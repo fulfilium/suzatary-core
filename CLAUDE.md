@@ -1080,15 +1080,18 @@ Threat model: an injected email can at worst mis-triage or write bad todo text
   writes the lock into the user
   repository only with its "Deploy <rev>" commit under safe-push's push
   lock, waits (briefly: it only links) for a `suzatary-roots` run whose
-  `ExecMainStartTimestamp` is at or after the commit, restarts
-  `suzatary-web` only on that run's `Result=success` with `roots/app` the
+  `ExecMainStartTimestamp` is at or after the commit, try-restarts every
+  running unit part of `suzatary-app.target` (the long-running units that
+  run the app, each declared so by `servingUnit` in `nix/nixos-module.nix`)
+  only on that run's `Result=success` with `roots/app` the
   lock's tree and its builds the same set at the same paths the deploy
-  built, waits for `/api/about` to answer 200 from that app's builds,
-  and pushes last. Until the web restarts, any failure stops a run still
+  built, waits for `/api/about` to answer 200 from that app's builds and
+  each restarted unit to root that app, and pushes last. Until the units
+  restart, any failure stops a run still
   building, appends `Revert "Deploy <rev>"` and runs the roots again to
   relink the previous app, so the log never names a rev that did not run
   and only grows; the revert is pushed whatever its relink's wait does.
-  TERM, HUP and INT are failures like any other; after the web restarts a
+  TERM, HUP and INT are failures like any other; after the units restart a
   failure keeps and pushes the deploy and says to re-run it.
   A rollback is a deploy of an earlier rev. Committing or
   pushing in a dev checkout deploys nothing. Never hand-roll that wait (a

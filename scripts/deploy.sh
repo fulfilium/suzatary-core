@@ -86,7 +86,7 @@
 # are pushed last. Only a published commit goes live.
 #
 # A SIGNAL IS A FAILURE. TERM, HUP and INT exit non-zero, so the deploy is
-# reverted (before the web restarts) or recorded (after it) as any failure
+# reverted (before the units restart) or recorded (after it) as any failure
 # is. Only SIGKILL skips that: then `git -C <user repository> log -1` says
 # where it stopped. A "Deploy <rev>" not yet pushed is pushed if the web runs
 # that rev (or simply deployed again), and reverted by deploying the previous
@@ -98,16 +98,25 @@
 # down). So the epoch is taken once the lock is committed, the only run that
 # counts is one whose ExecMainStartTimestamp is at or after it and which has
 # finished, and only its `Result=success`, with the app it linked being the
-# one the lock names, lets the web restart. Every other ending is an exit with
+# one the lock names, lets the units restart. Every other ending is an exit with
 # a sentence saying what happened, and every unit keeps running what it ran.
+#
+# IT RESTARTS EVERY UNIT THAT RUNS THE APP FOR LONGER THAN ONE JOB. Such a unit
+# goes on running the app it started with, so each is declared PartOf
+# suzatary-app.target (nix/nixos-module.nix `servingUnit`), and the deploy
+# try-restarts each unit the target's ConsistsOf names, once the roots run has
+# linked the new app: a running unit restarts, a stopped one (a watcher with no
+# account to watch) stays down and reads the new app when it next starts. A
+# timer's oneshot reads the lock at each start, so it needs no restart.
 #
 # Environment:
 #   SUZATARY_APP_URL  where /api/about answers; default: `app_url` in the
 #                     instance file suzatary-web itself reads
-#   SUZATARY_DEPLOY_ROOTS_TIMEOUT, SUZATARY_DEPLOY_WEB_TIMEOUT
+#   SUZATARY_DEPLOY_ROOTS_TIMEOUT, SUZATARY_DEPLOY_UNITS_TIMEOUT
 #                     seconds to wait for the roots run, which only links
-#                     what the deploy built (default 600), and for the web
-#                     (600); the build itself has no timeout
+#                     what the deploy built (default 600), and for the
+#                     restarted units to run the new app (600); the build
+#                     itself has no timeout
 #   SUZATARY_DEPLOY_CACHE_TIMEOUT, SUZATARY_DEPLOY_CACHE_APPEAR
 #                     seconds to wait for the publication run that builds
 #                     the pinned commit and pushes it to the binary cache
@@ -127,7 +136,7 @@ set -euo pipefail
 cache_timeout="${SUZATARY_DEPLOY_CACHE_TIMEOUT:-1200}"
 cache_appear="${SUZATARY_DEPLOY_CACHE_APPEAR:-120}"
 roots_timeout="${SUZATARY_DEPLOY_ROOTS_TIMEOUT:-600}"
-web_timeout="${SUZATARY_DEPLOY_WEB_TIMEOUT:-600}"
+units_timeout="${SUZATARY_DEPLOY_UNITS_TIMEOUT:-600}"
 revert_timeout="${SUZATARY_DEPLOY_REVERT_TIMEOUT:-600}"
 
 trap 'exit 143' TERM
@@ -203,6 +212,14 @@ for pair in "${pairs[@]}"; do
 done
 [[ -n "$user" && -n "$roots" ]] \
   || die "suzatary-web carries no SUZATARY_USER_REPO or SUZATARY_ROOTS: the box runs a module from before the lock deploys; rebuild it first. Nothing moved."
+
+# The long-running units that run the app: each declares itself part of the
+# target, so its ConsistsOf is the list.
+consists="$(systemctl --user show -p ConsistsOf --value suzatary-app.target)" \
+  || die "could not read suzatary-app.target from systemctl --user. Nothing moved."
+read -ra app_units <<<"$consists"
+((${#app_units[@]})) \
+  || die "no unit is part of suzatary-app.target: the box runs a NixOS module from before a deploy restarted every unit that runs the app. The NixOS configuration pins the module by its own suzatary input, apart from the user repository's lock: update that input to this rev or later, then run nixos-rebuild switch. Nothing moved."
 
 # --- the user repository ---------------------------------------------------
 
@@ -556,10 +573,10 @@ undo() {
   [[ "$status" -ne 0 ]] || return 0
   # A second signal must not cut the record short.
   trap '' TERM HUP INT
-  # Once the web restarted, the units run the new app, so the log keeps it.
+  # Once the units restarted, they run the new app, so the log keeps it.
   if [[ -n "$live" ]]; then
     [[ -z "$deployed" ]] || record
-    say "the units run ${rev:0:12}, but the deploy stopped before it was checked; re-run scripts/deploy.sh $rev to finish the about-check, or $(go_back)"
+    say "${restarted[*]:-no unit} restarted onto ${rev:0:12}, but the deploy stopped before it was checked; re-run scripts/deploy.sh $rev to finish the about-check, or $(go_back)"
     return 0
   fi
   [[ -n "$deployed" ]] || return 0
@@ -575,7 +592,7 @@ undo() {
   done
   if [[ -n "$reverted" ]] \
     && commit_moves -m "Revert \"Deploy $rev\"" \
-      -m "The units never ran it: the deploy stopped before restarting the web."; then
+      -m "The units never ran it: the deploy stopped before restarting them."; then
     git -C "$user" checkout HEAD -- "${moves[@]}" \
       || say "could not check ${moves[*]} out into $user; they are the revert's in HEAD"
     say "reverted the deploy of ${rev:0:12} in a new commit"
@@ -608,52 +625,81 @@ trap 'status=$?; cleanup; undo "$status" || true' EXIT
 epoch_us="$(date +%s%6N)"
 idle "a run the write of the lock started"
 systemctl --user start --no-block suzatary-roots.service \
-  || die "the lock names ${rev:0:12} but suzatary-roots would not start; suzatary-web was NOT restarted."
+  || die "the lock names ${rev:0:12} but suzatary-roots would not start; no unit was restarted."
 
 # --- the roots run this move caused ---------------------------------------
 
 say "waiting for a suzatary-roots run started after the move to finish"
 await_run "$epoch_us" \
-  || die "no suzatary-roots run started after the move finished within ${roots_timeout}s; suzatary-web was NOT restarted."
+  || die "no suzatary-roots run started after the move finished within ${roots_timeout}s; no unit was restarted."
 [[ "$result" == success ]] \
-  || die "the suzatary-roots run started $started ended Result=$result; suzatary-web was NOT restarted. See journalctl --user -u suzatary-roots."
+  || die "the suzatary-roots run started $started ended Result=$result; no unit was restarted. See journalctl --user -u suzatary-roots."
 [[ "$(readlink -f "$roots/app")" == "$app" ]] \
-  || die "the roots run succeeded but links $(readlink -f "$roots/app"), not $app, the app the lock names; suzatary-web was NOT restarted."
+  || die "the roots run succeeded but links $(readlink -f "$roots/app"), not $app, the app the lock names; no unit was restarted."
 # Each build is a function of the tree, so the run's builds are the deploy's:
 # the same set of outputs (the run uses the system module's copy of
 # app-builds.sh, which may list one this copy does not), and the same path
 # for each. A difference is a finding, never a deploy.
 [[ "$(builds lock-)" == "$(builds deploy-)" ]] \
-  || die "the roots run built $(builds lock- | paste -sd ' '), the deploy $(builds deploy- | paste -sd ' '): an output only one side builds is built cold; suzatary-web was NOT restarted."
+  || die "the roots run built $(builds lock- | paste -sd ' '), the deploy $(builds deploy- | paste -sd ' '): an output only one side builds is built cold; no unit was restarted."
 for name in $(builds deploy-); do
   [[ "$(readlink -f "$roots/lock-$name")" == "$(readlink -f "$roots/deploy-$name")" ]] \
-    || die "the roots run linked lock-$name to $(readlink -f "$roots/lock-$name"), not $(readlink -f "$roots/deploy-$name"), which the deploy built; suzatary-web was NOT restarted."
+    || die "the roots run linked lock-$name to $(readlink -f "$roots/lock-$name"), not $(readlink -f "$roots/deploy-$name"), which the deploy built; no unit was restarted."
 done
 rm -f "$roots"/deploy-*
 say "suzatary-roots run started $started linked $app and exactly the builds the deploy made"
 
-# --- the web --------------------------------------------------------------
+# --- the units that run the app ---------------------------------------------
 
+# try-restart, so a unit that stopped between the read and the restart stays
+# down too. Every running unit is tried before a refusal fails the deploy, so
+# one unit's refusal never leaves the others on the old app, and the record
+# names which restarted.
+restarted=() refused=()
 live=yes
-systemctl --user restart suzatary-web.service \
-  || die "${rev:0:12} is built and linked, but suzatary-web would not restart; see journalctl --user -u suzatary-web."
-say "restarted suzatary-web; waiting for $about"
-deadline=$((SECONDS + web_timeout))
+for unit in "${app_units[@]}"; do
+  state="$(systemctl --user show -p ActiveState --value "$unit")" \
+    || die "could not read $unit from systemctl --user."
+  case "$state" in
+    active | activating | reloading) ;;
+    *)
+      say "left $unit $state: it reads the new app when it next starts"
+      continue
+      ;;
+  esac
+  if systemctl --user try-restart "$unit"; then
+    restarted+=("$unit")
+    say "restarted $unit"
+  else
+    refused+=("$unit")
+  fi
+done
+((${#refused[@]} == 0)) \
+  || die "${rev:0:12} is built and linked, but ${refused[*]} would not restart, so it does not run ${rev:0:12}; see journalctl --user -u ${refused[0]}."
+say "waiting for $about"
+deadline=$((SECONDS + units_timeout))
 code=000
 while :; do
   code="$(curl --silent --output /dev/null --write-out '%{http_code}' --max-time 5 "$about")" || true
   [[ "$code" == 200 ]] && break
   ((SECONDS < deadline)) \
-    || die "$about did not answer 200 within ${web_timeout}s after the restart (last: $code); see journalctl --user -u suzatary-web; $(go_back)."
+    || die "$about did not answer 200 within ${units_timeout}s after the restart (last: $code); see journalctl --user -u suzatary-web; $(go_back)."
   sleep 3
 done
 
-# What it serves is what the lock names: the web's own root of its app is the
-# tree the roots run linked, and serve-web.sh's roots of the binary and the
-# bundle it execs and serves are that run's builds.
-serving="$(readlink -f "$roots/suzatary-web-app" || true)"
-[[ "$serving" == "$app" ]] \
-  || die "suzatary-web answers but runs ${serving:-nothing}, not $app, the app the lock names."
+# Each unit's wrapper roots the app it runs as <unit>-app before it runs it
+# (nix/services.nix `resolveApp`), so that root is the app each restarted unit
+# runs.
+for unit in "${restarted[@]}"; do
+  until [[ "$(readlink -f "$roots/${unit%.service}-app" || true)" == "$app" ]]; do
+    ((SECONDS < deadline)) \
+      || die "$unit restarted but runs $(readlink -f "$roots/${unit%.service}-app" || echo nothing), not $app, the app the lock names; see journalctl --user -u $unit."
+    sleep 3
+  done
+done
+
+# serve-web.sh's roots of the binary and the bundle it execs and serves are
+# the roots run's builds.
 for pair in app-bin-serving:lock-bin web-dist-serving:lock-dist; do
   link="${pair%%:*}" built="${pair#*:}"
   [[ "$(readlink -f "$roots/$link")" == "$(readlink -f "$roots/$built")" ]] \

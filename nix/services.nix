@@ -106,6 +106,8 @@ let
   '';
 
   # A service that runs one of the app's scripts with the environment it needs.
+  # `runsTheApp` marks it for nix/module-check.nix, which finds a unit that
+  # runs one by its ExecStart.
   appService = { name, script, waitForNet ? true }:
     pkgs.writeShellScriptBin name ''
       set -euo pipefail
@@ -113,7 +115,7 @@ let
       ${resolveApp name}
       ${lib.optionalString waitForNet "${waitForNetwork}"}
       exec "$app/${script}" "$@"
-    '';
+    '' // { runsTheApp = true; };
 in
 rec {
   inherit runtimeDeps waitForNetwork;

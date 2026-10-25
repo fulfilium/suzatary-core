@@ -110,6 +110,17 @@ let
     # still seen as its real uid by tailscaled, the nix daemon and the bus.
     serviceConfig = { PrivateTmp = true; UMask = "0077"; } // serviceConfig;
   };
+
+  # A unit that runs the app for as long as it is up, rather than one job: it
+  # read the app at its start and goes on running that app until it restarts.
+  # So it is PartOf the target, whose ConsistsOf is the list scripts/deploy.sh
+  # try-restarts once the roots run links a new app; a unit joins the list
+  # here, where it is declared. nix/module-check.nix fails on a long-running
+  # unit that runs one of the app's wrappers and is not on it.
+  servingUnit = description: serviceConfig: baseUnit description serviceConfig // {
+    partOf = [ "suzatary-app.target" ];
+    wantedBy = [ "default.target" ];
+  };
 in
 {
   options.services.suzatary = {
@@ -397,7 +408,7 @@ in
     # So on-failure, not always: the first restarts, the second stays down,
     # and a box without such an account runs no watcher. A roster that gains
     # one is read on the unit's next start.
-    systemd.user.services.suzatary-mail-idle = baseUnit
+    systemd.user.services.suzatary-mail-idle = servingUnit
       "Suzatary IMAP IDLE watcher (lowers triage latency; the 5-minute timer stays the fallback)"
       {
         Restart = "on-failure";
@@ -406,9 +417,15 @@ in
         # app's scripts/mail-idle.sh, which execs `suzatary mail idle` out of
         # the pure `.#suzatary` derivation.
         ExecStart = "${services.mailIdle}/bin/suzatary-mail-idle";
-      } // {
-        wantedBy = [ "default.target" ];
       };
+
+    # The long-running units that run the app: each `servingUnit` is part of
+    # it. Nothing starts it; it is the list a deploy restarts. Stopping it
+    # would stop every one of them, so it refuses a manual start or stop.
+    systemd.user.targets.suzatary-app = {
+      description = "Suzatary: the long-running units that run the app the lock names";
+      unitConfig = { RefuseManualStart = true; RefuseManualStop = true; };
+    };
 
     # BUILD WHEN THE LOCK MOVES, NOT WHEN THE BOX IS ASKED
     # (docs/LAZYBUILDSTALL-PLAN-2026-09-21.md; the lock since
@@ -442,7 +459,7 @@ in
         ExecStart = "${services.roots}/bin/suzatary-roots";
       };
 
-    systemd.user.services.suzatary-web = baseUnit
+    systemd.user.services.suzatary-web = servingUnit
       "Suzatary web app on the tailnet (https on web.port)"
       {
         # A server, not a job: Type=simple, and on-failure rather than always
@@ -471,8 +488,6 @@ in
           "SUZATARY_TLS_DIR=${cfg.web.tlsDir}"
           "SUZATARY_WEB_PORT=${toString cfg.web.port}"
         ];
-      } // {
-        wantedBy = [ "default.target" ];
       };
 
     systemd.user.services.suzatary-vault = lib.mkIf cfg.vault.enable (baseUnit

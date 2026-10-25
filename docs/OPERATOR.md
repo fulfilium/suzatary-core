@@ -135,3 +135,11 @@ builds, and says which way it went:
 
 A commit deployed with `--ref <branch>` is not on `master`, so no run builds
 it and the box does.
+
+## A deploy restarts every unit that runs the app
+
+The units that run the app for longer than one job are the ones part of
+`suzatary-app.target`, declared by `servingUnit` in `nix/nixos-module.nix`,
+and once the roots run links the new app a deploy try-restarts each of
+them that is running and checks that it runs the new app (today the web and
+the IMAP watcher).

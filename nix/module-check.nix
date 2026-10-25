@@ -57,12 +57,14 @@ let
       (named "service" (ours c.user.services))
       (named "timer" (prefixed c.user.timers))
       (named "path" (prefixed c.user.paths))
+      (named "target" (prefixed c.user.targets))
       (named "service" (prefixed c.services))
       (named "timer" (prefixed c.timers))
     ]);
   # What every host runs: the units whose work is a function of the instance
   # the binary reads at run time (an empty roster or plugin list is no work).
   core = [
+    "suzatary-app.target"
     "suzatary-mail-idle.service"
     "suzatary-plugins.service"
     "suzatary-plugins.timer"
@@ -73,6 +75,29 @@ let
     "suzatary-web.service"
   ];
   execOf = unit: toString unit.serviceConfig.ExecStart;
+  # Every unit of the module's on a host with every option set.
+  full = ours (host {
+    services.suzatary = {
+      protonBridge.enable = true;
+      vault.enable = true;
+      web.tlsDomain = "box.example.ts.net";
+    };
+  }).config.systemd.user.services;
+
+  # The units a deploy restarts: those part of suzatary-app.target.
+  serving = lib.filterAttrs (_: unit: lib.elem "suzatary-app.target" unit.partOf);
+  # The app's service wrappers (nix/services.nix `appService`), by the binary
+  # each installs.
+  appBins = lib.mapAttrsToList (_: wrapper: "/bin/${wrapper.name}")
+    (lib.filterAttrs (_: value: lib.isAttrs value && value.runsTheApp or false) services);
+  runsTheApp = unit: lib.any (bin: lib.hasSuffix bin (execOf unit)) appBins;
+  # A oneshot reads the lock at each start; any other unit runs the app it
+  # started with until it restarts.
+  longRunning = unit: (unit.serviceConfig.Type or "simple") != "oneshot";
+  # The units that would keep running an old app through a deploy.
+  unlisted = set: lib.attrNames (lib.filterAttrs
+    (name: unit: runsTheApp unit && longRunning unit && !(serving set ? ${name}))
+    set);
 
   # Does a configuration with `extra` evaluate as far as the user repository?
   evaluates = extra:
@@ -124,9 +149,7 @@ let
       lib.all (unit: !(unit.environment ? SUZATARY_REPO)) (lib.attrValues units);
     "every unit has a /tmp of its own and creates its files for its user alone" =
       lib.all (unit: unit.serviceConfig.PrivateTmp == true && unit.serviceConfig.UMask == "0077")
-        (lib.attrValues (ours (host {
-          services.suzatary = { protonBridge.enable = true; vault.enable = true; };
-        }).config.systemd.user.services));
+        (lib.attrValues full);
     "every unit links into the units' roots, never roots-dev" =
       lib.all (unit: unit.environment.SUZATARY_ROOTS == "/home/ada/.local/state/suzatary/roots")
         (lib.attrValues units);
@@ -154,6 +177,19 @@ let
     "a declared bridge restarts always, as every Proton job is downstream of it" =
       (host { services.suzatary.protonBridge.enable = true; })
         .config.systemd.user.services.proton-bridge.serviceConfig.Restart == "always";
+    "every unit that runs one of the app's wrappers for longer than one job is part of suzatary-app.target, which a deploy restarts" =
+      unlisted full == [ ];
+    "a long-running unit that runs the app and is left off suzatary-app.target is found" =
+      unlisted (ours (host {
+        systemd.user.services.suzatary-mail-idle.partOf = lib.mkForce [ ];
+      }).config.systemd.user.services) == [ "suzatary-mail-idle" ];
+    "suzatary-app.target refuses a manual start and stop, which would stop every unit on it" =
+      let unit = config.systemd.user.targets.suzatary-app.unitConfig;
+      in unit.RefuseManualStart && unit.RefuseManualStop;
+    "suzatary-app.target holds the IMAP watcher and the web" =
+      lib.attrNames (serving full) == [ "suzatary-mail-idle" "suzatary-web" ];
+    "each unit of suzatary-app.target runs the wrapper named for it, which roots its app as <unit>-app" =
+      lib.all (name: lib.hasSuffix "/bin/${name}" (execOf full.${name})) (lib.attrNames (serving full));
     "the IMAP watcher restarts a broken watch and leaves an empty one down" =
       units.suzatary-mail-idle.serviceConfig.Restart == "on-failure";
     "userRepo refuses a relative path" =

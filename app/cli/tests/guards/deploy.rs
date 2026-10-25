@@ -23,7 +23,11 @@ use std::process::{Command, Output};
 /// it. `long-run`, holding a lock, makes the first run of that lock a long build. With
 /// `term-at-move` present (holding the lock it was set at), the first read of a run of another
 /// lock under way sends the deploy TERM, as a stop or a dropped session would mid-wait; with
-/// `term-at-restart`, the web's restart does.
+/// `term-at-restart`, the web's restart does. `consists`, when present, is what
+/// `suzatary-app.target`'s `ConsistsOf` names (else the web and the watcher); `state-<unit>`,
+/// when present, is that unit's `ActiveState` (else `active`); a unit named in `wont-restart`
+/// fails its restart, and any other unit's restart roots the linked app as `<unit>-app`, as its
+/// wrapper does.
 const SYSTEMCTL: &str = r#"#!/usr/bin/env bash
 s="$DEPLOY_STATE"
 echo "systemctl $*" >>"$s/log"
@@ -73,6 +77,10 @@ term_deploy() {
 case "$*" in
   *"-p Environment --value suzatary-web.service")
     echo "SUZATARY_USER_REPO=$s/user SUZATARY_INSTANCE=$s/user/instance.toml SUZATARY_ROOTS=$s/roots" ;;
+  "--user show -p ConsistsOf --value suzatary-app.target")
+    cat "$s/consists" 2>/dev/null || echo "suzatary-web.service suzatary-mail-idle.service" ;;
+  "--user show -p ActiveState --value "*)
+    cat "$s/state-$6" 2>/dev/null || echo active ;;
   "--user show suzatary-roots.service"*)
     echo "show lock=$lock" >>"$s/log"
     if [ -f "$s/starting" ]; then
@@ -106,13 +114,16 @@ case "$*" in
     rm -f "$s/pending" "$s/starting" ;;
   "--user start --no-block suzatary-roots.service")
     [ "$(cat "$s/busy")" -gt 0 ] || echo 1 >"$s/starting" ;;
-  "--user restart suzatary-web.service")
+  "--user try-restart suzatary-web.service")
     if [ -f "$s/web-app" ]; then app="$(cat "$s/web-app")"; else app="$(readlink -f "$s/roots/app")"; fi
     ln -sfn "$app" "$s/roots/suzatary-web-app"
     ln -sfn "$(readlink -f "$s/roots/lock-bin")" "$s/roots/app-bin-serving"
     ln -sfn "$(readlink -f "$s/roots/lock-dist")" "$s/roots/web-dist-serving"
     [ -f "$s/term-at-restart" ] && { rm "$s/term-at-restart"; term_deploy; }
     exit 0 ;;
+  "--user try-restart "*)
+    grep -qx "$3" "$s/wont-restart" 2>/dev/null && exit 1
+    ln -sfn "$(readlink -f "$s/roots/app")" "$s/roots/${3%.service}-app" ;;
   *) exit 64 ;;
 esac
 "#;
@@ -922,6 +933,82 @@ fn deploy_refuses_before_moving_anything() {
     assert_eq!(subject(&deployed.user()), "seed");
     assert_eq!(deployed.lock(), deployed.old);
     assert!(!deployed.log().contains("start --no-block"));
+
+    // A box whose module declares no unit part of suzatary-app.target.
+    deployed.set("consists", "");
+    let out = deployed.deploy(&[&deployed.new], &short);
+    assert!(!out.status.success());
+    let stderr = text(&out.stderr);
+    assert!(
+        stderr.contains("no unit is part of suzatary-app.target"),
+        "{stderr}"
+    );
+    assert!(stderr.contains("Nothing moved"), "{stderr}");
+    assert_eq!(deployed.lock(), deployed.old);
+}
+
+/// Once the roots run links the new app, every running unit of suzatary-app.target is
+/// restarted onto it and checked to run it; a stopped one stays down; one that will not
+/// restart, listed before the web, fails the deploy by name after the web restarted, and the
+/// deploy, live by then, is kept.
+#[test]
+fn deploy_restarts_every_running_unit_that_runs_the_app() {
+    let watcher = "suzatary-mail-idle.service";
+    for (case, state, refuses) in [
+        ("watching", "active", false),
+        ("crash-looping", "activating", false),
+        ("no-account", "inactive", false),
+        ("stopped-broken", "failed", false),
+        ("wont-restart", "active", true),
+    ] {
+        let deployed = Box_::new(&format!("units-{case}"));
+        deployed.set("next-result", "success");
+        deployed.set(&format!("state-{watcher}"), state);
+        if refuses {
+            deployed.set("wont-restart", watcher);
+            deployed.set("consists", &format!("{watcher} suzatary-web.service"));
+        }
+        let out = deployed.deploy(&[&deployed.new], &[]);
+        let (stderr, log) = (text(&out.stderr), deployed.log());
+        let restart = log.find(&format!("try-restart {watcher}"));
+        let rooted = std::fs::canonicalize(
+            deployed
+                .scratch
+                .join("roots")
+                .join("suzatary-mail-idle-app"),
+        )
+        .ok();
+        assert!(deployed.restarted(), "{case}: {log}");
+        if refuses {
+            assert!(!out.status.success(), "{case}");
+            assert!(
+                stderr.contains(&format!("{watcher} would not restart")),
+                "{case}: {stderr}"
+            );
+            assert!(
+                stderr.contains("suzatary-web.service restarted onto"),
+                "{case}: the record names what runs the new rev: {stderr}"
+            );
+            assert_eq!(
+                deployed.origin_subject(),
+                format!("Deploy {}", deployed.new),
+                "{case}: the units run it, so the record is pushed"
+            );
+        } else if state == "active" || state == "activating" {
+            assert!(out.status.success(), "{case}: {stderr}");
+            let ended = log.find("roots run ends").expect("the run ends");
+            assert!(restart.is_some_and(|at| ended < at), "{case}: {log}");
+            assert_eq!(rooted, Some(deployed.store(&deployed.new)), "{case}");
+        } else {
+            assert!(out.status.success(), "{case}: {stderr}");
+            assert!(restart.is_none(), "{case}: {log}");
+            assert!(
+                stderr.contains(&format!("left {watcher} {state}")),
+                "{case}: {stderr}"
+            );
+            assert_eq!(rooted, None, "{case}: the watcher never started");
+        }
+    }
 }
 
 /// A commit that fails (a hook refuses it) wrote nothing: the working tree's lock is HEAD's as
@@ -1048,7 +1135,8 @@ fn deploy_fails_when_the_web_runs_another_app() {
         .join("store")
         .join(format!("app-{}", deployed.old));
     deployed.set("web-app", &running.display().to_string());
-    let out = deployed.deploy(&[&deployed.new], &[]);
+    // A short wait for the units, so the web's stale root ends it quickly.
+    let out = deployed.deploy(&[&deployed.new], &[("SUZATARY_DEPLOY_UNITS_TIMEOUT", "1")]);
     assert!(!out.status.success());
     assert!(
         text(&out.stderr).contains("the app the lock names"),
