@@ -1,6 +1,5 @@
 //! What a todo is worth, as every writer authors it and a proposed act stores it.
 
-use chrono::NaiveDate;
 use prodrome_core::fpl;
 use prodrome_core::literal::{ProdromeError, Value};
 use prodrome_core::term::{Term, TermF};
@@ -65,84 +64,6 @@ impl Price {
             }
         }
     }
-}
-
-impl Price {
-    /// The price `term` is, when it is a term [`Price::term`] writes, read in `zone`: a writer's
-    /// term carried into an act again. Law: whatever this reads writes the same term back, at
-    /// the term's own anchor for a cycle (`a_read_price_writes_its_term_back`).
-    #[must_use]
-    pub fn read(term: &Term, todo: &str, zone: crate::zone::Zone) -> Option<Price> {
-        let price = match term.out() {
-            TermF::Flat { value } => Price::Flat {
-                percent: percent(*value)?,
-            },
-            TermF::Decay {
-                start,
-                end,
-                end_date,
-                lead_up,
-                start_date,
-            } => Price::Deadline(Deadline {
-                end_date: day_of(zone.day(*end_date), |day| zone.end(day) == *end_date)?,
-                start_percent: percent(*start)?,
-                end_percent: percent(*end)?,
-                lead_up: (*lead_up != chrono::Duration::weeks(1)).then_some(*lead_up),
-                start_date: match start_date {
-                    None => None,
-                    Some(at) => Some(day_of(zone.day(*at), |day| zone.start(day) == *at)?),
-                },
-            }),
-            TermF::Recur { term: body, .. } => Price::Recur(ramp_cycle(body)?),
-            TermF::Periodic { term: body, .. } => Price::Periodic(ramp_cycle(body)?),
-            _ => return None,
-        };
-        let anchor = match term.out() {
-            TermF::Recur { anchor, .. } | TermF::Periodic { anchor, .. } => *anchor,
-            _ => chrono::NaiveDateTime::default(),
-        };
-        let now = Moment {
-            at: fpl::datetime_of(anchor).ok()?,
-            zone,
-        };
-        (price.term(todo, now, Some(term)).ok()? == *term).then_some(price)
-    }
-}
-
-/// A ratio as the whole percentage it was written as.
-fn percent(value: f64) -> Option<u32> {
-    let scaled = (value * 100.0).round();
-    ((scaled - value * 100.0).abs() < 1e-9 && (0.0..=100.0).contains(&scaled))
-        .then(|| format!("{scaled:.0}").parse().ok())
-        .flatten()
-}
-
-/// The day near `near` that `is` holds for: a day's end may fall on the next day's first instant.
-fn day_of(near: NaiveDate, is: impl Fn(NaiveDate) -> bool) -> Option<NaiveDate> {
-    [Some(near), near.pred_opt()]
-        .into_iter()
-        .flatten()
-        .find(|day| is(*day))
-}
-
-/// The cycle a two-point ramp is.
-fn ramp_cycle(ramp: &Term) -> Option<Cycle> {
-    let TermF::Curve { points } = ramp.out() else {
-        return None;
-    };
-    let [from, to] = points.as_slice() else {
-        return None;
-    };
-    let span = to.at - from.at;
-    let days = u32::try_from(span.num_days()).ok()?;
-    if span != chrono::Duration::days(i64::from(days)) {
-        return None;
-    }
-    Some(Cycle {
-        days,
-        from_percent: percent(from.value)?,
-        to_percent: percent(to.value)?,
-    })
 }
 
 fn refused(failed: impl std::fmt::Display) -> Refusal {
@@ -299,69 +220,5 @@ mod tests {
             )
             .is_err()
         );
-    }
-
-    fn prices() -> impl proptest::strategy::Strategy<Value = Price> {
-        use proptest::prelude::*;
-        let cycle = (1u32..=3650, 0u32..=100, 0u32..=100).prop_map(|(days, from, to)| Cycle {
-            days,
-            from_percent: from,
-            to_percent: to,
-        });
-        let day =
-            (0i64..2000).prop_map(|offset| day("2025-01-01") + chrono::Duration::days(offset));
-        prop_oneof![
-            (0u32..=100).prop_map(|percent| Price::Flat { percent }),
-            (
-                day.clone(),
-                0u32..=98,
-                0u32..=100,
-                proptest::option::of(1i64..=364),
-                proptest::option::of(day)
-            )
-                .prop_map(
-                    |(end_date, start_percent, end_percent, lead, start_date)| {
-                        Price::Deadline(Deadline {
-                            end_date,
-                            start_percent,
-                            end_percent,
-                            lead_up: lead.map(chrono::Duration::days),
-                            start_date,
-                        })
-                    }
-                ),
-            cycle.clone().prop_map(Price::Recur),
-            cycle.prop_map(Price::Periodic),
-        ]
-    }
-
-    proptest::proptest! {
-        /// Law: the price read from a term a price writes writes that same term, in any zone and
-        /// at any instant, so carrying a stored term into an act moves no number.
-        #[test]
-        fn a_read_price_writes_its_term_back(
-            price in prices(),
-            minutes in 0i64..1_000_000,
-            named in proptest::bool::ANY,
-        ) {
-            let zone = if named {
-                crate::zone::Zone::named("America/New_York").expect("a zone")
-            } else {
-                crate::zone::Zone::UTC
-            };
-            let at = fpl::datetime_of(
-                day("2025-01-01").and_hms_opt(0, 0, 0).expect("midnight")
-                    + chrono::Duration::minutes(minutes),
-            )
-            .expect("an instant");
-            let now = Moment { at, zone };
-            let Ok(term) = price.term("chore", now, None) else {
-                return Ok(());
-            };
-            let read = Price::read(&term, "chore", zone);
-            proptest::prop_assert!(read.is_some(), "{}", fpl::print_term(&term));
-            let written = read.and_then(|read| read.term("chore", now, None).ok());
-            proptest::prop_assert_eq!(written, Some(term));
-        }
     }
 }

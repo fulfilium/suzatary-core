@@ -67,7 +67,6 @@ root = "836884e1723c7b17f8b87e76a0272f012de6cff08f134eb9dcdb2670695b1818"
 [[chains]]
 name = "life"
 events = "events"
-proposals = "events-triage"
 untrusted = ["triage"]
 actors = ["{owner}", "triage"]
 owner = "{owner}"

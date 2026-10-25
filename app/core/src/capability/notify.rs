@@ -163,7 +163,7 @@ impl Push {
                 title: "The secretary's review is down",
                 body: format!(
                     "{} waiting; it has failed {} running",
-                    plural(*standing, "batch", "batches"),
+                    plural(*standing, "card", "cards"),
                     plural(passes.get(), "pass", "passes")
                 ),
                 click: format!("{app}/#/inbox"),

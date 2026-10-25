@@ -20,9 +20,6 @@ pub struct ChainDir {
     pub policy: ChainPolicy,
     /// Where this chain's objects live, resolved under the data root.
     pub events: PathBuf,
-    /// The agent's replica of `events`: the chain's objects plus every batch
-    /// nobody has settled.
-    pub proposals: PathBuf,
     /// Whom a command with no `--actor` acts as: on the roster and trusted.
     pub owner: Actor,
 }
@@ -66,7 +63,6 @@ impl ChainDir {
                 root: root.clone(),
             },
             events: data.under(&chain.events),
-            proposals: data.under(&chain.proposals),
             owner: chain.owner,
         })
     }
@@ -98,9 +94,8 @@ impl ChainDirs {
         1 + self.rest.len()
     }
 
-    /// Every `[[chains]]` entry, with no two stores sharing a directory: a
-    /// `proposals` that is its own chain's `events` would put every agent
-    /// proposal on the chain unreviewed.
+    /// Every `[[chains]]` entry, with no two chains sharing a directory, so no chain is read
+    /// under another's trust policy.
     pub(super) fn of(
         path: &Path,
         data: &DataRoot,
@@ -113,16 +108,13 @@ impl ChainDirs {
             .collect::<anyhow::Result<Vec<_>>>()?;
         let mut seen: BTreeMap<&Path, String> = BTreeMap::new();
         for chain in &built {
-            for (what, dir) in [("events", &chain.events), ("proposals", &chain.proposals)] {
-                let named = format!("{}.{what}", chain.policy.name);
-                if let Some(other) = seen.insert(dir, named.clone()) {
-                    bail!(
-                        "{}: {other} and {named} are the same directory ({}) — a proposal \
-                         store that IS its chain is a review that reviews nothing",
-                        path.display(),
-                        dir.display()
-                    );
-                }
+            let named = chain.policy.name.to_string();
+            if let Some(other) = seen.insert(&chain.events, named.clone()) {
+                bail!(
+                    "{}: chains {other} and {named} are the same directory ({})",
+                    path.display(),
+                    chain.events.display()
+                );
             }
         }
         let mut walking = built.into_iter();

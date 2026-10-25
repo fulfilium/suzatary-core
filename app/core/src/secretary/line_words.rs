@@ -3,9 +3,9 @@
 //! A line holds at most a few slots ([`crate::secretary::line_shape::LineShape::slots`]): a
 //! turn's words, or a model turn's text and then each call's arguments, each under a key of its
 //! own, so a forgetting can erase the one call that wrote a fact and leave the prose beside it.
-//! Every slot's words go through the redaction door ([`Scrubbed`]) before they are locked and
-//! again when they are opened, so no opened text holds what the door removes, whatever bytes it
-//! was read from.
+//! Every slot's words go through the redaction door ([`Scrubbed`]) before they are locked
+//! (`line_event::seal`), and the line records the rules they passed. Reading a print only parses
+//! it; the line scrubs again a slot whose rules are not the current ones as it opens.
 
 use std::borrow::Cow;
 use std::collections::BTreeMap;
@@ -136,8 +136,8 @@ pub struct AttachmentWords {
     pub private: Option<crate::vault::PrivateCopy>,
 }
 
-/// Printed as canonical JSON (struct fields in declared order, maps sorted), and read back
-/// through the redaction door, so `read(print(w)) == Some(w)` for every scrubbed `w`.
+/// Printed as canonical JSON (struct fields in declared order, maps sorted), and read back as
+/// parsed, so `read(print(w)) == Some(w)` for every `w`.
 impl Words for LineWords {
     fn print(&self) -> Cow<'_, str> {
         serde_json::to_string(self)
@@ -146,8 +146,7 @@ impl Words for LineWords {
     }
 
     fn read(print: &str) -> Option<Self> {
-        let words: Self = serde_json::from_str(print).ok()?;
-        Scrubbed::of(&words).ok().map(Scrubbed::into_inner)
+        serde_json::from_str(print).ok()
     }
 }
 
@@ -228,24 +227,11 @@ pub(crate) mod tests {
     }
 
     proptest! {
-        /// The text store's law: scrubbed words read back as their print.
+        /// The text store's law: words read back as their print.
         #[test]
-        fn scrubbed_words_read_back_as_their_print(words in line_words()) {
-            let words = words.scrubbed().expect("scrubs");
+        fn words_read_back_as_their_print(words in line_words()) {
             prop_assert_eq!(LineWords::read(&words.print()), Some(words));
         }
-    }
-
-    /// What the door removes is not in any opened slot, whatever bytes it was read from.
-    #[test]
-    fn a_slot_read_back_holds_no_credential() {
-        let print = r#"{"slot":"model","text":"reset at https://example.test/r?token=s3cret"}"#;
-        assert_eq!(
-            LineWords::read(print),
-            Some(LineWords::Model {
-                text: "reset at https://example.test/r?token=[redacted]".to_owned()
-            })
-        );
     }
 
     /// An answer of `len` bytes or a little more, of one-, two-, three- and four-byte characters,

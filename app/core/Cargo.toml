@@ -25,6 +25,7 @@ ts-rs.workspace = true
 # record was 58,000 searches and 1.3 s on the todo route), and the id, date and
 # query classes the routes refuse at the door.
 regex.workspace = true
+regex-syntax.workspace = true
 # THE LEAK GUARD READS TEXT AS WORDS (`leak`): folded to its letters without accents or
 # Unicode's invisible format characters, so neither hides a term.
 unicode-normalization = "0.1"

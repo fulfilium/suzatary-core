@@ -17,7 +17,6 @@ data = "."
 [[chains]]
 name = "life"
 events = "events"
-proposals = "events-triage"
 untrusted = []
 actors = [
     "ada",
@@ -29,7 +28,6 @@ owner = "ada"
 [[chains]]
 name = "suzatary"
 events = "events-suzatary"
-proposals = "events-triage-suzatary"
 untrusted = []
 actors = [
     "ada",

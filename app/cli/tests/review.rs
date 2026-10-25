@@ -12,7 +12,7 @@ use suzatary_core::secretary::changes::{Act, Changeset, Provenance};
 use suzatary_core::secretary::filed::TriageCards;
 use suzatary_core::secretary::review::{review, reviews};
 use suzatary_core::secretary::store::{Outcome, Reasons, Settle};
-use suzatary_core::store::Prodrome as _;
+use suzatary_core::store::Reads as _;
 
 /// Three cards, as the triage agent files them: two adds and a completion. Their lines go to
 /// a store the review does not read, since the review reads cards from the inbox alone.

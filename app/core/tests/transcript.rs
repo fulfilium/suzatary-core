@@ -31,6 +31,7 @@ use suzatary_core::secretary::store::{
 };
 use suzatary_core::secretary::transcript::{self, Transcript};
 use suzatary_core::secretary::words::Words;
+use suzatary_core::store::Reads as _;
 use suzatary_core::store::{InMemory, Prodrome, linearised};
 
 type Memory = suzatary_core::secretary::conversations::InMemory;

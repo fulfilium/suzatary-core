@@ -43,6 +43,7 @@ mod tests {
 
     use super::*;
     use crate::store::InMemory;
+    use crate::store::Reads as _;
 
     const SCHEMA: &str = "Schema(key='door', events=(Event(name='Seen', fields=(Field(name='door', \
         type=Text()), Field(name='at', type=Instant()), Field(name='actor', type=Text()), \

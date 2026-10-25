@@ -83,8 +83,6 @@ mod objects;
 mod paths;
 #[path = "perf_fold_chain.rs"]
 mod perf_fold_chain;
-#[path = "proposals.rs"]
-mod proposals;
 #[path = "push.rs"]
 mod push;
 #[path = "ran.rs"]

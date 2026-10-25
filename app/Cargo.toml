@@ -175,6 +175,9 @@ zeroize = { version = "1", default-features = false }
 # `view.references`' one alternation over every long id, `markup.suspicious`'s
 # three tripwires, and the id/date/query classes webapp.py refuses at the door.
 regex = "1"
+# Whether Unicode counts a character as part of a word, the test `\b` makes, for the scrub's ASCII
+# copy of a text (`redact`); the version `regex` itself links.
+regex-syntax = "0.8"
 # --- THE AGENT'S TOOLS (§8.4). The official Rust MCP SDK, PINNED, with the two
 # features `suzatary mcp` needs and nothing else: `server` for the handler and
 # `transport-io` for stdin/stdout. No `macros` — the verb table is DATA in

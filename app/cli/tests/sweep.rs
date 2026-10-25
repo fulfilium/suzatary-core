@@ -18,7 +18,7 @@ use suzatary_core::secretary::Bound;
 use suzatary_core::secretary::changes::Act;
 use suzatary_core::secretary::store::Proposal;
 use suzatary_core::secretary::sweep::{dry_run, sweep};
-use suzatary_core::store::Prodrome as _;
+use suzatary_core::store::Reads as _;
 
 /// The instant every todo below is authored, well before [`common::now`], so a candidate between
 /// the two is unambiguously later.

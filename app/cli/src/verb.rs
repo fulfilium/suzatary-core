@@ -7,8 +7,8 @@ use clap::Subcommand;
 
 use crate::commands::{
     coding, decision, device, doctor, heartbeat, init, instance, leaks, mail, mcp, notify, plugin,
-    proposals, ran, release, replica, secretary, secretspec, serve, site, todo, todos, typeset, up,
-    vault, verify, weather,
+    ran, release, replica, secretary, secretspec, serve, site, todo, todos, typeset, up, vault,
+    verify, weather,
 };
 
 /// Every verb the deployed binary answers.
@@ -37,8 +37,6 @@ pub enum Verb {
     Decision(decision::Args),
     /// The version the project chain reads, and the release a train cuts from it.
     Release(release::Args),
-    /// Carry the triage agent's open batches into the Inbox as its cards: the one migration.
-    Proposals(proposals::Args),
     /// Who may write: the box's signing keys, and the device keys trusted or revoked.
     Device(device::Args),
     /// Pull every account, reindex, re-tag the inbox, and keep the report in the state directory.
@@ -111,7 +109,6 @@ impl Verb {
             Verb::Todos(args) => todos::run(path, &args),
             Verb::Decision(args) => decision::run(path, &args),
             Verb::Release(args) => release::run(path, &args),
-            Verb::Proposals(args) => proposals::run(path, &args),
             Verb::Device(args) => device::run(path, &args),
             Verb::Sync => mail::sync(path),
             Verb::New(args) => mail::queue(path, &args),

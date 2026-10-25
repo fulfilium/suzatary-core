@@ -23,7 +23,8 @@ use suzatary_core::secretary::locked_text::KeyName;
 use suzatary_core::secretary::store::{ConversationId, Entry, Kind, NotAConversation, Stored};
 use suzatary_core::secretary::transcript::{self, Transcript};
 use suzatary_core::secretary::words::Words;
-use suzatary_core::store::{Doc as _, Prodrome as _};
+use suzatary_core::store::Doc as _;
+use suzatary_core::store::Reads as _;
 
 /// One step of a script: a turn said in a conversation, or an erasure of some of its lines. A turn
 /// that `echoes` draws its keys as the last conversation opened drew its first, so one key names

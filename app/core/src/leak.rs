@@ -314,11 +314,15 @@ fn hash(text: &str, start: usize, token: &str) -> bool {
     })
 }
 
-/// A sealed slot's literal (`secretary::line_event`'s `locked_value`): the name of its key, a
-/// digest, and its box, the sealed words in base64.
+/// A sealed slot's literal (`secretary::line_event`'s `SealedSlot`): the name of its key, a
+/// digest, its box, the sealed words in base64, and in the `Scrubbed` form the name of the
+/// rules its words passed, a digest.
 static LOCKED: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(r"\bLocked\(key='[0-9a-f]{64}', box='(?P<box>[A-Za-z0-9+/]+={0,2})'\)")
-        .expect("a valid pattern")
+    Regex::new(concat!(
+        r"\b(?:Locked\(key='[0-9a-f]{64}', box='(?P<locked>[A-Za-z0-9+/]+={0,2})'\)",
+        r"|Scrubbed\(key='[0-9a-f]{64}', box='(?P<scrubbed>[A-Za-z0-9+/]+={0,2})', rules='[0-9a-f]{64}'\))"
+    ))
+    .expect("a valid pattern")
 });
 
 /// A sealed slot of a text the guard recognises as ciphertext: where its whole call stands, and
@@ -326,7 +330,7 @@ static LOCKED: LazyLock<Regex> = LazyLock::new(|| {
 /// secret scanner's copy (the call is a placeholder), so the two cannot disagree.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Slot {
-    /// The whole `Locked(key='…', box='…')` call.
+    /// The whole `Locked(key='…', box='…')` or `Scrubbed(key='…', box='…', rules='…')` call.
     pub call: std::ops::Range<usize>,
     /// Its box, the sealed words in base64.
     pub sealed: std::ops::Range<usize>,
@@ -342,7 +346,7 @@ pub fn slots(text: &str) -> Vec<Slot> {
         .captures_iter(text)
         .filter_map(|found| {
             let call = found.get(0)?;
-            let sealed = found.name("box")?;
+            let sealed = found.name("locked").or_else(|| found.name("scrubbed"))?;
             let bytes = base64::engine::general_purpose::STANDARD
                 .decode(sealed.as_str())
                 .ok()?;
@@ -1047,13 +1051,20 @@ mod tests {
         };
         let key = hex::encode(sha2::Sha256::digest(b"a key"));
         let locked = |sealed: &str| format!("Locked(key='{key}', box='{sealed}')");
+        let scrubbed =
+            |sealed: &str| format!("Scrubbed(key='{key}', box='{sealed}', rules='{key}')");
         let ciphertext = b64(&random(256 * 2 + 16));
         let object = format!(
             "Change(genesis='{key}', deps=(), event=Opened(words=({},)))",
             locked(&ciphertext)
         );
+        let rescrubbed = format!(
+            "Change(genesis='{key}', deps=(), event=Opened(words=({},)))",
+            scrubbed(&ciphertext)
+        );
         for clean in [
             object.clone(),
+            rescrubbed.clone(),
             format!("      \"text\": \"{object}\",\n").repeat(4),
         ] {
             assert_eq!(Opaque::of(clean.as_bytes()), None, "{clean}");
@@ -1064,6 +1075,8 @@ mod tests {
             locked(&b64(&words.as_bytes()[..256 + 16])),
             format!("box='{ciphertext}'"),
             format!("{}{}", locked(&ciphertext), b64(&random(200))),
+            scrubbed(&b64(&words.as_bytes()[..256 + 16])),
+            format!("Scrubbed(key='{key}', box='{ciphertext}')"),
         ] {
             assert_eq!(Opaque::of(hit.as_bytes()), Some(Opaque::Encoded), "{hit}");
         }

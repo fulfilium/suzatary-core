@@ -85,17 +85,13 @@ cd "$DATA"
 # itself is denied. Code reaches master through the merge gate and the train
 # (scripts/train.sh), never through this path.
 #
-# The agent's set: dedup state, the chains and their replicas. Objects are
+# The agent's set: dedup state and the chains. Objects are
 # named by their own sha256 (hence the [0-9a-f]{64} shape), and the tips are
 # DERIVED from the objects, so no run writes `HEAD` or `refs/`. The agent
 # stages nothing rendered.
 # `events-suzatary/` is the second chain (docs/ARCHITECTURE.md §10.2), and a
 # chain the trusted push path would not commit is a chain whose objects live
 # only on this box.
-# `events-triage/` and `events-triage-suzatary/` are REPLICAS
-# (docs/ARCHITECTURE.md §10.6): the agent writes there, not to a chain, and
-# what it holds that its chain does not is what the owner accepts or rejects
-# in the app, so a push path without them carries nothing the agent did.
 # `inbox/objects/` is written by the server (the owner's
 # taps, the secretary's proposals, sends included) and nothing else commits
 # it; a remember card there names its words, which are in
@@ -128,8 +124,8 @@ cd "$DATA"
 # The three lists are the stores' rows (`suzatary_core::store::Kind`) for this
 # deployment, spelled out so a quiet pass runs no program but git; the guard
 # `app/cli/tests/guards/lists.rs` holds each equal to its derivation.
-ALLOWED_PATTERN='^(events/(objects/[0-9a-f]{64}\.py|\.lock|\.gitattributes)|events-suzatary/(objects/[0-9a-f]{64}\.py|\.lock|\.gitattributes)|events-triage/(objects/[0-9a-f]{64}\.py|\.lock|\.gitattributes)|events-triage-suzatary/(objects/[0-9a-f]{64}\.py|\.lock|\.gitattributes)|inbox/(objects/[0-9a-f]{64}\.py|\.gitattributes)|secretary-lines/(objects/[0-9a-f]{64}\.py|\.gitattributes)|memory/(objects/[0-9a-f]{64}\.py|\.gitattributes)|digests/(objects/[0-9a-f]{64}\.py|\.gitattributes)|decisions/(objects/[0-9a-f]{64}\.py|\.gitattributes)|state\.json|requests/([0-9a-f]{64}\.json|\.gitignore))$'
-ADD_PATHS='events/ events-suzatary/ events-triage/ events-triage-suzatary/ inbox/ secretary-lines/ memory/ digests/ decisions/ state.json requests/'
+ALLOWED_PATTERN='^(events/(objects/[0-9a-f]{64}\.py|\.lock|\.gitattributes)|events-suzatary/(objects/[0-9a-f]{64}\.py|\.lock|\.gitattributes)|inbox/(objects/[0-9a-f]{64}\.py|\.gitattributes)|secretary-lines/(objects/[0-9a-f]{64}\.py|\.gitattributes)|memory/(objects/[0-9a-f]{64}\.py|\.gitattributes)|digests/(objects/[0-9a-f]{64}\.py|\.gitattributes)|decisions/(objects/[0-9a-f]{64}\.py|\.gitattributes)|state\.json|requests/([0-9a-f]{64}\.json|\.gitignore))$'
+ADD_PATHS='events/ events-suzatary/ inbox/ secretary-lines/ memory/ digests/ decisions/ state.json requests/'
 WALKED='events/objects/ events-suzatary/objects/ inbox/objects/ secretary-lines/objects/ memory/objects/ digests/objects/ decisions/objects/ requests/'
 # ONCE THE DATA IS A TREE OF ITS OWN, the human-edited data files ride with
 # the agent's commit too — the data repository is one tree and its history
@@ -186,15 +182,6 @@ fi
 # Every chain (§10.2): the rule is a property of a Merkle log and not of one
 # directory's name, so a second chain the check did not walk would be a second
 # chain a rewrite could ride out through.
-#
-# ⚠️ AND THE PROPOSAL REPLICAS ARE DELIBERATELY NOT WALKED (§10.6). A rejection
-# DELETES an object from `events-triage*/objects/`, and that is the one removal
-# this system performs on purpose: those objects never entered a chain, nothing
-# anyone else holds rests on them, and the store they are in is the agent's
-# scratch. Adding the replicas to the line below would make every rejection an
-# append-only violation — which is the check being wrong about what it is FOR,
-# not the rejection being wrong. The chains themselves are as protected as they
-# ever were, which is the property this gate exists for.
 # shellcheck disable=SC2086
 REWRITES=$(git status --porcelain -- $WALKED | grep -vE '^(\?\?|A )' || true)
 if [ -n "$REWRITES" ]; then

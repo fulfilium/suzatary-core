@@ -83,13 +83,16 @@ impl Transcript {
                 .map(|write| (write.name, write.line.at(), write.parents))
                 .collect::<Vec<_>>(),
         );
-        let erased = erasures(
+        let ordered = || {
             order
                 .iter()
-                .map(|(at, _)| (writes[*at].name, writes[*at].line)),
-        );
+                .map(|(at, _)| (writes[*at].name, writes[*at].line))
+        };
+        let erased = erasures(ordered());
+        let reseals = reseals(ordered());
         let read = Through {
             erased: &erased,
+            reseals: &reseals,
             slots,
         };
         let lines: Vec<Written> = order
@@ -226,30 +229,101 @@ pub fn erasures<'l>(
         .collect()
 }
 
-/// [`erasures`], each beside the name of the erasure line that says why.
+/// [`erasures`], each beside the name of the erasure line that says why. A slot erased is
+/// erased in every seal of it: the key of each reseal of a slot an erasure names is named too.
 #[must_use]
 pub fn erasers<'l>(
     lines: impl IntoIterator<Item = (&'l Hash, &'l LineEvent)>,
 ) -> BTreeMap<KeyName, (&'l Hash, &'l Erasure)> {
+    let lines: Vec<(&Hash, &LineEvent)> = lines.into_iter().collect();
     let mut named: BTreeMap<KeyName, (&Hash, &Erasure)> = BTreeMap::new();
-    for (name, line) in lines {
+    for (name, line) in &lines {
         if let LineShape::Erased { keys, erasure } = line.shape() {
             for key in keys {
                 let at = named.entry(key.clone()).or_insert((name, erasure));
-                if name < at.0 {
+                if *name < at.0 {
                     *at = (name, erasure);
                 }
             }
         }
     }
+    for (_, line) in &lines {
+        if let LineShape::Resealed { of, .. } = line.shape()
+            && let Some(by) = named.get(of).copied()
+        {
+            named.extend(line.keys().map(|key| (key.clone(), by)));
+        }
+    }
     named
 }
 
+/// Every key a reseal among `lines` supersedes here: the key of each seal a slot was sealed again
+/// from, where `opens` says that reseal opens with a key this replica holds. Its words then stand
+/// in the reseal, so the key is destroyed like an erased one, and the slot reads from the reseal.
+/// A reseal whose key is not held supersedes nothing, so a store restored with its lines and
+/// without their keys keeps reading the old seal until a run seals it again. Monotone in the lines
+/// and in the keys held, since a reseal's key is destroyed only with the slot's erasure.
+#[must_use]
+pub fn superseded<'l>(
+    lines: impl IntoIterator<Item = (&'l Hash, &'l LineEvent)>,
+    opens: &dyn Fn(&LineEvent) -> bool,
+) -> std::collections::BTreeSet<KeyName> {
+    lines
+        .into_iter()
+        .filter_map(|(_, line)| match line.shape() {
+            LineShape::Resealed { from, .. } => opens(line).then(|| from.clone()),
+            LineShape::Opened { .. }
+            | LineShape::Titled { .. }
+            | LineShape::Said { .. }
+            | LineShape::Proposed { .. }
+            | LineShape::Reviewed { .. }
+            | LineShape::ReviewFailed { .. }
+            | LineShape::Stopped { .. }
+            | LineShape::Rewound { .. }
+            | LineShape::MemorySeen { .. }
+            | LineShape::Session { .. }
+            | LineShape::Unheard { .. }
+            | LineShape::Kept { .. }
+            | LineShape::Scoped { .. }
+            | LineShape::Coding { .. }
+            | LineShape::Erased { .. } => None,
+        })
+        .collect()
+}
+
+/// Every reseal among `lines`, by the key of the slot it seals, those under the current rules
+/// first: where a slot's own seal does not open, it is read from the first of these that does.
+#[must_use]
+pub fn reseals<'l>(
+    lines: impl IntoIterator<Item = (&'l Hash, &'l LineEvent)>,
+) -> BTreeMap<KeyName, Vec<&'l LineEvent>> {
+    let mut by: BTreeMap<KeyName, Vec<(bool, &Hash, &LineEvent)>> = BTreeMap::new();
+    for (name, line) in lines {
+        if let LineShape::Resealed { of, .. } = line.shape() {
+            let stale = !line
+                .scrubbed_under()
+                .all(crate::secretary::scrubbed_under::ScrubbedUnder::is_current);
+            by.entry(of.clone()).or_default().push((stale, name, line));
+        }
+    }
+    by.into_iter()
+        .map(|(of, mut seals)| {
+            seals.sort_by(|a, b| (a.0, a.1).cmp(&(b.0, b.1)));
+            (of, seals.into_iter().map(|(_, _, line)| line).collect())
+        })
+        .collect()
+}
+
 /// A slot as one conversation reads it: erased where `erased` names its key, before anything
-/// kept or held is asked, else as `slots` reads it.
-struct Through<'a, S> {
-    erased: &'a BTreeMap<KeyName, Erasure>,
-    slots: &'a S,
+/// kept or held is asked; else as `slots` reads it, and where that is missing, from the first
+/// of the slot's `reseals` that opens.
+pub struct Through<'a, S> {
+    /// The keys erased, with why.
+    pub erased: &'a BTreeMap<KeyName, Erasure>,
+    /// The reseals of each slot ([`reseals`]).
+    pub reseals: &'a BTreeMap<KeyName, Vec<&'a LineEvent>>,
+    /// How a slot is read by its key.
+    pub slots: &'a S,
 }
 
 impl<S: Slots> Slots for Through<'_, S> {
@@ -258,14 +332,33 @@ impl<S: Slots> Slots for Through<'_, S> {
         name: &KeyName,
         binding: &[u8],
         sealed: &[u8],
-        open: &dyn Fn(&TextKey) -> Option<LineWords>,
+        open: &dyn Fn(&TextKey) -> Option<Words<LineWords>>,
     ) -> Words<LineWords> {
-        match self.erased.get(name) {
-            Some(erasure) => Gone::Erased {
+        if let Some(erasure) = self.erased.get(name) {
+            return Gone::Erased {
                 erasure: erasure.clone(),
             }
-            .into(),
-            None => self.slots.words(name, binding, sealed, open),
+            .into();
+        }
+        match self.slots.words(name, binding, sealed, open) {
+            Words::Gone {
+                gone: Gone::Missing,
+            } => self
+                .reseals
+                .get(name)
+                .into_iter()
+                .flatten()
+                .map(|reseal| reseal.slot_words(0, self))
+                .find(|words| {
+                    !matches!(
+                        words,
+                        Words::Gone {
+                            gone: Gone::Missing
+                        }
+                    )
+                })
+                .unwrap_or_else(|| Gone::Missing.into()),
+            read => read,
         }
     }
 }
@@ -290,17 +383,26 @@ fn lines_of(objects: &[(Hash, Envelope<LineEvent>)]) -> impl Iterator<Item = (&H
         .filter_map(|(name, object)| object.event().map(|line| (name, line)))
 }
 
-/// Every slot whose key an erasure line of its own conversation names, as the line, the slot and
-/// its key's name: what a sweep destroys, on the box or in a tab. A function of the set of lines,
-/// and monotone in it, since a key an erasure names stays named as lines are added.
+/// Whether reseal `line` opens with `key`, the key its one slot is sealed under, if held.
+#[must_use]
+pub fn opens(line: &LineEvent, key: Option<&TextKey>) -> bool {
+    key.is_some_and(|key| line.read(0, key).is_some())
+}
+
+/// Every slot whose key an erasure line of its own conversation names, or a reseal of it that
+/// `opens` supersedes ([`superseded`]), as the line, the slot and its key's name: what a sweep
+/// destroys, on the box or in a tab. Monotone in the lines and the keys held, since a key an
+/// erasure names or a reseal supersedes stays so as lines and keys are added.
 #[must_use]
 pub fn dead<'l>(
     lines: impl IntoIterator<Item = (&'l Hash, &'l LineEvent)>,
+    opens: &dyn Fn(&LineEvent) -> bool,
 ) -> Vec<(&'l LineEvent, usize, &'l KeyName)> {
     by_conversation(lines)
         .into_values()
         .flat_map(|lines| {
             let erased = erasures(lines.iter().copied());
+            let superseded = superseded(lines.iter().copied(), opens);
             lines
                 .into_iter()
                 .flat_map(|(_, line)| {
@@ -308,7 +410,7 @@ pub fn dead<'l>(
                         .enumerate()
                         .map(move |(slot, key)| (line, slot, key))
                 })
-                .filter(|(_, _, key)| erased.contains_key(*key))
+                .filter(|(_, _, key)| erased.contains_key(*key) || superseded.contains(*key))
                 .collect::<Vec<_>>()
         })
         .collect()
@@ -360,8 +462,10 @@ pub fn opened(
         .into_values()
         .flat_map(|lines| {
             let erased = erasures(lines.iter().copied());
+            let reseals = reseals(lines.iter().copied());
             let read = Through {
                 erased: &erased,
+                reseals: &reseals,
                 slots,
             };
             lines
@@ -617,9 +721,31 @@ pub fn keys(conversations: Conversations<'_>) -> Result<Vec<ConversationId>, Sto
 /// rendered from its words may still be on disk; the next sweep tries again.
 pub fn sweep(conversations: Conversations<'_>) -> Result<usize, StoreError> {
     let objects = conversations.lines.objects()?;
+    let mut held = BTreeMap::new();
+    for (_, line) in lines_of(&objects) {
+        if let (LineShape::Resealed { .. }, Some(own)) = (line.shape(), line.keys().next())
+            && let Some(key) = conversations.keys.get(own)?
+        {
+            held.insert(own.clone(), key);
+        }
+    }
+    let opens = |line: &LineEvent| opens(line, line.keys().next().and_then(|own| held.get(own)));
+    destroy(conversations, dead(lines_of(&objects), &opens))
+}
+
+/// Destroy the key of each of `slots` that the key store still holds, each once the blocks its
+/// words were rendered to are forgotten, and say how many.
+///
+/// # Errors
+/// The stores' own, and [`StoreError::Unwritable`] naming every key kept because a block
+/// rendered from its words may still be on disk.
+pub fn destroy<'l>(
+    conversations: Conversations<'_>,
+    slots: impl IntoIterator<Item = (&'l LineEvent, usize, &'l KeyName)>,
+) -> Result<usize, StoreError> {
     let mut destroyed = 0;
     let mut kept = Vec::new();
-    for (line, slot, name) in dead(lines_of(&objects)) {
+    for (line, slot, name) in slots {
         conversations.opened.forget(name);
         let Some(key) = conversations.keys.get(name)? else {
             continue;
@@ -761,6 +887,7 @@ fn write(
 mod tests {
     use super::*;
     use crate::capability::Turn;
+    use crate::store::Reads as _;
 
     fn id(text: &str) -> ConversationId {
         ConversationId::new(text).expect("a slug")

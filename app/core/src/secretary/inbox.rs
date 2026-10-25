@@ -1015,6 +1015,7 @@ mod tests {
 
     use super::*;
     use crate::secretary::store::Draft;
+    use crate::store::Reads as _;
 
     fn draft(subject: &str) -> Proposal {
         Proposal::Email(Draft {

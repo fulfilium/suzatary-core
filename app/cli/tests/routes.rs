@@ -3,6 +3,7 @@
 mod common;
 
 use common::{Fakes, actor, deployment, login, v4};
+use suzatary_core::store::Reads as _;
 
 fn writer() -> (String, Fakes) {
     let fakes =
@@ -126,10 +127,7 @@ fn the_tip_route_is_tiny_and_true_and_never_cached() {
 #[test]
 fn a_named_peer_registers_a_token_and_loopback_may_not() {
     let (_, fakes) = writer();
-    let heads_before = {
-        use suzatary_core::store::Prodrome;
-        fakes.chain.tips().expect("derives")
-    };
+    let heads_before = { fakes.chain.tips().expect("derives") };
     let base = common::Server::new(
         std::sync::Arc::new(fakes),
         deployment([login("her@x.test")], [(login("her@x.test"), actor("ada"))]),

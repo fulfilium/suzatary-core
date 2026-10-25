@@ -49,9 +49,8 @@ pub use pairing::{
 };
 pub use provenance::Provenance;
 pub use registry::{
-    AdoptError, Adoption, Epoch, UnsignedWrite, adopt, complete_revocations, epoch,
-    misplaced_signatures, revoke, revoke_misplaced, revoked_for, sign_standing, sign_unsigned,
-    trust, trusted_for, unsigned_writes,
+    AdoptError, Adoption, Epoch, UnsignedWrite, adopt, complete_revocations, epoch, revoke,
+    revoke_misplaced, revoked_for, sign_unsigned, trust, trusted_for, unsigned_writes,
 };
 pub use request::{WINDOW_SECONDS, body_digest, is_nonce, request_name};
 pub use requested::{Answer, Requested};

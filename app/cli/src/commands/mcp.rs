@@ -137,8 +137,8 @@ pub async fn serve(
     Ok(())
 }
 
-/// The agent's interpreters; `K` is the chain it reads, a replica of it for the triage agent.
-pub struct Interpreters<K = suzatary_core::store::Signing<suzatary_io::proposals::Proposing>> {
+/// The agent's interpreters; `K` is the chain it reads, read-only for the triage agent.
+pub struct Interpreters<K = suzatary_io::reading::Reading> {
     pub(crate) chain: K,
     pub(crate) grounds: crate::wiring::Grounds,
     pub(crate) remembering: crate::wiring::Remembering,
@@ -162,7 +162,7 @@ impl<K> Interpreters<K> {
     }
 }
 
-impl<K: suzatary_core::store::Prodrome<suzatary_core::record::TodoEvent>> Interpreters<K> {
+impl<K: suzatary_core::store::Reads<suzatary_core::record::TodoEvent>> Interpreters<K> {
     /// The record the verbs are handed.
     pub fn agent(&self) -> Agent<'_> {
         self.grounds.agent(
@@ -173,36 +173,18 @@ impl<K: suzatary_core::store::Prodrome<suzatary_core::record::TodoEvent>> Interp
 }
 
 impl Interpreters {
-    /// The triage agent's interpreters for one chain, over a replica that first adopts the
-    /// chain's objects, so it reads what the chain holds.
-    ///
-    /// # Errors
-    /// The chain being unreadable or the replica unwritable.
+    /// The triage agent's interpreters for one chain, which it reads and never writes.
+    #[must_use]
     pub fn assemble(
         instance: &crate::instance::Instance,
         chain: &crate::instance::ChainDir,
-    ) -> anyhow::Result<Self> {
-        Ok(Self::around(
+    ) -> Self {
+        Self::around(
             instance,
-            replica(instance, chain)?,
+            crate::commands::reading_of(chain),
             crate::wiring::Remembering::reader(instance),
-        ))
+        )
     }
-}
-
-/// The agent's replica of one chain, its chain's objects taken in first; the box's key is never
-/// resolved here.
-///
-/// # Errors
-/// The chain being unreadable or the replica unwritable.
-fn replica(
-    instance: &crate::instance::Instance,
-    chain: &crate::instance::ChainDir,
-) -> anyhow::Result<suzatary_core::store::Signing<suzatary_io::proposals::Proposing>> {
-    Ok(suzatary_core::store::Signing::new(
-        crate::commands::proposing_of(chain)?,
-        instance.agent_signer(),
-    ))
 }
 
 /// `suzatary mcp`: serve the agent's tools over stdio until the client goes.
@@ -217,7 +199,7 @@ pub fn run(path: &std::path::Path) -> anyhow::Result<()> {
         .init();
     let instance = crate::instance::Instance::open(path)?;
     // Held for the life of the process, so every record borrows them for 'static: one set of
-    // grounds, and a replica per chain.
+    // grounds, and each chain, read.
     let grounds: &'static crate::wiring::Grounds =
         Box::leak(Box::new(crate::wiring::Grounds::of(&instance)));
     let remembering: &'static crate::wiring::Remembering =
@@ -227,13 +209,13 @@ pub fn run(path: &std::path::Path) -> anyhow::Result<()> {
         .chains
         .iter()
         .map(|chain| {
-            let held: &'static _ = Box::leak(Box::new(replica(&instance, chain)?));
-            Ok((
+            let held: &'static _ = Box::leak(Box::new(crate::commands::reading_of(chain)));
+            (
                 chain.policy.name.as_str().to_owned(),
                 grounds.agent(held, memory),
-            ))
+            )
         })
-        .collect::<anyhow::Result<_>>()?;
+        .collect();
     // The agent's writes are cards in the box's own Inbox, which only the owner's tap performs,
     // drawn in the conversations the memory reads, opened once and without the answers' cache.
     let cards = TriageCards::new(
@@ -251,16 +233,14 @@ pub fn run(path: &std::path::Path) -> anyhow::Result<()> {
 mod tests {
     use super::Interpreters;
 
-    /// The triage agent reads a replica of its chain, never the chain itself: the only way the
-    /// MCP server builds its interpreters answers exactly that.
+    /// The triage agent reads its chain through a store that only reads: the only way the MCP
+    /// server builds its interpreters answers exactly that.
     #[test]
-    fn the_agent_reads_a_replica() {
+    fn the_agent_reads_its_chain_and_writes_none() {
         let assemble: fn(
             &crate::instance::Instance,
             &crate::instance::ChainDir,
-        ) -> anyhow::Result<
-            Interpreters<suzatary_core::store::Signing<suzatary_io::proposals::Proposing>>,
-        > = Interpreters::assemble;
+        ) -> Interpreters<suzatary_io::reading::Reading> = Interpreters::assemble;
         let _ = assemble;
     }
 }

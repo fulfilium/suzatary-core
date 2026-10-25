@@ -85,9 +85,7 @@ proptest-regressions/
 /mbsyncrc
 /state.json
 /events/
-/events-triage/
 /events-suzatary/
-/events-triage-suzatary/
 /briefings/
 /notes/
 /secretary/

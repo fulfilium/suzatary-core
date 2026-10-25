@@ -17,7 +17,7 @@ document.documentElement.dataset["booting"] = ""
 pushtoken.hold()
 
 // The list's fold, the first thing the app reads on the chain this browser last read.
-primed.start(`/api/${encodeURIComponent(remembered())}/fold`)
+primed.start(primed.fold(remembered()))
 
 const at = (b: string, file: string): string => new URL(shell.under(b, file), document.baseURI).href
 

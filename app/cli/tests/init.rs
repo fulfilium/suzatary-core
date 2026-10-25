@@ -224,28 +224,16 @@ fn a_separate_data_root_gets_the_chain_directories_and_the_code_root_gets_none()
     let expected_data = std::fs::canonicalize(&data_dir).expect("the data dir exists");
     for chain in &read.chains {
         assert!(chain.events.is_dir(), "{:?}", chain.events);
-        assert!(chain.proposals.is_dir(), "{:?}", chain.proposals);
         assert!(
             chain.events.starts_with(&expected_data),
             "{:?} did not land under the data root {:?}",
             chain.events,
             expected_data
         );
-        assert!(
-            chain.proposals.starts_with(&expected_data),
-            "{:?} did not land under the data root {:?}",
-            chain.proposals,
-            expected_data
-        );
     }
 
     // And nothing leaked into the code root.
-    for name in [
-        "events",
-        "events-triage",
-        "events-suzatary",
-        "events-triage-suzatary",
-    ] {
+    for name in ["events", "events-suzatary"] {
         assert!(
             !code_dir.join(name).exists(),
             "{name} leaked into the code root {code_dir:?}"

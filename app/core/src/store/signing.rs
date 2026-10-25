@@ -6,12 +6,12 @@ use prodrome_core::registers::Node;
 use prodrome_core::schema::Schema;
 use prodrome_core::sign::Secret;
 
-use super::{Prodrome, StoreError, WriteLock};
+use super::{Prodrome, Reads, StoreError, WriteLock};
 
 /// A store whose every append is SIGNED: the event's `Change`, then the key's `Signed` of it,
 /// two objects joined into the store. So a writer holding a `Signing` cannot
 /// write an unsigned object, and which key signs is the value the store was built with: the
-/// box's key for the box's stores, the agent's for its replica.
+/// box's key for the box's stores.
 ///
 /// Signing is deterministic, so a twin's signature is the object already held and an append
 /// replayed writes nothing new, signature included.
@@ -79,7 +79,7 @@ pub fn sign<E: Schema>(
     Ok(named)
 }
 
-impl<E: Schema, S: Prodrome<E>> Prodrome<E> for Signing<S> {
+impl<E: Schema, S: Reads<E>> Reads<E> for Signing<S> {
     fn objects(&self) -> Result<Vec<(Hash, Envelope<E>)>, StoreError> {
         self.store.objects()
     }
@@ -103,7 +103,9 @@ impl<E: Schema, S: Prodrome<E>> Prodrome<E> for Signing<S> {
     fn verify(&self) -> Vec<String> {
         self.store.verify()
     }
+}
 
+impl<E: Schema, S: Prodrome<E>> Prodrome<E> for Signing<S> {
     /// No hold of its own: a signature is an element beside its object, so two writers'
     /// changes and signatures interleave harmlessly, and a crash between the two leaves an
     /// unsigned object that `verify` names and the same append, replayed, signs.
@@ -124,10 +126,6 @@ impl<E: Schema, S: Prodrome<E>> Prodrome<E> for Signing<S> {
 
     fn locked(&self) -> Result<Box<dyn WriteLock + '_>, StoreError> {
         self.store.locked()
-    }
-
-    fn settled(&self) -> Result<BTreeSet<Hash>, StoreError> {
-        self.store.settled()
     }
 }
 

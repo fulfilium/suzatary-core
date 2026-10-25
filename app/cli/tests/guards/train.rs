@@ -2582,14 +2582,12 @@ root = "{key}"
 [[chains]]
 name = "life"
 events = "events"
-proposals = "events-triage"
 untrusted = ["triage"]
 actors = ["assistant", "ada", "triage"]
 owner = "ada"
 [[chains]]
 name = "suzatary"
 events = "events-suzatary"
-proposals = "events-triage-suzatary"
 untrusted = ["triage"]
 actors = ["assistant", "ada", "triage"]
 owner = "ada"

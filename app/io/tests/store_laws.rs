@@ -23,6 +23,7 @@ use suzatary_core::secretary::line_event::LineEvent;
 use suzatary_core::secretary::memory_event::MemoryEvent;
 use suzatary_core::secretary::topics::alias_event::AliasEvent;
 use suzatary_core::secretary::topics::membership_event::MembershipEvent;
+use suzatary_core::store::Reads as _;
 use suzatary_core::store::{Files, Hold, Kind, Prodrome, Store};
 use suzatary_io::objects::Objects;
 
@@ -143,7 +144,6 @@ fn every_prodrome_keeps_the_store_laws() {
         }),
     ]
     .into();
-    // The agent's replica is a chain's schema at a chain's hold, so the chain's laws are its.
     let prodromes: BTreeSet<Kind> = Kind::ALL
         .iter()
         .copied()

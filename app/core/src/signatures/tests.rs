@@ -9,6 +9,7 @@ use proptest::prelude::*;
 
 use super::*;
 use crate::record::TodoEvent;
+use crate::store::Reads as _;
 use crate::store::{InMemory, Prodrome, Signing, sign};
 
 fn key(byte: char) -> Secret {

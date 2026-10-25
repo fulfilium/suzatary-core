@@ -20,6 +20,7 @@ use suzatary_core::secretary::line_event::LineEvent;
 use suzatary_core::secretary::store::{ConversationId, Entry, Kind};
 use suzatary_core::secretary::transcript;
 use suzatary_core::secretary::words::Words;
+use suzatary_core::store::Reads as _;
 use suzatary_core::store::{Doc as _, Prodrome as _};
 
 fn at(n: u32) -> Datetime {

@@ -3,10 +3,11 @@
 use chrono::NaiveDate;
 use prodrome_core::store::Replica as _;
 use suzatary_core::calendar::{Calendar as Reading, Day, Occurrence};
-use suzatary_core::store::{Prodrome, StoreError};
+use suzatary_core::store::StoreError;
 use suzatary_core::zone::Zone;
 
 use crate::plugin_store::PluginStore;
+use suzatary_core::store::Reads as _;
 
 /// The calendar every calendar plugin fills, read through
 /// [`suzatary_core::capability::Calendar`]: the union of the plugins' stores whose declared

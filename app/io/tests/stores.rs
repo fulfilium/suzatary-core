@@ -2,9 +2,9 @@
 //! leave exactly the files under `tests/stores/`, and reading a copy of them writes nothing.
 //!
 //! `tests/stores/` is never regenerated: a difference is a change to stored data, which is a
-//! migration. The chain and the agent's replica write the Prodrome's `Change`, so their appends
-//! are pinned in `tests/stores-changes/`; `tests/stores/` keeps their legacy bytes, which a copy
-//! is still read from.
+//! migration. The chain writes the Prodrome's `Change`, so its appends are pinned in
+//! `tests/stores-changes/`; `tests/stores/` keeps its legacy bytes, which a copy is still read
+//! from.
 
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
@@ -28,13 +28,13 @@ use suzatary_core::secretary::memories::Memories;
 use suzatary_core::secretary::memory::{Fact, Kind, Origin};
 use suzatary_core::secretary::store::{ConversationId, Draft, Entry, Proposal, Reasons};
 use suzatary_core::secretary::transcript;
-use suzatary_core::store::{Prodrome, Replica as _};
+use suzatary_core::store::Prodrome;
+use suzatary_core::store::Reads as _;
 use suzatary_io::attachments::AttachmentStore;
 use suzatary_io::blobs::Blobs;
 use suzatary_io::objects::Objects;
 use suzatary_io::pdftotext::Pdftotext;
 use suzatary_io::plugin_store::PluginStore;
-use suzatary_io::proposals::{Proposing, Replica};
 
 const PNG: &[u8] = &[0x89, b'P', b'N', b'G', 0x0D, 0x0A, 0x1A, 0x0A, 1, 2, 3];
 const SCAN: &[u8] = &[0x89, b'P', b'N', b'G', 0x0D, 0x0A, 0x1A, 0x0A, 4, 5, 6];
@@ -44,7 +44,7 @@ fn golden() -> PathBuf {
 }
 
 /// The prodromes whose appends write `Change`s, pinned apart from their legacy bytes.
-const CHANGES: [&str; 2] = ["events/", "events-triage/"];
+const CHANGES: [&str; 1] = ["events/"];
 
 /// The inbox at the proposal schema, pinned in `tests/stores-changes/` only.
 const INBOX: &str = "inbox";
@@ -264,24 +264,6 @@ fn literals(store: &Objects<TodoEvent>) -> Vec<(Hash, String)> {
             (name, text)
         })
         .collect()
-}
-
-/// The agent's replica of `events/`: one run of two todos, the second of which is rejected.
-fn proposals(root: &Path) {
-    let run = Proposing::open(
-        Replica::new(root.join("events-triage"), policy()),
-        EventStore::new(root.join("events"), policy()),
-    )
-    .expect("opens");
-    let first = &CAST.todos.checklist;
-    let second = &CAST.todos.high;
-    run.append(mk_created(first.id, at(10, 0), "triage", first.created, "").expect("valid"))
-        .expect("appends");
-    let gone = run
-        .append(mk_created(second.id, at(10, 1), "triage", second.created, "").expect("valid"))
-        .expect("appends");
-    let removed = run.replica().discard(&[gone]).expect("discards");
-    assert_eq!(removed.len(), 1);
 }
 
 /// The inbox's prodrome begun with a nonce of zeros, so its bytes can be pinned; the store's own
@@ -635,7 +617,6 @@ fn topics(root: &Path) {
 
 fn write_every_store(root: &Path) {
     chain(root);
-    proposals(root);
     let asked = inbox(root);
     conversations(root, &asked);
     memories(root);
@@ -702,14 +683,13 @@ fn copy_pins(root: &Path) -> PathBuf {
 fn reading_a_copy_of_every_store_writes_nothing() {
     use suzatary_core::attachment::AttachmentId;
     use suzatary_core::chains::ChainName;
-    use suzatary_core::store::{Area, Database};
+    use suzatary_core::store::Database;
 
     let dir = tempfile::tempdir().expect("a scratch dir");
     let root = dir.path();
     let changed = copy_pins(root);
 
     let chain = Objects::chain(EventStore::new(root.join("events"), policy()));
-    let replica = Replica::new(root.join("events-triage"), policy());
     let inbox = Objects::open(root.join(INBOX));
     let (lines, keys) = lines_at(root);
     let memory = Objects::open(root.join(MEMORY));
@@ -729,10 +709,7 @@ fn reading_a_copy_of_every_store_writes_nothing() {
     let database = Database {
         chains: [(
             ChainName::new("life").expect("a chain name"),
-            Area {
-                events: &chain,
-                proposals: &replica,
-            },
+            &chain as &dyn Prodrome<_>,
         )]
         .into(),
         inbox: &inbox,
@@ -755,10 +732,9 @@ fn reading_a_copy_of_every_store_writes_nothing() {
 
     assert!(database.verify().iter().all(|(_, found)| found.is_empty()));
     let life = &database.chains[&ChainName::new("life").expect("a chain name")];
-    assert_eq!(life.events.objects().expect("reads").len(), 5);
-    assert_eq!(life.events.nodes().expect("reads").len(), 5);
-    assert_eq!(life.events.tips().expect("reads").len(), 1);
-    assert_eq!(life.proposals.objects().expect("reads").len(), 6);
+    assert_eq!(life.objects().expect("reads").len(), 5);
+    assert_eq!(life.nodes().expect("reads").len(), 5);
+    assert_eq!(life.tips().expect("reads").len(), 1);
     assert_eq!(
         inbox::fold(database.inbox)
             .expect("reads")

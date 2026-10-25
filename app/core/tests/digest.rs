@@ -23,6 +23,7 @@ use suzatary_core::secretary::memory::Fact;
 use suzatary_core::secretary::memory_event::MemoryEvent;
 use suzatary_core::secretary::salted_text::{Text, TextName};
 use suzatary_core::secretary::store::{ConversationId, Entry};
+use suzatary_core::store::Reads as _;
 use suzatary_core::store::{Doc, InMemory, InMemoryDoc, Prodrome};
 
 /// Each salt the next number.
@@ -1387,7 +1388,7 @@ fn a_session_is_told_the_facts_then_the_record() {
     // Turns of a length the owner writes, so a summary costs less than the lines it stands for.
     // The tree's cuts follow the lines' names, so how many come before the tool answer is chosen
     // for a tree whose first part ends with it; a change to a line's stored print moves them.
-    let turns = turns(&[[0u8; 37].as_slice(), &[3], &[0; 8]].concat())
+    let turns = turns(&[[0u8; 60].as_slice(), &[3], &[0; 12]].concat())
         .into_iter()
         .map(|turn| match turn {
             Turn::Person {
@@ -1433,7 +1434,7 @@ fn a_session_is_told_the_facts_then_the_record() {
     assert!(
         parts
             .iter()
-            .any(|part| part.starts_with("0+38 (") && part.ends_with("tool answers)")),
+            .any(|part| part.starts_with("0+61 (") && part.ends_with("tool answers)")),
         "{told}"
     );
     for part in parts {

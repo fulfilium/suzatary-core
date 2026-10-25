@@ -12,7 +12,7 @@ use serde_json::{Map, Value};
 use crate::agent::priced::{PRICE_SPELLINGS, Priced};
 use crate::authoring::{self, NewTodo, Writer};
 use crate::believed::{Believed, Preview};
-use crate::capability::{Agent, Datetime, Typeset};
+use crate::capability::{Datetime, Typeset};
 use crate::chains::ChainPolicy;
 use crate::literal::{Fields, Literal, Signature, arm, no_arm, record};
 use crate::record::{Node, Source, TodoEvent};
@@ -544,7 +544,7 @@ pub enum Unapplied {
 /// The chain's refusal of the first act it would not build, or a chain that cannot be read.
 pub fn checked(
     changeset: &Changeset,
-    chain: &dyn crate::store::Prodrome<TodoEvent>,
+    chain: &dyn crate::store::Reads<TodoEvent>,
     building: &Building<'_>,
 ) -> Result<(), Refusal> {
     let preview =
@@ -559,7 +559,7 @@ pub fn checked(
 /// # Errors
 /// [`Unapplied::Refused`] before the first append, [`Unapplied::Appending`] after it.
 pub fn apply(
-    caps: &Agent<'_>,
+    caps: &crate::capability::Secretary<'_>,
     policy: &ChainPolicy,
     categories: &[&str],
     zone: crate::zone::Zone,

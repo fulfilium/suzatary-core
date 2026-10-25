@@ -33,6 +33,7 @@ use suzatary_core::secretary::outcome::Outcome;
 use suzatary_core::secretary::recollection::Recollection;
 use suzatary_core::secretary::salted_text::{Text, TextName};
 use suzatary_core::secretary::store::{ConversationId, Entry};
+use suzatary_core::store::Reads as _;
 use suzatary_core::store::{Doc as _, InMemory, InMemoryDoc, Prodrome};
 
 /// Each salt the next number.

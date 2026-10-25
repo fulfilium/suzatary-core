@@ -98,10 +98,10 @@ impl PluginStore {
 #[cfg(test)]
 mod tests {
     use prodrome_core::event::parse_event;
-    use suzatary_core::store::Prodrome;
     use suzatary_core::store::learn;
 
     use super::*;
+    use suzatary_core::store::Reads as _;
 
     const SCHEMA: &str = "Schema(key='door', events=(Event(name='Seen', fields=(Field(name='door', \
         type=Text()), Field(name='at', type=Instant()), Field(name='actor', type=Text()), \

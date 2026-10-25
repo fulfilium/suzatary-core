@@ -16,6 +16,7 @@ use prodrome_core::sign::{Registrar, Secret};
 use suzatary_core::record::TodoEvent;
 use suzatary_core::signatures::{BoxKeys, Enrolment, KEPT_CHECKS, Trust, Verified};
 use suzatary_core::store::Prodrome as _;
+use suzatary_core::store::Reads as _;
 
 fn ada() -> suzatary_core::capability::Login {
     common::login("ada@example.com")

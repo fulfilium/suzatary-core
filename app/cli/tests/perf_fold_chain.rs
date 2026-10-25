@@ -24,7 +24,7 @@ use sha2::{Digest, Sha256};
 use suzatary_core::capability::{Datetime, Secretary, Server};
 use suzatary_core::record::EventStore;
 use suzatary_core::routes;
-use suzatary_core::store::Prodrome;
+use suzatary_core::store::Reads as _;
 use suzatary_io::render::Typst;
 
 /// The repository root.

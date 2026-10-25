@@ -13,7 +13,7 @@
 //! and every summary of a renamed node stops being named by the tree. Those words are then dead
 //! ([`Digest::naming`]), and the one sweep deletes them: an erasure needs no case of its own.
 //!
-//! A leaf is the line a line carries ([`Carried::From`]), or the line itself, so a store carried
+//! A leaf is the line a line carries ([`Carried::From`](crate::secretary::carried::Carried::From)), or the line itself, so a store carried
 //! forward reads as the same tree and every summary stands. A line whose words are erased stays in
 //! the order, its leaf renamed over the keys that went
 //! and its label marked erased, so the nodes above it rename, and with them, where a renamed node
@@ -32,7 +32,6 @@ use prodrome_core::schema::Schema as _;
 use prodrome_core::topo;
 
 use crate::model_name::ModelName;
-use crate::secretary::carried::Carried;
 use crate::secretary::digest_event::{DigestEvent, Said};
 use crate::secretary::digest_label::Label;
 use crate::secretary::digest_line::Line;
@@ -212,10 +211,11 @@ fn leaves_of(
         let Some(line) = object.event() else {
             continue;
         };
-        let identity = match line.carried() {
-            Carried::From(old) => old,
-            Carried::Written => name,
-        };
+        // A reseal holds another slot's words, read where that slot stands: it is no leaf.
+        if resealing(line) {
+            continue;
+        }
+        let identity = line.identity(name);
         let keys: Vec<Hash> = line
             .keys()
             .filter(|key| gone.contains_key(*key))
@@ -269,15 +269,32 @@ fn line_order<'l>(
     lines: &'l [(Hash, Envelope<LineEvent>)],
     carries: &BTreeMap<&'l Hash, &'l Hash>,
 ) -> Result<Vec<&'l Hash>, Cycle> {
+    // A reseal is no leaf, so a line resting on one rests on what the reseal rests on.
+    let reseals: BTreeMap<&Hash, Vec<Hash>> = lines
+        .iter()
+        .filter(|(_, object)| object.event().is_some_and(resealing))
+        .map(|(name, object)| (name, parents_of(object)))
+        .collect();
     let parents: BTreeMap<&Hash, Vec<&Hash>> = lines
         .iter()
-        .filter(|(_, object)| object.event().is_some())
-        .map(|(name, object)| {
-            let parents = parents_of(object)
-                .iter()
-                .filter_map(|parent| carries.get(parent).copied())
-                .collect();
-            (carries[name], parents)
+        .filter_map(|(name, object)| Some((carries.get(name).copied()?, object)))
+        .map(|(carried, object)| {
+            let mut pending = parents_of(object);
+            let mut seen = BTreeSet::new();
+            let mut found = Vec::new();
+            while let Some(parent) = pending.pop() {
+                if !seen.insert(parent.clone()) {
+                    continue;
+                }
+                match (carries.get(&parent), reseals.get(&parent)) {
+                    (Some(line), _) => found.push(*line),
+                    (None, Some(beneath)) => pending.extend(beneath.iter().cloned()),
+                    (None, None) => {}
+                }
+            }
+            found.sort();
+            found.dedup();
+            (carried, found)
         })
         .collect();
     let line: BTreeMap<&Hash, &Hash> = carries
@@ -289,6 +306,14 @@ fn line_order<'l>(
         .into_iter()
         .filter_map(|carried| line.get(carried).copied())
         .collect())
+}
+
+/// Whether `line` seals another slot's words again.
+fn resealing(line: &LineEvent) -> bool {
+    matches!(
+        line.shape(),
+        crate::secretary::line_shape::LineShape::Resealed { .. }
+    )
 }
 
 /// What a register's write says; `None` for a call, which writes no register.

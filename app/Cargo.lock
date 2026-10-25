@@ -4178,6 +4178,7 @@ dependencies = [
  "prodrome-wasm-exports",
  "proptest",
  "regex",
+ "regex-syntax",
  "schemars",
  "serde",
  "serde_json",

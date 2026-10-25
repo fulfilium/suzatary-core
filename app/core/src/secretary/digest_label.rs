@@ -105,7 +105,8 @@ impl Kind {
             Entry::Session { .. }
             | Entry::Kept { .. }
             | Entry::Scoped { .. }
-            | Entry::Unheard { .. } => Kind::Session,
+            | Entry::Unheard { .. }
+            | Entry::Resealed { .. } => Kind::Session,
             Entry::Coding { .. } => Kind::Coding,
             Entry::Erased { .. } => Kind::Erased,
         }

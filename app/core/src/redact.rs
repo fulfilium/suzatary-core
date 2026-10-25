@@ -3,7 +3,8 @@
 //! [`Redacted`] is the only type a document read answers in, and [`redact`] is its only
 //! constructor, so text that skipped the pass does not typecheck. [`Scrubbed`] is the same
 //! promise for a stored conversation line: every string in it went through [`redact`] and the
-//! link pass, and [`Scrubbed::of`] is its only constructor.
+//! link pass, and [`Scrubbed::of`] is its only constructor. [`Rules`] names the patterns a scrub
+//! applies, so a stored line can record which rules its words passed.
 //!
 //! These shapes are held numbers, replaced with [`REDACTED`]:
 //!
@@ -50,11 +51,14 @@
 //! and is not costs the owner a look at the file; one that slips through costs
 //! the number. A `zipcode=` parameter loses its value for the same reason.
 
+use std::borrow::Cow;
+use std::cell::LazyCell;
 use std::sync::LazyLock;
 
 use regex::Regex;
 use serde::Serialize;
 use serde::de::DeserializeOwned;
+use sha2::{Digest as _, Sha256};
 
 /// What a redacted number becomes.
 pub const REDACTED: &str = "[redacted]";
@@ -150,11 +154,140 @@ static USERINFO: LazyLock<Regex> = LazyLock::new(|| {
 });
 
 /// Replace every link credential this module recognises in `text`.
+///
+/// Each pattern runs only on a text holding a substring every match of it holds, so a text
+/// without one costs a substring search, not a scan by the regex crate's slower engines, which a
+/// Unicode `\b` sends a non-ASCII text to.
 pub(crate) fn unlink(text: &str) -> String {
-    let text = USERINFO.replace_all(text, format!("${{1}}{REDACTED}@").as_str());
-    let text = CREDENTIAL.replace_all(&text, format!("${{1}}{REDACTED}").as_str());
-    JWT.replace_all(&text, REDACTED).into_owned()
+    let mut text = Cow::Borrowed(text);
+    if text.contains("://") && text.contains('@') {
+        text = Cow::Owned(
+            USERINFO
+                .replace_all(&text, format!("${{1}}{REDACTED}@").as_str())
+                .into_owned(),
+        );
+    }
+    if text.contains('=')
+        || text
+            .as_bytes()
+            .windows(3)
+            .any(|three| three.eq_ignore_ascii_case(b"%3d"))
+    {
+        text = Cow::Owned(
+            CREDENTIAL
+                .replace_all(&text, format!("${{1}}{REDACTED}").as_str())
+                .into_owned(),
+        );
+    }
+    if text.contains("eyJ") {
+        text = Cow::Owned(JWT.replace_all(&text, REDACTED).into_owned());
+    }
+    text.into_owned()
 }
+
+/// Which rules a text was scrubbed under: the SHA-256, in lowercase hex, of every pattern the
+/// scrub applies in the order it applies them, then its distances, its currency words and
+/// `CHECKS`. A stored line records it, so a change to the rules can find every line scrubbed
+/// under older ones.
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, serde::Deserialize)]
+#[serde(try_from = "String", into = "String")]
+pub struct Rules(String);
+
+/// A name that is no SHA-256.
+#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
+#[error("a scrub's rules are named by 64 lowercase hex, got {0:?}")]
+pub struct NotRules(pub String);
+
+/// The revision of the code the patterns' matches pass through (the checksums, the dates, the
+/// standing-alone test and the overlap rule). Raise it when that code changes what is redacted,
+/// since no pattern's text shows such a change.
+const CHECKS: u32 = 1;
+
+static RULES: LazyLock<Rules> = LazyLock::new(|| {
+    let patterns: [&Regex; 20] = [
+        &WRITTEN_OUT,
+        &NINE_DIGITS,
+        &LABEL,
+        &NAMED_CODE_LABEL,
+        &STRONG_CODE_LABEL,
+        &CODE_LABEL,
+        &NOT_CODE_LABEL,
+        &CODE,
+        &ACCOUNT_LABEL,
+        &NOT_ACCOUNT_LABEL,
+        &ACCOUNT,
+        &ROUTING_LABEL,
+        &ROUTING,
+        &GROUPS,
+        &IBAN,
+        &HINT,
+        &PLACEHOLDER,
+        &USERINFO,
+        &CREDENTIAL,
+        &JWT,
+    ];
+    let mut hash = Sha256::new();
+    // Each part ends in a NUL, which no pattern holds, so the parts split one way.
+    for part in patterns
+        .iter()
+        .map(|pattern| pattern.as_str().to_owned())
+        .chain([NEAR.to_string(), STRONG_NEAR.to_string()])
+        .chain(CURRENCIES.iter().map(|word| (*word).to_owned()))
+        .chain([REDACTED.to_owned(), CHECKS.to_string()])
+    {
+        hash.update(part.as_bytes());
+        hash.update([0]);
+    }
+    Rules(hex::encode(hash.finalize()))
+});
+
+impl Rules {
+    /// The rules this build scrubs under.
+    #[must_use]
+    pub fn current() -> &'static Rules {
+        &RULES
+    }
+
+    /// A name read back, checked once.
+    ///
+    /// # Errors
+    /// [`NotRules`] for anything but 64 lowercase hex.
+    pub fn new(name: impl Into<String>) -> Result<Self, NotRules> {
+        let name = name.into();
+        if name.len() == 64 && name.bytes().all(|b| matches!(b, b'0'..=b'9' | b'a'..=b'f')) {
+            Ok(Self(name))
+        } else {
+            Err(NotRules(name))
+        }
+    }
+
+    /// The hex.
+    #[must_use]
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+}
+
+impl TryFrom<String> for Rules {
+    type Error = NotRules;
+    fn try_from(name: String) -> Result<Self, NotRules> {
+        Self::new(name)
+    }
+}
+
+impl From<Rules> for String {
+    fn from(rules: Rules) -> String {
+        rules.0
+    }
+}
+
+impl std::fmt::Display for Rules {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(&self.0)
+    }
+}
+
+crate::literal::text_literal!(Rules => |rules| rules.as_str().to_owned());
 
 /// A value every string of which, object keys included, went through [`redact`] and the link
 /// pass: what a conversation line must be before a store takes it.
@@ -174,6 +307,8 @@ impl<T: Serialize + DeserializeOwned> Scrubbed<T> {
     /// [`Unscrubbable`] when the scrubbed strings do not parse back, which refuses the value
     /// rather than store it unscrubbed.
     pub fn of(value: &T) -> Result<Self, Unscrubbable> {
+        #[cfg(test)]
+        SCRUBS.with(|count| count.set(count.get() + 1));
         let tree = serde_json::to_value(value).map_err(|e| Unscrubbable(e.to_string()))?;
         serde_json::from_value(scrubbed(tree))
             .map(Self)
@@ -193,6 +328,17 @@ impl<T> Scrubbed<T> {
     pub fn into_inner(self) -> T {
         self.0
     }
+}
+
+#[cfg(test)]
+thread_local! {
+    static SCRUBS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
+/// How many values this thread has scrubbed, so a test can show a path scrubs none.
+#[cfg(test)]
+pub(crate) fn scrubs() -> usize {
+    SCRUBS.with(std::cell::Cell::get)
 }
 
 fn scrubbed(tree: serde_json::Value) -> serde_json::Value {
@@ -491,24 +637,32 @@ impl Labels {
     }
 }
 
-/// Every code in `text`, by [`Labels`]' code labels.
-fn codes(text: &str, labels: &Labels) -> Vec<Candidate> {
-    let Labels {
-        named,
-        strong,
-        weak,
-        not_codes,
-        ..
-    } = labels;
-    let right_before: Vec<Label> = weak
-        .iter()
-        .copied()
-        .filter(|&(label_start, label_end, _)| {
-            text[label_start..label_end].eq_ignore_ascii_case("code")
-        })
-        .collect();
-    CODE.find_iter(text)
+/// Every code in `text`, by [`Labels`]' code labels, the pattern matched over `digits`
+/// ([`identity_numbers`]).
+fn codes(
+    text: &str,
+    digits: &str,
+    labels: &LazyCell<Labels, impl FnOnce() -> Labels>,
+) -> Vec<Candidate> {
+    let right_before = LazyCell::new(|| -> Vec<Label> {
+        labels
+            .weak
+            .iter()
+            .copied()
+            .filter(|&(label_start, label_end, _)| {
+                text[label_start..label_end].eq_ignore_ascii_case("code")
+            })
+            .collect()
+    });
+    CODE.find_iter(digits)
         .filter_map(|found| {
+            let Labels {
+                named,
+                strong,
+                weak,
+                not_codes,
+                ..
+            } = &**labels;
             let (start, end) = (found.start(), found.end());
             let digits = digits_of(found.as_str());
             let code = |labels: &[Label], reach: usize, before: bool| {
@@ -536,19 +690,54 @@ fn codes(text: &str, labels: &Labels) -> Vec<Candidate> {
 /// Every held number this module recognises in `text`, in order and never overlapping: two
 /// matches that overlap are one, from the first one's start to the later end, of the kind of
 /// the strongest: a code, then a kind whose checksum held, then the closest label.
+///
+/// Every kind holds an ASCII digit, so a text with none holds no number; a text with some is
+/// matched by the digit patterns over its `ascii` copy, and its labels are read only when a
+/// pattern found something they could claim.
 #[must_use]
 pub fn identity_numbers(text: &str) -> Vec<Found> {
-    let labels = Labels::of(text);
-    let Labels {
-        identity,
-        accounts,
-        not_accounts,
-        routings,
-        ..
-    } = &labels;
+    if !text.bytes().any(|byte| byte.is_ascii_digit()) {
+        return Vec::new();
+    }
+    numbers(text, &ascii(text))
+}
+
+/// `text` as the digit patterns read it: each character outside ASCII replaced, byte for byte,
+/// by `_` where Unicode counts it part of a word and by `#` where it does not.
+///
+/// No digit pattern matches either byte, and `\b` falls where it falls in `text`, so every match
+/// is the same, at the same byte range; the IBAN pattern, whose letters `(?i)` folds onto two
+/// characters outside ASCII, reads the copy only of a text holding neither. The copy is ASCII,
+/// which lets the regex crate's fast engine run: that engine gives up at the first non-ASCII byte
+/// under a Unicode `\b`.
+fn ascii(text: &str) -> Cow<'_, str> {
+    if text.is_ascii() {
+        return Cow::Borrowed(text);
+    }
+    let mut copy = String::with_capacity(text.len());
+    for c in text.chars() {
+        if c.is_ascii() {
+            copy.push(c);
+        } else {
+            let fill = if regex_syntax::is_word_character(c) {
+                '_'
+            } else {
+                '#'
+            };
+            copy.extend(std::iter::repeat_n(fill, c.len_utf8()));
+        }
+    }
+    Cow::Owned(copy)
+}
+
+/// Every held number in `text`, the digit patterns matched over `digits`, which has `text`'s
+/// byte ranges and is `text` itself or its [`ascii`] copy.
+fn numbers(text: &str, digits: &str) -> Vec<Found> {
+    let labels = LazyCell::new(|| Labels::of(text));
     let mut spans: Vec<Candidate> = WRITTEN_OUT
-        .find_iter(text)
+        .find_iter(digits)
         .map(|found| {
+            let identity = &labels.identity;
             let (kind, strength) = closest(text, identity, found.start(), found.end()).map_or(
                 (
                     if found.as_str().starts_with('9') {
@@ -563,34 +752,45 @@ pub fn identity_numbers(text: &str) -> Vec<Found> {
             candidate(found.start(), found.end(), kind, strength)
         })
         .collect();
-    spans.extend(NINE_DIGITS.find_iter(text).filter_map(|found| {
-        closest(text, identity, found.start(), found.end())
+    spans.extend(NINE_DIGITS.find_iter(digits).filter_map(|found| {
+        closest(text, &labels.identity, found.start(), found.end())
             .map(|(kind, gap)| candidate(found.start(), found.end(), kind, Strength::Labelled(gap)))
     }));
-    spans.extend(codes(text, &labels));
-    spans.extend(ACCOUNT.find_iter(text).filter_map(|found| {
+    spans.extend(codes(text, digits, &labels));
+    spans.extend(ACCOUNT.find_iter(digits).filter_map(|found| {
         let (start, end) = (found.start(), found.end());
         if !account(found.as_str()) || !alone(text, start, end) {
             return None;
         }
-        let other = closest(text, not_accounts, start, end).map_or(usize::MAX, |(_, gap)| gap);
-        closest(text, accounts, start, end)
+        let other =
+            closest(text, &labels.not_accounts, start, end).map_or(usize::MAX, |(_, gap)| gap);
+        closest(text, &labels.accounts, start, end)
             .filter(|&(_, gap)| gap < other)
             .map(|(kind, gap)| candidate(start, end, kind, Strength::Labelled(gap)))
     }));
-    spans.extend(ROUTING.find_iter(text).filter_map(|found| {
+    spans.extend(ROUTING.find_iter(digits).filter_map(|found| {
         let (start, end) = (found.start(), found.end());
         (aba(found.as_str())
             && alone(text, start, end)
-            && closest(text, routings, start, end).is_some())
+            && closest(text, &labels.routings, start, end).is_some())
         .then(|| candidate(start, end, Kind::Routing, Strength::Checked))
     }));
-    spans.extend(cards(text));
+    spans.extend(cards(text, digits));
+    // Under `(?i)`, `ſ` matches `S` and the Kelvin sign `K`, each a letter the copy has no
+    // spelling of, so a text holding either is matched as written.
+    let letters = if text.contains(['\u{17f}', '\u{212a}']) {
+        text
+    } else {
+        digits
+    };
     spans.extend(
-        IBAN.find_iter(text)
+        IBAN.find_iter(letters)
             .filter(|found| iban(found.as_str()))
             .map(|found| candidate(found.start(), found.end(), Kind::Iban, Strength::Checked)),
     );
+    if spans.is_empty() {
+        return Vec::new();
+    }
     let hints: Vec<std::ops::Range<usize>> = HINT
         .captures_iter(text)
         .filter_map(|captures| captures.get(1))
@@ -761,10 +961,11 @@ fn aba(text: &str) -> bool {
 }
 
 /// Every card number in `text`: a stretch of digit groups of a card's length that starts with an
-/// issuer's prefix and passes the Luhn check. A run after a `+` is a phone number.
-fn cards(text: &str) -> Vec<Candidate> {
+/// issuer's prefix and passes the Luhn check, the groups matched over `digits`. A run after a `+`
+/// is a phone number.
+fn cards(text: &str, digits: &str) -> Vec<Candidate> {
     let mut found = Vec::new();
-    for run in GROUPS.find_iter(text) {
+    for run in GROUPS.find_iter(digits) {
         if text[..run.start()].ends_with('+') {
             continue;
         }
@@ -847,11 +1048,12 @@ fn luhn(digits: &str) -> bool {
     sum.is_multiple_of(10)
 }
 
-/// Whether `text` is an IBAN: fifteen to thirty-four letters and digits whose ISO 7064 remainder,
-/// mod 97, is one.
+/// Whether `text` is an IBAN: fifteen to thirty-four ASCII letters and digits whose ISO 7064
+/// remainder, mod 97, is one. The pattern matches `ſ` and the Kelvin sign as letters; neither is
+/// a base-36 digit, so a match holding one is no IBAN (and is never split inside it).
 fn iban(text: &str) -> bool {
     let compact: String = text.chars().filter(|c| *c != ' ').collect();
-    if !(15..=34).contains(&compact.len()) {
+    if !compact.is_ascii() || !(15..=34).contains(&compact.len()) {
         return false;
     }
     let (head, tail) = compact.split_at(4);
@@ -882,6 +1084,8 @@ pub fn redact(text: &str) -> Redacted {
 
 #[cfg(test)]
 mod tests {
+    use proptest::prelude::*;
+
     use super::*;
 
     fn shown(text: &str) -> String {
@@ -1273,6 +1477,305 @@ mod tests {
     fn the_link_pass_is_idempotent() {
         let text = "https://ada:pw@example.test/r?token=a&code=b eyJa.eyJb.c";
         assert_eq!(unlinked(&unlinked(text)), unlinked(text));
+    }
+
+    // The scrub's number patterns as they were before the fast path, verbatim but for the names:
+    // the reference the fast path is checked against.
+    /// Every code in `text`, by [`Labels`]' code labels.
+    fn codes_before(text: &str, labels: &Labels) -> Vec<Candidate> {
+        let Labels {
+            named,
+            strong,
+            weak,
+            not_codes,
+            ..
+        } = labels;
+        let right_before: Vec<Label> = weak
+            .iter()
+            .copied()
+            .filter(|&(label_start, label_end, _)| {
+                text[label_start..label_end].eq_ignore_ascii_case("code")
+            })
+            .collect();
+        CODE.find_iter(text)
+            .filter_map(|found| {
+                let (start, end) = (found.start(), found.end());
+                let digits = digits_of(found.as_str());
+                let code = |labels: &[Label], reach: usize, before: bool| {
+                    claims(text, labels, (start, end), reach, before)
+                };
+                let gap = [
+                    code(named, STRONG_NEAR, true),
+                    code(named, NEAR, false),
+                    code(strong, NEAR, false),
+                    code(&right_before, 2, true),
+                    (digits.len() >= 6)
+                        .then(|| code(weak, NEAR, false))
+                        .flatten(),
+                ]
+                .into_iter()
+                .flatten()
+                .min()?;
+                let other =
+                    closest(text, not_codes, start, end).map_or(usize::MAX, |(_, other)| other);
+                (gap < other && alone(text, start, end) && !dated(&digits))
+                    .then(|| candidate(start, end, Kind::Code, Strength::Code))
+            })
+            .collect()
+    }
+
+    /// Every held number this module recognises in `text`, in order and never overlapping: two
+    /// matches that overlap are one, from the first one's start to the later end, of the kind of
+    /// the strongest: a code, then a kind whose checksum held, then the closest label.
+    fn identity_numbers_before(text: &str) -> Vec<Found> {
+        let labels = Labels::of(text);
+        let Labels {
+            identity,
+            accounts,
+            not_accounts,
+            routings,
+            ..
+        } = &labels;
+        let mut spans: Vec<Candidate> = WRITTEN_OUT
+            .find_iter(text)
+            .map(|found| {
+                let (kind, strength) = closest(text, identity, found.start(), found.end()).map_or(
+                    (
+                        if found.as_str().starts_with('9') {
+                            Kind::Itin
+                        } else {
+                            Kind::Ssn
+                        },
+                        Strength::Shaped,
+                    ),
+                    |(kind, gap)| (kind, Strength::Labelled(gap)),
+                );
+                candidate(found.start(), found.end(), kind, strength)
+            })
+            .collect();
+        spans.extend(NINE_DIGITS.find_iter(text).filter_map(|found| {
+            closest(text, identity, found.start(), found.end()).map(|(kind, gap)| {
+                candidate(found.start(), found.end(), kind, Strength::Labelled(gap))
+            })
+        }));
+        spans.extend(codes_before(text, &labels));
+        spans.extend(ACCOUNT.find_iter(text).filter_map(|found| {
+            let (start, end) = (found.start(), found.end());
+            if !account(found.as_str()) || !alone(text, start, end) {
+                return None;
+            }
+            let other = closest(text, not_accounts, start, end).map_or(usize::MAX, |(_, gap)| gap);
+            closest(text, accounts, start, end)
+                .filter(|&(_, gap)| gap < other)
+                .map(|(kind, gap)| candidate(start, end, kind, Strength::Labelled(gap)))
+        }));
+        spans.extend(ROUTING.find_iter(text).filter_map(|found| {
+            let (start, end) = (found.start(), found.end());
+            (aba(found.as_str())
+                && alone(text, start, end)
+                && closest(text, routings, start, end).is_some())
+            .then(|| candidate(start, end, Kind::Routing, Strength::Checked))
+        }));
+        spans.extend(cards_before(text));
+        spans.extend(
+            IBAN.find_iter(text)
+                .filter(|found| iban(found.as_str()))
+                .map(|found| candidate(found.start(), found.end(), Kind::Iban, Strength::Checked)),
+        );
+        let hints: Vec<std::ops::Range<usize>> = HINT
+            .captures_iter(text)
+            .filter_map(|captures| captures.get(1))
+            .map(|hint| hint.range())
+            .collect();
+        spans.retain(|one| {
+            !hints
+                .iter()
+                .any(|hint| one.found.start < hint.end && hint.start < one.found.end)
+        });
+        spans.sort_unstable_by_key(|one| (one.found.start, one.found.end));
+        let mut merged: Vec<Candidate> = Vec::with_capacity(spans.len());
+        for one in spans {
+            match merged.last_mut() {
+                Some(last) if one.found.start < last.found.end => {
+                    last.found.end = last.found.end.max(one.found.end);
+                    if one.strength < last.strength {
+                        last.found.kind = one.found.kind;
+                        last.strength = one.strength;
+                    }
+                }
+                Some(_) | None => merged.push(one),
+            }
+        }
+        merged.into_iter().map(|one| one.found).collect()
+    }
+
+    /// Every card number in `text`: a stretch of digit groups of a card's length that starts with an
+    /// issuer's prefix and passes the Luhn check. A run after a `+` is a phone number.
+    fn cards_before(text: &str) -> Vec<Candidate> {
+        let mut found = Vec::new();
+        for run in GROUPS.find_iter(text) {
+            if text[..run.start()].ends_with('+') {
+                continue;
+            }
+            let groups: Vec<(usize, usize)> = digit_groups(run.as_str())
+                .map(|(start, end)| (run.start() + start, run.start() + end))
+                .collect();
+            let mut first = 0;
+            while first < groups.len() {
+                let card = (first..groups.len()).find(|&last| {
+                    let digits: String = groups[first..=last]
+                        .iter()
+                        .map(|&(start, end)| &text[start..end])
+                        .collect();
+                    card(&digits)
+                });
+                match card {
+                    Some(last) => {
+                        found.push(candidate(
+                            groups[first].0,
+                            groups[last].1,
+                            Kind::Card,
+                            Strength::Checked,
+                        ));
+                        first = last + 1;
+                    }
+                    None => first += 1,
+                }
+            }
+        }
+        found
+    }
+
+    /// The scrub before the fast path, as it was.
+    fn scrubbed_before(text: &str) -> String {
+        let mut out = String::with_capacity(text.len());
+        let mut at = 0;
+        for found in identity_numbers_before(text) {
+            out.push_str(&text[at..found.start]);
+            out.push_str(REDACTED);
+            at = found.end;
+        }
+        out.push_str(&text[at..]);
+        let out = USERINFO.replace_all(&out, format!("${{1}}{REDACTED}@").as_str());
+        let out = CREDENTIAL.replace_all(&out, format!("${{1}}{REDACTED}").as_str());
+        JWT.replace_all(&out, REDACTED).into_owned()
+    }
+
+    /// Mixed text, in the shapes a conversation holds: words of several scripts, the labels,
+    /// numbers alone and in groups, links with credentials, tokens, placeholders and line breaks.
+    fn mixed() -> impl Strategy<Value = String> {
+        let piece = prop_oneof![
+            Just("the ".to_owned()),
+            Just("café ".to_owned()),
+            Just("Numéro ".to_owned()),
+            Just("رمز التحقق ".to_owned()),
+            Just("الخاص بك هو ".to_owned()),
+            Just("確認コード ".to_owned()),
+            Just("😀".to_owned()),
+            Just("é".to_owned()),
+            Just("\u{a0}".to_owned()),
+            Just("—".to_owned()),
+            Just("€".to_owned()),
+            Just("+".to_owned()),
+            Just("\n".to_owned()),
+            Just(" ".to_owned()),
+            Just("-".to_owned()),
+            Just("SSN ".to_owned()),
+            Just("EIN: ".to_owned()),
+            Just("verification code ".to_owned()),
+            Just("código de verificação ".to_owned()),
+            Just("Bestätigungscode ".to_owned()),
+            Just("code: ".to_owned()),
+            Just("PIN ".to_owned()),
+            Just("zip code ".to_owned()),
+            Just("Account number ".to_owned()),
+            Just("routing ".to_owned()),
+            Just("order ".to_owned()),
+            Just("IBAN ".to_owned()),
+            Just("GB82 WEST 1234 5698 7654 32".to_owned()),
+            Just("de89370400440532013000".to_owned()),
+            Just("4111 1111 1111 1111".to_owned()),
+            Just("378282246310005".to_owned()),
+            Just("021000021".to_owned()),
+            Just("123-45-6789".to_owned()),
+            Just("[verification code · withheld]".to_owned()),
+            Just("[card ending 4242 · tap to show · x]".to_owned()),
+            Just("https://ada:pw@example.test/r?token=a1&lang=é".to_owned()),
+            Just("https://example.test/a?x=1%26code%3Dzz9".to_owned()),
+            Just("eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJhZGEifQ.c2ln".to_owned()),
+            "[0-9]{1,19}",
+            "[0-9]{2,4}([ -][0-9]{2,4}){0,4}",
+            Just("https://example.test/a?code%3Dzz9&x".to_owned()),
+            Just("ſ".to_owned()),
+            Just("\u{212a}".to_owned()),
+            Just("ſSN ".to_owned()),
+            Just("٤٨٢٩١٣".to_owned()),
+            Just("４８２９１３".to_owned()),
+            Just("4111\u{a0}1111 1111 1111".to_owned()),
+            Just("4111 1111 é111 1111".to_owned()),
+            Just("GB82 WÉST 1234 5698 7654 32".to_owned()),
+            Just("GB82 ſEST 1234 5698 7654 32".to_owned()),
+            Just("DE89 \u{212a}704 0044 0532 0130 00".to_owned()),
+            Just("ſE12 GB82 WEST 1234 5698 7654 32".to_owned()),
+            "[a-zA-Z_]{1,8}",
+            "\\PC{1,6}",
+        ];
+        proptest::collection::vec(piece, 0..24).prop_map(|pieces| pieces.concat())
+    }
+
+    proptest::proptest! {
+        #![proptest_config(proptest::prelude::ProptestConfig::with_cases(2048))]
+        /// The fast path changes no result: the ASCII copy, the prefilters and the labels read
+        /// lazily scrub every mixed text as the scrub before them did.
+        #[test]
+        fn the_fast_scrub_is_the_scrub_before_it(text in mixed()) {
+            proptest::prop_assert_eq!(unlink(redact(&text).as_str()), scrubbed_before(&text));
+        }
+    }
+
+    /// An IBAN-shaped match holding a letter outside ASCII is no IBAN, and is never split inside
+    /// that letter (the scrub once panicked on this text, the property's shrunk case).
+    #[test]
+    fn an_iban_match_holding_a_letter_outside_ascii_is_none() {
+        let text = "\u{17f}\u{212a}378282246310005code: ";
+        assert_eq!(unlink(redact(text).as_str()), scrubbed_before(text));
+    }
+
+    /// The rules' name moves whenever what the scrub does to this corpus moves. When the corpus
+    /// moved and the rules did not, a check's code changed: raise [`CHECKS`], then pin both.
+    #[test]
+    fn the_rules_move_when_the_scrub_moves() {
+        let corpus = [
+            "SSN 123-45-6789, EIN: 12-3456789, ITIN 912701234",
+            "Your verification code is 482913. Seu código de verificação é 4821",
+            "Card 4111 1111 1111 1111, Amex 378282246310005, IBAN GB82 WEST 1234 5698 7654 32",
+            "Account number: 000123456789, routing 021000021, order 123456789012",
+            "https://ada:pw@example.test/r?token=a1&code=b2 eyJa.eyJb.c and 2026-10-25",
+            "Call 617-555-1234; code expires 2026-10-23; promo code 123456",
+        ];
+        let mut hash = Sha256::new();
+        for text in corpus {
+            hash.update(unlink(redact(text).as_str()).as_bytes());
+            hash.update([0]);
+        }
+        assert_eq!(
+            (
+                Rules::current().as_str(),
+                hex::encode(hash.finalize()).as_str()
+            ),
+            (PINNED_RULES, PINNED_CORPUS),
+            "the scrub moved: if the rules' name did not move with it, raise CHECKS; then pin both"
+        );
+    }
+
+    const PINNED_RULES: &str = "a0d5cffe58839d79401ab650f475384a5eb7fbc064b46cfb3b7a3b25ac91f143";
+    const PINNED_CORPUS: &str = "afe74587a557301a25355154fa7c82b8f0dc73fdeb3b2b8d168c00f50ca6b2f3";
+
+    #[test]
+    fn rules_print_and_read_back() {
+        let rules = Rules::current().clone();
+        assert_eq!(Rules::new(rules.as_str()), Ok(rules.clone()));
+        assert!(Rules::new("not hex").is_err());
     }
 
     #[derive(Debug, PartialEq, serde::Serialize, serde::Deserialize)]

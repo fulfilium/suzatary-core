@@ -92,10 +92,10 @@ Each of those is a mechanism, not a rule someone must remember:
 - **The fence.** The agent runs under a hook that denies every tool except
   Suzatary's own verbs, including tools that do not exist yet: deny by
   default, never a blocklist.
-- **Provisional writes.** What the agent writes lands in its own replica and
-  stays *unconfirmed* — marked where it stands, served as source, never
-  rendered — until it is accepted. The fold keeps both readings: what is
-  believed and what was merely claimed.
+- **Provisional writes.** What the agent writes is a card in your Inbox, and
+  nothing reaches a chain until you tap it. Its record holds its chain as a read-only
+  store, with no write reachable from it. The fold keeps both readings of older agent text:
+  what is believed and what was merely claimed.
 - **The tap.** Only a request from a named login on your tailnet, carrying
   the browser's anti-forgery headers, can turn a stored proposal into an
   act. The tap carries an index, never a body, so what is sent is exactly

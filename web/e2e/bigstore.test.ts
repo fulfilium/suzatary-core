@@ -5,6 +5,10 @@
  * conversation and a new line are drawn with no task on the page's thread over 100 ms. The scene records every long
  * task (over 50 ms) the browser reports, cold (a device holding nothing) and warm (the same device loaded again).
  *
+ * The store's words are outside ASCII and hold digits, the text the scrub is slowest on. A warm load of the stream
+ * reads the lines the device holds, which scrubs nothing, and draws it well within a read's bound, with no read the
+ * loader started still open.
+ *
  * A phase ends once what it waits for is drawn whole (a conversation is marked `marks.PLACED` when its window is
  * drawn and placed) and the page has run no long task for a second and a half since, so a later slice or placing is
  * counted in the phase it belongs to.
@@ -18,6 +22,7 @@ import assert from "node:assert/strict"
 import { writeFileSync } from "node:fs"
 
 import marks from "../src/chat/marks"
+import wait from "../src/wire/wait"
 import { PHONE, SIGNED_POST, suite, trustThisDevice } from "./harness"
 
 const required = (name: string): string => {
@@ -112,4 +117,29 @@ app.scene("a store of many lines is listed, opened and grown with no task on the
     await app.page.throttle(1)
     await unobserve()
   }
+})
+
+// The API reads open now, less the event streams, which stay open for a page's life; a build's own files are the shell's
+// worker's to answer.
+const reads = (open: readonly string[]): string[] => open.filter((r) => r.includes(" /api/") && !r.endsWith("/events"))
+
+// A round of the generated conversations, drawn in the stream.
+const BULK = `document.querySelectorAll('.streamround .streammeta a[href*="bulk-"]').length > 0`
+
+app.scene("a warm load of the conversations draws them from the device, with no read left open", async () => {
+  await trustThisDevice(app.page, LINES_BASE, LINES_INSTANCE)
+  await app.page.navigate(`${LINES_BASE}/#/secretary`)
+  await app.page.waitFor(BULK, { timeout: 600000 })
+  // The cold load done: the device holds the lines, and nothing it asked for is still coming.
+  const journal = await app.page.journal()
+  const deadline = Date.now() + 600000
+  while (reads(journal.inFlight()).length > 0 && Date.now() < deadline) await new Promise((done) => setTimeout(done, 200))
+  assert.deepEqual(reads(journal.inFlight()), [], "the cold load ended")
+  journal.mark("warm load")
+  await app.page.reload()
+  await app.page.waitFor(BULK)
+  const drawn = await app.page.evaluate<number>(`performance.now()`)
+  const open = reads(journal.inFlight())
+  assert.ok(drawn < wait.MS / 3, `the stream drew ${Math.round(drawn)} ms after the document started (bound ${wait.MS / 3})`)
+  assert.deepEqual(open, [], `no read is still open when the stream draws:\n${journal.lines().join("\n")}`)
 })

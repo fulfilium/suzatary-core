@@ -28,7 +28,7 @@ use suzatary_core::repos::{CommitId, Patch, RepoName, RepoPath, RepoRow, Rev, Vi
 use suzatary_core::secretary::Bound;
 use suzatary_core::secretary::line_event::LineEvent;
 use suzatary_core::secretary::store::Entry;
-use suzatary_core::store::{Prodrome, StoreError, WriteLock, append_to, linearised};
+use suzatary_core::store::{Prodrome, Reads, StoreError, WriteLock, append_to, linearised};
 
 fn chain() -> ChainPolicy {
     let actor = |name: &str| Actor::new(name).expect("a roster name");
@@ -105,7 +105,7 @@ impl Fixed {
     }
 }
 
-impl Prodrome<TodoEvent> for Fixed {
+impl Reads<TodoEvent> for Fixed {
     fn objects(&self) -> Result<Vec<(Hash, Envelope)>, StoreError> {
         linearised(&self.events).map_err(|e| StoreError::unreadable("chain", e.to_string()))
     }
@@ -124,6 +124,9 @@ impl Prodrome<TodoEvent> for Fixed {
     fn verify(&self) -> Vec<String> {
         Vec::new()
     }
+}
+
+impl Prodrome<TodoEvent> for Fixed {
     fn append(&self, _event: TodoEvent) -> Result<Hash, StoreError> {
         Err(StoreError::not_appended("chain", "nothing is written"))
     }
@@ -132,9 +135,6 @@ impl Prodrome<TodoEvent> for Fixed {
     }
     fn locked(&self) -> Result<Box<dyn WriteLock + '_>, StoreError> {
         Ok(Box::new(NoLock))
-    }
-    fn settled(&self) -> Result<std::collections::BTreeSet<Hash>, StoreError> {
-        Ok(std::collections::BTreeSet::new())
     }
 }
 
@@ -156,7 +156,7 @@ static OPENED: std::sync::LazyLock<suzatary_core::secretary::opened::Opened> =
 
 /// The one open conversation, `default`, which keeps no line pushed to it: its title's key is
 /// kept nowhere, so it reads as missing.
-impl Prodrome<LineEvent> for Fixed {
+impl Reads<LineEvent> for Fixed {
     fn objects(
         &self,
     ) -> Result<Vec<(Hash, prodrome_core::event::Envelope<LineEvent>)>, StoreError> {
@@ -182,7 +182,7 @@ impl Prodrome<LineEvent> for Fixed {
     }
 
     fn tips(&self) -> Result<Vec<Hash>, StoreError> {
-        Ok(Prodrome::<LineEvent>::objects(self)?
+        Ok(Reads::<LineEvent>::objects(self)?
             .into_iter()
             .map(|(name, _)| name)
             .collect())
@@ -190,6 +190,9 @@ impl Prodrome<LineEvent> for Fixed {
     fn verify(&self) -> Vec<String> {
         Vec::new()
     }
+}
+
+impl Prodrome<LineEvent> for Fixed {
     fn append(&self, event: LineEvent) -> Result<Hash, StoreError> {
         Ok(prodrome_core::event::seal_hash(
             &prodrome_core::event::mk_sealed(None, event),

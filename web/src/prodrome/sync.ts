@@ -9,6 +9,7 @@
 import { fold, objectsSince, postObjects } from "../wire/api";
 import handover from "./handover";
 import type { FoldPayload } from "../wire/generated/wire";
+import primed from "../app/primed";
 import { cacheKey, fits, parseFold, printFold } from "../app/cache";
 import app from "../app/app";
 import type { Chains, Core, HeldChain, Kept, Standing } from "./core";
@@ -577,7 +578,9 @@ export async function foldHeld(): Promise<boolean> {
     const { held, answer } = await askHeld((h) => ({ type: "List", chain: h.holding, at: time.moment() }));
     const { replica, holding } = held;
     if (source.state().holding !== holding) return false;
-    return await showFold(answer, replica, holding);
+    const shown = await showFold(answer, replica, holding);
+    if (shown) primed.cancel(primed.fold(holding));
+    return shown;
   } catch {
     return false;
   }

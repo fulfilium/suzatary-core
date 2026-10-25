@@ -110,91 +110,91 @@
       "text": "Genesis(label='memory', nonce='00000000000000000000000000000000')"
     },
     {
-      "hash": "8e99d63c408b260a06036d93b6857122f83b11dcfc38d61e5438a98708ef9f48",
-      "text": "Change(genesis='7b818ef0fdd17acb5a6c38b43fa0281f189cc0854dab58dcff68c681ce13ad38', deps=(), event=Opened(conversation='about-the-deed', at=datetime(2026, 9, 2, 12, 0, 0), actor='assistant', held=0, carried=None, model='vectors-fixture', kind='topic', words=(Locked(key='630dcd2966c4336691125448bbb25b4ff412a49c732db2c8abc1b8581bd710dd', box='Y5oxXcKShOsxFTUVwyZsC9rFmoGNyHlmzrmefV9BVSgabSgJtItYf+ABWCRkDgA8m6D2Xt5dWc4NKkp/MZVazULyLdynSpLVbKeK7ymOcjtgI382R+q+t/PgnDDOgOPihKgCG4pcCySUzTyNWxNQfsfnoHhN9KPi6oFi0mHFnSPnqxHA9zw7frCYOVCz4sSgj4Q9qV+3/LPxNFaBa1G3gk3y+b1WE9S07ZUv2FjNG5hKy/j/H9GnyAbYHKjkrjss/9uhGCdYjEOPVDTqyVa+j5WgQ60Ezf0Kl9f6SdQNCZ7iLVMurXcAQPrjVFZbSgPyHfqUGj1PdvT5niCR5aBVZYI9bpdjzBWvBvJEzC9y0qk='),)))"
+      "hash": "77e6e205eea27dbd5e56496c0950c0017749e4ca88cd6137b984873f0f78a9ef",
+      "text": "Change(genesis='7b818ef0fdd17acb5a6c38b43fa0281f189cc0854dab58dcff68c681ce13ad38', deps=(), event=Opened(conversation='trains', at=datetime(2026, 9, 2, 12, 3, 20), actor='assistant', held=0, carried=None, model='vectors-fixture', kind='topic', words=(Scrubbed(key='1b2e08206305d4481c96d6d008d19a08e2696ec060534ed4c6c8d54e702ceec0', box='aZPAwyD67kOlAPpsZtGvyFcIHZxbRwz0ySL6pZjcWqf++RZFTpCza9ThboonmbQYDzM0ovOujqWfaBXzztEKki5qm2POopkpoWRweGBTehLjotI/OC6tRxtDo7fmlXIgjcywgv4zOpvapTqSmuSAokaeVMhEMNWrSYAsoOCvB1SWH1jjUAowg+Ib9cNmyG2p4vnCmTAdgFxsqFvEC3IN3ByiJycBz/pKPVD4YgcjwbIKd/1x/ytc4nLjyoePz7DSzwcaxV0zG8/r1aCNU5fHx9igAEc0q83lKMmByqgdTHo9fU5kuHbnUlSgyFITkARmKSKlIrDWgDDfAevHQnkJqV0mPMXBc4RK2lfMHpDUG44=', rules='a0d5cffe58839d79401ab650f475384a5eb7fbc064b46cfb3b7a3b25ac91f143'),)))"
     },
     {
-      "hash": "b401a367f3637b095defc64c68706a7e961c3c70042d102eef7ec47ffa8b0f19",
-      "text": "Change(genesis='7b818ef0fdd17acb5a6c38b43fa0281f189cc0854dab58dcff68c681ce13ad38', deps=(), event=Opened(conversation='trains', at=datetime(2026, 9, 2, 12, 3, 20), actor='assistant', held=0, carried=None, model='vectors-fixture', kind='topic', words=(Locked(key='1b2e08206305d4481c96d6d008d19a08e2696ec060534ed4c6c8d54e702ceec0', box='aZPAwyD67kOlAPpsZtGvyFcIHZxbRwz0ySL6pZjcWqf++RZFTpCza9ThboonmbQYDzM0ovOujqWfaBXzztEKki5qm2POopkpoWRweGBTehLjotI/OC6tRxtDo7fmlXIgjcywgv4zOpvapTqSmuSAokaeVMhEMNWrSYAsoOCvB1SWH1jjUAowg+Ib9cNmyG2p4vnCmTAdgFxsqFvEC3IN3ByiJycBz/pKPVD4YgcjwbIKd/1x/ytc4nLjyoePz7DSzwcaxV0zG8/r1aCNU5fHx9igAEc0q83lKMmByqgdTHo9fU5kuHbnUlSgyFITkARmKSKlIrDWgDDfAevHQnkJqbeUXcDBCfSSbzt9o1+Xc80='),)))"
+      "hash": "4b6a059ac594e9d42b22c7ea78e3cfa2eccaeac2ab34183fbded4f160f71829e",
+      "text": "Change(genesis='7b818ef0fdd17acb5a6c38b43fa0281f189cc0854dab58dcff68c681ce13ad38', deps=('77e6e205eea27dbd5e56496c0950c0017749e4ca88cd6137b984873f0f78a9ef',), event=Said(conversation='trains', at=datetime(2026, 9, 2, 12, 3, 21), actor='assistant', held=1, carried=None, turn='{\"who\":\"person\",\"references\":[],\"attachments\":[]}', by=None, words=(Scrubbed(key='c7dc3c32b1609e1ed9dfc266b6aded61940bff08a0a61f160225273fc322df60', box='Lylb+Ww31yoOlfms192bdEgYQ2F1G9Tp49ztZ2wcKfzceO+ygmrnoWsm6PWHKFPnYtsG7De8i5J9EFUA0t8EvpBAfVFpRdh82SewFo+vPC2cFqnipLXEGrZ+MwaKEEthAZJsPuE7Wrdg1uJlY0y3hQ5b32sccWAkX1W5QflFRJyXuGu69UQS5fnV6Q4Mx2+9hsIaZKUmCt+Q2QbkM4bOKoY2d4SrEMB3flNQU3E/an60F40QcBE3ABFMJBMPiMjPb0h8clRB2CdmTX888lgL5kFc4hxWBKUYJbZhG8nwV2RMKfnaNvrYLGLRHNoeNVmHNlOUJmz/Ak1iIqxM/97t7gVhcmt0jMc1BTbtvJgW+jw=', rules='a0d5cffe58839d79401ab650f475384a5eb7fbc064b46cfb3b7a3b25ac91f143'),)))"
     },
     {
-      "hash": "8bb1662e1b151af950a90aa5212857a29b635f482ebdc63649eeb9d990dbeac2",
-      "text": "Change(genesis='7b818ef0fdd17acb5a6c38b43fa0281f189cc0854dab58dcff68c681ce13ad38', deps=('b401a367f3637b095defc64c68706a7e961c3c70042d102eef7ec47ffa8b0f19',), event=Said(conversation='trains', at=datetime(2026, 9, 2, 12, 3, 21), actor='assistant', held=1, carried=None, turn='{\"who\":\"person\",\"references\":[],\"attachments\":[]}', by=None, words=(Locked(key='c7dc3c32b1609e1ed9dfc266b6aded61940bff08a0a61f160225273fc322df60', box='Lylb+Ww31yoOlfms192bdEgYQ2F1G9Tp49ztZ2wcKfzceO+ygmrnoWsm6PWHKFPnYtsG7De8i5J9EFUA0t8EvpBAfVFpRdh82SewFo+vPC2cFqnipLXEGrZ+MwaKEEthAZJsPuE7Wrdg1uJlY0y3hQ5b32sccWAkX1W5QflFRJyXuGu69UQS5fnV6Q4Mx2+9hsIaZKUmCt+Q2QbkM4bOKoY2d4SrEMB3flNQU3E/an60F40QcBE3ABFMJBMPiMjPb0h8clRB2CdmTX888lgL5kFc4hxWBKUYJbZhG8nwV2RMKfnaNvrYLGLRHNoeNVmHNlOUJmz/Ak1iIqxM/97t7mXNBPQZQCkZxvtLP3HiJXo='),)))"
+      "hash": "2eb6a0f78d1a67eeb14fd4f24a7899e7f6feb4faaef9b0e904786ab940ecdb38",
+      "text": "Change(genesis='7b818ef0fdd17acb5a6c38b43fa0281f189cc0854dab58dcff68c681ce13ad38', deps=('4b6a059ac594e9d42b22c7ea78e3cfa2eccaeac2ab34183fbded4f160f71829e',), event=Said(conversation='trains', at=datetime(2026, 9, 2, 12, 3, 22), actor='assistant', held=2, carried=None, turn='{\"who\":\"tool\",\"verb\":\"remember\",\"outcome\":{\"is\":\"remembered\",\"fact\":1},\"files\":[]}', by=None, words=(Scrubbed(key='ff234b439627f020679367b7f4bd920e93f0e5b9a379eb9877c465dbaa96b9c1', box='/TA+iR7pfpmygK9i7HMeBcOC3f2KrbZfVLk7UerdOn8hvk/K5rqq2ZTbklgL+AiNwnxlrqnLEBqRTMhg9N4FTCWOJnR9UjyOuFNbMC3u9XMd4/3GwBSrwBBUK3+8QdQQ4VPHTNrSuPu8F121qizJe3zM9HW9A7J9itHPQETLk/K5Qvxvb+OpaMTJUyM7+95aI19y9NCQXi41i5kpexQpnqVHA6dAhykoii+QrMgIvAEZ9ruJYsrkweYvy7NVtTm84NFs9BJiPJOZnAiE55A8ucegf9Ril2/fFCXhVlP+Q30wa5MDL5j4A2L4502BmcIICwu7CL8+v31XH1O+xtqx/4f9JaTD3FGodQDDCzQmpeU=', rules='a0d5cffe58839d79401ab650f475384a5eb7fbc064b46cfb3b7a3b25ac91f143'),)))"
     },
     {
-      "hash": "baaef16eaf654b8077ed5ca6b09004d384c7aec869eac217cfc6f7db8c7e6267",
-      "text": "Change(genesis='7b818ef0fdd17acb5a6c38b43fa0281f189cc0854dab58dcff68c681ce13ad38', deps=(), event=Opened(conversation='lagging', at=datetime(2026, 9, 2, 12, 0, 0), actor='assistant', held=0, carried=None, model='vectors-fixture', kind='topic', words=(Locked(key='2791831bfc6e6e3c03455addf475f278e8df6d907ef1e396c02a1fd088d4e25a', box='wTpUBRjqfdZpwotSqrJ2GHurHOJb/tq5yoQyFNJPehwUGYnpuQHIjo3FYkHLHPoxcT8Q68+gaDAII4nJVdAdTtg+onnKMi86wKMTkvQ74+GSXUCg1VvmDpTxbbhioijMKyIxj+x8nAB3KarKZpEdJAzEFn1pbCOm/+1kTtXF8374aBffjHq5ltXe5yiy7PKo+TvMsmSC9X85jsVR/ztsVkeXlIXt9FXOUnXflE9iM3rJCz9UcMLPq05VOXC96cHxD3aJHMXsjt4CjgXKVB8MFfgmj2ruQLLgi6SVNBBAmCdR3DwTOA4/qWBXkK7P4L1kruhOFfFb7bFCtcNgHDaxyuhHnFXafzedFR65DTXw7s4='),)))"
+      "hash": "b9d09729e796c1102685ad26513fb91c1e3a843ee0468b6587eecb3bfdca80af",
+      "text": "Change(genesis='7b818ef0fdd17acb5a6c38b43fa0281f189cc0854dab58dcff68c681ce13ad38', deps=(), event=Opened(conversation='about-the-deed', at=datetime(2026, 9, 2, 12, 0, 0), actor='assistant', held=0, carried=None, model='vectors-fixture', kind='topic', words=(Scrubbed(key='630dcd2966c4336691125448bbb25b4ff412a49c732db2c8abc1b8581bd710dd', box='Y5oxXcKShOsxFTUVwyZsC9rFmoGNyHlmzrmefV9BVSgabSgJtItYf+ABWCRkDgA8m6D2Xt5dWc4NKkp/MZVazULyLdynSpLVbKeK7ymOcjtgI382R+q+t/PgnDDOgOPihKgCG4pcCySUzTyNWxNQfsfnoHhN9KPi6oFi0mHFnSPnqxHA9zw7frCYOVCz4sSgj4Q9qV+3/LPxNFaBa1G3gk3y+b1WE9S07ZUv2FjNG5hKy/j/H9GnyAbYHKjkrjss/9uhGCdYjEOPVDTqyVa+j5WgQ60Ezf0Kl9f6SdQNCZ7iLVMurXcAQPrjVFZbSgPyHfqUGj1PdvT5niCR5aBVZR6Y0JxMhFQveuAG8eNwgCY=', rules='a0d5cffe58839d79401ab650f475384a5eb7fbc064b46cfb3b7a3b25ac91f143'),)))"
     },
     {
-      "hash": "1bd1f224c39e413b172e9fe5c3c5671573484d9cca16876c3431aa6aff566b59",
-      "text": "Change(genesis='7b818ef0fdd17acb5a6c38b43fa0281f189cc0854dab58dcff68c681ce13ad38', deps=('baaef16eaf654b8077ed5ca6b09004d384c7aec869eac217cfc6f7db8c7e6267',), event=Proposed(conversation='lagging', at=datetime(2026, 9, 2, 12, 0, 0), actor='assistant', held=1, carried=None, object='p2982717bc1845516d246db547fc866e1', revises=None))"
+      "hash": "afd36b122fd3ce9f98a6e028bdbf43f86334ed8d030b04868c9531ab433aff08",
+      "text": "Change(genesis='7b818ef0fdd17acb5a6c38b43fa0281f189cc0854dab58dcff68c681ce13ad38', deps=('b9d09729e796c1102685ad26513fb91c1e3a843ee0468b6587eecb3bfdca80af',), event=Said(conversation='about-the-deed', at=datetime(2026, 9, 2, 12, 0, 1), actor='assistant', held=1, carried=None, turn='{\"who\":\"person\",\"references\":[\"todo:life/email-harrow\"],\"attachments\":[]}', by=None, words=(Scrubbed(key='86f5d9bdc5ce5e4ff81af4dc4a8c2e724e448cb5ec16685b5591b4e56d5a1b3e', box='ZTlcxrynT2k0S6jipT7MuhC6WjJobBVdc4onPO8lQ3Cxw+04MbkxngGRjKyaAWtlAsjlaOi4pcTMgiHAZSIRmP6PqJ08geBq4vtBs5LobYwaY8MwV087EsbQsBCtK8+PcDClybrnkgWVdz1W9MewJofdNJk0PpEnGZFMTNpB2knZUOQ6mH+IrRR3lDt1LgqW1qyX7ws4LZHf+MdcFRZVQOkixOVr+Fd6feS1EDMURnmMpV6eGcGSMpI9xk1g+ELiGQM9+NqCSq7GIycFNJIgxiNb+LgaOoG8JMIO0UamHdCYWRc0arfKll2GiEMODbJSPfG0Oml41d3XkevFo5R8/5CxY7HwhlnOLhQspw0PAJ0=', rules='a0d5cffe58839d79401ab650f475384a5eb7fbc064b46cfb3b7a3b25ac91f143'),)))"
     },
     {
-      "hash": "781da3042d6831a3fdb17407c322ca292e03fead27d52f31831ed8230e141245",
-      "text": "Change(genesis='7b818ef0fdd17acb5a6c38b43fa0281f189cc0854dab58dcff68c681ce13ad38', deps=('1bd1f224c39e413b172e9fe5c3c5671573484d9cca16876c3431aa6aff566b59',), event=Proposed(conversation='lagging', at=datetime(2026, 9, 2, 12, 0, 0), actor='assistant', held=2, carried=None, object='pc6158144c4cbba7b515a767f00637101', revises=None))"
+      "hash": "c92d9aa68e40b442cea3b39085f5807d1d7b06789e4baa3fb28bc69826e6a157",
+      "text": "Change(genesis='7b818ef0fdd17acb5a6c38b43fa0281f189cc0854dab58dcff68c681ce13ad38', deps=('2eb6a0f78d1a67eeb14fd4f24a7899e7f6feb4faaef9b0e904786ab940ecdb38',), event=Said(conversation='trains', at=datetime(2026, 9, 2, 12, 3, 23), actor='assistant', held=3, carried=None, turn='{\"who\":\"model\",\"calls\":[]}', by=None, words=(Scrubbed(key='9b8cf3f80aea12988b50633cd0f8a1daf57dc1f6315dc614a256ea6078e8800c', box='awlJiPaRJw+Pvch6iSX1CkWvgRVkRiZGBuSUkhdwmmYfEwVevM0WtpDLaB1ua/146wwQZK/wR4KdZ2tz61paPB0f3NE59gXT7aEGLsqfgxyrT15Pi2tlMCpMN3qgtxPuyhW7XVbQxPdCmSCRdvA0aLdqcJz7MMM4LjyJyUHix7U+lr7qG2rTWEIOjCJbDSa2sBNqOfw9QGJNDZ05yeYl/bMhWSC0q1SSunwfnhmRUPDNtI1EnwSB5Z5tRLvWTtTMDY3zud7st2lpMbdmbaUCzsYl5B2YYK4NT5lopELFNS4UqjYtZpIt5IAePZ1OFwgcboSBsoGMplnQAmM/bu2ZsBeYi15sRA+8zvOEZIaQ8Q0=', rules='a0d5cffe58839d79401ab650f475384a5eb7fbc064b46cfb3b7a3b25ac91f143'),)))"
     },
     {
-      "hash": "53e5e81cebc75f1688ab96aa6af56186894b34d86e2ca98ac4aa2e46973004bb",
-      "text": "Change(genesis='7b818ef0fdd17acb5a6c38b43fa0281f189cc0854dab58dcff68c681ce13ad38', deps=('781da3042d6831a3fdb17407c322ca292e03fead27d52f31831ed8230e141245',), event=Proposed(conversation='lagging', at=datetime(2026, 9, 2, 12, 0, 0), actor='assistant', held=3, carried=None, object='pe0202384e0620cf052da2283f47c43c8', revises=None))"
+      "hash": "3e2d7729f3b71aee693d823038b0d21105ae9fdde75b36720c702b95e004a7c8",
+      "text": "Change(genesis='7b818ef0fdd17acb5a6c38b43fa0281f189cc0854dab58dcff68c681ce13ad38', deps=('c92d9aa68e40b442cea3b39085f5807d1d7b06789e4baa3fb28bc69826e6a157',), event=Proposed(conversation='trains', at=datetime(2026, 9, 2, 12, 3, 24), actor='assistant', held=4, carried=None, object='p7bf745230679b9064803a823f584469b', revises=None))"
     },
     {
-      "hash": "d76bf104a1a34e985d97d784753d2554429d62ebbed7d1fa39d4e4c31592bb3a",
-      "text": "Change(genesis='7b818ef0fdd17acb5a6c38b43fa0281f189cc0854dab58dcff68c681ce13ad38', deps=('8bb1662e1b151af950a90aa5212857a29b635f482ebdc63649eeb9d990dbeac2',), event=Said(conversation='trains', at=datetime(2026, 9, 2, 12, 3, 22), actor='assistant', held=2, carried=None, turn='{\"who\":\"tool\",\"verb\":\"remember\",\"outcome\":{\"is\":\"remembered\",\"fact\":1},\"files\":[]}', by=None, words=(Locked(key='ff234b439627f020679367b7f4bd920e93f0e5b9a379eb9877c465dbaa96b9c1', box='/TA+iR7pfpmygK9i7HMeBcOC3f2KrbZfVLk7UerdOn8hvk/K5rqq2ZTbklgL+AiNwnxlrqnLEBqRTMhg9N4FTCWOJnR9UjyOuFNbMC3u9XMd4/3GwBSrwBBUK3+8QdQQ4VPHTNrSuPu8F121qizJe3zM9HW9A7J9itHPQETLk/K5Qvxvb+OpaMTJUyM7+95aI19y9NCQXi41i5kpexQpnqVHA6dAhykoii+QrMgIvAEZ9ruJYsrkweYvy7NVtTm84NFs9BJiPJOZnAiE55A8ucegf9Ril2/fFCXhVlP+Q30wa5MDL5j4A2L4502BmcIICwu7CL8+v31XH1O+xtqx/4b/oEPLDxaF7hxD415abyQ='),)))"
+      "hash": "2bd4feab76d890e0b5a4c1d11cd0bcb41bd95a8a6d1eb73ca6144184c41fdf7a",
+      "text": "Change(genesis='7b818ef0fdd17acb5a6c38b43fa0281f189cc0854dab58dcff68c681ce13ad38', deps=('3e2d7729f3b71aee693d823038b0d21105ae9fdde75b36720c702b95e004a7c8',), event=Proposed(conversation='trains', at=datetime(2026, 9, 2, 12, 3, 25), actor='assistant', held=5, carried=None, object='pda3d123aec30ef75a018ccd6ad1dc1fa', revises=None))"
     },
     {
-      "hash": "8070370ff93e0171b33d203aea9bd3aa8e8ba94fbf17047eae2c76d4359df1be",
-      "text": "Change(genesis='7b818ef0fdd17acb5a6c38b43fa0281f189cc0854dab58dcff68c681ce13ad38', deps=('d76bf104a1a34e985d97d784753d2554429d62ebbed7d1fa39d4e4c31592bb3a',), event=Said(conversation='trains', at=datetime(2026, 9, 2, 12, 3, 23), actor='assistant', held=3, carried=None, turn='{\"who\":\"model\",\"calls\":[]}', by=None, words=(Locked(key='9b8cf3f80aea12988b50633cd0f8a1daf57dc1f6315dc614a256ea6078e8800c', box='awlJiPaRJw+Pvch6iSX1CkWvgRVkRiZGBuSUkhdwmmYfEwVevM0WtpDLaB1ua/146wwQZK/wR4KdZ2tz61paPB0f3NE59gXT7aEGLsqfgxyrT15Pi2tlMCpMN3qgtxPuyhW7XVbQxPdCmSCRdvA0aLdqcJz7MMM4LjyJyUHix7U+lr7qG2rTWEIOjCJbDSa2sBNqOfw9QGJNDZ05yeYl/bMhWSC0q1SSunwfnhmRUPDNtI1EnwSB5Z5tRLvWTtTMDY3zud7st2lpMbdmbaUCzsYl5B2YYK4NT5lopELFNS4UqjYtZpIt5IAePZ1OFwgcboSBsoGMplnQAmM/bu2ZsD5kt7qmYXo480ianWN9g7o='),)))"
+      "hash": "8eb94e037f1894370e08443c0e51bcfd23d4b3f4345d44698fd36ea9e400699a",
+      "text": "Change(genesis='7b818ef0fdd17acb5a6c38b43fa0281f189cc0854dab58dcff68c681ce13ad38', deps=('2bd4feab76d890e0b5a4c1d11cd0bcb41bd95a8a6d1eb73ca6144184c41fdf7a',), event=Proposed(conversation='trains', at=datetime(2026, 9, 2, 12, 3, 26), actor='assistant', held=6, carried=None, object='p7631d4dbe886e2eda86186f981faa87a', revises=None))"
     },
     {
-      "hash": "0694762dc9a27ee57d92612b90697b775bc0d650f82e52480b4c2ac6563157a2",
-      "text": "Change(genesis='7b818ef0fdd17acb5a6c38b43fa0281f189cc0854dab58dcff68c681ce13ad38', deps=('8070370ff93e0171b33d203aea9bd3aa8e8ba94fbf17047eae2c76d4359df1be',), event=Proposed(conversation='trains', at=datetime(2026, 9, 2, 12, 3, 24), actor='assistant', held=4, carried=None, object='p7bf745230679b9064803a823f584469b', revises=None))"
+      "hash": "0853d1043aa8c04e6b765f70dfb4f41f30ae974cd17a76076e64cbbf83259e49",
+      "text": "Change(genesis='7b818ef0fdd17acb5a6c38b43fa0281f189cc0854dab58dcff68c681ce13ad38', deps=('8eb94e037f1894370e08443c0e51bcfd23d4b3f4345d44698fd36ea9e400699a',), event=Said(conversation='trains', at=datetime(2026, 9, 2, 12, 6, 40), actor='assistant', held=7, carried=None, turn='{\"who\":\"act\",\"references\":[\"proposal:trains/0\"]}', by='ada', words=(Scrubbed(key='762df64490269f8ee748841c79f481102a6bb7d3211e7bd874ffeec4decbe973', box='cPtFnZVsihBF4gfAlXcMzd56aXslUWSHs0pD/Mk1yHqdBi08MTZ4Tax08vzKS424e6aT1aiVEnIzxntQRx6XMOq1EohfZThQRzydy+UWgzYf6vN0RGiaL6djAs3fBfldtHv5kuEcYiXdK5LHbHdA//wANXWmVkKQRbPknSWDj/J4Lwvgy0KBmrWSza66O6unOZgxq8H+6yskN3UkvyG0SXW1/MbtciTF3uvinz0PFxAKBThYLAdciQgWsju3bl2h7/pIG2tSRWI8p5MAAXUZ4ZmB6xe05hmI1G44WcKG8v1Uc+2f/rw3BMJQzFo2eqBOwLR7N68fmB9IqGYL24qd1E8yx+ME0y8MNHzIw1IHXjA=', rules='a0d5cffe58839d79401ab650f475384a5eb7fbc064b46cfb3b7a3b25ac91f143'),)))"
     },
     {
-      "hash": "298c746b260694893137a78e300c7c0e3db53c6932a0ddb4b4c55a9217fa07b2",
-      "text": "Change(genesis='7b818ef0fdd17acb5a6c38b43fa0281f189cc0854dab58dcff68c681ce13ad38', deps=('0694762dc9a27ee57d92612b90697b775bc0d650f82e52480b4c2ac6563157a2',), event=Proposed(conversation='trains', at=datetime(2026, 9, 2, 12, 3, 25), actor='assistant', held=5, carried=None, object='pda3d123aec30ef75a018ccd6ad1dc1fa', revises=None))"
+      "hash": "be39941a8ec556d22fce7cc5336ca28c1072e65d7db64080057470c1244c0987",
+      "text": "Change(genesis='7b818ef0fdd17acb5a6c38b43fa0281f189cc0854dab58dcff68c681ce13ad38', deps=('0853d1043aa8c04e6b765f70dfb4f41f30ae974cd17a76076e64cbbf83259e49',), event=Said(conversation='trains', at=datetime(2026, 9, 2, 12, 6, 40), actor='assistant', held=8, carried=None, turn='{\"who\":\"act\",\"references\":[\"proposal:trains/2\"]}', by='ada', words=(Scrubbed(key='6c28e9451b043cee34d7313c32984a90d25077a93ff466a4404454a84acccbaf', box='9MjP9xNsPw/QewXhUsRGygUeVL/F4pBl7eKdgHmB3rUUeldXMpcujP6IG1PmwlCnzx88xR203e0NkFbcNPUvVTp4Lz5k+eWUP5jY5kQ7Xc6yZgCuks6P2gTkmX5I5Tu2I+TcyKuZIvChOFZx9goQphLrgaPf2QLVZ0VUy7LwSC4JTRECiNHpp+hBUgraMKDs6CpNr522it5uV0QDfMdqgZxZy6rw2uwqbNRREQhXBuPN+wy9bd7XkZLhRBf+POWFyZbs0IlRRULGtnQmbjbCcKIXlJeV4CkUHqPZ6MBJzzD6mLedx60/zcb41/taNjf+1+LS+pLRUlMoPIJ80fC3udhZYPr17EbN4OrKrjE9IvE=', rules='a0d5cffe58839d79401ab650f475384a5eb7fbc064b46cfb3b7a3b25ac91f143'),)))"
     },
     {
-      "hash": "07a6dc381447217d11bc2d89c48847aa16df36804c57e08c5535becba2e5600c",
-      "text": "Change(genesis='7b818ef0fdd17acb5a6c38b43fa0281f189cc0854dab58dcff68c681ce13ad38', deps=('298c746b260694893137a78e300c7c0e3db53c6932a0ddb4b4c55a9217fa07b2',), event=Proposed(conversation='trains', at=datetime(2026, 9, 2, 12, 3, 26), actor='assistant', held=6, carried=None, object='p7631d4dbe886e2eda86186f981faa87a', revises=None))"
+      "hash": "e7bb805144dac1df16ea18eef000fd3b62a74a84f79106b78cf80058b3a89888",
+      "text": "Change(genesis='7b818ef0fdd17acb5a6c38b43fa0281f189cc0854dab58dcff68c681ce13ad38', deps=('afd36b122fd3ce9f98a6e028bdbf43f86334ed8d030b04868c9531ab433aff08',), event=Said(conversation='about-the-deed', at=datetime(2026, 9, 2, 12, 0, 20), actor='assistant', held=2, carried=None, turn='{\"who\":\"model\",\"calls\":[]}', by=None, words=(Scrubbed(key='6cf6abc29c87ca5fa1dc5399205a10bed451b2ff0cbef2a2739c5ac845963890', box='P4y04x6VZ3a7qybDXD1GrBezyIBohrCbaZlM3Zwm/n/fCrt2k7cKanF41EgiJWdKC/RxUwq9NQ35MB8ytPyKyx343FAeWZxsn8a2ybxOMVPmubfYq+8m8YnGaUpGKvGXGIt/tUhDqdpZ9pjCpFrD9JfsQQvaW/sUatvs2Im+j1lunxasnA1dZ4+nkcAlrnsnabWhuw3rY71kjtT7kA/k3jPEf87nZN3Bn1hCq5ExmomDaGcqYa8UWwtMGqpzMyiz0MoRxq8oljXXMLGbWZtYj5euS9JSbjqu41M7TL6XAglIl8RB470XX1gHlHrL+UwgAa01xeKr/9wXEGTCFCEw3sGE7bdZGlzefNDJ7Y9dyeY=', rules='a0d5cffe58839d79401ab650f475384a5eb7fbc064b46cfb3b7a3b25ac91f143'),)))"
     },
     {
-      "hash": "d8f99fcbd523d0a95a5247b2c0942ef096ff252c081b9114156e95203ffbbc75",
-      "text": "Change(genesis='7b818ef0fdd17acb5a6c38b43fa0281f189cc0854dab58dcff68c681ce13ad38', deps=('8e99d63c408b260a06036d93b6857122f83b11dcfc38d61e5438a98708ef9f48',), event=Said(conversation='about-the-deed', at=datetime(2026, 9, 2, 12, 0, 1), actor='assistant', held=1, carried=None, turn='{\"who\":\"person\",\"references\":[\"todo:life/email-harrow\"],\"attachments\":[]}', by=None, words=(Locked(key='86f5d9bdc5ce5e4ff81af4dc4a8c2e724e448cb5ec16685b5591b4e56d5a1b3e', box='ZTlcxrynT2k0S6jipT7MuhC6WjJobBVdc4onPO8lQ3Cxw+04MbkxngGRjKyaAWtlAsjlaOi4pcTMgiHAZSIRmP6PqJ08geBq4vtBs5LobYwaY8MwV087EsbQsBCtK8+PcDClybrnkgWVdz1W9MewJofdNJk0PpEnGZFMTNpB2knZUOQ6mH+IrRR3lDt1LgqW1qyX7ws4LZHf+MdcFRZVQOkixOVr+Fd6feS1EDMURnmMpV6eGcGSMpI9xk1g+ELiGQM9+NqCSq7GIycFNJIgxiNb+LgaOoG8JMIO0UamHdCYWRc0arfKll2GiEMODbJSPfG0Oml41d3XkevFo5R8/9w0Pi1QRD43FtuwySO1B5k='),)))"
+      "hash": "c88e35af1b9d5f472a8ee02a351a694711f49c5808372fa9d6d89b12d583e9de",
+      "text": "Change(genesis='7b818ef0fdd17acb5a6c38b43fa0281f189cc0854dab58dcff68c681ce13ad38', deps=('e7bb805144dac1df16ea18eef000fd3b62a74a84f79106b78cf80058b3a89888',), event=Proposed(conversation='about-the-deed', at=datetime(2026, 9, 2, 12, 0, 21), actor='assistant', held=3, carried=None, object='p86f99cf7e3106689524da6e1f3bff7c5', revises=None))"
     },
     {
-      "hash": "63b8a9603088d99511e5de1ef3f41dcc9a0aa3da2f5eb25ed1aa7c798bbc71e6",
-      "text": "Change(genesis='7b818ef0fdd17acb5a6c38b43fa0281f189cc0854dab58dcff68c681ce13ad38', deps=('d8f99fcbd523d0a95a5247b2c0942ef096ff252c081b9114156e95203ffbbc75',), event=Said(conversation='about-the-deed', at=datetime(2026, 9, 2, 12, 0, 20), actor='assistant', held=2, carried=None, turn='{\"who\":\"model\",\"calls\":[]}', by=None, words=(Locked(key='6cf6abc29c87ca5fa1dc5399205a10bed451b2ff0cbef2a2739c5ac845963890', box='P4y04x6VZ3a7qybDXD1GrBezyIBohrCbaZlM3Zwm/n/fCrt2k7cKanF41EgiJWdKC/RxUwq9NQ35MB8ytPyKyx343FAeWZxsn8a2ybxOMVPmubfYq+8m8YnGaUpGKvGXGIt/tUhDqdpZ9pjCpFrD9JfsQQvaW/sUatvs2Im+j1lunxasnA1dZ4+nkcAlrnsnabWhuw3rY71kjtT7kA/k3jPEf87nZN3Bn1hCq5ExmomDaGcqYa8UWwtMGqpzMyiz0MoRxq8oljXXMLGbWZtYj5euS9JSbjqu41M7TL6XAglIl8RB470XX1gHlHrL+UwgAa01xeKr/9wXEGTCFCEw3kDOXrG4ec4kvPKqXuH+aLc='),)))"
+      "hash": "8acefce5d96ba4fe29ceffa5822f90131cbc875575231867f3370ab87e4f6aea",
+      "text": "Change(genesis='7b818ef0fdd17acb5a6c38b43fa0281f189cc0854dab58dcff68c681ce13ad38', deps=('c88e35af1b9d5f472a8ee02a351a694711f49c5808372fa9d6d89b12d583e9de',), event=Said(conversation='about-the-deed', at=datetime(2026, 9, 2, 12, 1, 30), actor='assistant', held=4, carried=None, turn='{\"who\":\"person\",\"references\":[],\"attachments\":[]}', by=None, words=(Scrubbed(key='34cdfa29c001301f4ab4ae37b4e766f867cd4eb3a89d7f02e2fc3ca2f8493bf9', box='cZxjNmjKMUyKjJ46k0IhNUXYFvimosm9yAEhTJtVsohjMyopwEtM4C2c9wd05SrH/M3TWDfI6JP8iYgD6eeeX5BH2v2ncEgFqZ5YOr1LpLaaCTKx5Cpwo3O085xWarKHKTJ8ZY6E6KLB5ApWEjn3tYNMO/sGkeG+HZVJndj4aIkeu1FoeiyhAlhNNFqO9NFGr9ITbUw99dBJRXHFZOAdDjPUTuBsFPouX0Ngf3th91LXxilHUYmI6LEH3ZIGUO7ntsMBcXb6foQQd7Oc+rFdKkW08Pa33umIONwif88DmckTSx0rYqcnGO5KJ8Au2nKrRPa182DXzE95zi3LROYRVUlajJNwbmXZKbdKNlJRKwo=', rules='a0d5cffe58839d79401ab650f475384a5eb7fbc064b46cfb3b7a3b25ac91f143'),)))"
     },
     {
-      "hash": "1cf7ec1e28d2b5ffec12b496dd184f8203ce8ab5ac8d7f82caafa5c80ca60133",
-      "text": "Change(genesis='7b818ef0fdd17acb5a6c38b43fa0281f189cc0854dab58dcff68c681ce13ad38', deps=('63b8a9603088d99511e5de1ef3f41dcc9a0aa3da2f5eb25ed1aa7c798bbc71e6',), event=Proposed(conversation='about-the-deed', at=datetime(2026, 9, 2, 12, 0, 21), actor='assistant', held=3, carried=None, object='p86f99cf7e3106689524da6e1f3bff7c5', revises=None))"
+      "hash": "ebadd42a82e803973c8c463a43ab8ad6858d48c7d4acdff9c337d50b06a62487",
+      "text": "Change(genesis='7b818ef0fdd17acb5a6c38b43fa0281f189cc0854dab58dcff68c681ce13ad38', deps=(), event=Opened(conversation='lagging', at=datetime(2026, 9, 2, 12, 0, 0), actor='assistant', held=0, carried=None, model='vectors-fixture', kind='topic', words=(Scrubbed(key='2791831bfc6e6e3c03455addf475f278e8df6d907ef1e396c02a1fd088d4e25a', box='wTpUBRjqfdZpwotSqrJ2GHurHOJb/tq5yoQyFNJPehwUGYnpuQHIjo3FYkHLHPoxcT8Q68+gaDAII4nJVdAdTtg+onnKMi86wKMTkvQ74+GSXUCg1VvmDpTxbbhioijMKyIxj+x8nAB3KarKZpEdJAzEFn1pbCOm/+1kTtXF8374aBffjHq5ltXe5yiy7PKo+TvMsmSC9X85jsVR/ztsVkeXlIXt9FXOUnXflE9iM3rJCz9UcMLPq05VOXC96cHxD3aJHMXsjt4CjgXKVB8MFfgmj2ruQLLgi6SVNBBAmCdR3DwTOA4/qWBXkK7P4L1kruhOFfFb7bFCtcNgHDaxyusCHTiRAkZlwdVtAXG6v+g=', rules='a0d5cffe58839d79401ab650f475384a5eb7fbc064b46cfb3b7a3b25ac91f143'),)))"
     },
     {
-      "hash": "4f71d6d8900f0b050d25b78ced6064e1b02016d70a286d47eda6c1f4d337719f",
-      "text": "Change(genesis='7b818ef0fdd17acb5a6c38b43fa0281f189cc0854dab58dcff68c681ce13ad38', deps=('1cf7ec1e28d2b5ffec12b496dd184f8203ce8ab5ac8d7f82caafa5c80ca60133',), event=Said(conversation='about-the-deed', at=datetime(2026, 9, 2, 12, 1, 30), actor='assistant', held=4, carried=None, turn='{\"who\":\"person\",\"references\":[],\"attachments\":[]}', by=None, words=(Locked(key='34cdfa29c001301f4ab4ae37b4e766f867cd4eb3a89d7f02e2fc3ca2f8493bf9', box='cZxjNmjKMUyKjJ46k0IhNUXYFvimosm9yAEhTJtVsohjMyopwEtM4C2c9wd05SrH/M3TWDfI6JP8iYgD6eeeX5BH2v2ncEgFqZ5YOr1LpLaaCTKx5Cpwo3O085xWarKHKTJ8ZY6E6KLB5ApWEjn3tYNMO/sGkeG+HZVJndj4aIkeu1FoeiyhAlhNNFqO9NFGr9ITbUw99dBJRXHFZOAdDjPUTuBsFPouX0Ngf3th91LXxilHUYmI6LEH3ZIGUO7ntsMBcXb6foQQd7Oc+rFdKkW08Pa33umIONwif88DmckTSx0rYqcnGO5KJ8Au2nKrRPa182DXzE95zi3LROYRVTIbfX/YO4SIMfTrA9kiR3M='),)))"
+      "hash": "830200509e056ef4ae1cfd0f1729910534c7bb766add68da43910327009eee57",
+      "text": "Change(genesis='7b818ef0fdd17acb5a6c38b43fa0281f189cc0854dab58dcff68c681ce13ad38', deps=('ebadd42a82e803973c8c463a43ab8ad6858d48c7d4acdff9c337d50b06a62487',), event=Proposed(conversation='lagging', at=datetime(2026, 9, 2, 12, 0, 0), actor='assistant', held=1, carried=None, object='p2982717bc1845516d246db547fc866e1', revises=None))"
     },
     {
-      "hash": "724acf9747475582d7802aff7fbf0dadf1c0cf98b1cfd4fbaf9bbba81c72471d",
-      "text": "Change(genesis='7b818ef0fdd17acb5a6c38b43fa0281f189cc0854dab58dcff68c681ce13ad38', deps=('4f71d6d8900f0b050d25b78ced6064e1b02016d70a286d47eda6c1f4d337719f',), event=Said(conversation='about-the-deed', at=datetime(2026, 9, 2, 12, 1, 35), actor='assistant', held=5, carried=None, turn='{\"who\":\"model\",\"calls\":[]}', by=None, words=(Locked(key='f8517142a72094a6bbf487f5347b1a5c041aef1d861d319beab28719a157aaa9', box='PWJTRTWFy8HCOp8yx0YpmGZG73FGsI/IxozIm4FaR6pZERHzRAnffRqQTNQpE7LabV0E09CadEvf+7iclfE5U8tPCkAhd61oL/UJN7fnUUCbO9Ll90ChfnKNy0XrA+nhWVvT4AGhcJMuh2DbTtXM5L/BXynZih1lYcQAKxntnSxrBkPMna51jP6KJZpJhnIAErJa1BOaHM2ybZinYIlrr2PZ92DksbOngTzPgkPszd6iNrYL2MVCvh2fBrtJY69AdlqsM9JUWHox5U9OaWD5mdJ4YNzn+Y2BD44XXD6zBKBXROa7XiTqVL7GAq4N+IAvDcB/9gQUK9fxlZ30BtjnLpQzdy2q/RffRQAjQl0bb+0='),)))"
+      "hash": "9248b55e311c84b0375a194c7264888a7386537461a97743e151ba1f064e72ab",
+      "text": "Change(genesis='7b818ef0fdd17acb5a6c38b43fa0281f189cc0854dab58dcff68c681ce13ad38', deps=('830200509e056ef4ae1cfd0f1729910534c7bb766add68da43910327009eee57',), event=Proposed(conversation='lagging', at=datetime(2026, 9, 2, 12, 0, 0), actor='assistant', held=2, carried=None, object='pc6158144c4cbba7b515a767f00637101', revises=None))"
     },
     {
-      "hash": "51804f5be0f062c1d0b716766ce81d5ddd65aafb98c03f6a01c108c40fd1450c",
-      "text": "Change(genesis='7b818ef0fdd17acb5a6c38b43fa0281f189cc0854dab58dcff68c681ce13ad38', deps=('724acf9747475582d7802aff7fbf0dadf1c0cf98b1cfd4fbaf9bbba81c72471d',), event=Erased(conversation='about-the-deed', at=datetime(2026, 9, 2, 12, 5, 0), actor='assistant', held=6, carried=None, keys=('6cf6abc29c87ca5fa1dc5399205a10bed451b2ff0cbef2a2739c5ac845963890',), erasure='{\"erasure\":\"asked\",\"by\":\"ada\"}'))"
+      "hash": "44f6d82d04c2aa227155968bd6a187c4875c8ca18fffb6ee4bc4fad422cf28b6",
+      "text": "Change(genesis='7b818ef0fdd17acb5a6c38b43fa0281f189cc0854dab58dcff68c681ce13ad38', deps=('9248b55e311c84b0375a194c7264888a7386537461a97743e151ba1f064e72ab',), event=Proposed(conversation='lagging', at=datetime(2026, 9, 2, 12, 0, 0), actor='assistant', held=3, carried=None, object='pe0202384e0620cf052da2283f47c43c8', revises=None))"
     },
     {
-      "hash": "dc77d114da90a434246ff9b22f944d041c1a19bf6dba53ca8ab059b890b009d0",
-      "text": "Change(genesis='7b818ef0fdd17acb5a6c38b43fa0281f189cc0854dab58dcff68c681ce13ad38', deps=('07a6dc381447217d11bc2d89c48847aa16df36804c57e08c5535becba2e5600c',), event=Said(conversation='trains', at=datetime(2026, 9, 2, 12, 6, 40), actor='assistant', held=7, carried=None, turn='{\"who\":\"act\",\"references\":[\"proposal:trains/0\"]}', by='ada', words=(Locked(key='762df64490269f8ee748841c79f481102a6bb7d3211e7bd874ffeec4decbe973', box='cPtFnZVsihBF4gfAlXcMzd56aXslUWSHs0pD/Mk1yHqdBi08MTZ4Tax08vzKS424e6aT1aiVEnIzxntQRx6XMOq1EohfZThQRzydy+UWgzYf6vN0RGiaL6djAs3fBfldtHv5kuEcYiXdK5LHbHdA//wANXWmVkKQRbPknSWDj/J4Lwvgy0KBmrWSza66O6unOZgxq8H+6yskN3UkvyG0SXW1/MbtciTF3uvinz0PFxAKBThYLAdciQgWsju3bl2h7/pIG2tSRWI8p5MAAXUZ4ZmB6xe05hmI1G44WcKG8v1Uc+2f/rw3BMJQzFo2eqBOwLR7N68fmB9IqGYL24qd1Diz3aunUSLQTWrIny2D5LQ='),)))"
+      "hash": "ee7d9914486f95913092373443590e5493acaa9bc3e24dcaf998ad8347664ba6",
+      "text": "Change(genesis='7b818ef0fdd17acb5a6c38b43fa0281f189cc0854dab58dcff68c681ce13ad38', deps=('8acefce5d96ba4fe29ceffa5822f90131cbc875575231867f3370ab87e4f6aea',), event=Said(conversation='about-the-deed', at=datetime(2026, 9, 2, 12, 1, 35), actor='assistant', held=5, carried=None, turn='{\"who\":\"model\",\"calls\":[]}', by=None, words=(Scrubbed(key='f8517142a72094a6bbf487f5347b1a5c041aef1d861d319beab28719a157aaa9', box='PWJTRTWFy8HCOp8yx0YpmGZG73FGsI/IxozIm4FaR6pZERHzRAnffRqQTNQpE7LabV0E09CadEvf+7iclfE5U8tPCkAhd61oL/UJN7fnUUCbO9Ll90ChfnKNy0XrA+nhWVvT4AGhcJMuh2DbTtXM5L/BXynZih1lYcQAKxntnSxrBkPMna51jP6KJZpJhnIAErJa1BOaHM2ybZinYIlrr2PZ92DksbOngTzPgkPszd6iNrYL2MVCvh2fBrtJY69AdlqsM9JUWHox5U9OaWD5mdJ4YNzn+Y2BD44XXD6zBKBXROa7XiTqVL7GAq4N+IAvDcB/9gQUK9fxlZ30BtjnLmMFphCMBi6PgwbeYT3lA/8=', rules='a0d5cffe58839d79401ab650f475384a5eb7fbc064b46cfb3b7a3b25ac91f143'),)))"
     },
     {
-      "hash": "e3aa3e7e2a766c870fb5b4afea2a8a91f695758714ac98fdb6e60682e8cb24b3",
-      "text": "Change(genesis='7b818ef0fdd17acb5a6c38b43fa0281f189cc0854dab58dcff68c681ce13ad38', deps=('dc77d114da90a434246ff9b22f944d041c1a19bf6dba53ca8ab059b890b009d0',), event=Said(conversation='trains', at=datetime(2026, 9, 2, 12, 6, 40), actor='assistant', held=8, carried=None, turn='{\"who\":\"act\",\"references\":[\"proposal:trains/2\"]}', by='ada', words=(Locked(key='6c28e9451b043cee34d7313c32984a90d25077a93ff466a4404454a84acccbaf', box='9MjP9xNsPw/QewXhUsRGygUeVL/F4pBl7eKdgHmB3rUUeldXMpcujP6IG1PmwlCnzx88xR203e0NkFbcNPUvVTp4Lz5k+eWUP5jY5kQ7Xc6yZgCuks6P2gTkmX5I5Tu2I+TcyKuZIvChOFZx9goQphLrgaPf2QLVZ0VUy7LwSC4JTRECiNHpp+hBUgraMKDs6CpNr522it5uV0QDfMdqgZxZy6rw2uwqbNRREQhXBuPN+wy9bd7XkZLhRBf+POWFyZbs0IlRRULGtnQmbjbCcKIXlJeV4CkUHqPZ6MBJzzD6mLedx60/zcb41/taNjf+1+LS+pLRUlMoPIJ80fC3uWac7lQoV7Ueu5i6JU68t7w='),)))"
+      "hash": "12b81c0f1d112dfb9e81e527a3831de1790fb5ab9baf9506be6bb27b27f63fd9",
+      "text": "Change(genesis='7b818ef0fdd17acb5a6c38b43fa0281f189cc0854dab58dcff68c681ce13ad38', deps=('ee7d9914486f95913092373443590e5493acaa9bc3e24dcaf998ad8347664ba6',), event=Erased(conversation='about-the-deed', at=datetime(2026, 9, 2, 12, 5, 0), actor='assistant', held=6, carried=None, keys=('6cf6abc29c87ca5fa1dc5399205a10bed451b2ff0cbef2a2739c5ac845963890',), erasure='{\"erasure\":\"asked\",\"by\":\"ada\"}'))"
     }
   ],
   "skeleton": {
     "heads": [
-      "51804f5be0f062c1d0b716766ce81d5ddd65aafb98c03f6a01c108c40fd1450c",
-      "53e5e81cebc75f1688ab96aa6af56186894b34d86e2ca98ac4aa2e46973004bb",
-      "e3aa3e7e2a766c870fb5b4afea2a8a91f695758714ac98fdb6e60682e8cb24b3"
+      "12b81c0f1d112dfb9e81e527a3831de1790fb5ab9baf9506be6bb27b27f63fd9",
+      "44f6d82d04c2aa227155968bd6a187c4875c8ca18fffb6ee4bc4fad422cf28b6",
+      "be39941a8ec556d22fce7cc5336ca28c1072e65d7db64080057470c1244c0987"
     ],
     "geneses": [
       "7b818ef0fdd17acb5a6c38b43fa0281f189cc0854dab58dcff68c681ce13ad38"
@@ -211,27 +211,11 @@
         }
       },
       {
-        "hash": "8e99d63c408b260a06036d93b6857122f83b11dcfc38d61e5438a98708ef9f48",
+        "hash": "77e6e205eea27dbd5e56496c0950c0017749e4ca88cd6137b984873f0f78a9ef",
         "parents": [
           "7b818ef0fdd17acb5a6c38b43fa0281f189cc0854dab58dcff68c681ce13ad38"
         ],
-        "size": 712,
-        "header": {
-          "node": "line",
-          "conversation": "about-the-deed",
-          "at": "2026-09-02T12:00:00",
-          "kind": "Opened",
-          "keys": [
-            "630dcd2966c4336691125448bbb25b4ff412a49c732db2c8abc1b8581bd710dd"
-          ]
-        }
-      },
-      {
-        "hash": "b401a367f3637b095defc64c68706a7e961c3c70042d102eef7ec47ffa8b0f19",
-        "parents": [
-          "7b818ef0fdd17acb5a6c38b43fa0281f189cc0854dab58dcff68c681ce13ad38"
-        ],
-        "size": 705,
+        "size": 781,
         "header": {
           "node": "line",
           "conversation": "trains",
@@ -243,12 +227,12 @@
         }
       },
       {
-        "hash": "8bb1662e1b151af950a90aa5212857a29b635f482ebdc63649eeb9d990dbeac2",
+        "hash": "4b6a059ac594e9d42b22c7ea78e3cfa2eccaeac2ab34183fbded4f160f71829e",
         "parents": [
-          "7b818ef0fdd17acb5a6c38b43fa0281f189cc0854dab58dcff68c681ce13ad38",
-          "b401a367f3637b095defc64c68706a7e961c3c70042d102eef7ec47ffa8b0f19"
+          "77e6e205eea27dbd5e56496c0950c0017749e4ca88cd6137b984873f0f78a9ef",
+          "7b818ef0fdd17acb5a6c38b43fa0281f189cc0854dab58dcff68c681ce13ad38"
         ],
-        "size": 798,
+        "size": 874,
         "header": {
           "node": "line",
           "conversation": "trains",
@@ -260,73 +244,12 @@
         }
       },
       {
-        "hash": "baaef16eaf654b8077ed5ca6b09004d384c7aec869eac217cfc6f7db8c7e6267",
+        "hash": "2eb6a0f78d1a67eeb14fd4f24a7899e7f6feb4faaef9b0e904786ab940ecdb38",
         "parents": [
+          "4b6a059ac594e9d42b22c7ea78e3cfa2eccaeac2ab34183fbded4f160f71829e",
           "7b818ef0fdd17acb5a6c38b43fa0281f189cc0854dab58dcff68c681ce13ad38"
         ],
-        "size": 705,
-        "header": {
-          "node": "line",
-          "conversation": "lagging",
-          "at": "2026-09-02T12:00:00",
-          "kind": "Opened",
-          "keys": [
-            "2791831bfc6e6e3c03455addf475f278e8df6d907ef1e396c02a1fd088d4e25a"
-          ]
-        }
-      },
-      {
-        "hash": "1bd1f224c39e413b172e9fe5c3c5671573484d9cca16876c3431aa6aff566b59",
-        "parents": [
-          "7b818ef0fdd17acb5a6c38b43fa0281f189cc0854dab58dcff68c681ce13ad38",
-          "baaef16eaf654b8077ed5ca6b09004d384c7aec869eac217cfc6f7db8c7e6267"
-        ],
-        "size": 332,
-        "header": {
-          "node": "line",
-          "conversation": "lagging",
-          "at": "2026-09-02T12:00:00",
-          "kind": "Proposed",
-          "keys": []
-        }
-      },
-      {
-        "hash": "781da3042d6831a3fdb17407c322ca292e03fead27d52f31831ed8230e141245",
-        "parents": [
-          "1bd1f224c39e413b172e9fe5c3c5671573484d9cca16876c3431aa6aff566b59",
-          "7b818ef0fdd17acb5a6c38b43fa0281f189cc0854dab58dcff68c681ce13ad38"
-        ],
-        "size": 332,
-        "header": {
-          "node": "line",
-          "conversation": "lagging",
-          "at": "2026-09-02T12:00:00",
-          "kind": "Proposed",
-          "keys": []
-        }
-      },
-      {
-        "hash": "53e5e81cebc75f1688ab96aa6af56186894b34d86e2ca98ac4aa2e46973004bb",
-        "parents": [
-          "781da3042d6831a3fdb17407c322ca292e03fead27d52f31831ed8230e141245",
-          "7b818ef0fdd17acb5a6c38b43fa0281f189cc0854dab58dcff68c681ce13ad38"
-        ],
-        "size": 332,
-        "header": {
-          "node": "line",
-          "conversation": "lagging",
-          "at": "2026-09-02T12:00:00",
-          "kind": "Proposed",
-          "keys": []
-        }
-      },
-      {
-        "hash": "d76bf104a1a34e985d97d784753d2554429d62ebbed7d1fa39d4e4c31592bb3a",
-        "parents": [
-          "7b818ef0fdd17acb5a6c38b43fa0281f189cc0854dab58dcff68c681ce13ad38",
-          "8bb1662e1b151af950a90aa5212857a29b635f482ebdc63649eeb9d990dbeac2"
-        ],
-        "size": 831,
+        "size": 907,
         "header": {
           "node": "line",
           "conversation": "trains",
@@ -338,12 +261,45 @@
         }
       },
       {
-        "hash": "8070370ff93e0171b33d203aea9bd3aa8e8ba94fbf17047eae2c76d4359df1be",
+        "hash": "b9d09729e796c1102685ad26513fb91c1e3a843ee0468b6587eecb3bfdca80af",
+        "parents": [
+          "7b818ef0fdd17acb5a6c38b43fa0281f189cc0854dab58dcff68c681ce13ad38"
+        ],
+        "size": 788,
+        "header": {
+          "node": "line",
+          "conversation": "about-the-deed",
+          "at": "2026-09-02T12:00:00",
+          "kind": "Opened",
+          "keys": [
+            "630dcd2966c4336691125448bbb25b4ff412a49c732db2c8abc1b8581bd710dd"
+          ]
+        }
+      },
+      {
+        "hash": "afd36b122fd3ce9f98a6e028bdbf43f86334ed8d030b04868c9531ab433aff08",
         "parents": [
           "7b818ef0fdd17acb5a6c38b43fa0281f189cc0854dab58dcff68c681ce13ad38",
-          "d76bf104a1a34e985d97d784753d2554429d62ebbed7d1fa39d4e4c31592bb3a"
+          "b9d09729e796c1102685ad26513fb91c1e3a843ee0468b6587eecb3bfdca80af"
         ],
-        "size": 775,
+        "size": 905,
+        "header": {
+          "node": "line",
+          "conversation": "about-the-deed",
+          "at": "2026-09-02T12:00:01",
+          "kind": "Said",
+          "keys": [
+            "86f5d9bdc5ce5e4ff81af4dc4a8c2e724e448cb5ec16685b5591b4e56d5a1b3e"
+          ]
+        }
+      },
+      {
+        "hash": "c92d9aa68e40b442cea3b39085f5807d1d7b06789e4baa3fb28bc69826e6a157",
+        "parents": [
+          "2eb6a0f78d1a67eeb14fd4f24a7899e7f6feb4faaef9b0e904786ab940ecdb38",
+          "7b818ef0fdd17acb5a6c38b43fa0281f189cc0854dab58dcff68c681ce13ad38"
+        ],
+        "size": 851,
         "header": {
           "node": "line",
           "conversation": "trains",
@@ -355,10 +311,10 @@
         }
       },
       {
-        "hash": "0694762dc9a27ee57d92612b90697b775bc0d650f82e52480b4c2ac6563157a2",
+        "hash": "3e2d7729f3b71aee693d823038b0d21105ae9fdde75b36720c702b95e004a7c8",
         "parents": [
           "7b818ef0fdd17acb5a6c38b43fa0281f189cc0854dab58dcff68c681ce13ad38",
-          "8070370ff93e0171b33d203aea9bd3aa8e8ba94fbf17047eae2c76d4359df1be"
+          "c92d9aa68e40b442cea3b39085f5807d1d7b06789e4baa3fb28bc69826e6a157"
         ],
         "size": 332,
         "header": {
@@ -370,9 +326,9 @@
         }
       },
       {
-        "hash": "298c746b260694893137a78e300c7c0e3db53c6932a0ddb4b4c55a9217fa07b2",
+        "hash": "2bd4feab76d890e0b5a4c1d11cd0bcb41bd95a8a6d1eb73ca6144184c41fdf7a",
         "parents": [
-          "0694762dc9a27ee57d92612b90697b775bc0d650f82e52480b4c2ac6563157a2",
+          "3e2d7729f3b71aee693d823038b0d21105ae9fdde75b36720c702b95e004a7c8",
           "7b818ef0fdd17acb5a6c38b43fa0281f189cc0854dab58dcff68c681ce13ad38"
         ],
         "size": 332,
@@ -385,9 +341,9 @@
         }
       },
       {
-        "hash": "07a6dc381447217d11bc2d89c48847aa16df36804c57e08c5535becba2e5600c",
+        "hash": "8eb94e037f1894370e08443c0e51bcfd23d4b3f4345d44698fd36ea9e400699a",
         "parents": [
-          "298c746b260694893137a78e300c7c0e3db53c6932a0ddb4b4c55a9217fa07b2",
+          "2bd4feab76d890e0b5a4c1d11cd0bcb41bd95a8a6d1eb73ca6144184c41fdf7a",
           "7b818ef0fdd17acb5a6c38b43fa0281f189cc0854dab58dcff68c681ce13ad38"
         ],
         "size": 332,
@@ -400,110 +356,12 @@
         }
       },
       {
-        "hash": "d8f99fcbd523d0a95a5247b2c0942ef096ff252c081b9114156e95203ffbbc75",
+        "hash": "0853d1043aa8c04e6b765f70dfb4f41f30ae974cd17a76076e64cbbf83259e49",
         "parents": [
           "7b818ef0fdd17acb5a6c38b43fa0281f189cc0854dab58dcff68c681ce13ad38",
-          "8e99d63c408b260a06036d93b6857122f83b11dcfc38d61e5438a98708ef9f48"
+          "8eb94e037f1894370e08443c0e51bcfd23d4b3f4345d44698fd36ea9e400699a"
         ],
-        "size": 829,
-        "header": {
-          "node": "line",
-          "conversation": "about-the-deed",
-          "at": "2026-09-02T12:00:01",
-          "kind": "Said",
-          "keys": [
-            "86f5d9bdc5ce5e4ff81af4dc4a8c2e724e448cb5ec16685b5591b4e56d5a1b3e"
-          ]
-        }
-      },
-      {
-        "hash": "63b8a9603088d99511e5de1ef3f41dcc9a0aa3da2f5eb25ed1aa7c798bbc71e6",
-        "parents": [
-          "7b818ef0fdd17acb5a6c38b43fa0281f189cc0854dab58dcff68c681ce13ad38",
-          "d8f99fcbd523d0a95a5247b2c0942ef096ff252c081b9114156e95203ffbbc75"
-        ],
-        "size": 783,
-        "header": {
-          "node": "line",
-          "conversation": "about-the-deed",
-          "at": "2026-09-02T12:00:20",
-          "kind": "Said",
-          "keys": [
-            "6cf6abc29c87ca5fa1dc5399205a10bed451b2ff0cbef2a2739c5ac845963890"
-          ]
-        }
-      },
-      {
-        "hash": "1cf7ec1e28d2b5ffec12b496dd184f8203ce8ab5ac8d7f82caafa5c80ca60133",
-        "parents": [
-          "63b8a9603088d99511e5de1ef3f41dcc9a0aa3da2f5eb25ed1aa7c798bbc71e6",
-          "7b818ef0fdd17acb5a6c38b43fa0281f189cc0854dab58dcff68c681ce13ad38"
-        ],
-        "size": 340,
-        "header": {
-          "node": "line",
-          "conversation": "about-the-deed",
-          "at": "2026-09-02T12:00:21",
-          "kind": "Proposed",
-          "keys": []
-        }
-      },
-      {
-        "hash": "4f71d6d8900f0b050d25b78ced6064e1b02016d70a286d47eda6c1f4d337719f",
-        "parents": [
-          "1cf7ec1e28d2b5ffec12b496dd184f8203ce8ab5ac8d7f82caafa5c80ca60133",
-          "7b818ef0fdd17acb5a6c38b43fa0281f189cc0854dab58dcff68c681ce13ad38"
-        ],
-        "size": 806,
-        "header": {
-          "node": "line",
-          "conversation": "about-the-deed",
-          "at": "2026-09-02T12:01:30",
-          "kind": "Said",
-          "keys": [
-            "34cdfa29c001301f4ab4ae37b4e766f867cd4eb3a89d7f02e2fc3ca2f8493bf9"
-          ]
-        }
-      },
-      {
-        "hash": "724acf9747475582d7802aff7fbf0dadf1c0cf98b1cfd4fbaf9bbba81c72471d",
-        "parents": [
-          "4f71d6d8900f0b050d25b78ced6064e1b02016d70a286d47eda6c1f4d337719f",
-          "7b818ef0fdd17acb5a6c38b43fa0281f189cc0854dab58dcff68c681ce13ad38"
-        ],
-        "size": 783,
-        "header": {
-          "node": "line",
-          "conversation": "about-the-deed",
-          "at": "2026-09-02T12:01:35",
-          "kind": "Said",
-          "keys": [
-            "f8517142a72094a6bbf487f5347b1a5c041aef1d861d319beab28719a157aaa9"
-          ]
-        }
-      },
-      {
-        "hash": "51804f5be0f062c1d0b716766ce81d5ddd65aafb98c03f6a01c108c40fd1450c",
-        "parents": [
-          "724acf9747475582d7802aff7fbf0dadf1c0cf98b1cfd4fbaf9bbba81c72471d",
-          "7b818ef0fdd17acb5a6c38b43fa0281f189cc0854dab58dcff68c681ce13ad38"
-        ],
-        "size": 397,
-        "header": {
-          "node": "line",
-          "conversation": "about-the-deed",
-          "at": "2026-09-02T12:05:00",
-          "kind": "Erased",
-          "keys": []
-        }
-      },
-      {
-        "hash": "dc77d114da90a434246ff9b22f944d041c1a19bf6dba53ca8ab059b890b009d0",
-        "parents": [
-          "07a6dc381447217d11bc2d89c48847aa16df36804c57e08c5535becba2e5600c",
-          "7b818ef0fdd17acb5a6c38b43fa0281f189cc0854dab58dcff68c681ce13ad38"
-        ],
-        "size": 798,
+        "size": 874,
         "header": {
           "node": "line",
           "conversation": "trains",
@@ -515,12 +373,12 @@
         }
       },
       {
-        "hash": "e3aa3e7e2a766c870fb5b4afea2a8a91f695758714ac98fdb6e60682e8cb24b3",
+        "hash": "be39941a8ec556d22fce7cc5336ca28c1072e65d7db64080057470c1244c0987",
         "parents": [
-          "7b818ef0fdd17acb5a6c38b43fa0281f189cc0854dab58dcff68c681ce13ad38",
-          "dc77d114da90a434246ff9b22f944d041c1a19bf6dba53ca8ab059b890b009d0"
+          "0853d1043aa8c04e6b765f70dfb4f41f30ae974cd17a76076e64cbbf83259e49",
+          "7b818ef0fdd17acb5a6c38b43fa0281f189cc0854dab58dcff68c681ce13ad38"
         ],
-        "size": 798,
+        "size": 874,
         "header": {
           "node": "line",
           "conversation": "trains",
@@ -530,11 +388,153 @@
             "6c28e9451b043cee34d7313c32984a90d25077a93ff466a4404454a84acccbaf"
           ]
         }
+      },
+      {
+        "hash": "e7bb805144dac1df16ea18eef000fd3b62a74a84f79106b78cf80058b3a89888",
+        "parents": [
+          "7b818ef0fdd17acb5a6c38b43fa0281f189cc0854dab58dcff68c681ce13ad38",
+          "afd36b122fd3ce9f98a6e028bdbf43f86334ed8d030b04868c9531ab433aff08"
+        ],
+        "size": 859,
+        "header": {
+          "node": "line",
+          "conversation": "about-the-deed",
+          "at": "2026-09-02T12:00:20",
+          "kind": "Said",
+          "keys": [
+            "6cf6abc29c87ca5fa1dc5399205a10bed451b2ff0cbef2a2739c5ac845963890"
+          ]
+        }
+      },
+      {
+        "hash": "c88e35af1b9d5f472a8ee02a351a694711f49c5808372fa9d6d89b12d583e9de",
+        "parents": [
+          "7b818ef0fdd17acb5a6c38b43fa0281f189cc0854dab58dcff68c681ce13ad38",
+          "e7bb805144dac1df16ea18eef000fd3b62a74a84f79106b78cf80058b3a89888"
+        ],
+        "size": 340,
+        "header": {
+          "node": "line",
+          "conversation": "about-the-deed",
+          "at": "2026-09-02T12:00:21",
+          "kind": "Proposed",
+          "keys": []
+        }
+      },
+      {
+        "hash": "8acefce5d96ba4fe29ceffa5822f90131cbc875575231867f3370ab87e4f6aea",
+        "parents": [
+          "7b818ef0fdd17acb5a6c38b43fa0281f189cc0854dab58dcff68c681ce13ad38",
+          "c88e35af1b9d5f472a8ee02a351a694711f49c5808372fa9d6d89b12d583e9de"
+        ],
+        "size": 882,
+        "header": {
+          "node": "line",
+          "conversation": "about-the-deed",
+          "at": "2026-09-02T12:01:30",
+          "kind": "Said",
+          "keys": [
+            "34cdfa29c001301f4ab4ae37b4e766f867cd4eb3a89d7f02e2fc3ca2f8493bf9"
+          ]
+        }
+      },
+      {
+        "hash": "ebadd42a82e803973c8c463a43ab8ad6858d48c7d4acdff9c337d50b06a62487",
+        "parents": [
+          "7b818ef0fdd17acb5a6c38b43fa0281f189cc0854dab58dcff68c681ce13ad38"
+        ],
+        "size": 781,
+        "header": {
+          "node": "line",
+          "conversation": "lagging",
+          "at": "2026-09-02T12:00:00",
+          "kind": "Opened",
+          "keys": [
+            "2791831bfc6e6e3c03455addf475f278e8df6d907ef1e396c02a1fd088d4e25a"
+          ]
+        }
+      },
+      {
+        "hash": "830200509e056ef4ae1cfd0f1729910534c7bb766add68da43910327009eee57",
+        "parents": [
+          "7b818ef0fdd17acb5a6c38b43fa0281f189cc0854dab58dcff68c681ce13ad38",
+          "ebadd42a82e803973c8c463a43ab8ad6858d48c7d4acdff9c337d50b06a62487"
+        ],
+        "size": 332,
+        "header": {
+          "node": "line",
+          "conversation": "lagging",
+          "at": "2026-09-02T12:00:00",
+          "kind": "Proposed",
+          "keys": []
+        }
+      },
+      {
+        "hash": "9248b55e311c84b0375a194c7264888a7386537461a97743e151ba1f064e72ab",
+        "parents": [
+          "7b818ef0fdd17acb5a6c38b43fa0281f189cc0854dab58dcff68c681ce13ad38",
+          "830200509e056ef4ae1cfd0f1729910534c7bb766add68da43910327009eee57"
+        ],
+        "size": 332,
+        "header": {
+          "node": "line",
+          "conversation": "lagging",
+          "at": "2026-09-02T12:00:00",
+          "kind": "Proposed",
+          "keys": []
+        }
+      },
+      {
+        "hash": "44f6d82d04c2aa227155968bd6a187c4875c8ca18fffb6ee4bc4fad422cf28b6",
+        "parents": [
+          "7b818ef0fdd17acb5a6c38b43fa0281f189cc0854dab58dcff68c681ce13ad38",
+          "9248b55e311c84b0375a194c7264888a7386537461a97743e151ba1f064e72ab"
+        ],
+        "size": 332,
+        "header": {
+          "node": "line",
+          "conversation": "lagging",
+          "at": "2026-09-02T12:00:00",
+          "kind": "Proposed",
+          "keys": []
+        }
+      },
+      {
+        "hash": "ee7d9914486f95913092373443590e5493acaa9bc3e24dcaf998ad8347664ba6",
+        "parents": [
+          "7b818ef0fdd17acb5a6c38b43fa0281f189cc0854dab58dcff68c681ce13ad38",
+          "8acefce5d96ba4fe29ceffa5822f90131cbc875575231867f3370ab87e4f6aea"
+        ],
+        "size": 859,
+        "header": {
+          "node": "line",
+          "conversation": "about-the-deed",
+          "at": "2026-09-02T12:01:35",
+          "kind": "Said",
+          "keys": [
+            "f8517142a72094a6bbf487f5347b1a5c041aef1d861d319beab28719a157aaa9"
+          ]
+        }
+      },
+      {
+        "hash": "12b81c0f1d112dfb9e81e527a3831de1790fb5ab9baf9506be6bb27b27f63fd9",
+        "parents": [
+          "7b818ef0fdd17acb5a6c38b43fa0281f189cc0854dab58dcff68c681ce13ad38",
+          "ee7d9914486f95913092373443590e5493acaa9bc3e24dcaf998ad8347664ba6"
+        ],
+        "size": 397,
+        "header": {
+          "node": "line",
+          "conversation": "about-the-deed",
+          "at": "2026-09-02T12:05:00",
+          "kind": "Erased",
+          "keys": []
+        }
       }
     ],
     "since": "Known",
     "frontier": {
-      "digest": "5e5514fe1b5242f02b63c05bcf5bebf34357c0a02c62b96d3c13afd418d6bd04",
+      "digest": "3562daa108b79b8d950c3e1e79207ca5aa1812a175b178498637bd997065b1b2",
       "count": 21
     },
     "keys": {

@@ -17,15 +17,14 @@
 #                      NOTHING waiting, which is what makes the empty Inbox a
 #                      state some scene can actually see.
 #   E2E_BASE_PROPOSED  the same viewer login, over a chain whose triage run left
-#                      a BATCH waiting (§10.6) AND whose secretary has REVIEWED
-#                      it: the batch is held with its reason, and the day's
-#                      accepted and rejected ones are listed under it. One page
-#                      cannot be both empty and full, so the read-only Inbox is
-#                      two deployments rather than one deployment two files
+#                      a CARD waiting (§10.6) AND whose secretary has REVIEWED
+#                      it: the card is held with its reason. One page cannot be
+#                      both empty and full, so the read-only Inbox is two
+#                      deployments rather than one deployment two files
 #                      disagree about.
 #   E2E_BASE_WRITE     gated to the writer login, with a chain of its own and a
-#                      batch of its own. The files that complete and add todos —
-#                      and the ones that accept and reject — move this one only.
+#                      card of its own. The files that complete and add todos,
+#                      and the ones that tap a card, move this one only.
 #
 # All three are the REAL `suzatary serve` — the Rust binary, every route and
 # every refusal — over a temp chain. They run a build with a whois fixture
@@ -657,7 +656,7 @@ ready wide "$wide_base"
 ready write "$write_base"
 ready shell "$shell_base"
 echo "    reads    $read_base (a viewer, never an actor — its chain cannot move)"
-echo "    proposed $proposed_base (the same viewer, with a batch waiting)"
+echo "    proposed $proposed_base (the same viewer, with a card waiting)"
 echo "    writes   $write_base"
 echo "    shell    $shell_base (a writer, its build read from $shell_build)"
 
@@ -683,11 +682,9 @@ echo "==> chromium $(chromium --version 2>/dev/null || echo '(not on PATH)')"
 # One file at a time. Each launches its own browser and its own profile, and
 # four Chromiums racing for one server is a source of flakiness rather than of
 # speed on a run this short.
-# AND THE AGENT'S WRITER, FOR ONE SCENE (docs/ARCHITECTURE.md §10.6). Rejecting
-# a batch deletes it from the proposal store and remembers its names; the only
-# honest way to check that it does not come back is to RUN THE SAME WRITER AGAIN
-# and see it refused. A scene runs under node, so it shells out to the fixture
-# binary the same way this script does.
+# AND THE AGENT'S WRITER, FOR ONE SCENE (docs/ARCHITECTURE.md §10.6): a scene
+# files a triage card through the agent's own verbs and taps it, so it runs the
+# fixture binary under node the same way this script does.
 E2E_BASE="$read_base" \
 E2E_BASE_PROPOSED="$proposed_base" \
 E2E_BASE_WRITE="$write_base" \

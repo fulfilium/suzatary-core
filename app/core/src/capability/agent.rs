@@ -1,10 +1,10 @@
 use super::{Clock, Corpus, Mailbox, Manuals, Render, Repository};
 use crate::record::TodoEvent;
 use crate::secretary::recollection::Recollection;
-use crate::store::Prodrome;
+use crate::store::Reads;
 
 /// What the triage agent may use: it reads attacker-controlled mail, so nothing here
-/// sends, notifies, names a peer or performs a card, and its `chain` is a replica it reads.
+/// sends, notifies, names a peer or performs a card, and its `chain` is only read.
 /// Its writes are cards, filed through the call's [`crate::secretary::filed::TriageCards`].
 ///
 /// ```
@@ -25,6 +25,17 @@ use crate::store::Prodrome;
 /// ```
 /// ```compile_fail,E0609
 /// fn fetch(agent: suzatary_core::capability::Agent<'_>) { let _ = agent.web; }
+/// ```
+///
+/// Its chain is read and never written: neither `append` nor `accept` is reachable from it.
+///
+/// ```compile_fail,E0599
+/// fn write(agent: suzatary_core::capability::Agent<'_>, event: suzatary_core::record::TodoEvent) {
+///     let _ = agent.chain.append(event);
+/// }
+/// ```
+/// ```compile_fail,E0599
+/// fn join(agent: suzatary_core::capability::Agent<'_>) { let _ = agent.chain.accept(&[]); }
 /// ```
 ///
 /// It reads the secretary's memory and has no way to write it: the memory is a
@@ -65,8 +76,8 @@ use crate::store::Prodrome;
 /// ```
 #[derive(Clone, Copy)]
 pub struct Agent<'a> {
-    /// A replica of the chain, synced before a run, which it reads.
-    pub chain: &'a dyn Prodrome<TodoEvent>,
+    /// The chain, which it reads: a [`Reads`], so no write is reachable from it.
+    pub chain: &'a dyn Reads<TodoEvent>,
     /// The triage queue and its dedup state.
     pub corpus: &'a dyn Corpus,
     /// The mail index, read-only.

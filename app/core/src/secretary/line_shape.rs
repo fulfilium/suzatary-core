@@ -130,6 +130,13 @@ pub enum LineShape {
         /// Why.
         erasure: Erasure,
     },
+    /// One slot's words sealed again under the current redaction rules. Words: the slot's.
+    Resealed {
+        /// The key of the slot as first written.
+        of: KeyName,
+        /// The key of the seal it was sealed again from.
+        from: KeyName,
+    },
 }
 
 /// A coding session without its words.
@@ -179,7 +186,8 @@ impl LineShape {
             | LineShape::Coding {
                 session: CodingShape::Reported { .. } | CodingShape::Dropped { .. },
                 ..
-            } => 1,
+            }
+            | LineShape::Resealed { .. } => 1,
             LineShape::Proposed { .. }
             | LineShape::Stopped { .. }
             | LineShape::Rewound { .. }
@@ -212,6 +220,7 @@ impl LineShape {
             LineShape::Scoped { .. } => "Scoped",
             LineShape::Coding { .. } => "Coding",
             LineShape::Erased { .. } => "Erased",
+            LineShape::Resealed { .. } => "Resealed",
         }
     }
 }
@@ -353,6 +362,14 @@ pub fn split(entry: &Entry) -> (LineShape, Option<Vec<LineWords>>) {
                 erasure: erasure.clone(),
             },
             Some(Vec::new()),
+        ),
+        // Its words are another slot's, so it is sealed by `LineEvent::reseal` alone.
+        Entry::Resealed { of, from, .. } => (
+            LineShape::Resealed {
+                of: of.clone(),
+                from: from.clone(),
+            },
+            None,
         ),
     }
 }
@@ -536,6 +553,7 @@ pub fn join(
             },
         },
         LineShape::Erased { keys, erasure } => Entry::Erased { at, keys, erasure },
+        LineShape::Resealed { of, from } => Entry::Resealed { at, of, from },
     }
 }
 

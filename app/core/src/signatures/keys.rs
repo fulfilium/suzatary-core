@@ -9,8 +9,9 @@ use crate::capability;
 /// box makes and every key object, so a key counts where it signed one.
 pub const BOX_KEY: &str = "SUZATARY_BOX_KEY";
 
-/// The secretspec name of the agent's key: it signs only the objects of the agent's replica,
-/// and is registered for the agent's actor alone.
+/// The secretspec name of the agent's key, registered for the agent's actor alone, so no other
+/// key of the box's proves a write as the agent; the agent's writes are Inbox cards, so it signs
+/// nothing.
 pub const AGENT_KEY: &str = "SUZATARY_AGENT_KEY";
 
 /// The box's two signing keys, each a seed held in secretspec by its name, checked once against
@@ -75,7 +76,7 @@ impl BoxKeys {
         &self.root
     }
 
-    /// The agent's key: what signs its replica's objects.
+    /// The agent's key, the one key registered for its actor.
     #[must_use]
     pub fn agent(&self) -> &Arc<Secret> {
         &self.agent

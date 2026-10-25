@@ -11,7 +11,6 @@ and a build, and going back is a checkout of an earlier commit.
 | `suzatary` | the app the lock names, its tools (`./suzatary tool …`, `./suzatary shell`) and its secrets (`./suzatary secret NAME`), reached without copying this repository into the Nix store |
 | `instance.toml` | the deployment, written by `suzatary init`: who it serves, who may open it, the mail accounts, the model |
 | `events/`, `events-suzatary/` | your todos and the system's own work, each a content-addressed history |
-| `events-triage*/` | the triage agent's replicas: what it proposes, until it is accepted or rejected |
 | `inbox/`, `secretary-lines/`, `memory/`, `decisions/`, `state.json` | the inbox, the conversations, the memory's history, the recorded decisions, the mail queue's bookkeeping |
 | `local/` | never committed (its own `.gitignore` ignores everything in it, written by `suzatary init`), carried by the vault: `persona.toml` (your email voice, news filter and anchors), `personal-terms.txt` and `context-terms.txt` (what the leak guard looks for), `mail.json` (what the box keeps of each message beside the decision), `triage-notes.md` (your rules for the triage agent, appended to its prompt: which senders never make a todo, which chain a kind of mail belongs to, what a deadline costs; never facts about people) |
 

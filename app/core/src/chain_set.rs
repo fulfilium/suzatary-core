@@ -426,6 +426,7 @@ mod tests {
     use prodrome_core::term::Term;
 
     use super::*;
+    use crate::store::Reads as _;
     use crate::store::{InMemory, Prodrome as _};
 
     type Objects = Vec<(Hash, Envelope<TodoEvent>)>;

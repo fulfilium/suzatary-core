@@ -13,7 +13,7 @@ use crate::deployment::Deployment;
 use crate::refusal::{Refusal, shown};
 use crate::secretary::memory::Memory;
 use crate::secretary::owners_record::OwnersRecord;
-use crate::store::Prodrome;
+use crate::store::Reads;
 use crate::todos;
 
 pub(crate) fn list_open_todos(caps: &Agent<'_>, chain: &ChainPolicy) -> Result<Value, Refusal> {
@@ -231,7 +231,7 @@ pub(crate) fn todo_show(
     }))
 }
 
-pub(crate) fn history(chain: &dyn Prodrome<TodoEvent>, todo: &str) -> Result<Value, Refusal> {
+pub(crate) fn history(chain: &dyn Reads<TodoEvent>, todo: &str) -> Result<Value, Refusal> {
     let events = events_of(chain)?;
     let lines: Vec<String> = events
         .iter()
@@ -315,7 +315,7 @@ pub(crate) fn evaluate(
     }))
 }
 
-pub(crate) fn verify_chain(chain: &dyn Prodrome<TodoEvent>) -> String {
+pub(crate) fn verify_chain(chain: &dyn Reads<TodoEvent>) -> String {
     let problems = chain.verify();
     if problems.is_empty() {
         "healthy".to_owned()

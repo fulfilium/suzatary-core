@@ -236,23 +236,6 @@ impl Instance {
             })
     }
 
-    /// Every chain as a name and two directory names, for classifying the
-    /// replica objects a diff shows deleted.
-    ///
-    /// It takes each directory's last component, assuming the diff's paths are
-    /// relative to the directory that holds the chains.
-    #[must_use]
-    pub fn chain_roster(&self) -> Vec<suzatary_io::repository::ChainRoster> {
-        self.chains
-            .iter()
-            .map(|chain| suzatary_io::repository::ChainRoster {
-                name: chain.policy.name.as_str().to_owned(),
-                events_dir: dir_name(&chain.events),
-                proposals_dir: dir_name(&chain.proposals),
-            })
-            .collect()
-    }
-
     /// A root resolved against the instance file's directory rather than the
     /// working directory, so the same file works from any checkout.
     fn beside(file: &Path, named: &Path) -> PathBuf {
@@ -288,8 +271,8 @@ impl Instance {
         self.roots.data.under(Path::new("decisions"))
     }
 
-    /// Where each store of `kind` lives, beside the name the fsck reports it by: a chain and
-    /// its replica once per chain, a plugin's store once per plugin, every other store once.
+    /// Where each store of `kind` lives, beside the name the fsck reports it by: a chain once
+    /// per chain, a plugin's store once per plugin, every other store once.
     #[must_use]
     pub fn directories(&self, kind: Kind) -> Vec<(String, PathBuf)> {
         let once = |path: PathBuf| vec![(kind.name().to_owned(), path)];
@@ -305,7 +288,6 @@ impl Instance {
         let secretary = &self.secretary;
         match kind {
             Kind::Chain => chains(|chain| &chain.events),
-            Kind::Proposals => chains(|chain| &chain.proposals),
             Kind::Inbox => once(secretary.inbox.clone()),
             Kind::Lines => once(secretary.line_store()),
             Kind::LineKeys => once(secretary.line_keys()),
@@ -369,10 +351,8 @@ impl Instance {
     }
 
     /// ADOPTION, asked of every chain, and a no-op where it was asked before: each chain
-    /// registers the box's and the agent's keys and takes its epoch, and, when it takes one, each
-    /// replica's pending batch is signed by the agent's key, so accepting it later puts no
-    /// unsigned write on a chain. A revocation that reached some chains and not others is
-    /// completed. Under a lock beside each chain, so two processes adopting together adopt once.
+    /// registers the box's and the agent's keys and takes its epoch. A revocation that reached
+    /// some chains and not others is completed. Under a lock beside each chain, so two processes adopting together adopt once.
     /// Every chain is tried whatever one answers; answers each chain that adopted with the
     /// actors it registered now, and what did not.
     #[must_use]
@@ -426,36 +406,7 @@ impl Instance {
             keys,
             &chain.policy,
         )?;
-        // A batch can only predate the switch at the switch itself: later starts sign nothing.
-        if adoption
-            .epochs
-            .iter()
-            .any(|epoch| matches!(epoch, suzatary_core::signatures::Epoch::Taken(_)))
-        {
-            let replica = crate::commands::proposing_of(chain)?;
-            suzatary_core::signatures::sign_standing(&replica, signers, &chain.policy.untrusted)?;
-        }
         Ok(adoption.registered)
-    }
-
-    /// The agent's key alone, for the agent's own process (`suzatary mcp`): the root is never
-    /// resolved there. A key not at hand is a signer that refuses, never one that skips.
-    #[must_use]
-    pub fn agent_signer(&self) -> suzatary_core::store::Signer {
-        use suzatary_core::signatures::AGENT_KEY;
-        use suzatary_core::store::Signer;
-        let root = self.root();
-        match self
-            .secrets()
-            .get(AGENT_KEY, "the agent signs what it proposes")
-        {
-            Err(locked) => Signer::Refusing(self.locked(&locked)),
-            Ok(None) => Signer::Refusing(self.unresolved(AGENT_KEY)),
-            Ok(Some(seed)) => match suzatary_core::signatures::agent_key(root, &seed) {
-                Ok(key) => Signer::Key(key),
-                Err(why) => Signer::Refusing(why.to_string()),
-            },
-        }
     }
 
     fn locked(&self, locked: &suzatary_io::secrets::SecretError) -> String {
@@ -685,14 +636,6 @@ fn served(coding: Coding, chains: &Chains) -> anyhow::Result<Coding> {
     Ok(coding)
 }
 
-/// A path's last component as a string, or the whole path when it has none.
-fn dir_name(path: &Path) -> String {
-    path.file_name().map_or_else(
-        || path.to_string_lossy().into_owned(),
-        |name| name.to_string_lossy().into_owned(),
-    )
-}
-
 /// The file lock adoption is taken under, beside the chain's objects: across processes, since
 /// every writer that starts may be the first.
 pub(crate) fn adoption_lock(events: &Path) -> anyhow::Result<suzatary_io::durable::Held> {
@@ -716,14 +659,12 @@ root = "836884e1723c7b17f8b87e76a0272f012de6cff08f134eb9dcdb2670695b1818"
 [[chains]]
 name = "life"
 events = "events"
-proposals = "events-triage"
 untrusted = ["triage"]
 actors = ["ada", "triage"]
 owner = "ada"
 [[chains]]
 name = "suzatary"
 events = "events-suzatary"
-proposals = "events-triage-suzatary"
 untrusted = ["triage"]
 actors = ["ada", "triage"]
 owner = "ada"

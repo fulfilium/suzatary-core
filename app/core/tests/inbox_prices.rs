@@ -24,6 +24,7 @@ use suzatary_core::record::TodoEvent;
 use suzatary_core::secretary::inbox::{self, ProposalId};
 use suzatary_core::secretary::inbox_event::InboxEvent;
 use suzatary_core::secretary::store::{Draft, Proposal, Reasons};
+use suzatary_core::store::Reads as _;
 use suzatary_core::store::{InMemory, Prodrome};
 use suzatary_core::wire::Fulfillment;
 

@@ -1688,6 +1688,8 @@ pub enum TurnGone {
     },
     /// Their key is not here: lost in a restore, or never given to this replica.
     Missing,
+    /// Locked under older redaction rules, they do not pass the current ones.
+    Withheld,
 }
 
 impl From<&crate::secretary::words::Gone> for TurnGone {
@@ -1704,6 +1706,7 @@ impl From<&crate::secretary::words::Gone> for TurnGone {
                 erasure: Erasure::Forgot { fact },
             } => Self::Forgot { fact: *fact },
             Gone::Missing => Self::Missing,
+            Gone::Withheld => Self::Withheld,
         }
     }
 }

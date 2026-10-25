@@ -11,7 +11,7 @@ use prodrome_core::event::{
     Hash, canonical_envelope, mk_completed, mk_created, mk_reopened, mk_sealed, seal_hash,
 };
 use suzatary_core::record::Envelope;
-use suzatary_core::store::Prodrome as _;
+use suzatary_core::store::Reads as _;
 
 fn ada() -> suzatary_core::capability::Login {
     common::login("ada@example.com")

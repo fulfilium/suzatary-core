@@ -499,7 +499,7 @@ mod tests {
     use super::*;
     use crate::secretary::inbox_event::InboxEvent;
     use crate::secretary::store::ConversationId;
-    use crate::store::{InMemory, InMemoryDoc};
+    use crate::store::{InMemory, InMemoryDoc, Reads};
 
     /// Each salt one more than the last.
     #[derive(Default)]
@@ -666,7 +666,7 @@ mod tests {
         }
     }
 
-    impl<E: crate::store::Store> Prodrome<E> for Failing<E> {
+    impl<E: crate::store::Store> Reads<E> for Failing<E> {
         fn objects(
             &self,
         ) -> Result<
@@ -696,6 +696,9 @@ mod tests {
         fn verify(&self) -> Vec<String> {
             self.inner.verify()
         }
+    }
+
+    impl<E: crate::store::Store> Prodrome<E> for Failing<E> {
         fn append(&self, event: E) -> Result<prodrome_core::event::Hash, crate::store::StoreError> {
             self.inner.append(event)
         }

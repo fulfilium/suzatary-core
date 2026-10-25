@@ -16,10 +16,10 @@ use prodrome_core::event::Actor;
 use prodrome_core::sign::PublicKey;
 use suzatary_core::mail::dedup_key::DEDUP_KEY;
 use suzatary_core::signatures::{AGENT_KEY, BOX_KEY, BoxKeys, Trust};
-use suzatary_core::store::{Prodrome, Replica as _};
 
 use super::store_of;
 use crate::instance::Instance;
+use suzatary_core::store::Reads as _;
 
 /// Which act.
 #[derive(Debug, clap::Args)]
@@ -331,7 +331,7 @@ fn init(instance: &Instance) -> anyhow::Result<()> {
         for (actor, key) in registered {
             println!("{name}: registered {} for {actor}", key.as_str());
         }
-        if let Err(why) = repair(chain, &signers, &keys) {
+        if let Err(why) = repair(chain, &keys) {
             failed.push(format!("{name}: {why:#}"));
         }
     }
@@ -350,36 +350,13 @@ fn init(instance: &Instance) -> anyhow::Result<()> {
     Ok(())
 }
 
-/// THE REPAIR AFTER ADOPTION: each actor of one chain left speaking with the key that signs its
-/// writes and no other of the box's: the replica's standing proposals signed by their
-/// actor's key where they lack it, and a key of the box's registered for an actor whose writes
-/// the other signs revoked. What a box adopted before custody needs; asked again, nothing. Each
+/// THE REPAIR AFTER ADOPTION: a key of the box's registered for an actor whose writes the other
+/// signs, revoked, so each actor of one chain is left speaking with the key that signs its writes
+/// and no other of the box's. What a box adopted before custody needs; asked again, nothing. Each
 /// act is said.
-fn repair(
-    chain: &crate::instance::ChainDir,
-    signers: &suzatary_core::signatures::Signers,
-    keys: &BoxKeys,
-) -> anyhow::Result<()> {
+fn repair(chain: &crate::instance::ChainDir, keys: &BoxKeys) -> anyhow::Result<()> {
     let name = &chain.policy.name;
     let _held = chain_lock(chain)?;
-    let proposing = super::proposing_of(chain)?;
-    let signed =
-        suzatary_core::signatures::sign_standing(&proposing, signers, &chain.policy.untrusted)?;
-    if !signed.is_empty() {
-        println!(
-            "{name}: signed {} standing proposal(s) with the key their actor's writes are signed by",
-            signed.len()
-        );
-    }
-    let misplaced =
-        suzatary_core::signatures::misplaced_signatures(&proposing, keys, &chain.policy.untrusted)?;
-    let removed = proposing.replica().discard(&misplaced)?;
-    if !removed.is_empty() {
-        println!(
-            "{name}: removed {} signature(s) of the box's key over the agent's proposals",
-            removed.len()
-        );
-    }
     for (actor, key) in
         suzatary_core::signatures::revoke_misplaced(&store_of(chain), keys, &chain.policy)?
     {

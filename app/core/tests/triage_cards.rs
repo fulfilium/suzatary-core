@@ -13,6 +13,7 @@ use suzatary_core::secretary::filed::TriageCards;
 use suzatary_core::secretary::inbox_event::InboxEvent;
 use suzatary_core::secretary::proposer::Proposer;
 use suzatary_core::secretary::store::Proposal;
+use suzatary_core::store::Reads as _;
 use suzatary_core::store::{InMemory, Prodrome};
 
 fn deployment() -> Deployment {

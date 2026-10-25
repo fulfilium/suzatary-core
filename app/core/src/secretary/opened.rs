@@ -106,7 +106,7 @@ impl<S: Slots> Slots for Cached<'_, S> {
         name: &KeyName,
         binding: &[u8],
         sealed: &[u8],
-        open: &dyn Fn(&TextKey) -> Option<LineWords>,
+        open: &dyn Fn(&TextKey) -> Option<Words<LineWords>>,
     ) -> Words<LineWords> {
         use sha2::Digest as _;
         let digest = sha2::Sha256::new()

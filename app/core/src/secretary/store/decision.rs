@@ -9,9 +9,10 @@ use crate::nonempty::NonEmpty;
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS)]
 #[serde(rename_all = "lowercase")]
 pub enum Settle {
-    /// Adopted onto the chain.
+    /// Adopted onto the chain: a triage batch, before the agent filed cards (2026-10-24).
     Accepted,
-    /// Deleted from the replica: the one place an object is removed.
+    /// Withdrawn by the review: a triage card, or before 2026-10-24 a batch deleted from the
+    /// agent's replica.
     Rejected,
 }
 

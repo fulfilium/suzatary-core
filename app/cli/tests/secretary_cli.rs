@@ -10,6 +10,7 @@ use suzatary_cli::commands::init;
 use suzatary_cli::instance::Instance;
 use suzatary_core::secretary::responded::Responded;
 use suzatary_core::secretary::store::ConversationId;
+use suzatary_core::store::Reads as _;
 
 /// A thin wrapper so a test can build [`init::Args`] through `clap`'s own
 /// parser, exactly `tests/init.rs`'s own `Wrapper`/`parse`.
@@ -198,19 +199,12 @@ fn verify_walks_every_store() {
     let mut wanted: Vec<String> = instance
         .chains
         .iter()
-        .flat_map(|chain| {
-            [
-                format!(
-                    "{} chain OK — {}",
-                    chain.policy.name,
-                    chain.events.display()
-                ),
-                format!(
-                    "{} proposals OK — {}",
-                    chain.policy.name,
-                    chain.proposals.display()
-                ),
-            ]
+        .map(|chain| {
+            format!(
+                "{} chain OK — {}",
+                chain.policy.name,
+                chain.events.display()
+            )
         })
         .collect();
     wanted.push(format!("inbox OK — {}", instance.secretary.inbox.display()));
@@ -333,7 +327,7 @@ fn every_directory_the_push_stages_is_a_store_verify_reads() {
         .split_whitespace()
         .filter_map(|path| path.strip_suffix('/'))
         .collect();
-    assert!(directories.len() >= 10, "{directories:?}");
+    assert!(directories.len() >= 8, "{directories:?}");
     for directory in directories {
         let root = instance.data().join(directory);
         assert!(
@@ -492,7 +486,6 @@ fn carrying(
 
 /// How many objects the membership store holds.
 fn held(instance: &Instance) -> usize {
-    use suzatary_core::store::Prodrome as _;
     instance
         .secretary
         .topics
@@ -855,4 +848,304 @@ fn the_backfill_applies_the_plan_it_showed_once() {
         "{refused}"
     );
     assert_eq!(held(), stale, "a refused plan writes nothing");
+}
+
+/// The conversation `id` as the box reads it: its fold, which a reseal leaves as it was.
+fn read_lines(instance: &Instance, id: &ConversationId) -> suzatary_core::secretary::store::Stored {
+    let stores = instance.conversation_stores();
+    suzatary_core::secretary::transcript::read(stores.conversations(), id)
+        .expect("reads")
+        .into_stored()
+}
+
+/// Every object of the lines, by name and print.
+fn line_objects(instance: &Instance) -> Vec<(prodrome_core::event::Hash, String)> {
+    use suzatary_core::store::Reads as _;
+    instance
+        .conversation_stores()
+        .lines
+        .objects()
+        .expect("reads")
+        .into_iter()
+        .map(|(name, object)| (name, prodrome_core::event::canonical_envelope(&object)))
+        .collect()
+}
+
+/// `suzatary secretary migrate-scrub`, its count of keys and what it said.
+fn migrated(
+    instance: &Instance,
+    apply: bool,
+) -> (Option<suzatary_core::secretary::rescrub::Done>, String) {
+    let mut said = Vec::new();
+    let done = suzatary_cli::commands::secretary::migrate_scrub(instance, apply, &mut said)
+        .expect("the migration runs");
+    (done, String::from_utf8(said).expect("utf-8"))
+}
+
+/// A conversation of lines locked before lines recorded their rules, scrubbed under rules that
+/// missed a link's token and an SSN in them, the last of its words erased, then one line written
+/// under the current rules.
+fn written_before_the_rules(instance: &Instance) -> ConversationId {
+    use prodrome_core::event::Actor;
+    use suzatary_core::secretary::erasure::Erasure;
+    use suzatary_core::secretary::line_event::LineEvent;
+    use suzatary_core::secretary::scrubbed_under::ScrubbedUnder;
+    use suzatary_core::secretary::store::Entry;
+    use suzatary_core::store::{Doc as _, Prodrome as _};
+
+    let stores = instance.conversation_stores();
+    let id = ConversationId::new("2026-10-25-1").expect("a slug");
+    let at = |minute: u32| {
+        prodrome_core::literal::Datetime::new(2026, 10, 25, 9, minute, 0, 0).expect("an instant")
+    };
+    let secret = "reset at https://example.test/r?token=s3cret, SSN 123-45-6789";
+    let entries = [
+        Entry::Opened {
+            at: at(0),
+            title: suzatary_core::secretary::words::Words::kept("Café notes".to_owned()),
+            model: "scripted".to_owned(),
+            kind: suzatary_core::secretary::store::Kind::Topic,
+        },
+        Entry::Said {
+            at: at(1),
+            turn: asked(secret),
+            by: Some("owner".into()),
+        },
+        Entry::Said {
+            at: at(2),
+            turn: answered(&format!("Noted — {secret}")),
+            by: None,
+        },
+        Entry::Said {
+            at: at(3),
+            turn: asked("erase me: 482913 is my verification code"),
+            by: Some("owner".into()),
+        },
+    ];
+    let actor = Actor::new("assistant").expect("an actor");
+    let entropy = suzatary_core::secretary::conversations::Counting::default();
+    let mut erasable = Vec::new();
+    for (held, entry) in (0..).zip(&entries) {
+        let (line, keys) = LineEvent::written_under(
+            &ScrubbedUnder::Unversioned,
+            id.clone(),
+            actor.clone(),
+            held,
+            entry,
+            &entropy,
+        )
+        .expect("a line");
+        for key in &keys {
+            stores.keys.set(&key.name(), key).expect("kept");
+        }
+        erasable = line.keys().cloned().collect();
+        stores.lines.append(line).expect("appended");
+    }
+    let erasure = LineEvent::erasure(
+        id.clone(),
+        at(4),
+        actor.clone(),
+        4,
+        erasable.into_iter().collect(),
+        Erasure::Asked { by: actor },
+    );
+    stores.lines.append(erasure).expect("erased");
+    suzatary_core::secretary::transcript::push(
+        stores.conversations(),
+        &id,
+        &Entry::Said {
+            at: at(5),
+            turn: asked("written under the current rules"),
+            by: Some("owner".into()),
+        },
+    )
+    .expect("pushed");
+    id
+}
+
+/// The names of the keys the box keeps.
+fn kept_keys(instance: &Instance) -> std::collections::BTreeSet<String> {
+    std::fs::read_dir(instance.secretary.line_keys())
+        .expect("the keys")
+        .map(|entry| {
+            entry
+                .expect("a key")
+                .file_name()
+                .to_string_lossy()
+                .into_owned()
+        })
+        .collect()
+}
+
+/// The migration's laws. Lines locked under rules before the current ones, which missed what is
+/// in them, read scrubbed under the current rules before and after a run. After `--apply`, every
+/// slot's seal that opens is under the current rules and a second run appends nothing (a); no
+/// key of a seal a reseal replaced is kept, so no old seal opens (b); the store only grows (d).
+/// An erased slot stays erased, and a dry run writes nothing.
+#[test]
+fn migrate_scrub_reseals_every_stale_slot_once() {
+    use suzatary_core::secretary::rescrub::Census;
+
+    let instance = fresh_instance("migrate-scrub");
+    let id = written_before_the_rules(&instance);
+    let before = read_lines(&instance, &id);
+    let printed = format!("{before:?}");
+    for caught in ["s3cret", "123-45-6789"] {
+        assert!(
+            !printed.contains(caught),
+            "a stale slot read unscrubbed: {printed}"
+        );
+    }
+
+    let objects = line_objects(&instance);
+    let (done, said) = migrated(&instance, false);
+    assert_eq!(done, None);
+    assert!(
+        said.contains(
+            "6 line(s): 3 slot(s) to seal again, 1 under the current rules, 1 erased, 0 withheld, 0 that do not open"
+        ),
+        "{said}"
+    );
+    assert_eq!(line_objects(&instance), objects, "a dry run writes nothing");
+
+    let keys_before = kept_keys(&instance);
+    let (done, said) = migrated(&instance, true);
+    let done = done.expect("a run");
+    assert_eq!((done.resealed, done.destroyed), (3, 4), "{said}");
+    let after = line_objects(&instance);
+    assert!(
+        objects.iter().all(|object| after.contains(object)),
+        "the store only grows"
+    );
+    assert_eq!(after.len(), objects.len() + 3, "one reseal per stale slot");
+    assert_eq!(
+        read_lines(&instance, &id),
+        before,
+        "every slot reads the same words"
+    );
+
+    let stores = instance.conversation_stores();
+    assert_eq!(
+        suzatary_core::secretary::rescrub::census(stores.conversations()).expect("reads"),
+        Census {
+            lines: 6,
+            current: 4,
+            stale: 0,
+            erased: 1,
+            unopened: Vec::new(),
+            withheld: Vec::new(),
+        }
+    );
+    let keys_after = kept_keys(&instance);
+    assert_eq!(
+        keys_before.difference(&keys_after).count(),
+        4,
+        "the three replaced seals' keys and the erased slot's are destroyed"
+    );
+    assert_eq!(
+        keys_after.difference(&keys_before).count(),
+        3,
+        "one key per reseal"
+    );
+
+    let (done, _) = migrated(&instance, true);
+    let done = done.expect("a run");
+    assert_eq!(
+        (done.resealed, done.destroyed),
+        (0, 0),
+        "a second run appends nothing"
+    );
+    assert_eq!(line_objects(&instance), after);
+}
+
+/// A run stopped after it appended its reseals and before its sweep leaves every slot readable
+/// with the same words (c); the next run appends nothing and destroys what was left.
+#[test]
+fn migrate_scrub_stopped_and_run_again_reads_the_same() {
+    let instance = fresh_instance("migrate-scrub-stopped");
+    let id = written_before_the_rules(&instance);
+    let before = read_lines(&instance, &id);
+    let stores = instance.conversation_stores();
+    let at = prodrome_core::literal::Datetime::new(2026, 10, 25, 10, 0, 0, 0).expect("an instant");
+    let appended =
+        suzatary_core::secretary::rescrub::reseal(stores.conversations(), at).expect("reseals");
+    assert_eq!(appended, 3);
+    assert_eq!(
+        read_lines(&instance, &id),
+        before,
+        "both seals read the same words"
+    );
+    let (done, _) = migrated(&instance, true);
+    let done = done.expect("a run");
+    assert_eq!((done.resealed, done.destroyed), (0, 4));
+    assert_eq!(read_lines(&instance, &id), before);
+}
+
+/// A slot whose key is lost opens under no seal: the dry run names it, a run seals the others
+/// again and leaves it, and it reads as missing before and after.
+#[test]
+fn migrate_scrub_names_a_slot_whose_key_is_lost_and_seals_the_rest() {
+    let instance = fresh_instance("migrate-scrub-lost");
+    written_before_the_rules(&instance);
+    let objects = line_objects(&instance);
+    let keys_dir = instance.secretary.line_keys();
+    let lost = std::fs::read_dir(&keys_dir)
+        .expect("the keys")
+        .map(|entry| entry.expect("a key").path())
+        .find(|path| {
+            let name = path.file_name().and_then(|n| n.to_str()).unwrap_or("");
+            let named = |print: &String| print.contains(name);
+            objects
+                .iter()
+                .any(|(_, print)| named(print) && print.contains("Locked("))
+                && !objects
+                    .iter()
+                    .any(|(_, print)| print.contains("Erased(") && named(print))
+        })
+        .expect("a stale key a line names and no erasure does");
+    std::fs::remove_file(&lost).expect("the key is lost");
+    let (_, said) = migrated(&instance, false);
+    assert!(
+        said.contains("does not open, its key is lost: 2026-10-25-1 at"),
+        "{said}"
+    );
+    let (done, said) = migrated(&instance, true);
+    assert_eq!(done.expect("a run").resealed, 2, "{said}");
+}
+
+/// A store restored with its reseal lines and without their keys (the lines pushed, the vault
+/// older than the run) keeps every old key: a reseal that does not open here supersedes nothing,
+/// so every slot reads the same, and the next run seals each slot again and then destroys.
+#[test]
+fn migrate_scrub_restored_without_the_reseals_keys_destroys_no_old_key() {
+    let instance = fresh_instance("migrate-scrub-restored");
+    let id = written_before_the_rules(&instance);
+    let before = read_lines(&instance, &id);
+    let vaulted = kept_keys(&instance);
+    let stores = instance.conversation_stores();
+    let at = prodrome_core::literal::Datetime::new(2026, 10, 25, 10, 0, 0, 0).expect("an instant");
+    let appended =
+        suzatary_core::secretary::rescrub::reseal(stores.conversations(), at).expect("reseals");
+    assert_eq!(appended, 3);
+    let keys_dir = instance.secretary.line_keys();
+    for new in kept_keys(&instance).difference(&vaulted) {
+        std::fs::remove_file(keys_dir.join(new)).expect("the reseal's key was never vaulted");
+    }
+
+    let destroyed =
+        suzatary_core::secretary::transcript::sweep(stores.conversations()).expect("sweeps");
+    assert_eq!(destroyed, 1, "only the erased slot's key goes");
+    assert_eq!(
+        read_lines(&instance, &id),
+        before,
+        "every slot still reads its old seal"
+    );
+
+    let (done, said) = migrated(&instance, true);
+    let done = done.expect("a run");
+    assert_eq!((done.resealed, done.destroyed), (3, 3), "{said}");
+    assert_eq!(read_lines(&instance, &id), before);
+    let (done, _) = migrated(&instance, true);
+    let done = done.expect("a run");
+    assert_eq!((done.resealed, done.destroyed), (0, 0));
 }

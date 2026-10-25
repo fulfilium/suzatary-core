@@ -31,6 +31,7 @@ use suzatary_core::secretary::topics::membership_event::MembershipEvent;
 use suzatary_core::secretary::topics::reading::Reading;
 use suzatary_core::secretary::topics::target::Target;
 use suzatary_core::secretary::topics::topic::Topic;
+use suzatary_core::store::Reads as _;
 use suzatary_core::store::{InMemory, Prodrome as _};
 use suzatary_core::wire::{Frontier, SinceRead};
 

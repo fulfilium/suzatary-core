@@ -22,7 +22,7 @@ use suzatary_core::secretary::memory::Fact;
 use suzatary_core::secretary::memory_event::MemoryEvent;
 use suzatary_core::secretary::recollection::Recollection;
 use suzatary_core::signatures::Signers;
-use suzatary_core::store::{Prodrome, Signing};
+use suzatary_core::store::{Reads, Signing};
 use suzatary_io::conversations::ConversationStores;
 use suzatary_io::objects::Objects;
 use suzatary_io::texts::Texts;
@@ -47,10 +47,7 @@ impl Grounds {
     pub fn of(instance: &Instance) -> Self {
         Self {
             corpus: crate::commands::mail::operator(instance),
-            repository: suzatary_io::repository::Checkout::new(
-                instance.data().to_path_buf(),
-                instance.chain_roster(),
-            ),
+            repository: suzatary_io::repository::Checkout::new(instance.data().to_path_buf()),
             manuals: suzatary_io::manuals::Handbook::new(
                 instance.code().to_path_buf(),
                 instance.persona.clone(),
@@ -69,7 +66,7 @@ impl Grounds {
     #[must_use]
     pub fn agent<'a>(
         &'a self,
-        chain: &'a dyn Prodrome<TodoEvent>,
+        chain: &'a dyn Reads<TodoEvent>,
         memory: Recollection<'a>,
     ) -> Agent<'a> {
         Agent {

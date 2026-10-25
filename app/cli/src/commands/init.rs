@@ -400,13 +400,9 @@ fn provider_of(answer: &str) -> anyhow::Result<Provider> {
     })
 }
 
-/// Each chain begun with its `Genesis`, the prodrome every writer writes into, the agent's
-/// replica among them, which begins none of its own; the replica created empty, filled by a
-/// run's sync.
+/// Each chain begun with its `Genesis`, the prodrome every writer writes into.
 fn begin_chains(data: &Path) -> anyhow::Result<()> {
-    for (_, events, proposals) in onboarding::CHAINS {
-        let dir = data.join(proposals);
-        std::fs::create_dir_all(&dir).with_context(|| format!("creating {}", dir.display()))?;
+    for (_, events) in onboarding::CHAINS {
         let chain = suzatary_core::record::EventStore::new(
             data.join(events),
             prodrome_core::policy::Untrusted::none(),
@@ -548,9 +544,9 @@ mod tests {
         }
     }
 
-    /// A fresh init begins both chains, each holding its `Genesis` alone, with an empty replica.
+    /// A fresh init begins both chains, each holding its `Genesis` alone.
     #[test]
-    fn init_begins_every_chain_with_an_empty_replica() {
+    fn init_begins_every_chain() {
         let dir = temp_dir("chains");
         let path = dir.join("instance.toml");
         let onboarding = gather(parse(ADA), false).expect("gathered");
@@ -574,10 +570,6 @@ mod tests {
                 objects.values().next(),
                 Some(prodrome_core::event::Envelope::Genesis(_))
             ));
-            let replica = std::fs::read_dir(&chain.proposals)
-                .expect("created")
-                .count();
-            assert_eq!(replica, 0, "{:?}", chain.proposals);
         }
         let _ = std::fs::remove_dir_all(&dir);
     }

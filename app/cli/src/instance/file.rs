@@ -129,9 +129,6 @@ impl File {
 pub(crate) struct Chain {
     pub(crate) name: ChainName,
     pub(crate) events: PathBuf,
-    /// The triage agent's replica of `events`; required, so where the agent
-    /// writes is a fact about the deployment rather than a parser default.
-    pub(crate) proposals: PathBuf,
     #[serde(with = "texts")]
     pub(crate) untrusted: Vec<Actor>,
     #[serde(with = "texts")]

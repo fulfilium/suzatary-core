@@ -62,10 +62,11 @@ pub fn linearised<E: Schema, Pol: Policy<E>>(
 /// An exclusive hold on a store's write path for as long as the value lives.
 pub trait WriteLock {}
 
-/// Content-addressed objects of schema `E`, appended and never edited.
+/// Content-addressed objects of schema `E`, read: what a record that may only read holds, so
+/// no write is reachable from it.
 ///
 /// An interpreter may memoise, but never answer from a stale set of heads.
-pub trait Prodrome<E: Schema>: Sync {
+pub trait Reads<E: Schema>: Sync {
     /// Every object in the linearisation's order, each beside its name.
     ///
     /// # Errors
@@ -129,7 +130,10 @@ pub trait Prodrome<E: Schema>: Sync {
 
     /// The fsck's findings, empty when healthy.
     fn verify(&self) -> Vec<String>;
+}
 
+/// Content-addressed objects of schema `E`, read, appended and never edited.
+pub trait Prodrome<E: Schema>: Reads<E> {
     /// Write one event as a `Change` over its entity's heads ([`append_to`]);
     /// [`Prodrome::locked`] serialises the decision above it.
     ///
@@ -150,24 +154,4 @@ pub trait Prodrome<E: Schema>: Sync {
     /// # Errors
     /// [`StoreError::Unwritable`] when the hold cannot be taken.
     fn locked(&self) -> Result<Box<dyn WriteLock + '_>, StoreError>;
-
-    /// The objects already on the chain this store writes for; a replica's others are proposed.
-    ///
-    /// # Errors
-    /// [`StoreError::Unreadable`]: a chain that cannot be read settles nothing, and says so.
-    fn settled(&self) -> Result<BTreeSet<Hash>, StoreError> {
-        Ok(self.objects()?.into_iter().map(|(name, _)| name).collect())
-    }
-}
-
-/// A prodrome that may lose objects: the agent's replica, whose rejected proposals are removed,
-/// since nothing outside it rests on them.
-///
-/// A type of its own so that a record holding a [`Prodrome`] cannot remove anything.
-pub trait Replica<E: Schema>: Prodrome<E> {
-    /// Remove these objects, answering what was removed.
-    ///
-    /// # Errors
-    /// [`StoreError::Unwritable`] for a survivor resting on a removal, or a failed deletion.
-    fn discard(&self, names: &[Hash]) -> Result<Vec<Hash>, StoreError>;
 }

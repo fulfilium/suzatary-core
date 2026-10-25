@@ -122,7 +122,7 @@ impl Holds for SecretarySurface {
             .map(String::as_str)
             .collect();
         match changes::apply(
-            &call.caps.agent(),
+            call.caps,
             call.chain,
             &categories,
             call.deployment.zone,

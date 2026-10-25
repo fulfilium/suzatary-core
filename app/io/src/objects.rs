@@ -22,7 +22,7 @@ use prodrome_core::store::{EventStore, Replica};
 use suzatary_core::record::Record;
 use suzatary_core::secretary::digest_event::DigestEvent;
 use suzatary_core::store::{
-    Hold, Kind, Prodrome, Reentrant, Store, StoreError, WriteLock, append_to,
+    Hold, Kind, Prodrome, Reads, Reentrant, Store, StoreError, WriteLock, append_to,
 };
 
 use crate::durable;
@@ -194,7 +194,7 @@ impl<E: Store> Objects<E> {
 
 impl WriteLock for durable::Held {}
 
-impl<E: Store> Prodrome<E> for Objects<E> {
+impl<E: Store> Reads<E> for Objects<E> {
     fn objects(&self) -> Result<Vec<(Hash, Envelope<E>)>, StoreError> {
         self.with(|held| held.objects.clone())
     }
@@ -243,7 +243,9 @@ impl<E: Store> Prodrome<E> for Objects<E> {
         self.with(|held| held.verified.get_or_insert_with(findings).clone())
             .unwrap_or_else(|_| findings())
     }
+}
 
+impl<E: Store> Prodrome<E> for Objects<E> {
     fn append(&self, event: E) -> Result<Hash, StoreError> {
         if let Some(door) = &self.door {
             door(&event).map_err(|refused| Self::not_appended(refused))?;

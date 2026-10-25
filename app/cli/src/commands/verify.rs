@@ -9,35 +9,26 @@ use std::path::{Path, PathBuf};
 
 use anyhow::bail;
 use suzatary_core::chains::ChainName;
-use suzatary_core::store::{Area, Database, Kind};
+use suzatary_core::store::{Database, Kind};
 
-use super::{proposals_of, proposing_of, store_of};
+use super::store_of;
 use crate::commands::serve::interpreters::{file_store, upload_store};
 use crate::instance::Instance;
 
 /// `suzatary verify` — fsck every store the data push stages.
 ///
 /// The database's own fsck, [`Database::verify`], over every prodrome it holds, and beside it
-/// the request records, which the database does not hold. A replica is read as the agent's run
-/// opens it, its chain's objects taken in first, since a key the chain registered since the
-/// last run proves what the replica holds. The plugins' stores are the cache tier, never
-/// pushed and rebuilt by syncing, so a damaged one is no reason to hold the data back.
+/// the request records, which the database does not hold. The plugins' stores are the cache
+/// tier, never pushed and rebuilt by syncing, so a damaged one is no reason to hold the data
+/// back.
 pub fn run(path: &Path) -> anyhow::Result<()> {
     let instance = Instance::open(path)?;
-    let mut findings = Vec::new();
-    let mut areas = Vec::new();
-    for chain in &instance.chains {
-        // Opening the replica as the agent's run does takes its chain's objects in on disk,
-        // so the replica read after it is the one the run would read.
-        if let Err(why) = proposing_of(chain) {
-            findings.push((
-                format!("{} proposals", chain.policy.name),
-                vec![format!("{why:#}")],
-            ));
-        }
-        let proposals = proposals_of(chain);
-        areas.push((chain, store_of(chain), proposals));
-    }
+    let mut findings: Vec<(String, Vec<String>)> = Vec::new();
+    let stores: Vec<_> = instance
+        .chains
+        .iter()
+        .map(|chain| (chain.policy.name.clone(), store_of(chain)))
+        .collect();
     let inbox = instance.inbox_store();
     let conversations = instance.conversation_stores();
     let memory = instance.memory_store();
@@ -51,9 +42,14 @@ pub fn run(path: &Path) -> anyhow::Result<()> {
     let devices = suzatary_io::devices::Devices::open(instance.paths.devices.clone());
     let uploads = upload_store(&instance);
     let kept = file_store(&instance);
-    let chains: BTreeMap<ChainName, Area<'_>> = areas
+    let chains: BTreeMap<ChainName, &dyn suzatary_core::store::Prodrome<_>> = stores
         .iter()
-        .map(|(chain, events, proposals)| (chain.policy.name.clone(), Area { events, proposals }))
+        .map(|(name, store)| {
+            (
+                name.clone(),
+                store as &dyn suzatary_core::store::Prodrome<_>,
+            )
+        })
         .collect();
     let database = Database {
         chains,

@@ -80,7 +80,7 @@ fn remote() -> Destination {
         to: "The data repository's git remote (GitHub, or wherever you point it), on \
                  every push `safe-push.sh` makes."
             .to_owned(),
-        receives: "The stores: the todo chains and the agent's replicas (each todo's \
+        receives: "The stores: the todo chains (each todo's \
                        text, price and history, and `mail:` references by hash prefix), the \
                        inbox (each proposal whole: a drafted email's recipients, subject and \
                        body), the conversations (each line's shape, its words sealed), the \

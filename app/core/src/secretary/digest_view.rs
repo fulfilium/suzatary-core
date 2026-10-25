@@ -281,6 +281,10 @@ pub fn whole(entry: &Entry) -> String {
             format!("The model session ended: {model} said a turn the session never heard.")
         }
         Entry::Coding { .. } => "A coding session moved on.".to_owned(),
+        Entry::Resealed { .. } => {
+            "A part of this conversation was sealed again under the current redaction rules."
+                .to_owned()
+        }
         Entry::Erased { keys, erasure, .. } => format!(
             "The words of {} part{} of this conversation went: {}.",
             keys.len(),

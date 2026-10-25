@@ -16,6 +16,7 @@ use prodrome_core::policy::Untrusted;
 use prodrome_core::schema::Schema;
 use suzatary_core::record::{EventStore, Record};
 use suzatary_core::store::Prodrome;
+use suzatary_core::store::Reads as _;
 use suzatary_io::objects::Objects;
 
 /// The chains and the agent's replica.

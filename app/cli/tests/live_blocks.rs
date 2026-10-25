@@ -6,7 +6,7 @@
 
 use suzatary_core::capability::Clock;
 use suzatary_core::record::EventStore;
-use suzatary_core::store::Prodrome;
+use suzatary_core::store::Reads as _;
 use suzatary_io::clock::SystemClock;
 use suzatary_io::objects::Objects;
 

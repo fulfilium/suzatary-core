@@ -278,8 +278,10 @@ while its law is not a test.
    deserialising it in Rust is the identity, checked in the node suite against
    the generated declarations.
 
-Laws 7–10 are in §10.6: accepting a batch folds as the union, rejecting
-changes nothing, an ancestor-open pick is refused, accepting twice is once.
+Laws 7–10 were the batch's (§10.6 until 2026-10-24: accepting folds as the
+union, rejecting changes nothing, an ancestor-open pick is refused, accepting
+twice is once); they went with the batches, since a triage write is now a card
+the tap performs as any changeset.
 
 ## 7. The block
 
@@ -582,10 +584,26 @@ cannot forget, so the history and the text are two stores (below, MEMORY).
 `docs/WORDS-PLAN-2026-10-09.md`). The store is `secretary-lines/`, at the
 schema `secretary::line_event`: a line's SHAPE in the clear (who, when, which
 verbs, which references, which files, `held`, `carried`) and its words in
-slots (`line_words`), each through the redaction door and sealed with
-ChaCha20-Poly1305 under a fresh key, its associated data the line's print
-without its words and the slot's number, so a sealed slot moved anywhere else
-does not open. A model turn's prose is one slot and each call's arguments
+slots (`line_words`), each through the redaction door once, when it is
+written (`line_event::seal`), and sealed with ChaCha20-Poly1305 under a fresh
+key, its associated data the line's print without its words, the slot's
+number and the redaction rules the words passed (`redact::Rules`), so a sealed
+slot moved anywhere else does not open and cannot claim other rules. Opening a
+slot under the current rules parses it; a slot under any other rules is
+scrubbed as it opens, once per slot. Every change to the rules is followed by
+`suzatary secretary migrate-scrub` (`secretary::rescrub`), which appends to
+the same prodrome a `Resealed(of, from)` line for each slot whose words open
+only under older rules, its one slot those words scrubbed under the current
+rules and sealed under a new key. A reader takes a slot from its own seal
+while that key opens it and from the newest reseal once it does not
+(`transcript::Through`); a reseal that opens with a key held here supersedes
+`from`, so the one sweep destroys
+that key as it destroys an erased one (`transcript::dead`), and a tab forgets
+it the same way. Nothing is deleted and the genesis does not move. A second
+run appends nothing, and a run stopped anywhere leaves every line reading the
+same words. The one residue: the old ciphertext stays in the data
+repository's history, unreadable once its keys are gone, except by a key kept
+in an earlier vault snapshot. A model turn's prose is one slot and each call's arguments
 another, so a forget can take one call. `turn_shape::{split, join}` are a
 lawful pair; a slot whose key is gone joins as `Turn::Erased`, its shape
 whole, saying why (`words::Gone`). The keys are `secretary-lines-keys/`, one
@@ -814,20 +832,19 @@ none): a disk failure between appends leaves the earlier ones, named in the
 refusal. Success is `Outcome::Applied { objects, chain }` (a sibling of
 `Sent`, naming OBJECTS, undoable one at a time); failure `Outcome::Failed`.
 
-The card is `proposals::diff::shown`, THE SAME FUNCTION as a triage BATCH
-(§10.6): five row kinds — new todo, completion, cancellation, repricing,
-update — in the same before/after columns; a second renderer could start
-eliding a field. Shared shape `Proposed<'a>`: a name (a batch object's hash;
-an act's POSITION, being unsealed), the event it would be, what in the same
-proposal it rests on. Changeset rows never carry `needs` (confirmed WHOLE);
-acts that no longer build show a `problem` line, not a dead Confirm.
+The card is `secretary::diff::shown`, the one renderer of a changeset, whoever
+asked for it (a triage card included, §10.6): five row kinds — new todo,
+completion, cancellation, repricing, update — in the same before/after
+columns; a second renderer could start eliding a field. A row is an act's
+POSITION and the event it would be; a changeset is confirmed WHOLE, and acts
+that no longer build show a `problem` line, not a dead Confirm.
 
 `SECRETARY.md`'s "Writing directly, or proposing a changeset" is the rule, a
 judgement: write directly for routine, evidenced, undo-able work; propose for
 a real commitment of his or anything unsure — a new todo at or under 45%, any
 change to a todo HE wrote, money/legal/medical, a cancellation, a
 repricing across rows. "When in doubt, propose." Distinct from §10.6's
-"Reviewing the agent's batches" (someone else's writing), though both land in
+"Reviewing the agent's cards" (someone else's writing), though both land in
 the same review section.
 
 **Acts (2026-09-14; project chain `secretaryacts`, plan
@@ -1247,10 +1264,13 @@ performs it at once. The triage agent files it through `secretary::filed::Triage
 door its call holds, as a card asked by `Proposer::Triage` (stored `Triaged`) in the `triage`
 conversation, after building it against the chain as the tap would. A later write about a todo
 that an open triage card names joins that card and replaces it, so the Inbox holds one card per
-todo. The agent still reads a replica of the chain (`events-triage/`), synced before a run; it
-appends nothing to it. The secretary's review lists the open triage cards (`triage_cards`) and
-may withdraw one (`triage_withdraw`); it cannot perform one. The batches written before this are
-carried into cards by `suzatary proposals carry` (`docs/MIGRATE-TRIAGE-CARDS-2026-10-24.md`).
+todo. The agent's record holds its chain as a `store::Reads`, the read half of `Prodrome`, so no
+append or accept is reachable from it (`capability::Agent`'s `compile_fail` tests); the box
+gives it `suzatary_io::reading::Reading`, and its replica (`events-triage/`) went with the
+batches. The one performer, `changes::apply`, takes the secretary's record, never the agent's. The secretary's review lists the open triage cards (`triage_cards`) and
+may withdraw one (`triage_withdraw`); it cannot perform one. No batch was standing when this
+was deployed (the carry's dry run on the box found none), so the migration that would have
+carried them into cards was deleted unrun.
 
 What follows is the design this replaced, kept as the record of why: the replica, the batch, and
 accepting as the restricted join.
@@ -1718,7 +1738,7 @@ rules and points here for the modules. The web contract is `docs/WEB-SPEC.md`.
   over CDP (`web/e2e/cdp.ts`; node 24's `WebSocket`, no npm) against three real
   `suzatary serve` fixtures on chains `suzatary-dev fixture-chain` builds; two are
   gated to a READ-only login (chains cannot move, refusals are real) and differ
-  only in a waiting triage BATCH (§10.6) — a suite picks a state by
+  only in a waiting triage CARD (§10.6) — a suite picks a state by
   deployment, never by file order. They run `.#suzatary-fixture` (`suzatary-dev`), a
   second derivation with a whois fixture behind a cargo feature `.#suzatary`
   does not enable (a local browser arrives from 127.0.0.1); the fixture refuses to run

@@ -37,6 +37,9 @@ pub enum Gone {
     },
     /// Their key is not here: lost in a restore, or never given to this replica.
     Missing,
+    /// They were locked under older redaction rules and no longer pass the door under the
+    /// current ones, so they are not shown; the migration reports them.
+    Withheld,
 }
 
 impl<T> Words<T> {
@@ -138,6 +141,10 @@ impl Gone {
         match self {
             Gone::Erased { erasure } => erasure.sentence(),
             Gone::Missing => "these words are not on this box: their key was lost".to_owned(),
+            Gone::Withheld => {
+                "these words are withheld: they do not pass the box's current redaction rules"
+                    .to_owned()
+            }
         }
     }
 }

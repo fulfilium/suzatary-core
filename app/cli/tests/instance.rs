@@ -19,7 +19,6 @@ root = "836884e1723c7b17f8b87e76a0272f012de6cff08f134eb9dcdb2670695b1818"
 [[chains]]
 name = "life"
 events = "events"
-proposals = "events-triage"
 untrusted = ["triage"]
 actors = ["ada", "assistant", "triage"]
 owner = "ada"
@@ -27,7 +26,6 @@ owner = "ada"
 [[chains]]
 name = "suzatary"
 events = "events-suzatary"
-proposals = "events-triage-suzatary"
 untrusted = []
 actors = ["ada", "assistant", "triage"]
 owner = "ada"
@@ -134,7 +132,6 @@ fn printed(instance: &Instance) -> String {
     for chain in &instance.chains {
         let name = chain.policy.name.as_str();
         line(&format!("chain.{name}.events"), path(&chain.events));
-        line(&format!("chain.{name}.proposals"), path(&chain.proposals));
         line(
             &format!("chain.{name}.untrusted"),
             format!("{:?}", chain.policy.untrusted_names()),
@@ -315,11 +312,6 @@ const REFUSALS: &[(&str, &str, &str)] = &[
         "an untrusted actor off the roster",
         "untrusted = [\"triage\"]",
         "untrusted = [\"stranger\"]",
-    ),
-    (
-        "proposals that are the chain",
-        "proposals = \"events-triage\"",
-        "proposals = \"events\"",
     ),
     (
         "a writer who is not a viewer",

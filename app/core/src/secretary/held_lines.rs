@@ -22,6 +22,7 @@ use crate::secretary::answer::Renderable;
 use crate::secretary::erasure::Erasure;
 use crate::secretary::key_ring::KeyRing;
 use crate::secretary::line_event::{LineEvent, LineVocabulary};
+use crate::secretary::line_shape::LineShape;
 use crate::secretary::locked_text::{KeyName, TextKey};
 use crate::secretary::store::{ConversationId, Entry, NotAConversation, Stored};
 use crate::secretary::transcript;
@@ -112,12 +113,14 @@ enum Node {
     },
 }
 
-/// One line of the history, with how each slot of it reads.
+/// One line of the history, with how each slot of it reads, and the reseals of its slots (by the
+/// key of the slot each seals), whose own slots `slots` reads too.
 struct Leaf {
     object: Hash,
     line: Arc<LineEvent>,
     parents: Vec<Hash>,
     slots: BTreeMap<KeyName, Slot>,
+    reseals: BTreeMap<KeyName, Vec<(Hash, Arc<LineEvent>)>>,
 }
 
 /// How one slot reads: erased by the erasure line named `by`, its key held, or missing.
@@ -235,12 +238,24 @@ impl Algebra<Node> for Reading<'_> {
                         Some(Slot::Missing) | None => Gone::Missing.into(),
                     }
                 };
+                let reseals: BTreeMap<KeyName, Vec<&LineEvent>> = leaf
+                    .reseals
+                    .iter()
+                    .map(|(of, seals)| {
+                        (of.clone(), seals.iter().map(|(_, line)| &**line).collect())
+                    })
+                    .collect();
+                let read = transcript::Through {
+                    erased: &BTreeMap::new(),
+                    reseals: &reseals,
+                    slots: &slots,
+                };
                 Read {
                     open: vec![Arc::new(Opened {
                         object: leaf.object.clone(),
                         at: leaf.line.at(),
                         parents: leaf.parents.clone(),
-                        entry: leaf.line.entry(&slots),
+                        entry: leaf.line.entry(&read),
                     })],
                     closed: BTreeMap::new(),
                 }
@@ -452,7 +467,16 @@ impl HeldLines {
                 .map(move |(slot, name)| (*line, slot, name))
         });
         let mut dead: BTreeMap<KeyName, Vec<Renderable>> = BTreeMap::new();
-        for (line, slot, name) in transcript::dead(lines.iter().copied())
+        let opens = |line: &LineEvent| {
+            transcript::opens(
+                line,
+                line.keys()
+                    .next()
+                    .and_then(|own| keys.key(own).into_kept())
+                    .as_ref(),
+            )
+        };
+        for (line, slot, name) in transcript::dead(lines.iter().copied(), &opens)
             .into_iter()
             .chain(named)
         {
@@ -678,37 +702,78 @@ fn build(
         })
         .collect();
     let erasers = transcript::erasers(lines.iter().map(|(name, line, _)| (*name, &***line)));
+    let opens = |line: &LineEvent| {
+        transcript::opens(
+            line,
+            line.keys()
+                .next()
+                .and_then(|own| keys.key(own).into_kept())
+                .as_ref(),
+        )
+    };
+    let superseded = transcript::superseded(
+        lines.iter().map(|(name, line, _)| (*name, &***line)),
+        &opens,
+    );
     let dead: BTreeSet<KeyName> = lines
         .iter()
         .flat_map(|(_, line, _)| line.keys())
-        .filter(|key| erasers.contains_key(*key))
+        .filter(|key| erasers.contains_key(*key) || superseded.contains(*key))
         .cloned()
         .collect();
+    let mut reseals: BTreeMap<KeyName, Vec<(Hash, Arc<LineEvent>)>> = BTreeMap::new();
+    for (name, line, _) in &lines {
+        if let LineShape::Resealed { of, .. } = line.shape() {
+            reseals
+                .entry(of.clone())
+                .or_default()
+                .push(((*name).clone(), Arc::clone(line)));
+        }
+    }
+    let order = transcript::reseals(lines.iter().map(|(name, line, _)| (*name, &***line)));
+    for (of, seals) in &mut reseals {
+        let Some(ranked) = order.get(of) else {
+            continue;
+        };
+        seals.sort_by_key(|(_, line)| {
+            ranked
+                .iter()
+                .position(|ranked| std::ptr::eq(*ranked, std::ptr::from_ref(&**line)))
+        });
+    }
+    let status = |key: &KeyName| match erasers.get(key) {
+        Some((by, erasure)) => Slot::Erased {
+            by: (*by).clone(),
+            erasure: (*erasure).clone(),
+        },
+        None if keys.holds(key) => Slot::Held,
+        None => Slot::Missing,
+    };
     let leaves: BTreeMap<Hash, Arc<Node>> = lines
         .iter()
         .map(|(name, line, parents)| {
+            let own: BTreeMap<KeyName, Vec<(Hash, Arc<LineEvent>)>> = line
+                .keys()
+                .filter_map(|key| Some((key.clone(), reseals.get(key)?.clone())))
+                .collect();
             let slots: BTreeMap<KeyName, Slot> = line
                 .keys()
-                .map(|key| {
-                    let slot = match erasers.get(key) {
-                        Some((by, erasure)) => Slot::Erased {
-                            by: (*by).clone(),
-                            erasure: (*erasure).clone(),
-                        },
-                        None if keys.holds(key) => Slot::Held,
-                        None => Slot::Missing,
-                    };
-                    (key.clone(), slot)
-                })
+                .chain(own.values().flatten().flat_map(|(_, reseal)| reseal.keys()))
+                .map(|key| (key.clone(), status(key)))
                 .collect();
             let kept = conversation
                 .leaves
                 .get(*name)
                 .filter(|leaf| match &***leaf {
-                    Node::Line { leaf, .. } => leaf.slots == slots,
+                    Node::Line { leaf, .. } => {
+                        leaf.slots == slots && names(&leaf.reseals) == names(&own)
+                    }
                     Node::Store { .. } | Node::Conversation { .. } => false,
                 });
-            let leaf = kept.map_or_else(|| Arc::new(leaf(name, line, parents, slots)), Arc::clone);
+            let leaf = kept.map_or_else(
+                || Arc::new(leaf(name, line, parents, slots, own)),
+                Arc::clone,
+            );
             ((*name).clone(), leaf)
         })
         .collect();
@@ -724,17 +789,34 @@ fn build(
     (node, dead, leaves)
 }
 
-/// The leaf of the line `name`, its name covering the line and how each slot reads.
+/// The names of the reseals of a leaf's slots, by the key of the slot each seals.
+fn names(reseals: &BTreeMap<KeyName, Vec<(Hash, Arc<LineEvent>)>>) -> Vec<(&KeyName, &Hash)> {
+    reseals
+        .iter()
+        .flat_map(|(of, seals)| seals.iter().map(move |(name, _)| (of, name)))
+        .collect()
+}
+
+/// The leaf of the line `name`, its name covering the line, how each slot reads, and each reseal
+/// of its slots with how that reads.
 fn leaf(
     name: &Hash,
     line: &Arc<LineEvent>,
     parents: &[Hash],
     slots: BTreeMap<KeyName, Slot>,
+    reseals: BTreeMap<KeyName, Vec<(Hash, Arc<LineEvent>)>>,
 ) -> Node {
+    let read = |key: &KeyName| slots.get(key).map_or_else(String::new, Slot::print);
     let own = format!(
-        "line {name} {}",
-        line.keys()
-            .map(|key| slots.get(key).map_or_else(String::new, Slot::print))
+        "line {name} {} resealed {}",
+        line.keys().map(read).collect::<Vec<_>>().join(","),
+        reseals
+            .values()
+            .flatten()
+            .map(|(seal, reseal)| format!(
+                "{seal}:{}",
+                reseal.keys().map(read).collect::<Vec<_>>().join(",")
+            ))
             .collect::<Vec<_>>()
             .join(",")
     );
@@ -745,6 +827,7 @@ fn leaf(
             line: Arc::clone(line),
             parents: parents.to_vec(),
             slots,
+            reseals,
         },
     }
 }
@@ -754,8 +837,121 @@ mod tests {
     use super::*;
     use crate::secretary::conversations::InMemory;
     use crate::secretary::store::Kind;
-    use crate::store::{Doc as _, Prodrome as _};
+    use crate::store::Doc as _;
+    use crate::store::Prodrome as _;
+    use crate::store::Reads as _;
     use prodrome_core::event::canonical_envelope;
+
+    /// Every key `held` keeps, spelled as a replica is given it.
+    fn given(held: &InMemory) -> BTreeMap<KeyName, String> {
+        held.keys
+            .names()
+            .into_iter()
+            .map(|name| {
+                let key = held.keys.get(&name).expect("reads").expect("held");
+                (name, crate::secretary::key_ring::spelled(&key))
+            })
+            .collect()
+    }
+
+    /// Every object `held` keeps, printed as a replica is given it.
+    fn prints(held: &InMemory) -> Vec<(Hash, Vec<u8>)> {
+        held.lines
+            .objects()
+            .expect("objects")
+            .into_iter()
+            .map(|(name, object)| (name, canonical_envelope(&object).into_bytes()))
+            .collect()
+    }
+
+    fn opened(title: &str) -> Entry {
+        Entry::Opened {
+            at: Datetime::new(2026, 10, 1, 9, 0, 0, 0).expect("an instant"),
+            title: Words::kept(title.to_owned()),
+            model: "a-cli/small".to_owned(),
+            kind: Kind::Topic,
+        }
+    }
+
+    /// Opening held lines parses their words and scrubs none: the scrub ran once, when each line
+    /// was written.
+    #[test]
+    fn opening_held_lines_scrubs_nothing() {
+        let held = InMemory::default();
+        let id = ConversationId::new("2026-10-01-1").expect("a slug");
+        transcript::start(held.conversations(), &id, &opened("Notes, café")).expect("started");
+        for n in 0..40 {
+            let said = Entry::Said {
+                at: Datetime::new(2026, 10, 1, 9, 1, n, 0).expect("an instant"),
+                turn: crate::capability::Turn::Person {
+                    text: format!("Merci, voilà la réponse {n} — 確認"),
+                    references: Vec::new(),
+                    attachments: Vec::new(),
+                },
+                by: Some("ada".into()),
+            };
+            transcript::push(held.conversations(), &id, &said).expect("pushed");
+        }
+        let mut lines = HeldLines::new();
+        let before = crate::redact::scrubs();
+        assert!(before > 40, "each write scrubbed its words");
+        lines.keys(&given(&held), &[]);
+        lines.hold(prints(&held), &[]);
+        let read = lines.read().0.expect("reads");
+        assert_eq!(read[0].turns.len(), 40, "every line opened");
+        assert_eq!(crate::redact::scrubs(), before, "and none scrubbed");
+    }
+
+    /// A replica reads a conversation whose stale slots were sealed again, and whose replaced
+    /// keys are gone, as the box reads it: each slot from the reseal that stands for it.
+    #[test]
+    fn a_resealed_conversation_reads_as_the_box_reads_it() {
+        use crate::secretary::line_event::LineEvent;
+        use crate::secretary::scrubbed_under::ScrubbedUnder;
+        let held = InMemory::default();
+        let id = ConversationId::new("2026-10-25-1").expect("a slug");
+        let at = |second: u32| Datetime::new(2026, 10, 25, 9, 0, second, 0).expect("an instant");
+        let said = Entry::Said {
+            at: at(1),
+            turn: crate::capability::Turn::Person {
+                text: "reset at https://example.test/r?token=s3cret".to_owned(),
+                references: Vec::new(),
+                attachments: Vec::new(),
+            },
+            by: Some("ada".into()),
+        };
+        for (count, entry) in [opened("Notes"), said].iter().enumerate() {
+            let (line, keys) = LineEvent::written_under(
+                &ScrubbedUnder::Unversioned,
+                id.clone(),
+                transcript::writer(),
+                u32::try_from(count).expect("a count"),
+                entry,
+                &held.entropy,
+            )
+            .expect("a line");
+            for key in &keys {
+                held.keys.set(&key.name(), key).expect("kept");
+            }
+            held.lines.append(line).expect("appended");
+        }
+        let done = crate::secretary::rescrub::run(held.conversations(), at(9)).expect("runs");
+        assert_eq!((done.resealed, done.destroyed), (2, 2));
+        let boxed = transcript::read(held.conversations(), &id)
+            .expect("reads")
+            .into_stored();
+        let mut lines = HeldLines::new();
+        lines.keys(&given(&held), &[]);
+        lines.hold(prints(&held), &[]);
+        let read = lines.read().0.expect("reads");
+        assert_eq!(*read[0], boxed);
+        assert!(!format!("{boxed:?}").contains("s3cret"), "{boxed:?}");
+        assert_eq!(
+            lines.dead().len(),
+            2,
+            "a replica forgets each key a reseal replaced"
+        );
+    }
 
     /// A key taken out takes what was opened with it out of the cache at once, before any reading.
     #[test]
@@ -765,34 +961,13 @@ mod tests {
         transcript::start(
             held.conversations(),
             &id,
-            &Entry::Opened {
-                at: Datetime::new(2026, 10, 1, 9, 0, 0, 0).expect("an instant"),
-                title: Words::kept("a title nobody else says".to_owned()),
-                model: "a-cli/small".to_owned(),
-                kind: Kind::Topic,
-            },
+            &opened("a title nobody else says"),
         )
         .expect("started");
         let mut lines = HeldLines::new();
-        let given: BTreeMap<KeyName, String> = held
-            .keys
-            .names()
-            .into_iter()
-            .map(|name| {
-                let key = held.keys.get(&name).expect("reads").expect("held");
-                (name, crate::secretary::key_ring::spelled(&key))
-            })
-            .collect();
+        let given = given(&held);
         lines.keys(&given, &[]);
-        lines.hold(
-            held.lines
-                .objects()
-                .expect("objects")
-                .into_iter()
-                .map(|(name, object)| (name, canonical_envelope(&object).into_bytes()))
-                .collect(),
-            &[],
-        );
+        lines.hold(prints(&held), &[]);
         assert!(lines.read().0.is_ok());
         let says = |lines: &HeldLines| {
             lines

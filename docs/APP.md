@@ -85,13 +85,11 @@ modules must agree with (`webalgebra`, 2026-09-16). A feature that adds a
 closure flag, a second copy of state or a cast is judged against that
 document before it is judged against a page.
 
-**Mail becomes a todo through a review.** The agent reads the corpus every five
-minutes, writes proposals onto a replica (`events-triage/`), and the secretary
-reviews the batch against a written rule before anything is adopted onto the
-chain. What it holds — money, legal, medical, anything closing a todo he
-wrote, anything at or under 45% — lands in the Inbox with the reason above it.
-A push announces todos that landed. So the Inbox is the residue of a review, not
-the review itself, and on an ordinary day it is empty.
+**Mail becomes a todo through a card.** The agent reads the corpus every five
+minutes and files what it would change as cards in the Inbox, one per todo,
+each with its reason and the mail it rests on. The secretary reviews them
+against a written rule and withdraws duplicates and noise; everything else
+waits for his tap, and nothing reaches a chain until he taps it.
 
 **The person writes three ways and they are one path.** The phone seals an act
 locally and syncs it (`POST /api/objects`); a share from another app arrives as

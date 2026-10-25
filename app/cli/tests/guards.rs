@@ -1399,8 +1399,6 @@ fn every_store_safe_push_admits_is_classified() {
     const BY_DESIGN: &[&str] = &[
         "events/",
         "events-suzatary/",
-        "events-triage/",
-        "events-triage-suzatary/",
         "decisions/",
         "notes/",
         "instance.toml",
@@ -1661,8 +1659,6 @@ fn safe_push_carries_each_store_s_own_gitattributes() {
     for store in [
         "events",
         "events-suzatary",
-        "events-triage",
-        "events-triage-suzatary",
         "inbox",
         "secretary-lines",
         "memory",
@@ -1993,41 +1989,21 @@ fn safe_push_skips_a_store_that_names_nothing_and_commits_the_rest() {
 }
 
 /// A tracked store deleted whole still names its files in the index, so the deletion is staged,
-/// and then judged as every staged path is: a replica's removal (a rejection) is committed, and a
-/// chain's is a history rewrite the append-only check refuses.
+/// and then judged as every staged path is: a store's removal is a history rewrite the
+/// append-only check refuses.
 #[test]
 fn safe_push_stages_a_tracked_store_s_deletion() {
-    let replica = format!("events-triage/objects/{}.py", "a".repeat(64));
-    let chain = format!("inbox/objects/{}.py", "b".repeat(64));
-    for (name, store, committed) in [
-        ("push-gone-replica", "events-triage", true),
-        ("push-gone-chain", "inbox", false),
-    ] {
-        let fixture = PushFixture::new(name, Verification::Passes);
-        fixture.write(&replica);
-        fixture.write(&chain);
-        fixture.commit_all("the stores");
-        std::fs::remove_dir_all(fixture.data().join(store)).expect("removes the store");
-        let out = fixture.push();
-        let said = format!("{}{}", String::from_utf8_lossy(&out.stdout), stderr(&out));
-        assert!(
-            !said.contains(&format!("{store}/ names nothing")),
-            "{name}: {said}"
-        );
-        if committed {
-            assert_eq!(code(&out), 0, "{name}: {said}");
-            assert_eq!(fixture.commits(), 3, "{name}: {said}");
-            assert_eq!(fixture.last_commit(), format!("D\t{replica}\n"), "{name}");
-        } else {
-            assert_ne!(
-                code(&out),
-                0,
-                "{name}: a chain's deletion was pushed: {said}"
-            );
-            assert!(said.contains("APPEND-ONLY VIOLATION"), "{name}: {said}");
-            assert_eq!(fixture.commits(), 2, "{name}: {said}");
-        }
-    }
+    let object = format!("inbox/objects/{}.py", "b".repeat(64));
+    let fixture = PushFixture::new("push-gone-store", Verification::Passes);
+    fixture.write(&object);
+    fixture.commit_all("the store");
+    std::fs::remove_dir_all(fixture.data().join("inbox")).expect("removes the store");
+    let out = fixture.push();
+    let said = format!("{}{}", String::from_utf8_lossy(&out.stdout), stderr(&out));
+    assert!(!said.contains("inbox/ names nothing"), "{said}");
+    assert_ne!(code(&out), 0, "a store's deletion was pushed: {said}");
+    assert!(said.contains("APPEND-ONLY VIOLATION"), "{said}");
+    assert_eq!(fixture.commits(), 2, "{said}");
 }
 
 /// What a commit carries is bounded by the allowlist itself: a file under a staged store that the

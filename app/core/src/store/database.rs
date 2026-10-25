@@ -2,7 +2,7 @@ use std::collections::BTreeMap;
 
 use prodrome_core::declared::Declared;
 
-use super::{Doc, Kind, Log, Prodrome, Replica, Store};
+use super::{Doc, Kind, Log, Prodrome, Store};
 use crate::attachment::AttachmentId;
 use crate::chains::ChainName;
 use crate::decisions::DecisionEvent;
@@ -23,12 +23,11 @@ use crate::secretary::topics::alias_event::AliasEvent;
 use crate::secretary::topics::membership_event::MembershipEvent;
 use crate::upload::Upload;
 
-/// The whole store, as one value: every chain beside the agent's replica of it, and the box's
-/// own stores.
+/// The whole store, as one value: every chain, and the box's own stores.
 #[derive(Clone)]
 pub struct Database<'a> {
     /// Each chain by name, in the instance file's order of meaning.
-    pub chains: BTreeMap<ChainName, Area<'a>>,
+    pub chains: BTreeMap<ChainName, &'a dyn Prodrome<TodoEvent>>,
     /// The proposals a person taps.
     pub inbox: &'a dyn Prodrome<InboxEvent>,
     /// The secretary's conversations, one prodrome keyed by conversation, every word locked.
@@ -65,15 +64,6 @@ pub struct Database<'a> {
     pub kept: &'a dyn Doc<AttachmentId, Vec<u8>>,
 }
 
-/// One chain and the agent's replica of it.
-#[derive(Clone, Copy)]
-pub struct Area<'a> {
-    /// The chain.
-    pub events: &'a dyn Prodrome<TodoEvent>,
-    /// The triage agent's replica of it.
-    pub proposals: &'a dyn Replica<TodoEvent>,
-}
-
 impl Database<'_> {
     /// Every prodrome's fsck findings, each under the name [`Kind::name`] gives its store, a
     /// chain's and a plugin's after their own names.
@@ -81,18 +71,7 @@ impl Database<'_> {
     pub fn verify(&self) -> Vec<(String, Vec<String>)> {
         self.chains
             .iter()
-            .flat_map(|(name, area)| {
-                [
-                    (
-                        format!("{name} {}", Kind::Chain.name()),
-                        area.events.verify(),
-                    ),
-                    (
-                        format!("{name} {}", Kind::Proposals.name()),
-                        area.proposals.verify(),
-                    ),
-                ]
-            })
+            .map(|(name, chain)| (format!("{name} {}", Kind::Chain.name()), chain.verify()))
             .chain([
                 found(self.inbox, crate::secretary::inbox::findings(self.inbox)),
                 found(

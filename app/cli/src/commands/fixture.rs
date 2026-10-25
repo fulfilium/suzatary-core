@@ -810,7 +810,7 @@ fn filed(
     recording: &serde_json::Value,
 ) -> anyhow::Result<()> {
     let read = crate::instance::Instance::open(instance)?;
-    let caps = crate::commands::mcp::Interpreters::assemble(&read, read.first())?;
+    let caps = crate::commands::mcp::Interpreters::assemble(&read, read.first());
     let chains = std::collections::BTreeMap::from([(
         read.first().policy.name.as_str().to_owned(),
         caps.agent(),
@@ -1090,10 +1090,9 @@ fn instance_file(
             .map(actor)
             .to_vec()
     };
-    let chain = |name: &str, events: &str, proposals: &str| Chain {
+    let chain = |name: &str, events: &str| Chain {
         name: ChainName::new(name).expect("a slug"),
         events: PathBuf::from(events),
-        proposals: PathBuf::from(proposals),
         untrusted: vec![actor("triage")],
         actors: roster(),
         owner: actor(CAST.owner.actor),
@@ -1127,8 +1126,8 @@ fn instance_file(
         repo: root.to_path_buf(),
         data: root.to_path_buf(),
         chains: vec![
-            chain("life", "events", "events-triage"),
-            chain("suzatary", "events-suzatary", "events-triage-suzatary"),
+            chain("life", "events"),
+            chain("suzatary", "events-suzatary"),
         ],
         web,
         categories: BTreeMap::from([
@@ -1257,7 +1256,8 @@ fn sizes(count: usize, conversations: usize, wide: usize) -> Vec<(String, usize)
 
 /// The lines `sizes` names written to new conversations, each with its words locked under a key of its own
 /// as the box locks them: a model's answer of about 6 kB in three blocks and a person's question,
-/// alternating; `wide-0` onwards, if any, hold their opening line alone.
+/// alternating, in words outside ASCII and with digits, the text the scrub is slowest on;
+/// `wide-0` onwards, if any, hold their opening line alone.
 fn bulk_lines(read: &crate::instance::Instance, sizes: &[(String, usize)]) -> anyhow::Result<()> {
     use prodrome_core::event::{Actor, canonical_envelope};
     use prodrome_core::store::{MemoryStore, Replica as _};
@@ -1309,7 +1309,9 @@ fn bulk_lines(read: &crate::instance::Instance, sizes: &[(String, usize)]) -> an
                 Entry::Said {
                     at,
                     turn: Turn::Person {
-                        text: format!("Question {line} about the permit, asked again."),
+                        text: format!(
+                            "Question {line} sur le permis n° 4821, posée à nouveau — 確認してください。"
+                        ),
                         references: Vec::new(),
                         attachments: Vec::new(),
                     },
@@ -1321,8 +1323,10 @@ fn bulk_lines(read: &crate::instance::Instance, sizes: &[(String, usize)]) -> an
                     turn: Turn::Model {
                         text: [0, 1, 2]
                             .map(|part| {
-                                format!("Answer {line}, part {part}: the registry has the form. ")
-                                    .repeat(30)
+                                format!(
+                                    "Réponse {line}, partie {part} : le registre a le formulaire du 25/10. "
+                                )
+                                .repeat(30)
                             })
                             .join("\n\n"),
                         calls: Vec::new(),

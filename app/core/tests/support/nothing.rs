@@ -1,5 +1,3 @@
-use std::collections::BTreeSet;
-
 use prodrome_core::event::Hash;
 
 use super::{
@@ -18,7 +16,7 @@ use crate::mail::{AttachmentMeta, MailMessage, MailRow};
 use crate::record::{Envelope, Node, TodoEvent};
 use crate::refusal::Refusal;
 use crate::repos::{CommitId, Patch, RepoName, RepoPath, RepoRow, Rev, Visibility};
-use crate::store::{Prodrome, StoreError, WriteLock};
+use crate::store::{Prodrome, Reads, StoreError, WriteLock};
 
 /// Every effect, inert: reads find nothing, writes are refused, no peer has a login.
 /// A test fills a record from it and swaps in the effects it is about.
@@ -134,7 +132,7 @@ fn absent(kind: &'static str, name: &str) -> MailError {
     }
 }
 
-impl Prodrome<TodoEvent> for Nothing {
+impl Reads<TodoEvent> for Nothing {
     fn objects(&self) -> Result<Vec<(Hash, Envelope)>, StoreError> {
         Ok(Vec::new())
     }
@@ -151,6 +149,9 @@ impl Prodrome<TodoEvent> for Nothing {
     fn verify(&self) -> Vec<String> {
         Vec::new()
     }
+}
+
+impl Prodrome<TodoEvent> for Nothing {
     fn append(&self, _event: TodoEvent) -> Result<Hash, StoreError> {
         Err(StoreError::not_appended("chain", "nothing is written"))
     }
@@ -159,9 +160,6 @@ impl Prodrome<TodoEvent> for Nothing {
     }
     fn locked(&self) -> Result<Box<dyn WriteLock + '_>, StoreError> {
         Ok(Box::new(NoLock))
-    }
-    fn settled(&self) -> Result<BTreeSet<Hash>, StoreError> {
-        Ok(BTreeSet::new())
     }
 }
 
@@ -328,7 +326,7 @@ impl Sessions for Nothing {
 /// The inbox and the conversations take what is written and keep none of it.
 macro_rules! kept_nowhere {
     ($schema:ty) => {
-        impl crate::store::Prodrome<$schema> for Nothing {
+        impl crate::store::Reads<$schema> for Nothing {
             fn objects(
                 &self,
             ) -> Result<
@@ -349,6 +347,9 @@ macro_rules! kept_nowhere {
             fn verify(&self) -> Vec<String> {
                 Vec::new()
             }
+        }
+
+        impl crate::store::Prodrome<$schema> for Nothing {
             fn append(&self, event: $schema) -> Result<Hash, crate::store::StoreError> {
                 Ok(prodrome_core::event::seal_hash(
                     &prodrome_core::event::mk_sealed(None, event),
@@ -426,12 +427,6 @@ impl Briefings for Nothing {
 impl Weather for Nothing {
     fn today(&self) -> Result<String, WeatherError> {
         Ok("clear all day, no umbrella".to_owned())
-    }
-}
-
-impl crate::store::Replica<TodoEvent> for Nothing {
-    fn discard(&self, _names: &[Hash]) -> Result<Vec<Hash>, StoreError> {
-        Ok(Vec::new())
     }
 }
 

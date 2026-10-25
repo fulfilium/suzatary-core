@@ -3,7 +3,7 @@ use prodrome_core::genesis::mk_genesis;
 use prodrome_core::schema::Schema;
 use prodrome_core::store::{MemoryStore, Replica};
 
-use super::{InMemoryHold, Prodrome, Store, StoreError, WriteLock};
+use super::{InMemoryHold, Prodrome, Reads, Store, StoreError, WriteLock};
 
 /// A prodrome held in memory, for tests: the Prodrome's own `MemoryStore`, so an append writes
 /// byte for byte what a store on disk holding the same objects writes, its heads are derived, and
@@ -51,7 +51,7 @@ impl<E: Store> InMemory<E> {
     }
 }
 
-impl<E: Store> Prodrome<E> for InMemory<E> {
+impl<E: Store> Reads<E> for InMemory<E> {
     fn objects(&self) -> Result<Vec<(Hash, Envelope<E>)>, StoreError> {
         let unreadable =
             |why: prodrome_core::literal::ProdromeError| StoreError::unreadable("memory", why);
@@ -85,7 +85,9 @@ impl<E: Store> Prodrome<E> for InMemory<E> {
     fn verify(&self) -> Vec<String> {
         Vec::new()
     }
+}
 
+impl<E: Store> Prodrome<E> for InMemory<E> {
     fn append(&self, event: E) -> Result<Hash, StoreError> {
         if self.tips()?.is_empty() {
             self.begin()?;

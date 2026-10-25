@@ -20,7 +20,6 @@ pub mod migrate_models;
 pub mod notify;
 pub mod outbound;
 pub mod plugin;
-pub mod proposals;
 pub mod ran;
 pub mod release;
 pub mod replica;
@@ -67,22 +66,9 @@ pub fn chains_read(instance: &Instance) -> suzatary_core::chain_set::Read {
     }))
 }
 
-/// The proposal replica beside one chain, read under that chain's policy.
-pub(crate) fn proposals_of(chain: &ChainDir) -> suzatary_io::proposals::Replica {
-    suzatary_io::proposals::Replica::new(chain.proposals.clone(), chain.policy.untrusted.clone())
-}
-
-/// The proposal replica as the agent's run opens it: its chain's objects taken in first, the
-/// join a replica means, so its keys are the chain's before anything it holds is read or
-/// written.
-///
-/// # Errors
-/// The chain unreadable, or the replica unwritable.
-pub(crate) fn proposing_of(chain: &ChainDir) -> anyhow::Result<suzatary_io::proposals::Proposing> {
-    Ok(suzatary_io::proposals::Proposing::open(
-        proposals_of(chain),
-        EventStore::new(chain.events.clone(), chain.policy.untrusted.clone()),
-    )?)
+/// One chain as the triage agent reads it: under its own policy, and never written.
+pub(crate) fn reading_of(chain: &ChainDir) -> suzatary_io::reading::Reading {
+    suzatary_io::reading::Reading::new(chain.events.clone(), chain.policy.untrusted.clone())
 }
 
 /// Run one of the repository's operator scripts, and exit with its status.

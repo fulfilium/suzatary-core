@@ -211,6 +211,18 @@ pub enum Entry {
         /// Why.
         erasure: crate::secretary::erasure::Erasure,
     },
+    /// One slot's words sealed again, scrubbed under the current redaction rules, under a key of
+    /// its own: every reader reads the slot `of` names from it once the key it was sealed from is
+    /// destroyed. It says nothing of its own, so no turn's index moves.
+    Resealed {
+        /// When.
+        #[serde(serialize_with = "stamped")]
+        at: Datetime,
+        /// The key of the slot as first written, which names the slot.
+        of: crate::secretary::locked_text::KeyName,
+        /// The key of the seal it was sealed again from, which it supersedes.
+        from: crate::secretary::locked_text::KeyName,
+    },
 }
 
 impl Entry {
@@ -232,7 +244,8 @@ impl Entry {
             | Entry::Unheard { at, .. }
             | Entry::Scoped { at, .. }
             | Entry::Coding { at, .. }
-            | Entry::Erased { at, .. } => *at,
+            | Entry::Erased { at, .. }
+            | Entry::Resealed { at, .. } => *at,
         }
     }
 }

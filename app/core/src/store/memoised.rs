@@ -63,6 +63,7 @@ mod tests {
 
     use super::memoised;
     use crate::record::TodoEvent;
+    use crate::store::Reads as _;
     use crate::store::{InMemory, Prodrome, StoreError};
 
     fn created(todo: &str) -> TodoEvent {

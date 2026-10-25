@@ -139,7 +139,8 @@ mod tests {
     use crate::capability::Datetime;
     use crate::secretary::inbox_event::InboxEvent;
     use crate::secretary::responded::Performed;
-    use crate::store::{InMemory, Prodrome as _};
+    use crate::store::InMemory;
+    use crate::store::Reads as _;
 
     fn at(minute: u32) -> Datetime {
         Datetime::new(2026, 10, 7, 9, minute, 0, 0).expect("an instant")

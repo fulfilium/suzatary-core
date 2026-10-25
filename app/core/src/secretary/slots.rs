@@ -7,7 +7,8 @@ use crate::secretary::locked_text::{KeyName, TextKey};
 use crate::secretary::words::{Gone, Words};
 
 /// The words of a slot, locked under the key `name` names as `sealed` and bound to `binding`
-/// (what the slot's associated data is), `open` opening them with a key.
+/// (what the slot's associated data is), `open` opening them with a key: `None` for a key that
+/// does not open them, and words gone only for words that open and are withheld.
 pub trait Slots {
     /// The slot's words, or why they are not here.
     fn words(
@@ -15,7 +16,7 @@ pub trait Slots {
         name: &KeyName,
         binding: &[u8],
         sealed: &[u8],
-        open: &dyn Fn(&TextKey) -> Option<LineWords>,
+        open: &dyn Fn(&TextKey) -> Option<Words<LineWords>>,
     ) -> Words<LineWords>;
 }
 
@@ -27,10 +28,10 @@ impl<F: Fn(&KeyName) -> Words<TextKey>> Slots for F {
         name: &KeyName,
         _: &[u8],
         _: &[u8],
-        open: &dyn Fn(&TextKey) -> Option<LineWords>,
+        open: &dyn Fn(&TextKey) -> Option<Words<LineWords>>,
     ) -> Words<LineWords> {
         match self(name) {
-            Words::Kept { kept } => open(&kept).map_or_else(|| Gone::Missing.into(), Words::kept),
+            Words::Kept { kept } => open(&kept).unwrap_or_else(|| Gone::Missing.into()),
             Words::Gone { gone } => gone.into(),
         }
     }

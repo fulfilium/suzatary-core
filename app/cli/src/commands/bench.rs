@@ -22,12 +22,12 @@ use suzatary_core::capability::{
     Conversation, Corpus as _, Manual, Manuals as _, Model, ModelError, Query, Reply,
 };
 use suzatary_core::record::{Envelope, EventStore, TodoEvent};
-use suzatary_core::store::Prodrome as _;
 
 use crate::commands::mcp::Interpreters;
 use crate::commands::serve::interpreters::cli_of;
 
 use crate::instance::Instance;
+use suzatary_core::store::Reads as _;
 
 /// `suzatary-dev bench …`.
 #[derive(Debug, clap::Args)]

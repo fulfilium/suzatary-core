@@ -20,7 +20,7 @@ use suzatary_core::secretary::inbox::{Fold, Object};
 use suzatary_core::secretary::inbox_event::Said;
 use suzatary_core::secretary::store::stamp;
 use suzatary_core::secretary::tapped::Tapped;
-use suzatary_core::store::Prodrome as _;
+use suzatary_core::store::Reads as _;
 use suzatary_io::objects::Objects;
 
 /// The instant every reading is taken at: after every response in the frozen store, before the

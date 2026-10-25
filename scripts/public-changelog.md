@@ -26,11 +26,11 @@ The first public release. What exists:
   conflict rather than resolved by a clock.
 - **The triage agent.** Every five minutes, new mail from Gmail, Microsoft
   and Proton accounts is read by an agent behind a deny-by-default fence,
-  holding a capability record with no outward effect, writing provisionally
-  into its own replica.
+  holding a capability record with no outward effect, its writes cards in the
+  owner's Inbox.
 - **The secretary.** A conversation in the app, with a memory whose words
   can be forgotten while its history stays verifiable. It reviews the
-  agent's batches, sweeps the open list for evidence that a todo is done,
+  agent's cards, sweeps the open list for evidence that a todo is done,
   and proposes emails, sign-ins, secrets and coding sessions, each performed
   only by the owner's tap.
 - **The app.** A TypeScript web app with no framework, served over a

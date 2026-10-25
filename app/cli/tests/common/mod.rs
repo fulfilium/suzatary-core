@@ -2158,8 +2158,6 @@ pub struct Fakes {
     pub digest_texts: suzatary_io::texts::Texts<suzatary_core::secretary::digest_line::Line>,
     /// Whose retraction or erasure the digest believes: none here.
     pub owners: std::collections::BTreeSet<prodrome_core::event::Actor>,
-    /// The proposal replica, real because a rejection deletes from it.
-    pub proposals: suzatary_io::proposals::Replica,
     /// The topic stores, begun, as a box's server begins them.
     pub topics: suzatary_io::topics::Topics,
     /// The inbox store, real so a submit holds the server's `flock`.
@@ -2272,40 +2270,9 @@ impl Fakes {
                 [root.join("cache/plugins/ics/store")],
                 suzatary_core::zone::Zone::UTC,
             ),
-            proposals: suzatary_io::proposals::Replica::new(
-                root.join("events-triage"),
-                self::chain().untrusted,
-            ),
             configuration: Arc::new(EditsRecorder::new()),
             root,
         }
-    }
-
-    /// A `Proposing` over this bundle's replica, as a triage run writes through.
-    ///
-    /// It adopts the chain, as a run does, so the first write has a parent.
-    ///
-    /// # Panics
-    /// If the chain cannot be read or the replica cannot be written.
-    #[must_use]
-    pub fn proposing(&self) -> suzatary_io::proposals::Proposing {
-        suzatary_io::proposals::Proposing::open(
-            suzatary_io::proposals::Replica::new(
-                self.root.join("events-triage"),
-                self::chain().untrusted,
-            ),
-            self.chain.inner().clone(),
-        )
-        .expect("the replica adopts the chain")
-    }
-
-    /// The agent's run over this bundle's replica, every write signed by the cast's agent key,
-    /// as the triage pass writes through `suzatary mcp`.
-    pub fn agent_run(&self) -> suzatary_core::store::Signing<suzatary_io::proposals::Proposing> {
-        suzatary_core::store::Signing::new(
-            self.proposing(),
-            suzatary_core::store::Signer::Key(std::sync::Arc::clone(cast_keys().agent())),
-        )
     }
 
     /// The same, a Connect card checked against `configuration`.

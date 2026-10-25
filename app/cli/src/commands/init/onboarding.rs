@@ -165,12 +165,9 @@ pub(crate) const HEADER: &str = "\
 # fix) goes to `suzatary`.
 ";
 
-/// The two chains every deployment begins with, each beside its agent's replica: the person's
-/// life first, since the first is what every unscoped verb means, then the system's own work.
-pub const CHAINS: [(&str, &str, &str); 2] = [
-    ("life", "events", "events-triage"),
-    ("suzatary", "events-suzatary", "events-triage-suzatary"),
-];
+/// The two chains every deployment begins with: the person's life first, since the first is
+/// what every unscoped verb means, then the system's own work.
+pub const CHAINS: [(&str, &str); 2] = [("life", "events"), ("suzatary", "events-suzatary")];
 
 /// The categories a deployment starts with when none are named.
 pub const CATEGORIES: [&str; 5] = ["work", "study", "project", "home", "other"];
@@ -235,12 +232,11 @@ impl Onboarding {
             .collect();
         let chains = CHAINS
             .iter()
-            .map(|(name, events, proposals)| {
+            .map(|(name, events)| {
                 Ok(Chain {
                     name: ChainName::new(*name)?,
                     events: PathBuf::from(events),
-                    proposals: PathBuf::from(proposals),
-                    // An agent's writes land in its replica, never on a chain.
+                    // An agent's writes are cards in the Inbox, never on a chain.
                     untrusted: Vec::new(),
                     actors: roster.clone(),
                     owner: self.owner.clone(),

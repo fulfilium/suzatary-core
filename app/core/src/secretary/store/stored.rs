@@ -117,8 +117,8 @@ impl Stored {
         match entry {
             // A second opening line is ignored, not refused: the first is the fact, and one
             // stray line must not cost a whole transcript. An erasure's slots were read as gone
-            // where they stood.
-            Entry::Opened { .. } | Entry::Erased { .. } => {}
+            // where they stood, and a reseal's words where the slot it seals stands.
+            Entry::Opened { .. } | Entry::Erased { .. } | Entry::Resealed { .. } => {}
             Entry::Titled { title, .. } => {
                 self.title = title.clone().map(String::from);
             }

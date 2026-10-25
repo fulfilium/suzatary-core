@@ -82,7 +82,6 @@ root = "836884e1723c7b17f8b87e76a0272f012de6cff08f134eb9dcdb2670695b1818"
 [[chains]]
 name = "life"
 events = "events"
-proposals = "events-triage"
 untrusted = ["triage"]
 actors = ["assistant", "ada", "triage"]
 owner = "ada"
@@ -90,7 +89,6 @@ owner = "ada"
 [[chains]]
 name = "suzatary"
 events = "events-suzatary"
-proposals = "events-triage-suzatary"
 untrusted = ["triage"]
 actors = ["assistant", "ada", "triage"]
 owner = "ada"
@@ -335,13 +333,6 @@ fn the_agent_speaks_to_a_real_server_and_its_writes_are_cards() {
 
     for (dir, before) in &chains {
         assert_eq!(&names(&root.join(dir)), before, "{dir} gained an object");
-    }
-    // A replica is synced from its chain before a run and holds nothing else.
-    for (replica, (_, chain)) in ["events-triage", "events-triage-suzatary"]
-        .into_iter()
-        .zip(&chains)
-    {
-        assert!(names(&root.join(replica)).is_subset(chain), "{replica}");
     }
     let read = suzatary_cli::instance::Instance::read(
         &instance,

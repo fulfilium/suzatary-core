@@ -25,7 +25,7 @@ mod recording;
 mod reentrant;
 mod signing;
 
-pub use database::{Area, Database};
+pub use database::Database;
 pub use doc::Doc;
 pub use error::StoreError;
 pub use hold::{InMemoryHold, Once};
@@ -42,7 +42,7 @@ pub use knowledge::Knowledge;
 pub use learnt::{Learnt, learn};
 pub use log::{Decide, Edit, Log};
 pub use memoised::memoised;
-pub use prodrome::{Prodrome, Replica, WriteLock, append_to, left_out, linearised};
+pub use prodrome::{Prodrome, Reads, WriteLock, append_to, left_out, linearised};
 pub use recording::{recording, wrote};
 pub use reentrant::Reentrant;
 pub use signing::{Signer, Signing, sign};

@@ -8,6 +8,7 @@ use std::path::{Path, PathBuf};
 use prodrome_core::fpl;
 use prodrome_core::literal::Datetime;
 use suzatary_core::record::{EventStore, mk_authored};
+use suzatary_core::store::Reads as _;
 
 /// A scratch root unique to this process and thread.
 pub(crate) fn scratch(name: &str) -> PathBuf {
@@ -102,7 +103,6 @@ root = "{key}"
 [[chains]]
 name = "life"
 events = "events"
-proposals = "events-triage"
 untrusted = ["triage"]
 actors = ["assistant", "ada", "triage"]
 owner = "ada"
@@ -207,7 +207,6 @@ pub(crate) fn signing(
 pub(crate) fn objects(
     root: &Path,
 ) -> Vec<prodrome_core::event::Envelope<suzatary_core::record::TodoEvent>> {
-    use suzatary_core::store::Prodrome as _;
     suzatary_io::objects::Objects::chain(EventStore::new(
         root.join("events"),
         prodrome_core::policy::Untrusted::none(),

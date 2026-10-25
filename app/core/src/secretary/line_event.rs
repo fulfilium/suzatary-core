@@ -2,18 +2,21 @@
 //! shape in the clear and each slot of its words locked under a key of its own.
 //!
 //! A line is `Kind(conversation, at, actor, held, carried, <shape fields>, words)`: the head every
-//! line has, the shape of its kind ([`LineShape`]), and `words`, one `Locked(key, box)` per slot,
-//! the key's name and the ciphertext in base64. Each slot's associated data is the line's own
-//! print without its words and with the slot's number (`LineSlot`), so a ciphertext moved to
-//! another slot, line or store does not open. Every line writes its conversation's one register,
+//! line has, the shape of its kind ([`LineShape`]), and `words`, one `Scrubbed(key, box, rules)`
+//! per slot: the key's name, the ciphertext in base64, and the redaction rules the words passed
+//! ([`ScrubbedUnder`]). A slot locked before lines recorded their rules is `Locked(key, box)`.
+//! Each slot's associated data is the line's own print without its words, with the slot's number
+//! and its rules (`LineSlot`), so a ciphertext moved to another slot, line or store does not
+//! open, and a slot cannot claim other rules. Every line writes its conversation's one register,
 //! the transcript, so a line rests on the lines its writer held and the lines are causally
-//! ordered. Nothing in an object is words: the redaction door is applied to the words before they
-//! are locked and again when they are opened.
+//! ordered. Nothing in an object is words: the redaction door is applied to the words in `seal`,
+//! before they are locked. Opening a slot locked under the current rules only parses it; a slot
+//! locked under any other rules is scrubbed again as it opens (`SealedSlot::open`).
 
 use std::collections::BTreeSet;
 
 use base64::Engine as _;
-use prodrome_core::event::Actor;
+use prodrome_core::event::{Actor, Hash};
 use prodrome_core::fold::Frontier;
 use prodrome_core::literal::{Datetime, ProdromeError, Table, Value, Vocabulary, print_literal};
 use prodrome_core::registers::Stamp;
@@ -23,13 +26,16 @@ use serde::de::DeserializeOwned;
 
 use crate::capability::Entropy;
 use crate::literal::{Fields, Literal, Signature, no_arm, record};
+use crate::redact::Rules;
 use crate::secretary::carried::Carried;
 use crate::secretary::erasure::Erasure;
 use crate::secretary::line_shape::{self, LineShape};
 use crate::secretary::line_words::LineWords;
 use crate::secretary::locked_text::{FreshKey, KeyName, Locked, Shape, TextKey};
+use crate::secretary::scrubbed_under::ScrubbedUnder;
 use crate::secretary::slots::Slots;
 use crate::secretary::store::{ConversationId, Entry};
+use crate::secretary::words::{Gone, Words};
 use crate::sole::{One, Only, Sole};
 
 /// One line: which conversation, when, who wrote it, how many lines its writer held, where it
@@ -45,11 +51,36 @@ pub struct LineEvent {
     held: u32,
     carried: Carried,
     shape: LineShape,
-    words: Vec<Locked<LineSlot>>,
+    words: Vec<SealedSlot>,
 }
 
-/// One slot of one line, as its words are bound: the line's print without its words, and the
-/// slot's number.
+/// One slot's words as stored: locked, and the rules they passed before they were locked.
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct SealedSlot {
+    locked: Locked<LineSlot>,
+    under: ScrubbedUnder,
+}
+
+impl SealedSlot {
+    /// The words, opened by `key` for `binding`: as locked when they passed the current rules,
+    /// and scrubbed under the current rules now when they passed any other, so no reader sees
+    /// what the current rules catch; withheld when they no longer pass the door at all. `None`
+    /// for a key that does not open them. A reader that keeps what it opens
+    /// (`secretary::opened`, the tab's held lines) scrubs a stale slot once.
+    fn open(&self, binding: &LineSlot, key: &TextKey) -> Option<Words<LineWords>> {
+        let words = self.locked.open(binding, key)?;
+        Some(if self.under.is_current() {
+            Words::kept(words)
+        } else {
+            words
+                .scrubbed()
+                .map_or_else(|_| Gone::Withheld.into(), Words::kept)
+        })
+    }
+}
+
+/// One slot of one line, as its words are bound: the line's print without its words, the slot's
+/// number, and the rules the slot's words passed.
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct LineSlot(Vec<u8>);
 
@@ -103,12 +134,82 @@ impl LineEvent {
         };
         let mut keys = Vec::with_capacity(words.len());
         for (slot, words) in words.iter().enumerate() {
-            let words = words
-                .scrubbed()
-                .map_err(|failed| NotALine::Unscrubbable(failed.to_string()))?;
+            let (sealed, opens) = seal(&line, slot, words, entropy)?;
+            line.words.push(sealed);
+            keys.push(opens);
+        }
+        Ok((line, keys))
+    }
+
+    /// The words of slot `of` of a line of `conversation`, sealed again from the seal locked
+    /// under `from`: `words` through the redaction door and locked under a key drawn from
+    /// `entropy`, as a line written here by `actor` holding `held` lines at `at`; answers the key
+    /// that opens it.
+    ///
+    /// # Errors
+    /// [`NotALine`] for words the door refuses, or no key.
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "a line's head, the slot, and its words"
+    )]
+    pub fn reseal(
+        conversation: ConversationId,
+        at: Datetime,
+        actor: Actor,
+        held: u32,
+        of: KeyName,
+        from: KeyName,
+        words: &LineWords,
+        entropy: &dyn Entropy,
+    ) -> Result<(Self, TextKey), NotALine> {
+        let mut line = Self {
+            conversation,
+            at,
+            actor,
+            held,
+            carried: Carried::Written,
+            shape: LineShape::Resealed { of, from },
+            words: Vec::new(),
+        };
+        let (sealed, opens) = seal(&line, 0, words, entropy)?;
+        line.words.push(sealed);
+        Ok((line, opens))
+    }
+
+    /// Line `entry` locked as scrubbed `under` rules other than the current ones, its words not
+    /// scrubbed: a line scrubbed under rules that missed what is in it, for the tests of reading
+    /// and of the migration.
+    ///
+    /// # Errors
+    /// [`NotALine`] for words already gone, or no key.
+    #[cfg(any(test, feature = "nothing"))]
+    pub fn written_under(
+        under: &ScrubbedUnder,
+        conversation: ConversationId,
+        actor: Actor,
+        held: u32,
+        entry: &Entry,
+        entropy: &dyn Entropy,
+    ) -> Result<(Self, Vec<TextKey>), NotALine> {
+        let (shape, words) = line_shape::split(entry);
+        let words = words.ok_or(NotALine::Gone)?;
+        let mut line = Self {
+            conversation,
+            at: entry.at(),
+            actor,
+            held,
+            carried: Carried::Written,
+            shape,
+            words: Vec::new(),
+        };
+        let mut keys = Vec::with_capacity(words.len());
+        for (slot, words) in words.iter().enumerate() {
             let key = FreshKey::draw(entropy).map_err(NotALine::NoKey)?;
-            let (locked, opens) = Locked::lock(&line.slot(slot), &words, key);
-            line.words.push(locked);
+            let (locked, opens) = Locked::lock(&line.slot(slot, under), words, key);
+            line.words.push(SealedSlot {
+                locked,
+                under: under.clone(),
+            });
             keys.push(opens);
         }
         Ok((line, keys))
@@ -159,6 +260,16 @@ impl LineEvent {
         &self.carried
     }
 
+    /// What the line stands for, read from the store as `name`: the object it carries, or
+    /// itself.
+    #[must_use]
+    pub fn identity<'a>(&'a self, name: &'a Hash) -> &'a Hash {
+        match &self.carried {
+            Carried::From(old) => old,
+            Carried::Written => name,
+        }
+    }
+
     /// Its shape.
     #[must_use]
     pub fn shape(&self) -> &LineShape {
@@ -167,45 +278,89 @@ impl LineEvent {
 
     /// The name of each slot's key, in slot order.
     pub fn keys(&self) -> impl Iterator<Item = &KeyName> {
-        self.words.iter().map(Locked::key)
+        self.words.iter().map(|sealed| sealed.locked.key())
+    }
+
+    /// The rules each slot's words passed, in slot order.
+    pub fn scrubbed_under(&self) -> impl Iterator<Item = &ScrubbedUnder> {
+        self.words.iter().map(|sealed| &sealed.under)
     }
 
     /// Slot `slot`'s words, opened by `key`; `None` for a slot the line does not hold or a key
     /// that does not open it.
     #[must_use]
     pub fn open(&self, slot: usize, key: &TextKey) -> Option<LineWords> {
-        self.words.get(slot)?.open(&self.slot(slot), key)
+        self.read(slot, key).and_then(Words::into_kept)
+    }
+
+    /// Slot `slot`'s words, opened by `key` and read under the current rules (`SealedSlot`'s
+    /// door): kept, or withheld when they no longer pass it; `None` for a slot the line does not
+    /// hold or a key that does not open it.
+    #[must_use]
+    pub fn read(&self, slot: usize, key: &TextKey) -> Option<Words<LineWords>> {
+        let sealed = self.words.get(slot)?;
+        sealed.open(&self.slot(slot, &sealed.under), key)
+    }
+
+    /// Slot `slot`'s words as they were locked, under whatever rules: only for sealing them again
+    /// through the door ([`LineEvent::reseal`]), never for a reader.
+    pub(crate) fn unscrubbed(&self, slot: usize, key: &TextKey) -> Option<LineWords> {
+        let sealed = self.words.get(slot)?;
+        sealed.locked.open(&self.slot(slot, &sealed.under), key)
+    }
+
+    /// Slot `slot`'s words as `slots` reads them by its key's name, opened with this line's
+    /// binding for that slot; missing for a slot the line does not hold.
+    #[must_use]
+    pub fn slot_words(&self, slot: usize, slots: &impl Slots) -> Words<LineWords> {
+        let Some(sealed) = self.words.get(slot) else {
+            return Gone::Missing.into();
+        };
+        let binding = self.slot(slot, &sealed.under);
+        slots.words(
+            sealed.locked.key(),
+            &binding.0,
+            sealed.locked.sealed(),
+            &|key| sealed.open(&binding, key),
+        )
     }
 
     /// The line as read: each slot read by `slots` by its key's name, opened with this line's
     /// binding for that slot.
     #[must_use]
     pub fn entry(&self, slots: &impl Slots) -> Entry {
-        let words = self
-            .words
-            .iter()
-            .enumerate()
-            .map(|(slot, locked)| {
-                let binding = self.slot(slot);
-                slots.words(locked.key(), &binding.0, locked.sealed(), &|key| {
-                    locked.open(&binding, key)
-                })
-            })
-            .collect();
+        // A reseal's words are read where the slot it seals stands, so it opens nothing here.
+        let words = if matches!(self.shape, LineShape::Resealed { .. }) {
+            Vec::new()
+        } else {
+            (0..self.words.len())
+                .map(|slot| self.slot_words(slot, slots))
+                .collect()
+        };
         line_shape::join(&self.conversation, self.shape.clone(), self.at, words)
     }
 
-    /// Slot `slot`'s binding: this line's print without its words, and the slot's number.
-    fn slot(&self, slot: usize) -> LineSlot {
+    /// Slot `slot`'s binding: this line's print without its words, the slot's number, and the
+    /// rules its words passed, which an unversioned slot's binding does not name.
+    fn slot(&self, slot: usize, under: &ScrubbedUnder) -> LineSlot {
         let ((name, fields), mut values) = self.bare();
+        let rules: &[&str] = match under {
+            ScrubbedUnder::Rules(rules) => {
+                values.extend([slot.to_value(), rules.to_value()]);
+                &["slot", "rules"]
+            }
+            ScrubbedUnder::Unversioned => {
+                values.push(slot.to_value());
+                &["slot"]
+            }
+        };
         // The binding is the bare line with `slot` in place of `words`: no stored constructor.
         let named: Vec<&str> = fields
             .iter()
             .copied()
             .filter(|field| *field != "words")
-            .chain(["slot"])
+            .chain(rules.iter().copied())
             .collect();
-        values.push(slot.to_value());
         LineSlot(
             print_literal(&Value::call(
                 name,
@@ -231,6 +386,23 @@ impl LineEvent {
         values.extend(shape_fields(&self.shape));
         (signature(&self.shape), values)
     }
+}
+
+/// Slot `slot` of `line`: `words` through the redaction door, then locked under a key drawn from
+/// `entropy`, recording the rules they passed. The one place a line's words are scrubbed.
+fn seal(
+    line: &LineEvent,
+    slot: usize,
+    words: &LineWords,
+    entropy: &dyn Entropy,
+) -> Result<(SealedSlot, TextKey), NotALine> {
+    let words = words
+        .scrubbed()
+        .map_err(|failed| NotALine::Unscrubbable(failed.to_string()))?;
+    let under = ScrubbedUnder::Rules(Rules::current().clone());
+    let key = FreshKey::draw(entropy).map_err(NotALine::NoKey)?;
+    let (locked, opens) = Locked::lock(&line.slot(slot, &under), &words, key);
+    Ok((SealedSlot { locked, under }, opens))
 }
 
 /// The fields a shape prints after the head, in signature order.
@@ -282,6 +454,7 @@ fn shape_fields(shape: &LineShape) -> Vec<Value> {
         LineShape::Scoped { scope } => vec![scope.to_value()],
         LineShape::Coding { proposal, session } => vec![proposal.to_value(), json(session)],
         LineShape::Erased { keys, erasure } => vec![keys.to_value(), json(erasure)],
+        LineShape::Resealed { of, from } => vec![of.to_value(), from.to_value()],
     }
 }
 
@@ -352,6 +525,10 @@ fn shape_of(fields: Fields<'_>) -> Result<LineShape, ProdromeError> {
             keys: fields.get("keys")?,
             erasure: parsed(fields, "erasure")?,
         },
+        "Resealed" => LineShape::Resealed {
+            of: fields.get("of")?,
+            from: fields.get("from")?,
+        },
         other => return Err(no_arm("a conversation line", other)),
     })
 }
@@ -374,32 +551,44 @@ fn signature(shape: &LineShape) -> Signature {
         LineShape::Scoped { .. } => SCOPED,
         LineShape::Coding { .. } => CODING,
         LineShape::Erased { .. } => ERASED,
+        LineShape::Resealed { .. } => RESEALED,
     }
 }
 
-/// `Locked(key, box)`: a slot's words as stored, the key's name and the ciphertext in base64.
+/// `Scrubbed(key, box, rules)`: a slot's words as stored, the key's name, the ciphertext in
+/// base64, and the rules the words passed.
+const SCRUBBED: Signature = ("Scrubbed", &["key", "box", "rules"]);
+
+/// `Locked(key, box)`: a slot locked before lines recorded their rules.
 const LOCKED: Signature = ("Locked", &["key", "box"]);
 
 /// A slot's words as stored.
-impl Literal for Locked<LineSlot> {
+impl Literal for SealedSlot {
     fn to_value(&self) -> Value {
-        record(
-            LOCKED,
-            vec![
-                self.key().to_value(),
-                base64::engine::general_purpose::STANDARD
-                    .encode(self.sealed())
-                    .to_value(),
-            ],
-        )
+        let key = self.locked.key().to_value();
+        let sealed = base64::engine::general_purpose::STANDARD
+            .encode(self.locked.sealed())
+            .to_value();
+        match &self.under {
+            ScrubbedUnder::Rules(rules) => record(SCRUBBED, vec![key, sealed, rules.to_value()]),
+            ScrubbedUnder::Unversioned => record(LOCKED, vec![key, sealed]),
+        }
     }
 
     fn from_value(value: &Value) -> Result<Self, ProdromeError> {
-        let fields = Fields::of(value, LOCKED)?;
+        let fields = Fields::among(value, &[SCRUBBED, LOCKED])?;
         let sealed = base64::engine::general_purpose::STANDARD
             .decode(fields.get::<String>("box")?)
-            .map_err(|failed| ProdromeError::invalid(format!("Locked.box: {failed}")))?;
-        Ok(Locked::read(fields.get("key")?, sealed))
+            .map_err(|failed| ProdromeError::invalid(format!("{}.box: {failed}", fields.name())))?;
+        let under = if fields.name() == SCRUBBED.0 {
+            ScrubbedUnder::Rules(fields.get("rules")?)
+        } else {
+            ScrubbedUnder::Unversioned
+        };
+        Ok(Self {
+            locked: Locked::read(fields.get("key")?, sealed),
+            under,
+        })
     }
 }
 
@@ -583,6 +772,21 @@ const ERASED: Signature = (
     ],
 );
 
+/// `Resealed(conversation, at, actor, held, carried, of, from, words)`.
+const RESEALED: Signature = (
+    "Resealed",
+    &[
+        "conversation",
+        "at",
+        "actor",
+        "held",
+        "carried",
+        "of",
+        "from",
+        "words",
+    ],
+);
+
 /// The lines' constructors, in print order.
 const LINES: &[Signature] = &[
     OPENED,
@@ -600,9 +804,10 @@ const LINES: &[Signature] = &[
     SCOPED,
     CODING,
     ERASED,
+    RESEALED,
 ];
 
-/// The lines' whitelist: their constructors and `Locked`, nothing else.
+/// The lines' whitelist: their constructors, `Scrubbed` and `Locked`, nothing else.
 #[derive(Debug, Clone, Default)]
 pub struct LineVocabulary;
 
@@ -610,7 +815,7 @@ impl Vocabulary for LineVocabulary {
     fn signature(&self, name: &str) -> Option<prodrome_core::literal::Signature<'_>> {
         Table(LINES)
             .find(name)
-            .or_else(|| Table(&[LOCKED]).find(name))
+            .or_else(|| Table(&[SCRUBBED, LOCKED]).find(name))
     }
 }
 
@@ -636,7 +841,7 @@ impl Schema for LineEvent {
     fn from_value(_: &LineVocabulary, value: &Value) -> Result<Self, ProdromeError> {
         let fields = Fields::among(value, LINES)?;
         let shape = shape_of(fields)?;
-        let words: Vec<Locked<LineSlot>> = if has_words(signature(&shape)) {
+        let words: Vec<SealedSlot> = if has_words(signature(&shape)) {
             fields.get("words")?
         } else {
             Vec::new()
@@ -715,8 +920,11 @@ mod tests {
 
     use prodrome_core::event::{canonical, parse_event};
 
+    use proptest::prelude::Strategy as _;
+
     use super::*;
     use crate::capability::{ToolCall, Turn};
+    use crate::secretary::salted_text::Words as _;
     use crate::secretary::words::{Gone, Words};
 
     /// Each key one more than the last.
@@ -839,16 +1047,15 @@ mod tests {
             &Counting::default(),
         )
         .expect("a line");
-        let moved = &line.words[0];
+        let SealedSlot { locked, under } = &line.words[0];
+        let opens = |binding: LineSlot| locked.open(&binding, &keys[0]).is_some();
+        assert!(!opens(other.slot(0, under)), "another line");
+        assert!(!opens(line.slot(1, under)), "another slot");
         assert!(
-            moved.open(&other.slot(0), &keys[0]).is_none(),
-            "another line"
+            !opens(line.slot(0, &ScrubbedUnder::Unversioned)),
+            "other rules"
         );
-        assert!(
-            moved.open(&line.slot(1), &keys[0]).is_none(),
-            "another slot"
-        );
-        assert!(moved.open(&line.slot(0), &keys[0]).is_some(), "its own");
+        assert!(opens(line.slot(0, under)), "its own");
     }
 
     /// A slot moved into another conversation opens to nothing through the cache too, after
@@ -927,9 +1134,90 @@ mod tests {
         assert_eq!(read, line);
     }
 
+    /// Text holding the credentials and numbers the door removes, among other words.
+    fn said_text() -> impl proptest::strategy::Strategy<Value = String> {
+        use proptest::prelude::*;
+        let piece = prop_oneof![
+            Just("reset at https://example.test/r?token=s3cret ".to_owned()),
+            Just("SSN 123-45-6789 ".to_owned()),
+            Just("Your verification code is 482913. ".to_owned()),
+            Just("https://ada:hunter2@example.test/feed ".to_owned()),
+            Just("eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJhZGEifQ.c2lnbmF0dXJl ".to_owned()),
+            Just("café — 確認 ".to_owned()),
+            "[a-z ]{0,12}",
+        ];
+        proptest::collection::vec(piece, 0..6).prop_map(|pieces| pieces.concat())
+    }
+
+    proptest::proptest! {
+        /// The law of the one locking path: every slot of a written line opens to the words
+        /// written, scrubbed under the rules it records, and those are the current rules. So no
+        /// stored line holds what the rules it records catch, and reading it scrubs nothing.
+        #[test]
+        fn a_written_line_holds_its_words_scrubbed(text in said_text(), fact in said_text()) {
+            let entry = Entry::Said {
+                at: at(),
+                turn: Turn::Model {
+                    text,
+                    calls: vec![ToolCall {
+                        verb: "remember".into(),
+                        args: [("fact".to_owned(), serde_json::json!(fact))].into(),
+                    }],
+                },
+                by: None,
+            };
+            let (line, keys) = written(&entry);
+            let (_, words) = crate::secretary::line_shape::split(&entry);
+            let words = words.expect("a whole turn has words");
+            for (slot, said) in words.iter().enumerate() {
+                let opened = line.open(slot, &keys[slot]).expect("opens");
+                proptest::prop_assert_eq!(&opened, &said.scrubbed().expect("scrubs"));
+                for secret in ["s3cret", "123-45-6789", "482913", "hunter2", "eyJzdWIi"] {
+                    proptest::prop_assert!(!opened.print().contains(secret), "{secret}");
+                }
+            }
+            proptest::prop_assert!(line.scrubbed_under().all(ScrubbedUnder::is_current));
+        }
+
+        /// The law of reading: a slot locked under any rules but the current ones opens to its
+        /// words scrubbed under the current rules, by `open` and through a reading alike, so no
+        /// reader sees what the current rules catch before the migration locks it again.
+        #[test]
+        fn a_slot_under_older_rules_reads_scrubbed_under_the_current(
+            text in said_text(),
+            older in proptest::prop_oneof![
+                proptest::strategy::Just(ScrubbedUnder::Unversioned),
+                "[0-9a-f]{64}".prop_map(|name| ScrubbedUnder::Rules(Rules::new(name).expect("hex"))),
+            ],
+        ) {
+            proptest::prop_assume!(!older.is_current());
+            let entry = Entry::Said {
+                at: at(),
+                turn: Turn::Model { text, calls: Vec::new() },
+                by: None,
+            };
+            let (line, keys) = LineEvent::written_under(
+                &older,
+                id(),
+                Actor::new("assistant").expect("an actor"),
+                3,
+                &entry,
+                &Counting::default(),
+            )
+            .expect("a line");
+            let (_, words) = crate::secretary::line_shape::split(&entry);
+            let said = words.expect("a whole turn has words").remove(0).scrubbed().expect("scrubs");
+            proptest::prop_assert_eq!(line.open(0, &keys[0]), Some(said.clone()));
+            let Entry::Said { turn: Turn::Model { text, .. }, .. } = line.entry(&opened_by(&keys)) else {
+                panic!("a model turn reads whole");
+            };
+            proptest::prop_assert_eq!(LineWords::Model { text }, said);
+        }
+    }
+
     #[test]
     fn no_constructor_is_a_term_or_an_envelope() {
         crate::literal::assert_own(LINES);
-        crate::literal::assert_own(&[LOCKED]);
+        crate::literal::assert_own(&[SCRUBBED, LOCKED]);
     }
 }

@@ -30,7 +30,7 @@ use crate::capability::Agent;
 use crate::deployment::Deployment;
 use crate::record::TodoEvent;
 use crate::refusal::{Refusal, shown};
-use crate::store::Prodrome;
+use crate::store::Reads;
 
 /// Who this surface is: a constant, never an argument. Its writes are cards, which the owner's
 /// tap performs.
@@ -92,7 +92,7 @@ pub(crate) fn answered<T: serde::Serialize>(value: &T) -> Result<serde_json::Val
     serde_json::to_value(value).map_err(|failed| refused(&failed))
 }
 
-fn events_of(chain: &dyn Prodrome<TodoEvent>) -> Result<Vec<TodoEvent>, Refusal> {
+fn events_of(chain: &dyn Reads<TodoEvent>) -> Result<Vec<TodoEvent>, Refusal> {
     let nodes = chain.nodes()?;
     Ok(crate::view::events_of(&nodes))
 }

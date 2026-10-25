@@ -50,7 +50,7 @@ fn admitted((kind, path): &(Kind, String)) -> String {
     let objects = r"objects/[0-9a-f]{64}\.py";
     let dir = literal(path);
     match kind.files() {
-        Files::Chain | Files::Replica => format!(r"{dir}/({objects}|\.lock|\.gitattributes)"),
+        Files::Chain => format!(r"{dir}/({objects}|\.lock|\.gitattributes)"),
         Files::Objects => format!(r"{dir}/({objects}|\.gitattributes)"),
         Files::Records => format!(r"{dir}/([0-9a-f]{{64}}\.json|\.gitignore)"),
         Files::File => dir,
@@ -86,7 +86,7 @@ fn the_push_admits_only_the_pushed_stores_files() {
     );
 }
 
-/// A rejection deletes from an agent's replica on purpose, so the walk leaves the replicas out.
+/// Every pushed store whose objects are appended and never edited is walked for a rewrite.
 #[test]
 fn the_push_refuses_a_rewrite_of_every_append_only_store() {
     let walked: Vec<String> = listed(Tier::Pushed)

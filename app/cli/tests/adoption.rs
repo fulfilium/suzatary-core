@@ -1,15 +1,13 @@
 //! A deployment adopting signatures through the real binary: a write adopts nothing, `device
-//! init` adopts each chain once and nothing again, a batch the agent wrote before then is signed by
-//! the agent's key, and adopting again refuses while a write since the epoch carries no
-//! signature, until `device sign-unsigned` repairs it.
+//! init` adopts each chain once and nothing again, and adopting again refuses while a write since
+//! the epoch carries no signature, until `device sign-unsigned` repairs it.
 
 use std::path::Path;
 
-use prodrome_core::event::{Envelope, Hash};
+use prodrome_core::event::Envelope;
 use prodrome_core::sign::{PublicKey, Secret};
 use suzatary_core::record::{EventStore, TodoEvent};
 use suzatary_core::signatures::{AGENT_KEY, BOX_KEY};
-use suzatary_core::store::Prodrome as _;
 
 use super::todos::{a_chain, a_signing_instance, objects, scratch, signing};
 
@@ -39,23 +37,6 @@ fn ok(output: &std::process::Output) {
         "stderr: {}",
         String::from_utf8_lossy(&output.stderr)
     );
-}
-
-/// The agent's replica beside the chain, as its run opens it.
-fn replica(root: &Path) -> suzatary_io::proposals::Proposing {
-    suzatary_io::proposals::Proposing::open(
-        suzatary_io::proposals::Replica::new(
-            root.join("events-triage"),
-            prodrome_core::policy::Untrusted::of([
-                prodrome_core::event::Actor::new("triage").expect("an actor")
-            ]),
-        ),
-        EventStore::new(
-            root.join("events"),
-            prodrome_core::policy::Untrusted::none(),
-        ),
-    )
-    .expect("the replica opens")
 }
 
 fn done(todo: &str, by: &str) -> TodoEvent {
@@ -89,28 +70,6 @@ fn a_write_adopts_nothing_and_device_init_adopts_once() {
     ok(&signing(&instance, &["device", "init"], &seeds()));
     assert_eq!(snapshots(&root), 1, "adopted once");
     assert_eq!(keys(&root), 3);
-}
-
-#[test]
-fn a_batch_written_before_the_switch_is_the_agent_keys_once_adopted() {
-    let root = scratch("adopt-replica");
-    a_chain(&root);
-    let pending: Hash = replica(&root)
-        .append(done("parkingpermit", "triage"))
-        .expect("the agent proposes");
-
-    let instance = a_signing_instance(&root, &public(OWN));
-    ok(&signing(&instance, &["todos", "open"], &seeds()));
-    ok(&signing(&instance, &["device", "init"], &seeds()));
-    let signer = replica(&root)
-        .objects()
-        .expect("reads")
-        .into_iter()
-        .find_map(|(_, object)| match object {
-            Envelope::Signed(signed) if signed.object == pending => Some(signed.key),
-            _ => None,
-        });
-    assert_eq!(signer, Some(public(AGENT)), "signed by the agent's key");
 }
 
 #[test]
@@ -156,25 +115,6 @@ fn adopting_again_refuses_an_unsigned_write_since_the_epoch_until_it_is_repaired
         1,
         "still the one epoch"
     );
-}
-
-/// The agent's batches are signed at the switch and never after: a write in the replica after
-/// the epoch is the agent's own to sign, and a later writer's start leaves it as it found it.
-#[test]
-fn a_replica_is_signed_at_the_switch_only() {
-    let root = scratch("adopt-once-replica");
-    a_chain(&root);
-    let instance = a_signing_instance(&root, &public(OWN));
-    ok(&signing(&instance, &["device", "init"], &seeds()));
-    let later = replica(&root)
-        .append(done("parkingpermit", "triage"))
-        .expect("written after the switch, unsigned");
-    ok(&signing(&instance, &["todos", "open"], &seeds()));
-    let signed =
-        replica(&root).objects().expect("reads").into_iter().any(
-            |(_, object)| matches!(object, Envelope::Signed(signed) if signed.object == later),
-        );
-    assert!(!signed, "a writer's start signed a batch after the switch");
 }
 
 /// What `device list` says of `key` for `actor` on the chain `life`.
@@ -247,43 +187,6 @@ fn a_revoke_names_its_actor_or_takes_the_key_from_everyone() {
     assert_eq!(listed(&instance, "ada", &public(OWN)), "trusted");
 }
 
-/// A key the chain registers after the agent's last run proves what the replica holds as soon
-/// as anything verifies it: `verify` takes the chain's objects into the replica first, as the
-/// run does, so a quiet pass with no run between is not refused for a key the replica lacks.
-#[test]
-fn verify_reads_a_replica_with_the_keys_its_chain_registered_since() {
-    let root = scratch("verify-refreshes");
-    a_chain(&root);
-    let instance = a_signing_instance(&root, &public(OWN));
-    ok(&signing(&instance, &["device", "init"], &seeds()));
-    let device = Secret::new(&"6".repeat(64)).expect("a seed");
-    let proposing = replica(&root);
-    let pending = proposing
-        .append(done("parkingpermit", "triage"))
-        .expect("proposed");
-    suzatary_core::store::sign(&proposing, &device, &pending).expect("signed");
-    drop(proposing);
-    let refused = signing(&instance, &["verify"], &seeds());
-    assert!(
-        !refused.status.success(),
-        "an unregistered key proved a write"
-    );
-
-    ok(&signing(
-        &instance,
-        &[
-            "device",
-            "trust",
-            device.public().as_str(),
-            "--actor",
-            "triage",
-        ],
-        &seeds(),
-    ));
-    let verified = signing(&instance, &["verify"], &seeds());
-    ok(&verified);
-}
-
 /// The instance as the sample and the box write it: a chain whose fold trusts every actor.
 fn trusting_everyone(instance: &Path) -> &Path {
     let text = std::fs::read_to_string(instance).expect("the instance reads");
@@ -297,17 +200,14 @@ fn trusting_everyone(instance: &Path) -> &Path {
 }
 
 /// A box adopted before custody, as it was on 2026-10-07: the box's key registered for every
-/// actor of the roster, the epoch taken, and the agent's pending proposal signed by the box's
-/// key. `device init` repairs it, saying each act, and run again does nothing.
+/// actor of the roster and the epoch taken. `device init` repairs it, saying each act, and run
+/// again does nothing.
 #[test]
 fn device_init_repairs_a_box_adopted_before_custody() {
     let root = scratch("adopt-repair-custody");
     a_chain(&root);
     let instance = a_signing_instance(&root, &public(OWN));
     let instance = trusting_everyone(&instance);
-    let pending: Hash = replica(&root)
-        .append(done("parkingpermit", "triage"))
-        .expect("the agent proposes");
     let own = Secret::new(OWN).expect("a seed");
     {
         let chain = suzatary_io::objects::Objects::chain(EventStore::new(
@@ -320,7 +220,6 @@ fn device_init_repairs_a_box_adopted_before_custody() {
                 .expect("registered");
         }
         suzatary_core::signatures::epoch(&chain, &own).expect("the epoch");
-        suzatary_core::store::sign(&replica(&root), &own, &pending).expect("signed");
     }
     assert_eq!(listed(instance, "triage", &public(OWN)), "trusted");
     assert_eq!(listed(instance, "triage", &public(AGENT)), "absent");
@@ -330,8 +229,6 @@ fn device_init_repairs_a_box_adopted_before_custody() {
     let said = String::from_utf8_lossy(&repaired.stdout);
     for act in [
         format!("life: registered {} for triage", public(AGENT).as_str()),
-        "life: signed 1 standing proposal(s)".to_owned(),
-        "life: removed 1 signature(s)".to_owned(),
         format!("life: revoked {} for triage", public(OWN).as_str()),
     ] {
         assert!(said.contains(&act), "{act} in {said}");

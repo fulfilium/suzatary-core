@@ -2030,7 +2030,7 @@ fn apply(cards: &Cards<'_>, changeset: &Changeset) -> Performed {
         .map(String::as_str)
         .collect();
     match changes::apply(
-        &bound.caps.agent(),
+        &bound.caps,
         bound.policy,
         &known,
         cards.deployment.zone,

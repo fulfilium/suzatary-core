@@ -17,7 +17,7 @@ use suzatary_cli::instance::Plugins;
 use suzatary_core::calendar::{Calendar, Status};
 use suzatary_core::capability::Secret;
 use suzatary_core::plugin::{Came, Manifest};
-use suzatary_core::store::Prodrome;
+use suzatary_core::store::Reads;
 use suzatary_io::http::Ureq;
 use suzatary_io::plugin_store::PluginStore;
 use suzatary_io::secrets::Resolves;

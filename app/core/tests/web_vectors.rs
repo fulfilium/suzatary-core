@@ -46,7 +46,7 @@ use suzatary_core::secretary::store::{
 };
 use suzatary_core::secretary::transcript;
 use suzatary_core::store::{
-    InMemory, InMemoryDoc, Prodrome, StoreError, WriteLock, append_to, linearised,
+    InMemory, InMemoryDoc, Prodrome, Reads, StoreError, WriteLock, append_to, linearised,
 };
 use suzatary_core::wire;
 
@@ -435,7 +435,7 @@ fn server_of(bundle: &Bundle) -> Server<'_> {
     }
 }
 
-impl Prodrome<TodoEvent> for Bundle {
+impl Reads<TodoEvent> for Bundle {
     fn objects(&self) -> Result<Vec<(Hash, Envelope)>, StoreError> {
         linearised(&self.events).map_err(|e| StoreError::unreadable("chain", e.to_string()))
     }
@@ -464,7 +464,9 @@ impl Prodrome<TodoEvent> for Bundle {
             .map(ToString::to_string)
             .collect()
     }
+}
 
+impl Prodrome<TodoEvent> for Bundle {
     fn append(&self, event: suzatary_core::record::TodoEvent) -> Result<Hash, StoreError> {
         append_to(&self.events, suzatary_core::record::GENESIS, event)
             .map_err(|e| StoreError::not_appended("chain", e.to_string()))
@@ -479,10 +481,6 @@ impl Prodrome<TodoEvent> for Bundle {
 
     fn locked(&self) -> Result<Box<dyn WriteLock + '_>, StoreError> {
         Ok(Box::new(NoLock))
-    }
-
-    fn settled(&self) -> Result<std::collections::BTreeSet<Hash>, StoreError> {
-        Ok(std::collections::BTreeSet::new())
     }
 }
 
@@ -1404,6 +1402,15 @@ fn forgotten(
         objects
             .iter()
             .filter_map(|(hash, object)| object.event().map(|line| (hash, line))),
+        &|line| {
+            suzatary_core::secretary::transcript::opens(
+                line,
+                line.keys()
+                    .next()
+                    .and_then(|own| ring.key(own).into_kept())
+                    .as_ref(),
+            )
+        },
     ) {
         let fed = ring.key(name).get().map_or_else(Vec::new, |key| {
             suzatary_core::secretary::transcript::fed(line, slot, key)
@@ -1566,9 +1573,7 @@ fn remembering(bundle: &Bundle, id: &ConversationId) -> Vec<ConversationEntry> {
 /// A digest history whose read left an object out: every sweep over it refuses.
 struct LeftOut;
 
-impl suzatary_core::store::Prodrome<suzatary_core::secretary::digest_event::DigestEvent>
-    for LeftOut
-{
+impl suzatary_core::store::Reads<suzatary_core::secretary::digest_event::DigestEvent> for LeftOut {
     fn objects(
         &self,
     ) -> Result<
@@ -1591,6 +1596,11 @@ impl suzatary_core::store::Prodrome<suzatary_core::secretary::digest_event::Dige
     fn verify(&self) -> Vec<String> {
         Vec::new()
     }
+}
+
+impl suzatary_core::store::Prodrome<suzatary_core::secretary::digest_event::DigestEvent>
+    for LeftOut
+{
     fn append(
         &self,
         _: suzatary_core::secretary::digest_event::DigestEvent,

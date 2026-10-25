@@ -2,12 +2,10 @@
 code = /srv/code
 data = /srv/data
 chain.life.events = /srv/data/events
-chain.life.proposals = /srv/data/events-triage
 chain.life.untrusted = ["triage"]
 chain.life.roster = ["ada", "assistant", "triage"]
 chain.life.owner = ada
 chain.suzatary.events = /srv/data/events-suzatary
-chain.suzatary.proposals = /srv/data/events-triage-suzatary
 chain.suzatary.untrusted = []
 chain.suzatary.roster = ["ada", "assistant", "triage"]
 chain.suzatary.owner = ada
@@ -77,11 +75,11 @@ missing field `signatures`
 
 
 ## an unknown key in a chain
-parsing the instance file <file>: TOML parse error at line 21, column 1
+parsing the instance file <file>: TOML parse error at line 19, column 1
    |
-21 | colour = 1
+19 | colour = 1
    | ^^^^^^
-unknown field `colour`, expected one of `name`, `events`, `proposals`, `untrusted`, `actors`, `owner`
+unknown field `colour`, expected one of `name`, `events`, `untrusted`, `actors`, `owner`
 
 
 ## no chains
@@ -93,9 +91,9 @@ unknown field `nothing`, expected one of `repo`, `data`, `chains`, `web`, `categ
 
 
 ## a chain name that is not a slug
-parsing the instance file <file>: TOML parse error at line 17, column 8
+parsing the instance file <file>: TOML parse error at line 16, column 8
    |
-17 | name = "../etc"
+16 | name = "../etc"
    |        ^^^^^^^^
 a chain name is 1-32 characters of a-z, 0-9 and -, starting with a letter: "../etc"
 
@@ -107,9 +105,9 @@ a chain name is 1-32 characters of a-z, 0-9 and -, starting with a letter: "../e
 <file>: two chains are named "life"; a name is how a route and a verb pick one
 
 ## an actor that is not one
-parsing the instance file <file>: TOML parse error at line 21, column 10
+parsing the instance file <file>: TOML parse error at line 19, column 10
    |
-21 | actors = ["Ada"]
+19 | actors = ["Ada"]
    |          ^^^^^^^
 "Ada" is not an actor: actor must match ^[a-z][a-z0-9_-]*$, got "Ada"
 
@@ -131,9 +129,6 @@ missing field `owner`
 ## an untrusted actor off the roster
 <file>: chain "life" calls "stranger" untrusted and its roster does not name it
 
-## proposals that are the chain
-<file>: life.events and life.proposals are the same directory (/srv/data/events) — a proposal store that IS its chain is a review that reviews nothing
-
 ## a writer who is not a viewer
 <file>: ["ghost@example.test"] may write but is not a viewer — a writer the gate refuses is dead config
 
@@ -141,17 +136,17 @@ missing field `owner`
 <file>: ["nobody/life", "nobody/suzatary"] is named as a writer's actor and is not on that chain's roster
 
 ## a writer's actor that is not one
-parsing the instance file <file>: TOML parse error at line 28, column 1
+parsing the instance file <file>: TOML parse error at line 26, column 1
    |
-28 | [web.act_as]
+26 | [web.act_as]
    | ^^^^^^^^^^^^
 "No Body" is not an actor: actor must match ^[a-z][a-z0-9_-]*$, got "No Body"
 
 
 ## an unknown sync
-parsing the instance file <file>: TOML parse error at line 51, column 1
+parsing the instance file <file>: TOML parse error at line 49, column 1
    |
-51 | [[mail.accounts]]
+49 | [[mail.accounts]]
    | ^^^^^^^^^^^^^^^^^
 unknown variant `pigeon`, expected one of `gmail`, `google`, `ms-imap`, `proton`
 
@@ -160,193 +155,193 @@ unknown variant `pigeon`, expected one of `gmail`, `google`, `ms-imap`, `proton`
 accepted
 
 ## an unknown key under ms-imap
-parsing the instance file <file>: TOML parse error at line 56, column 1
+parsing the instance file <file>: TOML parse error at line 54, column 1
    |
-56 | [[mail.accounts]]
+54 | [[mail.accounts]]
    | ^^^^^^^^^^^^^^^^^
 unknown field `colour`, expected one of `authority`, `inbox_folders`, `sent_folder`
 
 
 ## an unknown authority
-parsing the instance file <file>: TOML parse error at line 56, column 1
+parsing the instance file <file>: TOML parse error at line 54, column 1
    |
-56 | [[mail.accounts]]
+54 | [[mail.accounts]]
    | ^^^^^^^^^^^^^^^^^
 "everyone" is not an MSAL authority (organizations, consumers)
 
 
 ## two accounts at one address
-parsing the instance file <file>: TOML parse error at line 51, column 1
+parsing the instance file <file>: TOML parse error at line 49, column 1
    |
-51 | [[mail.accounts]]
+49 | [[mail.accounts]]
    | ^^^^^^^^^^^^^^^^^
 two accounts claim the address "her@example.test"
 
 
 ## an account address with a capital
-parsing the instance file <file>: TOML parse error at line 57, column 9
+parsing the instance file <file>: TOML parse error at line 55, column 9
    |
-57 | email = "Work@example.test"
+55 | email = "Work@example.test"
    |         ^^^^^^^^^^^^^^^^^^^
 the account address "Work@example.test" has a capital; write it as "work@example.test"
 
 
 ## an account that counts no folder
-parsing the instance file <file>: TOML parse error at line 56, column 1
+parsing the instance file <file>: TOML parse error at line 54, column 1
    |
-56 | [[mail.accounts]]
+54 | [[mail.accounts]]
    | ^^^^^^^^^^^^^^^^^
 an account's inbox_folders names no folder
 
 
 ## a blank inbox folder
-parsing the instance file <file>: TOML parse error at line 56, column 1
+parsing the instance file <file>: TOML parse error at line 54, column 1
    |
-56 | [[mail.accounts]]
+54 | [[mail.accounts]]
    | ^^^^^^^^^^^^^^^^^
 an account's inbox_folders names a blank folder
 
 
 ## a churn domain that is not one
-parsing the instance file <file>: TOML parse error at line 73, column 1
+parsing the instance file <file>: TOML parse error at line 71, column 1
    |
-73 | [mail.junk]
+71 | [mail.junk]
    | ^^^^^^^^^^^
 [mail.junk] churn: "not a domain" is not a domain (letters, digits, dashes and dots, one dot at least)
 
 
 ## a keep domain that is not one
-parsing the instance file <file>: TOML parse error at line 73, column 1
+parsing the instance file <file>: TOML parse error at line 71, column 1
    |
-73 | [mail.junk]
+71 | [mail.junk]
    | ^^^^^^^^^^^
 [mail.junk] churn: "not a domain" is not a domain (letters, digits, dashes and dots, one dot at least)
 
 
 ## an unknown key in [mail.junk]
-parsing the instance file <file>: TOML parse error at line 75, column 1
+parsing the instance file <file>: TOML parse error at line 73, column 1
    |
-75 | colour = 1
+73 | colour = 1
    | ^^^^^^
 unknown field `colour`, expected `churn` or `keep`
 
 
 ## a bad model name
-parsing the instance file <file>: TOML parse error at line 82, column 9
+parsing the instance file <file>: TOML parse error at line 80, column 9
    |
-82 | model = "claude opus"
+80 | model = "claude opus"
    |         ^^^^^^^^^^^^^
 "claude opus" is not a model name (1 to 128 of A-Z a-z 0-9 . _ : / -)
 
 
 ## a bad web rule
-parsing the instance file <file>: TOML parse error at line 85, column 13
+parsing the instance file <file>: TOML parse error at line 83, column 13
    |
-85 | web_allow = ["http://"]
+83 | web_allow = ["http://"]
    |             ^^^^^^^^^^^
 not an allow rule: http://
 
 
 ## a bad drive folder
-parsing the instance file <file>: TOML parse error at line 86, column 15
+parsing the instance file <file>: TOML parse error at line 84, column 15
    |
-86 | drive_allow = ["my-files/../trash"]
+84 | drive_allow = ["my-files/../trash"]
    |               ^^^^^^^^^^^^^^^^^^^^^
 a Drive path is absolute (/my-files/…), without '.', '..', empty segments or control characters, at most 1024 bytes; got "my-files/../trash"
 
 
 ## a bad repo name
-parsing the instance file <file>: TOML parse error at line 93, column 8
+parsing the instance file <file>: TOML parse error at line 91, column 8
    |
-93 | name = "nope"
+91 | name = "nope"
    |        ^^^^^^
 a repository is owner/name, letters, digits, '-', '_' and '.', got "nope"
 
 
 ## an unknown key in [secretary]
-parsing the instance file <file>: TOML parse error at line 83, column 1
+parsing the instance file <file>: TOML parse error at line 81, column 1
    |
-83 | colour = 1
+81 | colour = 1
    | ^^^^^^
 unknown field `colour`, expected one of `conversations`, `renders`, `inbox`, `memory`, `digests`, `topics`, `model`, `compact`, `compactor`, `reserve`, `compact_calls_per_hour`, `compact_bytes_per_day`, `compact_workers`, `settings`, `web_allow`, `drive_allow`, `drive_cli`, `repos`
 
 
 ## an unknown key in [persona]
-parsing the instance file <file>: TOML parse error at line 100, column 1
-    |
-100 | colour = 1
-    | ^^^^^^
+parsing the instance file <file>: TOML parse error at line 98, column 1
+   |
+98 | colour = 1
+   | ^^^^^^
 unknown field `colour`, expected one of `name`, `city`, `zone`
 
 
 ## the person's prose in the pushed [persona]
-parsing the instance file <file>: TOML parse error at line 100, column 1
-    |
-100 | email_voice = ["short"]
-    | ^^^^^^^^^^^
+parsing the instance file <file>: TOML parse error at line 98, column 1
+   |
+98 | email_voice = ["short"]
+   | ^^^^^^^^^^^
 unknown field `email_voice`, expected one of `name`, `city`, `zone`
 
 
 ## a zone no database names
-parsing the instance file <file>: TOML parse error at line 100, column 8
-    |
-100 | zone = "Mars/Olympus"
-    |        ^^^^^^^^^^^^^^
+parsing the instance file <file>: TOML parse error at line 98, column 8
+   |
+98 | zone = "Mars/Olympus"
+   |        ^^^^^^^^^^^^^^
 "Mars/Olympus" names no time zone (an IANA name, such as America/New_York)
 
 
 ## the offset a zone replaced
-parsing the instance file <file>: TOML parse error at line 100, column 1
-    |
-100 | timezone_offset_hours = -4
-    | ^^^^^^^^^^^^^^^^^^^^^
+parsing the instance file <file>: TOML parse error at line 98, column 1
+   |
+98 | timezone_offset_hours = -4
+   | ^^^^^^^^^^^^^^^^^^^^^
 unknown field `timezone_offset_hours`, expected one of `name`, `city`, `zone`
 
 
 ## a channel no template connects
-parsing the instance file <file>: TOML parse error at line 103, column 12
+parsing the instance file <file>: TOML parse error at line 101, column 12
     |
-103 | channels = ["fcm", "carrier-pigeon"]
+101 | channels = ["fcm", "carrier-pigeon"]
     |            ^^^^^^^^^^^^^^^^^^^^^^^^^
 "carrier-pigeon" is no notification channel; the channels are fcm, ntfy
 
 
 ## an unknown key in [notify]
-parsing the instance file <file>: TOML parse error at line 104, column 1
+parsing the instance file <file>: TOML parse error at line 102, column 1
     |
-104 | colour = 1
+102 | colour = 1
     | ^^^^^^
 unknown field `colour`, expected `channels` or `fcm_sender`
 
 
 ## a Firebase sender that is no number
-parsing the instance file <file>: TOML parse error at line 104, column 14
+parsing the instance file <file>: TOML parse error at line 102, column 14
     |
-104 | fcm_sender = "sender-1"
+102 | fcm_sender = "sender-1"
     |              ^^^^^^^^^^
 'sender-1' is no Firebase sender: a sender is the project's number, 1 to 20 digits
 
 
 ## a model provider, a table the binary does not read
-parsing the instance file <file>: TOML parse error at line 106, column 3
+parsing the instance file <file>: TOML parse error at line 104, column 3
     |
-106 | [[providers]]
+104 | [[providers]]
     |   ^^^^^^^^^
 unknown field `providers`, expected one of `repo`, `data`, `chains`, `web`, `categories`, `mail`, `secretary`, `agent`, `persona`, `notify`, `coding`, `cache`, `plugins`, `signatures`
 
 
 ## a model order, a table the binary does not read
-parsing the instance file <file>: TOML parse error at line 106, column 2
+parsing the instance file <file>: TOML parse error at line 104, column 2
     |
-106 | [models]
+104 | [models]
     |  ^^^^^^
 unknown field `models`, expected one of `repo`, `data`, `chains`, `web`, `categories`, `mail`, `secretary`, `agent`, `persona`, `notify`, `coding`, `cache`, `plugins`, `signatures`
 
 
 ## a reserve over one
-parsing the instance file <file>: TOML parse error at line 83, column 11
+parsing the instance file <file>: TOML parse error at line 81, column 11
    |
-83 | reserve = 1.5
+81 | reserve = 1.5
    |           ^^^
 a reserve is a share between 0 and 1, got 1.5
 
@@ -355,17 +350,17 @@ a reserve is a share between 0 and 1, got 1.5
 [coding] chain work is not one of this deployment's [[chains]]
 
 ## a coding routine that is not one
-parsing the instance file <file>: TOML parse error at line 107, column 11
+parsing the instance file <file>: TOML parse error at line 105, column 11
     |
-107 | routine = "trig 01"
+105 | routine = "trig 01"
     |           ^^^^^^^^^
 a routine id is letters, digits, '_' and '-', got "trig 01"
 
 
 ## a coding repo that is not one
-parsing the instance file <file>: TOML parse error at line 108, column 8
+parsing the instance file <file>: TOML parse error at line 106, column 8
     |
-108 | repo = "nope"
+106 | repo = "nope"
     |        ^^^^^^
 a repository is owner/name, letters, digits, '-', '_' and '.', got "nope"
 
@@ -374,9 +369,9 @@ a repository is owner/name, letters, digits, '-', '_' and '.', got "nope"
 <file>: [coding] repo: every declared repository is in the owner's own account, but these name bmabsout, someorg
 
 ## a secretary repo of another account
-parsing the instance file <file>: TOML parse error at line 89, column 1
+parsing the instance file <file>: TOML parse error at line 87, column 1
    |
-89 | [[secretary.repos]]
+87 | [[secretary.repos]]
    | ^^^^^^^^^^^^^^^^^^^
 every declared repository is in the owner's own account, but these name bmabsout, someorg
 

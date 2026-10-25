@@ -664,7 +664,8 @@ mod tests {
     use crate::capability::{Datetime, Turn};
     use crate::secretary::responded::{Done, Responded};
     use crate::secretary::store::{ConversationId, Entry, Proposal, Reasons};
-    use crate::store::Prodrome as _;
+
+    use crate::store::Reads as _;
 
     /// An in-memory conversation store, since this crate reaches no filesystem.
     #[derive(Default)]

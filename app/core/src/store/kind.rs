@@ -31,8 +31,6 @@ pub enum Tier {
 pub enum Files {
     /// A todo chain's objects, appended and never edited, beside its tracked lock file.
     Chain,
-    /// The agent's replica of a chain: objects a rejection deletes, beside its tracked lock file.
-    Replica,
     /// Objects appended and never edited.
     Objects,
     /// One record per performed request, named by its hash and written once.
@@ -117,8 +115,6 @@ macro_rules! stores {
 stores! {
     /// A todo chain.
     Chain = "chain", Pushed, Chain: TodoEvent, Hold::Reentrant, crate::record::GENESIS;
-    /// The agent's replica of a chain, at the chain's schema and hold.
-    Proposals = "proposals", Pushed, Replica;
     /// The proposals a person taps.
     Inbox = "inbox", Pushed, Objects: InboxEvent, Hold::File("submit.lock");
     /// The secretary's conversations, every word locked.
@@ -160,7 +156,7 @@ impl Kind {
     pub const fn append_only(self) -> bool {
         match self.files() {
             Files::Chain | Files::Objects | Files::Records => true,
-            Files::Replica | Files::File | Files::Directory => false,
+            Files::File | Files::Directory => false,
         }
     }
 }

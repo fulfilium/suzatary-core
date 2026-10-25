@@ -1215,6 +1215,15 @@ enum Action {
         #[command(subcommand)]
         action: TopicsAction,
     },
+    /// Seal again, under the current redaction rules, every slot whose words passed older rules,
+    /// and destroy the keys they replace: the step every change to the rules is followed by.
+    /// Without `--apply` it says how the lines stand and writes nothing; a second run appends
+    /// nothing.
+    MigrateScrub {
+        /// Append the reseals and sweep.
+        #[arg(long)]
+        apply: bool,
+    },
 }
 
 #[derive(Debug, clap::Subcommand)]
@@ -1317,6 +1326,9 @@ pub fn run(path: &Path, args: &Args) -> anyhow::Result<()> {
             reason,
             actor,
         } => dismiss(&instance, conversation, *n, reason, actor.as_deref()),
+        Action::MigrateScrub { apply } => {
+            migrate_scrub(&instance, *apply, &mut std::io::stdout()).map(|_| ())
+        }
         Action::Topics {
             action: TopicsAction::Carry { map, dry_run },
         } => {
@@ -1561,6 +1573,75 @@ pub fn carry(
     }
     writeln!(out, "wrote {count} membership(s) as assistant")?;
     Ok(count)
+}
+
+/// `suzatary secretary migrate-scrub [--apply]`, said on `out`: how the lines stand against the
+/// current redaction rules, and with `apply`, the run. Answers what the run did, or `None` for a
+/// dry run.
+///
+/// # Errors
+/// The stores' own, and the run's refusals (`suzatary_core::secretary::rescrub::run`).
+pub fn migrate_scrub(
+    instance: &Instance,
+    apply: bool,
+    out: &mut impl std::io::Write,
+) -> anyhow::Result<Option<suzatary_core::secretary::rescrub::Done>> {
+    use suzatary_core::secretary::rescrub::{self, Census};
+    let stores = conversations(instance);
+    let census = |census: &Census| {
+        let counted = format!(
+            "{} line(s): {} slot(s) to seal again, {} under the current rules, {} erased, {} withheld, {} that do not open",
+            census.lines,
+            census.stale,
+            census.current,
+            census.erased,
+            census.withheld.len(),
+            census.unopened.len()
+        );
+        std::iter::once(counted)
+            .chain(census.withheld.iter().map(|slot| {
+                format!("  withheld, its words do not pass the current rules' door: {slot}")
+            }))
+            .chain(
+                census
+                    .unopened
+                    .iter()
+                    .map(|slot| format!("  does not open, its key is lost: {slot}")),
+            )
+            .collect::<Vec<_>>()
+            .join("\n")
+    };
+    writeln!(
+        out,
+        "the current rules are {}",
+        suzatary_core::redact::Rules::current()
+    )?;
+    if !apply {
+        let counted = rescrub::census(stores.conversations())?;
+        writeln!(out, "{}", census(&counted))?;
+        writeln!(
+            out,
+            "{}",
+            if counted.stale == 0 {
+                "nothing to seal again; wrote nothing"
+            } else {
+                "--apply seals them again and destroys the keys they replace; wrote nothing"
+            }
+        )?;
+        return Ok(None);
+    }
+    let done = rescrub::run(
+        stores.conversations(),
+        suzatary_core::capability::Clock::now(&suzatary_io::clock::SystemClock),
+    )?;
+    writeln!(
+        out,
+        "{}\nsealed {} slot(s) again; the sweep destroyed {} key(s)",
+        census(&done.census),
+        done.resealed,
+        done.destroyed
+    )?;
+    Ok(Some(done))
 }
 
 /// The conversations' store, beside the instance's `[secretary] conversations`.

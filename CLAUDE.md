@@ -111,8 +111,19 @@ confirm. Everything below derives from this.
   since words stage 2 their WORDS ARE LOCKED (`secretary::line_event`): one
   store, `secretary-lines/`, keyed by conversation, a line's shape in the
   clear and each slot of its words (a turn, a model's prose, each call's
-  arguments) through the redaction door and sealed under a key of its own in
-  `secretary-lines-keys/`, box-local, vaulted, never pushed. Erasing is an
+  arguments) through the redaction door ONCE, when it is written
+  (`line_event::seal`), and sealed under a key of its own in
+  `secretary-lines-keys/`, box-local, vaulted, never pushed. Each slot
+  records the rules it was scrubbed under (`redact::Rules`, a digest of the
+  patterns, inside the slot's associated data): reading parses a slot under
+  the current rules and scrubs any other as it opens, once per slot (the
+  `Opened` cache), and `suzatary secretary migrate-scrub` (2026-10-25) is the
+  STANDING step of every change to the rules: it appends a `Resealed` line
+  per stale slot, its words scrubbed under the current rules under a new
+  key, and the sweep destroys each replaced key (append and crypto-shred,
+  nothing deleted; the old ciphertext stays in history, and a key in an
+  earlier vault snapshot still opens it).
+  Erasing is an
   `Erased` line naming keys and the sweep destroying them (monotone, no
   hold); a forget erases the copies its remembering provably made
   (`secretary::caused`) and offers the rest on a card. The plain store it
