@@ -5,6 +5,7 @@ import { forgetChain, me, reportPushToken, waitingCount, wasOurWrite } from "./w
 import storesync from "./prodrome/storesync";
 import intentsync from "./prodrome/intentsync";
 import app from "./app/app";
+import time from "./app/time";
 import chrome from "./shell/chrome";
 import beacon from "./app/beacon";
 import pushtoken from "./app/pushtoken";
@@ -102,7 +103,8 @@ async function mount(a: app.App, fresh: boolean, heard: boolean, again: boolean)
   current = inert;
   if (!again) window.scrollTo(0, 0);
   current = await pages.mount(view, screen);
-  if (heard) announce(view);
+  // In a task of its own, since focusing the heading lays the new page out; a page that took the focus keeps it.
+  if (heard) setTimeout(() => (view.contains(document.activeElement) ? undefined : announce(view)), 0);
   if (again) kept.restore(routelog.here(a.log).kept, () => drawn !== null && drawn.log === a.log);
 }
 
@@ -223,6 +225,10 @@ const seen = (): chrome.Seen => ({ fold: store.state(), excluded: readings.left(
 
 let drawn: app.App | null = null;
 
+// The first reading of the owner's zone loads its rules, a long task on a phone: read once the first page is drawn and
+// the thread is idle, so no page's draw carries it.
+const idle = (f: () => void): void => void ("requestIdleCallback" in window ? requestIdleCallback(f, { timeout: 2000 }) : setTimeout(f, 1000));
+
 function draw(a: app.App): void {
   const was = drawn;
   drawn = a;
@@ -230,8 +236,10 @@ function draw(a: app.App): void {
   if (was === null || moved) remember(a.chain);
   if (moved) switched();
   paint(chrome.of(a, seen()));
-  if (was === null) go(a, true, false);
-  else if (moved || hrefOf(app.route(was)) !== hrefOf(app.route(a)) || was.wide !== a.wide)
+  if (was === null) {
+    go(a, true, false);
+    idle(() => void time.date(a.zone, time.now()));
+  } else if (moved || hrefOf(app.route(was)) !== hrefOf(app.route(a)) || was.wide !== a.wide)
     go(a, moved, true, !moved && a.again && hrefOf(app.route(was)) !== hrefOf(app.route(a)));
 }
 
@@ -303,6 +311,12 @@ bfcache.across(window, {
 const builds = newbuild.install((line) => app.dispatch({ type: "Build", line }));
 // A refused write or an answer this build cannot read: perhaps a newer build is served.
 http.whenStale(() => void builds.check().catch(() => {}));
+// What the core's worker says unasked: the lines' moves and leavings, and what the box answered a read it made.
+storesync.hearWorker({
+  gone: () => wiping.gone(),
+  stale: () => void builds.check().catch(() => {}),
+  unloaded: (why) => beacon.tell("core", new Error(why)),
+});
 void device.persist().catch(() => {});
 installNeedsYou(byId("needsyou"));
 app.tab.subscribe(draw);

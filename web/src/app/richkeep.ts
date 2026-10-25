@@ -1,7 +1,8 @@
 // A fold's typst HTML kept by the source it renders, so a fold this tab computes offline still reads rendered.
 
 import type { Authored, Entry } from "../wire/generated/wire"
-import rendered from "./rendered"
+import type rendered from "./rendered"
+import blocks from "./blocks"
 
 export namespace richkeep {
   export type Field = "body" | "detail" | "rationale" | "waiting_on"
@@ -10,7 +11,7 @@ export namespace richkeep {
   export type Want = { at: number; field: Field; k: string }
   export type Effects = { store: rendered.Store }
 
-  const live: Effects = { store: rendered.store }
+  const live: Effects = { store: blocks.store }
 
   // Only what the box rendered is kept, and it rendered only what a trusted actor wrote; each under the key the core
   // named it by, the escaped text a field renders included.

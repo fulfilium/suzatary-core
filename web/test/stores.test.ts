@@ -31,14 +31,15 @@ const replica = (r: Rng): Replica => {
 }
 
 const step = stores.step
-// The inbox's replica holds objects; the lines' steps by the same join over nodes.
-const held = (name: "inbox", replica: Replica, keys: locked.Keys = locked.NO_KEYS): stores.Event => ({ type: "Held", name, row: locked.of(replica, keys) })
+// The inbox's replica holds objects and locks no words; the lines' row steps by the same join over nodes, with the keys
+// of their words beside it (`stores.taken`).
+const held = (name: "inbox", replica: Replica): stores.Event => ({ type: "Held", name, replica })
 
 test("law: a step that adds nothing wakes nobody", () => {
   forAll(30, r => {
     const name = "inbox" as const
-    const t = step(stores.NONE, held(name, replica(r), r.bool(0.5) ? { [name.padEnd(64, "0")]: "00" } : locked.NO_KEYS))
-    assert.equal(step(t, { type: "Held", name, row: t[name] }), t)
+    const t = step(stores.NONE, held(name, replica(r)))
+    assert.equal(step(t, { type: "Held", name, replica: t[name] }), t)
     assert.equal(step(t, held(name, NOTHING)), t)
   })
 })
@@ -55,23 +56,21 @@ test("law: a refusal that replaces another, of another object or for another rea
   })
 })
 
-test("law: a key the box gave is a step, though no object moved", () => {
+test("law: a key the box gave the lines is a step, though no object moved", () => {
   forAll(30, r => {
-    const name = "inbox" as const
-    const t = step(stores.NONE, held(name, replica(r)))
-    const next = step(t, held(name, t[name].replica, { ["a".repeat(64)]: "00" }))
-    assert.notEqual(next, t)
-    assert.deepEqual(locked.names(next[name].keys), ["a".repeat(64)])
+    const row = locked.of(replica(r))
+    const next = stores.taken(row, { type: "Held", row: locked.of(row.replica, { ["a".repeat(64)]: "00" }) })
+    assert.notEqual(next, row)
+    assert.deepEqual(locked.names(next.keys), ["a".repeat(64)])
   })
 })
 
-test("law: a forgotten key leaves the row, and forgetting what it does not hold wakes nobody", () => {
+test("law: a forgotten key leaves the lines' row, and forgetting what it does not hold wakes nobody", () => {
   forAll(30, r => {
-    const name = "inbox" as const
     const k = "a".repeat(64)
-    const t = step(stores.NONE, held(name, replica(r), { [k]: "00" }))
-    assert.deepEqual(locked.names(step(t, { type: "Forgot", name, keys: [k] })[name].keys), [])
-    assert.equal(step(t, { type: "Forgot", name, keys: ["b".repeat(64)] }), t)
+    const row = locked.of(replica(r), { [k]: "00" })
+    assert.deepEqual(locked.names(stores.taken(row, { type: "Forgot", keys: [k] }).keys), [])
+    assert.equal(stores.taken(row, { type: "Forgot", keys: ["b".repeat(64)] }), row)
   })
 })
 
@@ -79,12 +78,12 @@ test("law: a policy the box changed with no new object is a step, and the later 
   forAll(30, r => {
     const name = "inbox" as const
     const t = step(stores.NONE, held(name, replica(r)))
-    const was = t[name].replica
+    const was = t[name]
     const w = said<Pick<Word, "heads" | "untrusted" | "root" | "fetchedAt" | "geneses">>(was.box, { heads: [], untrusted: [], root: null, fetchedAt: 0, geneses: [] }, w => w)
     const later = pulled(was, { objects: [], heads: [...w.heads], untrusted: [...w.untrusted, "scout"], root: w.root, geneses: [...w.geneses], epoch: 1, ...KNOWN }, w.fetchedAt + 1)
     const next = step(t, held(name, later))
     assert.notEqual(next, t, "the policy moved, so the reading must")
-    assert.deepEqual(untrustedOf(next[name].replica), untrustedOf(later))
+    assert.deepEqual(untrustedOf(next[name]), untrustedOf(later))
     assert.ok(!stores.same(was, later))
     const reversed = replicaOf({ ...later.held, words: later.held.words.map(v => ({ ...v, untrusted: [...v.untrusted].reverse() })) })
     assert.ok(stores.same(later, reversed), "a policy is a set")
@@ -149,5 +148,5 @@ test("a reset is a step even of a row that holds nothing, so a pull asks of the 
   const name = "inbox" as const
   const t = step(stores.NONE, held(name, reset(NOTHING)))
   assert.notEqual(t, stores.NONE)
-  assert.equal(t[name].replica.generation, 1)
+  assert.equal(t[name].generation, 1)
 })

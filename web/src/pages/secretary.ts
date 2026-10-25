@@ -79,10 +79,12 @@ export namespace secretary {
   // counts only the time the device is awake, so a page shown again reads the instant afresh and arms again.
   const ticking = (tick: (now: number) => void): (() => void) => {
     let stop = (): void => {}
+    // The next day is found on the owner's clock in a task of its own: the first reading of a zone loads its rules.
     const arm = (): void => {
       stop()
       tick(time.now())
-      stop = clock.wake(clock.nextDay(app.now().zone, time.now()), arm)
+      const later = setTimeout(() => (stop = clock.wake(clock.nextDay(app.now().zone, time.now()), arm)), 0)
+      stop = () => clearTimeout(later)
     }
     const shown = (): void => (document.visibilityState === "visible" ? arm() : undefined)
     arm()
@@ -130,11 +132,18 @@ export namespace secretary {
   const AT_END_PX = 80
 
   // The rounds kept by their target, so a draw rebuilds only a round that moved; the scroll is the DOM's: a new filter
-  // opens at its newest round, Earlier keeps the reader's place, and a reader at the end stays at the end.
+  // opens at its newest round, Earlier keeps the reader's place, and a reader at the end stays at the end. Where the
+  // reader is from the end is read as they scroll, when the layout is done, and the box moved in the frame after a draw,
+  // which lays the rounds out once: a draw reads no layout ahead of the frame.
   const rounds = (dispatch: (e: Event) => void): frame.Island<T> => {
     const node = el("div", { class: "streamrounds" })
     const list = keyed.list(node)
     let drawn: { readonly chosen: string; readonly pages: number } | null = null
+    const box = document.scrollingElement ?? document.documentElement
+    let fromEnd: number | null = null
+    const scrolled = (): void => void (fromEnd = box.scrollHeight - box.scrollTop)
+    window.addEventListener("scroll", scrolled, { passive: true })
+    let placing: number | undefined
     const fx: streamround.Effects = {
       add: target => dispatch({ type: "Add", target }),
       remove: (target, topic) => void written({ type: "Remove", target, topic }).catch((e: unknown) => toast(lo.reason(e))),
@@ -145,19 +154,29 @@ export namespace secretary {
         // A reading that failed draws no rounds, so none of another filter's stand under its problem.
         if (v.shown.type === "Refused") return void (list.draw([]), (drawn = null))
         if (v.shown.type !== "Read") return
-        const box = document.scrollingElement ?? document.documentElement
-        const fromEnd = box.scrollHeight - box.scrollTop
-        const atEnd = fromEnd - box.clientHeight < AT_END_PX
+        const was = fromEnd
+        const atEnd = was === null || was - box.clientHeight < AT_END_PX
+        const today = time.date(app.now().zone, v.now)
         list.draw(
           v.shown.streamed.stream.rounds.map(r => {
-            const said = streamround.when(r, v.now)
+            const said = streamround.when(r, today)
             return { key: r.target, sig: streamround.sig(r, v.writes, said), make: () => streamround.view(r, v.writes, said, fx) }
           }),
         )
         const chosen = v.chosen.join(",")
-        if (drawn === null || drawn.chosen !== chosen || atEnd) box.scrollTop = box.scrollHeight
-        else if (v.pages > drawn.pages) box.scrollTop = box.scrollHeight - fromEnd
+        const toEnd = drawn === null || drawn.chosen !== chosen || atEnd
+        const keep = !toEnd && drawn !== null && v.pages > drawn.pages && was !== null ? was : null
         drawn = { chosen, pages: v.pages }
+        if (!toEnd && keep === null) return
+        if (placing !== undefined) cancelAnimationFrame(placing)
+        placing = requestAnimationFrame(() => {
+          placing = undefined
+          box.scrollTop = keep === null ? box.scrollHeight : box.scrollHeight - keep
+        })
+      },
+      destroy: () => {
+        window.removeEventListener("scroll", scrolled)
+        if (placing !== undefined) cancelAnimationFrame(placing)
       },
     }
   }

@@ -59,6 +59,22 @@ test("through answers what the device holds, or asks once and keeps the answer",
   assert.equal(asked, 1)
 })
 
+test("throughAll answers what through would for each, asks once a miss, and a failed ask is null", async () => {
+  const store = rendered.memory(new Set(["answer"]))
+  const [held, missed, failed] = ["aa", "bb", "cc"].map(n => table.key("answer", n))
+  await store.join([[held!, "<p>held</p>"]])
+  let asked = 0
+  const ask = (k: table.Key, html: string) => () => ((asked += 1), Promise.resolve({ html, key: k }))
+  const first = await rendered.throughAll(store, [
+    { k: held!, ask: ask(held!, "<p>not asked</p>") },
+    { k: missed!, ask: ask(missed!, "<p>missed</p>") },
+    { k: failed!, ask: () => Promise.reject(new Error("refused")) },
+  ])
+  assert.deepEqual(first, ["<p>held</p>", "<p>missed</p>", null])
+  assert.equal(asked, 1)
+  assert.deepEqual(await store.get([missed!]), ["<p>missed</p>"], "the answer is kept")
+})
+
 test("through answers what a box of another build renders, and keeps it under neither name", async () => {
   const store = rendered.memory(new Set(["answer-of-this-build"]))
   const mine = table.key("answer-of-this-build", "cd")

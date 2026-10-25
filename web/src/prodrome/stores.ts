@@ -1,12 +1,13 @@
 // The secretary's stores as replicas this tab holds. The box alone writes the inbox and the lines, so a replica is a
-// down-set of the box's objects, held beside the keys that open their words, and two of one store join as `locked`
-// joins. The two topic stores are held the same way, with no keys; the box takes a tab's topics by `POST`. The lines'
-// replica holds their skeleton, each line's content kept apart by its name; every other store's holds its objects.
+// down-set of the box's objects, and two of one store join as replicas join. The lines alone lock words: their row holds
+// the keys that open them beside the replica, and joins as `locked` joins. The page holds the inbox and the two topic
+// stores, each its replica alone, the box taking a tab's topics by `POST`; the core's worker holds the lines' skeleton
+// (`linesync`), each line's content kept apart by its name.
 
 import heads from "./heads"
 import locked from "./locked"
 import type { Box, Frontier, Obj, Replica } from "./replica"
-import { said } from "./replica"
+import { NOTHING, join, said } from "./replica"
 import type { RefusedObject, SkeletonNode, StoreName, StoredObject } from "../wire/generated/wire"
 
 export namespace stores {
@@ -16,16 +17,16 @@ export namespace stores {
   // What each store's replica holds.
   export type Of = { readonly inbox: StoredObject; readonly lines: SkeletonNode; readonly topics: StoredObject; readonly "topic-aliases": StoredObject }
 
-  export type T = { readonly [N in Name]: locked.Row<Of[N]> }
-  // A row taken in, joined; or keys whose blocks are forgotten, dropped.
-  export type Event =
-    | { readonly type: "Held"; readonly name: "inbox"; readonly row: locked.Row<Of["inbox"]> }
-    | { readonly type: "Held"; readonly name: "lines"; readonly row: locked.Row<Of["lines"]> }
-    | { readonly type: "Held"; readonly name: "topics"; readonly row: locked.Row<Of["topics"]> }
-    | { readonly type: "Held"; readonly name: "topic-aliases"; readonly row: locked.Row<Of["topic-aliases"]> }
-    | { readonly type: "Forgot"; readonly name: Name; readonly keys: readonly string[] }
+  // The stores the page holds.
+  export type Paged = Exclude<Name, "lines">
+  export const PAGED: readonly Paged[] = ["inbox", "topics", "topic-aliases"]
 
-  export const NONE: T = { inbox: locked.NONE, lines: locked.none(), topics: locked.NONE, "topic-aliases": locked.NONE }
+  // The page's stores lock no words, so each is its replica alone.
+  export type T = { readonly [N in Paged]: Replica<Of[N]> }
+  // A replica taken in, joined.
+  export type Event = { readonly type: "Held"; readonly name: Paged; readonly replica: Replica<StoredObject> }
+
+  export const NONE: T = { inbox: NOTHING, topics: NOTHING, "topic-aliases": NOTHING }
 
   // What a reading or a pull can see: the generation, the objects, what the box is known to hold and refused, the box's
   // heads, the policy they are read under, the frontier the next pull asks from and the keys, never the instant they
@@ -61,29 +62,19 @@ export namespace stores {
   const moved = <O extends Obj>(was: locked.Row<O>, next: locked.Row<O>): locked.Row<O> =>
     next === was || (same(next.replica, was.replica) && locked.sameKeys(next.keys, was.keys)) ? was : next
 
-  // The row `e` leaves of `was`, the store it names.
-  const next = <O extends Obj>(was: locked.Row<O>, e: { readonly type: "Held"; readonly row: locked.Row<O> } | { readonly type: "Forgot"; readonly keys: readonly string[] }): locked.Row<O> =>
+  // The row `e` leaves of `was`, the store it names: `was` itself when nothing moved.
+  export const taken = <O extends Obj>(was: locked.Row<O>, e: { readonly type: "Held"; readonly row: locked.Row<O> } | { readonly type: "Forgot"; readonly keys: readonly string[] }): locked.Row<O> =>
     moved(was, e.type === "Held" ? locked.join(was, e.row) : locked.without(was, e.keys))
 
+  // A replica joined into `was`: `was` itself when nothing moved.
+  const joined = <O extends Obj>(was: Replica<O>, incoming: Replica<O>): Replica<O> => {
+    const next = join(was, incoming)
+    return next === was || same(next, was) ? was : next
+  }
+
   export const step = (t: T, e: Event): T => {
-    switch (e.name) {
-      case "inbox": {
-        const inbox = next(t.inbox, e)
-        return inbox === t.inbox ? t : { ...t, inbox }
-      }
-      case "lines": {
-        const lines = next(t.lines, e)
-        return lines === t.lines ? t : { ...t, lines }
-      }
-      case "topics": {
-        const topics = next(t.topics, e)
-        return topics === t.topics ? t : { ...t, topics }
-      }
-      case "topic-aliases": {
-        const aliases = next(t["topic-aliases"], e)
-        return aliases === t["topic-aliases"] ? t : { ...t, "topic-aliases": aliases }
-      }
-    }
+    const next = joined(t[e.name], e.replica)
+    return next === t[e.name] ? t : { ...t, [e.name]: next }
   }
 
 

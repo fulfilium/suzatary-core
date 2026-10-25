@@ -26,7 +26,9 @@ export namespace keyed {
           nodes.delete(op.key)
           sigs.delete(op.key)
         } else if (at !== undefined) {
-          parent.insertBefore(at, op.before === null ? null : (nodes.get(op.before) ?? null))
+          const before = op.before === null ? null : (nodes.get(op.before) ?? null)
+          // A node already where it goes is left, so a list placed in pieces is not placed again.
+          if (at.parentNode !== parent || at.nextSibling !== before) parent.insertBefore(at, before)
         }
       }
       keys = next

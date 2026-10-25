@@ -354,6 +354,30 @@ which answered last.
   px. — `chatlist.test.ts` "the list's instant moves…";
   `e2e/waiting.test.ts` "the conversations have one field above them, and
   no placeholder is cut, at 390 and 1440 px".
+- **A section draws a page of its newest rows.** Topics and reviews each
+  draw their newest 30, with "Show older · N" beneath, which draws 30 more;
+  another filter starts again at one page, and a listing keeps how far the
+  reader went. A store of thousands of conversations is never drawn whole,
+  and the search still reads every one. — `chatlist.test.ts` "a section
+  shows a page of its newest rows…".
+- **A conversation draws in slices and is placed once.** A redraw reads its
+  state once and draws the rounds newest first, at least one a slice and
+  for at most 4 ms, from where the last slice stopped; when the last is
+  drawn, the answer's place is placed in the next frame, which lays the
+  drawn rounds out once (never a task reading the layout ahead of it), and
+  the page marks `transcript:placed` (`chat/marks.ts`). A hidden tab, whose tasks
+  the browser throttles, draws and places in one pass, and a tab hidden
+  mid-way draws the rest at once. — `e2e/bigstore.test.ts`;
+  `slices.test.ts` "a hidden tab draws the pass in one pass…".
+- **The worker groups; the page holds one answer.** A page asks for every
+  turn it holds, from its first on, and an older window for those before
+  them too (`source.asking`); the core's worker reads back to them
+  (`grouped.covering`) and answers grouped into rounds, each by the
+  indices of its turns and cards, with its day and label
+  (`chat/grouped.ts`). The page holds that answer whole and draws the rounds
+  as given, never a join of windows, so a round is never split however long
+  it runs. — `grouped.test.ts` "law: whatever a page reads, it holds every
+  turn from its first to the newest, never fewer, grouped".
 - **A write's answer is never drawn.** A person's turn, Stop, Regenerate, an
   edit and a card's answer are intents (§3.15); the page reads the replicas
   once they hold them. — `source.test.ts` "say reads the window again once
@@ -1490,8 +1514,18 @@ under in every larger union and never wins.
   then drops it, in memory and on the device (`purge.forgotten`,
   `objects.alterRow`), before the row is drawn. A forget that fails keeps the
   key, says so in the shell's line and is asked again at the next sync; it
-  never stops a reading, since the words read as erased meanwhile. A page's
-  later join takes no forgotten block back. A store's row in the shape of a
+  never stops a reading, since the words read as erased meanwhile. The
+  core's worker is the one reader and writer of the device's rendered blocks
+  (`rendered.device`, made by `questions.serve` alone) as of the lines' row,
+  and a key's bytes live in its key row alone, so a forget is one delete
+  there, and a mark on the device every tab's worker reads, so no tab writes
+  an erased block back; an answer carrying keys is never kept with the reads
+  (`http.Keeping`); the page holds blocks in view (`rendered.viaWorker`), asks the
+  worker for the rest and hands it the box's answers, and a join the page
+  sent before it heard of an erasure writes nothing back. A key an erasure
+  names is let go only once its blocks are forgotten, wherever it is held,
+  the row or a pull's pieces. — `onewriter.test.ts` "law: once the box erases
+  words, no row, message or page holds them or their key…". A store's row in the shape of a
   build before the keys (a bare replica) is deleted under a reset's rule
   before it is read and taken again from the box; the plaintext row of the
   store the lines replaced is deleted under the same rule once the lines'
@@ -1557,8 +1591,15 @@ under in every larger union and never wins.
   app…"; `e2e/lines.test.ts` "the list draws and the badge is
   counted with no request for the lines…".
 - **The lines are a skeleton, and their content is fetched by name.** The
-  lines' row holds the skeleton (`GET /api/stores/lines/skeleton`, pulled by
-  the same pieces), a replica of nodes: each object's name, what it rests
+  core's worker pulls, lands and reads them (`linesync.ts`); the page says
+  when it reads them and hears what moved: which conversations a landing
+  touched (a line come or gone, a key of their words given or taken), or all
+  of them after a reset or a later epoch, heard once a frame, so an open
+  conversation reads again only when its own lines moved (`touched.test.ts`). The lines' row holds the skeleton
+  (`GET /api/stores/lines/skeleton`, pulled by the same pieces), kept one
+  node and one key per row in the database's `lines` store beside a head row
+  (`linerows.ts`), so a landing writes only what arrived; version 7 moves a
+  version 5 or 6 row there and deletes it. It is a replica of nodes: each object's name, what it rests
   on, its size and its header, never its literal (`replica.Obj`). Each
   literal is kept by its name in the database's `content` store
   (`content.ts`), taken only when its bytes hash to the name asked for in
@@ -1644,7 +1685,7 @@ Each pattern written once, in `web/src/algebra/once.ts`, `latest.ts`,
   pulls each chain and store again from the box, and the reader holds no
   shim. What a dropped row held that the box had not taken is lost. —
   `objects.test.ts` "a row version 2 kept is dropped…", "a row version 1
-  kept is dropped…", "version 5 drops the lines' row and its pieces…"; `replica.test.ts` "a row in a form an earlier build
+  kept is dropped…", "version 5 drops the lines' row and its pieces…"; e2e `upgrade7.test.ts`; `replica.test.ts` "a row in a form an earlier build
   kept does not read…"; e2e `upgrade.test.ts` "a device holding a version 2
   replica drops it on its first load…".
 - **A verdict says what it found as a sum.** Each object the walk reached

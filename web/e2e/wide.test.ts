@@ -35,7 +35,11 @@ app.scene("a tab holding 400 heads pulls in a request under a kilobyte, and the 
   const again = await app.page.statuses("/api/stores/")
   await app.page.reload()
   await app.page.waitFor(drawn, { timeout: 60000 })
-  await app.page.waitFor(`performance.getEntriesByType("resource").some((e) => e.name.includes("/api/stores/lines/skeleton?since="))`)
+  // The core's worker pulls, so its request is in no entry of the page's: it is waited for as the browser reports it.
+  for (const until = Date.now() + 60000; !again().some(r => r.url.includes("/api/stores/lines/skeleton?since=")); ) {
+    if (Date.now() > until) throw new Error(`no pull after the reload asked from a frontier: ${JSON.stringify(again())}`)
+    await new Promise(done => setTimeout(done, 100))
+  }
   const seen = again()
   const skeletons = seen.filter(r => r.url.includes("/skeleton"))
   assert.ok(skeletons.some(r => /since=[0-9a-f]{64}/.test(r.url)), `the second pull asks from a frontier: ${JSON.stringify(skeletons)}`)

@@ -8,7 +8,6 @@ import { readFileSync } from "node:fs"
 
 import pieces from "../src/prodrome/pieces"
 import stores from "../src/prodrome/stores"
-import locked from "../src/prodrome/locked"
 import { NOTHING, boxHeadsOf, headsOf, join, parentsOf, prodromeOf, pulled, replicaOf, reset, sinceOf } from "../src/prodrome/replica"
 import type { Replica } from "../src/prodrome/replica"
 import type { StorePayload, StoredObject } from "../src/wire/generated/wire"
@@ -73,14 +72,14 @@ const answer = (budget: number) => (since: string): StorePayload => {
 // asks from both, keeps each piece beside the row, written by itself, and lands them in one step at the end.
 const tab = (ask: (since: string) => Promise<StorePayload>) => {
   let t = stores.NONE
-  let pending = locked.NONE
+  let pending: Replica = NOTHING
   const asked: string[] = []
   const counts = { lands: 0, shown: 0, written: 0 }
   const of = new WeakMap<StorePayload, Replica>()
-  const holding = (): Replica => join(t.inbox.replica, pending.replica)
-  const show = (row: locked.Row): void => {
+  const holding = (): Replica => join(t.inbox, pending)
+  const show = (replica: Replica): void => {
     const was = t
-    t = stores.step(t, { type: "Held", name: "inbox", row })
+    t = stores.step(t, { type: "Held", name: "inbox", replica })
     if (t !== was) counts.shown += 1
   }
   const fx: pieces.Effects<StorePayload> = {
@@ -92,13 +91,13 @@ const tab = (ask: (since: string) => Promise<StorePayload>) => {
     },
     keep: async a => {
       const asked = of.get(a) ?? NOTHING
-      pending = locked.join(pending, locked.of(pulled(replicaOf({ ...NOTHING.held, generation: asked.generation, frontier: asked.held.frontier }), a, 1), a.keys))
+      pending = join(pending, pulled(replicaOf({ ...NOTHING.held, generation: asked.generation, frontier: asked.held.frontier }), a, 1))
       counts.written += a.objects.reduce((n, o) => n + o.literal.length, 0)
     },
     land: async () => {
       counts.lands += 1
       show(pending)
-      pending = locked.NONE
+      pending = NOTHING
     },
     held: () => [t.inbox, pending],
   }
@@ -107,13 +106,13 @@ const tab = (ask: (since: string) => Promise<StorePayload>) => {
     asked,
     counts,
     // What another tab kept of its pull comes back with the device's rows, joined beside this one's.
-    join: (row: locked.Row): void => void (pending = locked.join(pending, row)),
+    join: (row: Replica): void => void (pending = join(pending, row)),
     // Another tab's reset of the row pages read.
-    reset: (): void => show(locked.of(reset(t.inbox.replica))),
+    reset: (): void => show(reset(t.inbox)),
     pending: () => pending,
     row: () => t.inbox,
     held: () => holding().objects.map(o => o.hash),
-    shown: () => t.inbox.replica.objects.map(o => o.hash),
+    shown: () => t.inbox.objects.map(o => o.hash),
   }
 }
 
@@ -245,7 +244,7 @@ test("another tab's reset that lands while a piece is on its way keeps the piece
   })
   const ended = await pieces.pull(one.fx)
   assert.equal(ended.type, "Whole")
-  assert.equal(one.row().replica.generation, 1, "the reset stands")
+  assert.equal(one.row().generation, 1, "the reset stands")
   assert.deepEqual(one.asked.filter(since => since === "").length, 2, "asked from nothing twice: at the start and after the reset")
   assert.deepEqual(new Set(one.held()), new Set(all.map(o => o.hash)))
 })
@@ -266,11 +265,11 @@ test("a frame naming what the tab does not hold takes a cut pull up again, and o
   assert.equal((await pieces.pull(one.fx)).type, "Cut")
   // The box's heads, as its stream says them; the tab's last word of them is the same, and it still lacks objects.
   const frame = heads.of(headsOf(all))
-  assert.deepEqual(boxHeadsOf(one.pending().replica), frame)
-  assert.equal(stores.behind(frame, join(one.row().replica, one.pending().replica)), true)
+  assert.deepEqual(boxHeadsOf(one.pending()), frame)
+  assert.equal(stores.behind(frame, join(one.row(), one.pending())), true)
   answers = Infinity
   assert.equal((await pieces.pull(one.fx)).type, "Whole")
-  assert.equal(stores.behind(frame, one.row().replica), false)
+  assert.equal(stores.behind(frame, one.row()), false)
 })
 
 test("a box that lost its records answers the next pull from nothing once, and the pull ends; twice over", async () => {

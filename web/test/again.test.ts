@@ -12,6 +12,8 @@ import again from "../src/chat/again";
 import { step as sourceStep } from "../src/chat/source";
 import type { SourceState } from "../src/chat/source";
 import { forAll } from "./gen";
+import grouped from "../src/chat/grouped";
+import time from "../src/app/time";
 
 const turn = (index: number, over: Partial<turns.Question> = {}): turns.Question => ({
   index,
@@ -26,7 +28,8 @@ const turn = (index: number, over: Partial<turns.Question> = {}): turns.Question
   ...over,
 });
 
-const payload = (over: Partial<ConversationPayload>): ConversationPayload => ({
+const payload = (over: Partial<ConversationPayload>): grouped.Window =>
+  grouped.of({
   id: "default",
   title: "Secretary",
   model: "m",
@@ -39,7 +42,7 @@ const payload = (over: Partial<ConversationPayload>): ConversationPayload => ({
   total: 2,
   again: 0,
   ...over,
-});
+}, time.UTC);
 
 const loaded = (over: Partial<ConversationPayload> = {}): SourceState =>
   sourceStep(

@@ -22,7 +22,7 @@ const UNREAD =
   "at=datetime(2026, 9, 2, 12, 3, 26), actor='assistant', act=Remember(kind='person'), why='her signature says so', " +
   "sources=('mail:a1b2c3d4e5f6',), asked=None, serves=None, spec=None))";
 
-/** The inbox row this browser keeps (its replica and its keys), with `template` added in the row's own prodrome; the name is answered. */
+/** The inbox row this browser keeps (its replica), with `template` added in the row's own prodrome; the name is answered. */
 function hold(template: string): Promise<string> {
   return app.page.evaluate<string>(`
     new Promise((resolve, reject) => {
@@ -31,15 +31,15 @@ function hold(template: string): Promise<string> {
       request.onsuccess = () => {
         const db = request.result;
         const rows = db.transaction("chain", "readwrite").objectStore("chain");
-        const read = rows.get("objects:store/inbox");
+        const read = rows.get("objects:pages/inbox");
         read.onsuccess = () => {
           const row = read.result;
-          const genesis = row.replica.objects.find((o) => o.literal.startsWith("Genesis(")).hash;
+          const genesis = row.objects.find((o) => o.literal.startsWith("Genesis(")).hash;
           const literal = ${JSON.stringify(template)}.replace("GENESIS", genesis);
           crypto.subtle.digest("SHA-256", new TextEncoder().encode(literal)).then((bytes) => {
             const hash = [...new Uint8Array(bytes)].map((b) => b.toString(16).padStart(2, "0")).join("");
-            row.replica.objects = [...row.replica.objects, { hash, literal }];
-            const again = db.transaction("chain", "readwrite").objectStore("chain").put(row, "objects:store/inbox");
+            row.objects = [...row.objects, { hash, literal }];
+            const again = db.transaction("chain", "readwrite").objectStore("chain").put(row, "objects:pages/inbox");
             again.onsuccess = () => { db.close(); resolve(hash); };
             again.onerror = () => { db.close(); reject(again.error); };
           });
@@ -57,9 +57,9 @@ function untilInbox(): Promise<void> {
       request.onsuccess = () => {
         const db = request.result;
         if (!db.objectStoreNames.contains("chain")) { db.close(); resolve(false); return; }
-        const query = db.transaction("chain", "readonly").objectStore("chain").get("objects:store/inbox");
+        const query = db.transaction("chain", "readonly").objectStore("chain").get("objects:pages/inbox");
         query.onerror = () => { db.close(); resolve(false); };
-        query.onsuccess = () => { const row = query.result; db.close(); resolve(row !== undefined && row.replica.objects.some((o) => o.literal.startsWith("Genesis("))); };
+        query.onsuccess = () => { const row = query.result; db.close(); resolve(row !== undefined && row.objects.some((o) => o.literal.startsWith("Genesis("))); };
       };
     })`,
     { timeout: 15000 },
@@ -90,8 +90,8 @@ const HELD = `new Promise((resolve) => {
   const request = indexedDB.open("suzatary");
   request.onerror = () => resolve(null);
   request.onsuccess = () => {
-    const query = request.result.transaction("chain", "readonly").objectStore("chain").get("objects:store/inbox");
-    query.onsuccess = () => resolve({ held: (query.result?.replica?.objects ?? []).map((o) => o.literal.slice(0, 60)), hidden: document.getElementById("excluded")?.hidden ?? null, line: document.getElementById("excluded")?.textContent ?? null });
+    const query = request.result.transaction("chain", "readonly").objectStore("chain").get("objects:pages/inbox");
+    query.onsuccess = () => resolve({ held: (query.result?.objects ?? []).map((o) => o.literal.slice(0, 60)), hidden: document.getElementById("excluded")?.hidden ?? null, line: document.getElementById("excluded")?.textContent ?? null });
   };
 })`;
 
@@ -157,7 +157,8 @@ app.scene("a chain's copy that does not read is named, with the one reset that w
  */
 app.scene("a store's copy that does not read is named too, and the line stays open while a reset moves it", async () => {
   await app.open(WRITE_BASE);
-  await spoil(["life", "store/inbox"]);
+  // The inbox's row is kept under `pages/inbox`, and named by its store, `store/inbox`.
+  await spoil(["life", "pages/inbox"]);
   const row = (copy: string): string => `#excluded li[data-row="${copy}"]`;
   await app.page.waitFor(`document.querySelector('${row("life")}') !== null && document.querySelector('${row("store/inbox")}') !== null`, { timeout: 15000 });
   await app.page.click("#excluded summary");

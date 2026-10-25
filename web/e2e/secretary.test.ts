@@ -531,11 +531,9 @@ app.scene("streaming never scrolls a drifted-up box", async () => {
   );
   await app.page.waitFor(`document.querySelectorAll(".turnanswer").length === 7`, { timeout: 20000 });
   assert.equal(await app.page.evaluate<number>(`${scroller}.scrollTop`), before, "the box did not move");
-  assert.equal(
-    await app.page.evaluate<boolean>(`document.querySelector(".newanswerpill").hidden`),
-    false,
-    "the pill offers the way down instead",
-  );
+  // The answer is placed in the frame after it is drawn, and the pill with it.
+  await app.page.waitFor(`document.querySelector(".newanswerpill").hidden === false`);
+  assert.equal(await app.page.evaluate<number>(`${scroller}.scrollTop`), before, "the pill offers the way down instead, and the box stays");
 });
 
 /** The last question asked, its round at the top of the box just below the sticky header: held there by its send (`anchor.ts`, `ToTurn`). */

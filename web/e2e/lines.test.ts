@@ -41,8 +41,14 @@ const held = (name: string): string => `new Promise((ok, no) => {
   }
 })`
 
-/** The lines' row as the device keeps it, or null. */
-const linesRow = `${held("suzatary")}.then((all) => (JSON.parse(all).chain ?? []).find(([k]) => k === "objects:store/lines")?.[1] ?? null)`
+/** The lines' row as the device keeps it, one node and one key per row beside a head row, or null before a head. */
+const linesRow = `${held("suzatary")}.then((all) => {
+  const rows = JSON.parse(all).lines ?? []
+  if (!rows.some(([k]) => k === "head")) return null
+  const objects = rows.filter(([k]) => k.startsWith("node/")).map(([, n]) => n)
+  const keys = Object.fromEntries(rows.filter(([k]) => k.startsWith("key/")).map(([k, v]) => [k.slice(4), v]))
+  return { replica: { objects }, keys }
+})`
 
 /** `write(store)` run in one read-write transaction of the store `store` of the database `name`. */
 const put = (name: string, store: string, write: string): string => `new Promise((done, fail) => {
@@ -176,15 +182,18 @@ app.scene("an inbox row a build before the keys kept is taken again from the box
   await app.resize(PHONE)
   await app.open(WRITE_BASE)
   await app.page.navigate(`${WRITE_BASE}/#/inbox`)
-  const inboxRow = `${rowsOf("suzatary", "chain")}.then((rows) => rows.find(([k]) => k === "objects:store/inbox")?.[1] ?? null)`
-  await app.page.waitFor(`${inboxRow}.then((row) => row !== null && row.replica !== undefined)`, { timeout: 20000 })
-  // The row as the build before the keys wrote it: the bare replica.
-  const bare = await app.page.evaluate<unknown>(`${inboxRow}.then((row) => row.replica)`)
-  await app.page.evaluate(put("suzatary", "chain", `(s) => s.put(${JSON.stringify(bare)}, "objects:store/inbox")`))
-  assert.equal(await app.page.evaluate<boolean>(`${inboxRow}.then((row) => row.replica === undefined)`), true, "the old shape is on the device")
+  const rowAt = (key: string): string => `${rowsOf("suzatary", "chain")}.then((rows) => rows.find(([k]) => k === "${key}")?.[1] ?? null)`
+  const inboxRow = rowAt("objects:pages/inbox")
+  const oldRow = rowAt("objects:store/inbox")
+  await app.page.waitFor(`${inboxRow}.then((row) => row !== null && row.objects.length > 0)`, { timeout: 20000 })
+  // The row as the build before the keys wrote it: the bare replica, under the store's name.
+  const bare = await app.page.evaluate<unknown>(inboxRow)
+  await app.page.evaluate(put("suzatary", "chain", `(s) => (s.delete("objects:pages/inbox"), s.put(${JSON.stringify(bare)}, "objects:store/inbox"))`))
+  assert.equal(await app.page.evaluate<boolean>(`${oldRow}.then((row) => row !== null && row.replica === undefined)`), true, "the old shape is on the device")
   await app.page.navigate(`${WRITE_BASE}/?bare=1#/inbox`)
   await app.page.waitFor(`document.querySelector(".pagetitle") !== null`, { timeout: 15000 })
-  await app.page.waitFor(`${inboxRow}.then((row) => row !== null && row.replica !== undefined && row.replica.objects.length > 0)`, { timeout: 20000 })
+  await app.page.waitFor(`${inboxRow}.then((row) => row !== null && row.objects.length > 0)`, { timeout: 20000 })
+  assert.equal(await app.page.evaluate<unknown>(oldRow), null, "the old row is gone")
   assert.equal(
     await app.page.evaluate<boolean>(`document.querySelector('#excluded li[data-row="store/inbox"]') === null`),
     true,
@@ -195,6 +204,9 @@ app.scene("an inbox row a build before the keys kept is taken again from the box
 app.scene("a key a closed tab left on the device is forgotten with the blocks it fed, by the next tab that reads the row", async () => {
   await app.resize(PHONE)
   await app.open(WRITE_BASE)
+  // With no marks an earlier scene's erasure left: the scripted answer is the same words, whose blocks a mark keeps off
+  // the device for good.
+  await app.page.evaluate(put("suzatary-rendered", "rows", `(s) => s.clear()`))
   await converse("give me a rendered answer")
   await app.page.waitFor(`${held("suzatary-rendered")}.then((all) => all.includes("compiled to HTML"))`, { timeout: 20000 })
   // What a tab that is then closed keeps: the answer's key and the blocks it rendered.
@@ -210,7 +222,7 @@ app.scene("a key a closed tab left on the device is forgotten with the blocks it
   // The closed tab's late write lands: its key in the row, its blocks in the cache, each also under the name an
   // older build gave it, which no purge of this build computes.
   await app.page.evaluate(
-    put("suzatary", "chain", `(s) => { const g = s.get("objects:store/lines"); g.onsuccess = () => s.put({ ...g.result, keys: { ...g.result.keys, ...${JSON.stringify(keys)} } }, "objects:store/lines") }`),
+    put("suzatary", "lines", `(s) => Object.entries(${JSON.stringify(keys)}).forEach(([name, hex]) => s.put(hex, "key/" + name))`),
   )
   await app.page.evaluate(
     put("suzatary-rendered", "rows", `(s) => ${JSON.stringify(blocks)}.forEach(([, v]) => (s.put(v), s.put({ ...v, key: "older-answer " + v.key.split(" ")[1] })))`),
@@ -232,7 +244,7 @@ app.scene("the list draws and the badge is counted with no request for the lines
   // would make it a 304 with no body, whatever order the files run in.
   await app.open(WRITE_BASE)
   await app.page.evaluate(
-    put("suzatary", "chain", `(s) => (s.delete("objects:store/lines"), s.delete(IDBKeyRange.bound("objects:store/lines/piece/", "objects:store/lines/piece/\\uffff")))`),
+    put("suzatary", "lines", `(s) => s.clear()`),
   )
   // Nor any content an earlier scene's page kept, so what the secretary reads is fetched by name.
   await app.page.evaluate(put("suzatary", "content", `(s) => s.clear()`))
@@ -245,27 +257,24 @@ app.scene("the list draws and the badge is counted with no request for the lines
   await app.page.waitFor(`performance.getEntriesByType("resource").some((e) => e.name.includes("/api/waiting"))`, { timeout: 15000 })
   const boot = await booting()
   assert.deepEqual(boot.filter(r => ofLines(r.url)).map(r => r.url), [], "the boot never pulls the lines' skeleton or content")
+  // The lines are pulled by the core's worker, whose requests the page's own entries do not list: what it landed is read
+  // from the device instead.
+  assert.deepEqual(await app.page.evaluate<[string, unknown][]>(rowsOf("suzatary", "lines")), [], "and lands nothing of them")
   // The badge's count is the box's; an answer the tab already holds comes back as a 304, with no body.
   const counted = boot.filter(r => r.url.includes("/api/waiting"))
   assert.ok(counted.length > 0, "the badge is asked of the box")
   for (const r of counted.filter(r => r.responseBody !== "")) assert.equal(typeof (JSON.parse(r.responseBody) as { count: unknown }).count, "number")
-  const opening = await app.page.captureNetwork(LINES)
   await app.page.evaluate(`void (location.hash = "#/secretary/default")`)
   await app.page.waitFor(`document.querySelector(".pagetitle") !== null`, { timeout: 15000 })
   await app.page.waitFor(`${linesRow}.then((row) => row !== null && row.replica.objects.length > 0)`, { timeout: 20000 })
   // Once the lines land, the page's placeholder gives way to its list.
   await app.page.waitFor(`document.querySelector(".chats .placeholder") === null`, { timeout: 15000 })
-  // The lines a device already holds draw the list before the pull goes out, so the pull's answer is waited for.
-  await app.page.waitFor(`performance.getEntriesByType("resource").some((e) => e.name.includes("/api/stores/lines/skeleton"))`, { timeout: 15000 })
-  // The content is fetched once the skeleton names what the page reads, so its answer is waited for too.
-  await app.page.waitFor(`performance.getEntriesByType("resource").some((e) => e.name.includes("/api/stores/lines/content?hashes="))`)
-  const pulled = await opening()
-  assert.ok(pulled.some(r => r.url.includes("/api/stores/lines/skeleton")), "the secretary's page pulls the lines' skeleton")
-  assert.ok(pulled.some(r => r.url.includes("/api/stores/lines/content?hashes=")), "and the content of what it reads, by name")
+  // The content is fetched by name once the skeleton names what the page reads.
+  await app.page.waitFor(`${rowsOf("suzatary", "content")}.then((rows) => rows.length > 0)`, { timeout: 15000 })
   // The pull ended whole: the row holds the lines, and no kept piece is left, since pieces are dropped only when a
   // pull lands whole. Read from the device, not from captured bodies, which a revalidated or streamed answer may lack.
-  const left = await app.page.evaluate<[string, unknown][]>(rowsOf("suzatary", "chain"))
-  assert.deepEqual(left.filter(([k]) => k.startsWith("objects:store/lines/piece/")).map(([k]) => k), [], "no piece is left: the pull ended whole")
+  const left = await app.page.evaluate<[string, unknown][]>(rowsOf("suzatary", "lines"))
+  assert.deepEqual(left.filter(([k]) => k.startsWith("piece/")).map(([k]) => k), [], "no piece is left: the pull ended whole")
   await app.page.cold(false)
 })
 
@@ -274,7 +283,7 @@ app.scene("the list draws and the badge is counted with no request for the lines
 app.scene("a store's sync is drawn as a neutral pie, named in words", async () => {
   await app.open(WRITE_BASE)
   await app.page.evaluate(
-    put("suzatary", "chain", `(s) => (s.delete("objects:store/lines"), s.delete(IDBKeyRange.bound("objects:store/lines/piece/", "objects:store/lines/piece/\\uffff")))`),
+    put("suzatary", "lines", `(s) => s.clear()`),
   )
   await app.page.evaluate(put("suzatary", "content", `(s) => s.clear()`))
   await app.page.cold(true)

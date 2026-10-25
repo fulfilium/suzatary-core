@@ -3464,7 +3464,8 @@ h1[tabindex="-1"]:focus {
   margin: var(--s-2) 0 0;
 }
 
-.earlierbtn {
+.earlierbtn,
+.chatmore {
   align-self: center;
   margin-bottom: var(--s-2);
   min-height: var(--tap);
@@ -5851,9 +5852,13 @@ body:has(> .secretarypanel) .askrow {
   color: var(--primary);
 }
 
+/* A round off the screen is not laid out: a stream of rounds costs the
+   layout of those in view, each kept at the height it last had. */
 .streamround {
   padding: var(--s-3) 0;
   border-top: 1px solid var(--rule);
+  content-visibility: auto;
+  contain-intrinsic-size: auto 12rem;
 }
 
 .streammeta {

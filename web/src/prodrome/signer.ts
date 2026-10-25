@@ -58,6 +58,14 @@ export namespace signer {
     return row.type === "Held" ? { type: "Kept", key: row.v.public } : { type: "Absent" }
   }
 
+  // The key this device keeps now, read and never minted: what the core's worker signs with, so it never races the page
+  // to mint one.
+  export const existing = async (): Promise<Key | null> => {
+    if (!idb.available()) return null
+    const row = await idb.read(keys, DEVICE, parse)
+    return row.type === "Held" ? row.v : null
+  }
+
   const holding = (h: Held): Held => ((here = h.type === "Held" ? { type: "Held", key: h.key.public } : here), h)
 
   const load = async (): Promise<Held> =>

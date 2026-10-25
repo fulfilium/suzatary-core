@@ -627,8 +627,9 @@ google_base="$(start google --settings --connected google -- --google-fixture "$
 # origin or state directory.
 epoch_base="$(start epoch)"
 # THE LINES' SERVER (web/e2e/bigstore.test.ts): a writer whose conversations hold a generated store of
-# $SUZATARY_E2E_LINES lines (1,500 by default), so a scene can see a tab read a large store.
-lines_base="$(start lines --lines "${SUZATARY_E2E_LINES:-1500}")"
+# $SUZATARY_E2E_LINES lines (1,500 by default), so a scene can see a tab read a large store; spread over
+# $SUZATARY_E2E_CONVERSATIONS conversations when it is set, the shape of a store a year old.
+lines_base="$(start lines --lines "${SUZATARY_E2E_LINES:-1500}" ${SUZATARY_E2E_CONVERSATIONS:+--conversations "$SUZATARY_E2E_CONVERSATIONS"})"
 # THE WIDE SERVER (web/e2e/wide.test.ts): 400 conversations of one line each, so a tab's replica of
 # the lines has 400 heads, and every pull names it by a frontier as short as one head's.
 wide_base="$(start wide --wide 400)"

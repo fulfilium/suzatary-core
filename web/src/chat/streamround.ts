@@ -17,8 +17,8 @@ export namespace streamround {
     readonly remove: (target: string, topic: string) => void
   }
 
-  // When it was asked, as the round says it at `now`.
-  export const when = (r: StreamRound, now: number): string => recent(r.opening.at, now, app.now().zone)
+  // When it was asked, as the round says it on the owner's `today`.
+  export const when = (r: StreamRound, today: string): string => recent(r.opening.at, today, app.now().zone)
 
   // What the drawing reads, so a round is drawn again only when one of these moved.
   export const sig = (r: StreamRound, writes: boolean, said: string): string =>

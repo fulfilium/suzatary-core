@@ -13,17 +13,17 @@ import type {
   SpecNode,
   StreamPayload,
   TopicsPayload,
+  TurnRow,
 } from "../wire/generated/wire"
-import type { Acted, Chains, Core, CoreEnv, CoreFold, Erased, Linker, Named, Proposals, Standing, Todos, TopicReading, TopicStore, Window } from "./core"
+import type { Acted, Chains, Core, CoreEnv, CoreFold, Linker, Named, Proposals, Standing, Todos, TopicReading, TopicStore, Window } from "./core"
 import {
   appendTo,
   appendTopic,
   barOf,
   conversationOf,
-  deadOf,
-  erasedOf,
   excludedOf,
   foldOf,
+  functionsOf,
   holdIn,
   inboxOf,
   linesLeft,
@@ -40,8 +40,14 @@ import {
 } from "./core"
 import topics from "./topics"
 import excluded from "./excluded"
+import type heads from "./heads"
+import lines from "./lines"
+import linesync from "./linesync"
 import lo from "../algebra/lo"
 import thirty from "../todo/thirty"
+import grouped from "../chat/grouped"
+import rendered from "../app/rendered"
+import type time from "../app/time"
 
 export namespace questions {
   // A chain as the tab holds it now, by what changed since the last holding: names the worker lacks with their bytes,
@@ -72,8 +78,13 @@ export namespace questions {
   // their bytes, and the names it holds that the tab no longer does.
   export type Delta = { readonly add: readonly Named[]; readonly drop: readonly string[]; readonly whole: boolean }
 
-  // The keys of the lines' words by the same rule: each key's hex by its name, and the names let go.
-  export type Keys = { readonly add: Readonly<Record<string, string>>; readonly drop: readonly string[]; readonly whole: boolean }
+  // One conversation's window, or absent where the lines hold no line of it.
+  export type One = { readonly type: "Absent" } | { readonly type: "Held"; readonly payload: ConversationPayload }
+  // The key each answer block is kept by, by its source.
+  export type Keyed = Readonly<Record<string, string>>
+
+  // One conversation's window grouped into rounds, with the key of each of its answer blocks, or absent.
+  export type Grouped = { readonly type: "Absent" } | { readonly type: "Held"; readonly payload: grouped.Window; readonly keys: Keyed }
 
   // A term's price: its value (`null` for ∅), or why it does not link.
   export type Priced = { readonly type: "Value"; readonly v: number | null } | { readonly type: "Refused"; readonly why: string }
@@ -96,26 +107,38 @@ export namespace questions {
     Standing: { q: { readonly chain: string; readonly root: string | null; readonly actor: string; readonly key: string }; a: Standing }
     // The inbox's objects changed by `delta`.
     HoldInbox: { q: { readonly delta: Delta }; a: null }
-    // The lines' objects and keys changed: each object decoded once, here, as it arrives.
-    HoldLines: { q: { readonly delta: Delta; readonly keys: Keys }; a: null }
+    // A page reads the lines: pull them now, and after every word of the box's stream; whether the pull ended whole.
+    LinesWant: { q: Record<never, never>; a: boolean }
+    // The box's stream named the lines' heads.
+    LinesHeard: { q: { readonly heads: heads.Heads }; a: null }
+    // The lines' row written over by a reset and taken again, with what the reset could not do.
+    LinesReset: { q: Record<never, never>; a: readonly string[] }
     // The Inbox's rows at `at`, priced through every chain held.
     Proposals: { q: { readonly at: string; readonly memory: MemoryPayload | null }; a: InboxProposalsPayload }
     // Every conversation, newest first.
     Conversations: { q: Record<never, never>; a: ConversationsPayload }
-    // One conversation's window, or a refusal naming it where no line of it is held.
-    Conversation: { q: { readonly id: string; readonly window: Window; readonly memory: MemoryPayload | null }; a: ConversationPayload }
+    // One conversation's window, read over its own lines once they are held.
+    Conversation: { q: { readonly id: string; readonly window: Window; readonly memory: MemoryPayload | null }; a: One }
+    // The same, read back to the turn it must reach (`grouped.covering`) and grouped into rounds on the owner's days in
+    // `zone`, with the key each answer block is kept by.
+    Window: { q: { readonly id: string; readonly window: grouped.Asked; readonly memory: MemoryPayload | null; readonly zone: time.Zone }; a: Grouped }
     // Every conversation's turns holding `q`.
     Search: { q: { readonly q: string }; a: SearchPayload }
-    // The keys an erasure names, and every key in `told`, with the blocks their words fed where `keys` opens them.
-    Erased: { q: { readonly keys: Readonly<Record<string, string>>; readonly told: readonly string[] }; a: Erased }
-    // Every key an erasure of its own conversation names.
-    Dead: { q: Record<never, never>; a: readonly string[] }
     // What the readings of the inbox and the lines leave out, joined.
     Left: { q: Record<never, never>; a: excluded.T }
+    // The rendered blocks the device keeps, which the worker alone reads and writes: those of `keys`, the box's answers
+    // `pairs` joined (the findings it made), how much it keeps, and the functions this build keeps blocks of.
+    Blocks: { q: { readonly keys: readonly string[] }; a: (string | null)[] }
+    KeepBlocks: { q: { readonly pairs: readonly (readonly [string, string])[] }; a: string[] }
+    BlocksUsage: { q: Record<never, never>; a: rendered.Usage }
+    BlocksOwn: { q: Record<never, never>; a: ReadonlySet<string> }
+    // The key each answer block of `sources` is kept by, named by this build's core.
+    AnswerKeys: { q: { readonly sources: readonly string[] }; a: string[] }
     // A topic store's objects changed by `delta`.
     HoldTopics: { q: { readonly store: topics.Store; readonly delta: Delta }; a: null }
-    // The newest `pages` pages of the rounds carrying every topic of `chosen`, and the topics in use.
-    Stream: { q: { readonly chosen: readonly string[]; readonly pages: number }; a: { readonly stream: StreamPayload; readonly bar: TopicsPayload } }
+    // The newest `pages` pages of the rounds carrying every topic of `chosen`, and the topics in use, once every line is
+    // held.
+    Stream: { q: { readonly chosen: readonly string[]; readonly pages: number }; a: { readonly stream: StreamPayload; readonly bar: TopicsPayload; readonly keys: Keyed } }
     // `write` planned by the topics as held and appended to the replica of its store: the objects it wrote there.
     PlanTopic: { q: { readonly write: topics.Write; readonly at: string; readonly actor: string }; a: { readonly store: topics.Store; readonly objects: readonly Named[] } }
   }
@@ -128,6 +151,12 @@ export namespace questions {
   // On the wire: each question numbered, each answer under its number, a failure in the core's words.
   export type Asked = { readonly id: number; readonly question: Question }
   export type Answered = { readonly id: number; readonly answer: lo.Settled<Answer<Kind>> }
+
+  // What the worker says unasked: what the lines' sync tells, that the box refused this device's key (`Gone`) or this
+  // build's contract (`Stale`) on a read the worker made, and that its core did not load, and why (`Unloaded`).
+  export type Said = linesync.Said | { readonly type: "Gone" } | { readonly type: "Stale" } | { readonly type: "Unloaded"; readonly why: string }
+  // Everything the worker sends: an answer, or something said.
+  export type Out = Answered | { readonly said: Said }
 
   // How many readings are kept at once: the page's, and the one it replaced while a page still reads it.
   const KEPT = 4
@@ -147,7 +176,10 @@ export namespace questions {
   }
 
   // The answerer: each chain's objects, the core's set of them, and the readings kept, all its own.
-  export const serve = (core: Core): ((q: Question) => Answer<Kind>) => {
+  // An answer now, or once the lines a question reads are held.
+  export type Answering = (q: Question) => Answer<Kind> | Promise<Answer<Kind>>
+
+  export const serve = (core: Core, say: (s: Said) => void = () => {}): Answering => {
     const chains = new Map<string, Chain>()
     const set: Chains = new core.Chains()
     const inSet = new Map<string, { readonly version: number; readonly left: excluded.Left }>()
@@ -212,18 +244,16 @@ export namespace questions {
       }
       return null
     }
-    // The lines, held by what changed and read by what moved: the core keeps every decoded object and every reading.
-    const lines = new core.Lines()
-    // The names of the keys held, so a whole holding lets go of every one it does not name.
-    const keysHeld = new Set<string>()
-    const holdLines = (delta: Delta, keys: Keys): null => {
-      if (delta.add.length > 0 || delta.drop.length > 0) lines.hold(objectsOf(delta.add), JSON.stringify(delta.drop))
-      const drop = keys.whole ? [...keysHeld].filter(n => keys.add[n] === undefined) : keys.drop
-      if (Object.keys(keys.add).length > 0 || drop.length > 0) lines.keys(JSON.stringify(keys.add), JSON.stringify(drop))
-      for (const n of drop) keysHeld.delete(n)
-      for (const n of Object.keys(keys.add)) keysHeld.add(n)
-      return null
-    }
+    // The lines, pulled and held here, decoded once each and read by what moved: the core keeps every reading.
+    const held = new core.Lines()
+    // The rendered blocks the device keeps, read and written here alone, of the functions this build keeps blocks of.
+    const own = functionsOf(core)
+    const blocks = rendered.device(own)
+    const sync = linesync.of(held, say, blocks)
+
+    // The key each answer block of `turns` is kept by, named once here, where the core is.
+    const keyed = (turns: readonly TurnRow[]): Keyed =>
+      Object.fromEntries(turns.flatMap(t => (t.who === "model" ? t.blocks.map(b => [b.source, core.answer_key(b.source)]) : [])))
 
     // The topic stores' objects, and the core's replicas of them with its one reading, made again once per change.
     const topicHeld: { readonly [N in topics.Store]: Map<string, string> } = { topics: new Map(), "topic-aliases": new Map() }
@@ -235,11 +265,11 @@ export namespace questions {
       topicsRead?.aliases.free()
       topicsRead = null
     }
-    const held = (store: topics.Store): Named[] => [...topicHeld[store]].map(([hash, literal]) => ({ hash, literal }))
+    const topicObjects = (store: topics.Store): Named[] => [...topicHeld[store]].map(([hash, literal]) => ({ hash, literal }))
     const topicsNow = (): TopicsRead => {
       if (topicsRead !== null) return topicsRead
-      const memberships = new core.Memberships(objectsOf(held("topics")))
-      const aliases = new core.TopicAliases(objectsOf(held("topic-aliases")))
+      const memberships = new core.Memberships(objectsOf(topicObjects("topics")))
+      const aliases = new core.TopicAliases(objectsOf(topicObjects("topic-aliases")))
       topicsRead = { memberships, aliases, reading: new core.TopicReading(memberships, aliases) }
       return topicsRead
     }
@@ -352,29 +382,63 @@ export namespace questions {
           return standingIn(todosOf(named(q.chain)), q.root, q.actor, q.key)
         case "HoldInbox":
           return holdInbox(q.delta)
-        case "HoldLines":
-          return holdLines(q.delta, q.keys)
+        case "LinesWant":
+          return sync.want()
+        case "LinesHeard":
+          sync.heard(q.heads)
+          return null
+        case "LinesReset":
+          return sync.reset()
         case "Proposals":
           setNow()
           return inboxOf(proposals(), q.at, q.memory, set)
         case "Conversations":
-          return listOfLines(lines, proposals())
-        case "Conversation":
-          return conversationOf(lines, proposals(), q.id, q.window, q.memory)
+          return sync.over(lines.WHOLE, () => listOfLines(held, proposals()))
+        case "Conversation": {
+          const { id, window, memory } = q
+          return sync
+            .holds(id)
+            .then((holds): Promise<One> | One =>
+              holds ? sync.over({ type: "Conversation", id }, (): One => ({ type: "Held", payload: conversationOf(held, proposals(), id, window, memory) })) : { type: "Absent" },
+            )
+        }
+        case "Window": {
+          const { id, window, memory, zone } = q
+          const read = (w: Window): ConversationPayload => conversationOf(held, proposals(), id, w, memory)
+          return sync
+            .holds(id)
+            .then((holds): Promise<Grouped> | Grouped =>
+              holds
+                ? sync.over({ type: "Conversation", id }, (): Grouped => {
+                    const payload = grouped.of(grouped.covering(window, read), zone)
+                    return { type: "Held", payload, keys: keyed(payload.turns) }
+                  })
+                : { type: "Absent" },
+            )
+        }
         case "Search":
-          return searchOf(lines, q.q)
-        case "Erased":
-          return erasedOf(lines, q.keys, q.told)
-        case "Dead":
-          return deadOf(lines)
+          return sync.over(lines.WHOLE, () => searchOf(held, q.q))
+        // Over the same lines the reading beside it waits for, so it says what that reading left out.
         case "Left":
-          return excluded.join(excludedOf(proposals()), linesLeft(lines))
+          return sync.over(lines.WHOLE, () => excluded.join(excludedOf(proposals()), linesLeft(held)))
+        case "Blocks":
+          return blocks.get(q.keys)
+        case "KeepBlocks":
+          return blocks.join(q.pairs)
+        case "BlocksUsage":
+          return blocks.usage()
+        case "BlocksOwn":
+          return own
+        case "AnswerKeys":
+          return q.sources.map(source => core.answer_key(source))
         case "HoldTopics":
           return holdTopics(q.store, q.delta)
-        case "Stream": {
-          const read = topicsNow()
-          return { stream: streamOf(lines, read.reading, q.chosen, q.pages), bar: barOf(read.reading) }
-        }
+        case "Stream":
+          return sync.over(lines.WHOLE, () => {
+            const read = topicsNow()
+            const stream = streamOf(held, read.reading, q.chosen, q.pages)
+            return { stream, bar: barOf(read.reading), keys: keyed(stream.rounds.flatMap(r => (r.answer === null ? [] : [r.answer]))) }
+          })
         case "PlanTopic":
           return planTopic(q.write, q.at, q.actor)
       }
@@ -387,23 +451,18 @@ export namespace questions {
     readonly addEventListener: (type: "message", f: (e: { readonly data: In }) => void) => void
   }
 
-  // Each question answered in the order it came, once the core is ready; a core that did not load fails every one.
-  export const listen = (port: Port<Asked, Answered>, ready: Promise<(q: Question) => Answer<Kind>>): void =>
+  // Each question answered once the core is ready, in the order it came where it answers at once and when the lines it
+  // reads are held where it waits on them; a core that did not load fails every one.
+  export const listen = (port: Port<Asked, Answered>, ready: Promise<Answering>): void =>
     port.addEventListener("message", e => {
       const { id, question } = e.data
-      void ready.then(
-        answer => {
-          const settled = ((): lo.Settled<Answer<Kind>> => {
-            try {
-              return lo.val(answer(question))
-            } catch (x) {
-              return lo.error(lo.reason(x))
-            }
-          })()
-          port.postMessage({ id, answer: settled })
-        },
-        (x: unknown) => port.postMessage({ id, answer: lo.error(lo.reason(x)) }),
-      )
+      void ready
+        .then(answer => answer(question))
+        .then(
+          (v): lo.Settled<Answer<Kind>> => lo.val(v),
+          (x: unknown): lo.Settled<Answer<Kind>> => lo.error(lo.reason(x)),
+        )
+        .then(settled => port.postMessage({ id, answer: settled }))
     })
 }
 export default questions

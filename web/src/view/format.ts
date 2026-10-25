@@ -77,15 +77,15 @@ export function whenOf(date: string, zone: time.Zone): string {
 }
 
 /**
- * A recent instant as a list reads it, on the owner's clock: its minute today, `yesterday`, else its day.
- * "" for ""; a value that will not parse is handed back as it came.
+ * A recent instant as a list reads it, on the owner's clock, against the owner's `today`: its minute today,
+ * `yesterday`, else its day. "" for ""; a value that will not parse is handed back as it came.
  */
-export function recent(date: string, nowMs: number, zone: time.Zone): string {
+export function recent(date: string, today: string, zone: time.Zone): string {
   if (date === "") return "";
   const at = time.ms(date);
   if (at === null) return date;
   const d = time.date(zone, at);
-  const days = time.daysBetween(d, time.date(zone, nowMs));
+  const days = time.daysBetween(d, today);
   return days === 0 ? time.minute(zone, at).slice(11) : days === 1 ? "yesterday" : d;
 }
 

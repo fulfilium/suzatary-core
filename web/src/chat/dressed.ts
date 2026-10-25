@@ -15,18 +15,22 @@ import rendered from "../app/rendered"
 import storesync from "../prodrome/storesync"
 import { watchOthers, watchReplica } from "../prodrome/sync"
 import turns from "../chat/turns"
+import time from "../app/time"
+import grouped from "./grouped"
+import pageBlocks from "../app/blocks"
+import type questions from "../prodrome/questions"
 
 export namespace dressed {
-  // A block the box will not render stays its source, which the view draws.
-  const blockOf = async (id: string, b: BlockRow): Promise<BlockRow> => {
-    return rendered.through(rendered.store, await rendered.answerKey(b.source), () => blockBySource(id, b.source)).then(
-      html => ({ ...b, html }),
-      () => b,
-    )
+  // Every model turn's blocks with their renderings, each turn of the conversation beside it, kept by the keys the
+  // worker named them by, read together and asked of the box for the rest; a block the box will not render stays its
+  // source, which the view draws.
+  const turnsOf = async (ts: readonly { readonly id: string; readonly turn: TurnRow }[], keys: questions.Keyed): Promise<TurnRow[]> => {
+    const blocks = ts.flatMap(({ id, turn }) => (turn.who === "model" ? turn.blocks.map(b => ({ id, b })) : []))
+    if (blocks.length === 0) return ts.map(t => t.turn)
+    const html = await rendered.throughAll(pageBlocks.store, blocks.map(({ id, b }) => ({ k: keys[b.source] ?? null, ask: () => blockBySource(id, b.source) })))
+    const dressed = new Map(blocks.map(({ b }, i): [BlockRow, BlockRow] => [b, html[i] === null || html[i] === undefined ? b : { ...b, html: html[i] }]))
+    return ts.map(({ turn }) => (turn.who !== "model" || turn.blocks.length === 0 ? turn : { ...turn, blocks: turn.blocks.map(b => dressed.get(b) ?? b) }))
   }
-
-  const turnOf = (id: string, t: TurnRow): Promise<TurnRow> =>
-    t.who !== "model" || t.blocks.length === 0 ? Promise.resolve(t) : Promise.all(t.blocks.map(b => blockOf(id, b))).then(blocks => ({ ...t, blocks }))
 
   // The card counts what it draws, so a drawn proposal is the box's whole row; a secret's card links to where the
   // deployment's own declarations say it is issued, and a connection's names what its plugin may reach now.
@@ -87,19 +91,22 @@ export namespace dressed {
   // The stream a filter shows, each answer dressed with its blocks' renderings as a conversation's window is.
   export const stream = async (chosen: readonly string[], pages: number): Promise<storesync.Streamed> => {
     const read = await storesync.streamed(chosen, pages)
-    const rounds = await Promise.all(
-      read.stream.rounds.map(async r => (r.answer === null ? r : { ...r, answer: await turnOf(r.conversation, r.answer) })),
-    )
+    const answers = read.stream.rounds.flatMap(r => (r.answer === null ? [] : [{ id: r.conversation, turn: r.answer }]))
+    const dressed = await turnsOf(answers, read.keys)
+    let next = 0
+    const rounds = read.stream.rounds.map(r => (r.answer === null ? r : { ...r, answer: dressed[next++] ?? r.answer }))
     return { ...read, stream: { ...read.stream, rounds } }
   }
 
-  export const window = async (id: string, w: Window): Promise<ConversationPayload> => {
-    const at = (m: MemoryPayload | null): Promise<ConversationPayload> => held(id, w, m)
+  // A window, grouped into rounds on the owner's days in `zone`.
+  export const window = async (id: string, w: grouped.Asked, zone: time.Zone): Promise<grouped.Window> => {
+    const at = (m: MemoryPayload | null): Promise<{ readonly payload: grouped.Window; readonly keys: questions.Keyed }> =>
+      storesync.window(id, w, m, zone).then(one => (one.type === "Held" ? one : storesync.absent(id)))
     const bare = await at(null)
-    const m = await memory(bare)
-    const read = m === null ? bare : await at(m)
+    const m = await memory(bare.payload)
+    const { payload: read, keys } = m === null ? bare : await at(m)
     const [turns, proposals] = await Promise.all([
-      Promise.all(read.turns.map(t => turnOf(id, t))),
+      turnsOf(read.turns.map(turn => ({ id, turn })), keys),
       proposalsOf(id, read.proposals),
     ])
     return { ...read, turns, proposals }

@@ -12,8 +12,8 @@ import { block, revealHeld } from "../wire/api";
 import heldvalue from "../view/heldvalue";
 import attachment from "./attachment";
 import rendered from "../app/rendered";
+import blocks from "../app/blocks";
 import app from "../app/app";
-import { daySeparators } from "./days";
 import { el } from "../view/dom";
 import placeholder from "../view/placeholder";
 import memory from "./memory";
@@ -24,7 +24,8 @@ import intents from "../prodrome/intents";
 import intentsync from "../prodrome/intentsync";
 import keyed from "../algebra/keyed";
 import { anchor, anchorOf, print, textWithReferences, tokenise } from "./refs";
-import { type Round, foldOf, rounds } from "./rounds";
+import { type Round, foldOf } from "./rounds";
+import grouped from "./grouped";
 import { richOrText } from "../rich";
 import { toast } from "../view/toast";
 import held from "./anchor";
@@ -38,6 +39,8 @@ import time from "../app/time";
 import ui from "../app/ui";
 import registers from "../app/registers";
 import lo from "../algebra/lo";
+import marks from "./marks";
+import slices from "./slices";
 import page from "../shell/page";
 
 export interface TranscriptActions {
@@ -220,8 +223,12 @@ function roundParts(
   forget: memory.Forget,
   titles: spoken.Titles,
 ): keyed.Item[] {
-  const piece = (placed: { readonly turn: TurnRow; readonly index: number }): string =>
-    `${placed.index}:${placed.turn.who}:${turns.verb(placed.turn) ?? ""}:${turns.refused(placed.turn)}:${turns.queued(placed.turn)}:${turns.blocks(placed.turn).map((b) => b.html ?? "").join("")}:${placed.turn.text}:${placed.turn.at}:${placed.turn.gone?.why ?? ""}`;
+  // A line once written never changes, so a turn draws anew only when its HTML arrives or its words go: what it is
+  // drawn from is named by its shape, never by its words, which a redraw would copy into a string per turn.
+  const piece = (placed: { readonly turn: TurnRow; readonly index: number }): string => {
+    const blocks = turns.blocks(placed.turn);
+    return `${placed.index}:${placed.turn.who}:${turns.verb(placed.turn) ?? ""}:${turns.refused(placed.turn)}:${turns.queued(placed.turn)}:${blocks.length}:${blocks.filter((b) => b.html !== null).length}:${placed.turn.text.length}:${placed.turn.at}:${placed.turn.gone?.why ?? ""}`;
+  };
   const erasing: Erasing = mayReply ? { conversation: conversationId, asked, warning: erase.warning() } : null;
   const erased = (placed: { readonly turn: TurnRow }): string =>
     erasing === null ? "" : erase.sig(conversationId, placed.turn, asked);
@@ -325,13 +332,14 @@ export function mountTranscript(
 
   // Rounds by turn index; each a day mark and its parts, every list keyed, so a redraw replaces only what moved.
   const roundNodes = keyed.list(roundList);
-  const inner = new Map<string, { readonly wrap: keyed.List; readonly round: HTMLElement; readonly parts: keyed.List }>();
+  const inner = new Map<string, { readonly wrapper: HTMLElement; readonly wrap: keyed.List; readonly round: HTMLElement; readonly parts: keyed.List }>();
   const roundOf = (key: string): HTMLElement => {
     const wrapper = el("div", { class: "roundwrap" });
     const round = el("div", { class: "round" });
-    inner.set(key, { wrap: keyed.list(wrapper), round, parts: keyed.list(round) });
+    inner.set(key, { wrapper, wrap: keyed.list(wrapper), round, parts: keyed.list(round) });
     return wrapper;
   };
+  const wrapOf = (key: string): HTMLElement => inner.get(key)?.wrapper ?? roundOf(key);
   const onPage = scrollBox === document.scrollingElement;
   const hold = ui.cell(registers.hold, `${onPage ? "page" : "panel"}:${source.state().id}`);
   // A conversation's page reached afresh (a link, a search hit) opens at its newest turn, as every page opens at its
@@ -441,9 +449,9 @@ export function mountTranscript(
     streamed.set(b.sha, shown);
     // Kept by the function that renders it and its source, so a kept copy is the one that function computes.
     const id = source.state().id;
-    rendered
+    blocks
       .answerKey(b.source)
-      .then((k) => rendered.through(rendered.store, k, () => block(id, b.sha)))
+      .then((k) => rendered.through(blocks.store, k, () => block(id, b.sha)))
       .then(
         (html) => {
           const rich = richOrText(html, b.source, { class: "answerblock" });
@@ -499,61 +507,153 @@ export function mountTranscript(
     again.fold(again.offer(source.state()), () => {}, actions.edit);
   });
 
+  // A redraw reads its state once into a pass, and the pass draws the rounds newest first in slices (`slices`), from
+  // where the last stopped; a round new to the page stands once drawn, and one it holds stands where it stood until
+  // then, so a redraw moves nothing it does not change. When the last is drawn, the answer's place, whose move reads the
+  // layout, is placed in the next frame, which lays the drawn rounds out once, never ahead of it in a task, and the page
+  // marks it (`marks.PLACED`). A redraw replaces the pass it finds. A hidden tab, whose tasks are throttled and which
+  // draws no frame, draws and places in one pass.
+  // The rounds are the worker's (`grouped`), drawn as given: each read from the page's turns and cards by index as its
+  // slice draws it.
+  // Rows by their own index, read once per list the source holds.
+  const indexer = <R extends { readonly index: number }>(): ((rows: readonly R[]) => ReadonlyMap<number, R>) => {
+    const known = new WeakMap<readonly R[], ReadonlyMap<number, R>>();
+    return (rows) => {
+      const was = known.get(rows);
+      if (was !== undefined) return was;
+      const made = new Map(rows.map((r) => [r.index, r]));
+      known.set(rows, made);
+      return made;
+    };
+  };
+  const turnsIndexed = indexer<TurnRow>();
+  const cardsIndexed = indexer<ProposalRow>();
+  type Pass = {
+    readonly state: SourceState & { readonly kind: "loaded" };
+    readonly shapes: readonly grouped.Shape[];
+    readonly turnsAt: ReadonlyMap<number, TurnRow>;
+    readonly cardsAt: ReadonlyMap<number, ProposalRow>;
+    readonly mayReply: boolean;
+    readonly asked: intentsync.T;
+    readonly forget: memory.Forget;
+    readonly titles: spoken.Titles;
+    from: number;
+  };
+  const drawing = slices.of();
+  let placing: number | undefined;
+  const placings: (() => void)[] = [];
+
+  const placeNow = (): void => {
+    if (placing !== undefined) cancelAnimationFrame(placing);
+    placing = undefined;
+    for (const p of placings.splice(0)) p();
+    performance.clearMarks(marks.PLACED);
+    performance.mark(marks.PLACED);
+  };
+  const placeLater = (): void => {
+    if (placing !== undefined) cancelAnimationFrame(placing);
+    if (slices.browser.hidden()) return placeNow();
+    placing = requestAnimationFrame(placeNow);
+  };
+  // A tab hidden mid-way draws and places the rest at once.
+  const onHidden = (): void => {
+    if (!document.hidden) return;
+    drawing.flush();
+    if (placing !== undefined) placeNow();
+  };
+  document.addEventListener("visibilitychange", onHidden);
+
+  const passOf = (p: Pass): slices.Work => ({
+    unit: () => {
+      const shape = p.shapes[p.from - 1];
+      p.from -= 1;
+      if (shape !== undefined) {
+        const round = grouped.resolve(shape, p.turnsAt, p.cardsAt);
+        const key = String(round.key);
+        if (!inner.has(key)) roundOf(key);
+        const it = inner.get(key);
+        if (it !== undefined) {
+          const dayMark = shape.marked ? shape.label : undefined;
+          it.wrap.draw([
+            ...(dayMark === undefined ? [] : [{ key: "day", sig: dayMark, make: () => el("div", { class: "dayseparator" }, dayMark) }]),
+            { key: "round", sig: "", make: () => it.round },
+          ]);
+          it.parts.draw(roundParts(p.state.id, round, actions, p.mayReply, p.asked, p.forget, p.titles));
+          // A round new to the page stands once drawn, before the newer one this pass drew just before it; a round
+          // made before stands where it stood, and the last slice puts every round in its place.
+          if (it.wrapper.parentNode !== roundList) {
+            const newer = p.shapes[p.from + 1];
+            const before = newer === undefined ? null : (inner.get(String(newer.key))?.wrapper ?? null);
+            roundList.insertBefore(it.wrapper, before?.parentNode === roundList ? before : null);
+          }
+        }
+      }
+      return p.from > 0;
+    },
+    done: () => {
+      roundNodes.draw(p.shapes.map((round) => ({ key: String(round.key), sig: "", make: () => wrapOf(String(round.key)) })));
+      const keys = new Set(p.shapes.map((round) => String(round.key)));
+      for (const k of [...inner.keys()]) if (!keys.has(k)) inner.delete(k);
+      placeLater();
+    },
+  });
+
   /** Idempotent: a keyed-round diff, so an unchanged state moves nothing. */
   function redraw(state: SourceState): void {
+    drawing.cancel();
     if (state.kind !== "loading") coming.remove();
     if (state.kind !== "loaded") {
       problem.hidden = state.kind !== "failed";
       problem.textContent = state.kind === "failed" ? state.reason : "";
       earlierBtn.hidden = true;
+      placeLater();
       return;
     }
     const mayReply = app.writes(app.now());
-    const asked = intentsync.held();
-    const grouped = rounds(state.turns, state.proposals);
-    const dayMarks = daySeparators(
-      grouped.map((round) => ({
-        key: round.key,
-        at: round.opening?.turn.at ?? round.trace[0]?.turn.at ?? round.answer?.turn.at ?? "",
-      })),
-      app.now().zone,
-    );
-    const forget = memory.forgets(mayReply, () => source.refresh());
-    const titles = spoken.titles(onscreen.entries(store.state()));
-    roundNodes.draw(grouped.map((round) => ({ key: String(round.key), sig: "", make: () => roundOf(String(round.key)) })));
-    for (const round of grouped) {
-      const it = inner.get(String(round.key));
-      if (it === undefined) continue;
-      const dayMark = dayMarks.get(round.key);
-      it.wrap.draw([
-        ...(dayMark === undefined ? [] : [{ key: "day", sig: dayMark, make: () => el("div", { class: "dayseparator" }, dayMark) }]),
-        { key: "round", sig: "", make: () => it.round },
-      ]);
-      it.parts.draw(roundParts(state.id, round, actions, mayReply, asked, forget, titles));
-    }
-    for (const k of [...inner.keys()]) if (!grouped.some((round) => String(round.key) === k)) inner.delete(k);
     earlierBtn.hidden = state.first <= 0;
     problem.hidden = state.problem === null;
     problem.textContent = state.problem ?? "";
     unplaced.replaceChildren(...state.unplaced.map(u =>
       el("p", { class: "problem" }, `${print({ kind: "proposal", conversation: state.id, index: u.index })} has no card: ${waiting.unheld(u.why)}.`)));
+    const pass: Pass = {
+      state,
+      shapes: state.rounds,
+      turnsAt: turnsIndexed(state.turns),
+      cardsAt: cardsIndexed(state.proposals),
+      mayReply,
+      asked: intentsync.held(),
+      forget: memory.forgets(mayReply, () => source.refresh()),
+      titles: spoken.titles(onscreen.entries(store.state())),
+      from: state.rounds.length,
+    };
+    if (state.rounds.length === 0) {
+      roundNodes.draw([]);
+      inner.clear();
+      placeLater();
+      return;
+    }
+    // The first slice in the task after the reading, so neither holds the thread the other's time.
+    drawing.run(passOf(pass));
   }
 
   // --- wiring --------------------------------------------------------------
 
+  // A frame of the answer is placed at once; anything else redraws, and is placed once the pass is drawn, in order.
   const unsubscribe = source.subscribe((state, event) => {
-    drawPlace();
-    if (event.kind === "frame") return;
+    if (event.kind === "frame") return drawPlace();
+    placings.push(() => {
+      drawPlace();
+      // A refresh that brings no turn (a poll, a block's HTML, a second read) moves nothing under the reader's finger.
+      if (event.kind === "window" && event.mode === "newest" && state.kind === "loaded") {
+        const e = held.windowed(heldAt, state.total);
+        const was = hold.get();
+        // The first window of a conversation drawn again opens where the reader left it, unless that was the newest.
+        if (e?.type === "window" && e.fresh && was.at.type !== "Newest") scrollBox.scrollTop = was.top;
+        else if (e !== null) move(e);
+        heldAt = state.total;
+      }
+    });
     redraw(state);
-    // A refresh that brings no turn (a poll, a block's HTML, a second read) moves nothing under the reader's finger.
-    if (event.kind === "window" && event.mode === "newest" && state.kind === "loaded") {
-      const e = held.windowed(heldAt, state.total);
-      const was = hold.get();
-      // The first window of a conversation drawn again opens where the reader left it, unless that was the newest.
-      if (e?.type === "window" && e.fresh && was.at.type !== "Newest") scrollBox.scrollTop = was.top;
-      else if (e !== null) move(e);
-      heldAt = state.total;
-    }
   });
 
   // A card is drawn against what this tab asked, so an ask redraws exactly the rounds whose cards it moved.
@@ -593,6 +693,9 @@ export function mountTranscript(
     stop,
     offer: () => again.offer(source.state()),
     destroy: () => {
+      drawing.cancel();
+      if (placing !== undefined) cancelAnimationFrame(placing);
+      document.removeEventListener("visibilitychange", onHidden);
       unsubscribe();
       unwatchAsked();
       unwatchActor();

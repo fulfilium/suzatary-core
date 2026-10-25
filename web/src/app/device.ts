@@ -2,6 +2,7 @@
 
 import { el } from "../view/dom"
 import rendered from "./rendered"
+import blocks from "./blocks"
 import once from "../algebra/once"
 import type { Standing } from "../prodrome/core"
 import pairing from "./pairing"
@@ -88,7 +89,7 @@ export namespace device {
   }).get
 
   // What this device keeps, read with the box's overview: it moves when the page is read again, not with the replica.
-  export const kept = async (store: rendered.Store = rendered.store): Promise<Kept> => ({
+  export const kept = async (store: rendered.Store = blocks.store): Promise<Kept> => ({
     persist: await persist().catch(() => persistOf(false, false)),
     usage: await store.usage(),
     budget: rendered.BUDGET,

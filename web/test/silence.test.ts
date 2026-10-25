@@ -7,7 +7,7 @@ import assert from "node:assert/strict"
 import http from "../src/wire/http"
 import wait from "../src/wire/wait"
 import d from "../src/wire/decoder"
-import { storeObjects } from "../src/wire/api"
+import storereads from "../src/wire/storereads"
 
 const MS = 200
 
@@ -62,7 +62,7 @@ test("the lines are pulled bounded by 30 s of silence", async t => {
   Object.defineProperty(globalThis, "fetch", { value: () => Promise.resolve(new Response(body)), configurable: true })
   t.mock.timers.enable({ apis: ["setTimeout"] })
   let settled = false
-  const failed = storeObjects("lines", "").then(
+  const failed = storereads.objects("lines", "").then(
     () => "",
     (e: unknown) => String(e),
   )

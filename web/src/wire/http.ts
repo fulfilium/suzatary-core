@@ -29,9 +29,10 @@ export namespace http {
   // 3 signs every write with this device's key, 4 reads the conversations from the lines and forgets what is erased, 5
   // reads the box's turns, card answers, proposed objects, reviews and stored objects as tagged sums, 6 keeps the
   // lines as a skeleton and their content by hash, in a device database a page of contract 5 cannot open, 7 names what
-  // a replica holds by the frontier the box last named, in a device database a page of contract 6 cannot open.
+  // a replica holds by the frontier the box last named, in a device database a page of contract 6 cannot open, 8 keeps
+  // the lines' skeleton one node per row, in a version of that database a page of contract 7 cannot open.
   export const CLIENT_HEADER = "X-Suzatary-Client"
-  export const CLIENT = 7
+  export const CLIENT = 8
   // A box that has moved past this build's contract: it performed nothing, and the page offers the new build (`newbuild`).
   export const OUTDATED = 426
   export const NOT_SENT = "Not sent: this version of the app is older than the box's. Reload to the new version, then send it again."
@@ -75,6 +76,12 @@ export namespace http {
     for (const old of kept.keys()) if (kept.size > KEPT) kept.delete(old)
   }
   export const held = (path: string): string | null => kept.get(path)?.tag ?? null
+  // Every answer kept, as text: what a read of this module's memory finds.
+  export const keptTexts = (): readonly string[] => [...kept.values()].map(k => k.text)
+
+  // Whether a read's answer is kept: an answer that carries the keys of locked words never is, since the key's bytes
+  // would outlive the erasure that lets them go.
+  export type Keeping = "Kept" | "Never"
 
   // The protocol the box last answered an API read over ("h2", "http/1.1"), or "" where the browser has not said. The
   // page's own load may come from the worker's cache, which names none, so the API's answers are what is read.
@@ -145,7 +152,7 @@ export namespace http {
   }
 
   // A read is signed too, so a device whose key was revoked is told to wipe itself however it next asks.
-  export const get = async <A>(path: string, decoder: d.Decoder<A>, bound: Bound = WALL): Promise<A> => {
+  export const get = async <A>(path: string, decoder: d.Decoder<A>, bound: Bound = WALL, keeping: Keeping = "Kept"): Promise<A> => {
     const timer = bound.type === "Wall" ? { signal: AbortSignal.timeout(wait.MS), heard: () => undefined, done: () => undefined } : silence(path, bound.ms)
     try {
       const [response, had] = await answer(path, timer.signal)
@@ -162,7 +169,7 @@ export namespace http {
       }
       const text = await textOf(response, timer.signal, timer.heard).catch(wait.waited(path))
       const tag = response.headers.get("etag")
-      if (tag === null) kept.delete(path)
+      if (tag === null || keeping === "Never") kept.delete(path)
       else keep(path, { tag, text })
       return decoded(path, decoder, JSON.parse(text))
     } finally {

@@ -274,6 +274,8 @@ export class Page {
   private captures: Capture[] = [];
   private listening = false;
   private held: string[] = [];
+  private heldAt: string[] = [];
+  private attaching = false;
   /** The sentence `refuse` answers with. */
   private refusal = "";
 
@@ -731,6 +733,7 @@ export class Page {
     const verdict = ours ? (this.answer ?? "continue") : "continue";
     if (verdict === "hold") {
       this.held.push(id);
+      this.heldAt.push(url);
       return;
     }
     const sent = params["request"];
@@ -817,6 +820,12 @@ export class Page {
     }
   }
 
+  /** The URLs of the requests `holdRequests` is holding, in the order they came: a worker's among them, which the
+   * page's own entries do not list. */
+  heldUrls(): readonly string[] {
+    return [...this.heldAt];
+  }
+
   /** Pause every request whose URL contains one of these. The returned
    * function lets them all through and stops intercepting. */
   async holdRequests(fragments: readonly string[]): Promise<() => Promise<void>> {
@@ -825,6 +834,7 @@ export class Page {
       await this.narrow();
       const waiting = this.held;
       this.held = [];
+      this.heldAt = [];
       for (const id of waiting) {
         await this.command("Fetch.continueRequest", { requestId: id }).catch(() => {
           // Already gone; nothing to release.
@@ -985,20 +995,32 @@ export class Page {
     };
   }
 
-  /** Each response whose URL holds `part`, with its status, from now until the answer is called. */
+  /** Each response whose URL holds `part`, with its status, from now on, as far as the answer is called: the page's and
+   * its workers' alike, since the core's worker pulls the stores. */
   async statuses(part: string): Promise<() => { url: string; status: number }[]> {
     const seen: { url: string; status: number }[] = [];
-    let open = true;
     this.connection.on("Network.responseReceived", (params) => {
       const r = params["response"] as { url?: string; status?: number } | undefined;
       const url = r?.url ?? "";
-      if (open && url.includes(part)) seen.push({ url, status: r?.status ?? 0 });
+      if (url.includes(part)) seen.push({ url, status: r?.status ?? 0 });
     });
+    await this.workersToo();
     await this.command("Network.enable", {});
-    return () => {
-      open = false;
-      return seen;
-    };
+    return () => [...seen];
+  }
+
+  /** Every worker the page starts from now on attached, its network reported as the page's is. */
+  private async workersToo(): Promise<void> {
+    if (this.attaching) return;
+    this.attaching = true;
+    this.connection.on("Target.attachedToTarget", (params, session) => {
+      const info = params["targetInfo"] as { type?: string } | undefined;
+      const child = params["sessionId"];
+      if (session !== this.session || typeof child !== "string" || info?.type !== "worker") return;
+      void this.connection.send("Network.enable", {}, child).catch(() => {});
+      void this.connection.send("Runtime.runIfWaitingForDebugger", {}, child).catch(() => {});
+    });
+    await this.command("Target.setAutoAttach", { autoAttach: true, waitForDebuggerOnStart: false, flatten: true });
   }
 
   /**

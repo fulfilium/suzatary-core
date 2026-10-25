@@ -16,6 +16,12 @@ export namespace remote {
     readonly ask: <K extends questions.Kind>(q: questions.Of<K>) => Promise<questions.Answer<K>>
   }
 
+  // Who hears what the worker says unasked; one hearer, the page's shell, set before the worker starts.
+  let hearer: (s: questions.Said) => void = () => {}
+  export const hear = (f: (s: questions.Said) => void): void => {
+    hearer = f
+  }
+
   // What each chain holds as `hold` last told it, by name.
   // Nothing, once the worker refused a holding: the next is sent whole.
   type Sent = Map<string, ReadonlySet<string>> | null
@@ -34,7 +40,7 @@ export namespace remote {
 
   // `broken` is said once the worker is gone (its script did not load, or it threw outside a question): every question
   // waiting and every one after fails with why, rather than waiting on an answer that will not come.
-  export const over = (port: questions.Port<questions.Answered, questions.Asked>, broken: (fail: (why: string) => void) => void = () => {}): Remote => {
+  export const over = (port: questions.Port<questions.Out, questions.Asked>, broken: (fail: (why: string) => void) => void = () => {}): Remote => {
     const waiting = new Map<number, { ok: (v: questions.Answer<questions.Kind>) => void; no: (e: Error) => void }>()
     let gone: string | null = null
     broken(why => {
@@ -44,6 +50,7 @@ export namespace remote {
     })
     let n = 0
     port.addEventListener("message", e => {
+      if ("said" in e.data) return hearer(e.data.said)
       const { id, answer } = e.data
       const w = waiting.get(id)
       waiting.delete(id)

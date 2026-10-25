@@ -1,12 +1,12 @@
 // Every route the box answers, named once: its path, its method, and the decoder its answer passes through `http`.
 
 import app from "../app/app";
-import type { AboutPayload, AttachmentRow, Authoring, AuthoredPayload, BlockRender, BriefingPayload, BriefingsPayload, CalendarPayload, ChainPayload, ContentPayload, ConversationPayload, DevicePayload, DrawnPayload, Erasing, FactId, FoldPayload, InboxPayload, KeyAsked, MailMessage, MailSearchPayload, MePayload, MemoryPayload, NewTodo, ObjectsPayload, Overview, Pairing, PostedObjects, Reasoning, ReceiptPayload, Registering, ReleasesPayload, Revealing, SayPayload, Saying, SkeletonPayload, StorePayload, Tapping, ThreadPayload, Titling, TodoPayload, UpdateTodo, Uploaded, Uploading, UsagePayload, WaitingPayload, WatchesPayload } from "./generated/wire";
+import type { AboutPayload, AttachmentRow, Authoring, AuthoredPayload, BlockRender, BriefingPayload, BriefingsPayload, CalendarPayload, ChainPayload, ConversationPayload, DevicePayload, DrawnPayload, Erasing, FactId, FoldPayload, InboxPayload, KeyAsked, MailMessage, MailSearchPayload, MePayload, MemoryPayload, NewTodo, ObjectsPayload, Overview, Pairing, PostedObjects, Reasoning, ReceiptPayload, Registering, ReleasesPayload, Revealing, SayPayload, Saying, Tapping, ThreadPayload, Titling, TodoPayload, UpdateTodo, Uploaded, Uploading, UsagePayload, WaitingPayload, WatchesPayload } from "./generated/wire";
 import { print } from "../chat/refs";
 import type { Reference } from "../chat/refs";
 import heads from "../prodrome/heads";
 import http from "./http";
-import wait from "./wait";
+import storereads from "./storereads";
 import once from "../algebra/once";
 import d from "./decoder";
 import payload from "./generated/payload";
@@ -37,10 +37,9 @@ export const about = (): Promise<AboutPayload> => http.get("/api/about", payload
 export const getReleases = (): Promise<ReleasesPayload> => http.get("/api/releases", payload.ReleasesPayload);
 
 /** `path` asked from the frontier `since`, an answer's digest, or from nothing: a request that does not grow with the replica. */
-export const sinceIn = (path: string, since: string): string => (since === "" ? path : `${path}?since=${encodeURIComponent(since)}`);
 
 /** The objects the frontier `since` does not reach; none asks for all. */
-export const objectsSince = (since: string, chain?: string): Promise<ObjectsPayload> => http.get(onChain(sinceIn("objects", since), chain), payload.ObjectsPayload);
+export const objectsSince = (since: string, chain?: string): Promise<ObjectsPayload> => http.get(onChain(storereads.sinceIn("objects", since), chain), payload.ObjectsPayload);
 
 // The heads our own last sync produced, so `/events` does not announce our write back; asking consumes them.
 let ourHeads: heads.Heads | null = null;
@@ -78,24 +77,9 @@ export const authorUpdate = (edit: UpdateTodo, note = ""): Promise<AuthoredPaylo
 export const authorUndo = (todo: string): Promise<AuthoredPayload> => author({ undo: todo });
 export const authorRedo = (todo: string): Promise<AuthoredPayload> => author({ redo: todo });
 
-// --- the secretary's stores, as replicas ---------------------------------------
-
-/** A piece of what a replica of the inbox or the lines holding `since` lacks, the keys of the words it sends, and how much is left.
- * Bounded by silence, not length: one object may be larger than a piece, which a phone on a slow network takes longer than `wait.MS` to pull. */
-export const storeObjects = (store: string, since: string): Promise<StorePayload> =>
-  http.get(sinceIn(`/api/stores/${encodeURIComponent(store)}/objects`, since), payload.StorePayload, { type: "Silence", ms: wait.MS });
-
-/** A piece of the lines' skeleton a replica holding `since` lacks: what `storeObjects` sends, each object without its literal. */
-export const storeSkeleton = (since: string): Promise<SkeletonPayload> =>
-  http.get(sinceIn("/api/stores/lines/skeleton", since), payload.SkeletonPayload, { type: "Silence", ms: wait.MS });
-
 /** What a replica of a topic store holding the frontier `since` lacks on the box: the box takes each as the actor the request was proven for. */
 export const postStoreObjects = (store: "topics" | "topic-aliases", objects: readonly string[], since: string): Promise<ReceiptPayload> =>
   posted(`/api/stores/${store}/objects`, objects, since);
-
-/** The literals of `hashes`, in ascending order with none twice, so one set has one URL the browser keeps for good. */
-export const storeContent = (store: string, hashes: readonly string[]): Promise<ContentPayload> =>
-  http.get(`/api/stores/${encodeURIComponent(store)}/content?hashes=${hashes.join(",")}`, payload.ContentPayload, { type: "Silence", ms: wait.MS });
 
 // --- the Inbox ---------------------------------------------------------------
 

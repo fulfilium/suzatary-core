@@ -6,7 +6,7 @@
  * monotone `fallback`, so a page never un-says "nothing about this yet".
  */
 
-import type { AttachmentRow, ConversationPayload, ConversationState, Frame, ProposalRow, TurnRow, UnplacedProposal } from "../wire/generated/wire";
+import type { AttachmentRow, ConversationState, Frame, ProposalRow, TurnRow, UnplacedProposal } from "../wire/generated/wire";
 import type { Reference } from "./refs";
 import asks from "../prodrome/asks";
 import intentsync from "../prodrome/intentsync";
@@ -20,12 +20,14 @@ import stream from "../algebra/stream";
 import latest from "../algebra/latest";
 import answer from "./answer";
 import time from "../app/time";
+import app from "../app/app";
+import grouped from "./grouped";
 
 export interface SourceDeps {
   readonly fetchWindow: (
     id: string,
-    window: { before?: number; limit?: number; about?: string },
-  ) => Promise<ConversationPayload>;
+    window: grouped.Asked,
+  ) => Promise<grouped.Window>;
   /** One act on the conversation, an intent: resolves once the box took it and the replicas hold it, rejects with why not. */
   readonly ask: (a: asks.Ask) => Promise<void>;
   readonly openStream: (id: string) => stream.Socket;
@@ -33,16 +35,16 @@ export interface SourceDeps {
   readonly wake: stream.Wake;
   /** Bring the replicas level with the box, before a read that must see what it just wrote. */
   readonly pull: () => Promise<void>;
-  /** Wake on every change of what the replicas hold; returns its own removal. */
-  readonly watch: (heard: () => void) => () => void;
+  /** Wake on every change of what the replicas hold that conversation `id` reads; returns its own removal. */
+  readonly watch: (id: string, heard: () => void) => () => void;
 }
 
 const frameOf = d.json(payload.Frame);
 
 export const defaultDeps: SourceDeps = {
-  fetchWindow: dressed.window,
+  fetchWindow: (id, w) => dressed.window(id, w, app.now().zone),
   pull: storesync.sync,
-  watch: storesync.watch,
+  watch: storesync.watchConversation,
   ask: intentsync.asked,
   openStream: id => stream.of(`/api/secretary/conversations/${encodeURIComponent(id)}/stream`)(),
   wake: stream.browser,
@@ -68,6 +70,8 @@ export interface Loaded {
   readonly model: string;
   readonly opened: string;
   readonly turns: readonly TurnRow[];
+  /** The turns grouped into rounds, as the worker answered them: a window holds every turn the page holds. */
+  readonly rounds: readonly grouped.Shape[];
   readonly first: number;
   readonly total: number;
   readonly proposals: readonly ProposalRow[];
@@ -93,7 +97,7 @@ export type SourceEvent =
   | {
       readonly kind: "window";
       readonly mode: "older" | "newest";
-      readonly payload: ConversationPayload;
+      readonly payload: grouped.Window;
       /** The shell measured this fetch as the fallback's second leg; `step` only ORs it in. */
       readonly fallback: boolean;
       /** When it arrived, for the answer's clock. */
@@ -112,35 +116,24 @@ function initialState(id: string, about: Reference | undefined): SourceState {
   return { kind: "loading", id, about };
 }
 
-/** A gap between the loaded turns and a newest window trusts the new window whole rather than drawing a hole. */
-function mergedTurns(
-  priorTurns: readonly TurnRow[],
-  priorFirst: number,
-  payload: ConversationPayload,
-  mode: "older" | "newest",
-): { turns: TurnRow[]; first: number } {
-  if (mode === "older") {
-    return { turns: [...payload.turns, ...priorTurns], first: payload.first };
-  }
-  if (priorTurns.length === 0 || payload.first > priorFirst + priorTurns.length) {
-    return { turns: payload.turns.slice(), first: payload.first };
-  }
-  if (payload.first >= priorFirst) {
-    const keepBefore = payload.first - priorFirst;
-    return { turns: [...priorTurns.slice(0, keepBefore), ...payload.turns], first: priorFirst };
-  }
-  // Impossible on an append-only transcript; keeping the wider range held is safer than discarding it.
-  return { turns: priorTurns.slice(), first: priorFirst };
-}
+/**
+ * What a page asks for: a newest window holding every turn it holds, from its first on; an older one, a window further
+ * back as well. Before the first window, the core's own. A window about a reference is asked by how many turns it holds,
+ * since the core pages it over the turns it keeps.
+ */
+export const asking = (state: SourceState, mode: "older" | "newest", about: string | undefined): grouped.Asked => {
+  const on = about === undefined ? {} : { about };
+  if (state.kind !== "loaded") return on;
+  const more = mode === "older" ? grouped.WINDOW : 0;
+  const limit = Math.max(grouped.WINDOW, state.turns.length + more);
+  return about === undefined ? { ...on, limit, from: Math.max(0, state.first - more) } : { ...on, limit };
+};
 
 function applyWindow(
   state: SourceState,
   event: Extract<SourceEvent, { kind: "window" }>,
 ): Loaded {
-  const priorTurns = state.kind === "loaded" ? state.turns : [];
-  const priorFirst = state.kind === "loaded" ? state.first : 0;
   const priorFallback = state.kind === "loaded" ? state.fallback : false;
-  const merged = mergedTurns(priorTurns, priorFirst, event.payload, event.mode);
   return {
     kind: "loaded",
     id: state.id,
@@ -150,8 +143,9 @@ function applyWindow(
     title: event.payload.title,
     model: event.payload.model,
     opened: event.payload.opened,
-    turns: merged.turns,
-    first: merged.first,
+    turns: event.payload.turns,
+    rounds: event.payload.rounds,
+    first: event.payload.first,
     total: event.payload.total,
     proposals: event.payload.proposals,
     unplaced: event.payload.unplaced,
@@ -221,15 +215,18 @@ export function createSource(
   // Once fallen back, stays fallen back, so the whole conversation never narrows under the reader on a later reading.
   let effectiveAbout: Reference | undefined = about;
 
-  async function fetchNewestApplyingFallback(): Promise<{ payload: ConversationPayload; fallback: boolean }> {
+  type Reading = { payload: grouped.Window; fallback: boolean; mode: "older" | "newest" };
+
+  // A window holding every turn the page holds, and with an older one the turns before them too.
+  async function fetchApplyingFallback(mode: "older" | "newest"): Promise<Reading> {
     const aboutText = effectiveAbout === undefined ? undefined : print(effectiveAbout);
-    const first = await deps.fetchWindow(id, aboutText === undefined ? {} : { about: aboutText });
+    const first = await deps.fetchWindow(id, asking(fold.state(), mode, aboutText));
     if (aboutText === undefined || first.turns.length > 0) {
-      return { payload: first, fallback: false };
+      return { payload: first, fallback: false, mode };
     }
     effectiveAbout = undefined;
-    const whole = await deps.fetchWindow(id, {});
-    return { payload: whole, fallback: true };
+    const whole = await deps.fetchWindow(id, asking(fold.state(), mode, undefined));
+    return { payload: whole, fallback: true, mode };
   }
 
   let unwatch = (): void => {};
@@ -243,31 +240,26 @@ export function createSource(
   // The replicas only grow, so a reading asked later is never older than one asked before it; the two stores sync
   // apart, so two readings can hold the same turns and differ in their cards, and only the order asked tells them apart.
   // A reading that lands after a later-asked one has is dropped, its failure included.
-  const readings = latest.of<{ payload: ConversationPayload; fallback: boolean }>((l) =>
+  const readings = latest.of<Reading>((l) =>
     fold.dispatch(
       l.type === "Val"
-        ? { kind: "window", mode: "newest", payload: l.v.payload, fallback: l.v.fallback, at: time.now() }
+        ? { kind: "window", mode: l.v.mode, payload: l.v.payload, fallback: l.v.fallback, at: time.now() }
         : { kind: "failed", reason: l.e },
     ),
   );
   const newest = readings.ask;
 
-  const read = (): Promise<void> => newest(fetchNewestApplyingFallback);
+  const read = (): Promise<void> => newest(() => fetchApplyingFallback("newest"));
 
   /** A search hit's first window ends at its turn, so stick-to-bottom lands on it; later refreshes ask for the newest. */
   const openAt = (turn: number): Promise<void> =>
-    newest(async () => ({ payload: await deps.fetchWindow(id, { before: turn + 1 }), fallback: false }));
+    newest(async () => ({ payload: await deps.fetchWindow(id, { before: turn + 1 }), fallback: false, mode: "newest" }));
 
+  // In the readings' order, so a newest reading asked before it, which holds less, never lands over it.
   async function earlier(): Promise<void> {
     const current = fold.state();
     if (current.kind !== "loaded" || current.first <= 0 || destroyed) return;
-    const aboutText = effectiveAbout === undefined ? undefined : print(effectiveAbout);
-    const payload = await deps.fetchWindow(id, {
-      before: current.first,
-      ...(aboutText === undefined ? {} : { about: aboutText }),
-    });
-    if (destroyed) return;
-    fold.dispatch({ kind: "window", mode: "older", payload, fallback: false, at: time.now() });
+    await newest(() => fetchApplyingFallback("older"));
   }
 
   // How many turns this page has seen: what a question or a stop is asked after.
@@ -307,7 +299,7 @@ export function createSource(
     start: () => {
       void (at === undefined ? refresh() : openAt(at));
       close = stream.open(() => deps.openStream(id), { frame: heard }, deps.wake);
-      unwatch = deps.watch(() => void read());
+      unwatch = deps.watch(id, () => void read());
     },
     refresh,
     earlier,

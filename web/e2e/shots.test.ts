@@ -395,8 +395,8 @@ const SHOTS: readonly Shot[] = [
         const r = indexedDB.open("suzatary")
         r.onerror = () => fail(String(r.error))
         r.onsuccess = () => {
-          const tx = r.result.transaction(["chain", "content"], "readwrite")
-          tx.objectStore("chain").delete(IDBKeyRange.bound("objects:store/lines", "objects:store/lines\\uffff"))
+          const tx = r.result.transaction(["lines", "content"], "readwrite")
+          tx.objectStore("lines").clear()
           tx.objectStore("content").clear()
           tx.oncomplete = () => (r.result.close(), done(true))
           tx.onerror = () => fail(String(tx.error))

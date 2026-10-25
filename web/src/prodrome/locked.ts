@@ -5,7 +5,7 @@
 
 import type { Obj, Replica } from "./replica"
 import type { StoredObject } from "../wire/generated/wire"
-import { empty, join, reset, said } from "./replica"
+import { empty, epochOf, join, reset } from "./replica"
 
 // The replicas' own, under names the row's join and reset do not shadow.
 const joined = join
@@ -44,15 +44,14 @@ export namespace locked {
     return out ?? a
   }
 
-  // The epoch of the box's word a row holds, 0 before the box has spoken: every epoch it answers with is 1 or more.
-  const epochOf = <O extends Obj>(r: Row<O>): number => said(r.replica.box, 0, w => w.epoch)
+  const epoch = <O extends Obj>(r: Row<O>): number => epochOf(r.replica.held)
 
   // A semilattice with `NONE` its unit, ordered by generation and then by the epoch of the box's word: the later row is
   // kept whole, so the join that brings in a later epoch's word is the one that drops every object and key of the
   // epochs before, and no reader holds the word beside them. A store is a copy of the box's alone, so nothing of this
   // device's own goes with them. Within one generation and epoch, both sides united. Nothing new is `a` itself.
   export const join = <O extends Obj>(a: Row<O>, b: Row<O>): Row<O> => {
-    if (a.replica.generation === b.replica.generation && epochOf(a) !== epochOf(b)) return epochOf(a) > epochOf(b) ? a : b
+    if (a.replica.generation === b.replica.generation && epoch(a) !== epoch(b)) return epoch(a) > epoch(b) ? a : b
     const replica = joined(a.replica, b.replica)
     const keys = a.replica.generation === b.replica.generation ? union(a.keys, b.keys) : replica === a.replica ? a.keys : b.keys
     return replica === a.replica && sameKeys(keys, a.keys) ? a : replica === b.replica && sameKeys(keys, b.keys) ? b : of(replica, keys)

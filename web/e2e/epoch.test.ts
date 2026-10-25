@@ -42,8 +42,15 @@ const held = (name: string): string => `new Promise((ok, no) => {
   }
 })`
 
-/** The lines' row as the device keeps it, or null. */
-const linesRow = `${held("suzatary")}.then((all) => (JSON.parse(all).chain ?? []).find(([k]) => k === "objects:store/lines")?.[1] ?? null)`
+/** The lines' row as the device keeps it, one node and one key per row beside a head row, read back whole, or null. */
+const linesRow = `${held("suzatary")}.then((all) => {
+  const rows = JSON.parse(all).lines ?? []
+  const head = rows.find(([k]) => k === "head")?.[1]
+  if (head === undefined) return null
+  const objects = rows.filter(([k]) => k.startsWith("node/")).map(([, n]) => n)
+  const keys = Object.fromEntries(rows.filter(([k]) => k.startsWith("key/")).map(([k, v]) => [k.slice(4), v]))
+  return { replica: { generation: head.generation, objects, synced: objects.map((o) => o.hash), words: head.words }, keys }
+})`
 
 /** `write(store)` run in one read-write transaction of the store `store` of the database `name`. */
 const put = (name: string, store: string, write: string): string => `new Promise((done, fail) => {
@@ -92,17 +99,11 @@ app.scene("a device holding a line the box rewrote drops its copy at the later e
   const tip = [...row.replica.objects].reverse().find((o) => o.header.node === "line" && (o.header.keys ?? []).length > 0)!
   const old = { ...tip, hash: createHash("sha256").update(`${tip.hash} rewritten`, "utf8").digest("hex") }
   assert.ok(!row.replica.objects.some((o) => o.hash === old.hash), "the rewritten line is no object the box holds")
-  const before = {
-    ...row,
-    replica: {
-      ...row.replica,
-      objects: [...row.replica.objects, old],
-      synced: [...row.replica.synced, old.hash],
-      words: row.replica.words.map((w) => ({ ...w, epoch: 1 })),
-    },
-  }
+  // The head names the epoch before; the rewritten node is one more row beside the box's.
+  const head = await app.page.evaluate<{ generation: number; refused: unknown[] }>(`${rowsOf("suzatary", "lines")}.then((rows) => rows.find(([k]) => k === "head")[1])`)
+  const before = { ...head, words: row.replica.words.map((w) => ({ ...w, epoch: 1 })) }
   // And a piece of a pull from before it, kept and not landed: its progress, which the later epoch drops too.
-  const piece = { replica: { ...before.replica, objects: [old], synced: [old.hash] }, keys: {} }
+  const piece = { replica: { ...row.replica, objects: [old], synced: [old.hash], refused: [], words: before.words }, keys: {} }
   // The device is written from a page of the same origin that runs no app: an app tab still open would sync the round's
   // answer over the row written here. A pull that tab began before it navigated can still land after this write under
   // load; its row is of the later epoch, so the row's join keeps it whole and drops the copy written here. Either way the
@@ -110,7 +111,7 @@ app.scene("a device holding a line the box rewrote drops its copy at the later e
   await app.page.navigate(`${EPOCH_BASE}/api/about`)
   await app.page.waitFor(`document.readyState === "complete"`)
   await app.page.evaluate(
-    put("suzatary", "chain", `(s) => (s.put(${JSON.stringify(before)}, "objects:store/lines"), s.put(${JSON.stringify(piece)}, "objects:store/lines/piece/000000000000"))`),
+    put("suzatary", "lines", `(s) => (s.put(${JSON.stringify(before)}, "head"), s.put(${JSON.stringify(old)}, "node/${old.hash}"), s.put(${JSON.stringify(piece)}, "piece/000000000000"))`),
   )
   await app.page.navigate(`${EPOCH_BASE}/?overtaken=1#/secretary/${id}`)
   await app.page.waitFor(`document.querySelector(".pagetitle") !== null`, { timeout: 15000 })
@@ -132,8 +133,8 @@ app.scene("a device holding a line the box rewrote drops its copy at the later e
   assert.deepEqual(new Set(after.replica.objects.map((o) => o.hash)), new Set(box.nodes.map((o) => o.hash)), "the device holds the box's lines and nothing else")
   assert.ok(after.replica.words.every((w) => w.epoch > 1), "it heard the later epoch")
   assert.ok(Object.keys(after.keys).length > 0, "the keys taken again with the lines")
-  const left = await app.page.evaluate<[string, unknown][]>(rowsOf("suzatary", "chain"))
-  assert.deepEqual(left.filter(([k]) => k.startsWith("objects:store/lines/piece/")), [], "no piece from before the epoch is kept")
+  const left = await app.page.evaluate<[string, unknown][]>(rowsOf("suzatary", "lines"))
+  assert.deepEqual(left.filter(([k]) => k.startsWith("piece/")), [], "no piece from before the epoch is kept")
   // The conversation reads again from the box's lines alone.
   await app.page.waitFor(`document.querySelector(".turn-person") !== null`, { timeout: 20000 })
 })

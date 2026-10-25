@@ -646,8 +646,12 @@ plain store the lines were carried from on 2026-10-11 is gone (words stage 4):
 its schema, the verb that carried it and its law are deleted, and the data
 repository's earlier commits hold it beside the code that read it. A carried
 line keeps the name of the object it carried (`Carried::From`), which the
-digest reads as its leaf; nothing writes one any more. A TAB holds the lines as one device
-row, its replica and the keys the pulls gave (`web/src/prodrome/locked.ts`),
+digest reads as its leaf; nothing writes one any more. A TAB holds the lines in
+the core's worker (`web/src/prodrome/linesync.ts`), which restores, pulls and
+lands them and answers every reading of them; on the device they are a store
+of their own, one row per skeleton node and per key beside a head row
+(`linerows.ts`, database version 7), so a landing writes what arrived. The
+row is its replica and the keys the pulls gave (`web/src/prodrome/locked.ts`),
 joined as a pair of unions; a key the objects name as erased opens nothing
 and is owed, so whichever tab reads it, from a pull or from the row another
 tab left, forgets the blocks its words rendered and then drops it, by the
@@ -1572,7 +1576,9 @@ rules and points here for the modules. The web contract is `docs/WEB-SPEC.md`.
   conversations join the chains: `web/src/prodrome/stores.ts` is a store's
   replica as a semilattice (union of the objects, the heads of the later
   contact), `storesync.ts` its shell: kept in IndexedDB beside the chains
-  (`store/<name>`), pulled from the frontier the last answer named (§5), `GET /api/stores/<store>/objects?since=`
+  (`pages/<name>` for the page's stores, each its replica alone since they
+  lock no words, moved once from a keyed `store/<name>`; the lines one node
+  per row in a store of their own), pulled from the frontier the last answer named (§5), `GET /api/stores/<store>/objects?since=`
   (the conversations first, then the inbox, which the box writes first) in
   pieces of at most a megabyte of literals, each kept before the next is asked
   from the heads it left (2026-10-13: the whole lines store was 34 MB, which a

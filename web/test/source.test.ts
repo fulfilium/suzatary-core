@@ -12,10 +12,12 @@ import assert from "node:assert/strict";
 import type { ConversationPayload, Frame, TurnRow } from "../src/wire/generated/wire";
 import turns from "../src/chat/turns"
 import type asks from "../src/prodrome/asks";
-import { answering, createSource, step } from "../src/chat/source";
+import { answering, asking, createSource, step } from "../src/chat/source";
 import type { SourceDeps, SourceEvent, SourceState } from "../src/chat/source";
 import type stream from "../src/algebra/stream";
 import { forAll } from "./gen";
+import grouped from "../src/chat/grouped";
+import time from "../src/app/time";
 
 function turn(index: number, over: Partial<turns.Question> = {}): turns.Question {
   return {
@@ -32,8 +34,9 @@ function turn(index: number, over: Partial<turns.Question> = {}): turns.Question
   };
 }
 
-function payload(over: Partial<ConversationPayload> = {}): ConversationPayload {
-  return {
+// A window as the core's worker answers one, grouped into rounds.
+function payload(over: Partial<ConversationPayload> = {}): grouped.Window {
+  return grouped.of({
     id: "default",
     title: "Secretary",
     model: "claude",
@@ -46,7 +49,7 @@ function payload(over: Partial<ConversationPayload> = {}): ConversationPayload {
     total: 0,
     again: null,
     ...over,
-  };
+  }, time.UTC);
 }
 
 const LOADING: SourceState = { kind: "loading", id: "default", about: undefined };
@@ -135,23 +138,19 @@ test("a `state` frame updates the conversation state, and an idle one ends the a
   assert.deepEqual(state.kind === "loaded" ? state.answer : null, { type: "Done" });
 });
 
-test("`older` prepends and moves `first` back", () => {
+test("a window is what the page holds: the worker answered every turn it asked for, older or newest", () => {
   const first = step(LOADING, windowEvent({ payload: payload({ turns: [turn(2), turn(3)], first: 2, total: 4 }) }));
-  const next = step(
-    first,
-    windowEvent({ mode: "older", payload: payload({ turns: [turn(0), turn(1)], first: 0, total: 4 }) }),
-  );
-  assert.deepEqual(
-    next.kind === "loaded" ? next.turns.map((t) => t.index) : [],
-    [0, 1, 2, 3],
-  );
-  assert.equal(next.kind === "loaded" ? next.first : -1, 0);
+  const older = step(first, windowEvent({ mode: "older", payload: payload({ turns: [0, 1, 2, 3].map((i) => turn(i)), first: 0, total: 4 }) }));
+  assert.deepEqual(older.kind === "loaded" ? older.turns.map((t) => t.index) : [], [0, 1, 2, 3]);
+  assert.equal(older.kind === "loaded" ? older.first : -1, 0);
 });
 
-test("`newest` overlapping what is loaded keeps the overlap and appends the rest", () => {
-  const first = step(LOADING, windowEvent({ payload: payload({ turns: [turn(0), turn(1)], first: 0, total: 2 }) }));
-  const next = step(first, windowEvent({ payload: payload({ turns: [turn(1), turn(2)], first: 1, total: 3 }) }));
-  assert.deepEqual(next.kind === "loaded" ? next.turns.map((t) => t.index) : [], [0, 1, 2]);
+test("the page asks for every turn it holds, and an older window for those before them too", () => {
+  assert.deepEqual(asking(LOADING, "newest", undefined), {});
+  const held = step(LOADING, windowEvent({ payload: payload({ turns: [70, 71, 72].map((i) => turn(i)), first: 70, total: 73 }) }));
+  assert.deepEqual(asking(held, "newest", undefined), { limit: 60, from: 70 });
+  assert.deepEqual(asking(held, "older", undefined), { limit: 63, from: 10 });
+  assert.deepEqual(asking(held, "older", "todo:life/x"), { about: "todo:life/x", limit: 63 }, "a window about a reference by count");
 });
 
 test("`fallback` is monotone: once true, a later window without it stays true", () => {
@@ -321,7 +320,7 @@ test("law: readings land in any order, and what is on hand is never one asked be
     cases.push({ n, order, failing: new Set(order.filter(() => r.bool(0.2))) });
   });
   for (const { n, order, failing } of cases) {
-    const pending: { ok: (p: ConversationPayload) => void; no: (e: Error) => void }[] = [];
+    const pending: { ok: (p: grouped.Window) => void; no: (e: Error) => void }[] = [];
     const source = createSource(
       "default",
       undefined,

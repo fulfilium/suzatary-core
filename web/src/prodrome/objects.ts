@@ -7,6 +7,7 @@
 import d from "../wire/decoder";
 import lo from "../algebra/lo";
 import idb from "../app/idb";
+import locked from "./locked";
 import payload from "../wire/generated/payload";
 import type { Frontier, Held, Obj, Replica, Word } from "./replica";
 import type { StoredObject } from "../wire/generated/wire";
@@ -15,6 +16,7 @@ import { NOTHING, NO_FRONTIER, canonical, join, losses, replicaOf, reset } from 
 export const DB_NAME = "suzatary";
 const STORE_NAME = "chain";
 const CONTENT_NAME = "content";
+const LINES_NAME = "lines";
 
 /**
  * One row per chain, which only climbs: every tab of this origin joins into it, so none erases what another sealed.
@@ -25,7 +27,8 @@ function keyFor(chain: string): string {
   return `objects:${chain}`;
 }
 
-const Spoken = d.obj<Word>({
+/** A word of the box as a row keeps it. */
+export const Spoken = d.obj<Word>({
   epoch: d.num,
   heads: d.arr(d.str),
   untrusted: d.arr(d.str),
@@ -34,7 +37,8 @@ const Spoken = d.obj<Word>({
   geneses: d.arr(d.str),
 });
 
-const Standing: d.Decoder<Frontier> = d.sum<Frontier, "type">("type", { Nothing: {}, Named: { digest: d.str, count: d.num, era: d.num } });
+/** Where a replica stands with the box, as a row keeps it. */
+export const Standing: d.Decoder<Frontier> = d.sum<Frontier, "type">("type", { Nothing: {}, Named: { digest: d.str, count: d.num, era: d.num } });
 
 /** A replica's row, its objects read by `objects`. */
 export const replicaRow = <O extends Obj>(objects: d.Decoder<O>): d.Decoder<Held<O>> =>
@@ -62,25 +66,28 @@ export const parseReplica = (raw: unknown): lo.Settled<Replica> => lo.map(Stored
  * store of content by name, so the lines' row and its pieces from before it are dropped: the box alone writes the
  * lines, so nothing in them is this device's own; the blocks rendered from them are cleared too. Version 6 names where
  * each replica stands with the box by the frontier its last answer named (`replica.Frontier`), so every row is carried
- * standing nowhere, and its next pull asks from nothing.
+ * standing nowhere, and its next pull asks from nothing. Version 7 keeps the lines' skeleton one node per row in a
+ * store of its own (`linerows`), so a landing writes what arrived; the core's worker moves a version 6 lines' row into
+ * it and then deletes that row.
  */
 const DB: idb.Db = {
   name: DB_NAME,
-  version: 6,
+  version: 7,
   store: STORE_NAME,
   upgrade: (db, tx, from) => {
-    if (from >= 3) {
+    if (from >= 3 && from <= 6) {
       const rows = tx.objectStore(STORE_NAME);
       if (from < 5) {
         rows.delete(under(LINES));
         rows.put(true, keyFor(RENDERED_OWED));
       }
-      carry(rows, (row) => framed(from === 3 ? carried(row) : row));
+      if (from < 6) carry(rows, (row) => framed(from === 3 ? carried(row) : row));
     } else {
       if (db.objectStoreNames.contains(STORE_NAME)) db.deleteObjectStore(STORE_NAME);
       db.createObjectStore(STORE_NAME);
     }
     if (!db.objectStoreNames.contains(CONTENT_NAME)) db.createObjectStore(CONTENT_NAME);
+    if (!db.objectStoreNames.contains(LINES_NAME)) db.createObjectStore(LINES_NAME);
   },
 };
 
@@ -95,6 +102,9 @@ export const RENDERED_OWED = "store/rendered-owed";
 
 /** The device's content by name: one literal per object name, written once and never rewritten. */
 export const CONTENT: idb.Db = { ...DB, store: CONTENT_NAME };
+
+/** The lines' skeleton, one row per node and per key beside a head row (`linerows`). */
+export const LINE_ROWS: idb.Db = { ...DB, store: LINES_NAME };
 
 /** Every row rewritten by `step`, in the upgrade's own transaction. */
 function carry(store: IDBObjectStore, step: (row: unknown) => unknown): void {
@@ -141,6 +151,20 @@ export interface Rows<A> {
   readonly after: (generation: number) => A;
   readonly nothing: A;
 }
+
+/** A store's row: its replica of `O`s and the keys of their words, a reset's the empty row of the generation after. */
+export const storeRows = <O extends Obj>(objects: d.Decoder<O>, none: locked.Row<O>, unsent: (r: Replica<O>) => readonly StoredObject[]): Rows<locked.Row<O>> => {
+  const Kept = d.obj<{ replica: Held<O>; keys: locked.Keys }>({ replica: replicaRow(objects), keys: d.rec(d.str) });
+  return {
+    parse: (raw) => lo.map(Kept(raw), (k) => locked.of(replicaOf(canonical(k.replica)), k.keys)),
+    print: (r) => ({ replica: r.replica.held, keys: r.keys }),
+    generation: (r) => r.replica.generation,
+    unsent: (r) => unsent(r.replica),
+    join: locked.join,
+    after: (g) => locked.of(replicaOf<O>({ ...none.replica.held, generation: g + 1 })),
+    nothing: none,
+  };
+};
 
 export const CHAIN: Rows<Replica> = {
   parse: parseReplica,

@@ -1,5 +1,5 @@
 /**
- * Day separators for a transcript that spans days, on the owner's days. A day is printed from its own `YYYY-MM-DD`,
+ * The owner's days a transcript's rounds are separated by (`grouped`). A day is printed from its own `YYYY-MM-DD`,
  * never through a zoned `Date` that could move it; `Date.UTC` only names the weekday.
  */
 
@@ -44,21 +44,16 @@ export function dayLabel(at: string): string {
   return `${weekday} ${day} ${name}`;
 }
 
-export interface Dated {
-  readonly key: number;
-  readonly at: string;
-}
-
-/** A separator above each item whose owner's day differs from the previous dated item's; an undated item neither gets one nor resets the previous day. */
-export function daySeparators(items: readonly Dated[], zone: time.Zone): ReadonlyMap<number, string> {
-  const marks = new Map<number, string>();
-  let lastDay = "";
-  for (const item of items) {
-    const at = time.ms(item.at);
-    const today = at === null ? "" : time.date(zone, at);
-    if (today === "" || today === lastDay) continue;
-    lastDay = today;
-    marks.set(item.key, dayLabel(today));
-  }
-  return marks;
-}
+// The owner's day of each instant a round opened at, by zone and instant: an instant's day never moves, and every
+// window reads its rounds'. Let go whole past a bound.
+const days = new Map<string, string>();
+export const dayOf = (zone: time.Zone, instant: string): string => {
+  const key = `${zone.name} ${instant}`;
+  const known = days.get(key);
+  if (known !== undefined) return known;
+  const at = time.ms(instant);
+  const day = at === null ? "" : time.date(zone, at);
+  if (days.size >= 4096) days.clear();
+  days.set(key, day);
+  return day;
+};

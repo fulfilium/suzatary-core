@@ -62,7 +62,8 @@ export namespace time {
 
   // The owner's wall clock at `t`, as an instant whose UTC fields read it.
   const wall = (z: Zone, t: number): number => {
-    const part = (type: string): number => Number(face(z).formatToParts(t).find(p => p.type === type)?.value ?? NaN)
+    const parts = face(z).formatToParts(t)
+    const part = (type: string): number => Number(parts.find(p => p.type === type)?.value ?? NaN)
     return Date.UTC(part("year"), part("month") - 1, part("day"), part("hour"), part("minute"), part("second"), ((t % 1000) + 1000) % 1000)
   }
 

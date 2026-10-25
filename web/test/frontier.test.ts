@@ -7,7 +7,7 @@ import assert from "node:assert/strict"
 
 import type { Frontier } from "../src/prodrome/replica"
 import { NOTHING, answered, join, laterFrontier, pulled, reset, settled, sinceOf } from "../src/prodrome/replica"
-import { sinceIn } from "../src/wire/api"
+import storereads from "../src/wire/storereads"
 import type { StoredObject } from "../src/wire/generated/wire"
 import { forAll, type Rng } from "./gen"
 
@@ -36,7 +36,7 @@ test("law: a pull's request stays under a kilobyte, ten thousand heads or none",
   }, 1)
   assert.equal(replica.heads.length, 10_000)
   for (const path of ["/api/stores/lines/skeleton", "/api/stores/inbox/objects", "/api/life/objects"]) {
-    for (const r of [NOTHING, replica]) assert.ok(sinceIn(path, sinceOf(r)).length < 1024, path)
+    for (const r of [NOTHING, replica]) assert.ok(storereads.sinceIn(path, sinceOf(r)).length < 1024, path)
   }
 })
 

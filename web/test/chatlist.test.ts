@@ -28,10 +28,11 @@ const hits = (r: Rng): lo.T<readonly SearchHit[]> => r.pick([lo.loading, lo.erro
 const query = (r: Rng): string => r.pick(["", " ", "deed", " deed ", "lease"])
 
 const event = (r: Rng): list.Event => {
-  switch (r.int(4)) {
+  switch (r.int(5)) {
     case 0: return { type: "Listed", rows: r.bool() ? lo.val(rows(r)) : lo.error("down") }
     case 1: return { type: "Filtered", filter: filter(r) }
     case 2: return { type: "Typed", q: query(r) }
+    case 3: return { type: "More" }
     default: return { type: "Found", q: query(r), found: hits(r) }
   }
 }
@@ -61,4 +62,14 @@ test("the list's instant moves only by its tick, and every other event keeps it"
     const later = now + 1 + r.int(1000)
     assert.equal(list.step(t, { type: "Ticked", now: later }).now, later)
     assert.equal(list.step(t, { type: "Ticked", now }), t, "the same instant moves nothing")
+  }))
+
+test("a section shows a page of its newest rows, More a page more, and another filter starts again at one page", () =>
+  forAll(200, r => {
+    const t = r.array(r.int(20), () => event(r)).reduce(list.step, list.init(null, 0))
+    assert.ok(t.shown >= list.PAGE && t.shown % list.PAGE === 0)
+    assert.equal(list.step(t, { type: "More" }).shown, t.shown + list.PAGE)
+    const other = t.filter.type === "Topics" ? list.REVIEWS : list.TOPICS
+    assert.equal(list.step(t, { type: "Filtered", filter: other }).shown, list.PAGE)
+    assert.equal(list.step(t, { type: "Listed", rows: lo.val(rows(r)) }).shown, t.shown, "a listing keeps how far the reader went")
   }))

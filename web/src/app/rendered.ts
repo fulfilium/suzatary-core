@@ -10,7 +10,6 @@
 import lo from "../algebra/lo"
 import once from "../algebra/once"
 import table from "../algebra/table"
-import { functionsOf, loadCore } from "../prodrome/core"
 import idb from "./idb"
 
 export namespace rendered {
@@ -22,11 +21,6 @@ export namespace rendered {
   export const BUDGET = 20 * 1024 * 1024
   const KEPT = 2048
 
-  // An answer block's key, named by the core this tab runs, the box's own build.
-  export const answerKey = (source: string): Promise<table.Key | null> => loadCore().then(core => core.answer_key(source), () => null)
-
-  // The functions this build keeps blocks of; none where the core does not load, so nothing is kept.
-  export const own: () => Promise<ReadonlySet<string>> = once.of(() => loadCore().then(functionsOf, () => new Set<string>())).get
   const ours = (fs: ReadonlySet<string>) => (k: table.Key): boolean => fs.has(table.fnOf(k))
   // What a forget of `ks` takes from what is `held`: those keys, and every block of a function not `fs`.
   const taken = (fs: ReadonlySet<string>, ks: readonly table.Key[], held: readonly table.Key[]): table.Key[] => [...ks, ...held.filter(k => !ours(fs)(k))]
@@ -98,6 +92,39 @@ export namespace rendered {
     return answered.html
   }
 
+  // How many of the box's answers `throughAll` waits on at once: a browser asks one host six at a time anyway, and each
+  // ask then starts in the task the one before it ended in, never all in one.
+  const ASKING = 6
+
+  // `through` for many at once: the kept values read together, the box asked for each miss, and its answers joined
+  // together, so a window of blocks costs one read and one write of the device. A failed ask is null.
+  export const throughAll = async (
+    store: Store,
+    asks: readonly { readonly k: table.Key | null; readonly ask: () => Promise<{ readonly html: string; readonly key: string }> }[],
+  ): Promise<(string | null)[]> => {
+    const keyed = asks.flatMap(a => (a.k === null ? [] : [a.k]))
+    const read = await store.get(keyed)
+    const held = new Map(keyed.map((k, i) => [k, read[i] ?? null]))
+    type Answered = { readonly html: string; readonly join: Pair | null } | null
+    const answered: Answered[] = asks.map(a => {
+      const was = a.k === null ? null : (held.get(a.k) ?? null)
+      return was === null ? null : { html: was, join: null }
+    })
+    const misses = asks.flatMap((_, i) => (answered[i] === null ? [i] : []))
+    const next = async (): Promise<void> => {
+      for (let i = misses.shift(); i !== undefined; i = misses.shift()) {
+        answered[i] = await asks[i]!.ask().then(
+          (r): Answered => ({ html: r.html, join: [r.key, r.html] }),
+          () => null,
+        )
+      }
+    }
+    await Promise.all(Array.from({ length: Math.min(ASKING, misses.length) }, next))
+    const joins = answered.flatMap(a => (a === null || a.join === null ? [] : [a.join]))
+    if (joins.length > 0) await store.join(joins)
+    return answered.map(a => a?.html ?? null)
+  }
+
   export const DB = "suzatary-rendered"
   const ROWS = "rows"
 
@@ -148,57 +175,83 @@ export namespace rendered {
     readonly own: () => Promise<ReadonlySet<string>>
   }
 
+  // An erased block's mark on the device, beside the rows, read by every worker's join: a block one tab forgot is
+  // written back by no other, whatever that tab heard. A mark is no row, so no reading, eviction or usage counts it. It
+  // holds for the name for good: the same words said again later are rendered by the box and shown, never kept.
+  const STRUCK = "struck:"
+  const mark = (k: table.Key): string => `${STRUCK}${k}`
+  const marked = (k: string): boolean => k.startsWith(STRUCK)
+
   // The tab's table over the device's rows: a miss in the table reads the row, the join of one pair. A row and
   // a joined value that differ are a finding: the row goes and the table holds both, answering neither.
   const indexed = (fx: Effects, t: table.Table<string> = table.of(table.lru(KEPT))): Store => {
     const gone = struck()
-    const read = (k: table.Key): Promise<string | null> =>
+    // The rows of `ks`, read and marked used in one transaction: a miss, or a store that does not answer, is null.
+    const read = (ks: readonly table.Key[]): Promise<(string | null)[]> =>
       within(
         "readwrite",
-        async s => {
-          const row: unknown = await idb.done(s.get(k))
-          if (!isRow(row)) return null
-          await idb.done(s.put({ ...row, used: fx.now() }))
-          return row.html
+        s => {
+          const at = fx.now()
+          return Promise.all(
+            ks.map(async k => {
+              const row: unknown = await idb.done(s.get(k))
+              if (!isRow(row)) return null
+              await idb.done(s.put({ ...row, used: at }))
+              return row.html
+            }),
+          )
         },
-        null,
+        ks.map(() => null),
       )
     return {
-      get: ks =>
-        Promise.all(
-          ks.map(async k => {
-            const l = t.get(k)
-            if (l.type !== "Miss") return table.hit(l) ?? null
-            const html = await read(k)
-            // A read queued before a forget lands after it: what it found is not taken back.
-            if (html === null || gone.has(k)) return null
-            t.insert(k, html)
-            return html
-          }),
-        ),
+      get: async ks => {
+        const held = ks.map(k => t.get(k))
+        const misses = ks.filter((_, i) => held[i]!.type === "Miss")
+        const found = misses.length === 0 ? [] : await read(misses)
+        const byKey = new Map(misses.map((k, i) => [k, found[i] ?? null]))
+        return ks.map((k, i) => {
+          const l = held[i]!
+          if (l.type !== "Miss") return table.hit(l) ?? null
+          const html = byKey.get(k) ?? null
+          // A read queued before a forget lands after it: what it found is not taken back.
+          if (html === null || gone.has(k)) return null
+          t.insert(k, html)
+          return html
+        })
+      },
+      // A pair the device marks erased is taken nowhere, the table included, and its mark struck here too.
       join: async given => {
         const mine = ours(await fx.own())
         const ps = gone.fresh(given).filter(([k]) => mine(k))
-        const inTab = t.join(ps)
-        return within(
+        if (ps.length === 0) return []
+        const onDevice = await within(
           "readwrite",
-          async s => {
+          async (s): Promise<table.Key[]> => {
             const at = fx.now()
-            const rows = await Promise.all(ps.map(([k]): Promise<unknown> => idb.done(s.get(k))))
-            const disagree = ps.flatMap(([k, html], i) => {
+            const marks = await Promise.all(ps.map(([k]): Promise<unknown> => idb.done(s.get(mark(k)))))
+            gone.add(ps.filter((_, i) => marks[i] !== undefined).map(([k]) => k))
+            const live = ps.filter((_, i) => marks[i] === undefined)
+            const inTab = t.join(live)
+            const rows = await Promise.all(live.map(([k]): Promise<unknown> => idb.done(s.get(k))))
+            const disagree = live.flatMap(([k, html], i) => {
               const row = rows[i]
               return isRow(row) && row.html !== html ? [((): Pair => [k, row.html])()] : []
             })
             t.join(disagree)
             const found = new Set([...inTab, ...disagree.map(([k]) => k)])
-            await Promise.all(ps.map(([k, html]): Promise<unknown> => (found.has(k) ? idb.done(s.delete(k)) : idb.done(s.put({ key: k, html, bytes: bytesOf(html), used: at })))))
+            await Promise.all(live.map(([k, html]): Promise<unknown> => (found.has(k) ? idb.done(s.delete(k)) : idb.done(s.put({ key: k, html, bytes: bytesOf(html), used: at })))))
             await Promise.all(evict(await metas(s), fx.budget).map(key => idb.done(s.delete(key))))
             return [...found]
           },
-          inTab,
-        ).then(found => (found.forEach(fx.found), found))
+          null,
+        )
+        // A device that keeps nothing: the table is the only copy.
+        const found = onDevice ?? t.join(ps)
+        found.forEach(fx.found)
+        return found
       },
-      // A device that keeps nothing holds nothing to forget; one whose store fails to answer has not forgotten.
+      // A device that keeps nothing holds nothing to forget; one whose store fails to answer has not forgotten. Each
+      // forgotten key is marked, so no tab's join writes it back.
       forget: async ks => {
         gone.add(ks)
         const fs = await fx.own()
@@ -206,12 +259,26 @@ export namespace rendered {
         return !idb.available()
           ? DONE
           : idb
-              .within(kept, "readwrite", async s => (await Promise.all(taken(fs, ks, (await idb.done(s.getAllKeys())).filter((k): k is string => typeof k === "string")).map(k => idb.done(s.delete(k)))), DONE))
+              .within(kept, "readwrite", async s => {
+                const rows = (await idb.done(s.getAllKeys())).filter((k): k is string => typeof k === "string" && !marked(k))
+                await Promise.all(taken(fs, ks, rows).map(k => idb.done(s.delete(k))))
+                await Promise.all(ks.map(k => idb.done(s.put({ key: mark(k) }))))
+                return DONE
+              })
               .catch((e: unknown) => lo.error(lo.reason(e)))
       },
+      // Every block, its marks kept.
       clear: () => {
         t.pairs().forEach(([k]) => t.remove(k))
-        return !idb.available() ? Promise.resolve(DONE) : idb.within(kept, "readwrite", async s => (await idb.done(s.clear()), DONE)).catch((e: unknown) => lo.error(lo.reason(e)))
+        return !idb.available()
+          ? Promise.resolve(DONE)
+          : idb
+              .within(kept, "readwrite", async s => {
+                const rows = (await idb.done(s.getAllKeys())).filter((k): k is string => typeof k === "string" && !marked(k))
+                await Promise.all(rows.map(k => idb.done(s.delete(k))))
+                return DONE
+              })
+              .catch((e: unknown) => lo.error(lo.reason(e)))
       },
       usage: () => within("readonly", async s => usageOf(await metas(s)), none),
     }
@@ -221,7 +288,56 @@ export namespace rendered {
   // Who hears a finding: the beacon, once it is installed.
   export const hear = (f: (k: table.Key) => void): void => void (found = f)
 
-  export const store: Store = indexed({ budget: BUDGET, now: Date.now, found: k => found(k), own })
+  // The device's rows, made once by each tab's worker (`questions.serve`), their readers and writers, with the functions
+  // its core keeps blocks of: an erasure there is one delete and a mark, which every worker's join reads, so no tab
+  // writes the block back. A finding is answered to the page that asked the join, which tells it.
+  export const device = (own: ReadonlySet<string>): Store => indexed({ budget: BUDGET, now: Date.now, found: () => {}, own: () => Promise.resolve(own) })
+
+  // What the page asks of the worker for the device's rows: blocks by name, a join of the box's answers, and how much
+  // the device keeps, with the functions the worker's build keeps blocks of.
+  export type Asking = {
+    readonly get: (ks: readonly table.Key[]) => Promise<(string | null)[]>
+    readonly join: (pairs: readonly Pair[]) => Promise<table.Key[]>
+    readonly usage: () => Promise<Usage>
+    readonly own: () => Promise<ReadonlySet<string>>
+  }
+
+  // The page's blocks: a view in memory by name over the worker's, never written to the device from here. What the view
+  // lacks is asked of the worker; the box's answers are handed to the worker to keep, and held in view when they are of
+  // a function the worker keeps. The worker forgets erased blocks from the device first and then says so, so `forget`
+  // and `clear` take them from the view alone, and a join landing after takes none of them again.
+  export const viaWorker = (ask: Asking, t: table.Table<string> = table.of(table.lru(KEPT))): Store => {
+    const gone = struck()
+    const kept = once.of(() => ask.own().catch(() => new Set<string>()))
+    return {
+      get: async ks => {
+        const held = ks.map(k => t.get(k))
+        const misses = ks.filter((_, i) => held[i]!.type === "Miss")
+        const read = misses.length === 0 ? [] : await ask.get(misses).catch(() => misses.map(() => null))
+        const byKey = new Map(misses.map((k, i) => [k, read[i] ?? null]))
+        return ks.map((k, i) => {
+          const l = held[i]!
+          if (l.type !== "Miss") return table.hit(l) ?? null
+          const html = byKey.get(k) ?? null
+          if (html === null || gone.has(k)) return null
+          t.insert(k, html)
+          return html
+        })
+      },
+      join: async given => {
+        const ps = gone.fresh(given)
+        if (ps.length === 0) return []
+        const [findings, fs] = await Promise.all([ask.join(ps).catch(() => []), kept.get()])
+        const bad = new Set(findings)
+        t.join(gone.fresh(ps).filter(([k]) => ours(fs)(k) && !bad.has(k)))
+        findings.forEach(found)
+        return findings
+      },
+      forget: ks => (gone.add(ks), ks.forEach(k => t.remove(k)), Promise.resolve(DONE)),
+      clear: () => (t.pairs().forEach(([k]) => t.remove(k)), Promise.resolve(DONE)),
+      usage: () => ask.usage().catch(() => none),
+    }
+  }
 
 }
 export default rendered

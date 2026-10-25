@@ -100,6 +100,14 @@ if [[ "$doors" != "1" ]]; then
   exit 1
 fi
 
+# THE DEVICE'S RENDERED BLOCKS HAVE ONE WRITER: the worker's serve constructs the device's store, and no page module
+# does, so no page can write back a block an erasure removed (web/test/onewriter.test.ts is its law).
+makers=$(grep -Rl --binary-files=text --include='*.ts' -e 'rendered\.device(' web/src | sort | tr '\n' ' ')
+if [[ "$makers" != "web/src/prodrome/questions.ts " ]]; then
+  echo "web-static.sh: only web/src/prodrome/questions.ts may construct rendered.device (found: ${makers:-none})" >&2
+  exit 1
+fi
+
 # A CEILING ON `as`, THAT ONLY MOVES DOWN. `el`/`svg` are typed by tag, so a
 # cast narrowing what one
 # of them returns is a cast with no job left; this count is the blunt
