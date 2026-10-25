@@ -65,7 +65,7 @@ fn every_act() -> Vec<String> {
             adds.join(",")
         ),
         r#"{"act":"act","kind":"auth","account":"her@example.test"}"#.to_owned(),
-        r#"{"act":"act","kind":"secret","name":"ANTHROPIC_API_KEY","why":"the secretary needs a model"}"#.to_owned(),
+        r#"{"act":"act","kind":"secret","name":"NTFY_TOPIC","why":"the secretary needs a channel"}"#.to_owned(),
         r#"{"act":"act","kind":"web","request":{"kind":"search","query":"train times"}}"#.to_owned(),
         r#"{"act":"act","kind":"web","request":{"kind":"fetch","url":"https://docs.rs/serde"},"rule":"docs.rs"}"#.to_owned(),
         format!(
@@ -81,14 +81,6 @@ fn every_act() -> Vec<String> {
         r#"{"act":"act","kind":"connect","connection":{"template":"git-remote","params":[]}}"#.to_owned(),
         r#"{"act":"act","kind":"disconnect","connection":{"template":"lieer","params":["ada@example.test"]}}"#.to_owned(),
         r#"{"act":"act","kind":"grant","plugin":"ics","origin":"https://cal.example.test"}"#.to_owned(),
-        r#"{"act":"act","kind":"configure","change":{"setting":"order","job":"secretary","from":[],"to":["anthropic/claude-b","databricks/served"]}}"#.to_owned(),
-        r#"{"act":"act","kind":"configure","change":{"setting":"reserve","from":0.3,"to":0.2}}"#.to_owned(),
-        r#"{"act":"act","kind":"configure","change":{"setting":"provider","from":null,"to":{"preset":"databricks","workspace":"https://acme.cloud.databricks.com","expect":null}}}"#.to_owned(),
-        format!(
-            r#"{{"act":"act","kind":"configure","change":{{"setting":"provider","from":{{"name":"phala","base_url":"https://phala.example.test/v1","key":"PHALA_API_KEY","expect":"{}"}},"to":null}}}}"#,
-            "a".repeat(40)
-        ),
-        r#"{"act":"act","kind":"configure","change":{"setting":"provider","from":{"name":"openrouter","base_url":"https://old.example.test/v1","key":"OPENROUTER_API_KEY","expect":null},"to":{"preset":"openrouter","workspace":null,"expect":null}}}"#.to_owned(),
         r#"{"act":"decide","id":"literalacts","title":"Acts are literals","body":"The inbox stores *literals*.","rationale":"one walker","supersedes":["jsonacts"]}"#.to_owned(),
     ];
     for kind in ["owner", "person", "preference", "standing"] {

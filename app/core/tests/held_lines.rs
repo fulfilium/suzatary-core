@@ -95,7 +95,7 @@ fn written(script: &[Step]) -> InMemory {
                 &Entry::Opened {
                     at: at(n),
                     title: Words::kept(format!("Topic {conversation}")),
-                    model: "claude-cli/haiku".to_owned(),
+                    model: "a-cli/small".to_owned(),
                     kind: Kind::Topic,
                 },
             )

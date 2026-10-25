@@ -256,17 +256,11 @@ fn a_proposal_without_a_why_or_a_source_is_refused_to_the_model() {
     assert!(recorder.sent().is_empty());
 }
 
-/// A deployment that declares one secret, `PHALA_API_KEY`.
+/// A deployment that declares a channel's secret, `NTFY_TOPIC`.
 fn declared_secret() -> suzatary_core::settings::Settables {
     suzatary_core::settings::Settables::derive(
-        [suzatary_core::settings::DeclaredProvider {
-            name: "phala".to_owned(),
-            base_url: "https://phala.example.test/v1".to_owned(),
-            key: "PHALA_API_KEY".to_owned(),
-            attestation: suzatary_core::settings::Attestation::Unclaimed,
-        }]
-        .iter(),
-        std::iter::empty(),
+        suzatary_io::model::TOKEN,
+        [suzatary_core::connect::Channel::Ntfy],
         None,
         &[],
     )
@@ -281,8 +275,8 @@ fn secret_model() -> FakeModel {
         r#"{"say": "I will ask him for the key.",
             "calls": [{"verb": "propose_act", "args": {
               "act": "secret",
-              "name": "PHALA_API_KEY",
-              "why": "Phala calls have been failing for want of a key.",
+              "name": "NTFY_TOPIC",
+              "why": "Notifications have been failing for want of a topic.",
               "sources": "todo:life/permitfiling"
             }}]}"#,
         r#"{"say": "Proposed. Tap it and type the key."}"#,
@@ -307,14 +301,14 @@ fn a_tap_with_a_value_stores_it_and_never_echoes_it() {
         .start()
         .base;
 
-    let payload = exchange(&base, "the Phala key is missing");
+    let payload = exchange(&base, "the notifications topic is missing");
     let id = payload["id"].as_str().expect("an id").to_owned();
     let act = &payload["proposals"][0]["act"];
     assert_eq!(act["kind"], "secret");
-    assert_eq!(act["label"], "the Phala key");
-    assert!(!act.to_string().contains("PHALA_API_KEY"), "{act}");
+    assert_eq!(act["label"], "your notifications topic");
+    assert!(!act.to_string().contains("NTFY_TOPIC"), "{act}");
 
-    let distinctive = "sk-do-not-leak-the-phala-key";
+    let distinctive = "sk-do-not-leak-the-topic";
     let mut tapped = common::act(
         &format!("{base}/api/secretary/conversations/{id}/proposals/0/tap"),
         &serde_json::json!({"value": distinctive}),
@@ -322,14 +316,17 @@ fn a_tap_with_a_value_stores_it_and_never_echoes_it() {
     assert_eq!(common::status(&tapped), 200);
     let after = common::body_json(&mut tapped);
     assert_eq!(after["proposals"][0]["state"], "acted");
-    assert_eq!(after["proposals"][0]["outcome"], "stored the Phala key");
+    assert_eq!(
+        after["proposals"][0]["outcome"],
+        "stored your notifications topic"
+    );
 
     let raw = after.to_string();
     assert!(!raw.contains(distinctive), "{raw}");
 
     assert_eq!(
         recorder.calls(),
-        vec![("PHALA_API_KEY".to_owned(), distinctive.to_owned())]
+        vec![("NTFY_TOPIC".to_owned(), distinctive.to_owned())]
     );
 }
 
@@ -351,7 +348,7 @@ fn a_tap_with_no_value_is_refused_and_the_store_is_never_asked() {
         .start()
         .base;
 
-    let payload = exchange(&base, "the Phala key is missing");
+    let payload = exchange(&base, "the notifications topic is missing");
     let id = payload["id"].as_str().expect("an id").to_owned();
 
     let mut tapped = common::act(
@@ -489,7 +486,7 @@ fn the_standing_proposal_row_carries_no_value_field() {
         .start()
         .base;
 
-    let payload = exchange(&base, "the Phala key is missing");
+    let payload = exchange(&base, "the notifications topic is missing");
     let row = &payload["proposals"][0];
     assert!(
         row.get("value").is_none() && row["act"].get("value").is_none(),

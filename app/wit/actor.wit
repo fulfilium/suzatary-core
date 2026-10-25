@@ -1,0 +1,40 @@
+// The `actor` world, kept as the interface for a later plugin. No plugin targets it, and the host
+// does not load it: the host machinery is written when a plugin needs it.
+
+/// What an `actor` exports: from what its store holds, the acts it asks the owner to tap.
+///
+/// An actor's one outward power is to PROPOSE, and a proposal is a value it returns, never a
+/// call it makes: it imports no `fetch`, so nothing it decides leaves the box unless the owner
+/// taps it, and what a tap would perform is the stored act, never a body passed in.
+interface decide {
+    /// One event of the store the actor reads (its own, or the one its manifest grants it), in
+    /// the store's declared schema.
+    record act {
+        bytes: list<u8>,
+    }
+
+    /// One act the plugin asks the owner for, why, and what it rests on. The host files it in the
+    /// Inbox as the plugin's, and the owner's tap performs it as any proposal is performed.
+    record proposal {
+        /// A change to a todo chain, the one act a plugin may ask for, as the Inbox's closed act
+        /// vocabulary prints it: `Changes(chain=..., acts=(...))`. Any other act, a literal
+        /// outside that vocabulary, or one not printed as itself, is refused; the change is
+        /// built against its chain before it is filed.
+        act: string,
+        /// Why, in the plugin's words; shown as text, never as markup.
+        why: string,
+        /// What it rests on, as references in their one text form (`mail:<hash>`,
+        /// `todo:<chain>/<id>`, `briefing:<day>`, ...); at least one, and a few.
+        sources: list<string>,
+    }
+
+    /// Decide from `acts`, every event the plugin's store holds, each once and sorted by its
+    /// bytes, so the proposals are a function of that set and of the clock.
+    decide: func(acts: list<act>) -> result<list<proposal>, string>;
+}
+
+/// A plugin that asks the owner to act: accept an invite, file a reading. It performs nothing;
+/// what it proposes waits for the owner's tap.
+world actor {
+    export decide;
+}

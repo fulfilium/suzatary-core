@@ -23,8 +23,7 @@ use suzatary_core::capability::Login;
 use suzatary_core::chains::ChainName;
 use suzatary_core::mail::account::{MailAccount, Roster, Sync};
 use suzatary_core::mail::account_email::AccountEmail;
-use suzatary_core::models::ModelName;
-use suzatary_core::settings::{Attestation, DeclaredProvider};
+use suzatary_core::model_name::ModelName;
 
 use crate::instance::{Chain, File, Mail, Secretary, Serving, Web};
 
@@ -55,10 +54,10 @@ fn fixture_root() -> prodrome_core::sign::PublicKey {
         .public()
 }
 
-/// The one provider `--settings` declares, so the Settings page has a row to set.
-const SETTINGS_PROVIDER_NAME: &str = "phala";
-/// The name, never a value, of the secret `SETTINGS_PROVIDER_NAME` declares.
-pub const SETTINGS_PROVIDER_KEY: &str = "PHALA_API_KEY";
+/// The name, never a value, of the secret the fixture's standing secret card asks for: the
+/// coding routine's token, which the writing server's `[coding]` declares. Not the model's, which
+/// only its sign-in card asks for.
+pub const SECRET_ASK_KEY: &str = suzatary_core::coding::ROUTINE_TOKEN;
 /// The one calendar link `--settings` declares, on the `ics` plugin, which nothing stores.
 pub const SETTINGS_CALENDAR_LINK: &str = "PLUGIN_ICS_WORK";
 /// The `[[plugins]]` table `--settings` appends, as an operator adds one by hand: `File` never
@@ -68,9 +67,8 @@ const SETTINGS_CALENDAR: &str = "
 name = \"ics\"
 component = \"ics.wasm\"
 schema = \"ics.schema\"
-world = \"source@0.3.0\"
 origins = [\"https://calendar.example.test\"]
-credentials = [{ name = \"PLUGIN_ICS_WORK\", into = \"url\" }]
+credentials = [\"PLUGIN_ICS_WORK\"]
 ";
 
 /// `suzatary-dev fixture-chain`: build the chain and instance file at `root`, and print what
@@ -89,7 +87,6 @@ pub fn build(args: &Args) -> anyhow::Result<()> {
         settings,
         model,
         connected,
-        configuring,
         connections,
         lines,
         conversations,
@@ -125,7 +122,7 @@ pub fn build(args: &Args) -> anyhow::Result<()> {
         std::io::Write::write_all(&mut file, SETTINGS_CALENDAR.as_bytes())?;
         secretspec(root)?;
     }
-    standing_cards(root, *connected, *configuring)?;
+    standing_cards(root, *connected)?;
     // The fixture adopts signatures as a box's first writer does: every chain registers the
     // box's key and the agent's, and its epoch makes what was built above history.
     let signers = suzatary_core::signatures::Signers::Held(suzatary_core::signatures::BoxKeys::of(
@@ -371,7 +368,7 @@ fn answers(read: &crate::instance::Instance, no_model: bool) -> anyhow::Result<(
         .set(
             &(),
             &suzatary_core::mail::health::Healths::one(
-                &read.fallback().to_string(),
+                &suzatary_io::model::name_of(read.secretary.model.as_str()),
                 at,
                 if no_model {
                     Outcome::Failed(suzatary_core::connect::Failure::KeyRefused)
@@ -399,7 +396,7 @@ fn a_secret_ask(root: &Path) -> anyhow::Result<()> {
         "say": "I will ask for the key.",
         "calls": [{"verb": "propose_act", "args": {
             "act": "secret",
-            "name": SETTINGS_PROVIDER_KEY,
+            "name": SECRET_ASK_KEY,
             "why": SECRET_ASK_WHY,
             "sources": format!("todo:life/{}", CAST.todos.urgent.id),
         }}],
@@ -408,16 +405,16 @@ fn a_secret_ask(root: &Path) -> anyhow::Result<()> {
         &read,
         &suzatary_core::secretary::store::ConversationId::new(SECRET_ASK_CONVERSATION)?,
         "Secret ask",
-        "ask for the provider key",
+        "ask for the coding routine's token",
         Scripted::answering(&[
-            ("ask for the provider key", asking.to_string()),
+            ("ask for the coding routine's token", asking.to_string()),
             ("", r#"{"say": "Asked."}"#.to_owned()),
         ]),
     )
 }
 
 /// The fixture's own `secretspec.toml`, its code root's, declaring no name: every name a scene
-/// sets (the provider's key, the calendar links, the subscription's token) is one its instance
+/// sets (the calendar links, the subscription's token) is one its instance
 /// derives, which the server declares in the file it writes under its own state directory, as a
 /// deployment's does beside a read-only code root.
 fn secretspec(root: &Path) -> anyhow::Result<()> {
@@ -428,20 +425,12 @@ fn secretspec(root: &Path) -> anyhow::Result<()> {
     .context("writing the fixture's own secretspec.toml")
 }
 
-/// The cards a fixture's `--connected` and `--configuring` leave standing.
-fn standing_cards(
-    root: &Path,
-    connected: Connected,
-    configuring: Configuring,
-) -> anyhow::Result<()> {
+/// The cards a fixture's `--connected` leaves standing.
+fn standing_cards(root: &Path, connected: Connected) -> anyhow::Result<()> {
     match connected {
-        Connected::Nothing => {}
-        Connected::Calendar => a_connected_calendar(root)?,
-        Connected::Google => a_google_account_to_connect(root)?,
-    }
-    match configuring {
-        Configuring::Nothing => Ok(()),
-        Configuring::Order => a_configure_card(root),
+        Connected::Nothing => Ok(()),
+        Connected::Calendar => a_connected_calendar(root),
+        Connected::Google => a_google_account_to_connect(root),
     }
 }
 
@@ -577,59 +566,6 @@ pub fn fake_google(args: &FakeGoogleArgs) -> anyhow::Result<()> {
 )]
 pub mod fake_google;
 
-/// The conversation a `--configuring order` fixture's card is proposed in, as the setup agent will file it.
-pub const CONFIGURE_CONVERSATION: &str = "models";
-
-/// The order a `--configuring order` fixture's card proposes for Review, against the file as it reads.
-const CONFIGURED_ORDER: &str = "anthropic/claude-e2e";
-
-/// A card changing Review's model order, standing.
-fn a_configure_card(root: &Path) -> anyhow::Result<()> {
-    use suzatary_core::secretary::store::{ConversationId, Entry, Kind, Proposal, Reasons};
-    use suzatary_core::settings::configure::Configuration as _;
-
-    let now = crate::instance::InstanceEdits::new(root.join("instance.toml")).configured()?;
-    let change = suzatary_core::settings::configure::Configure::order(
-        &now,
-        suzatary_core::models::Job::Review,
-        &[CONFIGURED_ORDER],
-    )?;
-    let read = crate::instance::Instance::open(&root.join("instance.toml"))?;
-    let store = read.conversation_stores();
-    let conversations = store.conversations();
-    let inbox = read.inbox_store();
-    let id = ConversationId::new(CONFIGURE_CONVERSATION)?;
-    let now = SystemClock.now();
-    suzatary_core::secretary::transcript::start(
-        conversations,
-        &id,
-        &Entry::Opened {
-            at: now,
-            title: suzatary_core::secretary::words::Words::kept("Models".to_owned()),
-            model: "scripted".to_owned(),
-            kind: Kind::Topic,
-        },
-    )?;
-    suzatary_core::secretary::filed::file(
-        conversations,
-        &inbox,
-        now,
-        suzatary_core::secretary::filed::Filing {
-            conversation: &id,
-            proposer: suzatary_core::secretary::proposer::Proposer::Secretary,
-            proposal: Proposal::Act(suzatary_core::secretary::acts::Act::Configure { change }),
-            reasons: Reasons::new(
-                "Ada asked for the API's model to review the agent's cards",
-                vec![format!("todo:life/{}", CAST.todos.urgent.id).parse()?],
-            )?,
-            serves: None,
-            revises: None,
-        },
-    )
-    .map_err(|refusal| anyhow::anyhow!("{}", refusal.message()))?;
-    Ok(())
-}
-
 /// The calendar `--settings` declares as one that synced once and then lost its link: its store
 /// begun at the reference plugin's schema, so the calendar reads it, and its ledger's last run a
 /// success, so storing the link again makes its line healthy without a sync.
@@ -649,9 +585,6 @@ fn a_calendar(read: &crate::instance::Instance, repo: &Path) -> anyhow::Result<(
             came: Came::Learnt {
                 summary: "plugin ics: 3 items".to_owned(),
             },
-            refusals: Vec::new(),
-            log: Vec::new(),
-            dropped: 0,
         })
     };
     let link = |answer| [(SETTINGS_CALENDAR_LINK.to_owned(), answer)];
@@ -1221,17 +1154,6 @@ fn instance_file(
         persona: suzatary_core::persona::Persona::default(),
         // Absent, so push setup never reads this box's secret store.
         notify: None,
-        providers: if settings {
-            vec![DeclaredProvider {
-                name: SETTINGS_PROVIDER_NAME.to_owned(),
-                base_url: "https://inference.phala.example.invalid/v1".to_owned(),
-                key: SETTINGS_PROVIDER_KEY.to_owned(),
-                attestation: Attestation::Unclaimed,
-            }]
-        } else {
-            Vec::new()
-        },
-        models: None,
         // A routine nothing can fire, so a tapped session fails in words.
         coding: (settings && propose).then(|| suzatary_core::coding::Coding {
             routine: "trig01fixture".parse().expect("a routine id"),
@@ -1269,8 +1191,8 @@ pub struct Args {
     /// Write today's review: the open triage card held with a reason.
     #[arg(long, requires = "propose")]
     reviewed: bool,
-    /// Declare one provider and write the fixture's own `secretspec.toml`; the caller must
-    /// isolate `$HOME` and `$SECRETSPEC_PROVIDER`.
+    /// Declare a calendar and write the fixture's own `secretspec.toml`; the caller must isolate
+    /// `$HOME` and `$SECRETSPEC_PROVIDER`.
     #[arg(long)]
     settings: bool,
     /// Whether the fixture's model answered its last call; `unanswered` makes the box file the
@@ -1281,9 +1203,6 @@ pub struct Args {
     /// set and leaves its removal standing as a card.
     #[arg(long, value_enum, default_value_t = Connected::Nothing, requires = "settings")]
     connected: Connected,
-    /// What a card standing changes: `order` changes Review's model order.
-    #[arg(long, value_enum, default_value_t = Configuring::Nothing, requires = "settings")]
-    configuring: Configuring,
     /// What the connections beyond the fixture's own stand at: `lapsed` adds a Microsoft
     /// account that reads its mail and holds no grant to send.
     #[arg(long, value_enum, default_value_t = Connections::Fresh, requires = "settings")]
@@ -1447,15 +1366,6 @@ pub enum Connections {
 
 /// The Microsoft account `--connections lapsed` adds, signed in to read and not to send.
 pub const LINKS_ACCOUNT: &str = "ada-work@example.test";
-
-/// What a fixture's standing card changes.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, clap::ValueEnum)]
-pub enum Configuring {
-    /// No card.
-    Nothing,
-    /// Review's model order.
-    Order,
-}
 
 /// What a fixture has connected beyond its own tables.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, clap::ValueEnum)]

@@ -1674,7 +1674,7 @@ fn todo_id(value: &str) -> Result<&str, Refusal> {
     }
 }
 
-/// `GET /api/usage`: what this box has spent of its Claude allowance, over rolling windows on
+/// `GET /api/usage`: what this box has spent of its model subscription's allowance, over rolling windows on
 /// the wall clock.
 ///
 /// # Errors
@@ -1798,11 +1798,6 @@ mod tests {
         }
     }
 
-    fn a_fallback() -> crate::models::ModelEntry {
-        crate::models::ModelEntry::parse(&[], "claude-cli/claude-opus-5-5")
-            .expect("a built-in entry")
-    }
-
     #[test]
     fn a_message_id_excludes_what_notmuchs_query_language_reads_as_syntax() {
         assert!(check_mail_id("CAB+abc123@mail.example.test").is_ok());
@@ -1830,50 +1825,6 @@ mod tests {
             check_thread_id("nope").unwrap_err().message(),
             "a conversation id is hexadecimal, got 'nope'"
         );
-    }
-
-    /// Bad hosts are refused before `Edits` is asked.
-    #[test]
-    fn workspace_url_refuses_every_way_a_host_can_be_wrong() {
-        use crate::settings::{WorkspaceUrl, WorkspaceUrlError};
-
-        assert_eq!(
-            WorkspaceUrl::parse("http://acme.cloud.databricks.com"),
-            Err(WorkspaceUrlError::NotHttps(
-                "http://acme.cloud.databricks.com".to_owned()
-            ))
-        );
-        assert_eq!(
-            WorkspaceUrl::parse("https://acme.example.com"),
-            Err(WorkspaceUrlError::UnknownHost(
-                "https://acme.example.com".to_owned()
-            ))
-        );
-        assert_eq!(
-            WorkspaceUrl::parse("https://acme.cloud.databricks.com/serving-endpoints"),
-            Err(WorkspaceUrlError::PathOrQuery(
-                "https://acme.cloud.databricks.com/serving-endpoints".to_owned()
-            ))
-        );
-        assert_eq!(
-            WorkspaceUrl::parse("https://acme.cloud.databricks.com:8080"),
-            Err(WorkspaceUrlError::Port(
-                "https://acme.cloud.databricks.com:8080".to_owned()
-            ))
-        );
-        assert_eq!(
-            WorkspaceUrl::parse("https://user:pass@acme.cloud.databricks.com"),
-            Err(WorkspaceUrlError::Userinfo(
-                "https://user:pass@acme.cloud.databricks.com".to_owned()
-            ))
-        );
-        for good in [
-            "https://acme.cloud.databricks.com",
-            "https://acme.azuredatabricks.net",
-            "https://acme.gcp.databricks.com",
-        ] {
-            assert!(WorkspaceUrl::parse(good).is_ok(), "{good} should parse");
-        }
     }
 
     /// A store that counts the lookups it gives no answer to, each a wait for the timeout.
@@ -1909,28 +1860,20 @@ mod tests {
     /// A value that looks leaked, so a leak would show.
     const LEAKED: &str = "sk-do-not-print-this-key";
 
-    /// What the overview's tests declare: a provider, both channels, an account of each kind, a
+    /// What the overview's tests declare: the model, both channels, an account of each kind, a
     /// calendar of two links and one chain.
     struct Instance {
         deployment: Deployment,
         settables: crate::settings::Settables,
-        providers: Vec<crate::settings::DeclaredProvider>,
         channels: Vec<crate::connect::Channel>,
         accounts: crate::mail::account::Roster,
-        models: crate::models::Models,
-        fallback: crate::models::ModelEntry,
+        jobs: Vec<crate::settings::overview::ModelJob>,
         plugins: Vec<crate::plugin::Manifest>,
         build: wire::AboutPayload,
     }
 
     impl Instance {
         fn new() -> Self {
-            let providers = vec![crate::settings::DeclaredProvider {
-                name: "phala".to_owned(),
-                base_url: "https://phala.example.test/v1".to_owned(),
-                key: "PHALA_API_KEY".to_owned(),
-                attestation: crate::settings::Attestation::Unclaimed,
-            }];
             let channels = crate::connect::Channel::ALL.to_vec();
             let plugins = vec![crate::settings::overview::tests::calendar()];
             let account = |email: &str, sync| crate::mail::account::MailAccount {
@@ -1966,7 +1909,7 @@ mod tests {
                     zone: crate::zone::Zone::UTC,
                 },
                 settables: crate::settings::Settables::derive(
-                    providers.iter(),
+                    crate::settings::MODEL_TOKEN,
                     channels.iter().copied(),
                     None,
                     &plugins,
@@ -1976,16 +1919,15 @@ mod tests {
                     account("ada@university.example", ms),
                 ])
                 .expect("a roster"),
-                models: crate::models::Models::default().with_order(
-                    crate::models::Job::Review,
-                    vec![
-                        crate::models::ModelEntry::parse(&providers, "phala/deepseek-v4-flash")
-                            .expect("a declared entry"),
-                    ],
-                ),
-                providers,
+                jobs: vec![crate::settings::overview::ModelJob {
+                    label: "Chat".to_owned(),
+                    detail: "Chat, reviews and titles run a-model.".to_owned(),
+                    calls: crate::settings::overview::Calls::Recorded {
+                        key: "a-cli/a-model".to_owned(),
+                        credential: crate::settings::MODEL_TOKEN.to_owned(),
+                    },
+                }],
                 channels,
-                fallback: a_fallback(),
                 plugins,
                 build: wire::AboutPayload {
                     version: "dev".to_owned(),
@@ -1999,11 +1941,9 @@ mod tests {
             let declared = crate::settings::overview::Declared {
                 deployment: &self.deployment,
                 settables: &self.settables,
-                providers: &self.providers,
                 channels: &self.channels,
                 accounts: self.accounts.accounts(),
-                models: &self.models,
-                fallback: &self.fallback,
+                jobs: &self.jobs,
                 plugins: &self.plugins,
                 drive: &[],
                 storage: &crate::settings::overview::Storage {
@@ -2076,12 +2016,12 @@ mod tests {
         let counting = Counting(&locked, std::sync::atomic::AtomicUsize::new(0));
         let page = instance.overview(&counting);
         assert_eq!(counting.1.load(std::sync::atomic::Ordering::SeqCst), 1);
-        let providers = group(&page, crate::connect::Group::Models);
-        let phala = providers
+        let models = group(&page, crate::connect::Group::Models);
+        let chat = models
             .iter()
-            .find(|line| line.key == "provider:phala")
-            .expect("the provider's line");
-        assert_eq!(phala.standing, crate::connect::Standing::Locked);
+            .find(|line| line.key == "job:Chat")
+            .expect("the model's line");
+        assert_eq!(chat.standing, crate::connect::Standing::Locked);
     }
 
     /// No resolved value, and no secret's stored name, is drawn: names travel only where a card

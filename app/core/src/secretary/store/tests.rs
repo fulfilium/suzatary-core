@@ -85,7 +85,7 @@ fn opened() -> Entry {
     Entry::Opened {
         at: crate::capability::Datetime::new(2026, 9, 9, 9, 0, 0, 0).expect("an instant"),
         title: crate::secretary::words::Words::kept("Morning".to_owned()),
-        model: "claude-cli".to_owned(),
+        model: "a-cli".to_owned(),
         kind: crate::secretary::store::Kind::Topic,
     }
 }
@@ -292,7 +292,7 @@ fn an_unheard_turn_ends_only_the_session_it_names() {
     let kept = |at: &str, id: &SessionId| Entry::Kept {
         at: instant(at),
         session: id.clone(),
-        model: "claude-cli/haiku".to_owned(),
+        model: "a-cli/small".to_owned(),
         cwd: "/home/ada/Documents/Suzatary".to_owned(),
         surface: None,
         from: 0,
@@ -335,14 +335,14 @@ fn the_last_session_line_wins() {
         Entry::Session {
             at: crate::capability::Datetime::new(2026, 9, 13, 9, 1, 0, 0).expect("an instant"),
             session: first.clone(),
-            model: "claude-cli/haiku".to_owned(),
+            model: "a-cli/small".to_owned(),
             cwd: "/home/ada/Documents/Suzatary".to_owned(),
             surface: None,
         },
         Entry::Session {
             at: crate::capability::Datetime::new(2026, 9, 13, 9, 5, 0, 0).expect("an instant"),
             session: second.clone(),
-            model: "claude-cli/haiku".to_owned(),
+            model: "a-cli/small".to_owned(),
             cwd: "/home/ada/Documents/Suzatary".to_owned(),
             surface: None,
         },
@@ -363,7 +363,7 @@ fn a_stop_is_an_act_and_ends_the_session() {
         Entry::Session {
             at: crate::capability::Datetime::new(2026, 9, 25, 9, 0, 30, 0).expect("an instant"),
             session: SessionId::new("96f709a3-43d7-4453-bf59-6fb5291b5a3c").expect("a uuid"),
-            model: "claude-cli/haiku".to_owned(),
+            model: "a-cli/small".to_owned(),
             cwd: "/srv".to_owned(),
             surface: None,
         },

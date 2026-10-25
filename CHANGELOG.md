@@ -39,10 +39,9 @@ The first public release. What exists:
   calendar. Each tab holds a replica and folds it with the same core,
   compiled to WebAssembly. Text is Typst, edited with highlighting, completion
   and a live preview, and compiled in a closed world.
-- **Model choice.** Each job names an ordered list of models across the
-  Claude subscription, the Anthropic API and declared providers, with a
-  reserve kept for the person's own sessions and attestation enforced where
-  a provider claims it.
+- **The model.** Every job runs a Claude model through the `claude` CLI on
+  the person's Claude subscription. The model is a port in the core, so a
+  deployment can provide another implementation of it.
 - **Plugins.** WebAssembly components whose authority is their imports; the
   first reads calendars from their iCal links.
 - **The site.** A static site of the attestable history, built from the

@@ -1,77 +1,91 @@
-//! The model's conformance suite over a real interpreter, `OpenAiCompatible`, whose far end is a
-//! scripted HTTP transport: the request is built, sent and its answer read as on the wire, and
-//! no socket is opened.
+//! The model's conformance suite over the deployment's interpreter, `ClaudeCli`, whose far end is
+//! a script standing in for the `claude` binary: the prompt is built and sent down stdin as on
+//! the box, the script keeps what it heard and prints one `result` line, and no model is asked.
 
-use std::sync::{Arc, Mutex, PoisonError};
+use std::path::PathBuf;
+use std::sync::{Mutex, PoisonError};
 
-use suzatary_core::capability::{Conversation, Secret, ToolCall, Turn};
+use suzatary_core::capability::{Conversation, ToolCall, Turn};
 use suzatary_core::conformance::model::{Case, Rig, check};
-use suzatary_io::http::{HttpError, Resp, Scripted};
-use suzatary_io::openai::{Attestation, OpenAiCompatible};
+use suzatary_io::model::{ClaudeCli, Fence};
 
-/// Each model gets its own scripted far end; the rig keeps the last, to say what it heard.
-#[derive(Default)]
-struct Wire(Mutex<Option<Arc<Scripted>>>);
+/// Each model gets its own script and the file it writes what it heard to; the rig keeps the
+/// last, to say what it heard.
+struct Scripts {
+    dir: tempfile::TempDir,
+    made: Mutex<(usize, Option<PathBuf>)>,
+}
 
-impl Wire {
-    fn model(&self, far: Scripted) -> OpenAiCompatible<Arc<Scripted>> {
-        let far = Arc::new(far);
-        *self.0.lock().unwrap_or_else(PoisonError::into_inner) = Some(Arc::clone(&far));
-        OpenAiCompatible::with_transport(
-            "https://models.example.test/v1",
-            "a-model",
-            Secret::new("not-a-key"),
-            Attestation::Unclaimed,
-            far,
-        )
+impl Scripts {
+    fn new() -> Self {
+        Self {
+            dir: tempfile::tempdir().expect("a scratch directory"),
+            made: Mutex::new((0, None)),
+        }
+    }
+
+    fn fence() -> Fence {
+        Fence::at(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../.claude/secretary-settings.json"
+        ))
     }
 }
 
-impl Rig for Wire {
-    type Model = OpenAiCompatible<Arc<Scripted>>;
+impl Rig for Scripts {
+    type Model = ClaudeCli;
 
-    fn answering(&self, text: &str) -> Self::Model {
-        let body = serde_json::json!({"choices": [{"message": {"content": text}}]}).to_string();
-        self.model(Scripted::always(Ok(Resp {
-            status: 200,
-            headers: Vec::new(),
-            body: body.into_bytes(),
-        })))
+    fn answering(&self, text: &str) -> ClaudeCli {
+        let mut made = self.made.lock().unwrap_or_else(PoisonError::into_inner);
+        made.0 += 1;
+        let at = self.dir.path().join(made.0.to_string());
+        std::fs::create_dir_all(&at).expect("the script's directory");
+        let (heard, answer, script) = (at.join("heard"), at.join("answer"), at.join("claude"));
+        let result = serde_json::json!({
+            "type": "result",
+            "subtype": "success",
+            "is_error": false,
+            "num_turns": 1,
+            "duration_ms": 5,
+            "session_id": "00000000-0000-4000-8000-000000000001",
+            "result": text,
+        });
+        std::fs::write(&answer, result.to_string()).expect("the answer");
+        std::fs::write(
+            &script,
+            format!(
+                "#!/bin/sh\ncat > {}\ncat {}\n",
+                heard.display(),
+                answer.display()
+            ),
+        )
+        .expect("the script");
+        std::fs::set_permissions(&script, std::os::unix::fs::PermissionsExt::from_mode(0o755))
+            .expect("executable");
+        made.1 = Some(heard);
+        ClaudeCli::new("a-model", Self::fence()).with_binary(script.display().to_string())
     }
 
-    fn unreachable(&self) -> Self::Model {
-        self.model(Scripted::always(Err(HttpError::NotSent(
-            "no route to the far end".to_owned(),
-        ))))
+    fn unreachable(&self) -> ClaudeCli {
+        ClaudeCli::new("a-model", Self::fence()).with_binary("/nonexistent/claude")
     }
 
-    /// Every string the requests carried, in order: what the far end read.
-    fn heard(&self, _model: &Self::Model) -> String {
-        let far = self
-            .0
+    /// Everything that went down stdin: what the far end read.
+    fn heard(&self, _model: &ClaudeCli) -> String {
+        let heard = self
+            .made
             .lock()
             .unwrap_or_else(PoisonError::into_inner)
+            .1
             .clone();
-        let mut heard = Vec::new();
-        for request in far.map(|far| far.sent()).unwrap_or_default() {
-            let body: serde_json::Value = serde_json::from_slice(&request.body).unwrap_or_default();
-            strings(&body, &mut heard);
-        }
-        heard.join("\n")
-    }
-}
-
-fn strings(value: &serde_json::Value, into: &mut Vec<String>) {
-    match value {
-        serde_json::Value::String(text) => into.push(text.clone()),
-        serde_json::Value::Array(values) => values.iter().for_each(|value| strings(value, into)),
-        serde_json::Value::Object(fields) => fields.values().for_each(|value| strings(value, into)),
-        _ => {}
+        heard
+            .and_then(|path| std::fs::read_to_string(path).ok())
+            .unwrap_or_default()
     }
 }
 
 #[test]
-fn the_openai_compatible_interpreter_keeps_every_law_over_a_scripted_far_end() {
+fn the_claude_cli_interpreter_keeps_every_law_over_a_scripted_far_end() {
     let conversation = Conversation {
         system: "You are the secretary. Propose; never send.".to_owned(),
         turns: vec![
@@ -116,5 +130,5 @@ fn the_openai_compatible_interpreter_keeps_every_law_over_a_scripted_far_end() {
         },
     ];
     let tools = serde_json::json!([{"name": "context"}, {"name": "search"}]);
-    assert_eq!(check(&Wire::default(), &tools, &cases), Ok(()));
+    assert_eq!(check(&Scripts::new(), &tools, &cases), Ok(()));
 }

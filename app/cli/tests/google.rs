@@ -68,9 +68,10 @@ fn serving(tag: &str, model: Option<common::FakeModel>) -> Serving {
         accounts: vec![account()],
         ..suzatary_core::connect::Declared::default()
     };
-    let settables = suzatary_core::settings::Settables::derive([], [], None, &[]).join(
-        suzatary_core::settings::Settables::google(&declared.accounts),
-    );
+    let settables =
+        suzatary_core::settings::Settables::derive(suzatary_io::model::TOKEN, [], None, &[]).join(
+            suzatary_core::settings::Settables::google(&declared.accounts),
+        );
     let empty = SettingsFixture::empty();
     let settings = SettingsFixture {
         live: suzatary_cli::serve::Live {

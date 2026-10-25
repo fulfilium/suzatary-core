@@ -56,7 +56,6 @@ export namespace overview {
     s.kind === "kept" ? null
     : s.kind === "synced" ? ok(`Synced ${at(s.at)}.`)
     : s.kind === "answered" ? ok(`Answered ${at(s.at)}.`)
-    : s.kind === "unused" ? ok("No job orders it.")
     : s.kind === "unobserved" ? ok("Nothing has checked it yet.")
     : s.kind === "locked" ? asks("The secret store is locked, so whether it is stored is not known.")
     : s.kind === "store_failed" ? asks("The secret store could not answer.")

@@ -1,6 +1,6 @@
 //! Each mail account's sync health: the register the timer's syncs write and the settings page,
-//! the briefing and the inbox read. The register is keyed by any source, so whether each model a
-//! job orders answers is the same semilattice ([`Healths::one`]).
+//! the briefing and the inbox read. The register is keyed by any source, so whether the model each
+//! job runs answers is the same semilattice ([`Healths::one`]).
 //!
 //! What is read of an account's sync results is three things: the latest success, the latest
 //! failure with its words, and the first result recorded. Each is a semilattice (a maximum, a
@@ -189,7 +189,7 @@ pub struct Healths(BTreeMap<String, Health>);
 
 impl Healths {
     /// One source's one result, at `at`, `words` what it said: the generator every register is
-    /// a join of, whatever the source (a mail account, a model a job orders, a plugin's link).
+    /// a join of, whatever the source (a mail account, the model a job runs, a plugin's link).
     #[must_use]
     pub fn one(source: &str, at: Instant, outcome: Outcome, words: &str) -> Self {
         Self(BTreeMap::from([(

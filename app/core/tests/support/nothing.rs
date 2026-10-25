@@ -165,13 +165,7 @@ impl Prodrome<TodoEvent> for Nothing {
     }
 }
 
-impl crate::settings::configure::Configuration for Nothing {
-    fn configured(
-        &self,
-    ) -> Result<crate::settings::configure::Configured, crate::settings::EditError> {
-        Ok(crate::settings::configure::Configured::default())
-    }
-
+impl crate::settings::Configuration for Nothing {
     fn declared(&self) -> Result<crate::connect::Declared, crate::settings::EditError> {
         Ok(crate::connect::Declared::default())
     }

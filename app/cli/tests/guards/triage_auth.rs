@@ -1,16 +1,14 @@
-//! The triage agent's credential (`scripts/claude-auth.sh`, sourced by the triage wrapper):
-//! whichever model `suzatary init` was told, the secret its steps set is one the wrapper puts
-//! in `claude`'s environment, so no choice leaves the agent "Not logged in".
+//! The triage agent's credential (`scripts/claude-auth.sh`, sourced by the triage wrapper): the
+//! secret `suzatary init`'s model steps set is the one the wrapper puts in `claude`'s
+//! environment, so the agent is never left "Not logged in".
 
 use super::{Scratch, repo};
 use std::process::Command;
 
-use clap::ValueEnum as _;
-use suzatary_cli::commands::init::Brain;
 use suzatary_core::connect::Reach;
 
-/// The variables `claude` reads a credential from.
-const CLAUDE_READS: [&str; 2] = ["CLAUDE_CODE_OAUTH_TOKEN", "ANTHROPIC_API_KEY"];
+/// The variable `claude` reads the subscription's token from.
+const TOKEN: &str = "CLAUDE_CODE_OAUTH_TOKEN";
 
 /// A `secretspec` that holds `name` alone.
 fn secretspec_holding(dir: &std::path::Path, name: &str) {
@@ -25,44 +23,39 @@ fn secretspec_holding(dir: &std::path::Path, name: &str) {
 }
 
 #[test]
-fn every_model_init_offers_leaves_the_triage_agent_a_credential_claude_reads() {
+fn the_token_init_sets_is_the_credential_the_triage_agent_runs_under() {
     let auth = repo().join("scripts/claude-auth.sh");
-    for brain in Brain::value_variants() {
-        let key = brain.preset().key_name();
-        assert!(
-            brain
-                .steps(&Reach::Installed)
-                .iter()
-                .any(|step| step.command.contains(&format!("secretspec set {key} "))),
-            "{brain:?}'s steps do not set {key}"
-        );
-        let stub = Scratch::new(&format!("claude-auth-{key}"));
-        secretspec_holding(&stub, key);
-        let out = Command::new("bash")
-            .arg("-c")
-            .arg(format!(". {} && claude_auth && env", auth.display()))
-            .env(
-                "PATH",
-                format!(
-                    "{}:{}",
-                    stub.display(),
-                    std::env::var("PATH").unwrap_or_default()
-                ),
-            )
-            .env_remove("CLAUDE_CODE_OAUTH_TOKEN")
-            .env_remove("ANTHROPIC_API_KEY")
-            .output()
-            .expect("bash runs");
-        assert!(out.status.success(), "{brain:?}: no credential resolved");
-        let env = String::from_utf8_lossy(&out.stdout);
-        let held: Vec<&str> = CLAUDE_READS
-            .into_iter()
-            .filter(|name| env.lines().any(|line| line == format!("{name}=held-value")))
-            .collect();
-        assert_eq!(held, vec![key], "{brain:?}: the environment holds {held:?}");
-    }
+    assert!(
+        suzatary_cli::commands::init::model_steps(&Reach::Installed)
+            .iter()
+            .any(|step| step.command.contains(&format!("secretspec set {TOKEN} "))),
+        "the model's steps do not set {TOKEN}"
+    );
+    let stub = Scratch::new(&format!("claude-auth-{TOKEN}"));
+    secretspec_holding(&stub, TOKEN);
+    let out = Command::new("bash")
+        .arg("-c")
+        .arg(format!(". {} && claude_auth && env", auth.display()))
+        .env(
+            "PATH",
+            format!(
+                "{}:{}",
+                stub.display(),
+                std::env::var("PATH").unwrap_or_default()
+            ),
+        )
+        .env_remove(TOKEN)
+        .output()
+        .expect("bash runs");
+    assert!(out.status.success(), "no credential resolved");
+    let env = String::from_utf8_lossy(&out.stdout);
+    assert!(
+        env.lines()
+            .any(|line| line == format!("{TOKEN}=held-value")),
+        "the environment holds no {TOKEN}"
+    );
 
-    // With neither secret set, the wrapper falls back to the interactive login and says so.
+    // With no token set, the wrapper falls back to the interactive login and says so.
     let none = Scratch::new("claude-auth-none");
     secretspec_holding(&none, "NOTHING");
     let out = Command::new("bash")

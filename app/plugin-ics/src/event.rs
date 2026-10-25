@@ -1,432 +1,327 @@
 //! A feed's events as occurrences: each `VEVENT` expanded through its `RRULE` and `RDATE`, less
-//! its `EXDATE`, with each `RECURRENCE-ID` override standing in for the instance it names
-//! (§3.8.5, §3.8.4.4), and only what falls in the window kept.
+//! its `EXDATE`, each `RECURRENCE-ID` override standing in for the instance it names, and only
+//! what falls in the window kept.
 
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeMap;
 
 use chrono::{Duration, NaiveDate, NaiveDateTime, NaiveTime};
+use icalendar::parser::{Component, ParseString, Property};
 
-use crate::content::{Component, Property};
-use crate::expand;
-use crate::item::{self, Item, MAX_ATTENDEES, MAX_NAME, MAX_TEXT, Status, When};
-use crate::rule::{End, Rule};
-use crate::value::{self, Moment};
-use crate::zone::{self, Zone, Zones};
+use crate::item::{DAY, INSTANT, Item, MAX_ATTENDEES, MAX_NAME, MAX_TEXT, Status, When, Window};
+use crate::recurrence;
+use crate::zone::{Zone, Zones};
 
-/// The span of UTC time an occurrence must touch to be emitted.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct Window {
-    /// The first instant, inclusive.
-    pub from: NaiveDateTime,
-    /// The last, exclusive.
-    pub to: NaiveDateTime,
-}
+/// Occurrences by UID and occurrence, so an override replaces the instance it names.
+type Items = BTreeMap<(String, String), Item>;
+
+/// What is said about a feed while reading it: a line for the operator, never an item.
+pub type Said<'s> = &'s mut dyn FnMut(String);
 
 /// The most occurrences one calendar emits; past it the earliest are kept and the cut said.
 pub const MAX_OCCURRENCES: usize = 2000;
 
-/// What is said about a feed while reading it: a line for the operator, never an item.
-pub type Said<'a> = &'a mut dyn FnMut(String);
-
-/// Every occurrence of `calendar`'s events in `window`, named for `name`, sorted by UID and
-/// occurrence.
-pub fn occurrences(calendar: &Component, name: &str, window: Window, said: Said<'_>) -> Vec<Item> {
-    let zones = Zones::of(calendar);
-    let floating = calendar
-        .first("X-WR-TIMEZONE")
-        .and_then(|tz| zones.named(tz.value.trim()))
-        .unwrap_or(Zone::Utc);
-    let reader = Reader {
-        name,
-        zones: &zones,
-        floating: &floating,
-        window,
-    };
-    let mut masters: BTreeMap<String, &Component> = BTreeMap::new();
-    let mut overrides: BTreeMap<String, Vec<&Component>> = BTreeMap::new();
-    for event in calendar.children("VEVENT") {
-        let Some(uid) = event.first("UID").map(|uid| uid.value.trim().to_owned()) else {
-            said("an event with no UID was left out".to_owned());
-            continue;
-        };
-        if event.first("RECURRENCE-ID").is_some() {
-            overrides.entry(uid).or_default().push(event);
-        } else if masters.insert(uid.clone(), event).is_some() {
-            said(format!(
-                "UID {uid} has two events and no RECURRENCE-ID: the last was read"
-            ));
-        }
-    }
-    let mut out: Vec<Item> = Vec::new();
-    let uids: BTreeSet<&String> = masters.keys().chain(overrides.keys()).collect();
-    for uid in uids {
-        let master = masters.get(uid).copied();
-        let mut replaced: BTreeMap<String, Item> = BTreeMap::new();
-        for event in overrides.get(uid).into_iter().flatten() {
-            if let Some((key, item)) = reader.instead(uid, event, master, said) {
-                replaced.insert(key, item);
-            }
-        }
-        if let Some(master) = master {
-            for mut item in reader.instances(uid, master, said) {
-                if let Some(instead) = replaced.remove(&item.occurrence) {
-                    item = instead;
-                }
-                out.push(item);
-            }
-        }
-        // An override whose instance the rule does not make (moved in, or made before an
-        // EXDATE) is still an occurrence the feed states.
-        out.extend(replaced.into_values());
-    }
-    out.retain(|item| item.overlaps(window.from, window.to));
-    out.sort_by(|a, b| (&a.uid, &a.occurrence).cmp(&(&b.uid, &b.occurrence)));
-    out.dedup_by(|a, b| a.uid == b.uid && a.occurrence == b.occurrence);
-    if out.len() > MAX_OCCURRENCES {
-        said(format!(
-            "{} occurrences in the window; the earliest {MAX_OCCURRENCES} were kept",
-            out.len()
-        ));
-        out.sort_by_key(|item| item.when.span().map(|(start, _)| start));
-        out.truncate(MAX_OCCURRENCES);
-        out.sort_by(|a, b| (&a.uid, &a.occurrence).cmp(&(&b.uid, &b.occurrence)));
-    }
-    out
+fn props<'c, 'a>(component: &'c Component<'a>, name: &str) -> Vec<&'c Property<'a>> {
+    let all = component.properties.iter();
+    let named = |property: &&Property<'_>| property.name.as_str().eq_ignore_ascii_case(name);
+    all.filter(named).collect()
 }
 
-/// How long an event lasts, as §3.8.5.3 applies it to every instance: `DTEND` minus `DTSTART` is
-/// an EXACT duration, `DURATION` a nominal one.
+/// The children `name` of `component`, its name in any case.
+pub fn children<'c, 'a>(component: &'c Component<'a>, name: &str) -> Vec<&'c Component<'a>> {
+    let all = component.components.iter();
+    all.filter(|child| child.name.as_str().eq_ignore_ascii_case(name))
+        .collect()
+}
+
+/// The trimmed value of the first property `name` of `component`, TEXT unescaped.
+pub fn text<'c>(component: &'c Component<'_>, name: &str) -> Option<&'c str> {
+    Some(props(component, name).first()?.val.as_str().trim())
+}
+
+fn param<'p>(property: &'p Property<'_>, key: &str) -> Option<&'p str> {
+    let found = property
+        .params
+        .iter()
+        .find(|param| param.key.as_str().eq_ignore_ascii_case(key))?;
+    found.val.as_ref().map(ParseString::as_str)
+}
+
+/// A DATE, or a DATE-TIME as a reading of its zone's clock.
 #[derive(Debug, Clone, Copy)]
-enum Length {
-    Exact(Duration),
-    Nominal(value::Duration),
+enum Moment<'z> {
+    Date(NaiveDate),
+    Time(NaiveDateTime, Zone<'z>),
 }
 
-struct Reader<'a> {
-    name: &'a str,
-    zones: &'a Zones,
-    floating: &'a Zone,
-    window: Window,
-}
-
-/// One instance before its fields are read: its identity and its span.
-struct Instance {
-    key: String,
-    when: When,
-}
-
-impl Reader<'_> {
-    fn zone_of(&self, moment: &Moment, said: Said<'_>) -> Zone {
-        match moment {
-            Moment::Zoned(_, tzid) => self.zones.named(tzid).unwrap_or_else(|| {
-                said(format!(
-                    "TZID {tzid} names no zone this plugin knows; read as UTC"
-                ));
-                Zone::Utc
-            }),
-            Moment::Floating(_) => self.floating.clone(),
-            Moment::Utc(_) | Moment::Date(_) => Zone::Utc,
+impl Moment<'_> {
+    /// Its instant, a date read as its midnight in UTC.
+    fn utc(self) -> NaiveDateTime {
+        match self {
+            Moment::Date(day) => day.and_time(NaiveTime::MIN),
+            Moment::Time(at, zone) => zone.to_utc(at),
         }
     }
 
-    /// An instant for a moment, reading an unknown zone as UTC.
-    fn instant(&self, moment: &Moment, said: Said<'_>) -> Option<NaiveDateTime> {
-        zone::instant(moment, self.zones, self.floating, &mut |tzid| {
-            said(format!(
-                "TZID {tzid} names no zone this plugin knows; read as UTC"
-            ));
+    /// The identity of the instance it starts: a date, or a UTC instant.
+    fn key(self) -> String {
+        match self {
+            Moment::Date(day) => day.format("%Y%m%d").to_string(),
+            Moment::Time(..) => self.utc().format("%Y%m%dT%H%M%SZ").to_string(),
+        }
+    }
+
+    /// The span of an instance starting here, an all-day one at least a day; `None` for one
+    /// that would end past every date.
+    fn span(self, length: Duration) -> Option<When> {
+        let print = |at: NaiveDateTime, format| at.format(format).to_string();
+        let start = self.utc();
+        Some(match self {
+            Moment::Date(_) => {
+                let end = start.checked_add_signed(Duration::days(length.num_days().max(1)))?;
+                let (start, end) = (print(start, DAY), print(end, DAY));
+                When::AllDay { start, end }
+            }
+            Moment::Time(..) => {
+                let end = start.checked_add_signed(length.max(Duration::zero()))?;
+                let (start, end) = (print(start, INSTANT), print(end, INSTANT));
+                When::Timed { start, end }
+            }
         })
     }
+}
 
-    /// The identity of the instance `moment` starts: a date, or a UTC instant.
-    fn key(&self, moment: &Moment, said: Said<'_>) -> String {
-        match moment {
-            Moment::Date(date) => date.format("%Y%m%d").to_string(),
-            other => self
-                .instant(other, said)
-                .map_or_else(String::new, |at| at.format("%Y%m%dT%H%M%SZ").to_string()),
-        }
+/// One DATE or DATE-TIME of a list; a PERIOD counts by its start.
+fn moment<'z>(item: &str, date: bool, zone: Zone<'z>) -> Option<Moment<'z>> {
+    let text = item.split('/').next().unwrap_or(item).trim();
+    let time = text.strip_suffix(['Z', 'z']);
+    let (time, zone) = time.map_or((text, zone), |utc| (utc, Zone::Utc));
+    let day = || NaiveDate::parse_from_str(text, "%Y%m%d").ok();
+    match NaiveDateTime::parse_from_str(time, "%Y%m%dT%H%M%S") {
+        Ok(at) if !date => Some(Moment::Time(at, zone)),
+        Ok(_) | Err(_) => day().map(Moment::Date),
     }
+}
 
-    fn length(&self, event: &Component, start: &Moment, said: Said<'_>) -> Option<Length> {
-        if let Some(end) = event.first("DTEND").and_then(value::of) {
-            return Some(match (start, &end) {
-                (Moment::Date(start), Moment::Date(end)) => Length::Nominal(value::Duration {
-                    days: (*end - *start).num_days(),
-                    seconds: 0,
-                }),
-                _ => Length::Exact(
-                    self.instant(&end, said)
-                        .zip(self.instant(start, said))
-                        .map_or(Duration::zero(), |(end, start)| end - start),
-                ),
+/// Every occurrence of `calendar`'s events in `window`, named for `name`, sorted by UID and
+/// occurrence, at most [`MAX_OCCURRENCES`].
+pub fn occurrences(
+    calendar: &Component<'_>,
+    name: &str,
+    window: Window,
+    said: Said<'_>,
+) -> Vec<Item> {
+    let zones = Zones::of(calendar);
+    let all = children(calendar, "VEVENT");
+    let events: Vec<_> = all
+        .iter()
+        .filter_map(|event| Some((text(event, "UID")?, *event)))
+        .collect();
+    if events.len() < all.len() {
+        said(format!(
+            "{} events with no UID were left out",
+            all.len() - events.len()
+        ));
+    }
+    let events = events.into_iter();
+    let (overrides, masters): (Vec<_>, Vec<_>) =
+        events.partition(|(_, event)| text(event, "RECURRENCE-ID").is_some());
+    let masters: BTreeMap<&str, &Component<'_>> = masters.into_iter().collect();
+    let mut out = Items::new();
+    for (uid, event) in &masters {
+        zones.read((name, window), uid, event, None, &mut out, said);
+    }
+    for (uid, event) in &overrides {
+        let master = masters.get(uid).copied();
+        zones.read((name, window), uid, event, master, &mut out, said);
+    }
+    let mut items: Vec<Item> = out
+        .into_values()
+        .filter(|item| item.overlaps(window))
+        .collect();
+    if items.len() > MAX_OCCURRENCES {
+        said(format!(
+            "{} occurrences in the window, the earliest {MAX_OCCURRENCES} kept",
+            items.len()
+        ));
+        items.sort_by_key(|item| item.when.span().map(|(start, _)| start));
+        items.truncate(MAX_OCCURRENCES);
+        items.sort_by(|a, b| (&a.uid, &a.occurrence).cmp(&(&b.uid, &b.occurrence)));
+    }
+    items
+}
+
+impl Zones {
+    fn moments(&self, event: &Component<'_>, name: &str, said: Said<'_>) -> Vec<Moment<'_>> {
+        let mut out = Vec::new();
+        for property in props(event, name) {
+            let date =
+                param(property, "VALUE").is_some_and(|value| value.eq_ignore_ascii_case("DATE"));
+            let tzid = param(property, "TZID").or(self.1.as_deref());
+            let zone = tzid.and_then(|tzid| {
+                let zone = self.named(tzid);
+                if zone.is_none() {
+                    said(format!("TZID {tzid} names no zone known here; read as UTC"));
+                }
+                zone
             });
+            let items = property.val.as_str().split(',');
+            out.extend(items.filter_map(|item| moment(item, date, zone.unwrap_or(Zone::Utc))));
         }
-        event
-            .first("DURATION")
-            .and_then(|duration| value::duration(&duration.value))
-            .map(Length::Nominal)
+        out
     }
 
-    /// The wall-clock starts its `RRULE` makes in the padded window, or its `DTSTART` alone.
-    fn rule_starts(
-        &self,
-        uid: &str,
-        event: &Component,
-        start: &Moment,
-        zone: &Zone,
-        length: Option<Length>,
-        said: Said<'_>,
-    ) -> Vec<NaiveDateTime> {
-        let all_day = matches!(start, Moment::Date(_));
-        let local = start.naive();
-        let tzid = match &start {
-            Moment::Zoned(_, tzid) => Some(tzid.as_str()),
-            _ => None,
-        };
-        // The window in this event's wall clock, padded by a day each side and by its length,
-        // so an instance that began before the window and runs into it is found.
-        let padding = Duration::days(2)
-            + match length {
-                Some(Length::Exact(duration)) => duration.abs(),
-                Some(Length::Nominal(duration)) => {
-                    Duration::days(duration.days.abs()) + Duration::seconds(duration.seconds.abs())
-                }
-                None => Duration::zero(),
-            };
-        let from = self.window.from - padding;
-        let horizon = self.window.to + Duration::days(2);
-        match event.first("RRULE") {
-            None => vec![local],
-            Some(rule) => match Rule::parse(&rule.value, tzid) {
-                Err(refused) => {
-                    said(format!(
-                        "UID {uid}: RRULE not read ({}); its DTSTART alone stands",
-                        refused.0
-                    ));
-                    vec![local]
-                }
-                Ok(rule) => {
-                    let within = within_until(&rule, zone, all_day);
-                    let made = expand::starts(&rule, local, &within, from, horizon);
-                    if made.cut {
-                        said(format!(
-                            "UID {uid}: its rule was cut after {} periods",
-                            expand::MAX_PERIODS
-                        ));
-                    }
-                    made.starts
-                }
-            },
-        }
+    fn moment(&self, event: &Component<'_>, name: &str, said: Said<'_>) -> Option<Moment<'_>> {
+        self.moments(event, name, said).into_iter().next()
     }
 
-    /// Every instance of a master event in the window.
-    fn instances(&self, uid: &str, event: &Component, said: Said<'_>) -> Vec<Item> {
-        let Some(start) = event.first("DTSTART").and_then(value::of) else {
-            said(format!("UID {uid} has no DTSTART and was left out"));
-            return Vec::new();
-        };
-        let all_day = matches!(start, Moment::Date(_));
-        let zone = self.zone_of(&start, said);
-        let length = self.length(event, &start, said);
-        let mut starts = self.rule_starts(uid, event, &start, &zone, length, said);
-        if event.all("RRULE").count() > 1 {
-            said(format!("UID {uid}: only its first RRULE was read"));
+    /// `DTEND` less `DTSTART`, or `DURATION`.
+    fn length(&self, event: &Component<'_>, start: Moment<'_>, said: Said<'_>) -> Option<Duration> {
+        if let Some(end) = self.moment(event, "DTEND", said) {
+            return Some(end.utc() - start.utc());
         }
-        let mut extra: Vec<Instance> = Vec::new();
-        for moment in event.all("RDATE").flat_map(value::all_of) {
-            match (&moment, all_day) {
-                (Moment::Date(day), true) => starts.push(day.and_time(NaiveTime::MIN)),
-                (Moment::Date(_), false) | (_, true) => {
-                    said(format!(
-                        "UID {uid}: an RDATE of the other kind than its DTSTART was left out"
-                    ));
-                }
-                (other, false) => {
-                    if let Some(at) = self.instant(other, said) {
-                        let instance_zone = Zone::Utc;
-                        extra.push(Instance {
-                            key: at.format("%Y%m%dT%H%M%SZ").to_string(),
-                            when: span(false, at, &instance_zone, length),
-                        });
-                    }
-                }
+        let seconds = match iso8601::duration(text(event, "DURATION")?).ok()? {
+            iso8601::Duration::Weeks(weeks) => i64::from(weeks) * 7 * 86_400,
+            iso8601::Duration::YMDHMS {
+                year,
+                month,
+                day,
+                hour,
+                minute,
+                second,
+                ..
+            } => {
+                let days = i64::from(year) * 365 + i64::from(month) * 30 + i64::from(day);
+                days * 86_400 + i64::from(hour) * 3600 + i64::from(minute) * 60 + i64::from(second)
             }
-        }
-        let excluded: BTreeSet<String> = event
-            .all("EXDATE")
-            .flat_map(value::all_of)
-            .map(|moment| self.key(&moment, said))
-            .collect();
-        let excluded_days: BTreeSet<NaiveDate> = event
-            .all("EXDATE")
-            .flat_map(value::all_of)
-            .filter_map(|moment| match moment {
-                Moment::Date(day) if !all_day => Some(day),
-                _ => None,
-            })
-            .collect();
-        let status = status(event);
-        starts.sort_unstable();
-        starts.dedup();
-        starts
-            .into_iter()
-            .map(|local| {
-                let when = span(all_day, local, &zone, length);
-                let key = if all_day {
-                    local.date().format("%Y%m%d").to_string()
-                } else {
-                    zone.to_utc(local).format("%Y%m%dT%H%M%SZ").to_string()
-                };
-                (local.date(), Instance { key, when })
-            })
-            .filter(|(day, _)| !excluded_days.contains(day))
-            .map(|(_, instance)| instance)
-            .chain(extra)
-            .filter(|instance| !excluded.contains(&instance.key))
-            .map(|instance| self.item(uid, instance, event, None, status))
-            .collect()
+        };
+        Duration::try_seconds(seconds)
     }
 
-    /// The occurrence an override (an event with a `RECURRENCE-ID`) stands for, by the key of
-    /// the instance it replaces.
-    fn instead(
+    /// Every instance of a master event under its start, or an override (of `master`) under the
+    /// instance it replaces; its fields read from `event`, or from `master` where it says none.
+    fn read(
         &self,
+        (calendar, window): (&str, Window),
         uid: &str,
-        event: &Component,
-        master: Option<&Component>,
+        event: &Component<'_>,
+        master: Option<&Component<'_>>,
+        out: &mut Items,
         said: Said<'_>,
-    ) -> Option<(String, Item)> {
-        let recurrence = event.first("RECURRENCE-ID")?;
-        if recurrence.param("RANGE").is_some() {
+    ) {
+        let original = self.moment(event, "RECURRENCE-ID", said);
+        let Some(start) = self.moment(event, "DTSTART", said).or(original) else {
+            said(format!("UID {uid} has no DTSTART and was left out"));
+            return;
+        };
+        let length = match self.length(event, start, said) {
+            Some(length) => Some(length),
+            None => master.and_then(|master| {
+                let first = self.moment(master, "DTSTART", said)?;
+                self.length(master, first, said)
+            }),
+        };
+        let length = length.unwrap_or_default();
+        let (local, zone) = match start {
+            Moment::Date(day) => (day.and_time(NaiveTime::MIN), Zone::Utc),
+            Moment::Time(at, zone) => (at, zone),
+        };
+        // Every date of the set as a reading of the start's clock; a DATE at its time of day.
+        let wall = |moment| match moment {
+            Moment::Date(day) => day.and_time(local.time()),
+            Moment::Time(at, own) => zone.local(own.to_utc(at)),
+        };
+        let mut walls = |name| -> Vec<NaiveDateTime> {
+            self.moments(event, name, said)
+                .into_iter()
+                .map(wall)
+                .collect()
+        };
+        let (dates, excluded) = (walls("RDATE"), walls("EXDATE"));
+        let rule = match text(event, "RRULE")
+            .map(|rule| recurrence::rule(rule, local, &|at| zone.local(at)))
+        {
+            Some(Err(why)) => {
+                said(format!("UID {uid}: RRULE not read ({why}), DTSTART alone"));
+                None
+            }
+            Some(Ok(rule)) => Some(rule),
+            None => None,
+        };
+        // Padded so an instance that began before the window and runs into it is found; an
+        // override is read wherever it is, so it replaces its instance.
+        let padding = Duration::days(2).checked_add(&length.abs());
+        let span = padding.and_then(|padding| match original {
+            None => Some((
+                window.0.checked_sub_signed(padding)?,
+                window.1 + Duration::days(2),
+            )),
+            Some(_) => Some((
+                local.checked_sub_signed(padding)?,
+                local.checked_add_signed(padding)?,
+            )),
+        });
+        let Some(span) = span else {
             said(format!(
-                "UID {uid}: a RANGE on RECURRENCE-ID was read as this instance alone"
+                "UID {uid}: it lasts past every date, and was left out"
+            ));
+            return;
+        };
+        let (starts, cut) = recurrence::starts(local, rule, &dates, &excluded, span);
+        if cut {
+            said(format!(
+                "UID {uid}: its rule was cut after {} instances",
+                recurrence::MAX_STEPS
             ));
         }
-        let original = value::of(recurrence)?;
-        let key = self.key(&original, said);
-        let start = event
-            .first("DTSTART")
-            .and_then(value::of)
-            .unwrap_or_else(|| original.clone());
-        let all_day = matches!(start, Moment::Date(_));
-        let zone = self.zone_of(&start, said);
-        let length = self.length(event, &start, said).or_else(|| {
-            master.and_then(|master| {
-                let first = master.first("DTSTART").and_then(value::of)?;
-                self.length(master, &first, said)
-            })
-        });
-        let when = span(all_day, start.naive(), &zone, length);
+        let read = |name| clipped(text(event, name).or_else(|| text(master?, name)), MAX_TEXT);
         let status = match (status(event), master.map(status)) {
             (_, Some(Status::Cancelled)) => Status::Cancelled,
             (own, _) => own,
         };
-        let item = self.item(
-            uid,
-            Instance {
-                key: key.clone(),
-                when,
-            },
-            event,
-            master,
-            status,
-        );
-        Some((key, item))
-    }
-
-    fn item(
-        &self,
-        uid: &str,
-        instance: Instance,
-        event: &Component,
-        master: Option<&Component>,
-        status: Status,
-    ) -> Item {
-        let text = |name: &str| {
-            event
-                .first(name)
-                .or_else(|| master.and_then(|master| master.first(name)))
-                .map(|property| item::clipped(property.text().trim(), MAX_TEXT))
-                .unwrap_or_default()
+        let attendees = match (props(event, "ATTENDEE").is_empty(), master) {
+            (true, Some(master)) => props(master, "ATTENDEE"),
+            (true, None) | (false, _) => props(event, "ATTENDEE"),
         };
-        let attendees: Vec<String> = {
-            let own: Vec<&Property> = event.all("ATTENDEE").collect();
-            let from = if own.is_empty() {
-                master
-                    .map(|master| master.all("ATTENDEE").collect())
-                    .unwrap_or_default()
-            } else {
-                own
+        let name = |attendee: &&Property<'_>| clipped(param(attendee, "CN"), MAX_NAME);
+        let names = attendees.iter().filter_map(name);
+        let names: Vec<String> = names.take(MAX_ATTENDEES).collect();
+        for local in starts {
+            let instance = match start {
+                Moment::Date(_) => Moment::Date(local.date()),
+                Moment::Time(_, zone) => Moment::Time(local, zone),
             };
-            from.into_iter()
-                .filter_map(|attendee| attendee.param("CN"))
-                .map(|name| item::clipped(crate::content::unescape(name).trim(), MAX_NAME))
-                .filter(|name| !name.is_empty())
-                .take(MAX_ATTENDEES)
-                .collect()
-        };
-        Item {
-            calendar: self.name.to_owned(),
-            uid: item::clipped(uid, MAX_TEXT),
-            occurrence: instance.key,
-            title: text("SUMMARY"),
-            when: instance.when,
-            place: text("LOCATION"),
-            attendees,
-            status,
+            let Some(when) = instance.span(length) else {
+                said(format!(
+                    "UID {uid}: an instance ends past every date, and was left out"
+                ));
+                continue;
+            };
+            let item = Item {
+                calendar: calendar.to_owned(),
+                uid: clipped(Some(uid), MAX_TEXT).unwrap_or_default(),
+                occurrence: original.unwrap_or(instance).key(),
+                title: read("SUMMARY").unwrap_or_default(),
+                when,
+                place: read("LOCATION").unwrap_or_default(),
+                attendees: names.clone(),
+                status,
+            };
+            out.insert((uid.to_owned(), item.occurrence.clone()), item);
         }
     }
 }
 
-fn status(event: &Component) -> Status {
-    match event
-        .first("STATUS")
-        .map(|status| status.value.trim().to_ascii_uppercase())
-        .as_deref()
-    {
+/// The first `max` characters of `text`, trimmed, or `None` for none.
+fn clipped(text: Option<&str>, max: usize) -> Option<String> {
+    let text: String = text?.trim().chars().take(max).collect();
+    (!text.is_empty()).then_some(text)
+}
+
+fn status(event: &Component<'_>) -> Status {
+    let status = text(event, "STATUS").map(str::to_ascii_uppercase);
+    match status.as_deref() {
         Some("CANCELLED") => Status::Cancelled,
         Some("TENTATIVE") => Status::Tentative,
-        _ => Status::Confirmed,
-    }
-}
-
-/// The span of an instance starting at the wall-clock `local` in `zone`; a date event's
-/// `local` is its day's midnight.
-fn span(all_day: bool, local: NaiveDateTime, zone: &Zone, length: Option<Length>) -> When {
-    if all_day {
-        let days = match length {
-            Some(Length::Nominal(duration)) => duration.days.max(1),
-            Some(Length::Exact(duration)) => duration.num_days().max(1),
-            None => 1,
-        };
-        return When::all_day(local.date(), local.date() + Duration::days(days));
-    }
-    let start = zone.to_utc(local);
-    let end = match length {
-        None => start,
-        Some(Length::Exact(duration)) => start + duration,
-        Some(Length::Nominal(duration)) => {
-            zone.to_utc(local + Duration::days(duration.days)) + Duration::seconds(duration.seconds)
-        }
-    };
-    When::timed(start, end)
-}
-
-/// Whether a wall-clock instant is at or before the rule's `UNTIL`, which is UTC when it
-/// ends in `Z` and the event's own clock otherwise.
-fn within_until(rule: &Rule, zone: &Zone, all_day: bool) -> impl Fn(NaiveDateTime) -> bool + use<> {
-    let until = match &rule.end {
-        End::Until(until) => Some(until.clone()),
-        End::Never | End::Count(_) => None,
-    };
-    let zone = zone.clone();
-    move |local: NaiveDateTime| match &until {
-        None => true,
-        Some(Moment::Date(day)) => local.date() <= *day,
-        Some(Moment::Utc(at)) if all_day => local.date() <= at.date(),
-        Some(Moment::Utc(at)) => zone.to_utc(local) <= *at,
-        Some(other) => local <= other.naive(),
+        Some(_) | None => Status::Confirmed,
     }
 }

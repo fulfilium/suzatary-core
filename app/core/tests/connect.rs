@@ -42,8 +42,7 @@ fn connection() -> impl Strategy<Value = Connection> {
                 TemplateId::MsImap,
                 Params::Microsoft { email, tenant }
             )),
-        Just(made(TemplateId::ClaudeSubscription, Params::Nothing)),
-        Just(made(TemplateId::AnthropicApi, Params::Nothing)),
+        Just(made(TemplateId::Model, Params::Nothing)),
         Just(made(TemplateId::Ntfy, Params::Nothing)),
         Just(made(TemplateId::Fcm, Params::Nothing)),
     ]
@@ -56,7 +55,6 @@ fn by_hand() -> impl Strategy<Value = Vec<Manifest>> {
         "ics",
         "plugins/mine/ics.wasm",
         "plugins/mine/ics.schema",
-        "source@0.3.0",
         &["https://calendar.example.test"],
     )
     .expect("a manifest");
@@ -64,7 +62,6 @@ fn by_hand() -> impl Strategy<Value = Vec<Manifest>> {
         "dueday",
         "dueday.wasm",
         "dueday.schema",
-        "source@0.3.0",
         &["https://dueday.example.test"],
     )
     .expect("a manifest");
@@ -84,21 +81,15 @@ fn by_hand() -> impl Strategy<Value = Vec<Manifest>> {
 
 /// An instance: tables written by hand, then by connections, refusals ignored.
 fn declared() -> impl Strategy<Value = Declared> {
-    (
-        by_hand(),
-        proptest::collection::vec(connection(), 0..8),
-        proptest::sample::subsequence(vec!["claude-cli", "anthropic"], 0..=2),
-    )
-        .prop_map(|(plugins, connections, backends)| {
-            let start = Declared {
-                plugins,
-                backends: backends.into_iter().map(str::to_owned).collect(),
-                ..Declared::default()
-            };
-            connections.iter().fold(start, |declared, connection| {
-                declared.with(connection).unwrap_or(declared)
-            })
+    (by_hand(), proptest::collection::vec(connection(), 0..8)).prop_map(|(plugins, connections)| {
+        let start = Declared {
+            plugins,
+            ..Declared::default()
+        };
+        connections.iter().fold(start, |declared, connection| {
+            declared.with(connection).unwrap_or(declared)
         })
+    })
 }
 
 fn flip<T: Clone>(list: &[T]) -> Vec<T> {
@@ -111,7 +102,6 @@ fn reversed(declared: &Declared) -> Declared {
         plugins: flip(&declared.plugins),
         drive: flip(&declared.drive),
         channels: flip(&declared.channels),
-        backends: declared.backends.clone(),
     }
 }
 
@@ -174,7 +164,7 @@ proptest! {
             Err(Refused::Duplicate(_)) => prop_assert!(held),
             Err(Refused::Unwritten { .. }) => prop_assert!(matches!(
                 connection.id(),
-                TemplateId::GitRemote | TemplateId::ClaudeSubscription | TemplateId::AnthropicApi
+                TemplateId::GitRemote | TemplateId::Model
             )),
             Err(other) => prop_assert!(false, "{other}"),
         }
@@ -191,9 +181,7 @@ proptest! {
     /// mints: deriving the settable names is a homomorphism over the connections.
     #[test]
     fn every_secret_a_step_asks_for_is_settable(declared in declared()) {
-        let settables = Settables::derive(
-            std::iter::empty(),
-            declared.channels.iter().copied(),
+        let settables = Settables::derive("MODEL_TOKEN", declared.channels.iter().copied(),
             None,
             &declared.plugins,
         );

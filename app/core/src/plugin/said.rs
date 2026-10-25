@@ -1,21 +1,14 @@
 //! What a plugin said, as the host keeps it: its words, bounded.
 
-use std::fmt::{self, Write as _};
+use std::fmt;
 
 /// The most bytes a [`Said`] holds, its marker included.
 pub const MAX_SAID: usize = 512;
 
-/// The marker's longest form, `… (<usize::MAX> bytes cut)`, held back from the kept prefix so the
-/// whole fits [`MAX_SAID`].
-const MARKER: usize = "… ( bytes cut)".len() + 20;
-
-/// Text a plugin put before the host (an error, a refusal's subject, a log line), at most
-/// [`MAX_SAID`] bytes.
+/// Text a plugin put before the host (an error, a URL, a log line), at most [`MAX_SAID`] bytes.
 ///
 /// [`Said::clip`] is the one way to make one, so whatever the host keeps or prints of a plugin's
-/// words is bounded by type, never by a caller remembering to cut it. Text that fits is kept
-/// whole; text that does not is its longest prefix ending on a character that leaves room for
-/// `… (N bytes cut)`, so the reader sees that it was cut and by how much.
+/// words is bounded by type. Text that does not fit is cut on a character and marked `…`.
 #[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct Said(String);
 
@@ -25,11 +18,8 @@ impl Said {
     pub fn clip(text: impl Into<String>) -> Self {
         let mut text = text.into();
         if text.len() > MAX_SAID {
-            let kept = text.floor_char_boundary(MAX_SAID - MARKER);
-            let cut = text.len() - kept;
-            text.truncate(kept);
-            // Writing to a `String` cannot fail.
-            let _ = write!(text, "… ({cut} bytes cut)");
+            text.truncate(text.floor_char_boundary(MAX_SAID - '…'.len_utf8()));
+            text.push('…');
         }
         Self(text)
     }
@@ -61,35 +51,13 @@ mod tests {
     use super::*;
 
     proptest! {
-        /// Whatever a plugin says, what is kept fits the bound.
+        /// Whatever a plugin says, what is kept fits the bound, and text that fits is kept whole.
         #[test]
-        fn what_is_kept_is_bounded(text in "\\PC{0,700}") {
-            prop_assert!(Said::clip(text).as_str().len() <= MAX_SAID);
-        }
-
-        /// Text that fits is kept whole, so clipping is the identity on bounded text and
-        /// clipping twice is clipping once.
-        #[test]
-        fn clipping_is_a_projection(text in "\\PC{0,700}") {
-            let once = Said::clip(text.clone());
-            if text.len() <= MAX_SAID {
-                prop_assert_eq!(once.as_str(), text.as_str());
-            }
-            prop_assert_eq!(Said::clip(once.as_str()), once);
-        }
-
-        /// Cut text is a prefix of what was said, ending on a character, and the marker counts
-        /// exactly the bytes that are not kept.
-        #[test]
-        fn a_cut_keeps_a_prefix_and_counts_the_rest(text in "\\PC{120,700}") {
+        fn what_is_kept_is_bounded_and_a_prefix(text in "\\PC{0,700}") {
             let said = Said::clip(text.clone());
-            if text.len() > MAX_SAID {
-                let (kept, marker) = said.as_str().rsplit_once("… (").expect("a marker");
-                prop_assert!(text.starts_with(kept));
-                prop_assert_eq!(marker, format!("{} bytes cut)", text.len() - kept.len()));
-            } else {
-                prop_assert_eq!(said.as_str(), text.as_str());
-            }
+            prop_assert!(said.as_str().len() <= MAX_SAID);
+            let kept = said.as_str().strip_suffix('…').filter(|_| text.len() > MAX_SAID);
+            prop_assert!(text.starts_with(kept.unwrap_or(said.as_str())));
         }
     }
 }

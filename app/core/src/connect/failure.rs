@@ -24,7 +24,7 @@ pub enum Failure {
     NeedsLogin,
     /// A secret it reads is stored nowhere on this box.
     Unresolved,
-    /// The model's backend refused its key or token.
+    /// The model refused its key or token.
     KeyRefused,
     /// The value stored for its link is not one the box sends: not a URL it reads, or one in
     /// the clear. Nothing was sent, so no service answered.
@@ -101,8 +101,8 @@ impl Failure {
             | Refusal::OriginNotAllowed(_)
             | Refusal::CredentialNotDeclared(_)
             | Refusal::CredentialUnavailable(_)
-            | Refusal::BadHeader(_)
-            | Refusal::Echoed(_) => Failure::Unclassified,
+            | Refusal::Echoed(_)
+            | Refusal::TooManyFetches => Failure::Unclassified,
             Refusal::Unreachable | Refusal::TimedOut | Refusal::Lost => Failure::Unreachable,
         }
     }

@@ -36,6 +36,12 @@ impl PluginUrl {
         printable(&rest).then_some(Self { origin, rest })
     }
 
+    /// Its path and query, `/`-rooted.
+    #[must_use]
+    pub fn rest(&self) -> &str {
+        &self.rest
+    }
+
     /// Its origin, which the manifest must allow.
     #[must_use]
     pub fn origin(&self) -> &Origin {

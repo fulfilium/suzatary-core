@@ -93,7 +93,7 @@ impl Writer {
             let opened = Entry::Opened {
                 at: at(self.second),
                 title: Words::kept(format!("Topic {conversation}")),
-                model: "claude-cli/haiku".to_owned(),
+                model: "a-cli/small".to_owned(),
                 kind: Kind::Topic,
             };
             let line = self.line(conversation, &opened);

@@ -6,6 +6,15 @@ use suzatary_core::secretary::sign_in::SignInUrl;
 /// The prefix of a long-lived subscription token, `sk-ant-oat01-…`.
 const TOKEN_PREFIX: &str = "sk-ant-oat";
 
+/// The hosts a sign-in link `claude setup-token` draws may name; a link anywhere else is never
+/// drawn as a button.
+const HOSTS: [&str; 4] = [
+    "claude.com",
+    "claude.ai",
+    "platform.claude.com",
+    "console.anthropic.com",
+];
+
 /// How the CLI says it did not take a code, lowercased.
 const REFUSED: [&str; 5] = ["error", "invalid", "expired", "try again", "not accepted"];
 
@@ -30,7 +39,9 @@ impl Screen {
     pub fn url(&self) -> Option<SignInUrl> {
         self.text.match_indices("https://").find_map(|(at, _)| {
             let url = &self.text[at..];
-            SignInUrl::parse(&url[..url.find(char::is_whitespace).unwrap_or(url.len())]).ok()
+            SignInUrl::parse(&url[..url.find(char::is_whitespace).unwrap_or(url.len())])
+                .ok()
+                .filter(|url| HOSTS.contains(&url.host()))
         })
     }
 

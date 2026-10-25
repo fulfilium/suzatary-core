@@ -33,8 +33,6 @@ mod calendar;
 mod clienterrors;
 #[path = "coding.rs"]
 mod coding;
-#[path = "configure.rs"]
-mod configure;
 #[path = "connections.rs"]
 mod connections;
 #[path = "context_headroom.rs"]
@@ -77,14 +75,14 @@ mod markup;
 mod mcp;
 #[path = "memory.rs"]
 mod memory;
+#[path = "migrate_models.rs"]
+mod migrate_models;
 #[path = "objects.rs"]
 mod objects;
 #[path = "paths.rs"]
 mod paths;
 #[path = "perf_fold_chain.rs"]
 mod perf_fold_chain;
-#[path = "plugin_tap.rs"]
-mod plugin_tap;
 #[path = "proposals.rs"]
 mod proposals;
 #[path = "push.rs"]

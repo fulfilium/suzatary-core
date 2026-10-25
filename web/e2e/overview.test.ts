@@ -2,7 +2,7 @@
  * SETTINGS AS WHAT IS CONNECTED, END TO END (`docs/SETUPAGENT-PLAN-2026-10-07.md`
  * §8 and §12, the guided setup's stage 2, `overview`).
  *
- * The fixture is `--settings`: one `[[providers]]` entry (`phala`) and one
+ * The fixture is `--settings`: the model's token and one
  * calendar link on the `ics` plugin (`fixture.rs::SETTINGS_CALENDAR_LINK`),
  * a calendar that synced once and has since lost its link, each declared
  * over an ISOLATED `secretspec` store (`scripts/web-e2e.sh`'s
@@ -40,7 +40,7 @@ const SHOTS = process.env["SUZATARY_SHOTS"] ?? join(tmpdir(), "suzatary-shots");
 mkdirSync(SHOTS, { recursive: true });
 
 /** What the fixture declares and nothing stores, named once by `fixture.rs`; never drawn on a line. */
-const NAMES = ["PHALA_API_KEY", "PLUGIN_ICS_WORK"];
+const NAMES = ["CLAUDE_CODE_OAUTH_TOKEN", "PLUGIN_ICS_WORK"];
 /** What the owner reads instead of the link's name: the template's label for it. */
 const LINK_LABEL = "your Work calendar's secret link";
 
@@ -91,10 +91,17 @@ app.scene("only what is connected is drawn, grouped, and no line names a key", a
     assert.equal(answered.includes(name), false, `${name} is in the overview's answer`);
     assert.equal(rows.includes(name), false, `${name} is in a card's row`);
   }
+  assert.deepEqual(
+    await app.page.evaluate<string[]>(
+      `[...document.querySelectorAll('.settingsline[data-group="models"] h3')].map((h) => h.textContent)`,
+    ),
+    ["Chat, reviews and titles", "Compactor"],
+    "the Models group lists which Claude model each job runs, and nothing to choose",
+  );
   assert.match(
-    await app.page.evaluate<string>(`document.querySelector('.settingsline[data-line="provider:phala"] .settingshealth').textContent`),
-    /^No job orders it\.$/,
-    "a provider no job orders is unused, not a missing key",
+    await app.page.evaluate<string>(`document.querySelector('.settingsline[data-line="job:Chat, reviews and titles"] .settingshealth').textContent`),
+    /^Answered /,
+    "the model's line stands as its calls answered",
   );
 });
 

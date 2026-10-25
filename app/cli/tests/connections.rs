@@ -261,7 +261,7 @@ fn a_calendar_is_connected_granted_and_removed_by_its_cards() {
     assert_eq!(status, 200, "{after}");
     assert_eq!(after["proposals"][0]["state"], "acted", "{after}");
     assert!(file(&served).starts_with(INSTANCE), "{}", file(&served));
-    assert!(file(&served).contains("name = \"PLUGIN_ICS_WORK\""));
+    assert!(file(&served).contains("credentials = [\"PLUGIN_ICS_WORK\"]"));
 
     let asked = common::reading(base, setup, &[]);
     assert_eq!(
@@ -481,8 +481,7 @@ fn a_calendar_added_by_hand_is_seen_without_a_restart() {
     assert!(line().is_none(), "nothing is connected yet");
     let edited = format!(
         "{}\n[[plugins]]\nname = \"ics\"\ncomponent = \"ics.wasm\"\nschema = \"ics.schema\"\n\
-         world = \"source@0.3.0\"\norigins = [\"https://calendar.example.test\"]\n\n\
-         [[plugins.credentials]]\nname = \"PLUGIN_ICS_HOME\"\ninto = \"url\"\n",
+         origins = [\"https://calendar.example.test\"]\ncredentials = [\"PLUGIN_ICS_HOME\"]\n",
         file(&served)
     );
     std::fs::write(&served.path, edited).expect("a hand edit");
@@ -495,53 +494,6 @@ fn a_calendar_added_by_hand_is_seen_without_a_restart() {
     // The watcher reads the file every second; two more reads of the unmoved file file nothing.
     std::thread::park_timeout(std::time::Duration::from_millis(2500));
     assert_eq!(asked_for(), 1, "an unmoved file asks nothing more");
-    let _ = std::fs::remove_file(&served.path);
-}
-
-/// A provider declared by its card before a calendar's Connect is tapped keeps its key: each
-/// tap derives the names from the file and declares them with the providers under the same
-/// locks, so the store declares both the key and the link.
-#[test]
-fn a_provider_added_before_a_connect_keeps_its_key_declared() {
-    use suzatary_core::settings::configure::{Configuration as _, Configure};
-    let store = Arc::new(DeclaredStore::new());
-    let declared = Arc::clone(&store);
-    let served = serving_with(
-        "provider-then-connect",
-        Act::Connect {
-            connection: calendar(),
-        },
-        move |server, _| {
-            server.settings(SettingsFixture {
-                edits: Arc::new(suzatary_cli::instance::InstanceEdits::new(scratch(
-                    "provider-then-connect",
-                ))) as _,
-                secrets: Arc::clone(&declared) as _,
-                declares: Arc::new(declared.declarations.clone()) as _,
-                ..SettingsFixture::empty()
-            })
-        },
-    );
-    let now = suzatary_cli::instance::InstanceEdits::new(served.path.clone())
-        .configured()
-        .expect("the scratch instance reads");
-    asked_of(
-        &served,
-        Act::Configure {
-            change: Configure::declare(&now, suzatary_core::settings::ProviderSetup::OpenRouter)
-                .expect("a card"),
-        },
-    );
-    let (status, after) = tap(&served.base, CONNECT, 1, &serde_json::json!({}));
-    assert_eq!(status, 200, "{after}");
-    assert!(store.declares("OPENROUTER_API_KEY"));
-    let (status, after) = tap(&served.base, CONNECT, 0, &serde_json::json!({}));
-    assert_eq!(status, 200, "{after}");
-    assert!(store.declares("PLUGIN_ICS_WORK"), "the link is declared");
-    assert!(
-        store.declares("OPENROUTER_API_KEY"),
-        "the provider's key is still declared"
-    );
     let _ = std::fs::remove_file(&served.path);
 }
 
@@ -885,7 +837,7 @@ fn a_connect_card_names_the_origins_its_plugin_may_reach_now() {
         &served.path,
         format!(
             "{INSTANCE}\n[[plugins]]\nname = \"ics\"\ncomponent = \"plugins/mine/ics.wasm\"\n\
-             schema = \"plugins/mine/ics.schema\"\nworld = \"source@0.3.0\"\n\
+             schema = \"plugins/mine/ics.schema\"\n\
              origins = [\"https://calendar.example.test\"]\n"
         ),
     )
@@ -995,7 +947,7 @@ fn serving_pushing(tag: &str, origin: Option<&'static str>) -> Box {
             }
             server.effects(|effects| effects).settings_names(
                 suzatary_core::settings::Settables::of_deployment(
-                    std::iter::empty(),
+                    suzatary_io::model::TOKEN,
                     std::iter::empty(),
                     None,
                     (&[], &[]),
@@ -1228,7 +1180,7 @@ fn the_secretary_files_a_connect_card_and_the_tap_adds_the_calendar() {
     let (status, after) = tap(&served.base, &id, 0, &serde_json::json!({}));
     assert_eq!(status, 200, "{after}");
     assert_eq!(after["proposals"][0]["state"], "acted", "{after}");
-    assert!(file(&served).contains("name = \"PLUGIN_ICS_WORK\""));
+    assert!(file(&served).contains("credentials = [\"PLUGIN_ICS_WORK\"]"));
     let setup = common::reading(&served.base, CONVERSATION.as_str(), &[]);
     assert!(
         setup["proposals"]

@@ -40,9 +40,8 @@ impl Template {
 pub enum Table {
     /// None: every deployment has exactly one, its data repository.
     Always,
-    /// None: a built-in model backend, connected while a job's order or the fallback names it,
-    /// which is a choice of model, not a connection's table.
-    Backend(BuiltIn),
+    /// None: the deployment's model, which every deployment runs.
+    Model,
     /// A `url` credential its label names on the fragment's plugin, whose manifest is declared
     /// from the fragment when the instance has none.
     Link(Fragment),
@@ -52,26 +51,6 @@ pub enum Table {
     Folder,
     /// A `[notify]` channel.
     Channel(Channel),
-}
-
-/// A model backend built into the app: a key, and no `[[providers]]` entry.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum BuiltIn {
-    /// The Claude subscription, `claude-cli/`.
-    ClaudeCli,
-    /// The Messages API, `anthropic/`.
-    AnthropicApi,
-}
-
-impl BuiltIn {
-    /// Its spelling in a job's order.
-    #[must_use]
-    pub const fn as_str(self) -> &'static str {
-        match self {
-            BuiltIn::ClaudeCli => crate::models::CLAUDE_CLI,
-            BuiltIn::AnthropicApi => crate::models::ANTHROPIC,
-        }
-    }
 }
 
 /// A channel that wakes the owner's phones: `[notify] channels` is read into these once, where
@@ -144,7 +123,7 @@ impl Table {
     #[must_use]
     pub const fn shape(&self) -> Shape {
         match self {
-            Table::Always | Table::Backend(_) | Table::Channel(_) => Shape::Nothing,
+            Table::Always | Table::Model | Table::Channel(_) => Shape::Nothing,
             Table::Link(_) => Shape::Label,
             Table::Account(AccountKind::Microsoft) => Shape::Microsoft,
             Table::Account(AccountKind::Gmail | AccountKind::Google | AccountKind::Proton) => {
@@ -253,7 +232,7 @@ impl AccountKind {
 }
 
 /// The manifest a calendar-like template declares when the instance has none of its plugin:
-/// an app bundle, its world and the origins it may reach from the start.
+/// an app bundle and the origins it may reach from the start.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Fragment {
     /// The plugin, and its credentials' namespace.
@@ -262,8 +241,6 @@ pub struct Fragment {
     pub component: &'static str,
     /// Its schema, beside the component.
     pub schema: &'static str,
-    /// Its world, `<world>@<version>`.
-    pub world: &'static str,
     /// The origins it may reach before any grant.
     pub origins: &'static [&'static str],
 }
@@ -274,13 +251,7 @@ impl Fragment {
     /// # Errors
     /// The refusal the file's table would get.
     pub fn manifest(&self) -> Result<Manifest, ManifestError> {
-        Manifest::declare(
-            self.plugin,
-            self.component,
-            self.schema,
-            self.world,
-            self.origins,
-        )
+        Manifest::declare(self.plugin, self.component, self.schema, self.origins)
     }
 }
 
@@ -301,10 +272,8 @@ pub enum TemplateId {
     MsImap,
     /// Proton Mail, through its Bridge.
     Proton,
-    /// The Claude subscription.
-    ClaudeSubscription,
-    /// The Anthropic API, by key.
-    AnthropicApi,
+    /// The deployment's model, signed in from a card.
+    Model,
     /// Notifications through ntfy.
     Ntfy,
     /// Notifications through Firebase.
@@ -313,7 +282,7 @@ pub enum TemplateId {
 
 impl TemplateId {
     /// Every template, in the catalog's order.
-    pub const ALL: [TemplateId; 11] = [
+    pub const ALL: [TemplateId; 10] = [
         TemplateId::GitRemote,
         TemplateId::DriveCli,
         TemplateId::Ics,
@@ -321,8 +290,7 @@ impl TemplateId {
         TemplateId::Google,
         TemplateId::MsImap,
         TemplateId::Proton,
-        TemplateId::ClaudeSubscription,
-        TemplateId::AnthropicApi,
+        TemplateId::Model,
         TemplateId::Ntfy,
         TemplateId::Fcm,
     ];
@@ -338,8 +306,7 @@ impl TemplateId {
             TemplateId::Google => "google",
             TemplateId::MsImap => "imap-device-code",
             TemplateId::Proton => "bridge",
-            TemplateId::ClaudeSubscription => "claude-subscription",
-            TemplateId::AnthropicApi => "anthropic-api",
+            TemplateId::Model => "model",
             TemplateId::Ntfy => "ntfy",
             TemplateId::Fcm => "fcm",
         }

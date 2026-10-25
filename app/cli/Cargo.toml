@@ -50,10 +50,9 @@ tracing.workspace = true
 tracing-subscriber.workspace = true
 # The instance file, and the wire this serialises.
 toml.workspace = true
-# THE ONE EDIT PATH (`docs/PROVIDERSETUP-PLAN-2026-09-22.md` §2 rule 2):
-# `instance::InstanceEdits` parses the file as a `DocumentMut` and appends a
-# `[[providers]]` table, never rewriting the rest of it — see `toml_edit`'s
-# own comment in the workspace manifest.
+# THE ONE EDIT PATH: `instance::InstanceEdits` parses the file as a
+# `DocumentMut` and edits one table, never rewriting the rest of it — see
+# `toml_edit`'s own comment in the workspace manifest.
 toml_edit.workspace = true
 serde.workspace = true
 serde_json.workspace = true

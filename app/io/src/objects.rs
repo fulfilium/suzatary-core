@@ -292,6 +292,7 @@ impl<E: Store> Prodrome<E> for Objects<E> {
 mod tests {
     use prodrome_core::event::{Actor, mk_completed, mk_created};
     use prodrome_core::literal::Datetime;
+    use suzatary_core::model_name::ModelName;
 
     use super::*;
     use suzatary_core::secretary::inbox::{self, Response};
@@ -830,7 +831,7 @@ mod tests {
             "{}",
             refused.message()
         );
-        let model = suzatary_core::models::ModelName::parse("claude-sonnet-5-5").expect("a model");
+        let model = ModelName::parse("claude-sonnet-5-5").expect("a model");
         let summary = Line::new("the first lines").expect("a line");
         let over = vec![node.clone()];
         let refused = partial

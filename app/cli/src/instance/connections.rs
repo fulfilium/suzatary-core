@@ -29,21 +29,18 @@ pub(crate) fn add(path: &Path, text: &str, connection: &Connection) -> Result<St
             append(table_mut(&mut doc, "mail")?, "accounts", table)?;
         }
         Table::Link(fragment) => {
-            let mut credential = toml_edit::Table::new();
-            credential["name"] = toml_edit::value(link(connection)?);
-            credential["into"] = toml_edit::value("url");
+            let credential = link(connection)?;
             let plugins = plugins_mut(&mut doc)?;
             let held = plugins
                 .iter()
                 .position(|plugin| named(plugin, fragment.plugin));
             if let Some(plugin) = held.and_then(|at| plugins.get_mut(at)) {
-                append(plugin, "credentials", credential)?;
+                push(plugin, "credentials", &credential)?;
             } else {
                 let mut plugin = toml_edit::Table::new();
                 plugin["name"] = toml_edit::value(fragment.plugin);
                 plugin["component"] = toml_edit::value(fragment.component);
                 plugin["schema"] = toml_edit::value(fragment.schema);
-                plugin["world"] = toml_edit::value(fragment.world);
                 plugin["origins"] = toml_edit::value(
                     fragment
                         .origins
@@ -51,14 +48,20 @@ pub(crate) fn add(path: &Path, text: &str, connection: &Connection) -> Result<St
                         .copied()
                         .collect::<toml_edit::Array>(),
                 );
-                append(&mut plugin, "credentials", credential)?;
+                push(&mut plugin, "credentials", &credential)?;
                 plugins.push(plugin);
             }
         }
-        Table::Folder => push(&mut doc, "secretary", "drive_allow", &connection.key().name)?,
-        Table::Channel(channel) => push(&mut doc, "notify", "channels", channel.as_str())?,
+        Table::Folder => push(
+            table_mut(&mut doc, "secretary")?,
+            "drive_allow",
+            &connection.key().name,
+        )?,
+        Table::Channel(channel) => {
+            push(table_mut(&mut doc, "notify")?, "channels", channel.as_str())?;
+        }
         // The algebra refused these before any text was touched.
-        Table::Always | Table::Backend(_) => {}
+        Table::Always | Table::Model => {}
     }
     written(path, &doc, &expected)
 }
@@ -92,24 +95,19 @@ pub(crate) fn remove(
                 .iter_mut()
                 .filter(|plugin| named(plugin, fragment.plugin))
             {
-                let left = take(plugin, "credentials", |held| {
-                    held.get("name").and_then(Item::as_str) == Some(name.as_str())
-                })?;
-                if left == 0 {
-                    plugin.remove("credentials");
-                }
+                pull(plugin, "credentials", |held| held == name)?;
             }
         }
-        Table::Folder => pull(&mut doc, "secretary", "drive_allow", |held| {
+        Table::Folder => pull_top(&mut doc, "secretary", "drive_allow", |held| {
             held.parse::<suzatary_core::drive::DrivePath>()
                 .is_ok_and(|folder| folder.to_string() == key.name)
         })?,
         Table::Channel(channel) => {
-            pull(&mut doc, "notify", "channels", |held| {
+            pull_top(&mut doc, "notify", "channels", |held| {
                 held == channel.as_str()
             })?;
         }
-        Table::Always | Table::Backend(_) => {}
+        Table::Always | Table::Model => {}
     }
     written(path, &doc, &expected)
 }
@@ -155,24 +153,6 @@ pub(crate) fn declared(path: &Path, text: &str) -> Result<Declared, EditError> {
     // The tables are the file's alone, so any environment roots them the same.
     super::Instance::of(path, file, &crate::paths::Env::under("/", "/"))
         .map(|instance| instance.declared())
-        .map_err(|failed| EditError::Malformed(format!("{failed:#}")))
-}
-
-/// The settings a Configure card changes, as the instance at `path` holding `text` declares them.
-///
-/// # Errors
-/// A text that does not read as an instance.
-pub(crate) fn configured(
-    path: &Path,
-    text: &str,
-) -> Result<suzatary_core::settings::configure::Configured, EditError> {
-    let file: super::File =
-        toml::from_str(text).map_err(|failed| EditError::Malformed(failed.to_string()))?;
-    super::Instance::of(path, file, &crate::paths::Env::under("/", "/"))
-        .map(|instance| suzatary_core::settings::configure::Configured {
-            models: instance.models,
-            providers: instance.providers,
-        })
         .map_err(|failed| EditError::Malformed(format!("{failed:#}")))
 }
 
@@ -264,34 +244,40 @@ fn take(
     }
 }
 
-/// `text` appended to the list `[table] key`, each made when absent.
-fn push(doc: &mut DocumentMut, table: &str, key: &str, text: &str) -> Result<(), EditError> {
-    table_mut(doc, table)?
+/// `text` appended to the list of strings `key` of `parent`, made when absent.
+fn push(parent: &mut dyn TableLike, key: &str, text: &str) -> Result<(), EditError> {
+    parent
         .entry(key)
         .or_insert(toml_edit::value(toml_edit::Array::new()))
         .as_array_mut()
-        .ok_or_else(|| not_a(&format!("{table}.{key}"), "list"))?
+        .ok_or_else(|| not_a(key, "list"))?
         .push(text);
     Ok(())
 }
 
-/// Every entry `is` picks taken out of the list `[table] key`; a list or a table left empty
+/// Every entry `is` picks taken out of the list of strings `key` of `parent`; a list left empty
 /// goes, as it was before the add that made it.
-fn pull(
+fn pull(parent: &mut dyn TableLike, key: &str, is: impl Fn(&str) -> bool) -> Result<(), EditError> {
+    let list = parent
+        .get_mut(key)
+        .and_then(Item::as_array_mut)
+        .ok_or_else(|| not_a(key, "list"))?;
+    list.retain(|value| !value.as_str().is_some_and(&is));
+    if list.is_empty() {
+        parent.remove(key);
+    }
+    Ok(())
+}
+
+/// [`pull`] from the top-level table `table`, which goes too when it is left empty.
+fn pull_top(
     doc: &mut DocumentMut,
     table: &str,
     key: &str,
     is: impl Fn(&str) -> bool,
 ) -> Result<(), EditError> {
     let held = table_mut(doc, table)?;
-    let list = held
-        .get_mut(key)
-        .and_then(Item::as_array_mut)
-        .ok_or_else(|| not_a(&format!("{table}.{key}"), "list"))?;
-    list.retain(|value| !value.as_str().is_some_and(&is));
-    if list.is_empty() {
-        held.remove(key);
-    }
+    pull(held, key, is)?;
     if held.is_empty() {
         doc.remove(table);
     }
@@ -361,16 +347,16 @@ sync = "gmail"
     /// or exactly as its template declares it, with none.
     const ICS: [&str; 3] = [
         "",
-        "\n# a calendar, by hand\n[[plugins]]\nname = \"ics\"\ncomponent = \"plugins/mine/ics.wasm\"\nschema = \"plugins/mine/ics.schema\"\nworld = \"source@0.3.0\"\norigins = [\"https://calendar.example.test\"]\ncredentials = [{ name = \"PLUGIN_ICS_HOME\", into = \"url\" }]\n",
-        "\n[[plugins]]\nname = \"ics\"\ncomponent = \"ics.wasm\"\nschema = \"ics.schema\"\nworld = \"source@0.3.0\"\norigins = [\"https://calendar.google.com\", \"https://outlook.office365.com\"]\n",
+        "\n# a calendar, by hand\n[[plugins]]\nname = \"ics\"\ncomponent = \"plugins/mine/ics.wasm\"\nschema = \"plugins/mine/ics.schema\"\norigins = [\"https://calendar.example.test\"]\ncredentials = [\"PLUGIN_ICS_HOME\"]\n",
+        "\n[[plugins]]\nname = \"ics\"\ncomponent = \"ics.wasm\"\nschema = \"ics.schema\"\norigins = [\"https://calendar.google.com\", \"https://outlook.office365.com\"]\n",
     ];
 
     /// Tables a file may hold beside the required ones, each spelled as a person might.
     const MORE: [&str; 4] = [
         "\n[secretary]\nmodel = \"claude-opus-5-5\" # pinned\ndrive_allow = [\n    \"/Documents\",\n]\n",
         "\n[notify]\nchannels = [\"fcm\"]\n",
-        "\n[[plugins]]\nname = \"dueday\"\ncomponent = \"dueday.wasm\"\nschema = \"dueday.schema\"\nworld = \"source@0.3.0\"\norigins = [\"https://dueday.example.test\"]\n",
-        "\n[models]\nsecretary = [\"anthropic/claude-opus-5-5\"]\n",
+        "\n[[plugins]]\nname = \"dueday\"\ncomponent = \"dueday.wasm\"\nschema = \"dueday.schema\"\norigins = [\"https://dueday.example.test\"]\n",
+        "\n[persona]\ncity = \"Springfield\" # the owner's\n",
     ];
 
     fn path() -> PathBuf {
@@ -413,7 +399,6 @@ sync = "gmail"
                 )),
             Just(made(TemplateId::Ntfy, Params::Nothing)),
             Just(made(TemplateId::Fcm, Params::Nothing)),
-            Just(made(TemplateId::AnthropicApi, Params::Nothing)),
         ]
     }
 
@@ -495,7 +480,7 @@ sync = "gmail"
         let added = add(&path(), BASE, &work).expect("added");
         assert!(added.starts_with(BASE), "{added}");
         assert!(
-            added.contains("[[plugins.credentials]]\nname = \"PLUGIN_ICS_WORK\"\ninto = \"url\""),
+            added.contains("credentials = [\"PLUGIN_ICS_WORK\"]"),
             "{added}"
         );
         assert_eq!(

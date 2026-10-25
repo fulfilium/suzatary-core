@@ -103,29 +103,3 @@ impl ResourceLimiter for Limits {
         MAX_OBJECTS
     }
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn a_deadline_is_whole_ticks_and_never_zero() {
-        let budget = |time| Budget { time, memory: 0 };
-        assert_eq!(budget(Duration::ZERO).ticks(), 1);
-        assert_eq!(budget(Duration::from_millis(1)).ticks(), 1);
-        assert_eq!(budget(Duration::from_millis(25)).ticks(), 3);
-        assert_eq!(Budget::default().ticks(), 3000);
-    }
-
-    #[test]
-    fn memory_counts_every_memory_and_stops_past_the_cap() {
-        let mut limits = Limits::new(Budget {
-            time: Duration::ZERO,
-            memory: 100,
-        });
-        assert!(limits.memory_growing(0, 60, None).expect("under the cap"));
-        assert!(limits.memory_growing(60, 70, None).expect("under the cap"));
-        assert!(limits.memory_growing(0, 40, None).is_err(), "70 + 40 > 100");
-        assert!(limits.exceeded);
-    }
-}

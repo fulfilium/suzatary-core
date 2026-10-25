@@ -87,12 +87,12 @@ if [ "$AVAIL_MB" -lt 1024 ]; then
   exit 1
 fi
 
-# Auth: a long-lived token from `claude setup-token` (~1yr), else an Anthropic
-# API key, each resolved via secretspec so it never sits in a file the agent can
-# Read (scripts/claude-auth.sh). With either, triage is independent of the
-# interactive session's 8h OAuth cycle.
+# Auth: a long-lived token from `claude setup-token` (~1yr), resolved via
+# secretspec so it never sits in a file the agent can Read
+# (scripts/claude-auth.sh). With it, triage is independent of the interactive
+# session's 8h OAuth cycle.
 #
-# Fallback (neither set): the interactive credentials file, pre-checked 90
+# Fallback (not set): the interactive credentials file, pre-checked 90
 # minutes early so the unit fails loudly while there's still time to /login
 # before the next run — claude -p does NOT auto-refresh headlessly; it prints
 # "Not logged in" and exits 0, silently dropping runs.

@@ -4,8 +4,6 @@
 //! target of its own in `Cargo.toml`, does not run, and `suites.rs` in the
 //! cli's tests fails when one is missing.
 
-#[path = "attestation_fixture.rs"]
-mod attestation_fixture;
 #[path = "drive_port.rs"]
 mod drive_port;
 #[path = "inbox_readings.rs"]

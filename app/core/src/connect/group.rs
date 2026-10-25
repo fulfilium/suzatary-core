@@ -16,7 +16,7 @@ pub enum Group {
     Calendar,
     /// The folders of the owner's Drive the secretary may read.
     Drive,
-    /// Which model answers each job, and the providers declared for them.
+    /// Which model answers each job.
     Models,
     /// The channels that wake the owner's phones.
     Notifications,

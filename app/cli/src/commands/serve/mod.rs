@@ -25,6 +25,7 @@ pub mod live;
 mod locks;
 mod mail;
 pub mod mail_cache;
+pub mod models;
 mod params;
 mod proposals;
 mod reply;
@@ -90,10 +91,10 @@ impl std::ops::Deref for State {
 /// about secrets, models, channels, accounts and plugins under their one lock, and the writers
 /// outside every record.
 pub struct Settings {
-    /// The settable names, the providers, the orders, the channels, the accounts, the plugins.
+    /// The settable names, the channels, the accounts, the plugins.
     pub live: live::Shared,
-    /// What a job answers with when its order holds nothing usable.
-    pub fallback: Arc<suzatary_core::models::ModelEntry>,
+    /// The Claude models the deployment runs.
+    pub models: Arc<models::Models>,
     /// What writes a secret.
     pub secrets: Arc<dyn suzatary_core::settings::Writes + Send + Sync>,
     /// What declares `settables` to the store `secrets` writes to.
@@ -131,13 +132,13 @@ pub struct Inner {
     pub known: Arc<std::sync::Mutex<gate::Remembering>>,
     /// Every conversation currently being answered.
     pub workers: Arc<Workers>,
-    /// The settable names, the providers, the orders, the channels, the accounts and the
-    /// plugins, under the one lock the brains read per turn and, once serving,
+    /// The settable names, the channels, the accounts and the plugins, under the one lock
+    /// that, once serving,
     /// [`State::reconnected`] alone writes, so a tap's edit or a hand edit takes effect with no
     /// restart.
     pub live: live::Shared,
-    /// What a job answers with when its order holds nothing usable.
-    pub fallback: Arc<suzatary_core::models::ModelEntry>,
+    /// The Claude models the deployment runs.
+    pub models: Arc<models::Models>,
     /// What writes a secret; outside every record, reached only by a tapped card.
     pub secrets: Arc<dyn suzatary_core::settings::Writes + Send + Sync>,
     /// What declares `settables` to the store, which refuses a name it was never told of;
@@ -405,17 +406,17 @@ impl State {
         workers: Arc<Workers>,
         Settings {
             live,
-            fallback,
+            models,
             secrets,
             declares,
             edits,
             data,
         }: Settings,
     ) -> Self {
-        // A test's server: its fallback answers, as a scripted model does; `listen` reads the
+        // A test's server: its model answers, as a scripted model does; `listen` reads the
         // box's own register instead.
         let answered = Remembered::holding(suzatary_core::mail::health::Healths::one(
-            &fallback.to_string(),
+            &models.recorded(),
             chrono::DateTime::UNIX_EPOCH.naive_utc(),
             suzatary_core::mail::health::Outcome::Succeeded,
             "",
@@ -480,7 +481,7 @@ impl State {
             epochs: Arc::new(suzatary_core::epoch::Epochs::remembered()),
             frontiers: Arc::new(suzatary_core::frontier::Frontiers::remembered()),
             portal: Arc::new(suzatary_core::portal::Portal::Quiet),
-            fallback,
+            models,
         }))
     }
 
@@ -701,9 +702,8 @@ impl State {
 
     /// `who` moved the instance file (a tap, or a hand edit the watcher saw): everything
     /// [`live::Live`] holds is read from the file again and swapped in whole with no restart, so
-    /// a connected calendar's line is drawn and its link asked for at once, a new provider's key
-    /// is asked for, a removed one's card is withdrawn, and a job's new order finds the provider
-    /// it names. The file is read under the lock, so of two moves the one that swaps last read
+    /// a connected calendar's line is drawn and its link asked for at once, and a removed
+    /// connection's card is withdrawn. The file is read under the lock, so of two moves the one that swaps last read
     /// the file last. The names are declared to the secret store before the swap, so no card is
     /// filed for a name the store would refuse. A file that does not read, or names the store
     /// will not take, keeps all of it as it was, and says so. Reading a file that did not move
@@ -711,16 +711,15 @@ impl State {
     pub fn reconnected(&self, who: &str) {
         let mut live = locks::write(&self.live);
         let read = self.edits.declared().and_then(|declared| {
-            let configured = self.edits.configured()?;
             let accounts = suzatary_core::mail::account::Roster::new(declared.accounts.clone())
                 .map_err(|refused| {
                     suzatary_core::settings::EditError::Malformed(format!(
                         "[[mail.accounts]]: {refused}"
                     ))
                 })?;
-            Ok((declared, configured, accounts))
+            Ok((declared, accounts))
         });
-        let (declared, configured, accounts) = match read {
+        let (declared, accounts) = match read {
             Ok(read) => read,
             Err(failed) => {
                 tracing::warn!("reconnected: the instance file: {failed}");
@@ -729,14 +728,12 @@ impl State {
         };
         let next = live::Live {
             settables: suzatary_core::settings::Settables::of_deployment(
-                configured.providers.iter(),
+                suzatary_io::model::TOKEN,
                 declared.channels.iter().copied(),
                 self.deployment.coding.as_ref(),
                 (&declared.plugins, &declared.accounts),
                 &self.repos,
             ),
-            providers: configured.providers,
-            models: configured.models,
             channels: suzatary_core::nonempty::NonEmpty::of(declared.channels),
             accounts,
             plugins: declared.plugins,
@@ -801,8 +798,6 @@ impl State {
         let heard = locks::held(&self.noticing);
         let live::Live {
             settables,
-            providers,
-            models,
             channels: _,
             accounts: _,
             plugins: _,
@@ -832,15 +827,14 @@ impl State {
             .ok();
         let links = self.links();
         let now = prodrome_core::fpl::instant_of(caps.secretary.clock.now());
+        let model = self.models.recorded();
         let seen = suzatary_core::secretary::noticed::Seen {
             settables: &settables,
             secrets: caps.secretary.secrets,
-            models: &models,
-            fallback: &self.fallback,
+            model: &model,
             answered: &answered,
             open: &open,
             declared: declared.as_ref(),
-            providers: &providers,
             mail: mail.as_ref(),
             links: links.as_ref(),
             heard: heard.as_ref(),
@@ -981,54 +975,11 @@ impl State {
     }
 }
 
-/// One log line for each part of `from` that `to` moves: the providers, each job's order, the
-/// reserve, the connections' tables.
+/// One log line when `to` moves the connections' tables.
 fn logged(from: &live::Live, to: &live::Live, who: &str) {
     if (&from.channels, &from.accounts, &from.plugins) != (&to.channels, &to.accounts, &to.plugins)
     {
         tracing::info!(who, "settings: the connections' tables changed");
-    }
-    let names = |providers: &[suzatary_core::settings::DeclaredProvider]| {
-        providers
-            .iter()
-            .map(|provider| provider.name.as_str())
-            .collect::<Vec<_>>()
-            .join(", ")
-    };
-    if from.providers != to.providers {
-        tracing::info!(
-            from = %names(&from.providers),
-            to = %names(&to.providers),
-            who,
-            "settings: the providers changed"
-        );
-    }
-    let spelled = |entries: &[suzatary_core::models::ModelEntry]| {
-        entries
-            .iter()
-            .map(ToString::to_string)
-            .collect::<Vec<_>>()
-            .join(", ")
-    };
-    for job in suzatary_core::models::Job::ALL {
-        let (before, after) = (from.models.order(job), to.models.order(job));
-        if before != after {
-            tracing::info!(
-                job = job.as_str(),
-                from = %spelled(before),
-                to = %spelled(after),
-                who,
-                "settings: a job's model order changed"
-            );
-        }
-    }
-    if from.models.reserve() != to.models.reserve() {
-        tracing::info!(
-            from = from.models.reserve().get(),
-            to = to.models.reserve().get(),
-            who,
-            "settings: the reserve changed"
-        );
     }
 }
 
@@ -1040,13 +991,13 @@ pub struct Serving {
     pub door: suzatary_core::gate::Door,
     /// The frontend build.
     pub dist: PathBuf,
-    /// What the instance file declares, under the one lock the brains read and a tap swaps.
+    /// What the instance file declares, under the one lock a tap's edit swaps.
     pub live: live::Shared,
     /// Who names a peer, loopback included.
     pub peers: Peers,
     /// Which model answers a conversation.
     pub brain: Brain,
-    /// Which model names a topic (`[models].title`).
+    /// Which model names a topic: `[secretary] model`, as the conversation's.
     pub titler: Brain,
     /// Whether the compactor runs, and with what; off under every fixture, so no test asks a
     /// model.
@@ -1210,7 +1161,7 @@ pub async fn listen(instance: &Instance, serving: Serving) -> anyhow::Result<()>
             // Settable names come from the instance file, never `secretspec.toml`, which also
             // declares secrets the app may not set.
             live: Arc::clone(&serving.live),
-            fallback: Arc::new(instance.fallback()),
+            models: Arc::new(models::Models::of(instance)),
             // The same store `secret_resolves` reads, so a write and its check agree.
             secrets: Arc::new(instance.secrets()),
             // The names `instance.settables` holds, declared above; every later move goes
@@ -1256,7 +1207,7 @@ pub async fn listen(instance: &Instance, serving: Serving) -> anyhow::Result<()>
         Arc::new(crate::instance::InstanceEdits::new(instance.path.clone())),
         &instance.deployment.app_url,
     ));
-    let state = compaction::started(state, instance, &serving.live, serving.compacting);
+    let state = compaction::started(state, instance, serving.compacting);
 
     // Warmed here rather than in `app`, which every test calls.
     for chain in std::iter::once(&first).chain(&rest) {
@@ -1446,25 +1397,17 @@ fn serving(instance: &Instance, args: Args) -> anyhow::Result<Serving> {
     #[cfg(feature = "fixture")]
     let titler = match &model_fixture {
         Some(path) => Brain::Scripted(crate::commands::fixture::Scripted::reading(path)?),
-        None => real_titler(instance, &live, &answered),
+        None => real_brain(instance, &answered),
     };
     #[cfg(not(feature = "fixture"))]
-    let titler = real_titler(instance, &live, &answered);
+    let titler = real_brain(instance, &answered);
     #[cfg(feature = "fixture")]
-    let (brain, postman) = fixture_talking(
-        instance,
-        (&live, &answered),
-        (model_fixture, smtp_fixture),
-        secure,
-    )?;
+    let (brain, postman) =
+        fixture_talking(instance, &answered, (model_fixture, smtp_fixture), secure)?;
     #[cfg(not(feature = "fixture"))]
-    let (brain, postman) = (
-        real_brain(instance, &live, &answered),
-        real_postman(instance),
-    );
+    let (brain, postman) = (real_brain(instance, &answered), real_postman(instance));
     let (acting, signing, verify) = performers(
         instance,
-        &live,
         &answered,
         &moved,
         #[cfg(feature = "fixture")]
@@ -1536,19 +1479,19 @@ fn quiet(instance: &Instance, fixture: bool) -> (interpreters::Ledger, Compactin
 #[cfg(feature = "fixture")]
 fn fixture_talking(
     instance: &Instance,
-    (live, answered): (&live::Shared, &suzatary_io::model_health::Answered),
+    answered: &suzatary_io::model_health::Answered,
     (model_fixture, smtp_fixture): (Option<PathBuf>, Option<PathBuf>),
     certified: bool,
 ) -> anyhow::Result<(Brain, crate::commands::secretary::Postman)> {
     Ok(match (model_fixture, smtp_fixture) {
-        (None, None) => (real_brain(instance, live, answered), real_postman(instance)),
+        (None, None) => (real_brain(instance, answered), real_postman(instance)),
         (script, recording) => {
             if certified {
                 anyhow::bail!("the model and smtp fixtures refuse to run with a certificate");
             }
             (
                 match script {
-                    None => real_brain(instance, live, answered),
+                    None => real_brain(instance, answered),
                     Some(path) => {
                         tracing::warn!(
                             "serve: --model-fixture {} — scripted replies",
@@ -1576,7 +1519,6 @@ fn fixture_talking(
 /// fixture's recording and scripted pair under a model fixture, the box's own otherwise.
 fn performers(
     instance: &Instance,
-    live: &live::Shared,
     answered: &suzatary_io::model_health::Answered,
     moved: &Arc<tokio::sync::Notify>,
     #[cfg(feature = "fixture")] (scripted, google): (bool, &suzatary_core::google::Endpoints),
@@ -1597,7 +1539,6 @@ fn performers(
             Arc::clone(&signing),
             Arc::new(interpreters::Verifying::Fixture {
                 instance: Arc::new(instance.clone()),
-                live: Arc::clone(live),
                 answered: answered(),
             }),
         );
@@ -1607,7 +1548,6 @@ fn performers(
         Arc::clone(&signing),
         Arc::new(interpreters::Verifying::Real {
             instance: Arc::new(instance.clone()),
-            live: Arc::clone(live),
             answered: answered(),
         }),
     )
@@ -1635,27 +1575,10 @@ fn daemon_peers(socket: &Path) -> Peers {
     Peers::Daemon(suzatary_io::whois::Tailscaled::new(socket))
 }
 
-/// Which interpreter answers the secretary, chosen per turn.
-fn real_brain(
-    instance: &Instance,
-    live: &live::Shared,
-    answered: &suzatary_io::model_health::Answered,
-) -> Brain {
-    interpreters::brain_for_serving(
-        instance,
-        live,
-        suzatary_core::models::Job::Secretary,
-        answered,
-    )
-}
-
-/// Which interpreter names a topic, chosen per turn.
-fn real_titler(
-    instance: &Instance,
-    live: &live::Shared,
-    answered: &suzatary_io::model_health::Answered,
-) -> Brain {
-    interpreters::brain_for_serving(instance, live, suzatary_core::models::Job::Title, answered)
+/// The `claude` CLI at `[secretary] model`, its calls joined into `answered`: the secretary's
+/// model and the one that names a topic.
+fn real_brain(instance: &Instance, answered: &suzatary_io::model_health::Answered) -> Brain {
+    interpreters::brain(instance, answered.clone())
 }
 
 fn real_postman(instance: &Instance) -> crate::commands::secretary::Postman {

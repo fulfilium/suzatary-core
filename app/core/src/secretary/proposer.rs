@@ -53,7 +53,7 @@ impl Proposer {
                     | Act::DriveRead { .. }
                     | Act::CodingSession { .. }
                     | Act::Device(_)
-                    | Act::ClaudeSignIn { .. }
+                    | Act::SignIn { .. }
                     | Act::SignInCode { .. }
                     | Act::UnlockStore { .. }
                     | Act::Connect { .. }
@@ -61,8 +61,7 @@ impl Proposer {
                     | Act::Grant { .. }
                     | Act::Erase { .. }
                     | Act::GoogleSignIn { .. }
-                    | Act::CalendarEvent { .. }
-                    | Act::Configure { .. },
+                    | Act::CalendarEvent { .. },
                 )
                 | Proposal::Email(_)
                 | Proposal::Forward(_)

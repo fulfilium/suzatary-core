@@ -15,7 +15,7 @@ made-up correspondents, every address under a reserved domain.
   same flake outputs under your own scheduler.
 - A #link("https://tailscale.com")[Tailscale] network with the box and your
   phone on it. It is the only way into the app.
-- A Claude subscription, or an Anthropic API key.
+- A Claude subscription.
 - A mail account at Gmail, Microsoft or Proton.
 
 == Two repositories
@@ -94,16 +94,11 @@ asks you to.
 
 == The model
 
-By default every job runs on your Claude subscription through the `claude`
-command, with the year-long token `claude setup-token` mints. Begin with
-`--model anthropic-api` instead and every job uses the Anthropic API with
-the key you set as `ANTHROPIC_API_KEY`: the secretary and its reviews through
-the API, and the triage agent's `claude` with the key in its environment.
-
-Other providers are declared from the app's Settings page, each from a
-preset that derives its address, so a page cannot point the secretary at an
-arbitrary endpoint. Which model answers each job is chosen there too, and a
-change takes effect on the next turn.
+Every job runs a Claude model on your Claude subscription through the
+`claude` command, with the year-long token `claude setup-token` mints. The
+instance file names the models: `[secretary] model` for the conversation,
+the reviews and the titles, and `[secretary] compactor` for the compactor.
+The Settings page shows which model each job runs.
 
 == Mail
 

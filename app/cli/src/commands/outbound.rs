@@ -10,7 +10,6 @@ use std::num::NonZeroUsize;
 use suzatary_core::capability::Push;
 use suzatary_core::mail::dedup_key::DEDUP_KEY;
 use suzatary_core::secretary::store::ConversationId;
-use suzatary_core::settings::{OPENROUTER_BASE_URL, PHALA_BASE_URL};
 
 use crate::instance::Local;
 
@@ -113,12 +112,9 @@ fn destinations() -> Vec<Destination> {
         .collect();
     vec![
         Destination {
-            to: format!(
-                "The model vendor: Anthropic through the `claude` CLI (the subscription) or \
-                 `{}` (an API key), or a provider you declare (`{PHALA_BASE_URL}`, \
-                 `{OPENROUTER_BASE_URL}`, a Databricks workspace).",
-                suzatary_io::anthropic::MESSAGES_URL
-            ),
+            to: "The model vendor: Anthropic, through the `claude` CLI on the Claude \
+                 subscription."
+                .to_owned(),
             receives: "Whatever a job puts in its prompt: the secretary's conversations and \
                        what its verbs read (mail bodies, todos, calendar titles, files you \
                        attach), the triage agent's mail and the open list, the manuals, your \
@@ -127,10 +123,9 @@ fn destinations() -> Vec<Destination> {
                 .to_owned()
                 + &quiet.join(", ")
                 + ".",
-            off: "Ask the secretary to change a job's model: it files a card showing the \
-                  model before and after, and only your tap writes it; a provider declared \
-                  `attested` is refused unless it answers with a receipt. There is no \
-                  secretary without a model."
+            off: "Set `[secretary] model` and `[secretary] compactor` in the instance file \
+                  to choose which Claude model each job runs, and `[secretary] compact = \
+                  false` to stop the compactor. There is no secretary without a model."
                 .to_owned(),
         },
         remote(),

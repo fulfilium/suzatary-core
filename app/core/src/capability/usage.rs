@@ -1,4 +1,4 @@
-//! What this box has spent of its Claude allowance, readable only by `Server`.
+//! What this box has spent of its model subscription's allowance, readable only by `Server`.
 //!
 //! The reader passes numbers and nothing else: the transcripts quote mail and todos,
 //! so no message text may reach a [`crate::usage::Request`].

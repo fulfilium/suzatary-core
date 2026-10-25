@@ -1,13 +1,10 @@
 //! The default templates: what a deployment can connect with no code of its own.
-//!
-//! Model vendors beyond Anthropic's two are no default: a deployment that wants one declares it
-//! (`[[providers]]`), and its key is asked for by the secrets rule like any declared name.
 
 use super::{
-    AccountKind, BuiltIn, Channel, Check, Fragment, Group, Run, SecretName, StepShape, Table,
-    Template, TemplateId,
+    AccountKind, Channel, Check, Fragment, Group, Run, SecretName, StepShape, Table, Template,
+    TemplateId,
 };
-use crate::settings::{ANTHROPIC_API_KEY, Page, Words};
+use crate::settings::{Page, Words};
 
 /// The data repository, pushed to a remote.
 const GIT_REMOTE: Template = Template {
@@ -48,7 +45,6 @@ const ICS: Template = Template {
         plugin: "ics",
         component: "ics.wasm",
         schema: "ics.schema",
-        world: "source@0.3.0",
         origins: &[
             "https://calendar.google.com",
             "https://outlook.office365.com",
@@ -127,30 +123,13 @@ const PROTON: Template = Template {
     check: Check::MailSynced,
 };
 
-/// The Claude subscription, signed in from a card.
-const CLAUDE_SUBSCRIPTION: Template = Template {
-    id: TemplateId::ClaudeSubscription,
+/// The deployment's model, signed in from a card.
+const MODEL: Template = Template {
+    id: TemplateId::Model,
     group: Group::Models,
-    title: "the Claude subscription",
-    table: Table::Backend(BuiltIn::ClaudeCli),
+    title: "the model",
+    table: Table::Model,
     steps: &[StepShape::SignIn],
-    check: Check::Answered,
-};
-
-/// The Anthropic API, by key.
-const ANTHROPIC_API: Template = Template {
-    id: TemplateId::AnthropicApi,
-    group: Group::Models,
-    title: "the Anthropic API",
-    table: Table::Backend(BuiltIn::AnthropicApi),
-    steps: &[StepShape::Secret {
-        name: SecretName::Fixed(ANTHROPIC_API_KEY),
-        help: Words {
-            label: "the Anthropic API key",
-            text: "In the Claude Console, create an API key.",
-            page: Page::At("https://console.anthropic.com/settings/keys"),
-        },
-    }],
     check: Check::Answered,
 };
 
@@ -190,18 +169,8 @@ const FCM: Template = Template {
 };
 
 /// Every default template, in [`TemplateId::ALL`]'s order.
-pub const CATALOG: [Template; 11] = [
-    GIT_REMOTE,
-    DRIVE_CLI,
-    ICS,
-    GMAIL,
-    GOOGLE,
-    MS_IMAP,
-    PROTON,
-    CLAUDE_SUBSCRIPTION,
-    ANTHROPIC_API,
-    NTFY,
-    FCM,
+pub const CATALOG: [Template; 10] = [
+    GIT_REMOTE, DRIVE_CLI, ICS, GMAIL, GOOGLE, MS_IMAP, PROTON, MODEL, NTFY, FCM,
 ];
 
 /// The template `id` names.
@@ -214,8 +183,7 @@ pub(super) const fn of(id: TemplateId) -> &'static Template {
         TemplateId::Google => &GOOGLE,
         TemplateId::MsImap => &MS_IMAP,
         TemplateId::Proton => &PROTON,
-        TemplateId::ClaudeSubscription => &CLAUDE_SUBSCRIPTION,
-        TemplateId::AnthropicApi => &ANTHROPIC_API,
+        TemplateId::Model => &MODEL,
         TemplateId::Ntfy => &NTFY,
         TemplateId::Fcm => &FCM,
     }

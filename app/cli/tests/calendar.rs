@@ -8,7 +8,7 @@ use prodrome_core::declared::Declaration;
 use prodrome_core::event::Actor;
 use suzatary_core::calendar::{CalendarName, Content, Occurrence, OccurrenceId, Status, When};
 use suzatary_core::capability::Datetime;
-use suzatary_core::plugin::learn;
+use suzatary_core::store::learn;
 use suzatary_io::plugin_store::PluginStore;
 
 fn occurrence(uid: &str, start: &str, title: &str, status: Status) -> Occurrence {

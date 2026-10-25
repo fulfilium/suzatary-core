@@ -1,33 +1,27 @@
-//! The rule over the models: when no job's order resolves to a model that answers, the box asks
-//! for one itself. The setup agent needs a model to run, so connecting the first one is the one
-//! step no model guides.
+//! The rule over the model: when the deployment's model does not answer, the box asks for it
+//! itself. The setup agent needs a model to run, so connecting it is the one step no model
+//! guides.
 //!
-//! What it owes, and only while nothing answers: the subscription's sign-in, and the Messages
-//! API's key while a job orders `anthropic/`, named for the jobs that do (a declared provider's
-//! key is the secrets rule's). A
-//! sign-in the box holds open is owed its code card whatever answers, until the session ends.
-//! Each card's words name the episode, the last instant any model answered, so a model that
-//! answers and later stops (an expired token) files the same cards again, and the owner's no
-//! stands within one episode.
+//! What it owes, and only while the model does not answer: the subscription's sign-in. A sign-in
+//! the box holds open is owed its code card whatever answers, until the session ends. Each card's
+//! words name the episode, the last instant the model answered, so a model that answers and
+//! later stops (an expired token) files the same card again, and the owner's no stands within
+//! one episode.
 
 use crate::mail::health::{Healths, Instant, Reading};
-use crate::models::{Backend, Job, ModelEntry, Models};
 use crate::secretary::acts::Act;
 use crate::secretary::noticed::Owed;
 use crate::secretary::sign_in::SignInUrl;
 use crate::secretary::store::Proposal;
-use crate::settings::{
-    ANTHROPIC_API_KEY, CLAUDE_CODE_OAUTH_TOKEN, Declaration, Settable, Settables,
-};
+use crate::settings::{Settable, Settables};
 
-/// What the box knows of its models.
+/// What the box knows of its model.
 #[derive(Clone, Copy)]
 pub struct Answering<'a> {
-    /// Each job's order.
-    pub models: &'a Models,
-    /// What a job answers with when its order holds nothing usable.
-    pub fallback: &'a ModelEntry,
-    /// Each entry's observed calls, keyed by its print (`claude-cli/<model>`).
+    /// The model's name, as [`crate::capability::Model::name`] spells it: the key its calls are
+    /// recorded under.
+    pub model: &'a str,
+    /// The model's observed calls.
     pub health: &'a Healths,
     /// Every secret name declared, with what declares it.
     pub settables: &'a Settables,
@@ -36,80 +30,31 @@ pub struct Answering<'a> {
 }
 
 impl Answering<'_> {
-    /// Every entry some job may answer with: each order, then the fallback.
-    pub(crate) fn entries(&self) -> Vec<&ModelEntry> {
-        let mut entries: Vec<&ModelEntry> = Job::ALL
-            .iter()
-            .flat_map(|job| self.models.order(*job))
-            .chain([self.fallback])
-            .collect();
-        entries.sort_by_key(ToString::to_string);
-        entries.dedup();
-        entries
+    /// The secret the model reads.
+    pub(crate) fn credential(&self) -> Option<Settable> {
+        self.settables.model()
     }
 
-    /// The secret `backend` reads: the subscription's token, the Messages API's key, or the key
-    /// its `[[providers]]` entry declares.
-    pub(crate) fn credential(&self, backend: &Backend) -> Option<Settable> {
-        self.settables
-            .declarations()
-            .find(|(name, by)| match backend {
-                Backend::ClaudeCli => name.name() == CLAUDE_CODE_OAUTH_TOKEN,
-                Backend::AnthropicApi => name.name() == ANTHROPIC_API_KEY,
-                Backend::Declared(provider) => {
-                    by.contains(&Declaration::Provider(provider.clone()))
-                }
-            })
-            .map(|(name, _)| name)
-    }
-
-    /// Whether `entry` answers: its latest observed call succeeded or, never observed, the
+    /// Whether the model answers: its latest observed call succeeded or, never observed, the
     /// credential it reads resolves.
-    fn answers(&self, entry: &ModelEntry) -> bool {
-        match self.health.reading(&entry.to_string()) {
+    #[must_use]
+    pub fn any(&self) -> bool {
+        match self.health.reading(self.model) {
             Some(Reading::Ok { .. }) => true,
             Some(Reading::Failing { .. }) => false,
-            None => self
-                .credential(&entry.backend)
-                .is_some_and(|name| (self.resolves)(&name)),
+            None => self.credential().is_some_and(|name| (self.resolves)(&name)),
         }
     }
 
-    /// Whether any job's order resolves to a model that answers.
-    #[must_use]
-    pub fn any(&self) -> bool {
-        self.entries().into_iter().any(|entry| self.answers(entry))
-    }
-
-    /// The last instant any model answered: the episode a card belongs to.
+    /// The last instant the model answered: the episode a card belongs to.
     #[must_use]
     pub fn since(&self) -> Option<Instant> {
         self.health.succeeded()
     }
-
-    /// Why the Messages API's key is owed: the entries and jobs that order it. `None` while no
-    /// order names `anthropic/`, since an owner who chose the subscription chose no key.
-    fn keyed(&self) -> Option<String> {
-        let ordering: Vec<String> = self
-            .entries()
-            .into_iter()
-            .filter(|entry| entry.backend == Backend::AnthropicApi)
-            .map(|entry| {
-                let jobs = Job::ALL
-                    .into_iter()
-                    .filter(|job| self.models.order(*job).contains(entry))
-                    .map(Job::as_str)
-                    .collect::<Vec<_>>()
-                    .join(", ");
-                format!("{entry} answers {jobs} with this key")
-            })
-            .collect();
-        (!ordering.is_empty()).then(|| ordering.join("; "))
-    }
 }
 
-/// The cards the models owe: each open sign-in's code card, and while nothing answers, the
-/// subscription's sign-in and a key for each ordered built-in keyed backend.
+/// The cards the model owes: each open sign-in's code card, and while it does not answer, the
+/// subscription's sign-in.
 #[must_use]
 pub fn owed(answering: &Answering<'_>, open: &[SignInUrl]) -> Owed {
     let codes = open
@@ -134,23 +79,8 @@ pub fn owed(answering: &Answering<'_>, open: &[SignInUrl]) -> Owed {
         .clone()
         .unwrap_or_else(|| "no model has answered yet".to_owned());
     let connect = Owed::one(
-        Proposal::Act(Act::ClaudeSignIn {
-            since: since.clone(),
-        }),
+        Proposal::Act(Act::SignIn { since }),
         format!("{episode}, so nothing can answer a conversation, a review or a title"),
     );
-    let keys = answering
-        .credential(&Backend::AnthropicApi)
-        .and_then(|name| {
-            let why = answering.keyed()?;
-            Some(Owed::one(
-                Proposal::Act(Act::Secret {
-                    name: name.name().to_owned(),
-                    why: format!("{episode}, and {why}"),
-                }),
-                format!("{episode}, and the Messages API reads this key"),
-            ))
-        })
-        .unwrap_or_default();
-    codes.join(connect).join(keys)
+    codes.join(connect)
 }

@@ -1,6 +1,5 @@
 //! What one request carries beside its text: the photos and PDFs the owner sent and the files a
-//! verb handed over, as the Messages API's image and document blocks. Built once, because the
-//! `claude` CLI's stream-json and the Anthropic API both take this content array.
+//! verb handed over, as the image and document blocks the `claude` CLI's stream-json takes.
 
 use serde_json::{Value, json};
 use suzatary_core::attachment::{Attachment, AttachmentId};

@@ -31,7 +31,7 @@ case "${1:-}" in
   secret)
     name="${2:?usage: ./suzatary secret <NAME>}"
     # The file the app writes for this instance under its state directory: the code root's own
-    # names and every name its tables derive (a calendar's link, a provider's key).
+    # names and every name its tables derive (a calendar's link, the model's token).
     file="$(nix run "$app" -- secretspec)"
     exec nix develop "$app#triage" --command secretspec set "$name" --file "$file"
     ;;

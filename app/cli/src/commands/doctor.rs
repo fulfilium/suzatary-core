@@ -221,14 +221,11 @@ fn deployment(path: &Path) {
                     watched.join(", ")
                 );
             }
-            print_providers(&read);
             print_models(&read);
         }
     }
 }
 
-/// `[[providers]]` as declared, with whether each key resolves; only the secret's name
-/// is printed, never its value, and no attestation receipt is fetched here.
 /// The deployment's root (SPEC law 42), and whether its two keys resolve: names, never a
 /// value.
 fn signs(read: &instance::Instance) -> String {
@@ -250,114 +247,34 @@ fn said(state: suzatary_core::capability::SecretState) -> &'static str {
     }
 }
 
-fn print_providers(read: &instance::Instance) {
-    println!("\nproviders");
-    if read.providers.is_empty() {
-        println!("  none — [[providers]] is absent");
-        return;
-    }
-    let secrets = read.secrets();
-    for provider in &read.providers {
-        let resolves = said(suzatary_io::secrets::state(&secrets.get(
-            &provider.key,
-            "doctor: checking whether a declared provider's key resolves",
-        )));
-        match &provider.attestation {
-            suzatary_core::settings::Attestation::Required { expect } => {
-                println!(
-                    "  {:<12} {:<40} attested=true  key {} ({})",
-                    provider.name, provider.base_url, resolves, provider.key
-                );
-                println!(
-                    "               expect_commit {} ({}) — no receipt verified this \
-                     run (this command never calls the attestation endpoint itself)",
-                    expect.as_str(),
-                    suzatary_io::attestation::KNOWN_REPO_URL
-                );
-            }
-            suzatary_core::settings::Attestation::Unclaimed => {
-                println!(
-                    "  {:<12} {:<40} attested=false key {} ({})",
-                    provider.name, provider.base_url, resolves, provider.key
-                );
-            }
-        }
-    }
-}
-
-/// `[models]`: each job's order, the reserve, and which entry each job would use now.
+/// The Claude models `[secretary]` names, the compactor's reserve, and whether the token the
+/// `claude` CLI reads resolves.
 fn print_models(read: &instance::Instance) {
     println!("\nmodels");
-    println!("  reserve   {:.0}%", read.models.reserve().get() * 100.0);
-    let allowance = crate::commands::serve::interpreters::current_allowance(read);
-    let secrets = read.secrets();
-    // The key is read only to say whether one resolves, and dropped where it is read.
-    let usable = |entry: &suzatary_core::models::ModelEntry| match &entry.backend {
-        suzatary_core::models::Backend::ClaudeCli => Some(()),
-        keyed => crate::commands::serve::interpreters::key_of(&read.providers, keyed, &secrets)
-            .ok()
-            .flatten()
-            .map(drop),
-    };
-    let fallback = read.fallback();
-    // The fallback is the subscription: say how to give it its token when it has none.
-    if usable_token(read, &secrets) == Some(false) {
-        println!(
-            "  the model's token is not set: run {}, or connect the model from the app",
-            read.reach()
-                .secret(suzatary_core::settings::CLAUDE_CODE_OAUTH_TOKEN)
-        );
-    }
-    for job in suzatary_core::models::Job::ALL {
-        let order = read.models.order(job);
-        let spelled: Vec<String> = order.iter().map(ToString::to_string).collect();
-        println!(
-            "  {:<10} {}",
-            job.as_str(),
-            if spelled.is_empty() {
-                format!("(none — {fallback})")
-            } else {
-                spelled.join(", ")
-            }
-        );
-        match crate::commands::serve::interpreters::pick_entry(
-            order,
-            &allowance,
-            read.models.reserve(),
-            usable,
-        ) {
-            Some((entry, ())) => println!("              → {entry} right now"),
-            None if order.is_empty() => {}
-            None => println!("              → nothing usable right now — {fallback}"),
+    println!(
+        "  chat, reviews and titles  {}",
+        suzatary_io::model::name_of(read.secretary.model.as_str())
+    );
+    match read.secretary.compacting() {
+        suzatary_core::secretary::compacting::Compacting::Off => {
+            println!("  compactor                 off");
         }
+        suzatary_core::secretary::compacting::Compacting::On { model, .. } => println!(
+            "  compactor                 {}, leaving {:.0}% of the subscription",
+            suzatary_io::model::name_of(model.as_str()),
+            read.secretary.reserve.get() * 100.0
+        ),
     }
-}
-
-/// Whether the subscription's token resolves, when some job answers with it; `None` when none
-/// does, or the store cannot say.
-fn usable_token(
-    read: &instance::Instance,
-    secrets: &suzatary_io::secrets::Secretspec,
-) -> Option<bool> {
-    let fallback = read.fallback();
-    let answers_with_it = suzatary_core::models::Job::ALL.iter().any(|job| {
-        let order = read.models.order(*job);
-        order.is_empty() && fallback.backend == suzatary_core::models::Backend::ClaudeCli
-            || order
-                .iter()
-                .any(|entry| entry.backend == suzatary_core::models::Backend::ClaudeCli)
-    });
-    if !answers_with_it {
-        return None;
-    }
+    let secrets = read.secrets();
     match suzatary_io::secrets::state(&secrets.get(
-        suzatary_core::settings::CLAUDE_CODE_OAUTH_TOKEN,
+        suzatary_io::model::TOKEN,
         "doctor: checking whether the model's token resolves",
     )) {
-        suzatary_core::capability::SecretState::Set => Some(true),
-        suzatary_core::capability::SecretState::Missing => Some(false),
-        suzatary_core::capability::SecretState::Locked
-        | suzatary_core::capability::SecretState::Failed => None,
+        suzatary_core::capability::SecretState::Missing => println!(
+            "  the model's token is not set: run {}, or connect the model from the app",
+            read.reach().secret(suzatary_io::model::TOKEN)
+        ),
+        state => println!("  token     {}", said(state)),
     }
 }
 

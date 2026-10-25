@@ -14,8 +14,6 @@ pub struct Plugins {
     pub manifests: Vec<suzatary_core::plugin::Manifest>,
     /// The cache tier's root: box-local, never pushed, never staged by `safe-push.sh`.
     pub cache: PathBuf,
-    /// The user repository, which a manifest `from = "user"` reads its bundle from.
-    pub user: PathBuf,
 }
 
 impl Plugins {
@@ -71,6 +69,5 @@ pub(super) fn plugins_of(
     Ok(Plugins {
         manifests,
         cache: data.under(cache.unwrap_or_else(|| Path::new("cache"))),
-        user: data.as_path().to_path_buf(),
     })
 }

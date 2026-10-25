@@ -88,6 +88,9 @@ pub trait Draw {
     fn handed(&self, conversation: &ConversationId, index: usize) -> String;
     /// The routine `[coding]` declares, whose page its token's card opens.
     fn routine(&self) -> Option<&crate::coding::RoutineId>;
+    /// The name the deployment stores its model's credential under, which its card words as the
+    /// model's sign-in.
+    fn model(&self) -> Option<&str>;
     /// The origins the instance file lets `plugin` fetch from now, `None` while it declares no
     /// such plugin.
     fn origins(&self, plugin: &str) -> Option<Vec<String>>;
@@ -119,6 +122,10 @@ impl Draw for Undrawn {
     }
 
     fn routine(&self) -> Option<&crate::coding::RoutineId> {
+        None
+    }
+
+    fn model(&self) -> Option<&str> {
         None
     }
 
@@ -772,7 +779,7 @@ fn act_on_wire(
             sentence: act.sentence(),
         },
         crate::secretary::acts::Act::Secret { name, .. } => {
-            crate::secretary::card::secret_act(name, routine)
+            crate::secretary::card::secret_act(name, routine, draws.model())
         }
         crate::secretary::acts::Act::Web { request, rule } => wire::ProposedAct::Web {
             request: request.kind(),
@@ -818,7 +825,7 @@ fn act_on_wire(
             key: enrolment.key.as_str().to_owned(),
             sentence: act.sentence(),
         },
-        crate::secretary::acts::Act::ClaudeSignIn { .. } => wire::ProposedAct::ClaudeSignIn {
+        crate::secretary::acts::Act::SignIn { .. } => wire::ProposedAct::SignIn {
             sentence: act.sentence(),
         },
         crate::secretary::acts::Act::SignInCode { url } => wire::ProposedAct::SignInCode {
@@ -839,15 +846,6 @@ fn act_on_wire(
             origin: origin.to_string(),
             sentence: act.sentence(),
         },
-        crate::secretary::acts::Act::Configure { change } => {
-            let (from, to) = change.words();
-            wire::ProposedAct::Configure {
-                setting: change.setting().label(),
-                from,
-                to,
-                sentence: act.sentence(),
-            }
-        }
         crate::secretary::acts::Act::GoogleClient { redirect } => wire::ProposedAct::GoogleClient {
             redirect: redirect.to_string(),
             steps: crate::google::CLIENT_STEPS

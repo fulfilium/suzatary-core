@@ -1,244 +1,58 @@
-/// The worlds a Suzatary plugin targets (docs/PLUGINS-PLAN-2026-10-02.md §2).
+/// The world a Suzatary plugin targets: one function, `sync`, and one power, `fetch`.
 ///
-/// A world is a record of authorities: a component can call only what it
-/// imports, and the host links each import per plugin from its manifest.
-/// Nothing here imports `wasi:*`: no filesystem, no sockets, no environment,
-/// no randomness. The host refuses a component that imports anything a world
-/// does not name, so a missing import is a missing power.
+/// The host links `fetch` for each plugin from its manifest. Of WASI it links the clocks, random
+/// numbers, an empty environment, an empty standard input and a bounded standard error, and no
+/// filesystem and no sockets, so a component that imports either is refused at load.
 ///
-/// The version is the contract's. A change to any type below is a new version
-/// of the package, and the host loads only the version it was built against.
-package suzatary:plugin@0.3.0;
+/// The version is the contract's. A change to any type below is a new version of the package,
+/// and the host loads only the version it was built against.
+package suzatary:plugin@0.4.0;
 
 /// The one door to the network, held by the host.
 ///
-/// The host checks every request against the plugin's manifest: the URL's
-/// origin must be one it allows, and a credential is named, never held. The
-/// host puts the named credential's value into the request it sends, so the
-/// value is never in the plugin's memory; a response that contains it is
-/// refused rather than handed back. No redirect is followed: a 3xx is an
-/// answer, and its `location` a new request the manifest must also allow.
+/// The host sends a request only to an origin the manifest allows. A credential is named, never
+/// held: its value is a URL, which the host reads and requests, so the plugin never learns it.
+/// The host withholds an answer that contains a credential's value, and follows no redirect.
 interface fetch {
-    /// A request header, as the plugin writes it.
-    record header {
-        name: string,
-        value: string,
-    }
-
-    /// The verb, with the body only where a body exists.
-    variant verb {
-        get,
-        post(list<u8>),
-    }
-
-    /// Where the request goes.
+    /// Where a request goes.
     variant target {
-        /// A URL the plugin writes: `http` or `https`, an origin the
-        /// manifest allows, a path and a query, no fragment, no userinfo.
+        /// A URL the plugin writes: `http` or `https`, a path and a query, no fragment, no
+        /// userinfo.
         url(string),
-        /// A credential whose value IS the URL (a calendar's secret iCal
-        /// link), named. The plugin never learns the URL, only its answer.
-        secret-url(string),
-    }
-
-    /// One request.
-    record request {
-        verb: verb,
-        target: target,
-        headers: list<header>,
-        /// A credential the host puts into a header, named. The manifest
-        /// says which header and for which origin.
-        credential: option<string>,
+        /// A credential the manifest declares, by name: its value is the URL.
+        credential(string),
     }
 
     /// One answer, whatever its status.
     record response {
         status: u16,
-        /// Names lowercased.
-        headers: list<header>,
         body: list<u8>,
     }
 
-    /// Why a request was not sent, or its answer not handed back. A refusal
-    /// names an origin or a credential's name, never a credential's value or
-    /// a secret URL's path.
-    variant refusal {
-        /// Not a URL this host reads: the scheme, an `@`, a fragment, a
-        /// character outside the grammar.
-        bad-url(string),
-        /// The origin is not one the manifest allows.
-        origin-not-allowed(string),
-        /// The name is not a credential the manifest declares for this use.
-        credential-not-declared(string),
-        /// Declared, and not set on this box: the owner sets it by name.
-        credential-unset(string),
-        /// A secret URL whose value is not a URL this host reads.
-        credential-not-a-url(string),
-        /// A secret URL that is neither https nor loopback: never sent in
-        /// the clear. (A header credential is bound to such an origin only
-        /// if the manifest says so, and a manifest that does is refused.)
-        in-the-clear(string),
-        /// A header the plugin may not write (`host`, framing headers), or
-        /// one that is not a valid header.
-        bad-header(string),
-        /// The answer contained a credential's value, and is withheld.
-        echoed(string),
-        /// The request never left: the name, the connection or its TLS.
-        unreachable,
-        /// It left, and no answer came before the call's deadline.
-        timed-out,
-        /// It left, and the answer was lost or was larger than the host reads.
-        lost,
-    }
-
-    /// Send one request through the host.
-    fetch: func(request: request) -> result<response, refusal>;
+    /// Send one GET through the host. A refusal says why in the host's words: it names an
+    /// origin or a credential, never a credential's value.
+    fetch: func(target: target) -> result<response, string>;
 }
 
-/// The wall clock, read; never set.
-interface clock {
-    /// An instant as the Prodrome stores an `at`: naive, and UTC by definition.
-    record datetime {
-        year: s32,
-        month: u8,
-        day: u8,
-        hour: u8,
-        minute: u8,
-        second: u8,
-        microsecond: u32,
-    }
-
-    /// Now.
-    now: func() -> datetime;
-}
-
-/// Lines for the operator. The host keeps them with the call's outcome, as
-/// values; a plugin's line never reaches a model or a page by this door.
-interface log {
-    /// How much a line matters.
-    enum level {
-        debug,
-        info,
-        warn,
-    }
-
-    /// One line. The host keeps a bounded number of bounded lines per call
-    /// and counts the rest.
-    log: func(level: level, message: string);
-}
-
-/// What a `source` exports: read the outside world from where it last
-/// stopped.
+/// What a source exports.
 interface sync {
-    use fetch.{refusal};
-
-    /// One thing the source learned: bytes in a schema the plugin names.
-    /// The host parses them by that schema before anything is stored, and an
-    /// item whose schema it does not know is refused. Stored items are named
-    /// by their content, so an item learned twice is one item.
-    record item {
-        schema: string,
-        bytes: list<u8>,
-    }
-
     /// What one call learned, and where the next call starts.
     record synced {
-        items: list<item>,
+        /// Events of the schema the manifest names, each in the objects' literal grammar.
+        items: list<list<u8>>,
         /// Opaque to the host, which keeps it and hands it back.
         cursor: list<u8>,
     }
 
-    /// The one use a credential may be named for, as the manifest declares it.
-    enum placement {
-        /// Its value is the URL: `fetch`'s `secret-url`.
-        url,
-        /// Its value goes in `authorization: Bearer`, to one origin.
-        bearer,
-        /// Its value goes in one header, to one origin.
-        header,
-    }
-
-    /// A credential the manifest declares, by NAME: a designation the host
-    /// honours through `fetch`, never the value, which the plugin cannot read.
-    record credential {
-        name: string,
-        into: placement,
-    }
-
-    /// Why a call learned nothing.
-    variant sync-error {
-        /// A fetch the host refused, as the host said it.
-        refused(refusal),
-        /// The outside world answered something the plugin cannot read.
-        malformed(string),
-        /// The cursor is not one this plugin wrote.
-        bad-cursor(string),
-    }
-
-    /// Read from `cursor`, or from the beginning when there is none, over
-    /// the credentials the manifest declares (a calendar plugin reads one
-    /// feed per `url` credential).
+    /// Read from `cursor`, or from the beginning when there is none, over the credentials the
+    /// manifest declares, by name.
     ///
-    /// Each call runs in a fresh instance: the cursor is the only state that
-    /// survives it, so a call is a function of its cursor, the names it was
-    /// lent, the clock and what its fetches answered.
-    sync: func(cursor: option<list<u8>>, credentials: list<credential>) -> result<synced, sync-error>;
+    /// Each call runs in a fresh instance, so the cursor is the only state that survives it.
+    sync: func(cursor: option<list<u8>>, credentials: list<string>) -> result<synced, string>;
 }
 
-/// A plugin that reads the outside world: a calendar feed, a data provider,
-/// a mail account's read side. Monotone (§3): what it learns is appended,
-/// so it needs no lock and may run on any timer.
+/// A plugin that reads the outside world: a calendar feed, a data provider.
 world source {
     import fetch;
-    import clock;
-    import log;
     export sync;
 }
-
-/// What an `actor` exports: from what its store holds, the acts it asks the owner to tap.
-///
-/// An actor's one outward power is to PROPOSE, and a proposal is a value it returns, never a
-/// call it makes: it imports no `fetch`, so nothing it decides leaves the box unless the owner
-/// taps it, and what a tap would perform is the stored act, never a body passed in.
-interface decide {
-    /// One event of the store the actor reads (its own, or the one its manifest grants it), as
-    /// `sync`'s items are: bytes in its declared schema, named.
-    record act {
-        schema: string,
-        bytes: list<u8>,
-    }
-
-    /// One act the plugin asks the owner for, why, and what it rests on. The host files it in the
-    /// Inbox as the plugin's, and the owner's tap performs it as any proposal is performed.
-    record proposal {
-        /// A change to a todo chain, the one act a plugin may ask for, as the Inbox's closed act
-        /// vocabulary prints it: `Changes(chain=..., acts=(...))`. Any other act, a literal
-        /// outside that vocabulary, or one not printed as itself, is refused; the change is
-        /// built against its chain before it is filed.
-        act: string,
-        /// Why, in the plugin's words; shown as text, never as markup.
-        why: string,
-        /// What it rests on, as references in their one text form (`mail:<hash>`,
-        /// `todo:<chain>/<id>`, `briefing:<day>`, ...); at least one, and a few.
-        sources: list<string>,
-    }
-
-    /// Why a call proposed nothing.
-    variant decide-error {
-        /// What it was handed is not what it can read.
-        malformed(string),
-    }
-
-    /// Decide from `acts`, every event the plugin's store holds, each once and sorted by its
-    /// bytes, so the proposals are a function of that set and of the clock.
-    decide: func(acts: list<act>) -> result<list<proposal>, decide-error>;
-}
-
-/// A plugin that asks the owner to act: accept an invite, file a reading. Non-monotone (§3), so
-/// it performs nothing; what it proposes waits for the owner's tap.
-world actor {
-    import clock;
-    import log;
-    export decide;
-}
-

@@ -26,12 +26,7 @@ use crate::instance::Instance;
 
 /// `state` with the compactor's task started over its first chain's stores when `compacting`
 /// runs one; off is the kill switch, with no task, and the lines wait.
-pub fn started(
-    state: State,
-    instance: &Instance,
-    live: &super::live::Shared,
-    compacting: Compacting,
-) -> State {
+pub fn started(state: State, instance: &Instance, compacting: Compacting) -> State {
     match compacting {
         Compacting::Off => state,
         Compacting::On {
@@ -39,7 +34,7 @@ pub fn started(
             budget,
             workers,
         } => {
-            let model = Arc::new(CompactorModel::new(instance, live, model));
+            let model = Arc::new(CompactorModel::new(instance, model));
             let caps = state.first.caps;
             state.with_compactor(Compactor::spawn(caps, model, budget, workers))
         }

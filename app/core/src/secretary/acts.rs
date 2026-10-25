@@ -82,10 +82,10 @@ pub enum Act {
     /// Trust a new device's key to write as its actor (SPEC law 42): filed by the box when the
     /// device asks, performed only by a tap that a device already trusted endorses.
     Device(crate::signatures::Enrolment),
-    /// Sign in with the Claude subscription: the tap runs `claude setup-token` on the box and
-    /// the box files the card its code goes in. Filed by the box when no model answers.
-    #[serde(rename = "claude_sign_in")]
-    ClaudeSignIn {
+    /// Sign the model in: the tap runs the deployment's sign-in on the box and the box files the
+    /// card its code goes in. Filed by the box when no model answers.
+    #[serde(rename = "sign_in")]
+    SignIn {
         /// The episode in the box's words, when a model last answered; `None` before any has.
         #[serde(default, skip_serializing_if = "Option::is_none")]
         since: Option<String>,
@@ -128,12 +128,6 @@ pub enum Act {
         plugin: crate::plugin::PluginName,
         /// The origin it would reach.
         origin: crate::plugin::Origin,
-    },
-    /// Change one setting of `[models]` or `[[providers]]`, from the value the card read to the
-    /// one it shows, while the instance file still holds the first.
-    Configure {
-        /// The setting and its change.
-        change: crate::settings::configure::Configure,
     },
     /// Keep the box's Google Cloud client: filed by the box while a Google account is declared
     /// and the client is not stored. The card says how to make one and shows `redirect`, which
@@ -185,13 +179,12 @@ impl Act {
             Act::DriveRead { .. } => "drive_read",
             Act::CodingSession { .. } => "coding_session",
             Act::Device(_) => "device",
-            Act::ClaudeSignIn { .. } => "claude_sign_in",
+            Act::SignIn { .. } => "sign_in",
             Act::SignInCode { .. } => "sign_in_code",
             Act::UnlockStore { .. } => "unlock_store",
             Act::Connect { .. } => "connect",
             Act::Disconnect { .. } => "disconnect",
             Act::Grant { .. } => "grant",
-            Act::Configure { .. } => "configure",
             Act::GoogleClient { .. } => "google_client",
             Act::GoogleSignIn { .. } => "google_sign_in",
             Act::CalendarEvent { .. } => "calendar_event",
@@ -235,13 +228,14 @@ impl Act {
                 enrolment.key.as_str().chars().take(12).collect::<String>(),
                 enrolment.actor
             ),
-            Act::ClaudeSignIn { .. } => "connect a model: sign in with your Claude subscription, \
-                                         which runs claude setup-token on the box and shows you \
-                                         its link"
-                .to_owned(),
+            Act::SignIn { .. } => {
+                "connect a model: sign it in, which runs its sign-in on the box and shows you \
+                 its link"
+                    .to_owned()
+            }
             Act::SignInCode { .. } => {
                 "finish the sign-in with the code its page shows; the token it is exchanged for \
-                 is kept as the Claude sign-in"
+                 is kept as the model's sign-in"
                     .to_owned()
             }
             Act::UnlockStore { after } => {
@@ -268,7 +262,6 @@ impl Act {
                 "let {} reach {origin}",
                 crate::connect::plugin_called(plugin.as_str())
             ),
-            Act::Configure { change } => change.sentence(),
             Act::GoogleClient { redirect } => format!(
                 "keep the box's Google Cloud client, a web application client listing {redirect} \
                  as its redirect URI; every Google account signs in through it"
@@ -454,8 +447,8 @@ pub const DRIVE_READ: Signature = ("DriveRead", &["path", "size"]);
 pub const CODING_SESSION: Signature = ("CodingSession", &["task"]);
 /// `Device(actor, key)`.
 pub const DEVICE: Signature = ("Device", &["actor", "key"]);
-/// `ClaudeSignIn(since)`.
-pub const CLAUDE_SIGN_IN: Signature = ("ClaudeSignIn", &["since"]);
+/// `SignIn(since)`.
+pub const SIGN_IN: Signature = ("SignIn", &["since"]);
 /// `SignInCode(url)`.
 pub const SIGN_IN_CODE: Signature = ("SignInCode", &["url"]);
 /// `UnlockStore(after)`.
@@ -509,7 +502,7 @@ impl Literal for Act {
                     Value::str(enrolment.key.as_str()),
                 ],
             ),
-            Act::ClaudeSignIn { since } => record(CLAUDE_SIGN_IN, vec![since.to_value()]),
+            Act::SignIn { since } => record(SIGN_IN, vec![since.to_value()]),
             Act::SignInCode { url } => record(SIGN_IN_CODE, vec![url.to_value()]),
             Act::UnlockStore { after } => record(UNLOCK_STORE, vec![after.to_value()]),
             Act::Connect { connection } => record(CONNECT, vec![connection.to_value()]),
@@ -517,8 +510,6 @@ impl Literal for Act {
             Act::Grant { plugin, origin } => {
                 record(GRANT, vec![plugin.to_value(), origin.to_value()])
             }
-            // A change's own constructors are the act's arms.
-            Act::Configure { change } => change.to_value(),
             Act::GoogleClient { redirect } => record(GOOGLE_CLIENT, vec![redirect.to_value()]),
             Act::GoogleSignIn { account, scopes } => {
                 record(GOOGLE_SIGN_IN, vec![account.to_value(), scopes.to_value()])
@@ -594,8 +585,8 @@ impl Literal for Act {
                     key: prodrome_core::sign::PublicKey::new(fields.get::<String>("key")?)?,
                 })
             }
-            "ClaudeSignIn" => Act::ClaudeSignIn {
-                since: Fields::of(value, CLAUDE_SIGN_IN)?.get("since")?,
+            "SignIn" => Act::SignIn {
+                since: Fields::of(value, SIGN_IN)?.get("since")?,
             },
             "SignInCode" => Act::SignInCode {
                 url: Fields::of(value, SIGN_IN_CODE)?.get("url")?,
@@ -617,9 +608,6 @@ impl Literal for Act {
                 }
             }
             arm @ ("GoogleClient" | "GoogleSignIn" | "CalendarEvent") => google(value, arm)?,
-            "ConfigureOrder" | "ConfigureReserve" | "ConfigureProvider" => Act::Configure {
-                change: Literal::from_value(value)?,
-            },
             "Erase" => {
                 let fields = Fields::of(value, ERASE)?;
                 Act::Erase {
@@ -894,13 +882,13 @@ mod tests {
             Act::UnlockStore {
                 after: Some("proposal:setup/3".parse().expect("a reference")),
             },
-            Act::ClaudeSignIn { since: None },
-            Act::ClaudeSignIn {
+            Act::SignIn { since: None },
+            Act::SignIn {
                 since: Some("no model has answered since 2026-10-07 09:00 UTC".to_owned()),
             },
             Act::SignInCode {
                 url: crate::secretary::sign_in::SignInUrl::parse(
-                    "https://claude.com/cai/oauth/authorize?code=true&state=s",
+                    "https://sign-in.example.test/oauth/authorize?code=true&state=s",
                 )
                 .expect("a link"),
             },

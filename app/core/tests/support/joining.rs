@@ -2,7 +2,7 @@
 //! the digest post's own test (`OptMem`) compresses. Test support, never production.
 
 use crate::capability::{Compact, ModelError};
-use crate::models::ModelName;
+use crate::model_name::ModelName;
 use crate::secretary::compact_ask::Ask;
 use crate::secretary::digest_line::NODE_BYTES;
 

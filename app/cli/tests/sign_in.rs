@@ -9,7 +9,6 @@ mod common;
 use std::sync::{Arc, Mutex};
 
 use common::{Fakes, Reaching, SecretRecorder, SettingsFixture, VerifyRecorder};
-use suzatary_core::settings::CLAUDE_CODE_OAUTH_TOKEN;
 
 const CODE: &str = "fake-code#fake-state";
 const TOKEN: &str = "sk-ant-oat01-FAKEtoken_for-the-route-test";
@@ -40,7 +39,7 @@ fn fake_claude(tag: &str) -> String {
     script.display().to_string()
 }
 
-/// A server whose fallback's last call failed, so no model answers, over `secrets` and `verify`.
+/// A server whose model's last call failed, so no model answers, over `secrets` and `verify`.
 fn unanswered(tag: &str, secrets: &Arc<SecretRecorder>, verify: VerifyRecorder) -> String {
     unanswered_over(tag, secrets, verify).0.base
 }
@@ -54,14 +53,14 @@ fn unanswered_over(
     let ada = common::login("ada@example.com");
     let whois = common::FakeWhois::new().naming(common::v4(), ada.clone());
     let deployment = common::deployment([ada.clone()], [(ada, common::actor("ada"))]);
-    let fallback = SettingsFixture::empty().fallback.to_string();
+    let model = SettingsFixture::empty().models.recorded();
     let fakes = Arc::new(Fakes::new(tag).whois(whois));
     let running = common::Server::new(Arc::clone(&fakes), deployment, Vec::new())
         .settings(SettingsFixture::with_writer(Arc::clone(secrets) as _))
         .reaching(Reaching {
             claude: fake_claude(tag),
             answered: Some(suzatary_core::mail::health::Healths::one(
-                &fallback,
+                &model,
                 chrono::NaiveDate::from_ymd_opt(2026, 10, 7)
                     .and_then(|day| day.and_hms_opt(9, 0, 0))
                     .expect("an instant"),
@@ -78,7 +77,7 @@ fn unanswered_over(
 }
 
 /// The code card's index in the `setup` conversation: after the Connect card, the only other
-/// card the box files while no model answers, since no job orders `anthropic/`.
+/// card the box files while no model answers.
 const CODE_CARD: usize = 1;
 
 /// Tap the box's card `index` in its `setup` conversation, with `body`.
@@ -104,7 +103,7 @@ fn with_no_model_answering_the_sign_in_keeps_the_subscription_token() {
 
     let started = tap(&base, 0, &serde_json::json!({}));
     let connect = &started["proposals"][0];
-    assert_eq!(connect["act"]["kind"], "claude_sign_in", "{started}");
+    assert_eq!(connect["act"]["kind"], "sign_in", "{started}");
     assert_eq!(connect["state"], "started", "{connect}");
 
     let finished = tap(&base, CODE_CARD, &serde_json::json!({ "value": CODE }));
@@ -121,7 +120,7 @@ fn with_no_model_answering_the_sign_in_keeps_the_subscription_token() {
     );
     assert_eq!(
         secrets.calls(),
-        vec![(CLAUDE_CODE_OAUTH_TOKEN.to_owned(), TOKEN.to_owned())]
+        vec![(suzatary_io::model::TOKEN.to_owned(), TOKEN.to_owned())]
     );
     for answer in [&started, &finished] {
         let raw = answer.to_string();
@@ -163,7 +162,7 @@ fn a_token_whose_test_call_fails_is_not_kept() {
     let secrets = Arc::new(SecretRecorder::new());
     let verify = VerifyRecorder {
         asked: Mutex::new(Vec::new()),
-        refuses: Some(CLAUDE_CODE_OAUTH_TOKEN.to_owned()),
+        refuses: Some(suzatary_io::model::TOKEN.to_owned()),
     };
     let base = unanswered("signin-unverified", &secrets, verify);
     tap(&base, 0, &serde_json::json!({}));
@@ -179,8 +178,7 @@ fn a_token_whose_test_call_fails_is_not_kept() {
 }
 
 /// Four filings at once file each card once: one Connect card and one line asking for it,
-/// however the filings interleave. No API key is asked beside it, since no job orders
-/// `anthropic/`.
+/// however the filings interleave.
 #[test]
 fn filings_at_once_file_each_card_once() {
     let secrets = Arc::new(SecretRecorder::new());
@@ -193,7 +191,7 @@ fn filings_at_once_file_each_card_once() {
         .iter()
         .filter_map(|card| card["act"]["kind"].as_str())
         .collect();
-    assert_eq!(kinds, ["claude_sign_in"], "{reading}");
+    assert_eq!(kinds, ["sign_in"], "{reading}");
     let asked = reading["turns"]
         .as_array()
         .expect("turns")

@@ -37,4 +37,4 @@ pub use seen::{Checked, Seen};
 pub use standing::Standing;
 pub(crate) use standing::stamp;
 pub use step::{SecretName, Step, StepShape};
-pub use template::{AccountKind, BuiltIn, Channel, Fragment, Table, Template, TemplateId};
+pub use template::{AccountKind, Channel, Fragment, Table, Template, TemplateId};

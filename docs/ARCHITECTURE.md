@@ -46,12 +46,12 @@ prodrome-core   the database (unchanged in role; gains `view`, §4)
 `app/plugin` is the plugin host (`docs/PLUGINS-PLAN-2026-10-02.md`), a crate of
 its own because wasmtime is the largest tree in the workspace and only plugins
 need it; `cli` depends on it for `suzatary plugin sync` (stage 2,
-2026-10-03). `app/wit/plugin.wit` is the plugin worlds' contract
-(`suzatary:plugin@0.3.0`), `app/plugin-fence` is a hostile test plugin the
+2026-10-03). `app/wit/plugin.wit` is the plugin world's contract
+(`suzatary:plugin@0.4.0`), `app/plugin-fence` is a hostile test plugin the
 flake builds into the components `app/plugin/tests/fence.rs` attacks the host
 with, and `app/plugin-ics` is the app's first reference plugin, the calendar,
-built by `.#suzatary-plugins` into `ics.wasm` and, with `--features due`, into
-`due.wasm`, its actor, both held to the same fences.
+built by `.#suzatary-plugins` for wasm32-wasip2 into `ics.wasm`, held to the
+same fences.
 `prodrome-core` is a GIT DEPENDENCY pinned by `rev` in `app/Cargo.toml`'s
 `[workspace.dependencies]`, vendored by crane from the lock (§8.8);
 `flake.nix` pins the SAME sha as `inputs.prodrome`, and the tab's module is
@@ -78,9 +78,7 @@ Rules for every crate:
   binary has the runtime. Meaning that needs an effect takes it as a
   capability (§3) and stays in `core`.
 - rustls, never OpenSSL. Few dependencies, each named with its reason in the
-  crate's `lib.rs` header. An attested provider's TDX quote is verified to
-  Intel's root with the same rustls-webpki (`suzatary_io::attestation`), not
-  a second X.509 stack.
+  crate's `lib.rs` header.
 - Every wire type is declared ONCE, in `suzatary-core`, with `serde`; the
   browser's TypeScript is GENERATED (`ts-rs`) at build time, and so is each
   answer's decoder, folded from that text (`wire::shape`) into `decoder.ts`'s
@@ -128,69 +126,52 @@ fakes; the binary chooses. A RULE becomes a TYPE:
   produces.
 - **Loopback never writes** (SPEC §5, webapp Gate): an actor is a `Login` from
   `Whois`; nothing constructs one from an address.
-- **A plugin holds only what its world imports** (2026-10-02,
-  `docs/PLUGINS-PLAN-2026-10-02.md` stage 1). A plugin is a WebAssembly
-  component, and a world of `app/wit/plugin.wit` is its capability record:
-  `source` imports `fetch`, a clock and a logger and nothing of WASI.
-  `suzatary_plugin::Host::load` refuses a component importing anything else
-  (`LoadError::ForeignImports`) before it runs. The effects behind the imports
-  are a record too, `suzatary_plugin::Effects` (transport, secret store,
-  clock), lent per call. `fetch` crosses `suzatary_core::plugin::Request::admit`
-  against the `Manifest`, which parses only to declared origins and to
-  credential NAMES in the plugin's own `PLUGIN_<NAME>_` namespace, each bound
-  to one use and one origin; a value is resolved by the host and lives only
-  in `Outgoing`, whose answer is withheld if it echoes one. Each call is a
-  fresh `Store` under a `Budget` (an epoch deadline, a `ResourceLimiter`
-  memory cap), stopped with `RunError::Deadline` or `RunError::Memory`.
-  `sync` is lent the NAMES of the credentials its manifest declares, never a
-  value, and the host keeps its own record of each fetch (`Run::fetches`), so
-  what reads "when did this link last sync" rests on the host's observation.
-- **What a plugin learns enters through its schema's door** (2026-10-03,
-  stages 2 and 3). A plugin's schema is a DECLARATION shipped beside its
-  component (`[[plugins]] schema`, the calendar's `app/plugin-ics/ics.schema`),
-  admitted by the Prodrome's `declared::Declaration::admit` when the host
-  loads it (`LoadError::Schema` names the law; no Rust schema mirrors it). An
-  item is an EVENT of that schema in the objects' literal grammar, named by
-  the schema's hash; `suzatary_core::plugin::admit` parses it there, prints
-  it back the same (a second spelling would be a second object) and holds it
-  to the plugin's own actor. Each sync is a `suzatary_plugin::Trial`, the run
-  replayed over the answers it was given, and `plugin::Answers::hold` learns
-  it only when its items admit, its replay from the same cursor is the same,
-  and its replay from its own cursor teaches nothing more (`plugin::Law`);
-  `plugin::learn` then writes only what the store does not already read
-  (`plugin::Knowledge`), so a sync is monotone and idempotent and its timer
-  needs no lock. Each plugin's store is CACHE tier (`[cache]`, `cache/` under
-  the data root): `cache/plugins/<name>/store`, a `Genesis`-rooted prodrome
-  at the admitted declaration with its text in `schema` beside it (another
-  schema begins it afresh), box-local, never pushed, never staged by
-  `safe-push.sh` (a guard test), rebuilt by syncing again. The calendar is a
-  READER of every such store whose schema has its registers
-  (`calendar::Occurrence::reads`/`of`: an occurrence keyed by calendar,
-  original start and `UID`, five discrete registers, a calendar only in its
-  writer's namespace).
-  Readers reach it as `capability::Calendar` in the secretary's record, read
-  in the box's clock by `suzatary_io::calendar::Clocked`; its titles are
-  other people's words, so the `calendar` verb is Tainted and `context`
-  carries only times. Meetings are never todos: nothing writes from it to a
-  chain.
-- **An actor proposes, through the tap** (stage 4, `actorinbox`). An `actor`
-  reads one store, its own or the one its manifest grants it (`reads`), at
-  its schema (`PluginStore::read_at`), handed to it as a set by `suzatary
-  plugin sync` after the sources. A proposal is a literal of the Inbox's
-  closed act vocabulary with a reason and its sources, admitted by
-  `suzatary_core::plugin::propose` (an `Offer`) or refused naming the plugin;
-  for now only a change to a chain (an `Offer` holds a `Changeset`, so no other
-  act is expressible past the door), the whole offer bounded (`bounded`: 24 KiB,
-  8 sources of 256 bytes), built against its chain first (`changes::checked`, as `propose_changes` does). One decision is
-  read to `MAX_OFFERS`, and a plugin with `filed::MAX_STANDING` waiting files
-  nothing new. `secretary::filed::offer` files it as the plugin's, under the
-  inbox's hold, the inbox kind `Offered` naming the plugin
-  (`secretary::proposer::Proposer`), drawn in the box's conversation
-  `plugin-<name>`; one act is one proposal, so the next tick files nothing.
-  The card says "proposed by the <name> plugin", and the owner's tap
-  performs it through the route and performers every card has, the response
-  his. The reference actor, `due.wasm`, proposes a todo for each `Due:`
-  entry on the calendar.
+- **A plugin is one function and its grant** (2026-10-24). A plugin is a WebAssembly
+  component of `app/wit/plugin.wit`'s `source` world: one export, `sync(cursor,
+  credentials)`, which returns items and the next cursor, and one import of ours,
+  `fetch`. It is built for wasm32-wasip2, so it also imports WASI's clocks, random
+  numbers and standard streams; the host links those with nothing in them (an empty
+  environment and standard input, a bounded standard error, the box's own clocks) and
+  links no WASI filesystem or sockets, so
+  `suzatary_plugin::Host::load` refuses a component importing either
+  (`LoadError::NotASource`) before it runs. The effects behind the imports are a
+  record, `suzatary_plugin::Effects` (transport and secret store), lent per call.
+  `fetch` crosses `suzatary_core::plugin::Target::admit` against the `Manifest`,
+  which parses only to declared origins and to credential NAMES in the plugin's own
+  `PLUGIN_<NAME>_` namespace; a credential's value is a URL the host resolves, holds
+  only in `Outgoing` and requests only at an allowed origin over https or loopback,
+  and an answer that echoes it, or its path or query, is withheld; a call makes at
+  most `MAX_FETCHES`. Each call is a fresh `Store` under a `Budget` (an epoch
+  deadline, a `ResourceLimiter` memory cap), stopped with `RunError::Deadline` or
+  `RunError::Memory`. The host links its own WASI monotonic clock
+  (`suzatary_plugin`'s `clock.rs`), whose every wait ends at the call's deadline:
+  a wait blocks in the host, where the epoch never fires. The host keeps its own record of each
+  fetch (`Run::fetches`), so what reads "when did this link last sync" rests on the
+  host's observation.
+- **What a plugin learns enters through its schema's door**. A plugin's schema is a
+  DECLARATION shipped beside its component (`[[plugins]] schema`, the calendar's
+  `app/plugin-ics/ics.schema`), admitted by the Prodrome's
+  `declared::Declaration::admit` when the host loads it (`LoadError::Schema` names the
+  law; no Rust schema mirrors it). An item is an EVENT of that schema in the objects'
+  literal grammar; `suzatary_core::plugin::admit` parses it there, prints it back the
+  same (a second spelling would be a second object) and holds it to the plugin's own
+  actor. `store::learn` then writes only what the store does not already read
+  (`store::Knowledge`), so a sync is monotone and idempotent and its timer needs no
+  lock. Each plugin's store is CACHE tier (`[cache]`, `cache/` under the data root):
+  `cache/plugins/<name>/store`, a `Genesis`-rooted prodrome at the admitted
+  declaration with its text in `schema` beside it (another schema begins it afresh),
+  box-local, never pushed, never staged by `safe-push.sh` (a guard test), rebuilt by
+  syncing again. The calendar is a READER of every such store whose schema has its
+  registers (`calendar::Occurrence::reads`/`of`: an occurrence keyed by calendar,
+  original start and `UID`, five discrete registers, a calendar only in its writer's
+  namespace). Readers reach it as `capability::Calendar` in the secretary's record,
+  read in the box's clock by `suzatary_io::calendar::Clocked`; its titles are other
+  people's words, so the `calendar` verb is Tainted and `context` carries only times.
+  Meetings are never todos: nothing writes from it to a chain.
+- **The actor world is an interface only**. `app/wit/actor.wit` documents a plugin that
+  reads a store and proposes acts for the owner to tap; no plugin targets it, and the
+  host has no machinery for it until one does. Proposals a removed actor filed stay in
+  the Inbox's history, named `Proposer::Plugin`.
 
 Tagless final, or traits. Preferred over an effect enum with an interpreter
 loop: a route needing whois, a fold and a reply should read as three lines,
@@ -639,7 +620,7 @@ attachment hashes), file sizes, the padded length of each slot, and a coding
 session's branch slug (`claude/<task-slug>`); an erased line's shape stays
 readable, and an `Erased` line says which keys went, and when. What still
 holds the words: a push notification already sent, `briefings/` (until
-stage 6), the server's in-process memo of rendered pages, the provider's
+stage 6), the server's in-process memo of rendered pages, Anthropic's
 own session transcripts, and a conversation's title, which the title job
 wrote from its first answer and a forget does not offer to erase. The
 plain store the lines were carried from on 2026-10-11 is gone (words stage 4):

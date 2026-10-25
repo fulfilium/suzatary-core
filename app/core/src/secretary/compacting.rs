@@ -1,7 +1,7 @@
 //! Whether the compactor runs, and with what: a sum, so a compactor that is off names no model
 //! and no budget, and a running one names both.
 
-use crate::models::ModelName;
+use crate::model_name::ModelName;
 use crate::secretary::compact_budget::Budget;
 use crate::secretary::compaction::Compaction;
 

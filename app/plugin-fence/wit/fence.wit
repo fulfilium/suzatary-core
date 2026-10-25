@@ -1,0 +1,44 @@
+/// The fence plugin's worlds: the source world plus the WASI clock it sleeps on, and an escapee
+/// that also imports two powers the host does not link.
+///
+/// Only the names and types of what is imported matter to the host, so each WASI interface here
+/// holds just the functions the fence calls.
+package suzatary:fence;
+
+world fence {
+    include suzatary:plugin/source@0.4.0;
+    import wasi:clocks/monotonic-clock@0.2.0;
+}
+
+world escapee {
+    include fence;
+    import wasi:filesystem/preopens@0.2.0;
+    import wasi:sockets/instance-network@0.2.0;
+}
+
+package wasi:io@0.2.0 {
+    interface poll {
+        resource pollable {
+            block: func();
+        }
+    }
+}
+
+package wasi:clocks@0.2.0 {
+    interface monotonic-clock {
+        use wasi:io/poll@0.2.0.{pollable};
+        subscribe-duration: func(when: u64) -> pollable;
+    }
+}
+
+package wasi:filesystem@0.2.0 {
+    interface preopens {
+        get-directories: func() -> list<string>;
+    }
+}
+
+package wasi:sockets@0.2.0 {
+    interface instance-network {
+        instance-network: func() -> u32;
+    }
+}

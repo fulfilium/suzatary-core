@@ -32,7 +32,7 @@ pub enum StepShape {
     /// The account's sign-in with Google: an authorization code the consent sends back to the
     /// box.
     AuthCode,
-    /// The Claude subscription's sign-in.
+    /// The model's sign-in, which the deployment runs.
     SignIn,
     /// A command at a terminal; `{email}` and `{subdir}` stand for the account's.
     Terminal {
@@ -72,7 +72,7 @@ pub enum Step {
         /// The account.
         account: EmailAddress,
     },
-    /// Tap the Claude subscription's sign-in, which the box runs `claude setup-token` for.
+    /// Tap the model's sign-in, which the deployment runs on the box.
     SignIn,
     /// Run a command at a terminal on the box, which only the person can do.
     Terminal {
@@ -159,7 +159,7 @@ impl Step {
                 "make the box's Google Cloud client and paste its file into its card".to_owned()
             }
             Step::AuthCode { account } => format!("sign {account} in with Google from its card"),
-            Step::SignIn => "sign in with the Claude subscription from its card".to_owned(),
+            Step::SignIn => "sign the model in from its card".to_owned(),
             Step::Terminal { run, why } => {
                 format!("at a terminal on the box: {} ({why})", run.shown(reach))
             }
@@ -182,9 +182,7 @@ impl Step {
             (Step::AuthCode { account }, _) if (seen.signed_in)(account) => Standing::Kept,
             (Step::AuthCode { .. }, _) => Standing::missing("its sign-in with Google"),
             (Step::SignIn | Step::Terminal { .. }, Checked::Once) => Standing::Kept,
-            (Step::SignIn, Checked::Never) => {
-                Standing::missing(Help::label(crate::settings::CLAUDE_CODE_OAUTH_TOKEN))
-            }
+            (Step::SignIn, Checked::Never) => Standing::missing("the model's sign-in"),
             (Step::Terminal { run, why }, Checked::Never) => Standing::ByHand {
                 step: 0,
                 command: run.shown(seen.reach),

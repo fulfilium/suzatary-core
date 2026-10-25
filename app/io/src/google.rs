@@ -397,7 +397,7 @@ pub fn learn(
     root: &std::path::Path,
     occurrences: &[Occurrence],
     at: suzatary_core::capability::Datetime,
-) -> Result<suzatary_core::plugin::Learnt, String> {
+) -> Result<suzatary_core::store::Learnt, String> {
     use prodrome_core::store::Replica as _;
     let schema = prodrome_core::declared::Declaration::admit(suzatary_core::google::SCHEMA)
         .map_err(|refused| format!("the calendar's schema: {refused}"))?;
@@ -412,7 +412,7 @@ pub fn learn(
         .map(|occurrence| occurrence.event(store.inner().schema(), at, &actor))
         .collect::<Result<Vec<_>, _>>()
         .map_err(|refused| refused.to_string())?;
-    suzatary_core::plugin::learn(&store, items).map_err(|failed| failed.to_string())
+    suzatary_core::store::learn(&store, items).map_err(|failed| failed.to_string())
 }
 
 /// What lieer reads its credentials from, in the account's maildir: the authorized-user form of

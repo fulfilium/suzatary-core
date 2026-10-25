@@ -17,7 +17,7 @@ use suzatary_core::agent::TriageVerb;
 use suzatary_core::capability::{Agent, Entropy, Nothing, Turn};
 use suzatary_core::chains::{ChainName, ChainPolicy, Chains};
 use suzatary_core::deployment::Deployment;
-use suzatary_core::models::ModelName;
+use suzatary_core::model_name::ModelName;
 use suzatary_core::secretary::conversations::InMemory as Lines;
 use suzatary_core::secretary::digest_event::DigestEvent;
 use suzatary_core::secretary::digest_label::Label;
@@ -274,7 +274,7 @@ fn remembered() -> Stores {
                 &node,
                 &Line::new(&words).expect("a line"),
                 over,
-                ModelName::parse("claude-sonnet-5-5").expect("a model"),
+                ModelName::parse("a-model").expect("a model"),
                 at(41),
             )
             .expect("summarised");

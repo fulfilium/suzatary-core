@@ -54,7 +54,7 @@ export namespace settingsPage {
   }
 
   // The box's own cards to connect a model: while one stands, no model answers.
-  const signsIn = (r: Row): boolean => r.kind === "proposal" && (r.proposal.act.kind === "claude_sign_in" || r.proposal.act.kind === "sign_in_code")
+  const signsIn = (r: Row): boolean => r.kind === "proposal" && (r.proposal.act.kind === "sign_in" || r.proposal.act.kind === "sign_in_code")
 
   const line = (g: Group, l: OverviewLine, cards: readonly Row[]): HTMLElement => {
     const d = overview.drawn(l, stamp)

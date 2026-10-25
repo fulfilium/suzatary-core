@@ -65,7 +65,7 @@
           "label": "p3",
           "detail": null,
           "standing": {
-            "kind": "unused"
+            "kind": "unobserved"
           },
           "cards": []
         },
@@ -74,7 +74,7 @@
           "label": "p4",
           "detail": null,
           "standing": {
-            "kind": "unobserved"
+            "kind": "locked"
           },
           "cards": []
         },
@@ -83,7 +83,7 @@
           "label": "p5",
           "detail": null,
           "standing": {
-            "kind": "locked"
+            "kind": "store_failed"
           },
           "cards": []
         },
@@ -92,23 +92,14 @@
           "label": "p6",
           "detail": null,
           "standing": {
-            "kind": "store_failed"
-          },
-          "cards": []
-        },
-        {
-          "key": "plugin:p7",
-          "label": "p7",
-          "detail": null,
-          "standing": {
             "kind": "unreadable",
             "words": "its ledger could not be read"
           },
           "cards": []
         },
         {
-          "key": "plugin:p8",
-          "label": "p8",
+          "key": "plugin:p7",
+          "label": "p7",
           "detail": null,
           "standing": {
             "kind": "missing",
@@ -119,13 +110,29 @@
           "cards": []
         },
         {
-          "key": "plugin:p9",
-          "label": "p9",
+          "key": "plugin:p8",
+          "label": "p8",
           "detail": null,
           "standing": {
             "kind": "by_hand",
             "command": "example-cli auth login",
             "why": "sign the CLI in"
+          },
+          "cards": []
+        },
+        {
+          "key": "plugin:p9",
+          "label": "p9",
+          "detail": null,
+          "standing": {
+            "kind": "failing",
+            "since": "2026-09-02T11:00:00",
+            "class": {
+              "kind": "revoked",
+              "status": "unauthorized"
+            },
+            "words": "what the source said",
+            "at": "2026-09-02T12:00:00"
           },
           "cards": []
         },
@@ -138,7 +145,7 @@
             "since": "2026-09-02T11:00:00",
             "class": {
               "kind": "revoked",
-              "status": "unauthorized"
+              "status": "forbidden"
             },
             "words": "what the source said",
             "at": "2026-09-02T12:00:00"
@@ -154,7 +161,7 @@
             "since": "2026-09-02T11:00:00",
             "class": {
               "kind": "revoked",
-              "status": "forbidden"
+              "status": "not_found"
             },
             "words": "what the source said",
             "at": "2026-09-02T12:00:00"
@@ -169,8 +176,7 @@
             "kind": "failing",
             "since": "2026-09-02T11:00:00",
             "class": {
-              "kind": "revoked",
-              "status": "not_found"
+              "kind": "needs_login"
             },
             "words": "what the source said",
             "at": "2026-09-02T12:00:00"
@@ -185,7 +191,7 @@
             "kind": "failing",
             "since": "2026-09-02T11:00:00",
             "class": {
-              "kind": "needs_login"
+              "kind": "unresolved"
             },
             "words": "what the source said",
             "at": "2026-09-02T12:00:00"
@@ -200,7 +206,7 @@
             "kind": "failing",
             "since": "2026-09-02T11:00:00",
             "class": {
-              "kind": "unresolved"
+              "kind": "key_refused"
             },
             "words": "what the source said",
             "at": "2026-09-02T12:00:00"
@@ -215,7 +221,7 @@
             "kind": "failing",
             "since": "2026-09-02T11:00:00",
             "class": {
-              "kind": "key_refused"
+              "kind": "unusable"
             },
             "words": "what the source said",
             "at": "2026-09-02T12:00:00"
@@ -230,7 +236,7 @@
             "kind": "failing",
             "since": "2026-09-02T11:00:00",
             "class": {
-              "kind": "unusable"
+              "kind": "unreachable"
             },
             "words": "what the source said",
             "at": "2026-09-02T12:00:00"
@@ -240,21 +246,6 @@
         {
           "key": "plugin:p17",
           "label": "p17",
-          "detail": null,
-          "standing": {
-            "kind": "failing",
-            "since": "2026-09-02T11:00:00",
-            "class": {
-              "kind": "unreachable"
-            },
-            "words": "what the source said",
-            "at": "2026-09-02T12:00:00"
-          },
-          "cards": []
-        },
-        {
-          "key": "plugin:p18",
-          "label": "p18",
           "detail": null,
           "standing": {
             "kind": "failing",

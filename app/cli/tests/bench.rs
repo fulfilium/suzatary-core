@@ -146,7 +146,6 @@ fn a_scripted_todo_add_lands_as_a_real_object_and_a_run_resumes() {
         None,
         false,
         false,
-        suzatary_bench::run::DEFAULT_THROTTLE_ATTEMPTS,
     )
     .expect("a run over a scripted candidate and a temp chain");
 
@@ -210,7 +209,6 @@ fn a_scripted_todo_add_lands_as_a_real_object_and_a_run_resumes() {
         None,
         false,
         false,
-        suzatary_bench::run::DEFAULT_THROTTLE_ATTEMPTS,
     )
     .expect("a resumed run");
     let second_text = std::fs::read_to_string(&answer_path).expect("the answer file, unchanged");
@@ -241,7 +239,6 @@ fn a_failed_turn_is_recorded_failed_and_the_run_reports_it_and_exits_nonzero() {
         None,
         false,
         false,
-        suzatary_bench::run::DEFAULT_THROTTLE_ATTEMPTS,
     )
     .expect_err("a run made entirely of failures must not exit zero");
     assert!(refused.to_string().contains("failed"), "{refused}");
@@ -273,7 +270,6 @@ fn a_failed_turn_is_recorded_failed_and_the_run_reports_it_and_exits_nonzero() {
         None,
         false,
         false,
-        suzatary_bench::run::DEFAULT_THROTTLE_ATTEMPTS,
     );
     let reread: suzatary_bench::run::RunEntry =
         serde_json::from_str(&std::fs::read_to_string(&answer_path).expect("an answer file"))
@@ -298,7 +294,6 @@ fn a_failed_turn_is_recorded_failed_and_the_run_reports_it_and_exits_nonzero() {
         None,
         false,
         true,
-        suzatary_bench::run::DEFAULT_THROTTLE_ATTEMPTS,
     )
     .expect("--skip-failed leaves the prior failure alone rather than re-asking it");
     let after_skip = std::fs::read_to_string(&answer_path).expect("an answer file");
@@ -463,7 +458,6 @@ fn a_call_naming_the_project_chain_lands_there_not_as_a_refusal() {
         None,
         false,
         false,
-        suzatary_bench::run::DEFAULT_THROTTLE_ATTEMPTS,
     )
     .expect("a run whose candidate writes to the project chain");
 
@@ -545,7 +539,6 @@ fn a_bench_candidate_is_told_no_memory_of_the_box() {
         None,
         false,
         false,
-        suzatary_bench::run::DEFAULT_THROTTLE_ATTEMPTS,
     )
     .expect("a run over a scripted candidate");
     let entry: suzatary_bench::run::RunEntry = serde_json::from_str(

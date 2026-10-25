@@ -406,18 +406,6 @@ fn the_tap_is_minted_only_by_the_guard_from_a_proof() {
     );
 }
 
-/// The model settings are written by a Configure card's performer alone, reached through the
-/// tap's edits: no route, verb or read asks the editor to swap a setting.
-#[test]
-fn the_model_settings_are_written_by_a_tapped_card_alone() {
-    // Assembled at runtime so this file's prose does not count itself.
-    assert_eq!(
-        production_callers(&[".swap", "(&mut |"].concat()),
-        ["core/src/settings/configure.rs"],
-        "callers of the model settings' swap"
-    );
-}
-
 /// What edits the instance file's connections, and what deletes an account's mail or its
 /// sign-ins, is called from the tap's route, the server's wrappers and the fixture alone, so no
 /// verb, read or other route reaches any of them.

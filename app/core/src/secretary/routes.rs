@@ -26,7 +26,6 @@ use crate::secretary::responded::{Done, Performed, Tried, Withdrawal};
 use crate::secretary::store::{ConversationId, Draft, Entry, Kind, Proposal, Stored, Title};
 use crate::secretary::tap::Tap;
 use crate::secretary::transcript;
-use crate::settings::CLAUDE_CODE_OAUTH_TOKEN;
 use crate::wire;
 
 /// Sending a proposed message, the one effect behind a tap; deliberately in no capability bundle,
@@ -83,6 +82,8 @@ struct Drawn<'a> {
     handover: Option<crate::chains::ChainName>,
     /// The routine `[coding]` declares.
     routine: Option<crate::coding::RoutineId>,
+    /// The name the deployment stores its model's credential under.
+    model: Option<crate::settings::Settable>,
     /// The plugins the instance file declares now.
     plugins: Vec<crate::plugin::Manifest>,
     /// How the person reaches the app at a terminal.
@@ -156,6 +157,7 @@ impl<'a> Drawn<'a> {
             },
             categories: cards.deployment.categories.keys().cloned().collect(),
             handover,
+            model: cards.settables.model(),
             routine: cards
                 .deployment
                 .coding
@@ -219,6 +221,10 @@ fn sources(
 impl Draw for Drawn<'_> {
     fn routine(&self) -> Option<&crate::coding::RoutineId> {
         self.routine.as_ref()
+    }
+
+    fn model(&self) -> Option<&str> {
+        self.model.as_ref().map(crate::settings::Settable::name)
     }
 
     fn source(&self, handle: &held_value::Handle) -> String {
@@ -753,8 +759,6 @@ enum Prepared<'p, 'c> {
         plugin: &'p crate::plugin::PluginName,
         origin: &'p crate::plugin::Origin,
     },
-    /// Change one setting.
-    Configure(&'p crate::settings::configure::Configure),
     /// Ask the secret store again.
     UnlockStore,
     /// Erase these passages.
@@ -860,7 +864,11 @@ impl<'p, 'c> Prepared<'p, 'c> {
             Act::SignInCode { url } => Prepared::Code {
                 url,
                 code: answer.value(": the code the sign-in page shows")?,
-                name: minted(reach.settables, CLAUDE_CODE_OAUTH_TOKEN)?,
+                name: reach.settables.model().ok_or_else(|| {
+                    Refusal::conflict(
+                        "nothing was stored: this deployment declares no model credential",
+                    )
+                })?,
             },
             Act::Web { rule, .. } => Prepared::Begin {
                 act,
@@ -885,7 +893,7 @@ impl<'p, 'c> Prepared<'p, 'c> {
                     (
                         Choice::Always,
                         Table::Always
-                        | Table::Backend(_)
+                        | Table::Model
                         | Table::Link(_)
                         | Table::Folder
                         | Table::Channel(_),
@@ -913,10 +921,6 @@ impl<'p, 'c> Prepared<'p, 'c> {
                 answer.plain()?;
                 Prepared::Grant { plugin, origin }
             }
-            Act::Configure { change } => {
-                answer.plain()?;
-                Prepared::Configure(change)
-            }
             Act::UnlockStore { .. } => {
                 answer.plain()?;
                 Prepared::UnlockStore
@@ -941,7 +945,7 @@ impl<'p, 'c> Prepared<'p, 'c> {
             | Act::AuthSend { .. }
             | Act::Patch { .. }
             | Act::CodingSession { .. }
-            | Act::ClaudeSignIn { .. } => {
+            | Act::SignIn { .. } => {
                 answer.plain()?;
                 Prepared::Begin {
                     act,
@@ -1076,7 +1080,6 @@ fn performed(
             disconnected(effectors, cards, connection, mail, then)
         }
         Prepared::Grant { plugin, origin } => granted(effectors.edits, plugin, origin),
-        Prepared::Configure(change) => configured(effectors.edits, change, &object.id, then),
         Prepared::UnlockStore => store_answers(caps.secretary.secrets, cards.settables),
         Prepared::Erase(keys) => erased(caps, id, keys, tap)?,
         Prepared::Device {
@@ -1143,8 +1146,6 @@ fn summaries_after(caps: &Server<'_>, proposal: &Proposal) {
 enum Then {
     /// The sign-in card a code card finished, ended as its outcome says.
     End(ProposalId, Performed),
-    /// A card that can never be performed, withdrawn by the box with its reason.
-    Withdraw(ProposalId, String),
     /// The origin a link was served from, which its plugin may not reach: its card is asked for.
     Grant(crate::plugin::PluginName, crate::plugin::Origin),
     /// A plugin whose link was stored, synced once so the link is checked now.
@@ -1172,14 +1173,6 @@ fn afterwards(
             &super::writes_as(),
             caps.secretary.clock.now(),
             ended,
-        )
-        .map(|_| ()),
-        Some(Then::Withdraw(card, why)) => inbox::withdraw(
-            caps.secretary.inbox,
-            &card,
-            &super::writes_as(),
-            caps.secretary.clock.now(),
-            Withdrawal::NoLongerNeeded { why },
         )
         .map(|_| ()),
         Some(Then::Grant(plugin, origin)) => {
@@ -1231,7 +1224,7 @@ fn linked(
 ) -> Link {
     let a_plugin_s = settables.declaration(name).is_some_and(|by| {
         by.iter()
-            .any(|by| matches!(by, crate::settings::Declaration::Plugin { .. }))
+            .any(|by| matches!(by, crate::settings::Declaration::Plugin(_)))
     });
     let declared = match edits.declared() {
         Ok(declared) => declared,
@@ -1243,11 +1236,11 @@ fn linked(
         }
         Err(_) => return Link::Stored,
     };
-    let Some(manifest) = declared.plugins.iter().find(|manifest| {
-        manifest
-            .placement(name.name())
-            .is_some_and(|(_, placement)| *placement == crate::plugin::Placement::Url)
-    }) else {
+    let Some(manifest) = declared
+        .plugins
+        .iter()
+        .find(|manifest| manifest.declared(name.name()).is_some())
+    else {
         return Link::Stored;
     };
     match crate::plugin::PluginUrl::parse(value.expose().trim()) {
@@ -1352,13 +1345,19 @@ fn disconnected(
         .iter()
         .find(|account| account.email.as_str() == key.name)
         .cloned();
-    let declared = crate::settings::Settables::derive(
-        [],
-        before.channels.iter().copied(),
-        cards.deployment.coding.as_ref(),
-        &before.plugins,
-    )
-    .join(crate::settings::Settables::google(&before.accounts));
+    let declared = cards
+        .settables
+        .model()
+        .map(|model| {
+            crate::settings::Settables::derive(
+                model.name(),
+                before.channels.iter().copied(),
+                cards.deployment.coding.as_ref(),
+                &before.plugins,
+            )
+        })
+        .unwrap_or_default()
+        .join(crate::settings::Settables::google(&before.accounts));
     let owned: Vec<crate::settings::Settable> = connection
         .kept()
         .iter()
@@ -1431,36 +1430,6 @@ fn granted(
     }
 }
 
-/// Change one setting while the instance file still reads what the card read. A file that
-/// reads something else can never take this card, so once its no is recorded the box withdraws
-/// it: a card left to try again would stand on the setting's line above newer ones. Any other
-/// refusal wrote nothing and leaves Try again.
-fn configured(
-    edits: &dyn crate::settings::Edits,
-    change: &crate::settings::configure::Configure,
-    card: &ProposalId,
-    then: &mut Option<Then>,
-) -> Performed {
-    use crate::settings::configure::{Performed as Changed, Refused};
-    let (_, to) = change.words();
-    let setting = change.setting().label();
-    match change.perform(edits) {
-        Ok(Changed::Written) => Performed::Done(Done::Acted {
-            what: format!("{setting} now reads {to}"),
-        }),
-        Ok(Changed::Already) => Performed::Done(Done::Acted {
-            what: format!("{setting} already read {to}; nothing was written"),
-        }),
-        Err(refused) => {
-            let reason = format!("nothing was written: {refused}");
-            if let Refused::Moved { .. } = refused {
-                *then = Some(Then::Withdraw(card.clone(), reason.clone()));
-            }
-            Performed::Tried(Tried::NotSent { reason })
-        }
-    }
-}
-
 /// Write what `allowing` allows into the instance: nothing for this act alone, else the web
 /// request's rule or the document's folder.
 fn allowed(edits: &dyn crate::settings::Edits, allowing: Allowing<'_>) -> Result<(), Refusal> {
@@ -1516,13 +1485,12 @@ pub fn ask_trust(
                 | Act::Patch { .. }
                 | Act::DriveRead { .. }
                 | Act::CodingSession { .. }
-                | Act::ClaudeSignIn { .. }
+                | Act::SignIn { .. }
                 | Act::SignInCode { .. }
                 | Act::UnlockStore { .. }
                 | Act::Connect { .. }
                 | Act::Disconnect { .. }
                 | Act::Grant { .. }
-                | Act::Configure { .. }
                 | Act::Erase { .. }
                 | Act::GoogleClient { .. }
                 | Act::GoogleSignIn { .. }
@@ -1594,13 +1562,12 @@ pub fn withdraw_trusted(
                 | Act::Patch { .. }
                 | Act::DriveRead { .. }
                 | Act::CodingSession { .. }
-                | Act::ClaudeSignIn { .. }
+                | Act::SignIn { .. }
                 | Act::SignInCode { .. }
                 | Act::UnlockStore { .. }
                 | Act::Connect { .. }
                 | Act::Disconnect { .. }
                 | Act::Grant { .. }
-                | Act::Configure { .. }
                 | Act::GoogleClient { .. }
                 | Act::GoogleSignIn { .. }
                 | Act::CalendarEvent { .. }
@@ -2006,7 +1973,7 @@ fn signed_in(
                 Some((
                     began,
                     Performed::Done(Done::Acted {
-                        what: "signed in; the Claude sign-in is stored".to_owned(),
+                        what: "signed in; the model's sign-in is stored".to_owned(),
                     }),
                 )),
             ),
@@ -2422,6 +2389,7 @@ mod tests {
             },
             categories: Vec::new(),
             handover: None,
+            model: None,
             routine: None,
             plugins: Vec::new(),
             reach: crate::connect::PLAIN.clone(),
@@ -2750,7 +2718,7 @@ mod tests {
     /// The names a deployment with an ntfy channel declares.
     fn with_ntfy() -> crate::settings::Settables {
         crate::settings::Settables::derive(
-            std::iter::empty(),
+            crate::settings::MODEL_TOKEN,
             [crate::connect::Channel::Ntfy],
             None,
             &[],
@@ -2819,8 +2787,12 @@ mod tests {
             Ok(_) => panic!("not a secret"),
             Err(refusal) => panic!("{refusal}"),
         }
-        let undeclared =
-            crate::settings::Settables::derive(std::iter::empty(), std::iter::empty(), None, &[]);
+        let undeclared = crate::settings::Settables::derive(
+            crate::settings::MODEL_TOKEN,
+            std::iter::empty(),
+            None,
+            &[],
+        );
         let refusal = refused(prepared(&card, &answer, &undeclared));
         assert_eq!(refusal.status(), crate::refusal::Status::Conflict);
         assert!(
@@ -2838,13 +2810,15 @@ mod tests {
     fn a_code_card_mints_the_subscription_s_name_at_the_tap() {
         let card = Proposal::Act(Act::SignInCode {
             url: crate::secretary::sign_in::SignInUrl::parse(
-                "https://claude.com/cai/oauth/authorize?code=true&state=s",
+                "https://sign-in.example.test/oauth/authorize?code=true&state=s",
             )
             .expect("a link"),
         });
         let answer = value();
         match prepared(&card, &answer, &with_ntfy()) {
-            Ok(Prepared::Code { name, .. }) => assert_eq!(name.name(), CLAUDE_CODE_OAUTH_TOKEN),
+            Ok(Prepared::Code { name, .. }) => {
+                assert_eq!(name.name(), crate::settings::MODEL_TOKEN);
+            }
             Ok(_) => panic!("not a code"),
             Err(refusal) => panic!("{refusal}"),
         }

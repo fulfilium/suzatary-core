@@ -9,9 +9,8 @@
 //! except that a failing link is always owed its Secret card, worded by its class, since
 //! setting a link again is a valid move whatever went wrong.
 //!
-//! What goes unused is offered for removal, each a card the owner may dismiss: a declared
-//! provider [idle] for [`IDLE`] days (its Configure card, a move to nothing), a calendar
-//! whose link syncs and holds nothing within [`QUIET`] of today, and a mail account failing for
+//! What goes unused is offered for removal, each a card the owner may dismiss: a calendar whose
+//! link syncs and holds nothing within [`QUIET`] of today, and a mail account failing for
 //! [`ABANDONED`]. A connection whose failure a card already mends is offered no removal beside
 //! that card.
 
@@ -22,16 +21,12 @@ use chrono::Duration;
 use crate::calendar::CalendarName;
 use crate::connect::{Connection, Declared, Failure, Key, Remedy, Step, Table};
 use crate::mail::health::{Health, Healths, Instant, Reading};
-use crate::models::Backend;
 use crate::plugin::PluginName;
 use crate::secretary::acts::Act;
 use crate::secretary::bootstrap::Answering;
-use crate::secretary::inbox::Fold;
 use crate::secretary::noticed::Owed;
-use crate::secretary::responded::{Done, Responded};
 use crate::secretary::store::Proposal;
-use crate::settings::configure::{Configure, Configured};
-use crate::settings::{DeclaredProvider, Settable, Settables};
+use crate::settings::{Settable, Settables};
 
 /// How long a calendar may hold nothing, before today and after it, before it is offered for
 /// removal.
@@ -52,62 +47,13 @@ pub fn abandoned() -> Duration {
 /// [`abandoned`], in days.
 pub const ABANDONED: i64 = 7;
 
-/// How long a declared provider may go unused before it is offered for removal.
-#[must_use]
-pub fn unused_for() -> Duration {
-    Duration::days(IDLE)
-}
-
-/// [`unused_for`], in days.
-pub const IDLE: i64 = 7;
-
-/// Whether the provider `name` is idle at `now`: no job's order nor the fallback names it, and
-/// neither a tapped card declared it nor did any of its models answer within [`IDLE`] days. Its
-/// key is asked for only while it is not idle, and it is offered for removal only once it is,
-/// so a provider just added from a card is asked for its key at once and never offered back.
-#[must_use]
-pub fn idle(answering: &Answering<'_>, inbox: &Fold, name: &str, now: Instant) -> bool {
-    if answering.models.orders(name)
-        || answering.fallback.backend == Backend::Declared(name.to_owned())
-    {
-        return false;
-    }
-    let prefix = format!("{name}/");
-    let answered = answering
-        .health
-        .readings()
-        .filter(|(entry, _)| entry.starts_with(&prefix))
-        .map(|(_, reading)| match reading {
-            Reading::Ok { at } => at,
-            Reading::Failing { since, .. } => since,
-        });
-    let declared = inbox.objects().filter_map(|object| {
-        let Proposal::Act(Act::Configure { change }) = &object.asked.proposal else {
-            return None;
-        };
-        (change.declares() == Some(name))
-            .then(|| object.reading.shown())
-            .flatten()
-            .filter(|answer| matches!(answer.response, Responded::Done(Done::Acted { .. })))
-            .map(|answer| prodrome_core::fpl::instant_of(answer.at))
-    });
-    answered
-        .chain(declared)
-        .max()
-        .is_none_or(|last| now - last >= unused_for())
-}
-
 /// What the rule reads.
 #[derive(Clone, Copy)]
 pub struct Observed<'a> {
-    /// What the inbox holds: when a provider was declared from a card.
-    pub inbox: &'a Fold,
     /// The tables connections are read from.
     pub declared: &'a Declared,
-    /// What the models answer, and every secret name declared.
+    /// What the model answers, and every secret name declared.
     pub answering: &'a Answering<'a>,
-    /// Every `[[providers]]` entry.
-    pub providers: &'a [DeclaredProvider],
     /// Each mail account's syncs.
     pub mail: &'a Healths,
     /// Each plugin's links' fetches, by plugin.
@@ -120,25 +66,11 @@ pub struct Observed<'a> {
     pub now: Instant,
 }
 
-/// What a failing connection is, as its fix needs it.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum Target {
-    /// A connection the instance's tables hold.
-    Connection(Connection),
-    /// A model entry a job may answer with, by its print, and the secret its backend reads.
-    Model {
-        /// `claude-cli/<model>`, `<provider>/<model>`.
-        entry: String,
-        /// The key or token its backend reads, where one is declared.
-        key: Option<Settable>,
-    },
-}
-
 /// One failing observation: what failed, of what class, since when.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Failing {
-    /// What failed.
-    pub target: Target,
+    /// The connection that failed, one the instance's tables hold.
+    pub connection: Connection,
     /// Its class.
     pub class: Failure,
     /// It has not succeeded since this instant.
@@ -147,16 +79,16 @@ pub struct Failing {
 
 impl Failing {
     /// The one card this failure is owed: its class's remedy as a step of its own template
-    /// (the link's secret, the account's sign-in) or its backend's key; none for a remedy no
-    /// tap gives, or one its connection has no step for.
+    /// (the link's secret, the account's sign-in); none for a remedy no tap gives, or one its
+    /// connection has no step for.
     #[must_use]
     pub fn fix(&self, settables: &Settables) -> Option<Owed> {
         let episode = prodrome_core::fpl::datetime_of(self.since).ok()?;
         let since = utc(self.since);
-        let act = match (self.target.remedy(self.class), &self.target) {
-            (Remedy::Retry, Target::Connection(_) | Target::Model { .. })
-            | (Remedy::Auth, Target::Model { .. }) => return None,
-            (Remedy::Secret, Target::Connection(connection)) => {
+        let connection = &self.connection;
+        let act = match self.remedy() {
+            Remedy::Retry => return None,
+            Remedy::Secret => {
                 let name = connection.secrets().into_iter().next()?;
                 Act::Secret {
                     name: Settable::mint(settables, &name).ok()?.name().to_owned(),
@@ -169,11 +101,7 @@ impl Failing {
                     ),
                 }
             }
-            (Remedy::Secret, Target::Model { entry, key }) => Act::Secret {
-                name: key.as_ref()?.name().to_owned(),
-                why: format!("{entry} has failed since {since}: set its key again"),
-            },
-            (Remedy::Auth, Target::Connection(connection)) => {
+            Remedy::Auth => {
                 connection.steps().into_iter().find_map(|step| match step {
                     Step::DeviceCode { account } => Some(Act::Auth { account }),
                     // A revoked grant, or one a client in Testing ended after 7 days, holds no
@@ -206,28 +134,22 @@ impl Failing {
 
     /// What failed, as the owner calls it.
     fn named(&self) -> String {
-        match &self.target {
-            Target::Connection(connection) => connection.called(),
-            Target::Model { entry, .. } => format!("the model {entry}"),
-        }
+        self.connection.called()
     }
 }
 
-impl Target {
-    /// What mends `class` here: a link is always set again from its Secret card, since setting
-    /// it again is a valid move whatever its failure (a mistyped address, a rotated link, a
-    /// service gone); everything else takes its class's one remedy.
-    fn remedy(&self, class: Failure) -> Remedy {
-        match self {
-            Target::Connection(connection) => match connection.template().table {
-                Table::Link(_) => Remedy::Secret,
-                Table::Always
-                | Table::Backend(_)
-                | Table::Account(_)
-                | Table::Folder
-                | Table::Channel(_) => class.remedy(),
-            },
-            Target::Model { .. } => class.remedy(),
+impl Failing {
+    /// What mends its class here: a link is always set again from its Secret card, since
+    /// setting it again is a valid move whatever its failure (a mistyped address, a rotated
+    /// link, a service gone); everything else takes its class's one remedy.
+    fn remedy(&self) -> Remedy {
+        match self.connection.template().table {
+            Table::Link(_) => Remedy::Secret,
+            Table::Always
+            | Table::Model
+            | Table::Account(_)
+            | Table::Folder
+            | Table::Channel(_) => self.class.remedy(),
         }
     }
 }
@@ -264,8 +186,9 @@ fn said(class: Failure) -> String {
     }
 }
 
-/// Every failing observation: each link of a declared plugin, each mail account and, while some
-/// model answers, each model entry a job may answer with, whose results read as failing.
+/// Every failing observation: each link of a declared plugin and each mail account whose
+/// results read as failing. A model that does not answer is the bootstrap's to ask for
+/// (`bootstrap::owed`).
 #[must_use]
 pub fn failing(observed: &Observed<'_>) -> Vec<Failing> {
     let connections = observed.declared.connections();
@@ -281,33 +204,16 @@ pub fn failing(observed: &Observed<'_>) -> Vec<Failing> {
                     .and_then(|(_, links)| links.health(&name))
             }
             Table::Account(_) => observed.mail.health(&connection.key().name),
-            Table::Always | Table::Backend(_) | Table::Folder | Table::Channel(_) => None,
+            Table::Always | Table::Model | Table::Folder | Table::Channel(_) => None,
         };
         let (class, since) = of(reading)?;
         Some(Failing {
-            target: Target::Connection(connection.clone()),
+            connection: connection.clone(),
             class,
             since,
         })
     });
-    // While no model answers, connecting one is the bootstrap's to ask (`bootstrap::owed`).
-    let models = observed
-        .answering
-        .entries()
-        .into_iter()
-        .filter(|_| observed.answering.any())
-        .filter_map(|entry| {
-            let (class, since) = of(observed.answering.health.health(&entry.to_string()))?;
-            Some(Failing {
-                target: Target::Model {
-                    entry: entry.to_string(),
-                    key: observed.answering.credential(&entry.backend),
-                },
-                class,
-                since,
-            })
-        });
-    connected.chain(models).collect()
+    connected.collect()
 }
 
 /// The cards the connections' health owes, besides what `asked` already asks for: one per
@@ -338,36 +244,13 @@ pub fn owed(observed: &Observed<'_>, asked: &Owed) -> Owed {
     let mended: BTreeSet<Key> = failing
         .iter()
         .filter(|failing| failing.class.remedy() != Remedy::Retry)
-        .filter_map(|failing| match &failing.target {
-            Target::Connection(connection) => Some(connection.key()),
-            Target::Model { .. } => None,
-        })
+        .map(|failing| failing.connection.key())
         .collect();
     fixes.join(unused(observed, &mended))
 }
 
 /// The removals an unused connection is offered, none for a connection in `mended`.
 fn unused(observed: &Observed<'_>, mended: &BTreeSet<Key>) -> Owed {
-    let answering = observed.answering;
-    // Removing a provider is the provider's Configure card (stage 5): a move to nothing.
-    let configured = Configured {
-        models: answering.models.clone(),
-        providers: observed.providers.to_vec(),
-    };
-    let providers = observed
-        .providers
-        .iter()
-        .filter(|provider| idle(answering, observed.inbox, &provider.name, observed.now))
-        .filter_map(|provider| {
-            let change = Configure::remove(&configured, &provider.name).ok()?;
-            Some(Owed::one(
-                Proposal::Act(Act::Configure { change }),
-                format!(
-                    "No job has used {} for {IDLE} days or more.",
-                    crate::settings::configure::provider_label(&provider.name)
-                ),
-            ))
-        });
     let connections = observed.declared.connections();
     let accounts = connections
         .values()
@@ -376,7 +259,7 @@ fn unused(observed: &Observed<'_>, mended: &BTreeSet<Key>) -> Owed {
             match connection.template().table {
                 Table::Account(_) => {}
                 Table::Always
-                | Table::Backend(_)
+                | Table::Model
                 | Table::Link(_)
                 | Table::Folder
                 | Table::Channel(_) => return None,
@@ -412,10 +295,7 @@ fn unused(observed: &Observed<'_>, mended: &BTreeSet<Key>) -> Owed {
             .filter_map(|connection| quiet_calendar(observed, heard, connection))
             .fold(Owed::default(), Owed::join),
     };
-    providers
-        .chain(accounts)
-        .fold(Owed::default(), Owed::join)
-        .join(calendars)
+    accounts.fold(Owed::default(), Owed::join).join(calendars)
 }
 
 /// The removal a calendar is offered when its link syncs, its latest fetch included, and its
@@ -428,11 +308,9 @@ fn quiet_calendar(
 ) -> Option<Owed> {
     let fragment = match connection.template().table {
         Table::Link(fragment) => fragment,
-        Table::Always
-        | Table::Backend(_)
-        | Table::Account(_)
-        | Table::Folder
-        | Table::Channel(_) => return None,
+        Table::Always | Table::Model | Table::Account(_) | Table::Folder | Table::Channel(_) => {
+            return None;
+        }
     };
     let name = connection.secrets().into_iter().next()?;
     let synced = observed
@@ -463,7 +341,6 @@ fn quiet_calendar(
 mod tests {
     use super::*;
     use crate::mail::health::Outcome;
-    use crate::models::{ModelEntry, Models};
     use crate::secretary::inbox::{self, Fold};
     use crate::secretary::inbox_event::InboxEvent;
     use crate::secretary::proposer::Proposer;
@@ -492,47 +369,34 @@ mod tests {
         PluginName::parse("ics").expect("a name")
     }
 
-    /// A deployment declaring the Work calendar and Ada's Microsoft account, and the providers
-    /// named, none ordered.
+    /// A deployment declaring the Work calendar and Ada's Microsoft account.
     struct World {
         declared: Declared,
-        providers: Vec<crate::settings::DeclaredProvider>,
         settables: Settables,
-        models: Models,
-        fallback: ModelEntry,
         answered: Healths,
         mail: Healths,
         links: BTreeMap<PluginName, Healths>,
         heard: BTreeSet<CalendarName>,
-        inbox: Fold,
     }
 
     impl World {
-        fn new(providers: &[&str]) -> Self {
+        fn new() -> Self {
             let declared = Declared::default()
                 .with(&work())
                 .and_then(|declared| declared.with(&account()))
                 .expect("declared");
-            let providers: Vec<crate::settings::DeclaredProvider> = providers
-                .iter()
-                .map(|name| crate::settings::DeclaredProvider {
-                    name: (*name).to_owned(),
-                    base_url: format!("https://{name}.example.test/v1"),
-                    key: format!("{}_API_KEY", name.to_uppercase()),
-                    attestation: crate::settings::Attestation::Unclaimed,
-                })
-                .collect();
             Self {
-                settables: Settables::derive(providers.iter(), [], None, &declared.plugins),
-                providers,
+                settables: Settables::derive(
+                    crate::settings::MODEL_TOKEN,
+                    [],
+                    None,
+                    &declared.plugins,
+                ),
                 declared,
-                models: Models::default(),
-                fallback: ModelEntry::parse(&[], "claude-cli/a-model").expect("an entry"),
                 answered: Healths::default(),
                 mail: Healths::default(),
                 links: BTreeMap::new(),
                 heard: BTreeSet::new(),
-                inbox: Fold::default(),
             }
         }
 
@@ -549,18 +413,15 @@ mod tests {
         fn owed(&self, now: Instant) -> Owed {
             let resolves = |_: &Settable| true;
             let answering = Answering {
-                models: &self.models,
-                fallback: &self.fallback,
+                model: "a-cli/a-model",
                 health: &self.answered,
                 settables: &self.settables,
                 resolves: &resolves,
             };
             owed(
                 &Observed {
-                    inbox: &self.inbox,
                     declared: &self.declared,
                     answering: &answering,
-                    providers: &self.providers,
                     mail: &self.mail,
                     links: &self.links,
                     heard: Some(&self.heard),
@@ -624,7 +485,7 @@ mod tests {
         fn one_act_per_connection_and_since(
             script in proptest::collection::vec((seen(), 1u8..4, proptest::bool::ANY), 1..20)
         ) {
-            let mut world = World::new(&[]);
+            let mut world = World::new();
             let inbox_store = InMemory::<InboxEvent>::default();
             let conversations = crate::secretary::conversations::InMemory::default();
             // How many episodes began.

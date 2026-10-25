@@ -15,13 +15,11 @@ use crate::connect::{self, Checked, Connection, Group, Key, Standing, stamp};
 use crate::deployment::Deployment;
 use crate::mail::account::MailAccount;
 use crate::mail::health::Healths;
-use crate::models::{Backend, Job, ModelEntry, Models};
 use crate::plugin::{Ledger, Manifest, PluginName};
 use crate::secretary::acts::Act;
 use crate::secretary::store::Proposal;
-use crate::settings::configure::{Setting, provider_label};
+use crate::settings::Help;
 use crate::settings::remote::Pushed;
-use crate::settings::{ANTHROPIC_API_KEY, CLAUDE_CODE_OAUTH_TOKEN, DeclaredProvider, Help, Preset};
 use crate::wire;
 
 /// What an open card asks of the box, and so which lines it is about.
@@ -42,8 +40,6 @@ pub enum Need {
     SignIn,
     /// The code an open sign-in waits for: a step after the sign-in, so a card of its own.
     SignInCode,
-    /// A change of a setting, drawn on the setting's own line.
-    Configure(Setting),
     /// Taking a connection out, by its key.
     Removal(Key),
     /// Letting a plugin reach an origin a link of it was served from, drawn under the card that
@@ -80,9 +76,8 @@ impl Asking {
                     }
                     Proposal::Act(Act::GoogleClient { .. }) => Need::GoogleClient,
                     Proposal::Act(Act::Secret { name, .. }) => Need::Secret(name.clone()),
-                    Proposal::Act(Act::ClaudeSignIn { .. }) => Need::SignIn,
+                    Proposal::Act(Act::SignIn { .. }) => Need::SignIn,
                     Proposal::Act(Act::SignInCode { .. }) => Need::SignInCode,
-                    Proposal::Act(Act::Configure { change }) => Need::Configure(change.setting()),
                     Proposal::Act(Act::Disconnect { connection }) => {
                         Need::Removal(connection.key())
                     }
@@ -123,9 +118,7 @@ enum Slot {
     Credential(PluginName, String),
     Plugin(PluginName),
     Drive,
-    Job(Job),
-    Reserve,
-    Provider(String),
+    Job(String),
     Channel(connect::Channel),
     Routine,
     Build,
@@ -140,9 +133,7 @@ impl Slot {
             Self::Credential(plugin, label) => format!("credential:{plugin}/{label}"),
             Self::Plugin(plugin) => format!("plugin:{plugin}"),
             Self::Drive => "drive".to_owned(),
-            Self::Job(job) => format!("job:{}", job.as_str()),
-            Self::Reserve => "reserve".to_owned(),
-            Self::Provider(name) => format!("provider:{name}"),
+            Self::Job(label) => format!("job:{label}"),
             Self::Channel(name) => format!("channel:{name}"),
             Self::Routine => "routine".to_owned(),
             Self::Build => "build".to_owned(),
@@ -215,18 +206,14 @@ pub struct Storage {
 pub struct Declared<'a> {
     /// The chains and `[coding]`.
     pub deployment: &'a Deployment,
-    /// Every secret name declared now, which a new provider widens with no restart.
+    /// Every secret name declared now, which a new connection widens with no restart.
     pub settables: &'a crate::settings::Settables,
-    /// Every `[[providers]]` entry.
-    pub providers: &'a [DeclaredProvider],
     /// `[notify].channels`.
     pub channels: &'a [connect::Channel],
     /// Every mail account, a roster by construction.
     pub accounts: &'a [MailAccount],
-    /// Each job's order.
-    pub models: &'a Models,
-    /// What a job answers with when its order holds nothing usable.
-    pub fallback: &'a ModelEntry,
+    /// Each job the deployment runs a model for, in the order the page lists them.
+    pub jobs: &'a [ModelJob],
     /// Every `[[plugins]]` manifest.
     pub plugins: &'a [Manifest],
     /// `[secretary] drive_allow`.
@@ -239,6 +226,33 @@ pub struct Declared<'a> {
     pub reach: &'a connect::Reach,
 }
 
+/// One job the deployment runs a model for, as the deployment names it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ModelJob {
+    /// What the owner calls the job.
+    pub label: String,
+    /// What it runs, in the owner's words.
+    pub detail: String,
+    /// Whether the box records its calls.
+    pub calls: Calls,
+}
+
+/// Whether the box records a job's calls, and so whether its line stands as they answered.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Calls {
+    /// Each call is joined into the model health under `key`, and the model reads the secret
+    /// `credential`, which its sign-in stores.
+    Recorded {
+        /// The model health's key: the model's name as [`crate::capability::Model::name`]
+        /// spells it.
+        key: String,
+        /// The secret the model reads.
+        credential: String,
+    },
+    /// No call is recorded, so the line says only what runs.
+    Unrecorded,
+}
+
 /// What the box's stores say of it now; a name or account they hold nothing about reads as
 /// never stored and never observed.
 #[derive(Debug, Clone, Copy)]
@@ -249,7 +263,7 @@ pub struct Observed<'a> {
     pub grants: &'a BTreeMap<String, MailGrants>,
     /// Each mail account's syncs.
     pub mail: &'a Healths,
-    /// Each model entry's calls, by its print.
+    /// Each model's calls, by its name.
     pub answered: &'a Healths,
     /// Each plugin's cache tier.
     pub plugins: &'a BTreeMap<PluginName, Seen>,
@@ -277,7 +291,7 @@ impl Observed<'_> {
 pub struct Registers<'a> {
     /// Each mail account's syncs.
     pub mail: &'a Healths,
-    /// Each model entry's calls, by its print.
+    /// Each model's calls, by its name.
     pub answered: &'a Healths,
     /// Each plugin's cache tier.
     pub plugins: &'a BTreeMap<PluginName, Seen>,
@@ -481,7 +495,6 @@ pub fn overview(declared: &Declared<'_>, observed: &Observed<'_>) -> Overview {
         plugins: declared.plugins.to_vec(),
         drive: declared.drive.to_vec(),
         channels: declared.channels.to_vec(),
-        backends: BTreeSet::new(),
     }
     .connections();
     let connected = Connected {
@@ -655,7 +668,7 @@ fn plugins(declared: &Declared<'_>, observed: &Observed<'_>) -> Overview {
             let through = (group == Group::Plugins).then(|| format!("Through the {name} plugin."));
             let credentials: Vec<Overview> = manifest
                 .credentials()
-                .map(|(credential, _)| {
+                .map(|credential| {
                     let standing = observed
                         .secret(credential.as_str())
                         .join(seen.ledger.standing(|ledger| {
@@ -764,125 +777,34 @@ fn drive(declared: &Declared<'_>, observed: &Observed<'_>, connected: &Connected
     )
 }
 
-/// An entry as the owner reads it in a sentence: `the Claude subscription's opus model`.
-fn entry_words(entry: &ModelEntry) -> String {
-    let whose = match &entry.backend {
-        Backend::ClaudeCli => Preset::ClaudeSubscription.whose().to_owned(),
-        Backend::AnthropicApi => Preset::AnthropicApi.whose().to_owned(),
-        Backend::Declared(name) => Preset::ALL
-            .into_iter()
-            .find(|preset| preset.backend() == name)
-            .map_or_else(|| format!("{name}'s"), |preset| preset.whose().to_owned()),
-    };
-    format!("{whose} {} model", entry.model.as_str())
-}
-
-/// The secret `backend` reads, and whether connecting it is the subscription's sign-in.
-fn reads(backend: &Backend, providers: &[DeclaredProvider]) -> (Option<String>, bool) {
-    match backend {
-        Backend::ClaudeCli => (Some(CLAUDE_CODE_OAUTH_TOKEN.to_owned()), true),
-        Backend::AnthropicApi => (Some(ANTHROPIC_API_KEY.to_owned()), false),
-        Backend::Declared(name) => (
-            providers
-                .iter()
-                .find(|provider| provider.name == *name)
-                .map(|provider| provider.key.clone()),
-            false,
-        ),
-    }
-}
-
-/// One line per job, standing as the model it answers with first, and one per declared
-/// provider, unused while no job orders it.
+/// One line per job the deployment runs a model for: a job whose calls are recorded stands as
+/// they answered, or, never called, as its credential is stored.
 fn models(declared: &Declared<'_>, observed: &Observed<'_>) -> Overview {
-    let jobs = Job::ALL.into_iter().map(|job| {
-        let order = declared.models.order(job);
-        let first = order.first().unwrap_or(declared.fallback);
-        let spelled = order
-            .iter()
-            .map(entry_words)
-            .collect::<Vec<_>>()
-            .join(", then ");
-        let detail = if order.is_empty() {
-            format!(
-                "{} answers with {}, since nothing is chosen.",
-                job.label(),
-                entry_words(declared.fallback)
+    declared
+        .jobs
+        .iter()
+        .map(|job| {
+            let (standing, needs) = match &job.calls {
+                // What a model's calls said outranks whether its key resolves, as the bootstrap
+                // reads it: the model may hold a sign-in of its own that no store here names.
+                Calls::Recorded { key, credential } => (
+                    match observed.answered.reading(key) {
+                        Some(reading) => Standing::of_calls(Some(reading)),
+                        None => observed.secret(credential).join(Standing::Unobserved),
+                    },
+                    vec![secret(credential), Need::SignIn, Need::SignInCode],
+                ),
+                Calls::Unrecorded => (Standing::Kept, Vec::new()),
+            };
+            Overview::line(
+                Group::Models,
+                Slot::Job(job.label.clone()),
+                needing(
+                    line(job.label.clone(), Some(job.detail.clone()), standing),
+                    needs,
+                ),
             )
-        } else {
-            format!("{} answers with {spelled}.", job.label())
-        };
-        let (key, signs_in) = reads(&first.backend, declared.providers);
-        // What a model's calls said outranks whether its key resolves, as the bootstrap reads it:
-        // the subscription's CLI may hold a sign-in of its own that no store here names.
-        let standing = match observed.answered.reading(&first.to_string()) {
-            Some(reading) => Standing::of_calls(Some(reading)),
-            None => key
-                .as_deref()
-                .map_or(Standing::Kept, |key| observed.secret(key))
-                .join(Standing::Unobserved),
-        };
-        let needs = key
-            .as_deref()
-            .map(secret)
-            .into_iter()
-            .chain(
-                [Need::SignIn, Need::SignInCode]
-                    .into_iter()
-                    .filter(|_| signs_in),
-            )
-            .chain([Need::Configure(Setting::Order(job))])
-            .collect::<Vec<_>>();
-        Overview::line(
-            Group::Models,
-            Slot::Job(job),
-            needing(line(job.label(), Some(detail), standing), needs),
-        )
-    });
-    let providers = declared.providers.iter().map(|provider| {
-        let detail = format!(
-            "{}{}.",
-            provider.base_url,
-            if provider.attestation.claimed() {
-                ", attested"
-            } else {
-                ""
-            },
-        );
-        let standing = if declared.models.orders(&provider.name) {
-            observed.secret(&provider.key)
-        } else {
-            Standing::Unused
-        };
-        Overview::line(
-            Group::Models,
-            Slot::Provider(provider.name.clone()),
-            needing(
-                line(provider_label(&provider.name), Some(detail), standing),
-                [
-                    secret(&provider.key),
-                    Need::Configure(Setting::Provider(provider.name.clone())),
-                ],
-            ),
-        )
-    });
-    let reserve = Overview::line(
-        Group::Models,
-        Slot::Reserve,
-        needing(
-            line(
-                "Reserve",
-                Some(format!(
-                    "Automated jobs keep {}% of the subscription for you.",
-                    (declared.models.reserve().get() * 100.0).round()
-                )),
-                Standing::Kept,
-            ),
-            [Need::Configure(Setting::Reserve)],
-        ),
-    );
-    jobs.chain(providers)
-        .chain([reserve])
+        })
         .fold(Overview::default(), Overview::join)
 }
 
@@ -987,17 +909,12 @@ pub(crate) mod tests {
     fn manifest(name: &str, links: &[&str]) -> Manifest {
         let credentials = links
             .iter()
-            .map(|link| {
-                format!(
-                    "{{ name = \"PLUGIN_{}_{link}\", into = \"url\" }}",
-                    name.to_uppercase()
-                )
-            })
+            .map(|link| format!("\"PLUGIN_{}_{link}\"", name.to_uppercase()))
             .collect::<Vec<_>>()
             .join(", ");
         toml::from_str(&format!(
             "name = \"{name}\"\ncomponent = \"{name}.wasm\"\nschema = \"{name}.schema\"\n\
-             world = \"source@0.3.0\"\ncredentials = [{credentials}]\n"
+             credentials = [{credentials}]\n"
         ))
         .expect("a manifest")
     }
@@ -1006,7 +923,7 @@ pub(crate) mod tests {
     /// small alphabets so tables collide and secrets repeat.
     #[derive(Debug, Clone)]
     struct World {
-        providers: Vec<DeclaredProvider>,
+        jobs: Vec<ModelJob>,
         channels: Vec<crate::connect::Channel>,
         accounts: Vec<MailAccount>,
         plugins: Vec<Manifest>,
@@ -1026,7 +943,7 @@ pub(crate) mod tests {
         /// A deployment with nothing declared, its data repository pushed nowhere.
         fn empty() -> Self {
             Self {
-                providers: Vec::new(),
+                jobs: Vec::new(),
                 channels: Vec::new(),
                 accounts: Vec::new(),
                 plugins: Vec::new(),
@@ -1072,7 +989,7 @@ pub(crate) mod tests {
 
         fn settables(&self) -> crate::settings::Settables {
             crate::settings::Settables::derive(
-                self.providers.iter(),
+                crate::settings::MODEL_TOKEN,
                 self.channels.iter().copied(),
                 self.coding().as_ref(),
                 &self.plugins,
@@ -1106,7 +1023,6 @@ pub(crate) mod tests {
         fn read(&self) -> (Overview, Vec<String>) {
             let deployment = self.deployment();
             let settables = self.settables();
-            let fallback = ModelEntry::parse(&[], "claude-cli/scripted").expect("an entry");
             let build = wire::AboutPayload {
                 version: "0.0.0".to_owned(),
                 build: "dev".to_owned(),
@@ -1115,11 +1031,9 @@ pub(crate) mod tests {
             let declared = Declared {
                 deployment: &deployment,
                 settables: &settables,
-                providers: &self.providers,
                 channels: &self.channels,
                 accounts: &self.accounts,
-                models: &Models::default(),
-                fallback: &fallback,
+                jobs: &self.jobs,
                 plugins: &self.plugins,
                 drive: &self.drive,
                 storage: &Storage {
@@ -1186,8 +1100,27 @@ pub(crate) mod tests {
         ]
     }
 
+    /// The jobs a deployment may run a model for: one whose calls are recorded, one not.
+    fn jobs() -> Vec<ModelJob> {
+        vec![
+            ModelJob {
+                label: "Chat".to_owned(),
+                detail: "It runs a-model.".to_owned(),
+                calls: Calls::Recorded {
+                    key: "a-model".to_owned(),
+                    credential: crate::settings::MODEL_TOKEN.to_owned(),
+                },
+            },
+            ModelJob {
+                label: "Compactor".to_owned(),
+                detail: "Off.".to_owned(),
+                calls: Calls::Unrecorded,
+            },
+        ]
+    }
+
     fn world() -> impl Strategy<Value = World> {
-        let providers = proptest::sample::subsequence(vec!["phala", "openrouter", "acme"], 0..=3);
+        let jobs = proptest::sample::subsequence(jobs(), 0..=2);
         let channels = proptest::sample::subsequence(connect::Channel::ALL.to_vec(), 0..=2);
         let accounts =
             proptest::collection::btree_map("ada(\\+[a-c])?@example\\.test", 0u8..4, 0..4);
@@ -1201,7 +1134,7 @@ pub(crate) mod tests {
             0..3,
         );
         (
-            providers,
+            jobs,
             channels,
             accounts,
             plugins,
@@ -1212,22 +1145,13 @@ pub(crate) mod tests {
             proptest::collection::vec((0u8..4, 0usize..8, 1u8..10), 0..6),
         )
             .prop_map(
-                |(providers, channels, accounts, plugins, coding, drive, states, flags, cards)| {
-                    let providers: Vec<DeclaredProvider> = providers
-                        .into_iter()
-                        .map(|name| DeclaredProvider {
-                            name: name.to_owned(),
-                            base_url: format!("https://{name}.example.test/v1"),
-                            key: format!("{}_API_KEY", name.to_uppercase()),
-                            attestation: crate::settings::Attestation::Unclaimed,
-                        })
-                        .collect();
+                |(jobs, channels, accounts, plugins, coding, drive, states, flags, cards)| {
                     let manifests: Vec<Manifest> = plugins
                         .iter()
                         .map(|(name, (links, _, _))| manifest(name, links))
                         .collect();
                     let mut world = World {
-                        providers,
+                        jobs,
                         channels,
                         accounts: accounts
                             .iter()
@@ -1321,7 +1245,7 @@ pub(crate) mod tests {
                 Some(0) => crate::plugin::Answer::Status(200),
                 Some(1) => crate::plugin::Answer::Status(401),
                 Some(2) => crate::plugin::Answer::Refused(crate::plugin::Refusal::CredentialUnset(
-                    crate::plugin::Said::clip(credential.clone()),
+                    crate::plugin::CredentialName::parse(&plugin, &credential).expect("a name"),
                 )),
                 Some(_) => break,
             };
@@ -1334,9 +1258,6 @@ pub(crate) mod tests {
                     came: crate::plugin::Came::Learnt {
                         summary: String::new(),
                     },
-                    refusals: Vec::new(),
-                    log: Vec::new(),
-                    dropped: 0,
                 },
                 &[(credential, answer)],
             );
@@ -1360,7 +1281,6 @@ pub(crate) mod tests {
             Just(Standing::Kept),
             "2026-10-0[1-3]".prop_map(|at| Standing::Synced { at }),
             "2026-10-0[1-3]".prop_map(|at| Standing::Answered { at }),
-            Just(Standing::Unused),
             Just(Standing::Unobserved),
             Just(Standing::Locked),
             Just(Standing::StoreFailed),
@@ -1411,8 +1331,8 @@ pub(crate) mod tests {
         fn the_overview_is_a_function_of_the_instance_and_stores(world in world(), seed in any::<u64>()) {
             let mut shuffled = world.clone();
             let turn = |n: usize| usize::try_from(seed % 7).unwrap_or(0) % n.max(1);
-            let by = turn(shuffled.providers.len());
-            shuffled.providers.rotate_left(by);
+            let by = turn(shuffled.jobs.len());
+            shuffled.jobs.rotate_left(by);
             shuffled.channels.reverse();
             let by = turn(shuffled.accounts.len());
             shuffled.accounts.rotate_left(by);
@@ -1445,6 +1365,7 @@ pub(crate) mod tests {
             let calendars = world.plugins.iter().filter(|m| world.seen.get(m.name()).is_some_and(|s| s.store == Store::Calendar)).count();
             prop_assert_eq!(lines(&page, Group::Mail), world.accounts.len());
             prop_assert_eq!(lines(&page, Group::Notifications), world.channels.len());
+            prop_assert_eq!(lines(&page, Group::Models), world.jobs.len());
             prop_assert_eq!(lines(&page, Group::Coding) > 0, world.coding);
             prop_assert_eq!(lines(&page, Group::Drive) > 0, !world.drive.is_empty());
             prop_assert_eq!(lines(&page, Group::Calendar) > 0, calendars > 0);

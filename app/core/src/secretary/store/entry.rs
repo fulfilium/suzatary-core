@@ -128,7 +128,7 @@ pub enum Entry {
         /// The memory's version it was told.
         version: u64,
     },
-    /// A Claude Code session stands behind this conversation from here, written when one is first
+    /// A model session stands behind this conversation from here, written when one is first
     /// opened and whenever cold recovery mints a fresh one after
     /// [`crate::capability::ModelError::Lost`]. [`Stored::of`](super::Stored::of) keeps the last: a register with one
     /// writer.

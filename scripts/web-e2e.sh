@@ -592,8 +592,7 @@ process.stdin.on("end", () => {
 echo "==> fixture servers"
 # Started together: each one compiles the chain's markup with typst before it
 # listens, and doing that twice in sequence is the run's longest wait.
-# `--settings` declares one
-# `[[providers]]` entry so the Settings page has a row to read and, on
+# `--settings` declares a calendar link so the Settings page has a row to read and, on
 # `write_base`, to set — see `secrets_home`/`secrets_store` above for the
 # isolation that makes running the real `secretspec` safe here.
 read_base="$(start read --login e2e-reader@example.invalid --settings)"
@@ -606,10 +605,9 @@ write_base="$(start write --propose --settings)"
 # THE BOOTSTRAP'S SERVER: its model's last call failed, so the box files the card that connects
 # a model, and its sign-in runs the fake `claude` above.
 bootstrap_base="$(start bootstrap --settings --model unanswered)"
-# A CONNECTION'S CARDS' SERVER: a calendar connected with its link unset, its removal standing,
-# and a card changing Review's model order, so their scenes move this instance file and no other
-# server's.
-connect_base="$(start connect --settings --connected calendar --configuring order)"
+# A CONNECTION'S CARDS' SERVER: a calendar connected with its link unset and its removal standing,
+# so their scenes move this instance file and no other server's.
+connect_base="$(start connect --settings --connected calendar)"
 # THE LINKS' SERVER: a calendar whose link is not stored and a
 # Microsoft account that reads its mail and cannot send yet (web/e2e/links.test.ts).
 links_base="$(start links --settings --connections lapsed)"
@@ -719,7 +717,7 @@ E2E_SHELL_INSTANCE="$work/shell/instance.toml" \
 E2E_TRIAGE_BIN="$fixture_bin" \
 E2E_TRIAGE_INSTANCE="$work/write/instance.toml" \
 E2E_WRITE_STATE="$work/write/state" \
-E2E_SETTINGS_KEY="PHALA_API_KEY" \
+E2E_SETTINGS_KEY="SUZATARY_ROUTINE_TOKEN" \
 SUZATARY_E2E_SENT="$sent" \
 E2E_WRITE_MAIL="$work/write/Mail/her/cur" \
 E2E_MODEL_RELEASE="$release" \

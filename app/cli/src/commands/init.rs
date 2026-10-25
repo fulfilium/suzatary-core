@@ -20,7 +20,9 @@ use suzatary_core::zone::Zone;
 
 use crate::instance::Instance;
 
-pub use onboarding::{BoxName, Brain, Door, FirstAccount, Onboarding, Person, Provider, Step};
+pub use onboarding::{
+    BoxName, Door, FirstAccount, Onboarding, Person, Provider, Step, model_steps,
+};
 use suzatary_core::connect::Reach;
 
 /// What `suzatary init` was told.
@@ -56,9 +58,6 @@ pub struct Args {
     /// Who serves that account.
     #[arg(long, value_enum)]
     mail_provider: Option<Provider>,
-    /// Which model answers: the Claude subscription, or the Anthropic API by key.
-    #[arg(long, value_enum, default_value_t)]
-    model: Brain,
     /// The code root, relative to the instance file.
     #[arg(long, default_value = ".")]
     repo: PathBuf,
@@ -257,7 +256,6 @@ fn gather_from(args: Args, ask: &mut Asker<'_>) -> anyhow::Result<Onboarding> {
         door,
         categories,
         mail,
-        args.model,
         (args.repo, args.data),
     )
 }
@@ -506,14 +504,13 @@ mod tests {
                 prop::sample::select(Provider::value_variants()),
                 "[a-z]{1,8}@[a-z]{1,6}\\.test",
             )),
-            prop::sample::select(Brain::value_variants()),
             (
                 prop::sample::select(vec![".", "app", "/srv/app"]),
                 prop::sample::select(vec![".", "data", "../user"]),
             ),
         )
             .prop_map(
-                |(person, owner, (name, logins), categories, mail, brain, (repo, data))| {
+                |(person, owner, (name, logins), categories, mail, (repo, data))| {
                     Onboarding::new(
                         person,
                         Actor::new(owner).expect("generated an actor"),
@@ -524,7 +521,6 @@ mod tests {
                         .expect("generated logins"),
                         categories,
                         mail.map(|(provider, email)| FirstAccount { provider, email }),
-                        brain,
                         (PathBuf::from(repo), PathBuf::from(data)),
                     )
                     .expect("a generated onboarding is one")
@@ -662,8 +658,6 @@ mod tests {
         );
         let mut argv = ADA.to_vec();
         argv.extend([
-            "--model",
-            "anthropic-api",
             "--email",
             "her@study.test",
             "--mail-provider",
@@ -672,7 +666,8 @@ mod tests {
         assert_eq!(
             commands(&argv, &installed),
             [
-                "secretspec set ANTHROPIC_API_KEY --file \"$(suzatary secretspec)\"",
+                "claude setup-token",
+                "secretspec set CLAUDE_CODE_OAUTH_TOKEN --file \"$(suzatary secretspec)\"",
                 "suzatary auth her@study.test",
                 "suzatary auth her@study.test --scope smtp",
                 "suzatary doctor"

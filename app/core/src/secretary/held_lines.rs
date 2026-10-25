@@ -768,7 +768,7 @@ mod tests {
             &Entry::Opened {
                 at: Datetime::new(2026, 10, 1, 9, 0, 0, 0).expect("an instant"),
                 title: Words::kept("a title nobody else says".to_owned()),
-                model: "claude-cli/haiku".to_owned(),
+                model: "a-cli/small".to_owned(),
                 kind: Kind::Topic,
             },
         )

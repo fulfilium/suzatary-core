@@ -456,7 +456,7 @@ fn memories(root: &Path) {
 /// one occurrence learned, learned again unchanged (nothing written), then cancelled.
 fn calendar(root: &Path) {
     use suzatary_core::calendar::{CalendarName, Content, Occurrence, OccurrenceId, Status, When};
-    use suzatary_core::plugin::learn;
+    use suzatary_core::store::learn;
 
     let store = PluginStore::at(root.join(CALENDAR))
         .begin(&calendar_schema())

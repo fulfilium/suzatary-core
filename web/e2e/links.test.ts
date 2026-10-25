@@ -85,9 +85,9 @@ app.scene("a calendar added to the instance file by hand is drawn with no restar
   const home = line("credential:ics/home");
   assert.equal(await app.page.evaluate<boolean>(`document.querySelector('${home}') === null`), true);
   const declared = readFileSync(INSTANCE, "utf8");
-  const one = `{ name = "PLUGIN_ICS_WORK", into = "url" }`;
+  const one = `credentials = ["PLUGIN_ICS_WORK"]`;
   assert.ok(declared.includes(one), "the fixture declares its calendar inline");
-  writeFileSync(INSTANCE, declared.replace(one, `${one}, { name = "PLUGIN_ICS_HOME", into = "url" }`));
+  writeFileSync(INSTANCE, declared.replace(one, `credentials = ["PLUGIN_ICS_WORK", "PLUGIN_ICS_HOME"]`));
   await app.page.waitFor(`document.querySelector('${home} .proposal.proposal-act-secret') !== null`, { timeout: 30000 });
   assert.equal(await text(`${home} h3`), "Home");
 });

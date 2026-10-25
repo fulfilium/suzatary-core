@@ -392,7 +392,7 @@ impl suzatary_core::secretary::routes::Perform for Acting {
         consent: suzatary_core::mail::oauth::Consent,
     ) -> Performed {
         // The sign-in runs on the box and holds its terminal until the code card's tap.
-        if let suzatary_core::secretary::acts::Act::ClaudeSignIn { .. } = act {
+        if let suzatary_core::secretary::acts::Act::SignIn { .. } = act {
             return self.sign_in(object);
         }
         // A coding session spends the account's usage, so only the tap fires it.
@@ -520,13 +520,12 @@ fn begin_real(
         | Act::DriveRead { .. }
         | Act::CodingSession { .. }
         | Act::Device(_)
-        | Act::ClaudeSignIn { .. }
+        | Act::SignIn { .. }
         | Act::SignInCode { .. }
         | Act::UnlockStore { .. }
         | Act::Connect { .. }
         | Act::Disconnect { .. }
         | Act::Grant { .. }
-        | Act::Configure { .. }
         | Act::GoogleClient { .. }
         | Act::GoogleSignIn { .. }
         | Act::CalendarEvent { .. }
@@ -978,13 +977,12 @@ fn begin_recording(
         | Act::DriveRead { .. }
         | Act::CodingSession { .. }
         | Act::Device(_)
-        | Act::ClaudeSignIn { .. }
+        | Act::SignIn { .. }
         | Act::SignInCode { .. }
         | Act::UnlockStore { .. }
         | Act::Connect { .. }
         | Act::Disconnect { .. }
         | Act::Grant { .. }
-        | Act::Configure { .. }
         | Act::GoogleClient { .. }
         | Act::GoogleSignIn { .. }
         | Act::CalendarEvent { .. }
@@ -1191,6 +1189,13 @@ enum Action {
         /// Its id, as `list` prints it.
         id: String,
     },
+    /// Remove what this build no longer reads of the model providers and orders, once: the
+    /// inbox's setting cards and the model health's provider readings.
+    MigrateModels {
+        /// Say what a run would remove, and remove nothing.
+        #[arg(long)]
+        dry: bool,
+    },
     /// Say no to a proposal with a reason; it reaches nothing outward, so the operator may.
     Dismiss {
         /// The conversation, as `list` prints it.
@@ -1305,6 +1310,7 @@ pub fn run(path: &Path, args: &Args) -> anyhow::Result<()> {
         Action::Reviews { since } => reviews(&instance, since.as_deref()),
         Action::List => list(&instance),
         Action::Show { id } => show(&instance, id),
+        Action::MigrateModels { dry } => crate::commands::migrate_models::run(&instance, *dry),
         Action::Dismiss {
             conversation,
             n,
@@ -1332,10 +1338,8 @@ pub fn run(path: &Path, args: &Args) -> anyhow::Result<()> {
             match run {
                 BackfillRun::Apply(file) => backfill_apply(&instance, &file, out),
                 BackfillRun::Plan(plan) => {
-                    let live = crate::commands::serve::live::Live::of(&instance).shared();
                     let model = crate::commands::serve::interpreters::CompactorModel::new(
                         &instance,
-                        &live,
                         instance.secretary.compactor.clone(),
                     );
                     let mut asked =
@@ -1654,12 +1658,8 @@ struct Wired {
     brain: crate::commands::serve::Brain,
 }
 
-/// [`Wired`] for `job`, its model chosen as `suzatary serve` chooses it.
-fn wired(
-    instance: &Instance,
-    first: Option<&str>,
-    job: suzatary_core::models::Job,
-) -> anyhow::Result<Wired> {
+/// [`Wired`] over the model `suzatary serve` runs.
+fn wired(instance: &Instance, first: Option<&str>) -> anyhow::Result<Wired> {
     let named = instance.chain(first)?;
     let signers = instance.signers();
     let rest = instance
@@ -1672,7 +1672,10 @@ fn wired(
         opened: crate::wiring::Opened::of(instance, DECLARED),
         first: crate::wiring::Stores::of(named, &signers),
         rest,
-        brain: brain(instance, job),
+        brain: crate::commands::serve::interpreters::brain(
+            instance,
+            suzatary_io::model_health::beside(&instance.mail.heartbeat),
+        ),
     })
 }
 
@@ -1707,7 +1710,7 @@ pub fn scripted_round(
     said: &str,
     script: crate::commands::fixture::Scripted,
 ) -> anyhow::Result<()> {
-    let mut wired = wired(instance, None, suzatary_core::models::Job::Secretary)?;
+    let mut wired = wired(instance, None)?;
     wired.brain = crate::commands::serve::Brain::Scripted(script);
     let chains = wired.bound();
     let caps = &wired.secretary();
@@ -1777,7 +1780,7 @@ fn brief(
     first: Option<&str>,
     json: bool,
 ) -> anyhow::Result<()> {
-    let wired = wired(instance, first, suzatary_core::models::Job::Secretary)?;
+    let wired = wired(instance, first)?;
     let chains = wired.bound();
     let caps = &wired.secretary();
 
@@ -1909,7 +1912,7 @@ fn review(
     json: bool,
     page_after: usize,
 ) -> anyhow::Result<()> {
-    let wired = wired(instance, first, suzatary_core::models::Job::Review)?;
+    let wired = wired(instance, first)?;
     let chains = wired.bound();
     let caps = &wired.secretary();
     name_unreadable(instance, caps, page_after);
@@ -2010,7 +2013,7 @@ fn review(
 
 /// `suzatary secretary sweep --dry-run`: print what a sweep would lay before the model.
 fn sweep_dry_run(instance: &Instance, first: Option<&str>, json: bool) -> anyhow::Result<()> {
-    let wired = wired(instance, first, suzatary_core::models::Job::Secretary)?;
+    let wired = wired(instance, first)?;
     let chains = wired.bound();
     let caps = &wired.secretary();
     let report = suzatary_core::secretary::sweep::dry_run(
@@ -2078,7 +2081,7 @@ pub fn swept_or_failed(
 
 /// `suzatary secretary sweep`: propose closings from the open list's later mail.
 fn sweep(instance: &Instance, first: Option<&str>, json: bool) -> anyhow::Result<()> {
-    let wired = wired(instance, first, suzatary_core::models::Job::Secretary)?;
+    let wired = wired(instance, first)?;
     let chains = wired.bound();
     let caps = &wired.secretary();
     let swept = swept_or_failed(
@@ -2325,12 +2328,6 @@ fn pointed(references: &[suzatary_core::reference::Reference]) -> String {
         .map(ToString::to_string)
         .collect::<Vec<_>>()
         .join(", ")
-}
-
-/// Which interpreter answers `job`, chosen by the same function `suzatary serve` uses.
-fn brain(instance: &Instance, job: suzatary_core::models::Job) -> crate::commands::serve::Brain {
-    let allowance = crate::commands::serve::interpreters::current_allowance(instance);
-    crate::commands::serve::interpreters::choose_brain(instance, job, &allowance)
 }
 
 #[cfg(test)]

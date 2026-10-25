@@ -1930,7 +1930,7 @@ pub enum ProposedAct {
     /// A declared secret the box asks for. No value field: the card's own
     /// password field sends it in the tap's body.
     Secret {
-        /// What the owner calls it ("the Phala key"); its stored name stays on the box.
+        /// What the owner calls it ("the data repository's push token"); its stored name stays on the box.
         label: String,
         /// Where its value is found, for a secret a template knows.
         found: Option<String>,
@@ -1997,9 +1997,9 @@ pub enum ProposedAct {
         /// The imperative.
         sentence: String,
     },
-    /// Sign in with the Claude subscription, which the box runs `claude setup-token` for.
-    #[serde(rename = "claude_sign_in")]
-    ClaudeSignIn {
+    /// Sign the model in, which the box runs the deployment's sign-in for.
+    #[serde(rename = "sign_in")]
+    SignIn {
         /// The imperative.
         sentence: String,
     },
@@ -2089,18 +2089,6 @@ pub enum ProposedAct {
         plugin: String,
         /// The origin.
         origin: String,
-        /// The imperative.
-        sentence: String,
-    },
-    /// One setting of `[models]` or `[[providers]]` changed, from what the card read to what it
-    /// writes, each in the owner's words.
-    Configure {
-        /// What the owner calls the setting: `Chat`, `Reserve`, a provider.
-        setting: String,
-        /// What it read when the card was filed.
-        from: String,
-        /// What the tap writes.
-        to: String,
         /// The imperative.
         sentence: String,
     },

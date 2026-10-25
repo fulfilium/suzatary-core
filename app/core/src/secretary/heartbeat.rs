@@ -22,7 +22,7 @@ use serde_json::{Value, json};
 pub enum Stage {
     /// `scripts/app-bin.sh sync`, and what must hold before it runs (free disk, the auth check).
     Sync,
-    /// The `claude -p` triage agent: its auth check, the fail-closed preflight that fences its
+    /// The triage agent: its auth check, the fail-closed preflight that fences its
     /// tools, and the run itself.
     Triage,
     /// `suzatary secretary review`, reviewing the cards the pass just filed.

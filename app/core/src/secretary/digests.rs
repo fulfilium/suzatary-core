@@ -9,7 +9,7 @@
 use prodrome_core::event::{Actor, Hash};
 use prodrome_core::literal::Datetime;
 
-use crate::models::ModelName;
+use crate::model_name::ModelName;
 use crate::refusal::Refusal;
 use crate::secretary::digest::{self, Digest};
 use crate::secretary::digest_event::{Attempt, DigestEvent};

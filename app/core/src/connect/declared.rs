@@ -1,11 +1,11 @@
 //! The tables of the instance file connections are read from.
 
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeMap;
 
 use super::{AccountKind, Channel, Connection, Key, Label, Params, Refused, Table, TemplateId};
 use crate::drive::DrivePath;
 use crate::mail::account::{MailAccount, Roster};
-use crate::plugin::{Manifest, Origin, Placement, PluginName};
+use crate::plugin::{Manifest, Origin, PluginName};
 
 /// What the instance declares where a connection lives, each table parsed: the one value the
 /// connections are read from and the file's editor must agree with, so adding a connection is
@@ -20,8 +20,6 @@ pub struct Declared {
     pub drive: Vec<DrivePath>,
     /// `[notify] channels`.
     pub channels: Vec<Channel>,
-    /// Every backend a job's order or the fallback names.
-    pub backends: BTreeSet<String>,
 }
 
 impl Declared {
@@ -51,17 +49,11 @@ impl Declared {
                             .map(|label| made(id, Params::Label(label))),
                     );
                 }
-                Table::Backend(backend) if self.backends.contains(backend.as_str()) => {
-                    connections.push(made(id, Params::Nothing));
-                }
+                Table::Model => connections.push(made(id, Params::Nothing)),
                 Table::Channel(channel) if self.channels.contains(&channel) => {
                     connections.push(made(id, Params::Nothing));
                 }
-                Table::Always
-                | Table::Backend(_)
-                | Table::Account(_)
-                | Table::Folder
-                | Table::Channel(_) => {}
+                Table::Always | Table::Account(_) | Table::Folder | Table::Channel(_) => {}
             }
         }
         connections
@@ -76,11 +68,9 @@ impl Declared {
         let Some(manifest) = self.manifest(plugin) else {
             return Vec::new();
         };
-        let prefix = manifest.name().credential_prefix();
         manifest
             .credentials()
-            .filter(|(_, placement)| **placement == Placement::Url)
-            .filter_map(|(name, _)| Label::of_suffix(name.as_str().strip_prefix(&prefix)?).ok())
+            .filter_map(|name| Label::of_suffix(name.label()).ok())
             .collect()
     }
 
@@ -152,7 +142,7 @@ impl Declared {
                 .retain(|account| account.email.as_str() != key.name),
             Table::Folder => next.drive.retain(|folder| folder.to_string() != key.name),
             Table::Channel(channel) => next.channels.retain(|held| *held != channel),
-            table @ (Table::Always | Table::Backend(_)) => {
+            table @ (Table::Always | Table::Model) => {
                 return Err(unwritten(connection, table));
             }
         }
@@ -162,13 +152,12 @@ impl Declared {
     /// These tables with `plugin` allowed to reach `origin`.
     ///
     /// # Errors
-    /// [`Refused::NoPlugin`] when no manifest is named `plugin`, and a world that fetches
-    /// nothing.
+    /// [`Refused::NoPlugin`] when no manifest is named `plugin`.
     pub fn with_origin(&self, plugin: &PluginName, origin: &Origin) -> Result<Self, Refused> {
         let held = self
             .manifest(plugin.as_str())
             .ok_or_else(|| Refused::NoPlugin(plugin.to_string()))?;
-        let widened = held.with_origin(origin.clone())?;
+        let widened = held.with_origin(origin.clone());
         let mut next = self.clone();
         for manifest in &mut next.plugins {
             if manifest.name() == plugin {
@@ -197,10 +186,7 @@ fn unwritten(connection: &Connection, table: Table) -> Refused {
         template: connection.id().as_str(),
         why: match table {
             Table::Always => "every deployment has exactly one data repository",
-            Table::Backend(_) => {
-                "a built-in backend is connected while a job orders it, and its key is set by \
-                 its own card"
-            }
+            Table::Model => "every deployment runs its model, and its sign-in is its own card",
             Table::Link(_) | Table::Account(_) | Table::Folder | Table::Channel(_) => {
                 "its parameters are not of the shape its table reads"
             }

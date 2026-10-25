@@ -69,18 +69,6 @@ impl PluginStore {
         Ok(Some(Objects::plugin(&self.root, schema)))
     }
 
-    /// The store as written, where it is at `schema` (its text, so its name): one of the stores
-    /// an actor declaring `schema` reads, as one. A store at another schema, or none, is `None`.
-    ///
-    /// # Errors
-    /// A schema file that cannot be read.
-    pub fn read_at(&self, schema: &Declaration) -> Result<Option<Objects<Declared>>, StoreError> {
-        Ok(self
-            .schema()?
-            .filter(|text| text == schema.text())
-            .map(|_| Objects::plugin(&self.root, schema.clone())))
-    }
-
     /// The store at `schema`: kept where it already holds that schema, else emptied and begun
     /// at it, the schema's text written first.
     ///
@@ -110,8 +98,8 @@ impl PluginStore {
 #[cfg(test)]
 mod tests {
     use prodrome_core::event::parse_event;
-    use suzatary_core::plugin::learn;
     use suzatary_core::store::Prodrome;
+    use suzatary_core::store::learn;
 
     use super::*;
 
@@ -147,16 +135,6 @@ mod tests {
             "its genesis and the event"
         );
         assert!(matches!(place.begin(&schema), Ok(Begun::Kept(_))));
-        assert_eq!(
-            place
-                .read_at(&schema)
-                .expect("reads")
-                .map(|store| store.objects().expect("reads").len()),
-            Some(2),
-            "read at its own schema"
-        );
-        let elsewhere = Declaration::admit(&SCHEMA.replace("'shut'", "'sealed'")).expect("lawful");
-        assert!(place.read_at(&elsewhere).expect("reads").is_none());
         let mut names: Vec<String> = std::fs::read_dir(dir.path().join("store"))
             .expect("lists")
             .map(|entry| {

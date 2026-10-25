@@ -5,7 +5,7 @@ use prodrome_core::declared::{Declaration, Declared};
 use prodrome_core::event::{canonical, parse_event};
 use prodrome_core::schema::Schema;
 
-use super::{Manifest, Said};
+use super::{PluginName, Said};
 
 /// The most bytes one item may be.
 pub const MAX_ITEM: usize = 64 * 1024;
@@ -14,9 +14,6 @@ pub const MAX_ITEM: usize = 64 * 1024;
 /// refused, as [`Said`], never more of the item than that.
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 pub enum ItemRefusal {
-    /// A schema other than the plugin's own, by the name the item gave.
-    #[error("{0:?} is not this plugin's schema")]
-    OtherSchema(Said),
     /// Past the size an item may be.
     #[error("an item of {0} bytes is larger than this host reads")]
     TooLarge(usize),
@@ -32,20 +29,16 @@ pub enum ItemRefusal {
     NotItsOwn(Said),
 }
 
-/// Admit one item `manifest`'s plugin emitted, naming the schema `named`, into `schema`, the
-/// plugin's admitted declaration: the event it is.
+/// Admit one item `plugin` emitted into `schema`, the plugin's admitted declaration: the event
+/// it is.
 ///
 /// # Errors
-/// Every [`ItemRefusal`]: the schema's name, the size, the parse, the reprint, and the actor.
+/// Every [`ItemRefusal`]: the size, the parse, the reprint, and the actor.
 pub fn admit(
     schema: &Declaration,
-    manifest: &Manifest,
-    named: &str,
+    plugin: &PluginName,
     bytes: &[u8],
 ) -> Result<Declared, ItemRefusal> {
-    if named != schema.name().as_str() {
-        return Err(ItemRefusal::OtherSchema(Said::clip(named)));
-    }
     if bytes.len() > MAX_ITEM {
         return Err(ItemRefusal::TooLarge(bytes.len()));
     }
@@ -56,7 +49,7 @@ pub fn admit(
     if canonical(&event) != text {
         return Err(ItemRefusal::NotCanonical);
     }
-    if event.actor().as_str() != manifest.name().as_str() {
+    if event.actor().as_str() != plugin.as_str() {
         return Err(ItemRefusal::NotItsOwn(Said::clip(event.actor().as_str())));
     }
     Ok(event)
@@ -74,16 +67,8 @@ mod tests {
     const ITEM: &str =
         "Said(line='a', at=datetime(2026, 10, 5, 10, 0, 0), actor='probe', words='hello')";
 
-    fn manifest() -> Manifest {
-        toml::from_str(
-            r#"
-            name = "probe"
-            component = "probe.wasm"
-            schema = "probe.schema"
-            world = "source@0.3.0"
-            "#,
-        )
-        .expect("a manifest")
+    fn probe() -> PluginName {
+        PluginName::parse("probe").expect("a name")
     }
 
     fn schema() -> Declaration {
@@ -93,35 +78,29 @@ mod tests {
     #[test]
     fn every_way_an_item_can_be_wrong_is_refused_by_name() {
         let schema = schema();
-        let name = schema.name().as_str().to_owned();
-        let refused =
-            |named: &str, bytes: &str| admit(&schema, &manifest(), named, bytes.as_bytes());
+        let refused = |bytes: &str| admit(&schema, &probe(), bytes.as_bytes());
         assert!(matches!(
-            refused("calendar.occurrence", ITEM),
-            Err(ItemRefusal::OtherSchema(_))
-        ));
-        assert!(matches!(
-            refused(&name, "not an event"),
+            refused("not an event"),
             Err(ItemRefusal::NotAnEvent(_))
         ));
         assert!(matches!(
-            refused(&name, &ITEM.replace("words='hello'", "words=3")),
+            refused(&ITEM.replace("words='hello'", "words=3")),
             Err(ItemRefusal::NotAnEvent(_))
         ));
         assert!(matches!(
-            refused(&name, &ITEM.replace("Said(", "Sealed(")),
+            refused(&ITEM.replace("Said(", "Sealed(")),
             Err(ItemRefusal::NotAnEvent(_))
         ));
         assert_eq!(
-            refused(&name, &ITEM.replace("words='hello'", "words=\"hello\"")),
+            refused(&ITEM.replace("words='hello'", "words=\"hello\"")),
             Err(ItemRefusal::NotCanonical)
         );
         assert_eq!(
-            refused(&name, &ITEM.replace("actor='probe'", "actor='ics'")),
+            refused(&ITEM.replace("actor='probe'", "actor='ics'")),
             Err(ItemRefusal::NotItsOwn(Said::clip("ics")))
         );
         assert!(matches!(
-            refused(&name, &ITEM.replace("hello", &"x".repeat(MAX_ITEM))),
+            refused(&ITEM.replace("hello", &"x".repeat(MAX_ITEM))),
             Err(ItemRefusal::TooLarge(_))
         ));
     }
@@ -137,7 +116,7 @@ mod tests {
                 prodrome_core::literal::print_str(&line),
                 prodrome_core::literal::print_str(&words),
             );
-            let event = admit(&schema, &manifest(), schema.name().as_str(), text.as_bytes());
+            let event = admit(&schema, &probe(), text.as_bytes());
             proptest::prop_assert_eq!(event.map(|event| canonical(&event)), Ok(text));
         }
     }

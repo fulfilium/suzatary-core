@@ -774,7 +774,7 @@ mod tests {
         Entry::Opened {
             at: at(0),
             title: crate::secretary::words::Words::kept("Morning".to_owned()),
-            model: "claude-cli/haiku".to_owned(),
+            model: "a-cli/small".to_owned(),
             kind: crate::secretary::store::Kind::Topic,
         }
     }

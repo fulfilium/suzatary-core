@@ -304,7 +304,6 @@ function lineStanding(r: Rng): LineStanding {
     () => ({ kind: "kept" }),
     () => ({ kind: "synced", at }),
     () => ({ kind: "answered", at }),
-    () => ({ kind: "unused" }),
     () => ({ kind: "unobserved" }),
     () => ({ kind: "locked" }),
     () => ({ kind: "store_failed" }),

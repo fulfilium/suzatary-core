@@ -28,8 +28,6 @@ pub enum Standing {
         /// When, ISO 8601, UTC.
         at: String,
     },
-    /// Declared and asked of by nothing: a provider no job orders.
-    Unused,
     /// In place, and nothing has observed it yet.
     Unobserved,
     /// The secret store is locked, which an unlock at the box mends.

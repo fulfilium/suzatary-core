@@ -119,14 +119,8 @@ mod tests {
 
     fn declared() -> Settables {
         Settables::derive(
-            [crate::settings::DeclaredProvider {
-                name: "phala".to_owned(),
-                base_url: "https://phala.example.test/v1".to_owned(),
-                key: "PHALA_API_KEY".to_owned(),
-                attestation: crate::settings::Attestation::Unclaimed,
-            }]
-            .iter(),
-            std::iter::empty(),
+            crate::settings::MODEL_TOKEN,
+            [crate::connect::Channel::Ntfy],
             None,
             &[],
         )
@@ -135,7 +129,7 @@ mod tests {
     /// A locked store names no secret unset, and is asked once, not once per name and state.
     #[test]
     fn a_locked_store_is_asked_once_and_names_nothing_unset() {
-        let caps = FakeSecrets::new(&[], &["ANTHROPIC_API_KEY", "PHALA_API_KEY"]);
+        let caps = FakeSecrets::new(&[], &[crate::settings::MODEL_TOKEN, "NTFY_TOPIC"]);
         assert_eq!(
             caps.missing(),
             "the secret store is locked, so no declared secret could be read"
@@ -146,12 +140,12 @@ mod tests {
     /// A value the store could not read is that name's: the others are named as they stand.
     #[test]
     fn a_name_the_store_failed_on_is_named_apart() {
-        let mut caps = FakeSecrets::new(&["ANTHROPIC_API_KEY"], &[]);
-        caps.failed.insert("PHALA_API_KEY");
+        let mut caps = FakeSecrets::new(&[], &[]);
+        caps.failed.insert("NTFY_TOPIC");
         assert_eq!(
             caps.missing(),
-            "declared but unset: CLAUDE_CODE_OAUTH_TOKEN; \
-             the secret store could not read: PHALA_API_KEY"
+            "declared but unset: MODEL_TOKEN; \
+             the secret store could not read: NTFY_TOPIC"
         );
     }
 }

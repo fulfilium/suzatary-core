@@ -78,14 +78,12 @@ impl Proposal {
                 | Act::Secret { .. }
                 | Act::Web { .. }
                 | Act::DriveRead { .. }
-                | Act::ClaudeSignIn { .. }
+                | Act::SignIn { .. }
                 | Act::UnlockStore { .. }
                 // A connection made, removed and made again is three requests.
                 | Act::Connect { .. }
                 | Act::Disconnect { .. }
                 | Act::Grant { .. }
-                // A setting changed, changed back and changed again is three requests.
-                | Act::Configure { .. }
                 // A client kept and lost is asked again, and a sign-in with Google lapses.
                 | Act::GoogleClient { .. }
                 | Act::GoogleSignIn { .. } => true,

@@ -7,10 +7,7 @@
 
 #![forbid(unsafe_code)]
 
-pub mod anthropic;
-pub mod api_error;
 pub mod attachments;
-pub mod attestation;
 pub mod blobs;
 pub mod blocks;
 pub mod briefings;
@@ -41,7 +38,6 @@ pub mod notify;
 pub mod oauth;
 pub mod objects;
 pub mod older;
-pub mod openai;
 pub mod pairing;
 pub mod pdftotext;
 pub mod plugin_store;

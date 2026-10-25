@@ -118,7 +118,7 @@ pub fn of(act: &ProposedAct) -> Card {
             sentence,
             ..
         } => decision(title, body, rationale, supersedes, sentence),
-        ProposedAct::ClaudeSignIn { sentence } => sign_in(sentence),
+        ProposedAct::SignIn { sentence } => sign_in(sentence),
         ProposedAct::SignInCode { url, sentence } => sign_in_code(url, sentence),
         ProposedAct::UnlockStore { sentence } => unlock_store(sentence),
         ProposedAct::Connect {
@@ -140,12 +140,6 @@ pub fn of(act: &ProposedAct) -> Card {
             origin,
             sentence,
         } => grant(plugin, origin, sentence),
-        ProposedAct::Configure {
-            setting,
-            from,
-            to,
-            sentence,
-        } => configure(setting, from, to, sentence),
         ProposedAct::Erase { sentence } => erase(sentence),
         ProposedAct::GoogleClient {
             redirect, steps, ..
@@ -405,33 +399,6 @@ fn grant(plugin: &str, origin: &str, sentence: &str) -> Card {
                 ),
             ],
             "allow",
-        )
-    }
-}
-
-/// One setting changed: what it reads now and what the tap writes, written only while the
-/// instance file still reads the first.
-fn configure(setting: &str, from: &str, to: &str, sentence: &str) -> Card {
-    Card {
-        answers: vec![CardAnswer {
-            done: "changed".to_owned(),
-            asks: Asks::Confirm {
-                question: format!(
-                    "Change {setting}? The box writes it only if it still reads {from}."
-                ),
-                yes: "Yes, change it".to_owned(),
-            },
-            ..answer("change", "Change")
-        }],
-        ..card(
-            &format!("Change {setting}"),
-            sentence,
-            vec![
-                field("Setting", setting),
-                field("From", from),
-                field("To", to),
-            ],
-            "change",
         )
     }
 }
@@ -860,9 +827,17 @@ fn secret(label: &str, found: Option<&str>, link: Option<&str>) -> Card {
 }
 
 /// A secret the box asks for, as the wire carries it on a deployment whose `[coding]` declares
-/// `routine`: in the owner's words, its stored name left on the box.
+/// `routine` and whose model's credential is stored under `model`: in the owner's words, its
+/// stored name left on the box.
 #[must_use]
-pub fn secret_act(name: &str, routine: Option<&RoutineId>) -> ProposedAct {
+pub fn secret_act(name: &str, routine: Option<&RoutineId>, model: Option<&str>) -> ProposedAct {
+    if model == Some(name) {
+        return ProposedAct::Secret {
+            label: "the model's sign-in".to_owned(),
+            found: Some("Sign the model in from the Connect a model card.".to_owned()),
+            link: None,
+        };
+    }
     let help = crate::settings::Help::of(name, routine);
     ProposedAct::Secret {
         label: crate::settings::Help::label(name),
@@ -880,12 +855,12 @@ fn capitalised(words: &str) -> String {
         .unwrap_or_default()
 }
 
-/// Connect a model with the subscription: the tap starts `claude setup-token`.
+/// Connect a model: the tap starts the deployment's sign-in.
 fn sign_in(sentence: &str) -> Card {
     Card {
         answers: vec![CardAnswer {
             done: "sign-in started".to_owned(),
-            asks: Asks::Confirm { question: "Start the sign-in? The box runs claude setup-token and gives you its link to open." .to_owned(), yes: "Yes, start it".to_owned() },
+            asks: Asks::Confirm { question: "Start the sign-in? The box runs the model's sign-in and gives you its link to open." .to_owned(), yes: "Yes, start it".to_owned() },
             ..answer("connect", "Connect")
         }],
         ..card("Connect a model", sentence, Vec::new(), "connect")
@@ -971,8 +946,7 @@ fn sign_in_code(url: &str, sentence: &str) -> Card {
             sentence,
             vec![field(
                 "Then",
-                "Sign in with your Claude account on the page the button opens, copy the code it \
-                 shows, and paste it here.",
+                "Sign in on the page the button opens, copy the code it shows, and paste it here.",
             )],
             "finish",
         )
@@ -1084,21 +1058,21 @@ mod tests {
 
     #[test]
     fn a_secret_asks_for_its_value_with_no_second_press() {
-        let card = of(&secret_act("DATABRICKS_TOKEN", None));
+        let card = of(&secret_act("NTFY_TOPIC", None, None));
         let store = &card.answers[0];
         assert_eq!(
             (store.verb.as_str(), &store.asks),
             (
                 "store",
                 &Asks::Value {
-                    input: "The Databricks token".to_owned()
+                    input: "Your notifications topic".to_owned()
                 }
             ),
             "a value is asked for with no confirm step"
         );
-        assert_eq!(card.title, "Store the Databricks token");
+        assert_eq!(card.title, "Store your notifications topic");
         assert!(
-            !format!("{card:?}").contains("DATABRICKS_TOKEN"),
+            !format!("{card:?}").contains("NTFY_TOPIC"),
             "the stored name is nowhere on the card"
         );
         assert_eq!(
@@ -1108,9 +1082,19 @@ mod tests {
         assert!(card.fields.is_empty(), "the help is the card's sentence");
         assert!(!card.sentence.is_empty(), "{card:?}");
         assert_eq!(
-            card.link, None,
-            "no page is known for a workspace's own host"
+            card.link.map(|link| link.href).as_deref(),
+            Some("https://docs.ntfy.sh/subscribe/phone/"),
+            "the page that issues it is the card's link"
         );
+    }
+
+    /// The model's credential, whatever name the deployment stores it under, is worded as the
+    /// model's sign-in.
+    #[test]
+    fn the_model_s_credential_is_worded_as_its_sign_in() {
+        let card = of(&secret_act("ANY_NAME", None, Some("ANY_NAME")));
+        assert_eq!(card.title, "Store the model's sign-in");
+        assert!(!format!("{card:?}").contains("ANY_NAME"), "{card:?}");
     }
 
     #[test]

@@ -8,6 +8,9 @@ use serde::{Deserialize, Serialize};
 use super::{Group, Params, Refused, Seen, Standing, Step, Table, Template, TemplateId};
 use crate::literal::{Fields, Literal, Signature, record};
 
+/// The model connection's key name: a deployment has one model.
+const MODEL_KEY: &str = "model";
+
 /// A template applied to parameters of the shape it reads. [`Connection::new`] is its only
 /// constructor, so its tables, steps and check are functions of the value.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -22,7 +25,7 @@ pub struct Connection {
 pub struct Key {
     /// Its group.
     pub group: Group,
-    /// Its name in the group: an address, a label, a folder, a backend, a channel.
+    /// Its name in the group: an address, a label, a folder, the model, a channel.
     pub name: String,
 }
 
@@ -93,7 +96,7 @@ impl Connection {
         let template = self.template();
         let name = match (template.table, &self.params) {
             (Table::Always, _) => "data".to_owned(),
-            (Table::Backend(backend), _) => backend.as_str().to_owned(),
+            (Table::Model, _) => MODEL_KEY.to_owned(),
             (Table::Channel(channel), _) => channel.as_str().to_owned(),
             (_, Params::Label(label)) => label.as_str().to_owned(),
             (_, Params::Address(email) | Params::Microsoft { email, .. }) => {
@@ -122,7 +125,7 @@ impl Connection {
             (_, Params::Folder(folder)) => format!("the Drive folder {folder}"),
             (Table::Always, _) => "the data repository".to_owned(),
             (
-                Table::Backend(_)
+                Table::Model
                 | Table::Channel(_)
                 | Table::Link(_)
                 | Table::Account(_)
@@ -146,12 +149,7 @@ impl Connection {
                 format!("the {} channel in [notify]", channel.as_str())
             }
             (Table::Always, _) => "nothing: every deployment has one".to_owned(),
-            (Table::Backend(backend), _) => {
-                format!(
-                    "nothing: {} is connected while a job orders it",
-                    backend.as_str()
-                )
-            }
+            (Table::Model, _) => "nothing: every deployment runs its model".to_owned(),
         }
     }
 

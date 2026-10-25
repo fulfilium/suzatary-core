@@ -178,7 +178,7 @@ mod tests {
         Entry::Opened {
             at: crate::capability::Datetime::new(2026, 9, 13, 9, 0, 0, 0).expect("an instant"),
             title: crate::secretary::words::Words::kept("Morning".to_owned()),
-            model: "claude-cli/haiku".to_owned(),
+            model: "a-cli/small".to_owned(),
             kind: crate::secretary::store::Kind::Topic,
         }
     }

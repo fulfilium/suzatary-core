@@ -6,10 +6,11 @@
  * the SAME isolated `secretspec` store every `--settings` server shares
  * (`scripts/web-e2e.sh`'s `secrets_home`/`secrets_store`).
  *
- * It asks for `SETTINGS_PROVIDER_KEY`/`PHALA_API_KEY`, the provider
- * `--settings` declares, because the whole point of this scene is that the
- * secretary's card and the box's own card on the Settings line are the SAME
- * tap. The key MAY already resolve when this scene starts, and the
+ * It asks for `SECRET_ASK_KEY`, the coding routine's token, which the write
+ * server's `[coding]` declares and its Settings line reads, because the whole
+ * point of this scene is that the secretary's card and the box's own card on
+ * the Settings line are the SAME tap. Not the model's credential: only its
+ * sign-in card asks for that, never a Secret card. The key MAY already resolve when this scene starts, and the
  * assertions below never depend on it starting unset: `overview.test.ts`
  * checks the fresh-start transition, on the calendar's link.
  *
@@ -33,11 +34,11 @@ import { WRITE_BASE, suite } from "./harness";
 
 const app = await suite("tapsecret");
 
-/** The one name `--settings` ever declares — named once by the shell as
- * `E2E_SETTINGS_KEY`, read here rather than duplicated. */
-const SETTINGS_KEY = process.env["E2E_SETTINGS_KEY"] ?? "PHALA_API_KEY";
+/** The name the card asks for — named once by the shell as `E2E_SETTINGS_KEY`, read here rather
+ * than duplicated. */
+const SETTINGS_KEY = process.env["E2E_SETTINGS_KEY"] ?? "SUZATARY_ROUTINE_TOKEN";
 /** The template's words for it, which the card says instead of the name. */
-const SETTINGS_LABEL = "the Phala key";
+const SETTINGS_LABEL = "the coding routine's token";
 
 /** A fixture value — never a real one, and never the literal another scene
  * types, so a screenshot or a log line naming one is never mistaken for the
@@ -55,7 +56,7 @@ async function openInbox(): Promise<void> {
 app.scene("the Inbox asks for a declared secret, and Store performs the same tap the box's card does", async () => {
   await openInbox();
 
-  // THE HEAD NAMES THE KEY IN WORDS ("Store the Phala key"), and so does the field's label; the stored name is
+  // THE HEAD NAMES THE KEY IN WORDS ("Store the coding routine's token"), and so does the field's label; the stored name is
   // nowhere on the card.
   assert.match(
     await app.page.evaluate<string>(`document.querySelector('${CARD} .proposalact').textContent`),
@@ -79,7 +80,7 @@ app.scene("the Inbox asks for a declared secret, and Store performs the same tap
   );
   assert.equal(
     await app.page.evaluate<string>(`document.querySelector('${field}').closest("label").querySelector("span").textContent`),
-    "The Phala key",
+    "The coding routine's token",
     "the field is labelled on screen by what it is, never a bare placeholder",
   );
   assert.equal(await app.page.evaluate<string>(`document.querySelector('${field}').placeholder`), "Paste it here");
@@ -154,7 +155,7 @@ app.scene("the Inbox asks for a declared secret, and Store performs the same tap
   await app.page.navigate(`${WRITE_BASE}/#/settings`);
   await app.page.reload();
   await app.page.waitFor(
-    `document.querySelector('.settingsline[data-line="provider:phala"]:not(.settingsline-failing)') !== null`,
+    `document.querySelector('.settingsline[data-line="routine"]:not(.settingsline-failing)') !== null`,
     { timeout: 15000 },
   );
 });

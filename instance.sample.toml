@@ -80,6 +80,7 @@ digests = "digests"
 model = "claude-opus-5-5"
 compact = false
 compactor = "claude-sonnet-5-5"
+reserve = 0.3
 compact_calls_per_hour = 30
 compact_bytes_per_day = 33554432
 compact_workers = 1

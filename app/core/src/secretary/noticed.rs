@@ -238,11 +238,9 @@ pub struct Seen<'a> {
     pub settables: &'a crate::settings::Settables,
     /// Where each stands.
     pub secrets: &'a dyn crate::capability::Secrets,
-    /// Each job's order.
-    pub models: &'a crate::models::Models,
-    /// What a job answers with when its order holds nothing usable.
-    pub fallback: &'a crate::models::ModelEntry,
-    /// Each model entry's observed calls.
+    /// The model's name, as [`crate::capability::Model::name`] spells it.
+    pub model: &'a str,
+    /// The model's observed calls.
     pub answered: &'a crate::mail::health::Healths,
     /// The sign-ins the box holds open.
     pub open: &'a [super::sign_in::SignInUrl],
@@ -250,8 +248,6 @@ pub struct Seen<'a> {
     /// when the file does not read, which holds every waiting card, since a grant still needed
     /// cannot be told from one that is not.
     pub declared: Option<&'a crate::connect::Declared>,
-    /// Every `[[providers]]` entry.
-    pub providers: &'a [crate::settings::DeclaredProvider],
     /// Each mail account's syncs; `None` when the register could not be read, which holds
     /// every waiting card.
     pub mail: Option<&'a crate::mail::health::Healths>,
@@ -291,16 +287,14 @@ pub fn due(seen: &Seen<'_>, inbox: &inbox::Fold) -> Owed {
         |wanted: Answer| move |name: &crate::settings::Settable| answers.get(name) == Some(&wanted);
     let resolves = answered(Answer::Set);
     let answering = super::bootstrap::Answering {
-        models: seen.models,
-        fallback: seen.fallback,
+        model: seen.model,
         health: seen.answered,
         settables: seen.settables,
         resolves: &resolves,
     };
-    // An idle provider needs no key, and a data repository that pushes nowhere on GitHub no push
-    // token: their cards wait until they are used.
-    let idle = |name: &str| super::failing::idle(&answering, inbox, name, seen.now);
-    let in_use = seen.settables.restricted(|by| by.in_use(idle, seen.pushed));
+    // A data repository that pushes nowhere on GitHub needs no push token: its card waits until
+    // it is used.
+    let in_use = seen.settables.restricted(|by| by.in_use(seen.pushed));
     let owed = super::fixes::owed(&in_use, answered(Answer::Missing), inbox)
         .join(super::bootstrap::owed(&answering, seen.open))
         .join(seen.declared.map_or_else(
@@ -332,10 +326,8 @@ pub fn due(seen: &Seen<'_>, inbox: &inbox::Fold) -> Owed {
     let failing = match (seen.declared, seen.links, seen.mail) {
         (Some(declared), Some(links), Some(mail)) => super::failing::owed(
             &super::failing::Observed {
-                inbox,
                 declared,
                 answering: &answering,
-                providers: seen.providers,
                 mail,
                 links,
                 heard: seen.heard,
@@ -660,21 +652,18 @@ mod tests {
         minute: u32,
     ) -> Filed {
         let settables = crate::settings::Settables::derive(
-            std::iter::empty(),
+            crate::settings::MODEL_TOKEN,
             crate::connect::Channel::ALL,
             None,
             &[],
         );
-        let fallback = crate::models::ModelEntry::parse(&[], "claude-cli/opus").expect("an entry");
         let seen = Seen {
             settables: &settables,
             secrets: store,
-            models: &crate::models::Models::default(),
-            fallback: &fallback,
+            model: "a-cli/large",
             answered: &crate::mail::health::Healths::default(),
             open: &[],
             declared: Some(&crate::connect::Declared::default()),
-            providers: &[],
             mail: Some(&crate::mail::health::Healths::default()),
             links: Some(&std::collections::BTreeMap::new()),
             heard: Some(&std::collections::BTreeSet::new()),
@@ -696,21 +685,18 @@ mod tests {
     #[test]
     fn an_unreadable_health_register_holds_and_asks_the_rest() {
         let settables = crate::settings::Settables::derive(
-            std::iter::empty(),
+            crate::settings::MODEL_TOKEN,
             [crate::connect::Channel::Ntfy],
             None,
             &[],
         );
-        let fallback = crate::models::ModelEntry::parse(&[], "claude-cli/opus").expect("an entry");
         let seen = Seen {
             settables: &settables,
             secrets: &Store::default(),
-            models: &crate::models::Models::default(),
-            fallback: &fallback,
+            model: "a-cli/large",
             answered: &crate::mail::health::Healths::default(),
             open: &[],
             declared: Some(&crate::connect::Declared::default()),
-            providers: &[],
             mail: None,
             links: Some(&std::collections::BTreeMap::new()),
             heard: Some(&std::collections::BTreeSet::new()),
@@ -748,7 +734,7 @@ mod tests {
         );
 
         let locked = Store {
-            locked: vec!["NTFY_TOPIC", "CLAUDE_CODE_OAUTH_TOKEN"],
+            locked: vec!["NTFY_TOPIC", crate::settings::MODEL_TOKEN],
             failed: Vec::new(),
             ..Store::default()
         };
@@ -831,8 +817,7 @@ mod tests {
         let conversations = crate::secretary::conversations::InMemory::default();
         let inbox_store = InMemory::<InboxEvent>::default();
         let every = [
-            "ANTHROPIC_API_KEY",
-            "CLAUDE_CODE_OAUTH_TOKEN",
+            crate::settings::MODEL_TOKEN,
             "FCM_SERVICE_ACCOUNT_B64",
             "NTFY_TOPIC",
         ];

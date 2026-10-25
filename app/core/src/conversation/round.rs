@@ -202,6 +202,10 @@ fn model_failed(failed: &ModelError, after: Option<&ToolName>) -> String {
         (ModelError::Unreachable(words), _) => format!(
             "I could not finish: the model could not be reached ({words}). Ask again in a minute."
         ),
+        (ModelError::Refused(words), _) => format!(
+            "I could not finish: the model refused its sign-in ({words}). Sign in again from \
+             Settings."
+        ),
         (ModelError::Failed(words), _) => {
             format!("I could not finish: the model failed ({words}). Ask again.")
         }

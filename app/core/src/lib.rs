@@ -39,7 +39,7 @@ pub mod held_value;
 pub mod leak;
 pub mod literal;
 pub mod mail;
-pub mod models;
+pub mod model_name;
 pub mod narrowing;
 pub mod nonempty;
 pub mod notify;

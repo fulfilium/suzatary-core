@@ -855,30 +855,24 @@ revision = "1.0"
 
 [profiles.default]
 SUZATARY_DATA_PUSH_TOKEN = { description = "the data push", required = true }
-ANTHROPIC_API_KEY = { description = "the API", required = false }
+SUZATARY_BOX_KEY = { description = "the box's key", required = false }
 PROTON_BRIDGE_PASSWORD = { description = "the bridge", required = true }
 "#;
 
-    /// What a deployment with a calendar of `credentials` and one provider derives.
+    /// What a deployment with a calendar of `credentials` and an ntfy channel derives.
     fn derived(credentials: &[&str]) -> Settables {
         let manifest: suzatary_core::plugin::Manifest = toml::from_str(&format!(
             "name = \"ics\"\ncomponent = \"ics.wasm\"\nschema = \"ics.schema\"\n\
-             world = \"source@0.3.0\"\ncredentials = [{}]\n",
+             credentials = [{}]\n",
             credentials
                 .iter()
-                .map(|name| format!("{{ name = \"{name}\", into = \"url\" }}"))
+                .map(|name| format!("\"{name}\""))
                 .collect::<Vec<_>>()
                 .join(", ")
         ))
         .expect("a manifest");
-        let provider = suzatary_core::settings::DeclaredProvider {
-            name: "phala".to_owned(),
-            base_url: "https://inference.example.test/v1".to_owned(),
-            key: "PHALA_API_KEY".to_owned(),
-            attestation: suzatary_core::settings::Attestation::Unclaimed,
-        };
         Settables::of_deployment(
-            [&provider],
+            crate::model::TOKEN,
             [suzatary_core::connect::Channel::Ntfy],
             None,
             (&[manifest], &[]),
@@ -937,7 +931,7 @@ PROTON_BRIDGE_PASSWORD = { description = "the bridge", required = true }
         for name in [
             "PLUGIN_ICS_WORK",
             "PLUGIN_ICS_HOME",
-            "PHALA_API_KEY",
+            "CLAUDE_CODE_OAUTH_TOKEN",
             "NTFY_TOPIC",
         ] {
             assert!(names(&written).contains(name), "{name}: {written}");
@@ -953,7 +947,7 @@ PROTON_BRIDGE_PASSWORD = { description = "the bridge", required = true }
         );
         assert_eq!(
             written["profiles"]["default"]["PLUGIN_ICS_WORK"]["description"].as_str(),
-            Some("Declared by the ics plugin's url credential.")
+            Some("Declared by the ics plugin's link.")
         );
     }
 

@@ -117,12 +117,11 @@ rustls = { version = "0.23", default-features = false, features = ["ring", "std"
 # `instance.py`, as a file the binary reads (§8.2). Only the binary parses it —
 # suzatary-core and suzatary-io never see a path.
 toml = "0.9"
-# THE ONE PLACE `instance.toml` IS EDITED RATHER THAN REWRITTEN
-# (`docs/PROVIDERSETUP-PLAN-2026-09-22.md` §2 rule 2, `commands::serve` commit
-# 2): a document model that preserves every comment and every other byte
-# `toml`'s own `Deserialize`/`Serialize` round trip does not promise to keep,
-# so a `[[providers]]` entry can be appended without disturbing the operator's
-# own documentation of the rest of the file.
+# THE ONE PLACE `instance.toml` IS EDITED RATHER THAN REWRITTEN: a document
+# model that preserves every comment and every other byte `toml`'s own
+# `Deserialize`/`Serialize` round trip does not promise to keep, so a tapped
+# card can add a table without disturbing the operator's own documentation of
+# the rest of the file.
 toml_edit = "0.22"
 # The binary's edge may be lenient about its own errors in a way a library may
 # not (§2): a startup that cannot read its instance file has one thing to say.
@@ -141,6 +140,9 @@ ureq = { version = "3", default-features = false, features = ["rustls", "json"] 
 # none of it), no async, no cache directory, no wat parser, no threads or GC
 # proposals a plugin does not need.
 wasmtime = { version = "49", default-features = false, features = ["runtime", "cranelift", "component-model", "std"] }
+# The WASI a plugin built for wasm32-wasip2 imports, preview 2 only: the host links its clocks,
+# random numbers, standard streams and environment, and never its filesystem or sockets.
+wasmtime-wasi = { version = "49", default-features = false, features = ["p2"] }
 # The guest side of the same worlds, for `plugin-fence`: bindings generated
 # from app/wit, without the async runtime a plugin here does not use.
 wit-bindgen = { version = "0.62", default-features = false, features = ["macros", "realloc", "std"] }
@@ -159,9 +161,8 @@ mail-parser = "0.11"
 sha2 = "0.10"
 hmac = "0.12"
 hex = "0.4"
-# The Ed25519 verifier an ACI receipt's `signature` is checked with
-# (`attestation::check_signature`). Already in the tree under `rustls`, so this
-# names a crate the lock holds rather than adding a second implementation.
+# The system's random generator, for keys, seeds and pairing codes. Already in the tree under
+# `rustls`, so this names a crate the lock holds rather than adding a second implementation.
 ring = "0.17"
 # `push.credentials` reads a base64 service-account key.
 base64 = "0.22"

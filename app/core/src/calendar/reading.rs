@@ -178,7 +178,7 @@ mod tests {
 
     use super::*;
     use crate::calendar::{CalendarName, Status};
-    use crate::plugin::learn;
+    use crate::store::learn;
     use crate::store::{InMemory, Prodrome};
 
     fn schema() -> Declaration {

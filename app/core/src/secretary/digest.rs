@@ -31,7 +31,7 @@ use prodrome_core::registers::{Node, fold};
 use prodrome_core::schema::Schema as _;
 use prodrome_core::topo;
 
-use crate::models::ModelName;
+use crate::model_name::ModelName;
 use crate::secretary::carried::Carried;
 use crate::secretary::digest_event::{DigestEvent, Said};
 use crate::secretary::digest_label::Label;

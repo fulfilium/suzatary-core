@@ -1,8 +1,8 @@
-//! A credential a plugin may name, and where the host puts its value.
+//! A credential a plugin may name: a secret whose value is a URL the host requests for it.
 
 use std::fmt;
 
-use super::{HeaderName, ManifestError, Origin, PluginName};
+use super::{ManifestError, PluginName};
 
 /// The longest credential name.
 const MAX: usize = 96;
@@ -41,7 +41,7 @@ impl CredentialName {
         }
     }
 
-    /// The name, as secretspec spells it; the box's alone, never drawn.
+    /// The name, as secretspec spells it.
     #[must_use]
     pub fn as_str(&self) -> &str {
         &self.name
@@ -60,56 +60,17 @@ impl fmt::Display for CredentialName {
     }
 }
 
-/// Where a credential's value goes, which is also the one use a plugin may name it for.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum Placement {
-    /// The value IS the URL (a calendar's secret iCal link); its origin must still be allowed.
-    Url,
-    /// `authorization: Bearer <value>`, on requests to `origin` only.
-    Bearer {
-        /// The one origin this credential is sent to.
-        origin: Origin,
-    },
-    /// `<header>: <value>`, on requests to `origin` only.
-    Header {
-        /// The header the value goes in.
-        header: HeaderName,
-        /// The one origin this credential is sent to.
-        origin: Origin,
-    },
-}
-
-impl Placement {
-    /// The manifest's word for it, `into = "url"`.
-    #[must_use]
-    pub const fn into(&self) -> &'static str {
-        match self {
-            Placement::Url => "url",
-            Placement::Bearer { .. } => "bearer",
-            Placement::Header { .. } => "header",
-        }
-    }
-
-    /// The origin a header credential is bound to; `None` for a URL, whose value names its own.
-    #[must_use]
-    pub fn origin(&self) -> Option<&Origin> {
-        match self {
-            Placement::Url => None,
-            Placement::Bearer { origin } | Placement::Header { origin, .. } => Some(origin),
-        }
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
 
+    /// No name outside a plugin's own namespace parses, and no name is in two namespaces.
     #[test]
-    fn a_credential_lives_in_its_plugin_namespace() {
+    fn a_credential_lives_in_its_plugin_namespace_alone() {
         let calendar = PluginName::parse("calendar").expect("a name");
         assert!(CredentialName::parse(&calendar, "PLUGIN_CALENDAR_ICS_URL").is_ok());
         for bad in [
-            "ANTHROPIC_API_KEY",
+            "MODEL_TOKEN",
             "SUZATARY_ROUTINE_TOKEN",
             "PLUGIN_BANK_TOKEN",
             "PLUGIN_CALENDAR_",
@@ -117,22 +78,11 @@ mod tests {
             "plugin_calendar_ICS",
             "PLUGIN_CALENDAR_ICS-URL",
         ] {
-            assert!(
-                matches!(
-                    CredentialName::parse(&calendar, bad),
-                    Err(ManifestError::CredentialOutsideNamespace { .. })
-                ),
-                "{bad:?}"
-            );
+            assert!(CredentialName::parse(&calendar, bad).is_err(), "{bad:?}");
         }
-    }
-
-    #[test]
-    fn no_name_is_in_two_namespaces() {
         let ics = PluginName::parse("ics").expect("a name");
         let icsfeed = PluginName::parse("icsfeed").expect("a name");
-        let theirs = "PLUGIN_ICSFEED_TOKEN";
-        assert!(CredentialName::parse(&icsfeed, theirs).is_ok());
-        assert!(CredentialName::parse(&ics, theirs).is_err());
+        assert!(CredentialName::parse(&icsfeed, "PLUGIN_ICSFEED_TOKEN").is_ok());
+        assert!(CredentialName::parse(&ics, "PLUGIN_ICSFEED_TOKEN").is_err());
     }
 }

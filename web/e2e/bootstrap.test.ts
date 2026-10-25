@@ -26,7 +26,7 @@ const INSTANCE = process.env["E2E_BOOTSTRAP_INSTANCE"];
 const CODE = "e2e-code#e2e-state";
 const TOKEN = "sk-ant-oat01-E2Efake-token-never-real";
 
-const connect = '.settingsbody .proposal.proposal-act-claude_sign_in[data-conversation="setup"]';
+const connect = '.settingsbody .proposal.proposal-act-sign_in[data-conversation="setup"]';
 const code = '.settingsbody .proposal.proposal-act-sign_in_code[data-conversation="setup"]';
 
 app.scene("with no model answering, Settings connects one by signing in", async () => {

@@ -17,7 +17,7 @@ deployment.act_as.her@example.test = ada
 deployment.act_as.phone@example.test = assistant
 deployment.categories = {"home": 0, "work": 1}
 deployment.app_url = https://box.example.test
-instance.settables = ["ANTHROPIC_API_KEY", "CLAUDE_CODE_OAUTH_TOKEN", "DATABRICKS_TOKEN", "FCM_SERVICE_ACCOUNT_B64", "NTFY_TOPIC", "PHALA_API_KEY", "SUZATARY_DATA_PUSH_TOKEN", "SUZATARY_REPOS_TOKEN", "SUZATARY_ROUTINE_TOKEN"]
+instance.settables = ["CLAUDE_CODE_OAUTH_TOKEN", "FCM_SERVICE_ACCOUNT_B64", "NTFY_TOPIC", "SUZATARY_DATA_PUSH_TOKEN", "SUZATARY_REPOS_TOKEN", "SUZATARY_ROUTINE_TOKEN"]
 deployment.coding = Some(Coding { routine: RoutineId("trig_01fake"), repo: RepoName { owner: "bmabsout", name: "Suzatary" }, chain: ChainName("suzatary") })
 serving.host = 100.64.0.1
 serving.port = 443
@@ -29,6 +29,7 @@ secretary.renders = /srv/data/secretary-render
 secretary.inbox = /srv/data/inbox
 secretary.memory = /srv/data/memory
 secretary.model = claude-opus-5-5
+secretary.reserve = 0.4
 secretary.compacting = Off
 secretary.settings = /srv/code/.claude/secretary-settings.json
 secretary.web_allow = ["*.gov.uk", "example.org"]
@@ -49,13 +50,6 @@ persona = Persona { name: "Ada", city: "London", zone: Zone(Europe/London), pros
 local = /srv/data/local
 notify = [Fcm, Ntfy]
 portal = Fcm(Sender("100000000000"))
-provider.phala = DeclaredProvider { name: "phala", base_url: "https://inference.phala.com/v1", key: "PHALA_API_KEY", attestation: Required { expect: SourceCommit("8d0a666a2418898a8c823a9af49a634edd122a64") } }
-provider.databricks = DeclaredProvider { name: "databricks", base_url: "https://acme.cloud.databricks.com/serving-endpoints", key: "DATABRICKS_TOKEN", attestation: Unclaimed }
-models.secretary = ["claude-cli/claude-opus-5-5", "phala/deepseek-v4-flash"]
-models.review = ["anthropic/claude-sonnet-5"]
-models.title = ["anthropic/claude-haiku-4-5"]
-models.reserve = 0.4
-fallback = claude-cli/claude-opus-5-5
 
 # refused
 ## not toml
@@ -91,11 +85,11 @@ unknown field `colour`, expected one of `name`, `events`, `proposals`, `untruste
 
 
 ## no chains
-parsing the instance file <file>: TOML parse error at line 1, column 1
+parsing the instance file <file>: TOML parse error at line 8, column 3
   |
-1 | 
-  | ^
-missing field `chains`
+8 | [[nothing]]
+  |   ^^^^^^^
+unknown field `nothing`, expected one of `repo`, `data`, `chains`, `web`, `categories`, `mail`, `secretary`, `agent`, `persona`, `notify`, `coding`, `cache`, `plugins`, `signatures`
 
 
 ## a chain name that is not a slug
@@ -246,25 +240,25 @@ parsing the instance file <file>: TOML parse error at line 82, column 9
 
 
 ## a bad web rule
-parsing the instance file <file>: TOML parse error at line 84, column 13
+parsing the instance file <file>: TOML parse error at line 85, column 13
    |
-84 | web_allow = ["http://"]
+85 | web_allow = ["http://"]
    |             ^^^^^^^^^^^
 not an allow rule: http://
 
 
 ## a bad drive folder
-parsing the instance file <file>: TOML parse error at line 85, column 15
+parsing the instance file <file>: TOML parse error at line 86, column 15
    |
-85 | drive_allow = ["my-files/../trash"]
+86 | drive_allow = ["my-files/../trash"]
    |               ^^^^^^^^^^^^^^^^^^^^^
 a Drive path is absolute (/my-files/…), without '.', '..', empty segments or control characters, at most 1024 bytes; got "my-files/../trash"
 
 
 ## a bad repo name
-parsing the instance file <file>: TOML parse error at line 92, column 8
+parsing the instance file <file>: TOML parse error at line 93, column 8
    |
-92 | name = "nope"
+93 | name = "nope"
    |        ^^^^^^
 a repository is owner/name, letters, digits, '-', '_' and '.', got "nope"
 
@@ -274,135 +268,104 @@ parsing the instance file <file>: TOML parse error at line 83, column 1
    |
 83 | colour = 1
    | ^^^^^^
-unknown field `colour`, expected one of `conversations`, `renders`, `inbox`, `memory`, `digests`, `topics`, `model`, `compact`, `compactor`, `compact_calls_per_hour`, `compact_bytes_per_day`, `compact_workers`, `settings`, `web_allow`, `drive_allow`, `drive_cli`, `repos`
+unknown field `colour`, expected one of `conversations`, `renders`, `inbox`, `memory`, `digests`, `topics`, `model`, `compact`, `compactor`, `reserve`, `compact_calls_per_hour`, `compact_bytes_per_day`, `compact_workers`, `settings`, `web_allow`, `drive_allow`, `drive_cli`, `repos`
 
 
 ## an unknown key in [persona]
-parsing the instance file <file>: TOML parse error at line 99, column 1
-   |
-99 | colour = 1
-   | ^^^^^^
+parsing the instance file <file>: TOML parse error at line 100, column 1
+    |
+100 | colour = 1
+    | ^^^^^^
 unknown field `colour`, expected one of `name`, `city`, `zone`
 
 
 ## the person's prose in the pushed [persona]
-parsing the instance file <file>: TOML parse error at line 99, column 1
-   |
-99 | email_voice = ["short"]
-   | ^^^^^^^^^^^
+parsing the instance file <file>: TOML parse error at line 100, column 1
+    |
+100 | email_voice = ["short"]
+    | ^^^^^^^^^^^
 unknown field `email_voice`, expected one of `name`, `city`, `zone`
 
 
 ## a zone no database names
-parsing the instance file <file>: TOML parse error at line 99, column 8
-   |
-99 | zone = "Mars/Olympus"
-   |        ^^^^^^^^^^^^^^
+parsing the instance file <file>: TOML parse error at line 100, column 8
+    |
+100 | zone = "Mars/Olympus"
+    |        ^^^^^^^^^^^^^^
 "Mars/Olympus" names no time zone (an IANA name, such as America/New_York)
 
 
 ## the offset a zone replaced
-parsing the instance file <file>: TOML parse error at line 99, column 1
-   |
-99 | timezone_offset_hours = -4
-   | ^^^^^^^^^^^^^^^^^^^^^
+parsing the instance file <file>: TOML parse error at line 100, column 1
+    |
+100 | timezone_offset_hours = -4
+    | ^^^^^^^^^^^^^^^^^^^^^
 unknown field `timezone_offset_hours`, expected one of `name`, `city`, `zone`
 
 
 ## a channel no template connects
-parsing the instance file <file>: TOML parse error at line 102, column 12
+parsing the instance file <file>: TOML parse error at line 103, column 12
     |
-102 | channels = ["fcm", "carrier-pigeon"]
+103 | channels = ["fcm", "carrier-pigeon"]
     |            ^^^^^^^^^^^^^^^^^^^^^^^^^
 "carrier-pigeon" is no notification channel; the channels are fcm, ntfy
 
 
 ## an unknown key in [notify]
-parsing the instance file <file>: TOML parse error at line 103, column 1
+parsing the instance file <file>: TOML parse error at line 104, column 1
     |
-103 | colour = 1
+104 | colour = 1
     | ^^^^^^
 unknown field `colour`, expected `channels` or `fcm_sender`
 
 
 ## a Firebase sender that is no number
-parsing the instance file <file>: TOML parse error at line 103, column 14
+parsing the instance file <file>: TOML parse error at line 104, column 14
     |
-103 | fcm_sender = "sender-1"
+104 | fcm_sender = "sender-1"
     |              ^^^^^^^^^^
 'sender-1' is no Firebase sender: a sender is the project's number, 1 to 20 digits
 
 
-## a provider named anthropic
-<file>: a provider may not be named "anthropic" — that name is reserved for the built-in subscription-backed brains
-
-## a provider named claude-cli
-<file>: a provider may not be named "claude-cli" — that name is reserved for the built-in subscription-backed brains
-
-## a provider named twice
-<file>: "phala" is declared as a provider more than once
-
-## attested with no commit
-parsing the instance file <file>: TOML parse error at line 105, column 1
+## a model provider, a table the binary does not read
+parsing the instance file <file>: TOML parse error at line 106, column 3
     |
-105 | [[providers]]
-    | ^^^^^^^^^^^^^
-provider "phala" declares attested = true but names no expect_commit — a claim of attestation with nothing to check a receipt against is refused
+106 | [[providers]]
+    |   ^^^^^^^^^
+unknown field `providers`, expected one of `repo`, `data`, `chains`, `web`, `categories`, `mail`, `secretary`, `agent`, `persona`, `notify`, `coding`, `cache`, `plugins`, `signatures`
 
 
-## attested with a bad commit
-parsing the instance file <file>: TOML parse error at line 105, column 1
+## a model order, a table the binary does not read
+parsing the instance file <file>: TOML parse error at line 106, column 2
     |
-105 | [[providers]]
-    | ^^^^^^^^^^^^^
-provider "phala": "nope" is not a commit: 40 lowercase hex characters
+106 | [models]
+    |  ^^^^^^
+unknown field `models`, expected one of `repo`, `data`, `chains`, `web`, `categories`, `mail`, `secretary`, `agent`, `persona`, `notify`, `coding`, `cache`, `plugins`, `signatures`
 
-
-## an unknown key in a provider
-parsing the instance file <file>: TOML parse error at line 117, column 1
-    |
-117 | colour = 1
-    | ^^^^^^
-unknown field `colour`, expected one of `name`, `base_url`, `key`, `attested`, `expect_commit`
-
-
-## an order naming an undeclared provider
-<file>: [models].review: "openrouter" is not a backend this deployment has: claude-cli, anthropic, or a declared provider
-
-## an entry with no slash
-<file>: [models].review: "claude" is not "<backend>/<model>"
 
 ## a reserve over one
-parsing the instance file <file>: TOML parse error at line 122, column 11
-    |
-122 | reserve = 1.5
-    |           ^^^
+parsing the instance file <file>: TOML parse error at line 83, column 11
+   |
+83 | reserve = 1.5
+   |           ^^^
 a reserve is a share between 0 and 1, got 1.5
-
-
-## an unknown key in [models]
-parsing the instance file <file>: TOML parse error at line 123, column 1
-    |
-123 | chat = []
-    | ^^^^
-unknown field `chat`, expected one of `secretary`, `review`, `title`, `reserve`
 
 
 ## a coding chain not served
 [coding] chain work is not one of this deployment's [[chains]]
 
 ## a coding routine that is not one
-parsing the instance file <file>: TOML parse error at line 125, column 11
+parsing the instance file <file>: TOML parse error at line 107, column 11
     |
-125 | routine = "trig 01"
+107 | routine = "trig 01"
     |           ^^^^^^^^^
 a routine id is letters, digits, '_' and '-', got "trig 01"
 
 
 ## a coding repo that is not one
-parsing the instance file <file>: TOML parse error at line 126, column 8
+parsing the instance file <file>: TOML parse error at line 108, column 8
     |
-126 | repo = "nope"
+108 | repo = "nope"
     |        ^^^^^^
 a repository is owner/name, letters, digits, '-', '_' and '.', got "nope"
 
@@ -411,9 +374,9 @@ a repository is owner/name, letters, digits, '-', '_' and '.', got "nope"
 <file>: [coding] repo: every declared repository is in the owner's own account, but these name bmabsout, someorg
 
 ## a secretary repo of another account
-parsing the instance file <file>: TOML parse error at line 88, column 1
+parsing the instance file <file>: TOML parse error at line 89, column 1
    |
-88 | [[secretary.repos]]
+89 | [[secretary.repos]]
    | ^^^^^^^^^^^^^^^^^^^
 every declared repository is in the owner's own account, but these name bmabsout, someorg
 

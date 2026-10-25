@@ -167,12 +167,8 @@ echo "==> a calendar's link, stored beside the read-only tree" >&2
 name = "ics"
 component = "ics.wasm"
 schema = "ics.schema"
-world = "source@0.3.0"
 origins = ["https://calendar.example.test"]
-
-[[plugins.credentials]]
-name = "PLUGIN_ICS_WORK"
-into = "url"
+credentials = ["PLUGIN_ICS_WORK"]
 CALENDAR
 declared="$("${units[@]}" "SUZATARY_INSTANCE=$scratch/data/instance.toml" "$scratch/suzatary" secretspec)"
 case "$declared" in

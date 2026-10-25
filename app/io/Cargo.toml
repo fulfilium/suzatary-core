@@ -19,8 +19,7 @@ thiserror.workspace = true
 # The whois answer, the FCM message and the notmuch output are all JSON this
 # crate parses; serde derives the records it parses them into.
 serde.workspace = true
-# `raw_value`: Intel signs a collateral document's body as served, so it is read raw.
-serde_json = { workspace = true, features = ["raw_value"] }
+serde_json.workspace = true
 # FCM and ntfy, blocking, over rustls (§2: never OpenSSL).
 ureq.workspace = true
 webpki-roots.workspace = true
@@ -31,12 +30,9 @@ base64.workspace = true
 mail-parser.workspace = true
 sha2.workspace = true
 hex.workspace = true
-# An attestation receipt's Ed25519 signature, and a TDX quote's ECDSA ones
-# (`attestation/`).
+# The system's random generator (`secrets`, `pairing`, `texts`).
 ring.workspace = true
-# Intel's DCAP certificate chains and CRLs, through the one webpki rustls already
-# links; and the percent-encoded PEM Intel's PCS sends its issuer chains in.
-webpki = { package = "rustls-webpki", version = "0.103", default-features = false, features = ["ring", "std"] }
+# The Gmail API's search query, percent-encoded into its URL.
 percent-encoding = "2"
 # `markup.suspicious`' three tripwires, and the html-to-text walk over a body.
 regex.workspace = true

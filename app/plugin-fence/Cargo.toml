@@ -19,9 +19,6 @@ path = "src/lib.rs"
 # The same plugin targeting a world that also imports a filesystem and a network, which the
 # host must refuse to load.
 escapee = []
-# The fence's actor instead of its source: a component of the actor world whose every mode tries
-# to break a fence on proposals; with `escapee`, one that also imports `fetch`.
-actor = []
 
 [dependencies]
 wit-bindgen.workspace = true

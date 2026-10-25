@@ -22,20 +22,6 @@ pub struct ProposeActArgs {
     #[serde(default)]
     name: Caught<Option<String>>,
     #[serde(default)]
-    job: Caught<Option<String>>,
-    #[serde(default)]
-    models: Caught<Option<Vec<String>>>,
-    #[serde(default)]
-    reserve: Caught<Option<f64>>,
-    #[serde(default)]
-    preset: Caught<Option<String>>,
-    #[serde(default)]
-    workspace: Caught<Option<String>>,
-    #[serde(default)]
-    expect_commit: Caught<Option<String>>,
-    #[serde(default)]
-    remove_provider: Caught<Option<String>>,
-    #[serde(default)]
     template: Caught<Option<String>>,
     #[serde(default)]
     params: Caught<Option<Vec<String>>>,
@@ -69,17 +55,6 @@ impl Verb for ProposeAct {
         names which ones. The value never reaches you; the tap that stores it is \
         the only place it travels. `name` must be one of the declared names or \
         the proposal is refused; do not guess at one context did not list.\n\n\
-        `act=\"configure\"` asks the owner to change ONE model setting, which the box \
-        reads now as the card's from: `job=<secretary|review|title>` with \
-        `models=[\"<backend>/<model>\", ...]` (first choice first, `[]` for the \
-        fallback) changes that job's order; `reserve=<0..1>` the share automated \
-        jobs leave the owner; `preset=<databricks|phala|openrouter>` (with `workspace` \
-        for Databricks, `expect_commit` for Phala) declares a provider; and \
-        `remove_provider=<name>` takes one out. Give exactly one of the four. \
-        ⚠️ CALL IT FIRST: in a round that has already read mail, a todo, a \
-        document, the web or an old answer it is refused. The \
-        card shows from and to, and the tap writes only while the file still \
-        reads from.\n\n\
         `act=\"connect\"` asks the owner to add one thing to this deployment from the \
         box's catalog: `template=<name>` with `params=[...]`, one of \
         `ics` with `[\"<label>\"]` (a calendar by its secret iCal link, such as \
@@ -93,8 +68,8 @@ impl Verb for ProposeAct {
         tap writes it into the instance file, and the box then asks on its own \
         cards for each step it needs (a link, a sign-in); never ask for a link or \
         a key yourself. Something already connected is refused. ⚠️ CALL IT \
-        FIRST, as for configure: in a round that has read anything but the \
-        owner's own words it is refused.\n\n\
+        FIRST: in a round that has read anything but the owner's own words it \
+        is refused.\n\n\
         `act=\"calendar_event\"` with `account=<a Google account's address>`, \
         `title`, `start` and `end` (both UTC instants `2026-10-20T14:00:00Z`, or \
         both days `2026-10-20`, `end` the day after the last) and an optional \
@@ -144,17 +119,13 @@ impl Verb for ProposeAct {
                         why: reasons.why().to_owned(),
                     }
                 }
-                "configure" => Act::Configure {
-                    change: configure(call, &args)?,
-                },
                 "connect" => Act::Connect {
                     connection: connect(call, &args)?,
                 },
                 "calendar_event" => calendar_event(call, &args)?,
                 other => {
                     return Err(Refusal::bad_request(format!(
-                        "act must be one of: auth, secret, configure, connect, calendar_event, \
-                         got {}",
+                        "act must be one of: auth, secret, connect, calendar_event, got {}",
                         shown(other)
                     )));
                 }
@@ -182,12 +153,11 @@ impl Verb for ProposeAct {
             Act::DriveRead { path, .. } => Some(("path", path.to_string())),
             Act::CodingSession { task } => Some(("task", task.as_str().to_owned())),
             Act::Device(enrolment) => Some(("key", enrolment.key.as_str().to_owned())),
-            Act::Configure { change } => Some(("change", change.sentence())),
             Act::Connect { connection } => Some(("connection", connection.called())),
             Act::CalendarEvent { event, .. } => Some(("event", event.sentence())),
             // The box's own, never this verb's.
             Act::AuthSend { .. }
-            | Act::ClaudeSignIn { .. }
+            | Act::SignIn { .. }
             | Act::SignInCode { .. }
             | Act::UnlockStore { .. }
             | Act::Disconnect { .. }
@@ -241,13 +211,9 @@ fn calendar_event(call: &Call<'_>, args: &ProposeActArgs) -> Result<Act, Refusal
     Ok(Act::CalendarEvent { account, event })
 }
 
-/// What a round has read when a Configure or a Connect card is refused in it.
+/// What a round has read when a Connect card is refused in it.
 const READ_OUTSIDE: &str = "this round has read something that is not the owner's own words \
                             (mail, a todo, a document, the web, a repository or an old answer)";
-
-/// Why a Configure card is refused in a round that read anything but the owner's own words.
-const CONFIGURE_OUTSIDE: &str = "a model setting is a vendor and a trust anchor the owner names, \
-                                 never one learned from what was read";
 
 /// Why a Connect card is refused in a round that read anything but the owner's own words.
 const CONNECT_OUTSIDE: &str = "an account, a calendar or a folder is one the owner names, never \
@@ -288,77 +254,4 @@ fn connect(call: &Call<'_>, args: &ProposeActArgs) -> Result<crate::connect::Con
         .with(&connection)
         .map_err(|refused| Refusal::bad_request(format!("no card was filed: {refused}")))?;
     Ok(connection)
-}
-
-/// The one setting `args` names, read against what the instance file declares now: that is the
-/// card's from. A round that read anything but the owner's words proposes none, since a model,
-/// an endpoint or a commit a receipt must name could then be an email's.
-fn configure(
-    call: &Call<'_>,
-    args: &ProposeActArgs,
-) -> Result<crate::settings::configure::Configure, Refusal> {
-    use crate::settings::configure::Configure;
-    owners_words_only(call, CONFIGURE_OUTSIDE)?;
-    let now = call
-        .caps
-        .configuration
-        .configured()
-        .map_err(|failed| Refusal::internal(failed.to_string()))?;
-    let refused = |failed: crate::settings::configure::Refused| {
-        Refusal::bad_request(format!("no card was filed: {failed}"))
-    };
-    let named = [
-        args.job.read()?.is_some() || args.models.read()?.is_some(),
-        args.reserve.read()?.is_some(),
-        args.preset.read()?.is_some(),
-        args.remove_provider.read()?.is_some(),
-    ];
-    if named.iter().filter(|given| **given).count() != 1 {
-        return Err(Refusal::bad_request(
-            "act=\"configure\" takes exactly one of: job with models, reserve, preset, or \
-             remove_provider",
-        ));
-    }
-    if let Some(share) = args.reserve.read()? {
-        let share = crate::models::Reserve::parse(*share)
-            .map_err(|failed| Refusal::bad_request(failed.to_string()))?;
-        return Configure::reserve(&now, share).map_err(refused);
-    }
-    if let Some(preset) = args.preset.read()? {
-        let preset = crate::settings::Preset::ALL
-            .into_iter()
-            .find(|known| known.as_str() == preset)
-            .ok_or_else(|| {
-                Refusal::bad_request(format!(
-                    "preset must be one of: databricks, phala, openrouter, got {}",
-                    shown(preset)
-                ))
-            })?;
-        let setup = crate::settings::ProviderSetup::parse(
-            preset,
-            args.workspace.read()?.as_deref(),
-            args.expect_commit.read()?.as_deref(),
-        )
-        .map_err(|failed| Refusal::bad_request(failed.to_string()))?;
-        return Configure::declare(&now, setup).map_err(refused);
-    }
-    if let Some(name) = args.remove_provider.read()? {
-        return Configure::remove(&now, name).map_err(refused);
-    }
-    let job = args
-        .job
-        .read()?
-        .as_deref()
-        .ok_or_else(|| Refusal::bad_request("models needs the job whose order it is"))
-        .and_then(|job| {
-            crate::models::Job::parse(job)
-                .map_err(|failed| Refusal::bad_request(failed.to_string()))
-        })?;
-    let models = args
-        .models
-        .read()?
-        .as_ref()
-        .ok_or_else(|| Refusal::bad_request("job needs its models, first choice first"))?;
-    let models: Vec<&str> = models.iter().map(String::as_str).collect();
-    Configure::order(&now, job, &models).map_err(refused)
 }

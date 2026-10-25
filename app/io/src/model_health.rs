@@ -1,5 +1,5 @@
-//! Whether each model a job orders answers, on disk, as a [`Doc`]: the value and its join are
-//! [`suzatary_core::mail::health`]'s, keyed by the entry's print. It lives beside the mail health,
+//! Whether the model each job runs answers, on disk, as a [`Doc`]: the value and its join are
+//! [`suzatary_core::mail::health`]'s, keyed by the model's name. It lives beside the mail health,
 //! box-local and never pushed, because it is this box's account of its own calls.
 //!
 //! [`Doc`]: suzatary_core::store::Doc

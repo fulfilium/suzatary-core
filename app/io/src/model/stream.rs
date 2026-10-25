@@ -6,7 +6,7 @@ use serde::Deserialize;
 
 use suzatary_core::capability::{SessionId, TokenUsage};
 
-use crate::anthropic::stream_event::StreamEvent;
+use super::stream_event::StreamEvent;
 
 /// One line, tagged by its `type`.
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]

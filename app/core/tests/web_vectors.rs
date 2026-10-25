@@ -784,7 +784,6 @@ fn the_standings_vector_is_every_standing_a_line_can_take() {
         Standing::Kept,
         Standing::of_health(Healths::one("source", at, Outcome::Succeeded, "").reading("source")),
         Standing::of_calls(Healths::one("source", at, Outcome::Succeeded, "").reading("source")),
-        Standing::Unused,
         Standing::of_health(None),
         Standing::Locked,
         Standing::StoreFailed,
@@ -2338,22 +2337,10 @@ fn the_answers_vector_holds_every_answer() {
         };
         proposal.card.files = files;
     }
-    // A card changing a setting, from what it read to what it writes.
-    let mut configuring = conversations[1].clone();
-    if let Some(proposal) = configuring.proposals.first_mut() {
-        proposal.act = wire::ProposedAct::Configure {
-            setting: "Chat".to_owned(),
-            from: "nothing chosen, so the fallback answers".to_owned(),
-            to: "anthropic/claude-b".to_owned(),
-            sentence: "change Chat: nothing chosen, so the fallback answers → anthropic/claude-b"
-                .to_owned(),
-        };
-        proposal.card = suzatary_core::secretary::card::of(&proposal.act);
-    }
     samples.add(
         conversations
             .into_iter()
-            .chain([attaching, configuring])
+            .chain([attaching])
             .map(|conversation| wire::SayPayload { conversation }),
     );
     samples.add([wire::MemoryPayload {
@@ -2605,15 +2592,12 @@ fn the_answers_vector_holds_every_answer() {
                     &["proposal:setup/1"],
                 ),
             ],
-            Group::Models => vec![
-                line(
-                    "job:secretary",
-                    "Chat",
-                    Standing::Answered { at: stamp(at) },
-                    &[],
-                ),
-                line("provider:phala", "Phala", Standing::Unused, &[]),
-            ],
+            Group::Models => vec![line(
+                "job:Chat, reviews and titles",
+                "Chat, reviews and titles",
+                Standing::Answered { at: stamp(at) },
+                &[],
+            )],
             Group::Notifications => vec![
                 line("channel:ntfy", "ntfy", Standing::Locked, &[]),
                 line("channel:fcm", "fcm", Standing::StoreFailed, &[]),

@@ -7,7 +7,6 @@ use std::fmt::Write as _;
 use std::path::{Path, PathBuf};
 
 use suzatary_cli::instance::Instance;
-use suzatary_core::models::Job;
 
 /// Every table and key the owner's file uses, with the cast's names.
 const LIVE_SHAPED: &str = r#"
@@ -92,6 +91,7 @@ renders = "secretary-render"
 inbox = "inbox"
 memory = "memory"
 model = "claude-opus-5-5"
+reserve = 0.4
 settings = ".claude/secretary-settings.json"
 web_allow = ["*.gov.uk", "example.org"]
 drive_allow = ["/my-files/Docs/"]
@@ -113,25 +113,6 @@ zone = "Europe/London"
 [notify]
 channels = ["fcm", "ntfy"]
 fcm_sender = "100000000000"
-
-[[providers]]
-name = "phala"
-base_url = "https://inference.phala.com/v1"
-key = "PHALA_API_KEY"
-attested = true
-expect_commit = "8d0a666a2418898a8c823a9af49a634edd122a64"
-
-[[providers]]
-name = "databricks"
-base_url = "https://acme.cloud.databricks.com/serving-endpoints"
-key = "DATABRICKS_TOKEN"
-attested = false
-
-[models]
-secretary = ["claude-cli/claude-opus-5-5", "phala/deepseek-v4-flash"]
-review = ["anthropic/claude-sonnet-5"]
-title = ["anthropic/claude-haiku-4-5"]
-reserve = 0.4
 
 [coding]
 routine = "trig_01fake"
@@ -219,6 +200,7 @@ fn printed(instance: &Instance) -> String {
     line("secretary.inbox", path(&secretary.inbox));
     line("secretary.memory", path(&secretary.memory));
     line("secretary.model", secretary.model.as_str().to_owned());
+    line("secretary.reserve", secretary.reserve.get().to_string());
     line(
         "secretary.compacting",
         format!("{:?}", secretary.compacting()),
@@ -277,31 +259,6 @@ fn printed(instance: &Instance) -> String {
         ),
     );
     line("portal", format!("{:?}", instance.portal));
-    for provider in &instance.providers {
-        line(
-            &format!("provider.{}", provider.name),
-            format!("{provider:?}"),
-        );
-    }
-    for job in Job::ALL {
-        line(
-            &format!("models.{}", job.as_str()),
-            format!(
-                "{:?}",
-                instance
-                    .models
-                    .order(job)
-                    .iter()
-                    .map(ToString::to_string)
-                    .collect::<Vec<_>>()
-            ),
-        );
-    }
-    line(
-        "models.reserve",
-        instance.models.reserve().get().to_string(),
-    );
-    line("fallback", instance.fallback().to_string());
     out
 }
 
@@ -491,51 +448,17 @@ const REFUSALS: &[(&str, &str, &str)] = &[
         "fcm_sender = \"sender-1\"",
     ),
     (
-        "a provider named anthropic",
-        "name = \"databricks\"",
-        "name = \"anthropic\"",
+        "a model provider, a table the binary does not read",
+        "[coding]",
+        "[[providers]]\nname = \"phala\"\nbase_url = \"https://inference.phala.com/v1\"\n\
+         key = \"PHALA_API_KEY\"\nattested = false\n\n[coding]",
     ),
     (
-        "a provider named claude-cli",
-        "name = \"databricks\"",
-        "name = \"claude-cli\"",
-    ),
-    (
-        "a provider named twice",
-        "name = \"databricks\"",
-        "name = \"phala\"",
-    ),
-    (
-        "attested with no commit",
-        "expect_commit = \"8d0a666a2418898a8c823a9af49a634edd122a64\"\n",
-        "",
-    ),
-    (
-        "attested with a bad commit",
-        "expect_commit = \"8d0a666a2418898a8c823a9af49a634edd122a64\"",
-        "expect_commit = \"nope\"",
-    ),
-    (
-        "an unknown key in a provider",
-        "attested = false",
-        "attested = false\ncolour = 1",
-    ),
-    (
-        "an order naming an undeclared provider",
-        "review = [\"anthropic/claude-sonnet-5\"]",
-        "review = [\"openrouter/x\"]",
-    ),
-    (
-        "an entry with no slash",
-        "review = [\"anthropic/claude-sonnet-5\"]",
-        "review = [\"claude\"]",
+        "a model order, a table the binary does not read",
+        "[coding]",
+        "[models]\nsecretary = [\"claude-cli/claude-opus-5-5\"]\nreserve = 0.4\n\n[coding]",
     ),
     ("a reserve over one", "reserve = 0.4", "reserve = 1.5"),
-    (
-        "an unknown key in [models]",
-        "reserve = 0.4",
-        "reserve = 0.4\nchat = []",
-    ),
     (
         "a coding chain not served",
         "chain = \"suzatary\"\n",
@@ -639,7 +562,8 @@ fn the_compactor_is_off_by_default_and_on_by_its_switch() {
     assert_eq!(
         read(&on),
         Compacting::On {
-            model: suzatary_core::models::ModelName::parse("claude-sonnet-5-5").expect("a model"),
+            model: suzatary_core::model_name::ModelName::parse("claude-sonnet-5-5")
+                .expect("a model"),
             budget: Budget {
                 calls_per_hour: 30,
                 bytes_per_day: 32 * 1024 * 1024,

@@ -92,45 +92,18 @@ pub struct Reply {
     pub say: String,
     /// The calls it wants made, in order.
     pub calls: Vec<ToolCall>,
-    /// What the provider said this turn cost, attached by the interpreter; `None` when unreported.
+    /// What the model said this turn cost, attached by the interpreter; `None` when unreported.
     pub usage: Option<TokenUsage>,
-    /// The attestation receipt an attested provider carried, attached by the interpreter.
-    pub receipt: Option<ReceiptId>,
 }
 
-/// An attestation receipt's id, opaque, and only ever one a provider sent.
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
-#[serde(transparent)]
-pub struct ReceiptId(String);
-
-impl ReceiptId {
-    /// Wrap a receipt id exactly as the provider sent it.
-    #[must_use]
-    pub fn new(id: impl Into<String>) -> Self {
-        Self(id.into())
-    }
-
-    /// The id, verbatim.
-    #[must_use]
-    pub fn as_str(&self) -> &str {
-        &self.0
-    }
-}
-
-impl std::fmt::Display for ReceiptId {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str(&self.0)
-    }
-}
-
-/// Token counts for one turn; `cached_prompt_tokens` is `None` when the provider does not say.
+/// Token counts for one turn; `cached_prompt_tokens` is `None` when the model does not say.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
 pub struct TokenUsage {
     /// Tokens the prompt cost.
     pub prompt_tokens: u64,
     /// Tokens the reply cost.
     pub completion_tokens: u64,
-    /// Prompt tokens served from a cache, when the provider reports the figure.
+    /// Prompt tokens served from a cache, when the model reports the figure.
     pub cached_prompt_tokens: Option<u64>,
 }
 
@@ -169,13 +142,11 @@ impl Reply {
                     })
                     .collect(),
                 usage: None,
-                receipt: None,
             },
             Err(_) => Self {
                 say: text.trim().to_owned(),
                 calls: Vec::new(),
                 usage: None,
-                receipt: None,
             },
         }
     }
@@ -184,13 +155,6 @@ impl Reply {
     #[must_use]
     pub fn with_usage(mut self, usage: Option<TokenUsage>) -> Self {
         self.usage = usage;
-        self
-    }
-
-    /// Attach an attestation receipt read from the response headers.
-    #[must_use]
-    pub fn with_receipt(mut self, receipt: Option<ReceiptId>) -> Self {
-        self.receipt = receipt;
         self
     }
 }
@@ -217,10 +181,14 @@ pub enum ModelError {
     /// It ran and failed: a non-zero exit or a rejected request.
     #[error("the model refused or failed: {0}")]
     Failed(String),
+    /// It refused the credential it was run with, in the interpreter's words: the one failure a
+    /// new credential can mend. A rate limit, a timeout or an outage is never this.
+    #[error("the model refused its credential: {0}")]
+    Refused(String),
     /// It did not answer within the interpreter's time limit, and was ended.
     #[error("the model did not answer within {0:?}")]
     TimedOut(std::time::Duration),
-    /// What it was sent is longer than it reads, in the backend's own words.
+    /// What it was sent is longer than it reads, in the interpreter's own words.
     #[error("what the model was sent is longer than it reads: {0}")]
     TooLong(String),
     /// A [`SessionModel::resume`] named a session the CLI no longer knows.
@@ -230,37 +198,6 @@ pub enum ModelError {
     #[error("the answer was stopped")]
     Halted,
 }
-
-impl ModelError {
-    /// Whether it says the credential was refused (a 401 or 403, an invalid or expired key or
-    /// token, a login asked for), the one failure a new credential can mend. A rate limit, a
-    /// timeout or an outage says nothing about the credential, so it never asks for one.
-    #[must_use]
-    pub fn refused_credential(&self) -> bool {
-        let ModelError::Failed(words) = self else {
-            return false;
-        };
-        let words = words.to_ascii_lowercase();
-        let status = words
-            .split(|c: char| !c.is_ascii_alphanumeric())
-            .any(|token| token == "401" || token == "403");
-        status || REFUSALS.iter().any(|refusal| words.contains(refusal))
-    }
-}
-
-/// How a backend says it refused the credential, lowercased: the Messages API's error types and
-/// the CLI's own lines.
-const REFUSALS: [&str; 9] = [
-    "authentication_error",
-    "permission_error",
-    "invalid api key",
-    "invalid x-api-key",
-    "invalid bearer token",
-    "token has expired",
-    "please run /login",
-    "not logged in",
-    "unauthorized",
-];
 
 /// A round's stop, set once by the actor who pulled it so the round records a person.
 #[derive(Debug, Clone, Default)]
@@ -336,7 +273,7 @@ crate::literal::text_literal!(
     SessionId => |id| id.as_str().to_owned(),
 );
 
-/// A Claude Code session id, parsed as a UUID so a bad one fails here rather than in a subprocess.
+/// A model session's id, parsed as a UUID so a bad one fails here rather than in the interpreter.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 #[serde(try_from = "String", into = "String")]
 pub struct SessionId(String);
@@ -378,7 +315,7 @@ impl SessionId {
         Self(minted)
     }
 
-    /// The id, as `--session-id`, `--resume` and every stream-json line spell it.
+    /// The id, as the interpreter is handed it and answers it.
     #[must_use]
     pub fn as_str(&self) -> &str {
         &self.0
@@ -416,7 +353,7 @@ fn is_uuid(text: &str) -> bool {
         })
 }
 
-/// A Claude Code session as the application holds one: its id, model and directory.
+/// A model session as the application holds one: its id, model and directory.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Session {
     /// The id `--session-id` minted it under.
@@ -524,31 +461,6 @@ impl<M: Model + ?Sized> Model for &M {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    /// Only a refused credential asks for a new one: a rate limit, an overload, a timeout or an
-    /// unreachable model does not, whatever numbers its words hold.
-    #[test]
-    fn only_a_refused_credential_asks_for_another() {
-        let failed = |words: &str| ModelError::Failed(words.to_owned());
-        for refused in [
-            "API Error: 401 {\"type\":\"error\",\"error\":{\"type\":\"authentication_error\"}}",
-            "status 403: forbidden",
-            "OAuth token has expired. Please obtain a new token",
-            "Invalid API key · Please run /login",
-        ] {
-            assert!(failed(refused).refused_credential(), "{refused}");
-        }
-        for not in [
-            "API Error: 429 rate_limit_error",
-            "Claude AI usage limit reached|1760000000",
-            "529 overloaded_error",
-            "timed out after 4010 ms",
-            "exit status 1",
-        ] {
-            assert!(!failed(not).refused_credential(), "{not}");
-        }
-        assert!(!ModelError::Unreachable("401".to_owned()).refused_credential());
-    }
 
     /// A call with no `verb` fails the whole envelope, so the text stands as prose.
     #[test]

@@ -7,6 +7,7 @@
 //! carries other people's mail. None of the three is optional.
 
 pub mod stream;
+pub mod stream_event;
 pub mod summary;
 
 use std::path::{Path, PathBuf};
@@ -251,22 +252,28 @@ impl ClaudeCli {
         cmd
     }
 
-    fn failure(&self, failed: RunError) -> ModelError {
-        match failed {
+    fn failure(&self, ran: RunError) -> ModelError {
+        match ran {
             RunError::Spawn { source, .. } => {
                 ModelError::Unreachable(format!("{}: {source}", self.binary))
             }
             RunError::TimedOut { .. } => ModelError::TimedOut(self.timeout),
             RunError::Halted { .. } => ModelError::Halted,
-            RunError::Wait { source, .. } => ModelError::Failed(source.to_string()),
-            exited @ RunError::Exited { .. } => ModelError::Failed(exited.to_string()),
+            RunError::Wait { source, .. } => failed(source.to_string()),
+            exited @ RunError::Exited { .. } => failed(exited.to_string()),
         }
     }
 }
 
+/// The name the CLI at `model` answers as, and its calls are recorded under.
+#[must_use]
+pub fn name_of(model: &str) -> String {
+    format!("claude-cli/{model}")
+}
+
 impl Model for ClaudeCli {
     fn name(&self) -> String {
-        format!("claude-cli/{}", self.model)
+        name_of(&self.model)
     }
 
     fn turn(
@@ -311,9 +318,7 @@ fn last_result(out: &str) -> Result<Ended, ModelError> {
     out.lines()
         .rev()
         .find_map(|line| result_of(line).transpose())
-        .ok_or_else(|| {
-            ModelError::Failed("the model printed no result (not logged in?)".to_owned())
-        })?
+        .ok_or_else(|| failed("the model printed no result (not logged in?)".to_owned()))?
         .map_err(|unreadable| ModelError::Failed(unreadable.to_string()))
 }
 
@@ -339,17 +344,38 @@ fn clean(ended: Ended) -> Result<Ended, ModelError> {
     })))
 }
 
-/// A backend's words for a failure, read once: a prompt longer than the model reads is
-/// [`ModelError::TooLong`], so the round can say which answer was too big; anything else is
+/// The CLI's words for a failure, read once: a prompt longer than the model reads is
+/// [`ModelError::TooLong`], so the round can say which answer was too big; a refused credential
+/// (a 401 or 403, an invalid or expired key or token, a login asked for) is
+/// [`ModelError::Refused`], so the box asks for a new one; anything else is
 /// [`ModelError::Failed`].
 pub(crate) fn failed(words: String) -> ModelError {
     let lower = words.to_lowercase();
+    let status = lower
+        .split(|c: char| !c.is_ascii_alphanumeric())
+        .any(|token| token == "401" || token == "403");
     if TOO_LONG.iter().any(|said| lower.contains(said)) {
         ModelError::TooLong(words)
+    } else if status || REFUSALS.iter().any(|refusal| lower.contains(refusal)) {
+        ModelError::Refused(words)
     } else {
         ModelError::Failed(words)
     }
 }
+
+/// How the CLI says it refused the credential, lowercased: the API's error types it passes on
+/// and its own lines.
+const REFUSALS: [&str; 9] = [
+    "authentication_error",
+    "permission_error",
+    "invalid api key",
+    "invalid x-api-key",
+    "invalid bearer token",
+    "token has expired",
+    "please run /login",
+    "not logged in",
+    "unauthorized",
+];
 
 /// How the CLI, the Messages API and an OpenAI-shaped API say a prompt is too long, lowercased.
 const TOO_LONG: [&str; 3] = [
@@ -608,6 +634,35 @@ mod tests {
     use suzatary_core::for_model::ForModel;
 
     use suzatary_core::attachment::Attachment;
+
+    /// Only a refused credential is [`ModelError::Refused`]: a rate limit, an overload or a
+    /// timeout is not, whatever numbers its words hold.
+    #[test]
+    fn only_a_refused_credential_reads_as_refused() {
+        for refused in [
+            "API Error: 401 {\"type\":\"error\",\"error\":{\"type\":\"authentication_error\"}}",
+            "status 403: forbidden",
+            "OAuth token has expired. Please obtain a new token",
+            "Invalid API key · Please run /login",
+        ] {
+            assert!(
+                matches!(failed(refused.to_owned()), ModelError::Refused(_)),
+                "{refused}"
+            );
+        }
+        for not in [
+            "API Error: 429 rate_limit_error",
+            "Claude AI usage limit reached|1760000000",
+            "529 overloaded_error",
+            "timed out after 4010 ms",
+            "exit status 1",
+        ] {
+            assert!(
+                matches!(failed(not.to_owned()), ModelError::Failed(_)),
+                "{not}"
+            );
+        }
+    }
 
     fn person_with(photos: Vec<Attachment>) -> Turn {
         Turn::Person {

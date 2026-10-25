@@ -109,7 +109,7 @@ fn opened() -> Entry {
     Entry::Opened {
         at: at(0),
         title: suzatary_core::secretary::words::Words::kept("Morning".to_owned()),
-        model: "claude-cli/haiku".to_owned(),
+        model: "a-cli/small".to_owned(),
         kind: suzatary_core::secretary::store::Kind::Topic,
     }
 }
@@ -365,7 +365,7 @@ fn bookkeeping(step: &Step, second: u32, sessions: &mut u32) -> Entry {
                 Entry::Kept {
                     at,
                     session,
-                    model: "claude-cli/haiku".to_owned(),
+                    model: "a-cli/small".to_owned(),
                     cwd: "/srv/secretary".to_owned(),
                     surface: None,
                     from: *sessions as usize,
@@ -374,7 +374,7 @@ fn bookkeeping(step: &Step, second: u32, sessions: &mut u32) -> Entry {
                 Entry::Session {
                     at,
                     session,
-                    model: "claude-cli/haiku".to_owned(),
+                    model: "a-cli/small".to_owned(),
                     cwd: "/srv/secretary".to_owned(),
                     surface: None,
                 }

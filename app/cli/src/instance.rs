@@ -10,21 +10,22 @@ mod edits;
 mod file;
 mod local;
 mod plugins;
+mod reserve;
 mod roots;
 
 pub use chain_dir::{ChainDir, ChainDirs};
 pub use edits::{InstanceEdits, editing};
 pub(crate) use file::Signatures;
-pub(crate) use file::{Chain, File, Orders, Web};
+pub(crate) use file::{Chain, File, Web};
 pub use file::{Mail, Secretary, Serving, Triage};
 pub use local::Local;
 pub use plugins::Plugins;
 use plugins::plugins_of;
+pub use reserve::{BadReserve, Reserve};
 use roots::resolve_under;
 pub use roots::{CodeRoot, DataRoot, Roots};
 
 use crate::paths::{Env, Paths};
-use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
 
 use anyhow::{Context, bail};
@@ -34,9 +35,8 @@ use suzatary_core::chains::Chains;
 use suzatary_core::coding::Coding;
 use suzatary_core::connect::Channel;
 use suzatary_core::deployment::Deployment;
-use suzatary_core::models::{Job, ModelEntry, Models};
 use suzatary_core::nonempty::NonEmpty;
-use suzatary_core::settings::{DeclaredProvider, Settables};
+use suzatary_core::settings::Settables;
 use suzatary_core::store::Kind;
 
 /// The environment variable that names an instance file.
@@ -123,10 +123,6 @@ pub struct Instance {
     pub notify: Option<NonEmpty<Channel>>,
     /// What the box answers the Android portal at pairing.
     pub portal: suzatary_core::portal::Portal,
-    /// Every declared model provider.
-    pub providers: Vec<DeclaredProvider>,
-    /// Each job's model order and the reserve.
-    pub models: Models,
     /// The plugins this box runs, and where their cache-tier stores live.
     pub plugins: Plugins,
 }
@@ -179,16 +175,6 @@ impl Instance {
             .conversation_stores(std::sync::Arc::new(self.answers()))
     }
 
-    /// What answers a job whose order holds nothing usable: the subscription at
-    /// `[secretary] model`, never a guess between two backends.
-    #[must_use]
-    pub fn fallback(&self) -> ModelEntry {
-        ModelEntry {
-            backend: suzatary_core::models::Backend::ClaudeCli,
-            model: self.secretary.model.clone(),
-        }
-    }
-
     /// How the person reaches the app from a terminal: through the user repository's script when
     /// [`crate::paths::RUN_ENV`] named one, else the binary on `PATH`, whose `secretspec` verb
     /// names this instance's secret store.
@@ -203,18 +189,11 @@ impl Instance {
     /// The tables connections are read from, the one projection a tap's edit is read back by.
     #[must_use]
     pub fn declared(&self) -> suzatary_core::connect::Declared {
-        let ordered = Job::ALL
-            .into_iter()
-            .flat_map(|job| self.models.order(job).iter().cloned())
-            .chain([self.fallback()]);
         suzatary_core::connect::Declared {
             accounts: self.mail.accounts.accounts().to_vec(),
             plugins: self.plugins.manifests.clone(),
             drive: self.secretary.drive_allow.clone(),
             channels: NonEmpty::listed(self.notify.as_ref()).to_vec(),
-            backends: ordered
-                .map(|entry| entry.backend.as_str().to_owned())
-                .collect(),
         }
     }
 
@@ -568,8 +547,6 @@ impl Instance {
         // binary's stores cannot name different chains.
         let policies = Chains::of(chains.iter().map(|chain| chain.policy.clone()).collect())
             .map_err(|e| anyhow::anyhow!("{}: {e}", path.display()))?;
-        let providers = providers_of(path, file.providers)?;
-        let models = models_of(path, &providers, file.models)?;
         let coding = file
             .coding
             .map(|coding| served(coding, &policies))
@@ -595,7 +572,7 @@ impl Instance {
         };
         let mail = file.mail.rooted(&data);
         let settables = Settables::of_deployment(
-            &providers,
+            suzatary_io::model::TOKEN,
             NonEmpty::listed(notify.as_ref()).iter().copied(),
             coding.as_ref(),
             (&plugins.manifests, mail.accounts.accounts()),
@@ -612,8 +589,7 @@ impl Instance {
         };
         writers_checked(path, &deployment)?;
         let paths = Paths::of(&data, secretary.drive_cli.as_deref(), env);
-        // Every verb's store declares these names on its first call, so a calendar's link or a
-        // provider's key is one `secretspec` takes on a deployment whose code root is
+        // Every verb's store declares these names on its first call, so a calendar's link is one `secretspec` takes on a deployment whose code root is
         // read-only; reading the instance writes nothing.
         let declarations = suzatary_io::secrets::Declarations::new(
             code.as_path().join("secretspec.toml"),
@@ -637,8 +613,6 @@ impl Instance {
             local,
             notify,
             portal,
-            providers,
-            models,
             plugins,
             roots: Roots { code, data },
         })
@@ -699,64 +673,6 @@ fn writers_checked(path: &Path, deployment: &Deployment) -> anyhow::Result<()> {
     Ok(())
 }
 
-/// Every `[[providers]]` entry, refusing a built-in backend's name (it would
-/// be silently unreachable) and a name declared twice.
-fn providers_of(
-    path: &Path,
-    providers: Vec<DeclaredProvider>,
-) -> anyhow::Result<Vec<DeclaredProvider>> {
-    let mut seen: BTreeSet<&str> = BTreeSet::new();
-    for provider in &providers {
-        let name = provider.name.as_str();
-        if [
-            suzatary_core::models::ANTHROPIC,
-            suzatary_core::models::CLAUDE_CLI,
-        ]
-        .contains(&name)
-        {
-            bail!(
-                "{}: a provider may not be named {name:?} — that name is \
-                 reserved for the built-in subscription-backed brains",
-                path.display()
-            );
-        }
-        if !seen.insert(name) {
-            bail!(
-                "{}: {name:?} is declared as a provider more than once",
-                path.display()
-            );
-        }
-    }
-    Ok(providers)
-}
-
-/// `[models]`, each entry read against the declared providers, so an entry
-/// naming an undeclared backend stops startup rather than never being usable.
-fn models_of(
-    path: &Path,
-    providers: &[DeclaredProvider],
-    orders: Option<file::Orders>,
-) -> anyhow::Result<Models> {
-    let Some(orders) = orders else {
-        return Ok(Models::default());
-    };
-    let order_of = |job: Job, entries: &[String]| -> anyhow::Result<Vec<ModelEntry>> {
-        entries
-            .iter()
-            .map(|text| {
-                ModelEntry::parse(providers, text).map_err(|e| {
-                    anyhow::anyhow!("{}: [models].{}: {e}", path.display(), job.as_str())
-                })
-            })
-            .collect()
-    };
-    Ok(Models::default()
-        .with_order(Job::Secretary, order_of(Job::Secretary, &orders.secretary)?)
-        .with_order(Job::Review, order_of(Job::Review, &orders.review)?)
-        .with_order(Job::Title, order_of(Job::Title, &orders.title)?)
-        .with_reserve(orders.reserve))
-}
-
 /// `[coding]`, whose hand-over chain must be one this deployment serves, so a
 /// bad one stops startup rather than failing at the first tap.
 fn served(coding: Coding, chains: &Chains) -> anyhow::Result<Coding> {
@@ -789,9 +705,7 @@ mod tests {
     use super::*;
     use prodrome_core::event::Actor;
     use suzatary_core::capability::Login;
-    use suzatary_core::settings::Attestation;
     use suzatary_core::settings::Edits as _;
-    use suzatary_core::settings::configure::{Performed, Refused, Write};
 
     const GOOD: &str = r#"
 repo = "/tmp/suzatary-test"
@@ -1036,16 +950,10 @@ sent_folder = "Sent Items"
 
     /// An instance file the server would misread stops it starting, naming why: a writer who is
     /// not a viewer (dead config), a writer's actor the roster does not know, a chain name that is
-    /// not a slug, an attested provider with no `expect_commit`, a provider under a reserved name
-    /// (`anthropic`, `claude-cli`), an order naming an undeclared provider, and a reserve outside
-    /// zero to one.
+    /// not a slug, a table the binary does not read (a model provider or a model order, which
+    /// would otherwise choose nothing), and a reserve outside zero to one.
     #[test]
     fn a_file_the_server_would_misread_stops_it_starting_and_says_why() {
-        let provider = |name: &str, rest: &str| {
-            format!(
-                "{GOOD}\n[[providers]]\nname = {name:?}\nbase_url = \"https://example.test/v1\"\nkey = \"X\"\n{rest}"
-            )
-        };
         for (tag, text, said) in [
             (
                 "ghost",
@@ -1066,28 +974,21 @@ sent_folder = "Sent Items"
                 &["chain name"],
             ),
             (
-                "attested-no-expectation",
-                provider("phala", "attested = true\n"),
-                &["expect_commit"],
+                "a-provider",
+                format!(
+                    "{GOOD}\n[[providers]]\nname = \"phala\"\nbase_url = \"https://example.test/v1\"\n\
+                     key = \"X\"\nattested = false\n"
+                ),
+                &["unknown field `providers`"],
             ),
             (
-                "reserved-provider",
-                provider("anthropic", "attested = false\n"),
-                &["reserved"],
-            ),
-            (
-                "reserved-cli-provider",
-                provider("claude-cli", "attested = false\n"),
-                &["claude-cli"],
-            ),
-            (
-                "undeclared-provider",
-                format!("{GOOD}\n[models]\nreview = [\"phala/deepseek-v4-flash\"]\n"),
-                &["phala", "not a backend"],
+                "an-order",
+                format!("{GOOD}\n[models]\nreview = [\"claude-cli/claude-opus-5-5\"]\n"),
+                &["unknown field `models`"],
             ),
             (
                 "bad-reserve",
-                format!("{GOOD}\n[models]\nreserve = 1.5\n"),
+                format!("{GOOD}\n[secretary]\nreserve = 1.5\n"),
                 &["reserve"],
             ),
         ] {
@@ -1154,205 +1055,9 @@ sent_folder = "Sent Items"
         format!(
             "{GOOD}\n\
              # a comment an operator wrote by hand, years ago\n\
-             [[providers]]\n\
-             name = \"phala\"\n\
-             base_url = \"https://inference.phala.com/v1\"\n\
-             key = \"PHALA_API_KEY\"\n\
-             attested = false\n"
+             [persona]\n\
+             city = \"Springfield\"\n"
         )
-    }
-
-    /// The three writes a card's tap makes, each through `swap` as the tap makes it.
-    trait Writing {
-        fn set_provider(
-            &self,
-            name: &str,
-            to: Option<&suzatary_core::settings::DeclaredProvider>,
-        ) -> Result<Performed, Refused>;
-        fn set_order(
-            &self,
-            job: suzatary_core::models::Job,
-            entries: &[suzatary_core::models::ModelEntry],
-        ) -> Result<Performed, Refused>;
-        fn set_reserve(
-            &self,
-            reserve: suzatary_core::models::Reserve,
-        ) -> Result<Performed, Refused>;
-    }
-
-    impl Writing for InstanceEdits {
-        fn set_provider(
-            &self,
-            name: &str,
-            to: Option<&suzatary_core::settings::DeclaredProvider>,
-        ) -> Result<Performed, Refused> {
-            self.writing(Write::Provider {
-                name: name.to_owned(),
-                to: to.cloned(),
-            })
-        }
-
-        fn set_order(
-            &self,
-            job: suzatary_core::models::Job,
-            entries: &[suzatary_core::models::ModelEntry],
-        ) -> Result<Performed, Refused> {
-            self.writing(Write::Order(job, entries.to_vec()))
-        }
-
-        fn set_reserve(
-            &self,
-            reserve: suzatary_core::models::Reserve,
-        ) -> Result<Performed, Refused> {
-            self.writing(Write::Reserve(reserve))
-        }
-    }
-
-    impl InstanceEdits {
-        fn writing(&self, write: Write) -> Result<Performed, Refused> {
-            let mut write = Some(write);
-            self.swap(&mut |_| Ok(write.take()))
-        }
-    }
-
-    fn a_databricks_provider() -> suzatary_core::settings::DeclaredProvider {
-        suzatary_core::settings::DeclaredProvider {
-            name: "databricks".to_owned(),
-            base_url: "https://acme.cloud.databricks.com/serving-endpoints".to_owned(),
-            key: "DATABRICKS_TOKEN".to_owned(),
-            attestation: Attestation::Unclaimed,
-        }
-    }
-
-    #[test]
-    fn a_provider_declared_is_appended_and_every_other_byte_kept() {
-        let before = commented_instance();
-        let path = write(&before, "edits-byte-preservation");
-
-        InstanceEdits::new(path.clone())
-            .set_provider("databricks", Some(&a_databricks_provider()))
-            .expect("a fresh provider is accepted");
-
-        let after = std::fs::read_to_string(&path).expect("the file still exists");
-        assert!(
-            after.starts_with(&before),
-            "the edit changed a byte before the appended block:\n--- before ---\n{before}\n--- after ---\n{after}"
-        );
-        let appended = &after[before.len()..];
-        assert!(
-            appended.contains("name = \"databricks\""),
-            "the appended block is missing the new provider: {appended}"
-        );
-        assert!(
-            appended.contains("base_url = \"https://acme.cloud.databricks.com/serving-endpoints\""),
-        );
-        assert!(appended.contains("key = \"DATABRICKS_TOKEN\""));
-        assert!(appended.contains("attested = false"));
-
-        let instance = Instance::read(&path, &env()).expect("the edited file still parses");
-        let names: Vec<&str> = instance.providers.iter().map(|p| p.name.as_str()).collect();
-        assert_eq!(names, vec!["phala", "databricks"]);
-        let _ = std::fs::remove_file(&path);
-    }
-
-    #[test]
-    fn an_attested_provider_is_written_with_its_commit_and_reads_back() {
-        let path = write(GOOD, "edits-attested");
-        let commit = "8d0a666a2418898a8c823a9af49a634edd122a64";
-        let declared = suzatary_core::settings::ProviderSetup::parse(
-            suzatary_core::settings::Preset::Phala,
-            None,
-            Some(commit),
-        )
-        .expect("a commit")
-        .declared();
-        InstanceEdits::new(path.clone())
-            .set_provider("phala", Some(&declared))
-            .expect("a provider replaced");
-        let instance = Instance::read(&path, &env()).expect("the edited file still parses");
-        assert_eq!(instance.providers, vec![declared]);
-        let _ = std::fs::remove_file(&path);
-    }
-
-    fn entries(texts: &[&str]) -> Vec<suzatary_core::models::ModelEntry> {
-        let declared = [a_databricks_provider()];
-        texts
-            .iter()
-            .map(|text| {
-                suzatary_core::models::ModelEntry::parse(&declared, text).expect("an entry")
-            })
-            .collect()
-    }
-
-    #[test]
-    fn set_order_changes_one_key_and_no_other_byte() {
-        let before = format!(
-            "{GOOD}\n\
-             # the operator's own words about models\n\
-             [models]\n\
-             # the chat prefers the subscription\n\
-             secretary = [\"claude-cli/claude-opus-5-5\"]\n\
-             review = [\"claude-cli/claude-sonnet-5\"]   # trailing words\n\
-             reserve = 0.4\n"
-        );
-        let path = write(&before, "edits-set-order");
-        InstanceEdits::new(path.clone())
-            .set_order(
-                suzatary_core::models::Job::Review,
-                &entries(&["anthropic/claude-sonnet-5", "claude-cli/claude-sonnet-5"]),
-            )
-            .expect("an order is written");
-
-        let after = std::fs::read_to_string(&path).expect("the file still exists");
-        let (old, new): (Vec<&str>, Vec<&str>) =
-            (before.lines().collect(), after.lines().collect());
-        assert_eq!(old.len(), new.len(), "{after}");
-        let differing: Vec<(&str, &str)> = old
-            .iter()
-            .zip(&new)
-            .filter(|(a, b)| a != b)
-            .map(|(a, b)| (*a, *b))
-            .collect();
-        assert_eq!(
-            differing,
-            vec![(
-                "review = [\"claude-cli/claude-sonnet-5\"]   # trailing words",
-                "review = [\"anthropic/claude-sonnet-5\", \"claude-cli/claude-sonnet-5\"]   # trailing words"
-            )],
-            "{after}"
-        );
-        let _ = std::fs::remove_file(&path);
-    }
-
-    #[test]
-    fn set_order_and_reserve_create_the_table_and_read_back() {
-        let before = commented_instance();
-        let path = write(&before, "edits-new-models");
-        let edits = InstanceEdits::new(path.clone());
-        edits
-            .set_order(
-                suzatary_core::models::Job::Title,
-                &entries(&["anthropic/claude-haiku-4-5"]),
-            )
-            .expect("an order is written");
-        edits
-            .set_reserve(suzatary_core::models::Reserve::parse(0.5).expect("a share"))
-            .expect("a reserve is written");
-
-        let after = std::fs::read_to_string(&path).expect("the file still exists");
-        assert!(after.starts_with(&before), "{after}");
-        let instance = Instance::read(&path, &env()).expect("the edited file still parses");
-        assert_eq!(
-            instance
-                .models
-                .order(Job::Title)
-                .iter()
-                .map(ToString::to_string)
-                .collect::<Vec<_>>(),
-            vec!["anthropic/claude-haiku-4-5"]
-        );
-        assert!((instance.models.reserve().get() - 0.5).abs() < 1e-9);
-        let _ = std::fs::remove_file(&path);
     }
 
     #[test]
@@ -1474,54 +1179,5 @@ sent_folder = "Sent Items"
             ]
         );
         assert_eq!(secretary.drive_cli, Some(PathBuf::from("/data/bin/pd")));
-    }
-
-    /// A provider declared again is replaced where it stands, and removing it takes out its
-    /// table alone: declaring one and removing it leaves the file as it was.
-    #[test]
-    fn a_provider_is_replaced_in_place_and_removed_alone() {
-        let before = commented_instance();
-        let path = write(&before, "edits-provider-replace");
-        let edits = InstanceEdits::new(path.clone());
-        let replaced = suzatary_core::settings::DeclaredProvider {
-            name: "phala".to_owned(),
-            base_url: "https://something-else.test/v1".to_owned(),
-            key: "PHALA_API_KEY".to_owned(),
-            attestation: Attestation::Unclaimed,
-        };
-        edits
-            .set_provider("phala", Some(&replaced))
-            .expect("replaced");
-        edits
-            .set_provider("databricks", Some(&a_databricks_provider()))
-            .expect("declared");
-        let instance = Instance::read(&path, &env()).expect("the edited file still parses");
-        assert_eq!(instance.providers, vec![replaced, a_databricks_provider()]);
-        edits.set_provider("databricks", None).expect("removed");
-        edits
-            .set_provider("databricks", None)
-            .expect("removing what is absent is no error");
-        let instance = Instance::read(&path, &env()).expect("the edited file still parses");
-        assert_eq!(
-            instance
-                .providers
-                .iter()
-                .map(|provider| provider.name.as_str())
-                .collect::<Vec<_>>(),
-            ["phala"]
-        );
-        let path_two = write(&before, "edits-provider-round-trip");
-        let edits = InstanceEdits::new(path_two.clone());
-        edits
-            .set_provider("databricks", Some(&a_databricks_provider()))
-            .expect("declared");
-        edits.set_provider("databricks", None).expect("removed");
-        assert_eq!(
-            std::fs::read_to_string(&path_two).expect("the file still exists"),
-            before,
-            "declaring a provider and removing it leaves every byte"
-        );
-        let _ = std::fs::remove_file(&path);
-        let _ = std::fs::remove_file(&path_two);
     }
 }

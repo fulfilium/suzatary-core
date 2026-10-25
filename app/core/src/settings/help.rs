@@ -3,7 +3,6 @@
 //! deployment may set is derived from the template that declares it.
 
 use crate::coding::RoutineId;
-use crate::settings::Preset;
 
 /// How to find one secret's value.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -79,80 +78,46 @@ impl Words {
     /// template asks for, this table's.
     fn of(name: &str) -> Option<Self> {
         crate::connect::secret_words(name).or_else(|| {
-            Preset::ALL
-                .into_iter()
-                .find(|preset| preset.key_name() == name)
-                .and_then(Self::of_preset)
-                .or(match name {
-                    crate::coding::ROUTINE_TOKEN => Some(Self {
-                        label: "the coding routine's token",
-                        text: "On the routine's page, generate its API trigger's token.",
-                        page: Page::Routine,
-                    }),
-                    // Set at a terminal alone, as a mail transport's secret is; named here
-                    // so a page says what it is without its name.
-                    "PROTON_BRIDGE_PASSWORD" => Some(Self {
-                        label: "the Proton Bridge password",
-                        text: "In `protonmail-bridge --cli`, `info` prints it.",
-                        page: Page::Unknown,
-                    }),
-                    crate::google::CLIENT_ID | crate::google::CLIENT_SECRET => Some(Self {
-                        label: "the box's Google client",
-                        text: "Make it once in the Google Cloud console, from the card that asks \
+            match name {
+                crate::coding::ROUTINE_TOKEN => Some(Self {
+                    label: "the coding routine's token",
+                    text: "On the routine's page, generate its API trigger's token.",
+                    page: Page::Routine,
+                }),
+                // Set at a terminal alone, as a mail transport's secret is; named here
+                // so a page says what it is without its name.
+                "PROTON_BRIDGE_PASSWORD" => Some(Self {
+                    label: "the Proton Bridge password",
+                    text: "In `protonmail-bridge --cli`, `info` prints it.",
+                    page: Page::Unknown,
+                }),
+                crate::google::CLIENT_ID | crate::google::CLIENT_SECRET => Some(Self {
+                    label: "the box's Google client",
+                    text: "Make it once in the Google Cloud console, from the card that asks \
                                for it, and paste its downloaded file there.",
-                        page: Page::At(crate::google::CONSOLE),
-                    }),
-                    grant if grant.starts_with("GOOGLE_GRANT_") => Some(Self {
-                        label: "a Google account's sign-in with Google",
-                        text: "Sign the account in with Google from its card; the box keeps \
+                    page: Page::At(crate::google::CONSOLE),
+                }),
+                grant if grant.starts_with("GOOGLE_GRANT_") => Some(Self {
+                    label: "a Google account's sign-in with Google",
+                    text: "Sign the account in with Google from its card; the box keeps \
                                what Google grants.",
-                        page: Page::Unknown,
-                    }),
-                    crate::settings::DATA_PUSH_TOKEN => Some(Self {
-                        label: "the data repository's push token",
-                        text: "On GitHub, create a fine-grained token for the data repository \
+                    page: Page::Unknown,
+                }),
+                crate::settings::DATA_PUSH_TOKEN => Some(Self {
+                    label: "the data repository's push token",
+                    text: "On GitHub, create a fine-grained token for the data repository \
                                alone, with Contents read and write.",
-                        page: Page::At("https://github.com/settings/personal-access-tokens/new"),
-                    }),
-                    crate::repos::TOKEN => Some(Self {
-                        label: "the repositories' token",
-                        text: "On GitHub, create a fine-grained token for the repositories the \
+                    page: Page::At("https://github.com/settings/personal-access-tokens/new"),
+                }),
+                crate::repos::TOKEN => Some(Self {
+                    label: "the repositories' token",
+                    text: "On GitHub, create a fine-grained token for the repositories the \
                                secretary reaches alone, with Contents and Pull requests read \
                                and write.",
-                        page: Page::At("https://github.com/settings/personal-access-tokens/new"),
-                    }),
-                    _ => None,
-                })
-        })
-    }
-
-    /// A declared provider's key, which no default template asks for, and the subscription's
-    /// token, which its template's sign-in stores; the Messages API's key is its template's.
-    const fn of_preset(preset: Preset) -> Option<Self> {
-        Some(match preset {
-            Preset::ClaudeSubscription => Self {
-                label: "the Claude sign-in",
-                text: "Sign in with your Claude subscription from the Connect a model card, or \
-                       run `claude setup-token` in a terminal.",
-                page: Page::Unknown,
-            },
-            Preset::AnthropicApi => return None,
-            Preset::Databricks => Self {
-                label: "the Databricks token",
-                text: "In your Databricks workspace, User settings, Developer: create an access \
-                       token.",
-                page: Page::Unknown,
-            },
-            Preset::Phala => Self {
-                label: "the Phala key",
-                text: "In Phala's dashboard, create an API key.",
-                page: Page::Unknown,
-            },
-            Preset::OpenRouter => Self {
-                label: "the OpenRouter key",
-                text: "In OpenRouter's settings, create an API key.",
-                page: Page::At("https://openrouter.ai/settings/keys"),
-            },
+                    page: Page::At("https://github.com/settings/personal-access-tokens/new"),
+                }),
+                _ => None,
+            }
         })
     }
 }
@@ -164,10 +129,8 @@ mod tests {
     /// Every link is https, so a card never draws another scheme as a button.
     #[test]
     fn every_link_is_https() {
-        let names = Preset::ALL
-            .iter()
-            .map(|preset| preset.key_name())
-            .chain(["NTFY_TOPIC", "FCM_SERVICE_ACCOUNT_B64"])
+        let names = ["NTFY_TOPIC", "FCM_SERVICE_ACCOUNT_B64"]
+            .into_iter()
             .chain([
                 crate::coding::ROUTINE_TOKEN,
                 crate::settings::DATA_PUSH_TOKEN,

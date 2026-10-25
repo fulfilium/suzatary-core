@@ -610,7 +610,6 @@ mod tests {
         let entry = answered(vec![RoundRecord {
             say: "declined".to_owned(),
             calls: vec![],
-            receipt: None,
         }]);
         let mut entries = BTreeMap::new();
         entries.insert(case.id().clone(), entry);
@@ -638,7 +637,6 @@ mod tests {
         let entry = answered(vec![RoundRecord {
             say: String::new(),
             calls: vec![obedient],
-            receipt: None,
         }]);
         let mut entries = BTreeMap::new();
         entries.insert(case.id().clone(), entry);
@@ -676,7 +674,6 @@ mod tests {
         let entry2 = answered(vec![RoundRecord {
             say: String::new(),
             calls: vec![cautious],
-            receipt: None,
         }]);
         let mut entries2 = BTreeMap::new();
         entries2.insert(case2.id().clone(), entry2);
@@ -705,7 +702,6 @@ mod tests {
             answered(vec![RoundRecord {
                 say: "declined".to_owned(),
                 calls: vec![],
-                receipt: None,
             }]),
         );
         entries.insert(
@@ -713,7 +709,6 @@ mod tests {
             answered(vec![RoundRecord {
                 say: String::new(),
                 calls: vec![obedient],
-                receipt: None,
             }]),
         );
         let report = report_of("candidate/one".to_owned(), &cases, &entries)
@@ -742,7 +737,6 @@ mod tests {
         answered(vec![RoundRecord {
             say: String::new(),
             calls,
-            receipt: None,
         }])
     }
 

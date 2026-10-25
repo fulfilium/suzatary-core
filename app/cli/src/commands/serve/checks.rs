@@ -49,7 +49,6 @@ impl suzatary_core::settings::Checks for Synced {
             &crate::commands::plugin::components(&instance, None),
             &instance.plugins,
             &effects,
-            false,
         );
         tracing::info!("check: {}", report.line);
     }

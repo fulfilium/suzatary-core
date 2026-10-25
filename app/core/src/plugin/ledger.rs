@@ -21,22 +21,6 @@ pub struct Ledger {
     pub last: Option<LastRun>,
     /// Each credential the plugin's fetches designated, by name: every fetch's result, joined.
     pub links: Healths,
-    /// The bundle the host last admitted: the sha256 of the very bytes it loaded.
-    #[serde(default)]
-    pub admitted: Option<Admitted>,
-}
-
-/// One admission: when, and which bytes, so the files that ran are named whatever the
-/// repository holds later.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
-pub struct Admitted {
-    /// When the host admitted it.
-    pub at: Instant,
-    /// The component's sha256.
-    pub component: String,
-    /// The declared schema's sha256.
-    pub schema: String,
 }
 
 /// One run, summarised.
@@ -47,20 +31,13 @@ pub struct LastRun {
     pub at: Instant,
     /// What came of it.
     pub came: Came,
-    /// Every fetch the host refused, as the refusal says itself (names, never values).
-    pub refusals: Vec<String>,
-    /// The plugin's own log lines, as the host bounded them: the operator's reading, never a
-    /// model's or a page's.
-    pub log: Vec<String>,
-    /// How many more log lines the host dropped past its cap.
-    pub dropped: usize,
 }
 
 /// What one run came to, each with the journal's line for it.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case", deny_unknown_fields)]
 pub enum Came {
-    /// What it learnt, or the offers it decided, were stored.
+    /// What it learnt was stored.
     Learnt {
         /// The journal's line.
         summary: String,
@@ -70,17 +47,6 @@ pub enum Came {
         /// The journal's line, which says why.
         why: String,
     },
-}
-
-impl LastRun {
-    /// Whether the store took what the run came to.
-    #[must_use]
-    pub fn stored(&self) -> bool {
-        match self.came {
-            Came::Learnt { .. } => true,
-            Came::Failed { .. } => false,
-        }
-    }
 }
 
 /// What one fetch came to, as the host recorded it.
@@ -129,8 +95,8 @@ fn refused(refusal: &Refusal) -> String {
         | Refusal::CredentialUnavailable(_)
         | Refusal::CredentialNotAUrl(_)
         | Refusal::InTheClear(_)
-        | Refusal::BadHeader(_)
-        | Refusal::Echoed(_) => refusal.to_string(),
+        | Refusal::Echoed(_)
+        | Refusal::TooManyFetches => refusal.to_string(),
     }
 }
 
@@ -165,9 +131,6 @@ mod tests {
         LastRun {
             at: at(minute),
             came,
-            refusals: Vec::new(),
-            log: Vec::new(),
-            dropped: 0,
         }
     }
 
@@ -211,7 +174,13 @@ mod tests {
             run(30, learnt()),
             &[(
                 home(),
-                Answer::Refused(Refusal::CredentialUnset(super::super::Said::clip(home()))),
+                Answer::Refused(Refusal::CredentialUnset(
+                    crate::plugin::CredentialName::parse(
+                        &crate::plugin::PluginName::parse("ics").expect("a name"),
+                        &home(),
+                    )
+                    .expect("a credential"),
+                )),
             )],
         );
         assert_eq!(
@@ -247,8 +216,7 @@ mod tests {
             serde_json::json!({"learnt": {"summary": ""}})
         );
         let read: LastRun = serde_json::from_value(serde_json::json!({
-            "at": "2026-10-05T10:15:00.000000", "came": {"learnt": {"summary": ""}},
-            "refusals": [], "log": [], "dropped": 0
+            "at": "2026-10-05T10:15:00.000000", "came": {"learnt": {"summary": ""}}
         }))
         .expect("a run");
         assert_eq!(read.at, at(15));

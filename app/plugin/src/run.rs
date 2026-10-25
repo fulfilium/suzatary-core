@@ -1,22 +1,39 @@
-//! What one call of a plugin did: its answer, and what the host recorded while it ran.
+//! What one call of a plugin is lent, and what it did.
 
-use suzatary_core::plugin::{CredentialName, Refusal, Said, Synced};
+use std::sync::Arc;
 
-use crate::Log;
+use suzatary_core::plugin::{CredentialName, Refusal, Said};
+use suzatary_io::http::Http;
+use suzatary_io::secrets::Resolves;
 
-/// Why a call produced nothing. Whatever it repeats of the plugin's words is [`Said`], clipped
-/// where the answer crossed into the host, so no error a call returns is longer than the bound.
+/// What one call reaches. A plugin holds none of these: the host answers its imports with them.
+///
+/// `http` bounds every plugin's reach: the deployment passes
+/// `suzatary_io::http::Ureq::public_only()`, which follows no redirect and refuses any name
+/// resolving off the public internet, so no manifest can aim a plugin at this box or the tailnet.
+#[derive(Clone)]
+pub struct Effects {
+    /// The one way a request leaves.
+    pub http: Arc<dyn Http>,
+    /// The secret store, asked by name only for a credential the manifest declares.
+    pub secrets: Arc<dyn Resolves + Send + Sync>,
+}
+
+/// What a source returned: its items, unparsed, and the cursor the next call starts from.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Synced {
+    /// Each item's bytes, in the order the plugin gave them.
+    pub items: Vec<Vec<u8>>,
+    /// Opaque to the host.
+    pub cursor: Vec<u8>,
+}
+
+/// Why a call produced nothing. Whatever it repeats of the plugin's words is [`Said`].
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 pub enum RunError {
-    /// The plugin answered that a fetch was refused.
-    #[error("the plugin reports a refused fetch: {0}")]
-    Refused(Refusal),
-    /// The plugin could not read what the outside world answered.
-    #[error("the plugin could not read its answer: {0}")]
-    Malformed(Said),
-    /// The plugin did not recognise the cursor.
-    #[error("the plugin refused its cursor: {0}")]
-    BadCursor(Said),
+    /// The plugin answered with an error of its own.
+    #[error("the plugin failed: {0}")]
+    Plugin(Said),
     /// The component could not be instantiated in a fresh store.
     #[error("the plugin could not be instantiated: {0}")]
     Instantiate(Said),
@@ -26,35 +43,27 @@ pub enum RunError {
     /// The plugin grew past its budget's memory and was stopped.
     #[error("the plugin grew past its memory budget and was stopped")]
     Memory,
-    /// The plugin trapped: a panic, an unreachable, a stack overflow.
+    /// The plugin trapped: a panic, an unreachable, a stack overflow, a flood of its log.
     #[error("the plugin trapped: {0}")]
     Trapped(Said),
 }
 
-/// One fetch the plugin asked for, as the host saw it: the credential it designated, by name,
-/// and what came of it. The host's own record, so a reader (the Settings page's "last synced")
-/// never rests on what a plugin says of itself.
+/// One fetch, as the host saw it, so a reader never rests on what a plugin says of itself.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Fetch {
-    /// The declared credential the request named, as its URL or for a header; `None` for
-    /// neither, or for a name its manifest does not declare.
+    /// The declared credential it named as its URL; `None` for a URL the plugin wrote.
     pub credential: Option<CredentialName>,
     /// The status it was answered with, or why it was not sent or not handed back.
     pub outcome: Result<u16, Refusal>,
 }
 
 /// One call, as the host saw it.
-///
-/// `refused` is the host's own record of every fetch it refused, so a plugin that swallows a
-/// refusal is still seen to have been refused.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Run {
     /// The answer.
     pub result: Result<Synced, RunError>,
-    /// Every fetch the host refused during the call, in order.
-    pub refused: Vec<Refusal>,
     /// Every fetch asked for, in order, refused or answered.
     pub fetches: Vec<Fetch>,
-    /// What the plugin logged.
-    pub log: Log,
+    /// The lines the plugin wrote to its standard error, each bounded, at most a hundred.
+    pub said: Vec<Said>,
 }

@@ -35,8 +35,6 @@ pub fn overview(call: &Call<Reader, (), ()>) -> Result<Json<wire::Overview>, Ref
     let mut timed = Timed::start();
     let super::Live {
         settables,
-        providers,
-        models,
         channels,
         accounts,
         plugins,
@@ -83,14 +81,13 @@ pub fn overview(call: &Call<Reader, (), ()>) -> Result<Json<wire::Overview>, Ref
     })?;
     let seen = timed.part("plugins", || seen(state, &plugins));
     let pushes = timed.part("pushes", || pushes(state.data.as_path()));
+    let jobs = state.models.jobs();
     let declared = Declared {
         deployment: &state.deployment,
         settables: &settables,
-        providers: &providers,
         channels: suzatary_core::nonempty::NonEmpty::listed(channels.as_ref()),
         accounts: accounts.accounts(),
-        models: &models,
-        fallback: &state.fallback,
+        jobs: &jobs,
         plugins: &plugins,
         drive: &drive,
         storage: &storage,

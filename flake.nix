@@ -68,9 +68,18 @@
       url = "github:blocklistproject/Lists";
       flake = false;
     };
+
+    # THE PLUGINS' STANDARD LIBRARY. A plugin is built for wasm32-wasip2, whose std
+    # nixpkgs' rustc does not carry (it carries wasm32-unknown-unknown alone), so the
+    # plugin derivation alone takes a rustup toolchain from this overlay with that target
+    # added. Nothing else the flake builds uses it.
+    rust-overlay = {
+      url = "github:oxalica/rust-overlay";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
   };
 
-  outputs = { self, nixpkgs, flake-utils, prodrome, crane, typst-design, disposable-email-domains, blocklist-project }:
+  outputs = { self, nixpkgs, flake-utils, prodrome, crane, typst-design, disposable-email-domains, blocklist-project, rust-overlay }:
     let
       inherit (nixpkgs) lib;
 
@@ -263,6 +272,12 @@
         # into `./target` at the source root, and a cargo that wrote to
         # `app/target` instead would rebuild everything beside them.
         craneLib = crane.mkLib pkgs;
+        # The plugins' toolchain: rustup's 1.98.1, nixpkgs' version at this lock, with the
+        # wasm32-wasip2 std, whose linker writes the component itself.
+        craneWasi = craneLib.overrideToolchain
+          ((rust-overlay.lib.mkRustBin { } pkgs).stable."1.98.1".minimal.override {
+            targets = [ "wasm32-wasip2" ];
+          });
         # Every phase runs INSIDE `app/` (`sourceRoot`), the workspace's own
         # directory, rather than teaching each of crane's hooks a
         # `--manifest-path`: the install hook runs `cargo metadata` from the
@@ -482,17 +497,14 @@
 
         # THE PLUGIN HOST'S ADVERSARY (`nix build .#suzatary-plugin-fence`):
         # `app/plugin-fence`, a plugin whose every mode tries to break one of the
-        # host's fences, as the four components `app/plugin/tests/fence.rs` loads.
+        # host's fences, as the two components `app/plugin/tests/fence.rs` loads.
         # `fence.wasm` targets the source world; `escapee.wasm` is the same
         # plugin built against a world that also imports a filesystem and a
-        # network, which the host must refuse to load. `actor.wasm` is its actor
-        # (`--features actor`), and `actor-escapee.wasm` that actor importing
-        # `fetch`, which no actor is given. Built for
-        # wasm32-unknown-unknown, which nixpkgs' rustc carries (wasm32-wasip2 it
-        # does not), and wrapped by `wasm-tools component new`: nothing of WASI is
-        # linked in, so the components import exactly what their worlds name. A
-        # test fixture, never loaded by the app; its dependencies are wit-bindgen's
-        # few, so it shares no dependency build.
+        # network, which the host must refuse to load. Built for
+        # wasm32-unknown-unknown and wrapped by `wasm-tools component new`, so
+        # nothing of WASI is linked in and the components import exactly what
+        # their worlds name. A test fixture, never loaded by the app; its
+        # dependencies are wit-bindgen's few, so it shares no dependency build.
         suzatary-plugin-fence = craneLib.mkCargoDerivation (commonArgs // {
           pname = "suzatary-plugin-fence";
           src = lib.fileset.toSource {
@@ -521,31 +533,24 @@
               -p suzatary-plugin-fence --crate-type cdylib
             cargo rustc --offline --frozen --release --target wasm32-unknown-unknown \
               -p suzatary-plugin-fence --crate-type cdylib --features escapee --target-dir target/escapee
-            cargo rustc --offline --frozen --release --target wasm32-unknown-unknown \
-              -p suzatary-plugin-fence --crate-type cdylib --features actor --target-dir target/actor
-            cargo rustc --offline --frozen --release --target wasm32-unknown-unknown \
-              -p suzatary-plugin-fence --crate-type cdylib --features actor,escapee --target-dir target/actor-escapee
           '';
           installPhaseCommand = ''
             mkdir -p "$out"
             wasm-tools component new target/wasm32-unknown-unknown/release/suzatary_plugin_fence.wasm -o "$out/fence.wasm"
             wasm-tools component new target/escapee/wasm32-unknown-unknown/release/suzatary_plugin_fence.wasm -o "$out/escapee.wasm"
-            wasm-tools component new target/actor/wasm32-unknown-unknown/release/suzatary_plugin_fence.wasm -o "$out/actor.wasm"
-            wasm-tools component new target/actor-escapee/wasm32-unknown-unknown/release/suzatary_plugin_fence.wasm -o "$out/actor-escapee.wasm"
           '';
-          meta.description = "The plugin host's fence tests' adversary: four components, never loaded by the app";
+          meta.description = "The plugin host's fence tests' adversary: two components, never loaded by the app";
         });
 
-        # THE APP'S REFERENCE PLUGINS (`nix build .#suzatary-plugins`): each a
-        # component built the way the fence plugin is, for
-        # wasm32-unknown-unknown and wrapped by `wasm-tools component new`, so
-        # it imports exactly its world. `ics.wasm` is the calendar's source
-        # (`app/plugin-ics`), and `due.wasm` its actor, the same crate with
-        # `--features due`, reading the same schema. The box's plugin timer roots this output and
-        # resolves a manifest's `component` against it
-        # (`scripts/plugin-sync.sh`); the fence tests load it too, so a
-        # reference plugin is held to the same fences as the adversary.
-        suzatary-plugins = craneLib.mkCargoDerivation (commonArgs // {
+        # THE APP'S REFERENCE PLUGINS (`nix build .#suzatary-plugins`): `ics.wasm`,
+        # the calendar's source (`app/plugin-ics`), beside its schema. Built for
+        # wasm32-wasip2 with the plugins' toolchain, whose linker writes the
+        # component; it imports `fetch` and the WASI clocks, random numbers and
+        # standard streams the host links. The box's plugin timer roots this output
+        # and resolves a manifest's `component` against it (`scripts/plugin-sync.sh`);
+        # the fence tests load it too, so a reference plugin is held to the same
+        # fences as the adversary.
+        suzatary-plugins = craneWasi.mkCargoDerivation (commonArgs // {
           pname = "suzatary-plugins";
           src = lib.fileset.toSource {
             root = ./.;
@@ -565,23 +570,19 @@
           };
           cargoArtifacts = null;
           inherit cargoVendorDir;
-          nativeBuildInputs = [ pkgs.lld pkgs.wasm-tools ];
           doCheck = false;
           doInstallCargoArtifacts = false;
           buildPhaseCargoCommand = ''
-            cargo rustc --offline --frozen --release --target wasm32-unknown-unknown \
+            cargo rustc --offline --frozen --release --target wasm32-wasip2 \
               -p suzatary-plugin-ics --crate-type cdylib
-            cargo rustc --offline --frozen --release --target wasm32-unknown-unknown \
-              -p suzatary-plugin-ics --crate-type cdylib --features due --target-dir target/due
           '';
           installPhaseCommand = ''
             mkdir -p "$out"
-            wasm-tools component new target/wasm32-unknown-unknown/release/suzatary_plugin_ics.wasm -o "$out/ics.wasm"
-            wasm-tools component new target/due/wasm32-unknown-unknown/release/suzatary_plugin_ics.wasm -o "$out/due.wasm"
+            cp target/wasm32-wasip2/release/suzatary_plugin_ics.wasm "$out/ics.wasm"
             # Its declared schema ships beside it; the host admits it at load.
             cp "$src/app/plugin-ics/ics.schema" "$out/ics.schema"
           '';
-          meta.description = "Suzatary's reference plugins as components: ics.wasm, the calendar, and due.wasm, its actor, beside ics.schema";
+          meta.description = "Suzatary's reference plugin as a component: ics.wasm, the calendar, beside ics.schema";
         });
         # TYPST FOR THE TAB: the Prodrome's `typst-wasm` (`compile_html`,
         # `add_font`), the build its flake makes at the revision `inputs.prodrome`

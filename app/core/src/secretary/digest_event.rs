@@ -25,7 +25,7 @@ use crate::envelope::{Event, Says, Vocab};
 use crate::literal::{Fields, Literal as _, Signature};
 use crate::sole::{One, Only, Sole};
 
-use crate::models::ModelName;
+use crate::model_name::ModelName;
 use crate::secretary::digest_line::{Line, NODE_BYTES};
 use crate::secretary::salted_text::{Text, TextName};
 use crate::secretary::taint::Taint;
@@ -318,7 +318,7 @@ mod tests {
     }
 
     fn model() -> ModelName {
-        ModelName::parse("claude-sonnet-5-5").expect("a model")
+        ModelName::parse("a-model").expect("a model")
     }
 
     fn attempt(over: Vec<Hash>, taint: Taint) -> Attempt {

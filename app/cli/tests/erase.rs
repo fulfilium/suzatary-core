@@ -158,7 +158,7 @@ fn an_erasure_takes_the_summaries_that_read_it() {
                         .iter()
                         .map(|child| child.name().clone())
                         .collect(),
-                    model: suzatary_core::models::ModelName::parse("claude-sonnet-5-5")
+                    model: suzatary_core::model_name::ModelName::parse("claude-sonnet-5-5")
                         .expect("a model"),
                     taint: root.measure().taint,
                 },

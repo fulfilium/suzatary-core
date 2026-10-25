@@ -42,7 +42,7 @@ struct Script {
     tools: Vec<String>,
     /// The names `secretspec.toml` declares, which `secret` sets.
     secrets: Vec<String>,
-    /// The plugin credentials the guide's own `[[plugins.credentials]]` tables declare.
+    /// The plugin credentials the guide's own `[[plugins]]` tables declare.
     plugins: Vec<String>,
 }
 
@@ -83,10 +83,10 @@ impl Script {
             .collect();
         let plugins = guide
             .lines()
-            .filter_map(|line| line.trim().strip_prefix("name = \""))
-            .filter_map(|rest| rest.strip_suffix('"'))
+            .filter_map(|line| line.trim().strip_prefix("credentials = ["))
+            .flat_map(|rest| rest.trim_end_matches(']').split(','))
+            .map(|name| name.trim().trim_matches('"').to_owned())
             .filter(|name| name.starts_with("PLUGIN_"))
-            .map(str::to_owned)
             .collect();
         Self {
             verbs,

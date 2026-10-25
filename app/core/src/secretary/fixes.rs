@@ -55,8 +55,8 @@ impl Fix {
 }
 
 /// Every declared name a table of the instance file names that is `missing`, each with the
-/// box's card for it that last ended without the owner's no. A built-in backend's key is no table's: whether a model
-/// answers is the model's rule to ask.
+/// box's card for it that last ended without the owner's no. The model's credential is no
+/// table's: whether the model answers is the model's rule to ask.
 #[must_use]
 pub fn fixes(
     settables: &Settables,
@@ -148,7 +148,12 @@ mod tests {
     use crate::connect::Channel;
 
     fn declared(channels: &[Channel]) -> Settables {
-        Settables::derive(std::iter::empty(), channels.iter().copied(), None, &[])
+        Settables::derive(
+            crate::settings::MODEL_TOKEN,
+            channels.iter().copied(),
+            None,
+            &[],
+        )
     }
 
     struct World {

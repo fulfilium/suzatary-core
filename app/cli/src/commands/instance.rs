@@ -162,6 +162,10 @@ pub fn set(path: &Path, key: &Key, value: &str, env: &Env) -> anyhow::Result<()>
             .parse::<bool>()
             .map(toml_edit::Value::from)
             .with_context(|| format!("{key} holds a boolean, and {value:?} is not one"))?,
+        Some(toml_edit::Value::Float(_)) => value
+            .parse::<f64>()
+            .map(toml_edit::Value::from)
+            .with_context(|| format!("{key} holds a number, and {value:?} is not one"))?,
         Some(toml_edit::Value::String(_)) | None => toml_edit::Value::from(value),
         Some(_) => bail!("{key} holds neither a string, a number nor a boolean"),
     };
@@ -278,7 +282,7 @@ mod tests {
     /// it, neither writes, and once it is let go both do, neither losing the other's change.
     #[test]
     fn set_and_a_tap_wait_for_the_lock_beside_the_file() {
-        use suzatary_core::settings::configure::{Configuration as _, Configure, Performed};
+        use suzatary_core::settings::Edits as _;
         let dir = tempfile::tempdir().expect("scratch");
         let env = Env::under(dir.path(), dir.path());
         let path = dir.path().join("instance.toml");
@@ -287,12 +291,7 @@ mod tests {
             std::fs::read_to_string(sample()).expect("the sample"),
         )
         .expect("written");
-        let now = crate::instance::InstanceEdits::new(path.clone())
-            .configured()
-            .expect("reads");
-        let share = suzatary_core::models::Reserve::parse(0.07).expect("a share");
-        let card = Configure::reserve(&now, share).expect("a card");
-
+        let rule: suzatary_core::web::AllowRule = "*.gov.uk".parse().expect("a rule");
         let held = crate::instance::editing(&path).expect("the lock");
         let (done, finished) = std::sync::mpsc::channel();
         let setting = {
@@ -307,7 +306,7 @@ mod tests {
             let path = path.clone();
             std::thread::spawn(move || {
                 let edits = crate::instance::InstanceEdits::new(path);
-                assert_eq!(card.perform(&edits), Ok(Performed::Written));
+                edits.allow_web(&rule).expect("allowed");
                 done.send("tap").expect("sent");
             })
         };
@@ -324,12 +323,8 @@ mod tests {
         let key = |text: &str| text.parse::<Key>().expect("a key");
         assert_eq!(get(&path, &key("persona.city")).expect("reads"), "Paris");
         assert_eq!(
-            crate::instance::InstanceEdits::new(path.clone())
-                .configured()
-                .expect("reads")
-                .models
-                .reserve(),
-            share
+            get(&path, &key("secretary.web_allow.0")).expect("reads"),
+            "*.gov.uk"
         );
     }
 }

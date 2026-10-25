@@ -163,7 +163,7 @@ mod tests {
         let name = CalendarName::parse("PLUGIN_ICS_WORK").expect("a name");
         assert_eq!(name.label(), "WORK");
         for bad in [
-            "ANTHROPIC_API_KEY",
+            "MODEL_TOKEN",
             "PLUGIN_ICS",
             "PLUGIN__X",
             "PLUGIN_ICS_",

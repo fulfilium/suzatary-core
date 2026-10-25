@@ -26,7 +26,6 @@ use suzatary_core::store::Prodrome as _;
 
 use crate::commands::mcp::Interpreters;
 use crate::commands::serve::interpreters::cli_of;
-use suzatary_core::models::{Backend, ModelEntry};
 
 use crate::instance::Instance;
 
@@ -59,11 +58,11 @@ pub enum Action {
     /// Replay a frozen case file's triage and adversarial cases through a candidate,
     /// dispatching every call through the real agent surface over a temporary chain.
     Run {
-        /// `<provider>/<model>`, spelled as a `[models]` order entry; required unless
-        /// `--model-fixture` is given.
-        #[arg(long, value_name = "PROVIDER/MODEL")]
+        /// The Claude model to run through the `claude` CLI, such as `claude-sonnet-5-5`;
+        /// required unless `--model-fixture` is given.
+        #[arg(long, value_name = "MODEL")]
         model: Option<String>,
-        /// Test only: answer every round from this script instead of a real provider.
+        /// Test only: answer every round from this script instead of a real model.
         /// Overrides `--model`.
         #[cfg(feature = "fixture")]
         #[arg(long, value_name = "FILE")]
@@ -85,10 +84,6 @@ pub enum Action {
         /// failure is never "already answered".
         #[arg(long)]
         skip_failed: bool,
-        /// How many tries one throttled round gets before the case fails; the default
-        /// waits about twelve and a half minutes in all.
-        #[arg(long, default_value_t = run::DEFAULT_THROTTLE_ATTEMPTS)]
-        throttle_attempts: u32,
     },
     /// Total a run directory's token usage and, when prices are given, the dollars;
     /// prices are an input because this repository keeps no price table.
@@ -168,7 +163,6 @@ pub fn run(path: &Path, args: &Args) -> anyhow::Result<()> {
             sample,
             force,
             skip_failed,
-            throttle_attempts,
         } => run_cmd(
             &Instance::open(path)?,
             model.as_deref(),
@@ -179,7 +173,6 @@ pub fn run(path: &Path, args: &Args) -> anyhow::Result<()> {
             sample.as_deref(),
             *force,
             *skip_failed,
-            *throttle_attempts,
         ),
         Action::Cost {
             run,
@@ -399,15 +392,10 @@ fn write_atomically<T: Serialize>(out: &Path, value: &T) -> anyhow::Result<()> {
         .with_context(|| format!("writing {}", out.display()))
 }
 
-/// A candidate model as `--model` names one, built from the same interpreters a live job
-/// uses but without a job's spillover order.
+/// A candidate model as `--model` names one, built as a live job builds it.
 pub enum Candidate {
-    /// `anthropic/`: the Anthropic Messages API.
-    Anthropic(suzatary_io::anthropic::AnthropicMessages),
-    /// `claude-cli/`: the `claude` CLI subprocess, the incumbent, built as a live job builds it.
-    Cli(suzatary_io::model::ClaudeCli),
-    /// A `[[providers]]` entry: any OpenAI-compatible endpoint.
-    OpenAi(suzatary_io::openai::OpenAiCompatible),
+    /// The `claude` CLI subprocess.
+    Cli(Box<suzatary_io::model::ClaudeCli>),
     /// Test only: `--model-fixture`'s scripted replies.
     #[cfg(feature = "fixture")]
     Scripted(crate::commands::fixture::Scripted),
@@ -416,9 +404,7 @@ pub enum Candidate {
 impl Model for Candidate {
     fn name(&self) -> String {
         match self {
-            Candidate::Anthropic(model) => model.name(),
             Candidate::Cli(model) => model.name(),
-            Candidate::OpenAi(model) => model.name(),
             #[cfg(feature = "fixture")]
             Candidate::Scripted(model) => model.name(),
         }
@@ -430,53 +416,18 @@ impl Model for Candidate {
         tools: &serde_json::Value,
     ) -> Result<Reply, ModelError> {
         match self {
-            Candidate::Anthropic(model) => model.turn(conversation, tools),
             Candidate::Cli(model) => model.turn(conversation, tools),
-            Candidate::OpenAi(model) => model.turn(conversation, tools),
             #[cfg(feature = "fixture")]
             Candidate::Scripted(model) => model.turn(conversation, tools),
         }
     }
 }
 
-// Only the OpenAI-compatible interpreter's error still carries `retry_after` before
-// `ModelError` flattens it, so only that candidate can answer a typed throttle.
-impl run::Throttling for Candidate {
-    fn attempt(&self, conversation: &Conversation, tools: &serde_json::Value) -> run::Attempt {
-        let Candidate::OpenAi(model) = self else {
-            return match self.turn(conversation, tools) {
-                Ok(reply) => run::Attempt::Answered(reply),
-                Err(error) => run::Attempt::Failed(error),
-            };
-        };
-        match model.turn_with_receipt(conversation, tools) {
-            Ok((reply, receipt)) => {
-                run::Attempt::Answered(reply.with_receipt(receipt.map(|found| found.identifier)))
-            }
-            Err(suzatary_io::openai::OpenAiError::Throttled { retry_after }) => {
-                run::Attempt::Throttled {
-                    retry_after: retry_after.as_deref().and_then(seconds_of),
-                }
-            }
-            Err(other) => run::Attempt::Failed(ModelError::from(other)),
-        }
-    }
-}
-
-/// Parse a `Retry-After` value as plain seconds; an HTTP-date yields `None` and the
-/// loop's own backoff decides the wait.
-fn seconds_of(raw: &str) -> Option<std::time::Duration> {
-    raw.trim()
-        .parse::<u64>()
-        .ok()
-        .map(std::time::Duration::from_secs)
-}
-
 /// Build the candidate `--model`/`--model-fixture` names.
 ///
 /// # Errors
-/// No model given, an unparseable or undeclared one, an unresolved key, or an unreadable
-/// fixture; a `claude-cli/` candidate's own failures surface later as a failed case.
+/// No model given, a name that is not a model name, or an unreadable fixture; the CLI's own
+/// failures surface later as a failed case.
 pub fn candidate_of(
     instance: &Instance,
     model: Option<&str>,
@@ -491,44 +442,12 @@ pub fn candidate_of(
     }
     let model = model
         .ok_or_else(|| anyhow::anyhow!("--model (or, test-only, --model-fixture) is required"))?;
-    let entry = ModelEntry::parse(&instance.providers, model)?;
-    let model = entry.model.as_str().to_owned();
-    match &entry.backend {
-        Backend::AnthropicApi => {
-            let key = secrets
-                .get(suzatary_io::anthropic::KEY, suzatary_io::anthropic::REASON)?
-                .ok_or_else(|| anyhow::anyhow!("the anthropic subscription key did not resolve"))?;
-            Ok(Candidate::Anthropic(
-                suzatary_io::anthropic::AnthropicMessages::new(model, key),
-            ))
-        }
-        Backend::ClaudeCli => Ok(Candidate::Cli(cli_of(instance, &model, secrets))),
-        Backend::Declared(name) => {
-            let provider = instance
-                .providers
-                .iter()
-                .find(|provider| &provider.name == name)
-                .ok_or_else(|| {
-                    anyhow::anyhow!("no provider named {name:?} in this instance file")
-                })?;
-            let key = secrets
-                .get(
-                    &provider.key,
-                    "bench run: a declared provider answers a case",
-                )?
-                .ok_or_else(|| {
-                    anyhow::anyhow!("the key for provider {:?} did not resolve", provider.name)
-                })?;
-            Ok(Candidate::OpenAi(
-                suzatary_io::openai::OpenAiCompatible::new(
-                    provider.base_url.clone(),
-                    model,
-                    key,
-                    (&provider.attestation).into(),
-                ),
-            ))
-        }
-    }
+    let model = suzatary_core::model_name::ModelName::parse(model)?;
+    Ok(Candidate::Cli(Box::new(cli_of(
+        instance,
+        model.as_str(),
+        secrets,
+    ))))
 }
 
 /// A case's replay input (its chain, the tip to seed at, and the opening turn), built from
@@ -588,7 +507,6 @@ pub fn run_cmd(
     sample: Option<&Path>,
     force: bool,
     skip_failed: bool,
-    throttle_attempts: u32,
 ) -> anyhow::Result<()> {
     let secrets = instance.secrets();
     let candidate = candidate_of(
@@ -645,7 +563,6 @@ pub fn run_cmd(
             &chain_name,
             tip.as_deref(),
             opening,
-            throttle_attempts,
         )?;
         match &outcome {
             Outcome::Answered(answer) => {
@@ -728,7 +645,6 @@ fn dispatch_case(
     chain_name: &str,
     tip: Option<&str>,
     opening: String,
-    throttle_attempts: u32,
 ) -> anyhow::Result<Outcome> {
     // Validated by name up front so a misspelled chain is not a replay-time refusal.
     instance.chain(Some(chain_name))?;
@@ -796,9 +712,6 @@ fn dispatch_case(
         &instance.deployment,
         system,
         opening,
-        case.id().as_str(),
-        throttle_attempts,
-        &std::thread::sleep,
     );
     let _ = std::fs::remove_dir_all(&case_scratch);
     Ok(outcome)
@@ -1291,7 +1204,6 @@ mod sheet_printer_tests {
             rounds: vec![run::RoundRecord {
                 say: "Nothing actionable here.".to_owned(),
                 calls: Vec::new(),
-                receipt: None,
             }],
             objects: Vec::new(),
             usage: None,
@@ -1333,7 +1245,6 @@ mod sheet_printer_tests {
                       [{\"verb\": \"todo_add\", \"args\": {}}]}"
                     .to_owned(),
                 calls: Vec::new(),
-                receipt: None,
             }],
             objects: Vec::new(),
             usage: None,

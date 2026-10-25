@@ -23,8 +23,7 @@ every device holds a full replica, writes offline, and converges by union.
 - **A person who wants an assistant over their own mail** and will not hand
   their inbox to a hosted service. You need a small Linux box that is always
   on, [Nix](https://nixos.org), a [Tailscale](https://tailscale.com) network
-  for your box and your phone, and a Claude subscription or Anthropic API key
-  (or another provider you declare).
+  for your box and your phone, and a Claude subscription.
 - **Someone curious about local-first applications** built as readings of a
   CRDT: every page is a pure function of the replica it holds, every cache is
   a memo of a pure function, and every effect is an intent the history
@@ -114,8 +113,8 @@ the full threat model.
 ## Quick start
 
 What you need: a box running [NixOS](https://nixos.org/download) (flakes on),
-[Tailscale](https://tailscale.com) on the box and your phone, and either a
-Claude subscription or an Anthropic API key.
+[Tailscale](https://tailscale.com) on the box and your phone, and a Claude
+subscription.
 
 Setting up is a series of commands, each with a check of what it must print:
 [`AGENT.md`](AGENT.md) holds them, written for a coding agent working on your

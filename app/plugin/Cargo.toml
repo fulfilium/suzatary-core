@@ -17,6 +17,9 @@ suzatary-core.workspace = true
 suzatary-io.workspace = true
 thiserror.workspace = true
 wasmtime.workspace = true
+wasmtime-wasi.workspace = true
+# A plugin's clock subscriptions sleep on the runtime wasmtime-wasi already runs.
+tokio.workspace = true
 
 # THE FENCES, RUN BY NAME. Each mode of the fence plugin (`app/plugin-fence`) tries one rule and
 # the test asserts its typed refusal. It needs the components the flake builds, which a bare

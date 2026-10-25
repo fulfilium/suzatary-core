@@ -1526,9 +1526,7 @@ impl suzatary_core::secretary::routes::Perform for SignsIn {
         consent: suzatary_core::mail::oauth::Consent,
     ) -> suzatary_core::secretary::responded::Performed {
         match act {
-            suzatary_core::secretary::acts::Act::ClaudeSignIn { .. } => {
-                self.signing.begin(object, now())
-            }
+            suzatary_core::secretary::acts::Act::SignIn { .. } => self.signing.begin(object, now()),
             _ => self
                 .recorded
                 .begin(id, index, object, proposer, act, consent),
@@ -1712,7 +1710,7 @@ impl DeclaredStore {
         let declarations = suzatary_io::secrets::Declarations::new(
             base,
             dir.path().join("state"),
-            suzatary_core::settings::Settables::derive([], [], None, &[]),
+            suzatary_core::settings::Settables::derive(suzatary_io::model::TOKEN, [], None, &[]),
         );
         Self {
             declarations,
@@ -1788,11 +1786,10 @@ impl suzatary_core::settings::Writes for SecretsAlwaysFail {
 }
 
 /// Records every allow rule it is handed and always succeeds; a connection's edit is the
-/// algebra's, over the tables it holds, and a setting's is written to the settings it holds.
+/// algebra's, over the tables it holds.
 #[derive(Default)]
 pub struct EditsRecorder {
     declared: std::sync::Mutex<suzatary_core::connect::Declared>,
-    configured: std::sync::Mutex<suzatary_core::settings::configure::Configured>,
     allowed: std::sync::Mutex<Vec<suzatary_core::web::AllowRule>>,
     folders: std::sync::Mutex<Vec<suzatary_core::drive::DrivePath>>,
 }
@@ -1827,40 +1824,6 @@ impl EditsRecorder {
 }
 
 impl suzatary_core::settings::Edits for EditsRecorder {
-    fn swap(
-        &self,
-        decide: &mut dyn FnMut(
-            &suzatary_core::settings::configure::Configured,
-        ) -> Result<
-            Option<suzatary_core::settings::configure::Write>,
-            suzatary_core::settings::configure::Refused,
-        >,
-    ) -> Result<
-        suzatary_core::settings::configure::Performed,
-        suzatary_core::settings::configure::Refused,
-    > {
-        use suzatary_core::settings::configure::{Performed, Write};
-        let mut configured = self.configured.lock().expect("not poisoned");
-        Ok(match decide(&configured)? {
-            None => Performed::Already,
-            Some(Write::Order(job, entries)) => {
-                configured.models = configured.models.clone().with_order(job, entries);
-                Performed::Written
-            }
-            Some(Write::Reserve(reserve)) => {
-                configured.models = configured.models.clone().with_reserve(reserve);
-                Performed::Written
-            }
-            Some(Write::Provider { name, to }) => {
-                configured
-                    .providers
-                    .retain(|provider| provider.name != name);
-                configured.providers.extend(to);
-                Performed::Written
-            }
-        })
-    }
-
     fn allow_web(
         &self,
         rule: &suzatary_core::web::AllowRule,
@@ -1912,14 +1875,7 @@ impl suzatary_core::settings::Edits for EditsRecorder {
     }
 }
 
-impl suzatary_core::settings::configure::Configuration for EditsRecorder {
-    fn configured(
-        &self,
-    ) -> Result<suzatary_core::settings::configure::Configured, suzatary_core::settings::EditError>
-    {
-        Ok(self.configured.lock().expect("not poisoned").clone())
-    }
-
+impl suzatary_core::settings::Configuration for EditsRecorder {
     fn declared(
         &self,
     ) -> Result<suzatary_core::connect::Declared, suzatary_core::settings::EditError> {
@@ -1929,10 +1885,10 @@ impl suzatary_core::settings::configure::Configuration for EditsRecorder {
 
 /// Everything `State` needs for `/api/overview` and the settings writes beside the effect record.
 pub struct SettingsFixture {
-    /// The settable names, the providers, the orders, the channels, the accounts and the plugins the server starts with.
+    /// The settable names, the channels, the accounts and the plugins the server starts with.
     pub live: serve::Live,
-    /// The model an empty order answers with.
-    pub fallback: Arc<suzatary_core::models::ModelEntry>,
+    /// The Claude models the server runs.
+    pub models: Arc<serve::models::Models>,
     /// Where a secret write goes.
     pub secrets: Arc<dyn suzatary_core::settings::Writes + Send + Sync>,
     /// What declares the settable names to the store a secret write goes to.
@@ -1948,7 +1904,7 @@ impl SettingsFixture {
     fn over(self, data: Arc<PathBuf>) -> serve::Settings {
         serve::Settings {
             live: self.live.shared(),
-            fallback: self.fallback,
+            models: self.models,
             secrets: self.secrets,
             declares: self.declares,
             edits: self.edits,
@@ -1962,22 +1918,22 @@ impl SettingsFixture {
         Self {
             live: serve::Live {
                 settables: suzatary_core::settings::Settables::derive(
-                    std::iter::empty(),
+                    suzatary_io::model::TOKEN,
                     std::iter::empty(),
                     None,
                     &[],
                 ),
-                providers: Vec::new(),
-                models: suzatary_core::models::Models::default(),
                 channels: None,
                 accounts: suzatary_core::mail::account::Roster::new(Vec::new())
                     .expect("an empty roster"),
                 plugins: Vec::new(),
             },
-            fallback: Arc::new(
-                suzatary_core::models::ModelEntry::parse(&[], "claude-cli/claude-opus-5-5")
-                    .expect("a built-in entry"),
-            ),
+            models: Arc::new(serve::models::Models {
+                chat: suzatary_core::model_name::ModelName::parse("claude-opus-5-5")
+                    .expect("a model name"),
+                compacting: suzatary_core::secretary::compacting::Compacting::Off,
+                reserve: suzatary_cli::instance::Reserve::default(),
+            }),
             secrets: Arc::new(SecretRecorder::new()),
             declares: Arc::new(Undeclared),
             edits: Arc::new(EditsRecorder::new()),
@@ -2212,9 +2168,8 @@ pub struct Fakes {
     pub repos: Arc<suzatary_io::repos::Mirrors>,
     /// The calendar, a cache-tier store under the root; empty unless a test learns into it.
     pub calendar: suzatary_io::calendar::Clocked,
-    /// The model settings a Configure card reads as its from; none declared unless a test
-    /// reads them from an instance file.
-    pub configuration: Arc<dyn suzatary_core::settings::configure::Configuration>,
+    /// The tables a Connect card is checked against; none declared.
+    pub configuration: Arc<dyn suzatary_core::settings::Configuration>,
     /// Where each declared secret stands: nothing set, unless a scene reads its own store.
     pub secrets: Arc<dyn suzatary_core::capability::Secrets + Send + Sync>,
 }
@@ -2326,18 +2281,6 @@ impl Fakes {
         }
     }
 
-    /// The same, a Configure card reading its from out of `configuration`.
-    #[must_use]
-    pub fn configuration(
-        self,
-        configuration: Arc<dyn suzatary_core::settings::configure::Configuration>,
-    ) -> Self {
-        Self {
-            configuration,
-            ..self
-        }
-    }
-
     /// A `Proposing` over this bundle's replica, as a triage run writes through.
     ///
     /// It adopts the chain, as a run does, so the first write has a parent.
@@ -2363,6 +2306,18 @@ impl Fakes {
             self.proposing(),
             suzatary_core::store::Signer::Key(std::sync::Arc::clone(cast_keys().agent())),
         )
+    }
+
+    /// The same, a Connect card checked against `configuration`.
+    #[must_use]
+    pub fn configuration(
+        self,
+        configuration: Arc<dyn suzatary_core::settings::Configuration>,
+    ) -> Self {
+        Self {
+            configuration,
+            ..self
+        }
     }
 
     /// A bundle whose peers resolve through `whois`.
@@ -2785,7 +2740,7 @@ impl Googled {
 }
 
 /// How a test server reaches its models: the `claude` a sign-in runs, what the register says of
-/// each entry (a server whose fallback answers, by default), and the test call a credential takes.
+/// the model (a server whose model answers, by default), and the test call a credential takes.
 pub struct Reaching {
     /// The program a tapped Connect card runs.
     pub claude: String,

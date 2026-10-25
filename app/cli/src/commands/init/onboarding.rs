@@ -16,9 +16,7 @@ use suzatary_core::chains::ChainName;
 use suzatary_core::connect::{AccountKind, Connection, Params, Reach, Refused};
 use suzatary_core::mail::account::{Authority, MailAccount, Roster};
 use suzatary_core::mail::address::EmailAddress;
-use suzatary_core::models::{Backend, ModelEntry};
 use suzatary_core::persona::Persona;
-use suzatary_core::settings::Preset;
 
 use crate::instance::{Chain, File, Mail, Secretary, Serving, Web};
 
@@ -35,8 +33,6 @@ pub struct Onboarding {
     categories: Vec<String>,
     /// The first mail account, if any; more are added to the file by hand.
     mail: Option<FirstAccount>,
-    /// Which model answers.
-    brain: Brain,
     /// The code root, relative to the instance file.
     repo: PathBuf,
     /// The data root, relative to the instance file.
@@ -142,16 +138,6 @@ pub enum Provider {
     Proton,
 }
 
-/// The model every job answers with: one of the two backends that need no declared provider.
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, clap::ValueEnum)]
-pub enum Brain {
-    /// The Claude subscription, through the `claude` CLI.
-    #[default]
-    Subscription,
-    /// The Anthropic API, billed by key.
-    AnthropicApi,
-}
-
 /// One act left to the person, as the command they type.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Step {
@@ -205,7 +191,6 @@ impl Onboarding {
         door: Door,
         categories: Vec<String>,
         mail: Option<FirstAccount>,
-        brain: Brain,
         roots: (PathBuf, PathBuf),
     ) -> anyhow::Result<Self> {
         named(&person.name)?;
@@ -223,7 +208,6 @@ impl Onboarding {
             door,
             categories,
             mail,
-            brain,
             repo: roots.0,
             data: roots.1,
         })
@@ -314,8 +298,6 @@ impl Onboarding {
                 prose: suzatary_core::persona::Prose::default(),
             },
             notify: None,
-            providers: Vec::new(),
-            models: self.brain.orders(),
             coding: None,
             cache: None,
             plugins: Vec::new(),
@@ -335,8 +317,7 @@ impl Onboarding {
     /// `doctor` to see it all read back, each spelled as `reach` reaches the app.
     #[must_use]
     pub fn steps(&self, reach: &Reach) -> Vec<Step> {
-        self.brain
-            .steps(reach)
+        model_steps(reach)
             .into_iter()
             .chain(self.mail.iter().flat_map(|first| first.steps(reach)))
             .chain([Step {
@@ -468,61 +449,20 @@ impl FirstAccount {
     }
 }
 
-impl Brain {
-    /// The settings page's preset this is, which names its secret.
-    #[must_use]
-    pub const fn preset(self) -> Preset {
-        match self {
-            Brain::Subscription => Preset::ClaudeSubscription,
-            Brain::AnthropicApi => Preset::AnthropicApi,
-        }
-    }
-
-    /// `[models]`: none for the subscription, which every empty order falls back to; the API
-    /// at the secretary's model for the jobs the router reads.
-    pub(crate) fn orders(self) -> Option<crate::instance::Orders> {
-        match self {
-            Brain::Subscription => None,
-            Brain::AnthropicApi => {
-                let entry = vec![
-                    ModelEntry {
-                        backend: Backend::AnthropicApi,
-                        model: Secretary::default().model,
-                    }
-                    .to_string(),
-                ];
-                Some(crate::instance::Orders {
-                    secretary: entry.clone(),
-                    review: entry.clone(),
-                    title: entry,
-                    reserve: suzatary_core::models::Reserve::default(),
-                })
-            }
-        }
-    }
-
-    /// The secret this brain needs, set at a prompt so it is never an argument.
-    #[must_use]
-    pub fn steps(self, reach: &Reach) -> Vec<Step> {
-        let set = |why| Step {
-            command: reach.secret(self.preset().key_name()),
-            why,
-        };
-        match self {
-            Brain::Subscription => vec![
-                Step {
-                    command: reach.tool("claude setup-token"),
-                    why: "a year's token for the unattended jobs; or skip this step and the \
-                          next: the app asks you to connect the model, from your phone",
-                },
-                set("typed at the prompt, never on the command line"),
-            ],
-            Brain::AnthropicApi => vec![set(
-                "typed at the prompt, never on the command line; or skip it: the app asks for \
-                 the key, from your phone",
-            )],
-        }
-    }
+/// What the Claude subscription needs: a token, set at a prompt so it is never an argument.
+#[must_use]
+pub fn model_steps(reach: &Reach) -> Vec<Step> {
+    vec![
+        Step {
+            command: reach.tool("claude setup-token"),
+            why: "a year's token for the unattended jobs; or skip this step and the next: the \
+                  app asks you to connect the model, from your phone",
+        },
+        Step {
+            command: reach.secret(suzatary_io::model::TOKEN),
+            why: "typed at the prompt, never on the command line",
+        },
+    ]
 }
 
 impl std::fmt::Display for Step {
@@ -562,19 +502,6 @@ pub(crate) fn of(file: &File) -> Option<Onboarding> {
         ),
         _ => return None,
     };
-    let brain = [Brain::Subscription, Brain::AnthropicApi]
-        .into_iter()
-        .find(|brain| {
-            let (want, have) = (brain.orders(), file.models.as_ref());
-            match (want, have) {
-                (None, None) => true,
-                (Some(want), Some(have)) => {
-                    (&want.secretary, &want.review, &want.title)
-                        == (&have.secretary, &have.review, &have.title)
-                }
-                _ => false,
-            }
-        })?;
     let name = BoxName::parse(file.web.app_url.strip_prefix("https://")?).ok()?;
     (owners.len() == 1
         && file.chains.iter().all(|chain| chain.owner == owner)
@@ -591,7 +518,6 @@ pub(crate) fn of(file: &File) -> Option<Onboarding> {
         door: Door { name, logins },
         categories: ranked.into_values().cloned().collect(),
         mail,
-        brain,
         repo: file.repo.clone(),
         data: file.data.clone(),
     })

@@ -617,14 +617,14 @@ fn a_stray_key_cannot_flood_the_inbox_with_device_cards() {
     );
 }
 
-/// A model that proposes the Phala key, then answers three rounds of another conversation.
+/// A model that proposes the ntfy topic, then answers three rounds of another conversation.
 fn replaying_model() -> common::FakeModel {
     common::FakeModel::saying([
         r#"{"say": "I will ask for the key.",
             "calls": [{"verb": "propose_act", "args": {
               "act": "secret",
-              "name": "PHALA_API_KEY",
-              "why": "Phala calls have been failing for want of a key.",
+              "name": "NTFY_TOPIC",
+              "why": "Notifications have been failing for want of a topic.",
               "sources": "todo:life/permitfiling"
             }}]}"#,
         r#"{"say": "Proposed. Tap it and type the key."}"#,
@@ -634,32 +634,21 @@ fn replaying_model() -> common::FakeModel {
     ])
 }
 
-/// The Phala provider, whose key is a secret the settings page may set.
-fn phala_provider() -> suzatary_core::settings::DeclaredProvider {
-    suzatary_core::settings::DeclaredProvider {
-        name: "phala".to_owned(),
-        base_url: "https://phala.example.test/v1".to_owned(),
-        key: "PHALA_API_KEY".to_owned(),
-        attestation: suzatary_core::settings::Attestation::Unclaimed,
-    }
-}
-
-/// The secret names a deployment declaring the Phala provider may set.
-fn phala() -> suzatary_core::settings::Settables {
+/// The secret names a deployment with an ntfy channel may set.
+fn ntfy() -> suzatary_core::settings::Settables {
     suzatary_core::settings::Settables::derive(
-        [phala_provider()].iter(),
-        std::iter::empty(),
+        suzatary_io::model::TOKEN,
+        [suzatary_core::connect::Channel::Ntfy],
         None,
         &[],
     )
 }
 
-/// Settings declaring the Phala provider, its key settable.
-fn phala_settings(settings: common::SettingsFixture) -> common::SettingsFixture {
+/// Settings declaring an ntfy channel, its topic settable.
+fn ntfy_settings(settings: common::SettingsFixture) -> common::SettingsFixture {
     common::SettingsFixture {
         live: suzatary_cli::serve::Live {
-            settables: phala(),
-            providers: vec![phala_provider()],
+            settables: ntfy(),
             ..settings.live
         },
         ..settings
@@ -682,7 +671,7 @@ fn replaying(tag: &str) -> Replaying {
 fn replaying_with(tag: &str, model: common::FakeModel) -> Replaying {
     let phone = seed('1');
     let secrets = Arc::new(common::SecretRecorder::new());
-    let settings = phala_settings(common::SettingsFixture::with_writer(
+    let settings = ntfy_settings(common::SettingsFixture::with_writer(
         Arc::clone(&secrets) as _
     ));
     let deployment = common::deployment([ada()], [(ada(), common::actor("ada"))]);
@@ -775,7 +764,7 @@ fn a_replayed_request_is_answered_from_its_record_and_performs_nothing() {
     let carded = r.open("A key");
     r.twice(
         &format!("/api/secretary/conversations/{carded}/say"),
-        &serde_json::json!({ "say": "the Phala key is missing" }),
+        &serde_json::json!({ "say": "the notifications topic is missing" }),
         202,
     );
     assert_eq!(r.settled(&carded)["proposals"][0]["act"]["kind"], "secret");
@@ -786,7 +775,7 @@ fn a_replayed_request_is_answered_from_its_record_and_performs_nothing() {
     );
     assert_eq!(
         r.secrets.calls(),
-        vec![("PHALA_API_KEY".to_owned(), "sk-tapped-once".to_owned())],
+        vec![("NTFY_TOPIC".to_owned(), "sk-tapped-once".to_owned())],
         "the tapped secret was set exactly once"
     );
 
@@ -1031,7 +1020,7 @@ fn provenance_only(dir: &std::path::Path, words: &[&str], digests: &[String]) {
     }
 }
 
-/// A model that remembers two facts in one round, then proposes the Phala key and answers once
+/// A model that remembers two facts in one round, then proposes the ntfy topic and answers once
 /// more.
 fn private_model() -> common::FakeModel {
     common::FakeModel::saying([
@@ -1042,8 +1031,8 @@ fn private_model() -> common::FakeModel {
         r#"{"say": "I will ask for the key.",
                 "calls": [{"verb": "propose_act", "args": {
                   "act": "secret",
-                  "name": "PHALA_API_KEY",
-                  "why": "Phala calls have been failing for want of a key.",
+                  "name": "NTFY_TOPIC",
+                  "why": "Notifications have been failing for want of a topic.",
                   "sources": "todo:life/permitfiling"
                 }}]}"#,
         r#"{"say": "Proposed."}"#,
@@ -1073,7 +1062,7 @@ fn a_pushed_request_record_holds_nothing_said_either_way() {
     sent.send(
         &r,
         &format!("/api/secretary/conversations/{carded}/say"),
-        &serde_json::json!({ "say": "the Phala key is missing" }),
+        &serde_json::json!({ "say": "the notifications topic is missing" }),
         &r.phone,
     );
     r.settled(&carded);

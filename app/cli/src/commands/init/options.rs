@@ -8,10 +8,8 @@ use std::fmt::Write as _;
 
 use clap::{CommandFactory as _, ValueEnum};
 use suzatary_core::cast::CAST;
-use suzatary_core::plugin::World;
-use suzatary_core::settings::Preset;
 
-use super::{Brain, FirstAccount, Flags, Provider, Reach};
+use super::{FirstAccount, Flags, Provider, Reach};
 
 /// The line before the generated text in `AGENT.md`.
 pub const BEGIN: &str =
@@ -25,10 +23,6 @@ const SCRIPT: &str = "./suzatary";
 
 /// The flags `init` takes that choose nothing about the deployment.
 const NOT_CHOICES: [&str; 3] = ["help", "force", "options"];
-
-/// Each world, in the order the guide lists them; a new world is a new arm in [`about`], which
-/// fails to compile until it has one.
-const WORLDS: [World; 2] = [World::Source, World::Actor];
 
 /// The options, from [`BEGIN`] to [`END`] inclusive, ending with a newline.
 #[must_use]
@@ -79,57 +73,31 @@ fn mail(out: &mut String, reach: &Reach) {
     }
 }
 
-/// The model `init` sets, the secret each needs, and the backends added after.
+/// The model every job runs, and the token it needs.
 fn models(out: &mut String, reach: &Reach) {
     out.push_str("### Model\n\n");
     out.push_str(
-        "`--model`; every job answers with it until a tapped card orders others. Its secret \
-         is set at a terminal as below, or, once the app runs, from the **Connect a model** card \
-         the box files in the Inbox whenever no job's model answers.\n\n",
+        "Every job runs a Claude model through the `claude` CLI on the Claude subscription: \
+         `[secretary] model` for the chat, the reviews and the titles, and `[secretary] \
+         compactor` for the compactor. Its token is set at a terminal as below, or, once the app \
+         runs, from the **Connect a model** card the box files in the Inbox whenever the model \
+         does not answer.\n\n",
     );
-    for brain in Brain::value_variants() {
-        choice(out, brain);
-        block(out, &brain.steps(reach));
-    }
-    out.push_str(
-        "Other backends are declared after `init`, by a card the secretary files when asked and \
-         you tap. The box then files a \
-         card in the Inbox asking for each one's key, under its own name:\n\n| Backend | \
-         Secret |\n|---|---|\n",
-    );
-    for preset in Preset::ALL {
-        let _ = writeln!(out, "| `{}/` | `{}` |", preset.backend(), preset.key_name());
-    }
-    out.push('\n');
+    block(out, &super::onboarding::model_steps(reach));
 }
 
-/// The worlds a connector (a calendar, any other service) is written against.
+/// The world a connector (a calendar, any other service) is written against.
 fn connectors(out: &mut String) {
     out.push_str("### Calendars and other connectors\n\n");
     out.push_str(
-        "A connector is a plugin, a WebAssembly component of one world, declared by a \
-         `[[plugins]]` table that names every origin and credential it may use. The app ships \
-         the calendar (`ics`, a `source`, one secret iCal link per calendar, each a `url` \
-         credential named `PLUGIN_ICS_<LABEL>`). The worlds:\n\n",
+        "A connector is a plugin: a WebAssembly component of the `source` world, built for \
+         `wasm32-wasip2` and declared by a `[[plugins]]` table that names every origin it may \
+         reach and every credential it may name. A credential is a secret link the host fetches \
+         for it. The app ships the calendar (`ics`, one secret iCal link per calendar, each a \
+         credential named `PLUGIN_ICS_<LABEL>`). The host links one import of its own, \
+         `suzatary:plugin/fetch`, and of WASI only the clocks, random numbers and standard \
+         streams.\n\n",
     );
-    for world in WORLDS {
-        let imports = world.imports().join("`, `");
-        let _ = writeln!(out, "- `{world}`: {} Imports `{imports}`.", about(world));
-    }
-    out.push('\n');
-}
-
-/// What a world's plugins do.
-const fn about(world: World) -> &'static str {
-    match world {
-        World::Source => {
-            "reads a service from a cursor into its own cache store; the only world that fetches."
-        }
-        World::Actor => {
-            "reads a store and proposes cards the owner taps; it fetches nothing and performs \
-             nothing."
-        }
-    }
 }
 
 /// One value of a flag's enum, as a list item: its spelling and its help.

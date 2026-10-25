@@ -612,57 +612,54 @@ Threat model: an injected email can at worst mis-triage or write bad todo text
   Secrets never in git, URLs or transcripts: static → secretspec/pass
   (audited), rotating caches → owner-managed, vaulted. SSN/TIN never in this
   repo; resume_typst/thesis are PUBLIC.
-- ⚠️ **A plugin's authority is its imports** (2026-10-02,
-  `docs/PLUGINS-PLAN-2026-10-02.md` stage 1; `suzatary-plugin`,
-  `suzatary_core::plugin`). A plugin is a WebAssembly component targeting a
-  world of `app/wit/plugin.wit`, and a world is a record of authorities: the
-  `source` world imports the host's `fetch`, a clock and a logger, and no
-  WASI, so no filesystem, socket, environment or randomness exists to reach
-  for. `Host::load` refuses a component importing anything else before it
-  runs. `fetch` is the host's: the `[[plugins]]` manifest parses only to the
-  origins it allows and to credential NAMES in `PLUGIN_<NAME>_` (so the app's
-  own keys are outside any manifest's reach), each bound to one use and one
-  origin that is https or loopback, never one in the clear; the host resolves
-  the value through the secret effect and puts it in the request, so a plugin
-  never holds one, and an answer that echoes it is withheld
-  (`Refusal::Echoed`). Each call is a fresh store under a time
-  and memory `Budget`, stopped with a typed `RunError`; whatever the host keeps
-  or prints of a plugin's words is `plugin::Said`, at most 512 bytes, cut
-  where the answer crosses (`world.rs`). The transport bounds
-  every plugin: the deployment passes `Ureq::public_only()` (no redirect, no
-  name resolving off the public internet, so never this box or the tailnet).
-  The fences are `app/plugin/tests/fence.rs`, run by name against the hostile
-  `app/plugin-fence` the flake builds and against every reference plugin.
-  **The calendar is the first** (2026-10-03, stage 2; `app/plugin-ics`,
-  `suzatary_core::calendar`): `sync` is lent the NAMES of the credentials its
-  manifest declares (a calendar's secret iCal link is one of use `url`,
+- ⚠️ **A plugin is one function and its grant** (2026-10-24; `suzatary-plugin`,
+  `suzatary_core::plugin`). A plugin is a WebAssembly component of
+  `app/wit/plugin.wit`'s `source` world: `sync(cursor, credentials)` returns
+  items and the next cursor, and its one import of ours is `fetch`. Built for
+  wasm32-wasip2, it also imports WASI's clocks, random numbers and standard
+  streams, which the host links with nothing in them (an empty environment
+  and stdin, a bounded stderr, the box's own clocks); the
+  host links no WASI filesystem or sockets, so `Host::load` refuses a
+  component importing either before it runs. `fetch` is the host's: the
+  `[[plugins]]` manifest (`name`, `component`, `schema`, `origins`,
+  `credentials`) parses only to the origins it allows and to credential
+  NAMES in `PLUGIN_<NAME>_` (so the app's own keys are outside any
+  manifest's reach); a credential's value is a URL, which the host resolves
+  through the secret effect and requests only at an allowed origin and only
+  over https or loopback, so a plugin never holds one, and an answer that
+  echoes it, or its path or query, is withheld (`Refusal::Echoed`). A call
+  makes at most `MAX_FETCHES` (64). Each call is a fresh store under a time
+  and memory `Budget`, stopped with a typed `RunError`; the host links its
+  own monotonic clock, whose every wait ends at the call's deadline, since a
+  wait blocks in the host where the epoch never fires; whatever the
+  host keeps or prints of a plugin's words is `plugin::Said`, at most 512
+  bytes. The transport bounds every plugin: the deployment passes
+  `Ureq::public_only()` (no redirect, no name resolving off the public
+  internet, so never this box or the tailnet). The fences are
+  `app/plugin/tests/fence.rs`, run by name against the hostile
+  `app/plugin-fence` the flake builds and against the reference plugin.
+  **The calendar is the first** (`app/plugin-ics`, on the `icalendar` parser
+  and `rrule`; `suzatary_core::calendar`): `sync` is lent the NAMES of the
+  credentials its manifest declares (a calendar's secret iCal link,
   `PLUGIN_ICS_*`, asked for by the box's own card, never in a chat), and
   what it emits enters only through its schema's door. **A plugin's schema
-  is a DECLARATION** (2026-10-03, stage 3): `[[plugins]] schema` names its
-  text beside the component (`app/plugin-ics/ics.schema`; no Rust schema
-  mirrors it), admitted by the Prodrome's eight laws when the host loads it
-  or the plugin is refused by the law it breaks; an item is an event of it
+  is a DECLARATION**: `[[plugins]] schema` names its text beside the
+  component (`app/plugin-ics/ics.schema`; no Rust schema mirrors it),
+  admitted by the Prodrome's eight laws when the host loads it or the plugin
+  is refused by the law it breaks; an item is an event of it
   (`plugin::admit`: parsed, printed back the same, written as the plugin
-  itself), and a sync is learned only when its replays keep `plugin::Law`
-  (deterministic over the answers it was given, idempotent from its own
-  cursor), through `plugin::learn` (only what the store does not already
-  read, so its 15-minute timer, `suzatary plugin sync`, takes no lock). Each
-  plugin's store is CACHE tier, `cache/plugins/<name>/store` under the data
-  root, its schema's text beside it: box-local, never pushed, never staged
-  by `safe-push.sh` (a guard test), rebuilt by syncing again. The calendar
-  is the READER of every such store whose schema has its registers. Its titles are
-  other people's words, as mail is: the secretary's `calendar` verb is
-  Tainted and `context`, which is Clean, carries none of it, so an invite's
-  title can never reach the memory. Meetings are
-  never todos; nothing writes from the calendar to a chain. **An actor only
-  proposes** (2026-10-05, stage 4): the `actor` world imports the clock and
-  the log and returns its proposals as values, for now only a change to a
-  chain, a `Changeset` by type (`plugin::propose`), each bounded, a few per decision and none new
-  while five wait, filed as the plugin's (`Offered`) and performed only by
-  the owner's tap; it reads its own store or the one its manifest grants
-  (`reads`); a bundle
-  may live in the user repository (`from = "user"`), pinned by the sha256
-  the owner approved, never where a link takes it outside.
+  itself), learned through `store::learn` (only what the store does not
+  already read, so its 15-minute timer, `suzatary plugin sync`, takes no
+  lock). Each plugin's store is CACHE tier, `cache/plugins/<name>/store`
+  under the data root, its schema's text beside it: box-local, never pushed,
+  never staged by `safe-push.sh` (a guard test), rebuilt by syncing again.
+  The calendar is the READER of every such store whose schema has its
+  registers. Its titles are other people's words, as mail is: the
+  secretary's `calendar` verb is Tainted and `context`, which is Clean,
+  carries none of it, so an invite's title can never reach the memory.
+  Meetings are never todos; nothing writes from the calendar to a chain.
+  The `actor` world, a plugin that only proposes, is kept as an interface
+  (`app/wit/actor.wit`) and nothing hosts it until a plugin needs it.
 - ⚠️ **A coding session is the owner's tap, and the routine's brief is the
   fence** (2026-09-27, chain `codingsession`,
   `docs/CODINGSESSION-PLAN-2026-09-27.md`). The secretary only PROPOSES one
@@ -679,28 +676,29 @@ Threat model: an injected email can at worst mis-triage or write bad todo text
   session's URL and never runs their code. The box never merges, builds or
   promotes a cloud branch: "Hand to the main session" writes one todo on the
   `[coding]` chain, and `scripts/deploy.sh` stays the only deploy.
-- ⚠️ **A job's model is a data decision, not a configuration detail**
-  (2026-09-19, chain `modelrouter`, `docs/MODELROUTER-PLAN-2026-09-17.md`): the
-  mail a job reads and the chain it writes reach THAT vendor. A provider is
-  declared in `instance.toml` with its `base_url`, the NAME of its secret
-  (never a value) and its `attested` claim; a provider that declares
-  attestation and answers without a receipt is REFUSED, never quietly used.
-  Changing a job's model is the owner's decision, recorded on the project chain.
-  The fence does not rest on the model's quality (everything above holds for
-  any model), so a weaker model is a cost decision, not a security one — and
-  `triagebench` (`docs/TRIAGEBENCH-PLAN-2026-09-19.md`) gates it anyway: no job
-  changes model until this box's own year of decisions says it may, scored
-  blind with the incumbent anonymous in the pool. A job names an ORDER, not a
-  model, and uses the subscription until the allowance the box measures runs
-  down, holding back a `reserve` automated jobs never take (the subscription is
-  the owner's across every project; a 5-minute timer must never be why his session
-  is refused).
+- ⚠️ **The app talks to Claude alone, through the `claude` CLI** (the owner,
+  2026-10-24; chain `modelrouter` and its providers, orders and TEE
+  attestation are deleted): the mail a job reads and the chain it writes reach
+  Anthropic and no one else. The model is a PORT in the core (`capability::
+  Model`, `SessionModel`, `Compact`, `ForModel` as its only input, the
+  conformance suite in `conformance::model`), and the deployment's one
+  implementation is `suzatary_io::model::ClaudeCli` on the subscription, wired
+  in `commands::serve::interpreters` alone, so another deployment plugs in a
+  model without touching the core. `[secretary] model` names the model the
+  conversation, the reviews and the titles run; `[secretary] compactor` the
+  compactor's, which runs only while the five-hour window has room above
+  `[secretary] reserve` (the subscription is the owner's across every project;
+  a timer must never be why his session is refused); triage pins its model in
+  `scripts/hourly-triage.sh`. Changing a model is an edit of the instance
+  file. The fence does not rest on the model's quality (everything above holds
+  for any model), and `triagebench` (`docs/TRIAGEBENCH-PLAN-2026-09-19.md`)
+  scores a candidate Claude model blind against this box's own decisions.
 - ⚠️ **The app may set a secret, and may never read one back** (2026-09-21,
   chain `settings`, `docs/SETTINGS-PLAN-2026-09-19.md`; a second host has a
   browser and a tailnet identity, no shell). Each rule is a mechanism:
   - A secret is stored only by a tapped Secret card, whose name is a
     `suzatary_core::settings::Settable`, minted against the closed list
-    the INSTANCE FILE declares it needs (a provider's `key`, a channel's
+    the INSTANCE FILE declares it needs (the model's token, a channel's
     secrets, the two GitHub tokens, one per purpose) — never
     `secretspec.toml`, which also declares the signing password and the box's
     keys, so those are refused by absence, not by a blocklist.
@@ -729,14 +727,13 @@ Threat model: an injected email can at worst mis-triage or write bad todo text
     class is parsed where the failure is observed and stored with it in the
     health registers, each class has one remedy, and the card is that
     remedy's step of the connection's own template, once per (connection,
-    since); what is unused (a provider no job orders, a calendar quiet for 90
-    days, an account failing a week) is offered for removal on a card the
-    owner may dismiss.
+    since); what is unused (a calendar quiet for 90 days, an account failing
+    a week) is offered for removal on a card the owner may dismiss.
   - **When no model answers, the box asks for one** (2026-10-07, stage 0;
     `secretary::bootstrap`): Connect runs `claude setup-token` in a terminal the
     server holds (`sign_ins::SignIns`, in no record), and the code card's tap
     sends the token to one test call (`settings::Verify`) and the store, never
-    a transcript or an answer; every model key a card stores is tested first.
+    a transcript or an answer; the model's token is tested before it is stored.
   - **A connection is a template applied, read back out of the instance**
     (2026-10-09, stage 4; `suzatary_core::connect`, `secretary::connections`):
     a template is data, a connection's tables, steps and check are functions
@@ -757,8 +754,8 @@ Threat model: an injected email can at worst mis-triage or write bad todo text
     act UI; no reading names a secret (a secret card's act carries its
     label), though the inbox's stored `Act::Secret` still does, so a
     replica's objects carry it until that format changes. The page writes
-    nothing: no route changes a setting (stage 5, 2026-10-13, deleted
-    `POST /api/settings/{provider,models,reserve}` and the page's editors).
+    nothing: no route changes a setting, and the Models group only says which
+    Claude model each job runs.
   - Unchanged: `secretspec set` from a terminal is the operator's path; the
     four release and mail-transport secrets are settable only from a
     terminal; `web/e2e/overview.test.ts` proves the value never comes back
@@ -773,56 +770,6 @@ Threat model: an injected email can at worst mis-triage or write bad todo text
   tap without a value, or a value on any other act, is refused. Nothing in a
   session ever needs a secret's VALUE, only its name — if a step seems to
   need one pasted here, the step is wrong.
-- ⚠️ **A provider is declared by a card, by preset** (2026-09-22, chain
-  `providersetup`, `docs/PROVIDERSETUP-PLAN-2026-09-22.md`; a card since
-  2026-10-13): `settings::ProviderSetup` over a closed `Preset` and a
-  `WorkspaceUrl` limited to `https://` Databricks hosts; base URL, key name
-  and `attested` are DERIVED, never typed, and a Configure card's provider
-  change stores a `ProviderSetup`, so no card can aim the secretary at an
-  arbitrary endpoint. `settings::Edits` (no record) writes one
-  `[[providers]]` table atomically, behind the tap.
-- ⚠️ **Which model answers each job is asked for by a card** (2026-09-26,
-  chain `modelchoice`, `docs/MODELCHOICE-PLAN-2026-09-26.md`). `Preset` is
-  the closed list — `ClaudeSubscription`, `AnthropicApi` (both BUILT IN: a
-  key, no `[[providers]]` row), `Databricks`, `Phala` (attested, with the
-  source commit a receipt must name), `OpenRouter` — and every URL is
-  derived. EACH BACKEND IS SPELLED ONCE: `claude-cli/` is the subscription
-  only, `anthropic/` the Messages API only; an order with nothing usable
-  answers with `Instance::fallback` (`claude-cli/<[secretary] model>`), never
-  a guess. `suzatary_core::models` parses a job's order at the route
-  (`ModelEntry` = a built-in or DECLARED backend and a `ModelName` of
-  `[A-Za-z0-9._:/-]{1,128}`; an undeclared backend is refused by name) and
-  `Reserve` in `[0, 1]`. **A change is `Act::Configure`** (2026-10-13,
-  `docs/SETUPAGENT-PLAN-2026-10-07.md` stage 5; `settings::configure`): one
-  act over a closed sum of what can be configured (a job's order, the
-  reserve, a provider declared or removed), each a `Move` from the value the
-  card read to the one it writes, both shown on the card. One rule performs
-  every arm: the tap writes `to` only while the file still reads `from`
-  (already `to` is done, anything else writes nothing and says what it reads
-  now), parses `to`'s entries again against the providers declared then,
-  and refuses to remove a provider a job orders; a card whose From no longer
-  holds is withdrawn by the box. The read, the compare and the write are ONE
-  step under one `flock` on `instance.toml.lock` beside the file
-  (`Edits::swap`; every instance-file edit and `suzatary instance set` hold
-  it), so two writers at once never lose a change, and `swap` is called by
-  the performer alone (`app/cli/tests/writes.rs`). The secretary files a card
-  through `propose_act` `configure`, reading From through the read-only
-  `Configuration` its record holds, and only in a round that read nothing
-  but the owner's words, as a coding session; the arms are private, so only
-  `Configure::{order, reserve, declare, remove}` build one. After a tap the
-  server reads the file again, swapping `Models` and the providers behind
-  the locks the brains read per turn, so a change takes effect with no
-  restart and logs one line (job, from, to, who); the instance file is
-  tracked, so the change is also a diff. `CLAUDE_CODE_OAUTH_TOKEN` is asked
-  for by its Secret card like every other preset's key.
-- `suzatary secretary review` (2026-09-26) builds its brain through
-  `Job::Review`, not `Job::Secretary`, so the Review order a card sets
-  takes effect; an empty Review order still answers with
-  `Instance::fallback`, the same model an empty Secretary order would (both
-  read the one job-independent fallback). Triage runs `claude` directly
-  under `tool-guard.sh` with the model the wrapper pins, never through
-  `choose_brain`, so `[models]` has no triage order (deleted 2026-10-09:
-  a key that read as a choice and chose nothing).
 - **The code repository holds nothing personal, mechanically** (2026-09-27,
   `docs/DATASPLIT-PLAN-2026-09-14.md` §9.1): `app/cli/tests/guards.rs`'s
   `personal_terms_no_tracked_file_names_a_person` walks `git ls-files` of
@@ -1073,7 +1020,7 @@ Threat model: an injected email can at worst mis-triage or write bad todo text
   of the flake, BUILDS FIRST (`scripts/app-builds.sh`, the roots run's own
   list, from the tree that lock names, rooted under `deploy-`, with no
   timeout: a failed build moves nothing), runs the NEW binary's `verify`
-  from its tree against the live instance (plugin manifests' worlds
+  from its tree against the live instance (plugin manifests
   included, no component loaded) and its chains' and secretary's stores (a
   refusal moves nothing: the instance changes in the same deploy, or a store
   is migrated first), roots the previous app's builds until it succeeds,

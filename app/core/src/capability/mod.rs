@@ -73,7 +73,7 @@ pub use manuals::{Manual, Manuals};
 #[cfg(feature = "fixture")]
 pub use model::pulled;
 pub use model::{
-    Conversation, Delta, Halt, Model, ModelError, NotAUuid, ReceiptId, Reply, Session, SessionId,
+    Conversation, Delta, Halt, Model, ModelError, NotAUuid, Reply, Session, SessionId,
     SessionModel, Sessioned, TokenUsage, ToolCall, Turn,
 };
 #[cfg(any(test, feature = "nothing"))]

@@ -1,4 +1,4 @@
-//! What this box has spent of its Claude allowance: a fold over parsed
+//! What this box has spent of its model subscription's allowance: a fold over parsed
 //! records, deciding and reading nothing. Quota is the constraint up to the
 //! allowance and credits bill past it, so the two are never blurred and no
 //! price is invented. Where the allowance is unknown the report gives a

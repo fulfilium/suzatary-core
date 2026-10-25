@@ -10,7 +10,7 @@ pub enum Check {
     MailSynced,
     /// The Drive's folder lists.
     Listed,
-    /// A model the backend serves answered a call.
+    /// The model answered a call.
     Answered,
     /// The data repository pushed to its remote.
     Pushed,

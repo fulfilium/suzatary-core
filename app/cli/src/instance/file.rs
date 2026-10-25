@@ -17,17 +17,18 @@ use suzatary_core::coding::Coding;
 use suzatary_core::drive::DrivePath;
 use suzatary_core::mail::account::Roster;
 use suzatary_core::mail::junk::ChurnList;
-use suzatary_core::models::{ModelName, Reserve};
+use suzatary_core::model_name::ModelName;
 use suzatary_core::persona::Persona;
 use suzatary_core::plugin::Manifest;
 use suzatary_core::repos::Declared;
-use suzatary_core::settings::DeclaredProvider;
 use suzatary_core::web::AllowRule;
 
-use super::{CodeRoot, DataRoot};
+use super::{CodeRoot, DataRoot, Reserve};
 
-/// The whole file.
+/// The whole file. A key the binary does not read refuses the file, so a table left behind
+/// is never a setting that sets nothing.
 #[derive(Debug, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
 pub(crate) struct File {
     pub(crate) repo: PathBuf,
     /// Absent, the data root is the instance file's own directory.
@@ -47,10 +48,6 @@ pub(crate) struct File {
     /// secret resolves; TOML has no null, so "never" is the table absent.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub(crate) notify: Option<Notify>,
-    #[serde(default, skip_serializing_if = "Vec::is_empty", with = "providers")]
-    pub(crate) providers: Vec<DeclaredProvider>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub(crate) models: Option<Orders>,
     /// Absent, a tap on a coding session is refused.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub(crate) coding: Option<Coding>,
@@ -266,15 +263,17 @@ pub struct Secretary {
     pub digests: PathBuf,
     /// The two topic stores, box-local, vaulted and never pushed.
     pub topics: Topics,
-    /// The model every job falls back to, pinned because a drifting default is
-    /// a behaviour change nobody committed.
+    /// The Claude model the conversation, the reviews and the titles run, pinned because a
+    /// drifting default is a behaviour change nobody committed.
     pub model: ModelName,
     /// Whether the compactor summarises the conversations into the digest: off unless the file
-    /// says `true`, and `false` is its kill switch. The four keys after it are read only when
+    /// says `true`, and `false` is its kill switch. The five keys after it are read only when
     /// it runs ([`Secretary::compacting`]).
     pub compact: bool,
-    /// The model the compactor runs, over the subscription.
+    /// The Claude model the compactor runs, over the subscription.
     pub compactor: ModelName,
+    /// The share of the subscription the compactor never takes.
+    pub reserve: Reserve,
     /// The most calls the compactor makes in any hour.
     pub compact_calls_per_hour: u32,
     /// The most bytes it sends in any twenty-four hours.
@@ -314,6 +313,7 @@ impl Default for Secretary {
             compact: false,
             // The latest Sonnet, the owner's choice for the compactor (2026-10-06).
             compactor: ModelName::parse("claude-sonnet-5-5").expect("a model name"),
+            reserve: Reserve::default(),
             // Thirty calls an hour and 32 MiB a day: an import of every past line takes days,
             // never an afternoon of the subscription.
             compact_calls_per_hour: 30,
@@ -472,22 +472,6 @@ pub(crate) struct Notify {
     pub(crate) fcm_sender: Option<suzatary_core::portal::Sender>,
 }
 
-/// `[models]`: each job's order stays text here, because an entry's backend
-/// means something only against the providers declared beside it.
-#[derive(Debug, Deserialize, Serialize)]
-#[serde(deny_unknown_fields)]
-pub(crate) struct Orders {
-    #[serde(default)]
-    pub(crate) secretary: Vec<String>,
-    #[serde(default)]
-    pub(crate) review: Vec<String>,
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub(crate) title: Vec<String>,
-    /// The share of the subscription automated jobs never take.
-    #[serde(default)]
-    pub(crate) reserve: Reserve,
-}
-
 /// A value the file spells as one string, read through its own constructor.
 pub(crate) trait Text: Sized {
     fn read(text: String) -> Result<Self, String>;
@@ -592,83 +576,6 @@ mod text_map {
                     K::read(key).map_err(D::Error::custom)?,
                     V::read(value).map_err(D::Error::custom)?,
                 ))
-            })
-            .collect()
-    }
-}
-
-/// `[[providers]]`, where attestation is spelled as two keys: `attested`, and
-/// the `expect_commit` the owner read off a receipt he trusts, required when
-/// `attested = true` (a claim with nothing to check a receipt against).
-///
-/// ```toml
-/// [[providers]]
-/// name = "phala"
-/// base_url = "https://inference.phala.com/v1"
-/// key = "PHALA_API_KEY"      # the NAME of a secret — never a value
-/// attested = true            # a response with no receipt is refused
-/// expect_commit = "8d0a666a2418898a8c823a9af49a634edd122a64"
-/// ```
-mod providers {
-    use serde::de::Error as _;
-    use serde::{Deserialize, Deserializer, Serialize, Serializer};
-    use suzatary_core::settings::{Attestation, DeclaredProvider, SourceCommit};
-
-    #[derive(Deserialize, Serialize)]
-    #[serde(deny_unknown_fields)]
-    struct Spelled {
-        name: String,
-        base_url: String,
-        key: String,
-        attested: bool,
-        #[serde(default, skip_serializing_if = "Option::is_none")]
-        expect_commit: Option<String>,
-    }
-
-    pub(super) fn serialize<S: Serializer>(
-        providers: &[DeclaredProvider],
-        out: S,
-    ) -> Result<S::Ok, S::Error> {
-        out.collect_seq(providers.iter().map(|provider| Spelled {
-            name: provider.name.clone(),
-            base_url: provider.base_url.clone(),
-            key: provider.key.clone(),
-            attested: provider.attestation.claimed(),
-            expect_commit: match &provider.attestation {
-                Attestation::Required { expect } => Some(expect.as_str().to_owned()),
-                Attestation::Unclaimed => None,
-            },
-        }))
-    }
-
-    pub(super) fn deserialize<'de, D: Deserializer<'de>>(
-        input: D,
-    ) -> Result<Vec<DeclaredProvider>, D::Error> {
-        Vec::<Spelled>::deserialize(input)?
-            .into_iter()
-            .map(|spelled| {
-                let attestation = match (spelled.attested, spelled.expect_commit) {
-                    (false, _) => Attestation::Unclaimed,
-                    (true, None) => {
-                        return Err(D::Error::custom(format!(
-                            "provider {:?} declares attested = true but names no \
-                             expect_commit — a claim of attestation with nothing to check \
-                             a receipt against is refused",
-                            spelled.name
-                        )));
-                    }
-                    (true, Some(expect)) => Attestation::Required {
-                        expect: SourceCommit::parse(&expect).map_err(|failed| {
-                            D::Error::custom(format!("provider {:?}: {failed}", spelled.name))
-                        })?,
-                    },
-                };
-                Ok(DeclaredProvider {
-                    name: spelled.name,
-                    base_url: spelled.base_url,
-                    key: spelled.key,
-                    attestation,
-                })
             })
             .collect()
     }

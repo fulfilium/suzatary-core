@@ -9,43 +9,28 @@ autotests = false
 publish = false
 
 # A plain library here, so the workspace's native build tests and lints the calendar logic like
-# any other crate. The component is `nix build .#suzatary-plugins`, which asks `cargo rustc` for a
-# `cdylib` for wasm32-unknown-unknown and wraps it with `wasm-tools component new`, as for the
-# fence plugin.
+# any other crate. The component is this library built as a `cdylib` for wasm32-wasip2.
 [lib]
 name = "suzatary_plugin_ics"
 path = "src/lib.rs"
 
-[features]
-# The calendar's actor instead of its source (`src/due.rs`), as `due.wasm`: one component exports
-# one world, as the fence plugin's two do.
-due = []
-
 [dependencies]
-# NOT the workspace's chrono: that one turns on `clock`, and on wasm32-unknown-unknown chrono's
-# clock links `js-sys`, whose imports the host refuses as foreign. The guest reads the time
-# through its world's `clock` import instead, so `std` is all it takes.
-chrono = { version = "0.4", default-features = false, features = ["std"] }
+chrono.workspace = true
 # The IANA database, compiled in: a TZID that names a zone is resolved here, never by asking
 # the host's system.
-chrono-tz = { version = "0.10", default-features = false, features = ["std"] }
+chrono-tz.workspace = true
+icalendar = { version = "0.17", default-features = false, features = ["parser"] }
+iso8601 = "0.6"
+prodrome_core.workspace = true
+rrule = "0.14"
 serde.workspace = true
 serde_json.workspace = true
-# The due actor names the todo it proposes by a digest of the occurrence: pure Rust, no import.
-sha2.workspace = true
-# `str.isprintable`'s Unicode categories, so an item's strings print as the Prodrome's do. Data
-# tables only: no import reaches the host.
-unicode-general-category = "1"
 wit-bindgen.workspace = true
 
 [dev-dependencies]
 proptest.workspace = true
-# The host's own door for an item, so the test that every emitted item is admitted and prints
-# back the same asks the reader that stores it.
+# The host's own door for an item, so the tests ask the reader that stores it.
 suzatary-core = { workspace = true, features = ["nothing"] }
-# The store's own literal and instants, for the pinned readings.
-prodrome_core.workspace = true
-toml.workspace = true
 
 [lints]
 workspace = true

@@ -7,7 +7,7 @@
 //! [`Ask::text`] as it stands, with none of the secretary's framing.
 
 use crate::capability::ModelError;
-use crate::models::ModelName;
+use crate::model_name::ModelName;
 use crate::secretary::compact_ask::Ask;
 
 /// A model asked to stand one line for a span.

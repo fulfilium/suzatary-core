@@ -12,7 +12,7 @@ use prodrome_core::event::{Actor, Hash, canonical_envelope};
 use prodrome_core::literal::Datetime;
 use proptest::prelude::*;
 use suzatary_core::capability::{Entropy, Turn};
-use suzatary_core::models::ModelName;
+use suzatary_core::model_name::ModelName;
 use suzatary_core::secretary::digest::Digest;
 use suzatary_core::secretary::digest_event::DigestEvent;
 use suzatary_core::secretary::digest_line::Line;
@@ -186,7 +186,7 @@ fn ada() -> Actor {
 }
 
 fn model() -> ModelName {
-    ModelName::parse("claude-sonnet-5-5").expect("a model")
+    ModelName::parse("a-model").expect("a model")
 }
 
 /// The texts a reading names live.

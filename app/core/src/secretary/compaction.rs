@@ -24,7 +24,7 @@ use prodrome_core::fpl::instant_of;
 use prodrome_core::literal::Datetime;
 
 use crate::capability::{Clock, Compact};
-use crate::models::ModelName;
+use crate::model_name::ModelName;
 use crate::refusal::Refusal;
 use crate::rule::{Named, ReadingName, Rule};
 use crate::secretary::compact_ask::Ask;

@@ -217,25 +217,6 @@ impl<'a> Noting<'a> {
 }
 
 impl suzatary_core::settings::Edits for Noting<'_> {
-    fn swap(
-        &self,
-        decide: &mut dyn FnMut(
-            &suzatary_core::settings::configure::Configured,
-        ) -> Result<
-            Option<suzatary_core::settings::configure::Write>,
-            suzatary_core::settings::configure::Refused,
-        >,
-    ) -> Result<
-        suzatary_core::settings::configure::Performed,
-        suzatary_core::settings::configure::Refused,
-    > {
-        let performed = self.edits.swap(decide)?;
-        if performed == suzatary_core::settings::configure::Performed::Written {
-            self.moved.store(true, std::sync::atomic::Ordering::Relaxed);
-        }
-        Ok(performed)
-    }
-
     fn allow_web(&self, rule: &suzatary_core::web::AllowRule) -> Result<(), EditError> {
         self.noted(self.edits.allow_web(rule))
     }
@@ -267,11 +248,7 @@ impl suzatary_core::settings::Edits for Noting<'_> {
     }
 }
 
-impl suzatary_core::settings::configure::Configuration for Noting<'_> {
-    fn configured(&self) -> Result<suzatary_core::settings::configure::Configured, EditError> {
-        self.edits.configured()
-    }
-
+impl suzatary_core::settings::Configuration for Noting<'_> {
     fn declared(&self) -> Result<suzatary_core::connect::Declared, EditError> {
         self.edits.declared()
     }
