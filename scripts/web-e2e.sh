@@ -613,6 +613,9 @@ epoch_base="$(start epoch)"
 # THE LINES' SERVER (web/e2e/bigstore.test.ts): a writer whose conversations hold a generated store of
 # $SUZATARY_E2E_LINES lines (1,500 by default), so a scene can see a tab read a large store.
 lines_base="$(start lines --lines "${SUZATARY_E2E_LINES:-1500}")"
+# THE WIDE SERVER (web/e2e/wide.test.ts): 400 conversations of one line each, so a tab's replica of
+# the lines has 400 heads, and every pull names it by a frontier as short as one head's.
+wide_base="$(start wide --wide 400)"
 # THE APP SHELL'S SERVER (web/src/sw.ts): a writer, so a page there has a
 # composer whose draft must outlive a new build, with the build `/api/about`
 # names read from a file per request, so a scene can deploy a new build under a
@@ -626,7 +629,7 @@ cp -r web/dist "$shell_dist"
 shell_base="$(start shell -- --build-fixture "$shell_build" --dist "$shell_dist")"
 # Collected here, in the MAIN shell — not inside `start`'s subshell — which is
 # what makes `cleanup` able to reach them at all (see the note in `start`).
-servers+=("$(cat "$work/read.pid")" "$(cat "$work/proposed.pid")" "$(cat "$work/write.pid")" "$(cat "$work/shell.pid")" "$(cat "$work/bootstrap.pid")" "$(cat "$work/connect.pid")" "$(cat "$work/links.pid")" "$(cat "$work/epoch.pid")" "$(cat "$work/lines.pid")" "$(cat "$work/google.pid")" "$(cat "$work/fake-google.pid")")
+servers+=("$(cat "$work/read.pid")" "$(cat "$work/proposed.pid")" "$(cat "$work/write.pid")" "$(cat "$work/shell.pid")" "$(cat "$work/bootstrap.pid")" "$(cat "$work/connect.pid")" "$(cat "$work/links.pid")" "$(cat "$work/epoch.pid")" "$(cat "$work/lines.pid")" "$(cat "$work/wide.pid")" "$(cat "$work/google.pid")" "$(cat "$work/fake-google.pid")")
 ready read "$read_base"
 ready proposed "$proposed_base"
 ready bootstrap "$bootstrap_base"
@@ -635,6 +638,7 @@ ready links "$links_base"
 ready google "$google_base"
 ready epoch "$epoch_base"
 ready lines "$lines_base"
+ready wide "$wide_base"
 ready write "$write_base"
 ready shell "$shell_base"
 echo "    reads    $read_base (a viewer, never an actor — its chain cannot move)"
@@ -688,6 +692,8 @@ E2E_BASE_EPOCH="$epoch_base" \
 E2E_EPOCH_INSTANCE="$work/epoch/instance.toml" \
 E2E_BASE_LINES="$lines_base" \
 E2E_LINES_INSTANCE="$work/lines/instance.toml" \
+E2E_BASE_WIDE="$wide_base" \
+E2E_WIDE_INSTANCE="$work/wide/instance.toml" \
 E2E_SECRETS_STORE="$secrets_store" \
 E2E_WRITE_LOG="$work/write.log" \
 E2E_SHELL_BUILD="$shell_build" \

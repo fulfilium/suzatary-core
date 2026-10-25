@@ -62,7 +62,7 @@ test("the lines are pulled bounded by 30 s of silence", async t => {
   Object.defineProperty(globalThis, "fetch", { value: () => Promise.resolve(new Response(body)), configurable: true })
   t.mock.timers.enable({ apis: ["setTimeout"] })
   let settled = false
-  const failed = storeObjects("lines", []).then(
+  const failed = storeObjects("lines", "").then(
     () => "",
     (e: unknown) => String(e),
   )

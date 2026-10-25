@@ -24,6 +24,7 @@ pub mod drive;
 pub mod drive_health;
 pub mod durable;
 pub mod epochs;
+pub mod frontiers;
 pub mod gmail;
 pub mod google;
 pub mod http;

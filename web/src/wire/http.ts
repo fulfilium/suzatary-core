@@ -24,9 +24,10 @@ export namespace http {
   // The write contract this build keeps, which the box's `gate::CLIENT_MIN` must not pass: 2 stamps every instant in UTC,
   // 3 signs every write with this device's key, 4 reads the conversations from the lines and forgets what is erased, 5
   // reads the box's turns, card answers, proposed objects, reviews and stored objects as tagged sums, 6 keeps the
-  // lines as a skeleton and their content by hash, in a device database a page of contract 5 cannot open.
+  // lines as a skeleton and their content by hash, in a device database a page of contract 5 cannot open, 7 names what
+  // a replica holds by the frontier the box last named, in a device database a page of contract 6 cannot open.
   export const CLIENT_HEADER = "X-Suzatary-Client"
-  export const CLIENT = 6
+  export const CLIENT = 7
   // A box that has moved past this build's contract: it performed nothing, and the page offers the new build (`newbuild`).
   export const OUTDATED = 426
   export const NOT_SENT = "Not sent: this version of the app is older than the box's. Reload to the new version, then send it again."

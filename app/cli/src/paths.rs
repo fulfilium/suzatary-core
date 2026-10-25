@@ -121,6 +121,9 @@ pub struct Paths {
     /// Each store's epoch, box-local so no rewrite of the data repository takes one back, and
     /// the instance's own, so a server over a scratch instance never steps the live epochs.
     pub epochs: PathBuf,
+    /// Each store's recorded frontiers, box-local and the instance's own as the epochs are: a
+    /// lost one costs a replica one pull from nothing.
+    pub frontiers: PathBuf,
     /// The last pairing code's state (`suzatary device pair`): box state, the instance's own,
     /// and never pushed, since a code trusts a device of this box alone.
     pub pairing: PathBuf,
@@ -165,6 +168,7 @@ impl Paths {
             devices: state.join("devices"),
             answers: state.join("answers"),
             epochs: state.join("epochs").join(instance_key(data)),
+            frontiers: state.join("frontiers").join(instance_key(data)),
             pairing: state
                 .join("pairing")
                 .join(format!("{}.json", instance_key(data))),

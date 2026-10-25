@@ -31,7 +31,7 @@ test("a write carries the act header, the JSON content type and the POST method"
 });
 
 test("a post's receipt is guarded like every other payload", () => {
-  const receipt = { heads: ["ab12"], adopted: ["ab12"], already: [], refused: [] };
+  const receipt = { heads: ["ab12"], adopted: ["ab12"], already: [], refused: [], since: "Known", frontier: { digest: "0".repeat(64), count: 1 } };
   assert.equal(d.is(payload.ReceiptPayload)(receipt), true);
   // All the lists are ALWAYS sent, so an answer missing one is a server this
   // build does not know rather than an empty list to be assumed.

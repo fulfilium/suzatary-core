@@ -225,6 +225,8 @@ pub struct Inner {
     pub noticing: Arc<std::sync::Mutex<Option<Heard>>>,
     /// Each store's epoch, which every objects answer carries.
     pub epochs: Arc<suzatary_core::epoch::Epochs>,
+    /// Each store's recorded frontiers, which every pull names and every answer records.
+    pub frontiers: Arc<suzatary_core::frontier::Frontiers>,
     /// What `GET /api/portal` answers, read from `[notify]` when the server starts.
     pub portal: Arc<suzatary_core::portal::Portal>,
 }
@@ -476,6 +478,7 @@ impl State {
             noticing: Arc::default(),
             // A test's server keeps its epochs in memory; `listen` keeps the box's on disk.
             epochs: Arc::new(suzatary_core::epoch::Epochs::remembered()),
+            frontiers: Arc::new(suzatary_core::frontier::Frontiers::remembered()),
             portal: Arc::new(suzatary_core::portal::Portal::Quiet),
             fallback,
         }))
@@ -486,11 +489,27 @@ impl State {
         Arc::make_mut(&mut self.0)
     }
 
-    /// The same state keeping each store's epoch in `epochs`.
+    /// The same state keeping each store's epoch in `epochs` and recording its frontiers in
+    /// `frontiers`, both under the state directory.
     #[must_use]
-    pub fn with_epochs(mut self, epochs: Arc<suzatary_core::epoch::Epochs>) -> Self {
-        self.building().epochs = epochs;
+    pub fn with_books(
+        mut self,
+        epochs: Arc<suzatary_core::epoch::Epochs>,
+        frontiers: Arc<suzatary_core::frontier::Frontiers>,
+    ) -> Self {
+        let inner = self.building();
+        inner.epochs = epochs;
+        inner.frontiers = frontiers;
         self
+    }
+
+    /// What every pull records beside its answer.
+    #[must_use]
+    pub fn books(&self) -> suzatary_core::routes::Books<'_> {
+        suzatary_core::routes::Books {
+            epochs: &self.epochs,
+            frontiers: &self.frontiers,
+        }
     }
 
     /// The same state reading whether a model answers from `answered`.
@@ -1141,6 +1160,7 @@ pub const POLICY: &str = "default-src 'self'; script-src 'self' 'wasm-unsafe-eva
 
 /// Bind and run.
 pub async fn listen(instance: &Instance, serving: Serving) -> anyhow::Result<()> {
+    use suzatary_io::{epochs, frontiers};
     // The names the server starts with, declared before any store is asked, so a server that
     // cannot write their file does not start.
     instance
@@ -1225,9 +1245,10 @@ pub async fn listen(instance: &Instance, serving: Serving) -> anyhow::Result<()>
     .with_probes(Arc::new(suzatary_io::drive_health::beside(
         &instance.mail.heartbeat,
     )))
-    .with_epochs(Arc::new(suzatary_io::epochs::open(
-        instance.paths.epochs.clone(),
-    )))
+    .with_books(
+        Arc::new(epochs::open(instance.paths.epochs.clone())),
+        Arc::new(frontiers::open(instance.paths.frontiers.clone())),
+    )
     .with_sign_ins(serving.signing, serving.verify)
     .with_google(google::Consenting::new(
         suzatary_io::google::Google::new(serving.google),

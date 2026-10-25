@@ -27,7 +27,7 @@ import heads from "./heads";
 import excluded from "./excluded";
 import readings from "./readings";
 import type { Replica } from "./replica";
-import { NOTHING, ancestry, appended, askFrom, boxHeadsOf, join, landed, pulled, rootOf, said, settled, stranded, toPush, unsignedWrites, unsynced, untrustedOf, wentBack } from "./replica";
+import { NOTHING, ancestry, appended, boxHeadsOf, join, landed, pulled, rootOf, said, settled, sinceOf, stranded, toPush, unsignedWrites, unsynced, untrustedOf, wentBack } from "./replica";
 import time from "../app/time";
 import stores from "./stores";
 import onscreen, { store } from "../app/store";
@@ -325,7 +325,7 @@ async function pullEach(): Promise<{ moved: boolean; unread: { readonly name: st
       if (read.type === "Error") return { type: "Unread", name, why: read.e };
       const was = read.v;
       try {
-        const answer = await objectsSince(askFrom(was), name);
+        const answer = await objectsSince(sinceOf(was), name);
         readings.told(`epoch/${name}`, excluded.behind(name, wentBack(was, answer)));
         const now = pulled(was, answer, time.now());
         others.set(name, now);
@@ -495,8 +495,9 @@ async function exchange(): Promise<void> {
   const pushing = toPush(source.state().replica, trusted);
   if (pushing.length > 0) {
     let receipt;
+    const posting = source.state().replica;
     try {
-      receipt = await postObjects(pushing.map((object) => object.literal));
+      receipt = await postObjects(pushing.map((object) => object.literal), sinceOf(posting));
     } catch (error: unknown) {
       // A box past this build's contract: the page offers the new one, and what it holds stays held for it to send.
       if (error instanceof http.ApiError && error.status === http.OUTDATED) return;
@@ -509,7 +510,7 @@ async function exchange(): Promise<void> {
       throw error;
     }
     if (switched()) return;
-    await commit({ type: "Join", replica: settled(source.state().replica, receipt) });
+    await commit({ type: "Join", replica: settled(source.state().replica, receipt, posting.generation) });
   }
   source.dispatch({ kind: "pulling", on });
   // The answer is joined into the replica it was asked of: it names only what that one lacked, so another tab's reset
@@ -517,7 +518,7 @@ async function exchange(): Promise<void> {
   // is then asked of in turn, so an exchange that ends has pulled into the replica held when it ends.
   for (;;) {
     const asked = source.state().replica;
-    const answer = await objectsSince(askFrom(asked));
+    const answer = await objectsSince(sinceOf(asked));
     if (switched()) return;
     readings.told(`epoch/${on}`, excluded.behind(on, wentBack(source.state().replica, answer)));
     if (answer.objects.length > 0 || !said(source.state().replica.box, false, (w) => heads.same(heads.of(answer.heads), heads.of(w.heads)))) {

@@ -63,10 +63,10 @@ fn objects(base: &str, store: &str, since: &str) -> serde_json::Value {
     common::body_json(&mut answer)
 }
 
-/// A replica holding a store's heads lacks nothing, one holding nothing lacks everything, and the
-/// objects come parents first.
+/// A replica holding the frontier a store's answer named lacks nothing, one holding nothing lacks
+/// everything, and the objects come parents first.
 #[test]
-fn a_replica_pulls_what_it_lacks_by_heads() {
+fn a_replica_pulls_what_it_lacks_by_frontier() {
     let base = writing("stores-pull");
     let _ = answered(&base);
     for store in ["inbox", "lines"] {
@@ -86,7 +86,8 @@ fn a_replica_pulls_what_it_lacks_by_heads() {
             .map(|object| object["hash"].as_str().expect("a name"))
             .collect();
         assert!(heads.iter().all(|head| names.contains(head)), "{store}");
-        let none = objects(&base, store, &heads.join(","));
+        let since = all["frontier"]["digest"].as_str().expect("a frontier");
+        let none = objects(&base, store, since);
         assert_eq!(
             none["objects"],
             serde_json::json!([]),
@@ -455,15 +456,9 @@ fn the_lines_skeleton_and_their_content_are_the_whole_pull() {
         })
         .collect();
     assert_eq!(serde_json::Value::Array(rebuilt), whole["objects"]);
-    let heads: Vec<&str> = whole["heads"]
-        .as_array()
-        .expect("heads")
-        .iter()
-        .map(|head| head.as_str().expect("a name"))
-        .collect();
     let mut none = common::get(&format!(
         "{base}/api/stores/lines/skeleton?since={}",
-        heads.join(",")
+        skeleton["frontier"]["digest"].as_str().expect("a frontier")
     ));
     assert_eq!(common::body_json(&mut none)["nodes"], serde_json::json!([]));
 }

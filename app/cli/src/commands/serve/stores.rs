@@ -59,10 +59,10 @@ pub fn heads(store: StoreName, caps: &Server<'_>) -> Result<Vec<String>, StoreEr
     Ok(heads)
 }
 
-/// A store, and the heads a replica of it holds.
+/// A store, and the frontier a replica of it holds.
 pub struct Since {
     store: StoreName,
-    since: Vec<prodrome_core::event::Hash>,
+    since: suzatary_core::frontier::Since,
 }
 
 impl Params for Since {
@@ -74,25 +74,25 @@ impl Params for Since {
     }
 }
 
-/// `GET /api/stores/<store>/objects?since=<heads>`: a piece of what a replica holding those heads
-/// lacks, and how much is left after it.
+/// `GET /api/stores/<store>/objects?since=<frontier>`: a piece of what a replica holding that
+/// frontier lacks, and how much is left after it.
 pub fn objects(call: &Call<Reader, Since, ()>) -> Result<Json<wire::StorePayload>, Refusal> {
     let caps = call.state.first.caps;
     let Since { store, since } = &call.params;
-    let (epochs, now) = (call.state.epochs.as_ref(), caps.secretary.clock.now());
+    let (books, now) = (call.state.books(), caps.secretary.clock.now());
     let cut = routes::Cut::PIECE;
     match store {
         StoreName::Inbox => {
-            routes::store_objects_since(caps.secretary.inbox, since, epochs, now, cut)
+            routes::store_objects_since(caps.secretary.inbox, since, books, now, cut)
         }
         StoreName::Lines => {
-            routes::lines_since(caps.secretary.conversations, since, epochs, now, cut)
+            routes::lines_since(caps.secretary.conversations, since, books, now, cut)
         }
         StoreName::Topics => {
-            routes::store_objects_since(caps.secretary.topics.memberships, since, epochs, now, cut)
+            routes::store_objects_since(caps.secretary.topics.memberships, since, books, now, cut)
         }
         StoreName::TopicAliases => {
-            routes::store_objects_since(caps.secretary.topics.aliases, since, epochs, now, cut)
+            routes::store_objects_since(caps.secretary.topics.aliases, since, books, now, cut)
         }
     }
     .map(Json)
@@ -124,16 +124,16 @@ pub fn take(
     call: &Call<prodrome_core::event::Actor, Written, Literals>,
 ) -> Result<Json<wire::ReceiptPayload>, Refusal> {
     let topics = call.state.first.caps.secretary.topics;
-    let (posted, actor) = (&call.body.0, &call.guard);
+    let (posted, actor, frontiers) = (&call.body.posted(), &call.guard, &call.state.frontiers);
     match call.params {
-        Written::Topics => routes::receive_changes(topics.memberships, posted, actor),
-        Written::TopicAliases => routes::receive_changes(topics.aliases, posted, actor),
+        Written::Topics => routes::receive_changes(topics.memberships, posted, frontiers, actor),
+        Written::TopicAliases => routes::receive_changes(topics.aliases, posted, frontiers, actor),
     }
     .map(Json)
 }
 
-/// The lines' skeleton: the heads a replica of them holds.
-pub struct LinesSince(Vec<prodrome_core::event::Hash>);
+/// The lines' skeleton: the frontier a replica of them holds.
+pub struct LinesSince(suzatary_core::frontier::Since);
 
 impl Params for LinesSince {
     fn parse(asked: &Asked, _: &Chained) -> Result<Self, Refusal> {
@@ -141,8 +141,8 @@ impl Params for LinesSince {
     }
 }
 
-/// `GET /api/stores/lines/skeleton?since=<heads>`: a piece of what a replica of the lines
-/// holding those heads lacks, each object without its literal.
+/// `GET /api/stores/lines/skeleton?since=<frontier>`: a piece of what a replica of the lines
+/// holding that frontier lacks, each object without its literal.
 pub fn skeleton(
     call: &Call<Reader, LinesSince, ()>,
 ) -> Result<Json<wire::SkeletonPayload>, Refusal> {
@@ -150,7 +150,7 @@ pub fn skeleton(
     routes::lines_skeleton(
         caps.secretary.conversations,
         &call.params.0,
-        call.state.epochs.as_ref(),
+        call.state.books(),
         caps.secretary.clock.now(),
         routes::Cut::PIECE,
     )

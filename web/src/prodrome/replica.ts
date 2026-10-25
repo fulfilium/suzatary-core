@@ -5,7 +5,7 @@
  * Pure decisions over sets of names; the shells are `sync.ts` and `objects.ts`.
  */
 
-import type { ReceiptPayload, RefusedObject, SkeletonNode, StoredObject } from "../wire/generated/wire";
+import type { Frontier as Named, ReceiptPayload, RefusedObject, SinceRead, SkeletonNode, StoredObject } from "../wire/generated/wire";
 import heads from "./heads";
 import lo from "../algebra/lo";
 
@@ -32,6 +32,36 @@ export interface Word {
 }
 
 /**
+ * Where a replica stands with the box: nothing the box named yet, or the frontier an answer named, which the next pull
+ * names back as `since`. The era counts the answers that said the box no longer held the frontier asked from, so a
+ * frontier named after such an answer stands over every one named before it.
+ */
+export type Frontier = { readonly type: "Nothing" } | { readonly type: "Named"; readonly digest: string; readonly count: number; readonly era: number };
+
+export const NO_FRONTIER: Frontier = { type: "Nothing" };
+
+/**
+ * The later of two frontiers, a semilattice: the later era, then the larger count, then the greater digest. Each names
+ * only objects the replica holding it holds, so either is safe in their union; the later is the one asked from.
+ */
+export const laterFrontier = (a: Frontier, b: Frontier): Frontier => {
+  if (a.type === "Nothing") return b;
+  if (b.type === "Nothing") return a;
+  if (a.era !== b.era) return a.era > b.era ? a : b;
+  if (a.count !== b.count) return a.count > b.count ? a : b;
+  return a.digest >= b.digest ? a : b;
+};
+
+/** The frontier an answer names, of a replica that asked from `asked`: an era later when the box no longer held it. */
+export const answered = (asked: Frontier, since: SinceRead, named: Named): Frontier => {
+  const era = asked.type === "Named" ? asked.era : 0;
+  return { type: "Named", digest: named.digest, count: named.count, era: since === "Unknown" ? era + 1 : era };
+};
+
+/** What a pull or a post names as `since`: the frontier's digest, or nothing. */
+export const sinceOf = <O extends Obj>(replica: Replica<O>): string => (replica.held.frontier.type === "Named" ? replica.held.frontier.digest : "");
+
+/**
  * What a replica holds, all of it: the state its join unites by plain union, and the one thing kept on the device.
  * `synced` is knowledge about the box's store, so it is remembered, not derived; being wrong costs one re-post the box
  * answers with `already`. A refused object is kept, because it is real and this replica holds it; so is a store the
@@ -48,6 +78,8 @@ export interface Held<O extends Obj = StoredObject> {
   readonly refused: readonly RefusedObject[];
   /** What the box said, in key order, less a word whose heads another's rest strictly above: such a word never wins. */
   readonly words: readonly Word[];
+  /** Where it stands with the box, as the last answer it took named it. */
+  readonly frontier: Frontier;
 }
 
 /** Where the box stood at the contact a replica reads: not heard yet, or one word, its heads and its epoch together. */
@@ -87,7 +119,7 @@ export const rootOf = (r: Replica): string | null => said(r.box, null, (w) => w.
 /** The box's heads as this replica last heard them, or null for never. */
 export const boxHeadsOf = <O extends Obj>(r: Replica<O>): heads.Heads | null => said(r.box, null, (w) => heads.of(w.heads));
 
-const EMPTY: Held<never> = { generation: 0, objects: [], synced: [], refused: [], words: [] };
+const EMPTY: Held<never> = { generation: 0, objects: [], synced: [], refused: [], words: [], frontier: NO_FRONTIER };
 
 /** The reading of `held`: its box word, what that word forgets, and the rest derived from the objects left. */
 export function replicaOf<O extends Obj>(held: Held<O>): Replica<O> {
@@ -151,12 +183,13 @@ function union<O extends Obj>(a: Held<O>, b: Held<O>): Held<O> {
   const synced = new Set([...a.synced, ...b.synced]);
   const refused = refusedBoth(a.refused, b.refused);
   const words = spokenBoth(objects, a.words, b.words);
+  const frontier = laterFrontier(a.frontier, b.frontier);
   const mine = new Set(a.refused);
   const same = (x: Held<O>): boolean => x.objects.length === objects.length && new Set(x.synced).size === synced.size &&
-    x.refused.length === refused.length && sameWords(x.words, words);
+    x.refused.length === refused.length && sameWords(x.words, words) && x.frontier === frontier;
   if (same(a) && refused.every((one) => mine.has(one))) return a;
   if (same(b) && refused.every((one) => b.refused.includes(one))) return b;
-  return { generation: a.generation, objects, synced: [...synced].sort(), refused, words };
+  return { generation: a.generation, objects, synced: [...synced].sort(), refused, words, frontier };
 }
 
 const wordKey = (w: Word): string =>
@@ -244,6 +277,8 @@ export interface Said<O extends Obj> {
   readonly geneses: readonly string[];
   readonly epoch: number;
   readonly objects: readonly O[];
+  readonly since: SinceRead;
+  readonly frontier: Named;
 }
 
 /**
@@ -259,6 +294,7 @@ export function pulled<O extends Obj>(replica: Replica<O>, answer: Said<O>, fetc
     synced: [...answer.heads, ...answer.objects.map((object) => object.hash)],
     refused: [],
     words: [{ epoch: answer.epoch, heads: [...answer.heads], untrusted: [...answer.untrusted], root: answer.root, fetchedAt, geneses: [...answer.geneses] }],
+    frontier: answered(replica.held.frontier, answer.since, answer.frontier),
   }));
 }
 
@@ -374,25 +410,20 @@ export function unsignedWrites(replica: Replica): StoredObject[] {
 }
 
 /**
- * The heads of what the box is known to hold of ours, for `?since=`: every one, none picked. An object not yet
- * taken is left out, since the box would ignore it and send what it rests on again; a wrong answer costs bytes.
- */
-export function askFrom(replica: Replica): heads.Heads {
-  const known = new Set(replica.synced);
-  return heads.of(headsOf(replica.objects.filter((object) => known.has(object.hash))));
-}
-
-/**
  * `adopted` and `already` both mean the box holds it; a newer refusal of the same object replaces the older reason.
  * The box's heads wait for the pull that follows: they may name objects this replica does not hold yet, and its word
- * is only ever heads it holds, so that how far a word reaches is read off the objects.
+ * is only ever heads it holds, so that how far a word reaches is read off the objects. The receipt's frontier names
+ * what the replica of generation `posted` held, so a replica another tab reset meanwhile keeps its own.
  */
-export function settled(replica: Replica, receipt: ReceiptPayload): Replica {
+export function settled(replica: Replica, receipt: ReceiptPayload, posted: number): Replica {
   const learned = [...receipt.adopted, ...receipt.already, ...receipt.heads];
   const named = new Set(receipt.refused.map((one) => one.hash));
   return replicaOf({
     ...replica.held,
     synced: [...new Set([...replica.held.synced, ...learned])].sort(),
+    frontier: replica.generation === posted
+      ? laterFrontier(replica.held.frontier, answered(replica.held.frontier, receipt.since, receipt.frontier))
+      : replica.held.frontier,
     refused: refusedBoth(
       replica.held.refused.filter((old) => !named.has(old.hash)),
       // A refusal of bytes that were no object has no name to keep: it is toasted, not stored.

@@ -22,7 +22,7 @@ import type { Rows } from "./objects"
 import { CHAIN, RENDERED_OWED, alterRow, dropRow, dropRows, heldRow, heldRows, holdRow, keepRow, replicaRow } from "./objects"
 import idb from "../app/idb"
 import rendered from "../app/rendered"
-import { canonical, losses, pulled, replicaOf, wentBack } from "./replica"
+import { canonical, losses, pulled, replicaOf, sinceOf, wentBack } from "./replica"
 import type { Held, Obj, Replica, Said } from "./replica"
 import stores from "./stores"
 import serial from "../algebra/serial"
@@ -69,7 +69,7 @@ export namespace storesync {
     readonly none: locked.Row<O>
     readonly rows: Rows<locked.Row<O>>
     readonly shape: (raw: unknown) => lo.Settled<Shape<O>>
-    readonly ask: (since: heads.Heads) => Promise<Answer<O>>
+    readonly ask: (since: string) => Promise<Answer<O>>
     readonly dead: locked.Dead<O>
     // Every key `r`'s objects name as erased and every key in `told`, with the blocks `r.keys` opens of each.
     readonly erased: (r: locked.Row<O>, told: readonly string[]) => Promise<Erased>
@@ -295,13 +295,15 @@ export namespace storesync {
 
     // One piece kept: the erasures it names forgotten from what pages read, then the piece held beside it, less any key
     // those name, and written on the device by itself. It holds only what was asked of a replica, so another tab's reset
-    // kept meanwhile, a later generation, keeps it out when it lands, and the next piece is asked of the reset.
+    // kept meanwhile, a later generation, keeps it out when it lands, and the next piece is asked of the reset. It stands
+    // where that replica stood, so the frontier it names is read against the one asked from: an answer that did not
+    // know it moves the era on from there, and a later piece of the same era is the later frontier.
     const keep = async ({ asked, answer }: Piece): Promise<void> => {
       readings.told(`epoch/${kept(name)}`, excluded.behind(kept(name), wentBack(asked, answer.said)))
       bars.dispatch({ type: "Piece", name, size: answer.size, weight: answer.weight })
       // Only while more pieces are to come: the last lands with the erasure's lines, which then read as erased.
       if (answer.erased.length > 0 && answer.rest > 0) await take.into(taking(answer.erased), st.none)
-      const piece = locked.without(locked.of(pulled(replicaOf<O>({ ...st.none.replica.held, generation: asked.generation }), answer.said, time.now()), answer.keys), answer.erased)
+      const piece = locked.without(locked.of(pulled(replicaOf<O>({ ...st.none.replica.held, generation: asked.generation, frontier: asked.held.frontier }), answer.said, time.now()), answer.keys), answer.erased)
       pending = locked.without(locked.join(pending, piece), answer.erased)
       if (idb.available() && answer.said.objects.length > 0) {
         const written = await holdRow(st.rows, pieceAt(asked.objects.length), { type: "Join", replica: piece })
@@ -349,7 +351,7 @@ export namespace storesync {
     // A piece asked of what is held, landed and not.
     const askOf = (): Promise<Piece> => {
       const asked = holding()
-      return st.ask(stores.asked(asked)).then((answer): Piece => ({ asked, answer, rest: answer.rest }))
+      return st.ask(sinceOf(asked)).then((answer): Piece => ({ asked, answer, rest: answer.rest }))
     }
 
     // What the box's later epoch overtook dropped, on the device first, so no copy from before it, another tab's included,

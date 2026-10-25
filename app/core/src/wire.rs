@@ -832,7 +832,27 @@ pub struct StoredObject {
     pub literal: String,
 }
 
-/// `GET /api/objects?since=<heads>`: what the caller lacks, with the box's
+/// The frontier a replica holds once it has taken an answer: the digest the box recorded its
+/// heads under, which the replica names back as `since`, and how many objects lie under it.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]
+pub struct Frontier {
+    /// 64 hex digits.
+    pub digest: String,
+    /// The objects at or under the frontier's heads.
+    pub count: usize,
+}
+
+/// How the box read a request's `since`: the frontier it names, or one it does not hold, which
+/// it answered as a replica holding nothing.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, TS)]
+pub enum SinceRead {
+    /// Nothing, or a frontier the box recorded.
+    Known,
+    /// A frontier the box never recorded or let go.
+    Unknown,
+}
+
+/// `GET /api/objects?since=<frontier>`: what the caller lacks, with the box's
 /// heads and the trust policy it folds them under.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]
 pub struct ObjectsPayload {
@@ -854,6 +874,10 @@ pub struct ObjectsPayload {
     pub epoch: u64,
     /// Parents first.
     pub objects: Vec<StoredObject>,
+    /// How the box read `since`.
+    pub since: SinceRead,
+    /// What the replica holds once it has taken these, to name as the next `since`.
+    pub frontier: Frontier,
 }
 
 /// `GET /api/stores/<store>/objects?since=<heads>`: what a replica of one of the secretary's
@@ -946,6 +970,10 @@ pub struct SkeletonPayload {
     pub epoch: u64,
     /// Parents first.
     pub nodes: Vec<SkeletonNode>,
+    /// How the box read `since`.
+    pub since: SinceRead,
+    /// What the replica holds once it has taken these, to name as the next `since`.
+    pub frontier: Frontier,
     /// The key of every slot of words the nodes sent name, as the objects' pull carries them.
     #[ts(type = "Record<string, string>")]
     pub keys: BTreeMap<String, String>,
@@ -967,6 +995,9 @@ pub struct SkeletonPayload {
 pub struct PostedObjects {
     /// Canonical prints, in any order.
     pub objects: Vec<String>,
+    /// The frontier the poster held before these, as a pull names it: absent or empty for none.
+    #[serde(default)]
+    pub since: String,
 }
 
 /// `POST /api/secretary/conversations` and `…/title`: a topic's title; `""` leaves it to the
@@ -1181,6 +1212,11 @@ pub struct ReceiptPayload {
     pub already: Vec<String>,
     /// Refused, in arrival order.
     pub refused: Vec<RefusedObject>,
+    /// How the box read the post's `since`.
+    pub since: SinceRead,
+    /// The frontier the poster holds once the box took what it took: what it held at `since`
+    /// and everything adopted or already held, with all they rest on.
+    pub frontier: Frontier,
 }
 
 /// `GET /api/portal`: what the Android portal reads from a box before it keeps it as its box.

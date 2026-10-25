@@ -92,6 +92,7 @@ pub fn build(args: &Args) -> anyhow::Result<()> {
         configuring,
         connections,
         lines,
+        wide,
     } = args;
     let lapsed = *connections == Connections::Lapsed;
     let (root, port, propose, reviewed, settings) =
@@ -139,7 +140,7 @@ pub fn build(args: &Args) -> anyhow::Result<()> {
     if lapsed {
         reading_not_sending(&read, root)?;
     }
-    bulk_lines(&read, *lines)?;
+    bulk_lines(&read, *lines, *wide)?;
     read.adopt(&signers)
         .whole()
         .context("adopting signatures on every chain")?;
@@ -1289,12 +1290,16 @@ pub struct Args {
     /// holds a large store: half in one conversation, the rest in smaller ones.
     #[arg(long, default_value_t = 0)]
     lines: usize,
+    /// How many more conversations to open, one line each, so the store has that many heads: a
+    /// tab holding it names its replica by a frontier no longer than it would name one head by.
+    #[arg(long, default_value_t = 0)]
+    wide: usize,
 }
 
 /// `count` lines written to new conversations, each with its words locked under a key of its own
 /// as the box locks them: a model's answer of about 6 kB in three blocks and a person's question,
-/// alternating.
-fn bulk_lines(read: &crate::instance::Instance, count: usize) -> anyhow::Result<()> {
+/// alternating. Then `wide` conversations of their opening line alone, `wide-0` onwards.
+fn bulk_lines(read: &crate::instance::Instance, count: usize, wide: usize) -> anyhow::Result<()> {
     use prodrome_core::event::{Actor, canonical_envelope};
     use prodrome_core::store::{MemoryStore, Replica as _};
     use suzatary_core::capability::Turn;
@@ -1302,7 +1307,7 @@ fn bulk_lines(read: &crate::instance::Instance, count: usize) -> anyhow::Result<
     use suzatary_core::secretary::store::{ConversationId, Entry, Kind};
     use suzatary_core::secretary::words::Words;
 
-    if count == 0 {
+    if count + wide == 0 {
         return Ok(());
     }
     let stores = read.conversation_stores();
@@ -1314,7 +1319,8 @@ fn bulk_lines(read: &crate::instance::Instance, count: usize) -> anyhow::Result<
         kind: Kind::Topic,
     };
     // Through the store itself first, which begins it if nothing has.
-    let start = fpl::instant_of(SystemClock.now()) - Duration::seconds(i64::try_from(count)? + 60);
+    let start =
+        fpl::instant_of(SystemClock.now()) - Duration::seconds(i64::try_from(count + wide)? + 60);
     suzatary_core::secretary::transcript::start(
         conversations,
         &ConversationId::new("bulk-0")?,
@@ -1330,17 +1336,9 @@ fn bulk_lines(read: &crate::instance::Instance, count: usize) -> anyhow::Result<
         prints.get(name).cloned()
     })?;
     let writer = Actor::new(suzatary_core::secretary::WRITES_AS.actor())?;
-    // Half the lines in one conversation, then each next conversation half the size of the last.
-    let mut sizes = Vec::new();
-    let mut left = count;
-    while left > 0 {
-        let size = (left / 2).max(left.min(20));
-        sizes.push(size);
-        left -= size;
-    }
     let mut written = 0u32;
-    for (n, size) in sizes.into_iter().enumerate() {
-        let id = ConversationId::new(format!("bulk-{n}"))?;
+    for (n, (id, size)) in sizes(count, wide).into_iter().enumerate() {
+        let id = ConversationId::new(id)?;
         // The first conversation's opening line is the store's own, above.
         for line in usize::from(n == 0)..size {
             written += 1;
@@ -1396,6 +1394,23 @@ fn bulk_lines(read: &crate::instance::Instance, count: usize) -> anyhow::Result<
         .collect();
     conversations.lines.accept(&new)?;
     Ok(())
+}
+
+/// Each bulk conversation and how many lines it holds: half the `count` lines in `bulk-0`, each
+/// next one half the size of the last, then `wide` of one line each.
+fn sizes(count: usize, wide: usize) -> Vec<(String, usize)> {
+    let mut sizes = Vec::new();
+    let mut left = count;
+    while left > 0 {
+        let size = (left / 2).max(left.min(20));
+        sizes.push((format!("bulk-{}", sizes.len()), size));
+        left -= size;
+    }
+    if sizes.is_empty() {
+        sizes.push(("bulk-0".to_owned(), 1));
+    }
+    sizes.extend((0..wide).map(|n| (format!("wide-{n}"), 1)));
+    sizes
 }
 
 /// What the `--settings` fixture's further connections stand at.

@@ -34,14 +34,28 @@ pub struct Treeing {
     by: wire::TreeBy,
 }
 
-/// `?since=<heads>`: what a replica already holds.
-pub struct Since(Vec<prodrome_core::event::Hash>);
+/// `?since=<frontier>`: what a replica already holds.
+pub struct Since(suzatary_core::frontier::Since);
 
 /// `?hashes=`: the objects asked for by name.
 pub struct Wanted(query::Hashes);
 
-/// A replica's objects, each a canonical literal, refused one by one later.
-pub struct Literals(pub(super) Vec<String>);
+/// A replica's objects, each a canonical literal, refused one by one later, and the frontier it
+/// held before them.
+pub struct Literals {
+    pub(super) objects: Vec<String>,
+    pub(super) since: suzatary_core::frontier::Since,
+}
+
+impl Literals {
+    /// The post as the routes read it.
+    pub(super) fn posted(&self) -> routes::Posted<'_> {
+        routes::Posted {
+            objects: &self.objects,
+            since: &self.since,
+        }
+    }
+}
 
 /// A replica's post is a whole chain segment, not one action line.
 const MAX_OBJECTS_BYTES: usize = 4_194_304;
@@ -95,7 +109,10 @@ impl Body for Literals {
     type Wire = wire::PostedObjects;
 
     fn parse(posted: wire::PostedObjects, _: &State) -> Result<Self, Refusal> {
-        Ok(Self(posted.objects))
+        Ok(Self {
+            since: query::since(Some(&posted.since))?,
+            objects: posted.objects,
+        })
     }
 }
 
@@ -173,13 +190,13 @@ pub fn me(call: &Call<Reader, (), ()>) -> Json<wire::MePayload> {
     ))
 }
 
-/// `GET …/objects?since=<heads>`: what this replica does not hold.
+/// `GET …/objects?since=<frontier>`: what this replica does not hold.
 pub fn objects(call: &Call<Reader, Since, ()>) -> Result<Json<wire::ObjectsPayload>, Refusal> {
     routes::objects_since(
         call.chain.caps.secretary.chain,
         &call.chain.policy,
         &call.params.0,
-        call.state.epochs.as_ref(),
+        call.state.books(),
         call.state.first.caps.secretary.clock.now(),
     )
     .map(Json)
@@ -194,7 +211,8 @@ pub fn take_objects(
         caps.secretary.chain,
         caps.secretary.render,
         &call.chain.policy,
-        &call.body.0,
+        &call.body.posted(),
+        &call.state.frontiers,
         &call.guard.0,
     )?;
     // Adoption is the one moment a sealed lifecycle event's note is known here.

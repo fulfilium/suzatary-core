@@ -9,7 +9,7 @@ import type { Replica } from "../src/prodrome/replica"
 import { NOTHING, ancestry, appended, boxHeadsOf, headsOf, join, parentsOf, prodromeOf, pulled, reset, said, settled, untrustedOf } from "../src/prodrome/replica"
 import type { ObjectsPayload, RefusedObject, StoredObject } from "../src/wire/generated/wire"
 import { forAll, rng, type Rng } from "./gen"
-import { held as prodromes } from "./held"
+import { KNOWN, held as prodromes } from "./held"
 
 const box = JSON.parse(readFileSync("app/core/tests/web/replicas.json", "utf8")) as { conversations: { hash: string; text: string }[] }
 // The box's history in the order it took the objects, so the box at any instant holds a prefix of it.
@@ -44,13 +44,13 @@ const moved: StoredObject[] = [genesis(NEW), ...["a", "b", "c", "d"].map((x, i, 
 // epoch it answers with, one later per era since each moves the set it serves.
 type Era = { readonly objects: readonly StoredObject[]; readonly geneses: readonly string[]; readonly epoch: number }
 const ERAS: readonly Era[] = [
-  { objects: history, geneses: [OLD], epoch: 1 },
-  { objects: [...history, ...moved], geneses: [OLD, NEW], epoch: 2 },
-  { objects: moved, geneses: [NEW], epoch: 3 },
-  { objects: [...history, ...moved], geneses: [OLD, NEW], epoch: 4 },
-  { objects: history, geneses: [OLD], epoch: 5 },
+  { objects: history, geneses: [OLD], epoch: 1, ...KNOWN },
+  { objects: [...history, ...moved], geneses: [OLD, NEW], epoch: 2, ...KNOWN },
+  { objects: moved, geneses: [NEW], epoch: 3, ...KNOWN },
+  { objects: [...history, ...moved], geneses: [OLD, NEW], epoch: 4, ...KNOWN },
+  { objects: history, geneses: [OLD], epoch: 5, ...KNOWN },
   // A deploy of an earlier checkpoint of the same store: no store moves, but the heads answered last are gone.
-  { objects: history.slice(0, Math.max(1, history.length - 3)), geneses: [OLD], epoch: 6 },
+  { objects: history.slice(0, Math.max(1, history.length - 3)), geneses: [OLD], epoch: 6, ...KNOWN },
 ]
 const [BEFORE, BOTH, DROPPED, ROLLED, BACK, EARLIER] = ERAS as [Era, Era, Era, Era, Era, Era]
 // The box at some instant of an era: what it held so far, and the prodromes it serves.
@@ -59,20 +59,34 @@ const during = (r: Rng, era: Era): Era => ({
   geneses: era.geneses,
   epoch: era.epoch,
 })
-const heard = (era: Era, untrusted: string[] = [], root: string | null = null): ObjectsPayload =>
-  ({ objects: [...era.objects], heads: headsOf(era.objects), untrusted, root, geneses: [...era.geneses], epoch: era.epoch })
+const heard = (era: Era, untrusted: string[] = [], root: string | null = null): ObjectsPayload => ({
+  objects: [...era.objects],
+  heads: headsOf(era.objects),
+  untrusted,
+  root,
+  geneses: [...era.geneses],
+  epoch: era.epoch,
+  since: "Known",
+  frontier: { digest: "0".repeat(64), count: era.objects.length },
+})
+
+// Where an answer leaves a replica: one of a few frontiers, read as known or as one the box lost.
+const named = (r: Rng): Pick<ObjectsPayload, "since" | "frontier"> => ({
+  since: r.pick(["Known", "Unknown"] as const),
+  frontier: { digest: r.pick(["a", "b", "c"]).repeat(64), count: r.int(40) },
+})
 
 // A tab's replica: the box as it stood at its last contact, in some era of the migration, under some policy, plus
 // what it took from another tab since, writes into either store included, and refusals of some of what it holds.
 const replica = (r: Rng): Replica => {
   if (r.int(6) === 0) return NOTHING
   const era = during(r, r.pick(ERAS))
-  const contact = pulled(NOTHING, heard(era, r.int(2) === 0 ? [] : ["scout"], r.int(2) === 0 ? null : "f".repeat(64)), 1 + r.int(4))
+  const contact = pulled(NOTHING, { ...heard(era, r.int(2) === 0 ? [] : ["scout"], r.int(2) === 0 ? null : "f".repeat(64)), ...named(r) }, 1 + r.int(4))
   const more = appended(contact, downSet(r, [...history, ...moved], contact.held.objects).slice(contact.held.objects.length))
   const refused: RefusedObject[] = more.held.objects
     .filter(() => r.int(8) === 0)
     .map(o => ({ hash: o.hash, reason: r.pick(["no", "not yet"]), kind: r.pick(["final", "trust"] as const) }))
-  const withRefusals = settled(more, { heads: [], adopted: [], already: [], refused })
+  const withRefusals = settled(more, { heads: [], adopted: [], already: [], refused, ...named(r) }, more.generation)
   // Most replicas are of the first generation, some saw a reset, and one reset is kept whole over what came before it.
   return r.int(4) === 0 ? join(reset(withRefusals), pulled(reset(withRefusals), heard(era), 2)) : withRefusals
 }
@@ -120,7 +134,7 @@ test("law: the box's word that has seen more wins, whichever contact was later",
     const early = history.slice(0, r.int(k))
     const late = history.slice(0, k)
     const word = (objects: StoredObject[], untrusted: string[], at: number): Replica =>
-      pulled(NOTHING, { objects, heads: headsOf(objects), untrusted, root: null, geneses: prodromes(history), epoch: 1 }, at)
+      pulled(NOTHING, { objects, heads: headsOf(objects), untrusted, root: null, geneses: prodromes(history), epoch: 1, ...KNOWN }, at)
     // The fuller word was heard first, by the tab's clock: the clock does not decide.
     const fuller = word(late, ["scout"], 1)
     const older = word(early, [], 2)
@@ -134,15 +148,15 @@ test("law: the box's word that has seen more wins, whichever contact was later",
 test("law: a prodrome the box dropped reads as forgotten, whatever copy is joined in, until a later word serves it again", () => {
   const [GONE, KEPT, A, B] = ["1".repeat(64), "3".repeat(64), "a".repeat(64), "b".repeat(64)]
   // A tab that heard the box first, at the epoch before the migration.
-  const before = pulled(NOTHING, { objects: [genesis(GONE), change(A, GONE, [])], heads: [A], untrusted: [], root: null, geneses: [GONE], epoch: 1 }, 1)
-  const after = pulled(before, { objects: [genesis(KEPT), change(B, KEPT, [])], heads: [B], untrusted: [], root: null, geneses: [KEPT], epoch: 2 }, 2)
+  const before = pulled(NOTHING, { objects: [genesis(GONE), change(A, GONE, [])], heads: [A], untrusted: [], root: null, geneses: [GONE], epoch: 1, ...KNOWN }, 1)
+  const after = pulled(before, { objects: [genesis(KEPT), change(B, KEPT, [])], heads: [B], untrusted: [], root: null, geneses: [KEPT], epoch: 2, ...KNOWN }, 2)
   assert.deepEqual(after.objects.map(o => o.hash), [KEPT, B])
   assert.deepEqual(after.gone, [GONE])
   assert.deepEqual(join(after, before).objects.map(o => o.hash), [KEPT, B], "the other tab's copy does not bring it back")
   assert.deepEqual(boxHeadsOf(join(before, after)), [B], "nor its word")
   assert.deepEqual(names(after.held.objects), names([genesis(GONE), change(A, GONE, []), genesis(KEPT), change(B, KEPT, [])]), "it is still held")
   // The box rolled back to a checkpoint that serves the old store too: nothing is fetched again, and it reads.
-  const back = pulled(after, { objects: [], heads: [A, B], untrusted: [], root: null, geneses: [GONE, KEPT], epoch: 3 }, 3)
+  const back = pulled(after, { objects: [], heads: [A, B], untrusted: [], root: null, geneses: [GONE, KEPT], epoch: 3, ...KNOWN }, 3)
   assert.deepEqual(names(back.objects), names([genesis(GONE), change(A, GONE, []), genesis(KEPT), change(B, KEPT, [])]))
   assert.deepEqual(back.gone, [])
 })

@@ -18,19 +18,19 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 
 import type { ReceiptPayload, StoredObject } from "../src/wire/generated/wire";
-import { replicaWith } from "./held";
+import { KNOWN, replicaWith } from "./held";
 import { parseReplica } from "../src/prodrome/objects";
 import lo from "../src/algebra/lo";
 import {
   NOTHING,
   appended,
-  askFrom,
   boxHeadsOf,
   rootOf,
   untrustedOf,
   headsOf,
   parentsOf,
   pulled,
+  sinceOf,
   awaitingTrust,
   settled,
   stuckBehind,
@@ -159,24 +159,20 @@ test("a replica whose objects the box all holds pushes nothing", () => {
 
 // --- What to pull ---------------------------------------------------------------
 
-test("the heads to ask from are those of what the box holds of ours, every one", () => {
-  // Two branches the box has, and one act on top it has not taken yet.
+test("a pull asks from the frontier the box's last answer named, never from the heads it holds", () => {
   const held = replica({
     objects: [sealed(A, ""), sealed(B, A), sealed(C, A), sealed(D, B)],
     synced: [A, B, C],
   });
-  assert.deepEqual(askFrom(held), [B, C]);
-});
-
-test("a replica the box is known to hold nothing of asks for everything", () => {
-  const held = replica({ objects: [sealed(A, "")] });
-  assert.deepEqual(askFrom(held), []);
-  assert.deepEqual(askFrom(NOTHING), []);
+  assert.equal(sinceOf(held), "", "no answer named one yet: from nothing");
+  const named = pulled(held, { objects: [], heads: [B, C], untrusted: [], root: null, geneses: [], epoch: 1, since: "Known", frontier: { digest: "e".repeat(64), count: 3 } }, 1);
+  assert.equal(sinceOf(named), "e".repeat(64));
+  assert.equal(sinceOf(NOTHING), "");
 });
 
 test("pulling takes what is new, keeps what is held, and adopts the box's heads", () => {
   const before = replica({ objects: [sealed(A, "")], synced: [A], boxHeads: [A] });
-  const after = pulled(before, { objects: [sealed(A, ""), sealed(B, A)], heads: [B], untrusted: ["triage"], root: ROOT, geneses: [], epoch: 1 }, 1_700_000_000_000);
+  const after = pulled(before, { objects: [sealed(A, ""), sealed(B, A)], heads: [B], untrusted: ["triage"], root: ROOT, geneses: [], epoch: 1, ...KNOWN }, 1_700_000_000_000);
   assert.deepEqual(
     after.objects.map((object) => object.hash),
     [A, B],
@@ -201,7 +197,7 @@ test("a pull drops a prodrome the box no longer holds, and all that rests on it,
     synced: [OLD, A, B, C],
     refused: [{ hash: B, reason: "stale", kind: "final" }],
   });
-  const after = pulled(before, { objects: [genesisObject(NEW), change(D, NEW, [NEW])], heads: [D], untrusted: [], root: null, geneses: [NEW, C], epoch: 1 }, 1_700_000_000_000);
+  const after = pulled(before, { objects: [genesisObject(NEW), change(D, NEW, [NEW])], heads: [D], untrusted: [], root: null, geneses: [NEW, C], epoch: 1, ...KNOWN }, 1_700_000_000_000);
   assert.deepEqual(
     after.objects.map((object) => object.hash),
     [C, NEW, D],
@@ -215,7 +211,7 @@ test("a pull drops a prodrome the box no longer holds, and all that rests on it,
 test("a pull that names no geneses says the box holds no prodrome: every prodrome held is forgotten, a legacy object stays", () => {
   const OLD = name("1");
   const before = replica({ objects: [sealed(C, ""), genesisObject(OLD), change(A, OLD, [])], synced: [C, OLD, A] });
-  const after = pulled(before, { objects: [], heads: [C], untrusted: [], root: null, geneses: [], epoch: 2 }, 1_700_000_000_000);
+  const after = pulled(before, { objects: [], heads: [C], untrusted: [], root: null, geneses: [], epoch: 2, ...KNOWN }, 1_700_000_000_000);
   assert.deepEqual(after.objects.map((object) => object.hash), [C]);
   assert.deepEqual(after.gone, [OLD]);
 });
@@ -223,6 +219,7 @@ test("a pull that names no geneses says the box holds no prodrome: every prodrom
 // --- What a receipt teaches ------------------------------------------------------
 
 const receipt = (over: Partial<ReceiptPayload>): ReceiptPayload => ({
+  ...KNOWN,
   heads: [],
   adopted: [],
   already: [],
@@ -232,7 +229,7 @@ const receipt = (over: Partial<ReceiptPayload>): ReceiptPayload => ({
 
 test("adopted and already are the same fact: the box holds it now", () => {
   const before = replica({ objects: [sealed(A, ""), sealed(B, A)] });
-  const after = settled(before, receipt({ heads: [B], adopted: [B], already: [A] }));
+  const after = settled(before, receipt({ heads: [B], adopted: [B], already: [A] }), before.generation);
   assert.deepEqual(unsynced(after), []);
   assert.equal(after.box.type, "Unheard", "where the box stands is the pull's to say, from objects this replica holds");
 });
@@ -245,6 +242,7 @@ test("a refusal is kept with the box's own sentence, and holds back what rests o
   const after = settled(
     before,
     receipt({ heads: [A], refused: [{ hash: B, reason: "its event is triage's and you are posting as ada", kind: "final" }] }),
+    before.generation,
   );
   const { held, reasons } = stuckBehind(after);
   assert.equal(reasons.length, 1);
@@ -258,6 +256,7 @@ test("a write refused for its key waits, and goes again once this device is trus
   const after = settled(
     before,
     receipt({ heads: [A], refused: [{ hash: B, reason: "its signatures do not prove it: unsigned", kind: "trust" }] }),
+    before.generation,
   );
   assert.deepEqual(stuckBehind(after), { held: 0, reasons: [] }, "nothing is stuck: it waits");
   assert.equal(awaitingTrust(after), 2, "the refused write and the one resting on it");
@@ -282,13 +281,13 @@ test("an own write no signature covers is unsigned; a signature or the box holdi
 test("a refusal about bytes that were not an object is not kept against anything", () => {
   // There is no name to keep it under and no object of ours it is about, so it
   // is said once and forgotten.
-  const after = settled(NOTHING, receipt({ refused: [{ hash: "", reason: "not one canonical object: …", kind: "final" }] }));
+  const after = settled(NOTHING, receipt({ refused: [{ hash: "", reason: "not one canonical object: …", kind: "final" }] }), 0);
   assert.deepEqual(after.refused, []);
 });
 
 test("a re-post refused differently replaces the older reason", () => {
   const before = replica({ refused: [{ hash: B, reason: "old", kind: "final" }] });
-  const after = settled(before, receipt({ refused: [{ hash: B, reason: "new", kind: "final" }] }));
+  const after = settled(before, receipt({ refused: [{ hash: B, reason: "new", kind: "final" }] }), before.generation);
   assert.deepEqual(after.refused, [{ hash: B, reason: "new", kind: "final" }]);
 });
 
@@ -328,22 +327,22 @@ test("a row in a form an earlier build kept does not read: the reader holds no s
 });
 
 test("a row as kept now reads back as the replica it was", () => {
-  const row = pulled(replica({ objects: [sealed(A, ""), sealed(B, A)], synced: [A] }), { objects: [], heads: [A], untrusted: ["triage"], root: ROOT, geneses: [], epoch: 1 }, 9);
+  const row = pulled(replica({ objects: [sealed(A, ""), sealed(B, A)], synced: [A] }), { objects: [], heads: [A], untrusted: ["triage"], root: ROOT, geneses: [], epoch: 1, ...KNOWN }, 9);
   const back = lo.withDefault(parseReplica(JSON.parse(JSON.stringify(row.held))), null);
   assert.deepEqual(back, row);
 });
 
 test("the box's heads, epoch, policy and root are one word, the last pull's, and none before the box has spoken", () => {
-  const first = pulled(NOTHING, { objects: [sealed(A, "")], heads: [A], untrusted: [], root: null, geneses: [], epoch: 1 }, 1);
-  const second = pulled(first, { objects: [sealed(B, A)], heads: [B], untrusted: ["triage"], root: ROOT, geneses: [], epoch: 2 }, 2);
+  const first = pulled(NOTHING, { objects: [sealed(A, "")], heads: [A], untrusted: [], root: null, geneses: [], epoch: 1, ...KNOWN }, 1);
+  const second = pulled(first, { objects: [sealed(B, A)], heads: [B], untrusted: ["triage"], root: ROOT, geneses: [], epoch: 2, ...KNOWN }, 2);
   assert.deepEqual(second.box, { type: "Heard", word: { epoch: 2, heads: [B], untrusted: ["triage"], root: ROOT, fetchedAt: 2, geneses: [] } });
   assert.deepEqual(NOTHING.box, { type: "Unheard" });
   assert.equal(boxHeadsOf(NOTHING), null, "never heard is not heard to hold nothing");
 });
 
 test("an answer of an earlier epoch than a word held is the box going back, and is said", () => {
-  const held = pulled(NOTHING, { objects: [sealed(A, "")], heads: [A], untrusted: [], root: null, geneses: [], epoch: 5 }, 1);
-  const answer = (epoch: number) => ({ objects: [], heads: [A], untrusted: [], root: null, geneses: [], epoch });
+  const held = pulled(NOTHING, { objects: [sealed(A, "")], heads: [A], untrusted: [], root: null, geneses: [], epoch: 5, ...KNOWN }, 1);
+  const answer = (epoch: number) => ({ objects: [], heads: [A], untrusted: [], root: null, geneses: [], epoch, ...KNOWN });
   assert.equal(wentBack(held, answer(4)), true, "a lost state directory");
   assert.equal(wentBack(held, answer(5)), false);
   assert.equal(wentBack(held, answer(6)), false, "a later epoch is the box moving on");

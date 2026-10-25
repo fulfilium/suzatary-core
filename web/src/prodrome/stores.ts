@@ -5,7 +5,7 @@
 
 import heads from "./heads"
 import locked from "./locked"
-import type { Box, Obj, Replica } from "./replica"
+import type { Box, Frontier, Obj, Replica } from "./replica"
 import { said } from "./replica"
 import type { SkeletonNode, StoreName, StoredObject } from "../wire/generated/wire"
 
@@ -27,12 +27,17 @@ export namespace stores {
 
   export const NONE: T = { inbox: locked.NONE, lines: locked.none(), topics: locked.NONE, "topic-aliases": locked.NONE }
 
-  // What a reading or a pull can see: the generation, the objects, the box's heads, the policy they are read under and
-  // the keys, never the instant they were heard. A reset of an empty row holds what it held, and is still a step.
+  // What a reading or a pull can see: the generation, the objects, the box's heads, the policy they are read under, the
+  // frontier the next pull asks from and the keys, never the instant they were heard. A reset of an empty row holds what
+  // it held, and is still a step; so is a pull that moved only the frontier, which the next pull must ask from.
   export const same = <O extends Obj>(a: Replica<O>, b: Replica<O>): boolean =>
     a.generation === b.generation &&
     a.objects.length === b.objects.length &&
-    sameBox(a.box, b.box)
+    sameBox(a.box, b.box) &&
+    sameFrontier(a.held.frontier, b.held.frontier)
+
+  const sameFrontier = (a: Frontier, b: Frontier): boolean =>
+    a.type === "Named" && b.type === "Named" ? a.digest === b.digest && a.era === b.era : a.type === b.type
 
   // Two words are one when both are unheard, or both name the same heads under the same policy.
   const sameBox = (a: Box, b: Box): boolean =>
@@ -74,8 +79,6 @@ export namespace stores {
     }
   }
 
-  // What the box is known to hold, for `since=`: every object here came from it.
-  export const asked = <O extends Obj>(r: Replica<O>): heads.Heads => heads.of(r.heads)
 
   // Whether the box answered in a later epoch than a word any part of what is held heard (the row pages read, or the
   // pieces kept beside it): its store no longer extends what it served (a migration rewrote objects, or it went back

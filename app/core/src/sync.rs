@@ -529,26 +529,6 @@ fn unasserted(
     Some(why)
 }
 
-/// What a caller holding the heads `since` does not have: everything outside the union of their
-/// ancestries. A head this server does not hold (an act the caller has not posted yet) holds back
-/// nothing, so none known is a caller holding nothing.
-#[must_use]
-pub fn missing(held: &Objects, since: &[Hash]) -> Vec<Hash> {
-    let theirs: BTreeSet<Hash> = since
-        .iter()
-        .filter(|name| held.holds(name))
-        .flat_map(|name| {
-            let mut set = held.ancestors(name);
-            set.insert(name.clone());
-            set
-        })
-        .collect();
-    held.names()
-        .into_iter()
-        .filter(|name| !theirs.contains(name))
-        .collect()
-}
-
 /// What an object cannot be held without: its parents, and the genesis a change names, which a
 /// store's verify-on-receive walks to as it walks to a parent.
 fn rests_on<E>(envelope: &prodrome_core::event::Envelope<E>) -> Vec<Hash> {
@@ -910,61 +890,6 @@ mod tests {
                 .into_iter()
                 .collect::<BTreeSet<Hash>>()
         );
-    }
-
-    /// The answer is everything outside the ancestries of the caller's heads, and a head this
-    /// box does not hold holds back nothing.
-    #[test]
-    fn missing_is_everything_outside_the_callers_ancestry() {
-        let chain = branch(None, "alpha", 4);
-        let mut held = Objects::default();
-        for object in &chain {
-            held.insert(seal_hash(object), object.clone());
-        }
-        assert_eq!(missing(&held, &[]).len(), 4);
-        assert_eq!(missing(&held, &[seal_hash(&chain[3])]), Vec::new());
-        assert_eq!(
-            missing(&held, &[seal_hash(&chain[1])]),
-            {
-                let mut later = vec![seal_hash(&chain[2]), seal_hash(&chain[3])];
-                later.sort();
-                later
-            },
-            "the two it does not hold, and nothing it does"
-        );
-        let stranger = Hash::new("f".repeat(64)).expect("64 hex");
-        assert_eq!(missing(&held, std::slice::from_ref(&stranger)).len(), 4);
-        assert_eq!(
-            missing(&held, &[stranger, seal_hash(&chain[3])]),
-            Vec::new(),
-            "an unposted head beside a held one is the held one's answer"
-        );
-    }
-
-    /// Several heads: a caller holding two branches lacks only what neither rests on.
-    #[test]
-    fn missing_over_a_head_set_is_outside_every_heads_ancestry() {
-        let shared = branch(None, "alpha", 1);
-        let root = seal_hash(&shared[0]);
-        let left = sealed(
-            Some(&root),
-            mk_completed("alpha", at(2), "ada", "").expect("valid"),
-        );
-        let right = sealed(
-            Some(&root),
-            mk_created("beta", at(2), "ada", "", "").expect("valid"),
-        );
-        let woven: Envelope =
-            mk_woven(vec![seal_hash(&left), seal_hash(&right)], None).expect("two");
-        let mut held = Objects::default();
-        for object in [&shared[0], &left, &right, &woven] {
-            held.insert(seal_hash(object), object.clone());
-        }
-        assert_eq!(
-            missing(&held, &[seal_hash(&left), seal_hash(&right)]),
-            vec![seal_hash(&woven)]
-        );
-        assert_eq!(missing(&held, &[seal_hash(&left)]).len(), 2);
     }
 
     /// A tab: the Prodrome's replica in memory, holding `objects`, as the browser's module

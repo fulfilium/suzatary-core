@@ -1760,8 +1760,11 @@ fn the_replicas_vector_is_what_the_box_answers() {
 fn skeleton_of(bundle: &Bundle) -> wire::SkeletonPayload {
     suzatary_core::routes::lines_skeleton(
         bundle.conversations.conversations(),
-        &[],
-        &suzatary_core::epoch::Epochs::remembered(),
+        &suzatary_core::frontier::Since::Nothing,
+        suzatary_core::routes::Books {
+            epochs: &suzatary_core::epoch::Epochs::remembered(),
+            frontiers: &suzatary_core::frontier::Frontiers::remembered(),
+        },
         bundle.at,
         suzatary_core::routes::Cut::Whole,
     )
@@ -1956,8 +1959,17 @@ fn the_answers_vector_holds_every_answer() {
     samples.add([wire::TipFrame {
         heads: heads.clone(),
     }]);
-    let epochs = suzatary_core::epoch::Epochs::remembered();
-    samples.add([routes::objects_since(&bundle, &policy, &[], &epochs, at).expect("the objects")]);
+    let (epochs, frontiers) = (
+        suzatary_core::epoch::Epochs::remembered(),
+        suzatary_core::frontier::Frontiers::remembered(),
+    );
+    let books = routes::Books {
+        epochs: &epochs,
+        frontiers: &frontiers,
+    };
+    let nothing = suzatary_core::frontier::Since::Nothing;
+    samples
+        .add([routes::objects_since(&bundle, &policy, &nothing, books, at).expect("the objects")]);
     // The lines' pull: a conversation's objects and the key of every slot they name.
     let lines = suzatary_core::secretary::conversations::InMemory::default();
     suzatary_core::secretary::transcript::start(
@@ -1971,14 +1983,23 @@ fn the_answers_vector_holds_every_answer() {
         },
     )
     .expect("opens");
-    samples.add([
-        routes::lines_since(lines.conversations(), &[], &epochs, at, routes::Cut::PIECE)
-            .expect("the lines"),
-    ]);
+    samples.add([routes::lines_since(
+        lines.conversations(),
+        &nothing,
+        books,
+        at,
+        routes::Cut::PIECE,
+    )
+    .expect("the lines")]);
     // Its skeleton: the genesis, a structure, and the opening line.
-    let skeleton =
-        routes::lines_skeleton(lines.conversations(), &[], &epochs, at, routes::Cut::PIECE)
-            .expect("the skeleton");
+    let skeleton = routes::lines_skeleton(
+        lines.conversations(),
+        &nothing,
+        books,
+        at,
+        routes::Cut::PIECE,
+    )
+    .expect("the skeleton");
     let mut names: Vec<&str> = skeleton
         .nodes
         .iter()
@@ -1994,6 +2015,11 @@ fn the_answers_vector_holds_every_answer() {
         heads: heads.clone(),
         adopted: heads.clone(),
         already: Vec::new(),
+        since: wire::SinceRead::Unknown,
+        frontier: wire::Frontier {
+            digest: "f".repeat(64),
+            count: heads.len(),
+        },
         refused: vec![
             wire::RefusedObject {
                 hash: String::new(),

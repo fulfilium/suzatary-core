@@ -485,7 +485,9 @@ fn the_phones_at_is_stored_as_the_phone_claimed_it() {
 
 // --- The read side ------------------------------------------------------------
 
-/// `since` names the heads the caller holds; one the box does not hold holds back nothing.
+/// `since` names the frontier an answer named; one the box does not hold is answered as a replica
+/// holding nothing, and says so; a post naming its frontier is answered with one its next pull
+/// lacks nothing from.
 #[test]
 fn objects_since_answers_only_what_the_caller_lacks() {
     let (base, caps) = writer("sync-since");
@@ -496,7 +498,6 @@ fn objects_since_answers_only_what_the_caller_lacks() {
         .iter()
         .map(|head| head.as_str().to_owned())
         .collect();
-    let since = heads.join(",");
 
     let mut all = common::get(&format!("{base}/api/objects"));
     let everything = common::body_json(&mut all);
@@ -504,12 +505,16 @@ fn objects_since_answers_only_what_the_caller_lacks() {
     assert!(held > 0);
     assert_eq!(everything["heads"], serde_json::json!(heads));
     assert!(everything["untrusted"].as_array().is_some());
+    assert_eq!(everything["frontier"]["count"], held);
+    let since = everything["frontier"]["digest"]
+        .as_str()
+        .expect("a frontier")
+        .to_owned();
 
     let mut caught_up = common::get(&format!("{base}/api/objects?since={since}"));
-    assert_eq!(
-        common::body_json(&mut caught_up)["objects"],
-        serde_json::json!([])
-    );
+    let quiet = common::body_json(&mut caught_up);
+    assert_eq!(quiet["objects"], serde_json::json!([]));
+    assert_eq!(quiet["since"], "Known");
 
     let object = common::written(
         &caps.chain,
@@ -531,28 +536,47 @@ fn objects_since_answers_only_what_the_caller_lacks() {
 
     let stranger = "e".repeat(64);
     let mut unknown = common::get(&format!("{base}/api/objects?since={stranger}"));
+    let fallen = common::body_json(&mut unknown);
+    assert_eq!(fallen["since"], "Unknown");
     assert_eq!(
-        common::body_json(&mut unknown)["objects"]
-            .as_array()
-            .expect("objects")
-            .len(),
+        fallen["objects"].as_array().expect("objects").len(),
         held + 2
     );
-    // An act not yet posted beside a head the box holds: the held one answers.
-    let mut beside = common::get(&format!("{base}/api/objects?since={stranger},{since}"));
+
+    // A post naming its frontier: its receipt's frontier reaches what it posted, so the next
+    // pull from it sends nothing.
+    let next = common::written(
+        &caps.chain,
+        mk_completed("file-permit", at(9), "ada", "").expect("valid"),
+    );
+    let since = missing["frontier"]["digest"].as_str().expect("a frontier");
+    let literals = [
+        canonical_envelope(&next),
+        canonical_envelope(&signature(&next)),
+    ];
+    let mut receipt = common::act(
+        &format!("{base}/api/objects"),
+        &serde_json::json!({ "objects": literals, "since": since }),
+    );
+    let receipt = common::body_json(&mut receipt);
+    assert_eq!(receipt["since"], "Known");
+    let mut after = common::get(&format!(
+        "{base}/api/objects?since={}",
+        receipt["frontier"]["digest"].as_str().expect("a frontier")
+    ));
     assert_eq!(
-        common::body_json(&mut beside)["objects"]
-            .as_array()
-            .expect("objects")
-            .len(),
-        2
+        common::body_json(&mut after)["objects"],
+        serde_json::json!([])
     );
 
-    // A `since` that is not a name is a refusal, not a guess.
-    assert_eq!(
-        common::status(&common::get(&format!("{base}/api/objects?since=beef"))),
-        400
-    );
+    // A `since` that is not a frontier is a refusal, not a guess: heads are not one.
+    for wrong in ["beef".to_owned(), heads.join(",")] {
+        assert_eq!(
+            common::status(&common::get(&format!("{base}/api/objects?since={wrong}"))),
+            400,
+            "{wrong}"
+        );
+    }
 }
 
 /// `GET /api/me` is the actor a replica must seal as, or `null` for a read-only login.

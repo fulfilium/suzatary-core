@@ -76,34 +76,16 @@ pub fn fold_limit(raw: Option<&str>) -> Result<Option<usize>, Refusal> {
     }
 }
 
-/// The most heads one `since=` may name; a replica with more posts first, which joins them.
-pub const MAX_SINCE: usize = 256;
-
-/// `/api/objects`'s `since`: a replica's heads, comma-separated, each 64 hex digits; absent or
-/// empty is a replica holding nothing.
-pub fn since(raw: Option<&str>) -> Result<Vec<prodrome_core::event::Hash>, Refusal> {
-    let names: Vec<&str> = raw
-        .unwrap_or_default()
-        .split(',')
-        .filter(|name| !name.is_empty())
-        .collect();
-    if names.len() > MAX_SINCE {
-        return Err(Refusal::bad_request(format!(
-            "since names at most {MAX_SINCE} heads, got {}",
-            names.len()
-        )));
+/// A pull's `since`: absent or empty is a replica holding nothing; anything else is the frontier
+/// an earlier answer named, 64 hex digits, so a request names what a replica holds in the same
+/// few bytes however many heads it has.
+pub fn since(raw: Option<&str>) -> Result<crate::frontier::Since, Refusal> {
+    match raw.unwrap_or_default() {
+        "" => Ok(crate::frontier::Since::Nothing),
+        text => crate::frontier::Digest::parse(text)
+            .map(crate::frontier::Since::Frontier)
+            .map_err(|refused| Refusal::bad_request(format!("{refused}, got {}", shown(text)))),
     }
-    names
-        .into_iter()
-        .map(|name| {
-            prodrome_core::event::Hash::new(name).map_err(|_| {
-                Refusal::bad_request(format!(
-                    "since is heads of 64 hex digits, got {}",
-                    shown(name)
-                ))
-            })
-        })
-        .collect()
 }
 
 /// The most hashes one `hashes=` may name: 64 names of 64 hex digits fit a URL of about 4 KiB.

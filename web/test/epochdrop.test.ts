@@ -13,7 +13,7 @@ import type { Replica } from "../src/prodrome/replica"
 import { NOTHING, headsOf, parentsOf, pulled, replicaOf, said } from "../src/prodrome/replica"
 import type { StoredObject } from "../src/wire/generated/wire"
 import { forAll, type Rng } from "./gen"
-import { held as prodromes } from "./held"
+import { KNOWN, held as prodromes } from "./held"
 
 const box = JSON.parse(readFileSync("app/core/tests/web/replicas.json", "utf8")) as { conversations: { hash: string; text: string }[] }
 const before: StoredObject[] = box.conversations.map(o => ({ hash: o.hash, literal: o.text }))
@@ -46,7 +46,7 @@ const downSet = (r: Rng, objects: readonly StoredObject[]): StoredObject[] => {
 // An answer of the box at `epoch`, taken into an empty replica of `generation`, as a pull's piece is; it names the
 // prodromes the box held in that epoch, whatever part of them it sends.
 const answer = (objects: readonly StoredObject[], epoch: number, generation: number, at: number): Replica =>
-  pulled(replicaOf({ ...NOTHING.held, generation }), { objects: [...objects], heads: headsOf([...objects]), untrusted: [], root: null, geneses: prodromes(epoch === LATER ? after : before), epoch }, at)
+  pulled(replicaOf({ ...NOTHING.held, generation }), { objects: [...objects], heads: headsOf([...objects]), untrusted: [], root: null, geneses: prodromes(epoch === LATER ? after : before), epoch, ...KNOWN }, at)
 
 // What the device holds of a store: the row pages read, and the pieces of a pull kept beside it, not yet landed.
 type Device = { readonly row: locked.Row; readonly pending: locked.Row }
@@ -82,7 +82,7 @@ type Step = { readonly name: string; readonly apply: (d: Device) => Device }
 
 const steps = (r: Rng): Step[] => [
   { name: "an answer at the old epoch lands", apply: d => ({ ...d, row: locked.join(d.row, locked.of(answer(downSet(r, before), OLD, 0, 2), { a: "00" })) }) },
-  { name: "a piece of the old epoch is kept", apply: d => ({ ...d, pending: locked.join(d.pending, locked.of(pulled(NOTHING, { objects: [was], heads: [tip], untrusted: [], root: null, geneses: prodromes(before), epoch: OLD }, 3))) }) },
+  { name: "a piece of the old epoch is kept", apply: d => ({ ...d, pending: locked.join(d.pending, locked.of(pulled(NOTHING, { objects: [was], heads: [tip], untrusted: [], root: null, geneses: prodromes(before), epoch: OLD, ...KNOWN }, 3))) }) },
   // Another tab's pull cut after its first piece: kept beside the row, asked of what the device held.
   { name: "another tab keeps a piece and is cut off", apply: d => pull(d, 4, 1 + r.int(3)) },
   // What a tab whose pull was in flight as it closed leaves: a piece of the later epoch, kept after the row it was asked

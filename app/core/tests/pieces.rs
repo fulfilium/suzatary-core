@@ -12,7 +12,8 @@ use prodrome_core::literal::Datetime;
 use proptest::prelude::*;
 
 use suzatary_core::capability::Turn;
-use suzatary_core::routes::{self, Cut};
+use suzatary_core::frontier::{Digest, Frontiers, Since};
+use suzatary_core::routes::{self, Books, Cut};
 use suzatary_core::secretary::conversations::InMemory;
 use suzatary_core::secretary::erasure::Erasure;
 use suzatary_core::secretary::line_event::LineEvent;
@@ -195,6 +196,22 @@ fn rests_on(object: &Envelope<LineEvent>) -> Vec<Hash> {
     on
 }
 
+/// The frontier of `held`, a down-set of `objects`, recorded as an answer records one, as the
+/// `since` that names it.
+fn since_of(
+    frontiers: &Frontiers,
+    objects: &[(Hash, Envelope<LineEvent>)],
+    held: &BTreeSet<Hash>,
+) -> Since {
+    let below: BTreeSet<Hash> = objects
+        .iter()
+        .filter(|(name, _)| held.contains(name))
+        .flat_map(|(_, object)| parents_of(object))
+        .collect();
+    let heads = held.difference(&below).cloned().collect();
+    Since::Frontier(frontiers.record("store/lines", &heads).expect("recorded"))
+}
+
 proptest! {
     #![proptest_config(ProptestConfig::with_cases(64))]
 
@@ -214,13 +231,14 @@ proptest! {
         for write in &script {
             store.apply(write);
         }
-        let epochs = suzatary_core::epoch::Epochs::remembered();
+        let (epochs, frontiers) = (suzatary_core::epoch::Epochs::remembered(), Frontiers::remembered());
+        let books = Books { epochs: &epochs, frontiers: &frontiers };
         let first = store.lines.lines.objects().expect("reads");
         // A replica holds a down-set: a prefix of the store's order.
         let mut held: BTreeSet<Hash> =
             first.iter().take(held_first).map(|(name, _)| name.clone()).collect();
-        let since: Vec<Hash> = held.iter().cloned().collect();
-        let whole = routes::lines_since(store.lines.conversations(), &since, &epochs, now(), Cut::Whole).expect("the whole");
+        let mut since = since_of(&frontiers, &first, &held);
+        let whole = routes::lines_since(store.lines.conversations(), &since, books, now(), Cut::Whole).expect("the whole");
         prop_assert_eq!(whole.rest, 0);
         let mut sent = BTreeSet::new();
         let mut keys = BTreeMap::new();
@@ -230,8 +248,8 @@ proptest! {
             let objects = store.lines.lines.objects().expect("reads");
             let by_name: BTreeMap<&Hash, &Envelope<LineEvent>> = objects.iter().map(|(n, o)| (n, o)).collect();
             let erased: Vec<String> = transcript::erased(&objects).keys().map(|k| k.as_str().to_owned()).collect();
-            let since: Vec<Hash> = held.iter().cloned().collect();
-            let piece = routes::lines_since(store.lines.conversations(), &since, &epochs, now(), Cut::Bytes(budget)).expect("a piece");
+            let piece = routes::lines_since(store.lines.conversations(), &since, books, now(), Cut::Bytes(budget)).expect("a piece");
+            prop_assert_eq!(piece.objects.since, suzatary_core::wire::SinceRead::Known);
             let lacked = objects.len() - held.len();
             prop_assert_eq!(piece.objects.objects.is_empty(), lacked == 0);
             prop_assert_eq!(piece.rest, lacked - piece.objects.objects.len());
@@ -252,6 +270,8 @@ proptest! {
             for name in piece.keys.keys() {
                 prop_assert!(!erased.contains(name), "the erased key {} was sent", name);
             }
+            prop_assert_eq!(piece.objects.frontier.count, held.len(), "the frontier is what the replica holds");
+            since = Since::Frontier(Digest::parse(&piece.objects.frontier.digest).expect("a digest"));
             keys.extend(piece.keys);
             if piece.rest == 0 {
                 break;
@@ -351,18 +371,19 @@ proptest! {
         for write in &script {
             store.apply(write);
         }
-        let epochs = suzatary_core::epoch::Epochs::remembered();
+        let (epochs, frontiers) = (suzatary_core::epoch::Epochs::remembered(), Frontiers::remembered());
+        let books = Books { epochs: &epochs, frontiers: &frontiers };
         let first = store.lines.lines.objects().expect("reads");
         let mut held: BTreeSet<Hash> =
             first.iter().take(held_first).map(|(name, _)| name.clone()).collect();
-        let since: Vec<Hash> = held.iter().cloned().collect();
+        let since = since_of(&frontiers, &first, &held);
+        let mut since_now = since.clone();
         let mut nodes: Vec<suzatary_core::wire::SkeletonNode> = Vec::new();
         let mut keys = BTreeMap::new();
         let mut moved = false;
         let mut asked = 0usize;
         let last = loop {
-            let since_now: Vec<Hash> = held.iter().cloned().collect();
-            let piece = routes::lines_skeleton(store.lines.conversations(), &since_now, &epochs, now(), Cut::Bytes(budget)).expect("a piece");
+            let piece = routes::lines_skeleton(store.lines.conversations(), &since_now, books, now(), Cut::Bytes(budget)).expect("a piece");
             for node in &piece.nodes {
                 for parent in &node.parents {
                     let parent = Hash::new(parent.clone()).expect("a name");
@@ -373,6 +394,8 @@ proptest! {
             for name in piece.keys.keys() {
                 prop_assert!(!piece.erased.contains(name), "the erased key {} was sent", name);
             }
+            prop_assert_eq!(piece.frontier.count, held.len(), "the frontier is what the replica holds");
+            since_now = Since::Frontier(Digest::parse(&piece.frontier.digest).expect("a digest"));
             keys.extend(piece.keys.clone());
             nodes.extend(piece.nodes.clone());
             if piece.rest == 0 {
@@ -385,7 +408,7 @@ proptest! {
             asked += 1;
             prop_assert!(asked <= first.len() + moves.len() * 4 + 1, "the pull ends");
         };
-        let whole = routes::lines_since(store.lines.conversations(), &since, &epochs, now(), Cut::Whole).expect("the whole");
+        let whole = routes::lines_since(store.lines.conversations(), &since, books, now(), Cut::Whole).expect("the whole");
         prop_assert_eq!(&last.heads, &whole.objects.heads);
         prop_assert_eq!(&last.geneses, &whole.objects.geneses);
         prop_assert_eq!(last.epoch, whole.objects.epoch);

@@ -235,11 +235,31 @@ and written by nothing:
   adopt. A wrong clock yields a future-dated object the UI can say and
   `verify` reports; rewriting it is what the Prodrome refuses to do.
 
-Two routes: `GET /api/objects?since=<heads>` (names and literals outside the
-ancestry of every head the caller names that the box holds) and `POST
-/api/objects` (the server rehashes, verifies parents and a change's genesis,
-refuses another actor's event, and takes the rest in through the Prodrome's
-`store::accept`, which verifies each on receipt). `GET /api/<chain>/tip`, the receipt and the `/events` frame answer
+Two routes: `GET /api/objects?since=<frontier>` (names and literals outside
+what the frontier names) and `POST /api/objects` (the server rehashes,
+verifies parents and a change's genesis, refuses another actor's event, and
+takes the rest in through the Prodrome's `store::accept`, which verifies each
+on receipt). A FRONTIER IS A TOKEN THE BOX HANDED OUT (2026-10-25,
+`suzatary_core::frontier`; a replica of 400 heads named them in the URL, 26
+kB, and was refused 431): every answer to a pull or a post ends at the heads
+of what its asker then holds, which the box records under their digest (the
+sha256 of the sorted names), keeping each store's 512 latest, box-local in
+the state directory, and answers as `frontier {digest, count}` beside
+`since: Known|Unknown`. The asker names it back as `since`, 64 characters
+whatever it holds, so no request grows with a replica and no server limit is
+raised. A post carries `since` in its body, and its receipt's frontier is
+the closure of that, of what it adopted and of what the box already held of
+it. A token the box does not hold (let go, or from another box), or one
+naming a head its store no longer holds (a later epoch holding less, after a
+rollback or a migration), is answered as to a replica holding nothing,
+`since: Unknown`, which is complete because a pull from nothing is; the tab's
+`Frontier` carries an era that answer moves on, read against the frontier
+the question was asked from (each piece of a pull is kept standing where its
+question stood), so a token from before it never wins a join again and the
+fall back happens once. The module is set reconciliation over a Prodrome
+store and names nothing of this deployment's (its records are its own
+`frontier::Records`), so it can move to `prodrome_core::store` as is. A token only ever names what its asker holds, never more: a
+pull cut short records the heads of what the piece leaves held. `GET /api/<chain>/tip`, the receipt and the `/events` frame answer
 `heads`, every head sorted, never one picked. The gate decides WHO may post; the trust policy what their events
 BIND. Built after the server (§8), so sync exists once, in Rust.
 
@@ -1532,7 +1552,7 @@ rules and points here for the modules. The web contract is `docs/WEB-SPEC.md`.
   shell; `pending.ts` its look). The list is a fold of what this browser holds:
   nothing optimistic or rolled back, no queue, nonce or base tip (set union is
   idempotent; the hash is the name). Sync is `POST /api/objects` then `GET
-  /api/objects?since=<heads>` (the heads of what the box holds of ours), on
+  /api/objects?since=<frontier>` (the token the box's last answer named, §5), on
   every move of the box's heads and reconnect; diverged heads stay a head
   set (the box wove them with a `Woven` until 2026-10-03), and conflicts
   show in `Entry.conflicts`, every
@@ -1548,7 +1568,7 @@ rules and points here for the modules. The web contract is `docs/WEB-SPEC.md`.
   conversations join the chains: `web/src/prodrome/stores.ts` is a store's
   replica as a semilattice (union of the objects, the heads of the later
   contact), `storesync.ts` its shell: kept in IndexedDB beside the chains
-  (`store/<name>`), pulled by heads from `GET /api/stores/<store>/objects?since=`
+  (`store/<name>`), pulled from the frontier the last answer named (§5), `GET /api/stores/<store>/objects?since=`
   (the conversations first, then the inbox, which the box writes first) in
   pieces of at most a megabyte of literals, each kept before the next is asked
   from the heads it left (2026-10-13: the whole lines store was 34 MB, which a

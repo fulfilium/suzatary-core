@@ -71,6 +71,21 @@ impl StoreError {
     }
 }
 
+impl From<crate::frontier::Unrecorded> for StoreError {
+    fn from(failed: crate::frontier::Unrecorded) -> Self {
+        Self::Unreadable {
+            store: "recorded frontiers",
+            why: failed.0,
+        }
+    }
+}
+
+impl From<crate::frontier::Unrecorded> for Refusal {
+    fn from(failed: crate::frontier::Unrecorded) -> Self {
+        StoreError::from(failed).into()
+    }
+}
+
 impl From<StoreError> for Refusal {
     fn from(failed: StoreError) -> Self {
         match failed {

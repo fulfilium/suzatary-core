@@ -36,12 +36,11 @@ export const me = (): Promise<MePayload> => http.get(onChain("me"), payload.MePa
 export const about = (): Promise<AboutPayload> => http.get("/api/about", payload.AboutPayload);
 export const getReleases = (): Promise<ReleasesPayload> => http.get("/api/releases", payload.ReleasesPayload);
 
-/** The objects outside the ancestry of every head in `since` the box holds; none asks for all. */
-export const objectsSince = (since: heads.Heads, chain?: string): Promise<ObjectsPayload> =>
-  http.get(
-    since.length === 0 ? onChain("objects", chain) : onChain(`objects?since=${since.map(encodeURIComponent).join(",")}`, chain),
-    payload.ObjectsPayload,
-  );
+/** `path` asked from the frontier `since`, an answer's digest, or from nothing: a request that does not grow with the replica. */
+export const sinceIn = (path: string, since: string): string => (since === "" ? path : `${path}?since=${encodeURIComponent(since)}`);
+
+/** The objects the frontier `since` does not reach; none asks for all. */
+export const objectsSince = (since: string, chain?: string): Promise<ObjectsPayload> => http.get(onChain(sinceIn("objects", since), chain), payload.ObjectsPayload);
 
 // The heads our own last sync produced, so `/events` does not announce our write back; asking consumes them.
 let ourHeads: heads.Heads | null = null;
@@ -58,8 +57,8 @@ export const ours = (h: heads.Heads): void => {
 };
 
 /** Literals only: the box rehashes each, since a name is what the bytes are, never what a client says. */
-export const postObjects = (objects: readonly string[]): Promise<ReceiptPayload> =>
-  http.act(onChain("objects"), { objects: [...objects] } satisfies PostedObjects, payload.ReceiptPayload).then(receipt => {
+export const postObjects = (objects: readonly string[], since: string): Promise<ReceiptPayload> =>
+  http.act(onChain("objects"), { objects: [...objects], since } satisfies PostedObjects, payload.ReceiptPayload).then(receipt => {
     if (receipt.heads.length > 0) ours(receipt.heads);
     return receipt;
   });
@@ -80,20 +79,12 @@ export const authorRedo = (todo: string): Promise<AuthoredPayload> => author({ r
 
 /** A piece of what a replica of the inbox or the lines holding `since` lacks, the keys of the words it sends, and how much is left.
  * Bounded by silence, not length: one object may be larger than a piece, which a phone on a slow network takes longer than `wait.MS` to pull. */
-export const storeObjects = (store: string, since: heads.Heads): Promise<StorePayload> =>
-  http.get(
-    `/api/stores/${encodeURIComponent(store)}/objects${since.length === 0 ? "" : `?since=${since.map(encodeURIComponent).join(",")}`}`,
-    payload.StorePayload,
-    { type: "Silence", ms: wait.MS },
-  );
+export const storeObjects = (store: string, since: string): Promise<StorePayload> =>
+  http.get(sinceIn(`/api/stores/${encodeURIComponent(store)}/objects`, since), payload.StorePayload, { type: "Silence", ms: wait.MS });
 
 /** A piece of the lines' skeleton a replica holding `since` lacks: what `storeObjects` sends, each object without its literal. */
-export const storeSkeleton = (since: heads.Heads): Promise<SkeletonPayload> =>
-  http.get(
-    `/api/stores/lines/skeleton${since.length === 0 ? "" : `?since=${since.map(encodeURIComponent).join(",")}`}`,
-    payload.SkeletonPayload,
-    { type: "Silence", ms: wait.MS },
-  );
+export const storeSkeleton = (since: string): Promise<SkeletonPayload> =>
+  http.get(sinceIn("/api/stores/lines/skeleton", since), payload.SkeletonPayload, { type: "Silence", ms: wait.MS });
 
 /** The literals of `hashes`, in ascending order with none twice, so one set has one URL the browser keeps for good. */
 export const storeContent = (store: string, hashes: readonly string[]): Promise<ContentPayload> =>

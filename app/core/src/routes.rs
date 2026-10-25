@@ -3,7 +3,7 @@
 //!
 //! The bounds are the point: a route that cannot name a capability cannot use it.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 use crate::believed::{Believed, records};
 use crate::record::{Node, TodoEvent};
@@ -527,25 +527,34 @@ pub fn now(clock: &dyn Clock) -> Datetime {
     clock.now()
 }
 
-/// `GET /api/objects?since=<heads>`: the objects outside the ancestry of every head the caller
-/// names that this box holds; a head it does not hold (an act not yet posted) holds back nothing.
+/// What every pull records beside its answer: each store's epoch, and the frontiers it answered.
+#[derive(Clone, Copy)]
+pub struct Books<'a> {
+    /// Each store's epoch.
+    pub epochs: &'a crate::epoch::Epochs,
+    /// Each store's recorded frontiers.
+    pub frontiers: &'a crate::frontier::Frontiers,
+}
+
+/// `GET /api/objects?since=<frontier>`: the objects the frontier `since` names does not reach,
+/// all of them for a frontier this box does not hold.
+///
+/// # Errors
+/// The store's own, and the books'.
 pub fn objects_since(
     store: &dyn Prodrome<TodoEvent>,
     chain: &ChainPolicy,
-    since: &[prodrome_core::event::Hash],
-    epochs: &crate::epoch::Epochs,
+    since: &crate::frontier::Since,
+    books: Books<'_>,
     now: Datetime,
 ) -> Answered<wire::ObjectsPayload> {
     answered(
         store,
         &format!("chain/{}", chain.name.as_str()),
-        epochs,
+        books,
+        since,
         now,
         Cut::Whole,
-        |objects| {
-            let held = crate::sync::Objects::of(objects);
-            crate::sync::missing(&held, since).into_iter().collect()
-        },
         &Literals,
     )
     .map(|(snapshot, piece)| wire::ObjectsPayload {
@@ -572,32 +581,31 @@ impl Cut {
     pub const PIECE: Cut = Cut::Bytes(1 << 20);
 }
 
-/// `GET /api/stores/<store>/objects?since=<heads>`: what a replica of `store` lacks,
-/// cut as `cut` says: the objects outside the ancestry of every held head the caller names,
-/// parents first, every head, and how many objects are left after these. No replica writes to
-/// the store and no policy reads it, so its untrusted set is empty, and it locks no words, so it
-/// carries no keys.
+/// `GET /api/stores/<store>/objects?since=<frontier>`: what a replica of `store` lacks,
+/// cut as `cut` says: the objects the frontier `since` names does not reach, parents first,
+/// every head, and how many objects are left after these. No replica writes to the store and no
+/// policy reads it, so its untrusted set is empty, and it locks no words, so it carries no keys.
 ///
 /// Every object comes after its parents, so a piece joined to what the caller holds holds the
-/// ancestors of everything in it, and the pieces asked for one after another, each from the heads
-/// the last left, are together what one answer of the whole would send.
+/// ancestors of everything in it, and the pieces asked for one after another, each from the
+/// frontier the last named, are together what one answer of the whole would send.
 ///
 /// # Errors
-/// The store's own.
+/// The store's own, and the books'.
 pub fn store_objects_since<E: crate::store::Store>(
     store: &dyn Prodrome<E>,
-    since: &[prodrome_core::event::Hash],
-    epochs: &crate::epoch::Epochs,
+    since: &crate::frontier::Since,
+    books: Books<'_>,
     now: Datetime,
     cut: Cut,
 ) -> Answered<wire::StorePayload> {
     let (snapshot, piece) = answered(
         store,
         &format!("store/{}", E::KIND.name()),
-        epochs,
+        books,
+        since,
         now,
         cut,
-        |objects| lacking(objects, since),
         &Literals,
     )?;
     Ok(wire::StorePayload {
@@ -608,23 +616,6 @@ pub fn store_objects_since<E: crate::store::Store>(
         weight: piece.weight,
         erased: Vec::new(),
     })
-}
-
-/// The objects of `objects` outside the ancestry of every head in `since` they hold.
-fn lacking<E: prodrome_core::schema::Schema>(
-    objects: &[(
-        prodrome_core::event::Hash,
-        prodrome_core::event::Envelope<E>,
-    )],
-    since: &[prodrome_core::event::Hash],
-) -> std::collections::BTreeSet<prodrome_core::event::Hash> {
-    let dag: prodrome_core::dag::Dag<E> = objects.iter().cloned().collect();
-    let held = dag.closure(since.iter().filter(|name| dag.get(name).is_some()).cloned());
-    objects
-        .iter()
-        .map(|(name, _)| name.clone())
-        .filter(|name| !held.contains(name))
-        .collect()
 }
 
 /// One object as a replica carries it, weighed by its literal's bytes.
@@ -643,11 +634,14 @@ fn stored<E: prodrome_core::schema::Schema>(
     )
 }
 
-/// What a store held at one answer, in the epoch it was read in.
+/// What a store held at one answer, in the epoch it was read in, how it read `since`, and the
+/// frontier the asker holds once it has taken the answer.
 struct Snapshot {
     heads: Vec<String>,
     geneses: Vec<String>,
     epoch: u64,
+    since: wire::SinceRead,
+    frontier: wire::Frontier,
 }
 
 impl Snapshot {
@@ -660,6 +654,8 @@ impl Snapshot {
             geneses: self.geneses,
             epoch: self.epoch,
             objects,
+            since: self.since,
+            frontier: self.frontier,
         }
     }
 }
@@ -741,24 +737,20 @@ impl Sends<crate::secretary::line_event::LineEvent> for Nodes {
 }
 
 /// An answer of `store`, read under its epoch's lock so the epoch and the objects are one
-/// snapshot: every head, the prodromes it serves, and what `sends` makes of each object `wanted`
-/// names, cut as `cut` says by the weight it gives each, in linearisation order so a receiver
-/// can apply them as they arrive.
+/// snapshot: every head, the prodromes it serves, and what `sends` makes of each object the
+/// frontier `since` names does not reach, cut as `cut` says by the weight it gives each, in
+/// linearisation order so a receiver can apply them as they arrive. The frontier the asker holds
+/// once it has taken the answer is recorded, and named in it.
 fn answered<E: prodrome_core::schema::Schema, S: Sends<E>>(
     store: &dyn Prodrome<E>,
     key: &str,
-    epochs: &crate::epoch::Epochs,
+    books: Books<'_>,
+    since: &crate::frontier::Since,
     now: Datetime,
     cut: Cut,
-    wanted: impl Fn(
-        &[(
-            prodrome_core::event::Hash,
-            prodrome_core::event::Envelope<E>,
-        )],
-    ) -> std::collections::BTreeSet<prodrome_core::event::Hash>,
     sends: &S,
 ) -> Answered<(Snapshot, Piece<S::Item>)> {
-    let (epoch, (heads, geneses, piece)) = epochs.served(key, now, || {
+    let (epoch, (heads, geneses, read, frontier, piece)) = books.epochs.served(key, now, || {
         let objects = store.objects()?;
         let dag: prodrome_core::dag::Dag<E> = objects.iter().cloned().collect();
         let heads = head_set(store)?;
@@ -771,7 +763,7 @@ fn answered<E: prodrome_core::schema::Schema, S: Sends<E>>(
                 .map(|(name, _)| name.as_str().to_owned())
                 .collect(),
         };
-        let wanted = wanted(&objects);
+        let (read, mut have) = reached(books.frontiers, key, since, &dag)?;
         let mut piece = Piece {
             sent: Vec::new(),
             rest: 0,
@@ -779,7 +771,8 @@ fn answered<E: prodrome_core::schema::Schema, S: Sends<E>>(
             size: 0,
         };
         let mut full = false;
-        for (name, envelope) in objects.iter().filter(|(name, _)| wanted.contains(name)) {
+        for (name, envelope) in objects.iter().filter(|(name, _)| !have.contains(name)) {
+            piece.rest += 1;
             if full {
                 piece.size += sends.weigh(name, envelope);
                 continue;
@@ -790,23 +783,65 @@ fn answered<E: prodrome_core::schema::Schema, S: Sends<E>>(
                     full = true;
                 }
                 Cut::Whole | Cut::Bytes(_) => {
-                    piece.sent.push(item);
+                    piece.sent.push((name.clone(), item));
                     piece.weight += weight;
                 }
             }
             piece.size += weight;
         }
-        piece.rest = wanted.len() - piece.sent.len();
-        Ok((seen, (heads, geneses, piece)))
+        piece.rest -= piece.sent.len();
+        have.extend(piece.sent.iter().map(|(name, _)| name.clone()));
+        let frontier = frontier_of(&dag, &have, books.frontiers, key)?;
+        let piece = Piece {
+            sent: piece.sent.into_iter().map(|(_, item)| item).collect(),
+            rest: piece.rest,
+            weight: piece.weight,
+            size: piece.size,
+        };
+        Ok((seen, (heads, geneses, read, frontier, piece)))
     })?;
     Ok((
         Snapshot {
             heads,
             geneses,
             epoch,
+            since: read,
+            frontier,
         },
         piece,
     ))
+}
+
+/// How `since` reads against `dag`, and everything it reaches there: nothing when it is unknown.
+fn reached<E: prodrome_core::schema::Schema>(
+    frontiers: &crate::frontier::Frontiers,
+    key: &str,
+    since: &crate::frontier::Since,
+    dag: &prodrome_core::dag::Dag<E>,
+) -> Answered<(wire::SinceRead, BTreeSet<prodrome_core::event::Hash>)> {
+    Ok(match frontiers.reached(key, since, dag)? {
+        crate::frontier::Read::Known(have) => (wire::SinceRead::Known, have),
+        crate::frontier::Read::Unknown => (wire::SinceRead::Unknown, BTreeSet::new()),
+    })
+}
+
+/// The heads of `have`, a down-set of `dag`, recorded as a frontier of `key`.
+fn frontier_of<E: prodrome_core::schema::Schema>(
+    dag: &prodrome_core::dag::Dag<E>,
+    have: &BTreeSet<prodrome_core::event::Hash>,
+    frontiers: &crate::frontier::Frontiers,
+    key: &str,
+) -> Answered<wire::Frontier> {
+    let below: BTreeSet<prodrome_core::event::Hash> = have
+        .iter()
+        .filter_map(|name| dag.get(name))
+        .flat_map(prodrome_core::event::parents_of)
+        .collect();
+    let heads: BTreeSet<prodrome_core::event::Hash> = have.difference(&below).cloned().collect();
+    Ok(wire::Frontier {
+        digest: frontiers.record(key, &heads)?.as_str().to_owned(),
+        count: have.len(),
+    })
 }
 
 /// `GET /api/stores/lines/objects?since=<heads>`: [`store_objects_since`] for the conversations'
@@ -819,12 +854,12 @@ fn answered<E: prodrome_core::schema::Schema, S: Sends<E>>(
 /// The stores' own.
 pub fn lines_since(
     conversations: crate::secretary::conversations::Conversations<'_>,
-    since: &[prodrome_core::event::Hash],
-    epochs: &crate::epoch::Epochs,
+    since: &crate::frontier::Since,
+    books: Books<'_>,
     now: Datetime,
     cut: Cut,
 ) -> Answered<wire::StorePayload> {
-    let payload = store_objects_since(conversations.lines, since, epochs, now, cut)?;
+    let payload = store_objects_since(conversations.lines, since, books, now, cut)?;
     let (keys, erased) = words(
         conversations,
         payload
@@ -850,18 +885,18 @@ pub fn lines_since(
 /// The stores' own.
 pub fn lines_skeleton(
     conversations: crate::secretary::conversations::Conversations<'_>,
-    since: &[prodrome_core::event::Hash],
-    epochs: &crate::epoch::Epochs,
+    since: &crate::frontier::Since,
+    books: Books<'_>,
     now: Datetime,
     cut: Cut,
 ) -> Answered<wire::SkeletonPayload> {
     let (snapshot, piece) = answered(
         conversations.lines,
         "store/lines",
-        epochs,
+        books,
+        since,
         now,
         cut,
-        |objects| lacking(objects, since),
         &Nodes,
     )?;
     let (keys, erased) = words(
@@ -873,6 +908,8 @@ pub fn lines_skeleton(
         geneses: snapshot.geneses,
         epoch: snapshot.epoch,
         nodes: piece.sent,
+        since: snapshot.since,
+        frontier: snapshot.frontier,
         keys,
         rest: piece.rest,
         size: piece.size,
@@ -1077,9 +1114,14 @@ pub fn receive_objects(
     store: &dyn Prodrome<TodoEvent>,
     render: &dyn Render,
     chain: &ChainPolicy,
-    posted: &[String],
+    posted: &Posted<'_>,
+    frontiers: &crate::frontier::Frontiers,
     actor: &prodrome_core::event::Actor,
 ) -> Answered<(wire::ReceiptPayload, Vec<crate::secretary::acts::ActLine>)> {
+    let Posted {
+        objects: posted,
+        since,
+    } = *posted;
     if posted.len() > MAX_POSTED {
         return Err(Refusal::bad_request(format!(
             "at most {MAX_POSTED} objects per post, got {}",
@@ -1135,7 +1177,17 @@ pub fn receive_objects(
         actor,
         &chain.name,
     );
-    Ok((receipt(store, &outcome)?, heard))
+    let key = format!("chain/{}", chain.name.as_str());
+    Ok((receipt(store, &outcome, (&key, since, frontiers))?, heard))
+}
+
+/// What a post carries: the prints, and the frontier the poster held before them.
+#[derive(Clone, Copy)]
+pub struct Posted<'a> {
+    /// Canonical prints, in any order.
+    pub objects: &'a [String],
+    /// The frontier the poster held, as its last answer named it.
+    pub since: &'a crate::frontier::Since,
 }
 
 /// `POST /api/stores/<store>/objects`, for a store a tab writes that the box began and nobody
@@ -1144,14 +1196,19 @@ pub fn receive_objects(
 ///
 /// # Errors
 /// More than [`MAX_POSTED`] objects, or the store not read or not written.
-pub fn receive_changes<E: prodrome_core::schema::Schema>(
+pub fn receive_changes<E: crate::store::Store>(
     store: &dyn Prodrome<E>,
-    posted: &[String],
+    posted: &Posted<'_>,
+    frontiers: &crate::frontier::Frontiers,
     actor: &prodrome_core::event::Actor,
 ) -> Answered<wire::ReceiptPayload>
 where
     E::Vocabulary: Default,
 {
+    let Posted {
+        objects: posted,
+        since,
+    } = *posted;
     if posted.len() > MAX_POSTED {
         return Err(Refusal::bad_request(format!(
             "at most {MAX_POSTED} objects per post, got {}",
@@ -1162,15 +1219,33 @@ where
     let held = store.objects()?.into_iter().map(|(name, _)| name).collect();
     let outcome = crate::sync::receive_changes::<E>(&held, posted, actor);
     store.accept(&outcome.taken)?;
-    receipt(store, &outcome)
+    let key = format!("store/{}", E::KIND.name());
+    receipt(store, &outcome, (&key, since, frontiers))
 }
 
-/// What a post took, already held and refused, beside the store's heads after it.
+/// What a post took, already held and refused, beside the store's heads after it, and the
+/// frontier the poster holds now: what `since` named, if this box holds it, and every object it
+/// took or already held, with all they rest on.
 fn receipt<E: prodrome_core::schema::Schema>(
     store: &dyn Prodrome<E>,
     outcome: &crate::sync::Outcome,
+    (key, since, frontiers): (&str, &crate::frontier::Since, &crate::frontier::Frontiers),
 ) -> Answered<wire::ReceiptPayload> {
+    let objects = store.objects()?;
+    let dag: prodrome_core::dag::Dag<E> = objects.into_iter().collect();
+    let (read, mut have) = reached(frontiers, key, since, &dag)?;
+    let posted = outcome
+        .taken
+        .iter()
+        .map(|(name, _)| name)
+        .chain(&outcome.already)
+        .filter(|name| dag.get(name).is_some())
+        .cloned();
+    have.extend(dag.closure(posted));
+    let frontier = frontier_of(&dag, &have, frontiers, key)?;
     Ok(wire::ReceiptPayload {
+        since: read,
+        frontier,
         heads: head_set(store)?,
         adopted: outcome
             .taken

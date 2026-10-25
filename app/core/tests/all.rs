@@ -18,6 +18,8 @@ mod decisions_schema;
 mod digest;
 #[path = "drive_port.rs"]
 mod drive_port;
+#[path = "frontiers.rs"]
+mod frontiers;
 #[path = "held.rs"]
 mod held;
 #[path = "held_lines.rs"]

@@ -65,7 +65,15 @@ real browser); each section says which.
   core's `Todos.append`, whose `Change` rests on its todo's heads in this
   replica's fold, and the replica takes the objects it answers. A head set is
   sorted and compared whole (`heads.same`); nothing picks one head, so
-  `since=`, the receipt, `/events` and the banner all speak sets.
+  the receipt, `/events` and the banner all speak sets. A pull names what the
+  replica holds by `held.frontier` (2026-10-25, ARCHITECTURE §5): the token
+  the box's last answer named, never a digest the tab computes, joined as
+  the later by (era, count, digest), its era moved by an answer that did not
+  know the token asked from (`replica.answered`), so `since=` is 64
+  characters for any replica (`web/test/frontier.test.ts`). A piece of a
+  store's pull is kept standing where the question it answers stood, so its
+  era is read against that frontier, and a row whose frontier alone moved is
+  a step (`stores.same`), since the next pull asks from it.
 - **`stores.T`** (`web/src/prodrome/stores.ts`): the tab's replicas of the
   inbox and the lines, one `locked.Row` per store (its `Replica` and the keys
   of its words, `web/src/prodrome/locked.ts`), which the box alone writes. A

@@ -266,7 +266,7 @@ test("a row version 3 kept is carried: its objects stay, and a word of the box t
     const r = db.transaction("chain").objectStore().get("objects:store/inbox")
     r.onsuccess = () => done(r.result)
   })
-  assert.deepEqual(raw, { replica: { ...kept, words: [] }, keys: {} }, "a store's row is carried the same way")
+  assert.deepEqual(raw, { replica: { ...kept, words: [], frontier: { type: "Nothing" } }, keys: {} }, "a store's row is carried the same way")
 })
 
 // What the device's rows' store holds under `key`, as it was written.
@@ -292,9 +292,17 @@ test("version 5 drops the lines' row and its pieces, kept as literals, marks the
     assert.ok((await row()) !== null, "a chain's row reads")
     assert.equal(await rawOf("objects:store/lines"), undefined, `from ${from}`)
     assert.equal(await rawOf("objects:store/lines/piece/000000000001"), undefined, "and its pieces with it")
-    assert.deepEqual(await rawOf("objects:store/inbox"), { replica: kept, keys: {} }, "the inbox's row stays")
+    assert.deepEqual(await rawOf("objects:store/inbox"), { replica: { ...kept, frontier: { type: "Nothing" } }, keys: {} }, "the inbox's row stays")
     assert.equal(await rawOf("objects:store/rendered-owed"), true, "and the tab is told to clear the blocks the lines fed")
   }
+})
+
+test("version 6 gives every row of version 5 a frontier of nothing, so its first pull asks from nothing", async () => {
+  const kept = { generation: 0, objects: [BOX], synced: [BOX.hash], refused: [], words: [] }
+  Object.assign(globalThis, { indexedDB: fakeIndexedDB(5, { "objects:life": kept, "objects:store/lines": { replica: kept, keys: {} } }) })
+  assert.ok((await row()) !== null, "a chain's row reads")
+  assert.deepEqual(await rawOf("objects:life"), { ...kept, frontier: { type: "Nothing" } })
+  assert.deepEqual(await rawOf("objects:store/lines"), { replica: { ...kept, frontier: { type: "Nothing" } }, keys: {} }, "the lines' row is kept, framed")
 })
 
 test("a row version 1 kept is dropped, never read as a replica sealing onto heads it did not compute", async () => {

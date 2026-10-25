@@ -8,9 +8,9 @@ import d from "../wire/decoder";
 import lo from "../algebra/lo";
 import idb from "../app/idb";
 import payload from "../wire/generated/payload";
-import type { Held, Obj, Replica, Word } from "./replica";
+import type { Frontier, Held, Obj, Replica, Word } from "./replica";
 import type { StoredObject } from "../wire/generated/wire";
-import { NOTHING, canonical, join, losses, replicaOf, reset } from "./replica";
+import { NOTHING, NO_FRONTIER, canonical, join, losses, replicaOf, reset } from "./replica";
 
 export const DB_NAME = "suzatary";
 const STORE_NAME = "chain";
@@ -34,6 +34,8 @@ const Spoken = d.obj<Word>({
   geneses: d.arr(d.str),
 });
 
+const Standing: d.Decoder<Frontier> = d.sum<Frontier, "type">("type", { Nothing: {}, Named: { digest: d.str, count: d.num, era: d.num } });
+
 /** A replica's row, its objects read by `objects`. */
 export const replicaRow = <O extends Obj>(objects: d.Decoder<O>): d.Decoder<Held<O>> =>
   d.obj<Held<O>>({
@@ -42,6 +44,7 @@ export const replicaRow = <O extends Obj>(objects: d.Decoder<O>): d.Decoder<Held
     synced: d.arr(d.str),
     refused: d.arr(payload.RefusedObject),
     words: d.arr(Spoken),
+    frontier: Standing,
   });
 
 export const Stored = replicaRow(payload.StoredObject);
@@ -57,18 +60,22 @@ export const parseReplica = (raw: unknown): lo.Settled<Replica> => lo.map(Stored
  * Version 3's rows are carried: a word of the box that kept `null` for "did not say" is dropped, so the replica reads
  * as unheard until its next pull, and every object it held stays. Version 5 keeps the lines as a skeleton beside a
  * store of content by name, so the lines' row and its pieces from before it are dropped: the box alone writes the
- * lines, so nothing in them is this device's own; the blocks rendered from them are cleared too.
+ * lines, so nothing in them is this device's own; the blocks rendered from them are cleared too. Version 6 names where
+ * each replica stands with the box by the frontier its last answer named (`replica.Frontier`), so every row is carried
+ * standing nowhere, and its next pull asks from nothing.
  */
 const DB: idb.Db = {
   name: DB_NAME,
-  version: 5,
+  version: 6,
   store: STORE_NAME,
   upgrade: (db, tx, from) => {
-    if (from === 3 || from === 4) {
+    if (from >= 3) {
       const rows = tx.objectStore(STORE_NAME);
-      rows.delete(under(LINES));
-      rows.put(true, keyFor(RENDERED_OWED));
-      if (from === 3) carry(rows);
+      if (from < 5) {
+        rows.delete(under(LINES));
+        rows.put(true, keyFor(RENDERED_OWED));
+      }
+      carry(rows, (row) => framed(from === 3 ? carried(row) : row));
     } else {
       if (db.objectStoreNames.contains(STORE_NAME)) db.deleteObjectStore(STORE_NAME);
       db.createObjectStore(STORE_NAME);
@@ -89,15 +96,25 @@ export const RENDERED_OWED = "store/rendered-owed";
 /** The device's content by name: one literal per object name, written once and never rewritten. */
 export const CONTENT: idb.Db = { ...DB, store: CONTENT_NAME };
 
-/** Every version 3 row rewritten in version 4's form, in the upgrade's own transaction. */
-function carry(store: IDBObjectStore): void {
+/** Every row rewritten by `step`, in the upgrade's own transaction. */
+function carry(store: IDBObjectStore, step: (row: unknown) => unknown): void {
   const cursor = store.openCursor();
   cursor.onsuccess = () => {
     const at = cursor.result;
     if (at === null) return;
-    at.update(carried(at.value));
+    at.update(step(at.value));
     at.continue();
   };
+}
+
+/**
+ * A row from before version 6 standing nowhere with the box: its replica's next pull asks from nothing, once, and every
+ * object it holds stays. A chain's row is a replica, a store's holds one.
+ */
+export function framed(row: unknown): unknown {
+  if (typeof row !== "object" || row === null) return row;
+  if ("replica" in row) return { ...row, replica: framed(row.replica) };
+  return "objects" in row && !("frontier" in row) ? { ...row, frontier: NO_FRONTIER } : row;
 }
 
 /** A version 3 row with every word that named no geneses left out: a chain's row is a replica, a store's holds one. */

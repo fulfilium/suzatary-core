@@ -973,6 +973,22 @@ export class Page {
     };
   }
 
+  /** Each response whose URL holds `part`, with its status, from now until the answer is called. */
+  async statuses(part: string): Promise<() => { url: string; status: number }[]> {
+    const seen: { url: string; status: number }[] = [];
+    let open = true;
+    this.connection.on("Network.responseReceived", (params) => {
+      const r = params["response"] as { url?: string; status?: number } | undefined;
+      const url = r?.url ?? "";
+      if (open && url.includes(part)) seen.push({ url, status: r?.status ?? 0 });
+    });
+    await this.command("Network.enable", {});
+    return () => {
+      open = false;
+      return seen;
+    };
+  }
+
   /**
    * Everything the page said and fetched from now on, each line stamped with milliseconds since the journal began:
    * a request sent, its status, its end (or failure), a console line, and whatever `mark` a scene adds between its

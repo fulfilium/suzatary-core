@@ -61,7 +61,7 @@ app.scene("a device holding a version 3 replica keeps its row, drops the word th
   await app.page.waitFor(`document.querySelectorAll(".tree .row").length > 0`, { timeout: 15000 });
   await untilReplica(app.page);
   const now = await app.page.evaluate<Kept>(kept);
-  assert.equal(now.version, 5);
+  assert.equal(now.version, 6);
   assert.ok(now.row !== null, "the chain is held");
   assert.equal(now.row.generation, GENERATION, "the row is carried, not dropped");
   assert.ok(now.row.words.length > 0 && now.row.words.every((w) => Array.isArray(w.geneses)), "every word names the box's prodromes");

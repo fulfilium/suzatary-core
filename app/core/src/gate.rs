@@ -201,17 +201,19 @@ pub const CLIENT_HEADER: &str = "x-suzatary-client";
 /// the conversations from the lines with their keys and forgets what an erasure names, 5 the
 /// first that reads a turn, a card's answer, a proposed object, a review and a stored object as
 /// the tagged sums the box answers with, 6 the first that keeps the lines as a skeleton and
-/// their content by hash, in a version of the device's database an older page cannot open. A page
+/// their content by hash, in a version of the device's database an older page cannot open, 7
+/// the first that names what a replica holds by the frontier the box's last answer named, again
+/// in a version of the database an older page cannot open. A page
 /// older than this writes what the box cannot take (a stamp in the device's zone, a write no
 /// device key proves) or acts on words it holds in the clear and never hears erased,
 /// so it is refused before it writes and loads the box's shell instead, never told it is unsigned. Raise it in the
 /// same series as a change to what a page writes; a client that is not a page (no
 /// `Sec-Fetch-Site`) carries no bundle and is not asked.
-pub const CLIENT_MIN: u32 = 6;
+pub const CLIENT_MIN: u32 = 7;
 
 /// The contract this build's own page writes by, as its header says it: what a test writes as,
 /// so raising [`CLIENT_MIN`] never leaves a test writing as a page the box refuses.
-pub const CLIENT: &str = "6";
+pub const CLIENT: &str = "7";
 
 /// A page keeps [`CLIENT_MIN`] or later.
 fn current(client: Option<&str>) -> Result<(), Refusal> {
@@ -534,6 +536,7 @@ mod tests {
             Some("3"),
             Some("4"),
             Some("5"),
+            Some("6"),
             Some("not a number"),
         ] {
             let refused = check_csrf(&page(stale)).unwrap_err();
@@ -541,10 +544,10 @@ mod tests {
         }
         assert_eq!(
             check_csrf(&page(None)).unwrap_err().message(),
-            "this page writes by contract none, and the box takes 6 or later, so this act was not sent: the page says Suzatary <version> is ready with Reload, and it can be sent again after Reload"
+            "this page writes by contract none, and the box takes 7 or later, so this act was not sent: the page says Suzatary <version> is ready with Reload, and it can be sent again after Reload"
         );
-        assert_eq!(check_csrf(&page(Some("6"))), Ok(()));
         assert_eq!(check_csrf(&page(Some("7"))), Ok(()));
+        assert_eq!(check_csrf(&page(Some("8"))), Ok(()));
         assert_eq!(
             check_csrf(&ActHeaders {
                 site: None,

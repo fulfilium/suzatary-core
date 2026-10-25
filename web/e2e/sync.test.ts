@@ -213,7 +213,7 @@ const RESET_AT_NEXT_SAVE = `new Promise((resolve, reject) => {
     read.onsuccess = () => {
       const row = read.result;
       db.close();
-      let reset = { generation: (row.generation ?? 0) + 1, objects: [], synced: [], refused: [], words: [] };
+      let reset = { generation: (row.generation ?? 0) + 1, objects: [], synced: [], refused: [], words: [], frontier: { type: "Nothing" } };
       const transaction = IDBDatabase.prototype.transaction;
       IDBDatabase.prototype.transaction = function (names, mode, ...rest) {
         const t = transaction.call(this, names, mode, ...rest);

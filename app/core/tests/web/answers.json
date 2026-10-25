@@ -2536,6 +2536,10 @@
     {
       "value": {
         "epoch": 1788350400,
+        "frontier": {
+          "count": 14,
+          "digest": "3f5820c370044b27faf0623d6d4fa5bfb79b820aa882f347b93e6a4629ec834a"
+        },
         "geneses": [
           "5e8fbe14abfd0cedc32a4d786b3f86c13ca1566c51d1ea45a34d316f8be35fc4"
         ],
@@ -2606,6 +2610,7 @@
           }
         ],
         "root": "836884e1723c7b17f8b87e76a0272f012de6cff08f134eb9dcdb2670695b1818",
+        "since": "Known",
         "untrusted": [
           "triage"
         ]
@@ -2881,6 +2886,10 @@
           "fd954b57c01f37dae4785cb83b4af627582fbc33afe6e4448741aab8cd9af39c"
         ],
         "already": [],
+        "frontier": {
+          "count": 6,
+          "digest": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
+        },
         "heads": [
           "5fbc855a3ee2607f0f8c4352fb436c27731d4a13bb6d3919110f6386db9f0e73",
           "642518fd2e480cb8cb9cd81daab784b672c2ff57ed3f1c8450c05ac83d83b40c",
@@ -2900,7 +2909,8 @@
             "kind": "trust",
             "reason": "its signatures do not prove it: unsigned"
           }
-        ]
+        ],
+        "since": "Unknown"
       },
       "maps": []
     }
@@ -5011,6 +5021,10 @@
       "value": {
         "epoch": 1788350400,
         "erased": [],
+        "frontier": {
+          "count": 2,
+          "digest": "90755bf34158007e64e1499b3090973e63aea974dff4157b86ec4b3ea50e1b2f"
+        },
         "geneses": [
           "7b818ef0fdd17acb5a6c38b43fa0281f189cc0854dab58dcff68c681ce13ad38"
         ],
@@ -5048,6 +5062,7 @@
           }
         ],
         "rest": 0,
+        "since": "Known",
         "size": 492,
         "weight": 492
       },
@@ -5081,6 +5096,10 @@
       "value": {
         "epoch": 1788350400,
         "erased": [],
+        "frontier": {
+          "count": 2,
+          "digest": "90755bf34158007e64e1499b3090973e63aea974dff4157b86ec4b3ea50e1b2f"
+        },
         "geneses": [
           "7b818ef0fdd17acb5a6c38b43fa0281f189cc0854dab58dcff68c681ce13ad38"
         ],
@@ -5102,6 +5121,7 @@
         ],
         "rest": 0,
         "root": null,
+        "since": "Known",
         "size": 769,
         "untrusted": [],
         "weight": 769
