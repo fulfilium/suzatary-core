@@ -175,6 +175,12 @@ Write a function once over a type parameter, not once for each type. Express an 
 monoid with an identity, or as a semilattice with a join. Then every caller uses the same
 `combine` or `join`.
 
+When you see that two things are instances of one higher-level structure, move the code to that
+structure. Do it in your change if the move is small. If it is not small, name the stage that
+does it in your pull request, with the lines it would remove. The special case then becomes data
+or configuration of the general piece. Make the code smaller by making it more general. Do not
+make it smaller by removing a capability that someone uses.
+
 - Rust: `store::Database` uses three generic store shapes: `Prodrome<E>` for objects of a
   schema `E`, `Log<E>` for lines, and `Doc<K, V>` for values. A new store is one row of the
   `stores!` list (`app/core/src/store/kind.rs`), its schema and a field of `Database`, not a
