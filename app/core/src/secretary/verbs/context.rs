@@ -48,7 +48,7 @@ impl Verb for Context {
     fn run(call: &Call<'_>, _: NoArgs) -> Result<Value, Refusal> {
         // `declared_secrets` is here only, since the agent must never learn what is missing; the
         // calendar is `calendar`'s to answer, on demand.
-        let mut answer = reads::context(call.caps.manuals, call.deployment);
+        let mut answer = reads::manual(call.caps.manuals, call.deployment);
         if let Some(object) = answer.as_object_mut() {
             object.insert(
                 "declared_secrets".to_owned(),

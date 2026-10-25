@@ -37,6 +37,25 @@ impl Nothing {
             manuals: &Nothing,
             render: &Nothing,
             clock: &Nothing,
+            memory: crate::secretary::recollection::Recollection::of(Nothing::memories(), 0),
+        }
+    }
+
+    /// The memory and the digest, inert: no fact, no line and no summary.
+    #[must_use]
+    pub fn memories() -> crate::secretary::memories::Memories<'static> {
+        crate::secretary::memories::Memories {
+            history: &Nothing,
+            texts: &Nothing,
+            cards: &Nothing,
+            entropy: &Nothing,
+            digests: crate::secretary::digests::Digests {
+                history: &Nothing,
+                texts: &Nothing,
+                lines: Nothing::conversations(),
+                owners: &NO_OWNERS,
+                compacting: &crate::secretary::compacting::Compacting::Off,
+            },
         }
     }
 
@@ -66,19 +85,7 @@ impl Nothing {
             model: &Nothing,
             conversations: Nothing::conversations(),
             inbox: &Nothing,
-            memories: crate::secretary::memories::Memories {
-                history: &Nothing,
-                texts: &Nothing,
-                cards: &Nothing,
-                entropy: &Nothing,
-                digests: crate::secretary::digests::Digests {
-                    history: &Nothing,
-                    texts: &Nothing,
-                    lines: Nothing::conversations(),
-                    owners: &NO_OWNERS,
-                    compacting: &crate::secretary::compacting::Compacting::Off,
-                },
-            },
+            memories: Nothing::memories(),
             decisions: crate::decisions::Decisions { store: &Nothing },
             topics: crate::secretary::topics::stores::TopicStores {
                 memberships: &Nothing,

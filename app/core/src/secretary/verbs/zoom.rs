@@ -29,6 +29,10 @@ impl Verb for Zoom {
         guess, or ask.";
 
     fn run(call: &Call<'_>, args: ZoomArgs) -> Result<Value, Refusal> {
-        told::zoom(&Reading::of(&call.caps.memories.digests)?, &args.handle)
+        told::zoom(
+            &Reading::of(&call.caps.memories.digests)?,
+            &args.handle,
+            |_| true,
+        )
     }
 }

@@ -1,5 +1,6 @@
 use super::{Clock, Corpus, Mailbox, Manuals, Render, Repository};
 use crate::record::TodoEvent;
+use crate::secretary::recollection::Recollection;
 use crate::store::Prodrome;
 
 /// What the triage agent may use: it reads attacker-controlled mail, so nothing here
@@ -24,6 +25,28 @@ use crate::store::Prodrome;
 /// ```
 /// ```compile_fail,E0609
 /// fn fetch(agent: suzatary_core::capability::Agent<'_>) { let _ = agent.web; }
+/// ```
+///
+/// It reads the secretary's memory and has no way to write it: the memory is a
+/// [`Recollection`], whose stores are private and whose every method reads.
+///
+/// ```compile_fail,E0616
+/// fn reach(agent: suzatary_core::capability::Agent<'_>) { let _ = agent.memory.memories; }
+/// ```
+/// ```compile_fail,E0599
+/// fn remember(agent: suzatary_core::capability::Agent<'_>) { let _ = agent.memory.hold(); }
+/// ```
+///
+/// Its record of the conversations is the owner's part alone: no line of the whole record, a
+/// verb's answer or the secretary's, is reachable from it.
+///
+/// ```compile_fail,E0599
+/// fn lines(agent: suzatary_core::capability::Agent<'_>) {
+///     let _ = agent.memory.record().map(|record| record.entries().len());
+/// }
+/// ```
+/// ```compile_fail,E0599
+/// fn reading(agent: suzatary_core::capability::Agent<'_>) { let _ = agent.memory.reading(); }
 /// ```
 ///
 /// A caller may swap one of its effects, and may not add one:
@@ -56,4 +79,6 @@ pub struct Agent<'a> {
     pub render: &'a dyn Render,
     /// The instant every write is stamped with.
     pub clock: &'a dyn Clock,
+    /// The secretary's memory, read-only.
+    pub memory: Recollection<'a>,
 }

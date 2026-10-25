@@ -487,3 +487,117 @@ fn after_adoption_the_agents_card_is_filed_and_verifies() {
     ran(&["verify"]);
     let _ = std::fs::remove_dir_all(&root);
 }
+
+/// Every file under `root`, by its path, with its bytes.
+fn files(root: &Path) -> std::collections::BTreeMap<PathBuf, Vec<u8>> {
+    let mut held = std::collections::BTreeMap::new();
+    let mut stack = vec![root.to_path_buf()];
+    while let Some(dir) = stack.pop() {
+        for entry in std::fs::read_dir(&dir).expect("a readable directory") {
+            let path = entry.expect("an entry").path();
+            if path.is_dir() {
+                stack.push(path);
+            } else {
+                held.insert(path.clone(), std::fs::read(&path).expect("a readable file"));
+            }
+        }
+    }
+    held
+}
+
+/// The agent's reads of the memory write nothing anywhere under the data root: every file is there
+/// with the same bytes after `context`, `recall` and `zoom` have each read the owner's line as
+/// before them. And its server never
+/// opens the secretary's answers' cache, which sweeps a block like this one when it opens.
+#[test]
+fn the_agents_reads_of_the_memory_write_no_file() {
+    let root = scratch("reads");
+    let _chain = a_chain(&root);
+    let instance = an_instance(&root);
+    let read = suzatary_cli::instance::Instance::read(
+        &instance,
+        &suzatary_cli::paths::Env::under(&root, &root),
+    )
+    .expect("the instance reads");
+    suzatary_cli::wiring::Remembering::reader(&read)
+        .memories()
+        .remember(
+            &suzatary_core::secretary::memory::Fact::new("The permit office is on Rue Neuve")
+                .expect("a fact"),
+            suzatary_core::secretary::memory::Kind::Owner,
+            &suzatary_core::secretary::memory::Origin::Turn {
+                conversation: suzatary_core::secretary::store::ConversationId::new("a")
+                    .expect("a slug"),
+                turn: 0,
+            },
+            suzatary_core::capability::Clock::now(&suzatary_io::clock::SystemClock),
+        )
+        .expect("the box remembers");
+    let remembering = suzatary_cli::wiring::Remembering::reader(&read);
+    let lines = remembering.memories().digests.lines;
+    let id = suzatary_core::secretary::store::ConversationId::new("permits").expect("a slug");
+    let at = suzatary_core::capability::Clock::now(&suzatary_io::clock::SystemClock);
+    for (held, entry) in [
+        suzatary_core::secretary::store::Entry::Opened {
+            at,
+            title: suzatary_core::secretary::words::Words::kept("Permits".to_owned()),
+            model: "m".to_owned(),
+            kind: suzatary_core::secretary::store::Kind::Topic,
+        },
+        suzatary_core::secretary::store::Entry::Said {
+            at,
+            turn: suzatary_core::capability::Turn::Person {
+                text: "Renew the permit before it lapses".to_owned(),
+                references: Vec::new(),
+                attachments: Vec::new(),
+            },
+            by: Some("ada".into()),
+        },
+    ]
+    .iter()
+    .enumerate()
+    {
+        let (line, keys) = suzatary_core::secretary::line_event::LineEvent::write(
+            id.clone(),
+            Actor::new("ada").expect("an actor"),
+            u32::try_from(held).expect("two lines"),
+            entry,
+            lines.entropy,
+        )
+        .expect("a line");
+        for key in keys {
+            suzatary_core::store::Doc::set(lines.keys, &key.name(), &key).expect("kept");
+        }
+        lines.lines.append(line).expect("said");
+    }
+    let answers = root.join("secretary-render").join("blocks");
+    std::fs::create_dir_all(&answers).expect("a scratch directory");
+    std::fs::write(answers.join("kept.html"), "<p>an answer</p>").expect("written");
+    let mut session = Session::start(&instance);
+    session.hello();
+    let before = files(&root);
+    let mut said = Vec::new();
+    for (verb, args) in [
+        ("context", serde_json::json!({})),
+        ("recall", serde_json::json!({"query": "permit"})),
+        ("zoom", serde_json::json!({"handle": "1+1"})),
+    ] {
+        said.push(session.call(verb, &args));
+    }
+    assert!(
+        said.iter()
+            .all(|answer| answer.contains("Renew the permit")),
+        "each read reads the owner's line: {said:?}"
+    );
+    drop(session);
+    assert_eq!(
+        files(&root),
+        before,
+        "the agent's reads of the memory changed a file"
+    );
+    assert!(
+        answers.join("kept.html").exists(),
+        "the agent's server swept the secretary's answers when it opened"
+    );
+    let _ = std::fs::remove_dir_all(&root);
+}

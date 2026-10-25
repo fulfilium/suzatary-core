@@ -9,6 +9,7 @@ mod call;
 mod holds;
 pub(crate) mod priced;
 pub(crate) mod reads;
+mod remembered;
 mod says;
 pub(crate) mod sourced;
 mod surface;
@@ -23,7 +24,7 @@ pub use holds::{Direct, Holds};
 pub use says::Says;
 pub use surface::{TriageCall, TriageSurface, TriageVerb, tools};
 // Public so `app/cli/tests/live.rs` can weigh the answers on the live manuals.
-pub use reads::{CONTEXT_CAP, CONTEXT_HEADROOM, context};
+pub use reads::{CONTEXT_CAP, CONTEXT_HEADROOM, context, manual};
 
 use crate::capability::Agent;
 use crate::deployment::Deployment;

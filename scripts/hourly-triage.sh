@@ -237,8 +237,10 @@ and cannot be moved afterwards, so decide before you author.
 
 FIRST, build context (this IS your memory — durable, git-versioned, more
 reliable than any one chat's history):
-- Call `context` — the triage contract and the exact vocabularies the
-  authoring verbs accept (the constitution is already your project memory).
+- Call `context` — the triage contract, the exact vocabularies the
+  authoring verbs accept, and the secretary's memory, which you read and never
+  write (`recall` and `zoom` read further; the constitution is already your
+  project memory).
 - Call `list_open_todos` — the COMPLETE set of currently-open todos (id, kind,
   category, priority, body, waiting_on, authored_by), folded straight off the
   event chain. This is your dedup reference: if a message belongs to a topic

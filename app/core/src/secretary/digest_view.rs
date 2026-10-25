@@ -85,21 +85,20 @@ pub fn view(
         .collect()
 }
 
-/// What lies beneath the lines `handle` names (`first+lines`, as [`Part::handle`] prints it),
-/// each shown as it is, whatever its label, a line whole: the children of the node spanning
-/// them, the deepest of a chain of single children, or the line itself; otherwise the nodes that
-/// tile them, so a run of parts a view merged opens too. With the join of their labels, which
-/// is what the answer can carry. `None` for a handle naming no lines.
+/// What lies beneath the lines `handle` names (`first+lines`, as [`Part::handle`] prints it), a
+/// part `reads` admits as it is, a line whole, and any other hidden by its kinds: the children of
+/// the node spanning them, the deepest of a chain of single children, or the line itself;
+/// otherwise the nodes that tile them, so a run of parts a view merged opens too. With the join
+/// of the shown parts' labels, which is what the answer can carry. `None` for a handle naming no
+/// lines.
 #[must_use]
 pub fn opened(
     digest: &Digest,
     entries: &BTreeMap<&Hash, &Entry>,
     handle: &str,
+    reads: fn(&Label) -> bool,
 ) -> Option<(Label, Vec<Shown>)> {
     let nodes = digest.cover(span_of(handle)?)?;
-    let label = nodes
-        .iter()
-        .fold(Label::empty(), |label, node| label.join(node.measure()));
     let beneath: Vec<&Node<Label>> = match nodes.as_slice() {
         [node] => {
             let mut node = *node;
@@ -114,10 +113,17 @@ pub fn opened(
         }
         many => many.to_vec(),
     };
+    let label = beneath
+        .iter()
+        .map(|child| child.measure())
+        .filter(|label| reads(label))
+        .fold(Label::empty(), |label, child| label.join(child));
     let shown = beneath
         .into_iter()
         .map(|child| {
-            let body = if child.is_leaf() {
+            let body = if !reads(child.measure()) {
+                Body::Hidden(*child.measure())
+            } else if child.is_leaf() {
                 Body::Said(whole(entries.get(digest.line(child.name()))?))
             } else {
                 said(digest, entries, child).unwrap_or(Body::Unsummarised(*child.measure()))

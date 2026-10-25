@@ -306,6 +306,7 @@ impl Onboarding {
             categories: self.categories.iter().cloned().zip(0..).collect(),
             mail,
             secretary: Secretary::default(),
+            agent: crate::instance::Triage::default(),
             persona: Persona {
                 name: self.person.name.clone(),
                 city: self.person.city.clone(),

@@ -1339,7 +1339,7 @@ proptest! {
             prop_assert!(!(hidden && hidden_before), "two runs not shown, unmerged: {}", record);
             hidden_before = hidden;
             prop_assert!(
-                suzatary_core::secretary::told::zoom(&reading, handle).is_ok(),
+                suzatary_core::secretary::told::zoom(&reading, handle, |_| true).is_ok(),
                 "every handle told opens: {}",
                 handle
             );
@@ -1475,7 +1475,7 @@ proptest! {
             let span = first..first + count.parse::<usize>().expect("a count");
             let nodes = digest.cover(span.clone()).expect("a handle the reading printed names lines");
             prop_assert_eq!(nodes.len(), 1, "a printed handle names one node");
-            let answer = suzatary_core::secretary::told::zoom(&reading, &handle).expect("opens");
+            let answer = suzatary_core::secretary::told::zoom(&reading, &handle, |_| true).expect("opens");
             let said = serde_json::to_string_pretty(&answer).expect("prints");
             let round = |answer: &str| {
                 let id = ConversationId::new("z").expect("a slug");
@@ -1525,6 +1525,48 @@ proptest! {
             .collect();
         prop_assert_eq!(lines, expected);
     }
+}
+
+/// A node of nothing but the owner's words is summarised from nothing but them: its question's
+/// log shows every other part by its kinds alone, so the secretary's answer, clean as it is, never
+/// reaches a summary labelled the owner's. A node over that answer is asked beside it.
+#[test]
+fn an_owners_node_is_asked_beside_the_owners_words_alone() {
+    use suzatary_core::secretary::compact_ask::Ask;
+    use suzatary_core::secretary::compaction::Reading;
+    let the = Box::default();
+    let person = |k: usize| Turn::Person {
+        text: format!("a line of mine, {k}"),
+        references: Vec::new(),
+        attachments: Vec::new(),
+    };
+    let mut turns: Vec<Turn> = (0..12).map(person).collect();
+    turns.push(Turn::Model {
+        text: "SECRETARYWORDS: an answer of the secretary's".to_owned(),
+        calls: Vec::new(),
+    });
+    turns.extend((13..25).map(person));
+    the.write("a", turns);
+    let reading = Reading::of(&the.digests()).expect("reads whole");
+    let digest = reading.digest();
+    let entries = reading.entries();
+    let tree = digest.tree().expect("lines");
+    let (mut owners, mut others) = (0, 0);
+    for node in digest.pending() {
+        let (ask, _) = Ask::of(digest, &entries, &node).expect("a question");
+        let label = tree.node(&node).expect("in the tree").measure();
+        if label.is_owners() {
+            owners += 1;
+            assert!(!ask.text().contains("SECRETARYWORDS"), "{}", ask.text());
+        } else {
+            others += 1;
+            assert!(ask.text().contains("SECRETARYWORDS"), "{}", ask.text());
+        }
+    }
+    assert!(
+        owners > 0 && others > 0,
+        "{owners} owners' nodes, {others} others"
+    );
 }
 
 /// A model opening in a conversation is sent its last turns as turns, so the record leaves those

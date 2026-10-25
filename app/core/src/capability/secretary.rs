@@ -112,6 +112,10 @@ impl<'a> Secretary<'a> {
             manuals: self.manuals,
             render: self.render,
             clock: self.clock,
+            memory: crate::secretary::recollection::Recollection::of(
+                self.memories,
+                crate::secretary::digest_view::VIEW_BYTES,
+            ),
         }
     }
 }

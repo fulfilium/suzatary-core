@@ -132,7 +132,7 @@ agent verify_chain [chain mistyped] refused 400: chain must be a string or null
 agent verify_chain [chain garbled] refused 404: no chain named '?' — this deployment serves life
 agent verify_chain [chain unknown] refused 404: no chain named 'nowhere' — this deployment serves life
 agent verify_chain [chain mistyped] refused 400: chain must be a string or null
-agent context [valid] answered {"authoring":{"categories":["home","other"],"kinds":{"ekaTodo":"work for the category its name begins with; sets its own category, do not pass one","suzateryTodo":"this system's own upkeep; sets its own category","todo":"general; REQUIRES category"},"note":"You do not edit files. todo_add and todo_update take fields. `body`, `detail` and `detail_append` are Typst MARKUP, checked before anything is stored: write `*bold*`, `_emph_`, lists, `#link(\"https://...\")[text]`, and backslash a character you mean literally (`\\$`, `\\@`, `\\#`, `\\*`). A refusal names the line and column. Every other field is plain text, escaped for you.","priority":"a whole percentage like '65%'. It is a FULFILLMENT: LOW is urgent, HIGH is satisfied or someday. Sort ascending.","rationale":"required on every priority; it becomes the comment above the number and is the only record of the reason."},"constitution":"Not carried here: CLAUDE.md is already your project memory.","operator_manual":"(OPERATOR.md is not present)"}
+agent context [valid] answered {"authoring":{"categories":["home","other"],"kinds":{"ekaTodo":"work for the category its name begins with; sets its own category, do not pass one","suzateryTodo":"this system's own upkeep; sets its own category","todo":"general; REQUIRES category"},"note":"You do not edit files. todo_add and todo_update take fields. `body`, `detail` and `detail_append` are Typst MARKUP, checked before anything is stored: write `*bold*`, `_emph_`, lists, `#link(\"https://...\")[text]`, and backslash a character you mean literally (`\\$`, `\\@`, `\\#`, `\\*`). A refusal names the line and column. Every other field is plain text, escaped for you.","priority":"a whole percentage like '65%'. It is a FULFILLMENT: LOW is urgent, HIGH is satisfied or someday. Sort ascending.","rationale":"required on every priority; it becomes the comment above the number and is the only record of the reason."},"constitution":"Not carried here: CLAUDE.md is already your project memory.","memory":"The secretary remembers nothing yet.","operator_manual":"(OPERATOR.md is not present)"}
 agent context [chain unknown] refused 404: no chain named 'nowhere' — this deployment serves life
 agent context [chain mistyped] refused 400: chain must be a string or null
 agent todo_add [valid] answered {"acts":1,"filed":"proposal:triage/0","next":"Filed as a card in the owner's Inbox. Nothing is on the chain until he taps it; a later todo_update or record on this todo joins this card."}
@@ -379,7 +379,26 @@ agent todo_show [todo_id mistyped] refused 400: todo_id must be a string
 agent todo_show [todo_id garbled] answered {"error":"no todo with id '?' on the chain","ok":false}
 agent todo_show [chain unknown] refused 404: no chain named 'nowhere' — this deployment serves life
 agent todo_show [chain mistyped] refused 400: chain must be a string or null
-agent send [no such verb] refused 404: no verb named 'send' — this server exposes sync, new, search, show, mark, noise_add, list_open_todos, git_diff_summary, record, history, evaluate, verify_chain, context, todo_add, todo_update, todo_show
+agent recall [valid] answered {"facts":[],"lines":[],"query":"from:a@b.test"}
+agent recall [limit given] answered {"facts":[],"lines":[],"query":"from:a@b.test"}
+agent recall [limit null] answered {"facts":[],"lines":[],"query":"from:a@b.test"}
+agent recall [limit mistyped] refused 400: limit must be a whole number or null
+agent recall [limit negative] refused 400: limit must be a whole number that is not negative
+agent recall [limit fractional] refused 400: limit must be a whole number that is not negative
+agent recall [query missing] refused 400: query is required
+agent recall [query null] refused 400: query is required
+agent recall [query mistyped] refused 400: query must be a string
+agent recall [query garbled] answered {"facts":[],"lines":[],"query":"?"}
+agent recall [chain unknown] refused 404: no chain named 'nowhere' — this deployment serves life
+agent recall [chain mistyped] refused 400: chain must be a string or null
+agent zoom [valid] refused 404: no part of the record spans 'x': a handle is `first+lines`, as the record shows it
+agent zoom [handle missing] refused 400: handle is required
+agent zoom [handle null] refused 400: handle is required
+agent zoom [handle mistyped] refused 400: handle must be a string
+agent zoom [handle garbled] refused 404: no part of the record spans '?': a handle is `first+lines`, as the record shows it
+agent zoom [chain unknown] refused 404: no chain named 'nowhere' — this deployment serves life
+agent zoom [chain mistyped] refused 400: chain must be a string or null
+agent send [no such verb] refused 404: no verb named 'send' — this server exposes sync, new, search, show, mark, noise_add, list_open_todos, git_diff_summary, record, history, evaluate, verify_chain, context, todo_add, todo_update, todo_show, recall, zoom
 secretary context [valid] answered {"authoring":{"categories":["home","other"],"kinds":{"ekaTodo":"work for the category its name begins with; sets its own category, do not pass one","suzateryTodo":"this system's own upkeep; sets its own category","todo":"general; REQUIRES category"},"note":"You do not edit files. todo_add and todo_update take fields. `body`, `detail` and `detail_append` are Typst MARKUP, checked before anything is stored: write `*bold*`, `_emph_`, lists, `#link(\"https://...\")[text]`, and backslash a character you mean literally (`\\$`, `\\@`, `\\#`, `\\*`). A refusal names the line and column. Every other field is plain text, escaped for you.","priority":"a whole percentage like '65%'. It is a FULFILLMENT: LOW is urgent, HIGH is satisfied or someday. Sort ascending.","rationale":"required on every priority; it becomes the comment above the number and is the only record of the reason."},"constitution":"Not carried here: CLAUDE.md is already your project memory.","declared_secrets":"","operator_manual":"(OPERATOR.md is not present)"}
 secretary context [chain unknown] refused 404: no chain named 'nowhere' — this deployment serves life
 secretary context [chain mistyped] refused 400: chain must be a string or null

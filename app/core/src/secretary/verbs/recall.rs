@@ -1,10 +1,10 @@
 use schemars::JsonSchema;
 use serde::Deserialize;
-use serde_json::{Value, json};
+use serde_json::Value;
 
 use crate::refusal::Refusal;
 use crate::secretary;
-use crate::secretary::search::{self, Needle, Side};
+use crate::secretary::search::{self, Needle};
 use crate::secretary::{Call, SecretarySurface};
 use crate::verb::Verb;
 
@@ -16,9 +16,6 @@ pub struct RecallArgs {
     query: String,
     limit: Option<usize>,
 }
-
-/// How many hits `recall` answers when asked for no number.
-const RECALL_DEFAULT: usize = 10;
 
 impl Verb for Recall {
     type Surface = SecretarySurface;
@@ -35,25 +32,12 @@ impl Verb for Recall {
         let query = args.query.trim();
         let needle =
             Needle::new(query).map_err(|refused| Refusal::bad_request(refused.to_string()))?;
-        let limit = args.limit.unwrap_or(RECALL_DEFAULT).clamp(1, 50);
+        let limit = search::recall_limit(args.limit);
         let others: Vec<_> = secretary::list(call.caps.conversations)?
             .into_iter()
             .filter(|stored| &stored.id != call.conversation)
             .collect();
         let found = search::search(&others, &needle, search::RECALL_CONTEXT, limit);
-        Ok(json!({
-            "query": query,
-            "hits": found.iter().map(|hit| json!({
-                "conversation": hit.conversation.as_str(),
-                "title": hit.title,
-                "turn": hit.turn,
-                "who": match hit.side {
-                    Side::Person => "person",
-                    Side::Answer => "model",
-                },
-                "at": hit.at,
-                "text": hit.excerpt,
-            })).collect::<Vec<_>>(),
-        }))
+        Ok(search::recalled(query, &found))
     }
 }

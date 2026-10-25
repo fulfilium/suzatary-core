@@ -43,6 +43,19 @@ impl Needle {
             Ok(Self(text.chars().map(fold).collect()))
         }
     }
+
+    /// Whether `text` holds it.
+    #[must_use]
+    pub fn found_in(&self, text: &str) -> bool {
+        excerpt(text, self, 0).is_some()
+    }
+
+    /// Its first match in `text` with `context` characters either side, on one line; `None`
+    /// when `text` does not hold it.
+    #[must_use]
+    pub fn excerpt(&self, text: &str, context: usize) -> Option<String> {
+        excerpt(text, self, context)
+    }
 }
 
 /// Which side of the conversation a hit is on.
@@ -84,6 +97,32 @@ pub const LIST_CONTEXT: usize = 48;
 /// How much `recall`'s hit keeps: enough to read what was decided, never a whole transcript
 /// through a side door.
 pub const RECALL_CONTEXT: usize = 280;
+
+/// How many hits `recall` answers when asked for `asked`: ten when asked for no number, and
+/// between one and fifty.
+#[must_use]
+pub fn recall_limit(asked: Option<usize>) -> usize {
+    asked.unwrap_or(10).clamp(1, 50)
+}
+
+/// `hits` for `query` as `recall` answers them.
+#[must_use]
+pub fn recalled(query: &str, hits: &[Hit]) -> serde_json::Value {
+    serde_json::json!({
+        "query": query,
+        "hits": hits.iter().map(|hit| serde_json::json!({
+            "conversation": hit.conversation.as_str(),
+            "title": hit.title,
+            "turn": hit.turn,
+            "who": match hit.side {
+                Side::Person => "person",
+                Side::Answer => "model",
+            },
+            "at": hit.at,
+            "text": hit.excerpt,
+        })).collect::<Vec<_>>(),
+    })
+}
 
 /// Every turn that holds `needle`, newest first, at most `limit`, each cut to `context`
 /// characters either side of the match.

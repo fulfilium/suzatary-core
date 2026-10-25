@@ -499,3 +499,200 @@ fn a_call_naming_the_project_chain_lands_there_not_as_a_refusal() {
     assert!(!dir.join("events-suzatary").exists());
     assert!(!out.join(".chains").exists());
 }
+
+/// A bench candidate is another vendor's model, and a case is an old message: the box's memory
+/// reaches neither, so the candidate's `context` remembers nothing whatever the box remembers.
+#[test]
+fn a_bench_candidate_is_told_no_memory_of_the_box() {
+    let dir = scratch("memory");
+    let instance_path = write_instance(&dir);
+    let instance = suzatary_cli::instance::Instance::read(
+        &instance_path,
+        &suzatary_cli::paths::Env::under(&dir, &dir),
+    )
+    .expect("the instance reads");
+    let remembering = suzatary_cli::wiring::Remembering::reader(&instance);
+    remembering
+        .memories()
+        .remember(
+            &suzatary_core::secretary::memory::Fact::new("The landlord is Marguerite")
+                .expect("a fact"),
+            suzatary_core::secretary::memory::Kind::Person,
+            &suzatary_core::secretary::memory::Origin::Turn {
+                conversation: suzatary_core::secretary::store::ConversationId::new("a")
+                    .expect("a slug"),
+                turn: 0,
+            },
+            suzatary_core::capability::Clock::now(&suzatary_io::clock::SystemClock),
+        )
+        .expect("the box remembers");
+    let script = dir.join("script.json");
+    std::fs::write(
+        &script,
+        r#"[
+            { "reply": "{\"say\": \"reading\", \"calls\": [{\"verb\": \"context\", \"args\": {}}]}" },
+            { "when": "context", "reply": "{\"say\": \"read\"}" }
+        ]"#,
+    )
+    .expect("a writable script file");
+    let out = dir.join("out");
+    suzatary_cli::commands::bench::run_cmd(
+        &instance,
+        None,
+        Some(&script),
+        &write_case_file(&dir),
+        &out,
+        None,
+        false,
+        false,
+        suzatary_bench::run::DEFAULT_THROTTLE_ATTEMPTS,
+    )
+    .expect("a run over a scripted candidate");
+    let entry: suzatary_bench::run::RunEntry = serde_json::from_str(
+        &std::fs::read_to_string(out.join("triage:deadbeefcafefeed.json")).expect("an answer"),
+    )
+    .expect("a run entry");
+    let suzatary_bench::run::Outcome::Answered(answer) = &entry.outcome else {
+        panic!("a scripted context must answer: {entry:?}");
+    };
+    let suzatary_bench::run::CallOutcome::Answered { value } = &answer.rounds[0].calls[0].outcome
+    else {
+        panic!("context was refused: {answer:?}");
+    };
+    assert_eq!(
+        value["memory"],
+        serde_json::json!("The secretary remembers nothing yet."),
+        "{value}"
+    );
+}
+
+/// One case in each stratum: acted, overturned and quiet.
+fn write_stratified_case_file(dir: &std::path::Path) -> PathBuf {
+    let text = r#"{
+        "extracted_at": "2026-09-20T00:00:00Z",
+        "cases": [
+            {
+                "kind": "triage",
+                "id": "triage:acted",
+                "message_hash": "aaaaaaaaaaaaaaaa",
+                "chain_as_stood": { "chain": "life", "tip": null, "basis": "extraction" },
+                "truths": {
+                    "incumbent": {
+                        "decided": "wrote",
+                        "chain": "life",
+                        "todo": "t1",
+                        "object": "0000000000000000000000000000000000000000000000000000000000000001"
+                    },
+                    "settled": null
+                }
+            },
+            {
+                "kind": "triage",
+                "id": "triage:overturned",
+                "message_hash": "bbbbbbbbbbbbbbbb",
+                "chain_as_stood": { "chain": "life", "tip": null, "basis": "extraction" },
+                "truths": {
+                    "incumbent": { "decided": "declined" },
+                    "settled": {
+                        "decided": "wrote",
+                        "chain": "life",
+                        "todo": "t2",
+                        "object": "0000000000000000000000000000000000000000000000000000000000000002"
+                    }
+                }
+            },
+            {
+                "kind": "triage",
+                "id": "triage:quiet",
+                "message_hash": "cccccccccccccccc",
+                "chain_as_stood": { "chain": "life", "tip": null, "basis": "extraction" },
+                "truths": { "incumbent": { "decided": "declined" }, "settled": null }
+            }
+        ]
+    }"#;
+    let path = dir.join("stratified-cases.json");
+    std::fs::write(&path, text).expect("a writable case file");
+    path
+}
+
+/// A key naming `A` the incumbent and `B` a candidate on every case.
+fn write_stratified_key(dir: &std::path::Path) -> PathBuf {
+    let text = r#"{
+        "entries": {
+            "triage:acted": { "A": "incumbent", "B": "candidate/one" },
+            "triage:overturned": { "A": "incumbent", "B": "candidate/one" },
+            "triage:quiet": { "A": "incumbent", "B": "candidate/one" }
+        }
+    }"#;
+    let path = dir.join("key.json");
+    std::fs::write(&path, text).expect("a writable key file");
+    path
+}
+
+/// A scores file judging both labels on every case.
+fn write_stratified_scores(dir: &std::path::Path) -> PathBuf {
+    let score = r#"{ "right_todo": true, "wording": 4, "priority_defensible": true, "would_embarrass": false }"#;
+    let text = format!(
+        r#"{{
+            "triage:acted": {{ "A": {score}, "B": {score} }},
+            "triage:overturned": {{ "A": {score}, "B": {score} }},
+            "triage:quiet": {{ "A": {score}, "B": {score} }}
+        }}"#
+    );
+    let path = dir.join("scores.json");
+    std::fs::write(&path, text).expect("a writable scores file");
+    path
+}
+
+#[test]
+fn join_stratifies_every_model_across_all_three_strata() {
+    let dir = scratch("join-strata");
+    let cases_path = write_stratified_case_file(&dir);
+    let key_path = write_stratified_key(&dir);
+    let scores_path = write_stratified_scores(&dir);
+    let out = dir.join("joined.json");
+
+    suzatary_cli::commands::bench::join_cmd(&scores_path, &key_path, &cases_path, &out)
+        .expect("a join over a stratified case file");
+
+    let text = std::fs::read_to_string(&out).expect("the joined report");
+    let value: serde_json::Value = serde_json::from_str(&text).expect("joined JSON");
+
+    let by_model = value["by_model"]
+        .as_object()
+        .expect("by_model is an object");
+    assert_eq!(
+        by_model.len(),
+        2,
+        "both the incumbent and the candidate must appear: {value}"
+    );
+
+    let by_stratum = value["by_stratum"]
+        .as_array()
+        .expect("by_stratum is an array");
+    assert_eq!(
+        by_stratum.len(),
+        6,
+        "two models across three non-empty strata each: {value}"
+    );
+    for model in ["incumbent", "candidate/one"] {
+        for stratum in ["acted", "overturned", "quiet"] {
+            let row = by_stratum
+                .iter()
+                .find(|row| row["model"] == model && row["stratum"] == stratum)
+                .unwrap_or_else(|| panic!("no {stratum} row for {model} in {value}"));
+            assert_eq!(
+                row["summary"]["right_todo"]["applied"],
+                serde_json::json!(1),
+                "{model}/{stratum} must carry its one case: {row}"
+            );
+            // The judged bar is the incumbent's rate: the candidate earns a verdict, the
+            // incumbent none.
+            assert_eq!(
+                row["right_todo"].is_null(),
+                model == "incumbent",
+                "{model}/{stratum}: {row}"
+            );
+        }
+    }
+}

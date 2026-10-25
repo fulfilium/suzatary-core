@@ -761,7 +761,11 @@ fn dispatch_case(
         }
         held.push((
             name.to_owned(),
-            Interpreters::around(instance, suzatary_io::objects::Objects::chain(temp)),
+            Interpreters::around(
+                instance,
+                suzatary_io::objects::Objects::chain(temp),
+                crate::wiring::Remembering::empty_in(&case_scratch.join("memory"), instance),
+            ),
         ));
     }
     let chains: BTreeMap<String, _> = held
@@ -776,7 +780,7 @@ fn dispatch_case(
     let conversations = suzatary_io::conversations::ConversationStores::open(
         case_scratch.join("conversations"),
         case_scratch.join("conversations-lines-keys"),
-        std::sync::Arc::new(instance.answers()),
+        std::sync::Arc::new(suzatary_io::unrendered::Unrendered),
     );
 
     let outcome = run::replay(

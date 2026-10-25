@@ -497,13 +497,16 @@ Threat model: an injected email can at worst mis-triage or write bad todo text
 - **The fence has a type behind it**. The verbs are `suzatary mcp`
   (`app/cli/src/commands/mcp.rs`): pure handlers in `suzatary_core::agent`
   over an `Agent` record — chain, mail corpus, mailbox, the repository's
-  gates, manuals, renderer, clock (seven fields; a record is a
+  gates, manuals, renderer, clock, and the secretary's memory read-only (eight
+  fields, the last a `secretary::recollection::Recollection`, whose stores are
+  private and whose every method reads; 2026-10-24; a record is a
   list of authorities, one trait per effect, passed as a value) — and nothing
   outward. "No send tool" and "no confirm twin" are facts about what
   typechecks; the verb list is closed and snapshotted; every write's actor is
   the constant `agent::WRITES_AS` (`Writer::Triage`), which no argument
   reaches, so a forged trusted origin cannot be expressed. `tool-guard.sh` stays as the belt. Reads come back as
-  curated context (`context`, `todo_show`, `list_open_todos`), writes
+  curated context (`context`, `todo_show`, `list_open_todos`, and the
+  memory's `recall` and `zoom`), writes
   as verbs (`todo_add`, `todo_update`, `record`).
 - **Agent content is MARKED, not hidden** (2026-09-02). The content register
   folds `Authored` from every actor (a fold that dropped them would be an outage
@@ -577,7 +580,16 @@ Threat model: an injected email can at worst mis-triage or write bad todo text
   would make injections durable instead of one-run; continuity lives in
   reviewed data — `state.json`, todo text, future Gate terms).
   No verb reads the main session's memory (the `memory` verb went
-  2026-10-09). **Proton Drive is the secretary's by
+  2026-10-09). **The agent reads the secretary's memory and never writes it**
+  (the owner, 2026-10-24): `context` carries the newest facts and the record in
+  the owner's words alone, in one answer of `CONTEXT_CAP` plus `[agent]
+  memory_bytes`, the manual first (`agent::remembered`), and `recall` and
+  `zoom` read further over the same clean set: the facts, the owner's own lines
+  and the summaries made only of them (`Label::is_owners`); any other part
+  shows its kinds alone. No verb writes a fact or a summary: a triage write is
+  a card, and its lines in the `triage` conversation carry no words from mail,
+  which `app/core/tests/triage_memory.rs` pins over every verb, so mail it
+  reads reaches no later session through the memory. **Proton Drive is the secretary's by
   permission** (2026-09-25, `docs/SECRETARYDOCS-PLAN-2026-09-25.md`): the CLI
   is reached only through a closed enum of two reads (list, download) and two
   writes (create-folder, upload) that `ProtonDrive::keep` alone uses, a file

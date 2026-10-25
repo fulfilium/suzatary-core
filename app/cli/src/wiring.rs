@@ -4,10 +4,11 @@
 //! is built in one place.
 
 use std::collections::BTreeSet;
+use std::path::Path;
 use std::sync::Arc;
 
 use prodrome_core::event::Actor;
-use suzatary_core::capability::{Agent, Model, Secretary};
+use suzatary_core::capability::{Agent, Model, RenderCache, Secretary};
 use suzatary_core::chains::ChainPolicy;
 use suzatary_core::decisions::{DecisionEvent, Decisions};
 use suzatary_core::record::TodoEvent;
@@ -19,11 +20,13 @@ use suzatary_core::secretary::inbox_event::InboxEvent;
 use suzatary_core::secretary::memories::Memories;
 use suzatary_core::secretary::memory::Fact;
 use suzatary_core::secretary::memory_event::MemoryEvent;
+use suzatary_core::secretary::recollection::Recollection;
 use suzatary_core::signatures::Signers;
 use suzatary_core::store::{Prodrome, Signing};
 use suzatary_io::conversations::ConversationStores;
 use suzatary_io::objects::Objects;
 use suzatary_io::texts::Texts;
+use suzatary_io::unrendered::Unrendered;
 
 use crate::commands::serve::interpreters::{Declared, DriveAccess, Forecast, Junk, WebAccess};
 use crate::instance::{ChainDir, Instance};
@@ -62,9 +65,13 @@ impl Grounds {
         }
     }
 
-    /// The agent's record over `chain`.
+    /// The agent's record over `chain`, reading `memory`.
     #[must_use]
-    pub fn agent<'a>(&'a self, chain: &'a dyn Prodrome<TodoEvent>) -> Agent<'a> {
+    pub fn agent<'a>(
+        &'a self,
+        chain: &'a dyn Prodrome<TodoEvent>,
+        memory: Recollection<'a>,
+    ) -> Agent<'a> {
         Agent {
             chain,
             corpus: &self.corpus,
@@ -73,6 +80,86 @@ impl Grounds {
             manuals: &self.manuals,
             render: &self.render,
             clock: &self.clock,
+            memory,
+        }
+    }
+}
+
+/// The secretary's memory and every store it reads: what the secretary's record writes and the
+/// triage agent's reads through a [`Recollection`].
+pub struct Remembering {
+    pub(crate) conversations: ConversationStores,
+    pub(crate) memory: Objects<MemoryEvent>,
+    pub(crate) memory_texts: Texts<Fact>,
+    pub(crate) digests: Objects<DigestEvent>,
+    pub(crate) digest_texts: Texts<Line>,
+    /// Whose retraction or erasure the digest believes.
+    pub(crate) owners: BTreeSet<Actor>,
+    /// Whether the compactor runs, and within what.
+    pub(crate) compacting: Compacting,
+    // One store for every chain, as a proposal is the box's question and not a chain's.
+    pub(crate) inbox: Objects<InboxEvent>,
+}
+
+impl Remembering {
+    /// The memory's stores, from the instance file, the conversations' answers drawn through
+    /// `renders`, the cache an erasure empties.
+    #[must_use]
+    pub fn of(instance: &Instance, renders: Arc<dyn RenderCache + Send + Sync>) -> Self {
+        Self {
+            conversations: instance.secretary.conversation_stores(renders),
+            memory: instance.memory_store(),
+            memory_texts: Texts::open(instance.secretary.memory_texts()),
+            digests: instance.digest_store(),
+            digest_texts: Texts::open(instance.secretary.digest_texts()),
+            owners: instance.deployment.writers(),
+            compacting: instance.secretary.compacting(),
+            inbox: instance.inbox_store(),
+        }
+    }
+
+    /// The memory's stores as a reader that draws no answer opens them: the secretary's answers'
+    /// cache, which sweeps its directory when it opens, is not opened.
+    #[must_use]
+    pub fn reader(instance: &Instance) -> Self {
+        Self::of(instance, Arc::new(Unrendered))
+    }
+
+    /// A memory that holds nothing, its stores under `dir`, which holds nothing either: what the
+    /// bench is told, so no case reaches a vendor with the box's memory or today's.
+    #[must_use]
+    pub fn empty_in(dir: &Path, instance: &Instance) -> Self {
+        Self {
+            conversations: ConversationStores::open(
+                dir.join("lines"),
+                dir.join("keys"),
+                Arc::new(Unrendered),
+            ),
+            memory: Objects::open(dir.join("memory")),
+            memory_texts: Texts::open(dir.join("memory-texts")),
+            digests: Objects::digests(dir.join("digests"), instance.deployment.writers()),
+            digest_texts: Texts::open(dir.join("digest-texts")),
+            owners: instance.deployment.writers(),
+            compacting: Compacting::Off,
+            inbox: Objects::open(dir.join("inbox")),
+        }
+    }
+
+    /// The memory and the digest, as one record reads and erases them.
+    #[must_use]
+    pub fn memories(&self) -> Memories<'_> {
+        Memories {
+            history: &self.memory,
+            texts: &self.memory_texts,
+            cards: &self.inbox,
+            entropy: &suzatary_io::texts::SystemEntropy,
+            digests: Digests {
+                history: &self.digests,
+                texts: &self.digest_texts,
+                lines: self.conversations.conversations(),
+                owners: &self.owners,
+                compacting: &self.compacting,
+            },
         }
     }
 }
@@ -84,20 +171,10 @@ pub struct Opened {
     /// The answers' cache of typst blocks: the one the pages draw through is the one an
     /// erasure empties, so it is opened once and the conversations hold it.
     pub(crate) answers: Arc<suzatary_io::render::Typst>,
-    pub(crate) conversations: ConversationStores,
-    pub(crate) memory: Objects<MemoryEvent>,
+    pub(crate) remembering: Remembering,
     pub(crate) decisions: Objects<DecisionEvent>,
     /// The topics, box-local and never pushed; a server also serves them to a tab.
     pub(crate) topics: suzatary_io::topics::Topics,
-    pub(crate) memory_texts: Texts<Fact>,
-    pub(crate) digests: Objects<DigestEvent>,
-    pub(crate) digest_texts: Texts<Line>,
-    /// Whose retraction or erasure the digest believes.
-    pub(crate) owners: BTreeSet<Actor>,
-    /// Whether the compactor runs, and within what.
-    pub(crate) compacting: Compacting,
-    // One store for every chain, as a proposal is the box's question and not a chain's.
-    pub(crate) inbox: Objects<InboxEvent>,
     pub(crate) briefings: suzatary_io::briefings::BriefingFiles,
     pub(crate) weather: Forecast,
     pub(crate) calendar: suzatary_io::calendar::Clocked,
@@ -124,19 +201,10 @@ impl Opened {
         let answers = Arc::new(instance.answers());
         Self {
             grounds: Grounds::of(instance),
-            conversations: instance
-                .secretary
-                .conversation_stores(Arc::clone(&answers) as _),
+            remembering: Remembering::of(instance, Arc::clone(&answers) as _),
             answers,
-            memory: instance.memory_store(),
             decisions: Objects::open(instance.decisions()),
             topics: instance.secretary.topics.open(),
-            memory_texts: Texts::open(instance.secretary.memory_texts()),
-            digests: instance.digest_store(),
-            digest_texts: Texts::open(instance.secretary.digest_texts()),
-            owners: instance.deployment.writers(),
-            compacting: instance.secretary.compacting(),
-            inbox: instance.inbox_store(),
             briefings: suzatary_io::briefings::BriefingFiles::new(
                 instance.serving.briefings.clone(),
             ),
@@ -167,19 +235,7 @@ impl Opened {
     /// The memory and the digest, as one record reads and erases them.
     #[must_use]
     pub fn memories(&self) -> Memories<'_> {
-        Memories {
-            history: &self.memory,
-            texts: &self.memory_texts,
-            cards: &self.inbox,
-            entropy: &suzatary_io::texts::SystemEntropy,
-            digests: Digests {
-                history: &self.digests,
-                texts: &self.digest_texts,
-                lines: self.conversations.conversations(),
-                owners: &self.owners,
-                compacting: &self.compacting,
-            },
-        }
+        self.remembering.memories()
     }
 
     /// The recorded decisions.
@@ -203,8 +259,8 @@ impl Opened {
             render: &grounds.render,
             clock: &grounds.clock,
             model,
-            conversations: self.conversations.conversations(),
-            inbox: &self.inbox,
+            conversations: self.remembering.conversations.conversations(),
+            inbox: &self.remembering.inbox,
             memories: self.memories(),
             decisions: self.decisions(),
             topics: self.topics.stores(),

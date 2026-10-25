@@ -16,7 +16,7 @@ pub use chain_dir::{ChainDir, ChainDirs};
 pub use edits::{InstanceEdits, editing};
 pub(crate) use file::Signatures;
 pub(crate) use file::{Chain, File, Orders, Web};
-pub use file::{Mail, Secretary, Serving};
+pub use file::{Mail, Secretary, Serving, Triage};
 pub use local::Local;
 pub use plugins::Plugins;
 use plugins::plugins_of;
@@ -97,6 +97,8 @@ pub struct Instance {
     pub serving: Serving,
     /// The secretary's store and model.
     pub secretary: Secretary,
+    /// What the triage agent is handed.
+    pub agent: Triage,
     /// Every repository the box may reach: `[[secretary.repos]]` and `[coding] repo`, all in one
     /// account, read once.
     pub repos: suzatary_core::repos::Declared,
@@ -627,6 +629,7 @@ impl Instance {
             chains,
             paths,
             secretary,
+            agent: file.agent,
             serving: file.web.serving.rooted(&code, &data),
             mail,
             deployment,

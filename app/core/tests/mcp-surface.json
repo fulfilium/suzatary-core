@@ -260,7 +260,7 @@
     "name": "verify_chain"
   },
   {
-    "description": "START HERE. Everything you need to act with understanding rather than classify messages in isolation: the triage contract (OPERATOR.md) and the exact vocabularies the authoring verbs accept; CLAUDE.md is already your project memory.",
+    "description": "START HERE. Everything you need to act with understanding rather than classify messages in isolation: the triage contract (OPERATOR.md), the exact vocabularies the authoring verbs accept, and the secretary's memory (`memory`: the facts the owner had it keep, the newest when they do not all fit, then a short record of their own words in its conversations), which you read and never write; CLAUDE.md is already your project memory.",
     "inputSchema": {
       "properties": {},
       "required": [],
@@ -600,5 +600,42 @@
       "type": "object"
     },
     "name": "todo_show"
+  },
+  {
+    "description": "SEARCH THE SECRETARY'S MEMORY, read-only: the facts it keeps that contain `query` (plain text, any case), and the owner's own lines in its record that contain it, or a summary of nothing but those, newest first, each with its handle for `zoom`. Never the secretary's answers, a verb's answer or the box's notes. Use it before filing mail about a person, a place or a matter the owner may have talked about.",
+    "inputSchema": {
+      "properties": {
+        "limit": {
+          "default": null,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "query": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "query"
+      ],
+      "type": "object"
+    },
+    "name": "recall"
+  },
+  {
+    "description": "OPEN A PART OF THE SECRETARY'S RECORD, read-only: `handle` is a part's `first+lines`, as `context`'s `memory` or `recall` shows it. Answers what is beneath it, each with its own handle: the owner's own line whole, a summary of nothing but their lines (`derived`, nobody's own words), or a span not summarised yet. Anything else (the secretary's answers, a verb's answer, the box's notes) stays shown by its kinds alone, however far you open it. Zoom before you file on what a summary says.",
+    "inputSchema": {
+      "properties": {
+        "handle": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "handle"
+      ],
+      "type": "object"
+    },
+    "name": "zoom"
   }
 ]

@@ -58,5 +58,7 @@ mod transport_port;
 mod tree;
 #[path = "triage_cards.rs"]
 mod triage_cards;
+#[path = "triage_memory.rs"]
+mod triage_memory;
 #[path = "web_vectors.rs"]
 mod web_vectors;

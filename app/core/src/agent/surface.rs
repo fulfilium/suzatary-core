@@ -7,7 +7,7 @@
 use serde_json::Value;
 
 use super::verbs::{
-    Context, Evaluate, HistoryArgs, Mark, New, NoiseAdd, ShowArgs, Sync, VerifyChain,
+    Context, Evaluate, HistoryArgs, Mark, New, NoiseAdd, Recall, ShowArgs, Sync, VerifyChain, Zoom,
 };
 use super::{Call, Holds, Says};
 use crate::authoring::Writer;
@@ -233,6 +233,8 @@ verbs! {
     TodoAdd: (),
     TodoUpdate: (),
     TodoShow: (),
+    Recall: (),
+    Zoom: (),
 }
 
 /// The whole surface as JSON in the MCP `tools/list` shape, which both the server and the

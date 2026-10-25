@@ -1216,6 +1216,7 @@ fn instance_file(
             drive_cli: Some(root.join(FAKE_DRIVE)),
             ..Secretary::default()
         },
+        agent: crate::instance::Triage::default(),
         persona: suzatary_core::persona::Persona::default(),
         // Absent, so push setup never reads this box's secret store.
         notify: None,

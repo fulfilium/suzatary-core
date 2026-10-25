@@ -257,9 +257,13 @@ Suzatary:
 Erasable words: summaries live in a box-local salted text store, names only
 in objects. Redaction door: `Line::new` goes through `Scrubbed`, input lines
 already are. The tap: nothing here acts outward; the compactor has no tools.
-The triage agent gets no digest (an injected summary would persist across its
-stateless runs, the thing CLAUDE.md rejected 2026-08-30) and no memory write,
-as now. Provenance: every fact keeps its `Origin`(s); every summary names its
+The triage agent gets no memory write. Since 2026-10-24 (the owner) it reads
+the facts and the view in the owner's words alone, as the secretary's opening
+does, in one budget with its manual, and its `recall` and `zoom` read the same
+clean set (the facts, the owner's own lines, and summaries of nothing but
+those, `Label::is_owners`): never the secretary's answers, a verb's answer or a
+review round, which can quote mail or a batch triage once wrote, so nothing an
+email put in front of one run is read back by a later one through the memory. Provenance: every fact keeps its `Origin`(s); every summary names its
 node, whose leaves name conversation and turn. Conflicts: shown, least name for
 a single-record reading. Replicas: everything is a prodrome or a reading of
 one, so union converges (§6.1); summaries are objects, so a phone never

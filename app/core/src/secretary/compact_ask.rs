@@ -6,8 +6,9 @@
 //! salted name, never reach a compactor. The log, while over its budget, keeps its earliest
 //! parts and says how many later ones it left out, so its first lines, the prefix a model's cache
 //! keeps, stay as they were. It hides the words of every tainted part, so a clean node's summary is
-//! written from clean words alone and its label, the join of its lines', is true of what the
-//! compactor read.
+//! written from clean words alone, and for a node of nothing but the owner's words it hides every
+//! other part too, so that summary is written from the owner's words alone: either way its label,
+//! the join of its lines', is true of what the compactor read.
 
 use std::collections::BTreeMap;
 use std::fmt::Write as _;
@@ -128,9 +129,17 @@ impl Ask {
         node: &Hash,
     ) -> Option<(Self, Vec<Hash>)> {
         let tree = digest.tree()?;
+        let asked = tree.node(node)?;
+        // An owner's node is read beside the owner's words alone, so its summary, labelled as
+        // nothing but theirs, is written from nothing but theirs.
+        let reads: fn(&Label) -> bool = if asked.measure().is_owners() {
+            Label::is_owners
+        } else {
+            Label::is_clean
+        };
         let mut span = Vec::new();
         let mut over = Vec::new();
-        for child in tree.node(node)?.children() {
+        for child in asked.children() {
             if child.is_leaf() {
                 span.push(rendered(entries.get(digest.line(child.name()))?));
                 over.push(child.name().clone());
@@ -139,14 +148,18 @@ impl Ask {
                 over.push(digest.candidates(child.name()).first()?.object.clone());
             }
         }
-        Some((Self::new(log(digest, entries), span), over))
+        Some((Self::new(log(digest, entries, reads), span), over))
     }
 }
 
-/// The view under [`VIEW_BYTES`] as [`digest_view::view`] shows it, its earliest parts kept
-/// while the rendering is over the budget.
-fn log(digest: &Digest, entries: &BTreeMap<&Hash, &Entry>) -> Vec<String> {
-    let shown = digest_view::view(digest, entries, VIEW_BYTES, Label::is_clean)
+/// The view under [`VIEW_BYTES`] as [`digest_view::view`] shows it to a reader that `reads`, its
+/// earliest parts kept while the rendering is over the budget.
+fn log(
+    digest: &Digest,
+    entries: &BTreeMap<&Hash, &Entry>,
+    reads: fn(&Label) -> bool,
+) -> Vec<String> {
+    let shown = digest_view::view(digest, entries, VIEW_BYTES, reads)
         .into_iter()
         .map(|shown| shown.body.text(shown.part.span.len()))
         .collect();

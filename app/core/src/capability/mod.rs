@@ -268,6 +268,7 @@ mod tests {
             manuals: _,
             render: _,
             clock: _,
+            memory: _,
         } = Nothing::agent();
         let Secretary {
             chain: _,

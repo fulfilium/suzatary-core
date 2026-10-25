@@ -274,17 +274,18 @@ impl Told {
     }
 }
 
-/// What opening `handle` in `reading` answers, the `zoom` verb's answer: the node's taint, which
-/// `taint::turn` reads back as the answer's class, and what is beneath it, each with its own
-/// handle: a line whole, a summary as derived words, a node with none by its kinds.
+/// What opening `handle` in `reading` answers, the `zoom` verb's answer: the taint of what it
+/// shows, which `taint::turn` reads back as the answer's class, and what is beneath it, each with
+/// its own handle: a part `shows` reads as a line whole or a summary as derived words, a node
+/// with none or a part it does not read by its kinds.
 ///
 /// # Errors
 /// [`Refusal::not_found`] for a handle no node of the reading spans.
-pub fn zoom(reading: &Reading, handle: &str) -> Result<Value, Refusal> {
+pub fn zoom(reading: &Reading, handle: &str, shows: fn(&Label) -> bool) -> Result<Value, Refusal> {
     let entries = reading.entries();
     let handle = handle.trim();
-    let (label, beneath) =
-        digest_view::opened(reading.digest(), &entries, handle).ok_or_else(|| {
+    let (label, beneath) = digest_view::opened(reading.digest(), &entries, handle, shows)
+        .ok_or_else(|| {
             Refusal::not_found(format!(
                 "no part of the record spans {}: a handle is `first+lines`, as the record shows \
                  it",

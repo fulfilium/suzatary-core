@@ -70,6 +70,7 @@ pub mod tokens;
 pub mod tool;
 pub mod topics;
 pub mod typeset;
+pub mod unrendered;
 pub mod upload_index;
 pub mod usage;
 pub mod watches;

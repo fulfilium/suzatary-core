@@ -1604,7 +1604,7 @@ pub fn dismiss(
     let id = ConversationId::new(conversation).map_err(|failed| anyhow::anyhow!("{failed}"))?;
     let opened = crate::wiring::Opened::of(instance, DECLARED);
     let stored = suzatary_core::secretary::dismiss(
-        opened.conversations.conversations(),
+        opened.remembering.conversations.conversations(),
         opened.memories(),
         &suzatary_io::clock::SystemClock,
         &who,
@@ -1818,7 +1818,12 @@ fn brief(
     };
 
     // Before `converse`, so the alarm lands even when the model is unreachable.
-    maybe_append_triage_alarm(caps.corpus, caps.clock, &wired.opened.conversations, &id);
+    maybe_append_triage_alarm(
+        caps.corpus,
+        caps.clock,
+        &wired.opened.remembering.conversations,
+        &id,
+    );
 
     // Also before it: what the box files needing no model.
     unasked(instance, &chains, &id);

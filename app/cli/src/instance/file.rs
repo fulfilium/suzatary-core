@@ -39,6 +39,8 @@ pub(crate) struct File {
     pub(crate) mail: Mail,
     #[serde(default)]
     pub(crate) secretary: Secretary,
+    #[serde(default, skip_serializing_if = "Triage::is_default")]
+    pub(crate) agent: Triage,
     #[serde(default)]
     pub(crate) persona: Persona,
     /// The intent to notify, declared rather than inferred from which push
@@ -215,6 +217,30 @@ impl Mail {
             mbsyncrc: data.under(&self.mbsyncrc),
             heartbeat: data.under(&self.heartbeat),
             ..self
+        }
+    }
+}
+
+/// `[agent]`, defaulted key by key: what the triage agent is handed.
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(default, deny_unknown_fields)]
+pub struct Triage {
+    /// What its `context` may spend on the secretary's memory beyond the manual's cap: the memory,
+    /// the newest facts first and then the record in the owner's words alone, gets this and what
+    /// the manual leaves of its cap.
+    pub memory_bytes: usize,
+}
+
+impl Triage {
+    fn is_default(&self) -> bool {
+        *self == Self::default()
+    }
+}
+
+impl Default for Triage {
+    fn default() -> Self {
+        Self {
+            memory_bytes: 16 * 1024,
         }
     }
 }

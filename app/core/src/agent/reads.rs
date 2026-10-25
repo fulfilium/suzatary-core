@@ -11,6 +11,8 @@ use crate::capability::{Agent, Manual, Manuals};
 use crate::chains::ChainPolicy;
 use crate::deployment::Deployment;
 use crate::refusal::{Refusal, shown};
+use crate::secretary::memory::Memory;
+use crate::secretary::owners_record::OwnersRecord;
 use crate::store::Prodrome;
 use crate::todos;
 
@@ -35,8 +37,10 @@ pub(crate) fn list_open_todos(caps: &Agent<'_>, chain: &ChainPolicy) -> Result<V
     ))
 }
 
-/// The most `context` may answer, in serialized bytes: a budget the answer is built
-/// inside, because an answer the harness will not show inline is read by nobody.
+/// The most `context` spends on the manual and the vocabularies, in serialized bytes. The whole
+/// answer is one budget, this and `[agent] memory_bytes`, filled in order: the manual and the
+/// vocabularies, the facts, then the record. An answer the harness will not show inline is read
+/// by nobody.
 pub const CONTEXT_CAP: usize = 24 * 1024;
 
 /// What the answer leaves unspent so `OPERATOR.md` can grow without a cut: a fifth of the cap,
@@ -46,9 +50,10 @@ pub const CONTEXT_HEADROOM: usize = CONTEXT_CAP / 5;
 /// What the category vocabulary may spend, so the manual's room is a constant.
 const CATEGORIES_BUDGET: usize = 1024;
 
-/// The bytes `serde_json` spends on a value, measured by the encoder itself.
-fn wire_len<T: serde::Serialize + ?Sized>(value: &T) -> usize {
-    serde_json::to_string(value).map_or(usize::MAX, |wire| wire.len())
+/// The bytes a value costs as the agent is sent it, pretty-printed (`commands::mcp`), measured by
+/// the encoder itself. A string costs the same printed either way; an object's layout does not.
+pub(crate) fn wire_len<T: serde::Serialize + ?Sized>(value: &T) -> usize {
+    serde_json::to_string_pretty(value).map_or(usize::MAX, |wire| wire.len())
 }
 
 /// `text` cut at a line boundary to cost at most `budget` bytes, with a last line saying
@@ -98,9 +103,35 @@ fn listed(items: &[String], budget: usize) -> Vec<String> {
     kept
 }
 
-/// `OPERATOR.md` and the authoring vocabularies, under [`CONTEXT_CAP`]. `CLAUDE.md` stays out:
-/// it is already the session's memory.
-pub fn context(manuals: &dyn Manuals, deployment: &Deployment) -> Value {
+/// `OPERATOR.md` and the authoring vocabularies, under [`CONTEXT_CAP`]: the secretary's
+/// `context`. `CLAUDE.md` stays out: it is already the session's memory.
+pub fn manual(manuals: &dyn Manuals, deployment: &Deployment) -> Value {
+    manual_within(manuals, deployment, CONTEXT_CAP)
+}
+
+/// The agent's `context`: [`manual`] within what leaves room for the memory's key, then the
+/// secretary's memory (the facts in `memory`, then the record read in `record`) in what is left
+/// of `CONTEXT_CAP + memory_bytes`.
+pub fn context(
+    manuals: &dyn Manuals,
+    deployment: &Deployment,
+    memory: Result<&Memory, &Refusal>,
+    record: Result<&OwnersRecord, &Refusal>,
+    memory_bytes: usize,
+) -> Value {
+    // What the `memory` key costs beside its string, which pays for its own quotes and escapes,
+    // measured on an object laid out as the answer is; the manual leaves the string room to say
+    // at least that nothing fits.
+    let key = wire_len(&json!({"a": 0, "memory": ""})) - wire_len(&json!({"a": 0})) - 2;
+    let least = wire_len(super::remembered::TOO_BIG);
+    let mut answer = manual_within(manuals, deployment, CONTEXT_CAP - key - least);
+    let room = (CONTEXT_CAP + memory_bytes).saturating_sub(wire_len(&answer) + key);
+    answer["memory"] = Value::String(super::remembered::remembered(memory, record, room));
+    answer
+}
+
+/// [`manual`] within `cap` bytes.
+fn manual_within(manuals: &dyn Manuals, deployment: &Deployment, cap: usize) -> Value {
     let read = |which: Manual| {
         manuals
             .document(which)
@@ -144,7 +175,7 @@ pub fn context(manuals: &dyn Manuals, deployment: &Deployment) -> Value {
         })
     };
     let fixed = wire_len(&shape(String::new()));
-    let room = CONTEXT_CAP.saturating_sub(fixed);
+    let room = cap.saturating_sub(fixed);
     shape(within(&read(Manual::Operator), room, "OPERATOR.md"))
 }
 
@@ -335,6 +366,18 @@ mod tests {
         }
     }
 
+    /// `context` over an empty memory and a record that did not read, spending nothing beyond
+    /// the manual's cap.
+    fn bare(manuals: &dyn Manuals, deployment: &Deployment) -> Value {
+        let memory = Memory {
+            facts: Vec::new(),
+            forgotten: Vec::new(),
+            version: 0,
+        };
+        let unread = Refusal::not_found("no record here".to_owned());
+        context(manuals, deployment, Ok(&memory), Err(&unread), 0)
+    }
+
     fn paragraphs(lines: usize) -> String {
         use std::fmt::Write as _;
 
@@ -349,7 +392,7 @@ mod tests {
         let library = Library {
             operator: paragraphs(20_000),
         };
-        let answer = context(&library, &deployment(1_000));
+        let answer = bare(&library, &deployment(1_000));
         let size = wire_len(&answer);
         assert!(size <= CONTEXT_CAP, "{size} bytes is over the cap");
 
@@ -371,13 +414,12 @@ mod tests {
         let library = Library {
             operator: paragraphs(120),
         };
-        let answer = context(&library, &deployment(8));
+        let answer = bare(&library, &deployment(8));
         assert!(wire_len(&answer) <= CONTEXT_CAP);
         assert_eq!(answer["operator_manual"], json!(library.operator));
         assert_eq!(answer["authoring"]["categories"][0], json!("category0000"));
         let constitution = answer["constitution"].as_str().expect("a sentence");
         assert!(constitution.contains("CLAUDE.md"), "{constitution}");
         assert!(constitution.contains("project memory"), "{constitution}");
-        assert!(answer.get("memory").is_none(), "{answer}");
     }
 }

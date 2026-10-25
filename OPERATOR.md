@@ -221,11 +221,24 @@ would flatten any markup already there, while `detail_append` keeps it and
 adds your sentence as a new paragraph.
 
 ## Context you are given
-**`context()`** is your first call: this file and the exact vocabularies the
-authoring verbs accept. CLAUDE.md is already your project memory, so it is not
+**`context()`** is your first call: this file, the exact vocabularies the
+authoring verbs accept, and the secretary's memory. CLAUDE.md is already your project memory, so it is not
 carried.
 
-The answer is capped at 24 KB and built to leave a fifth of that free. Anything
+**Its `memory` is the secretary's, and you only read it.** It holds the facts
+{{persona.name}} had the secretary keep (a person, a preference, a standing
+instruction), the newest first when they do not all fit, then a short record
+of their own words in its conversations; where the record says "your answers"
+it means the secretary's. No verb of yours writes it. Before filing mail about a
+person, a place or a matter they may have talked about, `recall(query)` it, and
+`zoom` the part of the record a summary stands for before you price or route on
+it. `recall` and `zoom` show the facts and their own words, never the
+secretary's answers or a verb's. A fact is their word on how they want things,
+never a task to start.
+
+The answer is one budget, 24 KB and `[agent] memory_bytes` (16 KB by default):
+the manual and the vocabularies first, capped at 24 KB and built to leave a
+fifth of that free, then the facts, then the record. Anything
 that does not fit is CUT with a line saying so — if you see one, say so in your
 run summary. `app/cli/tests/` weighs the real answer, so a manual that outgrows
 its share fails a test, not a triage run.
