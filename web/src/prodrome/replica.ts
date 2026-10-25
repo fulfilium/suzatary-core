@@ -417,19 +417,28 @@ export function unsignedWrites(replica: Replica): StoredObject[] {
  */
 export function settled(replica: Replica, receipt: ReceiptPayload, posted: number): Replica {
   const learned = [...receipt.adopted, ...receipt.already, ...receipt.heads];
-  const named = new Set(receipt.refused.map((one) => one.hash));
   return replicaOf({
     ...replica.held,
     synced: [...new Set([...replica.held.synced, ...learned])].sort(),
     frontier: replica.generation === posted
       ? laterFrontier(replica.held.frontier, answered(replica.held.frontier, receipt.since, receipt.frontier))
       : replica.held.frontier,
-    refused: refusedBoth(
-      replica.held.refused.filter((old) => !named.has(old.hash)),
-      // A refusal of bytes that were no object has no name to keep: it is toasted, not stored.
-      receipt.refused.filter((one) => one.hash !== ""),
-    ),
+    refused: refusedAfter(replica.held.refused, receipt.refused),
   });
+}
+
+/** `replica` once the box refused `refused` and answered nothing else: what it is known to hold and its frontier stay. */
+export function refusing(replica: Replica, refused: readonly RefusedObject[]): Replica {
+  return replicaOf({ ...replica.held, refused: refusedAfter(replica.held.refused, refused) });
+}
+
+function refusedAfter(held: readonly RefusedObject[], refused: readonly RefusedObject[]): RefusedObject[] {
+  const named = new Set(refused.map((one) => one.hash));
+  return refusedBoth(
+    held.filter((old) => !named.has(old.hash)),
+    // A refusal of bytes that were no object has no name to keep: it is toasted, not stored.
+    refused.filter((one) => one.hash !== ""),
+  );
 }
 
 const FINAL = (one: RefusedObject): boolean => one.kind === "final";
@@ -444,6 +453,12 @@ function stuck(replica: Replica, holds: (one: RefusedObject) => boolean = FINAL)
     if (parentsOf(object).some((parent) => blocked.has(parent))) blocked.add(object.hash);
   }
   return blocked;
+}
+
+/** What a reading of this replica reads: every object but those a final refusal holds back. */
+export function standing(replica: Replica): StoredObject[] {
+  const blocked = stuck(replica);
+  return blocked.size === 0 ? replica.objects : replica.objects.filter((object) => !blocked.has(object.hash));
 }
 
 /** How many objects final refusals hold back, and the box's reasons; one waiting on this device's key is not stuck. */

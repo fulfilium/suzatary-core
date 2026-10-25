@@ -18,6 +18,10 @@ export namespace http {
     }
   }
 
+  // Whether the box may not have decided: no answer came (`fetch` itself failed) or a 5xx came from it or a gateway. A 4xx
+  // is the box deciding no, and status 0 is an answer of the wrong shape: both were decided.
+  export const unanswered = (e: unknown): boolean => !(e instanceof ApiError) || e.status >= 500
+
   // A custom header forces a CORS preflight the box never answers, so only a page the box served can act (`gate::check_csrf`).
   export const ACT_HEADER = "X-Suzatary-Act"
 

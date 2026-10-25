@@ -2273,6 +2273,27 @@ fn the_answers_vector_holds_every_answer() {
     samples.add([proposals]);
     samples.add([readings::conversations(&listed, &inbox_fold)]);
     samples.add([readings::search(&listed, "deed").expect("a search")]);
+    samples.add([suzatary_core::secretary::stream::stream(
+        &listed,
+        &suzatary_core::secretary::topics::reading::Reading::default(),
+        &std::collections::BTreeSet::new(),
+        1,
+        &readings::Dress::BARE,
+    )]);
+    samples.add([wire::TopicsPayload {
+        topics: vec![
+            wire::TopicInUse {
+                topic: "garden".to_owned(),
+                rounds: 2,
+                disputed: Vec::new(),
+            },
+            wire::TopicInUse {
+                topic: "trip".to_owned(),
+                rounds: 1,
+                disputed: vec!["journey".to_owned()],
+            },
+        ],
+    }]);
     let server = server_of(&bundle);
     let conversations = [&deed, &stages]
         .map(|id| secretary_routes::newest(&server, &cards, id).expect("a conversation"));

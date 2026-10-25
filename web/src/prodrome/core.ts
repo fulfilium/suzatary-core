@@ -12,6 +12,8 @@ import type {
   Phase,
   ProvenanceRow,
   SearchPayload,
+  StreamPayload,
+  TopicsPayload,
   SpecNode,
   VerifiedPayload,
 } from "../wire/generated/wire";
@@ -32,6 +34,9 @@ export interface Core {
   Todos: new (objects: string) => Todos;
   Proposals: new (objects: string) => Proposals;
   Lines: new () => Lines;
+  Memberships: new (objects: string) => TopicStore;
+  TopicAliases: new (objects: string) => TopicStore;
+  TopicReading: new (memberships: TopicStore, aliases: TopicStore) => TopicReading;
   Chains: new () => Chains;
   /** `undefined` where the term reads `∅`. */
   fulfillment: (term: string, now: string, env: string) => number | undefined;
@@ -53,6 +58,8 @@ export interface Core {
   erase_warning: () => string;
   /** `{hash, text}`: the `Signed` of `object` by `key`, refused unless `signature` verifies. */
   signed: (object: string, key: string, signature: string) => string;
+  /** Why a text is no topic (`Topic::new`'s refusal), or `undefined` for a topic. */
+  topic_refusal: (text: string) => string | undefined;
 }
 
 /** A set of todo objects read once by the core; every method asks its question of what was read. */
@@ -176,10 +183,31 @@ export interface Lines {
     memory: string | undefined,
   ) => string;
   search: (q: string) => string;
+  /** The newest `pages` pages of every conversation's rounds carrying each topic of `chosen`, a JSON array. */
+  stream: (topics: TopicReading, chosen: string, pages: number) => string;
   /** `{<name>: [<answer key>, …]}`: every key an erasure names, with the blocks its words fed where `keys` opens it. */
   erased: (keys: string, told: string) => string;
   dead: () => string;
   excluded: () => string;
+  free: () => void;
+}
+
+/** A replica of one topic store: the memberships, or the aliases. */
+export interface TopicStore {
+  /** `event` sealed as a `Change` over this replica's fold: `{hash, objects}`, the objects the box lacks of it. */
+  append: (event: string, genesis: string | null) => string;
+  free: () => void;
+}
+
+/** The topics both replicas read as, and the events that change them, printed for `append`. */
+export interface TopicReading {
+  /** The topics in use, as `TopicsPayload`. */
+  bar: () => string;
+  add: (target: string, topic: string, at: string, actor: string) => string | undefined;
+  /** A JSON array of event prints. */
+  remove: (target: string, topic: string, at: string, actor: string) => string;
+  /** A JSON array of event prints. */
+  rename: (from: string, to: string, at: string, actor: string) => string;
   free: () => void;
 }
 
@@ -478,6 +506,11 @@ export function appendTo(todos: Todos, event: string): Appended {
   return checked("append", todos.append(event, null), Appended);
 }
 
+/** `event` written into a topic store's replica, as `appendTo` writes a todo's. */
+export function appendTopic(store: TopicStore, event: string): Appended {
+  return checked("append", store.append(event, null), Appended);
+}
+
 /** An act and the fold after it, answered by one reading of the replica. */
 export interface Acted {
   appended: Appended;
@@ -597,6 +630,11 @@ export const conversationOf = (lines: Lines, inbox: Proposals, id: string, windo
   checked("conversation", lines.conversation(id, inbox, shown(window.before), shown(window.limit), window.about, memoryOf(memory)), payload.ConversationPayload);
 
 export const searchOf = (lines: Lines, q: string): SearchPayload => checked("search", lines.search(q), payload.SearchPayload);
+
+export const streamOf = (lines: Lines, topics: TopicReading, chosen: readonly string[], pages: number): StreamPayload =>
+  checked("stream", lines.stream(topics, JSON.stringify(chosen), pages), payload.StreamPayload);
+
+export const barOf = (topics: TopicReading): TopicsPayload => checked("topics", topics.bar(), payload.TopicsPayload);
 
 /**
  * Every key an erasure of its own conversation names, and every key named in `told`, each with the blocks its words fed

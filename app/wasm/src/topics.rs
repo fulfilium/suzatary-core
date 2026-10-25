@@ -1,4 +1,4 @@
-//! The topic topics as a page reads and writes them: the two stores' replicas, the
+//! The topics as a page reads and writes them: the two stores' replicas, the
 //! `suzatary_core::secretary::topics::Reading` over what they hold, and its planners, which answer
 //! events for the replicas' `append`. The box plans with the same functions, so a tab writing
 //! offline writes what the box would write holding the same objects.
@@ -12,8 +12,7 @@ use prodrome_core::fpl::datetime_of;
 use prodrome_core::literal::Datetime;
 use prodrome_wasm_exports::wire::parse_instant;
 use prodrome_wasm_exports::{Replica, thrown};
-use suzatary_core::secretary::topics::alias_event::{Alias, AliasEvent};
-use suzatary_core::secretary::topics::dispute::Dispute;
+use suzatary_core::secretary::topics::alias_event::AliasEvent;
 use suzatary_core::secretary::topics::membership_event::MembershipEvent;
 use suzatary_core::secretary::topics::reading::Reading;
 use suzatary_core::secretary::topics::target::Target;
@@ -64,7 +63,7 @@ replica!(TopicAliases = AliasEvent);
 
 /// The topics both classes' objects read as, read once.
 #[wasm_bindgen]
-pub struct TopicReading(Reading);
+pub struct TopicReading(pub(crate) Reading);
 
 #[wasm_bindgen]
 impl TopicReading {
@@ -76,49 +75,9 @@ impl TopicReading {
         Ok(Self(Reading::of(memberships.nodes, aliases.nodes)))
     }
 
-    /// Every target with a topic, `{<target>: [<topic>, …]}`, each topic in its current spelling.
-    pub fn memberships(&self) -> Result<String, JsError> {
-        json(
-            &self
-                .0
-                .memberships()
-                .into_iter()
-                .map(|(target, topics)| (target.to_string(), topics))
-                .collect::<std::collections::BTreeMap<_, _>>(),
-        )
-    }
-
-    /// Every place concurrent renames disagree: `{type: "Aliases", topic, chosen, others}` or
-    /// `{type: "Ring", names, spelled}`, an alias printed as its topic or `null` for itself.
-    pub fn disputes(&self) -> Result<String, JsError> {
-        let alias = |alias: &Alias| match alias {
-            Alias::Itself => serde_json::Value::Null,
-            Alias::As(topic) => serde_json::Value::from(topic.as_str()),
-        };
-        json(
-            &self
-                .0
-                .disputes()
-                .iter()
-                .map(|dispute| match dispute {
-                    Dispute::Aliases {
-                        topic,
-                        chosen,
-                        others,
-                    } => serde_json::json!({
-                        "type": "Aliases",
-                        "topic": topic,
-                        "chosen": alias(chosen),
-                        "others": others.iter().map(alias).collect::<Vec<_>>(),
-                    }),
-                    Dispute::Ring { names, spelled } => serde_json::json!({
-                        "type": "Ring",
-                        "names": names,
-                        "spelled": spelled,
-                    }),
-                })
-                .collect::<Vec<_>>(),
-        )
+    /// The topics in use, the most rounds first, each with the names in dispute for it.
+    pub fn bar(&self) -> Result<String, JsError> {
+        json(&self.0.bar())
     }
 
     /// The `Added` event that puts `topic` on `target`, printed, or `undefined` where it is on.
@@ -177,6 +136,20 @@ impl TopicReading {
                 .collect::<Vec<_>>(),
         )
     }
+}
+
+/// Why `text` is not a topic, in the rule it breaks, or `undefined` for a topic.
+#[wasm_bindgen]
+#[must_use]
+pub fn topic_refusal(text: &str) -> Option<String> {
+    Topic::new(text).err().map(|e| e.to_string())
+}
+
+/// `text`, a JSON array of topics, each through [`Topic::new`].
+pub(crate) fn topics_of(text: &str) -> Result<std::collections::BTreeSet<Topic>, JsError> {
+    let named: Vec<String> =
+        serde_json::from_str(text).map_err(|e| refused(format!("topics: {e}")))?;
+    named.into_iter().map(|name| topic_of(&name)).collect()
 }
 
 fn target_of(text: &str) -> Result<Target, JsError> {

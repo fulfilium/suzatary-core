@@ -5758,11 +5758,221 @@ body:has(> .secretarypanel) .askrow {
   font: inherit;
 }
 
-.act.act-newtopic {
+.act.act-newtopic,
+.act.act-topicwrite {
   flex: none;
   border-color: var(--primary);
   background: var(--primary);
   color: var(--on-primary);
+}
+
+/* --- the topic bar and the stream (docs/TOPICS-PLAN-2026-10-21.md §6) -------
+   The bar reads at a glance: lowercase names with their round counts, the
+   chosen ones filled. A round's chips stay small and muted beside its words. */
+.topicbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-2);
+  margin: 0 0 var(--s-3);
+}
+
+.topicchip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-1);
+}
+
+.topiclink {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35em;
+  min-height: 2.25rem;
+  padding: 0 0.75rem;
+  border: 1px solid var(--line);
+  border-radius: var(--r-pill);
+  font: 400 var(--t-small) / 1 var(--f-sans);
+  color: var(--ink);
+  text-decoration: none;
+}
+
+.topicchip.on .topiclink {
+  border-color: var(--primary);
+  background: var(--primary);
+  color: var(--on-primary);
+  font-weight: 600;
+}
+
+.topiccount {
+  font-size: var(--t-tiny);
+  font-variant-numeric: tabular-nums;
+  color: var(--ink-muted);
+}
+
+.topicchip.on .topiccount {
+  color: inherit;
+}
+
+.topicdisputed {
+  font: 600 var(--t-small) / 1 var(--f-sans);
+  color: var(--problem);
+}
+
+.topicrename,
+.act-earlier,
+.roundtopicoff,
+.roundtopicadd {
+  border: 0;
+  background: none;
+  color: var(--ink-muted);
+  font: 400 var(--t-tiny) / 1 var(--f-sans);
+  cursor: pointer;
+}
+
+.topicrename {
+  min-height: 2.25rem;
+  padding: 0 var(--s-1);
+  text-decoration: underline;
+  text-underline-offset: 0.18em;
+}
+
+.streamsaid {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s-1);
+  margin: 0 0 var(--s-3);
+}
+
+.act-earlier {
+  min-height: var(--tap);
+  padding: 0 var(--s-2);
+  font-size: var(--t-small);
+  font-style: normal;
+  color: var(--primary);
+}
+
+.streamround {
+  padding: var(--s-3) 0;
+  border-top: 1px solid var(--rule);
+}
+
+.streammeta {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--s-2);
+  margin: 0 0 var(--s-2);
+  font: 400 var(--t-tiny) / 1.4 var(--f-sans);
+  color: var(--ink-muted);
+}
+
+.streammeta a {
+  color: inherit;
+}
+
+.streamasked {
+  margin: 0 0 var(--s-2);
+  font-weight: 600;
+  white-space: pre-wrap;
+}
+
+.streamasked-act,
+.streamasked-box {
+  font-weight: 400;
+  font-style: italic;
+  color: var(--ink-muted);
+}
+
+.roundtopics {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s-1);
+  margin-top: var(--s-2);
+}
+
+.roundtopic {
+  display: inline-flex;
+  align-items: center;
+  padding: 0 0 0 0.5rem;
+  border-radius: var(--r-pill);
+  background: var(--tint);
+  font: 400 var(--t-tiny) / 1.6 var(--f-sans);
+  color: var(--ink-muted);
+}
+
+.roundtopic:not(:has(button)) {
+  padding-right: 0.5rem;
+}
+
+.roundtopicoff,
+.roundtopicadd {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.2em;
+  min-width: 2rem;
+  min-height: 2rem;
+  justify-content: center;
+}
+
+.roundtopicoff svg,
+.roundtopicadd svg {
+  width: 0.75rem;
+  height: 0.75rem;
+}
+
+/* The sheet a topic is written through: docked above the tab bar on a phone,
+   a panel at the column's foot on a wide screen, as the overlay box is. */
+.topicsheet {
+  position: fixed;
+  left: 50%;
+  bottom: calc(4.6rem + env(safe-area-inset-bottom));
+  z-index: 40;
+  width: min(38rem, calc(100% - 2rem));
+  transform: translateX(-50%);
+  padding: 0.9rem 0.95rem 1.1rem;
+  border: 2px solid var(--line);
+  border-radius: var(--r-card);
+  background: var(--sheet-solid);
+}
+
+.topicsheethead {
+  margin: 0 0 var(--s-2);
+  font-size: var(--t-body);
+}
+
+.topicoffers {
+  flex-wrap: wrap;
+  overflow-x: visible;
+  margin-bottom: var(--s-2);
+}
+
+.topicform {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-2);
+}
+
+.topicfield {
+  flex: 1 1 100%;
+  min-width: 0;
+  min-height: var(--tap);
+  padding: 0 0.8rem;
+  border: 2px solid var(--line);
+  border-radius: var(--r-card);
+  background: var(--sheet);
+  color: var(--ink);
+  font: inherit;
+}
+
+.act.act-topicwrite[disabled] {
+  border-color: var(--ink-muted);
+  background: transparent;
+  color: var(--ink-muted);
+}
+
+.topicsaid {
+  margin: var(--s-2) 0 0;
+  min-height: 1.4em;
 }
 
 .chatsections {

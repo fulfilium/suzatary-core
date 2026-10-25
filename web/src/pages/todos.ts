@@ -136,7 +136,7 @@ export namespace todos {
         sheet.under({ todo, title: e === undefined ? todo : headline(e), category: e?.authored?.category ?? "" })
       },
       acted: () => {},
-      ask: todo => hrefOf({ type: "secretary", refs: [print({ kind: "todo", chain: on, id: todo })] }),
+      ask: todo => hrefOf({ type: "secretary", refs: [print({ kind: "todo", chain: on, id: todo })], topics: [] }),
       href: todo => hrefOf({ type: "todo", id: todo }),
     }
 

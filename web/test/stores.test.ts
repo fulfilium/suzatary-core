@@ -43,6 +43,18 @@ test("law: a step that adds nothing wakes nobody", () => {
   })
 })
 
+test("law: a refusal that replaces another, of another object or for another reason, is a step", () => {
+  forAll(30, r => {
+    const base = replica(r)
+    const refused = (hash: string, reason: string): Replica =>
+      replicaOf({ ...base.held, refused: [{ hash, reason, kind: "final" }] })
+    const one = refused("a".repeat(64), "not trusted")
+    assert.ok(stores.same(one, refused("a".repeat(64), "not trusted")))
+    assert.ok(!stores.same(one, refused("b".repeat(64), "not trusted")), "another object refused")
+    assert.ok(!stores.same(one, refused("a".repeat(64), "too large")), "another reason")
+  })
+})
+
 test("law: a key the box gave is a step, though no object moved", () => {
   forAll(30, r => {
     const name = "inbox" as const

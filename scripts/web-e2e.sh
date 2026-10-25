@@ -418,6 +418,22 @@ cat > "$script" <<'SCRIPT'
     "reply": "{\"say\": \"I asked to read it; tap Allow and it will land here.\"}"
   },
   {
+    "when": "tag the garden invoices",
+    "reply": "{\"say\": \"The garden's invoices are both paid.\", \"calls\": [{\"verb\": \"add_topics\", \"args\": {\"topics\": [\"garden\", \"invoices\"]}}]}"
+  },
+  {
+    "when": "tag the garden alone",
+    "reply": "{\"say\": \"The hedge is trimmed in May.\", \"calls\": [{\"verb\": \"add_topics\", \"args\": {\"topics\": [\"garden\"]}}]}"
+  },
+  {
+    "when": "tag the trip alone",
+    "reply": "{\"say\": \"The train leaves at nine.\", \"calls\": [{\"verb\": \"add_topics\", \"args\": {\"topics\": [\"trip\"]}}]}"
+  },
+  {
+    "when": "add_topics",
+    "reply": "{\"say\": \"Filed under its topics.\"}"
+  },
+  {
     "when": "take your time",
     "release": "MODEL_RELEASE",
     "reply": "{\"say\": \"An answer that was stopped before it landed.\"}"

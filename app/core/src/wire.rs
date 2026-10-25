@@ -2627,6 +2627,54 @@ pub struct SearchPayload {
     pub hits: Vec<crate::secretary::search::Hit>,
 }
 
+/// The rounds of every conversation a topic filter shows (`secretary::stream`).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]
+pub struct StreamPayload {
+    /// The newest a page asked for, oldest first.
+    pub rounds: Vec<StreamRound>,
+    /// How many rounds the filter shows in all.
+    pub total: usize,
+}
+
+/// One round of the stream: the question that opened it and its answer.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]
+pub struct StreamRound {
+    /// `round:<conversation>/<turn>`, the target its topics are on.
+    pub target: String,
+    /// The conversation it was asked in.
+    pub conversation: String,
+    /// That conversation's heading.
+    pub title: String,
+    /// The index of its opening turn.
+    pub turn: usize,
+    /// The turn that opened it.
+    pub opening: TurnRow,
+    /// Its last model turn with words, absent while it is going or when it said nothing.
+    pub answer: Option<TurnRow>,
+    /// Its topics, each in its current spelling, sorted.
+    pub topics: Vec<String>,
+    /// How many more topics it may carry.
+    pub room: usize,
+}
+
+/// The topics in use, the most rounds first (`topics::reading::Reading::in_use`).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]
+pub struct TopicsPayload {
+    /// Every topic on a target.
+    pub topics: Vec<TopicInUse>,
+}
+
+/// One topic in use.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]
+pub struct TopicInUse {
+    /// Its current spelling.
+    pub topic: String,
+    /// How many rounds carry it.
+    pub rounds: usize,
+    /// The other names concurrent renames disagree on for it, sorted; empty when none do.
+    pub disputed: Vec<String>,
+}
+
 /// The conversation list.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]
 pub struct ConversationsPayload {
@@ -2983,6 +3031,8 @@ fn answers(visit: &mut impl TypeVisitor) {
     visit.visit::<RevealPayload>();
     visit.visit::<ConversationsPayload>();
     visit.visit::<SearchPayload>();
+    visit.visit::<StreamPayload>();
+    visit.visit::<TopicsPayload>();
     visit.visit::<SayPayload>();
     visit.visit::<crate::usage::Report>();
     visit.visit::<Overview>();

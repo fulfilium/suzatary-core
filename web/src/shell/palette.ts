@@ -51,7 +51,7 @@ const DEBOUNCE_MS = 250;
 const ASYNC_LIMIT = 5;
 
 /** `#/secretary` focused with no reference, where `a` and this entry both go. */
-const ASK_ANYWHERE: Route = { type: "secretary", refs: [], focus: true };
+const ASK_ANYWHERE: Route = { type: "secretary", refs: [], topics: [], focus: true };
 
 const MOST = 12;
 

@@ -26,9 +26,9 @@ export namespace intentsync {
   // A reading that refused is told to the box, never dropped; the ask it would have retracted stays in view.
   const told = (e: unknown): void => beacon.tell("rejection", e)
 
-  // A 4xx is the box deciding no, in its own words; a 5xx, a gateway's answer or no answer may have reached it or not.
+  // An answer the box decided is a refusal in its own words; one it may not have decided may have reached it or not.
   const answerOf = (a: asks.Ask) => (e: unknown): intents.Answer =>
-    a.type === "Seal" || (e instanceof http.ApiError && e.status >= 400 && e.status < 500)
+    a.type === "Seal" || a.type === "Topic" || !http.unanswered(e)
       ? { type: "Refused", e: lo.reason(e) }
       : { type: "Lost", e: lo.reason(e) }
 
@@ -48,16 +48,16 @@ export namespace intentsync {
     retract(asks.holds(id => read.get(id) ?? null))
   }
 
-  // One ask: nothing if it is already asked; otherwise sent, answered, and read back. A seal is held once the tab's
-  // replica has it, and a forgotten fact by the box's answer, since no replica carries the memory's words.
+  // One ask: nothing if it is already asked; otherwise sent, answered, and read back. A seal or a topic is held once the
+  // tab's replica has it, and a forgotten fact by the box's answer, since no replica carries the memory's words.
   export const ask = async (a: asks.Ask, secret?: string): Promise<Outcome> => {
     const key = intents.key(a)
     if (!intents.wants(source.state(), key)) return { type: "Already" }
     source.dispatch({ type: "Asked", key, act: a })
     const asked = source.state().asked.get(key)?.asks ?? 0
-    const answer = await (a.type === "Seal" ? appendAct(a.event) : asks.send(a, secret)).then(() => TAKEN, answerOf(a))
+    const answer = await (a.type === "Seal" ? appendAct(a.event) : a.type === "Topic" ? storesync.write(a.write, a.at) : asks.send(a, secret)).then(() => TAKEN, answerOf(a))
     source.dispatch({ type: "Answered", key, asks: asked, answer })
-    if (answer.type === "Taken" && (a.type === "Seal" || a.type === "Forget")) source.dispatch({ type: "Subsumed", key })
+    if (answer.type === "Taken" && (a.type === "Seal" || a.type === "Topic" || a.type === "Forget")) source.dispatch({ type: "Subsumed", key })
     else if (answer.type === "Taken") {
       // A pull asked after the box's answer holds what it wrote, whatever the record's words became on the way in; a pull
       // that did not reach the box leaves the ask in view, and the next sync retracts it.

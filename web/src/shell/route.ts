@@ -24,8 +24,9 @@ export type Route =
   | { readonly type: "briefing"; readonly date: string }
   // A week of the calendars from a day, "" for today.
   | { readonly type: "calendar"; readonly date: string }
-  // "Ask the secretary": the references to attach, and whether to focus the compose box; it forwards to the default conversation.
-  | { readonly type: "secretary"; readonly refs: readonly string[]; readonly focus?: boolean }
+  // The stream filtered by `topics`; with references to attach or the compose box to focus ("Ask the secretary"), it
+  // forwards to the default conversation.
+  | { readonly type: "secretary"; readonly refs: readonly string[]; readonly topics: readonly string[]; readonly focus?: boolean }
   | { readonly type: "memory" }
   // `at` is a search hit's turn: the window opens ending at it.
   | { readonly type: "conversation"; readonly id: string; readonly refs: readonly string[]; readonly focus?: boolean; readonly at?: number }
@@ -112,7 +113,7 @@ export function parseRoute(hash: string): Route {
       const refs = list(query["ref"] ?? "");
       // Absent rather than false, so a literal with no `focus` still equals what this parses.
       const focus: { readonly focus?: true } = query["focus"] === "1" ? { focus: true } : {};
-      if (rest === "") return { type: "secretary", refs, ...focus };
+      if (rest === "") return { type: "secretary", refs, topics: list(query["topics"] ?? ""), ...focus };
       if (rest === "memory") return { type: "memory" };
       const id = decode(rest);
       const at = /^\d+$/.test(query["at"] ?? "") ? { at: Number(query["at"]) } : {};
@@ -163,7 +164,7 @@ export function hrefOf(route: Route): string {
     case "chain":
       return route.focus === "" ? "#/chain" : `#/chain/${encodeURIComponent(route.focus)}`;
     case "secretary":
-      return `#/secretary${search({ ref: route.refs.join(","), focus: route.focus === true ? "1" : "" })}`;
+      return `#/secretary${search({ ref: route.refs.join(","), topics: route.topics.join(","), focus: route.focus === true ? "1" : "" })}`;
     case "memory":
       return "#/secretary/memory";
     case "conversation":

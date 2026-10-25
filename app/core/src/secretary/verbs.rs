@@ -487,7 +487,7 @@ mod tests {
                 let read_something = lines.iter().any(|entry| matches!(
                     entry,
                     Entry::Said { turn: Turn::Tool { verb, .. }, .. }
-                        if !matches!(verb.as_str(), "context" | "weather" | "remember" | "forget")
+                        if !matches!(verb.as_str(), "context" | "weather" | "remember" | "forget" | "add_topics")
                 ));
                 if read_something {
                     prop_assert!(!matches!(gate(&round), Gate::Write(_)));

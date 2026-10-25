@@ -11,6 +11,7 @@
 //! - The box's door merges as the union does: a box that takes each device's own objects through
 //!   `sync::receive_changes`, whatever order they are posted in, reads what a device holding the
 //!   union of every device's objects reads.
+//! - The stream's filter shows exactly the targets that carry every chosen topic.
 //! - Every event, topic and target prints and parses back to itself.
 
 use std::collections::BTreeSet;
@@ -423,6 +424,39 @@ proptest! {
             if let Some(event) = envelope.event() {
                 let print = canonical(event);
                 prop_assert_eq!(&parse_event::<AliasEvent>(&AliasVocabulary::default(), &print).expect("parses"), event);
+            }
+        }
+    }
+
+    /// The stream's filter shows exactly the targets carrying every chosen topic, whatever was
+    /// added, taken off and renamed on two devices: no topic chosen shows every target, a
+    /// combination shows what each of its topics shows, and a name filters as its topic does.
+    #[test]
+    fn a_filter_shows_exactly_the_rounds_holding_every_chosen_topic(
+        script in steps(2),
+        chosen in proptest::collection::btree_set(0usize..4, 0..=4),
+    ) {
+        let mut devices = devices(2);
+        run(&mut devices, &script);
+        let reading = union(&[&devices[0], &devices[1]]).read();
+        let chosen: BTreeSet<Topic> = chosen.iter().map(|n| topic(NAMES[*n])).collect();
+        let one = |name: &Topic| BTreeSet::from([name.clone()]);
+        for n in 0..6 {
+            let at = target(n);
+            let on = topics_of(&reading, n);
+            prop_assert!(reading.shows(&BTreeSet::new(), &at));
+            prop_assert_eq!(
+                reading.shows(&chosen, &at),
+                chosen.iter().all(|name| on.contains(&reading.spelling(name)))
+            );
+            prop_assert_eq!(
+                reading.shows(&chosen, &at),
+                chosen.iter().all(|name| reading.shows(&one(name), &at))
+            );
+            for name in &chosen {
+                for alias in reading.names(name) {
+                    prop_assert_eq!(reading.shows(&one(&alias), &at), reading.shows(&one(name), &at));
+                }
             }
         }
     }

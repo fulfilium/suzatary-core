@@ -168,7 +168,7 @@ export const parsed = (texts: readonly string[]): Reference[] =>
 
 /** A link, not a button: it is a navigation, so it middle-clicks, can be sent, and Back returns here. */
 export function askHref(reference: Reference): string {
-  return routeHref({ type: "secretary", refs: [print(reference)] });
+  return routeHref({ type: "secretary", refs: [print(reference)], topics: [] });
 }
 
 export function askLink(reference: Reference): HTMLElement {

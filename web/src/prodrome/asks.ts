@@ -5,6 +5,7 @@ import type { AttachmentRow, ConversationPayload, FactId, ProposalRow } from "..
 import { acknowledgeProposal, dismissProposal, dropSession, editQuestion, eraseTurns, forgetFact, handSession, regenerate, renameConversation, say, stopAnswer, tapProposal } from "../wire/api"
 import { parsed } from "../chat/refs"
 import type vouch from "./vouch"
+import type topics from "./topics"
 
 export namespace asks {
   // A proposal the way its card saw it: `from` is its signature then, and any later climb of the machine holds the ask.
@@ -27,6 +28,8 @@ export namespace asks {
 
   export type Ask =
     | { readonly type: "Seal"; readonly chain: string; readonly event: string }
+    // `at` is when it was asked, so the same write asked again after the history took the first is a new ask.
+    | { readonly type: "Topic"; readonly write: topics.Write; readonly at: string }
     | { readonly type: "Answer"; readonly at: Proposal; readonly answer: Answer }
     | { readonly type: "Question"; readonly kind: "Say" | "Edit"; readonly question: Question }
     | { readonly type: "Round"; readonly kind: "Stop" | "Regenerate"; readonly conversation: string; readonly after: number }
@@ -40,6 +43,7 @@ export namespace asks {
   export const fold = <R>(alg: Alg<R>) => (a: Ask): R => {
     switch (a.type) {
       case "Seal": return alg.Seal(a)
+      case "Topic": return alg.Topic(a)
       case "Answer": return alg.Answer(a)
       case "Question": return alg.Question(a)
       case "Round": return alg.Round(a)
@@ -70,6 +74,7 @@ export namespace asks {
   export const holds = (read: Reading): ((a: Ask) => boolean) =>
     fold<boolean>({
       Seal: () => false,
+      Topic: () => false,
       Answer: a => moved(a.at, read(a.at.conversation)?.proposals.find(p => p.index === a.at.index)),
       Question: ({ question: q }) => read(q.conversation)?.turns.some(t => t.index >= q.after && t.who === "person" && t.text === q.text) === true,
       Round: a => (read(a.conversation)?.total ?? 0) > a.after,
@@ -84,6 +89,7 @@ export namespace asks {
   // The conversation an ask's record lands in, which a settle reads; none for a todo's seal or a fact.
   export const conversation = fold<string | null>({
     Seal: () => null,
+    Topic: () => null,
     Answer: a => a.at.conversation,
     Question: a => a.question.conversation,
     Round: a => a.conversation,
@@ -103,8 +109,8 @@ export namespace asks {
     kind === "Say" ? say(c, text, parsed(references), files, after) : editQuestion(c, text, parsed(references), files)
 
   // How a request reaches the box: the route that names it. A secret's value travels beside the ask, never in it,
-  // so no key, set or log holds it; the seal is the shell's, since it writes the tab's own replica.
-  export const send = (a: Exclude<Ask, { type: "Seal" }>, secret?: string): Promise<unknown> =>
+  // so no key, set or log holds it; a seal and a topic are the shell's, since each writes the tab's own replica.
+  export const send = (a: Exclude<Ask, { type: "Seal" | "Topic" }>, secret?: string): Promise<unknown> =>
     a.type === "Answer" ? answered(a.at, a.answer, secret)
     : a.type === "Question" ? asked(a.kind, a.question)
     : a.type === "Round" ? (a.kind === "Stop" ? stopAnswer(a.conversation) : regenerate(a.conversation))

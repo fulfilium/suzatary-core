@@ -98,7 +98,7 @@ const HELD = `new Promise((resolve) => {
 app.scene("a print this device cannot read is left out, the page draws, and one line says so", async () => {
   await app.open(WRITE_BASE);
   await app.page.evaluate(`location.hash = "#/secretary"`);
-  await app.page.waitFor(`document.querySelector(".chats .chatrow") !== null`, { timeout: 15000 });
+  await app.page.waitFor(`document.querySelector(".column.secretarystream:not(.pagewaiting) .streamrounds") !== null`, { timeout: 15000 });
   await untilInbox();
   assert.equal(await app.page.evaluate<boolean>(`document.getElementById("excluded").hidden`), true, "nothing is left out yet");
 
@@ -107,7 +107,7 @@ app.scene("a print this device cannot read is left out, the page draws, and one 
   await app.page.navigate(`${WRITE_BASE}/.well-known/assetlinks.json`);
   const name = await hold(UNREAD);
   await app.page.navigate(`${WRITE_BASE}/#/secretary`);
-  await app.page.waitFor(`document.querySelector(".chats .chatrow") !== null`, { timeout: 15000 });
+  await app.page.waitFor(`document.querySelector(".column.secretarystream:not(.pagewaiting) .streamrounds") !== null`, { timeout: 15000 });
   await app.page.waitFor(`document.getElementById("excluded").hidden === false`, { timeout: 15000 });
   assert.equal(
     await app.page.evaluate<string>(`document.querySelector("#excluded summary").textContent`),
@@ -118,8 +118,8 @@ app.scene("a print this device cannot read is left out, the page draws, and one 
   assert.ok(opened.startsWith(name), `the line opens to the name, got ${opened}`);
   assert.match(opened, /failed to parse: Asked\.act: Remember\(\.\.\.\) has no field text/);
   assert.equal(
-    await app.page.evaluate<string>(`document.querySelector(".chats .chatrow .chattitle").textContent`),
-    "Secretary",
+    await app.page.evaluate<number>(`document.querySelectorAll(".secretarystream .problem").length`),
+    0,
     "the page drew what it could read",
   );
 }, HELD);

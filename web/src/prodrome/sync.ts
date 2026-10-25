@@ -7,8 +7,8 @@
  */
 
 import { fold, objectsSince, postObjects } from "../wire/api";
+import handover from "./handover";
 import type { FoldPayload } from "../wire/generated/wire";
-import http from "../wire/http";
 import { cacheKey, fits, parseFold, printFold } from "../app/cache";
 import app from "../app/app";
 import type { Chains, Core, HeldChain, Kept, Standing } from "./core";
@@ -27,7 +27,7 @@ import heads from "./heads";
 import excluded from "./excluded";
 import readings from "./readings";
 import type { Replica } from "./replica";
-import { NOTHING, ancestry, appended, boxHeadsOf, join, landed, pulled, rootOf, said, settled, sinceOf, stranded, toPush, unsignedWrites, unsynced, untrustedOf, wentBack } from "./replica";
+import { NOTHING, ancestry, appended, boxHeadsOf, join, landed, pulled, rootOf, said, sinceOf, stranded, unsignedWrites, unsynced, untrustedOf, wentBack } from "./replica";
 import time from "../app/time";
 import stores from "./stores";
 import onscreen, { store } from "../app/store";
@@ -334,7 +334,7 @@ async function pullEach(): Promise<{ moved: boolean; unread: { readonly name: st
         const row = await holdRow(CHAIN, name, { type: "Join", replica: now });
         if (row.type === "Val" && source.state().holding !== name) others.set(name, join(others.get(name) ?? NOTHING, row.v));
         // A policy that moved reprices as objects do: who is believed changes what the chain reads.
-        const moved = !heads.same(heads.of(now.heads), heads.of(was.heads)) || !stores.sameActors(untrustedOf(now), untrustedOf(was));
+        const moved = !heads.same(heads.of(now.heads), heads.of(was.heads)) || !stores.sameSet(untrustedOf(now), untrustedOf(was));
         return moved ? { type: "Moved" } : { type: "Stood" };
       } catch {
         // The network: what is held stays held, and the next exchange asks again.
@@ -492,25 +492,25 @@ async function exchange(): Promise<void> {
   if (switched()) return;
   const trusted = await signedOwn();
   if (switched()) return;
-  const pushing = toPush(source.state().replica, trusted);
-  if (pushing.length > 0) {
-    let receipt;
-    const posting = source.state().replica;
-    try {
-      receipt = await postObjects(pushing.map((object) => object.literal), sinceOf(posting));
-    } catch (error: unknown) {
-      // A box past this build's contract: the page offers the new one, and what it holds stays held for it to send.
-      if (error instanceof http.ApiError && error.status === http.OUTDATED) return;
-      // The box answered no to the whole request (the gate, CSRF, size): said once, never retried.
-      if (error instanceof http.ApiError && error.status !== 0) {
-        source.dispatch({ kind: "refused", reason: error.message });
-        toastRefusal(error.message);
-        return;
-      }
-      throw error;
-    }
-    if (switched()) return;
-    await commit({ type: "Join", replica: settled(source.state().replica, receipt, posting.generation) });
+  const ended = await handover.of(() => source.state().replica, trusted, postObjects);
+  switch (ended.type) {
+    case "Nothing":
+      break;
+    // A box past this build's contract: the page offers the new one, and what it holds stays held for it to send.
+    case "Outdated":
+      return;
+    // The box answered no to the whole request (the gate, CSRF, size): said once, never retried.
+    case "Refused":
+      source.dispatch({ kind: "refused", reason: ended.reason });
+      handover.told(ended.reason);
+      return;
+    // No answer: what is held stays held, and the next tip change or reconnect tries again.
+    case "Unanswered":
+      throw ended.e;
+    case "Taken":
+      if (switched()) return;
+      await commit({ type: "Join", replica: ended.replica });
+      break;
   }
   source.dispatch({ kind: "pulling", on });
   // The answer is joined into the replica it was asked of: it names only what that one lacked, so another tab's reset
@@ -547,7 +547,7 @@ export async function resetReplica(shown: ReadonlySet<string>): Promise<void> {
 export async function resetRow(chain: string, shown: ReadonlySet<string>, over: "Read" | "Unread"): Promise<void> {
   if (chain !== source.state().holding) {
     const done = await holdRow(CHAIN, chain, { type: "Reset", shown, floor: 0, over });
-    if (done.type === "Error") toastRefusal(`the reset was not kept: ${done.e}`);
+    if (done.type === "Error") handover.told(`the reset was not kept: ${done.e}`);
     others.delete(chain);
     void pullServed();
     return;
@@ -556,7 +556,7 @@ export async function resetRow(chain: string, shown: ReadonlySet<string>, over: 
   // What the row holds now is read again, so a notice that missed another tab's acts draws them before it is pressed again.
   await restoreReplica();
   if (done.type === "Error") {
-    toastRefusal(`the reset was not kept: ${done.e}`);
+    handover.told(`the reset was not kept: ${done.e}`);
     return;
   }
   store.dispatch({ type: "Reset" });
@@ -564,12 +564,6 @@ export async function resetRow(chain: string, shown: ReadonlySet<string>, over: 
   await foldHeld();
 }
 
-/** Imported lazily so this file stays testable without a DOM. */
-function toastRefusal(said: string): void {
-  void import("../view/toast").then((module) => {
-    module.toast(said);
-  });
-}
 
 /**
  * Under the trust policy the box reported with these objects, never another. This browser's clock is used

@@ -18,7 +18,7 @@ export namespace memoryPage {
   export const page: frame.Page<T> = {
     className: "memorypage",
     title: "Memory",
-    back: { label: "Secretary", fallback: { type: "secretary", refs: [] } },
+    back: { label: "Secretary", fallback: { type: "secretary", refs: [], topics: [] } },
     legend: v => memory.legend(v.p),
     reads: () => reading.map(reading.both(kept, writes), ([p, w]) => ({ p, writes: w })),
     shape: placeholder.ROWS,

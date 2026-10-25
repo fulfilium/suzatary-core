@@ -33,7 +33,7 @@ const PAGES: readonly (readonly [string, Route])[] = [
   ["typst", { type: "typst", open: "" }],
   ["todo", { type: "todo", id: todos.urgent.id }],
   ["inbox", { type: "inbox" }],
-  ["secretary", { type: "secretary", refs: [] }],
+  ["secretary", { type: "secretary", refs: [], topics: [] }],
   ["conversation", { type: "conversation", id: "default", refs: [] }],
   ["memory", { type: "memory" }],
   ["mail", { type: "mail", query: "", account: "" }],

@@ -244,9 +244,10 @@ export interface WaitOptions {
 
 /**
  * What the network does with an intercepted request: `lose` lets it reach the box and fails its answer; `stale` sends
- * the next one as an older build would, without its write contract, and lets the rest through.
+ * the next one as an older build would, without its write contract, and lets the rest through; `refuse` answers it as
+ * the box answers a request it decided no to, a 403 with its sentence.
  */
-type Verdict = "fail" | "hold" | "continue" | "lose" | "stale";
+type Verdict = "fail" | "hold" | "continue" | "lose" | "stale" | "refuse";
 type Stage = "Request" | "Response";
 
 /** A response's body as `captureNetwork` read it at its headers, or why it could not be read. */
@@ -273,6 +274,8 @@ export class Page {
   private captures: Capture[] = [];
   private listening = false;
   private held: string[] = [];
+  /** The sentence `refuse` answers with. */
+  private refusal = "";
 
   constructor(
     private readonly connection: Connection,
@@ -744,12 +747,15 @@ export class Page {
       return;
     }
     // A lost answer is a gateway's 502 in its place: the box acted, the page hears nothing usable.
+    const refused = { responseCode: 403, responseHeaders: [{ name: "content-type", value: "application/json" }], body: btoa(JSON.stringify({ error: this.refusal })) };
     const [method, args] =
       verdict === "fail"
         ? ["Fetch.failRequest", { errorReason: "ConnectionRefused" }]
         : verdict === "lose"
           ? ["Fetch.fulfillRequest", { responseCode: 502, body: "" }]
-          : ["Fetch.continueRequest", {}];
+          : verdict === "refuse" && posted
+            ? ["Fetch.fulfillRequest", refused]
+            : ["Fetch.continueRequest", {}];
     void this.command(method, { requestId: id, ...args }).catch(() => {
       // A request whose page navigated away is no longer ours to answer.
     });
@@ -778,6 +784,12 @@ export class Page {
   /** Send the next request whose URL contains one of these as a build older than the box takes would. */
   async sendNextAsStale(fragments: readonly string[]): Promise<void> {
     await this.intercept(fragments, "stale");
+  }
+
+  /** Answer every POST whose URL contains one of these with the box's 403 and `said`, never reaching the box. */
+  async refuseRequests(fragments: readonly string[], said: string): Promise<void> {
+    this.refusal = said;
+    await this.intercept(fragments, "refuse");
   }
 
   /** Fail every request whose URL contains one of these. */

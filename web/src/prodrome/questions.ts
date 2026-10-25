@@ -11,10 +11,14 @@ import type {
   MemoryPayload,
   SearchPayload,
   SpecNode,
+  StreamPayload,
+  TopicsPayload,
 } from "../wire/generated/wire"
-import type { Acted, Chains, Core, CoreEnv, CoreFold, Erased, Linker, Named, Proposals, Standing, Todos, Window } from "./core"
+import type { Acted, Chains, Core, CoreEnv, CoreFold, Erased, Linker, Named, Proposals, Standing, Todos, TopicReading, TopicStore, Window } from "./core"
 import {
   appendTo,
+  appendTopic,
+  barOf,
   conversationOf,
   deadOf,
   erasedOf,
@@ -31,8 +35,10 @@ import {
   objectsOf,
   searchOf,
   standingIn,
+  streamOf,
   within,
 } from "./core"
+import topics from "./topics"
 import excluded from "./excluded"
 import lo from "../algebra/lo"
 import thirty from "../todo/thirty"
@@ -106,6 +112,12 @@ export namespace questions {
     Dead: { q: Record<never, never>; a: readonly string[] }
     // What the readings of the inbox and the lines leave out, joined.
     Left: { q: Record<never, never>; a: excluded.T }
+    // A topic store's objects changed by `delta`.
+    HoldTopics: { q: { readonly store: topics.Store; readonly delta: Delta }; a: null }
+    // The newest `pages` pages of the rounds carrying every topic of `chosen`, and the topics in use.
+    Stream: { q: { readonly chosen: readonly string[]; readonly pages: number }; a: { readonly stream: StreamPayload; readonly bar: TopicsPayload } }
+    // `write` planned by the topics as held and appended to the replica of its store: the objects it wrote there.
+    PlanTopic: { q: { readonly write: topics.Write; readonly at: string; readonly actor: string }; a: { readonly store: topics.Store; readonly objects: readonly Named[] } }
   }
   export type Kind = keyof Table
   export type Question = { [k in Kind]: { readonly type: k } & Table[k]["q"] }[Kind]
@@ -211,6 +223,43 @@ export namespace questions {
       for (const n of drop) keysHeld.delete(n)
       for (const n of Object.keys(keys.add)) keysHeld.add(n)
       return null
+    }
+
+    // The topic stores' objects, and the core's replicas of them with its one reading, made again once per change.
+    const topicHeld: { readonly [N in topics.Store]: Map<string, string> } = { topics: new Map(), "topic-aliases": new Map() }
+    type TopicsRead = { readonly memberships: TopicStore; readonly aliases: TopicStore; readonly reading: TopicReading }
+    let topicsRead: TopicsRead | null = null
+    const forgetTopics = (): void => {
+      topicsRead?.reading.free()
+      topicsRead?.memberships.free()
+      topicsRead?.aliases.free()
+      topicsRead = null
+    }
+    const held = (store: topics.Store): Named[] => [...topicHeld[store]].map(([hash, literal]) => ({ hash, literal }))
+    const topicsNow = (): TopicsRead => {
+      if (topicsRead !== null) return topicsRead
+      const memberships = new core.Memberships(objectsOf(held("topics")))
+      const aliases = new core.TopicAliases(objectsOf(held("topic-aliases")))
+      topicsRead = { memberships, aliases, reading: new core.TopicReading(memberships, aliases) }
+      return topicsRead
+    }
+    const holdTopics = (store: topics.Store, delta: Delta): null => {
+      const map = topicHeld[store]
+      if (delta.whole) map.clear()
+      for (const hash of delta.drop) map.delete(hash)
+      for (const o of delta.add) map.set(o.hash, o.literal)
+      if (delta.whole || delta.add.length > 0 || delta.drop.length > 0) forgetTopics()
+      return null
+    }
+    // The objects are held here at once, so the next plan reads them before the tab says it holds them.
+    const planTopic = (write: topics.Write, at: string, actor: string): Answer<"PlanTopic"> => {
+      const read = topicsNow()
+      const store = topics.store(write)
+      const into = store === "topics" ? read.memberships : read.aliases
+      const objects = topics.plan(read.reading, write, at, actor).flatMap(e => appendTopic(into, e).objects)
+      for (const o of objects) topicHeld[store].set(o.hash, o.literal)
+      if (objects.length > 0) forgetTopics()
+      return { store, objects }
     }
 
     const hold = (holding: readonly Holding[]): Answer<"Hold"> => {
@@ -320,6 +369,14 @@ export namespace questions {
           return deadOf(lines)
         case "Left":
           return excluded.join(excludedOf(proposals()), linesLeft(lines))
+        case "HoldTopics":
+          return holdTopics(q.store, q.delta)
+        case "Stream": {
+          const read = topicsNow()
+          return { stream: streamOf(lines, read.reading, q.chosen, q.pages), bar: barOf(read.reading) }
+        }
+        case "PlanTopic":
+          return planTopic(q.write, q.at, q.actor)
       }
     }
   }

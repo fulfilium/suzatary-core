@@ -27,7 +27,7 @@ import { mkdirSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { DESKTOP, PHONE, SIGNED_POST, suite, WRITE_BASE } from "./harness";
+import { DESKTOP, PHONE, SIGNED_POST, suite, topicRounds, WRITE_BASE } from "./harness";
 import cast from "../test/cast";
 
 const { todos, owner, counsel } = cast.world;
@@ -1007,15 +1007,78 @@ app.scene("a blank new topic is named after its first answer, and renamed in pla
   await app.page.press("Enter");
   await app.page.waitFor(`document.querySelector(".pagetitle")?.textContent === "The zephyr filing"`, { timeout: 15000 });
 
+  // The stream names each round's conversation, so the new name stands over its round there too.
   await app.page.evaluate(`location.hash = "#/secretary"`);
-  await app.page.waitFor(
-    `[...document.querySelectorAll(".chats .chatrow")].some((r) => r.getAttribute("href") === "#/secretary/${id}" && r.querySelector(".chattitle").textContent === "The zephyr filing")`,
-    { timeout: 15000 },
+  const round = `[...document.querySelectorAll(".streamround")].find((r) => r.querySelector(".streammeta a")?.getAttribute("href")?.startsWith("#/secretary/${id}?"))`;
+  await app.page.waitFor(`${round}?.querySelector(".streammeta a").textContent === "The zephyr filing"`, { timeout: 15000 });
+  assert.ok(
+    (await app.page.evaluate<string>(`${round}.querySelector(".answerblock, .turntext:not(.streamasked)").textContent`)).includes("Nothing has changed since the last briefing."),
+    "the round's answer stands under its question",
   );
-  assert.equal(
-    await app.page.evaluate<string>(`document.querySelector('.chats .chatrow[href="#/secretary/${id}"] .chatlast').textContent`),
-    "Nothing has changed since the last briefing.",
-    "the row's second line is the last answer",
+});
+
+/**
+ * A TOPIC THE BOX REFUSES IS SAID, AND LEAVES THE ROUND: the post is answered with the box's 403 and its sentence, the
+ * owner is told in those words, and the refused write never shows as a chip or goes again.
+ */
+app.scene("a topic write the box refuses is said in words and leaves no chip", async () => {
+  await app.resize(PHONE);
+  await topicRounds(app.page);
+  await app.page.navigate(`${WRITE_BASE}/#/secretary?topics=garden%2Cinvoices`);
+  const shown = `[...document.querySelectorAll(".streamrounds .streamround")].map((r) => [...r.querySelectorAll(".roundtopic")].map((c) => c.textContent).join(" "))`;
+  await app.page.waitFor(`${shown}.join("|") === "garden invoices"`, { timeout: 15000 });
+  const trips = `fetch("/api/stores/topics/objects").then((r) => r.json()).then((b) => b.objects.filter((o) => o.literal.includes("'trip'")).length)`;
+  const before = await app.page.evaluate<number>(trips);
+  await app.page.refuseRequests(["/api/stores/topics/objects"], "this device is not trusted to write topics");
+  await app.page.click(".streamround .roundtopicadd");
+  await app.page.waitFor(`document.querySelector(".topicsheet .topicoffers") !== null`, { timeout: 8000 });
+  await app.page.evaluate(`[...document.querySelectorAll(".topicsheet .topicoffers .chipbtn")].find((b) => b.textContent === "trip").click()`);
+  await app.page.waitFor(`document.getElementById("toast")?.textContent.includes("the box refused this topic: this device is not trusted to write topics") === true`, { timeout: 15000 });
+  await app.page.waitFor(`${shown}.join("|") === "garden invoices"`, { timeout: 8000 });
+  await app.page.resumeRequests();
+  assert.equal(await app.page.evaluate<number>(trips), before, "the box holds no new write");
+});
+
+/**
+ * THE TOPIC BAR (docs/TOPICS-PLAN-2026-10-21.md §6): two chips tapped show the rounds that carry both, the filter is
+ * the address, so Back moves it, and a topic added to a round by tap is checked by the type before it is written and
+ * reaches the box's topic store.
+ */
+app.scene("two topics chosen show the rounds holding both, and a topic added by tap lands on the round", async () => {
+  await app.resize(PHONE);
+  await app.trust();
+  await topicRounds(app.page);
+  await app.page.navigate(`${WRITE_BASE}/#/secretary`);
+  const chip = (topic: string): string => `.topicbar .topicchip[data-topic="${topic}"] .topiclink`;
+  const shown = `[...document.querySelectorAll(".streamrounds .streamround")].map((r) => [...r.querySelectorAll(".roundtopic")].map((c) => c.textContent).join(" "))`;
+  await app.page.waitFor(`document.querySelector('${chip("invoices")}') !== null`, { timeout: 15000 });
+
+  await app.page.click(chip("garden"));
+  await app.page.waitFor(`location.hash === "#/secretary?topics=garden"`, { timeout: 8000 });
+  await app.page.waitFor(`${shown}.length === 2`, { timeout: 8000 });
+  await app.page.click(chip("invoices"));
+  await app.page.waitFor(`location.hash === "#/secretary?topics=garden%2Cinvoices"`, { timeout: 8000 });
+  await app.page.waitFor(`${shown}.length === 1`, { timeout: 8000 });
+  assert.deepEqual(await app.page.evaluate<string[]>(shown), ["garden invoices"], "only the round holding both");
+  assert.equal(await app.page.evaluate<number>(`document.querySelectorAll(".topicbar .topicchip.on").length`), 2);
+
+  await app.page.evaluate(`history.back()`);
+  await app.page.waitFor(`location.hash === "#/secretary?topics=garden" && ${shown}.length === 2`, { timeout: 8000 });
+  await app.page.evaluate(`history.forward()`);
+  await app.page.waitFor(`${shown}.length === 1`, { timeout: 8000 });
+
+  await app.page.click(".streamround .roundtopicadd");
+  await app.page.waitFor(`document.activeElement?.classList.contains("topicfield") === true`, { timeout: 8000 });
+  await app.page.type(".topicsheet .topicfield", "Trip");
+  await app.page.waitFor(`document.querySelector(".topicsheet .topicsaid.problem")?.textContent.includes("lowercase") === true`, { timeout: 8000 });
+  assert.equal(await app.page.evaluate<boolean>(`document.querySelector(".topicsheet .act-topicwrite").disabled`), true, "nothing the type refuses is written");
+  await app.page.evaluate(`(() => { const f = document.querySelector(".topicsheet .topicfield"); f.value = "trip"; f.dispatchEvent(new Event("input", { bubbles: true })); })()`);
+  await app.page.waitFor(`document.querySelector(".topicsheet .act-topicwrite")?.disabled === false`, { timeout: 8000 });
+  await app.page.click(".topicsheet .act-topicwrite");
+  await app.page.waitFor(`document.querySelector(".topicsheet") === null && ${shown}.join("|") === "garden invoices trip"`, { timeout: 15000 });
+  await app.page.waitFor(
+    `fetch("/api/stores/topics/objects").then((r) => r.json()).then((b) => b.objects.filter((o) => o.literal.includes("'trip'")).length === 2)`,
+    { timeout: 15000 },
   );
 });
 
@@ -1033,9 +1096,9 @@ app.scene("search finds what was said and a hit opens its conversation", async (
   const excerpt = await app.page.evaluate<string>(`document.querySelector(".chathit .chatlast").textContent`);
   assert.equal(excerpt, "You: when is the zephyr filing due");
   assert.equal(
-    await app.page.evaluate<number>(`document.querySelectorAll(".chats .chatrow:not(.chathit)").length`),
+    await app.page.evaluate<number>(`document.querySelectorAll(".streamround").length`),
     0,
-    "a search replaces the list while it is on",
+    "a search replaces the stream while it is on",
   );
   await app.page.click(".chathit");
   await app.page.waitFor(`/^#\\/secretary\\/[0-9-]+\\?at=0$/.test(location.hash)`, { timeout: 15000 });

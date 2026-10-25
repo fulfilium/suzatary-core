@@ -1,6 +1,6 @@
 # TOPICS PLAN: one stream, with topics (2026-10-21)
 
-*Status: stages 1 to 3 are built. Stages 4 and 5 are designs. The owner named the
+*Status: stages 1 to 4 are built. Stage 5 is a design. The owner named the
 tags "topics" (2026-10-24), and every name below uses that word.*
 
 Sources read: `CLAUDE.md`; `AGENTS.md`; `docs/ARCHITECTURE.md` §10.3;
@@ -360,6 +360,34 @@ and tested. Android needs nothing in any stage: the APK calls only
    opens on the stream with the topic bar, every round with the topics the carry
    gave it. An old bundle still lists conversations, because its
    routes are unchanged.
+   *As built:* the core reads the stream (`secretary::stream`, the live rounds
+   of every conversation a filter shows, ordered by the instant of each
+   round's opening turn) and the bar (`Reading::bar`, `in_use` with each
+   topic's disputed names) from the tab's replicas, through the wasm module's
+   `TopicReading`, which the tab reads once per change of either topic store.
+   The page draws the newest 30 rounds and asks the core for 30 more on
+   Earlier. The filter is the core's `Reading::shows`, and its law is
+   `a_filter_shows_exactly_the_rounds_holding_every_chosen_topic`. The bar
+   orders topics by round count, as `in_use` does, not by recency. A write is
+   an ask (`asks.Topic`): the tab plans it with the same reading, appends it
+   to its replica, keeps the row on the device, and posts it to
+   `POST /api/stores/<store>/objects`; a post that gets no answer stays unsent
+   and goes before the next pull. Asking with a filter is not built: the
+   stream has no composer, and a round is asked in its conversation, which
+   each round links to. `locked.join` is unchanged: when the box answers in a
+   later epoch while the tab holds an unsent topic write, the reset that epoch
+   asks for is refused (`holdRow` never drops an unsent object it was not
+   shown), so the write is kept and that topic store stops pulling for good:
+   the new epoch lacks the objects the write rests on, so the box refuses it and
+   it is never taken. A tab posts each write at once, so this needs a write made
+   offline across a migration of the box's topic stores. Stage 5 fixes it by
+   keeping each unsent `topics.Write` and planning it again against the new
+   epoch's reading, never by sending the old objects again.
+   The reading, the stream and the write planner run in the core's worker,
+   beside the lines (`questions` `HoldTopics`, `Stream`, `PlanTopic`), so there
+   is one `TopicReading`, and a topic write moves no line: the worker's memoised
+   lines reading is a cache hit. An object the box refused leaves the reading
+   (`replica.standing`).
 5. **One stream.** Every new round goes to `default`; `POST
    /api/secretary/conversations` and the conversation list are deleted, with
    their tests; the carry verb is deleted. `CLIENT_MIN` moves to 6, because an

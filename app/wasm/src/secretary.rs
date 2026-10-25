@@ -136,6 +136,24 @@ impl Lines {
         ))
     }
 
+    /// The newest `pages` pages of the rounds of every conversation carrying each topic of
+    /// `chosen` (a JSON array), oldest first, with how many the filter shows in all.
+    pub fn stream(
+        &mut self,
+        topics: &crate::topics::TopicReading,
+        chosen: &str,
+        pages: u32,
+    ) -> Result<String, JsError> {
+        let chosen = crate::topics::topics_of(chosen)?;
+        json(&suzatary_core::secretary::stream::stream(
+            &self.stored()?,
+            &topics.0,
+            &chosen,
+            usize::try_from(pages).map_err(|e| refused(format!("pages: {e}")))?,
+            &Dress::BARE,
+        ))
+    }
+
     /// Every conversation's turns holding `q`, newest first: only words this reading opened.
     pub fn search(&mut self, q: &str) -> Result<String, JsError> {
         json(&readings::search(&self.stored()?, q).map_err(|r| said(&r))?)

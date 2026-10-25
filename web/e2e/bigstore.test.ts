@@ -2,7 +2,7 @@
  * A LARGE STORE OF LINES DOES NOT HOLD THE PAGE'S THREAD: the lines' server holds a generated store
  * (`suzatary-dev fixture-chain --lines`, 1,500 lines by default, `SUZATARY_E2E_LINES` to change it), and the
  * core's worker reads it, so a new line is read with no long task on the page's thread. The scene records every long
- * task (over 50 ms) the browser reports while the list draws, a conversation opens and a new line arrives.
+ * task (over 50 ms) the browser reports while the stream draws, a conversation opens and a new line arrives.
  *
  * As a measurement: `SUZATARY_E2E_LINES=6000 SUZATARY_LINES_RATE=6 SUZATARY_LINESBENCH=<file> scripts/web-e2e.sh
  * bigstore` runs it at a 6x CPU throttle and writes each phase's longest task and its time; the list's is from the
@@ -52,7 +52,7 @@ app.scene("a new line in a store of many lines is read with the page's thread fr
   await app.page.throttle(RATE)
   try {
     await app.page.navigate(`${LINES_BASE}/#/secretary`)
-    const list = await phase(`document.querySelectorAll('.chatrow[href*="bulk-"]').length > 0`, 0)
+    const list = await phase(`document.querySelectorAll('.streamround .streammeta a[href*="bulk-"]').length > 0`, 0)
     await app.page.navigate(`${LINES_BASE}/#/secretary/bulk-0`)
     const opened = await phase(`document.querySelectorAll(".turns .turn").length > 0`)
     const before = await app.page.evaluate<number>(`document.querySelectorAll(".turns .turn-model").length`)

@@ -214,6 +214,43 @@ export const SIGNED_POST = `(async (path, body) => {
   return fetch(path, { method: "POST", headers: { ...${WRITE_HEADERS}, ...signed }, body });
 })`;
 
+/** The rounds the topic scenes and shots read, each given its topics by the scripted model's `add_topics`. */
+export const TOPIC_ROUNDS: readonly (readonly [string, readonly string[]])[] = [
+  ["tag the garden invoices", ["garden", "invoices"]],
+  ["tag the garden alone", ["garden"]],
+  ["tag the trip alone", ["trip"]],
+];
+
+/**
+ * THE TOPIC ROUNDS ON THE WRITER'S DEPLOYMENT, asked once: a conversation of their own, each question answered and
+ * given its topics before the next is asked, so the bar reads garden 2, invoices 1, trip 1. Another file or scene
+ * that ran first leaves them there, and nothing is asked again.
+ */
+export async function topicRounds(page: Page): Promise<void> {
+  await page.navigate(`${WRITE_BASE}/#/secretary/default`);
+  await page.waitFor(`document.querySelector(".pagetitle") !== null`, { timeout: 15000 });
+  const held = await page.evaluate<boolean>(
+    `fetch("/api/stores/topics/objects").then((r) => r.json()).then((b) => b.objects.some((o) => o.literal.includes("'invoices'")))`,
+  );
+  if (held) return;
+  const id = await page.evaluate<string>(
+    `${SIGNED_POST}("/api/secretary/conversations", JSON.stringify({title: "Topics"})).then((r) => r.json()).then((j) => j.id)`,
+  );
+  await page.navigate(`${WRITE_BASE}/#/secretary/${id}`);
+  await page.waitFor(`document.querySelector(".composebox") !== null`, { timeout: 8000 });
+  let memberships = 0
+  for (const [said, topics] of TOPIC_ROUNDS) {
+    memberships += topics.length
+    await page.type(".composebox", said);
+    await page.click(".composesend");
+    await page.waitFor(
+      `fetch("/api/stores/topics/objects").then((r) => r.json()).then((b) => b.objects.filter((o) => o.literal.startsWith("Change(")).length >= ${memberships})`,
+      { timeout: 20000 },
+    );
+    await page.waitFor(`document.querySelector(".answerplace .answerstate") === null`, { timeout: 20000 });
+  }
+}
+
 /** A verb of a deployment (the writer's, by default) run at the box's terminal, as the owner would run it. */
 export function atTheTerminal(args: readonly string[], instance = process.env["E2E_TRIAGE_INSTANCE"], env: Readonly<Record<string, string>> = {}): string {
   const bin = process.env["E2E_TRIAGE_BIN"];

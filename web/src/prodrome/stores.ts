@@ -7,7 +7,7 @@ import heads from "./heads"
 import locked from "./locked"
 import type { Box, Frontier, Obj, Replica } from "./replica"
 import { said } from "./replica"
-import type { SkeletonNode, StoreName, StoredObject } from "../wire/generated/wire"
+import type { RefusedObject, SkeletonNode, StoreName, StoredObject } from "../wire/generated/wire"
 
 export namespace stores {
   export type Name = StoreName
@@ -27,14 +27,20 @@ export namespace stores {
 
   export const NONE: T = { inbox: locked.NONE, lines: locked.none(), topics: locked.NONE, "topic-aliases": locked.NONE }
 
-  // What a reading or a pull can see: the generation, the objects, the box's heads, the policy they are read under, the
-  // frontier the next pull asks from and the keys, never the instant they were heard. A reset of an empty row holds what
-  // it held, and is still a step; so is a pull that moved only the frontier, which the next pull must ask from.
+  // What a reading or a pull can see: the generation, the objects, what the box is known to hold and refused, the box's
+  // heads, the policy they are read under, the frontier the next pull asks from and the keys, never the instant they
+  // were heard. A reset of an empty row holds what it held, and is still a step; so is a pull that moved only the
+  // frontier, which the next pull must ask from. The objects only grow within a generation, so their count says whether
+  // they moved; what the box holds and refused are compared whole, since a refusal can replace another and keep the count.
   export const same = <O extends Obj>(a: Replica<O>, b: Replica<O>): boolean =>
     a.generation === b.generation &&
     a.objects.length === b.objects.length &&
+    sameSet(a.synced, b.synced) &&
+    sameSet(a.refused.map(refusal), b.refused.map(refusal)) &&
     sameBox(a.box, b.box) &&
     sameFrontier(a.held.frontier, b.held.frontier)
+
+  const refusal = (r: RefusedObject): string => JSON.stringify([r.hash, r.kind, r.reason])
 
   const sameFrontier = (a: Frontier, b: Frontier): boolean =>
     a.type === "Named" && b.type === "Named" ? a.digest === b.digest && a.era === b.era : a.type === b.type
@@ -42,11 +48,12 @@ export namespace stores {
   // Two words are one when both are unheard, or both name the same heads under the same policy.
   const sameBox = (a: Box, b: Box): boolean =>
     a.type === "Heard" && b.type === "Heard"
-      ? heads.same(heads.of(a.word.heads), heads.of(b.word.heads)) && sameActors(a.word.untrusted, b.word.untrusted)
+      ? heads.same(heads.of(a.word.heads), heads.of(b.word.heads)) && sameSet(a.word.untrusted, b.word.untrusted)
       : a.type === b.type
 
-  // Two policies are one when they name the same actors, in any order and however often.
-  export const sameActors = (a: readonly string[], b: readonly string[]): boolean => {
+  // Two lists of names are one set when they hold the same names, in any order and however often: two policies, or what
+  // the box holds.
+  export const sameSet = (a: readonly string[], b: readonly string[]): boolean => {
     const x = new Set(a), y = new Set(b)
     return x.size === y.size && [...x].every(n => y.has(n))
   }

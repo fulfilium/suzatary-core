@@ -677,6 +677,10 @@ and `note:<conversation>/<turn>` are `Reference`s. `suzatary secretary topics
 backfill --dry-run --plan <file>` proposes topics for the rounds no topic is on,
 from a model shown the owner's words alone (`topics::backfill`), and `--apply
 <file>` writes that plan as written (`topics::plan::Plan`).
+`#/secretary` is every conversation's rounds as one stream under a topic bar
+(`secretary::stream`, `Reading::bar`, read from the tab's replicas), filtered
+by the topics the address names (`?topics=a,b`); the tab writes a topic by tap
+into its own replica and posts it (`POST /api/stores/<store>/objects`).
 
 *(5) THE APP IS THE DOOR.* `#/secretary`, in the More sheet by `nav.ts`'s
 slice rule. A person's turn and a verb's answer are text through `refs.ts`

@@ -28,7 +28,7 @@ export namespace nav {
   export const DESTINATIONS: readonly Tab[] = [
     { route: { type: "todos" }, label: "Todos", part: "Bar" },
     { route: { type: "inbox" }, label: "Inbox", part: "Bar" },
-    { route: { type: "secretary", refs: [] }, label: "Secretary", part: "Bar" },
+    { route: { type: "secretary", refs: [], topics: [] }, label: "Secretary", part: "Bar" },
     { route: { type: "briefings" }, label: "Briefing", part: "Bar" },
     { route: { type: "project" }, label: "Project", part: "Places", needsChain: PROJECT_CHAIN },
     { route: { type: "mail", query: "", account: "" }, label: "Mail", part: "Places" },

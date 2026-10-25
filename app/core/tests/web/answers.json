@@ -5133,6 +5133,88 @@
       ]
     }
   ],
+  "StreamPayload": [
+    {
+      "value": {
+        "rounds": [
+          {
+            "answer": {
+              "at": "2026-09-02T12:00:20",
+              "attempt": "current",
+              "blocks": [
+                {
+                  "html": null,
+                  "kind": "prose",
+                  "plain": "I will draft that now.",
+                  "source": "I will draft that now."
+                }
+              ],
+              "gone": null,
+              "index": 1,
+              "text": "I will draft that now.",
+              "who": "model"
+            },
+            "conversation": "about-the-deed",
+            "opening": {
+              "at": "2026-09-02T12:00:01",
+              "attachments": [],
+              "attempt": "current",
+              "gone": null,
+              "index": 0,
+              "queued": false,
+              "references": [
+                "todo:life/email-harrow"
+              ],
+              "text": "email Harrow about the deed",
+              "who": "person"
+            },
+            "room": 3,
+            "target": "round:about-the-deed/0",
+            "title": "About the deed",
+            "topics": [],
+            "turn": 0
+          },
+          {
+            "answer": {
+              "at": "2026-09-02T12:01:35",
+              "attempt": "current",
+              "blocks": [
+                {
+                  "html": null,
+                  "kind": "prose",
+                  "plain": "Nothing else today.",
+                  "source": "Nothing else today."
+                }
+              ],
+              "gone": null,
+              "index": 3,
+              "text": "Nothing else today.",
+              "who": "model"
+            },
+            "conversation": "about-the-deed",
+            "opening": {
+              "at": "2026-09-02T12:01:30",
+              "attachments": [],
+              "attempt": "current",
+              "gone": null,
+              "index": 2,
+              "queued": false,
+              "references": [],
+              "text": "thanks — anything else on it?",
+              "who": "person"
+            },
+            "room": 3,
+            "target": "round:about-the-deed/2",
+            "title": "About the deed",
+            "topics": [],
+            "turn": 2
+          }
+        ],
+        "total": 2
+      },
+      "maps": []
+    }
+  ],
   "ThreadPayload": [
     {
       "value": {
@@ -5351,6 +5433,27 @@
           "diffs"
         ]
       ]
+    }
+  ],
+  "TopicsPayload": [
+    {
+      "value": {
+        "topics": [
+          {
+            "disputed": [],
+            "rounds": 2,
+            "topic": "garden"
+          },
+          {
+            "disputed": [
+              "journey"
+            ],
+            "rounds": 1,
+            "topic": "trip"
+          }
+        ]
+      },
+      "maps": []
     }
   ],
   "TreePayload": [

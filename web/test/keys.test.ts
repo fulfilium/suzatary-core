@@ -32,7 +32,7 @@ test("a modified key belongs to the browser, except the palette's one chord", ()
 });
 
 test("each key means its one action in the context it lands in, and an unbound key is nobody's", () => {
-  const secretary: KeyAction = { type: "go", route: { type: "secretary", refs: [], focus: true } };
+  const secretary: KeyAction = { type: "go", route: { type: "secretary", refs: [], topics: [], focus: true } };
   const armed = { ...IDLE, pending: "g" };
   const cases: [string, KeyContext, KeyAction | null][] = [
     // `a` asks the secretary with nothing on screen to point at, and does nothing on the conversation page, whose
@@ -60,7 +60,7 @@ test("each key means its one action in the context it lands in, and an unbound k
     ["i", armed, { type: "go", route: { type: "inbox" } }],
     ["p", armed, { type: "go", route: { type: "project" } }],
     ["m", armed, { type: "go", route: { type: "mail", query: "", account: "" } }],
-    ["s", armed, { type: "go", route: { type: "secretary", refs: [] } }],
+    ["s", armed, { type: "go", route: { type: "secretary", refs: [], topics: [] } }],
     ["b", armed, { type: "go", route: { type: "briefings" } }],
     ...["q", "F5", "Tab", "ArrowDown", " "].map((key): [string, KeyContext, null] => [key, IDLE, null]),
   ];

@@ -37,8 +37,8 @@ test("briefings: the list and one day, and a bare prefix names the list", () => 
 });
 
 test("the secretary: the list and one conversation", () => {
-  assert.deepEqual(parseRoute("#/secretary"), { type: "secretary", refs: [] });
-  assert.deepEqual(parseRoute("#/secretary/"), { type: "secretary", refs: [] });
+  assert.deepEqual(parseRoute("#/secretary"), { type: "secretary", refs: [], topics: [] });
+  assert.deepEqual(parseRoute("#/secretary/"), { type: "secretary", refs: [], topics: [] });
   assert.deepEqual(parseRoute("#/secretary/2026-09-09-1"), {
     type: "conversation",
     id: "2026-09-09-1",

@@ -111,12 +111,11 @@ app.scene("the conversations have one field above them, and no placeholder is cu
     await app.resize(size);
     await app.open(WRITE_BASE);
     await app.page.evaluate(`location.hash = "#/secretary"`);
-    await app.page.waitFor(`document.querySelector(".chats .chatrow") !== null`, { timeout: 15000 });
+    await app.page.waitFor(`document.querySelector(".column.secretarystream:not(.pagewaiting) .streamrounds") !== null`, { timeout: 15000 });
     assert.equal(await app.page.evaluate<number>(`${visible(".chats .chathead input")}.length`), 1, `${size[0]} px: the search, and no name field`);
     assert.equal(await app.page.evaluate<number>(`${visible(".chats .chathead .act-newtopic")}.length`), 1, `${size[0]} px`);
     assert.deepEqual(await app.page.evaluate<string[]>(cutPlaceholders), [], `${size[0]} px`);
-    const id = await app.page.evaluate<string>(`document.querySelector(".chats .chatrow").getAttribute("href").split("/").pop()`);
-    await app.page.evaluate(`location.hash = "#/secretary/${id}"`);
+    await app.page.evaluate(`location.hash = "#/secretary/default"`);
     await app.page.waitFor(`document.querySelector(".composebox") !== null`, { timeout: 8000 });
     if (size === WIDE) await app.page.waitFor(`document.querySelector(".chatsaside .chathead input") !== null`, { timeout: 8000 });
     assert.deepEqual(await app.page.evaluate<string[]>(cutPlaceholders), [], `${size[0]} px`);
@@ -127,7 +126,7 @@ app.scene("a page waiting on a search keeps its whole column: nothing is clipped
   await app.resize(PHONE);
   await app.open(WRITE_BASE);
   await app.page.evaluate(`location.hash = "#/secretary"`);
-  await app.page.waitFor(`document.querySelector(".chats .chatrow") !== null`, { timeout: 15000 });
+  await app.page.waitFor(`document.querySelector(".column.secretarystream:not(.pagewaiting) .streamrounds") !== null`, { timeout: 15000 });
   await app.page.type(".chats .chatsearch", "deed");
   // A search waits at least its debounce, a state the column says.
   await app.page.waitFor(`document.querySelector(".column.chats.pagewaiting") !== null`, { timeout: 8000 });

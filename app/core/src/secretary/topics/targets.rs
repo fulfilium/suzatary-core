@@ -9,37 +9,32 @@ use crate::secretary::turn_shape::{TurnShape, shape};
 /// The most topics one round or note holds.
 pub const MAX_TOPICS: usize = 3;
 
-/// One live round: the turn that opened it, and its turns with their indices, oldest first.
+/// One live round: the turn that opened it and the turns after it, with their indices, oldest
+/// first.
 #[derive(Debug, Clone)]
 pub struct Round<'a> {
     pub conversation: &'a ConversationId,
-    pub turn: usize,
-    pub turns: Vec<(usize, &'a Said)>,
+    pub opening: (usize, &'a Said),
+    pub rest: Vec<(usize, &'a Said)>,
 }
 
-/// The live rounds, each named by the person's or act's turn that opened it (or the first live
-/// turn), each holding the turns up to the next round's.
+/// The live rounds, each opened by a person's or act's turn (or the first live turn), each
+/// holding the turns up to the next round's.
 #[must_use]
 pub fn rounds(stored: &Stored) -> Vec<Round<'_>> {
-    let live = stored.live();
-    let Some((&first, rest)) = live.split_first() else {
-        return Vec::new();
-    };
-    let open = |(turn, said)| Round {
-        conversation: &stored.id,
-        turn,
-        turns: vec![(turn, said)],
-    };
-    let mut rounds = vec![open(first)];
-    for &(turn, said) in rest {
-        if matches!(
+    let mut rounds: Vec<Round<'_>> = Vec::new();
+    for (turn, said) in stored.live() {
+        let opens = matches!(
             shape(&said.turn),
             TurnShape::Person { .. } | TurnShape::Act { .. }
-        ) {
-            rounds.push(open((turn, said)));
-        } else {
-            let last = rounds.len() - 1;
-            rounds[last].turns.push((turn, said));
+        );
+        match rounds.last_mut() {
+            Some(round) if !opens => round.rest.push((turn, said)),
+            Some(_) | None => rounds.push(Round {
+                conversation: &stored.id,
+                opening: (turn, said),
+                rest: Vec::new(),
+            }),
         }
     }
     rounds
@@ -50,14 +45,20 @@ impl Round<'_> {
     pub fn target(&self) -> Target {
         Target::Round {
             conversation: self.conversation.clone(),
-            turn: self.turn,
+            turn: self.opening.0,
         }
+    }
+
+    /// Every turn of the round, the opening first.
+    #[must_use]
+    pub fn turns(&self) -> impl DoubleEndedIterator<Item = (usize, &Said)> + '_ {
+        std::iter::once(self.opening).chain(self.rest.iter().copied())
     }
 
     /// Its notes.
     #[must_use]
     pub fn notes(&self) -> Vec<Target> {
-        notes_in(self.conversation, &self.turns)
+        notes_in(self.conversation, &self.turns().collect::<Vec<_>>())
     }
 }
 

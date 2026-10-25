@@ -28,24 +28,34 @@ export namespace list {
     | { type: "Typed"; q: string }
     | { type: "Found"; q: string; found: lo.T<readonly SearchHit[]> }
     | { type: "Ticked"; now: number }
+  export type SearchEvent = Extract<Event, { type: "Typed" | "Found" }>
   export type Sections = { pinned: readonly ConversationRow[]; rows: readonly ConversationRow[] }
 
   export const TOPICS: Filter = { type: "Topics" }
   export const REVIEWS: Filter = { type: "Reviews" }
-  export const init = (current: string | null, now: number): T => ({ rows: lo.loading, filter: TOPICS, search: { type: "Off" }, current, now })
+  export const OFF: Search = { type: "Off" }
+  export const init = (current: string | null, now: number): T => ({ rows: lo.loading, filter: TOPICS, search: OFF, current, now })
 
   /** A stale answer — for a query no longer typed — is dropped. */
+  export const searched = (s: Search, e: SearchEvent): Search => {
+    switch (e.type) {
+      case "Typed": {
+        const q = e.q.trim()
+        return q === "" ? OFF : s.type === "On" && s.q === q ? s : { type: "On", q, found: lo.loading }
+      }
+      case "Found": return s.type === "On" && s.q === e.q.trim() ? { ...s, found: e.found } : s
+    }
+  }
+
   export const step = (t: T, e: Event): T => {
     switch (e.type) {
       case "Listed": return { ...t, rows: e.rows }
       case "Filtered": return e.filter.type === t.filter.type ? t : { ...t, filter: e.filter }
-      case "Typed": {
-        const q = e.q.trim()
-        return q === "" ? (t.search.type === "Off" ? t : { ...t, search: { type: "Off" } })
-          : t.search.type === "On" && t.search.q === q ? t
-          : { ...t, search: { type: "On", q, found: lo.loading } }
+      case "Typed":
+      case "Found": {
+        const search = searched(t.search, e)
+        return search === t.search ? t : { ...t, search }
       }
-      case "Found": return t.search.type === "On" && t.search.q === e.q.trim() ? { ...t, search: { ...t.search, found: e.found } } : t
       case "Ticked": return e.now === t.now ? t : { ...t, now: e.now }
     }
   }
@@ -71,7 +81,8 @@ export namespace list {
     hrefOf(at === undefined ? { type: "conversation", id, refs: [] } : { type: "conversation", id, refs: [], at })
 
   // Whether a search is still on its way: what the page waits on before it has anything to show.
-  export const searching = (t: T): boolean => t.search.type === "On" && t.search.found.type === "Loading"
+  export const searchWaits = (s: Search): boolean => s.type === "On" && s.found.type === "Loading"
+  export const searching = (t: T): boolean => searchWaits(t.search)
 
   const row = (r: ConversationRow, current: string | null, now: number): HTMLElement =>
     el("a", { class: `chatrow${r.id === current ? " current" : ""}`, href: link(r.id), "aria-current": r.id === current ? "page" : null },
@@ -117,7 +128,7 @@ export namespace list {
       },
     })
 
-  const hits = (q: string, found: lo.T<readonly SearchHit[]>, now: number, waiting: Child): Child =>
+  export const hits = (q: string, found: lo.T<readonly SearchHit[]>, now: number, waiting: Child): Child =>
     lo.fold<readonly SearchHit[], Child>(found, {
       loading: () => waiting,
       error: e => failed(`The search did not run: ${e}`),

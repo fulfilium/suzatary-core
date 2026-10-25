@@ -1683,6 +1683,30 @@ the dark one, so its outline holds a contrast above 3:1 in both themes.
   value's colour"; in a browser, `web/e2e/lines.test.ts` "a store's sync is
   drawn as a neutral pie, named in words".
 
+### 3.21 The topic stream
+
+The secretary page (`web/src/pages/secretary.ts`) is one `secretaryState.T`
+(`secretary.state.ts`): the filter, how many rounds are asked for, the last
+reading, the sheet and the head's search, moved only by `secretaryState.step`.
+Its one effect, `secretaryState.ask`, reads the stream again whenever what the
+page wants (the filter, Earlier, a move of the stores) is newer than what it
+last asked. The core reads the stream and the bar from the tab's replicas, so
+the page holds no filter of its own and no second reading of the topics.
+
+- **A combination shows exactly the rounds that carry every chosen topic.** No
+  topic chosen shows every round, a combination shows what each of its topics
+  shows, and an old name filters as the topic it stands for. —
+  `app/core/tests/topics.rs`
+  `a_filter_shows_exactly_the_rounds_holding_every_chosen_topic`.
+- **The filter is the address.** `#/secretary?topics=a,b` parses to the route
+  that prints it. — `laws.test.ts` "a route survives print and parse" (the
+  generator gives the secretary route topics).
+- **In a browser:** two chips tapped show the one round that carries both,
+  Back and Forward move the filter, a name the type refuses is said before
+  anything is written, and a topic added by tap reaches the box's topic store.
+  — `web/e2e/secretary.test.ts` "two topics chosen show the rounds holding
+  both, and a topic added by tap lands on the round".
+
 ## 4. The vectors
 
 What the Rust writes and the TypeScript must agree with, never refresh:

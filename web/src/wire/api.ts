@@ -57,8 +57,11 @@ export const ours = (h: heads.Heads): void => {
 };
 
 /** Literals only: the box rehashes each, since a name is what the bytes are, never what a client says. */
+const posted = (path: string, objects: readonly string[], since: string): Promise<ReceiptPayload> =>
+  http.act(path, { objects: [...objects], since } satisfies PostedObjects, payload.ReceiptPayload);
+
 export const postObjects = (objects: readonly string[], since: string): Promise<ReceiptPayload> =>
-  http.act(onChain("objects"), { objects: [...objects], since } satisfies PostedObjects, payload.ReceiptPayload).then(receipt => {
+  posted(onChain("objects"), objects, since).then(receipt => {
     if (receipt.heads.length > 0) ours(receipt.heads);
     return receipt;
   });
@@ -85,6 +88,10 @@ export const storeObjects = (store: string, since: string): Promise<StorePayload
 /** A piece of the lines' skeleton a replica holding `since` lacks: what `storeObjects` sends, each object without its literal. */
 export const storeSkeleton = (since: string): Promise<SkeletonPayload> =>
   http.get(sinceIn("/api/stores/lines/skeleton", since), payload.SkeletonPayload, { type: "Silence", ms: wait.MS });
+
+/** What a replica of a topic store holding the frontier `since` lacks on the box: the box takes each as the actor the request was proven for. */
+export const postStoreObjects = (store: "topics" | "topic-aliases", objects: readonly string[], since: string): Promise<ReceiptPayload> =>
+  posted(`/api/stores/${store}/objects`, objects, since);
 
 /** The literals of `hashes`, in ascending order with none twice, so one set has one URL the browser keeps for good. */
 export const storeContent = (store: string, hashes: readonly string[]): Promise<ContentPayload> =>

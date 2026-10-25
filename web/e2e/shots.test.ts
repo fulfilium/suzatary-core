@@ -27,7 +27,7 @@ import { mkdirSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { BASE, doneFromList, MIDDLE, openFinder, openInPlace, PHONE, pickCategory, PROPOSED_BASE, releaseModel, row, SIGNED_POST, suite, WIDE, WRITE_BASE } from "./harness";
+import { BASE, doneFromList, MIDDLE, openFinder, openInPlace, PHONE, pickCategory, PROPOSED_BASE, releaseModel, row, SIGNED_POST, suite, topicRounds, WIDE, WRITE_BASE } from "./harness";
 import type { Page } from "./cdp";
 import cast from "../test/cast";
 
@@ -35,6 +35,9 @@ const { todos } = cast.world;
 
 const OUT = process.env["SUZATARY_SHOTS"] ?? join(tmpdir(), "suzatary-shots");
 mkdirSync(OUT, { recursive: true });
+
+/** The secretary's stream, drawn from a reading of the stores. */
+const STREAM_READY = `document.querySelector(".column.secretarystream:not(.pagewaiting) .streamrounds") !== null`;
 
 /** The post a row's Done makes, held while its picture is taken; each run marks a todo of its own done. */
 let sendingRun = 0;
@@ -270,12 +273,12 @@ const SHOTS: readonly Shot[] = [
     hash: "#/usage",
     ready: `document.querySelector(".usagebody .usagewindow, .usagebody .empty, .usagepage .problem") !== null`,
   },
-  // The conversations (`docs/CHAT-PLAN-2026-09-25.md` §4.2) on the deployment
-  // that holds topics, and the default conversation itself.
+  // The stream (`docs/TOPICS-PLAN-2026-10-21.md` §6) on the deployment that
+  // holds conversations, and the default conversation itself.
   {
     name: "secretary",
     hash: "#/secretary",
-    ready: `document.querySelector(".chats .chatrow") !== null`,
+    ready: STREAM_READY,
     base: WRITE_BASE,
   },
   {
@@ -448,12 +451,41 @@ const SHOTS: readonly Shot[] = [
       await page.waitFor(`document.querySelector("${answer} .turnmore").open`);
     },
   },
-  // The conversations with one field above them (X17).
+  // The topic bar with two topics chosen, over the one round that carries both.
   {
     name: "secretary-topics",
     hash: "#/secretary",
-    ready: `document.querySelector(".chats .chatrow") !== null`,
+    ready: STREAM_READY,
     base: WRITE_BASE,
+    act: async (page: Page): Promise<void> => {
+      await topicRounds(page);
+      await page.navigate(`${WRITE_BASE}/#/secretary?topics=garden%2Cinvoices`);
+      await page.waitFor(`document.querySelectorAll(".topicbar .topicchip.on").length === 2 && document.querySelectorAll(".streamround").length === 1`, { timeout: 15000 });
+    },
+  },
+  // One topic chosen: its rounds, each with its topics as chips beside its words.
+  {
+    name: "secretary-round-topics",
+    hash: "#/secretary?topics=garden",
+    ready: `${STREAM_READY} && document.querySelectorAll(".streamround .roundtopic").length >= 3`,
+    base: WRITE_BASE,
+  },
+  // The rename sheet on a chosen topic, a name in use typed into it: the merge it would make, said before it is made.
+  {
+    name: "secretary-rename",
+    hash: "#/secretary?topics=garden",
+    ready: `${STREAM_READY} && document.querySelector(".topicbar .topicrename") !== null`,
+    base: WRITE_BASE,
+    act: async (page: Page): Promise<void> => {
+      await page.click(".topicbar .topicrename");
+      await page.waitFor(`document.activeElement?.classList.contains("topicfield") === true`, { timeout: 8000 });
+      await page.evaluate(`(() => { const f = document.querySelector(".topicsheet .topicfield"); f.value = "trip"; f.dispatchEvent(new Event("input", { bubbles: true })); })()`);
+      await page.waitFor(`document.querySelector(".topicsheet .topicsaid")?.textContent.includes("one topic") === true`, { timeout: 8000 });
+    },
+    undo: async (page: Page): Promise<void> => {
+      await page.click(".topicsheet .act:not(.act-topicwrite)");
+      await page.waitFor(`document.querySelector(".topicsheet") === null`, { timeout: 8000 });
+    },
   },
   {
     name: "project",

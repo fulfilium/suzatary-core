@@ -84,6 +84,15 @@ export namespace dressed {
     return { ...read, proposals: await proposalsOf(id, read.proposals) }
   }
 
+  // The stream a filter shows, each answer dressed with its blocks' renderings as a conversation's window is.
+  export const stream = async (chosen: readonly string[], pages: number): Promise<storesync.Streamed> => {
+    const read = await storesync.streamed(chosen, pages)
+    const rounds = await Promise.all(
+      read.stream.rounds.map(async r => (r.answer === null ? r : { ...r, answer: await turnOf(r.conversation, r.answer) })),
+    )
+    return { ...read, stream: { ...read.stream, rounds } }
+  }
+
   export const window = async (id: string, w: Window): Promise<ConversationPayload> => {
     const at = (m: MemoryPayload | null): Promise<ConversationPayload> => held(id, w, m)
     const bare = await at(null)

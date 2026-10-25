@@ -82,6 +82,7 @@ pub mod sign_in;
 pub mod slots;
 pub mod stamp;
 pub mod store;
+pub mod stream;
 pub mod surface;
 pub mod sweep;
 pub mod taint;

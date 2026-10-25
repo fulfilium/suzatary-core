@@ -90,9 +90,8 @@ export class TopicAliases {
 /** The topics both replicas read as, and the events that change them, printed for `append`. */
 export class TopicReading {
   constructor(memberships: Memberships, aliases: TopicAliases);
-  /** `{<target>: [<topic>, …]}`. */
-  memberships(): string;
-  disputes(): string;
+  /** The topics in use, as `TopicsPayload`. */
+  bar(): string;
   add(target: string, topic: string, at: string, actor: string): string | undefined;
   /** A JSON array of event prints. */
   remove(target: string, topic: string, at: string, actor: string): string;
@@ -100,6 +99,9 @@ export class TopicReading {
   rename(from: string, to: string, at: string, actor: string): string;
   free(): void;
 }
+
+/** Why a text is no topic, or `undefined` for a topic. */
+export function topic_refusal(text: string): string | undefined;
 
 /** What a term is worth at an instant; `undefined` for `∅`. */
 export function fulfillment(term: string, now: string, env: string): number | undefined;

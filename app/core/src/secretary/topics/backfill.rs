@@ -77,8 +77,7 @@ pub fn untopiced(conversations: &[Stored], reading: &Reading) -> (Vec<Untopiced>
                 continue;
             }
             let words: Vec<&str> = round
-                .turns
-                .iter()
+                .turns()
                 .filter(|(_, said)| taint::turn(said) == Taint::Clean)
                 .filter_map(|(_, said)| match &said.turn {
                     Turn::Person { text, .. } if !text.trim().is_empty() => Some(text.as_str()),

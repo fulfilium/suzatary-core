@@ -140,6 +140,16 @@ impl Reading {
             .collect()
     }
 
+    /// Whether `target` carries every topic of `chosen`, each read in its current spelling: the
+    /// stream's filter, so no topic chosen shows every target.
+    #[must_use]
+    pub fn shows(&self, chosen: &BTreeSet<Topic>, target: &Target) -> bool {
+        let on = self.topics(target);
+        chosen
+            .iter()
+            .all(|topic| on.contains(&self.spelling(topic)))
+    }
+
     /// Every topic on a target, with how many rounds it is on, the most first and then by name,
     /// so the order moves only when a count does.
     #[must_use]
@@ -154,6 +164,53 @@ impl Reading {
         let mut in_use: Vec<(Topic, usize)> = counts.into_iter().collect();
         in_use.sort_by(|(one, many), (two, more)| more.cmp(many).then_with(|| one.cmp(two)));
         in_use
+    }
+
+    /// The topics in use as the topic bar draws them: [`Reading::in_use`]'s order, each with the
+    /// names its disputes hold besides its own spelling.
+    #[must_use]
+    pub fn bar(&self) -> crate::wire::TopicsPayload {
+        let mut disputed: BTreeMap<Topic, BTreeSet<Topic>> = BTreeMap::new();
+        for dispute in self.disputes() {
+            let names: BTreeSet<Topic> = match dispute {
+                Dispute::Aliases {
+                    topic,
+                    chosen,
+                    others,
+                } => std::iter::once(&chosen)
+                    .chain(&others)
+                    .map(|alias| match alias {
+                        Alias::Itself => topic.clone(),
+                        Alias::As(to) => self.spelling(to),
+                    })
+                    .chain([topic.clone()])
+                    .collect(),
+                Dispute::Ring { names, .. } => names,
+            };
+            for name in &names {
+                let topic = self.spelling(name);
+                disputed
+                    .entry(topic.clone())
+                    .or_default()
+                    .extend(names.iter().filter(|other| **other != topic).cloned());
+            }
+        }
+        crate::wire::TopicsPayload {
+            topics: self
+                .in_use()
+                .into_iter()
+                .map(|(topic, rounds)| crate::wire::TopicInUse {
+                    disputed: disputed
+                        .remove(&topic)
+                        .into_iter()
+                        .flatten()
+                        .map(String::from)
+                        .collect(),
+                    topic: topic.into(),
+                    rounds,
+                })
+                .collect(),
+        }
     }
 
     #[must_use]

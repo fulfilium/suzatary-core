@@ -22,7 +22,7 @@ import type { Rows } from "./objects"
 import { CHAIN, RENDERED_OWED, alterRow, dropRow, dropRows, heldRow, heldRows, holdRow, keepRow, replicaRow } from "./objects"
 import idb from "../app/idb"
 import rendered from "../app/rendered"
-import { canonical, losses, pulled, replicaOf, sinceOf, wentBack } from "./replica"
+import { appended, canonical, losses, pulled, replicaOf, sinceOf, standing, wentBack } from "./replica"
 import type { Held, Obj, Replica, Said } from "./replica"
 import stores from "./stores"
 import serial from "../algebra/serial"
@@ -33,7 +33,10 @@ import stream from "../algebra/stream"
 import time from "../app/time"
 import d from "../wire/decoder"
 import payload from "../wire/generated/payload"
-import { storeContent, storeObjects, storeSkeleton } from "../wire/api"
+import { postStoreObjects, storeContent, storeObjects, storeSkeleton } from "../wire/api"
+import handover from "./handover"
+import type topics from "./topics"
+import app from "../app/app"
 import type { ConversationPayload, ConversationsPayload, InboxProposalsPayload, MemoryPayload, SearchPayload, SkeletonNode, StoredObject } from "../wire/generated/wire"
 import pieces from "./pieces"
 import http from "../wire/http"
@@ -237,16 +240,18 @@ export namespace storesync {
   }
 
   // One store's pull, its pieces kept beside its row, and its landing.
-  type Sync = {
+  type Sync<O extends Obj = Obj> = {
     readonly restored: once.T<void>
     readonly pull: () => Promise<boolean>
     readonly holding: () => Replica<Obj>
     readonly landed: () => boolean
     readonly whole: () => Promise<void>
     readonly reset: (said: (why: string) => void) => Promise<void>
+    // A row this tab moved itself: held, then kept on the device joined with what another tab kept.
+    readonly keep: (row: locked.Row<O>) => Promise<void>
   }
 
-  const syncOf = <O extends Obj>(st: Store<O>, replaced: () => void): Sync => {
+  const syncOf = <O extends Obj>(st: Store<O>, replaced: () => void): Sync<O> => {
     const name = st.name
     const taking = (told: readonly string[]): take.Effects<O> => ({
       held: st.held,
@@ -315,18 +320,26 @@ export namespace storesync {
 
     // What the pieces brought, landed in one step, so a page reading the store reads it once, whole; then the row written
     // once with what another tab kept joined in, and the pieces' own rows deleted.
+    // What is held written on the device, joined with what another tab kept there, and that join held. Without
+    // IndexedDB what is held is the only copy, as the chains' is.
+    const stored = async (erased: readonly string[]): Promise<void> => {
+      if (!idb.available()) return
+      const { row, unread } = await keepRow(st.rows, kept(name), { type: "Join", replica: st.held() })
+      if (row.type === "Val") await take.into(taking(erased), row.v)
+      told(name, unread)
+    }
+
+    const held = async (row: locked.Row<O>): Promise<void> => {
+      await take.into(taking([]), row)
+      await stored([])
+    }
+
     const land = async (last: Piece): Promise<void> => {
       const was = st.held()
       const brought = pending
       await take.into(taking(last.answer.erased), brought)
       pending = st.none
-      const now = st.held()
-      // Without IndexedDB what is held is the only copy, as the chains' is.
-      if (now !== was && idb.available()) {
-        const { row, unread } = await keepRow(st.rows, kept(name), { type: "Join", replica: now })
-        if (row.type === "Val") await take.into(taking(last.answer.erased), row.v)
-        told(name, unread)
-      }
+      if (st.held() !== was) await stored(last.answer.erased)
       if (brought !== st.none && idb.available()) {
         const gone = await dropRows(piecesOf)
         if (gone.type === "Error") told(name, gone.e)
@@ -422,12 +435,12 @@ export namespace storesync {
     }
 
     // One pull at a time, so a pull asked for during another is a pull that starts after it.
-    return { restored, pull: serial.of(pullNow), holding, landed, whole, reset }
+    return { restored, pull: serial.of(pullNow), holding, landed, whole, reset, keep: held }
   }
 
   // A store that lands empty moves no row, so the landing itself is what is waited on; a later epoch forgets the cells
   // that waited on the landing it replaced, so the store is waited for again until it lands again.
-  const syncs: { readonly [N in stores.Name]: Sync } = {
+  const syncs: { readonly [N in stores.Name]: Sync<stores.Of[N]> } = {
     inbox: syncOf(INBOX, () => {
       ready.forget()
       inboxReady.forget()
@@ -457,11 +470,20 @@ export namespace storesync {
   }
 
   // The lines, then the inbox: the box files a proposal before the line that names it, so an inbox pulled after the
-  // lines holds every proposal they name. The topic stores name rounds, never a proposal, so they are pulled beside them.
+  // lines holds every proposal they name. The topic stores name rounds, never a proposal, so they are pulled beside them,
+  // each after what this tab wrote in it is handed over; a refusal is said, and a push with no answer waits.
   const all = (): Promise<boolean> => {
     wanted = "All"
-    const topicStores = Promise.all([pull("topics"), pull("topic-aliases")])
-    return pull("lines").then(lines => pull("inbox").then(inbox => topicStores.then(([t, a]) => lines && inbox && t && a)))
+    const topicStores = Promise.all(
+      TOPIC_STORES.map(name =>
+        syncs[name].restored
+          .get()
+          .then(() => push(name))
+          .then(pushed => (pushed.type === "Refused" ? handover.told(pushed.why) : undefined), () => undefined)
+          .then(() => pull(name)),
+      ),
+    )
+    return pull("lines").then(lines => pull("inbox").then(inbox => topicStores.then(ts => lines && inbox && ts.every(t => t))))
   }
 
   // The inbox alone, for a reading of the proposals; a move of the stores pulls the rest too once a page asked for all.
@@ -487,27 +509,44 @@ export namespace storesync {
   const ready = readyOf(stores.NAMES, all)
   const inboxReady = readyOf(["inbox"], inboxOnly)
 
-  // What the worker was last told of the inbox and of the keys: the inbox right before a reading of it, the keys then
-  // and when a purge lets one go. Each is nothing once the worker refused what was sent, and the next is sent whole.
-  let inboxSent: { readonly replica: Replica; readonly names: ReadonlySet<string> } | null = { replica: stores.NONE.inbox.replica, names: new Set() }
-  let keysSent: locked.Keys | null = locked.NO_KEYS
-
-  // Each sent before it returns, with no wait between reading what was sent and writing it, so two in a row are each
-  // the change from the one before.
-  const holdInbox = (replica: Replica): Promise<null> => {
-    const was = inboxSent
-    if (replica === was?.replica) return Promise.resolve(null)
-    const names = new Set(replica.objects.map(o => o.hash))
-    const delta =
-      was === null
-        ? { add: replica.objects, drop: [], whole: true }
-        : { add: replica.objects.filter(o => !was.names.has(o.hash)), drop: [...was.names].filter(n => !names.has(n)), whole: false }
-    inboxSent = { replica, names }
-    return remote.ask({ type: "HoldInbox", delta }).catch((e: unknown) => {
-      inboxSent = null
-      throw e
-    })
+  // What the worker was last told of a store's objects, so each holding is the change from it: nothing once the worker
+  // refused what was sent, and the next is sent whole. Each is sent before it returns, with no wait between reading
+  // what was sent and writing it, so two in a row are each the change from the one before.
+  const holder = (objects: (r: Replica) => readonly StoredObject[], ask: (delta: questions.Delta) => Promise<null>) => {
+    let sent: { readonly replica: Replica; readonly names: ReadonlySet<string> } | null = { replica: locked.NONE.replica, names: new Set() }
+    return {
+      hold: (replica: Replica): Promise<null> => {
+        const was = sent
+        if (replica === was?.replica) return Promise.resolve(null)
+        const now = objects(replica)
+        const names = new Set(now.map(o => o.hash))
+        const delta =
+          was === null
+            ? { add: now, drop: [], whole: true }
+            : { add: now.filter(o => !was.names.has(o.hash)), drop: [...was.names].filter(n => !names.has(n)), whole: false }
+        sent = { replica, names }
+        return ask(delta).catch((e: unknown) => {
+          sent = null
+          throw e
+        })
+      },
+      // Names the worker wrote itself, so a later holding that lacks them lets them go there too.
+      took: (names: readonly string[]): void => {
+        if (sent !== null) sent = { replica: sent.replica, names: new Set([...sent.names, ...names]) }
+      },
+    }
   }
+  const inboxHeld = holder(r => r.objects, delta => remote.ask({ type: "HoldInbox", delta }))
+  // A reading of a topic store reads no object the box refused, nor what rests on one.
+  const topicsHeld: { readonly [N in topics.Store]: ReturnType<typeof holder> } = {
+    topics: holder(standing, delta => remote.ask({ type: "HoldTopics", store: "topics", delta })),
+    "topic-aliases": holder(standing, delta => remote.ask({ type: "HoldTopics", store: "topic-aliases", delta })),
+  }
+  const TOPIC_STORES: readonly topics.Store[] = ["topics", "topic-aliases"]
+  const holdTopics = (t: stores.T): Promise<unknown> =>
+    Promise.all([topicsHeld.topics.hold(t.topics.replica), topicsHeld["topic-aliases"].hold(t["topic-aliases"].replica)])
+
+  let keysSent: locked.Keys | null = locked.NO_KEYS
 
   const holdKeys = (keys: locked.Keys): Promise<null> => {
     const was = keysSent
@@ -526,7 +565,7 @@ export namespace storesync {
   export type Proposals = { readonly payload: InboxProposalsPayload; readonly held: readonly string[] }
   export const proposals = async (at: string, memory: MemoryPayload | null): Promise<Proposals> => {
     await inboxReady.get()
-    const holding = holdInbox(source.state().inbox.replica)
+    const holding = inboxHeld.hold(source.state().inbox.replica)
     const [, { held, answer }] = await Promise.all([holding, askHeld(() => ({ type: "Proposals", at, memory }))])
     return { payload: answer, held: held.held.map(c => c.name) }
   }
@@ -542,7 +581,7 @@ export namespace storesync {
         await fetching(scope.type === "Whole" ? "Behind" : "First", need.nodes)
         continue
       }
-      const holding = Promise.all([holdInbox(t.inbox.replica), holdKeys(t.lines.keys)])
+      const holding = Promise.all([inboxHeld.hold(t.inbox.replica), holdKeys(t.lines.keys), holdTopics(t)])
       const [, answer, left] = await Promise.all([holding, remote.ask(question), scope.type === "Whole" ? remote.ask({ type: "Left" }) : null])
       if (left !== null) readings.told("stores", excluded.left(left))
       return answer
@@ -552,6 +591,52 @@ export namespace storesync {
   // The whole of both stores: the list and a search read every conversation.
   export const list = (): Promise<ConversationsPayload> => over(lines.WHOLE, { type: "Conversations" })
   export const search = (q: string): Promise<SearchPayload> => over(lines.WHOLE, { type: "Search", q })
+
+  // The stream a filter shows and the topics in use, read in the worker from one holding of the stores.
+  export type Streamed = questions.Answer<"Stream">
+  export const streamed = (chosen: readonly string[], pages: number): Promise<Streamed> => over(lines.WHOLE, { type: "Stream", chosen, pages })
+
+  // How a topic store's handing over ended: sent, kept for the next sync, or refused in words the owner is told.
+  type Pushed = { readonly type: "Sent" } | { readonly type: "Kept" } | { readonly type: "Refused"; readonly why: string }
+  const SENT: Pushed = { type: "Sent" }
+  const KEPT: Pushed = { type: "Kept" }
+
+  // What this tab wrote in a topic store and the box has not taken, handed over. A refused object stays held as refused,
+  // so it leaves the reading and is never posted again; a post with no answer leaves everything for the next sync.
+  const push = async (name: topics.Store): Promise<Pushed> => {
+    const sync = syncs[name]
+    const ended = await handover.of(() => source.state()[name].replica, true, (literals, since) => postStoreObjects(name, literals, since))
+    switch (ended.type) {
+      case "Nothing":
+        return SENT
+      case "Unanswered":
+        return KEPT
+      case "Outdated":
+        return { type: "Refused", why: "the box runs a newer build: reload, and this topic goes with the next sync" }
+      case "Refused":
+        await sync.keep(locked.of(ended.replica, source.state()[name].keys))
+        return { type: "Refused", why: `the box refused this topic: ${ended.reason}` }
+      case "Taken":
+        await sync.keep(locked.of(ended.replica, source.state()[name].keys))
+        return ended.refused.length === 0 ? SENT : { type: "Refused", why: `the box refused this topic: ${ended.refused.map(r => r.reason).join("; ")}` }
+    }
+  }
+
+  // `w` planned in the worker from the topics as held, written into the replica of its store as the actor this tab
+  // writes as, kept on the device and handed to the box. Offline, it stays kept and goes with the next sync; a refusal
+  // is thrown in the box's words.
+  export const write = async (w: topics.Write, at: string): Promise<void> => {
+    await ready.get()
+    const actor = app.actor(app.now())
+    if (actor === null) throw new Error("this device only reads, so it writes no topic")
+    const [, planned] = await Promise.all([holdTopics(source.state()), remote.ask({ type: "PlanTopic", write: w, at, actor })])
+    if (planned.objects.length === 0) return
+    topicsHeld[planned.store].took(planned.objects.map(o => o.hash))
+    const row = source.state()[planned.store]
+    await syncs[planned.store].keep(locked.of(appended(row.replica, planned.objects), row.keys))
+    const pushed = await push(planned.store)
+    if (pushed.type === "Refused") throw new Error(pushed.why)
+  }
 
   // One conversation over its own lines alone, which reads as the whole store reads it; absent where the store holds no
   // line of it, read off the skeleton without fetching anything.

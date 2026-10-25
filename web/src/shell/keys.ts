@@ -42,7 +42,7 @@ const DESTINATIONS: Record<string, Route> = {
   i: { type: "inbox" },
   p: { type: "project" },
   m: { type: "mail", query: "", account: "" },
-  s: { type: "secretary", refs: [] },
+  s: { type: "secretary", refs: [], topics: [] },
   b: { type: "briefings" },
 };
 
@@ -72,7 +72,7 @@ export function keyAction(key: string, context: KeyContext): KeyAction | null {
       // Nothing on the conversation page itself: the compose box `a` would focus is already on screen.
       return context.onConversation === true
         ? null
-        : { type: "go", route: { type: "secretary", refs: [], focus: true } };
+        : { type: "go", route: { type: "secretary", refs: [], topics: [], focus: true } };
     case "u":
       return { type: "undo" };
     // Shift alone is not a modifier `context.modified` reserves, so `key` is already uppercase.

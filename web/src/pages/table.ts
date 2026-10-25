@@ -52,7 +52,7 @@ export namespace pages {
     briefings: root => briefings.mount(root),
     briefing: (root, s) => briefing.mount(root, s.date),
     calendar: (root, s) => calendar.mount(root, s.date),
-    secretary: root => secretary.mount(root),
+    secretary: (root, s) => secretary.mount(root, s.topics),
     conversation: (root, s) =>
       conversation.mount(root, s.id, { refs: s.refs, focus: s.focus === true, ...(s.at === undefined ? {} : { at: s.at }) }),
     unknown: (root, s) => frame.mount(root, unknown(s.hash)),

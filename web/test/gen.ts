@@ -147,6 +147,7 @@ export function day(r: Rng): string {
 export function route(r: Rng): Route {
   const id = (): string => r.string(SLUG, 1 + r.int(16));
   const refs = (): string[] => r.array(r.int(3), () => referenceText(r));
+  const topics = (): string[] => r.array(r.int(3), () => r.pick(["garden", "invoices", "trip", "trip-plan", "سفر"]));
   switch (r.int(20)) {
     case 0:
       return { type: "todos" };
@@ -183,7 +184,7 @@ export function route(r: Rng): Route {
     case 16:
       return { type: "briefing", date: day(r) };
     case 17:
-      return r.bool() ? { type: "secretary", refs: refs() } : { type: "secretary", refs: refs(), focus: true };
+      return r.bool() ? { type: "secretary", refs: refs(), topics: topics() } : { type: "secretary", refs: refs(), topics: topics(), focus: true };
     case 18:
       return { type: "typst", open: r.bool() ? "" : id() };
     default: {
