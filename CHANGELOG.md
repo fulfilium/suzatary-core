@@ -18,7 +18,7 @@ The first public release. What exists:
   function of time, built from its spec revisions, completions and
   reopenings; the list is sorted by its value now, lowest (most urgent)
   first. Specs are terms of FPL, priced only by the
-  [Prodrome](https://github.com/bmabsout/prodrome)'s evaluator.
+  [Prodrome](https://github.com/fulfilium/prodrome)'s evaluator.
 - **Stores that are replicas.** The todo chains, the Inbox, the
   conversations, the secretary's memory and the recorded decisions are each
   a Prodrome at a schema of its own: content-addressed objects in a DAG,

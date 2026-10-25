@@ -7,7 +7,7 @@
 
     # THE DATABASE, AS AN INPUT (docs/ARCHITECTURE.md §1, §8.8). It was
     # `prodrome/` in this tree until 2026-09-09; it is
-    # https://github.com/bmabsout/prodrome now, public under MIT OR Apache-2.0,
+    # https://github.com/fulfilium/prodrome now, public under MIT OR Apache-2.0,
     # and this repository takes it the way it takes any other dependency.
     #
     # PINNED TO A COMMIT, and to the SAME commit `app/Cargo.toml` names. The
@@ -19,7 +19,7 @@
     # `source` (and the crate's version with it). It was four until crane
     # (2026-09-13): the `outputHashes` entry that vendored the checkout by hash
     # is gone, because crane fetches a git dependency at the lock's own rev.
-    prodrome.url = "github:bmabsout/prodrome/de71cccc7565c770ce282eba07b1718d612b87bd";
+    prodrome.url = "github:fulfilium/prodrome/de71cccc7565c770ce282eba07b1718d612b87bd";
     # One nixpkgs in the closure. The Prodrome's own
     # flake pins its own — that is what its CI builds against — but the two
     # packages that matter here (`cargo`/`rustc` and `wasm-bindgen-cli_0_2_127`,
@@ -947,7 +947,7 @@
         # It used to run the database's too — SPEC §9 against
         # `prodrome/conformance/*.json`, and clippy over that workspace. Both
         # are gone, and not because they stopped mattering: they are
-        # https://github.com/bmabsout/prodrome's own CI now, and that CI ran on
+        # https://github.com/fulfilium/prodrome's own CI now, and that CI ran on
         # the commit `inputs.prodrome` pins before this repository could pin it.
         # Re-running them here would compile the same crate a second time to
         # re-state a verdict already taken, which is the duplication the split

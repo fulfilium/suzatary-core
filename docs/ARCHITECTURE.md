@@ -4,7 +4,7 @@ Decided 2026-09-07 with the owner ("build the whole thing"; "let's not care abou
 backwards compatibility"). Every stage is built from this: the pieces, which
 way the arrows point, which rules are types, which claims are laws, in what
 order the Python left. `CLAUDE.md` wins where they disagree; the Prodrome's
-`SPEC.md` (<https://github.com/bmabsout/prodrome/blob/main/SPEC.md>) is the
+`SPEC.md` (<https://github.com/fulfilium/prodrome/blob/main/SPEC.md>) is the
 database's contract and is not restated here.
 
 Check each stage against three readers: a Rust maintainer (crate graph, I/O
@@ -18,7 +18,7 @@ facts, conflicts are values).
 **The Prodrome is the temporal FPL database and nothing else**: literals,
 objects and the DAG, the trust rule, folds and registers, FPL and its
 breakpoints; no briefing, mailbox, phone, gate or page. Since 2026-09-09 it is
-<https://github.com/bmabsout/prodrome> (was `prodrome/` here; public, MIT OR
+<https://github.com/fulfilium/prodrome> (was `prodrome/` here; public, MIT OR
 Apache-2.0, own flake and CI), taken BY REVISION (§8.8): an upstream push
 cannot change this build without a commit here saying so.
 
@@ -419,7 +419,7 @@ it in the same series. Two applications that both work is the failure mode.
    sidecar (`events/sigs/<hash>`), so an actor is a key rather than a network
    position. Not a stored kind; not before 1.0.
 8. ✅ **The split** (2026-09-09). `prodrome/` is
-   <https://github.com/bmabsout/prodrome>: a README whose quick start is a
+   <https://github.com/fulfilium/prodrome>: a README whose quick start is a
    doctest, its own flake (`packages.prodrome-wasm`,
    `checks.prodrome-core`/`prodrome-clippy`) and CI, which run on the commit
    before this repository pins it. `app/Cargo.toml` takes it by `rev`;

@@ -1481,7 +1481,7 @@ fn merge_gate_keys_the_ignored_counterexamples_and_the_time_zone() {
 /// The 40-hex commit ids on the lines of `text` that name the Prodrome's repository.
 fn prodrome_pins(text: &str) -> BTreeSet<String> {
     text.lines()
-        .filter(|line| line.contains("bmabsout/prodrome"))
+        .filter(|line| line.contains("fulfilium/prodrome"))
         .flat_map(|line| line.split(|c: char| !c.is_ascii_hexdigit()))
         .filter(|word| word.len() == 40)
         .map(str::to_owned)

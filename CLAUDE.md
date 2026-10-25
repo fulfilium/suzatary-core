@@ -254,7 +254,7 @@ confirm. Everything below derives from this.
 - Term algebra: atoms `Flat|Decay|Curve`; ops
   `Conj|Offset|Gate|Importance|OffsetBy`; temporal `Shift|Within|After`;
   `Piecewise` for a todo's whole history; event Env `Completed|Cancelled`.
-  Semantics: the Prodrome's SPEC.md §7 (github.com/bmabsout/prodrome),
+  Semantics: the Prodrome's SPEC.md §7 (github.com/fulfilium/prodrome),
   and a private research repository. Terms never hold callables. A Cancelled upstream
   prices as moot (1.0) and MUST be surfaced by reporting, never silently. Never
   trust compile-time numbers: reads come from the chain (`fold::content`,
@@ -895,7 +895,7 @@ Threat model: an injected email can at worst mis-triage or write bad todo text
   stores are on the agent's `safe-push.sh` allowlist and walked by its
   append-only check.
 - **The Prodrome is a dependency, not a directory**:
-  <https://github.com/bmabsout/prodrome>, public under MIT OR Apache-2.0, taken
+  <https://github.com/fulfilium/prodrome>, public under MIT OR Apache-2.0, taken
   BY REVISION in `app/Cargo.toml` (`prodrome-core`,
   `prodrome-wasm-exports` and `prodrome-typst-wasm`, the closed world) and by
   the same sha as `flake.nix`'s

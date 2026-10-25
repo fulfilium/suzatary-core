@@ -99,13 +99,13 @@
       "locked": {
         "lastModified": 1791272963,
         "narHash": "sha256-ZoTabkYKMIq21OTKu7GPRe31ZLeMeXOTdrx/sDfb/LQ=",
-        "owner": "bmabsout",
+        "owner": "fulfilium",
         "repo": "prodrome",
         "rev": "de71cccc7565c770ce282eba07b1718d612b87bd",
         "type": "github"
       },
       "original": {
-        "owner": "bmabsout",
+        "owner": "fulfilium",
         "repo": "prodrome",
         "rev": "de71cccc7565c770ce282eba07b1718d612b87bd",
         "type": "github"

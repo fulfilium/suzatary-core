@@ -14,7 +14,7 @@ Every todo carries a **fulfillment**: a number in `[0, 1]` that says, as a
 function of time, how well it is being met. A deadline that is close and that
 hurts to miss reads low; an errand that can wait reads high. The list is
 sorted by it, so the top of your list is what matters most *now*. Todos live
-on a [Prodrome](https://github.com/bmabsout/prodrome), a small
+on a [Prodrome](https://github.com/fulfilium/prodrome), a small
 content-addressed database whose history is a grow-only set of objects, so
 every device holds a full replica, writes offline, and converges by union.
 
@@ -164,7 +164,7 @@ there is no login page and no public endpoint, by design.
 
 ## Built on
 
-- **[Prodrome](https://github.com/bmabsout/prodrome)** — the database: a
+- **[Prodrome](https://github.com/fulfilium/prodrome)** — the database: a
   temporal, content-addressed event store with fulfillment semantics, its
   laws tested in its own repository. Its `SPEC.md` is the contract.
 - **[typst-design](https://github.com/bmabsout/typst-design)** — the design

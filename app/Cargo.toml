@@ -3,7 +3,7 @@
 # THIS IS THE ONLY WORKSPACE IN THE REPOSITORY (§8.8, 2026-09-09). The Prodrome
 # is the database and this is an application built on it, and nothing flows the
 # other way (§1) — so the database left, to
-# https://github.com/bmabsout/prodrome, and the seam between them is now a
+# https://github.com/fulfilium/prodrome, and the seam between them is now a
 # REVISION rather than a relative path. What was a directory somebody could
 # edit in the same commit is a pin somebody has to publish first.
 #
@@ -61,11 +61,11 @@ license = "MIT OR Apache-2.0"
 # application's record is `suzatary_core::record::Record` — so the example is
 # not compiled in, and "the app owns its record shape" is a fact about what
 # links rather than a claim in a comment.
-prodrome_core = { package = "prodrome-core", git = "https://github.com/bmabsout/prodrome", rev = "de71cccc7565c770ce282eba07b1718d612b87bd", default-features = false }
+prodrome_core = { package = "prodrome-core", git = "https://github.com/fulfilium/prodrome", rev = "de71cccc7565c770ce282eba07b1718d612b87bd", default-features = false }
 # The Prodrome's exports generic over a schema, which `wasm` instantiates at
 # this application's schemas; the same revision as `prodrome_core`, so one
 # crate of the core links into the module.
-prodrome-wasm-exports = { git = "https://github.com/bmabsout/prodrome", rev = "de71cccc7565c770ce282eba07b1718d612b87bd" }
+prodrome-wasm-exports = { git = "https://github.com/fulfilium/prodrome", rev = "de71cccc7565c770ce282eba07b1718d612b87bd" }
 suzatary-core = { path = "core" }
 suzatary-io = { path = "io" }
 # The plugin host; `cli` depends on it for `suzatary plugin sync`.
@@ -245,7 +245,7 @@ typst-syntax = "=0.15.1"
 # and the tab admit a text by ONE implementation, not two copies of a list. The same
 # revision as `prodrome_core`, for the reason given there; no default features, so none of
 # the viewer's one-shot or editor exports are linked (the tab's module carries those).
-prodrome-typst-wasm = { git = "https://github.com/bmabsout/prodrome", rev = "de71cccc7565c770ce282eba07b1718d612b87bd", default-features = false }
+prodrome-typst-wasm = { git = "https://github.com/fulfilium/prodrome", rev = "de71cccc7565c770ce282eba07b1718d612b87bd", default-features = false }
 
 # CLIPPY PEDANTIC IS ON, AND THE ALLOW-LIST IS SHORT AND SAID OUT LOUD.
 # ARCHITECTURE §2: clippy at `-D warnings` over `--all-targets`. An allow with

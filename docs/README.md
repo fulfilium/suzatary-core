@@ -25,9 +25,9 @@ and the plans are how it got here.
 
 ## Contracts, specs and laws
 
-- **The Prodrome's [`SPEC.md`](https://github.com/bmabsout/prodrome/blob/main/SPEC.md)**
+- **The Prodrome's [`SPEC.md`](https://github.com/fulfilium/prodrome/blob/main/SPEC.md)**
   — the database's contract: objects, the DAG, the folds, FPL, the laws.
-- **The Prodrome's [`docs/design-register-types.md`](https://github.com/bmabsout/prodrome/blob/main/docs/design-register-types.md)**
+- **The Prodrome's [`docs/design-register-types.md`](https://github.com/fulfilium/prodrome/blob/main/docs/design-register-types.md)**
   — the shape everything here follows: the history is the free
   join-semilattice, a type supplies an order, the application is a reading,
   replicas sync by union, caches are memoised pure functions.
