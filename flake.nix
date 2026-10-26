@@ -207,6 +207,7 @@
             ./app/plugin
             ./app/plugin-fence
             ./app/plugin-ics
+            ./app/testkit
             ./app/wasm
             # The plugin worlds the host binds at compile time.
             ./app/wit
@@ -319,6 +320,7 @@
             ./app/plugin-fence/Cargo.toml
             ./app/plugin-ics/Cargo.toml
             ./app/plugin-ics/ics.schema
+            ./app/testkit/Cargo.toml
             ./app/wasm/Cargo.toml
             ./app/core/Cargo.toml
             ./app/core/src
@@ -445,6 +447,7 @@
               ./app/plugin/Cargo.toml
               ./app/plugin-fence/Cargo.toml
               ./app/plugin-ics/Cargo.toml
+              ./app/testkit/Cargo.toml
               ./app/core/Cargo.toml
               ./app/core/src
               # The release plan, which the core compiles in.
@@ -518,6 +521,7 @@
               ./app/core/Cargo.toml
               ./app/plugin/Cargo.toml
               ./app/plugin-ics/Cargo.toml
+              ./app/testkit/Cargo.toml
               ./app/wasm/Cargo.toml
               ./app/plugin-fence
               ./app/wit
@@ -563,6 +567,7 @@
               ./app/core/Cargo.toml
               ./app/plugin/Cargo.toml
               ./app/plugin-fence/Cargo.toml
+              ./app/testkit/Cargo.toml
               ./app/wasm/Cargo.toml
               ./app/plugin-ics
               ./app/wit

@@ -40,7 +40,7 @@ impl Rig for Scripts {
         made.0 += 1;
         let at = self.dir.path().join(made.0.to_string());
         std::fs::create_dir_all(&at).expect("the script's directory");
-        let (heard, answer, script) = (at.join("heard"), at.join("answer"), at.join("claude"));
+        let (heard, answer) = (at.join("heard"), at.join("answer"));
         let result = serde_json::json!({
             "type": "result",
             "subtype": "success",
@@ -51,17 +51,15 @@ impl Rig for Scripts {
             "result": text,
         });
         std::fs::write(&answer, result.to_string()).expect("the answer");
-        std::fs::write(
-            &script,
-            format!(
+        let script = suzatary_testkit::fake_program(
+            &at,
+            "claude",
+            &format!(
                 "#!/bin/sh\ncat > {}\ncat {}\n",
                 heard.display(),
                 answer.display()
             ),
-        )
-        .expect("the script");
-        std::fs::set_permissions(&script, std::os::unix::fs::PermissionsExt::from_mode(0o755))
-            .expect("executable");
+        );
         made.1 = Some(heard);
         ClaudeCli::new("a-model", Self::fence()).with_binary(script.display().to_string())
     }

@@ -652,17 +652,17 @@ pub fn fresh_seed() -> Result<Secret, String> {
 #[cfg(test)]
 mod tests {
     use std::cell::Cell;
-    use std::os::unix::fs::PermissionsExt as _;
 
     use super::*;
 
     /// A `secretspec` that runs `script`, for one test.
     fn fake(script: &str, timeout: Duration) -> (tempfile::TempDir, Secretspec) {
         let dir = tempfile::tempdir().expect("a scratch directory");
-        let program = dir.path().join("secretspec");
-        std::fs::write(&program, format!("#!/bin/sh\n{script}\n")).expect("the fake");
-        std::fs::set_permissions(&program, std::fs::Permissions::from_mode(0o755))
-            .expect("executable");
+        let program = suzatary_testkit::fake_program(
+            dir.path(),
+            "secretspec",
+            &format!("#!/bin/sh\n{script}\n"),
+        );
         std::fs::write(dir.path().join("secretspec.toml"), "").expect("a spec file");
         let spec = Secretspec {
             program,

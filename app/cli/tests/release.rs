@@ -599,26 +599,15 @@ fn version_installed(name: &str, release: Option<&str>) -> String {
     let _ = std::fs::remove_dir_all(&out);
     std::fs::create_dir_all(out.join("bin")).expect("a bin dir");
     let exe = out.join("bin/suzatary");
-    std::fs::copy(crate::binary::path(), &exe).expect("the binary copied");
+    suzatary_testkit::copy_program(Path::new(&crate::binary::path()), &exe);
     if let Some(text) = release {
         let file = out.join(suzatary_cli::stamp::BESIDE);
         std::fs::create_dir_all(file.parent().expect("a share dir")).expect("a share dir");
         std::fs::write(&file, text).expect("the release file");
     }
-    // A test thread that forks while the copy is open for writing hands its child that file for
-    // the moment before the child's exec, and Linux refuses to run a file open for writing
-    // (ETXTBSY). The child drops it at its exec, so the run is asked again until it is let go.
-    let ran = (0..100)
-        .find_map(
-            |_| match crate::binary::run(&exe).arg("--version").output() {
-                Err(e) if e.kind() == std::io::ErrorKind::ExecutableFileBusy => {
-                    std::thread::sleep(std::time::Duration::from_millis(20));
-                    None
-                }
-                ran => Some(ran),
-            },
-        )
-        .expect("the copy is let go within two seconds")
+    let ran = crate::binary::run(&exe)
+        .arg("--version")
+        .output()
         .expect("the copy runs");
     assert!(ran.status.success(), "{ran:?}");
     String::from_utf8(ran.stdout).expect("utf-8")

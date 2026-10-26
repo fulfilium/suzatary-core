@@ -1,6 +1,5 @@
 //! The closed world's bound, against the real child: `suzatary typeset` as the box runs it.
 
-use std::os::unix::fs::PermissionsExt as _;
 use std::process::{Child, Command, Stdio};
 use std::time::{Duration, Instant};
 
@@ -89,16 +88,14 @@ fn a_short_text_compiles_while_the_box_is_busy() {
 #[test]
 fn a_slow_start_is_not_counted_against_the_text() {
     let dir = tempfile::tempdir().expect("scratch");
-    let script = dir.path().join("slow-start");
-    std::fs::write(
-        &script,
-        format!(
+    let script = suzatary_testkit::fake_program(
+        dir.path(),
+        "slow-start",
+        &format!(
             "#!/bin/sh\nsleep 6\nexec '{}' \"$@\"\n",
             crate::binary::path()
         ),
-    )
-    .expect("the script");
-    std::fs::set_permissions(&script, std::fs::Permissions::from_mode(0o755)).expect("chmod");
+    );
     assert_eq!(
         Closed::new(&script, BACKSTOP).closed("Renew *passport*"),
         suzatary_io::typeset::compile("Renew *passport*")
@@ -109,9 +106,7 @@ fn a_slow_start_is_not_counted_against_the_text() {
 #[test]
 fn a_child_that_never_answers_is_stopped_at_the_backstop() {
     let dir = tempfile::tempdir().expect("scratch");
-    let script = dir.path().join("stuck");
-    std::fs::write(&script, "#!/bin/sh\nexec sleep 30\n").expect("the script");
-    std::fs::set_permissions(&script, std::fs::Permissions::from_mode(0o755)).expect("chmod");
+    let script = suzatary_testkit::fake_program(dir.path(), "stuck", "#!/bin/sh\nexec sleep 30\n");
     let started = Instant::now();
     let refused = Closed::new(&script, Duration::from_millis(500))
         .closed("Renew *passport*")

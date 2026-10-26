@@ -383,12 +383,11 @@ mod tests {
     /// A fake CLI that logs every call and fails on anything but the two reads.
     struct Fake {
         dir: PathBuf,
+        cli: PathBuf,
     }
 
     impl Fake {
         fn new(tag: &str) -> Self {
-            use std::os::unix::fs::PermissionsExt as _;
-
             let dir = std::env::temp_dir()
                 .join(format!("suzatary-io-drive-{tag}-{}", std::process::id()));
             let _ = std::fs::remove_dir_all(&dir);
@@ -433,16 +432,13 @@ mod tests {
                    echo \"refused: $*\" >&2; exit 99\n\
                  fi\n"
             );
-            let cli = dir.join("proton-drive");
-            std::fs::write(&cli, script).expect("the script");
-            std::fs::set_permissions(&cli, std::fs::Permissions::from_mode(0o755))
-                .expect("executable");
-            Self { dir }
+            let cli = suzatary_testkit::fake_program(&dir, "proton-drive", &script);
+            Self { dir, cli }
         }
 
         fn drive(&self) -> ProtonDrive {
             ProtonDrive::new(
-                self.dir.join("proton-drive"),
+                self.cli.clone(),
                 self.dir.join("scratch"),
                 PathBuf::from("."),
             )

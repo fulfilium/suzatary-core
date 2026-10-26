@@ -55,17 +55,8 @@ fn world(root: &Path) -> std::path::PathBuf {
         std::fs::create_dir_all(path.parent().expect("a parent")).expect("a directory");
         std::fs::write(path, text).expect("written");
     };
-    let executable = |path: &Path, text: &str| {
-        write(path, text);
-        let ok = Command::new("chmod")
-            .arg("+x")
-            .arg(path)
-            .status()
-            .expect("chmod runs");
-        assert!(ok.success());
-    };
-    executable(&root.join("bin/systemctl"), SYSTEMCTL);
-    executable(&root.join("roots/lock-bin/bin/suzatary"), SUZATARY);
+    let _ = suzatary_testkit::fake_program(&root.join("bin"), "systemctl", SYSTEMCTL);
+    let _ = suzatary_testkit::fake_program(&root.join("roots/lock-bin/bin"), "suzatary", SUZATARY);
     std::fs::create_dir_all(root.join("store/app-tree")).expect("a tree");
     std::os::unix::fs::symlink(root.join("store/app-tree"), root.join("roots/app"))
         .expect("the app link");

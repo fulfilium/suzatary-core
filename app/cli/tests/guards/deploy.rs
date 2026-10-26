@@ -1017,17 +1017,11 @@ fn deploy_restarts_every_running_unit_that_runs_the_app() {
 fn deploy_whose_commit_fails_writes_nothing() {
     let deployed = Box_::new("commit-fails");
     deployed.set("next-result", "success");
-    let hook = deployed
-        .user()
-        .join(".git")
-        .join("hooks")
-        .join("pre-commit");
-    write(
-        &deployed.user(),
-        ".git/hooks/pre-commit",
+    let _ = suzatary_testkit::fake_program(
+        &deployed.user().join(".git/hooks"),
+        "pre-commit",
         "#!/bin/sh\nexit 1\n",
     );
-    run(Command::new("chmod").arg("+x").arg(&hook), "chmod");
     let out = deployed.deploy(&[&deployed.new], &[]);
     assert!(!out.status.success());
     assert!(
@@ -1251,31 +1245,22 @@ fn deploy_refuses_while_another_runs() {
 
 /// The stub commands the deploy runs, in `bin`.
 fn stubs(bin: &Path) {
-    write(bin, "systemctl", SYSTEMCTL);
-    write(bin, "nix", NIX);
-    write(
-        bin,
-        "nix-store",
-        "#!/bin/sh\necho \"nix-store $*\" >>\"$DEPLOY_STATE/log\"\nln -sfn \"$5\" \"$2\"\n",
-    );
-    write(
-        bin,
-        "curl",
-        "#!/bin/sh\ncat \"$DEPLOY_STATE/about\" 2>/dev/null || printf 200\n",
-    );
-    write(bin, "sleep", "#!/bin/sh\nexit 0\n");
-    write(bin, "git", GIT);
-    write(bin, "gh", GH);
-    for stub in [
-        "systemctl",
-        "nix",
-        "nix-store",
-        "curl",
-        "sleep",
-        "git",
-        "gh",
+    for (stub, body) in [
+        ("systemctl", SYSTEMCTL),
+        ("nix", NIX),
+        (
+            "nix-store",
+            "#!/bin/sh\necho \"nix-store $*\" >>\"$DEPLOY_STATE/log\"\nln -sfn \"$5\" \"$2\"\n",
+        ),
+        (
+            "curl",
+            "#!/bin/sh\ncat \"$DEPLOY_STATE/about\" 2>/dev/null || printf 200\n",
+        ),
+        ("sleep", "#!/bin/sh\nexit 0\n"),
+        ("git", GIT),
+        ("gh", GH),
     ] {
-        run(Command::new("chmod").arg("+x").arg(bin.join(stub)), "chmod");
+        let _ = suzatary_testkit::fake_program(bin, stub, body);
     }
 }
 
@@ -1323,9 +1308,11 @@ fn fill_store(store: &Path, pre: &[String], revs: &[String]) {
             std::fs::create_dir_all(store.join(format!("app-{rev}{suffix}")))
                 .expect("a store path");
         }
-        let binary = store.join(format!("app-{rev}-bin/bin/suzatary"));
-        write(store, &format!("app-{rev}-bin/bin/suzatary"), SUZATARY);
-        run(Command::new("chmod").arg("+x").arg(&binary), "chmod");
+        let _ = suzatary_testkit::fake_program(
+            &store.join(format!("app-{rev}-bin/bin")),
+            "suzatary",
+            SUZATARY,
+        );
     }
     for rev in revs {
         write(store, &format!("app-{rev}/nix/app-input.nix"), "{ }\n");

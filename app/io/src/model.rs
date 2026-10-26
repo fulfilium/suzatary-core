@@ -813,18 +813,15 @@ mod tests {
             r#"{"type":"result","subtype":"success","is_error":false,"num_turns":1,"duration_ms":5,"session_id":"00000000-0000-4000-8000-000000000001","result":"{\"say\":\"hi\"}"}"#,
         )
             .expect("the answer");
-        let script = dir.path().join("claude");
-        std::fs::write(
-            &script,
-            format!(
+        let script = suzatary_testkit::fake_program(
+            dir.path(),
+            "claude",
+            &format!(
                 "#!/bin/sh\ncat > /dev/null\nenv > {}\ncat {}\n",
                 seen.display(),
                 answer.display()
             ),
-        )
-        .expect("the script");
-        std::fs::set_permissions(&script, std::os::unix::fs::PermissionsExt::from_mode(0o755))
-            .expect("executable");
+        );
         let cli = ClaudeCli::new("m", shipped()).with_binary(script.display().to_string());
         cli.turn(
             &Conversation {
@@ -850,14 +847,11 @@ mod tests {
     fn the_child_sees_its_config_dir_and_nothing_unlisted() {
         let dir = tempfile::tempdir().expect("scratch");
         let seen = dir.path().join("env");
-        let script = dir.path().join("claude");
-        std::fs::write(
-            &script,
-            format!("#!/bin/sh\ncat > /dev/null\nenv > {}\n", seen.display()),
-        )
-        .expect("the script");
-        std::fs::set_permissions(&script, std::os::unix::fs::PermissionsExt::from_mode(0o755))
-            .expect("executable");
+        let script = suzatary_testkit::fake_program(
+            dir.path(),
+            "claude",
+            &format!("#!/bin/sh\ncat > /dev/null\nenv > {}\n", seen.display()),
+        );
         let config = dir.path().join("config");
         // What it answers does not matter here, only what it was started with.
         let _ = ClaudeCli::new("m", shipped())

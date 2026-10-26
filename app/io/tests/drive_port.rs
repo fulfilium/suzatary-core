@@ -2,7 +2,6 @@
 //! shell script answering the four commands `ProtonDrive` builds over a directory tree, so what
 //! the suite keeps is really written, listed and read back through the CLI's own grammar.
 
-use std::os::unix::fs::PermissionsExt as _;
 use std::path::{Path, PathBuf};
 
 use suzatary_core::conformance::drive::{Case, check};
@@ -52,10 +51,7 @@ else
 fi
 "#
     );
-    let cli = dir.join("proton-drive");
-    std::fs::write(&cli, script).expect("the script");
-    std::fs::set_permissions(&cli, std::fs::Permissions::from_mode(0o755)).expect("executable");
-    cli
+    suzatary_testkit::fake_program(dir, "proton-drive", &script)
 }
 
 fn case(folder: &str, name: &str, bytes: &[u8]) -> Case {

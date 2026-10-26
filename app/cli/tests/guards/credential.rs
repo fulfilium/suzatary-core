@@ -38,11 +38,8 @@ fn answer(scratch: &Scratch, stdin: &str) -> String {
 
 #[test]
 fn the_helper_names_the_remotes_user_or_the_generic_one() {
-    use std::os::unix::fs::PermissionsExt as _;
     let scratch = Scratch::new("credential");
-    let fake = scratch.join("secretspec");
-    std::fs::write(&fake, "#!/bin/sh\necho t0ken\n").expect("written");
-    std::fs::set_permissions(&fake, std::fs::Permissions::from_mode(0o755)).expect("chmod");
+    let _ = suzatary_testkit::fake_program(&scratch, "secretspec", "#!/bin/sh\necho t0ken\n");
 
     let bare = answer(&scratch, "protocol=https\nhost=github.com\n\n");
     assert_eq!(bare, "username=x-access-token\npassword=t0ken\n");

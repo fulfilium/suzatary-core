@@ -440,17 +440,12 @@ fn the_fence_refuses_a_guard_that_does_not_guard() {
             root.join(".claude").join("triage-settings.json"),
         )
         .expect("copies");
-        std::fs::copy(
-            repo().join("scripts").join("edit-guard.sh"),
-            root.join("scripts").join("edit-guard.sh"),
-        )
-        .expect("copies");
+        suzatary_testkit::copy_program(
+            &repo().join("scripts").join("edit-guard.sh"),
+            &root.join("scripts").join("edit-guard.sh"),
+        );
         if let Some(body) = guard {
-            let path = root.join("scripts").join("tool-guard.sh");
-            std::fs::write(&path, body).expect("writes");
-            let mut perms = std::fs::metadata(&path).expect("written").permissions();
-            std::os::unix::fs::PermissionsExt::set_mode(&mut perms, 0o755);
-            std::fs::set_permissions(&path, perms).expect("chmod the guard");
+            let _ = suzatary_testkit::fake_program(&root.join("scripts"), "tool-guard.sh", body);
         }
         let out = Command::new(repo().join("scripts").join("triage-fence.sh"))
             .arg(root)
@@ -1007,7 +1002,7 @@ fn hooked_repo(name: &str) -> Scratch {
 
     let hooks_dir = root.join("hooks");
     std::fs::create_dir(&hooks_dir).expect("hooks dir");
-    std::fs::copy(commit_msg_hook(), hooks_dir.join("commit-msg")).expect("copies the real hook");
+    suzatary_testkit::copy_program(&commit_msg_hook(), &hooks_dir.join("commit-msg"));
     // `core.hooksPath` is set to the real scripts/hooks directory's contents,
     // copied in.
     let cfg = git(&root, &["config", "core.hooksPath", "hooks"], None);
@@ -1813,11 +1808,10 @@ impl PushFixture {
     /// An executable `#!/bin/sh` script at `rel` under the fixture's root.
     fn script(&self, rel: &str, body: &str) {
         let path = self.root.join(rel);
-        std::fs::create_dir_all(path.parent().expect("a parent")).expect("parent dir");
-        std::fs::write(&path, format!("#!/bin/sh\n{body}\n")).expect("writes the stub");
-        let mut perms = std::fs::metadata(&path).expect("stub").permissions();
-        std::os::unix::fs::PermissionsExt::set_mode(&mut perms, 0o755);
-        std::fs::set_permissions(&path, perms).expect("chmod the stub");
+        let dir = path.parent().expect("a parent");
+        std::fs::create_dir_all(dir).expect("parent dir");
+        let name = path.file_name().expect("a name").to_str().expect("utf-8");
+        let _ = suzatary_testkit::fake_program(dir, name, &format!("#!/bin/sh\n{body}\n"));
     }
 
     fn data(&self) -> PathBuf {
@@ -2427,17 +2421,11 @@ fn wiring_a_failed_module_build_fails_the_web_inputs() {
     for name in ["web-static.sh", "wire.sh"] {
         std::fs::write(scripts.join(name), "exit 0\n").expect("a passing stub");
     }
-    std::fs::write(
-        bin.join("nix"),
+    let _ = suzatary_testkit::fake_program(
+        &bin,
+        "nix",
         "#!/bin/sh\necho 'a build failed' >&2\nexit 1\n",
-    )
-    .expect("the failing nix");
-    let status = Command::new("chmod")
-        .arg("+x")
-        .arg(bin.join("nix"))
-        .status()
-        .expect("chmod");
-    assert!(status.success());
+    );
     let init = Command::new("git")
         .args(["init", "-q"])
         .current_dir(&*scratch)

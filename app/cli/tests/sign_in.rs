@@ -20,10 +20,10 @@ fn fake_claude(tag: &str) -> String {
     let dir =
         std::env::temp_dir().join(format!("suzatary-test-claude-{tag}-{}", std::process::id()));
     std::fs::create_dir_all(&dir).expect("a directory");
-    let script = dir.join("claude");
-    std::fs::write(
-        &script,
-        format!(
+    suzatary_testkit::fake_program(
+        &dir,
+        "claude",
+        &format!(
             "#!/bin/sh\n\
              [ \"$1\" = \"setup-token\" ] || exit 2\n\
              [ -t 0 ] || exit 1\n\
@@ -33,10 +33,8 @@ fn fake_claude(tag: &str) -> String {
              printf '\\r\\nYour OAuth token (valid for 1 year):\\r\\n\\r\\n{TOKEN}\\r\\n\\r\\nStore this token securely.\\r\\n'\n"
         ),
     )
-    .expect("the script");
-    std::fs::set_permissions(&script, std::os::unix::fs::PermissionsExt::from_mode(0o755))
-        .expect("executable");
-    script.display().to_string()
+    .display()
+    .to_string()
 }
 
 /// A server whose model's last call failed, so no model answers, over `secrets` and `verify`.

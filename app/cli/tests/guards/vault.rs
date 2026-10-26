@@ -4,7 +4,6 @@
 //! tar itself and its list can be read back.
 
 use super::{Scratch, repo};
-use std::path::Path;
 use std::process::{Command, Output};
 
 /// The Drive as a directory under `$FAKE_DRIVE`: `/my-files/...` and `/trash` are its paths.
@@ -87,8 +86,7 @@ impl Vault {
         let bin = scratch.join("bin");
         std::fs::create_dir_all(&bin).expect("bin");
         for (stub, text) in [("proton-drive", DRIVE), ("gpg", GPG)] {
-            std::fs::write(bin.join(stub), text).expect("a stub");
-            make_executable(&bin.join(stub));
+            let _ = suzatary_testkit::fake_program(&bin, stub, text);
         }
         Vault { scratch }
     }
@@ -134,11 +132,6 @@ impl Vault {
     fn calls(&self) -> String {
         std::fs::read_to_string(self.scratch.join("drive/log")).unwrap_or_default()
     }
-}
-
-fn make_executable(path: &Path) {
-    use std::os::unix::fs::PermissionsExt;
-    std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o755)).expect("chmod");
 }
 
 fn text(out: &[u8]) -> String {

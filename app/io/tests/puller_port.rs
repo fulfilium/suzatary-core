@@ -6,7 +6,6 @@
 
 use std::collections::VecDeque;
 use std::io::{Read, Write};
-use std::os::unix::fs::PermissionsExt as _;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
@@ -79,12 +78,6 @@ fn serve(far: &Path, server: &Server) {
     }
 }
 
-fn script(path: &Path, text: &str) -> PathBuf {
-    std::fs::write(path, text).expect("the script");
-    std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o755)).expect("executable");
-    path.to_path_buf()
-}
-
 /// Copies each message of the far end `far` the maildir leaf `leaf` lacks into its `half`.
 fn copying(far: &Path, leaf: &str, half: &str) -> String {
     format!(
@@ -104,7 +97,7 @@ echo synced"#,
 
 /// mbsync's command line, `-c <config> <channel>`, reading the far end and the maildir leaf
 /// from the config; anything else exits 99.
-struct Bridge(tempfile::TempDir);
+struct Bridge(tempfile::TempDir, PathBuf);
 
 impl Bridge {
     fn new() -> Self {
@@ -118,8 +111,9 @@ impl Bridge {
         )
         .expect("the config");
         let far = dir.path().join("far");
-        script(
-            &dir.path().join("mbsync"),
+        let program = suzatary_testkit::fake_program(
+            dir.path(),
+            "mbsync",
             &format!(
                 "#!/bin/sh\n[ \"$1\" = -c ] && [ $# -eq 3 ] || {{ echo \"refused: $*\" >&2; exit 99; }}\n\
                  grep -qx \"Channel $3\" \"$2\" || {{ echo \"no channel $3\" >&2; exit 98; }}\n\
@@ -127,12 +121,12 @@ impl Bridge {
                 copying(&far, "$near", "new")
             ),
         );
-        Self(dir)
+        Self(dir, program)
     }
 
     fn puller(&self) -> Mbsync {
         Mbsync {
-            program: self.0.path().join("mbsync"),
+            program: self.1.clone(),
             config: self.0.path().join("mbsyncrc"),
             channel: "ada".to_owned(),
         }
@@ -172,8 +166,9 @@ fn mbsync_keeps_every_law_behind_a_fake_bridge() {
 /// lieer's command lines in the account's maildir: `sync` runs `first`, then copies the far end
 /// into `mail/cur`, and `init --no-auth <account>` begins the repository; anything else exits 99.
 fn gmi(dir: &Path, first: &str) -> PathBuf {
-    script(
-        &dir.join("gmi"),
+    suzatary_testkit::fake_program(
+        dir,
+        "gmi",
         &format!(
             "#!/bin/sh\nif [ \"$*\" = sync ]; then\n{first}\n{}\n\
              elif [ \"$*\" = 'init --no-auth {ADA}' ]; then\n  echo '{{}}' > .gmailieer.json\n\

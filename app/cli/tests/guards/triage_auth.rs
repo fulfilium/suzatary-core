@@ -15,11 +15,7 @@ fn secretspec_holding(dir: &std::path::Path, name: &str) {
     let script = format!(
         "#!/usr/bin/env bash\n[ \"$1\" = get ] && [ \"$2\" = {name} ] && {{ echo held-value; exit 0; }}\nexit 1\n"
     );
-    let path = dir.join("secretspec");
-    std::fs::write(&path, script).expect("the stub");
-    let mut perms = std::fs::metadata(&path).expect("stat").permissions();
-    std::os::unix::fs::PermissionsExt::set_mode(&mut perms, 0o755);
-    std::fs::set_permissions(&path, perms).expect("chmod");
+    let _ = suzatary_testkit::fake_program(dir, "secretspec", &script);
 }
 
 #[test]

@@ -19,9 +19,11 @@
 # use; `cli` depends on it for `suzatary plugin sync`. `plugin-fence` is a
 # test fixture: a hostile plugin whose component the flake builds for wasm32
 # (`.#suzatary-plugin-fence`) and whose library the workspace merely lints.
+# `testkit` is a dev-dependency of `io` and `cli` alone: the programs their tests
+# make and run.
 [workspace]
 resolver = "3"
-members = ["core", "io", "cli", "bench", "wasm", "plugin", "plugin-fence", "plugin-ics"]
+members = ["core", "io", "cli", "bench", "wasm", "plugin", "plugin-fence", "plugin-ics", "testkit"]
 
 [workspace.package]
 # FIXED, AND NOT THE RELEASE (CLAUDE.md, "Versioning"): the version is a reading of

@@ -74,6 +74,8 @@ workspace = true
 proptest.workspace = true
 # Inert effects a test fills a record from (a render cache that keeps nothing).
 suzatary-core = { workspace = true, features = ["nothing"] }
+# Programs a test makes and runs, never executing a file its process wrote.
+suzatary-testkit = { path = "../testkit" }
 
 # ONE TEST BINARY (`autotests = false` above): every file under `tests/` is a
 # module of `tests/all.rs`, so the suite links the application once, not per file.

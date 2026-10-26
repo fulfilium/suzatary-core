@@ -211,17 +211,11 @@ impl Train {
 
         let bin = root.join("bin");
         std::fs::create_dir_all(root.join("prs")).expect("prs dir");
-        write(&bin, "gh", GH);
         // The tree half is green unless the tree holds `broken`, the live half unless it
         // holds `broken-live`; every run is counted by its flag. A red half ends with the
         // real gate's last section.
-        write(&bin, "gate", GATE);
-        write(&bin, "public", PUBLIC);
-        for stub in ["gh", "gate", "public"] {
-            run(
-                Command::new("chmod").args(["+x"]).arg(bin.join(stub)),
-                "chmod",
-            );
+        for (stub, body) in [("gh", GH), ("gate", GATE), ("public", PUBLIC)] {
+            let _ = suzatary_testkit::fake_program(&bin, stub, body);
         }
         run(Command::new("mkfifo").arg(root.join("awake")), "mkfifo");
         train
@@ -1082,13 +1076,11 @@ fn train_land_rebuilds_the_train_on_a_master_that_moved_and_lands_only_its_gated
     assert!(t.train(&["gate"]).status.success());
     let gated = t.git(&["rev-parse", "train"]);
 
-    let refuse = t.scratch.join("origin.git/hooks/pre-receive");
-    write(
-        &t.scratch,
-        "origin.git/hooks/pre-receive",
+    let refuse = suzatary_testkit::fake_program(
+        &t.scratch.join("origin.git/hooks"),
+        "pre-receive",
         "#!/bin/sh\nexit 1\n",
     );
-    run(Command::new("chmod").args(["+x"]).arg(&refuse), "chmod");
     assert!(
         !t.train(&["land"]).status.success(),
         "origin refused the push"
@@ -1594,16 +1586,14 @@ impl Train {
         self.git(&["remote", "set-url", "core", url]);
         let core = self.scratch.join("core.git");
         self.git(&["config", &format!("url.{}.insteadOf", core.display()), url]);
-        let hook = core.join("hooks/update");
-        write(
-            &core,
-            "hooks/update",
+        let _ = suzatary_testkit::fake_program(
+            &core.join("hooks"),
+            "update",
             &format!(
                 "#!/bin/sh\necho \"$1 $3\" >>'{}'\n",
                 self.scratch.join("core-pushes").display()
             ),
         );
-        run(Command::new("chmod").args(["+x"]).arg(hook), "chmod");
     }
 
     /// The refs pushed to core, in order: `<ref> <new sha>`.
@@ -2066,14 +2056,10 @@ fn train_publish_refuses_to_push_an_empty_commit() {
         "which git",
     );
     let broken = t.scratch.join("broken");
-    write(
+    let _ = suzatary_testkit::fake_program(
         &broken,
         "git",
         &format!("#!/bin/sh\n[ \"$1\" = commit-tree ] && exit 0\nexec {real} \"$@\"\n"),
-    );
-    run(
-        Command::new("chmod").arg("+x").arg(broken.join("git")),
-        "chmod",
     );
     let path = format!(
         "{}:{}",
@@ -3031,18 +3017,16 @@ fn train_reads_origin_first_and_repairs_a_failed_record() {
     let data = t.scratch.join("data");
     std::fs::create_dir_all(&data).expect("a data root");
     let instance = a_release_deployment(&data);
-    let failing = t.scratch.join("bin/suzatary-failing");
     let flag = t.scratch.join("fail-record");
-    write(
-        &t.scratch,
-        "bin/suzatary-failing",
+    let failing = suzatary_testkit::fake_program(
+        &t.scratch.join("bin"),
+        "suzatary-failing",
         &format!(
             "#!/bin/sh\n[ \"$1 $2\" != \"release record\" ] || [ ! -e '{flag}' ] || {{ echo 'the chain is busy' >&2; exit 1; }}\nexec '{real}' \"$@\"\n",
             flag = flag.display(),
             real = crate::binary::path()
         ),
     );
-    run(Command::new("chmod").args(["+x"]).arg(&failing), "chmod");
     let mut env = release_env(&instance);
     env.push(("SUZATARY_TRAIN_BIN", failing.display().to_string()));
     let env: Vec<(&str, &str)> = env.iter().map(|(k, v)| (*k, v.as_str())).collect();
@@ -3358,31 +3342,25 @@ fn app_bin_builds_a_named_commit_from_its_public_tree() {
     let scratch = Scratch::new("app-bin-public");
     let checkout = scratch.join("checkout");
     std::fs::create_dir_all(checkout.join("scripts")).expect("a checkout");
-    std::fs::copy(
-        repo().join("scripts/app-bin.sh"),
-        checkout.join("scripts/app-bin.sh"),
-    )
-    .expect("the script");
+    suzatary_testkit::copy_program(
+        &repo().join("scripts/app-bin.sh"),
+        &checkout.join("scripts/app-bin.sh"),
+    );
     let tree = scratch.join("public-tree");
     let asked = scratch.join("asked");
-    let stub = |name: &str, body: String| {
-        let path = checkout.join(name);
-        std::fs::write(&path, body).expect("a stub");
-        std::fs::set_permissions(&path, std::os::unix::fs::PermissionsExt::from_mode(0o755))
-            .expect("executable");
-    };
-    stub(
-        "scripts/public-tree.sh",
-        format!(
+    let _ = suzatary_testkit::fake_program(
+        &checkout.join("scripts"),
+        "public-tree.sh",
+        &format!(
             "#!/bin/sh\necho \"public $*\" >>'{asked}'\necho '{tree}'\n",
             asked = asked.display(),
             tree = tree.display()
         ),
     );
-    std::fs::create_dir_all(checkout.join("bin")).expect("a bin");
-    stub(
-        "bin/nix",
-        format!(
+    let _ = suzatary_testkit::fake_program(
+        &checkout.join("bin"),
+        "nix",
+        &format!(
             "#!/bin/sh\necho \"nix $*\" >>'{asked}'\necho /nix/store/example-suzatary\n",
             asked = asked.display()
         ),

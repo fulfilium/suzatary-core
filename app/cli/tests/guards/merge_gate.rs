@@ -528,11 +528,14 @@ impl Gate {
         let gate = Gate {
             scratch: Scratch::new("merge-gate-kept"),
         };
-        let root = &*gate.scratch;
-        for script in ["scripts/merge-gate.sh", "scripts/gate-units.mjs"] {
-            let text = std::fs::read(repo().join(script)).expect("the gate reads");
-            gate.write(script, &String::from_utf8_lossy(&text));
-        }
+        gate.write(
+            "scripts/gate-units.mjs",
+            &std::fs::read_to_string(repo().join("scripts/gate-units.mjs")).expect("reads"),
+        );
+        gate.program(
+            "scripts/merge-gate.sh",
+            &std::fs::read_to_string(repo().join("scripts/merge-gate.sh")).expect("reads"),
+        );
         for path in [
             "app/core/src/lib.rs",
             "web/src/main.ts",
@@ -551,15 +554,7 @@ impl Gate {
         }
         gate.write(".gitignore", "red\nprobes*\nstub*\n");
         gate.write(".gitattributes", PRIVATE);
-        gate.write("stub", STUB);
-        for file in ["scripts/merge-gate.sh", "stub"] {
-            let status = Command::new("chmod")
-                .arg("+x")
-                .arg(root.join(file))
-                .status()
-                .expect("chmod");
-            assert!(status.success());
-        }
+        gate.program("stub", STUB);
         gate.git(&["init", "-q", "-b", "master"]);
         gate.git(&["add", "-A"]);
         gate.git(&["commit", "-q", "-m", "seed"]);
@@ -570,6 +565,14 @@ impl Gate {
         let path = self.scratch.join(rel);
         std::fs::create_dir_all(path.parent().expect("a parent")).expect("dirs");
         std::fs::write(path, content).expect("writes");
+    }
+
+    /// An executable file at `rel` holding `content`: a regular file, since the gate commits
+    /// the script it runs and keys a stub's passes by the stub's own bytes.
+    fn program(&self, rel: &str, content: &str) {
+        let path = self.scratch.join(rel);
+        std::fs::create_dir_all(path.parent().expect("a parent")).expect("dirs");
+        suzatary_testkit::write_program(&path, content.as_bytes());
     }
 
     fn git(&self, args: &[&str]) {
@@ -662,13 +665,7 @@ while [ ! -e go ]; do sleep 0.1; done
 #[test]
 fn merge_gate_a_second_gate_in_one_checkout_does_not_start() {
     let gate = Gate::new();
-    gate.write("waits", WAITS);
-    let status = Command::new("chmod")
-        .arg("+x")
-        .arg(gate.scratch.join("waits"))
-        .status()
-        .expect("chmod");
-    assert!(status.success());
+    gate.program("waits", WAITS);
     let started = gate.scratch.join("started");
     let mut first = Command::new(gate.scratch.join("scripts/merge-gate.sh"))
         .arg("--no-live")
@@ -819,10 +816,10 @@ fn merge_gate_runs_only_the_steps_whose_inputs_moved() {
         every,
         "the environment the steps read is in every key"
     );
-    let script = gate.scratch.join("scripts/merge-gate.sh");
-    let mut source = std::fs::read_to_string(&script).expect("the gate reads");
+    let mut source = std::fs::read_to_string(gate.scratch.join("scripts/merge-gate.sh"))
+        .expect("the gate reads");
     source.push_str("# a changed gate\n");
-    std::fs::write(&script, source).expect("the gate writes");
+    gate.program("scripts/merge-gate.sh", &source);
     gate.commit();
     assert_eq!(gate.run(&[]).1, every, "the gate is in every key");
 }
@@ -968,13 +965,7 @@ fn merge_gate_keeps_a_stubs_passes_apart() {
         .collect();
     let gate = Gate::new();
     assert_eq!(gate.run(&[]).1, every);
-    gate.write("stub-other", &format!("{STUB}# another program\n"));
-    let status = Command::new("chmod")
-        .arg("+x")
-        .arg(gate.scratch.join("stub-other"))
-        .status()
-        .expect("chmod");
-    assert!(status.success());
+    gate.program("stub-other", &format!("{STUB}# another program\n"));
     assert_eq!(gate.run_with("stub-other", &[]).1, every);
     let kept = gate.scratch.join(".git/gate");
     let tables: Vec<String> = std::fs::read_dir(&kept)
@@ -1104,10 +1095,9 @@ type Pair = (String, String);
 /// `order`: the steps that ran beside another, as (a step, the step running when it started),
 /// the (light, heavy) pairs that ran side by side, and the steps in the order they started.
 fn take_turns(env: &[(&str, &str)], order: &[&str]) -> (Vec<Pair>, BTreeSet<Pair>, Vec<String>) {
-    use std::os::unix::fs::PermissionsExt as _;
     let gate = Gate::new();
-    let script = gate.scratch.join("scripts/merge-gate.sh");
-    let source = std::fs::read_to_string(&script).expect("the gate reads");
+    let source = std::fs::read_to_string(gate.scratch.join("scripts/merge-gate.sh"))
+        .expect("the gate reads");
     let source: Vec<String> = source
         .lines()
         .map(|line| {
@@ -1118,11 +1108,9 @@ fn take_turns(env: &[(&str, &str)], order: &[&str]) -> (Vec<Pair>, BTreeSet<Pair
             }
         })
         .collect();
-    std::fs::write(&script, source.join("\n") + "\n").expect("the gate writes");
+    gate.program("scripts/merge-gate.sh", &(source.join("\n") + "\n"));
     gate.commit();
-    let stub = gate.scratch.join("stub-turns");
-    std::fs::write(&stub, TAKES_TURNS).expect("the stub writes");
-    std::fs::set_permissions(&stub, std::fs::Permissions::from_mode(0o755)).expect("chmod");
+    gate.program("stub-turns", TAKES_TURNS);
     let heavy = order.join(" ");
     let mut env = env.to_vec();
     env.push(("GATE_HEAVY", &heavy));
@@ -1255,11 +1243,9 @@ esac
 /// heavy step runs, the second's waits for it, and both reach their verdict once it ends.
 #[test]
 fn merge_gate_two_worktrees_share_the_heavy_lock() {
-    use std::os::unix::fs::PermissionsExt as _;
     let gate = Gate::new();
+    gate.program("stub-holds", HOLDS);
     let stub = gate.scratch.join("stub-holds");
-    std::fs::write(&stub, HOLDS).expect("the stub writes");
-    std::fs::set_permissions(&stub, std::fs::Permissions::from_mode(0o755)).expect("chmod");
     let other = Scratch::new("merge-gate-worktree");
     let tree = other.join("tree");
     gate.git(&[
@@ -1655,7 +1641,6 @@ fn merge_gate_roots_the_shell_it_runs_in_before_it_collects() {
 /// checkout whose target holds one marker, after `edit` runs on it. Whether the target was kept,
 /// and the stubs' log: each collection and `cargo sweep`, in order.
 fn make_room(scratch: &Path, free_gb: u32, edit: &str) -> (bool, Vec<String>) {
-    use std::os::unix::fs::PermissionsExt as _;
     let gate = std::fs::read_to_string(repo().join("scripts/merge-gate.sh")).expect("reads");
     let start = gate.find("\ncodespace_room=").expect("the room's settings");
     let end = start
@@ -1674,9 +1659,8 @@ fn make_room(scratch: &Path, free_gb: u32, edit: &str) -> (bool, Vec<String>) {
         ("nix-collect-garbage", "echo collect >>log"),
         ("sudo", "true"),
     ] {
-        let path = bin.join(name);
-        std::fs::write(&path, format!("#!/usr/bin/env bash\n{body}\n")).expect("stub");
-        std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o755)).expect("chmod");
+        let _ =
+            suzatary_testkit::fake_program(&bin, name, &format!("#!/usr/bin/env bash\n{body}\n"));
     }
     let free = format!("{free_gb}\n");
     for (path, text) in [

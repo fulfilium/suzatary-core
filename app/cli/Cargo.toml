@@ -124,6 +124,8 @@ test = false
 [dev-dependencies]
 # A scratch cache tier for `tests/plugin.rs`.
 tempfile = "3"
+# Programs a test makes and runs, never executing a file its process wrote.
+suzatary-testkit = { path = "../testkit" }
 # Inert effects the fakes fill a record with.
 suzatary-core = { workspace = true, features = ["nothing"] }
 # The integration tests drive the axum app with FAKE capabilities, which needs

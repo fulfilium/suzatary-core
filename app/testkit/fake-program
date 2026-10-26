@@ -1,0 +1,8 @@
+#!/bin/sh
+# Runs the text in "$0.sh", beside the link this was called through, under the interpreter
+# its first line names, or under sh. See src/lib.rs.
+IFS= read -r first <"$0.sh"
+case $first in
+'#!'*) exec ${first#??} "$0.sh" "$@" ;;
+esac
+exec /bin/sh "$0.sh" "$@"

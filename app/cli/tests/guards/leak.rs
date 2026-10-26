@@ -362,7 +362,6 @@ fn public_tree_guard_finds_what_a_reader_would() {
 /// and prints no verdict, whatever the tree holds.
 #[test]
 fn public_tree_guard_is_not_clean_when_its_matcher_fails() {
-    use std::os::unix::fs::PermissionsExt as _;
     let scratch = Scratch::new("public-tree-matcher-fails");
     let (data, tree) = (scratch.join("data"), scratch.join("tree"));
     std::fs::create_dir_all(&data).expect("data dir");
@@ -386,9 +385,7 @@ fn public_tree_guard_is_not_clean_when_its_matcher_fails() {
             ),
         ),
     ] {
-        let bin = scratch.join(name);
-        std::fs::write(&bin, body).expect("a matcher");
-        std::fs::set_permissions(&bin, std::fs::Permissions::from_mode(0o755)).expect("executable");
+        let bin = suzatary_testkit::fake_program(&scratch, name, &body);
         let out = Command::new(public_tree_script())
             .args([Path::new("--check"), &tree])
             .env(suzatary_cli::instance::ENV, data.join("instance.toml"))
@@ -553,14 +550,18 @@ fn public_tree_is_a_function_of_its_commit() {
         std::fs::create_dir_all(path.parent().expect("a parent")).expect("dirs");
         std::fs::write(path, content).expect("a file writes");
     };
-    for script in ["public-tree.sh", "public-changelog.md", "secret-rules.toml"] {
-        std::fs::create_dir_all(source.join("scripts")).expect("scripts");
+    std::fs::create_dir_all(source.join("scripts")).expect("scripts");
+    for file in ["public-changelog.md", "secret-rules.toml"] {
         std::fs::copy(
-            repo().join("scripts").join(script),
-            source.join("scripts").join(script),
+            repo().join("scripts").join(file),
+            source.join("scripts").join(file),
         )
-        .expect("the script copies");
+        .expect("the file copies");
     }
+    suzatary_testkit::copy_program(
+        &public_tree_script(),
+        &source.join("scripts/public-tree.sh"),
+    );
     write(
         "app/Cargo.toml",
         "[workspace.package]\nversion = \"9.8.7\"\n",
@@ -894,7 +895,6 @@ fn public_tree_guard_reads_a_sealed_slot_as_ciphertext() {
 /// with 1 as its fatal errors do, makes the guard exit 2 with no verdict.
 #[test]
 fn public_tree_guard_is_not_clean_when_gitleaks_fails() {
-    use std::os::unix::fs::PermissionsExt as _;
     let scratch = Scratch::new("public-tree-gitleaks-fails");
     let instance = throwaway_deployment(&scratch);
     let tree = scratch.join("tree");
@@ -902,16 +902,11 @@ fn public_tree_guard_is_not_clean_when_gitleaks_fails() {
     std::fs::write(tree.join("note.txt"), "nothing here\n").expect("a file");
     let stub = scratch.join("bin");
     std::fs::create_dir_all(&stub).expect("a stub dir");
-    std::fs::write(
-        stub.join("gitleaks"),
+    let _ = suzatary_testkit::fake_program(
+        &stub,
+        "gitleaks",
         "#!/bin/sh\necho 'FTL broken' >&2\nexit 1\n",
-    )
-    .expect("a stub");
-    std::fs::set_permissions(
-        stub.join("gitleaks"),
-        std::fs::Permissions::from_mode(0o755),
-    )
-    .expect("executable");
+    );
     let path = format!(
         "{}:{}",
         stub.display(),
@@ -1207,7 +1202,6 @@ fn public_scan_never_admits_a_message() {
 #[test]
 #[allow(clippy::too_many_lines)]
 fn public_tree_guard_incremental_and_full_checks_agree() {
-    use std::os::unix::fs::PermissionsExt as _;
     let scratch = Scratch::new("public-tree-passes");
     let (data, tree, passes) = (
         scratch.join("data"),
@@ -1306,17 +1300,16 @@ fn public_tree_guard_incremental_and_full_checks_agree() {
         &["picture.png:0"],
     );
 
-    // Another matcher is another rule: a copy that answers as the real one, with other bytes.
+    // Another matcher is another rule: a program that answers as the real one, with other bytes.
     let other = scratch.join("matcher");
-    std::fs::write(
+    suzatary_testkit::write_program(
         &other,
         format!(
             "#!/bin/sh\n# another matcher\nexec {} \"$@\"\n",
             real.display()
-        ),
-    )
-    .expect("a matcher");
-    std::fs::set_permissions(&other, std::fs::Permissions::from_mode(0o755)).expect("executable");
+        )
+        .as_bytes(),
+    );
     let moved = check(false, &other);
     assert_eq!(
         (moved.0, moved.1),

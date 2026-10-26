@@ -40,10 +40,12 @@ fn files(dir: &Path, under: &Path, out: &mut Vec<PathBuf>) {
 fn place(from: &Path, to: &Path) {
     use std::os::unix::fs::PermissionsExt as _;
     std::fs::create_dir_all(to.parent().expect("a parent")).expect("dirs");
-    std::fs::write(to, std::fs::read(from).expect("the template file reads")).expect("placed");
-    let executable = std::fs::metadata(from).expect("stat").permissions().mode() & 0o111 != 0;
-    let mode = if executable { 0o755 } else { 0o644 };
-    std::fs::set_permissions(to, std::fs::Permissions::from_mode(mode)).expect("chmod");
+    if std::fs::metadata(from).expect("stat").permissions().mode() & 0o111 == 0 {
+        std::fs::write(to, std::fs::read(from).expect("the template file reads")).expect("placed");
+        std::fs::set_permissions(to, std::fs::Permissions::from_mode(0o644)).expect("chmod");
+    } else {
+        suzatary_testkit::copy_program(from, to);
+    }
 }
 
 fn git(dir: &Path, args: &[&str]) -> String {

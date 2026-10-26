@@ -712,7 +712,7 @@ lane=live
 live_reads=(CLAUDE.md app/Cargo.toml app/Cargo.lock app/conformance app/wit app/core app/io app/plugin app/bench
   app/plugin-ics/Cargo.toml app/plugin-ics/ics.schema app/plugin-fence/Cargo.toml app/wasm/Cargo.toml
   app/cli/Cargo.toml app/cli/src app/cli/tests/common app/cli/tests/this_box.rs app/cli/tests/all.rs
-  app/cli/tests/live.rs)
+  app/cli/tests/live.rs app/testkit)
 for module in "${live_modules[@]}"; do live_reads+=("app/cli/tests/$module.rs"); done
 live_only="only:$(IFS=,; echo "${live_reads[*]}")"
 # The public tree holds no live pins, so it has no live step.

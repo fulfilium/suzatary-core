@@ -1,0 +1,18 @@
+[package]
+name = "suzatary-testkit"
+description = "Programs a test makes and runs, made so that no test's process ever executes a file it holds open for writing"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish = false
+
+[lib]
+name = "suzatary_testkit"
+path = "src/lib.rs"
+
+[dev-dependencies]
+tempfile = "3"
+
+[lints]
+workspace = true

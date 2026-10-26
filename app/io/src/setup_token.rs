@@ -254,10 +254,10 @@ mod tests {
     /// column, the link in a hyperlink, the terminal queries after the prompt. It refuses to run
     /// off a terminal as Ink does, and prints a token for one code.
     fn fake(dir: &std::path::Path) -> String {
-        let script = dir.join("claude");
-        std::fs::write(
-            &script,
-            format!(
+        suzatary_testkit::fake_program(
+            dir,
+            "claude",
+            &format!(
                 r#"#!/bin/sh
 [ "$1" = "setup-token" ] || exit 2
 if [ ! -t 0 ] || [ ! -t 1 ]; then
@@ -281,10 +281,8 @@ printf 'Use this token by setting: export CLAUDE_CODE_OAUTH_TOKEN=<token>\r\n'
 "#
             ),
         )
-        .expect("the script");
-        std::fs::set_permissions(&script, std::os::unix::fs::PermissionsExt::from_mode(0o755))
-            .expect("executable");
-        script.display().to_string()
+        .display()
+        .to_string()
     }
 
     const WAIT: Duration = Duration::from_secs(10);
@@ -324,17 +322,14 @@ printf 'Use this token by setting: export CLAUDE_CODE_OAUTH_TOKEN=<token>\r\n'
     fn dropping_a_sign_in_ends_its_whole_group() {
         let dir = tempfile::tempdir().expect("a directory");
         let pidfile = dir.path().join("child.pid");
-        let script = dir.path().join("claude");
-        std::fs::write(
-            &script,
-            format!(
+        let script = suzatary_testkit::fake_program(
+            dir.path(),
+            "claude",
+            &format!(
                 "#!/bin/sh\nsleep 300 &\necho $! > {}\nprintf '{URL}\\r\\n'\nwait\n",
                 pidfile.display()
             ),
-        )
-        .expect("written");
-        std::fs::set_permissions(&script, std::os::unix::fs::PermissionsExt::from_mode(0o755))
-            .expect("executable");
+        );
         let signing = SignIn::start(&script.display().to_string(), WAIT).expect("a URL");
         let child = std::fs::read_to_string(&pidfile).expect("the child's pid");
         // A killed process nobody has reaped yet is a zombie: dead, though /proc still names it.

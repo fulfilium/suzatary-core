@@ -3679,8 +3679,6 @@ impl FakeDrive {
     /// If the scratch directory cannot be written.
     #[must_use]
     pub fn new(tag: &str) -> Self {
-        use std::os::unix::fs::PermissionsExt as _;
-
         let dir = scratch(&format!("{tag}-drive"));
         std::fs::create_dir_all(dir.join("files")).expect("a fixture dir");
         std::fs::write(
@@ -3731,9 +3729,7 @@ impl FakeDrive {
                echo \"refused: $*\" >&2; exit 99\n\
              fi\n"
         );
-        let cli = dir.join("proton-drive");
-        std::fs::write(&cli, script).expect("the script");
-        std::fs::set_permissions(&cli, std::fs::Permissions::from_mode(0o755)).expect("executable");
+        let _ = suzatary_testkit::fake_program(&dir, "proton-drive", &script);
         Self { dir }
     }
 
