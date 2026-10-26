@@ -22,6 +22,7 @@ import { proposalCard } from "../inbox/proposal";
 import asks from "../prodrome/asks";
 import intents from "../prodrome/intents";
 import intentsync from "../prodrome/intentsync";
+import storesync from "../prodrome/storesync";
 import keyed from "../algebra/keyed";
 import { anchor, anchorOf, print, textWithReferences, tokenise } from "./refs";
 import { type Round, foldOf } from "./rounds";
@@ -325,10 +326,11 @@ export function mountTranscript(
   const turns = el("div", { class: "turns" }, roundList, place, roomNode);
   const newAnswerPill = el("button", { type: "button", class: "newanswerpill", hidden: true }, "↓ new answer");
   const problem = el("p", { class: "problem", hidden: true });
+  const notHere = el("p", { class: "nothere", hidden: true });
   const unplaced = el("div", { class: "unplaced" });
   // Until the first window is read, turns in grey above the composer: a conversation on its way never looks empty.
   const coming = placeholder.view(placeholder.TURNS);
-  const content = el("div", { class: "transcriptcontent" }, coming, problem, unplaced, earlierBtn, turns, newAnswerPill);
+  const content = el("div", { class: "transcriptcontent" }, coming, problem, notHere, unplaced, earlierBtn, turns, newAnswerPill);
 
   // Rounds by turn index; each a day mark and its parts, every list keyed, so a redraw replaces only what moved.
   const roundNodes = keyed.list(roundList);
@@ -602,6 +604,8 @@ export function mountTranscript(
   function redraw(state: SourceState): void {
     drawing.cancel();
     if (state.kind !== "loading") coming.remove();
+    notHere.hidden = state.kind !== "nothere";
+    notHere.textContent = state.kind === "nothere" ? storesync.notHere(state.lines, "this conversation", state.why) : "";
     if (state.kind !== "loaded") {
       problem.hidden = state.kind !== "failed";
       problem.textContent = state.kind === "failed" ? state.reason : "";

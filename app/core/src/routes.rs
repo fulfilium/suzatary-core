@@ -903,11 +903,12 @@ pub fn lines_skeleton(
         conversations,
         piece.sent.iter().map(|node| node.hash.as_str()),
     )?;
+    let nodes = held_sizes(conversations.lines, piece.sent)?;
     Ok(wire::SkeletonPayload {
         heads: snapshot.heads,
         geneses: snapshot.geneses,
         epoch: snapshot.epoch,
-        nodes: piece.sent,
+        nodes,
         since: snapshot.since,
         frontier: snapshot.frontier,
         keys,
@@ -916,6 +917,29 @@ pub fn lines_skeleton(
         weight: piece.weight,
         erased,
     })
+}
+
+/// Each node sized by the bytes [`content`] sends of it, which are the store's own print and not
+/// its reprint, so a tab that batches its asks by these sizes never asks for more than one answer
+/// carries.
+fn held_sizes(
+    lines: &dyn Prodrome<crate::secretary::line_event::LineEvent>,
+    nodes: Vec<wire::SkeletonNode>,
+) -> Answered<Vec<wire::SkeletonNode>> {
+    let names: Vec<prodrome_core::event::Hash> = nodes
+        .iter()
+        .map(|node| prodrome_core::event::Hash::new(node.hash.clone()))
+        .collect::<Result<_, _>>()
+        .map_err(|failed| crate::store::StoreError::unreadable("lines", failed.to_string()))?;
+    let sizes = lines.sizes(&names)?;
+    Ok(nodes
+        .into_iter()
+        .zip(sizes)
+        .map(|(node, size)| wire::SkeletonNode {
+            size: size.unwrap_or(node.size),
+            ..node
+        })
+        .collect())
 }
 
 /// The key of every slot the lines named `sent` name, by name, but a key an erasure anywhere in

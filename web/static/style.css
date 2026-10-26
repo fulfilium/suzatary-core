@@ -658,6 +658,11 @@ a.chipbtn,
   overflow-wrap: anywhere;
 }
 
+.nothere {
+  color: var(--ink-muted);
+  overflow-wrap: anywhere;
+}
+
 .count {
   display: flex;
   flex-wrap: wrap;

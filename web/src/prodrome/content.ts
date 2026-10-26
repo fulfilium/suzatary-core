@@ -8,12 +8,14 @@ import { CONTENT } from "./objects"
 import { sha256Hex } from "./verify"
 
 export namespace content {
-  // Who asks first: a conversation a page opens, or the whole store behind it.
-  export type Lane = "First" | "Behind"
+  // Who asks, first to last: a conversation a page opens, the whole store behind it, or a prefetch ahead of any page.
+  export type Lane = "First" | "Behind" | "Ahead"
+  const LANES: readonly Lane[] = ["First", "Behind", "Ahead"]
 
   export type Effects = {
     readonly ask: (hashes: readonly string[]) => Promise<ContentPayload>
-    // The bytes a fetch will ask the box for, said once as it starts; then each batch's bytes as it comes or is lost.
+    // The bytes a page's fetch will ask the box for, said once as it starts; then each batch's bytes as it comes or is
+    // lost. A prefetch says none of them.
     readonly asked: (bytes: number) => void
     readonly came: (bytes: number) => void
     readonly lost: (bytes: number) => void
@@ -21,6 +23,15 @@ export namespace content {
     readonly atOnce: () => number
     // Literals now held, handed to the reader once each; it settles once the reader has them.
     readonly held: (rows: readonly Row[]) => Promise<void>
+    // Whether the page is shown: a prefetch sends nothing while it is not.
+    readonly shown: () => boolean
+  }
+
+  export type Fetcher = {
+    // The content of `nodes` held; rejects when an answer their names were in did not come or was not kept.
+    readonly fetch: (lane: Lane, nodes: readonly SkeletonNode[]) => Promise<void>
+    // Sends what a hidden page held back.
+    readonly wake: () => void
   }
 
   // The box's bounds on one answer (`query::MOST_HASHES`, `routes::MOST_CONTENT_BYTES`).
@@ -37,7 +48,15 @@ export namespace content {
   const memory = new Set<string>()
   let moves = 0
 
-  export const has = (name: string): boolean => memory.has(name)
+  // Every name a reading asked for: the page keeps their content while it is open.
+  const asked = new Set<string>()
+  export const has = (name: string): boolean => {
+    asked.add(name)
+    return memory.has(name)
+  }
+  // The same, without keeping it: what a count reads.
+  export const holds = (name: string): boolean => memory.has(name)
+  export const read = (): ReadonlySet<string> => asked
   // Counts every change of what is held, so a reading of it is named by it.
   export const version = (): number => moves
 
@@ -96,9 +115,17 @@ export namespace content {
     }
   }
 
-  const keep = async (fx: Effects, rows: readonly Row[]): Promise<void> => {
+  // A prefetch's answer goes to the device's store alone, so the reader holds only what a reading loaded.
+  const keep = async (fx: Effects, lane: Lane, rows: readonly Row[]): Promise<void> => {
     if (idb.available()) await idb.within(CONTENT, "readwrite", s => Promise.all(rows.map(r => idb.done(s.put(r.literal, r.hash)))))
-    await take(fx, rows)
+    if (lane !== "Ahead") await take(fx, rows)
+  }
+
+  // The names whose content the device's store holds; none where it does not open.
+  export const stored = async (): Promise<ReadonlySet<string>> => {
+    if (!idb.available()) return new Set()
+    const keys: readonly IDBValidKey[] = await idb.within(CONTENT, "readonly", s => idb.done(s.getAllKeys())).catch(() => [])
+    return new Set(keys.filter((k): k is string => typeof k === "string"))
   }
 
   // One name asked for: queued in a lane, or in an answer that is out; settled once that answer comes or is lost.
@@ -114,25 +141,36 @@ export namespace content {
   }
 
   // The content of the nodes it is given held, what the device keeps read first and the rest asked of the box, at most
-  // `fx.atOnce` answers out. A conversation's names go before the whole store's, taken out of its queue if waiting there.
-  // Rejects when an answer its names were in did not come or was not kept.
-  export const fetcher = (fx: Effects): ((lane: Lane, nodes: readonly SkeletonNode[]) => Promise<void>) => {
+  // `fx.atOnce` answers out. A name asked in a lane goes before every later lane, taken out of its queue if waiting
+  // there. A prefetch's answer goes out only when no other is out and the page is shown, and its first failure drops
+  // the rest of the prefetch.
+  export const fetcher = (fx: Effects): Fetcher => {
     const waits = new Map<string, Wait>()
-    const queues: { [L in Lane]: SkeletonNode[] } = { First: [], Behind: [] }
+    const queues: { [L in Lane]: SkeletonNode[] } = { First: [], Behind: [], Ahead: [] }
+    // The names whose bytes the bar was told of and not yet told came or were lost.
+    const told = new Set<string>()
     let out = 0
 
-    const send = async (sent: readonly SkeletonNode[]): Promise<void> => {
+    const settled = (names: readonly string[], said: (bytes: number) => void): void => {
+      const bytes = names.reduce((k, n) => k + (told.has(n) ? (waits.get(n)?.node.size ?? 0) : 0), 0)
+      for (const n of names) told.delete(n)
+      if (bytes > 0) said(bytes)
+    }
+
+    const send = async (lane: Lane, sent: readonly SkeletonNode[]): Promise<void> => {
       const names = sent.map(n => n.hash)
-      const bytes = sent.reduce((k, n) => k + n.size, 0)
       try {
         const rows = await fx.ask(names).then(a => admit(names, a))
         if (rows.type === "Error") throw new Error(rows.e)
-        await keep(fx, rows.v)
-        fx.came(bytes)
+        await keep(fx, lane, rows.v)
+        settled(names, fx.came)
         for (const n of names) waits.get(n)?.come()
       } catch (e: unknown) {
-        fx.lost(bytes)
-        for (const n of names) waits.get(n)?.fail(e)
+        settled(names, fx.lost)
+        const dropped = lane === "Ahead" ? queues.Ahead.map(n => n.hash) : []
+        queues.Ahead = lane === "Ahead" ? [] : queues.Ahead
+        for (const n of [...names, ...dropped]) waits.get(n)?.fail(e)
+        for (const n of dropped) waits.delete(n)
       } finally {
         for (const n of names) waits.delete(n)
         out -= 1
@@ -140,31 +178,39 @@ export namespace content {
       }
     }
 
+    const next = (): Lane | null =>
+      queues.First.length > 0 ? "First" : queues.Behind.length > 0 ? "Behind" : queues.Ahead.length > 0 && out === 0 && fx.shown() ? "Ahead" : null
+
     const pump = (): void => {
-      while (out < fx.atOnce() && queues.First.length + queues.Behind.length > 0) {
-        const lane: Lane = queues.First.length > 0 ? "First" : "Behind"
+      for (let lane = next(); lane !== null && out < fx.atOnce(); lane = next()) {
         const sent = batch(queues[lane], n => n.size).sort(byName)
         const going = new Set(sent.map(n => n.hash))
         queues[lane] = queues[lane].filter(n => !going.has(n.hash))
         out += 1
-        void send(sent)
+        void send(lane, sent)
       }
     }
 
-    return async (lane, nodes) => {
-      await load(fx, nodes.map(n => n.hash))
-      const lacking = nodes.filter(n => !memory.has(n.hash))
+    const fetch = async (lane: Lane, nodes: readonly SkeletonNode[]): Promise<void> => {
+      // A prefetch is given what the device's store lacks, which the reader's names do not say.
+      if (lane !== "Ahead") await load(fx, nodes.map(n => n.hash))
+      const lacking = lane === "Ahead" ? nodes : nodes.filter(n => !memory.has(n.hash))
       const fresh = lacking.filter(n => !waits.has(n.hash))
       for (const n of fresh) waits.set(n.hash, wait(n))
-      if (fresh.length > 0) fx.asked(fresh.reduce((k, n) => k + n.size, 0))
+      const unsaid = lane === "Ahead" ? [] : lacking.filter(n => !told.has(n.hash))
+      for (const n of unsaid) told.add(n.hash)
+      if (unsaid.length > 0) fx.asked(unsaid.reduce((k, n) => k + n.size, 0))
       const named = new Set(lacking.map(n => n.hash))
-      const moved = lane === "First" ? queues.Behind.filter(n => named.has(n.hash)) : []
-      if (moved.length > 0) queues.Behind = queues.Behind.filter(n => !named.has(n.hash))
+      const later = LANES.slice(LANES.indexOf(lane) + 1)
+      const moved = later.flatMap(l => queues[l].filter(n => named.has(n.hash)))
+      for (const l of later) queues[l] = queues[l].filter(n => !named.has(n.hash))
       queues[lane] = [...queues[lane], ...moved, ...fresh]
       if (lane === "Behind") queues.Behind.sort(newest)
       pump()
       await Promise.all(lacking.flatMap(n => waits.get(n.hash)?.done ?? []))
     }
+
+    return { fetch, wake: pump }
   }
 
   // Every row no name in `named` holds dropped, on the device, here and by the reader (`letGo`): content of an object

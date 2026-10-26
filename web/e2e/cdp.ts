@@ -276,6 +276,10 @@ export class Page {
   private held: string[] = [];
   private heldAt: string[] = [];
   private attaching = false;
+  private readonly workers = new Set<string>();
+  private coldOn = false;
+  private rate = 1;
+
   /** The sentence `refuse` answers with. */
   private refusal = "";
 
@@ -1009,7 +1013,12 @@ export class Page {
     return () => [...seen];
   }
 
-  /** Every worker the page starts from now on attached, its network reported as the page's is. */
+  /** Every worker the page starts from now on attached, its network reported as the page's is, and the page's cache
+   * and CPU as `cold` and `throttle` last set them, so a scene measures and starves the core's worker as the page. */
+  async attachWorkers(): Promise<void> {
+    await this.workersToo();
+  }
+
   private async workersToo(): Promise<void> {
     if (this.attaching) return;
     this.attaching = true;
@@ -1017,10 +1026,23 @@ export class Page {
       const info = params["targetInfo"] as { type?: string } | undefined;
       const child = params["sessionId"];
       if (session !== this.session || typeof child !== "string" || info?.type !== "worker") return;
+      this.workers.add(child);
       void this.connection.send("Network.enable", {}, child).catch(() => {});
+      // As it starts: what it does before these land runs warm and unthrottled.
+      void this.toWorker(child);
       void this.connection.send("Runtime.runIfWaitingForDebugger", {}, child).catch(() => {});
     });
+    this.connection.on("Target.detachedFromTarget", (params) => {
+      const child = params["sessionId"];
+      if (typeof child === "string") this.workers.delete(child);
+    });
     await this.command("Target.setAutoAttach", { autoAttach: true, waitForDebuggerOnStart: false, flatten: true });
+  }
+
+  /** The cache and the CPU a worker shares with the page, as last set. */
+  private async toWorker(child: string): Promise<void> {
+    await this.connection.send("Network.setCacheDisabled", { cacheDisabled: this.coldOn }, child).catch(() => {});
+    await this.connection.send("Emulation.setCPUThrottlingRate", { rate: this.rate }, child).catch(() => {});
   }
 
   /**
@@ -1075,9 +1097,24 @@ export class Page {
     await this.command("ServiceWorker.stopAllWorkers", {});
   }
 
+  /** The page's main thread sampled from now until the returned stop, which answers DevTools' CPU profile. */
+  async profile(intervalUs = 200): Promise<() => Promise<CpuProfile>> {
+    await this.command("Profiler.enable", {});
+    await this.command("Profiler.setSamplingInterval", { interval: intervalUs });
+    await this.command("Profiler.start", {});
+    return async () => (await this.command("Profiler.stop", {}))["profile"] as CpuProfile;
+  }
+
+  /** The storage quota `origin` is given, as `navigator.storage.estimate()` reads it; `null` is the browser's own again. */
+  async quota(origin: string, bytes: number | null): Promise<void> {
+    await this.command("Storage.overrideQuotaForOrigin", bytes === null ? { origin } : { origin, quotaSize: bytes });
+  }
+
   /** A phone-class CPU: Chromium runs this page's main thread `rate` times slower (1 is none). */
   async throttle(rate: number): Promise<void> {
+    this.rate = rate;
     await this.command("Emulation.setCPUThrottlingRate", { rate });
+    await Promise.all([...this.workers].map((w) => this.toWorker(w)));
   }
 
   /** A phone-class network, or the box's own again with `null`: each request waits `latency` ms and moves at the throughputs, in bytes a second. */
@@ -1093,9 +1130,11 @@ export class Page {
 
   /** A first visit, every time: no HTTP cache and no service worker between this page and the box. */
   async cold(on: boolean): Promise<void> {
+    this.coldOn = on;
     await this.command("Network.enable", {});
     await this.command("Network.setCacheDisabled", { cacheDisabled: on });
     await this.command("Network.setBypassServiceWorker", { bypass: on });
+    await Promise.all([...this.workers].map((w) => this.toWorker(w)));
   }
 
   /** A full-page PNG at `path`. The picture is the deliverable when the reader
@@ -1104,6 +1143,17 @@ export class Page {
     const result = await this.command("Page.captureScreenshot", { format: "png" });
     writeFileSync(path, String(result["data"]), "base64");
   }
+}
+
+/** DevTools' CPU profile: each node a frame under its parent, and the samples' nodes with the microseconds between them. */
+export interface CpuProfile {
+  readonly nodes: readonly {
+    readonly id: number;
+    readonly callFrame: { readonly functionName: string; readonly url: string; readonly lineNumber: number; readonly columnNumber: number };
+    readonly children?: readonly number[];
+  }[];
+  readonly samples: readonly number[];
+  readonly timeDeltas: readonly number[];
 }
 
 /** What `Page.journal` records: a scene's own marks between the page's lines, in the order they happened. */

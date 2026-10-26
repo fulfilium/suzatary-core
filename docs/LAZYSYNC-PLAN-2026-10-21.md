@@ -299,7 +299,7 @@ stores' and the conversation's), beside any pull piece in flight.
   the old build is told to reload rather than calling a route that no longer
   answers as it expects.
 - **After stage 3** (prefetch): no row changes; the content store fills
-  behind the first screen.
+  behind the first screen (§15).
 - **After stage 4** (the inbox): the same as stage 2 for `store/inbox`.
 - **After stage 5** (the chains): a chain's row holds the tab's own sealed
   acts, which must not be lost, so the upgrade does not drop a row that holds
@@ -388,3 +388,75 @@ fetches every line again, four answers at a time instead of one megabyte
 after another. Each answer is kept for good, in the browser's cache and in
 the `content` store, so a later load fetches only lines written since.
 
+
+## 15. Stage 3 as built
+
+Stage 3 prefetches the lines' content, evicts it under a budget, and says
+what is not on the device when the network is gone. Since the lines moved
+into the core's worker (#250), all of it runs there, in `linesync`'s
+landing: the page says whether it is shown (`LinesShown`), and a
+conversation the worker cannot read for want of lines answers `NotHere`
+with how many it lacks.
+
+- **The budget** (`keep.budget`) is a tenth of the origin's quota from
+  `navigator.storage.estimate()`, at most 256 MiB, and 64 MiB where the
+  browser gives no quota. The live store is about 54 MB in about 6,200 line
+  objects, so 256 MiB holds it whole with room to grow. A tenth of the quota
+  leaves the rest of the origin's storage to the chains, the rendered blocks
+  (20 MB), the shell and the browser's HTTP cache.
+- **The plan** (`keep.plan`) is the content of the newest conversations, each
+  whole with what its lines rest on, ordered by each conversation's newest
+  line, up to the first conversation that does not fit. A part of a
+  conversation reads nothing, so the plan never holds one.
+- **Prefetch.** After each landing of the lines, once a page has asked for
+  them, the tab fetches what the plan names and the `content` store lacks. It
+  sends one answer at a time, only while no other content answer is out and
+  the page is shown, so a page's own fetch never waits behind more than one
+  prefetch answer. A prefetch answer goes to the `content` store and not to
+  the tab's memory, and the sync bar does not count it. The first failure
+  stops the prefetch until the next landing.
+- **Eviction.** After each landing the tab keeps the plan's content and the
+  content of every line a reading of this page asked for, and drops the rest.
+  A reading reads a line whole or not at all (§5), so eviction changes whether
+  a reading can be made and never what it says; an evicted line is fetched
+  again by name, from the HTTP cache first. The secretary's page and the
+  Inbox read the list, which reads every line (§14), so while either is open
+  eviction drops no line of the store, and a store past the budget is held
+  whole on the device. The budget bounds what a page that reads no list
+  keeps, and the prefetch; it bounds the list once the list reads headers
+  and titles alone.
+- **Offline.** A conversation whose lines are held reads with no network. One
+  whose lines are not held, and cannot be fetched, draws "Not on this device
+  yet: N lines of this conversation" with the reason, and reads again when its
+  stream opens. The list, a search, the stream and what a reading left out
+  still read every line (§14); offline they read only when every line is
+  held, and otherwise the worker answers each of them as it answers one
+  conversation (`questions.Whole`, `NotHere`), and the page says "Not on this
+  device yet: N lines of the conversations" with the reason.
+- **One size.** A skeleton node's `size` is what the content answer sends of
+  it, the store's own print (`Prodrome::sizes`, the file's length), never its
+  reprint, so a batch the tab sizes within the bound is always answered.
+
+**The main thread, measured** (`web/e2e/linesbench.bench.ts`, 6,002 lines
+and 7.6 MB, Chromium at a 6x CPU throttle, the most of one busy run each
+function was on the stack for): the plan 46 to 68 ms; the eviction step 13 to
+27 ms and its listing and deleting of the `content` store's keys 30 ms; the
+prefetch's setup 43 ms and its queueing 39 ms; keeping one prefetch answer 68
+ms and checking it 23 ms; the purge 38 ms and its search for erased keys 31 ms.
+The longest busy run of each pass is not one of these: 844 ms of a first load
+and 894 ms of a load are the reading of the lines (`storesync`'s reading and
+`core.ts`'s), and 681 ms of a landing is the parse of the lines' row of 6,000
+nodes as the landing writes it (`objects.holdRow`).
+
+The purge still reads only the conversations whose content is held. A key the
+box names erased is forgotten from every answer's `erased`, whatever is held;
+a key that a closed tab writes back late is found dead only in a held
+conversation.
+
+A phone holding stage 2's replica sees this on its first load of the new
+build: no database row changes, and nothing is dropped, since the live store
+fits the budget. The first page that reads a conversation lands the lines, and
+then the tab prefetches the content of every conversation the device lacks,
+newest first, one answer of at most a megabyte at a time behind the page's own
+fetches. A device whose list was opened under stage 2 already holds every
+line and fetches nothing. After the prefetch every conversation reads offline.

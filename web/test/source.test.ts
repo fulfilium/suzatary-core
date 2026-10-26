@@ -298,15 +298,19 @@ function inertStream(closed: () => void = () => {}): stream.Socket {
   };
 }
 
-function deps(over: Partial<SourceDeps> = {}): SourceDeps {
+/** The shell's effects, each window read whole: no test here holds a conversation that is not on the device. */
+function deps(
+  over: Partial<Omit<SourceDeps, "fetchWindow">> & { fetchWindow?: (id: string, window: Parameters<SourceDeps["fetchWindow"]>[1]) => Promise<grouped.Window> } = {},
+): SourceDeps {
+  const { fetchWindow = async () => payload(), ...rest } = over;
   return {
-    fetchWindow: async () => payload(),
+    fetchWindow: (id, window) => fetchWindow(id, window).then((p) => ({ type: "Read", payload: p })),
     ask: async () => {},
     openStream: () => inertStream(),
     wake: () => () => {},
     pull: async () => {},
     watch: () => () => {},
-    ...over,
+    ...rest,
   };
 }
 

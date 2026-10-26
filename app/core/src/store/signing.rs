@@ -92,6 +92,10 @@ impl<E: Schema, S: Reads<E>> Reads<E> for Signing<S> {
         self.store.literals(names)
     }
 
+    fn sizes(&self, names: &[Hash]) -> Result<Vec<Option<usize>>, StoreError> {
+        self.store.sizes(names)
+    }
+
     fn excluded(&self) -> Result<BTreeSet<Hash>, StoreError> {
         self.store.excluded()
     }

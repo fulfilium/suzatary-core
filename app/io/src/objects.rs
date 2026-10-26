@@ -203,18 +203,60 @@ impl<E: Store> Reads<E> for Objects<E> {
         self.with(|held| held.nodes.clone())
     }
 
-    /// Each from its own file, its bytes checked against its name: a file that is missing or
-    /// does not hash to its name is an object this store does not hold.
-    fn literals(&self, names: &[Hash]) -> Result<Vec<Option<String>>, StoreError> {
-        Ok(names
+    /// Each the bytes of its own file, checked against its name. A missing file, or one the
+    /// store's history leaves out, is not held; a file that cannot be read or does not hash to
+    /// its name makes the store unreadable.
+    /// The file's own length, read from its metadata alone: what [`Self::literals`] answers of it.
+    fn sizes(&self, names: &[Hash]) -> Result<Vec<Option<usize>>, StoreError> {
+        names
             .iter()
             .map(|name| {
-                self.events
-                    .load(name)
-                    .ok()
-                    .map(|object| prodrome_core::event::canonical_envelope(&object))
+                let path = self
+                    .events
+                    .root()
+                    .join("objects")
+                    .join(format!("{}.py", name.as_str()));
+                match std::fs::metadata(&path) {
+                    Ok(meta) => usize::try_from(meta.len())
+                        .map(Some)
+                        .map_err(|e| Self::unreadable(format!("{}: {e}", path.display()))),
+                    Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(None),
+                    Err(e) => Err(Self::unreadable(format!("{}: {e}", path.display()))),
+                }
             })
-            .collect())
+            .collect()
+    }
+
+    fn literals(&self, names: &[Hash]) -> Result<Vec<Option<String>>, StoreError> {
+        use sha2::Digest as _;
+        let history = self.events.dag().map_err(|e| Self::unreadable(e))?;
+        names
+            .iter()
+            .map(|name| {
+                let path = self
+                    .events
+                    .root()
+                    .join("objects")
+                    .join(format!("{}.py", name.as_str()));
+                let bytes = match std::fs::read(&path) {
+                    Ok(bytes) => bytes,
+                    Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+                    Err(e) => return Err(Self::unreadable(format!("{}: {e}", path.display()))),
+                };
+                if hex::encode(sha2::Sha256::digest(&bytes)) != name.as_str() {
+                    return Err(Self::unreadable(format!(
+                        "{} does not hash to its name",
+                        path.display()
+                    )));
+                }
+                if history.get(name).is_none() {
+                    return Ok(None);
+                }
+                String::from_utf8(bytes)
+                    .map(Some)
+                    .map_err(|e| Self::unreadable(format!("{}: {e}", path.display())))
+            })
+            .collect()
     }
 
     fn excluded(&self) -> Result<std::collections::BTreeSet<Hash>, StoreError> {
@@ -401,6 +443,54 @@ mod tests {
                 .iter()
                 .all(|(name, _)| !left_out.contains(name))
         );
+    }
+
+    /// A content answer is the file's own bytes, and only of the history: a missing file and
+    /// one the history leaves out are not held, and a file that does not hash to its name is
+    /// a failure, never an absence.
+    #[test]
+    fn a_literal_is_its_files_bytes_of_the_history_alone() {
+        let (dir, store) = store("literals");
+        let first = store
+            .append(mk_created("alpha", at(1), "ada", "", "").expect("valid"))
+            .expect("appends");
+        let second = store
+            .append(mk_completed("alpha", at(2), "ada", "").expect("valid"))
+            .expect("appends");
+        let file = |name: &Hash| {
+            dir.path()
+                .join("literals/objects")
+                .join(format!("{}.py", name.as_str()))
+        };
+        let held = std::fs::read_to_string(file(&second)).expect("the file");
+        assert_eq!(
+            store
+                .literals(std::slice::from_ref(&second))
+                .expect("reads"),
+            vec![Some(held.clone())]
+        );
+        assert_eq!(
+            store.sizes(std::slice::from_ref(&second)).expect("reads"),
+            vec![Some(held.len())],
+            "a size is the file's own bytes, what a content answer sends"
+        );
+
+        let first_bytes = std::fs::read(file(&first)).expect("the file");
+        std::fs::remove_file(file(&first)).expect("removed");
+        assert_eq!(
+            store
+                .literals(&[first.clone(), second.clone()])
+                .expect("reads"),
+            vec![None, None],
+            "a missing file, and one resting on it, are not held"
+        );
+
+        std::fs::write(file(&first), &first_bytes).expect("restored");
+        std::fs::write(file(&second), "Created(not this object)").expect("tampered");
+        assert!(matches!(
+            store.literals(&[second]),
+            Err(StoreError::Unreadable { .. })
+        ));
     }
 
     /// The memo answers the store's answer, and an append invalidates it.

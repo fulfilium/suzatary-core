@@ -27,7 +27,7 @@ export interface SourceDeps {
   readonly fetchWindow: (
     id: string,
     window: grouped.Asked,
-  ) => Promise<grouped.Window>;
+  ) => Promise<dressed.Windowed>;
   /** One act on the conversation, an intent: resolves once the box took it and the replicas hold it, rejects with why not. */
   readonly ask: (a: asks.Ask) => Promise<void>;
   readonly openStream: (id: string) => stream.Socket;
@@ -91,7 +91,16 @@ export interface Failed {
   readonly reason: string;
 }
 
-export type SourceState = Loading | Loaded | Failed;
+/** Lines of the conversation are not on this device and could not be fetched: how many, and why. */
+export interface NotHere {
+  readonly kind: "nothere";
+  readonly id: string;
+  readonly about: Reference | undefined;
+  readonly lines: number;
+  readonly why: string;
+}
+
+export type SourceState = Loading | Loaded | Failed | NotHere;
 
 export type SourceEvent =
   | {
@@ -104,7 +113,8 @@ export type SourceEvent =
       readonly at: number;
     }
   | { readonly kind: "frame"; readonly frame: Frame; readonly at: number }
-  | { readonly kind: "failed"; readonly reason: string };
+  | { readonly kind: "failed"; readonly reason: string }
+  | { readonly kind: "nothere"; readonly lines: number; readonly why: string };
 
 /** Whether Stop could end a round: the one reading the Stop control and Esc share. */
 export type Answering = "running" | "idle";
@@ -177,6 +187,9 @@ export function step(state: SourceState, event: SourceEvent): SourceState {
     case "failed":
       if (state.kind === "loaded") return { ...state, problem: event.reason };
       return { kind: "failed", id: state.id, about: state.about, reason: event.reason };
+    case "nothere":
+      if (state.kind === "loaded") return { ...state, problem: storesync.notHere(event.lines, "this conversation", event.why) };
+      return { kind: "nothere", id: state.id, about: state.about, lines: event.lines, why: event.why };
   }
 }
 
@@ -215,18 +228,22 @@ export function createSource(
   // Once fallen back, stays fallen back, so the whole conversation never narrows under the reader on a later reading.
   let effectiveAbout: Reference | undefined = about;
 
-  type Reading = { payload: grouped.Window; fallback: boolean; mode: "older" | "newest" };
+  // A window holding every turn the page holds, and with an older one the turns before them too; or lines not on this
+  // device.
+  type Reading =
+    | { readonly type: "Read"; readonly payload: grouped.Window; readonly fallback: boolean; readonly mode: "older" | "newest" }
+    | { readonly type: "NotHere"; readonly lines: number; readonly why: string };
 
-  // A window holding every turn the page holds, and with an older one the turns before them too.
   async function fetchApplyingFallback(mode: "older" | "newest"): Promise<Reading> {
     const aboutText = effectiveAbout === undefined ? undefined : print(effectiveAbout);
     const first = await deps.fetchWindow(id, asking(fold.state(), mode, aboutText));
-    if (aboutText === undefined || first.turns.length > 0) {
-      return { payload: first, fallback: false, mode };
+    if (first.type === "NotHere") return first;
+    if (aboutText === undefined || first.payload.turns.length > 0) {
+      return { type: "Read", payload: first.payload, fallback: false, mode };
     }
     effectiveAbout = undefined;
     const whole = await deps.fetchWindow(id, asking(fold.state(), mode, undefined));
-    return { payload: whole, fallback: true, mode };
+    return whole.type === "NotHere" ? whole : { type: "Read", payload: whole.payload, fallback: true, mode };
   }
 
   let unwatch = (): void => {};
@@ -242,9 +259,11 @@ export function createSource(
   // A reading that lands after a later-asked one has is dropped, its failure included.
   const readings = latest.of<Reading>((l) =>
     fold.dispatch(
-      l.type === "Val"
-        ? { kind: "window", mode: l.v.mode, payload: l.v.payload, fallback: l.v.fallback, at: time.now() }
-        : { kind: "failed", reason: l.e },
+      l.type === "Error"
+        ? { kind: "failed", reason: l.e }
+        : l.v.type === "Read"
+          ? { kind: "window", mode: l.v.mode, payload: l.v.payload, fallback: l.v.fallback, at: time.now() }
+          : { kind: "nothere", lines: l.v.lines, why: l.v.why },
     ),
   );
   const newest = readings.ask;
@@ -253,7 +272,10 @@ export function createSource(
 
   /** A search hit's first window ends at its turn, so stick-to-bottom lands on it; later refreshes ask for the newest. */
   const openAt = (turn: number): Promise<void> =>
-    newest(async () => ({ payload: await deps.fetchWindow(id, { before: turn + 1 }), fallback: false, mode: "newest" }));
+    newest(async (): Promise<Reading> => {
+      const w = await deps.fetchWindow(id, { before: turn + 1 });
+      return w.type === "NotHere" ? w : { type: "Read", payload: w.payload, fallback: false, mode: "newest" };
+    });
 
   // In the readings' order, so a newest reading asked before it, which holds less, never lands over it.
   async function earlier(): Promise<void> {
@@ -298,7 +320,8 @@ export function createSource(
     ...fold,
     start: () => {
       void (at === undefined ? refresh() : openAt(at));
-      close = stream.open(() => deps.openStream(id), { frame: heard }, deps.wake);
+      // A stream that opens again may mean the box answers again, so lines not on this device are asked for again.
+      close = stream.open(() => deps.openStream(id), { frame: heard, opened: () => (fold.state().kind === "nothere" ? void read() : undefined) }, deps.wake);
       unwatch = deps.watch(id, () => void read());
     },
     refresh,

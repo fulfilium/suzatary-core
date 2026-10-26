@@ -8,6 +8,7 @@ import { deadOf, erasedOf, objectsOf } from "./core"
 import content from "./content"
 import excluded from "./excluded"
 import heads from "./heads"
+import keep from "./keep"
 import linerows from "./linerows"
 import lines from "./lines"
 import locked from "./locked"
@@ -18,9 +19,12 @@ import { epochOf } from "./replica"
 import stores from "./stores"
 import lo from "../algebra/lo"
 import once from "../algebra/once"
+import serial from "../algebra/serial"
+import idb from "../app/idb"
 import type rendered from "../app/rendered"
 import http from "../wire/http"
 import storereads from "../wire/storereads"
+import type { Replica } from "./replica"
 import type { SkeletonNode } from "../wire/generated/wire"
 
 export namespace linesync {
@@ -48,6 +52,11 @@ export namespace linesync {
     readonly holds: (id: string) => Promise<boolean>
     // The lines' row written over by a reset and taken again from the box, with whatever the reset could not do.
     readonly reset: () => Promise<readonly string[]>
+    // Whether a page is shown, as the page says: a prefetch sends nothing while none is, and sends what it held back
+    // once one is again.
+    readonly shown: (on: boolean) => void
+    // How many lines `scope` reads that the skeleton names and the device does not hold.
+    readonly lacking: (scope: lines.Scope) => number
   }
 
   // Whether a page reads the lines yet: before one does, the worker pulls nothing.
@@ -88,15 +97,61 @@ export namespace linesync {
     const clear = (): Promise<lo.Settled<null>> => blocks.clear().then(done => (say({ type: "Cleared" }), done))
     const bars = (e: progress.Event): void => say({ type: "Bars", e })
 
+    // Whether a page is shown; none is until one says so.
+    let shown = false
     // The content, fetched by name and held by the core as it comes.
-    const fetching = content.fetcher({
+    const fetcher = content.fetcher({
       ask: hashes => storereads.content("lines", hashes),
       asked: bytes => bars({ type: "Asked", name: "lines", bytes }),
       came: bytes => bars({ type: "Came", name: "lines", bytes }),
       lost: bytes => bars({ type: "Lost", name: "lines", bytes }),
       atOnce: () => content.atOnce(http.protocol()),
       held: rows => Promise.resolve(held.hold(objectsOf(rows), "[]")),
+      shown: () => shown,
     })
+    const fetching = fetcher.fetch
+
+    // The device's budget for the lines' content, read once from the origin's quota.
+    const budget = once.of(async (): Promise<number> => {
+      const s = typeof navigator === "undefined" ? undefined : navigator.storage
+      const quota = s === undefined || typeof s.estimate !== "function" ? undefined : (await s.estimate().catch(() => undefined))?.quota
+      return keep.budget(quota === undefined ? { type: "Unknown" } : { type: "Known", bytes: quota })
+    }).get
+
+    // The plan of a skeleton, made once for its landing's eviction and its prefetch.
+    let planned: { readonly skeleton: Replica<SkeletonNode>; readonly nodes: readonly SkeletonNode[] } | null = null
+    const planOf = async (skeleton: Replica<SkeletonNode>): Promise<readonly SkeletonNode[]> => {
+      const most = await budget()
+      if (planned?.skeleton === skeleton) return planned.nodes
+      planned = { skeleton, nodes: keep.plan(skeleton, most) }
+      return planned.nodes
+    }
+
+    // What the device keeps of the lines' content: the plan within the budget, and what a reading read, so a reading
+    // that fetched a line is not left fetching it again.
+    const keeping = async (skeleton: Replica<SkeletonNode>): Promise<ReadonlySet<string>> => {
+      const names = new Set((await planOf(skeleton)).map(n => n.hash))
+      const read = content.read()
+      for (const n of skeleton.objects) if (read.has(n.hash)) names.add(n.hash)
+      return names
+    }
+
+    // The skeleton last prefetched, so each is prefetched once, and again after a prefetch that failed.
+    let ahead: Replica<SkeletonNode> | null = null
+    // The plan's content the device lacks, fetched behind every reading's fetch, one answer at a time.
+    const prefetch = serial.of(async (): Promise<void> => {
+      if (!idb.available()) return
+      const skeleton = row.replica
+      const [plan, stored] = await Promise.all([planOf(skeleton), content.stored()])
+      await fetching("Ahead", plan.filter(n => !stored.has(n.hash))).catch(() => {
+        ahead = null
+      })
+    })
+    const prefetched = (skeleton: Replica<SkeletonNode>): void => {
+      if (ahead === skeleton) return
+      ahead = skeleton
+      void prefetch()
+    }
 
     // The plaintext conversations a build before the lines kept: deleted once the lines' row holds what replaces them,
     // under a reset's rule, the blocks they rendered cleared first, since nothing names which of those words went since.
@@ -173,8 +228,10 @@ export namespace linesync {
         })),
       landed: async r => {
         if (r.replica.objects.length > 0) await retire()
-        const gone = await content.keepOnly(new Set(r.replica.objects.map(n => n.hash)), drop => Promise.resolve(held.hold("[]", JSON.stringify(drop))))
+        const gone = await content.keepOnly(await keeping(r.replica), drop => Promise.resolve(held.hold("[]", JSON.stringify(drop))))
         if (gone.type === "Error") told(`row/${pull.kept("lines")}`, pull.unread("lines", gone.e))
+        // Only once a page reads the lines: a page that reads no conversation prefetches nothing.
+        if (wanted === "Yes") prefetched(r.replica)
       },
       restoring: cleared,
     }
@@ -220,6 +277,14 @@ export namespace linesync {
         await sync.restored.get()
         await sync.pull()
         return said
+      },
+      shown: on => {
+        shown = on
+        if (on) fetcher.wake()
+      },
+      lacking: scope => {
+        const need = lines.need(row.replica, content.holds, scope)
+        return need.type === "Fetching" ? need.nodes.filter(n => n.header.node === "line").length : 0
       },
     }
   }

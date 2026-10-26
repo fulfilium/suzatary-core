@@ -573,3 +573,125 @@ fn the_content_bound_holds() {
         suzatary_core::refusal::Status::BadRequest
     );
 }
+
+/// A store whose prints are its objects' reprints and more, as a file written by an older printer
+/// is: what a content answer sends of each is longer than its reprint.
+struct Padded<'a>(&'a dyn suzatary_core::store::Prodrome<LineEvent>);
+
+const PAD: usize = 40_000;
+
+impl suzatary_core::store::Reads<LineEvent> for Padded<'_> {
+    fn objects(
+        &self,
+    ) -> Result<Vec<(Hash, Envelope<LineEvent>)>, suzatary_core::store::StoreError> {
+        self.0.objects()
+    }
+    fn literals(
+        &self,
+        names: &[Hash],
+    ) -> Result<Vec<Option<String>>, suzatary_core::store::StoreError> {
+        Ok(self
+            .0
+            .literals(names)?
+            .into_iter()
+            .map(|l| l.map(|l| format!("{l}{}", " ".repeat(PAD))))
+            .collect())
+    }
+    fn excluded(&self) -> Result<BTreeSet<Hash>, suzatary_core::store::StoreError> {
+        self.0.excluded()
+    }
+    fn tips(&self) -> Result<Vec<Hash>, suzatary_core::store::StoreError> {
+        self.0.tips()
+    }
+    fn verify(&self) -> Vec<String> {
+        self.0.verify()
+    }
+}
+
+impl suzatary_core::store::Prodrome<LineEvent> for Padded<'_> {
+    fn append(&self, event: LineEvent) -> Result<Hash, suzatary_core::store::StoreError> {
+        self.0.append(event)
+    }
+    fn accept(
+        &self,
+        objects: &[(Hash, String)],
+    ) -> Result<Vec<Hash>, suzatary_core::store::StoreError> {
+        self.0.accept(objects)
+    }
+    fn locked(
+        &self,
+    ) -> Result<Box<dyn suzatary_core::store::WriteLock + '_>, suzatary_core::store::StoreError>
+    {
+        self.0.locked()
+    }
+}
+
+/// A node's size is what the content answer sends of it, the store's own print, never its
+/// reprint: a store whose prints are longer than their reprints still answers every ask a tab
+/// makes by those sizes, where asks sized by the reprint would pass the bound and be refused.
+#[test]
+fn a_node_is_sized_by_the_bytes_its_content_answer_sends() {
+    let mut store = Writer::new();
+    for n in 0..30 {
+        store.apply(&Write::Said {
+            conversation: n % 3,
+            words: 10,
+        });
+    }
+    let padded = Padded(&store.lines.lines);
+    let conversations = suzatary_core::secretary::conversations::Conversations {
+        lines: &padded,
+        ..store.lines.conversations()
+    };
+    let (epochs, frontiers) = (
+        suzatary_core::epoch::Epochs::remembered(),
+        Frontiers::remembered(),
+    );
+    let books = Books {
+        epochs: &epochs,
+        frontiers: &frontiers,
+    };
+    let skeleton = routes::lines_skeleton(conversations, &Since::Nothing, books, now(), Cut::Whole)
+        .expect("the skeleton");
+    let names: Vec<Hash> = skeleton
+        .nodes
+        .iter()
+        .map(|n| Hash::new(n.hash.clone()).expect("a name"))
+        .collect();
+    let sent = padded.literals(&names).expect("reads");
+    for (node, literal) in skeleton.nodes.iter().zip(&sent) {
+        assert_eq!(
+            Some(node.size),
+            literal.as_ref().map(String::len),
+            "{} is sized by what is sent",
+            node.hash
+        );
+    }
+    let reprinted: usize = store
+        .lines
+        .lines
+        .literals(&names)
+        .expect("reads")
+        .iter()
+        .flatten()
+        .map(String::len)
+        .sum();
+    assert!(
+        reprinted < routes::MOST_CONTENT_BYTES,
+        "sized by reprint, every line would go in one ask"
+    );
+    let sizes: BTreeMap<String, usize> = skeleton
+        .nodes
+        .iter()
+        .map(|n| (n.hash.clone(), n.size))
+        .collect();
+    assert!(
+        sizes.values().sum::<usize>() > routes::MOST_CONTENT_BYTES,
+        "and that ask would pass the bound"
+    );
+    assert_eq!(
+        fetched(&padded, &sizes).len(),
+        names.len(),
+        "every ask by the skeleton's sizes is answered"
+    );
+}

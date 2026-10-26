@@ -73,9 +73,9 @@ pub trait Reads<E: Schema>: Sync {
     /// [`StoreError::Unreadable`].
     fn objects(&self) -> Result<Vec<(Hash, Envelope<E>)>, StoreError>;
 
-    /// The canonical print of each object `names` names, in that order, or `None` for one this
-    /// store does not hold. A store that can read one object by its name answers without
-    /// reading the rest.
+    /// The print of each object `names` names as the store holds it, in that order, or `None`
+    /// for one this store does not hold. A store that can read one object by its name answers
+    /// without reading the rest.
     ///
     /// # Errors
     /// [`StoreError::Unreadable`].
@@ -89,6 +89,20 @@ pub trait Reads<E: Schema>: Sync {
                     .get(name)
                     .map(prodrome_core::event::canonical_envelope)
             })
+            .collect())
+    }
+
+    /// How many bytes each object `names` names is as the store holds it, the length of its
+    /// print in [`Reads::literals`], in that order, or `None` for one this store does not
+    /// hold: what a content answer sends of it, and so what a reader sizes its asks by.
+    ///
+    /// # Errors
+    /// [`StoreError::Unreadable`].
+    fn sizes(&self, names: &[Hash]) -> Result<Vec<Option<usize>>, StoreError> {
+        Ok(self
+            .literals(names)?
+            .into_iter()
+            .map(|literal| literal.map(|literal| literal.len()))
             .collect())
     }
 

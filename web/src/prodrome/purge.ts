@@ -23,7 +23,6 @@ export namespace purge {
     if (read.type === "Error") return read
     const owed = read.v
     if (owed.length === 0) return lo.val(owed)
-    // A purge that cannot find the blocks keeps the keys owed, to be asked again.
     const fed = await fx.erased(locked.of(r.replica, Object.fromEntries(owed.map(n => [n, r.keys[n]!])))).then(
       (e): lo.Settled<Erased> => lo.val(e),
       (e: unknown): lo.Settled<Erased> => lo.error(lo.reason(e)),

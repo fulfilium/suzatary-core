@@ -1,7 +1,7 @@
 /**
  * THE LINES, IN A TAB (docs/WORDS-PLAN-2026-10-09.md §5): the conversations are read from
  * `secretary-lines`, whose objects hold their words locked, with the keys the pull hands over
- * kept beside them in one row. Four claims, each a scene:
+ * kept beside them in one row. Its claims, each a scene:
  *
  * 1. A conversation reads from the lines: the row holds the objects and the keys, and the
  *    objects hold no word of it in the clear.
@@ -11,6 +11,7 @@
  *    tap erases.
  * 4. A device that kept the plaintext conversations is upgraded: that row goes once the lines
  *    are held, and nothing plaintext is left on the device.
+ * 5. A conversation the device prefetched reads with no network, and one it lacks says so.
  */
 
 import assert from "node:assert/strict"
@@ -276,6 +277,47 @@ app.scene("the list draws and the badge is counted with no request for the lines
   const left = await app.page.evaluate<[string, unknown][]>(rowsOf("suzatary", "lines"))
   assert.deepEqual(left.filter(([k]) => k.startsWith("piece/")).map(([k]) => k), [], "no piece is left: the pull ended whole")
   await app.page.cold(false)
+})
+
+app.scene("a conversation the device prefetched reads with no network, and one it lacks says so", async () => {
+  await app.resize(PHONE)
+  // The core's worker prefetches and reads the lines, so it is attached as the page is.
+  await app.page.attachWorkers()
+  await app.open(WRITE_BASE)
+  const kept = await converse("the prefetched one")
+  const lacked = await converse("the one this device lacks")
+  await app.page.waitFor(`document.querySelector(".turns .turn-person") !== null`, { timeout: 15000 })
+  // No content on the device, and a new load that opens the second conversation alone: the first's lines come by
+  // prefetch or not at all.
+  await app.page.evaluate(put("suzatary", "content", `(s) => s.clear()`))
+  await app.page.navigate(`${WRITE_BASE}/?prefetch=1#/secretary/${lacked}`)
+  await app.page.waitFor(`document.querySelector(".turns .turn-person") !== null`, { timeout: 15000 })
+  // Every line of both conversations on the device: the content store holds each node the skeleton names for them.
+  const linesOf = (ids: readonly string[]): string =>
+    `${linesRow}.then((row) => row === null ? [] : row.replica.objects.filter((n) => n.header.node === "line" && ${JSON.stringify(ids)}.includes(n.header.conversation)).map((n) => n.hash))`
+  const contentNames = `${rowsOf("suzatary", "content")}.then((rows) => rows.map(([k]) => k))`
+  await app.page.waitFor(
+    `Promise.all([${linesOf([kept, lacked])}, ${contentNames}]).then(([lines, held]) => lines.length > 0 && lines.every((h) => held.includes(h)))`,
+    { timeout: 20000 },
+  )
+  // A device that did not prefetch the second: its lines' content gone, its skeleton kept.
+  const dropped = await app.page.evaluate<string[]>(linesOf([lacked]))
+  await app.page.evaluate(put("suzatary", "content", `(s) => ${JSON.stringify(dropped)}.forEach((h) => s.delete(h))`))
+  await app.page.failRequests(["/api/", "/events"])
+  try {
+    await app.page.navigate(`${WRITE_BASE}/?offline=1#/secretary/${kept}`)
+    await app.page.waitFor(`[...document.querySelectorAll(".turns .turn-person .turntext")].some((t) => t.textContent.includes("the prefetched one"))`, { timeout: 15000 })
+    assert.equal(await app.page.evaluate<boolean>(`document.querySelector(".transcriptcontent .nothere").hidden`), true, "the prefetched conversation reads whole")
+    await app.page.evaluate(`void (location.hash = "#/secretary/${lacked}")`)
+    await app.page.waitFor(`document.querySelector(".transcriptcontent .nothere")?.hidden === false`, { timeout: 15000 })
+    assert.match(
+      await app.page.evaluate<string>(`document.querySelector(".transcriptcontent .nothere").textContent`),
+      new RegExp(`^Not on this device yet: ${dropped.length} lines? of this conversation \\(`),
+    )
+    assert.equal(await app.page.evaluate<boolean>(`document.querySelector(".turns .turn-person") === null`), true, "never an empty conversation drawn as read")
+  } finally {
+    await app.page.resumeRequests()
+  }
 })
 
 // A FRACTION IS A PIE (WEB-SPEC §3.20): the line under the header draws a sync's share as the neutral pie, named in

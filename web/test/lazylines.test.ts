@@ -11,6 +11,8 @@ import type { Core, Named } from "../src/prodrome/core"
 import { conversationOf, listOfLines, objectsOf, searchOf } from "../src/prodrome/core"
 import lines from "../src/prodrome/lines"
 import content from "../src/prodrome/content"
+import keep from "../src/prodrome/keep"
+import { sha256Hex } from "../src/prodrome/verify"
 import { empty, pulled } from "../src/prodrome/replica"
 import type { Replica } from "../src/prodrome/replica"
 import type { SkeletonNode, SkeletonPayload } from "../src/wire/generated/wire"
@@ -114,7 +116,7 @@ test("an opened conversation's names go out before the whole store's batches sti
   // Each ask settles the wait for it, so the test moves when an answer goes out and never on a timer.
   let sent = (): void => {}
   const next = (): Promise<void> => new Promise(done => (sent = done))
-  const fetch = content.fetcher({
+  const { fetch } = content.fetcher({
     ask: hashes => {
       asked.push([...hashes])
       sent()
@@ -125,6 +127,7 @@ test("an opened conversation's names go out before the whole store's batches sti
     lost: () => {},
     atOnce: () => 4,
     held: () => Promise.resolve(),
+    shown: () => true,
   })
   // One name a batch, so the whole store queues more batches than go out at once.
   const one = box.skeleton.nodes.map(n => ({ ...n, size: content.MOST_BYTES }))
@@ -158,4 +161,95 @@ test("over HTTP/1.1 one content answer is out at a time, beside the three stream
   assert.equal(content.atOnce("http/1.1"), 1)
   assert.equal(content.atOnce(""), 1, "a protocol the browser has not said is read as HTTP/1.1")
   assert.equal(content.atOnce("h2"), 4)
+})
+
+test("law: the plan keeps the newest conversations whole, in order, within the budget", () => {
+  forAll(60, r => {
+    const s = skeleton(r)
+    const total = s.objects.reduce((k, n) => k + n.size, 0)
+    const budget = r.int(total + 2)
+    const planned = keep.plan(s, budget)
+    const kept = new Set(planned.map(n => n.hash))
+    assert.equal(kept.size, planned.length, "each node once")
+    assert.ok(planned.reduce((k, n) => k + n.size, 0) <= budget, "within the budget")
+    assert.ok(planned.every(n => n.parents.every(p => kept.has(p) || !s.objects.some(o => o.hash === p))), "a down-set of the skeleton")
+    const recent = keep.recent(s)
+    const whole = recent.map(c => c.nodes.every(n => kept.has(n.hash)))
+    const first = whole.indexOf(false)
+    assert.ok(first === -1 || whole.slice(first).every(w => !w), "the conversations kept are the newest, each whole")
+    const ofKept = new Set(recent.filter((_, i) => whole[i]).map(c => c.id))
+    assert.ok(planned.every(n => n.header.node !== "line" || ofKept.has(n.header.conversation)), "no line of a conversation not kept whole")
+    const newest = (c: keep.Conversation): string => c.nodes.reduce((m, n) => (n.header.node === "line" && n.header.at > m ? n.header.at : m), "")
+    assert.ok(recent.every((c, i) => i === 0 || newest(recent[i - 1]!) >= newest(c)), "newest first")
+    if (budget >= total) assert.ok(s.objects.every(n => n.header.node !== "line" || kept.has(n.hash)), "a budget past the store keeps every line")
+  })
+})
+
+test("a prefetch goes out one answer at a time, only when no other is out, and stops at its first failure", async () => {
+  // Names of their own, so no earlier test's fetch already holds them.
+  const own = new Map(await Promise.all(Array.from({ length: 9 }, async (_, i): Promise<[string, string]> => [await sha256Hex(`prefetched line ${i}`), `prefetched line ${i}`])))
+  const template = box.skeleton.nodes[0]!
+  const one = [...own.keys()].map(hash => ({ ...template, hash, parents: [], size: content.MOST_BYTES }))
+  const asked: string[][] = []
+  const answers: ((ok: boolean) => void)[] = []
+  const { fetch } = content.fetcher({
+    ask: hashes => {
+      asked.push([...hashes])
+      return new Promise((done, fail) =>
+        answers.push(ok => (ok ? done({ objects: hashes.map(h => ({ hash: h, literal: own.get(h)! })) }) : fail(new Error("offline")))),
+      )
+    },
+    asked: () => {},
+    came: () => {},
+    lost: () => {},
+    atOnce: () => 4,
+    held: () => Promise.resolve(),
+    shown: () => true,
+  })
+  const tick = (): Promise<void> => new Promise(done => setTimeout(done, 0))
+  const ahead = fetch("Ahead", one.slice(0, 6))
+  await tick()
+  assert.equal(asked.length, 1, "one prefetch answer out")
+  const first = fetch("First", one.slice(6, 9))
+  await tick()
+  assert.equal(asked.length, 4, "a page's names go out beside it, up to the bound")
+  for (let i = 0; i < 4; i += 1) answers.shift()!(true)
+  await first
+  await tick()
+  assert.equal(asked.length, 5, "the prefetch goes on once nothing else is out")
+  answers.shift()!(false)
+  await assert.rejects(ahead)
+  await tick()
+  assert.equal(asked.length, 5, "and stops at its first failure")
+})
+
+test("a prefetch sends nothing while the page is hidden, and once it is shown a wake sends exactly one answer", async () => {
+  const own = new Map(await Promise.all(Array.from({ length: 3 }, async (_, i): Promise<[string, string]> => [await sha256Hex(`hidden line ${i}`), `hidden line ${i}`])))
+  const template = box.skeleton.nodes[0]!
+  const nodes = [...own.keys()].map(hash => ({ ...template, hash, parents: [], size: content.MOST_BYTES }))
+  const asked: string[][] = []
+  let shown = false
+  const { fetch, wake } = content.fetcher({
+    ask: hashes => {
+      asked.push([...hashes])
+      return new Promise(() => {})
+    },
+    asked: () => {},
+    came: () => {},
+    lost: () => {},
+    atOnce: () => 4,
+    held: () => Promise.resolve(),
+    shown: () => shown,
+  })
+  const tick = (): Promise<void> => new Promise(done => setTimeout(done, 0))
+  void fetch("Ahead", nodes)
+  await tick()
+  assert.equal(asked.length, 0, "no prefetch answer goes out while the page is hidden")
+  wake()
+  await tick()
+  assert.equal(asked.length, 0, "nor on a wake while it is still hidden")
+  shown = true
+  wake()
+  await tick()
+  assert.equal(asked.length, 1, "once shown, a wake sends one answer")
 })

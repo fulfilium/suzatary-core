@@ -125,8 +125,18 @@ export namespace storesync {
 
   const restore = (): Promise<void> => Promise.all(stores.PAGED.map(name => syncs[name].restored.get())).then(() => undefined)
 
+  // Whether this page is shown, said to the worker once a page reads the lines and at every change after: its prefetch
+  // sends nothing while the page is hidden.
+  const shown = (): boolean => typeof document === "undefined" || document.visibilityState === "visible"
+  const showing = once.of(async (): Promise<void> => {
+    const say = (): void => void remote.ask({ type: "LinesShown", on: shown() })
+    if (typeof document !== "undefined") document.addEventListener("visibilitychange", say)
+    say()
+  })
+
   // A page store pulled, or the lines, which the worker pulls once a page reads them.
-  const pulled = (name: stores.Name): Promise<boolean> => (name === "lines" ? remote.ask({ type: "LinesWant" }) : syncs[name].pull())
+  const pulled = (name: stores.Name): Promise<boolean> =>
+    name === "lines" ? (void showing.get(), remote.ask({ type: "LinesWant" })) : syncs[name].pull()
 
   // Which stores a page has asked for so far. A stream's move or reconnect pulls those and nothing else, so before a page
   // asks it pulls nothing: the boot asks for none, and a visit that never reads a conversation never pulls the lines.
@@ -233,23 +243,28 @@ export namespace storesync {
   }
 
   // `question` about the lines, asked of the worker once the page's stores are ready and the inbox and the topics it
-  // reads are held: the worker answers once every line the question reads is held. A reading of the whole store says
-  // what it left out.
+  // reads are held: the worker answers once every line the question reads is held.
   const over = async <K extends questions.Kind>(question: questions.Of<K>, whole: boolean): Promise<questions.Answer<K>> => {
     await ready.get()
     const holding = Promise.all([inboxHeld.hold(source.state().inbox), holdTopics(source.state())])
     const [, answer, left] = await Promise.all([holding, remote.ask(question), whole ? remote.ask({ type: "Left" }) : null])
-    if (left !== null) readings.told("stores", excluded.left(left))
+    if (left !== null && left.type === "Held") readings.told("stores", excluded.left(left.v))
     return answer
   }
 
-  // The whole of both stores: the list and a search read every conversation.
-  export const list = (): Promise<ConversationsPayload> => over({ type: "Conversations" }, true)
-  export const search = (q: string): Promise<SearchPayload> => over({ type: "Search", q }, true)
+  // A reading of every line, said in words where the device lacks lines it reads: how many, and why.
+  const held = <A>(read: questions.Whole<A>): A => {
+    if (read.type === "NotHere") throw new Error(notHere(read.lines, "the conversations", read.why))
+    return read.v
+  }
+
+  // The whole of both stores: the list and a search read every conversation, and say what they left out.
+  export const list = (): Promise<ConversationsPayload> => over({ type: "Conversations" }, true).then(held)
+  export const search = (q: string): Promise<SearchPayload> => over({ type: "Search", q }, true).then(held)
 
   // The stream a filter shows and the topics in use, read in the worker from one holding of the stores.
-  export type Streamed = questions.Answer<"Stream">
-  export const streamed = (chosen: readonly string[], pages: number): Promise<Streamed> => over({ type: "Stream", chosen, pages }, true)
+  export type Streamed = questions.Answer<"Stream"> extends questions.Whole<infer A> ? A : never
+  export const streamed = (chosen: readonly string[], pages: number): Promise<Streamed> => over({ type: "Stream", chosen, pages }, true).then(held)
 
   // How a topic store's handing over ended: sent, kept for the next sync, or refused in words the owner is told.
   type Pushed = { readonly type: "Sent" } | { readonly type: "Kept" } | { readonly type: "Refused"; readonly why: string }
@@ -298,6 +313,9 @@ export namespace storesync {
 
   export const conversation = (id: string, window: Window, memory: MemoryPayload | null): Promise<One> =>
     over({ type: "Conversation", id, window, memory }, false)
+
+  // How a page says lines of `of` are not on this device.
+  export const notHere = (lines: number, of: string, why: string): string => `Not on this device yet: ${lines} ${lines === 1 ? "line" : "lines"} of ${of} (${why}).`
 
   // The same, read back to the turn it must reach, grouped into rounds on the owner's days in `zone`.
   export const window = (id: string, window: grouped.Asked, memory: MemoryPayload | null, zone: time.Zone): Promise<questions.Grouped> =>

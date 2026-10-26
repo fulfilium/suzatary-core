@@ -77,15 +77,18 @@ export namespace dressed {
   export type Inbox = storesync.Proposals
   export const inbox = (at: string, memory: MemoryPayload | null): Promise<Inbox> => storesync.proposals(at, memory)
 
-  // A conversation's window, refused in the core's words where the store holds no line of it.
-  const held = (id: string, w: Window, memory: MemoryPayload | null): Promise<ConversationPayload> =>
-    storesync.conversation(id, w, memory).then(one => (one.type === "Held" ? one.payload : storesync.absent(id)))
+  // A conversation's window, or how many of its lines are not on this device and why, refused in the core's words where
+  // the store holds no line of it.
+  type Held = { readonly type: "Read"; readonly payload: ConversationPayload } | questions.NotHere
+  const held = (id: string, w: Window, memory: MemoryPayload | null): Promise<Held> =>
+    storesync.conversation(id, w, memory).then((one): Held => (one.type === "Absent" ? storesync.absent(id) : one.type === "Held" ? { type: "Read", payload: one.payload } : one))
 
   // What a proposal's card needs and nothing more: every proposal, drawn, beside the newest turn, a remember card with
   // the words `memory` keeps for it.
   export const cards = async (id: string, memory: MemoryPayload | null): Promise<ConversationPayload> => {
-    const read = await held(id, { limit: 1 }, memory)
-    return { ...read, proposals: await proposalsOf(id, read.proposals) }
+    const one = await held(id, { limit: 1 }, memory)
+    if (one.type === "NotHere") throw new Error(storesync.notHere(one.lines, "this conversation", one.why))
+    return { ...one.payload, proposals: await proposalsOf(id, one.payload.proposals) }
   }
 
   // The stream a filter shows, each answer dressed with its blocks' renderings as a conversation's window is.
@@ -98,18 +101,25 @@ export namespace dressed {
     return { ...read, stream: { ...read.stream, rounds } }
   }
 
+  // A window grouped into rounds, or how many of the conversation's lines are not on this device and why, as the
+  // worker says.
+  export type Windowed = { readonly type: "Read"; readonly payload: grouped.Window } | questions.NotHere
+
   // A window, grouped into rounds on the owner's days in `zone`.
-  export const window = async (id: string, w: grouped.Asked, zone: time.Zone): Promise<grouped.Window> => {
-    const at = (m: MemoryPayload | null): Promise<{ readonly payload: grouped.Window; readonly keys: questions.Keyed }> =>
-      storesync.window(id, w, m, zone).then(one => (one.type === "Held" ? one : storesync.absent(id)))
+  export const window = async (id: string, w: grouped.Asked, zone: time.Zone): Promise<Windowed> => {
+    type At = { readonly type: "Held"; readonly payload: grouped.Window; readonly keys: questions.Keyed } | questions.NotHere
+    const at = (m: MemoryPayload | null): Promise<At> =>
+      storesync.window(id, w, m, zone).then((one): At => (one.type === "Absent" ? storesync.absent(id) : one))
     const bare = await at(null)
+    if (bare.type === "NotHere") return bare
     const m = await memory(bare.payload)
-    const { payload: read, keys } = m === null ? bare : await at(m)
+    const read = m === null ? bare : await at(m)
+    if (read.type === "NotHere") return read
     const [turns, proposals] = await Promise.all([
-      turnsOf(read.turns.map(turn => ({ id, turn })), keys),
-      proposalsOf(id, read.proposals),
+      turnsOf(read.payload.turns.map(turn => ({ id, turn })), read.keys),
+      proposalsOf(id, read.payload.proposals),
     ])
-    return { ...read, turns, proposals }
+    return { type: "Read", payload: { ...read.payload, turns, proposals } }
   }
 }
 export default dressed

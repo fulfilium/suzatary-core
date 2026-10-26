@@ -1626,6 +1626,29 @@ under in every larger union and never wins.
   purge that cannot find the blocks…"; `e2e/lines.test.ts` "a conversation is
   read from the lines…", "the list draws and the badge is counted with no
   request for the lines…"; `e2e/epoch.test.ts`.
+- **The device keeps the newest conversations, and says what it lacks.**
+  Once a page has read the lines, the core's worker (`linesync`, at each
+  landing) prefetches the content of the
+  newest conversations, each whole, newest first, up to a byte budget
+  (`keep.plan`): a tenth of the origin's quota from
+  `navigator.storage.estimate()`, at most 256 MiB, and 64 MiB where the
+  browser does not say (`keep.budget`). A prefetch goes out one answer at a
+  time, only when no other content answer is out and a page is shown (as the
+  page tells the worker, `LinesShown`), and
+  its first failure stops it until the next landing; what it
+  fetches goes to the device's `content` store, not to the tab's memory. After
+  a landing the tab keeps only the plan's content and the content of every
+  node a reading of this page read; it drops the rest, which a reading fetches
+  again by name. Eviction changes only whether a reading can be made, never
+  what it says, since a reading is whole or not made. A conversation whose
+  lines are not held and cannot be fetched is answered `NotHere` by the
+  worker (`questions.One`), with how many lines it lacks, and draws "Not on
+  this device yet: N lines of this conversation", with why, never an empty
+  transcript or a
+  placeholder that does not end. — `lazylines.test.ts` "law: the plan keeps
+  the newest conversations whole, in order, within the budget", "a prefetch
+  goes out one answer at a time…"; `e2e/lines.test.ts` "a conversation the
+  device prefetched reads with no network, and one it lacks says so".
 - **A sync says how far it has come, in bytes.** Every piece of a store's
   pull carries `size`, the bytes the replica lacked when it asked, so the
   first piece says what the whole pull brings, and `weight`, its own bytes;

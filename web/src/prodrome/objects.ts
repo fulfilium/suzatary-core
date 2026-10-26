@@ -85,6 +85,8 @@ const DB: idb.Db = {
     } else {
       if (db.objectStoreNames.contains(STORE_NAME)) db.deleteObjectStore(STORE_NAME);
       db.createObjectStore(STORE_NAME);
+      // A device at version 1 or 2 rendered blocks from lines its rows no longer hold: cleared once, as from 3 or 4.
+      if (from > 0) tx.objectStore(STORE_NAME).put(true, keyFor(RENDERED_OWED));
     }
     if (!db.objectStoreNames.contains(CONTENT_NAME)) db.createObjectStore(CONTENT_NAME);
     if (!db.objectStoreNames.contains(LINES_NAME)) db.createObjectStore(LINES_NAME);
