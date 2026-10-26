@@ -161,6 +161,7 @@ fn an_erasure_takes_the_summaries_that_read_it() {
                     model: suzatary_core::model_name::ModelName::parse("claude-sonnet-5-5")
                         .expect("a model"),
                     taint: root.measure().taint,
+                    beside: suzatary_core::secretary::compact_ask::Beside::of(root.measure()),
                 },
             )
             .expect("a summary"),

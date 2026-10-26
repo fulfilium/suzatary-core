@@ -300,9 +300,7 @@ pub fn reseals<'l>(
     let mut by: BTreeMap<KeyName, Vec<(bool, &Hash, &LineEvent)>> = BTreeMap::new();
     for (name, line) in lines {
         if let LineShape::Resealed { of, .. } = line.shape() {
-            let stale = !line
-                .scrubbed_under()
-                .all(crate::secretary::scrubbed_under::ScrubbedUnder::is_current);
+            let stale = !line.scrubbed_under().all(|under| under.is_current(()));
             by.entry(of.clone()).or_default().push((stale, name, line));
         }
     }

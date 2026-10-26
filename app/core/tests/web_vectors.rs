@@ -2780,3 +2780,37 @@ fn failed_chain() -> wire::FailedChain {
         why: "two geneses: the chain is two prodromes".to_owned(),
     }
 }
+
+/// The slots the web vectors store, sealed under #257's own `Rules`, still read as sealed under
+/// the current rules now that `Rules` is a `rule_version::Version`: the hex a slot's associated
+/// data binds is the hex this build names.
+#[test]
+fn a_stored_slot_is_under_the_rules_this_build_names() {
+    use suzatary_core::redact::Rules;
+    use suzatary_core::secretary::line_event::{LineEvent, LineVocabulary};
+    use suzatary_core::secretary::scrubbed_under::ScrubbedUnder;
+
+    let text = std::fs::read_to_string(vector("replicas.json")).expect("the replicas vector");
+    let vectors: serde_json::Value = serde_json::from_str(&text).expect("json");
+    let stored: Vec<&str> = vectors["conversations"]
+        .as_array()
+        .expect("conversations")
+        .iter()
+        .filter_map(|object| object["text"].as_str())
+        .filter(|text| text.contains("Scrubbed("))
+        .collect();
+    assert!(!stored.is_empty());
+    for text in stored {
+        let envelope = prodrome_core::event::parse_envelope::<LineEvent>(&LineVocabulary, text)
+            .expect("a stored line reads");
+        let line = envelope.event().expect("a line");
+        assert!(line.scrubbed_under().count() > 0, "{text}");
+        for under in line.scrubbed_under() {
+            assert_eq!(under, &ScrubbedUnder::current(()), "{text}");
+        }
+    }
+    assert_eq!(
+        Rules::current(()).as_str(),
+        "a0d5cffe58839d79401ab650f475384a5eb7fbc064b46cfb3b7a3b25ac91f143"
+    );
+}

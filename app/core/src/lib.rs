@@ -57,6 +57,7 @@ pub mod rendering;
 pub mod repos;
 pub mod routes;
 pub mod rule;
+pub mod rule_version;
 pub mod secretary;
 pub mod settings;
 pub mod signatures;

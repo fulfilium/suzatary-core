@@ -75,11 +75,7 @@ pub fn view(
         .into_iter()
         .filter_map(|part| {
             let node = tree.node(&part.node)?;
-            let body = if shows(node.measure()) {
-                said(digest, entries, node)?
-            } else {
-                Body::Hidden(*node.measure())
-            };
+            let body = shown_as(*node.measure(), shows, || said(digest, entries, node))?;
             Some(Shown { part, body })
         })
         .collect()
@@ -121,13 +117,13 @@ pub fn opened(
     let shown = beneath
         .into_iter()
         .map(|child| {
-            let body = if !reads(child.measure()) {
-                Body::Hidden(*child.measure())
-            } else if child.is_leaf() {
-                Body::Said(whole(entries.get(digest.line(child.name()))?))
-            } else {
-                said(digest, entries, child).unwrap_or(Body::Unsummarised(*child.measure()))
-            };
+            let body = shown_as(*child.measure(), reads, || {
+                Some(if child.is_leaf() {
+                    Body::Said(whole(entries.get(digest.line(child.name()))?))
+                } else {
+                    said(digest, entries, child).unwrap_or(Body::Unsummarised(*child.measure()))
+                })
+            })?;
             Some(Shown {
                 part: part(child),
                 body,
@@ -135,6 +131,21 @@ pub fn opened(
         })
         .collect::<Option<_>>()?;
     Some((label, shown))
+}
+
+/// What stands for a part labelled `label` to a reader that `reads`: its words, as `words`
+/// gives them, when the reader reads the label, and otherwise its kinds alone. `None` when its
+/// words do not read. The one rule every rendering of the digest shows a part by.
+pub fn shown_as(
+    label: Label,
+    reads: fn(&Label) -> bool,
+    words: impl FnOnce() -> Option<Body>,
+) -> Option<Body> {
+    if reads(&label) {
+        words()
+    } else {
+        Some(Body::Hidden(label))
+    }
 }
 
 /// The lines a handle names: `first+lines`.

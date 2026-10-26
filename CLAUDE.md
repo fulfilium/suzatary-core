@@ -103,7 +103,14 @@ confirm. Everything below derives from this.
   and swept by the same sweep, and written by one rule in the box's engine
   (`secretary::compaction`) through a `Compact` that answers words only,
   within a budget folded from the digest's own objects, every call counted
-  before it is made (off unless `[secretary] compact = true`); every session
+  before it is made (off unless `[secretary] compact = true`); each summary
+  records the version of how its node's class was asked
+  (`compact_ask::Asking`, a `rule_version::Versioned` hashing what each
+  class's log shows on a fixed probe, 2026-10-25), and one asked under an older
+  version, or over a child's summary since replaced, is stale: asked again
+  lowest level first, the owner's nodes first, and while stale an owner's
+  node's summary is shown to no reader (`suzatary secretary digest census`
+  counts them); every session
   opening is told the facts and that view in the owner's words alone, the
   rest by kind (`secretary::told`), and `zoom` opens a part as tainted as
   what it holds. The conversations are a
@@ -115,7 +122,8 @@ confirm. Everything below derives from this.
   (`line_event::seal`), and sealed under a key of its own in
   `secretary-lines-keys/`, box-local, vaulted, never pushed. Each slot
   records the rules it was scrubbed under (`redact::Rules`, a digest of the
-  patterns, inside the slot's associated data): reading parses a slot under
+  patterns, a `rule_version::Version` as the compactor's asking is, inside
+  the slot's associated data): reading parses a slot under
   the current rules and scrubs any other as it opens, once per slot (the
   `Opened` cache), and `suzatary secretary migrate-scrub` (2026-10-25) is the
   STANDING step of every change to the rules: it appends a `Resealed` line

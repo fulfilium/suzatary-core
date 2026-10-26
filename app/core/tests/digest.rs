@@ -139,16 +139,9 @@ impl Box {
                 return written;
             }
             let read = self.read();
-            let tree = read.tree().expect("lines");
             let held = self.memories().hold().expect("held");
             for node in pending {
-                let over = tree
-                    .node(&node)
-                    .expect("in the tree")
-                    .children()
-                    .iter()
-                    .map(|child| child.name().clone())
-                    .collect();
+                let over = read.over(&node).expect("children read");
                 let words = format!("summary {} of {}", written.len(), &node.as_str()[..12]);
                 held.summarize(
                     &node,
@@ -365,7 +358,9 @@ fn texts_of(read: &Digest, nodes: &[Hash]) -> BTreeSet<TextName> {
         .iter()
         .flat_map(|node| read.candidates(node))
         .filter_map(|candidate| match &candidate.said {
-            suzatary_core::secretary::digest::Written::Summary { text, .. } => Some(text.clone()),
+            suzatary_core::secretary::digest::Written::Summary(summary) => {
+                Some(summary.text.clone())
+            }
             _ => None,
         })
         .collect()
@@ -732,7 +727,7 @@ proptest! {
             let Some(summary) = read.summary(node.name()) else { continue };
             let label = node.measure().taint;
             let recorded = match &read.candidates(node.name())[0].said {
-                suzatary_core::secretary::digest::Written::Summary { taint, .. } => *taint,
+                suzatary_core::secretary::digest::Written::Summary(summary) => summary.taint,
                 other => panic!("{other:?}"),
             };
             prop_assert_eq!(recorded, label);
@@ -946,9 +941,11 @@ impl Box {
                     .candidates(node.name())
                     .iter()
                     .map(|candidate| match &candidate.said {
-                        suzatary_core::secretary::digest::Written::Summary { words, .. } => {
-                            words.as_ref().map(|line| line.as_str().to_owned())
-                        }
+                        suzatary_core::secretary::digest::Written::Summary(summary) => self
+                            .texts
+                            .get(&summary.text)
+                            .expect("reads")
+                            .map(|text| text.words().as_str().to_owned()),
                         suzatary_core::secretary::digest::Written::Unfit { .. }
                         | suzatary_core::secretary::digest::Written::Retracted => None,
                     })
@@ -1720,4 +1717,476 @@ fn write_line(
         lines.keys.set(&key.name(), &key).expect("kept");
     }
     lines.lines.append(line).expect("said");
+}
+
+/// A summary asked under an older rule is redone: stage 6 of the digest, the asking versioned.
+mod recompacting {
+    use std::collections::BTreeMap;
+
+    use prodrome_core::digest::Tree;
+    use suzatary_core::rule_version::{Under, Versioned};
+    use suzatary_core::secretary::compact_ask::{Asking, Beside};
+    use suzatary_core::secretary::compaction::{Compacted, Compaction, Reading, perform};
+    use suzatary_core::secretary::digest::{Standing, Written};
+    use suzatary_core::secretary::digest_census::{Census, Group, State};
+    use suzatary_core::secretary::digest_event::Said;
+    use suzatary_core::secretary::digest_label::Label;
+    use suzatary_core::secretary::digests::compactor;
+
+    use super::*;
+
+    /// What an older compactor wrote of a node of the owner's words alone, asked beside the clean
+    /// log: the secretary's answer restated as the owner's.
+    const RESTATED: &str = "SECRETARYWORDS restated as the owner's";
+
+    /// The name of the words `node`'s summary is stored under.
+    fn written(read: &Digest, node: &Hash) -> TextName {
+        match &read.candidates(node).first().expect("summarised").said {
+            Written::Summary(summary) => summary.text.clone(),
+            other => panic!("{other:?}"),
+        }
+    }
+
+    /// Every inner node, children before their parents.
+    fn inner(tree: &Tree<Label>) -> Vec<(Hash, Label)> {
+        fn walk(node: &prodrome_core::digest::Node<Label>, out: &mut Vec<(Hash, Label)>) {
+            if node.is_leaf() {
+                return;
+            }
+            for child in node.children() {
+                walk(child, out);
+            }
+            out.push((node.name().clone(), *node.measure()));
+        }
+        let mut out = Vec::new();
+        walk(tree.root(), &mut out);
+        out
+    }
+
+    impl Box {
+        /// Every node the compactor before this change would have summarised, summarised as it
+        /// stored them: unversioned, each over its children as they read then, an owner's node
+        /// in [`RESTATED`] words.
+        fn summarise_unversioned(&self) {
+            loop {
+                let read = self.read();
+                let tree = read.tree().expect("lines");
+                let owed =
+                    prodrome_core::digest::pending(tree, |node| read.standing(node).map(|_| 1));
+                if owed.is_empty() {
+                    return;
+                }
+                for node in owed {
+                    let label = *tree.node(&node).expect("in the tree").measure();
+                    let words = if label.is_owners() {
+                        RESTATED.to_owned()
+                    } else {
+                        format!("an older summary of {}", &node.as_str()[..12])
+                    };
+                    self.write_summary(&read, &node, label, &words, None);
+                }
+            }
+        }
+
+        /// `words` stored as the summary of `node`, labelled `label`, over its children as
+        /// `read` reads them, recorded under the asking `version` names, or under none, as the
+        /// compactor before versioning stored it: the print `summarized` writes, its version
+        /// replaced or removed, read back through the vocabulary.
+        fn write_summary(
+            &self,
+            read: &Digest,
+            node: &Hash,
+            label: Label,
+            words: &str,
+            version: Option<&str>,
+        ) {
+            let text = Text::new(Line::new(words).expect("a line"), [7; 16]);
+            self.texts.set(&text.name(), &text).expect("kept");
+            let beside = Beside::of(&label);
+            let event = DigestEvent::summarized(
+                node.clone(),
+                at(0),
+                compactor(),
+                &text,
+                suzatary_core::secretary::digest_event::Attempt {
+                    over: read.over(node).expect("children read"),
+                    model: model(),
+                    taint: label.taint,
+                    beside,
+                },
+            )
+            .expect("an event");
+            let print = prodrome_core::event::canonical(&event);
+            let current = format!(", asked='{}'", Asking::current(beside));
+            let print = match version {
+                Some(version) => print.replace(&current, &format!(", asked='{version}'")),
+                None => print
+                    .replace("SummarizedUnder(", "Summarized(")
+                    .replace(&current, ""),
+            };
+            let event = prodrome_core::event::parse_event::<DigestEvent>(
+                &suzatary_core::secretary::digest_event::DigestVocabulary::default(),
+                &print,
+            )
+            .expect("the print reads");
+            let Said::Summarized { asked, .. } = event.said() else {
+                panic!("{print}");
+            };
+            assert!(!asked.is_current(beside), "{print}");
+            self.history.append(event).expect("stored");
+        }
+
+        /// The census, and beside it each count read off the history's objects directly: per
+        /// group, the nodes whose newest summary is versioned and current, and those whose is not.
+        fn census_and_store(&self) -> (Census, BTreeMap<(Group, State), usize>) {
+            let read = self.read();
+            let tree = read.tree().expect("lines");
+            let mut newest: BTreeMap<Hash, Option<Under<Asking>>> = BTreeMap::new();
+            for (_, object) in self.history.objects().expect("objects") {
+                let Some(event) = object.event() else {
+                    continue;
+                };
+                let asked = match event.said() {
+                    Said::Summarized { asked, text, .. } => {
+                        self.texts.get(text).expect("reads").map(|_| asked.clone())
+                    }
+                    Said::Unfit { .. } | Said::Retracted => None,
+                    Said::Asked { .. } => continue,
+                };
+                newest.insert(event.key().clone(), asked);
+            }
+            let mut store = BTreeMap::new();
+            for (node, label) in inner(tree) {
+                let state = match newest.get(&node).cloned().flatten() {
+                    Some(asked) if asked.is_current(Beside::of(&label)) => State::Current,
+                    Some(_) => State::Stale,
+                    None => State::Unsummarized,
+                };
+                *store.entry((Group::of(&label), state)).or_default() += 1;
+            }
+            (Census::of(&read), store)
+        }
+
+        /// The census by group and state.
+        fn census(&self) -> BTreeMap<(Group, State), usize> {
+            let census = self.census_and_store().0;
+            let mut counts = BTreeMap::new();
+            for group in [Group::Owners, Group::Clean, Group::Tainted] {
+                for state in [State::Current, State::Stale, State::Unsummarized] {
+                    let n = census.count(|at, _, is| at == group && is == state);
+                    if n > 0 {
+                        counts.insert((group, state), n);
+                    }
+                }
+            }
+            counts
+        }
+    }
+
+    /// No finding: every store verifies, no node's reading is a conflict, and every text the
+    /// reading names live is kept.
+    fn no_finding(the: &Box) {
+        assert_eq!(the.history.verify(), Vec::<String>::new());
+        let read = the.read();
+        for (node, _) in inner(read.tree().expect("lines")) {
+            assert!(read.candidates(&node).len() <= 1, "{node} is in conflict");
+        }
+        assert!(live(&read).is_subset(&the.kept()));
+    }
+
+    /// Every inner node is current, or owed now, or above one that is: nothing is left behind.
+    fn summarised_or_owed(the: &Box) {
+        fn owed_at_or_under(
+            node: &prodrome_core::digest::Node<Label>,
+            owed: &BTreeSet<Hash>,
+        ) -> bool {
+            owed.contains(node.name())
+                || node
+                    .children()
+                    .iter()
+                    .any(|child| owed_at_or_under(child, owed))
+        }
+        let read = the.read();
+        let tree = read.tree().expect("lines");
+        let owed: BTreeSet<Hash> = Compaction { model: model() }
+            .owed(&read)
+            .into_iter()
+            .collect();
+        let mut stack = vec![tree.root()];
+        while let Some(node) = stack.pop() {
+            let current = read.standing(node.name()) == Some(Standing::Current);
+            if !node.is_leaf() && tree.settled(node) {
+                assert!(
+                    current || owed_at_or_under(node, &owed),
+                    "{} is stranded",
+                    node.name()
+                );
+            }
+            stack.extend(node.children());
+        }
+    }
+
+    /// The fixture of #236: the owner's lines, one answer of the secretary's, the owner's again.
+    fn owners_then_answer(the: &Box) {
+        let person = |k: usize| Turn::Person {
+            text: format!("a line of mine, {k}"),
+            references: Vec::new(),
+            attachments: Vec::new(),
+        };
+        let mut turns: Vec<Turn> = (0..12).map(person).collect();
+        turns.push(Turn::Model {
+            text: "SECRETARYWORDS: an answer of the secretary's".to_owned(),
+            calls: Vec::new(),
+        });
+        turns.extend((13..40).map(person));
+        the.write("a", turns);
+    }
+
+    proptest! {
+        #![proptest_config(ProptestConfig { cases: 12, ..ProptestConfig::default() })]
+
+        /// Laws (a) and (d): every summary stored before the asking was versioned is stale and
+        /// counted so; after the redo every summary is current, a second pass asks nothing, and
+        /// the census counts what the store holds at each step.
+        #[test]
+        fn the_redo_leaves_every_summary_current_and_a_second_pass_asks_nothing(
+            kinds in proptest::collection::vec(any::<u8>(), 20..90),
+        ) {
+            let the = Box::default();
+            the.write_lines("a", conversation(&kinds, true));
+            the.summarise_unversioned();
+            let (census, store) = the.census_and_store();
+            prop_assert_eq!(the.census(), store);
+            prop_assert_eq!(census.count(|_, _, state| state == State::Current), 0);
+            prop_assert!(census.count(|_, _, state| state == State::Stale) > 0);
+
+            let compactor = Recording::joining();
+            the.compact_all(&compactor);
+            let (census, store) = the.census_and_store();
+            prop_assert_eq!(the.census(), store);
+            prop_assert_eq!(census.count(|_, _, state| state == State::Stale), 0);
+            let read = the.read();
+            for (node, label) in inner(read.tree().expect("lines")) {
+                if let Some(candidate) = read.candidates(&node).first() {
+                    prop_assert!(
+                        matches!(
+                            &candidate.said,
+                            Written::Summary(summary) if summary.asked.is_current(Beside::of(&label))
+                        ),
+                        "{node}: {:?}", candidate.said
+                    );
+                }
+            }
+            let asked = compactor.asked().len();
+            prop_assert!(the.compact_all(&compactor).is_empty());
+            prop_assert_eq!(compactor.asked().len(), asked);
+            no_finding(&the);
+        }
+
+        /// Law (c): a redo stopped after any number of firings, and with a call recorded and never
+        /// answered, leaves no finding and every node current or owed; resumed, it ends as law
+        /// (a) says.
+        #[test]
+        fn a_redo_stopped_anywhere_and_resumed_ends_current(
+            kinds in proptest::collection::vec(any::<u8>(), 20..90),
+            stop in 0usize..40,
+        ) {
+            let the = Box::default();
+            the.write_lines("a", conversation(&kinds, true));
+            the.summarise_unversioned();
+            let joining = Recording::joining();
+            let rule = Compaction { model: joining.model().clone() };
+            for _ in 0..stop {
+                let reading = Reading::of(&the.digests()).expect("reads whole");
+                if perform(&the.memories(), &joining, &reading, ROOMY, &At(at(0)))
+                    .expect("performed")
+                    .is_none()
+                {
+                    break;
+                }
+            }
+            // The process stopped between recording a call and hearing its answer.
+            if let Some(node) = rule.due(&the.read()) {
+                the.history
+                    .append(DigestEvent::asked(node, at(0), compactor(), 9))
+                    .expect("recorded");
+            }
+            no_finding(&the);
+            summarised_or_owed(&the);
+
+            the.compact_all(&joining);
+            no_finding(&the);
+            prop_assert_eq!(the.census_and_store().0.count(|_, _, state| state == State::Stale), 0);
+            prop_assert!(the.compact_all(&joining).is_empty());
+        }
+    }
+
+    /// Law (b), and the order: a node of the owner's words alone whose summary restates the
+    /// secretary's answer is shown to no reader while it is stale, is redone before every other
+    /// node, beside the owner's words alone, and after the redo holds nothing but them.
+    #[test]
+    fn an_owners_node_is_redone_first_beside_the_owners_words_alone() {
+        let the = Box::default();
+        owners_then_answer(&the);
+        the.summarise_unversioned();
+        let read = the.read();
+        let tree = read.tree().expect("lines");
+        let owners: BTreeSet<Hash> = inner(tree)
+            .into_iter()
+            .filter(|(node, label)| label.is_owners() && read.standing(node).is_some())
+            .map(|(node, _)| node)
+            .collect();
+        assert!(!owners.is_empty());
+        for node in &owners {
+            assert_eq!(read.standing(node), Some(Standing::Stale));
+            let words = the.texts.get(&written(&read, node)).expect("reads");
+            assert!(words.is_some_and(|text| text.words().as_str() == RESTATED));
+            assert_eq!(read.summary(node), None, "a stale owner's summary is shown");
+        }
+
+        let compactor = Recording::joining();
+        let done = the.compact_all(&compactor);
+        let asked = compactor.asked();
+        assert_eq!(done.len(), asked.len(), "every answer fitted at once");
+        let nodes: Vec<Hash> = done
+            .into_iter()
+            .map(|done| match done {
+                Compacted::Summarized { node, .. } => node,
+                Compacted::Unfit { node, .. } => panic!("{node} found no line"),
+            })
+            .collect();
+        let mut owners_asked = 0;
+        for (node, ask) in nodes.iter().zip(&asked) {
+            if owners.contains(node) {
+                owners_asked += 1;
+                assert!(!ask.text().contains("SECRETARYWORDS"), "{}", ask.text());
+            }
+        }
+        assert!(owners_asked > 0);
+        // The first owner's node at each level goes before any other node of that level.
+        let first_other = nodes.iter().position(|node| !owners.contains(node));
+        let first_owner = nodes.iter().position(|node| owners.contains(node));
+        assert!(
+            first_owner < first_other,
+            "{first_owner:?} after {first_other:?}"
+        );
+
+        let read = the.read();
+        for node in &owners {
+            let words = read.summary(node).expect("redone");
+            assert!(
+                !words.as_str().contains("SECRETARYWORDS"),
+                "{}",
+                words.as_str()
+            );
+        }
+    }
+
+    /// Every node summarised that has one of `marked` at or under it.
+    fn at_or_above(tree: &Tree<Label>, read: &Digest, marked: &BTreeSet<Hash>) -> BTreeSet<Hash> {
+        fn walk(
+            node: &prodrome_core::digest::Node<Label>,
+            read: &Digest,
+            marked: &BTreeSet<Hash>,
+            out: &mut BTreeSet<Hash>,
+        ) -> bool {
+            let mut under = false;
+            for child in node.children() {
+                under |= walk(child, read, marked, out);
+            }
+            let here = under || marked.contains(node.name());
+            if here && read.standing(node.name()).is_some() {
+                out.insert(node.name().clone());
+            }
+            here
+        }
+        let mut out = BTreeSet::new();
+        walk(tree.root(), read, marked, &mut out);
+        out
+    }
+
+    /// A change to how one class of node is asked stales that class's summaries and the
+    /// summaries written over them, and no other: with every owner's node recorded under an
+    /// older owners' asking, the redo asks exactly those nodes and the nodes above them, and
+    /// leaves every other clean summary as it was.
+    #[test]
+    fn an_older_owners_asking_redoes_the_owners_nodes_and_what_rests_on_them_alone() {
+        let the = Box::default();
+        owners_then_answer(&the);
+        the.write_lines(
+            "b",
+            conversation(&[0, 1, 2, 0, 1, 2, 0, 0, 1, 2, 2, 1, 0, 1], false),
+        );
+        let compactor = Recording::joining();
+        the.compact_all(&compactor);
+        let read = the.read();
+        let owners: BTreeSet<Hash> = inner(read.tree().expect("lines"))
+            .into_iter()
+            .filter(|(node, label)| label.is_owners() && read.standing(node).is_some())
+            .map(|(node, _)| node)
+            .collect();
+        let expected = at_or_above(read.tree().expect("lines"), &read, &owners);
+        assert!(!owners.is_empty());
+        assert!(
+            inner(read.tree().expect("lines"))
+                .iter()
+                .any(|(node, _)| read.standing(node).is_some() && !expected.contains(node)),
+            "some summary lies outside what the owners' asking reaches"
+        );
+        for (node, label) in inner(read.tree().expect("lines")) {
+            if owners.contains(&node) {
+                let now = the.read();
+                the.write_summary(
+                    &now,
+                    &node,
+                    label,
+                    "an owner's summary",
+                    Some(&"0".repeat(64)),
+                );
+            }
+        }
+        let redone: BTreeSet<Hash> = the
+            .compact_all(&compactor)
+            .into_iter()
+            .map(|done| match done {
+                Compacted::Summarized { node, .. } => node,
+                Compacted::Unfit { node, .. } => panic!("{node} found no line"),
+            })
+            .collect();
+        assert_eq!(redone, expected);
+        assert!(the.compact_all(&compactor).is_empty());
+    }
+
+    /// The asking's versions move whenever the questions move ([`Versioned::pinned`]). Each
+    /// class's version is a hash of what the rule does on a fixed probe; this pins both beside a
+    /// hash of every question a whole compaction of a fixed record asks.
+    #[test]
+    fn the_asking_moves_when_the_questions_move() {
+        use suzatary_core::secretary::compact_ask::Ask;
+        // One conversation, whose order is causal alone: runs of the owner's turns long enough
+        // to make nodes of the owner's words, then every other kind of line.
+        let mut kinds = vec![0; 12];
+        kinds.push(1);
+        kinds.extend([0; 12]);
+        kinds.extend([2, 3, 1, 0, 0, 0, 0, 0, 1, 2, 0, 1]);
+        let the = Box::default();
+        the.write_lines("a", conversation(&kinds, true));
+        let compactor = Recording::joining();
+        the.compact_all(&compactor);
+        let questions: Vec<String> = compactor.asked().iter().map(Ask::text).collect();
+        for (beside, version) in [
+            (Beside::OwnersWords, PINNED_OWNERS),
+            (Beside::CleanWords, PINNED_CLEAN),
+        ] {
+            if let Err(moved) = Asking::pinned(beside, questions.clone(), version, PINNED_QUESTIONS)
+            {
+                panic!("{beside:?}: {moved}");
+            }
+        }
+    }
+
+    const PINNED_OWNERS: &str = "909dbcacef5074e6f92b818cd4a1b28fa65a38e393533d3ebf4ce9f9a37fea30";
+    const PINNED_CLEAN: &str = "fbc63a4dfd9e1cf3ced851d4950c9ad82e08cba3e904ae7755355906f47ab495";
+    const PINNED_QUESTIONS: &str =
+        "106d3f5877fa609965041ba9094fe43af77e8085f7fc6edd80b60f6baeba2dd6";
 }

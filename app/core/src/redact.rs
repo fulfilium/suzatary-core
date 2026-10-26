@@ -55,10 +55,10 @@ use std::borrow::Cow;
 use std::cell::LazyCell;
 use std::sync::LazyLock;
 
+use crate::rule_version::{Version, Versioned};
 use regex::Regex;
 use serde::Serialize;
 use serde::de::DeserializeOwned;
-use sha2::{Digest as _, Sha256};
 
 /// What a redacted number becomes.
 pub const REDACTED: &str = "[redacted]";
@@ -185,109 +185,64 @@ pub(crate) fn unlink(text: &str) -> String {
     text.into_owned()
 }
 
-/// Which rules a text was scrubbed under: the SHA-256, in lowercase hex, of every pattern the
-/// scrub applies in the order it applies them, then its distances, its currency words and
-/// `CHECKS`. A stored line records it, so a change to the rules can find every line scrubbed
-/// under older ones.
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, serde::Deserialize)]
-#[serde(try_from = "String", into = "String")]
-pub struct Rules(String);
+/// The scrub as a versioned rule: its version is the SHA-256, in lowercase hex, of every pattern
+/// it applies in the order it applies them, then its distances, its currency words, the
+/// replacement and [`Versioned::REVISION`]. A stored line records it, so a change to the rules
+/// can find every line scrubbed under older ones.
+#[derive(Debug)]
+pub struct Scrub;
 
-/// A name that is no SHA-256.
-#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
-#[error("a scrub's rules are named by 64 lowercase hex, got {0:?}")]
-pub struct NotRules(pub String);
+/// Which rules a text was scrubbed under.
+pub type Rules = Version<Scrub>;
 
-/// The revision of the code the patterns' matches pass through (the checksums, the dates, the
-/// standing-alone test and the overlap rule). Raise it when that code changes what is redacted,
-/// since no pattern's text shows such a change.
-const CHECKS: u32 = 1;
+static RULES: LazyLock<Rules> = LazyLock::new(|| Version::of_parts(()));
 
-static RULES: LazyLock<Rules> = LazyLock::new(|| {
-    let patterns: [&Regex; 20] = [
-        &WRITTEN_OUT,
-        &NINE_DIGITS,
-        &LABEL,
-        &NAMED_CODE_LABEL,
-        &STRONG_CODE_LABEL,
-        &CODE_LABEL,
-        &NOT_CODE_LABEL,
-        &CODE,
-        &ACCOUNT_LABEL,
-        &NOT_ACCOUNT_LABEL,
-        &ACCOUNT,
-        &ROUTING_LABEL,
-        &ROUTING,
-        &GROUPS,
-        &IBAN,
-        &HINT,
-        &PLACEHOLDER,
-        &USERINFO,
-        &CREDENTIAL,
-        &JWT,
-    ];
-    let mut hash = Sha256::new();
-    // Each part ends in a NUL, which no pattern holds, so the parts split one way.
-    for part in patterns
-        .iter()
-        .map(|pattern| pattern.as_str().to_owned())
-        .chain([NEAR.to_string(), STRONG_NEAR.to_string()])
-        .chain(CURRENCIES.iter().map(|word| (*word).to_owned()))
-        .chain([REDACTED.to_owned(), CHECKS.to_string()])
-    {
-        hash.update(part.as_bytes());
-        hash.update([0]);
+impl Versioned for Scrub {
+    type Case = ();
+
+    const WHAT: &'static str = "the redaction rules";
+
+    /// The revision of the code the patterns' matches pass through (the checksums, the dates,
+    /// the standing-alone test and the overlap rule). Raise it when that code changes what is
+    /// redacted, since no pattern's text shows such a change.
+    const REVISION: u32 = 1;
+
+    fn parts((): ()) -> Vec<String> {
+        let patterns: [&Regex; 20] = [
+            &WRITTEN_OUT,
+            &NINE_DIGITS,
+            &LABEL,
+            &NAMED_CODE_LABEL,
+            &STRONG_CODE_LABEL,
+            &CODE_LABEL,
+            &NOT_CODE_LABEL,
+            &CODE,
+            &ACCOUNT_LABEL,
+            &NOT_ACCOUNT_LABEL,
+            &ACCOUNT,
+            &ROUTING_LABEL,
+            &ROUTING,
+            &GROUPS,
+            &IBAN,
+            &HINT,
+            &PLACEHOLDER,
+            &USERINFO,
+            &CREDENTIAL,
+            &JWT,
+        ];
+        patterns
+            .iter()
+            .map(|pattern| pattern.as_str().to_owned())
+            .chain([NEAR.to_string(), STRONG_NEAR.to_string()])
+            .chain(CURRENCIES.iter().map(|word| (*word).to_owned()))
+            .chain([REDACTED.to_owned()])
+            .collect()
     }
-    Rules(hex::encode(hash.finalize()))
-});
 
-impl Rules {
-    /// The rules this build scrubs under.
-    #[must_use]
-    pub fn current() -> &'static Rules {
+    fn current((): ()) -> &'static Rules {
         &RULES
     }
-
-    /// A name read back, checked once.
-    ///
-    /// # Errors
-    /// [`NotRules`] for anything but 64 lowercase hex.
-    pub fn new(name: impl Into<String>) -> Result<Self, NotRules> {
-        let name = name.into();
-        if name.len() == 64 && name.bytes().all(|b| matches!(b, b'0'..=b'9' | b'a'..=b'f')) {
-            Ok(Self(name))
-        } else {
-            Err(NotRules(name))
-        }
-    }
-
-    /// The hex.
-    #[must_use]
-    pub fn as_str(&self) -> &str {
-        &self.0
-    }
 }
-
-impl TryFrom<String> for Rules {
-    type Error = NotRules;
-    fn try_from(name: String) -> Result<Self, NotRules> {
-        Self::new(name)
-    }
-}
-
-impl From<Rules> for String {
-    fn from(rules: Rules) -> String {
-        rules.0
-    }
-}
-
-impl std::fmt::Display for Rules {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str(&self.0)
-    }
-}
-
-crate::literal::text_literal!(Rules => |rules| rules.as_str().to_owned());
 
 /// A value every string of which, object keys included, went through [`redact`] and the link
 /// pass: what a conversation line must be before a store takes it.
@@ -1741,8 +1696,8 @@ mod tests {
         assert_eq!(unlink(redact(text).as_str()), scrubbed_before(text));
     }
 
-    /// The rules' name moves whenever what the scrub does to this corpus moves. When the corpus
-    /// moved and the rules did not, a check's code changed: raise [`CHECKS`], then pin both.
+    /// The rules' name moves whenever what the scrub does to this corpus moves
+    /// ([`Versioned::pinned`]).
     #[test]
     fn the_rules_move_when_the_scrub_moves() {
         let corpus = [
@@ -1753,19 +1708,10 @@ mod tests {
             "https://ada:pw@example.test/r?token=a1&code=b2 eyJa.eyJb.c and 2026-10-25",
             "Call 617-555-1234; code expires 2026-10-23; promo code 123456",
         ];
-        let mut hash = Sha256::new();
-        for text in corpus {
-            hash.update(unlink(redact(text).as_str()).as_bytes());
-            hash.update([0]);
+        let scrubbed = corpus.map(|text| unlink(redact(text).as_str()));
+        if let Err(moved) = Scrub::pinned((), scrubbed, PINNED_RULES, PINNED_CORPUS) {
+            panic!("{moved}");
         }
-        assert_eq!(
-            (
-                Rules::current().as_str(),
-                hex::encode(hash.finalize()).as_str()
-            ),
-            (PINNED_RULES, PINNED_CORPUS),
-            "the scrub moved: if the rules' name did not move with it, raise CHECKS; then pin both"
-        );
     }
 
     const PINNED_RULES: &str = "a0d5cffe58839d79401ab650f475384a5eb7fbc064b46cfb3b7a3b25ac91f143";
@@ -1773,9 +1719,13 @@ mod tests {
 
     #[test]
     fn rules_print_and_read_back() {
-        let rules = Rules::current().clone();
+        let rules = Rules::current(()).clone();
         assert_eq!(Rules::new(rules.as_str()), Ok(rules.clone()));
         assert!(Rules::new("not hex").is_err());
+        let json = serde_json::to_string(&rules).expect("prints");
+        assert_eq!(json, format!("\"{rules}\""));
+        assert_eq!(serde_json::from_str::<Rules>(&json).expect("reads"), rules);
+        assert!(serde_json::from_str::<Rules>("\"not hex\"").is_err());
     }
 
     #[derive(Debug, PartialEq, serde::Serialize, serde::Deserialize)]

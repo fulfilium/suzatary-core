@@ -354,6 +354,25 @@ logged, "zoom before you act, guess or ask", and the stability-first view.
    than a day's cap is recorded `Unfit`. Also the compactor's three follow-ups: an
    `Asked` per call at the call's instant, a call held when it would cross
    a cap by its own size, and an empty `CLAUDE_CONFIG_DIR`.
+   A SUMMARY RECORDS HOW IT WAS ASKED (2026-10-25): `compact_ask::Asking`
+   is a `rule_version::Versioned` rule with a version per class of node
+   (`Beside`: the owner's words alone, or every clean part), the SHA-256 of
+   the prompt, the question's text and what that class's log shows on a
+   fixed probe of every shape of part (`digest_view::shown_as`, the one rule
+   a rendering shows a part by), the sizes and a `REVISION` raised by hand
+   for what the probe cannot reach; `the_asking_moves_when_the_questions_move`
+   pins both versions beside a hash of a whole compaction's questions, and
+   every `SummarizedUnder` records its node's class's version (a `Summarized` from before reads as
+   unversioned). A summary is CURRENT when it was asked under the current
+   version over what its children read now (`digest::Standing`), and
+   `Digest::pending` reads a stale one as none, so the compactor asks it
+   again only over current children, lowest level first, the owner's nodes
+   first (`Compaction::owed`), at the budget's pace, its new summary
+   appended over the old one. A stale summary of a node labelled the
+   owner's alone is shown to no reader until it is redone, since it may
+   have been asked beside the clean log (before #236). `suzatary secretary
+   digest census` counts current, stale and unsummarized nodes by group and
+   level.
 6. **Fact consolidation**: `Consolidated`, the `consolidate` verb, the page's
    "merged from"; law 11. ~250 lines. Deletes the forget-both procedure.
 7. **(Owner-gated) A fresh call per turn**: `Ask::Digest` replaces

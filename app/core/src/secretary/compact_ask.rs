@@ -9,20 +9,179 @@
 //! written from clean words alone, and for a node of nothing but the owner's words it hides every
 //! other part too, so that summary is written from the owner's words alone: either way its label,
 //! the join of its lines', is true of what the compactor read.
+//!
+//! How a node is asked is a versioned rule, [`Asking`], and every summary records the version it
+//! was asked under, so a change to the asking finds every summary asked the old way.
 
 use std::collections::BTreeMap;
 use std::fmt::Write as _;
+use std::sync::LazyLock;
 
+use prodrome_core::digest::Measure as _;
 use prodrome_core::event::Hash;
 
+use crate::rule_version::{Version, Versioned};
 use crate::secretary::digest::Digest;
-use crate::secretary::digest_label::Label;
-use crate::secretary::digest_line::NODE_BYTES;
-use crate::secretary::digest_view::{self, Keep, VIEW_BYTES, rendered};
+use crate::secretary::digest_label::{Kind, Kinds, Label};
+use crate::secretary::digest_line::{Line, NODE_BYTES};
+use crate::secretary::digest_view::{self, Body, Keep, LINE_BYTES, VIEW_BYTES, rendered};
 use crate::secretary::store::Entry;
+use crate::secretary::taint::Taint;
 
 /// The compactor's rules, the file the code sends: `app/core/src/secretary/compact.md`.
 pub const PROMPT: &str = include_str!("compact.md");
+
+/// How a node is asked for its summary, as a rule whose version each summary records, one
+/// version for each [`Beside`]: the prompt, the question's text, what the log shows a node of
+/// that class, and the sizes that cut them. A change to what one class is shown leaves the other
+/// class's summaries current.
+#[derive(Debug)]
+pub struct Asking;
+
+static OWNERS_WORDS: LazyLock<Version<Asking>> =
+    LazyLock::new(|| Version::of_parts(Beside::OwnersWords));
+static CLEAN_WORDS: LazyLock<Version<Asking>> =
+    LazyLock::new(|| Version::of_parts(Beside::CleanWords));
+
+impl Versioned for Asking {
+    type Case = Beside;
+
+    const WHAT: &'static str = "the compactor's asking";
+
+    /// Raise it when the code that builds a question changes in a way the probe does not show
+    /// (which children a span holds, or which parts a log keeps).
+    const REVISION: u32 = 1;
+
+    fn parts(beside: Beside) -> Vec<String> {
+        // What the rule does on a fixed probe, not a list of what it reads: the question's text
+        // stands for its template, and the probe's log as this class is shown it stands for
+        // which parts it reads, how each line and summary renders and the note a cut log ends in.
+        let question = Ask::new(vec!["log".to_owned()], vec!["span".to_owned()])
+            .tried(
+                "answer".to_owned(),
+                Unfit::Long {
+                    bytes: 1,
+                    cut: "cut".to_owned(),
+                },
+            )
+            .tried("answer".to_owned(), Unfit::NotALine);
+        let log: Vec<String> = probe()
+            .into_iter()
+            .filter_map(|(label, words)| {
+                digest_view::shown_as(label, beside.reads(), || Some(words))
+            })
+            .map(|body| body.text(2))
+            .collect();
+        let cut = digest_view::fit(log.clone(), PROBE_CUT, Keep::Earliest);
+        [PROMPT.to_owned(), question.text()]
+            .into_iter()
+            .chain(log)
+            .chain(cut)
+            .chain([VIEW_BYTES, NODE_BYTES, LINE_BYTES].map(|bytes| bytes.to_string()))
+            .collect()
+    }
+
+    fn current(beside: Beside) -> &'static Version<Self> {
+        match beside {
+            Beside::OwnersWords => &OWNERS_WORDS,
+            Beside::CleanWords => &CLEAN_WORDS,
+        }
+    }
+}
+
+/// The bytes the probe's log is cut at, so its note is part of the version.
+const PROBE_CUT: usize = 160;
+
+/// Parts of every shape a log shows, each labelled as the digest labels it: a line of each kind
+/// of turn, clean and tainted, a summary, and a node not summarised yet.
+fn probe() -> Vec<(Label, Body)> {
+    use crate::capability::{ToolCall, Turn};
+    use crate::secretary::outcome::Outcome;
+    let at = || crate::capability::Datetime::new(2026, 10, 25, 9, 0, 0, 0).expect("an instant");
+    let tool = |outcome| Turn::Tool {
+        verb: "weather".into(),
+        answer: "a verb's answer".to_owned(),
+        outcome,
+        files: Vec::new(),
+    };
+    let turns = [
+        Turn::Person {
+            text: "the owner's turn".to_owned(),
+            references: Vec::new(),
+            attachments: Vec::new(),
+        },
+        Turn::Model {
+            text: "the secretary's answer".to_owned(),
+            calls: vec![ToolCall {
+                verb: "remember".into(),
+                args: BTreeMap::new(),
+            }],
+        },
+        tool(Outcome::Answered),
+        tool(Outcome::Refused),
+    ];
+    let lines = turns.into_iter().map(|turn| Entry::Said {
+        at: at(),
+        turn,
+        by: None,
+    });
+    let opened = Entry::Opened {
+        at: at(),
+        title: crate::secretary::words::Words::kept("a title".to_owned()),
+        model: "m".to_owned(),
+        kind: crate::secretary::store::Kind::Topic,
+    };
+    let mut parts = Vec::new();
+    for taint in [Taint::Clean, Taint::Tainted] {
+        for entry in lines.clone().chain([opened.clone()]) {
+            parts.push((Label::of(&entry, taint), Body::Said(rendered(&entry))));
+        }
+        let owners = Label {
+            taint,
+            kinds: Kinds::one(Kind::Person),
+        };
+        let mixed = owners.join(&Label {
+            taint,
+            kinds: Kinds::one(Kind::Model),
+        });
+        for label in [owners, mixed] {
+            let line = Line::new("a summary").expect("a line");
+            parts.push((label, Body::Derived(line)));
+            parts.push((label, Body::Unsummarised(label)));
+        }
+    }
+    parts
+}
+
+/// Which parts of the log a node is asked beside, by its label.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Beside {
+    /// The owner's words alone: a node of nothing but the owner's words, so its summary,
+    /// labelled as nothing but theirs, is written from nothing but theirs.
+    OwnersWords,
+    /// Every clean part's words.
+    CleanWords,
+}
+
+impl Beside {
+    /// What a node labelled `label` is asked beside.
+    #[must_use]
+    pub fn of(label: &Label) -> Self {
+        if label.is_owners() {
+            Beside::OwnersWords
+        } else {
+            Beside::CleanWords
+        }
+    }
+
+    /// The parts it shows in words.
+    fn reads(self) -> fn(&Label) -> bool {
+        match self {
+            Beside::OwnersWords => Label::is_owners,
+            Beside::CleanWords => Label::is_clean,
+        }
+    }
+}
 
 /// One question to the compactor.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -128,26 +287,20 @@ impl Ask {
         entries: &std::collections::BTreeMap<&Hash, &crate::secretary::store::Entry>,
         node: &Hash,
     ) -> Option<(Self, Vec<Hash>)> {
-        let tree = digest.tree()?;
-        let asked = tree.node(node)?;
-        // An owner's node is read beside the owner's words alone, so its summary, labelled as
-        // nothing but theirs, is written from nothing but theirs.
-        let reads: fn(&Label) -> bool = if asked.measure().is_owners() {
-            Label::is_owners
-        } else {
-            Label::is_clean
-        };
-        let mut span = Vec::new();
-        let mut over = Vec::new();
-        for child in asked.children() {
-            if child.is_leaf() {
-                span.push(rendered(entries.get(digest.line(child.name()))?));
-                over.push(child.name().clone());
-            } else {
-                span.push(digest.summary(child.name())?.as_str().to_owned());
-                over.push(digest.candidates(child.name()).first()?.object.clone());
-            }
-        }
+        let asked = digest.tree()?.node(node)?;
+        let over = digest.over(node)?;
+        let span = asked
+            .children()
+            .iter()
+            .map(|child| {
+                Some(if child.is_leaf() {
+                    rendered(entries.get(digest.line(child.name()))?)
+                } else {
+                    digest.summary(child.name())?.as_str().to_owned()
+                })
+            })
+            .collect::<Option<_>>()?;
+        let reads = Beside::of(asked.measure()).reads();
         Some((Self::new(log(digest, entries, reads), span), over))
     }
 }

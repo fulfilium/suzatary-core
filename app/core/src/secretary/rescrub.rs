@@ -33,7 +33,6 @@ use crate::secretary::line_event::LineEvent;
 use crate::secretary::line_shape::LineShape;
 use crate::secretary::line_words::LineWords;
 use crate::secretary::locked_text::KeyName;
-use crate::secretary::scrubbed_under::ScrubbedUnder;
 use crate::secretary::store::ConversationId;
 use crate::secretary::transcript;
 use crate::secretary::words::Words;
@@ -170,7 +169,7 @@ fn slots(conversations: Conversations<'_>) -> Result<Vec<(Place, Stands)>, Store
                             let current = seal
                                 .scrubbed_under()
                                 .nth(at)
-                                .is_some_and(ScrubbedUnder::is_current);
+                                .is_some_and(|under| under.is_current(()));
                             Some((seal, at, own, opened, current))
                         })
                         .collect::<Vec<_>>();

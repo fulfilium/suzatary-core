@@ -28,6 +28,7 @@ pub mod daily;
 pub mod decide;
 pub mod diff;
 pub mod digest;
+pub mod digest_census;
 pub mod digest_event;
 pub mod digest_label;
 pub mod digest_line;

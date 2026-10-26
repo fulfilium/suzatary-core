@@ -32,6 +32,8 @@ use prodrome_core::schema::Schema as _;
 use prodrome_core::topo;
 
 use crate::model_name::ModelName;
+use crate::rule_version::Under;
+use crate::secretary::compact_ask::{Asking, Beside};
 use crate::secretary::digest_event::{DigestEvent, Said};
 use crate::secretary::digest_label::Label;
 use crate::secretary::digest_line::Line;
@@ -65,24 +67,20 @@ pub struct Candidate {
     pub said: Written,
 }
 
-/// What a candidate says, its words joined.
+/// Whether a summary is true to how a node is asked now.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub enum Standing {
+    /// Asked under the current asking, over what the node's children read now.
+    Current,
+    /// Asked under an older asking, or over a child's summary since replaced: owed again.
+    Stale,
+}
+
+/// What a candidate says.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Written {
     /// A summary.
-    Summary {
-        /// Its words, `None` once deleted or lost.
-        words: Option<Line>,
-        /// Their name.
-        text: TextName,
-        /// What it was written from.
-        over: Vec<Hash>,
-        /// The model that wrote it.
-        model: ModelName,
-        /// Its length.
-        bytes: u32,
-        /// The node's taint when it was written.
-        taint: Taint,
-    },
+    Summary(Summary),
     /// No answer fitted a node.
     Unfit {
         /// The model asked.
@@ -94,6 +92,26 @@ pub enum Written {
     },
     /// The summary is wrong.
     Retracted,
+}
+
+/// A summary as the history records it. Its words are private to this module, so a reader
+/// reaches them only through [`Digest::summary`], which shows no stale summary of an owner's node.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Summary {
+    /// Its words, `None` once deleted or lost.
+    words: Option<Line>,
+    /// Their name.
+    pub text: TextName,
+    /// What it was written from.
+    pub over: Vec<Hash>,
+    /// The model that wrote it.
+    pub model: ModelName,
+    /// Its length.
+    pub bytes: u32,
+    /// The node's taint when it was written.
+    pub taint: Taint,
+    /// The version of the asking it was written under.
+    pub asked: Under<Asking>,
 }
 
 /// The digest of `lines` (every conversation's objects, each read as `opened` reads it) under
@@ -325,14 +343,16 @@ fn written(event: &DigestEvent, words: impl Fn(&TextName) -> Option<Line>) -> Op
             model,
             bytes,
             taint,
-        } => Written::Summary {
+            asked,
+        } => Written::Summary(Summary {
             words: words(text),
             text: text.clone(),
             over: over.clone(),
             model: model.clone(),
             bytes: *bytes,
             taint: *taint,
-        },
+            asked: asked.clone(),
+        }),
         Said::Unfit {
             model,
             limit,
@@ -397,13 +417,68 @@ impl Digest {
     }
 
     /// The summary a single-record reading shows: the least-named candidate's, when it is a
-    /// summary whose words read.
+    /// summary whose words read, unless it is stale and its node is labelled the owner's alone.
+    /// Such a summary may have been asked beside more than the owner's words, so no reader is
+    /// shown it as theirs: the node reads as unsummarized until it is asked again.
     #[must_use]
     pub fn summary(&self, node: &Hash) -> Option<&Line> {
-        match &self.candidates(node).first()?.said {
-            Written::Summary { words, .. } => words.as_ref(),
-            Written::Unfit { .. } | Written::Retracted => None,
+        let (words, standing) = self.shown(node)?;
+        match standing {
+            Standing::Current => Some(words),
+            Standing::Stale => {
+                let owners = self.tree.as_ref()?.node(node)?.measure().is_owners();
+                (!owners).then_some(words)
+            }
         }
+    }
+
+    /// How the summary [`Digest::summary`] would show stands, when its words read, whether it
+    /// is shown or not: the census's reading, which names no word.
+    #[must_use]
+    pub fn standing(&self, node: &Hash) -> Option<Standing> {
+        self.shown(node).map(|(_, standing)| standing)
+    }
+
+    /// The least-named candidate's summary, when its words read, and how it stands: current
+    /// when it was asked under its node's class's current asking over what the node's children
+    /// read now. Private, so a stale summary of an owner's node reaches no reader.
+    fn shown(&self, node: &Hash) -> Option<(&Line, Standing)> {
+        let Written::Summary(Summary {
+            words, over, asked, ..
+        }) = &self.candidates(node).first()?.said
+        else {
+            return None;
+        };
+        let beside = Beside::of(self.tree.as_ref()?.node(node)?.measure());
+        let current = asked.is_current(beside) && self.over(node).as_ref() == Some(over);
+        Some((
+            words.as_ref()?,
+            if current {
+                Standing::Current
+            } else {
+                Standing::Stale
+            },
+        ))
+    }
+
+    /// What a summary of `node` is written over now, in the log's order: each child line's
+    /// leaf, and each inner child's least-named candidate. `None` for a node the tree does not
+    /// hold, or one with an inner child nothing was said of.
+    #[must_use]
+    pub fn over(&self, node: &Hash) -> Option<Vec<Hash>> {
+        self.tree
+            .as_ref()?
+            .node(node)?
+            .children()
+            .iter()
+            .map(|child| {
+                Some(if child.is_leaf() {
+                    child.name().clone()
+                } else {
+                    self.candidates(child.name()).first()?.object.clone()
+                })
+            })
+            .collect()
     }
 
     /// The taint of the summary [`Digest::summary`] shows: the taint its event records joined
@@ -413,7 +488,7 @@ impl Digest {
     pub fn summary_taint(&self, node: &Hash) -> Option<Taint> {
         self.summary(node)?;
         let recorded = match &self.candidates(node).first()?.said {
-            Written::Summary { taint, .. } => *taint,
+            Written::Summary(summary) => summary.taint,
             Written::Unfit { .. } | Written::Retracted => return None,
         };
         let spans = self.tree.as_ref()?.node(node)?.measure().taint;
@@ -454,11 +529,19 @@ impl Digest {
             .map(|line| u32::try_from(line.as_str().len()).unwrap_or(u32::MAX))
     }
 
-    /// The nodes whose summary can be written now ([`digest::pending`]).
+    /// The nodes whose summary can be written now ([`digest::pending`]), reading a stale
+    /// summary as none: a node with no current summary whose children are lines or have current
+    /// ones. So a stale node is asked again only over current children, lowest level first, and
+    /// a parent written over a child's older summary is stale once the child is asked again.
     #[must_use]
     pub fn pending(&self) -> Vec<Hash> {
         self.tree.as_ref().map_or_else(Vec::new, |tree| {
-            digest::pending(tree, |node| self.summarized(node))
+            digest::pending(tree, |node| match self.shown(node)? {
+                (words, Standing::Current) => {
+                    Some(u32::try_from(words.as_str().len()).unwrap_or(u32::MAX))
+                }
+                (_, Standing::Stale) => None,
+            })
         })
     }
 

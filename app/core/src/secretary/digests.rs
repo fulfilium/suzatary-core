@@ -11,6 +11,7 @@ use prodrome_core::literal::Datetime;
 
 use crate::model_name::ModelName;
 use crate::refusal::Refusal;
+use crate::secretary::compact_ask::Beside;
 use crate::secretary::digest::{self, Digest};
 use crate::secretary::digest_event::{Attempt, DigestEvent};
 use crate::secretary::digest_line::Line;
@@ -120,12 +121,13 @@ impl Digests<'_> {
 impl Held<'_> {
     /// Record `line` as the compactor's summary of `node`, written by `model` from `over`: its
     /// words kept first, then the event naming them, and the words removed again if the event is
-    /// refused. The event's taint is the node's, read off the reading here
-    /// and never an argument, so no caller can label a summary cleaner than its lines.
+    /// refused. The event's taint, and the class whose asking it is recorded under, are the
+    /// node's, read off the reading here and never an argument, so no caller can label a summary
+    /// cleaner than its lines.
     ///
     /// # Errors
-    /// [`Refusal::conflict`] for a node that is not pending (summarised already, holding the last
-    /// line, or not in the tree); [`Digests::whole`]'s; the salt's and the stores' own.
+    /// [`Refusal::conflict`] for a node that is not pending (holding a current summary, holding
+    /// the last line, or not in the tree); [`Digests::whole`]'s; the salt's and the stores' own.
     pub fn summarize(
         &self,
         node: &Hash,
@@ -134,7 +136,7 @@ impl Held<'_> {
         model: ModelName,
         at: Datetime,
     ) -> Result<Hash, Refusal> {
-        let taint = self.pending(node)?;
+        let label = self.pending(node)?;
         let text = Text::new(line.clone(), self.salt()?);
         let name = text.name();
         let event = DigestEvent::summarized(
@@ -142,7 +144,12 @@ impl Held<'_> {
             at,
             compactor(),
             &text,
-            Attempt { over, model, taint },
+            Attempt {
+                over,
+                model,
+                taint: label.taint,
+                beside: Beside::of(&label),
+            },
         )
         .map_err(|refused| Refusal::unprocessable(refused.to_string()))?;
         let digests = self.digests();
@@ -174,9 +181,9 @@ impl Held<'_> {
         Ok(self.digests().history.append(event)?)
     }
 
-    /// Refuse unless every store reads whole and `node` is waiting for a summary; its taint
+    /// Refuse unless every store reads whole and `node` is waiting for a summary; its label
     /// when it is.
-    fn pending(&self, node: &Hash) -> Result<crate::secretary::taint::Taint, Refusal> {
+    fn pending(&self, node: &Hash) -> Result<crate::secretary::digest_label::Label, Refusal> {
         let digests = self.digests();
         digests.whole()?;
         let read = digests.read()?;
@@ -185,6 +192,6 @@ impl Held<'_> {
             return Err(waiting());
         }
         let tree = read.tree().ok_or_else(waiting)?;
-        Ok(tree.node(node).ok_or_else(waiting)?.measure().taint)
+        Ok(*tree.node(node).ok_or_else(waiting)?.measure())
     }
 }

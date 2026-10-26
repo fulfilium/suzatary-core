@@ -69,7 +69,7 @@ impl SealedSlot {
     /// (`secretary::opened`, the tab's held lines) scrubs a stale slot once.
     fn open(&self, binding: &LineSlot, key: &TextKey) -> Option<Words<LineWords>> {
         let words = self.locked.open(binding, key)?;
-        Some(if self.under.is_current() {
+        Some(if self.under.is_current(()) {
             Words::kept(words)
         } else {
             words
@@ -345,7 +345,7 @@ impl LineEvent {
     fn slot(&self, slot: usize, under: &ScrubbedUnder) -> LineSlot {
         let ((name, fields), mut values) = self.bare();
         let rules: &[&str] = match under {
-            ScrubbedUnder::Rules(rules) => {
+            ScrubbedUnder::Version(rules) => {
                 values.extend([slot.to_value(), rules.to_value()]);
                 &["slot", "rules"]
             }
@@ -399,7 +399,7 @@ fn seal(
     let words = words
         .scrubbed()
         .map_err(|failed| NotALine::Unscrubbable(failed.to_string()))?;
-    let under = ScrubbedUnder::Rules(Rules::current().clone());
+    let under = ScrubbedUnder::Version(Rules::current(()).clone());
     let key = FreshKey::draw(entropy).map_err(NotALine::NoKey)?;
     let (locked, opens) = Locked::lock(&line.slot(slot, &under), &words, key);
     Ok((SealedSlot { locked, under }, opens))
@@ -570,7 +570,7 @@ impl Literal for SealedSlot {
             .encode(self.locked.sealed())
             .to_value();
         match &self.under {
-            ScrubbedUnder::Rules(rules) => record(SCRUBBED, vec![key, sealed, rules.to_value()]),
+            ScrubbedUnder::Version(rules) => record(SCRUBBED, vec![key, sealed, rules.to_value()]),
             ScrubbedUnder::Unversioned => record(LOCKED, vec![key, sealed]),
         }
     }
@@ -581,7 +581,7 @@ impl Literal for SealedSlot {
             .decode(fields.get::<String>("box")?)
             .map_err(|failed| ProdromeError::invalid(format!("{}.box: {failed}", fields.name())))?;
         let under = if fields.name() == SCRUBBED.0 {
-            ScrubbedUnder::Rules(fields.get("rules")?)
+            ScrubbedUnder::Version(fields.get("rules")?)
         } else {
             ScrubbedUnder::Unversioned
         };
@@ -1176,7 +1176,7 @@ mod tests {
                     proptest::prop_assert!(!opened.print().contains(secret), "{secret}");
                 }
             }
-            proptest::prop_assert!(line.scrubbed_under().all(ScrubbedUnder::is_current));
+            proptest::prop_assert!(line.scrubbed_under().all(|under| under.is_current(())));
         }
 
         /// The law of reading: a slot locked under any rules but the current ones opens to its
@@ -1187,10 +1187,10 @@ mod tests {
             text in said_text(),
             older in proptest::prop_oneof![
                 proptest::strategy::Just(ScrubbedUnder::Unversioned),
-                "[0-9a-f]{64}".prop_map(|name| ScrubbedUnder::Rules(Rules::new(name).expect("hex"))),
+                "[0-9a-f]{64}".prop_map(|name| ScrubbedUnder::Version(Rules::new(name).expect("hex"))),
             ],
         ) {
-            proptest::prop_assume!(!older.is_current());
+            proptest::prop_assume!(!older.is_current(()));
             let entry = Entry::Said {
                 at: at(),
                 turn: Turn::Model { text, calls: Vec::new() },

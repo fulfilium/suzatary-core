@@ -2,9 +2,12 @@
 //! compact the most pending node, append its outcome"), discharged by the outcome it records.
 //!
 //! The most pending node is the first the Prodrome's `pending` offers (smallest, then
-//! leftmost) that this rule's model has not already found unfit. The outcome is an object of the
-//! digest's history, a summary or an `Unfit`, so it moves the reading and the next round takes
-//! the next nodes. A node is pending only once its children's summaries exist, so several
+//! leftmost), the owner's nodes first, that this rule's model has not already found unfit. A
+//! node whose summary is stale, asked under an older asking or over a child's summary since
+//! replaced ([`crate::secretary::digest::Standing`]), is pending again once its children are
+//! current, and its new summary is appended over the old one, which it replaces. The outcome is
+//! an object of the digest's history, a summary or an `Unfit`, so it moves the reading and the
+//! next round takes the next nodes. A node is pending only once its children's summaries exist, so several
 //! workers build a level as its children finish, each on a node [`Paced`] has claimed for it
 //! alone. An import of the conversations that already exist is no special path: it is this rule
 //! over those lines, at the budget's pace.
@@ -133,12 +136,20 @@ pub struct Compaction {
 }
 
 impl Compaction {
-    /// Every node owed a summary, most pending first: what `pending` offers, less each this
-    /// model found unfit at today's [`NODE_BYTES`] or above, so another model, or a larger
-    /// limit, is owed it again.
+    /// Every node owed a summary, most pending first: what `pending` offers, a stale summary
+    /// read as none, less each this model found unfit at today's [`NODE_BYTES`] or above, so
+    /// another model, or a larger limit, is owed it again. The nodes labelled the owner's alone
+    /// come first, since a stale one of those is the summary a reader could take for the owner's
+    /// words; each part keeps `pending`'s order.
     #[must_use]
     pub fn owed(&self, digest: &Digest) -> Vec<Hash> {
-        digest
+        let owners = |node: &Hash| {
+            digest
+                .tree()
+                .and_then(|tree| tree.node(node))
+                .is_some_and(|node| node.measure().is_owners())
+        };
+        let (mut first, rest): (Vec<Hash>, Vec<Hash>) = digest
             .pending()
             .into_iter()
             .filter(|node| {
@@ -151,7 +162,9 @@ impl Compaction {
                     )
                 })
             })
-            .collect()
+            .partition(|node| owners(node));
+        first.extend(rest);
+        first
     }
 
     /// The most pending node.

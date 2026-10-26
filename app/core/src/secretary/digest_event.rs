@@ -8,7 +8,9 @@
 //! A summary records the taint of the words it was written from, read off the reading by the
 //! one writer and never told by the model; an attempt whose every answer was too long is
 //! `Unfit`, so the node stays unsummarized and says why, and no cut line is ever stored as its
-//! summary. Every call to a model is an `Asked`, appended BEFORE the call is made, so what the
+//! summary. A summary records the version of the asking it was written under
+//! ([`Asking`]); one from before summaries recorded it prints as it always did and reads as
+//! unversioned. Every call to a model is an `Asked`, appended BEFORE the call is made, so what the
 //! compactor spent is a fold over these objects that no failure can leave uncounted; an `Asked`
 //! writes no register, so it never stands as a node's reading.
 //! Only a [`Tap`] makes a `Retracted`, and it is about standing (`Schema::asks`), so one
@@ -26,6 +28,8 @@ use crate::literal::{Fields, Literal as _, Signature};
 use crate::sole::{One, Only, Sole};
 
 use crate::model_name::ModelName;
+use crate::rule_version::Under;
+use crate::secretary::compact_ask::{Asking, Beside};
 use crate::secretary::digest_line::{Line, NODE_BYTES};
 use crate::secretary::salted_text::{Text, TextName};
 use crate::secretary::taint::Taint;
@@ -52,6 +56,8 @@ pub enum Said {
         /// The node's taint when it was written: the join of the lines it spans, so tainted
         /// whenever any of them is.
         taint: Taint,
+        /// The version of the asking it was written under.
+        asked: Under<Asking>,
     },
     /// No answer of an attempt was a line of at most `limit` bytes, so the node has no summary
     /// from `model`: it stays unsummarized, and this says why. Keyed by both, so another model,
@@ -84,7 +90,8 @@ pub enum NotADigestEvent {
     Length(u32),
 }
 
-/// How a summary came to be written: from what, by which model, at what taint.
+/// How a summary came to be written: from what, by which model, at what taint, asked beside
+/// what.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Attempt {
     /// What it was written from, in the log's order.
@@ -93,11 +100,14 @@ pub struct Attempt {
     pub model: ModelName,
     /// The node's taint.
     pub taint: Taint,
+    /// What the node's class is asked beside, whose current asking it is written under.
+    pub beside: Beside,
 }
 
 impl DigestEvent {
-    /// Node `node` summarized by `actor` as `text`, as `attempt` says. The name and length are
-    /// the text's own, so an event cannot name one text and price another.
+    /// Node `node` summarized by `actor` as `text`, as `attempt` says, under the current asking.
+    /// The name and length are the text's own, so an event cannot name one text and price
+    /// another.
     ///
     /// # Errors
     /// [`NotADigestEvent::FromNothing`] for an attempt over nothing.
@@ -110,7 +120,12 @@ impl DigestEvent {
     ) -> Result<Self, NotADigestEvent> {
         let bytes = u32::try_from(text.words().as_str().len())
             .map_err(|_| NotADigestEvent::Length(u32::MAX))?;
-        let Attempt { over, model, taint } = attempt;
+        let Attempt {
+            over,
+            model,
+            taint,
+            beside,
+        } = attempt;
         Self::checked(
             node,
             at,
@@ -121,6 +136,7 @@ impl DigestEvent {
                 model,
                 bytes,
                 taint,
+                asked: Under::current(beside),
             },
         )
     }
@@ -187,11 +203,19 @@ impl DigestEvent {
     }
 }
 
-/// `Summarized(node, at, actor, text, over, model, bytes, taint)`.
+/// `Summarized(node, at, actor, text, over, model, bytes, taint)`: a summary from before
+/// summaries recorded their asking.
 const SUMMARIZED: Signature = (
     "Summarized",
     &[
         "node", "at", "actor", "text", "over", "model", "bytes", "taint",
+    ],
+);
+/// `SummarizedUnder(node, at, actor, text, over, model, bytes, taint, asked)`.
+const SUMMARIZED_UNDER: Signature = (
+    "SummarizedUnder",
+    &[
+        "node", "at", "actor", "text", "over", "model", "bytes", "taint", "asked",
     ],
 );
 /// `Unfit(node, at, actor, model, limit, shortest)`.
@@ -204,7 +228,7 @@ const ASKED: Signature = ("Asked", &["node", "at", "actor", "sent"]);
 /// `Retracted(node, at, actor)`.
 const RETRACTED: Signature = ("Retracted", &["node", "at", "actor"]);
 /// The constructors, in print order.
-const SIGNATURES: &[Signature] = &[SUMMARIZED, UNFIT, ASKED, RETRACTED];
+const SIGNATURES: &[Signature] = &[SUMMARIZED, SUMMARIZED_UNDER, UNFIT, ASKED, RETRACTED];
 
 /// The digest's whitelist: its constructors and nothing else, since no event nests a term.
 pub type DigestVocabulary = Vocab<Said>;
@@ -241,16 +265,23 @@ impl Says for Said {
                 model,
                 bytes,
                 taint,
-            } => (
-                SUMMARIZED,
-                vec![
+                asked,
+            } => {
+                let mut values = vec![
                     text.to_value(),
                     over.to_value(),
                     model.to_value(),
                     bytes.to_value(),
                     taint.to_value(),
-                ],
-            ),
+                ];
+                match asked {
+                    Under::Version(version) => {
+                        values.push(version.to_value());
+                        (SUMMARIZED_UNDER, values)
+                    }
+                    Under::Unversioned => (SUMMARIZED, values),
+                }
+            }
             Said::Unfit {
                 model,
                 limit,
@@ -266,12 +297,17 @@ impl Says for Said {
 
     fn parse(fields: &Fields<'_>) -> Result<DigestEvent, ProdromeError> {
         let said = match fields.name() {
-            "Summarized" => Said::Summarized {
+            name @ ("Summarized" | "SummarizedUnder") => Said::Summarized {
                 text: fields.get("text")?,
                 over: fields.get("over")?,
                 model: fields.get("model")?,
                 bytes: fields.get("bytes")?,
                 taint: fields.get("taint")?,
+                asked: if name == "SummarizedUnder" {
+                    Under::Version(fields.get("asked")?)
+                } else {
+                    Under::Unversioned
+                },
             },
             "Unfit" => Said::Unfit {
                 model: fields.get("model")?,
@@ -326,6 +362,7 @@ mod tests {
             over,
             model: model(),
             taint,
+            beside: Beside::CleanWords,
         }
     }
 
@@ -346,9 +383,20 @@ mod tests {
             let ada = Actor::new("ada").expect("an actor");
             let over = over.into_iter().map(name).collect();
             let taint = if tainted { Taint::Tainted } else { Taint::Clean };
+            let summarized = DigestEvent::summarized(
+                name(node), at(), ada.clone(), &text, attempt(over, taint),
+            )
+            .expect("an event");
+            let mut said = summarized.said().clone();
+            if let Said::Summarized { asked, .. } = &mut said {
+                *asked = Under::Unversioned;
+            }
+            let unversioned = DigestEvent::of(name(node), at(), ada.clone(), said);
+            prop_assert!(canonical(&unversioned).starts_with("Summarized("));
+            prop_assert!(canonical(&summarized).starts_with("SummarizedUnder("));
             for event in [
-                DigestEvent::summarized(name(node), at(), ada.clone(), &text, attempt(over, taint))
-                    .expect("an event"),
+                summarized,
+                unversioned,
                 DigestEvent::unfit(name(node), at(), ada.clone(), model(), shortest),
                 DigestEvent::asked(name(node), at(), ada.clone(), sent),
                 DigestEvent::of(name(node), at(), ada, Said::Retracted),

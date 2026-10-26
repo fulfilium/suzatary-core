@@ -850,6 +850,58 @@ fn the_backfill_applies_the_plan_it_showed_once() {
     assert_eq!(held(), stale, "a refused plan writes nothing");
 }
 
+/// `suzatary secretary digest census` counts the digest's nodes from the instance's own stores
+/// and prints no word of a line or a summary.
+#[test]
+fn the_digest_census_prints_counts_and_no_word() {
+    use suzatary_core::secretary::digest_line::Line;
+    use suzatary_core::secretary::store::Kind;
+    let instance = fresh_instance("census");
+    let turns = (0..29)
+        .flat_map(|k| {
+            [
+                asked(&format!("CENSUSWORDS asked {k}")),
+                answered(&format!("CENSUSWORDS answered {k}")),
+            ]
+        })
+        .collect();
+    conversation(&instance, "2026-10-20-1", "Counted", Kind::Topic, turns);
+    let remembering = suzatary_cli::wiring::Remembering::reader(&instance);
+    let memories = remembering.memories();
+    let read = memories.digests.read().expect("the digest reads");
+    let held = memories.hold().expect("held");
+    let pending = read.pending();
+    assert!(
+        !pending.is_empty(),
+        "the conversation is long enough to summarise"
+    );
+    for node in &pending {
+        held.summarize(
+            node,
+            &Line::new("CENSUSWORDS summarised").expect("a line"),
+            read.over(node).expect("children read"),
+            suzatary_core::model_name::ModelName::parse("joining").expect("a model"),
+            prodrome_core::literal::Datetime::new(2026, 10, 20, 10, 0, 0, 0).expect("an instant"),
+        )
+        .expect("summarised");
+    }
+    drop(held);
+    let mut said = Vec::new();
+    suzatary_cli::commands::secretary::census(&instance, &mut said).expect("the census");
+    let said = String::from_utf8(said).expect("utf-8");
+    assert!(!said.contains("CENSUSWORDS"), "{said}");
+    let census = suzatary_core::secretary::digest_census::Census::of(
+        &memories.digests.read().expect("the digest reads"),
+    );
+    let current = census
+        .count(|_, _, state| state == suzatary_core::secretary::digest_census::State::Current);
+    assert_eq!(current, pending.len());
+    assert!(
+        said.starts_with(&format!("all nodes: {current} current, 0 stale, ")),
+        "{said}"
+    );
+}
+
 /// The conversation `id` as the box reads it: its fold, which a reseal leaves as it was.
 fn read_lines(instance: &Instance, id: &ConversationId) -> suzatary_core::secretary::store::Stored {
     let stores = instance.conversation_stores();

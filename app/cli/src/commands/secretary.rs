@@ -1224,6 +1224,20 @@ enum Action {
         #[arg(long)]
         apply: bool,
     },
+    /// The memory's digest of the conversations.
+    Digest {
+        /// What to read of it.
+        #[command(subcommand)]
+        action: DigestAction,
+    },
+}
+
+#[derive(Debug, clap::Subcommand)]
+enum DigestAction {
+    /// Count the digest's summaries, current, stale (owed again because they were asked under
+    /// an older rule or over a child's older summary) or unsummarized, by group and level.
+    /// Prints counts and no word.
+    Census,
 }
 
 #[derive(Debug, clap::Subcommand)]
@@ -1326,6 +1340,9 @@ pub fn run(path: &Path, args: &Args) -> anyhow::Result<()> {
             reason,
             actor,
         } => dismiss(&instance, conversation, *n, reason, actor.as_deref()),
+        Action::Digest {
+            action: DigestAction::Census,
+        } => census(&instance, &mut std::io::stdout()),
         Action::MigrateScrub { apply } => {
             migrate_scrub(&instance, *apply, &mut std::io::stdout()).map(|_| ())
         }
@@ -1365,6 +1382,21 @@ pub fn run(path: &Path, args: &Args) -> anyhow::Result<()> {
             .map(|_| ())
         }
     }
+}
+
+/// `suzatary secretary digest census`, said on `out`.
+///
+/// # Errors
+/// A store that does not read.
+pub fn census(instance: &Instance, out: &mut dyn std::io::Write) -> anyhow::Result<()> {
+    let remembering = crate::wiring::Remembering::reader(instance);
+    let digest = remembering.memories().digests.read()?;
+    write!(
+        out,
+        "{}",
+        suzatary_core::secretary::digest_census::Census::of(&digest)
+    )?;
+    Ok(())
 }
 
 /// `suzatary secretary topics backfill --dry-run [--plan <file>]`, said on `out`, each batch
@@ -1614,7 +1646,7 @@ pub fn migrate_scrub(
     writeln!(
         out,
         "the current rules are {}",
-        suzatary_core::redact::Rules::current()
+        suzatary_core::redact::Rules::current(())
     )?;
     if !apply {
         let counted = rescrub::census(stores.conversations())?;
