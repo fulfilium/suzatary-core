@@ -1402,15 +1402,7 @@ fn forgotten(
         objects
             .iter()
             .filter_map(|(hash, object)| object.event().map(|line| (hash, line))),
-        &|line| {
-            suzatary_core::secretary::transcript::opens(
-                line,
-                line.keys()
-                    .next()
-                    .and_then(|own| ring.key(own).into_kept())
-                    .as_ref(),
-            )
-        },
+        &|name: &KeyName| ring.key(name),
     ) {
         let fed = ring.key(name).get().map_or_else(Vec::new, |key| {
             suzatary_core::secretary::transcript::fed(line, slot, key)

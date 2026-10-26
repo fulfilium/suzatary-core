@@ -123,6 +123,8 @@ export function prose(markup: string): string | undefined;
 
 /** The box's tripwire over typst's HTML: what is wrong with it, or `undefined`. */
 export function suspicious(html: string): string | undefined;
+/** How many values the module has scrubbed since it was loaded; read by the browser scenes. */
+export function scrubs(): number;
 
 /** Every function above throws until this resolves, so `core.ts` alone calls it and memoises it. */
 export default function init(init: { module_or_path: string }): Promise<unknown>;

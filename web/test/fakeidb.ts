@@ -26,12 +26,19 @@ export type Fake = {
   readonly rows: (name: string, store: string) => ReadonlyMap<string, unknown>
   // Every committed row of every store of every database, each as `<database>/<store>/<key>` and its value, printed.
   readonly printed: () => readonly string[]
+  // How many times a database was opened, and how many values were read by `get` or `getAll`, since the device began.
+  readonly opened: () => number
+  readonly read: () => number
 }
 
 // A device holding nothing, set as the global `indexedDB`; `failing` refuses nothing until a test sets it.
 export const fakeIndexedDB = (): Fake => {
   const dbs = new Map<string, { version: number; stores: Map<string, Map<string, unknown>>; paths: Map<string, string> }>()
+  let opened = 0
+  let read = 0
   const fake: Fake = {
+    opened: () => opened,
+    read: () => read,
     failing: () => false,
     rows: (name, store) => dbs.get(name)?.stores.get(store) ?? new Map(),
     printed: () => [...dbs].flatMap(([name, d]) => [...d.stores].flatMap(([store, rows]) => [...rows].map(([k, v]) => `${name}/${store}/${k} ${JSON.stringify(v)}`))),
@@ -102,8 +109,13 @@ export const fakeIndexedDB = (): Fake => {
               later(step)
               return r
             },
-            get: (k: string) => ask(() => structuredClone(staged.get(k))),
-            getAll: (k?: Key) => ask(() => keys(k).map(x => structuredClone(staged.get(x)))),
+            get: (k: string) => ask(() => ((read += 1), structuredClone(staged.get(k)))),
+            getAll: (k?: Key) =>
+              ask(() => {
+                const all = keys(k)
+                read += all.length
+                return all.map(x => structuredClone(staged.get(x)))
+              }),
             getAllKeys: (k?: Key) => ask(() => keys(k)),
             put: (v: unknown, k?: string) => ask(() => void staged.set(keyOf(v, k), structuredClone(v)), fake.failing(keyOf(v, k))),
             delete: (k: Key) => ask(() => keys(k).forEach(x => staged.delete(x))),
@@ -132,6 +144,7 @@ export const fakeIndexedDB = (): Fake => {
   Object.assign(globalThis, {
     indexedDB: {
       open: (name: string, wanted = 0) => {
+        opened += 1
         const db = database(name)
         const r: Req = { result: db, error: null, onsuccess: null, onerror: null, onupgradeneeded: null }
         later(() => {

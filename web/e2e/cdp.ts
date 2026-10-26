@@ -276,7 +276,8 @@ export class Page {
   private held: string[] = [];
   private heldAt: string[] = [];
   private attaching = false;
-  private readonly workers = new Set<string>();
+  /** Each attached worker's session, with the URL of its script, oldest first. */
+  private readonly workers = new Map<string, string>();
   private coldOn = false;
   private rate = 1;
 
@@ -387,12 +388,15 @@ export class Page {
   /** A JavaScript expression, evaluated in the page, returned by value. A
    * promise is awaited; a thrown error becomes a thrown error here. */
   async evaluate<T>(expression: string): Promise<T> {
-    const result = await this.command("Runtime.evaluate", {
-      expression,
-      returnByValue: true,
-      awaitPromise: true,
-      userGesture: true,
-    });
+    return this.evaluateIn<T>(this.session, expression);
+  }
+
+  private async evaluateIn<T>(session: string, expression: string): Promise<T> {
+    const result = await this.connection.send(
+      "Runtime.evaluate",
+      { expression, returnByValue: true, awaitPromise: true, userGesture: true },
+      session,
+    );
     const failure = result["exceptionDetails"] as { exception?: { description?: string }; text?: string } | undefined;
     if (failure !== undefined) {
       const said = failure.exception?.description ?? failure.text ?? "unknown";
@@ -1019,14 +1023,22 @@ export class Page {
     await this.workersToo();
   }
 
+  /** `expression` evaluated in the newest running dedicated worker whose script's URL holds `part`, in its own scope. */
+  async inWorker<T>(part: string, expression: string): Promise<T> {
+    await this.workersToo();
+    const session = [...this.workers].filter(([, url]) => url.includes(part)).at(-1)?.[0];
+    if (session === undefined) throw new Error(`no worker whose URL holds ${part} runs`);
+    return this.evaluateIn<T>(session, expression);
+  }
+
   private async workersToo(): Promise<void> {
     if (this.attaching) return;
     this.attaching = true;
     this.connection.on("Target.attachedToTarget", (params, session) => {
-      const info = params["targetInfo"] as { type?: string } | undefined;
+      const info = params["targetInfo"] as { type?: string; url?: string } | undefined;
       const child = params["sessionId"];
       if (session !== this.session || typeof child !== "string" || info?.type !== "worker") return;
-      this.workers.add(child);
+      this.workers.set(child, info.url ?? "");
       void this.connection.send("Network.enable", {}, child).catch(() => {});
       // As it starts: what it does before these land runs warm and unthrottled.
       void this.toWorker(child);
@@ -1114,7 +1126,7 @@ export class Page {
   async throttle(rate: number): Promise<void> {
     this.rate = rate;
     await this.command("Emulation.setCPUThrottlingRate", { rate });
-    await Promise.all([...this.workers].map((w) => this.toWorker(w)));
+    await Promise.all([...this.workers.keys()].map((w) => this.toWorker(w)));
   }
 
   /** A phone-class network, or the box's own again with `null`: each request waits `latency` ms and moves at the throughputs, in bytes a second. */
@@ -1134,7 +1146,7 @@ export class Page {
     await this.command("Network.enable", {});
     await this.command("Network.setCacheDisabled", { cacheDisabled: on });
     await this.command("Network.setBypassServiceWorker", { bypass: on });
-    await Promise.all([...this.workers].map((w) => this.toWorker(w)));
+    await Promise.all([...this.workers.keys()].map((w) => this.toWorker(w)));
   }
 
   /** A full-page PNG at `path`. The picture is the deliverable when the reader

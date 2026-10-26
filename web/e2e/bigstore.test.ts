@@ -6,8 +6,8 @@
  * task (over 50 ms) the browser reports, cold (a device holding nothing) and warm (the same device loaded again).
  *
  * The store's words are outside ASCII and hold digits, the text the scrub is slowest on. A warm load of the stream
- * reads the lines the device holds, which scrubs nothing, and draws it well within a read's bound, with no read the
- * loader started still open.
+ * reads the lines the device holds, which scrubs nothing, and draws it well within a read's bound while every request
+ * to the box's API is held, so nothing it draws waits on the box.
  *
  * A phase ends once what it waits for is drawn whole (a conversation is marked `marks.PLACED` when its window is
  * drawn and placed) and the page has run no long task for a second and a half since, so a later slice or placing is
@@ -126,7 +126,7 @@ const reads = (open: readonly string[]): string[] => open.filter((r) => r.includ
 // A round of the generated conversations, drawn in the stream.
 const BULK = `document.querySelectorAll('.streamround .streammeta a[href*="bulk-"]').length > 0`
 
-app.scene("a warm load of the conversations draws them from the device, with no read left open", async () => {
+app.scene("a warm load of the conversations draws them from the device, with every read of the box held", async () => {
   await trustThisDevice(app.page, LINES_BASE, LINES_INSTANCE)
   await app.page.navigate(`${LINES_BASE}/#/secretary`)
   await app.page.waitFor(BULK, { timeout: 600000 })
@@ -136,10 +136,17 @@ app.scene("a warm load of the conversations draws them from the device, with no 
   while (reads(journal.inFlight()).length > 0 && Date.now() < deadline) await new Promise((done) => setTimeout(done, 200))
   assert.deepEqual(reads(journal.inFlight()), [], "the cold load ended")
   journal.mark("warm load")
-  await app.page.reload()
-  await app.page.waitFor(BULK)
-  const drawn = await app.page.evaluate<number>(`performance.now()`)
-  const open = reads(journal.inFlight())
-  assert.ok(drawn < wait.MS / 3, `the stream drew ${Math.round(drawn)} ms after the document started (bound ${wait.MS / 3})`)
-  assert.deepEqual(open, [], `no read is still open when the stream draws:\n${journal.lines().join("\n")}`)
+  // Every request to the box's API is held until the stream has drawn, so what draws is drawn from the device.
+  const release = await app.page.holdRequests(["/api/"])
+  const drawn = await (async (): Promise<{ readonly ms: number; readonly held: readonly string[] }> => {
+    try {
+      await app.page.reload()
+      await app.page.waitFor(BULK)
+      return { ms: await app.page.evaluate<number>(`performance.now()`), held: app.page.heldUrls() }
+    } finally {
+      await release()
+    }
+  })()
+  assert.ok(drawn.ms < wait.MS / 3, `the stream drew ${Math.round(drawn.ms)} ms after the document started (bound ${wait.MS / 3})`)
+  assert.ok(drawn.held.length > 0, `the box was asked and answered nothing before the stream drew:\n${journal.lines().join("\n")}`)
 })

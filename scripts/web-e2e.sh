@@ -627,6 +627,10 @@ epoch_base="$(start epoch)"
 # $SUZATARY_E2E_LINES lines (1,500 by default), so a scene can see a tab read a large store; spread over
 # $SUZATARY_E2E_CONVERSATIONS conversations when it is set, the shape of a store a year old.
 lines_base="$(start lines --lines "${SUZATARY_E2E_LINES:-1500}" ${SUZATARY_E2E_CONVERSATIONS:+--conversations "$SUZATARY_E2E_CONVERSATIONS"})"
+# THE RESCRUB SERVER (web/e2e/rescrub.test.ts): a writer whose generated lines were sealed before lines
+# recorded their rules, $SUZATARY_E2E_RESCRUB_LINES of them (1,500 by default) over
+# $SUZATARY_E2E_RESCRUB_CONVERSATIONS conversations (30), so a scene can run `migrate-scrub` under a tab.
+rescrub_base="$(start rescrub --lines "${SUZATARY_E2E_RESCRUB_LINES:-1500}" --conversations "${SUZATARY_E2E_RESCRUB_CONVERSATIONS:-30}" --sealed unversioned)"
 # THE WIDE SERVER (web/e2e/wide.test.ts): 400 conversations of one line each, so a tab's replica of
 # the lines has 400 heads, and every pull names it by a frontier as short as one head's.
 wide_base="$(start wide --wide 400)"
@@ -643,7 +647,7 @@ cp -r web/dist "$shell_dist"
 shell_base="$(start shell -- --build-fixture "$shell_build" --dist "$shell_dist")"
 # Collected here, in the MAIN shell — not inside `start`'s subshell — which is
 # what makes `cleanup` able to reach them at all (see the note in `start`).
-servers+=("$(cat "$work/read.pid")" "$(cat "$work/proposed.pid")" "$(cat "$work/write.pid")" "$(cat "$work/shell.pid")" "$(cat "$work/bootstrap.pid")" "$(cat "$work/connect.pid")" "$(cat "$work/links.pid")" "$(cat "$work/epoch.pid")" "$(cat "$work/lines.pid")" "$(cat "$work/wide.pid")" "$(cat "$work/google.pid")" "$(cat "$work/fake-google.pid")")
+servers+=("$(cat "$work/read.pid")" "$(cat "$work/proposed.pid")" "$(cat "$work/write.pid")" "$(cat "$work/shell.pid")" "$(cat "$work/bootstrap.pid")" "$(cat "$work/connect.pid")" "$(cat "$work/links.pid")" "$(cat "$work/epoch.pid")" "$(cat "$work/lines.pid")" "$(cat "$work/rescrub.pid")" "$(cat "$work/wide.pid")" "$(cat "$work/google.pid")" "$(cat "$work/fake-google.pid")")
 ready read "$read_base"
 ready proposed "$proposed_base"
 ready bootstrap "$bootstrap_base"
@@ -652,6 +656,7 @@ ready links "$links_base"
 ready google "$google_base"
 ready epoch "$epoch_base"
 ready lines "$lines_base"
+ready rescrub "$rescrub_base"
 ready wide "$wide_base"
 ready write "$write_base"
 ready shell "$shell_base"
@@ -704,6 +709,8 @@ E2E_BASE_EPOCH="$epoch_base" \
 E2E_EPOCH_INSTANCE="$work/epoch/instance.toml" \
 E2E_BASE_LINES="$lines_base" \
 E2E_LINES_INSTANCE="$work/lines/instance.toml" \
+E2E_BASE_RESCRUB="$rescrub_base" \
+E2E_RESCRUB_INSTANCE="$work/rescrub/instance.toml" \
 E2E_BASE_WIDE="$wide_base" \
 E2E_WIDE_INSTANCE="$work/wide/instance.toml" \
 E2E_SECRETS_STORE="$secrets_store" \

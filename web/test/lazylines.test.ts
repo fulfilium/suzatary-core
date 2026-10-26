@@ -17,6 +17,9 @@ import { empty, pulled } from "../src/prodrome/replica"
 import type { Replica } from "../src/prodrome/replica"
 import type { SkeletonNode, SkeletonPayload } from "../src/wire/generated/wire"
 import { forAll, forAllAsync, type Rng } from "./gen"
+import { fakeIndexedDB } from "./fakeidb"
+import idb from "../src/app/idb"
+import { CONTENT } from "../src/prodrome/objects"
 
 const core = ((): Core => {
   const built = process.env["SUZATARY_PRODROME_WASM"]
@@ -252,4 +255,32 @@ test("a prefetch sends nothing while the page is hidden, and once it is shown a 
   wake()
   await tick()
   assert.equal(asked.length, 1, "once shown, a wake sends one answer")
+})
+
+test("concurrent whole readings read each object the device keeps once, in one transaction, and ask the box nothing", async () => {
+  const device = fakeIndexedDB()
+  await content.keepOnly(new Set(), () => Promise.resolve())
+  const nodes = box.skeleton.nodes
+  await idb.within(CONTENT, "readwrite", s => Promise.all(nodes.map(n => idb.done(s.put(literals.get(n.hash)!, n.hash)))))
+  const handed: string[] = []
+  const { fetch } = content.fetcher({
+    ask: () => Promise.reject(new Error("the device keeps every object")),
+    asked: () => {},
+    came: () => {},
+    lost: () => {},
+    atOnce: () => 4,
+    held: rows => Promise.resolve(void handed.push(...rows.map(r => r.hash))),
+    shown: () => true,
+  })
+  const before = [device.opened(), device.read()] as const
+  await fetch("Ahead", nodes)
+  assert.equal(device.opened() - before[0], 1, "a prefetch reads the device in one transaction")
+  assert.equal(device.read() - before[1], 0, "by name alone")
+  assert.deepEqual(handed, [], "and hands the reader nothing")
+  const [opened, read] = [device.opened(), device.read()]
+  await Promise.all(Array.from({ length: 10 }, (_, i) => fetch(i % 2 === 0 ? "Behind" : "First", nodes)))
+  assert.equal(device.opened() - opened, 1, "one database opened for the one batch")
+  assert.ok(device.read() - read <= nodes.length, `${device.read() - read} values read for ${nodes.length} objects`)
+  assert.deepEqual([...handed].sort(), nodes.map(n => n.hash).sort(), "each object handed to the reader once")
+  assert.ok(nodes.every(n => content.holds(n.hash)))
 })

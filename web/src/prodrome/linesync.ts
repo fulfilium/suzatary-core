@@ -142,8 +142,7 @@ export namespace linesync {
     const prefetch = serial.of(async (): Promise<void> => {
       if (!idb.available()) return
       const skeleton = row.replica
-      const [plan, stored] = await Promise.all([planOf(skeleton), content.stored()])
-      await fetching("Ahead", plan.filter(n => !stored.has(n.hash))).catch(() => {
+      await fetching("Ahead", await planOf(skeleton)).catch(() => {
         ahead = null
       })
     })
@@ -252,11 +251,27 @@ export namespace linesync {
       again: () => void (wanted === "Yes" ? sync.pull() : undefined),
     })
 
+    // The row and the content held at the last purge. The keys the lines name as dead are found only in content held,
+    // and only grow with it: a key a reseal supersedes is seen once its reseal's content is here, never at landing. So
+    // the purge runs once every line's content is held, once for each row and content held.
+    let purged: { readonly row: locked.Row<SkeletonNode>; readonly content: number } | null = null
+    const purge = (): void => {
+      if (purged?.row === row && purged.content === content.version()) return
+      if (lines.need(row.replica, content.holds, lines.WHOLE).type === "Fetching") return
+      purged = { row, content: content.version() }
+      // On a later task, so the reading's answer goes out first.
+      setTimeout(() => void sync.purge(), 0)
+    }
+
     const over = async <A>(scope: lines.Scope, read: () => A): Promise<A> => {
       await ready.get()
       for (;;) {
         const need = lines.need(row.replica, content.has, scope)
-        if (need.type === "Whole") return read()
+        if (need.type === "Whole") {
+          const answer = read()
+          purge()
+          return answer
+        }
         await fetching(scope.type === "Whole" ? "Behind" : "First", need.nodes)
       }
     }

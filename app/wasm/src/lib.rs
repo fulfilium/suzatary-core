@@ -20,6 +20,7 @@ mod evaluator;
 mod lifecycle;
 mod memo;
 mod prose;
+mod redact;
 mod rendering;
 mod secretary;
 mod signatures;

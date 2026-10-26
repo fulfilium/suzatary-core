@@ -99,6 +99,8 @@ export namespace pull {
     readonly reset: (said: (why: string) => void) => Promise<void>
     // A row this tab moved itself: held, then written on the device joined with what another tab kept there.
     readonly keep: (row: R) => Promise<void>
+    // What the row owes let go, as a landing does: asked again once the store reads more of what its row names.
+    readonly purge: () => Promise<void>
   }
 
   // A row that is a replica alone, a store whose objects lock no words: the page's stores.
@@ -336,7 +338,9 @@ export namespace pull {
     }
 
     // One pull at a time, so a pull asked for during another is a pull that starts after it.
-    return { restored, pull: serial.of(pullNow), holding, landed, whole, reset, keep: keepOwn }
+    const purgeNow = (): Promise<void> => restored.get().then(() => st.take([], rows.none))
+
+    return { restored, pull: serial.of(pullNow), holding, landed, whole, reset, keep: keepOwn, purge: serial.of(purgeNow) }
   }
 }
 export default pull

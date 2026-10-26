@@ -1612,18 +1612,28 @@ under in every larger union and never wins.
   browser opens six connections to a host and a page holds three for its
   streams (`content.atOnce`), an opened conversation's names taken out
   of the whole store's queue, which goes newest first) and reads only once
-  every one is held. So every reading a tab
+  every one is held. Each name is read once a load, by the first reading
+  that needs it: the names the device keeps are read in one transaction over
+  one opened database, and every other reading that needs them waits on that
+  read or on the box's answer. So every reading a tab
   answers is the reading of the whole pull at the same skeleton. A purge
   reads the largest down-set whose content is held, since words were only
   rendered from a conversation read whole, and first fetches the content of
   the conversations naming the keys it owes, keeping them owed if it cannot;
-  content no node names is dropped after a landing. — `lazylines.test.ts` "law: a reading of part-fetched
+  it runs at each landing and once every line's content is held, so a key a reseal
+  replaced, which only the reseal's content shows, is destroyed and the
+  device holds the box's keys; a slot whose seal a reseal supersedes is read
+  from the reseal whether or not its old key is still held.
+  Content no node names is dropped after a landing. — `lazylines.test.ts` "law: a reading of part-fetched
   lines is the whole pull's reading at the same skeleton, or names what it
   fetches", "law: content is taken only where its bytes hash to the name
   asked for, in the place asked", "an opened conversation's names go out
   before the whole store's batches still queued…", "over HTTP/1.1 one
-  content answer is out at a time…"; `linekeys.test.ts` "a
-  purge that cannot find the blocks…"; `e2e/lines.test.ts` "a conversation is
+  content answer is out at a time…", "concurrent whole readings read each
+  object the device keeps once…"; `linekeys.test.ts` "a
+  purge that cannot find the blocks…"; the core's `held_lines`
+  `a_replica_holding_the_replaced_keys_reads_the_reseals_and_scrubs_nothing`;
+  `e2e/rescrub.test.ts`; `e2e/lines.test.ts` "a conversation is
   read from the lines…", "the list draws and the badge is counted with no
   request for the lines…"; `e2e/epoch.test.ts`.
 - **The device keeps the newest conversations, and says what it lacks.**

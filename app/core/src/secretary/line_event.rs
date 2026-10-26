@@ -66,7 +66,8 @@ impl SealedSlot {
     /// and scrubbed under the current rules now when they passed any other, so no reader sees
     /// what the current rules catch; withheld when they no longer pass the door at all. `None`
     /// for a key that does not open them. A reader that keeps what it opens
-    /// (`secretary::opened`, the tab's held lines) scrubs a stale slot once.
+    /// (`secretary::opened`, the tab's held lines) scrubs a stale slot once, and no reader opens
+    /// a seal a reseal supersedes ([`crate::secretary::transcript::Through`]).
     fn open(&self, binding: &LineSlot, key: &TextKey) -> Option<Words<LineWords>> {
         let words = self.locked.open(binding, key)?;
         Some(if self.under.is_current(()) {
@@ -178,11 +179,11 @@ impl LineEvent {
 
     /// Line `entry` locked as scrubbed `under` rules other than the current ones, its words not
     /// scrubbed: a line scrubbed under rules that missed what is in it, for the tests of reading
-    /// and of the migration.
+    /// and of the migration, and the fixture's stale store.
     ///
     /// # Errors
     /// [`NotALine`] for words already gone, or no key.
-    #[cfg(any(test, feature = "nothing"))]
+    #[cfg(any(test, feature = "nothing", feature = "fixture"))]
     pub fn written_under(
         under: &ScrubbedUnder,
         conversation: ConversationId,

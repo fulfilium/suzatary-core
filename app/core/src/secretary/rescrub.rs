@@ -4,10 +4,11 @@
 //!
 //! Nothing is deleted. A reseal is one more line of its conversation, `Resealed(of, from)`, whose
 //! one slot holds the words of the slot `of` names, sealed again from the seal locked under
-//! `from` ([`LineEvent::reseal`]). A reader reads a slot from its own seal while its key opens it,
-//! and from a reseal of it once that key is gone ([`transcript::Through`]); a reseal that opens
-//! with a key held here supersedes `from`, so the one sweep destroys that key as it destroys an
-//! erased one, forgetting first what its words were rendered to ([`transcript::dead`]). A store
+//! `from` ([`LineEvent::reseal`]). A reseal that opens with a key held here supersedes `from`: a
+//! reader reads the slot from that reseal and never opens the seal it replaced, whether or not
+//! its key is still held ([`transcript::Through`]), and the one sweep destroys that key as it
+//! destroys an erased one, forgetting first what its words were rendered to ([`transcript::dead`]).
+//! A slot no reseal supersedes is read from its own seal while its key opens it. A store
 //! restored with its reseal lines and without their keys destroys no old key: it reads the old
 //! seals, and its next run seals them again. The store only grows, and its genesis does
 //! not move, so a tab keeps its replica and forgets the superseded keys as it forgets erased ones.
@@ -136,10 +137,9 @@ fn slots(conversations: Conversations<'_>) -> Result<Vec<(Place, Stands)>, Store
                 }
             }
         }
-        let opens = |line: &LineEvent| {
-            transcript::opens(line, line.keys().next().and_then(|own| held.get(own)))
-        };
-        let superseded = transcript::superseded(lines.iter().copied(), &opens);
+        let superseded = transcript::superseded(lines.iter().copied(), &|name: &KeyName| {
+            conversations.key(name)
+        });
         for (_, line) in &lines {
             if matches!(line.shape(), LineShape::Resealed { .. }) {
                 continue;

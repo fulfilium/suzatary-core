@@ -90,6 +90,7 @@ pub fn build(args: &Args) -> anyhow::Result<()> {
         connections,
         lines,
         conversations,
+        sealed,
         wide,
     } = args;
     let lapsed = *connections == Connections::Lapsed;
@@ -138,7 +139,7 @@ pub fn build(args: &Args) -> anyhow::Result<()> {
     if lapsed {
         reading_not_sending(&read, root)?;
     }
-    bulk_lines(&read, &sizes(*lines, *conversations, *wide))?;
+    bulk_lines(&read, &sizes(*lines, *conversations, *wide), *sealed)?;
     read.adopt(&signers)
         .whole()
         .context("adopting signatures on every chain")?;
@@ -1214,6 +1215,11 @@ pub struct Args {
     /// first holds up to 400 of them and the rest are shared evenly. Zero halves them instead.
     #[arg(long, default_value_t = 0, requires = "lines")]
     conversations: usize,
+    /// Which rules the generated lines' words are sealed under: `unversioned` seals them as a
+    /// store written before lines recorded their rules, unscrubbed, which `migrate-scrub` seals
+    /// again.
+    #[arg(long, value_enum, default_value_t = Sealed::Current, requires = "lines")]
+    sealed: Sealed,
     /// How many more conversations to open, one line each, so the store has that many heads: a
     /// tab holding it names its replica by a frontier no longer than it would name one head by.
     #[arg(long, default_value_t = 0)]
@@ -1257,8 +1263,12 @@ fn sizes(count: usize, conversations: usize, wide: usize) -> Vec<(String, usize)
 /// The lines `sizes` names written to new conversations, each with its words locked under a key of its own
 /// as the box locks them: a model's answer of about 6 kB in three blocks and a person's question,
 /// alternating, in words outside ASCII and with digits, the text the scrub is slowest on;
-/// `wide-0` onwards, if any, hold their opening line alone.
-fn bulk_lines(read: &crate::instance::Instance, sizes: &[(String, usize)]) -> anyhow::Result<()> {
+/// `wide-0` onwards, if any, hold their opening line alone. Each is sealed as `sealed` says.
+fn bulk_lines(
+    read: &crate::instance::Instance,
+    sizes: &[(String, usize)],
+    sealed: Sealed,
+) -> anyhow::Result<()> {
     use prodrome_core::event::{Actor, canonical_envelope};
     use prodrome_core::store::{MemoryStore, Replica as _};
     use suzatary_core::capability::Turn;
@@ -1335,7 +1345,7 @@ fn bulk_lines(read: &crate::instance::Instance, sizes: &[(String, usize)]) -> an
                 }
             };
             let held = u32::try_from(line)?;
-            let (event, keys) = LineEvent::write(
+            let (event, keys) = sealed.write(
                 id.clone(),
                 writer.clone(),
                 held,
@@ -1370,6 +1380,46 @@ pub enum Connections {
 
 /// The Microsoft account `--connections lapsed` adds, signed in to read and not to send.
 pub const LINKS_ACCOUNT: &str = "ada-work@example.test";
+
+/// Which rules a fixture's generated lines are sealed under.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, clap::ValueEnum)]
+pub enum Sealed {
+    /// The current rules, scrubbed, as the box writes every line.
+    Current,
+    /// No recorded rules and not scrubbed, as a line written before lines recorded them.
+    Unversioned,
+}
+
+impl Sealed {
+    /// Line `entry` of `id`, written as `writer` holding `held` lines, its slots sealed so.
+    fn write(
+        self,
+        id: suzatary_core::secretary::store::ConversationId,
+        writer: prodrome_core::event::Actor,
+        held: u32,
+        entry: &suzatary_core::secretary::store::Entry,
+        entropy: &dyn suzatary_core::capability::Entropy,
+    ) -> Result<
+        (
+            suzatary_core::secretary::line_event::LineEvent,
+            Vec<suzatary_core::secretary::locked_text::TextKey>,
+        ),
+        suzatary_core::secretary::line_event::NotALine,
+    > {
+        use suzatary_core::secretary::line_event::LineEvent;
+        match self {
+            Sealed::Current => LineEvent::write(id, writer, held, entry, entropy),
+            Sealed::Unversioned => LineEvent::written_under(
+                &suzatary_core::secretary::scrubbed_under::ScrubbedUnder::Unversioned,
+                id,
+                writer,
+                held,
+                entry,
+                entropy,
+            ),
+        }
+    }
+}
 
 /// What a fixture has connected beyond its own tables.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, clap::ValueEnum)]

@@ -1237,13 +1237,10 @@ app.scene("Regenerate answers again beside an earlier attempt, and ↑ edits the
     /Nothing has changed/,
     "the first answer is kept, set aside",
   );
-  assert.equal(
-    await app.page.evaluate<number>(
-      `[...document.querySelectorAll(".turns .turn-model")].filter((t) => t.closest(".earlierattempt") === null && t.textContent.trim() !== "").length`,
-    ),
-    1,
-    "one current answer, the regenerated one",
-  );
+  // The regenerated answer is drawn after the earlier attempt is set aside, so the count is waited for.
+  const current = `[...document.querySelectorAll(".turns .turn-model")].filter((t) => t.closest(".earlierattempt") === null && t.textContent.trim() !== "").length`;
+  await app.page.waitFor(`${current} === 1`, { timeout: 20000 }).catch(() => undefined);
+  assert.equal(await app.page.evaluate<number>(current), 1, "one current answer, the regenerated one");
 
   await app.page.click(".composebox");
   await app.page.press("ArrowUp");

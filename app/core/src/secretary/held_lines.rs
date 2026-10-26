@@ -5,8 +5,8 @@
 //! Each print is decoded once, when it arrives. The history is the objects whose every ancestor
 //! is held, kept as prints arrive, as a store's down-set is. The tree the fold walks has three
 //! levels: the store, one node per conversation, and one leaf per line of the history. A leaf's
-//! name covers the line and how each slot reads (erased by which erasure line, its key held, or
-//! missing), and a conversation's covers its leaves, so a new line renames its leaf, its
+//! name covers the line and how each slot reads (erased by which erasure line, superseded by a
+//! reseal that opens here, its key held, or missing), and a conversation's covers its leaves, so a new line renames its leaf, its
 //! conversation and the store, and every other node is one cache hit. Words are opened at the
 //! leaves, the expensive step; a conversation orders its opened lines and folds them.
 
@@ -123,10 +123,12 @@ struct Leaf {
     reseals: BTreeMap<KeyName, Vec<(Hash, Arc<LineEvent>)>>,
 }
 
-/// How one slot reads: erased by the erasure line named `by`, its key held, or missing.
+/// How one slot reads: erased by the erasure line named `by`, superseded by a reseal that opens
+/// here (read from it whether or not its own key is still held), its key held, or missing.
 #[derive(PartialEq, Eq)]
 enum Slot {
     Erased { by: Hash, erasure: Erasure },
+    Superseded,
     Held,
     Missing,
 }
@@ -135,6 +137,7 @@ impl Slot {
     fn print(&self) -> String {
         match self {
             Slot::Erased { by, .. } => format!("erased by {by}"),
+            Slot::Superseded => "superseded".to_owned(),
             Slot::Held => "held".to_owned(),
             Slot::Missing => "missing".to_owned(),
         }
@@ -235,9 +238,15 @@ impl Algebra<Node> for Reading<'_> {
                         }
                         .into(),
                         Some(Slot::Held) => self.keys.key(name),
-                        Some(Slot::Missing) | None => Gone::Missing.into(),
+                        Some(Slot::Superseded | Slot::Missing) | None => Gone::Missing.into(),
                     }
                 };
+                let superseded: BTreeSet<KeyName> = leaf
+                    .slots
+                    .iter()
+                    .filter(|(_, slot)| **slot == Slot::Superseded)
+                    .map(|(name, _)| name.clone())
+                    .collect();
                 let reseals: BTreeMap<KeyName, Vec<&LineEvent>> = leaf
                     .reseals
                     .iter()
@@ -247,6 +256,7 @@ impl Algebra<Node> for Reading<'_> {
                     .collect();
                 let read = transcript::Through {
                     erased: &BTreeMap::new(),
+                    superseded: &superseded,
                     reseals: &reseals,
                     slots: &slots,
                 };
@@ -356,24 +366,28 @@ impl HeldLines {
             let Some(conversation) = self.conversations.get(id) else {
                 continue;
             };
+            // A superseded slot opened nothing with its own key, so losing that key forgets nothing.
+            let leaves: Vec<Hash> = conversation
+                .leaves
+                .values()
+                .filter_map(|leaf| match &**leaf {
+                    Node::Line { name, leaf }
+                        if leaf
+                            .slots
+                            .iter()
+                            .any(|(key, slot)| *slot == Slot::Held && lost.contains(key)) =>
+                    {
+                        Some(name.clone())
+                    }
+                    Node::Line { .. } | Node::Store { .. } | Node::Conversation { .. } => None,
+                })
+                .collect();
             if let Built::Stale { cached } = &conversation.built
-                && !lost.is_empty()
+                && !leaves.is_empty()
             {
                 opened.push(cached.clone());
             }
-            opened.extend(
-                conversation
-                    .leaves
-                    .values()
-                    .filter_map(|leaf| match &**leaf {
-                        Node::Line { name, leaf }
-                            if leaf.slots.keys().any(|key| lost.contains(key)) =>
-                        {
-                            Some(name.clone())
-                        }
-                        Node::Line { .. } | Node::Store { .. } | Node::Conversation { .. } => None,
-                    }),
-            );
+            opened.extend(leaves);
         }
         if !opened.is_empty() {
             opened.extend(self.root.take());
@@ -467,18 +481,10 @@ impl HeldLines {
                 .map(move |(slot, name)| (*line, slot, name))
         });
         let mut dead: BTreeMap<KeyName, Vec<Renderable>> = BTreeMap::new();
-        let opens = |line: &LineEvent| {
-            transcript::opens(
-                line,
-                line.keys()
-                    .next()
-                    .and_then(|own| keys.key(own).into_kept())
-                    .as_ref(),
-            )
-        };
-        for (line, slot, name) in transcript::dead(lines.iter().copied(), &opens)
-            .into_iter()
-            .chain(named)
+        for (line, slot, name) in
+            transcript::dead(lines.iter().copied(), &|name: &KeyName| keys.key(name))
+                .into_iter()
+                .chain(named)
         {
             let fed = match keys.key(name) {
                 Words::Kept { kept } => transcript::fed(line, slot, &kept),
@@ -702,18 +708,9 @@ fn build(
         })
         .collect();
     let erasers = transcript::erasers(lines.iter().map(|(name, line, _)| (*name, &***line)));
-    let opens = |line: &LineEvent| {
-        transcript::opens(
-            line,
-            line.keys()
-                .next()
-                .and_then(|own| keys.key(own).into_kept())
-                .as_ref(),
-        )
-    };
     let superseded = transcript::superseded(
         lines.iter().map(|(name, line, _)| (*name, &***line)),
-        &opens,
+        &|name: &KeyName| keys.key(name),
     );
     let dead: BTreeSet<KeyName> = lines
         .iter()
@@ -746,6 +743,7 @@ fn build(
             by: (*by).clone(),
             erasure: (*erasure).clone(),
         },
+        None if superseded.contains(key) => Slot::Superseded,
         None if keys.holds(key) => Slot::Held,
         None => Slot::Missing,
     };
@@ -951,6 +949,91 @@ mod tests {
             2,
             "a replica forgets each key a reseal replaced"
         );
+    }
+
+    /// A reader that still holds the keys from before the sweep, each replaced seal's beside its
+    /// reseal's, the box's or a replica's, reads every slot from its reseal and scrubs nothing; the
+    /// replica's sweep then leaves it the box's keys, and it reads the same.
+    #[test]
+    fn a_replica_holding_the_replaced_keys_reads_the_reseals_and_scrubs_nothing() {
+        use crate::secretary::line_event::LineEvent;
+        use crate::secretary::scrubbed_under::ScrubbedUnder;
+        let held = InMemory::default();
+        let at = |second: u32| Datetime::new(2026, 10, 25, 9, 0, second, 0).expect("an instant");
+        for id in ["2026-10-25-1", "2026-10-25-2"] {
+            let id = ConversationId::new(id).expect("a slug");
+            let mut entries = vec![opened("Notes")];
+            entries.extend((1..8).map(|n| Entry::Said {
+                at: at(n),
+                turn: crate::capability::Turn::Person {
+                    text: format!("reset {n} at https://example.test/r?token=s3cret — 確認"),
+                    references: Vec::new(),
+                    attachments: Vec::new(),
+                },
+                by: Some("ada".into()),
+            }));
+            for (count, entry) in entries.iter().enumerate() {
+                let (line, keys) = LineEvent::written_under(
+                    &ScrubbedUnder::Unversioned,
+                    id.clone(),
+                    transcript::writer(),
+                    u32::try_from(count).expect("a count"),
+                    entry,
+                    &held.entropy,
+                )
+                .expect("a line");
+                for key in &keys {
+                    held.keys.set(&key.name(), key).expect("kept");
+                }
+                held.lines.append(line).expect("appended");
+            }
+        }
+        assert_eq!(
+            crate::secretary::rescrub::reseal(held.conversations(), at(9)).expect("reseals"),
+            16
+        );
+        let before = given(&held);
+        let read_by_box = || -> Vec<Stored> {
+            transcript::each(held.conversations())
+                .expect("reads")
+                .into_iter()
+                .map(|(_, read)| read.expect("folds").into_stored())
+                .collect()
+        };
+        let scrubs = crate::redact::scrubs();
+        let unswept = read_by_box();
+        assert_eq!(
+            crate::redact::scrubs(),
+            scrubs,
+            "the box, before its sweep, opens no replaced seal"
+        );
+        assert_eq!(transcript::sweep(held.conversations()), Ok(16));
+        let boxed: BTreeSet<KeyName> = held.keys.names().into_iter().collect();
+        let read_by_box = read_by_box();
+        assert_eq!(read_by_box, unswept);
+        let scrubs = crate::redact::scrubs();
+        let mut lines = HeldLines::new();
+        lines.keys(&before, &[]);
+        lines.hold(prints(&held), &[]);
+        let read = |lines: &mut HeldLines| -> Vec<Stored> {
+            let read = lines.read().0.expect("reads");
+            read.iter().map(|stored| (**stored).clone()).collect()
+        };
+        assert_eq!(read(&mut lines), read_by_box);
+        assert_eq!(
+            crate::redact::scrubs(),
+            scrubs,
+            "no replaced seal is opened"
+        );
+        let dead: Vec<KeyName> = lines.dead().into_iter().collect();
+        lines.keys(&BTreeMap::new(), &dead);
+        let kept: BTreeSet<KeyName> = before
+            .into_keys()
+            .filter(|key| !dead.contains(key))
+            .collect();
+        assert_eq!(kept, boxed, "the replica's sweep leaves it the box's keys");
+        assert_eq!(read(&mut lines), read_by_box);
+        assert_eq!(crate::redact::scrubs(), scrubs);
     }
 
     /// A key taken out takes what was opened with it out of the cache at once, before any reading.

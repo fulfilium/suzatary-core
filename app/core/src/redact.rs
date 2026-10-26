@@ -262,7 +262,6 @@ impl<T: Serialize + DeserializeOwned> Scrubbed<T> {
     /// [`Unscrubbable`] when the scrubbed strings do not parse back, which refuses the value
     /// rather than store it unscrubbed.
     pub fn of(value: &T) -> Result<Self, Unscrubbable> {
-        #[cfg(test)]
         SCRUBS.with(|count| count.set(count.get() + 1));
         let tree = serde_json::to_value(value).map_err(|e| Unscrubbable(e.to_string()))?;
         serde_json::from_value(scrubbed(tree))
@@ -285,14 +284,14 @@ impl<T> Scrubbed<T> {
     }
 }
 
-#[cfg(test)]
 thread_local! {
     static SCRUBS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
 }
 
-/// How many values this thread has scrubbed, so a test can show a path scrubs none.
-#[cfg(test)]
-pub(crate) fn scrubs() -> usize {
+/// How many values this thread has scrubbed, so a test can show a path scrubs none: the core's
+/// tests, and the browser scenes, which read it from the tab's core worker (its one thread).
+#[must_use]
+pub fn scrubs() -> usize {
     SCRUBS.with(std::cell::Cell::get)
 }
 
