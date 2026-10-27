@@ -147,15 +147,16 @@ pub struct Interpreters<K = suzatary_io::reading::Reading> {
 }
 
 impl<K> Interpreters<K> {
-    /// The box's grounds and `remembering` around one store, shared with the bench.
+    /// `grounds` and `remembering` around one store, shared with the bench.
     pub(crate) fn around(
         instance: &crate::instance::Instance,
         chain: K,
+        grounds: crate::wiring::Grounds,
         remembering: crate::wiring::Remembering,
     ) -> Self {
         Self {
             chain,
-            grounds: crate::wiring::Grounds::of(instance),
+            grounds,
             remembering,
             view: instance.agent.memory_bytes,
         }
@@ -182,6 +183,7 @@ impl Interpreters {
         Self::around(
             instance,
             crate::commands::reading_of(chain),
+            crate::wiring::Grounds::of(instance),
             crate::wiring::Remembering::reader(instance),
         )
     }

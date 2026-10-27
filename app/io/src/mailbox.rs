@@ -18,7 +18,18 @@ use crate::present::Present as _;
 use crate::run::{Cmd, succeed};
 
 /// What notmuch reads of its environment beyond [`crate::run::BASE`].
-pub const NOTMUCH: &[&str] = &["NOTMUCH_*"];
+const NOTMUCH: &[&str] = &["NOTMUCH_*"];
+
+/// `cmd` told which index to use: the `config` named, and no other `NOTMUCH_*` variable, since
+/// `NOTMUCH_DATABASE` or `NOTMUCH_PROFILE` from the environment would point it at another one;
+/// with none named, the environment's.
+#[must_use]
+pub fn indexed_by(cmd: Cmd, config: Option<&Path>) -> Cmd {
+    match config {
+        Some(config) => cmd.env("NOTMUCH_CONFIG", config),
+        None => cmd.pass(NOTMUCH),
+    }
+}
 use self::message::NotmuchMessage;
 use suzatary_core::capability::{Datetime, MailError, Mailbox, Query};
 use suzatary_core::enclosed::Enclosure;
@@ -106,10 +117,7 @@ impl Notmuch {
                 "this deployment has no mail index".to_owned(),
             ));
         };
-        Ok(Cmd::new(&self.binary)
-            .args(args)
-            .pass(NOTMUCH)
-            .env("NOTMUCH_CONFIG", config))
+        Ok(indexed_by(Cmd::new(&self.binary).args(args), Some(config)))
     }
 
     /// notmuch's answer as it wrote it: it copies a message's bytes into its JSON unchanged, so
@@ -473,6 +481,41 @@ impl Notmuch {
             }
         }
         Ok(None)
+    }
+
+    /// Each file notmuch holds for the message `id` whose bytes have the canonical hash `hash`,
+    /// with its path under the mail root; a file outside the mail root is left out, since no
+    /// account holds it.
+    ///
+    /// # Errors
+    /// notmuch cannot be asked, or a file it names cannot be read.
+    pub fn files_holding(
+        &self,
+        id: &str,
+        hash: &str,
+    ) -> Result<Vec<(PathBuf, Vec<u8>)>, MailError> {
+        let query = by_id_query(std::iter::once(id));
+        if query.is_empty() {
+            return Ok(Vec::new());
+        }
+        let listed = self.run(&["search", "--output=files", &query])?;
+        let mut files = Vec::new();
+        for line in String::from_utf8_lossy(&listed).lines().map(str::trim) {
+            let path = Path::new(line);
+            let Ok(relative) = path.strip_prefix(&self.mail_root) else {
+                continue;
+            };
+            let Some(bytes) = std::fs::read(path).present().map_err(|failed| {
+                MailError::Unreachable(format!("reading {}: {failed}", path.display()))
+            })?
+            else {
+                continue;
+            };
+            if dedup::canonical_hash(&bytes) == hash {
+                files.push((relative.to_path_buf(), bytes));
+            }
+        }
+        Ok(files)
     }
 }
 
@@ -1145,6 +1188,11 @@ mod tests {
                 .and_then(|(_, value)| value.as_deref()),
             Some(std::ffi::OsStr::new("/tmp/notmuch-config")),
             "NOTMUCH_CONFIG must be the capability's own value, not left to the process environment"
+        );
+        assert!(
+            command.pass.iter().all(|name| !name.starts_with("NOTMUCH")),
+            "NOTMUCH_DATABASE from the process environment would name another index: {:?}",
+            command.pass
         );
     }
 

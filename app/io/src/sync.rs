@@ -34,6 +34,9 @@ pub struct Syncer {
     accounts: Roster,
     mail_root: PathBuf,
     notmuch: PathBuf,
+    /// The index's config, set as `NOTMUCH_CONFIG` on every call when named, so the index a sync
+    /// writes is the one the reads ask.
+    config: Option<PathBuf>,
     mbsyncrc: PathBuf,
     state_dir: PathBuf,
     tokens: TokenStore,
@@ -64,11 +67,19 @@ impl Syncer {
             accounts,
             mail_root: mail_root.into(),
             notmuch: notmuch.into(),
+            config: None,
             mbsyncrc: mbsyncrc.into(),
             state_dir: state_dir.into(),
             tokens,
             grants,
         }
+    }
+
+    /// The notmuch config every index call carries as `NOTMUCH_CONFIG`.
+    #[must_use]
+    pub fn with_config(mut self, config: impl Into<PathBuf>) -> Self {
+        self.config = Some(config.into());
+        self
     }
 
     /// The roster this syncer pulls.
@@ -117,9 +128,7 @@ impl Syncer {
     }
 
     fn notmuch(&self, args: &[&str]) -> Cmd {
-        Cmd::new(&self.notmuch)
-            .args(args)
-            .pass(crate::mailbox::NOTMUCH)
+        crate::mailbox::indexed_by(Cmd::new(&self.notmuch).args(args), self.config.as_deref())
     }
 
     fn one(&self, account: &MailAccount, since: chrono::NaiveDate) -> AccountSync {

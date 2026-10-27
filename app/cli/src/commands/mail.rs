@@ -57,30 +57,13 @@ pub fn ledger(instance: &Instance) -> suzatary_io::state::Ledger {
 /// The corpus, read-only.
 #[must_use]
 pub fn notmuch(instance: &Instance) -> Notmuch {
-    let notmuch = Notmuch::new(
-        instance.mail.root.clone(),
-        ledger(instance),
-        instance.mail.accounts.clone(),
-    )
-    .with_binary(instance.mail.notmuch.clone())
-    .with_pdftotext_repo(instance.code().to_path_buf());
-    match &instance.mail.notmuch_config {
-        Some(config) => notmuch.with_config(config.clone()),
-        None => notmuch,
-    }
+    crate::wiring::Ground::of(instance).notmuch(instance.code())
 }
 
 /// The pull.
 #[must_use]
 pub fn syncer(instance: &Instance) -> Syncer {
-    Syncer::new(
-        instance.mail.accounts.clone(),
-        instance.mail.root.clone(),
-        instance.mail.notmuch.clone(),
-        instance.mail.mbsyncrc.clone(),
-        instance.paths.imap_state.clone(),
-        (tokens(instance), google_grants(instance)),
-    )
+    crate::wiring::Ground::of(instance).syncer()
 }
 
 /// The grants a sign-in with Google keeps, against Google's own endpoints.
@@ -96,15 +79,7 @@ pub fn google_grants(instance: &Instance) -> suzatary_io::google::Grants {
 /// agent and the operator run against one corpus, dedup authority and syncer.
 #[must_use]
 pub fn operator(instance: &Instance) -> Operator {
-    Operator::new(
-        notmuch(instance),
-        ledger(instance),
-        syncer(instance),
-        instance.mail.heartbeat.clone(),
-        instance.paths.last_sync.clone(),
-        instance.persona.zone,
-        suzatary_io::watches::Watches::open(instance.local.watches()),
-    )
+    crate::wiring::Ground::of(instance).operator(instance.code(), instance.persona.zone)
 }
 
 /// `suzatary sync`: pull every account, reindex, re-tag (which rings each open watch the corpus

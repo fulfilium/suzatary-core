@@ -550,10 +550,15 @@ lane=tests
 # above it, whose `default` feature only the tests' proptest turns on. The steps after it run what
 # it built; each is still the cargo command that would build it, so a step run without it (a kept
 # build) builds what it needs.
+# The cli's tests that need its `fixture` feature (`bench`, and some of `drive`, `signatures` and
+# `web`), in the feature set scripts/app-build.sh --fixture builds suzatary-dev in, so they share
+# its build.
+fixture_tests=(--test all --features suzatary/fixture --features suzatary-core/nothing)
 # shellcheck disable=SC2329
 build_once() {
   cargo_app test -q --workspace --no-run &&
     cargo_app test -q --workspace --no-run --test guards --test fence --test plugin &&
+    cargo_app test -q --workspace --no-run "${fixture_tests[@]}" &&
     scripts/app-build.sh --fixture >/dev/null
 }
 step tree build           $rust   build_once
@@ -567,20 +572,35 @@ suzatary_fence() {
     export SUZATARY_FENCE_PLUGINS SUZATARY_PLUGINS
 }
 step tree fence-plugin    unkept  suzatary_fence
+# The workspace's test executables `cargo test` selects with these arguments, run by the runner,
+# which skips those of the members SUZATARY_GATE_UNITS does not name.
+# shellcheck disable=SC2329
+units_test() {
+  local host
+  host="$(rustc -vV | sed -n 's/^host: //p')"
+  cargo_app test -q --workspace --no-fail-fast "$@" \
+    --config "target.$host.runner=['$root/scripts/test-units.sh']"
+}
 # The workspace's tests, or only the members named in SUZATARY_GATE_UNITS: every executable is
 # built in the workspace's feature set, and the runner skips those of the other members. The doc
 # tests run apart and whole, since rustdoc runs a merged doc test in one process under a runner.
 # shellcheck disable=SC2329
 rust_test() {
   [[ -n "${SUZATARY_GATE_UNITS:-}" ]] || { cargo_app test -q --workspace --no-fail-fast; return; }
-  local host code=0
-  host="$(rustc -vV | sed -n 's/^host: //p')"
-  cargo_app test -q --workspace --no-fail-fast --tests \
-    --config "target.$host.runner=['$root/scripts/test-units.sh']" || code=$?
+  local code=0
+  units_test --tests || code=$?
   cargo_app test -q --workspace --no-fail-fast --doc || code=$?
   return "$code"
 }
 step tree test            crates  rust_test
+# The fixture's tests, whole, or skipped by the runner when SUZATARY_GATE_UNITS does not name the
+# cli.
+# shellcheck disable=SC2329
+rust_test_fixture() {
+  [[ -n "${SUZATARY_GATE_UNITS:-}" ]] || { cargo_app test -q --workspace --no-fail-fast "${fixture_tests[@]}"; return; }
+  units_test "${fixture_tests[@]}"
+}
+step tree test-fixture    crates  rust_test_fixture
 step tree guards          all     cargo_app test -q --workspace --test guards
 step tree plugin-fence    $rust   cargo_app test -q --workspace --test fence
 step tree plugin-sync     $rust   cargo_app test -q --workspace --test plugin

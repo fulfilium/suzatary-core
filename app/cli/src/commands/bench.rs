@@ -1,8 +1,9 @@
 //! `suzatary-dev bench`: the effectful shell over `suzatary_bench`'s extraction, replay and scoring.
 //!
 //! The case file is frozen (overwritten only with `--force`); a run directory is append-only
-//! by case id so runs resume; a candidate dispatches through the real agent interpreters over
-//! a temporary chain, never the live one; and this shell never prints a message body.
+//! by case id so runs resume; a candidate dispatches through the real agent interpreters over a
+//! per-case scratch ground (its chains, its maildir of the case's frozen mail, its ledger and its
+//! data checkout), never the box's; and this shell never prints a message body.
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
@@ -14,6 +15,7 @@ use serde_json::Value;
 use suzatary_bench::bar::Verdict;
 use suzatary_bench::cases::{AdversarialCase, Case, CaseFile, CaseId, TriageAnswer, TriageCase};
 use suzatary_bench::cost::{Prices, Totals};
+use suzatary_bench::frozen::{FrozenFile, FrozenMessage, MailPath};
 use suzatary_bench::run::{self, Outcome};
 use suzatary_bench::sample::{Sample, Shape};
 use suzatary_bench::stratum::{Stratum, measure_of};
@@ -21,6 +23,8 @@ use suzatary_bench::{extract, join, pool, score, sheet};
 use suzatary_core::capability::{
     Conversation, Corpus as _, Manual, Manuals as _, Model, ModelError, Query, Reply,
 };
+use suzatary_core::mail::known::Known;
+use suzatary_core::mail::local_state::Kept;
 use suzatary_core::record::{Envelope, EventStore, TodoEvent};
 
 use crate::commands::mcp::Interpreters;
@@ -165,6 +169,7 @@ pub fn run(path: &Path, args: &Args) -> anyhow::Result<()> {
             skip_failed,
         } => run_cmd(
             &Instance::open(path)?,
+            &suzatary_io::typeset::Closed::this_binary(),
             model.as_deref(),
             #[cfg(feature = "fixture")]
             model_fixture.as_deref(),
@@ -238,7 +243,9 @@ fn extract_cmd(instance_path: &Path, out: &Path, seed: u64, force: bool) -> anyh
         );
     }
 
-    let cases = corpus_cases(&Instance::open(instance_path)?)?;
+    let instance = Instance::open(instance_path)?;
+    let cases = corpus_cases(&instance)?;
+    let mail = frozen_mail(&instance, &cases)?;
     let mut kinds: BTreeMap<&str, usize> = BTreeMap::new();
     for case in &cases {
         *kinds.entry(case.kind()).or_default() += 1;
@@ -251,6 +258,7 @@ fn extract_cmd(instance_path: &Path, out: &Path, seed: u64, force: bool) -> anyh
     let file = CaseFile {
         extracted_at: chrono::Utc::now().to_rfc3339(),
         cases,
+        mail,
     };
 
     suzatary_bench::privacy::private_dir(out)
@@ -340,6 +348,53 @@ fn corpus_cases(instance: &Instance) -> anyhow::Result<Vec<Case>> {
     }
 
     Ok(cases)
+}
+
+/// The message each triage and adversarial case names, read from the box's corpus once, here,
+/// so a replay reads the case file's copy and never the corpus.
+fn frozen_mail(
+    instance: &Instance,
+    cases: &[Case],
+) -> anyhow::Result<BTreeMap<String, FrozenMessage>> {
+    let state = super::mail::ledger(instance)
+        .read()
+        .map_err(|failed| anyhow::anyhow!("reading the triage's bookkeeping: {failed}"))?;
+    let corpus = super::mail::notmuch(instance);
+    let mut mail = BTreeMap::new();
+    for hash in cases.iter().filter_map(Case::message_hash) {
+        // `show` finds a hash only through its recorded locator, so a replay could show no more.
+        let Some(Kept {
+            native_id: Some(id),
+            ..
+        }) = state.local.messages.get(hash)
+        else {
+            continue;
+        };
+        if mail.contains_key(hash) {
+            continue;
+        }
+        let files = corpus
+            .files_holding(id, hash)
+            .with_context(|| format!("reading the files of message {hash}"))?
+            .into_iter()
+            .map(|(path, bytes)| {
+                Ok(FrozenFile {
+                    path: MailPath::new(path.to_string_lossy())?,
+                    bytes,
+                })
+            })
+            .collect::<anyhow::Result<Vec<_>>>()?;
+        if !files.is_empty() {
+            mail.insert(
+                hash.to_owned(),
+                FrozenMessage {
+                    id: id.clone(),
+                    files,
+                },
+            );
+        }
+    }
+    Ok(mail)
 }
 
 /// Read one JSON file as `T`, naming the file and what it should have been.
@@ -500,6 +555,7 @@ pub fn opening_of(case: &Case) -> Option<(String, Option<String>, String)> {
 #[allow(clippy::too_many_arguments)]
 pub fn run_cmd(
     instance: &Instance,
+    typeset: &suzatary_io::typeset::Closed,
     model: Option<&str>,
     #[cfg(feature = "fixture")] model_fixture: Option<&Path>,
     cases: &Path,
@@ -554,16 +610,25 @@ pub fn run_cmd(
             counts.not_yet_supported += 1;
             continue;
         };
-        let outcome = dispatch_case(
+        let outcome = match dispatch_case(
             instance,
+            typeset,
             &candidate,
             &system,
             &scratch_root,
             case,
+            case.message_hash().and_then(|hash| file.mail.get(hash)),
             &chain_name,
             tip.as_deref(),
             opening,
-        )?;
+        ) {
+            Ok(outcome) => outcome,
+            // A case's scratch holds its mail, so a run that stops leaves none of it behind.
+            Err(failed) => {
+                let _ = std::fs::remove_dir_all(&scratch_root);
+                return Err(failed);
+            }
+        };
         match &outcome {
             Outcome::Answered(answer) => {
                 counts.answered += 1;
@@ -626,22 +691,25 @@ fn resume_of(answer_path: &Path, force: bool, skip_failed: bool) -> Resume {
     }
 }
 
-/// Replay one case against fresh scratch replicas, one per chain this
-/// deployment serves.
+/// Replay one case over a fresh scratch ground: one scratch replica per chain this deployment
+/// serves, a maildir holding only the case's `mail`, and a ledger, memory, inbox and data
+/// checkout of its own.
 ///
 /// Every chain is bound, as in a live session, so routing to another chain is not scored
 /// as a failure; chains other than the case's own are seeded at their current tips.
 ///
 /// # Errors
-/// `chain_name` names a chain this deployment does not serve, or a scratch
-/// chain cannot be created or seeded.
+/// `chain_name` names a chain this deployment does not serve, or the scratch ground cannot be
+/// built: a chain not seeded, the mail not written or indexed, or the checkout not committed.
 #[allow(clippy::too_many_arguments)]
 fn dispatch_case(
     instance: &Instance,
+    typeset: &suzatary_io::typeset::Closed,
     candidate: &Candidate,
     system: &str,
     scratch_root: &Path,
     case: &Case,
+    mail: Option<&FrozenMessage>,
     chain_name: &str,
     tip: Option<&str>,
     opening: String,
@@ -652,38 +720,38 @@ fn dispatch_case(
     // A fresh scratch directory per case, so no case's writes leak into the next.
     let case_scratch = scratch_root.join(case.id().as_str());
     let _ = std::fs::remove_dir_all(&case_scratch);
-
-    let mut held = Vec::new();
-    for chain_dir in instance.chains.iter() {
-        let name = chain_dir.policy.name.as_str();
-        let chain_scratch = case_scratch.join(name);
-        let temp = EventStore::new(chain_scratch, chain_dir.policy.untrusted.clone());
-
-        // The live chain is only read from; nothing here appends to it.
-        let live = super::store_of(chain_dir);
-        let seed_tip: Option<String> = if name == chain_name {
-            tip.map(str::to_owned)
-        } else {
-            live.objects()
-                .with_context(|| format!("reading the {name} chain"))?
-                .pop()
-                .map(|(hash, _)| hash.as_str().to_owned())
-        };
-        if let Some(seed_tip) = seed_tip {
-            let hash = prodrome_core::event::Hash::new(seed_tip.clone())
-                .map_err(|failed| anyhow::anyhow!("{seed_tip}: {failed}"))?;
-            temp.adopt(live.inner(), &hash)
-                .with_context(|| format!("seeding the temp {name} chain at {seed_tip}"))?;
-        }
-        held.push((
-            name.to_owned(),
+    // Private, since it holds the case's mail; every file under it is then out of other users'
+    // reach whatever the umask gives the file itself.
+    suzatary_bench::privacy::private_dir(&case_scratch)
+        .with_context(|| format!("creating {}", case_scratch.display()))?;
+    let ground = crate::wiring::Ground::scratch(&case_scratch, instance);
+    let held: Vec<_> = seed(
+        instance,
+        &ground,
+        &case_scratch,
+        case,
+        mail,
+        chain_name,
+        tip,
+    )?
+    .into_iter()
+    .map(|(name, temp)| {
+        (
+            name,
             Interpreters::around(
                 instance,
                 suzatary_io::objects::Objects::chain(temp),
+                crate::wiring::Grounds::over(
+                    &ground,
+                    instance.code(),
+                    &instance.persona,
+                    typeset.clone(),
+                ),
                 crate::wiring::Remembering::empty_in(&case_scratch.join("memory"), instance),
             ),
-        ));
-    }
+        )
+    })
+    .collect();
     let chains: BTreeMap<String, _> = held
         .iter()
         .map(|(name, interpreters)| (name.clone(), interpreters.agent()))
@@ -715,6 +783,139 @@ fn dispatch_case(
     );
     let _ = std::fs::remove_dir_all(&case_scratch);
     Ok(outcome)
+}
+
+/// The case's scratch ground filled: each chain's replica seeded at its tip, the case's mail
+/// indexed, and the data root committed.
+fn seed(
+    instance: &Instance,
+    ground: &crate::wiring::Ground,
+    case_scratch: &Path,
+    case: &Case,
+    mail: Option<&FrozenMessage>,
+    chain_name: &str,
+    tip: Option<&str>,
+) -> anyhow::Result<Vec<(String, EventStore)>> {
+    let mut held = Vec::new();
+    for chain_dir in instance.chains.iter() {
+        let name = chain_dir.policy.name.as_str();
+        let temp = EventStore::new(ground.data.join(name), chain_dir.policy.untrusted.clone());
+
+        // The live chain is only read from; nothing here appends to it.
+        let live = super::store_of(chain_dir);
+        let seed_tip: Option<String> = if name == chain_name {
+            tip.map(str::to_owned)
+        } else {
+            live.objects()
+                .with_context(|| format!("reading the {name} chain"))?
+                .pop()
+                .map(|(hash, _)| hash.as_str().to_owned())
+        };
+        if let Some(seed_tip) = seed_tip {
+            let hash = prodrome_core::event::Hash::new(seed_tip.clone())
+                .map_err(|failed| anyhow::anyhow!("{seed_tip}: {failed}"))?;
+            temp.adopt(live.inner(), &hash)
+                .with_context(|| format!("seeding the temp {name} chain at {seed_tip}"))?;
+        }
+        held.push((name.to_owned(), temp));
+    }
+    seed_mail(ground, case_scratch, case, mail)?;
+    commit_checkout(&ground.data)?;
+    Ok(held)
+}
+
+/// Write the case's `mail` into the scratch maildir, index it there, and record its locator in
+/// the scratch ledger, so `show` finds it by hash as the box's corpus found it.
+fn seed_mail(
+    ground: &crate::wiring::Ground,
+    case_scratch: &Path,
+    case: &Case,
+    mail: Option<&FrozenMessage>,
+) -> anyhow::Result<()> {
+    let root = ground.mail_root();
+    std::fs::create_dir_all(root).with_context(|| format!("creating {}", root.display()))?;
+    let config = crate::wiring::Ground::scratch_index(case_scratch);
+    std::fs::write(
+        &config,
+        format!(
+            "[database]\npath={}\nhook_dir={}\n[new]\ntags=inbox;unread\n\
+             [maildir]\nsynchronize_flags=false\n",
+            root.display(),
+            crate::wiring::Ground::scratch_hooks(case_scratch).display()
+        ),
+    )
+    .with_context(|| format!("writing {}", config.display()))?;
+    if let Some(message) = mail {
+        for file in &message.files {
+            let path = root.join(file.path.as_path());
+            if let Some(dir) = path.parent() {
+                std::fs::create_dir_all(dir)
+                    .with_context(|| format!("creating {}", dir.display()))?;
+            }
+            std::fs::write(&path, &file.bytes)
+                .with_context(|| format!("writing {}", path.display()))?;
+        }
+    }
+    ground
+        .syncer()
+        .index()
+        .map_err(|failed| anyhow::anyhow!("indexing the case's scratch mail: {failed}"))?;
+    if let (Some(hash), Some(message)) = (case.message_hash(), mail) {
+        let Known { pushed, local, key } = ground
+            .ledger
+            .read()
+            .map_err(|failed| anyhow::anyhow!("reading the scratch ledger: {failed}"))?;
+        let kept = Kept {
+            native_id: Some(message.id.clone()),
+            note: String::new(),
+        };
+        ground
+            .ledger
+            .write(&Known {
+                pushed,
+                local: local.keep(hash, kept),
+                key,
+            })
+            .map_err(|failed| anyhow::anyhow!("writing the scratch ledger: {failed}"))?;
+    }
+    Ok(())
+}
+
+/// Make `data` a git checkout holding what it holds now, so the candidate's `git diff` reads its
+/// own writes and never a repository the run directory happens to lie inside.
+fn commit_checkout(data: &Path) -> anyhow::Result<()> {
+    use suzatary_io::run::{Cmd, succeed};
+    std::fs::create_dir_all(data).with_context(|| format!("creating {}", data.display()))?;
+    let git = |args: &[&str]| {
+        Cmd::new("git")
+            .args([
+                "-c",
+                "user.name=bench",
+                "-c",
+                "user.email=bench@example.test",
+                "-c",
+                "commit.gpgsign=false",
+            ])
+            .args(args)
+            .env("GIT_CONFIG_GLOBAL", "/dev/null")
+            .env("GIT_CONFIG_NOSYSTEM", "1")
+            .cwd(data)
+    };
+    for args in [
+        &["init", "-q"][..],
+        &["add", "-A"],
+        &[
+            "commit",
+            "-q",
+            "--allow-empty",
+            "--no-verify",
+            "-m",
+            "the case as it stood",
+        ],
+    ] {
+        succeed(&git(args)).with_context(|| format!("git {} in {}", args[0], data.display()))?;
+    }
+    Ok(())
 }
 
 /// `bench run`'s summary over this invocation's newly answered cases.

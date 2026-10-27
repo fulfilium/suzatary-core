@@ -22,6 +22,8 @@ prodrome_core.workspace = true
 # reader").
 suzatary-core = { path = "../core" }
 thiserror.workspace = true
+# A frozen message's bytes, which need not be UTF-8, in the case file's JSON.
+base64.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 # `select::rank`'s deterministic ordering — the same digest, not a second

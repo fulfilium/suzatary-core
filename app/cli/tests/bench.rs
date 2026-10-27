@@ -1,8 +1,8 @@
 //! `suzatary-dev bench run` over the `Scripted` model and a temp chain; everything
 //! else (instance, event store, run directory) is real.
 //!
-//! Every path written is absolute under a scratch directory, and `repo` points at
-//! this checkout only to read `OPERATOR.md`, so nothing live is touched.
+//! Every path written is absolute under a scratch directory, `repo` points at this checkout only
+//! to read `OPERATOR.md`, and notmuch is a fake program, so nothing live is touched.
 
 #![cfg(feature = "fixture")]
 
@@ -36,6 +36,18 @@ fn toml_path(path: &std::path::Path) -> String {
     toml::Value::String(path.display().to_string()).to_string()
 }
 
+/// A notmuch that answers nothing and logs, one line a call, its `NOTMUCH_CONFIG`, the
+/// `hook_dir` that config names, its `XDG_CONFIG_HOME`, and its arguments, tab-separated.
+fn fake_notmuch(dir: &std::path::Path) -> PathBuf {
+    suzatary_testkit::fake_program(
+        &dir.join("bin"),
+        "notmuch",
+        "hooks=$(sed -n 's/^hook_dir=//p' \"$NOTMUCH_CONFIG\" 2>/dev/null)\n\
+         printf '%s\\t%s\\t%s\\t%s\\n' \"$NOTMUCH_CONFIG\" \"$hooks\" \"$XDG_CONFIG_HOME\" \"$*\" \
+         >>\"$0.log\"\n",
+    )
+}
+
 /// A minimal instance file: `repo` is the real checkout, `data` is the scratch `dir`.
 fn write_instance(dir: &std::path::Path) -> PathBuf {
     let text = format!(
@@ -67,7 +79,7 @@ home = 3
 [mail]
 root = {mail_root}
 state = "state.json"
-notmuch = "notmuch"
+notmuch = {notmuch}
 mbsyncrc = "mbsyncrc"
 heartbeat = {heartbeat}
 [[mail.accounts]]
@@ -83,6 +95,7 @@ sent_folder = "Sent Items"
         tls = toml_path(&dir.join("tls")),
         mail_root = toml_path(&dir.join("Mail")),
         heartbeat = toml_path(&dir.join("triage-heartbeat")),
+        notmuch = toml_path(&fake_notmuch(dir)),
     );
     let path = dir.join("instance.toml");
     std::fs::write(&path, text).expect("a writable instance file");
@@ -101,7 +114,8 @@ fn write_case_file(dir: &std::path::Path) -> PathBuf {
                 "chain_as_stood": { "chain": "life", "tip": null, "basis": "extraction" },
                 "truths": { "incumbent": { "decided": "declined" }, "settled": null }
             }
-        ]
+        ],
+        "mail": {}
     }"#;
     let path = dir.join("cases.json");
     std::fs::write(&path, text).expect("a writable case file");
@@ -112,11 +126,11 @@ fn write_case_file(dir: &std::path::Path) -> PathBuf {
 fn write_script(dir: &std::path::Path) -> PathBuf {
     let text = r#"[
         {
-            "reply": "{\"say\": \"filing it\", \"calls\": [{\"verb\": \"todo_add\", \"args\": {\"todo_id\": \"benchtest1\", \"body\": \"a scripted candidate wrote this\", \"rationale\": \"the script said so\", \"category\": \"home\", \"priority\": \"65%\", \"why\": \"a message asks for it\", \"sources\": \"briefing:2026-09-02\"}}]}"
+            "when": "list_open_todos",
+            "reply": "{\"say\": \"filed\"}"
         },
         {
-            "when": "todo_add",
-            "reply": "{\"say\": \"filed\"}"
+            "reply": "{\"say\": \"filing it\", \"calls\": [{\"verb\": \"todo_add\", \"args\": {\"todo_id\": \"benchtest1\", \"body\": \"a scripted candidate wrote this\", \"rationale\": \"the script said so\", \"category\": \"home\", \"priority\": \"65%\", \"why\": \"a message asks for it\", \"sources\": \"briefing:2026-09-02\"}}, {\"verb\": \"list_open_todos\", \"args\": {}}]}"
         }
     ]"#;
     let path = dir.join("script.json");
@@ -138,6 +152,7 @@ fn a_scripted_todo_add_lands_as_a_real_object_and_a_run_resumes() {
             &suzatary_cli::paths::Env::under(&dir, &dir),
         )
         .expect("the instance reads"),
+        &crate::binary::typeset(),
         None,
         Some(&script_path),
         &cases_path,
@@ -171,15 +186,18 @@ fn a_scripted_todo_add_lands_as_a_real_object_and_a_run_resumes() {
     };
 
     let round = &first_answer.rounds[0];
-    assert_eq!(round.calls.len(), 1);
+    // The script reads the open list after filing, so its next cue names no verb the opening does.
+    assert_eq!(first_answer.rounds.len(), 2, "{first:?}");
+    assert_eq!(round.calls.len(), 2);
     assert_eq!(round.calls[0].verb, "todo_add");
     let suzatary_bench::run::CallOutcome::Answered { value } = &round.calls[0].outcome else {
         panic!("todo_add was refused: {:?}", round.calls[0].outcome);
     };
     assert_eq!(value["filed"], serde_json::json!("proposal:triage/0"));
 
-    // The verb's answer carries no hash, so this one came from the scratch inbox itself.
-    assert_eq!(first_answer.objects.len(), 1, "{first:?}");
+    // The verb's answer carries no hash, so these came from the scratch inbox itself: its
+    // `Genesis`, since the card is its first write, and the card.
+    assert_eq!(first_answer.objects.len(), 2, "{first:?}");
     let hash = &first_answer.objects[0];
     assert_eq!(hash.len(), 64, "{hash:?} is not a sha256 hex digest");
     assert!(
@@ -201,6 +219,7 @@ fn a_scripted_todo_add_lands_as_a_real_object_and_a_run_resumes() {
             &suzatary_cli::paths::Env::under(&dir, &dir),
         )
         .expect("the instance reads"),
+        &crate::binary::typeset(),
         None,
         Some(&script_path),
         &cases_path,
@@ -231,6 +250,7 @@ fn a_failed_turn_is_recorded_failed_and_the_run_reports_it_and_exits_nonzero() {
             &suzatary_cli::paths::Env::under(&dir, &dir),
         )
         .expect("the instance reads"),
+        &crate::binary::typeset(),
         None,
         Some(&script_path),
         &cases_path,
@@ -262,6 +282,7 @@ fn a_failed_turn_is_recorded_failed_and_the_run_reports_it_and_exits_nonzero() {
             &suzatary_cli::paths::Env::under(&dir, &dir),
         )
         .expect("the instance reads"),
+        &crate::binary::typeset(),
         None,
         Some(&script_path),
         &cases_path,
@@ -286,6 +307,7 @@ fn a_failed_turn_is_recorded_failed_and_the_run_reports_it_and_exits_nonzero() {
             &suzatary_cli::paths::Env::under(&dir, &dir),
         )
         .expect("the instance reads"),
+        &crate::binary::typeset(),
         None,
         Some(&script_path),
         &cases_path,
@@ -394,7 +416,7 @@ home = 3
 [mail]
 root = {mail_root}
 state = "state.json"
-notmuch = "notmuch"
+notmuch = {notmuch}
 mbsyncrc = "mbsyncrc"
 heartbeat = {heartbeat}
 [[mail.accounts]]
@@ -410,6 +432,7 @@ sent_folder = "Sent Items"
         tls = toml_path(&dir.join("tls")),
         mail_root = toml_path(&dir.join("Mail")),
         heartbeat = toml_path(&dir.join("triage-heartbeat")),
+        notmuch = toml_path(&fake_notmuch(dir)),
     );
     let path = dir.join("instance.toml");
     std::fs::write(&path, text).expect("a writable instance file");
@@ -420,11 +443,11 @@ sent_folder = "Sent Items"
 fn write_project_chain_script(dir: &std::path::Path) -> PathBuf {
     let text = r#"[
         {
-            "reply": "{\"say\": \"this is about the system, not Ada's life\", \"calls\": [{\"verb\": \"todo_add\", \"args\": {\"chain\": \"suzatary\", \"todo_id\": \"projecttest1\", \"body\": \"a system fact routed to the project chain\", \"rationale\": \"the script said so\", \"category\": \"home\", \"priority\": \"65%\", \"why\": \"a message asks for it\", \"sources\": \"briefing:2026-09-02\"}}]}"
+            "when": "list_open_todos",
+            "reply": "{\"say\": \"filed on the project chain\"}"
         },
         {
-            "when": "todo_add",
-            "reply": "{\"say\": \"filed on the project chain\"}"
+            "reply": "{\"say\": \"this is about the system, not Ada's life\", \"calls\": [{\"verb\": \"todo_add\", \"args\": {\"chain\": \"suzatary\", \"todo_id\": \"projecttest1\", \"body\": \"a system fact routed to the project chain\", \"rationale\": \"the script said so\", \"category\": \"home\", \"priority\": \"65%\", \"why\": \"a message asks for it\", \"sources\": \"briefing:2026-09-02\"}}, {\"verb\": \"list_open_todos\", \"args\": {}}]}"
         }
     ]"#;
     let path = dir.join("script.json");
@@ -448,6 +471,7 @@ fn a_call_naming_the_project_chain_lands_there_not_as_a_refusal() {
             &suzatary_cli::paths::Env::under(&dir, &dir),
         )
         .expect("the instance reads"),
+        &crate::binary::typeset(),
         None,
         Some(&script_path),
         &cases_path,
@@ -466,7 +490,8 @@ fn a_call_naming_the_project_chain_lands_there_not_as_a_refusal() {
     };
 
     let round = &answer.rounds[0];
-    assert_eq!(round.calls.len(), 1);
+    assert_eq!(answer.rounds.len(), 2, "{answer:?}");
+    assert_eq!(round.calls.len(), 2);
     assert_eq!(round.calls[0].verb, "todo_add");
     assert_eq!(
         round.calls[0].args.get("chain"),
@@ -484,7 +509,11 @@ fn a_call_naming_the_project_chain_lands_there_not_as_a_refusal() {
         "the card for the project chain must be filed: {value:?}"
     );
 
-    assert_eq!(answer.objects.len(), 1, "{answer:?}");
+    assert_eq!(
+        answer.objects.len(),
+        2,
+        "the inbox's `Genesis` and the card: {answer:?}"
+    );
 
     assert!(!dir.join("events").exists());
     assert!(!dir.join("events-suzatary").exists());
@@ -521,14 +550,15 @@ fn a_bench_candidate_is_told_no_memory_of_the_box() {
     std::fs::write(
         &script,
         r#"[
-            { "reply": "{\"say\": \"reading\", \"calls\": [{\"verb\": \"context\", \"args\": {}}]}" },
-            { "when": "context", "reply": "{\"say\": \"read\"}" }
+            { "when": "context", "reply": "{\"say\": \"read\"}" },
+            { "reply": "{\"say\": \"reading\", \"calls\": [{\"verb\": \"context\", \"args\": {}}]}" }
         ]"#,
     )
     .expect("a writable script file");
     let out = dir.join("out");
     suzatary_cli::commands::bench::run_cmd(
         &instance,
+        &crate::binary::typeset(),
         None,
         Some(&script),
         &write_case_file(&dir),
@@ -554,6 +584,218 @@ fn a_bench_candidate_is_told_no_memory_of_the_box() {
         serde_json::json!("The secretary remembers nothing yet."),
         "{value}"
     );
+}
+
+/// Every file under `root` with its bytes, so two readings are equal exactly when nothing under
+/// `root` was written, created or removed between them.
+fn snapshot(root: &std::path::Path) -> std::collections::BTreeMap<PathBuf, Vec<u8>> {
+    let mut files = std::collections::BTreeMap::new();
+    let mut pending = vec![root.to_path_buf()];
+    while let Some(dir) = pending.pop() {
+        for entry in std::fs::read_dir(&dir).expect("a readable directory") {
+            let path = entry.expect("an entry").path();
+            if path.is_dir() {
+                files.insert(path.clone(), Vec::new());
+                pending.push(path);
+            } else {
+                let bytes = std::fs::read(&path).expect("a readable file");
+                files.insert(path, bytes);
+            }
+        }
+    }
+    files
+}
+
+/// A box whose data root `data` holds a maildir, an index config and the instance file, and
+/// whose home `home` is its state directory; answers the instance file's path.
+fn write_box_with_mail(
+    dir: &std::path::Path,
+    data: &std::path::Path,
+    home: &std::path::Path,
+) -> PathBuf {
+    std::fs::create_dir_all(data.join("Mail/her/cur")).expect("the box's maildir");
+    std::fs::create_dir_all(home).expect("the box's home");
+    std::fs::write(
+        data.join("Mail/her/cur/1:2,S"),
+        "Subject: the box's own\n\nmail\n",
+    )
+    .expect("a message of the box's");
+    std::fs::write(data.join("notmuch-config"), "[database]\npath=elsewhere\n")
+        .expect("the box's index config");
+    let text = format!(
+        r#"
+repo = {repo}
+data = {data}
+[signatures]
+root = "836884e1723c7b17f8b87e76a0272f012de6cff08f134eb9dcdb2670695b1818"
+
+[[chains]]
+name = "life"
+events = "events"
+untrusted = ["triage"]
+actors = ["ada", "triage"]
+owner = "ada"
+[web]
+viewers = ["her@example.test"]
+app_url = "https://example.test/"
+[web.act_as]
+"her@example.test" = "ada"
+[web.serving]
+host = "127.0.0.1"
+port = 8787
+tls_dir = "tls"
+dist = "web/dist"
+briefings = "briefings"
+[categories]
+home = 3
+[mail]
+root = "Mail"
+state = "state.json"
+notmuch = {notmuch}
+notmuch_config = "notmuch-config"
+mbsyncrc = "mbsyncrc"
+heartbeat = "triage-heartbeat"
+[[mail.accounts]]
+email = "her@example.test"
+subdir = "her"
+sync = "ms-imap"
+authority = "organizations"
+inbox_folders = ["Inbox"]
+sent_folder = "Sent Items"
+"#,
+        repo = toml_path(&repo_root()),
+        data = toml_path(data),
+        notmuch = toml_path(&fake_notmuch(dir)),
+    );
+    let path = data.join("instance.toml");
+    std::fs::write(&path, text).expect("a writable instance file");
+    path
+}
+
+/// A case whose message the case file freezes, and a script that marks it, adds a noise sender
+/// and syncs in one round.
+fn write_mail_writing_case(dir: &std::path::Path) -> (PathBuf, PathBuf) {
+    let message = b"Message-ID: <case@example.test>\nSubject: the case's own\n\nbody\n";
+    let cases = dir.join("cases.json");
+    std::fs::write(
+        &cases,
+        serde_json::json!({
+            "extracted_at": "2026-09-20T00:00:00Z",
+            "cases": [{
+                "kind": "triage",
+                "id": "triage:deadbeefcafefeed",
+                "message_hash": "deadbeefcafefeed",
+                "chain_as_stood": { "chain": "life", "tip": null, "basis": "extraction" },
+                "truths": { "incumbent": { "decided": "declined" }, "settled": null }
+            }],
+            "mail": {
+                "deadbeefcafefeed": {
+                    "id": "case@example.test",
+                    "files": [{
+                        "path": "her/cur/2:2,S",
+                        "bytes": base64::Engine::encode(
+                            &base64::engine::general_purpose::STANDARD,
+                            message,
+                        ),
+                    }],
+                },
+            },
+        })
+        .to_string(),
+    )
+    .expect("a writable case file");
+    let script = dir.join("script.json");
+    std::fs::write(
+        &script,
+        r#"[
+            { "when": "sync", "reply": "{\"say\": \"done\"}" },
+            { "reply": "{\"say\": \"handling it\", \"calls\": [{\"verb\": \"mark\", \"args\": {\"hash\": \"deadbeefcafefeed\", \"disposition\": \"skip\", \"native_id\": \"case@example.test\"}}, {\"verb\": \"noise_add\", \"args\": {\"sender\": \"alerts@example.test\"}}, {\"verb\": \"sync\", \"args\": {}}]}" }
+        ]"#,
+    )
+    .expect("a writable script file");
+    (cases, script)
+}
+
+/// A candidate's mail writes and sync are the case's alone: after `mark`, `noise_add` and `sync`,
+/// the instance's data root (its chains, ledger, box-local tier and maildir) and its state
+/// directory hold the same bytes as before, and every index call named the case's own config.
+#[test]
+fn a_candidates_mark_noise_and_sync_change_nothing_outside_the_cases_scratch() {
+    let dir = scratch("sandbox");
+    let data = dir.join("data");
+    let home = dir.join("home");
+    let instance = suzatary_cli::instance::Instance::read(
+        &write_box_with_mail(&dir, &data, &home),
+        &suzatary_cli::paths::Env::under(&home, dir.join("run")),
+    )
+    .expect("the instance reads");
+    let (cases, script) = write_mail_writing_case(&dir);
+
+    let before = (snapshot(&data), snapshot(&home));
+    let out = dir.join("out");
+    suzatary_cli::commands::bench::run_cmd(
+        &instance,
+        &crate::binary::typeset(),
+        None,
+        Some(&script),
+        &cases,
+        &out,
+        None,
+        false,
+        false,
+    )
+    .expect("a run over a scripted candidate");
+    assert_eq!(
+        (snapshot(&data), snapshot(&home)),
+        before,
+        "a bench candidate changed the box's data or state"
+    );
+
+    let entry: suzatary_bench::run::RunEntry = serde_json::from_str(
+        &std::fs::read_to_string(out.join("triage:deadbeefcafefeed.json")).expect("an answer"),
+    )
+    .expect("a run entry");
+    let suzatary_bench::run::Outcome::Answered(answer) = &entry.outcome else {
+        panic!("a scripted round must answer: {entry:?}");
+    };
+    assert_eq!(answer.rounds.len(), 2, "{answer:?}");
+    let calls = &answer.rounds[0].calls;
+    assert_eq!(
+        calls
+            .iter()
+            .map(|call| call.verb.as_str())
+            .collect::<Vec<_>>(),
+        ["mark", "noise_add", "sync"]
+    );
+    for call in calls {
+        assert!(
+            matches!(
+                call.outcome,
+                suzatary_bench::run::CallOutcome::Answered { .. }
+            ),
+            "{} was refused, so it wrote nowhere at all: {:?}",
+            call.verb,
+            call.outcome
+        );
+    }
+
+    // A hook from the box's `$XDG_CONFIG_HOME` would run as the box: the case's config names
+    // its own, empty, hook directory.
+    let case_scratch = out.join(".chains").join("triage:deadbeefcafefeed");
+    let config = case_scratch.join("notmuch-config").display().to_string();
+    let hooks = case_scratch.join("hooks").display().to_string();
+    let log = std::fs::read_to_string(dir.join("bin").join("notmuch.sh.log"))
+        .expect("the fake notmuch was called");
+    let calls: Vec<Vec<&str>> = log.lines().map(|line| line.split('\t').collect()).collect();
+    assert!(calls.iter().any(|call| call[3] == "new"), "{log}");
+    for call in &calls {
+        assert_eq!(
+            (call[0], call[1]),
+            (config.as_str(), hooks.as_str()),
+            "a notmuch call named another config or hook directory: {call:?}"
+        );
+    }
+    assert!(!out.join(".chains").exists());
 }
 
 /// One case in each stratum: acted, overturned and quiet.
@@ -598,7 +840,8 @@ fn write_stratified_case_file(dir: &std::path::Path) -> PathBuf {
                 "chain_as_stood": { "chain": "life", "tip": null, "basis": "extraction" },
                 "truths": { "incumbent": { "decided": "declined" }, "settled": null }
             }
-        ]
+        ],
+        "mail": {}
     }"#;
     let path = dir.join("stratified-cases.json");
     std::fs::write(&path, text).expect("a writable case file");

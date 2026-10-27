@@ -7,6 +7,7 @@ pub mod bar;
 pub mod cases;
 pub mod cost;
 pub mod extract;
+pub mod frozen;
 pub mod join;
 pub mod pool;
 pub mod privacy;

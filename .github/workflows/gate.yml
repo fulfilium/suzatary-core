@@ -49,7 +49,7 @@ jobs:
       matrix:
         include:
           - { lane: checks, steps: 'clippy,clippy-fixture,doc', part: '' }
-          - { lane: tests, steps: 'build,fence-plugin,test,plugin-fence,plugin-sync', part: '' }
+          - { lane: tests, steps: 'build,fence-plugin,test,test-fixture,plugin-fence,plugin-sync', part: '' }
           - { lane: guards, steps: 'guards', part: '' }
           - { lane: web, steps: 'web-inputs,web-test,build-web', part: '' }
           # e2e serves the bundle build-web writes from what web-inputs prepares, so each part

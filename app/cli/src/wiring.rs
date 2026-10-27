@@ -4,13 +4,17 @@
 //! is built in one place.
 
 use std::collections::BTreeSet;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use prodrome_core::event::Actor;
+use suzatary_core::capability::Secret;
 use suzatary_core::capability::{Agent, Model, RenderCache, Secretary};
 use suzatary_core::chains::ChainPolicy;
 use suzatary_core::decisions::{DecisionEvent, Decisions};
+use suzatary_core::mail::account::Roster;
+use suzatary_core::mail::dedup_key::DedupKey;
+use suzatary_core::persona::Persona;
 use suzatary_core::record::TodoEvent;
 use suzatary_core::secretary::compacting::Compacting;
 use suzatary_core::secretary::digest_event::DigestEvent;
@@ -23,6 +27,7 @@ use suzatary_core::secretary::memory_event::MemoryEvent;
 use suzatary_core::secretary::recollection::Recollection;
 use suzatary_core::signatures::Signers;
 use suzatary_core::store::{Reads, Signing};
+use suzatary_core::zone::Zone;
 use suzatary_io::conversations::ConversationStores;
 use suzatary_io::objects::Objects;
 use suzatary_io::texts::Texts;
@@ -30,6 +35,177 @@ use suzatary_io::unrendered::Unrendered;
 
 use crate::commands::serve::interpreters::{Declared, DriveAccess, Forecast, Junk, WebAccess};
 use crate::instance::{ChainDir, Instance};
+
+/// The files a [`Grounds`] reads and writes, and the accounts its sync pulls: the box's own
+/// ([`Ground::of`]) or a bench case's scratch ([`Ground::scratch`]), both wired by [`Ground`]'s
+/// methods alone.
+pub struct Ground {
+    mail_root: PathBuf,
+    notmuch: PathBuf,
+    /// `None` is a box with no mail index, which every read refuses.
+    notmuch_config: Option<PathBuf>,
+    pub(crate) ledger: suzatary_io::state::Ledger,
+    /// The accounts a message's folder is read as.
+    accounts: Roster,
+    /// The accounts a sync pulls.
+    pulled: Roster,
+    mbsyncrc: PathBuf,
+    imap_state: PathBuf,
+    tokens: suzatary_io::oauth::TokenStore,
+    grants: suzatary_io::google::Grants,
+    heartbeat: PathBuf,
+    last_sync: PathBuf,
+    watches: PathBuf,
+    pub(crate) data: PathBuf,
+    markup_cache: PathBuf,
+}
+
+impl Ground {
+    /// The box's, from the instance file.
+    #[must_use]
+    pub fn of(instance: &Instance) -> Self {
+        Self {
+            mail_root: instance.mail.root.clone(),
+            notmuch: instance.mail.notmuch.clone(),
+            notmuch_config: instance.mail.notmuch_config.clone(),
+            ledger: crate::commands::mail::ledger(instance),
+            accounts: instance.mail.accounts.clone(),
+            pulled: instance.mail.accounts.clone(),
+            mbsyncrc: instance.mail.mbsyncrc.clone(),
+            imap_state: instance.paths.imap_state.clone(),
+            tokens: crate::commands::mail::tokens(instance),
+            grants: crate::commands::mail::google_grants(instance),
+            heartbeat: instance.mail.heartbeat.clone(),
+            last_sync: instance.paths.last_sync.clone(),
+            watches: instance.local.watches(),
+            data: instance.data().to_path_buf(),
+            markup_cache: instance.paths.markup_cache.clone(),
+        }
+    }
+
+    /// A bench case's, every file under `dir`: its own maildir and index, its own ledger under a
+    /// key of its own, its own data checkout, and no account pulled. The instance gives only the
+    /// notmuch program and the roster a folder is read by, so nothing a case does reaches the
+    /// box's mail, data, grants or secret store.
+    #[must_use]
+    pub fn scratch(dir: &Path, instance: &Instance) -> Self {
+        let data = dir.join("data");
+        let state = dir.join("state");
+        let local = data.join(crate::instance::Local::DIR);
+        Self {
+            mail_root: dir.join("mail"),
+            notmuch: instance.mail.notmuch.clone(),
+            notmuch_config: Some(Self::scratch_index(dir)),
+            ledger: suzatary_io::state::Ledger::new(
+                data.join("state.json"),
+                local.join("mail.json"),
+                scratch_key,
+            ),
+            accounts: instance.mail.accounts.clone(),
+            pulled: Roster::default(),
+            mbsyncrc: dir.join("mbsyncrc"),
+            imap_state: state.join("imap"),
+            tokens: suzatary_io::oauth::TokenStore::new(state.join("oauth")),
+            grants: suzatary_io::google::Grants::new(
+                suzatary_io::google::Google::new(suzatary_core::google::Endpoints::google()),
+                Arc::new(suzatary_io::secrets::Secretspec::new(
+                    dir.join("secretspec.toml"),
+                )),
+            ),
+            heartbeat: state.join("triage-heartbeat"),
+            last_sync: state.join("last-sync.json"),
+            watches: local.join("watches"),
+            data,
+            markup_cache: dir.join("markup"),
+        }
+    }
+
+    /// The maildir root.
+    #[must_use]
+    pub fn mail_root(&self) -> &Path {
+        &self.mail_root
+    }
+
+    /// The notmuch config of the index a scratch ground under `dir` reads and writes.
+    #[must_use]
+    pub fn scratch_index(dir: &Path) -> PathBuf {
+        dir.join("notmuch-config")
+    }
+
+    /// The hook directory that config names, empty: without one, notmuch runs the hooks under the
+    /// user's `$XDG_CONFIG_HOME`, which are the box's.
+    #[must_use]
+    pub fn scratch_hooks(dir: &Path) -> PathBuf {
+        dir.join("hooks")
+    }
+
+    /// The mail this ground keeps, held against its sync.
+    #[must_use]
+    pub fn mail_cache(&self) -> crate::commands::serve::mail_cache::MailCache {
+        crate::commands::serve::mail_cache::MailCache::new(
+            self.mail_root.clone(),
+            self.notmuch.clone(),
+            self.notmuch_config.clone(),
+            suzatary_io::sync::lock(&self.imap_state),
+            self.tokens.clone(),
+        )
+    }
+
+    /// The corpus, read-only, `pdftotext` falling back through `code`.
+    #[must_use]
+    pub fn notmuch(&self, code: &Path) -> suzatary_io::mailbox::Notmuch {
+        let notmuch = suzatary_io::mailbox::Notmuch::new(
+            self.mail_root.clone(),
+            self.ledger.clone(),
+            self.accounts.clone(),
+        )
+        .with_binary(self.notmuch.clone())
+        .with_pdftotext_repo(code.to_path_buf());
+        match &self.notmuch_config {
+            Some(config) => notmuch.with_config(config.clone()),
+            None => notmuch,
+        }
+    }
+
+    /// The pull.
+    #[must_use]
+    pub fn syncer(&self) -> suzatary_io::sync::Syncer {
+        let syncer = suzatary_io::sync::Syncer::new(
+            self.pulled.clone(),
+            self.mail_root.clone(),
+            self.notmuch.clone(),
+            self.mbsyncrc.clone(),
+            self.imap_state.clone(),
+            (self.tokens.clone(), self.grants.clone()),
+        );
+        match &self.notmuch_config {
+            Some(config) => syncer.with_config(config.clone()),
+            None => syncer,
+        }
+    }
+
+    /// The mechanical operations over this ground, the sync's window counted in `zone`.
+    #[must_use]
+    pub fn operator(&self, code: &Path, zone: Zone) -> suzatary_io::corpus::Operator {
+        suzatary_io::corpus::Operator::new(
+            self.notmuch(code),
+            self.ledger.clone(),
+            self.syncer(),
+            self.heartbeat.clone(),
+            self.last_sync.clone(),
+            zone,
+            suzatary_io::watches::Watches::open(self.watches.clone()),
+        )
+    }
+}
+
+/// A key no other ledger holds, so a scratch ledger names no message as the box's does.
+fn scratch_key() -> Result<DedupKey, String> {
+    use suzatary_core::capability::Entropy as _;
+    let mut bytes = [0u8; 32];
+    suzatary_io::texts::SystemEntropy.fill(&mut bytes)?;
+    DedupKey::of(&Secret::new(hex::encode(bytes))).map_err(|failed| failed.to_string())
+}
 
 /// What every record reads through, the triage agent's included: its six effects beside a chain.
 pub struct Grounds {
@@ -45,18 +221,32 @@ impl Grounds {
     /// The box's six, from the instance file.
     #[must_use]
     pub fn of(instance: &Instance) -> Self {
+        Self::over(
+            &Ground::of(instance),
+            instance.code(),
+            &instance.persona,
+            suzatary_io::typeset::Closed::this_binary(),
+        )
+    }
+
+    /// The six over `ground`, the manuals and the renderer reading the code root `code`, the
+    /// renderer typesetting through `typeset`.
+    #[must_use]
+    pub fn over(
+        ground: &Ground,
+        code: &Path,
+        persona: &Persona,
+        typeset: suzatary_io::typeset::Closed,
+    ) -> Self {
         Self {
-            corpus: crate::commands::mail::operator(instance),
-            repository: suzatary_io::repository::Checkout::new(instance.data().to_path_buf()),
-            manuals: suzatary_io::manuals::Handbook::new(
-                instance.code().to_path_buf(),
-                instance.persona.clone(),
-            ),
-            mail: crate::commands::mail::notmuch(instance),
+            corpus: ground.operator(code, persona.zone),
+            repository: suzatary_io::repository::Checkout::new(ground.data.clone()),
+            manuals: suzatary_io::manuals::Handbook::new(code.to_path_buf(), persona.clone()),
+            mail: ground.notmuch(code),
             render: suzatary_io::render::Typst::new(
-                instance.code().to_path_buf(),
-                instance.paths.markup_cache.clone(),
-                suzatary_io::typeset::Closed::this_binary(),
+                code.to_path_buf(),
+                ground.markup_cache.clone(),
+                typeset,
             ),
             clock: suzatary_io::clock::SystemClock,
         }

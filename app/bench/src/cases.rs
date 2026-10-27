@@ -1,13 +1,16 @@
 //! The four kinds of case, as a closed sum: the input as it stood, the incumbent's answer,
 //! and the owner's settled truth where one exists.
 //!
-//! A case carries a message's canonical hash and never its text, so a case file, printed or
-//! committed, is never the mail; a replay reads the body back through the corpus.
+//! A case carries a message's canonical hash; the case file holds the message itself beside the
+//! cases ([`CaseFile::mail`]), and a replay indexes it in a scratch maildir.
 
+use std::collections::BTreeMap;
 use std::fmt;
 
 use serde::{Deserialize, Serialize};
 use suzatary_core::secretary::store::{Decision, Proposal};
+
+use crate::frozen::FrozenMessage;
 
 // --- identity ----------------------------------------------------------------
 
@@ -257,6 +260,16 @@ impl Case {
         }
     }
 
+    /// The canonical hash of the message a triage or adversarial case is about.
+    #[must_use]
+    pub fn message_hash(&self) -> Option<&str> {
+        match self {
+            Case::Triage(case) => Some(&case.message_hash),
+            Case::Adversarial(case) => Some(&case.message_hash),
+            Case::Review(_) | Case::Judgement(_) => None,
+        }
+    }
+
     /// The kind's own word, for a count or a filter.
     #[must_use]
     pub fn kind(&self) -> &'static str {
@@ -269,7 +282,7 @@ impl Case {
     }
 }
 
-/// The frozen case file: every case, and when they were pulled.
+/// The frozen case file: every case, its mail, and when they were pulled.
 ///
 /// Written once: the type cannot enforce it, so `suzatary-dev bench extract` refuses to
 /// overwrite an existing file without an explicit flag.
@@ -279,6 +292,9 @@ pub struct CaseFile {
     pub extracted_at: String,
     /// Every case, in extraction order.
     pub cases: Vec<Case>,
+    /// The messages the triage and adversarial cases name, by canonical hash; a hash absent here
+    /// is a message the box could not find at extraction, and a replay finds it nowhere either.
+    pub mail: BTreeMap<String, FrozenMessage>,
 }
 
 #[cfg(test)]
@@ -290,6 +306,7 @@ mod tests {
     fn a_case_file_round_trips_through_json() {
         let file = CaseFile {
             extracted_at: "2026-09-20T00:00:00Z".to_owned(),
+            mail: BTreeMap::new(),
             cases: vec![
                 Case::Adversarial(AdversarialCase {
                     id: CaseId::new("adversarial:life:def").expect("valid"),

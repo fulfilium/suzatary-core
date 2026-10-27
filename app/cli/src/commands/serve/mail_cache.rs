@@ -47,26 +47,18 @@ impl MailCache {
     /// The mail `instance` keeps, indexed as its mailbox is and held as its sync holds.
     #[must_use]
     pub fn of(instance: &crate::instance::Instance) -> Self {
-        Self::new(
-            instance.mail.root.clone(),
-            instance.mail.notmuch.clone(),
-            instance.mail.notmuch_config.clone(),
-            suzatary_io::sync::lock(&instance.paths.imap_state),
-            crate::commands::mail::tokens(instance),
-        )
+        crate::wiring::Ground::of(instance).mail_cache()
     }
 
     /// The index told what the maildir no longer holds, so no reading asks it for a file gone;
     /// no hook runs, since a hook may sync.
     fn reindex(&self) -> Result<(), String> {
-        let command = Cmd::new(&self.notmuch)
-            .args(["new", "--no-hooks"])
-            .pass(suzatary_io::mailbox::NOTMUCH)
-            .timeout(REINDEX);
-        let command = match &self.config {
-            Some(config) => command.env("NOTMUCH_CONFIG", config),
-            None => command,
-        };
+        let command = suzatary_io::mailbox::indexed_by(
+            Cmd::new(&self.notmuch)
+                .args(["new", "--no-hooks"])
+                .timeout(REINDEX),
+            self.config.as_deref(),
+        );
         succeed(&command)
             .map(drop)
             .map_err(|failed| failed.to_string())

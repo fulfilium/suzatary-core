@@ -4155,6 +4155,7 @@ dependencies = [
 name = "suzatary-bench"
 version = "0.0.0"
 dependencies = [
+ "base64 0.22.1",
  "prodrome-core",
  "proptest",
  "serde",

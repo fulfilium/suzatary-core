@@ -329,9 +329,9 @@ impl std::fmt::Display for AccountName {
 }
 
 /// Every account this deployment reads mail for, checked as a set (unique
-/// identities and folders, a sent folder on every Microsoft account) by the only
-/// constructor.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+/// identities and folders, a sent folder on every Microsoft account) by [`Roster::new`]; the
+/// default roster holds no account.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(try_from = "Vec<MailAccount>", into = "Vec<MailAccount>")]
 pub struct Roster(Vec<MailAccount>);
 

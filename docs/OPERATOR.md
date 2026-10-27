@@ -18,7 +18,7 @@ GitHub's runners there.
 | `deployed-shape` | the box | it runs the binary `public-tree` built |
 | `changelog` | the box | it compares with this repository's `origin/master` |
 | `fmt`, `clippy`, `clippy-fixture`, `doc` | core, job `checks` | |
-| `build`, `fence-plugin`, `test`, `plugin-fence`, `plugin-sync` | core, job `tests` | |
+| `build`, `fence-plugin`, `test`, `test-fixture`, `plugin-fence`, `plugin-sync` | core, job `tests` | |
 | `guards` | core, job `guards` | |
 | `web-inputs`, `web-test`, `build-web` | core, job `web` | |
 | `e2e` (with `web-inputs` and `build-web` again) | core, jobs `e2e-1` to `e2e-4` | each runs a quarter of the scenes (`scripts/e2e-part.sh`) |
