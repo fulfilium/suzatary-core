@@ -1,7 +1,7 @@
 //! The two topic stores on disk, box-local and never pushed: a topic name is words.
 
-use suzatary_core::secretary::topics::alias_event::AliasEvent;
-use suzatary_core::secretary::topics::membership_event::MembershipEvent;
+use suzatary_core::secretary::topics::reading::AliasEvent;
+use suzatary_core::secretary::topics::reading::MembershipEvent;
 use suzatary_core::secretary::topics::stores::TopicStores;
 use suzatary_core::store::StoreError;
 

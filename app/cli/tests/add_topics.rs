@@ -92,7 +92,7 @@ fn topics_on(fakes: &Fakes, target: &str) -> Vec<String> {
         .topics
         .reading()
         .expect("reads")
-        .topics(&target.parse::<Target>().expect("a target"))
+        .tags(&target.parse::<Target>().expect("a target"))
         .iter()
         .map(Topic::to_string)
         .collect()

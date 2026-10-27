@@ -12,8 +12,8 @@ use crate::secretary::digest_event::DigestEvent;
 use crate::secretary::inbox_event::InboxEvent;
 use crate::secretary::line_event::LineEvent;
 use crate::secretary::memory_event::MemoryEvent;
-use crate::secretary::topics::alias_event::AliasEvent;
-use crate::secretary::topics::membership_event::MembershipEvent;
+use crate::secretary::topics::reading::AliasEvent;
+use crate::secretary::topics::reading::MembershipEvent;
 
 /// Where a store's files go.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

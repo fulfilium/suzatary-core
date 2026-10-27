@@ -595,7 +595,7 @@ fn the_carry_gives_the_conversations_a_map_names_their_topics_once() {
         ("round:default/0", &["daily"]),
         ("round:default/2", &["daily"]),
     ] {
-        assert_eq!(reading.topics(&target(on)), topic(filed), "{on}");
+        assert_eq!(reading.tags(&target(on)), topic(filed), "{on}");
     }
     assert_eq!(
         reading.memberships().len(),
@@ -665,7 +665,6 @@ fn lines_of(said: Vec<u8>) -> Vec<String> {
 /// and one drafting a note.
 fn backfilled(name: &str) -> Instance {
     use suzatary_core::secretary::store::Kind;
-    use suzatary_core::secretary::topics::membership_event;
     use suzatary_core::secretary::topics::target::Target;
     use suzatary_core::secretary::topics::topic::Topic;
     use suzatary_core::store::Prodrome as _;
@@ -701,7 +700,9 @@ fn backfilled(name: &str) -> Instance {
     topics.begin().expect("begun");
     topics
         .memberships
-        .append(membership_event::added(
+        .append(prodrome_core::tags::membership::added::<
+            suzatary_core::secretary::topics::reading::Topics,
+        >(
             "round:default/0".parse::<Target>().expect("a target"),
             Topic::new("garden").expect("a topic"),
             prodrome_core::literal::Datetime::new(2026, 10, 21, 9, 0, 0, 0).expect("an instant"),
@@ -751,7 +752,6 @@ fn a_batch_the_model_does_not_answer_is_left_out_of_the_plan() {
 /// writes nothing, and a plan whose rounds gained other topics is refused whole.
 #[test]
 fn the_backfill_applies_the_plan_it_showed_once() {
-    use suzatary_core::secretary::topics::membership_event;
     use suzatary_core::secretary::topics::target::Target;
     use suzatary_core::secretary::topics::topic::Topic;
     use suzatary_core::store::Prodrome as _;
@@ -825,7 +825,7 @@ fn the_backfill_applies_the_plan_it_showed_once() {
         ("round:default/15", &[]),
     ] {
         let filed: std::collections::BTreeSet<Topic> = filed.iter().map(|t| topic(t)).collect();
-        assert_eq!(reading.topics(&target(on)), filed, "{on}");
+        assert_eq!(reading.tags(&target(on)), filed, "{on}");
     }
     let written = held();
     assert_eq!(apply(&file).expect("the plan applies again").0, 0);
@@ -833,7 +833,9 @@ fn the_backfill_applies_the_plan_it_showed_once() {
 
     topics
         .memberships
-        .append(membership_event::added(
+        .append(prodrome_core::tags::membership::added::<
+            suzatary_core::secretary::topics::reading::Topics,
+        >(
             target("round:default/4"),
             topic("hedge"),
             prodrome_core::literal::Datetime::new(2026, 10, 25, 9, 0, 0, 0).expect("an instant"),

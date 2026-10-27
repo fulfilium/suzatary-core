@@ -148,7 +148,7 @@ fn row(
         )
     };
     let target = round.target();
-    let on = topics.topics(&target);
+    let on = topics.tags(&target);
     wire::StreamRound {
         target: target.to_string(),
         conversation: stored.id.as_str().to_owned(),

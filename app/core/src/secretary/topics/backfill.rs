@@ -73,7 +73,7 @@ pub fn untopiced(conversations: &[Stored], reading: &Reading) -> (Vec<Untopiced>
     for stored in conversations {
         for round in rounds(stored) {
             let target = round.target();
-            if !reading.topics(&target).is_empty() {
+            if !reading.tags(&target).is_empty() {
                 continue;
             }
             let words: Vec<&str> = round
@@ -92,7 +92,7 @@ pub fn untopiced(conversations: &[Stored], reading: &Reading) -> (Vec<Untopiced>
                 notes: round
                     .notes()
                     .into_iter()
-                    .filter(|note| reading.topics(note).is_empty())
+                    .filter(|note| reading.tags(note).is_empty())
                     .collect(),
                 target,
                 words: words.join("\n"),
@@ -159,7 +159,10 @@ pub fn plan(
     model: &mut dyn FnMut(&ForModel, ForModel) -> Result<String, ModelError>,
 ) -> Result<Backfill, NotAPlan> {
     let (untopiced, unsent) = untopiced(conversations, reading);
-    let existing: BTreeSet<Topic> = reading.in_use().into_iter().map(|(t, _)| t).collect();
+    let existing: BTreeSet<Topic> = super::reading::in_use(reading)
+        .into_iter()
+        .map(|(t, _)| t)
+        .collect();
     let mut sorting = Sorting::default();
     let mut failed = Vec::new();
     let mut answered: Vec<&Untopiced> = Vec::new();

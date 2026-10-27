@@ -2,12 +2,7 @@
 //! what its own reading plans, devices sync by the Prodrome's `sync` (the union of two object
 //! sets), and every law is about the reading after that union.
 //!
-//! - Merging is commutative, associative and idempotent: devices that hold the same objects read
-//!   the same topics, whatever order they synced in and however often.
-//! - Observed remove: a removal takes off the adds its writer saw, and an add it did not see stays
-//!   on, whichever device merges into which.
-//! - A rename keeps every membership: each target that carried the renamed topic carries the new
-//!   name, on the renaming device and on a device that added under the old name meanwhile.
+//! The merge laws of the stores are the Prodrome's (`prodrome_core::tags`, SPEC law 48). Here:
 //! - The box's door merges as the union does: a box that takes each device's own objects through
 //!   `sync::receive_changes`, whatever order they are posted in, reads what a device holding the
 //!   union of every device's objects reads.
@@ -26,12 +21,9 @@ use prodrome_core::store::{MemoryStore, Replica, sync};
 use proptest::prelude::*;
 
 use suzatary_core::secretary::store::ConversationId;
-use suzatary_core::secretary::topics::alias_event::{Alias, AliasEvent, AliasVocabulary};
-use suzatary_core::secretary::topics::dispute::Dispute;
-use suzatary_core::secretary::topics::membership_event::{
-    self, MembershipEvent, MembershipVocabulary,
+use suzatary_core::secretary::topics::reading::{
+    AliasEvent, AliasVocabulary, MembershipEvent, MembershipVocabulary, Reading, Topics,
 };
-use suzatary_core::secretary::topics::reading::Reading;
 use suzatary_core::secretary::topics::target::Target;
 use suzatary_core::secretary::topics::topic::Topic;
 
@@ -115,7 +107,7 @@ impl Device {
             .dag
             .nodes()
             .expect("nodes");
-        Reading::of(&memberships, &aliases)
+        suzatary_core::secretary::topics::reading::of(&memberships, &aliases).expect("one genesis")
     }
 
     fn objects(&self) -> (BTreeSet<String>, BTreeSet<String>) {
@@ -186,14 +178,6 @@ fn op() -> impl Strategy<Value = Op> {
     ]
 }
 
-/// A membership write over two targets and two topics, so two devices often write one pair.
-fn membership_op() -> impl Strategy<Value = Op> {
-    prop_oneof![
-        (0usize..2, 0usize..2).prop_map(|(n, name)| Op::Add(n, name)),
-        (0usize..2, 0usize..2).prop_map(|(n, name)| Op::Remove(n, name)),
-    ]
-}
-
 /// A step of a script: a device writes, or a device takes in another's objects.
 #[derive(Debug, Clone)]
 enum Step {
@@ -241,125 +225,11 @@ fn union(parts: &[&Device]) -> Device {
 }
 
 fn topics_of(reading: &Reading, n: usize) -> BTreeSet<Topic> {
-    reading.topics(&target(n))
+    reading.tags(&target(n))
 }
 
 proptest! {
     #![proptest_config(ProptestConfig::with_cases(64))]
-
-    /// Three devices write and sync in any interleaving. However their objects are then merged,
-    /// the reading is one value: union commutes, associates and is idempotent, and every device
-    /// reads it once each has taken in the others' objects.
-    #[test]
-    fn merging_is_commutative_associative_and_idempotent(script in steps(3)) {
-        let mut all = devices(3);
-        run(&mut all, &script);
-        let [a, b, c] = [&all[0], &all[1], &all[2]];
-        let ab = union(&[a, b]).read();
-        prop_assert_eq!(&ab, &union(&[b, a]).read(), "commutative");
-        let left = union(&[&union(&[a, b]), c]).read();
-        let right = union(&[a, &union(&[b, c])]).read();
-        prop_assert_eq!(&left, &right, "associative");
-        let twice = union(&[a, a, b, b]);
-        prop_assert_eq!(&twice.read(), &ab, "idempotent");
-        prop_assert_eq!(twice.objects(), union(&[a, b]).objects(), "idempotent in objects");
-        // Each device takes in the others', in a different order, and all read the union.
-        a.take(b);
-        a.take(c);
-        b.take(c);
-        b.take(a);
-        c.take(a);
-        for device in [a, b, c] {
-            prop_assert_eq!(&device.read(), &left, "converged");
-        }
-    }
-
-    /// Two devices share a history, then write memberships apart. After a merge in either
-    /// direction a membership reads as the one device that wrote it after the fork left it, and
-    /// where both did, it is on if either left it on: a removal takes off only the adds its
-    /// writer saw.
-    #[test]
-    fn an_add_and_a_remove_apart_merge_the_same_way_in_either_order(
-        base in proptest::collection::vec(membership_op(), 0..8),
-        mine in proptest::collection::vec(membership_op(), 0..6),
-        theirs in proptest::collection::vec(membership_op(), 0..6),
-    ) {
-        let mut all = devices(2);
-        for op in &base {
-            all[0].apply(op);
-        }
-        all[1].take(&all[0]);
-        let before = all[0].read();
-        let mut wrote: [BTreeSet<(usize, usize)>; 2] = Default::default();
-        for (device, ops) in [(0, &mine), (1, &theirs)] {
-            for op in ops {
-                let (n, name) = match op {
-                    Op::Add(n, name) | Op::Remove(n, name) => (*n, *name),
-                    Op::Rename(..) => unreachable!("memberships only"),
-                };
-                if all[device].apply(op) > 0 {
-                    wrote[device].insert((n, name));
-                }
-            }
-        }
-        let (a, b) = (all[0].read(), all[1].read());
-        let one = union(&[&all[0], &all[1]]).read();
-        let other = union(&[&all[1], &all[0]]).read();
-        prop_assert_eq!(&one, &other);
-        all[0].take(&all[1]);
-        all[1].take(&all[0]);
-        prop_assert_eq!(&all[0].read(), &one);
-        prop_assert_eq!(&all[1].read(), &one);
-        for n in 0..2 {
-            for (name, spelled) in NAMES.iter().enumerate().take(2) {
-                let on = |reading: &Reading| topics_of(reading, n).contains(&topic(spelled));
-                let expected = match (wrote[0].contains(&(n, name)), wrote[1].contains(&(n, name))) {
-                    (false, false) => on(&before),
-                    (true, false) => on(&a),
-                    (false, true) => on(&b),
-                    (true, true) => on(&a) || on(&b),
-                };
-                prop_assert_eq!(on(&one), expected, "target {} topic {}", n, spelled);
-            }
-        }
-    }
-
-    /// After a rename, every target that carried the renamed topic or the topic `to` stood for
-    /// carries `to`, every other topic stays where it was, and the same rename again writes
-    /// nothing.
-    #[test]
-    fn a_rename_keeps_every_membership(
-        script in proptest::collection::vec(op(), 0..20),
-        from in 0usize..4,
-        to in 0usize..4,
-    ) {
-        let mut device = Device::new(0);
-        for op in &script {
-            device.apply(op);
-        }
-        let before = device.read();
-        let (from_topic, to_topic) = (topic(NAMES[from]), topic(NAMES[to]));
-        let merged = [before.spelling(&from_topic), before.spelling(&to_topic)];
-        let memberships = device.objects().0;
-        device.apply(&Op::Rename(from, to));
-        let after = device.read();
-        prop_assert_eq!(device.objects().0, memberships, "a rename writes no membership");
-        for n in 0..4 {
-            let expected: BTreeSet<Topic> = topics_of(&before, n)
-                .into_iter()
-                .map(|topic| if merged.contains(&topic) { to_topic.clone() } else { topic })
-                .collect();
-            prop_assert_eq!(topics_of(&after, n), expected);
-        }
-        for name in before.names(&from_topic).iter().chain(&before.names(&to_topic)) {
-            prop_assert_eq!(after.spelling(name), to_topic.clone());
-        }
-        prop_assert!(after.disputes().iter().all(|dispute| match dispute {
-            Dispute::Aliases { topic, .. } => after.spelling(topic) != to_topic,
-            Dispute::Ring { names, .. } => !names.contains(&to_topic),
-        }), "the rename settles the names it writes");
-        prop_assert_eq!(device.apply(&Op::Rename(from, to)), 0, "a second rename writes nothing");
-    }
 
     /// Adding twice writes once, and removing twice writes once.
     #[test]
@@ -518,99 +388,6 @@ fn posted<E: Schema<Vocabulary: Default>>(
     outcome.taken.len()
 }
 
-/// The two devices of the concrete cases below, sharing what `shared` writes on the first.
-fn forked(shared: &[Op]) -> [Device; 2] {
-    let [mut a, b] = [Device::new(0), Device::new(1)];
-    for op in shared {
-        a.apply(op);
-    }
-    b.take(&a);
-    [a, b]
-}
-
-fn merged_both_ways(a: &Device, b: &Device) -> Reading {
-    let one = union(&[a, b]).read();
-    assert_eq!(one, union(&[b, a]).read(), "either order");
-    one
-}
-
-const TRAVEL: usize = 0;
-const TRIPS: usize = 1;
-const WORK: usize = 2;
-const JOB: usize = 3;
-
-#[test]
-fn a_topic_under_the_old_name_lands_in_the_renamed_topic() {
-    let [mut a, mut b] = forked(&[Op::Add(0, WORK)]);
-    a.apply(&Op::Rename(WORK, JOB));
-    b.apply(&Op::Add(1, WORK));
-    let reading = merged_both_ways(&a, &b);
-    for n in [0, 1] {
-        assert_eq!(
-            topics_of(&reading, n),
-            BTreeSet::from([topic("job")]),
-            "round {n}"
-        );
-    }
-}
-
-#[test]
-fn two_renames_into_each_other_read_as_the_least_name_until_one_settles_them() {
-    let [mut a, mut b] = forked(&[Op::Add(0, TRAVEL), Op::Add(1, TRIPS)]);
-    a.apply(&Op::Rename(TRAVEL, TRIPS));
-    b.apply(&Op::Rename(TRIPS, TRAVEL));
-    let reading = merged_both_ways(&a, &b);
-    assert_eq!(
-        reading.disputes(),
-        vec![Dispute::Ring {
-            names: BTreeSet::from([topic("travel"), topic("trips")]),
-            spelled: topic("travel"),
-        }]
-    );
-    for n in [0, 1] {
-        assert_eq!(topics_of(&reading, n), BTreeSet::from([topic("travel")]));
-    }
-    let mut settled = union(&[&a, &b]);
-    settled.apply(&Op::Rename(TRIPS, TRIPS));
-    let reading = settled.read();
-    assert!(reading.disputes().is_empty());
-    for n in [0, 1] {
-        assert_eq!(topics_of(&reading, n), BTreeSet::from([topic("trips")]));
-    }
-}
-
-#[test]
-fn two_renames_of_one_topic_apart_are_a_dispute_every_device_reads_alike() {
-    let [mut a, mut b] = forked(&[Op::Add(0, TRAVEL)]);
-    a.apply(&Op::Rename(TRAVEL, TRIPS));
-    b.apply(&Op::Rename(TRAVEL, WORK));
-    let reading = merged_both_ways(&a, &b);
-    let disputes = reading.disputes();
-    let [
-        Dispute::Aliases {
-            topic: renamed,
-            chosen,
-            others,
-        },
-    ] = disputes.as_slice()
-    else {
-        panic!("one dispute, got {disputes:?}");
-    };
-    assert_eq!(renamed, &topic("travel"));
-    let both: BTreeSet<Alias> = [chosen.clone()]
-        .into_iter()
-        .chain(others.iter().cloned())
-        .collect();
-    assert_eq!(
-        both,
-        BTreeSet::from([Alias::As(topic("trips")), Alias::As(topic("work"))])
-    );
-    let Alias::As(spelled) = chosen else {
-        panic!("an alias");
-    };
-    assert_eq!(topics_of(&reading, 0), BTreeSet::from([spelled.clone()]));
-}
-
 /// The box takes a tab's topic only as a change written as the poster, resting on what it holds:
 /// a change naming another actor, a prodrome, a signature, a legacy object, bytes that are not
 /// one canonical object and a change resting on an unheld object are each refused, and an
@@ -629,7 +406,12 @@ fn the_box_door_takes_only_the_posters_changes() {
             mk_change(
                 begun.clone(),
                 deps,
-                membership_event::added(target(0), topic("travel"), at(1), actor.clone()),
+                prodrome_core::tags::membership::added::<Topics>(
+                    target(0),
+                    topic("travel"),
+                    at(1),
+                    actor.clone(),
+                ),
             )
             .expect("a change"),
         )
@@ -640,7 +422,12 @@ fn the_box_door_takes_only_the_posters_changes() {
         mk_change(
             begun.clone(),
             vec![seal_hash(&mine)],
-            membership_event::removed(target(0), topic("travel"), at(2), ada.clone()),
+            prodrome_core::tags::membership::removed::<Topics>(
+                target(0),
+                topic("travel"),
+                at(2),
+                ada.clone(),
+            ),
         )
         .expect("a change"),
     );
@@ -663,7 +450,12 @@ fn the_box_door_takes_only_the_posters_changes() {
     assert_eq!(refused(canonical_envelope(&other)), vec![Reason::BoxOnly]);
     let legacy: Envelope<MembershipEvent> = prodrome_core::event::mk_sealed(
         None,
-        membership_event::added(target(0), topic("travel"), at(1), ada.clone()),
+        prodrome_core::tags::membership::added::<Topics>(
+            target(0),
+            topic("travel"),
+            at(1),
+            ada.clone(),
+        ),
     );
     assert_eq!(
         refused(canonical_envelope(&legacy)),

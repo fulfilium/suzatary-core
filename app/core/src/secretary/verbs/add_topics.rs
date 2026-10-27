@@ -54,7 +54,10 @@ impl Verb for AddTopics {
         let memberships = call.caps.topics.memberships;
         let _held = memberships.locked()?;
         let reading = call.caps.topics.reading()?;
-        let existing: BTreeSet<Topic> = reading.in_use().into_iter().map(|(t, _)| t).collect();
+        let existing: BTreeSet<Topic> = crate::secretary::topics::reading::in_use(&reading)
+            .into_iter()
+            .map(|(t, _)| t)
+            .collect();
         let asked: BTreeSet<Topic> = asked.iter().map(|topic| reading.spelling(topic)).collect();
         let new: Vec<&Topic> = asked.iter().filter(|t| !existing.contains(*t)).collect();
         let listed = || listing(&reading);
@@ -75,7 +78,7 @@ impl Verb for AddTopics {
                 )));
             }
         }
-        let on = reading.topics(&target);
+        let on = reading.tags(&target);
         let after: BTreeSet<&Topic> = on.iter().chain(&asked).collect();
         if after.len() > MAX_TOPICS {
             return Err(Refusal::bad_request(format!(
@@ -158,7 +161,7 @@ fn parsed(texts: Vec<String>) -> Result<BTreeSet<Topic>, Refusal> {
 
 /// The topics in use, each with how many rounds it is on, the most first.
 fn listing(reading: &Reading) -> String {
-    let in_use = reading.in_use();
+    let in_use = crate::secretary::topics::reading::in_use(reading);
     if in_use.is_empty() {
         return "none yet".to_owned();
     }

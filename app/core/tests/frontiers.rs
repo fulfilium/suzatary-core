@@ -27,8 +27,7 @@ use prodrome_core::store::frontier::{Frontiers, Reached, Since, Token};
 use suzatary_core::epoch::Epochs;
 use suzatary_core::routes::{self, Books, Cut, Posted};
 use suzatary_core::secretary::store::ConversationId;
-use suzatary_core::secretary::topics::membership_event::MembershipEvent;
-use suzatary_core::secretary::topics::reading::Reading;
+use suzatary_core::secretary::topics::reading::MembershipEvent;
 use suzatary_core::secretary::topics::target::Target;
 use suzatary_core::secretary::topics::topic::Topic;
 use suzatary_core::store::Reads as _;
@@ -93,8 +92,9 @@ impl Device {
             turn: n,
         };
         let topic = Topic::new(["travel", "work"][n % 2]).expect("a topic");
-        if let Some(event) =
-            Reading::of(&nodes, &[]).add(&target, &topic, at(self.clock), &self.actor)
+        if let Some(event) = suzatary_core::secretary::topics::reading::of(&nodes, &[])
+            .expect("one genesis")
+            .add(&target, &topic, at(self.clock), &self.actor)
         {
             self.store.append(event).expect("appended");
         }

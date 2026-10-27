@@ -2655,7 +2655,7 @@ pub struct StreamRound {
     pub room: usize,
 }
 
-/// The topics in use, the most rounds first (`topics::reading::Reading::in_use`).
+/// The topics in use, the most rounds first (`topics::reading::in_use`).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]
 pub struct TopicsPayload {
     /// Every topic on a target.

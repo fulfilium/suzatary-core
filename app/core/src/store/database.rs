@@ -19,8 +19,8 @@ use crate::secretary::locked_text::{KeyName, TextKey};
 use crate::secretary::memory::Fact;
 use crate::secretary::memory_event::MemoryEvent;
 use crate::secretary::salted_text::{Text, TextName};
-use crate::secretary::topics::alias_event::AliasEvent;
-use crate::secretary::topics::membership_event::MembershipEvent;
+use crate::secretary::topics::reading::AliasEvent;
+use crate::secretary::topics::reading::MembershipEvent;
 use crate::upload::Upload;
 
 /// The whole store, as one value: every chain, and the box's own stores.

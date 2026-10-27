@@ -8,7 +8,7 @@ use prodrome_core::literal::Datetime;
 use serde::Deserialize;
 
 use crate::secretary::store::Stored;
-use crate::secretary::topics::membership_event::MembershipEvent;
+use crate::secretary::topics::reading::MembershipEvent;
 use crate::secretary::topics::reading::Reading;
 use crate::secretary::topics::target::Target;
 use crate::secretary::topics::targets::{MAX_TOPICS, rounds};
@@ -175,7 +175,7 @@ impl Plan {
         let mut stale = Vec::new();
         for planned in &self.0 {
             for target in planned.targets() {
-                let on = reading.topics(target);
+                let on = reading.tags(target);
                 if !live.contains(target) {
                     stale.push(format!("{target} is no longer a live round or note"));
                 } else if !on.is_subset(&planned.topics) {

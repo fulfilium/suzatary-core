@@ -16,7 +16,7 @@ use prodrome_core::memo;
 /// `app/Cargo.toml` pins, and the typst it links. A test reads `app/Cargo.lock` and fails when
 /// either moves without this.
 pub const TYPESETTER: &str =
-    "prodrome-typst-wasm fcf061508b94a32630d159f0ccf7e9763d2005d1, typst 0.15.1";
+    "prodrome-typst-wasm 186ac61694186ccc2e9168ad886a41f38d6710cf, typst 0.15.1";
 
 /// How a compiled document becomes what is kept ([`crate::narrowing`]): named by its code and
 /// the tripwire's, so an edit to either is a new function.

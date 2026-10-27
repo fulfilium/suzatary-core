@@ -139,7 +139,7 @@ mod tests {
     use prodrome_core::event::{Envelope, seal_hash};
     use prodrome_core::genesis::mk_genesis;
     use prodrome_core::store::frontier::{Reached, Since};
-    use suzatary_core::secretary::topics::membership_event::MembershipEvent;
+    use suzatary_core::secretary::topics::reading::MembershipEvent;
 
     /// The token the box names a frontier by, and so each record file by, is the sha256 of the
     /// tips, one on each line: the names of the files the box has already written.

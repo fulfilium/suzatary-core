@@ -8,7 +8,7 @@ use prodrome_core::literal::Datetime;
 use serde::Deserialize;
 
 use crate::secretary::store::{ConversationId, Stored};
-use crate::secretary::topics::membership_event::MembershipEvent;
+use crate::secretary::topics::reading::MembershipEvent;
 use crate::secretary::topics::reading::Reading;
 use crate::secretary::topics::target::Target;
 use crate::secretary::topics::topic::{NotATopic, Topic};

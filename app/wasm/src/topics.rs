@@ -12,8 +12,8 @@ use prodrome_core::fpl::datetime_of;
 use prodrome_core::literal::Datetime;
 use prodrome_wasm_exports::wire::parse_instant;
 use prodrome_wasm_exports::{Replica, thrown};
-use suzatary_core::secretary::topics::alias_event::AliasEvent;
-use suzatary_core::secretary::topics::membership_event::MembershipEvent;
+use suzatary_core::secretary::topics::reading::AliasEvent;
+use suzatary_core::secretary::topics::reading::MembershipEvent;
 use suzatary_core::secretary::topics::reading::Reading;
 use suzatary_core::secretary::topics::target::Target;
 use suzatary_core::secretary::topics::topic::Topic;
@@ -72,12 +72,14 @@ impl TopicReading {
     pub fn new(memberships: &Memberships, aliases: &TopicAliases) -> Result<TopicReading, JsError> {
         let memberships = memberships.0.read().map_err(refused)?;
         let aliases = aliases.0.read().map_err(refused)?;
-        Ok(Self(Reading::of(memberships.nodes, aliases.nodes)))
+        suzatary_core::secretary::topics::reading::of(memberships.nodes, aliases.nodes)
+            .map(Self)
+            .map_err(|several| refused(several.to_string()))
     }
 
     /// The topics in use, the most rounds first, each with the names in dispute for it.
     pub fn bar(&self) -> Result<String, JsError> {
-        json(&self.0.bar())
+        json(&suzatary_core::secretary::topics::reading::bar(&self.0))
     }
 
     /// The `Added` event that puts `topic` on `target`, printed, or `undefined` where it is on.

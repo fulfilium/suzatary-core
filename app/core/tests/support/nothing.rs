@@ -374,8 +374,8 @@ kept_nowhere!(crate::secretary::inbox_event::InboxEvent);
 kept_nowhere!(crate::secretary::line_event::LineEvent);
 kept_nowhere!(crate::secretary::memory_event::MemoryEvent);
 kept_nowhere!(crate::secretary::digest_event::DigestEvent);
-kept_nowhere!(crate::secretary::topics::membership_event::MembershipEvent);
-kept_nowhere!(crate::secretary::topics::alias_event::AliasEvent);
+kept_nowhere!(crate::secretary::topics::reading::MembershipEvent);
+kept_nowhere!(crate::secretary::topics::reading::AliasEvent);
 
 /// No owner: nothing here believes a retraction or an erasure.
 static NO_OWNERS: std::collections::BTreeSet<prodrome_core::event::Actor> =

@@ -591,8 +591,7 @@ fn decisions(root: &Path) {
 /// The topics and their aliases, each begun with a nonce of zeros: a round put on a topic and
 /// taken off another, and the first topic renamed.
 fn topics(root: &Path) {
-    use suzatary_core::secretary::topics::alias_event;
-    use suzatary_core::secretary::topics::membership_event;
+    use suzatary_core::secretary::topics::reading::Topics;
     use suzatary_core::secretary::topics::topic::Topic;
     let topics = suzatary_io::topics::Topics::open(root.join(TOPICS), root.join(TOPIC_ALIASES));
     rooted(&topics.memberships, "topics");
@@ -600,17 +599,37 @@ fn topics(root: &Path) {
     let round = || "round:default/0".parse().expect("a target");
     let topic = |name: &str| Topic::new(name).expect("a topic");
     for event in [
-        membership_event::added(round(), topic("travel"), at(16, 0), owner()),
-        membership_event::added(round(), topic("taxes"), at(16, 1), owner()),
-        membership_event::removed(round(), topic("taxes"), at(16, 2), owner()),
+        prodrome_core::tags::membership::added::<Topics>(
+            round(),
+            topic("travel"),
+            at(16, 0),
+            owner(),
+        ),
+        prodrome_core::tags::membership::added::<Topics>(
+            round(),
+            topic("taxes"),
+            at(16, 1),
+            owner(),
+        ),
+        prodrome_core::tags::membership::removed::<Topics>(
+            round(),
+            topic("taxes"),
+            at(16, 2),
+            owner(),
+        ),
     ] {
         topics.memberships.append(event).expect("appends");
     }
     topics
         .aliases
         .append(
-            alias_event::aliased(topic("travel"), topic("trips"), at(16, 3), owner())
-                .expect("an alias"),
+            prodrome_core::tags::alias::aliased::<Topics>(
+                topic("travel"),
+                topic("trips"),
+                at(16, 3),
+                owner(),
+            )
+            .expect("an alias"),
         )
         .expect("appends");
 }

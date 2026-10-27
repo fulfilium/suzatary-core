@@ -481,9 +481,12 @@ fn topics_begun(base: &str) -> (prodrome_core::event::Hash, Vec<String>) {
 
 /// A tab's topic on the first round of `default`, written as `actor` over `genesis`.
 fn added(genesis: &prodrome_core::event::Hash, actor: &str) -> String {
-    use suzatary_core::secretary::topics::membership_event;
-    let event = membership_event::added(
-        "round:default/0".parse().expect("a target"),
+    let event = prodrome_core::tags::membership::added::<
+        suzatary_core::secretary::topics::reading::Topics,
+    >(
+        "round:default/0"
+            .parse::<suzatary_core::secretary::topics::target::Target>()
+            .expect("a target"),
         suzatary_core::secretary::topics::topic::Topic::new("travel").expect("a topic"),
         prodrome_core::literal::Datetime::new(2026, 9, 2, 12, 0, 0, 0).expect("an instant"),
         common::actor(actor),

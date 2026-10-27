@@ -523,7 +523,7 @@ fn load(
             let topics: Vec<String> = caps
                 .topics
                 .reading()?
-                .topics(target)
+                .tags(target)
                 .iter()
                 .map(ToString::to_string)
                 .collect();

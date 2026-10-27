@@ -1,7 +1,7 @@
 //! The two topic stores, read together, since a membership's topic reads through the aliases.
 
-use crate::secretary::topics::alias_event::AliasEvent;
-use crate::secretary::topics::membership_event::MembershipEvent;
+use crate::secretary::topics::reading::AliasEvent;
+use crate::secretary::topics::reading::MembershipEvent;
 use crate::secretary::topics::reading::Reading;
 use crate::store::{Prodrome, StoreError};
 
@@ -15,9 +15,7 @@ impl TopicStores<'_> {
     /// # Errors
     /// Either store unreadable.
     pub fn reading(&self) -> Result<Reading, StoreError> {
-        Ok(Reading::of(
-            &self.memberships.nodes()?,
-            &self.aliases.nodes()?,
-        ))
+        super::reading::of(&self.memberships.nodes()?, &self.aliases.nodes()?)
+            .map_err(|several| StoreError::unreadable("topics", several))
     }
 }

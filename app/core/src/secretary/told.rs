@@ -112,7 +112,7 @@ pub fn context_of(
         facts,
         version: memory.version,
         topics: match topics {
-            Ok(topics) => InUse::Read(topics.in_use()),
+            Ok(topics) => InUse::Read(crate::secretary::topics::reading::in_use(topics)),
             Err(refused) => InUse::Unread(refused.message().to_owned()),
         },
         record,
