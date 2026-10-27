@@ -1,0 +1,1 @@
+Change(genesis='66602cd0dec37d58d03eec9518ca805a7ac38ea912d2b0c366a0b67b4b9f50b6', deps=(), event=Decided(decision='syncfixpoint', at=datetime(2026, 9, 7, 16, 0, 0), actor='assistant', title='Sync converges at a fixpoint, not on the first round trip', body='Sync converges at a fixpoint, not on the first round trip.', rationale='Log lesson, 2026-09-07 (later).', supersedes=()))

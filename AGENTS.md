@@ -13,6 +13,25 @@ Read these files too:
 - [`docs/WEB-SPEC.md`](docs/WEB-SPEC.md) contains the web app's types, laws and tests.
 - [`AGENT.md`](AGENT.md) (no "S") is a different file. Use it only to set up a new deployment.
 
+## The project's memory
+
+The project's decisions and lessons are in `memory/`, a store of recorded decisions. Each one
+says what was decided, who decided it, when, and why. `CLAUDE.md` names a rule's decision as
+`(→ id)`. It is not the secretary's memory, which is the `memory/` of the data tree.
+
+1. Before you change a mechanism, run `suzatary decision list --store memory --grep <words>`.
+   It lists the decisions whose title, body or rationale holds every word.
+2. To read one decision whole, run `suzatary decision show <id> --store memory`.
+3. Without an installed binary, run the same verbs as
+   `cargo run --manifest-path app/Cargo.toml -q --bin suzatary -- decision …`.
+4. Do not write to `memory/` yourself. To propose a lesson, put it on its own line of your pull
+   request's description, for example `Lesson: a clean rebase can still fail to compile`. The
+   main session records the lesson, or not, when it reviews the pull request.
+5. The main session records with `suzatary decision record|revise|withdraw --store memory`,
+   with `--at` set to the date the decision was made. The actor is `owner` or `assistant`,
+   never a name. `memory/` is published with the code, so a decision holds nothing personal.
+   Each new decision is a new published path, which the main session admits at publish.
+
 ## Commands
 
 1. Before your first commit in a clone, run `git config core.hooksPath scripts/hooks`.

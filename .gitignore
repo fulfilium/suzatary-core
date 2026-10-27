@@ -95,3 +95,7 @@ proptest-regressions/
 # ledgers under the data root's `cache/`, a replica of outside truths rebuilt by syncing
 # again. Box-local, never pushed; the data repository ignores it the same way.
 /cache/
+
+# The project's memory (memory/, a store of recorded decisions): its objects are committed, the
+# store's holds are not.
+/memory/*.lock

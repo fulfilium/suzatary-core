@@ -1,0 +1,1 @@
+Change(genesis='66602cd0dec37d58d03eec9518ca805a7ac38ea912d2b0c366a0b67b4b9f50b6', deps=(), event=Decided(decision='pipefail', at=datetime(2026, 9, 2, 12, 0, 0), actor='assistant', title='set -o pipefail does not cross bash -c: set it inside', body='`set -o pipefail` does not cross `bash -c`: set it inside.', rationale='Log lesson, 2026-09-02.', supersedes=()))

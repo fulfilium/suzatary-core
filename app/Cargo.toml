@@ -272,7 +272,7 @@ missing_docs = "allow"
 # caches made a `cargo test --workspace` tree of 9–16 GB, on a 45 GB box that
 # then ran one of those every triage pass — and the wrapper's
 # own 1 GB floor then silenced the triage rather than reporting a full disk
-# (CLAUDE.md Log, 2026-09-08 and 2026-09-09). Line tables keep the file and
+# (memory/, decision checkdisk). Line tables keep the file and
 # line in a panic's backtrace, which is what a failing test needs; the rest of
 # the debuginfo nobody on this box ever opened. It is a manifest setting and
 # not an environment variable because an environment variable is something

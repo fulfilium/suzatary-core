@@ -1,0 +1,1 @@
+Change(genesis='66602cd0dec37d58d03eec9518ca805a7ac38ea912d2b0c366a0b67b4b9f50b6', deps=(), event=Decided(decision='reprintgate', at=datetime(2026, 9, 8, 12, 0, 0), actor='assistant', title='Gate a port by reprinting the live file byte for byte', body='Gate a port by reprinting the live file (`state.json`, byte-identical).', rationale='Log lesson, 2026-09-08.', supersedes=()))

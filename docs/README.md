@@ -11,7 +11,9 @@ and the plans are how it got here.
 - [`../CLAUDE.md`](../CLAUDE.md) — **the constitution.** Every invariant and
   the mechanism that holds it: the code's rules, the FPL semantics, the
   limits, the safety model (*Irreversibles* and *Containment*), operations.
-  Where any other document disagrees, this one wins.
+  Where any other document disagrees, this one wins. Each rule's history is a
+  decision in `../memory/`: `suzatary decision list --store memory --grep
+  <words>` finds one, and `decision show <id> --store memory` prints it.
 - [`ARCHITECTURE.md`](ARCHITECTURE.md) — the crates and which way the arrows
   point, rules as types, the laws at the application layer, the replicas, and
   §10's design decisions as built.

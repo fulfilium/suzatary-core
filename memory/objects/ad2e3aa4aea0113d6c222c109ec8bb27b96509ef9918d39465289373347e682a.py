@@ -1,0 +1,1 @@
+Change(genesis='66602cd0dec37d58d03eec9518ca805a7ac38ea912d2b0c366a0b67b4b9f50b6', deps=(), event=Decided(decision='worktreecwd', at=datetime(2026, 9, 14, 12, 0, 0), actor='assistant', title="A worktree agent is cut from the shell's current directory", body="A worktree agent is cut from the shell's current directory.", rationale='Log lesson, 2026-09-14.', supersedes=()))

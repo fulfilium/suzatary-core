@@ -1075,7 +1075,7 @@
           # tests.yml, scripts/merge-gate.sh) passes them in.
           # Every command in this repo runs through this shell, so this is
           # where the commit-msg hook gets wired — not a README step and not
-          # a value some tool can clobber for a day (CLAUDE.md Log, 2026-09-04:
+          # a value some tool can clobber for a day (memory/, decision hookspath:
           # the worktree harness kept setting it absolute). Relative resolves
           # against the worktree root, so it is right in every worktree.
           shellHook = ''

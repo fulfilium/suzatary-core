@@ -1,0 +1,1 @@
+Change(genesis='66602cd0dec37d58d03eec9518ca805a7ac38ea912d2b0c366a0b67b4b9f50b6', deps=(), event=Decided(decision='untrustedrequired', at=datetime(2026, 8, 31, 20, 0, 0), actor='assistant', title="env_at's untrusted is required, never defaulted", body="`env_at`'s `untrusted` is REQUIRED, never defaulted.", rationale='Log lesson, 2026-08-31 (late).', supersedes=()))

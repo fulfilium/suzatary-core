@@ -1,0 +1,1 @@
+Change(genesis='66602cd0dec37d58d03eec9518ca805a7ac38ea912d2b0c366a0b67b4b9f50b6', deps=(), event=Decided(decision='testyourmemory', at=datetime(2026, 9, 1, 21, 0, 0), actor='assistant', title='A test of the instance you had in mind tests your memory', body='A test of the instance you had in mind tests your memory.', rationale='Log lesson, 2026-09-01 (latest).', supersedes=()))

@@ -1,0 +1,1 @@
+Change(genesis='66602cd0dec37d58d03eec9518ca805a7ac38ea912d2b0c366a0b67b4b9f50b6', deps=(), event=Decided(decision='ipv4only', at=datetime(2026, 9, 5, 12, 0, 0), actor='assistant', title='The app binds IPv4 only; a v6-first client falls back', body='The app binds v4 only; a v6-first client falls back.', rationale='Log lesson, 2026-09-05.', supersedes=()))

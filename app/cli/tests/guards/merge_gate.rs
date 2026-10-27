@@ -355,11 +355,7 @@ fn merge_gate_keeps_no_live_step() {
 /// `"/../../web/typst"`), a single name inside a `join` or a `Path::new` (a bare word is also
 /// data), or its segments joined one by one.
 fn names_path(source: &str, path: &str) -> bool {
-    let code: String = source
-        .lines()
-        .filter(|line| !line.trim_start().starts_with("//"))
-        .collect::<Vec<_>>()
-        .join("\n");
+    let code = code(source);
     let source = code.as_str();
     let joined = path
         .split('/')
@@ -372,6 +368,21 @@ fn names_path(source: &str, path: &str) -> bool {
         || source.contains(&format!("join(\"{path}\")"))
         || source.contains(&format!("new(\"{path}\")"))
         || source.contains(&joined)
+}
+
+/// Whether a Rust source's code climbs to `path` from a crate (`../path`, `../../path/…`): a
+/// read of this repository's own, whatever else the source names it as.
+fn climbs_to(source: &str, path: &str) -> bool {
+    code(source).contains(&format!("../{path}"))
+}
+
+/// A Rust source without its comment lines.
+fn code(source: &str) -> String {
+    source
+        .lines()
+        .filter(|line| !line.trim_start().starts_with("//"))
+        .collect::<Vec<_>>()
+        .join("\n")
 }
 
 /// The sources that name a skipped path only as a path of a scratch repository, of a checkout
@@ -392,6 +403,17 @@ const NAMED_AS_DATA: &[(&str, &str)] = &[
     ("app/core/tests/act_literal.rs", "docs"),
     ("app/core/tests/web_vectors.rs", "docs"),
     ("app/io/src/repos.rs", "docs"),
+    // `memory` is also the data tree's store of the secretary's memory and its route's segment.
+    ("app/cli/src/commands/bench.rs", "memory"),
+    ("app/cli/src/commands/fixture.rs", "memory"),
+    ("app/cli/src/commands/serve/table.rs", "memory"),
+    ("app/cli/src/wiring.rs", "memory"),
+    ("app/cli/tests/common/mod.rs", "memory"),
+    ("app/cli/tests/memory.rs", "memory"),
+    ("app/cli/tests/signatures.rs", "memory"),
+    ("app/cli/tests/stores.rs", "memory"),
+    ("app/cli/tests/writes.rs", "memory"),
+    ("app/io/src/objects.rs", "memory"),
 ];
 
 /// The paths only a declaring unit reads, as `--list` prints them.
@@ -452,9 +474,9 @@ fn declares(member: &str, path: &str) -> bool {
 }
 
 /// A cargo step that declares it never reads a path is kept across changes to it, so no Rust
-/// source it builds or runs may name that path; a path only a declaring unit reads may be named
-/// by the sources of a member whose unit declares it. The guards' own sources are read by the
-/// `guards` step, which reads the whole tree.
+/// source it builds or runs may name that path, and none may climb to it from a crate; a path
+/// only a declaring unit reads may be named by the sources of a member whose unit declares it.
+/// The guards' own sources are read by the `guards` step, which reads the whole tree.
 #[test]
 fn merge_gate_no_rust_source_names_a_path_its_cargo_steps_skip() {
     let skipped: BTreeSet<String> = steps()
@@ -488,12 +510,14 @@ fn merge_gate_no_rust_source_names_a_path_its_cargo_steps_skip() {
             .max_by_key(|(_, dir)| dir.len())
             .map(|(name, _)| name.as_str());
         for path in &skipped {
-            if NAMED_AS_DATA.contains(&(relative.as_ref(), path.as_str()))
-                || (cli_only.contains(path) && member.is_some_and(|m| declares(m, path)))
+            let climbs = climbs_to(&source, path);
+            if !climbs
+                && (NAMED_AS_DATA.contains(&(relative.as_ref(), path.as_str()))
+                    || (cli_only.contains(path) && member.is_some_and(|m| declares(m, path))))
             {
                 continue;
             }
-            if names_path(&source, path) {
+            if climbs || names_path(&source, path) {
                 named.push(format!("{} names {path}", file.display()));
             }
         }
@@ -912,7 +936,7 @@ fn merge_gate_keeps_nothing_for_a_dirty_checkout() {
 /// The public-tree step leaves out of its key the private history it never reads, read off
 /// `.gitattributes`: what it declares `export-ignore`, which `git archive` leaves out, but the
 /// changelog the public one is dated from and the attributes themselves, which `git archive`
-/// reads to decide; and docs/ and android/, which none of its builds' sources holds
+/// reads to decide; and docs/, memory/ and android/, which none of its builds' sources holds
 /// (`merge_gate_web_and_public_builds_read_no_skipped_path`). So a report alone runs it not, and
 /// a changelog does.
 #[test]
@@ -929,7 +953,7 @@ fn merge_gate_public_tree_skips_only_the_private_history() {
                 .to_owned()
         })
         .filter(|path| path != "CHANGELOG.md" && path != ".gitattributes")
-        .chain(["docs".to_owned(), "android".to_owned()])
+        .chain(["docs", "memory", "android"].map(str::to_owned))
         .collect();
     private.sort();
     let step = steps()
@@ -2266,8 +2290,8 @@ fn merge_gate_web_and_public_builds_read_no_skipped_path() {
                     let private = step
                         .skips()
                         .into_iter()
-                        .filter(|p| *p != "docs" && *p != "android");
-                    !["docs", "android"]
+                        .filter(|p| !["docs", "memory", "android"].contains(p));
+                    !["docs", "memory", "android"]
                         .iter()
                         .any(|p| rel.starts_with(&format!("{p}/")))
                         || private.into_iter().any(|p| rel.starts_with(p))
@@ -2381,7 +2405,7 @@ fn repo_paths(source: &str) -> Vec<String> {
         .skip(1)
         .step_by(2)
         .filter(|s| {
-            ["app/", "web/", "docs/", "android/", "scripts/"]
+            ["app/", "web/", "docs/", "memory/", "android/", "scripts/"]
                 .iter()
                 .any(|top| s.starts_with(top))
                 || ["tokens.typ", "CHANGELOG.md", "CLAUDE.md"].contains(s)

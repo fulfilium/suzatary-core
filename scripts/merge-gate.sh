@@ -473,21 +473,22 @@ fi
 
 
 # What the steps never read, so a change there runs none of them. The Rust reads no web source,
-# test or view, no Android and no docs/ (app/cli/tests/guards/merge_gate.rs holds every Rust
-# source but the guards' to that). The web's modules, unit tests and bundles read no Android,
-# no docs/ and none of the app's Rust beyond what the four flake builds they take read (the
-# same test holds those builds' sources to that): the core, the browser module, the manifests
-# and the files the unit tests read from app/core/tests and app/io/tests.
+# test or view, no Android, no docs/ and no memory/, the project's recorded decisions
+# (app/cli/tests/guards/merge_gate.rs holds every Rust source but the guards' to that). The web's
+# modules, unit tests and bundles read no Android, no docs/, no memory/ and none of the app's
+# Rust beyond what the four flake builds they take read (the same test holds those builds'
+# sources to that): the core, the browser module, the manifests and the files the unit tests
+# read from app/core/tests and app/io/tests.
 #
 # THE FILES ONLY A DECLARING UNIT READS, which most changes move: the changelog, CLAUDE.md and
 # the release file. Every Rust and web unit skips them unless crate_reads declares one for it;
 # the guards, the public tree, the changelog step and the module's evaluation read the whole
 # tree or their own list. merge_gate.rs takes a source's leave to name one from crate_reads.
 cli_only=CHANGELOG.md,CLAUDE.md,app/release.toml
-rust_base=web/src,web/test,web/e2e,web/typst,android,docs
+rust_base=web/src,web/test,web/e2e,web/typst,android,docs,memory
 rust=all-but:$rust_base,$cli_only
 web_app_skips=app/bench/src,app/cli/src,app/cli/tests,app/conformance,app/io/src,app/plugin/src,app/plugin/tests,app/plugin-fence/src,app/plugin-fence/wit,app/plugin-ics/src,app/plugin-ics/tests,app/wit
-web=all-but:android,docs,$cli_only,$web_app_skips
+web=all-but:android,docs,memory,$cli_only,$web_app_skips
 
 # THE UNITS (see the head of this file). Each member's tests read what cargo metadata says it
 # depends on, and the paths declared here for a member whose tests read another member's files:
@@ -501,7 +502,7 @@ rust_skips="${rust#all-but:}" web_skips="${web#all-but:}"
 declare -A unit_base=(
   [crates]="${rust_skips//,/ }"
   [files:web/test]="${web_skips//,/ }"
-  [files:web/e2e]="android docs ${cli_only//,/ } app/conformance app/plugin-fence/src app/plugin-fence/wit"
+  [files:web/e2e]="android docs memory ${cli_only//,/ } app/conformance app/plugin-fence/src app/plugin-fence/wit"
 )
 declare -A unit_fallback=([crates]="all-but:${rust_base//,/ }" [files:web/test]="${web//,/ }" [files:web/e2e]=all)
 # The list as merge_gate.rs reads it.
@@ -658,8 +659,8 @@ lane=nix
 # one core (`codegen-units = 1`), so it starts with the gate and ends inside it.
 private="$(sed -n 's#^/\(.*\) export-ignore$#\1#p' .gitattributes 2>/dev/null | sed 's#/\*\*$##' |
   grep -vxF -e CHANGELOG.md -e .gitattributes | paste -sd, -)"
-# Nor does it read docs/ or android/: its builds' sources hold neither (merge_gate.rs).
-public_reads="all-but:${private:+$private,}docs,android"
+# Nor does it read docs/, memory/ or android/: its builds' sources hold none of them (merge_gate.rs).
+public_reads="all-but:${private:+$private,}docs,memory,android"
 # The binary it built is exported to the steps after it in its lane, as SUZATARY_DEPLOY_BIN: this
 # gate's own, named by the store path its build answered, where `gate-roots/public-bin` is a link
 # every checkout's gate moves (the gate's lock is per checkout) and a failed build leaves pointing

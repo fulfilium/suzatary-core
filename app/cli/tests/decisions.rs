@@ -1,6 +1,7 @@
-//! `suzatary decision` against a scratch store: a decision recorded, superseded, withdrawn and
-//! viewed, and each refusal a writer meets (markup the door refuses, a link that would close a
-//! cycle, a restatement of a withdrawn decision), with the store reading the same afterwards.
+//! `suzatary decision` against a scratch store: a decision recorded, superseded, withdrawn,
+//! found by a word of its body and viewed, and each refusal a writer meets (markup the door
+//! refuses, a link that would close a cycle, a restatement of a withdrawn decision), with the
+//! store reading the same afterwards.
 
 use std::path::Path;
 use std::process::Output;
@@ -112,6 +113,14 @@ fn a_decision_is_recorded_superseded_withdrawn_and_viewed() {
     );
     assert!(listed.contains("superseded by userrepo"), "{listed}");
     assert!(listed.contains("in force"), "{listed}");
+    let bodies = ok(&store, &["list", "--grep", "STORE is"]);
+    assert!(
+        ["datasplit", "livebranch", "userrepo"]
+            .iter()
+            .all(|id| bodies.contains(id)),
+        "words only a body holds are found: {bodies}"
+    );
+    assert_eq!(ok(&store, &["list", "--grep", "store nowhere"]), "");
 
     the_writers_refusals(&store);
 
