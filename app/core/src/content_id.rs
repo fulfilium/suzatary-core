@@ -5,7 +5,7 @@ use std::marker::PhantomData;
 
 use sha2::{Digest, Sha256};
 
-use crate::literal::Literal;
+use prodrome_core::literal::codec::Literal;
 
 /// The name of a `T` by its content.
 #[derive(Debug)]

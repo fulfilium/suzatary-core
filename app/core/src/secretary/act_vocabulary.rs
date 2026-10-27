@@ -1,13 +1,13 @@
 //! The vocabulary a proposal's act is stored in: every constructor an act prints, from the
 //! proposal down to its leaves' records, each declared beside the type it prints.
 
-use crate::literal::Signature;
 use crate::secretary::{acts, attached, attachment_source, changes, store};
 use crate::todo::price;
+use prodrome_core::literal::codec::Constructor;
 
 /// Every constructor of a stored act, with its fields in printed order. None is a term's or an
 /// inbox event's, so one walker reads an `Asked` whole.
-pub const SIGNATURES: &[Signature] = &[
+pub const SIGNATURES: &[Constructor] = &[
     store::EMAIL,
     store::FORWARD,
     store::FORWARDED,

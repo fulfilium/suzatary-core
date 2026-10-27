@@ -665,15 +665,18 @@ pub type EventStore = prodrome_core::store::EventStore<TodoEvent>;
 pub type Entry = prodrome_core::view::Entry<TodoEvent>;
 
 /// `SubTodo(body, done)`, a checklist line in a stored act.
-pub const SUBTODO: crate::literal::Signature = ("SubTodo", &["body", "done"]);
+pub const SUBTODO: prodrome_core::literal::codec::Constructor = ("SubTodo", &["body", "done"]);
 
-impl crate::literal::Literal for SubTodo {
+impl prodrome_core::literal::codec::Literal for SubTodo {
     fn to_value(&self) -> Value {
-        crate::literal::record(SUBTODO, vec![self.body.to_value(), self.done.to_value()])
+        prodrome_core::literal::codec::record(
+            SUBTODO,
+            vec![self.body.to_value(), self.done.to_value()],
+        )
     }
 
     fn from_value(value: &Value) -> Result<Self, ProdromeError> {
-        let fields = crate::literal::Fields::of(value, SUBTODO)?;
+        let fields = prodrome_core::literal::codec::Fields::of(value, SUBTODO)?;
         Ok(SubTodo {
             body: fields.get("body")?,
             done: fields.get("done")?,
@@ -682,7 +685,7 @@ impl crate::literal::Literal for SubTodo {
 }
 
 /// `Source(sender, subject, date, hash, thread_id, message_id)`, the message a stored act names.
-pub const SOURCE: crate::literal::Signature = (
+pub const SOURCE: prodrome_core::literal::codec::Constructor = (
     "Source",
     &[
         "sender",
@@ -694,7 +697,7 @@ pub const SOURCE: crate::literal::Signature = (
     ],
 );
 
-impl crate::literal::Literal for Source {
+impl prodrome_core::literal::codec::Literal for Source {
     fn to_value(&self) -> Value {
         Source::to_value(self)
     }

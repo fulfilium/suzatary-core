@@ -143,13 +143,13 @@ impl Proposal {
 }
 
 /// `Remember(text, kind)`.
-pub const REMEMBER: crate::literal::Signature = ("Remember", &["text", "kind"]);
+pub const REMEMBER: prodrome_core::literal::codec::Constructor = ("Remember", &["text", "kind"]);
 
 /// An act is its arm's own constructor: `Email`, `Forward`, `Changes`, `Remember`, `Decide`, or
 /// one of the acts the box performs.
-impl crate::literal::Literal for Proposal {
+impl prodrome_core::literal::codec::Literal for Proposal {
     fn to_value(&self) -> prodrome_core::literal::Value {
-        use crate::literal::record;
+        use prodrome_core::literal::codec::record;
         match self {
             Proposal::Email(draft) => draft.to_value(),
             Proposal::Forward(forward) => forward.to_value(),
@@ -165,7 +165,7 @@ impl crate::literal::Literal for Proposal {
     fn from_value(
         value: &prodrome_core::literal::Value,
     ) -> Result<Self, prodrome_core::literal::ProdromeError> {
-        use crate::literal::{Fields, arm};
+        use prodrome_core::literal::codec::{Fields, arm};
         Ok(match arm(value)? {
             "Email" => Proposal::Email(Draft::from_value(value)?),
             "Forward" => Proposal::Forward(super::Forward::from_value(value)?),

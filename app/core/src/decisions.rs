@@ -23,7 +23,7 @@ mod store;
 mod view;
 
 pub use draft::{DECIDE, Draft};
-pub use event::{DecisionEvent, DecisionVocabulary, Said};
+pub use event::{DecisionEvent, DecisionVocabulary, Said, decided, revised, withdrawn};
 pub use id::DecisionId;
 pub use ledger::{Decision, Held, Ledger, Withdrawal};
 pub use life::Life;

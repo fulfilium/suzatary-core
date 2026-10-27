@@ -945,7 +945,7 @@ fn performed_body(route: &str) -> (serde_json::Value, Secret) {
         // A topic whose name is the marker, over a prodrome the box does not hold: refused by name,
         // and still a request performed.
         "stores/{store}/objects" => {
-            let added = suzatary_core::secretary::topics::membership_event::MembershipEvent::added(
+            let added = suzatary_core::secretary::topics::membership_event::added(
                 "round:default/0".parse().expect("a target"),
                 suzatary_core::secretary::topics::topic::Topic::new(MARKER)
                     .expect("the marker is a topic"),

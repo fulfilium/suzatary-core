@@ -86,7 +86,7 @@ impl std::fmt::Display for KeyName {
     }
 }
 
-crate::literal::text_literal!(
+prodrome_core::text_literal!(
     KeyName => |name| name.as_str().to_owned(),
 );
 

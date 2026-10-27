@@ -5,14 +5,16 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use prodrome_core::event::Actor;
+use prodrome_core::fold::Product as _;
+use prodrome_core::fold::sole::{One, Only};
 use prodrome_core::literal::Datetime;
 use prodrome_core::policy::Everything;
 use prodrome_core::registers::{Node, Stamp, fold};
 
-use crate::secretary::topics::alias_event::{Alias, AliasEvent};
+use crate::secretary::topics::alias_event::{self, Alias, AliasEvent, AliasType};
 use crate::secretary::topics::dispute::Dispute;
 use crate::secretary::topics::membership::Presence;
-use crate::secretary::topics::membership_event::MembershipEvent;
+use crate::secretary::topics::membership_event::{self, MembershipEvent, PresenceRegister};
 use crate::secretary::topics::target::Target;
 use crate::secretary::topics::topic::Topic;
 
@@ -35,9 +37,9 @@ impl Reading {
     pub fn of(memberships: &[Node<MembershipEvent>], aliases: &[Node<AliasEvent>]) -> Self {
         let mut on: BTreeMap<Target, BTreeSet<Topic>> = BTreeMap::new();
         for (membership, stream) in fold(memberships).entities() {
-            let registers: crate::sole::One<'_, MembershipEvent> =
+            let registers: One<'_, PresenceRegister> =
                 prodrome_core::fold::read(stream, None, &Everything);
-            if registers.presence() == Presence::On {
+            if Presence::of(&registers) == Presence::On {
                 on.entry(membership.target.clone())
                     .or_default()
                     .insert(membership.topic.clone());
@@ -46,12 +48,12 @@ impl Reading {
         let folded = fold(aliases);
         let mut written: BTreeMap<&Topic, Vec<&Stamp<AliasEvent>>> = BTreeMap::new();
         for (topic, stream) in folded.entities() {
-            let registers: crate::sole::One<'_, AliasEvent> =
+            let registers: One<'_, AliasType> =
                 prodrome_core::fold::read(stream, None, &Everything);
             written
                 .entry(topic)
                 .or_default()
-                .extend(registers.reading());
+                .extend(registers.reading(Only));
         }
         let aliases: BTreeMap<Topic, Candidates> = written
             .into_iter()
@@ -59,8 +61,8 @@ impl Reading {
                 stamps.sort_by(|one, two| one.name.cmp(&two.name));
                 let mut values: Vec<Alias> = Vec::with_capacity(stamps.len());
                 for stamp in stamps {
-                    if !values.contains(stamp.event.said()) {
-                        values.push(stamp.event.said().clone());
+                    if !values.contains(stamp.event.body()) {
+                        values.push(stamp.event.body().clone());
                     }
                 }
                 let mut values = values.into_iter();
@@ -241,7 +243,7 @@ impl Reading {
     ) -> Option<MembershipEvent> {
         let spelled = self.spelling(topic);
         (!self.topics(target).contains(&spelled))
-            .then(|| MembershipEvent::added(target.clone(), spelled, at, actor.clone()))
+            .then(|| membership_event::added(target.clone(), spelled, at, actor.clone()))
     }
 
     /// Takes off every name of the topic this reading sees on `target`, and no add it has not
@@ -260,7 +262,7 @@ impl Reading {
             .into_iter()
             .flatten()
             .filter(|name| self.spelling(name) == spelled)
-            .map(|name| MembershipEvent::removed(target.clone(), name.clone(), at, actor.clone()))
+            .map(|name| membership_event::removed(target.clone(), name.clone(), at, actor.clone()))
             .collect()
     }
 
@@ -270,7 +272,8 @@ impl Reading {
     #[must_use]
     pub fn rename(&self, from: &Topic, to: &Topic, at: Datetime, actor: &Actor) -> Vec<AliasEvent> {
         let itself = (!self.settled(to, &Alias::Itself))
-            .then(|| AliasEvent::unaliased(to.clone(), at, actor.clone()));
+            .then(|| alias_event::unaliased(to.clone(), at, actor.clone()).ok())
+            .flatten();
         let pointed = Alias::As(to.clone());
         let mut names = self.names(from);
         names.extend(self.names(to));
@@ -278,7 +281,7 @@ impl Reading {
             .into_iter()
             .filter(|name| !self.settled(name, &pointed))
             // `aliased` refuses `to` itself, the one name that is no alias afterwards.
-            .filter_map(|name| AliasEvent::aliased(name, to.clone(), at, actor.clone()).ok());
+            .filter_map(|name| alias_event::aliased(name, to.clone(), at, actor.clone()).ok());
         itself.into_iter().chain(aliased).collect()
     }
 

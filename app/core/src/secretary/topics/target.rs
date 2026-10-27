@@ -74,7 +74,7 @@ impl From<Target> for String {
     }
 }
 
-crate::literal::text_literal!(
+prodrome_core::text_literal!(
     Target => ToString::to_string,
 );
 

@@ -567,7 +567,7 @@ fn decisions(root: &Path) {
         .expect("a statement")
     };
     let decided = |name: &str, minute, supersedes: &[&str]| {
-        DecisionEvent::decided(
+        suzatary_core::decisions::decided(
             id(name),
             at(15, minute),
             owner(),
@@ -582,7 +582,7 @@ fn decisions(root: &Path) {
         .expect("appends");
     store
         .append(
-            DecisionEvent::withdrawn(id("first"), at(15, 2), owner(), "Replaced.")
+            suzatary_core::decisions::withdrawn(id("first"), at(15, 2), owner(), "Replaced.")
                 .expect("a withdrawal"),
         )
         .expect("appends");
@@ -591,8 +591,8 @@ fn decisions(root: &Path) {
 /// The topics and their aliases, each begun with a nonce of zeros: a round put on a topic and
 /// taken off another, and the first topic renamed.
 fn topics(root: &Path) {
-    use suzatary_core::secretary::topics::alias_event::AliasEvent;
-    use suzatary_core::secretary::topics::membership_event::MembershipEvent;
+    use suzatary_core::secretary::topics::alias_event;
+    use suzatary_core::secretary::topics::membership_event;
     use suzatary_core::secretary::topics::topic::Topic;
     let topics = suzatary_io::topics::Topics::open(root.join(TOPICS), root.join(TOPIC_ALIASES));
     rooted(&topics.memberships, "topics");
@@ -600,16 +600,16 @@ fn topics(root: &Path) {
     let round = || "round:default/0".parse().expect("a target");
     let topic = |name: &str| Topic::new(name).expect("a topic");
     for event in [
-        MembershipEvent::added(round(), topic("travel"), at(16, 0), owner()),
-        MembershipEvent::added(round(), topic("taxes"), at(16, 1), owner()),
-        MembershipEvent::removed(round(), topic("taxes"), at(16, 2), owner()),
+        membership_event::added(round(), topic("travel"), at(16, 0), owner()),
+        membership_event::added(round(), topic("taxes"), at(16, 1), owner()),
+        membership_event::removed(round(), topic("taxes"), at(16, 2), owner()),
     ] {
         topics.memberships.append(event).expect("appends");
     }
     topics
         .aliases
         .append(
-            AliasEvent::aliased(topic("travel"), topic("trips"), at(16, 3), owner())
+            alias_event::aliased(topic("travel"), topic("trips"), at(16, 3), owner())
                 .expect("an alias"),
         )
         .expect("appends");

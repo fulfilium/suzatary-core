@@ -73,7 +73,7 @@ pub struct Place {
 
 impl std::fmt::Display for Place {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        use crate::literal::Literal as _;
+        use prodrome_core::literal::codec::Literal as _;
         write!(
             f,
             "{} at {}, slot {}, key {}",

@@ -8,9 +8,9 @@ use prodrome_core::literal::{ProdromeError, Value};
 use serde::{Deserialize, Serialize};
 
 use crate::attachment::AttachmentId;
-use crate::literal::{Fields, Literal, Signature, record};
 use crate::mail::send::Attachment;
 use crate::secretary::attachment_source::AttachmentSource;
+use prodrome_core::literal::codec::{Constructor, Fields, Literal, record};
 
 /// The most one message may carry in attachments, in bytes: under the 25 MB
 /// the common transports accept once base64 has grown it by a third.
@@ -242,7 +242,7 @@ fn is_media(media: &str) -> bool {
 }
 
 /// `Attached(source, name, media, size, sha256)`.
-pub const ATTACHED: Signature = ("Attached", &["source", "name", "media", "size", "sha256"]);
+pub const ATTACHED: Constructor = ("Attached", &["source", "name", "media", "size", "sha256"]);
 
 impl Literal for Attached {
     fn to_value(&self) -> Value {

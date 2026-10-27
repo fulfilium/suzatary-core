@@ -6,9 +6,9 @@ use serde::{Deserialize, Serialize};
 
 use super::Draft;
 use crate::held_value::Original;
-use crate::literal::{Fields, Literal, Signature, record, text_literal};
 use crate::mail::StoredMessage;
 use crate::mail::send::Attachment;
+use prodrome_core::literal::codec::{Constructor, Fields, Literal, record};
 
 /// A forward as proposed: the message around the original, and the original by its record.
 ///
@@ -41,6 +41,9 @@ pub enum Style {
 }
 
 impl Style {
+    /// Every style.
+    pub const ALL: [Style; 2] = [Style::Inline, Style::Attached];
+
     /// The word its stored form and the verb's argument use.
     #[must_use]
     pub fn as_str(self) -> &'static str {
@@ -51,7 +54,7 @@ impl Style {
     }
 }
 
-text_literal!(Style => |style| style.as_str().to_owned());
+prodrome_core::word_literal!(Style: Style::ALL => |style| style.as_str());
 
 /// The original of a forward, as its card shows it.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -129,12 +132,12 @@ impl Forward {
 }
 
 /// `Forward(account, to, cc, subject, note, message)`.
-pub const FORWARD: Signature = (
+pub const FORWARD: Constructor = (
     "Forward",
     &["account", "to", "cc", "subject", "note", "message"],
 );
 /// `Forwarded(file, style, from, subject, date)`.
-pub const FORWARDED: Signature = ("Forwarded", &["file", "style", "from", "subject", "date"]);
+pub const FORWARDED: Constructor = ("Forwarded", &["file", "style", "from", "subject", "date"]);
 
 impl Literal for Forward {
     fn to_value(&self) -> Value {
@@ -187,5 +190,16 @@ impl Literal for Forwarded {
             subject: fields.get("subject")?,
             date: fields.get("date")?,
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// `rename_all` spells the generated `Style` and the verb's JSON schema, so serde's words are checked against `ALL`'s.
+    #[test]
+    fn a_styles_serde_word_is_its_literals() {
+        crate::words::assert_serde_words(&Style::ALL, |style| style.as_str());
     }
 }

@@ -8,13 +8,13 @@
 use prodrome_core::literal::{ProdromeError, Value};
 use serde::{Deserialize, Serialize};
 
-use crate::literal::{Fields, Literal, Signature, arm, no_arm, record};
 use crate::mail::address::EmailAddress;
 use crate::reference::{ProposalRef, Reference, TodoRef};
 use crate::refusal::Refusal;
 use crate::secretary::responded::{Performed, Tried};
 use crate::secretary::stamp::Stamp;
 use crate::secretary::store::{ConversationId, Entry};
+use prodrome_core::literal::codec::{Constructor, Fields, Literal, arm, no_arm, record};
 
 /// One act, from a closed set.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -432,41 +432,41 @@ pub fn heard_from_objects(
 }
 
 /// `Auth(account)`.
-pub const AUTH: Signature = ("Auth", &["account"]);
+pub const AUTH: Constructor = ("Auth", &["account"]);
 /// `AuthSend(account)`.
-pub const AUTH_SEND: Signature = ("AuthSend", &["account"]);
+pub const AUTH_SEND: Constructor = ("AuthSend", &["account"]);
 /// `Secret(name, why)`.
-pub const SECRET: Signature = ("Secret", &["name", "why"]);
+pub const SECRET: Constructor = ("Secret", &["name", "why"]);
 /// `Web(request, rule)`.
-pub const WEB: Signature = ("Web", &["request", "rule"]);
+pub const WEB: Constructor = ("Web", &["request", "rule"]);
 /// `Patch(repo, visibility, base, patch, message)`.
-pub const PATCH: Signature = ("Patch", &["repo", "visibility", "base", "patch", "message"]);
+pub const PATCH: Constructor = ("Patch", &["repo", "visibility", "base", "patch", "message"]);
 /// `DriveRead(path, size)`.
-pub const DRIVE_READ: Signature = ("DriveRead", &["path", "size"]);
+pub const DRIVE_READ: Constructor = ("DriveRead", &["path", "size"]);
 /// `CodingSession(task)`.
-pub const CODING_SESSION: Signature = ("CodingSession", &["task"]);
+pub const CODING_SESSION: Constructor = ("CodingSession", &["task"]);
 /// `Device(actor, key)`.
-pub const DEVICE: Signature = ("Device", &["actor", "key"]);
+pub const DEVICE: Constructor = ("Device", &["actor", "key"]);
 /// `SignIn(since)`.
-pub const SIGN_IN: Signature = ("SignIn", &["since"]);
+pub const SIGN_IN: Constructor = ("SignIn", &["since"]);
 /// `SignInCode(url)`.
-pub const SIGN_IN_CODE: Signature = ("SignInCode", &["url"]);
+pub const SIGN_IN_CODE: Constructor = ("SignInCode", &["url"]);
 /// `UnlockStore(after)`.
-pub const UNLOCK_STORE: Signature = ("UnlockStore", &["after"]);
+pub const UNLOCK_STORE: Constructor = ("UnlockStore", &["after"]);
 /// `Connect(connection)`.
-pub const CONNECT: Signature = ("Connect", &["connection"]);
+pub const CONNECT: Constructor = ("Connect", &["connection"]);
 /// `Disconnect(connection)`.
-pub const DISCONNECT: Signature = ("Disconnect", &["connection"]);
+pub const DISCONNECT: Constructor = ("Disconnect", &["connection"]);
 /// `Grant(plugin, origin)`.
-pub const GRANT: Signature = ("Grant", &["plugin", "origin"]);
+pub const GRANT: Constructor = ("Grant", &["plugin", "origin"]);
 /// `Erase(fact, keys)`.
-pub const ERASE: Signature = ("Erase", &["fact", "keys"]);
+pub const ERASE: Constructor = ("Erase", &["fact", "keys"]);
 /// `GoogleClient(redirect)`.
-pub const GOOGLE_CLIENT: Signature = ("GoogleClient", &["redirect"]);
+pub const GOOGLE_CLIENT: Constructor = ("GoogleClient", &["redirect"]);
 /// `GoogleSignIn(account, scopes)`.
-pub const GOOGLE_SIGN_IN: Signature = ("GoogleSignIn", &["account", "scopes"]);
+pub const GOOGLE_SIGN_IN: Constructor = ("GoogleSignIn", &["account", "scopes"]);
 /// `CalendarEvent(account, title, when, place)`.
-pub const CALENDAR_EVENT: Signature = ("CalendarEvent", &["account", "title", "when", "place"]);
+pub const CALENDAR_EVENT: Constructor = ("CalendarEvent", &["account", "title", "when", "place"]);
 
 impl Literal for Act {
     fn to_value(&self) -> Value {

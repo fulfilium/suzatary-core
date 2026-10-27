@@ -190,15 +190,15 @@ pub struct StoredPart {
 }
 
 /// `StoredMessage(id, size, sha256, held, parts)`.
-pub const STORED_MESSAGE: crate::literal::Signature =
+pub const STORED_MESSAGE: prodrome_core::literal::codec::Constructor =
     ("StoredMessage", &["id", "size", "sha256", "held", "parts"]);
 /// `StoredPart(name, media, size, sha256)`.
-pub const STORED_PART: crate::literal::Signature =
+pub const STORED_PART: prodrome_core::literal::codec::Constructor =
     ("StoredPart", &["name", "media", "size", "sha256"]);
 
-impl crate::literal::Literal for StoredMessage {
+impl prodrome_core::literal::codec::Literal for StoredMessage {
     fn to_value(&self) -> prodrome_core::literal::Value {
-        crate::literal::record(
+        prodrome_core::literal::codec::record(
             STORED_MESSAGE,
             vec![
                 self.id.to_value(),
@@ -213,7 +213,7 @@ impl crate::literal::Literal for StoredMessage {
     fn from_value(
         value: &prodrome_core::literal::Value,
     ) -> Result<Self, prodrome_core::literal::ProdromeError> {
-        let fields = crate::literal::Fields::of(value, STORED_MESSAGE)?;
+        let fields = prodrome_core::literal::codec::Fields::of(value, STORED_MESSAGE)?;
         Ok(StoredMessage {
             id: fields.get("id")?,
             size: fields.get("size")?,
@@ -224,9 +224,9 @@ impl crate::literal::Literal for StoredMessage {
     }
 }
 
-impl crate::literal::Literal for StoredPart {
+impl prodrome_core::literal::codec::Literal for StoredPart {
     fn to_value(&self) -> prodrome_core::literal::Value {
-        crate::literal::record(
+        prodrome_core::literal::codec::record(
             STORED_PART,
             vec![
                 self.name.to_value(),
@@ -240,7 +240,7 @@ impl crate::literal::Literal for StoredPart {
     fn from_value(
         value: &prodrome_core::literal::Value,
     ) -> Result<Self, prodrome_core::literal::ProdromeError> {
-        let fields = crate::literal::Fields::of(value, STORED_PART)?;
+        let fields = prodrome_core::literal::codec::Fields::of(value, STORED_PART)?;
         Ok(StoredPart {
             name: fields.get("name")?,
             media: fields.get("media")?,

@@ -20,7 +20,7 @@ use crate::secretary::inbox_event::InboxEvent;
 use crate::secretary::memory::{
     Fact, FactId, Forgotten, Kind, MAX_LIVE, Memory, Origin, Remembered,
 };
-use crate::secretary::memory_event::MemoryEvent;
+use crate::secretary::memory_event::{self, MemoryEvent};
 use crate::secretary::salted_text::{Text, TextName};
 use crate::secretary::store::Proposal;
 use crate::secretary::two_phase::TwoPhase;
@@ -179,11 +179,9 @@ impl Held<'_> {
         let id = remembering(&history, &memories.with_words(&history)?, fact)?;
         let text = Text::new(fact.clone(), self.salt()?);
         let name = text.name();
+        let event = remembered(id, at, name.clone(), kind, said)?;
         memories.texts.set(&name, &text)?;
-        if let Err(refused) = memories
-            .history
-            .append(remembered(id, at, name.clone(), kind, said))
-        {
+        if let Err(refused) = memories.history.append(event) {
             // Its words never stood, so they are not kept.
             let _ = memories.texts.remove(&name);
             return Err(refused.into());
@@ -217,7 +215,7 @@ impl Held<'_> {
         let id = remembering(&history, &memories.with_words(&history)?, &fact)?;
         memories
             .history
-            .append(remembered(id, at, text.clone(), kind, said))?;
+            .append(remembered(id, at, text.clone(), kind, said)?)?;
         Ok(Remembered {
             id,
             at,
@@ -267,7 +265,7 @@ impl Held<'_> {
     pub fn forget(&self, id: FactId, at: Datetime, by: &Actor) -> Result<Forgotten, Refusal> {
         let memories = &self.memories;
         let version = forgetting(&memories.history()?, id)?;
-        let event = MemoryEvent::forgotten(id, at, by.clone(), version)
+        let event = memory_event::forgotten(id, at, by.clone(), version)
             .map_err(|refused| Refusal::internal(refused.to_string()))?;
         memories.history.append(event)?;
         // The forgetting stands whatever its erasures do; the next forgetting owes them again.
@@ -448,8 +446,17 @@ pub(crate) fn whole<E: prodrome_core::schema::Schema>(
 }
 
 /// The event remembering fact `id`, whose words are kept under `text`.
-fn remembered(id: FactId, at: Datetime, text: TextName, kind: Kind, said: &Origin) -> MemoryEvent {
-    MemoryEvent::remembered(
+///
+/// # Errors
+/// [`Refusal::internal`] for a refusal the schema never makes of a remembering.
+fn remembered(
+    id: FactId,
+    at: Datetime,
+    text: TextName,
+    kind: Kind,
+    said: &Origin,
+) -> Result<MemoryEvent, Refusal> {
+    memory_event::remembered(
         id,
         at,
         crate::secretary::writes_as(),
@@ -457,6 +464,7 @@ fn remembered(id: FactId, at: Datetime, text: TextName, kind: Kind, said: &Origi
         kind,
         said.clone(),
     )
+    .map_err(|refused| Refusal::internal(refused.to_string()))
 }
 
 /// Decide a remember: the new fact's number, one more than every id and version before it.
@@ -747,7 +755,7 @@ mod tests {
             .remember(&fact("A fact to forget"), Kind::Owner, &said(), at(0))
             .expect("remembers");
         let ada = Actor::new("ada").expect("an actor");
-        let event = MemoryEvent::forgotten(gone.id, at(1), ada, 2).expect("an event");
+        let event = memory_event::forgotten(gone.id, at(1), ada, 2).expect("an event");
         history
             .inner
             .append(event)

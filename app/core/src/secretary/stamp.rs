@@ -44,7 +44,7 @@ impl From<String> for Stamp {
     }
 }
 
-crate::literal::text_literal!(
+prodrome_core::text_literal!(
     Stamp => |stamp| String::from(stamp.clone()),
 );
 

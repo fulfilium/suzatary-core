@@ -185,8 +185,13 @@ make it smaller by removing a capability that someone uses.
   schema `E`, `Log<E>` for lines, and `Doc<K, V>` for values. A new store is one row of the
   `stores!` list (`app/core/src/store/kind.rs`), its schema and a field of `Database`, not a
   new trait. The row gives its name, tier, files and hold to every layer.
-- Rust: `sole::One` is the register product of every schema with one register. A schema
-  implements `Sole` to say how the register reads and climbs.
+- Rust: the Prodrome's `schema::headed::Event<B>` is the event of every schema whose events
+  print as `Constructor(<key>, at, actor, <body>)`. A schema gives only its body, which
+  implements `Body` and checks a key and a body together in `Body::admits`. `Event::new` is
+  the only constructor, so a schema's smart constructors are functions of its module that call
+  it. The Prodrome's `fold::sole::One` is the register product of every schema with one
+  register. Its parameter is the register's type, which implements `Sole` (and says how an
+  append climbs, where it must), or the Prodrome's `Whole` where the value is the whole event.
 - Rust: `laws::partial_order<V: Order>` (`app/core/tests/laws.rs`) states the partial-order
   laws once. Each schema's tests call it.
 - TypeScript: `lo.combine` is a monoid whose identity is `val([])`. `lo.map`, `lo.bind` and

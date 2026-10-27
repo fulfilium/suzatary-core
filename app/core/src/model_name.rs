@@ -35,7 +35,7 @@ impl ModelName {
     }
 }
 
-crate::literal::text_literal!(
+prodrome_core::text_literal!(
     ModelName => |name| name.as_str().to_owned(),
 );
 

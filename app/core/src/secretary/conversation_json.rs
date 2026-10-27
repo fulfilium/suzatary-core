@@ -7,7 +7,7 @@ use prodrome_wasm_exports::wire::json_literal;
 use serde_json::Value;
 
 use crate::secretary::line_event::{LineEvent, LineVocabulary};
-use crate::sole::Only;
+use prodrome_core::fold::sole::Only;
 
 impl Json for LineEvent {
     fn key_field(_: &LineVocabulary) -> &'static str {

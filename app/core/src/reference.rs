@@ -442,7 +442,7 @@ fn target(text: &str, scheme: &'static str) -> Result<Reference, NotAReference> 
     })
 }
 
-crate::literal::text_literal!(
+prodrome_core::text_literal!(
     Reference => |reference| reference.to_string(),
     TodoRef => |todo| todo.to_string(),
     ProposalRef => |proposal| proposal.to_string(),

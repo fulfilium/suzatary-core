@@ -19,6 +19,9 @@ pub enum Kind {
 }
 
 impl Kind {
+    /// Every kind.
+    pub const ALL: [Kind; 3] = [Kind::Default, Kind::Topic, Kind::Review];
+
     /// The name a stored line prints.
     #[must_use]
     pub fn as_str(self) -> &'static str {
@@ -31,6 +34,15 @@ impl Kind {
 }
 
 // Its literal is its text, as a stored line prints it.
-crate::literal::text_literal!(
-    Kind => |kind| kind.as_str().to_owned(),
-);
+prodrome_core::word_literal!(Kind: Kind::ALL => |kind| kind.as_str());
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// `rename_all` spells the generated `ConversationKind`, so serde's words are checked against `ALL`'s.
+    #[test]
+    fn a_kinds_serde_word_is_its_literals() {
+        crate::words::assert_serde_words(&Kind::ALL, |kind| kind.as_str());
+    }
+}

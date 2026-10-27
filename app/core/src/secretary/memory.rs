@@ -19,9 +19,9 @@ use serde::{Deserialize, Serialize};
 use prodrome_core::literal::{ProdromeError, Value};
 
 use crate::capability::Datetime;
-use crate::literal::{Fields, Literal, Signature, record};
 use crate::refusal::{Refusal, shown};
 use crate::secretary::store::ConversationId;
+use prodrome_core::literal::codec::{Constructor, Fields, Literal, record};
 
 /// The longest fact, in characters: a sentence, never a document.
 pub const MAX_FACT_CHARS: usize = 280;
@@ -217,9 +217,9 @@ pub enum Origin {
 }
 
 /// `Turn(conversation, turn)`: the owner's own words, the round's opening turn.
-pub const TURN: Signature = ("Turn", &["conversation", "turn"]);
+pub const TURN: Constructor = ("Turn", &["conversation", "turn"]);
 /// `Tapped(conversation, proposal)`: the owner's tap on a remember card.
-pub const TAPPED: Signature = ("Tapped", &["conversation", "proposal"]);
+pub const TAPPED: Constructor = ("Tapped", &["conversation", "proposal"]);
 
 /// An origin is its arm's own constructor.
 impl Literal for Origin {
@@ -247,7 +247,7 @@ impl Literal for Origin {
                 conversation,
                 proposal: fields.get("proposal")?,
             },
-            other => return Err(crate::literal::no_arm("an origin", other)),
+            other => return Err(prodrome_core::literal::codec::no_arm("an origin", other)),
         })
     }
 }
@@ -462,9 +462,7 @@ pub fn kind_of(word: &str) -> Result<Kind, Refusal> {
 }
 
 // The literal of each is its text, as an inbox act stores it.
-crate::literal::text_literal!(
-    Kind => |kind| kind.as_str().to_owned(),
-);
+prodrome_core::word_literal!(Kind: Kind::ALL => |kind| kind.as_str());
 
 /// A fact's literal is its number.
 impl Literal for FactId {
@@ -480,6 +478,12 @@ impl Literal for FactId {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// `rename_all` spells the generated `FactKind`, so serde's words are checked against `ALL`'s.
+    #[test]
+    fn a_kinds_serde_word_is_its_literals() {
+        crate::words::assert_serde_words(&Kind::ALL, |kind| kind.as_str());
+    }
 
     #[test]
     fn a_fact_is_one_short_line_with_no_link() {

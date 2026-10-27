@@ -42,7 +42,7 @@ impl Decisions<'_> {
         typeset: &dyn Typeset,
     ) -> Result<Hash, Refusal> {
         let _hold = self.store.locked()?;
-        let event = DecisionEvent::decided(
+        let event = super::decided(
             draft.id().clone(),
             at,
             actor.clone(),
@@ -79,7 +79,7 @@ impl Decisions<'_> {
         let ledger = self.ledger()?;
         standing(&ledger, draft.id())?;
         linkable(&ledger, draft.id(), draft.supersedes())?;
-        let event = DecisionEvent::revised(
+        let event = super::revised(
             draft.id().clone(),
             at,
             actor.clone(),
@@ -104,7 +104,7 @@ impl Decisions<'_> {
     ) -> Result<Hash, Refusal> {
         let _hold = self.store.locked()?;
         standing(&self.ledger()?, id)?;
-        let event = DecisionEvent::withdrawn(id.clone(), at, actor.clone(), reason.trim())
+        let event = super::withdrawn(id.clone(), at, actor.clone(), reason.trim())
             .map_err(|refused| Refusal::bad_request(refused.to_string()))?;
         Ok(self.store.append(event)?)
     }

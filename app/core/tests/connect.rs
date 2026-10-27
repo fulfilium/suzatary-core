@@ -3,13 +3,13 @@
 //! the reading is a function of the tables as sets, every secret a step asks for is a name the
 //! deployment may set, and meeting a step never moves a standing back.
 
+use prodrome_core::literal::codec::Literal as _;
 use proptest::prelude::*;
 use suzatary_core::capability::SecretState;
 use suzatary_core::connect::{
     CATALOG, Checked, Connection, Declared, PLAIN, Params, Refused, Seen, StepShape, Table,
     TemplateId,
 };
-use suzatary_core::literal::Literal as _;
 use suzatary_core::mail::account::Authority;
 use suzatary_core::mail::address::EmailAddress;
 use suzatary_core::mail::health::{Health, Outcome};

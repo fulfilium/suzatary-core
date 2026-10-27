@@ -121,7 +121,7 @@ impl<T: Words> Text<T> {
 }
 
 // The literal of each is its text, as an inbox act stores it.
-crate::literal::text_literal!(
+prodrome_core::text_literal!(
     TextName => |name| String::from(name.clone()),
 );
 

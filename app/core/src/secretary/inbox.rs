@@ -24,7 +24,6 @@ use prodrome_core::term::{Term, TermF};
 
 use crate::chain_set::ChainSet;
 use crate::content_id::ContentId;
-use crate::literal::{Fields, Literal, Signature};
 use crate::plugin::PluginName;
 use crate::reference::{ProposalRef, TodoRef};
 use crate::refusal::Refusal;
@@ -36,6 +35,7 @@ use crate::secretary::responded::{CheckFields, Done, Performed, Responded, Tried
 use crate::secretary::store::{Proposal, Reasons};
 use crate::secretary::tapped::Tapped;
 use crate::store::Prodrome;
+use prodrome_core::literal::codec::{Constructor, Fields, Literal};
 
 /// Its fulfillment at the set's instant, its price linked in `set`: what it serves, read as that
 /// todo's chain reads it, and `∅` for a chain or a todo the set does not hold; `None` where its
@@ -146,7 +146,7 @@ impl Asked {
 
     /// Its constructor's own fields, after the proposal, the instant and the actor, and their
     /// values.
-    pub(crate) fn body(&self) -> (Signature, Vec<Value>) {
+    pub(crate) fn body(&self) -> (Constructor, Vec<Value>) {
         let [serves, spec] = self.price.fields();
         let asked = [
             self.proposal.to_value(),
@@ -186,7 +186,7 @@ impl Asked {
                 PluginName::parse(&fields.get::<String>("plugin")?)
                     .map_err(|failed| invalid(failed.to_string()))?,
             ),
-            other => return Err(crate::literal::no_arm("an asking", other)),
+            other => return Err(prodrome_core::literal::codec::no_arm("an asking", other)),
         };
         Ok(Asked {
             proposer,
@@ -199,22 +199,22 @@ impl Asked {
 }
 
 /// `Asked(act, why, sources, asked, serves, spec)`: the secretary's asking, after the head.
-pub const ASKED: Signature = (
+pub const ASKED: Constructor = (
     "Asked",
     &["act", "why", "sources", "asked", "serves", "spec"],
 );
 /// `Noticed(..)`: the box's own, the same fields.
-pub const NOTICED: Signature = (
+pub const NOTICED: Constructor = (
     "Noticed",
     &["act", "why", "sources", "asked", "serves", "spec"],
 );
 /// `Triaged(..)`: the triage agent's, the same fields.
-pub const TRIAGED: Signature = (
+pub const TRIAGED: Constructor = (
     "Triaged",
     &["act", "why", "sources", "asked", "serves", "spec"],
 );
 /// `Offered(plugin, ..)`: a plugin's, naming it.
-pub const OFFERED: Signature = (
+pub const OFFERED: Constructor = (
     "Offered",
     &["plugin", "act", "why", "sources", "asked", "serves", "spec"],
 );
@@ -235,7 +235,7 @@ pub enum Identity {
 }
 
 /// `Recurring(at, act)`.
-const RECURRING: crate::literal::Signature = ("Recurring", &["at", "act"]);
+const RECURRING: prodrome_core::literal::codec::Constructor = ("Recurring", &["at", "act"]);
 
 impl Identity {
     /// What `asked`, asked at `at`, is.
@@ -256,15 +256,16 @@ impl Literal for Identity {
     fn to_value(&self) -> Value {
         match self {
             Identity::Once(proposal) => proposal.to_value(),
-            Identity::Recurring { at, proposal } => {
-                crate::literal::record(RECURRING, vec![at.to_value(), proposal.to_value()])
-            }
+            Identity::Recurring { at, proposal } => prodrome_core::literal::codec::record(
+                RECURRING,
+                vec![at.to_value(), proposal.to_value()],
+            ),
         }
     }
 
     fn from_value(value: &Value) -> Result<Self, ProdromeError> {
-        if crate::literal::arm(value)? == RECURRING.0 {
-            let fields = crate::literal::Fields::of(value, RECURRING)?;
+        if prodrome_core::literal::codec::arm(value)? == RECURRING.0 {
+            let fields = prodrome_core::literal::codec::Fields::of(value, RECURRING)?;
             Ok(Identity::Recurring {
                 at: fields.get("at")?,
                 proposal: fields.get("act")?,
@@ -329,7 +330,7 @@ impl ProposalId {
 }
 
 /// A proposal's literal is its name.
-impl crate::literal::Literal for ProposalId {
+impl prodrome_core::literal::codec::Literal for ProposalId {
     fn to_value(&self) -> Value {
         Value::str(self.as_str())
     }
@@ -411,7 +412,7 @@ impl Check {
 
 /// A check as the reading holds it prints the reason of the send it checks.
 impl CheckFields for Check {
-    fn body(&self) -> (Signature, Vec<Value>) {
+    fn body(&self) -> (Constructor, Vec<Value>) {
         (("Checked", &["reason"]), vec![self.reason.to_value()])
     }
 }

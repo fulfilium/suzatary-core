@@ -14,11 +14,11 @@ use crate::authoring::{self, NewTodo, Writer};
 use crate::believed::{Believed, Preview};
 use crate::capability::{Datetime, Typeset};
 use crate::chains::ChainPolicy;
-use crate::literal::{Fields, Literal, Signature, arm, no_arm, record};
 use crate::record::{Node, Source, TodoEvent};
 use crate::refusal::{Refusal, shown as quoted};
 use crate::todo::{Patch, Price, TodoFields, TodoPatch};
 use crate::zone::Moment;
+use prodrome_core::literal::codec::{Constructor, Fields, Literal, arm, no_arm, record};
 
 /// One chain act, each arm backed by an existing builder.
 ///
@@ -674,9 +674,9 @@ pub fn acts_of(acts: Option<&Value>) -> Result<Vec<Act>, Refusal> {
 }
 
 /// `Changes(chain, acts)`.
-pub const CHANGES: Signature = ("Changes", &["chain", "acts"]);
+pub const CHANGES: Constructor = ("Changes", &["chain", "acts"]);
 /// `Add(todo, ...)`: a new todo's fields, its price under `priority`.
-pub const ADD: Signature = (
+pub const ADD: Constructor = (
     "Add",
     &[
         "todo",
@@ -692,7 +692,7 @@ pub const ADD: Signature = (
 /// `AddFrom(todo, ..., source, created, parent)`: an add with a [`Provenance`]. A shipped kind's
 /// fields are frozen, so an add that carries one prints as a kind of its own and every `Add`
 /// already stored reads as it did.
-pub const ADD_FROM: Signature = (
+pub const ADD_FROM: Constructor = (
     "AddFrom",
     &[
         "todo",
@@ -709,7 +709,7 @@ pub const ADD_FROM: Signature = (
     ],
 );
 /// `Update(todo, ...)`: each field `None` where it is kept.
-pub const UPDATE: Signature = (
+pub const UPDATE: Constructor = (
     "Update",
     &[
         "todo",
@@ -726,15 +726,15 @@ pub const UPDATE: Signature = (
     ],
 );
 /// `Complete(todo, note)`.
-pub const COMPLETE: Signature = ("Complete", &["todo", "note"]);
+pub const COMPLETE: Constructor = ("Complete", &["todo", "note"]);
 /// `Cancel(todo, note)`.
-pub const CANCEL: Signature = ("Cancel", &["todo", "note"]);
+pub const CANCEL: Constructor = ("Cancel", &["todo", "note"]);
 /// `Reopen(todo, note)`.
-pub const REOPEN: Signature = ("Reopen", &["todo", "note"]);
+pub const REOPEN: Constructor = ("Reopen", &["todo", "note"]);
 /// `Tend(todo, note)`.
-pub const TEND: Signature = ("Tend", &["todo", "note"]);
+pub const TEND: Constructor = ("Tend", &["todo", "note"]);
 /// `Reprice(todo, priority, rationale)`.
-pub const REPRICE: Signature = ("Reprice", &["todo", "priority", "rationale"]);
+pub const REPRICE: Constructor = ("Reprice", &["todo", "priority", "rationale"]);
 
 impl Literal for Act {
     fn to_value(&self) -> LiteralValue {

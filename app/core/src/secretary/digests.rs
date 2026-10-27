@@ -13,7 +13,7 @@ use crate::model_name::ModelName;
 use crate::refusal::Refusal;
 use crate::secretary::compact_ask::Beside;
 use crate::secretary::digest::{self, Digest};
-use crate::secretary::digest_event::{Attempt, DigestEvent};
+use crate::secretary::digest_event::{self, Attempt, DigestEvent};
 use crate::secretary::digest_line::Line;
 use crate::secretary::line_event::LineEvent;
 use crate::secretary::memories::Held;
@@ -139,7 +139,7 @@ impl Held<'_> {
         let label = self.pending(node)?;
         let text = Text::new(line.clone(), self.salt()?);
         let name = text.name();
-        let event = DigestEvent::summarized(
+        let event = digest_event::summarized(
             node.clone(),
             at,
             compactor(),
@@ -177,7 +177,8 @@ impl Held<'_> {
         at: Datetime,
     ) -> Result<Hash, Refusal> {
         self.pending(node)?;
-        let event = DigestEvent::unfit(node.clone(), at, compactor(), model, shortest);
+        let event = digest_event::unfit(node.clone(), at, compactor(), model, shortest)
+            .map_err(|refused| Refusal::internal(refused.to_string()))?;
         Ok(self.digests().history.append(event)?)
     }
 

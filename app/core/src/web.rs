@@ -66,7 +66,8 @@ impl fmt::Display for Host {
 }
 
 /// An `http(s)` URL with a public host, as sent.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+#[serde(try_from = "String")]
 pub struct WebUrl {
     text: String,
     host: Host,
@@ -145,10 +146,10 @@ impl Serialize for WebUrl {
     }
 }
 
-impl<'de> Deserialize<'de> for WebUrl {
-    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
-        let text = String::deserialize(deserializer)?;
-        text.parse().map_err(serde::de::Error::custom)
+impl TryFrom<String> for WebUrl {
+    type Error = WebError;
+    fn try_from(text: String) -> Result<Self, WebError> {
+        text.parse()
     }
 }
 
@@ -397,7 +398,8 @@ pub enum HostScope {
 /// A host or domain the secretary may read without asking, optionally
 /// narrowed to a path prefix. Its text form is `host`, `*.domain`, either
 /// followed by `/path`: `docs.rs`, `*.wikipedia.org`, `github.com/bmabsout`.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+#[serde(try_from = "String")]
 pub struct AllowRule {
     scope: HostScope,
     path: Option<String>,
@@ -492,28 +494,28 @@ impl Serialize for AllowRule {
     }
 }
 
-impl<'de> Deserialize<'de> for AllowRule {
-    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
-        let text = String::deserialize(deserializer)?;
-        text.parse().map_err(serde::de::Error::custom)
+impl TryFrom<String> for AllowRule {
+    type Error = WebError;
+    fn try_from(text: String) -> Result<Self, WebError> {
+        text.parse()
     }
 }
 
 // The literal of each is its text, as an inbox act stores it.
-crate::literal::text_literal!(
+prodrome_core::text_literal!(
     SearchQuery => |query| String::from(query.clone()),
     WebUrl => ToString::to_string,
     AllowRule => ToString::to_string,
 );
 
 /// `Search(query)`.
-pub const SEARCH: crate::literal::Signature = ("Search", &["query"]);
+pub const SEARCH: prodrome_core::literal::codec::Constructor = ("Search", &["query"]);
 /// `Fetch(url)`.
-pub const FETCH: crate::literal::Signature = ("Fetch", &["url"]);
+pub const FETCH: prodrome_core::literal::codec::Constructor = ("Fetch", &["url"]);
 
-impl crate::literal::Literal for WebRequest {
+impl prodrome_core::literal::codec::Literal for WebRequest {
     fn to_value(&self) -> prodrome_core::literal::Value {
-        use crate::literal::record;
+        use prodrome_core::literal::codec::record;
         match self {
             WebRequest::Search { query } => record(SEARCH, vec![query.to_value()]),
             WebRequest::Fetch { url } => record(FETCH, vec![url.to_value()]),
@@ -523,7 +525,7 @@ impl crate::literal::Literal for WebRequest {
     fn from_value(
         value: &prodrome_core::literal::Value,
     ) -> Result<Self, prodrome_core::literal::ProdromeError> {
-        use crate::literal::{Fields, arm, no_arm};
+        use prodrome_core::literal::codec::{Fields, arm, no_arm};
         Ok(match arm(value)? {
             "Search" => WebRequest::Search {
                 query: Fields::of(value, SEARCH)?.get("query")?,

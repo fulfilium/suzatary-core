@@ -13,7 +13,7 @@ use std::marker::PhantomData;
 use prodrome_core::literal::{ProdromeError, Value};
 use sha2::{Digest as _, Sha256};
 
-use crate::literal::Literal;
+use prodrome_core::literal::codec::Literal;
 
 /// A rule whose output records the version it was made under.
 pub trait Versioned: 'static {

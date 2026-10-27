@@ -665,7 +665,7 @@ fn lines_of(said: Vec<u8>) -> Vec<String> {
 /// and one drafting a note.
 fn backfilled(name: &str) -> Instance {
     use suzatary_core::secretary::store::Kind;
-    use suzatary_core::secretary::topics::membership_event::MembershipEvent;
+    use suzatary_core::secretary::topics::membership_event;
     use suzatary_core::secretary::topics::target::Target;
     use suzatary_core::secretary::topics::topic::Topic;
     use suzatary_core::store::Prodrome as _;
@@ -701,7 +701,7 @@ fn backfilled(name: &str) -> Instance {
     topics.begin().expect("begun");
     topics
         .memberships
-        .append(MembershipEvent::added(
+        .append(membership_event::added(
             "round:default/0".parse::<Target>().expect("a target"),
             Topic::new("garden").expect("a topic"),
             prodrome_core::literal::Datetime::new(2026, 10, 21, 9, 0, 0, 0).expect("an instant"),
@@ -751,7 +751,7 @@ fn a_batch_the_model_does_not_answer_is_left_out_of_the_plan() {
 /// writes nothing, and a plan whose rounds gained other topics is refused whole.
 #[test]
 fn the_backfill_applies_the_plan_it_showed_once() {
-    use suzatary_core::secretary::topics::membership_event::MembershipEvent;
+    use suzatary_core::secretary::topics::membership_event;
     use suzatary_core::secretary::topics::target::Target;
     use suzatary_core::secretary::topics::topic::Topic;
     use suzatary_core::store::Prodrome as _;
@@ -833,7 +833,7 @@ fn the_backfill_applies_the_plan_it_showed_once() {
 
     topics
         .memberships
-        .append(MembershipEvent::added(
+        .append(membership_event::added(
             target("round:default/4"),
             topic("hedge"),
             prodrome_core::literal::Datetime::new(2026, 10, 25, 9, 0, 0, 0).expect("an instant"),

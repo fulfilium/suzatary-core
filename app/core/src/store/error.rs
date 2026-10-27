@@ -71,8 +71,8 @@ impl StoreError {
     }
 }
 
-impl From<crate::frontier::Unrecorded> for StoreError {
-    fn from(failed: crate::frontier::Unrecorded) -> Self {
+impl From<prodrome_core::store::frontier::Unrecorded> for StoreError {
+    fn from(failed: prodrome_core::store::frontier::Unrecorded) -> Self {
         Self::Unreadable {
             store: "recorded frontiers",
             why: failed.0,
@@ -80,8 +80,25 @@ impl From<crate::frontier::Unrecorded> for StoreError {
     }
 }
 
-impl From<crate::frontier::Unrecorded> for Refusal {
-    fn from(failed: crate::frontier::Unrecorded) -> Self {
+impl From<prodrome_core::store::frontier::Unrecorded> for Refusal {
+    fn from(failed: prodrome_core::store::frontier::Unrecorded) -> Self {
+        StoreError::from(failed).into()
+    }
+}
+
+impl From<prodrome_core::store::frontier::Unanswered> for StoreError {
+    fn from(failed: prodrome_core::store::frontier::Unanswered) -> Self {
+        match failed {
+            prodrome_core::store::frontier::Unanswered::Unrecorded(failed) => failed.into(),
+            prodrome_core::store::frontier::Unanswered::Unordered(why) => {
+                Self::unreadable("the store's order", why)
+            }
+        }
+    }
+}
+
+impl From<prodrome_core::store::frontier::Unanswered> for Refusal {
+    fn from(failed: prodrome_core::store::frontier::Unanswered) -> Self {
         StoreError::from(failed).into()
     }
 }

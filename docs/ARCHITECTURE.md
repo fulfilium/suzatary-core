@@ -221,7 +221,7 @@ what the frontier names) and `POST /api/objects` (the server rehashes,
 verifies parents and a change's genesis, refuses another actor's event, and
 takes the rest in through the Prodrome's `store::accept`, which verifies each
 on receipt). A FRONTIER IS A TOKEN THE BOX HANDED OUT (2026-10-25,
-`suzatary_core::frontier`; a replica of 400 heads named them in the URL, 26
+`prodrome_core::store::frontier`, SPEC law 47; a replica of 400 heads named them in the URL, 26
 kB, and was refused 431): every answer to a pull or a post ends at the heads
 of what its asker then holds, which the box records under their digest (the
 sha256 of the sorted names), keeping each store's 512 latest, box-local in
@@ -237,9 +237,10 @@ rollback or a migration), is answered as to a replica holding nothing,
 `Frontier` carries an era that answer moves on, read against the frontier
 the question was asked from (each piece of a pull is kept standing where its
 question stood), so a token from before it never wins a join again and the
-fall back happens once. The module is set reconciliation over a Prodrome
-store and names nothing of this deployment's (its records are its own
-`frontier::Records`), so it can move to `prodrome_core::store` as is. A token only ever names what its asker holds, never more: a
+fall back happens once. The token, the bounded record, the fallback and the
+frontier each answer records are the Prodrome's (`store::frontier`); this box
+supplies only where the records live (`suzatary_io::frontiers`, its
+`Records`). A token only ever names what its asker holds, never more: a
 pull cut short records the heads of what the piece leaves held. `GET /api/<chain>/tip`, the receipt and the `/events` frame answer
 `heads`, every head sorted, never one picked. The gate decides WHO may post; the trust policy what their events
 BIND. Built after the server (§8), so sync exists once, in Rust.

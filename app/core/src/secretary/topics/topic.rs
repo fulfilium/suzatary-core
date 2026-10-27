@@ -124,7 +124,7 @@ impl std::fmt::Display for Topic {
     }
 }
 
-crate::literal::text_literal!(
+prodrome_core::text_literal!(
     Topic => |topic| topic.as_str().to_owned(),
 );
 

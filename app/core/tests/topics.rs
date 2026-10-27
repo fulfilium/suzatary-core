@@ -28,7 +28,9 @@ use proptest::prelude::*;
 use suzatary_core::secretary::store::ConversationId;
 use suzatary_core::secretary::topics::alias_event::{Alias, AliasEvent, AliasVocabulary};
 use suzatary_core::secretary::topics::dispute::Dispute;
-use suzatary_core::secretary::topics::membership_event::{MembershipEvent, MembershipVocabulary};
+use suzatary_core::secretary::topics::membership_event::{
+    self, MembershipEvent, MembershipVocabulary,
+};
 use suzatary_core::secretary::topics::reading::Reading;
 use suzatary_core::secretary::topics::target::Target;
 use suzatary_core::secretary::topics::topic::Topic;
@@ -627,7 +629,7 @@ fn the_box_door_takes_only_the_posters_changes() {
             mk_change(
                 begun.clone(),
                 deps,
-                MembershipEvent::added(target(0), topic("travel"), at(1), actor.clone()),
+                membership_event::added(target(0), topic("travel"), at(1), actor.clone()),
             )
             .expect("a change"),
         )
@@ -638,7 +640,7 @@ fn the_box_door_takes_only_the_posters_changes() {
         mk_change(
             begun.clone(),
             vec![seal_hash(&mine)],
-            MembershipEvent::removed(target(0), topic("travel"), at(2), ada.clone()),
+            membership_event::removed(target(0), topic("travel"), at(2), ada.clone()),
         )
         .expect("a change"),
     );
@@ -661,7 +663,7 @@ fn the_box_door_takes_only_the_posters_changes() {
     assert_eq!(refused(canonical_envelope(&other)), vec![Reason::BoxOnly]);
     let legacy: Envelope<MembershipEvent> = prodrome_core::event::mk_sealed(
         None,
-        MembershipEvent::added(target(0), topic("travel"), at(1), ada.clone()),
+        membership_event::added(target(0), topic("travel"), at(1), ada.clone()),
     );
     assert_eq!(
         refused(canonical_envelope(&legacy)),

@@ -17,10 +17,10 @@ use prodrome_core::literal::{Datetime, ProdromeError, Table, Value, Vocabulary};
 use prodrome_core::schema::{Price, Schema};
 use prodrome_core::term::Term;
 
-use crate::literal::{Fields, Literal as _, Signature, headed};
 use crate::secretary::inbox::{Asked, ProposalId};
 use crate::secretary::inbox_registers::{InboxRegister, InboxRegisters};
 use crate::secretary::responded::{Done, Responded, Tried, Withdrawal};
+use prodrome_core::literal::codec::{Constructor, Fields, Literal as _, headed};
 
 /// One event about one proposal: who, when, and what was said of it.
 #[derive(Debug, Clone, PartialEq)]
@@ -45,7 +45,7 @@ pub enum Said {
 }
 
 /// The constructors and their declared fields, in print order.
-pub const SIGNATURES: &[Signature] = &[
+pub const SIGNATURES: &[Constructor] = &[
     (
         "Asked",
         &[
@@ -104,7 +104,7 @@ impl Vocabulary for InboxVocabulary {
 
 impl InboxEvent {
     /// Its constructor's own fields, after the head, and their values.
-    fn body(&self) -> (Signature, Vec<Value>) {
+    fn body(&self) -> (Constructor, Vec<Value>) {
         match &self.said {
             Said::Asked(asked) => asked.body(),
             Said::Responded(responded) => responded.body(),
@@ -163,7 +163,10 @@ impl InboxEvent {
                     why: fields.get("why")?,
                 },
             ))),
-            other => Err(crate::literal::no_arm("an inbox event", other)),
+            other => Err(prodrome_core::literal::codec::no_arm(
+                "an inbox event",
+                other,
+            )),
         }
     }
 }
@@ -243,7 +246,7 @@ mod tests {
 
     #[test]
     fn no_constructor_is_a_term_or_an_envelope() {
-        crate::literal::assert_own(SIGNATURES);
+        crate::own::assert_own(SIGNATURES);
     }
 
     /// Every constructor the whitelist admits is the head and one body, so a print and its

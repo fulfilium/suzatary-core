@@ -62,7 +62,7 @@ pub fn heads(store: StoreName, caps: &Server<'_>) -> Result<Vec<String>, StoreEr
 /// A store, and the frontier a replica of it holds.
 pub struct Since {
     store: StoreName,
-    since: suzatary_core::frontier::Since,
+    since: prodrome_core::store::frontier::Since,
 }
 
 impl Params for Since {
@@ -133,7 +133,7 @@ pub fn take(
 }
 
 /// The lines' skeleton: the frontier a replica of them holds.
-pub struct LinesSince(suzatary_core::frontier::Since);
+pub struct LinesSince(prodrome_core::store::frontier::Since);
 
 impl Params for LinesSince {
     fn parse(asked: &Asked, _: &Chained) -> Result<Self, Refusal> {

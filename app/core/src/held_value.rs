@@ -361,17 +361,20 @@ impl Held {
 }
 
 /// `Held(kind, hint)`.
-pub const HELD: crate::literal::Signature = ("Held", &["kind", "hint"]);
+pub const HELD: prodrome_core::literal::codec::Constructor = ("Held", &["kind", "hint"]);
 
-impl crate::literal::Literal for Held {
+impl prodrome_core::literal::codec::Literal for Held {
     fn to_value(&self) -> prodrome_core::literal::Value {
-        crate::literal::record(HELD, vec![self.kind.to_value(), self.hint.to_value()])
+        prodrome_core::literal::codec::record(
+            HELD,
+            vec![self.kind.to_value(), self.hint.to_value()],
+        )
     }
 
     fn from_value(
         value: &prodrome_core::literal::Value,
     ) -> Result<Self, prodrome_core::literal::ProdromeError> {
-        let fields = crate::literal::Fields::of(value, HELD)?;
+        let fields = prodrome_core::literal::codec::Fields::of(value, HELD)?;
         Ok(Held {
             kind: fields.get("kind")?,
             hint: fields.get("hint")?,

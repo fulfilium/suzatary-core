@@ -3,7 +3,7 @@ use std::collections::BTreeSet;
 use prodrome_core::literal::{ProdromeError, Value};
 use serde::{Deserialize, Serialize};
 
-use crate::literal::{Fields as Read, Literal, Signature, record};
+use prodrome_core::literal::codec::{Constructor, Fields as Read, Literal, record};
 
 use super::{DecisionId, NotADecision};
 
@@ -120,7 +120,7 @@ impl From<Draft> for Fields {
 }
 
 /// `Decide(id, title, body, rationale, supersedes)`, a decision proposed in the inbox.
-pub const DECIDE: Signature = (
+pub const DECIDE: Constructor = (
     "Decide",
     &["id", "title", "body", "rationale", "supersedes"],
 );

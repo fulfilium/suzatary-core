@@ -4,7 +4,7 @@ use std::collections::BTreeSet;
 
 use prodrome_core::literal::{ProdromeError, Value};
 
-use crate::literal::Literal;
+use prodrome_core::literal::codec::Literal;
 
 /// One part of a Google account the box reads, each the set of Google scopes it needs.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -138,23 +138,16 @@ impl Scopes {
     }
 }
 
+prodrome_core::word_literal!(Scope: Scope::ALL => |scope| scope.as_str());
+
 impl Literal for Scopes {
     fn to_value(&self) -> Value {
-        self.iter()
-            .map(|part| part.as_str().to_owned())
-            .collect::<Vec<_>>()
-            .to_value()
+        self.iter().collect::<Vec<_>>().to_value()
     }
 
     fn from_value(value: &Value) -> Result<Self, ProdromeError> {
-        let parts = Vec::<String>::from_value(value)?
-            .iter()
-            .map(|text| {
-                Scope::parse(text)
-                    .ok_or_else(|| ProdromeError::invalid(format!("{text:?} is no Google scope")))
-            })
-            .collect::<Result<Vec<_>, _>>()?;
-        Self::of(parts).ok_or_else(|| ProdromeError::invalid("a consent asks for some scope"))
+        Self::of(Vec::<Scope>::from_value(value)?)
+            .ok_or_else(|| ProdromeError::invalid("a consent asks for some scope"))
     }
 }
 

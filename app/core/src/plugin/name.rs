@@ -60,7 +60,7 @@ impl From<PluginName> for String {
 }
 
 // A grant card stores the plugin by its name.
-crate::literal::text_literal!(PluginName => |name| name.as_str().to_owned());
+prodrome_core::text_literal!(PluginName => |name| name.as_str().to_owned());
 
 impl fmt::Display for PluginName {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {

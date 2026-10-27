@@ -312,8 +312,7 @@ fn scrubbed(tree: serde_json::Value) -> serde_json::Value {
 }
 
 /// Which held number a span of text is, by the label beside it or, with none, by its shape.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, serde::Deserialize)]
-#[serde(rename_all = "lowercase")]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Kind {
     /// A Social Security number.
     Ssn,
@@ -395,7 +394,7 @@ impl Kind {
     }
 }
 
-crate::literal::text_literal!(Kind => |kind| kind.word().to_owned());
+crate::words::words!(Kind: Kind::ALL => |kind| kind.word());
 
 /// One held number in a text: its byte range and its kind.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

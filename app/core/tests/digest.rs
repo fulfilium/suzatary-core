@@ -14,7 +14,7 @@ use proptest::prelude::*;
 use suzatary_core::capability::{Entropy, Turn};
 use suzatary_core::model_name::ModelName;
 use suzatary_core::secretary::digest::Digest;
-use suzatary_core::secretary::digest_event::DigestEvent;
+use suzatary_core::secretary::digest_event::{self, DigestEvent};
 use suzatary_core::secretary::digest_line::Line;
 use suzatary_core::secretary::digests::Digests;
 use suzatary_core::secretary::inbox_event::InboxEvent;
@@ -466,7 +466,7 @@ fn only_an_owner_retracts() {
     assert_eq!(the.kept(), kept, "and no words go");
 
     the.history
-        .append(DigestEvent::retracted(node.clone(), at(600), &tap()))
+        .append(digest_event::retracted(node.clone(), at(600), &tap()).expect("a retraction"))
         .expect("the owner's retraction");
     let retracted = the.read();
     assert!(
@@ -476,6 +476,38 @@ fn only_an_owner_retracts() {
     assert!(
         retracted.pending().contains(&node),
         "and the node is offered again"
+    );
+}
+
+/// A call recorded and never answered writes no register, so it supersedes nothing: the node's
+/// summary stays its reading, and its words stay live, so the sweep keeps them.
+#[test]
+fn a_call_never_answered_keeps_the_summary() {
+    let the = Box::default();
+    the.say("a", 48);
+    the.summarise_all();
+    let read = the.read();
+    let (node, _) = summarised(&read).into_iter().next().expect("a summary");
+    let summary = read.summary(&node).cloned();
+    let words = texts_of(&read, std::slice::from_ref(&node));
+    the.history
+        .append(
+            digest_event::asked(
+                node.clone(),
+                at(600),
+                suzatary_core::secretary::digests::compactor(),
+                9,
+            )
+            .expect("a call"),
+        )
+        .expect("recorded");
+    assert!(summary.is_some());
+    let after = the.read();
+    assert_eq!(after.summary(&node).cloned(), summary);
+    assert!(!words.is_empty());
+    assert!(
+        words.is_subset(&live(&after)),
+        "the summary's words stay live"
     );
 }
 
@@ -843,7 +875,7 @@ fn each_call_is_stamped_at_its_own_instant() {
         .filter_map(|object| object.event())
         .filter(|event| {
             matches!(
-                event.said(),
+                event.body(),
                 suzatary_core::secretary::digest_event::Said::Unfit { .. }
             )
         })
@@ -1803,7 +1835,7 @@ mod recompacting {
             let text = Text::new(Line::new(words).expect("a line"), [7; 16]);
             self.texts.set(&text.name(), &text).expect("kept");
             let beside = Beside::of(&label);
-            let event = DigestEvent::summarized(
+            let event = digest_event::summarized(
                 node.clone(),
                 at(0),
                 compactor(),
@@ -1829,7 +1861,7 @@ mod recompacting {
                 &print,
             )
             .expect("the print reads");
-            let Said::Summarized { asked, .. } = event.said() else {
+            let Said::Summarized { asked, .. } = event.body() else {
                 panic!("{print}");
             };
             assert!(!asked.is_current(beside), "{print}");
@@ -1846,14 +1878,14 @@ mod recompacting {
                 let Some(event) = object.event() else {
                     continue;
                 };
-                let asked = match event.said() {
+                let asked = match event.body() {
                     Said::Summarized { asked, text, .. } => {
                         self.texts.get(text).expect("reads").map(|_| asked.clone())
                     }
                     Said::Unfit { .. } | Said::Retracted => None,
                     Said::Asked { .. } => continue,
                 };
-                newest.insert(event.key().clone(), asked);
+                newest.insert(prodrome_core::schema::Schema::key(event).clone(), asked);
             }
             let mut store = BTreeMap::new();
             for (node, label) in inner(tree) {
@@ -2008,7 +2040,7 @@ mod recompacting {
             // The process stopped between recording a call and hearing its answer.
             if let Some(node) = rule.due(&the.read()) {
                 the.history
-                    .append(DigestEvent::asked(node, at(0), compactor(), 9))
+                    .append(digest_event::asked(node, at(0), compactor(), 9).expect("a call"))
                     .expect("recorded");
             }
             no_finding(&the);

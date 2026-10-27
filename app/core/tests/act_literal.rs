@@ -3,8 +3,8 @@
 //! constructor of an act is an inbox event's or a term's.
 
 use prodrome_core::event::EventVocabulary;
+use prodrome_core::literal::codec::Literal;
 use prodrome_core::literal::{Table, Vocabulary as _, parse_literal, print_literal};
-use suzatary_core::literal::Literal;
 use suzatary_core::secretary::act_vocabulary::SIGNATURES;
 use suzatary_core::secretary::inbox_event::{InboxEvent, InboxVocabulary};
 use suzatary_core::secretary::store::Proposal;

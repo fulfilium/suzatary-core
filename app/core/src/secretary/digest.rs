@@ -26,6 +26,8 @@ use std::ops::Range;
 
 use prodrome_core::digest::{self, Cycle, Leaf, Measure as _, Tree, View};
 use prodrome_core::event::{Actor, Envelope, Hash, parents_of};
+use prodrome_core::fold::Product as _;
+use prodrome_core::fold::sole::{One, Only, Whole};
 use prodrome_core::literal::Datetime;
 use prodrome_core::registers::{Node, fold};
 use prodrome_core::schema::Schema as _;
@@ -160,23 +162,23 @@ pub fn digest(
     let tree = digest::tree(leaves)?;
     let mut said: BTreeMap<Hash, Vec<Candidate>> = BTreeMap::new();
     for (node, stream) in fold(history).entities() {
-        let registers: crate::sole::One<'_, DigestEvent> =
+        let registers: One<'_, Whole<DigestEvent>> =
             prodrome_core::fold::read(stream, None, &policy);
-        said.entry(node.clone())
-            .or_default()
-            .extend(registers.reading().into_iter().filter_map(|stamp| {
+        said.entry(node.clone()).or_default().extend(
+            registers.reading(Only).into_iter().filter_map(|stamp| {
                 Some(Candidate {
                     object: stamp.name.clone(),
                     said: written(&stamp.event, &words)?,
                 })
-            }));
+            }),
+        );
     }
     for candidates in said.values_mut() {
         candidates.sort_by(|one, two| one.object.cmp(&two.object));
     }
     let named = history
         .iter()
-        .filter_map(|object| match object.event()?.said() {
+        .filter_map(|object| match object.event()?.body() {
             Said::Summarized { text, .. } => Some((
                 object.name().clone(),
                 object.event()?.key().clone(),
@@ -207,7 +209,7 @@ pub fn attempts(history: &[Node<DigestEvent>]) -> Vec<(Hash, Datetime, Spent)> {
         .iter()
         .filter_map(|object| {
             let event = object.event()?;
-            let sent = event.sent()?;
+            let sent = event.body().sent()?;
             Some((object.name().clone(), event.at(), Spent::call(sent)))
         })
         .collect()
@@ -336,7 +338,7 @@ fn resealing(line: &LineEvent) -> bool {
 
 /// What a register's write says; `None` for a call, which writes no register.
 fn written(event: &DigestEvent, words: impl Fn(&TextName) -> Option<Line>) -> Option<Written> {
-    Some(match event.said() {
+    Some(match event.body() {
         Said::Summarized {
             text,
             over,

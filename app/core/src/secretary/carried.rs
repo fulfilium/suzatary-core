@@ -17,7 +17,7 @@ pub enum Carried {
 }
 
 /// A line prints `None`, or the name of the object it carries.
-impl crate::literal::Literal for Carried {
+impl prodrome_core::literal::codec::Literal for Carried {
     fn to_value(&self) -> prodrome_core::literal::Value {
         match self {
             Carried::Written => None::<Hash>.to_value(),

@@ -227,7 +227,7 @@ pub struct Inner {
     /// Each store's epoch, which every objects answer carries.
     pub epochs: Arc<suzatary_core::epoch::Epochs>,
     /// Each store's recorded frontiers, which every pull names and every answer records.
-    pub frontiers: Arc<suzatary_core::frontier::Frontiers>,
+    pub frontiers: Arc<prodrome_core::store::frontier::Frontiers>,
     /// What `GET /api/portal` answers, read from `[notify]` when the server starts.
     pub portal: Arc<suzatary_core::portal::Portal>,
 }
@@ -479,7 +479,9 @@ impl State {
             noticing: Arc::default(),
             // A test's server keeps its epochs in memory; `listen` keeps the box's on disk.
             epochs: Arc::new(suzatary_core::epoch::Epochs::remembered()),
-            frontiers: Arc::new(suzatary_core::frontier::Frontiers::remembered()),
+            frontiers: Arc::new(prodrome_core::store::frontier::Frontiers::remembered(
+                prodrome_core::store::frontier::KEPT,
+            )),
             portal: Arc::new(suzatary_core::portal::Portal::Quiet),
             models,
         }))
@@ -496,7 +498,7 @@ impl State {
     pub fn with_books(
         mut self,
         epochs: Arc<suzatary_core::epoch::Epochs>,
-        frontiers: Arc<suzatary_core::frontier::Frontiers>,
+        frontiers: Arc<prodrome_core::store::frontier::Frontiers>,
     ) -> Self {
         let inner = self.building();
         inner.epochs = epochs;

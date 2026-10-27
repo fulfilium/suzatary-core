@@ -2,19 +2,18 @@
 //! the names they were written with, and the reading follows each name's alias.
 
 use prodrome_core::event::Actor;
-use prodrome_core::fold::{Discrete, Frontier, RegisterType};
+use prodrome_core::fold::{Discrete, RegisterType};
 use prodrome_core::literal::{Datetime, ProdromeError, Value};
-use prodrome_core::registers::Stamp;
 
-use crate::envelope::{Event, Says, Vocab};
-use crate::literal::{Fields, Literal as _, Signature};
 use crate::secretary::topics::topic::Topic;
-use crate::sole::{One, Only, Sole};
+use prodrome_core::fold::sole::{One, Only, Sole};
+use prodrome_core::literal::codec::{Constructor, Fields, Literal as _};
+use prodrome_core::schema::headed::{Body, Constructors, Event};
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum Alias {
     Itself,
-    /// Never the topic itself: [`AliasEvent::aliased`] refuses that.
+    /// Never the topic itself: [`aliased`] refuses that.
     As(Topic),
 }
 
@@ -25,44 +24,55 @@ pub type AliasEvent = Event<Alias>;
 #[error("{0} cannot be an alias of itself; it is a name of its own")]
 pub struct OfItself(pub Topic);
 
-impl AliasEvent {
-    /// Refuses `to == topic`, so "its own name" has one spelling, [`AliasEvent::unaliased`].
-    pub fn aliased(topic: Topic, to: Topic, at: Datetime, actor: Actor) -> Result<Self, OfItself> {
-        if topic == to {
-            return Err(OfItself(topic));
-        }
-        Ok(Self::of(topic, at, actor, Alias::As(to)))
-    }
-
-    #[must_use]
-    pub fn unaliased(topic: Topic, at: Datetime, actor: Actor) -> Self {
-        Self::of(topic, at, actor, Alias::Itself)
-    }
+/// `topic` made an alias of `to` by `actor`.
+///
+/// # Errors
+/// [`OfItself`] where `to` is `topic`, so "its own name" has one spelling, [`unaliased`].
+pub fn aliased(
+    topic: Topic,
+    to: Topic,
+    at: Datetime,
+    actor: Actor,
+) -> Result<AliasEvent, OfItself> {
+    Event::new(topic, at, actor, Alias::As(to))
 }
 
-const ALIASED: Signature = ("Aliased", &["topic", "at", "actor", "to"]);
-const UNALIASED: Signature = ("Unaliased", &["topic", "at", "actor"]);
-const SIGNATURES: &[Signature] = &[ALIASED, UNALIASED];
+/// `topic` made a name of its own again by `actor`.
+///
+/// # Errors
+/// None in practice: the schema refuses only an alias of itself. The type is the schema's one
+/// door, [`Event::new`].
+pub fn unaliased(topic: Topic, at: Datetime, actor: Actor) -> Result<AliasEvent, OfItself> {
+    Event::new(topic, at, actor, Alias::Itself)
+}
+
+const ALIASED: Constructor = ("Aliased", &["topic", "at", "actor", "to"]);
+const UNALIASED: Constructor = ("Unaliased", &["topic", "at", "actor"]);
+const SIGNATURES: &[Constructor] = &[ALIASED, UNALIASED];
 
 /// The alias store's schema.
-pub type AliasVocabulary = Vocab<Alias>;
+pub type AliasVocabulary = Constructors<Alias>;
 
-impl Says for Alias {
+impl Body for Alias {
     type Key = Topic;
     type Register = Only;
-    type Registers<'a> = One<'a, AliasEvent>;
+    type Registers<'a> = One<'a, AliasType>;
+    type Refusal = OfItself;
 
-    const EVENTS: &'static [Signature] = SIGNATURES;
+    const EVENTS: &'static [Constructor] = SIGNATURES;
 
-    fn registers() -> Vec<Only> {
-        vec![Only]
-    }
-
-    fn writes(_: &AliasEvent) -> impl Iterator<Item = Only> {
+    fn writes(&self) -> impl Iterator<Item = Only> {
         std::iter::once(Only)
     }
 
-    fn body(&self) -> (Signature, Vec<Value>) {
+    fn admits(topic: &Topic, alias: &Alias) -> Result<(), OfItself> {
+        match alias {
+            Alias::As(to) if to == topic => Err(OfItself(topic.clone())),
+            Alias::As(_) | Alias::Itself => Ok(()),
+        }
+    }
+
+    fn fields(&self) -> (Constructor, Vec<Value>) {
         match self {
             Alias::As(to) => (ALIASED, vec![to.to_value()]),
             Alias::Itself => (UNALIASED, Vec::new()),
@@ -76,10 +86,14 @@ impl Says for Alias {
             fields.get("actor")?,
         );
         match fields.name() {
-            "Aliased" => AliasEvent::aliased(topic, fields.get("to")?, at, actor)
+            "Aliased" => aliased(topic, fields.get("to")?, at, actor)
                 .map_err(|failed| ProdromeError::invalid(failed.to_string())),
-            "Unaliased" => Ok(AliasEvent::unaliased(topic, at, actor)),
-            other => Err(crate::literal::no_arm("an alias event", other)),
+            "Unaliased" => unaliased(topic, at, actor)
+                .map_err(|failed| ProdromeError::invalid(failed.to_string())),
+            other => Err(prodrome_core::literal::codec::no_arm(
+                "an alias event",
+                other,
+            )),
         }
     }
 }
@@ -93,14 +107,12 @@ impl RegisterType<AliasEvent> for AliasType {
     type Value<'e> = Discrete<&'e Alias>;
 
     fn value(event: &AliasEvent) -> Option<Discrete<&Alias>> {
-        Some(Discrete(event.said()))
+        Some(Discrete(event.body()))
     }
 }
 
-impl Sole for AliasEvent {
-    fn reading<'a>(frontier: &Frontier<'a, Self>) -> Vec<&'a Stamp<Self>> {
-        frontier.reading::<AliasType>()
-    }
+impl Sole for AliasType {
+    type Schema = AliasEvent;
 }
 
 #[cfg(test)]
@@ -109,7 +121,7 @@ mod tests {
 
     #[test]
     fn no_constructor_is_a_term_or_an_envelope() {
-        crate::literal::assert_own(SIGNATURES);
+        crate::own::assert_own(SIGNATURES);
     }
 
     #[test]
@@ -118,10 +130,10 @@ mod tests {
         let ada = Actor::new("ada").expect("an actor");
         let travel = Topic::new("travel").expect("a topic");
         assert_eq!(
-            AliasEvent::aliased(travel.clone(), travel.clone(), at, ada.clone()),
+            aliased(travel.clone(), travel.clone(), at, ada.clone()),
             Err(OfItself(travel.clone()))
         );
-        let itself = crate::literal::record(
+        let itself = prodrome_core::literal::codec::record(
             ALIASED,
             vec![
                 travel.to_value(),

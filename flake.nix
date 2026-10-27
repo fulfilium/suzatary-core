@@ -19,7 +19,7 @@
     # `source` (and the crate's version with it). It was four until crane
     # (2026-09-13): the `outputHashes` entry that vendored the checkout by hash
     # is gone, because crane fetches a git dependency at the lock's own rev.
-    prodrome.url = "github:fulfilium/prodrome/de71cccc7565c770ce282eba07b1718d612b87bd";
+    prodrome.url = "github:fulfilium/prodrome/fcf061508b94a32630d159f0ccf7e9763d2005d1";
     # One nixpkgs in the closure. The Prodrome's own
     # flake pins its own — that is what its CI builds against — but the two
     # packages that matter here (`cargo`/`rustc` and `wasm-bindgen-cli_0_2_127`,

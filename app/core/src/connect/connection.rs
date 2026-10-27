@@ -6,7 +6,7 @@ use prodrome_core::literal::{ProdromeError, Value};
 use serde::{Deserialize, Serialize};
 
 use super::{Group, Params, Refused, Seen, Standing, Step, Table, Template, TemplateId};
-use crate::literal::{Fields, Literal, Signature, record};
+use prodrome_core::literal::codec::{Constructor, Fields, Literal, record};
 
 /// The model connection's key name: a deployment has one model.
 const MODEL_KEY: &str = "model";
@@ -220,7 +220,7 @@ impl Connection {
 }
 
 /// `Connection(template, params)`.
-pub const CONNECTION: Signature = ("Connection", &["template", "params"]);
+pub const CONNECTION: Constructor = ("Connection", &["template", "params"]);
 
 impl Literal for Connection {
     fn to_value(&self) -> Value {

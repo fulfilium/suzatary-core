@@ -35,7 +35,7 @@ use crate::secretary::compact_budget::{Budget, Hold};
 use crate::secretary::compacting::Compacting;
 use crate::secretary::compactor::{self, Outcome};
 use crate::secretary::digest::{self, Digest, Written};
-use crate::secretary::digest_event::DigestEvent;
+use crate::secretary::digest_event::{self, DigestEvent};
 use crate::secretary::digest_line::NODE_BYTES;
 use crate::secretary::digest_spent::Spent;
 use crate::secretary::digests::{Digests, compactor};
@@ -265,7 +265,9 @@ fn attempt(
         if let Some(hold) = budget.hold(&spent(history)?, Spent::call(sent), instant_of(now)) {
             return Err(Refusal::conflict(hold.to_string()));
         }
-        history.append(DigestEvent::asked(node.clone(), now, compactor(), sent))?;
+        let asked = digest_event::asked(node.clone(), now, compactor(), sent)
+            .map_err(|refused| Refusal::internal(refused.to_string()))?;
+        history.append(asked)?;
         Ok(())
     })?;
     let now = clock.now();

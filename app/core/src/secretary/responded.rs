@@ -4,8 +4,8 @@
 
 use prodrome_core::literal::{Datetime, Value};
 
-use crate::literal::{Literal as _, Signature, record};
 use crate::secretary::phase::Phase;
+use prodrome_core::literal::codec::{Constructor, Literal as _, record};
 
 /// A try that did not settle the proposal, so a tap may perform it again.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -116,36 +116,36 @@ impl Performed {
 /// What a check prints: its signature, after an event's head, and its values.
 pub trait CheckFields {
     /// Its signature and values, in print order.
-    fn body(&self) -> (Signature, Vec<Value>);
+    fn body(&self) -> (Constructor, Vec<Value>);
 }
 
 /// A check as written holds nothing.
 impl CheckFields for () {
-    fn body(&self) -> (Signature, Vec<Value>) {
+    fn body(&self) -> (Constructor, Vec<Value>) {
         (CHECKED, Vec::new())
     }
 }
 
 /// `NotSent(attempt, reason)`, after an event's head.
-pub const NOT_SENT: Signature = ("NotSent", &["attempt", "reason"]);
+pub const NOT_SENT: Constructor = ("NotSent", &["attempt", "reason"]);
 /// `Started(attempt, began, expires_at)`.
-pub const STARTED: Signature = ("Started", &["attempt", "began", "expires_at"]);
+pub const STARTED: Constructor = ("Started", &["attempt", "began", "expires_at"]);
 /// `Sent(recipients, message_id)`.
-pub const SENT: Signature = ("Sent", &["recipients", "message_id"]);
+pub const SENT: Constructor = ("Sent", &["recipients", "message_id"]);
 /// `Applied(objects, chain)`.
-pub const APPLIED: Signature = ("Applied", &["objects", "chain"]);
+pub const APPLIED: Constructor = ("Applied", &["objects", "chain"]);
 /// `Acted(what)`.
-pub const ACTED: Signature = ("Acted", &["what"]);
+pub const ACTED: Constructor = ("Acted", &["what"]);
 /// `MayHaveGone(reason)`.
-pub const MAY_HAVE_GONE: Signature = ("MayHaveGone", &["reason"]);
+pub const MAY_HAVE_GONE: Constructor = ("MayHaveGone", &["reason"]);
 /// `Checked()`, as written.
-pub const CHECKED: Signature = ("Checked", &[]);
+pub const CHECKED: Constructor = ("Checked", &[]);
 /// `Dismissed(reason)`.
-pub const DISMISSED: Signature = ("Dismissed", &["reason"]);
+pub const DISMISSED: Constructor = ("Dismissed", &["reason"]);
 /// `Superseded()`.
-pub const SUPERSEDED: Signature = ("Superseded", &[]);
+pub const SUPERSEDED: Constructor = ("Superseded", &[]);
 /// `NoLongerNeeded(why)`.
-pub const NO_LONGER_NEEDED: Signature = ("NoLongerNeeded", &["why"]);
+pub const NO_LONGER_NEEDED: Constructor = ("NoLongerNeeded", &["why"]);
 
 /// One response. A check holds `C`: nothing as it is written, and the send it checks once a
 /// reading has found that send beneath it ([`crate::secretary::inbox::Check`]), so a check of nothing has no reading.
@@ -217,7 +217,7 @@ impl<C> Responded<C> {
 impl<C: CheckFields> Responded<C> {
     /// Its signature, after an event's head, and its values, in print order.
     #[must_use]
-    pub fn body(&self) -> (Signature, Vec<Value>) {
+    pub fn body(&self) -> (Constructor, Vec<Value>) {
         match self {
             Responded::Tried {
                 attempt,

@@ -147,7 +147,7 @@ fn an_erasure_takes_the_summaries_that_read_it() {
         .digests
         .history
         .append(
-            suzatary_core::secretary::digest_event::DigestEvent::summarized(
+            suzatary_core::secretary::digest_event::summarized(
                 root.name().clone(),
                 prodrome_core::literal::Datetime::new(2026, 10, 9, 9, 0, 0, 0).expect("an instant"),
                 suzatary_core::secretary::digests::compactor(),

@@ -6,10 +6,10 @@ use prodrome_core::term::{Term, TermF};
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
-use crate::literal::{Fields, Literal, Signature, arm, no_arm, record};
 use crate::refusal::Refusal;
 use crate::todo::{Cycle, Deadline};
 use crate::zone::Moment;
+use prodrome_core::literal::codec::{Constructor, Fields, Literal, arm, no_arm, record};
 
 /// One price, since a todo carrying two has no defined value. Percentages are whole; low is
 /// urgent. The serde form is a verb's argument, and the inbox's acts' before they were literals.
@@ -85,9 +85,9 @@ pub fn ratio(percent: u32, field: &str) -> Result<f64, Refusal> {
 }
 
 /// `FlatPrice(percent)`; the term vocabulary's `Flat` is a term, not a price.
-pub const FLAT_PRICE: Signature = ("FlatPrice", &["percent"]);
+pub const FLAT_PRICE: Constructor = ("FlatPrice", &["percent"]);
 /// `DeadlinePrice(end_date, start_percent, end_percent, lead_up_days, start_date)`.
-pub const DEADLINE_PRICE: Signature = (
+pub const DEADLINE_PRICE: Constructor = (
     "DeadlinePrice",
     &[
         "end_date",
@@ -98,11 +98,11 @@ pub const DEADLINE_PRICE: Signature = (
     ],
 );
 /// `RecurPrice(days, from_percent, to_percent)`.
-pub const RECUR_PRICE: Signature = ("RecurPrice", &["days", "from_percent", "to_percent"]);
+pub const RECUR_PRICE: Constructor = ("RecurPrice", &["days", "from_percent", "to_percent"]);
 /// `PeriodicPrice(days, from_percent, to_percent)`.
-pub const PERIODIC_PRICE: Signature = ("PeriodicPrice", &["days", "from_percent", "to_percent"]);
+pub const PERIODIC_PRICE: Constructor = ("PeriodicPrice", &["days", "from_percent", "to_percent"]);
 
-fn cycle(signature: Signature, cycle: &Cycle) -> Value {
+fn cycle(signature: Constructor, cycle: &Cycle) -> Value {
     record(
         signature,
         vec![
@@ -113,13 +113,31 @@ fn cycle(signature: Signature, cycle: &Cycle) -> Value {
     )
 }
 
-fn cycle_of(value: &Value, signature: Signature) -> Result<Cycle, ProdromeError> {
+fn cycle_of(value: &Value, signature: Constructor) -> Result<Cycle, ProdromeError> {
     let fields = Fields::of(value, signature)?;
     Ok(Cycle {
         days: fields.get("days")?,
         from_percent: fields.get("from_percent")?,
         to_percent: fields.get("to_percent")?,
     })
+}
+
+/// A lead-up in whole days, the only spans a price holds.
+struct Days(chrono::Duration);
+
+impl Literal for Days {
+    fn to_value(&self) -> Value {
+        Value::int(self.0.num_days())
+    }
+
+    fn from_value(value: &Value) -> Result<Self, ProdromeError> {
+        match value {
+            Value::Int(int) => int.as_i64().and_then(chrono::Duration::try_days),
+            _ => None,
+        }
+        .map(Days)
+        .ok_or_else(|| ProdromeError::invalid(format!("expected whole days, got {value:?}")))
+    }
 }
 
 impl Literal for Price {
@@ -132,7 +150,7 @@ impl Literal for Price {
                     due.end_date.to_value(),
                     due.start_percent.to_value(),
                     due.end_percent.to_value(),
-                    due.lead_up.to_value(),
+                    due.lead_up.map(Days).to_value(),
                     due.start_date.to_value(),
                 ],
             ),
@@ -152,7 +170,9 @@ impl Literal for Price {
                     end_date: fields.get("end_date")?,
                     start_percent: fields.get("start_percent")?,
                     end_percent: fields.get("end_percent")?,
-                    lead_up: fields.get("lead_up_days")?,
+                    lead_up: fields
+                        .get::<Option<Days>>("lead_up_days")?
+                        .map(|Days(span)| span),
                     start_date: fields.get("start_date")?,
                 })
             }

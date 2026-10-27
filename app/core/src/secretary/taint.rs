@@ -26,6 +26,9 @@ pub enum Taint {
 }
 
 impl Taint {
+    /// Every taint.
+    pub const ALL: [Taint; 2] = [Taint::Clean, Taint::Tainted];
+
     /// The least taint above both.
     #[must_use]
     pub fn join(self, other: Self) -> Self {
@@ -44,27 +47,12 @@ impl Taint {
     /// The taint `text` names; `None` for anything but the two names.
     #[must_use]
     pub fn parse(text: &str) -> Option<Self> {
-        [Taint::Clean, Taint::Tainted]
-            .into_iter()
-            .find(|taint| taint.as_str() == text)
+        Self::ALL.into_iter().find(|taint| taint.as_str() == text)
     }
 }
 
-/// A taint's literal is its name.
-impl crate::literal::Literal for Taint {
-    fn to_value(&self) -> prodrome_core::literal::Value {
-        prodrome_core::literal::Value::str(self.as_str())
-    }
-
-    fn from_value(
-        value: &prodrome_core::literal::Value,
-    ) -> Result<Self, prodrome_core::literal::ProdromeError> {
-        let word = String::from_value(value)?;
-        Self::parse(&word).ok_or_else(|| {
-            prodrome_core::literal::ProdromeError::invalid(format!("{word} is no taint"))
-        })
-    }
-}
+// A taint's literal is its name.
+prodrome_core::word_literal!(Taint: Taint::ALL => |taint| taint.as_str());
 
 /// One turn's class. A verb answer under a name the surface lacks (a loaded
 /// reference, a tapped document) is tainted; so are a person's photos and PDFs. A `zoom` answer

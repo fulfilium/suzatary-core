@@ -1,7 +1,7 @@
 //! A pull names what its replica holds by the frontier the box's last answer named
-//! (`suzatary_core::frontier`). Over random histories of a topic store, written by other
-//! devices and by the tab itself, the tab pulling in pieces it may stop short of, posting its own
-//! writes, and the box losing every frontier it recorded:
+//! (`prodrome_core::store::frontier`, the Prodrome's law 47). Over random histories of a topic
+//! store, written by other devices and by the tab itself, the tab pulling in pieces it may stop
+//! short of, posting its own writes, and the box losing every frontier it recorded:
 //!
 //! - Safe: every frontier the tab names reaches only objects it holds.
 //! - Complete: once a pull ends, the tab holds every object the box holds.
@@ -23,8 +23,8 @@ use prodrome_core::schema::Schema as _;
 use prodrome_core::store::{MemoryStore, Replica as _};
 use proptest::prelude::*;
 
+use prodrome_core::store::frontier::{Frontiers, Reached, Since, Token};
 use suzatary_core::epoch::Epochs;
-use suzatary_core::frontier::{Digest, Frontiers, Read, Since};
 use suzatary_core::routes::{self, Books, Cut, Posted};
 use suzatary_core::secretary::store::ConversationId;
 use suzatary_core::secretary::topics::membership_event::MembershipEvent;
@@ -152,7 +152,7 @@ impl TheBox {
         Self {
             store,
             epochs: Epochs::remembered(),
-            frontiers: Frontiers::remembered(),
+            frontiers: Frontiers::remembered(prodrome_core::store::frontier::KEPT),
             held_before: vec![vec![genesis()]],
         }
     }
@@ -253,7 +253,7 @@ impl Standing {
 
     fn since(&self) -> Since {
         self.digest.as_deref().map_or(Since::Nothing, |digest| {
-            Since::Frontier(Digest::parse(digest).expect("a digest"))
+            Since::Frontier(Token::parse(digest).expect("a digest"))
         })
     }
 
@@ -283,22 +283,21 @@ impl Tab {
         read: SinceRead,
         frontier: &Frontier,
     ) -> Result<(), TestCaseError> {
-        let digest = Digest::parse(&frontier.digest).expect("a digest");
-        let Read::Known(heads) = the_box
-            .frontiers
-            .read(KEY, &Since::Frontier(digest))
-            .expect("reads")
-        else {
-            return Err(TestCaseError::fail("the answer's frontier is recorded"));
-        };
-        let held = self.device.held();
-        prop_assert!(
-            heads.is_subset(&held),
-            "the frontier names only what the tab holds"
-        );
+        let token = Token::parse(&frontier.digest).expect("a token");
         let objects = the_box.store.objects().expect("reads");
         let dag: prodrome_core::dag::Dag<MembershipEvent> = objects.into_iter().collect();
-        prop_assert_eq!(dag.closure(heads).len(), frontier.count);
+        let lacking = the_box
+            .frontiers
+            .answer(KEY, &Since::Frontier(token), &dag)
+            .expect("reads");
+        let Reached::Known(reached) = lacking.reached() else {
+            return Err(TestCaseError::fail("the answer's frontier is recorded"));
+        };
+        prop_assert!(
+            reached.is_subset(&self.device.held()),
+            "the frontier names only what the tab holds"
+        );
+        prop_assert_eq!(reached.len(), frontier.count);
         self.standing = self
             .standing
             .clone()
@@ -382,7 +381,7 @@ proptest! {
                 Step::Pull { budget, pieces } => {
                     tab.pull(&the_box, *budget, *pieces)?;
                 }
-                Step::Forget => the_box.frontiers = Frontiers::remembered(),
+                Step::Forget => the_box.frontiers = Frontiers::remembered(prodrome_core::store::frontier::KEPT),
                 Step::GoBack(n) => the_box.go_back(*n),
             }
         }

@@ -48,11 +48,13 @@ impl<'de, A: Deserialize<'de>> Deserialize<'de> for Patch<A> {
 }
 
 /// A kept field is `None`, a set one its value.
-impl<A: crate::literal::Literal> crate::literal::Literal for Patch<A> {
+impl<A: prodrome_core::literal::codec::Literal> prodrome_core::literal::codec::Literal
+    for Patch<A>
+{
     fn to_value(&self) -> prodrome_core::literal::Value {
         self.set().map_or(
             prodrome_core::literal::Value::None,
-            crate::literal::Literal::to_value,
+            prodrome_core::literal::codec::Literal::to_value,
         )
     }
 

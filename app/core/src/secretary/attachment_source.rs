@@ -9,8 +9,8 @@ use serde_json::Value;
 
 use crate::attachment::AttachmentId;
 use crate::drive::DrivePath;
-use crate::literal::{Fields, Literal, Signature, arm, no_arm, record};
 use crate::repos::{RepoName, RepoPath, Rev};
+use prodrome_core::literal::codec::{Constructor, Fields, Literal, arm, no_arm, record};
 
 /// One source, by name.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -156,15 +156,15 @@ fn named(text: &str, key: &str) -> Result<String, NotASource> {
 }
 
 /// `FromMail(message, name)`.
-pub const FROM_MAIL: Signature = ("FromMail", &["message", "name"]);
+pub const FROM_MAIL: Constructor = ("FromMail", &["message", "name"]);
 /// `FromDrive(path)`.
-pub const FROM_DRIVE: Signature = ("FromDrive", &["path"]);
+pub const FROM_DRIVE: Constructor = ("FromDrive", &["path"]);
 /// `FromUpload(id)`.
-pub const FROM_UPLOAD: Signature = ("FromUpload", &["id"]);
+pub const FROM_UPLOAD: Constructor = ("FromUpload", &["id"]);
 /// `FromKept(id)`.
-pub const FROM_KEPT: Signature = ("FromKept", &["id"]);
+pub const FROM_KEPT: Constructor = ("FromKept", &["id"]);
 /// `FromRepo(repo, path, at)`.
-pub const FROM_REPO: Signature = ("FromRepo", &["repo", "path", "at"]);
+pub const FROM_REPO: Constructor = ("FromRepo", &["repo", "path", "at"]);
 
 impl Literal for AttachmentSource {
     fn to_value(&self) -> LiteralValue {

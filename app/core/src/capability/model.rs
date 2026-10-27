@@ -269,7 +269,7 @@ pub mod pulled {
     }
 }
 
-crate::literal::text_literal!(
+prodrome_core::text_literal!(
     SessionId => |id| id.as_str().to_owned(),
 );
 

@@ -3,7 +3,7 @@
 //!
 //! The bounds are the point: a route that cannot name a capability cannot use it.
 
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeMap;
 
 use crate::believed::{Believed, records};
 use crate::record::{Node, TodoEvent};
@@ -533,7 +533,7 @@ pub struct Books<'a> {
     /// Each store's epoch.
     pub epochs: &'a crate::epoch::Epochs,
     /// Each store's recorded frontiers.
-    pub frontiers: &'a crate::frontier::Frontiers,
+    pub frontiers: &'a prodrome_core::store::frontier::Frontiers,
 }
 
 /// `GET /api/objects?since=<frontier>`: the objects the frontier `since` names does not reach,
@@ -544,7 +544,7 @@ pub struct Books<'a> {
 pub fn objects_since(
     store: &dyn Prodrome<TodoEvent>,
     chain: &ChainPolicy,
-    since: &crate::frontier::Since,
+    since: &prodrome_core::store::frontier::Since,
     books: Books<'_>,
     now: Datetime,
 ) -> Answered<wire::ObjectsPayload> {
@@ -594,7 +594,7 @@ impl Cut {
 /// The store's own, and the books'.
 pub fn store_objects_since<E: crate::store::Store>(
     store: &dyn Prodrome<E>,
-    since: &crate::frontier::Since,
+    since: &prodrome_core::store::frontier::Since,
     books: Books<'_>,
     now: Datetime,
     cut: Cut,
@@ -745,7 +745,7 @@ fn answered<E: prodrome_core::schema::Schema, S: Sends<E>>(
     store: &dyn Prodrome<E>,
     key: &str,
     books: Books<'_>,
-    since: &crate::frontier::Since,
+    since: &prodrome_core::store::frontier::Since,
     now: Datetime,
     cut: Cut,
     sends: &S,
@@ -763,7 +763,8 @@ fn answered<E: prodrome_core::schema::Schema, S: Sends<E>>(
                 .map(|(name, _)| name.as_str().to_owned())
                 .collect(),
         };
-        let (read, mut have) = reached(books.frontiers, key, since, &dag)?;
+        let lacking = books.frontiers.answer(key, since, &dag)?;
+        let read = since_read(lacking.reached());
         let mut piece = Piece {
             sent: Vec::new(),
             rest: 0,
@@ -771,7 +772,7 @@ fn answered<E: prodrome_core::schema::Schema, S: Sends<E>>(
             size: 0,
         };
         let mut full = false;
-        for (name, envelope) in objects.iter().filter(|(name, _)| !have.contains(name)) {
+        for &(name, envelope) in lacking.lacking() {
             piece.rest += 1;
             if full {
                 piece.size += sends.weigh(name, envelope);
@@ -790,8 +791,7 @@ fn answered<E: prodrome_core::schema::Schema, S: Sends<E>>(
             piece.size += weight;
         }
         piece.rest -= piece.sent.len();
-        have.extend(piece.sent.iter().map(|(name, _)| name.clone()));
-        let frontier = frontier_of(&dag, &have, books.frontiers, key)?;
+        let frontier = frontier_of(&lacking.record(piece.sent.len())?);
         let piece = Piece {
             sent: piece.sent.into_iter().map(|(_, item)| item).collect(),
             rest: piece.rest,
@@ -812,36 +812,20 @@ fn answered<E: prodrome_core::schema::Schema, S: Sends<E>>(
     ))
 }
 
-/// How `since` reads against `dag`, and everything it reaches there: nothing when it is unknown.
-fn reached<E: prodrome_core::schema::Schema>(
-    frontiers: &crate::frontier::Frontiers,
-    key: &str,
-    since: &crate::frontier::Since,
-    dag: &prodrome_core::dag::Dag<E>,
-) -> Answered<(wire::SinceRead, BTreeSet<prodrome_core::event::Hash>)> {
-    Ok(match frontiers.reached(key, since, dag)? {
-        crate::frontier::Read::Known(have) => (wire::SinceRead::Known, have),
-        crate::frontier::Read::Unknown => (wire::SinceRead::Unknown, BTreeSet::new()),
-    })
+/// Whether the store of record knew the frontier a pull named.
+fn since_read(reached: &prodrome_core::store::frontier::Reached) -> wire::SinceRead {
+    match reached {
+        prodrome_core::store::frontier::Reached::Known(_) => wire::SinceRead::Known,
+        prodrome_core::store::frontier::Reached::Unknown => wire::SinceRead::Unknown,
+    }
 }
 
-/// The heads of `have`, a down-set of `dag`, recorded as a frontier of `key`.
-fn frontier_of<E: prodrome_core::schema::Schema>(
-    dag: &prodrome_core::dag::Dag<E>,
-    have: &BTreeSet<prodrome_core::event::Hash>,
-    frontiers: &crate::frontier::Frontiers,
-    key: &str,
-) -> Answered<wire::Frontier> {
-    let below: BTreeSet<prodrome_core::event::Hash> = have
-        .iter()
-        .filter_map(|name| dag.get(name))
-        .flat_map(prodrome_core::event::parents_of)
-        .collect();
-    let heads: BTreeSet<prodrome_core::event::Hash> = have.difference(&below).cloned().collect();
-    Ok(wire::Frontier {
-        digest: frontiers.record(key, &heads)?.as_str().to_owned(),
-        count: have.len(),
-    })
+/// The frontier an answer recorded, as the wire names it.
+fn frontier_of(recorded: &prodrome_core::store::frontier::Recorded) -> wire::Frontier {
+    wire::Frontier {
+        digest: recorded.token.as_str().to_owned(),
+        count: recorded.count,
+    }
 }
 
 /// `GET /api/stores/lines/objects?since=<heads>`: [`store_objects_since`] for the conversations'
@@ -854,7 +838,7 @@ fn frontier_of<E: prodrome_core::schema::Schema>(
 /// The stores' own.
 pub fn lines_since(
     conversations: crate::secretary::conversations::Conversations<'_>,
-    since: &crate::frontier::Since,
+    since: &prodrome_core::store::frontier::Since,
     books: Books<'_>,
     now: Datetime,
     cut: Cut,
@@ -885,7 +869,7 @@ pub fn lines_since(
 /// The stores' own.
 pub fn lines_skeleton(
     conversations: crate::secretary::conversations::Conversations<'_>,
-    since: &crate::frontier::Since,
+    since: &prodrome_core::store::frontier::Since,
     books: Books<'_>,
     now: Datetime,
     cut: Cut,
@@ -1171,7 +1155,7 @@ pub fn receive_objects(
     render: &dyn Render,
     chain: &ChainPolicy,
     posted: &Posted<'_>,
-    frontiers: &crate::frontier::Frontiers,
+    frontiers: &prodrome_core::store::frontier::Frontiers,
     actor: &prodrome_core::event::Actor,
 ) -> Answered<(wire::ReceiptPayload, Vec<crate::secretary::acts::ActLine>)> {
     let Posted {
@@ -1243,7 +1227,7 @@ pub struct Posted<'a> {
     /// Canonical prints, in any order.
     pub objects: &'a [String],
     /// The frontier the poster held, as its last answer named it.
-    pub since: &'a crate::frontier::Since,
+    pub since: &'a prodrome_core::store::frontier::Since,
 }
 
 /// `POST /api/stores/<store>/objects`, for a store a tab writes that the box began and nobody
@@ -1255,7 +1239,7 @@ pub struct Posted<'a> {
 pub fn receive_changes<E: crate::store::Store>(
     store: &dyn Prodrome<E>,
     posted: &Posted<'_>,
-    frontiers: &crate::frontier::Frontiers,
+    frontiers: &prodrome_core::store::frontier::Frontiers,
     actor: &prodrome_core::event::Actor,
 ) -> Answered<wire::ReceiptPayload>
 where
@@ -1285,20 +1269,23 @@ where
 fn receipt<E: prodrome_core::schema::Schema>(
     store: &dyn Prodrome<E>,
     outcome: &crate::sync::Outcome,
-    (key, since, frontiers): (&str, &crate::frontier::Since, &crate::frontier::Frontiers),
+    (key, since, frontiers): (
+        &str,
+        &prodrome_core::store::frontier::Since,
+        &prodrome_core::store::frontier::Frontiers,
+    ),
 ) -> Answered<wire::ReceiptPayload> {
     let objects = store.objects()?;
     let dag: prodrome_core::dag::Dag<E> = objects.into_iter().collect();
-    let (read, mut have) = reached(frontiers, key, since, &dag)?;
+    let lacking = frontiers.answer(key, since, &dag)?;
+    let read = since_read(lacking.reached());
     let posted = outcome
         .taken
         .iter()
         .map(|(name, _)| name)
         .chain(&outcome.already)
-        .filter(|name| dag.get(name).is_some())
         .cloned();
-    have.extend(dag.closure(posted));
-    let frontier = frontier_of(&dag, &have, frontiers, key)?;
+    let frontier = frontier_of(&lacking.record_with(posted)?);
     Ok(wire::ReceiptPayload {
         since: read,
         frontier,

@@ -5,9 +5,9 @@ use prodrome_core::literal::{Datetime, ProdromeError, Value};
 
 use super::registers::{DecisionRegister, DecisionRegisters};
 use super::{DecisionId, NotADecision, Statement};
-use crate::envelope::{Event, Says, Vocab};
-use crate::literal::{Fields, Literal, Signature};
 use crate::record::MarkupSource;
+use prodrome_core::literal::codec::{Constructor, Fields, Literal};
+use prodrome_core::schema::headed::{Body, Constructors, Event};
 
 /// One event about one decision: which, when its writer recorded it (data, never an order), who,
 /// and what was said of it.
@@ -37,79 +37,69 @@ pub enum Said {
     },
 }
 
-impl DecisionEvent {
-    /// Decision `decision` decided by `actor`.
-    ///
-    /// # Errors
-    /// [`NotADecision::Itself`] where it names itself among what it supersedes.
-    pub fn decided(
-        decision: DecisionId,
-        at: Datetime,
-        actor: Actor,
-        statement: Statement,
-        supersedes: BTreeSet<DecisionId>,
-    ) -> Result<Self, NotADecision> {
-        Self::stated(decision, at, actor, supersedes, |supersedes| {
-            Said::Decided {
-                statement,
-                supersedes,
-            }
-        })
-    }
+/// Decision `decision` decided by `actor`.
+///
+/// # Errors
+/// [`NotADecision::Itself`] where it names itself among what it supersedes.
+pub fn decided(
+    decision: DecisionId,
+    at: Datetime,
+    actor: Actor,
+    statement: Statement,
+    supersedes: BTreeSet<DecisionId>,
+) -> Result<DecisionEvent, NotADecision> {
+    Event::new(
+        decision,
+        at,
+        actor,
+        Said::Decided {
+            statement,
+            supersedes,
+        },
+    )
+}
 
-    /// Decision `decision` restated by `actor`.
-    ///
-    /// # Errors
-    /// [`NotADecision::Itself`] where it names itself among what it supersedes.
-    pub fn revised(
-        decision: DecisionId,
-        at: Datetime,
-        actor: Actor,
-        statement: Statement,
-        supersedes: BTreeSet<DecisionId>,
-    ) -> Result<Self, NotADecision> {
-        Self::stated(decision, at, actor, supersedes, |supersedes| {
-            Said::Revised {
-                statement,
-                supersedes,
-            }
-        })
-    }
+/// Decision `decision` restated by `actor`.
+///
+/// # Errors
+/// [`NotADecision::Itself`] where it names itself among what it supersedes.
+pub fn revised(
+    decision: DecisionId,
+    at: Datetime,
+    actor: Actor,
+    statement: Statement,
+    supersedes: BTreeSet<DecisionId>,
+) -> Result<DecisionEvent, NotADecision> {
+    Event::new(
+        decision,
+        at,
+        actor,
+        Said::Revised {
+            statement,
+            supersedes,
+        },
+    )
+}
 
-    /// Decision `decision` withdrawn by `actor`, for `reason`.
-    ///
-    /// # Errors
-    /// [`NotADecision::Empty`] for an empty or untrimmed reason.
-    pub fn withdrawn(
-        decision: DecisionId,
-        at: Datetime,
-        actor: Actor,
-        reason: &str,
-    ) -> Result<Self, NotADecision> {
-        if reason.is_empty() || reason != reason.trim() {
-            return Err(NotADecision::Empty("reason"));
-        }
-        let reason = reason.to_owned();
-        Ok(Self::of(decision, at, actor, Said::Withdrawn { reason }))
-    }
+/// Decision `decision` withdrawn by `actor`, for `reason`.
+///
+/// # Errors
+/// [`NotADecision::Empty`] for an empty or untrimmed reason.
+pub fn withdrawn(
+    decision: DecisionId,
+    at: Datetime,
+    actor: Actor,
+    reason: &str,
+) -> Result<DecisionEvent, NotADecision> {
+    let reason = reason.to_owned();
+    Event::new(decision, at, actor, Said::Withdrawn { reason })
+}
 
-    fn stated(
-        decision: DecisionId,
-        at: Datetime,
-        actor: Actor,
-        supersedes: BTreeSet<DecisionId>,
-        said: impl FnOnce(BTreeSet<DecisionId>) -> Said,
-    ) -> Result<Self, NotADecision> {
-        if supersedes.contains(&decision) {
-            return Err(NotADecision::Itself(decision.to_string()));
-        }
-        Ok(Self::of(decision, at, actor, said(supersedes)))
-    }
-
+impl Said {
     /// The statement a `Decided` or `Revised` makes.
     #[must_use]
     pub fn statement(&self) -> Option<&Statement> {
-        match self.said() {
+        match self {
             Said::Decided { statement, .. } | Said::Revised { statement, .. } => Some(statement),
             Said::Withdrawn { .. } => None,
         }
@@ -118,7 +108,7 @@ impl DecisionEvent {
     /// The links a `Decided` or `Revised` makes; none for a withdrawal.
     #[must_use]
     pub fn supersedes(&self) -> Option<&BTreeSet<DecisionId>> {
-        match self.said() {
+        match self {
             Said::Decided { supersedes, .. } | Said::Revised { supersedes, .. } => Some(supersedes),
             Said::Withdrawn { .. } => None,
         }
@@ -126,7 +116,7 @@ impl DecisionEvent {
 }
 
 /// `Decided(decision, at, actor, title, body, rationale, supersedes)`.
-const DECIDED: Signature = (
+const DECIDED: Constructor = (
     "Decided",
     &[
         "decision",
@@ -139,7 +129,7 @@ const DECIDED: Signature = (
     ],
 );
 /// `Revised(decision, at, actor, title, body, rationale, supersedes)`.
-const REVISED: Signature = (
+const REVISED: Constructor = (
     "Revised",
     &[
         "decision",
@@ -152,12 +142,12 @@ const REVISED: Signature = (
     ],
 );
 /// `Withdrawn(decision, at, actor, reason)`.
-const WITHDRAWN: Signature = ("Withdrawn", &["decision", "at", "actor", "reason"]);
+const WITHDRAWN: Constructor = ("Withdrawn", &["decision", "at", "actor", "reason"]);
 /// The constructors, in print order.
-const SIGNATURES: &[Signature] = &[DECIDED, REVISED, WITHDRAWN];
+const SIGNATURES: &[Constructor] = &[DECIDED, REVISED, WITHDRAWN];
 
 /// The decisions' whitelist: three constructors and nothing else, since no event nests a term.
-pub type DecisionVocabulary = Vocab<Said>;
+pub type DecisionVocabulary = Constructors<Said>;
 
 /// A decision's literal is its id.
 impl Literal for DecisionId {
@@ -184,27 +174,39 @@ fn stated(statement: &Statement, supersedes: &BTreeSet<DecisionId>) -> Vec<Value
     ]
 }
 
-impl Says for Said {
+impl Body for Said {
     type Key = DecisionId;
     type Register = DecisionRegister;
     type Registers<'a> = DecisionRegisters<'a>;
+    type Refusal = NotADecision;
 
-    const EVENTS: &'static [Signature] = SIGNATURES;
-
-    fn registers() -> Vec<DecisionRegister> {
-        vec![DecisionRegister::Content, DecisionRegister::Life]
-    }
+    const EVENTS: &'static [Constructor] = SIGNATURES;
 
     /// A statement supersedes in both registers, so a restatement of a withdrawn decision is
     /// refused by the life's order; a withdrawal only in the life. The links accumulate and
     /// supersede nothing.
-    fn writes(event: &DecisionEvent) -> impl Iterator<Item = DecisionRegister> {
-        let statement = matches!(event.said(), Said::Decided { .. } | Said::Revised { .. })
+    fn writes(&self) -> impl Iterator<Item = DecisionRegister> {
+        let statement = matches!(self, Said::Decided { .. } | Said::Revised { .. })
             .then_some(DecisionRegister::Content);
         statement.into_iter().chain([DecisionRegister::Life])
     }
 
-    fn body(&self) -> (Signature, Vec<Value>) {
+    /// A decision never supersedes itself, and a withdrawal's reason is trimmed and not empty.
+    fn admits(decision: &DecisionId, said: &Said) -> Result<(), NotADecision> {
+        match said {
+            Said::Decided { supersedes, .. } | Said::Revised { supersedes, .. }
+                if supersedes.contains(decision) =>
+            {
+                Err(NotADecision::Itself(decision.to_string()))
+            }
+            Said::Withdrawn { reason } if reason.is_empty() || *reason != reason.trim() => {
+                Err(NotADecision::Empty("reason"))
+            }
+            Said::Decided { .. } | Said::Revised { .. } | Said::Withdrawn { .. } => Ok(()),
+        }
+    }
+
+    fn fields(&self) -> (Constructor, Vec<Value>) {
         match self {
             Said::Decided {
                 statement,
@@ -233,16 +235,15 @@ impl Says for Said {
             .map_err(invalid)
         };
         match fields.name() {
-            "Decided" => {
-                DecisionEvent::decided(decision, at, actor, statement()?, fields.get("supersedes")?)
+            "Decided" => decided(decision, at, actor, statement()?, fields.get("supersedes")?),
+            "Revised" => revised(decision, at, actor, statement()?, fields.get("supersedes")?),
+            "Withdrawn" => withdrawn(decision, at, actor, &fields.get::<String>("reason")?),
+            other => {
+                return Err(prodrome_core::literal::codec::no_arm(
+                    "a decision event",
+                    other,
+                ));
             }
-            "Revised" => {
-                DecisionEvent::revised(decision, at, actor, statement()?, fields.get("supersedes")?)
-            }
-            "Withdrawn" => {
-                DecisionEvent::withdrawn(decision, at, actor, &fields.get::<String>("reason")?)
-            }
-            other => return Err(crate::literal::no_arm("a decision event", other)),
         }
         .map_err(invalid)
     }
@@ -254,7 +255,7 @@ mod tests {
 
     #[test]
     fn no_constructor_is_a_term_or_an_envelope() {
-        crate::literal::assert_own(SIGNATURES);
+        crate::own::assert_own(SIGNATURES);
     }
 
     /// A set of links has one spelling: sorted, each once; any other print is not this event's.
@@ -265,7 +266,7 @@ mod tests {
         let statement =
             Statement::new("Plugins", MarkupSource::escaped("body"), "why").expect("a statement");
         let id = |text: &str| DecisionId::new(text).expect("an id");
-        let event = DecisionEvent::decided(
+        let event = decided(
             id("plugins"),
             at,
             Actor::new("ada").expect("an actor"),
@@ -291,7 +292,7 @@ mod tests {
         let id = DecisionId::new("plugins").expect("an id");
         let statement =
             Statement::new("Plugins", MarkupSource::escaped("body"), "why").expect("a statement");
-        let refused = DecisionEvent::decided(
+        let refused = decided(
             id.clone(),
             at,
             Actor::new("ada").expect("an actor"),

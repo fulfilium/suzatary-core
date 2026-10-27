@@ -78,12 +78,12 @@ pub fn fold_limit(raw: Option<&str>) -> Result<Option<usize>, Refusal> {
 
 /// A pull's `since`: absent or empty is a replica holding nothing; anything else is the frontier
 /// an earlier answer named, 64 hex digits, so a request names what a replica holds in the same
-/// few bytes however many heads it has.
-pub fn since(raw: Option<&str>) -> Result<crate::frontier::Since, Refusal> {
+/// few bytes however many tips it has.
+pub fn since(raw: Option<&str>) -> Result<prodrome_core::store::frontier::Since, Refusal> {
     match raw.unwrap_or_default() {
-        "" => Ok(crate::frontier::Since::Nothing),
-        text => crate::frontier::Digest::parse(text)
-            .map(crate::frontier::Since::Frontier)
+        "" => Ok(prodrome_core::store::frontier::Since::Nothing),
+        text => prodrome_core::store::frontier::Token::parse(text)
+            .map(prodrome_core::store::frontier::Since::Frontier)
             .map_err(|refused| Refusal::bad_request(format!("{refused}, got {}", shown(text)))),
     }
 }

@@ -9,11 +9,10 @@
 use prodrome_core::event::Actor;
 use prodrome_core::fold::{Discrete, Frontier, RegisterType};
 use prodrome_core::literal::{Datetime, ProdromeError, Value};
-use prodrome_core::registers::Stamp;
 
-use crate::envelope::{Event, Says, Vocab};
-use crate::literal::{Fields, Literal as _, Signature};
-use crate::sole::{One, Only, Sole};
+use prodrome_core::fold::sole::{One, Only, Sole};
+use prodrome_core::literal::codec::{Constructor, Fields, Literal as _};
+use prodrome_core::schema::headed::{Body, Constructors, Event};
 
 use crate::secretary::fact_life::Life;
 use crate::secretary::memory::{FactId, Kind, Origin, TAPPED, TURN};
@@ -54,74 +53,71 @@ pub enum NotAMemoryEvent {
     },
 }
 
-impl MemoryEvent {
-    /// Fact `fact` remembered by `actor`: its words by `text`, its `kind` and who said it.
-    #[must_use]
-    pub fn remembered(
-        fact: FactId,
-        at: Datetime,
-        actor: Actor,
-        text: TextName,
-        kind: Kind,
-        origin: Origin,
-    ) -> Self {
-        Self::of(fact, at, actor, Said::Remembered { text, kind, origin })
-    }
+/// Fact `fact` remembered by `actor`: its words by `text`, its `kind` and who said it.
+///
+/// # Errors
+/// None in practice: the schema refuses only a forgetting. The type is the schema's one door,
+/// [`Event::new`].
+pub fn remembered(
+    fact: FactId,
+    at: Datetime,
+    actor: Actor,
+    text: TextName,
+    kind: Kind,
+    origin: Origin,
+) -> Result<MemoryEvent, NotAMemoryEvent> {
+    Event::new(fact, at, actor, Said::Remembered { text, kind, origin })
+}
 
-    /// Fact `fact` forgotten by `actor`, making memory version `version`.
-    ///
-    /// # Errors
-    /// [`NotAMemoryEvent::Before`] for a version at or below the fact's own number.
-    pub fn forgotten(
-        fact: FactId,
-        at: Datetime,
-        actor: Actor,
-        version: u64,
-    ) -> Result<Self, NotAMemoryEvent> {
-        if version <= fact.0 {
-            return Err(NotAMemoryEvent::Before { fact, version });
-        }
-        Ok(Self::of(fact, at, actor, Said::Forgotten { version }))
-    }
-
-    /// The memory's version this event made: a remembered fact's number, or a forgetting's.
-    #[must_use]
-    pub fn version(&self) -> u64 {
-        match *self.said() {
-            Said::Remembered { .. } => self.key().0,
-            Said::Forgotten { version } => version,
-        }
-    }
+/// Fact `fact` forgotten by `actor`, making memory version `version`.
+///
+/// # Errors
+/// [`NotAMemoryEvent::Before`] for a version at or below the fact's own number.
+pub fn forgotten(
+    fact: FactId,
+    at: Datetime,
+    actor: Actor,
+    version: u64,
+) -> Result<MemoryEvent, NotAMemoryEvent> {
+    Event::new(fact, at, actor, Said::Forgotten { version })
 }
 
 /// `Remembered(fact, at, actor, text, kind, said)`.
-const REMEMBERED: Signature = (
+const REMEMBERED: Constructor = (
     "Remembered",
     &["fact", "at", "actor", "text", "kind", "said"],
 );
 /// `Forgotten(fact, at, actor, version)`.
-const FORGOTTEN: Signature = ("Forgotten", &["fact", "at", "actor", "version"]);
+const FORGOTTEN: Constructor = ("Forgotten", &["fact", "at", "actor", "version"]);
 /// The memory's whitelist: its two events and an origin's two arms, nothing else, since no
 /// event nests a term.
-pub type MemoryVocabulary = Vocab<Said>;
+pub type MemoryVocabulary = Constructors<Said>;
 
-impl Says for Said {
+impl Body for Said {
     type Key = FactId;
     type Register = Only;
-    type Registers<'a> = One<'a, MemoryEvent>;
+    type Registers<'a> = One<'a, LifeRegister>;
+    type Refusal = NotAMemoryEvent;
 
-    const EVENTS: &'static [Signature] = &[REMEMBERED, FORGOTTEN];
-    const NESTED: &'static [Signature] = &[TURN, TAPPED];
+    const EVENTS: &'static [Constructor] = &[REMEMBERED, FORGOTTEN];
+    const NESTED: &'static [Constructor] = &[TURN, TAPPED];
 
-    fn registers() -> Vec<Only> {
-        vec![Only]
-    }
-
-    fn writes(_: &MemoryEvent) -> impl Iterator<Item = Only> {
+    fn writes(&self) -> impl Iterator<Item = Only> {
         std::iter::once(Only)
     }
 
-    fn body(&self) -> (Signature, Vec<Value>) {
+    /// A forgetting comes after its fact: its version is above the fact's own number.
+    fn admits(fact: &FactId, said: &Said) -> Result<(), NotAMemoryEvent> {
+        match *said {
+            Said::Forgotten { version } if version <= fact.0 => Err(NotAMemoryEvent::Before {
+                fact: *fact,
+                version,
+            }),
+            Said::Remembered { .. } | Said::Forgotten { .. } => Ok(()),
+        }
+    }
+
+    fn fields(&self) -> (Constructor, Vec<Value>) {
         match self {
             Said::Remembered { text, kind, origin } => (
                 REMEMBERED,
@@ -134,18 +130,23 @@ impl Says for Said {
     fn parse(fields: &Fields<'_>) -> Result<MemoryEvent, ProdromeError> {
         let (fact, at, actor) = (fields.get("fact")?, fields.get("at")?, fields.get("actor")?);
         match fields.name() {
-            "Remembered" => Ok(MemoryEvent::remembered(
+            "Remembered" => remembered(
                 fact,
                 at,
                 actor,
                 fields.get("text")?,
                 fields.get("kind")?,
                 fields.get("said")?,
-            )),
-            "Forgotten" => MemoryEvent::forgotten(fact, at, actor, fields.get("version")?)
-                .map_err(|failed| ProdromeError::invalid(failed.to_string())),
-            other => Err(crate::literal::no_arm("a memory event", other)),
+            ),
+            "Forgotten" => forgotten(fact, at, actor, fields.get("version")?),
+            other => {
+                return Err(prodrome_core::literal::codec::no_arm(
+                    "a memory event",
+                    other,
+                ));
+            }
         }
+        .map_err(|failed| ProdromeError::invalid(failed.to_string()))
     }
 }
 
@@ -157,20 +158,22 @@ impl RegisterType<MemoryEvent> for LifeRegister {
     type Value<'e> = Life<'e>;
 
     fn value(event: &MemoryEvent) -> Option<Life<'_>> {
-        Some(match event.said() {
+        Some(match event.body() {
             Said::Remembered { .. } => Life::Remembered(Discrete(event)),
             Said::Forgotten { .. } => Life::Forgotten,
         })
     }
 }
 
-impl Sole for MemoryEvent {
-    fn reading<'a>(frontier: &Frontier<'a, Self>) -> Vec<&'a Stamp<Self>> {
-        frontier.reading::<LifeRegister>()
-    }
+/// Inflationary: the store refuses a write below the life it supersedes.
+impl Sole for LifeRegister {
+    type Schema = MemoryEvent;
 
-    fn grows(frontier: &Frontier<'_, Self>, event: &Self) -> Result<(), ProdromeError> {
-        frontier.grows::<LifeRegister>(event)
+    fn grows(
+        frontier: &Frontier<'_, MemoryEvent>,
+        event: &MemoryEvent,
+    ) -> Result<(), ProdromeError> {
+        frontier.grows::<Self>(event)
     }
 }
 
@@ -180,7 +183,7 @@ mod tests {
 
     #[test]
     fn no_constructor_is_a_term_or_an_envelope() {
-        crate::literal::assert_own(&[REMEMBERED, FORGOTTEN, TURN, TAPPED]);
+        crate::own::assert_own(&[REMEMBERED, FORGOTTEN, TURN, TAPPED]);
     }
 
     /// Every count prints as itself and reads back, at the widest it holds.
@@ -191,7 +194,7 @@ mod tests {
         let ada = Actor::new("ada").expect("an actor");
         let fact = FactId(u64::MAX - 1);
         for event in [
-            MemoryEvent::remembered(
+            remembered(
                 fact,
                 at,
                 ada.clone(),
@@ -202,8 +205,9 @@ mod tests {
                         .expect("an id"),
                     turn: usize::MAX,
                 },
-            ),
-            MemoryEvent::forgotten(fact, at, ada, u64::MAX).expect("after its fact"),
+            )
+            .expect("a remembering"),
+            forgotten(fact, at, ada, u64::MAX).expect("after its fact"),
         ] {
             let print = canonical(&event);
             assert_eq!(
@@ -218,7 +222,7 @@ mod tests {
     fn a_forgetting_comes_after_its_fact() {
         let at = Datetime::new(2026, 10, 2, 9, 0, 0, 0).expect("an instant");
         let ada = Actor::new("ada").expect("an actor");
-        assert!(MemoryEvent::forgotten(FactId(3), at, ada.clone(), 3).is_err());
-        assert!(MemoryEvent::forgotten(FactId(3), at, ada, 4).is_ok());
+        assert!(forgotten(FactId(3), at, ada.clone(), 3).is_err());
+        assert!(forgotten(FactId(3), at, ada, 4).is_ok());
     }
 }

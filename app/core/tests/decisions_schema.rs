@@ -20,7 +20,7 @@ use prodrome_core::store::EventStore;
 use proptest::prelude::*;
 
 use suzatary_core::decisions::{
-    DecisionEvent, DecisionId, DecisionVocabulary, Ledger, Life, Statement,
+    self, DecisionEvent, DecisionId, DecisionVocabulary, Ledger, Life, Statement,
 };
 use suzatary_core::record::MarkupSource;
 use suzatary_core::store::linearised;
@@ -120,7 +120,7 @@ fn history(script: &[Step], from: usize) -> Vec<DecisionEvent> {
             Step::Decide(seed, links) => {
                 let links = earlier(decided, links);
                 events.push(
-                    DecisionEvent::decided(id(decided), now, ada(), statement(*seed), links)
+                    decisions::decided(id(decided), now, ada(), statement(*seed), links)
                         .expect("an event"),
                 );
                 decided += 1;
@@ -130,7 +130,7 @@ fn history(script: &[Step], from: usize) -> Vec<DecisionEvent> {
                 if !withdrawn.contains(&which) {
                     let links = earlier(which, links);
                     events.push(
-                        DecisionEvent::revised(id(which), now, ada(), statement(*seed), links)
+                        decisions::revised(id(which), now, ada(), statement(*seed), links)
                             .expect("an event"),
                     );
                 }
@@ -139,7 +139,7 @@ fn history(script: &[Step], from: usize) -> Vec<DecisionEvent> {
                 let which = pick % decided;
                 if withdrawn.insert(which) {
                     events.push(
-                        DecisionEvent::withdrawn(id(which), now, ada(), "No longer held.")
+                        decisions::withdrawn(id(which), now, ada(), "No longer held.")
                             .expect("an event"),
                     );
                 }
@@ -224,13 +224,13 @@ fn two_concurrent_revisions_are_a_conflict_shown_whole() {
     adopt(&two.0, &one.0);
     one.0
         .append(
-            DecisionEvent::revised(id(0), at(10), ada(), statement(2), BTreeSet::new())
+            decisions::revised(id(0), at(10), ada(), statement(2), BTreeSet::new())
                 .expect("an event"),
         )
         .expect("allowed");
     two.0
         .append(
-            DecisionEvent::revised(id(0), at(11), ada(), statement(3), BTreeSet::new())
+            decisions::revised(id(0), at(11), ada(), statement(3), BTreeSet::new())
                 .expect("an event"),
         )
         .expect("allowed");
@@ -252,13 +252,13 @@ fn concurrent_links_that_close_a_cycle_are_named_and_every_decision_is_shown_onc
     adopt(&two.0, &one.0);
     one.0
         .append(
-            DecisionEvent::revised(id(0), at(10), ada(), statement(1), BTreeSet::from([id(1)]))
+            decisions::revised(id(0), at(10), ada(), statement(1), BTreeSet::from([id(1)]))
                 .expect("an event"),
         )
         .expect("allowed");
     two.0
         .append(
-            DecisionEvent::revised(id(1), at(11), ada(), statement(2), BTreeSet::from([id(0)]))
+            decisions::revised(id(1), at(11), ada(), statement(2), BTreeSet::from([id(0)]))
                 .expect("an event"),
         )
         .expect("allowed");
@@ -322,10 +322,10 @@ proptest! {
         let before = objects(&store.0).len();
         let reading = read(objects(&store.0));
         for (withdrawn, _) in reading.iter().filter(|(_, decision)| decision.withdrawn.is_some()) {
-            let again = DecisionEvent::revised(withdrawn.clone(), at(500), ada(), statement(seed), BTreeSet::new())
+            let again = decisions::revised(withdrawn.clone(), at(500), ada(), statement(seed), BTreeSet::new())
                 .expect("an event");
             prop_assert!(store.0.append(again).is_err());
-            let anew = DecisionEvent::decided(withdrawn.clone(), at(501), ada(), statement(seed), BTreeSet::new())
+            let anew = decisions::decided(withdrawn.clone(), at(501), ada(), statement(seed), BTreeSet::new())
                 .expect("an event");
             prop_assert!(store.0.append(anew).is_err());
         }
@@ -416,13 +416,13 @@ fn rename(event: &DecisionEvent, offset: usize) -> DecisionEvent {
         let n: usize = of.as_str()["decision".len()..].parse().expect("a number");
         id(n + offset)
     };
-    let decision = moved(event.key());
+    let decision = moved(prodrome_core::schema::Schema::key(event));
     let when = prodrome_core::schema::Schema::at(event);
-    match event.said() {
+    match event.body() {
         suzatary_core::decisions::Said::Decided {
             statement,
             supersedes,
-        } => DecisionEvent::decided(
+        } => decisions::decided(
             decision,
             when,
             ada(),
@@ -432,7 +432,7 @@ fn rename(event: &DecisionEvent, offset: usize) -> DecisionEvent {
         suzatary_core::decisions::Said::Revised {
             statement,
             supersedes,
-        } => DecisionEvent::revised(
+        } => decisions::revised(
             decision,
             when,
             ada(),
@@ -440,7 +440,7 @@ fn rename(event: &DecisionEvent, offset: usize) -> DecisionEvent {
             supersedes.iter().map(moved).collect(),
         ),
         suzatary_core::decisions::Said::Withdrawn { reason } => {
-            DecisionEvent::withdrawn(decision, when, ada(), reason)
+            decisions::withdrawn(decision, when, ada(), reason.as_str())
         }
     }
     .expect("an event")

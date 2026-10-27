@@ -1408,7 +1408,7 @@ where
 /// store whose rounds were filed under topics carries them.
 fn bulk_topics(read: &crate::instance::Instance) -> anyhow::Result<()> {
     use prodrome_core::event::Actor;
-    use suzatary_core::secretary::topics::membership_event::MembershipEvent;
+    use suzatary_core::secretary::topics::membership_event;
     use suzatary_core::secretary::topics::targets::rounds;
     use suzatary_core::secretary::topics::topic::Topic;
     const NAMES: [&str; 8] = [
@@ -1428,7 +1428,7 @@ fn bulk_topics(read: &crate::instance::Instance) -> anyhow::Result<()> {
     {
         for round in rounds(stored) {
             let topic = names[events.len() % NAMES.len()].clone()?;
-            events.push(MembershipEvent::added(
+            events.push(membership_event::added(
                 round.target(),
                 topic,
                 at,

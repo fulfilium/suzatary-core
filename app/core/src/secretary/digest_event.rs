@@ -15,17 +15,15 @@
 //! writes no register, so it never stands as a node's reading.
 //! Only a [`Tap`] makes a `Retracted`, and it is about standing (`Schema::asks`), so one
 //! written as anyone but an owner claims and moves nothing ([`crate::secretary::digest_policy`]).
-//! Every other event writes the node's one register, discrete ([`Sole`]):
+//! Every other event writes the node's one register, discrete ([`Whole`]):
 //! two summaries no later write descends from are a conflict, never settled by time.
 
 use prodrome_core::event::{Actor, Hash};
-use prodrome_core::fold::Frontier;
 use prodrome_core::literal::{Datetime, ProdromeError, Value};
-use prodrome_core::registers::Stamp;
 
-use crate::envelope::{Event, Says, Vocab};
-use crate::literal::{Fields, Literal as _, Signature};
-use crate::sole::{One, Only, Sole};
+use prodrome_core::fold::sole::{One, Only, Whole};
+use prodrome_core::literal::codec::{Constructor, Fields, Literal as _};
+use prodrome_core::schema::headed::{Body, Constructors, Event};
 
 use crate::model_name::ModelName;
 use crate::rule_version::Under;
@@ -104,99 +102,95 @@ pub struct Attempt {
     pub beside: Beside,
 }
 
-impl DigestEvent {
-    /// Node `node` summarized by `actor` as `text`, as `attempt` says, under the current asking.
-    /// The name and length are the text's own, so an event cannot name one text and price
-    /// another.
-    ///
-    /// # Errors
-    /// [`NotADigestEvent::FromNothing`] for an attempt over nothing.
-    pub fn summarized(
-        node: Hash,
-        at: Datetime,
-        actor: Actor,
-        text: &Text<Line>,
-        attempt: Attempt,
-    ) -> Result<Self, NotADigestEvent> {
-        let bytes = u32::try_from(text.words().as_str().len())
-            .map_err(|_| NotADigestEvent::Length(u32::MAX))?;
-        let Attempt {
+/// Node `node` summarized by `actor` as `text`, as `attempt` says, under the current asking.
+/// The name and length are the text's own, so an event cannot name one text and price
+/// another.
+///
+/// # Errors
+/// [`NotADigestEvent::FromNothing`] for an attempt over nothing.
+pub fn summarized(
+    node: Hash,
+    at: Datetime,
+    actor: Actor,
+    text: &Text<Line>,
+    attempt: Attempt,
+) -> Result<DigestEvent, NotADigestEvent> {
+    let bytes = u32::try_from(text.words().as_str().len())
+        .map_err(|_| NotADigestEvent::Length(u32::MAX))?;
+    let Attempt {
+        over,
+        model,
+        taint,
+        beside,
+    } = attempt;
+    Event::new(
+        node,
+        at,
+        actor,
+        Said::Summarized {
+            text: text.name(),
             over,
             model,
+            bytes,
             taint,
-            beside,
-        } = attempt;
-        Self::checked(
-            node,
-            at,
-            actor,
-            Said::Summarized {
-                text: text.name(),
-                over,
-                model,
-                bytes,
-                taint,
-                asked: Under::current(beside),
-            },
-        )
-    }
+            asked: Under::current(beside),
+        },
+    )
+}
 
-    /// Node `node` left unsummarized by `actor`'s attempt with `model`, whose shortest answer was
-    /// `shortest` bytes, under today's [`NODE_BYTES`].
-    #[must_use]
-    pub fn unfit(node: Hash, at: Datetime, actor: Actor, model: ModelName, shortest: u32) -> Self {
-        let limit = u32::try_from(NODE_BYTES).unwrap_or(u32::MAX);
-        Self::of(
-            node,
-            at,
-            actor,
-            Said::Unfit {
-                model,
-                limit,
-                shortest,
-            },
-        )
-    }
+/// Node `node` left unsummarized by `actor`'s attempt with `model`, whose shortest answer was
+/// `shortest` bytes, under today's [`NODE_BYTES`].
+///
+/// # Errors
+/// None in practice: the schema refuses only a summary. The type is the schema's one door,
+/// [`Event::new`].
+pub fn unfit(
+    node: Hash,
+    at: Datetime,
+    actor: Actor,
+    model: ModelName,
+    shortest: u32,
+) -> Result<DigestEvent, NotADigestEvent> {
+    let limit = u32::try_from(NODE_BYTES).unwrap_or(u32::MAX);
+    Event::new(
+        node,
+        at,
+        actor,
+        Said::Unfit {
+            model,
+            limit,
+            shortest,
+        },
+    )
+}
 
-    /// A call of `sent` bytes about `node` that `actor` is about to make.
-    #[must_use]
-    pub fn asked(node: Hash, at: Datetime, actor: Actor, sent: u64) -> Self {
-        Self::of(node, at, actor, Said::Asked { sent })
-    }
+/// A call of `sent` bytes about `node` that `actor` is about to make.
+///
+/// # Errors
+/// None in practice, as [`unfit`].
+pub fn asked(
+    node: Hash,
+    at: Datetime,
+    actor: Actor,
+    sent: u64,
+) -> Result<DigestEvent, NotADigestEvent> {
+    Event::new(node, at, actor, Said::Asked { sent })
+}
 
-    /// Node `node`'s summary retracted by whoever tapped `tap`: the actor is the gate's
-    /// mapping of the peer, never an argument.
-    #[must_use]
-    pub fn retracted(node: Hash, at: Datetime, tap: &Tap) -> Self {
-        Self::of(node, at, tap.who().clone(), Said::Retracted)
-    }
+/// Node `node`'s summary retracted by whoever tapped `tap`: the actor is the gate's
+/// mapping of the peer, never an argument.
+///
+/// # Errors
+/// None in practice, as [`unfit`].
+pub fn retracted(node: Hash, at: Datetime, tap: &Tap) -> Result<DigestEvent, NotADigestEvent> {
+    Event::new(node, at, tap.who().clone(), Said::Retracted)
+}
 
-    /// The one door both the constructors and the parse go through.
-    fn checked(
-        node: Hash,
-        at: Datetime,
-        actor: Actor,
-        said: Said,
-    ) -> Result<Self, NotADigestEvent> {
-        match &said {
-            Said::Summarized { over, .. } if over.is_empty() => {
-                return Err(NotADigestEvent::FromNothing);
-            }
-            Said::Summarized { bytes, .. }
-                if !(1..=NODE_BYTES).contains(&usize::try_from(*bytes).unwrap_or(usize::MAX)) =>
-            {
-                return Err(NotADigestEvent::Length(*bytes));
-            }
-            Said::Summarized { .. } | Said::Unfit { .. } | Said::Asked { .. } | Said::Retracted => {
-            }
-        }
-        Ok(Self::of(node, at, actor, said))
-    }
-
+impl Said {
     /// The bytes it sent, if it is a call.
     #[must_use]
     pub fn sent(&self) -> Option<u64> {
-        match self.said() {
+        match self {
             Said::Asked { sent } => Some(*sent),
             Said::Summarized { .. } | Said::Unfit { .. } | Said::Retracted => None,
         }
@@ -205,59 +199,71 @@ impl DigestEvent {
 
 /// `Summarized(node, at, actor, text, over, model, bytes, taint)`: a summary from before
 /// summaries recorded their asking.
-const SUMMARIZED: Signature = (
+const SUMMARIZED: Constructor = (
     "Summarized",
     &[
         "node", "at", "actor", "text", "over", "model", "bytes", "taint",
     ],
 );
 /// `SummarizedUnder(node, at, actor, text, over, model, bytes, taint, asked)`.
-const SUMMARIZED_UNDER: Signature = (
+const SUMMARIZED_UNDER: Constructor = (
     "SummarizedUnder",
     &[
         "node", "at", "actor", "text", "over", "model", "bytes", "taint", "asked",
     ],
 );
 /// `Unfit(node, at, actor, model, limit, shortest)`.
-const UNFIT: Signature = (
+const UNFIT: Constructor = (
     "Unfit",
     &["node", "at", "actor", "model", "limit", "shortest"],
 );
 /// `Asked(node, at, actor, sent)`.
-const ASKED: Signature = ("Asked", &["node", "at", "actor", "sent"]);
+const ASKED: Constructor = ("Asked", &["node", "at", "actor", "sent"]);
 /// `Retracted(node, at, actor)`.
-const RETRACTED: Signature = ("Retracted", &["node", "at", "actor"]);
+const RETRACTED: Constructor = ("Retracted", &["node", "at", "actor"]);
 /// The constructors, in print order.
-const SIGNATURES: &[Signature] = &[SUMMARIZED, SUMMARIZED_UNDER, UNFIT, ASKED, RETRACTED];
+const SIGNATURES: &[Constructor] = &[SUMMARIZED, SUMMARIZED_UNDER, UNFIT, ASKED, RETRACTED];
 
 /// The digest's whitelist: its constructors and nothing else, since no event nests a term.
-pub type DigestVocabulary = Vocab<Said>;
+pub type DigestVocabulary = Constructors<Said>;
 
-impl Says for Said {
+impl Body for Said {
     type Key = Hash;
     type Register = Only;
-    type Registers<'a> = One<'a, DigestEvent>;
+    type Registers<'a> = One<'a, Whole<DigestEvent>>;
+    type Refusal = NotADigestEvent;
 
-    const EVENTS: &'static [Signature] = SIGNATURES;
-
-    fn registers() -> Vec<Only> {
-        vec![Only]
-    }
+    const EVENTS: &'static [Constructor] = SIGNATURES;
 
     /// A call writes no register: it is counted, and never a node's reading.
-    fn writes(event: &DigestEvent) -> impl Iterator<Item = Only> {
-        (!matches!(event.said(), Said::Asked { .. }))
+    fn writes(&self) -> impl Iterator<Item = Only> {
+        (!matches!(self, Said::Asked { .. }))
             .then_some(Only)
             .into_iter()
     }
 
     /// A retraction is about standing ([`crate::secretary::digest_policy`]); an attempt binds
     /// whoever wrote it.
-    fn asks(event: &DigestEvent) -> bool {
-        matches!(event.said(), Said::Retracted)
+    fn asks(&self) -> bool {
+        matches!(self, Said::Retracted)
     }
 
-    fn body(&self) -> (Signature, Vec<Value>) {
+    /// A summary is written from something, and its length is within [`NODE_BYTES`].
+    fn admits(_: &Hash, said: &Said) -> Result<(), NotADigestEvent> {
+        match said {
+            Said::Summarized { over, .. } if over.is_empty() => Err(NotADigestEvent::FromNothing),
+            Said::Summarized { bytes, .. }
+                if !(1..=NODE_BYTES).contains(&usize::try_from(*bytes).unwrap_or(usize::MAX)) =>
+            {
+                Err(NotADigestEvent::Length(*bytes))
+            }
+            Said::Summarized { .. } | Said::Unfit { .. } | Said::Asked { .. } | Said::Retracted => {
+                Ok(())
+            }
+        }
+    }
+
+    fn fields(&self) -> (Constructor, Vec<Value>) {
         match self {
             Said::Summarized {
                 text,
@@ -318,22 +324,20 @@ impl Says for Said {
                 sent: fields.get("sent")?,
             },
             "Retracted" => Said::Retracted,
-            other => return Err(crate::literal::no_arm("a digest event", other)),
+            other => {
+                return Err(prodrome_core::literal::codec::no_arm(
+                    "a digest event",
+                    other,
+                ));
+            }
         };
-        DigestEvent::checked(
+        Event::new(
             fields.get("node")?,
             fields.get("at")?,
             fields.get("actor")?,
             said,
         )
         .map_err(|failed| ProdromeError::invalid(failed.to_string()))
-    }
-}
-
-/// Discrete, so not inflationary: a retraction may follow a summary and a summary a retraction.
-impl Sole for DigestEvent {
-    fn reading<'a>(frontier: &Frontier<'a, Self>) -> Vec<&'a Stamp<Self>> {
-        frontier.candidates()
     }
 }
 
@@ -368,7 +372,7 @@ mod tests {
 
     #[test]
     fn no_constructor_is_a_term_or_an_envelope() {
-        crate::literal::assert_own(SIGNATURES);
+        crate::own::assert_own(SIGNATURES);
     }
 
     proptest! {
@@ -383,23 +387,23 @@ mod tests {
             let ada = Actor::new("ada").expect("an actor");
             let over = over.into_iter().map(name).collect();
             let taint = if tainted { Taint::Tainted } else { Taint::Clean };
-            let summarized = DigestEvent::summarized(
+            let summarized = summarized(
                 name(node), at(), ada.clone(), &text, attempt(over, taint),
             )
             .expect("an event");
-            let mut said = summarized.said().clone();
+            let mut said = summarized.body().clone();
             if let Said::Summarized { asked, .. } = &mut said {
                 *asked = Under::Unversioned;
             }
-            let unversioned = DigestEvent::of(name(node), at(), ada.clone(), said);
+            let unversioned = DigestEvent::new(name(node), at(), ada.clone(), said).expect("a summary");
             prop_assert!(canonical(&unversioned).starts_with("Summarized("));
             prop_assert!(canonical(&summarized).starts_with("SummarizedUnder("));
             for event in [
                 summarized,
                 unversioned,
-                DigestEvent::unfit(name(node), at(), ada.clone(), model(), shortest),
-                DigestEvent::asked(name(node), at(), ada.clone(), sent),
-                DigestEvent::of(name(node), at(), ada, Said::Retracted),
+                unfit(name(node), at(), ada.clone(), model(), shortest).expect("an attempt"),
+                asked(name(node), at(), ada.clone(), sent).expect("a call"),
+                DigestEvent::new(name(node), at(), ada, Said::Retracted).expect("a retraction"),
             ] {
                 let print = canonical(&event);
                 prop_assert!(!print.contains(words.trim()), "{print}");
@@ -412,7 +416,7 @@ mod tests {
     #[test]
     fn every_count_round_trips_at_its_widest() {
         let ada = Actor::new("ada").expect("an actor");
-        let unfit = DigestEvent::of(
+        let unfit = DigestEvent::new(
             name(1),
             at(),
             ada.clone(),
@@ -421,8 +425,10 @@ mod tests {
                 limit: u32::MAX,
                 shortest: u32::MAX,
             },
-        );
-        for event in [DigestEvent::asked(name(1), at(), ada, u64::MAX), unfit] {
+        )
+        .expect("an attempt");
+        let asked = asked(name(1), at(), ada, u64::MAX).expect("a call");
+        for event in [asked, unfit] {
             let print = canonical(&event);
             assert_eq!(
                 parse_event::<DigestEvent>(&DigestVocabulary::default(), &print),
@@ -437,7 +443,7 @@ mod tests {
         let text = Text::new(Line::new("a line").expect("a line"), [0; 16]);
         let ada = Actor::new("ada").expect("an actor");
         assert_eq!(
-            DigestEvent::summarized(
+            summarized(
                 name(1),
                 at(),
                 ada.clone(),
@@ -446,7 +452,7 @@ mod tests {
             ),
             Err(NotADigestEvent::FromNothing)
         );
-        let event = DigestEvent::summarized(
+        let event = summarized(
             name(1),
             at(),
             ada,
@@ -462,21 +468,10 @@ mod tests {
     #[test]
     fn a_call_writes_no_register() {
         let ada = Actor::new("ada").expect("an actor");
-        assert_eq!(
-            DigestEvent::asked(name(1), at(), ada.clone(), 9)
-                .writes()
-                .count(),
-            0
-        );
-        assert_eq!(
-            DigestEvent::asked(name(1), at(), ada.clone(), 9).sent(),
-            Some(9)
-        );
-        assert_eq!(
-            DigestEvent::unfit(name(1), at(), ada, model(), 9)
-                .writes()
-                .count(),
-            1
-        );
+        let call = asked(name(1), at(), ada.clone(), 9).expect("a call");
+        assert_eq!(call.writes().count(), 0);
+        assert_eq!(call.body().sent(), Some(9));
+        let unfit = unfit(name(1), at(), ada, model(), 9).expect("an attempt");
+        assert_eq!(unfit.writes().count(), 1);
     }
 }

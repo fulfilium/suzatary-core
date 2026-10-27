@@ -26,7 +26,7 @@ impl RegisterType<DecisionEvent> for ContentRegister {
     type Value<'e> = Discrete<&'e Statement>;
 
     fn value(event: &DecisionEvent) -> Option<Discrete<&Statement>> {
-        event.statement().map(Discrete)
+        event.body().statement().map(Discrete)
     }
 }
 
@@ -34,7 +34,7 @@ impl RegisterType<DecisionEvent> for LifeRegister {
     type Value<'e> = Life;
 
     fn value(event: &DecisionEvent) -> Option<Life> {
-        Some(match event.said() {
+        Some(match event.body() {
             Said::Decided { .. } | Said::Revised { .. } => Life::Stated,
             Said::Withdrawn { .. } => Life::Withdrawn,
         })
@@ -61,7 +61,7 @@ impl<'a> Product<'a> for DecisionRegisters<'a> {
     }
 
     fn join(&mut self, stamp: &'a Stamp<DecisionEvent>) {
-        if let Some(links) = stamp.event.supersedes() {
+        if let Some(links) = stamp.event.body().supersedes() {
             self.content.join(stamp);
             for link in links {
                 self.supersedes.join(link);

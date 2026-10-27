@@ -7,12 +7,13 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
+use prodrome_core::dag::Dag;
 use prodrome_core::event::{Actor, Envelope, Hash, parents_of};
 use prodrome_core::literal::Datetime;
 use proptest::prelude::*;
 
+use prodrome_core::store::frontier::{Frontiers, Since, Token};
 use suzatary_core::capability::Turn;
-use suzatary_core::frontier::{Digest, Frontiers, Since};
 use suzatary_core::routes::{self, Books, Cut};
 use suzatary_core::secretary::conversations::InMemory;
 use suzatary_core::secretary::erasure::Erasure;
@@ -197,20 +198,20 @@ fn rests_on(object: &Envelope<LineEvent>) -> Vec<Hash> {
     on
 }
 
-/// The frontier of `held`, a down-set of `objects`, recorded as an answer records one, as the
-/// `since` that names it.
+/// The frontier of `held`, a down-set of `objects`, recorded as the receipt of a post of `held`
+/// records one, as the `since` that names it.
 fn since_of(
     frontiers: &Frontiers,
     objects: &[(Hash, Envelope<LineEvent>)],
     held: &BTreeSet<Hash>,
 ) -> Since {
-    let below: BTreeSet<Hash> = objects
-        .iter()
-        .filter(|(name, _)| held.contains(name))
-        .flat_map(|(_, object)| parents_of(object))
-        .collect();
-    let heads = held.difference(&below).cloned().collect();
-    Since::Frontier(frontiers.record("store/lines", &heads).expect("recorded"))
+    let dag: Dag<LineEvent> = objects.iter().cloned().collect();
+    let recorded = frontiers
+        .answer("store/lines", &Since::Nothing, &dag)
+        .expect("answered")
+        .record_with(held.iter().cloned())
+        .expect("recorded");
+    Since::Frontier(recorded.token)
 }
 
 proptest! {
@@ -232,7 +233,7 @@ proptest! {
         for write in &script {
             store.apply(write);
         }
-        let (epochs, frontiers) = (suzatary_core::epoch::Epochs::remembered(), Frontiers::remembered());
+        let (epochs, frontiers) = (suzatary_core::epoch::Epochs::remembered(), Frontiers::remembered(prodrome_core::store::frontier::KEPT));
         let books = Books { epochs: &epochs, frontiers: &frontiers };
         let first = store.lines.lines.objects().expect("reads");
         // A replica holds a down-set: a prefix of the store's order.
@@ -272,7 +273,7 @@ proptest! {
                 prop_assert!(!erased.contains(name), "the erased key {} was sent", name);
             }
             prop_assert_eq!(piece.objects.frontier.count, held.len(), "the frontier is what the replica holds");
-            since = Since::Frontier(Digest::parse(&piece.objects.frontier.digest).expect("a digest"));
+            since = Since::Frontier(Token::parse(&piece.objects.frontier.digest).expect("a digest"));
             keys.extend(piece.keys);
             if piece.rest == 0 {
                 break;
@@ -372,7 +373,7 @@ proptest! {
         for write in &script {
             store.apply(write);
         }
-        let (epochs, frontiers) = (suzatary_core::epoch::Epochs::remembered(), Frontiers::remembered());
+        let (epochs, frontiers) = (suzatary_core::epoch::Epochs::remembered(), Frontiers::remembered(prodrome_core::store::frontier::KEPT));
         let books = Books { epochs: &epochs, frontiers: &frontiers };
         let first = store.lines.lines.objects().expect("reads");
         let mut held: BTreeSet<Hash> =
@@ -396,7 +397,7 @@ proptest! {
                 prop_assert!(!piece.erased.contains(name), "the erased key {} was sent", name);
             }
             prop_assert_eq!(piece.frontier.count, held.len(), "the frontier is what the replica holds");
-            since_now = Since::Frontier(Digest::parse(&piece.frontier.digest).expect("a digest"));
+            since_now = Since::Frontier(Token::parse(&piece.frontier.digest).expect("a digest"));
             keys.extend(piece.keys.clone());
             nodes.extend(piece.nodes.clone());
             if piece.rest == 0 {
@@ -645,7 +646,7 @@ fn a_node_is_sized_by_the_bytes_its_content_answer_sends() {
     };
     let (epochs, frontiers) = (
         suzatary_core::epoch::Epochs::remembered(),
-        Frontiers::remembered(),
+        Frontiers::remembered(prodrome_core::store::frontier::KEPT),
     );
     let books = Books {
         epochs: &epochs,

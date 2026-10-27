@@ -17,15 +17,12 @@ use std::collections::BTreeSet;
 
 use base64::Engine as _;
 use prodrome_core::event::{Actor, Hash};
-use prodrome_core::fold::Frontier;
 use prodrome_core::literal::{Datetime, ProdromeError, Table, Value, Vocabulary, print_literal};
-use prodrome_core::registers::Stamp;
 use prodrome_core::schema::Schema;
 use serde::Serialize;
 use serde::de::DeserializeOwned;
 
 use crate::capability::Entropy;
-use crate::literal::{Fields, Literal, Signature, no_arm, record};
 use crate::redact::Rules;
 use crate::secretary::carried::Carried;
 use crate::secretary::erasure::Erasure;
@@ -36,7 +33,8 @@ use crate::secretary::scrubbed_under::ScrubbedUnder;
 use crate::secretary::slots::Slots;
 use crate::secretary::store::{ConversationId, Entry};
 use crate::secretary::words::{Gone, Words};
-use crate::sole::{One, Only, Sole};
+use prodrome_core::fold::sole::{One, Only, Whole};
+use prodrome_core::literal::codec::{Constructor, Fields, Literal, no_arm, record};
 
 /// One line: which conversation, when, who wrote it, how many lines its writer held, where it
 /// came from, its shape, and its words locked.
@@ -382,7 +380,7 @@ impl LineEvent {
     }
 
     /// The line's print without its words: its head and its shape, under its signature.
-    fn bare(&self) -> (Signature, Vec<Value>) {
+    fn bare(&self) -> (Constructor, Vec<Value>) {
         let mut values = self.head();
         values.extend(shape_fields(&self.shape));
         (signature(&self.shape), values)
@@ -535,7 +533,7 @@ fn shape_of(fields: Fields<'_>) -> Result<LineShape, ProdromeError> {
 }
 
 /// The signature a line of `shape` is stored under.
-fn signature(shape: &LineShape) -> Signature {
+fn signature(shape: &LineShape) -> Constructor {
     match shape {
         LineShape::Opened { .. } => OPENED,
         LineShape::Titled { .. } => TITLED,
@@ -558,10 +556,10 @@ fn signature(shape: &LineShape) -> Signature {
 
 /// `Scrubbed(key, box, rules)`: a slot's words as stored, the key's name, the ciphertext in
 /// base64, and the rules the words passed.
-const SCRUBBED: Signature = ("Scrubbed", &["key", "box", "rules"]);
+const SCRUBBED: Constructor = ("Scrubbed", &["key", "box", "rules"]);
 
 /// `Locked(key, box)`: a slot locked before lines recorded their rules.
-const LOCKED: Signature = ("Locked", &["key", "box"]);
+const LOCKED: Constructor = ("Locked", &["key", "box"]);
 
 /// A slot's words as stored.
 impl Literal for SealedSlot {
@@ -594,12 +592,12 @@ impl Literal for SealedSlot {
 }
 
 /// Whether a line of `signature` carries `words`: every kind that may hold any.
-fn has_words(signature: Signature) -> bool {
+fn has_words(signature: Constructor) -> bool {
     signature.1.contains(&"words")
 }
 
 /// `Opened(conversation, at, actor, held, carried, model, kind, words)`.
-const OPENED: Signature = (
+const OPENED: Constructor = (
     "Opened",
     &[
         "conversation",
@@ -613,7 +611,7 @@ const OPENED: Signature = (
     ],
 );
 /// `Titled(conversation, at, actor, held, carried, by, words)`.
-const TITLED: Signature = (
+const TITLED: Constructor = (
     "Titled",
     &[
         "conversation",
@@ -626,7 +624,7 @@ const TITLED: Signature = (
     ],
 );
 /// `Said(conversation, at, actor, held, carried, turn, by, words)`.
-const SAID: Signature = (
+const SAID: Constructor = (
     "Said",
     &[
         "conversation",
@@ -640,7 +638,7 @@ const SAID: Signature = (
     ],
 );
 /// `Proposed(conversation, at, actor, held, carried, object, revises)`.
-const PROPOSED: Signature = (
+const PROPOSED: Constructor = (
     "Proposed",
     &[
         "conversation",
@@ -653,7 +651,7 @@ const PROPOSED: Signature = (
     ],
 );
 /// `Reviewed(conversation, at, actor, held, carried, chain, batch, decision, objects, words)`.
-const REVIEWED: Signature = (
+const REVIEWED: Constructor = (
     "Reviewed",
     &[
         "conversation",
@@ -669,7 +667,7 @@ const REVIEWED: Signature = (
     ],
 );
 /// `ReviewFailed(conversation, at, actor, held, carried, standing, words)`.
-const REVIEW_FAILED: Signature = (
+const REVIEW_FAILED: Constructor = (
     "ReviewFailed",
     &[
         "conversation",
@@ -682,22 +680,22 @@ const REVIEW_FAILED: Signature = (
     ],
 );
 /// `Stopped(conversation, at, actor, held, carried, by)`.
-const STOPPED: Signature = (
+const STOPPED: Constructor = (
     "Stopped",
     &["conversation", "at", "actor", "held", "carried", "by"],
 );
 /// `Rewound(conversation, at, actor, held, carried, to, by)`.
-const REWOUND: Signature = (
+const REWOUND: Constructor = (
     "Rewound",
     &["conversation", "at", "actor", "held", "carried", "to", "by"],
 );
 /// `MemorySeen(conversation, at, actor, held, carried, version)`.
-const MEMORY_SEEN: Signature = (
+const MEMORY_SEEN: Constructor = (
     "MemorySeen",
     &["conversation", "at", "actor", "held", "carried", "version"],
 );
 /// `Session(conversation, at, actor, held, carried, session, model, cwd, surface)`.
-const SESSION: Signature = (
+const SESSION: Constructor = (
     "Session",
     &[
         "conversation",
@@ -712,7 +710,7 @@ const SESSION: Signature = (
     ],
 );
 /// `Unheard(conversation, at, actor, held, carried, session, model)`.
-const UNHEARD: Signature = (
+const UNHEARD: Constructor = (
     "Unheard",
     &[
         "conversation",
@@ -725,7 +723,7 @@ const UNHEARD: Signature = (
     ],
 );
 /// `Kept(conversation, at, actor, held, carried, session, model, cwd, surface, from)`.
-const KEPT: Signature = (
+const KEPT: Constructor = (
     "Kept",
     &[
         "conversation",
@@ -741,12 +739,12 @@ const KEPT: Signature = (
     ],
 );
 /// `Scoped(conversation, at, actor, held, carried, scope)`.
-const SCOPED: Signature = (
+const SCOPED: Constructor = (
     "Scoped",
     &["conversation", "at", "actor", "held", "carried", "scope"],
 );
 /// `Coding(conversation, at, actor, held, carried, proposal, session, words)`.
-const CODING: Signature = (
+const CODING: Constructor = (
     "Coding",
     &[
         "conversation",
@@ -760,7 +758,7 @@ const CODING: Signature = (
     ],
 );
 /// `Erased(conversation, at, actor, held, carried, keys, erasure)`.
-const ERASED: Signature = (
+const ERASED: Constructor = (
     "Erased",
     &[
         "conversation",
@@ -774,7 +772,7 @@ const ERASED: Signature = (
 );
 
 /// `Resealed(conversation, at, actor, held, carried, of, from, words)`.
-const RESEALED: Signature = (
+const RESEALED: Constructor = (
     "Resealed",
     &[
         "conversation",
@@ -789,7 +787,7 @@ const RESEALED: Signature = (
 );
 
 /// The lines' constructors, in print order.
-const LINES: &[Signature] = &[
+const LINES: &[Constructor] = &[
     OPENED,
     TITLED,
     SAID,
@@ -829,7 +827,11 @@ impl Schema for LineEvent {
         vec![Only]
     }
 
-    type Registers<'a> = One<'a, Self>;
+    /// A conversation's one register, its transcript. A new line rests on every line no later
+    /// line rests on, so the lines are causally ordered and the frontier is the heads. Its
+    /// reading is the heads' distinct events ([`Whole`]); two heads that print alike are one
+    /// line written twice.
+    type Registers<'a> = One<'a, Whole<Self>>;
 
     fn to_value(&self) -> Value {
         let (signature, mut values) = self.bare();
@@ -880,25 +882,6 @@ impl Schema for LineEvent {
 
     fn writes(&self) -> impl Iterator<Item = Only> {
         std::iter::once(Only)
-    }
-}
-
-/// A conversation's one register, its transcript: every line, a grow-only set under inclusion.
-///
-/// A line's value is the set of lines it rests on and itself, its down-set in the causal order,
-/// and the register's join is union. The register holds its frontier, the lines no later line
-/// rests on: a new line supersedes exactly those, so the lines are causally ordered, and its
-/// down-set contains every superseded line's, so the register only grows.
-impl Sole for LineEvent {
-    /// Every head: under inclusion no head's down-set holds another's, so each is maximal, and
-    /// the transcript is their union.
-    fn reading<'a>(frontier: &Frontier<'a, Self>) -> Vec<&'a Stamp<Self>> {
-        frontier.writes().to_vec()
-    }
-
-    /// Union joins two heads, so none is a conflict to settle; the next line rests on both.
-    fn conflict(_: &Frontier<'_, Self>) -> bool {
-        false
     }
 }
 
@@ -1218,7 +1201,7 @@ mod tests {
 
     #[test]
     fn no_constructor_is_a_term_or_an_envelope() {
-        crate::literal::assert_own(LINES);
-        crate::literal::assert_own(&[SCRUBBED, LOCKED]);
+        crate::own::assert_own(LINES);
+        crate::own::assert_own(&[SCRUBBED, LOCKED]);
     }
 }

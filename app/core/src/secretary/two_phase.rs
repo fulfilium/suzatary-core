@@ -10,13 +10,14 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use prodrome_core::event::Actor;
-use prodrome_core::fold::Order;
+use prodrome_core::fold::sole::{One, Only};
+use prodrome_core::fold::{Order, Product as _};
 use prodrome_core::literal::Datetime;
 use prodrome_core::policy::Everything;
 use prodrome_core::registers::{Node, Stamp, fold};
 
 use crate::secretary::memory::{FactId, Kind, Origin};
-use crate::secretary::memory_event::{MemoryEvent, Said};
+use crate::secretary::memory_event::{LifeRegister, MemoryEvent, Said};
 use crate::secretary::salted_text::TextName;
 use crate::secretary::texts::{Liveness, Naming};
 
@@ -70,9 +71,9 @@ impl TwoPhase {
         let folded = fold(nodes);
         let mut read = Self::default();
         for (&fact, stream) in folded.entities() {
-            let registers: crate::sole::One<'_, MemoryEvent> =
+            let registers: One<'_, LifeRegister> =
                 prodrome_core::fold::read(stream, None, &Everything);
-            if let Some(gone) = registers.reading().iter().find_map(|stamp| gone(stamp)) {
+            if let Some(gone) = registers.reading(Only).iter().find_map(|stamp| gone(stamp)) {
                 read.forgotten.insert(fact, gone);
             }
             if let Some(kept) = stream
@@ -166,7 +167,7 @@ impl Order for Held {
 }
 
 fn kept(stamp: &Stamp<MemoryEvent>) -> Option<Kept> {
-    match stamp.event.said() {
+    match stamp.event.body() {
         Said::Remembered { text, kind, origin } => Some(Kept {
             at: prodrome_core::schema::Schema::at(&*stamp.event),
             text: text.clone(),
@@ -178,7 +179,7 @@ fn kept(stamp: &Stamp<MemoryEvent>) -> Option<Kept> {
 }
 
 fn gone(stamp: &Stamp<MemoryEvent>) -> Option<Gone> {
-    match stamp.event.said() {
+    match stamp.event.body() {
         Said::Forgotten { version } => Some(Gone {
             at: prodrome_core::schema::Schema::at(&*stamp.event),
             by: prodrome_core::schema::Schema::actor(&*stamp.event).clone(),

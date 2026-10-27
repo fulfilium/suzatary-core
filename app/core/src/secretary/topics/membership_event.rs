@@ -1,67 +1,58 @@
 //! The membership store's schema: `Added` and `Removed`, each writing its pair's one register.
 
 use prodrome_core::event::Actor;
-use prodrome_core::fold::{Frontier, RegisterType};
+use prodrome_core::fold::{Product as _, RegisterType};
 use prodrome_core::literal::{Datetime, ProdromeError, Value};
-use prodrome_core::registers::Stamp;
 
-use crate::envelope::{Event, Head, Says, Vocab};
-use crate::literal::{Fields, Literal as _, Signature};
 use crate::secretary::topics::membership::{Membership, Presence};
 use crate::secretary::topics::target::Target;
 use crate::secretary::topics::topic::Topic;
-use crate::sole::{One, Only, Sole};
+use prodrome_core::fold::sole::{One, Only, Sole};
+use prodrome_core::literal::codec::{Constructor, Fields, Literal as _};
+use prodrome_core::schema::headed::{Body, Constructors, Event, KeyFields};
 
 /// A topic put on a target or taken off it.
 pub type MembershipEvent = Event<Presence>;
 
-impl MembershipEvent {
-    #[must_use]
-    pub fn added(target: Target, topic: Topic, at: Datetime, actor: Actor) -> Self {
-        Self::of(Membership { target, topic }, at, actor, Presence::On)
-    }
-
-    #[must_use]
-    pub fn removed(target: Target, topic: Topic, at: Datetime, actor: Actor) -> Self {
-        Self::of(Membership { target, topic }, at, actor, Presence::Off)
-    }
-
-    #[must_use]
-    pub fn presence(&self) -> Presence {
-        *self.said()
-    }
+/// `topic` put on `target` by `actor`.
+#[must_use]
+pub fn added(target: Target, topic: Topic, at: Datetime, actor: Actor) -> MembershipEvent {
+    Event::of(Membership { target, topic }, at, actor, Presence::On)
 }
 
-const ADDED: Signature = ("Added", &["target", "topic", "at", "actor"]);
-const REMOVED: Signature = ("Removed", &["target", "topic", "at", "actor"]);
-const SIGNATURES: &[Signature] = &[ADDED, REMOVED];
+/// `topic` taken off `target` by `actor`.
+#[must_use]
+pub fn removed(target: Target, topic: Topic, at: Datetime, actor: Actor) -> MembershipEvent {
+    Event::of(Membership { target, topic }, at, actor, Presence::Off)
+}
+
+const ADDED: Constructor = ("Added", &["target", "topic", "at", "actor"]);
+const REMOVED: Constructor = ("Removed", &["target", "topic", "at", "actor"]);
+const SIGNATURES: &[Constructor] = &[ADDED, REMOVED];
 
 /// The membership store's schema.
-pub type MembershipVocabulary = Vocab<Presence>;
+pub type MembershipVocabulary = Constructors<Presence>;
 
 /// A membership's key is two fields, its target's and its topic's.
-impl Head for Membership {
-    fn head(&self) -> Vec<Value> {
+impl KeyFields for Membership {
+    fn key_fields(&self) -> Vec<Value> {
         vec![self.target.to_value(), self.topic.to_value()]
     }
 }
 
-impl Says for Presence {
+impl Body for Presence {
     type Key = Membership;
     type Register = Only;
-    type Registers<'a> = One<'a, MembershipEvent>;
+    type Registers<'a> = One<'a, PresenceRegister>;
+    type Refusal = std::convert::Infallible;
 
-    const EVENTS: &'static [Signature] = SIGNATURES;
+    const EVENTS: &'static [Constructor] = SIGNATURES;
 
-    fn registers() -> Vec<Only> {
-        vec![Only]
-    }
-
-    fn writes(_: &MembershipEvent) -> impl Iterator<Item = Only> {
+    fn writes(&self) -> impl Iterator<Item = Only> {
         std::iter::once(Only)
     }
 
-    fn body(&self) -> (Signature, Vec<Value>) {
+    fn fields(&self) -> (Constructor, Vec<Value>) {
         match self {
             Presence::On => (ADDED, Vec::new()),
             Presence::Off => (REMOVED, Vec::new()),
@@ -72,7 +63,12 @@ impl Says for Presence {
         let presence = match fields.name() {
             "Added" => Presence::On,
             "Removed" => Presence::Off,
-            other => return Err(crate::literal::no_arm("a membership event", other)),
+            other => {
+                return Err(prodrome_core::literal::codec::no_arm(
+                    "a membership event",
+                    other,
+                ));
+            }
         };
         let membership = Membership {
             target: fields.get("target")?,
@@ -96,23 +92,22 @@ impl RegisterType<MembershipEvent> for PresenceRegister {
     type Value<'e> = Presence;
 
     fn value(event: &MembershipEvent) -> Option<Presence> {
-        Some(event.presence())
+        Some(*event.body())
     }
 }
 
-impl Sole for MembershipEvent {
-    fn reading<'a>(frontier: &Frontier<'a, Self>) -> Vec<&'a Stamp<Self>> {
-        frontier.reading::<PresenceRegister>()
-    }
+impl Sole for PresenceRegister {
+    type Schema = MembershipEvent;
 }
 
-impl One<'_, MembershipEvent> {
-    /// `Off` where nothing wrote it.
+impl Presence {
+    /// The presence `registers` read: `Off` where nothing wrote it.
     #[must_use]
-    pub fn presence(&self) -> Presence {
-        self.reading()
+    pub fn of(registers: &One<'_, PresenceRegister>) -> Presence {
+        registers
+            .reading(Only)
             .iter()
-            .map(|stamp| stamp.event.presence())
+            .map(|stamp| *stamp.event.body())
             .max()
             .unwrap_or(Presence::Off)
     }
@@ -124,6 +119,6 @@ mod tests {
 
     #[test]
     fn no_constructor_is_a_term_or_an_envelope() {
-        crate::literal::assert_own(SIGNATURES);
+        crate::own::assert_own(SIGNATURES);
     }
 }

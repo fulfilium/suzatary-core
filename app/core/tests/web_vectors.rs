@@ -1761,10 +1761,12 @@ fn the_replicas_vector_is_what_the_box_answers() {
 fn skeleton_of(bundle: &Bundle) -> wire::SkeletonPayload {
     suzatary_core::routes::lines_skeleton(
         bundle.conversations.conversations(),
-        &suzatary_core::frontier::Since::Nothing,
+        &prodrome_core::store::frontier::Since::Nothing,
         suzatary_core::routes::Books {
             epochs: &suzatary_core::epoch::Epochs::remembered(),
-            frontiers: &suzatary_core::frontier::Frontiers::remembered(),
+            frontiers: &prodrome_core::store::frontier::Frontiers::remembered(
+                prodrome_core::store::frontier::KEPT,
+            ),
         },
         bundle.at,
         suzatary_core::routes::Cut::Whole,
@@ -1962,13 +1964,13 @@ fn the_answers_vector_holds_every_answer() {
     }]);
     let (epochs, frontiers) = (
         suzatary_core::epoch::Epochs::remembered(),
-        suzatary_core::frontier::Frontiers::remembered(),
+        prodrome_core::store::frontier::Frontiers::remembered(prodrome_core::store::frontier::KEPT),
     );
     let books = routes::Books {
         epochs: &epochs,
         frontiers: &frontiers,
     };
-    let nothing = suzatary_core::frontier::Since::Nothing;
+    let nothing = prodrome_core::store::frontier::Since::Nothing;
     samples
         .add([routes::objects_since(&bundle, &policy, &nothing, books, at).expect("the objects")]);
     // The lines' pull: a conversation's objects and the key of every slot they name.

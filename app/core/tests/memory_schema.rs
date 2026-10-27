@@ -19,7 +19,7 @@ use proptest::prelude::*;
 
 use suzatary_core::secretary::fact_life::Life;
 use suzatary_core::secretary::memory::{FactId, Kind, Origin};
-use suzatary_core::secretary::memory_event::{MemoryEvent, MemoryVocabulary};
+use suzatary_core::secretary::memory_event::{self, MemoryEvent, MemoryVocabulary};
 use suzatary_core::secretary::salted_text::TextName;
 use suzatary_core::secretary::store::ConversationId;
 use suzatary_core::secretary::two_phase::TwoPhase;
@@ -73,7 +73,7 @@ fn name(seed: u64) -> TextName {
 const KINDS: [Kind; 4] = Kind::ALL;
 
 fn remembered(fact: u64, seed: u64) -> MemoryEvent {
-    MemoryEvent::remembered(
+    memory_event::remembered(
         FactId(fact),
         at(fact),
         actor("assistant"),
@@ -91,10 +91,11 @@ fn remembered(fact: u64, seed: u64) -> MemoryEvent {
             }
         },
     )
+    .expect("a remembering")
 }
 
 fn forgotten(fact: u64, version: u64) -> MemoryEvent {
-    MemoryEvent::forgotten(FactId(fact), at(version), actor("ada"), version).expect("after it")
+    memory_event::forgotten(FactId(fact), at(version), actor("ada"), version).expect("after it")
 }
 
 /// What the box writes: a remembering of a new fact, or a forgetting of a standing one.
@@ -193,7 +194,7 @@ fn adopt(to: &Disk, from: &Disk) {
 fn lives(events: &[MemoryEvent]) -> Vec<Life<'_>> {
     events
         .iter()
-        .map(|event| match event.said() {
+        .map(|event| match event.body() {
             suzatary_core::secretary::memory_event::Said::Remembered { .. } => {
                 Life::Remembered(Discrete(event))
             }

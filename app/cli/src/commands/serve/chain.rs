@@ -35,7 +35,7 @@ pub struct Treeing {
 }
 
 /// `?since=<frontier>`: what a replica already holds.
-pub struct Since(suzatary_core::frontier::Since);
+pub struct Since(prodrome_core::store::frontier::Since);
 
 /// `?hashes=`: the objects asked for by name.
 pub struct Wanted(query::Hashes);
@@ -44,7 +44,7 @@ pub struct Wanted(query::Hashes);
 /// held before them.
 pub struct Literals {
     pub(super) objects: Vec<String>,
-    pub(super) since: suzatary_core::frontier::Since,
+    pub(super) since: prodrome_core::store::frontier::Since,
 }
 
 impl Literals {

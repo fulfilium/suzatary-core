@@ -320,6 +320,18 @@ pub enum Visibility {
 }
 
 impl Visibility {
+    /// Every visibility.
+    pub const ALL: [Visibility; 2] = [Visibility::Public, Visibility::Private];
+
+    /// Its word on the wire and in an inbox act.
+    #[must_use]
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Visibility::Public => "public",
+            Visibility::Private => "private",
+        }
+    }
+
     /// What a card says about pushing here.
     #[must_use]
     pub fn sentence(self) -> &'static str {
@@ -333,10 +345,7 @@ impl Visibility {
 /// Its word on the wire.
 impl fmt::Display for Visibility {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str(match self {
-            Visibility::Public => "public",
-            Visibility::Private => "private",
-        })
+        f.write_str(self.as_str())
     }
 }
 
@@ -439,21 +448,25 @@ impl Declared {
 }
 
 // The literal of each is its text, as an inbox act stores it.
-crate::literal::text_literal!(
+prodrome_core::text_literal!(
     RepoName => |repo| String::from(repo.clone()),
     CommitId => |commit| String::from(commit.clone()),
     Patch => |patch| String::from(patch.clone()),
     RepoPath => |path| String::from(path.clone()),
     Rev => |rev| String::from(rev.clone()),
-    Visibility => |visibility| match visibility {
-        Visibility::Public => "public".to_owned(),
-        Visibility::Private => "private".to_owned(),
-    },
 );
+prodrome_core::word_literal!(Visibility: Visibility::ALL => |visibility| visibility.as_str());
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// `rename_all` spells the generated `Visibility`, so serde's words are checked against
+    /// `ALL`'s.
+    #[test]
+    fn a_visibilitys_serde_word_is_its_literals() {
+        crate::words::assert_serde_words(&Visibility::ALL, |visibility| visibility.as_str());
+    }
 
     fn named(text: &str) -> RepoName {
         text.parse().expect("a name")

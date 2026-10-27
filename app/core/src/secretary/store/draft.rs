@@ -24,14 +24,14 @@ pub struct Draft {
 }
 
 /// `Email(account, to, cc, subject, body, attachments)`.
-pub const EMAIL: crate::literal::Signature = (
+pub const EMAIL: prodrome_core::literal::codec::Constructor = (
     "Email",
     &["account", "to", "cc", "subject", "body", "attachments"],
 );
 
-impl crate::literal::Literal for Draft {
+impl prodrome_core::literal::codec::Literal for Draft {
     fn to_value(&self) -> prodrome_core::literal::Value {
-        use crate::literal::record;
+        use prodrome_core::literal::codec::record;
         record(
             EMAIL,
             vec![
@@ -48,7 +48,7 @@ impl crate::literal::Literal for Draft {
     fn from_value(
         value: &prodrome_core::literal::Value,
     ) -> Result<Self, prodrome_core::literal::ProdromeError> {
-        let fields = crate::literal::Fields::of(value, EMAIL)?;
+        let fields = prodrome_core::literal::codec::Fields::of(value, EMAIL)?;
         Ok(Draft {
             account: fields.get("account")?,
             to: fields.get("to")?,

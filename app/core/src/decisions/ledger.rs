@@ -266,18 +266,18 @@ impl Decision {
             .content
             .reading::<super::ContentRegister>()
             .into_iter()
-            .filter_map(|stamp| stamp.event.statement().cloned())
+            .filter_map(|stamp| stamp.event.body().statement().cloned())
             .collect();
         let decided = stream
             .iter()
-            .filter(|stamp| stamp.event.statement().is_some())
+            .filter(|stamp| stamp.event.body().statement().is_some())
             .map(|stamp| stamp.event.at())
             .min()?;
         let withdrawn = registers
             .life
             .reading::<super::LifeRegister>()
             .into_iter()
-            .find_map(|stamp| match stamp.event.said() {
+            .find_map(|stamp| match stamp.event.body() {
                 Said::Withdrawn { reason } => Some(Withdrawal {
                     at: stamp.event.at(),
                     by: stamp.event.actor().clone(),
