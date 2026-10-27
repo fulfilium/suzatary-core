@@ -59,6 +59,12 @@ export class Lines {
   ): string;
   /** Every conversation's turns holding a query. */
   search(q: string): string;
+  /** The skeleton's nodes held and let go. */
+  nodes(add: string, drop: string): void;
+  /** The conversations the stream's newest pages draw rounds of. */
+  chosen(topics: TopicReading, chosen: string, pages: number): string;
+  /** The stream's newest pages. */
+  stream(topics: TopicReading, chosen: string, pages: number): string;
   /** `{<name>: [<answer key>]}`: the keys an erasure names, and the blocks their words fed. */
   erased(keys: string, told: string): string;
   /** `[<name>]`: every key an erasure of its own conversation names. */
@@ -125,6 +131,8 @@ export function prose(markup: string): string | undefined;
 export function suspicious(html: string): string | undefined;
 /** How many values the module has scrubbed since it was loaded; read by the browser scenes. */
 export function scrubs(): number;
+/** How many prints the lines have decoded since the module was loaded; read by the browser scenes. */
+export function decodes(): number;
 
 /** Every function above throws until this resolves, so `core.ts` alone calls it and memoises it. */
 export default function init(init: { module_or_path: string }): Promise<unknown>;

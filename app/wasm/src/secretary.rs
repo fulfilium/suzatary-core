@@ -15,8 +15,10 @@ use suzatary_core::secretary::held_lines::HeldLines;
 use suzatary_core::secretary::inbox::Fold;
 use suzatary_core::secretary::key_ring::KeyRing;
 use suzatary_core::secretary::locked_text::KeyName;
+use suzatary_core::secretary::outlines::{Node, Outlines};
 use suzatary_core::secretary::readings::{self, DEFAULT_TURN_WINDOW, Dress, Window};
 use suzatary_core::secretary::store::{ConversationId, Stored};
+use suzatary_core::secretary::stream;
 use suzatary_core::wire::MemoryPayload;
 use wasm_bindgen::prelude::*;
 
@@ -46,10 +48,12 @@ impl Proposals {
 
 /// The lines this replica holds, read through `HeldLines`: each print decoded once as it is
 /// held, and each reading computing only the conversations and lines that moved since the last.
-/// A slot whose key is not held reads as missing, and one an erasure names as erased.
+/// A slot whose key is not held reads as missing, and one an erasure names as erased. Beside the
+/// prints, the skeleton's line nodes, whose outlines the stream chooses its rounds by.
 #[wasm_bindgen]
 pub struct Lines {
     held: HeldLines,
+    outlines: Outlines,
 }
 
 #[wasm_bindgen]
@@ -60,6 +64,7 @@ impl Lines {
     pub fn new() -> Lines {
         Lines {
             held: HeldLines::new(),
+            outlines: Outlines::default(),
         }
     }
 
@@ -76,6 +81,19 @@ impl Lines {
             })
             .collect::<Result<Vec<_>, _>>()?;
         self.held.hold(add, &names(drop, "drop")?);
+        Ok(())
+    }
+
+    /// The skeleton's nodes `add`, as the box sent them, held, and `drop`, `[<name>, …]`, let go.
+    pub fn nodes(&mut self, add: &str, drop: &str) -> Result<(), JsError> {
+        let add: Vec<suzatary_core::wire::SkeletonNode> =
+            serde_json::from_str(add).map_err(|e| refused(format!("nodes: {e}")))?;
+        let add = add
+            .into_iter()
+            .filter_map(|node| Node::of(node).transpose())
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(|e| refused(e.to_string()))?;
+        self.outlines.hold(add, &names(drop, "drop")?);
         Ok(())
     }
 
@@ -136,8 +154,28 @@ impl Lines {
         ))
     }
 
+    /// `[<id>, …]`: the conversations the newest `pages` pages of the stream draw rounds of, by
+    /// the skeleton's outlines alone, which a page holds the lines of before it reads the stream.
+    pub fn chosen(
+        &self,
+        topics: &crate::topics::TopicReading,
+        chosen: &str,
+        pages: u32,
+    ) -> Result<String, JsError> {
+        let chosen = crate::topics::topics_of(chosen)?;
+        let choice = stream::choose(
+            self.outlines.outlines(),
+            &topics.0,
+            &chosen,
+            pages_of(pages)?,
+        )
+        .map_err(|e| refused(e.to_string()))?;
+        json(&choice.conversations())
+    }
+
     /// The newest `pages` pages of the rounds of every conversation carrying each topic of
-    /// `chosen` (a JSON array), oldest first, with how many the filter shows in all.
+    /// `chosen` (a JSON array), oldest first, with how many the filter shows in all: chosen by
+    /// the skeleton's outlines, each drawn from the lines held of its conversation.
     pub fn stream(
         &mut self,
         topics: &crate::topics::TopicReading,
@@ -145,13 +183,19 @@ impl Lines {
         pages: u32,
     ) -> Result<String, JsError> {
         let chosen = crate::topics::topics_of(chosen)?;
-        json(&suzatary_core::secretary::stream::stream(
-            &self.stored()?,
-            &topics.0,
-            &chosen,
-            usize::try_from(pages).map_err(|e| refused(format!("pages: {e}")))?,
-            &Dress::BARE,
-        ))
+        let pages = pages_of(pages)?;
+        let held = &mut self.held;
+        json(
+            &stream::stream(
+                self.outlines.outlines(),
+                |id| held.conversation(id),
+                &topics.0,
+                &chosen,
+                pages,
+                &Dress::BARE,
+            )
+            .map_err(|e| refused(e.to_string()))?,
+        )
     }
 
     /// Every conversation's turns holding `q`, newest first: only words this reading opened.
@@ -275,6 +319,10 @@ impl Proposals {
         let read = self.0.read().map_err(refused)?;
         Ok(Fold::of(read.nodes))
     }
+}
+
+fn pages_of(pages: u32) -> Result<usize, JsError> {
+    usize::try_from(pages).map_err(|e| refused(format!("pages: {e}")))
 }
 
 fn said(refusal: &suzatary_core::refusal::Refusal) -> JsError {

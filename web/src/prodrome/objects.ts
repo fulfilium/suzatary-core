@@ -67,20 +67,23 @@ export const parseReplica = (raw: unknown): lo.Settled<Replica> => lo.map(Stored
  * lines, so nothing in them is this device's own; the blocks rendered from them are cleared too. Version 6 names where
  * each replica stands with the box by the frontier its last answer named (`replica.Frontier`), so every row is carried
  * standing nowhere, and its next pull asks from nothing. Version 7 keeps the lines' skeleton one node per row in a
- * store of its own (`linerows`), so a landing writes what arrived; the core's worker moves a version 6 lines' row into
- * it and then deletes that row.
+ * store of its own (`linerows`), so a landing writes what arrived. Version 8's nodes carry the step each line takes,
+ * which the stream chooses its rounds by, so every earlier lines' skeleton, the rows' store's whole row and its pieces
+ * and version 7's nodes and keys, is dropped and pulled again, and the blocks rendered from them are cleared, since
+ * no key is left to find them by; the content by name stays.
  */
 const DB: idb.Db = {
   name: DB_NAME,
-  version: 7,
+  version: 8,
   store: STORE_NAME,
   upgrade: (db, tx, from) => {
-    if (from >= 3 && from <= 6) {
+    if (from >= 3 && from <= 7) {
       const rows = tx.objectStore(STORE_NAME);
-      if (from < 5) {
-        rows.delete(under(LINES));
-        rows.put(true, keyFor(RENDERED_OWED));
-      }
+      // Every earlier lines' skeleton is dropped with the keys it held, so the blocks those keys' words fed can no longer
+      // be found by them: the tab clears every block once.
+      rows.put(true, keyFor(RENDERED_OWED));
+      // The lines' row of version 5 and 6, and its pieces, whose nodes carry no step.
+      if (from < 7) rows.delete(under(LINES));
       if (from < 6) carry(rows, (row) => framed(from === 3 ? carried(row) : row));
     } else {
       if (db.objectStoreNames.contains(STORE_NAME)) db.deleteObjectStore(STORE_NAME);
@@ -90,6 +93,7 @@ const DB: idb.Db = {
     }
     if (!db.objectStoreNames.contains(CONTENT_NAME)) db.createObjectStore(CONTENT_NAME);
     if (!db.objectStoreNames.contains(LINES_NAME)) db.createObjectStore(LINES_NAME);
+    else if (from < 8) tx.objectStore(LINES_NAME).clear();
   },
 };
 

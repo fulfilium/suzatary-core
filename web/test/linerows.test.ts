@@ -16,7 +16,7 @@ const node = (hash: string): SkeletonNode => ({
   hash: hash.repeat(64).slice(0, 64),
   parents: [],
   size: 1,
-  header: { node: "line", conversation: "first", at: "2026-10-25T09:00:00", kind: "Said", keys: [] },
+  header: { node: "line", conversation: "first", at: "2026-10-25T09:00:00", kind: "Said", keys: [], step: { step: "asks" } },
 })
 const at = (count: number): Frontier => ({ type: "Named", digest: String(count).repeat(64).slice(0, 64), count, era: 0 })
 // The box's word of a pull that heard `heads` at `fetchedAt`.

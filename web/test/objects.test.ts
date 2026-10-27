@@ -297,12 +297,16 @@ test("version 5 drops the lines' row and its pieces, kept as literals, marks the
   }
 })
 
-test("version 6 gives every row of version 5 a frontier of nothing, so its first pull asks from nothing", async () => {
+test("version 6 gives every row of version 5 a frontier of nothing, so its first pull asks from nothing, and version 8 drops its lines' row and marks its blocks owed", async () => {
   const kept = { generation: 0, objects: [BOX], synced: [BOX.hash], refused: [], words: [] }
-  Object.assign(globalThis, { indexedDB: fakeIndexedDB(5, { "objects:life": kept, "objects:store/lines": { replica: kept, keys: {} } }) })
+  Object.assign(globalThis, {
+    indexedDB: fakeIndexedDB(5, { "objects:life": kept, "objects:store/lines": { replica: kept, keys: {} }, "objects:store/lines/piece/000000000001": { replica: kept, keys: {} } }),
+  })
   assert.ok((await row()) !== null, "a chain's row reads")
   assert.deepEqual(await rawOf("objects:life"), { ...kept, frontier: { type: "Nothing" } })
-  assert.deepEqual(await rawOf("objects:store/lines"), { replica: { ...kept, frontier: { type: "Nothing" } }, keys: {} }, "the lines' row is kept, framed")
+  assert.equal(await rawOf("objects:store/lines"), undefined, "the lines' row, whose nodes carry no step, is dropped")
+  assert.equal(await rawOf("objects:store/lines/piece/000000000001"), undefined, "and its pieces with it")
+  assert.equal(await rawOf("objects:store/rendered-owed"), true, "and the tab is told to clear the blocks its keys fed")
 })
 
 test("a row version 1 kept is dropped, never read as a replica sealing onto heads it did not compute", async () => {

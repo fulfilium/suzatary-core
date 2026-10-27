@@ -92,6 +92,7 @@ pub fn build(args: &Args) -> anyhow::Result<()> {
         conversations,
         sealed,
         wide,
+        topics,
     } = args;
     let lapsed = *connections == Connections::Lapsed;
     let (root, port, propose, reviewed, settings) =
@@ -140,6 +141,10 @@ pub fn build(args: &Args) -> anyhow::Result<()> {
         reading_not_sending(&read, root)?;
     }
     bulk_lines(&read, &sizes(*lines, *conversations, *wide), *sealed)?;
+    match topics {
+        Filing::None => {}
+        Filing::Every => bulk_topics(&read)?,
+    }
     read.adopt(&signers)
         .whole()
         .context("adopting signatures on every chain")?;
@@ -1224,6 +1229,19 @@ pub struct Args {
     /// tab holding it names its replica by a frontier no longer than it would name one head by.
     #[arg(long, default_value_t = 0)]
     wide: usize,
+    /// Whether the generated rounds carry topics: `every` puts one on each, from eight names in
+    /// turn, so the stream reads a topic store of the live shape.
+    #[arg(long, value_enum, default_value_t = Filing::None, requires = "lines")]
+    topics: Filing,
+}
+
+/// Which of the generated rounds carry a topic.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, clap::ValueEnum)]
+pub enum Filing {
+    /// None.
+    None,
+    /// Every one.
+    Every,
 }
 
 /// Each bulk conversation and how many lines it holds. With no `conversations`, half the `count`
@@ -1269,8 +1287,7 @@ fn bulk_lines(
     sizes: &[(String, usize)],
     sealed: Sealed,
 ) -> anyhow::Result<()> {
-    use prodrome_core::event::{Actor, canonical_envelope};
-    use prodrome_core::store::{MemoryStore, Replica as _};
+    use prodrome_core::event::Actor;
     use suzatary_core::capability::Turn;
     use suzatary_core::secretary::line_event::LineEvent;
     use suzatary_core::secretary::store::{ConversationId, Entry, Kind};
@@ -1295,15 +1312,7 @@ fn bulk_lines(
         &ConversationId::new("bulk-0")?,
         &opened(0, fpl::datetime_of(start)?),
     )?;
-    let held = conversations.lines.objects()?;
-    let memory: MemoryStore<LineEvent> = MemoryStore::default();
-    let prints: std::collections::BTreeMap<Hash, Vec<u8>> = held
-        .iter()
-        .map(|(name, object)| (name.clone(), canonical_envelope(object).into_bytes()))
-        .collect();
-    memory.receive(prints.keys().cloned().collect(), &|name| {
-        prints.get(name).cloned()
-    })?;
+    let mut events: Vec<LineEvent> = Vec::new();
     let writer = Actor::new(suzatary_core::secretary::WRITES_AS.actor())?;
     let mut written = 0u32;
     for (n, (id, size)) in sizes.iter().enumerate() {
@@ -1355,18 +1364,79 @@ fn bulk_lines(
             for key in &keys {
                 conversations.keys.set(&key.name(), key)?;
             }
-            memory.append(event)?;
+            events.push(event);
         }
     }
-    let all = memory.held()?.dag;
-    let new: Vec<(Hash, String)> = all
+    appended(conversations.lines, events)
+}
+
+/// `events` appended to `store` in order, through a store in memory holding what `store`
+/// holds, and the objects they made handed to `store` at once: one read of the store, where an
+/// append each would read it again for every event.
+fn appended<E>(store: &dyn suzatary_core::store::Prodrome<E>, events: Vec<E>) -> anyhow::Result<()>
+where
+    E: prodrome_core::schema::Schema,
+    E::Vocabulary: Default,
+{
+    use prodrome_core::event::canonical_envelope;
+    use prodrome_core::store::{MemoryStore, Replica as _};
+    let held = store.objects()?;
+    let memory: MemoryStore<E> = MemoryStore::default();
+    let prints: std::collections::BTreeMap<Hash, Vec<u8>> = held
+        .iter()
+        .map(|(name, object)| (name.clone(), canonical_envelope(object).into_bytes()))
+        .collect();
+    memory.receive(prints.keys().cloned().collect(), &|name| {
+        prints.get(name).cloned()
+    })?;
+    for event in events {
+        memory.append(event)?;
+    }
+    let new: Vec<(Hash, String)> = memory
+        .held()?
+        .dag
         .objects()
         .iter()
         .filter(|(name, _)| !prints.contains_key(*name))
         .map(|(name, object)| (name.clone(), canonical_envelope(object)))
         .collect();
-    conversations.lines.accept(&new)?;
+    store.accept(&new)?;
     Ok(())
+}
+
+/// One topic on every round of the generated conversations, from eight names in turn, as a
+/// store whose rounds were filed under topics carries them.
+fn bulk_topics(read: &crate::instance::Instance) -> anyhow::Result<()> {
+    use prodrome_core::event::Actor;
+    use suzatary_core::secretary::topics::membership_event::MembershipEvent;
+    use suzatary_core::secretary::topics::targets::rounds;
+    use suzatary_core::secretary::topics::topic::Topic;
+    const NAMES: [&str; 8] = [
+        "permits", "travel", "taxes", "garden", "health", "family", "school", "car",
+    ];
+    let listed = suzatary_core::secretary::list(read.conversation_stores().conversations())
+        .map_err(|refusal| anyhow::anyhow!("{}", refusal.message()))?;
+    let topics = read.secretary.topics.open();
+    topics.begin()?;
+    let actor = Actor::new(suzatary_core::secretary::WRITES_AS.actor())?;
+    let at = SystemClock.now();
+    let names = NAMES.map(Topic::new);
+    let mut events = Vec::new();
+    for stored in listed
+        .iter()
+        .filter(|stored| stored.id.as_str().starts_with("bulk-"))
+    {
+        for round in rounds(stored) {
+            let topic = names[events.len() % NAMES.len()].clone()?;
+            events.push(MembershipEvent::added(
+                round.target(),
+                topic,
+                at,
+                actor.clone(),
+            ));
+        }
+    }
+    appended(&topics.memberships, events)
 }
 
 /// What the `--settings` fixture's further connections stand at.

@@ -20,6 +20,7 @@ import {
   appendTo,
   appendTopic,
   barOf,
+  chosenOf,
   conversationOf,
   excludedOf,
   foldOf,
@@ -133,8 +134,8 @@ export namespace questions {
     Window: { q: { readonly id: string; readonly window: grouped.Asked; readonly memory: MemoryPayload | null; readonly zone: time.Zone }; a: Grouped }
     // Every conversation's turns holding `q`.
     Search: { q: { readonly q: string }; a: Whole<SearchPayload> }
-    // What the readings of the inbox and the lines leave out, joined.
-    Left: { q: Record<never, never>; a: Whole<excluded.T> }
+    // What the readings of the inbox and of the lines held leave out, joined.
+    Left: { q: Record<never, never>; a: excluded.T }
     // The rendered blocks the device keeps, which the worker alone reads and writes: those of `keys`, the box's answers
     // `pairs` joined (the findings it made), how much it keeps, and the functions this build keeps blocks of.
     Blocks: { q: { readonly keys: readonly string[] }; a: (string | null)[] }
@@ -145,8 +146,8 @@ export namespace questions {
     AnswerKeys: { q: { readonly sources: readonly string[] }; a: string[] }
     // A topic store's objects changed by `delta`.
     HoldTopics: { q: { readonly store: topics.Store; readonly delta: Delta }; a: null }
-    // The newest `pages` pages of the rounds carrying every topic of `chosen`, and the topics in use, once every line is
-    // held.
+    // The newest `pages` pages of the rounds carrying every topic of `chosen`, and the topics in use, once the lines of
+    // the conversations they are in are held.
     Stream: { q: { readonly chosen: readonly string[]; readonly pages: number }; a: Whole<{ readonly stream: StreamPayload; readonly bar: TopicsPayload; readonly keys: Keyed }> }
     // `write` planned by the topics as held and appended to the replica of its store: the objects it wrote there.
     PlanTopic: { q: { readonly write: topics.Write; readonly at: string; readonly actor: string }; a: { readonly store: topics.Store; readonly objects: readonly Named[] } }
@@ -266,8 +267,9 @@ export namespace questions {
       return { type: "NotHere", lines: lacked, why: lo.reason(e) }
     }
     // A reading of every line once they are held, or how many the device lacks where they cannot be fetched.
-    const whole = <A>(read: () => A): Promise<Whole<A>> =>
-      sync.over(lines.WHOLE, (): Whole<A> => ({ type: "Held", v: read() })).catch((e: unknown): Whole<A> => notHere(lines.WHOLE, e))
+    const scoped = <A>(scope: () => lines.Scope, read: () => A): Promise<Whole<A>> =>
+      sync.over(scope, (): Whole<A> => ({ type: "Held", v: read() })).catch((e: unknown): Whole<A> => notHere(scope(), e))
+    const whole = <A>(read: () => A): Promise<Whole<A>> => scoped(() => lines.WHOLE, read)
 
     // The key each answer block of `turns` is kept by, named once here, where the core is.
     const keyed = (turns: readonly TurnRow[]): Keyed =>
@@ -420,9 +422,9 @@ export namespace questions {
           return sync
             .holds(id)
             .then((holds): Promise<One> | One =>
-              holds ? sync.over({ type: "Conversation", id }, (): One => ({ type: "Held", payload: conversationOf(held, proposals(), id, window, memory) })) : { type: "Absent" },
+              holds ? sync.over(() => lines.one(id), (): One => ({ type: "Held", payload: conversationOf(held, proposals(), id, window, memory) })) : { type: "Absent" },
             )
-            .catch((e: unknown): One => notHere({ type: "Conversation", id }, e))
+            .catch((e: unknown): One => notHere(lines.one(id), e))
         }
         case "Window": {
           const { id, window, memory, zone } = q
@@ -431,19 +433,20 @@ export namespace questions {
             .holds(id)
             .then((holds): Promise<Grouped> | Grouped =>
               holds
-                ? sync.over({ type: "Conversation", id }, (): Grouped => {
+                ? sync.over(() => lines.one(id), (): Grouped => {
                     const payload = grouped.of(grouped.covering(window, read), zone)
                     return { type: "Held", payload, keys: keyed(payload.turns) }
                   })
                 : { type: "Absent" },
             )
-            .catch((e: unknown): Grouped => notHere({ type: "Conversation", id }, e))
+            .catch((e: unknown): Grouped => notHere(lines.one(id), e))
         }
         case "Search":
           return whole(() => searchOf(held, q.q))
-        // Over the same lines the reading beside it waits for, so it says what that reading left out.
+        // What the readings made so far left out of the lines they read, asked after a reading, so it says at least what
+        // that reading left out.
         case "Left":
-          return whole(() => excluded.join(excludedOf(proposals()), linesLeft(held)))
+          return excluded.join(excludedOf(proposals()), linesLeft(held))
         case "Blocks":
           return blocks.get(q.keys)
         case "KeepBlocks":
@@ -456,12 +459,16 @@ export namespace questions {
           return q.sources.map(source => core.answer_key(source))
         case "HoldTopics":
           return holdTopics(q.store, q.delta)
+        // The rounds are chosen by the skeleton's outlines, and only the lines of the conversations they are in are read.
         case "Stream":
-          return whole(() => {
-            const read = topicsNow()
-            const stream = streamOf(held, read.reading, q.chosen, q.pages)
-            return { stream, bar: barOf(read.reading), keys: keyed(stream.rounds.flatMap(r => (r.answer === null ? [] : [r.answer]))) }
-          })
+          return scoped(
+            () => ({ type: "Conversations", ids: chosenOf(held, topicsNow().reading, q.chosen, q.pages) }),
+            () => {
+              const read = topicsNow()
+              const stream = streamOf(held, read.reading, q.chosen, q.pages)
+              return { stream, bar: barOf(read.reading), keys: keyed(stream.rounds.flatMap(r => (r.answer === null ? [] : [r.answer]))) }
+            },
+          )
         case "PlanTopic":
           return planTopic(q.write, q.at, q.actor)
       }

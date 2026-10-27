@@ -223,7 +223,10 @@
           "kind": "Opened",
           "keys": [
             "1b2e08206305d4481c96d6d008d19a08e2696ec060534ed4c6c8d54e702ceec0"
-          ]
+          ],
+          "step": {
+            "step": "opened"
+          }
         }
       },
       {
@@ -240,7 +243,10 @@
           "kind": "Said",
           "keys": [
             "c7dc3c32b1609e1ed9dfc266b6aded61940bff08a0a61f160225273fc322df60"
-          ]
+          ],
+          "step": {
+            "step": "asks"
+          }
         }
       },
       {
@@ -257,7 +263,10 @@
           "kind": "Said",
           "keys": [
             "ff234b439627f020679367b7f4bd920e93f0e5b9a379eb9877c465dbaa96b9c1"
-          ]
+          ],
+          "step": {
+            "step": "answers"
+          }
         }
       },
       {
@@ -273,7 +282,10 @@
           "kind": "Opened",
           "keys": [
             "630dcd2966c4336691125448bbb25b4ff412a49c732db2c8abc1b8581bd710dd"
-          ]
+          ],
+          "step": {
+            "step": "opened"
+          }
         }
       },
       {
@@ -290,7 +302,10 @@
           "kind": "Said",
           "keys": [
             "86f5d9bdc5ce5e4ff81af4dc4a8c2e724e448cb5ec16685b5591b4e56d5a1b3e"
-          ]
+          ],
+          "step": {
+            "step": "asks"
+          }
         }
       },
       {
@@ -307,7 +322,10 @@
           "kind": "Said",
           "keys": [
             "9b8cf3f80aea12988b50633cd0f8a1daf57dc1f6315dc614a256ea6078e8800c"
-          ]
+          ],
+          "step": {
+            "step": "answers"
+          }
         }
       },
       {
@@ -322,7 +340,10 @@
           "conversation": "trains",
           "at": "2026-09-02T12:03:24",
           "kind": "Proposed",
-          "keys": []
+          "keys": [],
+          "step": {
+            "step": "proposed"
+          }
         }
       },
       {
@@ -337,7 +358,10 @@
           "conversation": "trains",
           "at": "2026-09-02T12:03:25",
           "kind": "Proposed",
-          "keys": []
+          "keys": [],
+          "step": {
+            "step": "proposed"
+          }
         }
       },
       {
@@ -352,7 +376,10 @@
           "conversation": "trains",
           "at": "2026-09-02T12:03:26",
           "kind": "Proposed",
-          "keys": []
+          "keys": [],
+          "step": {
+            "step": "proposed"
+          }
         }
       },
       {
@@ -369,7 +396,10 @@
           "kind": "Said",
           "keys": [
             "762df64490269f8ee748841c79f481102a6bb7d3211e7bd874ffeec4decbe973"
-          ]
+          ],
+          "step": {
+            "step": "asks"
+          }
         }
       },
       {
@@ -386,7 +416,10 @@
           "kind": "Said",
           "keys": [
             "6c28e9451b043cee34d7313c32984a90d25077a93ff466a4404454a84acccbaf"
-          ]
+          ],
+          "step": {
+            "step": "asks"
+          }
         }
       },
       {
@@ -403,7 +436,10 @@
           "kind": "Said",
           "keys": [
             "6cf6abc29c87ca5fa1dc5399205a10bed451b2ff0cbef2a2739c5ac845963890"
-          ]
+          ],
+          "step": {
+            "step": "answers"
+          }
         }
       },
       {
@@ -418,7 +454,10 @@
           "conversation": "about-the-deed",
           "at": "2026-09-02T12:00:21",
           "kind": "Proposed",
-          "keys": []
+          "keys": [],
+          "step": {
+            "step": "proposed"
+          }
         }
       },
       {
@@ -435,7 +474,10 @@
           "kind": "Said",
           "keys": [
             "34cdfa29c001301f4ab4ae37b4e766f867cd4eb3a89d7f02e2fc3ca2f8493bf9"
-          ]
+          ],
+          "step": {
+            "step": "asks"
+          }
         }
       },
       {
@@ -451,7 +493,10 @@
           "kind": "Opened",
           "keys": [
             "2791831bfc6e6e3c03455addf475f278e8df6d907ef1e396c02a1fd088d4e25a"
-          ]
+          ],
+          "step": {
+            "step": "opened"
+          }
         }
       },
       {
@@ -466,7 +511,10 @@
           "conversation": "lagging",
           "at": "2026-09-02T12:00:00",
           "kind": "Proposed",
-          "keys": []
+          "keys": [],
+          "step": {
+            "step": "proposed"
+          }
         }
       },
       {
@@ -481,7 +529,10 @@
           "conversation": "lagging",
           "at": "2026-09-02T12:00:00",
           "kind": "Proposed",
-          "keys": []
+          "keys": [],
+          "step": {
+            "step": "proposed"
+          }
         }
       },
       {
@@ -496,7 +547,10 @@
           "conversation": "lagging",
           "at": "2026-09-02T12:00:00",
           "kind": "Proposed",
-          "keys": []
+          "keys": [],
+          "step": {
+            "step": "proposed"
+          }
         }
       },
       {
@@ -513,7 +567,10 @@
           "kind": "Said",
           "keys": [
             "f8517142a72094a6bbf487f5347b1a5c041aef1d861d319beab28719a157aaa9"
-          ]
+          ],
+          "step": {
+            "step": "answers"
+          }
         }
       },
       {
@@ -528,7 +585,10 @@
           "conversation": "about-the-deed",
           "at": "2026-09-02T12:05:00",
           "kind": "Erased",
-          "keys": []
+          "keys": [],
+          "step": {
+            "step": "still"
+          }
         }
       }
     ],
@@ -551,11 +611,12 @@
       "ff234b439627f020679367b7f4bd920e93f0e5b9a379eb9877c465dbaa96b9c1": "000102030405060008090a0b0c0d0e08101112131415161018191a1b1c1d1e18"
     },
     "rest": 0,
-    "size": 7326,
-    "weight": 7326,
+    "size": 7966,
+    "weight": 7966,
     "erased": [
       "6cf6abc29c87ca5fa1dc5399205a10bed451b2ff0cbef2a2739c5ac845963890"
-    ]
+    ],
+    "replaced": []
   },
   "keys": {
     "1b2e08206305d4481c96d6d008d19a08e2696ec060534ed4c6c8d54e702ceec0": "000102030405060208090a0b0c0d0e0a101112131415161218191a1b1c1d1e1a",

@@ -920,8 +920,9 @@ pub struct ContentPayload {
 }
 
 /// One object of a store's skeleton: its name, what it rests on, how large its literal is, and
-/// what a fold reads of it without its literal.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]
+/// what a fold reads of it without its literal. A tab hands its nodes to its core as the box sent
+/// them, so a node also reads back.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
 pub struct SkeletonNode {
     /// The object's name, the sha256 of its literal.
     pub hash: String,
@@ -934,7 +935,7 @@ pub struct SkeletonNode {
 }
 
 /// What a fold of the lines reads of one object without its literal.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[serde(tag = "node", rename_all = "lowercase")]
 pub enum NodeHeader {
     /// An object that carries no line: a genesis, a signature, a key.
@@ -952,6 +953,8 @@ pub enum NodeHeader {
         kind: String,
         /// The name of the key of each slot of its words, in slot order.
         keys: Vec<String>,
+        /// What it does to its conversation's turns.
+        step: crate::secretary::step::Step,
     },
 }
 
@@ -987,6 +990,10 @@ pub struct SkeletonPayload {
     pub weight: usize,
     /// The name of every key an erasure anywhere in the store names, sorted.
     pub erased: Vec<String>,
+    /// The name of every key a reseal that opens on the box supersedes, anywhere in the store,
+    /// sorted: its words are read from the reseal, so a replica drops the key with no block to
+    /// forget, as the box's sweep destroys it.
+    pub replaced: Vec<String>,
 }
 
 /// `POST /api/objects`: literals only; a name is what the bytes are.

@@ -66,7 +66,7 @@ const read = (objects: readonly Named[], scope: lines.Scope): string => {
     held.keys(JSON.stringify(box.keys), "[]")
     return scope.type === "Whole"
       ? JSON.stringify([listOfLines(held, proposals), searchOf(held, "draft"), searchOf(held, "train")])
-      : JSON.stringify(conversationOf(held, proposals, scope.id, {}, null))
+      : JSON.stringify(scope.ids.map(id => conversationOf(held, proposals, id, {}, null)))
   } catch (e: unknown) {
     return `refused: ${String(e)}`
   } finally {
@@ -75,7 +75,7 @@ const read = (objects: readonly Named[], scope: lines.Scope): string => {
   }
 }
 
-const scopes: readonly lines.Scope[] = [lines.WHOLE, ...ids.map((id): lines.Scope => ({ type: "Conversation", id })), { type: "Conversation", id: "never-opened" }]
+const scopes: readonly lines.Scope[] = [lines.WHOLE, ...ids.map(lines.one), lines.one("never-opened"), { type: "Conversations", ids }]
 
 test("law: a reading of part-fetched lines is the whole pull's reading at the same skeleton, or names what it fetches", () => {
   forAll(40, r => {

@@ -577,6 +577,92 @@ proptest! {
         prop_assert_eq!(read.stored(), &Stored::of(&id(), &door).expect("folds"));
     }
 
+    /// THE OUTLINE LAW: the rounds the skeleton's nodes fold to, by each line's step, are the
+    /// rounds of the conversation read whole, whatever was erased or sealed again, and a
+    /// conversation whose lines are none (a rewind past its end, a session for a proposal never
+    /// made) is refused for the same reason.
+    #[test]
+    fn the_skeleton_outlines_a_conversation_as_its_reading_does(
+        script in steps(),
+        broken in 0u8..3,
+        order in any::<prop::sample::Index>(),
+        erased in proptest::option::of(any::<prop::sample::Index>()),
+        stale in any::<bool>(),
+    ) {
+        use suzatary_core::secretary::outline;
+        use suzatary_core::secretary::outlines::{Node, Outlines};
+        use suzatary_core::store::Doc as _;
+        use suzatary_core::store::Prodrome as _;
+        let lines = conversation(&script);
+        let (memory, _) = written(&lines);
+        // A turn sealed under rules from before lines recorded them, and sealed again under the current ones.
+        if stale {
+            let read = transcript::read(memory.conversations(), &id()).expect("read");
+            let (line, keys) = LineEvent::written_under(
+                &suzatary_core::secretary::scrubbed_under::ScrubbedUnder::Unversioned,
+                id(),
+                by(),
+                u32::try_from(read.lines().len()).expect("a count"),
+                &said(3597, person(0)),
+                &memory.entropy,
+            )
+            .expect("a line");
+            for key in &keys {
+                memory.keys.set(&key.name(), key).expect("kept");
+            }
+            memory.lines.append(line).expect("appended");
+            let resealed = suzatary_core::secretary::rescrub::reseal(memory.conversations(), at(3597)).expect("resealed");
+            prop_assert!(resealed > 0, "the stale turn is sealed again");
+        }
+        // The words of one line erased.
+        if let Some(which) = erased {
+            let read = transcript::read(memory.conversations(), &id()).expect("read");
+            let keys: std::collections::BTreeSet<KeyName> = read.lines()[which.index(read.lines().len())].line.keys().cloned().collect();
+            if !keys.is_empty() {
+                let by = suzatary_core::secretary::erasure::Erasure::Asked { by: Actor::new("ada").expect("a name") };
+                transcript::erase(memory.conversations(), &id(), keys, by, at(3598)).expect("erased");
+            }
+        }
+        let file = transcript::read(memory.conversations(), &id()).expect("read").into_stored();
+        let past = match broken {
+            0 => None,
+            1 => Some(Entry::Rewound { to: file.turns.len() + 1, at: at(3599), by: CAST.owner.actor.to_owned() }),
+            _ => Some(Entry::Coding {
+                at: at(3599),
+                proposal: file.proposals.len(),
+                session: suzatary_core::coding::Session::Fired {
+                    id: "session_1".parse().expect("a session id"),
+                    url: "https://claude.ai/code/session_1".parse().expect("a url"),
+                    at: stamp(at(3599)),
+                },
+            }),
+        };
+        if let Some(entry) = &past {
+            memory.lines.append(line_of(&id(), lines.len(), entry)).expect("appended");
+        }
+        let mut nodes: Vec<Node> = memory
+            .lines
+            .objects()
+            .expect("objects")
+            .iter()
+            .filter_map(|(name, object)| {
+                let sent = serde_json::to_string(&suzatary_core::routes::skeleton_node(name, object)).expect("prints");
+                Node::of(serde_json::from_str(&sent).expect("reads back")).expect("a node")
+            })
+            .collect();
+        let turn = order.index(nodes.len());
+        nodes.rotate_left(turn);
+        let mut held = Outlines::default();
+        held.hold(nodes, &[]);
+        let read: Vec<_> = held.outlines().map(|(id, outline)| (id.clone(), outline.clone())).collect();
+        let whole: Vec<_> = transcript::each(memory.conversations())
+            .expect("reads")
+            .into_iter()
+            .map(|(id, read)| (id, read.map(|read| outline::of_stored(&read.into_stored()))))
+            .collect();
+        prop_assert_eq!(read, whole);
+    }
+
     /// The owed register is the queue: every turn `queue::delta` would send, and nothing else.
     #[test]
     fn owed_is_the_queue(script in steps()) {

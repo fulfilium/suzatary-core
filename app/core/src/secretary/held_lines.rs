@@ -28,6 +28,17 @@ use crate::secretary::store::{ConversationId, Entry, NotAConversation, Stored};
 use crate::secretary::transcript;
 use crate::secretary::words::{Gone, Words};
 
+thread_local! {
+    static DECODES: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
+/// How many prints this thread's held lines have decoded, so a test can show what a reading
+/// decodes: the core's tests, and the browser scenes, which read it from the tab's core worker.
+#[must_use]
+pub fn decodes() -> usize {
+    DECODES.with(std::cell::Cell::get)
+}
+
 /// The lines held: every print decoded once, the history, and the fold's cache over it.
 pub struct HeldLines {
     prints: BTreeMap<Hash, Print>,
@@ -322,6 +333,7 @@ impl HeldLines {
             if self.prints.contains_key(&name) {
                 continue;
             }
+            DECODES.with(|count| count.set(count.get() + 1));
             let print = match decode::<LineEvent>(&LineVocabulary, &name, &bytes) {
                 Ok(envelope) => {
                     let parents = parents_of(&envelope);

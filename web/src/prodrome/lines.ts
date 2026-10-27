@@ -6,8 +6,9 @@ import type { Replica } from "./replica"
 import type { SkeletonNode } from "../wire/generated/wire"
 
 export namespace lines {
-  // The whole store, for the list and a search; or one conversation, which reads its own lines and what they rest on.
-  export type Scope = { readonly type: "Whole" } | { readonly type: "Conversation"; readonly id: string }
+  // The whole store, for the list and a search; or some conversations, each of which reads its own lines and what they
+  // rest on: one for a window, those whose rounds the stream draws.
+  export type Scope = { readonly type: "Whole" } | { readonly type: "Conversations"; readonly ids: readonly string[] }
 
   // Every node the reading needs is held; or the nodes whose content is not.
   export type Need = { readonly type: "Whole" } | { readonly type: "Fetching"; readonly nodes: readonly SkeletonNode[] }
@@ -15,6 +16,7 @@ export namespace lines {
   export type Has = (name: string) => boolean
 
   export const WHOLE: Scope = { type: "Whole" }
+  export const one = (id: string): Scope => ({ type: "Conversations", ids: [id] })
 
   // The nodes `wanted` names and everything they rest on, parents first, by one pass back over the skeleton's order.
   const closure = (nodes: readonly SkeletonNode[], wanted: (n: SkeletonNode) => boolean): SkeletonNode[] => {
@@ -29,8 +31,11 @@ export namespace lines {
 
   // A conversation's lines are a register of their own: no line of one rests on a line of another, and an erasure
   // erases only its own conversation's words, so its closure reads as the whole store reads it.
-  export const nodesOf = (skeleton: Replica<SkeletonNode>, scope: Scope): readonly SkeletonNode[] =>
-    scope.type === "Whole" ? skeleton.objects : closure(skeleton.objects, n => n.header.node === "line" && n.header.conversation === scope.id)
+  export const nodesOf = (skeleton: Replica<SkeletonNode>, scope: Scope): readonly SkeletonNode[] => {
+    if (scope.type === "Whole") return skeleton.objects
+    const ids = new Set(scope.ids)
+    return closure(skeleton.objects, n => n.header.node === "line" && ids.has(n.header.conversation))
+  }
 
   // Whether the skeleton holds any line of `id`, read off the headers alone.
   export const holds = (skeleton: Replica<SkeletonNode>, id: string): boolean =>

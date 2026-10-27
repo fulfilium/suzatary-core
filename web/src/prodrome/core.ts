@@ -12,6 +12,7 @@ import type {
   Phase,
   ProvenanceRow,
   SearchPayload,
+  SkeletonNode,
   StreamPayload,
   TopicsPayload,
   SpecNode,
@@ -172,6 +173,8 @@ export function chainsOf(core: Core, held: readonly HeldChain[]): Chains {
  */
 export interface Lines {
   hold: (add: string, drop: string) => void;
+  /** The skeleton's nodes `add`, as the box sent them, held, and the names `drop` let go. */
+  nodes: (add: string, drop: string) => void;
   keys: (add: string, drop: string) => void;
   list: (inbox: Proposals) => string;
   conversation: (
@@ -183,6 +186,8 @@ export interface Lines {
     memory: string | undefined,
   ) => string;
   search: (q: string) => string;
+  /** `[<id>, …]`: the conversations whose rounds the newest `pages` pages of the stream draw, by the skeleton alone. */
+  chosen: (topics: TopicReading, chosen: string, pages: number) => string;
   /** The newest `pages` pages of every conversation's rounds carrying each topic of `chosen`, a JSON array. */
   stream: (topics: TopicReading, chosen: string, pages: number) => string;
   /** `{<name>: [<answer key>, …]}`: every key an erasure names, with the blocks its words fed where `keys` opens it. */
@@ -630,6 +635,12 @@ export const conversationOf = (lines: Lines, inbox: Proposals, id: string, windo
   checked("conversation", lines.conversation(id, inbox, shown(window.before), shown(window.limit), window.about, memoryOf(memory)), payload.ConversationPayload);
 
 export const searchOf = (lines: Lines, q: string): SearchPayload => checked("search", lines.search(q), payload.SearchPayload);
+
+/** `nodes` held in the core's skeleton and `gone` let go. */
+export const nodesInto = (lines: Lines, nodes: readonly SkeletonNode[], gone: readonly string[]): void => lines.nodes(JSON.stringify(nodes), JSON.stringify(gone));
+
+export const chosenOf = (lines: Lines, topics: TopicReading, chosen: readonly string[], pages: number): readonly string[] =>
+  checked("chosen", lines.chosen(topics, JSON.stringify(chosen), pages), arr(str));
 
 export const streamOf = (lines: Lines, topics: TopicReading, chosen: readonly string[], pages: number): StreamPayload =>
   checked("stream", lines.stream(topics, JSON.stringify(chosen), pages), payload.StreamPayload);

@@ -649,7 +649,7 @@ digest reads as its leaf; nothing writes one any more. A TAB holds the lines in
 the core's worker (`web/src/prodrome/linesync.ts`), which restores, pulls and
 lands them and answers every reading of them; on the device they are a store
 of their own, one row per skeleton node and per key beside a head row
-(`linerows.ts`, database version 7), so a landing writes what arrived. The
+(`linerows.ts`, database version 8), so a landing writes what arrived. The
 row is its replica and the keys the pulls gave (`web/src/prodrome/locked.ts`),
 joined as a pair of unions; a key the objects name as erased opens nothing
 and is owed, so whichever tab reads it, from a pull or from the row another
@@ -1604,7 +1604,11 @@ rules and points here for the modules. The web contract is `docs/WEB-SPEC.md`.
   literal by its name in the `content` store, fetched when a reading needs
   it: a conversation reads its own lines and what they rest on, the list and
   a search every line, and no reading is made until every line it reads is
-  held (`lines.need`). The todo chains are not held
+  held (`lines.need`). Each line's node carries its step
+  (`secretary::step::Step`, the box's reading of its shape), so the core
+  folds each conversation's outline, the openings of its rounds, from the
+  skeleton alone (`secretary::outlines`); the stream chooses and counts its
+  rounds by the outlines and reads only the conversations it draws. The todo chains are not held
   here: the Inbox prices through the replicas the chain pages read
   (`sync.heldChains`, 2026-10-04: the open chain from memory, unsent acts
   included, every other served chain from its row on this device joined with

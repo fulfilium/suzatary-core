@@ -13,7 +13,7 @@ const line = (hash: string, conversation: string, keys: string[] = []): Skeleton
   hash,
   parents: [],
   size: 1,
-  header: { node: "line", conversation, at: "2026-10-25T09:00:00", kind: "Said", keys },
+  header: { node: "line", conversation, at: "2026-10-25T09:00:00", kind: "Said", keys, step: { step: "asks" } },
 })
 
 const row = (nodes: SkeletonNode[], keys: Record<string, string> = {}, generation = 0): locked.Row<SkeletonNode> =>

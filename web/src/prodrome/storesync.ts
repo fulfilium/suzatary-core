@@ -247,8 +247,9 @@ export namespace storesync {
   const over = async <K extends questions.Kind>(question: questions.Of<K>, whole: boolean): Promise<questions.Answer<K>> => {
     await ready.get()
     const holding = Promise.all([inboxHeld.hold(source.state().inbox), holdTopics(source.state())])
-    const [, answer, left] = await Promise.all([holding, remote.ask(question), whole ? remote.ask({ type: "Left" }) : null])
-    if (left !== null && left.type === "Held") readings.told("stores", excluded.left(left.v))
+    const [, answer] = await Promise.all([holding, remote.ask(question)])
+    // Asked behind the answer, so it says what the reading left out and the answer waits for none of it.
+    if (whole) void remote.ask({ type: "Left" }).then(left => readings.told("stores", excluded.left(left)))
     return answer
   }
 

@@ -2274,13 +2274,24 @@ fn the_answers_vector_holds_every_answer() {
     samples.add([proposals]);
     samples.add([readings::conversations(&listed, &inbox_fold)]);
     samples.add([readings::search(&listed, "deed").expect("a search")]);
+    let outlines: Vec<_> = listed
+        .iter()
+        .map(|stored| {
+            (
+                &stored.id,
+                Ok(suzatary_core::secretary::outline::of_stored(stored)),
+            )
+        })
+        .collect();
     samples.add([suzatary_core::secretary::stream::stream(
-        &listed,
+        outlines.iter().map(|(id, outline)| (*id, outline)),
+        |id| listed.iter().find(|stored| stored.id == *id).map(Ok),
         &suzatary_core::secretary::topics::reading::Reading::default(),
         &std::collections::BTreeSet::new(),
         1,
         &readings::Dress::BARE,
-    )]);
+    )
+    .expect("the stream reads")]);
     samples.add([wire::TopicsPayload {
         topics: vec![
             wire::TopicInUse {

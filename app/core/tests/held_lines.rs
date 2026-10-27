@@ -361,3 +361,212 @@ fn a_new_line_costs_its_leaf_its_conversation_and_the_store() {
         in_first + 1
     );
 }
+
+proptest! {
+    #![proptest_config(ProptestConfig { cases: 24, ..ProptestConfig::default() })]
+
+    /// THE LAZY STREAM LAW: the stream chosen by the skeleton's outlines and drawn from lines
+    /// holding only the conversations it draws, and what they rest on, is the stream of every line
+    /// read whole, and holding those lines decodes no other print.
+    #[test]
+    fn the_stream_decodes_only_what_it_draws(
+        script in proptest::collection::vec(step(), 1..90),
+        pages in 1usize..3,
+    ) {
+        use suzatary_core::secretary::held_lines::decodes;
+        use suzatary_core::secretary::outline;
+        use suzatary_core::secretary::outlines::{Node, Outlines};
+        use suzatary_core::secretary::readings::Dress;
+        use suzatary_core::secretary::stream;
+        use suzatary_core::secretary::topics::reading::Reading;
+        let held = written(&script);
+        let given: BTreeMap<KeyName, String> = keys(&held).into_iter().collect();
+        let topics = Reading::default();
+        let chosen = BTreeSet::new();
+
+        let mut whole = HeldLines::new();
+        whole.keys(&given, &[]);
+        whole.hold(prints(&held), &[]);
+        let all = whole.read().0.expect("reads");
+        let outlines: Vec<_> = all.iter().map(|stored| (&stored.id, Ok(outline::of_stored(stored)))).collect();
+        let eager = stream::stream(
+            outlines.iter().map(|(id, outline)| (*id, outline)),
+            |id| all.iter().find(|stored| stored.id == *id).cloned().map(Ok),
+            &topics,
+            &chosen,
+            pages,
+            &Dress::BARE,
+        );
+
+        let objects = held.lines.objects().expect("objects");
+        let mut skeleton = Outlines::default();
+        skeleton.hold(
+            objects
+                .iter()
+                .filter_map(|(name, object)| Node::of(suzatary_core::routes::skeleton_node(name, object)).expect("a node"))
+                .collect(),
+            &[],
+        );
+        let drawn: BTreeSet<ConversationId> = stream::choose(skeleton.outlines(), &topics, &chosen, pages)
+            .expect("chooses")
+            .conversations()
+            .into_iter()
+            .cloned()
+            .collect();
+        // The lines of the drawn conversations and every object they rest on.
+        let parents: BTreeMap<&Hash, Vec<Hash>> = objects
+            .iter()
+            .map(|(name, object)| (name, prodrome_core::event::parents_of(object)))
+            .collect();
+        let mut under: BTreeSet<Hash> = BTreeSet::new();
+        let mut pending: Vec<Hash> = objects
+            .iter()
+            .filter(|(_, object)| object.event().is_some_and(|line| drawn.contains(line.conversation())))
+            .map(|(name, _)| name.clone())
+            .collect();
+        while let Some(name) = pending.pop() {
+            if under.insert(name.clone()) {
+                pending.extend(parents.get(&name).into_iter().flatten().cloned());
+            }
+        }
+        let mut lazy = HeldLines::new();
+        lazy.keys(&given, &[]);
+        let before = decodes();
+        lazy.hold(prints(&held).into_iter().filter(|(name, _)| under.contains(name)).collect(), &[]);
+        prop_assert_eq!(decodes() - before, under.len());
+        let lazy_read = stream::stream(
+            skeleton.outlines(),
+            |id| lazy.conversation(id),
+            &topics,
+            &chosen,
+            pages,
+            &Dress::BARE,
+        );
+        prop_assert_eq!(lazy_read, eager);
+    }
+}
+
+/// THE STREAM'S COST: over ten conversations written one after another, ten rounds each, the
+/// newest page of the stream draws three of them, and its reading decodes their objects and
+/// nothing of the other seven.
+#[test]
+fn the_newest_page_decodes_three_conversations_of_ten() {
+    use suzatary_core::secretary::held_lines::decodes;
+    use suzatary_core::secretary::outlines::{Node, Outlines};
+    use suzatary_core::secretary::stream;
+    use suzatary_core::secretary::topics::reading::Reading;
+    let script: Vec<Step> = (0..10)
+        .flat_map(|conversation| {
+            (0..20).map(move |k| Step::Said {
+                conversation,
+                model: k % 2 == 1,
+                echoes: false,
+            })
+        })
+        .collect();
+    let held = written(&script);
+    let objects = held.lines.objects().expect("objects");
+    let mut skeleton = Outlines::default();
+    skeleton.hold(
+        objects
+            .iter()
+            .filter_map(|(name, object)| {
+                Node::of(suzatary_core::routes::skeleton_node(name, object)).expect("a node")
+            })
+            .collect(),
+        &[],
+    );
+    let choice = stream::choose(
+        skeleton.outlines(),
+        &Reading::default(),
+        &BTreeSet::new(),
+        1,
+    )
+    .expect("chooses");
+    assert_eq!(choice.total, 100);
+    let drawn: BTreeSet<ConversationId> = choice.conversations().into_iter().cloned().collect();
+    assert_eq!(drawn, (7..10).map(id).collect());
+    let mine = |name: &Hash| {
+        objects.iter().any(|(other, object)| {
+            other == name
+                && object
+                    .event()
+                    .is_none_or(|line| drawn.contains(line.conversation()))
+        })
+    };
+    let read: Vec<_> = prints(&held)
+        .into_iter()
+        .filter(|(name, _)| mine(name))
+        .collect();
+    let mut lines = HeldLines::new();
+    lines.keys(&keys(&held).into_iter().collect(), &[]);
+    let before = decodes();
+    let count = read.len();
+    lines.hold(read, &[]);
+    assert_eq!(decodes() - before, count);
+    assert!(count < objects.len() / 3, "{count} of {}", objects.len());
+}
+
+/// A print of a drawn conversation that does not decode leaves its line and what rests on it out
+/// of the reading, and the stream still draws every round that reading holds, each as the
+/// whole store draws it, and leaves out the rounds it lost.
+#[test]
+fn a_print_that_does_not_decode_leaves_out_its_rounds_and_draws_the_rest() {
+    use suzatary_core::secretary::outlines::{Node, Outlines};
+    use suzatary_core::secretary::readings::Dress;
+    use suzatary_core::secretary::stream;
+    use suzatary_core::secretary::topics::reading::Reading;
+    let script: Vec<Step> = (0..12)
+        .map(|k| Step::Said {
+            conversation: 0,
+            model: k % 2 == 1,
+            echoes: false,
+        })
+        .collect();
+    let held = written(&script);
+    let given: BTreeMap<KeyName, String> = keys(&held).into_iter().collect();
+    let objects = held.lines.objects().expect("objects");
+    let mut skeleton = Outlines::default();
+    skeleton.hold(
+        objects
+            .iter()
+            .filter_map(|(name, object)| {
+                Node::of(suzatary_core::routes::skeleton_node(name, object)).expect("a node")
+            })
+            .collect(),
+        &[],
+    );
+    let read = |prints: Vec<(Hash, Vec<u8>)>| {
+        let mut lines = HeldLines::new();
+        lines.keys(&given, &[]);
+        lines.hold(prints, &[]);
+        stream::stream(
+            skeleton.outlines(),
+            |id| lines.conversation(id),
+            &Reading::default(),
+            &BTreeSet::new(),
+            1,
+            &Dress::BARE,
+        )
+    };
+    let whole = read(prints(&held)).expect("reads");
+    // The ninth line of twelve, a question: what rests on it is left out with it.
+    let ninth = transcript::read(held.conversations(), &id(0))
+        .expect("read")
+        .lines()[9]
+        .name
+        .clone();
+    let forged: Vec<_> = prints(&held)
+        .into_iter()
+        .map(|(name, mut bytes)| {
+            if name == ninth {
+                bytes.push(b' ');
+            }
+            (name, bytes)
+        })
+        .collect();
+    let part = read(forged).expect("still reads");
+    assert_eq!(part.total, whole.total, "the count is the skeleton's");
+    assert!(!part.rounds.is_empty() && part.rounds.len() < whole.rounds.len());
+    assert!(part.rounds.iter().all(|round| whole.rounds.contains(round)));
+}

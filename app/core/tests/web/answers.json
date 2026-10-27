@@ -4484,7 +4484,10 @@
                 "630dcd2966c4336691125448bbb25b4ff412a49c732db2c8abc1b8581bd710dd"
               ],
               "kind": "Opened",
-              "node": "line"
+              "node": "line",
+              "step": {
+                "step": "opened"
+              }
             },
             "parents": [
               "7b818ef0fdd17acb5a6c38b43fa0281f189cc0854dab58dcff68c681ce13ad38"
@@ -4492,10 +4495,11 @@
             "size": 780
           }
         ],
+        "replaced": [],
         "rest": 0,
         "since": "Known",
-        "size": 492,
-        "weight": 492
+        "size": 524,
+        "weight": 524
       },
       "maps": [
         [

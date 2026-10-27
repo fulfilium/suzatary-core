@@ -10,7 +10,7 @@ import d from "../wire/decoder"
 import payload from "../wire/generated/payload"
 import type { RefusedObject, SkeletonNode } from "../wire/generated/wire"
 import locked from "./locked"
-import { CHAIN, LINE_ROWS, Spoken, Standing, dropRow, dropRows, heldRow, storeRows } from "./objects"
+import { LINE_ROWS, Spoken, Standing, storeRows } from "./objects"
 import type pull from "./pull"
 import type { Frontier, Held, Replica, Word } from "./replica"
 import { empty, epochOf, replicaOf } from "./replica"
@@ -29,11 +29,8 @@ export namespace linerows {
   const pieceAt = (at: number): string => `${PIECE}${String(at).padStart(12, "0")}`
 
   const NONE = locked.none<SkeletonNode>()
-  // The lines' row and its pieces' rows as version 5 kept them, whole, in the rows' store: read once to move them here.
-  const WHOLE = "store/lines"
-  const wholeRows = storeRows(payload.SkeletonNode, NONE, () => [])
   // A piece's row holds its nodes alone; its keys are key rows.
-  const pieceRows = wholeRows
+  const pieceRows = storeRows(payload.SkeletonNode, NONE, () => [])
 
   // The head a raw row holds, or none for an absent one or one that does not read.
   const headIn = (raw: unknown): Head | null => {
@@ -128,25 +125,6 @@ export namespace linerows {
       x !== null && typeof x === "object" && !Array.isArray(x) ? Object.fromEntries(Object.entries(x).sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))) : x,
     )
 
-  // The version 5 or 6 row moved into this store, once, and then deleted with its pieces: a store already holding a head
-  // keeps it, since what the old row holds is the box's, pulled again by heads. A row that does not read is deleted. The
-  // old pieces go whether or not a row is there: a pull cut before its first landing kept them, keys and all, with none.
-  export const migrate = async (): Promise<lo.Settled<null>> => {
-    const old = await heldRow(wholeRows, WHOLE)
-    if (old.type === "Held") {
-      const moved = await idb
-        .within(LINE_ROWS, "readwrite", async s => {
-          if ((await idb.done(s.get(HEAD))) === undefined) await writeAll(s, old.v)
-          return lo.val(null)
-        })
-        .catch((e: unknown) => lo.error(lo.reason(e)))
-      if (moved.type === "Error") return moved
-    }
-    const pieces = await dropRows(`${WHOLE}/piece/`)
-    if (pieces.type === "Error") return pieces
-    return old.type === "Absent" ? lo.val(null) : dropRow(CHAIN, WHOLE, new Set())
-  }
-
   const without = <A>(f: () => Promise<A>, otherwise: A): Promise<A> => (idb.available() ? f() : Promise.resolve(otherwise))
   const settled = (p: Promise<lo.Settled<null>>): Promise<lo.Settled<null>> => p.catch((e: unknown) => lo.error(lo.reason(e)))
 
@@ -187,11 +165,10 @@ export namespace linerows {
       restore: () =>
         without(
           async () => {
-            const moved = await migrate()
             const read = await idb.within(LINE_ROWS, "readonly", readAll).catch((e: unknown): Read | string => lo.reason(e))
             if (typeof read === "string") return { row: { type: "Unreadable", why: read }, pieces: [], unread: [] }
             confirmed = read.unread.length === 0 && read.printed !== null ? { row: read.row, head: read.printed } : null
-            const unread = moved.type === "Error" ? [...read.unread, `the lines' row of version 5 or 6 was not moved (${moved.e})`] : read.unread
+            const unread = read.unread
             // The pieces' keys are the store's key rows, which hold the row's as well: a union, so either holds them.
             const pieces = read.pieces.map(p => locked.of(p.replica, read.keys))
             return { row: read.head === null ? { type: "Absent" } : { type: "Held", row: read.row }, pieces, unread }

@@ -126,6 +126,23 @@ const reads = (open: readonly string[]): string[] => open.filter((r) => r.includ
 // A round of the generated conversations, drawn in the stream.
 const BULK = `document.querySelectorAll('.streamround .streammeta a[href*="bulk-"]').length > 0`
 
+// The conversations the stream drew rounds of, by their links.
+const DRAWN = `[...new Set([...document.querySelectorAll(".streamround .streammeta a")].map((a) => decodeURIComponent(/secretary\\/([^/?#&@]+)/.exec(a.getAttribute("href"))?.[1] ?? "")))]`
+// In the core's worker: how many prints its lines decoded, and how many objects the device's skeleton holds, in all and
+// of the conversations `ids` and the structure every line rests on, which is what drawing their rounds needs.
+const DECODED = (ids: readonly string[]): string => `(async () => {
+  const m = await import(new URL("prodrome.js", self.location.href).href)
+  const db = await new Promise((done, fail) => { const r = indexedDB.open("suzatary"); r.onsuccess = () => done(r.result); r.onerror = () => fail(r.error) })
+  const nodes = await new Promise((done, fail) => {
+    const r = db.transaction("lines").objectStore("lines").getAll(IDBKeyRange.bound("node/", "node/\uffff"))
+    r.onsuccess = () => done(r.result); r.onerror = () => fail(r.error)
+  })
+  db.close()
+  const ids = new Set(${JSON.stringify(ids)})
+  const needed = nodes.filter((n) => n.header.node === "structure" || ids.has(n.header.conversation)).length
+  return { decoded: m.decodes(), needed, all: nodes.length }
+})()`
+
 app.scene("a warm load of the conversations draws them from the device, with every read of the box held", async () => {
   await trustThisDevice(app.page, LINES_BASE, LINES_INSTANCE)
   await app.page.navigate(`${LINES_BASE}/#/secretary`)
@@ -138,15 +155,19 @@ app.scene("a warm load of the conversations draws them from the device, with eve
   journal.mark("warm load")
   // Every request to the box's API is held until the stream has drawn, so what draws is drawn from the device.
   const release = await app.page.holdRequests(["/api/"])
-  const drawn = await (async (): Promise<{ readonly ms: number; readonly held: readonly string[] }> => {
+  const drawn = await (async (): Promise<{ readonly ms: number; readonly held: readonly string[]; readonly cost: { decoded: number; needed: number; all: number } }> => {
     try {
       await app.page.reload()
       await app.page.waitFor(BULK)
-      return { ms: await app.page.evaluate<number>(`performance.now()`), held: app.page.heldUrls() }
+      const ms = await app.page.evaluate<number>(`performance.now()`)
+      const ids = await app.page.evaluate<string[]>(DRAWN)
+      return { ms, held: app.page.heldUrls(), cost: await app.page.inWorker<{ decoded: number; needed: number; all: number }>("prodromework", DECODED(ids)) }
     } finally {
       await release()
     }
   })()
   assert.ok(drawn.ms < wait.MS / 3, `the stream drew ${Math.round(drawn.ms)} ms after the document started (bound ${wait.MS / 3})`)
+  console.log(JSON.stringify({ warm: drawn.ms, ...drawn.cost }))
+  assert.ok(drawn.cost.decoded <= drawn.cost.needed, `the warm load decoded ${drawn.cost.decoded} prints; its rounds need ${drawn.cost.needed} of ${drawn.cost.all}`)
   assert.ok(drawn.held.length > 0, `the box was asked and answered nothing before the stream drew:\n${journal.lines().join("\n")}`)
 })

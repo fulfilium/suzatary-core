@@ -860,7 +860,7 @@ pub fn lines_since(
     cut: Cut,
 ) -> Answered<wire::StorePayload> {
     let payload = store_objects_since(conversations.lines, since, books, now, cut)?;
-    let (keys, erased) = words(
+    let KeysSaid { keys, erased, .. } = words(
         conversations,
         payload
             .objects
@@ -899,7 +899,11 @@ pub fn lines_skeleton(
         cut,
         &Nodes,
     )?;
-    let (keys, erased) = words(
+    let KeysSaid {
+        keys,
+        erased,
+        replaced,
+    } = words(
         conversations,
         piece.sent.iter().map(|node| node.hash.as_str()),
     )?;
@@ -916,6 +920,7 @@ pub fn lines_skeleton(
         size: piece.size,
         weight: piece.weight,
         erased,
+        replaced,
     })
 }
 
@@ -942,21 +947,38 @@ fn held_sizes(
         .collect())
 }
 
-/// The key of every slot the lines named `sent` name, by name, but a key an erasure anywhere in
-/// the store names; and every key so named, sorted.
+/// What a pull of the lines says of their words' keys.
+struct KeysSaid {
+    /// The key of every slot the lines sent name, by name, but a key an erasure names or a reseal
+    /// replaced.
+    keys: BTreeMap<String, String>,
+    /// Every key an erasure anywhere in the store names, sorted.
+    erased: Vec<String>,
+    /// Every key a reseal that opens on the box supersedes, anywhere in the store, sorted
+    /// (`transcript::superseded`).
+    replaced: Vec<String>,
+}
+
+/// What the lines named `sent` and the store say of their keys.
 fn words<'a>(
     conversations: crate::secretary::conversations::Conversations<'_>,
     sent: impl Iterator<Item = &'a str>,
-) -> Answered<(BTreeMap<String, String>, Vec<String>)> {
+) -> Answered<KeysSaid> {
     let objects = conversations.lines.objects()?;
     let erased = crate::secretary::transcript::erased(&objects);
+    let replaced = crate::secretary::transcript::superseded(
+        objects
+            .iter()
+            .filter_map(|(name, object)| Some((name, object.event()?))),
+        &conversations.slots(),
+    );
     let sent: std::collections::BTreeSet<&str> = sent.collect();
     let keys = objects
         .iter()
         .filter(|(name, _)| sent.contains(name.as_str()))
         .filter_map(|(_, object)| object.event())
         .flat_map(crate::secretary::line_event::LineEvent::keys)
-        .filter(|name| !erased.contains_key(name))
+        .filter(|name| !erased.contains_key(name) && !replaced.contains(name))
         .filter_map(|name| {
             let key = conversations.keys.get(name).ok()??;
             Some((
@@ -965,14 +987,19 @@ fn words<'a>(
             ))
         })
         .collect();
-    Ok((
+    Ok(KeysSaid {
         keys,
-        erased.keys().map(|name| name.as_str().to_owned()).collect(),
-    ))
+        erased: erased.keys().map(|name| name.as_str().to_owned()).collect(),
+        replaced: replaced
+            .iter()
+            .map(|name| name.as_str().to_owned())
+            .collect(),
+    })
 }
 
 /// One line's node: its name, what it rests on, its literal's size, and its header.
-fn skeleton_node(
+#[must_use]
+pub fn skeleton_node(
     name: &prodrome_core::event::Hash,
     envelope: &prodrome_core::event::Envelope<crate::secretary::line_event::LineEvent>,
 ) -> wire::SkeletonNode {
@@ -982,6 +1009,7 @@ fn skeleton_node(
             at: fpl::iso(fpl::instant_of(line.at())),
             kind: line.shape().name().to_owned(),
             keys: line.keys().map(|key| key.as_str().to_owned()).collect(),
+            step: crate::secretary::step::Step::of(line.shape()),
         },
         None => wire::NodeHeader::Structure {
             kind: constructor(envelope).to_owned(),
@@ -1017,6 +1045,8 @@ fn constructor<E>(envelope: &prodrome_core::event::Envelope<E>) -> &'static str 
 /// them, which is what a skeleton's piece is cut by.
 fn weight(node: &wire::SkeletonNode) -> usize {
     const AROUND: usize = 96;
+    // A step's tag, and the count two of them carry.
+    const STEP: usize = 32;
     let header = match &node.header {
         wire::NodeHeader::Structure { kind } => kind.len(),
         wire::NodeHeader::Line {
@@ -1024,11 +1054,13 @@ fn weight(node: &wire::SkeletonNode) -> usize {
             at,
             kind,
             keys,
+            step: _,
         } => {
             conversation.len()
                 + at.len()
                 + kind.len()
                 + keys.iter().map(|key| key.len() + 3).sum::<usize>()
+                + STEP
         }
     };
     AROUND + node.hash.len() + node.parents.iter().map(|p| p.len() + 3).sum::<usize>() + header

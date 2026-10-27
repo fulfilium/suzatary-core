@@ -4,7 +4,7 @@
 // names their heads, and it hears what moved, what a reading left out and how far a pull has come.
 
 import type { Lines } from "./core"
-import { deadOf, erasedOf, objectsOf } from "./core"
+import { deadOf, erasedOf, nodesInto, objectsOf } from "./core"
 import content from "./content"
 import excluded from "./excluded"
 import heads from "./heads"
@@ -46,8 +46,9 @@ export namespace linesync {
     readonly want: () => Promise<boolean>
     // The box's stream named the lines' heads: a pull, if a page reads them and the worker lacks one.
     readonly heard: (box: heads.Heads) => void
-    // `read` once every line `scope` reads is held, fetching what is not, a conversation's before the whole store's.
-    readonly over: <A>(scope: lines.Scope, read: () => A) => Promise<A>
+    // `read` once every line `scope` reads is held, fetching what is not, a conversation's before the whole store's. The
+    // scope is asked again after each fetch, of the skeleton then held, and `read` runs in the same task as its last ask.
+    readonly over: <A>(scope: () => lines.Scope, read: () => A) => Promise<A>
     // Whether the lines hold any line of `id`, once they have landed.
     readonly holds: (id: string) => Promise<boolean>
     // The lines' row written over by a reset and taken again from the box, with whatever the reset could not do.
@@ -86,6 +87,14 @@ export namespace linesync {
       const add = Object.fromEntries(Object.entries(row.keys).filter(([n, k]) => was.keys[n] !== k))
       const drop = Object.keys(was.keys).filter(n => row.keys[n] === undefined)
       if (Object.keys(add).length > 0 || drop.length > 0) held.keys(JSON.stringify(add), JSON.stringify(drop))
+      // The core's skeleton is the row's, so the stream chooses its rounds by the row it reads.
+      if (was.replica.objects !== row.replica.objects) {
+        const before = new Set(was.replica.objects.map(n => n.hash))
+        const after = new Set(row.replica.objects.map(n => n.hash))
+        const came = row.replica.objects.filter(n => !before.has(n.hash))
+        const went = was.replica.objects.flatMap(n => (after.has(n.hash) ? [] : [n.hash]))
+        if (came.length > 0 || went.length > 0) nodesInto(held, came, went)
+      }
       say({ type: "Moved", conversations: touched(was, row, new Set([...Object.keys(add), ...drop])) })
     }
     const told = (reader: string, left: excluded.Left): void => say({ type: "Told", reader, left })
@@ -138,8 +147,13 @@ export namespace linesync {
 
     // The skeleton last prefetched, so each is prefetched once, and again after a prefetch that failed.
     let ahead: Replica<SkeletonNode> | null = null
+    // The first reading's end, which every prefetch waits for: a prefetch reads the device's every name, and the first
+    // draw reads before it.
+    let ended = (): void => {}
+    const firstRead = new Promise<void>(done => (ended = done))
     // The plan's content the device lacks, fetched behind every reading's fetch, one answer at a time.
     const prefetch = serial.of(async (): Promise<void> => {
+      await firstRead
       if (!idb.available()) return
       const skeleton = row.replica
       await fetching("Ahead", await planOf(skeleton)).catch(() => {
@@ -194,6 +208,8 @@ export namespace linesync {
           ),
       )
 
+    // Every key the box said a reseal that opens on it replaced: the box destroys them, and so does the purge.
+    const replaced = new Set<string>()
     const store: pull.Store<SkeletonNode, locked.Row<SkeletonNode>> = {
       name: "lines",
       ...pull.locks<SkeletonNode>({
@@ -202,13 +218,14 @@ export namespace linesync {
         hold: r => take({ type: "Held", row: r }),
         forgot: keys => take({ type: "Forgot", keys }),
         // The core reads the content held, the largest down-set of the skeleton it has: a word was only ever rendered
-        // from a conversation read whole.
-        dead: () => Promise.resolve(new Set(deadOf(held))),
+        // from a conversation read whole. Beside it, the keys the box says a reseal replaced.
+        dead: () => Promise.resolve(new Set([...deadOf(held), ...replaced])),
         // The blocks a key's words fed are found by opening its lines, so their content is fetched first; a fetch that
-        // fails rejects, and the keys stay owed.
+        // fails rejects, and the keys stay owed. A replaced key's old words may have fed blocks under the older rules,
+        // so it is purged as an erased one is: its blocks forgotten, then the key.
         erased: async (r, erased) => {
           await fetching("First", lines.naming(r.replica, locked.names(r.keys)))
-          return erasedOf(held, r.keys, erased)
+          return erasedOf(held, r.keys, [...erased, ...replaced])
         },
         forget,
         alter: linerows.place.forget,
@@ -217,14 +234,17 @@ export namespace linesync {
       held: () => row,
       place: linerows.place,
       ask: since =>
-        storereads.skeleton(since).then(a => ({
-          said: { ...a, objects: a.nodes, untrusted: [], root: null },
-          erased: a.erased,
-          piece: r => locked.without(locked.of(r, a.keys), a.erased),
-          rest: a.rest,
-          size: a.size,
-          weight: a.weight,
-        })),
+        storereads.skeleton(since).then(a => {
+          for (const k of a.replaced) replaced.add(k)
+          return {
+            said: { ...a, objects: a.nodes, untrusted: [], root: null },
+            erased: a.erased,
+            piece: r => locked.without(locked.of(r, a.keys), [...a.erased, ...a.replaced]),
+            rest: a.rest,
+            size: a.size,
+            weight: a.weight,
+          }
+        }),
       landed: async r => {
         if (r.replica.objects.length > 0) await retire()
         const gone = await content.keepOnly(await keeping(r.replica), drop => Promise.resolve(held.hold("[]", JSON.stringify(drop))))
@@ -263,16 +283,21 @@ export namespace linesync {
       setTimeout(() => void sync.purge(), 0)
     }
 
-    const over = async <A>(scope: lines.Scope, read: () => A): Promise<A> => {
-      await ready.get()
-      for (;;) {
-        const need = lines.need(row.replica, content.has, scope)
-        if (need.type === "Whole") {
-          const answer = read()
-          purge()
-          return answer
+    const over = async <A>(scope: () => lines.Scope, reading: () => A): Promise<A> => {
+      try {
+        await ready.get()
+        for (;;) {
+          const now = scope()
+          const need = lines.need(row.replica, content.has, now)
+          if (need.type === "Whole") {
+            const answer = reading()
+            purge()
+            return answer
+          }
+          await fetching(now.type === "Whole" ? "Behind" : "First", need.nodes)
         }
-        await fetching(scope.type === "Whole" ? "Behind" : "First", need.nodes)
+      } finally {
+        ended()
       }
     }
 

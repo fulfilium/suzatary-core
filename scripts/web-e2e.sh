@@ -625,8 +625,9 @@ google_base="$(start google --settings --connected google -- --google-fixture "$
 epoch_base="$(start epoch)"
 # THE LINES' SERVER (web/e2e/bigstore.test.ts): a writer whose conversations hold a generated store of
 # $SUZATARY_E2E_LINES lines (1,500 by default), so a scene can see a tab read a large store; spread over
-# $SUZATARY_E2E_CONVERSATIONS conversations when it is set, the shape of a store a year old.
-lines_base="$(start lines --lines "${SUZATARY_E2E_LINES:-1500}" ${SUZATARY_E2E_CONVERSATIONS:+--conversations "$SUZATARY_E2E_CONVERSATIONS"})"
+# $SUZATARY_E2E_CONVERSATIONS conversations when it is set, the shape of a store a year old, and with a topic
+# on every round when $SUZATARY_E2E_TOPICS is set.
+lines_base="$(start lines --lines "${SUZATARY_E2E_LINES:-1500}" ${SUZATARY_E2E_CONVERSATIONS:+--conversations "$SUZATARY_E2E_CONVERSATIONS"} ${SUZATARY_E2E_TOPICS:+--topics every})"
 # THE RESCRUB SERVER (web/e2e/rescrub.test.ts): a writer whose generated lines were sealed before lines
 # recorded their rules, $SUZATARY_E2E_RESCRUB_LINES of them (1,500 by default) over
 # $SUZATARY_E2E_RESCRUB_CONVERSATIONS conversations (30), so a scene can run `migrate-scrub` under a tab.

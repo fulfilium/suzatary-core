@@ -1598,15 +1598,17 @@ under in every larger union and never wins.
   conversation reads again only when its own lines moved (`touched.test.ts`). The lines' row holds the skeleton
   (`GET /api/stores/lines/skeleton`, pulled by the same pieces), kept one
   node and one key per row in the database's `lines` store beside a head row
-  (`linerows.ts`), so a landing writes only what arrived; version 7 moves a
-  version 5 or 6 row there and deletes it. It is a replica of nodes: each object's name, what it rests
+  (`linerows.ts`), so a landing writes only what arrived; version 8 drops every earlier
+  skeleton, whose nodes carry no step, with its keys, clears the rendered
+  blocks those keys could find (`RENDERED_OWED`), and pulls the skeleton
+  again. It is a replica of nodes: each object's name, what it rests
   on, its size and its header, never its literal (`replica.Obj`). Each
   literal is kept by its name in the database's `content` store
   (`content.ts`), taken only when its bytes hash to the name asked for in
   the same place, so the device holds the box's bytes and nothing else. A
   reading is whole or it is not made (`lines.need`): the list and a search
-  read every line, one conversation reads its own lines and what they rest
-  on, and a reading whose lines are not all held fetches them (`GET
+  read every line, some conversations (a window's one, the stream's drawn
+  ones) read their own lines and what they rest on, and a reading whose lines are not all held fetches them (`GET
   /api/stores/lines/content?hashes=`, at most 64 names and a megabyte an
   answer, four answers out at once over HTTP/2 and one over HTTP/1.1, where a
   browser opens six connections to a host and a page holds three for its
@@ -1620,9 +1622,13 @@ under in every larger union and never wins.
   reads the largest down-set whose content is held, since words were only
   rendered from a conversation read whole, and first fetches the content of
   the conversations naming the keys it owes, keeping them owed if it cannot;
-  it runs at each landing and once every line's content is held, so a key a reseal
-  replaced, which only the reseal's content shows, is destroyed and the
-  device holds the box's keys; a slot whose seal a reseal supersedes is read
+  it runs at each landing and once every line's content is held. A key a
+  reseal replaced is shown only by the reseal's content, so the box names
+  every key a reseal that opens on it supersedes, store-wide, in each
+  skeleton answer (`replaced`, its own `transcript::superseded`) and sends
+  none of their bytes, and the purge treats them as erased keys: it fetches
+  the lines naming them, forgets the blocks their old words fed, and then
+  drops them, so the device holds the box's keys whatever its readings read; a slot whose seal a reseal supersedes is read
   from the reseal whether or not its old key is still held.
   Content no node names is dropped after a landing. — `lazylines.test.ts` "law: a reading of part-fetched
   lines is the whole pull's reading at the same skeleton, or names what it
@@ -1718,7 +1724,7 @@ Each pattern written once, in `web/src/algebra/once.ts`, `latest.ts`,
   pulls each chain and store again from the box, and the reader holds no
   shim. What a dropped row held that the box had not taken is lost. —
   `objects.test.ts` "a row version 2 kept is dropped…", "a row version 1
-  kept is dropped…", "version 5 drops the lines' row and its pieces…"; e2e `upgrade7.test.ts`; `replica.test.ts` "a row in a form an earlier build
+  kept is dropped…", "version 5 drops the lines' row and its pieces…"; e2e `upgrade8.test.ts`; `replica.test.ts` "a row in a form an earlier build
   kept does not read…"; e2e `upgrade.test.ts` "a device holding a version 2
   replica drops it on its first load…".
 - **A verdict says what it found as a sum.** Each object the walk reached
@@ -1772,6 +1778,31 @@ the page holds no filter of its own and no second reading of the topics.
   shows, and an old name filters as the topic it stands for. —
   `app/core/tests/topics.rs`
   `a_filter_shows_exactly_the_rounds_holding_every_chosen_topic`.
+- **The stream reads only the conversations it draws.** Each skeleton node
+  of a line carries its step (`secretary::step::Step`: it opens the
+  conversation, asks, answers, rewinds, proposes, records a coding session,
+  or moves no turn), which the box takes from the line's shape. The core's
+  worker holds the skeleton's line nodes beside the prints
+  (`secretary::outlines::Outlines`) and folds each conversation's steps, in
+  the causal order its own reading uses, to its outline: each live round's
+  opening turn and when (`secretary::outline::of_steps`), kept until a line
+  of that conversation comes or goes. The stream chooses its rounds and
+  counts them from the outlines (`stream::choose`), and the worker then
+  holds the lines of the chosen rounds' conversations and draws those rounds
+  from them (`linesync.over` with a scope asked again after each fetch), so a
+  warm load decodes the lines those conversations rest on and no other; the
+  bar reads the topic stores alone. What a reading left out (`Left`) is asked
+  after its answer, of the lines held. — `app/core/tests/transcript.rs`
+  `the_skeleton_outlines_a_conversation_as_its_reading_does` (the outline of
+  the box's nodes is the conversation's rounds, and both refuse the same
+  lines); `app/core/tests/held_lines.rs`
+  `the_stream_decodes_only_what_it_draws` (the stream chosen by the outlines
+  and drawn from the drawn conversations' lines alone is the stream of every
+  line, and holding those lines decodes no other print),
+  `the_newest_page_decodes_three_conversations_of_ten`;
+  `e2e/bigstore.test.ts` "a warm load of the conversations draws them from
+  the device…" (the worker's decode count is at most the drawn
+  conversations' nodes and the structure they rest on).
 - **The filter is the address.** `#/secretary?topics=a,b` parses to the route
   that prints it. — `laws.test.ts` "a route survives print and parse" (the
   generator gives the secretary route topics).
