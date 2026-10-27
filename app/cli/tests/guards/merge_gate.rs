@@ -1759,7 +1759,7 @@ fn merge_gate_sweeps_a_codespace_target_by_age_alone() {
 }
 
 /// Whether `tool` is on PATH.
-fn on_path(tool: &str) -> bool {
+pub(super) fn on_path(tool: &str) -> bool {
     std::env::var_os("PATH")
         .is_some_and(|path| std::env::split_paths(&path).any(|dir| dir.join(tool).is_file()))
 }
@@ -2163,24 +2163,11 @@ fn merge_gate_live_reads_cover_what_the_live_tests_compile() {
             need(dir.clone());
         }
         if closure.iter().any(|c| c == name) {
-            let mut sources = Vec::new();
-            files_under(&repo().join(&dir).join("src"), &mut sources);
-            for file in sources {
-                let text = std::fs::read_to_string(&file).unwrap_or_default();
-                for include in text
-                    .split("include_str!(\"")
-                    .chain(text.split("include_bytes!(\""))
-                    .skip(1)
+            for include in super::includes::includes(&repo().join(&dir).join("src")) {
+                if let Ok(target) = include.target().canonicalize()
+                    && let Ok(rel) = target.strip_prefix(repo().canonicalize().expect("repo"))
                 {
-                    let Some((rel, _)) = include.split_once('"') else {
-                        continue;
-                    };
-                    let target = file.parent().expect("a parent").join(rel);
-                    if let Ok(target) = target.canonicalize()
-                        && let Ok(rel) = target.strip_prefix(repo().canonicalize().expect("repo"))
-                    {
-                        need(rel.to_string_lossy().into_owned());
-                    }
+                    need(rel.to_string_lossy().into_owned());
                 }
             }
         }

@@ -2635,41 +2635,6 @@ fn release_env(instance: &Path) -> Vec<(&'static str, String)> {
     ]
 }
 
-/// Every path a crate's source includes (`include_str!`, `include_bytes!`, `include!` of a
-/// literal), resolved from the file that includes it.
-fn included(dir: &Path, into: &mut Vec<PathBuf>) {
-    for entry in std::fs::read_dir(dir)
-        .expect("a readable directory")
-        .flatten()
-    {
-        let path = entry.path();
-        let name = entry.file_name();
-        if path.is_dir() {
-            if name != "target" && name != "node_modules" {
-                included(&path, into);
-            }
-            continue;
-        }
-        if path.extension().is_none_or(|e| e != "rs") {
-            continue;
-        }
-        let text = std::fs::read_to_string(&path).expect("a readable source");
-        for macro_ in ["include_str!", "include_bytes!", "include!"] {
-            for (at, _) in text.match_indices(macro_) {
-                let rest = text[at + macro_.len()..].trim_start();
-                let Some(rest) = rest.strip_prefix('(').map(str::trim_start) else {
-                    continue;
-                };
-                let Some(literal) = rest.strip_prefix('"').and_then(|r| r.split('"').next()) else {
-                    continue;
-                };
-                let from = path.parent().expect("a file's directory").join(literal);
-                into.push(std::fs::canonicalize(&from).unwrap_or(from));
-            }
-        }
-    }
-}
-
 /// THE VERSION IS NO COMPILED INPUT: what a release cut writes (the changelog and
 /// `app/release.toml`, pinned by `train_releases_what_the_chain_reads_and_tags_it`) is
 /// included by no crate's source, and no crate has a build script that could read it, so a
@@ -2683,8 +2648,11 @@ fn a_release_cut_changes_no_file_a_crate_compiles() {
         .map(|p| repo().join(p))
         .map(|p| std::fs::canonicalize(&p).unwrap_or(p))
         .collect();
-    let mut paths = Vec::new();
-    included(&app, &mut paths);
+    let paths: Vec<PathBuf> = super::includes::includes(&app)
+        .iter()
+        .map(super::includes::Include::target)
+        .map(|p| std::fs::canonicalize(&p).unwrap_or(p))
+        .collect();
     assert!(
         paths.iter().any(|p| p.ends_with("app/core/releases.toml")),
         "the scan finds the plan the core includes: {paths:?}"
