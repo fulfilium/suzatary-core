@@ -35,9 +35,40 @@ struct Train {
 /// `…/jobs/7/logs` the gate's output, each line stamped with a time as GitHub's are. With
 /// `GH_RUN=cancelled` the run is cancelled, and with `GH_RUN=lost` it fails with no red step, as
 /// a lost runner's does, and with `GH_RUN=running` it never ends; none of them runs the gate.
+///
+/// `workflow run publication.yml --repo <repo> --ref master -f commit=<sha>`, the train's dispatch
+/// of master's publication workflow, appends `dispatch <master> <sha>` to `<TRAIN_PROBES>.args`
+/// and marks the run of `<sha>` dispatched; with `GH_CACHE=down` it fails. `run list --repo <repo>
+/// --workflow publication.yml --event workflow_dispatch … --jq <filter naming "Publication cache
+/// <sha>">` appends `publication <sha>` and answers nothing until that run is dispatched, then
+/// `completed success`; with `GH_CACHE=failure` `completed failure`, with `GH_CACHE=running`
+/// `in_progress `, and with `GH_CACHE=down` it fails as an unreachable GitHub. `api
+/// …/actions/runs?per_page=…`, the listing a gate's end cancels from, answers `<sha>` for each gate
+/// run still in progress and `pub-<sha>` for each publication run still running, and `api
+/// …/runs/<id>/cancel` is logged.
 const GH: &str = r#"#!/bin/sh
 exec 9>&-
 here="$(cd "$(dirname "$0")/.." && pwd)"
+if [ "$1 $2" = "workflow run" ]; then
+  [ "$3 $7" = "publication.yml master" ] || exit 64
+  echo "dispatch $7 ${9#commit=}" >>"$TRAIN_PROBES.args"
+  [ "$GH_CACHE" != down ] || { echo "error connecting to api.github.com" >&2; exit 1; }
+  mkdir -p "$here/dispatched" && echo "${GH_CACHE:-success}" >"$here/dispatched/${9#commit=}"
+  exit 0
+fi
+if [ "$1 $2" = "run list" ]; then
+  [ "$6 $8" = "publication.yml workflow_dispatch" ] || exit 64
+  sha="$(echo "$*" | sed -n 's/.*Publication cache \([0-9a-f]\{40\}\).*/\1/p')"
+  echo "publication $sha" >>"$TRAIN_PROBES.args"
+  [ "$GH_CACHE" != down ] || { echo "error connecting to api.github.com" >&2; exit 1; }
+  [ -e "$here/dispatched/$sha" ] || exit 0
+  case "$(cat "$here/dispatched/$sha")" in
+    failure) echo "completed failure" ;;
+    running) echo "in_progress " ;;
+    *) echo "completed success" ;;
+  esac
+  exit 0
+fi
 if [ "$1" = api ]; then
   echo "api $2" >>"$here/github.log"
   case "$2" in
@@ -60,6 +91,15 @@ if [ "$1" = api ]; then
         esac
       fi
       echo "$sha" ;;
+    repos/*/actions/runs\?per_page=*)
+      for f in "$here"/runs/*; do
+        [ -f "$f" ] && [ "$(cat "$f")" = "in_progress " ] && basename "$f"
+      done
+      for f in "$here"/dispatched/*; do
+        [ -f "$f" ] && [ "$(cat "$f")" = running ] && echo "pub-$(basename "$f")"
+      done
+      exit 0 ;;
+    repos/*/actions/runs/*/cancel) ;;
     repos/*/actions/runs/*/jobs*)
       run="${2#*/runs/}" && run="${run%%/*}"
       [ ! -e "$here/runs/$run.red" ] || echo "7 gate (tests)" ;;
@@ -99,7 +139,9 @@ esac
 /// With `GATE_RED_TEXT` set, the tree half is red on a tree whose CHANGELOG.md holds that text.
 /// Each run writes the environment it was handed to `<TRAIN_PROBES>.env`, and its arguments, a
 /// line, to `<TRAIN_PROBES>.args`. Run with `--steps` naming `changelog`, the box's part of a
-/// tree half on GitHub's runners, it is red on a tree holding `broken-box` and on no other.
+/// tree half on GitHub's runners before the push, it is red on a tree holding `broken-box` and on
+/// no other; run with `--steps` naming `public-tree`, the box's part after the push, on a tree
+/// holding `broken-build`.
 const GATE: &str = r#"#!/bin/sh
 env >"$TRAIN_PROBES.env"
 echo "$*" >>"$TRAIN_PROBES.args"
@@ -112,7 +154,10 @@ echo "$1 $(git rev-parse HEAD) $(pwd)" >>"$TRAIN_PROBES"
 case "$1" in
   --no-live)
     bad=broken
-    case "$2 $3" in "--steps "*changelog*) bad=broken-box ;; esac ;;
+    case "$2 $3" in
+      "--steps "*changelog*) bad=broken-box ;;
+      "--steps "*public-tree*) bad=broken-build ;;
+    esac ;;
   --only-live) bad=broken-live ;;
   *) exit 64 ;;
 esac
@@ -1626,11 +1671,13 @@ impl Train {
 
 const ZERO: &str = "0000000000000000000000000000000000000000";
 
-/// `gate --remote github`: the box runs its steps of the tree half first, then the train commit's
-/// public tree goes to core, committed on core's master by the publications' author with a `Gate:`
-/// trailer, pushed to `gate/<train sha>` and to no other ref; the runner gates that commit alone,
-/// its success is the half's green, and the branch is deleted once the run is read. The live half
-/// runs on the box as ever, and the train lands.
+/// `gate --remote github`: the box runs its steps of the tree half that build nothing first, then
+/// the train commit's public tree goes to core, committed on core's master by the publications'
+/// author with a `Gate:` trailer, pushed to `gate/<train sha>` and to no other ref. The box waits
+/// for the publication run of that commit, and only then runs the steps that build the public
+/// tree, and then the live half, whose deploy-build builds it too. The runner gates that commit
+/// alone, its success is the half's green, and the branch is deleted once the run is read. The
+/// train lands.
 #[test]
 fn train_gate_github_runs_the_public_tree_on_a_gate_branch_and_records_its_green() {
     let t = Train::new("github");
@@ -1647,11 +1694,9 @@ fn train_gate_github_runs_the_public_tree_on_a_gate_branch_and_records_its_green
     let out = t.train(&["gate", "--remote", "github"]);
     assert!(out.status.success(), "gate: {}", text(&out.stderr));
     assert!(
-        t.gate_args().iter().any(
-            |args| args.ends_with("--no-live --steps fmt,public-tree,deployed-shape,changelog")
-        ),
-        "the box ran its steps: {:?}",
-        t.gate_args()
+        text(&out.stderr).contains("succeeded: the box's builds come from the binary cache"),
+        "{}",
+        text(&out.stderr)
     );
     let refs = t.core_pushes();
     let branch = format!("refs/heads/gate/{train}");
@@ -1661,6 +1706,23 @@ fn train_gate_github_runs_the_public_tree_on_a_gate_branch_and_records_its_green
         .unwrap_or_else(|| panic!("only gate/<train sha> is pushed: {refs:?}"))
         .to_owned();
     assert_eq!(refs[1], format!("{branch} {ZERO}"), "and then deleted");
+    let order: Vec<String> = t
+        .gate_args()
+        .into_iter()
+        .map(|args| args.trim_start_matches("--full ").to_owned())
+        .filter(|args| args != "--no-live --steps cloud")
+        .collect();
+    assert_eq!(
+        order,
+        [
+            "--no-live --steps fmt,changelog".to_owned(),
+            format!("dispatch master {pushed}"),
+            format!("publication {pushed}"),
+            "--no-live --steps public-tree,deployed-shape".to_owned(),
+            "--only-live".to_owned(),
+        ],
+        "the box dispatches master's publication run and builds the public tree once it ended"
+    );
     assert_eq!(
         t.core(&["rev-parse", "master"]),
         master,
@@ -1803,6 +1865,83 @@ fn train_gate_github_red_on_the_box_pushes_nothing() {
     assert_eq!(t.github_calls(), Vec::<String>::new(), "no run asked for");
 }
 
+/// A publication run that failed, ran past the wait, or that GitHub would not start leaves the
+/// public tree's builds to the box, which says which and builds it after the wait, never beside
+/// it; the gate is green all the same, since the builds are the same either way. A run still
+/// going when the box stops waiting is cancelled.
+#[test]
+fn train_gate_github_builds_on_the_box_when_the_publication_run_gave_nothing() {
+    for (how, said) in [
+        (
+            "failure",
+            "ended failure: the box builds the public tree itself",
+        ),
+        (
+            "running",
+            "was still in_progress after 0s: the box builds the public tree itself",
+        ),
+        ("down", "could not start the publication run"),
+    ] {
+        let t = Train::new(&format!("github-cache-{how}"));
+        t.on_github();
+        t.pr(1, "the first", &[("a.txt", "a\n")]);
+        assert!(t.train(&["build", "1"]).status.success());
+
+        let out = t.train_with(
+            &["gate", "--remote", "github"],
+            &[("GH_CACHE", how), ("SUZATARY_TRAIN_CACHE_TIMEOUT", "0")],
+        );
+        let stderr = text(&out.stderr);
+        assert!(out.status.success(), "{how}: {stderr}");
+        assert!(stderr.contains(said), "{how}: {stderr}");
+        let args = t.gate_args();
+        let asked = args.iter().position(|a| a.starts_with("dispatch master "));
+        let built = args
+            .iter()
+            .position(|a| a.ends_with("--no-live --steps public-tree,deployed-shape"));
+        assert!(
+            asked.is_some() && asked < built,
+            "{how}: the box builds once the wait ended: {args:?}"
+        );
+        let cancelled = t
+            .github_calls()
+            .iter()
+            .any(|call| call.contains("/runs/pub-") && call.ends_with("/cancel"));
+        assert_eq!(
+            cancelled,
+            how == "running",
+            "{how}: only a publication run still going is cancelled: {:?}",
+            t.github_calls()
+        );
+    }
+}
+
+/// The box's build of the public tree red, after the push: the half is red, no run of the gate is
+/// waited on, the branch is deleted, and nothing lands.
+#[test]
+fn train_gate_github_red_build_on_the_box_is_the_halfs_red() {
+    let t = Train::new("github-build-red");
+    t.on_github();
+    t.pr(1, "the first", &[("broken-build", "x\n")]);
+    let seed = t.origin_master();
+    assert!(t.train(&["build", "1"]).status.success());
+
+    let out = t.train(&["gate", "--remote", "github"]);
+    let stderr = text(&out.stderr);
+    assert!(!out.status.success());
+    assert!(stderr.contains("tree half: failed"), "{stderr}");
+    assert!(
+        !t.github_calls()
+            .iter()
+            .any(|call| call.contains("head_sha")),
+        "no gate run is waited on: {:?}",
+        t.github_calls()
+    );
+    assert_eq!(t.core(&["for-each-ref", "refs/heads/gate/"]), "");
+    assert!(text(&t.train(&["land"]).stderr).contains("tree: failed"));
+    assert_eq!(t.origin_master(), seed, "nothing landed");
+}
+
 /// A public tree its leak guard refuses never leaves the box: nothing is pushed, no step runs, and
 /// the tree half says nothing of the tree.
 #[test]
@@ -1859,6 +1998,19 @@ fn train_gate_github_killed_deletes_its_branch() {
         t.core(&["for-each-ref", "refs/heads/gate/"]),
         "",
         "its gate branch went with it"
+    );
+    let pushed = t
+        .core_pushes()
+        .first()
+        .and_then(|line| line.split(' ').nth(1))
+        .expect("the gate commit")
+        .to_owned();
+    assert!(
+        t.github_calls()
+            .iter()
+            .any(|call| call.ends_with(&format!("/actions/runs/{pushed}/cancel"))),
+        "and its gate run was cancelled: {:?}",
+        t.github_calls()
     );
 }
 

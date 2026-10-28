@@ -5,8 +5,10 @@ name: Gate
 # nothing. The train pushes one commit to a branch `gate/<train sha>`: the train commit's public
 # tree, a function of its tree. Each job checks out that one commit (depth 1, so it reads the tree
 # and no history) and runs one lane of scripts/merge-gate.sh's tree half with `--steps`; the steps
-# that read the private repository ran on the box before the push (train.sh's `box_steps`), and a
-# guard test holds the two lists to every step of the half.
+# that read the private repository run on the box (train.sh's `box_before` and `box_after`), and a
+# guard test holds the lists to every step of the half. The train dispatches master's
+# publication.yml for the same commit, which builds what a deploy builds beside these jobs, and the
+# box waits for that run before it builds them.
 #
 # THE VERDICT IS READ OFF THE STEPS, NOT THE RUN. A job's `gate` step writes the gate's exit code
 # and passes; then `red` fails when the gate exited 1, and `no verdict` fails on any other code. So

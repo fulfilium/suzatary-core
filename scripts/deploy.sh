@@ -122,6 +122,8 @@
 #                     the pinned commit and pushes it to the binary cache
 #                     (default 1200: past it, building here is quicker), and for such a run to appear at all
 #                     (120); past either the deploy builds here
+#   SUZATARY_DEPLOY_CACHE_POLL
+#                     seconds between two questions about that run (10)
 #   SUZATARY_DEPLOY_PUBLICATIONS
 #                     the GitHub repository (owner/name) whose publication
 #                     runs are asked; default: the one the declared input's
@@ -135,6 +137,7 @@ set -euo pipefail
 
 cache_timeout="${SUZATARY_DEPLOY_CACHE_TIMEOUT:-1200}"
 cache_appear="${SUZATARY_DEPLOY_CACHE_APPEAR:-120}"
+cache_poll="${SUZATARY_DEPLOY_CACHE_POLL:-10}"
 roots_timeout="${SUZATARY_DEPLOY_ROOTS_TIMEOUT:-600}"
 units_timeout="${SUZATARY_DEPLOY_UNITS_TIMEOUT:-600}"
 revert_timeout="${SUZATARY_DEPLOY_REVERT_TIMEOUT:-600}"
@@ -308,31 +311,6 @@ nix flake lock --override-input suzatary "$pin" "path:$scratch" \
 app="$(lock_read "$scratch/flake.lock" source.outPath)" \
   || die "could not read the app the new lock names. Nothing moved."
 
-# How the publication run of commit <2> in GitHub repository <1> ended, as a word and its
-# detail: `success`; `failed <conclusion>`; `none`, when no run appeared within the appear
-# bound; `running <status>`, when one was still under way at the end of the whole bound; or
-# `unasked <gh's last line>`, when GitHub could not be asked. The newest run of the commit
-# counts, so a re-run that passed stands.
-publication_run() {
-  local polls=0 answer status conclusion
-  while :; do
-    answer="$(gh run list --repo "$1" --workflow publication.yml --commit "$2" --limit 1 \
-      --json status,conclusion --jq '.[] | "\(.status) \(.conclusion)"' 2>&1)" \
-      || { echo "unasked ${answer##*$'\n'}"; return 0; }
-    read -r status conclusion <<<"$answer"
-    case "$status" in
-      "") ((polls * 10 < cache_appear)) || { echo none; return 0; } ;;
-      completed)
-        if [[ "$conclusion" == success ]]; then echo success; else echo "failed $conclusion"; fi
-        return 0
-        ;;
-      *) ((polls * 10 < cache_timeout)) || { echo "running $status"; return 0; } ;;
-    esac
-    polls=$((polls + 1))
-    sleep 10
-  done
-}
-
 # The builds of a commit of suzatary-core's master are made on GitHub's runners
 # (.github/workflows/publication.yml, on each push to it) and pushed to the binary cache this
 # box substitutes from. So unless the store holds them already (the merge gate's deploy-build
@@ -350,13 +328,13 @@ elif [[ -z "$publications" ]]; then
   say "$remote is not on GitHub, so no publication run builds ${core:0:12}: building it here"
 else
   say "waiting for the publication run of ${core:0:12} in $publications (at most ${cache_timeout}s)"
-  run="$(publication_run "$publications" "$core")"
+  run="$("$here/scripts/publication-run.sh" gh "$publications" push "$core" "$cache_appear" "$cache_timeout" "$cache_poll")"
   case "$run" in
     success) say "the publication run of ${core:0:12} succeeded: its builds come from the binary cache" ;;
     failed*) say "the publication run of ${core:0:12} ended ${run#failed }: building it here" ;;
     none) say "no publication run of ${core:0:12} appeared within ${cache_appear}s: building it here" ;;
     running*) say "the publication run of ${core:0:12} was still ${run#running } after ${cache_timeout}s: building it here" ;;
-    unasked*) say "could not ask GitHub for the publication run of ${core:0:12} (${run#unasked }): building it here" ;;
+    unasked) say "could not ask GitHub for the publication run of ${core:0:12} (gh's words above): building it here" ;;
   esac
 fi
 

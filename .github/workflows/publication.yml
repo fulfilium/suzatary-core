@@ -1,65 +1,149 @@
-# THE DEPLOY'S BUILDS, MADE ON GITHUB'S RUNNERS (2026-10-20). Every commit of
+# THE DEPLOY'S BUILDS, MADE ON GITHUB'S RUNNERS. Every commit of
 # suzatary-core's master is a publication (scripts/train.sh publish), and a
-# deploy pins one. This workflow builds, for the box's system (aarch64-linux),
-# what scripts/app-builds.sh builds from that tree, the app, the web bundle
+# deploy pins one; every gate commit, on a branch `gate/<train sha>`, is the
+# public tree of a train the gate judges (scripts/train.sh gate --remote
+# github). This workflow builds, for the box's system (aarch64-linux), what
+# scripts/app-builds.sh builds from one such tree, the app, the web bundle
 # and the plugins, and pushes their closures to the `bmabsout` Cachix, which
-# the box substitutes from. scripts/deploy.sh waits, bounded, for this run on
-# the commit it pins, so the deploy downloads what this run built; when the
-# run failed or never came, the deploy builds on the box and says so.
+# the box substitutes from. A push to master builds that commit; the train
+# DISPATCHES this workflow on master with the gate commit as its input
+# `commit`. scripts/deploy.sh and scripts/train.sh wait, bounded, for the run
+# of their commit (scripts/publication-run.sh, by the run-name), so each
+# downloads what this run built; when the run failed or never came, the box
+# builds and says so.
 #
 # The operator's shell (`.#triage`), the fourth thing app-builds.sh builds, is
 # left out: it is nixpkgs' packages, which come from cache.nixos.org, and one
 # unfree package this cache must not redistribute. So is the Android portal:
 # its build bakes in the box's name and Firebase project, read from the
 # environment under --impure, and is built in the private repository alone.
-# Every build here is pure, so nothing of the deployment reaches the cache.
 #
-# WHO REACHES THE CACHE'S TOKEN. Only a push to master runs this, and only in
-# the public repository (the private one carries the same file and skips it).
-# A pull request never runs it, and the token is handed to the last step
-# alone, after every build, so nothing the builds run sees it. The token is a
-# secret of the environment `cachix`, which only a run on master may enter,
-# so a workflow file a gate branch carries cannot name it either. This is the
-# one workflow that writes to the cache: the gate's jobs only read it.
+# WHO REACHES THE CACHE'S TOKEN. Two jobs, so the code that reads the tree
+# and the token are never in one job. `build` enters no environment and holds
+# no secret: it checks out master at `.` and the commit to build apart, at
+# ./tree, evaluates and builds that tree, measures what a push would add, and
+# hands the paths on as an artifact (`nix-store --export`). `push` enters the
+# environment `cachix`, so GitHub hands it the token when the job starts; it
+# runs on a fresh runner with master's checkout alone, builds master's cachix
+# before it reads anything the build job made, fetches the served references
+# with their signatures checked, imports the export, measures it again and
+# pushes the list. So a build that the tree compromises can choose what one
+# push contains (at most 1 GB, in the paths the list names), and never holds
+# the token. Only master's copy of this file holds it: the environment admits
+# master alone (scripts/core-settings.sh), the jobs refuse any other ref and
+# any run the owner did not start, and core's ruleset lets only an
+# administrator move master, so no workflow a gate branch carries can move
+# master to run code of its own here. The train reaches this workflow by
+# dispatching master's copy with the gate commit as its input. A pull
+# request never runs it.
+#
+# WHAT REACHES THE CACHE. What the box pushes to core is a public tree, checked
+# by its leak guard before the push (scripts/train.sh `checked`); that guard is
+# the privacy boundary. scripts/public-source.sh, master's copy run on
+# ./tree, is a tripwire on top: it refuses a tree holding the private history
+# (a file `.gitattributes` marks export-ignore), as the private repository's
+# own checkout would be. A public tree holds no .gitattributes, so it passes
+# any public tree. Every build is pure, so nothing of the deployment is read.
+#
+# THE ACTIONS CACHE. A run on master reads only the Actions caches saved on
+# master. gate-store.yml writes them, and so could any other job of a run on
+# master; after the two jobs and the ruleset, planting an entry there takes an
+# escape from Nix in a job that holds no token.
 name: Publication cache
+run-name: Publication cache ${{ inputs.commit || github.sha }}
 
 on:
   push:
     branches: [master]
+  workflow_dispatch:
+    inputs:
+      commit:
+        description: The commit of suzatary-core to build, a full commit id
+        required: true
+        type: string
 
 permissions:
   contents: read
 
 jobs:
-  cache:
-    if: ${{ !github.event.repository.private }}
-    # The token is this environment's secret, and only a run on master enters
-    # it (scripts/core-settings.sh), so no other branch's workflow can read it.
-    environment: cachix
+  build:
+    if: ${{ !github.event.repository.private && github.ref == 'refs/heads/master' && github.triggering_actor == 'bmabsout' }}
+    # No environment and no secret. The token GitHub hands it reads this
+    # public repository and nothing else, since install-nix-action writes it
+    # where any process on the runner can read it.
+    permissions:
+      contents: read
     runs-on: ubuntu-24.04-arm
     timeout-minutes: 180
     steps:
-      - name: Checkout the publication
+      # The commit to build: the input of a dispatch, else the commit pushed.
+      # It reaches the shell through the environment alone, and anything but a
+      # full commit id stops the job.
+      - name: The commit
+        id: commit
+        env:
+          COMMIT: ${{ inputs.commit || github.sha }}
+        run: |
+          set -euo pipefail
+          [[ "$COMMIT" =~ ^[0-9a-f]{40}$ ]] || { echo "::error::the input commit is no full commit id"; exit 1; }
+          echo "sha=$COMMIT" >>"$GITHUB_OUTPUT"
+
+      # The gate's store and the builds need more room than the runner's
+      # preinstalled toolchains, none of them used here, leave.
+      - name: Free the runner's disk
+        run: |
+          sudo rm -rf /usr/local/lib/android /usr/share/dotnet /opt/ghc /usr/local/.ghcup \
+            /usr/share/swift /usr/local/share/powershell /opt/hostedtoolcache || true
+          df -h /
+
+      # Master, whose steps and scripts run here.
+      - name: Checkout master
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
         with:
+          persist-credentials: false
+
+      # The tree to build, apart, so nothing of it runs as a step.
+      - name: Checkout the tree to build
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          ref: ${{ steps.commit.outputs.sha }}
+          path: tree
           persist-credentials: false
 
       - name: Install Nix
         uses: cachix/install-nix-action@2126ae7fc54c9df00dd18f7f18754393182c73cd # v31.9.1
         with:
           extra_nix_config: |
+            accept-flake-config = false
             extra-substituters = https://bmabsout.cachix.org
             extra-trusted-public-keys = bmabsout.cachix.org-1:/GhCEayGQ3NHMIlJiUelQrLtHHXVdGjHtyDz32xNAo4=
 
+      # The store gate-store.yml saves on master, holding the dependency
+      # builds no binary cache serves, keyed by the tree's own files, so a run
+      # builds only what moved. Restored, never saved. A miss, or a restore
+      # that fails, builds from a cold store.
+      - name: The gate's store
+        uses: nix-community/cache-nix-action/restore@7df957e333c1e5da7721f60227dbba6d06080569 # v7.0.2
+        continue-on-error: true
+        with:
+          primary-key: gate-store-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('tree/flake.nix', 'tree/flake.lock', 'tree/app/Cargo.lock', 'tree/app/**/Cargo.toml') }}
+          restore-prefixes-first-match: gate-store-${{ runner.os }}-${{ runner.arch }}-
+
+      - name: The tree holds no private history
+        run: scripts/public-source.sh tree
+
       # The attributes scripts/app-builds.sh builds, from the same tree: the
-      # store path of a checkout is the path the box fetches the pinned commit
-      # to, so every output here is the one a deploy asks for.
+      # store path of a checkout is the path the box fetches the commit to, so
+      # every output here is the one the box asks for. Evaluation only, and
+      # builds in the sandbox: no `nix run` or `nix develop` of the tree, no
+      # flake configuration of its own, and no lock file written, so no input
+      # is locked from the runner's disk.
       - name: Build what a deploy builds
         run: |
           set -euo pipefail
-          nix build --print-build-logs --out-link result-bin .#suzatary
-          nix build --print-build-logs --out-link result-dist .#suzatary-web
-          nix build --print-build-logs --out-link result-plugins .#suzatary-plugins
+          nix build --option accept-flake-config false --no-update-lock-file --print-build-logs --out-link result-bin ./tree#suzatary
+          nix build --option accept-flake-config false --no-update-lock-file --print-build-logs --out-link result-dist ./tree#suzatary-web
+          nix build --option accept-flake-config false --no-update-lock-file --print-build-logs --out-link result-plugins ./tree#suzatary-plugins
 
       # What the push adds to the cache: every path of the three closures that
       # neither cache.nixos.org nor the cache already serves, by its NAR size
@@ -88,13 +172,102 @@ jobs:
             exit 1
           fi
 
-      # cachix from the flake's own pinned nixpkgs, pushing the paths measured
-      # above. The rest of their closures is served already, and cachix leaves
-      # out what either cache serves.
+      # The unserved paths in the closures' order, each after what it refers
+      # to, exported for the push job, with the served paths it fetches first.
+      - name: Export the unserved paths
+        run: |
+          set -euo pipefail
+          mkdir -p publication
+          nix-store --query --requisites ./result-bin ./result-dist ./result-plugins | grep -Fx -f unserved.txt >publication/unserved.txt || true
+          cp served.txt publication/served.txt
+          if [[ -s publication/unserved.txt ]]; then
+            mapfile -t paths <publication/unserved.txt
+            nix-store --export "${paths[@]}" >publication/export.nar
+          fi
+
+      - name: Hand the paths to the push job
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: publication
+          path: publication
+          if-no-files-found: error
+          retention-days: 1
+
+  push:
+    needs: build
+    if: ${{ !github.event.repository.private && github.ref == 'refs/heads/master' && github.triggering_actor == 'bmabsout' }}
+    # The token is this environment's secret, and only a run on master enters
+    # it (scripts/core-settings.sh). GitHub hands it to the job when the job
+    # starts, so nothing here reads or runs the tree: master's checkout alone.
+    environment: cachix
+    permissions:
+      contents: read
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 60
+    steps:
+      - name: Checkout master
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          persist-credentials: false
+
+      - name: Install Nix
+        uses: cachix/install-nix-action@2126ae7fc54c9df00dd18f7f18754393182c73cd # v31.9.1
+        with:
+          extra_nix_config: |
+            accept-flake-config = false
+            extra-substituters = https://bmabsout.cachix.org
+            extra-trusted-public-keys = bmabsout.cachix.org-1:/GhCEayGQ3NHMIlJiUelQrLtHHXVdGjHtyDz32xNAo4=
+
+      # cachix from master's pinned nixpkgs, built before anything the build
+      # job made is in the store, so no import can stand in for a path of it.
+      - name: Master's cachix
+        run: nix build --inputs-from . --out-link cachix nixpkgs#cachix
+
+      - name: The build job's paths
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: publication
+          path: publication
+
+      # The lists name store paths and nothing else; the served references
+      # come from the two caches, their signatures checked, and only then is
+      # the export imported, which needs them in the store.
+      - name: Import the paths
+        run: |
+          set -euo pipefail
+          touch publication/unserved.txt publication/served.txt
+          ! grep -Evx '/nix/store/[0-9a-df-np-sv-z]{32}-[A-Za-z0-9+._?=-]+' publication/unserved.txt publication/served.txt \
+            || { echo "::error::a list names something other than a store path"; exit 1; }
+          xargs -r nix-store --realise <publication/served.txt >/dev/null
+          if [[ -s publication/unserved.txt ]]; then
+            nix-store --import <publication/export.nar >/dev/null
+          fi
+
+      # The build job's measure again, over what was imported: each path the
+      # list names is in the store, neither cache serves it, and together
+      # they are at most 1 GB.
+      - name: Measure the push again
+        env:
+          LIMIT: 1000000000
+        run: |
+          set -euo pipefail
+          for cache in https://cache.nixos.org https://bmabsout.cachix.org; do
+            # shellcheck disable=SC2016
+            xargs -P 16 -I '{}' sh -c 'name="${1#/nix/store/}"; curl -sfI -o /dev/null "$0/${name%%-*}.narinfo" && echo "$1"' "$cache" '{}' <publication/unserved.txt || true
+          done | sort -u >served-now.txt
+          [[ ! -s served-now.txt ]] || { echo "::error::the list names paths a cache serves already"; exit 1; }
+          bytes="$(xargs -r nix path-info --size <publication/unserved.txt | awk '{ sum += $2 } END { print sum + 0 }')"
+          echo "the push adds $(wc -l <publication/unserved.txt) paths, $((bytes / 1000000)) MB uncompressed"
+          if ((bytes > LIMIT)); then
+            echo "::error::this publication would add $((bytes / 1000000)) MB to the bmabsout Cachix, over the $((LIMIT / 1000000)) MB one publication may add to its 5 GB: nothing pushed"
+            exit 1
+          fi
+
+      # Master's cachix pushes the paths measured above and nothing else.
       - name: Push the builds to the cache
         env:
           CACHIX_AUTH_TOKEN: ${{ secrets.CACHIX_AUTH_TOKEN }}
         run: |
           set -euo pipefail
-          xargs -r nix run --inputs-from . nixpkgs#cachix -- push bmabsout <unserved.txt
-          echo "pushed $(wc -l <unserved.txt) paths"
+          ./cachix/bin/cachix push bmabsout <publication/unserved.txt
+          echo "pushed $(wc -l <publication/unserved.txt) paths"

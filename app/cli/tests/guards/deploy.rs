@@ -1849,10 +1849,14 @@ fn deploy_waits_for_the_publication_run_and_says_where_its_builds_come_from() {
         assert_eq!(deployed.lock_holds(), core, "{name}");
         let log = deployed.log();
         let asked = log
-            .find(&format!(
-                "gh run list --repo owner/core --workflow publication.yml --commit {core} "
-            ))
+            .find(
+                "gh run list --repo owner/core --workflow publication.yml --event push --limit 50 ",
+            )
             .unwrap_or_else(|| panic!("{name}: the run of the publication is asked for:\n{log}"));
+        assert!(
+            log.contains(&format!("Publication cache {core}")),
+            "{name}: the run is found by its run-name, which names the commit:\n{log}"
+        );
         let built = log
             .find("nix build")
             .unwrap_or_else(|| panic!("{name}: the deploy builds:\n{log}"));
@@ -1867,7 +1871,10 @@ fn deploy_waits_for_the_publication_run_and_says_where_its_builds_come_from() {
     deployed.set("gh-down", "");
     let out = deployed.deploy(
         &[&deployed.new],
-        &[("SUZATARY_DEPLOY_PUBLICATIONS", "owner/core")],
+        &[
+            ("SUZATARY_DEPLOY_PUBLICATIONS", "owner/core"),
+            ("SUZATARY_DEPLOY_CACHE_POLL", "0"),
+        ],
     );
     assert!(out.status.success(), "{}", text(&out.stderr));
     assert!(

@@ -1,5 +1,5 @@
 //! The tree half on GitHub's runners (`scripts/train.sh gate --remote github`): the steps the box
-//! runs (`box_steps` in `scripts/train.sh`) and the jobs of `.github/workflows/gate.yml` hold every
+//! runs (`box_before` and `box_after` in `scripts/train.sh`) and the jobs of `.github/workflows/gate.yml` hold every
 //! step of `scripts/merge-gate.sh`'s tree half between them; the workflow runs on a push to a gate
 //! branch alone, with a read-only token, no secret and every action pinned, and restores the store
 //! `.github/workflows/gate-store.yml` saves on master and saves nothing; and `scripts/e2e-part.sh`
@@ -41,20 +41,28 @@ fn jobs() -> BTreeMap<String, (Vec<String>, String)> {
         .collect()
 }
 
-/// The steps `scripts/train.sh` runs on the box before the push.
-fn box_steps() -> Vec<String> {
-    read("scripts/train.sh")
-        .lines()
-        .find_map(|line| line.strip_prefix("box_steps=\""))
-        .and_then(|list| list.strip_suffix('"'))
-        .expect("train.sh names the box's steps")
-        .split(',')
-        .map(str::to_owned)
+/// The steps `scripts/train.sh` runs on the box, each list one run of the gate: `box_before`,
+/// before the push, and `box_after`, after it.
+fn box_runs() -> Vec<(&'static str, Vec<String>)> {
+    let train = read("scripts/train.sh");
+    ["box_before", "box_after"]
+        .into_iter()
+        .map(|name| {
+            let steps = train
+                .lines()
+                .find_map(|line| line.strip_prefix(&format!("{name}=\"")))
+                .and_then(|list| list.strip_suffix('"'))
+                .unwrap_or_else(|| panic!("train.sh names the box's steps, {name}"))
+                .split(',')
+                .map(str::to_owned)
+                .collect();
+            (name, steps)
+        })
         .collect()
 }
 
-/// Every step of the tree half runs on the box or in a job, never both; each job and the box hold
-/// what each step they run reads from another; and a step runs in more than one job only as what
+/// Every step of the tree half runs on the box or in a job, never both; each job and each of the
+/// box's runs hold what each step they run reads from another; and a step runs in more than one job only as what
 /// a job's own reader reads, or as the e2e parts, each a part of its scenes.
 #[test]
 fn gate_yml_and_the_box_run_every_tree_step() {
@@ -65,7 +73,13 @@ fn gate_yml_and_the_box_run_every_tree_step() {
         .collect();
     let jobs = jobs();
     assert!(!jobs.is_empty(), "gate.yml names its jobs");
-    let on_box: BTreeSet<String> = box_steps().into_iter().collect();
+    let runs = box_runs();
+    let on_box: BTreeSet<String> = runs.iter().flat_map(|(_, s)| s.clone()).collect();
+    assert_eq!(
+        on_box.len(),
+        runs.iter().map(|(_, s)| s.len()).sum::<usize>(),
+        "the box runs each step once"
+    );
     let in_jobs: BTreeSet<String> = jobs.values().flat_map(|(s, _)| s.clone()).collect();
     for name in on_box.iter().chain(&in_jobs) {
         assert!(tree.contains(name), "{name} is no step of the tree half");
@@ -83,7 +97,7 @@ fn gate_yml_and_the_box_run_every_tree_step() {
     let places = jobs
         .iter()
         .map(|(lane, (s, _))| (lane.as_str(), s.clone()))
-        .chain([("the box", on_box.iter().cloned().collect())]);
+        .chain(runs);
     for (place, held) in places {
         for &(made, reader) in MADE_AND_READ {
             assert!(

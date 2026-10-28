@@ -129,18 +129,32 @@
 # core, a public repository, whose runners cost nothing. Only the train commit's PUBLIC TREE goes
 # there, a function of its tree, and only once its leak guard passes whole (`--check --strict`,
 # as a publication's); a tree that does not pass sends nothing, and the half says nothing of it.
-# The tree half's steps that read this private repository run on the box first (`box_steps`:
-# fmt, whose workspace names test targets the public tree leaves out, the public tree's own build
-# and the deploy's shape, which build the public tree from the source, and the changelog, which
-# reads origin's master); a red there is the half's red, and nothing goes
-# to the cloud. Then the public tree is committed on core's master by the publications' fixed
-# author, with a `Gate: <train sha>` trailer, and pushed to core's branch `gate/<train sha>` alone,
-# never to master, where .github/workflows/gate.yml runs the rest of the half's steps, one job per
-# lane, each reading the checkout of that one commit. The run's verdict is the half's: success
-# green; red where a job's `red` step failed, which it does only when its gate exited 1; and
-# anything else (the run cancelled or timed out, a runner lost, a job that never reached its
-# gate, a gate that did not start) no verdict, as a lost Codespace is, so only a gate's own
-# red makes the tree red. The branch is deleted when the half ends, and by the exit trap of a killed train.
+# The tree half's steps that read this private repository run on the box: fmt, whose workspace
+# names test targets the public tree leaves out, and the changelog, which reads origin's master,
+# before the push (`box_before`), so a red there is the half's red and nothing goes to the cloud;
+# the public tree's own build and the deploy's shape after it (`box_after`). The public tree is
+# committed on core's master by the publications' fixed author, with a `Gate: <train sha>`
+# trailer, and pushed to core's branch `gate/<train sha>` alone, never to master. There
+# .github/workflows/gate.yml runs the rest of the half's steps, one job per lane, each reading the
+# checkout of that one commit. The train then dispatches master's .github/workflows/publication.yml
+# with the gate commit as its input, which builds what a deploy builds from it and pushes it to
+# the `bmabsout` Cachix: only master's workflow holds the cache's token, never one the gate branch
+# carries.
+#
+# THE BOX WAITS FOR THE CLOUD'S BUILD OF THE PUBLIC TREE. Its builds (`box_after`, and the live
+# half's deploy-build after them) are the derivations publication.yml builds, since the gate
+# commit's tree is the box's public tree byte for byte, so the box waits for that run (at most
+# `cache_appear` seconds for it to appear and `cache_timeout` for it to end) and only then builds,
+# and Nix substitutes each output the cache holds. A run that failed, never came, or ran past the
+# wait leaves those builds to the box, and the train says which; the outputs are the same either
+# way, since a substitute is found only under the output path the box's own derivation names.
+#
+# The gate run's verdict is the half's: success green; red where a job's `red` step failed, which
+# it does only when its gate exited 1; and anything else (the run cancelled or timed out, a runner
+# lost, a job that never reached its gate, a gate that did not start) no verdict, as a lost
+# Codespace is, so only a gate's own red makes the tree red. When the half ends, and in the exit
+# trap of a killed train, the gate commit's runs that have not ended are cancelled and the branch
+# is deleted.
 #
 # SUZATARY_TRAIN_GATE names another gate script, for the test's stub. Its
 # verdicts are keyed by its own bytes, apart from the real gate's, so a
@@ -148,6 +162,7 @@
 # SUZATARY_TRAIN_GH names another `gh`, for the test's stub Codespace and GitHub, and
 # SUZATARY_TRAIN_POLL the seconds between reads of its log or of a run (60).
 # SUZATARY_TRAIN_PUBLIC names another public-tree script, for the test's stub.
+# SUZATARY_TRAIN_CACHE_TIMEOUT names the seconds the box waits for the publication run (12000).
 # SUZATARY_TRAIN_BIN names the app the train reads and writes the chain with.
 set -euo pipefail
 
@@ -162,6 +177,8 @@ usage() {
 }
 
 gh="${SUZATARY_TRAIN_GH:-gh}"
+# This script's own directory, whose helpers it runs whatever checkout it runs in.
+scripts="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 root="$(git rev-parse --show-toplevel)" || die "not inside a git checkout."
 cd "$root"
 # Beside the objects, never in the tree: what the train has learned is about
@@ -175,9 +192,9 @@ exec 9>"$state/lock"
 flock -n 9 || die "another scripts/train.sh is running in this checkout; wait for it to finish."
 
 # What leaving undoes: the branch to return to, the tree half running beside
-# the live one, the Codespace's ref, keep-alive and machine (remote_close), and
-# a gate's worktree (worktree_close).
-return_to="" codespace="" ref="" keeper="" there="" cloud="" gate_branch=""
+# the live one, the Codespace's ref, keep-alive and machine (remote_close), a gate branch and
+# its commit's runs (cloud_close), and a gate's worktree (worktree_close).
+return_to="" codespace="" ref="" keeper="" there="" cloud="" gate_branch="" gate_pushed=""
 finish() {
   [[ -z "$there" ]] || { kill "$there" 2>/dev/null; wait "$there" 2>/dev/null; } || true
   [[ -z "$ref" ]] || remote_close
@@ -693,7 +710,7 @@ run_here() {
 # What the train reads for itself: its test seams, and the keys its app signs a release's record
 # with. A gate is handed none of them.
 train_reads=(SUZATARY_TRAIN_BIN SUZATARY_TRAIN_GATE SUZATARY_TRAIN_GH SUZATARY_TRAIN_POLL
-  SUZATARY_TRAIN_PUBLIC SUZATARY_BOX_KEY SUZATARY_AGENT_KEY SUZATARY_DEDUP_KEY)
+  SUZATARY_TRAIN_PUBLIC SUZATARY_TRAIN_CACHE_TIMEOUT SUZATARY_BOX_KEY SUZATARY_AGENT_KEY SUZATARY_DEDUP_KEY)
 # The variables the gate's steps read (merge-gate.sh's `environment`) that a caller sets to
 # change a build or a test: an inherited one makes the verdict about something beside the tree.
 gate_reads='^(SUZATARY_|CARGO|RUST|PROPTEST_|TYPST|NODE_OPTIONS$|LD_PRELOAD$|LD_LIBRARY_PATH$|LIBRARY_PATH$)'
@@ -868,16 +885,22 @@ run_remote() {
 
 # --- GitHub's runners --------------------------------------------------------
 
-# The tree half's steps that read this private repository, run on the box before anything goes to
-# the cloud: public-tree builds the public tree from the source (scripts/public-tree.sh --store),
-# deployed-shape runs the binary it built, and changelog compares with origin's master. Every
-# other step of the half is a job's in .github/workflows/gate.yml (a guard test holds the two to
-# every step of the half, each once).
-box_steps="fmt,public-tree,deployed-shape,changelog"
+# The tree half's steps that read this private repository, run on the box: fmt and the changelog,
+# which read this checkout's workspace and origin's master, before anything goes to the cloud;
+# public-tree, which builds the public tree from the source (scripts/public-tree.sh --store), and
+# deployed-shape, which runs the binary it built, after the publication run of the gate commit.
+# Every other step of the half is a job's in .github/workflows/gate.yml (a guard test holds the
+# lists to every step of the half, each once).
+box_before="fmt,changelog"
+box_after="public-tree,deployed-shape"
 # The workflow a gate branch runs, and how long the train waits for its run: a run that has not
 # ended in six hours (GitHub's own limit on a job) says nothing of the tree.
 gate_workflow=.github/workflows/gate.yml
 cloud_hours=6
+# How long the box waits for the publication run of a gate commit, in seconds: to appear, and to
+# end, past publication.yml's own 180 minutes, so a run GitHub queued for a while is still waited on.
+cache_appear=600
+cache_timeout="${SUZATARY_TRAIN_CACHE_TIMEOUT:-12000}"
 
 # core's owner/name on GitHub, read off the remote's configured URL.
 core_repo() {
@@ -891,16 +914,17 @@ core_repo() {
 cloud_half() {
   local commit="$1" pushed code=0
   pushed="$(cloud_push "$commit")" || return
-  gate_branch="gate/$commit"
-  cloud_wait "$commit" "$pushed" || code=$?
+  gate_branch="gate/$commit" gate_pushed="$pushed"
+  cloud_build "$commit" "$pushed" || code=$?
+  ((code)) || cloud_wait "$commit" "$pushed" || code=$?
   cloud_close
   return "$code"
 }
 
-# The box's part of <commit>'s tree half, then the public tree pushed to core: prints the gate
-# commit and succeeds once it is pushed; otherwise 1 when the box's steps are red (recorded) and
-# 2 when there is no verdict (a leak, a gate that did not start, core out of reach), recording
-# nothing and pushing nothing.
+# The box's steps before the push, then the public tree pushed to core: prints the gate commit
+# and succeeds once it is pushed; otherwise 1 when the box's steps are red (recorded) and 2 when
+# there is no verdict (a leak, a gate that did not start, core out of reach), recording nothing
+# and pushing nothing.
 cloud_push() {
   local commit="$1" dir code=0 repo tree parent pushed
   repo="$(core_repo)" \
@@ -912,7 +936,7 @@ cloud_push() {
     say "the public tree of ${commit:0:12} did not pass its leak guard (the files and lines above), so nothing went to $repo and the tree half says nothing of it; the live half's public-check judges it"
     return 2
   fi
-  run_here tree "$commit" --steps "$box_steps" || code=$?
+  run_here tree "$commit" --steps "$box_before" || code=$?
   if ((code)); then
     rm -rf "$dir"
     record tree "$commit" "$code" || return
@@ -937,6 +961,30 @@ cloud_push() {
   echo "$pushed"
 }
 
+# The box's steps after the push, once the publication run of <pushed>, the gate commit of
+# <commit>, has an answer: 0 when they pass, otherwise the verdict recorded (1 red, 2 none). The
+# run is master's publication.yml, dispatched with <pushed> as its input: a workflow the gate
+# branch carries never holds the cache's token.
+cloud_build() {
+  local commit="$1" pushed="$2" repo run code=0
+  repo="$(core_repo)"
+  if ! timeout 60 "$gh" workflow run publication.yml --repo "$repo" --ref master -f "commit=$pushed" >&2; then
+    say "could not start the publication run of ${pushed:0:12} on $repo (above): the box builds the public tree itself"
+  else
+    say "waiting for the publication run of ${pushed:0:12} in $repo before the box builds the public tree (at most ${cache_timeout}s)"
+    run="$("$scripts/publication-run.sh" "$gh" "$repo" workflow_dispatch "$pushed" "$cache_appear" "$cache_timeout" "${SUZATARY_TRAIN_POLL:-60}")"
+    case "$run" in
+      success) say "the publication run of ${pushed:0:12} succeeded: the box's builds come from the binary cache" ;;
+      failed*) say "the publication run of ${pushed:0:12} ended ${run#failed }: the box builds the public tree itself" ;;
+      none) say "no publication run of ${pushed:0:12} appeared within ${cache_appear}s: the box builds the public tree itself" ;;
+      running*) say "the publication run of ${pushed:0:12} was still ${run#running } after ${cache_timeout}s: the box builds the public tree itself" ;;
+      unasked) say "could not ask GitHub for the publication run of ${pushed:0:12} (gh's words above): the box builds the public tree itself" ;;
+    esac
+  fi
+  run_here tree "$commit" --steps "$box_after" || code=$?
+  ((code == 0)) || record tree "$commit" "$code"
+}
+
 # Wait for the gate workflow's run on <pushed>, the gate commit of <commit>, and record its
 # verdict: success green, a job's `red` step failed red, anything else none. Each job's log is
 # kept in the half's log; a red job's ends with the gate's failing steps.
@@ -947,7 +995,7 @@ cloud_wait() {
   deadline=$((SECONDS + cloud_hours * 3600))
   while [[ -z "$run" ]] && ((misses < 10 && SECONDS < deadline)); do
     sleep "${SUZATARY_TRAIN_POLL:-60}"
-    run="$("$gh" api "repos/$repo/actions/runs?head_sha=$pushed&event=push" \
+    run="$(timeout 60 "$gh" api "repos/$repo/actions/runs?head_sha=$pushed&event=push" \
       --jq ".workflow_runs[] | select(.path == \"$gate_workflow\") | .id" | awk 'NR == 1')" || run=""
     misses=$((misses + 1))
   done
@@ -959,7 +1007,7 @@ cloud_wait() {
   misses=0
   while [[ "$status" != completed\ * ]] && ((misses < 10 && SECONDS < deadline)); do
     sleep "${SUZATARY_TRAIN_POLL:-60}"
-    if status="$("$gh" api "repos/$repo/actions/runs/$run" --jq '.status + " " + (.conclusion // "")')"; then
+    if status="$(timeout 60 "$gh" api "repos/$repo/actions/runs/$run" --jq '.status + " " + (.conclusion // "")')"; then
       misses=0
     else
       misses=$((misses + 1)) status=""
@@ -975,7 +1023,7 @@ cloud_wait() {
     return
   fi
   # Each job whose `red` step failed: its gate exited 1, a finding about the tree.
-  red="$("$gh" api "repos/$repo/actions/runs/$run/jobs?per_page=100" \
+  red="$(timeout 60 "$gh" api "repos/$repo/actions/runs/$run/jobs?per_page=100" \
     --jq '.jobs[] | select(any((.steps // [])[]; .name == "red" and .conclusion == "failure")) | "\(.id) \(.name)"')" || {
     say "the jobs of run $run could not be read, so the tree half says nothing of ${commit:0:12}"
     return 2
@@ -989,17 +1037,29 @@ cloud_wait() {
   while read -r job name; do
     say "red: $name"
     { echo "--- job $name"
-      "$gh" api "repos/$repo/actions/jobs/$job/logs" | sed -E 's/^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9:.]+Z //' ||
+      timeout 60 "$gh" api "repos/$repo/actions/jobs/$job/logs" | sed -E 's/^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9:.]+Z //' ||
         echo "(its log could not be read)"; } >>"$log"
   done <<<"$red"
   record tree "$commit" 1
 }
 
-# Delete the gate branch. Nothing waits on it any more, and a failure leaves only a branch.
+# Cancel the runs of the gate commit that have not ended (gate.yml's on the branch, and the
+# publication run that builds it), then delete the gate branch. Nothing waits on them any more:
+# the half is decided, red, or the train was stopped, and a red tree's builds should not reach the
+# cache. A failure leaves only a run or a branch, and says which.
 cloud_close() {
+  local repo id
+  if repo="$(core_repo)" && [[ -n "$gate_pushed" ]]; then
+    while read -r id; do
+      [[ -z "$id" ]] || timeout 60 "$gh" api "repos/$repo/actions/runs/$id/cancel" -X POST >/dev/null \
+        || say "could not cancel the run $id on $repo: cancel it by hand (gh run cancel $id --repo $repo)"
+    done < <(timeout 60 "$gh" api "repos/$repo/actions/runs?per_page=100" \
+      --jq ".workflow_runs[] | select(.status != \"completed\" and (.head_sha == \"$gate_pushed\" or .display_title == \"Publication cache $gate_pushed\")) | .id" \
+      || say "could not list the runs of ${gate_pushed:0:12} on $repo to cancel them")
+  fi
   git push --quiet core --delete "refs/heads/$gate_branch" 2>/dev/null \
     || say "could not delete core's $gate_branch: delete it by hand (git push core --delete $gate_branch)"
-  gate_branch=""
+  gate_branch="" gate_pushed=""
 }
 
 on_train() {
@@ -1036,13 +1096,18 @@ gate() {
     wait "$there" || true
     there="" ref="" keeper=""
   elif [[ -n "$cloud" ]]; then
-    # The box's steps first, in the worktree the live half then uses; the cloud's run is waited
-    # on beside the live half.
+    # The box's steps first, in the worktree the live half then uses, so the live half's
+    # deploy-build finds the public tree's builds in the store; the gate run is waited on beside
+    # the live half.
     local pushed
     if pushed="$(cloud_push "$commit")"; then
-      gate_branch="gate/$commit"
-      { cloud_wait "$commit" "$pushed" || true; } &
-      there=$!
+      gate_branch="gate/$commit" gate_pushed="$pushed"
+      if cloud_build "$commit" "$pushed"; then
+        { cloud_wait "$commit" "$pushed" || true; } &
+        there=$!
+      else
+        cloud_close
+      fi
     fi
     run_half live "$commit" || true
     if [[ -n "$there" ]]; then

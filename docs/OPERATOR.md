@@ -14,25 +14,44 @@ GitHub's runners there.
 | Step | Where | Why |
 |---|---|---|
 | the leak guard (`public-tree.sh --check --strict`) | the box, first | it reads the data repository's lists, and a tree that fails it sends nothing |
-| `public-tree` | the box | it builds the public tree from this private repository (`public-tree.sh --store HEAD`) |
-| `deployed-shape` | the box | it runs the binary `public-tree` built |
-| `changelog` | the box | it compares with this repository's `origin/master` |
-| `fmt`, `clippy`, `clippy-fixture`, `doc` | core, job `checks` | |
+| `fmt` | the box, before the push | its workspace names test targets the public tree leaves out |
+| `changelog` | the box, before the push | it compares with this repository's `origin/master` |
+| the deploy's builds (`.#suzatary`, `.#suzatary-web`, `.#suzatary-plugins`) | core, master's `publication.yml`, dispatched with the gate commit | pushed to the `bmabsout` Cachix for the box |
+| `public-tree` | the box, after `publication.yml` | it builds the public tree from this private repository (`public-tree.sh --store HEAD`), substituting from the Cachix |
+| `deployed-shape` | the box, after `publication.yml` | it runs the binary `public-tree` built |
+| `clippy`, `clippy-fixture`, `doc` | core, job `checks` | |
 | `build`, `fence-plugin`, `test`, `test-fixture`, `plugin-fence`, `plugin-sync` | core, job `tests` | |
 | `guards` | core, job `guards` | |
 | `web-inputs`, `web-test`, `build-web` | core, job `web` | |
 | `e2e` (with `web-inputs` and `build-web` again) | core, jobs `e2e-1` to `e2e-4` | each runs a quarter of the scenes (`scripts/e2e-part.sh`) |
 | `nix-web`, `nix-module`, `release-free` | core, job `nix` | |
 
-The box's list is `box_steps` in `scripts/train.sh`, the jobs' are the matrix
+The box's lists are `box_before` and `box_after` in `scripts/train.sh`, the jobs' are the matrix
 of `.github/workflows/gate.yml`, and `app/cli/tests/guards/gate_yml.rs` fails
 when the two do not hold every step of the tree half between them. Every job
 runs on `ubuntu-24.04-arm`: the box is aarch64, and no step needs x86_64.
 
 The train pushes one commit, the public tree of the train commit on core's
 `master`, to the branch `gate/<train sha>`, never to `master`, waits for the
-run, and deletes the branch. The live half runs on the box meanwhile, as it
-always does.
+run, and deletes the branch. The push starts `gate.yml`, the lanes. Then the
+train dispatches master's `publication.yml` with the gate commit as its
+input (`gh workflow run publication.yml --ref master -f commit=<sha>`). That
+run builds what a deploy builds from the gate commit and pushes it to the
+Cachix. The box waits for that run before it runs `box_after`, so
+`public-tree` downloads the builds instead of compiling them. It waits at
+most 600 seconds for the run to appear and 12000 seconds
+(`SUZATARY_TRAIN_CACHE_TIMEOUT`) for it to end, past the run's own
+180-minute limit. Each question to GitHub has 60 seconds, and ten failed
+questions in a row end the wait. When the run failed, never appeared, ran
+past the wait, or could not be started or asked about, the train says which
+and the box builds the public tree itself, as before. Then the live half
+runs on the box, and its `deploy-build` finds the same builds in the store.
+The `gate.yml` run is waited on beside it. When the half ends, and when a
+train is killed, the train cancels the gate commit's runs that have not
+ended, then deletes the branch.
+
+The train's `gh` must be allowed to dispatch a workflow on core (a
+fine-grained token's Actions permission, read and write).
 
 ## The settings, once
 
@@ -54,14 +73,26 @@ cache). It sets:
 - **An outside contributor's run waits for an approval**
   (`all_external_contributors`). `gate.yml` runs on a push to `gate/**` alone,
   so no pull request runs it; this covers a workflow added later.
+- **The ruleset `master-updates-admin-only`**: only a repository
+  administrator may move `master` (an `update` rule whose one bypass is the
+  administrator role). A run's token is never an administrator, even when its
+  workflow asks for `contents: write`. The train's publish pushes as the
+  owner's login, which is one.
 - **The environment `cachix`**, which only a run on `master` may enter, and
   in it **the secret `CACHIX_AUTH_TOKEN`**, which `publication.yml` alone
   names, read from secretspec and given to `gh secret set` on its stdin, so
   it is never in an argument or printed. A repository-wide copy of the
   secret, which the script set before, is deleted.
 
-Nothing else in the gate sets any of these. Core's ruleset, which keeps
-`master` fast-forward only, stays as it is: a gate branch is never `master`.
+Nothing else in the gate sets any of these. Core's other ruleset, which keeps
+`master` fast-forward only and undeletable, stays as it is.
+
+The update rule matters because `default_workflow_permissions=read` is only a
+default. A workflow file in a gate commit runs on the push to its branch, and
+it may ask for `contents: write`. Without the rule, it could fast-forward
+`master` with a commit that changes only a script or `flake.lock`, and the
+next publication run would run that code. With the rule, only an
+administrator moves `master`.
 
 The credential the train pushes to core with must be allowed to push a
 change under `.github/workflows/` (a fine-grained token's Workflows
@@ -70,24 +101,86 @@ carries `gate.yml`.
 
 ## Who can reach the Cachix token
 
-Only a run on a push to core's `master`, a publication, which only someone
-with write access to core can push (the train does, with its own
-credential): `publication.yml`, and in it only the last step, after every
-build. The secret is the environment `cachix`'s, which only a run on
-`master` may enter, so a workflow a gate branch carries, which is the
-`gate.yml` of the pushed commit, cannot read it even if it names it. No job
-of `gate.yml` holds a secret.
-Its token reads the repository and nothing else, it reads the `bmabsout`
-cache as a plain substituter, and it pushes nothing anywhere, so a gate
-branch, whoever pushed it, cannot write to the cache.
+`publication.yml` has two jobs, so the code that reads a tree and the token
+are never in one job:
+
+- **`build`** enters no environment and holds no secret. Its token reads
+  this public repository and nothing else. It checks out master at `.` and
+  the commit to build apart, at `./tree`. It runs master's tripwire over the
+  tree, evaluates and builds the tree, and measures what a push would add.
+  Then it exports the unserved paths (`nix-store --export`) and the list of
+  served references as an artifact.
+- **`push`** enters the environment `cachix`, so GitHub hands it the token
+  when the job starts. It runs on a fresh runner with master's checkout
+  alone. It builds master's `cachix` before it reads the artifact. It
+  fetches the served references from the two caches, with their signatures
+  checked, and then imports the export. It measures the paths again (each
+  in the store, none served, at most 1 GB together) and pushes that list.
+
+So a build that the tree compromises can choose what one push contains, at
+most 1 GB in the paths its list names. It never holds the token.
+
+Only master's copy of the workflow runs these jobs. The environment admits
+`master` alone, and both jobs refuse any other ref and any run that the owner
+(`github.triggering_actor`, `bmabsout`) did not start. The update rule above
+keeps any workflow from moving `master`. A run starts only from a push to
+`master` (a publication) or from a dispatch on `master` (a train's gate
+commit), and the train does both with the owner's credential.
+
+A gate branch carries the train's own workflow files, and GitHub runs them
+on a push to that branch. The environment's policy checks only the branch,
+so no workflow on a gate branch may enter it. That is why the train
+dispatches master's workflow and does not let the gate branch run one. No
+job of `gate.yml` holds a secret. Its token reads the repository and nothing
+else, and it reads the `bmabsout` cache as a plain substituter.
+
+The only code from the tree that runs is in the `build` job:
+
+- Nix's pure evaluation of its flake, with `accept-flake-config = false` and
+  `--no-update-lock-file`, so it locks no input from the runner's disk;
+- its builds, which run in Nix's sandbox as build users that the daemon
+  ends after each build.
+
+## What reaches the cache
+
+The privacy boundary is the box's leak guard: the train and a publication
+push to core only a public tree whose leak guard passed whole
+(`--check --strict`, with the data repository's lists). Beyond that:
+
+- No script or Nix file on the box pushes to the Cachix or names its token;
+  `scripts/core-settings.sh` hands the token to GitHub and pushes nothing.
+  `publication.yml` is the one writer, and it runs only in core
+  (`if: !github.event.repository.private`).
+- Master's `scripts/public-source.sh` runs over `./tree` before the builds.
+  It is a tripwire, not a boundary: it refuses a tree holding a file
+  `.gitattributes` marks `export-ignore`, as this private repository's own
+  checkout does. A public tree holds no `.gitattributes`, so it passes every
+  public tree, whatever else that tree holds.
+- Every build is pure (no `--impure`, no environment read), so no build
+  reads the deployment.
+- A run on `master` reads only the Actions caches saved on `master`. So a
+  lane of `gate.yml`, which runs a train's code outside Nix's sandbox, cannot
+  plant a store entry that the `build` job restores. `gate-store.yml` writes
+  those caches, and so could any job of a run on `master`. With the update
+  rule and the two jobs, planting an entry there takes an escape from Nix in
+  the `build` job, which holds no token. That risk is accepted.
+
+A gate tree that turns red in a `gate.yml` lane may already be in the cache,
+since the publication run ends before the lanes usually do. That tree passed
+its leak guard, and the cache evicts it in time.
+
+`app/cli/tests/guards/publication.rs` holds each of these.
 
 ## The two caches and their budgets
 
 - **The `bmabsout` Cachix** holds 5 GB on Cachix's free plan and evicts the
   least recently used past it; the Prodrome's CI pushes to it too.
-  `publication.yml` is its one writer here: it pushes the closures of the
-  app, the web bundle and the plugins, less what cache.nixos.org or the
-  cache already serve. Its step "Measure what the push adds" prints that
+  `publication.yml` is its one writer here: for each publication and each
+  gate commit it pushes the closures of the app, the web bundle and the
+  plugins, less what cache.nixos.org or the cache already serve. A landed
+  train's publication holds the tree its gate commit held, so its run finds
+  the builds served already and adds almost nothing; a train that never
+  lands leaves its builds for the cache to evict. Its step "Measure what the push adds" prints that
   size, and fails, pushing nothing, when one publication would add more
   than 1 GB; the deploy of that commit then builds on the box.
 - **The Actions cache of core** holds 10 GB and evicts past it. The gate's
@@ -100,6 +193,9 @@ branch, whoever pushed it, cannot write to the cache.
   that branch and of `master`, and each train's gate branch is new. Each
   gate job restores it, or the newest before it when the key moved, and
   saves nothing; a miss or a failed restore makes the job slower, never red.
+  `publication.yml` restores it too, so a run on a `Cargo.lock` that did not
+  move builds only the app, and a run on one that moved starts from the
+  newest store before it.
   The job's last step fails when the entry is over 5 GB, so two of it, the
   most there is while a new one is saved, stay inside the 10 GB. The purge
   needs `actions: write`, which `gate-store.yml` alone holds.

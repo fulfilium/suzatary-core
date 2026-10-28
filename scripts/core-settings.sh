@@ -16,6 +16,10 @@
 #     pull request;
 #   - a run a pull request from any outside contributor starts waits for an approval (gate.yml
 #     names no pull request event, so this covers a workflow added later);
+#   - a ruleset under which only a repository administrator may move master, so no workflow
+#     (whose token is never an administrator) can move it, though a run may ask for
+#     `contents: write`: a workflow a gate branch carries could otherwise move master and so run
+#     code of its own in publication.yml, beside the cache's token;
 #   - the environment `cachix`, which only a run on master may enter, and in it the secret
 #     CACHIX_AUTH_TOKEN, the bmabsout cache's push token, which publication.yml alone names, read
 #     from secretspec and handed to `gh secret set` on its stdin, so it is in no argument, file or
@@ -71,6 +75,25 @@ while IFS=$'\t' read -r id path state; do
       echo "core-settings:   $path off" ;;
   esac
 done < <(gh api --paginate "repos/$repo/actions/workflows" --jq '.workflows[] | "\(.id)\t\(.path)\t\(.state)"')
+
+# Only an administrator moves master: the train's publish pushes as the owner's login, which is
+# one, and a run's token is never one. The rule sits beside core's fast-forward ruleset, which
+# this leaves as it is.
+update_rules="master-updates-admin-only"
+echo "core-settings: the ruleset $update_rules, under which only an administrator may move master"
+ruleset="$(cat <<JSON
+{"name": "$update_rules", "target": "branch", "enforcement": "active",
+ "conditions": {"ref_name": {"include": ["refs/heads/master"], "exclude": []}},
+ "rules": [{"type": "update"}],
+ "bypass_actors": [{"actor_type": "RepositoryRole", "actor_id": 5, "bypass_mode": "always"}]}
+JSON
+)"
+id="$(gh api "repos/$repo/rulesets" --jq ".[] | select(.name == \"$update_rules\") | .id")"
+if [[ -n "$id" ]]; then
+  gh api --silent -X PUT "repos/$repo/rulesets/$id" --input - <<<"$ruleset"
+else
+  gh api --silent -X POST "repos/$repo/rulesets" --input - <<<"$ruleset"
+fi
 
 # The token is the environment's, not the repository's: a gate branch runs the gate.yml of its
 # own commit, so a repository secret is one any workflow file a pushed commit carries can name.
