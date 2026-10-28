@@ -8,9 +8,8 @@ import assert from "node:assert/strict"
 import { readFileSync } from "node:fs"
 
 import locked from "../src/prodrome/locked"
-import stores from "../src/prodrome/stores"
 import type { Replica } from "../src/prodrome/replica"
-import { NOTHING, headsOf, parentsOf, pulled, replicaOf, said } from "../src/prodrome/replica"
+import { NOTHING, headsOf, overtaken, parentsOf, pulled, replicaOf, said } from "../src/prodrome/replica"
 import type { StoredObject } from "../src/wire/generated/wire"
 import { forAll, type Rng } from "./gen"
 import { KNOWN, held as prodromes } from "./held"
@@ -68,7 +67,7 @@ const since = (objects: readonly StoredObject[], heads: readonly string[]): Stor
 // drops the row and the pieces, and the store is asked for again from nothing; the first `cut` objects of the answer
 // are kept as a piece, and a pull that took the rest lands them in the row.
 const pull = (d: Device, at: number, cut: number | null): Device => {
-  const asked = stores.overtaken([d.row.replica, d.pending.replica], { epoch: LATER })
+  const asked = overtaken([d.row.replica, d.pending.replica], { epoch: LATER })
     ? { row: locked.reset(d.row), pending: locked.NONE }
     : d
   const from = locked.join(asked.row, asked.pending).replica

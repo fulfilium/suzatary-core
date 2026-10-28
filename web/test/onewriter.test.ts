@@ -16,7 +16,9 @@ import questions from "../src/prodrome/questions"
 import rendered from "../src/app/rendered"
 import time from "../src/app/time"
 import http from "../src/wire/http"
-import type { ContentPayload, SkeletonNode, SkeletonPayload } from "../src/wire/generated/wire"
+import { headsOf as objectHeads } from "../src/prodrome/replica"
+import type { ContentPayload, SkeletonNode, SkeletonPayload, StorePayload, StoredObject } from "../src/wire/generated/wire"
+import { held as prodromes } from "./held"
 
 const built = process.env["SUZATARY_PRODROME_WASM"]
 if (built === undefined || built === "") throw new Error("SUZATARY_PRODROME_WASM is unset — run scripts/web-test.sh")
@@ -63,8 +65,17 @@ const firstPiece = (p: SkeletonPayload, key?: string): SkeletonPayload => {
   return { ...p, nodes, keys, heads: headsOf(nodes), rest: p.nodes.length - nodes.length, frontier: { digest: "2".repeat(64), count: nodes.length } }
 }
 
-// The box as `fetch` reaches it, serving its lines before the erasure or after it: the answers queued first, then the
-// whole store.
+// A store of objects as the box serves it to a replica holding `since`: all of it to one holding nothing, nothing more
+// to one at its frontier.
+const objectsOf = (objects: readonly StoredObject[], since: string): StorePayload => {
+  const frontier = { digest: "9".repeat(64), count: objects.length }
+  const sent = since === frontier.digest ? [] : [...objects]
+  const size = sent.reduce((n, o) => n + o.literal.length, 0)
+  return { objects: sent, heads: objectHeads(objects), untrusted: [], root: null, geneses: prodromes(objects), epoch: 1, since: "Known", frontier, keys: {}, rest: 0, size, weight: size, erased: [] }
+}
+
+// The box as `fetch` reaches it, serving its lines before the erasure or after it (the answers queued first, then the
+// whole store), its inbox, and two topic stores holding nothing.
 let erased = false
 const queued: (SkeletonPayload | "Down")[] = []
 // Each answer tagged, as the box tags its reads, so a read this module may keep is kept.
@@ -78,6 +89,8 @@ Object.assign(globalThis, {
       const next = queued.shift() ?? (erased ? box.skeleton : before)
       return next === "Down" ? new Response("", { status: 503 }) : json(next)
     }
+    const store = /^\/api\/stores\/(inbox|topics|topic-aliases)\/objects$/.exec(url.pathname)?.[1]
+    if (store !== undefined) return json(objectsOf(store === "inbox" ? inbox : [], url.searchParams.get("since") ?? ""))
     if (url.pathname === "/api/stores/lines/content") {
       const hashes = (url.searchParams.get("hashes") ?? "").split(",")
       return json({ objects: hashes.flatMap(hash => (literals.has(hash) ? [{ hash, literal: literals.get(hash)! }] : [])) } satisfies ContentPayload)
@@ -111,8 +124,7 @@ const worker = () => {
 
 // The conversation read through the worker, as the page reads it.
 const read = async (w: ReturnType<typeof worker>): Promise<void> => {
-  await w.ask({ type: "HoldInbox", delta: { add: inbox, drop: [], whole: true } })
-  assert.equal(await w.ask({ type: "LinesWant" }), true, "the pull ends whole")
+  assert.equal(await w.ask({ type: "Pull" }), true, "the pull ends whole")
   const window = await w.ask({ type: "Window", id: conversation, window: {}, memory: null, zone: time.UTC })
   assert.equal(window.type, "Held")
 }
@@ -123,8 +135,7 @@ test("law: once the box erases words, no row, message or page holds them or thei
   const first = worker()
   // A pull cut after its first piece keeps that piece, the key among its keys, on the device.
   queued.push(firstPiece(before, KEY), "Down")
-  await first.ask({ type: "HoldInbox", delta: { add: inbox, drop: [], whole: true } })
-  assert.equal(await first.ask({ type: "LinesWant" }), false, "the pull was cut")
+  assert.equal(await first.ask({ type: "Pull" }), false, "the pull was cut")
   assert.ok(device.printed().some(r => r.includes(BYTES)), "the device holds the key")
   // The page had rendered the words, and its blocks are kept on the device by the worker.
   await first.page.join(FED.map((k): rendered.Pair => [k, `<p>${WORDS}</p>`]))
@@ -143,7 +154,7 @@ test("law: once the box erases words, no row, message or page holds them or thei
   queued.push(firstPiece(box.skeleton))
   const from = first.posted.length
   device.failing = k => k === "head"
-  await first.ask({ type: "LinesWant" })
+  await first.ask({ type: "Pull" })
   device.failing = () => false
   assert.deepEqual(holders(first.posted.slice(from)), [], "a landing that failed leaves nothing holding them")
   await read(first)
@@ -160,7 +171,7 @@ test("law: once the box erases words, no row, message or page holds them or thei
   // content it holds in memory is this process's, so its readings are the first worker's; the rows are what a reload
   // reads.)
   const reloaded = worker()
-  assert.equal(await reloaded.ask({ type: "LinesWant" }), true)
+  assert.equal(await reloaded.ask({ type: "Pull" }), true)
   assert.deepEqual(holders(reloaded.posted), [], "a reload brings none back")
   assert.deepEqual(await reloaded.page.get(FED), FED.map(() => null))
 })

@@ -8,11 +8,9 @@ import purge from "./purge"
 import type { Obj } from "./replica"
 
 export namespace take {
-  export type Event<O extends Obj> = { readonly type: "Held"; readonly row: locked.Row<O> } | { readonly type: "Forgot"; readonly keys: readonly string[] }
-
   export type Effects<O extends Obj> = {
     readonly held: () => locked.Row<O>
-    readonly dispatch: (e: Event<O>) => void
+    readonly dispatch: (e: locked.Event<O>) => void
     readonly purge: purge.Effects<O>
     readonly dead: locked.Dead<O>
     readonly alter: (gone: readonly string[]) => Promise<lo.Settled<null>>

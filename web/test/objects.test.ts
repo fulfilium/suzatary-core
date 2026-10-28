@@ -10,6 +10,7 @@ import { NOTHING, appended, join, landed, losses } from "../src/prodrome/replica
 import type { Write } from "../src/prodrome/objects"
 import { CHAIN, alterRow, dropRow, heldRow, holdRow, keepRow } from "../src/prodrome/objects"
 import { replicaWith } from "./held"
+import door from "../src/app/idb"
 
 // IndexedDB as far as `objects.ts` reaches into it: one database of named stores, each request answered on a later
 // turn, a transaction committing once its last request has answered.
@@ -27,6 +28,8 @@ type Range = { readonly includes: (k: string) => boolean }
 Object.assign(globalThis, { IDBKeyRange: { bound: (lower: string, upper: string): Range => ({ includes: k => lower <= k && k <= upper }) } })
 // A device at `version`, holding `rows` in its one store; an upgrade runs before the open answers, as IndexedDB's does.
 const fakeIndexedDB = (at = 0, rows: Readonly<Record<string, unknown>> = {}) => {
+  // The connections the app's door kept open belong to the device before.
+  door.reset()
   const stores = new Map<string, Map<string, unknown>>(at === 0 ? [] : [["chain", new Map(Object.entries(rows))]])
   let version = at
   const db = {

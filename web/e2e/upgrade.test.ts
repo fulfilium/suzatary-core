@@ -59,7 +59,7 @@ app.scene("a device holding a version 2 replica drops it on its first load and p
   await app.page.waitFor(`document.querySelectorAll(".tree .row").length > 0`, { timeout: 15000 });
   await untilReplica(app.page);
   const now = await app.page.evaluate<Kept>(kept);
-  assert.equal(now.version, 8);
+  assert.equal(now.version, 9);
   assert.ok(now.row !== null, "the chain is held again");
   assert.ok(!now.row.objects.some((o) => o.hash === UNSENT), "the old row's unsent act is not carried over");
   assert.ok(Array.isArray(now.row.words) && now.row.boxHeads === undefined, "the row is in this build's form");

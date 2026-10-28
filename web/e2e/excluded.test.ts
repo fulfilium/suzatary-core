@@ -22,7 +22,10 @@ const UNREAD =
   "at=datetime(2026, 9, 2, 12, 3, 26), actor='assistant', act=Remember(kind='person'), why='her signature says so', " +
   "sources=('mail:a1b2c3d4e5f6',), asked=None, serves=None, spec=None))";
 
-/** The inbox row this browser keeps (its replica), with `template` added in the row's own prodrome; the name is answered. */
+// The inbox's nodes as this browser keeps them, one row each in the database's `inbox` store.
+const NODES = `IDBKeyRange.bound("node/", "node/\\uffff")`;
+
+/** The inbox's rows this browser keeps, with a node of `template` added in the store's own prodrome; the name is answered. */
 function hold(template: string): Promise<string> {
   return app.page.evaluate<string>(`
     new Promise((resolve, reject) => {
@@ -30,16 +33,13 @@ function hold(template: string): Promise<string> {
       request.onerror = () => reject(request.error);
       request.onsuccess = () => {
         const db = request.result;
-        const rows = db.transaction("chain", "readwrite").objectStore("chain");
-        const read = rows.get("objects:pages/inbox");
+        const read = db.transaction("inbox", "readonly").objectStore("inbox").getAll(${NODES});
         read.onsuccess = () => {
-          const row = read.result;
-          const genesis = row.objects.find((o) => o.literal.startsWith("Genesis(")).hash;
+          const genesis = read.result.find((o) => o.literal.startsWith("Genesis(")).hash;
           const literal = ${JSON.stringify(template)}.replace("GENESIS", genesis);
           crypto.subtle.digest("SHA-256", new TextEncoder().encode(literal)).then((bytes) => {
             const hash = [...new Uint8Array(bytes)].map((b) => b.toString(16).padStart(2, "0")).join("");
-            row.objects = [...row.objects, { hash, literal }];
-            const again = db.transaction("chain", "readwrite").objectStore("chain").put(row, "objects:pages/inbox");
+            const again = db.transaction("inbox", "readwrite").objectStore("inbox").put({ hash, literal }, "node/" + hash);
             again.onsuccess = () => { db.close(); resolve(hash); };
             again.onerror = () => { db.close(); reject(again.error); };
           });
@@ -48,7 +48,7 @@ function hold(template: string): Promise<string> {
     })`);
 }
 
-/** Until the inbox row this browser keeps holds the store's genesis. */
+/** Until the inbox's rows this browser keeps hold the store's genesis. */
 function untilInbox(): Promise<void> {
   return app.page.waitFor(
     `new Promise((resolve) => {
@@ -56,10 +56,10 @@ function untilInbox(): Promise<void> {
       request.onerror = () => resolve(false);
       request.onsuccess = () => {
         const db = request.result;
-        if (!db.objectStoreNames.contains("chain")) { db.close(); resolve(false); return; }
-        const query = db.transaction("chain", "readonly").objectStore("chain").get("objects:pages/inbox");
+        if (!db.objectStoreNames.contains("inbox")) { db.close(); resolve(false); return; }
+        const query = db.transaction("inbox", "readonly").objectStore("inbox").getAll(${NODES});
         query.onerror = () => { db.close(); resolve(false); };
-        query.onsuccess = () => { const row = query.result; db.close(); resolve(row !== undefined && row.objects.some((o) => o.literal.startsWith("Genesis("))); };
+        query.onsuccess = () => { db.close(); resolve(query.result.some((o) => o.literal.startsWith("Genesis("))); };
       };
     })`,
     { timeout: 15000 },
@@ -67,20 +67,21 @@ function untilInbox(): Promise<void> {
 }
 
 /**
- * These copies spoiled, from a document of the same origin that runs no app, as a broken write or an older build would
- * leave them; then the secretary's page, which reads them.
+ * These copies spoiled, each a row of a store of the database by its key, from a document of the same origin that runs
+ * no app, as a broken write or an older build would leave them; then the secretary's page, which reads them.
  */
-async function spoil(copies: readonly string[]): Promise<void> {
+async function spoil(copies: readonly (readonly [string, string])[]): Promise<void> {
   await app.page.navigate(`${WRITE_BASE}/.well-known/assetlinks.json`);
   await app.page.evaluate(`new Promise((resolve, reject) => {
     const request = indexedDB.open("suzatary");
     request.onerror = () => reject(request.error);
     request.onsuccess = () => {
       const db = request.result;
-      const rows = db.transaction("chain", "readwrite").objectStore("chain");
-      for (const copy of ${JSON.stringify(copies)}) rows.put({ objects: "not a list" }, "objects:" + copy);
-      rows.transaction.oncomplete = () => { db.close(); resolve(true); };
-      rows.transaction.onerror = () => reject(rows.transaction.error);
+      const copies = ${JSON.stringify(copies)};
+      const tx = db.transaction([...new Set(copies.map(([store]) => store))], "readwrite");
+      for (const [store, key] of copies) tx.objectStore(store).put({ objects: "not a list" }, key);
+      tx.oncomplete = () => { db.close(); resolve(true); };
+      tx.onerror = () => reject(tx.error);
     };
   })`);
   await app.page.navigate(`${WRITE_BASE}/#/secretary`);
@@ -90,8 +91,8 @@ const HELD = `new Promise((resolve) => {
   const request = indexedDB.open("suzatary");
   request.onerror = () => resolve(null);
   request.onsuccess = () => {
-    const query = request.result.transaction("chain", "readonly").objectStore("chain").get("objects:pages/inbox");
-    query.onsuccess = () => resolve({ held: (query.result?.objects ?? []).map((o) => o.literal.slice(0, 60)), hidden: document.getElementById("excluded")?.hidden ?? null, line: document.getElementById("excluded")?.textContent ?? null });
+    const query = request.result.transaction("inbox", "readonly").objectStore("inbox").getAll(${NODES});
+    query.onsuccess = () => resolve({ held: query.result.map((o) => o.literal.slice(0, 60)), hidden: document.getElementById("excluded")?.hidden ?? null, line: document.getElementById("excluded")?.textContent ?? null });
   };
 })`;
 
@@ -126,7 +127,7 @@ app.scene("a print this device cannot read is left out, the page draws, and one 
 
 app.scene("a chain's copy that does not read is named, with the one reset that writes over it", async () => {
   await app.open(WRITE_BASE);
-  await spoil(["life"]);
+  await spoil([["chain", "objects:life"]]);
   await app.page.waitFor(`document.querySelector('#excluded li[data-row="life"]') !== null`, { timeout: 15000 });
   assert.match(await app.page.evaluate<string>(`document.querySelector("#excluded summary").textContent`), /this device's copy of life needs you/i);
   await app.page.click("#excluded summary");
@@ -157,8 +158,8 @@ app.scene("a chain's copy that does not read is named, with the one reset that w
  */
 app.scene("a store's copy that does not read is named too, and the line stays open while a reset moves it", async () => {
   await app.open(WRITE_BASE);
-  // The inbox's row is kept under `pages/inbox`, and named by its store, `store/inbox`.
-  await spoil(["life", "pages/inbox"]);
+  // The inbox's head is kept in the database's `inbox` store, and named by its store, `store/inbox`.
+  await spoil([["chain", "objects:life"], ["inbox", "head"]]);
   const row = (copy: string): string => `#excluded li[data-row="${copy}"]`;
   await app.page.waitFor(`document.querySelector('${row("life")}') !== null && document.querySelector('${row("store/inbox")}') !== null`, { timeout: 15000 });
   await app.page.click("#excluded summary");

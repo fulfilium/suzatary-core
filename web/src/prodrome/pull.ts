@@ -1,17 +1,15 @@
-// One store's pull from the box, by pieces asked from what is held, and its landing: the row a store's pages read,
+// One store's pull from the box, by pieces asked from what is held, and its landing: the row a store's readings read,
 // restored from where the device keeps it, joined with what each landing brought, and started over when the box answers
-// in a later epoch. The same machine runs on the page for the whole stores and in the core's worker for the lines; what
-// differs is what a row is (`Rows`: a replica alone, or the lines' with the keys of their words, `locks`), where it is
-// kept (`Place`), how a piece is asked for, and who hears what it says (`Effects`).
+// in a later epoch. A row is a replica with the keys of its words (`locked`), none for a store that locks no words; what
+// differs between stores is where a row is kept (`Place`), how a piece is asked for, and who hears what it says
+// (`Effects`).
 
 import type { Erased } from "./core"
 import excluded from "./excluded"
 import locked from "./locked"
 import pieces from "./pieces"
-import type progress from "./progress"
-import { empty, join, pulled, replicaOf, sinceOf, wentBack } from "./replica"
+import { empty, overtaken, pulled, replicaOf, sinceOf, wentBack } from "./replica"
 import type { Obj, Replica, Said } from "./replica"
-import stores from "./stores"
 import purge from "./purge"
 import take from "./take"
 import lo from "../algebra/lo"
@@ -22,10 +20,10 @@ import time from "../app/time"
 export namespace pull {
   // One piece the box answered, as each store's pull answers it: what it said, what it erased, and the row it makes of
   // the replica it is taken into.
-  export type Answer<O extends Obj, R> = {
+  export type Answer<O extends Obj> = {
     readonly said: Said<O>
     readonly erased: readonly string[]
-    readonly piece: (r: Replica<O>) => R
+    readonly piece: (r: Replica<O>) => locked.Row<O>
     readonly rest: number
     readonly size: number
     readonly weight: number
@@ -41,79 +39,67 @@ export namespace pull {
 
   // Where a store's row lives on the device, and its pieces beside it. Without a device store every write answers done
   // and holds nothing, and what is held in memory is the only copy.
-  export type Place<R> = {
-    readonly restore: () => Promise<{ readonly row: Restored<R>; readonly pieces: readonly R[]; readonly unread: readonly string[] }>
+  export type Place<O extends Obj> = {
+    readonly restore: () => Promise<{ readonly row: Restored<locked.Row<O>>; readonly pieces: readonly locked.Row<O>[]; readonly unread: readonly string[] }>
     // A piece kept by itself, named by how many objects were held when it was asked for.
-    readonly keepPiece: (at: number, piece: R) => Promise<lo.Settled<null>>
+    readonly keepPiece: (at: number, piece: locked.Row<O>) => Promise<lo.Settled<null>>
     // The row a landing moved to, `now`, written, and what the device holds now, another tab's included.
-    readonly land: (now: R) => Promise<{ readonly row: lo.Settled<R>; readonly unread: string | null }>
+    readonly land: (now: locked.Row<O>) => Promise<{ readonly row: lo.Settled<locked.Row<O>>; readonly unread: string | null }>
     readonly dropPieces: () => Promise<lo.Settled<null>>
     // The one way down: an empty row of the generation after, its pieces gone.
-    readonly reset: (held: R) => Promise<lo.Settled<R>>
-  }
-
-  // What a store's rows are: each one's replica, and their join, `none` its unit.
-  export type Rows<O extends Obj, R> = {
-    readonly none: R
-    readonly replica: (r: R) => Replica<O>
-    readonly join: (a: R, b: R) => R
+    readonly reset: (held: locked.Row<O>) => Promise<lo.Settled<locked.Row<O>>>
   }
 
   // How a store's rows take in what comes: a row joined into what is held once whatever the erasures it names owe is
   // done, and the pieces held less what a piece of the pull erased, with `rest` objects still to come.
-  export type Taking<R> = {
-    readonly take: (erased: readonly string[], incoming: R) => Promise<void>
-    readonly erasing: (erased: readonly string[], rest: number, pending: R) => Promise<R>
+  export type Taking<O extends Obj> = {
+    readonly take: (erased: readonly string[], incoming: locked.Row<O>) => Promise<void>
+    readonly erasing: (erased: readonly string[], rest: number, pending: locked.Row<O>) => Promise<locked.Row<O>>
   }
 
-  // What differs between the stores: what their rows are and hold, how they take in what comes, and how a piece is
-  // asked for.
-  export type Store<O extends Obj, R> = Taking<R> & {
-    readonly name: stores.Name
-    readonly rows: Rows<O, R>
-    readonly held: () => R
-    readonly place: Place<R>
-    readonly ask: (since: string) => Promise<Answer<O, R>>
+  // What differs between the stores: how they take in what comes, where their row is kept, and how a piece is asked for.
+  export type Store<O extends Obj> = Taking<O> & {
+    readonly name: string
+    readonly held: () => locked.Row<O>
+    readonly place: Place<O>
+    readonly ask: (since: string) => Promise<Answer<O>>
     // What follows a landing that moved the row.
-    readonly landed: (row: R) => Promise<void>
+    readonly landed: (row: locked.Row<O>) => Promise<void>
     // What runs before the row is first read.
     readonly restoring: () => Promise<void>
   }
+
+  // How far a pull has come: a piece came, `size` bytes lacking when it was asked for and `weight` of them brought; or
+  // the pull ended, whole or not.
+  export type Bar = { readonly type: "Piece"; readonly size: number; readonly weight: number } | { readonly type: "Pulled" }
 
   // Who hears a pull: what a reading left out, by reader; each move of its progress; what to do once a later epoch
   // replaced a landing; and the pull asked again after a wait.
   export type Effects = {
     readonly told: (reader: string, left: excluded.Left) => void
-    readonly bars: (e: progress.Event) => void
+    readonly bars: (e: Bar) => void
     readonly replaced: () => void
     readonly again: () => void
   }
 
   // One store's pull, its pieces kept beside its row, and its landing.
-  export type Sync<R> = {
+  export type Sync<O extends Obj> = {
     readonly restored: once.T<void>
     readonly pull: () => Promise<boolean>
-    readonly holding: () => Replica<Obj>
+    readonly holding: () => Replica<O>
     readonly landed: () => boolean
     readonly whole: () => Promise<void>
     readonly reset: (said: (why: string) => void) => Promise<void>
     // A row this tab moved itself: held, then written on the device joined with what another tab kept there.
-    readonly keep: (row: R) => Promise<void>
+    readonly keep: (row: locked.Row<O>) => Promise<void>
     // What the row owes let go, as a landing does: asked again once the store reads more of what its row names.
     readonly purge: () => Promise<void>
   }
 
-  // A row that is a replica alone, a store whose objects lock no words: the page's stores.
-  export const plain = <O extends Obj>(hold: (r: Replica<O>) => void): Taking<Replica<O>> & { readonly rows: Rows<O, Replica<O>> } => ({
-    rows: { none: empty<O>(), replica: r => r, join },
-    take: (_, incoming) => Promise.resolve(hold(incoming)),
-    erasing: (_, __, pending) => Promise.resolve(pending),
-  })
-
-  // What a row with the keys of its words needs beyond a plain one: how a key is let go, what the objects name as
-  // erased, the blocks each key's words fed, and how those are forgotten, from the device's row as well.
+  // What a row with the keys of its words needs: how a key is let go, what the objects name as erased, the blocks each
+  // key's words fed, and how those are forgotten, from the device's row as well.
   export type Locking<O extends Obj> = {
-    readonly name: stores.Name
+    readonly name: string
     readonly held: () => locked.Row<O>
     readonly hold: (row: locked.Row<O>) => void
     readonly forgot: (keys: readonly string[]) => void
@@ -126,9 +112,9 @@ export namespace pull {
     readonly told: (reader: string, left: excluded.Left) => void
   }
 
-  // A row with the keys of its words, the lines': a key an erasure names is let go only once the blocks its words fed
-  // are forgotten, wherever it is held, the row or a pull's pieces; a forget that fails keeps it, owed, to be asked again.
-  export const locks = <O extends Obj>(l: Locking<O>): Taking<locked.Row<O>> & { readonly rows: Rows<O, locked.Row<O>> } => {
+  // A key an erasure names is let go only once the blocks its words fed are forgotten, wherever it is held, the row or a
+  // pull's pieces; a forget that fails keeps it, owed, to be asked again. A store that locks no words names none.
+  export const locks = <O extends Obj>(l: Locking<O>): Taking<O> => {
     // A purge that could not forget is said, and asked again at the next sync; the keys it owes stay until it can.
     const owing = (failed: string | null): void =>
       l.told(
@@ -144,9 +130,7 @@ export namespace pull {
       alter: l.alter,
       owing,
     })
-    const none = locked.none<O>()
     return {
-      rows: { none, replica: r => r.replica, join: locked.join },
       take: (erased, incoming) => take.into(taking(erased), incoming),
       // While more pieces are to come: the keys the erasure owes, the pieces' among them, purged over the row and the
       // pieces together, and let go from both and from the device. The last piece lands, and its landing purges the rest.
@@ -164,10 +148,10 @@ export namespace pull {
   }
 
   // A store's row on the device sits beside the chains', under a key no chain can be named.
-  export const kept = (name: stores.Name): string => `store/${name}`
+  export const kept = (name: string): string => `store/${name}`
 
   // A row that does not read is said, with its own reset, never passed over.
-  export const unread = (name: stores.Name, why: string | null): excluded.Left =>
+  export const unread = (name: string, why: string | null): excluded.Left =>
     excluded.left(excluded.NONE, [], why === null ? [] : [excluded.unread(kept(name), why)])
 
   // A pull that did not end whole is asked again after a wait that doubles from two seconds to a minute, and whatever
@@ -183,17 +167,17 @@ export namespace pull {
     return { once, done }
   }
 
-  export const of = <O extends Obj, R>(st: Store<O, R>, fx: Effects): Sync<R> => {
+  export const of = <O extends Obj>(st: Store<O>, fx: Effects): Sync<O> => {
     const name = st.name
-    const rows = st.rows
+    const none = locked.none<O>()
     const told = (why: string | null): void => fx.told(`row/${kept(name)}`, unread(name, why))
 
     // The pieces of the pull that have not landed: held beside the row and asked from, never read by a page.
-    let pending = rows.none
+    let pending = none
     // What the tab holds of the store, landed and not: what a pull asks from, and what a stream's heads are compared with.
-    const holding = (): Replica<O> => rows.replica(rows.join(st.held(), pending))
+    const holding = (): Replica<O> => locked.join(st.held(), pending).replica
     // The two parts of it, each asked on its own whether a later epoch overtook it.
-    const parts = (): readonly Replica<O>[] => [rows.replica(st.held()), rows.replica(pending)]
+    const parts = (): readonly Replica<O>[] => [st.held().replica, pending.replica]
 
     // One read of the row per page.
     const restoredOne = async (): Promise<void> => {
@@ -203,12 +187,12 @@ export namespace pull {
       told(read.row.type === "Unreadable" ? read.row.why : null)
       if (read.row.type === "Held") await st.take([], read.row.row)
       // The pieces a pull kept and did not land, another tab's included: held beside the row, never read by a page.
-      pending = read.pieces.reduce(rows.join, pending)
+      pending = read.pieces.reduce(locked.join, pending)
       if (read.unread.length > 0) told(read.unread.join("; "))
     }
     const restored = once.of(restoredOne)
 
-    type Piece = { readonly asked: Replica<O>; readonly answer: Answer<O, R>; readonly rest: number }
+    type Piece = { readonly asked: Replica<O>; readonly answer: Answer<O>; readonly rest: number }
 
     // One piece kept: the erasures it names forgotten from what pages read, then the piece held beside it, less any key
     // those name, and written on the device by itself. It holds only what was asked of a replica, so another tab's reset
@@ -217,9 +201,9 @@ export namespace pull {
     // know it moves the era on from there, and a later piece of the same era is the later frontier.
     const keep = async ({ asked, answer }: Piece): Promise<void> => {
       fx.told(`epoch/${kept(name)}`, excluded.behind(kept(name), wentBack(asked, answer.said)))
-      fx.bars({ type: "Piece", name, size: answer.size, weight: answer.weight })
+      fx.bars({ type: "Piece", size: answer.size, weight: answer.weight })
       const piece = answer.piece(pulled(replicaOf<O>({ ...empty<O>().held, generation: asked.generation, frontier: asked.held.frontier }), answer.said, time.now()))
-      pending = rows.join(await st.erasing(answer.erased, answer.rest, pending), piece)
+      pending = locked.join(await st.erasing(answer.erased, answer.rest, pending), piece)
       if (answer.said.objects.length > 0) {
         const written = await st.place.keepPiece(asked.objects.length, piece)
         if (written.type === "Error") told(written.e)
@@ -235,7 +219,7 @@ export namespace pull {
       const was = st.held()
       const brought = pending
       await st.take(last.answer.erased, brought)
-      pending = rows.none
+      pending = none
       const now = st.held()
       let wrote = true
       if (now !== was) {
@@ -244,7 +228,7 @@ export namespace pull {
         wrote = row.type === "Val"
         told(unread)
       }
-      if (brought !== rows.none && wrote) {
+      if (brought !== none && wrote) {
         const gone = await st.place.dropPieces()
         if (gone.type === "Error") told(gone.e)
       }
@@ -277,7 +261,7 @@ export namespace pull {
     const startOver = async (): Promise<void> => {
       const row = await st.place.reset(st.held())
       if (row.type === "Error") throw new Error(row.e)
-      pending = rows.none
+      pending = none
       // The store is unlanded again, so a reading waits for its next landing, never reads the emptied row. The landing
       // a reading already waits on is settled as it is replaced, so that reading asks again and waits on this one.
       const was = landing
@@ -298,7 +282,7 @@ export namespace pull {
           pieces.pull({
             ask: async () => {
               const piece = await askOf()
-              if (!stores.overtaken(parts(), piece.answer.said)) return piece
+              if (!overtaken(parts(), piece.answer.said)) return piece
               await startOver()
               return askOf()
             },
@@ -309,7 +293,7 @@ export namespace pull {
         )
         .catch((e: unknown): pieces.Ended => ({ type: "Cut", taken: 0, e }))
         .then(ended => {
-          fx.bars({ type: "Pulled", name })
+          fx.bars({ type: "Pulled" })
           if (ended.type === "Whole") {
             settled()
             return true
@@ -318,7 +302,7 @@ export namespace pull {
           return false
         })
 
-    const landed = (): boolean => rows.replica(st.held()).box.type === "Heard"
+    const landed = (): boolean => st.held().replica.box.type === "Heard"
     // A replaced landing is waited on again through the one that replaced it; a landed one ends the wait, even empty.
     const whole = (): Promise<void> => (landed() ? Promise.resolve() : landing.once.then(how => (how === "Landed" ? undefined : whole())))
 
@@ -326,11 +310,11 @@ export namespace pull {
     const reset = async (said: (why: string) => void): Promise<void> => {
       const done = await st.place.reset(st.held())
       if (done.type === "Error") said(`the reset was not kept: ${done.e}`)
-      pending = rows.none
+      pending = none
       restored.forget()
     }
 
-    const keepOwn = async (row: R): Promise<void> => {
+    const keepOwn = async (row: locked.Row<O>): Promise<void> => {
       await st.take([], row)
       const written = await st.place.land(st.held())
       if (written.row.type === "Val") await st.take([], written.row.v)
@@ -338,7 +322,7 @@ export namespace pull {
     }
 
     // One pull at a time, so a pull asked for during another is a pull that starts after it.
-    const purgeNow = (): Promise<void> => restored.get().then(() => st.take([], rows.none))
+    const purgeNow = (): Promise<void> => restored.get().then(() => st.take([], none))
 
     return { restored, pull: serial.of(pullNow), holding, landed, whole, reset, keep: keepOwn, purge: serial.of(purgeNow) }
   }

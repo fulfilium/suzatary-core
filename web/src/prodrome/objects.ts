@@ -17,6 +17,9 @@ export const DB_NAME = "suzatary";
 const STORE_NAME = "chain";
 const CONTENT_NAME = "content";
 const LINES_NAME = "lines";
+const INBOX_NAME = "inbox";
+const TOPICS_NAME = "topics";
+const ALIASES_NAME = "topic-aliases";
 
 /**
  * One row per chain, which only climbs: every tab of this origin joins into it, so none erases what another sealed.
@@ -67,17 +70,22 @@ export const parseReplica = (raw: unknown): lo.Settled<Replica> => lo.map(Stored
  * lines, so nothing in them is this device's own; the blocks rendered from them are cleared too. Version 6 names where
  * each replica stands with the box by the frontier its last answer named (`replica.Frontier`), so every row is carried
  * standing nowhere, and its next pull asks from nothing. Version 7 keeps the lines' skeleton one node per row in a
- * store of its own (`linerows`), so a landing writes what arrived. Version 8's nodes carry the step each line takes,
+ * store of its own (`noderows`), so a landing writes what arrived. Version 8's nodes carry the step each line takes,
  * which the stream chooses its rounds by, so every earlier lines' skeleton, the rows' store's whole row and its pieces
  * and version 7's nodes and keys, is dropped and pulled again, and the blocks rendered from them are cleared, since
- * no key is left to find them by; the content by name stays.
+ * no key is left to find them by; the content by name stays. Version 9 keeps the inbox and the two topic stores one node
+ * per row as the lines are kept, each in a store of its own, and a head row names the nodes the box has not taken: a
+ * version 8 lines' head names none, and the rows of those stores in the rows' store are carried by the core's worker
+ * the first time it restores them (`objectsync`).
  */
 const DB: idb.Db = {
   name: DB_NAME,
-  version: 8,
+  version: 9,
   store: STORE_NAME,
   upgrade: (db, tx, from) => {
-    if (from >= 3 && from <= 7) {
+    if (from === 8) {
+      // The rows' store is carried as it is.
+    } else if (from >= 3 && from <= 7) {
       const rows = tx.objectStore(STORE_NAME);
       // Every earlier lines' skeleton is dropped with the keys it held, so the blocks those keys' words fed can no longer
       // be found by them: the tab clears every block once.
@@ -94,6 +102,8 @@ const DB: idb.Db = {
     if (!db.objectStoreNames.contains(CONTENT_NAME)) db.createObjectStore(CONTENT_NAME);
     if (!db.objectStoreNames.contains(LINES_NAME)) db.createObjectStore(LINES_NAME);
     else if (from < 8) tx.objectStore(LINES_NAME).clear();
+    else if (from === 8) unsentNone(tx.objectStore(LINES_NAME));
+    for (const name of [INBOX_NAME, TOPICS_NAME, ALIASES_NAME]) if (!db.objectStoreNames.contains(name)) db.createObjectStore(name);
   },
 };
 
@@ -109,8 +119,20 @@ export const RENDERED_OWED = "store/rendered-owed";
 /** The device's content by name: one literal per object name, written once and never rewritten. */
 export const CONTENT: idb.Db = { ...DB, store: CONTENT_NAME };
 
-/** The lines' skeleton, one row per node and per key beside a head row (`linerows`). */
+/** Each store the core's worker holds, one row per node and per key beside a head row (`noderows`). */
 export const LINE_ROWS: idb.Db = { ...DB, store: LINES_NAME };
+export const INBOX_ROWS: idb.Db = { ...DB, store: INBOX_NAME };
+export const TOPIC_ROWS: idb.Db = { ...DB, store: TOPICS_NAME };
+export const ALIAS_ROWS: idb.Db = { ...DB, store: ALIASES_NAME };
+
+/** The lines' head row of version 8, which the box alone writes, naming no node the box has not taken, in the lines' first format. */
+function unsentNone(store: IDBObjectStore): void {
+  const head = store.get("head");
+  head.onsuccess = () => {
+    const row: unknown = head.result;
+    if (typeof row === "object" && row !== null) store.put({ ...row, unsent: [], format: 1 }, "head");
+  };
+}
 
 /** Every row rewritten by `step`, in the upgrade's own transaction. */
 function carry(store: IDBObjectStore, step: (row: unknown) => unknown): void {
@@ -298,6 +320,15 @@ export const heldRows = <A>(rows: Pick<Rows<A>, "parse">, prefix: string): Promi
           },
           (error: unknown) => ({ rows: [], unread: [lo.reason(error)] }),
         );
+
+/** The names of every row whose name starts with `prefix`, in one read-only transaction, or why they could not be read. */
+export const heldNames = (prefix: string): Promise<lo.Settled<readonly string[]>> =>
+  idb
+    .within(DB, "readonly", (store) => idb.done(store.getAllKeys(under(prefix))))
+    .then(
+      (keys) => lo.val(keys.map(String)),
+      (error: unknown) => lo.error(lo.reason(error)),
+    );
 
 /** Every row whose name starts with `prefix` deleted, in one read-write transaction. */
 export const dropRows = (prefix: string): Promise<lo.Settled<null>> =>

@@ -15,30 +15,34 @@ const answered = (result: unknown, error: unknown = null): Req => {
 }
 
 // A database whose one store answers `get` with `row`, fails it, or answers it and then aborts its transaction.
-const fake = (open: "opens" | "refuses", get: { readonly row: unknown } | "fails" | "aborts") => ({
-  open: () =>
-    open === "refuses"
-      ? answered(null, "UnknownError: Connection to Indexed Database server lost")
-      : answered({
-          close: () => {},
-          transaction: () => {
-            const tx: { oncomplete: (() => void) | null; onerror: (() => void) | null; onabort: (() => void) | null; error: unknown; objectStore: () => unknown } = {
-              oncomplete: null,
-              onerror: null,
-              onabort: null,
-              error: get === "fails" ? "the read failed" : get === "aborts" ? "AbortError" : null,
-              objectStore: () => ({
-                get: () => {
-                  const r = get === "fails" ? answered(null, "the read failed") : answered(get === "aborts" ? 7 : get.row)
-                  setTimeout(() => (get === "fails" ? tx.onerror?.() : get === "aborts" ? tx.onabort?.() : tx.oncomplete?.()), 5)
-                  return r
-                },
-              }),
-            }
-            return tx
-          },
-        }),
-})
+const fake = (open: "opens" | "refuses", get: { readonly row: unknown } | "fails" | "aborts") => {
+  // The connection the door kept open belongs to the database before.
+  idb.reset()
+  return {
+    open: () =>
+      open === "refuses"
+        ? answered(null, "UnknownError: Connection to Indexed Database server lost")
+        : answered({
+            close: () => {},
+            transaction: () => {
+              const tx: { oncomplete: (() => void) | null; onerror: (() => void) | null; onabort: (() => void) | null; error: unknown; objectStore: () => unknown } = {
+                oncomplete: null,
+                onerror: null,
+                onabort: null,
+                error: get === "fails" ? "the read failed" : get === "aborts" ? "AbortError" : null,
+                objectStore: () => ({
+                  get: () => {
+                    const r = get === "fails" ? answered(null, "the read failed") : answered(get === "aborts" ? 7 : get.row)
+                    setTimeout(() => (get === "fails" ? tx.onerror?.() : get === "aborts" ? tx.onabort?.() : tx.oncomplete?.()), 5)
+                    return r
+                  },
+                }),
+              }
+              return tx
+            },
+          }),
+  }
+}
 
 const DB: idb.Db = { name: "test", version: 1, store: "rows", upgrade: () => {} }
 const parse = (u: unknown) => (typeof u === "number" ? lo.val(u) : lo.error("not a number"))

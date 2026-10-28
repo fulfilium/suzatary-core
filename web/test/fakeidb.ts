@@ -3,6 +3,8 @@
 // writes kept only when it commits, and a write `failing` names refused, which aborts its transaction whole, as a full
 // disk does.
 
+import idb from "../src/app/idb"
+
 type Req = {
   result: unknown
   error: unknown
@@ -26,18 +28,24 @@ export type Fake = {
   readonly rows: (name: string, store: string) => ReadonlyMap<string, unknown>
   // Every committed row of every store of every database, each as `<database>/<store>/<key>` and its value, printed.
   readonly printed: () => readonly string[]
-  // How many times a database was opened, and how many values were read by `get` or `getAll`, since the device began.
-  readonly opened: () => number
+  // How many transactions were begun, how many values were read by `get` or `getAll`, and how many deletes and clears
+  // were asked, since the device began.
+  readonly transactions: () => number
   readonly read: () => number
+  readonly deletes: () => number
 }
 
 // A device holding nothing, set as the global `indexedDB`; `failing` refuses nothing until a test sets it.
 export const fakeIndexedDB = (): Fake => {
+  // The connections the app's door kept open belong to the device before.
+  idb.reset()
   const dbs = new Map<string, { version: number; stores: Map<string, Map<string, unknown>>; paths: Map<string, string> }>()
-  let opened = 0
   let read = 0
+  let transactions = 0
+  let deletes = 0
   const fake: Fake = {
-    opened: () => opened,
+    transactions: () => transactions,
+    deletes: () => deletes,
     read: () => read,
     failing: () => false,
     rows: (name, store) => dbs.get(name)?.stores.get(store) ?? new Map(),
@@ -47,6 +55,7 @@ export const fakeIndexedDB = (): Fake => {
     const d = dbs.get(name) ?? { version: 0, stores: new Map<string, Map<string, unknown>>(), paths: new Map<string, string>() }
     dbs.set(name, d)
     const transaction = (store: string) => {
+      transactions += 1
       const staged = new Map(d.stores.get(store) ?? [])
       let open = 0
       let asked = false
@@ -118,8 +127,8 @@ export const fakeIndexedDB = (): Fake => {
               }),
             getAllKeys: (k?: Key) => ask(() => keys(k)),
             put: (v: unknown, k?: string) => ask(() => void staged.set(keyOf(v, k), structuredClone(v)), fake.failing(keyOf(v, k))),
-            delete: (k: Key) => ask(() => keys(k).forEach(x => staged.delete(x))),
-            clear: () => ask(() => staged.clear()),
+            delete: (k: Key) => ((deletes += 1), ask(() => keys(k).forEach(x => staged.delete(x)))),
+            clear: () => ((deletes += 1), ask(() => staged.clear())),
           }
         },
       }
@@ -127,7 +136,8 @@ export const fakeIndexedDB = (): Fake => {
       later(() => later(() => (asked ? undefined : tx.oncomplete?.())))
       return tx
     }
-    return {
+    const connection = {
+      onversionchange: null as (() => void) | null,
       objectStoreNames: { contains: (n: string) => d.stores.has(n) },
       createObjectStore: (n: string, o?: { keyPath?: string }) => {
         d.stores.set(n, new Map())
@@ -140,11 +150,14 @@ export const fakeIndexedDB = (): Fake => {
       version: () => d.version,
       setVersion: (v: number) => void (d.version = v),
     }
+    connections.set(name, [...(connections.get(name) ?? []), connection])
+    return connection
   }
+  // Every connection opened, by database: a delete asks each to let go, as IndexedDB's `versionchange` does.
+  const connections = new Map<string, { onversionchange: (() => void) | null }[]>()
   Object.assign(globalThis, {
     indexedDB: {
       open: (name: string, wanted = 0) => {
-        opened += 1
         const db = database(name)
         const r: Req = { result: db, error: null, onsuccess: null, onerror: null, onupgradeneeded: null }
         later(() => {
@@ -160,6 +173,8 @@ export const fakeIndexedDB = (): Fake => {
         return r
       },
       deleteDatabase: (name: string) => {
+        for (const c of connections.get(name) ?? []) c.onversionchange?.()
+        connections.delete(name)
         dbs.delete(name)
         const r: Req = { result: undefined, error: null, onsuccess: null, onerror: null }
         later(() => r.onsuccess?.())

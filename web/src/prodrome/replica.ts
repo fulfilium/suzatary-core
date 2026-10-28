@@ -374,7 +374,7 @@ export function ancestry(objects: readonly Obj[]): (a: readonly string[], b: rea
 }
 
 /** What an object rests on: its parents, and the genesis of the prodrome a change is in. */
-function restsOn(object: Obj): readonly string[] {
+export function restsOn(object: Obj): readonly string[] {
   if (!("literal" in object)) return object.parents;
   const genesis = object.literal.startsWith("Genesis(") ? null : prodromeOf(object);
   return genesis === null ? parentsOf(object) : [...parentsOf(object), genesis];
@@ -528,3 +528,49 @@ export function unsentTodos(replica: Replica): Map<string, Unsent> {
   }
   return todos;
 }
+
+/**
+ * Whether two replicas read the same: the generation, the objects, what the box is known to hold and refused, the box's
+ * word and the frontier the next pull asks from, never the instant they were heard. The objects only grow within a
+ * generation, so their count says whether they moved; what the box holds and refused are compared whole, since a refusal
+ * can replace another and keep the count.
+ */
+export const same = <O extends Obj>(a: Replica<O>, b: Replica<O>): boolean =>
+  a.generation === b.generation &&
+  a.objects.length === b.objects.length &&
+  sameSet(a.synced, b.synced) &&
+  sameSet(a.refused.map(refusal), b.refused.map(refusal)) &&
+  sameBox(a.box, b.box) &&
+  sameFrontier(a.held.frontier, b.held.frontier);
+
+const refusal = (r: RefusedObject): string => JSON.stringify([r.hash, r.kind, r.reason]);
+
+const sameFrontier = (a: Frontier, b: Frontier): boolean =>
+  a.type === "Named" && b.type === "Named" ? a.digest === b.digest && a.era === b.era : a.type === b.type;
+
+/** Two words are one when both are unheard, or both name the same heads under the same policy. */
+const sameBox = (a: Box, b: Box): boolean =>
+  a.type === "Heard" && b.type === "Heard"
+    ? heads.same(heads.of(a.word.heads), heads.of(b.word.heads)) && sameSet(a.word.untrusted, b.word.untrusted)
+    : a.type === b.type;
+
+/** Whether two lists of names hold the same names, in any order and however often. */
+export const sameSet = (a: readonly string[], b: readonly string[]): boolean => {
+  const x = new Set(a), y = new Set(b);
+  return x.size === y.size && [...x].every((n) => y.has(n));
+};
+
+/**
+ * Whether the box answered in a later epoch than a word any part of what is held heard (the row pages read, or the
+ * pieces kept beside it): its store no longer extends what it served, so what is held may name objects the box no longer
+ * holds, and the store starts over. Each part is asked, not their join: a piece of the later epoch another tab kept
+ * beside a row of the epoch before joins to the piece alone, which hides the row it overtook.
+ */
+export const overtaken = (held: readonly Replica<Obj>[], answer: { readonly epoch: number }): boolean =>
+  held.some((r) => said(r.box, false, (w) => w.epoch < answer.epoch));
+
+/** Whether the box's heads name an object the replica does not hold: a move of the store, or a pull cut short. */
+export const behind = <O extends Obj>(box: heads.Heads, held: Replica<O>): boolean => {
+  const names = new Set(held.objects.map((o) => o.hash));
+  return box.some((h) => !names.has(h));
+};

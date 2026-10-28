@@ -1,7 +1,7 @@
-// The secretary's stores read from the box, by the frontier a replica holds and by name: plain reads, which the page
-// and the core's worker both make, so this module reads no state of the page.
+// The secretary's stores read from the box, by the frontier a replica holds and by name, and a tab's own objects handed
+// to it: plain requests, which the core's worker makes, so this module reads no state of the page.
 
-import type { ContentPayload, SkeletonPayload, StorePayload } from "./generated/wire"
+import type { ContentPayload, PostedObjects, ReceiptPayload, SkeletonPayload, StorePayload } from "./generated/wire"
 import http from "./http"
 import wait from "./wait"
 import payload from "./generated/payload"
@@ -25,5 +25,10 @@ export namespace storereads {
   // The literals of `hashes`, in ascending order with none twice, so one set has one URL the browser keeps for good.
   export const content = (store: string, hashes: readonly string[]): Promise<ContentPayload> =>
     http.get(`/api/stores/${encodeURIComponent(store)}/content?hashes=${hashes.join(",")}`, payload.ContentPayload, BOUND)
+
+  // What a replica of a topic store holding the frontier `since` lacks on the box: the box takes each as the actor the
+  // request was proven for.
+  export const post = (store: "topics" | "topic-aliases", objects: readonly string[], since: string): Promise<ReceiptPayload> =>
+    http.act(`/api/stores/${store}/objects`, { objects: [...objects], since } satisfies PostedObjects, payload.ReceiptPayload)
 }
 export default storereads

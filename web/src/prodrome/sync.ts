@@ -28,9 +28,8 @@ import heads from "./heads";
 import excluded from "./excluded";
 import readings from "./readings";
 import type { Replica } from "./replica";
-import { NOTHING, ancestry, appended, boxHeadsOf, join, landed, pulled, rootOf, said, sinceOf, stranded, unsignedWrites, unsynced, untrustedOf, wentBack } from "./replica";
+import { NOTHING, ancestry, appended, boxHeadsOf, join, landed, pulled, rootOf, said, sameSet, sinceOf, stranded, unsignedWrites, unsynced, untrustedOf, wentBack } from "./replica";
 import time from "../app/time";
-import stores from "./stores";
 import onscreen, { store } from "../app/store";
 import serial from "../algebra/serial";
 import folds from "./folds";
@@ -185,6 +184,8 @@ export async function restoreReplica(): Promise<void> {
   const on = source.state().holding;
   const found = await heldRow(CHAIN, on);
   if (found.type === "Held") joinIn(on, found.v);
+  // The fold the loader asked the box for is read from what the device holds instead, so its answer goes unread.
+  if (found.type === "Held" && found.v.objects.length > 0) primed.cancel(primed.fold(on));
   // A row that does not read is said, with the one write that may stand in for it; nothing else is kept until then.
   readings.told(`row/${on}`, excluded.left(excluded.NONE, [], found.type === "Unreadable" ? [excluded.unread(on, found.why)] : []));
 }
@@ -335,7 +336,7 @@ async function pullEach(): Promise<{ moved: boolean; unread: { readonly name: st
         const row = await holdRow(CHAIN, name, { type: "Join", replica: now });
         if (row.type === "Val" && source.state().holding !== name) others.set(name, join(others.get(name) ?? NOTHING, row.v));
         // A policy that moved reprices as objects do: who is believed changes what the chain reads.
-        const moved = !heads.same(heads.of(now.heads), heads.of(was.heads)) || !stores.sameSet(untrustedOf(now), untrustedOf(was));
+        const moved = !heads.same(heads.of(now.heads), heads.of(was.heads)) || !sameSet(untrustedOf(now), untrustedOf(was));
         return moved ? { type: "Moved" } : { type: "Stood" };
       } catch {
         // The network: what is held stays held, and the next exchange asks again.
@@ -578,9 +579,7 @@ export async function foldHeld(): Promise<boolean> {
     const { held, answer } = await askHeld((h) => ({ type: "List", chain: h.holding, at: time.moment() }));
     const { replica, holding } = held;
     if (source.state().holding !== holding) return false;
-    const shown = await showFold(answer, replica, holding);
-    if (shown) primed.cancel(primed.fold(holding));
-    return shown;
+    return await showFold(answer, replica, holding);
   } catch {
     return false;
   }

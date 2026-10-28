@@ -647,10 +647,12 @@ its schema, the verb that carried it and its law are deleted, and the data
 repository's earlier commits hold it beside the code that read it. A carried
 line keeps the name of the object it carried (`Carried::From`), which the
 digest reads as its leaf; nothing writes one any more. A TAB holds the lines in
-the core's worker (`web/src/prodrome/linesync.ts`), which restores, pulls and
-lands them and answers every reading of them; on the device they are a store
-of their own, one row per skeleton node and per key beside a head row
-(`linerows.ts`, database version 8), so a landing writes what arrived. The
+the core's worker, one instance of the engine every store the tab holds runs
+on (`web/src/prodrome/engine.ts`, the lines' `linesync.ts`), which restores,
+pulls and lands them and answers every reading of them; on the device they
+are a store of their own, one row per skeleton node and per key beside a
+head row (`noderows.ts`, database version 8), so a landing writes what
+arrived. The
 row is its replica and the keys the pulls gave (`web/src/prodrome/locked.ts`),
 joined as a pair of unions; a key the objects name as erased opens nothing
 and is owed, so whichever tab reads it, from a pull or from the row another
@@ -1575,12 +1577,14 @@ rules and points here for the modules. The web contract is `docs/WEB-SPEC.md`.
   network. `GET /api/me` → `actor: null` means no act controls.
 - **Every store a replica in the tab** (2026-10-03,
   `docs/APP-AS-READING-PLAN-2026-10-02.md` stage 1). The inbox and the
-  conversations join the chains: `web/src/prodrome/stores.ts` is a store's
-  replica as a semilattice (union of the objects, the heads of the later
-  contact), `storesync.ts` its shell: kept in IndexedDB beside the chains
-  (`pages/<name>` for the page's stores, each its replica alone since they
-  lock no words, moved once from a keyed `store/<name>`; the lines one node
-  per row in a store of their own), pulled from the frontier the last answer named (§5), `GET /api/stores/<store>/objects?since=`
+  conversations join the chains. Every store is held by the core's worker,
+  each one instance of one engine (`web/src/prodrome/engine.ts`, 2026-10-27;
+  the set of them `storeset.ts`): a row that is the store's replica as a
+  semilattice (union of the objects, the heads of the later contact) and the
+  keys of its words (none for a store that locks no words), kept in
+  IndexedDB one node per row in an object store of its own (`noderows.ts`,
+  database version 9, which carries a build's rows of the inbox and the topic
+  stores once), pulled from the frontier the last answer named (§5), `GET /api/stores/<store>/objects?since=`
   (the conversations first, then the inbox, which the box writes first) in
   pieces of at most a megabyte of literals, each kept before the next is asked
   from the heads it left (2026-10-13: the whole lines store was 34 MB, which a
@@ -1592,10 +1596,14 @@ rules and points here for the modules. The web contract is `docs/WEB-SPEC.md`.
   objects are also served by hash, `…/content?hashes=`, kept for good, and
   the lines' skeleton at `GET /api/stores/lines/skeleton?since=`;
   `docs/LAZYSYNC-PLAN-2026-10-21.md`), and read by the core in its worker
-  (`questions.ts`, 2026-10-24): the page sends the inbox's objects, the
-  lines' content and their keys by what changed, and asks for the list, a
-  conversation, a search or a purge's keys; the worker keeps one
-  `Proposals` per change of the inbox and one `Lines`
+  (`questions.ts`, 2026-10-24): the page sends nothing of a store and asks
+  for the list, a conversation, the stream, a search, the proposals or a
+  topic write; the page thread holds no store (`storesync.ts` asks and
+  hears), so nothing it does grows with one. A store's nodes either carry
+  their content (the inbox and the topic stores, whose objects are small) or
+  name it (the lines), and then a reading fetches it by name first: that is
+  the store's `content`, data on its spec, never a second path. The worker
+  keeps one `Proposals` per move of the inbox's row and one `Lines`
   (`secretary::held_lines::HeldLines`), which decodes each line once and
   reads through the Prodrome's memoised fold, one node per conversation and
   one leaf per line, so a new line computes its leaf, its conversation and

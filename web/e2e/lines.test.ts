@@ -184,16 +184,19 @@ app.scene("an inbox row a build before the keys kept is taken again from the box
   await app.open(WRITE_BASE)
   await app.page.navigate(`${WRITE_BASE}/#/inbox`)
   const rowAt = (key: string): string => `${rowsOf("suzatary", "chain")}.then((rows) => rows.find(([k]) => k === "${key}")?.[1] ?? null)`
-  const inboxRow = rowAt("objects:pages/inbox")
+  const nodes = `${rowsOf("suzatary", "inbox")}.then((rows) => rows.filter(([k]) => k.startsWith("node/")).map(([, v]) => v))`
   const oldRow = rowAt("objects:store/inbox")
-  await app.page.waitFor(`${inboxRow}.then((row) => row !== null && row.objects.length > 0)`, { timeout: 20000 })
-  // The row as the build before the keys wrote it: the bare replica, under the store's name.
-  const bare = await app.page.evaluate<unknown>(inboxRow)
-  await app.page.evaluate(put("suzatary", "chain", `(s) => (s.delete("objects:pages/inbox"), s.put(${JSON.stringify(bare)}, "objects:store/inbox"))`))
+  await app.page.waitFor(`${nodes}.then((ns) => ns.length > 0)`, { timeout: 20000 })
+  // The row as the build before the keys wrote it: the bare replica, under the store's name, and the inbox's own store
+  // emptied.
+  const objects = await app.page.evaluate<unknown[]>(nodes)
+  const bare = { generation: 0, objects, synced: [], refused: [], words: [], frontier: { type: "Nothing" } }
+  await app.page.evaluate(put("suzatary", "inbox", `(s) => s.clear()`))
+  await app.page.evaluate(put("suzatary", "chain", `(s) => s.put(${JSON.stringify(bare)}, "objects:store/inbox")`))
   assert.equal(await app.page.evaluate<boolean>(`${oldRow}.then((row) => row !== null && row.replica === undefined)`), true, "the old shape is on the device")
   await app.page.navigate(`${WRITE_BASE}/?bare=1#/inbox`)
   await app.page.waitFor(`document.querySelector(".pagetitle") !== null`, { timeout: 15000 })
-  await app.page.waitFor(`${inboxRow}.then((row) => row !== null && row.objects.length > 0)`, { timeout: 20000 })
+  await app.page.waitFor(`${nodes}.then((ns) => ns.length > 0)`, { timeout: 20000 })
   assert.equal(await app.page.evaluate<unknown>(oldRow), null, "the old row is gone")
   assert.equal(
     await app.page.evaluate<boolean>(`document.querySelector('#excluded li[data-row="store/inbox"]') === null`),

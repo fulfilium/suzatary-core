@@ -77,10 +77,6 @@ export const authorUpdate = (edit: UpdateTodo, note = ""): Promise<AuthoredPaylo
 export const authorUndo = (todo: string): Promise<AuthoredPayload> => author({ undo: todo });
 export const authorRedo = (todo: string): Promise<AuthoredPayload> => author({ redo: todo });
 
-/** What a replica of a topic store holding the frontier `since` lacks on the box: the box takes each as the actor the request was proven for. */
-export const postStoreObjects = (store: "topics" | "topic-aliases", objects: readonly string[], since: string): Promise<ReceiptPayload> =>
-  posted(`/api/stores/${store}/objects`, objects, since);
-
 // --- the Inbox ---------------------------------------------------------------
 
 /** The Inbox badge's count, read on the box. */

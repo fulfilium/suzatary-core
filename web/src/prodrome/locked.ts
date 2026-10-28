@@ -5,7 +5,7 @@
 
 import type { Obj, Replica } from "./replica"
 import type { StoredObject } from "../wire/generated/wire"
-import { empty, epochOf, join, reset } from "./replica"
+import { empty, epochOf, join, reset, same } from "./replica"
 
 // The replicas' own, under names the row's join and reset do not shadow.
 const joined = join
@@ -68,6 +68,13 @@ export namespace locked {
     const drop = new Set(gone)
     return gone.some(n => r.keys[n] !== undefined) ? of(r.replica, Object.fromEntries(Object.entries(r.keys).filter(([n]) => !drop.has(n)))) : r
   }
+
+  const moved = <O extends Obj>(was: Row<O>, next: Row<O>): Row<O> =>
+    next === was || (same(next.replica, was.replica) && sameKeys(next.keys, was.keys)) ? was : next
+
+  // A row joined in or keys let go: what either leaves of `was`, `was` itself when nothing moved.
+  export type Event<O extends Obj> = { readonly type: "Held"; readonly row: Row<O> } | { readonly type: "Forgot"; readonly keys: readonly string[] }
+  export const taken = <O extends Obj>(was: Row<O>, e: Event<O>): Row<O> => moved(was, e.type === "Held" ? join(was, e.row) : without(was, e.keys))
 
   // The one way down: an empty row of the generation after, holding no key.
   export const reset = <O extends Obj>(r: Row<O>): Row<O> => of(emptied(r.replica))

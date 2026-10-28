@@ -15,10 +15,9 @@ import type {
   TopicsPayload,
   TurnRow,
 } from "../wire/generated/wire"
-import type { Acted, Chains, Core, CoreEnv, CoreFold, Linker, Named, Proposals, Standing, Todos, TopicReading, TopicStore, Window } from "./core"
+import type { Acted, Chains, Core, CoreEnv, CoreFold, Linker, Named, Standing, Todos, Window } from "./core"
 import {
   appendTo,
-  appendTopic,
   barOf,
   chosenOf,
   conversationOf,
@@ -39,11 +38,12 @@ import {
   streamOf,
   within,
 } from "./core"
-import topics from "./topics"
+import type topics from "./topics"
 import excluded from "./excluded"
 import type heads from "./heads"
 import lines from "./lines"
-import linesync from "./linesync"
+import storeset from "./storeset"
+import type stores from "./stores"
 import lo from "../algebra/lo"
 import thirty from "../todo/thirty"
 import grouped from "../chat/grouped"
@@ -74,10 +74,6 @@ export namespace questions {
 
   // What prices a term: a reading's functions, or the box's rows, each todo's `Ref` its row's value at `at`.
   export type Basis = { readonly type: "Fold"; readonly reading: Name } | { readonly type: "Rows"; readonly at: string; readonly functions: Readonly<Record<string, SpecNode>> }
-
-  // A store's objects as the tab holds them now, by what changed since it last said: the names the worker lacks with
-  // their bytes, and the names it holds that the tab no longer does.
-  export type Delta = { readonly add: readonly Named[]; readonly drop: readonly string[]; readonly whole: boolean }
 
   // A conversation not on this device: how many of its lines the device lacks, and why they could not be fetched.
   export type NotHere = { readonly type: "NotHere"; readonly lines: number; readonly why: string }
@@ -113,16 +109,16 @@ export namespace questions {
     Thirty: { q: { readonly chain: string; readonly id: string; readonly ms: number }; a: thirty.Thirty }
     // What `key` is to `actor` under `root` in `chain`.
     Standing: { q: { readonly chain: string; readonly root: string | null; readonly actor: string; readonly key: string }; a: Standing }
-    // The inbox's objects changed by `delta`.
-    HoldInbox: { q: { readonly delta: Delta }; a: null }
-    // A page reads the lines: pull them now, and after every word of the box's stream; whether the pull ended whole.
-    LinesWant: { q: Record<never, never>; a: boolean }
-    // The box's stream named the lines' heads.
-    LinesHeard: { q: { readonly heads: heads.Heads }; a: null }
+    // Every store pulled now, and after every word of the box's stream; whether every pull ended whole.
+    Pull: { q: Record<never, never>; a: boolean }
+    // The box's stream named a store's heads.
+    Heard: { q: { readonly store: stores.Name; readonly heads: heads.Heads }; a: null }
+    // The box's stream opened again: what a reading asked for is pulled.
+    Opened: { q: Record<never, never>; a: null }
     // Whether a page is shown: a prefetch waits while none is.
-    LinesShown: { q: { readonly on: boolean }; a: null }
-    // The lines' row written over by a reset and taken again, with what the reset could not do.
-    LinesReset: { q: Record<never, never>; a: readonly string[] }
+    Shown: { q: { readonly on: boolean }; a: null }
+    // A store's row written over by a reset and taken again, with what the reset could not do.
+    Reset: { q: { readonly store: stores.Name }; a: readonly string[] }
     // The Inbox's rows at `at`, priced through every chain held.
     Proposals: { q: { readonly at: string; readonly memory: MemoryPayload | null }; a: InboxProposalsPayload }
     // Every conversation, newest first.
@@ -144,13 +140,12 @@ export namespace questions {
     BlocksOwn: { q: Record<never, never>; a: ReadonlySet<string> }
     // The key each answer block of `sources` is kept by, named by this build's core.
     AnswerKeys: { q: { readonly sources: readonly string[] }; a: string[] }
-    // A topic store's objects changed by `delta`.
-    HoldTopics: { q: { readonly store: topics.Store; readonly delta: Delta }; a: null }
     // The newest `pages` pages of the rounds carrying every topic of `chosen`, and the topics in use, once the lines of
     // the conversations they are in are held.
     Stream: { q: { readonly chosen: readonly string[]; readonly pages: number }; a: Whole<{ readonly stream: StreamPayload; readonly bar: TopicsPayload; readonly keys: Keyed }> }
-    // `write` planned by the topics as held and appended to the replica of its store: the objects it wrote there.
-    PlanTopic: { q: { readonly write: topics.Write; readonly at: string; readonly actor: string }; a: { readonly store: topics.Store; readonly objects: readonly Named[] } }
+    // `write` planned by the topics as held, written into its store as `actor` and handed to the box; a refusal fails in
+    // the box's words.
+    Topic: { q: { readonly write: topics.Write; readonly at: string; readonly actor: string }; a: null }
   }
   export type Kind = keyof Table
   export type Question = { [k in Kind]: { readonly type: k } & Table[k]["q"] }[Kind]
@@ -162,9 +157,9 @@ export namespace questions {
   export type Asked = { readonly id: number; readonly question: Question }
   export type Answered = { readonly id: number; readonly answer: lo.Settled<Answer<Kind>> }
 
-  // What the worker says unasked: what the lines' sync tells, that the box refused this device's key (`Gone`) or this
+  // What the worker says unasked: what the stores' syncs tell, that the box refused this device's key (`Gone`) or this
   // build's contract (`Stale`) on a read the worker made, and that its core did not load, and why (`Unloaded`).
-  export type Said = linesync.Said | { readonly type: "Gone" } | { readonly type: "Stale" } | { readonly type: "Unloaded"; readonly why: string }
+  export type Said = storeset.Said | { readonly type: "Gone" } | { readonly type: "Stale" } | { readonly type: "Unloaded"; readonly why: string }
   // Everything the worker sends: an answer, or something said.
   export type Out = Answered | { readonly said: Said }
 
@@ -235,31 +230,14 @@ export namespace questions {
     }
     const sorted = (xs: readonly string[]): string => JSON.stringify([...xs].sort())
 
-    // The inbox's objects, and the core's reading of them, made again once per change of what is held.
-    const inbox = new Map<string, string>()
-    let inboxRead: Proposals | null = null
-    const proposals = (): Proposals => {
-      if (inboxRead !== null) return inboxRead
-      const read = new core.Proposals(objectsOf([...inbox].map(([hash, literal]) => ({ hash, literal }))))
-      inboxRead = read
-      return read
-    }
-    const holdInbox = (delta: Delta): null => {
-      if (delta.whole) inbox.clear()
-      for (const hash of delta.drop) inbox.delete(hash)
-      for (const o of delta.add) inbox.set(o.hash, o.literal)
-      if (delta.whole || delta.add.length > 0 || delta.drop.length > 0) {
-        inboxRead?.free()
-        inboxRead = null
-      }
-      return null
-    }
-    // The lines, pulled and held here, decoded once each and read by what moved: the core keeps every reading.
+    // The lines, decoded once each and read by what moved: the core keeps every reading.
     const held = new core.Lines()
     // The rendered blocks the device keeps, read and written here alone, of the functions this build keeps blocks of.
     const own = functionsOf(core)
     const blocks = rendered.device(own)
-    const sync = linesync.of(held, say, blocks)
+    const stores = storeset.of(core, held, say, blocks)
+    const sync = stores.lines
+    const proposals = stores.proposals
     // A reading of conversation `id` that failed while lines of it are not on this device failed for want of them.
     const notHere = (scope: lines.Scope, e: unknown): NotHere => {
       const lacked = sync.lacking(scope)
@@ -268,49 +246,15 @@ export namespace questions {
     }
     // A reading of every line once they are held, or how many the device lacks where they cannot be fetched.
     const scoped = <A>(scope: () => lines.Scope, read: () => A): Promise<Whole<A>> =>
-      sync.over(scope, (): Whole<A> => ({ type: "Held", v: read() })).catch((e: unknown): Whole<A> => notHere(scope(), e))
+      stores
+        .ready("All")
+        .then(() => sync.over(scope, (): Whole<A> => ({ type: "Held", v: read() })))
+        .catch((e: unknown): Whole<A> => notHere(scope(), e))
     const whole = <A>(read: () => A): Promise<Whole<A>> => scoped(() => lines.WHOLE, read)
 
     // The key each answer block of `turns` is kept by, named once here, where the core is.
     const keyed = (turns: readonly TurnRow[]): Keyed =>
       Object.fromEntries(turns.flatMap(t => (t.who === "model" ? t.blocks.map(b => [b.source, core.answer_key(b.source)]) : [])))
-
-    // The topic stores' objects, and the core's replicas of them with its one reading, made again once per change.
-    const topicHeld: { readonly [N in topics.Store]: Map<string, string> } = { topics: new Map(), "topic-aliases": new Map() }
-    type TopicsRead = { readonly memberships: TopicStore; readonly aliases: TopicStore; readonly reading: TopicReading }
-    let topicsRead: TopicsRead | null = null
-    const forgetTopics = (): void => {
-      topicsRead?.reading.free()
-      topicsRead?.memberships.free()
-      topicsRead?.aliases.free()
-      topicsRead = null
-    }
-    const topicObjects = (store: topics.Store): Named[] => [...topicHeld[store]].map(([hash, literal]) => ({ hash, literal }))
-    const topicsNow = (): TopicsRead => {
-      if (topicsRead !== null) return topicsRead
-      const memberships = new core.Memberships(objectsOf(topicObjects("topics")))
-      const aliases = new core.TopicAliases(objectsOf(topicObjects("topic-aliases")))
-      topicsRead = { memberships, aliases, reading: new core.TopicReading(memberships, aliases) }
-      return topicsRead
-    }
-    const holdTopics = (store: topics.Store, delta: Delta): null => {
-      const map = topicHeld[store]
-      if (delta.whole) map.clear()
-      for (const hash of delta.drop) map.delete(hash)
-      for (const o of delta.add) map.set(o.hash, o.literal)
-      if (delta.whole || delta.add.length > 0 || delta.drop.length > 0) forgetTopics()
-      return null
-    }
-    // The objects are held here at once, so the next plan reads them before the tab says it holds them.
-    const planTopic = (write: topics.Write, at: string, actor: string): Answer<"PlanTopic"> => {
-      const read = topicsNow()
-      const store = topics.store(write)
-      const into = store === "topics" ? read.memberships : read.aliases
-      const objects = topics.plan(read.reading, write, at, actor).flatMap(e => appendTopic(into, e).objects)
-      for (const o of objects) topicHeld[store].set(o.hash, o.literal)
-      if (objects.length > 0) forgetTopics()
-      return { store, objects }
-    }
 
     const hold = (holding: readonly Holding[]): Answer<"Hold"> => {
       for (const h of holding) {
@@ -400,39 +344,42 @@ export namespace questions {
         }
         case "Standing":
           return standingIn(todosOf(named(q.chain)), q.root, q.actor, q.key)
-        case "HoldInbox":
-          return holdInbox(q.delta)
-        case "LinesWant":
-          return sync.want()
-        case "LinesHeard":
-          sync.heard(q.heads)
+        case "Pull":
+          return stores.pull()
+        case "Heard":
+          stores.heard(q.store, q.heads)
           return null
-        case "LinesShown":
+        case "Opened":
+          stores.opened()
+          return null
+        case "Shown":
           sync.shown(q.on)
           return null
-        case "LinesReset":
-          return sync.reset()
+        case "Reset":
+          return stores.reset(q.store)
         case "Proposals":
-          setNow()
-          return inboxOf(proposals(), q.at, q.memory, set)
+          return stores.ready("Inbox").then(() => {
+            setNow()
+            return inboxOf(proposals(), q.at, q.memory, set)
+          })
         case "Conversations":
           return whole(() => listOfLines(held, proposals()))
         case "Conversation": {
           const { id, window, memory } = q
-          return sync
-            .holds(id)
-            .then((holds): Promise<One> | One =>
-              holds ? sync.over(() => lines.one(id), (): One => ({ type: "Held", payload: conversationOf(held, proposals(), id, window, memory) })) : { type: "Absent" },
+          return stores
+            .ready("All")
+            .then((): Promise<One> | One =>
+              sync.holds(id) ? sync.over(() => lines.one(id), (): One => ({ type: "Held", payload: conversationOf(held, proposals(), id, window, memory) })) : { type: "Absent" },
             )
             .catch((e: unknown): One => notHere(lines.one(id), e))
         }
         case "Window": {
           const { id, window, memory, zone } = q
           const read = (w: Window): ConversationPayload => conversationOf(held, proposals(), id, w, memory)
-          return sync
-            .holds(id)
-            .then((holds): Promise<Grouped> | Grouped =>
-              holds
+          return stores
+            .ready("All")
+            .then((): Promise<Grouped> | Grouped =>
+              sync.holds(id)
                 ? sync.over(() => lines.one(id), (): Grouped => {
                     const payload = grouped.of(grouped.covering(window, read), zone)
                     return { type: "Held", payload, keys: keyed(payload.turns) }
@@ -457,20 +404,18 @@ export namespace questions {
           return own
         case "AnswerKeys":
           return q.sources.map(source => core.answer_key(source))
-        case "HoldTopics":
-          return holdTopics(q.store, q.delta)
         // The rounds are chosen by the skeleton's outlines, and only the lines of the conversations they are in are read.
         case "Stream":
           return scoped(
-            () => ({ type: "Conversations", ids: chosenOf(held, topicsNow().reading, q.chosen, q.pages) }),
+            () => ({ type: "Conversations", ids: chosenOf(held, stores.topics().reading, q.chosen, q.pages) }),
             () => {
-              const read = topicsNow()
+              const read = stores.topics()
               const stream = streamOf(held, read.reading, q.chosen, q.pages)
               return { stream, bar: barOf(read.reading), keys: keyed(stream.rounds.flatMap(r => (r.answer === null ? [] : [r.answer]))) }
             },
           )
-        case "PlanTopic":
-          return planTopic(q.write, q.at, q.actor)
+        case "Topic":
+          return stores.write(q.write, q.at, q.actor).then(() => null)
       }
     }
   }

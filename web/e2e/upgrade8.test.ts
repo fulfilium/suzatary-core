@@ -116,7 +116,7 @@ app.scene("a device holding version 7's lines' skeleton drops it and every rende
     }
   })`, { timeout: 20000 })
   const pulled = await app.page.evaluate<Rows>(rows)
-  assert.equal(pulled.version, 8)
+  assert.equal(pulled.version, 9)
   assert.ok(pulled.nodes.length >= now.nodes.length, "the skeleton is pulled again")
   assert.ok(pulled.nodes.every((n) => n.header.node !== "line" || n.header.step !== undefined), "every line's node carries its step")
   assert.ok(now.content.every(([k]) => pulled.content.some(([c]) => c === k)), "the content by name stays")

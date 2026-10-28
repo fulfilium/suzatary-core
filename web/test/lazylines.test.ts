@@ -86,10 +86,9 @@ test("law: a reading of part-fetched lines is the whole pull's reading at the sa
     // What the box's whole pull at this skeleton would have sent: every node with its literal.
     const whole = s.objects.map(n => ({ hash: n.hash, literal: literals.get(n.hash)! }))
     for (const scope of scopes) {
-      const need = lines.need(s, has, scope)
-      if (need.type === "Fetching") {
-        assert.ok(need.nodes.length > 0)
-        assert.ok(need.nodes.every(n => names.has(n.hash) && !has(n.hash)), "it fetches only what the skeleton names and the device lacks")
+      const need = lines.nodesOf(s, scope).filter(n => !has(n.hash))
+      if (need.length > 0) {
+        assert.ok(need.every(n => names.has(n.hash)), "it fetches only what the skeleton names and the device lacks")
         continue
       }
       const held = [...kept].map(([hash, literal]) => ({ hash, literal }))
@@ -272,14 +271,14 @@ test("concurrent whole readings read each object the device keeps once, in one t
     held: rows => Promise.resolve(void handed.push(...rows.map(r => r.hash))),
     shown: () => true,
   })
-  const before = [device.opened(), device.read()] as const
+  const before = [device.transactions(), device.read()] as const
   await fetch("Ahead", nodes)
-  assert.equal(device.opened() - before[0], 1, "a prefetch reads the device in one transaction")
+  assert.equal(device.transactions() - before[0], 1, "a prefetch reads the device in one transaction")
   assert.equal(device.read() - before[1], 0, "by name alone")
   assert.deepEqual(handed, [], "and hands the reader nothing")
-  const [opened, read] = [device.opened(), device.read()]
+  const [begun, read] = [device.transactions(), device.read()]
   await Promise.all(Array.from({ length: 10 }, (_, i) => fetch(i % 2 === 0 ? "Behind" : "First", nodes)))
-  assert.equal(device.opened() - opened, 1, "one database opened for the one batch")
+  assert.equal(device.transactions() - begun, 1, "one transaction for the one batch")
   assert.ok(device.read() - read <= nodes.length, `${device.read() - read} values read for ${nodes.length} objects`)
   assert.deepEqual([...handed].sort(), nodes.map(n => n.hash).sort(), "each object handed to the reader once")
   assert.ok(nodes.every(n => content.holds(n.hash)))

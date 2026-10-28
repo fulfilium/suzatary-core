@@ -88,11 +88,7 @@ pub fn build(args: &Args) -> anyhow::Result<()> {
         model,
         connected,
         connections,
-        lines,
-        conversations,
-        sealed,
-        wide,
-        topics,
+        bulk,
     } = args;
     let lapsed = *connections == Connections::Lapsed;
     let (root, port, propose, reviewed, settings) =
@@ -140,11 +136,7 @@ pub fn build(args: &Args) -> anyhow::Result<()> {
     if lapsed {
         reading_not_sending(&read, root)?;
     }
-    bulk_lines(&read, &sizes(*lines, *conversations, *wide), *sealed)?;
-    match topics {
-        Filing::None => {}
-        Filing::Every => bulk_topics(&read)?,
-    }
+    bulk.write(&read)?;
     read.adopt(&signers)
         .whole()
         .context("adopting signatures on every chain")?;
@@ -1212,6 +1204,14 @@ pub struct Args {
     /// account that reads its mail and holds no grant to send.
     #[arg(long, value_enum, default_value_t = Connections::Fresh, requires = "settings")]
     connections: Connections,
+    /// The generated stores, for measuring a tab that holds large ones.
+    #[command(flatten)]
+    bulk: Bulk,
+}
+
+/// What `fixture-chain` generates beyond its own tables, so a tab holds stores of the live shape.
+#[derive(Debug, clap::Args)]
+pub struct Bulk {
     /// How many more lines to write to the conversations, generated, for measuring a tab that
     /// holds a large store: half in one conversation, the rest in smaller ones.
     #[arg(long, default_value_t = 0)]
@@ -1229,19 +1229,34 @@ pub struct Args {
     /// tab holding it names its replica by a frontier no longer than it would name one head by.
     #[arg(long, default_value_t = 0)]
     wide: usize,
-    /// Whether the generated rounds carry topics: `every` puts one on each, from eight names in
-    /// turn, so the stream reads a topic store of the live shape.
-    #[arg(long, value_enum, default_value_t = Filing::None, requires = "lines")]
-    topics: Filing,
+    /// How many slots of the generated lines are sealed again, as `migrate-scrub` seals a slot
+    /// written under older rules: shared evenly over the conversations, from each one's first
+    /// line, each a line of its own after the conversation's last.
+    #[arg(long, default_value_t = 0, requires = "lines")]
+    reseals: usize,
+    /// How many of the generated rounds carry a topic, the newest first, one each from eight
+    /// names in turn, so the stream reads a topic store of the live shape.
+    #[arg(long, default_value_t = 0, requires = "lines")]
+    topics: usize,
+    /// How many more proposals to file, in a conversation of their own, every one but each tenth
+    /// dismissed, so the inbox holds as many objects as a store a year old.
+    #[arg(long, default_value_t = 0)]
+    proposals: usize,
 }
 
-/// Which of the generated rounds carry a topic.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, clap::ValueEnum)]
-pub enum Filing {
-    /// None.
-    None,
-    /// Every one.
-    Every,
+impl Bulk {
+    /// The proposals, then the lines, then their topics: each filing reads a small store of
+    /// conversations.
+    fn write(&self, read: &crate::instance::Instance) -> anyhow::Result<()> {
+        bulk_proposals(read, self.proposals)?;
+        bulk_lines(
+            read,
+            &sizes(self.lines, self.conversations, self.wide),
+            self.sealed,
+            self.reseals,
+        )?;
+        bulk_topics(read, self.topics)
+    }
 }
 
 /// Each bulk conversation and how many lines it holds. With no `conversations`, half the `count`
@@ -1281,17 +1296,18 @@ fn sizes(count: usize, conversations: usize, wide: usize) -> Vec<(String, usize)
 /// The lines `sizes` names written to new conversations, each with its words locked under a key of its own
 /// as the box locks them: a model's answer of about 6 kB in three blocks and a person's question,
 /// alternating, in words outside ASCII and with digits, the text the scrub is slowest on;
-/// `wide-0` onwards, if any, hold their opening line alone. Each is sealed as `sealed` says.
+/// `wide-0` onwards, if any, hold their opening line alone. Each is sealed as `sealed` says, and
+/// `reseals` of their slots are sealed again.
 fn bulk_lines(
     read: &crate::instance::Instance,
     sizes: &[(String, usize)],
     sealed: Sealed,
+    reseals: usize,
 ) -> anyhow::Result<()> {
     use prodrome_core::event::Actor;
-    use suzatary_core::capability::Turn;
     use suzatary_core::secretary::line_event::LineEvent;
-    use suzatary_core::secretary::store::{ConversationId, Entry, Kind};
-    use suzatary_core::secretary::words::Words;
+    use suzatary_core::secretary::line_words::LineWords;
+    use suzatary_core::secretary::store::ConversationId;
 
     let count: usize = sizes.iter().map(|(_, size)| size).sum();
     if count == 0 {
@@ -1299,60 +1315,29 @@ fn bulk_lines(
     }
     let stores = read.conversation_stores();
     let conversations = stores.conversations();
-    let opened = |n: usize, at| Entry::Opened {
-        at,
-        title: Words::kept(format!("Bulk conversation {n}")),
-        model: "scripted/fixture".to_owned(),
-        kind: Kind::Topic,
-    };
     // Through the store itself first, which begins it if nothing has.
     let start = fpl::instant_of(SystemClock.now()) - Duration::seconds(i64::try_from(count)? + 60);
     suzatary_core::secretary::transcript::start(
         conversations,
         &ConversationId::new("bulk-0")?,
-        &opened(0, fpl::datetime_of(start)?),
+        &bulk_entry(0, 0, fpl::datetime_of(start)?),
     )?;
     let mut events: Vec<LineEvent> = Vec::new();
     let writer = Actor::new(suzatary_core::secretary::WRITES_AS.actor())?;
     let mut written = 0u32;
+    let mut resealing = reseals;
     for (n, (id, size)) in sizes.iter().enumerate() {
         let id = ConversationId::new(id.clone())?;
+        // Each conversation's share of what is left, so the reseals are spread evenly.
+        let mut share = resealing.div_ceil(sizes.len() - n);
+        let mut slots: Vec<(suzatary_core::secretary::locked_text::TextKey, LineWords)> =
+            Vec::new();
         // The first conversation's opening line is the store's own, above.
         for line in usize::from(n == 0)..*size {
             written += 1;
             // Every line a second after the one before, all before now, so none is dated in the future.
             let at = fpl::datetime_of(start + Duration::seconds(i64::from(written)))?;
-            let entry = if line == 0 {
-                opened(n, at)
-            } else if line % 2 == 1 {
-                Entry::Said {
-                    at,
-                    turn: Turn::Person {
-                        text: format!(
-                            "Question {line} sur le permis n° 4821, posée à nouveau — 確認してください。"
-                        ),
-                        references: Vec::new(),
-                        attachments: Vec::new(),
-                    },
-                    by: Some("ada".into()),
-                }
-            } else {
-                Entry::Said {
-                    at,
-                    turn: Turn::Model {
-                        text: [0, 1, 2]
-                            .map(|part| {
-                                format!(
-                                    "Réponse {line}, partie {part} : le registre a le formulaire du 25/10. "
-                                )
-                                .repeat(30)
-                            })
-                            .join("\n\n"),
-                        calls: Vec::new(),
-                    },
-                    by: None,
-                }
-            };
+            let entry = bulk_entry(n, line, at);
             let held = u32::try_from(line)?;
             let (event, keys) = sealed.write(
                 id.clone(),
@@ -1364,10 +1349,83 @@ fn bulk_lines(
             for key in &keys {
                 conversations.keys.set(&key.name(), key)?;
             }
+            if share > 0 {
+                let words = suzatary_core::secretary::line_shape::split(&entry)
+                    .1
+                    .unwrap_or_default();
+                let before = slots.len();
+                slots.extend(keys.into_iter().zip(words).take(share));
+                share -= slots.len() - before;
+            }
             events.push(event);
+        }
+        for (held, (key, words)) in (u32::try_from(*size)?..).zip(slots) {
+            written += 1;
+            let at = fpl::datetime_of(start + Duration::seconds(i64::from(written)))?;
+            let (event, opens) = LineEvent::reseal(
+                id.clone(),
+                at,
+                writer.clone(),
+                held,
+                key.name(),
+                key.name(),
+                &words,
+                conversations.entropy,
+            )?;
+            conversations.keys.set(&opens.name(), &opens)?;
+            events.push(event);
+            resealing -= 1;
         }
     }
     appended(conversations.lines, events)
+}
+
+/// Line `line` of the bulk conversation `n`, written at `at`: its opening, then a person's
+/// question and a model's answer of about 6 kB in three blocks, alternating.
+fn bulk_entry(
+    n: usize,
+    line: usize,
+    at: prodrome_core::literal::Datetime,
+) -> suzatary_core::secretary::store::Entry {
+    use suzatary_core::capability::Turn;
+    use suzatary_core::secretary::store::{Entry, Kind};
+    use suzatary_core::secretary::words::Words;
+    if line == 0 {
+        Entry::Opened {
+            at,
+            title: Words::kept(format!("Bulk conversation {n}")),
+            model: "scripted/fixture".to_owned(),
+            kind: Kind::Topic,
+        }
+    } else if line % 2 == 1 {
+        Entry::Said {
+            at,
+            turn: Turn::Person {
+                text: format!(
+                    "Question {line} sur le permis n° 4821, posée à nouveau — 確認してください。"
+                ),
+                references: Vec::new(),
+                attachments: Vec::new(),
+            },
+            by: Some("ada".into()),
+        }
+    } else {
+        Entry::Said {
+            at,
+            turn: Turn::Model {
+                text: [0, 1, 2]
+                    .map(|part| {
+                        format!(
+                            "Réponse {line}, partie {part} : le registre a le formulaire du 25/10. "
+                        )
+                        .repeat(30)
+                    })
+                    .join("\n\n"),
+                calls: Vec::new(),
+            },
+            by: None,
+        }
+    }
 }
 
 /// `events` appended to `store` in order, through a store in memory holding what `store`
@@ -1404,9 +1462,66 @@ where
     Ok(())
 }
 
-/// One topic on every round of the generated conversations, from eight names in turn, as a
-/// store whose rounds were filed under topics carries them.
-fn bulk_topics(read: &crate::instance::Instance) -> anyhow::Result<()> {
+/// `count` proposals filed in a conversation of their own, each an email to the counsel, every one
+/// but each tenth dismissed: the inbox's objects of a store a year old.
+fn bulk_proposals(read: &crate::instance::Instance, count: usize) -> anyhow::Result<()> {
+    use prodrome_core::event::Actor;
+    use suzatary_core::secretary::store::{ConversationId, Draft, Entry, Kind, Proposal, Reasons};
+    if count == 0 {
+        return Ok(());
+    }
+    let store = read.conversation_stores();
+    let conversations = store.conversations();
+    let inbox = read.inbox_store();
+    let id = ConversationId::new("bulk-proposals")?;
+    let now = SystemClock.now();
+    suzatary_core::secretary::transcript::start(
+        conversations,
+        &id,
+        &Entry::Opened {
+            at: now,
+            title: suzatary_core::secretary::words::Words::kept("Letters".to_owned()),
+            model: "scripted/fixture".to_owned(),
+            kind: Kind::Topic,
+        },
+    )?;
+    let owner = Actor::new(WRITER_ACTOR)?;
+    for n in 0..count {
+        let (_, object) = suzatary_core::secretary::filed::file(
+            conversations,
+            &inbox,
+            now,
+            suzatary_core::secretary::filed::Filing {
+                conversation: &id,
+                proposer: suzatary_core::secretary::proposer::Proposer::Secretary,
+                proposal: Proposal::Email(Draft {
+                    account: CAST.owner.email.to_owned(),
+                    to: vec![CAST.counsel.email.to_owned()],
+                    cc: Vec::new(),
+                    subject: format!("Le formulaire n° {n}"),
+                    body: format!("Bonjour, voici le formulaire n° {n} du 25/10."),
+                    attachments: Vec::new(),
+                }),
+                reasons: Reasons::new(
+                    "the counsel asked for the form",
+                    vec![format!("todo:life/{}", CAST.todos.urgent.id).parse()?],
+                )?,
+                serves: None,
+                revises: None,
+            },
+        )
+        .map_err(|refusal| anyhow::anyhow!("{}", refusal.message()))?;
+        if n % 10 != 0 {
+            suzatary_core::secretary::inbox::dismiss(&inbox, &object, &owner, now, "sent by hand")
+                .map_err(|refusal| anyhow::anyhow!("{}", refusal.message()))?;
+        }
+    }
+    Ok(())
+}
+
+/// One topic on each of the newest `count` rounds of the generated conversations, from eight
+/// names in turn, as a store whose rounds were filed under topics carries them.
+fn bulk_topics(read: &crate::instance::Instance, count: usize) -> anyhow::Result<()> {
     use prodrome_core::event::Actor;
     use suzatary_core::secretary::topics::targets::rounds;
     use suzatary_core::secretary::topics::topic::Topic;
@@ -1415,22 +1530,25 @@ fn bulk_topics(read: &crate::instance::Instance) -> anyhow::Result<()> {
     ];
     let listed = suzatary_core::secretary::list(read.conversation_stores().conversations())
         .map_err(|refusal| anyhow::anyhow!("{}", refusal.message()))?;
+    if count == 0 {
+        return Ok(());
+    }
     let topics = read.secretary.topics.open();
     topics.begin()?;
     let actor = Actor::new(suzatary_core::secretary::WRITES_AS.actor())?;
     let at = SystemClock.now();
     let names = NAMES.map(Topic::new);
     let mut events = Vec::new();
-    for stored in listed
+    let generated = listed
         .iter()
         .filter(|stored| stored.id.as_str().starts_with("bulk-"))
-    {
-        for round in rounds(stored) {
-            let topic = names[events.len() % NAMES.len()].clone()?;
-            events.push(prodrome_core::tags::membership::added::<
-                suzatary_core::secretary::topics::reading::Topics,
-            >(round.target(), topic, at, actor.clone()));
-        }
+        .flat_map(rounds)
+        .take(count);
+    for round in generated {
+        let topic = names[events.len() % NAMES.len()].clone()?;
+        events.push(prodrome_core::tags::membership::added::<
+            suzatary_core::secretary::topics::reading::Topics,
+        >(round.target(), topic, at, actor.clone()));
     }
     appended(&topics.memberships, events)
 }

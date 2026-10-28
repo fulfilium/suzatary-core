@@ -74,14 +74,14 @@ real browser); each section says which.
   store's pull is kept standing where the question it answers stood, so its
   era is read against that frontier, and a row whose frontier alone moved is
   a step (`stores.same`), since the next pull asks from it.
-- **`stores.T`** (`web/src/prodrome/stores.ts`): the tab's replicas of the
-  inbox and the lines, one `locked.Row` per store (its `Replica` and the keys
-  of its words, `web/src/prodrome/locked.ts`), which the box alone writes. A
-  `Held` event joins by the row's join (§3.18); one that
-  adds nothing (the same objects, heads and policy, `stores.same`) returns the
+- **A store's row** (`web/src/prodrome/locked.ts`): every store the tab holds
+  (the inbox, the lines and the two topic stores) is one `locked.Row` in the
+  core's worker, its `Replica` and the keys of its words (none for a store
+  that locks no words), each held by one engine (`engine.ts`, the set of
+  them `storeset.ts`). A `Held` event joins by the row's join (§3.18); one that
+  adds nothing (the same objects, heads and policy, `replica.same`) returns the
   same value, and one that changes only the policy is a step
-  (`web/test/stores.test.ts`). `storesync.ts` is its
-  shell (IndexedDB, the pull by heads, each store's stream) and asks every
+  (`web/test/stores.test.ts`). The page asks every
   reading of the core's worker (`questions.ts`), which holds the stores by
   what changed and reads the lines through a memoised fold: the memoised
   reading is the plain one (`app/core/tests/held_lines.rs`
@@ -1553,9 +1553,9 @@ under in every larger union and never wins.
   "law: in every order, the device never holds the box's later word beside
   an object it no longer holds"; `e2e/epoch.test.ts`.
 - **A store is pulled by pieces, and only for a page that reads it.** The
-  boot never pulls the lines: `storesync` restores and pulls a store the
-  first time something asks for it (`reading` and `sync` both, `proposals`
-  the inbox alone), and a store this device never landed is waited for
+  boot never pulls the lines: the core's worker (`storeset`) restores and
+  pulls a store the first time a question reads it (every reading and `Pull`
+  all of them, `Proposals` the inbox alone), and a store this device never landed is waited for
   until it is whole, so a page never reads part of it, nor reads nothing as
   empty. The Inbox badge, on every page the Inbox's included, is the box's
   count (`GET /api/waiting`), and the "Needs you" popup reads the proposals
@@ -1571,7 +1571,7 @@ under in every larger union and never wins.
   (`pieces.Ended`: `Whole`, `Stalled`, `Cut`). A pull that
   did not end whole is asked again after a wait that doubles to a minute,
   and sooner by a stream frame naming an object the tab does not hold,
-  landed or not (`stores.behind`). A piece's read waits while bytes come
+  landed or not (`replica.behind`). A piece's read waits while bytes come
   (`http.get` with a `Silence` bound), since one object may be larger than a
   piece: a verb's answer is stored at most 64 KiB, but a line written before
   that bound is not rewritten. A piece joined to what the tab holds holds everything it
@@ -1591,14 +1591,15 @@ under in every larger union and never wins.
   app…"; `e2e/lines.test.ts` "the list draws and the badge is
   counted with no request for the lines…".
 - **The lines are a skeleton, and their content is fetched by name.** The
-  core's worker pulls, lands and reads them (`linesync.ts`); the page says
+  core's worker pulls, lands and reads them (`linesync.ts`, the lines'
+  instance of `engine.ts`, whose content is named rather than carried); the page says
   when it reads them and hears what moved: which conversations a landing
   touched (a line come or gone, a key of their words given or taken), or all
   of them after a reset or a later epoch, heard once a frame, so an open
   conversation reads again only when its own lines moved (`touched.test.ts`). The lines' row holds the skeleton
   (`GET /api/stores/lines/skeleton`, pulled by the same pieces), kept one
   node and one key per row in the database's `lines` store beside a head row
-  (`linerows.ts`), so a landing writes only what arrived; version 8 drops every earlier
+  (`noderows.ts`, which keeps every store so, each in its own object store), so a landing writes only what arrived. Each store's head row records the format its rows were written in (`noderows.Format`); a restore that finds another drops what those rows found (the lines: their rendered blocks), empties the store to a row of the generation after and takes it again from the box, while the content by name stays, so a change of a node's form moves the store's format and never the database's version (`noderows.test.ts` "rows of another format are dropped at restore…"); version 8 drops every earlier
   skeleton, whose nodes carry no step, with its keys, clears the rendered
   blocks those keys could find (`RENDERED_OWED`), and pulls the skeleton
   again. It is a replica of nodes: each object's name, what it rests
@@ -1606,7 +1607,7 @@ under in every larger union and never wins.
   literal is kept by its name in the database's `content` store
   (`content.ts`), taken only when its bytes hash to the name asked for in
   the same place, so the device holds the box's bytes and nothing else. A
-  reading is whole or it is not made (`lines.need`): the list and a search
+  reading is whole or it is not made (`engine.over`): the list and a search
   read every line, some conversations (a window's one, the stream's drawn
   ones) read their own lines and what they rest on, and a reading whose lines are not all held fetches them (`GET
   /api/stores/lines/content?hashes=`, at most 64 names and a megabyte an

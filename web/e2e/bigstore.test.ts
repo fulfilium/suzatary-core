@@ -1,8 +1,8 @@
 /**
- * A LARGE STORE OF LINES DOES NOT HOLD THE PAGE'S THREAD: the lines' server holds a generated store
- * (`suzatary-dev fixture-chain --lines`, 1,500 lines by default, `SUZATARY_E2E_LINES` to change it, spread over
- * `SUZATARY_E2E_CONVERSATIONS` conversations when it is set), and the core's worker pulls and reads it, so the stream, a
- * conversation and a new line are drawn with no task on the page's thread over 100 ms. The scene records every long
+ * LARGE STORES DO NOT HOLD THE PAGE'S THREAD: the lines' server holds generated stores of the live shape
+ * (`suzatary-dev fixture-chain`, as `scripts/web-e2e.sh` sets it: about 14,500 line objects over 100 conversations
+ * with reseals, 730 inbox objects and 900 topic objects), and the core's worker pulls, keeps and reads every store, so
+ * the stream, a conversation and a new line are drawn with no task on the page's thread over 100 ms. The scene records every long
  * task (over 50 ms) the browser reports, cold (a device holding nothing) and warm (the same device loaded again).
  *
  * The store's words are outside ASCII and hold digits, the text the scrub is slowest on. A warm load of the stream
@@ -24,6 +24,16 @@ import { writeFileSync } from "node:fs"
 import marks from "../src/chat/marks"
 import wait from "../src/wire/wait"
 import { PHONE, SIGNED_POST, suite, trustThisDevice } from "./harness"
+
+type Shape = { readonly lines: number; readonly conversations: number; readonly reseals: number; readonly proposals: number; readonly topics: number }
+// The stores' shape as `scripts/web-e2e.sh` hands it to the fixture.
+const SHAPE: Shape = {
+  lines: Number(process.env["SUZATARY_E2E_LINES"] ?? "13000"),
+  conversations: Number(process.env["SUZATARY_E2E_CONVERSATIONS"] ?? "100"),
+  reseals: Number(process.env["SUZATARY_E2E_RESEALS"] ?? "1500"),
+  proposals: Number(process.env["SUZATARY_E2E_PROPOSALS"] ?? "400"),
+  topics: Number(process.env["SUZATARY_E2E_TOPICS"] ?? "900"),
+}
 
 const required = (name: string): string => {
   const v = process.env[name]
@@ -95,8 +105,7 @@ app.scene("a store of many lines is listed, opened and grown with no task on the
     const line = await phase(`document.querySelectorAll(".turns .turn-model").length > ${before} && ${placed} > ${was}`, since)
     const warm = await visit("warm")
     const measured = {
-      lines: Number(process.env["SUZATARY_E2E_LINES"] ?? "1500"),
-      conversations: Number(process.env["SUZATARY_E2E_CONVERSATIONS"] ?? "0"),
+      ...SHAPE,
       rate: RATE,
       cold,
       line,
@@ -143,8 +152,9 @@ const DECODED = (ids: readonly string[]): string => `(async () => {
   return { decoded: m.decodes(), needed, all: nodes.length }
 })()`
 
-app.scene("a warm load of the conversations draws them from the device, with every read of the box held", async () => {
+app.scene("a warm load of the conversations draws them from the device, with every read of the box held and no task on the page's thread over 100 ms", async () => {
   await trustThisDevice(app.page, LINES_BASE, LINES_INSTANCE)
+  const unobserve = await app.page.beforeEveryDocument(OBSERVE)
   await app.page.navigate(`${LINES_BASE}/#/secretary`)
   await app.page.waitFor(BULK, { timeout: 600000 })
   // The cold load done: the device holds the lines, and nothing it asked for is still coming.
@@ -155,19 +165,22 @@ app.scene("a warm load of the conversations draws them from the device, with eve
   journal.mark("warm load")
   // Every request to the box's API is held until the stream has drawn, so what draws is drawn from the device.
   const release = await app.page.holdRequests(["/api/"])
-  const drawn = await (async (): Promise<{ readonly ms: number; readonly held: readonly string[]; readonly cost: { decoded: number; needed: number; all: number } }> => {
+  const drawn = await (async (): Promise<{ readonly ms: number; readonly longest: number; readonly held: readonly string[]; readonly cost: { decoded: number; needed: number; all: number } }> => {
     try {
+      await app.page.throttle(RATE)
       await app.page.reload()
-      await app.page.waitFor(BULK)
-      const ms = await app.page.evaluate<number>(`performance.now()`)
+      const draw = await phase(BULK, 0)
       const ids = await app.page.evaluate<string[]>(DRAWN)
-      return { ms, held: app.page.heldUrls(), cost: await app.page.inWorker<{ decoded: number; needed: number; all: number }>("prodromework", DECODED(ids)) }
+      return { ms: draw.ms, longest: draw.longest, held: app.page.heldUrls(), cost: await app.page.inWorker<{ decoded: number; needed: number; all: number }>("prodromework", DECODED(ids)) }
     } finally {
+      await app.page.throttle(1)
       await release()
+      await unobserve()
     }
   })()
+  console.log(JSON.stringify({ ...SHAPE, rate: RATE, warm: drawn.ms, longest: drawn.longest, ...drawn.cost }))
   assert.ok(drawn.ms < wait.MS / 3, `the stream drew ${Math.round(drawn.ms)} ms after the document started (bound ${wait.MS / 3})`)
-  console.log(JSON.stringify({ warm: drawn.ms, ...drawn.cost }))
+  assert.ok(drawn.longest <= LONGEST_MS, `the warm load held the page's thread ${drawn.longest} ms at once (at most ${LONGEST_MS})`)
   assert.ok(drawn.cost.decoded <= drawn.cost.needed, `the warm load decoded ${drawn.cost.decoded} prints; its rounds need ${drawn.cost.needed} of ${drawn.cost.all}`)
   assert.ok(drawn.held.length > 0, `the box was asked and answered nothing before the stream drew:\n${journal.lines().join("\n")}`)
 })

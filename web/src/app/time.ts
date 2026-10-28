@@ -60,6 +60,17 @@ export namespace time {
     return made
   }
 
+  // A name is a zone only where this browser's Intl reads it as one; the face it makes is the one every reading of the
+  // zone uses after, so the browser loads the zone's rules once.
+  export const zoneOf = (name: string): Zone | null => {
+    try {
+      face({ name })
+      return { name }
+    } catch {
+      return null
+    }
+  }
+
   // The owner's wall clock at `t`, as an instant whose UTC fields read it.
   const wall = (z: Zone, t: number): number => {
     const parts = face(z).formatToParts(t)

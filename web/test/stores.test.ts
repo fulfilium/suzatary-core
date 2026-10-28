@@ -1,13 +1,13 @@
-// A store's replica in the tab steps by the replicas' one join, and a step that adds nothing wakes nobody.
+// A store's row in the core's worker steps by the rows' one join (`locked.taken`), and a step that adds nothing wakes
+// nobody.
 
 import { test } from "node:test"
 import assert from "node:assert/strict"
 import { readFileSync } from "node:fs"
 
-import stores from "../src/prodrome/stores"
 import locked from "../src/prodrome/locked"
 import type { Replica, Word } from "../src/prodrome/replica"
-import { NOTHING, boxHeadsOf, headsOf, parentsOf, pulled, replicaOf, reset, said, untrustedOf } from "../src/prodrome/replica"
+import { NOTHING, boxHeadsOf, headsOf, overtaken, parentsOf, pulled, replicaOf, reset, said, same, untrustedOf } from "../src/prodrome/replica"
 import type { StoredObject } from "../src/wire/generated/wire"
 import { forAll, type Rng } from "./gen"
 import { KNOWN, held as prodromes } from "./held"
@@ -30,17 +30,15 @@ const replica = (r: Rng): Replica => {
   return pulled(NOTHING, { objects, heads: headsOf(objects), untrusted: [], root: null, geneses: prodromes(objects), epoch: 1, ...KNOWN }, 1 + r.int(1000))
 }
 
-const step = stores.step
-// The inbox's replica holds objects and locks no words; the lines' row steps by the same join over nodes, with the keys
-// of their words beside it (`stores.taken`).
-const held = (name: "inbox", replica: Replica): stores.Event => ({ type: "Held", name, replica })
+// Every store's row steps by one join, a store that locks no words holding no keys.
+const NONE = locked.none<StoredObject>()
+const step = (row: locked.Row<StoredObject>, replica: Replica): locked.Row<StoredObject> => locked.taken(row, { type: "Held", row: locked.of(replica) })
 
 test("law: a step that adds nothing wakes nobody", () => {
   forAll(30, r => {
-    const name = "inbox" as const
-    const t = step(stores.NONE, held(name, replica(r)))
-    assert.equal(step(t, { type: "Held", name, replica: t[name] }), t)
-    assert.equal(step(t, held(name, NOTHING)), t)
+    const t = step(NONE, replica(r))
+    assert.equal(step(t, t.replica), t)
+    assert.equal(step(t, NOTHING), t)
   })
 })
 
@@ -50,16 +48,16 @@ test("law: a refusal that replaces another, of another object or for another rea
     const refused = (hash: string, reason: string): Replica =>
       replicaOf({ ...base.held, refused: [{ hash, reason, kind: "final" }] })
     const one = refused("a".repeat(64), "not trusted")
-    assert.ok(stores.same(one, refused("a".repeat(64), "not trusted")))
-    assert.ok(!stores.same(one, refused("b".repeat(64), "not trusted")), "another object refused")
-    assert.ok(!stores.same(one, refused("a".repeat(64), "too large")), "another reason")
+    assert.ok(same(one, refused("a".repeat(64), "not trusted")))
+    assert.ok(!same(one, refused("b".repeat(64), "not trusted")), "another object refused")
+    assert.ok(!same(one, refused("a".repeat(64), "too large")), "another reason")
   })
 })
 
 test("law: a key the box gave the lines is a step, though no object moved", () => {
   forAll(30, r => {
     const row = locked.of(replica(r))
-    const next = stores.taken(row, { type: "Held", row: locked.of(row.replica, { ["a".repeat(64)]: "00" }) })
+    const next = locked.taken(row, { type: "Held", row: locked.of(row.replica, { ["a".repeat(64)]: "00" }) })
     assert.notEqual(next, row)
     assert.deepEqual(locked.names(next.keys), ["a".repeat(64)])
   })
@@ -69,24 +67,23 @@ test("law: a forgotten key leaves the lines' row, and forgetting what it does no
   forAll(30, r => {
     const k = "a".repeat(64)
     const row = locked.of(replica(r), { [k]: "00" })
-    assert.deepEqual(locked.names(stores.taken(row, { type: "Forgot", keys: [k] }).keys), [])
-    assert.equal(stores.taken(row, { type: "Forgot", keys: ["b".repeat(64)] }), row)
+    assert.deepEqual(locked.names(locked.taken(row, { type: "Forgot", keys: [k] }).keys), [])
+    assert.equal(locked.taken(row, { type: "Forgot", keys: ["b".repeat(64)] }), row)
   })
 })
 
 test("law: a policy the box changed with no new object is a step, and the later contact's policy is the one kept", () => {
   forAll(30, r => {
-    const name = "inbox" as const
-    const t = step(stores.NONE, held(name, replica(r)))
-    const was = t[name]
+    const t = step(NONE, replica(r))
+    const was = t.replica
     const w = said<Pick<Word, "heads" | "untrusted" | "root" | "fetchedAt" | "geneses">>(was.box, { heads: [], untrusted: [], root: null, fetchedAt: 0, geneses: [] }, w => w)
     const later = pulled(was, { objects: [], heads: [...w.heads], untrusted: [...w.untrusted, "scout"], root: w.root, geneses: [...w.geneses], epoch: 1, ...KNOWN }, w.fetchedAt + 1)
-    const next = step(t, held(name, later))
+    const next = step(t, later)
     assert.notEqual(next, t, "the policy moved, so the reading must")
-    assert.deepEqual(untrustedOf(next[name]), untrustedOf(later))
-    assert.ok(!stores.same(was, later))
+    assert.deepEqual(untrustedOf(next.replica), untrustedOf(later))
+    assert.ok(!same(was, later))
     const reversed = replicaOf({ ...later.held, words: later.held.words.map(v => ({ ...v, untrusted: [...v.untrusted].reverse() })) })
-    assert.ok(stores.same(later, reversed), "a policy is a set")
+    assert.ok(same(later, reversed), "a policy is a set")
   })
 })
 
@@ -114,13 +111,13 @@ test("a replica overtaken by the box's later epoch starts over and holds only wh
   const heard = locked.of(pulled(NOTHING, word(before, 1), 1), { k: "00" })
   // What the box answers it after the migration: what moved since its heads, in a later epoch.
   const answer = word(after, 2, before)
-  assert.ok(stores.overtaken([heard.replica], answer))
+  assert.ok(overtaken([heard.replica], answer))
   // Joined as any answer is, it keeps the rewritten tip beside its image: two heads where the box holds one.
   const forked = pulled(heard.replica, answer, 2)
   assert.ok(forked.heads.includes(tip) && forked.heads.includes(again), "the fork the reset prevents")
   // Started over and asked again of nothing, it is the box's set.
   const fresh = locked.reset(heard)
-  assert.equal(stores.overtaken([fresh.replica], word(after, 2)), false, "a replica that heard nothing is not overtaken")
+  assert.equal(overtaken([fresh.replica], word(after, 2)), false, "a replica that heard nothing is not overtaken")
   const whole = locked.of(pulled(fresh.replica, word(after, 2), 3))
   assert.deepEqual(new Set(whole.replica.objects.map(o => o.hash)), new Set(after.map(o => o.hash)))
   assert.ok(!whole.replica.heads.includes(tip))
@@ -129,7 +126,7 @@ test("a replica overtaken by the box's later epoch starts over and holds only wh
   assert.equal(locked.join(whole, heard), whole)
   assert.equal(locked.join(heard, whole), whole)
   // And a later answer of the same epoch is no reason to start over again.
-  assert.equal(stores.overtaken([whole.replica], word(after, 2)), false)
+  assert.equal(overtaken([whole.replica], word(after, 2)), false)
 })
 
 test("law: only an answer of a later epoch than every word heard overtakes a replica", () => {
@@ -137,16 +134,15 @@ test("law: only an answer of a later epoch than every word heard overtakes a rep
     const held = replica(r)
     const epoch = held.held.words[0]?.epoch ?? 0
     const at = (e: number) => ({ objects: [], heads: [...(boxHeadsOf(held) ?? [])], untrusted: [], root: null, geneses: prodromes(held.objects), epoch: e, ...KNOWN })
-    assert.equal(stores.overtaken([held], at(epoch)), false, "the same epoch")
-    assert.equal(stores.overtaken([held], at(epoch - 1)), false, "an earlier one, which is the box gone back")
-    assert.equal(stores.overtaken([held], at(epoch + 1 + r.int(5))), held.held.words.length > 0)
-    assert.equal(stores.overtaken([NOTHING], at(epoch + 1)), false, "nothing heard")
+    assert.equal(overtaken([held], at(epoch)), false, "the same epoch")
+    assert.equal(overtaken([held], at(epoch - 1)), false, "an earlier one, which is the box gone back")
+    assert.equal(overtaken([held], at(epoch + 1 + r.int(5))), held.held.words.length > 0)
+    assert.equal(overtaken([NOTHING], at(epoch + 1)), false, "nothing heard")
   })
 })
 
 test("a reset is a step even of a row that holds nothing, so a pull asks of the reset", () => {
-  const name = "inbox" as const
-  const t = step(stores.NONE, held(name, reset(NOTHING)))
-  assert.notEqual(t, stores.NONE)
-  assert.equal(t[name].generation, 1)
+  const t = step(NONE, reset(NOTHING))
+  assert.notEqual(t, NONE)
+  assert.equal(t.replica.generation, 1)
 })
