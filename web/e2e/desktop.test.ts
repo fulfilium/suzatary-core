@@ -104,7 +104,9 @@ app.scene("the panel's toggle keeps its place, a closed panel takes no width, an
   assert.deepEqual(await box(".panelcollapse"), open, "the toggle is where it was");
   assert.equal((await box(".secretarypanel")).width, 0, "a closed panel takes no width");
   assert.equal(await app.page.evaluate<boolean>(`document.activeElement === document.querySelector(".panelcollapse")`), true, "the toggle keeps the focus");
+  // The panel's column closes before the page's height settles, so wait for the height itself.
   const fits = `document.documentElement.scrollHeight <= innerHeight`;
+  await app.page.waitFor(fits);
   assert.equal(await app.page.evaluate<boolean>(fits), true, "closed, the page does not scroll; its panes do");
   await app.page.click(".panelcollapse");
   await app.page.waitFor(`document.querySelector(".panelcollapse").getAttribute("aria-expanded") === "true"`);
