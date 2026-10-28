@@ -3,5 +3,4 @@
 # never their titles, since this file is public. No crate compiles it: the build hands its text
 # to the binary as `SUZATARY_RELEASE`, for `GET /api/about` and `--version`.
 
-version = "2.1.33"
-completes = ["triagememory"]
+version = "2.1.34"
