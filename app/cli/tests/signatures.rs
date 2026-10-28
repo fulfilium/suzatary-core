@@ -12,9 +12,10 @@ use std::sync::Arc;
 use common::Fakes;
 use prodrome_core::dag::Dag;
 use prodrome_core::event::{Envelope, Hash, canonical_envelope, mk_completed, seal_hash};
+use prodrome_core::sign::Checks;
 use prodrome_core::sign::{Registrar, Secret};
 use suzatary_core::record::TodoEvent;
-use suzatary_core::signatures::{BoxKeys, Enrolment, KEPT_CHECKS, Trust, Verified};
+use suzatary_core::signatures::{BoxKeys, Enrolment, KEPT_CHECKS, Trust};
 use suzatary_core::store::Prodrome as _;
 use suzatary_core::store::Reads as _;
 
@@ -1278,7 +1279,7 @@ fn the_door_s_reading_by_chain_size() {
         let history: Dag<TodoEvent> = objects.into_iter().collect();
         let built = timed.elapsed();
         let timed = std::time::Instant::now();
-        let _cold = Trust::through(&history, &roots(), &Verified::new(KEPT_CHECKS));
+        let _cold = Trust::through(&history, &roots(), &Checks::new(KEPT_CHECKS));
         let cold = timed.elapsed();
         Trust::held(&fakes.chain, &roots()).expect("reads");
         write(written);

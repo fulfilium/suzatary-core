@@ -8,9 +8,9 @@
 //!
 //! [`Trust`] is that reading, one fold over the object set: what is proven, which is the
 //! Prodrome's [`Proof`] exactly (a law, tested), WHY something is not ([`Unproven`]) and what a
-//! key's standing is ([`KeyStanding`]). Each signature's check in it is read through
-//! [`Verified`], the check tabulated by the signature's name, so a history read again checks
-//! only what it gained. History written before the deployment adopted
+//! key's standing is ([`KeyStanding`]). Each signature's check in it is read through the
+//! Prodrome's [`Checks`](prodrome_core::sign::Checks), the check tabulated by the signature's
+//! name, so a history read again checks only what it gained. History written before the deployment adopted
 //! signatures is not unproven but EARLIER: the root's signed `Snapshot` of each chain, its
 //! [`epoch`], attests what the box held then, and everything beneath it reads
 //! [`Provenance::Predates`].
@@ -31,7 +31,6 @@ mod requested;
 mod signers;
 mod trust;
 mod unproven;
-mod verified;
 
 #[cfg(any(test, feature = "nothing"))]
 pub use asking::scene;
@@ -55,9 +54,8 @@ pub use registry::{
 pub use request::{WINDOW_SECONDS, body_digest, is_nonce, request_name};
 pub use requested::{Answer, Requested};
 pub use signers::Signers;
-pub use trust::Trust;
+pub use trust::{KEPT_CHECKS, Trust};
 pub use unproven::Unproven;
-pub use verified::{KEPT_CHECKS, Verified};
 
 #[cfg(test)]
 mod tests;

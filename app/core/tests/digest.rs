@@ -1503,7 +1503,7 @@ proptest! {
             let (first, count) = handle.split_once('+').expect("first+lines");
             let first: usize = first.parse().expect("a line");
             let span = first..first + count.parse::<usize>().expect("a count");
-            let nodes = digest.cover(span.clone()).expect("a handle the reading printed names lines");
+            let nodes = digest.tree().expect("a tree").cover(span.clone()).expect("a handle the reading printed names lines");
             prop_assert_eq!(nodes.len(), 1, "a printed handle names one node");
             let answer = suzatary_core::secretary::told::zoom(&reading, &handle, |_| true).expect("opens");
             let said = serde_json::to_string_pretty(&answer).expect("prints");

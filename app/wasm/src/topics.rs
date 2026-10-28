@@ -3,15 +3,13 @@
 //! events for the replicas' `append`. The box plans with the same functions, so a tab writing
 //! offline writes what the box would write holding the same objects.
 //!
-//! The replicas are classes of their own rather than the Prodrome's `schema!` exports: a
-//! membership's key is a pair, which that macro's register readings cannot name, and no page
-//! reads a topic store's registers but through [`TopicReading`].
+//! The replicas are the Prodrome's `schema!` exports at the two stores' schemas. A page reads
+//! the topics through [`TopicReading`].
 
 use prodrome_core::event::{Actor, canonical};
 use prodrome_core::fpl::datetime_of;
 use prodrome_core::literal::Datetime;
 use prodrome_wasm_exports::wire::parse_instant;
-use prodrome_wasm_exports::{Replica, thrown};
 use suzatary_core::secretary::topics::reading::AliasEvent;
 use suzatary_core::secretary::topics::reading::MembershipEvent;
 use suzatary_core::secretary::topics::reading::Reading;
@@ -21,45 +19,8 @@ use wasm_bindgen::prelude::*;
 
 use crate::{json, refused};
 
-macro_rules! replica {
-    ($name:ident = $schema:ty) => {
-        #[doc = concat!("A replica of the store at `", stringify!($schema), "`.")]
-        #[wasm_bindgen]
-        pub struct $name(Replica<$schema>);
-
-        #[wasm_bindgen]
-        impl $name {
-            /// The objects, `[{hash, text}]`, read once.
-            #[wasm_bindgen(constructor)]
-            pub fn new(objects: &str) -> Result<$name, JsError> {
-                Replica::of(objects).map($name).map_err(refused)
-            }
-
-            /// The objects' tips, and each prodrome's heads by its genesis.
-            pub fn tips(&self) -> Result<String, JsError> {
-                thrown(prodrome_wasm_exports::tips(&self.0))
-            }
-
-            /// What a replica holding `tips` (a JSON array of names) lacks, in causal order.
-            pub fn since(&self, tips: &str) -> Result<String, JsError> {
-                thrown(prodrome_wasm_exports::since(&self.0, tips))
-            }
-
-            /// `event`, its print, sealed into this replica as a `Change` over its own fold:
-            /// `{hash, objects}`, the objects the box lacks of it.
-            pub fn append(
-                &mut self,
-                event: &str,
-                genesis: Option<String>,
-            ) -> Result<String, JsError> {
-                thrown(prodrome_wasm_exports::append(&mut self.0, event, genesis))
-            }
-        }
-    };
-}
-
-replica!(Memberships = MembershipEvent);
-replica!(TopicAliases = AliasEvent);
+prodrome_wasm_exports::schema!(Memberships = MembershipEvent);
+prodrome_wasm_exports::schema!(TopicAliases = AliasEvent);
 
 /// The topics both classes' objects read as, read once.
 #[wasm_bindgen]

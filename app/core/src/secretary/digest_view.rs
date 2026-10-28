@@ -94,7 +94,7 @@ pub fn opened(
     handle: &str,
     reads: fn(&Label) -> bool,
 ) -> Option<(Label, Vec<Shown>)> {
-    let nodes = digest.cover(span_of(handle)?)?;
+    let nodes = digest.tree()?.cover(span_of(handle)?)?;
     let beneath: Vec<&Node<Label>> = match nodes.as_slice() {
         [node] => {
             let mut node = *node;

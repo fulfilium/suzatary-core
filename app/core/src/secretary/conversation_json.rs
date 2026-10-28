@@ -10,8 +10,12 @@ use crate::secretary::line_event::{LineEvent, LineVocabulary};
 use prodrome_core::fold::sole::Only;
 
 impl Json for LineEvent {
-    fn key_field(_: &LineVocabulary) -> &'static str {
-        "conversation"
+    fn key_fields(_: &LineVocabulary) -> Vec<&str> {
+        vec!["conversation"]
+    }
+
+    fn key_values(key: &<Self as Schema>::Key) -> Vec<Value> {
+        vec![Value::from(key.as_ref())]
     }
 
     fn register(_: &LineVocabulary, _: Only) -> &'static str {

@@ -290,8 +290,12 @@ impl Tab {
             .frontiers
             .answer(KEY, &Since::Frontier(token), &dag)
             .expect("reads");
-        let Reached::Known(reached) = lacking.reached() else {
-            return Err(TestCaseError::fail("the answer's frontier is recorded"));
+        let reached: BTreeSet<prodrome_core::event::Hash> = match lacking.reached() {
+            Reached::Everything => dag.objects().keys().cloned().collect(),
+            Reached::Known(reached) => reached.clone(),
+            Reached::Unknown => {
+                return Err(TestCaseError::fail("the answer's frontier is recorded"));
+            }
         };
         prop_assert!(
             reached.is_subset(&self.device.held()),

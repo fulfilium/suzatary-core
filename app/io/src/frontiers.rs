@@ -152,8 +152,8 @@ mod tests {
         );
     }
 
-    /// A frontier recorded by one process reads back in the next, and a file whose tips are not
-    /// its name's reads as unknown.
+    /// A frontier recorded by one process reads back in the next, as every object where its tips
+    /// are the store's, and a file whose tips are not its name's reads as unknown.
     #[test]
     fn a_frontier_outlives_the_process_that_recorded_it() {
         let dir = tempfile::tempdir().expect("a scratch dir");
@@ -176,10 +176,7 @@ mod tests {
                 .reached()
                 .clone()
         };
-        assert_eq!(
-            reached(open(dir.path().to_path_buf())),
-            Reached::Known([name].into())
-        );
+        assert_eq!(reached(open(dir.path().to_path_buf())), Reached::Everything);
         std::fs::write(
             dir.path().join("store-topics").join(token.as_str()),
             format!("{}\n", "b".repeat(64)),

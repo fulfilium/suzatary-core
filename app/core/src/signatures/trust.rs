@@ -6,9 +6,9 @@ use prodrome_core::event::{Actor, Envelope, Hash};
 use prodrome_core::memo::{self, Key};
 use prodrome_core::registers::Genesis;
 use prodrome_core::schema::Schema;
-use prodrome_core::sign::{PublicKey, Registrar, Signed};
+use prodrome_core::sign::{Checks, PublicKey, Registrar, Signed};
 
-use super::{KeyStanding, Provenance, Unproven, Verified};
+use super::{KeyStanding, Provenance, Unproven};
 use crate::store::{Prodrome, StoreError};
 use crate::table::Table;
 
@@ -16,6 +16,14 @@ use crate::table::Table;
 pub const KEPT_READINGS: usize = 8;
 
 static READINGS: LazyLock<Table<Arc<Trust>>> = LazyLock::new(|| Table::new(KEPT_READINGS));
+
+/// How many signature checks a process keeps: twenty times a chain of a few thousand objects'
+/// signatures. A history holding more is read correctly and checks again what was dropped.
+pub const KEPT_CHECKS: usize = 1 << 16;
+
+/// This process's table of signature checks, the Prodrome's [`Checks`]. It is no input of any
+/// reading, since it cannot change one, so no reader is handed it.
+static CHECKS: LazyLock<Checks> = LazyLock::new(|| Checks::new(KEPT_CHECKS));
 
 /// THE READING OF A HISTORY'S SIGNATURES, as a deployment reads them: what is proven, every
 /// key's standing, the epochs and what lies beneath them, and why an object left out of the
@@ -30,9 +38,9 @@ static READINGS: LazyLock<Table<Arc<Trust>>> = LazyLock::new(|| Table::new(KEPT_
 /// ```
 ///
 /// and [`Trust::proves`] is `Proof::of` exactly (a law, tested over generated histories). It is
-/// read here, in ONE fold over the objects, because each signature's check is asked of
-/// [`Verified`], which `Proof::of` cannot be handed: so a history read again costs the checks
-/// of the signatures it gained.
+/// read here, in ONE fold over the objects, with each signature's check asked of a table of
+/// [`Checks`], as `Proof::through` asks it: so a history read again costs the checks of the
+/// signatures it gained.
 ///
 /// A FUNCTION OF THE OBJECT SET (SPEC law 42): every answer is a question about which objects
 /// exist and what each rests on, so two replicas holding the same objects read the same trust,
@@ -66,10 +74,10 @@ struct Signature {
 impl Trust {
     /// The trust `dag`'s objects give, its key objects counted as `registrar` says (the
     /// deployment's root, or anyone's, which is how `verify` reads them), each signature checked
-    /// through this process's [`Verified`].
+    /// through this process's table of [`Checks`].
     #[must_use]
     pub fn of<E: Schema>(dag: &Dag<E>, registrar: &Registrar) -> Trust {
-        Trust::through(dag, registrar, Verified::process())
+        Trust::through(dag, registrar, &CHECKS)
     }
 
     /// The trust a chain's store holds now, kept by its heads: a chain that has not moved is
@@ -95,9 +103,9 @@ impl Trust {
         Ok(trust)
     }
 
-    /// [`Trust::of`], each signature checked through `verified`.
+    /// [`Trust::of`], each signature checked through `checks`.
     #[must_use]
-    pub fn through<E: Schema>(dag: &Dag<E>, registrar: &Registrar, verified: &Verified) -> Trust {
+    pub fn through<E: Schema>(dag: &Dag<E>, registrar: &Registrar, checks: &Checks) -> Trust {
         let mut signatures: BTreeMap<Hash, Vec<Signature>> = BTreeMap::new();
         for (name, object) in dag.objects() {
             if let Envelope::Signed(signed) = object {
@@ -107,7 +115,7 @@ impl Trust {
                     .push(Signature {
                         name: name.clone(),
                         key: signed.key.clone(),
-                        verifies: verified.verifies(name, signed),
+                        verifies: checks.verifies(signed),
                     });
             }
         }

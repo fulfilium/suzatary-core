@@ -815,7 +815,8 @@ fn answered<E: prodrome_core::schema::Schema, S: Sends<E>>(
 /// Whether the store of record knew the frontier a pull named.
 fn since_read(reached: &prodrome_core::store::frontier::Reached) -> wire::SinceRead {
     match reached {
-        prodrome_core::store::frontier::Reached::Known(_) => wire::SinceRead::Known,
+        prodrome_core::store::frontier::Reached::Everything
+        | prodrome_core::store::frontier::Reached::Known(_) => wire::SinceRead::Known,
         prodrome_core::store::frontier::Reached::Unknown => wire::SinceRead::Unknown,
     }
 }

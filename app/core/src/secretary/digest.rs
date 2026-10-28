@@ -22,7 +22,6 @@
 //! the compactor summarises again from what is left.
 
 use std::collections::{BTreeMap, BTreeSet};
-use std::ops::Range;
 
 use prodrome_core::digest::{self, Cycle, Leaf, Measure as _, Tree, View};
 use prodrome_core::event::{Actor, Envelope, Hash, parents_of};
@@ -381,34 +380,6 @@ impl Digest {
     #[must_use]
     pub fn tree(&self) -> Option<&Tree<Label>> {
         self.tree.as_ref()
-    }
-
-    /// The largest nodes lying within the lines `span`, in order: the one node spanning it when
-    /// there is one, otherwise the nodes that tile it. `None` for a span reaching past the last
-    /// line, or of no line.
-    #[must_use]
-    pub fn cover(&self, span: Range<usize>) -> Option<Vec<&prodrome_core::digest::Node<Label>>> {
-        fn within<'t>(
-            node: &'t prodrome_core::digest::Node<Label>,
-            span: &Range<usize>,
-            out: &mut Vec<&'t prodrome_core::digest::Node<Label>>,
-        ) {
-            let lines = node.span();
-            if span.start <= lines.start && lines.end <= span.end {
-                out.push(node);
-            } else if lines.start < span.end && span.start < lines.end {
-                for child in node.children() {
-                    within(child, span, out);
-                }
-            }
-        }
-        let tree = self.tree.as_ref()?;
-        if span.is_empty() || span.end > tree.lines() {
-            return None;
-        }
-        let mut out = Vec::new();
-        within(tree.root(), &span, &mut out);
-        Some(out)
     }
 
     /// Node `node`'s reading: one candidate, or a conflict's, by least object name first; empty

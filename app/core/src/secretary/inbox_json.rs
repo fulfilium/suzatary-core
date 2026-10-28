@@ -10,8 +10,12 @@ use crate::secretary::inbox_event::{InboxEvent, InboxVocabulary, Said};
 use crate::secretary::inbox_registers::InboxRegister;
 
 impl Json for InboxEvent {
-    fn key_field(_: &InboxVocabulary) -> &'static str {
-        "proposal"
+    fn key_fields(_: &InboxVocabulary) -> Vec<&str> {
+        vec!["proposal"]
+    }
+
+    fn key_values(key: &<Self as Schema>::Key) -> Vec<Value> {
+        vec![Value::from(key.as_ref())]
     }
 
     fn register(_: &InboxVocabulary, register: InboxRegister) -> &'static str {

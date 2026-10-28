@@ -578,40 +578,6 @@ fn adopting_again_and_repairing_converge_on_custody_and_then_do_nothing() {
     }
 }
 
-/// A signature of `object` by `by`, honest or carried over from another object.
-fn signature_of(by: &Secret, object: &Hash, honest: bool) -> Signed {
-    if honest {
-        by.sign(object)
-    } else {
-        Signed {
-            object: object.clone(),
-            ..by.sign(&prodrome_core::memo::name(b"another object", []))
-        }
-    }
-}
-
-proptest! {
-    #![proptest_config(ProptestConfig::with_cases(48))]
-
-    /// `memo f = f`: a check read through the table is the check itself, whatever the table
-    /// kept or dropped (a capacity of one to three drops nearly everything), and asked again
-    /// it answers the same.
-    #[test]
-    fn a_kept_check_is_the_check(
-        asks in proptest::collection::vec((0..6_usize, any::<bool>()), 1..32),
-        capacity in 1..4_usize,
-    ) {
-        let table = Verified::new(capacity);
-        let signer = key('1');
-        for (object, honest) in asks {
-            let signed = signature_of(&signer, &prodrome_core::memo::name(format!("object {object}").as_bytes(), []), honest);
-            let name = prodrome_core::event::seal_hash(&Envelope::<TodoEvent>::Signed(signed.clone()));
-            prop_assert_eq!(table.verifies(&name, &signed), signed.verifies());
-            prop_assert_eq!(table.verifies(&name, &signed), honest);
-        }
-    }
-}
-
 /// One step of a generated history.
 #[derive(Debug, Clone, Copy)]
 enum Step {
@@ -719,7 +685,7 @@ proptest! {
         capacity in prop_oneof![1..4_usize, Just(KEPT_CHECKS)],
     ) {
         let store = begun();
-        let warm = Verified::new(capacity);
+        let warm = prodrome_core::sign::Checks::new(capacity);
         for (n, step) in steps.iter().enumerate() {
             taken(&store, *step, n);
             if n == steps.len() / 2 {
@@ -729,7 +695,7 @@ proptest! {
         let history = dag(&store);
         let reversed: Dag<TodoEvent> = store.objects().expect("reads").into_iter().rev().collect();
         for registrar in [roots(), Registrar::Anyone] {
-            let cold = Trust::through(&history, &registrar, &Verified::new(KEPT_CHECKS));
+            let cold = Trust::through(&history, &registrar, &prodrome_core::sign::Checks::new(KEPT_CHECKS));
             let proof = prodrome_core::sign::Proof::of(&history, &registrar);
             for name in history.objects().keys() {
                 prop_assert_eq!(cold.proves(name), proof.proves(name), "{}", name);
