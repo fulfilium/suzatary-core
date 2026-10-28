@@ -3,7 +3,6 @@
 import type { CodingFile, CodingSession } from "../wire/generated/wire"
 import { clear, el } from "../view/dom"
 import placeholder from "../view/placeholder"
-import { anchor, parse } from "../chat/refs"
 import cardui from "./cardui"
 import intents from "../prodrome/intents"
 
@@ -14,7 +13,7 @@ export namespace coding {
     "The token of the routine a tapped coding session fires. It is shown once when generated at claude.ai/code/routines; set it here, never in a chat."
 
   export type Session = CodingSession
-  export type Answer = { type: "Hand" } | { type: "Drop"; reason: string }
+  export type Answer = { type: "Drop"; reason: string }
   export type Tally = { files: number; added: number; removed: number }
 
   /** Asking the box; `null` for a login that may not. */
@@ -40,14 +39,14 @@ export namespace coding {
 
   export const answers = fold<Answer["type"][]>({
     fired: () => ["Drop"],
-    reported: s => (s.handed === "" ? ["Hand", "Drop"] : ["Drop"]),
+    reported: () => ["Drop"],
     merged: () => [],
     dropped: () => [],
   })
 
   /** What a keyed redraw compares: a card changes exactly when this does. */
   export const signature = (s: Session | null): string =>
-    s === null ? "" : `${s.state}:${s.state === "reported" ? s.handed : ""}`
+    s === null ? "" : s.state
 
   export const headline = fold<string>({
     fired: s => `Running since ${s.at}`,
@@ -70,35 +69,27 @@ export namespace coding {
     )
   }
 
-  const handed = (text: string): Node => {
-    const r = parse(text)
-    return el("p", { class: "codinghanded" }, "Handed to the main session: ", r === null ? text : anchor(r))
-  }
-
   const body = fold<(Node | null)[]>({
     fired: s => [el("p", null, el("a", { href: s.url, target: "_blank", rel: "noopener", class: "codingurl" }, s.url))],
     reported: s => [
       el("p", { class: "codingpath" }, el("code", null, s.path)),
       stat(s.stat),
       el("pre", { class: "proposalbody codingreport" }, s.report),
-      s.handed === "" ? null : handed(s.handed),
     ],
     merged: () => [],
     dropped: () => [],
   })
 
   // Whether an answer is pending is the intents'; whether the drop field is open, and its words, the card's register.
-  const controls = (s: Session, asked: intents.Shown, ui: cardui.Ui, redraw: () => void, send: (a: Answer) => void): Node[] => {
+  const controls = (asked: intents.Shown, ui: cardui.Ui, redraw: () => void, send: (a: Answer) => void): Node[] => {
     const go = (e: cardui.Event): void => (ui.go(e), redraw())
     const sent = (a: Answer): void => (ui.go({ type: "Closed" }), send(a))
-    const hand = el("button", { type: "button", class: "act act-hand", onclick: () => sent({ type: "Hand" }) }, "Hand to the main session")
     const dropping = (): Node[] => {
       const why = cardui.field(ui, () => el("input", { type: "text", class: "dismissreason", placeholder: "Why not? (done by hand, wrong task…)" }))
       const confirm = () => (ui.get().text.trim() === "" ? why.focus() : sent({ type: "Drop", reason: ui.get().text.trim() }))
       return [why, el("button", { type: "button", class: "act act-drop confirming", onclick: confirm }, "Dismiss"), el("button", { type: "button", class: "act act-keep", onclick: () => go({ type: "Closed" }) }, "Keep")]
     }
     const idle = (): Node[] => [
-      ...(answers(s).includes("Hand") ? [hand] : []),
       el("button", { type: "button", class: "act act-drop", onclick: () => go({ type: "Opened", step: { type: "Saying", verb: "drop" } }) }, "Dismiss"),
     ]
     return intents.fold<Node[]>(asked, {
@@ -125,7 +116,7 @@ export namespace coding {
       node.dataset["ui"] = cardui.print(ui.get())
       node.dataset["asked"] = asked.type
       clear(row)
-      row.append(...controls(s, asked, ui, draw, answer))
+      row.append(...controls(asked, ui, draw, answer))
     }
     draw()
     node.append(row)

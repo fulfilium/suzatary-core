@@ -4,7 +4,8 @@
 import { actButton } from "./acts";
 import act from "../view/act";
 import type { Acted } from "./acts";
-import { todo as fetchTodo } from "../wire/api";
+import { buildTodo, todo as fetchTodo } from "../wire/api";
+import address from "../shell/address";
 import type { AuthoredSource, Entry, FieldChange, Link, TodoLinks, TodoPayload } from "../wire/generated/wire";
 import { neighbourList } from "./card";
 import app from "../app/app";
@@ -316,7 +317,7 @@ export namespace todoview {
         };
         const offered = act.offered<Node[]>(
           act.gate(v.writes),
-          () => [...applicable(entry).map((name) => actButton(name, entry.todo, withClear, "", () => noteOf(field.value))), field],
+          () => [...applicable(entry).map((name) => actButton(name, entry.todo, withClear, "", () => noteOf(field.value))), ...build(v), field],
           [],
         );
         // A login that may not write is offered nothing, and an empty row is not drawn.
@@ -324,6 +325,15 @@ export namespace todoview {
         row.replaceChildren(...offered);
       },
     };
+  };
+
+  // An open todo of the chain sessions build files the card that would start one; its card is where it is tapped.
+  const build = (v: T): Node[] => {
+    const entry = reading.entryOf(v.got);
+    const payload = reading.payloadOf(v.got);
+    return payload === null || payload.builder === null || !isOpen(entry)
+      ? []
+      : [act.view({ label: "Build it", cls: "act act-build", run: () => buildTodo(entry.todo).then((p) => (address.go({ type: "conversation", id: p.id, refs: [] }), act.SPENT)) })];
   };
 
   // A half-typed edit survives a reload that brings the same content; new content is a new form.

@@ -273,7 +273,8 @@ mod tests {
         assert!(format!("{refused:#}").contains("would not"), "{refused:#}");
         assert_eq!(std::fs::read_to_string(&path).expect("reads"), after);
 
-        set(&path, &key("coding.chain"), "life", &env).expect_err("a [coding] with no routine");
+        set(&path, &key("coding.repo"), "bmabsout/Suzatary", &env)
+            .expect_err("a [coding] with no routine");
         set(&path, &key("persona.city"), "Paris", &env).expect("a string");
         assert_eq!(get(&path, &key("persona.city")).expect("reads"), "Paris");
     }

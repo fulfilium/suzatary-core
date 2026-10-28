@@ -20,9 +20,7 @@ use crate::secretary::inbox_reading::{Reading, Words};
 use crate::secretary::memory::Fact;
 use crate::secretary::responded::{Done, Responded, Tried, Withdrawal};
 use crate::secretary::salted_text::TextName;
-use crate::secretary::store::{
-    ConversationId, Forward, Proposal, Said, Standing, Stored, Style, stamp,
-};
+use crate::secretary::store::{Forward, Proposal, Said, Standing, Stored, Style, stamp};
 use crate::secretary::turn_shape::TurnShape;
 use crate::wire;
 
@@ -64,13 +62,13 @@ pub struct Dress<'a> {
     /// The memory as its route reads it, for a receipt's words; `None` reads every receipt as
     /// unread.
     pub memory: Option<&'a wire::MemoryPayload>,
-    /// Draws a changeset against its chain and says whether a session was handed over.
+    /// Draws a changeset against its chain.
     pub draws: &'a dyn Draw,
 }
 
 impl Dress<'static> {
     /// Nothing from beyond the stores: every block as its source, every receipt unread, no
-    /// changeset drawn and no session handed.
+    /// changeset drawn.
     pub const BARE: Self = Self {
         answers: &Unrendered,
         memory: None,
@@ -78,14 +76,11 @@ impl Dress<'static> {
     };
 }
 
-/// A changeset drawn against the chain it names, whether a reported session's todo is on the
-/// hand-over chain, and the routine the deployment declares: readings of the todo chains and the
-/// instance file, which only the box holds.
+/// A changeset drawn against the chain it names, and the routine the deployment declares:
+/// readings of the todo chains and the instance file, which only the box holds.
 pub trait Draw {
     /// The rows, and the box's own refusal when an act would no longer build.
     fn shown(&self, changeset: &Changeset) -> (Vec<wire::ProposedObject>, String);
-    /// `todo:<chain>/<id>` when this session's hand-over todo is on its chain, `""` otherwise.
-    fn handed(&self, conversation: &ConversationId, index: usize) -> String;
     /// The routine `[coding]` declares, whose page its token's card opens.
     fn routine(&self) -> Option<&crate::coding::RoutineId>;
     /// The name the deployment stores its model's credential under, which its card words as the
@@ -109,16 +104,12 @@ impl Answers for Unrendered {
     }
 }
 
-/// Draws nothing and hands nothing.
+/// Draws nothing.
 struct Undrawn;
 
 impl Draw for Undrawn {
     fn shown(&self, _: &Changeset) -> (Vec<wire::ProposedObject>, String) {
         (Vec::new(), String::new())
-    }
-
-    fn handed(&self, _: &ConversationId, _: usize) -> String {
-        String::new()
     }
 
     fn routine(&self) -> Option<&crate::coding::RoutineId> {
@@ -437,7 +428,7 @@ fn row(stored: &Stored, fold: &inbox::Fold) -> wire::ConversationRow {
     }
 }
 
-/// Proposal `index` of `stored`, with the session its tap started, drawn by `draws`.
+/// Proposal `index` of `stored`, drawn by `draws`, with the session its tap started.
 pub(crate) fn drawn(
     stored: &Stored,
     index: usize,
@@ -446,10 +437,7 @@ pub(crate) fn drawn(
     memory: Option<&wire::MemoryPayload>,
 ) -> wire::ProposalRow {
     wire::ProposalRow {
-        coding: stored
-            .coding
-            .get(&index)
-            .map(|session| session_on_wire(session, &stored.id, index, draws)),
+        coding: stored.coding.get(&index).map(session_on_wire),
         announced: announced(stored, index, standing),
         ..proposal(index, standing, draws, memory)
     }
@@ -1104,13 +1092,8 @@ pub(crate) fn proposal(
     }
 }
 
-/// A session on the wire, with whether it has been handed over.
-fn session_on_wire(
-    session: &crate::coding::Session,
-    conversation: &ConversationId,
-    index: usize,
-    draws: &dyn Draw,
-) -> wire::CodingSession {
+/// A session on the wire.
+fn session_on_wire(session: &crate::coding::Session) -> wire::CodingSession {
     use crate::coding::{Lines, Session};
     match session {
         Session::Fired { id, url, at } => wire::CodingSession::Fired {
@@ -1143,7 +1126,6 @@ fn session_on_wire(
                     }
                 })
                 .collect(),
-            handed: draws.handed(conversation, index),
         },
         Session::Merged { id, sha } => wire::CodingSession::Merged {
             id: id.to_string(),

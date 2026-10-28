@@ -3,10 +3,12 @@
 use axum::Json;
 use prodrome_core::event::{Actor, TodoId};
 use suzatary_core::capability::Datetime;
-use suzatary_core::refusal::Refusal;
+use suzatary_core::reference::TodoRef;
+use suzatary_core::refusal::{Refusal, Status};
 use suzatary_core::routes;
 use suzatary_core::secretary::acts::{self, ActLine};
 use suzatary_core::secretary::store::DEFAULT;
+use suzatary_core::secretary::tap::Tap;
 use suzatary_core::{query, wire};
 
 use super::body::{Body, MAX_ACT_BYTES};
@@ -78,6 +80,18 @@ impl Params for TodoAt {
         Ok(Self {
             id: asked.segment("id")?.to_owned(),
             at: moment(asked, chain)?,
+        })
+    }
+}
+
+/// The todo the path names, on the chain it names.
+impl Params for TodoRef {
+    fn parse(asked: &Asked, chain: &Chained) -> Result<Self, Refusal> {
+        let text = asked.segment("id")?;
+        Ok(Self {
+            chain: chain.policy.name.clone(),
+            id: TodoId::new(text)
+                .map_err(|_| Refusal::not_found(format!("{text:?} is not a todo id")))?,
         })
     }
 }
@@ -161,14 +175,31 @@ pub fn fold(call: &Call<Reader, Folding, ()>) -> Result<Json<wire::FoldPayload>,
 /// `GET …/todo/<id>`: one todo, its reading page included.
 pub fn todo(call: &Call<Reader, TodoAt, ()>) -> Result<Json<wire::TodoPayload>, Refusal> {
     let caps = call.chain.caps;
+    // A chain no session builds offers no button; a plan that does not read is the box's fault.
+    let builder = match call.state.deployment.builder(&call.chain.policy.name) {
+        Ok(routine) => Some(routine),
+        Err(refused) if refused.status() == Status::Conflict => None,
+        Err(refused) => return Err(refused),
+    };
     routes::todo(
         caps.secretary.render,
         &call.chain.policy,
         call.state.deployment.zone,
         &call.state.chains_read().set(call.params.at),
         &call.params.id,
+        builder,
     )
     .map(Json)
+}
+
+/// `POST …/todo/<id>/build`: the owner asks for the todo to be built, and the box files the
+/// coding-session card that serves it; only his tap on that card fires a session.
+pub fn build(call: &Call<Tap, TodoRef, ()>) -> Result<Json<wire::ConversationPayload>, Refusal> {
+    call.state
+        .with_cards(|caps, cards| {
+            suzatary_core::secretary::routes::build(caps, &call.guard, cards, &call.params)
+        })
+        .map(Json)
 }
 
 /// `GET …/tree`: the open list as a tree.

@@ -132,9 +132,10 @@ fn every_secretary_write_refuses_a_bare_post_from_loopback() {
         "/api/secretary/attachments",
         "/api/secretary/conversations/anything/proposals/0/tap",
         "/api/secretary/conversations/anything/proposals/0/acknowledge",
-        // Handing over or dropping a session's branch is the owner's answer.
-        "/api/secretary/conversations/anything/proposals/0/hand",
+        // Dropping a session's branch is the owner's answer.
         "/api/secretary/conversations/anything/proposals/0/drop",
+        // So is asking for a todo to be built: its card spends the account once tapped.
+        "/api/todo/anything/build",
         // Forgetting erases, so it is the owner's act.
         "/api/secretary/memory/1/forget",
     ] {

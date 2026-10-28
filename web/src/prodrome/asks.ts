@@ -2,7 +2,7 @@
 // A monotone act is sealed into the tab's own replica; every other is a request the box answers under its lock.
 
 import type { AttachmentRow, ConversationPayload, FactId, ProposalRow } from "../wire/generated/wire"
-import { acknowledgeProposal, dismissProposal, dropSession, editQuestion, eraseTurns, forgetFact, handSession, regenerate, renameConversation, say, stopAnswer, tapProposal } from "../wire/api"
+import { acknowledgeProposal, dismissProposal, dropSession, editQuestion, eraseTurns, forgetFact, regenerate, renameConversation, say, stopAnswer, tapProposal } from "../wire/api"
 import { parsed } from "../chat/refs"
 import type vouch from "./vouch"
 import type topics from "./topics"
@@ -15,7 +15,6 @@ export namespace asks {
     | { readonly type: "Tap"; readonly note: string; readonly always: boolean; readonly endorsement?: vouch.Endorsement }
     | { readonly type: "Dismiss"; readonly reason: string }
     | { readonly type: "Acknowledge" }
-    | { readonly type: "Hand" }
     | { readonly type: "Drop"; readonly reason: string }
   // A question the way its asker saw the conversation: `after` turns stood, so the box's line for it is at or past `after`.
   export type Question = {
@@ -58,7 +57,7 @@ export namespace asks {
 
   // What moves when the box records an answer to a proposal: its machine and the session it started.
   export const signature = (p: ProposalRow): string =>
-    `${p.state}:${p.tries}:${p.coding?.state ?? ""}:${p.coding?.state === "reported" ? p.coding.handed : ""}`
+    `${p.state}:${p.tries}:${p.coding?.state ?? ""}`
 
   // Every ask about one proposal's card.
   export const about = (conversation: string, index: number) => (a: Ask): boolean =>
@@ -102,7 +101,6 @@ export namespace asks {
     a.type === "Tap" ? tapProposal(c, i, a.note, secret, a.always, a.endorsement)
     : a.type === "Dismiss" ? dismissProposal(c, i, a.reason)
     : a.type === "Acknowledge" ? acknowledgeProposal(c, i)
-    : a.type === "Hand" ? handSession(c, i)
     : dropSession(c, i, a.reason)
 
   const asked = (kind: "Say" | "Edit", { conversation: c, text, references, files, after }: Question): Promise<unknown> =>

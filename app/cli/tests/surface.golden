@@ -42,7 +42,6 @@ POST /api/secretary/conversations/{conversation}/erase tap signed
 POST /api/secretary/conversations/{conversation}/proposals/{index}/acknowledge tap signed
 POST /api/secretary/conversations/{conversation}/proposals/{index}/dismiss tap signed
 POST /api/secretary/conversations/{conversation}/proposals/{index}/drop tap signed
-POST /api/secretary/conversations/{conversation}/proposals/{index}/hand tap signed
 POST /api/secretary/conversations/{conversation}/proposals/{index}/tap tap signed
 POST /api/secretary/conversations/{conversation}/regenerate act signed
 POST /api/secretary/conversations/{conversation}/say act signed
@@ -58,6 +57,7 @@ GET /api/stores/{store}/objects read -
 POST /api/stores/{store}/objects act signed
 GET /api/tip read -
 GET /api/todo/{id} read -
+POST /api/todo/{id}/build tap signed
 GET /api/tree read -
 GET /api/usage read -
 GET /api/waiting read -
@@ -71,5 +71,6 @@ GET /api/{chain}/objects read -
 POST /api/{chain}/objects act -
 GET /api/{chain}/tip read -
 GET /api/{chain}/todo/{id} read -
+POST /api/{chain}/todo/{id}/build tap signed
 GET /api/{chain}/tree read -
 GET /events read -

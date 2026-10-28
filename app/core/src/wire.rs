@@ -456,6 +456,9 @@ pub struct TodoPayload {
     pub diffs: BTreeMap<String, Vec<FieldChange>>,
     /// The reference graph around it.
     pub links: TodoLinks,
+    /// The routine "Build it" fires for it, or `null` on a chain whose todos no pull request's
+    /// `Completes:` closes.
+    pub builder: Option<String>,
 }
 
 /// How `GET /api/tree` groups; ancestry nests under each.
@@ -2466,7 +2469,7 @@ pub struct InboxProposalsPayload {
 }
 
 /// A coding session as a page draws it: the stored `coding::Session`
-/// flattened, with whether it has been handed over.
+/// flattened.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]
 #[serde(tag = "state", rename_all = "lowercase")]
 pub enum CodingSession {
@@ -2491,8 +2494,6 @@ pub enum CodingSession {
         report: String,
         /// Every file the branch changes.
         stat: Vec<CodingFile>,
-        /// The handed-over todo as `todo:<chain>/<id>`, or `""`.
-        handed: String,
     },
     /// Its branch is on the default branch.
     Merged {

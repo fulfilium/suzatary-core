@@ -115,7 +115,6 @@ fcm_sender = "100000000000"
 [coding]
 routine = "trig_01fake"
 repo = "bmabsout/Suzatary"
-chain = "suzatary"
 "#;
 
 /// Each fact the binary read, one `name = value` line each.
@@ -452,24 +451,24 @@ const REFUSALS: &[(&str, &str, &str)] = &[
     ),
     ("a reserve over one", "reserve = 0.4", "reserve = 1.5"),
     (
-        "a coding chain not served",
-        "chain = \"suzatary\"\n",
-        "chain = \"work\"\n",
-    ),
-    (
         "a coding routine that is not one",
         "routine = \"trig_01fake\"",
         "routine = \"trig 01\"",
     ),
     (
+        "a coding chain, which no reading has",
+        "trig_01fake\"\nrepo = \"bmabsout/Suzatary\"",
+        "trig_01fake\"\nrepo = \"bmabsout/Suzatary\"\nchain = \"suzatary\"",
+    ),
+    (
         "a coding repo that is not one",
-        "repo = \"bmabsout/Suzatary\"\nchain",
-        "repo = \"nope\"\nchain",
+        "trig_01fake\"\nrepo = \"bmabsout/Suzatary\"",
+        "trig_01fake\"\nrepo = \"nope\"",
     ),
     (
         "a coding repo of another account",
-        "repo = \"bmabsout/Suzatary\"\nchain",
-        "repo = \"someorg/Suzatary\"\nchain",
+        "trig_01fake\"\nrepo = \"bmabsout/Suzatary\"",
+        "trig_01fake\"\nrepo = \"someorg/Suzatary\"",
     ),
     (
         "a secretary repo of another account",

@@ -62,12 +62,9 @@ impl Verb for ProposeCodingSession {
         let task =
             Task::try_from(args.task).map_err(|failed| Refusal::bad_request(failed.to_string()))?;
         let act = Act::CodingSession { task };
-        let index = args.filing.file(
-            call.caps,
-            call.conversation,
-            Proposal::Act(act.clone()),
-            &reasons,
-        )?;
+        let index = args
+            .filing
+            .file(call, Proposal::Act(act.clone()), &reasons)?;
         Ok(json!({
             "proposed": index,
             "sentence": act.sentence(),

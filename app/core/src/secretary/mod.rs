@@ -9,6 +9,7 @@ pub mod attached;
 pub mod attachment_source;
 pub mod bootstrap;
 pub mod briefs;
+pub mod build;
 mod call;
 pub mod card;
 pub mod carried;
@@ -601,7 +602,10 @@ pub fn run(
 }
 
 /// Which chain a call is about: absent means the first, an unknown name is refused.
-fn bound_of<'a>(chains: &'a [Bound<'a>], named: Option<&str>) -> Result<&'a Bound<'a>, Refusal> {
+pub(crate) fn bound_of<'a>(
+    chains: &'a [Bound<'a>],
+    named: Option<&str>,
+) -> Result<&'a Bound<'a>, Refusal> {
     match named {
         None => chains
             .first()

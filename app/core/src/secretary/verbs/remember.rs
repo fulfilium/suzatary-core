@@ -54,7 +54,7 @@ fn card(
         text: kept.name().clone(),
         kind,
     };
-    let index = match propose(caps, id, proposal, &reasons, None, None) {
+    let index = match propose(caps, &[], id, proposal, &reasons, None, None) {
         Ok(index) => index,
         Err(refused) => {
             held.unkeep(&kept)?;

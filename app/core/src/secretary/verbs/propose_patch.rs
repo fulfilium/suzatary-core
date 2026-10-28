@@ -81,9 +81,7 @@ impl Verb for ProposePatch {
             patch,
             message,
         };
-        let index = args
-            .filing
-            .file(call.caps, call.conversation, Proposal::Act(act), &reasons)?;
+        let index = args.filing.file(call, Proposal::Act(act), &reasons)?;
         Ok(json!({
             "proposed": index,
             "repo": repo.to_string(),

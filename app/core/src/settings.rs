@@ -420,7 +420,6 @@ mod tests {
         let coding = crate::coding::Coding {
             routine: "trig_01fake".parse().expect("a routine id"),
             repo: "bmabsout/Suzatary".parse().expect("a repository"),
-            chain: crate::chains::ChainName::new("suzatary").expect("a chain"),
         };
         let with = Settables::derive(MODEL_TOKEN, std::iter::empty(), Some(&coding), &[]);
         assert!(Settable::mint(&with, crate::coding::ROUTINE_TOKEN).is_ok());

@@ -1,6 +1,7 @@
 //! A coding session from the phone, over a real server with a scripted model: the tap fires a
 //! routine at a loopback fake of the documented endpoint, never the real one; the poll reads a
-//! local repository's `claude/` branches; the hand-over writes one todo and merges nothing.
+//! local repository's `claude/` branches and merges nothing; "Build it" files the card for a
+//! todo, at most two at once.
 
 mod common;
 
@@ -23,7 +24,6 @@ fn deployment() -> suzatary_core::deployment::Deployment {
         coding: Some(suzatary_core::coding::Coding {
             routine: "trig_01fake".parse().expect("a routine id"),
             repo: "bmabsout/cv".parse().expect("a repository"),
-            chain: suzatary_core::chains::ChainName::new("life").expect("a chain"),
         }),
         ..common::deployment([owner()], [(owner(), common::actor(CAST.owner.actor))])
     }
@@ -262,11 +262,10 @@ fn git(dir: &std::path::Path, args: &[&str]) {
     );
 }
 
-/// The whole life: fired, reported by the branch whose report names it,
-/// handed over once as one todo, then merged; a drop of a merged session is
-/// refused.
+/// The whole life: fired, reported by the branch whose report names it, then merged; a drop of
+/// a merged session is refused.
 #[test]
-fn a_session_is_reported_handed_over_once_and_merged() {
+fn a_session_is_reported_then_merged() {
     let (routine, served) = fake_routine();
     let (base, fakes) = scene(
         "coding-life",
@@ -287,11 +286,6 @@ fn a_session_is_reported_handed_over_once_and_merged() {
         suzatary_cli::commands::coding::poll(&fakes.conversations, mirrors, &repo).expect("polls")
     };
     assert!(poll(&mirrors).is_empty(), "no branch speaks for it yet");
-    assert_eq!(
-        answer(&base, &id, "hand", &serde_json::json!({})).0,
-        409,
-        "a fired session has nothing to hand over"
-    );
 
     let work = root.join("cv-work");
     let remote = root.join("remotes/bmabsout/cv.git");
@@ -327,25 +321,6 @@ fn a_session_is_reported_handed_over_once_and_merged() {
             {"path": "docs/reports/retitle.md", "added": 5, "removed": 0},
         ])
     );
-    assert_eq!(coding["handed"], "");
-
-    let (status, handed) = answer(&base, &id, "hand", &serde_json::json!({}));
-    assert_eq!(status, 200, "{handed}");
-    let todo = format!(
-        "todo:life/{}",
-        suzatary_core::coding::handed_todo(
-            &suzatary_core::secretary::store::ConversationId::new(id.clone()).expect("an id"),
-            0
-        )
-    );
-    assert_eq!(handed["proposals"][0]["coding"]["handed"], todo.as_str());
-    handed_by_the_tapper(fakes.conversations.conversations(), &id);
-    assert_eq!(
-        answer(&base, &id, "hand", &serde_json::json!({})).0,
-        409,
-        "a second hand-over is the same todo, refused"
-    );
-
     git(&work, &["checkout", "-q", "main"]);
     git(&work, &["merge", "-q", "--ff-only", "claude/retitle"]);
     git(&work, &["push", "-q", remote, "main"]);
@@ -389,35 +364,166 @@ fn a_fired_session_is_dropped_with_a_reason() {
     assert_eq!(dropped["proposals"][0]["coding"]["reason"], "done by hand");
 }
 
-/// The hand-over's line is the tapper's own, stamped by the actor who handed it, and carries
-/// no word of the session's report: not its branch.
-fn handed_by_the_tapper(
-    conversations: suzatary_core::secretary::conversations::Conversations<'_>,
-    id: &str,
-) {
-    let stored = suzatary_core::secretary::read(
-        conversations,
-        &suzatary_core::secretary::store::ConversationId::new(id).expect("an id"),
-    )
-    .expect("reads");
-    let line = stored
-        .turns
-        .iter()
-        .rev()
-        .find(|said| matches!(said.turn, suzatary_core::capability::Turn::Act { .. }))
-        .expect("the hand-over's line");
-    let suzatary_core::capability::Turn::Act { text, .. } = &line.turn else {
-        unreachable!("an act")
+/// A deployment whose one chain is the one a pull request's `Completes:` closes, and which
+/// declares the routine.
+fn building() -> suzatary_core::deployment::Deployment {
+    let plan = suzatary_core::release::Plan::declared().expect("the plan reads");
+    suzatary_core::deployment::Deployment {
+        chains: suzatary_core::chains::Chains::of(vec![suzatary_core::chains::ChainPolicy {
+            name: suzatary_core::chains::ChainName::new(plan.chain()).expect("a chain"),
+            ..common::chain()
+        }])
+        .expect("one chain"),
+        ..deployment()
+    }
+}
+
+/// "Build it" on `todo`: the status and the answer.
+fn build(base: &str, todo: &str) -> (u16, serde_json::Value) {
+    let mut response = common::act(
+        &format!("{base}/api/todo/{todo}/build"),
+        &serde_json::json!({}),
+    );
+    (common::status(&response), common::body_json(&mut response))
+}
+
+/// The task a build of `todo` carries on its `attempt`.
+fn task_of(chain: &str, todo: &suzatary_core::cast::Todo, attempt: usize) -> String {
+    let id = todo.id;
+    let detail = if todo.detail.is_empty() {
+        String::new()
+    } else {
+        format!("\n\n{}", todo.detail)
     };
-    assert!(
-        !text.contains("claude/retitle"),
-        "the branch is the report's words, not the tapper's: {text}"
+    format!(
+        "Build todo:{chain}/{id}, attempt {attempt}. Its text follows, as the owner's prodrome \
+         holds it.\nWhen the pull request finishes it, put `Completes: {id}` on a line of its \
+         description.\n\n{}{detail}",
+        todo.body,
+    )
+}
+
+/// "Build it" files today's session card serving the todo, its task the todo's whole text; the
+/// tap sends that task and nothing else, and leaves the other build card standing. A todo is in
+/// progress while its card is open or its session runs, so a second build of it and a third
+/// todo are refused, naming what is in progress, until a card is dismissed; a dropped session's
+/// todo is built again as a new card, its next attempt.
+#[test]
+fn a_todo_is_built_from_its_card_at_most_two_at_once() {
+    let (routine, served) = fake_routine();
+    let fakes = Arc::new(
+        Fakes::new("coding-build").whois(common::FakeWhois::new().naming(common::v4(), owner())),
     );
-    assert!(
-        matches!(
-            line.by,
-            Some(suzatary_core::secretary::stamp::Stamp::Actor(_))
-        ),
-        "stamped by the actor who handed it over"
+    let base = common::Server::new(Arc::clone(&fakes), building(), Vec::new())
+        .real_acts(
+            "coding-build",
+            "her@study.test",
+            common::again(&fakes.conversations),
+            common::ScriptedOauth::new(Vec::new()),
+        )
+        .firing(Firing::Endpoint {
+            base: routine,
+            routine: "trig_01fake".parse().expect("a routine id"),
+            secrets: Arc::new(Holding),
+        })
+        .start()
+        .base;
+    let chain = suzatary_core::release::Plan::declared()
+        .expect("the plan reads")
+        .chain()
+        .to_owned();
+    let todos = &CAST.todos;
+    let card = |index: usize| common::reading(&base, "build", &[])["proposals"][index].clone();
+    let answered = |index: usize, verb: &str, body: serde_json::Value| {
+        common::status(&common::act(
+            &format!("{base}/api/secretary/conversations/build/proposals/{index}/{verb}"),
+            &body,
+        ))
+    };
+
+    let (status, closed) = build(&base, todos.resolved.id);
+    assert_eq!(status, 409, "a completed todo is not built: {closed}");
+
+    let (status, filed) = build(&base, todos.checklist.id);
+    assert_eq!(status, 200, "{filed}");
+    let task = task_of(&chain, &todos.checklist, 1);
+    assert_eq!(filed["proposals"][0]["act"]["kind"], "coding_session");
+    assert_eq!(
+        filed["proposals"][0]["card"]["body"],
+        task.as_str(),
+        "the card shows the whole task"
     );
+    let fold = suzatary_core::secretary::inbox::fold(&fakes.inbox).expect("the inbox reads");
+    let [object] = fold.objects().collect::<Vec<_>>()[..] else {
+        panic!("one card")
+    };
+    assert_eq!(
+        object.asked.price.serves().map(ToString::to_string),
+        Some(format!("todo:{chain}/{}", todos.checklist.id)),
+        "priced by the todo it builds"
+    );
+    assert_eq!(build(&base, todos.flat.id).0, 200);
+
+    assert_eq!(answered(0, "tap", serde_json::json!({})), 200);
+    let (_, body) = served.join().expect("the fake ran");
+    assert_eq!(
+        serde_json::from_str::<serde_json::Value>(&body).expect("json"),
+        serde_json::json!({ "text": task }),
+        "the tap sends the card's task and nothing else"
+    );
+    assert_eq!(
+        card(1)["state"],
+        "standing",
+        "the box's sweep after a tap leaves the other build standing"
+    );
+
+    let (status, again) = build(&base, todos.checklist.id);
+    assert_eq!(status, 409, "its session is running: {again}");
+    let (status, third) = build(&base, todos.high.id);
+    assert_eq!(status, 409, "{third}");
+    let said = third["error"].as_str().expect("a sentence");
+    for todo in [todos.checklist.id, todos.flat.id] {
+        assert!(said.contains(&format!("todo:{chain}/{todo}")), "{said}");
+    }
+
+    assert_eq!(
+        answered(1, "dismiss", serde_json::json!({ "reason": "later" })),
+        200
+    );
+    assert_eq!(
+        build(&base, todos.high.id).0,
+        200,
+        "one is no longer in progress"
+    );
+
+    assert_eq!(
+        answered(0, "drop", serde_json::json!({ "reason": "wrong approach" })),
+        200
+    );
+    let (status, retried) = build(&base, todos.checklist.id);
+    assert_eq!(status, 200, "{retried}");
+    let retry = card(3);
+    assert_eq!(retry["state"], "standing", "{retry}");
+    assert_eq!(
+        retry["card"]["body"],
+        task_of(&chain, &todos.checklist, 2).as_str(),
+        "a retry is a new request, its attempt on the card"
+    );
+}
+
+/// Only the chain a pull request's `Completes:` closes is built, and only where `[coding]` names
+/// a routine: a personal todo never becomes a session's task.
+#[test]
+fn a_todo_of_another_chain_is_not_built() {
+    let fakes = Arc::new(
+        Fakes::new("coding-build-life")
+            .whois(common::FakeWhois::new().naming(common::v4(), owner())),
+    );
+    let base = common::Server::new(Arc::clone(&fakes), deployment(), Vec::new())
+        .start()
+        .base;
+    let (status, refused) = build(&base, CAST.todos.flat.id);
+    assert_eq!(status, 409, "{refused}");
+    let fold = suzatary_core::secretary::inbox::fold(&fakes.inbox).expect("the inbox reads");
+    assert_eq!(fold.objects().count(), 0, "nothing was filed");
 }

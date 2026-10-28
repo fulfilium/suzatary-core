@@ -16,7 +16,7 @@ deployment.act_as.phone@example.test = assistant
 deployment.categories = {"home": 0, "work": 1}
 deployment.app_url = https://box.example.test
 instance.settables = ["CLAUDE_CODE_OAUTH_TOKEN", "FCM_SERVICE_ACCOUNT_B64", "NTFY_TOPIC", "SUZATARY_DATA_PUSH_TOKEN", "SUZATARY_REPOS_TOKEN", "SUZATARY_ROUTINE_TOKEN"]
-deployment.coding = Some(Coding { routine: RoutineId("trig_01fake"), repo: RepoName { owner: "bmabsout", name: "Suzatary" }, chain: ChainName("suzatary") })
+deployment.coding = Some(Coding { routine: RoutineId("trig_01fake"), repo: RepoName { owner: "bmabsout", name: "Suzatary" } })
 serving.host = 100.64.0.1
 serving.port = 443
 serving.tls_dir = /var/lib/suzatary/tls
@@ -346,15 +346,20 @@ parsing the instance file <file>: TOML parse error at line 81, column 11
 a reserve is a share between 0 and 1, got 1.5
 
 
-## a coding chain not served
-[coding] chain work is not one of this deployment's [[chains]]
-
 ## a coding routine that is not one
 parsing the instance file <file>: TOML parse error at line 105, column 11
     |
 105 | routine = "trig 01"
     |           ^^^^^^^^^
 a routine id is letters, digits, '_' and '-', got "trig 01"
+
+
+## a coding chain, which no reading has
+parsing the instance file <file>: TOML parse error at line 107, column 1
+    |
+107 | chain = "suzatary"
+    | ^^^^^
+unknown field `chain`, expected `routine` or `repo`
 
 
 ## a coding repo that is not one

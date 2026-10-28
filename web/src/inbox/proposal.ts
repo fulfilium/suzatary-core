@@ -269,7 +269,7 @@ export function proposalCard(id: string, proposal: ProposalRow, frame: ProposalF
     if (proposal.coding !== null) {
       node.appendChild(
         coding.view(proposal.coding, shown, cardui.of(cardui.key("coding", `${id}/${proposal.index}`)), {
-          answer: writes ? (a) => ask(a, a.type === "Hand" ? "Handed" : "Dropped") : null,
+          answer: writes ? (a) => ask(a, "Dropped") : null,
         }),
       );
     }

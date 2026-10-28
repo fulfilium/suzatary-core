@@ -84,6 +84,7 @@ impl Verb for Web {
         let sentence = request.sentence();
         let index = propose(
             call.caps,
+            call.chains,
             call.conversation,
             Proposal::Act(Act::Web { request, rule }),
             &reasons,

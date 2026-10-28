@@ -379,12 +379,9 @@ impl Verb for ProposeEmail {
         if draft.to.is_empty() {
             return Err(Refusal::bad_request("to must name at least one recipient"));
         }
-        let index = args.filing.file(
-            call.caps,
-            call.conversation,
-            Proposal::Email(draft.clone()),
-            &reasons,
-        )?;
+        let index = args
+            .filing
+            .file(call, Proposal::Email(draft.clone()), &reasons)?;
         Ok(json!({
             "proposed": index,
             "to": draft.to,

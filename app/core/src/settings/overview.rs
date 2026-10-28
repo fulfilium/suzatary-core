@@ -966,7 +966,6 @@ pub(crate) mod tests {
             self.coding.then(|| crate::coding::Coding {
                 routine: "trig01fixture".parse().expect("a routine id"),
                 repo: "example/repo".parse().expect("a repository"),
-                chain: crate::chains::ChainName::new("life").expect("a slug"),
             })
         }
 

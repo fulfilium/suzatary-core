@@ -49,12 +49,7 @@ impl Verb for ProposeDecision {
         .map_err(|refused| Refusal::bad_request(refused.to_string()))?;
         call.caps.decisions.admits(&draft, call.caps.render)?;
         let sentence = crate::secretary::decide::sentence(&draft);
-        let index = args.filing.file(
-            call.caps,
-            call.conversation,
-            Proposal::Decide(draft),
-            &reasons,
-        )?;
+        let index = args.filing.file(call, Proposal::Decide(draft), &reasons)?;
         Ok(json!({
             "proposed": index,
             "sentence": sentence,

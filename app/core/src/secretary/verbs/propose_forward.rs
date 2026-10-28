@@ -112,12 +112,9 @@ impl Verb for ProposeForward {
                 date: shown.row.date.map(crate::capability::Datetime::isoformat),
             },
         };
-        let index = args.filing.file(
-            call.caps,
-            call.conversation,
-            Proposal::Forward(forward.clone()),
-            &reasons,
-        )?;
+        let index = args
+            .filing
+            .file(call, Proposal::Forward(forward.clone()), &reasons)?;
         let original = &forward.message;
         Ok(json!({
             "proposed": index,

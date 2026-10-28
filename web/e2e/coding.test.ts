@@ -6,9 +6,8 @@
  * routine is unreachable by construction.
  *
  * ONE SCENE, in order, because each answer changes what the next can see: the
- * card shows the branch, the diff stat's total and the report whole; "Hand to
- * the main session" writes its todo on the project chain and the card then
- * links it; dropping needs a reason and ends the session.
+ * card shows the branch, the diff stat's total and the report whole; dropping
+ * needs a reason and ends the session.
  */
 
 import assert from "node:assert/strict";
@@ -19,17 +18,10 @@ const app = await suite("coding");
 
 const SESSION = ".proposal .codingsession";
 
-// The secretary has answered the hand-over: a model turn after the act that records it, and nothing running.
-const HEARD = `(() => {
-  const turns = [...document.querySelectorAll(".turn")];
-  const act = turns.findIndex((t) => t.dataset.who === "act" && /handed it:/.test(t.textContent));
-  return act >= 0 && turns.slice(act + 1).some((t) => t.dataset.who === "model") && document.querySelector(".answerplace")?.hidden === true;
-})()`;
-
 // What a failure writes down of the card: its register and intent as it draws them, and its DOM whole.
 const PROBE = `(() => { const n = document.querySelector('${SESSION}'); return n === null ? null : { ui: n.dataset.ui, asked: n.dataset.asked, hash: location.hash, focus: document.activeElement?.className ?? null, place: document.querySelector(".answerplace")?.hidden, turns: [...document.querySelectorAll(".turn")].map((t) => t.dataset.who + ": " + t.textContent.slice(0, 60)), html: new XMLSerializer().serializeToString(n) }; })()`;
 
-app.scene("a reported session shows its report, is handed over once, then dropped", async () => {
+app.scene("a reported session shows its report, then is dropped", async () => {
   const { mark } = await app.journal();
   mark("open");
   await app.page.navigate(`${WRITE_BASE}/#/secretary/codingsession`);
@@ -45,22 +37,6 @@ app.scene("a reported session shows its report, is handed over once, then droppe
   assert.match(await text(`${SESSION} .codingreport`), /Gates: cargo test and web-test green\./);
   assert.match(await text(".proposal .proposaloutcome"), /started a coding session/);
 
-  mark("hand");
-  await app.page.click(`${SESSION} .act-hand`);
-  await app.page.waitFor(`document.querySelector('${SESSION} .codinghanded .reflink') !== null`, {
-    timeout: 10000,
-  });
-  assert.match(await text(`${SESSION} .codinghanded`), /todo:suzatary\/merge[0-9a-f]{12}/);
-  assert.equal(
-    await app.page.evaluate<number>(`document.querySelectorAll('${SESSION} .act-hand').length`),
-    0,
-    "a handed session offers no second hand-over",
-  );
-  // THE HAND-OVER WAKES THE SECRETARY (2026-10-04: under load its round landed while Drop was being tapped, and the
-  // stick-to-bottom scroll moved the card from under the tap): the next tap waits until it has answered.
-  mark("heard");
-  await app.page.waitFor(HEARD, { timeout: 20000 });
-
   mark("drop");
   await app.page.click(`${SESSION} .act-drop`);
   mark("drop with no reason");
@@ -70,8 +46,8 @@ app.scene("a reported session shows its report, is handed over once, then droppe
     0,
     "no reason, no drop",
   );
-  // THE DROP STEP AND ITS HALF-TYPED REASON OUTLIVE A REDRAW (2026-10-03: the hand-over's settle redrew the card
-  // between "Drop" and its confirmation, and the step was gone): the page drawn again from nothing finds both.
+  // THE DROP STEP AND ITS HALF-TYPED REASON OUTLIVE A REDRAW (2026-10-03: a settle redrew the card between "Drop"
+  // and its confirmation, and the step was gone): the page drawn again from nothing finds both.
   mark("type done");
   await app.page.type(`${SESSION} .dismissreason`, "done");
   mark("leave");

@@ -130,12 +130,14 @@ fn mail_refusal(failed: &MailError) -> Refusal {
 
 /// File `proposal` in the inbox, name it in the conversation, and supersede what it revises.
 ///
-/// The object is filed before the line names it, and an unsupersedable `revises` is refused first.
+/// The object is filed before the line names it, and an unsupersedable `revises` is refused first;
+/// a coding session serving a todo is counted with each todo read open in `chains`.
 ///
 /// # Errors
 /// A `revises` naming no open proposal, or a store's failure to append.
 pub(crate) fn propose(
     caps: &Secretary<'_>,
+    chains: &[super::Bound<'_>],
     id: &ConversationId,
     proposal: Proposal,
     reasons: &Reasons,
@@ -148,6 +150,7 @@ pub(crate) fn propose(
     let (filed, _) = super::filed::file(
         caps.conversations,
         caps.inbox,
+        chains,
         caps.clock.now(),
         Filing {
             conversation: id,

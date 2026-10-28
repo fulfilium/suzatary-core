@@ -5,9 +5,11 @@
 use crate::capability::Datetime;
 use crate::reference::ProposalRef;
 use crate::refusal::Refusal;
+use crate::secretary::acts::Act;
 use crate::secretary::changes::Changeset;
 use crate::secretary::inbox::{self, ProposalId};
 use crate::secretary::inbox_event::InboxEvent;
+use crate::secretary::inbox_reading::Reading;
 use crate::secretary::proposer::Proposer;
 use crate::secretary::store::{ConversationId, Entry, Kind, Proposal, Reasons};
 use crate::secretary::transcript;
@@ -54,24 +56,32 @@ pub struct Filing<'a> {
 /// it holds), then a line naming the object, unless the conversation already draws it.
 ///
 /// Under the inbox's one hold, taken before the conversations' as the tap takes them, so the
-/// card's index is read and its line written with no other filing between.
+/// card's index is read and its line written with no other filing between, and a coding
+/// session serving a todo is held to [`crate::secretary::build::admitted`] with no other filing
+/// between, whoever files it, each todo read open in `chains`.
 ///
 /// # Errors
-/// A conversation that cannot be read, and the stores' failures to append.
+/// [`crate::secretary::build::admitted`]'s, a conversation that cannot be read, and the
+/// stores' failures to append.
 pub fn file(
     conversations: crate::secretary::conversations::Conversations<'_>,
     inbox: &dyn Prodrome<InboxEvent>,
+    chains: &[crate::secretary::Bound<'_>],
     at: Datetime,
     filing: Filing<'_>,
 ) -> Result<(Filed, ProposalId), Refusal> {
     let _held = inbox.locked()?;
-    file_held(conversations, inbox, at, filing)
+    file_held(conversations, inbox, chains, at, filing)
 }
 
 /// [`file()`], under the inbox's hold the caller has taken.
-fn file_held(
+///
+/// # Errors
+/// As [`file()`]'s.
+pub fn file_held(
     conversations: crate::secretary::conversations::Conversations<'_>,
     inbox: &dyn Prodrome<InboxEvent>,
+    chains: &[crate::secretary::Bound<'_>],
     at: Datetime,
     filing: Filing<'_>,
 ) -> Result<(Filed, ProposalId), Refusal> {
@@ -83,6 +93,15 @@ fn file_held(
         serves,
         revises,
     } = filing;
+    if let (Proposal::Act(Act::CodingSession { .. }), Some(todo)) = (&proposal, &serves) {
+        crate::secretary::build::admitted(
+            &inbox::fold(inbox)?,
+            &crate::secretary::coding::waiting(conversations)?,
+            chains,
+            at,
+            todo,
+        )?;
+    }
     let stored = super::read(conversations, conversation)?;
     let index = stored.proposals.len();
     let asked = inbox::Asked {
@@ -101,7 +120,21 @@ fn file_held(
         .iter()
         .position(|asking| asking.object == object)
     {
-        return Ok((Filed::Already(already), object));
+        // The Inbox is content-addressed: the same act asked again is the card that asked it,
+        // and one somebody answered or withdrew is not asked again.
+        return match inbox::fold(inbox)?.get(&object).map(|asked| &asked.reading) {
+            Some(reading) if !matches!(reading, Reading::Standing) => {
+                Err(Refusal::conflict(format!(
+                    "this was asked before, as {}, which reads {reading}; the same act is never \
+                     filed again",
+                    ProposalRef {
+                        conversation: conversation.clone(),
+                        index: already
+                    },
+                )))
+            }
+            Some(_) | None => Ok((Filed::Already(already), object)),
+        };
     }
     transcript::push(
         conversations,
@@ -183,7 +216,14 @@ impl<'a> TriageCards<'a> {
         serves: Option<crate::reference::TodoRef>,
         check: &dyn Fn(&Changeset) -> Result<(), Refusal>,
     ) -> Result<Carded, Refusal> {
-        let conversation = self.opened(at)?;
+        let conversation = triage_conversation();
+        opened(
+            self.conversations,
+            &conversation,
+            "Proposed by the triage agent",
+            &Proposer::Triage,
+            at,
+        )?;
         let _held = self.inbox.locked()?;
         let fold = inbox::fold(self.inbox)?;
         let (changeset, reasons, revises) = match open_card(&fold, &changeset) {
@@ -199,9 +239,10 @@ impl<'a> TriageCards<'a> {
         };
         check(&changeset)?;
         let acts = changeset.acts().len();
-        let (filed, object) = file_held(
+        let (filed, _) = file_held(
             self.conversations,
             self.inbox,
+            &[],
             at,
             Filing {
                 conversation: &conversation,
@@ -212,24 +253,6 @@ impl<'a> TriageCards<'a> {
                 revises: revises.as_ref().map(|(_, index)| *index),
             },
         )?;
-        // The Inbox is content-addressed: the same acts asked again are the card that asked them,
-        // and one somebody answered or withdrew is not asked again.
-        if let (Filed::Already(index), Some(asked)) = (filed, fold.get(&object))
-            && !matches!(
-                asked.reading,
-                crate::secretary::inbox_reading::Reading::Standing
-            )
-        {
-            return Err(Refusal::conflict(format!(
-                "these acts were asked before, as {}, which reads {}; the same acts are never \
-                 filed again, so file only what is new",
-                ProposalRef {
-                    conversation,
-                    index
-                },
-                asked.reading
-            )));
-        }
         if let (Filed::Drawn(_), Some((old, _))) = (filed, &revises) {
             inbox::withdraw_held(
                 self.inbox,
@@ -252,20 +275,29 @@ impl<'a> TriageCards<'a> {
             },
         })
     }
+}
 
-    /// The triage conversation, opened the first time a card is filed.
-    fn opened(&self, at: Datetime) -> Result<ConversationId, Refusal> {
-        let conversation = triage_conversation();
-        let opened = Entry::Opened {
-            at,
-            title: crate::secretary::words::Words::kept("Proposed by the triage agent".to_owned()),
-            model: Proposer::Triage.named(),
-            kind: Kind::Review,
-        };
-        match transcript::start(self.conversations, &conversation, &opened) {
-            Ok(()) | Err(StoreError::Taken { .. }) => Ok(conversation),
-            Err(failed) => Err(failed.into()),
-        }
+/// `conversation`, one the box keeps for `proposer`'s cards, opened under `title` unless it is
+/// already.
+///
+/// # Errors
+/// The store's failures to append.
+pub fn opened(
+    conversations: crate::secretary::conversations::Conversations<'_>,
+    conversation: &ConversationId,
+    title: &str,
+    proposer: &Proposer,
+    at: Datetime,
+) -> Result<(), Refusal> {
+    let opened = Entry::Opened {
+        at,
+        title: crate::secretary::words::Words::kept(title.to_owned()),
+        model: proposer.named(),
+        kind: Kind::Review,
+    };
+    match transcript::start(conversations, conversation, &opened) {
+        Ok(()) | Err(StoreError::Taken { .. }) => Ok(()),
+        Err(failed) => Err(failed.into()),
     }
 }
 
@@ -353,4 +385,103 @@ fn joined(
     let reasons =
         Reasons::new(why, sources).map_err(|failed| Refusal::internal(failed.to_string()))?;
     Ok(Joining::Joined(joined, reasons))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::store::InMemory;
+
+    fn at(minute: u32) -> Datetime {
+        Datetime::new(2026, 10, 27, 9, minute, 0, 0).expect("an instant")
+    }
+
+    /// A coding session serving `todo`, filed in `conversation` by `proposer`.
+    fn session<'a>(conversation: &'a ConversationId, proposer: Proposer, todo: &str) -> Filing<'a> {
+        let serves: crate::reference::TodoRef = format!("todo:suzatary/{todo}")
+            .parse()
+            .expect("a todo reference");
+        Filing {
+            conversation,
+            proposer,
+            proposal: Proposal::Act(Act::CodingSession {
+                task: crate::coding::Task::try_from(format!("Build {serves}.")).expect("a task"),
+            }),
+            reasons: Reasons::new(
+                "asked",
+                vec![crate::reference::Reference::Todo(serves.clone())],
+            )
+            .expect("reasons"),
+            serves: Some(serves),
+            revises: None,
+        }
+    }
+
+    /// The limit is the filing door's, under the inbox's hold: with one build in progress, a
+    /// build card and the secretary's session filed at the same instant cannot both pass.
+    #[test]
+    fn two_filings_at_once_take_one_free_slot() {
+        let conversations = crate::secretary::conversations::InMemory::default();
+        let inbox = InMemory::<InboxEvent>::default();
+        let (build, default) = (
+            ConversationId::new("build").expect("a slug"),
+            ConversationId::new("default").expect("a slug"),
+        );
+        for conversation in [&build, &default] {
+            opened(
+                conversations.conversations(),
+                conversation,
+                "Builds",
+                &Proposer::Box,
+                at(0),
+            )
+            .expect("opened");
+        }
+        file(
+            conversations.conversations(),
+            &inbox,
+            &[],
+            at(1),
+            session(&build, Proposer::Box, "first"),
+        )
+        .expect("the first build files");
+        let barrier = std::sync::Barrier::new(2);
+        let filed: Vec<Result<(Filed, ProposalId), Refusal>> = std::thread::scope(|scope| {
+            let threads = [
+                (&build, Proposer::Box, "second"),
+                (&default, Proposer::Secretary, "third"),
+            ]
+            .map(|(conversation, proposer, todo)| {
+                let (conversations, inbox, barrier) = (&conversations, &inbox, &barrier);
+                scope.spawn(move || {
+                    barrier.wait();
+                    file(
+                        conversations.conversations(),
+                        inbox,
+                        &[],
+                        at(2),
+                        session(conversation, proposer, todo),
+                    )
+                })
+            });
+            threads
+                .into_iter()
+                .map(|thread| thread.join().expect("the thread ran"))
+                .collect()
+        });
+        assert_eq!(
+            filed.iter().filter(|filed| filed.is_ok()).count(),
+            1,
+            "{filed:?}"
+        );
+        let refused = filed
+            .iter()
+            .find_map(|filed| filed.as_ref().err())
+            .expect("one refused");
+        assert!(
+            refused.message().contains("2 todos are in progress"),
+            "{}",
+            refused.message()
+        );
+    }
 }

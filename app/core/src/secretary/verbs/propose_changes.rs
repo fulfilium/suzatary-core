@@ -91,12 +91,9 @@ impl Verb for ProposeChanges {
             },
         )?;
 
-        let index = args.filing.file(
-            call.caps,
-            call.conversation,
-            Proposal::Changes(changeset.clone()),
-            &reasons,
-        )?;
+        let index = args
+            .filing
+            .file(call, Proposal::Changes(changeset.clone()), &reasons)?;
         Ok(json!({
             "proposed": index,
             "chain": call.chain.name.as_str(),

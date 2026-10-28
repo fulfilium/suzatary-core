@@ -29,6 +29,10 @@ export const fold = (chain?: string): Promise<FoldPayload> => http.get(onChain("
 export const todo = (id: string): Promise<TodoPayload> =>
   http.get(onChain(`todo/${encodeURIComponent(id)}`), payload.TodoPayload);
 
+/** The box files the coding-session card that builds this todo; only a tap on that card starts a session. */
+export const buildTodo = (id: string): Promise<ConversationPayload> =>
+  http.act(onChain(`todo/${encodeURIComponent(id)}/build`), {}, payload.ConversationPayload);
+
 /** Who the gate says we are on this chain: `actor: null` is a viewer, who gets no act buttons. */
 export const me = (): Promise<MePayload> => http.get(onChain("me"), payload.MePayload);
 
@@ -232,10 +236,6 @@ export const dismissProposal = (id: string, index: number, reason: string): Prom
 /** The owner has checked Sent for a send that may have gone; it performs nothing. */
 export const acknowledgeProposal = (id: string, index: number): Promise<ConversationPayload> =>
   http.act(proposalPath(id, index, "acknowledge"), {}, payload.ConversationPayload);
-
-/** One todo linking a reported coding session's branch; nothing is merged. */
-export const handSession = (id: string, index: number): Promise<ConversationPayload> =>
-  http.act(proposalPath(id, index, "hand"), {}, payload.ConversationPayload);
 
 /** Let a coding session go, with the reason the secretary reads. */
 export const dropSession = (id: string, index: number, reason: string): Promise<ConversationPayload> =>

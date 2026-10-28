@@ -4865,6 +4865,7 @@
     {
       "value": {
         "at": "2026-09-02T12:00:00",
+        "builder": null,
         "diffs": {
           "642518fd2e480cb8cb9cd81daab784b672c2ff57ed3f1c8450c05ac83d83b40c": [
             {

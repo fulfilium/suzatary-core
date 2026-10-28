@@ -130,12 +130,9 @@ impl Verb for ProposeAct {
                     )));
                 }
             };
-        let index = args.filing.file(
-            call.caps,
-            call.conversation,
-            Proposal::Act(act.clone()),
-            &reasons,
-        )?;
+        let index = args
+            .filing
+            .file(call, Proposal::Act(act.clone()), &reasons)?;
         let mut answer = json!({
             "proposed": index,
             "why": reasons.why(),

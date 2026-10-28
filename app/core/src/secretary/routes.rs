@@ -5,7 +5,6 @@
 //! mint and carries an index, never a body, so what is sent is what was stored and shown.
 
 use crate::drive::Port as _;
-use prodrome_core::event::TodoId;
 
 use crate::believed::Preview;
 use crate::capability::{Clock, Server, Turn};
@@ -78,8 +77,6 @@ struct Drawn<'a> {
     typeset: &'a dyn crate::capability::Typeset,
     now: crate::zone::Moment,
     categories: Vec<String>,
-    /// The chain a hand-over writes on, when this deployment has `[coding]`.
-    handover: Option<crate::chains::ChainName>,
     /// The routine `[coding]` declares.
     routine: Option<crate::coding::RoutineId>,
     /// The name the deployment stores its model's credential under.
@@ -95,14 +92,13 @@ struct Drawn<'a> {
 
 impl<'a> Drawn<'a> {
     fn of(
-        stored: &Stored,
         lines: &crate::secretary::store::Lines,
         cards: &Cards<'_>,
         at: crate::capability::Datetime,
         typeset: &'a dyn crate::capability::Typeset,
     ) -> Self {
         // An unplaced line names no changeset, so it reads no chain.
-        let mut wanted: std::collections::BTreeSet<&str> = lines
+        let wanted: std::collections::BTreeSet<&str> = lines
             .standings()
             .filter_map(|standing| match &standing.object.asked.proposal {
                 Proposal::Changes(changeset) => Some(changeset.chain()),
@@ -115,20 +111,6 @@ impl<'a> Drawn<'a> {
                 | Proposal::Decide(_) => None,
             })
             .collect();
-        // A reported session's card says whether its derived todo is on the hand-over chain.
-        let handover = cards
-            .deployment
-            .coding
-            .as_ref()
-            .map(|coding| coding.chain.clone());
-        if let Some(chain) = &handover
-            && stored
-                .coding
-                .values()
-                .any(|session| matches!(session, crate::coding::Session::Reported { .. }))
-        {
-            wanted.insert(chain.as_str());
-        }
         let mut read = std::collections::BTreeMap::new();
         for bound in cards.chains {
             if !wanted.contains(bound.name) {
@@ -156,7 +138,6 @@ impl<'a> Drawn<'a> {
                 zone: cards.deployment.zone,
             },
             categories: cards.deployment.categories.keys().cloned().collect(),
-            handover,
             model: cards.settables.model(),
             routine: cards
                 .deployment
@@ -243,31 +224,6 @@ impl Draw for Drawn<'_> {
             .iter()
             .find(|manifest| manifest.name().as_str() == plugin)
             .map(|manifest| manifest.origins().map(ToString::to_string).collect())
-    }
-
-    fn handed(&self, conversation: &ConversationId, index: usize) -> String {
-        let Some(chain) = &self.handover else {
-            return String::new();
-        };
-        let Ok(todo) = TodoId::new(crate::coding::handed_todo(conversation, index)) else {
-            return String::new();
-        };
-        let on = self.nodes.get(chain.as_str()).is_some_and(|(preview, _)| {
-            preview
-                .nodes()
-                .iter()
-                .filter_map(|node| node.event())
-                .any(|event| event.todo() == &todo)
-        });
-        if on {
-            Reference::Todo(TodoRef {
-                chain: chain.clone(),
-                id: todo,
-            })
-            .to_string()
-        } else {
-            String::new()
-        }
     }
 
     fn shown(&self, changeset: &Changeset) -> (Vec<wire::ProposedObject>, String) {
@@ -427,9 +383,8 @@ pub fn newest(
 }
 
 /// `GET …/<id>/drawn?indices=<n>,…`: proposals `indices` drawn against the todo chains, which a
-/// tab's replicas of the inbox and the conversations cannot: a standing changeset's rows, and
-/// whether a reported session was handed over. Each the whole row, so its card is the one
-/// function's; the conversation, the inbox and the memory are read once for all of them.
+/// tab's replicas of the inbox and the conversations cannot: a standing changeset's rows. Each
+/// the whole row, so its card is the one function's; the conversation, the inbox and the memory are read once for all of them.
 ///
 /// # Errors
 /// [`Refusal::not_found`] for a conversation or a proposal there is none of, and the stores' own.
@@ -442,7 +397,6 @@ pub fn drawn(
     let stored = super::read(caps.secretary.conversations, id)?;
     let fold = inbox::fold(caps.secretary.inbox)?;
     let drawn = Drawn::of(
-        &stored,
         &stored.lines(&fold),
         cards,
         caps.secretary.clock.now(),
@@ -1522,6 +1476,7 @@ pub fn ask_trust(
     .map_err(|failed| Refusal::internal(failed.to_string()))?;
     super::verbs::propose(
         &secretary,
+        &[],
         &stored.id,
         Proposal::Act(Act::Device(crate::signatures::Enrolment {
             actor: actor.clone(),
@@ -2092,93 +2047,56 @@ pub fn acknowledge(
     payload(&after, caps, cards)
 }
 
-/// `POST …/proposals/<n>/hand`: hand a reported session to the main session as one todo on the
-/// `[coding]` chain.
+/// `POST …/todo/<id>/build`: file the coding-session card that builds `todo`, serving it, in
+/// the box's `build` conversation; the owner's tap on that card is what fires a session.
 ///
 /// # Errors
-/// [`Refusal::conflict`] without `[coding]`, unreported or already handed; [`Refusal::not_found`]
-/// for no session; the store's own.
-pub fn hand(
+/// As [`Deployment::builder`], [`super::build::record`], [`super::build::admitted`] and
+/// [`super::build::task`]; the stores' own.
+pub fn build(
     caps: &Server<'_>,
     by: &Tap,
     cards: &Cards<'_>,
-    card: &ProposalRef,
+    todo: &TodoRef,
 ) -> Answered<wire::ConversationPayload> {
-    let (id, index) = (&card.conversation, card.index);
-    let coding = cards.deployment.coding.as_ref().ok_or_else(|| {
-        Refusal::conflict("this deployment declares no [coding], so nothing can be handed over")
-    })?;
-    let (session, branch, report) =
-        match crate::secretary::coding::started(caps.secretary.conversations, id, index)? {
-            crate::coding::Session::Reported {
-                id: session,
-                branch,
-                report: crate::secretary::words::Words::Kept { kept: report },
-            } => (session, branch, report),
-            crate::coding::Session::Reported {
-                report: crate::secretary::words::Words::Gone { .. },
-                ..
-            } => {
-                return Err(Refusal::conflict(format!(
-                    "proposal {index}'s session's report is gone, so there is nothing to hand over"
-                )));
-            }
-            crate::coding::Session::Fired { .. }
-            | crate::coding::Session::Merged { .. }
-            | crate::coding::Session::Dropped { .. } => {
-                return Err(Refusal::conflict(format!(
-                    "proposal {index}'s session has no report to hand over"
-                )));
-            }
-        };
-    let todo = crate::coding::handed_todo(id, index);
-    let changeset = Changeset::new(
-        coding.chain.as_str(),
-        vec![changes::Act::Add {
-            todo: todo.clone(),
-            fields: crate::todo::TodoFields {
-                body: format!("Review and merge the coding session's branch {branch}"),
-                rationale: "A cloud session's branch the owner handed over: merging it takes \
-                            the full gates, and nothing is deployed until scripts/deploy.sh."
-                    .to_owned(),
-                kind: "todo".to_owned(),
-                category: String::new(),
-                price: crate::todo::Price::Flat { percent: 60 },
-                detail: format!(
-                    "Session {session}, report {} on {branch}, proposal:{id}/{index}.",
-                    report.path.as_str()
-                ),
-                waiting_on: String::new(),
-            },
-            from: changes::Provenance::default(),
-        }],
-    )
-    .map_err(|failed| Refusal::internal(failed.to_string()))?;
-    if let Performed::Tried(Tried::NotSent { reason })
-    | Performed::Done(Done::MayHaveGone { reason }) = apply(cards, &changeset)
-    {
-        return Err(Refusal::conflict(reason));
-    }
-    crate::secretary::acts::note_act(
-        caps.secretary.conversations,
-        id,
-        &ActLine {
-            at: caps.secretary.clock.now(),
-            actor: by.who().as_str().to_owned(),
-            verb: "handed",
-            reference: Reference::Todo(TodoRef {
-                chain: coding.chain.clone(),
-                id: TodoId::new(todo).map_err(|failed| Refusal::internal(failed.to_string()))?,
-            }),
-            // Not the branch: its name came from the session's report, not from the tapper.
-            note: "to the main session, to review and merge".to_owned(),
-        },
-        // The todo this hand-over wrote: `apply` writes it as the secretary, but its id is
-        // `coding::handed_todo`'s, `merge` and a hash of the proposal, so no word in it is chosen
-        // by mail or a model.
-        crate::secretary::stamp::Stamp::Actor(by.who().as_str().to_owned()),
+    cards.deployment.builder(&todo.chain)?;
+    let bound = super::bound_of(cards.chains, Some(todo.chain.as_str()))?;
+    let at = caps.secretary.clock.now();
+    let believed =
+        crate::believed::Believed::of(&bound.caps.chain.nodes()?, at, &bound.policy.untrusted)
+            .map_err(|failed| Refusal::internal(failed.to_string()))?;
+    let record = super::build::record(&believed, todo)?;
+    let (conversations, inbox) = (caps.secretary.conversations, caps.secretary.inbox);
+    // The attempt read and the card filed under one hold, so two builds asked at once are not
+    // the same attempt.
+    let _held = inbox.locked()?;
+    let task = super::build::task(
+        todo,
+        record,
+        super::build::attempt(&inbox::fold(inbox)?, todo),
     )?;
-    payload(&super::read(caps.secretary.conversations, id)?, caps, cards)
+    let conversation = &*super::build::CONVERSATION;
+    let proposer = crate::secretary::proposer::Proposer::Box;
+    super::filed::opened(conversations, conversation, "Builds", &proposer, at)?;
+    super::filed::file_held(
+        conversations,
+        inbox,
+        cards.chains,
+        at,
+        super::filed::Filing {
+            conversation,
+            proposer,
+            proposal: Proposal::Act(Act::CodingSession { task }),
+            reasons: crate::secretary::store::Reasons::new(
+                format!("{} asked for {todo} to be built.", by.who().as_str()),
+                vec![Reference::Todo(todo.clone())],
+            )
+            .map_err(|failed| Refusal::internal(failed.to_string()))?,
+            serves: Some(todo.clone()),
+            revises: None,
+        },
+    )?;
+    payload(&super::read(conversations, conversation)?, caps, cards)
 }
 
 /// `POST …/proposals/<n>/drop`: let a session go, with a reason.
@@ -2213,7 +2131,6 @@ fn payload(
 ) -> Answered<wire::ConversationPayload> {
     let fold = inbox::fold(caps.secretary.inbox)?;
     let drawn = Drawn::of(
-        stored,
         &stored.lines(&fold),
         cards,
         caps.secretary.clock.now(),
@@ -2388,7 +2305,6 @@ mod tests {
                 zone: crate::zone::Zone::UTC,
             },
             categories: Vec::new(),
-            handover: None,
             model: None,
             routine: None,
             plugins: Vec::new(),

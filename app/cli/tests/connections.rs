@@ -224,6 +224,7 @@ fn asked(fakes: &Fakes, act: Act) {
     suzatary_core::secretary::filed::file(
         fakes.conversations.conversations(),
         &fakes.inbox,
+        &[],
         fakes.clock.now(),
         suzatary_core::secretary::filed::Filing {
             conversation: &id,

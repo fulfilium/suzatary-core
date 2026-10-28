@@ -101,6 +101,32 @@ impl Deployment {
         }
     }
 
+    /// The routine "Build it" fires for a todo of `chain`: `[coding]`'s, on the chain whose todos a
+    /// pull request's `Completes:` line closes.
+    ///
+    /// # Errors
+    /// [`crate::refusal::Refusal::conflict`] without `[coding]` or for any other chain.
+    pub fn builder(
+        &self,
+        chain: &crate::chains::ChainName,
+    ) -> Result<&crate::coding::RoutineId, crate::refusal::Refusal> {
+        let coding = self.coding.as_ref().ok_or_else(|| {
+            crate::refusal::Refusal::conflict(
+                "this deployment declares no [coding], so no todo is built",
+            )
+        })?;
+        let plan = crate::release::Plan::declared()
+            .map_err(|failed| crate::refusal::Refusal::internal(failed.to_string()))?;
+        if chain.as_str() == plan.chain() {
+            Ok(&coding.routine)
+        } else {
+            Err(crate::refusal::Refusal::conflict(format!(
+                "only todos of {} are built: a pull request's Completes: line closes those",
+                plan.chain()
+            )))
+        }
+    }
+
     /// This project's own chain: second in the instance file's order of meaning, or the only
     /// one a deployment of one chain has.
     #[must_use]

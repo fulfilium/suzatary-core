@@ -227,25 +227,15 @@ impl SessionUrl {
     }
 }
 
-/// `[coding]` in the instance file, parsed: which routine a tap fires, which
-/// repository its branches come back to, and which chain a hand-over lands on.
+/// `[coding]` in the instance file, parsed: which routine a tap fires and which repository its
+/// branches come back to.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct Coding {
     /// The routine created at claude.ai/code/routines.
     pub routine: RoutineId,
     /// The repository its saved prompt names; the poll reads its branches.
     pub repo: RepoName,
-    /// The project chain "Hand to the main session" writes its todo on.
-    pub chain: crate::chains::ChainName,
-}
-
-/// The todo a hand-over writes, derived from the proposal, so a second hand-over of the same
-/// session is the same id and is refused. `merge<hex>`, since a todo id is letters and digits.
-#[must_use]
-pub fn handed_todo(conversation: &crate::secretary::store::ConversationId, index: usize) -> String {
-    use sha2::Digest as _;
-    let digest = sha2::Sha256::digest(format!("proposal:{conversation}/{index}"));
-    format!("merge{}", &hex::encode(digest)[..12])
 }
 
 /// What a fire answered.

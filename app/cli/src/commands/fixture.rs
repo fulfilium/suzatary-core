@@ -455,6 +455,7 @@ fn a_connected_calendar(root: &Path) -> anyhow::Result<()> {
     suzatary_core::secretary::filed::file(
         conversations,
         &inbox,
+        &[],
         now,
         suzatary_core::secretary::filed::Filing {
             conversation: &id,
@@ -503,6 +504,7 @@ fn a_google_account_to_connect(root: &Path) -> anyhow::Result<()> {
     suzatary_core::secretary::filed::file(
         conversations,
         &inbox,
+        &[],
         now,
         suzatary_core::secretary::filed::Filing {
             conversation: &id,
@@ -1142,7 +1144,6 @@ fn instance_file(
         coding: (settings && propose).then(|| suzatary_core::coding::Coding {
             routine: "trig01fixture".parse().expect("a routine id"),
             repo: "bmabsout/fixture".parse().expect("a repository"),
-            chain: ChainName::new("suzatary").expect("a slug"),
         }),
         cache: None,
         plugins: Vec::new(),
@@ -1477,6 +1478,7 @@ fn bulk_proposals(read: &crate::instance::Instance, count: usize) -> anyhow::Res
         let (_, object) = suzatary_core::secretary::filed::file(
             conversations,
             &inbox,
+            &[],
             now,
             suzatary_core::secretary::filed::Filing {
                 conversation: &id,

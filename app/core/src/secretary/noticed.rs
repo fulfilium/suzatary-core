@@ -21,9 +21,8 @@ use crate::secretary::inbox::{self, ProposalId};
 use crate::secretary::inbox_event::InboxEvent;
 use crate::secretary::proposer::Proposer;
 use crate::secretary::responded::Withdrawal;
-use crate::secretary::store::{ConversationId, Entry, Kind, Proposal, Reasons};
-use crate::secretary::transcript;
-use crate::store::{Prodrome, StoreError};
+use crate::secretary::store::{ConversationId, Entry, Proposal, Reasons};
+use crate::store::Prodrome;
 
 /// The conversation the box's own cards are drawn in.
 pub static CONVERSATION: LazyLock<ConversationId> =
@@ -155,16 +154,7 @@ impl Owed {
                 continue;
             }
             // Opened by the first card it draws, so a box that owes nothing has no conversation.
-            let opened = Entry::Opened {
-                at,
-                title: crate::secretary::words::Words::kept("Setup".to_owned()),
-                model: Proposer::Box.named(),
-                kind: Kind::Review,
-            };
-            match transcript::start(conversations, conversation, &opened) {
-                Ok(()) | Err(StoreError::Taken { .. }) => {}
-                Err(failed) => return Err(failed.into()),
-            }
+            filed::opened(conversations, conversation, "Setup", &Proposer::Box, at)?;
             // The card is its own evidence, as a device's request is: the reading it rests on is
             // the box's, and the box says it in a line the card is drawn under.
             let card = Reference::Proposal(ProposalRef {
@@ -182,6 +172,7 @@ impl Owed {
             let (_, object) = filed::file(
                 conversations,
                 inbox,
+                &[],
                 at,
                 Filing {
                     conversation,
@@ -197,7 +188,10 @@ impl Owed {
         let stale: Vec<ProposalId> = before
             .objects()
             .filter(|object| {
+                // The box files cards elsewhere too (a build, an erasure), which are not this
+                // set's to withdraw.
                 self.stale == Stale::Withdrawn
+                    && object.asked.asked.conversation == *conversation
                     && object.asked.proposer == Proposer::Box
                     && object.reading.performs()
                     && !self.holds(&object.asked.proposal)
@@ -504,6 +498,55 @@ mod tests {
         assert!(filed.withdrawn.is_empty());
         let fold = inbox::fold(&inbox_store).expect("reads");
         assert!(fold.get(&theirs).expect("held").reading.open());
+    }
+
+    /// The box files cards outside the setup conversation, a build's and an erasure's, and the
+    /// setup set withdraws none of them.
+    #[test]
+    fn the_box_s_cards_elsewhere_are_not_the_setup_set_s() {
+        let conversations = crate::secretary::conversations::InMemory::default();
+        let inbox_store = InMemory::<InboxEvent>::default();
+        let boxs = |conversation: &str, proposal: Proposal| {
+            let asked = inbox::Asked {
+                proposer: Proposer::Box,
+                proposal,
+                reasons: Reasons::new(
+                    "the box asks",
+                    vec!["briefing:2026-10-07".parse().expect("a reference")],
+                )
+                .expect("reasons"),
+                asked: ProposalRef {
+                    conversation: ConversationId::new(conversation).expect("a slug"),
+                    index: 0,
+                },
+                price: inbox::Price::unpriced(),
+            };
+            inbox::ask(&inbox_store, asked, &super::super::writes_as(), at(0)).expect("filed")
+        };
+        let build = boxs(
+            "build",
+            Proposal::Act(crate::secretary::acts::Act::CodingSession {
+                task: crate::coding::Task::try_from("Build todo:suzatary/x.".to_owned())
+                    .expect("a task"),
+            }),
+        );
+        let erase = boxs(
+            "default",
+            Proposal::Act(crate::secretary::acts::Act::Erase {
+                fact: crate::secretary::memory::FactId(2),
+                keys: [crate::secretary::locked_text::KeyName::new("a".repeat(64))
+                    .expect("a key name")]
+                .into(),
+            }),
+        );
+        let filed = Owed::default()
+            .file(conversations.conversations(), &inbox_store, at(1))
+            .expect("filed");
+        assert!(filed.withdrawn.is_empty(), "{:?}", filed.withdrawn);
+        let fold = inbox::fold(&inbox_store).expect("reads");
+        for card in [build, erase] {
+            assert!(fold.get(&card).expect("held").reading.open());
+        }
     }
 
     fn signing_in() -> Proposal {

@@ -32,7 +32,6 @@ use anyhow::{Context, bail};
 use prodrome_core::event::Actor;
 use prodrome_core::sign::PublicKey;
 use suzatary_core::chains::Chains;
-use suzatary_core::coding::Coding;
 use suzatary_core::connect::Channel;
 use suzatary_core::deployment::Deployment;
 use suzatary_core::nonempty::NonEmpty;
@@ -498,10 +497,7 @@ impl Instance {
         // binary's stores cannot name different chains.
         let policies = Chains::of(chains.iter().map(|chain| chain.policy.clone()).collect())
             .map_err(|e| anyhow::anyhow!("{}: {e}", path.display()))?;
-        let coding = file
-            .coding
-            .map(|coding| served(coding, &policies))
-            .transpose()?;
+        let coding = file.coding;
         let (notify, sender) = file.notify.map_or((None, None), |section| {
             (NonEmpty::of(section.channels), section.fcm_sender)
         });
@@ -622,18 +618,6 @@ fn writers_checked(path: &Path, deployment: &Deployment) -> anyhow::Result<()> {
         );
     }
     Ok(())
-}
-
-/// `[coding]`, whose hand-over chain must be one this deployment serves, so a
-/// bad one stops startup rather than failing at the first tap.
-fn served(coding: Coding, chains: &Chains) -> anyhow::Result<Coding> {
-    if chains.get(coding.chain.as_str()).is_none() {
-        bail!(
-            "[coding] chain {} is not one of this deployment's [[chains]]",
-            coding.chain
-        );
-    }
-    Ok(coding)
 }
 
 /// The file lock adoption is taken under, beside the chain's objects: across processes, since

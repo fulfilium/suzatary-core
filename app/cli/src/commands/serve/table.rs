@@ -17,6 +17,8 @@ pub fn table() -> Vec<Route> {
         Route::get("/tip", Scope::Chain, chain::tip),
         Route::get("/fold", Scope::Chain, chain::fold),
         Route::get("/todo/{id}", Scope::Chain, chain::todo),
+        // Files a card and fires nothing: the owner's tap on that card starts the session.
+        Route::post("/todo/{id}/build", Scope::Chain, chain::build),
         Route::get("/tree", Scope::Chain, chain::tree),
         Route::get("/me", Scope::Chain, chain::me),
         // Replica sync: the GET is what the caller lacks, the POST its objects, rehashed.
@@ -101,11 +103,6 @@ pub fn table() -> Vec<Route> {
             "/api/secretary/conversations/{conversation}/proposals/{index}/acknowledge",
             Scope::Box,
             proposals::acknowledge,
-        ),
-        Route::post(
-            "/api/secretary/conversations/{conversation}/proposals/{index}/hand",
-            Scope::Box,
-            proposals::hand,
         ),
         Route::post(
             "/api/secretary/conversations/{conversation}/proposals/{index}/drop",

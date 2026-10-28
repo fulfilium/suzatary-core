@@ -152,13 +152,15 @@ fn most_owed(entries: Vec<wire::Entry>, n: usize) -> Vec<wire::Entry> {
     owed.into_iter().map(|(_, entry)| entry).collect()
 }
 
-/// One todo in full; an id no event mentions is a 404, not an empty page.
+/// One todo in full, with the routine "Build it" fires for it ([`Deployment::builder`]); an id no
+/// event mentions is a 404, not an empty page.
 pub fn todo(
     render: &dyn Render,
     chain: &ChainPolicy,
     zone: crate::zone::Zone,
     set: &ChainSet<'_>,
     id: &str,
+    builder: Option<&crate::coding::RoutineId>,
 ) -> Answered<wire::TodoPayload> {
     let (at, untrusted) = (set.at(), &chain.untrusted);
     let id = todo_id(id)?;
@@ -208,6 +210,7 @@ pub fn todo(
             out: neighbours(refs.get(id)),
             inward: neighbours(back.get(id)),
         },
+        builder: builder.map(ToString::to_string),
     })
 }
 

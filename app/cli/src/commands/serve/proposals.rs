@@ -281,17 +281,6 @@ pub fn acknowledge(
         .map(Json)
 }
 
-/// `POST …/proposals/<n>/hand`: hand a reported coding session to the main session as
-/// one todo; nothing is merged here.
-pub fn hand(call: &Call<Tap, ProposalRef, ()>) -> Result<Json<wire::ConversationPayload>, Refusal> {
-    let card = &call.params;
-    let id = &card.conversation;
-    call.state
-        .with_cards(|caps, cards| secretary_routes::hand(caps, &call.guard, cards, card))
-        .inspect(|_| call.state.heard(id))
-        .map(Json)
-}
-
 /// `POST …/proposals/<n>/drop`: let a coding session go, with a required reason.
 pub fn drop_session(
     call: &Call<Tap, ProposalRef, wire::Reasoning>,

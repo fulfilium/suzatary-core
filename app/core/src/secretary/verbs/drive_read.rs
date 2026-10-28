@@ -70,6 +70,7 @@ impl Verb for DriveRead {
         let sentence = act.sentence();
         let index = propose(
             call.caps,
+            call.chains,
             call.conversation,
             Proposal::Act(act),
             &reasons,

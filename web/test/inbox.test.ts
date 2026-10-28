@@ -164,12 +164,12 @@ test("rowOf: a decision naming a triage batch is unresolved, never a half-built 
   assert.equal(rowOf(held, new Map()).kind, "unresolved");
 });
 
-test("sameRows: a coding session handed over is a different row, so its card is drawn again", () => {
-  const reported = { state: "reported" as const, id: "s1", branch: "claude/x", path: "docs/reports/x.md", report: "done", stat: [], handed: "" };
+test("sameRows: a coding session that moved is a different row, so its card is drawn again", () => {
+  const reported = { state: "reported" as const, id: "s1", branch: "claude/x", path: "docs/reports/x.md", report: "done", stat: [] };
   const of = (coding: ProposalRow["coding"]) =>
     rowOf(waiting.proposal(asked()), new Map([["default", conversationPayload({ proposals: [proposalRow({ coding })] })]]));
   assert.ok(sameRows([of(reported)], [of(reported)]));
-  assert.ok(!sameRows([of(reported)], [of({ ...reported, handed: "2026-10-07T10:00:00" })]));
+  assert.ok(!sameRows([of(reported)], [of({ state: "merged", id: "s1", sha: "0123456789ab" })]));
 });
 
 // --- the box's setup cards, folded into one row ---------------------------------

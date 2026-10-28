@@ -2,10 +2,10 @@ use schemars::JsonSchema;
 use serde::Deserialize;
 
 use super::{propose, references};
-use crate::capability::Secretary;
 use crate::reference::TodoRef;
 use crate::refusal::Refusal;
-use crate::secretary::store::{ConversationId, Proposal, Reasons};
+use crate::secretary::Call;
+use crate::secretary::store::{Proposal, Reasons};
 
 /// The reasons every proposal carries: why, and what it rests on.
 #[derive(Deserialize, JsonSchema)]
@@ -49,8 +49,7 @@ impl FilingArgs {
     /// A `serves` that is no todo reference, and whatever filing the proposal refuses.
     pub fn file(
         &self,
-        caps: &Secretary<'_>,
-        conversation: &ConversationId,
+        call: &Call<'_>,
         proposal: Proposal,
         reasons: &Reasons,
     ) -> Result<usize, Refusal> {
@@ -63,6 +62,14 @@ impl FilingArgs {
                     .map_err(|failed| Refusal::bad_request(format!("serves: {failed}")))
             })
             .transpose()?;
-        propose(caps, conversation, proposal, reasons, serves, self.revises)
+        propose(
+            call.caps,
+            call.chains,
+            call.conversation,
+            proposal,
+            reasons,
+            serves,
+            self.revises,
+        )
     }
 }

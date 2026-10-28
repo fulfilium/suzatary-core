@@ -141,6 +141,7 @@ pub fn propose_persistent(
         .map_err(|failed| Refusal::internal(failed.to_string()))?;
         proposed.push(super::verbs::propose(
             caps,
+            &[],
             conversation,
             Proposal::Changes(changeset),
             &reasons,
