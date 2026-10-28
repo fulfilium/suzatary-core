@@ -193,7 +193,7 @@ test("the lines' rows of form 1 are reset under linesync.FORMAT, whose nodes nam
 // for good: the lines' rows of form 2 are reset as well, and taken again with each reseal's `from`.
 test("the lines' rows of form 2 are reset under linesync.FORMAT, whose reseals name the seal they were sealed from", async () => {
   fakeIndexedDB()
-  assert.equal(linesync.FORMAT, 3, "the lines are of form 3")
+  assert.ok(linesync.FORMAT > 2, `the lines moved past form 2 (${linesync.FORMAT})`)
   const reseal = { ...node("a"), header: { node: "line", conversation: "first", at: "2026-10-25T09:00:00", kind: "Resealed", keys: ["b".repeat(64)], step: { step: "resealed", of: "c".repeat(64) } } } as unknown as SkeletonNode
   assert.equal((await lineRows(2).land(locked.of(row([reseal], at(1)).replica, { k: "00" }))).row.type, "Val")
   const read = await lineRows(linesync.FORMAT).restore()

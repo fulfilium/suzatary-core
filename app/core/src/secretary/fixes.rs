@@ -1,20 +1,20 @@
 //! The rule over the deployment's secrets: a name a table of the instance file declares, with
 //! nothing stored under it, is owed a Secret card the box files itself, with no model asked.
 //!
-//! Its identity is (name, declaration, episode). The act's words name what declares the name and,
-//! once a card of the box's has ended without the owner's no (stored from the card, or withdrawn
-//! when the value was stored elsewhere), that card. So asking again while nothing changed asks
-//! for the same card however it was answered (one the owner dismissed stays dismissed), a
-//! declaration that changes is a new card, and a value stored and then lost is a new card naming
-//! the one before it.
+//! Its identity is (name, declaration, episode). The act's words name what declares the name and
+//! nothing else, so the same state asks for the same card. An episode begins when a card of the
+//! box's for the name ends without the owner's no (stored from the card, or withdrawn when the
+//! value was stored elsewhere), so asking again while nothing changed asks for the same card
+//! however it was answered (one the owner dismissed stays dismissed), and a value stored and then
+//! lost is asked for anew.
 
-use crate::reference::ProposalRef;
+use crate::capability::Datetime;
 use crate::secretary::acts::Act;
 use crate::secretary::inbox;
 use crate::secretary::noticed::Owed;
 use crate::secretary::proposer::Proposer;
 use crate::secretary::responded::{Done, Responded};
-use crate::secretary::store::Proposal;
+use crate::secretary::store::{Need, Proposal};
 use crate::settings::{Declaration, Settable, Settables};
 
 /// Why the box asks for a declared secret nothing stores, in the owner's words.
@@ -30,8 +30,9 @@ pub struct Fix {
     pub name: Settable,
     /// Every table declaring it.
     pub declared: Vec<Declaration>,
-    /// The box's card for it that last ended without the owner's no, once one has.
-    pub after: Option<ProposalRef>,
+    /// When the box's card for it last ended without the owner's no, once one has: its episode
+    /// begins there.
+    pub since: Option<Datetime>,
 }
 
 impl Fix {
@@ -46,16 +47,23 @@ impl Fix {
             .join(" and ");
         Act::Secret {
             name: self.name.name().to_owned(),
-            why: match &self.after {
-                None => format!("{readers} reads it"),
-                Some(card) => format!("{readers} reads it, and it no longer resolves after {card}"),
-            },
+            why: format!("{readers} reads it"),
+        }
+    }
+
+    /// What it owes: its act, in its episode.
+    #[must_use]
+    pub fn owed(&self) -> Owed {
+        let owed = Owed::one(Proposal::Act(self.act()), MISSING);
+        match self.since {
+            Some(since) => owed.since(since),
+            None => owed,
         }
     }
 }
 
 /// Every declared name a table of the instance file names that is `missing`, each with the
-/// box's card for it that last ended without the owner's no. The model's credential is no
+/// instant the box's card for it last ended without the owner's no. The model's credential is no
 /// table's: whether the model answers is the model's rule to ask.
 #[must_use]
 pub fn fixes(
@@ -73,9 +81,10 @@ pub fn fixes(
                 .cloned()
                 .collect();
             (!declared.is_empty()).then(|| Fix {
-                after: ended(inbox, |proposal| {
-                    matches!(proposal, Proposal::Act(Act::Secret { name: asked, .. }) if asked == name.name())
-                }),
+                since: ended(inbox, |proposal| {
+                    proposal.need() == Need::Secret(name.name())
+                })
+                .and_then(|object| object.reading.shown().map(|answer| answer.at)),
                 name,
                 declared,
             })
@@ -91,8 +100,8 @@ pub fn owed(
     inbox: &inbox::Fold,
 ) -> Owed {
     fixes(settables, missing, inbox)
-        .into_iter()
-        .map(|fix| Owed::one(Proposal::Act(fix.act()), MISSING))
+        .iter()
+        .map(Fix::owed)
         .fold(Owed::default(), Owed::join)
 }
 
@@ -101,14 +110,15 @@ pub fn owed(
 pub fn unlock(inbox: &inbox::Fold) -> Owed {
     let after = ended(inbox, |proposal| {
         matches!(proposal, Proposal::Act(Act::UnlockStore { .. }))
-    });
+    })
+    .map(|object| object.asked.asked.clone());
     Owed::one(Proposal::Act(Act::UnlockStore { after }), LOCKED)
 }
 
 /// The box's card asking for what `asks` picks that last ended without the owner's no: acted on
 /// from the card, or withdrawn by the box. The latest by its recorded instant and then its name,
 /// so the answer is a function of the inbox's objects.
-fn ended(inbox: &inbox::Fold, asks: impl Fn(&Proposal) -> bool) -> Option<ProposalRef> {
+fn ended(inbox: &inbox::Fold, asks: impl Fn(&Proposal) -> bool) -> Option<&inbox::Object> {
     inbox
         .objects()
         .filter(|object| {
@@ -128,7 +138,6 @@ fn ended(inbox: &inbox::Fold, asks: impl Fn(&Proposal) -> bool) -> Option<Propos
                 && asks(&object.asked.proposal)
         })
         .max_by_key(|object| (object.reading.shown().map(|answer| answer.at), &object.id))
-        .map(|object| object.asked.asked.clone())
 }
 
 #[cfg(test)]

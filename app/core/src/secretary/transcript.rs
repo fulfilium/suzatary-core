@@ -21,6 +21,7 @@ use prodrome_core::event::{Actor, Envelope, Hash};
 use prodrome_core::literal::Datetime;
 use prodrome_core::registers::Node;
 
+use crate::capability::Turn;
 use crate::secretary::conversations::Conversations;
 use crate::secretary::erasure::Erasure;
 use crate::secretary::line_event::LineEvent;
@@ -198,6 +199,100 @@ impl Transcript {
             .filter(|(turn, _)| !settled[self.turns[*turn]])
             .collect()
     }
+
+    /// The question a round answers: the first owed turn that wakes a model, by its line's name,
+    /// which stays the question's whatever is written after it.
+    #[must_use]
+    pub fn asked(&self) -> Option<&Hash> {
+        self.owed()
+            .into_iter()
+            .find(|(_, said)| crate::secretary::queue::wakes(said))
+            .map(|(turn, _)| &self.lines[self.turns[turn]].name)
+    }
+
+    /// Whether a round was owed here at or after `since` and none answered: a round already in
+    /// flight (a model's or a verb's turn still owed), or a person's question, which the routes
+    /// wake a model for. An act line alone is not: an acknowledgement wakes no model, by design.
+    #[must_use]
+    pub fn interrupted(&self, since: crate::health::Instant) -> bool {
+        self.owed().iter().any(|(_, said)| {
+            prodrome_core::fpl::instant_of(said.at) >= since
+                && match said.turn {
+                    Turn::Person { .. } | Turn::Model { .. } | Turn::Tool { .. } => true,
+                    Turn::Act { .. } | Turn::Erased { .. } => false,
+                }
+        })
+    }
+
+    /// Whether the turn the line named `line` says is still owed an answer.
+    #[must_use]
+    pub fn owes(&self, line: &Hash) -> bool {
+        self.owed()
+            .iter()
+            .any(|(turn, _)| self.lines[self.turns[*turn]].name == *line)
+    }
+}
+
+/// What a round's write for one question did.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Answering {
+    /// The line was written.
+    Written,
+    /// A closing line already rests on the question, so nothing was written.
+    Answered,
+}
+
+/// [`push`] `entry`, a round's line for the question named `asked`, unless a closing line already
+/// rests on that question: a round resumed beside one that answered it writes nothing.
+///
+/// # Errors
+/// As [`push`].
+pub fn push_answering(
+    conversations: Conversations<'_>,
+    id: &ConversationId,
+    asked: &Hash,
+    entry: &Entry,
+) -> Result<Answering, StoreError> {
+    let _held = conversations.lines.locked()?;
+    let read = read(conversations, id)?;
+    if !read.owes(asked) {
+        return Ok(Answering::Answered);
+    }
+    write(conversations, id, read.lines().len(), entry)?;
+    Ok(Answering::Written)
+}
+
+/// How long before a restart a question it left unanswered is still answered after it.
+pub const RESUMED: chrono::Duration = chrono::Duration::hours(1);
+
+/// Every conversation a restart at `now` left unanswered ([`Transcript::interrupted`]) within
+/// [`RESUMED`], to be answered now; none while the model's last observed call, `model`, failed,
+/// since a round would only close each question with "did not finish", and the owner's next write
+/// asks again.
+///
+/// # Errors
+/// The store's.
+pub fn waiting(
+    conversations: Conversations<'_>,
+    model: Option<&crate::health::Reading>,
+    now: Datetime,
+) -> Result<Vec<ConversationId>, StoreError> {
+    match model {
+        Some(crate::health::Reading::Failing { .. }) => return Ok(Vec::new()),
+        Some(crate::health::Reading::Ok { .. }) | None => {}
+    }
+    let since = prodrome_core::fpl::instant_of(now) - RESUMED;
+    let nodes = conversations.lines.nodes()?;
+    let slots = conversations.reads().slots();
+    Ok(writes(&nodes)
+        .into_iter()
+        .filter_map(|(id, written)| {
+            Transcript::of(id, &written, &slots)
+                .ok()
+                .filter(|transcript| transcript.interrupted(since))
+                .map(|_| id.clone())
+        })
+        .collect())
 }
 
 /// A conversation's reading is named by its heads, the lines no other line rests on: the down-set
@@ -1093,6 +1188,115 @@ mod tests {
             },
             by: Some("ada".into()),
         }
+    }
+
+    /// After a restart, a person's question and a round in flight within the hour are answered;
+    /// an acknowledgement, which wakes no model, and a question from an earlier deploy are not;
+    /// and while the model fails nothing is, so no question is closed by "did not finish".
+    #[test]
+    fn a_restart_answers_only_what_it_cut_off() {
+        let held = crate::secretary::conversations::InMemory::default();
+        let store = held.conversations();
+        let hours_ago =
+            |hours: u32| Datetime::new(2026, 9, 30, 9 - hours, 0, 0, 0).expect("an instant");
+        let lines: [(&str, Entry); 4] = [
+            ("2026-09-30-1", person(1, "when is the permit due")),
+            (
+                "2026-09-30-2",
+                Entry::Said {
+                    at: at(1),
+                    turn: Turn::Model {
+                        text: String::new(),
+                        calls: vec![crate::capability::ToolCall {
+                            verb: "weather".into(),
+                            args: std::collections::BTreeMap::new(),
+                        }],
+                    },
+                    by: None,
+                },
+            ),
+            (
+                "2026-09-30-3",
+                Entry::Said {
+                    at: at(1),
+                    turn: Turn::Act {
+                        text: "Checked Sent".to_owned(),
+                        references: Vec::new(),
+                    },
+                    by: Some("ada".into()),
+                },
+            ),
+            (
+                "2026-09-30-4",
+                Entry::Said {
+                    at: hours_ago(2),
+                    turn: Turn::Person {
+                        text: "from the deploy before".to_owned(),
+                        references: Vec::new(),
+                        attachments: Vec::new(),
+                    },
+                    by: Some("ada".into()),
+                },
+            ),
+        ];
+        for (conversation, line) in &lines {
+            start(store, &id(conversation), &opened()).expect("started");
+            push(store, &id(conversation), line).expect("written");
+        }
+        assert_eq!(
+            waiting(store, None, at(30)).expect("reads"),
+            [id("2026-09-30-1"), id("2026-09-30-2")]
+        );
+        let failing = crate::health::Healths::<String>::one(
+            "a-cli/large".to_owned(),
+            prodrome_core::fpl::instant_of(at(20)),
+            crate::health::Outcome::Failed(crate::connect::Failure::Unclassified),
+            "it failed",
+        );
+        assert!(
+            waiting(store, failing.reading("a-cli/large").as_ref(), at(30))
+                .expect("reads")
+                .is_empty()
+        );
+    }
+
+    /// A question left unanswered, as a restart leaves it, is waiting; a round's closing line for
+    /// it is written once, and a second round's for the same question writes nothing.
+    #[test]
+    fn a_question_is_answered_once_whichever_round_answers_it() {
+        let held = crate::secretary::conversations::InMemory::default();
+        let store = held.conversations();
+        let morning = id("2026-09-30-1");
+        start(store, &morning, &opened()).expect("started");
+        push(store, &morning, &person(1, "when is the permit due")).expect("asked");
+        assert_eq!(
+            waiting(store, None, at(2)).expect("reads"),
+            std::slice::from_ref(&morning)
+        );
+        let asked = read(store, &morning)
+            .expect("reads")
+            .asked()
+            .cloned()
+            .expect("a question");
+        let answer = |second: u32| Entry::Said {
+            at: at(second),
+            turn: Turn::Model {
+                text: "On Friday.".to_owned(),
+                calls: Vec::new(),
+            },
+            by: None,
+        };
+        assert_eq!(
+            push_answering(store, &morning, &asked, &answer(2)).expect("written"),
+            Answering::Written
+        );
+        let lines = held.lines.objects().expect("reads").len();
+        assert_eq!(
+            push_answering(store, &morning, &asked, &answer(3)).expect("read"),
+            Answering::Answered
+        );
+        assert_eq!(held.lines.objects().expect("reads").len(), lines);
+        assert!(waiting(store, None, at(4)).expect("reads").is_empty());
     }
 
     #[test]

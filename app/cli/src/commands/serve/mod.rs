@@ -64,6 +64,7 @@ use crate::instance::Instance;
 pub use conversation_worker::Workers;
 pub use interpreters::{Brain, Ledger, Peers};
 pub use live::Live;
+pub use settings::pushed_at;
 pub use world::World;
 
 /// The owner's uploads: the store on the box, and his Drive for the ones he keeps private.
@@ -1124,6 +1125,7 @@ pub async fn listen(instance: &Instance, serving: Serving) -> anyhow::Result<()>
     erase_at_startup(&first).await;
     open_default(&first).await;
     notice_from_now_on(state.clone(), serving.moved).await;
+    resume_waiting(&state).await;
     tokio::spawn(instance_watched(state.clone(), instance.path.clone()));
     watch_from_now_on(instance, &state, &first, rest);
 
@@ -1667,6 +1669,50 @@ pub async fn instance_watched(state: State, path: PathBuf) {
         {
             tracing::warn!(
                 "reconnected: reading the moved instance file did not finish: {join_error}"
+            );
+        }
+    }
+}
+
+/// Answer what a restart left unanswered (`transcript::waiting`): each such conversation is
+/// nudged, as a write would nudge it. A model health that does not read resumes nothing; the
+/// owner's next write asks again. A failure is logged, never fatal.
+async fn resume_waiting(state: &State) {
+    let caps = state.first.caps;
+    let answered = match state.answered.healths() {
+        Ok(answered) => answered,
+        Err(failed) => {
+            tracing::warn!(
+                "secretary: the model health did not read, so nothing is resumed: {failed}"
+            );
+            return;
+        }
+    };
+    let model = state.models.recorded();
+    match tokio::task::spawn_blocking(move || {
+        suzatary_core::secretary::transcript::waiting(
+            caps.secretary.conversations,
+            answered.reading(model.as_str()).as_ref(),
+            caps.secretary.clock.now(),
+        )
+    })
+    .await
+    {
+        Ok(Ok(waiting)) => {
+            if !waiting.is_empty() {
+                tracing::info!(
+                    "secretary: resuming {} unanswered conversation(s)",
+                    waiting.len()
+                );
+            }
+            for id in &waiting {
+                state.heard(id);
+            }
+        }
+        Ok(Err(failed)) => tracing::warn!("secretary: unanswered conversations: {failed}"),
+        Err(join_error) => {
+            tracing::warn!(
+                "secretary: reading unanswered conversations did not finish: {join_error}"
             );
         }
     }

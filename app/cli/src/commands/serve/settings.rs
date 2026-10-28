@@ -207,7 +207,13 @@ fn storage(state: &State) -> Storage {
 
 /// Where the data repository pushes, read from its git configuration now.
 pub(super) fn pushed(state: &State) -> Pushed {
-    match git_config(state.data.as_path()).present() {
+    pushed_at(state.data.as_path())
+}
+
+/// Where the data repository at `root` pushes, read from its git configuration now.
+#[must_use]
+pub fn pushed_at(root: &std::path::Path) -> Pushed {
+    match git_config(root).present() {
         Ok(Some(config)) => Pushed::of_git_config(&config),
         Ok(None) => Pushed::Nowhere,
         Err(error) => Pushed::Unread(error.to_string()),

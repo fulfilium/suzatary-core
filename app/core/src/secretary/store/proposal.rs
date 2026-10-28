@@ -42,7 +42,8 @@ pub enum Proposal {
 impl Proposal {
     /// Whether the box's own card for it is asked again in a new episode, so is its instant as
     /// well as its content: an account's sign-in, asked again once the account is connected
-    /// again, and a plugin's grant, asked again whenever a link is pasted from the origin.
+    /// again, a plugin's grant, asked again whenever a link is pasted from the origin, and a
+    /// secret, asked again once a value stored from its card is lost.
     #[must_use]
     pub fn episodic(&self) -> bool {
         matches!(
@@ -52,6 +53,7 @@ impl Proposal {
                     | crate::secretary::acts::Act::AuthSend { .. }
                     | crate::secretary::acts::Act::GoogleSignIn { .. }
                     | crate::secretary::acts::Act::Grant { .. }
+                    | crate::secretary::acts::Act::Secret { .. }
             )
         )
     }

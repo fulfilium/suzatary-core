@@ -63,6 +63,46 @@ pub struct Round {
     pub opening: Opening,
     /// Its turns, the opening first.
     pub turns: Vec<(usize, Hash)>,
+    /// Who says its turns.
+    pub voices: Voices,
+}
+
+/// Who says a round's turns.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Voices {
+    /// The box alone, in its own notes ([`Step::Noted`]): the line above a card the Inbox draws,
+    /// which the stream leaves out.
+    BoxAlone,
+    /// Anyone else too.
+    Others,
+}
+
+impl Voices {
+    /// Who says a line taking `step`.
+    fn of(step: &Step) -> Self {
+        match step {
+            Step::Noted => Voices::BoxAlone,
+            Step::Opened
+            | Step::Asks
+            | Step::Answers
+            | Step::Rewound { .. }
+            | Step::Proposed
+            | Step::Coding { .. }
+            | Step::Titled
+            | Step::Resealed { .. }
+            | Step::Erased { .. }
+            | Step::Still => Voices::Others,
+        }
+    }
+
+    /// Who says a round of these voices and then a turn of `then`.
+    fn and(self, then: Self) -> Self {
+        match (self, then) {
+            (Voices::BoxAlone, Voices::BoxAlone) => Voices::BoxAlone,
+            (Voices::BoxAlone | Voices::Others, Voices::Others)
+            | (Voices::Others, Voices::BoxAlone) => Voices::Others,
+        }
+    }
 }
 
 impl Rounds {
@@ -133,17 +173,17 @@ pub fn of_steps(id: &ConversationId, lines: &[Line<'_>]) -> Outline {
         Some(first) if *first.step == Step::Opened => first.name,
         Some(_) | None => return Err(NotAConversation::Unopened(id.clone())),
     };
-    // Each turn's instant, whether it opens a round and its line; the spans set aside; how many
-    // proposals.
-    let mut turns: Vec<(Datetime, bool, &Hash)> = Vec::new();
+    // Each turn's instant, its step and its line; the spans set aside; how many proposals.
+    let mut turns: Vec<(Datetime, &Step, &Hash)> = Vec::new();
     let mut aside: Vec<std::ops::Range<usize>> = Vec::new();
     let mut proposals = 0;
     let mut reseals: BTreeMap<KeyName, BTreeSet<Hash>> = BTreeMap::new();
     let mut erasures: BTreeMap<KeyName, BTreeSet<Hash>> = BTreeMap::new();
     for line in ordered {
         match line.step {
-            Step::Asks => turns.push((line.at, true, line.name)),
-            Step::Answers => turns.push((line.at, false, line.name)),
+            Step::Asks | Step::Noted | Step::Answers => {
+                turns.push((line.at, line.step, line.name));
+            }
             Step::Rewound { to } if *to > turns.len() => {
                 return Err(NotAConversation::Unsaid {
                     id: id.clone(),
@@ -181,12 +221,16 @@ pub fn of_steps(id: &ConversationId, lines: &[Line<'_>]) -> Outline {
         .enumerate()
         .filter(|(turn, _)| !aside.iter().any(|span| span.contains(turn)));
     let mut rounds: Vec<Round> = Vec::new();
-    for (count, (turn, &(at, opens, line))) in live.enumerate() {
+    for (count, (turn, &(at, step, line))) in live.enumerate() {
         match rounds.last_mut() {
-            Some(round) if count > 0 && !opens => round.turns.push((turn, line.clone())),
+            Some(round) if count > 0 && *step == Step::Answers => {
+                round.turns.push((turn, line.clone()));
+                round.voices = round.voices.and(Voices::of(step));
+            }
             Some(_) | None => rounds.push(Round {
                 opening: Opening { turn, at },
                 turns: vec![(turn, line.clone())],
+                voices: Voices::of(step),
             }),
         }
     }

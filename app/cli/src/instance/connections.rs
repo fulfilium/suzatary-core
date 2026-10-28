@@ -347,7 +347,7 @@ sync = "gmail"
     const ICS: [&str; 3] = [
         "",
         "\n# a calendar, by hand\n[[plugins]]\nname = \"ics\"\ncomponent = \"plugins/mine/ics.wasm\"\nschema = \"plugins/mine/ics.schema\"\norigins = [\"https://calendar.example.test\"]\ncredentials = [\"PLUGIN_ICS_HOME\"]\n",
-        "\n[[plugins]]\nname = \"ics\"\ncomponent = \"ics.wasm\"\nschema = \"ics.schema\"\norigins = [\"https://calendar.google.com\", \"https://outlook.office365.com\"]\n",
+        "\n[[plugins]]\nname = \"ics\"\ncomponent = \"ics.wasm\"\nschema = \"ics.schema\"\norigins = [\"https://outlook.office365.com\"]\n",
     ];
 
     /// Tables a file may hold beside the required ones, each spelled as a person might.

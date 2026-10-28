@@ -373,7 +373,7 @@ fn a_calendar_s_link_is_declared_before_its_card_and_cleared_before_it_is_droppe
     let asked = common::reading(base, setup, &[]);
     assert_eq!(asked["proposals"][0]["act"]["kind"], "secret", "{asked}");
 
-    let link = "https://calendar.google.com/calendar/ical/work/private-7f3a9c/basic.ics";
+    let link = "https://outlook.office365.com/owa/calendar/a1b2/c3d4/calendar.ics";
     let (status, after) = tap(base, setup, 0, &serde_json::json!({ "value": link }));
     assert_eq!(status, 200, "{after}");
     assert_eq!(after["proposals"][0]["state"], "acted", "{after}");
@@ -813,6 +813,59 @@ fn a_link_in_the_clear_is_refused_before_any_grant() {
     let _ = std::fs::remove_file(&served.path);
 }
 
+/// A link to a Google calendar is stored nowhere, since the box reads a Google account's
+/// calendars through its sign-in with Google: a calendar the deployment's account holds, or one
+/// that is no account's own, asks for nothing more, and another account's own calendar asks for
+/// that account's connection, never for a grant of Google's origin.
+#[test]
+fn a_google_calendar_s_link_asks_for_its_google_account() {
+    let served = serving(
+        "google",
+        Act::Connect {
+            connection: calendar(),
+        },
+    );
+    let (base, setup) = (&served.base, CONVERSATION.as_str());
+    let (status, after) = tap(base, CONNECT, 0, &serde_json::json!({}));
+    assert_eq!(status, 200, "{after}");
+    let google = |id: &str| {
+        format!("https://calendar.google.com/calendar/ical/{id}/private-7f3a9c/basic.ics")
+    };
+    for asks_nothing in ["ada%40example.test", "c_1f2e%40group.calendar.google.com"] {
+        let (status, after) = tap(
+            base,
+            setup,
+            0,
+            &serde_json::json!({ "value": google(asks_nothing) }),
+        );
+        assert_eq!(status, 200, "{after}");
+        assert_eq!(after["proposals"][0]["state"], "failed", "{after}");
+        assert_eq!(
+            after["proposals"].as_array().map(Vec::len),
+            Some(1),
+            "{after}"
+        );
+    }
+    let (status, after) = tap(
+        base,
+        setup,
+        0,
+        &serde_json::json!({ "value": google("bea%40example.test") }),
+    );
+    assert_eq!(status, 200, "{after}");
+    assert_eq!(after["proposals"][0]["state"], "failed", "{after}");
+    let card = &after["proposals"][1]["act"];
+    assert_eq!(card["kind"], "connect", "{after}");
+    assert!(
+        card["connection"]
+            .as_str()
+            .is_some_and(|called| called.contains("bea@example.test")),
+        "{after}"
+    );
+    assert!(served.secrets.calls().is_empty(), "nothing was stored");
+    let _ = std::fs::remove_file(&served.path);
+}
+
 /// A calendar's card says what its plugin may reach as the instance declares it now: the
 /// template's origins for a first calendar, as a replica reads it, and the box draws the
 /// declared plugin's once there is one.
@@ -827,10 +880,7 @@ fn a_connect_card_names_the_origins_its_plugin_may_reach_now() {
     let first = common::reading(&served.base, CONNECT, &[]);
     assert_eq!(
         first["proposals"][0]["act"]["reach"],
-        serde_json::json!([
-            "https://calendar.google.com",
-            "https://outlook.office365.com"
-        ]),
+        serde_json::json!(["https://outlook.office365.com"]),
         "{first}"
     );
     std::fs::write(

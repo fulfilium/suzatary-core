@@ -8,6 +8,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::secretary::line_shape::LineShape;
 use crate::secretary::locked_text::KeyName;
+use crate::secretary::stamp::Stamp;
 use crate::secretary::turn_shape::TurnShape;
 
 /// What a line does to its conversation's reading.
@@ -19,6 +20,9 @@ pub enum Step {
     Opened,
     /// A turn that opens a round: a person's, an act's, or the act a stop reads as.
     Asks,
+    /// The box's own note, an act it composed from its own state: it opens a round as an act
+    /// does, and a round of nothing but such notes is no round of the owner's.
+    Noted,
     /// A turn that goes on with the round before it: the model's, or a verb's.
     Answers,
     /// Sets aside every turn from `to` on.
@@ -61,7 +65,8 @@ impl Step {
     pub fn of(shape: &LineShape) -> Self {
         match shape {
             LineShape::Opened { .. } => Step::Opened,
-            LineShape::Said { turn, .. } => match turn {
+            LineShape::Said { turn, by } => match turn {
+                TurnShape::Act { .. } if *by == Some(Stamp::Box) => Step::Noted,
                 TurnShape::Person { .. } | TurnShape::Act { .. } => Step::Asks,
                 TurnShape::Model { .. } | TurnShape::Tool { .. } => Step::Answers,
             },

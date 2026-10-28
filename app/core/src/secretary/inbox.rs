@@ -645,17 +645,21 @@ impl Fold {
         }
     }
 
-    /// The card that holds the box's asking of `proposal`, whoever asked it: for an act with
-    /// episodes ([`Proposal::episodic`]), a card of its act still open or asked at or after
-    /// `since`, when its episode began (`None`: any card); for any other act, any card of its
-    /// act. The one rule for whether the box has asked, so one request has one card.
+    /// The card that holds the box's asking of `proposal`, whoever asked it: an open card asking
+    /// for the same [`Need`](crate::secretary::store::Need), in whatever words; else, for an act
+    /// with episodes ([`Proposal::episodic`]), a card of its act asked at or after `since`, when
+    /// its episode began (`None`: any card); for any other act, any card of its act. The one
+    /// rule for whether the box has asked, so one need has one card.
     #[must_use]
     pub fn held(&self, proposal: &Proposal, since: Option<Datetime>) -> Option<&Object> {
-        self.objects.values().find(|object| {
-            object.asked.proposal == *proposal
-                && (!proposal.episodic()
-                    || object.reading.open()
-                    || since.is_none_or(|since| object.at >= since))
+        let open = self.objects.values().find(|object| {
+            object.reading.open() && object.asked.proposal.need() == proposal.need()
+        });
+        open.or_else(|| {
+            self.objects.values().find(|object| {
+                object.asked.proposal == *proposal
+                    && (!proposal.episodic() || since.is_none_or(|since| object.at >= since))
+            })
         })
     }
 }
@@ -1325,15 +1329,12 @@ mod tests {
         );
     }
 
-    /// The box's own proposal prints `Noticed` and reads back; asked of a secret, an act that
-    /// recurs when the secretary asks it, its name is its content alone, so the box asking again
-    /// at another instant is the same proposal.
+    /// The box's own proposal prints `Noticed` and reads back; asked of the store's unlocking, an
+    /// act that recurs when the secretary asks it and has no episodes, its name is its content
+    /// alone, so the box asking again at another instant is the same proposal.
     #[test]
     fn the_boxs_proposal_is_noticed_and_named_by_its_content() {
-        let act = Proposal::Act(crate::secretary::acts::Act::Secret {
-            name: "NTFY_TOPIC".to_owned(),
-            why: "the ntfy notification channel's secret does not resolve".to_owned(),
-        });
+        let act = Proposal::Act(crate::secretary::acts::Act::UnlockStore { after: None });
         let noticed = Asked {
             proposer: Proposer::Box,
             proposal: act.clone(),
@@ -1359,7 +1360,7 @@ mod tests {
         assert_ne!(
             ProposalId::of(&asked_by_the_secretary, at(0)),
             ProposalId::of(&asked_by_the_secretary, at(9)),
-            "the secretary's secret ask still recurs"
+            "the secretary's ask still recurs"
         );
     }
 

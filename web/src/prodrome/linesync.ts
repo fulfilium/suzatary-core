@@ -108,7 +108,9 @@ export namespace linesync {
   // 2: a line's step names a conversation's title lines, the slot each reseal seals and the keys each erasure names,
   // which a round's lines are found by; a node of form 1 reads them as `still`, so the reseals and erasures go unseen.
   // 3: a reseal's step also names the seal it was sealed again from, which the dead keys are read from.
-  export const FORMAT = 3
+  // 4: the box's own note takes a step of its own, `noted`, and the stream leaves out a round of nothing else; a node of
+  // form 3 reads it as `asks`, so the box's notes would be drawn as rounds.
+  export const FORMAT = 4
 
   export const of = (held: Lines, fx: Effects, blocks: rendered.Store): T => {
     // The core opens words with the row's keys and reads the row's skeleton: told what changed, so a purge's key is let

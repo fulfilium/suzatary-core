@@ -1091,6 +1091,7 @@ fn weight(node: &wire::SkeletonNode) -> usize {
                     }
                     Step::Opened
                     | Step::Asks
+                    | Step::Noted
                     | Step::Answers
                     | Step::Rewound { .. }
                     | Step::Proposed

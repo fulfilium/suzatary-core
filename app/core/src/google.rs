@@ -23,6 +23,7 @@
 mod calendar;
 mod client;
 mod flow;
+pub mod ical;
 mod pkce;
 mod scope;
 

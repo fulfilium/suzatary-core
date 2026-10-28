@@ -11,7 +11,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use prodrome_core::event::Hash;
 
 use crate::capability::Turn;
-use crate::secretary::outline::{Outline, Round, Rounds};
+use crate::secretary::outline::{Outline, Round, Rounds, Voices};
 use crate::secretary::readings::{Dress, Place, turn};
 use crate::secretary::store::{ConversationId, Entry, NotAConversation, Said, heading};
 use crate::secretary::topics::reading::Reading;
@@ -88,7 +88,9 @@ pub enum Unread {
     },
 }
 
-/// The newest `pages` pages of the rounds of `outlines` that carry every topic of `chosen`.
+/// The newest `pages` pages of the rounds of `outlines` that carry every topic of `chosen`. A
+/// round of nothing but the box's own notes ([`Voices::BoxAlone`]) is the line above a card the
+/// Inbox draws, so it is not drawn.
 ///
 /// # Errors
 /// The first outline, by id, whose lines are no conversation.
@@ -108,7 +110,7 @@ pub fn choose<'o>(
                 conversation: id.clone(),
                 turn: round.opening.turn,
             };
-            if topics.shows(chosen, &target) {
+            if round.voices == Voices::Others && topics.shows(chosen, &target) {
                 shown.push((round.opening.at, id, round.opening.turn, rounds, at));
             }
         }

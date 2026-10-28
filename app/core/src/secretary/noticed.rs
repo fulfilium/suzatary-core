@@ -1,15 +1,18 @@
 //! What the box itself asks the owner for, with no model asked: the proposals a reading of the
 //! deployment owes, filed in one conversation and kept equal to that set.
 //!
-//! [`Owed`] is a set joined by union, so each of the box's rules contributes its part in any
-//! order, and the box files the join of all of them at once. Filing is idempotent: the box's
-//! proposals are named by their content ([`crate::secretary::inbox::Asked::recurs`]), so filing
-//! the same set again writes nothing, and a card filed anew is drawn under the box's line saying
-//! why it asks. A card of the box's that still waits and that the set no
-//! longer holds is withdrawn, saying why: what asked for it is gone, and an open card nothing
-//! needs is a question nobody is asking. A set [holding](Owed::holding) withdraws nothing:
-//! while the secret store cannot answer, the box cannot tell a card still needed from one that
-//! is not.
+//! [`Owed`] is a set of needs ([`crate::secretary::store::Need`]) joined by union, so each of
+//! the box's rules contributes its part, two rules asking for one need (a secret, by its name)
+//! are one card, and the box files the join of all of them at once. Filing is idempotent: a
+//! card is held by an open card for its need, or by its own content
+//! ([`crate::secretary::inbox::Fold::held`]), and no rule's words name an earlier card, so
+//! filing over the same state writes nothing, and a card filed anew is drawn under the box's
+//! line saying why it asks. The set owns the box's cards of the kinds its rules ask for
+//! (`owns`), wherever they are drawn, and no other card. One of those that still waits and that
+//! the set no longer holds is withdrawn, saying why: what asked for it is gone, and an open card
+//! nothing needs is a question nobody is asking. A set [holding](Owed::holding) withdraws
+//! nothing: while the secret store cannot answer, the box cannot tell a card still needed from
+//! one that is not.
 
 use std::sync::LazyLock;
 
@@ -104,8 +107,8 @@ impl Owed {
         }
     }
 
-    /// The union: a proposal both owe is owed once, with the first one's words; it holds when
-    /// either does.
+    /// The union: a need both owe ([`crate::secretary::store::Need`]) is owed once, with the
+    /// first one's proposal and words; it holds when either does.
     #[must_use]
     pub fn join(mut self, other: Self) -> Self {
         for noticed in other.owed {
@@ -117,12 +120,12 @@ impl Owed {
         self
     }
 
-    /// Whether `proposal` is owed.
+    /// Whether what `proposal` asks for is owed, in whatever words.
     #[must_use]
     pub fn holds(&self, proposal: &Proposal) -> bool {
         self.owed
             .iter()
-            .any(|noticed| noticed.proposal == *proposal)
+            .any(|noticed| noticed.proposal.need() == proposal.need())
     }
 
     /// Every proposal owed.
@@ -188,11 +191,9 @@ impl Owed {
         let stale: Vec<ProposalId> = before
             .objects()
             .filter(|object| {
-                // The box files cards elsewhere too (a build, an erasure), which are not this
-                // set's to withdraw.
                 self.stale == Stale::Withdrawn
-                    && object.asked.asked.conversation == *conversation
                     && object.asked.proposer == Proposer::Box
+                    && owns(&object.asked.proposal)
                     && object.reading.performs()
                     && !self.holds(&object.asked.proposal)
             })
@@ -211,6 +212,42 @@ impl Owed {
             done.withdrawn.push(id);
         }
         Ok(done)
+    }
+}
+
+/// Whether a card of the box's asking for `proposal` is this set's, filed and withdrawn by it
+/// alone: the kinds its rules ask for. The box's other cards (a build, an erasure) are their
+/// filers', wherever they are drawn.
+pub(crate) fn owns(proposal: &Proposal) -> bool {
+    use crate::secretary::acts::Act;
+    match proposal {
+        Proposal::Act(
+            Act::Secret { .. }
+            | Act::UnlockStore { .. }
+            | Act::SignIn { .. }
+            | Act::SignInCode { .. }
+            | Act::Auth { .. }
+            | Act::AuthSend { .. }
+            | Act::GoogleSignIn { .. }
+            | Act::GoogleClient { .. }
+            | Act::Grant { .. }
+            | Act::Connect { .. }
+            | Act::Disconnect { .. },
+        ) => true,
+        Proposal::Act(
+            Act::Web { .. }
+            | Act::Patch { .. }
+            | Act::DriveRead { .. }
+            | Act::CodingSession { .. }
+            | Act::Device(_)
+            | Act::Erase { .. }
+            | Act::CalendarEvent { .. },
+        )
+        | Proposal::Email(_)
+        | Proposal::Forward(_)
+        | Proposal::Changes(_)
+        | Proposal::Remember { .. }
+        | Proposal::Decide(_) => false,
     }
 }
 
@@ -310,19 +347,16 @@ pub fn due(seen: &Seen<'_>, inbox: &inbox::Fold) -> Owed {
                 )
             },
         ));
-    // Read after the rules above, since a secret or a sign-in one of them already asks for is
+    // Joined after the rules above, since a secret or a sign-in one of them already asks for is
     // that card, whatever made the connection fail.
     let failing = match (seen.declared, seen.health) {
-        (Some(declared), Some(health)) => super::failing::owed(
-            &super::failing::Observed {
-                declared,
-                answering: &answering,
-                health,
-                heard: seen.heard,
-                now: seen.now,
-            },
-            &owed,
-        ),
+        (Some(declared), Some(health)) => super::failing::owed(&super::failing::Observed {
+            declared,
+            answering: &answering,
+            health,
+            heard: seen.heard,
+            now: seen.now,
+        }),
         (None, _) | (_, None) => Owed::default().holding(),
     };
     let owed = owed.join(failing);
@@ -361,7 +395,7 @@ impl FromIterator<Noticed> for Owed {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::secretary::store::Draft;
+    use crate::secretary::acts::Act;
     use crate::store::InMemory;
     use crate::store::Reads as _;
 
@@ -369,19 +403,19 @@ mod tests {
         Datetime::new(2026, 10, 7, 9, minute, 0, 0).expect("an instant")
     }
 
-    fn email(subject: &str) -> Proposal {
-        Proposal::Email(Draft {
-            subject: subject.to_owned(),
-            ..Draft::default()
+    fn secret(name: &str) -> Proposal {
+        Proposal::Act(Act::Secret {
+            name: name.to_owned(),
+            why: format!("{name} is declared"),
         })
     }
 
-    fn owed(subjects: &[&str]) -> Owed {
-        subjects
+    fn owed(names: &[&str]) -> Owed {
+        names
             .iter()
-            .map(|subject| Noticed {
-                proposal: email(subject),
-                why: format!("{subject} is owed"),
+            .map(|name| Noticed {
+                proposal: secret(name),
+                why: format!("{name} is owed"),
                 since: None,
             })
             .collect()
@@ -391,15 +425,15 @@ mod tests {
     #[test]
     fn the_union_is_a_semilattice() {
         let set = |owed: &Owed| {
-            let mut subjects: Vec<String> = owed
+            let mut names: Vec<String> = owed
                 .iter()
                 .map(|noticed| match &noticed.proposal {
-                    Proposal::Email(draft) => draft.subject.clone(),
+                    Proposal::Act(Act::Secret { name, .. }) => name.clone(),
                     _ => String::new(),
                 })
                 .collect();
-            subjects.sort();
-            subjects
+            names.sort();
+            names
         };
         let (a, b, c) = (owed(&["a", "b"]), owed(&["b", "c"]), owed(&["c"]));
         assert_eq!(
@@ -478,7 +512,7 @@ mod tests {
         let inbox_store = InMemory::<InboxEvent>::default();
         let asked = inbox::Asked {
             proposer: Proposer::Secretary,
-            proposal: email("theirs"),
+            proposal: secret("THEIRS"),
             reasons: Reasons::new(
                 "asked in a round",
                 vec!["briefing:2026-10-07".parse().expect("a reference")],
@@ -635,11 +669,13 @@ mod tests {
         assert_eq!(next.owed.len(), 1);
     }
 
-    /// A store that answers `Missing` for everything but the names in `locked`.
+    /// A store that answers `Missing` for everything but the names in `locked`, `failed` and
+    /// `set`.
     #[derive(Default)]
     struct Store {
         locked: Vec<&'static str>,
         failed: Vec<&'static str>,
+        set: Vec<String>,
         asked: std::sync::atomic::AtomicUsize,
     }
 
@@ -653,6 +689,8 @@ mod tests {
                 crate::capability::SecretState::Locked
             } else if self.failed.contains(&settable.name()) {
                 crate::capability::SecretState::Failed
+            } else if self.set.iter().any(|name| name == settable.name()) {
+                crate::capability::SecretState::Set
             } else {
                 crate::capability::SecretState::Missing
             }
@@ -843,6 +881,88 @@ mod tests {
             "a failed name holds its card: {refiled:?}"
         );
         assert_eq!(open(&inbox_store), waiting);
+    }
+
+    /// A calendar whose link fails is asked for its link once, whichever rule asks: by the
+    /// failing-source rule while its secret is stored, and by the secrets rule once it is lost.
+    /// The secret's loss is the same need, so no notice after the first appends anything, and
+    /// one card for the link stands.
+    #[test]
+    fn a_failing_link_whose_secret_is_lost_is_asked_for_once() {
+        let work =
+            crate::connect::Connection::parse("ics", &["Work".to_owned()]).expect("a calendar");
+        let declared = crate::connect::Declared::default()
+            .with(&work)
+            .expect("declared");
+        let settables = crate::settings::Settables::derive(
+            crate::settings::MODEL_TOKEN,
+            [],
+            None,
+            &declared.plugins,
+        );
+        let link = work.secrets().into_iter().next().expect("a link's secret");
+        let health = crate::health::Healths::one(
+            work.sources().into_iter().next().expect("a link's source"),
+            prodrome_core::fpl::instant_of(at(0)),
+            crate::health::Outcome::Failed(crate::connect::Failure::of_status(401)),
+            "it answered 401",
+        );
+        let conversations = crate::secretary::conversations::InMemory::default();
+        let inbox_store = InMemory::<InboxEvent>::default();
+        let notice_at = |store: &Store, minute: u32| {
+            let seen = Seen {
+                settables: &settables,
+                secrets: store,
+                model: "a-cli/large",
+                answered: &crate::health::Healths::default(),
+                open: &[],
+                declared: Some(&declared),
+                health: Some(&health),
+                heard: Some(&std::collections::BTreeSet::new()),
+                pushed: &crate::settings::remote::Pushed::Nowhere,
+                now: prodrome_core::fpl::instant_of(at(minute)),
+                redirect: None,
+            };
+            notice(
+                &seen,
+                conversations.conversations(),
+                &inbox_store,
+                at(minute),
+            )
+            .expect("filed")
+        };
+        let written = || {
+            (
+                inbox_store.objects().expect("reads").len(),
+                conversations.lines.objects().expect("reads").len(),
+            )
+        };
+        let asking = || {
+            open(&inbox_store)
+                .into_iter()
+                .filter(|act| {
+                    matches!(act, crate::secretary::acts::Act::Secret { name, .. } if *name == link)
+                })
+                .count()
+        };
+        let stored = Store {
+            set: vec![link.clone()],
+            ..Store::default()
+        };
+        notice_at(&stored, 1);
+        assert_eq!(asking(), 1, "the failing link is asked for its link");
+        let settled = written();
+        let lost = Store::default();
+        for minute in 2..6 {
+            let filed = notice_at(&lost, minute);
+            assert!(filed.withdrawn.is_empty(), "{minute}: {filed:?}");
+            assert_eq!(
+                written(),
+                settled,
+                "a notice over the same state appends nothing"
+            );
+        }
+        assert_eq!(asking(), 1, "one card asks for the link");
     }
 
     /// A locked answer is the store's: the box asks once and files the unlock card, and never

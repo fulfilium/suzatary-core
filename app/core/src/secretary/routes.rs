@@ -1102,6 +1102,8 @@ enum Then {
     End(ProposalId, Performed),
     /// The origin a link was served from, which its plugin may not reach: its card is asked for.
     Grant(crate::plugin::PluginName, crate::plugin::Origin),
+    /// The Google account whose calendar's link was pasted: its connection's card is asked for.
+    Connect(crate::connect::Connection),
     /// A plugin whose link was stored, synced once so the link is checked now.
     Check(crate::plugin::PluginName),
     /// What the box kept for a removed account, deleted outside the inbox's hold, since it
@@ -1132,6 +1134,7 @@ fn afterwards(
         Some(Then::Grant(plugin, origin)) => {
             crate::secretary::connections::grant(caps, &plugin, &origin)
         }
+        Some(Then::Connect(connection)) => crate::secretary::connections::connect(caps, connection),
         Some(Then::Check(plugin)) => {
             effectors.checks.check(&plugin);
             Ok(())
@@ -1166,6 +1169,9 @@ enum Link {
         plugin: crate::plugin::PluginName,
         origin: crate::plugin::Origin,
     },
+    /// A Google account's own calendar, which the deployment does not hold: the account's
+    /// connection is asked for in its place.
+    Connect(crate::connect::Connection),
 }
 
 /// Where `value` stands as `name`'s link, read against the manifests the file declares now; a
@@ -1202,6 +1208,9 @@ fn linked(
             "nothing was stored: that is not an http(s) link the {} plugin can fetch",
             manifest.name()
         )),
+        Some(url) if let Some(calendar) = crate::google::ical::linked(&url) => {
+            google_calendar(&declared, calendar)
+        }
         // The plugin's fetch sends a secret link over TLS or loopback alone, so a grant for any
         // other origin would allow what is never fetched.
         Some(url) if !url.origin().is_confidential() => Link::Refused(format!(
@@ -1213,6 +1222,28 @@ fn linked(
             plugin: manifest.name().clone(),
             origin: url.origin().clone(),
         },
+    }
+}
+
+/// A link to a Google calendar: never stored, since a Google account's calendars are read through
+/// its sign-in with Google. An account's own calendar asks for that account's connection, unless
+/// the deployment already holds the account.
+fn google_calendar(
+    declared: &crate::connect::Declared,
+    calendar: crate::google::ical::Linked,
+) -> Link {
+    use crate::google::ical::Linked;
+    const READ: &str = "nothing was stored: the box reads a Google calendar through its Google \
+                        account, never by its link";
+    let Linked::Account(account) = calendar else {
+        return Link::Refused(format!("{READ}; connect the Google account that holds it"));
+    };
+    match crate::connect::Connection::parse("google", &[account.as_str().to_owned()]) {
+        Ok(connection) if declared.connections().contains_key(&connection.key()) => {
+            Link::Refused(format!("{READ}, and {account} is connected already"))
+        }
+        Ok(connection) => Link::Connect(connection),
+        Err(failed) => Link::Refused(format!("{READ}; {account} cannot be connected: {failed}")),
     }
 }
 
@@ -1253,6 +1284,15 @@ fn secret(
                  may not reach yet, so nothing was stored"
             );
             *then = Some(Then::Grant(plugin, origin));
+            Performed::Tried(Tried::NotSent { reason })
+        }
+        Link::Connect(connection) => {
+            let reason = format!(
+                "nothing was stored: the box reads a Google calendar through its Google account, \
+                 never by its link, so the card beside this one connects {}",
+                connection.called()
+            );
+            *then = Some(Then::Connect(connection));
             Performed::Tried(Tried::NotSent { reason })
         }
     }

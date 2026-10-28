@@ -1224,6 +1224,14 @@ enum Action {
         #[arg(long)]
         apply: bool,
     },
+    /// Withdraw, once, the setup cards an earlier build filed more than once, leaving one per
+    /// need, and ask at once for each secret still missing in today's words. Without `--apply` it
+    /// names the cards and writes nothing; a second run withdraws nothing.
+    MigrateSetup {
+        /// Withdraw them.
+        #[arg(long)]
+        apply: bool,
+    },
     /// The memory's digest of the conversations.
     Digest {
         /// What to read of it.
@@ -1346,6 +1354,7 @@ pub fn run(path: &Path, args: &Args) -> anyhow::Result<()> {
         Action::MigrateScrub { apply } => {
             migrate_scrub(&instance, *apply, &mut std::io::stdout()).map(|_| ())
         }
+        Action::MigrateSetup { apply } => migrate_setup(&instance, *apply, &mut std::io::stdout()),
         Action::Topics {
             action: TopicsAction::Carry { map, dry_run },
         } => {
@@ -1674,6 +1683,60 @@ pub fn migrate_scrub(
         done.destroyed
     )?;
     Ok(Some(done))
+}
+
+/// `suzatary secretary migrate-setup [--apply]`, said on `out`: each setup card a run withdraws
+/// (`suzatary_core::secretary::setup_migration`), and with `apply`, the run and then the secrets
+/// rule's cards filed at once.
+///
+/// # Errors
+/// The inbox's own.
+pub fn migrate_setup(
+    instance: &Instance,
+    apply: bool,
+    out: &mut impl std::io::Write,
+) -> anyhow::Result<()> {
+    use suzatary_core::secretary::setup_migration;
+    let store = inbox(instance);
+    if !apply {
+        let fold = suzatary_core::secretary::inbox::fold(&store)?;
+        let cards = setup_migration::plan(&fold);
+        for (card, headline) in cards.iter().map(|object| setup_migration::said(object)) {
+            writeln!(out, "  {card}: {headline}")?;
+        }
+        writeln!(
+            out,
+            "would withdraw {} card(s); --apply withdraws them and asks again for each secret \
+             still missing; wrote nothing",
+            cards.len()
+        )?;
+        return Ok(());
+    }
+    let now = suzatary_core::capability::Clock::now(&suzatary_io::clock::SystemClock);
+    let cards = setup_migration::run(&store, now)?;
+    for (card, headline) in &cards {
+        writeln!(out, "  {card}: {headline}")?;
+    }
+    let stores = conversations(instance);
+    let asked = setup_migration::asked_again(
+        &instance.settables,
+        &crate::commands::serve::interpreters::Declared {
+            secrets: instance.secrets(),
+            tokens: crate::commands::mail::tokens(instance),
+            asking: DECLARED,
+        },
+        &crate::commands::serve::pushed_at(instance.data()),
+        stores.conversations(),
+        &store,
+        now,
+    )?;
+    writeln!(
+        out,
+        "withdrew {} card(s); {} secret(s) still missing are asked for, each on one card",
+        cards.len(),
+        asked.owed.len()
+    )?;
+    Ok(())
 }
 
 /// The conversations' store, beside the instance's `[secretary] conversations`.

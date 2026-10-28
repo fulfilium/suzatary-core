@@ -6,9 +6,11 @@
 //! Google client, and a Google account's sign-in with Google once that client is stored. A
 //! secret step is the secrets rule's (`fixes`), which reads every declared name, the
 //! connections' among them; the subscription's sign-in is the models rule's (`bootstrap`); a
-//! terminal step has no card, since only the person can take it. A grant the box asked for is
-//! owed while its plugin still may not reach the origin, so it is withdrawn once the origin is
-//! allowed however it was, and stands while it is not.
+//! terminal step has no card, since only the person can take it. A card a tap asked the box for
+//! is owed while what it asks is unmet, so it is withdrawn once that is met however it was, and
+//! stands while it is not: a grant while its plugin may not reach the origin, and a Google
+//! account's connection, asked for when a link to one of its calendars was pasted, while the
+//! deployment does not hold the account.
 
 use crate::capability::Datetime;
 use crate::capability::{SecretState, Secrets, Server};
@@ -97,25 +99,50 @@ pub fn owed(
             })
         })
         .filter_map(|step| card(step, google, inbox));
-    let grants = inbox
+    let tapped = inbox
         .objects()
-        .filter_map(|object| match &object.asked.proposal {
-            Proposal::Act(Act::Grant { plugin, origin })
-                if object.asked.proposer == Proposer::Box
-                    && object.reading.performs()
-                    && outside(declared, plugin, origin) =>
-            {
-                Some(Owed::one(
-                    object.asked.proposal.clone(),
-                    asking(plugin, origin),
-                ))
-            }
-            _ => None,
-        });
+        .filter(|object| object.asked.proposer == Proposer::Box && object.reading.performs())
+        .filter_map(|object| unmet(declared, &object.asked.proposal));
     signins
         .chain(lacking(declared, secrets, inbox))
-        .chain(grants)
+        .chain(tapped)
         .fold(Owed::default(), Owed::join)
+}
+
+/// A card of the box's that a tap asked for, owed while what it asks is unmet: a grant while its
+/// plugin may not reach the origin, and a connection while the deployment does not hold it.
+fn unmet(declared: &Declared, proposal: &Proposal) -> Option<Owed> {
+    match proposal {
+        Proposal::Act(Act::Grant { plugin, origin }) => outside(declared, plugin, origin)
+            .then(|| Owed::one(proposal.clone(), asking(plugin, origin))),
+        Proposal::Act(Act::Connect { connection }) => {
+            (!declared.connections().contains_key(&connection.key()))
+                .then(|| Owed::one(proposal.clone(), connecting(connection)))
+        }
+        Proposal::Act(
+            Act::Secret { .. }
+            | Act::Web { .. }
+            | Act::Patch { .. }
+            | Act::DriveRead { .. }
+            | Act::CodingSession { .. }
+            | Act::Device(_)
+            | Act::Auth { .. }
+            | Act::AuthSend { .. }
+            | Act::SignIn { .. }
+            | Act::SignInCode { .. }
+            | Act::UnlockStore { .. }
+            | Act::Disconnect { .. }
+            | Act::Erase { .. }
+            | Act::GoogleClient { .. }
+            | Act::GoogleSignIn { .. }
+            | Act::CalendarEvent { .. },
+        )
+        | Proposal::Email(_)
+        | Proposal::Forward(_)
+        | Proposal::Changes(_)
+        | Proposal::Remember { .. }
+        | Proposal::Decide(_) => None,
+    }
 }
 
 /// The box's card for a connection's unmet `step`, where the box performs it on a tap; `None`
@@ -249,27 +276,54 @@ fn asking(plugin: &PluginName, origin: &Origin) -> String {
     )
 }
 
+/// Why the box asks to connect `connection`, a Google account whose calendar's link was pasted.
+fn connecting(connection: &crate::connect::Connection) -> String {
+    format!(
+        "A link to a calendar of {} was pasted, and the box reads a Google account's calendars \
+         through its sign-in with Google, never by a link.",
+        connection.called()
+    )
+}
+
 /// File the box's card asking to let `plugin` reach `origin`, when a secret card was tapped with
-/// a link served from it. It withdraws nothing: the next
-/// filing holds it while the rule above owes it.
+/// a link served from it.
 ///
 /// # Errors
 /// The stores' own failures.
 pub fn grant(caps: &Server<'_>, plugin: &PluginName, origin: &Origin) -> Result<(), Refusal> {
-    Owed::one(
-        Proposal::Act(Act::Grant {
-            plugin: plugin.clone(),
-            origin: origin.clone(),
-        }),
-        asking(plugin, origin),
+    tapped(
+        caps,
+        Owed::one(
+            Proposal::Act(Act::Grant {
+                plugin: plugin.clone(),
+                origin: origin.clone(),
+            }),
+            asking(plugin, origin),
+        ),
     )
-    // Each paste is the owner asking again, so a grant once dismissed is asked for anew.
-    .since(caps.secretary.clock.now())
-    .holding()
-    .file(
-        caps.secretary.conversations,
-        caps.secretary.inbox,
-        caps.secretary.clock.now(),
+}
+
+/// File the box's card asking to connect `connection`, a Google account, when a secret card was
+/// tapped with a link to one of its calendars.
+///
+/// # Errors
+/// The stores' own failures.
+pub fn connect(caps: &Server<'_>, connection: crate::connect::Connection) -> Result<(), Refusal> {
+    let why = connecting(&connection);
+    tapped(
+        caps,
+        Owed::one(Proposal::Act(Act::Connect { connection }), why),
     )
-    .map(|_| ())
+}
+
+/// File `owed`, a card a tap asked for. It withdraws nothing: the next filing holds it while
+/// [`unmet`] owes it.
+fn tapped(caps: &Server<'_>, owed: Owed) -> Result<(), Refusal> {
+    let now = caps.secretary.clock.now();
+    // Each paste is the owner asking again, so a grant once dismissed is asked for anew; a
+    // connection is its content alone, so one dismissed stays dismissed.
+    owed.since(now)
+        .holding()
+        .file(caps.secretary.conversations, caps.secretary.inbox, now)
+        .map(|_| ())
 }

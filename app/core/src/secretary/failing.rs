@@ -210,34 +210,17 @@ pub fn failing(observed: &Observed<'_>) -> Vec<Failing> {
         .collect()
 }
 
-/// The cards the connections' health owes, besides what `asked` already asks for: one per
-/// failing connection and episode whose remedy a tap gives, a secret or a sign-in another rule
-/// already asks for being that card; and each removal an unused connection is offered.
+/// The cards the connections' health owes: one per failing connection and episode whose remedy
+/// a tap gives, and each removal an unused connection is offered. A secret or a sign-in another
+/// rule also asks for is one need, so joined after that rule's cards it is that rule's card
+/// ([`Owed::join`]).
 #[must_use]
-pub fn owed(observed: &Observed<'_>, asked: &Owed) -> Owed {
+pub fn owed(observed: &Observed<'_>) -> Owed {
     let settables = observed.answering.settables;
-    let asks = |proposal: &Proposal| {
-        asked
-            .iter()
-            .any(|noticed| match (&noticed.proposal, proposal) {
-                (
-                    Proposal::Act(Act::Secret { name: held, .. }),
-                    Proposal::Act(Act::Secret { name, .. }),
-                ) => held == name,
-                // One sign-in with Google per account: a card asking for one missing part is the
-                // card a failure that needs the sign-in is owed.
-                (
-                    Proposal::Act(Act::GoogleSignIn { account: held, .. }),
-                    Proposal::Act(Act::GoogleSignIn { account, .. }),
-                ) => held == account,
-                (held, proposal) => held == proposal,
-            })
-    };
     let failing = failing(observed);
     let fixes = failing
         .iter()
         .filter_map(|failing| failing.fix(settables))
-        .filter(|owed| !owed.iter().any(|noticed| asks(&noticed.proposal)))
         .fold(Owed::default(), Owed::join);
     fixes.join(unused(observed, &failing))
 }
@@ -411,10 +394,6 @@ mod tests {
         }
 
         fn owed(&self, now: Instant) -> Owed {
-            self.owed_beside(now, &Owed::default())
-        }
-
-        fn owed_beside(&self, now: Instant, asked: &Owed) -> Owed {
             let resolves = |_: &Settable| true;
             let answering = Answering {
                 model: "a-cli/a-model",
@@ -422,16 +401,13 @@ mod tests {
                 settables: &self.settables,
                 resolves: &resolves,
             };
-            owed(
-                &Observed {
-                    declared: &self.declared,
-                    answering: &answering,
-                    health: &self.health,
-                    heard: Some(&self.heard),
-                    now,
-                },
-                asked,
-            )
+            owed(&Observed {
+                declared: &self.declared,
+                answering: &answering,
+                health: &self.health,
+                heard: Some(&self.heard),
+                now,
+            })
         }
     }
 
@@ -588,9 +564,12 @@ mod tests {
             }),
             "it lacks its calendars".to_owned(),
         );
-        assert_eq!(
-            sign_ins(&partial.owed_beside(at(2), &asked)),
-            0,
+        let joined = asked.clone().join(partial.owed(at(2)));
+        assert_eq!(sign_ins(&joined), 1, "one sign-in");
+        assert!(
+            joined
+                .iter()
+                .any(|noticed| asked.iter().any(|held| held.proposal == noticed.proposal)),
             "that card"
         );
     }

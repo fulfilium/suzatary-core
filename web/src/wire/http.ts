@@ -32,9 +32,10 @@ export namespace http {
   // a replica holds by the frontier the box last named, in a device database a page of contract 6 cannot open, 8 keeps
   // the lines' skeleton one node per row, in a version of that database a page of contract 7 cannot open, 9 decodes the
   // steps that name the lines each round reads, which a page of contract 8 refuses, 10 reads its dead keys from the
-  // skeleton's steps and a pull that names no heads, which a page of contract 9 refuses.
+  // skeleton's steps and a pull that names no heads, which a page of contract 9 refuses, 11 decodes the step of the box's
+  // own note, which a page of contract 10 refuses.
   export const CLIENT_HEADER = "X-Suzatary-Client"
-  export const CLIENT = 10
+  export const CLIENT = 11
   // A box that has moved past this build's contract: it performed nothing, and the page offers the new build (`newbuild`).
   export const OUTDATED = 426
   export const NOT_SENT = "Not sent: this version of the app is older than the box's. Reload to the new version, then send it again."

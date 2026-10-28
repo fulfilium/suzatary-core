@@ -850,3 +850,72 @@ fn a_print_that_does_not_decode_leaves_out_its_round_and_draws_the_rest() {
     assert_eq!(part.rounds.len(), whole.rounds.len() - 1);
     assert!(part.rounds.iter().all(|round| whole.rounds.contains(round)));
 }
+
+/// A round of nothing but the box's own notes, the line above each setup card, is left out of the
+/// stream, while a round the owner opens in the same conversation (a dismissal's reason) is drawn
+/// with its answer.
+#[test]
+fn the_box_s_notes_are_left_out_and_the_owner_s_reason_is_drawn() {
+    let held = InMemory::default();
+    let store = held.conversations();
+    let setup = ConversationId::new("setup").expect("a slug");
+    transcript::start(
+        store,
+        &setup,
+        &Entry::Opened {
+            at: at(1),
+            title: Words::kept("Setup".to_owned()),
+            model: "the box".to_owned(),
+            kind: Kind::Review,
+        },
+    )
+    .expect("started");
+    let noted = |n: u32| {
+        Entry::noted(
+            at(n),
+            "Nothing is stored for it yet, so what needs it cannot work.".to_owned(),
+            Vec::new(),
+        )
+    };
+    let lines = [
+        noted(2),
+        noted(3),
+        Entry::Said {
+            at: at(4),
+            turn: Turn::Act {
+                text: "Dismissed: I connect that calendar by its Google account".to_owned(),
+                references: Vec::new(),
+            },
+            by: Some(suzatary_core::secretary::stamp::Stamp::Actor(
+                "ada".to_owned(),
+            )),
+        },
+        Entry::Said {
+            at: at(5),
+            turn: Turn::Model {
+                text: "Noted: no link for it, then.".to_owned(),
+                calls: Vec::new(),
+            },
+            by: None,
+        },
+        noted(6),
+    ];
+    for line in &lines {
+        transcript::push(store, &setup, line).expect("written");
+    }
+    let objects = held.lines.objects().expect("objects");
+    let opened = transcript::opened(&objects, &store.reads().slots());
+    let drawn = stream::stream(
+        skeleton(&held).outlines(),
+        stream::every(&opened),
+        &Reading::default(),
+        &BTreeSet::new(),
+        1,
+        &Dress::BARE,
+    )
+    .expect("reads");
+    assert_eq!(drawn.total, 1, "{drawn:?}");
+    let round = &drawn.rounds[0];
+    assert_eq!(round.turn, 2, "the owner's reason opens it");
+    assert!(round.answer.is_some(), "with its answer: {round:?}");
+}

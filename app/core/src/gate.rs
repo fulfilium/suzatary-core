@@ -207,17 +207,18 @@ pub const CLIENT_HEADER: &str = "x-suzatary-client";
 /// skeleton one node per row, in a later version of that database, 9 the first that reads the steps
 /// naming the lines each round reads, which a page of 8 cannot decode, 10 the first that reads its
 /// dead keys from the skeleton's steps and a pull that names no heads, which a page of 9 cannot
+/// decode, 11 the first that decodes the step of the box's own note, which a page of 10 cannot
 /// decode. A page
 /// older than this writes what the box cannot take (a stamp in the device's zone, a write no
 /// device key proves) or acts on words it holds in the clear and never hears erased,
 /// so it is refused before it writes and loads the box's shell instead, never told it is unsigned. Raise it in the
 /// same series as a change to what a page writes; a client that is not a page (no
 /// `Sec-Fetch-Site`) carries no bundle and is not asked.
-pub const CLIENT_MIN: u32 = 10;
+pub const CLIENT_MIN: u32 = 11;
 
 /// The contract this build's own page writes by, as its header says it: what a test writes as,
 /// so raising [`CLIENT_MIN`] never leaves a test writing as a page the box refuses.
-pub const CLIENT: &str = "10";
+pub const CLIENT: &str = "11";
 
 /// A page keeps [`CLIENT_MIN`] or later.
 fn current(client: Option<&str>) -> Result<(), Refusal> {
@@ -544,6 +545,7 @@ mod tests {
             Some("7"),
             Some("8"),
             Some("9"),
+            Some("10"),
             Some("not a number"),
         ] {
             let refused = check_csrf(&page(stale)).unwrap_err();
@@ -551,10 +553,10 @@ mod tests {
         }
         assert_eq!(
             check_csrf(&page(None)).unwrap_err().message(),
-            "this page writes by contract none, and the box takes 10 or later, so this act was not sent: the page says Suzatary <version> is ready with Reload, and it can be sent again after Reload"
+            "this page writes by contract none, and the box takes 11 or later, so this act was not sent: the page says Suzatary <version> is ready with Reload, and it can be sent again after Reload"
         );
-        assert_eq!(check_csrf(&page(Some("10"))), Ok(()));
         assert_eq!(check_csrf(&page(Some("11"))), Ok(()));
+        assert_eq!(check_csrf(&page(Some("12"))), Ok(()));
         assert_eq!(
             check_csrf(&ActHeaders {
                 site: None,

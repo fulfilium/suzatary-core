@@ -82,6 +82,7 @@ pub mod rules;
 pub mod salted_text;
 pub mod scrubbed_under;
 pub mod search;
+pub mod setup_migration;
 pub mod shown_record;
 pub mod sign_in;
 pub mod slots;

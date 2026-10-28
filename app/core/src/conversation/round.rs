@@ -1,6 +1,7 @@
 //! One exchange with a model: ask, append its turn, run the verbs it called, until it answers
 //! without a call or reaches its bound.
 
+use prodrome_core::event::Hash;
 use serde_json::{Map, Value};
 
 use crate::capability::{Clock, Halt, ModelError, ToolCall, Turn};
@@ -243,20 +244,26 @@ impl Round {
     /// # Errors
     /// The store's, when it refuses the box's closing line too.
     pub fn answer(rules: &Rules<'_>, at: &Transcript<'_>) -> Result<Option<Closed>, Refusal> {
+        // The question is fixed before the model is asked, and the round's closing line is
+        // written only while it is owed, so a round resumed after a restart beside one that
+        // answered the same question answers nothing.
+        let Some(asked) = transcript::read(at.conversations, at.id)?.asked().cloned() else {
+            return Ok(None);
+        };
         let mut round = Round::default();
-        let ending = match round.run(rules, at) {
+        let ending = match round.run(rules, at, &asked) {
             Ok(Ran::Nothing) => return Ok(None),
             Ok(Ran::Answered) => Ending::Answered,
-            Err(why) => {
-                round.close(at, &why)?;
-                Ending::Ended { why }
-            }
+            Err(why) => match round.close(at, &asked, &why)? {
+                transcript::Answering::Written => Ending::Ended { why },
+                transcript::Answering::Answered => return Ok(None),
+            },
         };
         Ok(Some(Closed { round, ending }))
     }
 
-    /// Step until the model answers without a call, or say why it did not.
-    fn run(&mut self, rules: &Rules<'_>, at: &Transcript<'_>) -> Result<Ran, Why> {
+    /// Step until the model answers `asked` without a call, or say why it did not.
+    fn run(&mut self, rules: &Rules<'_>, at: &Transcript<'_>, asked: &Hash) -> Result<Ran, Why> {
         let tools = rules.verbs.tools();
         loop {
             let stored = read(at)?;
@@ -276,13 +283,17 @@ impl Round {
             let after = self.calls.last().map(|called| called.verb.clone());
             #[cfg(feature = "fixture")]
             let _asking = crate::capability::pulled::Asking::of(rules.sink.halt);
-            let asked = rules
+            let reply = rules
                 .ask
                 .ask(at.id, rules.system, &tools, &stored, &waiting, rules.sink)
                 .map_err(|failed| unasked(failed, after.clone(), rules.sink.halt))?;
             obeyed(rules.sink.halt)?;
-            let silent = asked.reply.say.trim().is_empty() && asked.reply.calls.is_empty();
-            self.said(at, &stored, asked, rules.ask.scope())?;
+            let silent = reply.reply.say.trim().is_empty() && reply.reply.calls.is_empty();
+            if self.said(at, &stored, reply, rules.ask.scope(), asked)?
+                == transcript::Answering::Answered
+            {
+                return Ok(Ran::Nothing);
+            }
             if silent {
                 return Err(Why::Silent { after });
             }
@@ -297,14 +308,16 @@ impl Round {
         }
     }
 
-    /// The model's turn, after the memory it was told and the session it opened, if either moved.
+    /// The model's turn, after the memory it was told and the session it opened, if either moved;
+    /// nothing of the turn's own while `question` is answered already.
     fn said(
         &mut self,
         at: &Transcript<'_>,
         stored: &Stored,
         asked: Asked,
         scope: Scope,
-    ) -> Result<(), Refusal> {
+        question: &Hash,
+    ) -> Result<transcript::Answering, Refusal> {
         if let Some(version) = asked.seen
             && stored.memory_seen != Some(version)
         {
@@ -332,8 +345,9 @@ impl Round {
         }
         self.sent = Some(asked.answered.sent());
         self.calls.clone_from(&asked.reply.calls);
-        self.append(
+        self.answering(
             at,
+            question,
             Entry::Said {
                 at: at.clock.now(),
                 turn: Turn::Model {
@@ -377,10 +391,16 @@ impl Round {
     /// ending is a model turn with no calls, since "over" is derived from the transcript, holding
     /// `why`'s words escaped, since they quote a backend's or a verb's text and are not markup.
     /// The box says it, not the session, so the session never hears it nor the turns it closes.
-    fn close(&mut self, at: &Transcript<'_>, why: &Why) -> Result<(), Refusal> {
+    fn close(
+        &mut self,
+        at: &Transcript<'_>,
+        question: &Hash,
+        why: &Why,
+    ) -> Result<transcript::Answering, Refusal> {
         match why {
-            Why::Stopped(by) => self.append(
+            Why::Stopped(by) => self.answering(
                 at,
+                question,
                 Entry::Stopped {
                     at: at.clock.now(),
                     by: by.as_str().to_owned(),
@@ -388,8 +408,9 @@ impl Round {
             ),
             Why::Model { .. } | Why::Silent { .. } | Why::Bound(_) | Why::Refused(_) => {
                 self.unheard(at, &read(at)?, BOX)?;
-                self.append(
+                self.answering(
                     at,
+                    question,
                     Entry::Said {
                         at: at.clock.now(),
                         turn: Turn::Model {
@@ -417,6 +438,34 @@ impl Round {
                 model: by.to_owned(),
             },
         )
+    }
+
+    /// [`Self::append`] while `question` is owed an answer, or once this round has written a
+    /// model turn for it: that turn made the question this round's, and a silent one closes it
+    /// before the box's words that end the round.
+    fn answering(
+        &mut self,
+        at: &Transcript<'_>,
+        question: &Hash,
+        entry: Entry,
+    ) -> Result<transcript::Answering, Refusal> {
+        if self.appended.iter().any(|written| {
+            matches!(
+                written,
+                Entry::Said {
+                    turn: Turn::Model { .. },
+                    ..
+                }
+            )
+        }) {
+            self.append(at, entry)?;
+            return Ok(transcript::Answering::Written);
+        }
+        let answering = transcript::push_answering(at.conversations, at.id, question, &entry)?;
+        if answering == transcript::Answering::Written {
+            self.appended.push(entry);
+        }
+        Ok(answering)
     }
 
     fn append(&mut self, at: &Transcript<'_>, entry: Entry) -> Result<(), Refusal> {

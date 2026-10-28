@@ -49,10 +49,7 @@ const ICS: Template = Template {
         plugin: &ICS_PLUGIN,
         component: "ics.wasm",
         schema: "ics.schema",
-        origins: &[
-            "https://calendar.google.com",
-            "https://outlook.office365.com",
-        ],
+        origins: &["https://outlook.office365.com"],
     }),
     steps: &[StepShape::Secret {
         name: SecretName::Link,
@@ -61,7 +58,7 @@ const ICS: Template = Template {
             text: "In your calendar's settings, copy its secret address in iCal format (a link \
                    ending in .ics). A Google account's calendars need no link: connect the \
                    account itself, which reads them through Google's own API.",
-            page: Page::At("https://support.google.com/calendar/answer/37648"),
+            page: Page::Unknown,
         },
     }],
     check: Check::Synced,
