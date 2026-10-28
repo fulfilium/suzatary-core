@@ -24,7 +24,7 @@ use suzatary_core::secretary::memory_event::MemoryEvent;
 use suzatary_core::secretary::salted_text::{Text, TextName};
 use suzatary_core::secretary::store::{ConversationId, Entry};
 use suzatary_core::store::Reads as _;
-use suzatary_core::store::{Doc, InMemory, InMemoryDoc, Prodrome};
+use suzatary_core::store::{Doc, Gets as _, InMemory, InMemoryDoc, Prodrome};
 
 /// Each salt the next number.
 #[derive(Default)]
@@ -82,7 +82,7 @@ impl Box {
     }
 
     fn read(&self) -> Digest {
-        self.digests().read().expect("the digest reads")
+        self.digests().reads().read().expect("the digest reads")
     }
 
     /// `n` lines said in `conversation`, the `k`th at minute `k`.
@@ -281,7 +281,7 @@ fn accept_lines(
     from: &suzatary_core::secretary::conversations::InMemory,
     given: impl FnOnce(Vec<(Hash, String)>) -> Vec<(Hash, String)>,
 ) {
-    use suzatary_core::store::Doc as _;
+    use suzatary_core::store::{Doc as _, Gets as _};
     to.lines.accept(&given(prints(&from.lines))).expect("lines");
     for name in from.keys.names() {
         let key = from.keys.get(&name).expect("reads").expect("held");
@@ -633,7 +633,7 @@ impl Box {
         let mut engine = Engine::new(vec![rule]);
         let mut done = Vec::new();
         loop {
-            let reading = Reading::of(&self.digests()).expect("reads whole");
+            let reading = Reading::of(&self.digests().reads()).expect("reads whole");
             if engine.due(&TheDigest, &reading).is_none() {
                 return done;
             }
@@ -812,7 +812,7 @@ fn an_unfit_node_stays_pending_and_says_why() {
     let other = Compaction {
         model: ModelName::parse("another").expect("a model"),
     };
-    assert!(other.holds(&Reading::of(&the.digests()).expect("reads")));
+    assert!(other.holds(&Reading::of(&the.digests().reads()).expect("reads")));
     let on = suzatary_core::secretary::compacting::Compacting::On {
         model: long.model().clone(),
         budget: ROOMY,
@@ -860,7 +860,7 @@ fn each_call_is_stamped_at_its_own_instant() {
         ..Recording::joining()
     };
     let clock = Ticking(std::sync::atomic::AtomicUsize::new(0));
-    let reading = Reading::of(&the.digests()).expect("reads whole");
+    let reading = Reading::of(&the.digests().reads()).expect("reads whole");
     perform(&the.memories(), &long, &reading, ROOMY, &clock)
         .expect("performed")
         .expect("a node was owed");
@@ -949,7 +949,7 @@ impl Box {
                             }
                             Round::Held(_) => return,
                             Round::Idle => {
-                                let reading = Reading::of(&self.digests()).expect("reads");
+                                let reading = Reading::of(&self.digests().reads()).expect("reads");
                                 if !owes.holds(&reading) {
                                     return;
                                 }
@@ -1278,8 +1278,8 @@ impl Box {
     /// What a session opening now is told, its view within `budget` bytes.
     fn told(&self, budget: usize) -> String {
         use suzatary_core::secretary::compaction::Reading;
-        let memory = self.memories().read().expect("the memory reads");
-        let record = Reading::of(&self.digests());
+        let memory = self.memories().reads().read().expect("the memory reads");
+        let record = Reading::of(&self.digests().reads());
         suzatary_core::secretary::told::context_of(
             &memory,
             Ok(&suzatary_core::secretary::topics::reading::Reading::default()),
@@ -1343,7 +1343,7 @@ proptest! {
         the.compact_all(&Recording::joining());
         let told = the.told(budget);
         prop_assert!(!told.contains("INJECTED"), "{}", told);
-        let reading = suzatary_core::secretary::compaction::Reading::of(&the.digests())
+        let reading = suzatary_core::secretary::compaction::Reading::of(&the.digests().reads())
             .expect("reads whole");
         let record = &told[told.find("the record of every conversation").expect("told")..];
         let mut hidden_before = false;
@@ -1493,7 +1493,7 @@ proptest! {
         let the = Box::default();
         the.write("a", turns(&kinds));
         the.compact_all(&Recording::joining());
-        let reading = Reading::of(&the.digests()).expect("reads whole");
+        let reading = Reading::of(&the.digests().reads()).expect("reads whole");
         let digest = reading.digest();
         let view = digest.view(u64::try_from(budget).expect("small")).expect("lines");
         let mut lines = Vec::new();
@@ -1577,7 +1577,7 @@ fn an_owners_node_is_asked_beside_the_owners_words_alone() {
     });
     turns.extend((13..25).map(person));
     the.write("a", turns);
-    let reading = Reading::of(&the.digests()).expect("reads whole");
+    let reading = Reading::of(&the.digests().reads()).expect("reads whole");
     let digest = reading.digest();
     let entries = reading.entries();
     let tree = digest.tree().expect("lines");
@@ -1608,8 +1608,8 @@ fn the_record_leaves_out_what_the_window_sends() {
     let the = Box::default();
     the.say("a", 10);
     the.say("b", 3);
-    let memory = the.memories().read().expect("reads");
-    let reading = Reading::of(&the.digests()).expect("reads whole");
+    let memory = the.memories().reads().read().expect("reads");
+    let reading = Reading::of(&the.digests().reads()).expect("reads whole");
     let a = ConversationId::new("a").expect("a slug");
     let told = |asking| {
         context_of(
@@ -2029,7 +2029,7 @@ mod recompacting {
             let joining = Recording::joining();
             let rule = Compaction { model: joining.model().clone() };
             for _ in 0..stop {
-                let reading = Reading::of(&the.digests()).expect("reads whole");
+                let reading = Reading::of(&the.digests().reads()).expect("reads whole");
                 if perform(&the.memories(), &joining, &reading, ROOMY, &At(at(0)))
                     .expect("performed")
                     .is_none()
@@ -2217,8 +2217,8 @@ mod recompacting {
         }
     }
 
-    const PINNED_OWNERS: &str = "909dbcacef5074e6f92b818cd4a1b28fa65a38e393533d3ebf4ce9f9a37fea30";
-    const PINNED_CLEAN: &str = "fbc63a4dfd9e1cf3ced851d4950c9ad82e08cba3e904ae7755355906f47ab495";
+    const PINNED_OWNERS: &str = "d59ec97d7a1f1bd85811d6b987a4f057d209f35d8b66375c420914cbd724c175";
+    const PINNED_CLEAN: &str = "e5170368b19af8030c88aa4a3ae9370add5c3d46ea065fed2646cfd39cccb744";
     const PINNED_QUESTIONS: &str =
         "106d3f5877fa609965041ba9094fe43af77e8085f7fc6edd80b60f6baeba2dd6";
 }

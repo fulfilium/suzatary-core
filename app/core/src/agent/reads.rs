@@ -12,7 +12,7 @@ use crate::chains::ChainPolicy;
 use crate::deployment::Deployment;
 use crate::refusal::{Refusal, shown};
 use crate::secretary::memory::Memory;
-use crate::secretary::owners_record::OwnersRecord;
+use crate::secretary::shown_record::OwnersRecord;
 use crate::store::Reads;
 use crate::todos;
 
@@ -40,7 +40,8 @@ pub(crate) fn list_open_todos(caps: &Agent<'_>, chain: &ChainPolicy) -> Result<V
 /// The most `context` spends on the manual and the vocabularies, in serialized bytes. The whole
 /// answer is one budget, this and `[agent] memory_bytes`, filled in order: the manual and the
 /// vocabularies, the facts, then the record. An answer the harness will not show inline is read
-/// by nobody.
+/// by nobody. With the default `memory_bytes` of 16 KiB the answer is at most 40 KiB: at most
+/// 40,960 tokens, since no token is shorter than one byte, and about 10,000 tokens of English.
 pub const CONTEXT_CAP: usize = 24 * 1024;
 
 /// What the answer leaves unspent so `OPERATOR.md` can grow without a cut: a fifth of the cap,

@@ -33,6 +33,7 @@ use crate::secretary::compaction::Reading;
 use crate::secretary::digest_label::Label;
 use crate::secretary::digest_view::{self, Body, Keep, Shown};
 use crate::secretary::memory::{Change, Kind, Memory, Remembered};
+use crate::secretary::shown_record::{OwnersWords, Shows as _};
 use crate::secretary::store::{ConversationId, Entry};
 use crate::secretary::topics::reading::Reading as Topics;
 use crate::secretary::topics::topic::Topic;
@@ -100,7 +101,7 @@ pub fn context_of(
             let entries = reading.entries();
             let sent = asking.map_or_else(BTreeSet::new, |asking| sent(reading, asking));
             let shown: Vec<Shown> =
-                digest_view::view(reading.digest(), &entries, budget, Label::is_owners)
+                digest_view::view(reading.digest(), &entries, budget, OwnersWords::shows)
                     .into_iter()
                     .filter(|shown| !shown.part.span.clone().all(|at| sent.contains(&at)))
                     .collect();

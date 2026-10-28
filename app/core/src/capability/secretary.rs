@@ -91,7 +91,7 @@ pub struct Secretary<'a> {
     /// The mail servers, searched for mail older than the routine sync's window.
     pub older: &'a dyn OlderMail,
     /// The owner's uploaded photos and PDFs, read-only.
-    pub uploads: &'a dyn crate::store::Doc<crate::attachment::AttachmentId, crate::upload::Upload>,
+    pub uploads: &'a dyn crate::store::Gets<crate::attachment::AttachmentId, crate::upload::Upload>,
     /// The words of the uploads, for its search.
     pub upload_index: &'a dyn super::UploadIndex,
     /// The files a verb keeps for the model.
@@ -115,7 +115,7 @@ impl<'a> Secretary<'a> {
             render: self.render,
             clock: self.clock,
             memory: crate::secretary::recollection::Recollection::of(
-                self.memories,
+                self.memories.reads(),
                 crate::secretary::digest_view::VIEW_BYTES,
             ),
         }

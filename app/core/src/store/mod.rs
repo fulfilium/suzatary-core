@@ -1,5 +1,6 @@
 //! The whole store, [`Database`], in three shapes: [`Prodrome`] (objects, appended), [`Log`]
-//! (lines, pushed) and [`Doc`] (one value, got and set), each keyed where a store holds several.
+//! (lines, pushed) and [`Doc`] (one value, got and set), each keyed where a store holds several;
+//! [`Reads`] and [`Gets`] are the read halves of the first and the last.
 //! `suzatary-io` interprets them over files; what a store's contents mean is the module that owns
 //! its type.
 
@@ -21,13 +22,14 @@ mod knowledge;
 mod learnt;
 mod log;
 mod memoised;
+mod only;
 mod prodrome;
 mod recording;
 mod reentrant;
 mod signing;
 
 pub use database::Database;
-pub use doc::Doc;
+pub use doc::{Doc, Gets};
 pub use error::StoreError;
 pub use graph::Graph;
 pub use hold::{InMemoryHold, Once};
@@ -44,6 +46,7 @@ pub use knowledge::Knowledge;
 pub use learnt::{Learnt, learn};
 pub use log::{Decide, Edit, Log};
 pub use memoised::memoised;
+pub use only::Only;
 pub use prodrome::{Prodrome, Reads, WriteLock, append_to, left_out, linearised};
 pub use recording::{recording, wrote};
 pub use reentrant::Reentrant;

@@ -1390,7 +1390,7 @@ pub fn run(path: &Path, args: &Args) -> anyhow::Result<()> {
 /// A store that does not read.
 pub fn census(instance: &Instance, out: &mut dyn std::io::Write) -> anyhow::Result<()> {
     let remembering = crate::wiring::Remembering::reader(instance);
-    let digest = remembering.memories().digests.read()?;
+    let digest = remembering.memories().digests.reads().read()?;
     write!(
         out,
         "{}",
@@ -1743,7 +1743,7 @@ fn words_of(
 ) -> impl Fn(
     &suzatary_core::secretary::salted_text::TextName,
 ) -> suzatary_core::secretary::inbox_reading::Words {
-    use suzatary_core::store::Doc as _;
+    use suzatary_core::store::Gets as _;
     let texts = suzatary_io::texts::Texts::<suzatary_core::secretary::memory::Fact>::open(
         instance.secretary.memory_texts(),
     );

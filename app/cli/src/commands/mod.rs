@@ -69,7 +69,7 @@ pub fn chains_read(instance: &Instance) -> suzatary_core::chain_set::Read {
 
 /// One chain as the triage agent reads it: under its own policy, and never written.
 pub(crate) fn reading_of(chain: &ChainDir) -> suzatary_io::reading::Reading {
-    suzatary_io::reading::Reading::new(chain.events.clone(), chain.policy.untrusted.clone())
+    suzatary_io::reading::chain(chain.events.clone(), chain.policy.untrusted.clone())
 }
 
 /// Run one of the repository's operator scripts, and exit with its status.

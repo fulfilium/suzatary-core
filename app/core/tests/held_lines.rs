@@ -36,9 +36,9 @@ use suzatary_core::secretary::topics::reading::Reading;
 use suzatary_core::secretary::topics::targets::rounds;
 use suzatary_core::secretary::transcript::{self, Transcript};
 use suzatary_core::secretary::words::Words;
-use suzatary_core::store::Doc as _;
 use suzatary_core::store::Prodrome as _;
 use suzatary_core::store::Reads as _;
+use suzatary_core::store::{Doc as _, Gets as _};
 use suzatary_core::wire;
 
 /// One step of a script: a turn said in a conversation, an erasure of some of its lines, a
@@ -611,7 +611,7 @@ proptest! {
 
         let skeleton = skeleton(&held);
         let objects = held.lines.objects().expect("objects");
-        let opened = transcript::opened(&objects, &held.conversations().slots());
+        let opened = transcript::opened(&objects, &held.conversations().reads().slots());
         let eager = stream::stream(skeleton.outlines(), stream::every(&opened), &topics, &chosen, pages, &Dress::BARE)
             .expect("reads");
         prop_assert_eq!(&eager, &read_whole);

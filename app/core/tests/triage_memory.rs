@@ -3,8 +3,13 @@
 //! later session. Its surface names no verb that writes the memory, and no call it can make adds,
 //! changes or deletes an object or a word in the memory's or the digest's stores. What it does
 //! write is a card: an inbox object and lines in the `triage` conversation (its opening, and the
-//! card drawn) that carry no words from mail; no line already held moves. What it reads, through `context`, `recall` and `zoom`, is the facts and the
-//! record in the owner's words alone: their own lines and the summaries of nothing but those.
+//! card drawn) that carry no words from mail; no line already held moves. What it reads, through
+//! `context`, `recall` and `zoom`, is the facts and the record in the owner's words alone: their
+//! own lines and the summaries of nothing but those.
+//!
+//! Every test here builds the agent's memory over `store::Only`, stores that implement the read
+//! traits and nothing else, so the agent's record compiling over them is the proof that its type
+//! holds no way to write the memory, the digest or the lines.
 
 use std::collections::BTreeSet;
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -18,23 +23,24 @@ use suzatary_core::capability::{Agent, Entropy, Nothing, Turn};
 use suzatary_core::chains::{ChainName, ChainPolicy, Chains};
 use suzatary_core::deployment::Deployment;
 use suzatary_core::model_name::ModelName;
-use suzatary_core::secretary::conversations::InMemory as Lines;
+use suzatary_core::secretary::compaction::Reading;
+use suzatary_core::secretary::conversations::{InMemory as Lines, ReadConversations};
 use suzatary_core::secretary::digest_event::DigestEvent;
 use suzatary_core::secretary::digest_label::Label;
 use suzatary_core::secretary::digest_line::Line;
-use suzatary_core::secretary::digests::Digests;
+use suzatary_core::secretary::digests::{Digests, ReadDigests};
 use suzatary_core::secretary::filed::{TriageCards, triage_conversation};
 use suzatary_core::secretary::inbox_event::InboxEvent;
 use suzatary_core::secretary::line_event::LineEvent;
-use suzatary_core::secretary::memories::Memories;
+use suzatary_core::secretary::memories::{Memories, ReadMemories};
 use suzatary_core::secretary::memory::{Fact, Kind, Origin};
 use suzatary_core::secretary::memory_event::MemoryEvent;
 use suzatary_core::secretary::outcome::Outcome;
 use suzatary_core::secretary::recollection::Recollection;
 use suzatary_core::secretary::salted_text::{Text, TextName};
 use suzatary_core::secretary::store::{ConversationId, Entry};
-use suzatary_core::store::Reads as _;
-use suzatary_core::store::{Doc as _, InMemory, InMemoryDoc, Prodrome};
+use suzatary_core::secretary::surface::{Effect, SecretaryVerb};
+use suzatary_core::store::{Doc as _, InMemory, InMemoryDoc, Only, Prodrome, Reads as _};
 
 /// Each salt the next number.
 #[derive(Default)]
@@ -59,6 +65,44 @@ struct Stores {
     words: InMemoryDoc<TextName, Text<Fact>>,
     cards: InMemory<InboxEvent>,
     entropy: Counting,
+}
+
+/// The memory's stores, each behind [`Only`].
+struct Reader<'a> {
+    stores: &'a Stores,
+    facts: Only<&'a InMemory<MemoryEvent>>,
+    words: Only<&'a InMemoryDoc<TextName, Text<Fact>>>,
+    digests: Only<&'a InMemory<DigestEvent>>,
+    summaries: Only<&'a InMemoryDoc<TextName, Text<Line>>>,
+    lines: Only<&'a InMemory<LineEvent>>,
+    keys: Only<&'a suzatary_core::store::InMemoryKeys>,
+}
+
+impl Reader<'_> {
+    /// The agent, its memory read through the stores behind [`Only`] alone.
+    fn agent(&self) -> Agent<'_> {
+        Agent {
+            memory: Recollection::of(
+                ReadMemories {
+                    history: &self.facts,
+                    texts: &self.words,
+                    digests: ReadDigests {
+                        history: &self.digests,
+                        texts: &self.summaries,
+                        lines: ReadConversations {
+                            lines: &self.lines,
+                            keys: &self.keys,
+                            opened: &self.stores.lines.opened,
+                        },
+                        owners: &self.stores.owners,
+                        compacting: &suzatary_core::secretary::compacting::Compacting::Off,
+                    },
+                },
+                16 * 1024,
+            ),
+            ..Nothing::agent()
+        }
+    }
 }
 
 /// Every object and every kept word of the memory's and the digest's stores, as one value to
@@ -101,6 +145,18 @@ impl Stores {
                 owners: &self.owners,
                 compacting: &suzatary_core::secretary::compacting::Compacting::Off,
             },
+        }
+    }
+
+    fn reader(&self) -> Reader<'_> {
+        Reader {
+            stores: self,
+            facts: Only::new(&self.facts),
+            words: Only::new(&self.words),
+            digests: Only::new(&self.digests),
+            summaries: Only::new(&self.summaries),
+            lines: Only::new(&self.lines.lines),
+            keys: Only::new(&self.lines.keys),
         }
     }
 
@@ -241,6 +297,11 @@ fn remembered() -> Stores {
         by: None,
     });
     lines.extend((28..32).map(|minute| person(minute, format!("A last note, number {minute}"))));
+    lines.push(Entry::noted(
+        at(32),
+        "BOXNOTE: not signed in to the mail account".to_owned(),
+        Vec::new(),
+    ));
     stores.say("lease", &lines);
     stores
         .memories()
@@ -256,7 +317,12 @@ fn remembered() -> Stores {
         .expect("remembered");
     let mut written = 0;
     loop {
-        let read = stores.memories().digests.read().expect("the digest reads");
+        let read = stores
+            .memories()
+            .digests
+            .reads()
+            .read()
+            .expect("the digest reads");
         let pending = read.pending();
         if pending.is_empty() {
             break;
@@ -287,7 +353,12 @@ fn remembered() -> Stores {
 
 /// Every summary the record holds, by whose lines it is over.
 fn summaries(stores: &Stores) -> BTreeSet<&'static str> {
-    let read = stores.memories().digests.read().expect("the digest reads");
+    let read = stores
+        .memories()
+        .digests
+        .reads()
+        .read()
+        .expect("the digest reads");
     let mut kinds = BTreeSet::new();
     let mut stack = vec![read.tree().expect("lines").root()];
     while let Some(node) = stack.pop() {
@@ -337,6 +408,21 @@ fn the_triage_surface_reads_the_memory_and_names_no_verb_that_writes_it() {
         names.contains("recall") && names.contains("zoom"),
         "{names:?}"
     );
+    let remembers: Vec<&str> = SecretaryVerb::ALL
+        .iter()
+        .filter(|verb| verb.class().effect == Effect::Remembers)
+        .map(|verb| verb.name())
+        .collect();
+    assert!(
+        !remembers.is_empty(),
+        "the secretary's surface writes the memory"
+    );
+    for name in remembers {
+        assert!(
+            !names.contains(name),
+            "{name} writes the secretary's memory and is on the triage surface"
+        );
+    }
     for name in &names {
         for writes in WRITES_MEMORY {
             assert!(
@@ -361,10 +447,8 @@ fn no_triage_call_writes_the_memory_the_digest_or_the_conversations() {
     );
     let before = stores.held();
     let filed = stores.filed();
-    let agent = Agent {
-        memory: Recollection::of(stores.memories(), 16 * 1024),
-        ..Nothing::agent()
-    };
+    let reader = stores.reader();
+    let agent = reader.agent();
     let asked = [
         json!({}),
         json!({ "query": "landlord" }),
@@ -409,16 +493,15 @@ fn no_triage_call_writes_the_memory_the_digest_or_the_conversations() {
 }
 
 /// `context` tells the agent the facts and the owner's own words, and nobody else's, and so do
-/// `recall` and `zoom`: neither the secretary's answer, a verb's answer quoting an email, nor a
-/// summary over either is shown, however it is asked for or opened; a summary of nothing but
-/// the owner's lines is.
+/// `recall` and `zoom`: neither the secretary's answer, a verb's answer quoting an email, the
+/// box's own note, nor a summary over any of them is shown, however it is asked for or opened; a
+/// summary of nothing but the owner's lines is. The secretary's opening leaves the box's note out
+/// too.
 #[test]
 fn the_agent_reads_the_facts_and_the_owners_words_alone() {
     let stores = remembered();
-    let agent = Agent {
-        memory: Recollection::of(stores.memories(), 16 * 1024),
-        ..Nothing::agent()
-    };
+    let reader = stores.reader();
+    let agent = reader.agent();
     let context = call(&stores, &agent, "context", &json!({})).expect("answered");
     let memory = context["memory"].as_str().expect("the memory, as text");
     assert!(memory.contains("Marguerite is the landlord"), "{memory}");
@@ -444,7 +527,7 @@ fn the_agent_reads_the_facts_and_the_owners_words_alone() {
     );
 
     let mut read = vec![context, owners];
-    for query in ["injected", "secretarywords", "summary", "note"] {
+    for query in ["injected", "secretarywords", "boxnote", "summary", "note"] {
         read.push(
             call(
                 &stores,
@@ -455,7 +538,7 @@ fn the_agent_reads_the_facts_and_the_owners_words_alone() {
             .expect("answered"),
         );
     }
-    let lines = 33;
+    let lines = 34;
     let stores = &stores;
     let agent = &agent;
     read.extend((0..lines).flat_map(|first| {
@@ -478,5 +561,17 @@ fn the_agent_reads_the_facts_and_the_owners_words_alone() {
         let answer = answer.to_string();
         assert!(!answer.contains("INJECTED"), "{answer}");
         assert!(!answer.contains("SECRETARYWORDS"), "{answer}");
+        assert!(!answer.contains("BOXNOTE"), "{answer}");
     }
+    let reading = Reading::of(&stores.memories().digests.reads()).expect("the record reads");
+    let opening = suzatary_core::secretary::told::context_of(
+        &stores.memories().reads().read().expect("the memory reads"),
+        Ok(&suzatary_core::secretary::topics::reading::Reading::default()),
+        Ok(&reading),
+        1024 * 1024,
+        None,
+    )
+    .text();
+    assert!(opening.contains("A last note, number 31"), "{opening}");
+    assert!(!opening.contains("BOXNOTE"), "{opening}");
 }

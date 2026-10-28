@@ -48,6 +48,27 @@ use crate::store::Reads;
 /// fn remember(agent: suzatary_core::capability::Agent<'_>) { let _ = agent.memory.hold(); }
 /// ```
 ///
+/// Those stores are read halves ([`Reads`], [`crate::store::Gets`]), so not even code inside
+/// [`Recollection`] can append a fact or a summary, or keep or delete their words:
+///
+/// ```compile_fail,E0599
+/// use suzatary_core::secretary::memories::ReadMemories;
+/// use suzatary_core::secretary::memory_event::MemoryEvent;
+/// fn remember(memory: ReadMemories<'_>, event: MemoryEvent) { let _ = memory.history.append(event); }
+/// ```
+/// ```compile_fail,E0599
+/// use suzatary_core::secretary::memories::ReadMemories;
+/// use suzatary_core::secretary::salted_text::TextName;
+/// fn forget(memory: ReadMemories<'_>, name: &TextName) { let _ = memory.texts.remove(name); }
+/// ```
+/// ```compile_fail,E0599
+/// use suzatary_core::secretary::memories::ReadMemories;
+/// use suzatary_core::secretary::digest_event::DigestEvent;
+/// fn summarize(memory: ReadMemories<'_>, event: DigestEvent) {
+///     let _ = memory.digests.history.append(event);
+/// }
+/// ```
+///
 /// Its record of the conversations is the owner's part alone: no line of the whole record, a
 /// verb's answer or the secretary's, is reachable from it.
 ///

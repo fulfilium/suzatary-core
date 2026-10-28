@@ -43,7 +43,7 @@ mod tests {
 
     use suzatary_core::secretary::locked_text::{FreshKey, Locked, Shape};
     use suzatary_core::secretary::memory::Fact;
-    use suzatary_core::store::Doc as _;
+    use suzatary_core::store::{Doc as _, Gets as _};
 
     use super::*;
     use crate::texts::SystemEntropy;

@@ -8,7 +8,7 @@ use std::time::{Duration, SystemTime};
 
 use prodrome_core::event::Hash;
 use suzatary_core::signatures::{Answer, Requested, WINDOW_SECONDS};
-use suzatary_core::store::{Doc, StoreError};
+use suzatary_core::store::{Doc, Gets as _, StoreError};
 
 use crate::docs::{DocCodec, Docs};
 use crate::present::Present as _;

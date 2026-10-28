@@ -1452,7 +1452,7 @@ fn shipped<E: suzatary_core::store::Store>(store: &InMemory<E>) -> Vec<Shipped> 
 fn keys_of(
     conversations: &suzatary_core::secretary::conversations::InMemory,
 ) -> BTreeMap<String, String> {
-    use suzatary_core::store::Doc as _;
+    use suzatary_core::store::Gets as _;
     conversations
         .keys
         .names()
@@ -2388,7 +2388,7 @@ fn the_answers_vector_holds_every_answer() {
         .expect("the lines read");
     let opened = suzatary_core::secretary::transcript::opened(
         &objects,
-        &bundle.conversations.conversations().slots(),
+        &bundle.conversations.conversations().reads().slots(),
     );
     let mut skeleton = suzatary_core::secretary::outlines::Outlines::default();
     skeleton.hold(
@@ -3160,7 +3160,7 @@ fn held_keys(
     suzatary_core::secretary::locked_text::KeyName,
     suzatary_core::secretary::locked_text::TextKey,
 )> {
-    use suzatary_core::store::Doc as _;
+    use suzatary_core::store::Gets as _;
     lines
         .keys
         .names()
@@ -3327,7 +3327,7 @@ fn the_retired_vector_is_every_way_a_key_dies() {
 fn a_slot_resealed_twice_reads_its_newest_reseal() {
     use suzatary_core::secretary::line_shape::LineShape;
     use suzatary_core::secretary::scrubbed_under::ScrubbedUnder;
-    use suzatary_core::store::Doc as _;
+    use suzatary_core::store::Gets as _;
     let lines = three_turns(&ScrubbedUnder::Unversioned);
     migrate(&lines);
     reseal_again(&lines);

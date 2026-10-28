@@ -2536,7 +2536,7 @@ pub struct FakeFiles {
 }
 
 impl
-    suzatary_core::store::Doc<
+    suzatary_core::store::Gets<
         suzatary_core::attachment::AttachmentId,
         suzatary_core::upload::Upload,
     > for FakeFiles
@@ -2547,30 +2547,9 @@ impl
     ) -> Result<Option<suzatary_core::upload::Upload>, suzatary_core::store::StoreError> {
         Ok(self.uploads.get(id).cloned())
     }
-
-    fn set(
-        &self,
-        id: &suzatary_core::attachment::AttachmentId,
-        _upload: &suzatary_core::upload::Upload,
-    ) -> Result<(), suzatary_core::store::StoreError> {
-        Err(suzatary_core::store::StoreError::unwritable(
-            "upload store",
-            format!("{id} is an upload"),
-        ))
-    }
-
-    fn remove(
-        &self,
-        id: &suzatary_core::attachment::AttachmentId,
-    ) -> Result<(), suzatary_core::store::StoreError> {
-        Err(suzatary_core::store::StoreError::unwritable(
-            "upload store",
-            format!("{id} is an upload"),
-        ))
-    }
 }
 
-impl suzatary_core::store::Doc<suzatary_core::attachment::AttachmentId, Vec<u8>> for FakeFiles {
+impl suzatary_core::store::Gets<suzatary_core::attachment::AttachmentId, Vec<u8>> for FakeFiles {
     fn get(
         &self,
         id: &suzatary_core::attachment::AttachmentId,
@@ -2583,7 +2562,9 @@ impl suzatary_core::store::Doc<suzatary_core::attachment::AttachmentId, Vec<u8>>
             .find(|bytes| &suzatary_core::attachment::AttachmentId::of(bytes) == id)
             .cloned())
     }
+}
 
+impl suzatary_core::store::Doc<suzatary_core::attachment::AttachmentId, Vec<u8>> for FakeFiles {
     fn set(
         &self,
         _id: &suzatary_core::attachment::AttachmentId,

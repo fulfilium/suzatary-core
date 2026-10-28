@@ -302,7 +302,7 @@ enum Telling<'a> {
 /// opening; the facts added and forgotten since a resumed session was last told. A memory that
 /// will not read is said, never skipped.
 fn heading(memories: crate::secretary::memories::Memories<'_>, telling: Telling<'_>) -> Heading {
-    let memory = match memories.read() {
+    let memory = match memories.reads().read() {
         Ok(memory) => memory,
         Err(refusal) => {
             return Heading {
@@ -318,7 +318,7 @@ fn heading(memories: crate::secretary::memories::Memories<'_>, telling: Telling<
     };
     let told = match telling {
         Telling::Opening(topics, asking) => {
-            let record = Reading::of(&memories.digests);
+            let record = Reading::of(&memories.digests.reads());
             let topics = topics.reading().map_err(crate::refusal::Refusal::from);
             let told = context_of(
                 &memory,

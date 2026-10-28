@@ -1088,9 +1088,9 @@ mod tests {
     use super::*;
     use crate::secretary::conversations::InMemory;
     use crate::secretary::store::Kind;
-    use crate::store::Doc as _;
     use crate::store::Prodrome as _;
     use crate::store::Reads as _;
+    use crate::store::{Doc as _, Gets as _};
     use prodrome_core::event::canonical_envelope;
 
     /// Every key `held` keeps, spelled as a replica is given it.

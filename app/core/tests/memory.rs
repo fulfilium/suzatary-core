@@ -17,7 +17,7 @@ use suzatary_core::secretary::memory_event::MemoryEvent;
 use suzatary_core::secretary::salted_text::{Text, TextName};
 use suzatary_core::secretary::store::ConversationId;
 use suzatary_core::store::Reads as _;
-use suzatary_core::store::{Doc, InMemory, InMemoryDoc};
+use suzatary_core::store::{Gets as _, InMemory, InMemoryDoc};
 
 /// Each salt the next number.
 #[derive(Default)]
@@ -165,7 +165,7 @@ proptest! {
                 }
             }
         }
-        let read = memories.read().expect("reads");
+        let read = memories.reads().read().expect("reads");
         let facts: Vec<(FactId, String, Kind)> = read
             .facts
             .iter()
@@ -198,7 +198,7 @@ proptest! {
         let memories = held.memories();
         let mut n = 0;
         for round in 0..=forgets.len() {
-            while memories.read().expect("reads").facts.len() < MAX_LIVE {
+            while memories.reads().read().expect("reads").facts.len() < MAX_LIVE {
                 n += 1;
                 memories.remember(&Fact::new(text(n)).expect("a fact"), Kind::Owner, &said(), now())
                     .expect("room");
@@ -208,9 +208,9 @@ proptest! {
                 .remember(&Fact::new(text(n)).expect("a fact"), Kind::Owner, &said(), now())
                 .expect_err("at the cap");
             prop_assert!(refused.message().contains(&MAX_LIVE.to_string()), "{}", refused.message());
-            let read = memories.read().expect("reads");
+            let read = memories.reads().read().expect("reads");
             prop_assert!(read.facts.len() <= MAX_LIVE);
-            prop_assert!(memories.history().expect("reads").live().count() <= MAX_LIVE);
+            prop_assert!(memories.reads().history().expect("reads").live().count() <= MAX_LIVE);
             if let Some(pick) = forgets.get(round) {
                 let id = read.facts[pick % read.facts.len()].id;
                 memories.forget(id, now(), &ada()).expect("forgets");
@@ -259,7 +259,7 @@ proptest! {
                     let _ = memories.remember(&Fact::new(text(n)).expect("a fact"), Kind::Owner, &said(), now());
                 }
                 Moment::Forget(pick) => {
-                    let standing = memories.read().expect("reads").facts;
+                    let standing = memories.reads().read().expect("reads").facts;
                     if let Some(one) = standing.get(pick % standing.len().max(1)) {
                         memories.forget(one.id, now(), &ada()).expect("forgets");
                     }
@@ -267,7 +267,7 @@ proptest! {
                 Moment::Round(c, fresh) => {
                     let id = ConversationId::new(format!("c{c}")).expect("a slug");
                     let stored = suzatary_core::secretary::store::Stored::of(&id, &files[c]).expect("folds");
-                    let now = memories.read().expect("reads");
+                    let now = memories.reads().read().expect("reads");
                     let change = memory::change(&now, if fresh { None } else { stored.memory_seen });
                     match &change {
                         memory::Change::Whole { facts, .. } => {
@@ -334,5 +334,5 @@ fn the_sweep_spares_a_text_a_standing_fact_names() {
         )
         .expect("remembers");
     memories.forget(other.id, now(), &ada()).expect("forgets");
-    assert_eq!(memories.read().expect("reads").facts, vec![again]);
+    assert_eq!(memories.reads().read().expect("reads").facts, vec![again]);
 }

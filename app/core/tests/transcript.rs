@@ -44,7 +44,7 @@ static ENTROPY: std::sync::LazyLock<Counting> = std::sync::LazyLock::new(Default
 
 /// A key `KEYS` holds, or missing.
 fn key(name: &KeyName) -> Words<suzatary_core::secretary::locked_text::TextKey> {
-    use suzatary_core::store::Doc as _;
+    use suzatary_core::store::Gets as _;
     KEYS.get(name).ok().flatten().map_or_else(
         || suzatary_core::secretary::words::Gone::Missing.into(),
         Words::kept,
@@ -781,7 +781,7 @@ proptest! {
             state ^= state << 17;
             objects.swap(at, usize::try_from(state % (at as u64 + 1)).expect("an index"));
         }
-        let all = transcript::of_objects(objects, &memory.conversations().slots()).expect("reads");
+        let all = transcript::of_objects(objects, &memory.conversations().reads().slots()).expect("reads");
         prop_assert_eq!(all.get(&id()), Some(&read));
     }
 

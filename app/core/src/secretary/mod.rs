@@ -68,7 +68,6 @@ pub mod opened;
 pub mod outcome;
 pub mod outline;
 pub mod outlines;
-pub mod owners_record;
 pub mod phase;
 pub mod proposer;
 pub mod queue;
@@ -83,6 +82,7 @@ pub mod rules;
 pub mod salted_text;
 pub mod scrubbed_under;
 pub mod search;
+pub mod shown_record;
 pub mod sign_in;
 pub mod slots;
 pub mod stamp;
@@ -486,18 +486,20 @@ fn load(
                     "sentence": act.sentence(),
                 }),
                 // The words while the memory's text store keeps them, and never once deleted.
-                store::Proposal::Remember { text, kind } => match caps.memories.words(text)? {
-                    Some(fact) => serde_json::json!({
-                        "act": "remember",
-                        "fact": fact.as_str(),
-                        "kind": kind.as_str(),
-                    }),
-                    None => serde_json::json!({
-                        "act": "remember",
-                        "deleted": "its words are deleted: dismissed, or the fact forgotten",
-                        "kind": kind.as_str(),
-                    }),
-                },
+                store::Proposal::Remember { text, kind } => {
+                    match caps.memories.reads().words(text)? {
+                        Some(fact) => serde_json::json!({
+                            "act": "remember",
+                            "fact": fact.as_str(),
+                            "kind": kind.as_str(),
+                        }),
+                        None => serde_json::json!({
+                            "act": "remember",
+                            "deleted": "its words are deleted: dismissed, or the fact forgotten",
+                            "kind": kind.as_str(),
+                        }),
+                    }
+                }
                 store::Proposal::Decide(draft) => serde_json::json!({
                     "act": "decide",
                     "sentence": crate::secretary::decide::sentence(draft),

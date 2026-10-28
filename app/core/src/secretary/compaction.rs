@@ -38,7 +38,7 @@ use crate::secretary::digest::{self, Digest, Written};
 use crate::secretary::digest_event::{self, DigestEvent};
 use crate::secretary::digest_line::NODE_BYTES;
 use crate::secretary::digest_spent::Spent;
-use crate::secretary::digests::{Digests, compactor};
+use crate::secretary::digests::{Digests, ReadDigests, compactor};
 use crate::secretary::line_event::LineEvent;
 use crate::secretary::memories::Memories;
 use crate::secretary::store::Entry;
@@ -66,8 +66,8 @@ impl Reading {
     /// The digest as `digests` holds it now.
     ///
     /// # Errors
-    /// [`Digests::whole`]'s, and the stores' own.
-    pub fn of(digests: &Digests<'_>) -> Result<Self, Refusal> {
+    /// [`ReadDigests::whole`]'s, and the stores' own.
+    pub fn of(digests: &ReadDigests<'_>) -> Result<Self, Refusal> {
         digests.whole()?;
         let lines = digests.lines.lines.objects()?;
         let opened = digests.opened(&lines);
@@ -366,7 +366,7 @@ impl Paced {
         clock: &dyn Clock,
     ) -> Result<Round, Refusal> {
         let mut taken = self.taken.lock().unwrap_or_else(PoisonError::into_inner);
-        let reading = Reading::of(&memories.digests)?;
+        let reading = Reading::of(&memories.digests.reads())?;
         let now = clock.now();
         let mut spent: Vec<_> = reading.digest.attempts().collect();
         let mut chosen = Vec::new();
@@ -526,7 +526,7 @@ impl std::fmt::Display for Waiting {
 /// # Errors
 /// [`Reading::of`]'s.
 pub fn waiting(digests: &Digests<'_>, now: Datetime) -> Result<Option<Waiting>, Refusal> {
-    let reading = Reading::of(digests)?;
+    let reading = Reading::of(&digests.reads())?;
     let pending = reading.digest.pending().len();
     let (owed, why) = match digests.compacting {
         Compacting::Off => (pending, Some(Why::Off)),

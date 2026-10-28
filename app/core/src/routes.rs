@@ -1003,7 +1003,7 @@ fn keys_of(
     retired: &crate::secretary::transcript::Retired,
     sent: &[prodrome_core::event::Hash],
 ) -> BTreeMap<String, String> {
-    let slots = conversations.slots();
+    let slots = conversations.reads().slots();
     let line = |name: &prodrome_core::event::Hash| graph.dag().get(name)?.event();
     sent.iter()
         .filter_map(line)

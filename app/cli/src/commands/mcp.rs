@@ -16,7 +16,6 @@ use suzatary_core::capability::Agent;
 use suzatary_core::deployment::Deployment;
 use suzatary_core::for_model::ForModel;
 use suzatary_core::secretary::filed::TriageCards;
-use suzatary_core::secretary::recollection::Recollection;
 
 /// The server's name, which the tool guard matches as `mcp__suzatary__*`.
 pub const NAME: &str = "suzatary";
@@ -141,7 +140,7 @@ pub async fn serve(
 pub struct Interpreters<K = suzatary_io::reading::Reading> {
     pub(crate) chain: K,
     pub(crate) grounds: crate::wiring::Grounds,
-    pub(crate) remembering: crate::wiring::Remembering,
+    pub(crate) remembering: crate::wiring::Recalling,
     /// `[agent] memory_bytes`.
     pub(crate) view: usize,
 }
@@ -152,7 +151,7 @@ impl<K> Interpreters<K> {
         instance: &crate::instance::Instance,
         chain: K,
         grounds: crate::wiring::Grounds,
-        remembering: crate::wiring::Remembering,
+        remembering: crate::wiring::Recalling,
     ) -> Self {
         Self {
             chain,
@@ -166,10 +165,8 @@ impl<K> Interpreters<K> {
 impl<K: suzatary_core::store::Reads<suzatary_core::record::TodoEvent>> Interpreters<K> {
     /// The record the verbs are handed.
     pub fn agent(&self) -> Agent<'_> {
-        self.grounds.agent(
-            &self.chain,
-            Recollection::of(self.remembering.memories(), self.view),
-        )
+        self.grounds
+            .agent(&self.chain, self.remembering.memory(self.view))
     }
 }
 
@@ -184,7 +181,7 @@ impl Interpreters {
             instance,
             crate::commands::reading_of(chain),
             crate::wiring::Grounds::of(instance),
-            crate::wiring::Remembering::reader(instance),
+            crate::wiring::Recalling::of(instance),
         )
     }
 }
@@ -204,9 +201,9 @@ pub fn run(path: &std::path::Path) -> anyhow::Result<()> {
     // grounds, and each chain, read.
     let grounds: &'static crate::wiring::Grounds =
         Box::leak(Box::new(crate::wiring::Grounds::of(&instance)));
-    let remembering: &'static crate::wiring::Remembering =
-        Box::leak(Box::new(crate::wiring::Remembering::reader(&instance)));
-    let memory = Recollection::of(remembering.memories(), instance.agent.memory_bytes);
+    let remembering: &'static crate::wiring::Recalling =
+        Box::leak(Box::new(crate::wiring::Recalling::of(&instance)));
+    let memory = remembering.memory(instance.agent.memory_bytes);
     let chains: BTreeMap<String, Agent<'static>> = instance
         .chains
         .iter()
@@ -235,14 +232,17 @@ pub fn run(path: &std::path::Path) -> anyhow::Result<()> {
 mod tests {
     use super::Interpreters;
 
-    /// The triage agent reads its chain through a store that only reads: the only way the MCP
-    /// server builds its interpreters answers exactly that.
+    /// The triage agent reads its chain, and the secretary's memory, through stores that only
+    /// read: the only way the MCP server builds its interpreters answers exactly that, and their
+    /// memory is a `Recalling`, whose memory and digest stores are each inside `store::Only`.
     #[test]
-    fn the_agent_reads_its_chain_and_writes_none() {
+    fn the_agent_reads_its_chain_and_memory_and_writes_none() {
         let assemble: fn(
             &crate::instance::Instance,
             &crate::instance::ChainDir,
         ) -> Interpreters<suzatary_io::reading::Reading> = Interpreters::assemble;
-        let _ = assemble;
+        let memory: fn(&Interpreters) -> &crate::wiring::Recalling =
+            |interpreters| &interpreters.remembering;
+        let _ = (assemble, memory);
     }
 }

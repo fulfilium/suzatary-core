@@ -747,7 +747,7 @@ fn dispatch_case(
                     &instance.persona,
                     typeset.clone(),
                 ),
-                crate::wiring::Remembering::empty_in(&case_scratch.join("memory"), instance),
+                crate::wiring::Recalling::empty_in(&case_scratch.join("memory"), instance),
             ),
         )
     })

@@ -15,7 +15,7 @@ use suzatary_core::mail::dedup_key::{DEDUP_KEY, DedupKey};
 use suzatary_core::mail::known::Known;
 use suzatary_core::mail::local_state::LocalState;
 use suzatary_core::mail::state::TriageState;
-use suzatary_core::store::Doc as _;
+use suzatary_core::store::{Doc as _, Gets as _};
 
 use crate::docs::{DocCodec, Docs};
 use crate::secrets::Resolves;

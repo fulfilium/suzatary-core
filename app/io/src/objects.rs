@@ -647,7 +647,7 @@ mod tests {
                 Datetime::new(2026, 10, 2, 9, 0, 0, 0).expect("an instant"),
             )
             .expect("remembers");
-        assert_eq!(memories.read().expect("reads").facts.len(), 1);
+        assert_eq!(memories.reads().read().expect("reads").facts.len(), 1);
         let text = std::fs::read_dir(dir.path().join("memory-texts"))
             .expect("the texts")
             .next()
@@ -656,7 +656,7 @@ mod tests {
             .path();
         std::fs::remove_file(&text).expect("removed");
         std::fs::create_dir(&text).expect("a directory where the text belongs");
-        assert!(memories.read().is_err());
+        assert!(memories.reads().read().is_err());
     }
 
     /// A triage write joining the open card about its todo files the new card and withdraws the
@@ -761,7 +761,7 @@ mod tests {
         memories
             .forget(gone.id, at(2), &Actor::new("ada").expect("an actor"))
             .expect("forgets");
-        let read = memories.read().expect("reads");
+        let read = memories.reads().read().expect("reads");
         assert_eq!(read.facts, vec![kept]);
         assert_eq!(read.version, 3);
         assert!(history.verify().is_empty(), "{:?}", history.verify());
@@ -899,7 +899,7 @@ mod tests {
             .remember(&fact, Kind::Person, &said, at)
             .expect("remembers");
         let ada = Actor::new("ada").expect("an actor");
-        let node = memories.digests.read().expect("reads").pending()[0].clone();
+        let node = memories.digests.reads().read().expect("reads").pending()[0].clone();
         let (line, _) = lines
             .lines
             .objects()

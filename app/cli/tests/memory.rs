@@ -429,7 +429,15 @@ fn a_round_the_box_opened_remembers_nothing() {
         "{}",
         refused.0
     );
-    assert!(fakes.memories().read().expect("reads").facts.is_empty());
+    assert!(
+        fakes
+            .memories()
+            .reads()
+            .read()
+            .expect("reads")
+            .facts
+            .is_empty()
+    );
 }
 
 /// A tainted round's card, and what is left of its words once it is answered: dismissed, or

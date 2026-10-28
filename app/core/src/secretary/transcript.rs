@@ -769,7 +769,11 @@ fn unreadable(failed: impl std::fmt::Display) -> StoreError {
 pub fn all(
     conversations: Conversations<'_>,
 ) -> Result<BTreeMap<ConversationId, Transcript>, StoreError> {
-    transcripts(&conversations.lines.nodes()?, &conversations.slots()).map_err(unreadable)
+    transcripts(
+        &conversations.lines.nodes()?,
+        &conversations.reads().slots(),
+    )
+    .map_err(unreadable)
 }
 
 /// One conversation's reading, or why its lines are none.
@@ -781,7 +785,7 @@ pub type Read = Result<Transcript, NotAConversation>;
 /// # Errors
 /// The store's own.
 pub fn each(conversations: Conversations<'_>) -> Result<Vec<(ConversationId, Read)>, StoreError> {
-    each_of(conversations.lines, &conversations.slots())
+    each_of(conversations.lines, &conversations.reads().slots())
 }
 
 fn each_of(
@@ -861,7 +865,7 @@ pub fn read(
             what: "conversation",
             name: id.to_string(),
         })?;
-    Transcript::of(id, &writes, &conversations.slots()).map_err(unreadable)
+    Transcript::of(id, &writes, &conversations.reads().slots()).map_err(unreadable)
 }
 
 /// One conversation's lines, in causal order.
@@ -897,7 +901,7 @@ pub fn sweep(conversations: Conversations<'_>) -> Result<usize, StoreError> {
     destroy(
         conversations,
         dead(lines_of(&objects), &|name: &KeyName| {
-            conversations.key(name)
+            conversations.reads().key(name)
         }),
     )
 }

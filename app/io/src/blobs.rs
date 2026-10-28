@@ -7,7 +7,7 @@
 use std::path::PathBuf;
 
 use suzatary_core::attachment::AttachmentId;
-use suzatary_core::store::{Doc as _, StoreError};
+use suzatary_core::store::{Doc as _, Gets as _, StoreError};
 
 use crate::docs::{DocCodec, Docs};
 

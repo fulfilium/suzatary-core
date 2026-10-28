@@ -25,6 +25,7 @@ use crate::secretary::digest::Digest;
 use crate::secretary::digest_label::{Kind, Kinds, Label};
 use crate::secretary::digest_line::{Line, NODE_BYTES};
 use crate::secretary::digest_view::{self, Body, Keep, LINE_BYTES, VIEW_BYTES, rendered};
+use crate::secretary::shown_record::{CleanWords, OwnersWords, Shows as _};
 use crate::secretary::store::Entry;
 use crate::secretary::taint::Taint;
 
@@ -50,7 +51,7 @@ impl Versioned for Asking {
 
     /// Raise it when the code that builds a question changes in a way the probe does not show
     /// (which children a span holds, or which parts a log keeps).
-    const REVISION: u32 = 1;
+    const REVISION: u32 = 2;
 
     fn parts(beside: Beside) -> Vec<String> {
         // What the rule does on a fixed probe, not a list of what it reads: the question's text
@@ -177,8 +178,8 @@ impl Beside {
     /// The parts it shows in words.
     fn reads(self) -> fn(&Label) -> bool {
         match self {
-            Beside::OwnersWords => Label::is_owners,
-            Beside::CleanWords => Label::is_clean,
+            Beside::OwnersWords => OwnersWords::shows,
+            Beside::CleanWords => CleanWords::shows,
         }
     }
 }

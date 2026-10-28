@@ -221,7 +221,8 @@ impl Mail {
 pub struct Triage {
     /// What its `context` may spend on the secretary's memory beyond the manual's cap: the memory,
     /// the newest facts first and then the record in the owner's words alone, gets this and what
-    /// the manual leaves of its cap.
+    /// the manual leaves of its cap. A token is at least one byte, so this many bytes are at most
+    /// this many tokens.
     pub memory_bytes: usize,
 }
 

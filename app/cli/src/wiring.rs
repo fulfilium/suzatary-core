@@ -19,14 +19,14 @@ use suzatary_core::record::TodoEvent;
 use suzatary_core::secretary::compacting::Compacting;
 use suzatary_core::secretary::digest_event::DigestEvent;
 use suzatary_core::secretary::digest_line::Line;
-use suzatary_core::secretary::digests::Digests;
+use suzatary_core::secretary::digests::{Digests, ReadDigests};
 use suzatary_core::secretary::inbox_event::InboxEvent;
-use suzatary_core::secretary::memories::Memories;
+use suzatary_core::secretary::memories::{Memories, ReadMemories};
 use suzatary_core::secretary::memory::Fact;
 use suzatary_core::secretary::memory_event::MemoryEvent;
 use suzatary_core::secretary::recollection::Recollection;
 use suzatary_core::signatures::Signers;
-use suzatary_core::store::{Reads, Signing};
+use suzatary_core::store::{Only, Reads, Signing};
 use suzatary_core::zone::Zone;
 use suzatary_io::conversations::ConversationStores;
 use suzatary_io::objects::Objects;
@@ -347,6 +347,68 @@ impl Remembering {
                 owners: &self.owners,
                 compacting: &self.compacting,
             },
+        }
+    }
+}
+
+/// The secretary's memory as the triage agent's process opens it: the facts, their words, the
+/// digest and its words each inside [`Only`], so no write handle to them exists in the process.
+/// The conversations and the inbox stay writable, since the agent's cards are filed there.
+pub struct Recalling {
+    pub(crate) conversations: ConversationStores,
+    memory: Only<Objects<MemoryEvent>>,
+    memory_texts: Only<Texts<Fact>>,
+    digests: Only<Objects<DigestEvent>>,
+    digest_texts: Only<Texts<Line>>,
+    owners: BTreeSet<Actor>,
+    compacting: Compacting,
+    pub(crate) inbox: Objects<InboxEvent>,
+}
+
+impl Recalling {
+    /// The memory's stores, from the instance file, opened as [`Remembering::reader`] opens them.
+    #[must_use]
+    pub fn of(instance: &Instance) -> Self {
+        Remembering::reader(instance).into()
+    }
+
+    /// A memory that holds nothing, as [`Remembering::empty_in`].
+    #[must_use]
+    pub fn empty_in(dir: &Path, instance: &Instance) -> Self {
+        Remembering::empty_in(dir, instance).into()
+    }
+
+    /// The memory, read within `budget` bytes.
+    #[must_use]
+    pub fn memory(&self, budget: usize) -> Recollection<'_> {
+        Recollection::of(
+            ReadMemories {
+                history: &self.memory,
+                texts: &self.memory_texts,
+                digests: ReadDigests {
+                    history: &self.digests,
+                    texts: &self.digest_texts,
+                    lines: self.conversations.conversations().reads(),
+                    owners: &self.owners,
+                    compacting: &self.compacting,
+                },
+            },
+            budget,
+        )
+    }
+}
+
+impl From<Remembering> for Recalling {
+    fn from(opened: Remembering) -> Self {
+        Self {
+            conversations: opened.conversations,
+            memory: Only::new(opened.memory),
+            memory_texts: Only::new(opened.memory_texts),
+            digests: Only::new(opened.digests),
+            digest_texts: Only::new(opened.digest_texts),
+            owners: opened.owners,
+            compacting: opened.compacting,
+            inbox: opened.inbox,
         }
     }
 }

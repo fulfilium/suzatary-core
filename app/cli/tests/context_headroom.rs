@@ -4,7 +4,8 @@
 //! record longer than the budget. Weighed with this box's persona, categories and
 //! `[agent] memory_bytes` where there is an instance file, and otherwise with a stand-in of the
 //! same shape; skipped where the checkout's manual is not present (a build sandbox is handed
-//! `app/` alone).
+//! `app/` alone). Beside it, a `zoom` into the same record shows no line longer than a line may
+//! be shown, however long the line was said.
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
@@ -21,12 +22,13 @@ use suzatary_core::persona::Persona;
 use suzatary_core::secretary::compaction::Reading;
 use suzatary_core::secretary::conversations::InMemory as Lines;
 use suzatary_core::secretary::digest_event::DigestEvent;
-use suzatary_core::secretary::digests::Digests;
+use suzatary_core::secretary::digest_view::LINE_BYTES;
+use suzatary_core::secretary::digests::ReadDigests;
 use suzatary_core::secretary::line_event::LineEvent;
 use suzatary_core::secretary::memory::{
     Fact, FactId, Kind, MAX_FACT_CHARS, MAX_LIVE, Memory, Origin, Remembered,
 };
-use suzatary_core::secretary::owners_record::OwnersRecord;
+use suzatary_core::secretary::shown_record::OwnersRecord;
 use suzatary_core::secretary::store::{ConversationId, Entry};
 use suzatary_core::store::{Doc as _, InMemory, InMemoryDoc, Prodrome as _};
 
@@ -106,17 +108,23 @@ fn full_memory() -> Memory {
     }
 }
 
-/// A record of the owner's turns longer than any budget here.
+/// How many lines [`full_record`] holds.
+const RECORD_LINES: u32 = 600;
+
+/// A record of the owner's turns longer than any budget here, its last turn alone 25 times
+/// longer than a line may be shown.
 fn full_record(lines: &Lines) -> Reading {
     let id = ConversationId::new("long").expect("a slug");
-    for minute in 0..600u32 {
+    for minute in 0..RECORD_LINES {
+        let said = if minute + 1 == RECORD_LINES {
+            "x".repeat(25 * LINE_BYTES)
+        } else {
+            "and then some more of what I said ".repeat(4)
+        };
         let entry = Entry::Said {
             at: at(minute),
             turn: Turn::Person {
-                text: format!(
-                    "Turn {minute}: {}",
-                    "and then some more of what I said ".repeat(4)
-                ),
+                text: format!("Turn {minute}: {said}"),
                 references: Vec::new(),
                 attachments: Vec::new(),
             },
@@ -132,14 +140,44 @@ fn full_record(lines: &Lines) -> Reading {
     let owners: BTreeSet<Actor> = [ada()].into_iter().collect();
     let history = InMemory::<DigestEvent>::default();
     let texts = InMemoryDoc::default();
-    Reading::of(&Digests {
+    Reading::of(&ReadDigests {
         history: &history,
         texts: &texts,
-        lines: lines.conversations(),
+        lines: lines.conversations().reads(),
         owners: &owners,
         compacting: &suzatary_core::secretary::compacting::Compacting::Off,
     })
     .expect("the record reads")
+}
+
+/// `zoom` opens any part of the record, the longest line included, with no line of its answer
+/// longer than [`LINE_BYTES`] and its cut note.
+#[test]
+fn a_zoom_answers_no_line_longer_than_a_line_may_be() {
+    let lines = Lines::default();
+    let record = OwnersRecord::of(full_record(&lines));
+    let most = LINE_BYTES + " … (102400 bytes more)".len();
+    for first in 0..RECORD_LINES {
+        for count in [1, 16.min(RECORD_LINES - first), RECORD_LINES - first] {
+            let answer = record
+                .zoom(&format!("{first}+{count}"))
+                .expect("a handle the record spans");
+            for part in answer["beneath"].as_array().expect("parts") {
+                let longest = part
+                    .as_object()
+                    .expect("a part")
+                    .values()
+                    .filter_map(serde_json::Value::as_str)
+                    .map(str::len)
+                    .max()
+                    .unwrap_or(0);
+                assert!(
+                    longest <= most,
+                    "{first}+{count}: a line of {longest} bytes"
+                );
+            }
+        }
+    }
 }
 
 #[test]

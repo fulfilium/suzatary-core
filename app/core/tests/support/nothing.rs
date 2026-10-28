@@ -35,7 +35,10 @@ impl Nothing {
             manuals: &Nothing,
             render: &Nothing,
             clock: &Nothing,
-            memory: crate::secretary::recollection::Recollection::of(Nothing::memories(), 0),
+            memory: crate::secretary::recollection::Recollection::of(
+                Nothing::memories().reads(),
+                0,
+            ),
         }
     }
 
@@ -529,10 +532,13 @@ impl crate::drive::Port for Nothing {
 }
 
 /// No file was uploaded or kept, no fact's words either, and none is kept here.
-impl<K, T> crate::store::Doc<K, T> for Nothing {
+impl<K, T> crate::store::Gets<K, T> for Nothing {
     fn get(&self, _key: &K) -> Result<Option<T>, StoreError> {
         Ok(None)
     }
+}
+
+impl<K, T> crate::store::Doc<K, T> for Nothing {
     fn set(&self, _key: &K, _value: &T) -> Result<(), StoreError> {
         Err(StoreError::unwritable("file store", "nothing keeps files"))
     }

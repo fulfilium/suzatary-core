@@ -1050,10 +1050,11 @@ mod tests {
         let mut moved = line.clone();
         moved.conversation = ConversationId::new("2026-10-09-elsewhere").expect("a slug");
         let opened = crate::secretary::opened::Opened::default();
-        let cached = crate::secretary::opened::Cached {
-            slots: opened_by(&keys),
-            opened: &opened,
-        };
+        let held = crate::store::InMemoryKeys::default();
+        for key in &keys {
+            crate::store::Doc::set(&held, &key.name(), key).expect("kept");
+        }
+        let cached = crate::secretary::opened::Cached::new(&held, &opened);
         assert_eq!(line.entry(&cached), model(), "the original reads whole");
         let Entry::Said {
             turn: Turn::Erased { words, .. },

@@ -19,4 +19,6 @@ pub struct Says {
     pub todo_add: &'static str,
     /// `todo_update`.
     pub todo_update: &'static str,
+    /// `zoom`.
+    pub zoom: &'static str,
 }

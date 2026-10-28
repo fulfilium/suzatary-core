@@ -1,11 +1,11 @@
 //! The secretary's memory as the agent's `context` carries it, within what the answer has left:
 //! the newest facts that fit, a sentence counting the rest, then the record in the owner's words
-//! alone (`owners_record::told`), as much of it as fits beside them. The answer always leaves it
+//! alone (`shown_record::told`), as much of it as fits beside them. The answer always leaves it
 //! room for [`TOO_BIG`], so it never goes silent.
 
 use crate::refusal::Refusal;
 use crate::secretary::memory::Memory;
-use crate::secretary::owners_record::{OwnersRecord, told};
+use crate::secretary::shown_record::{OwnersRecord, told};
 
 use super::reads::wire_len;
 

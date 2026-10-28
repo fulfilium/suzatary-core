@@ -10,6 +10,7 @@ use crate::capability::Agent;
 use crate::chains::ChainPolicy;
 use crate::refusal::Refusal;
 use crate::secretary::changes::Act;
+use crate::secretary::shown_record::{ShownRecord, Shows};
 use crate::verb::Surface;
 
 use super::Says;
@@ -27,6 +28,13 @@ pub trait Holds: Surface<Answer: From<Value>> {
     type Filing: DeserializeOwned + JsonSchema;
     /// The agent's record, as this call holds it.
     fn agent<'a>(call: &Self::Call<'a>) -> Agent<'a>;
+    /// Which parts of the record this surface's model reads in words.
+    type Shows: Shows;
+    /// The record of the conversations, as this surface's model may read it.
+    ///
+    /// # Errors
+    /// The stores' own.
+    fn record(call: &Self::Call<'_>) -> Result<ShownRecord<Self::Shows>, Refusal>;
     /// The policy of the chain the call named.
     fn chain<'a>(call: &Self::Call<'a>) -> &'a ChainPolicy;
     /// Perform or file `act` on the call's chain, as this surface writes.

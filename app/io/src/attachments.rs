@@ -10,7 +10,7 @@ use suzatary_core::enclosed::Enclosure;
 use suzatary_core::file_read::{FileRead, Withheld};
 use suzatary_core::vault::{PrivateCopy, Vault};
 
-use suzatary_core::store::{Doc, StoreError};
+use suzatary_core::store::{Doc, Gets, StoreError};
 use suzatary_core::upload::Upload;
 
 use crate::blobs::Blobs;
@@ -248,7 +248,7 @@ impl AttachmentStore {
 
 /// The uploads as the secretary reads them; it keeps none, since an upload is kept by the
 /// owner's route alone.
-impl Doc<AttachmentId, Upload> for AttachmentStore {
+impl Gets<AttachmentId, Upload> for AttachmentStore {
     fn get(&self, id: &AttachmentId) -> Result<Option<Upload>, StoreError> {
         Ok(self.attachment(id)?.map(|stored| match stored {
             Stored::Here { attachment, bytes } => Upload::Here {
@@ -261,20 +261,6 @@ impl Doc<AttachmentId, Upload> for AttachmentStore {
                 copy,
             },
         }))
-    }
-
-    fn set(&self, id: &AttachmentId, _upload: &Upload) -> Result<(), StoreError> {
-        Err(StoreError::unwritable(
-            "upload store",
-            format!("{id} is an upload, kept by the owner's upload alone"),
-        ))
-    }
-
-    fn remove(&self, id: &AttachmentId) -> Result<(), StoreError> {
-        Err(StoreError::unwritable(
-            "upload store",
-            format!("{id} is an upload, which a conversation names for good"),
-        ))
     }
 }
 

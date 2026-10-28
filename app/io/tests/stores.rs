@@ -776,6 +776,7 @@ fn reading_a_copy_of_every_store_writes_nothing() {
             compacting: &suzatary_core::secretary::compacting::Compacting::Off,
         },
     }
+    .reads()
     .read()
     .expect("reads");
     assert_eq!((read.facts.len(), read.forgotten.len()), (1, 1));
@@ -925,7 +926,7 @@ fn lines_at_scale() {
     let objects = lines.objects().expect("objects");
     let digest = |opened| {
         let read = stores(opened);
-        let entries = transcript::opened(&objects, &read.slots());
+        let entries = transcript::opened(&objects, &read.reads().slots());
         suzatary_core::secretary::digest::digest(
             &objects,
             &entries,

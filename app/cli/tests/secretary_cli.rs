@@ -876,7 +876,7 @@ fn the_digest_census_prints_counts_and_no_word() {
     conversation(&instance, "2026-10-20-1", "Counted", Kind::Topic, turns);
     let remembering = suzatary_cli::wiring::Remembering::reader(&instance);
     let memories = remembering.memories();
-    let read = memories.digests.read().expect("the digest reads");
+    let read = memories.digests.reads().read().expect("the digest reads");
     let held = memories.hold().expect("held");
     let pending = read.pending();
     assert!(
@@ -899,7 +899,7 @@ fn the_digest_census_prints_counts_and_no_word() {
     let said = String::from_utf8(said).expect("utf-8");
     assert!(!said.contains("CENSUSWORDS"), "{said}");
     let census = suzatary_core::secretary::digest_census::Census::of(
-        &memories.digests.read().expect("the digest reads"),
+        &memories.digests.reads().read().expect("the digest reads"),
     );
     let current = census
         .count(|_, _, state| state == suzatary_core::secretary::digest_census::State::Current);

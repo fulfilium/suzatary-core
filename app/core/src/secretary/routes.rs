@@ -2158,7 +2158,7 @@ fn payload(
 pub fn memory(memories: crate::secretary::memories::Memories<'_>) -> Answered<wire::MemoryPayload> {
     Ok(wire::MemoryPayload {
         cards: card_words(memories)?,
-        ..memory_payload(&memories.read()?)
+        ..memory_payload(&memories.reads().read()?)
     })
 }
 
@@ -2171,7 +2171,7 @@ fn card_words(
     for object in inbox::fold(memories.cards)?.objects() {
         if let Proposal::Remember { text, .. } = &object.asked.proposal
             && named.insert(text.clone())
-            && let Some(fact) = memories.words(text)?
+            && let Some(fact) = memories.reads().words(text)?
         {
             words.push(wire::CardWords {
                 text: text.as_str().to_owned(),

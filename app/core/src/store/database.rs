@@ -2,7 +2,7 @@ use std::collections::BTreeMap;
 
 use prodrome_core::declared::Declared;
 
-use super::{Doc, Kind, Log, Prodrome, Store};
+use super::{Doc, Gets, Kind, Log, Prodrome, Store};
 use crate::attachment::AttachmentId;
 use crate::chains::ChainName;
 use crate::decisions::DecisionEvent;
@@ -59,7 +59,7 @@ pub struct Database<'a> {
     /// Each actor's phones.
     pub devices: &'a dyn Log<String, Device>,
     /// The owner's uploads.
-    pub uploads: &'a dyn Doc<AttachmentId, Upload>,
+    pub uploads: &'a dyn Gets<AttachmentId, Upload>,
     /// The files a verb kept for the model.
     pub kept: &'a dyn Doc<AttachmentId, Vec<u8>>,
 }

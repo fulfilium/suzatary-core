@@ -9,6 +9,7 @@
 use prodrome_core::digest::Measure;
 
 use crate::capability::Turn;
+use crate::secretary::stamp::Stamp;
 use crate::secretary::store::Entry;
 use crate::secretary::taint::Taint;
 use crate::secretary::turn_shape::TurnShape;
@@ -35,8 +36,10 @@ pub enum Kind {
     Model,
     /// A verb's answer.
     Tool,
-    /// An act's line.
+    /// The owner's act.
     Act,
+    /// The box's own note, an act line it composed from its own state ([`Entry::noted`]).
+    Noted,
     /// A proposal made.
     Proposed,
     /// A batch settled.
@@ -60,13 +63,14 @@ pub enum Kind {
 
 impl Kind {
     /// Every kind, in order.
-    pub const ALL: [Kind; 15] = [
+    pub const ALL: [Kind; 16] = [
         Kind::Opened,
         Kind::Titled,
         Kind::Person,
         Kind::Model,
         Kind::Tool,
         Kind::Act,
+        Kind::Noted,
         Kind::Proposed,
         Kind::Reviewed,
         Kind::ReviewFailed,
@@ -84,16 +88,16 @@ impl Kind {
         match entry {
             Entry::Opened { .. } => Kind::Opened,
             Entry::Titled { .. } => Kind::Titled,
-            Entry::Said { turn, .. } => match turn {
+            Entry::Said { turn, by, .. } => match turn {
                 Turn::Person { .. } => Kind::Person,
                 Turn::Model { .. } => Kind::Model,
                 Turn::Tool { .. } => Kind::Tool,
-                Turn::Act { .. } => Kind::Act,
+                Turn::Act { .. } => Kind::act(by.as_ref()),
                 Turn::Erased { shape, .. } => match shape {
                     TurnShape::Person { .. } => Kind::Person,
                     TurnShape::Model { .. } => Kind::Model,
                     TurnShape::Tool { .. } => Kind::Tool,
-                    TurnShape::Act { .. } => Kind::Act,
+                    TurnShape::Act { .. } => Kind::act(by.as_ref()),
                 },
             },
             Entry::Proposed { .. } => Kind::Proposed,
@@ -112,14 +116,22 @@ impl Kind {
         }
     }
 
-    fn bit(self) -> u16 {
-        1 << (self as u16)
+    /// An act line stamped `by`: the box's own note, or the owner's act.
+    pub(crate) fn act(by: Option<&Stamp>) -> Self {
+        match by {
+            Some(Stamp::Box) => Kind::Noted,
+            Some(Stamp::Actor(_) | Stamp::Unconfirmed(_)) | None => Kind::Act,
+        }
+    }
+
+    fn bit(self) -> u32 {
+        1 << (self as u32)
     }
 }
 
 /// A set of [`Kind`]s, joined by union.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
-pub struct Kinds(u16);
+pub struct Kinds(u32);
 
 impl Kinds {
     /// The set holding `kind` alone.
@@ -179,7 +191,7 @@ impl Label {
     }
 
     /// The owner's own words: clean, and nothing but his turns and acts (and erasures, which hold
-    /// no words). What every session is
+    /// no words), never the box's notes. What every session is
     /// told; the secretary's answers, verbs' answers and the box's bookkeeping are opened by `zoom`.
     #[must_use]
     pub fn is_owners(&self) -> bool {
@@ -212,7 +224,7 @@ mod tests {
     use super::*;
 
     fn label() -> impl Strategy<Value = Label> {
-        (any::<bool>(), any::<u16>()).prop_map(|(tainted, kinds)| Label {
+        (any::<bool>(), any::<u32>()).prop_map(|(tainted, kinds)| Label {
             taint: if tainted {
                 Taint::Tainted
             } else {

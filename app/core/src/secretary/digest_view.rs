@@ -17,6 +17,7 @@ use crate::secretary::digest::Digest;
 use crate::secretary::digest_label::{Kind, Label};
 use crate::secretary::digest_line::Line;
 use crate::secretary::outcome::Outcome;
+use crate::secretary::stamp::Stamp;
 use crate::secretary::store::Entry;
 use crate::secretary::tool_name::ToolName;
 use crate::secretary::turn_shape::TurnShape;
@@ -43,7 +44,7 @@ pub enum Body {
     Unsummarised(Label),
 }
 
-/// The most bytes one rendered line holds; a longer one is cut and says so.
+/// The most bytes one rendered or opened line holds; a longer one is cut and says so.
 pub const LINE_BYTES: usize = 4_096;
 
 /// The most bytes a view is shown in: the view's budget (the owner's answer 8, 128 KB).
@@ -119,7 +120,7 @@ pub fn opened(
         .map(|child| {
             let body = shown_as(*child.measure(), reads, || {
                 Some(if child.is_leaf() {
-                    Body::Said(whole(entries.get(digest.line(child.name()))?))
+                    Body::Said(cut(&whole(entries.get(digest.line(child.name()))?)))
                 } else {
                     said(digest, entries, child).unwrap_or(Body::Unsummarised(*child.measure()))
                 })
@@ -240,6 +241,7 @@ fn word(kind: Kind) -> &'static str {
         Kind::Model => "the secretary's answers",
         Kind::Tool => "tool answers",
         Kind::Act => "the owner's acts",
+        Kind::Noted => "the box's notes",
         Kind::Proposed => "proposals",
         Kind::Reviewed => "reviews",
         Kind::ReviewFailed => "failed reviews",
@@ -271,7 +273,7 @@ pub fn whole(entry: &Entry) -> String {
         }
         Entry::Opened { title, .. } => format!("A conversation opened: {title}"),
         Entry::Titled { title, .. } => format!("The conversation was named: {title}"),
-        Entry::Said { turn, .. } => said_turn(turn),
+        Entry::Said { turn, by, .. } => said_turn(turn, by.as_ref()),
         Entry::Proposed { revises: None, .. } => {
             "The secretary proposed a card for the owner to tap.".to_owned()
         }
@@ -307,7 +309,12 @@ pub fn whole(entry: &Entry) -> String {
 
 /// A turn, a call as its verb's name and never its arguments, so a remember card's words, which
 /// a `remember` call carries, are never shown.
-fn said_turn(turn: &Turn) -> String {
+fn said_turn(turn: &Turn, by: Option<&Stamp>) -> String {
+    let acted = if Kind::act(by) == Kind::Noted {
+        "The box noted"
+    } else {
+        "Owner did"
+    };
     match turn {
         Turn::Person {
             text, attachments, ..
@@ -331,7 +338,7 @@ fn said_turn(turn: &Turn) -> String {
             }
             Outcome::Refused => format!("{} refused: {answer}", verb.as_str()),
         },
-        Turn::Act { text, .. } => format!("Owner did: {text}"),
+        Turn::Act { text, .. } => format!("{acted}: {text}"),
         Turn::Erased { shape, words } => {
             let prose = crate::secretary::turn_shape::prose(words);
             match shape {
@@ -341,7 +348,7 @@ fn said_turn(turn: &Turn) -> String {
                     format!("Secretary: {prose} [asked {}]", verbs.join(", "))
                 }
                 TurnShape::Tool { verb, .. } => format!("{} answered: {prose}", verb.as_str()),
-                TurnShape::Act { .. } => format!("Owner did: {prose}"),
+                TurnShape::Act { .. } => format!("{acted}: {prose}"),
             }
         }
     }

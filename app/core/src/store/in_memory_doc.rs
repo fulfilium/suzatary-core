@@ -1,7 +1,7 @@
 use std::collections::BTreeMap;
 use std::sync::{Mutex, PoisonError};
 
-use super::{Doc, StoreError};
+use super::{Doc, Gets, StoreError};
 
 /// Documents held in memory, for tests.
 #[derive(Debug)]
@@ -30,7 +30,7 @@ impl<K: Ord + Clone, T: Clone> InMemoryDoc<K, T> {
     }
 }
 
-impl<K, T> Doc<K, T> for InMemoryDoc<K, T>
+impl<K, T> Gets<K, T> for InMemoryDoc<K, T>
 where
     K: Ord + Clone + Send,
     T: Clone + Send,
@@ -43,7 +43,13 @@ where
             .get(key)
             .cloned())
     }
+}
 
+impl<K, T> Doc<K, T> for InMemoryDoc<K, T>
+where
+    K: Ord + Clone + Send,
+    T: Clone + Send,
+{
     fn set(&self, key: &K, value: &T) -> Result<(), StoreError> {
         self.docs
             .lock()

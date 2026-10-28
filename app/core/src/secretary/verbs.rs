@@ -47,7 +47,6 @@ mod watch_mail;
 mod weather;
 mod web;
 mod withdraw_proposal;
-mod zoom;
 
 pub use add_topics::AddTopics;
 pub use attachments::Attachments;
@@ -68,6 +67,8 @@ pub type TodoUpdate = verbs::TodoUpdate<SecretarySurface>;
 pub type Show = verbs::Show<SecretarySurface, verbs::WholeArgs>;
 /// One todo as the chain holds it.
 pub type TodoShow = verbs::TodoShow<SecretarySurface>;
+/// A part of the record opened, every part read in words.
+pub type Zoom = verbs::Zoom<SecretarySurface>;
 pub use briefing::Briefing;
 pub use briefing_delta::BriefingDelta;
 pub use calendar::Calendar;
@@ -103,7 +104,6 @@ pub use watch_mail::WatchMail;
 pub use weather::Weather;
 pub use web::Web;
 pub use withdraw_proposal::WithdrawProposal;
-pub use zoom::Zoom;
 
 // --- attachments -------------------------------------------------------------
 

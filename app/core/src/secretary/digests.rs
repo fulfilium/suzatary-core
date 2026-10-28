@@ -12,6 +12,7 @@ use prodrome_core::literal::Datetime;
 use crate::model_name::ModelName;
 use crate::refusal::Refusal;
 use crate::secretary::compact_ask::Beside;
+use crate::secretary::conversations::{Conversations, ReadConversations};
 use crate::secretary::digest::{self, Digest};
 use crate::secretary::digest_event::{self, Attempt, DigestEvent};
 use crate::secretary::digest_line::Line;
@@ -19,7 +20,7 @@ use crate::secretary::line_event::LineEvent;
 use crate::secretary::memories::Held;
 use crate::secretary::salted_text::{Text, TextName};
 use crate::secretary::texts::Naming;
-use crate::store::{Doc, Prodrome};
+use crate::store::{Doc, Gets, Prodrome, Reads};
 
 /// Who every attempt is written as: the compactor, whose word binds about summaries alone.
 pub const COMPACTOR: &str = "compactor";
@@ -41,7 +42,7 @@ pub struct Digests<'a> {
     /// Each summary's words, by the name its event gives them.
     pub texts: &'a dyn Doc<TextName, Text<Line>>,
     /// The conversations, every line a leaf.
-    pub lines: crate::secretary::conversations::Conversations<'a>,
+    pub lines: Conversations<'a>,
     /// Whose retraction or erasure is believed: the deployment's writers
     /// ([`crate::deployment::Deployment::writers`]).
     pub owners: &'a std::collections::BTreeSet<Actor>,
@@ -49,7 +50,37 @@ pub struct Digests<'a> {
     pub compacting: &'a crate::secretary::compacting::Compacting,
 }
 
-impl Digests<'_> {
+/// The digest as a reader holds it: no field reaches a write of an event, a summary's words or
+/// a line.
+#[derive(Clone, Copy)]
+pub struct ReadDigests<'a> {
+    /// What was said of each node, by the node's name.
+    pub history: &'a dyn Reads<DigestEvent>,
+    /// Each summary's words, by the name its event gives them.
+    pub texts: &'a dyn Gets<TextName, Text<Line>>,
+    /// The conversations, every line a leaf.
+    pub lines: ReadConversations<'a>,
+    /// Whose retraction or erasure is believed.
+    pub owners: &'a std::collections::BTreeSet<Actor>,
+    /// Whether the compactor runs and within what.
+    pub compacting: &'a crate::secretary::compacting::Compacting,
+}
+
+impl<'a> Digests<'a> {
+    /// The stores as a reader holds them.
+    #[must_use]
+    pub fn reads(&self) -> ReadDigests<'a> {
+        ReadDigests {
+            history: self.history,
+            texts: self.texts,
+            lines: self.lines.reads(),
+            owners: self.owners,
+            compacting: self.compacting,
+        }
+    }
+}
+
+impl ReadDigests<'_> {
     /// The reading.
     ///
     /// # Errors
@@ -72,7 +103,7 @@ impl Digests<'_> {
     /// of them read.
     ///
     /// # Errors
-    /// As [`Digests::read`].
+    /// As [`ReadDigests::read`].
     pub fn read_over(
         &self,
         lines: &[(Hash, prodrome_core::event::Envelope<LineEvent>)],
@@ -92,7 +123,7 @@ impl Digests<'_> {
     /// The texts the history names, each live or past ([`Digest::naming`]).
     ///
     /// # Errors
-    /// As [`Digests::read`].
+    /// As [`ReadDigests::read`].
     pub fn naming(&self) -> Result<Naming<Line>, Refusal> {
         Ok(self.read()?.naming())
     }
@@ -127,7 +158,7 @@ impl Held<'_> {
     ///
     /// # Errors
     /// [`Refusal::conflict`] for a node that is not pending (holding a current summary, holding
-    /// the last line, or not in the tree); [`Digests::whole`]'s; the salt's and the stores' own.
+    /// the last line, or not in the tree); [`ReadDigests::whole`]'s; the salt's and the stores' own.
     pub fn summarize(
         &self,
         node: &Hash,
@@ -185,7 +216,7 @@ impl Held<'_> {
     /// Refuse unless every store reads whole and `node` is waiting for a summary; its label
     /// when it is.
     fn pending(&self, node: &Hash) -> Result<crate::secretary::digest_label::Label, Refusal> {
-        let digests = self.digests();
+        let digests = self.digests().reads();
         digests.whole()?;
         let read = digests.read()?;
         let waiting = || Refusal::conflict(format!("node {node} is not waiting for a summary"));

@@ -6,7 +6,7 @@
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use suzatary_core::store::{Doc, StoreError};
+use suzatary_core::store::{Doc, Gets, StoreError};
 
 use crate::durable::Mode;
 use crate::present::Present as _;
@@ -154,7 +154,7 @@ impl<K: 'static, T: 'static> Docs<K, T> {
     }
 }
 
-impl<K, T> Doc<K, T> for Docs<K, T>
+impl<K, T> Gets<K, T> for Docs<K, T>
 where
     K: Sync + 'static,
     T: Sync + 'static,
@@ -170,7 +170,13 @@ where
         (self.codec.parse)(key, bytes)
             .map_err(|why| StoreError::unreadable(self.store, format!("{}: {why}", path.display())))
     }
+}
 
+impl<K, T> Doc<K, T> for Docs<K, T>
+where
+    K: Sync + 'static,
+    T: Sync + 'static,
+{
     fn set(&self, key: &K, value: &T) -> Result<(), StoreError> {
         let path = self.path(key);
         let unwritable = |why: &dyn std::fmt::Display| {

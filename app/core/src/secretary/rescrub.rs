@@ -138,7 +138,7 @@ fn slots(conversations: Conversations<'_>) -> Result<Vec<(Place, Stands)>, Store
             }
         }
         let superseded = transcript::superseded(lines.iter().copied(), &|name: &KeyName| {
-            conversations.key(name)
+            conversations.reads().key(name)
         });
         for (_, line) in &lines {
             if matches!(line.shape(), LineShape::Resealed { .. }) {

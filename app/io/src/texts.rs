@@ -53,7 +53,7 @@ impl Entropy for SystemEntropy {
 mod tests {
     use suzatary_core::secretary::memory::Fact;
     use suzatary_core::secretary::salted_text::SALT_BYTES;
-    use suzatary_core::store::Doc as _;
+    use suzatary_core::store::{Doc as _, Gets as _};
 
     use super::*;
 

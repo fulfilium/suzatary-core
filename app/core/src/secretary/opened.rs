@@ -15,7 +15,8 @@ use crate::secretary::line_words::LineWords;
 use crate::secretary::locked_text::{KeyName, TextKey};
 use crate::secretary::salted_text::Words as _;
 use crate::secretary::slots::Slots;
-use crate::secretary::words::Words;
+use crate::secretary::words::{Gone, Words};
+use crate::store::Gets;
 
 /// One slot as the cache knows it: its key's name, and the digest of its binding and sealed
 /// bytes.
@@ -91,16 +92,32 @@ impl Opened {
     }
 }
 
-/// `slots` read through `opened`: words kept are answered from memory, and words opened are
-/// kept; what is gone is never kept.
-pub struct Cached<'a, S> {
-    /// How a slot is read when its words are not kept.
-    pub slots: S,
-    /// The words kept.
-    pub opened: &'a Opened,
+/// The slots `keys` opens, read through `opened`: words kept are answered from memory, and words
+/// opened are kept; what is gone is never kept. Its fields are private and its slots are always
+/// opened by a key from `keys`, so the cache holds only words a key opened.
+pub struct Cached<'a> {
+    keys: &'a dyn Gets<KeyName, TextKey>,
+    opened: &'a Opened,
 }
 
-impl<S: Slots> Slots for Cached<'_, S> {
+impl<'a> Cached<'a> {
+    /// The slots `keys` opens, cached in `opened`.
+    pub(crate) fn new(keys: &'a dyn Gets<KeyName, TextKey>, opened: &'a Opened) -> Self {
+        Self { keys, opened }
+    }
+
+    /// The key named `name`, or why its words are not here: a key the store does not hold, or
+    /// cannot read, is missing.
+    #[must_use]
+    pub fn key(&self, name: &KeyName) -> Words<TextKey> {
+        match self.keys.get(name) {
+            Ok(Some(key)) => Words::kept(key),
+            Ok(None) | Err(_) => Gone::Missing.into(),
+        }
+    }
+}
+
+impl Slots for Cached<'_> {
     fn words(
         &self,
         name: &KeyName,
@@ -118,7 +135,7 @@ impl<S: Slots> Slots for Cached<'_, S> {
         if let Some(words) = self.opened.get(&slot) {
             return Words::kept(words);
         }
-        let words = self.slots.words(name, binding, sealed, open);
+        let words = (|name: &KeyName| self.key(name)).words(name, binding, sealed, open);
         if let Some(kept) = words.get() {
             self.opened.keep(slot, kept);
         }

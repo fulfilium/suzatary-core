@@ -158,7 +158,7 @@ fn dismiss(the: &Box, id: &ProposalId) {
 
 /// What something live names: a standing fact's text or a standing card's.
 fn live(the: &Box) -> BTreeSet<TextName> {
-    let history = the.memories().history().expect("reads");
+    let history = the.memories().reads().history().expect("reads");
     history
         .live()
         .map(|(_, kept)| kept.text.clone())
@@ -237,14 +237,14 @@ proptest! {
                 }
                 Step::Forget(pick) => {
                     let standing: Vec<FactId> =
-                        the.memories().read().expect("reads").facts.iter().map(|f| f.id).collect();
+                        the.memories().reads().read().expect("reads").facts.iter().map(|f| f.id).collect();
                     if let Some(id) = standing.get(pick % standing.len().max(1)) {
                         the.memories().forget(*id, now(), &owner()).expect("forgets");
                     }
                 }
             }
             let dead = texts::dead([
-                the.memories().history().expect("reads").naming(),
+                the.memories().reads().history().expect("reads").naming(),
                 the.fold().naming(),
             ]);
             prop_assert!(was_dead.is_subset(&dead), "a dead text is dead for good");
@@ -255,7 +255,7 @@ proptest! {
                 if let (Proposal::Remember { text, .. }, true) =
                     (&object.asked.proposal, object.reading.open())
                 {
-                    prop_assert!(the.memories().words(text).expect("the texts read").is_some(), "a standing card reads its words");
+                    prop_assert!(the.memories().reads().words(text).expect("the texts read").is_some(), "a standing card reads its words");
                 }
             }
             let prints = prints(&the.cards) + &prints(&the.history);
@@ -306,7 +306,7 @@ fn a_tapped_cards_words_go_with_its_fact() {
     let card = ask(&the, &fact(1), Kind::Preference, 0);
     tap(&the, &card, 0);
     assert_eq!(the.texts.keys().len(), 1, "the fact names the card's text");
-    let read = the.memories().read().expect("reads");
+    let read = the.memories().reads().read().expect("reads");
     assert_eq!(read.facts.len(), 1);
     assert_eq!(read.facts[0].fact, fact(1));
     the.memories()

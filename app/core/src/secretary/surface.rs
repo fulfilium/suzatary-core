@@ -23,6 +23,8 @@ use crate::capability::Agent;
 use crate::chains::ChainPolicy;
 use crate::refusal::{Refusal, shown};
 use crate::secretary::changes::{self, Act, Changeset, Unapplied};
+use crate::secretary::compaction::Reading;
+use crate::secretary::shown_record::{Everything, ShownRecord};
 use crate::verb::{Surface, verbs};
 
 /// The secretary's verbs: each runs against a [`Call`], and answers JSON and the files it hands
@@ -101,11 +103,23 @@ impl Holds for SecretarySurface {
         markup — use this, never `detail`, when the detail already exists; give at most one \
         of the two.\n\n`chain` must be the store the todo was authored in; there is no moving \
         one between them.",
+        zoom: "OPEN A PART OF THE RECORD of every conversation you \
+        were told when this one opened: `handle` is a part's `first+lines`. Answers what is \
+        beneath it, each with its own handle: a line whole, a summary (`derived`, nobody's own \
+        words), or a span not summarised yet. A part you were shown in parentheses may hold \
+        somebody else's words, and opening it shows them: its answer says `taint: tainted`, \
+        and a `remember` after it becomes a card. Zoom before you act on what a summary says, \
+        guess, or ask.",
     };
     type Filing = Direct;
+    type Shows = Everything;
 
     fn agent<'a>(call: &Self::Call<'a>) -> Agent<'a> {
         call.caps.agent()
+    }
+
+    fn record(call: &Call<'_>) -> Result<ShownRecord<Everything>, Refusal> {
+        Reading::of(&call.caps.memories.digests.reads()).map(ShownRecord::of)
     }
 
     fn chain<'a>(call: &Self::Call<'a>) -> &'a ChainPolicy {

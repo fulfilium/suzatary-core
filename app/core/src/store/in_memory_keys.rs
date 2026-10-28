@@ -1,7 +1,7 @@
 use std::collections::BTreeMap;
 use std::sync::{Mutex, PoisonError};
 
-use super::{Doc, StoreError};
+use super::{Doc, Gets, StoreError};
 use crate::secretary::locked_text::{KEY_BYTES, KeyName, TextKey};
 
 /// Keys held in memory as their bytes, for tests: a key is read back as a fresh [`TextKey`], as
@@ -24,7 +24,7 @@ impl InMemoryKeys {
     }
 }
 
-impl Doc<KeyName, TextKey> for InMemoryKeys {
+impl Gets<KeyName, TextKey> for InMemoryKeys {
     fn get(&self, name: &KeyName) -> Result<Option<TextKey>, StoreError> {
         Ok(self
             .keys
@@ -33,7 +33,9 @@ impl Doc<KeyName, TextKey> for InMemoryKeys {
             .get(name)
             .and_then(|bytes| TextKey::parse(name, bytes)))
     }
+}
 
+impl Doc<KeyName, TextKey> for InMemoryKeys {
     fn set(&self, name: &KeyName, key: &TextKey) -> Result<(), StoreError> {
         if &key.name() != name {
             return Err(StoreError::unwritable(

@@ -9,7 +9,7 @@ use std::sync::{Arc, Mutex, PoisonError};
 
 use crate::capability::Datetime;
 use crate::refusal::Answered;
-use crate::store::{Doc, StoreError};
+use crate::store::{Doc, Gets, StoreError};
 
 /// What a store holds at one answer: the prodromes it serves, its heads, and every object it holds.
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
@@ -115,11 +115,13 @@ impl Epochs {
 #[derive(Default)]
 struct Held(Mutex<BTreeMap<String, Served>>);
 
-impl Doc<String, Served> for Held {
+impl Gets<String, Served> for Held {
     fn get(&self, key: &String) -> Result<Option<Served>, StoreError> {
         Ok(self.held().get(key).cloned())
     }
+}
 
+impl Doc<String, Served> for Held {
     fn set(&self, key: &String, value: &Served) -> Result<(), StoreError> {
         self.held().insert(key.clone(), value.clone());
         Ok(())

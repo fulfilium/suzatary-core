@@ -7,7 +7,7 @@
 use serde_json::Value;
 
 use super::verbs::{
-    Context, Evaluate, HistoryArgs, Mark, New, NoiseAdd, Recall, ShowArgs, Sync, VerifyChain, Zoom,
+    Context, Evaluate, HistoryArgs, Mark, New, NoiseAdd, Recall, ShowArgs, Sync, VerifyChain,
 };
 use super::{Call, Holds, Says};
 use crate::authoring::Writer;
@@ -17,6 +17,7 @@ use crate::reference::TodoRef;
 use crate::refusal::Refusal;
 use crate::secretary::changes::{self, Act, Building, Changeset};
 use crate::secretary::filed::Carding;
+use crate::secretary::shown_record::{OwnersRecord, OwnersWords};
 use crate::secretary::verbs::Reasoned;
 use crate::verb::{Chained, Surface, verbs};
 use crate::zone::Moment;
@@ -136,11 +137,23 @@ impl Holds for TriageSurface {
         markup — use this, never `detail`, when the detail already exists; give at most one \
         of the two.\n\n`chain` must be the store the todo was authored in; there is no moving \
         one between them.",
+        zoom: "OPEN A PART OF THE SECRETARY'S RECORD, read-only: \
+        `handle` is a part's `first+lines`, as `context`'s `memory` or `recall` shows it. \
+        Answers what is beneath it, each with its own handle: the owner's own line whole, a \
+        summary of nothing but their lines (`derived`, nobody's own words), or a span not \
+        summarised yet. Anything else (the secretary's answers, a verb's answer, the box's \
+        notes) stays shown by its kinds alone, however far you open it. Zoom before you file \
+        on what a summary says.",
     };
     type Filing = Reasoned;
+    type Shows = OwnersWords;
 
     fn agent<'a>(call: &Self::Call<'a>) -> Agent<'a> {
         *call.caps
+    }
+
+    fn record(call: &Call<'_>) -> Result<OwnersRecord, Refusal> {
+        call.caps.memory.record()
     }
 
     fn chain<'a>(call: &Self::Call<'a>) -> &'a ChainPolicy {
@@ -210,6 +223,7 @@ type TodoUpdate = super::verbs::TodoUpdate<TriageSurface>;
 type Search = super::verbs::Search<TriageSurface>;
 type Show = super::verbs::Show<TriageSurface, ShowArgs>;
 type TodoShow = super::verbs::TodoShow<TriageSurface>;
+type Zoom = super::verbs::Zoom<TriageSurface>;
 
 verbs! {
     /// Every verb the triage agent may call, and nothing else.

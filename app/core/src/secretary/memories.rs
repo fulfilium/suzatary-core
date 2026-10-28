@@ -15,7 +15,7 @@ use prodrome_core::literal::Datetime;
 
 use crate::capability::Entropy;
 use crate::refusal::Refusal;
-use crate::secretary::digests::Digests;
+use crate::secretary::digests::{Digests, ReadDigests};
 use crate::secretary::inbox_event::InboxEvent;
 use crate::secretary::memory::{
     Fact, FactId, Forgotten, Kind, MAX_LIVE, Memory, Origin, Remembered,
@@ -24,7 +24,7 @@ use crate::secretary::memory_event::{self, MemoryEvent};
 use crate::secretary::salted_text::{Text, TextName};
 use crate::secretary::store::Proposal;
 use crate::secretary::two_phase::TwoPhase;
-use crate::store::{Doc, Prodrome, WriteLock};
+use crate::store::{Doc, Gets, Prodrome, Reads, WriteLock};
 
 /// The memory: its history, its texts, the inbox whose remember cards name texts too, and the
 /// salt each new text is kept with.
@@ -68,7 +68,19 @@ impl Kept {
     }
 }
 
-impl<'a> Memories<'a> {
+/// The memory as a reader holds it: no field reaches a write of an event, a fact's words, a
+/// card or a summary.
+#[derive(Clone, Copy)]
+pub struct ReadMemories<'a> {
+    /// What was remembered and forgotten, by id.
+    pub history: &'a dyn Reads<MemoryEvent>,
+    /// The words of each standing fact and of each remember card.
+    pub texts: &'a dyn Gets<TextName, Text<Fact>>,
+    /// The digest.
+    pub digests: ReadDigests<'a>,
+}
+
+impl ReadMemories<'_> {
     /// The history's reading.
     ///
     /// # Errors
@@ -105,6 +117,18 @@ impl<'a> Memories<'a> {
         Ok(Memory::from_history(history, |name| {
             kept.get(name).cloned()
         }))
+    }
+}
+
+impl<'a> Memories<'a> {
+    /// The stores as a reader holds them.
+    #[must_use]
+    pub fn reads(&self) -> ReadMemories<'a> {
+        ReadMemories {
+            history: self.history,
+            texts: self.texts,
+            digests: self.digests.reads(),
+        }
     }
 
     /// Take the history's hold, which every write and every deletion of words is made under.
@@ -175,8 +199,8 @@ impl Held<'_> {
         at: Datetime,
     ) -> Result<Remembered, Refusal> {
         let memories = &self.memories;
-        let history = memories.history()?;
-        let id = remembering(&history, &memories.with_words(&history)?, fact)?;
+        let history = memories.reads().history()?;
+        let id = remembering(&history, &memories.reads().with_words(&history)?, fact)?;
         let text = Text::new(fact.clone(), self.salt()?);
         let name = text.name();
         let event = remembered(id, at, name.clone(), kind, said)?;
@@ -208,11 +232,11 @@ impl Held<'_> {
         at: Datetime,
     ) -> Result<Remembered, Refusal> {
         let memories = &self.memories;
-        let fact = memories.words(text)?.ok_or_else(|| {
+        let fact = memories.reads().words(text)?.ok_or_else(|| {
             Refusal::not_found("the card's words are deleted, so there is nothing to remember")
         })?;
-        let history = memories.history()?;
-        let id = remembering(&history, &memories.with_words(&history)?, &fact)?;
+        let history = memories.reads().history()?;
+        let id = remembering(&history, &memories.reads().with_words(&history)?, &fact)?;
         memories
             .history
             .append(remembered(id, at, text.clone(), kind, said)?)?;
@@ -235,7 +259,7 @@ impl Held<'_> {
         let fold = crate::secretary::inbox::fold(memories.cards)?;
         for object in fold.objects() {
             if let Proposal::Remember { text, .. } = &object.asked.proposal
-                && memories.words(text)?.as_ref() == Some(fact)
+                && memories.reads().words(text)?.as_ref() == Some(fact)
             {
                 return Ok(Kept::Found(text.clone()));
             }
@@ -264,7 +288,7 @@ impl Held<'_> {
     /// [`Refusal::not_found`] for an id no standing fact carries; the stores' own.
     pub fn forget(&self, id: FactId, at: Datetime, by: &Actor) -> Result<Forgotten, Refusal> {
         let memories = &self.memories;
-        let version = forgetting(&memories.history()?, id)?;
+        let version = forgetting(&memories.reads().history()?, id)?;
         let event = memory_event::forgotten(id, at, by.clone(), version)
             .map_err(|refused| Refusal::internal(refused.to_string()))?;
         memories.history.append(event)?;
@@ -302,10 +326,10 @@ impl Held<'_> {
         whole(memories.digests.history, "digests")?;
         whole(memories.digests.lines.lines, "conversations")?;
         let facts = crate::secretary::texts::dead([
-            memories.history()?.naming(),
+            memories.reads().history()?.naming(),
             crate::secretary::inbox::fold(memories.cards)?.naming(),
         ]);
-        let summaries = crate::secretary::texts::dead([memories.digests.naming()?]);
+        let summaries = crate::secretary::texts::dead([memories.digests.reads().naming()?]);
         for name in &facts {
             memories.texts.remove(name)?;
         }
@@ -324,7 +348,7 @@ impl Held<'_> {
     /// # Errors
     /// The stores' own; a conversation that does not read owes nothing until it does.
     pub fn erase_forgotten(&self) -> Result<usize, Refusal> {
-        let history = self.memories.history()?;
+        let history = self.memories.reads().history()?;
         let lines = self.memories.digests.lines;
         let mut erased = 0;
         for (fact, gone) in history.forgotten() {
@@ -428,7 +452,7 @@ fn refused_sweep(refused: &Refusal) {
 /// # Errors
 /// [`Refusal::conflict`] naming the store and what its read left out.
 pub(crate) fn whole<E: prodrome_core::schema::Schema>(
-    store: &dyn Prodrome<E>,
+    store: &dyn Reads<E>,
     store_name: &str,
 ) -> Result<(), Refusal> {
     let left_out = store.excluded()?;
@@ -594,7 +618,7 @@ mod tests {
         let forgotten = memories.forget(gone.id, at(2), &ada).expect("forgets");
         assert_eq!((forgotten.id, forgotten.version), (FactId(2), 3));
         assert_eq!(texts.keys().len(), 1, "the forgotten words are deleted");
-        let read = memories.read().expect("reads");
+        let read = memories.reads().read().expect("reads");
         assert_eq!(read.facts, vec![kept]);
         assert_eq!(read.forgotten, vec![forgotten]);
         assert_eq!(read.version, 3);
@@ -646,10 +670,10 @@ mod tests {
         for name in texts.keys() {
             texts.remove(&name).expect("lost");
         }
-        let read = memories.read().expect("reads, never refuses");
+        let read = memories.reads().read().expect("reads, never refuses");
         assert!(read.facts.is_empty());
         assert_eq!(read.version, 1);
-        let history_read = memories.history().expect("reads");
+        let history_read = memories.reads().history().expect("reads");
         assert_eq!(
             history_read.live().count(),
             1,

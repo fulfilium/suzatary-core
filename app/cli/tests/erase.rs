@@ -130,7 +130,7 @@ fn an_erasure_takes_the_summaries_that_read_it() {
     let (fakes, base, id) = one_round("erase-summary", words);
     let summary = format!("Ada said {words}");
     let memories = fakes.memories();
-    let digest = memories.digests.read().expect("the digest reads");
+    let digest = memories.digests.reads().read().expect("the digest reads");
     let root = digest.tree().expect("lines").root();
     // Written as the compactor writes it, over the root, whichever node is pending: which is,
     // is a function of the lines' names, and every key is fresh.
