@@ -269,5 +269,5 @@ jobs:
           CACHIX_AUTH_TOKEN: ${{ secrets.CACHIX_AUTH_TOKEN }}
         run: |
           set -euo pipefail
-          ./cachix/bin/cachix push bmabsout <publication/unserved.txt
+          ./cachix-bin/bin/cachix push bmabsout <publication/unserved.txt
           echo "pushed $(wc -l <publication/unserved.txt) paths"

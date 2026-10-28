@@ -275,7 +275,7 @@ fn publication_cache_measures_its_push_and_refuses_over_a_gigabyte() {
     assert!(again.contains("<publication/unserved.txt"));
     assert!(!send.contains("if:"));
     assert!(
-        send.contains("./cachix/bin/cachix push bmabsout <publication/unserved.txt\n"),
+        send.contains("./cachix-bin/bin/cachix push bmabsout <publication/unserved.txt\n"),
         "master's cachix pushes what was measured"
     );
 }
