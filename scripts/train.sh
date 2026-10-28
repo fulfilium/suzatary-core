@@ -1401,13 +1401,16 @@ publish() {
   done
   # Read by `row`: the paths each row would publish first. An admit names one of them, or it is a
   # word about nothing this publish holds.
-  local pending=() fresh
+  local pending=() fresh paths
   for source in "${sources[@]}"; do
     printf '%s\n' "${skips[@]}" | awk -v r="$source" '$0 == r { f = 1 } END { exit !f }' || pending+=("$source")
   done
   fresh="$(fresh_rows "${pending[@]}")" || die "could not write the public tree to list the paths it would publish. Nothing published."
+  # grep reads a here-string, not a pipe: `grep -q` leaves at its first match, and a writer
+  # into a pipe longer than its buffer then dies of SIGPIPE, which pipefail reads as no match.
+  paths="$(cut -d' ' -f2- <<<"$fresh")"
   for at in "${admits[@]}"; do
-    printf '%s\n' "$fresh" | cut -d' ' -f2- | grep -qxF -- "$at" \
+    grep -qxF -- "$at" <<<"$paths" \
       || die "--admit $at names no path this publish would hold: admit only what a held row names. Nothing published."
   done
   for source in "${sources[@]}"; do
@@ -1557,7 +1560,7 @@ row() {
     # Each line is "<source> <path>", the path whole: a space or an edge blank in it is kept.
     every="$(while IFS= read -r line; do
       s="${line%% *}" path="${line#* }"
-      printf '%s\n' "${admits[@]}" | grep -qxF -- "$path" || printf '%s %s\n' "${s:0:12}" "$path"
+      grep -qxF -- "$path" <<<"$(printf '%s\n' "${admits[@]}")" || printf '%s %s\n' "${s:0:12}" "$path"
     done <<<"$fresh")"
     printf '%s\n' "$every" | sed 's/^\([^ ]*\) \(.*\)$/held: \2 (in \1)/' >&2
     say "the public tree of ${source:0:12} holds a path no publication has held; every row's are above. Nothing published from it on. Look at each, then at a terminal: scripts/train.sh publish$(while IFS= read -r line; do printf " --admit %q" "${line#* }"; done <<<"$every")"

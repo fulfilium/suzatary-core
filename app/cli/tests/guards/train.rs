@@ -2452,6 +2452,34 @@ fn train_publish_holds_a_new_path_until_a_person_admits_it() {
     );
 }
 
+/// A publish admits every held path however many there are: the held list is longer than a
+/// pipe's buffer (64 KiB), and an admit of its first path is still found.
+#[test]
+fn train_publish_admits_more_held_paths_than_a_pipe_holds() {
+    let t = Train::new("publish-admit-many");
+    t.pr(1, "the start", &[("a.txt", "a\n")]);
+    assert!(t.train(&["build", "1"]).status.success());
+    assert!(t.train(&["gate"]).status.success());
+    assert!(t.train(&["land"]).status.success());
+
+    let paths: Vec<String> = (0..900)
+        .map(|n| format!("store/objects/{n:0>64}.py"))
+        .collect();
+    let files: Vec<(&str, &str)> = paths.iter().map(|path| (path.as_str(), "x\n")).collect();
+    t.pr(2, "a store of new objects", &files);
+    assert!(t.train(&["build", "2"]).status.success());
+    assert!(t.train(&["gate"]).status.success());
+    assert!(!t.train(&["land"]).status.success(), "held");
+
+    let mut args = vec!["publish"];
+    for path in &paths {
+        args.extend(["--admit", path.as_str()]);
+    }
+    let admitted = t.at_a_terminal(&args);
+    assert!(admitted.status.success(), "{}", text(&admitted.stdout));
+    assert_eq!(t.core(&["show", &format!("master:{}", paths[0])]), "x");
+}
+
 /// A skip is taken only on a check that ran and found hits: where the public tree could not be
 /// written, or the check could not run whole, the publish stops naming that, and core does not
 /// move, whatever the tree holds.
