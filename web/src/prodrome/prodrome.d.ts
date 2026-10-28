@@ -42,8 +42,10 @@ export class Proposals {
 /** The lines a tab holds, each print decoded once, read by what moved since the last reading. */
 export class Lines {
   constructor();
-  /** `[{hash, text}]` held and `[<name>]` let go. */
+  /** `[{hash, text}]` held, each hashed against its name, and `[<name>]` let go. */
   hold(add: string, drop: string): void;
+  /** `[{hash, text}]` already admitted by their names held, hashed not again, and `[<name>]` let go. */
+  hold_admitted(add: string, drop: string): void;
   /** The keys `{<name>: <hex>}` held and `[<name>]` let go. */
   keys(add: string, drop: string): void;
   /** Every conversation, newest first. */
@@ -61,7 +63,7 @@ export class Lines {
   search(q: string): string;
   /** The skeleton's nodes held and let go. */
   nodes(add: string, drop: string): void;
-  /** The conversations the stream's newest pages draw rounds of. */
+  /** `[<name>]`: every line whose words the stream's newest pages read. */
   chosen(topics: TopicReading, chosen: string, pages: number): string;
   /** The stream's newest pages. */
   stream(topics: TopicReading, chosen: string, pages: number): string;
@@ -133,6 +135,10 @@ export function suspicious(html: string): string | undefined;
 export function scrubs(): number;
 /** How many prints the lines have decoded since the module was loaded; read by the browser scenes. */
 export function decodes(): number;
+/** How many of those prints were hashed against their names first; read by the browser scenes. */
+export function hashes(): number;
+/** How many sealed slots the module has decrypted since it was loaded; read by the browser scenes. */
+export function opens(): number;
 
 /** Every function above throws until this resolves, so `core.ts` alone calls it and memoises it. */
 export default function init(init: { module_or_path: string }): Promise<unknown>;

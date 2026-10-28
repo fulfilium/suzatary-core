@@ -1,0 +1,1505 @@
+[
+  {
+    "name": "an erasure",
+    "nodes": [
+      {
+        "hash": "5de669e0bd8e8469a0e677697a7280b9e1e076444241771200be8df525b13d60",
+        "parents": [
+          "7b818ef0fdd17acb5a6c38b43fa0281f189cc0854dab58dcff68c681ce13ad38"
+        ],
+        "size": 785,
+        "header": {
+          "node": "line",
+          "conversation": "2026-09-02-keys",
+          "at": "2026-09-02T12:00:00",
+          "kind": "Opened",
+          "keys": [
+            "630dcd2966c4336691125448bbb25b4ff412a49c732db2c8abc1b8581bd710dd"
+          ],
+          "step": {
+            "step": "opened"
+          }
+        }
+      },
+      {
+        "hash": "7b818ef0fdd17acb5a6c38b43fa0281f189cc0854dab58dcff68c681ce13ad38",
+        "parents": [],
+        "size": 65,
+        "header": {
+          "node": "structure",
+          "kind": "Genesis"
+        }
+      },
+      {
+        "hash": "7be828f9c64ceb2d2782cd3c747ace7db37185a8a1f090e16b916f4d7f3d75aa",
+        "parents": [
+          "7b818ef0fdd17acb5a6c38b43fa0281f189cc0854dab58dcff68c681ce13ad38",
+          "e7b018c000b459c9e7a64a3cd1de3fe3aba0d39271c51aac7bb709a234e6f516"
+        ],
+        "size": 882,
+        "header": {
+          "node": "line",
+          "conversation": "2026-09-02-keys",
+          "at": "2026-09-02T12:00:03",
+          "kind": "Said",
+          "keys": [
+            "34cdfa29c001301f4ab4ae37b4e766f867cd4eb3a89d7f02e2fc3ca2f8493bf9"
+          ],
+          "step": {
+            "step": "asks"
+          }
+        }
+      },
+      {
+        "hash": "db04cda2912d50e3c567b0f42ede5a8a99df727c0aede9c81229858a67e9bc53",
+        "parents": [
+          "7b818ef0fdd17acb5a6c38b43fa0281f189cc0854dab58dcff68c681ce13ad38",
+          "7be828f9c64ceb2d2782cd3c747ace7db37185a8a1f090e16b916f4d7f3d75aa"
+        ],
+        "size": 398,
+        "header": {
+          "node": "line",
+          "conversation": "2026-09-02-keys",
+          "at": "2026-09-02T12:01:00",
+          "kind": "Erased",
+          "keys": [],
+          "step": {
+            "step": "erased",
+            "keys": [
+              "6cf6abc29c87ca5fa1dc5399205a10bed451b2ff0cbef2a2739c5ac845963890"
+            ]
+          }
+        }
+      },
+      {
+        "hash": "e7b018c000b459c9e7a64a3cd1de3fe3aba0d39271c51aac7bb709a234e6f516",
+        "parents": [
+          "7b818ef0fdd17acb5a6c38b43fa0281f189cc0854dab58dcff68c681ce13ad38",
+          "f5c6aad53d18643a738954cb7701d4e6169e04bb08a7c514af660df4cb23ae7f"
+        ],
+        "size": 882,
+        "header": {
+          "node": "line",
+          "conversation": "2026-09-02-keys",
+          "at": "2026-09-02T12:00:02",
+          "kind": "Said",
+          "keys": [
+            "6cf6abc29c87ca5fa1dc5399205a10bed451b2ff0cbef2a2739c5ac845963890"
+          ],
+          "step": {
+            "step": "asks"
+          }
+        }
+      },
+      {
+        "hash": "f5c6aad53d18643a738954cb7701d4e6169e04bb08a7c514af660df4cb23ae7f",
+        "parents": [
+          "5de669e0bd8e8469a0e677697a7280b9e1e076444241771200be8df525b13d60",
+          "7b818ef0fdd17acb5a6c38b43fa0281f189cc0854dab58dcff68c681ce13ad38"
+        ],
+        "size": 882,
+        "header": {
+          "node": "line",
+          "conversation": "2026-09-02-keys",
+          "at": "2026-09-02T12:00:01",
+          "kind": "Said",
+          "keys": [
+            "86f5d9bdc5ce5e4ff81af4dc4a8c2e724e448cb5ec16685b5591b4e56d5a1b3e"
+          ],
+          "step": {
+            "step": "asks"
+          }
+        }
+      }
+    ],
+    "device": [
+      "34cdfa29c001301f4ab4ae37b4e766f867cd4eb3a89d7f02e2fc3ca2f8493bf9",
+      "630dcd2966c4336691125448bbb25b4ff412a49c732db2c8abc1b8581bd710dd",
+      "6cf6abc29c87ca5fa1dc5399205a10bed451b2ff0cbef2a2739c5ac845963890",
+      "86f5d9bdc5ce5e4ff81af4dc4a8c2e724e448cb5ec16685b5591b4e56d5a1b3e"
+    ],
+    "box": [
+      "34cdfa29c001301f4ab4ae37b4e766f867cd4eb3a89d7f02e2fc3ca2f8493bf9",
+      "630dcd2966c4336691125448bbb25b4ff412a49c732db2c8abc1b8581bd710dd",
+      "86f5d9bdc5ce5e4ff81af4dc4a8c2e724e448cb5ec16685b5591b4e56d5a1b3e"
+    ]
+  },
+  {
+    "name": "a migration while the device was away",
+    "nodes": [
+      {
+        "hash": "04d2d8140e1d647a6e9fc3264f8553fd84c4303b62ad997ecbb8a9558f343fd7",
+        "parents": [
+          "7b818ef0fdd17acb5a6c38b43fa0281f189cc0854dab58dcff68c681ce13ad38",
+          "ee430f6485d5db49cc9fdc17ce5ac84c9092ff63423568785b97785978d0ef18"
+        ],
+        "size": 964,
+        "header": {
+          "node": "line",
+          "conversation": "2026-09-02-keys",
+          "at": "2026-09-02T12:00:30",
+          "kind": "Resealed",
+          "keys": [
+            "c7dc3c32b1609e1ed9dfc266b6aded61940bff08a0a61f160225273fc322df60"
+          ],
+          "step": {
+            "step": "resealed",
+            "of": "6cf6abc29c87ca5fa1dc5399205a10bed451b2ff0cbef2a2739c5ac845963890",
+            "from": "6cf6abc29c87ca5fa1dc5399205a10bed451b2ff0cbef2a2739c5ac845963890"
+          }
+        }
+      },
+      {
+        "hash": "42e2c1d9c324c4cd90b9caa3e41ea42cf90cd39dd65727316ae979e3514358e6",
+        "parents": [
+          "7b818ef0fdd17acb5a6c38b43fa0281f189cc0854dab58dcff68c681ce13ad38",
+          "8300d088dd4db76d9ec4cece9a0bd0ea5c0d9b411c72fb2364bbcbb499e5c1b6"
+        ],
+        "size": 806,
+        "header": {
+          "node": "line",
+          "conversation": "2026-09-02-keys",
+          "at": "2026-09-02T12:00:02",
+          "kind": "Said",
+          "keys": [
+            "6cf6abc29c87ca5fa1dc5399205a10bed451b2ff0cbef2a2739c5ac845963890"
+          ],
+          "step": {
+            "step": "asks"
+          }
+        }
+      },
+      {
+        "hash": "5e7b644b0dd7594769652ee7a4ac4038f324a76fee43b60a55f9f5ef87f9afa6",
+        "parents": [
+          "42e2c1d9c324c4cd90b9caa3e41ea42cf90cd39dd65727316ae979e3514358e6",
+          "7b818ef0fdd17acb5a6c38b43fa0281f189cc0854dab58dcff68c681ce13ad38"
+        ],
+        "size": 806,
+        "header": {
+          "node": "line",
+          "conversation": "2026-09-02-keys",
+          "at": "2026-09-02T12:00:03",
+          "kind": "Said",
+          "keys": [
+            "34cdfa29c001301f4ab4ae37b4e766f867cd4eb3a89d7f02e2fc3ca2f8493bf9"
+          ],
+          "step": {
+            "step": "asks"
+          }
+        }
+      },
+      {
+        "hash": "7b818ef0fdd17acb5a6c38b43fa0281f189cc0854dab58dcff68c681ce13ad38",
+        "parents": [],
+        "size": 65,
+        "header": {
+          "node": "structure",
+          "kind": "Genesis"
+        }
+      },
+      {
+        "hash": "8300d088dd4db76d9ec4cece9a0bd0ea5c0d9b411c72fb2364bbcbb499e5c1b6",
+        "parents": [
+          "7b818ef0fdd17acb5a6c38b43fa0281f189cc0854dab58dcff68c681ce13ad38",
+          "abd2a8fba3708700ce38b89da190d47b41c683c9c70608101db1e7bd3eed020b"
+        ],
+        "size": 806,
+        "header": {
+          "node": "line",
+          "conversation": "2026-09-02-keys",
+          "at": "2026-09-02T12:00:01",
+          "kind": "Said",
+          "keys": [
+            "86f5d9bdc5ce5e4ff81af4dc4a8c2e724e448cb5ec16685b5591b4e56d5a1b3e"
+          ],
+          "step": {
+            "step": "asks"
+          }
+        }
+      },
+      {
+        "hash": "8430253f5cd3b798f51571f30cb04c0d327382a4c415969c85f066797b3ca28f",
+        "parents": [
+          "04d2d8140e1d647a6e9fc3264f8553fd84c4303b62ad997ecbb8a9558f343fd7",
+          "7b818ef0fdd17acb5a6c38b43fa0281f189cc0854dab58dcff68c681ce13ad38"
+        ],
+        "size": 964,
+        "header": {
+          "node": "line",
+          "conversation": "2026-09-02-keys",
+          "at": "2026-09-02T12:00:30",
+          "kind": "Resealed",
+          "keys": [
+            "ff234b439627f020679367b7f4bd920e93f0e5b9a379eb9877c465dbaa96b9c1"
+          ],
+          "step": {
+            "step": "resealed",
+            "of": "34cdfa29c001301f4ab4ae37b4e766f867cd4eb3a89d7f02e2fc3ca2f8493bf9",
+            "from": "34cdfa29c001301f4ab4ae37b4e766f867cd4eb3a89d7f02e2fc3ca2f8493bf9"
+          }
+        }
+      },
+      {
+        "hash": "abd2a8fba3708700ce38b89da190d47b41c683c9c70608101db1e7bd3eed020b",
+        "parents": [
+          "7b818ef0fdd17acb5a6c38b43fa0281f189cc0854dab58dcff68c681ce13ad38"
+        ],
+        "size": 709,
+        "header": {
+          "node": "line",
+          "conversation": "2026-09-02-keys",
+          "at": "2026-09-02T12:00:00",
+          "kind": "Opened",
+          "keys": [
+            "630dcd2966c4336691125448bbb25b4ff412a49c732db2c8abc1b8581bd710dd"
+          ],
+          "step": {
+            "step": "opened"
+          }
+        }
+      },
+      {
+        "hash": "de728876b1d19cd6bc1fb7cf6cec064063fee88752dd025ee1e7e0e496f5875b",
+        "parents": [
+          "5e7b644b0dd7594769652ee7a4ac4038f324a76fee43b60a55f9f5ef87f9afa6",
+          "7b818ef0fdd17acb5a6c38b43fa0281f189cc0854dab58dcff68c681ce13ad38"
+        ],
+        "size": 964,
+        "header": {
+          "node": "line",
+          "conversation": "2026-09-02-keys",
+          "at": "2026-09-02T12:00:30",
+          "kind": "Resealed",
+          "keys": [
+            "f8517142a72094a6bbf487f5347b1a5c041aef1d861d319beab28719a157aaa9"
+          ],
+          "step": {
+            "step": "resealed",
+            "of": "630dcd2966c4336691125448bbb25b4ff412a49c732db2c8abc1b8581bd710dd",
+            "from": "630dcd2966c4336691125448bbb25b4ff412a49c732db2c8abc1b8581bd710dd"
+          }
+        }
+      },
+      {
+        "hash": "ee430f6485d5db49cc9fdc17ce5ac84c9092ff63423568785b97785978d0ef18",
+        "parents": [
+          "7b818ef0fdd17acb5a6c38b43fa0281f189cc0854dab58dcff68c681ce13ad38",
+          "de728876b1d19cd6bc1fb7cf6cec064063fee88752dd025ee1e7e0e496f5875b"
+        ],
+        "size": 964,
+        "header": {
+          "node": "line",
+          "conversation": "2026-09-02-keys",
+          "at": "2026-09-02T12:00:30",
+          "kind": "Resealed",
+          "keys": [
+            "1b2e08206305d4481c96d6d008d19a08e2696ec060534ed4c6c8d54e702ceec0"
+          ],
+          "step": {
+            "step": "resealed",
+            "of": "86f5d9bdc5ce5e4ff81af4dc4a8c2e724e448cb5ec16685b5591b4e56d5a1b3e",
+            "from": "86f5d9bdc5ce5e4ff81af4dc4a8c2e724e448cb5ec16685b5591b4e56d5a1b3e"
+          }
+        }
+      }
+    ],
+    "device": [
+      "1b2e08206305d4481c96d6d008d19a08e2696ec060534ed4c6c8d54e702ceec0",
+      "34cdfa29c001301f4ab4ae37b4e766f867cd4eb3a89d7f02e2fc3ca2f8493bf9",
+      "630dcd2966c4336691125448bbb25b4ff412a49c732db2c8abc1b8581bd710dd",
+      "6cf6abc29c87ca5fa1dc5399205a10bed451b2ff0cbef2a2739c5ac845963890",
+      "86f5d9bdc5ce5e4ff81af4dc4a8c2e724e448cb5ec16685b5591b4e56d5a1b3e",
+      "c7dc3c32b1609e1ed9dfc266b6aded61940bff08a0a61f160225273fc322df60",
+      "f8517142a72094a6bbf487f5347b1a5c041aef1d861d319beab28719a157aaa9",
+      "ff234b439627f020679367b7f4bd920e93f0e5b9a379eb9877c465dbaa96b9c1"
+    ],
+    "box": [
+      "1b2e08206305d4481c96d6d008d19a08e2696ec060534ed4c6c8d54e702ceec0",
+      "c7dc3c32b1609e1ed9dfc266b6aded61940bff08a0a61f160225273fc322df60",
+      "f8517142a72094a6bbf487f5347b1a5c041aef1d861d319beab28719a157aaa9",
+      "ff234b439627f020679367b7f4bd920e93f0e5b9a379eb9877c465dbaa96b9c1"
+    ]
+  },
+  {
+    "name": "two migrations, the first one's reseals taken in an earlier pull",
+    "nodes": [
+      {
+        "hash": "04d2d8140e1d647a6e9fc3264f8553fd84c4303b62ad997ecbb8a9558f343fd7",
+        "parents": [
+          "7b818ef0fdd17acb5a6c38b43fa0281f189cc0854dab58dcff68c681ce13ad38",
+          "ee430f6485d5db49cc9fdc17ce5ac84c9092ff63423568785b97785978d0ef18"
+        ],
+        "size": 964,
+        "header": {
+          "node": "line",
+          "conversation": "2026-09-02-keys",
+          "at": "2026-09-02T12:00:30",
+          "kind": "Resealed",
+          "keys": [
+            "c7dc3c32b1609e1ed9dfc266b6aded61940bff08a0a61f160225273fc322df60"
+          ],
+          "step": {
+            "step": "resealed",
+            "of": "6cf6abc29c87ca5fa1dc5399205a10bed451b2ff0cbef2a2739c5ac845963890",
+            "from": "6cf6abc29c87ca5fa1dc5399205a10bed451b2ff0cbef2a2739c5ac845963890"
+          }
+        }
+      },
+      {
+        "hash": "22d08428f01c221c59fb4b62ea1904ab2d91be86d778e210a65b34cdec97dee3",
+        "parents": [
+          "7278768b26683696149c988682d3bd6646790730bdfd0794792bf9a39cb750c6",
+          "7b818ef0fdd17acb5a6c38b43fa0281f189cc0854dab58dcff68c681ce13ad38"
+        ],
+        "size": 965,
+        "header": {
+          "node": "line",
+          "conversation": "2026-09-02-keys",
+          "at": "2026-09-02T12:01:30",
+          "kind": "Resealed",
+          "keys": [
+            "6c28e9451b043cee34d7313c32984a90d25077a93ff466a4404454a84acccbaf"
+          ],
+          "step": {
+            "step": "resealed",
+            "of": "34cdfa29c001301f4ab4ae37b4e766f867cd4eb3a89d7f02e2fc3ca2f8493bf9",
+            "from": "ff234b439627f020679367b7f4bd920e93f0e5b9a379eb9877c465dbaa96b9c1"
+          }
+        }
+      },
+      {
+        "hash": "42e2c1d9c324c4cd90b9caa3e41ea42cf90cd39dd65727316ae979e3514358e6",
+        "parents": [
+          "7b818ef0fdd17acb5a6c38b43fa0281f189cc0854dab58dcff68c681ce13ad38",
+          "8300d088dd4db76d9ec4cece9a0bd0ea5c0d9b411c72fb2364bbcbb499e5c1b6"
+        ],
+        "size": 806,
+        "header": {
+          "node": "line",
+          "conversation": "2026-09-02-keys",
+          "at": "2026-09-02T12:00:02",
+          "kind": "Said",
+          "keys": [
+            "6cf6abc29c87ca5fa1dc5399205a10bed451b2ff0cbef2a2739c5ac845963890"
+          ],
+          "step": {
+            "step": "asks"
+          }
+        }
+      },
+      {
+        "hash": "5e7b644b0dd7594769652ee7a4ac4038f324a76fee43b60a55f9f5ef87f9afa6",
+        "parents": [
+          "42e2c1d9c324c4cd90b9caa3e41ea42cf90cd39dd65727316ae979e3514358e6",
+          "7b818ef0fdd17acb5a6c38b43fa0281f189cc0854dab58dcff68c681ce13ad38"
+        ],
+        "size": 806,
+        "header": {
+          "node": "line",
+          "conversation": "2026-09-02-keys",
+          "at": "2026-09-02T12:00:03",
+          "kind": "Said",
+          "keys": [
+            "34cdfa29c001301f4ab4ae37b4e766f867cd4eb3a89d7f02e2fc3ca2f8493bf9"
+          ],
+          "step": {
+            "step": "asks"
+          }
+        }
+      },
+      {
+        "hash": "7278768b26683696149c988682d3bd6646790730bdfd0794792bf9a39cb750c6",
+        "parents": [
+          "7b818ef0fdd17acb5a6c38b43fa0281f189cc0854dab58dcff68c681ce13ad38",
+          "ebb0cd00a80df48a26702b15ae9bfa45b08a6e2e7e11b9507fc717b38a5ee649"
+        ],
+        "size": 965,
+        "header": {
+          "node": "line",
+          "conversation": "2026-09-02-keys",
+          "at": "2026-09-02T12:01:30",
+          "kind": "Resealed",
+          "keys": [
+            "762df64490269f8ee748841c79f481102a6bb7d3211e7bd874ffeec4decbe973"
+          ],
+          "step": {
+            "step": "resealed",
+            "of": "6cf6abc29c87ca5fa1dc5399205a10bed451b2ff0cbef2a2739c5ac845963890",
+            "from": "c7dc3c32b1609e1ed9dfc266b6aded61940bff08a0a61f160225273fc322df60"
+          }
+        }
+      },
+      {
+        "hash": "7b818ef0fdd17acb5a6c38b43fa0281f189cc0854dab58dcff68c681ce13ad38",
+        "parents": [],
+        "size": 65,
+        "header": {
+          "node": "structure",
+          "kind": "Genesis"
+        }
+      },
+      {
+        "hash": "8300d088dd4db76d9ec4cece9a0bd0ea5c0d9b411c72fb2364bbcbb499e5c1b6",
+        "parents": [
+          "7b818ef0fdd17acb5a6c38b43fa0281f189cc0854dab58dcff68c681ce13ad38",
+          "abd2a8fba3708700ce38b89da190d47b41c683c9c70608101db1e7bd3eed020b"
+        ],
+        "size": 806,
+        "header": {
+          "node": "line",
+          "conversation": "2026-09-02-keys",
+          "at": "2026-09-02T12:00:01",
+          "kind": "Said",
+          "keys": [
+            "86f5d9bdc5ce5e4ff81af4dc4a8c2e724e448cb5ec16685b5591b4e56d5a1b3e"
+          ],
+          "step": {
+            "step": "asks"
+          }
+        }
+      },
+      {
+        "hash": "8430253f5cd3b798f51571f30cb04c0d327382a4c415969c85f066797b3ca28f",
+        "parents": [
+          "04d2d8140e1d647a6e9fc3264f8553fd84c4303b62ad997ecbb8a9558f343fd7",
+          "7b818ef0fdd17acb5a6c38b43fa0281f189cc0854dab58dcff68c681ce13ad38"
+        ],
+        "size": 964,
+        "header": {
+          "node": "line",
+          "conversation": "2026-09-02-keys",
+          "at": "2026-09-02T12:00:30",
+          "kind": "Resealed",
+          "keys": [
+            "ff234b439627f020679367b7f4bd920e93f0e5b9a379eb9877c465dbaa96b9c1"
+          ],
+          "step": {
+            "step": "resealed",
+            "of": "34cdfa29c001301f4ab4ae37b4e766f867cd4eb3a89d7f02e2fc3ca2f8493bf9",
+            "from": "34cdfa29c001301f4ab4ae37b4e766f867cd4eb3a89d7f02e2fc3ca2f8493bf9"
+          }
+        }
+      },
+      {
+        "hash": "abd2a8fba3708700ce38b89da190d47b41c683c9c70608101db1e7bd3eed020b",
+        "parents": [
+          "7b818ef0fdd17acb5a6c38b43fa0281f189cc0854dab58dcff68c681ce13ad38"
+        ],
+        "size": 709,
+        "header": {
+          "node": "line",
+          "conversation": "2026-09-02-keys",
+          "at": "2026-09-02T12:00:00",
+          "kind": "Opened",
+          "keys": [
+            "630dcd2966c4336691125448bbb25b4ff412a49c732db2c8abc1b8581bd710dd"
+          ],
+          "step": {
+            "step": "opened"
+          }
+        }
+      },
+      {
+        "hash": "b61e122cb3503db7c0426ad38c3ebde192df2db6c521cb26a27009308b98ee52",
+        "parents": [
+          "7b818ef0fdd17acb5a6c38b43fa0281f189cc0854dab58dcff68c681ce13ad38",
+          "8430253f5cd3b798f51571f30cb04c0d327382a4c415969c85f066797b3ca28f"
+        ],
+        "size": 964,
+        "header": {
+          "node": "line",
+          "conversation": "2026-09-02-keys",
+          "at": "2026-09-02T12:01:30",
+          "kind": "Resealed",
+          "keys": [
+            "9b8cf3f80aea12988b50633cd0f8a1daf57dc1f6315dc614a256ea6078e8800c"
+          ],
+          "step": {
+            "step": "resealed",
+            "of": "630dcd2966c4336691125448bbb25b4ff412a49c732db2c8abc1b8581bd710dd",
+            "from": "f8517142a72094a6bbf487f5347b1a5c041aef1d861d319beab28719a157aaa9"
+          }
+        }
+      },
+      {
+        "hash": "de728876b1d19cd6bc1fb7cf6cec064063fee88752dd025ee1e7e0e496f5875b",
+        "parents": [
+          "5e7b644b0dd7594769652ee7a4ac4038f324a76fee43b60a55f9f5ef87f9afa6",
+          "7b818ef0fdd17acb5a6c38b43fa0281f189cc0854dab58dcff68c681ce13ad38"
+        ],
+        "size": 964,
+        "header": {
+          "node": "line",
+          "conversation": "2026-09-02-keys",
+          "at": "2026-09-02T12:00:30",
+          "kind": "Resealed",
+          "keys": [
+            "f8517142a72094a6bbf487f5347b1a5c041aef1d861d319beab28719a157aaa9"
+          ],
+          "step": {
+            "step": "resealed",
+            "of": "630dcd2966c4336691125448bbb25b4ff412a49c732db2c8abc1b8581bd710dd",
+            "from": "630dcd2966c4336691125448bbb25b4ff412a49c732db2c8abc1b8581bd710dd"
+          }
+        }
+      },
+      {
+        "hash": "ebb0cd00a80df48a26702b15ae9bfa45b08a6e2e7e11b9507fc717b38a5ee649",
+        "parents": [
+          "7b818ef0fdd17acb5a6c38b43fa0281f189cc0854dab58dcff68c681ce13ad38",
+          "b61e122cb3503db7c0426ad38c3ebde192df2db6c521cb26a27009308b98ee52"
+        ],
+        "size": 965,
+        "header": {
+          "node": "line",
+          "conversation": "2026-09-02-keys",
+          "at": "2026-09-02T12:01:30",
+          "kind": "Resealed",
+          "keys": [
+            "2791831bfc6e6e3c03455addf475f278e8df6d907ef1e396c02a1fd088d4e25a"
+          ],
+          "step": {
+            "step": "resealed",
+            "of": "86f5d9bdc5ce5e4ff81af4dc4a8c2e724e448cb5ec16685b5591b4e56d5a1b3e",
+            "from": "1b2e08206305d4481c96d6d008d19a08e2696ec060534ed4c6c8d54e702ceec0"
+          }
+        }
+      },
+      {
+        "hash": "ee430f6485d5db49cc9fdc17ce5ac84c9092ff63423568785b97785978d0ef18",
+        "parents": [
+          "7b818ef0fdd17acb5a6c38b43fa0281f189cc0854dab58dcff68c681ce13ad38",
+          "de728876b1d19cd6bc1fb7cf6cec064063fee88752dd025ee1e7e0e496f5875b"
+        ],
+        "size": 964,
+        "header": {
+          "node": "line",
+          "conversation": "2026-09-02-keys",
+          "at": "2026-09-02T12:00:30",
+          "kind": "Resealed",
+          "keys": [
+            "1b2e08206305d4481c96d6d008d19a08e2696ec060534ed4c6c8d54e702ceec0"
+          ],
+          "step": {
+            "step": "resealed",
+            "of": "86f5d9bdc5ce5e4ff81af4dc4a8c2e724e448cb5ec16685b5591b4e56d5a1b3e",
+            "from": "86f5d9bdc5ce5e4ff81af4dc4a8c2e724e448cb5ec16685b5591b4e56d5a1b3e"
+          }
+        }
+      }
+    ],
+    "device": [
+      "1b2e08206305d4481c96d6d008d19a08e2696ec060534ed4c6c8d54e702ceec0",
+      "2791831bfc6e6e3c03455addf475f278e8df6d907ef1e396c02a1fd088d4e25a",
+      "34cdfa29c001301f4ab4ae37b4e766f867cd4eb3a89d7f02e2fc3ca2f8493bf9",
+      "630dcd2966c4336691125448bbb25b4ff412a49c732db2c8abc1b8581bd710dd",
+      "6c28e9451b043cee34d7313c32984a90d25077a93ff466a4404454a84acccbaf",
+      "6cf6abc29c87ca5fa1dc5399205a10bed451b2ff0cbef2a2739c5ac845963890",
+      "762df64490269f8ee748841c79f481102a6bb7d3211e7bd874ffeec4decbe973",
+      "86f5d9bdc5ce5e4ff81af4dc4a8c2e724e448cb5ec16685b5591b4e56d5a1b3e",
+      "9b8cf3f80aea12988b50633cd0f8a1daf57dc1f6315dc614a256ea6078e8800c",
+      "c7dc3c32b1609e1ed9dfc266b6aded61940bff08a0a61f160225273fc322df60",
+      "f8517142a72094a6bbf487f5347b1a5c041aef1d861d319beab28719a157aaa9",
+      "ff234b439627f020679367b7f4bd920e93f0e5b9a379eb9877c465dbaa96b9c1"
+    ],
+    "box": [
+      "2791831bfc6e6e3c03455addf475f278e8df6d907ef1e396c02a1fd088d4e25a",
+      "6c28e9451b043cee34d7313c32984a90d25077a93ff466a4404454a84acccbaf",
+      "762df64490269f8ee748841c79f481102a6bb7d3211e7bd874ffeec4decbe973",
+      "9b8cf3f80aea12988b50633cd0f8a1daf57dc1f6315dc614a256ea6078e8800c"
+    ]
+  },
+  {
+    "name": "two migrations while the device was away",
+    "nodes": [
+      {
+        "hash": "04d2d8140e1d647a6e9fc3264f8553fd84c4303b62ad997ecbb8a9558f343fd7",
+        "parents": [
+          "7b818ef0fdd17acb5a6c38b43fa0281f189cc0854dab58dcff68c681ce13ad38",
+          "ee430f6485d5db49cc9fdc17ce5ac84c9092ff63423568785b97785978d0ef18"
+        ],
+        "size": 964,
+        "header": {
+          "node": "line",
+          "conversation": "2026-09-02-keys",
+          "at": "2026-09-02T12:00:30",
+          "kind": "Resealed",
+          "keys": [
+            "c7dc3c32b1609e1ed9dfc266b6aded61940bff08a0a61f160225273fc322df60"
+          ],
+          "step": {
+            "step": "resealed",
+            "of": "6cf6abc29c87ca5fa1dc5399205a10bed451b2ff0cbef2a2739c5ac845963890",
+            "from": "6cf6abc29c87ca5fa1dc5399205a10bed451b2ff0cbef2a2739c5ac845963890"
+          }
+        }
+      },
+      {
+        "hash": "22d08428f01c221c59fb4b62ea1904ab2d91be86d778e210a65b34cdec97dee3",
+        "parents": [
+          "7278768b26683696149c988682d3bd6646790730bdfd0794792bf9a39cb750c6",
+          "7b818ef0fdd17acb5a6c38b43fa0281f189cc0854dab58dcff68c681ce13ad38"
+        ],
+        "size": 965,
+        "header": {
+          "node": "line",
+          "conversation": "2026-09-02-keys",
+          "at": "2026-09-02T12:01:30",
+          "kind": "Resealed",
+          "keys": [
+            "6c28e9451b043cee34d7313c32984a90d25077a93ff466a4404454a84acccbaf"
+          ],
+          "step": {
+            "step": "resealed",
+            "of": "34cdfa29c001301f4ab4ae37b4e766f867cd4eb3a89d7f02e2fc3ca2f8493bf9",
+            "from": "ff234b439627f020679367b7f4bd920e93f0e5b9a379eb9877c465dbaa96b9c1"
+          }
+        }
+      },
+      {
+        "hash": "42e2c1d9c324c4cd90b9caa3e41ea42cf90cd39dd65727316ae979e3514358e6",
+        "parents": [
+          "7b818ef0fdd17acb5a6c38b43fa0281f189cc0854dab58dcff68c681ce13ad38",
+          "8300d088dd4db76d9ec4cece9a0bd0ea5c0d9b411c72fb2364bbcbb499e5c1b6"
+        ],
+        "size": 806,
+        "header": {
+          "node": "line",
+          "conversation": "2026-09-02-keys",
+          "at": "2026-09-02T12:00:02",
+          "kind": "Said",
+          "keys": [
+            "6cf6abc29c87ca5fa1dc5399205a10bed451b2ff0cbef2a2739c5ac845963890"
+          ],
+          "step": {
+            "step": "asks"
+          }
+        }
+      },
+      {
+        "hash": "5e7b644b0dd7594769652ee7a4ac4038f324a76fee43b60a55f9f5ef87f9afa6",
+        "parents": [
+          "42e2c1d9c324c4cd90b9caa3e41ea42cf90cd39dd65727316ae979e3514358e6",
+          "7b818ef0fdd17acb5a6c38b43fa0281f189cc0854dab58dcff68c681ce13ad38"
+        ],
+        "size": 806,
+        "header": {
+          "node": "line",
+          "conversation": "2026-09-02-keys",
+          "at": "2026-09-02T12:00:03",
+          "kind": "Said",
+          "keys": [
+            "34cdfa29c001301f4ab4ae37b4e766f867cd4eb3a89d7f02e2fc3ca2f8493bf9"
+          ],
+          "step": {
+            "step": "asks"
+          }
+        }
+      },
+      {
+        "hash": "7278768b26683696149c988682d3bd6646790730bdfd0794792bf9a39cb750c6",
+        "parents": [
+          "7b818ef0fdd17acb5a6c38b43fa0281f189cc0854dab58dcff68c681ce13ad38",
+          "ebb0cd00a80df48a26702b15ae9bfa45b08a6e2e7e11b9507fc717b38a5ee649"
+        ],
+        "size": 965,
+        "header": {
+          "node": "line",
+          "conversation": "2026-09-02-keys",
+          "at": "2026-09-02T12:01:30",
+          "kind": "Resealed",
+          "keys": [
+            "762df64490269f8ee748841c79f481102a6bb7d3211e7bd874ffeec4decbe973"
+          ],
+          "step": {
+            "step": "resealed",
+            "of": "6cf6abc29c87ca5fa1dc5399205a10bed451b2ff0cbef2a2739c5ac845963890",
+            "from": "c7dc3c32b1609e1ed9dfc266b6aded61940bff08a0a61f160225273fc322df60"
+          }
+        }
+      },
+      {
+        "hash": "7b818ef0fdd17acb5a6c38b43fa0281f189cc0854dab58dcff68c681ce13ad38",
+        "parents": [],
+        "size": 65,
+        "header": {
+          "node": "structure",
+          "kind": "Genesis"
+        }
+      },
+      {
+        "hash": "8300d088dd4db76d9ec4cece9a0bd0ea5c0d9b411c72fb2364bbcbb499e5c1b6",
+        "parents": [
+          "7b818ef0fdd17acb5a6c38b43fa0281f189cc0854dab58dcff68c681ce13ad38",
+          "abd2a8fba3708700ce38b89da190d47b41c683c9c70608101db1e7bd3eed020b"
+        ],
+        "size": 806,
+        "header": {
+          "node": "line",
+          "conversation": "2026-09-02-keys",
+          "at": "2026-09-02T12:00:01",
+          "kind": "Said",
+          "keys": [
+            "86f5d9bdc5ce5e4ff81af4dc4a8c2e724e448cb5ec16685b5591b4e56d5a1b3e"
+          ],
+          "step": {
+            "step": "asks"
+          }
+        }
+      },
+      {
+        "hash": "8430253f5cd3b798f51571f30cb04c0d327382a4c415969c85f066797b3ca28f",
+        "parents": [
+          "04d2d8140e1d647a6e9fc3264f8553fd84c4303b62ad997ecbb8a9558f343fd7",
+          "7b818ef0fdd17acb5a6c38b43fa0281f189cc0854dab58dcff68c681ce13ad38"
+        ],
+        "size": 964,
+        "header": {
+          "node": "line",
+          "conversation": "2026-09-02-keys",
+          "at": "2026-09-02T12:00:30",
+          "kind": "Resealed",
+          "keys": [
+            "ff234b439627f020679367b7f4bd920e93f0e5b9a379eb9877c465dbaa96b9c1"
+          ],
+          "step": {
+            "step": "resealed",
+            "of": "34cdfa29c001301f4ab4ae37b4e766f867cd4eb3a89d7f02e2fc3ca2f8493bf9",
+            "from": "34cdfa29c001301f4ab4ae37b4e766f867cd4eb3a89d7f02e2fc3ca2f8493bf9"
+          }
+        }
+      },
+      {
+        "hash": "abd2a8fba3708700ce38b89da190d47b41c683c9c70608101db1e7bd3eed020b",
+        "parents": [
+          "7b818ef0fdd17acb5a6c38b43fa0281f189cc0854dab58dcff68c681ce13ad38"
+        ],
+        "size": 709,
+        "header": {
+          "node": "line",
+          "conversation": "2026-09-02-keys",
+          "at": "2026-09-02T12:00:00",
+          "kind": "Opened",
+          "keys": [
+            "630dcd2966c4336691125448bbb25b4ff412a49c732db2c8abc1b8581bd710dd"
+          ],
+          "step": {
+            "step": "opened"
+          }
+        }
+      },
+      {
+        "hash": "b61e122cb3503db7c0426ad38c3ebde192df2db6c521cb26a27009308b98ee52",
+        "parents": [
+          "7b818ef0fdd17acb5a6c38b43fa0281f189cc0854dab58dcff68c681ce13ad38",
+          "8430253f5cd3b798f51571f30cb04c0d327382a4c415969c85f066797b3ca28f"
+        ],
+        "size": 964,
+        "header": {
+          "node": "line",
+          "conversation": "2026-09-02-keys",
+          "at": "2026-09-02T12:01:30",
+          "kind": "Resealed",
+          "keys": [
+            "9b8cf3f80aea12988b50633cd0f8a1daf57dc1f6315dc614a256ea6078e8800c"
+          ],
+          "step": {
+            "step": "resealed",
+            "of": "630dcd2966c4336691125448bbb25b4ff412a49c732db2c8abc1b8581bd710dd",
+            "from": "f8517142a72094a6bbf487f5347b1a5c041aef1d861d319beab28719a157aaa9"
+          }
+        }
+      },
+      {
+        "hash": "de728876b1d19cd6bc1fb7cf6cec064063fee88752dd025ee1e7e0e496f5875b",
+        "parents": [
+          "5e7b644b0dd7594769652ee7a4ac4038f324a76fee43b60a55f9f5ef87f9afa6",
+          "7b818ef0fdd17acb5a6c38b43fa0281f189cc0854dab58dcff68c681ce13ad38"
+        ],
+        "size": 964,
+        "header": {
+          "node": "line",
+          "conversation": "2026-09-02-keys",
+          "at": "2026-09-02T12:00:30",
+          "kind": "Resealed",
+          "keys": [
+            "f8517142a72094a6bbf487f5347b1a5c041aef1d861d319beab28719a157aaa9"
+          ],
+          "step": {
+            "step": "resealed",
+            "of": "630dcd2966c4336691125448bbb25b4ff412a49c732db2c8abc1b8581bd710dd",
+            "from": "630dcd2966c4336691125448bbb25b4ff412a49c732db2c8abc1b8581bd710dd"
+          }
+        }
+      },
+      {
+        "hash": "ebb0cd00a80df48a26702b15ae9bfa45b08a6e2e7e11b9507fc717b38a5ee649",
+        "parents": [
+          "7b818ef0fdd17acb5a6c38b43fa0281f189cc0854dab58dcff68c681ce13ad38",
+          "b61e122cb3503db7c0426ad38c3ebde192df2db6c521cb26a27009308b98ee52"
+        ],
+        "size": 965,
+        "header": {
+          "node": "line",
+          "conversation": "2026-09-02-keys",
+          "at": "2026-09-02T12:01:30",
+          "kind": "Resealed",
+          "keys": [
+            "2791831bfc6e6e3c03455addf475f278e8df6d907ef1e396c02a1fd088d4e25a"
+          ],
+          "step": {
+            "step": "resealed",
+            "of": "86f5d9bdc5ce5e4ff81af4dc4a8c2e724e448cb5ec16685b5591b4e56d5a1b3e",
+            "from": "1b2e08206305d4481c96d6d008d19a08e2696ec060534ed4c6c8d54e702ceec0"
+          }
+        }
+      },
+      {
+        "hash": "ee430f6485d5db49cc9fdc17ce5ac84c9092ff63423568785b97785978d0ef18",
+        "parents": [
+          "7b818ef0fdd17acb5a6c38b43fa0281f189cc0854dab58dcff68c681ce13ad38",
+          "de728876b1d19cd6bc1fb7cf6cec064063fee88752dd025ee1e7e0e496f5875b"
+        ],
+        "size": 964,
+        "header": {
+          "node": "line",
+          "conversation": "2026-09-02-keys",
+          "at": "2026-09-02T12:00:30",
+          "kind": "Resealed",
+          "keys": [
+            "1b2e08206305d4481c96d6d008d19a08e2696ec060534ed4c6c8d54e702ceec0"
+          ],
+          "step": {
+            "step": "resealed",
+            "of": "86f5d9bdc5ce5e4ff81af4dc4a8c2e724e448cb5ec16685b5591b4e56d5a1b3e",
+            "from": "86f5d9bdc5ce5e4ff81af4dc4a8c2e724e448cb5ec16685b5591b4e56d5a1b3e"
+          }
+        }
+      }
+    ],
+    "device": [
+      "2791831bfc6e6e3c03455addf475f278e8df6d907ef1e396c02a1fd088d4e25a",
+      "34cdfa29c001301f4ab4ae37b4e766f867cd4eb3a89d7f02e2fc3ca2f8493bf9",
+      "630dcd2966c4336691125448bbb25b4ff412a49c732db2c8abc1b8581bd710dd",
+      "6c28e9451b043cee34d7313c32984a90d25077a93ff466a4404454a84acccbaf",
+      "6cf6abc29c87ca5fa1dc5399205a10bed451b2ff0cbef2a2739c5ac845963890",
+      "762df64490269f8ee748841c79f481102a6bb7d3211e7bd874ffeec4decbe973",
+      "86f5d9bdc5ce5e4ff81af4dc4a8c2e724e448cb5ec16685b5591b4e56d5a1b3e",
+      "9b8cf3f80aea12988b50633cd0f8a1daf57dc1f6315dc614a256ea6078e8800c"
+    ],
+    "box": [
+      "2791831bfc6e6e3c03455addf475f278e8df6d907ef1e396c02a1fd088d4e25a",
+      "6c28e9451b043cee34d7313c32984a90d25077a93ff466a4404454a84acccbaf",
+      "762df64490269f8ee748841c79f481102a6bb7d3211e7bd874ffeec4decbe973",
+      "9b8cf3f80aea12988b50633cd0f8a1daf57dc1f6315dc614a256ea6078e8800c"
+    ]
+  },
+  {
+    "name": "an erasure of a slot sealed again",
+    "nodes": [
+      {
+        "hash": "04d2d8140e1d647a6e9fc3264f8553fd84c4303b62ad997ecbb8a9558f343fd7",
+        "parents": [
+          "7b818ef0fdd17acb5a6c38b43fa0281f189cc0854dab58dcff68c681ce13ad38",
+          "ee430f6485d5db49cc9fdc17ce5ac84c9092ff63423568785b97785978d0ef18"
+        ],
+        "size": 964,
+        "header": {
+          "node": "line",
+          "conversation": "2026-09-02-keys",
+          "at": "2026-09-02T12:00:30",
+          "kind": "Resealed",
+          "keys": [
+            "c7dc3c32b1609e1ed9dfc266b6aded61940bff08a0a61f160225273fc322df60"
+          ],
+          "step": {
+            "step": "resealed",
+            "of": "6cf6abc29c87ca5fa1dc5399205a10bed451b2ff0cbef2a2739c5ac845963890",
+            "from": "6cf6abc29c87ca5fa1dc5399205a10bed451b2ff0cbef2a2739c5ac845963890"
+          }
+        }
+      },
+      {
+        "hash": "42e2c1d9c324c4cd90b9caa3e41ea42cf90cd39dd65727316ae979e3514358e6",
+        "parents": [
+          "7b818ef0fdd17acb5a6c38b43fa0281f189cc0854dab58dcff68c681ce13ad38",
+          "8300d088dd4db76d9ec4cece9a0bd0ea5c0d9b411c72fb2364bbcbb499e5c1b6"
+        ],
+        "size": 806,
+        "header": {
+          "node": "line",
+          "conversation": "2026-09-02-keys",
+          "at": "2026-09-02T12:00:02",
+          "kind": "Said",
+          "keys": [
+            "6cf6abc29c87ca5fa1dc5399205a10bed451b2ff0cbef2a2739c5ac845963890"
+          ],
+          "step": {
+            "step": "asks"
+          }
+        }
+      },
+      {
+        "hash": "5e7b644b0dd7594769652ee7a4ac4038f324a76fee43b60a55f9f5ef87f9afa6",
+        "parents": [
+          "42e2c1d9c324c4cd90b9caa3e41ea42cf90cd39dd65727316ae979e3514358e6",
+          "7b818ef0fdd17acb5a6c38b43fa0281f189cc0854dab58dcff68c681ce13ad38"
+        ],
+        "size": 806,
+        "header": {
+          "node": "line",
+          "conversation": "2026-09-02-keys",
+          "at": "2026-09-02T12:00:03",
+          "kind": "Said",
+          "keys": [
+            "34cdfa29c001301f4ab4ae37b4e766f867cd4eb3a89d7f02e2fc3ca2f8493bf9"
+          ],
+          "step": {
+            "step": "asks"
+          }
+        }
+      },
+      {
+        "hash": "7b818ef0fdd17acb5a6c38b43fa0281f189cc0854dab58dcff68c681ce13ad38",
+        "parents": [],
+        "size": 65,
+        "header": {
+          "node": "structure",
+          "kind": "Genesis"
+        }
+      },
+      {
+        "hash": "8300d088dd4db76d9ec4cece9a0bd0ea5c0d9b411c72fb2364bbcbb499e5c1b6",
+        "parents": [
+          "7b818ef0fdd17acb5a6c38b43fa0281f189cc0854dab58dcff68c681ce13ad38",
+          "abd2a8fba3708700ce38b89da190d47b41c683c9c70608101db1e7bd3eed020b"
+        ],
+        "size": 806,
+        "header": {
+          "node": "line",
+          "conversation": "2026-09-02-keys",
+          "at": "2026-09-02T12:00:01",
+          "kind": "Said",
+          "keys": [
+            "86f5d9bdc5ce5e4ff81af4dc4a8c2e724e448cb5ec16685b5591b4e56d5a1b3e"
+          ],
+          "step": {
+            "step": "asks"
+          }
+        }
+      },
+      {
+        "hash": "8430253f5cd3b798f51571f30cb04c0d327382a4c415969c85f066797b3ca28f",
+        "parents": [
+          "04d2d8140e1d647a6e9fc3264f8553fd84c4303b62ad997ecbb8a9558f343fd7",
+          "7b818ef0fdd17acb5a6c38b43fa0281f189cc0854dab58dcff68c681ce13ad38"
+        ],
+        "size": 964,
+        "header": {
+          "node": "line",
+          "conversation": "2026-09-02-keys",
+          "at": "2026-09-02T12:00:30",
+          "kind": "Resealed",
+          "keys": [
+            "ff234b439627f020679367b7f4bd920e93f0e5b9a379eb9877c465dbaa96b9c1"
+          ],
+          "step": {
+            "step": "resealed",
+            "of": "34cdfa29c001301f4ab4ae37b4e766f867cd4eb3a89d7f02e2fc3ca2f8493bf9",
+            "from": "34cdfa29c001301f4ab4ae37b4e766f867cd4eb3a89d7f02e2fc3ca2f8493bf9"
+          }
+        }
+      },
+      {
+        "hash": "89a386de1a5c7238a338f5a96433f0a394881649be2e9f23dffff4fef4bec818",
+        "parents": [
+          "7b818ef0fdd17acb5a6c38b43fa0281f189cc0854dab58dcff68c681ce13ad38",
+          "8430253f5cd3b798f51571f30cb04c0d327382a4c415969c85f066797b3ca28f"
+        ],
+        "size": 398,
+        "header": {
+          "node": "line",
+          "conversation": "2026-09-02-keys",
+          "at": "2026-09-02T12:01:00",
+          "kind": "Erased",
+          "keys": [],
+          "step": {
+            "step": "erased",
+            "keys": [
+              "86f5d9bdc5ce5e4ff81af4dc4a8c2e724e448cb5ec16685b5591b4e56d5a1b3e"
+            ]
+          }
+        }
+      },
+      {
+        "hash": "abd2a8fba3708700ce38b89da190d47b41c683c9c70608101db1e7bd3eed020b",
+        "parents": [
+          "7b818ef0fdd17acb5a6c38b43fa0281f189cc0854dab58dcff68c681ce13ad38"
+        ],
+        "size": 709,
+        "header": {
+          "node": "line",
+          "conversation": "2026-09-02-keys",
+          "at": "2026-09-02T12:00:00",
+          "kind": "Opened",
+          "keys": [
+            "630dcd2966c4336691125448bbb25b4ff412a49c732db2c8abc1b8581bd710dd"
+          ],
+          "step": {
+            "step": "opened"
+          }
+        }
+      },
+      {
+        "hash": "de728876b1d19cd6bc1fb7cf6cec064063fee88752dd025ee1e7e0e496f5875b",
+        "parents": [
+          "5e7b644b0dd7594769652ee7a4ac4038f324a76fee43b60a55f9f5ef87f9afa6",
+          "7b818ef0fdd17acb5a6c38b43fa0281f189cc0854dab58dcff68c681ce13ad38"
+        ],
+        "size": 964,
+        "header": {
+          "node": "line",
+          "conversation": "2026-09-02-keys",
+          "at": "2026-09-02T12:00:30",
+          "kind": "Resealed",
+          "keys": [
+            "f8517142a72094a6bbf487f5347b1a5c041aef1d861d319beab28719a157aaa9"
+          ],
+          "step": {
+            "step": "resealed",
+            "of": "630dcd2966c4336691125448bbb25b4ff412a49c732db2c8abc1b8581bd710dd",
+            "from": "630dcd2966c4336691125448bbb25b4ff412a49c732db2c8abc1b8581bd710dd"
+          }
+        }
+      },
+      {
+        "hash": "ee430f6485d5db49cc9fdc17ce5ac84c9092ff63423568785b97785978d0ef18",
+        "parents": [
+          "7b818ef0fdd17acb5a6c38b43fa0281f189cc0854dab58dcff68c681ce13ad38",
+          "de728876b1d19cd6bc1fb7cf6cec064063fee88752dd025ee1e7e0e496f5875b"
+        ],
+        "size": 964,
+        "header": {
+          "node": "line",
+          "conversation": "2026-09-02-keys",
+          "at": "2026-09-02T12:00:30",
+          "kind": "Resealed",
+          "keys": [
+            "1b2e08206305d4481c96d6d008d19a08e2696ec060534ed4c6c8d54e702ceec0"
+          ],
+          "step": {
+            "step": "resealed",
+            "of": "86f5d9bdc5ce5e4ff81af4dc4a8c2e724e448cb5ec16685b5591b4e56d5a1b3e",
+            "from": "86f5d9bdc5ce5e4ff81af4dc4a8c2e724e448cb5ec16685b5591b4e56d5a1b3e"
+          }
+        }
+      }
+    ],
+    "device": [
+      "1b2e08206305d4481c96d6d008d19a08e2696ec060534ed4c6c8d54e702ceec0",
+      "34cdfa29c001301f4ab4ae37b4e766f867cd4eb3a89d7f02e2fc3ca2f8493bf9",
+      "630dcd2966c4336691125448bbb25b4ff412a49c732db2c8abc1b8581bd710dd",
+      "6cf6abc29c87ca5fa1dc5399205a10bed451b2ff0cbef2a2739c5ac845963890",
+      "86f5d9bdc5ce5e4ff81af4dc4a8c2e724e448cb5ec16685b5591b4e56d5a1b3e",
+      "c7dc3c32b1609e1ed9dfc266b6aded61940bff08a0a61f160225273fc322df60",
+      "f8517142a72094a6bbf487f5347b1a5c041aef1d861d319beab28719a157aaa9",
+      "ff234b439627f020679367b7f4bd920e93f0e5b9a379eb9877c465dbaa96b9c1"
+    ],
+    "box": [
+      "c7dc3c32b1609e1ed9dfc266b6aded61940bff08a0a61f160225273fc322df60",
+      "f8517142a72094a6bbf487f5347b1a5c041aef1d861d319beab28719a157aaa9",
+      "ff234b439627f020679367b7f4bd920e93f0e5b9a379eb9877c465dbaa96b9c1"
+    ]
+  },
+  {
+    "name": "the box restored without the reseals' keys, the device starting over",
+    "nodes": [
+      {
+        "hash": "04d2d8140e1d647a6e9fc3264f8553fd84c4303b62ad997ecbb8a9558f343fd7",
+        "parents": [
+          "7b818ef0fdd17acb5a6c38b43fa0281f189cc0854dab58dcff68c681ce13ad38",
+          "ee430f6485d5db49cc9fdc17ce5ac84c9092ff63423568785b97785978d0ef18"
+        ],
+        "size": 964,
+        "header": {
+          "node": "line",
+          "conversation": "2026-09-02-keys",
+          "at": "2026-09-02T12:00:30",
+          "kind": "Resealed",
+          "keys": [
+            "c7dc3c32b1609e1ed9dfc266b6aded61940bff08a0a61f160225273fc322df60"
+          ],
+          "step": {
+            "step": "resealed",
+            "of": "6cf6abc29c87ca5fa1dc5399205a10bed451b2ff0cbef2a2739c5ac845963890",
+            "from": "6cf6abc29c87ca5fa1dc5399205a10bed451b2ff0cbef2a2739c5ac845963890"
+          }
+        }
+      },
+      {
+        "hash": "42e2c1d9c324c4cd90b9caa3e41ea42cf90cd39dd65727316ae979e3514358e6",
+        "parents": [
+          "7b818ef0fdd17acb5a6c38b43fa0281f189cc0854dab58dcff68c681ce13ad38",
+          "8300d088dd4db76d9ec4cece9a0bd0ea5c0d9b411c72fb2364bbcbb499e5c1b6"
+        ],
+        "size": 806,
+        "header": {
+          "node": "line",
+          "conversation": "2026-09-02-keys",
+          "at": "2026-09-02T12:00:02",
+          "kind": "Said",
+          "keys": [
+            "6cf6abc29c87ca5fa1dc5399205a10bed451b2ff0cbef2a2739c5ac845963890"
+          ],
+          "step": {
+            "step": "asks"
+          }
+        }
+      },
+      {
+        "hash": "5e7b644b0dd7594769652ee7a4ac4038f324a76fee43b60a55f9f5ef87f9afa6",
+        "parents": [
+          "42e2c1d9c324c4cd90b9caa3e41ea42cf90cd39dd65727316ae979e3514358e6",
+          "7b818ef0fdd17acb5a6c38b43fa0281f189cc0854dab58dcff68c681ce13ad38"
+        ],
+        "size": 806,
+        "header": {
+          "node": "line",
+          "conversation": "2026-09-02-keys",
+          "at": "2026-09-02T12:00:03",
+          "kind": "Said",
+          "keys": [
+            "34cdfa29c001301f4ab4ae37b4e766f867cd4eb3a89d7f02e2fc3ca2f8493bf9"
+          ],
+          "step": {
+            "step": "asks"
+          }
+        }
+      },
+      {
+        "hash": "7b818ef0fdd17acb5a6c38b43fa0281f189cc0854dab58dcff68c681ce13ad38",
+        "parents": [],
+        "size": 65,
+        "header": {
+          "node": "structure",
+          "kind": "Genesis"
+        }
+      },
+      {
+        "hash": "8300d088dd4db76d9ec4cece9a0bd0ea5c0d9b411c72fb2364bbcbb499e5c1b6",
+        "parents": [
+          "7b818ef0fdd17acb5a6c38b43fa0281f189cc0854dab58dcff68c681ce13ad38",
+          "abd2a8fba3708700ce38b89da190d47b41c683c9c70608101db1e7bd3eed020b"
+        ],
+        "size": 806,
+        "header": {
+          "node": "line",
+          "conversation": "2026-09-02-keys",
+          "at": "2026-09-02T12:00:01",
+          "kind": "Said",
+          "keys": [
+            "86f5d9bdc5ce5e4ff81af4dc4a8c2e724e448cb5ec16685b5591b4e56d5a1b3e"
+          ],
+          "step": {
+            "step": "asks"
+          }
+        }
+      },
+      {
+        "hash": "8430253f5cd3b798f51571f30cb04c0d327382a4c415969c85f066797b3ca28f",
+        "parents": [
+          "04d2d8140e1d647a6e9fc3264f8553fd84c4303b62ad997ecbb8a9558f343fd7",
+          "7b818ef0fdd17acb5a6c38b43fa0281f189cc0854dab58dcff68c681ce13ad38"
+        ],
+        "size": 964,
+        "header": {
+          "node": "line",
+          "conversation": "2026-09-02-keys",
+          "at": "2026-09-02T12:00:30",
+          "kind": "Resealed",
+          "keys": [
+            "ff234b439627f020679367b7f4bd920e93f0e5b9a379eb9877c465dbaa96b9c1"
+          ],
+          "step": {
+            "step": "resealed",
+            "of": "34cdfa29c001301f4ab4ae37b4e766f867cd4eb3a89d7f02e2fc3ca2f8493bf9",
+            "from": "34cdfa29c001301f4ab4ae37b4e766f867cd4eb3a89d7f02e2fc3ca2f8493bf9"
+          }
+        }
+      },
+      {
+        "hash": "abd2a8fba3708700ce38b89da190d47b41c683c9c70608101db1e7bd3eed020b",
+        "parents": [
+          "7b818ef0fdd17acb5a6c38b43fa0281f189cc0854dab58dcff68c681ce13ad38"
+        ],
+        "size": 709,
+        "header": {
+          "node": "line",
+          "conversation": "2026-09-02-keys",
+          "at": "2026-09-02T12:00:00",
+          "kind": "Opened",
+          "keys": [
+            "630dcd2966c4336691125448bbb25b4ff412a49c732db2c8abc1b8581bd710dd"
+          ],
+          "step": {
+            "step": "opened"
+          }
+        }
+      },
+      {
+        "hash": "de728876b1d19cd6bc1fb7cf6cec064063fee88752dd025ee1e7e0e496f5875b",
+        "parents": [
+          "5e7b644b0dd7594769652ee7a4ac4038f324a76fee43b60a55f9f5ef87f9afa6",
+          "7b818ef0fdd17acb5a6c38b43fa0281f189cc0854dab58dcff68c681ce13ad38"
+        ],
+        "size": 964,
+        "header": {
+          "node": "line",
+          "conversation": "2026-09-02-keys",
+          "at": "2026-09-02T12:00:30",
+          "kind": "Resealed",
+          "keys": [
+            "f8517142a72094a6bbf487f5347b1a5c041aef1d861d319beab28719a157aaa9"
+          ],
+          "step": {
+            "step": "resealed",
+            "of": "630dcd2966c4336691125448bbb25b4ff412a49c732db2c8abc1b8581bd710dd",
+            "from": "630dcd2966c4336691125448bbb25b4ff412a49c732db2c8abc1b8581bd710dd"
+          }
+        }
+      },
+      {
+        "hash": "ee430f6485d5db49cc9fdc17ce5ac84c9092ff63423568785b97785978d0ef18",
+        "parents": [
+          "7b818ef0fdd17acb5a6c38b43fa0281f189cc0854dab58dcff68c681ce13ad38",
+          "de728876b1d19cd6bc1fb7cf6cec064063fee88752dd025ee1e7e0e496f5875b"
+        ],
+        "size": 964,
+        "header": {
+          "node": "line",
+          "conversation": "2026-09-02-keys",
+          "at": "2026-09-02T12:00:30",
+          "kind": "Resealed",
+          "keys": [
+            "1b2e08206305d4481c96d6d008d19a08e2696ec060534ed4c6c8d54e702ceec0"
+          ],
+          "step": {
+            "step": "resealed",
+            "of": "86f5d9bdc5ce5e4ff81af4dc4a8c2e724e448cb5ec16685b5591b4e56d5a1b3e",
+            "from": "86f5d9bdc5ce5e4ff81af4dc4a8c2e724e448cb5ec16685b5591b4e56d5a1b3e"
+          }
+        }
+      }
+    ],
+    "device": [
+      "34cdfa29c001301f4ab4ae37b4e766f867cd4eb3a89d7f02e2fc3ca2f8493bf9",
+      "630dcd2966c4336691125448bbb25b4ff412a49c732db2c8abc1b8581bd710dd",
+      "6cf6abc29c87ca5fa1dc5399205a10bed451b2ff0cbef2a2739c5ac845963890",
+      "86f5d9bdc5ce5e4ff81af4dc4a8c2e724e448cb5ec16685b5591b4e56d5a1b3e"
+    ],
+    "box": [
+      "34cdfa29c001301f4ab4ae37b4e766f867cd4eb3a89d7f02e2fc3ca2f8493bf9",
+      "630dcd2966c4336691125448bbb25b4ff412a49c732db2c8abc1b8581bd710dd",
+      "6cf6abc29c87ca5fa1dc5399205a10bed451b2ff0cbef2a2739c5ac845963890",
+      "86f5d9bdc5ce5e4ff81af4dc4a8c2e724e448cb5ec16685b5591b4e56d5a1b3e"
+    ]
+  },
+  {
+    "name": "an erasure naming a reseal's own key, refused",
+    "nodes": [
+      {
+        "hash": "04d2d8140e1d647a6e9fc3264f8553fd84c4303b62ad997ecbb8a9558f343fd7",
+        "parents": [
+          "7b818ef0fdd17acb5a6c38b43fa0281f189cc0854dab58dcff68c681ce13ad38",
+          "ee430f6485d5db49cc9fdc17ce5ac84c9092ff63423568785b97785978d0ef18"
+        ],
+        "size": 964,
+        "header": {
+          "node": "line",
+          "conversation": "2026-09-02-keys",
+          "at": "2026-09-02T12:00:30",
+          "kind": "Resealed",
+          "keys": [
+            "c7dc3c32b1609e1ed9dfc266b6aded61940bff08a0a61f160225273fc322df60"
+          ],
+          "step": {
+            "step": "resealed",
+            "of": "6cf6abc29c87ca5fa1dc5399205a10bed451b2ff0cbef2a2739c5ac845963890",
+            "from": "6cf6abc29c87ca5fa1dc5399205a10bed451b2ff0cbef2a2739c5ac845963890"
+          }
+        }
+      },
+      {
+        "hash": "42e2c1d9c324c4cd90b9caa3e41ea42cf90cd39dd65727316ae979e3514358e6",
+        "parents": [
+          "7b818ef0fdd17acb5a6c38b43fa0281f189cc0854dab58dcff68c681ce13ad38",
+          "8300d088dd4db76d9ec4cece9a0bd0ea5c0d9b411c72fb2364bbcbb499e5c1b6"
+        ],
+        "size": 806,
+        "header": {
+          "node": "line",
+          "conversation": "2026-09-02-keys",
+          "at": "2026-09-02T12:00:02",
+          "kind": "Said",
+          "keys": [
+            "6cf6abc29c87ca5fa1dc5399205a10bed451b2ff0cbef2a2739c5ac845963890"
+          ],
+          "step": {
+            "step": "asks"
+          }
+        }
+      },
+      {
+        "hash": "5e7b644b0dd7594769652ee7a4ac4038f324a76fee43b60a55f9f5ef87f9afa6",
+        "parents": [
+          "42e2c1d9c324c4cd90b9caa3e41ea42cf90cd39dd65727316ae979e3514358e6",
+          "7b818ef0fdd17acb5a6c38b43fa0281f189cc0854dab58dcff68c681ce13ad38"
+        ],
+        "size": 806,
+        "header": {
+          "node": "line",
+          "conversation": "2026-09-02-keys",
+          "at": "2026-09-02T12:00:03",
+          "kind": "Said",
+          "keys": [
+            "34cdfa29c001301f4ab4ae37b4e766f867cd4eb3a89d7f02e2fc3ca2f8493bf9"
+          ],
+          "step": {
+            "step": "asks"
+          }
+        }
+      },
+      {
+        "hash": "7b818ef0fdd17acb5a6c38b43fa0281f189cc0854dab58dcff68c681ce13ad38",
+        "parents": [],
+        "size": 65,
+        "header": {
+          "node": "structure",
+          "kind": "Genesis"
+        }
+      },
+      {
+        "hash": "8300d088dd4db76d9ec4cece9a0bd0ea5c0d9b411c72fb2364bbcbb499e5c1b6",
+        "parents": [
+          "7b818ef0fdd17acb5a6c38b43fa0281f189cc0854dab58dcff68c681ce13ad38",
+          "abd2a8fba3708700ce38b89da190d47b41c683c9c70608101db1e7bd3eed020b"
+        ],
+        "size": 806,
+        "header": {
+          "node": "line",
+          "conversation": "2026-09-02-keys",
+          "at": "2026-09-02T12:00:01",
+          "kind": "Said",
+          "keys": [
+            "86f5d9bdc5ce5e4ff81af4dc4a8c2e724e448cb5ec16685b5591b4e56d5a1b3e"
+          ],
+          "step": {
+            "step": "asks"
+          }
+        }
+      },
+      {
+        "hash": "8430253f5cd3b798f51571f30cb04c0d327382a4c415969c85f066797b3ca28f",
+        "parents": [
+          "04d2d8140e1d647a6e9fc3264f8553fd84c4303b62ad997ecbb8a9558f343fd7",
+          "7b818ef0fdd17acb5a6c38b43fa0281f189cc0854dab58dcff68c681ce13ad38"
+        ],
+        "size": 964,
+        "header": {
+          "node": "line",
+          "conversation": "2026-09-02-keys",
+          "at": "2026-09-02T12:00:30",
+          "kind": "Resealed",
+          "keys": [
+            "ff234b439627f020679367b7f4bd920e93f0e5b9a379eb9877c465dbaa96b9c1"
+          ],
+          "step": {
+            "step": "resealed",
+            "of": "34cdfa29c001301f4ab4ae37b4e766f867cd4eb3a89d7f02e2fc3ca2f8493bf9",
+            "from": "34cdfa29c001301f4ab4ae37b4e766f867cd4eb3a89d7f02e2fc3ca2f8493bf9"
+          }
+        }
+      },
+      {
+        "hash": "abd2a8fba3708700ce38b89da190d47b41c683c9c70608101db1e7bd3eed020b",
+        "parents": [
+          "7b818ef0fdd17acb5a6c38b43fa0281f189cc0854dab58dcff68c681ce13ad38"
+        ],
+        "size": 709,
+        "header": {
+          "node": "line",
+          "conversation": "2026-09-02-keys",
+          "at": "2026-09-02T12:00:00",
+          "kind": "Opened",
+          "keys": [
+            "630dcd2966c4336691125448bbb25b4ff412a49c732db2c8abc1b8581bd710dd"
+          ],
+          "step": {
+            "step": "opened"
+          }
+        }
+      },
+      {
+        "hash": "de728876b1d19cd6bc1fb7cf6cec064063fee88752dd025ee1e7e0e496f5875b",
+        "parents": [
+          "5e7b644b0dd7594769652ee7a4ac4038f324a76fee43b60a55f9f5ef87f9afa6",
+          "7b818ef0fdd17acb5a6c38b43fa0281f189cc0854dab58dcff68c681ce13ad38"
+        ],
+        "size": 964,
+        "header": {
+          "node": "line",
+          "conversation": "2026-09-02-keys",
+          "at": "2026-09-02T12:00:30",
+          "kind": "Resealed",
+          "keys": [
+            "f8517142a72094a6bbf487f5347b1a5c041aef1d861d319beab28719a157aaa9"
+          ],
+          "step": {
+            "step": "resealed",
+            "of": "630dcd2966c4336691125448bbb25b4ff412a49c732db2c8abc1b8581bd710dd",
+            "from": "630dcd2966c4336691125448bbb25b4ff412a49c732db2c8abc1b8581bd710dd"
+          }
+        }
+      },
+      {
+        "hash": "ee430f6485d5db49cc9fdc17ce5ac84c9092ff63423568785b97785978d0ef18",
+        "parents": [
+          "7b818ef0fdd17acb5a6c38b43fa0281f189cc0854dab58dcff68c681ce13ad38",
+          "de728876b1d19cd6bc1fb7cf6cec064063fee88752dd025ee1e7e0e496f5875b"
+        ],
+        "size": 964,
+        "header": {
+          "node": "line",
+          "conversation": "2026-09-02-keys",
+          "at": "2026-09-02T12:00:30",
+          "kind": "Resealed",
+          "keys": [
+            "1b2e08206305d4481c96d6d008d19a08e2696ec060534ed4c6c8d54e702ceec0"
+          ],
+          "step": {
+            "step": "resealed",
+            "of": "86f5d9bdc5ce5e4ff81af4dc4a8c2e724e448cb5ec16685b5591b4e56d5a1b3e",
+            "from": "86f5d9bdc5ce5e4ff81af4dc4a8c2e724e448cb5ec16685b5591b4e56d5a1b3e"
+          }
+        }
+      }
+    ],
+    "device": [
+      "1b2e08206305d4481c96d6d008d19a08e2696ec060534ed4c6c8d54e702ceec0",
+      "34cdfa29c001301f4ab4ae37b4e766f867cd4eb3a89d7f02e2fc3ca2f8493bf9",
+      "630dcd2966c4336691125448bbb25b4ff412a49c732db2c8abc1b8581bd710dd",
+      "6cf6abc29c87ca5fa1dc5399205a10bed451b2ff0cbef2a2739c5ac845963890",
+      "86f5d9bdc5ce5e4ff81af4dc4a8c2e724e448cb5ec16685b5591b4e56d5a1b3e",
+      "c7dc3c32b1609e1ed9dfc266b6aded61940bff08a0a61f160225273fc322df60",
+      "f8517142a72094a6bbf487f5347b1a5c041aef1d861d319beab28719a157aaa9",
+      "ff234b439627f020679367b7f4bd920e93f0e5b9a379eb9877c465dbaa96b9c1"
+    ],
+    "box": [
+      "1b2e08206305d4481c96d6d008d19a08e2696ec060534ed4c6c8d54e702ceec0",
+      "c7dc3c32b1609e1ed9dfc266b6aded61940bff08a0a61f160225273fc322df60",
+      "f8517142a72094a6bbf487f5347b1a5c041aef1d861d319beab28719a157aaa9",
+      "ff234b439627f020679367b7f4bd920e93f0e5b9a379eb9877c465dbaa96b9c1"
+    ]
+  }
+]

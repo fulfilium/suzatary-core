@@ -57,7 +57,7 @@ pub use said::Said;
 pub use scope::Scope;
 pub use standing::{Revised, Standing, refused};
 pub use state::{ConversationState, state};
-pub use stored::{NotAConversation, Stored, stopped_by};
+pub use stored::{NotAConversation, Stored, heading, stopped_by};
 pub use title::{NotATitle, Title};
 
 #[cfg(test)]

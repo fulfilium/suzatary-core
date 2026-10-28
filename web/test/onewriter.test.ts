@@ -38,7 +38,7 @@ const erasure = box.conversations.find(o => o.text.includes("event=Erased("))!
 const conversation = /conversation='([^']+)'/.exec(erasure.text)![1]!
 // The words the vector erased, the key that opened them, and the blocks of them a page had rendered.
 const WORDS = "I will draft that now."
-const KEY = box.skeleton.erased[0]!
+const KEY = box.skeleton.nodes.flatMap(n => (n.header.node === "line" && n.header.step.step === "erased" ? n.header.step.keys : []))[0]!
 const BYTES = box.stale[KEY]!
 const FED = box.erased[KEY]!
 
@@ -49,7 +49,7 @@ const headsOf = (nodes: readonly SkeletonNode[]): string[] => {
 // The box before the erasure: its lines without the erasure, the key that opens the words among their keys.
 const before: SkeletonPayload = (() => {
   const nodes = box.skeleton.nodes.filter(n => n.hash !== erasure.hash)
-  return { ...box.skeleton, nodes, heads: headsOf(nodes), keys: { ...box.skeleton.keys, [KEY]: BYTES }, erased: [], frontier: { digest: "1".repeat(64), count: nodes.length } }
+  return { ...box.skeleton, nodes, heads: { are: "these", heads: headsOf(nodes) }, keys: { ...box.skeleton.keys, [KEY]: BYTES }, frontier: { digest: "1".repeat(64), count: nodes.length } }
 })()
 
 // A first piece of `p` with the rest to come: the lines naming `key` and all they rest on, else the first half, with
@@ -62,7 +62,7 @@ const firstPiece = (p: SkeletonPayload, key?: string): SkeletonPayload => {
   const nodes = key === undefined ? p.nodes.slice(0, Math.ceil(p.nodes.length / 2)) : p.nodes.filter(n => under.has(n.hash))
   const named = new Set(nodes.flatMap(n => (n.header.node === "line" ? n.header.keys : [])))
   const keys = Object.fromEntries(Object.entries(p.keys).filter(([k]) => named.has(k)))
-  return { ...p, nodes, keys, heads: headsOf(nodes), rest: p.nodes.length - nodes.length, frontier: { digest: "2".repeat(64), count: nodes.length } }
+  return { ...p, nodes, keys, heads: { are: "these", heads: headsOf(nodes) }, rest: p.nodes.length - nodes.length, frontier: { digest: "2".repeat(64), count: nodes.length } }
 }
 
 // A store of objects as the box serves it to a replica holding `since`: all of it to one holding nothing, nothing more

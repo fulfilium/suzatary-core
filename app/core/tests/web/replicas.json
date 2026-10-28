@@ -191,11 +191,14 @@
     }
   ],
   "skeleton": {
-    "heads": [
-      "12b81c0f1d112dfb9e81e527a3831de1790fb5ab9baf9506be6bb27b27f63fd9",
-      "44f6d82d04c2aa227155968bd6a187c4875c8ca18fffb6ee4bc4fad422cf28b6",
-      "be39941a8ec556d22fce7cc5336ca28c1072e65d7db64080057470c1244c0987"
-    ],
+    "heads": {
+      "are": "these",
+      "heads": [
+        "12b81c0f1d112dfb9e81e527a3831de1790fb5ab9baf9506be6bb27b27f63fd9",
+        "44f6d82d04c2aa227155968bd6a187c4875c8ca18fffb6ee4bc4fad422cf28b6",
+        "be39941a8ec556d22fce7cc5336ca28c1072e65d7db64080057470c1244c0987"
+      ]
+    },
     "geneses": [
       "7b818ef0fdd17acb5a6c38b43fa0281f189cc0854dab58dcff68c681ce13ad38"
     ],
@@ -587,7 +590,10 @@
           "kind": "Erased",
           "keys": [],
           "step": {
-            "step": "still"
+            "step": "erased",
+            "keys": [
+              "6cf6abc29c87ca5fa1dc5399205a10bed451b2ff0cbef2a2739c5ac845963890"
+            ]
           }
         }
       }
@@ -611,12 +617,8 @@
       "ff234b439627f020679367b7f4bd920e93f0e5b9a379eb9877c465dbaa96b9c1": "000102030405060008090a0b0c0d0e08101112131415161018191a1b1c1d1e18"
     },
     "rest": 0,
-    "size": 7966,
-    "weight": 7966,
-    "erased": [
-      "6cf6abc29c87ca5fa1dc5399205a10bed451b2ff0cbef2a2739c5ac845963890"
-    ],
-    "replaced": []
+    "size": 8033,
+    "weight": 8033
   },
   "keys": {
     "1b2e08206305d4481c96d6d008d19a08e2696ec060534ed4c6c8d54e702ceec0": "000102030405060208090a0b0c0d0e0a101112131415161218191a1b1c1d1e1a",

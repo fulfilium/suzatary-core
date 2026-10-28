@@ -32,6 +32,8 @@ mod inbox;
 mod inbox_prices;
 #[path = "inbox_schema.rs"]
 mod inbox_schema;
+#[path = "known_pull.rs"]
+mod known_pull;
 #[path = "laws.rs"]
 mod laws;
 #[path = "memory.rs"]

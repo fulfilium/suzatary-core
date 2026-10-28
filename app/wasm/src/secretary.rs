@@ -11,11 +11,11 @@ use prodrome_core::event::Hash;
 use prodrome_core::fpl::datetime_of;
 use prodrome_wasm_exports::wire::parse_instant;
 use suzatary_core::query;
-use suzatary_core::secretary::held_lines::HeldLines;
+use suzatary_core::secretary::held_lines::{Admitted, HeldLines};
 use suzatary_core::secretary::inbox::Fold;
 use suzatary_core::secretary::key_ring::KeyRing;
 use suzatary_core::secretary::locked_text::KeyName;
-use suzatary_core::secretary::outlines::{Node, Outlines};
+use suzatary_core::secretary::outlines::{Outlines, Parsed};
 use suzatary_core::secretary::readings::{self, DEFAULT_TURN_WINDOW, Dress, Window};
 use suzatary_core::secretary::store::{ConversationId, Stored};
 use suzatary_core::secretary::stream;
@@ -68,19 +68,21 @@ impl Lines {
         }
     }
 
-    /// `add`, `[{hash, text}]`, held, and `drop`, `[<name>, …]`, let go.
+    /// `add`, `[{hash, text}]`, each hashed against its name and held, and `drop`,
+    /// `[<name>, …]`, let go.
     pub fn hold(&mut self, add: &str, drop: &str) -> Result<(), JsError> {
-        let add: Vec<Object> =
-            serde_json::from_str(add).map_err(|e| refused(format!("add: {e}")))?;
-        let add = add
+        self.held.hold(objects(add)?, &names(drop, "drop")?);
+        Ok(())
+    }
+
+    /// `add`, `[{hash, text}]`, each a literal the tab's content admission checked against its
+    /// name, held without hashing it again, and `drop`, `[<name>, …]`, let go.
+    pub fn hold_admitted(&mut self, add: &str, drop: &str) -> Result<(), JsError> {
+        let add = objects(add)?
             .into_iter()
-            .map(|object| {
-                Hash::new(object.hash)
-                    .map(|name| (name, object.text.into_bytes()))
-                    .map_err(|e| refused(format!("add: {e}")))
-            })
-            .collect::<Result<Vec<_>, _>>()?;
-        self.held.hold(add, &names(drop, "drop")?);
+            .map(|(name, bytes)| Admitted::vouched(name, bytes))
+            .collect();
+        self.held.hold_admitted(add, &names(drop, "drop")?);
         Ok(())
     }
 
@@ -90,7 +92,7 @@ impl Lines {
             serde_json::from_str(add).map_err(|e| refused(format!("nodes: {e}")))?;
         let add = add
             .into_iter()
-            .filter_map(|node| Node::of(node).transpose())
+            .map(Parsed::of)
             .collect::<Result<Vec<_>, _>>()
             .map_err(|e| refused(e.to_string()))?;
         self.outlines.hold(add, &names(drop, "drop")?);
@@ -154,8 +156,8 @@ impl Lines {
         ))
     }
 
-    /// `[<id>, …]`: the conversations the newest `pages` pages of the stream draw rounds of, by
-    /// the skeleton's outlines alone, which a page holds the lines of before it reads the stream.
+    /// `[<name>, …]`: every line whose words the newest `pages` pages of the stream read, chosen by
+    /// the skeleton's outlines alone, which a page holds before it reads the stream.
     pub fn chosen(
         &self,
         topics: &crate::topics::TopicReading,
@@ -170,12 +172,18 @@ impl Lines {
             pages_of(pages)?,
         )
         .map_err(|e| refused(e.to_string()))?;
-        json(&choice.conversations())
+        json(
+            &choice
+                .objects()
+                .iter()
+                .map(Hash::as_str)
+                .collect::<Vec<_>>(),
+        )
     }
 
     /// The newest `pages` pages of the rounds of every conversation carrying each topic of
     /// `chosen` (a JSON array), oldest first, with how many the filter shows in all: chosen by
-    /// the skeleton's outlines, each drawn from the lines held of its conversation.
+    /// the skeleton's outlines, each drawn from the lines held that it reads.
     pub fn stream(
         &mut self,
         topics: &crate::topics::TopicReading,
@@ -188,7 +196,7 @@ impl Lines {
         json(
             &stream::stream(
                 self.outlines.outlines(),
-                |id| held.conversation(id),
+                |id, turn, objects| held.round(id, turn, objects),
                 &topics.0,
                 &chosen,
                 pages,
@@ -233,11 +241,12 @@ impl Lines {
     }
 
     /// `{excluded}`: what the history leaves out, `[{name, why, resting}]` in name order, as every
-    /// class's `tips` answers it.
+    /// class's `tips` answers it: a print that does not read, and a name a held line rests on that
+    /// the skeleton does not hold either.
     pub fn excluded(&self) -> Result<String, JsError> {
         let excluded: Vec<serde_json::Value> = self
             .held
-            .excluded()
+            .excluded(|name| self.outlines.holds(name))
             .into_iter()
             .map(|out| {
                 serde_json::json!({
@@ -268,6 +277,18 @@ impl Lines {
 struct Object {
     hash: String,
     text: String,
+}
+
+/// The objects a page hands over, each beside its name.
+fn objects(text: &str) -> Result<Vec<(Hash, Vec<u8>)>, JsError> {
+    let add: Vec<Object> = serde_json::from_str(text).map_err(|e| refused(format!("add: {e}")))?;
+    add.into_iter()
+        .map(|object| {
+            Hash::new(object.hash)
+                .map(|name| (name, object.text.into_bytes()))
+                .map_err(|e| refused(format!("add: {e}")))
+        })
+        .collect()
 }
 
 fn names(text: &str, what: &str) -> Result<Vec<Hash>, JsError> {

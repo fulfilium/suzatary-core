@@ -1,14 +1,17 @@
-//! What one line does to its conversation's turns, read off its shape: what the rounds' outline
-//! folds (`outline`). Every line's skeleton node carries it, so a reader counts and chooses rounds
-//! from the skeleton without the line's object.
+//! What one line does to its conversation's reading, read off its shape: what the rounds' outline
+//! folds (`outline`). Every line's skeleton node carries it, so a reader counts and chooses rounds,
+//! and names the lines that hold each round's words, from the skeleton without the line's object.
+
+use std::collections::BTreeSet;
 
 use serde::{Deserialize, Serialize};
 
 use crate::secretary::line_shape::LineShape;
+use crate::secretary::locked_text::KeyName;
 use crate::secretary::turn_shape::TurnShape;
 
-/// What a line does to its conversation's turns.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS)]
+/// What a line does to its conversation's reading.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS)]
 #[serde(tag = "step", rename_all = "lowercase")]
 #[ts(rename = "LineStep")]
 pub enum Step {
@@ -30,7 +33,25 @@ pub enum Step {
         /// The proposal's index.
         proposal: usize,
     },
-    /// Moves no turn.
+    /// Names the conversation: the last such line, in causal order, holds the title's words.
+    Titled,
+    /// Seals slot `of` again, from the seal under `from`, so a reader of that slot may read it from
+    /// this line, and `from` is dead once this line's own key opens it or is itself superseded.
+    Resealed {
+        /// The key of the slot as first written.
+        #[ts(as = "String")]
+        of: KeyName,
+        /// The key of the seal it was sealed again from.
+        #[ts(as = "String")]
+        from: KeyName,
+    },
+    /// Erases the words of every slot `keys` names.
+    Erased {
+        /// The keys.
+        #[ts(as = "Vec<String>")]
+        keys: BTreeSet<KeyName>,
+    },
+    /// Moves no turn and holds no words a round reads.
     Still,
 }
 
@@ -50,16 +71,19 @@ impl Step {
             LineShape::Coding { proposal, .. } => Step::Coding {
                 proposal: *proposal,
             },
-            LineShape::Titled { .. }
-            | LineShape::Reviewed { .. }
+            LineShape::Titled { .. } => Step::Titled,
+            LineShape::Resealed { of, from } => Step::Resealed {
+                of: of.clone(),
+                from: from.clone(),
+            },
+            LineShape::Erased { keys, .. } => Step::Erased { keys: keys.clone() },
+            LineShape::Reviewed { .. }
             | LineShape::ReviewFailed { .. }
             | LineShape::MemorySeen { .. }
             | LineShape::Session { .. }
             | LineShape::Unheard { .. }
             | LineShape::Kept { .. }
-            | LineShape::Scoped { .. }
-            | LineShape::Erased { .. }
-            | LineShape::Resealed { .. } => Step::Still,
+            | LineShape::Scoped { .. } => Step::Still,
         }
     }
 }

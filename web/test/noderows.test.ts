@@ -8,13 +8,14 @@ import assert from "node:assert/strict"
 import { fakeIndexedDB } from "./fakeidb"
 import idb from "../src/app/idb"
 import lo from "../src/algebra/lo"
+import linesync from "../src/prodrome/linesync"
 import noderows from "../src/prodrome/noderows"
 import { CONTENT, DB_NAME, INBOX_ROWS, LINE_ROWS } from "../src/prodrome/objects"
 import payload from "../src/wire/generated/payload"
 import locked from "../src/prodrome/locked"
 import type { Frontier, Word } from "../src/prodrome/replica"
 import { empty, replicaOf, unsynced } from "../src/prodrome/replica"
-import type { SkeletonNode, StoredObject } from "../src/wire/generated/wire"
+import type { LineStep, SkeletonNode, StoredObject } from "../src/wire/generated/wire"
 
 // The rows of the lines and of the inbox in the form `version`, saying when rows of another form are dropped.
 const KEEP = (): Promise<lo.Settled<null>> => Promise.resolve(lo.val(null))
@@ -159,6 +160,46 @@ test("rows of another format are dropped at restore, what they found first, and 
   assert.ok(device.printed().some(r => r.startsWith("suzatary/content/") && r.includes('"A"')), "the content by name stays")
   const again = await lineRows(2).restore()
   assert.ok(again.row.type === "Held" && again.row.row.replica.generation === 1, "a restore in the same form keeps it")
+})
+
+// Form 1's nodes read a reseal, an erasure and a title as `still`, so a round would read an old seal and skip an erasure:
+// the lines' rows of form 1 are reset under this build's form, and the nodes it lands name what a round reads.
+test("the lines' rows of form 1 are reset under linesync.FORMAT, whose nodes name reseals, erasures and titles", async () => {
+  fakeIndexedDB()
+  assert.ok(linesync.FORMAT > 1, `the lines moved past form 1 (${linesync.FORMAT})`)
+  const line = (hash: string, kind: string, keys: readonly string[], step: LineStep): SkeletonNode => ({
+    ...node(hash),
+    header: { node: "line", conversation: "first", at: "2026-10-25T09:00:00", kind, keys: [...keys], step },
+  })
+  assert.equal((await lineRows(1).land(locked.of(row([line("a", "Resealed", [], { step: "still" })], at(1)).replica, { k: "00" }))).row.type, "Val")
+  const now = lineRows(linesync.FORMAT)
+  const read = await now.restore()
+  assert.ok(read.row.type === "Held", read.row.type)
+  assert.deepEqual(names(read.row.row), [], "the form 1 nodes are gone, and the skeleton is taken again")
+  const k = "b".repeat(64)
+  const named = [
+    line("b", "Resealed", [k], { step: "resealed", of: "c".repeat(64), from: "c".repeat(64) }),
+    line("c", "Erased", [], { step: "erased", keys: [k] }),
+    line("d", "Titled", [], { step: "titled" }),
+  ]
+  // Landed in the generation the reset began, as the next pull lands it.
+  const after = replicaOf<SkeletonNode>({ ...read.row.row.replica.held, objects: named, synced: named.map(n => n.hash), frontier: at(2) })
+  assert.equal((await now.land(locked.of(after, {}))).row.type, "Val")
+  const steps = (nodes: readonly SkeletonNode[]): unknown[] => nodes.map(n => (n.header.node === "line" ? n.header.step : null))
+  assert.deepEqual(steps((await held(now)).replica.objects), steps(named), "each step reads back as the box sent it")
+})
+
+// Form 2's reseals name their slot and not the seal they were sealed again from, so a device would keep that seal's key
+// for good: the lines' rows of form 2 are reset as well, and taken again with each reseal's `from`.
+test("the lines' rows of form 2 are reset under linesync.FORMAT, whose reseals name the seal they were sealed from", async () => {
+  fakeIndexedDB()
+  assert.equal(linesync.FORMAT, 3, "the lines are of form 3")
+  const reseal = { ...node("a"), header: { node: "line", conversation: "first", at: "2026-10-25T09:00:00", kind: "Resealed", keys: ["b".repeat(64)], step: { step: "resealed", of: "c".repeat(64) } } } as unknown as SkeletonNode
+  assert.equal((await lineRows(2).land(locked.of(row([reseal], at(1)).replica, { k: "00" }))).row.type, "Val")
+  const read = await lineRows(linesync.FORMAT).restore()
+  assert.ok(read.row.type === "Held", read.row.type)
+  assert.deepEqual(names(read.row.row), [], "the form 2 nodes are gone, and the skeleton is taken again")
+  assert.deepEqual(read.row.row.keys, {}, "and their keys")
 })
 
 test("rows of another format whose findings could not be dropped are kept and said", async () => {

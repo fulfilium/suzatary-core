@@ -6,6 +6,7 @@
 mod database;
 mod doc;
 mod error;
+mod graph;
 mod hold;
 #[cfg(any(test, feature = "nothing"))]
 mod in_memory;
@@ -28,6 +29,7 @@ mod signing;
 pub use database::Database;
 pub use doc::Doc;
 pub use error::StoreError;
+pub use graph::Graph;
 pub use hold::{InMemoryHold, Once};
 #[cfg(any(test, feature = "nothing"))]
 pub use in_memory::InMemory;

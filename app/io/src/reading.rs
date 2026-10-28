@@ -42,6 +42,10 @@ impl Reads<TodoEvent> for Reading {
         self.store.objects()
     }
 
+    fn graph(&self) -> Result<std::sync::Arc<suzatary_core::store::Graph<TodoEvent>>, StoreError> {
+        self.store.graph()
+    }
+
     fn nodes(&self) -> Result<Vec<Node>, StoreError> {
         self.store.nodes()
     }

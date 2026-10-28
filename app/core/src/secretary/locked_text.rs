@@ -263,6 +263,7 @@ impl<S: Shape> Locked<S> {
         if key.name() != self.key {
             return None;
         }
+        OPENS.with(|count| count.set(count.get() + 1));
         let padded = cipher(&key.0)
             .decrypt(
                 &Nonce::default(),
@@ -323,6 +324,17 @@ impl<S> std::fmt::Debug for Locked<S> {
             .field("sealed", &self.sealed.len())
             .finish()
     }
+}
+
+thread_local! {
+    static OPENS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
+/// How many sealed texts this thread has decrypted, so a test can show what a reading opens: the
+/// core's tests, and the browser scenes, which read it from the tab's core worker.
+#[must_use]
+pub fn opens() -> usize {
+    OPENS.with(std::cell::Cell::get)
 }
 
 fn cipher(key: &[u8; KEY_BYTES]) -> ChaCha20Poly1305 {

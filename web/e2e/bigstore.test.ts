@@ -137,8 +137,9 @@ const BULK = `document.querySelectorAll('.streamround .streammeta a[href*="bulk-
 
 // The conversations the stream drew rounds of, by their links.
 const DRAWN = `[...new Set([...document.querySelectorAll(".streamround .streammeta a")].map((a) => decodeURIComponent(/secretary\\/([^/?#&@]+)/.exec(a.getAttribute("href"))?.[1] ?? "")))]`
-// In the core's worker: how many prints its lines decoded, and how many objects the device's skeleton holds, in all and
-// of the conversations `ids` and the structure every line rests on, which is what drawing their rounds needs.
+// In the core's worker: how many prints its lines decoded, hashed and opened, and how many objects the device's skeleton
+// holds, in all and of the conversations `ids` and the structure every line rests on, which bounds what drawing their
+// rounds needs.
 const DECODED = (ids: readonly string[]): string => `(async () => {
   const m = await import(new URL("prodrome.js", self.location.href).href)
   const db = await new Promise((done, fail) => { const r = indexedDB.open("suzatary"); r.onsuccess = () => done(r.result); r.onerror = () => fail(r.error) })
@@ -149,8 +150,10 @@ const DECODED = (ids: readonly string[]): string => `(async () => {
   db.close()
   const ids = new Set(${JSON.stringify(ids)})
   const needed = nodes.filter((n) => n.header.node === "structure" || ids.has(n.header.conversation)).length
-  return { decoded: m.decodes(), needed, all: nodes.length }
+  return { decoded: m.decodes(), hashed: m.hashes(), opened: m.opens(), needed, all: nodes.length }
 })()`
+
+type Cost = { decoded: number; hashed: number; opened: number; needed: number; all: number }
 
 app.scene("a warm load of the conversations draws them from the device, with every read of the box held and no task on the page's thread over 100 ms", async () => {
   await trustThisDevice(app.page, LINES_BASE, LINES_INSTANCE)
@@ -165,13 +168,13 @@ app.scene("a warm load of the conversations draws them from the device, with eve
   journal.mark("warm load")
   // Every request to the box's API is held until the stream has drawn, so what draws is drawn from the device.
   const release = await app.page.holdRequests(["/api/"])
-  const drawn = await (async (): Promise<{ readonly ms: number; readonly longest: number; readonly held: readonly string[]; readonly cost: { decoded: number; needed: number; all: number } }> => {
+  const drawn = await (async (): Promise<{ readonly ms: number; readonly longest: number; readonly held: readonly string[]; readonly cost: Cost }> => {
     try {
       await app.page.throttle(RATE)
       await app.page.reload()
       const draw = await phase(BULK, 0)
       const ids = await app.page.evaluate<string[]>(DRAWN)
-      return { ms: draw.ms, longest: draw.longest, held: app.page.heldUrls(), cost: await app.page.inWorker<{ decoded: number; needed: number; all: number }>("prodromework", DECODED(ids)) }
+      return { ms: draw.ms, longest: draw.longest, held: app.page.heldUrls(), cost: await app.page.inWorker<Cost>("prodromework", DECODED(ids)) }
     } finally {
       await app.page.throttle(1)
       await release()
@@ -182,5 +185,6 @@ app.scene("a warm load of the conversations draws them from the device, with eve
   assert.ok(drawn.ms < wait.MS / 3, `the stream drew ${Math.round(drawn.ms)} ms after the document started (bound ${wait.MS / 3})`)
   assert.ok(drawn.longest <= LONGEST_MS, `the warm load held the page's thread ${drawn.longest} ms at once (at most ${LONGEST_MS})`)
   assert.ok(drawn.cost.decoded <= drawn.cost.needed, `the warm load decoded ${drawn.cost.decoded} prints; its rounds need ${drawn.cost.needed} of ${drawn.cost.all}`)
+  assert.equal(drawn.cost.hashed, 0, "every print the warm load read was admitted by its name, so none is hashed again")
   assert.ok(drawn.held.length > 0, `the box was asked and answered nothing before the stream drew:\n${journal.lines().join("\n")}`)
 })

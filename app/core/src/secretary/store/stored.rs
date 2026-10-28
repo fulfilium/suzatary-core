@@ -51,6 +51,17 @@ pub struct Stored {
     pub coding: std::collections::BTreeMap<usize, crate::coding::Session>,
 }
 
+/// The name a list draws for a conversation titled `title`: the title, "New topic" while the title
+/// job is owed, or the box's sentence for a name whose words are gone.
+#[must_use]
+pub fn heading(title: &Words<String>) -> std::borrow::Cow<'_, str> {
+    match title {
+        Words::Kept { kept } if kept.trim().is_empty() => "New topic".into(),
+        Words::Kept { kept } => kept.as_str().into(),
+        gone @ Words::Gone { .. } => gone.to_string().into(),
+    }
+}
+
 /// The act an [`Entry::Stopped`](super::Entry::Stopped) line reads as, in the box's words, so the model reading it back
 /// is told who did what.
 #[must_use]
@@ -119,14 +130,8 @@ impl Stored {
             // stray line must not cost a whole transcript. An erasure's slots were read as gone
             // where they stood, and a reseal's words where the slot it seals stands.
             Entry::Opened { .. } | Entry::Erased { .. } | Entry::Resealed { .. } => {}
-            Entry::Titled { title, .. } => {
-                self.title = title.clone().map(String::from);
-            }
-            Entry::Said { at, turn, by } => self.turns.push(Said {
-                at: *at,
-                turn: turn.clone(),
-                by: by.clone(),
-            }),
+            Entry::Titled { title, .. } => self.title = super::entry::named(title),
+            Entry::Said { .. } => self.turns.extend(Said::of(entry)),
             Entry::Proposed {
                 at,
                 object,
@@ -161,7 +166,11 @@ impl Stored {
                 answered(self, &self.id.clone(), *proposal)?;
                 self.coding.insert(*proposal, session.clone());
             }
-            Entry::Stopped { at, by } => stopped(self, *at, by),
+            Entry::Stopped { .. } => {
+                self.stops.push(self.turns.len());
+                self.turns.extend(Said::of(entry));
+                self.session = None;
+            }
             Entry::Rewound { to, at, by } => rewound(self, *to, *at, by)?,
             // The last session line wins: one writer, so overwriting is the register's reading.
             Entry::Session {
@@ -377,11 +386,7 @@ impl Stored {
     /// box's sentence for a name whose words are gone.
     #[must_use]
     pub fn heading(&self) -> std::borrow::Cow<'_, str> {
-        match &self.title {
-            Words::Kept { kept } if kept.trim().is_empty() => "New topic".into(),
-            Words::Kept { kept } => kept.as_str().into(),
-            gone @ Words::Gone { .. } => gone.to_string().into(),
-        }
+        heading(&self.title)
     }
 
     /// Whether the conversation is named: a title whose words are gone was a name.
@@ -492,20 +497,6 @@ fn proposed(
         after_turn: stored.turns.len(),
         revises,
     });
-}
-
-/// Fold one [`Entry::Stopped`](super::Entry::Stopped): the act a reader sees, and no session.
-fn stopped(stored: &mut Stored, at: Datetime, by: &str) {
-    stored.stops.push(stored.turns.len());
-    stored.turns.push(Said {
-        at,
-        turn: Turn::Act {
-            text: stopped_by(by),
-            references: Vec::new(),
-        },
-        by: Some(by.into()),
-    });
-    stored.session = None;
 }
 
 /// Fold one [`Entry::Rewound`](super::Entry::Rewound): the turns from `to` go aside, and the session with them.

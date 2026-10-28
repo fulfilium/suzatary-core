@@ -108,6 +108,14 @@ if [[ "$makers" != "web/src/prodrome/questions.ts " ]]; then
   exit 1
 fi
 
+# A LITERAL IS HELD UNHASHED ONLY THROUGH ITS ADMISSION: `Lines.hold_admitted` takes JSON, so its one caller is
+# core.ts's `holdAdmitted`, which takes only `content.Admitted` rows, and no other file may call it.
+holders=$(grep -Rl --binary-files=text --include='*.ts' -e '\.hold_admitted(' web/src web/test web/e2e | sort | tr '\n' ' ')
+if [[ "$holders" != "web/src/prodrome/core.ts " ]]; then
+  echo "web-static.sh: only web/src/prodrome/core.ts may call Lines.hold_admitted (found: ${holders:-none})" >&2
+  exit 1
+fi
+
 # A CEILING ON `as`, THAT ONLY MOVES DOWN. `el`/`svg` are typed by tag, so a
 # cast narrowing what one
 # of them returns is a cast with no job left; this count is the blunt

@@ -32,10 +32,10 @@ export namespace engine {
 
   export const INLINE: { readonly type: "Inline" } = { type: "Inline" }
 
-  // The keys a row's objects name as erased (`dead`), the blocks each key's words fed (`erased`), and how those are
-  // forgotten. A store whose words are not locked names no key dead.
+  // The keys a row names as dead, read from its objects and the keys it holds (`dead`), the blocks each key's words fed
+  // (`erased`), and how those are forgotten. A store whose words are not locked names no key dead.
   export type Words<N extends Obj> = {
-    readonly dead: () => Promise<ReadonlySet<string>>
+    readonly dead: locked.Dead<N>
     readonly erased: (r: locked.Row<N>, told: readonly string[]) => Promise<Erased>
     readonly forget: (blocks: readonly string[]) => Promise<lo.Settled<null>>
   }

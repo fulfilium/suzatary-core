@@ -18,6 +18,7 @@ use crate::capability::{Answers, Briefings, Clock, Datetime, Mailbox, Query, Ren
 use crate::chains::{ChainName, ChainPolicy};
 use crate::deployment::Deployment;
 use crate::refusal::{Answered, Refusal, shown};
+use crate::secretary::step::Step;
 use crate::store::Prodrome;
 use crate::tree::{By, Classifier, Monoid};
 use crate::{mail, query, reading};
@@ -557,11 +558,15 @@ pub fn objects_since(
         Cut::Whole,
         &Literals,
     )
-    .map(|(snapshot, piece)| wire::ObjectsPayload {
-        untrusted: chain.untrusted_names(),
-        root: Some(chain.root.as_str().to_owned()),
-        ..snapshot.payload(piece.sent)
-    })
+    .map(
+        |Pulled {
+             snapshot, piece, ..
+         }| wire::ObjectsPayload {
+            untrusted: chain.untrusted_names(),
+            root: Some(chain.root.as_str().to_owned()),
+            ..snapshot.payload(piece.items())
+        },
+    )
 }
 
 /// How much of what a caller lacks one answer carries.
@@ -599,7 +604,27 @@ pub fn store_objects_since<E: crate::store::Store>(
     now: Datetime,
     cut: Cut,
 ) -> Answered<wire::StorePayload> {
-    let (snapshot, piece) = answered(
+    store_answer(store, since, books, now, cut).map(|(payload, _, _)| payload)
+}
+
+/// [`store_objects_since`], with the names of the objects it sends and the graph it read them
+/// from.
+fn store_answer<E: crate::store::Store>(
+    store: &dyn Prodrome<E>,
+    since: &prodrome_core::store::frontier::Since,
+    books: Books<'_>,
+    now: Datetime,
+    cut: Cut,
+) -> Answered<(
+    wire::StorePayload,
+    Vec<prodrome_core::event::Hash>,
+    std::sync::Arc<crate::store::Graph<E>>,
+)> {
+    let Pulled {
+        snapshot,
+        piece,
+        graph,
+    } = answered(
         store,
         &format!("store/{}", E::KIND.name()),
         books,
@@ -608,14 +633,20 @@ pub fn store_objects_since<E: crate::store::Store>(
         cut,
         &Literals,
     )?;
-    Ok(wire::StorePayload {
-        objects: snapshot.payload(piece.sent),
-        keys: BTreeMap::new(),
-        rest: piece.rest,
-        size: piece.size,
-        weight: piece.weight,
-        erased: Vec::new(),
-    })
+    let (rest, size, weight) = (piece.rest, piece.size, piece.weight);
+    let (sent, objects): (Vec<_>, Vec<_>) = piece.sent.into_iter().unzip();
+    Ok((
+        wire::StorePayload {
+            objects: snapshot.payload(objects),
+            keys: BTreeMap::new(),
+            rest,
+            size,
+            weight,
+            erased: Vec::new(),
+        },
+        sent,
+        graph,
+    ))
 }
 
 /// One object as a replica carries it, weighed by its literal's bytes.
@@ -663,10 +694,27 @@ impl Snapshot {
 /// What one answer of a pull sends: the items in linearisation order, how many it names are left
 /// out, the weight of those sent, and the weight of all it names, sent or not.
 struct Piece<T> {
-    sent: Vec<T>,
+    sent: Vec<(prodrome_core::event::Hash, T)>,
     rest: usize,
     weight: usize,
     size: usize,
+}
+
+impl<T> Piece<T> {
+    /// What a replica lacking nothing is sent.
+    fn none() -> Self {
+        Self {
+            sent: Vec::new(),
+            rest: 0,
+            weight: 0,
+            size: 0,
+        }
+    }
+
+    /// The items sent, without their names.
+    fn items(self) -> Vec<T> {
+        self.sent.into_iter().map(|(_, item)| item).collect()
+    }
 }
 
 /// What a pull sends of each object it answers: the object with its literal, or a skeleton's
@@ -740,8 +788,10 @@ impl Sends<crate::secretary::line_event::LineEvent> for Nodes {
 /// snapshot: every head, the prodromes it serves, and what `sends` makes of each object the
 /// frontier `since` names does not reach, cut as `cut` says by the weight it gives each, in
 /// linearisation order so a receiver can apply them as they arrive. The frontier the asker holds
-/// once it has taken the answer is recorded, and named in it.
-fn answered<E: prodrome_core::schema::Schema, S: Sends<E>>(
+/// once it has taken the answer is recorded, and named in it. The store is read through the graph
+/// it keeps by its heads, so an answer at heads already read reads no object; one to a `since` at
+/// the store's heads also walks none, and sends nothing.
+fn answered<E, S>(
     store: &dyn Prodrome<E>,
     key: &str,
     books: Books<'_>,
@@ -749,28 +799,21 @@ fn answered<E: prodrome_core::schema::Schema, S: Sends<E>>(
     now: Datetime,
     cut: Cut,
     sends: &S,
-) -> Answered<(Snapshot, Piece<S::Item>)> {
-    let (epoch, (heads, geneses, read, frontier, piece)) = books.epochs.served(key, now, || {
-        let objects = store.objects()?;
-        let dag: prodrome_core::dag::Dag<E> = objects.iter().cloned().collect();
-        let heads = head_set(store)?;
-        let geneses = names(&dag.geneses());
+) -> Answered<Pulled<E, S::Item>>
+where
+    E: prodrome_core::schema::Schema + Send + Sync + 'static,
+    S: Sends<E>,
+{
+    let (epoch, (read, frontier, piece, graph)) = books.epochs.served(key, now, || {
+        let graph = store.graph()?;
         let seen = crate::epoch::Seen {
-            geneses: geneses.iter().cloned().collect(),
-            heads: heads.iter().cloned().collect(),
-            held: objects
-                .iter()
-                .map(|(name, _)| name.as_str().to_owned())
-                .collect(),
+            geneses: names(graph.geneses()).into_iter().collect(),
+            heads: names(graph.heads()).into_iter().collect(),
+            held: std::sync::Arc::clone(graph.names()),
         };
-        let lacking = books.frontiers.answer(key, since, &dag)?;
+        let lacking = books.frontiers.answer(key, since, graph.dag())?;
         let read = since_read(lacking.reached());
-        let mut piece = Piece {
-            sent: Vec::new(),
-            rest: 0,
-            weight: 0,
-            size: 0,
-        };
+        let mut piece = Piece::none();
         let mut full = false;
         for &(name, envelope) in lacking.lacking() {
             piece.rest += 1;
@@ -792,24 +835,26 @@ fn answered<E: prodrome_core::schema::Schema, S: Sends<E>>(
         }
         piece.rest -= piece.sent.len();
         let frontier = frontier_of(&lacking.record(piece.sent.len())?);
-        let piece = Piece {
-            sent: piece.sent.into_iter().map(|(_, item)| item).collect(),
-            rest: piece.rest,
-            weight: piece.weight,
-            size: piece.size,
-        };
-        Ok((seen, (heads, geneses, read, frontier, piece)))
+        Ok((seen, (read, frontier, piece, std::sync::Arc::clone(&graph))))
     })?;
-    Ok((
-        Snapshot {
-            heads,
-            geneses,
+    Ok(Pulled {
+        snapshot: Snapshot {
+            heads: names(graph.heads()),
+            geneses: names(graph.geneses()),
             epoch,
             since: read,
             frontier,
         },
         piece,
-    ))
+        graph,
+    })
+}
+
+/// One answer of a pull, and the graph it was read from.
+struct Pulled<E: prodrome_core::schema::Schema, T> {
+    snapshot: Snapshot,
+    piece: Piece<T>,
+    graph: std::sync::Arc<crate::store::Graph<E>>,
 }
 
 /// Whether the store of record knew the frontier a pull named.
@@ -831,9 +876,10 @@ fn frontier_of(recorded: &prodrome_core::store::frontier::Recorded) -> wire::Fro
 
 /// `GET /api/stores/lines/objects?since=<heads>`: [`store_objects_since`] for the conversations'
 /// lines, carrying the key of every slot the objects sent name, except a key an erasure of its
-/// own conversation names, which is never sent: so a replica joining the answer can open what it
-/// was sent and nothing erased. The erasures are read over the whole store, so a piece that
-/// holds a line and not the later line erasing its words carries no key for them either.
+/// own conversation names or a reseal supersedes, which is never sent: so a replica joining the
+/// answer can open what it was sent and nothing erased. The erasures are read over the whole
+/// store, so a piece that holds a line and not the later line erasing its words carries no key
+/// for them either, and every erased key is named beside them.
 ///
 /// # Errors
 /// The stores' own.
@@ -844,27 +890,25 @@ pub fn lines_since(
     now: Datetime,
     cut: Cut,
 ) -> Answered<wire::StorePayload> {
-    let payload = store_objects_since(conversations.lines, since, books, now, cut)?;
-    let KeysSaid { keys, erased, .. } = words(
-        conversations,
-        payload
-            .objects
-            .objects
-            .iter()
-            .map(|object| object.hash.as_str()),
-    )?;
+    let (payload, sent, graph) = store_answer(conversations.lines, since, books, now, cut)?;
+    let retired = retired(&graph);
     Ok(wire::StorePayload {
-        keys,
-        erased,
+        keys: keys_of(conversations, &graph, &retired, &sent),
+        erased: retired
+            .erased
+            .keys()
+            .map(|name| name.as_str().to_owned())
+            .collect(),
         ..payload
     })
 }
 
 /// `GET /api/stores/lines/skeleton?since=<heads>`: what [`lines_since`] answers, each object as
 /// its [`wire::SkeletonNode`] instead of its literal, cut by the nodes' own weight: the same
-/// heads, prodromes and epoch, read under the same lock, the same keys and the same erasures. A
-/// replica that takes the pieces of the skeleton and the literal of each node by hash
-/// ([`content`]) holds what the pieces of the objects' pull would have brought it.
+/// heads, prodromes and epoch, read under the same lock, and the same keys. It names no erased
+/// key beside them: each node's step says what its line retires, so a replica that takes the pieces of
+/// the skeleton and the literal of each node by hash ([`content`]) holds what the pieces of the
+/// objects' pull would have brought it, and a replica that lacks nothing is sent nothing.
 ///
 /// # Errors
 /// The stores' own.
@@ -875,7 +919,11 @@ pub fn lines_skeleton(
     now: Datetime,
     cut: Cut,
 ) -> Answered<wire::SkeletonPayload> {
-    let (snapshot, piece) = answered(
+    let Pulled {
+        snapshot,
+        piece,
+        graph,
+    } = answered(
         conversations.lines,
         "store/lines",
         books,
@@ -884,44 +932,47 @@ pub fn lines_skeleton(
         cut,
         &Nodes,
     )?;
-    let KeysSaid {
-        keys,
-        erased,
-        replaced,
-    } = words(
-        conversations,
-        piece.sent.iter().map(|node| node.hash.as_str()),
-    )?;
-    let nodes = held_sizes(conversations.lines, piece.sent)?;
+    let (rest, size, weight) = (piece.rest, piece.size, piece.weight);
+    let (sent, nodes): (Vec<_>, Vec<_>) = piece.sent.into_iter().unzip();
+    let keys = if sent.is_empty() {
+        BTreeMap::new()
+    } else {
+        keys_of(conversations, &graph, &retired(&graph), &sent)
+    };
+    // A replica that lacks nothing holds the store's heads already: they are the heads of what it
+    // holds, which a recorded frontier names exactly.
+    let heads = match (&snapshot.since, sent.is_empty() && rest == 0) {
+        (wire::SinceRead::Known, true) => wire::Heads::Held,
+        (wire::SinceRead::Known | wire::SinceRead::Unknown, _) => wire::Heads::These {
+            heads: snapshot.heads,
+        },
+    };
     Ok(wire::SkeletonPayload {
-        heads: snapshot.heads,
+        heads,
         geneses: snapshot.geneses,
         epoch: snapshot.epoch,
-        nodes,
+        nodes: held_sizes(conversations.lines, &sent, nodes)?,
         since: snapshot.since,
         frontier: snapshot.frontier,
         keys,
-        rest: piece.rest,
-        size: piece.size,
-        weight: piece.weight,
-        erased,
-        replaced,
+        rest,
+        size,
+        weight,
     })
 }
 
-/// Each node sized by the bytes [`content`] sends of it, which are the store's own print and not
-/// its reprint, so a tab that batches its asks by these sizes never asks for more than one answer
-/// carries.
+/// Each node, named `names`, sized by the bytes [`content`] sends of it, which are the store's own
+/// print and not its reprint, so a tab that batches its asks by these sizes never asks for more
+/// than one answer carries.
 fn held_sizes(
     lines: &dyn Prodrome<crate::secretary::line_event::LineEvent>,
+    names: &[prodrome_core::event::Hash],
     nodes: Vec<wire::SkeletonNode>,
 ) -> Answered<Vec<wire::SkeletonNode>> {
-    let names: Vec<prodrome_core::event::Hash> = nodes
-        .iter()
-        .map(|node| prodrome_core::event::Hash::new(node.hash.clone()))
-        .collect::<Result<_, _>>()
-        .map_err(|failed| crate::store::StoreError::unreadable("lines", failed.to_string()))?;
-    let sizes = lines.sizes(&names)?;
+    if names.is_empty() {
+        return Ok(nodes);
+    }
+    let sizes = lines.sizes(names)?;
     Ok(nodes
         .into_iter()
         .zip(sizes)
@@ -932,38 +983,30 @@ fn held_sizes(
         .collect())
 }
 
-/// What a pull of the lines says of their words' keys.
-struct KeysSaid {
-    /// The key of every slot the lines sent name, by name, but a key an erasure names or a reseal
-    /// replaced.
-    keys: BTreeMap<String, String>,
-    /// Every key an erasure anywhere in the store names, sorted.
-    erased: Vec<String>,
-    /// Every key a reseal that opens on the box supersedes, anywhere in the store, sorted
-    /// (`transcript::superseded`).
-    replaced: Vec<String>,
+/// What the lines of `graph` retire of their keys, kept in the graph.
+fn retired(
+    graph: &crate::store::Graph<crate::secretary::line_event::LineEvent>,
+) -> std::sync::Arc<crate::secretary::transcript::Retired> {
+    graph.reading("retired", |graph| {
+        crate::secretary::transcript::Retired::of(graph.objects())
+    })
 }
 
-/// What the lines named `sent` and the store say of their keys.
-fn words<'a>(
+/// The key of every slot the lines named `sent` name, by name, but a key `retired` says is dead,
+/// erased or superseded by a reseal the box opens.
+fn keys_of(
     conversations: crate::secretary::conversations::Conversations<'_>,
-    sent: impl Iterator<Item = &'a str>,
-) -> Answered<KeysSaid> {
-    let objects = conversations.lines.objects()?;
-    let erased = crate::secretary::transcript::erased(&objects);
-    let replaced = crate::secretary::transcript::superseded(
-        objects
-            .iter()
-            .filter_map(|(name, object)| Some((name, object.event()?))),
-        &conversations.slots(),
-    );
-    let sent: std::collections::BTreeSet<&str> = sent.collect();
-    let keys = objects
-        .iter()
-        .filter(|(name, _)| sent.contains(name.as_str()))
-        .filter_map(|(_, object)| object.event())
-        .flat_map(crate::secretary::line_event::LineEvent::keys)
-        .filter(|name| !erased.contains_key(name) && !replaced.contains(name))
+    graph: &crate::store::Graph<crate::secretary::line_event::LineEvent>,
+    retired: &crate::secretary::transcript::Retired,
+    sent: &[prodrome_core::event::Hash],
+) -> BTreeMap<String, String> {
+    let slots = conversations.slots();
+    let line = |name: &prodrome_core::event::Hash| graph.dag().get(name)?.event();
+    sent.iter()
+        .filter_map(line)
+        .flat_map(|sent| sent.keys().map(move |key| (sent.conversation(), key)))
+        .filter(|(id, name)| !retired.retires(id, name, line, &slots))
+        .map(|(_, name)| name)
         .filter_map(|name| {
             let key = conversations.keys.get(name).ok()??;
             Some((
@@ -971,15 +1014,7 @@ fn words<'a>(
                 crate::secretary::key_ring::spelled(&key),
             ))
         })
-        .collect();
-    Ok(KeysSaid {
-        keys,
-        erased: erased.keys().map(|name| name.as_str().to_owned()).collect(),
-        replaced: replaced
-            .iter()
-            .map(|name| name.as_str().to_owned())
-            .collect(),
-    })
+        .collect()
 }
 
 /// One line's node: its name, what it rests on, its literal's size, and its header.
@@ -994,7 +1029,7 @@ pub fn skeleton_node(
             at: fpl::iso(fpl::instant_of(line.at())),
             kind: line.shape().name().to_owned(),
             keys: line.keys().map(|key| key.as_str().to_owned()).collect(),
-            step: crate::secretary::step::Step::of(line.shape()),
+            step: Step::of(line.shape()),
         },
         None => wire::NodeHeader::Structure {
             kind: constructor(envelope).to_owned(),
@@ -1030,7 +1065,7 @@ fn constructor<E>(envelope: &prodrome_core::event::Envelope<E>) -> &'static str 
 /// them, which is what a skeleton's piece is cut by.
 fn weight(node: &wire::SkeletonNode) -> usize {
     const AROUND: usize = 96;
-    // A step's tag, and the count two of them carry.
+    // A step's tag, and the count two of them carry; the keys two others name are counted apart.
     const STEP: usize = 32;
     let header = match &node.header {
         wire::NodeHeader::Structure { kind } => kind.len(),
@@ -1039,13 +1074,27 @@ fn weight(node: &wire::SkeletonNode) -> usize {
             at,
             kind,
             keys,
-            step: _,
+            step,
         } => {
             conversation.len()
                 + at.len()
                 + kind.len()
                 + keys.iter().map(|key| key.len() + 3).sum::<usize>()
                 + STEP
+                + match step {
+                    Step::Resealed { of, from } => of.as_str().len() + from.as_str().len(),
+                    Step::Erased { keys } => {
+                        keys.iter().map(|key| key.as_str().len() + 3).sum::<usize>()
+                    }
+                    Step::Opened
+                    | Step::Asks
+                    | Step::Answers
+                    | Step::Rewound { .. }
+                    | Step::Proposed
+                    | Step::Coding { .. }
+                    | Step::Titled
+                    | Step::Still => 0,
+                }
         }
     };
     AROUND + node.hash.len() + node.parents.iter().map(|p| p.len() + 3).sum::<usize>() + header

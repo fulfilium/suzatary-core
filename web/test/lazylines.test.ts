@@ -49,7 +49,7 @@ const skeleton = (r: Rng): Replica<SkeletonNode> => {
     held.add(next.hash)
     left.splice(left.indexOf(next), 1)
   }
-  return pulled(empty<SkeletonNode>(), { ...box.skeleton, objects: nodes, untrusted: [], root: null }, 1)
+  return pulled(empty<SkeletonNode>(), { ...box.skeleton, heads: box.skeleton.heads.are === "these" ? box.skeleton.heads.heads : [], objects: nodes, untrusted: [], root: null }, 1)
 }
 
 // Some of the box's literals for nodes the skeleton holds: content is fetched for a node the skeleton names, and let go
@@ -58,7 +58,7 @@ const fetched = (r: Rng, s: Replica<SkeletonNode>): ReadonlyMap<string, string> 
   new Map(s.objects.filter(() => r.bool(0.7)).map(n => [n.hash, literals.get(n.hash)!]))
 
 // Every answer the worker's lines holding `objects` give about `scope`, or the refusal they give instead.
-const read = (objects: readonly Named[], scope: lines.Scope): string => {
+const read = (objects: readonly Named[], scope: Exclude<lines.Scope, { readonly type: "Objects" }>): string => {
   const held = new core.Lines()
   const proposals = new core.Proposals(objectsOf(inbox))
   try {
@@ -75,7 +75,10 @@ const read = (objects: readonly Named[], scope: lines.Scope): string => {
   }
 }
 
-const scopes: readonly lines.Scope[] = [lines.WHOLE, ...ids.map(lines.one), lines.one("never-opened"), { type: "Conversations", ids }]
+// The stream's scope, the drawn rounds' objects, is the Rust's law (`held_lines.rs`), since only the core chooses it.
+const scopes = [lines.WHOLE, ...ids.map(lines.one), lines.one("never-opened"), { type: "Conversations", ids } satisfies lines.Scope].flatMap(s =>
+  s.type === "Objects" ? [] : [s],
+)
 
 test("law: a reading of part-fetched lines is the whole pull's reading at the same skeleton, or names what it fetches", () => {
   forAll(40, r => {
@@ -268,7 +271,7 @@ test("concurrent whole readings read each object the device keeps once, in one t
     came: () => {},
     lost: () => {},
     atOnce: () => 4,
-    held: rows => Promise.resolve(void handed.push(...rows.map(r => r.hash))),
+    held: rows => Promise.resolve(void handed.push(...rows.map(r => content.rowOf(r).hash))),
     shown: () => true,
   })
   const before = [device.transactions(), device.read()] as const

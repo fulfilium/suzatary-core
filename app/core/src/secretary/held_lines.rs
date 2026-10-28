@@ -5,16 +5,19 @@
 //! Each print is decoded once, when it arrives. The history is the objects whose every ancestor
 //! is held, kept as prints arrive, as a store's down-set is. The tree the fold walks has three
 //! levels: the store, one node per conversation, and one leaf per line of the history. A leaf's
-//! name covers the line and how each slot reads (erased by which erasure line, superseded by a
-//! reseal that opens here, its key held, or missing), and a conversation's covers its leaves, so a new line renames its leaf, its
-//! conversation and the store, and every other node is one cache hit. Words are opened at the
-//! leaves, the expensive step; a conversation orders its opened lines and folds them.
+//! name covers the line, the reseals of its slots, and for each slot of them whether an erasure
+//! line erased it and whether its key is held, and a conversation's covers its leaves, so a new
+//! line renames its leaf, its conversation and the store, and every other node is one cache hit.
+//! Words are opened at the leaves, the expensive step, each sealed text at most once, and a slot a
+//! reseal that opens supersedes is read from that reseal and never from its own seal; a
+//! conversation orders its opened lines and folds them. A round read on its own is a node over the
+//! leaves of the lines it reads, named by them, so a round read again is one cache hit.
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::sync::Arc;
 
-use prodrome_core::dag::{Excluded, Unread, decode};
-use prodrome_core::event::{Hash, parents_of};
+use prodrome_core::dag::{Excluded, Unread};
+use prodrome_core::event::{Envelope, Hash, parents_of, parse_envelope};
 use prodrome_core::literal::Datetime;
 use prodrome_core::memo::{self, Algebra, Cache, Report, Tree};
 
@@ -23,13 +26,17 @@ use crate::secretary::erasure::Erasure;
 use crate::secretary::key_ring::KeyRing;
 use crate::secretary::line_event::{LineEvent, LineVocabulary};
 use crate::secretary::line_shape::LineShape;
+use crate::secretary::line_words::LineWords;
 use crate::secretary::locked_text::{KeyName, TextKey};
+use crate::secretary::slots::Slots;
 use crate::secretary::store::{ConversationId, Entry, NotAConversation, Stored};
+use crate::secretary::stream::Held;
 use crate::secretary::transcript;
 use crate::secretary::words::{Gone, Words};
 
 thread_local! {
     static DECODES: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+    static HASHES: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
 }
 
 /// How many prints this thread's held lines have decoded, so a test can show what a reading
@@ -37,6 +44,27 @@ thread_local! {
 #[must_use]
 pub fn decodes() -> usize {
     DECODES.with(std::cell::Cell::get)
+}
+
+/// How many of those prints were hashed against their names first: those not [`Admitted`].
+#[must_use]
+pub fn hashes() -> usize {
+    HASHES.with(std::cell::Cell::get)
+}
+
+/// A print whose bytes a caller has checked hash to its name, so holding it hashes nothing.
+pub struct Admitted {
+    name: Hash,
+    bytes: Vec<u8>,
+}
+
+impl Admitted {
+    /// `bytes`, which the caller checked hash to `name`: the tab's content admission checks every
+    /// literal before it hands it over or keeps it on the device, and nothing else calls this.
+    #[must_use]
+    pub fn vouched(name: Hash, bytes: Vec<u8>) -> Self {
+        Self { name, bytes }
+    }
 }
 
 /// The lines held: every print decoded once, the history, and the fold's cache over it.
@@ -56,6 +84,15 @@ pub struct HeldLines {
     algebra: Reader,
     /// The store's name at the last fold of it, whose entry the next one replaces.
     root: Option<Hash>,
+    /// Each round read on its own, by its conversation and opening turn, as last read.
+    rounds: BTreeMap<(ConversationId, usize), RoundRead>,
+}
+
+/// A round as last read: the objects it read and its node, whose entries a later reading of the
+/// round replaces, and a key or print let go forgets.
+struct RoundRead {
+    objects: BTreeSet<Hash>,
+    node: Arc<Node>,
 }
 
 /// A line of the history as a build reads it: its name, its object and what it rests on.
@@ -76,6 +113,17 @@ enum Print {
 }
 
 impl Print {
+    fn of(envelope: Envelope<LineEvent>) -> Self {
+        let parents = parents_of(&envelope);
+        match envelope.into_event() {
+            Some(line) => Print::Line {
+                line: Arc::new(line),
+                parents,
+            },
+            None => Print::Structure { parents },
+        }
+    }
+
     /// The names an object rests on; none for a print that is no object.
     fn parents(&self) -> Option<&[Hash]> {
         match self {
@@ -118,6 +166,11 @@ enum Node {
         id: ConversationId,
         lines: Vec<Arc<Node>>,
     },
+    /// One round's lines, opened and left open.
+    Round {
+        name: Hash,
+        lines: Vec<Arc<Node>>,
+    },
     Line {
         name: Hash,
         leaf: Leaf,
@@ -134,24 +187,64 @@ struct Leaf {
     reseals: BTreeMap<KeyName, Vec<(Hash, Arc<LineEvent>)>>,
 }
 
-/// How one slot reads: erased by the erasure line named `by`, superseded by a reseal that opens
-/// here (read from it whether or not its own key is still held), its key held, or missing.
+/// What a leaf's reading of one slot rests on: whether an erasure line erased it, and whether its
+/// key is held. Whether a reseal supersedes it is a function of its reseals' slots, which the
+/// leaf's name covers too, so the leaf's fold decides it.
 #[derive(PartialEq, Eq)]
-enum Slot {
+struct Slot {
+    standing: Standing,
+    key: Key,
+}
+
+/// Whether a slot's words were erased, by the erasure line named `by`.
+#[derive(PartialEq, Eq)]
+enum Standing {
     Erased { by: Hash, erasure: Erasure },
-    Superseded,
+    Kept,
+}
+
+/// Whether the ring holds a slot's key.
+#[derive(PartialEq, Eq)]
+enum Key {
     Held,
     Missing,
 }
 
 impl Slot {
     fn print(&self) -> String {
-        match self {
-            Slot::Erased { by, .. } => format!("erased by {by}"),
-            Slot::Superseded => "superseded".to_owned(),
-            Slot::Held => "held".to_owned(),
-            Slot::Missing => "missing".to_owned(),
+        let standing = match &self.standing {
+            Standing::Erased { by, .. } => format!("erased by {by}"),
+            Standing::Kept => "kept".to_owned(),
+        };
+        let key = match self.key {
+            Key::Held => "held",
+            Key::Missing => "missing",
+        };
+        format!("{standing} {key}")
+    }
+}
+
+/// A slot reader that opens each sealed text once: a key locks exactly one text, so the words
+/// read under a key's name are the words of every later read of it.
+struct Once<S> {
+    slots: S,
+    read: std::cell::RefCell<BTreeMap<KeyName, Words<LineWords>>>,
+}
+
+impl<S: Slots> Slots for Once<S> {
+    fn words(
+        &self,
+        name: &KeyName,
+        binding: &[u8],
+        sealed: &[u8],
+        open: &dyn Fn(&TextKey) -> Option<Words<LineWords>>,
+    ) -> Words<LineWords> {
+        if let Some(words) = self.read.borrow().get(name) {
+            return words.clone();
         }
+        let words = self.slots.words(name, binding, sealed, open);
+        self.read.borrow_mut().insert(name.clone(), words.clone());
+        words
     }
 }
 
@@ -187,6 +280,7 @@ impl Tree for Node {
         match self {
             Node::Store { name, .. }
             | Node::Conversation { name, .. }
+            | Node::Round { name, .. }
             | Node::Line { name, .. } => name,
         }
     }
@@ -194,7 +288,9 @@ impl Tree for Node {
     fn children(&self) -> impl Iterator<Item = &Self> {
         let children: Box<dyn Iterator<Item = &Self>> = match self {
             Node::Store { conversations, .. } => Box::new(conversations.iter().map(|c| &**c)),
-            Node::Conversation { lines, .. } => Box::new(lines.iter().map(|line| &**line)),
+            Node::Conversation { lines, .. } | Node::Round { lines, .. } => {
+                Box::new(lines.iter().map(|line| &**line))
+            }
             Node::Line { .. } => Box::new(std::iter::empty()),
         };
         children
@@ -208,10 +304,12 @@ struct Reader {
 }
 
 impl Reader {
+    /// The name changes with every change to how a leaf, a conversation or a round reads, since
+    /// a cache kept beyond this process would answer from entries named by the old reading.
     fn new() -> Self {
         Self {
             name: memo::name(
-                b"suzatary held lines: open at the leaves, fold at a conversation",
+                b"suzatary held lines 2: open at the leaves, each slot as its leaf's reseals and erasures say, fold at a conversation or a round",
                 [],
             ),
         }
@@ -233,7 +331,7 @@ impl Algebra<Node> for Reading<'_> {
 
     fn apply(&self, node: &Node, children: Vec<Read>) -> Read {
         match node {
-            Node::Store { .. } => Read::join(children),
+            Node::Store { .. } | Node::Round { .. } => Read::join(children),
             Node::Conversation { id, .. } => {
                 let mut read = Read::join(children);
                 let lines = std::mem::take(&mut read.open);
@@ -242,22 +340,34 @@ impl Algebra<Node> for Reading<'_> {
                 read
             }
             Node::Line { leaf, .. } => {
-                let slots = |name: &KeyName| -> Words<TextKey> {
-                    match leaf.slots.get(name) {
-                        Some(Slot::Erased { erasure, .. }) => Gone::Erased {
-                            erasure: erasure.clone(),
+                // The key ring as the leaf's name says it, each text opened once.
+                let slots = Once {
+                    slots: |name: &KeyName| -> Words<TextKey> {
+                        match leaf.slots.get(name) {
+                            Some(Slot { key: Key::Held, .. }) => self.keys.key(name),
+                            Some(Slot {
+                                key: Key::Missing, ..
+                            })
+                            | None => Gone::Missing.into(),
                         }
-                        .into(),
-                        Some(Slot::Held) => self.keys.key(name),
-                        Some(Slot::Superseded | Slot::Missing) | None => Gone::Missing.into(),
-                    }
+                    },
+                    read: std::cell::RefCell::default(),
                 };
-                let superseded: BTreeSet<KeyName> = leaf
+                let erased: BTreeMap<KeyName, Erasure> = leaf
                     .slots
                     .iter()
-                    .filter(|(_, slot)| **slot == Slot::Superseded)
-                    .map(|(name, _)| name.clone())
+                    .filter_map(|(name, slot)| match &slot.standing {
+                        Standing::Erased { erasure, .. } => Some((name.clone(), erasure.clone())),
+                        Standing::Kept => None,
+                    })
                     .collect();
+                let superseded = transcript::superseded(
+                    leaf.reseals
+                        .values()
+                        .flatten()
+                        .map(|(name, line)| (name, &**line)),
+                    &slots,
+                );
                 let reseals: BTreeMap<KeyName, Vec<&LineEvent>> = leaf
                     .reseals
                     .iter()
@@ -266,7 +376,7 @@ impl Algebra<Node> for Reading<'_> {
                     })
                     .collect();
                 let read = transcript::Through {
-                    erased: &BTreeMap::new(),
+                    erased: &erased,
                     superseded: &superseded,
                     reseals: &reseals,
                     slots: &slots,
@@ -317,48 +427,79 @@ impl HeldLines {
             cache: Cache::default(),
             algebra: Reader::new(),
             root: None,
+            rounds: BTreeMap::new(),
         }
     }
 
-    /// `add`, each print beside the name it is claimed to have, decoded once, and `drop` let go.
-    /// A print whose bytes are not an object at the schema is held as unread, and what rests on
-    /// it stays out of the history.
+    /// `add`, each print beside the name it is claimed to have, hashed against it and decoded
+    /// once, and `drop` let go. A print whose bytes are not an object at the schema is held as
+    /// unread, and what rests on it stays out of the history.
     pub fn hold(&mut self, add: Vec<(Hash, Vec<u8>)>, drop: &[Hash]) {
-        let dropped = drop
+        let add = add
+            .into_iter()
+            .filter(|(name, _)| !self.prints.contains_key(name))
+            .map(|(name, bytes)| {
+                HASHES.with(|count| count.set(count.get() + 1));
+                let print =
+                    match prodrome_core::dag::decode::<LineEvent>(&LineVocabulary, &name, &bytes) {
+                        Ok(envelope) => Print::of(envelope),
+                        Err(why) => Print::Unread(why),
+                    };
+                (name, print)
+            })
+            .collect();
+        self.held(add, drop);
+    }
+
+    /// [`HeldLines::hold`] of prints already admitted by their names, each decoded once and hashed
+    /// not again.
+    pub fn hold_admitted(&mut self, add: Vec<Admitted>, drop: &[Hash]) {
+        let add = add
+            .into_iter()
+            .filter(|admitted| !self.prints.contains_key(&admitted.name))
+            .map(|Admitted { name, bytes }| {
+                let print = match std::str::from_utf8(&bytes) {
+                    Ok(text) => match parse_envelope::<LineEvent>(&LineVocabulary, text) {
+                        Ok(envelope) => Print::of(envelope),
+                        Err(why) => Print::Unread(Unread::Unparsed(why)),
+                    },
+                    Err(_) => Print::Unread(Unread::NotText),
+                };
+                (name, print)
+            })
+            .collect();
+        self.held(add, drop);
+    }
+
+    fn held(&mut self, add: Vec<(Hash, Print)>, drop: &[Hash]) {
+        let dropped: BTreeSet<&Hash> = drop
             .iter()
             .filter(|name| self.prints.remove(*name).is_some())
-            .count();
+            .collect();
+        if !dropped.is_empty() {
+            let gone: Vec<(ConversationId, usize)> = self
+                .rounds
+                .iter()
+                .filter(|(_, read)| read.objects.iter().any(|name| dropped.contains(name)))
+                .map(|(round, _)| round.clone())
+                .collect();
+            self.forget_rounds(&gone);
+        }
         let mut arrived = Vec::new();
-        for (name, bytes) in add {
-            if self.prints.contains_key(&name) {
-                continue;
-            }
+        for (name, print) in add {
             DECODES.with(|count| count.set(count.get() + 1));
-            let print = match decode::<LineEvent>(&LineVocabulary, &name, &bytes) {
-                Ok(envelope) => {
-                    let parents = parents_of(&envelope);
-                    match envelope.into_event() {
-                        Some(line) => Print::Line {
-                            line: Arc::new(line),
-                            parents,
-                        },
-                        None => Print::Structure { parents },
-                    }
-                }
-                Err(why) => Print::Unread(why),
-            };
             self.prints.insert(name.clone(), print);
             arrived.push(name);
         }
-        if dropped > 0 {
-            self.rebuild();
-        } else {
+        if dropped.is_empty() {
             for name in &arrived {
                 self.place(name);
             }
             for name in &arrived {
                 self.enter(name);
             }
+        } else {
+            self.rebuild();
         }
     }
 
@@ -378,21 +519,11 @@ impl HeldLines {
             let Some(conversation) = self.conversations.get(id) else {
                 continue;
             };
-            // A superseded slot opened nothing with its own key, so losing that key forgets nothing.
             let leaves: Vec<Hash> = conversation
                 .leaves
                 .values()
-                .filter_map(|leaf| match &**leaf {
-                    Node::Line { name, leaf }
-                        if leaf
-                            .slots
-                            .iter()
-                            .any(|(key, slot)| *slot == Slot::Held && lost.contains(key)) =>
-                    {
-                        Some(name.clone())
-                    }
-                    Node::Line { .. } | Node::Store { .. } | Node::Conversation { .. } => None,
-                })
+                .filter(|leaf| opened_with(leaf, &lost))
+                .map(|leaf| leaf.name().clone())
                 .collect();
             if let Built::Stale { cached } = &conversation.built
                 && !leaves.is_empty()
@@ -404,6 +535,88 @@ impl HeldLines {
         if !opened.is_empty() {
             opened.extend(self.root.take());
             self.forget(opened);
+        }
+        let rounds: Vec<(ConversationId, usize)> = self
+            .rounds
+            .iter()
+            .filter(|(_, read)| read.node.children().any(|leaf| opened_with(leaf, &lost)))
+            .map(|(round, _)| round.clone())
+            .collect();
+        self.forget_rounds(&rounds);
+    }
+
+    /// The lines `objects` of conversation `id`, each opened as the conversation opens it, for the
+    /// round it opens at turn `turn`: a slot read from its own seal, the reseals among `objects`
+    /// that seal it and the erasures among them that name it. Only those prints are read, and the
+    /// fold's cache answers a round read before with the same lines and keys.
+    pub fn round(
+        &mut self,
+        id: &ConversationId,
+        turn: usize,
+        objects: &BTreeSet<Hash>,
+    ) -> Held<BTreeMap<Hash, Entry>> {
+        let mut lines: Vec<HeldLine<'_>> = Vec::new();
+        for name in objects {
+            match self.prints.get(name) {
+                Some(Print::Line { line, parents }) if line.conversation() == id => {
+                    lines.push((name, line, parents));
+                }
+                Some(Print::Line { .. } | Print::Structure { .. } | Print::Unread(_)) => {
+                    return Held::Unread;
+                }
+                None => return Held::Lacking(name.clone()),
+            }
+        }
+        let leaves = leaves(&self.keys, &lines, &BTreeMap::new());
+        let node = Arc::new(Node::Round {
+            name: memo::name(
+                format!("round {id} {turn}").as_bytes(),
+                leaves.values().map(|leaf| leaf.name()),
+            ),
+            lines: leaves.into_values().collect(),
+        });
+        let (read, _) = memo::fold(
+            &Reading {
+                reader: &self.algebra,
+                keys: &self.keys,
+            },
+            &*node,
+            &mut self.cache,
+        );
+        let was = self.rounds.insert(
+            (id.clone(), turn),
+            RoundRead {
+                objects: objects.clone(),
+                node: Arc::clone(&node),
+            },
+        );
+        if let Some(was) = was.filter(|was| was.node.name() != node.name()) {
+            let kept: BTreeSet<&Hash> = node.children().map(Tree::name).collect();
+            let gone: Vec<Hash> = std::iter::once(was.node.name())
+                .chain(was.node.children().map(Tree::name))
+                .filter(|name| !kept.contains(name))
+                .cloned()
+                .collect();
+            self.forget(gone);
+        }
+        Held::Opened(
+            read.open
+                .iter()
+                .map(|line| (line.object.clone(), line.entry.clone()))
+                .collect(),
+        )
+    }
+
+    /// The rounds `rounds` taken out of the cache, and their leaves with them.
+    fn forget_rounds(&mut self, rounds: &[(ConversationId, usize)]) {
+        for round in rounds {
+            if let Some(read) = self.rounds.remove(round) {
+                let names: Vec<Hash> = std::iter::once(read.node.name())
+                    .chain(read.node.children().map(Tree::name))
+                    .cloned()
+                    .collect();
+                self.forget(names);
+            }
         }
     }
 
@@ -512,14 +725,21 @@ impl HeldLines {
         dead
     }
 
-    /// What the history leaves out, as the Prodrome's DAG says it (`Dag::excluded`): each name
-    /// lacking (a print that is not an object, or a parent no object is) with why and what rests
-    /// on it.
+    /// What the history leaves out, as the Prodrome's DAG says it (`Dag::excluded`), less the
+    /// names the store holds and no reading fetched: each print held that is not an object, with
+    /// why, and each name a held object rests on that `stored` does not name, and what rests on
+    /// each. A reading fetches only the lines it reads (a round's, without what they rest on), so
+    /// a name the store holds and this replica does not is no hole.
     #[must_use]
-    pub fn excluded(&self) -> Vec<Excluded> {
+    pub fn excluded(&self, stored: impl Fn(&Hash) -> bool) -> Vec<Excluded> {
         self.lacking
             .iter()
-            .map(|name| {
+            .filter_map(|name| match self.prints.get(name) {
+                Some(Print::Unread(why)) => Some((name, Some(why.clone()))),
+                None if !stored(name) => Some((name, None)),
+                Some(Print::Line { .. } | Print::Structure { .. }) | None => None,
+            })
+            .map(|(name, why)| {
                 let mut resting = BTreeSet::new();
                 let mut pending: Vec<&Hash> =
                     self.children.get(name).into_iter().flatten().collect();
@@ -530,10 +750,7 @@ impl HeldLines {
                 }
                 Excluded {
                     name: name.clone(),
-                    why: match self.prints.get(name) {
-                        Some(Print::Unread(why)) => Some(why.clone()),
-                        Some(Print::Line { .. } | Print::Structure { .. }) | None => None,
-                    },
+                    why,
                     resting,
                 }
             })
@@ -730,8 +947,29 @@ fn build(
         .filter(|key| erasers.contains_key(*key) || superseded.contains(*key))
         .cloned()
         .collect();
+    let leaves = leaves(keys, &lines, &conversation.leaves);
+    let name = memo::name(
+        format!("conversation {id}").as_bytes(),
+        leaves.values().map(|leaf| leaf.name()),
+    );
+    let node = Arc::new(Node::Conversation {
+        name,
+        id: id.clone(),
+        lines: leaves.values().cloned().collect(),
+    });
+    (node, dead, leaves)
+}
+
+/// Each of `lines`' leaf, reading its slots as one conversation holding exactly `lines` reads
+/// them, the leaf in `kept` wherever its slots read the same. Nothing is opened here.
+fn leaves(
+    keys: &KeyRing,
+    lines: &[HeldLine<'_>],
+    kept: &BTreeMap<Hash, Arc<Node>>,
+) -> BTreeMap<Hash, Arc<Node>> {
+    let erasers = transcript::erasers(lines.iter().map(|(name, line, _)| (*name, &***line)));
     let mut reseals: BTreeMap<KeyName, Vec<(Hash, Arc<LineEvent>)>> = BTreeMap::new();
-    for (name, line, _) in &lines {
+    for (name, line, _) in lines {
         if let LineShape::Resealed { of, .. } = line.shape() {
             reseals
                 .entry(of.clone())
@@ -750,16 +988,21 @@ fn build(
                 .position(|ranked| std::ptr::eq(*ranked, std::ptr::from_ref(&**line)))
         });
     }
-    let status = |key: &KeyName| match erasers.get(key) {
-        Some((by, erasure)) => Slot::Erased {
-            by: (*by).clone(),
-            erasure: (*erasure).clone(),
+    let status = |key: &KeyName| Slot {
+        standing: match erasers.get(key) {
+            Some((by, erasure)) => Standing::Erased {
+                by: (*by).clone(),
+                erasure: (*erasure).clone(),
+            },
+            None => Standing::Kept,
         },
-        None if superseded.contains(key) => Slot::Superseded,
-        None if keys.holds(key) => Slot::Held,
-        None => Slot::Missing,
+        key: if keys.holds(key) {
+            Key::Held
+        } else {
+            Key::Missing
+        },
     };
-    let leaves: BTreeMap<Hash, Arc<Node>> = lines
+    lines
         .iter()
         .map(|(name, line, parents)| {
             let own: BTreeMap<KeyName, Vec<(Hash, Arc<LineEvent>)>> = line
@@ -771,32 +1014,30 @@ fn build(
                 .chain(own.values().flatten().flat_map(|(_, reseal)| reseal.keys()))
                 .map(|key| (key.clone(), status(key)))
                 .collect();
-            let kept = conversation
-                .leaves
-                .get(*name)
-                .filter(|leaf| match &***leaf {
-                    Node::Line { leaf, .. } => {
-                        leaf.slots == slots && names(&leaf.reseals) == names(&own)
-                    }
-                    Node::Store { .. } | Node::Conversation { .. } => false,
-                });
-            let leaf = kept.map_or_else(
+            let same = kept.get(*name).filter(|leaf| match &***leaf {
+                Node::Line { leaf, .. } => {
+                    leaf.slots == slots && names(&leaf.reseals) == names(&own)
+                }
+                Node::Store { .. } | Node::Conversation { .. } | Node::Round { .. } => false,
+            });
+            let leaf = same.map_or_else(
                 || Arc::new(leaf(name, line, parents, slots, own)),
                 Arc::clone,
             );
             ((*name).clone(), leaf)
         })
-        .collect();
-    let name = memo::name(
-        format!("conversation {id}").as_bytes(),
-        leaves.values().map(|leaf| leaf.name()),
-    );
-    let node = Arc::new(Node::Conversation {
-        name,
-        id: id.clone(),
-        lines: leaves.values().cloned().collect(),
-    });
-    (node, dead, leaves)
+        .collect()
+}
+
+/// Whether leaf `node` may have opened a slot with one of `lost`.
+fn opened_with(node: &Node, lost: &BTreeSet<&KeyName>) -> bool {
+    match node {
+        Node::Line { leaf, .. } => leaf
+            .slots
+            .iter()
+            .any(|(key, slot)| slot.key == Key::Held && lost.contains(key)),
+        Node::Store { .. } | Node::Conversation { .. } | Node::Round { .. } => false,
+    }
 }
 
 /// The names of the reseals of a leaf's slots, by the key of the slot each seals.
@@ -1048,7 +1289,8 @@ mod tests {
         assert_eq!(crate::redact::scrubs(), scrubs);
     }
 
-    /// A key taken out takes what was opened with it out of the cache at once, before any reading.
+    /// A key taken out takes what was opened with it out of the cache at once, before any reading,
+    /// the rounds read on their own included.
     #[test]
     fn a_key_taken_out_leaves_no_words_it_opened() {
         let held = InMemory::default();
@@ -1063,6 +1305,15 @@ mod tests {
         let given = given(&held);
         lines.keys(&given, &[]);
         lines.hold(prints(&held), &[]);
+        let names: BTreeSet<Hash> = held
+            .lines
+            .objects()
+            .expect("objects")
+            .into_iter()
+            .filter(|(_, object)| object.event().is_some())
+            .map(|(name, _)| name)
+            .collect();
+        assert!(matches!(lines.round(&id, 0, &names), Held::Opened(_)));
         assert!(lines.read().0.is_ok());
         let says = |lines: &HeldLines| {
             lines

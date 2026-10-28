@@ -41,9 +41,10 @@ pub struct Objects<E: Schema> {
 type Door<E> = Box<dyn Fn(&E) -> Result<(), String> + Send + Sync>;
 
 /// What one head set's read produced.
-struct Remembered<E> {
+struct Remembered<E: Schema> {
     heads: Vec<Hash>,
-    objects: Vec<(Hash, Envelope<E>)>,
+    /// The objects as one graph, which a pull reads through and every reading of it is kept in.
+    graph: std::sync::Arc<suzatary_core::store::Graph<E>>,
     nodes: Vec<Node<E>>,
     /// What the read left out.
     excluded: std::collections::BTreeSet<Hash>,
@@ -178,7 +179,7 @@ impl<E: Store> Objects<E> {
             .collect();
         Ok(look(slot.insert(Remembered {
             heads,
-            objects,
+            graph: std::sync::Arc::new(suzatary_core::store::Graph::of(objects)),
             nodes,
             excluded: suzatary_core::store::left_out(&dag),
             verified: None,
@@ -196,7 +197,16 @@ impl WriteLock for durable::Held {}
 
 impl<E: Store> Reads<E> for Objects<E> {
     fn objects(&self) -> Result<Vec<(Hash, Envelope<E>)>, StoreError> {
-        self.with(|held| held.objects.clone())
+        self.with(|held| {
+            held.graph
+                .objects()
+                .map(|(name, object)| (name.clone(), object.clone()))
+                .collect()
+        })
+    }
+
+    fn graph(&self) -> Result<std::sync::Arc<suzatary_core::store::Graph<E>>, StoreError> {
+        self.with(|held| std::sync::Arc::clone(&held.graph))
     }
 
     fn nodes(&self) -> Result<Vec<Node<E>>, StoreError> {

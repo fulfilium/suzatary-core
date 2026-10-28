@@ -22,7 +22,7 @@ export namespace content {
     // How many answers may be out at once, asked as each goes out.
     readonly atOnce: () => number
     // Literals now held, handed to the reader once each; it settles once the reader has them.
-    readonly held: (rows: readonly Row[]) => Promise<void>
+    readonly held: (rows: readonly Admitted[]) => Promise<void>
     // Whether the page is shown: a prefetch sends nothing while it is not.
     readonly shown: () => boolean
   }
@@ -44,6 +44,13 @@ export namespace content {
   export const atOnce = (protocol: string): number => (protocol === "h2" || protocol === "h3" ? 4 : 1)
 
   export type Row = { readonly hash: string; readonly literal: string }
+
+  // A literal known to hash to its name: `admit` checked it, or the device's store held it, which keeps only what `admit`
+  // took. Only this module holds the symbol, so nothing else makes one, and a reader may hold it without hashing again.
+  const ADMITTED: unique symbol = Symbol("admitted")
+  export type Admitted = { readonly [ADMITTED]: Row }
+  const admitted = (r: Row): Admitted => ({ [ADMITTED]: r })
+  export const rowOf = (a: Admitted): Row => a[ADMITTED]
 
   const memory = new Set<string>()
   let moves = 0
@@ -82,20 +89,20 @@ export namespace content {
   }
 
   // An answer's literals, each checked against the name asked for in the same place; one that is not refuses the answer.
-  export const admit = async (asked: readonly string[], answer: ContentPayload): Promise<lo.Settled<readonly Row[]>> => {
+  export const admit = async (asked: readonly string[], answer: ContentPayload): Promise<lo.Settled<readonly Admitted[]>> => {
     if (answer.objects.length !== asked.length) return lo.error(`the box answered ${answer.objects.length} objects for ${asked.length} names`)
     const hashed = await Promise.all(answer.objects.map(o => sha256Hex(o.literal)))
     const wrong = asked.filter((name, i) => hashed[i] !== name || answer.objects[i]?.hash !== name)
-    return wrong.length > 0 ? lo.error(`the box's bytes for ${wrong.join(", ")} are not what those names hash to`) : lo.val(answer.objects.map(o => ({ hash: o.hash, literal: o.literal })))
+    return wrong.length > 0 ? lo.error(`the box's bytes for ${wrong.join(", ")} are not what those names hash to`) : lo.val(answer.objects.map(o => admitted({ hash: o.hash, literal: o.literal })))
   }
 
   // Rows handed to the reader in runs of at most `MOST_BYTES`, so no one message holds the thread long.
-  const take = async (fx: Effects, rows: readonly Row[]): Promise<void> => {
-    const fresh = rows.filter(r => !memory.has(r.hash))
+  const take = async (fx: Effects, rows: readonly Admitted[]): Promise<void> => {
+    const fresh = rows.filter(r => !memory.has(rowOf(r).hash))
     for (let at = 0; at < fresh.length; ) {
-      const run = batch(fresh.slice(at), r => r.literal.length)
+      const run = batch(fresh.slice(at), r => rowOf(r).literal.length)
       await fx.held(run)
-      for (const r of run) memory.add(r.hash)
+      for (const r of run) memory.add(rowOf(r).hash)
       at += run.length
     }
     if (fresh.length > 0) moves += 1
@@ -104,16 +111,16 @@ export namespace content {
   // What the device's store holds of `names`, read in one transaction over one opened database: the names alone for a
   // prefetch, whose rows the reader does not take; else the rows, every row of the range the names span where they are
   // most of its rows, else each by name. A store that does not open holds nothing.
-  const stored = async (lane: Lane, names: readonly string[]): Promise<{ readonly present: readonly string[]; readonly rows: readonly Row[] }> => {
+  const stored = async (lane: Lane, names: readonly string[]): Promise<{ readonly present: readonly string[]; readonly rows: readonly Admitted[] }> => {
     const sorted = [...names].sort()
     const [first, last] = [sorted[0], sorted[sorted.length - 1]]
     if (first === undefined || last === undefined || !idb.available()) return { present: [], rows: [] }
     const wanted = new Set(names)
     const range = IDBKeyRange.bound(first, last)
-    const rows = (keys: readonly IDBValidKey[], values: readonly unknown[]): Row[] =>
+    const rows = (keys: readonly IDBValidKey[], values: readonly unknown[]): Admitted[] =>
       keys.flatMap((k, i) => {
         const v = values[i]
-        return typeof k === "string" && wanted.has(k) && typeof v === "string" ? [{ hash: k, literal: v }] : []
+        return typeof k === "string" && wanted.has(k) && typeof v === "string" ? [admitted({ hash: k, literal: v })] : []
       })
     return idb
       .within(CONTENT, "readonly", async s => {
@@ -121,14 +128,14 @@ export namespace content {
         const present = keys.filter((k): k is string => typeof k === "string" && wanted.has(k))
         if (lane === "Ahead") return { present, rows: [] }
         const read = present.length * 2 >= keys.length ? rows(keys, await idb.done(s.getAll(range))) : rows(present, await Promise.all(present.map(k => idb.done(s.get(k)))))
-        return { present: read.map(r => r.hash), rows: read }
+        return { present: read.map(r => rowOf(r).hash), rows: read }
       })
       .catch(() => ({ present: [], rows: [] }))
   }
 
   // A prefetch's answer goes to the device's store alone, so the reader holds only what a reading loaded.
-  const keep = async (fx: Effects, lane: Lane, rows: readonly Row[]): Promise<void> => {
-    if (idb.available()) await idb.within(CONTENT, "readwrite", s => Promise.all(rows.map(r => idb.done(s.put(r.literal, r.hash)))))
+  const keep = async (fx: Effects, lane: Lane, rows: readonly Admitted[]): Promise<void> => {
+    if (idb.available()) await idb.within(CONTENT, "readwrite", s => Promise.all(rows.map(rowOf).map(r => idb.done(s.put(r.literal, r.hash)))))
     if (lane !== "Ahead") await take(fx, rows)
   }
 

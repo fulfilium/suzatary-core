@@ -15,8 +15,8 @@ export namespace locked {
   // A key's bytes in hex, by its name: the name is the bytes' SHA-256, so one name holds one key.
   export type Keys = Readonly<Record<string, string>>
   export type Row<O extends Obj = StoredObject> = { readonly replica: Replica<O>; readonly keys: Keys }
-  // The keys a replica's objects name as erased, as the core's worker reads them: monotone in the objects.
-  export type Dead<O extends Obj = StoredObject> = (r: Replica<O>) => Promise<ReadonlySet<string>>
+  // The keys a row names as dead, read from its objects and the keys it holds: monotone in both.
+  export type Dead<O extends Obj = StoredObject> = (r: Row<O>) => Promise<ReadonlySet<string>>
 
   export const NO_KEYS: Keys = {}
   export const none = <O extends Obj>(): Row<O> => ({ replica: empty<O>(), keys: NO_KEYS })
@@ -59,7 +59,7 @@ export namespace locked {
 
   // The keys the row holds that its objects name as erased.
   export const owed = async <O extends Obj>(dead: Dead<O>, r: Row<O>): Promise<string[]> => {
-    const gone = await dead(r.replica)
+    const gone = await dead(r)
     return gone.size === 0 ? [] : Object.keys(r.keys).filter(n => gone.has(n)).sort()
   }
 

@@ -401,6 +401,17 @@
             "unplaced": []
           },
           {
+            "id": "every-line",
+            "kind": "topic",
+            "last": "and the beans after that?",
+            "last_at": "2026-09-02T12:03:40",
+            "opened": "2026-09-02T12:03:20",
+            "standing": 0,
+            "title": "The garden, by week",
+            "turns": 8,
+            "unplaced": []
+          },
+          {
             "id": "about-the-deed",
             "kind": "topic",
             "last": "Nothing else today.",
@@ -4451,7 +4462,6 @@
     {
       "value": {
         "epoch": 1788350400,
-        "erased": [],
         "frontier": {
           "count": 2,
           "digest": "fce581e63251c4473d1c18665155a19696f33a5815b2aaa1f1157d61cf25cf60"
@@ -4459,9 +4469,12 @@
         "geneses": [
           "7b818ef0fdd17acb5a6c38b43fa0281f189cc0854dab58dcff68c681ce13ad38"
         ],
-        "heads": [
-          "b7fd815049fbab8c294486d5a5ae7b12262b5b87a8bd413ab4e3c0bcf6cb8921"
-        ],
+        "heads": {
+          "are": "these",
+          "heads": [
+            "b7fd815049fbab8c294486d5a5ae7b12262b5b87a8bd413ab4e3c0bcf6cb8921"
+          ]
+        },
         "keys": {
           "630dcd2966c4336691125448bbb25b4ff412a49c732db2c8abc1b8581bd710dd": "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f"
         },
@@ -4495,7 +4508,6 @@
             "size": 780
           }
         ],
-        "replaced": [],
         "rest": 0,
         "since": "Known",
         "size": 524,
@@ -4643,9 +4655,137 @@
             "title": "About the deed",
             "topics": [],
             "turn": 2
+          },
+          {
+            "answer": {
+              "at": "2026-09-02T12:03:22",
+              "attempt": "current",
+              "blocks": [
+                {
+                  "html": null,
+                  "kind": "prose",
+                  "plain": "The beans, in the second week.",
+                  "source": "The beans, in the second week."
+                }
+              ],
+              "gone": null,
+              "index": 1,
+              "text": "The beans, in the second week.",
+              "who": "model"
+            },
+            "conversation": "every-line",
+            "opening": {
+              "at": "2026-09-02T12:03:21",
+              "attachments": [],
+              "attempt": "current",
+              "gone": null,
+              "index": 0,
+              "queued": false,
+              "references": [],
+              "text": "what is planted first?",
+              "who": "person"
+            },
+            "room": 3,
+            "target": "round:every-line/0",
+            "title": "The garden, by week",
+            "topics": [],
+            "turn": 0
+          },
+          {
+            "answer": null,
+            "conversation": "every-line",
+            "opening": {
+              "at": "2026-09-02T12:03:24",
+              "attachments": [],
+              "attempt": "current",
+              "gone": null,
+              "index": 2,
+              "queued": false,
+              "references": [],
+              "text": "and the peas?",
+              "who": "person"
+            },
+            "room": 3,
+            "target": "round:every-line/2",
+            "title": "The garden, by week",
+            "topics": [],
+            "turn": 2
+          },
+          {
+            "answer": null,
+            "conversation": "every-line",
+            "opening": {
+              "at": "2026-09-02T12:03:25",
+              "attempt": "current",
+              "gone": null,
+              "index": 3,
+              "references": [],
+              "text": "Ada stopped the answer",
+              "who": "act"
+            },
+            "room": 3,
+            "target": "round:every-line/3",
+            "title": "The garden, by week",
+            "topics": [],
+            "turn": 3
+          },
+          {
+            "answer": {
+              "at": "2026-09-02T12:03:29",
+              "attempt": "current",
+              "blocks": [
+                {
+                  "html": null,
+                  "kind": "prose",
+                  "plain": "The peas, in the third week.",
+                  "source": "The peas, in the third week."
+                }
+              ],
+              "gone": null,
+              "index": 6,
+              "text": "The peas, in the third week.",
+              "who": "model"
+            },
+            "conversation": "every-line",
+            "opening": {
+              "at": "2026-09-02T12:03:26",
+              "attachments": [],
+              "attempt": "current",
+              "gone": null,
+              "index": 4,
+              "queued": false,
+              "references": [],
+              "text": "the peas, then?",
+              "who": "person"
+            },
+            "room": 3,
+            "target": "round:every-line/4",
+            "title": "The garden, by week",
+            "topics": [],
+            "turn": 4
+          },
+          {
+            "answer": null,
+            "conversation": "every-line",
+            "opening": {
+              "at": "2026-09-02T12:03:40",
+              "attachments": [],
+              "attempt": "current",
+              "gone": null,
+              "index": 7,
+              "queued": false,
+              "references": [],
+              "text": "and the beans after that?",
+              "who": "person"
+            },
+            "room": 3,
+            "target": "round:every-line/7",
+            "title": "The garden, by week",
+            "topics": [],
+            "turn": 7
           }
         ],
-        "total": 2
+        "total": 7
       },
       "maps": []
     }

@@ -545,6 +545,106 @@ impl Answers for Bundle {
 /// Two rounds and one proposal about [`CAST`]'s agent todo, so the vectors describe one scene.
 ///
 /// The proposal follows round one's two `Said` lines, which makes it round one's own.
+/// A conversation holding every kind of line a round reads or skips: a rename, a stop, a rewind
+/// and, once `resealed` runs, a turn sealed under older rules and sealed again.
+fn every_line() -> Vec<ConversationEntry> {
+    use suzatary_core::secretary::store::{Namer, Title};
+    use suzatary_core::secretary::words::Words;
+    let opened = later(now(), 200);
+    let owner = CAST.owner.actor.to_owned();
+    let person = |at: u32, text: &str| ConversationEntry::Said {
+        at: later(opened, at.into()),
+        turn: Turn::Person {
+            text: text.to_owned(),
+            references: Vec::new(),
+            attachments: Vec::new(),
+        },
+        by: Some(CAST.owner.actor.into()),
+    };
+    let model = |at: u32, text: &str| ConversationEntry::Said {
+        at: later(opened, at.into()),
+        turn: Turn::Model {
+            text: text.to_owned(),
+            calls: Vec::new(),
+        },
+        by: None,
+    };
+    vec![
+        ConversationEntry::Opened {
+            at: opened,
+            title: Words::kept("Every line".to_owned()),
+            model: "vectors-fixture".to_owned(),
+            kind: suzatary_core::secretary::store::Kind::Topic,
+        },
+        person(1, "what is planted first?"),
+        model(2, "The beans, in the second week."),
+        ConversationEntry::Titled {
+            at: later(opened, 3),
+            title: Words::kept(Title::new("The garden, by week").expect("a title")),
+            by: Namer::Person {
+                actor: owner.clone(),
+            },
+        },
+        person(4, "and the peas?"),
+        ConversationEntry::Stopped {
+            at: later(opened, 5),
+            by: owner.clone(),
+        },
+        person(6, "the peas, then?"),
+        model(7, "An answer set aside."),
+        ConversationEntry::Rewound {
+            to: 5,
+            at: later(opened, 8),
+            by: owner,
+        },
+        model(9, "The peas, in the third week."),
+    ]
+}
+
+/// One turn of conversation `id`, written under the rules from before lines recorded them, then
+/// every such slot sealed again as `migrate-scrub` does.
+fn resealed(bundle: &Bundle, id: &ConversationId) {
+    use suzatary_core::secretary::line_event::LineEvent;
+    use suzatary_core::secretary::scrubbed_under::ScrubbedUnder;
+    use suzatary_core::store::Doc as _;
+    let held = transcript::read(bundle.conversations.conversations(), id)
+        .expect("reads")
+        .lines()
+        .len();
+    let at = later(now(), 220);
+    let (line, keys) = LineEvent::written_under(
+        &ScrubbedUnder::Unversioned,
+        id.clone(),
+        Actor::new("assistant").expect("an actor"),
+        u32::try_from(held).expect("a count"),
+        &ConversationEntry::Said {
+            at,
+            turn: Turn::Person {
+                text: "and the beans after that?".to_owned(),
+                references: Vec::new(),
+                attachments: Vec::new(),
+            },
+            by: Some(CAST.owner.actor.into()),
+        },
+        &bundle.conversations.entropy,
+    )
+    .expect("a line");
+    for key in &keys {
+        bundle
+            .conversations
+            .keys
+            .set(&key.name(), key)
+            .expect("kept");
+    }
+    bundle.conversations.lines.append(line).expect("appended");
+    let resealed = suzatary_core::secretary::rescrub::reseal(
+        bundle.conversations.conversations(),
+        later(at, 1),
+    )
+    .expect("reseals");
+    assert!(resealed > 0, "the older turn is sealed again");
+}
+
 fn scripted_conversation(bundle: &Bundle, id: &ConversationId) -> Vec<ConversationEntry> {
     let opened = now();
     let asked = later(opened, 1);
@@ -1912,6 +2012,9 @@ fn the_answers_vector_holds_every_answer() {
     bundle.seed(&deed, &scripted_conversation(&bundle, &deed));
     let stages = ConversationId::new("every-stage").expect("a slug");
     bundle.seed(&stages, &every_stage(&bundle, &stages));
+    let lines = ConversationId::new("every-line").expect("a slug");
+    bundle.seed(&lines, &every_line());
+    resealed(&bundle, &lines);
     let deployment = deployment();
     let cards: Cards<'_> = Cards {
         deployment: &deployment,
@@ -2277,18 +2380,31 @@ fn the_answers_vector_holds_every_answer() {
     samples.add([proposals]);
     samples.add([readings::conversations(&listed, &inbox_fold)]);
     samples.add([readings::search(&listed, "deed").expect("a search")]);
-    let outlines: Vec<_> = listed
-        .iter()
-        .map(|stored| {
-            (
-                &stored.id,
-                Ok(suzatary_core::secretary::outline::of_stored(stored)),
-            )
-        })
-        .collect();
+    let objects = bundle
+        .conversations
+        .lines
+        .objects()
+        .expect("the lines read");
+    let opened = suzatary_core::secretary::transcript::opened(
+        &objects,
+        &bundle.conversations.conversations().slots(),
+    );
+    let mut skeleton = suzatary_core::secretary::outlines::Outlines::default();
+    skeleton.hold(
+        objects
+            .iter()
+            .map(|(name, object)| {
+                suzatary_core::secretary::outlines::Parsed::of(
+                    suzatary_core::routes::skeleton_node(name, object),
+                )
+                .expect("a node")
+            })
+            .collect(),
+        &[],
+    );
     samples.add([suzatary_core::secretary::stream::stream(
-        outlines.iter().map(|(id, outline)| (*id, outline)),
-        |id| listed.iter().find(|stored| stored.id == *id).map(Ok),
+        skeleton.outlines(),
+        suzatary_core::secretary::stream::every(&opened),
         &suzatary_core::secretary::topics::reading::Reading::default(),
         &std::collections::BTreeSet::new(),
         1,
@@ -2819,4 +2935,425 @@ fn a_stored_slot_is_under_the_rules_this_build_names() {
         Rules::current(()).as_str(),
         "a0d5cffe58839d79401ab650f475384a5eb7fbc064b46cfb3b7a3b25ac91f143"
     );
+}
+
+/// What a device held at the end of one scenario, and what the box keeps: the nodes of every
+/// skeleton answer it took, the name of every key those answers gave it, and the name of every
+/// key the box still holds. `linesync.retiredBy` over the nodes, given the keys the device holds,
+/// must leave the device the box's keys and no other (`web/test/retired.test.ts`).
+#[derive(Serialize)]
+struct Retirement {
+    name: &'static str,
+    nodes: Vec<wire::SkeletonNode>,
+    device: Vec<String>,
+    #[serde(rename = "box")]
+    kept: Vec<String>,
+}
+
+/// A device that pulls the lines' skeleton whole from the frontier its last answer named, and
+/// holds every node and key it was given.
+struct Device {
+    since: prodrome_core::store::frontier::Since,
+    nodes: BTreeMap<String, wire::SkeletonNode>,
+    keys: BTreeMap<String, String>,
+}
+
+impl Device {
+    fn pull(
+        &mut self,
+        lines: &suzatary_core::secretary::conversations::InMemory,
+        books: routes::Books<'_>,
+    ) {
+        let answer = routes::lines_skeleton(
+            lines.conversations(),
+            &self.since,
+            books,
+            now(),
+            routes::Cut::Whole,
+        )
+        .expect("the skeleton reads");
+        self.since = prodrome_core::store::frontier::Since::Frontier(
+            prodrome_core::store::frontier::Token::parse(&answer.frontier.digest).expect("a token"),
+        );
+        self.nodes.extend(
+            answer
+                .nodes
+                .into_iter()
+                .map(|node| (node.hash.clone(), node)),
+        );
+        self.keys.extend(answer.keys);
+    }
+}
+
+/// The conversation every retirement scenario writes to.
+fn keys_conversation() -> ConversationId {
+    ConversationId::new("2026-09-02-keys".to_owned()).expect("a slug")
+}
+
+/// The conversation opened and three turns, each sealed under `under`.
+fn three_turns(
+    under: &suzatary_core::secretary::scrubbed_under::ScrubbedUnder,
+) -> suzatary_core::secretary::conversations::InMemory {
+    use suzatary_core::secretary::line_event::LineEvent;
+    use suzatary_core::store::Doc as _;
+    let lines = suzatary_core::secretary::conversations::InMemory::default();
+    let opened = ConversationEntry::Opened {
+        at: now(),
+        title: suzatary_core::secretary::words::Words::kept("Keys".to_owned()),
+        model: "a-cli/small".to_owned(),
+        kind: suzatary_core::secretary::store::Kind::Topic,
+    };
+    let said = |n: i64| ConversationEntry::Said {
+        at: later(now(), n),
+        turn: Turn::Person {
+            text: format!("Question {n}"),
+            references: Vec::new(),
+            attachments: Vec::new(),
+        },
+        by: None,
+    };
+    for (held, entry) in [opened, said(1), said(2), said(3)].iter().enumerate() {
+        let held = u32::try_from(held).expect("a count");
+        let (line, keys) = LineEvent::written_under(
+            under,
+            keys_conversation(),
+            actor("assistant"),
+            held,
+            entry,
+            &lines.entropy,
+        )
+        .expect("a line");
+        for key in &keys {
+            lines.keys.set(&key.name(), key).expect("kept");
+        }
+        lines.lines.append(line).expect("appended");
+    }
+    lines
+}
+
+/// The words of the conversation's line `at` erased, and swept.
+fn erase_line(lines: &suzatary_core::secretary::conversations::InMemory, at: usize) {
+    let keys = transcript::read(lines.conversations(), &keys_conversation())
+        .expect("reads")
+        .lines()[at]
+        .line
+        .keys()
+        .cloned()
+        .collect();
+    transcript::erase(
+        lines.conversations(),
+        &keys_conversation(),
+        keys,
+        suzatary_core::secretary::erasure::Erasure::Asked {
+            by: actor(CAST.owner.actor),
+        },
+        later(now(), 60),
+    )
+    .expect("erased");
+    transcript::sweep(lines.conversations()).expect("swept");
+}
+
+/// `migrate-scrub` run on the box: every stale slot sealed again, and swept.
+fn migrate(lines: &suzatary_core::secretary::conversations::InMemory) {
+    let done = suzatary_core::secretary::rescrub::run(lines.conversations(), later(now(), 30))
+        .expect("migrated");
+    assert!(done.resealed > 0, "the stale slots are sealed again");
+}
+
+/// Every reseal sealed again from its own seal, as a change to the rules would, then swept.
+fn migrate_again(lines: &suzatary_core::secretary::conversations::InMemory) {
+    reseal_again(lines);
+    transcript::sweep(lines.conversations()).expect("swept");
+}
+
+/// Every reseal sealed again from its own seal, with no sweep after: both reseals' keys held.
+fn reseal_again(lines: &suzatary_core::secretary::conversations::InMemory) {
+    use suzatary_core::secretary::line_event::LineEvent;
+    use suzatary_core::secretary::line_shape::LineShape;
+    use suzatary_core::secretary::line_words::LineWords;
+    use suzatary_core::secretary::locked_text::KeyName;
+    use suzatary_core::store::Doc as _;
+    let read = transcript::read(lines.conversations(), &keys_conversation()).expect("reads");
+    // Each slot's words as a reader reads them, by the key of the slot as first written.
+    let words: BTreeMap<KeyName, LineWords> = read
+        .lines()
+        .iter()
+        .filter(|written| !matches!(written.line.shape(), LineShape::Resealed { .. }))
+        .flat_map(|written| {
+            let words = suzatary_core::secretary::line_shape::split(&written.entry)
+                .1
+                .expect("words");
+            written.line.keys().cloned().zip(words).collect::<Vec<_>>()
+        })
+        .collect();
+    let objects = lines.lines.objects().expect("reads");
+    let mut held = u32::try_from(objects.len()).expect("a count");
+    for (_, object) in &objects {
+        let Some(line) = object.event() else { continue };
+        let LineShape::Resealed { of, .. } = line.shape() else {
+            continue;
+        };
+        let own = line.keys().next().expect("a reseal's key").clone();
+        let (reseal, key) = LineEvent::reseal(
+            keys_conversation(),
+            later(now(), 90),
+            actor("assistant"),
+            held,
+            of.clone(),
+            own,
+            &words[of],
+            &lines.entropy,
+        )
+        .expect("a reseal");
+        lines.keys.set(&key.name(), &key).expect("kept");
+        lines.lines.append(reseal).expect("appended");
+        held += 1;
+    }
+}
+
+/// What a device does after a step of the box: pulls from where it stands, or starts over, as
+/// one does when a later epoch replaces its row, and pulls from nothing.
+#[derive(Clone, Copy)]
+enum Then {
+    Pull,
+    StartOver,
+}
+
+/// One step of a scenario, and what the device does after it.
+type Step<'a> = (
+    &'a dyn Fn(&suzatary_core::secretary::conversations::InMemory),
+    Then,
+);
+
+/// A device holding nothing of the lines.
+fn fresh() -> Device {
+    Device {
+        since: prodrome_core::store::frontier::Since::Nothing,
+        nodes: BTreeMap::new(),
+        keys: BTreeMap::new(),
+    }
+}
+
+/// The box restored from a copy taken before the migration: the lines keep every reseal, and the
+/// keys are the copy's, so each first seal is back and no reseal's own key is held.
+fn restore_keys_from_before(
+    lines: &suzatary_core::secretary::conversations::InMemory,
+    before: &[(
+        suzatary_core::secretary::locked_text::KeyName,
+        suzatary_core::secretary::locked_text::TextKey,
+    )],
+) {
+    use suzatary_core::store::Doc as _;
+    for name in lines.keys.names() {
+        lines.keys.remove(&name).expect("removed");
+    }
+    for (name, key) in before {
+        lines.keys.set(name, key).expect("kept");
+    }
+}
+
+/// Every key the box holds, with its bytes.
+fn held_keys(
+    lines: &suzatary_core::secretary::conversations::InMemory,
+) -> Vec<(
+    suzatary_core::secretary::locked_text::KeyName,
+    suzatary_core::secretary::locked_text::TextKey,
+)> {
+    use suzatary_core::store::Doc as _;
+    lines
+        .keys
+        .names()
+        .into_iter()
+        .map(|name| {
+            let key = lines.keys.get(&name).expect("reads").expect("held");
+            (name, key)
+        })
+        .collect()
+}
+
+/// An erasure that names a reseal's own key and not its slot's first key, which `erase` refuses:
+/// it would leave the first seal open on a device that never held the reseal's key.
+fn erase_a_reseal_s_key(lines: &suzatary_core::secretary::conversations::InMemory) {
+    use suzatary_core::secretary::line_shape::LineShape;
+    let objects = lines.lines.objects().expect("reads");
+    let own = objects
+        .iter()
+        .filter_map(|(_, object)| object.event())
+        .find(|line| matches!(line.shape(), LineShape::Resealed { .. }))
+        .and_then(|line| line.keys().next().cloned())
+        .expect("a reseal");
+    let refused = transcript::erase(
+        lines.conversations(),
+        &keys_conversation(),
+        [own].into(),
+        suzatary_core::secretary::erasure::Erasure::Asked {
+            by: actor(CAST.owner.actor),
+        },
+        later(now(), 60),
+    );
+    assert!(
+        refused.is_err(),
+        "an erasure of a reseal's own key is refused"
+    );
+}
+
+/// What a device that pulls once before `steps`, and after each as it says, holds, and what the
+/// box keeps; checked first by the box's own rule, given the keys the device holds.
+fn converged(
+    name: &'static str,
+    lines: &suzatary_core::secretary::conversations::InMemory,
+    steps: &[Step<'_>],
+) -> Retirement {
+    use suzatary_core::secretary::locked_text::KeyName;
+    let (epochs, frontiers) = (
+        suzatary_core::epoch::Epochs::remembered(),
+        prodrome_core::store::frontier::Frontiers::remembered(prodrome_core::store::frontier::KEPT),
+    );
+    let books = routes::Books {
+        epochs: &epochs,
+        frontiers: &frontiers,
+    };
+    let mut device = fresh();
+    device.pull(lines, books);
+    for (step, then) in steps {
+        step(lines);
+        match then {
+            Then::Pull => {}
+            Then::StartOver => device = fresh(),
+        }
+        device.pull(lines, books);
+    }
+    let kept: Vec<String> = lines
+        .keys
+        .names()
+        .iter()
+        .map(|name| name.as_str().to_owned())
+        .collect();
+    let ring = suzatary_core::secretary::key_ring::KeyRing::of(
+        &device
+            .keys
+            .iter()
+            .map(|(name, hex)| (KeyName::new(name.clone()).expect("a key name"), hex.clone()))
+            .collect(),
+    );
+    let objects = lines.lines.objects().expect("reads");
+    let dead: std::collections::BTreeSet<String> = transcript::dead(
+        objects
+            .iter()
+            .filter_map(|(name, object)| Some((name, object.event()?))),
+        &|name: &KeyName| ring.key(name),
+    )
+    .into_iter()
+    .map(|(_, _, key)| key.as_str().to_owned())
+    .collect();
+    let left: Vec<String> = device
+        .keys
+        .keys()
+        .filter(|name| !dead.contains(*name))
+        .cloned()
+        .collect();
+    assert_eq!(left, kept, "{name}: the device converges on the box's keys");
+    Retirement {
+        name,
+        nodes: device.nodes.into_values().collect(),
+        device: device.keys.into_keys().collect(),
+        kept,
+    }
+}
+
+/// Every scenario the device's key hygiene must converge through: an erasure, a migration while
+/// the device was away, two migrations whose first reseals the device took in an earlier pull,
+/// two while it was away, so it never held the first reseals' keys and finds the first seals
+/// dead only through the second reseals, an erasure of a slot sealed again, the box restored
+/// with its reseals and without their keys while the device starts over, so each first seal is
+/// live again, and an erasure of a reseal's own key, which the box refuses.
+#[test]
+fn the_retired_vector_is_every_way_a_key_dies() {
+    use suzatary_core::secretary::scrubbed_under::ScrubbedUnder;
+    let (current, unversioned) = (ScrubbedUnder::current(()), ScrubbedUnder::Unversioned);
+    let migrate_twice = |lines: &suzatary_core::secretary::conversations::InMemory| {
+        migrate(lines);
+        migrate_again(lines);
+    };
+    let restored = three_turns(&unversioned);
+    let before = held_keys(&restored);
+    let restore = |lines: &suzatary_core::secretary::conversations::InMemory| {
+        restore_keys_from_before(lines, &before);
+    };
+    let vector = vec![
+        converged(
+            "an erasure",
+            &three_turns(&current),
+            &[(&|l| erase_line(l, 2), Then::Pull)],
+        ),
+        converged(
+            "a migration while the device was away",
+            &three_turns(&unversioned),
+            &[(&migrate, Then::Pull)],
+        ),
+        converged(
+            "two migrations, the first one's reseals taken in an earlier pull",
+            &three_turns(&unversioned),
+            &[(&migrate, Then::Pull), (&migrate_again, Then::Pull)],
+        ),
+        converged(
+            "two migrations while the device was away",
+            &three_turns(&unversioned),
+            &[(&migrate_twice, Then::Pull)],
+        ),
+        converged(
+            "an erasure of a slot sealed again",
+            &three_turns(&unversioned),
+            &[(&migrate, Then::Pull), (&|l| erase_line(l, 1), Then::Pull)],
+        ),
+        converged(
+            "the box restored without the reseals' keys, the device starting over",
+            &restored,
+            &[(&migrate, Then::Pull), (&restore, Then::StartOver)],
+        ),
+        converged(
+            "an erasure naming a reseal's own key, refused",
+            &three_turns(&unversioned),
+            &[(&migrate, Then::Pull), (&erase_a_reseal_s_key, Then::Pull)],
+        ),
+    ];
+    write_or_check(&vector, "retired.json");
+}
+
+/// A slot sealed again twice, before the sweep, while both reseals' keys are held: it reads from
+/// the second reseal, the newest, and the reseal it was sealed again from comes after it.
+#[test]
+fn a_slot_resealed_twice_reads_its_newest_reseal() {
+    use suzatary_core::secretary::line_shape::LineShape;
+    use suzatary_core::secretary::scrubbed_under::ScrubbedUnder;
+    use suzatary_core::store::Doc as _;
+    let lines = three_turns(&ScrubbedUnder::Unversioned);
+    migrate(&lines);
+    reseal_again(&lines);
+    let objects = lines.lines.objects().expect("reads");
+    let all: Vec<_> = objects
+        .iter()
+        .filter_map(|(name, object)| Some((name, object.event()?)))
+        .collect();
+    let ordered = transcript::reseals(all.iter().copied());
+    assert!(!ordered.is_empty());
+    for seals in ordered.values() {
+        let [newest, older] = seals.as_slice() else {
+            panic!("two reseals of each slot, got {}", seals.len());
+        };
+        let LineShape::Resealed { from, .. } = newest.shape() else {
+            panic!("a reseal");
+        };
+        assert_eq!(
+            Some(from),
+            older.keys().next(),
+            "the newest is sealed again from the older"
+        );
+        for key in [newest, older].iter().filter_map(|seal| seal.keys().next()) {
+            assert!(
+                lines.keys.get(key).expect("reads").is_some(),
+                "both reseals' keys are held"
+            );
+        }
+    }
 }

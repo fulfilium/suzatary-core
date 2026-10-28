@@ -59,7 +59,7 @@ const over = <A>(r: Replica, keys: locked.Keys, ask: (lines: Lines) => A): A => 
     lines.free()
   }
 }
-const dead: locked.Dead = r => Promise.resolve(new Set(over(r, locked.NO_KEYS, deadOf)))
+const dead: locked.Dead = r => Promise.resolve(new Set(over(r.replica, locked.NO_KEYS, deadOf)))
 
 const replicaOf = (objects: readonly StoredObject[]): Replica =>
   pulled(NOTHING, { objects: [...objects], heads: headsOf([...objects]), untrusted: [], root: null, geneses: held(objects), epoch: 1, ...KNOWN }, 1)

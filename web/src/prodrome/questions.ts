@@ -404,10 +404,10 @@ export namespace questions {
           return own
         case "AnswerKeys":
           return q.sources.map(source => core.answer_key(source))
-        // The rounds are chosen by the skeleton's outlines, and only the lines of the conversations they are in are read.
+        // The rounds are chosen by the skeleton's outlines, and only the lines whose words they read are read.
         case "Stream":
           return scoped(
-            () => ({ type: "Conversations", ids: chosenOf(held, stores.topics().reading, q.chosen, q.pages) }),
+            () => ({ type: "Objects", names: chosenOf(held, stores.topics().reading, q.chosen, q.pages) }),
             () => {
               const read = stores.topics()
               const stream = streamOf(held, read.reading, q.chosen, q.pages)

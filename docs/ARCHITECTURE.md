@@ -659,7 +659,12 @@ and is owed, so whichever tab reads it, from a pull or from the row another
 tab left, forgets the blocks its words rendered and then drops it, by the
 box's own reading of which slots are dead (`transcript::{dead, fed}`, the
 module's `Conversations.erased`), a forget that fails keeping the key until
-one succeeds. Its plaintext row of the old store is deleted once
+one succeeds. Which keys are dead the tab reads from the nodes it holds:
+each node's step says what its line retires (`Step::Erased`, `Step::Resealed`), and
+`linesync.retiredBy` applies the box's rule to them (`transcript::erased`,
+and `transcript::superseded`, which follows a reseal of a reseal), so no
+answer carries a list of dead keys and a tab converges on the box's keys
+whichever pulls it heard the erasures and reseals in. Its plaintext row of the old store is deleted once
 the lines' row holds objects, its rendered blocks cleared first.
 
 *(4b) TOPICS* (`docs/TOPICS-PLAN-2026-10-21.md`, `secretary::topics`). Two
@@ -1615,9 +1620,16 @@ rules and points here for the modules. The web contract is `docs/WEB-SPEC.md`.
   a search every line, and no reading is made until every line it reads is
   held (`lines.need`). Each line's node carries its step
   (`secretary::step::Step`, the box's reading of its shape), so the core
-  folds each conversation's outline, the openings of its rounds, from the
-  skeleton alone (`secretary::outlines`); the stream chooses and counts its
-  rounds by the outlines and reads only the conversations it draws. The todo chains are not held
+  folds each conversation's outline, the openings of its rounds and the
+  lines that hold each round's words, from the skeleton alone
+  (`secretary::outlines`); the stream chooses and counts its rounds by the
+  outlines and reads only the lines of the rounds it draws, each round's
+  reading memoised by its lines' leaves (`HeldLines::round`). The box
+  answers every pull through the store's graph (`Reads::graph`,
+  `store::Graph`), which the store keeps in its memo by its heads beside every
+  reading of it, so a pull that lacks nothing walks nothing, reads
+  no object and is sent no node, no key and not the heads it already holds
+  (`wire::Heads::Held`). The todo chains are not held
   here: the Inbox prices through the replicas the chain pages read
   (`sync.heldChains`, 2026-10-04: the open chain from memory, unsent acts
   included, every other served chain from its row on this device joined with

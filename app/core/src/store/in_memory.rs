@@ -12,6 +12,8 @@ use super::{InMemoryHold, Prodrome, Reads, Store, StoreError, WriteLock};
 pub struct InMemory<E: Schema> {
     store: MemoryStore<E>,
     hold: InMemoryHold,
+    /// The graph at the heads it was read at, as a store on disk keeps it.
+    graph: std::sync::Mutex<Option<std::sync::Arc<super::Graph<E>>>>,
 }
 
 impl<E: Store<Vocabulary: Default>> Default for InMemory<E> {
@@ -19,6 +21,7 @@ impl<E: Store<Vocabulary: Default>> Default for InMemory<E> {
         Self {
             store: MemoryStore::default(),
             hold: InMemoryHold::of(E::HOLD),
+            graph: std::sync::Mutex::default(),
         }
     }
 }
@@ -31,6 +34,7 @@ impl<E: Store> InMemory<E> {
         Self {
             store: MemoryStore::at(schema),
             hold: InMemoryHold::of(E::HOLD),
+            graph: std::sync::Mutex::default(),
         }
     }
 
@@ -65,6 +69,20 @@ impl<E: Store> Reads<E> for InMemory<E> {
                 (name, object)
             })
             .collect())
+    }
+
+    fn graph(&self) -> Result<std::sync::Arc<super::Graph<E>>, StoreError> {
+        let heads: std::collections::BTreeSet<Hash> = self.tips()?.into_iter().collect();
+        let mut kept = self
+            .graph
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        if let Some(graph) = kept.as_ref().filter(|graph| graph.heads() == &heads) {
+            return Ok(std::sync::Arc::clone(graph));
+        }
+        let graph = std::sync::Arc::new(super::Graph::of(self.objects()?));
+        *kept = Some(std::sync::Arc::clone(&graph));
+        Ok(graph)
     }
 
     fn excluded(&self) -> Result<std::collections::BTreeSet<Hash>, StoreError> {

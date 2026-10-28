@@ -226,6 +226,30 @@ pub enum Entry {
 }
 
 impl Entry {
+    /// The title this line gives its conversation: an opening's, or a naming's, which the last
+    /// naming in order replaces; `None` for a line that names nothing.
+    #[must_use]
+    pub fn title(&self) -> Option<Words<String>> {
+        match self {
+            Entry::Opened { title, .. } => Some(title.clone()),
+            Entry::Titled { title, .. } => Some(named(title)),
+            Entry::Said { .. }
+            | Entry::Proposed { .. }
+            | Entry::Reviewed { .. }
+            | Entry::ReviewFailed { .. }
+            | Entry::Stopped { .. }
+            | Entry::Rewound { .. }
+            | Entry::MemorySeen { .. }
+            | Entry::Session { .. }
+            | Entry::Kept { .. }
+            | Entry::Unheard { .. }
+            | Entry::Scoped { .. }
+            | Entry::Coding { .. }
+            | Entry::Erased { .. }
+            | Entry::Resealed { .. } => None,
+        }
+    }
+
     /// When it was written: every line carries an instant.
     #[must_use]
     pub fn at(&self) -> Datetime {
@@ -274,4 +298,9 @@ pub fn stamp(at: Datetime) -> String {
 /// An instant as [`stamp`] prints it, for [`Entry`]'s print.
 fn stamped<S: serde::Serializer>(at: &Datetime, to: S) -> Result<S::Ok, S::Error> {
     to.serialize_str(&stamp(*at))
+}
+
+/// A naming's title, as the conversation holds it.
+pub(super) fn named(title: &Words<Title>) -> Words<String> {
+    title.clone().map(String::from)
 }

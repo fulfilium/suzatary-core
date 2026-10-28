@@ -958,14 +958,28 @@ pub enum NodeHeader {
     },
 }
 
+/// A store's heads as a pull answers them.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]
+#[serde(tag = "are", rename_all = "lowercase")]
+pub enum Heads {
+    /// The heads the asker's `since` names, which it holds, so they are not sent again.
+    Held,
+    /// These heads.
+    These {
+        /// Sorted.
+        heads: Vec<String>,
+    },
+}
+
 /// `GET /api/stores/lines/skeleton?since=<heads>`: the lines a replica holding those heads lacks,
 /// each without its literal, parents first, cut like a piece of the objects' pull, with the same
-/// heads, prodromes, epoch, keys and erasures that pull answers. Joined to the literals fetched by
-/// hash, the pieces of a skeleton are what the objects' pull sends.
+/// heads, prodromes, epoch and keys that pull answers. Joined to the literals fetched by hash, the
+/// pieces of a skeleton are what the objects' pull sends. It names no erased or replaced key: each
+/// node's step says what its line retires, so a replica reads both from the nodes it holds.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]
 pub struct SkeletonPayload {
-    /// Every head, sorted.
-    pub heads: Vec<String>,
+    /// Every head.
+    pub heads: Heads,
     /// The genesis of every prodrome the store holds, sorted.
     pub geneses: Vec<String>,
     /// The box's clock over what the store serves, the one the objects' pull answers with.
@@ -988,12 +1002,6 @@ pub struct SkeletonPayload {
     /// The bytes of the nodes this piece sends, by the same weight, so `size` less this is what
     /// is left.
     pub weight: usize,
-    /// The name of every key an erasure anywhere in the store names, sorted.
-    pub erased: Vec<String>,
-    /// The name of every key a reseal that opens on the box supersedes, anywhere in the store,
-    /// sorted: its words are read from the reseal, so a replica drops the key with no block to
-    /// forget, as the box's sweep destroys it.
-    pub replaced: Vec<String>,
 }
 
 /// `POST /api/objects`: literals only; a name is what the bytes are.

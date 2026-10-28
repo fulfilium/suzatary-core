@@ -70,7 +70,7 @@ mod tests {
         let seen = Seen {
             geneses: one(&["a"]),
             heads: one(&["x"]),
-            held: one(&["x"]),
+            held: std::sync::Arc::new(one(&["x"])),
         };
         let first = open(dir.clone())
             .served("store/inbox", now, || Ok((seen.clone(), ())))
@@ -84,7 +84,7 @@ mod tests {
             first
         );
         let back = Seen {
-            held: BTreeSet::new(),
+            held: std::sync::Arc::default(),
             heads: BTreeSet::new(),
             ..seen.clone()
         };

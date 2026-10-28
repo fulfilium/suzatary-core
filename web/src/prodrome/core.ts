@@ -22,6 +22,7 @@ import once from "../algebra/once";
 import register from "../algebra/register";
 import d from "../wire/decoder";
 import payload from "../wire/generated/payload";
+import content from "./content";
 import excluded from "./excluded";
 import heads from "./heads";
 import type { Replica } from "./replica";
@@ -173,6 +174,8 @@ export function chainsOf(core: Core, held: readonly HeldChain[]): Chains {
  */
 export interface Lines {
   hold: (add: string, drop: string) => void;
+  /** `hold` of literals the content's admission checked against their names, so none is hashed again. */
+  hold_admitted: (add: string, drop: string) => void;
   /** The skeleton's nodes `add`, as the box sent them, held, and the names `drop` let go. */
   nodes: (add: string, drop: string) => void;
   keys: (add: string, drop: string) => void;
@@ -186,7 +189,7 @@ export interface Lines {
     memory: string | undefined,
   ) => string;
   search: (q: string) => string;
-  /** `[<id>, …]`: the conversations whose rounds the newest `pages` pages of the stream draw, by the skeleton alone. */
+  /** `[<name>, …]`: every line whose words the newest `pages` pages of the stream read, by the skeleton alone. */
   chosen: (topics: TopicReading, chosen: string, pages: number) => string;
   /** The newest `pages` pages of every conversation's rounds carrying each topic of `chosen`, a JSON array. */
   stream: (topics: TopicReading, chosen: string, pages: number) => string;
@@ -655,3 +658,8 @@ export const erasedOf = (lines: Lines, keys: Readonly<Record<string, string>>, t
   checked("erased", lines.erased(JSON.stringify(keys), JSON.stringify(told)), Erased);
 
 export const deadOf = (lines: Lines): readonly string[] => checked("dead", lines.dead(), arr(str));
+
+/** Literals the content's admission checked, held without hashing them again: the one caller of `hold_admitted`
+ * (`scripts/web-static.sh`), so only an admitted row reaches the path that does not hash. */
+export const holdAdmitted = (lines: Lines, rows: readonly content.Admitted[]): void =>
+  lines.hold_admitted(objectsOf(rows.map(content.rowOf)), "[]");

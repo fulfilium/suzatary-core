@@ -7,7 +7,9 @@
  * the tab opens it again, hearing of the reseals in one pull.
  *
  * After that load the device holds the box's keys and no other: its own sweep destroyed each key a reseal replaced,
- * once the content that names the reseals was held. A last warm load then scrubs nothing in the core's worker, which
+ * which it reads from the reseals' nodes. A device that took the reseals in an earlier pull and still holds a key they
+ * replaced, as one whose purge was cut short does, drops it again on its next load, from the nodes it holds, while the
+ * pull it makes lacks nothing and brings no key's name. A last warm load then scrubs nothing in the core's worker, which
  * the warm load before the migration did, and draws the stream within `DRAW_MS`. The count is the core module's own
  * (`scrubs`), read in the worker's scope from the module the worker loaded, so it holds whatever the fixture's size.
  *
@@ -48,6 +50,48 @@ const DEVICE_KEYS = `new Promise((done, failed) => {
   }
 })`
 
+// Every key row of the device's lines, as [name, bytes].
+const KEY_ROWS = `new Promise((done, failed) => {
+  const r = indexedDB.open("suzatary")
+  r.onerror = () => failed(r.error)
+  r.onsuccess = () => {
+    const store = r.result.transaction("lines").objectStore("lines")
+    const range = IDBKeyRange.bound("key/", "key/\\uffff")
+    const keys = store.getAllKeys(range)
+    const values = store.getAll(range)
+    values.onerror = () => failed(values.error)
+    values.onsuccess = () => { r.result.close(); done(keys.result.map((k, i) => [k.slice(4), values.result[i]])) }
+  }
+})`
+
+// The key row `name` holding `bytes` written on the device again.
+const plant = (name: string, bytes: unknown): string => `new Promise((done, failed) => {
+  const r = indexedDB.open("suzatary")
+  r.onerror = () => failed(r.error)
+  r.onsuccess = () => {
+    const tx = r.result.transaction("lines", "readwrite")
+    tx.objectStore("lines").put(${JSON.stringify(bytes)}, ${JSON.stringify(`key/${name}`)})
+    tx.oncomplete = () => { r.result.close(); done(true) }
+    tx.onerror = () => failed(tx.error)
+  }
+})`
+
+// The skeleton the box answers to the frontier the device's lines stand at.
+const KNOWN_PULL = `new Promise((done, failed) => {
+  const r = indexedDB.open("suzatary")
+  r.onerror = () => failed(r.error)
+  r.onsuccess = () => {
+    const head = r.result.transaction("lines").objectStore("lines").get("head")
+    head.onerror = () => failed(head.error)
+    head.onsuccess = () => {
+      r.result.close()
+      fetch("/api/stores/lines/skeleton?since=" + head.result.frontier.digest)
+        .then((a) => a.text())
+        .then((text) => done({ bytes: text.length, answer: JSON.parse(text) }))
+    }
+  }
+})`
+
 // The names of the keys the box keeps, one file each beside its lines.
 const boxKeys = (): string[] => readdirSync(join(dirname(INSTANCE), "secretary-lines-keys")).sort()
 
@@ -75,6 +119,7 @@ app.scene("after migrate-scrub the device holds the box's keys and a warm load s
     await app.page.navigate(`${BASE}/#/secretary`)
     await app.page.waitFor(BULK, { timeout: 600000 })
     const stale = await load()
+    const held = new Map(await app.page.evaluate<[string, unknown][]>(KEY_ROWS))
     // The tab is closed while the box runs the migration, so it hears of the reseals in one pull when it opens again.
     await app.page.navigate("about:blank")
     const before = boxKeys()
@@ -94,6 +139,23 @@ app.scene("after migrate-scrub the device holds the box's keys and a warm load s
     }
     assert.deepEqual(device, after, "the device holds the box's keys and no other")
     const converged = Date.now() - swept
+    // A key the reseals replaced, held again by a device that took them in an earlier pull.
+    const replaced = before.find((k) => !after.includes(k) && held.has(k))
+    assert.ok(replaced !== undefined, "a key the device held was replaced")
+    await app.page.evaluate<boolean>(plant(replaced, held.get(replaced)))
+    await app.page.reload()
+    await app.page.waitFor(BULK, { timeout: 600000 })
+    const again = Date.now() + 600000
+    device = await app.page.evaluate<string[]>(DEVICE_KEYS)
+    while (JSON.stringify(device) !== JSON.stringify(after) && Date.now() < again) {
+      await new Promise((done) => setTimeout(done, 500))
+      device = await app.page.evaluate<string[]>(DEVICE_KEYS)
+    }
+    assert.deepEqual(device, after, "the device drops the replaced key again, from the nodes it holds")
+    const known = await app.page.evaluate<{ bytes: number; answer: { nodes: unknown[]; keys: Record<string, string>; since: string } }>(KNOWN_PULL)
+    assert.equal(known.answer.since, "Known")
+    assert.deepEqual([known.answer.nodes.length, Object.keys(known.answer.keys).length], [0, 0], "a pull that lacks nothing brings no node and no key")
+    assert.ok(known.bytes < 1024, `a pull that lacks nothing is ${known.bytes} bytes`)
     const warm = await load()
     const measured = { lines: Number(process.env["SUZATARY_E2E_RESCRUB_LINES"] ?? "1500"), rate: RATE, stale, resealed, converged, warm }
     console.log(JSON.stringify(measured))

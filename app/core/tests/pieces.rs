@@ -360,7 +360,7 @@ proptest! {
     /// moves, and then each node's literal asked for by hash, rebuild what the objects' pull
     /// sends: each piece holds with what came before everything it rests on, as its parents say,
     /// and each node's parents and size are its literal's; the heads, prodromes and epoch are the
-    /// pull's; the keys and the erasures are the pull's, no erased key among them. Where nothing
+    /// pull's; the keys are the pull's, no erased key among them. Where nothing
     /// moved, the objects come in the pull's own order, literal for literal.
     #[test]
     fn law_the_skeleton_and_the_content_by_hash_are_the_whole_pull(
@@ -393,8 +393,10 @@ proptest! {
                 }
                 prop_assert!(held.insert(Hash::new(node.hash.clone()).expect("a name")), "{} sent again", node.hash);
             }
+            let objects = store.lines.lines.objects().expect("reads");
+            let erased = transcript::erased(&objects);
             for name in piece.keys.keys() {
-                prop_assert!(!piece.erased.contains(name), "the erased key {} was sent", name);
+                prop_assert!(!erased.keys().any(|key| key.as_str() == name), "the erased key {} was sent", name);
             }
             prop_assert_eq!(piece.frontier.count, held.len(), "the frontier is what the replica holds");
             since_now = Since::Frontier(Token::parse(&piece.frontier.digest).expect("a digest"));
@@ -411,10 +413,12 @@ proptest! {
             prop_assert!(asked <= first.len() + moves.len() * 4 + 1, "the pull ends");
         };
         let whole = routes::lines_since(store.lines.conversations(), &since, books, now(), Cut::Whole).expect("the whole");
-        prop_assert_eq!(&last.heads, &whole.objects.heads);
+        match &last.heads {
+            suzatary_core::wire::Heads::These { heads } => prop_assert_eq!(heads, &whole.objects.heads),
+            suzatary_core::wire::Heads::Held => prop_assert!(last.nodes.is_empty(), "the heads go unsaid only to a replica that lacks nothing"),
+        }
         prop_assert_eq!(&last.geneses, &whole.objects.geneses);
         prop_assert_eq!(last.epoch, whole.objects.epoch);
-        prop_assert_eq!(&last.erased, &whole.erased);
         let sizes: BTreeMap<String, usize> = nodes.iter().map(|node| (node.hash.clone(), node.size)).collect();
         let literals = fetched(&store.lines.lines, &sizes);
         let objects = store.lines.lines.objects().expect("reads");

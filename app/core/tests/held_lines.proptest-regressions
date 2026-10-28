@@ -1,0 +1,7 @@
+# Seeds for failure cases proptest has generated in the past. It is
+# automatically read and these particular cases re-run before any
+# novel cases are generated.
+#
+# It is recommended to check this file in to source control so that
+# everyone who runs the test benefits from these saved cases.
+cc d14964e74fc3d1bca227f538208b7044e763d6e85236cf530f25e1b4910df6f4 # shrinks to script = [Said { conversation: 0, model: false, echoes: false }, Said { conversation: 1, model: false, echoes: true }], stale = [1, 0], swept = false, after = [Erase { conversation: 0, lines: [Index(13835058055282163712)] }], pages = 1

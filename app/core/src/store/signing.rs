@@ -84,6 +84,10 @@ impl<E: Schema, S: Reads<E>> Reads<E> for Signing<S> {
         self.store.objects()
     }
 
+    fn graph(&self) -> Result<std::sync::Arc<super::Graph<E>>, StoreError> {
+        self.store.graph()
+    }
+
     fn nodes(&self) -> Result<Vec<Node<E>>, StoreError> {
         self.store.nodes()
     }

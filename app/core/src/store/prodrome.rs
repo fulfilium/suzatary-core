@@ -73,6 +73,15 @@ pub trait Reads<E: Schema>: Sync {
     /// [`StoreError::Unreadable`].
     fn objects(&self) -> Result<Vec<(Hash, Envelope<E>)>, StoreError>;
 
+    /// The objects as one graph, which a store that memoises keeps by its heads, so a reader at
+    /// heads already read reads no object.
+    ///
+    /// # Errors
+    /// [`StoreError::Unreadable`].
+    fn graph(&self) -> Result<std::sync::Arc<super::Graph<E>>, StoreError> {
+        Ok(std::sync::Arc::new(super::Graph::of(self.objects()?)))
+    }
+
     /// The print of each object `names` names as the store holds it, in that order, or `None`
     /// for one this store does not hold. A store that can read one object by its name answers
     /// without reading the rest.

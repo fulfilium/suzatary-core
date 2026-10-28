@@ -18,8 +18,9 @@ pub struct Seen {
     pub geneses: BTreeSet<String>,
     /// Its heads.
     pub heads: BTreeSet<String>,
-    /// The name of every object it holds.
-    pub held: BTreeSet<String>,
+    /// The name of every object it holds, shared with the store's graph so an answer builds no
+    /// set of its own.
+    pub held: Arc<BTreeSet<String>>,
 }
 
 /// What a store served at its last answer, and the epoch it was served in.
@@ -174,7 +175,7 @@ mod tests {
         Seen {
             geneses: set(geneses),
             heads: held.last().map(|&h| set(&[h])).unwrap_or_default(),
-            held: set(held),
+            held: Arc::new(set(held)),
         }
     }
 

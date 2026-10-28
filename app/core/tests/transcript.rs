@@ -590,7 +590,7 @@ proptest! {
         stale in any::<bool>(),
     ) {
         use suzatary_core::secretary::outline;
-        use suzatary_core::secretary::outlines::{Node, Outlines};
+        use suzatary_core::secretary::outlines::{Outlines, Parsed};
         use suzatary_core::store::Doc as _;
         use suzatary_core::store::Prodrome as _;
         let lines = conversation(&script);
@@ -614,10 +614,16 @@ proptest! {
             let resealed = suzatary_core::secretary::rescrub::reseal(memory.conversations(), at(3597)).expect("resealed");
             prop_assert!(resealed > 0, "the stale turn is sealed again");
         }
-        // The words of one line erased.
+        // The words of one line erased, each slot named by its first key: never a reseal's.
         if let Some(which) = erased {
             let read = transcript::read(memory.conversations(), &id()).expect("read");
-            let keys: std::collections::BTreeSet<KeyName> = read.lines()[which.index(read.lines().len())].line.keys().cloned().collect();
+            let slots: Vec<&LineEvent> = read
+                .lines()
+                .iter()
+                .map(|written| &written.line)
+                .filter(|line| !matches!(line.shape(), suzatary_core::secretary::line_shape::LineShape::Resealed { .. }))
+                .collect();
+            let keys: std::collections::BTreeSet<KeyName> = slots[which.index(slots.len())].keys().cloned().collect();
             if !keys.is_empty() {
                 let by = suzatary_core::secretary::erasure::Erasure::Asked { by: Actor::new("ada").expect("a name") };
                 transcript::erase(memory.conversations(), &id(), keys, by, at(3598)).expect("erased");
@@ -640,21 +646,24 @@ proptest! {
         if let Some(entry) = &past {
             memory.lines.append(line_of(&id(), lines.len(), entry)).expect("appended");
         }
-        let mut nodes: Vec<Node> = memory
+        let mut nodes: Vec<Parsed> = memory
             .lines
             .objects()
             .expect("objects")
             .iter()
-            .filter_map(|(name, object)| {
+            .map(|(name, object)| {
                 let sent = serde_json::to_string(&suzatary_core::routes::skeleton_node(name, object)).expect("prints");
-                Node::of(serde_json::from_str(&sent).expect("reads back")).expect("a node")
+                Parsed::of(serde_json::from_str(&sent).expect("reads back")).expect("a node")
             })
             .collect();
         let turn = order.index(nodes.len());
         nodes.rotate_left(turn);
         let mut held = Outlines::default();
         held.hold(nodes, &[]);
-        let read: Vec<_> = held.outlines().map(|(id, outline)| (id.clone(), outline.clone())).collect();
+        let read: Vec<_> = held
+            .outlines()
+            .map(|(id, outline)| (id.clone(), outline.as_ref().map(outline::Rounds::openings).map_err(Clone::clone)))
+            .collect();
         let whole: Vec<_> = transcript::each(memory.conversations())
             .expect("reads")
             .into_iter()

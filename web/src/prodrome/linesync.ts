@@ -4,7 +4,7 @@
 // ahead of any page, and a reading reads a conversation's lines and what they rest on.
 
 import type { Lines } from "./core"
-import { deadOf, erasedOf, nodesInto, objectsOf } from "./core"
+import { deadOf, erasedOf, holdAdmitted, nodesInto } from "./core"
 import content from "./content"
 import engine from "./engine"
 import excluded from "./excluded"
@@ -71,8 +71,44 @@ export namespace linesync {
     return [...out].sort()
   }
 
+  // The keys `nodes` retire, by the box's rule (`transcript::Retired`), of those a conversation's own lines name: each
+  // key an erasure of it names, and each key of a reseal of a slot it names; and each seal a reseal of it was sealed
+  // again from, where the reseal's own key `holds` or a later reseal of it supersedes that key in turn.
+  export const retiredBy = (nodes: readonly SkeletonNode[], holds: (key: string) => boolean): Set<string> => {
+    type Conversation = { readonly named: Set<string>; readonly erased: Set<string>; readonly reseals: { readonly of: string; readonly from: string; readonly keys: readonly string[] }[] }
+    const by = new Map<string, Conversation>()
+    for (const n of nodes) {
+      if (n.header.node !== "line") continue
+      const c = by.get(n.header.conversation) ?? { named: new Set<string>(), erased: new Set<string>(), reseals: [] }
+      by.set(n.header.conversation, c)
+      for (const k of n.header.keys) c.named.add(k)
+      const s = n.header.step
+      if (s.step === "erased") for (const k of s.keys) c.erased.add(k)
+      if (s.step === "resealed") c.reseals.push({ of: s.of, from: s.from, keys: n.header.keys })
+    }
+    const out = new Set<string>()
+    for (const c of by.values()) {
+      const erased = new Set([...c.erased, ...c.reseals.filter(r => c.erased.has(r.of)).flatMap(r => r.keys)])
+      for (const k of erased) if (c.named.has(k)) out.add(k)
+      const sealedFrom = new Map<string, string[]>()
+      for (const r of c.reseals) for (const k of r.keys) sealedFrom.set(k, [...(sealedFrom.get(k) ?? []), r.from])
+      const walking = c.reseals.filter(r => r.keys.some(holds)).map(r => r.from)
+      const superseded = new Set<string>()
+      for (let k = walking.pop(); k !== undefined; k = walking.pop()) {
+        if (superseded.has(k)) continue
+        superseded.add(k)
+        walking.push(...(sealedFrom.get(k) ?? []))
+      }
+      for (const k of superseded) if (c.named.has(k)) out.add(k)
+    }
+    return out
+  }
+
   // The form of the lines' nodes on the device: a change of the skeleton's node moves it, and the lines are taken again.
-  export const FORMAT = 1
+  // 2: a line's step names a conversation's title lines, the slot each reseal seals and the keys each erasure names,
+  // which a round's lines are found by; a node of form 1 reads them as `still`, so the reseals and erasures go unseen.
+  // 3: a reseal's step also names the seal it was sealed again from, which the dead keys are read from.
+  export const FORMAT = 3
 
   export const of = (held: Lines, fx: Effects, blocks: rendered.Store): T => {
     // The core opens words with the row's keys and reads the row's skeleton: told what changed, so a purge's key is let
@@ -108,7 +144,7 @@ export namespace linesync {
       came: bytes => fx.bars({ type: "Came", name: "lines", bytes }),
       lost: bytes => fx.bars({ type: "Lost", name: "lines", bytes }),
       atOnce: () => content.atOnce(http.protocol()),
-      held: rows => Promise.resolve(held.hold(objectsOf(rows), "[]")),
+      held: rows => Promise.resolve(holdAdmitted(held, rows)),
       shown: () => shown,
     })
     const fetching = fetcher.fetch
@@ -201,35 +237,38 @@ export namespace linesync {
           ),
       )
 
-    // Every key the box said a reseal that opens on it replaced: the box destroys them, and so does the purge.
-    const replaced = new Set<string>()
     const store: engine.T<SkeletonNode> = engine.of<SkeletonNode>(
       {
         name: "lines",
         place,
-        ask: since =>
-          storereads.skeleton(since).then(a => {
-            for (const k of a.replaced) replaced.add(k)
+        ask: since => {
+          // A pull that lacks nothing is not sent the heads again: they are those of what this tab holds.
+          const mine = store.sync.holding().heads
+          return storereads.skeleton(since).then(a => {
+            const row = store.row()
             return {
-              said: { ...a, objects: a.nodes, untrusted: [], root: null },
-              erased: a.erased,
-              piece: r => locked.without(locked.of(r, a.keys), [...a.erased, ...a.replaced]),
+              said: { ...a, heads: a.heads.are === "held" ? mine : a.heads.heads, objects: a.nodes, untrusted: [], root: null },
+              // What this piece's own nodes retire, given the keys it and the row hold, purged before the pull goes on.
+              erased: [...retiredBy(a.nodes, k => a.keys[k] !== undefined || row.keys[k] !== undefined)],
+              piece: r => locked.of(r, a.keys),
               rest: a.rest,
               size: a.size,
               weight: a.weight,
             }
-          }),
+          })
+        },
         content: { type: "ByName", has: content.has, holds: content.holds, fetch: fetching, version: content.version, ended: () => ended() },
         words: {
-          // The core reads the content held, the largest down-set of the skeleton it has: a word was only ever rendered
-          // from a conversation read whole. Beside it, the keys the box says a reseal replaced.
-          dead: () => Promise.resolve(new Set([...deadOf(held), ...replaced])),
+          // The keys the row's nodes retire, given the keys the row holds, and the keys the content held names as dead:
+          // the core reads the largest down-set of the skeleton whose content it has. The nodes name every erasure and
+          // reseal, so a key a round's lines held alone retire is found here too.
+          dead: r => Promise.resolve(new Set([...deadOf(held), ...retiredBy(r.replica.objects, k => r.keys[k] !== undefined)])),
           // The blocks a key's words fed are found by opening its lines, so their content is fetched first; a fetch
-          // that fails rejects, and the keys stay owed. A replaced key's old words may have fed blocks under the older
-          // rules, so it is purged as an erased one is: its blocks forgotten, then the key.
-          erased: async (r, erased) => {
+          // that fails rejects, and the keys stay owed. Every owed key is dead, a replaced one too: its old words may
+          // have fed blocks under the older rules, so its blocks are forgotten before the key, as an erased key's are.
+          erased: async r => {
             await fetching("First", lines.naming(r.replica, locked.names(r.keys)))
-            return erasedOf(held, r.keys, [...erased, ...replaced])
+            return erasedOf(held, r.keys, locked.names(r.keys))
           },
           forget,
         },

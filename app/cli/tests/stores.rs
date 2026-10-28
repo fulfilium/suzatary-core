@@ -411,8 +411,8 @@ fn a_chain_s_objects_are_asked_for_by_hash() {
 }
 
 /// The lines' skeleton, and each node's literal asked for by hash, are the lines' whole pull:
-/// the same objects in the same order, the same heads, prodromes and epoch, the same keys and
-/// erasures; and a replica holding the heads lacks nothing.
+/// the same objects in the same order, the same heads, prodromes, epoch and keys; and a replica
+/// holding the heads lacks nothing, and is sent no node, no key and not the heads it holds.
 #[test]
 fn the_lines_skeleton_and_their_content_are_the_whole_pull() {
     let base = writing("stores-skeleton");
@@ -422,7 +422,9 @@ fn the_lines_skeleton_and_their_content_are_the_whole_pull() {
     assert_eq!(common::status(&asked), 200);
     let skeleton = common::body_json(&mut asked);
     assert_eq!(skeleton["rest"], 0);
-    for field in ["heads", "geneses", "epoch", "keys", "erased"] {
+    assert_eq!(skeleton["heads"]["are"], "these");
+    assert_eq!(skeleton["heads"]["heads"], whole["heads"]);
+    for field in ["geneses", "epoch", "keys"] {
         assert_eq!(skeleton[field], whole[field], "{field}");
     }
     let nodes = skeleton["nodes"].as_array().expect("nodes");
@@ -460,7 +462,10 @@ fn the_lines_skeleton_and_their_content_are_the_whole_pull() {
         "{base}/api/stores/lines/skeleton?since={}",
         skeleton["frontier"]["digest"].as_str().expect("a frontier")
     ));
-    assert_eq!(common::body_json(&mut none)["nodes"], serde_json::json!([]));
+    let none = common::body_json(&mut none);
+    assert_eq!(none["nodes"], serde_json::json!([]));
+    assert_eq!(none["keys"], serde_json::json!({}));
+    assert_eq!(none["heads"], serde_json::json!({"are": "held"}));
 }
 
 /// The topic store's one prodrome, as the box began it, and its heads.

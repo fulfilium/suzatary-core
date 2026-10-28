@@ -260,60 +260,196 @@ pub fn erasers<'l>(
 }
 
 /// Every key a reseal among `lines` supersedes here: the key of each seal a slot was sealed again
-/// from, where `slots` opens that reseal's one slot (reads it as anything but missing). Its words
-/// then stand in the reseal, so the key is destroyed like an erased one, and the slot reads from
-/// the reseal. A reseal whose key is not held supersedes nothing, so a store restored with its lines
-/// and without their keys keeps reading the old seal until a run seals it again. Monotone in the
-/// lines and in the keys held, since a reseal's key is destroyed only with the slot's erasure.
+/// from, where `slots` opens that reseal's one slot (reads it as anything but missing), or where
+/// a later reseal supersedes the reseal's own key, since that reseal holds the same words. Its
+/// words then stand in a reseal, so the key is destroyed like an erased one, and the slot reads
+/// from the reseal. A reseal whose key is not held, and that nothing later supersedes, supersedes
+/// nothing, so a store restored with its lines and without their keys keeps reading the old seal
+/// until a run seals it again. Monotone in the lines and in the keys held.
 #[must_use]
 pub fn superseded<'l>(
     lines: impl IntoIterator<Item = (&'l Hash, &'l LineEvent)>,
     slots: &impl Slots,
 ) -> BTreeSet<KeyName> {
-    lines
-        .into_iter()
-        .filter_map(|(_, line)| match line.shape() {
-            LineShape::Resealed { from, .. } => {
-                (!missing(&line.slot_words(0, slots))).then(|| from.clone())
-            }
-            LineShape::Opened { .. }
-            | LineShape::Titled { .. }
-            | LineShape::Said { .. }
-            | LineShape::Proposed { .. }
-            | LineShape::Reviewed { .. }
-            | LineShape::ReviewFailed { .. }
-            | LineShape::Stopped { .. }
-            | LineShape::Rewound { .. }
-            | LineShape::MemorySeen { .. }
-            | LineShape::Session { .. }
-            | LineShape::Unheard { .. }
-            | LineShape::Kept { .. }
-            | LineShape::Scoped { .. }
-            | LineShape::Coding { .. }
-            | LineShape::Erased { .. } => None,
-        })
+    let resealed = resealed_from(lines);
+    let from = |key: &KeyName| -> Vec<&'l LineEvent> {
+        resealed
+            .get(key)
+            .into_iter()
+            .flatten()
+            .map(|(_, line)| *line)
+            .collect()
+    };
+    resealed
+        .keys()
+        .filter(|key| supersedes(key, from, slots))
+        .map(|key| (*key).clone())
         .collect()
 }
 
+/// Every reseal among `lines`, beside its name, by the key of the seal it was sealed again from.
+fn resealed_from<'l>(
+    lines: impl IntoIterator<Item = (&'l Hash, &'l LineEvent)>,
+) -> BTreeMap<&'l KeyName, Vec<(&'l Hash, &'l LineEvent)>> {
+    let mut by: BTreeMap<&KeyName, Vec<(&Hash, &LineEvent)>> = BTreeMap::new();
+    for (name, line) in lines {
+        if let LineShape::Resealed { from, .. } = line.shape() {
+            by.entry(from).or_default().push((name, line));
+        }
+    }
+    by
+}
+
+/// Whether a reseal supersedes the seal under `key`: one sealed again from it whose slot `slots`
+/// opens, or whose own key a later reseal supersedes in turn, walking `resealed_from`, the
+/// reseals sealed again from each key. Each key is walked once, so the walk ends whatever the
+/// lines name.
+pub fn supersedes<'l>(
+    key: &KeyName,
+    resealed_from: impl Fn(&KeyName) -> Vec<&'l LineEvent>,
+    slots: &impl Slots,
+) -> bool {
+    let mut walked = BTreeSet::new();
+    let mut walking = vec![key.clone()];
+    while let Some(key) = walking.pop() {
+        if !walked.insert(key.clone()) {
+            continue;
+        }
+        for reseal in resealed_from(&key) {
+            if !missing(&reseal.slot_words(0, slots)) {
+                return true;
+            }
+            walking.extend(reseal.keys().cloned());
+        }
+    }
+    false
+}
+
+/// What a store's lines retire of their keys, a function of the lines alone, so it is read once
+/// per set of heads: every key an erasure of its own conversation names ([`erased`]), and each
+/// conversation's reseals by the key of the seal each was sealed from, so
+/// whether a key is superseded is asked of its own conversation's reseals descending from it
+/// alone ([`supersedes`]), as [`dead`] asks it.
+#[derive(Debug, Default)]
+pub struct Retired {
+    /// The keys erased, with why.
+    pub erased: BTreeMap<KeyName, Erasure>,
+    resealed: BTreeMap<ConversationId, BTreeMap<KeyName, Vec<Hash>>>,
+}
+
+impl Retired {
+    /// What `objects` retire.
+    #[must_use]
+    pub fn of<'l>(objects: impl IntoIterator<Item = impl Named<'l>>) -> Self {
+        let lines: Vec<(&Hash, &LineEvent)> = lines_of(objects).collect();
+        let resealed = by_conversation(lines.iter().copied())
+            .into_iter()
+            .map(|(id, lines)| {
+                let index = resealed_from(lines)
+                    .into_iter()
+                    .map(|(from, reseals)| {
+                        (
+                            from.clone(),
+                            reseals.into_iter().map(|(name, _)| name.clone()).collect(),
+                        )
+                    })
+                    .collect();
+                (id.clone(), index)
+            })
+            .collect();
+        Self {
+            erased: erased_lines(lines),
+            resealed,
+        }
+    }
+
+    /// Whether `key`, a key of a line of conversation `id`, is dead: erased, or superseded by a
+    /// reseal of that conversation that `slots` opens, each reseal read by its name through `line`.
+    pub fn retires<'l>(
+        &self,
+        id: &ConversationId,
+        key: &KeyName,
+        line: impl Fn(&Hash) -> Option<&'l LineEvent>,
+        slots: &impl Slots,
+    ) -> bool {
+        let resealed = self.resealed.get(id);
+        self.erased.contains_key(key)
+            || supersedes(
+                key,
+                |from| {
+                    resealed
+                        .and_then(|index| index.get(from))
+                        .into_iter()
+                        .flatten()
+                        .filter_map(&line)
+                        .collect()
+                },
+                slots,
+            )
+    }
+}
+
 /// Every reseal among `lines`, by the key of the slot it seals, those under the current rules
-/// first: where a slot's own seal does not open, it is read from the first of these that does.
+/// first, and among those under the same rules the newest first: the one sealed again from
+/// another's key comes before that other, however far down the chain. Where a slot's own seal
+/// does not open, it is read from the first of these that does, so a slot whose every reseal is
+/// under older rules reads its newest, which the current rules scrub least.
 #[must_use]
 pub fn reseals<'l>(
     lines: impl IntoIterator<Item = (&'l Hash, &'l LineEvent)>,
 ) -> BTreeMap<KeyName, Vec<&'l LineEvent>> {
-    let mut by: BTreeMap<KeyName, Vec<(bool, &Hash, &LineEvent)>> = BTreeMap::new();
+    let mut by: BTreeMap<KeyName, Vec<(&Hash, &LineEvent)>> = BTreeMap::new();
     for (name, line) in lines {
         if let LineShape::Resealed { of, .. } = line.shape() {
-            let stale = !line.scrubbed_under().all(|under| under.is_current(()));
-            by.entry(of.clone()).or_default().push((stale, name, line));
+            by.entry(of.clone()).or_default().push((name, line));
         }
     }
     by.into_iter()
-        .map(|(of, mut seals)| {
-            seals.sort_by(|a, b| (a.0, a.1).cmp(&(b.0, b.1)));
-            (of, seals.into_iter().map(|(_, _, line)| line).collect())
+        .map(|(of, seals)| {
+            let mut ranked: Vec<(bool, std::cmp::Reverse<usize>, &Hash, &LineEvent)> = seals
+                .iter()
+                .map(|(name, line)| {
+                    let stale = !line.scrubbed_under().all(|under| under.is_current(()));
+                    (
+                        stale,
+                        std::cmp::Reverse(depth(line, &of, &seals)),
+                        *name,
+                        *line,
+                    )
+                })
+                .collect();
+            ranked.sort_by(|a, b| (a.0, a.1, a.2).cmp(&(b.0, b.1, b.2)));
+            (of, ranked.into_iter().map(|(.., line)| line).collect())
         })
         .collect()
+}
+
+/// How many reseals down from the slot's first seal `reseal` stands: one when it was sealed
+/// again from the first seal `of`, one more than the reseal whose own key it was sealed from
+/// otherwise. A chain is walked at most once through `seals`, so the count ends whatever the
+/// lines name.
+fn depth(reseal: &LineEvent, of: &KeyName, seals: &[(&Hash, &LineEvent)]) -> usize {
+    let mut depth = 1;
+    let mut at = reseal;
+    while depth <= seals.len() {
+        let LineShape::Resealed { from, .. } = at.shape() else {
+            break;
+        };
+        if from == of {
+            break;
+        }
+        match seals
+            .iter()
+            .find(|(_, other)| other.keys().next() == Some(from))
+        {
+            Some((_, below)) => {
+                at = below;
+                depth += 1;
+            }
+            None => break,
+        }
+    }
+    depth
 }
 
 /// A slot as one conversation reads it: erased where `erased` names its key, before anything
@@ -388,11 +524,33 @@ fn by_conversation<'l>(
     by
 }
 
+/// An object of the lines beside its name, as a slice of a store's objects yields it and as a
+/// store's graph does.
+pub trait Named<'l> {
+    /// The name and the object.
+    fn named(self) -> (&'l Hash, &'l Envelope<LineEvent>);
+}
+
+impl<'l> Named<'l> for &'l (Hash, Envelope<LineEvent>) {
+    fn named(self) -> (&'l Hash, &'l Envelope<LineEvent>) {
+        (&self.0, &self.1)
+    }
+}
+
+impl<'l> Named<'l> for (&'l Hash, &'l Envelope<LineEvent>) {
+    fn named(self) -> (&'l Hash, &'l Envelope<LineEvent>) {
+        self
+    }
+}
+
 /// The objects' lines, by name.
-fn lines_of(objects: &[(Hash, Envelope<LineEvent>)]) -> impl Iterator<Item = (&Hash, &LineEvent)> {
-    objects
-        .iter()
-        .filter_map(|(name, object)| object.event().map(|line| (name, line)))
+fn lines_of<'l>(
+    objects: impl IntoIterator<Item = impl Named<'l>>,
+) -> impl Iterator<Item = (&'l Hash, &'l LineEvent)> {
+    objects.into_iter().filter_map(|object| {
+        let (name, object) = object.named();
+        object.event().map(|line| (name, line))
+    })
 }
 
 /// Every slot whose key an erasure line of its own conversation names, or a reseal of it that
@@ -443,8 +601,15 @@ pub fn fed(
 /// whose words are erased, each with why. A key an erasure names in another conversation is no
 /// key of its, and erases nothing.
 #[must_use]
-pub fn erased(objects: &[(Hash, Envelope<LineEvent>)]) -> BTreeMap<KeyName, Erasure> {
-    by_conversation(lines_of(objects))
+pub fn erased<'l>(objects: impl IntoIterator<Item = impl Named<'l>>) -> BTreeMap<KeyName, Erasure> {
+    erased_lines(lines_of(objects))
+}
+
+/// [`erased`] of the lines themselves.
+fn erased_lines<'l>(
+    lines: impl IntoIterator<Item = (&'l Hash, &'l LineEvent)>,
+) -> BTreeMap<KeyName, Erasure> {
+    by_conversation(lines)
         .into_values()
         .flat_map(|lines| {
             let named: std::collections::BTreeSet<&KeyName> =
@@ -786,8 +951,9 @@ pub fn destroy<'l>(
 /// count it answers (a sweep that kept keys is logged and counts nothing).
 ///
 /// # Errors
-/// [`StoreError::NotAppended`] for no keys, or a key no line of `id` holds words under (an erasure
-/// erases only its own conversation's words), and [`push`]'s.
+/// [`StoreError::NotAppended`] for no keys, or a key that is not the first key of a slot of `id`:
+/// an erasure erases only its own conversation's words, and names a slot sealed again by the key
+/// it was first sealed under, which erases every seal of it. And [`push`]'s.
 pub fn erase(
     conversations: Conversations<'_>,
     id: &ConversationId,
@@ -798,15 +964,18 @@ pub fn erase(
     {
         let _held = conversations.lines.locked()?;
         let transcript = read(conversations, id)?;
-        let named: std::collections::BTreeSet<&KeyName> = transcript
+        // A slot is named by the key it was first sealed under. An erasure of a reseal's own key
+        // alone would leave the slot's first seal open on a device that never held that key.
+        let slots: std::collections::BTreeSet<&KeyName> = transcript
             .lines()
             .iter()
+            .filter(|written| !matches!(written.line.shape(), LineShape::Resealed { .. }))
             .flat_map(|written| written.line.keys())
             .collect();
-        if keys.is_empty() || keys.iter().any(|key| !named.contains(key)) {
+        if keys.is_empty() || keys.iter().any(|key| !slots.contains(key)) {
             return Err(StoreError::not_appended(
                 "conversation store",
-                format!("an erasure names only words {id} holds"),
+                format!("an erasure names only slots {id} holds, each by its first key"),
             ));
         }
         let held = transcript.lines().len();
@@ -1151,7 +1320,7 @@ mod tests {
                         prop_assert!(!print.contains(words.as_str()));
                     }
                 }
-                let erased = erased(&objects);
+                let erased = erased(objects.iter());
                 let named: std::collections::BTreeSet<KeyName> = objects
                     .iter()
                     .filter_map(|(_, object)| object.event())
