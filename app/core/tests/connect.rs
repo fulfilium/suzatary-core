@@ -10,9 +10,9 @@ use suzatary_core::connect::{
     CATALOG, Checked, Connection, Declared, PLAIN, Params, Refused, Seen, StepShape, Table,
     TemplateId,
 };
+use suzatary_core::health::{Health, Outcome};
 use suzatary_core::mail::account::Authority;
 use suzatary_core::mail::address::EmailAddress;
-use suzatary_core::mail::health::{Health, Outcome};
 use suzatary_core::plugin::Manifest;
 use suzatary_core::settings::{Page, Settable, Settables};
 

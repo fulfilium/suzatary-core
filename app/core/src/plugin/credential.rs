@@ -41,6 +41,18 @@ impl CredentialName {
         }
     }
 
+    /// The credential a link labelled `label` is stored under, in `plugin`'s namespace: a
+    /// label's suffix is upper-case letters, digits and `_`, at most 32 of them, so the name
+    /// has this type's shape whatever the label.
+    #[must_use]
+    pub fn link(plugin: &PluginName, label: &crate::connect::Label) -> Self {
+        let prefix = plugin.credential_prefix();
+        Self {
+            name: format!("{prefix}{}", label.as_str()),
+            label: prefix.len(),
+        }
+    }
+
     /// The name, as secretspec spells it.
     #[must_use]
     pub fn as_str(&self) -> &str {

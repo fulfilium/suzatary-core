@@ -26,7 +26,7 @@ pub struct Operator {
     /// The pull.
     syncer: Syncer,
     /// Each account's sync health, which every sync joins its report into.
-    health: crate::mail_health::Health,
+    health: crate::source_health::Health,
     /// The clock, for the sync window.
     clock: crate::clock::SystemClock,
     /// The owner's zone, whose day the sync window counts back from.
@@ -60,7 +60,7 @@ impl Operator {
         let heartbeat = heartbeat.into();
         Self {
             sync_status: sync_status.into(),
-            health: crate::mail_health::Health::beside(&heartbeat),
+            health: crate::source_health::beside(&heartbeat),
             pulse: crate::pulse::Pulse::at(&heartbeat),
             mail,
             ledger,
@@ -149,12 +149,8 @@ impl Corpus for Operator {
     fn sync(&self) -> Result<verbs::SyncReport, CorpusError> {
         let report = self.syncer.sync(self.today());
         self.ring();
-        suzatary_core::mail::health::record(
-            &self.health,
-            &report,
-            prodrome_core::fpl::instant_of(self.clock.now()),
-        )
-        .map_err(|failed| {
+        let at = prodrome_core::fpl::instant_of(self.clock.now());
+        self.health.join(&report.healths(at)).map_err(|failed| {
             CorpusError::Refused(format!(
                 "the sync ran, and its accounts' health was not recorded: {failed}"
             ))

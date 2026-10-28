@@ -37,7 +37,7 @@ impl Declared {
         connections.extend(self.accounts.iter().map(|account| {
             made(
                 AccountKind::of(&account.sync).template(),
-                AccountKind::params(account)?,
+                AccountKind::params(account),
             )
         }));
         for id in TemplateId::ALL {
@@ -64,7 +64,7 @@ impl Declared {
     }
 
     /// The labels of every link `plugin`'s manifest declares.
-    fn links(&self, plugin: &str) -> Vec<Label> {
+    fn links(&self, plugin: &PluginName) -> Vec<Label> {
         let Some(manifest) = self.manifest(plugin) else {
             return Vec::new();
         };
@@ -74,10 +74,10 @@ impl Declared {
             .collect()
     }
 
-    fn manifest(&self, plugin: &str) -> Option<&Manifest> {
+    fn manifest(&self, plugin: &PluginName) -> Option<&Manifest> {
         self.plugins
             .iter()
-            .find(|manifest| manifest.name().as_str() == plugin)
+            .find(|manifest| manifest.name() == plugin)
     }
 
     /// These tables with `connection` written into them.
@@ -97,7 +97,7 @@ impl Declared {
                 match next
                     .plugins
                     .iter_mut()
-                    .find(|held| held.name().as_str() == fragment.plugin)
+                    .find(|held| held.name() == fragment.plugin)
                 {
                     Some(held) => *held = held.with_link(&name)?,
                     None => next.plugins.push(fragment.manifest()?.with_link(&name)?),
@@ -132,7 +132,7 @@ impl Declared {
             Table::Link(fragment) => {
                 let name = link_name(connection)?;
                 for held in &mut next.plugins {
-                    if held.name().as_str() == fragment.plugin {
+                    if held.name() == fragment.plugin {
                         *held = held.without_credential(&name);
                     }
                 }
@@ -155,7 +155,7 @@ impl Declared {
     /// [`Refused::NoPlugin`] when no manifest is named `plugin`.
     pub fn with_origin(&self, plugin: &PluginName, origin: &Origin) -> Result<Self, Refused> {
         let held = self
-            .manifest(plugin.as_str())
+            .manifest(plugin)
             .ok_or_else(|| Refused::NoPlugin(plugin.to_string()))?;
         let widened = held.with_origin(origin.clone());
         let mut next = self.clone();

@@ -85,6 +85,9 @@ pub struct Secretary<'a> {
     pub junk: &'a dyn Junk,
     /// The timer's own mail sync, started early; it reaches nothing the timer does not.
     pub sync: &'a dyn MailSync,
+    /// Every source's health: each mail account's syncs, each plugin's runs and links, each
+    /// Google account's calendars and the Drive's probes.
+    pub health: &'a dyn crate::health::Register<crate::source_key::SourceKey>,
     /// The mail servers, searched for mail older than the routine sync's window.
     pub older: &'a dyn OlderMail,
     /// The owner's uploaded photos and PDFs, read-only.

@@ -31,6 +31,69 @@ pub struct DocCodec<K, T> {
     pub parse: fn(&K, Vec<u8>) -> Result<Option<T>, String>,
 }
 
+impl<K, T: serde::Serialize + serde::de::DeserializeOwned> DocCodec<K, T> {
+    /// One document as its value's pretty-printed JSON, whatever its key.
+    pub const JSON: Self = Self {
+        print: |_, value| serde_json::to_vec_pretty(value).map_err(|failed| failed.to_string()),
+        parse: |_, bytes| {
+            serde_json::from_slice(&bytes)
+                .map(Some)
+                .map_err(|failed| failed.to_string())
+        },
+    };
+}
+
+/// One document and a lock beside it, which every rewrite holds across its read and its write,
+/// so two writers, in one process or two, each keep the other's change.
+#[derive(Debug, Clone)]
+pub struct Locked<T: 'static> {
+    docs: Docs<(), T>,
+    lock: PathBuf,
+}
+
+impl<T: 'static> Locked<T> {
+    /// `docs`, rewritten under `lock`.
+    #[must_use]
+    pub fn new(docs: Docs<(), T>, lock: PathBuf) -> Self {
+        Self { docs, lock }
+    }
+}
+
+impl<T: Sync + 'static> Locked<T> {
+    /// The document, `None` before the first write.
+    ///
+    /// # Errors
+    /// [`StoreError::Unreadable`].
+    pub fn get(&self) -> Result<Option<T>, StoreError> {
+        self.docs.get(&())
+    }
+
+    /// Hold the lock, hand `step` what the document holds, and write what it answers, `None`
+    /// writing nothing; answer what the document holds after.
+    ///
+    /// # Errors
+    /// The lock, the read or the write failing.
+    pub fn rewrite(
+        &self,
+        step: impl FnOnce(Option<&T>) -> Option<T>,
+    ) -> Result<Option<T>, StoreError> {
+        let _held = crate::durable::hold(&self.lock).map_err(|failed| {
+            StoreError::unwritable(
+                self.docs.store,
+                format!("{}: {failed}", self.lock.display()),
+            )
+        })?;
+        let held = self.docs.get(&())?;
+        match step(held.as_ref()) {
+            Some(next) => {
+                self.docs.set(&(), &next)?;
+                Ok(Some(next))
+            }
+            None => Ok(held),
+        }
+    }
+}
+
 impl<K: 'static, T: 'static> std::fmt::Debug for Docs<K, T> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("Docs")

@@ -57,14 +57,12 @@ fn unanswered_over(
         .settings(SettingsFixture::with_writer(Arc::clone(secrets) as _))
         .reaching(Reaching {
             claude: fake_claude(tag),
-            answered: Some(suzatary_core::mail::health::Healths::one(
+            answered: Some(suzatary_core::health::Healths::one(
                 &model,
                 chrono::NaiveDate::from_ymd_opt(2026, 10, 7)
                     .and_then(|day| day.and_hms_opt(9, 0, 0))
                     .expect("an instant"),
-                suzatary_core::mail::health::Outcome::Failed(
-                    suzatary_core::connect::Failure::KeyRefused,
-                ),
+                suzatary_core::health::Outcome::Failed(suzatary_core::connect::Failure::KeyRefused),
                 "401: the token expired",
             )),
             verify: Arc::new(verify),

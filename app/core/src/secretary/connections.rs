@@ -175,8 +175,8 @@ fn lacking<'a>(
         .accounts
         .iter()
         .filter(|account| matches!(account.sync, Sync::Google))
-        .filter_map(|account| EmailAddress::new(account.email.as_str()).ok())
-        .filter_map(move |account| match secrets.google_grant(&account) {
+        .map(|account| account.email.address())
+        .filter_map(move |account| match secrets.google_grant(account) {
             Held::Signed(parts) => Scopes::all().missing(&parts).map(|missing| {
                 let why = format!(
                     "{account} is signed in with Google without {}, which it was not granted: \
@@ -194,7 +194,7 @@ fn lacking<'a>(
                         account: account.clone(),
                         scopes: missing,
                     },
-                    &account,
+                    account,
                     why,
                 )
             }),

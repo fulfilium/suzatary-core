@@ -8,7 +8,7 @@
 //! later stops (an expired token) files the same card again, and the owner's no stands within
 //! one episode.
 
-use crate::mail::health::{Healths, Instant, Reading};
+use crate::health::{Healths, Instant, Reading};
 use crate::secretary::acts::Act;
 use crate::secretary::noticed::Owed;
 use crate::secretary::sign_in::SignInUrl;
@@ -22,7 +22,7 @@ pub struct Answering<'a> {
     /// recorded under.
     pub model: &'a str,
     /// The model's observed calls.
-    pub health: &'a Healths,
+    pub health: &'a Healths<String>,
     /// Every secret name declared, with what declares it.
     pub settables: &'a Settables,
     /// Whether a declared name resolves.

@@ -4,16 +4,14 @@
 use super::{DrivePath, Port};
 use crate::capability::DriveFailure;
 use crate::connect::Failure;
-use crate::mail::health::{Healths, Instant, Outcome};
-
-/// The source the register keys the Drive's results by.
-pub const SOURCE: &str = "drive";
+use crate::health::{Healths, Instant, Outcome};
+use crate::source_key::SourceKey;
 
 /// What listing each of `folders` through `port` at `at` says: a success when every one lists,
 /// else a failure naming the first that did not, in the Drive's words. No folder to read is
 /// nothing observed, since there is nothing to check.
 #[must_use]
-pub fn probe(port: &dyn Port, folders: &[DrivePath], at: Instant) -> Healths {
+pub fn probe(port: &dyn Port, folders: &[DrivePath], at: Instant) -> Healths<SourceKey> {
     if folders.is_empty() {
         return Healths::default();
     }
@@ -21,9 +19,9 @@ pub fn probe(port: &dyn Port, folders: &[DrivePath], at: Instant) -> Healths {
         .iter()
         .find_map(|folder| port.list(folder).err().map(|failed| (folder, failed)))
     {
-        None => Healths::one(SOURCE, at, Outcome::Succeeded, ""),
+        None => Healths::one(SourceKey::Drive, at, Outcome::Succeeded, ""),
         Some((folder, failed)) => Healths::one(
-            SOURCE,
+            SourceKey::Drive,
             at,
             Outcome::Failed(class(&failed)),
             &words(folder, &failed),

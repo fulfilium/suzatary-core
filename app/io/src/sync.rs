@@ -7,10 +7,8 @@
 
 use std::path::{Path, PathBuf};
 
-use suzatary_core::connect::Failure;
+use suzatary_core::health::Outcome;
 use suzatary_core::mail::account::{MailAccount, Roster, Sync, folder_slug};
-use suzatary_core::mail::address::EmailAddress;
-use suzatary_core::mail::health::Outcome;
 use suzatary_core::mail::imap::{ImapError, Pull, SyncState, window_start};
 use suzatary_core::mail::puller::{Puller, Unpulled};
 use suzatary_core::mail::verbs::{AccountSync, Backfilled, SyncReport};
@@ -132,31 +130,28 @@ impl Syncer {
     }
 
     fn one(&self, account: &MailAccount, since: chrono::NaiveDate) -> AccountSync {
-        let (outcome, tail) = match self.puller(account).and_then(|puller| puller.pull(since)) {
+        let (outcome, tail) = match self.puller(account).pull(since) {
             Ok(said) => (Outcome::Succeeded, said),
             Err(Unpulled { class, said }) => (Outcome::Failed(class), said),
         };
         AccountSync {
-            account: account.email.to_string(),
+            account: account.email.clone(),
             outcome,
             tail,
         }
     }
 
     /// The puller for `account`'s kind.
-    fn puller(&self, account: &MailAccount) -> Result<Box<dyn Puller>, Unpulled> {
+    fn puller(&self, account: &MailAccount) -> Box<dyn Puller> {
         let maildir = self.mail_root.join(&account.subdir);
         let lieer = |maildir: PathBuf| Lieer {
             program: PathBuf::from(LIEER),
             maildir,
         };
-        Ok(match &account.sync {
+        match &account.sync {
             Sync::Gmail => Box::new(lieer(maildir)),
             Sync::Google => Box::new(Google {
-                account: EmailAddress::new(account.email.as_str()).map_err(|refused| Unpulled {
-                    class: Failure::Unclassified,
-                    said: refused.message().to_owned(),
-                })?,
+                account: account.email.address().clone(),
                 lieer: lieer(maildir),
                 grants: self.grants.clone(),
             }),
@@ -172,7 +167,7 @@ impl Syncer {
                 state_dir: self.state_dir.clone(),
                 open: Granted::new(self.tokens.clone()),
             }),
-        })
+        }
     }
 
     /// `notmuch new`, as a sync runs it, for files written outside a sync; what it said.

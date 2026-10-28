@@ -7,8 +7,8 @@ use clap::Subcommand;
 
 use crate::commands::{
     coding, decision, device, doctor, heartbeat, init, instance, leaks, mail, mcp, notify, plugin,
-    ran, release, replica, secretary, secretspec, serve, site, todo, todos, typeset, up, vault,
-    verify, weather,
+    ran, release, replica, secretary, secretspec, serve, site, sources, todo, todos, typeset, up,
+    vault, verify, weather,
 };
 
 /// Every verb the deployed binary answers.
@@ -79,6 +79,8 @@ pub enum Verb {
     Coding(coding::Args),
     /// Run the `[[plugins]]` sources (a calendar's links) into the cache tier; the box's timer.
     Plugin(plugin::Args),
+    /// The sources the box reads from: their health register's migration.
+    Sources(sources::Args),
     /// The leak guard's matcher: each line of a tree to publish that names this deployment.
     Leaks(leaks::Args),
     /// Check the store: every object rehashed, every parent present, every head reachable.
@@ -130,6 +132,7 @@ impl Verb {
             Verb::Weather => weather::run(path),
             Verb::Coding(args) => coding::run(path, &args),
             Verb::Plugin(args) => plugin::run(path, &args),
+            Verb::Sources(args) => sources::run(path, &args),
             Verb::Leaks(args) => leaks::run(&args),
             Verb::Verify => verify::run(path),
             Verb::Secretspec => secretspec::run(path),
@@ -184,6 +187,7 @@ mod tests {
             &["mail", "migrate-health", "--check"],
             &["plugin", "migrate-ledgers"],
             &["plugin", "migrate-ledgers", "--check"],
+            &["plugin", "migrate"],
         ] {
             let refused =
                 Tree::try_parse_from(std::iter::once("suzatary").chain(argv.iter().copied()))

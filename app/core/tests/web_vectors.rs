@@ -764,7 +764,8 @@ fn the_vectors_match_what_the_pure_ts_modules_compute() {
 #[test]
 fn the_standings_vector_is_every_standing_a_line_can_take() {
     use suzatary_core::connect::{Failure, Group, Standing};
-    use suzatary_core::mail::health::{Healths, Outcome};
+    use suzatary_core::health::Outcome;
+    type Healths = suzatary_core::health::Healths<String>;
     let at = fpl::instant_of(now());
     let failed = |class: Failure| {
         Standing::of_health(

@@ -2,7 +2,7 @@
 //! credential a URL carries left behind; and whether what it holds was pushed there.
 
 use crate::connect::Failure;
-use crate::mail::health::{Health, Instant, Outcome};
+use crate::health::{Health, Instant, Outcome};
 
 /// Where the data repository is pushed, as far as its git configuration could be read: "pushed
 /// nowhere" is a fact read from it, never what a failed read stands for.

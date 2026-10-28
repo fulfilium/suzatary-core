@@ -123,13 +123,10 @@ impl suzatary_core::capability::Secrets for Declared {
         match account.sync {
             // A Google account's reading grant is its sign-in with Google, in the secret store.
             Sync::Google => suzatary_core::capability::MailGrants {
-                imap: suzatary_core::mail::address::EmailAddress::new(account.email.as_str())
-                    .is_ok_and(|email| {
-                        matches!(
-                            self.google_grant(&email),
-                            suzatary_core::google::Held::Signed(_)
-                        )
-                    }),
+                imap: matches!(
+                    self.google_grant(account.email.address()),
+                    suzatary_core::google::Held::Signed(_)
+                ),
                 smtp: false,
             },
             Sync::MsImap(_) | Sync::Gmail | Sync::Proton(_) => {
@@ -481,7 +478,7 @@ pub fn older(instance: &Instance) -> Older {
 /// The timer's own mail sync, whose report is the state directory's `last-sync.json`.
 #[must_use]
 pub fn mail_sync(instance: &Instance) -> suzatary_io::mail_sync::Timer {
-    suzatary_io::mail_sync::Timer::new(instance.paths.last_sync.clone(), &instance.mail.heartbeat)
+    suzatary_io::mail_sync::Timer::new(instance.paths.last_sync.clone())
 }
 
 /// The owner's uploads, skipped by the conversations' listing.

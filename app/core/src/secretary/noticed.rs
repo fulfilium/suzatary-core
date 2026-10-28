@@ -241,28 +241,23 @@ pub struct Seen<'a> {
     /// The model's name, as [`crate::capability::Model::name`] spells it.
     pub model: &'a str,
     /// The model's observed calls.
-    pub answered: &'a crate::mail::health::Healths,
+    pub answered: &'a crate::health::Healths<String>,
     /// The sign-ins the box holds open.
     pub open: &'a [super::sign_in::SignInUrl],
     /// The tables connections are read from, as the instance file declares them now; `None`
     /// when the file does not read, which holds every waiting card, since a grant still needed
     /// cannot be told from one that is not.
     pub declared: Option<&'a crate::connect::Declared>,
-    /// Each mail account's syncs; `None` when the register could not be read, which holds
-    /// every waiting card.
-    pub mail: Option<&'a crate::mail::health::Healths>,
-    /// Each plugin's links' fetches, by plugin; `None` when a ledger could not be read, which
-    /// holds every waiting card.
-    pub links: Option<
-        &'a std::collections::BTreeMap<crate::plugin::PluginName, crate::mail::health::Healths>,
-    >,
+    /// Every source's results; `None` when the register could not be read, which holds every
+    /// waiting card.
+    pub health: Option<&'a crate::health::Healths<crate::source_key::SourceKey>>,
     /// The calendars holding an occurrence within [`super::failing::quiet`] of now; `None` when
     /// they could not be read.
     pub heard: Option<&'a std::collections::BTreeSet<crate::calendar::CalendarName>>,
     /// Where the data repository pushes: its push token is asked for only where that is GitHub.
     pub pushed: &'a crate::settings::remote::Pushed,
     /// Now, UTC.
-    pub now: crate::mail::health::Instant,
+    pub now: crate::health::Instant,
     /// The box's callback for a sign-in with Google, `None` when the app's URL names no origin
     /// Google can send the owner back to.
     pub redirect: Option<&'a crate::google::RedirectUri>,
@@ -323,19 +318,18 @@ pub fn due(seen: &Seen<'_>, inbox: &inbox::Fold) -> Owed {
         ));
     // Read after the rules above, since a secret or a sign-in one of them already asks for is
     // that card, whatever made the connection fail.
-    let failing = match (seen.declared, seen.links, seen.mail) {
-        (Some(declared), Some(links), Some(mail)) => super::failing::owed(
+    let failing = match (seen.declared, seen.health) {
+        (Some(declared), Some(health)) => super::failing::owed(
             &super::failing::Observed {
                 declared,
                 answering: &answering,
-                mail,
-                links,
+                health,
                 heard: seen.heard,
                 now: seen.now,
             },
             &owed,
         ),
-        (None, _, _) | (_, None, _) | (_, _, None) => Owed::default().holding(),
+        (None, _) | (_, None) => Owed::default().holding(),
     };
     let owed = owed.join(failing);
     if answers.values().any(|answer| *answer == Answer::Failed) {
@@ -662,11 +656,10 @@ mod tests {
             settables: &settables,
             secrets: store,
             model: "a-cli/large",
-            answered: &crate::mail::health::Healths::default(),
+            answered: &crate::health::Healths::default(),
             open: &[],
             declared: Some(&crate::connect::Declared::default()),
-            mail: Some(&crate::mail::health::Healths::default()),
-            links: Some(&std::collections::BTreeMap::new()),
+            health: Some(&crate::health::Healths::default()),
             heard: Some(&std::collections::BTreeSet::new()),
             pushed: &crate::settings::remote::Pushed::Nowhere,
             now: prodrome_core::fpl::instant_of(at(minute)),
@@ -695,11 +688,10 @@ mod tests {
             settables: &settables,
             secrets: &Store::default(),
             model: "a-cli/large",
-            answered: &crate::mail::health::Healths::default(),
+            answered: &crate::health::Healths::default(),
             open: &[],
             declared: Some(&crate::connect::Declared::default()),
-            mail: None,
-            links: Some(&std::collections::BTreeMap::new()),
+            health: None,
             heard: Some(&std::collections::BTreeSet::new()),
             pushed: &crate::settings::remote::Pushed::Nowhere,
             now: prodrome_core::fpl::instant_of(at(0)),

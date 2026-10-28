@@ -11,9 +11,7 @@ use suzatary_core::calendar::Occurrence;
 use suzatary_core::plugin::PluginName;
 use suzatary_core::refusal::Refusal;
 use suzatary_core::routes;
-use suzatary_core::settings::overview::{
-    Asking, Declared, Recorded, Registers, Seen, Storage, Store,
-};
+use suzatary_core::settings::overview::{Asking, Declared, Registers, Storage, Store};
 use suzatary_core::settings::remote::{self, Pushed, Tip};
 use suzatary_core::wire;
 use suzatary_io::plugin_store::PluginStore;
@@ -39,28 +37,19 @@ pub fn overview(call: &Call<Reader, (), ()>) -> Result<Json<wire::Overview>, Ref
         accounts,
         plugins,
     } = state.live();
-    let mail = timed.part("mail", || {
+    let health = timed.part("sources", || {
         caps.secretary
-            .sync
-            .health()
-            .map_err(|failed| Refusal::internal(format!("the mail health register: {failed}")))
+            .health
+            .healths()
+            .map_err(|failed| Refusal::internal(format!("the sources' health register: {failed}")))
     })?;
-    let answered = timed
-        .part("models", || {
-            state
-                .answered
-                .get(&())
-                .map_err(|failed| Refusal::internal(format!("the model health register: {failed}")))
-        })?
-        .unwrap_or_default();
+    let answered = timed.part("models", || {
+        state
+            .answered
+            .healths()
+            .map_err(|failed| Refusal::internal(format!("the model health register: {failed}")))
+    })?;
     let drive = timed.part("drive", || caps.secretary.drive.allowed_folders());
-    let probed = timed
-        .part("probes", || {
-            state.probes.get(&()).map_err(|failed| {
-                Refusal::internal(format!("the Drive's health register: {failed}"))
-            })
-        })?
-        .unwrap_or_default();
     let build = timed.part("about", || {
         state
             .stamp
@@ -79,7 +68,7 @@ pub fn overview(call: &Call<Reader, (), ()>) -> Result<Json<wire::Overview>, Ref
             },
         )
     })?;
-    let seen = timed.part("plugins", || seen(state, &plugins));
+    let stores = timed.part("plugins", || stores(state, &plugins));
     let pushes = timed.part("pushes", || pushes(state.data.as_path()));
     let jobs = state.models.jobs();
     let declared = Declared {
@@ -100,10 +89,9 @@ pub fn overview(call: &Call<Reader, (), ()>) -> Result<Json<wire::Overview>, Ref
         &declared,
         &secrets,
         &Registers {
-            mail: &mail,
+            health: &health,
             answered: &answered,
-            plugins: &seen,
-            drive: &probed,
+            plugins: &stores,
             pushes: pushes.as_ref(),
         },
         &asking,
@@ -254,7 +242,7 @@ fn git_config(root: &std::path::Path) -> std::io::Result<String> {
 /// What the data repository's pushes read, from its reflogs: where its branch last moved, and
 /// where `origin`'s copy of it last moved, which a push moves. `None` when either log is not
 /// there to read: a repository on no branch, or one never pushed.
-fn pushes(root: &std::path::Path) -> Option<suzatary_core::mail::health::Health> {
+fn pushes(root: &std::path::Path) -> Option<suzatary_core::health::Health> {
     let (dir, common) = git_dirs(root).ok()?;
     let head = std::fs::read_to_string(dir.join("HEAD")).ok()?;
     let branch = head.trim().strip_prefix("ref: refs/heads/")?;
@@ -263,12 +251,12 @@ fn pushes(root: &std::path::Path) -> Option<suzatary_core::mail::health::Health>
     remote::pushes(&tip(dir.join("logs/HEAD"))?, upstream.as_ref())
 }
 
-/// What the cache tier holds of each declared plugin: its ledger, and its store as the schema
-/// beside it reads, a store that cannot be read saying why.
-fn seen(
+/// Each declared plugin's store as the schema beside it reads, a store that cannot be read
+/// saying why.
+fn stores(
     state: &State,
     manifests: &[suzatary_core::plugin::Manifest],
-) -> BTreeMap<PluginName, Seen> {
+) -> BTreeMap<PluginName, Store> {
     state
         .plugins
         .as_ref()
@@ -285,14 +273,7 @@ fn seen(
                         Ok(Some(_)) => Store::Other,
                         Err(failed) => Store::Unreadable(failed.to_string()),
                     };
-                    (
-                        name.clone(),
-                        Seen {
-                            ledger: crate::commands::plugin::ledger(plugins, name)
-                                .map_or_else(Recorded::Unreadable, Recorded::Ledger),
-                            store,
-                        },
-                    )
+                    (name.clone(), store)
                 })
                 .collect()
         })
@@ -343,7 +324,7 @@ mod tests {
     /// whose branch moved on since is failing since that push; one never pushed observes nothing.
     #[test]
     fn the_pushes_are_read_from_the_reflogs() {
-        use suzatary_core::mail::health::Reading;
+        use suzatary_core::health::Reading;
         let root = tempfile::tempdir().expect("a scratch directory");
         let git = root.path().join(".git");
         std::fs::create_dir_all(git.join("logs/refs/remotes/origin")).expect("the logs");

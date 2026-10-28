@@ -2,11 +2,12 @@ use schemars::JsonSchema;
 use serde::Deserialize;
 use serde_json::{Value, json};
 
-use crate::mail::health::Reading;
+use crate::health::Reading;
 use crate::record::TodoEvent;
 use crate::refusal::{Refusal, shown};
 use crate::secretary::store::stamp;
 use crate::secretary::{Call, SecretarySurface, heartbeat};
+use crate::source_key::SourceKey;
 use crate::verb::{Chained, Verb};
 
 /// What moved since a day.
@@ -156,20 +157,26 @@ impl Verb for BriefingDelta {
         // The register's reading now, not the window's: an account is failing or it is not.
         let failing: Vec<Value> = call
             .caps
-            .sync
-            .health()
-            .map_err(|failed| Refusal::internal(format!("the mail health register: {failed}")))?
+            .health
+            .healths()
+            .map_err(|failed| Refusal::internal(format!("the sources' health register: {failed}")))?
             .readings()
-            .filter_map(|(account, reading)| match reading {
-                Reading::Failing {
-                    at, words, since, ..
-                } => Some(json!({
-                    "account": account,
+            .filter_map(|(source, reading)| {
+                let (
+                    SourceKey::Mail(account),
+                    Reading::Failing {
+                        at, words, since, ..
+                    },
+                ) = (source, reading)
+                else {
+                    return None;
+                };
+                Some(json!({
+                    "account": account.as_str(),
                     "words": words,
                     "since": since.format("%Y-%m-%dT%H:%M:%S").to_string(),
                     "last_tried": at.format("%Y-%m-%dT%H:%M:%S").to_string(),
-                })),
-                Reading::Ok { .. } => None,
+                }))
             })
             .collect();
         Ok(json!({

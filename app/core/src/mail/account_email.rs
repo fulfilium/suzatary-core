@@ -47,6 +47,12 @@ impl AccountEmail {
         self.0.as_str()
     }
 
+    /// The address.
+    #[must_use]
+    pub const fn address(&self) -> &EmailAddress {
+        &self.0
+    }
+
     /// Whether `address`, in any case, is this account's.
     #[must_use]
     pub fn is(&self, address: &str) -> bool {

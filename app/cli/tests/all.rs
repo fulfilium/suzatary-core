@@ -75,6 +75,8 @@ mod markup;
 mod mcp;
 #[path = "memory.rs"]
 mod memory;
+#[path = "migrate_health.rs"]
+mod migrate_health;
 #[path = "migrate_models.rs"]
 mod migrate_models;
 #[path = "objects.rs"]

@@ -5,26 +5,21 @@
 use std::path::PathBuf;
 
 use suzatary_core::signatures::{Code, Pairing, Pairings as Kept, Salt};
-use suzatary_core::store::{Doc, StoreError};
+use suzatary_core::store::StoreError;
 
-use crate::docs::{DocCodec, Docs};
+use crate::docs::{DocCodec, Docs, Locked};
 
 /// The pairing file and its lock.
 #[derive(Debug, Clone)]
-pub struct Pairings {
-    docs: Docs<(), Pairing>,
-    lock: PathBuf,
-}
+pub struct Pairings(Locked<Pairing>);
 
 impl Pairings {
     /// The file at `path`, its lock beside it.
     #[must_use]
     pub fn at(path: PathBuf) -> Self {
         let lock = path.with_extension("lock");
-        Self {
-            docs: Docs::new("pairing", move |()| path.clone(), &CODEC).private(),
-            lock,
-        }
+        let docs = Docs::new("pairing", move |()| path.clone(), &DocCodec::JSON).private();
+        Self(Locked::new(docs, lock))
     }
 }
 
@@ -33,24 +28,9 @@ impl Kept for Pairings {
         &self,
         step: &mut dyn FnMut(Option<&Pairing>) -> Option<Pairing>,
     ) -> Result<(), StoreError> {
-        let _held = crate::durable::hold(&self.lock).map_err(|failed| {
-            StoreError::unwritable("pairing", format!("{}: {failed}", self.lock.display()))
-        })?;
-        match step(self.docs.get(&())?.as_ref()) {
-            Some(kept) => self.docs.set(&(), &kept),
-            None => Ok(()),
-        }
+        self.0.rewrite(step).map(|_| ())
     }
 }
-
-const CODEC: DocCodec<(), Pairing> = DocCodec {
-    print: |(), pairing| serde_json::to_vec_pretty(pairing).map_err(|failed| failed.to_string()),
-    parse: |(), bytes| {
-        serde_json::from_slice(&bytes)
-            .map(Some)
-            .map_err(|failed| failed.to_string())
-    },
-};
 
 /// A fresh code and the key of its hash, from the system's generator.
 ///

@@ -1,9 +1,7 @@
 //! The mail sync the timer runs, as an effect a verb may start early.
 
 use super::Datetime;
-use crate::mail::health::Healths;
 use crate::mail::verbs::SyncReport;
-use crate::store::StoreError;
 
 /// A sync's report and when it was written.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -34,10 +32,4 @@ pub trait MailSync: Sync {
     /// # Errors
     /// [`SyncFailure`] when the unit could not be started.
     fn start(&self, since: Datetime) -> Result<Option<Synced>, SyncFailure>;
-
-    /// Each account's health, the join of every sync's report; empty before the first.
-    ///
-    /// # Errors
-    /// [`StoreError`] for a register that cannot be read, which is not an empty one.
-    fn health(&self) -> Result<Healths, StoreError>;
 }

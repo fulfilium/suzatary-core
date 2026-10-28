@@ -17,7 +17,7 @@ use serde::{Deserialize, Serialize};
 pub use fenced::Fenced;
 pub use memory::Memory;
 pub use port::{Port, WritePort};
-pub use probe::{SOURCE, probe};
+pub use probe::probe;
 
 /// The longest path accepted, in bytes.
 pub const MAX_PATH: usize = 1024;

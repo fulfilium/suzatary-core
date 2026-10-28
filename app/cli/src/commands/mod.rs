@@ -27,6 +27,7 @@ pub mod secretary;
 pub mod secretspec;
 pub mod serve;
 pub mod site;
+pub mod sources;
 pub mod todo;
 pub mod todos;
 pub mod typeset;

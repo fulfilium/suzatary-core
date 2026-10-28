@@ -230,6 +230,12 @@ fn verify_walks_every_store() {
         instance.secretary.topics.aliases.display()
     ));
     wanted.push(format!("requests OK — {}", instance.requests().display()));
+    wanted.push(format!(
+        "source health OK — {}",
+        (instance.mail.heartbeat)
+            .with_file_name(suzatary_io::source_health::FILE)
+            .display()
+    ));
     assert_eq!(said.lines().collect::<Vec<_>>(), wanted);
 
     let object = std::fs::read_dir(instance.secretary.line_store().join("objects"))

@@ -5,6 +5,7 @@ use std::collections::BTreeSet;
 use serde::Deserialize;
 
 use super::{BundlePath, CredentialName, Origin, PluginName};
+use crate::source_key::SourceKey;
 
 /// One `[[plugins]]` table, parsed: the origins it may reach and the credentials it may name.
 ///
@@ -196,6 +197,21 @@ impl Manifest {
     /// Every credential it declares.
     pub fn credentials(&self) -> impl Iterator<Item = &CredentialName> {
         self.credentials.iter()
+    }
+
+    /// The source its runs are recorded under.
+    #[must_use]
+    pub fn ran(&self) -> SourceKey {
+        SourceKey::Plugin(self.name.clone())
+    }
+
+    /// The source the fetches of its `credential`'s link are recorded under.
+    #[must_use]
+    pub fn link(&self, credential: &CredentialName) -> SourceKey {
+        SourceKey::Link {
+            plugin: self.name.clone(),
+            credential: credential.clone(),
+        }
     }
 }
 

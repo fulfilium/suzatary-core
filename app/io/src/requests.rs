@@ -54,7 +54,7 @@ impl Requests {
             answers: Docs::new(
                 "answer store",
                 move |name: &Hash| answered_at.join(format!("{}.json", name.as_str())),
-                &ANSWER,
+                &DocCodec::JSON,
             ),
             answered,
         }
@@ -172,16 +172,6 @@ const RECORD: DocCodec<Hash, Requested> = DocCodec {
     parse: |name, bytes| {
         let record: Requested = serde_json::from_slice(&bytes).map_err(|e| e.to_string())?;
         Ok((record.name == name.as_str()).then_some(record))
-    },
-};
-
-/// One JSON answer.
-const ANSWER: DocCodec<Hash, Answer> = DocCodec {
-    print: |_, answer| serde_json::to_vec(answer).map_err(|e| e.to_string()),
-    parse: |_, bytes| {
-        serde_json::from_slice(&bytes)
-            .map(Some)
-            .map_err(|e| e.to_string())
     },
 };
 

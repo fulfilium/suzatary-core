@@ -6,6 +6,7 @@
 //! `YYYY-MM-DD HH:MM:SS[±HH:MM]` (a space, not a `T`), one grammar for an agent
 //! to parse.
 
+use crate::source_key::SourceKey;
 use serde::{Deserialize, Serialize};
 
 /// One queue or search row, enough for an agent to decide whether to `show`.
@@ -130,16 +131,16 @@ pub struct NoiseAdded {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct AccountSync {
     /// The account's canonical address.
-    pub account: String,
+    pub account: crate::mail::account_email::AccountEmail,
     /// Whether it synced, and the class of its failure where it did not.
-    pub outcome: super::health::Outcome,
+    pub outcome: crate::health::Outcome,
     /// The last line of what it said.
     pub tail: String,
 }
 
 /// What `sync` answers. The wrapper persists it at the last-sync path, where
 /// `suzatary gate` (the triage rule, [`super::triage`]) and `sync_mail` read it back, so a renamed field is renamed
-/// for both; each account's health over time is [`super::health`]'s.
+/// for both; each account's health over time is [`crate::health`]'s.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SyncReport {
     /// Every account, in the roster's order.
@@ -150,6 +151,20 @@ pub struct SyncReport {
     /// deleted meanwhile may have been pulled back.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub unheld: Option<String>,
+}
+
+impl SyncReport {
+    /// What it says of each account's health, every account at `at`.
+    #[must_use]
+    pub fn healths(&self, at: crate::health::Instant) -> crate::health::Healths<SourceKey> {
+        self.synced
+            .iter()
+            .map(|account| {
+                let key = SourceKey::Mail(account.account.clone());
+                crate::health::Healths::one(key, at, account.outcome, &account.tail)
+            })
+            .fold(crate::health::Healths::default(), |sum, one| sum.join(&one))
+    }
 }
 
 /// What `backfill` answers.
@@ -224,10 +239,9 @@ mod tests {
         let report = SyncReport {
             unheld: None,
             synced: vec![AccountSync {
-                account: "her@example.test".to_owned(),
-                outcome: crate::mail::health::Outcome::Failed(
-                    crate::connect::Failure::Unclassified,
-                ),
+                account: crate::mail::account_email::AccountEmail::new("her@example.test")
+                    .expect("an address"),
+                outcome: crate::health::Outcome::Failed(crate::connect::Failure::Unclassified),
                 tail: "connection refused".to_owned(),
             }],
             notmuch: "No new mail.".to_owned(),

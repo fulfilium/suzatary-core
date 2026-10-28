@@ -336,8 +336,9 @@ impl MailSync for Fixed {
             report: SyncReport {
                 unheld: None,
                 synced: vec![AccountSync {
-                    account: ACCOUNT.to_owned(),
-                    outcome: suzatary_core::mail::health::Outcome::Succeeded,
+                    account: suzatary_core::mail::account_email::AccountEmail::new(ACCOUNT)
+                        .expect("an address"),
+                    outcome: suzatary_core::health::Outcome::Succeeded,
                     tail: "Sent: 1 new".to_owned(),
                 }],
                 notmuch: "Added 1 new message.".to_owned(),
@@ -348,11 +349,6 @@ impl MailSync for Fixed {
         Err(SyncFailure(
             "a fresh sync is answered without starting one".to_owned(),
         ))
-    }
-    fn health(
-        &self,
-    ) -> Result<suzatary_core::mail::health::Healths, suzatary_core::store::StoreError> {
-        Ok(suzatary_core::mail::health::Healths::default())
     }
 }
 

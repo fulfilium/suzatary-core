@@ -2,6 +2,7 @@
 
 use super::{Checked, Params, Reach, Run, Seen, Standing};
 use crate::mail::address::EmailAddress;
+use crate::plugin::{CredentialName, PluginName};
 use crate::settings::{Help, Words};
 
 /// Which secret a step asks for.
@@ -88,7 +89,7 @@ impl StepShape {
     /// plugin's credential; `None` where its blanks name a parameter the shape lacks, which
     /// the catalog's law rules out for every template.
     #[must_use]
-    pub fn fill(&self, plugin: Option<&str>, params: &Params) -> Option<Step> {
+    pub fn fill(&self, plugin: Option<&PluginName>, params: &Params) -> Option<Step> {
         let email = match params {
             Params::Address(email) | Params::Microsoft { email, .. } => Some(email),
             Params::Nothing | Params::Label(_) | Params::Folder(_) => None,
@@ -106,7 +107,7 @@ impl StepShape {
                 help,
             } => match (plugin, params) {
                 (Some(plugin), Params::Label(label)) => Step::Secret {
-                    name: format!("PLUGIN_{}_{}", plugin.to_ascii_uppercase(), label.as_str()),
+                    name: CredentialName::link(plugin, label).as_str().to_owned(),
                     help,
                 },
                 _ => return None,

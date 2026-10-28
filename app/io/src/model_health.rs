@@ -1,24 +1,23 @@
-//! Whether the model each job runs answers, on disk, as a [`Doc`]: the value and its join are
-//! [`suzatary_core::mail::health`]'s, keyed by the model's name. It lives beside the mail health,
-//! box-local and never pushed, because it is this box's account of its own calls.
-//!
-//! [`Doc`]: suzatary_core::store::Doc
+//! Whether the model each job runs answers, on disk, as a [`Register`]: the value and its join
+//! are [`suzatary_core::health`]'s, keyed by the model's name. It lives beside the sources'
+//! health, box-local and never pushed, because it is this box's account of its own calls.
 
 use std::path::Path;
 use std::sync::Arc;
 
 use suzatary_core::connect::Failure;
-use suzatary_core::mail::health::{self, Healths, Instant, Outcome, Reading};
-use suzatary_core::store::{Doc, StoreError};
+use suzatary_core::health::{Healths, Instant, Outcome, Reading, Register};
+use suzatary_core::store::StoreError;
 
 use crate::docs::{DocCodec, Docs};
+use crate::health_file::HealthFile;
 
 /// The register, one document (absent is a box that has called no model yet), and what to ring
 /// when a call moves an entry's reading between answering and refused, so the box's cards follow
 /// at once rather than at the next hourly filing.
 #[derive(Clone)]
 pub struct Answered {
-    docs: Docs<(), Healths>,
+    file: HealthFile<String>,
     moved: Arc<dyn Fn() + Send + Sync>,
 }
 
@@ -44,19 +43,16 @@ impl Answered {
         at: Instant,
         refused: Option<&str>,
     ) -> Result<(), StoreError> {
-        let answering = |healths: &Healths| {
+        let answering = |healths: &Healths<String>| {
             healths
                 .reading(entry)
                 .map(|reading| matches!(reading, Reading::Ok { .. }))
         };
-        let before = answering(&self.docs.get(&())?.unwrap_or_default());
-        let after = answering(&health::join_into(
-            &self.docs,
-            &match refused {
-                Some(words) => Healths::one(entry, at, Outcome::Failed(Failure::KeyRefused), words),
-                None => Healths::one(entry, at, Outcome::Succeeded, ""),
-            },
-        )?);
+        let before = answering(&self.file.healths()?);
+        let after = answering(&self.file.join(&match refused {
+            Some(words) => Healths::one(entry, at, Outcome::Failed(Failure::KeyRefused), words),
+            None => Healths::one(entry, at, Outcome::Succeeded, ""),
+        })?);
         if before != after {
             (self.moved)();
         }
@@ -64,41 +60,26 @@ impl Answered {
     }
 }
 
-impl Doc<(), Healths> for Answered {
-    fn get(&self, key: &()) -> Result<Option<Healths>, StoreError> {
-        self.docs.get(key)
-    }
-
-    fn set(&self, key: &(), value: &Healths) -> Result<(), StoreError> {
-        self.docs.set(key, value)
-    }
-
-    fn remove(&self, key: &()) -> Result<(), StoreError> {
-        self.docs.remove(key)
+impl Register<String> for Answered {
+    fn healths(&self) -> Result<Healths<String>, StoreError> {
+        self.file.healths()
     }
 }
 
 /// Its file's name, beside the heartbeat as the mail health is.
 pub const FILE: &str = "model-health.json";
 
-/// The document beside `heartbeat`, ringing nothing.
+/// The register beside `heartbeat`, its lock beside it, ringing nothing.
 #[must_use]
 pub fn beside(heartbeat: &Path) -> Answered {
     let path = heartbeat.with_file_name(FILE);
+    let lock = path.with_extension("lock");
+    let docs = Docs::new("model health", move |()| path.clone(), &DocCodec::JSON);
     Answered {
-        docs: Docs::new("model health", move |()| path.clone(), &CODEC),
+        file: HealthFile::new(docs, lock),
         moved: Arc::new(|| {}),
     }
 }
-
-const CODEC: DocCodec<(), Healths> = DocCodec {
-    print: |(), healths| serde_json::to_vec_pretty(healths).map_err(|failed| failed.to_string()),
-    parse: |(), bytes| {
-        serde_json::from_slice(&bytes)
-            .map(Some)
-            .map_err(|failed| failed.to_string())
-    },
-};
 
 #[cfg(test)]
 mod tests {
@@ -126,7 +107,7 @@ mod tests {
         store.record(entry, at(2), Some("401")).expect("recorded");
         store.record(entry, at(3), Some("401")).expect("recorded");
         assert!(dir.path().join(FILE).is_file());
-        let read = store.get(&()).expect("readable").expect("written");
+        let read = store.healths().expect("readable");
         assert_eq!(
             read.reading(entry),
             Some(Reading::Failing {

@@ -44,7 +44,7 @@ impl UploadIndexFiles {
             entries: Docs::new(
                 "upload index",
                 move |id: &AttachmentId| root.join(format!("{id}.json")),
-                &ENTRY,
+                &DocCodec::JSON,
             )
             .private(),
         }
@@ -144,12 +144,6 @@ impl UploadIndex for UploadIndexFiles {
         })
     }
 }
-
-/// An entry as JSON.
-const ENTRY: DocCodec<AttachmentId, Entry> = DocCodec {
-    print: |_, entry| serde_json::to_vec(entry).map_err(|failed| failed.to_string()),
-    parse: |_, bytes| serde_json::from_slice(&bytes).map_err(|failed| failed.to_string()),
-};
 
 #[cfg(test)]
 mod tests {

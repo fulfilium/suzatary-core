@@ -246,10 +246,7 @@ impl<C: Connect, H: Http, I: Index> Servers<C, H, I> {
                 self.gmail(account, &token, query, range)
             }
             Sync::Google => {
-                let address =
-                    suzatary_core::mail::address::EmailAddress::new(account.email.as_str())
-                        .map_err(|refused| failed(refused.message()))?;
-                let token = self.google.token(&address)?;
+                let token = self.google.token(account.email.address())?;
                 self.gmail(account, &token, query, range)
             }
             Sync::Proton(_) => Err(Unsearched::NoServerSearch(account.email.to_string())),

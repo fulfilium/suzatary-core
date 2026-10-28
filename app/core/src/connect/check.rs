@@ -1,7 +1,7 @@
 //! How a connection proves it works.
 
 /// What a connection's check observes: a number the box computes, never words a service sent,
-/// joined over time as each mail account's sync results are (`mail::health`).
+/// joined over time as each mail account's sync results are (`crate::health`).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Check {
     /// The plugin fetched and admitted its items.

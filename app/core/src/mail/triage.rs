@@ -90,11 +90,12 @@ mod tests {
             synced: oks
                 .iter()
                 .map(|ok| AccountSync {
-                    account: "a@example.com".to_owned(),
+                    account: crate::mail::account_email::AccountEmail::new("a@example.com")
+                        .expect("an address"),
                     outcome: if *ok {
-                        crate::mail::health::Outcome::Succeeded
+                        crate::health::Outcome::Succeeded
                     } else {
-                        crate::mail::health::Outcome::Failed(crate::connect::Failure::Unclassified)
+                        crate::health::Outcome::Failed(crate::connect::Failure::Unclassified)
                     },
                     tail: String::new(),
                 })

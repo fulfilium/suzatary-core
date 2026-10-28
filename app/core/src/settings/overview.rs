@@ -11,15 +11,16 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use crate::capability::{MailCredential, MailGrants, SecretState};
-use crate::connect::{self, Checked, Connection, Group, Key, Standing, stamp};
+use crate::connect::{self, Checked, Connection, Group, Key, Standing};
 use crate::deployment::Deployment;
+use crate::health::{Health, Healths};
 use crate::mail::account::MailAccount;
-use crate::mail::health::Healths;
-use crate::plugin::{Ledger, Manifest, PluginName};
+use crate::plugin::{Manifest, PluginName};
 use crate::secretary::acts::Act;
 use crate::secretary::store::Proposal;
 use crate::settings::Help;
 use crate::settings::remote::Pushed;
+use crate::source_key::SourceKey;
 use crate::wire;
 
 /// What an open card asks of the box, and so which lines it is about.
@@ -155,43 +156,6 @@ pub enum Store {
     Unreadable(String),
 }
 
-/// One plugin as the box's cache tier holds it: what its syncs came to, and its store.
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
-pub struct Seen {
-    /// Its ledger.
-    pub ledger: Recorded,
-    /// Its store.
-    pub store: Store,
-}
-
-/// A plugin's ledger as the cache tier holds it: read (an empty one before its first run), or
-/// there and unreadable, which is said and never drawn as a plugin that has not run.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum Recorded {
-    /// The ledger read.
-    Ledger(Ledger),
-    /// A ledger that is there and could not be read, and why.
-    Unreadable(String),
-}
-
-impl Default for Recorded {
-    fn default() -> Self {
-        Recorded::Ledger(Ledger::default())
-    }
-}
-
-impl Recorded {
-    /// `read`'s standing of the ledger, or the failure to read it.
-    fn standing(&self, read: impl FnOnce(&Ledger) -> Standing) -> Standing {
-        match self {
-            Recorded::Ledger(ledger) => read(ledger),
-            Recorded::Unreadable(why) => Standing::Unreadable {
-                words: format!("its ledger could not be read: {why}"),
-            },
-        }
-    }
-}
-
 /// Where the data is kept.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Storage {
@@ -261,19 +225,32 @@ pub struct Observed<'a> {
     pub secrets: &'a BTreeMap<String, SecretState>,
     /// Each Microsoft account's grants, by address.
     pub grants: &'a BTreeMap<String, MailGrants>,
-    /// Each mail account's syncs.
-    pub mail: &'a Healths,
-    /// Each model's calls, by its name.
-    pub answered: &'a Healths,
-    /// Each plugin's cache tier.
-    pub plugins: &'a BTreeMap<PluginName, Seen>,
-    /// The Drive's probes.
-    pub drive: &'a Healths,
-    /// The data repository's pushes, as its reflogs record them; `None` with no upstream.
-    pub pushes: Option<&'a crate::mail::health::Health>,
+    /// What the box's registers hold.
+    pub registers: Registers<'a>,
 }
 
 impl Observed<'_> {
+    /// What `sources` read: checked once any has succeeded, and standing as the join of their
+    /// readings, unobserved while nothing has reported any.
+    fn read(&self, sources: &[SourceKey]) -> (Checked, Standing) {
+        let healths: Vec<&Health> = sources
+            .iter()
+            .filter_map(|key| self.registers.health.health(key))
+            .collect();
+        let checked = Checked::of(
+            healths
+                .iter()
+                .copied()
+                .find(|health| health.succeeded().is_some()),
+        );
+        let standing = healths
+            .iter()
+            .map(|health| Standing::of_health(Some(health.reading())))
+            .reduce(Standing::join)
+            .unwrap_or(Standing::Unobserved);
+        (checked, standing)
+    }
+
     fn secret(&self, name: &str) -> Standing {
         Standing::of_secret(
             name,
@@ -289,16 +266,14 @@ impl Observed<'_> {
 /// check reads.
 #[derive(Debug, Clone, Copy)]
 pub struct Registers<'a> {
-    /// Each mail account's syncs.
-    pub mail: &'a Healths,
+    /// Every source's results.
+    pub health: &'a Healths<SourceKey>,
     /// Each model's calls, by its name.
-    pub answered: &'a Healths,
-    /// Each plugin's cache tier.
-    pub plugins: &'a BTreeMap<PluginName, Seen>,
-    /// The Drive's probes.
-    pub drive: &'a Healths,
-    /// The data repository's pushes; `None` with no upstream.
-    pub pushes: Option<&'a crate::mail::health::Health>,
+    pub answered: &'a Healths<String>,
+    /// Each plugin's store.
+    pub plugins: &'a BTreeMap<PluginName, Store>,
+    /// The data repository's pushes, as its reflogs record them; `None` with no upstream.
+    pub pushes: Option<&'a crate::health::Health>,
 }
 
 /// The connections the instance's tables hold, read through what the box observed: a line that
@@ -560,13 +535,24 @@ fn storage(
 ) -> Overview {
     let storage = declared.storage;
     let chains = declared.deployment.chains.names();
-    let as_read = || Standing::of_health(observed.pushes.map(crate::mail::health::Health::reading));
+    let as_read = || {
+        Standing::of_health(
+            observed
+                .registers
+                .pushes
+                .map(crate::health::Health::reading),
+        )
+    };
     let (pushed, standing) = match &storage.pushed {
         Pushed::To(remote) => (format!(" and pushed to {}", remote.as_str()), as_read()),
         Pushed::Folder(_) => (" and pushed to a folder on this box".to_owned(), as_read()),
         Pushed::Nowhere => (
             " and pushed nowhere".to_owned(),
-            connected.standing(Group::Storage, "data", Checked::of(observed.pushes)),
+            connected.standing(
+                Group::Storage,
+                "data",
+                Checked::of(observed.registers.pushes),
+            ),
         ),
         Pushed::Unread(why) => (
             String::new(),
@@ -613,7 +599,11 @@ fn mail(declared: &Declared<'_>, observed: &Observed<'_>, connected: &Connected<
                 ),
                 MailCredential::Bridge => "Proton, through the local Bridge.".to_owned(),
             };
-            let health = observed.mail.health(account.email.as_str());
+            let sources = connected
+                .connection(Group::Mail, account.email.as_str())
+                .map(Connection::sources)
+                .unwrap_or_default();
+            let (checked, read) = observed.read(&sources);
             Overview::line(
                 Group::Mail,
                 Slot::Account(account.email.to_string()),
@@ -622,10 +612,8 @@ fn mail(declared: &Declared<'_>, observed: &Observed<'_>, connected: &Connected<
                         account.email.as_str(),
                         Some(detail),
                         connected
-                            .standing(Group::Mail, account.email.as_str(), Checked::of(health))
-                            .join(Standing::of_health(
-                                health.map(crate::mail::health::Health::reading),
-                            )),
+                            .standing(Group::Mail, account.email.as_str(), checked)
+                            .join(read),
                     ),
                     matches!(account.sync, crate::mail::account::Sync::Google)
                         .then_some(Need::GoogleClient)
@@ -654,8 +642,13 @@ fn plugins(declared: &Declared<'_>, observed: &Observed<'_>) -> Overview {
         .iter()
         .flat_map(|manifest| {
             let name = manifest.name();
-            let seen = observed.plugins.get(name).cloned().unwrap_or_default();
-            let (group, store) = match &seen.store {
+            let (group, store) = match observed
+                .registers
+                .plugins
+                .get(name)
+                .cloned()
+                .unwrap_or_default()
+            {
                 Store::Calendar => (Group::Calendar, Standing::Kept),
                 Store::NotBegun | Store::Other => (Group::Plugins, Standing::Kept),
                 Store::Unreadable(why) => (
@@ -669,11 +662,10 @@ fn plugins(declared: &Declared<'_>, observed: &Observed<'_>) -> Overview {
             let credentials: Vec<Overview> = manifest
                 .credentials()
                 .map(|credential| {
+                    let (_, read) = observed.read(&[manifest.link(credential)]);
                     let standing = observed
                         .secret(credential.as_str())
-                        .join(seen.ledger.standing(|ledger| {
-                            Standing::of_health(ledger.links.reading(credential.as_str()))
-                        }))
+                        .join(read)
                         .join(store.clone());
                     Overview::line(
                         group,
@@ -704,10 +696,8 @@ fn plugins(declared: &Declared<'_>, observed: &Observed<'_>) -> Overview {
                 })
                 .collect();
             if credentials.is_empty() {
-                let standing = seen
-                    .ledger
-                    .standing(|ledger| last_run(ledger.last.as_ref()))
-                    .join(store);
+                let (_, ran) = observed.read(&[manifest.ran()]);
+                let standing = ran.join(store);
                 vec![Overview::line(
                     group,
                     Slot::Plugin(name.clone()),
@@ -720,19 +710,6 @@ fn plugins(declared: &Declared<'_>, observed: &Observed<'_>) -> Overview {
         .fold(Overview::default(), Overview::join)
 }
 
-/// A plugin's last run: synced when it was stored, failing with its words when not.
-fn last_run(run: Option<&crate::plugin::LastRun>) -> Standing {
-    run.map_or(Standing::Unobserved, |run| match &run.came {
-        crate::plugin::Came::Learnt { .. } => Standing::Synced { at: stamp(run.at) },
-        crate::plugin::Came::Failed { why } => Standing::Failing {
-            since: stamp(run.at),
-            class: connect::Failure::Unclassified,
-            words: why.clone(),
-            at: stamp(run.at),
-        },
-    })
-}
-
 /// One line for the Drive: every allowed folder's connection, joined, and its probes. While a
 /// probe fails for a reason a sign-in does not mend, the line is that failure in words, and no
 /// step of the template stands above it.
@@ -740,13 +717,19 @@ fn drive(declared: &Declared<'_>, observed: &Observed<'_>, connected: &Connected
     if declared.drive.is_empty() {
         return Overview::default();
     }
-    let probed = observed.drive.health(crate::drive::SOURCE);
-    let reading = probed.map(crate::mail::health::Health::reading);
+    let sources: BTreeSet<SourceKey> = declared
+        .drive
+        .iter()
+        .filter_map(|folder| connected.connection(Group::Drive, &folder.to_string()))
+        .flat_map(Connection::sources)
+        .collect();
+    let probed = (sources.iter()).find_map(|key| observed.registers.health.health(key));
+    let reading = probed.map(crate::health::Health::reading);
     // A sign-in that lapsed is the template's terminal step again, however often the Drive
     // listed before; a failure a sign-in does not mend shows no step.
     let steps = match &reading {
-        None | Some(crate::mail::health::Reading::Ok { .. }) => Some(Checked::of(probed)),
-        Some(crate::mail::health::Reading::Failing { class, .. }) => match class.remedy() {
+        None | Some(crate::health::Reading::Ok { .. }) => Some(Checked::of(probed)),
+        Some(crate::health::Reading::Failing { class, .. }) => match class.remedy() {
             connect::Remedy::Auth => Some(Checked::Never),
             connect::Remedy::Secret | connect::Remedy::Retry => None,
         },
@@ -788,7 +771,7 @@ fn models(declared: &Declared<'_>, observed: &Observed<'_>) -> Overview {
                 // What a model's calls said outranks whether its key resolves, as the bootstrap
                 // reads it: the model may hold a sign-in of its own that no store here names.
                 Calls::Recorded { key, credential } => (
-                    match observed.answered.reading(key) {
+                    match observed.registers.answered.reading(key) {
                         Some(reading) => Standing::of_calls(Some(reading)),
                         None => observed.secret(credential).join(Standing::Unobserved),
                     },
@@ -932,11 +915,11 @@ pub(crate) mod tests {
         secrets: BTreeMap<String, SecretState>,
         grants: BTreeMap<String, MailGrants>,
         failing: Vec<(String, String)>,
-        seen: BTreeMap<PluginName, Seen>,
+        seen: BTreeMap<PluginName, Store>,
         asking: Vec<Asking>,
         pushed: Pushed,
-        probed: Healths,
-        pushes: Option<crate::mail::health::Health>,
+        links: Healths<SourceKey>,
+        pushes: Option<crate::health::Health>,
     }
 
     impl World {
@@ -955,7 +938,7 @@ pub(crate) mod tests {
                 seen: BTreeMap::new(),
                 asking: Vec::new(),
                 pushed: Pushed::Nowhere,
-                probed: Healths::default(),
+                links: Healths::default(),
                 pushes: None,
             }
         }
@@ -996,23 +979,22 @@ pub(crate) mod tests {
             )
         }
 
-        fn mail(&self) -> Healths {
-            Healths::of(
-                &SyncReport {
-                    unheld: None,
-                    synced: self
-                        .failing
-                        .iter()
-                        .map(|(account, tail)| AccountSync {
-                            account: account.clone(),
-                            outcome: crate::mail::health::Outcome::Failed(
-                                connect::Failure::Unclassified,
-                            ),
-                            tail: tail.clone(),
-                        })
-                        .collect(),
-                    notmuch: String::new(),
-                },
+        fn mail(&self) -> Healths<SourceKey> {
+            SyncReport {
+                unheld: None,
+                synced: self
+                    .failing
+                    .iter()
+                    .map(|(account, tail)| AccountSync {
+                        account: crate::mail::account_email::AccountEmail::new(account)
+                            .expect("a generated address"),
+                        outcome: crate::health::Outcome::Failed(connect::Failure::Unclassified),
+                        tail: tail.clone(),
+                    })
+                    .collect(),
+                notmuch: String::new(),
+            }
+            .healths(
                 chrono::NaiveDate::from_ymd_opt(2026, 10, 1)
                     .and_then(|day| day.and_hms_opt(9, 0, 0))
                     .expect("an instant"),
@@ -1043,15 +1025,16 @@ pub(crate) mod tests {
                 build: &build,
                 reach: &crate::connect::PLAIN,
             };
-            let mail = self.mail();
+            let health = self.mail().join(&self.links);
             let observed = Observed {
                 secrets: &self.secrets,
                 grants: &self.grants,
-                mail: &mail,
-                answered: &Healths::default(),
-                plugins: &self.seen,
-                drive: &self.probed,
-                pushes: self.pushes.as_ref(),
+                registers: Registers {
+                    health: &health,
+                    answered: &Healths::default(),
+                    plugins: &self.seen,
+                    pushes: self.pushes.as_ref(),
+                },
             };
             let names = settables.names().into_iter().map(str::to_owned).collect();
             (overview(&declared, &observed), names)
@@ -1170,7 +1153,7 @@ pub(crate) mod tests {
                         seen: BTreeMap::new(),
                         asking: Vec::new(),
                         pushed: Pushed::Nowhere,
-                        probed: Healths::default(),
+                        links: Healths::default(),
                         pushes: None,
                     };
                     let names: Vec<String> = world
@@ -1200,10 +1183,11 @@ pub(crate) mod tests {
                                 .push((account.clone(), format!("{said} was refused")));
                         }
                     }
-                    world.seen = plugins
-                        .into_iter()
-                        .map(|(name, (links, store, said))| seen(name, &links, store, said))
-                        .collect();
+                    for (name, (links, store, said)) in plugins {
+                        let (plugin, seen, fetched) = seen(name, &links, store, said);
+                        world.seen.insert(plugin, seen);
+                        world.links = world.links.join(&fetched);
+                    }
                     let emails: Vec<String> = accounts.keys().cloned().collect();
                     world.asking = asking(&cards, &names, &emails);
                     world
@@ -1233,11 +1217,16 @@ pub(crate) mod tests {
             .collect()
     }
 
-    /// A plugin's cache tier: every link last fetched as `said` picks (never, 200, 401, a refusal
-    /// naming the link), or a ledger that could not be read.
-    fn seen(name: &str, links: &[&str], store: u8, said: Option<u8>) -> (PluginName, Seen) {
+    /// A plugin's store and its links' health: every link last fetched as `said` picks (never,
+    /// 200, 401, a refusal naming the link).
+    fn seen(
+        name: &str,
+        links: &[&str],
+        store: u8,
+        said: Option<u8>,
+    ) -> (PluginName, Store, Healths<SourceKey>) {
         let plugin = PluginName::parse(name).expect("a name");
-        let mut ledger = Ledger::default();
+        let mut fetched = Healths::default();
         for link in links {
             let credential = format!("{}{link}", plugin.credential_prefix());
             let answer = match said {
@@ -1252,15 +1241,13 @@ pub(crate) mod tests {
             let tried = chrono::NaiveDate::from_ymd_opt(2026, 10, 5)
                 .and_then(|day| day.and_hms_opt(10, 0, 0))
                 .expect("an instant");
-            ledger = ledger.after(
-                crate::plugin::LastRun {
-                    at: tried,
-                    came: crate::plugin::Came::Learnt {
-                        summary: String::new(),
-                    },
-                },
-                &[(credential, answer)],
-            );
+            let run = crate::plugin::LastRun {
+                at: tried,
+                came: crate::plugin::Came::Learnt,
+            };
+            let credential =
+                crate::plugin::CredentialName::parse(&plugin, &credential).expect("a name");
+            fetched = fetched.join(&run.health(&manifest(name, links), &[(credential, answer)]));
         }
         let store = match store {
             0 => Store::NotBegun,
@@ -1268,12 +1255,7 @@ pub(crate) mod tests {
             2 => Store::Other,
             _ => Store::Unreadable(format!("{} holds no schema", plugin.credential_prefix())),
         };
-        let ledger = if said == Some(3) {
-            Recorded::Unreadable("a directory where the ledger belongs".to_owned())
-        } else {
-            Recorded::Ledger(ledger)
-        };
-        (plugin, Seen { ledger, store })
+        (plugin, store, fetched)
     }
 
     fn standing() -> impl Strategy<Value = Standing> {
@@ -1362,7 +1344,7 @@ pub(crate) mod tests {
         #[test]
         fn a_group_with_nothing_connected_lists_nothing(world in world()) {
             let (page, _) = world.wire();
-            let calendars = world.plugins.iter().filter(|m| world.seen.get(m.name()).is_some_and(|s| s.store == Store::Calendar)).count();
+            let calendars = world.plugins.iter().filter(|m| world.seen.get(m.name()) == Some(&Store::Calendar)).count();
             prop_assert_eq!(lines(&page, Group::Mail), world.accounts.len());
             prop_assert_eq!(lines(&page, Group::Notifications), world.channels.len());
             prop_assert_eq!(lines(&page, Group::Models), world.jobs.len());
@@ -1491,23 +1473,6 @@ pub(crate) mod tests {
             Standing::Unreadable {
                 words: "where it is pushed could not be read: permission denied".to_owned()
             }
-        );
-    }
-
-    /// A ledger that could not be read is said as such, never drawn as a plugin that has not
-    /// run: the failure is its own arm, with no run invented for it.
-    #[test]
-    fn an_unreadable_ledger_is_said_never_unobserved() {
-        let unread = Recorded::Unreadable("Is a directory".to_owned());
-        assert_eq!(
-            unread.standing(|ledger| last_run(ledger.last.as_ref())),
-            Standing::Unreadable {
-                words: "its ledger could not be read: Is a directory".to_owned()
-            }
-        );
-        assert_eq!(
-            Recorded::default().standing(|ledger| last_run(ledger.last.as_ref())),
-            Standing::Unobserved
         );
     }
 }

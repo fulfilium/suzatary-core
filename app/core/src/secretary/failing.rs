@@ -14,19 +14,19 @@
 //! [`ABANDONED`]. A connection whose failure a card already mends is offered no removal beside
 //! that card.
 
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeSet;
 
 use chrono::Duration;
 
 use crate::calendar::CalendarName;
 use crate::connect::{Connection, Declared, Failure, Key, Remedy, Step, Table};
-use crate::mail::health::{Health, Healths, Instant, Reading};
-use crate::plugin::PluginName;
+use crate::health::{Health, Healths, Instant, Reading};
 use crate::secretary::acts::Act;
 use crate::secretary::bootstrap::Answering;
 use crate::secretary::noticed::Owed;
 use crate::secretary::store::Proposal;
 use crate::settings::{Settable, Settables};
+use crate::source_key::SourceKey;
 
 /// How long a calendar may hold nothing, before today and after it, before it is offered for
 /// removal.
@@ -54,10 +54,8 @@ pub struct Observed<'a> {
     pub declared: &'a Declared,
     /// What the model answers, and every secret name declared.
     pub answering: &'a Answering<'a>,
-    /// Each mail account's syncs.
-    pub mail: &'a Healths,
-    /// Each plugin's links' fetches, by plugin.
-    pub links: &'a BTreeMap<PluginName, Healths>,
+    /// Every source's results.
+    pub health: &'a Healths<SourceKey>,
     /// The calendars holding an occurrence within [`quiet`] of `now`; `None` when the
     /// calendars could not be read, which holds every waiting card, since a calendar still
     /// quiet cannot be told from one that is not.
@@ -186,34 +184,30 @@ fn said(class: Failure) -> String {
     }
 }
 
-/// Every failing observation: each link of a declared plugin and each mail account whose
-/// results read as failing. A model that does not answer is the bootstrap's to ask for
+/// Every failing observation: each declared connection one of whose sources reads as failing,
+/// of the class and since the instant of that source. Of two failing sources, one whose class a
+/// tap mends is the one owed a card, so a calendar's outage never hides its account's sign-in;
+/// of two alike, the longer failing. A model that does not answer is the bootstrap's to ask for
 /// (`bootstrap::owed`).
 #[must_use]
 pub fn failing(observed: &Observed<'_>) -> Vec<Failing> {
-    let connections = observed.declared.connections();
-    let of = |health: Option<&Health>| health.and_then(Health::remedial);
-    let connected = connections.values().filter_map(|connection| {
-        let reading = match connection.template().table {
-            Table::Link(fragment) => {
-                let name = connection.secrets().into_iter().next()?;
-                observed
-                    .links
-                    .iter()
-                    .find(|(plugin, _)| plugin.as_str() == fragment.plugin)
-                    .and_then(|(_, links)| links.health(&name))
-            }
-            Table::Account(_) => observed.mail.health(&connection.key().name),
-            Table::Always | Table::Model | Table::Folder | Table::Channel(_) => None,
-        };
-        let (class, since) = of(reading)?;
-        Some(Failing {
-            connection: connection.clone(),
-            class,
-            since,
+    observed
+        .declared
+        .connections()
+        .values()
+        .filter_map(|connection| {
+            let (class, since) = connection
+                .sources()
+                .iter()
+                .filter_map(|key| observed.health.health(key).and_then(Health::remedial))
+                .min_by_key(|(class, since)| (class.remedy() == Remedy::Retry, *since))?;
+            Some(Failing {
+                connection: connection.clone(),
+                class,
+                since,
+            })
         })
-    });
-    connected.collect()
+        .collect()
 }
 
 /// The cards the connections' health owes, besides what `asked` already asks for: one per
@@ -230,6 +224,12 @@ pub fn owed(observed: &Observed<'_>, asked: &Owed) -> Owed {
                     Proposal::Act(Act::Secret { name: held, .. }),
                     Proposal::Act(Act::Secret { name, .. }),
                 ) => held == name,
+                // One sign-in with Google per account: a card asking for one missing part is the
+                // card a failure that needs the sign-in is owed.
+                (
+                    Proposal::Act(Act::GoogleSignIn { account: held, .. }),
+                    Proposal::Act(Act::GoogleSignIn { account, .. }),
+                ) => held == account,
                 (held, proposal) => held == proposal,
             })
     };
@@ -239,89 +239,83 @@ pub fn owed(observed: &Observed<'_>, asked: &Owed) -> Owed {
         .filter_map(|failing| failing.fix(settables))
         .filter(|owed| !owed.iter().any(|noticed| asks(&noticed.proposal)))
         .fold(Owed::default(), Owed::join);
-    // A failure a tap mends has its card, from this rule or another; removing the connection
-    // beside it would offer the opposite act for the same state.
-    let mended: BTreeSet<Key> = failing
-        .iter()
-        .filter(|failing| failing.class.remedy() != Remedy::Retry)
-        .map(|failing| failing.connection.key())
-        .collect();
-    fixes.join(unused(observed, &mended))
+    fixes.join(unused(observed, &failing))
 }
 
-/// The removals an unused connection is offered, none for a connection in `mended`.
-fn unused(observed: &Observed<'_>, mended: &BTreeSet<Key>) -> Owed {
-    let connections = observed.declared.connections();
-    let accounts = connections
-        .values()
-        .filter(|connection| !mended.contains(&connection.key()))
-        .filter_map(|connection| {
-            match connection.template().table {
-                Table::Account(_) => {}
-                Table::Always
-                | Table::Model
-                | Table::Link(_)
-                | Table::Folder
-                | Table::Channel(_) => return None,
-            }
-            let reading = observed.mail.reading(&connection.key().name)?;
-            let since = match reading {
-                Reading::Failing { since, .. }
-                    if reading.failing_for(observed.now) >= Some(abandoned()) =>
-                {
-                    since
-                }
-                Reading::Failing { .. } | Reading::Ok { .. } => return None,
-            };
-            Some(
-                Owed::one(
-                    Proposal::Act(Act::Disconnect {
-                        connection: connection.clone(),
-                    }),
-                    format!(
-                        "{} has not synced since {}, {ABANDONED} days or more.",
-                        connection.called(),
-                        utc(since)
-                    ),
-                )
-                .since(prodrome_core::fpl::datetime_of(since).ok()?),
+/// The removals an unused connection is offered: an account whose mail has failed for
+/// [`abandoned`] (a Google account's calendars failing alone leave its mail in use), and a
+/// calendar that syncs and is [`quiet`]. A failure a tap mends has its card, from this rule or
+/// another, so its connection is offered no removal, which would be the opposite act for the
+/// same state.
+fn unused(observed: &Observed<'_>, failing: &[Failing]) -> Owed {
+    let mended = |key: Key| {
+        failing.iter().any(|failing| {
+            failing.connection.key() == key && failing.class.remedy() != Remedy::Retry
+        })
+    };
+    let accounts = failing.iter().filter_map(|failing| {
+        let connection = &failing.connection;
+        let mail = connection.sources().into_iter().find(|key| match key {
+            SourceKey::Mail(_) => true,
+            SourceKey::Plugin(_)
+            | SourceKey::Link { .. }
+            | SourceKey::GoogleCalendar(_)
+            | SourceKey::Drive => false,
+        })?;
+        let since = match observed.health.reading(&mail)? {
+            Reading::Failing { since, .. } if observed.now - since >= abandoned() => since,
+            Reading::Failing { .. } | Reading::Ok { .. } => return None,
+        };
+        if mended(connection.key()) {
+            return None;
+        }
+        Some(
+            Owed::one(
+                Proposal::Act(Act::Disconnect {
+                    connection: connection.clone(),
+                }),
+                format!(
+                    "{} has not synced since {}, {ABANDONED} days or more.",
+                    connection.called(),
+                    utc(since)
+                ),
             )
-        });
+            .since(prodrome_core::fpl::datetime_of(since).ok()?),
+        )
+    });
     let calendars = match observed.heard {
         None => Owed::default().holding(),
-        Some(heard) => connections
+        Some(heard) => observed
+            .declared
+            .connections()
             .values()
-            .filter(|connection| !mended.contains(&connection.key()))
             .filter_map(|connection| quiet_calendar(observed, heard, connection))
             .fold(Owed::default(), Owed::join),
     };
     accounts.fold(Owed::default(), Owed::join).join(calendars)
 }
 
-/// The removal a calendar is offered when its link syncs, its latest fetch included, and its
-/// store holds nothing within [`quiet`] of now: a calendar that holds nothing because its link
-/// fails is offered none.
+/// The removal a calendar is offered when its link syncs, one that does not fail, and its store
+/// holds nothing within [`quiet`] of now: a calendar that holds nothing because its link fails is
+/// offered none.
 fn quiet_calendar(
     observed: &Observed<'_>,
     heard: &BTreeSet<CalendarName>,
     connection: &Connection,
 ) -> Option<Owed> {
-    let fragment = match connection.template().table {
-        Table::Link(fragment) => fragment,
+    match connection.template().table {
+        Table::Link(_) => {}
         Table::Always | Table::Model | Table::Account(_) | Table::Folder | Table::Channel(_) => {
             return None;
         }
-    };
+    }
     let name = connection.secrets().into_iter().next()?;
-    let synced = observed
-        .links
-        .iter()
-        .find(|(plugin, _)| plugin.as_str() == fragment.plugin)
-        .and_then(|(_, links)| links.health(&name))
-        .and_then(|health| match health.reading() {
+    let synced = (connection.sources().iter())
+        .filter_map(|key| match observed.health.reading(key)? {
             Reading::Ok { at } => Some(at),
             Reading::Failing { .. } => None,
-        })?;
+        })
+        .max()?;
     if heard.iter().any(|calendar| calendar.as_str() == name) {
         return None;
     }
@@ -340,7 +334,7 @@ fn quiet_calendar(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::mail::health::Outcome;
+    use crate::health::Outcome;
     use crate::secretary::inbox::{self, Fold};
     use crate::secretary::inbox_event::InboxEvent;
     use crate::secretary::proposer::Proposer;
@@ -365,17 +359,17 @@ mod tests {
         .expect("an account")
     }
 
-    fn ics() -> PluginName {
-        PluginName::parse("ics").expect("a name")
+    fn google() -> Connection {
+        Connection::parse("google", &["bea@example.test".to_owned()]).expect("a Google account")
     }
 
-    /// A deployment declaring the Work calendar and Ada's Microsoft account.
+    /// A deployment declaring the Work calendar, Ada's Microsoft account and Bea's Google
+    /// account.
     struct World {
         declared: Declared,
         settables: Settables,
-        answered: Healths,
-        mail: Healths,
-        links: BTreeMap<PluginName, Healths>,
+        answered: Healths<String>,
+        health: Healths<SourceKey>,
         heard: BTreeSet<CalendarName>,
     }
 
@@ -384,6 +378,7 @@ mod tests {
             let declared = Declared::default()
                 .with(&work())
                 .and_then(|declared| declared.with(&account()))
+                .and_then(|declared| declared.with(&google()))
                 .expect("declared");
             Self {
                 settables: Settables::derive(
@@ -394,23 +389,32 @@ mod tests {
                 ),
                 declared,
                 answered: Healths::default(),
-                mail: Healths::default(),
-                links: BTreeMap::new(),
+                health: Healths::default(),
                 heard: BTreeSet::new(),
             }
         }
 
         fn link(&mut self, at: Instant, outcome: Outcome) {
-            let joined = self
-                .links
-                .get(&ics())
-                .cloned()
-                .unwrap_or_default()
-                .join(&Healths::one("PLUGIN_ICS_WORK", at, outcome, "it answered"));
-            self.links.insert(ics(), joined);
+            let key = work()
+                .sources()
+                .into_iter()
+                .next()
+                .expect("a calendar reads its link");
+            self.health = self
+                .health
+                .join(&Healths::one(key, at, outcome, "it answered"));
+        }
+
+        fn google(&mut self, key: &SourceKey, at: Instant, outcome: Outcome) {
+            let one = Healths::one(key.clone(), at, outcome, "it failed");
+            self.health = self.health.join(&one);
         }
 
         fn owed(&self, now: Instant) -> Owed {
+            self.owed_beside(now, &Owed::default())
+        }
+
+        fn owed_beside(&self, now: Instant, asked: &Owed) -> Owed {
             let resolves = |_: &Settable| true;
             let answering = Answering {
                 model: "a-cli/a-model",
@@ -422,12 +426,11 @@ mod tests {
                 &Observed {
                     declared: &self.declared,
                     answering: &answering,
-                    mail: &self.mail,
-                    links: &self.links,
+                    health: &self.health,
                     heard: Some(&self.heard),
                     now,
                 },
-                &Owed::default(),
+                asked,
             )
         }
     }
@@ -535,6 +538,61 @@ mod tests {
             // Only an episode a success ended withdraws its card.
             proptest::prop_assert!(withdrawn <= episodes.saturating_sub(usize::from(open_episode)));
         }
+    }
+
+    /// A Google account reads two sources, its mail and its calendars. Its calendars failing
+    /// alone for a week leave its mail in use, so no removal is offered; a sign-in its mail needs
+    /// is owed its card whatever older outage its calendars have; and a sign-in card another
+    /// rule already asks for, for one missing part, is that card.
+    #[test]
+    fn a_google_accounts_two_sources() {
+        let bea =
+            crate::mail::account_email::AccountEmail::new("bea@example.test").expect("an address");
+        let (mail, calendars) = (
+            SourceKey::Mail(bea.clone()),
+            SourceKey::GoogleCalendar(bea.clone()),
+        );
+        let outage = Outcome::Failed(Failure::Unclassified);
+        let count = |owed: &Owed, act: fn(&Act) -> bool| {
+            owed.iter()
+                .filter(|noticed| matches!(&noticed.proposal, Proposal::Act(held) if act(held)))
+                .count()
+        };
+        let disconnects = |owed: &Owed| count(owed, |act| matches!(act, Act::Disconnect { .. }));
+        let sign_ins = |owed: &Owed| count(owed, |act| matches!(act, Act::GoogleSignIn { .. }));
+        let week = at(24 * 8);
+
+        let mut world = World::new();
+        world.google(&calendars, at(0), outage);
+        world.google(&mail, week, Outcome::Succeeded);
+        assert_eq!(disconnects(&world.owed(week)), 0, "its mail syncs");
+        let mut failing = World::new();
+        failing.google(&mail, at(1), outage);
+        failing.google(&mail, week, outage);
+        assert_eq!(disconnects(&failing.owed(week)), 1, "its mail fails a week");
+
+        let mut lapsed = World::new();
+        lapsed.google(&calendars, at(0), outage);
+        lapsed.google(&mail, at(4), Outcome::Succeeded);
+        lapsed.google(&mail, at(5), Outcome::Failed(Failure::NeedsLogin));
+        assert_eq!(sign_ins(&lapsed.owed(at(6))), 1, "the mail's sign-in");
+
+        let mut partial = World::new();
+        partial.google(&calendars, at(1), Outcome::Failed(Failure::NeedsLogin));
+        assert_eq!(sign_ins(&partial.owed(at(2))), 1, "owed when nothing asks");
+        let asked = Owed::one(
+            Proposal::Act(Act::GoogleSignIn {
+                account: bea.address().clone(),
+                scopes: crate::google::Scopes::of([crate::google::Scope::Calendar])
+                    .expect("one part"),
+            }),
+            "it lacks its calendars".to_owned(),
+        );
+        assert_eq!(
+            sign_ins(&partial.owed_beside(at(2), &asked)),
+            0,
+            "that card"
+        );
     }
 
     fn outcome(result: Seen) -> Outcome {

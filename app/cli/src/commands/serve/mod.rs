@@ -206,11 +206,7 @@ pub struct Inner {
     pub wall: fn() -> chrono::DateTime<chrono::Utc>,
     /// Whether each model entry answered its calls: the register the box reads to know whether
     /// any model answers.
-    pub answered:
-        Arc<dyn suzatary_core::store::Doc<(), suzatary_core::mail::health::Healths> + Send + Sync>,
-    /// The Drive's probes: whether each folder the secretary may read lists.
-    pub probes:
-        Arc<dyn suzatary_core::store::Doc<(), suzatary_core::mail::health::Healths> + Send + Sync>,
+    pub answered: Arc<dyn suzatary_core::health::Register<String> + Send + Sync>,
     /// The sign-ins the box holds open; outside every record, reached only with a `Tap`.
     pub signing: Arc<dyn suzatary_core::secretary::sign_in::Sessions + Send + Sync>,
     /// The one test call before a model's credential is kept; outside every record likewise.
@@ -230,40 +226,6 @@ pub struct Inner {
     pub frontiers: Arc<prodrome_core::store::frontier::Frontiers>,
     /// What `GET /api/portal` answers, read from `[notify]` when the server starts.
     pub portal: Arc<suzatary_core::portal::Portal>,
-}
-
-/// Whether each model answered, held in memory: a test's register, joined as the file is.
-pub struct Remembered(std::sync::Mutex<suzatary_core::mail::health::Healths>);
-
-impl Remembered {
-    /// The register, holding `healths`.
-    #[must_use]
-    pub fn holding(healths: suzatary_core::mail::health::Healths) -> Self {
-        Self(std::sync::Mutex::new(healths))
-    }
-}
-
-impl suzatary_core::store::Doc<(), suzatary_core::mail::health::Healths> for Remembered {
-    fn get(
-        &self,
-        (): &(),
-    ) -> Result<Option<suzatary_core::mail::health::Healths>, suzatary_core::store::StoreError>
-    {
-        Ok(Some(locks::held(&self.0).clone()))
-    }
-
-    fn set(
-        &self,
-        (): &(),
-        value: &suzatary_core::mail::health::Healths,
-    ) -> Result<(), suzatary_core::store::StoreError> {
-        *locks::held(&self.0) = value.clone();
-        Ok(())
-    }
-
-    fn remove(&self, (): &()) -> Result<(), suzatary_core::store::StoreError> {
-        self.set(&(), &suzatary_core::mail::health::Healths::default())
-    }
 }
 
 /// A store that holds no secret: a test's server keeps no Google client until it is given one.
@@ -415,10 +377,10 @@ impl State {
     ) -> Self {
         // A test's server: its model answers, as a scripted model does; `listen` reads the
         // box's own register instead.
-        let answered = Remembered::holding(suzatary_core::mail::health::Healths::one(
-            &models.recorded(),
+        let answered = std::sync::Mutex::new(suzatary_core::health::Healths::one(
+            models.recorded(),
             chrono::DateTime::UNIX_EPOCH.naive_utc(),
-            suzatary_core::mail::health::Outcome::Succeeded,
+            suzatary_core::health::Outcome::Succeeded,
             "",
         ));
         let consenting = Arc::new(google::Consenting::new(
@@ -470,9 +432,6 @@ impl State {
             performing: Arc::default(),
             wall: chrono::Utc::now,
             answered: Arc::new(answered),
-            probes: Arc::new(Remembered::holding(
-                suzatary_core::mail::health::Healths::default(),
-            )),
             signing: Arc::new(Closed),
             verify: Arc::new(Unverified),
             consenting,
@@ -519,23 +478,9 @@ impl State {
     #[must_use]
     pub fn with_answered(
         mut self,
-        answered: Arc<
-            dyn suzatary_core::store::Doc<(), suzatary_core::mail::health::Healths> + Send + Sync,
-        >,
+        answered: Arc<dyn suzatary_core::health::Register<String> + Send + Sync>,
     ) -> Self {
         self.building().answered = answered;
-        self
-    }
-
-    /// The same state keeping the Drive's probes in `probes`.
-    #[must_use]
-    pub fn with_probes(
-        mut self,
-        probes: Arc<
-            dyn suzatary_core::store::Doc<(), suzatary_core::mail::health::Healths> + Send + Sync,
-        >,
-    ) -> Self {
-        self.building().probes = probes;
         self
     }
 
@@ -546,22 +491,6 @@ impl State {
         let now = prodrome_core::fpl::instant_of(caps.secretary.clock.now());
         let heard = heard(caps.secretary.calendar, now);
         *locks::held(&self.noticing) = heard;
-    }
-
-    /// List every folder the secretary may read and join what came of it into the Drive's
-    /// register; a register that cannot be written is a log line, since the next probe asks
-    /// again.
-    pub fn probe_drive(&self) {
-        let caps = self.first.caps;
-        let at = prodrome_core::fpl::instant_of(caps.secretary.clock.now());
-        let probed = suzatary_core::drive::probe(
-            caps.secretary.drive.port(),
-            &caps.secretary.drive.allowed_folders(),
-            at,
-        );
-        if let Err(failed) = suzatary_core::mail::health::join_into(self.probes.as_ref(), &probed) {
-            tracing::warn!("the Drive's probe: {failed}");
-        }
     }
 
     /// The same state holding its sign-ins in `signing`, and testing a model's credential with
@@ -804,8 +733,8 @@ impl State {
             accounts: _,
             plugins: _,
         } = self.live();
-        let answered = match self.answered.get(&()) {
-            Ok(answered) => answered.unwrap_or_default(),
+        let answered = match self.answered.healths() {
+            Ok(answered) => answered,
             Err(failed) => {
                 tracing::warn!(
                     "noticed: the model health: {}",
@@ -821,13 +750,12 @@ impl State {
             .declared()
             .inspect_err(|failed| tracing::warn!("noticed: the instance file: {failed}"))
             .ok();
-        let mail = caps
+        let health = caps
             .secretary
-            .sync
-            .health()
-            .inspect_err(|failed| tracing::warn!("noticed: the mail health: {failed}"))
+            .health
+            .healths()
+            .inspect_err(|failed| tracing::warn!("noticed: the sources' health: {failed}"))
             .ok();
-        let links = self.links();
         let now = prodrome_core::fpl::instant_of(caps.secretary.clock.now());
         let model = self.models.recorded();
         let seen = suzatary_core::secretary::noticed::Seen {
@@ -837,8 +765,7 @@ impl State {
             answered: &answered,
             open: &open,
             declared: declared.as_ref(),
-            mail: mail.as_ref(),
-            links: links.as_ref(),
+            health: health.as_ref(),
             heard: heard.as_ref(),
             pushed: &settings::pushed(self),
             now,
@@ -879,28 +806,6 @@ impl State {
                 }
             }
         }
-    }
-
-    /// Each declared plugin's links' fetches, from its ledger; `None` when a ledger is there and
-    /// cannot be read, which is said.
-    fn links(
-        &self,
-    ) -> Option<BTreeMap<suzatary_core::plugin::PluginName, suzatary_core::mail::health::Healths>>
-    {
-        let Some(plugins) = self.plugins.as_ref() else {
-            return Some(BTreeMap::new());
-        };
-        self.live()
-            .plugins
-            .iter()
-            .map(|manifest| {
-                let name = manifest.name();
-                crate::commands::plugin::ledger(plugins, name)
-                    .map(|ledger| (name.clone(), ledger.links))
-                    .inspect_err(|failed| tracing::warn!("noticed: plugin {name}: {failed}"))
-                    .ok()
-            })
-            .collect()
     }
 
     /// Every chain this server serves, as the secretary binds one.
@@ -1195,9 +1100,6 @@ pub async fn listen(instance: &Instance, serving: Serving) -> anyhow::Result<()>
     .with_reveal(Arc::new(crate::commands::mail::notmuch(instance)))
     .with_checks(Arc::new(checks::Synced::of(instance.path.clone())))
     .with_answered(Arc::new(serving.answered))
-    .with_probes(Arc::new(suzatary_io::drive_health::beside(
-        &instance.mail.heartbeat,
-    )))
     .with_books(
         Arc::new(epochs::open(instance.paths.epochs.clone())),
         Arc::new(frontiers::open(instance.paths.frontiers.clone())),
@@ -1679,7 +1581,7 @@ pub type Heard = std::collections::BTreeSet<suzatary_core::calendar::CalendarNam
 /// `None` when the calendars could not be read, which is said.
 fn heard(
     calendar: &dyn suzatary_core::capability::Calendar,
-    now: suzatary_core::mail::health::Instant,
+    now: suzatary_core::health::Instant,
 ) -> Option<Heard> {
     use suzatary_core::secretary::failing::{QUIET, quiet};
     calendar
@@ -1698,9 +1600,8 @@ fn heard(
 /// cards before anyone opens Settings, and once an hour from then on: a secret can stop
 /// resolving, a sign-in lapse and a model stop answering with no request to say so; and at
 /// once whenever `moved` rings (a model starts or stops answering, a sign-in lapses). The
-/// Drive is probed and the calendars heard before each hourly filing, the first at once and
-/// beside the server, never before it listens: a Drive that does not answer costs its probe's
-/// own time, and its line and cards read a listing at most an hour old.
+/// calendars are heard before each hourly filing, the first at once and beside the server,
+/// never before it listens; the Drive's probe is the source timer's (`suzatary plugin sync`).
 async fn notice_from_now_on(state: State, moved: Arc<tokio::sync::Notify>) {
     let first = state.clone();
     if let Err(join_error) = tokio::task::spawn_blocking(move || first.notice()).await {
@@ -1725,7 +1626,6 @@ async fn notice_from_now_on(state: State, moved: Arc<tokio::sync::Notify>) {
             every.tick().await;
             let noticing = state.clone();
             if let Err(join_error) = tokio::task::spawn_blocking(move || {
-                noticing.probe_drive();
                 noticing.hear();
                 noticing.notice();
             })

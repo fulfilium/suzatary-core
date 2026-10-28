@@ -56,7 +56,7 @@ impl Report {
             at: iso(synced.at),
             accounts: all
                 .iter()
-                .filter(|row| account.is_none_or(|asked| row.account.eq_ignore_ascii_case(asked)))
+                .filter(|row| account.is_none_or(|asked| row.account.is(asked)))
                 .cloned()
                 .collect(),
             notmuch: notmuch.clone(),

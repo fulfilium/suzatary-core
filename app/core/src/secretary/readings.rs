@@ -715,7 +715,7 @@ fn connect_on_wire(
         // The plugin's origins as declared now, or its template's for a first link.
         reach: match connection.template().table {
             crate::connect::Table::Link(fragment) => {
-                draws.origins(fragment.plugin).unwrap_or_else(|| {
+                draws.origins(fragment.plugin.as_str()).unwrap_or_else(|| {
                     fragment
                         .origins
                         .iter()

@@ -359,22 +359,12 @@ fn a_review(root: &Path) -> anyhow::Result<()> {
 /// `no_model` its last call failed instead, so the box asks for a model itself.
 fn answers(read: &crate::instance::Instance, no_model: bool) -> anyhow::Result<()> {
     use suzatary_core::capability::Clock as _;
-    use suzatary_core::mail::health::Outcome;
-    use suzatary_core::store::Doc as _;
     let at = prodrome_core::fpl::instant_of(SystemClock.now());
     suzatary_io::model_health::beside(&read.mail.heartbeat)
-        .set(
-            &(),
-            &suzatary_core::mail::health::Healths::one(
-                &suzatary_io::model::name_of(read.secretary.model.as_str()),
-                at,
-                if no_model {
-                    Outcome::Failed(suzatary_core::connect::Failure::KeyRefused)
-                } else {
-                    Outcome::Succeeded
-                },
-                "the fixture's model is not connected",
-            ),
+        .record(
+            &suzatary_io::model::name_of(read.secretary.model.as_str()),
+            at,
+            no_model.then_some("the fixture's model is not connected"),
         )
         .context("writing the fixture's model health")
 }
@@ -565,10 +555,10 @@ pub fn fake_google(args: &FakeGoogleArgs) -> anyhow::Result<()> {
 pub mod fake_google;
 
 /// The calendar `--settings` declares as one that synced once and then lost its link: its store
-/// begun at the reference plugin's schema, so the calendar reads it, and its ledger's last run a
-/// success, so storing the link again makes its line healthy without a sync.
+/// begun at the reference plugin's schema, so the calendar reads it, and its last run and its
+/// link's fetch a success, so storing the link again makes its line healthy without a sync.
 fn a_calendar(read: &crate::instance::Instance, repo: &Path) -> anyhow::Result<()> {
-    use suzatary_core::plugin::{Answer, Came, LastRun, Ledger, PluginName};
+    use suzatary_core::plugin::{Answer, Came, CredentialName, LastRun, PluginName};
     let name = PluginName::parse("ics")?;
     let text = std::fs::read_to_string(repo.join("app/plugin-ics/ics.schema"))
         .context("reading the calendar plugin's schema")?;
@@ -580,17 +570,14 @@ fn a_calendar(read: &crate::instance::Instance, repo: &Path) -> anyhow::Result<(
             at: chrono::NaiveDate::from_ymd_opt(2026, 10, 8)
                 .and_then(|day| day.and_hms_opt(hour, 0, 0))
                 .context("the fixture's instant")?,
-            came: Came::Learnt {
-                summary: "plugin ics: 3 items".to_owned(),
-            },
+            came: Came::Learnt,
         })
     };
-    let link = |answer| [(SETTINGS_CALENDAR_LINK.to_owned(), answer)];
-    let ledger = Ledger::default().after(run(9)?, &link(Answer::Status(200)));
-    std::fs::write(
-        read.plugins.beside(&name).join("ledger.json"),
-        serde_json::to_vec(&ledger)?,
-    )?;
+    let manifest = (read.plugins.named(name.as_str()))
+        .context("the fixture declares the calendar's plugin")?;
+    let link = CredentialName::parse(&name, SETTINGS_CALENDAR_LINK)?;
+    suzatary_io::source_health::beside(&read.mail.heartbeat)
+        .join(&run(9)?.health(manifest, &[(link, Answer::Status(200))]))?;
     Ok(())
 }
 

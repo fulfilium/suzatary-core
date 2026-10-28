@@ -533,6 +533,27 @@ and can land in any order after #243. Stages 5 and 6 need stage 2's runner.
 - **The phone:** no change, except that a Google calendar that fails says so
   on its Settings line and gets its card.
 
+Stage 1 BUILT (2026-10-27): `suzatary_core::source_key::SourceKey` (`mail:`,
+`plugin:`, `link:`, `google-calendar:`, `drive`) keys one
+`crate::health::Healths<SourceKey>` in `source-health.json` beside the
+heartbeat (`suzatary_io::source_health`), not under `cache/`, because a
+failure's `since` cannot be rebuilt by syncing again. It is a
+`suzatary_io::docs::Locked` document, the read-change-write under a lock
+that the pairing file uses too, so writers that join at once lose nothing.
+Every reader reads it through the secretary's record (`health::Register`,
+read-only). The Drive's probe rides the source timer (`suzatary plugin
+sync`) beside the plugins and the Google calendars, so the server writes
+nothing to it. `Endpoint` waits for stage 3, which adds the first `SinkKey`.
+`connect::Connection::sources` maps a connection to its keys; a plugin's own
+lines read `Manifest::ran` and `Manifest::link`, the keys its runs are
+recorded under. A plugin's run is a health result under `plugin:<name>`, so
+the plugin ledger went whole, and stage 2's ledger holds only the cursor.
+`suzatary sources migrate-health` carries the three old registers, folding a
+mail key written before addresses were folded, and `verify` refuses while
+the old ones hold a failure the new one lacks. `plugin migrate`, which ran
+in the 2.1.21 window, is deleted. Measured with `scripts/size.sh`: −31
+production lines before the merge of 2.1.28.
+
 ### Stage 2 (inputs): one source port and one runner
 
 - **General piece:** `Source`, `Pulled`, `Deliver` (with no writer yet:
@@ -545,9 +566,9 @@ and can land in any order after #243. Stages 5 and 6 need stage 2's runner.
   plumbing (≈ 110 of #243's `plugin/mod.rs`, 281), which becomes the plugin
   adapter; `Syncer::sync`'s loop (57), which moves into the runner; the
   stage-1 migration verb (35).
-- **Migration:** the plugin `ledger.json` and `cursor` move to
-  `cache/sources/<key>/`, read once by `suzatary sources migrate-ledgers`
-  and deleted in stage 4. Mail's per-puller state files do not move.
+- **Migration:** the plugin `cursor` moves to `cache/sources/<key>/`, read
+  once by `suzatary sources migrate-ledgers` and deleted in stage 4 (stage 1
+  removed the ledger). Mail's per-puller state files do not move.
 - **Lines:** about −295, +225. **Net ≈ −70.**
 - **The phone:** no change. A calendar refreshes on the runner's cadence.
 

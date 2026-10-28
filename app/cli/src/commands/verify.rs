@@ -1,7 +1,7 @@
 //! `suzatary verify` — the stores' fsck.
 //!
-//! Every object rehashed, every parent present, one line per problem and a non-zero exit
-//! when there is one: `scripts/safe-push.sh` aborts on it before committing, since a bad
+//! Every object rehashed, every parent present, every failure the old health registers hold
+//! carried into the sources' one, one line per problem and a non-zero exit when there is one: `scripts/safe-push.sh` aborts on it before committing, since a bad
 //! object in a Merkle log is history that must not reach the remote.
 
 use std::collections::BTreeMap;
@@ -74,13 +74,29 @@ pub fn run(path: &Path) -> anyhow::Result<()> {
         suzatary_io::requests::Requests::open(instance.requests(), instance.paths.answers.clone());
     findings.extend(database.verify());
     findings.push(("requests".to_owned(), requests.verify()));
+    findings.push((
+        "source health".to_owned(),
+        super::sources::uncarried(&instance)?
+            .iter()
+            .map(|key| {
+                format!(
+                    "{key} fails in an old health register and not in this one: run `suzatary \
+                     sources migrate-health` before the deploy"
+                )
+            })
+            .collect(),
+    ));
 
     // Where each store lives, by the name its findings carry, so an OK line says which
     // directory was read.
-    let roots: BTreeMap<String, PathBuf> = Kind::ALL
+    let mut roots: BTreeMap<String, PathBuf> = Kind::ALL
         .iter()
         .flat_map(|kind| instance.directories(*kind))
         .collect();
+    roots.insert(
+        "source health".to_owned(),
+        (instance.mail.heartbeat).with_file_name(suzatary_io::source_health::FILE),
+    );
 
     let mut total = 0;
     for (what, problems) in &findings {

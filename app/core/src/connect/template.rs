@@ -3,9 +3,8 @@
 use super::{Check, Group, Params, Refused, Shape, StepShape};
 use crate::mail::account::{Authority, MailAccount, MsImap, Proton, Sync, slug_of};
 use crate::mail::account_email::AccountEmail;
-use crate::mail::address::EmailAddress;
 use crate::mail::folders::Folders;
-use crate::plugin::{Manifest, ManifestError};
+use crate::plugin::{Manifest, ManifestError, PluginName};
 
 /// A template: its group, the table it writes, the steps a person takes and the check that
 /// proves it. Every value that grants anything (an origin, a secret's name, a help link, a
@@ -216,18 +215,17 @@ impl AccountKind {
         })
     }
 
-    /// The parameters an account of this kind was written from, `None` for an address that
-    /// is not one.
+    /// The parameters an account of this kind was written from.
     #[must_use]
-    pub fn params(account: &MailAccount) -> Option<Params> {
-        let email = EmailAddress::new(account.email.as_str()).ok()?;
-        Some(match &account.sync {
+    pub fn params(account: &MailAccount) -> Params {
+        let email = account.email.address().clone();
+        match &account.sync {
             Sync::Gmail | Sync::Google | Sync::Proton(_) => Params::Address(email),
             Sync::MsImap(ms) => Params::Microsoft {
                 email,
                 tenant: ms.authority,
             },
-        })
+        }
     }
 }
 
@@ -236,7 +234,7 @@ impl AccountKind {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Fragment {
     /// The plugin, and its credentials' namespace.
-    pub plugin: &'static str,
+    pub plugin: &'static PluginName,
     /// Its component, under the app's bundles.
     pub component: &'static str,
     /// Its schema, beside the component.
@@ -251,7 +249,12 @@ impl Fragment {
     /// # Errors
     /// The refusal the file's table would get.
     pub fn manifest(&self) -> Result<Manifest, ManifestError> {
-        Manifest::declare(self.plugin, self.component, self.schema, self.origins)
+        Manifest::declare(
+            self.plugin.as_str(),
+            self.component,
+            self.schema,
+            self.origins,
+        )
     }
 }
 

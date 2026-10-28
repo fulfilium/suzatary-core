@@ -645,7 +645,7 @@ fn idle_run(instance: &Instance) -> anyhow::Result<()> {
 
     // One shared debounce, so accounts waking together collapse into one trigger.
     let (wakes, incoming) = mpsc::channel::<()>();
-    let unit = Timer::new(instance.paths.last_sync.clone(), &instance.mail.heartbeat);
+    let unit = Timer::new(instance.paths.last_sync.clone());
     let tokens = tokens(instance);
     let mut jobs: Vec<(String, Job)> = accounts
         .into_iter()

@@ -98,6 +98,7 @@ impl Nothing {
             drive: &Nothing,
             junk: &Nothing,
             sync: &Nothing,
+            health: &Nothing,
             older: &Nothing,
             uploads: &Nothing,
             upload_index: &Nothing,
@@ -613,15 +614,21 @@ impl crate::capability::UploadIndex for Nothing {
     }
 }
 
+impl crate::health::Register<crate::source_key::SourceKey> for Nothing {
+    fn healths(
+        &self,
+    ) -> Result<crate::health::Healths<crate::source_key::SourceKey>, crate::store::StoreError>
+    {
+        Ok(crate::health::Healths::default())
+    }
+}
+
 impl MailSync for Nothing {
     fn last(&self) -> Result<Option<Synced>, SyncFailure> {
         Ok(None)
     }
     fn start(&self, _since: Datetime) -> Result<Option<Synced>, SyncFailure> {
         Err(SyncFailure("this box runs no mail sync".to_owned()))
-    }
-    fn health(&self) -> Result<crate::mail::health::Healths, crate::store::StoreError> {
-        Ok(crate::mail::health::Healths::default())
     }
 }
 

@@ -9,7 +9,6 @@ use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant, SystemTime};
 
 use suzatary_core::capability::{Datetime, MailSync, SyncFailure, Synced};
-use suzatary_core::mail::health::Healths;
 use suzatary_core::mail::verbs::SyncReport;
 
 use crate::present::Present as _;
@@ -24,25 +23,22 @@ const WAIT: Duration = Duration::from_secs(150);
 /// How often the report is looked at while waiting.
 const POLL: Duration = Duration::from_secs(2);
 
-/// The unit, the report its sync step writes, and the health every sync joins into.
+/// The unit and the report its sync step writes.
 #[derive(Debug, Clone)]
 pub struct Timer {
     program: PathBuf,
     report: PathBuf,
-    health: crate::mail_health::Health,
     wait: Duration,
 }
 
 impl Timer {
     /// The triage unit, whose sync writes `report` (`Paths::last_sync`, the state directory's
-    /// `last-sync.json`) and the health beside `heartbeat` (the instance file's
-    /// `mail.heartbeat`).
+    /// `last-sync.json`).
     #[must_use]
-    pub fn new(report: impl Into<PathBuf>, heartbeat: &Path) -> Self {
+    pub fn new(report: impl Into<PathBuf>) -> Self {
         Self {
             program: PathBuf::from("systemctl"),
             report: report.into(),
-            health: crate::mail_health::Health::beside(heartbeat),
             wait: WAIT,
         }
     }
@@ -68,11 +64,6 @@ impl Timer {
 }
 
 impl MailSync for Timer {
-    fn health(&self) -> Result<Healths, suzatary_core::store::StoreError> {
-        use suzatary_core::store::Doc as _;
-        self.health.get(&()).map(Option::unwrap_or_default)
-    }
-
     fn last(&self) -> Result<Option<Synced>, SyncFailure> {
         let unread = |failed: std::io::Error| {
             SyncFailure(format!("reading {}: {failed}", self.report.display()))
@@ -152,8 +143,9 @@ mod tests {
         serde_json::to_string_pretty(&SyncReport {
             unheld: None,
             synced: vec![AccountSync {
-                account: "ada@example.test".to_owned(),
-                outcome: suzatary_core::mail::health::Outcome::Succeeded,
+                account: suzatary_core::mail::account_email::AccountEmail::new("ada@example.test")
+                    .expect("an address"),
+                outcome: suzatary_core::health::Outcome::Succeeded,
                 tail: tail.to_owned(),
             }],
             notmuch: "No new mail.".to_owned(),
@@ -165,7 +157,6 @@ mod tests {
         Timer {
             program: PathBuf::from(program),
             report: dir.join("last-sync.json"),
-            health: crate::mail_health::Health::beside(&dir.join("triage-heartbeat")),
             wait: Duration::from_secs(5),
         }
     }

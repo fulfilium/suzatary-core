@@ -1770,11 +1770,7 @@ pub fn overview(
     let observed = crate::settings::overview::Observed {
         secrets: &states,
         grants: &grants,
-        mail: observed.mail,
-        answered: observed.answered,
-        plugins: observed.plugins,
-        drive: observed.drive,
-        pushes: observed.pushes,
+        registers: *observed,
     };
     crate::settings::overview::overview(declared, &observed).wire(
         &settables.names(),
@@ -2003,20 +1999,15 @@ mod tests {
             };
             let calendar = BTreeMap::from([(
                 crate::plugin::PluginName::parse("ics").expect("a name"),
-                crate::settings::overview::Seen {
-                    ledger: crate::settings::overview::Recorded::default(),
-                    store: crate::settings::overview::Store::Calendar,
-                },
+                crate::settings::overview::Store::Calendar,
             )]);
-            let nothing = crate::mail::health::Healths::default();
             overview(
                 &declared,
                 secrets,
                 &crate::settings::overview::Registers {
-                    mail: &nothing,
-                    answered: &nothing,
+                    health: &crate::health::Healths::default(),
+                    answered: &crate::health::Healths::default(),
                     plugins: &calendar,
-                    drive: &nothing,
                     pushes: None,
                 },
                 &[],

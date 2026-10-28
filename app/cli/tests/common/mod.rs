@@ -2411,6 +2411,7 @@ impl Fakes {
             drive: &self.drive,
             junk: &self.junk,
             sync: &suzatary_core::capability::Nothing,
+            health: &suzatary_core::capability::Nothing,
             older: &suzatary_core::capability::Nothing,
             uploads: &self.files,
             upload_index: &self.upload_index,
@@ -2712,7 +2713,7 @@ pub struct Reaching {
     /// The program a tapped Connect card runs.
     pub claude: String,
     /// The register's first reading; `None` for the server's own default.
-    pub answered: Option<suzatary_core::mail::health::Healths>,
+    pub answered: Option<suzatary_core::health::Healths<String>>,
     /// What a credential's test call answers.
     pub verify: Arc<VerifyRecorder>,
 }
@@ -2733,7 +2734,7 @@ impl Reaching {
     fn serving(self, state: State, signing: Arc<serve::sign_ins::SignIns>) -> State {
         let state = state.with_sign_ins(signing, self.verify);
         let state = match self.answered {
-            Some(answered) => state.with_answered(Arc::new(serve::Remembered::holding(answered))),
+            Some(answered) => state.with_answered(Arc::new(std::sync::Mutex::new(answered))),
             None => state,
         };
         // Filed from four threads at once, as a start, an hourly tick and two taps may: the

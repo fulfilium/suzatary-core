@@ -9,7 +9,6 @@ pub mod dedup_key;
 pub mod folders;
 pub mod gone;
 pub mod grants;
-pub mod health;
 pub mod idle;
 pub mod imap;
 pub mod junk;

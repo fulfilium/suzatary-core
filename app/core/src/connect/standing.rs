@@ -4,7 +4,7 @@ use serde::Serialize;
 use ts_rs::TS;
 
 use crate::capability::SecretState;
-use crate::mail::health::{Instant, Reading};
+use crate::health::{Instant, Reading};
 use crate::settings::Help;
 
 /// Where a line stands, ordered by how much it asks of the owner (the arms in that order), so
@@ -146,6 +146,6 @@ impl Standing {
 }
 
 /// An instant as the wire spells one.
-pub(crate) fn stamp(at: Instant) -> String {
+fn stamp(at: Instant) -> String {
     at.format("%Y-%m-%dT%H:%M:%S%.f").to_string()
 }

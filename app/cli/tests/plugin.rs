@@ -1,5 +1,6 @@
 //! `suzatary plugin sync` over a loopback feed: the reference calendar component, the host, the
-//! store and the ledger, everything but the transport and the secret store the box's own.
+//! store and the sources' health, everything but the transport and the secret store the box's
+//! own.
 //!
 //! Run by name with `SUZATARY_PLUGINS` naming `nix build .#suzatary-plugins`'s output, as
 //! `scripts/merge-gate.sh` does; the production transport refuses loopback by design, so the
@@ -16,7 +17,9 @@ use suzatary_cli::commands::plugin;
 use suzatary_cli::instance::Plugins;
 use suzatary_core::calendar::{Calendar, Status};
 use suzatary_core::capability::Secret;
-use suzatary_core::plugin::{Came, Manifest};
+use suzatary_core::health::Reading;
+use suzatary_core::health::Register as _;
+use suzatary_core::plugin::Manifest;
 use suzatary_core::store::Reads;
 use suzatary_io::http::Ureq;
 use suzatary_io::plugin_store::PluginStore;
@@ -126,8 +129,24 @@ fn files(dir: &Path) -> Vec<String> {
     names
 }
 
+/// When `plugin`'s `link` last synced, as the sources' health holds it.
+fn synced(
+    healths: &suzatary_core::health::Healths<suzatary_core::source_key::SourceKey>,
+    plugin: &suzatary_core::plugin::PluginName,
+    link: &str,
+) -> Option<suzatary_core::health::Instant> {
+    let credential =
+        suzatary_core::plugin::CredentialName::parse(plugin, link).expect("a credential");
+    healths
+        .health(&suzatary_core::source_key::SourceKey::Link {
+            plugin: plugin.clone(),
+            credential,
+        })
+        .and_then(suzatary_core::health::Health::succeeded)
+}
+
 #[test]
-fn a_sync_learns_once_keeps_its_ledger_and_reads_a_cancellation() {
+fn a_sync_learns_once_keeps_its_health_and_reads_a_cancellation() {
     let feed = Feed::serve(&calendar("CONFIRMED"));
     let scratch = tempfile::tempdir().expect("a scratch dir");
     let manifest = manifest(&feed.origin);
@@ -143,7 +162,8 @@ fn a_sync_learns_once_keeps_its_ledger_and_reads_a_cancellation() {
         )]))),
     };
     let host = Host::new(Budget::default()).expect("the host");
-    let sync = || plugin::sync(&host, &manifest, &components(), &plugins, &effects);
+    let health = suzatary_io::source_health::beside(&scratch.path().join("triage-heartbeat"));
+    let sync = || plugin::sync(&host, &manifest, &components(), &plugins, &effects, &health);
 
     let learnt = |report: &plugin::Report| report.learnt.expect("stored");
     let first = sync();
@@ -164,22 +184,14 @@ fn a_sync_learns_once_keeps_its_ledger_and_reads_a_cancellation() {
     );
     assert_eq!(
         files(&plugins.cache.join("plugins/ics")),
-        ["cursor", "ledger.json", "store"]
+        ["cursor", "store"]
     );
-    let ledger = plugin::ledger(&plugins, manifest.name()).expect("the ledger reads");
-    let synced = |link: &str| {
-        ledger
-            .links
-            .health(link)
-            .and_then(suzatary_core::mail::health::Health::succeeded)
-    };
-    assert!(synced("PLUGIN_ICS_HOME").is_some());
-    assert_eq!(synced("PLUGIN_ICS_WORK"), None);
-    assert!(
-        !std::fs::read_to_string(plugins.cache.join("plugins/ics/ledger.json"))
-            .expect("a ledger")
-            .contains("s3cret")
-    );
+    let healths = health.healths().expect("the health reads");
+    assert!(synced(&healths, manifest.name(), "PLUGIN_ICS_HOME").is_some());
+    assert_eq!(synced(&healths, manifest.name(), "PLUGIN_ICS_WORK"), None);
+    let kept = std::fs::read_to_string(scratch.path().join(suzatary_io::source_health::FILE))
+        .expect("the health");
+    assert!(!kept.contains("s3cret"), "the link is never kept");
 
     let again = sync();
     assert_eq!(
@@ -215,7 +227,7 @@ fn a_sync_learns_once_keeps_its_ledger_and_reads_a_cancellation() {
         restarted.line
     );
 
-    // A cursor that is there and cannot be read fails the run, and the ledger says so, rather
+    // A cursor that is there and cannot be read fails the run, and its health says so, rather
     // than reading as none and reporting the whole window again.
     let cursor = plugins.cache.join("plugins/ics/cursor");
     std::fs::remove_file(&cursor).expect("removed");
@@ -227,12 +239,11 @@ fn a_sync_learns_once_keeps_its_ledger_and_reads_a_cancellation() {
         "{}",
         unread.line
     );
-    let last = plugin::ledger(&plugins, manifest.name())
-        .expect("the ledger reads")
-        .last
-        .expect("the run is recorded");
+    let ran = health.healths().expect("the health reads");
+    let plugin = suzatary_core::source_key::SourceKey::Plugin(manifest.name().clone());
     assert!(
-        matches!(&last.came, Came::Failed { why } if why.contains("its cursor could not be read")),
-        "{last:?}"
+        matches!(ran.reading(&plugin), Some(Reading::Failing { words, .. })
+            if words.contains("its cursor could not be read")),
+        "{ran:?}"
     );
 }

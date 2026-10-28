@@ -1,14 +1,15 @@
-//! Each mail account's sync health: the register the timer's syncs write and the settings page,
-//! the briefing and the inbox read. The register is keyed by any source, so whether the model each
-//! job runs answers is the same semilattice ([`Healths::one`]).
+//! The health of what the box reads from and calls: a register of results keyed by any source
+//! (each source of [`crate::source_key::SourceKey`], and the model each job runs), which the
+//! settings page, the box's cards, the briefing and the inbox read.
 //!
-//! What is read of an account's sync results is three things: the latest success, the latest
+//! What is read of a source's results is three things: the latest success, the latest
 //! failure with its words, and the first result recorded. Each is a semilattice (a maximum, a
 //! maximum by instant, a minimum), so their product [`Health`] is one, and so is [`Healths`],
 //! the pointwise join over accounts. The reading is therefore a function of the SET of results,
 //! whatever order they arrive in and however often, and the store holds the join rather than
 //! every result: joining one more result into it is adding that result to the set.
 
+use std::borrow::Borrow;
 use std::collections::BTreeMap;
 
 use chrono::{Duration, NaiveDateTime};
@@ -16,17 +17,10 @@ use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
 use crate::connect::Failure;
-use crate::mail::verbs::SyncReport;
-use crate::store::{Doc, StoreError};
+use crate::store::StoreError;
 
 /// An instant on the box's clock, naive and UTC, as every `at` is.
 pub type Instant = NaiveDateTime;
-
-/// How long an account may fail before the box proposes a todo about it.
-#[must_use]
-pub fn persistent() -> Duration {
-    Duration::days(1)
-}
 
 /// What one result came to: a success, or a failure of a class the box parsed where it was
 /// observed.
@@ -182,58 +176,57 @@ impl Reading {
     }
 }
 
-/// Every account's health, joined pointwise: an account in one side only is kept as it is.
-#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+/// Every source's health, joined pointwise: a source in one side only is kept as it is.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(transparent)]
-pub struct Healths(BTreeMap<String, Health>);
+pub struct Healths<K: Ord>(BTreeMap<K, Health>);
 
-impl Healths {
+impl<K: Ord> Default for Healths<K> {
+    fn default() -> Self {
+        Self(BTreeMap::new())
+    }
+}
+
+impl<K: Ord + Clone> Healths<K> {
     /// One source's one result, at `at`, `words` what it said: the generator every register is
     /// a join of, whatever the source (a mail account, the model a job runs, a plugin's link).
     #[must_use]
-    pub fn one(source: &str, at: Instant, outcome: Outcome, words: &str) -> Self {
+    pub fn one(source: impl Into<K>, at: Instant, outcome: Outcome, words: &str) -> Self {
         Self(BTreeMap::from([(
-            source.to_owned(),
+            source.into(),
             Health::of(at, outcome, words),
         )]))
-    }
-
-    /// The health one sync's report gives, every account at `at`.
-    #[must_use]
-    pub fn of(report: &SyncReport, at: Instant) -> Self {
-        report
-            .synced
-            .iter()
-            .map(|account| Self::one(&account.account, at, account.outcome, &account.tail))
-            .fold(Self::default(), |sum, one| sum.join(&one))
     }
 
     /// The pointwise join.
     #[must_use]
     pub fn join(&self, other: &Self) -> Self {
         let mut joined = self.0.clone();
-        for (account, health) in &other.0 {
+        for (source, health) in &other.0 {
             joined
-                .entry(account.clone())
+                .entry(source.clone())
                 .and_modify(|mine| *mine = mine.join(health))
                 .or_insert_with(|| health.clone());
         }
         Self(joined)
     }
 
-    /// One account's reading, `None` for an account no sync has reported.
+    /// One source's reading, `None` for a source nothing has reported.
     #[must_use]
-    pub fn reading(&self, account: &str) -> Option<Reading> {
-        self.health(account).map(Health::reading)
+    pub fn reading<Q: Ord + ?Sized>(&self, source: &Q) -> Option<Reading>
+    where
+        K: Borrow<Q>,
+    {
+        self.health(source).map(Health::reading)
     }
 
     /// One source's joined results, `None` for a source nothing has reported.
     #[must_use]
-    pub fn health(&self, source: &str) -> Option<&Health> {
-        self.0
-            .iter()
-            .find(|(known, _)| known.eq_ignore_ascii_case(source))
-            .map(|(_, health)| health)
+    pub fn health<Q: Ord + ?Sized>(&self, source: &Q) -> Option<&Health>
+    where
+        K: Borrow<Q>,
+    {
+        self.0.get(source)
     }
 
     /// The latest success of any source, `None` while none has succeeded.
@@ -242,34 +235,31 @@ impl Healths {
         self.0.values().filter_map(Health::succeeded).max()
     }
 
-    /// Every account's reading, by address.
-    pub fn readings(&self) -> impl Iterator<Item = (&str, Reading)> {
+    /// Every source's reading.
+    pub fn readings(&self) -> impl Iterator<Item = (&K, Reading)> {
         self.0
             .iter()
-            .map(|(account, health)| (account.as_str(), health.reading()))
+            .map(|(source, health)| (source, health.reading()))
     }
 }
 
-/// Join one sync's report, taken at `at`, into the register and answer what it holds now.
-///
-/// # Errors
-/// The store's, reading or writing; a sync whose health is not recorded says so.
-pub fn record(
-    store: &dyn Doc<(), Healths>,
-    report: &SyncReport,
-    at: Instant,
-) -> Result<Healths, StoreError> {
-    join_into(store, &Healths::of(report, at))
+/// A register of results, read whole: what a reader holds.
+pub trait Register<K: Ord>: Sync {
+    /// What it holds; empty before the first result.
+    ///
+    /// # Errors
+    /// [`StoreError::Unreadable`].
+    fn healths(&self) -> Result<Healths<K>, StoreError>;
 }
 
-/// Join `results` into the register and answer what it holds now.
-///
-/// # Errors
-/// The store's, reading or writing.
-pub fn join_into(store: &dyn Doc<(), Healths>, results: &Healths) -> Result<Healths, StoreError> {
-    let joined = store.get(&())?.unwrap_or_default().join(results);
-    store.set(&(), &joined)?;
-    Ok(joined)
+/// A register held in memory, as a test's server holds one.
+impl<K: Ord + Clone + Send> Register<K> for std::sync::Mutex<Healths<K>> {
+    fn healths(&self) -> Result<Healths<K>, StoreError> {
+        Ok(self
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .clone())
+    }
 }
 
 #[cfg(test)]
@@ -307,13 +297,13 @@ mod tests {
         }
     }
 
-    fn healths(results: &[(usize, i64, Said)]) -> Healths {
+    fn healths(results: &[(usize, i64, Said)]) -> Healths<String> {
         results
             .iter()
             .map(|(account, minute, said)| {
                 let (outcome, words) = outcome(said);
                 Healths::one(
-                    &format!("a{account}@example.test"),
+                    format!("a{account}@example.test"),
                     instant(*minute),
                     outcome,
                     words,

@@ -49,6 +49,7 @@ impl suzatary_core::settings::Checks for Synced {
             &crate::commands::plugin::components(&instance, None),
             &instance.plugins,
             &effects,
+            &suzatary_io::source_health::beside(&instance.mail.heartbeat),
         );
         tracing::info!("check: {}", report.line);
     }

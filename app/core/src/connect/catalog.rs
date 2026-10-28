@@ -4,6 +4,7 @@ use super::{
     AccountKind, Channel, Check, Fragment, Group, Run, SecretName, StepShape, Table, Template,
     TemplateId,
 };
+use crate::plugin::PluginName;
 use crate::settings::{Page, Words};
 
 /// The data repository, pushed to a remote.
@@ -36,13 +37,16 @@ const DRIVE_CLI: Template = Template {
     check: Check::Listed,
 };
 
+/// The calendar's plugin.
+static ICS_PLUGIN: PluginName = PluginName::known("ics");
+
 /// A calendar, by the secret link its service publishes.
 const ICS: Template = Template {
     id: TemplateId::Ics,
     group: Group::Calendar,
     title: "a calendar, by its secret iCal link",
     table: Table::Link(Fragment {
-        plugin: "ics",
+        plugin: &ICS_PLUGIN,
         component: "ics.wasm",
         schema: "ics.schema",
         origins: &[
@@ -205,7 +209,9 @@ pub fn secret_words(name: &str) -> Option<Words> {
                 Table::Link(fragment)
                     if name
                         .strip_prefix("PLUGIN_")
-                        .and_then(|rest| rest.strip_prefix(&*fragment.plugin.to_ascii_uppercase()))
+                        .and_then(|rest| {
+                            rest.strip_prefix(&*fragment.plugin.as_str().to_ascii_uppercase())
+                        })
                         .is_some_and(|rest| rest.starts_with('_')) =>
                 {
                     Some(help)
@@ -224,7 +230,7 @@ pub fn plugin_called(plugin: &str) -> String {
     CATALOG
         .iter()
         .find(
-            |template| matches!(template.table, Table::Link(fragment) if fragment.plugin == plugin),
+            |template| matches!(template.table, Table::Link(fragment) if fragment.plugin.as_str() == plugin),
         )
         .map_or_else(
             || format!("the {plugin} plugin"),

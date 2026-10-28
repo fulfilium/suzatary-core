@@ -293,6 +293,7 @@ mod tests {
             drive: _,
             junk: _,
             sync: _,
+            health: _,
             older: _,
             uploads: _,
             upload_index: _,

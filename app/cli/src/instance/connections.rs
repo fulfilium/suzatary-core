@@ -33,12 +33,12 @@ pub(crate) fn add(path: &Path, text: &str, connection: &Connection) -> Result<St
             let plugins = plugins_mut(&mut doc)?;
             let held = plugins
                 .iter()
-                .position(|plugin| named(plugin, fragment.plugin));
+                .position(|plugin| named(plugin, fragment.plugin.as_str()));
             if let Some(plugin) = held.and_then(|at| plugins.get_mut(at)) {
                 push(plugin, "credentials", &credential)?;
             } else {
                 let mut plugin = toml_edit::Table::new();
-                plugin["name"] = toml_edit::value(fragment.plugin);
+                plugin["name"] = toml_edit::value(fragment.plugin.as_str());
                 plugin["component"] = toml_edit::value(fragment.component);
                 plugin["schema"] = toml_edit::value(fragment.schema);
                 plugin["origins"] = toml_edit::value(
@@ -93,7 +93,7 @@ pub(crate) fn remove(
             let name = link(connection)?;
             for plugin in plugins_mut(&mut doc)?
                 .iter_mut()
-                .filter(|plugin| named(plugin, fragment.plugin))
+                .filter(|plugin| named(plugin, fragment.plugin.as_str()))
             {
                 pull(plugin, "credentials", |held| held == name)?;
             }

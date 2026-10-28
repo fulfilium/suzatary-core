@@ -5,7 +5,12 @@ use std::fmt;
 use prodrome_core::literal::{ProdromeError, Value};
 use serde::{Deserialize, Serialize};
 
-use super::{Group, Params, Refused, Seen, Standing, Step, Table, Template, TemplateId};
+use super::{
+    AccountKind, Group, Params, Refused, Seen, Standing, Step, Table, Template, TemplateId,
+};
+use crate::mail::account_email::AccountEmail;
+use crate::plugin::CredentialName;
+use crate::source_key::SourceKey;
 use prodrome_core::literal::codec::{Constructor, Fields, Literal, record};
 
 /// The model connection's key name: a deployment has one model.
@@ -111,6 +116,37 @@ impl Connection {
         }
     }
 
+    /// The sources its health is read from: an account's mail, and a Google account's
+    /// calendars too; a link's fetches; the Drive, for a folder it may read. None for what the
+    /// box reads nothing from (the data repository, the model, a channel).
+    #[must_use]
+    pub fn sources(&self) -> Vec<SourceKey> {
+        match (self.template().table, &self.params) {
+            (Table::Account(kind), Params::Address(email) | Params::Microsoft { email, .. }) => {
+                let email = AccountEmail::folded(email);
+                let mut sources = vec![SourceKey::Mail(email.clone())];
+                if kind == AccountKind::Google {
+                    sources.push(SourceKey::GoogleCalendar(email));
+                }
+                sources
+            }
+            (Table::Link(fragment), Params::Label(label)) => vec![SourceKey::Link {
+                plugin: fragment.plugin.clone(),
+                credential: CredentialName::link(fragment.plugin, label),
+            }],
+            (Table::Folder, _) => vec![SourceKey::Drive],
+            // A parameter of another shape than its template reads, which `Connection::new`
+            // refuses, and the tables the box reads nothing from.
+            (
+                Table::Link(_),
+                Params::Nothing | Params::Address(_) | Params::Microsoft { .. } | Params::Folder(_),
+            )
+            | (Table::Account(_) | Table::Always | Table::Model | Table::Channel(_), _) => {
+                Vec::new()
+            }
+        }
+    }
+
     /// What the owner calls it, as a sentence begins with it: the label they gave a calendar
     /// (`your Work calendar`), an account's address, a folder's path.
     #[must_use]
@@ -141,7 +177,10 @@ impl Connection {
     pub fn writes(&self) -> String {
         match (self.template().table, &self.params) {
             (Table::Link(fragment), _) => {
-                format!("one link for {}", super::plugin_called(fragment.plugin))
+                format!(
+                    "one link for {}",
+                    super::plugin_called(fragment.plugin.as_str())
+                )
             }
             (Table::Account(_), _) => format!("a [[mail.accounts]] entry for {}", self.key().name),
             (Table::Folder, _) => format!("{} in [secretary] drive_allow", self.key().name),

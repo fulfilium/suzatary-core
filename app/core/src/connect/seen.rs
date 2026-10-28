@@ -1,8 +1,8 @@
 //! What the box has observed of one connection: the facts its steps are met by.
 
 use crate::capability::SecretState;
+use crate::health::Health;
 use crate::mail::address::EmailAddress;
-use crate::mail::health::Health;
 
 /// The observations a connection's steps read, each a function the reader lends.
 pub struct Seen<'a> {

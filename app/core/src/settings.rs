@@ -108,12 +108,10 @@ impl Settables {
     /// never a Secret card ([`Declaration::own_card`]).
     #[must_use]
     pub fn google(accounts: &[crate::mail::account::MailAccount]) -> Self {
-        let addresses: Vec<crate::mail::address::EmailAddress> = accounts
+        let addresses: Vec<&crate::mail::address::EmailAddress> = accounts
             .iter()
             .filter(|account| matches!(account.sync, crate::mail::account::Sync::Google))
-            .filter_map(|account| {
-                crate::mail::address::EmailAddress::new(account.email.as_str()).ok()
-            })
+            .map(|account| account.email.address())
             .collect();
         let client = addresses.first().map(|_| {
             Self::declared(crate::google::CLIENT_ID, Declaration::GoogleClient).join(
@@ -275,7 +273,7 @@ pub trait Verify {
 /// says what its check found then and not at the plugin's next timer; held in no capability
 /// record, as [`Verify`] is not.
 pub trait Checks {
-    /// Sync `plugin` once: every link of it is fetched, and what each came to is its ledger's.
+    /// Sync `plugin` once: every link of it is fetched, and what each came to joins its health.
     fn check(&self, plugin: &crate::plugin::PluginName);
 }
 
