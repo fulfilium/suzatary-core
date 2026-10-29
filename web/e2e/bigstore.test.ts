@@ -1,13 +1,16 @@
 /**
  * LARGE STORES DO NOT HOLD THE PAGE'S THREAD: the lines' server holds generated stores of the live shape
  * (`suzatary-dev fixture-chain`, as `scripts/web-e2e.sh` sets it: about 14,500 line objects over 100 conversations
- * with reseals, 730 inbox objects and 900 topic objects), and the core's worker pulls, keeps and reads every store, so
+ * with reseals, 730 inbox objects, 900 topic objects and 600 todos), and the core's worker pulls, keeps and reads every store, so
  * the stream, a conversation and a new line are drawn with no task on the page's thread over 100 ms. The scene records every long
  * task (over 50 ms) the browser reports, cold (a device holding nothing) and warm (the same device loaded again).
  *
  * The store's words are outside ASCII and hold digits, the text the scrub is slowest on. A warm load of the stream
  * reads the lines the device holds, which scrubs nothing, and draws it well within a read's bound while every request
- * to the box's API is held, so nothing it draws waits on the box.
+ * to the box's API is held, so nothing it draws waits on the box. Loaded again with the box answering, as it does live,
+ * the shell asks its own questions of the core's worker beside the page's, and the worker answers none of them while
+ * the page's first stream is owed (`prodrome/lanes.ts`): the scene reads that order in the worker itself, and reports
+ * the first draw.
  *
  * A phase ends once what it waits for is drawn whole (a conversation is marked `marks.PLACED` when its window is
  * drawn and placed) and the page has run no long task for a second and a half since, so a later slice or placing is
@@ -25,7 +28,7 @@ import marks from "../src/chat/marks"
 import wait from "../src/wire/wait"
 import { PHONE, SIGNED_POST, suite, trustThisDevice } from "./harness"
 
-type Shape = { readonly lines: number; readonly conversations: number; readonly reseals: number; readonly proposals: number; readonly topics: number }
+type Shape = { readonly lines: number; readonly conversations: number; readonly reseals: number; readonly proposals: number; readonly topics: number; readonly todos: number }
 // The stores' shape as `scripts/web-e2e.sh` hands it to the fixture.
 const SHAPE: Shape = {
   lines: Number(process.env["SUZATARY_E2E_LINES"] ?? "13000"),
@@ -33,6 +36,7 @@ const SHAPE: Shape = {
   reseals: Number(process.env["SUZATARY_E2E_RESEALS"] ?? "1500"),
   proposals: Number(process.env["SUZATARY_E2E_PROPOSALS"] ?? "400"),
   topics: Number(process.env["SUZATARY_E2E_TOPICS"] ?? "900"),
+  todos: Number(process.env["SUZATARY_E2E_TODOS"] ?? "600"),
 }
 
 const required = (name: string): string => {
@@ -187,4 +191,69 @@ app.scene("a warm load of the conversations draws them from the device, with eve
   assert.ok(drawn.cost.decoded <= drawn.cost.needed, `the warm load decoded ${drawn.cost.decoded} prints; its rounds need ${drawn.cost.needed} of ${drawn.cost.all}`)
   assert.equal(drawn.cost.hashed, 0, "every print the warm load read was admitted by its name, so none is hashed again")
   assert.ok(drawn.held.length > 0, `the box was asked and answered nothing before the stream drew:\n${journal.lines().join("\n")}`)
+})
+
+// In the core's worker, before its own script: each question as it arrives (its number, lane and kind) and each
+// answer as it is sent, in the order the worker saw them, each at the worker's clock.
+const RECORD = `(() => {
+  const seen = (self.__questions = [])
+  self.addEventListener("message", (e) => {
+    const d = e.data
+    if (d !== null && typeof d === "object" && typeof d.id === "number" && "question" in d) seen.push(["asked", d.id, Math.round(performance.now()), d.lane, d.question.type])
+  })
+  const post = self.postMessage.bind(self)
+  self.postMessage = (m, ...rest) => {
+    if (m !== null && typeof m === "object" && typeof m.id === "number" && "answer" in m) seen.push(["answered", m.id, Math.round(performance.now())])
+    return post(m, ...rest)
+  }
+})()`
+
+type Recorded = readonly ["asked", number, number, string, string] | readonly ["answered", number, number]
+
+// How many warm loads the scene reads, each reported.
+const LOADS = 3
+
+app.scene("a warm load of the conversations answers the page's first stream before any question of the shell asked beside it", async () => {
+  await trustThisDevice(app.page, LINES_BASE, LINES_INSTANCE)
+  const unobserve = await app.page.beforeEveryDocument(OBSERVE)
+  await app.page.navigate(`${LINES_BASE}/#/secretary`)
+  await app.page.waitFor(BULK, { timeout: 600000 })
+  const journal = await app.page.journal()
+  const deadline = Date.now() + 600000
+  while (reads(journal.inFlight()).length > 0 && Date.now() < deadline) await new Promise((done) => setTimeout(done, 200))
+  assert.deepEqual(reads(journal.inFlight()), [], "the cold load ended")
+  // The box answers as it does live, so the shell asks what it asks on every load.
+  const unrecord = await app.page.beforeEveryWorker(RECORD)
+  const loads = await (async (): Promise<{ readonly draw: Phase; readonly seen: readonly Recorded[] }[]> => {
+    const each: { readonly draw: Phase; readonly seen: readonly Recorded[] }[] = []
+    try {
+      await app.page.throttle(RATE)
+      for (let n = 0; n < LOADS; n += 1) {
+        await app.page.reload()
+        const draw = await phase(BULK, 0)
+        each.push({ draw, seen: await app.page.inWorker<Recorded[]>("prodromework", "self.__questions") })
+      }
+      return each
+    } finally {
+      await app.page.throttle(1)
+      await unrecord()
+      await unobserve()
+    }
+  })()
+  for (const { draw, seen } of loads) {
+    const asked = new Map(seen.flatMap((s) => (s[0] === "asked" ? [[s[1], { lane: s[3], kind: s[4], at: s[2] }] as const] : [])))
+    const at = (type: Recorded[0], id: number): number => seen.findIndex((s) => s[0] === type && s[1] === id)
+    const stream = [...asked].find(([, q]) => q.kind === "Stream")?.[0]
+    assert.ok(stream !== undefined, `the page asked for its stream:\n${JSON.stringify(seen)}`)
+    const [from, to] = [at("asked", stream), at("answered", stream)]
+    // Each question answered while the stream was owed, as `<lane> <kind> #<number>`.
+    const between = seen.slice(from, to).flatMap((s) => (s[0] === "answered" ? [{ id: s[1], ...asked.get(s[1]) }] : []))
+    const named = (qs: readonly { readonly id: number; readonly lane?: string; readonly kind?: string }[]): string[] => qs.map((q) => `${q.lane} ${q.kind} #${q.id}`)
+    const answered = seen[to]?.[2] ?? -1
+    // How many times the page asked for its stream before the first answer.
+    const streams = seen.slice(0, to).filter((s) => s[0] === "asked" && s[4] === "Stream").length
+    console.log(JSON.stringify({ ...SHAPE, rate: RATE, firstDraw: draw.ms, longest: draw.longest, streamAsked: asked.get(stream)?.at, streamAnswered: answered, streams, answeredWhileTheStreamWasOwed: named(between) }))
+    assert.deepEqual(named(between.filter((q) => q.lane === "Shell")), [], `the worker answered the shell while the page's stream was owed:\n${JSON.stringify(seen)}`)
+    assert.ok(draw.ms < wait.MS / 3, `the stream drew ${draw.ms} ms after the document started (bound ${wait.MS / 3})`)
+  }
 })

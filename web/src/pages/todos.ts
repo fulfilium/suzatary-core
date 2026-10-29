@@ -315,7 +315,7 @@ export namespace todos {
       if (at === null) return
       const on = app.now().chain
       void readings.ask(async (): Promise<todosState.Basis | null> => {
-        const { held: h, answer: read } = await askHeld(() => ({ type: "Reading", chain: on, at }))
+        const { held: h, answer: read } = await askHeld(() => ({ type: "Reading", chain: on, at }), "Page")
         // Holding nothing of the open chain yet, the rows price the tree, and its first objects ask again.
         return read.type === "Unheld"
           ? null
@@ -424,7 +424,7 @@ export namespace todos {
         }
       },
       // The worker's prices for what the tree lacks, asked once per set of terms; each answer is an event of the page.
-      effects: (v, fx) => todosState.ask(v, (basis, terms) => remote.ask({ type: "Price", basis, terms }), fx.dispatch),
+      effects: (v, fx) => todosState.ask(v, (basis, terms) => remote.ask({ type: "Price", basis, terms }, "Page"), fx.dispatch),
       masthead: (_, at) => at.head,
       around: (column, at) => el("div", { class: "split todosplit" }, column, at.detail),
       absorb: (screen, dispatch) => {

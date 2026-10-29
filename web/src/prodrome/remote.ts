@@ -5,15 +5,17 @@
 import type { Named } from "./core"
 import { CoreError } from "./core"
 import questions from "./questions"
+import lanes from "./lanes"
 
 export namespace remote {
   // A chain as the tab holds it: its objects and its policy.
   export type Chain = { readonly name: string; readonly objects: readonly Named[]; readonly untrusted: readonly string[] }
 
   export type Remote = {
-    // The chains held, each by what changed since the last holding; what each reading leaves out.
+    // The chains held, each by what changed since the last holding.
     readonly hold: (chains: readonly Chain[]) => Promise<questions.Answer<"Hold">>
-    readonly ask: <K extends questions.Kind>(q: questions.Of<K>) => Promise<questions.Answer<K>>
+    // `q` in the lane of whoever asks it (`lanes`).
+    readonly ask: <K extends questions.Kind>(q: questions.Of<K>, lane: lanes.Lane) => Promise<questions.Answer<K>>
   }
 
   // Who hears what the worker says unasked; one hearer, the page's shell, set before the worker starts.
@@ -57,23 +59,24 @@ export namespace remote {
       if (answer.type === "Val") w?.ok(answer.v)
       else w?.no(new CoreError(answer.e))
     })
-    const ask = <K extends questions.Kind>(question: questions.Of<K>): Promise<questions.Answer<K>> =>
+    const ask = <K extends questions.Kind>(question: questions.Of<K>, lane: lanes.Lane): Promise<questions.Answer<K>> =>
       new Promise((ok, no) => {
         if (gone !== null) return no(new CoreError(gone))
         const id = (n += 1)
         // The worker answers question `id` with what that question's kind answers.
         waiting.set(id, { ok: v => ok(v as questions.Answer<K>), no })
-        port.postMessage({ id, question })
+        port.postMessage({ id, lane, question })
       })
     let sent: Sent = new Map()
     return {
       // Sent before it returns, with no wait between reading `sent` and writing it, so two holdings in a row are each the
-      // change from the one before; a refused one makes the next whole.
+      // change from the one before; a refused one makes the next whole. Every holding goes in the first lane, so the
+      // worker takes them in the order they were sent, each before any question asked after it.
       hold: chains => {
         const was = sent
         const holding = chains.map(c => delta(was === null ? null : (was.get(c.name) ?? new Set()), c))
         sent = new Map(chains.map(c => [c.name, new Set(c.objects.map(o => o.hash))]))
-        return ask({ type: "Hold", chains: holding }).catch((e: unknown) => {
+        return ask({ type: "Hold", chains: holding }, lanes.FIRST).catch((e: unknown) => {
           sent = null
           throw e
         })
@@ -92,6 +95,6 @@ export namespace remote {
   }
 
   export const hold = (chains: readonly Chain[]): Promise<questions.Answer<"Hold">> => worker().hold(chains)
-  export const ask = <K extends questions.Kind>(q: questions.Of<K>): Promise<questions.Answer<K>> => worker().ask(q)
+  export const ask = <K extends questions.Kind>(q: questions.Of<K>, lane: lanes.Lane): Promise<questions.Answer<K>> => worker().ask(q, lane)
 }
 export default remote

@@ -276,6 +276,8 @@ export class Page {
   private held: string[] = [];
   private heldAt: string[] = [];
   private attaching = false;
+  /** What runs in every dedicated worker as it starts, before its own script (`beforeEveryWorker`). */
+  private readonly workerScripts = new Set<string>();
   /** Each attached worker's session, with the URL of its script, oldest first. */
   private readonly workers = new Map<string, string>();
   private coldOn = false;
@@ -1031,18 +1033,35 @@ export class Page {
     return this.evaluateIn<T>(session, expression);
   }
 
+  /**
+   * `source` evaluated in every dedicated worker the page starts from now on, before the worker's own script runs; the
+   * answer stops that. Every target the page starts is held at its start until then, and let go.
+   */
+  async beforeEveryWorker(source: string): Promise<() => Promise<void>> {
+    this.workerScripts.add(source);
+    await this.workersToo();
+    await this.command("Target.setAutoAttach", { autoAttach: true, waitForDebuggerOnStart: true, flatten: true });
+    return async () => {
+      this.workerScripts.delete(source);
+      if (this.workerScripts.size === 0) await this.command("Target.setAutoAttach", { autoAttach: true, waitForDebuggerOnStart: false, flatten: true });
+    };
+  }
+
   private async workersToo(): Promise<void> {
     if (this.attaching) return;
     this.attaching = true;
     this.connection.on("Target.attachedToTarget", (params, session) => {
       const info = params["targetInfo"] as { type?: string; url?: string } | undefined;
       const child = params["sessionId"];
-      if (session !== this.session || typeof child !== "string" || info?.type !== "worker") return;
+      if (session !== this.session || typeof child !== "string") return;
+      const go = (): void => void this.connection.send("Runtime.runIfWaitingForDebugger", {}, child).catch(() => {});
+      if (info?.type !== "worker") return go();
       this.workers.set(child, info.url ?? "");
       void this.connection.send("Network.enable", {}, child).catch(() => {});
       // As it starts: what it does before these land runs warm and unthrottled.
       void this.toWorker(child);
-      void this.connection.send("Runtime.runIfWaitingForDebugger", {}, child).catch(() => {});
+      const scripts = [...this.workerScripts].map((expression) => this.connection.send("Runtime.evaluate", { expression }, child));
+      void Promise.all(scripts).catch(() => {}).then(go);
     });
     this.connection.on("Target.detachedFromTarget", (params) => {
       const child = params["sessionId"];

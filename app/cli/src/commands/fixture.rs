@@ -1227,16 +1227,22 @@ pub struct Bulk {
     #[arg(long, default_value_t = 0, requires = "lines")]
     topics: usize,
     /// How many more proposals to file, in a conversation of their own, every one but each tenth
-    /// dismissed, so the inbox holds as many objects as a store a year old.
+    /// dismissed, so the inbox holds as many objects as a store a year old; each serves one of the
+    /// generated todos in turn, where there are any.
     #[arg(long, default_value_t = 0)]
     proposals: usize,
+    /// How many more todos to write to the life chain, generated, so the folds of the todo chains
+    /// read a chain of the live shape.
+    #[arg(long, default_value_t = 0)]
+    todos: usize,
 }
 
 impl Bulk {
-    /// The proposals, then the lines, then their topics: each filing reads a small store of
-    /// conversations.
+    /// The todos, the proposals that serve them, then the lines, then their topics: each filing
+    /// reads a small store of conversations.
     fn write(&self, read: &crate::instance::Instance) -> anyhow::Result<()> {
-        bulk_proposals(read, self.proposals)?;
+        bulk_todos(read, self.todos)?;
+        bulk_proposals(read, self.proposals, self.todos)?;
         bulk_lines(
             read,
             &sizes(self.lines, self.conversations, self.wide),
@@ -1450,9 +1456,81 @@ where
     Ok(())
 }
 
+/// The name of the `n`th generated todo.
+fn bulk_todo(n: usize) -> String {
+    format!("bulk-todo-{n}")
+}
+
+/// `count` todos on the life chain: each created, written with a deadline one to sixty days away,
+/// and written again a day later, every fifth then completed.
+fn bulk_todos(read: &crate::instance::Instance, count: usize) -> anyhow::Result<()> {
+    if count == 0 {
+        return Ok(());
+    }
+    let now = fpl::instant_of(SystemClock.now());
+    let owner = CAST.owner.actor;
+    let born = fpl::datetime_of(now - Duration::days(30))?;
+    let mut events = Vec::new();
+    for n in 0..count {
+        let id = bulk_todo(n);
+        events.push(mk_created(
+            &id,
+            born,
+            owner,
+            &format!("Le dossier n° {n}"),
+            "",
+        )?);
+        let due = now + Duration::days(i64::try_from(1 + n % 60)?);
+        for (ago, start) in [(20, 0.6), (19, 0.5)] {
+            events.push(mk_authored(
+                &id,
+                fpl::datetime_of(now - Duration::days(ago))?,
+                owner,
+                "todo",
+                born,
+                suzatary_core::record::MarkupSource::from_chain(format!(
+                    "Le dossier n° {n}, à rendre"
+                )),
+                mk_decay(
+                    start,
+                    0.05,
+                    due,
+                    Duration::days(14),
+                    Some(now - Duration::days(ago)),
+                )?,
+                Vec::new(),
+                "home",
+                "",
+                suzatary_core::record::MarkupSource::from_chain(""),
+                None,
+                Vec::new(),
+                Vec::new(),
+                "",
+            )?);
+        }
+        if n % 5 == 0 {
+            events.push(mk_completed(
+                &id,
+                fpl::datetime_of(now - Duration::days(1))?,
+                owner,
+                "",
+            )?);
+        }
+    }
+    appended(
+        &crate::commands::store_of(read.chain(Some("life"))?),
+        events,
+    )
+}
+
 /// `count` proposals filed in a conversation of their own, each an email to the counsel, every one
-/// but each tenth dismissed: the inbox's objects of a store a year old.
-fn bulk_proposals(read: &crate::instance::Instance, count: usize) -> anyhow::Result<()> {
+/// but each tenth dismissed: the inbox's objects of a store a year old. Each serves one of the
+/// `todos` generated todos in turn, where there are any.
+fn bulk_proposals(
+    read: &crate::instance::Instance,
+    count: usize,
+    todos: usize,
+) -> anyhow::Result<()> {
     use prodrome_core::event::Actor;
     use suzatary_core::secretary::store::{ConversationId, Draft, Entry, Kind, Proposal, Reasons};
     if count == 0 {
@@ -1495,7 +1573,11 @@ fn bulk_proposals(read: &crate::instance::Instance, count: usize) -> anyhow::Res
                     "the counsel asked for the form",
                     vec![format!("todo:life/{}", CAST.todos.urgent.id).parse()?],
                 )?,
-                serves: None,
+                serves: if todos == 0 {
+                    None
+                } else {
+                    Some(format!("todo:life/{}", bulk_todo(n % todos)).parse()?)
+                },
                 revises: None,
             },
         )

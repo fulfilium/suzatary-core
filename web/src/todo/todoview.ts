@@ -432,7 +432,7 @@ export namespace todoview {
       // The chain this sample reads, taken before any wait, so a switch mid-read cannot file it under the next.
       const on = app.now().chain;
       // Sampled by the core in its worker, from the chains it holds: nothing here reads a chain.
-      void askHeld(() => ({ type: "Thirty", chain: on, id, ms: readAt() }))
+      void askHeld(() => ({ type: "Thirty", chain: on, id, ms: readAt() }), "Page")
         .then(({ answer }) => {
           if (destroyed || mine !== asked) return;
           span = answer;

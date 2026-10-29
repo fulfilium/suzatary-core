@@ -87,7 +87,7 @@ export function installNeedsYou(host: HTMLElement): void {
   const read = (): void => {
     void dressed
       .asked()
-      .then((memory) => storesync.proposals(time.moment(), memory))
+      .then((memory) => storesync.proposals(time.moment(), memory, "Shell"))
       .then(
         (read) => {
           proposals = read.payload.proposals;

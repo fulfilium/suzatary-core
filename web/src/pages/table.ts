@@ -59,6 +59,30 @@ export namespace pages {
     unknown: (root, s) => frame.mount(root, unknown(s.hash)),
   }
 
+  // Whether a screen draws the fold the shell keeps (`app/store`): its rows, or the titles of the todos it names.
+  export type Fold = "Shown" | "Unshown"
+  export const folds: { readonly [K in keyof Screens]: Fold } = {
+    todos: "Shown",
+    inbox: "Shown",
+    todo: "Shown",
+    typst: "Shown",
+    mail: "Unshown",
+    message: "Shown",
+    thread: "Unshown",
+    chain: "Unshown",
+    usage: "Unshown",
+    about: "Unshown",
+    settings: "Unshown",
+    memory: "Unshown",
+    briefings: "Unshown",
+    briefing: "Unshown",
+    calendar: "Unshown",
+    secretary: "Unshown",
+    conversation: "Shown",
+    newtopic: "Unshown",
+    unknown: "Unshown",
+  }
+
   export const mount = <K extends Screen["type"]>(root: HTMLElement, s: Screens[K] & { readonly type: K }): Promise<Mounted> =>
     table[s.type](root, s)
 }

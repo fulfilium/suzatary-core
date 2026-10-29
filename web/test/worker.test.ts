@@ -71,14 +71,14 @@ test("law: an answer by message is the in-thread core's answer, as holdings grow
     const at = instant(rg.int(24 * 40))
     const set = chainsOf(core, held.map(c => heldChain(c.name, c.objects, c.untrusted)))
     try {
-      assert.deepEqual(await r.ask({ type: "List", chain: "life", at }), entriesOf(core, life, at, chain.untrusted, "life", set))
-      const read = await r.ask({ type: "Reading", chain: "life", at })
+      assert.deepEqual(await r.ask({ type: "List", chain: "life", at }, "Page"), entriesOf(core, life, at, chain.untrusted, "life", set))
+      const read = await r.ask({ type: "Reading", chain: "life", at }, "Page")
       const f = foldObjects(core, life, at, chain.untrusted)
       assert.equal(read.type, "Read")
       if (read.type !== "Read") return
       assert.deepEqual([read.at, read.specs, read.functions], [f.at, f.specs, f.functions])
       for (const o of other.filter(c => c.objects.length > 0)) {
-        const theirs = await r.ask({ type: "Reading", chain: o.name, at })
+        const theirs = await r.ask({ type: "Reading", chain: o.name, at }, "Page")
         const g = foldObjects(core, o.objects, at, o.untrusted)
         assert.equal(theirs.type, "Read")
         if (theirs.type === "Read") assert.deepEqual([theirs.reading.chain, theirs.specs, theirs.functions], [o.name, g.specs, g.functions], "two chains at one instant are two readings")
@@ -97,11 +97,11 @@ test("law: an answer by message is the in-thread core's answer, as holdings grow
         }
       })
       linkSet.free()
-      assert.deepEqual(await r.ask({ type: "Price", basis: { type: "Fold", reading: read.reading }, terms }), direct)
+      assert.deepEqual(await r.ask({ type: "Price", basis: { type: "Fold", reading: read.reading }, terms }, "Page"), direct)
       const id = rg.pick(todos)
       const ms = time.ms(at) ?? 0
       const t: Todos = new core.Todos(objectsOf(life))
-      assert.deepEqual(await r.ask({ type: "Thirty", chain: "life", id, ms }), thirty.sample(core, set, t, chain.untrusted, id, ms))
+      assert.deepEqual(await r.ask({ type: "Thirty", chain: "life", id, ms }, "Page"), thirty.sample(core, set, t, chain.untrusted, id, ms))
       t.free()
     } finally {
       set.free()
@@ -116,8 +116,8 @@ test("two chains held and read at one instant are two readings, each its own cha
       { name: "work", objects: few, untrusted: chain.untrusted },
     ])
     const at = instant(5)
-    const life = await r.ask({ type: "Reading", chain: "life", at })
-    const work = await r.ask({ type: "Reading", chain: "work", at })
+    const life = await r.ask({ type: "Reading", chain: "life", at }, "Page")
+    const work = await r.ask({ type: "Reading", chain: "work", at }, "Page")
     assert.ok(life.type === "Read" && work.type === "Read")
     assert.deepEqual(work.specs, foldObjects(core, few, at, chain.untrusted).specs)
     assert.notDeepEqual(work.specs, life.specs, "work's reading is not life's")
@@ -157,8 +157,8 @@ test("a holding the worker refused is sent again whole, and the worker holds wha
     // A worker holding more than the whole names lets the rest go.
     await r.hold(held)
     const at = instant(5)
-    await r.ask({ type: "Hold", chains: again.chains })
-    const read = await r.ask({ type: "Reading", chain: "life", at })
+    await r.ask({ type: "Hold", chains: again.chains }, "Page")
+    const read = await r.ask({ type: "Reading", chain: "life", at }, "Page")
     assert.ok(read.type === "Read")
     assert.deepEqual(read.specs, foldObjects(core, ordered.slice(0, 3), at, chain.untrusted).specs)
   }))
@@ -168,13 +168,13 @@ test("a remount does not fold: the same chains at the same instant read the read
   return channel(c, async r => {
     const held = [{ name: "life", objects: ordered, untrusted: chain.untrusted }]
     const at = instant(10)
-    const mount = async () => (await r.hold(held), await r.ask({ type: "Reading", chain: "life", at }))
+    const mount = async () => (await r.hold(held), await r.ask({ type: "Reading", chain: "life", at }, "Page"))
     const first = await mount()
     assert.equal(folds(), 1)
     assert.deepEqual(await mount(), first, "the page mounted again reads the same reading")
     assert.equal(folds(), 1, "and nothing was folded for it")
     await r.hold([{ name: "life", objects: ordered.slice(0, -1), untrusted: chain.untrusted }])
-    await r.ask({ type: "Reading", chain: "life", at })
+    await r.ask({ type: "Reading", chain: "life", at }, "Page")
     assert.equal(folds(), 2, "a chain that moved is folded again")
   })
 })
@@ -183,7 +183,7 @@ test("the box's rows price a group through the core, a todo as its row", () =>
   channel(core, async r => {
     const functions: Record<string, SpecNode> = { a: { kind: "flat", value: 0.5 }, b: { kind: "absent" } }
     const terms: SpecNode[] = [{ kind: "ref", todo: "a" }, { kind: "conj", p: -4, terms: [{ kind: "ref", todo: "a" }, { kind: "ref", todo: "a" }] }, { kind: "ref", todo: "c" }]
-    const [a, group, unknown] = await r.ask({ type: "Price", basis: { type: "Rows", at: instant(0), functions }, terms })
+    const [a, group, unknown] = await r.ask({ type: "Price", basis: { type: "Rows", at: instant(0), functions }, terms }, "Page")
     assert.deepEqual(a, { type: "Value", v: 0.5 })
     assert.deepEqual(group, { type: "Value", v: 0.5 })
     assert.equal(unknown?.type, "Refused")
@@ -192,15 +192,15 @@ test("the box's rows price a group through the core, a todo as its row", () =>
 test("a worker that is gone fails every question waiting and every one after, in words", async () => {
   let fail: (why: string) => void = () => {}
   const r = remote.over({ postMessage: () => {}, addEventListener: () => {} }, f => (fail = f))
-  const waiting = r.ask({ type: "List", chain: "life", at: null })
+  const waiting = r.ask({ type: "List", chain: "life", at: null }, "Page")
   fail("the core's worker stopped")
   await assert.rejects(waiting, /stopped/)
-  await assert.rejects(r.ask({ type: "List", chain: "life", at: null }), /stopped/)
+  await assert.rejects(r.ask({ type: "List", chain: "life", at: null }, "Page"), /stopped/)
 })
 
 test("a question about a chain the worker does not hold says so", () =>
   channel(core, async r => {
     await r.hold([])
-    await assert.rejects(r.ask({ type: "List", chain: "life", at: null }), /holds nothing of life/)
-    assert.deepEqual(await r.ask({ type: "Reading", chain: "life", at: instant(0) }), { type: "Unheld" })
+    await assert.rejects(r.ask({ type: "List", chain: "life", at: null }, "Page"), /holds nothing of life/)
+    assert.deepEqual(await r.ask({ type: "Reading", chain: "life", at: instant(0) }, "Page"), { type: "Unheld" })
   }))

@@ -130,7 +130,7 @@ export namespace settingsPage {
 
   // Who this device writes as, read again when what it reads moves: the replica (a key trusted or revoked arrives there
   // after the box moved, so the box moving is too early to read it), this device's key and who writes.
-  const here = reading.againOn(asked.question(() => device.signing(signingHere)), heard => {
+  const here = reading.againOn(asked.question(() => device.signing(() => signingHere("Page"))), heard => {
     const unhear = [watchReplica(heard), signer.watch(heard), app.hear(app.actor, heard)]
     return () => unhear.forEach(u => u())
   })

@@ -172,6 +172,10 @@ export namespace frame {
     place(parts.body, body, kept)
   }
 
+  // Settles once a page first draws what it read, or why it could not: what the shell's own readings wait for.
+  let drew = (): void => {}
+  export const firstDrawn: Promise<void> = new Promise(done => (drew = done))
+
   // Synchronous, so a caller swapping one page for another can destroy it without waiting.
   export const open =<S, E = never, K extends string = never>(root: HTMLElement, f: Page<S, E, K>): Mounted => {
     const ownStep = f.step ?? (v => v)
@@ -207,6 +211,7 @@ export namespace frame {
     const draw = (p: lo.T<S>): void => {
       const t0 = performance.now()
       paint(parts, f, p, stale, fx, at, kept, carry)
+      if (said(f, p, stale).type !== "Waiting") drew()
       if (p.type === "Val") for (const i of all) i.update(p.v)
       if (p.type === "Val") f.effects?.(p.v, fx)
       performance.measure("page:draw", { start: t0, end: performance.now(), detail: { page: f.className, read: p.type } })

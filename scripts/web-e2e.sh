@@ -627,13 +627,15 @@ epoch_base="$(start epoch)"
 # tab read stores of the size the owner's are: $SUZATARY_E2E_LINES generated lines (13,000) over
 # $SUZATARY_E2E_CONVERSATIONS conversations (100; 0 halves them instead), $SUZATARY_E2E_RESEALS of their
 # slots sealed again (1,500), so about 14,500 line objects; $SUZATARY_E2E_PROPOSALS proposals (400), so
-# about 730 inbox objects; and a topic on $SUZATARY_E2E_TOPICS rounds (900).
+# about 730 inbox objects; a topic on $SUZATARY_E2E_TOPICS rounds (900); and $SUZATARY_E2E_TODOS todos on
+# the life chain (600), so about 1,900 more objects, which the proposals serve in turn.
 lines_shape=(
   --lines "${SUZATARY_E2E_LINES:-13000}"
   --conversations "${SUZATARY_E2E_CONVERSATIONS:-100}"
   --reseals "${SUZATARY_E2E_RESEALS:-1500}"
   --proposals "${SUZATARY_E2E_PROPOSALS:-400}"
   --topics "${SUZATARY_E2E_TOPICS:-900}"
+  --todos "${SUZATARY_E2E_TODOS:-600}"
 )
 lines_base="$(start lines "${lines_shape[@]}")"
 # THE RESCRUB SERVER (web/e2e/rescrub.test.ts): a writer whose generated lines were sealed before lines

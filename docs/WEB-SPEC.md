@@ -763,6 +763,23 @@ term is one of its folds):
   core's for the same objects, which cross to the worker once. —
   `worker.test.ts` "law: an answer by message is the in-thread core's…",
   "a holding sends each object once…".
+- **The page's question goes first.** Each question goes to the core's
+  worker in the lane of whoever asks it (`prodrome/lanes.ts`): the page on
+  screen, then the shell around it. A question of the shell starts, reads
+  after a wait and is answered only while no question of the page waits or
+  is being answered, and each lane starts in the order it came. A holding
+  of the chains goes in the first lane, so the worker takes holdings in the
+  order they were sent, and holding one costs nothing until a reading reads
+  the chains. The fold of the todo chains the shell keeps is asked in the
+  page's lane on a route that shows it (`pages.folds`), and in the shell's
+  on any other. The shell's own questions about the chains (that fold,
+  "Needs you" and whether this device signs) are not read or sent until a
+  page has drawn what it read (`frame.firstDrawn`) and the thread is idle.
+  The Inbox's rows are read again only once the inbox, the chains held or
+  the memory moved. —
+  `lanes.test.ts` "law: a shell question starts, reads and is answered only
+  while no page question waits…"; `e2e/bigstore.test.ts` "a warm load of the
+  conversations answers the page's first stream…".
 - **A chain the set holds as a failure is one line** above the list (and
   above the Inbox), naming the chain and why, from the fold's `failed`.
 

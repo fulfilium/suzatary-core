@@ -16,6 +16,7 @@ import type { Chains, Core, HeldChain, Kept, Standing } from "./core";
 import { keptChains, loadCore, signedObject } from "./core";
 import remote from "./remote";
 import type questions from "./questions";
+import type lanes from "./lanes";
 import signer from "./signer";
 import type device from "../app/device";
 import richkeep from "../app/richkeep";
@@ -257,23 +258,35 @@ export interface Holding {
   readonly replica: Replica;
 }
 
+/** What a question of the shell's lane about the chains waits for before anything of it is read or sent. */
+let shellAfter: Promise<void> = Promise.resolve();
+
+/** Said once by the shell: its questions about the chains wait until the first page has drawn. */
+export function shellAsksAfter(after: Promise<void>): void {
+  shellAfter = after;
+}
+
+const turnOf = (lane: lanes.Lane): Promise<void> => (lane === "Shell" ? shellAfter : Promise.resolve());
+
 /**
  * The core's answer about the chains held now: every chain the tab holds, sent to its worker by what changed since the
- * last time, and the question right behind it, with no wait between, so the answer reads exactly that holding. What
- * each chain's reading leaves out is told.
+ * last time, and the question right behind it in `lane`, with no wait between, so the answer reads that holding or a
+ * later one.
  */
 export async function askHeld<K extends questions.Kind>(
   question: (h: Holding) => questions.Of<K>,
+  lane: lanes.Lane,
 ): Promise<{ readonly held: Holding; readonly answer: questions.Answer<K> }> {
+  await turnOf(lane);
   const held = await heldNow();
-  return { held, answer: await askOf(held, question) };
+  return { held, answer: await askOf(held, question, lane) };
 }
 
 /** `askHeld` over a holding already read, so a caller can look at it before anything is asked. */
-async function askOf<K extends questions.Kind>(held: Holding, question: (h: Holding) => questions.Of<K>): Promise<questions.Answer<K>> {
-  const left = remote.hold(held.held.map((c) => ({ name: c.name, objects: c.replica.objects, untrusted: untrustedOf(c.replica) })));
-  const answer = remote.ask(question(held));
-  tellLeft(new Map(await left));
+async function askOf<K extends questions.Kind>(held: Holding, question: (h: Holding) => questions.Of<K>, lane: lanes.Lane): Promise<questions.Answer<K>> {
+  const holding = remote.hold(held.held.map((c) => ({ name: c.name, objects: c.replica.objects, untrusted: untrustedOf(c.replica) })));
+  const answer = remote.ask(question(held), lane);
+  await holding;
   return answer;
 }
 
@@ -390,7 +403,7 @@ async function sealAct(event: string, last: boolean): Promise<"Kept" | "Overtake
   // Another tab's reset kept during those waits emptied what was held: the act is sealed again once it is filled.
   if (replica.objects.length === 0 && !last) return "Overtaken";
   if (replica.objects.length === 0) throw new Error("this browser holds no chain yet — syncing first");
-  const { appended: written, answer } = await askOf(held, (h) => ({ type: "Act", chain: h.holding, event, at: time.moment() }));
+  const { appended: written, answer } = await askOf(held, (h) => ({ type: "Act", chain: h.holding, event, at: time.moment() }), "Page");
   const signature = key === null ? [] : [signedObject(await loadCore(), written.hash, key.public, await signer.sign(key, written.hash))];
   // Signing waits; joined into what is held now, which is a union, unless the tab has moved to another chain.
   if (source.state().holding !== holding) throw new Error("the chain changed while this act was signed — nothing was recorded");
@@ -410,7 +423,7 @@ async function trustedKey(): Promise<signer.Key> {
   const actor = app.actor(app.now());
   const held = await signer.held();
   if (held.type !== "Held") throw new Error(`this browser cannot sign what it writes (${held.e}), so the box would refuse it`);
-  const standing = (): Promise<Standing> => (actor === null ? Promise.resolve("untrusted") : standingHere(actor, held.key.public));
+  const standing = (): Promise<Standing> => (actor === null ? Promise.resolve("untrusted") : standingHere(actor, held.key.public, "Page"));
   // A key trusted since the last pull reads trusted after one exchange.
   const now = await standing();
   const after = now === "trusted" ? now : (await sync(), await standing());
@@ -435,7 +448,7 @@ async function signedOwn(): Promise<boolean> {
   if (rootOf(replica) === null || actor === null) return false;
   const held = await signer.held();
   if (held.type !== "Held") return false;
-  if ((await standingHere(actor, held.key.public)) !== "trusted") return false;
+  if ((await standingHere(actor, held.key.public, "Shell")) !== "trusted") return false;
   const unsigned = unsignedWrites(source.state().replica);
   if (unsigned.length === 0) return true;
   const core = await loadCore();
@@ -446,15 +459,16 @@ async function signedOwn(): Promise<boolean> {
 }
 
 /** What `key` is to `actor` in the open chain as held now, read by the core in its worker. */
-async function standingHere(actor: string, key: string): Promise<Standing> {
+async function standingHere(actor: string, key: string, lane: lanes.Lane): Promise<Standing> {
+  await turnOf(lane);
   const held = await heldNow();
   // A replica a reset emptied trusts no key, as the core reads no objects.
   if (held.replica.objects.length === 0) return "untrusted";
-  return askOf(held, (h) => ({ type: "Standing", chain: h.holding, root: rootOf(h.replica), actor, key }));
+  return askOf(held, (h) => ({ type: "Standing", chain: h.holding, root: rootOf(h.replica), actor, key }), lane);
 }
 
 /** What this device's key is to the chain this tab holds, read by the core from the replica. */
-export async function signingHere(): Promise<device.Signing> {
+export async function signingHere(lane: lanes.Lane): Promise<device.Signing> {
   await restoreReplica();
   const replica = source.state().replica;
   if (rootOf(replica) === null) return { type: "Unheard" };
@@ -462,7 +476,7 @@ export async function signingHere(): Promise<device.Signing> {
   if (actor === null) return { type: "Reads" };
   const held = await signer.held();
   if (held.type !== "Held") return held;
-  return { type: "Keyed", key: held.key.public, standing: await standingHere(actor, held.key.public) };
+  return { type: "Keyed", key: held.key.public, standing: await standingHere(actor, held.key.public, lane) };
 }
 
 // --- The exchange -------------------------------------------------------------
@@ -567,6 +581,14 @@ export async function resetRow(chain: string, shown: ReadonlySet<string>, over: 
 }
 
 
+/** The lane the fold on screen is read in: the page's on a route that shows it, the shell's on any other. */
+let folding = (): lanes.Lane => "Page";
+
+/** Said once by the shell, which knows the route on screen. */
+export function foldWhere(where: () => lanes.Lane): void {
+  folding = where;
+}
+
 /**
  * Under the trust policy the box reported with these objects, never another. This browser's clock is used
  * only for "now"; the banner names the tip, because what is uncertain is the chain, not the instant.
@@ -576,7 +598,7 @@ export async function foldHeld(): Promise<boolean> {
   await restoreReplica();
   if (source.state().replica.objects.length === 0) return false;
   try {
-    const { held, answer } = await askHeld((h) => ({ type: "List", chain: h.holding, at: time.moment() }));
+    const { held, answer } = await askHeld((h) => ({ type: "List", chain: h.holding, at: time.moment() }), folding());
     const { replica, holding } = held;
     if (source.state().holding !== holding) return false;
     return await showFold(answer, replica, holding);

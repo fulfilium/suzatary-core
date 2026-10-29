@@ -17,6 +17,7 @@ import type progress from "./progress"
 import { appended, standing } from "./replica"
 import stores from "./stores"
 import topics from "./topics"
+import last from "../algebra/last"
 import once from "../algebra/once"
 import type idb from "../app/idb"
 import type rendered from "../app/rendered"
@@ -71,14 +72,10 @@ export namespace storeset {
 
   // The core's reading made from some rows, again only once one of them moved, the reading it replaces freed.
   const readOf = <R extends Readonly<Record<string, locked.Row<StoredObject>>>, A>(rows: () => R, make: (rows: R) => A, free: (a: A) => void): (() => A) => {
-    let made: { readonly rows: R; readonly a: A } | null = null
+    const kept = last.of<R, A>((was, now) => Object.keys(now).every(k => now[k] === was[k]), free)
     return () => {
       const now = rows()
-      const was = made
-      if (was !== null && Object.keys(now).every(k => now[k] === was.rows[k])) return was.a
-      if (was !== null) free(was.a)
-      made = { rows: now, a: make(now) }
-      return made.a
+      return kept(now, () => make(now))
     }
   }
 

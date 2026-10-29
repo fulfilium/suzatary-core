@@ -75,7 +75,7 @@ export namespace dressed {
   // waits on the network: the chains are the ones the tab holds, and the set is made inside the reading, with no wait
   // between it and the pricing, so `held` is what was priced.
   export type Inbox = storesync.Proposals
-  export const inbox = (at: string, memory: MemoryPayload | null): Promise<Inbox> => storesync.proposals(at, memory)
+  export const inbox = (at: string, memory: MemoryPayload | null): Promise<Inbox> => storesync.proposals(at, memory, "Page")
 
   // A conversation's window, or how many of its lines are not on this device and why, refused in the core's words where
   // the store holds no line of it.

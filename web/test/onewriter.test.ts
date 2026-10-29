@@ -109,7 +109,7 @@ const worker = () => {
     if (said.type === "Cleared") void page?.clear()
   })
   const ask = async <K extends questions.Kind>(q: questions.Of<K>): Promise<questions.Answer<K>> => {
-    const a = (await serve(q)) as questions.Answer<K>
+    const a = (await serve(q, () => Promise.resolve())) as questions.Answer<K>
     posted.push(JSON.stringify(a, (_, v: unknown) => (v instanceof Set ? [...v] : v)))
     return a
   }

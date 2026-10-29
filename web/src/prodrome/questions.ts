@@ -15,7 +15,7 @@ import type {
   TopicsPayload,
   TurnRow,
 } from "../wire/generated/wire"
-import type { Acted, Chains, Core, CoreEnv, CoreFold, Linker, Named, Standing, Todos, Window } from "./core"
+import type { Acted, Chains, Core, CoreEnv, CoreFold, Linker, Named, Proposals, Standing, Todos, Window } from "./core"
 import {
   appendTo,
   barOf,
@@ -41,10 +41,12 @@ import {
 import type topics from "./topics"
 import excluded from "./excluded"
 import type heads from "./heads"
+import lanes from "./lanes"
 import lines from "./lines"
 import storeset from "./storeset"
 import type stores from "./stores"
 import lo from "../algebra/lo"
+import last from "../algebra/last"
 import thirty from "../todo/thirty"
 import grouped from "../chat/grouped"
 import rendered from "../app/rendered"
@@ -95,8 +97,8 @@ export namespace questions {
 
   // Each question, and what answers it.
   export type Table = {
-    // The chains held, replacing the last holding; what each chain's reading leaves out.
-    Hold: { q: { readonly chains: readonly Holding[] }; a: readonly (readonly [string, excluded.Left])[] }
+    // The chains held, replacing the last holding. What each chain's reading leaves out is said once a reading holds it.
+    Hold: { q: { readonly chains: readonly Holding[] }; a: null }
     // The box's `GET …/fold` of `chain` at `at`, priced through every chain held.
     List: { q: { readonly chain: string; readonly at: string | null }; a: FoldPayload }
     // `event` sealed onto `chain` as held, and the fold after it.
@@ -153,8 +155,9 @@ export namespace questions {
   export type Of<K extends Kind> = Extract<Question, { readonly type: K }>
   export type Answer<K extends Kind> = Table[K]["a"]
 
-  // On the wire: each question numbered, each answer under its number, a failure in the core's words.
-  export type Asked = { readonly id: number; readonly question: Question }
+  // On the wire: each question numbered and in the lane of whoever asked it, each answer under its number, a failure in
+  // the core's words.
+  export type Asked = { readonly id: number; readonly lane: lanes.Lane; readonly question: Question }
   export type Answered = { readonly id: number; readonly answer: lo.Settled<Answer<Kind>> }
 
   // What the worker says unasked: what the stores' syncs tell, that the box refused this device's key (`Gone`) or this
@@ -180,14 +183,17 @@ export namespace questions {
     }
   }
 
+  // Resolves once the question's lane may run (`lanes.free`): what an answer awaits after it waited on a store.
+  export type Turn = () => Promise<void>
+
   // The answerer: each chain's objects, the core's set of them, and the readings kept, all its own.
   // An answer now, or once the lines a question reads are held.
-  export type Answering = (q: Question) => Answer<Kind> | Promise<Answer<Kind>>
+  export type Answering = (q: Question, turn: Turn) => Answer<Kind> | Promise<Answer<Kind>>
 
   export const serve = (core: Core, say: (s: Said) => void = () => {}): Answering => {
     const chains = new Map<string, Chain>()
     const set: Chains = new core.Chains()
-    const inSet = new Map<string, { readonly version: number; readonly left: excluded.Left }>()
+    const inSet = new Map<string, number>()
     const readings: Reading[] = []
     let versions = 0
 
@@ -209,16 +215,19 @@ export namespace questions {
       c.todos?.t.free()
       c.todos = null
     }
-    // The set holds each chain as it is now; what names it is each chain's name and version.
+    // The set holds each chain as it is now, and what each chain's reading leaves out is said as it is held; what names
+    // the set is each chain's name and version.
     const setNow = (): string => {
       for (const [name, c] of chains) {
-        if (inSet.get(name)?.version === c.version) continue
-        inSet.set(name, { version: c.version, left: holdIn(set, name, objectsIn(c), c.untrusted) })
+        if (inSet.get(name) === c.version) continue
+        say({ type: "Told", reader: `chain/${name}`, left: holdIn(set, name, objectsIn(c), c.untrusted) })
+        inSet.set(name, c.version)
       }
       for (const name of [...inSet.keys()]) {
         if (chains.has(name)) continue
         set.drop(name)
         inSet.delete(name)
+        say({ type: "Told", reader: `chain/${name}`, left: excluded.NOTHING })
       }
       return [...chains].map(([name, c]) => `${name}:${c.version}`).sort().join(";")
     }
@@ -244,19 +253,26 @@ export namespace questions {
       if (lacked === 0) throw e
       return { type: "NotHere", lines: lacked, why: lo.reason(e) }
     }
+    // The stores `scope` reads once they are ready, and the question's turn after the wait.
+    const ready = (scope: storeset.Scope, turn: Turn): Promise<void> => stores.ready(scope).then(turn)
     // A reading of every line once they are held, or how many the device lacks where they cannot be fetched.
-    const scoped = <A>(scope: () => lines.Scope, read: () => A): Promise<Whole<A>> =>
-      stores
-        .ready("All")
+    const scoped = <A>(turn: Turn, scope: () => lines.Scope, read: () => A): Promise<Whole<A>> =>
+      ready("All", turn)
         .then(() => sync.over(scope, (): Whole<A> => ({ type: "Held", v: read() })))
         .catch((e: unknown): Whole<A> => notHere(scope(), e))
-    const whole = <A>(read: () => A): Promise<Whole<A>> => scoped(() => lines.WHOLE, read)
+    const whole = <A>(turn: Turn, read: () => A): Promise<Whole<A>> => scoped(turn, () => lines.WHOLE, read)
+
+    // The Inbox's rows, read again only once the inbox, the chains held or the memory moved: until then an ask is
+    // answered with the reading made at the instant of the first, which its `at` names.
+    const inbox = last.of<{ readonly of: Proposals; readonly set: string; readonly memory: string }, InboxProposalsPayload>(
+      (a, b) => a.of === b.of && a.set === b.set && a.memory === b.memory,
+    )
 
     // The key each answer block of `turns` is kept by, named once here, where the core is.
     const keyed = (turns: readonly TurnRow[]): Keyed =>
       Object.fromEntries(turns.flatMap(t => (t.who === "model" ? t.blocks.map(b => [b.source, core.answer_key(b.source)]) : [])))
 
-    const hold = (holding: readonly Holding[]): Answer<"Hold"> => {
+    const hold = (holding: readonly Holding[]): null => {
       for (const h of holding) {
         const c = chains.get(h.name) ?? { objects: new Map<string, string>(), untrusted: [], version: 0, todos: null }
         chains.set(h.name, c)
@@ -271,8 +287,7 @@ export namespace questions {
         forget(c)
         chains.delete(name)
       }
-      setNow()
-      return [...inSet].map(([name, i]): readonly [string, excluded.Left] => [name, i.left])
+      return null
     }
 
     const act = (chain: string, event: string, at: string): Answer<"Act"> => {
@@ -322,7 +337,7 @@ export namespace questions {
       })
     }
 
-    return q => {
+    return (q, turn) => {
       switch (q.type) {
         case "Hold":
           return hold(q.chains)
@@ -358,16 +373,15 @@ export namespace questions {
         case "Reset":
           return stores.reset(q.store)
         case "Proposals":
-          return stores.ready("Inbox").then(() => {
-            setNow()
-            return inboxOf(proposals(), q.at, q.memory, set)
+          return ready("Inbox", turn).then(() => {
+            const of = proposals()
+            return inbox({ of, set: setNow(), memory: JSON.stringify(q.memory) }, () => inboxOf(of, q.at, q.memory, set))
           })
         case "Conversations":
-          return whole(() => listOfLines(held, proposals()))
+          return whole(turn, () => listOfLines(held, proposals()))
         case "Conversation": {
           const { id, window, memory } = q
-          return stores
-            .ready("All")
+          return ready("All", turn)
             .then((): Promise<One> | One =>
               sync.holds(id) ? sync.over(() => lines.one(id), (): One => ({ type: "Held", payload: conversationOf(held, proposals(), id, window, memory) })) : { type: "Absent" },
             )
@@ -376,8 +390,7 @@ export namespace questions {
         case "Window": {
           const { id, window, memory, zone } = q
           const read = (w: Window): ConversationPayload => conversationOf(held, proposals(), id, w, memory)
-          return stores
-            .ready("All")
+          return ready("All", turn)
             .then((): Promise<Grouped> | Grouped =>
               sync.holds(id)
                 ? sync.over(() => lines.one(id), (): Grouped => {
@@ -389,7 +402,7 @@ export namespace questions {
             .catch((e: unknown): Grouped => notHere(lines.one(id), e))
         }
         case "Search":
-          return whole(() => searchOf(held, q.q))
+          return whole(turn, () => searchOf(held, q.q))
         // What the readings made so far left out of the lines they read, asked after a reading, so it says at least what
         // that reading left out.
         case "Left":
@@ -407,6 +420,7 @@ export namespace questions {
         // The rounds are chosen by the skeleton's outlines, and only the lines whose words they read are read.
         case "Stream":
           return scoped(
+            turn,
             () => ({ type: "Objects", names: chosenOf(held, stores.topics().reading, q.chosen, q.pages) }),
             () => {
               const read = stores.topics()
@@ -426,18 +440,80 @@ export namespace questions {
     readonly addEventListener: (type: "message", f: (e: { readonly data: In }) => void) => void
   }
 
-  // Each question answered once the core is ready, in the order it came where it answers at once and when the lines it
-  // reads are held where it waits on them; a core that did not load fails every one.
-  export const listen = (port: Port<Asked, Answered>, ready: Promise<Answering>): void =>
+  // A question as it waits in its lane: one to start, or one that waited and takes its turn again.
+  type Item = { readonly type: "Ask"; readonly asked: Asked } | { readonly type: "Turn"; readonly go: () => void }
+
+  // How long the thread serves the queue before it lets in what came meanwhile, so a page's question that arrived while
+  // the shell's was answered is chosen before the shell's next.
+  const SLICE_MS = 8
+
+  // Each question answered once the core is ready, in the order of `lanes`; a core that did not load fails every one.
+  // The queue is served in a later task (`later`), so what arrives in the tasks between is chosen from.
+  export const listen = (port: Port<Asked, Answered>, ready: Promise<Answering>, later: (f: () => void) => void = f => void setTimeout(f, 0)): void => {
+    let queue = lanes.empty<Item>()
+    let answering: { readonly type: "Loading" } | { readonly type: "Ready"; readonly answer: Answering } = { type: "Loading" }
+    let serving: "Idle" | "Scheduled" = "Idle"
+
+    const schedule = (): void => {
+      if (answering.type === "Loading" || serving === "Scheduled") return
+      serving = "Scheduled"
+      later(serve)
+    }
+    const turn = (lane: lanes.Lane): Turn => () =>
+      lanes.free(queue, lane)
+        ? Promise.resolve()
+        : new Promise(go => {
+            queue = lanes.arrived(queue, lane, { type: "Turn", go })
+            schedule()
+          })
+    const settle = (asked: Asked, answer: lo.Settled<Answer<Kind>>): void => {
+      queue = lanes.ended(queue, asked.lane)
+      port.postMessage({ id: asked.id, answer })
+      schedule()
+    }
+    // An answer that waited is sent on its lane's turn, so the page's thread hears the page's answer first.
+    const start = (answer: Answering, asked: Asked): void => {
+      queue = lanes.started(queue, asked.lane)
+      const again = turn(asked.lane)
+      const settled = ((): lo.Settled<Answer<Kind>> | Promise<lo.Settled<Answer<Kind>>> => {
+        try {
+          const v = answer(asked.question, again)
+          return v instanceof Promise ? v.then(lo.val, (x: unknown) => lo.error(lo.reason(x))) : lo.val(v)
+        } catch (x) {
+          return lo.error(lo.reason(x))
+        }
+      })()
+      if (settled instanceof Promise) void settled.then(s => again().then(() => settle(asked, s)))
+      else settle(asked, settled)
+    }
+    const serve = (): void => {
+      serving = "Idle"
+      if (answering.type === "Loading") return
+      const { answer } = answering
+      const from = performance.now()
+      for (let n = lanes.next(queue); n.type === "Serve"; n = lanes.next(queue)) {
+        queue = n.q
+        if (n.a.type === "Turn") n.a.go()
+        else start(answer, n.a.asked)
+        if (performance.now() - from > SLICE_MS) return schedule()
+      }
+    }
+
     port.addEventListener("message", e => {
-      const { id, question } = e.data
-      void ready
-        .then(answer => answer(question))
-        .then(
-          (v): lo.Settled<Answer<Kind>> => lo.val(v),
-          (x: unknown): lo.Settled<Answer<Kind>> => lo.error(lo.reason(x)),
-        )
-        .then(settled => port.postMessage({ id, answer: settled }))
+      queue = lanes.arrived(queue, e.data.lane, { type: "Ask", asked: e.data })
+      schedule()
     })
+    void ready
+      .then(
+        answer => answer,
+        (x: unknown): Answering => () => {
+          throw x
+        },
+      )
+      .then(answer => {
+        answering = { type: "Ready", answer }
+        schedule()
+      })
+  }
 }
 export default questions

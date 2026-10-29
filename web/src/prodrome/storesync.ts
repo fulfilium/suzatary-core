@@ -7,6 +7,7 @@ import { CoreError } from "./core"
 import remote from "./remote"
 import type questions from "./questions"
 import type linesync from "./linesync"
+import lanes from "./lanes"
 import type storeset from "./storeset"
 import { askHeld } from "./sync"
 import heads from "./heads"
@@ -39,16 +40,18 @@ export namespace storesync {
   const both = (a: linesync.Moved, b: linesync.Moved): linesync.Moved => (a === "All" || b === "All" ? "All" : [...new Set([...a, ...b])])
 
   // Whether this page is shown, said to the worker once a page reads the stores and at every change after: its prefetch
-  // sends nothing while the page is hidden.
+  // sends nothing while the page is hidden. What the tab tells the worker, of the page and of the box's stream, goes in
+  // the first lane, as a holding does, so the worker takes it when it was said: an opened stream taken after a reading
+  // asked for the stores would pull them all again.
   const shown = (): boolean => typeof document === "undefined" || document.visibilityState === "visible"
   const showing = once.of(async (): Promise<void> => {
-    const say = (): void => void remote.ask({ type: "Shown", on: shown() })
+    const say = (): void => void remote.ask({ type: "Shown", on: shown() }, lanes.FIRST)
     if (typeof document !== "undefined") document.addEventListener("visibilitychange", say)
     say()
   })
 
   // Every store pulled; whether every pull ended whole.
-  const all = (): Promise<boolean> => (void showing.get(), remote.ask({ type: "Pull" }))
+  const all = (): Promise<boolean> => (void showing.get(), remote.ask({ type: "Pull" }, "Page"))
 
   export const sync = (): Promise<void> => all().then(() => undefined)
 
@@ -58,8 +61,8 @@ export namespace storesync {
   // The Inbox's rows at `at`, priced through every chain the tab holds, read from the inbox alone, and the chains they
   // were priced through: what a page that reads no conversation asks, so it pulls the inbox and never the lines.
   export type Proposals = { readonly payload: InboxProposalsPayload; readonly held: readonly string[] }
-  export const proposals = async (at: string, memory: MemoryPayload | null): Promise<Proposals> => {
-    const { held, answer } = await askHeld(() => ({ type: "Proposals", at, memory }))
+  export const proposals = async (at: string, memory: MemoryPayload | null, lane: lanes.Lane): Promise<Proposals> => {
+    const { held, answer } = await askHeld(() => ({ type: "Proposals", at, memory }), lane)
     return { payload: answer, held: held.held.map(c => c.name) }
   }
 
@@ -67,9 +70,9 @@ export namespace storesync {
   // reads is held.
   const over = async <K extends questions.Kind>(question: questions.Of<K>, whole: boolean): Promise<questions.Answer<K>> => {
     void showing.get()
-    const answer = await remote.ask(question)
+    const answer = await remote.ask(question, "Page")
     // Asked behind the answer, so it says what the reading left out and the answer waits for none of it.
-    if (whole) void remote.ask({ type: "Left" }).then(left => readings.told("stores", excluded.left(left)))
+    if (whole) void remote.ask({ type: "Left" }, "Shell").then(left => readings.told("stores", excluded.left(left)))
     return answer
   }
 
@@ -93,7 +96,7 @@ export namespace storesync {
     const actor = app.actor(app.now())
     if (actor === null) throw new Error("this device only reads, so it writes no topic")
     // Held as the page's own writes are, so a reload waits for the worker to keep it and the box to answer.
-    await inflight.held(remote.ask({ type: "Topic", write: w, at, actor }))
+    await inflight.held(remote.ask({ type: "Topic", write: w, at, actor }, "Page"))
   }
 
   // One conversation over its own lines alone, which reads as the whole store reads it; absent where the lines hold no
@@ -120,7 +123,7 @@ export namespace storesync {
 
   // A store's row that does not read, written over by a reset and taken again from the box; a reset that fails is said.
   export const reset = async (name: stores.Name, said: (why: string) => void): Promise<void> =>
-    void (await remote.ask({ type: "Reset", store: name })).forEach(said)
+    void (await remote.ask({ type: "Reset", store: name }, "Page")).forEach(said)
 
   // What the worker says of the stores: a reading's leavings, a pull's progress, the rendered blocks it forgot, a
   // refused topic, and what moved, heard once a frame however many landings it says it of, so a page asks for its
@@ -199,12 +202,12 @@ export namespace storesync {
   // the first frame of each included, whether or not a page has read them.
   export const listen = (moved: (name: stores.Name) => void): (() => void) =>
     stream.open(stream.of("/api/stores/events"), {
-      opened: () => void remote.ask({ type: "Opened" }),
+      opened: () => void remote.ask({ type: "Opened" }, lanes.FIRST),
       frame: data => {
         const f = frame(data)
         if (f.type !== "Val") return
         moved(f.v.store)
-        void remote.ask({ type: "Heard", store: f.v.store, heads: heads.of(f.v.heads) })
+        void remote.ask({ type: "Heard", store: f.v.store, heads: heads.of(f.v.heads) }, lanes.FIRST)
       },
     })
 }

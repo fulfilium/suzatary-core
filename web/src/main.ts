@@ -34,6 +34,7 @@ import { updatePanel } from "./chat/panel";
 import type { Mounted } from "./view/page";
 import { inert } from "./view/page";
 import pages from "./pages/table";
+import frame from "./view/frame";
 import { hrefOf } from "./shell/route";
 import address from "./shell/address";
 import routelog from "./shell/routelog";
@@ -50,7 +51,7 @@ import readings from "./prodrome/readings";
 import heads from "./prodrome/heads";
 import { hearTheme, restoreTheme, theme } from "./app/theme";
 import { store } from "./app/store";
-import { foldHeld, forgetChainReplica, held, keepObjects, refetchFold, resetRow, restoreFold, restoreReplica, signingHere, sync, watchReplica } from "./prodrome/sync";
+import { foldHeld, foldWhere, forgetChainReplica, held, keepObjects, refetchFold, resetRow, restoreFold, restoreReplica, shellAsksAfter, signingHere, sync, watchReplica } from "./prodrome/sync";
 import signer from "./prodrome/signer";
 import http from "./wire/http";
 import clock from "./algebra/clock";
@@ -184,7 +185,7 @@ function askAgain(): void {
 // first write; a key trusted since, a renewed one's included, writes again.
 function keyed(): void {
   if (app.now().who.type !== "Writes") return;
-  void signingHere()
+  void signingHere("Shell")
     .then((s) => app.dispatch({ type: "Keyed", key: keyOf(s) }))
     .catch(() => {});
 }
@@ -228,6 +229,10 @@ let drawn: app.App | null = null;
 // The first reading of the owner's zone loads its rules, a long task on a phone: read once the first page is drawn and
 // the thread is idle, so no page's draw carries it.
 const idle = (f: () => void): void => void ("requestIdleCallback" in window ? requestIdleCallback(f, { timeout: 2000 }) : setTimeout(f, 1000));
+// What the shell asks of the chains for itself waits until a page has drawn what it read and the thread is idle: the fold
+// of the todo chains on a route that does not show it, what "Needs you" reads and whether this device signs.
+shellAsksAfter(frame.firstDrawn.then(() => new Promise<void>((done) => idle(done))));
+foldWhere(() => (pages.folds[app.screen(app.now()).type] === "Shown" ? "Page" : "Shell"));
 
 function draw(a: app.App): void {
   const was = drawn;
