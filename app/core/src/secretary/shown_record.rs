@@ -86,6 +86,26 @@ impl<S: Shows> ShownRecord<S> {
         told::zoom(&self.reading, handle, S::shows)
     }
 
+    /// The summaries this reader reads in words in the view a session opening is told, within
+    /// `budget` bytes, in the record's order, each with its part.
+    #[must_use]
+    pub fn summaries(&self, budget: usize) -> Vec<(Part, crate::secretary::digest_line::Line)> {
+        digest_view::view(
+            self.reading.digest(),
+            &self.reading.entries(),
+            budget,
+            S::shows,
+        )
+        .into_iter()
+        .filter_map(|shown| match shown.body {
+            digest_view::Body::Derived(line) => Some((shown.part, line)),
+            digest_view::Body::Said(_)
+            | digest_view::Body::Hidden(_)
+            | digest_view::Body::Unsummarised(_) => None,
+        })
+        .collect()
+    }
+
     /// The lines and summaries this reader reads in words that hold `needle`, the newest `limit`
     /// of them, each by its handle and with its words around the match.
     #[must_use]

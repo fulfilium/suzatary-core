@@ -2519,9 +2519,12 @@
             "id": 1,
             "kind": "person",
             "said": {
-              "conversation": "about-the-deed",
-              "kind": "turn",
-              "turn": 0
+              "how": "said",
+              "on": {
+                "conversation": "about-the-deed",
+                "kind": "turn",
+                "turn": 0
+              }
             }
           },
           {
@@ -2530,14 +2533,57 @@
             "id": 2,
             "kind": "person",
             "said": {
-              "conversation": "about-the-deed",
-              "kind": "tapped",
-              "proposal": 1
+              "how": "said",
+              "on": {
+                "conversation": "about-the-deed",
+                "kind": "tapped",
+                "proposal": 1
+              }
+            }
+          },
+          {
+            "at": "2026-09-02T12:00:00",
+            "fact": "Takes the early train on weekdays",
+            "id": 6,
+            "kind": "owner",
+            "said": {
+              "from": [
+                4,
+                5
+              ],
+              "how": "merged",
+              "origins": [
+                {
+                  "conversation": "about-the-deed",
+                  "kind": "turn",
+                  "turn": 2
+                },
+                {
+                  "conversation": "about-the-deed",
+                  "kind": "tapped",
+                  "proposal": 3
+                }
+              ],
+              "round": {
+                "conversation": "about-the-deed",
+                "kind": "turn",
+                "turn": 4
+              }
             }
           }
         ],
         "forgotten": [
           3
+        ],
+        "merged": [
+          {
+            "fact": 4,
+            "into": 6
+          },
+          {
+            "fact": 5,
+            "into": 6
+          }
         ]
       },
       "maps": []
@@ -2913,6 +2959,21 @@
           }
         ],
         "since": "Unknown"
+      },
+      "maps": []
+    }
+  ],
+  "RecordPayload": [
+    {
+      "value": {
+        "summaries": [
+          {
+            "handle": "0+16",
+            "lines": 16,
+            "node": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "text": "Asked for the early train on weekdays"
+          }
+        ]
       },
       "maps": []
     }

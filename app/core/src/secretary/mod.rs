@@ -70,6 +70,7 @@ pub mod outline;
 pub mod outlines;
 pub mod phase;
 pub mod proposer;
+pub mod provenance;
 pub mod queue;
 pub mod read_mail;
 pub mod readings;

@@ -50,6 +50,8 @@ GET /api/secretary/conversations/{conversation}/stream read -
 POST /api/secretary/conversations/{conversation}/title act signed
 GET /api/secretary/memory read -
 POST /api/secretary/memory/{id}/forget act signed
+GET /api/secretary/record read -
+POST /api/secretary/record/{node}/retract tap signed
 GET /api/stores/events read -
 GET /api/stores/lines/skeleton read -
 GET /api/stores/{store}/content read -

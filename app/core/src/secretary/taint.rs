@@ -313,7 +313,7 @@ mod tests {
     }
 
     #[test]
-    fn only_five_verbs_are_clean() {
+    fn only_six_verbs_are_clean() {
         let clean: Vec<&str> = crate::secretary::SecretaryVerb::ALL
             .iter()
             .filter(|verb| verb.class().taint == Taint::Clean)
@@ -321,7 +321,14 @@ mod tests {
             .collect();
         assert_eq!(
             clean,
-            vec!["context", "remember", "forget", "weather", "add_topics"]
+            vec![
+                "context",
+                "remember",
+                "forget",
+                "consolidate",
+                "weather",
+                "add_topics"
+            ]
         );
     }
 

@@ -373,6 +373,7 @@ mod tests {
         let memory = Memory {
             facts: Vec::new(),
             forgotten: Vec::new(),
+            merged: Vec::new(),
             version: 0,
         };
         let unread = Refusal::not_found("no record here".to_owned());

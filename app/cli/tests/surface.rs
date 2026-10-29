@@ -58,6 +58,7 @@ fn concrete(pattern: &str) -> String {
         .replace("{name}", "x.pdf")
         .replace("{*verb}", "x")
         .replace("{id}", "1")
+        .replace("{node}", &"0".repeat(64))
 }
 
 /// The local shell, a viewer who may not write, and a writer.

@@ -46,7 +46,7 @@ impl Group {
 pub enum State {
     /// A summary true to how the node is asked now.
     Current,
-    /// A summary owed again.
+    /// A summary owed again, a summary written over a retracted one among them.
     Stale,
     /// No summary whose words read.
     Unsummarized,
@@ -74,7 +74,7 @@ impl Census {
                 .unwrap_or(0);
             let state = match digest.standing(node.name()) {
                 Some(Standing::Current) => State::Current,
-                Some(Standing::Stale) => State::Stale,
+                Some(Standing::Stale | Standing::OverRetracted) => State::Stale,
                 None => State::Unsummarized,
             };
             *census

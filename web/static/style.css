@@ -5679,12 +5679,21 @@ body:has(> .secretarypanel) .askrow {
   gap: var(--s-2) var(--s-3);
 }
 
-.memorysaid {
+.memorysaid,
+.memorymerged {
   font-size: var(--t-small);
   font-style: italic;
 }
 
-.act.forget {
+/* A consolidated fact's foot: the facts it replaced, then where each of theirs was said. */
+.memoryprovenance {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-1) var(--s-3);
+}
+
+.act.forget,
+.act.retract {
   min-height: 2.25rem;
   padding: 0 0.9rem;
   font-size: var(--t-small);

@@ -100,6 +100,8 @@ fn nothing_but_the_named_writes_answers_a_post() {
         "/api/overview",
         // The memory's read; its one write is `…/memory/<id>/forget`.
         "/api/secretary/memory",
+        // The record's read; its one write is `…/record/<node>/retract`.
+        "/api/secretary/record",
         // A replica's pull of the lines, which the box alone writes.
         "/api/stores/lines/skeleton",
     ] {
@@ -138,6 +140,8 @@ fn every_secretary_write_refuses_a_bare_post_from_loopback() {
         "/api/todo/anything/build",
         // Forgetting erases, so it is the owner's act.
         "/api/secretary/memory/1/forget",
+        // So is saying a summary is wrong.
+        "/api/secretary/record/0000000000000000000000000000000000000000000000000000000000000000/retract",
     ] {
         let response = common::agent()
             .post(format!("{base}{path}"))

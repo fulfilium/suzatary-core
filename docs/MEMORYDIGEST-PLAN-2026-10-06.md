@@ -245,9 +245,16 @@ Suzatary:
    `zoom` into a tainted node is a card.
 10. **Conflicts.** Two `Summarized` for one node read as a conflict; the view
     is the same whatever their arrival order.
-11. **Consolidation.** `live(h + Consolidated{from, into})` =
-    `live(h) − from + {into}`; `origins(into) = ⋃ origins(from)`; the sources'
-    words are dead after the sweep.
+11. **Consolidation.** Two clauses. (i) When `from ⊆ live(h)`,
+    `live(h + Consolidated{from, into}) = live(h) − from + {into}`,
+    `origins(into) = ⋃ origins(from)`, and the sources' words are dead after
+    the sweep; one box refuses any other consolidation. (ii) When a source rests
+    on a forgotten fact, which only another replica's forgetting can make,
+    `live(h + C) = live(h)`: `into` reads forgotten and its words are dead, and
+    it replaces nothing, so its other sources stand again (their words are
+    lost if a sweep ran while the consolidation stood alone). Two
+    consolidations under one number keep the least-named; the other's words are
+    dead and its sources are replaced by nothing.
 12. **Determinism.** `context_of` is a function of the objects and the budget:
     two replicas holding the same objects send the model byte-identical
     context.
@@ -375,6 +382,23 @@ logged, "zoom before you act, guess or ask", and the stability-first view.
    level.
 6. **Fact consolidation**: `Consolidated`, the `consolidate` verb, the page's
    "merged from"; law 11. ~250 lines. Deletes the forget-both procedure.
+   BUILT (2026-10-28): `memory_event::Said::Consolidated { from, text, kind,
+   round }`, a set of sources each numbered below the new fact, and the round
+   that wrote it, so a forgetting finds the call that holds its words. The
+   reading (`two_phase::TwoPhase`) reads a source replaced once its
+   consolidation is held, the new fact standing once every source is, on
+   `provenance::Provenance::Merged` and its `Origins`, a set with at least one
+   member; a consolidation resting on a forgotten fact reads forgotten
+   (`forgotten_with`), and erasure walks the same set. Law 11 is
+   `app/core/tests/memory.rs`'s `a_consolidation_replaces_its_sources`; the
+   schema's arrival and union laws generate consolidations too, clause (ii)
+   and two consolidations under one number among them
+   (`two_consolidations_numbered_alike_keep_the_least_named`). Retraction's
+   tap is `POST /api/secretary/record/<node>/retract` from the memory page's
+   summaries, and a summary written over a retracted one, at any depth, reads
+   `Standing::OverRetracted`, shown to no reader until it is redone
+   (`digest.rs`'s `a_retraction_redoes_the_spine_above_it`, over mixed
+   speakers).
 7. **(Owner-gated) A fresh call per turn**: `Ask::Digest` replaces
    `Ask::Session` for conversations; a migration verb drops `MemorySeen` and
    `Session` lines, then deletes `memory::Change`, `queue::heading`,

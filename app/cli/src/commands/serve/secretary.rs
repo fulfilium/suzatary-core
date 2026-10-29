@@ -95,6 +95,19 @@ impl Params for FactId {
     }
 }
 
+/// A digest node, by its content name.
+impl Params for prodrome_core::event::Hash {
+    fn parse(asked: &Asked, _: &Chained) -> Result<Self, Refusal> {
+        let node = asked.segment("node")?;
+        prodrome_core::event::Hash::new(node).map_err(|_| {
+            Refusal::bad_request(format!(
+                "a summary is named by its node's 64-hex name, not {}",
+                shown(node)
+            ))
+        })
+    }
+}
+
 impl Params for AttachmentId {
     fn parse(asked: &Asked, _: &Chained) -> Result<Self, Refusal> {
         asked.segment("id")?.parse().map_err(
@@ -237,6 +250,25 @@ pub fn forget(call: &Call<Actor, FactId, ()>) -> Result<Json<wire::MemoryPayload
         caps.secretary.clock,
         &call.guard,
         call.params,
+    )
+    .map(Json)
+}
+
+/// `GET /api/secretary/record`: the summaries a session is told of the owner's words.
+pub fn record(call: &Call<Reader, (), ()>) -> Result<Json<wire::RecordPayload>, Refusal> {
+    secretary_routes::record(&call.chain.caps.secretary.memories.digests).map(Json)
+}
+
+/// `POST /api/secretary/record/<node>/retract`: the owner's tap on a wrong summary.
+pub fn retract(
+    call: &Call<suzatary_core::secretary::tap::Tap, prodrome_core::event::Hash, ()>,
+) -> Result<Json<wire::RecordPayload>, Refusal> {
+    let caps = call.chain.caps;
+    secretary_routes::retract(
+        caps.secretary.memories,
+        caps.secretary.clock,
+        &call.guard,
+        &call.params,
     )
     .map(Json)
 }

@@ -681,7 +681,13 @@ fn receipt(
             text: standing.fact.clone(),
         },
         None if memory.forgotten.contains(&fact) => wire::Receipt::Forgotten { fact },
-        None => wire::Receipt::Unread { fact },
+        None => match memory.merged.iter().find(|merge| merge.fact == fact) {
+            Some(merge) => wire::Receipt::Merged {
+                fact,
+                into: merge.into,
+            },
+            None => wire::Receipt::Unread { fact },
+        },
     }
 }
 

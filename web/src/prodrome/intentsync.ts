@@ -49,8 +49,8 @@ export namespace intentsync {
   }
 
   // One ask: nothing if it is already asked; otherwise sent, answered (told to `heard`), and read back. A seal or a topic
-  // is held once the tab's replica has it, and a forgotten fact by the box's answer, since no replica carries the
-  // memory's words.
+  // is held once the tab's replica has it, and a forgotten fact or a retracted summary by the box's answer, since no
+  // replica carries the memory's words or the record's.
   export const ask = async (a: asks.Ask, secret?: string, heard: (answer: intents.Answer) => void = () => {}): Promise<Outcome> => {
     const key = intents.key(a)
     if (!intents.wants(source.state(), key)) return { type: "Already" }
@@ -59,7 +59,7 @@ export namespace intentsync {
     const answer = await (a.type === "Seal" ? appendAct(a.event) : a.type === "Topic" ? storesync.write(a.write, a.at) : asks.send(a, secret)).then(() => TAKEN, answerOf(a))
     source.dispatch({ type: "Answered", key, asks: asked, answer })
     heard(answer)
-    if (answer.type === "Taken" && (a.type === "Seal" || a.type === "Topic" || a.type === "Forget")) source.dispatch({ type: "Subsumed", key })
+    if (answer.type === "Taken" && (a.type === "Seal" || a.type === "Topic" || a.type === "Forget" || a.type === "Retract")) source.dispatch({ type: "Subsumed", key })
     else if (answer.type === "Taken") {
       // A pull asked after the box's answer holds what it wrote, whatever the record's words became on the way in; a pull
       // that did not reach the box leaves the ask in view, and the next sync retracts it.

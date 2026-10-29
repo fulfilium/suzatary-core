@@ -57,6 +57,9 @@ pub struct Digest {
     attempts: Vec<(Hash, Datetime, Spent)>,
     /// The line of every leaf renamed because words of it were erased.
     renamed: BTreeMap<Hash, Hash>,
+    /// Every summary object written over a retracted summary, at any depth: stale until its node
+    /// is asked again.
+    over_retracted: BTreeSet<Hash>,
 }
 
 /// One write of a node's reading: a summary, or its retraction.
@@ -71,10 +74,14 @@ pub struct Candidate {
 /// Whether a summary is true to how a node is asked now.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum Standing {
-    /// Asked under the current asking, over what the node's children read now.
+    /// Asked under the current asking, over what the node's children read now, and over no
+    /// retracted summary at any depth.
     Current,
     /// Asked under an older asking, or over a child's summary since replaced: owed again.
     Stale,
+    /// Written over a summary the owner retracted, however deep, so its words may restate the
+    /// line he said was wrong: owed again, and shown to no reader until it is.
+    OverRetracted,
 }
 
 /// What a candidate says.
@@ -160,7 +167,24 @@ pub fn digest(
         .collect();
     let tree = digest::tree(leaves)?;
     let mut said: BTreeMap<Hash, Vec<Candidate>> = BTreeMap::new();
+    let mut retracted = BTreeSet::new();
     for (node, stream) in fold(history).entities() {
+        // A summary is retracted when a retraction the policy believes descends from it.
+        for retraction in stream.iter().filter(|stamp| {
+            matches!(stamp.event.body(), Said::Retracted)
+                && matches!(
+                    prodrome_core::policy::Policy::standing(&policy, &stamp.name, &stamp.event),
+                    prodrome_core::policy::Standing::Binds
+                )
+        }) {
+            retracted.extend(
+                stream
+                    .iter()
+                    .filter(|stamp| matches!(stamp.event.body(), Said::Summarized { .. }))
+                    .filter(|summary| retraction.descends(summary))
+                    .map(|summary| summary.name.clone()),
+            );
+        }
         let registers: One<'_, Whole<DigestEvent>> =
             prodrome_core::fold::read(stream, None, &policy);
         said.entry(node.clone()).or_default().extend(
@@ -187,6 +211,7 @@ pub fn digest(
         })
         .collect();
     let attempts = attempts(history);
+    let over_retracted = over_retracted(history, &retracted);
     Ok(Digest {
         tree,
         said,
@@ -197,7 +222,45 @@ pub fn digest(
             .filter(|(line, (leaf, _))| leaf != *line)
             .map(|(line, (leaf, _))| (leaf, line.clone()))
             .collect(),
+        over_retracted,
     })
+}
+
+/// Every summary in `history` written over one of `retracted`, or over a summary that is, so
+/// a retraction reads as stale every summary of the spine above it.
+fn over_retracted(history: &[Node<DigestEvent>], retracted: &BTreeSet<Hash>) -> BTreeSet<Hash> {
+    let overs: BTreeMap<&Hash, &[Hash]> = history
+        .iter()
+        .filter_map(|object| match object.event()?.body() {
+            Said::Summarized { over, .. } => Some((object.name(), over.as_slice())),
+            Said::Unfit { .. } | Said::Asked { .. } | Said::Retracted => None,
+        })
+        .collect();
+    let mut known = BTreeMap::new();
+    overs
+        .keys()
+        .filter(|summary| stale(summary, &overs, retracted, &mut known))
+        .map(|summary| (*summary).clone())
+        .collect()
+}
+
+/// Whether `summary` is written over one of `retracted`, at any depth, each answer kept in
+/// `known`. A summary is written over objects that exist before it, so the walk down ends.
+fn stale<'h>(
+    summary: &'h Hash,
+    overs: &BTreeMap<&'h Hash, &'h [Hash]>,
+    retracted: &BTreeSet<Hash>,
+    known: &mut BTreeMap<&'h Hash, bool>,
+) -> bool {
+    if let Some(&read) = known.get(summary) {
+        return read;
+    }
+    let read = overs.get(summary).is_some_and(|over| {
+        over.iter()
+            .any(|beneath| retracted.contains(beneath) || stale(beneath, overs, retracted, known))
+    });
+    known.insert(summary, read);
+    read
 }
 
 /// Every call `history` records: its object, instant and what it spent, in the history's order.
@@ -390,9 +453,11 @@ impl Digest {
     }
 
     /// The summary a single-record reading shows: the least-named candidate's, when it is a
-    /// summary whose words read, unless it is stale and its node is labelled the owner's alone.
-    /// Such a summary may have been asked beside more than the owner's words, so no reader is
-    /// shown it as theirs: the node reads as unsummarized until it is asked again.
+    /// summary whose words read, unless it is stale and its node is labelled the owner's alone,
+    /// or it is written over a retracted summary. The first may have been asked beside more than
+    /// the owner's words, and the second from the line he said was wrong, so no reader, the
+    /// compactor included, is shown either: the node reads as unsummarized until it is asked
+    /// again.
     #[must_use]
     pub fn summary(&self, node: &Hash) -> Option<&Line> {
         let (words, standing) = self.shown(node)?;
@@ -402,6 +467,7 @@ impl Digest {
                 let owners = self.tree.as_ref()?.node(node)?.measure().is_owners();
                 (!owners).then_some(words)
             }
+            Standing::OverRetracted => None,
         }
     }
 
@@ -416,22 +482,22 @@ impl Digest {
     /// when it was asked under its node's class's current asking over what the node's children
     /// read now. Private, so a stale summary of an owner's node reaches no reader.
     fn shown(&self, node: &Hash) -> Option<(&Line, Standing)> {
+        let candidate = self.candidates(node).first()?;
         let Written::Summary(Summary {
             words, over, asked, ..
-        }) = &self.candidates(node).first()?.said
+        }) = &candidate.said
         else {
             return None;
         };
         let beside = Beside::of(self.tree.as_ref()?.node(node)?.measure());
-        let current = asked.is_current(beside) && self.over(node).as_ref() == Some(over);
-        Some((
-            words.as_ref()?,
-            if current {
-                Standing::Current
-            } else {
-                Standing::Stale
-            },
-        ))
+        let standing = if self.over_retracted.contains(&candidate.object) {
+            Standing::OverRetracted
+        } else if asked.is_current(beside) && self.over(node).as_ref() == Some(over) {
+            Standing::Current
+        } else {
+            Standing::Stale
+        };
+        Some((words.as_ref()?, standing))
     }
 
     /// What a summary of `node` is written over now, in the log's order: each child line's
@@ -513,7 +579,7 @@ impl Digest {
                 (words, Standing::Current) => {
                     Some(u32::try_from(words.as_str().len()).unwrap_or(u32::MAX))
                 }
-                (_, Standing::Stale) => None,
+                (_, Standing::Stale | Standing::OverRetracted) => None,
             })
         })
     }

@@ -39,6 +39,7 @@ pub(crate) fn remembered(
         let shown = Memory {
             facts: newest[..kept].to_vec(),
             forgotten: Vec::new(),
+            merged: Vec::new(),
             version: memory.version,
         };
         let told = told(&shown, record, view);

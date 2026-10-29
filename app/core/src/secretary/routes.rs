@@ -2237,7 +2237,45 @@ pub fn forget(
     memory(memories)
 }
 
+/// `GET /api/secretary/record`: the summaries of the owner's words a session opening is told.
+///
+/// # Errors
+/// The stores' own.
+pub fn record(digests: &crate::secretary::digests::Digests<'_>) -> Answered<wire::RecordPayload> {
+    let record = crate::secretary::shown_record::OwnersRecord::of(
+        crate::secretary::compaction::Reading::of(&digests.reads())?,
+    );
+    Ok(wire::RecordPayload {
+        summaries: record
+            .summaries(crate::secretary::digest_view::VIEW_BYTES)
+            .into_iter()
+            .map(|(part, line)| wire::RecordSummary {
+                node: part.node.as_str().to_owned(),
+                handle: part.handle(),
+                lines: u32::try_from(part.span.len()).unwrap_or(u32::MAX),
+                text: line.as_str().to_owned(),
+            })
+            .collect(),
+    })
+}
+
+/// `POST /api/secretary/record/<node>/retract`: the owner's tap says the summary `node` shows is
+/// wrong. Its node is asked again, and so is every summary above it.
+///
+/// # Errors
+/// [`Refusal::not_found`] for a node that shows no summary, and the stores' own.
+pub fn retract(
+    memories: crate::secretary::memories::Memories<'_>,
+    clock: &dyn Clock,
+    tap: &crate::secretary::tap::Tap,
+    node: &prodrome_core::event::Hash,
+) -> Answered<wire::RecordPayload> {
+    memories.hold()?.retract(node, clock.now(), tap)?;
+    record(&memories.digests)
+}
+
 fn memory_payload(memory: &crate::secretary::memory::Memory) -> wire::MemoryPayload {
+    use crate::secretary::provenance::Wrote;
     let number = |n: usize| u32::try_from(n).unwrap_or(u32::MAX);
     wire::MemoryPayload {
         facts: memory
@@ -2248,26 +2286,47 @@ fn memory_payload(memory: &crate::secretary::memory::Memory) -> wire::MemoryPayl
                 at: crate::secretary::store::stamp(remembered.at),
                 fact: remembered.fact.as_str().to_owned(),
                 kind: remembered.kind,
-                said: match &remembered.said {
-                    crate::secretary::memory::Origin::Turn { conversation, turn } => {
-                        wire::SaidOn::Turn {
-                            conversation: conversation.as_str().to_owned(),
-                            turn: number(*turn),
-                        }
-                    }
-                    crate::secretary::memory::Origin::Tapped {
-                        conversation,
-                        proposal,
-                    } => wire::SaidOn::Tapped {
-                        conversation: conversation.as_str().to_owned(),
-                        proposal: number(*proposal),
+                said: match &remembered.said.wrote {
+                    Wrote::Said(origin) => wire::FactSaid::Said {
+                        on: said_on(origin),
+                    },
+                    Wrote::Merged { from, round } => wire::FactSaid::Merged {
+                        from: from.iter().copied().collect(),
+                        origins: remembered.said.origins.iter().map(said_on).collect(),
+                        round: said_on(round),
                     },
                 },
             })
             .collect(),
         cap: number(crate::secretary::memory::MAX_LIVE),
         forgotten: memory.forgotten.iter().map(|gone| gone.id).collect(),
+        merged: memory
+            .merged
+            .iter()
+            .map(|merge| wire::MergedFact {
+                fact: merge.fact,
+                into: merge.into,
+            })
+            .collect(),
         cards: Vec::new(),
+    }
+}
+
+/// Where `origin` was said, as the page links it.
+fn said_on(origin: &crate::secretary::memory::Origin) -> wire::SaidOn {
+    let number = |n: usize| u32::try_from(n).unwrap_or(u32::MAX);
+    match origin {
+        crate::secretary::memory::Origin::Turn { conversation, turn } => wire::SaidOn::Turn {
+            conversation: conversation.as_str().to_owned(),
+            turn: number(*turn),
+        },
+        crate::secretary::memory::Origin::Tapped {
+            conversation,
+            proposal,
+        } => wire::SaidOn::Tapped {
+            conversation: conversation.as_str().to_owned(),
+            proposal: number(*proposal),
+        },
     }
 }
 
@@ -2456,22 +2515,25 @@ mod tests {
         assert_eq!(printed["who"], "person");
     }
 
-    /// A receipt's words are the memory's, whatever the answer quoted: an answer stored before the
-    /// verb stopped echoing its fact still names it, and a forgotten fact still draws none.
-    #[test]
-    fn a_receipt_is_the_shapes_fact_and_its_words_the_memorys() {
-        use crate::secretary::memory::{Fact, FactId, Forgotten, Kind, Memory, Origin, Remembered};
-        use crate::secretary::outcome::Outcome;
-        let memory = Memory {
+    /// A memory of one standing fact, one forgotten and one replaced by the standing one.
+    fn receipts_memory() -> crate::secretary::memory::Memory {
+        use crate::secretary::memory::{
+            Fact, FactId, Forgotten, Kind, Memory, Merge, Origin, Remembered,
+        };
+        Memory {
             facts: vec![Remembered {
                 id: FactId(1),
                 at: crate::capability::Datetime::new(2026, 10, 2, 9, 0, 0, 0).expect("an instant"),
                 fact: Fact::new("He takes the 7:40 train").expect("a fact"),
                 kind: Kind::Owner,
-                said: Origin::Turn {
+                said: crate::secretary::provenance::Provenance::said(Origin::Turn {
                     conversation: ConversationId::new("default").expect("a slug"),
                     turn: 0,
-                },
+                }),
+            }],
+            merged: vec![Merge {
+                fact: FactId(4),
+                into: FactId(1),
             }],
             forgotten: vec![Forgotten {
                 id: FactId(2),
@@ -2480,7 +2542,16 @@ mod tests {
                 version: 3,
             }],
             version: 3,
-        };
+        }
+    }
+
+    /// A receipt's words are the memory's, whatever the answer quoted: an answer stored before the
+    /// verb stopped echoing its fact still names it, and a forgotten fact still draws none.
+    #[test]
+    fn a_receipt_is_the_shapes_fact_and_its_words_the_memorys() {
+        use crate::secretary::memory::{FactId, Memory};
+        use crate::secretary::outcome::Outcome;
+        let memory = receipts_memory();
         let row = |turn_said: crate::capability::Turn, memory: Option<&Memory>| match turn(
             &NeverAsked,
             &Said {
@@ -2515,15 +2586,20 @@ mod tests {
             text: "He takes the 7:40 train".to_owned(),
         });
         assert_eq!(drawn(remembered(1), Some(&memory)), standing);
-        assert_eq!(
-            drawn(remembered(2), Some(&memory)),
-            receipt(wire::Receipt::Forgotten { fact: FactId(2) })
-        );
-        assert_eq!(
-            drawn(remembered(9), Some(&memory)),
-            receipt(wire::Receipt::Unread { fact: FactId(9) }),
-            "a fact whose words are lost"
-        );
+        // A forgotten or replaced fact names no word, nor does one whose words are lost.
+        for (fact, drawn_as) in [
+            (2, wire::Receipt::Forgotten { fact: FactId(2) }),
+            (
+                4,
+                wire::Receipt::Merged {
+                    fact: FactId(4),
+                    into: FactId(1),
+                },
+            ),
+            (9, wire::Receipt::Unread { fact: FactId(9) }),
+        ] {
+            assert_eq!(drawn(remembered(fact), Some(&memory)), receipt(drawn_as));
+        }
         assert_eq!(
             drawn(remembered(2), None),
             receipt(wire::Receipt::Unread { fact: FactId(2) }),

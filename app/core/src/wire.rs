@@ -1774,6 +1774,13 @@ pub enum Receipt {
         /// Its number.
         fact: crate::secretary::memory::FactId,
     },
+    /// Replaced since by a consolidation: its words are gone, and `into` says what they said.
+    Merged {
+        /// Its number.
+        fact: crate::secretary::memory::FactId,
+        /// The fact that replaced it.
+        into: crate::secretary::memory::FactId,
+    },
     /// The memory would not read, or holds no words for it that are not forgotten.
     Unread {
         /// Its number, which Forget still names.
@@ -1790,6 +1797,8 @@ pub struct MemoryPayload {
     pub cap: u32,
     /// The numbers of the facts forgotten, oldest first: a receipt naming one says so.
     pub forgotten: Vec<crate::secretary::memory::FactId>,
+    /// Every fact a consolidation replaced, by the consolidation: a receipt naming one says so.
+    pub merged: Vec<MergedFact>,
     /// The words the memory's text store keeps for remember cards, by the name a card gives
     /// them: a card whose name is not here has had its words deleted.
     pub cards: Vec<CardWords>,
@@ -1804,6 +1813,36 @@ pub struct CardWords {
     pub fact: String,
 }
 
+/// `GET /api/secretary/record`: the summaries a session opening is told in place of the owner's
+/// own lines, each of which he can retract.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+pub struct RecordPayload {
+    /// Oldest first.
+    pub summaries: Vec<RecordSummary>,
+}
+
+/// One summary of the owner's words, as the record shows it to a session.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+pub struct RecordSummary {
+    /// Its node's content name, 64 hex, which the retract route names.
+    pub node: String,
+    /// The handle a session reads it by, `first+lines`.
+    pub handle: String,
+    /// How many lines it stands for.
+    pub lines: u32,
+    /// Its words, model text drawn as text.
+    pub text: String,
+}
+
+/// A fact a consolidation replaced.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
+pub struct MergedFact {
+    /// Its number.
+    pub fact: crate::secretary::memory::FactId,
+    /// The fact that replaced it.
+    pub into: crate::secretary::memory::FactId,
+}
+
 /// One standing fact.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
 pub struct FactRow {
@@ -1815,8 +1854,28 @@ pub struct FactRow {
     pub fact: String,
     /// What it is about.
     pub kind: crate::secretary::memory::Kind,
-    /// Where it was said.
-    pub said: SaidOn,
+    /// Where it comes from.
+    pub said: FactSaid,
+}
+
+/// Where a standing fact comes from: one round, or the facts a consolidation replaced.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(tag = "how", rename_all = "lowercase")]
+pub enum FactSaid {
+    /// Said once.
+    Said {
+        /// Where.
+        on: SaidOn,
+    },
+    /// Consolidated from earlier facts, whose words are gone.
+    Merged {
+        /// The facts it replaced, by number.
+        from: Vec<crate::secretary::memory::FactId>,
+        /// Where those facts were said, together: at least one.
+        origins: Vec<SaidOn>,
+        /// The round the owner opened that wrote it.
+        round: SaidOn,
+    },
 }
 
 /// Where a fact was said: a round's opening turn, or a tapped card.
@@ -3029,6 +3088,7 @@ fn answers(visit: &mut impl TypeVisitor) {
     visit.visit::<AuthoredPayload>();
     visit.visit::<DevicePayload>();
     visit.visit::<MemoryPayload>();
+    visit.visit::<RecordPayload>();
     visit.visit::<InboxProposalsPayload>();
     visit.visit::<DrawnPayload>();
     visit.visit::<Frame>();

@@ -97,13 +97,14 @@ fn full_memory() -> Memory {
                 at: at(0),
                 fact: Fact::new(words.clone()).expect("a fact"),
                 kind: Kind::Standing,
-                said: Origin::Turn {
+                said: suzatary_core::secretary::provenance::Provenance::said(Origin::Turn {
                     conversation: ConversationId::new("a").expect("a slug"),
                     turn: 0,
-                },
+                }),
             })
             .collect(),
         forgotten: Vec::new(),
+        merged: Vec::new(),
         version: u64::try_from(MAX_LIVE).expect("small"),
     }
 }

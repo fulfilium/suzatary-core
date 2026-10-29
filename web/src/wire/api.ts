@@ -1,7 +1,7 @@
 // Every route the box answers, named once: its path, its method, and the decoder its answer passes through `http`.
 
 import app from "../app/app";
-import type { AboutPayload, AttachmentRow, Authoring, AuthoredPayload, BlockRender, BriefingPayload, BriefingsPayload, CalendarPayload, ChainPayload, ConversationPayload, DevicePayload, DrawnPayload, Erasing, FactId, FoldPayload, InboxPayload, KeyAsked, MailMessage, MailSearchPayload, MePayload, MemoryPayload, NewTodo, ObjectsPayload, Overview, Pairing, PostedObjects, Reasoning, ReceiptPayload, Registering, ReleasesPayload, Revealing, SayPayload, Saying, Tapping, ThreadPayload, Titling, TodoPayload, UpdateTodo, Uploaded, Uploading, UsagePayload, WaitingPayload, WatchesPayload } from "./generated/wire";
+import type { AboutPayload, AttachmentRow, Authoring, AuthoredPayload, BlockRender, BriefingPayload, BriefingsPayload, CalendarPayload, ChainPayload, ConversationPayload, DevicePayload, DrawnPayload, Erasing, FactId, FoldPayload, InboxPayload, KeyAsked, MailMessage, MailSearchPayload, MePayload, MemoryPayload, NewTodo, ObjectsPayload, Overview, Pairing, PostedObjects, Reasoning, ReceiptPayload, RecordPayload, Registering, ReleasesPayload, Revealing, SayPayload, Saying, Tapping, ThreadPayload, Titling, TodoPayload, UpdateTodo, Uploaded, Uploading, UsagePayload, WaitingPayload, WatchesPayload } from "./generated/wire";
 import { print } from "../chat/refs";
 import type { Reference } from "../chat/refs";
 import heads from "../prodrome/heads";
@@ -261,3 +261,9 @@ export const pairDevice = (code: string): Promise<{ trusted: string }> =>
 
 export const forgetFact = (id: FactId): Promise<MemoryPayload> =>
   http.act(`/api/secretary/memory/${id}/forget`, {}, payload.MemoryPayload);
+
+export const getRecord = (): Promise<RecordPayload> => http.get("/api/secretary/record", payload.RecordPayload);
+
+/** The owner's tap on a wrong summary of the record: the box asks its node again, and every summary above it. */
+export const retractSummary = (node: string): Promise<RecordPayload> =>
+  http.act(`/api/secretary/record/${node}/retract`, {}, payload.RecordPayload);

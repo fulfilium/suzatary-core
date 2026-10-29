@@ -145,9 +145,11 @@ reading.
   `zoom` to their line before you remember from it.
 - A round the box opened (the morning brief, a review, a sweep) has no words
   of theirs, and remembers nothing at all. Do not try.
-- At 200 facts `remember` refuses. `forget` a stale one, or merge two into one
-  (`forget` both, `remember` the merged line), in a round they opened and that
-  has read nothing yet.
+- At 200 facts `remember` refuses. `forget` a stale one, or merge facts into
+  one with `consolidate(from, fact, kind)`, in a round they opened and that has
+  read nothing yet. `from` lists the facts' numbers; the new fact replaces them,
+  their words are deleted, and it stands on where each of them was said. Use it
+  too when two facts say one thing, or a new fact corrects an old one.
 - Do not remember what the chain already holds (a todo, a deadline) or what a
   conversation holds for a day; the memory is for what should outlive both.
 

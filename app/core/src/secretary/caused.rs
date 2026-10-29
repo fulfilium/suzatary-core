@@ -2,7 +2,8 @@
 //! never searched for: the copies the remembering provably made, which it erases, and the turns
 //! around them, which it can only offer.
 //!
-//! The `remember` call's answer names the fact (`remembered`) or the card it filed (`proposed`);
+//! The `remember` or `consolidate` call's answer names the fact (`remembered`), or `remember`'s
+//! the card it filed (`proposed`);
 //! the model turn that asked for it is the last before the answer, and the call is the one the
 //! answers between them have not yet answered. That call's arguments hold the fact's words, and
 //! its answer is the receipt; both are erased. The owner's opening turn and the model's prose
@@ -53,11 +54,12 @@ impl Caused {
                 .filter(|written| matches!(said(&written.line), Some(TurnShape::Tool { .. })))
                 .count();
             let calls = model_calls(&lines[model].line).unwrap_or_default();
-            if calls
-                .get(call)
-                .and_then(crate::secretary::tool_name::ToolName::verb)
-                == Some(SecretaryVerb::Remember)
-            {
+            if matches!(
+                calls
+                    .get(call)
+                    .and_then(crate::secretary::tool_name::ToolName::verb),
+                Some(SecretaryVerb::Remember | SecretaryVerb::Consolidate)
+            ) {
                 caused
                     .erased
                     .extend(lines[model].line.keys().nth(1 + call).cloned());

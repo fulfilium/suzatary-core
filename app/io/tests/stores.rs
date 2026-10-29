@@ -381,7 +381,8 @@ fn owners() -> std::collections::BTreeSet<prodrome_core::event::Actor> {
 }
 
 /// The memory: a `Genesis` begun with a nonce of zeros, two facts remembered and one forgotten,
-/// whose text is deleted.
+/// whose text is deleted; then two more remembered and consolidated into a sixth, whose sources'
+/// texts are deleted. The consolidation adds files, so every earlier object keeps its bytes.
 fn memories(root: &Path) {
     let history = Objects::open(root.join(MEMORY));
     rooted(&history, "memory");
@@ -432,6 +433,29 @@ fn memories(root: &Path) {
     memories
         .forget(gone.id, at(13, 2), &owner())
         .expect("forgets");
+    let sources = [("mornings", 3), ("tea", 4)].map(|(what, minute)| {
+        memories
+            .remember(
+                &Fact::new(format!("{} prefers {what}", CAST.owner.name)).expect("a fact"),
+                Kind::Preference,
+                &said,
+                at(13, minute),
+            )
+            .expect("remembers")
+            .id
+    });
+    memories
+        .consolidate(
+            &sources.into(),
+            &Fact::new(format!("{} prefers tea in the morning", CAST.owner.name)).expect("a fact"),
+            Kind::Preference,
+            &Origin::Turn {
+                conversation: ConversationId::new("default").expect("a slug"),
+                turn: 1,
+            },
+            at(13, 5),
+        )
+        .expect("consolidates");
 }
 
 /// The calendar plugin's store, at its declared schema: a `Genesis` begun with a nonce of zeros,
@@ -779,7 +803,10 @@ fn reading_a_copy_of_every_store_writes_nothing() {
     .reads()
     .read()
     .expect("reads");
-    assert_eq!((read.facts.len(), read.forgotten.len()), (1, 1));
+    assert_eq!(
+        (read.facts.len(), read.forgotten.len(), read.merged.len()),
+        (2, 1, 2)
+    );
     decisions_and_topics_read(&database);
     let phones = suzatary_core::devices::everyone(database.devices).expect("reads");
     assert_eq!(phones.values().map(|them| them.0.len()).sum::<usize>(), 2);

@@ -479,6 +479,94 @@ fn only_an_owner_retracts() {
     );
 }
 
+proptest! {
+    #![proptest_config(ProptestConfig::with_cases(16))]
+
+    /// Retraction: the owner's tap on a summary makes its node pending again, reads every
+    /// summary above it as written over a retracted one, shown to no reader whatever its node's
+    /// label, and leaves every other summary current; the sweep deletes the retracted words, and the compactor
+    /// redoes exactly the node and the spine above it, after which nothing is stale.
+    #[test]
+    fn a_retraction_redoes_the_spine_above_it(
+        lines in 24usize..120,
+        answers in proptest::collection::vec(any::<bool>(), 120),
+        pick in any::<usize>(),
+    ) {
+        use suzatary_core::secretary::digest::Standing;
+        let the = Box::default();
+        // The owner's turns and the secretary's answers mixed, so most nodes are more than the
+        // owner's words, the nodes whose stale summaries are otherwise shown.
+        the.write(
+            "a",
+            (0..lines).map(|k| {
+                if answers[k] {
+                    Turn::Model {
+                        text: format!("answer {k}"),
+                        calls: Vec::new(),
+                    }
+                } else {
+                    Turn::Person {
+                        text: format!("a line {k}"),
+                        references: Vec::new(),
+                        attachments: Vec::new(),
+                    }
+                }
+            }),
+        );
+        the.summarise_all();
+        let read = the.read();
+        let all = summarised(&read);
+        let (node, span) = all[pick % all.len()].clone();
+        let spine: BTreeSet<Hash> = all
+            .iter()
+            .filter(|(other, covers)| *other != node && covers.start <= span.start && span.end <= covers.end)
+            .map(|(other, _)| other.clone())
+            .collect();
+        let before: Vec<(Hash, Hash)> = all
+            .iter()
+            .map(|(other, _)| (other.clone(), read.candidates(other)[0].object.clone()))
+            .collect();
+        let words = texts_of(&read, std::slice::from_ref(&node));
+        prop_assert!(
+            the.memories().hold().expect("held").retract(&Hash::new("0".repeat(64)).expect("a name"), at(600), &tap()).is_err(),
+            "a node that shows no summary is not retracted"
+        );
+        the.memories()
+            .hold()
+            .expect("held")
+            .retract(&node, at(600), &tap())
+            .expect("the owner's retraction");
+        let retracted = the.read();
+        prop_assert!(retracted.summary(&node).is_none());
+        prop_assert!(retracted.pending().contains(&node), "the node is pending again");
+        prop_assert!(the.kept().is_disjoint(&words), "the retracted words are swept");
+        for (other, _) in &all {
+            if *other == node {
+                continue;
+            }
+            let standing = retracted.standing(other);
+            if spine.contains(other) {
+                prop_assert_eq!(standing, Some(Standing::OverRetracted), "an ancestor reads owed");
+                prop_assert!(retracted.summary(other).is_none(), "and shows no reader its words");
+            } else {
+                prop_assert_eq!(standing, Some(Standing::Current), "every other summary stands");
+            }
+        }
+        the.summarise_all();
+        let redone = the.read();
+        for (other, object) in before {
+            let now = &redone.candidates(&other)[0].object;
+            prop_assert_eq!(redone.standing(&other), Some(Standing::Current));
+            if other == node || spine.contains(&other) {
+                prop_assert_ne!(now, &object, "the spine is asked again");
+            } else {
+                prop_assert_eq!(now, &object, "nothing off the spine is asked again");
+            }
+        }
+        prop_assert!(redone.pending().is_empty());
+    }
+}
+
 /// A call recorded and never answered writes no register, so it supersedes nothing: the node's
 /// summary stays its reading, and its words stay live, so the sweep keeps them.
 #[test]

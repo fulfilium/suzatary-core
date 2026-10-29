@@ -3,7 +3,7 @@
 {"line":"said","at":"2026-09-02T12:00:00","turn":{"who":"person","text":"hello?","references":[]}}
 {"line":"said","at":"2026-09-02T12:00:00.000001","turn":{"who":"model","text":"I could not finish: the model failed (the script ran out). Ask again.","calls":[]}}
 # shown
-context remember forget recall zoom list_open_todos todo_show history search show attachments upload_read sync_mail search_older watch_mail briefing_delta briefing git_diff_summary todo_add todo_update record propose_email propose_forward propose_act propose_changes withdraw_proposal weather calendar decisions web drive_list drive_read junk_digest junk_show repos_list repo_tree repo_read repo_grep propose_patch propose_coding_session propose_decision draft_note triage_cards triage_withdraw add_topics
+context remember forget consolidate recall zoom list_open_todos todo_show history search show attachments upload_read sync_mail search_older watch_mail briefing_delta briefing git_diff_summary todo_add todo_update record propose_email propose_forward propose_act propose_changes withdraw_proposal weather calendar decisions web drive_list drive_read junk_digest junk_show repos_list repo_tree repo_read repo_grep propose_patch propose_coding_session propose_decision draft_note triage_cards triage_withdraw add_topics
 # asked
 [
     Conversation {

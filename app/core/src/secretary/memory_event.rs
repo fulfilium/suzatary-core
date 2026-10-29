@@ -1,10 +1,15 @@
-//! The memory's schema: a fact remembered, naming its words by their [`TextName`], and a fact
-//! forgotten, naming only its id, each about one [`FactId`].
+//! The memory's schema: a fact remembered, naming its words by their [`TextName`]; a fact
+//! consolidated from earlier facts, naming its words and the facts it replaces; and a fact
+//! forgotten, naming only its id. Each event is about one [`FactId`].
 //!
 //! Every event writes the fact's one register, its life ([`LifeRegister`]), declared
 //! inflationary: the store refuses a
-//! `Remembered` on a fact already forgotten, so once forgotten, always forgotten. The words are
-//! never an object: they live in the memory's text store, which forgetting deletes from.
+//! `Remembered` on a fact already forgotten, so once forgotten, always forgotten. A
+//! consolidation writes only the new fact's register; that it replaces its sources is the
+//! reading's ([`crate::secretary::two_phase`]). The words are never an object: they live in the
+//! memory's text store, which forgetting and consolidating delete from.
+
+use std::collections::BTreeSet;
 
 use prodrome_core::event::Actor;
 use prodrome_core::fold::{Discrete, Frontier, RegisterType};
@@ -33,6 +38,18 @@ pub enum Said {
         /// Who said it.
         origin: Origin,
     },
+    /// It replaces the facts `from` with one fact of its own words: what they said together,
+    /// on their authority, so its origins are theirs.
+    Consolidated {
+        /// The facts it replaces: at least one, each numbered below it.
+        from: BTreeSet<FactId>,
+        /// The name of its words in the text store.
+        text: TextName,
+        /// About whom or what.
+        kind: Kind,
+        /// The round the owner opened that wrote it, where its words were written.
+        round: Origin,
+    },
     /// It was forgotten; `version` is the memory's version this made.
     Forgotten {
         /// One more than every id and version before it.
@@ -50,6 +67,17 @@ pub enum NotAMemoryEvent {
         fact: FactId,
         /// The version.
         version: u64,
+    },
+    /// A consolidation that replaces nothing.
+    #[error("fact {0} consolidates no fact")]
+    FromNothing(FactId),
+    /// A consolidation naming a source numbered at or above itself, which cannot be earlier.
+    #[error("fact {fact} cannot replace fact {replaced}, numbered at or above it")]
+    Later {
+        /// The fact.
+        fact: FactId,
+        /// The source numbered at or above it.
+        replaced: FactId,
     },
 }
 
@@ -82,6 +110,33 @@ pub fn forgotten(
     Event::new(fact, at, actor, Said::Forgotten { version })
 }
 
+/// Fact `fact` written by `actor` in `round` from the facts `from`, its words by `text`.
+///
+/// # Errors
+/// [`NotAMemoryEvent::FromNothing`] for no source, and [`NotAMemoryEvent::Later`] for a source
+/// numbered at or above `fact`.
+pub fn consolidated(
+    fact: FactId,
+    at: Datetime,
+    actor: Actor,
+    from: BTreeSet<FactId>,
+    text: TextName,
+    kind: Kind,
+    round: Origin,
+) -> Result<MemoryEvent, NotAMemoryEvent> {
+    Event::new(
+        fact,
+        at,
+        actor,
+        Said::Consolidated {
+            from,
+            text,
+            kind,
+            round,
+        },
+    )
+}
+
 /// `Remembered(fact, at, actor, text, kind, said)`.
 const REMEMBERED: Constructor = (
     "Remembered",
@@ -89,7 +144,12 @@ const REMEMBERED: Constructor = (
 );
 /// `Forgotten(fact, at, actor, version)`.
 const FORGOTTEN: Constructor = ("Forgotten", &["fact", "at", "actor", "version"]);
-/// The memory's whitelist: its two events and an origin's two arms, nothing else, since no
+/// `Consolidated(fact, at, actor, from, text, kind, round)`.
+const CONSOLIDATED: Constructor = (
+    "Consolidated",
+    &["fact", "at", "actor", "from", "text", "kind", "round"],
+);
+/// The memory's whitelist: its three events and an origin's two arms, nothing else, since no
 /// event nests a term.
 pub type MemoryVocabulary = Constructors<Said>;
 
@@ -99,20 +159,29 @@ impl Body for Said {
     type Registers<'a> = One<'a, LifeRegister>;
     type Refusal = NotAMemoryEvent;
 
-    const EVENTS: &'static [Constructor] = &[REMEMBERED, FORGOTTEN];
+    const EVENTS: &'static [Constructor] = &[REMEMBERED, FORGOTTEN, CONSOLIDATED];
     const NESTED: &'static [Constructor] = &[TURN, TAPPED];
 
     fn writes(&self) -> impl Iterator<Item = Only> {
         std::iter::once(Only)
     }
 
-    /// A forgetting comes after its fact: its version is above the fact's own number.
+    /// A forgetting comes after its fact: its version is above the fact's own number. A
+    /// consolidation comes after every fact it replaces, so no fact rests on itself.
     fn admits(fact: &FactId, said: &Said) -> Result<(), NotAMemoryEvent> {
-        match *said {
-            Said::Forgotten { version } if version <= fact.0 => Err(NotAMemoryEvent::Before {
+        match said {
+            Said::Forgotten { version } if *version <= fact.0 => Err(NotAMemoryEvent::Before {
                 fact: *fact,
-                version,
+                version: *version,
             }),
+            Said::Consolidated { from, .. } => match from.last() {
+                None => Err(NotAMemoryEvent::FromNothing(*fact)),
+                Some(replaced) if replaced >= fact => Err(NotAMemoryEvent::Later {
+                    fact: *fact,
+                    replaced: *replaced,
+                }),
+                Some(_) => Ok(()),
+            },
             Said::Remembered { .. } | Said::Forgotten { .. } => Ok(()),
         }
     }
@@ -124,6 +193,20 @@ impl Body for Said {
                 vec![text.to_value(), kind.to_value(), origin.to_value()],
             ),
             Said::Forgotten { version } => (FORGOTTEN, vec![version.to_value()]),
+            Said::Consolidated {
+                from,
+                text,
+                kind,
+                round,
+            } => (
+                CONSOLIDATED,
+                vec![
+                    from.to_value(),
+                    text.to_value(),
+                    kind.to_value(),
+                    round.to_value(),
+                ],
+            ),
         }
     }
 
@@ -139,6 +222,15 @@ impl Body for Said {
                 fields.get("said")?,
             ),
             "Forgotten" => forgotten(fact, at, actor, fields.get("version")?),
+            "Consolidated" => consolidated(
+                fact,
+                at,
+                actor,
+                fields.get("from")?,
+                fields.get("text")?,
+                fields.get("kind")?,
+                fields.get("round")?,
+            ),
             other => {
                 return Err(prodrome_core::literal::codec::no_arm(
                     "a memory event",
@@ -159,7 +251,9 @@ impl RegisterType<MemoryEvent> for LifeRegister {
 
     fn value(event: &MemoryEvent) -> Option<Life<'_>> {
         Some(match event.body() {
-            Said::Remembered { .. } => Life::Remembered(Discrete(event)),
+            Said::Remembered { .. } | Said::Consolidated { .. } => {
+                Life::Remembered(Discrete(event))
+            }
             Said::Forgotten { .. } => Life::Forgotten,
         })
     }
@@ -183,7 +277,7 @@ mod tests {
 
     #[test]
     fn no_constructor_is_a_term_or_an_envelope() {
-        crate::own::assert_own(&[REMEMBERED, FORGOTTEN, TURN, TAPPED]);
+        crate::own::assert_own(&[REMEMBERED, FORGOTTEN, CONSOLIDATED, TURN, TAPPED]);
     }
 
     /// Every count prints as itself and reads back, at the widest it holds.
@@ -207,7 +301,21 @@ mod tests {
                 },
             )
             .expect("a remembering"),
-            forgotten(fact, at, ada, u64::MAX).expect("after its fact"),
+            forgotten(fact, at, ada.clone(), u64::MAX).expect("after its fact"),
+            consolidated(
+                FactId(u64::MAX),
+                at,
+                ada,
+                [FactId(0), fact].into(),
+                TextName::new("b".repeat(64)).expect("a name"),
+                Kind::Standing,
+                Origin::Tapped {
+                    conversation: crate::secretary::store::ConversationId::new("default")
+                        .expect("an id"),
+                    proposal: usize::MAX,
+                },
+            )
+            .expect("after its sources"),
         ] {
             let print = canonical(&event);
             assert_eq!(
@@ -219,10 +327,37 @@ mod tests {
     }
 
     #[test]
-    fn a_forgetting_comes_after_its_fact() {
+    fn a_forgetting_and_a_consolidation_come_after_their_facts() {
         let at = Datetime::new(2026, 10, 2, 9, 0, 0, 0).expect("an instant");
         let ada = Actor::new("ada").expect("an actor");
         assert!(forgotten(FactId(3), at, ada.clone(), 3).is_err());
-        assert!(forgotten(FactId(3), at, ada, 4).is_ok());
+        assert!(forgotten(FactId(3), at, ada.clone(), 4).is_ok());
+        let consolidating = |from: &[u64]| {
+            consolidated(
+                FactId(3),
+                at,
+                ada.clone(),
+                from.iter().copied().map(FactId).collect(),
+                TextName::new("a".repeat(64)).expect("a name"),
+                Kind::Owner,
+                Origin::Turn {
+                    conversation: crate::secretary::store::ConversationId::new("default")
+                        .expect("an id"),
+                    turn: 0,
+                },
+            )
+        };
+        assert_eq!(
+            consolidating(&[]),
+            Err(NotAMemoryEvent::FromNothing(FactId(3)))
+        );
+        assert_eq!(
+            consolidating(&[1, 3]),
+            Err(NotAMemoryEvent::Later {
+                fact: FactId(3),
+                replaced: FactId(3)
+            })
+        );
+        assert!(consolidating(&[1, 2]).is_ok());
     }
 }

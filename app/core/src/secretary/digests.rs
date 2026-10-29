@@ -213,6 +213,35 @@ impl Held<'_> {
         Ok(self.digests().history.append(event)?)
     }
 
+    /// Retract the summary `node` shows, as the owner who tapped `tap`: the node reads
+    /// unsummarized and is pending again, every summary above it reads stale until its node is
+    /// asked again, so the compactor redoes the spine, and the sweep after the write deletes the
+    /// retracted words.
+    ///
+    /// # Errors
+    /// [`Refusal::not_found`] for a node that shows no summary; [`ReadDigests::whole`]'s; the
+    /// stores' own.
+    pub fn retract(
+        &self,
+        node: &Hash,
+        at: Datetime,
+        tap: &crate::secretary::tap::Tap,
+    ) -> Result<Hash, Refusal> {
+        let digests = self.digests();
+        let reads = digests.reads();
+        reads.whole()?;
+        if reads.read()?.summary(node).is_none() {
+            return Err(Refusal::not_found(format!(
+                "node {node} shows no summary to retract"
+            )));
+        }
+        let event = digest_event::retracted(node.clone(), at, tap)
+            .map_err(|refused| Refusal::internal(refused.to_string()))?;
+        let object = digests.history.append(event)?;
+        self.sweep_after_write();
+        Ok(object)
+    }
+
     /// Refuse unless every store reads whole and `node` is waiting for a summary; its label
     /// when it is.
     fn pending(&self, node: &Hash) -> Result<crate::secretary::digest_label::Label, Refusal> {

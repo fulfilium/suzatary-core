@@ -15,6 +15,7 @@ mod attachments;
 mod briefing;
 mod briefing_delta;
 mod calendar;
+mod consolidate;
 mod context;
 mod decisions;
 mod draft_note;
@@ -72,6 +73,7 @@ pub type Zoom = verbs::Zoom<SecretarySurface>;
 pub use briefing::Briefing;
 pub use briefing_delta::BriefingDelta;
 pub use calendar::Calendar;
+pub use consolidate::Consolidate;
 pub use context::Context;
 pub use decisions::Decisions;
 pub use draft_note::DraftNote;
@@ -265,6 +267,23 @@ fn gate(stored: &super::store::Stored) -> Gate {
         None => Gate::Closed,
         Some(_) if super::taint::tainted(stored) => Gate::Card,
         Some(said) => Gate::Write(said),
+    }
+}
+
+/// The round's opening turn, for a memory write that has no card: a forgetting or a
+/// consolidation, which an email must not be able to make, writes only where `remember` would.
+///
+/// # Errors
+/// [`Refusal::forbidden`] for a round the box opened, or one that has read something not the
+/// owner's own words, saying `instead`, what the owner can do.
+fn clean_round(call: &super::Call<'_>, instead: &str) -> Result<super::memory::Origin, Refusal> {
+    match gate(&super::read(call.caps.conversations, call.conversation)?) {
+        Gate::Closed => Err(Refusal::forbidden(NO_OPENER)),
+        Gate::Card => Err(Refusal::forbidden(format!(
+            "this round has read something that is not the owner's own words, so it changes \
+             nothing in the memory; {instead}"
+        ))),
+        Gate::Write(said) => Ok(said),
     }
 }
 
@@ -490,7 +509,7 @@ mod tests {
                 let read_something = lines.iter().any(|entry| matches!(
                     entry,
                     Entry::Said { turn: Turn::Tool { verb, .. }, .. }
-                        if !matches!(verb.as_str(), "context" | "weather" | "remember" | "forget" | "add_topics")
+                        if !matches!(verb.as_str(), "context" | "weather" | "remember" | "forget" | "consolidate" | "add_topics")
                 ));
                 if read_something {
                     prop_assert!(!matches!(gate(&round), Gate::Write(_)));

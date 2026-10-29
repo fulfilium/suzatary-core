@@ -86,7 +86,7 @@ impl Verb for Remember {
         an old answer (`recall`), it does not write: it stores a card the owner taps, \
         and then `why` and `sources` are required as for any proposal. A round the \
         box opened (a brief, a review, a sweep) remembers nothing at all. At 200 \
-        facts it refuses: forget one, or merge two into one, first.";
+        facts it refuses: forget one, or `consolidate` several into one, first.";
 
     fn run(call: &Call<'_>, args: RememberArgs) -> Result<VerbAnswer, Refusal> {
         let fact = Fact::new(&args.fact)

@@ -429,6 +429,20 @@ secretary forget [id negative] refused 400: id must be a whole number that is no
 secretary forget [id fractional] refused 400: id must be a whole number that is not negative
 secretary forget [chain unknown] refused 404: no chain named 'nowhere' — this deployment serves life
 secretary forget [chain mistyped] refused 400: chain must be a string or null
+secretary consolidate [valid] refused 403: this round was not opened by the owner's own words (it is a brief, a review, a sweep, or a question the box asked), so nothing is remembered from it; ask them in a round they open
+secretary consolidate [fact missing] refused 400: fact is required
+secretary consolidate [fact null] refused 400: fact is required
+secretary consolidate [fact mistyped] refused 400: fact must be a string
+secretary consolidate [fact garbled] refused 403: this round was not opened by the owner's own words (it is a brief, a review, a sweep, or a question the box asked), so nothing is remembered from it; ask them in a round they open
+secretary consolidate [from missing] refused 400: from is required
+secretary consolidate [from null] refused 400: from: invalid type: null, expected a sequence
+secretary consolidate [from mistyped] refused 400: from: invalid type: string "x", expected a sequence
+secretary consolidate [kind missing] refused 400: kind is required
+secretary consolidate [kind null] refused 400: kind is required
+secretary consolidate [kind mistyped] refused 400: kind must be a string
+secretary consolidate [kind garbled] refused 400: kind must be one of owner, person, preference, standing, got '?'
+secretary consolidate [chain unknown] refused 404: no chain named 'nowhere' — this deployment serves life
+secretary consolidate [chain mistyped] refused 400: chain must be a string or null
 secretary recall [valid] answered {"hits":[],"query":"from:a@b.test"}
 secretary recall [limit given] answered {"hits":[],"query":"from:a@b.test"}
 secretary recall [limit null] answered {"hits":[],"query":"from:a@b.test"}
@@ -1286,4 +1300,4 @@ secretary add_topics [topics null] refused 400: topics: invalid type: null, expe
 secretary add_topics [topics mistyped] refused 400: topics: invalid type: string "x", expected a sequence
 secretary add_topics [chain unknown] refused 404: no chain named 'nowhere' — this deployment serves life
 secretary add_topics [chain mistyped] refused 400: chain must be a string or null
-secretary send [no such verb] refused 404: no verb named 'send' — the secretary's verbs are context, remember, forget, recall, zoom, list_open_todos, todo_show, history, search, show, attachments, upload_read, sync_mail, search_older, watch_mail, briefing_delta, briefing, git_diff_summary, todo_add, todo_update, record, propose_email, propose_forward, propose_act, propose_changes, withdraw_proposal, weather, calendar, decisions, web, drive_list, drive_read, junk_digest, junk_show, repos_list, repo_tree, repo_read, repo_grep, propose_patch, propose_coding_session, propose_decision, draft_note, triage_cards, triage_withdraw, add_topics
+secretary send [no such verb] refused 404: no verb named 'send' — the secretary's verbs are context, remember, forget, consolidate, recall, zoom, list_open_todos, todo_show, history, search, show, attachments, upload_read, sync_mail, search_older, watch_mail, briefing_delta, briefing, git_diff_summary, todo_add, todo_update, record, propose_email, propose_forward, propose_act, propose_changes, withdraw_proposal, weather, calendar, decisions, web, drive_list, drive_read, junk_digest, junk_show, repos_list, repo_tree, repo_read, repo_grep, propose_patch, propose_coding_session, propose_decision, draft_note, triage_cards, triage_withdraw, add_topics

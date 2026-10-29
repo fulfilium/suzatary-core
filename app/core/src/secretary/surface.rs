@@ -10,9 +10,9 @@ use super::taint::Taint;
 use super::tool_name::ToolName;
 use super::verb_answer::VerbAnswer;
 use super::verbs::{
-    AddTopics, Attachments, Briefing, BriefingDelta, Calendar, Context, Decisions, DraftNote,
-    DriveList, DriveRead, Forget, GitDiffSummary, History, JunkDigest, JunkShow, ListOpenTodos,
-    ProposeAct, ProposeChanges, ProposeCodingSession, ProposeDecision, ProposeEmail,
+    AddTopics, Attachments, Briefing, BriefingDelta, Calendar, Consolidate, Context, Decisions,
+    DraftNote, DriveList, DriveRead, Forget, GitDiffSummary, History, JunkDigest, JunkShow,
+    ListOpenTodos, ProposeAct, ProposeChanges, ProposeCodingSession, ProposeDecision, ProposeEmail,
     ProposeForward, ProposePatch, Recall, Record, Remember, RepoGrep, RepoRead, RepoTree,
     ReposList, Search, SearchOlder, Show, SyncMail, TodoAdd, TodoShow, TodoUpdate, TriageCards,
     TriageWithdraw, UploadRead, WatchMail, Weather, Web, WithdrawProposal, Zoom,
@@ -206,6 +206,7 @@ verbs! {
     Context: powers(Reads, Clean),
     Remember: powers(Remembers, Clean),
     Forget: powers(Remembers, Clean),
+    Consolidate: powers(Remembers, Clean),
     Recall: powers(Reads, Tainted),
     // Its answer carries the node's own taint, which `taint::turn` reads; a refusal stays here.
     Zoom: powers(Reads, Tainted),

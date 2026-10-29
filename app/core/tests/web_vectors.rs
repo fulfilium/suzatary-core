@@ -1884,13 +1884,16 @@ fn memory_of(bundle: &Bundle, trains: &ConversationId) -> wire::MemoryPayload {
             at: stamp(later(now(), 202)),
             fact: "Takes the early train".to_owned(),
             kind: suzatary_core::secretary::memory::Kind::Owner,
-            said: wire::SaidOn::Turn {
-                conversation: trains.to_string(),
-                turn: 0,
+            said: wire::FactSaid::Said {
+                on: wire::SaidOn::Turn {
+                    conversation: trains.to_string(),
+                    turn: 0,
+                },
             },
         }],
         cap: 200,
         forgotten: Vec::new(),
+        merged: Vec::new(),
         cards: secretary_routes::memory(bundle.memories())
             .expect("the memory reads")
             .cards,
@@ -2483,9 +2486,11 @@ fn the_answers_vector_holds_every_answer() {
                 at: stamp(at),
                 fact: "Takes the early train".to_owned(),
                 kind: suzatary_core::secretary::memory::Kind::Person,
-                said: wire::SaidOn::Turn {
-                    conversation: deed.to_string(),
-                    turn: 0,
+                said: wire::FactSaid::Said {
+                    on: wire::SaidOn::Turn {
+                        conversation: deed.to_string(),
+                        turn: 0,
+                    },
                 },
             },
             wire::FactRow {
@@ -2493,14 +2498,52 @@ fn the_answers_vector_holds_every_answer() {
                 at: stamp(at),
                 fact: format!("{} keeps the books", CAST.counsel.name),
                 kind: suzatary_core::secretary::memory::Kind::Person,
-                said: wire::SaidOn::Tapped {
-                    conversation: deed.to_string(),
-                    proposal: 1,
+                said: wire::FactSaid::Said {
+                    on: wire::SaidOn::Tapped {
+                        conversation: deed.to_string(),
+                        proposal: 1,
+                    },
+                },
+            },
+            wire::FactRow {
+                id: suzatary_core::secretary::memory::FactId(6),
+                at: stamp(at),
+                fact: "Takes the early train on weekdays".to_owned(),
+                kind: suzatary_core::secretary::memory::Kind::Owner,
+                said: wire::FactSaid::Merged {
+                    from: vec![
+                        suzatary_core::secretary::memory::FactId(4),
+                        suzatary_core::secretary::memory::FactId(5),
+                    ],
+                    origins: vec![
+                        wire::SaidOn::Turn {
+                            conversation: deed.to_string(),
+                            turn: 2,
+                        },
+                        wire::SaidOn::Tapped {
+                            conversation: deed.to_string(),
+                            proposal: 3,
+                        },
+                    ],
+                    round: wire::SaidOn::Turn {
+                        conversation: deed.to_string(),
+                        turn: 4,
+                    },
                 },
             },
         ],
         cap: 200,
         forgotten: vec![suzatary_core::secretary::memory::FactId(3)],
+        merged: vec![
+            wire::MergedFact {
+                fact: suzatary_core::secretary::memory::FactId(4),
+                into: suzatary_core::secretary::memory::FactId(6),
+            },
+            wire::MergedFact {
+                fact: suzatary_core::secretary::memory::FactId(5),
+                into: suzatary_core::secretary::memory::FactId(6),
+            },
+        ],
         cards: vec![wire::CardWords {
             text: "c".repeat(64),
             fact: "Prefers mornings".to_owned(),
@@ -2873,6 +2916,15 @@ fn the_answers_vector_holds_every_answer() {
             heads: Vec::new(),
         },
     ]);
+
+    samples.add([wire::RecordPayload {
+        summaries: vec![wire::RecordSummary {
+            node: "a".repeat(64),
+            handle: "0+16".to_owned(),
+            lines: 16,
+            text: "Asked for the early train on weekdays".to_owned(),
+        }],
+    }]);
 
     let names: std::collections::BTreeSet<String> = wire::answer_names().into_iter().collect();
     let covered: std::collections::BTreeSet<String> = samples.0.keys().cloned().collect();

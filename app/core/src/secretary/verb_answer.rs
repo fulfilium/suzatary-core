@@ -19,7 +19,8 @@ pub struct VerbAnswer {
     pub value: Value,
     /// Files it hands the model, each already in the file store.
     pub files: Vec<Enclosed>,
-    /// The fact it wrote to the memory, which only `remember` writes: the turn's receipt.
+    /// The fact it wrote to the memory, which only `remember` and `consolidate` write: the
+    /// turn's receipt.
     pub remembered: Option<FactId>,
 }
 

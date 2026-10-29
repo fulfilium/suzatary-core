@@ -1,9 +1,9 @@
-//! The memory's laws over any interleaving of remembers and forgets, through its real store (a
-//! prodrome and a text store in memory): the memory is a plain map of its standing facts, the
-//! cap holds over the reading, no object ever holds a fact's words, and a forgotten fact's
-//! words are deleted.
+//! The memory's laws over any interleaving of remembers, consolidations and forgets, through its
+//! real store (a prodrome and a text store in memory): the memory is a plain map of its standing
+//! facts, the cap holds over the reading, no object ever holds a fact's words, a forgotten fact's
+//! words are deleted, and a consolidation replaces its sources (law 11).
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::sync::atomic::{AtomicU64, Ordering};
 
 use prodrome_core::event::Actor;
@@ -110,6 +110,34 @@ fn steps() -> impl Strategy<Value = Vec<Step>> {
     )
 }
 
+/// What a law 11 script does: remember a fact said at a turn, forget a standing one, or
+/// consolidate some standing ones into new words.
+#[derive(Debug, Clone)]
+enum Act {
+    Remember(usize, usize),
+    Forget(usize),
+    Consolidate(Vec<usize>, usize),
+}
+
+fn acts() -> impl Strategy<Value = Vec<Act>> {
+    proptest::collection::vec(
+        prop_oneof![
+            3 => (0usize..40, 0usize..5).prop_map(|(n, turn)| Act::Remember(n, turn)),
+            1 => (0usize..40).prop_map(Act::Forget),
+            2 => (proptest::collection::vec(0usize..40, 1..4), 40usize..80)
+                .prop_map(|(picks, n)| Act::Consolidate(picks, n)),
+        ],
+        0..50,
+    )
+}
+
+fn turn(turn: usize) -> Origin {
+    Origin::Turn {
+        conversation: ConversationId::new("default").expect("a slug"),
+        turn,
+    }
+}
+
 fn said() -> Origin {
     Origin::Turn {
         conversation: ConversationId::new("default").expect("a slug"),
@@ -188,6 +216,99 @@ proptest! {
 }
 
 proptest! {
+    /// Law 11, clause 1, on one box: when every source stands, `live(h + Consolidated{from,
+    /// into}) = live(h) − from + {into}` and `origins(into) = ⋃ origins(from)`; after the write's
+    /// sweep no text holds a source's words, and no object ever holds any fact's. A consolidation
+    /// naming a forgotten or replaced fact is refused, so clause 2 (a source resting on a
+    /// forgotten fact) arises only across replicas (`memory_schema.rs`). Forgetting a
+    /// consolidated fact forgets what it stood on, and no standing fact rests on a forgotten one.
+    #[test]
+    fn a_consolidation_replaces_its_sources(script in acts()) {
+        let held = Held::default();
+        let memories = held.memories();
+        // Each standing fact's words and the origins it stands on, as the law says they are.
+        let mut model: BTreeMap<FactId, (String, BTreeSet<Origin>)> = BTreeMap::new();
+        let mut gone: BTreeSet<FactId> = BTreeSet::new();
+        let mut replaced: BTreeSet<FactId> = BTreeSet::new();
+        let live = |memories: &Memories<'_>| -> BTreeSet<FactId> {
+            memories.reads().history().expect("reads").live().map(|(id, _)| id).collect()
+        };
+        for act in script {
+            match act {
+                Act::Remember(n, at) => {
+                    let words = text(n);
+                    if let Ok(kept) = memories.remember(&Fact::new(&words).expect("a fact"), Kind::Owner, &turn(at), now()) {
+                        model.insert(kept.id, (words, BTreeSet::from([turn(at)])));
+                    }
+                }
+                Act::Forget(pick) => {
+                    if let Some(&id) = model.keys().nth(pick % model.len().max(1)) {
+                        memories.forget(id, now(), &ada()).expect("forgets a standing fact");
+                        model.remove(&id);
+                        gone.insert(id);
+                    }
+                }
+                Act::Consolidate(picks, n) => {
+                    // Every id ever written, so a pick may name a forgotten or replaced fact.
+                    let ids: Vec<FactId> = model.keys().chain(&gone).chain(&replaced).copied().collect();
+                    let from: BTreeSet<FactId> = picks
+                        .iter()
+                        .filter_map(|pick| ids.get(pick % ids.len().max(1)).copied())
+                        .collect();
+                    let words = text(n);
+                    let before = live(&memories);
+                    let done = memories.consolidate(&from, &Fact::new(&words).expect("a fact"), Kind::Person, &turn(9), now());
+                    let elsewhere = model.iter().any(|(id, (said, _))| *said == words && !from.contains(id));
+                    let standing = from.iter().all(|id| model.contains_key(id));
+                    prop_assert_eq!(
+                        done.is_ok(),
+                        !from.is_empty() && standing && !elsewhere,
+                        "a consolidation of a forgotten or replaced fact is refused: {:?}", done
+                    );
+                    let Ok(merged) = done else {
+                        prop_assert_eq!(live(&memories), before, "a refused consolidation changes nothing");
+                        continue;
+                    };
+                    let mut expected = before;
+                    expected.retain(|id| !from.contains(id));
+                    expected.insert(merged.id);
+                    prop_assert_eq!(live(&memories), expected, "live − from + into");
+                    let origins: BTreeSet<Origin> = from.iter().flat_map(|id| model[id].1.clone()).collect();
+                    let read: BTreeSet<Origin> = merged.said.origins.iter().cloned().collect();
+                    prop_assert_eq!(&read, &origins, "the union of the sources' origins");
+                    let history = memories.reads().history().expect("reads");
+                    let stored = history.provenance(merged.id).expect("reads");
+                    prop_assert_eq!(stored.origins.iter().cloned().collect::<BTreeSet<_>>(), origins.clone());
+                    for id in &from {
+                        model.remove(id);
+                        replaced.insert(*id);
+                    }
+                    model.insert(merged.id, (words, origins));
+                    // A consolidation of the sources again is refused: they no longer stand.
+                    prop_assert!(memories.consolidate(&from, &Fact::new("again").expect("a fact"), Kind::Owner, &turn(9), now()).is_err());
+                }
+            }
+            let mut words = held.words();
+            words.sort();
+            let mut standing: Vec<String> = model.values().map(|(said, _)| said.clone()).collect();
+            standing.sort();
+            prop_assert_eq!(words, standing, "the texts hold exactly the standing facts' words");
+            prop_assert_eq!(live(&memories), model.keys().copied().collect::<BTreeSet<_>>());
+            let history = memories.reads().history().expect("reads");
+            for (id, _) in history.live() {
+                for down in &gone {
+                    prop_assert!(!history.forgotten_with(*down).contains_key(&id), "fact {id} rests on forgotten fact {down}");
+                }
+            }
+        }
+        let prints = held.prints();
+        for n in 0..80 {
+            prop_assert!(!prints.contains(&format!("qx{n}qx")), "an object holds fact {}'s words", n);
+        }
+    }
+}
+
+proptest! {
     #![proptest_config(ProptestConfig::with_cases(8))]
 
     /// However remembers and forgets interleave past the cap, the reading never holds more than
@@ -223,6 +344,8 @@ proptest! {
 enum Moment {
     Remember(usize),
     Forget(usize),
+    /// Consolidate the standing facts the picks name into new words.
+    Consolidate(usize, usize, usize),
     /// A round in conversation `.0`; `.1` says its session is fresh.
     Round(usize, bool),
 }
@@ -232,6 +355,8 @@ fn moments() -> impl Strategy<Value = Vec<Moment>> {
         prop_oneof![
             (0usize..20).prop_map(Moment::Remember),
             (0usize..20).prop_map(Moment::Forget),
+            (0usize..20, 0usize..20, 20usize..40)
+                .prop_map(|(a, b, n)| Moment::Consolidate(a, b, n)),
             (0usize..3, proptest::bool::weighted(0.2)).prop_map(|(c, f)| Moment::Round(c, f)),
         ],
         0..80,
@@ -264,6 +389,14 @@ proptest! {
                         memories.forget(one.id, now(), &ada()).expect("forgets");
                     }
                 }
+                Moment::Consolidate(a, b, n) => {
+                    let standing = memories.reads().read().expect("reads").facts;
+                    let from: BTreeSet<FactId> = [a, b]
+                        .iter()
+                        .filter_map(|pick| standing.get(pick % standing.len().max(1)).map(|one| one.id))
+                        .collect();
+                    let _ = memories.consolidate(&from, &Fact::new(text(n)).expect("a fact"), Kind::Owner, &said(), now());
+                }
                 Moment::Round(c, fresh) => {
                     let id = ConversationId::new(format!("c{c}")).expect("a slug");
                     let stored = suzatary_core::secretary::store::Stored::of(&id, &files[c]).expect("folds");
@@ -273,9 +406,13 @@ proptest! {
                         memory::Change::Whole { facts, .. } => {
                             knows[c] = facts.iter().map(|r| r.id).collect();
                         }
-                        memory::Change::Since { added, forgotten, .. } => {
+                        memory::Change::Since { added, forgotten, merged, .. } => {
                             for gone in forgotten {
                                 prop_assert!(knows[c].remove(gone), "told to forget {gone}, never told of it");
+                            }
+                            for merge in merged {
+                                prop_assert!(knows[c].remove(&merge.fact), "told {} is merged, never told of it", merge.fact);
+                                prop_assert!(now.get(merge.into).is_some(), "told to rely on fact {}, which does not stand", merge.into);
                             }
                             for added in added {
                                 prop_assert!(knows[c].insert(added.id), "told of {} twice", added.id);

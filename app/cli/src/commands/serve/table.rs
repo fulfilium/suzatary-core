@@ -164,6 +164,12 @@ pub fn table() -> Vec<Route> {
             Scope::Box,
             secretary::forget,
         ),
+        Route::get("/api/secretary/record", Scope::Box, secretary::record),
+        Route::post(
+            "/api/secretary/record/{node}/retract",
+            Scope::Box,
+            secretary::retract,
+        ),
     ]
 }
 

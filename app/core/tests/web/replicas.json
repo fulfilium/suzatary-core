@@ -660,14 +660,18 @@
         "fact": "Takes the early train",
         "kind": "owner",
         "said": {
-          "kind": "turn",
-          "conversation": "trains",
-          "turn": 0
+          "how": "said",
+          "on": {
+            "kind": "turn",
+            "conversation": "trains",
+            "turn": 0
+          }
         }
       }
     ],
     "cap": 200,
     "forgotten": [],
+    "merged": [],
     "cards": [
       {
         "text": "c0f5cb80479a2d481657a50a518e41764465d4d272be5f6255d72b10121a05f9",

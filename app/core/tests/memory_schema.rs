@@ -2,9 +2,11 @@
 //! is a partial order (law 2); the reading is a function of the object set, whatever order the
 //! objects arrive in (law 1); the store's real append refuses a remembering of a forgotten fact,
 //! so a forgotten id never reads again, and the reading of a union is the join of the readings
-//! (law 4); every event prints and parses back.
+//! (law 4); every event prints and parses back. Consolidations ride in every script, so a
+//! consolidation arriving before its sources, or beside a forgetting of one of them on another
+//! replica, reads the same whatever the order, and never stands on a forgotten fact.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
@@ -19,7 +21,9 @@ use proptest::prelude::*;
 
 use suzatary_core::secretary::fact_life::Life;
 use suzatary_core::secretary::memory::{FactId, Kind, Origin};
+use suzatary_core::secretary::memory_event::Said;
 use suzatary_core::secretary::memory_event::{self, MemoryEvent, MemoryVocabulary};
+use suzatary_core::secretary::provenance::Wrote;
 use suzatary_core::secretary::salted_text::TextName;
 use suzatary_core::secretary::store::ConversationId;
 use suzatary_core::secretary::two_phase::TwoPhase;
@@ -94,15 +98,33 @@ fn remembered(fact: u64, seed: u64) -> MemoryEvent {
     .expect("a remembering")
 }
 
+fn consolidated(fact: u64, from: &[u64], seed: u64) -> MemoryEvent {
+    memory_event::consolidated(
+        FactId(fact),
+        at(fact),
+        actor("assistant"),
+        from.iter().copied().map(FactId).collect(),
+        name(seed),
+        KINDS[usize::try_from(seed % 4).expect("small")],
+        Origin::Turn {
+            conversation: ConversationId::new("default").expect("a slug"),
+            turn: usize::try_from(seed % 3).expect("small"),
+        },
+    )
+    .expect("after its sources")
+}
+
 fn forgotten(fact: u64, version: u64) -> MemoryEvent {
     memory_event::forgotten(FactId(fact), at(version), actor("ada"), version).expect("after it")
 }
 
-/// What the box writes: a remembering of a new fact, or a forgetting of a standing one.
+/// What the box writes: a remembering of a new fact, a forgetting of a standing one, or a
+/// consolidation of two standing ones.
 #[derive(Debug, Clone)]
 enum Step {
     Remember(u64),
     Forget(usize),
+    Consolidate(usize, usize, u64),
 }
 
 fn steps() -> impl Strategy<Value = Vec<Step>> {
@@ -110,6 +132,8 @@ fn steps() -> impl Strategy<Value = Vec<Step>> {
         prop_oneof![
             (0u64..1000).prop_map(Step::Remember),
             (0usize..40).prop_map(Step::Forget),
+            (0usize..40, 0usize..40, 0u64..1000)
+                .prop_map(|(a, b, seed)| Step::Consolidate(a, b, seed)),
         ],
         1..40,
     )
@@ -133,7 +157,16 @@ fn history(script: &[Step]) -> Vec<MemoryEvent> {
                 version += 1;
                 events.push(forgotten(fact, version));
             }
-            Step::Forget(_) => {}
+            Step::Consolidate(a, b, seed) if !standing.is_empty() => {
+                let mut from = vec![standing[a % standing.len()], standing[b % standing.len()]];
+                from.sort_unstable();
+                from.dedup();
+                standing.retain(|fact| !from.contains(fact));
+                version += 1;
+                standing.push(version);
+                events.push(consolidated(version, &from, *seed));
+            }
+            Step::Forget(_) | Step::Consolidate(..) => {}
         }
     }
     events
@@ -195,7 +228,8 @@ fn lives(events: &[MemoryEvent]) -> Vec<Life<'_>> {
     events
         .iter()
         .map(|event| match event.body() {
-            suzatary_core::secretary::memory_event::Said::Remembered { .. } => {
+            suzatary_core::secretary::memory_event::Said::Remembered { .. }
+            | suzatary_core::secretary::memory_event::Said::Consolidated { .. } => {
                 Life::Remembered(Discrete(event))
             }
             suzatary_core::secretary::memory_event::Said::Forgotten { .. } => Life::Forgotten,
@@ -255,6 +289,13 @@ proptest! {
                 prefix.live().all(|(fact, _)| !forgotten_so_far.contains(&fact)),
                 "a forgotten fact stands again"
             );
+            for &down in &forgotten_so_far {
+                let taken = prefix.forgotten_with(down);
+                prop_assert!(
+                    prefix.live().all(|(fact, _)| !taken.contains_key(&fact)),
+                    "a fact standing on forgotten fact {} stands", down
+                );
+            }
         }
         // A second arrival's prefixes, so pairs no one arrival orders are compared too.
         let second = arrival(&all, other);
@@ -287,8 +328,14 @@ proptest! {
     }
 
     /// Two replicas share a prefix; each remembers facts the other does not see (ids the other
-    /// does not use) and forgets some of the shared ones; adopting each other's objects, both
-    /// hold the join of what each held, and the join is the least upper bound.
+    /// does not use), consolidates shared facts, and forgets one of them; adopting each other's
+    /// objects, both hold the join of what each held, and the join is the least upper bound.
+    ///
+    /// The union reads law 11's two clauses: a fact stands exactly when its sources are held,
+    /// nothing it rests on is forgotten and nothing replaced it; a consolidation that reads
+    /// forgotten through a source replaces nothing, so its other sources stand again. When both
+    /// replicas number their consolidations alike, the least-named one stands, the other's
+    /// sources are replaced by nothing, and its words are named by nothing live.
     #[test]
     fn the_union_reads_the_join(
         script in steps(),
@@ -296,6 +343,9 @@ proptest! {
         theirs in proptest::collection::vec(0u64..1000, 0..5),
         drop_mine in 0usize..40,
         drop_theirs in 0usize..40,
+        merge_mine in proptest::option::weighted(0.9, (0usize..40, 0usize..40)),
+        merge_theirs in proptest::option::weighted(0.9, (0usize..40, 0usize..40)),
+        same_number in any::<bool>(),
     ) {
         let shared = history(&script);
         let one = written(&shared);
@@ -304,13 +354,28 @@ proptest! {
         let reading = read(objects(&one.0));
         let standing: Vec<FactId> = reading.live().map(|(fact, _)| fact).collect();
         let top = reading.version();
-        for (store, seeds, base, drop) in [(&one, &mine, 1000, drop_mine), (&two, &theirs, 2000, drop_theirs)] {
+        for (store, seeds, base, drop, merge) in [
+            (&one, &mine, 1000, drop_mine, merge_mine),
+            (&two, &theirs, 2000, drop_theirs, merge_theirs),
+        ] {
             let mut next = top + base;
             for seed in seeds {
                 next += 1;
                 store.0.append(remembered(next, *seed)).expect("climbs");
             }
-            if let Some(fact) = standing.get(drop % standing.len().max(1)) {
+            // A consolidation of shared facts, beside the other replica's forgetting of one.
+            let dropped = standing.get(drop % standing.len().max(1)).copied();
+            if let (Some((a, b)), false) = (merge, standing.is_empty()) {
+                let mut from: Vec<u64> = [a, b].iter().map(|pick| standing[pick % standing.len()].0).collect();
+                from.sort_unstable();
+                from.dedup();
+                if dropped.is_none_or(|fact| !from.contains(&fact.0)) {
+                    next += 1;
+                    let number = if same_number { top + 1 } else { next };
+                    store.0.append(consolidated(number, &from, next)).expect("climbs");
+                }
+            }
+            if let Some(fact) = dropped {
                 next += 1;
                 store.0.append(forgotten(fact.0, next)).expect("climbs");
             }
@@ -325,5 +390,81 @@ proptest! {
         crate::laws::join(&[reading, a, b, after_one.clone()], TwoPhase::held, TwoPhase::join)?;
         let live = |phase: &TwoPhase| phase.live().map(|(fact, _)| fact).collect::<Vec<_>>();
         prop_assert_eq!(live(&after_one), live(&joined));
+        prop_assert_eq!(after_one.naming().dead(), joined.naming().dead());
+        for &down in after_one.forgotten().keys() {
+            let taken = after_one.forgotten_with(down);
+            prop_assert!(
+                after_one.live().all(|(fact, _)| !taken.contains_key(&fact)),
+                "a consolidation of forgotten fact {} stands after the union", down
+            );
+        }
+        let standing: BTreeSet<FactId> = after_one.live().map(|(fact, _)| fact).collect();
+        for (&fact, kept) in after_one.remembered() {
+            let stands = after_one.provenance(fact).is_some()
+                && after_one.forgetting(fact).is_none()
+                && !after_one.replaced().contains_key(&fact);
+            prop_assert_eq!(standing.contains(&fact), stands, "fact {}", fact);
+            if let Wrote::Merged { from, .. } = &kept.wrote {
+                let through_a_source = after_one.forgetting(fact).is_some()
+                    && !after_one.forgotten().contains_key(&fact);
+                if through_a_source {
+                    for source in from {
+                        prop_assert!(
+                            !after_one.replaced().get(source).is_some_and(|by| by.contains(&fact)),
+                            "a consolidation read forgotten through a source replaces nothing"
+                        );
+                    }
+                } else {
+                    prop_assert!(from.is_disjoint(&standing), "no source stands beside its consolidation");
+                }
+            }
+        }
+        if same_number {
+            // Every remembering's words but the one kept per number are named, and dead.
+            let kept: BTreeSet<_> = after_one.remembered().values().map(|kept| kept.text.clone()).collect();
+            let named = after_one.naming();
+            for (_, object) in objects(&one.0) {
+                if let Some(text) = object.event().and_then(|event| match event.body() {
+                        Said::Remembered { text, .. } | Said::Consolidated { text, .. } => Some(text.clone()),
+                        Said::Forgotten { .. } => None,
+                    })
+                    && !kept.contains(&text)
+                {
+                    prop_assert!(named.dead().contains(&text), "an outranked remembering's words are dead");
+                }
+            }
+        }
     }
+}
+
+/// Two replicas consolidate shared facts under one new number: after the union, the least-named
+/// consolidation stands in its sources' place, the other's sources are replaced by nothing and
+/// stand, and the other's words are dead.
+#[test]
+fn two_consolidations_numbered_alike_keep_the_least_named() {
+    let one = written(&[remembered(1, 0), remembered(2, 2), remembered(3, 4)]);
+    let two = Scratch::empty();
+    adopt(&two.0, &one.0);
+    one.0.append(consolidated(4, &[1, 2], 10)).expect("climbs");
+    two.0.append(consolidated(4, &[2, 3], 11)).expect("climbs");
+    adopt(&one.0, &two.0);
+    adopt(&two.0, &one.0);
+    let (after_one, after_two) = (read(objects(&one.0)), read(objects(&two.0)));
+    assert_eq!(after_one, after_two);
+    let kept = &after_one.remembered()[&FactId(4)];
+    let (won, lost, freed) = match &kept.wrote {
+        Wrote::Merged { from, .. } if from.contains(&FactId(1)) => (name(10), name(11), FactId(3)),
+        Wrote::Merged { .. } => (name(11), name(10), FactId(1)),
+        Wrote::Said(_) => panic!("fact 4 is a consolidation"),
+    };
+    assert_eq!(kept.text, won);
+    let live: BTreeSet<FactId> = after_one.live().map(|(fact, _)| fact).collect();
+    assert_eq!(
+        live,
+        [freed, FactId(4)].into(),
+        "the loser's other source stands again"
+    );
+    let dead = after_one.naming().dead();
+    assert!(dead.contains(&lost), "the outranked words are dead");
+    assert!(!dead.contains(&won));
 }

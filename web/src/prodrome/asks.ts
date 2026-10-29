@@ -2,7 +2,7 @@
 // A monotone act is sealed into the tab's own replica; every other is a request the box answers under its lock.
 
 import type { AttachmentRow, ConversationPayload, FactId, ProposalRow } from "../wire/generated/wire"
-import { acknowledgeProposal, dismissProposal, dropSession, editQuestion, eraseTurns, forgetFact, regenerate, renameConversation, say, stopAnswer, tapProposal } from "../wire/api"
+import { acknowledgeProposal, dismissProposal, dropSession, editQuestion, eraseTurns, forgetFact, regenerate, renameConversation, retractSummary, say, stopAnswer, tapProposal } from "../wire/api"
 import { parsed } from "../chat/refs"
 import type vouch from "./vouch"
 import type topics from "./topics"
@@ -34,6 +34,8 @@ export namespace asks {
     | { readonly type: "Round"; readonly kind: "Stop" | "Regenerate"; readonly conversation: string; readonly after: number }
     | { readonly type: "Rename"; readonly conversation: string; readonly title: string }
     | { readonly type: "Forget"; readonly fact: FactId }
+    // A summary of the record the owner says is wrong, by its node's name.
+    | { readonly type: "Retract"; readonly node: string }
     | { readonly type: "Erase"; readonly conversation: string; readonly turns: readonly number[] }
 
   type Of<K extends Ask["type"]> = Extract<Ask, { type: K }>
@@ -48,6 +50,7 @@ export namespace asks {
       case "Round": return alg.Round(a)
       case "Rename": return alg.Rename(a)
       case "Forget": return alg.Forget(a)
+      case "Retract": return alg.Retract(a)
       case "Erase": return alg.Erase(a)
     }
   }
@@ -69,7 +72,7 @@ export namespace asks {
   export const holdsRow = (row: ProposalRow) => (a: Ask): boolean => a.type === "Answer" && moved(a.at, row)
 
   // Whether the history holds the act: a monotone act once sealed, a request once the box's record of it is read.
-  // A request whose record no replica carries (a forgotten fact) is held only by the box's own answer.
+  // A request whose record no replica carries (a forgotten fact, a retracted summary) is held only by the box's own answer.
   export const holds = (read: Reading): ((a: Ask) => boolean) =>
     fold<boolean>({
       Seal: () => false,
@@ -79,13 +82,14 @@ export namespace asks {
       Round: a => (read(a.conversation)?.total ?? 0) > a.after,
       Rename: a => read(a.conversation)?.title === a.title,
       Forget: () => false,
+      Retract: () => false,
       Erase: a => {
         const turns = read(a.conversation)?.turns ?? []
         return a.turns.every(n => turns.some(t => t.index === n && t.gone !== null))
       },
     })
 
-  // The conversation an ask's record lands in, which a settle reads; none for a todo's seal or a fact.
+  // The conversation an ask's record lands in, which a settle reads; none for a todo's seal, a fact or a summary.
   export const conversation = fold<string | null>({
     Seal: () => null,
     Topic: () => null,
@@ -94,6 +98,7 @@ export namespace asks {
     Round: a => a.conversation,
     Rename: a => a.conversation,
     Forget: () => null,
+    Retract: () => null,
     Erase: a => a.conversation,
   })
 
@@ -114,6 +119,7 @@ export namespace asks {
     : a.type === "Round" ? (a.kind === "Stop" ? stopAnswer(a.conversation) : regenerate(a.conversation))
     : a.type === "Rename" ? renameConversation(a.conversation, a.title)
     : a.type === "Erase" ? eraseTurns(a.conversation, a.turns)
+    : a.type === "Retract" ? retractSummary(a.node)
     : forgetFact(a.fact)
 }
 export default asks

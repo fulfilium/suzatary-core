@@ -1116,6 +1116,7 @@ fn a_pushed_request_record_holds_nothing_said_either_way() {
             .replace("{conversation}", conversation)
             .replace("{index}", &index.to_string())
             .replace("{id}", id_in(route))
+            .replace("{node}", &"0".repeat(64))
             .replace("{store}", "topics");
         let (body, key) = performed_body(route);
         let (status, said) = sent.send(&r, &path, &body, &key);

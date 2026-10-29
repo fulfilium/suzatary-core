@@ -108,8 +108,9 @@ fn his_clean_round_remembers_at_once() {
     assert_eq!(listed["cap"], 200);
     assert_eq!(listed["facts"][0]["fact"], "Ada moved to Oslo in September");
     assert_eq!(listed["facts"][0]["kind"], "owner");
-    assert_eq!(listed["facts"][0]["said"]["kind"], "turn");
-    assert_eq!(listed["facts"][0]["said"]["turn"], 0);
+    assert_eq!(listed["facts"][0]["said"]["how"], "said");
+    assert_eq!(listed["facts"][0]["said"]["on"]["kind"], "turn");
+    assert_eq!(listed["facts"][0]["said"]["on"]["turn"], 0);
 
     let mut forgot = common::act(
         &format!("{base}/api/secretary/memory/1/forget"),
@@ -206,6 +207,11 @@ fn only_the_call(fakes: &Fakes, id: &str, words: &str) {
 /// hold the words. The model's `remember` call reads as erased, its shape whole, and the turns
 /// around it are offered on a card of the box's.
 fn erased_by_forgetting(fakes: &Fakes, id: &str, words: &str) {
+    erased_call(fakes, id, words, "remember");
+}
+
+/// [`erased_by_forgetting`], for the model's call of `verb`.
+fn erased_call(fakes: &Fakes, id: &str, words: &str, verb: &str) {
     let left = holding(&fakes.root, words);
     assert!(left.is_empty(), "no file holds the words: {left:?}");
     let conversation = suzatary_core::secretary::store::ConversationId::new(id).expect("an id");
@@ -229,7 +235,7 @@ fn erased_by_forgetting(fakes: &Fakes, id: &str, words: &str) {
                     ..
                 },
                 ..
-            } if calls.iter().any(|verb| verb.as_str() == "remember")
+            } if calls.iter().any(|called| called.as_str() == verb)
         )),
         "the call reads as erased: {read:?}"
     );
@@ -320,6 +326,87 @@ fn a_forgotten_facts_words_are_left_nowhere() {
         after["turns"][0]["text"], "[Ada erased these words]",
         "{after}"
     );
+}
+
+/// Two facts remembered in two conversations and consolidated in a third: the memory lists the
+/// new fact merged from both, on both rounds' word; each source's receipt names the fact that
+/// replaced it, and no file but the calls that wrote them holds the sources' words. Forgetting
+/// the consolidation then erases all three calls, in their three conversations, and leaves the
+/// words nowhere.
+#[test]
+fn forgetting_a_consolidation_leaves_its_sources_words_nowhere() {
+    let (one, two, both) = (
+        "The spare key is under the blue pot",
+        "The blue pot is by the back door",
+        "Spare key: blue pot, at the back door",
+    );
+    let (fakes, base) = served(
+        "memory-consolidated",
+        FakeModel::saying([
+            r#"{"say": "", "calls": [{"verb": "remember", "args": {
+                "fact": "The spare key is under the blue pot", "kind": "owner"}}]}"#,
+            r#"{"say": "Noted."}"#,
+            r#"{"say": "", "calls": [{"verb": "remember", "args": {
+                "fact": "The blue pot is by the back door", "kind": "owner"}}]}"#,
+            r#"{"say": "Noted."}"#,
+            r#"{"say": "", "calls": [{"verb": "consolidate", "args": {"from": [1, 2],
+                "fact": "Spare key: blue pot, at the back door", "kind": "owner"}}]}"#,
+            r#"{"say": "Merged."}"#,
+        ]),
+    );
+    let (first, _) = said(&base, "remember where the key is");
+    let (second, _) = said(&base, "and where the pot is");
+    let (third, payload) = said(&base, "merge those two");
+    assert_eq!(
+        verb_turn(&payload, "consolidate")["outcome"]["receipt"],
+        serde_json::json!({"state": "standing", "fact": 3, "text": both}),
+    );
+    let mut listed = common::get(&format!("{base}/api/secretary/memory"));
+    let listed = common::body_json(&mut listed);
+    assert_eq!(
+        listed["facts"].as_array().expect("facts").len(),
+        1,
+        "{listed}"
+    );
+    let said = &listed["facts"][0]["said"];
+    assert_eq!(said["how"], "merged", "{said}");
+    assert_eq!(said["from"], serde_json::json!([1, 2]));
+    assert_eq!(
+        said["origins"]
+            .as_array()
+            .expect("origins")
+            .iter()
+            .map(|origin| origin["conversation"].as_str().expect("a conversation"))
+            .collect::<std::collections::BTreeSet<_>>(),
+        [first.as_str(), second.as_str()].into(),
+        "the union of where its sources were said"
+    );
+    assert_eq!(said["round"]["conversation"], third.as_str());
+    assert_eq!(
+        verb_turn(&settled(&base, &first), "remember")["outcome"]["receipt"],
+        serde_json::json!({"state": "merged", "fact": 1, "into": 3}),
+    );
+    for words in [one, two] {
+        let left = holding(&fakes.root, words);
+        assert!(
+            left.iter()
+                .all(|file| !file.starts_with("secretary-memory-texts/")),
+            "a replaced fact's words leave the memory: {left:?}"
+        );
+    }
+    let forgot = common::act(
+        &format!("{base}/api/secretary/memory/3/forget"),
+        &serde_json::json!({}),
+    );
+    assert_eq!(common::status(&forgot), 200);
+    erased_by_forgetting(&fakes, &first, one);
+    erased_by_forgetting(&fakes, &second, two);
+    erased_call(&fakes, &third, both, "consolidate");
+    let mut memory = common::get(&format!("{base}/api/secretary/memory"));
+    let memory = common::body_json(&mut memory).to_string();
+    for words in [one, two, both] {
+        assert!(!memory.contains(words), "{memory}");
+    }
 }
 
 #[test]
