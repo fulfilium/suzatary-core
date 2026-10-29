@@ -59,6 +59,7 @@ pub mod smtp;
 pub mod source_health;
 pub mod state;
 pub mod sync;
+pub mod tapped;
 pub mod text_keys;
 pub mod texts;
 pub mod tier;

@@ -163,7 +163,7 @@ export function mount(root: HTMLElement, id: string): Promise<Mounted> {
         : [
             chips(read.message),
             el("div", { class: "askrow" }, askLink({ kind: "mail", hash: read.message.row.hash })),
-            heldvalue.within(el("div", { class: "mailbody" }, read.message.body === "" ? "(this message has no readable body)" : read.message.body), revealHeld),
+            heldvalue.within(el("div", { class: "mailbody" }, read.message.body === "" ? "(this message has no readable body)" : read.message.body), revealHeld(null)),
             read.message.truncated
               ? el("p", { class: "legend" }, "Cut at 200 KB — the rest is in the maildir, not on this page.")
               : null,

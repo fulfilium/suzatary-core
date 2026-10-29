@@ -2,6 +2,7 @@ use schemars::JsonSchema;
 use serde::Deserialize;
 use serde_json::{Map, Value, json};
 
+use crate::held_value::HeldFile;
 use crate::refusal::Refusal;
 use crate::secretary::acts::Act;
 use crate::secretary::store::Proposal;
@@ -31,8 +32,9 @@ impl Verb for DriveRead {
         other type is refused by name. In a folder the owner has allowed it reads \
         at once; anywhere else it is ASKED, on a card naming the file, and the \
         file arrives in this conversation if they tap Read. Every SSN, ITIN, TIN \
-        and EIN, code, and card or bank number in text is already `[redacted]`, and a PDF whose text names one \
-        comes back as that text, not as itself: never try to recover one, and \
+        and EIN, code, and card or bank number in text is already a placeholder naming its kind and last digits, and a \
+        PDF whose text names one comes back as that text and as its own `held` \
+        placeholder, not as itself: never try to recover one, and \
         never quote an ID number back, from text or from a scan. When a task needs the number, say \
         which file holds it and let them copy it. `why` and `sources` are \
         required as for proposals.";
@@ -48,9 +50,13 @@ impl Verb for DriveRead {
                 .map_err(|failed| drive_refusal(&failed))?;
             let mut head = Map::new();
             head.insert("path".to_owned(), Value::from(path.to_string()));
-            return VerbAnswer::reading(head, path.name().unwrap_or_default(), read, |bytes| {
-                kept(call.caps, bytes)
-            });
+            return VerbAnswer::reading(
+                head,
+                &HeldFile::Drive { path: path.clone() },
+                path.name().unwrap_or_default(),
+                read,
+                |bytes| kept(call.caps, bytes),
+            );
         }
         // Outside the private folder its entry comes first, so the card names a file that is
         // there. Inside it nothing is listed: every name answers with the same card, there or

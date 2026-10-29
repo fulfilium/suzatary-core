@@ -6,7 +6,7 @@ use crate::held_value::Written;
 use crate::mail::Stored;
 use crate::refusal::Refusal;
 use crate::secretary::attached::MAX_TOTAL;
-use crate::secretary::read_mail::ReadMail;
+use crate::secretary::read_holders::ReadHolders;
 use crate::secretary::store::{Forward, Forwarded, Proposal, Style};
 use crate::secretary::verbs::propose_email::{address, addresses};
 use crate::secretary::verbs::{FilingArgs, mail_refusal};
@@ -73,7 +73,7 @@ impl Verb for ProposeForward {
         let shown = mail
             .message(&args.message)
             .map_err(|failed| mail_refusal(&failed))?;
-        if !ReadMail::of(&crate::secretary::read(
+        if !ReadHolders::of(&crate::secretary::read(
             call.caps.conversations,
             call.conversation,
         )?)

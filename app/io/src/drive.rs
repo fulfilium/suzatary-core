@@ -141,7 +141,9 @@ impl ProtonDrive {
             });
         };
         let bytes = self.download(file)?;
-        crate::mailbox::read_of(mime, bytes, &self.pdftotext).map_err(DriveFailure::Unreachable)
+        let source = suzatary_core::held_value::HeldFile::Drive { path: file.clone() };
+        crate::mailbox::read_of(&source, name, mime, bytes, &self.pdftotext)
+            .map_err(DriveFailure::Unreachable)
     }
 
     /// Run one command, bounded, and answer its standard output.
@@ -586,23 +588,22 @@ mod tests {
     }
 
     #[test]
-    fn a_file_is_read_redacted_and_its_download_removed() {
+    fn a_file_is_read_masked_and_its_download_removed() {
         let fake = Fake::new("read");
         let read = fake
             .drive()
             .read(&path("/my-files/Docs/letter.txt"))
             .expect("read");
-        let FileRead::Text {
-            text,
-            truncated,
-            withheld: None,
-        } = read
-        else {
+        let FileRead::Text { text, truncated } = read else {
             panic!("text expected: {read:?}");
         };
         assert!(!truncated);
-        assert!(text.as_str().contains("SSN: [redacted]"), "{text:?}");
-        assert!(!text.as_str().contains("6789"), "{text:?}");
+        assert!(
+            text.as_str()
+                .contains("SSN: [SSN ending 6789 · tap to show · held:file:"),
+            "{text:?}"
+        );
+        assert!(!text.as_str().contains("123-45-6789"), "{text:?}");
         assert!(text.as_str().contains("617-555-1234"), "a phone stays");
         assert!(fake.scratch_is_empty(), "the download was removed");
         fake.only_reads_ran();

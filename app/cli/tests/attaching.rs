@@ -427,7 +427,16 @@ fn a_file_read_here_attaches_from_its_kept_copy_and_nothing_else_does() {
             .mailbox(mailbox().with_attachment_read(
                 "notice@example.test",
                 "notice.pdf",
-                suzatary_core::file_read::FileRead::of("application/pdf", NOTICE.to_vec(), Some("")),
+                suzatary_core::file_read::FileRead::of(
+                    &suzatary_core::held_value::HeldFile::Mail {
+                        message: "notice@example.test".to_owned(),
+                        name: "notice.pdf".to_owned(),
+                    },
+                    "notice.pdf",
+                    "application/pdf",
+                    NOTICE.to_vec(),
+                    Some(""),
+                ),
             ))
             .model(FakeModel::saying_owned([
                 r#"{"say": "Reading the notice.", "calls": [

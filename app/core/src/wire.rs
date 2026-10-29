@@ -1140,6 +1140,9 @@ pub struct Pairing {
 pub struct Revealing {
     /// The handle, as the placeholder prints it (`held:…`).
     pub handle: String,
+    /// The conversation the placeholder is drawn in, which must have read a file the handle
+    /// names; `null` on a mail page, which shows only a message's values.
+    pub conversation: Option<String>,
 }
 
 /// What `POST /api/held/reveal` answers. The box keeps [`RevealPayload::NotKept`] for a replay
@@ -1147,21 +1150,60 @@ pub struct Revealing {
 #[derive(Clone, PartialEq, Eq, Serialize, TS)]
 #[serde(tag = "type")]
 pub enum RevealPayload {
-    /// The value, as the message writes it.
+    /// The value, as its message or file writes it.
     Shown {
         /// The value.
         value: String,
     },
-    /// The message is gone, or holds no value at that place any more.
+    /// A held file, for the device to open.
+    File {
+        /// Its name, as its source holds it.
+        name: String,
+        /// Its `type/subtype`, read from its bytes.
+        media: String,
+        /// Its bytes, in base64.
+        bytes: String,
+    },
+    /// The message or file is gone, or holds no value at that place any more.
     Gone,
     /// A replay: the value was answered once and not kept; tap again.
     NotKept,
+}
+
+impl RevealPayload {
+    /// What a reveal answers for what it read.
+    ///
+    /// # Errors
+    /// A file over [`crate::held_value::MAX_OPENED`], which no answer carries.
+    pub fn of(read: crate::held_value::Revealed) -> Result<Self, crate::refusal::Refusal> {
+        use base64::Engine as _;
+        match read {
+            crate::held_value::Revealed::Value(shown) => Ok(Self::Shown {
+                value: shown.into_string(),
+            }),
+            crate::held_value::Revealed::File(opened) => Ok(Self::File {
+                name: opened.name,
+                media: opened.media,
+                bytes: base64::engine::general_purpose::STANDARD.encode(opened.bytes),
+            }),
+            crate::held_value::Revealed::TooLarge(size) => Err(crate::refusal::Refusal::new(
+                crate::refusal::Status::UnprocessableEntity,
+                format!(
+                    "the file is {size} bytes; a tap opens at most {} here, so open it where \
+                     it is kept",
+                    crate::held_value::MAX_OPENED
+                ),
+            )),
+            crate::held_value::Revealed::Gone => Ok(Self::Gone),
+        }
+    }
 }
 
 impl std::fmt::Debug for RevealPayload {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str(match self {
             Self::Shown { .. } => "Shown(a held value)",
+            Self::File { .. } => "File(a held file)",
             Self::Gone => "Gone",
             Self::NotKept => "NotKept",
         })

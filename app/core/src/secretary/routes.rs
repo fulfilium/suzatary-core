@@ -4,8 +4,6 @@
 //! [`tap`] is the one route that ends in an irreversible act; it takes a [`Tap`] only the gate can
 //! mint and carries an index, never a body, so what is sent is what was stored and shown.
 
-use crate::drive::Port as _;
-
 use crate::believed::Preview;
 use crate::capability::{Clock, Server, Turn};
 use crate::deployment::Deployment;
@@ -20,6 +18,8 @@ use crate::secretary::attachment_source::AttachmentSource;
 use crate::secretary::changes::{self, Changeset};
 use crate::secretary::decide;
 use crate::secretary::inbox::{self, ProposalId, Response};
+use crate::secretary::opening::Opening;
+use crate::secretary::read_holders::ReadHolders;
 use crate::secretary::readings::{self, Draw, Dress, Window};
 use crate::secretary::responded::{Done, Performed, Tried, Withdrawal};
 use crate::secretary::store::{ConversationId, Draft, Entry, Kind, Proposal, Stored, Title};
@@ -173,8 +173,14 @@ fn sources(
             written
                 .held()
                 .filter_map(|held| match held.reach() {
-                    held_value::Reach::Revealable(handle) => Some(handle.message().to_owned()),
-                    held_value::Reach::Withheld => None,
+                    held_value::Reach::Revealable(held_value::Handle::Value(place)) => {
+                        match place.holder() {
+                            held_value::Holder::Message(message) => Some(message.clone()),
+                            held_value::Holder::File(_) => None,
+                        }
+                    }
+                    held_value::Reach::Revealable(held_value::Handle::File(_))
+                    | held_value::Reach::Withheld => None,
                 })
                 .collect::<Vec<_>>()
         })
@@ -209,10 +215,19 @@ impl Draw for Drawn<'_> {
     }
 
     fn source(&self, handle: &held_value::Handle) -> String {
-        self.sources
-            .get(handle.message())
-            .cloned()
-            .unwrap_or_else(|| crate::secretary::readings::UNREAD_SOURCE.to_owned())
+        let file =
+            match handle {
+                held_value::Handle::Value(place) => match place.holder() {
+                    held_value::Holder::Message(message) => {
+                        return self.sources.get(message).cloned().unwrap_or_else(|| {
+                            crate::secretary::readings::UNREAD_SOURCE.to_owned()
+                        });
+                    }
+                    held_value::Holder::File(file) => file,
+                },
+                held_value::Handle::File(file) => file,
+            };
+        format!("from {}", file.source().describe())
     }
 
     fn reach(&self) -> &crate::connect::Reach {
@@ -1633,8 +1648,8 @@ fn trusted(
 }
 
 /// Send a draft with its held values read again and checked against the card, each from a
-/// message the proposal's conversation read, and its attachments fetched again and checked, or
-/// nothing.
+/// message or file the proposal's conversation read, and its attachments fetched again and
+/// checked, or nothing.
 fn mailed(
     caps: &Server<'_>,
     effectors: &Effectors<'_>,
@@ -1646,69 +1661,56 @@ fn mailed(
         Ok(written) => written,
         Err(malformed) => return not_sent(malformed.to_string()),
     };
-    let read = match written.held().next() {
-        None => crate::secretary::read_mail::ReadMail::default(),
-        Some(_) => match super::read(caps.secretary.conversations, id) {
-            Ok(stored) => crate::secretary::read_mail::ReadMail::of(&stored),
-            Err(refused) => return not_sent(refused.message().to_owned()),
-        },
+    let read = match super::read(caps.secretary.conversations, id) {
+        Ok(stored) => ReadHolders::of(&stored),
+        Err(refused) => return not_sent(refused.message().to_owned()),
     };
     if let Some(unread) = written.held().find(|held| match held.reach() {
-        held_value::Reach::Revealable(handle) => !read.holds(handle),
+        held_value::Reach::Revealable(handle) => !read.holds(&handle),
         held_value::Reach::Withheld => false,
     }) {
         return not_sent(format!(
-            "the {} comes from a message this conversation did not read",
+            "the {} comes from a message or file this conversation did not read",
             unread.described()
         ));
     }
-    let body = match held_value::fill(&written, effectors.reveal) {
+    let opening = Opening {
+        caps: &caps.secretary,
+        read: &read,
+    };
+    let holders = held_value::Holders {
+        mail: effectors.reveal,
+        files: &opening,
+    };
+    let body = match held_value::fill(&written, &holders, &draft.attachments) {
         Ok(body) => body,
         Err(unfilled) => return not_sent(unfilled.to_string()),
     };
-    match attached::checked(&draft.attachments, |one| fetch(caps, one)) {
+    match attached::checked(&draft.attachments, |one| fetch(caps, &read, one)) {
         Ok(parts) => effectors.post.send(draft, body, parts),
         Err(refused) => not_sent(refused.to_string()),
     }
 }
 
-/// One attachment's bytes as its source holds them now; a Drive file through the fence, so only
-/// while its folder is still allowed, a private upload from the owner's Drive, which this tap is
-/// the read of, and a repository's file as the box kept it when proposed, by its digest.
-fn fetch(caps: &Server<'_>, one: &attached::Attached) -> Result<Vec<u8>, String> {
-    match &one.source {
-        AttachmentSource::Mail { message, name } => caps
-            .secretary
-            .mail
-            .attachment(message, name)
-            .map(|file| file.content)
-            .map_err(|failed| failed.to_string()),
-        AttachmentSource::Drive { path } => caps
-            .secretary
-            .drive
-            .fenced()
-            .fetch(path)
-            .map_err(|failed| failed.to_string()),
-        AttachmentSource::Kept { id } => kept(caps, id),
-        AttachmentSource::Repo { .. } => kept(caps, &one.sha256),
-        AttachmentSource::Upload { id } => {
-            match caps
-                .secretary
-                .uploads
-                .get(id)
-                .map_err(|failed| failed.to_string())?
-                .ok_or_else(|| format!("no file {id} in the store"))?
-            {
-                crate::upload::Upload::Here { bytes, .. } => Ok(bytes),
-                crate::upload::Upload::Private { copy, .. } => caps
-                    .secretary
-                    .drive
-                    .port()
-                    .fetch(&copy.path)
-                    .map_err(|failed| failed.to_string()),
-            }
-        }
-    }
+/// One attachment's bytes as its source holds them now, a repository's file as the box kept it
+/// when proposed, by its digest.
+fn fetch(
+    caps: &Server<'_>,
+    read: &ReadHolders,
+    one: &attached::Attached,
+) -> Result<Vec<u8>, String> {
+    let source = match &one.source {
+        AttachmentSource::Repo { .. } => &AttachmentSource::Kept {
+            id: one.sha256.clone(),
+        },
+        source @ (AttachmentSource::Mail { .. }
+        | AttachmentSource::Drive { .. }
+        | AttachmentSource::Kept { .. }
+        | AttachmentSource::Upload { .. }) => source,
+    };
+    crate::secretary::opening::open(&caps.secretary, source, read)
+        .map(|opened| opened.bytes)
+        .map_err(|refused| refused.message().to_owned())
 }
 
 /// Forward a stored message as its card showed it, or nothing: only one the proposal's
@@ -1724,15 +1726,14 @@ fn forwarded(
     use crate::secretary::store::Style;
     let not_sent = |reason: String| Performed::Tried(Tried::NotSent { reason });
     let file = &forward.message.file;
-    match super::read(caps.secretary.conversations, id) {
-        Ok(stored) if crate::secretary::read_mail::ReadMail::of(&stored).reads(&file.id) => {}
-        Ok(_) => {
-            return not_sent(
-                "the message comes from no mail this conversation read; nothing was sent"
-                    .to_owned(),
-            );
-        }
+    let read = match super::read(caps.secretary.conversations, id) {
+        Ok(stored) => ReadHolders::of(&stored),
         Err(refused) => return not_sent(refused.message().to_owned()),
+    };
+    if !read.reads(&file.id) {
+        return not_sent(
+            "the message comes from no mail this conversation read; nothing was sent".to_owned(),
+        );
     }
     let original = match effectors.reveal.original(&file.id, file.size) {
         Err(failed) => return not_sent(format!("the message could not be read: {failed}")),
@@ -1747,7 +1748,15 @@ fn forwarded(
     let note = match held_value::Written::parse(&forward.note)
         .map_err(|malformed| malformed.to_string())
         .and_then(|written| {
-            held_value::fill(&written, effectors.reveal).map_err(|unfilled| unfilled.to_string())
+            let opening = Opening {
+                caps: &caps.secretary,
+                read: &read,
+            };
+            let holders = held_value::Holders {
+                mail: effectors.reveal,
+                files: &opening,
+            };
+            held_value::fill(&written, &holders, &[]).map_err(|unfilled| unfilled.to_string())
         }) {
         Ok(note) => note,
         Err(why) => return not_sent(why),
@@ -1761,15 +1770,6 @@ fn forwarded(
         Ok(parts) => effectors.post.send(&forward.draft(), body, parts),
         Err(changed) => not_sent(changed.to_string()),
     }
-}
-
-/// A file the box kept, by its digest.
-fn kept(caps: &Server<'_>, id: &crate::attachment::AttachmentId) -> Result<Vec<u8>, String> {
-    caps.secretary
-        .kept
-        .get(id)
-        .map_err(|failed| failed.to_string())?
-        .ok_or_else(|| format!("no file {id} in the store"))
 }
 
 /// Whether the instance file declares `account` as a Google account now, or why not.

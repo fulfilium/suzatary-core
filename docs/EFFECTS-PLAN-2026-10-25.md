@@ -364,14 +364,26 @@ reaches the inbox page, the triage queue, a watch or the sweep.
 ### 3.5 Held values
 
 A `Handle` names a Message-ID and a value's place in that message
-(`app/core/src/held_value.rs:25-33`, at most `MAX_MESSAGE` = 998 bytes,
-`:25`). An item's Message-ID is under 70 bytes. So the masker that every model
+(`held_value::Place`, the id at most `held_value::MAX_MESSAGE` = 998 bytes). An
+item's Message-ID is under 70 bytes. So the masker that every model
 read goes through, the reveal and the send fill work on items unchanged.
 Today a number in an item has no handle of its own, since no message names
-it, so a model reads it through `held_value::withheld` (`held_value.rs:4-5`,
-`:406`), which can mask
-it and cannot reveal it. As a message, it can be revealed and sent on a tap
+it, so a model reads it through `held_value::withheld`, which can mask it and
+cannot reveal it. As a message, it can be revealed and sent on a tap
 like a number in mail.
+
+Since held values stage 3 a handle names a holder, a message or a file
+(`held_value::Holder`), and a file is named by its source (`held_value::HeldFile`:
+a message's attachment, a Drive path or an upload). An
+upload's text is masked with handles that name the upload
+(`held:file:<FromUpload>.<n>`), and the upload itself is a held value of kind
+`file` (`held:file:<FromUpload>.file`). The reveal and the send read an upload
+by its id from the upload store, never from the maildir. So stage 5 needs no second reveal path for an
+upload, with one condition: the mail reader masks a message's text as that
+message's and withholds a placeholder of any other holder. An upload's item
+must therefore be masked as its upload (`Holder::File`), or its placeholders
+read as withheld. Stage 5 adds that, and a test that an upload item's
+placeholder still reveals.
 
 ### 3.6 Uploads, Drive, privacy and size
 
@@ -380,7 +392,7 @@ like a number in mail.
   set of uploads that a live turn names, which is the set `refresh(named)`
   reads today (`capability/upload_index.rs:11-21`). It delivers each one's
   words as the index holds them: a file on the box as its text layer, a
-  private one as its redacted note, and a file whose text names an identity
+  private one as its masked note, and a file whose text names an identity
   number as `FileRead::of` withholds it. An upload no live turn names any
   more is `gone`. `upload_read` keeps opening the bytes by id from the
   upload store, so the bytes never enter the maildir.
@@ -491,7 +503,7 @@ with notmuch left as it is.
 | code removed | the upload index (465), the plugin stores and their learning (≈ 170), the calendar's store reader, the `search` verb's merge of two backends (55) | the upload index's storage only. The merge stays and grows: two ranked lists, two query languages |
 | code added | the writer (≈ 150) and `Query::mail` (≈ 25) | an index crate, its schema, its updates and deletions, its query parser, its rebuild (≈ 400 or more) |
 | search quality | one query language, one ranking; `from:`, `date:`, `subject:`, phrases, prefixes and `thread:` all work on items | fields can be typed (an event's start as a real range), but every search is two searches merged by hand |
-| held values | unchanged: a handle names a Message-ID | a second reveal path for a second kind of handle |
+| held values | unchanged: a handle names a Message-ID or a file's source (held values stage 3) | a second reveal path for a second kind of handle |
 | failure modes | one lock, one rebuild, one place to be wrong; mail paths must exclude `sources/` | two indexes that can disagree; two rebuilds; a crate's on-disk format to migrate |
 | simpler | the phone's search shows everything with no new route; one masker; one reader | mail-only paths need no care |
 | harder | structured queries over items (a week) parse literals rather than query fields | everything that reads both |
@@ -628,7 +640,8 @@ production lines before the merge of 2.1.28.
   callers (§3.4), and the uploads source with a declared schema of its own.
 - **Laws it adds:** an item tagged `inbox` never reaches the inbox page,
   the triage queue, a watch or the sweep (§3.4). A guard test holds the
-  source root disjoint from every account's root (§3.6).
+  source root disjoint from every account's root (§3.6). An upload item's
+  placeholder still reveals (§3.5).
 - **Removes:** the upload index whole: `app/io/src/upload_index.rs` (130),
   `capability::UploadIndex` (22), `secretary::file_search` (121),
   `secretary::file_query` (145), `secretary::upload_standing` (47), and the

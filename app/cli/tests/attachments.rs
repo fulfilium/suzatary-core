@@ -13,6 +13,38 @@ use suzatary_core::mail::AttachmentMeta;
 
 const PDF: &[u8] = b"%PDF-1.7\n1 0 obj << /Type /Catalog >> endobj\n%%EOF\n";
 
+/// A mailbox holding message `id` under its own notmuch id, which `attachments` names a file by.
+fn holding(id: &str) -> FakeMailbox {
+    FakeMailbox::new().with_message(
+        id,
+        suzatary_core::mail::MailMessage {
+            row: suzatary_core::mail::MailRow {
+                hash: "a1b2c3d4e5f6a1b2".to_owned(),
+                id: id.to_owned(),
+                sender: "hr@example.test".to_owned(),
+                subject: "Attached".to_owned(),
+                date: None,
+                container: "inbox".to_owned(),
+                account: "ada@example.com".to_owned(),
+                disposition: suzatary_core::mail::Disposed::Undecided,
+            },
+            thread: "000000000000c3fd".to_owned(),
+            headers: Vec::new(),
+            body: "See the attachment.".to_owned(),
+            truncated: false,
+            links: Vec::new(),
+        },
+    )
+}
+
+/// The source of attachment `name` on message `id`, as `attachments` names it.
+fn mail(id: &str, name: &str) -> suzatary_core::held_value::HeldFile {
+    suzatary_core::held_value::HeldFile::Mail {
+        message: id.to_owned(),
+        name: name.to_owned(),
+    }
+}
+
 fn ada() -> suzatary_core::capability::Login {
     common::login("ada@example.com")
 }
@@ -83,7 +115,7 @@ fn handed(model: &FakeModel) -> Vec<suzatary_core::enclosed::Enclosed> {
 /// it for a model that cannot read one.
 #[test]
 fn attachments_lists_then_reads_a_named_one() {
-    let mailbox = FakeMailbox::new()
+    let mailbox = holding("offer-msg")
         .with_attachments(
             "offer-msg",
             vec![
@@ -103,6 +135,8 @@ fn attachments_lists_then_reads_a_named_one() {
             "offer-msg",
             "offer.pdf",
             FileRead::of(
+                &mail("offer-msg", "offer.pdf"),
+                "offer.pdf",
                 "application/pdf",
                 PDF.to_vec(),
                 Some("Base salary: USD 70,000 per year.\u{c}"),
@@ -179,7 +213,7 @@ fn attachments_lists_then_reads_a_named_one() {
 #[test]
 fn an_image_is_handed_over_and_an_unsupported_attachment_is_refused_naming_the_type() {
     let jpeg = vec![0xFF, 0xD8, 0xFF, 0xE0, 0, 16];
-    let mailbox = FakeMailbox::new()
+    let mailbox = holding("photo-msg")
         .with_attachments(
             "photo-msg",
             vec![AttachmentMeta {
@@ -191,12 +225,20 @@ fn an_image_is_handed_over_and_an_unsupported_attachment_is_refused_naming_the_t
         .with_attachment_read(
             "photo-msg",
             "scan.jpg",
-            FileRead::of("image/jpeg", jpeg.clone(), None),
+            FileRead::of(
+                &mail("photo-msg", "scan.jpg"),
+                "scan.jpg",
+                "image/jpeg",
+                jpeg.clone(),
+                None,
+            ),
         )
         .with_attachment_read(
             "photo-msg",
             "form.docx",
             FileRead::of(
+                &mail("photo-msg", "form.docx"),
+                "form.docx",
                 "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
                 b"PK\x03\x04".to_vec(),
                 None,
@@ -240,8 +282,8 @@ fn an_image_is_handed_over_and_an_unsupported_attachment_is_refused_naming_the_t
 /// handed over at all, and its text passes through the same `redact` a Drive document does
 /// before the model or the transcript sees it.
 #[test]
-fn an_ssn_in_an_attachment_arrives_redacted() {
-    let mailbox = FakeMailbox::new()
+fn an_ssn_in_an_attachment_arrives_as_placeholders_naming_the_file() {
+    let mailbox = holding("w2-msg")
         .with_attachments(
             "w2-msg",
             vec![AttachmentMeta {
@@ -254,6 +296,8 @@ fn an_ssn_in_an_attachment_arrives_redacted() {
             "w2-msg",
             "w2.pdf",
             FileRead::of(
+                &mail("w2-msg", "w2.pdf"),
+                "w2.pdf",
                 "application/pdf",
                 PDF.to_vec(),
                 Some("Employee SSN: 123-45-6789. Wages: 70,000. Receipt IOE0912345678.\u{c}"),
@@ -275,7 +319,14 @@ fn an_ssn_in_an_attachment_arrives_redacted() {
     let calls = answers(&payload, "attachments");
     let (read, refused) = calls.first().expect("one read");
     assert!(!refused, "{read}");
-    assert!(read.contains("SSN: [redacted]"), "{read}");
+    assert!(
+        read.contains("SSN: [SSN ending 6789 · tap to show · held:file:"),
+        "{read}"
+    );
+    assert!(
+        read.contains("[file w2.pdf, under 1 KB · tap to show · held:file:"),
+        "the file's own placeholder: {read}"
+    );
     assert!(
         read.contains("70,000") && read.contains("IOE0912345678"),
         "{read}"

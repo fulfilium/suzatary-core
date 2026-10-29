@@ -106,6 +106,8 @@ impl Nothing {
             uploads: &Nothing,
             upload_index: &Nothing,
             kept: &Nothing,
+            pdf: &Nothing,
+            tapped: &Nothing,
             configuration: &Nothing,
             watches: &Nothing,
         }
@@ -747,5 +749,11 @@ impl crate::secretary::google_sign_in::Consents for Nothing {
         crate::secretary::responded::Performed::Tried(crate::secretary::responded::Tried::NotSent {
             reason: "nothing opens a sign-in with Google here".to_owned(),
         })
+    }
+}
+
+impl crate::capability::PdfText for Nothing {
+    fn text(&self, _: &[u8]) -> Result<String, String> {
+        Err("this test reads no PDF".to_owned())
     }
 }

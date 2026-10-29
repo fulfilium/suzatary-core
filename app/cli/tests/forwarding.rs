@@ -8,7 +8,7 @@ use std::sync::Arc;
 
 use common::{FakeMailbox, FakeModel, Fakes};
 use suzatary_core::capability::MailError;
-use suzatary_core::held_value::{Handle, Reopened, Reveal, Revealed};
+use suzatary_core::held_value::{Handle, Reopened, Reveal, Shown};
 use suzatary_core::mail::{MailMessage, MailRow};
 use suzatary_core::secretary::store::Style;
 
@@ -89,8 +89,8 @@ fn mailbox() -> FakeMailbox {
 struct Originals(Vec<u8>);
 
 impl Reveal for Originals {
-    fn reveal(&self, _: &Handle) -> Result<Revealed, MailError> {
-        Ok(Revealed::Gone)
+    fn value(&self, _: &str, _: u16) -> Result<Option<Shown>, MailError> {
+        Ok(None)
     }
 
     fn original(&self, message: &str, size: u64) -> Result<Reopened, MailError> {

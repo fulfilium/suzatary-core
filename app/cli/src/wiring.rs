@@ -437,6 +437,11 @@ pub struct Opened {
     pub(crate) uploads: suzatary_io::attachments::AttachmentStore,
     pub(crate) upload_index: suzatary_io::upload_index::UploadIndexFiles,
     pub(crate) kept: suzatary_io::blobs::Blobs,
+    pub(crate) pdf: suzatary_io::pdftotext::Pdftotext,
+    pub(crate) tapped: suzatary_io::docs::Docs<
+        suzatary_core::held_value::HeldFile,
+        suzatary_core::secretary::attached::Attached,
+    >,
     /// The model settings the instance file declares, read as a card is filed.
     pub(crate) configuration: crate::instance::InstanceEdits,
     pub(crate) watches: suzatary_io::watches::Watches,
@@ -477,6 +482,8 @@ impl Opened {
             uploads: chosen::upload_store(instance),
             upload_index: chosen::upload_index(instance),
             kept: chosen::file_store(instance),
+            pdf: suzatary_io::pdftotext::Pdftotext::new(instance.code()),
+            tapped: suzatary_io::tapped::beside(&chosen::file_store(instance)),
             configuration: crate::instance::InstanceEdits::new(instance.path.clone()),
             watches: suzatary_io::watches::Watches::open(instance.local.watches()),
             repos: chosen::mirrors(instance),
@@ -529,6 +536,8 @@ impl Opened {
             uploads: &self.uploads,
             upload_index: &self.upload_index,
             kept: &self.kept,
+            pdf: &self.pdf,
+            tapped: &self.tapped,
             configuration: &self.configuration,
             watches: &self.watches,
         }

@@ -246,7 +246,7 @@ export function proposalCard(id: string, proposal: ProposalRow, frame: ProposalF
       proposal.sources.map((text) => source(text, frame.titles)),
     ),
     card.fields.map((shown) => field(shown.label, shown.value)),
-    card.body === "" ? null : heldvalue.within(el("pre", { class: "proposalbody" }, card.body), revealHeld),
+    card.body === "" ? null : heldvalue.within(el("pre", { class: "proposalbody" }, card.body), revealHeld(id)),
     card.files.length === 0 ? null : el("ul", { class: "proposalfiles" }, card.files.map(fileRow)),
     // A changeset's rows, confirmed whole.
     card.rows.length === 0 ? null : el("div", { class: "proposedchangeset" }, ...card.rows.map(row => objectRow(row, since(proposal.revises, row)))),

@@ -50,6 +50,12 @@ impl Pdftotext {
     }
 }
 
+impl suzatary_core::capability::PdfText for Pdftotext {
+    fn text(&self, pdf: &[u8]) -> Result<String, String> {
+        Pdftotext::text(self, pdf)
+    }
+}
+
 /// A one-page PDF that says `text`, which must hold no `(`, `)` or `\`.
 #[cfg(test)]
 #[must_use]

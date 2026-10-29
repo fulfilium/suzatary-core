@@ -15,9 +15,10 @@ A held value has four parts:
   never in a log line and never in a public tree.
 - **A handle**, which names it. The handle is not the value.
 - **A kind**: SSN, ITIN, TIN, EIN, verification code, card, account, routing
-  number or IBAN. Passport and file come with the stages below.
+  number, IBAN or file (stage 3). Passport comes with stage 4.
 - **A hint**: the last four digits, which a person needs to tell two values
-  apart. A code has no hint, since its last four digits are most of it.
+  apart. A code has no hint, since its last four digits are most of it. A
+  file's hint is its name and size.
 
 The box offers three uses of a held value, each on the owner's tap:
 
@@ -120,7 +121,7 @@ number, and the box finds the message.
 **What stage 1 did not cover:**
 
 - **Attachments.** A text attachment's numbers still arrive as `[redacted]`
-  (`file_read`), and a PDF naming one is still withheld. Both guards are kept.
+  (`file_read`), and a PDF naming one is still withheld. Both guards are kept; stage 3 makes them placeholders.
 - **Patterns.** The patterns detect SSNs and ITINs written out, and SSN, TIN,
   ITIN and EIN numbers of nine digits beside their label. They miss
   verification and two-factor codes, bank and card account numbers, routing
@@ -221,14 +222,103 @@ message whole, so a held value in it leaves as the message holds it:
   spellings, only the send holds the number, and two attachments of one name
   are both sent.
 
-## Stage 3: the attachments and the PDF hold fold in
+## Stage 3 (built): files are held values
 
-A file the box holds back today becomes a held value of kind `file`, under
-the same handle shape (`held:<store>.<id>`): an upload kept private
-(`vault`), or a PDF that `FileRead` withholds for naming a number. Its hint is
-the file's name and size. REVEAL opens it on the owner's device, and SEND
-attaches it on the tap. `FileRead`'s `[redacted]` text becomes placeholders
-whose handles name the file and the place in its text layer.
+A file the box holds back is a held value of kind `file`. That covers a PDF
+that `FileRead` withholds because its text names a number, and an upload the
+owner kept private (`vault`). It adds one kind to the same mechanism; it does
+not add a second one.
+
+**The holder.** A value is held by a message or by a file
+(`held_value::Holder`). A file is a `held_value::HeldFile`: a message's
+attachment, a Drive path or an upload, the three sources a reader withholds a
+file from. It is never a kept copy or a repository file, so a handle cannot
+name one. One function reads a file from any source the box names,
+`secretary::opening::open`. A proposal's record, the tap's attachment send and
+the reveal all call it.
+
+**The handle** keeps its shape, `held:<holder>.<place>`:
+
+- `held:<Message-ID in base64url>.<n>` names the `n`th value of a message, as
+  before;
+- `held:file:<the file's source, printed, in base64url>.<n>` names the `n`th
+  value of a file's text (a PDF's text layer or a text file's words);
+- `held:file:<…>.file` names the file itself.
+
+A colon is no base64url character, so no message's handle reads as a file's.
+A number's placeholder carries a value's handle (`Place`) and a file's
+placeholder carries a `HeldFile`, so a placeholder that crosses them is
+refused when it is read (`Written::parse`). A handle carries its file's source
+in base64, which no masker or log scan reads, so a file whose source names a
+number (a path such as `SSN 000-12-3456.pdf`) gets no handle at all: its
+placeholder and the numbers in its text are `withheld` (`Holder::named`).
+`held_file.rs` pins the spelling of each of the three sources, since stored
+notes, turns and drafts carry them.
+
+**The placeholder** of a file is `[file w2.pdf, 48.2 KB · tap to show ·
+held:file:….file]`. Its hint is the file's name and size. The name is shown
+with every number in it removed, and the size is "under 1 KB" or in tenths of
+a KB or MB, so its digits never read as a number. The Rust spells it
+(`Placeholder::print`), `web/src/view/heldvalue.ts` reads it, and both tests
+pin one spelling character for character.
+
+**What a model reads.** `FileRead::of` takes the file's source and name. A
+text file's words and a withheld PDF's text layer are masked
+(`held_value::Masked`): each number is a placeholder whose handle names the
+file and the number's place in its text, and a placeholder of another holder
+is withheld, as in mail text. A file's whole text is masked and then cut at
+`MAX_CHARS`, as mail is, so a number the cut falls inside is found whole, and
+a PDF is withheld when any of its text names a number. A withheld PDF
+is `FileRead::Withheld`, which carries the file's own placeholder; the
+reader's answer gives it as `held`, beside the text. The answer also names the
+file's `source`, which `secretary::read_holders::ReadHolders` reads as "this
+conversation read this file". A private upload's note keeps its text masked
+the same way.
+
+**REVEAL.** `POST /api/held/reveal` takes every handle and the conversation the
+placeholder is drawn in. A message's number reveals as before, from any page.
+A file, or a number in one, reveals only when that conversation read the file
+(`ReadHolders`), because a model writes the handle and could name any file.
+The send applies the same rule, so the reveal uses it rather than a signature
+on the handle, which would add a key and a second rule. A number in
+a file is read again from the file's bytes and its text layer, through the
+record's `PdfText`. A file answers `{"type":"File","name":…,"media":…,
+"bytes":<base64>}`, and the page turns it into a link named by `name`, never by
+the model's text; a file over 20 MB is refused. A Drive file the owner tapped
+Read on is outside every allowed folder: a tap reads it through the Drive port,
+because the conversation read it. A file that is gone answers `Gone`. The route keeps only
+`{"type":"NotKept"}` for a replay, as for a number.
+
+**SEND.** The secretary copies the file's placeholder into a `propose_email`
+body. The verb checks that this conversation read the file, records the file
+as one of the draft's attachments (its source, name, type, size and digest),
+and refuses a placeholder that does not print as that record does. A model's
+call reads nothing past the fence: a file the owner tapped Read on outside the
+allowed folders is recorded from what that tap read (`suzatary_io::tapped`,
+box-local, never told to a model, since a model could test guesses of a
+number against a digest), as a private upload is recorded from its note. The
+verb's answer names no digest. The card
+lists the file and names it as a held value. The tap's `fill` checks the
+placeholder against the record again and writes the record's name where the
+placeholder stood; the attachment send reads the bytes again and checks their
+digest. A private upload is recorded without a read, so the tap that sends it
+is its first read since it was kept.
+
+**The boundary**, pinned by `app/cli/tests/held.rs`
+(`a_trusted_device_opens_a_held_file_its_conversation_read_and_the_box_keeps_none_of_it`
+and `a_held_file_reaches_only_the_wire_and_only_on_the_owners_tap`) and
+`app/cli/tests/drive.rs`
+(`a_tapped_document_s_number_reveals_and_sends_from_its_conversation`): the
+file's bytes and the number in its text reach no prompt, no stored line, no
+kept answer and no request record; an untrusted device, a file the
+conversation never read, a kept or repository source and a file handle with
+no conversation are refused; and only the tap sends the file. A draft that
+names a file this conversation did not read, a withheld file, or a file under
+another name is refused.
+
+**Not changed.** The upload route still refuses a PDF that names a number
+until the owner keeps it private, and a private file's note written before
+this stage keeps its `[redacted]` text, which reads as text with no handles.
 
 ## Stage 4: FIND and passports
 

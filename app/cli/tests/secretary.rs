@@ -1852,44 +1852,6 @@ fn a_photo_is_kept_served_as_an_image_and_named_by_a_turn() {
     assert_eq!(common::status(&said), 202, "a photo alone is a turn");
 }
 
-/// A one-page PDF that says `text`, which must hold no `(`, `)` or `\`.
-fn pdf_saying(text: &str) -> Vec<u8> {
-    let content = format!("BT /F1 24 Tf 20 100 Td ({text}) Tj ET");
-    let objects = [
-        "<< /Type /Catalog /Pages 2 0 R >>".to_owned(),
-        "<< /Type /Pages /Kids [3 0 R] /Count 1 >>".to_owned(),
-        "<< /Type /Page /Parent 2 0 R /Resources << /Font << /F1 4 0 R >> >> \
-         /MediaBox [0 0 200 200] /Contents 5 0 R >>"
-            .to_owned(),
-        "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>".to_owned(),
-        format!(
-            "<< /Length {} >>\nstream\n{content}\nendstream",
-            content.len()
-        ),
-    ];
-    let mut out = b"%PDF-1.4\n".to_vec();
-    let mut offsets = Vec::new();
-    for (index, object) in objects.iter().enumerate() {
-        offsets.push(out.len());
-        out.extend_from_slice(format!("{} 0 obj\n{object}\nendobj\n", index + 1).as_bytes());
-    }
-    let xref = out.len();
-    out.extend_from_slice(
-        format!("xref\n0 {}\n0000000000 65535 f \n", objects.len() + 1).as_bytes(),
-    );
-    for offset in &offsets {
-        out.extend_from_slice(format!("{offset:010} 00000 n \n").as_bytes());
-    }
-    out.extend_from_slice(
-        format!(
-            "trailer\n<< /Size {} /Root 1 0 R >>\nstartxref\n{xref}\n%%EOF",
-            objects.len() + 1
-        )
-        .as_bytes(),
-    );
-    out
-}
-
 /// A PDF naming an SSN is held for the owner, then kept in his Drive on his say: the first
 /// upload keeps nothing and says why; the second, marked private, goes to the vault and leaves
 /// only a note on the box, which a turn names and the file route will not serve.
@@ -1901,7 +1863,7 @@ fn a_pdf_naming_an_ssn_is_held_then_kept_privately_in_the_drive() {
     let deployment = common::deployment([ada()], [(ada(), common::actor("ada"))]);
     let common::Running { base, vault, .. } =
         common::Server::new(Arc::new(fakes), deployment, Vec::new()).start();
-    let w2 = pdf_saying("SSN 123-45-6789 wages 70000");
+    let w2 = common::pdf_saying("SSN 123-45-6789 wages 70000");
     let encoded = base64::engine::general_purpose::STANDARD.encode(&w2);
 
     let mut held = common::act(
@@ -2040,7 +2002,7 @@ fn a_file_sent_in_a_chat_is_found_by_search_and_a_held_one_only_once_released() 
         r#"{"say": "Kept the form."}"#,
         r#"{"say": "Looking again.", "calls": [
             {"verb": "search", "args": {"query": "SSN"}},
-            {"verb": "search", "args": {"query": "6789"}}
+            {"verb": "search", "args": {"query": "123-45-6789"}}
         ]}"#,
         r#"{"say": "The form is in A lease."}"#,
     ]);
@@ -2049,9 +2011,14 @@ fn a_file_sent_in_a_chat_is_found_by_search_and_a_held_one_only_once_released() 
     let common::Running { base, .. } =
         common::Server::new(Arc::new(fakes), deployment, Vec::new()).start();
 
-    let lease = uploaded(&base, &pdf_saying("Lease for unit 4"), "lease.pdf", false);
+    let lease = uploaded(
+        &base,
+        &common::pdf_saying("Lease for unit 4"),
+        "lease.pdf",
+        false,
+    );
     let lease = lease["file"]["id"].as_str().expect("an id").to_owned();
-    let w2 = pdf_saying("SSN 123-45-6789");
+    let w2 = common::pdf_saying("SSN 123-45-6789");
     assert_eq!(uploaded(&base, &w2, "w2.pdf", false)["kind"], "sensitive");
 
     let sent_in = opened(&base, "A lease");
@@ -2143,7 +2110,12 @@ fn erasing_the_turn_that_sent_a_file_takes_it_out_of_the_index() {
     let deployment = common::deployment([ada()], [(ada(), common::actor("ada"))]);
     let common::Running { base, .. } =
         common::Server::new(Arc::clone(&fakes), deployment, Vec::new()).start();
-    let lease = uploaded(&base, &pdf_saying("Lease for unit 4"), "lease.pdf", false);
+    let lease = uploaded(
+        &base,
+        &common::pdf_saying("Lease for unit 4"),
+        "lease.pdf",
+        false,
+    );
     let lease = lease["file"]["id"].as_str().expect("an id").to_owned();
     let sent_in = opened(&base, "A lease");
     sending(
@@ -2203,7 +2175,12 @@ fn a_search_answer_is_stored_within_the_cap_and_keeps_its_files() {
     let deployment = common::deployment([ada()], [(ada(), common::actor("ada"))]);
     let common::Running { base, .. } =
         common::Server::new(Arc::new(fakes), deployment, Vec::new()).start();
-    let lease = uploaded(&base, &pdf_saying("Lease for unit 4"), "lease.pdf", false);
+    let lease = uploaded(
+        &base,
+        &common::pdf_saying("Lease for unit 4"),
+        "lease.pdf",
+        false,
+    );
     let lease = lease["file"]["id"].as_str().expect("an id").to_owned();
     let id = opened(&base, "A lease");
     sending(&base, &id, "here is the lease", &[(&lease, "lease.pdf")]);
@@ -2235,7 +2212,7 @@ fn a_search_answer_is_stored_within_the_cap_and_keeps_its_files() {
 /// turn sent.
 #[test]
 fn upload_read_opens_a_file_a_turn_sent_and_no_other() {
-    let lease_pdf = pdf_saying("Lease for unit 4");
+    let lease_pdf = common::pdf_saying("Lease for unit 4");
     let never = suzatary_core::attachment::AttachmentId::of(b"never sent");
     let model = FakeModel::saying_owned([
         r#"{"say": "Kept."}"#.to_owned(),

@@ -34,6 +34,7 @@ pub mod for_model;
 pub mod gate;
 pub mod google;
 pub mod health;
+pub mod held_file;
 pub mod held_value;
 pub mod leak;
 pub mod mail;

@@ -10,6 +10,8 @@ use suzatary_core::attachment::AttachmentId;
 use suzatary_core::capability::{IndexError, UploadIndex};
 use suzatary_core::enclosed::Enclosure;
 use suzatary_core::file_read::{FileRead, Withheld};
+use suzatary_core::held_value::HeldFile;
+use suzatary_core::held_value::{Masked, Placeholder};
 use suzatary_core::secretary::upload_standing::UploadStanding;
 use suzatary_core::store::{Doc as _, Gets as _, StoreError};
 
@@ -82,7 +84,7 @@ impl UploadIndexFiles {
             Some(entry) if entry.place == place => return Ok(UploadStanding::Indexed(entry.text)),
             Some(_) | None => {}
         }
-        let standing = UploadStanding::of(self.store.get(id)?, |pdf| self.store.layer(pdf))
+        let standing = UploadStanding::of(id, self.store.get(id)?, |pdf| self.store.layer(pdf))
             .map_err(|why| IndexError::Unread {
                 id: id.clone(),
                 why,
@@ -122,6 +124,7 @@ impl UploadIndex for UploadIndexFiles {
             id: id.clone(),
             why,
         };
+        let source = HeldFile::Upload { id: id.clone() };
         Ok(match self.store.attachment(id)? {
             None => None,
             Some(Stored::Here { attachment, bytes }) => {
@@ -130,16 +133,21 @@ impl UploadIndex for UploadIndexFiles {
                     Enclosure::Image(_) => None,
                 };
                 Some(FileRead::of(
+                    &source,
+                    &attachment.called(),
                     attachment.media_type.as_str(),
                     bytes,
                     layer.as_deref(),
                 ))
             }
             // The owner kept it private because its text names a held number.
-            Some(Stored::Private { copy, .. }) => Some(FileRead::Text {
-                text: suzatary_core::redact::redact(&copy.text),
+            Some(Stored::Private { attachment, copy }) => Some(FileRead::Withheld {
+                held: Placeholder::file(&source, &attachment.called(), copy.size),
+                text: Masked::of(&source, &copy.text),
                 truncated: false,
-                withheld: Some(Withheld::HeldNumber),
+                why: Withheld::HeldNumber,
+                size: copy.size,
+                digest: id.clone(),
             }),
         })
     }
@@ -217,7 +225,8 @@ mod tests {
     }
 
     /// A PDF naming a held number that reached the store is held, with no entry, until the
-    /// owner keeps it private; then it is indexed by its redacted text.
+    /// owner keeps it private; then it is indexed by its masked text, each number a placeholder
+    /// naming the upload.
     #[test]
     fn a_held_pdf_is_not_indexed_until_it_is_kept_private() {
         let Some((dir, store, index)) = index() else {
@@ -244,15 +253,29 @@ mod tests {
             .expect("kept private");
         let released = index.refresh(&one(&id)).expect("refreshed");
         let words = text(released.get(&id));
-        assert!(words.contains("SSN [redacted]"), "{words}");
-        assert!(!words.contains("6789"), "{words}");
+        assert!(
+            words.contains("SSN [SSN ending 6789 · tap to show · held:file:"),
+            "{words}"
+        );
+        assert!(!words.contains("123-45-6789"), "{words}");
         match index.open(&id).expect("opened") {
-            Some(FileRead::Text {
+            Some(FileRead::Withheld {
+                held,
                 text,
-                withheld: Some(Withheld::HeldNumber),
+                why: Withheld::HeldNumber,
                 ..
-            }) => assert!(!text.as_str().contains("6789")),
-            other => panic!("a private file is its redacted text: {other:?}"),
+            }) => {
+                assert!(!text.as_str().contains("123-45-6789"));
+                assert_eq!(
+                    held,
+                    Placeholder::file(
+                        &HeldFile::Upload { id: id.clone() },
+                        "w2.pdf",
+                        w2.len() as u64
+                    )
+                );
+            }
+            other => panic!("a private file is its placeholder and masked text: {other:?}"),
         }
     }
 

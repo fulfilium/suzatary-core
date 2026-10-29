@@ -7,10 +7,14 @@ use crate::attachment::AttachmentId;
 use crate::capability::Turn;
 use crate::enclosed::{Enclosed, Enclosure};
 use crate::file_read::FileRead;
+use crate::held_value::HeldFile;
 use crate::refusal::Refusal;
 use crate::secretary::memory::FactId;
 use crate::secretary::outcome::Outcome;
 use crate::secretary::tool_name::ToolName;
+
+/// The field of a file reading that names the file's source.
+pub const SOURCE: &str = "source";
 
 /// One verb's answer.
 #[derive(Debug, Clone, PartialEq)]
@@ -43,17 +47,25 @@ impl VerbAnswer {
         }))
     }
 
-    /// A file read for the model, answered: `head` names what was read, and the file itself
-    /// rides on the answer, kept through `keep`; its text answers when the file is withheld.
+    /// A file read for the model, answered: `head` names what was read and gains the file's
+    /// `source`, by which a draft's held values are checked against what this conversation read.
+    /// The file itself rides on the answer, kept through `keep`; a withheld file answers with its
+    /// placeholder and its text.
     ///
     /// # Errors
     /// [`Refusal::internal`] when the file cannot be kept.
     pub fn reading(
         mut head: Map<String, Value>,
+        source: &HeldFile,
         name: &str,
         read: FileRead,
         keep: impl FnOnce(&[u8]) -> Result<AttachmentId, String>,
     ) -> Result<Self, Refusal> {
+        head.insert(
+            SOURCE.to_owned(),
+            serde_json::to_value(source.source())
+                .map_err(|failed| Refusal::internal(failed.to_string()))?,
+        );
         let files = match read {
             FileRead::File(readable) => {
                 let id = keep(readable.bytes()).map_err(Refusal::internal)?;
@@ -78,22 +90,32 @@ impl VerbAnswer {
                     text: readable.text().as_str().to_owned(),
                 }]
             }
-            FileRead::Text {
-                text,
-                truncated,
-                withheld,
-            } => {
+            FileRead::Text { text, truncated } => {
                 head.insert("text".to_owned(), Value::from(text.into_string()));
                 head.insert("truncated".to_owned(), Value::from(truncated));
-                if let Some(why) = withheld {
-                    head.insert(
-                        "withheld".to_owned(),
-                        Value::from(format!(
-                            "{why}, so the file itself is not handed to you; its text follows, \
-                             any identity number redacted"
-                        )),
-                    );
-                }
+                Vec::new()
+            }
+            // Its size and digest stay on the box: a model could test guesses of a number against them.
+            FileRead::Withheld {
+                held,
+                text,
+                truncated,
+                why,
+                size: _,
+                digest: _,
+            } => {
+                head.insert("held".to_owned(), Value::from(held.print()));
+                head.insert("text".to_owned(), Value::from(text.into_string()));
+                head.insert("truncated".to_owned(), Value::from(truncated));
+                head.insert(
+                    "withheld".to_owned(),
+                    Value::from(format!(
+                        "{why}, so the file itself is not handed to you. Its text follows, each \
+                         held number a placeholder. `held` is the file's own placeholder: copy \
+                         it whole into a propose_email body to send the file, which the owner's \
+                         tap attaches"
+                    )),
+                );
                 Vec::new()
             }
             FileRead::Unsupported { what } => {

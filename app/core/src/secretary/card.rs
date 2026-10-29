@@ -596,7 +596,7 @@ fn document(name: &str, folder: &str, size: &str, sentence: &str) -> Card {
                 done: format!("reading {name}"),
                 asks: Asks::Confirm {
                     question: format!(
-                        "Allow {name} once? It is read into this conversation, with any SSN, ITIN, TIN or EIN, code, or card or bank number replaced by [redacted], and the copy read can go on an email you tap."
+                        "Allow {name} once? It is read into this conversation, with any SSN, ITIN, TIN or EIN, code, or card or bank number replaced by a placeholder that names its kind and last four digits, and the copy read can go on an email you tap."
                     ),
                     yes: "Yes, allow once".to_owned(),
                 },
@@ -1122,7 +1122,7 @@ mod tests {
         );
         assert_eq!(card.answers[0].verb, "read");
         assert_eq!(card.answers[0].label, "Allow once");
-        assert!(asked(&card.answers[0]).contains("[redacted]"));
+        assert!(asked(&card.answers[0]).contains("a placeholder that names its kind"));
         let always = &card.answers[1];
         assert!(widens(always));
         assert_eq!(always.label, "Always allow this folder");

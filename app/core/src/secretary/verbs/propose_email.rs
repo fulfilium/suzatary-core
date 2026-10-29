@@ -1,16 +1,17 @@
-use crate::drive::Port as _;
 use schemars::JsonSchema;
 use serde::Deserialize;
 use serde_json::{Value, json};
 
 use crate::capability::{Secretary, Turn};
-use crate::enclosed::Enclosure;
+use crate::held_value::HeldFile;
 use crate::refusal::Refusal;
 use crate::secretary;
 use crate::secretary::attached::{self, Attached};
 use crate::secretary::attachment_source::AttachmentSource;
-use crate::secretary::store::{ConversationId, Draft, Proposal};
-use crate::secretary::verbs::{FilingArgs, drive_refusal, kept, mail_refusal, refused_by};
+use crate::secretary::opening;
+use crate::secretary::read_holders::ReadHolders;
+use crate::secretary::store::{Draft, Proposal, Stored};
+use crate::secretary::verbs::{FilingArgs, kept, mail_refusal, refused_by};
 use crate::secretary::{Call, SecretarySurface};
 use crate::upload::Upload;
 use crate::verb::Verb;
@@ -47,17 +48,17 @@ pub(super) fn addresses(list: &str, field: &str) -> Result<Vec<String>, Refusal>
         .collect()
 }
 
-/// What the body's held values are, as the card names them. Refused: a placeholder in the
-/// subject, since the tap writes values into the body alone; a placeholder whose handle does not
-/// decode; a code; a withheld value; and a value from a message this conversation did not read,
-/// so mail the model read cannot have another message's value sent.
+/// The body's held values as the card names them, and the held files they name, which the draft
+/// attaches. Refused: a placeholder in the subject, since the tap writes values into the body
+/// alone; a placeholder whose handle does not decode; a code; a withheld value or file; and a
+/// value or file from a message or file this conversation did not read, so mail or a document
+/// the model read cannot have another holder's value or another file sent.
 fn held_in(
-    caps: &Secretary<'_>,
-    conversation: &ConversationId,
+    read: &ReadHolders,
     subject: &str,
     body: &str,
-) -> Result<Vec<String>, Refusal> {
-    use crate::held_value::{Reach, Written};
+) -> Result<(Vec<String>, Vec<HeldFile>), Refusal> {
+    use crate::held_value::{Handle, Placeholder, Reach, Written};
     use crate::redact::Kind;
     let written = |text: &str| {
         Written::parse(text).map_err(|malformed| Refusal::bad_request(malformed.to_string()))
@@ -71,45 +72,96 @@ fn held_in(
     }
     let body = written(body)?;
     if body.held().next().is_none() {
-        return Ok(Vec::new());
+        return Ok((Vec::new(), Vec::new()));
     }
-    let read = crate::secretary::read_mail::ReadMail::of(&secretary::read(
-        caps.conversations,
-        conversation,
-    )?);
-    body.held()
-        .map(|placeholder| match (placeholder.kind(), placeholder.reach()) {
-            (Kind::Code, _) => Err(Refusal::bad_request(
-                "a verification code is never sent: the owner types it where it is asked for",
-            )),
-            (_, Reach::Withheld) => Err(Refusal::bad_request(format!(
-                "the body names the {} as withheld, which the box cannot read again; only a \
-                 value written `· tap to show · held:…` can be sent",
-                placeholder.described()
-            ))),
-            (_, Reach::Revealable(handle)) if !read.holds(handle) => {
-                Err(Refusal::bad_request(format!(
-                    "the {} comes from a message this conversation has not read; `show` it first",
-                    placeholder.described()
-                )))
+    let mut named = Vec::new();
+    let mut files: Vec<HeldFile> = Vec::new();
+    for placeholder in body.held() {
+        let handle = match (placeholder, placeholder.reach()) {
+            (
+                Placeholder::Number {
+                    kind: Kind::Code, ..
+                },
+                _,
+            ) => {
+                return Err(Refusal::bad_request(
+                    "a verification code is never sent: the owner types it where it is asked \
+                     for",
+                ));
             }
-            (_, Reach::Revealable(_)) => Ok(placeholder.described()),
-        })
-        .collect()
+            (_, Reach::Withheld) => {
+                return Err(Refusal::bad_request(format!(
+                    "the body names the {} as withheld, which the box cannot read again; only a \
+                     value written `· tap to show · held:…` can be sent",
+                    placeholder.described()
+                )));
+            }
+            (_, Reach::Revealable(handle)) => handle,
+        };
+        if !read.holds(&handle) {
+            return Err(Refusal::bad_request(format!(
+                "the {} comes from a message or file this conversation has not read; `show` the \
+                 message or read the file first",
+                placeholder.described()
+            )));
+        }
+        if let Handle::File(file) = handle
+            && !files.contains(&file)
+        {
+            files.push(file);
+        }
+        named.push(placeholder.described());
+    }
+    Ok((named, files))
 }
 
-/// `attach`, each entry resolved now and recorded with its digest; absent is none.
+/// Refuse a file's placeholder in `draft`'s body that does not print as the file's record does: a
+/// name or size the model changed would go on the card and into the sent body.
+fn as_recorded(draft: &Draft) -> Result<(), Refusal> {
+    use crate::held_value::{Placeholder, Reach, Written};
+    let written = Written::parse(&draft.body)
+        .map_err(|malformed| Refusal::bad_request(malformed.to_string()))?;
+    for placeholder in written.held() {
+        let Placeholder::File {
+            reach: Reach::Revealable(file),
+            ..
+        } = placeholder
+        else {
+            continue;
+        };
+        let source = file.source();
+        let recorded = draft
+            .attachments
+            .iter()
+            .find(|one| one.source == source)
+            .map(|one| Placeholder::file(file, &one.name, one.size));
+        if recorded.as_ref() != Some(placeholder) {
+            return Err(Refusal::bad_request(format!(
+                "the body names the {}, which is not how the file reads now ({}); copy its `held` \
+                 placeholder whole",
+                placeholder.described(),
+                recorded.map_or_else(|| "no record".to_owned(), |file| file.described())
+            )));
+        }
+    }
+    Ok(())
+}
+
+/// `attach`, then each held file the body names that `attach` does not list, each resolved now
+/// and recorded with its digest; absent is none.
 ///
 /// # Errors
 /// An entry that names no source, a source that answers with nothing, a Drive file outside
-/// the allowed folders, or a total over [`attached::MAX_TOTAL`].
+/// the allowed folders that this conversation never read, or a total over
+/// [`attached::MAX_TOTAL`].
 fn attach_of(
     caps: &Secretary<'_>,
-    conversation: &ConversationId,
+    (stored, read): (&Stored, &ReadHolders),
     attach: Option<&Value>,
+    held: Vec<HeldFile>,
 ) -> Result<Vec<Attached>, Refusal> {
-    let listed = match attach {
-        None => return Ok(Vec::new()),
+    let listed: &[Value] = match attach {
+        None => &[],
         Some(Value::Array(listed)) => listed,
         Some(_) => {
             return Err(Refusal::bad_request(
@@ -119,34 +171,49 @@ fn attach_of(
             ));
         }
     };
-    let attached = listed
+    let listed = listed
         .iter()
         .enumerate()
         .map(|(index, entry)| {
-            let source = AttachmentSource::parse(entry)
-                .map_err(|failed| Refusal::bad_request(format!("attach[{index}]: {failed}")))?;
-            read_now(caps, conversation, source).map_err(|failed| {
-                Refusal::new(
-                    failed.status(),
-                    format!("attach[{index}]: {}", failed.message()),
-                )
-            })
+            AttachmentSource::parse(entry)
+                .map(|source| (format!("attach[{index}]"), source))
+                .map_err(|failed| Refusal::bad_request(format!("attach[{index}]: {failed}")))
         })
         .collect::<Result<Vec<_>, _>>()?;
+    let mut attached = Vec::new();
+    for (named, source) in &listed {
+        attached.push(
+            read_now(caps, (stored, read), source.clone()).map_err(|failed| {
+                Refusal::new(failed.status(), format!("{named}: {}", failed.message()))
+            })?,
+        );
+    }
+    for file in held {
+        let source = file.source();
+        if listed.iter().all(|(_, listed)| *listed != source) {
+            // As the handle names it, unresolved, so the tap's fill finds this record by it.
+            attached.push(recorded(caps, read, source).map_err(|failed| {
+                Refusal::new(
+                    failed.status(),
+                    format!(
+                        "the held {}: {}",
+                        file.source().describe(),
+                        failed.message()
+                    ),
+                )
+            })?);
+        }
+    }
     attached::within_cap(&attached).map_err(|failed| Refusal::bad_request(failed.to_string()))?;
     Ok(attached)
 }
 
-/// Read one source now and record what it holds.
+/// Read one `attach` entry now and record what it holds.
 fn read_now(
     caps: &Secretary<'_>,
-    conversation: &ConversationId,
+    (stored, read): (&Stored, &ReadHolders),
     source: AttachmentSource,
 ) -> Result<Attached, Refusal> {
-    let recorded = |source: AttachmentSource, name: &str, media: &str, bytes: &[u8]| {
-        Attached::of(source, name, media, bytes)
-            .map_err(|failed| Refusal::bad_request(failed.to_string()))
-    };
     match source {
         AttachmentSource::Mail { message, name } => {
             // The notmuch id, which names the message whether or not triage has marked it.
@@ -156,80 +223,47 @@ fn read_now(
                 .map_err(|failed| mail_refusal(&failed))?
                 .row
                 .id;
-            let file = caps
-                .mail
-                .attachment(&message, &name)
-                .map_err(|failed| mail_refusal(&failed))?;
-            let media = if file.mime.is_empty() {
-                crate::mail::send::guess_mime_type(&name)
-            } else {
-                file.mime
-            };
-            recorded(
-                AttachmentSource::Mail {
-                    message,
-                    name: name.clone(),
-                },
-                &name,
-                &media,
-                &file.content,
-            )
+            recorded(caps, read, AttachmentSource::Mail { message, name })
         }
-        AttachmentSource::Drive { path } => {
-            if !crate::drive::allowed(&caps.drive.allowed_folders(), &path) {
-                return Err(Refusal::bad_request(format!(
-                    "{path} is not in a folder the owner allowed, so it cannot be attached from \
-                     Drive; drive_read asks them, and once they allow it the copy read into this \
-                     conversation attaches as {{\"kept\": <its file id>}}"
-                )));
-            }
-            let name = path.name().unwrap_or_default().to_owned();
-            let bytes = caps
-                .drive
-                .fenced()
-                .fetch(&path)
-                .map_err(|failed| drive_refusal(&failed))?;
-            let media = crate::mail::send::guess_mime_type(&name);
-            recorded(AttachmentSource::Drive { path }, &name, &media, &bytes)
-        }
-        AttachmentSource::Kept { id } => kept_copy(caps, conversation, &id),
+        AttachmentSource::Kept { id } => kept_copy(caps, stored, &id),
         AttachmentSource::Repo { repo, path, at } => repo_file(caps, repo, path, &at),
-        AttachmentSource::Upload { id } => {
-            let upload = caps
-                .uploads
-                .get(&id)?
-                .ok_or_else(|| Refusal::not_found(format!("no file {id} was uploaded")))?;
-            let (media, bytes) = match upload {
-                Upload::Here { media, bytes } => (media, bytes),
-                // Recorded from what the upload kept, never read: the tap that sends it is
-                // the one read.
-                Upload::Private { media, name, copy } => {
-                    return Attached::known(
-                        AttachmentSource::Upload { id: id.clone() },
-                        &name,
-                        media.as_str(),
-                        copy.size,
-                        id,
-                    )
-                    .map_err(|failed| Refusal::bad_request(failed.to_string()));
-                }
-            };
-            let name = match media {
-                Enclosure::Pdf => format!("file-{}.pdf", &id.as_str()[..12]),
-                Enclosure::Image(image) => format!(
-                    "photo-{}.{}",
-                    &id.as_str()[..12],
-                    image.as_str().trim_start_matches("image/")
-                ),
-            };
-            recorded(
-                AttachmentSource::Upload { id },
-                &name,
-                media.as_str(),
-                &bytes,
-            )
+        source @ (AttachmentSource::Drive { .. } | AttachmentSource::Upload { .. }) => {
+            recorded(caps, read, source)
         }
     }
+}
+
+/// `source` recorded with the name, type, size and digest it reads as now. Two are recorded without
+/// a read, so the tap that sends them is their one read: a private upload, from what the upload
+/// kept, and a Drive file outside the allowed folders that this conversation read on the owner's
+/// tap, from what that tap read. A model's call reads nothing past the fence.
+fn recorded(
+    caps: &Secretary<'_>,
+    read: &ReadHolders,
+    source: AttachmentSource,
+) -> Result<Attached, Refusal> {
+    let unrecorded = |failed: attached::Unattachable| Refusal::bad_request(failed.to_string());
+    if let AttachmentSource::Drive { path } = &source
+        && !crate::drive::allowed(&caps.drive.allowed_folders(), path)
+    {
+        let file = HeldFile::Drive { path: path.clone() };
+        return match caps.tapped.get(&file)? {
+            Some(record) if read.reads_file(&file) => Ok(record),
+            Some(_) | None => Err(Refusal::bad_request(format!(
+                "{path} is not in a folder the owner allowed and this conversation never read it \
+                 on their tap, so it cannot be attached from Drive; drive_read asks them"
+            ))),
+        };
+    }
+    if let AttachmentSource::Upload { id } = &source
+        && let Some(Upload::Private { media, name, copy }) = caps.uploads.get(id)?
+    {
+        let name = crate::attachment::called(id, media, Some(&name));
+        let id = id.clone();
+        return Attached::known(source, &name, media.as_str(), copy.size, id).map_err(unrecorded);
+    }
+    let opened = opening::open(caps, &source, &ReadHolders::default())?;
+    Attached::of(source, &opened.name, &opened.media, &opened.bytes).map_err(unrecorded)
 }
 
 /// A file of a declared repository at the commit `at` resolves to, recorded and then kept by its
@@ -244,39 +278,16 @@ fn repo_file(
         .repositories
         .resolve(&repo, Some(at))
         .map_err(|failed| refused_by(&failed))?;
-    let bytes = caps
-        .repositories
-        .blob(&repo, &commit, &path)
-        .map_err(|failed| refused_by(&failed))?;
-    // A Git LFS file is stored as a pointer; its bytes are elsewhere, and the pointer is not the
-    // file its name and type would claim.
-    if bytes.starts_with(b"version https://git-lfs.github.com/spec/") {
-        return Err(Refusal::bad_request(format!(
-            "{} in {repo} is a Git LFS pointer, not the file; the box does not fetch LFS objects, \
-             so it cannot be attached",
-            path.as_str()
-        )));
-    }
-    let name = path
-        .as_str()
-        .rsplit('/')
-        .next()
-        .unwrap_or_default()
-        .to_owned();
-    let media = crate::mail::send::guess_mime_type(&name);
-    let recorded = Attached::of(
-        AttachmentSource::Repo {
-            repo,
-            path,
-            at: commit.into(),
-        },
-        &name,
-        &media,
-        &bytes,
-    )
-    .map_err(|failed| Refusal::bad_request(failed.to_string()))?;
+    let source = AttachmentSource::Repo {
+        repo,
+        path,
+        at: commit.into(),
+    };
+    let opened = opening::open(caps, &source, &ReadHolders::default())?;
+    let recorded = Attached::of(source, &opened.name, &opened.media, &opened.bytes)
+        .map_err(|failed| Refusal::bad_request(failed.to_string()))?;
     // Kept only once recorded, so a refused file leaves nothing behind.
-    kept(caps, &bytes).map_err(Refusal::internal)?;
+    kept(caps, &opened.bytes).map_err(Refusal::internal)?;
     Ok(recorded)
 }
 
@@ -284,10 +295,9 @@ fn repo_file(
 /// conversation holds, since the owner's Allow once is what put it here.
 fn kept_copy(
     caps: &Secretary<'_>,
-    conversation: &ConversationId,
+    stored: &Stored,
     id: &crate::attachment::AttachmentId,
 ) -> Result<Attached, Refusal> {
-    let stored = secretary::read(caps.conversations, conversation)?;
     let file = stored
         .turns
         .iter()
@@ -302,16 +312,10 @@ fn kept_copy(
                 &id.as_str()[..12]
             ))
         })?;
-    let bytes = caps.kept.get(id)?.ok_or_else(|| {
-        Refusal::not_found(format!("the copy of {} is gone from the box", file.name))
-    })?;
-    Attached::of(
-        AttachmentSource::Kept { id: id.clone() },
-        &file.name,
-        file.media.as_str(),
-        &bytes,
-    )
-    .map_err(|failed| Refusal::bad_request(failed.to_string()))
+    let source = AttachmentSource::Kept { id: id.clone() };
+    let opened = opening::open(caps, &source, &ReadHolders::default())?;
+    Attached::of(source, &file.name, file.media.as_str(), &opened.bytes)
+        .map_err(|failed| Refusal::bad_request(failed.to_string()))
 }
 
 impl Verb for ProposeEmail {
@@ -357,13 +361,18 @@ impl Verb for ProposeEmail {
         `[SSN ending 3456 · tap to show · held:…]`) goes in the BODY as that \
         placeholder, copied whole, where the number belongs. The card tells the \
         owner it is included, and only their tap writes the real number into \
-        the message; you never see it. Only a value from a message this \
-        conversation read can be sent. A verification code, a `withheld` \
+        the message; you never see it. A HELD FILE (`[file w2.pdf, 48.2 KB · tap \
+        to show · held:…]`, the `held` of a file the box withheld from you) goes \
+        in the body the same way: the box attaches the file, and the tap writes \
+        its name where the placeholder stood. Only a value or file from a message \
+        or file this conversation read can be sent. A verification code, a `withheld` \
         placeholder and a placeholder in the subject are refused.";
 
     fn run(call: &Call<'_>, args: ProposeEmailArgs) -> Result<Value, Refusal> {
         let reasons = args.filing.reasons()?;
-        let held = held_in(call.caps, call.conversation, &args.subject, &args.body)?;
+        let stored = secretary::read(call.caps.conversations, call.conversation)?;
+        let read = ReadHolders::of(&stored);
+        let (held, files) = held_in(&read, &args.subject, &args.body)?;
         let draft = Draft {
             account: address(&args.account, "account")?,
             to: addresses(&args.to, "to")?,
@@ -374,8 +383,9 @@ impl Verb for ProposeEmail {
             },
             subject: args.subject,
             body: args.body,
-            attachments: attach_of(call.caps, call.conversation, args.attach.as_ref())?,
+            attachments: attach_of(call.caps, (&stored, &read), args.attach.as_ref(), files)?,
         };
+        as_recorded(&draft)?;
         if draft.to.is_empty() {
             return Err(Refusal::bad_request("to must name at least one recipient"));
         }
@@ -393,7 +403,6 @@ impl Verb for ProposeEmail {
                 "media": one.media,
                 "size": one.size,
                 "from": one.source.describe(),
-                "sha256": one.sha256.as_str(),
             })).collect::<Vec<_>>(),
             "why": reasons.why(),
             "sources": reasons.sources().iter().map(ToString::to_string).collect::<Vec<_>>(),

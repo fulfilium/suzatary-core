@@ -96,6 +96,10 @@ pub struct Secretary<'a> {
     pub upload_index: &'a dyn super::UploadIndex,
     /// The files a verb keeps for the model.
     pub kept: &'a dyn crate::store::Doc<crate::attachment::AttachmentId, Vec<u8>>,
+    /// A PDF's text layer, which a held file's numbers are read back from.
+    pub pdf: &'a dyn super::PdfText,
+    /// The files the owner tapped Read on outside the allowed folders, as each tap read it.
+    pub tapped: &'a dyn crate::store::Gets<crate::held_value::HeldFile, crate::secretary::attached::Attached>,
     /// The tables the instance file declares, read-only: what a Connect card is checked against.
     pub configuration: &'a dyn crate::settings::Configuration,
     /// The watches on mail the owner expects; a watch's only act is the sync's push.

@@ -91,7 +91,8 @@ pub trait Draw {
     fn origins(&self, plugin: &str) -> Option<Vec<String>>;
     /// How the person reaches the app at a terminal, which a step's command is spelled in.
     fn reach(&self) -> &crate::connect::Reach;
-    /// The message a held value comes from, in the box's words: its sender, subject and date.
+    /// The message or file a held value comes from, in the box's words: a message by its
+    /// sender, subject and date, a file by its source.
     fn source(&self, handle: &crate::held_value::Handle) -> String;
 }
 
@@ -146,7 +147,7 @@ fn held_in(body: &str, draws: &dyn Draw) -> wire::HeldIn {
                 .map(|placeholder| wire::HeldFrom {
                     named: placeholder.described(),
                     from: match placeholder.reach() {
-                        Reach::Revealable(handle) => draws.source(handle),
+                        Reach::Revealable(handle) => draws.source(&handle),
                         Reach::Withheld => {
                             "withheld, from nothing the box can read again".to_owned()
                         }

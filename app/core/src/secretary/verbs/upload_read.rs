@@ -4,6 +4,7 @@ use serde_json::{Map, Value};
 
 use crate::attachment::AttachmentId;
 use crate::capability::Turn;
+use crate::held_value::HeldFile;
 use crate::refusal::Refusal;
 use crate::secretary::file_search;
 use crate::secretary::upload_standing::UploadStanding;
@@ -28,8 +29,9 @@ impl Verb for UploadRead {
     const DESCRIPTION: &'static str = "OPEN A FILE THE OWNER SENT in a chat: `file` is the id of a \
         `files` row `search` answered. A PDF or a photo on the box is handed to you AS ITSELF, \
         attached to this answer, so read it there. A file he kept private in his Drive comes \
-        back as its text with every identity number `[redacted]`; `drive_read` of its \
-        `private` path reads the file itself, on his tap. A file whose turn was erased, or that \
+        back as its text, every identity number a placeholder, and as its own `held` \
+        placeholder, which a propose_email body carries to send it on his tap; \
+        `drive_read` of its `private` path reads the file itself, on his tap. A file whose turn was erased, or that \
         the box holds back, is refused by name.";
 
     fn run(call: &Call<'_>, args: UploadReadArgs) -> Result<VerbAnswer, Refusal> {
@@ -84,6 +86,12 @@ impl Verb for UploadRead {
         if let Some(copy) = attachment.and_then(|attachment| attachment.private.as_ref()) {
             head.insert("private".to_owned(), Value::from(copy.path.to_string()));
         }
-        VerbAnswer::reading(head, &name, read, |bytes| kept(call.caps, bytes))
+        VerbAnswer::reading(
+            head,
+            &HeldFile::Upload { id: id.clone() },
+            &name,
+            read,
+            |bytes| kept(call.caps, bytes),
+        )
     }
 }

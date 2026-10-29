@@ -178,6 +178,29 @@ impl Attachment {
             ..self
         })
     }
+
+    /// Its name, as [`called`] gives it.
+    #[must_use]
+    pub fn called(&self) -> String {
+        called(&self.id, self.media_type, self.name.as_deref())
+    }
+}
+
+/// An upload's name: the one it was picked with, or one its type and id give it,
+/// `file-<id>.pdf` or `photo-<id>.png`, so two unnamed uploads are two names.
+#[must_use]
+pub fn called(id: &AttachmentId, media: Enclosure, name: Option<&str>) -> String {
+    match name.filter(|name| !name.is_empty()) {
+        Some(name) => name.to_owned(),
+        None => match media {
+            Enclosure::Pdf => format!("file-{}.pdf", &id.as_str()[..12]),
+            Enclosure::Image(image) => format!(
+                "photo-{}.{}",
+                &id.as_str()[..12],
+                image.as_str().trim_start_matches("image/")
+            ),
+        },
+    }
 }
 
 /// Why bytes or a name are not an attachment.

@@ -147,6 +147,7 @@ export type Erasing = { readonly conversation: string; readonly asked: intentsyn
 
 /** At rest a turn shows its words, Reply and one "…"; `tucked` is what else its menu holds (a finished round's calls). */
 function turnBlock(
+  conversationId: string,
   turn: TurnRow,
   actions: TranscriptActions,
   mayReply: boolean,
@@ -158,7 +159,7 @@ function turnBlock(
   if (turn.gone !== null) classes.push("gone");
   const source = el("div", { class: "turntext" }, ...textWithReferences(turn.text, turn.who));
   const rich = turn.gone === null && turn.who === "model" && turn.blocks.length > 0 ? turn : null;
-  const body = turn.gone !== null ? goneText(turn, turn.gone) : heldvalue.within(rich !== null ? answerBlocks(rich) : source, revealHeld);
+  const body = turn.gone !== null ? goneText(turn, turn.gone) : heldvalue.within(rich !== null ? answerBlocks(rich) : source, revealHeld(conversationId));
   const block = el(
     "div",
     { class: classes.join(" "), "data-who": turn.who },
@@ -244,11 +245,11 @@ function roundParts(
           {
             key,
             sig: `${mayReply}|${piece(placed)}|${erased(placed)}|${tucked?.sig ?? ""}`,
-            make: () => turnBlock(placed.turn, actions, mayReply, erasing, tucked?.make() ?? null),
+            make: () => turnBlock(conversationId, placed.turn, actions, mayReply, erasing, tucked?.make() ?? null),
           },
         ];
   const folded = (placed: readonly { readonly turn: TurnRow; readonly index: number }[], reply: boolean): HTMLElement =>
-    el("div", { class: "roundfoldbody" }, placed.filter((p) => !silent(p.turn)).map((p) => turnBlock(p.turn, actions, reply, reply ? erasing : null)));
+    el("div", { class: "roundfoldbody" }, placed.filter((p) => !silent(p.turn)).map((p) => turnBlock(conversationId, p.turn, actions, reply, reply ? erasing : null)));
   // What a rewind set aside is read, never resumed: collapsed, with no Reply.
   const earlier: keyed.Item[] =
     round.earlier.length === 0

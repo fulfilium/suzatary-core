@@ -747,6 +747,34 @@ fn web_turn(
     outcome
 }
 
+/// Keep what the tap read of a withheld document, so a proposal that sends it records it without
+/// reading it again; a model is told neither its size nor its digest.
+fn keep_tapped(
+    kept: &suzatary_io::blobs::Blobs,
+    path: &suzatary_core::drive::DrivePath,
+    size: u64,
+    digest: &suzatary_core::attachment::AttachmentId,
+) {
+    use suzatary_core::store::Doc as _;
+    let file = suzatary_core::held_value::HeldFile::Drive { path: path.clone() };
+    let kept_it = suzatary_core::secretary::attached::Attached::known(
+        file.source(),
+        path.name().unwrap_or_default(),
+        suzatary_core::enclosed::Enclosure::Pdf.as_str(),
+        size,
+        digest.clone(),
+    )
+    .map_err(|failed| failed.to_string())
+    .and_then(|record| {
+        suzatary_io::tapped::beside(kept)
+            .set(&file, &record)
+            .map_err(|failed| failed.to_string())
+    });
+    if let Err(failed) = kept_it {
+        tracing::warn!("secretary: could not keep what the tap read of {path}: {failed}");
+    }
+}
+
 /// A tapped document as a `drive_read` answer in the conversation, the file itself kept for the
 /// model the way an allowed read keeps it, and the outcome the tap records.
 fn drive_turn(
@@ -762,6 +790,9 @@ fn drive_turn(
     use suzatary_core::secretary::store::Entry;
     use suzatary_core::secretary::verb_answer::VerbAnswer;
 
+    if let Ok(FileRead::Withheld { size, digest, .. }) = &read {
+        keep_tapped(kept, path, *size, digest);
+    }
     let (answer, outcome) = match read {
         Ok(FileRead::Unsupported { what }) => {
             let reason = format!("{path}: {what} is nothing a model reads");
@@ -773,10 +804,13 @@ fn drive_turn(
         Ok(read) => {
             let mut head = serde_json::Map::new();
             head.insert("path".to_owned(), serde_json::Value::from(path.to_string()));
-            let answered =
-                VerbAnswer::reading(head, path.name().unwrap_or_default(), read, |bytes| {
-                    kept.put(bytes).map_err(|failed| failed.to_string())
-                });
+            let answered = VerbAnswer::reading(
+                head,
+                &suzatary_core::held_value::HeldFile::Drive { path: path.clone() },
+                path.name().unwrap_or_default(),
+                read,
+                |bytes| kept.put(bytes).map_err(|failed| failed.to_string()),
+            );
             let outcome = match &answered {
                 Ok(_) => Performed::Done(Done::Acted {
                     what: format!("read {path}"),

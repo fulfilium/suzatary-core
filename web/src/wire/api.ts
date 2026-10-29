@@ -9,6 +9,7 @@ import http from "./http";
 import storereads from "./storereads";
 import once from "../algebra/once";
 import d from "./decoder";
+import type heldvalue from "../view/heldvalue";
 import payload from "./generated/payload";
 
 // Every ordinary page asks about the chain it is on; the Inbox asks every chain, so it names one.
@@ -243,9 +244,18 @@ export const dropSession = (id: string, index: number, reason: string): Promise<
 
 export const getMemory = (): Promise<MemoryPayload> => http.get("/api/secretary/memory", payload.MemoryPayload);
 
-/** The owner's tap on a held value's placeholder: the value, answered once and kept nowhere; `null` when the box holds it no more. */
-export const revealHeld = (handle: string): Promise<string | null> =>
-  http.act("/api/held/reveal", { handle } satisfies Revealing, payload.RevealPayload).then((p) => (p.type === "Shown" ? p.value : null));
+/** The owner's tap on a held value's placeholder drawn in `conversation` (`null` on a mail page): the number or the file, answered once and kept nowhere; `Gone` when the box holds it no more or answered a replay. */
+export const revealHeld = (conversation: string | null): heldvalue.Reveal => (handle) =>
+  http.act("/api/held/reveal", { handle, conversation } satisfies Revealing, payload.RevealPayload).then((p): heldvalue.Opened => {
+    switch (p.type) {
+      case "Shown":
+      case "File":
+        return p;
+      case "Gone":
+      case "NotKept":
+        return { type: "Gone" };
+    }
+  });
 
 /** The Android portal's push token, which this page signs for the native code that holds no key. */
 export const reportPushToken = (token: string): Promise<DevicePayload> =>

@@ -34,7 +34,8 @@ use self::message::NotmuchMessage;
 use suzatary_core::capability::{Datetime, MailError, Mailbox, Query};
 use suzatary_core::enclosed::Enclosure;
 use suzatary_core::file_read::FileRead;
-use suzatary_core::held_value::{self, Handle, Reopened, Reveal, Revealed};
+use suzatary_core::held_value::HeldFile;
+use suzatary_core::held_value::{self, Reopened, Reveal};
 use suzatary_core::mail::account::{MailAccount, Roster};
 use suzatary_core::mail::known::Known;
 use suzatary_core::mail::local_state::{Ambiguous, Kept};
@@ -180,9 +181,10 @@ impl Notmuch {
                 .as_ref()
                 .and_then(|m| m.header_raw(mail_parser::HeaderName::Date))
                 .and_then(dedup::parse_rfc2822_date);
+            let holder = held_value::Holder::Message(msg.id.clone());
             let (sender, title) = (
-                held_value::mask(&sender, &msg.id, &values),
-                held_value::mask(&title, &msg.id, &values),
+                held_value::mask(&sender, &holder, &values),
+                held_value::mask(&title, &holder, &values),
             );
             let source = Source {
                 account: self.account_for(&msg.file),
@@ -700,7 +702,8 @@ struct Shown {
 /// A shown message as a model may read it: every identity number a placeholder (`held_value`).
 fn shown_of(msg: NotmuchMessage) -> Shown {
     let (shown, values) = unmasked(msg);
-    let mask = |text: &str| held_value::mask(text, &shown.id, &values);
+    let holder = held_value::Holder::Message(shown.id.clone());
+    let mask = |text: &str| held_value::mask(text, &holder, &values);
     Shown {
         headers: shown
             .headers
@@ -788,21 +791,19 @@ fn before_query(query: &str, before: Option<Datetime>) -> String {
 }
 
 impl Reveal for Notmuch {
-    fn reveal(&self, handle: &Handle) -> Result<Revealed, MailError> {
-        let query = by_id_query(std::iter::once(handle.message()));
+    fn value(&self, message: &str, ordinal: u16) -> Result<Option<held_value::Shown>, MailError> {
+        let query = by_id_query(std::iter::once(message));
         if query.is_empty() {
-            return Ok(Revealed::Gone);
+            return Ok(None);
         }
         let raw = self.run(&["show", "--format=json", "--include-html", &query])?;
         let Some(msg) = message::matched(&raw)?.into_iter().next() else {
-            return Ok(Revealed::Gone);
+            return Ok(None);
         };
         let (_, values) = unmasked(msg);
         Ok(values
-            .get(handle.ordinal())
-            .map_or(Revealed::Gone, |(kind, value)| {
-                Revealed::Value(held_value::Shown::new(kind, value))
-            }))
+            .get(ordinal)
+            .map(|(kind, value)| held_value::Shown::new(kind, value)))
     }
 
     fn original(&self, message: &str, size: u64) -> Result<Reopened, MailError> {
@@ -930,14 +931,21 @@ impl Mailbox for Notmuch {
 
     fn read_attachment(&self, id: &str, name: &str) -> Result<FileRead, MailError> {
         let file = self.attachment(id, name)?;
-        read_of(&file.mime, file.content, &self.pdftotext).map_err(MailError::Unreachable)
+        let source = HeldFile::Mail {
+            message: id.to_owned(),
+            name: name.to_owned(),
+        };
+        read_of(&source, name, &file.mime, file.content, &self.pdftotext)
+            .map_err(MailError::Unreachable)
     }
 }
 
-/// A file read for the model: a PDF with its text layer through `pdftotext` beside it, anything
-/// else as [`FileRead::of`] finds it; `Err` is a `pdftotext` failure, a fact about the box, not
-/// the file.
+/// A file read for the model, the file `file` names and calls `name`: a PDF with its text layer
+/// through `pdftotext` beside it, anything else as [`FileRead::of`] finds it; `Err` is a
+/// `pdftotext` failure, a fact about the box, not the file.
 pub(crate) fn read_of(
+    file: &HeldFile,
+    name: &str,
     mime: &str,
     content: Vec<u8>,
     pdftotext: &crate::pdftotext::Pdftotext,
@@ -946,12 +954,13 @@ pub(crate) fn read_of(
         Some(Enclosure::Pdf) => Some(pdftotext.text(&content)?),
         Some(Enclosure::Image(_)) | None => None,
     };
-    Ok(FileRead::of(mime, content, layer.as_deref()))
+    Ok(FileRead::of(file, name, mime, content, layer.as_deref()))
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use suzatary_core::held_value::{Handle, Holder};
 
     /// Synthetic numbers no person holds: SSN area 000, ITIN area 912, an EIN of zeros.
     const SSN: &str = "000-12-3456";
@@ -1094,13 +1103,17 @@ mod tests {
         let revealed: std::collections::BTreeSet<String> = handles
             .iter()
             .map(|text| {
-                match mailbox
-                    .reveal(&Handle::parse(text).expect("a handle"))
+                let Ok(Handle::Value(place)) = Handle::parse(text) else {
+                    panic!("{text} is no value's handle");
+                };
+                let Holder::Message(message) = place.holder() else {
+                    panic!("{text} names no message");
+                };
+                mailbox
+                    .value(message, place.ordinal())
                     .expect("read")
-                {
-                    Revealed::Value(shown) => shown.into_string(),
-                    Revealed::Gone => panic!("{text} is gone"),
-                }
+                    .unwrap_or_else(|| panic!("{text} is gone"))
+                    .into_string()
             })
             .collect();
         assert_eq!(
@@ -1114,15 +1127,12 @@ mod tests {
             "Received with thanks, ibex 123456789."
         );
         assert_eq!(shown.row.subject, "thanks");
-        for gone in [
-            Handle::new("ok-1@example.test", 0),
-            Handle::new("form-1@example.test", 9),
-            Handle::new("no\"such@example.test", 0),
+        for (message, ordinal) in [
+            ("ok-1@example.test", 0),
+            ("form-1@example.test", 9),
+            ("no\"such@example.test", 0),
         ] {
-            assert_eq!(
-                mailbox.reveal(&gone.expect("a handle")).expect("read"),
-                Revealed::Gone
-            );
+            assert_eq!(mailbox.value(message, ordinal).expect("read"), None);
         }
     }
 

@@ -41,6 +41,7 @@ mod model;
 mod nothing;
 mod notify;
 mod older_mail;
+mod pdf_text;
 mod render;
 mod repositories;
 mod repository;
@@ -80,6 +81,7 @@ pub use model::{
 pub use nothing::{Nothing, Parses};
 pub use notify::{Delivered, Notify, NotifyError, Printed, Push};
 pub use older_mail::OlderMail;
+pub use pdf_text::PdfText;
 pub use render::{Html, Render, RenderError};
 pub use render_cache::RenderCache;
 pub use repositories::{MAX_FILE_BYTES, MAX_TEXT_BYTES, RepoFailure, Repositories, readable};
@@ -298,6 +300,8 @@ mod tests {
             uploads: _,
             upload_index: _,
             kept: _,
+            pdf: _,
+            tapped: _,
             configuration: _,
             watches: _,
         } = Nothing::secretary();

@@ -8,6 +8,7 @@ use suzatary_core::attachment::{Attachment, AttachmentError, AttachmentId};
 use suzatary_core::capability::DriveFailure;
 use suzatary_core::enclosed::Enclosure;
 use suzatary_core::file_read::{FileRead, Withheld};
+use suzatary_core::held_value::HeldFile;
 use suzatary_core::vault::{PrivateCopy, Vault};
 
 use suzatary_core::store::{Doc, Gets, StoreError};
@@ -112,11 +113,15 @@ impl AttachmentStore {
         let attachment = Attachment::accept(bytes)?;
         if attachment.media_type == Enclosure::Pdf {
             let layer = self.pdftotext.text(bytes).map_err(UploadError::Unread)?;
-            if let FileRead::Text {
-                withheld: Some(why),
-                ..
-            } = FileRead::of(Enclosure::Pdf.as_str(), bytes.to_vec(), Some(&layer))
-            {
+            if let FileRead::Withheld { why, .. } = FileRead::of(
+                &HeldFile::Upload {
+                    id: attachment.id.clone(),
+                },
+                &attachment.called(),
+                Enclosure::Pdf.as_str(),
+                bytes.to_vec(),
+                Some(&layer),
+            ) {
                 return Err(UploadError::Withheld(why));
             }
         }
@@ -126,7 +131,8 @@ impl AttachmentStore {
 
     /// Keep a file the owner said to keep private: in his Drive through `vault`, and on the
     /// box only a note of where, which [`AttachmentStore::attachment`] reads back. A PDF's
-    /// text is read now and kept redacted, which is all a model is ever given of it.
+    /// text is read now and kept masked, each number a placeholder naming the upload, which is
+    /// all a model is ever given of it.
     ///
     /// # Errors
     /// As [`AttachmentStore::put`], less the rule it keeps, and [`UploadError::Drive`].
@@ -140,9 +146,19 @@ impl AttachmentStore {
         let text = match attachment.media_type {
             Enclosure::Pdf => {
                 let layer = self.pdftotext.text(bytes).map_err(UploadError::Unread)?;
-                match FileRead::of(Enclosure::Pdf.as_str(), bytes.to_vec(), Some(&layer)) {
+                match FileRead::of(
+                    &HeldFile::Upload {
+                        id: attachment.id.clone(),
+                    },
+                    &attachment.called(),
+                    Enclosure::Pdf.as_str(),
+                    bytes.to_vec(),
+                    Some(&layer),
+                ) {
                     FileRead::File(readable) => readable.text().as_str().to_owned(),
-                    FileRead::Text { text, .. } => text.into_string(),
+                    FileRead::Text { text, .. } | FileRead::Withheld { text, .. } => {
+                        text.into_string()
+                    }
                     FileRead::Unsupported { .. } => String::new(),
                 }
             }
@@ -150,15 +166,7 @@ impl AttachmentStore {
         };
         // The digest leads the name, so two files called the same are two files, and the
         // same file kept twice is the one Drive already holds.
-        let called = attachment
-            .name
-            .clone()
-            .unwrap_or_else(|| match attachment.media_type {
-                Enclosure::Pdf => "file.pdf".to_owned(),
-                Enclosure::Image(image) => {
-                    format!("photo.{}", image.as_str().trim_start_matches("image/"))
-                }
-            });
+        let called = attachment.called();
         let drive_name = format!(
             "{} {}",
             &attachment.id.as_str()[..8],
@@ -368,7 +376,7 @@ mod tests {
         }
     }
 
-    /// A private file leaves only a note on the box: where it is, and its text redacted.
+    /// A private file leaves only a note on the box: where it is, and its text masked.
     #[test]
     fn a_private_file_goes_to_the_vault_and_the_box_keeps_only_where() {
         if !crate::tool::on_path("pdftotext") {
@@ -378,7 +386,8 @@ mod tests {
         let dir = tempfile::tempdir().expect("a scratch dir");
         let store = AttachmentStore::new(dir.path().to_path_buf(), Pdftotext::new("."));
         let vault = FakeVault::default();
-        let w2 = crate::pdftotext::minimal_pdf("Wages 70000 SSN 123-45-6789");
+        // The test page holds one short line.
+        let w2 = crate::pdftotext::minimal_pdf("SSN 123-45-6789");
         let kept = store
             .keep_private(&w2, "w2.pdf", &vault)
             .expect("kept private");
@@ -393,8 +402,13 @@ mod tests {
             copy.path.to_string(),
             format!("/my-files/Suzatary/Private/{short} w2.pdf")
         );
-        assert!(!copy.text.contains("6789"), "{}", copy.text);
-        assert!(copy.text.contains("70000"), "{}", copy.text);
+        assert!(!copy.text.contains("123-45-6789"), "{}", copy.text);
+        assert!(
+            copy.text
+                .contains("[SSN ending 6789 · tap to show · held:file:"),
+            "{}",
+            copy.text
+        );
         assert_eq!(
             store.attachment(&id).expect("its note"),
             Some(Stored::Private {
@@ -408,6 +422,6 @@ mod tests {
         );
         let on_disk = std::fs::read_to_string(dir.path().join(format!("{id}.private.json")))
             .expect("the note");
-        assert!(!on_disk.contains("6789"), "{on_disk}");
+        assert!(!on_disk.contains("123-45-6789"), "{on_disk}");
     }
 }

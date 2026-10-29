@@ -511,10 +511,10 @@ secretary attachments [id missing] refused 400: id is required
 secretary attachments [id null] refused 400: id is required
 secretary attachments [id mistyped] refused 400: id must be a string
 secretary attachments [id garbled] answered {"attachments":[],"id":"?","next":"No attachments on this message."}
-secretary attachments [name given] refused 404: the local corpus holds no attachment "MEMORY"
+secretary attachments [name given] refused 404: the local corpus holds no message "abcdef123456"
 secretary attachments [name null] answered {"attachments":[],"id":"abcdef123456","next":"No attachments on this message."}
 secretary attachments [name mistyped] refused 400: name must be a string or null
-secretary attachments [name garbled] refused 404: the local corpus holds no attachment "?"
+secretary attachments [name garbled] refused 404: the local corpus holds no message "abcdef123456"
 secretary attachments [chain unknown] refused 404: no chain named 'nowhere' — this deployment serves life
 secretary attachments [chain mistyped] refused 400: chain must be a string or null
 secretary upload_read [valid] refused 404: no live turn sent file 0000000000000000000000000000000000000000000000000000000000000000: it was erased, or never sent in a chat

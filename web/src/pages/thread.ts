@@ -40,7 +40,7 @@ function messageBlock(message: MailMessage, open: boolean): HTMLElement {
       todo === null ? null : el("code", { class: "cardid" }, todo),
       el("a", { class: "hashlink", href: hrefOf({ type: "message", id: row.id }) }, "open"),
     ),
-    heldvalue.within(el("div", { class: "mailbody" }, message.body === "" ? "(this message has no readable body)" : message.body), revealHeld),
+    heldvalue.within(el("div", { class: "mailbody" }, message.body === "" ? "(this message has no readable body)" : message.body), revealHeld(null)),
     message.truncated ? el("p", { class: "legend" }, "Cut at 200 KB.") : null,
   );
 }

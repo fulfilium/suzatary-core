@@ -2142,6 +2142,13 @@ pub struct Fakes {
     pub files: FakeFiles,
     /// The upload index, over the upload store the server's upload route writes.
     pub upload_index: suzatary_io::upload_index::UploadIndexFiles,
+    /// What a PDF's text layer reads as.
+    pub pdf: FakePdf,
+    /// What the taps read of withheld documents, where `Acting` keeps it.
+    pub tapped: suzatary_io::docs::Docs<
+        suzatary_core::held_value::HeldFile,
+        suzatary_core::secretary::attached::Attached,
+    >,
     /// The secretary's conversation store.
     pub conversations: Conversations,
     /// Every answer block an erasure emptied from the render cache, by source.
@@ -2246,6 +2253,8 @@ impl Fakes {
             drive: FakeDriveAccess::default(),
             junk: FakeJunk::default(),
             files: FakeFiles::default(),
+            pdf: FakePdf::default(),
+            tapped: suzatary_io::tapped::beside(&kept_store(&root)),
             upload_index: suzatary_io::upload_index::UploadIndexFiles::new(
                 root.join("secretary/upload-index"),
                 upload_store(&root),
@@ -2308,6 +2317,13 @@ impl Fakes {
     #[must_use]
     pub fn mailbox(mut self, mailbox: FakeMailbox) -> Self {
         self.mailbox = mailbox;
+        self
+    }
+
+    /// A bundle that reads every PDF's text layer as `layer`.
+    #[must_use]
+    pub fn pdf_layer(mut self, layer: &str) -> Self {
+        self.pdf = FakePdf(Some(layer.to_owned()));
         self
     }
 
@@ -2416,6 +2432,8 @@ impl Fakes {
             uploads: &self.files,
             upload_index: &self.upload_index,
             kept: &self.files,
+            pdf: &self.pdf,
+            tapped: &self.tapped,
             configuration: self.configuration.as_ref(),
             watches: &self.watches,
         }
@@ -3685,7 +3703,7 @@ impl FakeDrive {
         .expect("a letter");
         std::fs::write(
             dir.join("files/w2.txt"),
-            "Form W-2. Employee SSN 123-45-6789. Employer EIN 12-3456789. \
+            "Form W-2. Employee SSN 123-45-6789. Employer EIN 00-0000001. \
              Wages 95000. Payroll 617-555-1234.\n",
         )
         .expect("a form");
@@ -4127,4 +4145,54 @@ pub fn never_stored(root: &std::path::Path, value: &str) {
             );
         }
     }
+}
+
+/// A PDF reader that answers one text layer for every PDF, or fails when it holds none.
+#[derive(Default)]
+pub struct FakePdf(Option<String>);
+
+impl suzatary_core::capability::PdfText for FakePdf {
+    fn text(&self, _: &[u8]) -> Result<String, String> {
+        self.0
+            .clone()
+            .ok_or_else(|| "this fake reads no PDF".to_owned())
+    }
+}
+
+/// A one-page PDF that says `text`, which must hold no `(`, `)` or `\`.
+pub fn pdf_saying(text: &str) -> Vec<u8> {
+    let content = format!("BT /F1 24 Tf 20 100 Td ({text}) Tj ET");
+    let objects = [
+        "<< /Type /Catalog /Pages 2 0 R >>".to_owned(),
+        "<< /Type /Pages /Kids [3 0 R] /Count 1 >>".to_owned(),
+        "<< /Type /Page /Parent 2 0 R /Resources << /Font << /F1 4 0 R >> >> \
+         /MediaBox [0 0 200 200] /Contents 5 0 R >>"
+            .to_owned(),
+        "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>".to_owned(),
+        format!(
+            "<< /Length {} >>\nstream\n{content}\nendstream",
+            content.len()
+        ),
+    ];
+    let mut out = b"%PDF-1.4\n".to_vec();
+    let mut offsets = Vec::new();
+    for (index, object) in objects.iter().enumerate() {
+        offsets.push(out.len());
+        out.extend_from_slice(format!("{} 0 obj\n{object}\nendobj\n", index + 1).as_bytes());
+    }
+    let xref = out.len();
+    out.extend_from_slice(
+        format!("xref\n0 {}\n0000000000 65535 f \n", objects.len() + 1).as_bytes(),
+    );
+    for offset in &offsets {
+        out.extend_from_slice(format!("{offset:010} 00000 n \n").as_bytes());
+    }
+    out.extend_from_slice(
+        format!(
+            "trailer\n<< /Size {} /Root 1 0 R >>\nstartxref\n{xref}\n%%EOF",
+            objects.len() + 1
+        )
+        .as_bytes(),
+    );
+    out
 }

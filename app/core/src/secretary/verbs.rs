@@ -119,7 +119,7 @@ fn kept(caps: &Secretary<'_>, bytes: &[u8]) -> Result<crate::attachment::Attachm
 }
 
 /// A missing message or attachment is a 404; anything else is [`Refusal::internal`].
-fn mail_refusal(failed: &MailError) -> Refusal {
+pub(crate) fn mail_refusal(failed: &MailError) -> Refusal {
     match failed {
         MailError::Absent { .. } => Refusal::not_found(failed.to_string()),
         MailError::Query(_) | MailError::Unreachable(_) => Refusal::internal(failed.to_string()),
@@ -211,7 +211,7 @@ fn drive_path(path: &str) -> Result<crate::drive::DrivePath, Refusal> {
 }
 
 /// A missing file is a 404, a refused one a 400; anything else is the box's.
-fn drive_refusal(failed: &crate::capability::DriveFailure) -> Refusal {
+pub(crate) fn drive_refusal(failed: &crate::capability::DriveFailure) -> Refusal {
     use crate::capability::DriveFailure;
     match failed {
         DriveFailure::Missing(_) => Refusal::not_found(failed.to_string()),
@@ -290,7 +290,7 @@ fn clean_round(call: &super::Call<'_>, instead: &str) -> Result<super::memory::O
 // --- repositories ------------------------------------------------------------
 
 /// A read's failure, in the words the model can act on.
-fn refused_by(failure: &crate::capability::RepoFailure) -> Refusal {
+pub(crate) fn refused_by(failure: &crate::capability::RepoFailure) -> Refusal {
     use crate::capability::RepoFailure;
     match failure {
         RepoFailure::Unknown(_) | RepoFailure::Missing(_) => {

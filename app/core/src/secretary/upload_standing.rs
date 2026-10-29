@@ -8,7 +8,7 @@ use crate::upload::Upload;
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum UploadStanding {
     /// Searchable by these words: a PDF's text layer or a private file's text, identity numbers
-    /// redacted, or `""` for a photo, since the box reads no text out of pixels.
+    /// masked, or `""` for a photo, since the box reads no text out of pixels.
     Indexed(String),
     /// Held back until the owner keeps it private: its text names a held number, so the
     /// index reads nothing of it.
@@ -25,12 +25,13 @@ impl UploadStanding {
     /// `layer`'s sentence: without the text the box cannot tell whether a PDF names an identity
     /// number, so it indexes nothing rather than guess.
     pub fn of(
+        id: &crate::attachment::AttachmentId,
         upload: Option<Upload>,
         layer: impl FnOnce(&[u8]) -> Result<String, String>,
     ) -> Result<Self, String> {
         match upload {
             None => Ok(Self::Erased),
-            // Kept private by the owner's say, with its text redacted when it was kept.
+            // Kept private by the owner's say, with its text masked when it was kept.
             Some(Upload::Private { copy, .. }) => Ok(Self::Indexed(copy.text)),
             Some(Upload::Here {
                 media: Enclosure::Image(_),
@@ -42,20 +43,27 @@ impl UploadStanding {
             }) => {
                 let layer = layer(&bytes)?;
                 Ok(
-                    match FileRead::of(Enclosure::Pdf.as_str(), bytes, Some(&layer)) {
+                    match FileRead::of(
+                        &crate::held_value::HeldFile::Upload { id: id.clone() },
+                        "file.pdf",
+                        Enclosure::Pdf.as_str(),
+                        bytes,
+                        Some(&layer),
+                    ) {
                         FileRead::File(readable) => {
                             Self::Indexed(readable.text().as_str().to_owned())
                         }
-                        FileRead::Text {
-                            withheld: Some(Withheld::HeldNumber),
+                        FileRead::Withheld {
+                            why: Withheld::HeldNumber,
                             ..
                         } => Self::Held,
                         // Too large or too long for a model, and naming no held number.
-                        FileRead::Text {
+                        FileRead::Withheld {
                             text,
-                            withheld: Some(Withheld::TooLarge(_) | Withheld::TooManyPages(_)) | None,
+                            why: Withheld::TooLarge(_) | Withheld::TooManyPages(_),
                             ..
-                        } => Self::Indexed(text.into_string()),
+                        }
+                        | FileRead::Text { text, .. } => Self::Indexed(text.into_string()),
                         FileRead::Unsupported { .. } => Self::Indexed(String::new()),
                     },
                 )
@@ -82,9 +90,11 @@ mod tests {
     #[test]
     fn a_pdf_naming_an_identity_number_is_held() {
         assert_eq!(
-            UploadStanding::of(Some(here_pdf()), |_| Ok(
-                "SSN 123-45-6789 wages\u{c}".to_owned()
-            )),
+            UploadStanding::of(
+                &crate::attachment::AttachmentId::of(PDF),
+                Some(here_pdf()),
+                |_| Ok("SSN 123-45-6789 wages\u{c}".to_owned())
+            ),
             Ok(UploadStanding::Held)
         );
     }
@@ -102,7 +112,11 @@ mod tests {
             },
         };
         assert_eq!(
-            UploadStanding::of(Some(private), |_| Err("not asked".to_owned())),
+            UploadStanding::of(
+                &crate::attachment::AttachmentId::of(PDF),
+                Some(private),
+                |_| Err("not asked".to_owned())
+            ),
             Ok(UploadStanding::Indexed(
                 "Wages 70000 SSN [redacted]".to_owned()
             ))

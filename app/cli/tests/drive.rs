@@ -1,7 +1,7 @@
 //! The secretary reads the owner's documents by permission, over a real server with a scripted
 //! model and the real Drive interpreter pointed at a fake CLI ([`common::FakeDrive`]) that fails
 //! on any command but the two reads: a file in an allowed folder is read at once, any other
-//! becomes a card naming the file, and every SSN or EIN arrives `[redacted]`.
+//! becomes a card naming the file, and every SSN or EIN arrives as a placeholder naming the file.
 
 mod common;
 
@@ -203,10 +203,10 @@ fn a_file_in_an_allowed_folder_is_read_at_once_and_asks_nothing() {
     drive.only_reads_ran();
 }
 
-/// An SSN and an EIN arrive `[redacted]`, in the answer the model reads and
+/// An SSN and an EIN arrive as placeholders naming the file, in the answer the model reads and
 /// in every byte the conversation store keeps; the phone number stays.
 #[test]
-fn an_ssn_in_a_document_arrives_redacted_and_is_never_stored() {
+fn an_ssn_in_a_document_arrives_masked_and_is_never_stored() {
     let drive = FakeDrive::new("drive-redacted");
     let fakes = Arc::new(
         Fakes::new("drive-redacted")
@@ -227,12 +227,18 @@ fn an_ssn_in_a_document_arrives_redacted_and_is_never_stored() {
     let (text, refused) = read.first().expect("one read");
     assert!(!refused, "{text}");
     assert!(text.contains("Wages 95000"), "{text}");
-    assert!(text.contains("SSN [redacted]"), "{text}");
-    assert!(text.contains("EIN [redacted]"), "{text}");
+    assert!(
+        text.contains("SSN [SSN ending 6789 · tap to show · held:file:"),
+        "{text}"
+    );
+    assert!(
+        text.contains("EIN [EIN ending 0001 · tap to show · held:file:"),
+        "{text}"
+    );
     assert!(text.contains("617-555-1234"), "a phone number is not an ID");
     let kept = stored(&fakes);
     assert!(!kept.is_empty(), "the conversation was stored");
-    for number in ["123-45-6789", "3456789"] {
+    for number in ["123-45-6789", "00-0000001"] {
         assert!(
             !payload.to_string().contains(number),
             "{number} reached the wire"
@@ -421,7 +427,7 @@ fn tapped(tag: &str, tap: &serde_json::Value) -> Tapped {
 /// answer, redacted, and the proposal reads acted.
 #[cfg(feature = "fixture")]
 #[test]
-fn a_tapped_document_request_puts_the_redacted_text_in_the_conversation() {
+fn a_tapped_document_request_puts_the_masked_text_in_the_conversation() {
     let Tapped {
         drive,
         edits,
@@ -437,7 +443,8 @@ fn a_tapped_document_request_puts_the_redacted_text_in_the_conversation() {
         .map(|(text, _)| text)
         .expect("the tap's text is in the transcript");
     assert!(
-        text.contains("SSN [redacted]") && text.contains("EIN [redacted]"),
+        text.contains("SSN [SSN ending 6789 · tap to show · held:file:")
+            && text.contains("EIN [EIN ending 0001 · tap to show · held:file:"),
         "{text}"
     );
     assert_eq!(payload["proposals"][0]["state"], "acted", "{payload}");
@@ -485,4 +492,190 @@ fn always_allow_writes_the_folder_and_reads_the_document() {
         "and the document was read too"
     );
     drive.only_reads_ran();
+}
+
+/// A document the owner tapped Read on sits outside every allowed folder, and its held values
+/// still reveal in the conversation that read it and send on the tap: the box reads it again as
+/// the tap read it, never through the fence that refused it.
+#[cfg(feature = "fixture")]
+#[test]
+fn a_tapped_document_s_number_reveals_and_sends_from_its_conversation() {
+    use suzatary_core::held_value::{Handle, HeldFile, Holder, Place, Placeholder, Reach};
+    use suzatary_core::redact::Kind;
+    const PATH: &str = "/shared-with-me/Ada Documents/w2.txt";
+    let place = Place::new(
+        Holder::File(HeldFile::Drive {
+            path: PATH.parse().expect("a path"),
+        }),
+        0,
+    )
+    .expect("a place");
+    let ssn = Placeholder::of(Kind::Ssn, "123-45-6789", Reach::Revealable(place.clone())).print();
+    let drive = FakeDrive::new("drive-tapped-held");
+    let fakes = Arc::new(
+        Fakes::new("drive-tapped-held")
+            .whois(common::FakeWhois::new().naming(common::v4(), ada()))
+            .drive(&drive)
+            .model(FakeModel::saying_owned([
+                read_call(PATH),
+                r#"{"say": "Asked."}"#.to_owned(),
+                r#"{"say": "Wages were 95000."}"#.to_owned(),
+                serde_json::json!({"say": "Drafted.", "calls": [
+                    {"verb": "propose_email", "args": {
+                        "account": "her@example.invalid",
+                        "to": "counsel@example.test",
+                        "subject": "The filing",
+                        "body": format!("My SSN is {ssn}."),
+                        "why": "Counsel asked for the number.",
+                        "sources": "todo:life/permitfiling",
+                    }},
+                ]})
+                .to_string(),
+                r#"{"say": "Proposed."}"#.to_owned(),
+            ])),
+    );
+    let running = common::Server::new(Arc::clone(&fakes), deployment(), Vec::new())
+        .recording_acts(common::again(&fakes.conversations))
+        .reading(&drive)
+        .start();
+    let base = &running.base;
+    let (id, _) = exchange(base, "what were my wages");
+    let tapped = common::act(
+        &format!("{base}/api/secretary/conversations/{id}/proposals/0/tap"),
+        &serde_json::json!({}),
+    );
+    assert_eq!(common::status(&tapped), 200);
+    settled(base, &id);
+
+    let mut revealed = common::act_signed(
+        &format!("{base}/api/held/reveal"),
+        &serde_json::json!({ "handle": Handle::Value(place).print(), "conversation": id }),
+        &common::phone(),
+    );
+    assert_eq!(common::status(&revealed), 200);
+    assert_eq!(
+        common::body_json(&mut revealed),
+        serde_json::json!({ "type": "Shown", "value": "123-45-6789" })
+    );
+
+    let said = common::act(
+        &format!("{base}/api/secretary/conversations/{id}/say"),
+        &serde_json::json!({ "say": "send counsel my SSN" }),
+    );
+    assert_eq!(common::status(&said), 202);
+    let payload = settled(base, &id);
+    let email = payload["proposals"]
+        .as_array()
+        .and_then(|rows| rows.iter().position(|row| row["act"]["kind"] == "email"))
+        .expect("the email was proposed");
+    let mut sent = common::act_signed(
+        &format!("{base}/api/secretary/conversations/{id}/proposals/{email}/tap"),
+        &serde_json::json!({}),
+        &common::phone(),
+    );
+    assert_eq!(common::status(&sent), 200);
+    assert_eq!(
+        common::body_json(&mut sent)["proposals"][email]["state"],
+        "sent"
+    );
+    assert_eq!(running.sent.sent()[0].body, "My SSN is 123-45-6789.");
+}
+
+/// A PDF in the private folder that the owner tapped Read on is withheld, and a proposal that
+/// sends it reads nothing from Drive: it is recorded from what the tap read, the model is told
+/// no digest of it, and the tap that sends it is the one read past the fence.
+#[cfg(feature = "fixture")]
+#[test]
+fn a_tapped_private_file_is_proposed_without_a_read_and_sent_on_the_tap() {
+    use suzatary_core::held_value::{HeldFile, Placeholder};
+    const PATH: &str = "/my-files/Suzatary/Private/w2.pdf";
+    let pdf = common::pdf_saying("SSN 123-45-6789");
+    let digest = suzatary_core::attachment::AttachmentId::of(&pdf);
+    let file = Placeholder::file(
+        &HeldFile::Drive {
+            path: PATH.parse().expect("a path"),
+        },
+        "w2.pdf",
+        pdf.len() as u64,
+    )
+    .print();
+    let drive = FakeDrive::new("drive-tapped-private").holding_private("w2.pdf", &pdf);
+    let fakes = Arc::new(
+        Fakes::new("drive-tapped-private")
+            .whois(common::FakeWhois::new().naming(common::v4(), ada()))
+            .drive(&drive)
+            .model(FakeModel::saying_owned([
+                read_call(PATH),
+                r#"{"say": "Asked."}"#.to_owned(),
+                r#"{"say": "Read."}"#.to_owned(),
+                serde_json::json!({"say": "Drafted.", "calls": [
+                    {"verb": "propose_email", "args": {
+                        "account": "her@example.invalid",
+                        "to": "counsel@example.test",
+                        "subject": "The W-2",
+                        "body": format!("Attached is {file}."),
+                        "why": "Counsel asked for the W-2.",
+                        "sources": "todo:life/permitfiling",
+                    }},
+                ]})
+                .to_string(),
+                r#"{"say": "Proposed."}"#.to_owned(),
+            ])),
+    );
+    let running = common::Server::new(Arc::clone(&fakes), deployment(), Vec::new())
+        .recording_acts(common::again(&fakes.conversations))
+        .reading(&drive)
+        .start();
+    let base = &running.base;
+    let (id, _) = exchange(base, "what is on my W-2");
+    let tapped = common::act(
+        &format!("{base}/api/secretary/conversations/{id}/proposals/0/tap"),
+        &serde_json::json!({}),
+    );
+    assert_eq!(common::status(&tapped), 200);
+    settled(base, &id);
+    let downloads = || {
+        drive
+            .calls()
+            .iter()
+            .filter(|call| call.starts_with("filesystem download"))
+            .count()
+    };
+    let read_on_tap = downloads();
+    assert_eq!(read_on_tap, 1, "{:?}", drive.calls());
+
+    let said = common::act(
+        &format!("{base}/api/secretary/conversations/{id}/say"),
+        &serde_json::json!({ "say": "send counsel my W-2" }),
+    );
+    assert_eq!(common::status(&said), 202);
+    let payload = settled(base, &id);
+    assert_eq!(
+        downloads(),
+        read_on_tap,
+        "proposing read nothing from Drive"
+    );
+    let asked = format!("{:?}{:?}", fakes.model.asked(), fakes.model.resumed_with());
+    assert!(
+        !asked.contains(&digest.as_str()[..12]),
+        "a model was told the file's digest"
+    );
+    let email = payload["proposals"]
+        .as_array()
+        .and_then(|rows| rows.iter().position(|row| row["act"]["kind"] == "email"))
+        .expect("the email was proposed");
+
+    let mut sent = common::act_signed(
+        &format!("{base}/api/secretary/conversations/{id}/proposals/{email}/tap"),
+        &serde_json::json!({}),
+        &common::phone(),
+    );
+    assert_eq!(common::status(&sent), 200);
+    assert_eq!(
+        common::body_json(&mut sent)["proposals"][email]["state"],
+        "sent"
+    );
+    assert_eq!(downloads(), read_on_tap + 1, "the send tap read it once");
+    assert_eq!(running.sent.sent()[0].body, "Attached is w2.pdf.");
+    assert_eq!(running.sent.parts()[0][0].content, pdf);
 }

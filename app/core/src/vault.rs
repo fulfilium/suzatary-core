@@ -1,6 +1,6 @@
 //! The owner's private files: an upload whose text names an identity number is kept in his
 //! Drive, never on the box, and only his confirm puts it there. A model reads its text with
-//! the numbers redacted; reading the file again or sending it is a tap.
+//! each number a placeholder; reading the file again or sending it is a tap.
 
 use serde::{Deserialize, Serialize};
 
@@ -14,7 +14,8 @@ pub struct PrivateCopy {
     pub path: DrivePath,
     /// Its size in bytes.
     pub size: u64,
-    /// Its text with identity numbers redacted; `""` for an image.
+    /// Its text with each identity number a placeholder naming the upload (`crate::held_value`);
+    /// `""` for an image.
     pub text: String,
 }
 
