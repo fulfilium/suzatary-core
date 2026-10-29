@@ -55,6 +55,7 @@ export namespace pages {
     secretary: (root, s) => secretary.mount(root, s.topics),
     conversation: (root, s) =>
       conversation.mount(root, s.id, { refs: s.refs, focus: s.focus === true, ...(s.at === undefined ? {} : { at: s.at }) }),
+    newtopic: root => frame.mount(root, conversation.draft()),
     unknown: (root, s) => frame.mount(root, unknown(s.hash)),
   }
 

@@ -13,7 +13,7 @@ pub struct ConversationId(String);
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 #[error(
     "a conversation id is 1-64 characters of a-z, 0-9 and -, starting with a letter or digit, \
-     and not `memory`: {0:?}"
+     and not `memory` or `new`: {0:?}"
 )]
 pub struct NotAnId(pub String);
 
@@ -26,8 +26,10 @@ impl ConversationId {
     pub fn new(text: impl Into<String>) -> Result<Self, NotAnId> {
         let text = text.into();
         // `memory` is taken: `memory.jsonl`, the secretary's memory, shared the directory the
-        // conversations' files were kept in.
+        // conversations' files were kept in. `new` is the page's address of a topic not yet
+        // opened (`#/secretary/new`), so no conversation can be named by it.
         let ok = text != "memory"
+            && text != "new"
             && matches!(text.len(), 1..=64)
             && text.starts_with(|c: char| c.is_ascii_lowercase() || c.is_ascii_digit())
             && text

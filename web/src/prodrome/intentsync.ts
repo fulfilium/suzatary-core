@@ -48,15 +48,17 @@ export namespace intentsync {
     retract(asks.holds(id => read.get(id) ?? null))
   }
 
-  // One ask: nothing if it is already asked; otherwise sent, answered, and read back. A seal or a topic is held once the
-  // tab's replica has it, and a forgotten fact by the box's answer, since no replica carries the memory's words.
-  export const ask = async (a: asks.Ask, secret?: string): Promise<Outcome> => {
+  // One ask: nothing if it is already asked; otherwise sent, answered (told to `heard`), and read back. A seal or a topic
+  // is held once the tab's replica has it, and a forgotten fact by the box's answer, since no replica carries the
+  // memory's words.
+  export const ask = async (a: asks.Ask, secret?: string, heard: (answer: intents.Answer) => void = () => {}): Promise<Outcome> => {
     const key = intents.key(a)
     if (!intents.wants(source.state(), key)) return { type: "Already" }
     source.dispatch({ type: "Asked", key, act: a })
     const asked = source.state().asked.get(key)?.asks ?? 0
     const answer = await (a.type === "Seal" ? appendAct(a.event) : a.type === "Topic" ? storesync.write(a.write, a.at) : asks.send(a, secret)).then(() => TAKEN, answerOf(a))
     source.dispatch({ type: "Answered", key, asks: asked, answer })
+    heard(answer)
     if (answer.type === "Taken" && (a.type === "Seal" || a.type === "Topic" || a.type === "Forget")) source.dispatch({ type: "Subsumed", key })
     else if (answer.type === "Taken") {
       // A pull asked after the box's answer holds what it wrote, whatever the record's words became on the way in; a pull
@@ -70,6 +72,14 @@ export namespace intentsync {
   export const asked = (a: asks.Ask): Promise<void> =>
     ask(a).then(o => {
       if (o.type === "Answered" && o.answer.type !== "Taken") throw new Error(o.answer.e)
+    })
+
+  // The same, settled by the box's answer, while the read-back runs behind it: what a field closes on, since a pull of
+  // every store is minutes on a device taking its lines again. The ask stays in the set until a reading holds it.
+  export const answered = (a: asks.Ask): Promise<void> =>
+    new Promise((taken, refused) => {
+      const heard = (answer: intents.Answer): void => (answer.type === "Taken" ? taken() : refused(new Error(answer.e)))
+      ask(a, undefined, heard).then(o => (o.type === "Already" ? taken() : undefined), refused)
     })
 
   // Every move of the replicas may hold an open ask.

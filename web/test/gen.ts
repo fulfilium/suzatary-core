@@ -170,7 +170,7 @@ export function route(r: Rng): Route {
     case 9:
       return { type: "settings" };
     case 10:
-      return { type: "memory" };
+      return r.bool() ? { type: "memory" } : { type: "newtopic" };
     case 11:
       return { type: "chain", focus: r.bool() ? "" : r.string("0123456789abcdef", 8) };
     case 12:

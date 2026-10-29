@@ -981,21 +981,22 @@ app.scene("a new request pops up in an open app and Open lands on its row", asyn
 
 /**
  * A TOPIC LEFT UNNAMED IS NAMED AFTER ITS FIRST ANSWER, AND RENAMED IN PLACE
- * (`docs/CHAT-PLAN-2026-09-25.md` §4.1): "New topic" on the list opens one
- * with the compose box focused, the title job (the fixture script's `Title
- * this conversation` line) names it once the answer lands, and Rename is an
- * append the heading and the list both show.
+ * (`docs/CHAT-PLAN-2026-09-25.md` §4.1): "New topic" on the list opens a draft
+ * with the compose box focused, its first message opens the conversation, the
+ * title job (the fixture script's `Title this conversation` line) names it
+ * once the answer lands, and Rename is an append the heading and the list
+ * both show.
  */
 app.scene("a blank new topic is named after its first answer, and renamed in place", async () => {
   await app.resize(PHONE);
   await app.page.navigate(`${WRITE_BASE}/#/secretary`);
   await app.page.waitFor(`document.querySelector(".act-newtopic") !== null`, { timeout: 15000 });
   await app.page.click(".act-newtopic");
-  await app.page.waitFor(`/^#\\/secretary\\/[0-9-]+\\?focus=1$/.test(location.hash)`, { timeout: 15000 });
-  await app.page.waitFor(`document.querySelector(".pagetitle")?.textContent === "New topic"`, { timeout: 15000 });
+  await app.page.waitFor(`location.hash === "#/secretary/new"`, { timeout: 15000 });
   await app.page.waitFor(`document.activeElement?.classList.contains("composebox") === true`, { timeout: 15000 });
   await app.page.type(".composebox", "when is the zephyr filing due");
   await app.page.click(".composesend");
+  await app.page.waitFor(`/^#\\/secretary\\/[0-9-]+$/.test(location.hash)`, { timeout: 15000 });
   await app.page.waitFor(`document.querySelector(".pagetitle")?.textContent === "A named topic"`, { timeout: 30000 });
   const id = await app.page.evaluate<string>(`location.hash.replace(/^#\\/secretary\\//, "").replace(/\\?.*$/, "")`);
 

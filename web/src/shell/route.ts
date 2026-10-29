@@ -28,6 +28,8 @@ export type Route =
   // forwards to the default conversation.
   | { readonly type: "secretary"; readonly refs: readonly string[]; readonly topics: readonly string[]; readonly focus?: boolean }
   | { readonly type: "memory" }
+  // A topic not yet asked anything: the box holds nothing of it until its first message is sent.
+  | { readonly type: "newtopic" }
   // `at` is a search hit's turn: the window opens ending at it.
   | { readonly type: "conversation"; readonly id: string; readonly refs: readonly string[]; readonly focus?: boolean; readonly at?: number }
   | { readonly type: "unknown"; readonly hash: string };
@@ -115,6 +117,7 @@ export function parseRoute(hash: string): Route {
       const focus: { readonly focus?: true } = query["focus"] === "1" ? { focus: true } : {};
       if (rest === "") return { type: "secretary", refs, topics: list(query["topics"] ?? ""), ...focus };
       if (rest === "memory") return { type: "memory" };
+      if (rest === "new") return { type: "newtopic" };
       const id = decode(rest);
       const at = /^\d+$/.test(query["at"] ?? "") ? { at: Number(query["at"]) } : {};
       return id === null || id === ""
@@ -167,6 +170,8 @@ export function hrefOf(route: Route): string {
       return `#/secretary${search({ ref: route.refs.join(","), topics: route.topics.join(","), focus: route.focus === true ? "1" : "" })}`;
     case "memory":
       return "#/secretary/memory";
+    case "newtopic":
+      return "#/secretary/new";
     case "conversation":
       return `#/secretary/${encodeURIComponent(route.id)}${search({
         ref: route.refs.join(","),

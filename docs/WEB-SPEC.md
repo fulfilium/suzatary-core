@@ -347,7 +347,10 @@ which answered last.
   carries no queued mark. — `answer.test.ts` "a question the box holds is
   thinking from the moment it is seen…".
 - **One field above the conversations.** The search, with New topic beside
-  it, which opens a conversation at once; a topic with no name reads "New
+  it, which opens a draft the box holds nothing of: its first message opens
+  the conversation under the name typed over the composer, so no
+  conversation stands that nobody spoke in (`e2e/topic.test.ts` "a new topic
+  is named, asked and answered…"); a topic with no name reads "New
   topic" until the box names it, and a last turn is its minute today,
   "yesterday", or its day, read against an instant the list holds and
   moves when the owner's day turns. No placeholder is cut at 390 or 1440

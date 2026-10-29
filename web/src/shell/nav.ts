@@ -66,6 +66,7 @@ export namespace nav {
         return "briefings";
       case "conversation":
       case "memory":
+      case "newtopic":
         return "secretary";
       default:
         return route.type;

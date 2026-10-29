@@ -4,7 +4,6 @@
 
 import app from "../app/app"
 import type { ConversationRow, StreamPayload, TopicInUse } from "../wire/generated/wire"
-import { openConversation } from "../wire/api"
 import storesync from "../prodrome/storesync"
 import conversations from "../chat/conversations"
 import list from "../chat/list"
@@ -36,14 +35,8 @@ import secretaryState from "./secretary.state"
 export namespace secretary {
   const DEBOUNCE_MS = 250
 
-  // A new topic opens at once with no name: the box names it after its first answer, and Rename is on its page.
-  const starter = (): HTMLElement => {
-    const start = (): void =>
-      void openConversation("")
-        .then(p => { address.go({ type: "conversation", id: p.id, refs: [], focus: true }) })
-        .catch((e: unknown) => toast(lo.reason(e)))
-    return el("button", { type: "button", class: "act act-newtopic", onclick: start }, "New topic")
-  }
+  // A new topic is a page of its own, and the box opens the conversation only once its first message is sent.
+  const starter = (): HTMLElement => el("a", { class: "act act-newtopic", href: hrefOf({ type: "newtopic" }) }, "New topic")
 
   // The search field and New topic, on one line outside the redrawn list, so a redraw keeps what is typed.
   type Head = { readonly node: HTMLElement; readonly listen: () => () => void }

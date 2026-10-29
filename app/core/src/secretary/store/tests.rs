@@ -159,6 +159,7 @@ fn a_conversation_id_is_a_slug() {
         "has_underscore",
         "%2e%2e",
         "memory",
+        "new",
         &"a".repeat(65),
     ] {
         assert!(ConversationId::new(bad).is_err(), "{bad:?}");
