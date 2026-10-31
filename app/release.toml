@@ -3,4 +3,5 @@
 # never their titles, since this file is public. No crate compiles it: the build hands its text
 # to the binary as `SUZATARY_RELEASE`, for `GET /api/about` and `--version`.
 
-version = "2.1.38"
+version = "2.1.39"
+completes = ["boxprompts"]
