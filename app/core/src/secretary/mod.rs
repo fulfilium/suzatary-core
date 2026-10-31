@@ -54,6 +54,7 @@ pub mod inbox_event;
 mod inbox_json;
 pub mod inbox_reading;
 pub mod inbox_registers;
+pub mod indexed_tree;
 pub mod key_ring;
 pub mod line_event;
 pub mod line_shape;

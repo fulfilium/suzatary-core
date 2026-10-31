@@ -252,7 +252,6 @@ impl Held<'_> {
         if !read.pending().contains(node) {
             return Err(waiting());
         }
-        let tree = read.tree().ok_or_else(waiting)?;
-        Ok(*tree.node(node).ok_or_else(waiting)?.measure())
+        Ok(*read.node(node).ok_or_else(waiting)?.measure())
     }
 }

@@ -12,6 +12,8 @@ mod calls;
 mod card_words;
 #[path = "connect.rs"]
 mod connect;
+#[path = "context_cost.rs"]
+mod context_cost;
 #[path = "decisions_schema.rs"]
 mod decisions_schema;
 #[path = "digest.rs"]

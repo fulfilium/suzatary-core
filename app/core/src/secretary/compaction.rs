@@ -145,8 +145,7 @@ impl Compaction {
     pub fn owed(&self, digest: &Digest) -> Vec<Hash> {
         let owners = |node: &Hash| {
             digest
-                .tree()
-                .and_then(|tree| tree.node(node))
+                .node(node)
                 .is_some_and(|node| node.measure().is_owners())
         };
         let (mut first, rest): (Vec<Hash>, Vec<Hash>) = digest

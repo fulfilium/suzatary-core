@@ -40,6 +40,7 @@ use crate::secretary::digest_label::Label;
 use crate::secretary::digest_line::Line;
 use crate::secretary::digest_policy::Owners;
 use crate::secretary::digest_spent::Spent;
+use crate::secretary::indexed_tree::IndexedTree;
 use crate::secretary::line_event::LineEvent;
 use crate::secretary::salted_text::TextName;
 use crate::secretary::store::Entry;
@@ -49,7 +50,7 @@ use crate::secretary::texts::{Liveness, Naming};
 /// The conversations read through their summaries.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Digest {
-    tree: Option<Tree<Label>>,
+    tree: Option<IndexedTree<Label>>,
     said: BTreeMap<Hash, Vec<Candidate>>,
     /// Every summary's words the history names: its object, its node and its text.
     named: Vec<(Hash, Hash, TextName)>,
@@ -60,6 +61,9 @@ pub struct Digest {
     /// Every summary object written over a retracted summary, at any depth: stale until its node
     /// is asked again.
     over_retracted: BTreeSet<Hash>,
+    /// How each node's least-named candidate stands, where it is a summary ([`standing`]): read
+    /// once here, since a view asks it of every node of the tree.
+    standings: BTreeMap<Hash, Standing>,
 }
 
 /// One write of a node's reading: a summary, or its retraction.
@@ -165,7 +169,7 @@ pub fn digest(
             })
         })
         .collect();
-    let tree = digest::tree(leaves)?;
+    let tree = digest::tree(leaves)?.map(IndexedTree::of);
     let mut said: BTreeMap<Hash, Vec<Candidate>> = BTreeMap::new();
     let mut retracted = BTreeSet::new();
     for (node, stream) in fold(history).entities() {
@@ -212,6 +216,11 @@ pub fn digest(
         .collect();
     let attempts = attempts(history);
     let over_retracted = over_retracted(history, &retracted);
+    let standings = tree.as_ref().map_or_else(BTreeMap::new, |tree| {
+        said.keys()
+            .filter_map(|node| Some((node.clone(), standing(tree, &said, &over_retracted, node)?)))
+            .collect()
+    });
     Ok(Digest {
         tree,
         said,
@@ -223,7 +232,50 @@ pub fn digest(
             .map(|(line, (leaf, _))| (leaf, line.clone()))
             .collect(),
         over_retracted,
+        standings,
     })
+}
+
+/// How the least-named candidate's summary of `node` stands, when it is a summary of a node of
+/// `tree`: current when it was asked under its node's class's current asking over what the
+/// node's children read now and over no retracted summary.
+fn standing(
+    tree: &IndexedTree<Label>,
+    said: &BTreeMap<Hash, Vec<Candidate>>,
+    over_retracted: &BTreeSet<Hash>,
+    node: &Hash,
+) -> Option<Standing> {
+    let candidate = said.get(node)?.first()?;
+    let Written::Summary(Summary { over, asked, .. }) = &candidate.said else {
+        return None;
+    };
+    let beside = Beside::of(tree.node(node)?.measure());
+    Some(if over_retracted.contains(&candidate.object) {
+        Standing::OverRetracted
+    } else if asked.is_current(beside) && written_over(tree, said, node).as_ref() == Some(over) {
+        Standing::Current
+    } else {
+        Standing::Stale
+    })
+}
+
+/// What a summary of `node` is written over now, as [`Digest::over`] answers.
+fn written_over(
+    tree: &IndexedTree<Label>,
+    said: &BTreeMap<Hash, Vec<Candidate>>,
+    node: &Hash,
+) -> Option<Vec<Hash>> {
+    tree.node(node)?
+        .children()
+        .iter()
+        .map(|child| {
+            Some(if child.is_leaf() {
+                child.name().clone()
+            } else {
+                said.get(child.name())?.first()?.object.clone()
+            })
+        })
+        .collect()
 }
 
 /// Every summary in `history` written over one of `retracted`, or over a summary that is, so
@@ -442,7 +494,13 @@ impl Digest {
     /// The tree, `None` while there are no lines.
     #[must_use]
     pub fn tree(&self) -> Option<&Tree<Label>> {
-        self.tree.as_ref()
+        self.tree.as_ref().map(IndexedTree::tree)
+    }
+
+    /// The node of the tree named `name`, found in the tree's depth.
+    #[must_use]
+    pub fn node(&self, name: &Hash) -> Option<&prodrome_core::digest::Node<Label>> {
+        self.tree.as_ref()?.node(name)
     }
 
     /// Node `node`'s reading: one candidate, or a conflict's, by least object name first; empty
@@ -464,7 +522,7 @@ impl Digest {
         match standing {
             Standing::Current => Some(words),
             Standing::Stale => {
-                let owners = self.tree.as_ref()?.node(node)?.measure().is_owners();
+                let owners = self.node(node)?.measure().is_owners();
                 (!owners).then_some(words)
             }
             Standing::OverRetracted => None,
@@ -478,26 +536,13 @@ impl Digest {
         self.shown(node).map(|(_, standing)| standing)
     }
 
-    /// The least-named candidate's summary, when its words read, and how it stands: current
-    /// when it was asked under its node's class's current asking over what the node's children
-    /// read now. Private, so a stale summary of an owner's node reaches no reader.
+    /// The least-named candidate's summary, when its words read, and how it stands
+    /// ([`standing`]). Private, so a stale summary of an owner's node reaches no reader.
     fn shown(&self, node: &Hash) -> Option<(&Line, Standing)> {
-        let candidate = self.candidates(node).first()?;
-        let Written::Summary(Summary {
-            words, over, asked, ..
-        }) = &candidate.said
-        else {
+        let Written::Summary(Summary { words, .. }) = &self.candidates(node).first()?.said else {
             return None;
         };
-        let beside = Beside::of(self.tree.as_ref()?.node(node)?.measure());
-        let standing = if self.over_retracted.contains(&candidate.object) {
-            Standing::OverRetracted
-        } else if asked.is_current(beside) && self.over(node).as_ref() == Some(over) {
-            Standing::Current
-        } else {
-            Standing::Stale
-        };
-        Some((words.as_ref()?, standing))
+        Some((words.as_ref()?, *self.standings.get(node)?))
     }
 
     /// What a summary of `node` is written over now, in the log's order: each child line's
@@ -505,19 +550,7 @@ impl Digest {
     /// hold, or one with an inner child nothing was said of.
     #[must_use]
     pub fn over(&self, node: &Hash) -> Option<Vec<Hash>> {
-        self.tree
-            .as_ref()?
-            .node(node)?
-            .children()
-            .iter()
-            .map(|child| {
-                Some(if child.is_leaf() {
-                    child.name().clone()
-                } else {
-                    self.candidates(child.name()).first()?.object.clone()
-                })
-            })
-            .collect()
+        written_over(self.tree.as_ref()?, &self.said, node)
     }
 
     /// The taint of the summary [`Digest::summary`] shows: the taint its event records joined
@@ -530,7 +563,7 @@ impl Digest {
             Written::Summary(summary) => summary.taint,
             Written::Unfit { .. } | Written::Retracted => return None,
         };
-        let spans = self.tree.as_ref()?.node(node)?.measure().taint;
+        let spans = self.node(node)?.measure().taint;
         Some(recorded.join(spans))
     }
 
@@ -540,8 +573,7 @@ impl Digest {
     #[must_use]
     pub fn name(&self) -> crate::rule::ReadingName {
         let tree = self
-            .tree
-            .as_ref()
+            .tree()
             .map(|tree| digest::read(tree, |node| self.summarized(node)));
         crate::rule::ReadingName::of(
             tree.iter()
@@ -574,7 +606,7 @@ impl Digest {
     /// a parent written over a child's older summary is stale once the child is asked again.
     #[must_use]
     pub fn pending(&self) -> Vec<Hash> {
-        self.tree.as_ref().map_or_else(Vec::new, |tree| {
+        self.tree().map_or_else(Vec::new, |tree| {
             digest::pending(tree, |node| match self.shown(node)? {
                 (words, Standing::Current) => {
                     Some(u32::try_from(words.as_str().len()).unwrap_or(u32::MAX))
@@ -587,8 +619,7 @@ impl Digest {
     /// The view under `budget` bytes ([`digest::view`]); `None` while there are no lines.
     #[must_use]
     pub fn view(&self, budget: u64) -> Option<View> {
-        self.tree
-            .as_ref()
+        self.tree()
             .map(|tree| digest::view(tree, |node| self.summarized(node), budget))
     }
 
@@ -598,7 +629,7 @@ impl Digest {
     #[must_use]
     pub fn naming(&self) -> Naming<Line> {
         let mut in_tree = BTreeSet::new();
-        let mut stack: Vec<_> = self.tree.iter().map(Tree::root).collect();
+        let mut stack: Vec<_> = self.tree().map(Tree::root).into_iter().collect();
         while let Some(node) = stack.pop() {
             in_tree.insert(node.name());
             stack.extend(node.children());

@@ -69,13 +69,13 @@ pub fn view(
     shows: fn(&Label) -> bool,
 ) -> Vec<Shown> {
     let budget = u64::try_from(budget).unwrap_or(u64::MAX);
-    let (Some(tree), Some(view)) = (digest.tree(), digest.view(budget)) else {
+    let Some(view) = digest.view(budget) else {
         return Vec::new();
     };
     view.parts
         .into_iter()
         .filter_map(|part| {
-            let node = tree.node(&part.node)?;
+            let node = digest.node(&part.node)?;
             let body = shown_as(*node.measure(), shows, || said(digest, entries, node))?;
             Some(Shown { part, body })
         })

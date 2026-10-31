@@ -288,7 +288,7 @@ impl Ask {
         entries: &std::collections::BTreeMap<&Hash, &crate::secretary::store::Entry>,
         node: &Hash,
     ) -> Option<(Self, Vec<Hash>)> {
-        let asked = digest.tree()?.node(node)?;
+        let asked = digest.node(node)?;
         let over = digest.over(node)?;
         let span = asked
             .children()
