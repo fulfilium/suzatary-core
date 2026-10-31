@@ -28,9 +28,17 @@
 //!   characters of account, acct, a/c, checking or savings, unless an order, invoice, tracking,
 //!   booking, telephone or help label is closer, and not grouped as a phone number or a date;
 //! - a routing number: nine digits whose ABA checksum holds, within [`NEAR`] characters of
-//!   routing, ABA, RTN or transit.
+//!   routing, ABA, RTN or transit;
+//! - a passport number: six to nine capital letters and digits, at least six of them digits, at
+//!   most three letters, eight or nine digits when there is no letter, and no date, within
+//!   [`NEAR`] characters of passport or its word in French, Portuguese, Spanish, German or Arabic;
+//! - an A-number: seven to nine digits, in a row or as `ddd-ddd-ddd` or `ddd ddd ddd`, after an
+//!   optional `A` and one hyphen or space, and no date, within [`NEAR`] characters of `A-number`,
+//!   `A-No`, `A#`, alien number or alien registration number.
 //!
-//! A labelled code, account or routing number stands alone: no `+` or currency beside it, no
+//! An account number, a passport number and an A-number are held only when no order, invoice,
+//! tracking, booking, telephone or help label is closer. A labelled code, account, routing,
+//! passport or A-number stands alone: no `+` or currency beside it, no
 //! digit beside it across a hyphen, dot, comma or slash, and no run of three digits or more
 //! across one space. When matches overlap, a code wins, then a kind whose checksum held, then the
 //! closest label. No label is read inside a placeholder `crate::held_value` printed.
@@ -57,8 +65,8 @@ use std::sync::LazyLock;
 
 use crate::rule_version::{Version, Versioned};
 use regex::Regex;
-use serde::Serialize;
 use serde::de::DeserializeOwned;
+use serde::{Deserialize, Serialize};
 
 /// What a redacted number becomes.
 pub const REDACTED: &str = "[redacted]";
@@ -208,7 +216,7 @@ impl Versioned for Scrub {
     const REVISION: u32 = 1;
 
     fn parts((): ()) -> Vec<String> {
-        let patterns: [&Regex; 20] = [
+        let patterns: [&Regex; 24] = [
             &WRITTEN_OUT,
             &NINE_DIGITS,
             &LABEL,
@@ -222,6 +230,10 @@ impl Versioned for Scrub {
             &ACCOUNT,
             &ROUTING_LABEL,
             &ROUTING,
+            &PASSPORT_LABEL,
+            &PASSPORT,
+            &A_NUMBER_LABEL,
+            &A_NUMBER,
             &GROUPS,
             &IBAN,
             &HINT,
@@ -312,7 +324,9 @@ fn scrubbed(tree: serde_json::Value) -> serde_json::Value {
 }
 
 /// Which held number a span of text is, by the label beside it or, with none, by its shape.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, ts_rs::TS)]
+#[serde(rename_all = "snake_case")]
+#[ts(rename = "HeldKind")]
 pub enum Kind {
     /// A Social Security number.
     Ssn,
@@ -332,11 +346,15 @@ pub enum Kind {
     Routing,
     /// An International Bank Account Number.
     Iban,
+    /// A passport number.
+    Passport,
+    /// A US immigration A-number (Alien Registration Number).
+    ANumber,
 }
 
 impl Kind {
     /// Every kind.
-    pub const ALL: [Kind; 9] = [
+    pub const ALL: [Kind; 11] = [
         Kind::Ssn,
         Kind::Itin,
         Kind::Tin,
@@ -346,6 +364,8 @@ impl Kind {
         Kind::Account,
         Kind::Routing,
         Kind::Iban,
+        Kind::Passport,
+        Kind::ANumber,
     ];
 
     /// The kind as a person writes it.
@@ -361,6 +381,8 @@ impl Kind {
             Kind::Account => "account",
             Kind::Routing => "routing number",
             Kind::Iban => "IBAN",
+            Kind::Passport => "passport",
+            Kind::ANumber => "A-number",
         }
     }
 
@@ -377,6 +399,8 @@ impl Kind {
             Kind::Account => "account",
             Kind::Routing => "routing",
             Kind::Iban => "iban",
+            Kind::Passport => "passport",
+            Kind::ANumber => "a_number",
         }
     }
 
@@ -394,7 +418,11 @@ impl Kind {
     }
 }
 
-crate::words::words!(Kind: Kind::ALL => |kind| kind.word());
+prodrome_core::word_literal!(Kind: Kind::ALL => |kind| kind.word());
+
+impl crate::finite::Finite for Kind {
+    const ALL: &'static [Self] = &Kind::ALL;
+}
 
 /// One held number in a text: its byte range and its kind.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -494,6 +522,37 @@ static ROUTING_LABEL: LazyLock<Regex> =
 static ROUTING: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r"\b[0-9]{9}\b").expect("a valid pattern"));
 
+/// The labels of a passport number: passport, and the word in French, Portuguese, Spanish, German
+/// and Arabic.
+static PASSPORT_LABEL: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(
+        r"(?i)\b(?:passports?|passeports?|passaportes?|pasaportes?|reisep[aä]ss(?:e)?)\b|جواز\s+(?:ال)?سفر",
+    )
+    .expect("a valid pattern")
+});
+
+/// Six to nine capital letters and digits, checked by [`passport`].
+static PASSPORT: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"\b[A-Z0-9]{6,9}\b").expect("a valid pattern"));
+
+/// The labels of an A-number: `A-number`, `A-No`, `A#` or `A-#` (the `A` a capital), alien
+/// number and alien registration number.
+static A_NUMBER_LABEL: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(
+        r"\bA(?:-(?i:numbers?|no)\b|-?#)|(?i:\balien\s+(?:registration\s+)?(?:numbers?|no)\b)",
+    )
+    .expect("a valid pattern")
+});
+
+/// Seven to nine digits, in a row or as `ddd-ddd-ddd` or `ddd ddd ddd`, after an optional capital
+/// `A` and one hyphen or space: an A-number, checked by [`a_number`].
+static A_NUMBER: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(
+        r"\b(?:A[- ]?)?(?:[0-9]{7,9}|[0-9]{3}-[0-9]{3}-[0-9]{3}|[0-9]{3} [0-9]{3} [0-9]{3})\b",
+    )
+    .expect("a valid pattern")
+});
+
 /// Runs of digit groups with one space or hyphen between groups; [`cards`] tries each stretch of
 /// groups in a run, since a card's groups often sit beside an expiry date or a phone number.
 static GROUPS: LazyLock<Regex> =
@@ -546,6 +605,8 @@ struct Labels {
     accounts: Vec<Label>,
     not_accounts: Vec<Label>,
     routings: Vec<Label>,
+    passports: Vec<Label>,
+    a_numbers: Vec<Label>,
 }
 
 impl Labels {
@@ -577,6 +638,8 @@ impl Labels {
         let accounts = labels(&ACCOUNT_LABEL, |_| Kind::Account);
         let not_accounts = labels(&NOT_ACCOUNT_LABEL, |_| Kind::Account);
         let routings = labels(&ROUTING_LABEL, |_| Kind::Routing);
+        let passports = labels(&PASSPORT_LABEL, |_| Kind::Passport);
+        let a_numbers = labels(&A_NUMBER_LABEL, |_| Kind::ANumber);
         Self {
             identity,
             named,
@@ -586,6 +649,8 @@ impl Labels {
             accounts,
             not_accounts,
             routings,
+            passports,
+            a_numbers,
         }
     }
 }
@@ -710,17 +775,18 @@ fn numbers(text: &str, digits: &str) -> Vec<Found> {
             .map(|(kind, gap)| candidate(found.start(), found.end(), kind, Strength::Labelled(gap)))
     }));
     spans.extend(codes(text, digits, &labels));
-    spans.extend(ACCOUNT.find_iter(digits).filter_map(|found| {
-        let (start, end) = (found.start(), found.end());
-        if !account(found.as_str()) || !alone(text, start, end) {
-            return None;
-        }
-        let other =
-            closest(text, &labels.not_accounts, start, end).map_or(usize::MAX, |(_, gap)| gap);
-        closest(text, &labels.accounts, start, end)
-            .filter(|&(_, gap)| gap < other)
-            .map(|(kind, gap)| candidate(start, end, kind, Strength::Labelled(gap)))
-    }));
+    let not_accounts = &labels.not_accounts;
+    for (pattern, check, kinds) in [
+        (&*ACCOUNT, account as fn(&str) -> bool, &labels.accounts),
+        (&*PASSPORT, passport, &labels.passports),
+        (&*A_NUMBER, a_number, &labels.a_numbers),
+    ] {
+        spans.extend(
+            pattern
+                .find_iter(digits)
+                .filter_map(|found| labelled(text, &found, check, kinds, not_accounts)),
+        );
+    }
     spans.extend(ROUTING.find_iter(digits).filter_map(|found| {
         let (start, end) = (found.start(), found.end());
         (aba(found.as_str())
@@ -776,6 +842,26 @@ fn candidate(start: usize, end: usize, kind: Kind, strength: Strength) -> Candid
         found: Found { start, end, kind },
         strength,
     }
+}
+
+/// A match of a kind that its label alone makes held (an account, a passport, an A-number): it
+/// passes `check` and stands alone, and the closest of `labels` is closer than any of `others`,
+/// which claim a number for something else.
+fn labelled(
+    text: &str,
+    found: &regex::Match<'_>,
+    check: fn(&str) -> bool,
+    labels: &[Label],
+    others: &[Label],
+) -> Option<Candidate> {
+    let (start, end) = (found.start(), found.end());
+    if !check(found.as_str()) || !alone(text, start, end) {
+        return None;
+    }
+    let other = closest(text, others, start, end).map_or(usize::MAX, |(_, gap)| gap);
+    closest(text, labels, start, end)
+        .filter(|&(_, gap)| gap < other)
+        .map(|(kind, gap)| candidate(start, end, kind, Strength::Labelled(gap)))
 }
 
 /// A label's byte range and the kind it makes a number beside it.
@@ -911,6 +997,20 @@ fn aba(text: &str) -> bool {
         .map(|(digit, weight)| digit * weight)
         .sum();
     digits.len() == 9 && sum.is_multiple_of(10) && sum > 0
+}
+
+/// Whether a match of [`PASSPORT`] is a passport number: at least six digits, at most three
+/// letters, eight or nine digits when it has no letter, and no date. A US passport is nine digits
+/// or a letter and eight; most others are a few letters and six to eight digits.
+fn passport(text: &str) -> bool {
+    let digits = digits_of(text);
+    let letters = text.len() - digits.len();
+    digits.len() >= 6 && letters <= 3 && (letters > 0 || digits.len() >= 8) && !dated(&digits)
+}
+
+/// Whether a match of [`A_NUMBER`] is an A-number: its digits read as no date.
+fn a_number(text: &str) -> bool {
+    !dated(&digits_of(text))
 }
 
 /// Every card number in `text`: a stretch of digit groups of a card's length that starts with an
@@ -1130,7 +1230,6 @@ mod tests {
             "Dated 2026-09-25, due 09/30/2026",
             "Receipt IOE0912345678 and EAC2190012345",
             "Receipt number: IOE0912345678",
-            "A-Number A123456789",
             "Case 1234567890 (ten digits)",
             "123-456-789",
             "12-345-6789",
@@ -1241,6 +1340,82 @@ mod tests {
                 .collect();
             assert_eq!(spans, vec![(held, kind)], "{text}");
         }
+    }
+
+    /// A passport number and an A-number, each beside one of its labels, in the shapes they are
+    /// written (made-up numbers, and the specimen number printed on Germany's sample passport).
+    #[test]
+    fn passports_and_a_numbers_are_found_beside_their_labels() {
+        for (text, held, kind) in [
+            ("Passport No. 123456789", "123456789", Kind::Passport),
+            ("passport number: X12345678", "X12345678", Kind::Passport),
+            (
+                "Passport #AB1234567, issued 2019",
+                "AB1234567",
+                Kind::Passport,
+            ),
+            ("Reisepass C01X00T47", "C01X00T47", Kind::Passport),
+            (
+                "Numéro de passeport : 12AB34567",
+                "12AB34567",
+                Kind::Passport,
+            ),
+            ("رقم جواز السفر RL1234567", "RL1234567", Kind::Passport),
+            ("12345678 (passport)", "12345678", Kind::Passport),
+            ("A-Number A123456789", "A123456789", Kind::ANumber),
+            ("A#: A-123-456-789", "A-123-456-789", Kind::ANumber),
+            ("A-No. 012345678", "012345678", Kind::ANumber),
+            (
+                "Alien Registration Number A12345678",
+                "A12345678",
+                Kind::ANumber,
+            ),
+            ("A-number: 123-456-789", "123-456-789", Kind::ANumber),
+            ("Alien number A 1234567", "A 1234567", Kind::ANumber),
+        ] {
+            let spans: Vec<(&str, Kind)> = identity_numbers(text)
+                .iter()
+                .map(|one| (&text[one.start..one.end], one.kind))
+                .collect();
+            assert_eq!(spans, vec![(held, kind)], "{text}");
+        }
+    }
+
+    /// What a passport's or an immigration letter's mail is full of, and the look-alikes of the
+    /// two numbers away from their labels, stay as written.
+    #[test]
+    fn look_alikes_of_passports_and_a_numbers_are_not_held() {
+        for text in [
+            "Passport photo IMG_20261023 attached",
+            "Your passport expires 20310514",
+            "Passport renewal fee: $130, or USD 130000",
+            "Passport appointment confirmation 12345678",
+            "passport application, order 123456789",
+            "Passport valid until 2031-05-14; call 617-555-1234",
+            "Passport 123456 is too short, as is passport 1234567",
+            "passport ABCD12345 has four letters",
+            "the passports2 folder and passportX12345678",
+            "Flight BA0117, passport check at gate B12",
+            "A123456789 alone is a part number",
+            "Model X12345678 ships Monday",
+            "A-number pending; receipt IOE0912345678 and EAC2190012345",
+            "A-Number A1234567890 (ten digits)",
+            "A-number: 123456 (six)",
+            "A# 20261023",
+            "a number of 1234567 people",
+            "Agency portal, case 1234567",
+            "A# +1 617 555 0123",
+            "A-number 617.555.0123",
+            "[A-number ending 6789 · withheld] and [passport · withheld]",
+        ] {
+            assert_eq!(shown(text), text, "{text}");
+        }
+    }
+
+    /// The kind's serde word is its literal's, which the wire's `HeldKind` reads.
+    #[test]
+    fn a_kind_prints_as_its_word() {
+        crate::words::assert_serde_words(&Kind::ALL, |kind| kind.word());
     }
 
     /// The closest label decides between kinds that share a shape.
@@ -1487,6 +1662,8 @@ mod tests {
             accounts,
             not_accounts,
             routings,
+            passports,
+            a_numbers,
             ..
         } = &labels;
         let mut spans: Vec<Candidate> = WRITTEN_OUT
@@ -1512,16 +1689,17 @@ mod tests {
             })
         }));
         spans.extend(codes_before(text, &labels));
-        spans.extend(ACCOUNT.find_iter(text).filter_map(|found| {
-            let (start, end) = (found.start(), found.end());
-            if !account(found.as_str()) || !alone(text, start, end) {
-                return None;
-            }
-            let other = closest(text, not_accounts, start, end).map_or(usize::MAX, |(_, gap)| gap);
-            closest(text, accounts, start, end)
-                .filter(|&(_, gap)| gap < other)
-                .map(|(kind, gap)| candidate(start, end, kind, Strength::Labelled(gap)))
-        }));
+        for (pattern, check, kinds) in [
+            (&*ACCOUNT, account as fn(&str) -> bool, accounts),
+            (&*PASSPORT, passport, passports),
+            (&*A_NUMBER, a_number, a_numbers),
+        ] {
+            spans.extend(
+                pattern
+                    .find_iter(text)
+                    .filter_map(|found| labelled(text, &found, check, kinds, not_accounts)),
+            );
+        }
         spans.extend(ROUTING.find_iter(text).filter_map(|found| {
             let (start, end) = (found.start(), found.end());
             (aba(found.as_str())
@@ -1645,6 +1823,15 @@ mod tests {
             Just("routing ".to_owned()),
             Just("order ".to_owned()),
             Just("IBAN ".to_owned()),
+            Just("passport no. ".to_owned()),
+            Just("Passeport ".to_owned()),
+            Just("جواز السفر ".to_owned()),
+            Just("A-Number: ".to_owned()),
+            Just("A# ".to_owned()),
+            Just("X12345678".to_owned()),
+            Just("C01X00T47".to_owned()),
+            Just("A123456789".to_owned()),
+            Just("A-123-456-789".to_owned()),
             Just("GB82 WEST 1234 5698 7654 32".to_owned()),
             Just("de89370400440532013000".to_owned()),
             Just("4111 1111 1111 1111".to_owned()),
@@ -1705,6 +1892,7 @@ mod tests {
             "Account number: 000123456789, routing 021000021, order 123456789012",
             "https://ada:pw@example.test/r?token=a1&code=b2 eyJa.eyJb.c and 2026-10-25",
             "Call 617-555-1234; code expires 2026-10-23; promo code 123456",
+            "Passport No. X12345678, A-Number A123456789, passport photo IMG_20261023",
         ];
         let scrubbed = corpus.map(|text| unlink(redact(text).as_str()));
         if let Err(moved) = Scrub::pinned((), scrubbed, PINNED_RULES, PINNED_CORPUS) {
@@ -1712,8 +1900,8 @@ mod tests {
         }
     }
 
-    const PINNED_RULES: &str = "a0d5cffe58839d79401ab650f475384a5eb7fbc064b46cfb3b7a3b25ac91f143";
-    const PINNED_CORPUS: &str = "afe74587a557301a25355154fa7c82b8f0dc73fdeb3b2b8d168c00f50ca6b2f3";
+    const PINNED_RULES: &str = "403bab20bab53d90453e6715e6b70348a37d9a8bbc1f98e3b3add04ebb1e09c7";
+    const PINNED_CORPUS: &str = "471b61d5fa2f2229c93d19537d7bea384e386cab3608b5026767a2c83b873a62";
 
     #[test]
     fn rules_print_and_read_back() {

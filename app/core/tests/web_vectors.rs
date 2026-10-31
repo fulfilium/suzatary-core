@@ -806,6 +806,18 @@ fn the_client_vector_holds_the_box_s_minimum() {
     );
 }
 
+/// Each held kind's word, as the wire spells it, and its name, as a placeholder and a search row
+/// print it: `web/src/view/heldvalue.ts` reads placeholders and draws rows by the same names.
+#[test]
+fn the_held_kinds_vector_names_every_kind() {
+    use suzatary_core::redact::Kind;
+    let named: BTreeMap<&str, &str> = Kind::ALL
+        .into_iter()
+        .map(|kind| (kind.word(), kind.name()))
+        .collect();
+    write_or_check(&named, "held-kinds.json");
+}
+
 #[test]
 fn the_vectors_match_what_the_pure_ts_modules_compute() {
     // The cast, for the TypeScript tests' people, todos and mail.
@@ -1994,6 +2006,12 @@ fn mail_row() -> suzatary_core::mail::MailRow {
         disposition: suzatary_core::mail::Disposed::Todo {
             todo: CAST.todos.agents.id.to_owned(),
         },
+        held: [
+            suzatary_core::redact::Kind::Ssn,
+            suzatary_core::redact::Kind::Passport,
+        ]
+        .into_iter()
+        .collect(),
     }
 }
 
@@ -2997,7 +3015,7 @@ fn a_stored_slot_is_under_the_rules_this_build_names() {
     }
     assert_eq!(
         Rules::current(()).as_str(),
-        "a0d5cffe58839d79401ab650f475384a5eb7fbc064b46cfb3b7a3b25ac91f143"
+        "403bab20bab53d90453e6715e6b70348a37d9a8bbc1f98e3b3add04ebb1e09c7"
     );
 }
 

@@ -1504,8 +1504,9 @@ fn a_session_is_told_the_facts_then_the_record() {
     let the = Box::default();
     // Turns of a length the owner writes, so a summary costs less than the lines it stands for.
     // The tree's cuts follow the lines' names, so how many come before the tool answer is chosen
-    // for a tree whose first part ends with it; a change to a line's stored print moves them.
-    let turns = turns(&[[0u8; 60].as_slice(), &[3], &[0; 12]].concat())
+    // for a tree whose parts all fit the budget, one of them a summary and one the hidden part that
+    // holds the tool answer; a change to a line's stored print (its rules' name too) moves them.
+    let turns = turns(&[[0u8; 35].as_slice(), &[3], &[0; 12]].concat())
         .into_iter()
         .map(|turn| match turn {
             Turn::Person {
@@ -1551,7 +1552,7 @@ fn a_session_is_told_the_facts_then_the_record() {
     assert!(
         parts
             .iter()
-            .any(|part| part.starts_with("0+61 (") && part.ends_with("tool answers)")),
+            .any(|part| part.starts_with("24+23 (") && part.ends_with("tool answers)")),
         "{told}"
     );
     for part in parts {
@@ -2308,5 +2309,5 @@ mod recompacting {
     const PINNED_OWNERS: &str = "d59ec97d7a1f1bd85811d6b987a4f057d209f35d8b66375c420914cbd724c175";
     const PINNED_CLEAN: &str = "e5170368b19af8030c88aa4a3ae9370add5c3d46ea065fed2646cfd39cccb744";
     const PINNED_QUESTIONS: &str =
-        "106d3f5877fa609965041ba9094fe43af77e8085f7fc6edd80b60f6baeba2dd6";
+        "66e44466932e9fb014b97dd98ee678f93dcc50360d59ebb4f262dddc218a00a9";
 }

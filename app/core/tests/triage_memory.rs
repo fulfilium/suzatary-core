@@ -331,11 +331,9 @@ fn remembered() -> Stores {
         let held = stores.memories().hold().expect("held");
         for node in pending {
             let node_in = tree.node(&node).expect("in the tree");
-            let over = node_in
-                .children()
-                .iter()
-                .map(|child| child.name().clone())
-                .collect();
+            let over = read
+                .over(&node)
+                .expect("each child is a line or summarised");
             let words = summary_of(*node_in.measure(), written);
             held.summarize(
                 &node,

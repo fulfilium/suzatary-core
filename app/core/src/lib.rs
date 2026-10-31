@@ -30,6 +30,7 @@ pub mod epoch;
 pub mod escape;
 pub mod excerpt;
 pub mod file_read;
+pub mod finite;
 pub mod for_model;
 pub mod gate;
 pub mod google;

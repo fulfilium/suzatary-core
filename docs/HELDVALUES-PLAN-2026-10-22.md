@@ -15,7 +15,7 @@ A held value has four parts:
   never in a log line and never in a public tree.
 - **A handle**, which names it. The handle is not the value.
 - **A kind**: SSN, ITIN, TIN, EIN, verification code, card, account, routing
-  number, IBAN or file (stage 3). Passport comes with stage 4.
+  number, IBAN, file (stage 3), passport or A-number (stage 4).
 - **A hint**: the last four digits, which a person needs to tell two values
   apart. A code has no hint, since its last four digits are most of it. A
   file's hint is its name and size.
@@ -320,8 +320,86 @@ another name is refused.
 until the owner keeps it private, and a private file's note written before
 this stage keeps its `[redacted]` text, which reads as text with no handles.
 
-## Stage 4: FIND and passports
+## Stage 4 (built): FIND, passports and A-numbers
 
-- A search row says `names a held SSN`, from the values the mask counted,
-  never the value.
-- Passport numbers and A-numbers arrive with their own patterns and tests.
+**FIND.** A mail search row says which kinds of held value its message names,
+and nothing else about them: no value, no last digits, no count.
+
+- The kinds come from the values the mask already counts. The reader that
+  builds a row (`suzatary_io::mailbox::Notmuch::load_messages`) reads the
+  message file once for its `held_value::Values`, which mask the sender and
+  subject; `Values::kinds` turns them into a `held_value::Kinds`.
+- `Kinds` is a set of `redact::Kind`, the generic `finite::Set` of a type with
+  finitely many values (one bit a kind). Its serde form is a list of the
+  kinds' words, `["ssn", "passport"]`, and the wire names the word type
+  `HeldKind`. It is never text: a row carries no phrase a model or a page
+  could misread as a value.
+- Both rows carry it as `held`: the app's `mail::MailRow` (the mail list, a
+  mail search, a thread and a message page) and the agent's and secretary's
+  `mail::verbs::Summary` (`search`, `new`, the secretary's `search`, and the
+  older-mail search, whose rows are read from the index after the backfill).
+  The verbs' descriptions say what `held` holds and that `show` gives each
+  value as a placeholder.
+- The mail page draws each kind as a chip, `names a held SSN`
+  (`heldvalue.named`). The page names a kind from one table,
+  `heldvalue.NAMES`, which also builds the placeholder pattern, and
+  `app/core/tests/web/held-kinds.json` (written by
+  `the_held_kinds_vector_names_every_kind`) pins it to `Kind::name`
+  (`heldkinds.test.ts`, "every kind is named as the box names it").
+- `every_reading_holds_placeholders_and_a_handle_reveals_its_value`
+  (`app/io/src/mailbox.rs`, over the real notmuch) pins the boundary: each
+  row's kinds are its message's, a row and a summary agree, and no reading
+  holds a value.
+
+**The patterns.** Each is held only beside its own label, like an account
+number, and a closer order, invoice, tracking, reference, confirmation,
+receipt, booking, case, ticket, telephone or help label claims the number
+instead (`redact::labelled`, which the account, passport and A-number matches
+share). Each must stand alone, as the other labelled kinds do: no `+` or
+currency beside it, no digit beside it across a hyphen, dot, comma or slash.
+
+- **A passport number**: six to nine capital letters and digits
+  (`\b[A-Z0-9]{6,9}\b`) within 20 characters of passport, passeport,
+  passaporte, pasaporte, Reisepass or جواز السفر, with at least six digits and
+  at most three letters, eight or nine digits when it has no letter, and no
+  `yyyymmdd` date. That takes a US passport (nine digits, or a letter and
+  eight), most others (a few letters and six to eight digits) and Germany's
+  letters among digits, and refuses a fee, a short reference, a photo's file
+  name, a flight number and an expiry date.
+- **An A-number**: seven to nine digits, in a row or as `ddd-ddd-ddd` or
+  `ddd ddd ddd`, after an optional capital `A` and one hyphen or space, within
+  20 characters of `A-number`, `A-No`, `A#` or `A-#` (the `A` a capital, so "a
+  number" is no label), alien number or alien registration number, and no
+  `yyyymmdd` date. An `A` and nine digits with no label is not held: a part or
+  model number has that shape. An immigration case's receipt number (three
+  letters and ten digits) never matches.
+
+The tests are `passports_and_a_numbers_are_found_beside_their_labels` and
+`look_alikes_of_passports_and_a_numbers_are_not_held` (`redact.rs`), and the
+fast path's property over mixed text holds both. The two kinds take the same
+mask, reveal and send paths as every other number: a placeholder
+`[passport · tap to show · held:…]` (eight digits or fewer show none) or
+`[A-number ending 5678 · …]`, the reveal route, and `fill` on the tap that
+sends.
+
+**The rules moved.** The patterns are part of the scrub's rules
+(`redact::Rules`), so their name moved, and every stored conversation line
+records the rules it was scrubbed under. A line stored under the old rules is
+scrubbed again when it is opened; `suzatary secretary migrate-scrub` is the
+standing step after a deploy that changes them (→ `migratescrub`).
+
+**What stays open:**
+
+- A passport number written in lowercase, or split by spaces, is not found;
+  nor is an A-number labelled `A number` (with a space), since that is also
+  ordinary English.
+- A search row's kinds come from the message file, not from its attachments:
+  a PDF that names a number is withheld when it is read (stage 3), but the row
+  of its message does not say so.
+- An A-number labelled only by an agency's own label (the field a permanent
+  resident card prints it under) is not held: that label is a term the
+  public tree may not hold, so no pattern names it.
+- One A-number written with and without its `A` (`A012345678`,
+  `012345678`) counts as two values of one message.
+- The older-mail search (`search_older`) answers rows only for what the
+  backfill brought into the index, as before.

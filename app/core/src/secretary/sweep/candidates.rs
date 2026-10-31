@@ -317,6 +317,7 @@ mod tests {
             timestamp: Some(timestamp.to_owned()),
             container: "inbox".to_owned(),
             sources: 1,
+            held: crate::held_value::Kinds::empty(),
         }
     }
 

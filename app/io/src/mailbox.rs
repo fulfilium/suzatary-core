@@ -186,6 +186,7 @@ impl Notmuch {
                 held_value::mask(&sender, &holder, &values),
                 held_value::mask(&title, &holder, &values),
             );
+            let held = values.kinds();
             let source = Source {
                 account: self.account_for(&msg.file),
                 container: container_of(&msg.tags),
@@ -200,6 +201,7 @@ impl Notmuch {
                     sender,
                     title,
                     timestamp,
+                    held,
                     primary: source,
                     also: Vec::new(),
                 });
@@ -327,6 +329,7 @@ impl Notmuch {
             }),
             container: primary.container.clone(),
             sources: message.sources(),
+            held: message.held,
         }
     }
 
@@ -593,6 +596,8 @@ struct CanonicalMessage {
     sender: String,
     title: String,
     timestamp: Option<dedup::ParsedDate>,
+    /// The kinds of held value the mask counted in its file.
+    held: held_value::Kinds,
     primary: Source,
     also: Vec<Source>,
 }
@@ -640,6 +645,7 @@ fn row_of(message: &CanonicalMessage, state: &Known) -> MailRow {
         container: primary.container.clone(),
         account: primary.account.clone(),
         disposition: suzatary_core::mail::Disposed::from(seen),
+        held: message.held,
     }
 }
 
@@ -961,11 +967,14 @@ pub(crate) fn read_of(
 mod tests {
     use super::*;
     use suzatary_core::held_value::{Handle, Holder};
+    use suzatary_core::redact::Kind;
 
     /// Synthetic numbers no person holds: SSN area 000, ITIN area 912, an EIN of zeros.
     const SSN: &str = "000-12-3456";
     const ITIN: &str = "912-70-1234";
     const EIN: &str = "00-0000001";
+    const PASSPORT: &str = "X12345678";
+    const A_NUMBER: &str = "A-012-345-678";
 
     /// A sent, an inbound and a clean message under `root`, indexed by the real notmuch under a
     /// config of their own, and the reader over them.
@@ -997,7 +1006,8 @@ mod tests {
         let inbound = format!(
             "From: counsel@example.test\nTo: ada@example.test\nSubject: filed\n\
          Message-ID: <in-1@example.test>\nDate: Tue, 07 Mar 2023 10:00:00 +0000\n\n\
-         The trust's EIN: {EIN} is on the yak filing.\n"
+         The trust's EIN: {EIN} is on the yak filing.\n\
+         Passport No. {PASSPORT}, A-Number {A_NUMBER}.\n"
         );
         let clean = "From: counsel@example.test\nTo: ada@example.test\nSubject: thanks\n\
                  Message-ID: <ok-1@example.test>\nDate: Wed, 08 Mar 2023 10:00:00 +0000\n\n\
@@ -1081,7 +1091,7 @@ mod tests {
             .expect("JSON"),
         ];
         for reading in &readings {
-            for number in [SSN, ITIN, EIN] {
+            for number in [SSN, ITIN, EIN, PASSPORT, A_NUMBER, "012345678"] {
                 assert!(!reading.contains(number), "{number} in {reading}");
             }
         }
@@ -1090,6 +1100,8 @@ mod tests {
             "[SSN ending 3456 · tap to show · held:",
             "[ITIN ending 1234 · tap to show · held:",
             "[EIN ending 0001 · tap to show · held:",
+            "[passport · tap to show · held:",
+            "[A-number ending 5678 · tap to show · held:",
         ] {
             assert!(all.contains(placeholder), "{placeholder} in {all}");
         }
@@ -1118,7 +1130,10 @@ mod tests {
             .collect();
         assert_eq!(
             revealed,
-            [SSN, ITIN, EIN].into_iter().map(str::to_owned).collect()
+            [SSN, ITIN, EIN, PASSPORT, A_NUMBER]
+                .into_iter()
+                .map(str::to_owned)
+                .collect()
         );
 
         let shown = mailbox.message("ok-1@example.test").expect("the clean one");
@@ -1137,6 +1152,54 @@ mod tests {
     }
 
     /// A ledger no test here reads: its key never resolves.
+    /// With the real notmuch: a search row, and the agent's row of the same message, say which
+    /// kinds of held value it names, from the values its mask counted, and hold none of them.
+    #[test]
+    fn a_search_row_names_the_kinds_its_message_holds_and_no_value() {
+        if crate::run::run(&Cmd::new("notmuch").arg("--version")).is_err() {
+            eprintln!("notmuch is not on PATH: the real-index half of held values is not run");
+            return;
+        }
+        let scratch = tempfile::tempdir().expect("a scratch directory");
+        let (mailbox, _) = indexed(scratch.path());
+        let query = Query::new("zebra or yak or ibex").expect("a query");
+        let rows = mailbox.search(&query, None, 10, None).expect("rows");
+        let kinds: Vec<(&str, Vec<Kind>)> = rows
+            .iter()
+            .map(|row| (row.id.as_str(), row.held.iter().collect()))
+            .collect();
+        assert_eq!(
+            kinds,
+            vec![
+                ("ok-1@example.test", vec![]),
+                (
+                    "in-1@example.test",
+                    vec![Kind::Ein, Kind::Passport, Kind::ANumber]
+                ),
+                ("form-1@example.test", vec![Kind::Ssn, Kind::Itin]),
+            ]
+        );
+        let summaries = mailbox
+            .summaries("zebra or yak or ibex", None)
+            .expect("rows");
+        assert_eq!(summaries.len(), rows.len());
+        for summary in &summaries {
+            assert!(
+                rows.iter()
+                    .any(|row| row.id == summary.id && row.held == summary.held),
+                "{summary:?}"
+            );
+        }
+        let printed = format!(
+            "{}{}",
+            serde_json::to_string(&rows).expect("JSON"),
+            serde_json::to_string(&summaries).expect("JSON")
+        );
+        for number in [SSN, ITIN, EIN, PASSPORT, A_NUMBER, "012345678"] {
+            assert!(!printed.contains(number), "{number} in {printed}");
+        }
+    }
+
     fn ledger() -> crate::state::Ledger {
         crate::state::Ledger::new(
             "/tmp/state.json".into(),
@@ -1160,6 +1223,7 @@ mod tests {
             sender: "ada@example.test".to_owned(),
             title: "Hello".to_owned(),
             timestamp: None,
+            held: held_value::Kinds::empty(),
             primary: at("one"),
             also: Vec::new(),
         };

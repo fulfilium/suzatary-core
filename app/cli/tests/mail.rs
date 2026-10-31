@@ -18,6 +18,7 @@ fn a_row(hash: &str, account: &str) -> MailRow {
         container: "inbox".to_owned(),
         account: account.to_owned(),
         disposition: suzatary_core::mail::Disposed::Undecided,
+        held: suzatary_core::held_value::Kinds::empty(),
     }
 }
 

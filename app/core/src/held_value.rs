@@ -495,6 +495,9 @@ fn foreign_withheld(text: &str, holder: &Holder) -> String {
         .into_owned()
 }
 
+/// The kinds of value a holder holds.
+pub type Kinds = crate::finite::Set<Kind>;
+
 /// One holder's held numbers as written, each once with the kind it was first found as, in the
 /// order they first appear.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
@@ -543,6 +546,13 @@ impl Values {
     #[must_use]
     pub fn is_empty(&self) -> bool {
         self.0.is_empty()
+    }
+
+    /// The kinds of value it holds: what a search row says of its message, never a value or a
+    /// hint.
+    #[must_use]
+    pub fn kinds(&self) -> Kinds {
+        self.0.iter().map(|(kind, _)| *kind).collect()
     }
 
     /// Each value as a card names it, in order, with the hint its placeholder shows.

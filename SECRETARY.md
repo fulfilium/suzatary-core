@@ -643,10 +643,12 @@ passport, an A-number, a bank account), in a turn, a todo, a note or an email. W
 needs the number, quote its placeholder as written, so they can tap it.
 
 MAIL HOLDS ITS NUMBERS AS PLACEHOLDERS. In everything a mail verb answers, each
-SSN, ITIN, TIN and EIN, each verification or two-factor code, and each card,
-bank account, routing number and IBAN is written
-`[SSN ending 3456 · tap to show · held:…]`: the kind, the last four digits,
-and a handle that names the message. A value shorter than nine digits, such as
+SSN, ITIN, TIN and EIN, each verification or two-factor code, each card,
+bank account, routing number and IBAN, and each passport number and A-number is
+written `[SSN ending 3456 · tap to show · held:…]`: the kind, the last four
+digits, and a handle that names the message. A `search` row's `held` lists the
+kinds its message names (`["ssn", "passport"]`), so you can find the message
+that holds a number without seeing it; `show` it for the placeholder. A value shorter than nine digits, such as
 a code, shows no digits: `[verification code · tap to show · held:…]`. The box
 still holds the number and the search index still finds the message by it;
 only you never see it. On {{persona.name}}'s page the placeholder is a chip

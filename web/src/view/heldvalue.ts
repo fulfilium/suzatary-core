@@ -1,6 +1,7 @@
 // A held value's placeholder as the box writes it into mail and file text (`suzatary_core::held_value`), and the chip a tap reveals.
 
 import { el } from "./dom"
+import type { HeldKind } from "../wire/generated/wire"
 
 export namespace heldvalue {
   export type Token =
@@ -12,9 +13,31 @@ export namespace heldvalue {
 
   export type Reveal = (handle: string) => Promise<Opened>
 
+  // Each kind as the box names it in a placeholder and a search row (`redact::Kind::name`, pinned by `held-kinds.json`).
+  export const NAMES: Readonly<Record<HeldKind, string>> = {
+    ssn: "SSN",
+    itin: "ITIN",
+    tin: "TIN",
+    ein: "EIN",
+    code: "verification code",
+    card: "card",
+    account: "account",
+    routing: "routing number",
+    iban: "IBAN",
+    passport: "passport",
+    a_number: "A-number",
+  }
+
+  const escaped = (s: string): string => s.replace(/[.*+?^${}()|[\]\\-]/g, "\\$&")
+
   // A number's kind and last digits, or `file` and the file's name and size; the handle names a message's value, a file's value, or a file.
-  const PATTERN =
-    /\[(?:(SSN|ITIN|TIN|EIN|verification code|card|account|routing number|IBAN)(?: ending (\d{1,4}))?|(file) ([^[\]·\r\n]+?, (?:under 1 KB|\d+\.\d [KM]B))) · (?:tap to show · (held:(?:file:)?[A-Za-z0-9_-]+\.(?:\d+|file))|withheld)\]/g
+  const PATTERN = new RegExp(
+    `\\[(?:(${Object.values(NAMES).map(escaped).join("|")})(?: ending (\\d{1,4}))?|(file) ([^[\\]·\\r\\n]+?, (?:under 1 KB|\\d+\\.\\d [KM]B))) · (?:tap to show · (held:(?:file:)?[A-Za-z0-9_-]+\\.(?:\\d+|file))|withheld)\\]`,
+    "g",
+  )
+
+  // What a search row says of a message that names held values: one phrase per kind, never a value or its digits.
+  export const named = (kinds: readonly HeldKind[]): string[] => kinds.map((k) => `names a held ${NAMES[k]}`)
 
   export const text = (t: string): Token => ({ type: "Text", text: t })
 

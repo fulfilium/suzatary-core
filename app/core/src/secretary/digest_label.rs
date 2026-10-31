@@ -123,42 +123,14 @@ impl Kind {
             Some(Stamp::Actor(_) | Stamp::Unconfirmed(_)) | None => Kind::Act,
         }
     }
+}
 
-    fn bit(self) -> u32 {
-        1 << (self as u32)
-    }
+impl crate::finite::Finite for Kind {
+    const ALL: &'static [Self] = &Kind::ALL;
 }
 
 /// A set of [`Kind`]s, joined by union.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
-pub struct Kinds(u32);
-
-impl Kinds {
-    /// The set holding `kind` alone.
-    #[must_use]
-    pub fn one(kind: Kind) -> Self {
-        Self(kind.bit())
-    }
-
-    /// Whether it holds `kind`.
-    #[must_use]
-    pub fn contains(self, kind: Kind) -> bool {
-        self.0 & kind.bit() != 0
-    }
-
-    /// Its kinds, in order.
-    pub fn iter(self) -> impl Iterator<Item = Kind> {
-        Kind::ALL
-            .into_iter()
-            .filter(move |kind| self.contains(*kind))
-    }
-
-    /// The union.
-    #[must_use]
-    pub fn join(self, other: Self) -> Self {
-        Self(self.0 | other.0)
-    }
-}
+pub type Kinds = crate::finite::Set<Kind>;
 
 impl Label {
     /// The mark of a line whose words were erased, clean and of that kind alone.
@@ -212,7 +184,7 @@ impl Measure for Label {
     fn join(&self, other: &Self) -> Self {
         Self {
             taint: self.taint.join(other.taint),
-            kinds: self.kinds.join(other.kinds),
+            kinds: self.kinds.join(&other.kinds),
         }
     }
 }
@@ -224,13 +196,18 @@ mod tests {
     use super::*;
 
     fn label() -> impl Strategy<Value = Label> {
-        (any::<bool>(), any::<u32>()).prop_map(|(tainted, kinds)| Label {
+        (any::<bool>(), any::<u32>()).prop_map(|(tainted, bits)| Label {
             taint: if tainted {
                 Taint::Tainted
             } else {
                 Taint::Clean
             },
-            kinds: Kinds(kinds & ((1 << Kind::ALL.len()) - 1)),
+            kinds: Kind::ALL
+                .into_iter()
+                .enumerate()
+                .filter(|(at, _)| bits & (1 << at) != 0)
+                .map(|(_, kind)| kind)
+                .collect(),
         })
     }
 

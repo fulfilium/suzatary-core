@@ -334,6 +334,7 @@ fn w2_mailbox() -> common::FakeMailbox {
                         container: "inbox".to_owned(),
                         account: "ada@example.com".to_owned(),
                         disposition: suzatary_core::mail::Disposed::Undecided,
+                        held: suzatary_core::held_value::Kinds::empty(),
                     },
                     thread: "000000000000c3fc".to_owned(),
                     headers: Vec::new(),

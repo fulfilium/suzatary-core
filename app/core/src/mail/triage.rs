@@ -115,6 +115,7 @@ mod tests {
                 timestamp: None,
                 container: "inbox".to_owned(),
                 sources: 1,
+                held: crate::held_value::Kinds::empty(),
             })
             .collect()
     }

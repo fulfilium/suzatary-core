@@ -7,6 +7,7 @@ import empty from "../view/empty";
 import { el } from "../view/dom";
 import { chip, whenOf } from "../view/format";
 import { chevronIcon } from "../view/icons";
+import heldvalue from "../view/heldvalue";
 import { badgeOf, cursorOf, senderOf, subjectOf, todoOf } from "./mailrow";
 import type { Mounted } from "../view/page";
 import { hrefOf } from "../shell/route";
@@ -42,6 +43,7 @@ function mailRow(row: MailRow): HTMLElement {
       row.container === "inbox" ? null : chip(row.container, "kind"),
       badge === null ? null : chip(badge.label, badge.kind),
       todo === null ? null : el("code", { class: "cardid" }, todo),
+      ...heldvalue.named(row.held).map((said) => chip(said, "kind")),
     ),
   );
 }

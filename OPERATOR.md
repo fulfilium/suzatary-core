@@ -243,12 +243,13 @@ that does not fit is CUT with a line saying so — if you see one, say so in you
 run summary. `app/cli/tests/` weighs the real answer, so a manual that outgrows
 its share fails a test, not a triage run.
 
-Every SSN, ITIN, TIN and EIN, verification code, and card, bank account,
-routing and IBAN number in mail reaches you as a placeholder:
-`[SSN ending 3456 · tap to show · held:…]`, or `[… · withheld]`. The owner taps
-it to see the number. Price and route the mail as you would if you could read
-the number. Quote the placeholder as written when a todo needs to point at it,
-and never guess the hidden digits.
+Every SSN, ITIN, TIN and EIN, verification code, card, bank account,
+routing and IBAN number, passport number and A-number in mail reaches you as a
+placeholder: `[SSN ending 3456 · tap to show · held:…]`, or `[… · withheld]`.
+The owner taps it to see the number. A `search` or `new` row's `held` lists the
+kinds its message names (`["ssn", "passport"]`), never a value. Price and route
+the mail as you would if you could read the number. Quote the placeholder as
+written when a todo needs to point at it, and never guess the hidden digits.
 
 ## Completing / cancelling / reopening a todo
 A todo's lifecycle state is the chain's fold, never a field you write.

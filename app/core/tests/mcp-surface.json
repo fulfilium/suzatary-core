@@ -26,7 +26,7 @@
     "name": "new"
   },
   {
-    "description": "Any notmuch query, newest first. Use to check for prior related threads before deciding a disposition (e.g. `from:sender@example.com`).",
+    "description": "Any notmuch query, newest first. Use to check for prior related threads before deciding a disposition (e.g. `from:sender@example.com`). Each row's `held` lists the kinds of held value its message names (`ssn`, `passport`, `a_number`, ...), never a value: `show` gives each as a placeholder.",
     "inputSchema": {
       "properties": {
         "limit": {

@@ -72,6 +72,9 @@ pub struct MailRow {
     pub account: String,
     /// What triage decided about this hash.
     pub disposition: Disposed,
+    /// The kinds of held value it names, which the row says and never their values.
+    #[ts(as = "Vec<crate::redact::Kind>")]
+    pub held: crate::held_value::Kinds,
 }
 
 /// What triage decided about a message, as a row shows it: nothing yet, or its decision, the
@@ -408,12 +411,14 @@ mod tests {
             container: "inbox".to_owned(),
             account: "me@example.test".to_owned(),
             disposition: Disposed::Undecided,
+            held: crate::held_value::Kinds::empty(),
         };
         assert_eq!(
             serde_json::to_value(&row).expect("serialises"),
             serde_json::json!({"hash": "abc", "id": "id@x", "sender": "her@example.test",
                 "subject": "hello", "date": "", "container": "inbox",
-                "account": "me@example.test", "disposition": {"kind": "undecided"}})
+                "account": "me@example.test", "disposition": {"kind": "undecided"},
+                "held": []})
         );
         let decided = |decision: &state::Decision| {
             serde_json::to_value(MailRow {

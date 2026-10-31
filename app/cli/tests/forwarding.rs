@@ -68,6 +68,7 @@ fn masked() -> MailMessage {
             container: "inbox".to_owned(),
             account: "ada@example.com".to_owned(),
             disposition: suzatary_core::mail::Disposed::Undecided,
+            held: suzatary_core::held_value::Kinds::one(suzatary_core::redact::Kind::Ssn),
         },
         thread: "000000000000c3fc".to_owned(),
         headers: Vec::new(),

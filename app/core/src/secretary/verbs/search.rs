@@ -52,7 +52,9 @@ impl Verb for Search {
         you answer it. Answers `files` first: under `found`, each file whose name or text holds \
         every word of the query, with the conversation and turn it came in on, what he said \
         there, and the words around the match; `upload_read` opens one, and `propose_email`'s \
-        `{\"upload\": <file>}` attaches it. Then `mail`: the rows `show` opens. A file is \
+        `{\"upload\": <file>}` attaches it. Then `mail`: the rows `show` opens, each with \
+        `held`, the kinds of held value its message names (`ssn`, `passport`, `a_number`, ...), \
+        never a value: `show` gives each as a placeholder. A file is \
         matched on plain words, `word*` prefixes and quoted phrases, every word required and \
         matched whole, never stemmed, so try `permit*` where mail would find `permits`. A query \
         with a field such as `from:` or an operator such as `OR` searches the mail alone, and \

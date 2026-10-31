@@ -1,0 +1,13 @@
+{
+  "a_number": "A-number",
+  "account": "account",
+  "card": "card",
+  "code": "verification code",
+  "ein": "EIN",
+  "iban": "IBAN",
+  "itin": "ITIN",
+  "passport": "passport",
+  "routing": "routing number",
+  "ssn": "SSN",
+  "tin": "TIN"
+}

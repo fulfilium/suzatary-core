@@ -1322,6 +1322,7 @@ fn row(message: &FakeMessage) -> Summary {
         timestamp: Some(message.timestamp.clone()),
         container: "inbox".to_owned(),
         sources: 1,
+        held: suzatary_core::held_value::Kinds::empty(),
     }
 }
 
