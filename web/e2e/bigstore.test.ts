@@ -19,6 +19,8 @@
  * As a measurement: `SUZATARY_E2E_LINES=6000 SUZATARY_E2E_CONVERSATIONS=1500 SUZATARY_LINES_RATE=6
  * SUZATARY_E2E_SCENE_MS=1800000 SUZATARY_LINESBENCH=<file> scripts/web-e2e.sh bigstore` runs it at a 6x CPU throttle and writes each phase's longest
  * task and its time. The boot's (from the document's start until the todo list draws) is the app's own, and reported.
+ * That throttle slows the page's main thread alone; `SUZATARY_E2E_BROWSER_CPU=0.67` gives the whole browser two thirds
+ * of a core, its worker and its storage included, and each warm load of the last scene reports the worker's own phases.
  */
 
 import assert from "node:assert/strict"
@@ -210,6 +212,16 @@ const RECORD = `(() => {
 
 type Recorded = readonly ["asked", number, number, string, string] | readonly ["answered", number, number]
 
+// The core worker's marks (`pull`, `noderows`, `linesync`, `questions`), each the first of its name, in milliseconds from
+// the first stream asked.
+const PHASES = `(() => {
+  const marks = performance.getEntriesByType("mark")
+  const first = new Map()
+  for (const m of marks) if (!first.has(m.name)) first.set(m.name, m.startTime)
+  const from = first.get("stream asked") ?? 0
+  return Object.fromEntries([...first].map(([name, at]) => [name, Math.round(at - from)]))
+})()`
+
 // How many warm loads the scene reads, each reported.
 const LOADS = 3
 
@@ -224,14 +236,15 @@ app.scene("a warm load of the conversations answers the page's first stream befo
   assert.deepEqual(reads(journal.inFlight()), [], "the cold load ended")
   // The box answers as it does live, so the shell asks what it asks on every load.
   const unrecord = await app.page.beforeEveryWorker(RECORD)
-  const loads = await (async (): Promise<{ readonly draw: Phase; readonly seen: readonly Recorded[] }[]> => {
-    const each: { readonly draw: Phase; readonly seen: readonly Recorded[] }[] = []
+  type Load = { readonly draw: Phase; readonly seen: readonly Recorded[]; readonly phases: Readonly<Record<string, number>> }
+  const loads = await (async (): Promise<Load[]> => {
+    const each: Load[] = []
     try {
       await app.page.throttle(RATE)
       for (let n = 0; n < LOADS; n += 1) {
         await app.page.reload()
         const draw = await phase(BULK, 0)
-        each.push({ draw, seen: await app.page.inWorker<Recorded[]>("prodromework", "self.__questions") })
+        each.push({ draw, seen: await app.page.inWorker<Recorded[]>("prodromework", "self.__questions"), phases: await app.page.inWorker<Record<string, number>>("prodromework", PHASES) })
       }
       return each
     } finally {
@@ -240,7 +253,7 @@ app.scene("a warm load of the conversations answers the page's first stream befo
       await unobserve()
     }
   })()
-  for (const { draw, seen } of loads) {
+  for (const { draw, seen, phases } of loads) {
     const asked = new Map(seen.flatMap((s) => (s[0] === "asked" ? [[s[1], { lane: s[3], kind: s[4], at: s[2] }] as const] : [])))
     const at = (type: Recorded[0], id: number): number => seen.findIndex((s) => s[0] === type && s[1] === id)
     const stream = [...asked].find(([, q]) => q.kind === "Stream")?.[0]
@@ -252,7 +265,7 @@ app.scene("a warm load of the conversations answers the page's first stream befo
     const answered = seen[to]?.[2] ?? -1
     // How many times the page asked for its stream before the first answer.
     const streams = seen.slice(0, to).filter((s) => s[0] === "asked" && s[4] === "Stream").length
-    console.log(JSON.stringify({ ...SHAPE, rate: RATE, firstDraw: draw.ms, longest: draw.longest, streamAsked: asked.get(stream)?.at, streamAnswered: answered, streams, answeredWhileTheStreamWasOwed: named(between) }))
+    console.log(JSON.stringify({ ...SHAPE, rate: RATE, firstDraw: draw.ms, longest: draw.longest, streamAsked: asked.get(stream)?.at, streamAnswered: answered, streams, answeredWhileTheStreamWasOwed: named(between), cpu: process.env["SUZATARY_E2E_BROWSER_CPU"] ?? "all", worker: phases }))
     assert.deepEqual(named(between.filter((q) => q.lane === "Shell")), [], `the worker answered the shell while the page's stream was owed:\n${JSON.stringify(seen)}`)
     assert.ok(draw.ms < wait.MS / 3, `the stream drew ${draw.ms} ms after the document started (bound ${wait.MS / 3})`)
   }

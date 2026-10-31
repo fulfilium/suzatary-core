@@ -12,6 +12,7 @@ import payload from "../wire/generated/payload"
 import type { RefusedObject } from "../wire/generated/wire"
 import locked from "./locked"
 import { Spoken, Standing, storeRows } from "./objects"
+import phases from "./phases"
 import type pull from "./pull"
 import type { Frontier, Held, Obj, Replica, Word } from "./replica"
 import { empty, epochOf, replicaOf, restsOn } from "./replica"
@@ -136,6 +137,7 @@ export namespace noderows {
         idb.done(s.getAll(range(KEY))),
         idb.done(s.getAll(range(PIECE))),
       ]).then(([rawHead, rawNodes, keyNames, keyValues, rawPieces]) => {
+        phases.mark(`${db.store} rows read`)
         const unread: string[] = []
         const head = headIn(rawHead)
         if (rawHead !== undefined && head === null) unread.push(`the head row of ${db.store} does not read`)
@@ -154,6 +156,7 @@ export namespace noderows {
           if (p.type === "Error") unread.push(p.e)
           return p.type === "Val" ? [p.v] : []
         })
+        phases.mark(`${db.store} rows decoded`)
         return { head, printed: rawHead === undefined ? null : printed(rawHead), row: head === null ? NONE : rowOf(head, nodes, keys), keys, pieces, unread }
       })
 

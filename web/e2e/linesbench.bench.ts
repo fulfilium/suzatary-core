@@ -203,7 +203,7 @@ app.scene("measured: a first load, a landing and an eviction over about 6,000 li
   const origin = new URL(BULK).origin;
   // The landing's line is a conversation this page opens, so the page signs as a trusted device.
   await trustThisDevice(app.page, BULK, process.env["E2E_LINES_INSTANCE"]);
-  // The core's worker pulls, fetches and evicts the lines, so it is cold and throttled as the page is.
+  // The core's worker pulls, fetches and evicts the lines, so it is cold as the page is (its CPU is the browser's, `SUZATARY_E2E_BROWSER_CPU`).
   await app.page.attachWorkers();
   await app.open(BULK);
   await app.page.evaluate(`Promise.all(["suzatary", "suzatary-rendered"].map((n) => new Promise((ok) => { const r = indexedDB.deleteDatabase(n); r.onsuccess = r.onerror = r.onblocked = () => ok(true) })))`);

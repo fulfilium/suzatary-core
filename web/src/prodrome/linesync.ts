@@ -13,6 +13,7 @@ import lines from "./lines"
 import locked from "./locked"
 import noderows from "./noderows"
 import { CHAIN, LINE_ROWS, RENDERED_OWED, dropRow, heldRow } from "./objects"
+import phases from "./phases"
 import type progress from "./progress"
 import pull from "./pull"
 import { epochOf } from "./replica"
@@ -119,12 +120,14 @@ export namespace linesync {
       const add = Object.fromEntries(Object.entries(row.keys).filter(([n, k]) => was.keys[n] !== k))
       const drop = Object.keys(was.keys).filter(n => row.keys[n] === undefined)
       if (Object.keys(add).length > 0 || drop.length > 0) held.keys(JSON.stringify(add), JSON.stringify(drop))
+      phases.mark("lines keys held")
       if (was.replica.objects !== row.replica.objects) {
         const before = new Set(was.replica.objects.map(n => n.hash))
         const after = new Set(row.replica.objects.map(n => n.hash))
         const came = row.replica.objects.filter(n => !before.has(n.hash))
         const went = was.replica.objects.flatMap(n => (after.has(n.hash) ? [] : [n.hash]))
         if (came.length > 0 || went.length > 0) nodesInto(held, came, went)
+        phases.mark("lines nodes held")
       }
       fx.moved(touched(was, row, new Set([...Object.keys(add), ...drop])))
     }

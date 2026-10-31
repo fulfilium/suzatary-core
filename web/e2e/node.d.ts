@@ -69,6 +69,8 @@ declare module "node:fs" {
   export function writeFileSync(path: string, data: string, encoding?: string): void;
   export function existsSync(path: string): boolean;
   export function rmSync(path: string, options?: { readonly recursive?: boolean; readonly force?: boolean }): void;
+  /** An empty directory removed: the cgroup a capped browser ran in (`cdp.ts`). */
+  export function rmdirSync(path: string): void;
   /** A bundle's file set aside and put back: `web/e2e/shell.test.ts` deploys a build whose files differ. */
   export function copyFileSync(from: string, to: string): void;
   export function renameSync(from: string, to: string): void;
@@ -89,6 +91,7 @@ declare module "node:path" {
 declare const process: {
   readonly env: Record<string, string | undefined>;
   readonly platform: string;
+  readonly pid: number;
 };
 
 declare module "node:url" {

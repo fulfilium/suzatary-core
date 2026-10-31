@@ -30,7 +30,7 @@
 
 import { spawn } from "node:child_process";
 import type { ChildProcess } from "node:child_process";
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, rmdirSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import http from "../src/wire/http";
@@ -48,6 +48,36 @@ const STRETCH = WAIT_MS / BASELINE_MS;
  */
 function chromiumBinary(): string {
   return process.env["SUZATARY_CHROMIUM"] ?? "chromium";
+}
+
+/**
+ * A slow device's whole CPU: `SUZATARY_E2E_BROWSER_CPU` cores (`0.67`, say) for the browser and every process it starts,
+ * as a cgroup of its own, or none when unset. `Emulation.setCPUThrottlingRate` slows a page's main thread alone, and
+ * Chromium refuses it for a worker, so only this slows the core's worker. A machine whose cgroups this user cannot write
+ * refuses the run rather than measuring an unslowed browser.
+ */
+function cpuCap(): string | null {
+  const cores = process.env["SUZATARY_E2E_BROWSER_CPU"];
+  if (cores === undefined || cores === "") return null;
+  const share = Number(cores);
+  if (!(share > 0)) throw new Error(`SUZATARY_E2E_BROWSER_CPU is a count of cores above 0, not '${cores}'`);
+  const period = 100000;
+  const quota = Math.round(share * period);
+  // cgroup v2 names the controller in one file; v1 mounts it as a directory of its own.
+  const v2 = existsSync("/sys/fs/cgroup/cgroup.controllers");
+  const group = join(v2 ? "/sys/fs/cgroup" : "/sys/fs/cgroup/cpu", `suzatary-e2e-${process.pid}`);
+  try {
+    mkdirSync(group, { recursive: true });
+    if (v2) {
+      writeFileSync(join(group, "cpu.max"), `${quota} ${period}`);
+    } else {
+      writeFileSync(join(group, "cpu.cfs_period_us"), String(period));
+      writeFileSync(join(group, "cpu.cfs_quota_us"), String(quota));
+    }
+  } catch (error: unknown) {
+    throw new Error(`SUZATARY_E2E_BROWSER_CPU needs a cgroup this user can write (${String(error)})`);
+  }
+  return group;
 }
 
 /**
@@ -281,7 +311,6 @@ export class Page {
   /** Each attached worker's session, with the URL of its script, oldest first. */
   private readonly workers = new Map<string, string>();
   private coldOn = false;
-  private rate = 1;
 
   /** The sentence `refuse` answers with. */
   private refusal = "";
@@ -1019,8 +1048,8 @@ export class Page {
     return () => [...seen];
   }
 
-  /** Every worker the page starts from now on attached, its network reported as the page's is, and the page's cache
-   * and CPU as `cold` and `throttle` last set them, so a scene measures and starves the core's worker as the page. */
+  /** Every worker the page starts from now on attached, its network reported as the page's is, and the page's cache as
+   * `cold` last set it. */
   async attachWorkers(): Promise<void> {
     await this.workersToo();
   }
@@ -1070,10 +1099,10 @@ export class Page {
     await this.command("Target.setAutoAttach", { autoAttach: true, waitForDebuggerOnStart: false, flatten: true });
   }
 
-  /** The cache and the CPU a worker shares with the page, as last set. */
+  /** The cache a worker shares with the page, as last set. Its CPU is the browser's (`SUZATARY_E2E_BROWSER_CPU`): Chromium
+   * throttles a page's main thread alone, and refuses the throttle for a worker. */
   private async toWorker(child: string): Promise<void> {
     await this.connection.send("Network.setCacheDisabled", { cacheDisabled: this.coldOn }, child).catch(() => {});
-    await this.connection.send("Emulation.setCPUThrottlingRate", { rate: this.rate }, child).catch(() => {});
   }
 
   /**
@@ -1141,11 +1170,9 @@ export class Page {
     await this.command("Storage.overrideQuotaForOrigin", bytes === null ? { origin } : { origin, quotaSize: bytes });
   }
 
-  /** A phone-class CPU: Chromium runs this page's main thread `rate` times slower (1 is none). */
+  /** A phone-class main thread: Chromium runs this page's main thread `rate` times slower (1 is none), and no worker. */
   async throttle(rate: number): Promise<void> {
-    this.rate = rate;
     await this.command("Emulation.setCPUThrottlingRate", { rate });
-    await Promise.all([...this.workers.keys()].map((w) => this.toWorker(w)));
   }
 
   /** A phone-class network, or the box's own again with `null`: each request waits `latency` ms and moves at the throughputs, in bytes a second. */
@@ -1227,7 +1254,12 @@ async function devtoolsUrl(profile: string, child: ChildProcess, stderr: () => s
 /** Launch one browser with one page attached. */
 export async function launch(): Promise<Browser> {
   const profile = mkdtempSync(join(tmpdir(), "suzatary-e2e-profile-"));
-  const child = spawn(chromiumBinary(), flags(profile), { stdio: ["ignore", "pipe", "pipe"] });
+  const group = cpuCap();
+  // In the group before it execs, so every process it starts is born in it.
+  const child =
+    group === null
+      ? spawn(chromiumBinary(), flags(profile), { stdio: ["ignore", "pipe", "pipe"] })
+      : spawn("sh", ["-c", 'echo $$ > "$0/cgroup.procs" && exec "$@"', group, chromiumBinary(), ...flags(profile)], { stdio: ["ignore", "pipe", "pipe"] });
   let said = "";
   child.stderr?.on("data", (chunk) => {
     said += chunk.toString();
@@ -1264,6 +1296,14 @@ export async function launch(): Promise<Browser> {
       child.kill("SIGKILL");
       await gone(child);
       await discard(profile);
+      // An empty group goes.
+      if (group !== null) {
+        try {
+          rmdirSync(group);
+        } catch {
+          // Another browser of this run still runs in it.
+        }
+      }
     },
   };
 }

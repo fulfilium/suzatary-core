@@ -43,6 +43,7 @@ import excluded from "./excluded"
 import type heads from "./heads"
 import lanes from "./lanes"
 import lines from "./lines"
+import phases from "./phases"
 import storeset from "./storeset"
 import type stores from "./stores"
 import lo from "../algebra/lo"
@@ -419,12 +420,15 @@ export namespace questions {
           return q.sources.map(source => core.answer_key(source))
         // The rounds are chosen by the skeleton's outlines, and only the lines whose words they read are read.
         case "Stream":
+          phases.mark("stream asked")
           return scoped(
             turn,
             () => ({ type: "Objects", names: chosenOf(held, stores.topics().reading, q.chosen, q.pages) }),
             () => {
+              phases.mark("stream content held")
               const read = stores.topics()
               const stream = streamOf(held, read.reading, q.chosen, q.pages)
+              phases.mark("stream drawn")
               return { stream, bar: barOf(read.reading), keys: keyed(stream.rounds.flatMap(r => (r.answer === null ? [] : [r.answer]))) }
             },
           )

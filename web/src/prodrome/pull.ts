@@ -8,6 +8,7 @@ import type { Erased } from "./core"
 import excluded from "./excluded"
 import locked from "./locked"
 import pieces from "./pieces"
+import phases from "./phases"
 import { empty, overtaken, pulled, replicaOf, sinceOf, wentBack } from "./replica"
 import type { Obj, Replica, Said } from "./replica"
 import purge from "./purge"
@@ -181,6 +182,7 @@ export namespace pull {
 
     // One read of the row per page.
     const restoredOne = async (): Promise<void> => {
+      phases.mark(`${name} restore`)
       await st.restoring()
       const read = await st.place.restore()
       if (read.row.type === "Dropped") return told(read.row.failed)
@@ -189,6 +191,7 @@ export namespace pull {
       // The pieces a pull kept and did not land, another tab's included: held beside the row, never read by a page.
       pending = read.pieces.reduce(locked.join, pending)
       if (read.unread.length > 0) told(read.unread.join("; "))
+      phases.mark(`${name} restored`)
     }
     const restored = once.of(restoredOne)
 
