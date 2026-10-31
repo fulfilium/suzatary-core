@@ -2757,12 +2757,28 @@ pub struct StreamRound {
     pub turn: usize,
     /// The turn that opened it.
     pub opening: TurnRow,
+    /// Who wrote that turn's question.
+    pub asked: RoundAsked,
     /// Its last model turn with words, absent while it is going or when it said nothing.
     pub answer: Option<TurnRow>,
     /// Its topics, each in its current spelling, sorted.
     pub topics: Vec<String>,
     /// How many more topics it may carry.
     pub room: usize,
+}
+
+/// Who wrote the question that opened a stream round.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]
+#[serde(tag = "by", rename_all = "lowercase")]
+pub enum RoundAsked {
+    /// A person: the page draws the question as said.
+    Person {},
+    /// The box, for one of its own rounds: the page draws `title` in its place and keeps the
+    /// question behind a disclosure.
+    Box {
+        /// What the round is called.
+        title: String,
+    },
 }
 
 /// The topics in use, the most rounds first (`topics::reading::in_use`).

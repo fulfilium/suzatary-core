@@ -2406,7 +2406,7 @@ fn the_answers_vector_holds_every_answer() {
             .collect(),
         &[],
     );
-    samples.add([suzatary_core::secretary::stream::stream(
+    let stream = suzatary_core::secretary::stream::stream(
         skeleton.outlines(),
         suzatary_core::secretary::stream::every(&opened),
         &suzatary_core::secretary::topics::reading::Reading::default(),
@@ -2414,7 +2414,18 @@ fn the_answers_vector_holds_every_answer() {
         1,
         &readings::Dress::BARE,
     )
-    .expect("the stream reads")]);
+    .expect("the stream reads");
+    // The bundle holds no round of the box's own, so one is made of its first round, for the tab
+    // to decode the other way a round is asked.
+    let mut asked_by_the_box = stream.clone();
+    asked_by_the_box
+        .rounds
+        .first_mut()
+        .expect("the bundle's stream holds a round")
+        .asked = wire::RoundAsked::Box {
+        title: "Sweep of later mail".to_owned(),
+    };
+    samples.add([stream, asked_by_the_box]);
     samples.add([wire::TopicsPayload {
         topics: vec![
             wire::TopicInUse {

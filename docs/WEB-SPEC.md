@@ -1858,6 +1858,12 @@ the page holds no filter of its own and no second reading of the topics.
   anything is written, and a topic added by tap reaches the box's topic store.
   — `web/e2e/secretary.test.ts` "two topics chosen show the rounds holding
   both, and a topic added by tap lands on the round".
+- **A round the box asked reads as its title.** The box's daily rounds are
+  known by their conversation (`ConversationId::daily_round`) with a question
+  no actor stamped, so a round already on a store needs no new line. Such a
+  round draws its title and the answer, and its prompt is a tap away. —
+  `web/e2e/secretary.test.ts` "a round the box asked reads as its title and
+  answer, its prompt a tap away, at 390 px".
 
 ## 4. The vectors
 

@@ -43,8 +43,8 @@ pub const SURFACE: Subset = Subset {
 
 /// The instruction, as a person turn like the review's.
 const ASK_HEADER: &str = "Below is every open todo with later mail that might bear on it, and \
-                          that mail's own content, loaded the way `show` would answer it. For \
-                          each todo: if the mail plainly says it is done or moot, call \
+                          that mail's own content as `show` would answer it, written out as text. \
+                          For each todo: if the mail plainly says it is done or moot, call \
                           `propose_changes` with ONE act — `complete` or `cancel` — naming that \
                           todo, a `why` in a sentence, and `sources` naming at least the \
                           `mail:<hash>` you rested it on. If it does not plainly say so, or \
@@ -345,14 +345,9 @@ fn user_turn(
             args.insert("id".to_owned(), Value::from(candidate.message.as_str()));
             let (loaded, refused) =
                 match super::call(deployment, settables, chains, id, Show::NAME, &args) {
-                    Ok(super::verb_answer::VerbAnswer { value, .. }) => (
-                        clip(
-                            &serde_json::to_string_pretty(&value).unwrap_or_else(|failed| {
-                                format!("(the answer did not serialise: {failed})")
-                            }),
-                        ),
-                        false,
-                    ),
+                    Ok(super::verb_answer::VerbAnswer { value, .. }) => {
+                        (clip(&readable(&value)), false)
+                    }
                     Err(refusal) => (refusal.message().to_owned(), true),
                 };
             let _ = write!(
@@ -367,6 +362,66 @@ fn user_turn(
         }
     }
     out
+}
+
+/// A verb's answer as text a person reads: each field on a line of its own as `name: value`, a
+/// string as itself with its line breaks, each item of a list on a `- ` line, and anything nested
+/// indented under its name.
+fn readable(value: &Value) -> String {
+    let mut out = String::new();
+    nested(&mut out, value, 0);
+    out.trim_end().to_owned()
+}
+
+/// `value` under a name or a list's dash, each of its lines indented by `depth` spaces.
+fn nested(out: &mut String, value: &Value, depth: usize) {
+    use std::fmt::Write as _;
+
+    let pad = " ".repeat(depth);
+    match value {
+        Value::Object(fields) => {
+            for (name, field) in fields {
+                headed(out, &format!("{pad}{name}:"), field, depth);
+            }
+        }
+        Value::Array(items) => {
+            for item in items {
+                headed(out, &format!("{pad}-"), item, depth);
+            }
+        }
+        Value::String(text) => {
+            for line in text.lines() {
+                let _ = writeln!(out, "{pad}{line}");
+            }
+        }
+        Value::Null | Value::Bool(_) | Value::Number(_) => {
+            let _ = writeln!(out, "{pad}{value}");
+        }
+    }
+}
+
+/// `value` after `head`: on the same line when it is one line or empty, else on the lines below it.
+fn headed(out: &mut String, head: &str, value: &Value, depth: usize) {
+    use std::fmt::Write as _;
+
+    match value {
+        Value::String(text) if !text.contains('\n') => {
+            let _ = writeln!(out, "{head} {text}");
+        }
+        Value::Null | Value::Bool(_) | Value::Number(_) => {
+            let _ = writeln!(out, "{head} {value}");
+        }
+        Value::Array(items) if items.is_empty() => {
+            let _ = writeln!(out, "{head} none");
+        }
+        Value::Object(fields) if fields.is_empty() => {
+            let _ = writeln!(out, "{head} none");
+        }
+        Value::String(_) | Value::Object(_) | Value::Array(_) => {
+            let _ = writeln!(out, "{head}");
+            nested(out, value, depth + 2);
+        }
+    }
 }
 
 fn match_word(matched: &Match) -> String {

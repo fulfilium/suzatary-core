@@ -5901,6 +5901,31 @@ body:has(> .secretarypanel) .askrow {
   color: var(--ink-muted);
 }
 
+/* A round the box asked is headed by its title, on the line that names the
+   conversation, and its prompt is folded under the answer like `.turnsource`. */
+.streamtitle {
+  font: 600 var(--t-body) / 1.4 var(--f-sans);
+  color: var(--ink);
+}
+
+.streamtitle .streamwhen {
+  font: 400 var(--t-tiny) / 1.4 var(--f-sans);
+  color: var(--ink-muted);
+}
+
+.streamprompt summary {
+  margin-top: var(--s-2);
+  font-size: var(--t-tiny);
+  color: var(--ink-muted);
+  cursor: pointer;
+}
+
+.streamprompt .turntext {
+  margin-top: var(--s-1);
+  font-size: var(--t-small);
+  color: var(--ink-muted);
+}
+
 .roundtopics {
   display: flex;
   flex-wrap: wrap;

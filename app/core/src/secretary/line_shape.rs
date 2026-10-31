@@ -421,7 +421,7 @@ fn coding(session: &Session) -> (CodingShape, Option<Vec<LineWords>>) {
 pub fn unkinded(id: &ConversationId) -> Kind {
     if id == &*DEFAULT {
         Kind::Default
-    } else if id.as_str().ends_with("-review") || id.as_str().ends_with("-sweep") {
+    } else if id.daily_round().is_some() {
         Kind::Review
     } else {
         Kind::Topic

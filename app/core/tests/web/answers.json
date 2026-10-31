@@ -4662,6 +4662,9 @@
               "text": "I will draft that now.",
               "who": "model"
             },
+            "asked": {
+              "by": "person"
+            },
             "conversation": "about-the-deed",
             "opening": {
               "at": "2026-09-02T12:00:01",
@@ -4699,6 +4702,9 @@
               "text": "Nothing else today.",
               "who": "model"
             },
+            "asked": {
+              "by": "person"
+            },
             "conversation": "about-the-deed",
             "opening": {
               "at": "2026-09-02T12:01:30",
@@ -4734,6 +4740,9 @@
               "text": "The beans, in the second week.",
               "who": "model"
             },
+            "asked": {
+              "by": "person"
+            },
             "conversation": "every-line",
             "opening": {
               "at": "2026-09-02T12:03:21",
@@ -4754,6 +4763,9 @@
           },
           {
             "answer": null,
+            "asked": {
+              "by": "person"
+            },
             "conversation": "every-line",
             "opening": {
               "at": "2026-09-02T12:03:24",
@@ -4774,6 +4786,9 @@
           },
           {
             "answer": null,
+            "asked": {
+              "by": "person"
+            },
             "conversation": "every-line",
             "opening": {
               "at": "2026-09-02T12:03:25",
@@ -4807,6 +4822,9 @@
               "text": "The peas, in the third week.",
               "who": "model"
             },
+            "asked": {
+              "by": "person"
+            },
             "conversation": "every-line",
             "opening": {
               "at": "2026-09-02T12:03:26",
@@ -4827,6 +4845,239 @@
           },
           {
             "answer": null,
+            "asked": {
+              "by": "person"
+            },
+            "conversation": "every-line",
+            "opening": {
+              "at": "2026-09-02T12:03:40",
+              "attachments": [],
+              "attempt": "current",
+              "gone": null,
+              "index": 7,
+              "queued": false,
+              "references": [],
+              "text": "and the beans after that?",
+              "who": "person"
+            },
+            "room": 3,
+            "target": "round:every-line/7",
+            "title": "The garden, by week",
+            "topics": [],
+            "turn": 7
+          }
+        ],
+        "total": 7
+      },
+      "maps": []
+    },
+    {
+      "value": {
+        "rounds": [
+          {
+            "answer": {
+              "at": "2026-09-02T12:00:20",
+              "attempt": "current",
+              "blocks": [
+                {
+                  "html": null,
+                  "kind": "prose",
+                  "plain": "I will draft that now.",
+                  "source": "I will draft that now."
+                }
+              ],
+              "gone": null,
+              "index": 1,
+              "text": "I will draft that now.",
+              "who": "model"
+            },
+            "asked": {
+              "by": "box",
+              "title": "Sweep of later mail"
+            },
+            "conversation": "about-the-deed",
+            "opening": {
+              "at": "2026-09-02T12:00:01",
+              "attachments": [],
+              "attempt": "current",
+              "gone": null,
+              "index": 0,
+              "queued": false,
+              "references": [
+                "todo:life/email-harrow"
+              ],
+              "text": "email Harrow about the deed",
+              "who": "person"
+            },
+            "room": 3,
+            "target": "round:about-the-deed/0",
+            "title": "About the deed",
+            "topics": [],
+            "turn": 0
+          },
+          {
+            "answer": {
+              "at": "2026-09-02T12:01:35",
+              "attempt": "current",
+              "blocks": [
+                {
+                  "html": null,
+                  "kind": "prose",
+                  "plain": "Nothing else today.",
+                  "source": "Nothing else today."
+                }
+              ],
+              "gone": null,
+              "index": 3,
+              "text": "Nothing else today.",
+              "who": "model"
+            },
+            "asked": {
+              "by": "person"
+            },
+            "conversation": "about-the-deed",
+            "opening": {
+              "at": "2026-09-02T12:01:30",
+              "attachments": [],
+              "attempt": "current",
+              "gone": null,
+              "index": 2,
+              "queued": false,
+              "references": [],
+              "text": "thanks — anything else on it?",
+              "who": "person"
+            },
+            "room": 3,
+            "target": "round:about-the-deed/2",
+            "title": "About the deed",
+            "topics": [],
+            "turn": 2
+          },
+          {
+            "answer": {
+              "at": "2026-09-02T12:03:22",
+              "attempt": "current",
+              "blocks": [
+                {
+                  "html": null,
+                  "kind": "prose",
+                  "plain": "The beans, in the second week.",
+                  "source": "The beans, in the second week."
+                }
+              ],
+              "gone": null,
+              "index": 1,
+              "text": "The beans, in the second week.",
+              "who": "model"
+            },
+            "asked": {
+              "by": "person"
+            },
+            "conversation": "every-line",
+            "opening": {
+              "at": "2026-09-02T12:03:21",
+              "attachments": [],
+              "attempt": "current",
+              "gone": null,
+              "index": 0,
+              "queued": false,
+              "references": [],
+              "text": "what is planted first?",
+              "who": "person"
+            },
+            "room": 3,
+            "target": "round:every-line/0",
+            "title": "The garden, by week",
+            "topics": [],
+            "turn": 0
+          },
+          {
+            "answer": null,
+            "asked": {
+              "by": "person"
+            },
+            "conversation": "every-line",
+            "opening": {
+              "at": "2026-09-02T12:03:24",
+              "attachments": [],
+              "attempt": "current",
+              "gone": null,
+              "index": 2,
+              "queued": false,
+              "references": [],
+              "text": "and the peas?",
+              "who": "person"
+            },
+            "room": 3,
+            "target": "round:every-line/2",
+            "title": "The garden, by week",
+            "topics": [],
+            "turn": 2
+          },
+          {
+            "answer": null,
+            "asked": {
+              "by": "person"
+            },
+            "conversation": "every-line",
+            "opening": {
+              "at": "2026-09-02T12:03:25",
+              "attempt": "current",
+              "gone": null,
+              "index": 3,
+              "references": [],
+              "text": "Ada stopped the answer",
+              "who": "act"
+            },
+            "room": 3,
+            "target": "round:every-line/3",
+            "title": "The garden, by week",
+            "topics": [],
+            "turn": 3
+          },
+          {
+            "answer": {
+              "at": "2026-09-02T12:03:29",
+              "attempt": "current",
+              "blocks": [
+                {
+                  "html": null,
+                  "kind": "prose",
+                  "plain": "The peas, in the third week.",
+                  "source": "The peas, in the third week."
+                }
+              ],
+              "gone": null,
+              "index": 6,
+              "text": "The peas, in the third week.",
+              "who": "model"
+            },
+            "asked": {
+              "by": "person"
+            },
+            "conversation": "every-line",
+            "opening": {
+              "at": "2026-09-02T12:03:26",
+              "attachments": [],
+              "attempt": "current",
+              "gone": null,
+              "index": 4,
+              "queued": false,
+              "references": [],
+              "text": "the peas, then?",
+              "who": "person"
+            },
+            "room": 3,
+            "target": "round:every-line/4",
+            "title": "The garden, by week",
+            "topics": [],
+            "turn": 4
+          },
+          {
+            "answer": null,
+            "asked": {
+              "by": "person"
+            },
             "conversation": "every-line",
             "opening": {
               "at": "2026-09-02T12:03:40",

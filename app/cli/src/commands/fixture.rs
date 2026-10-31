@@ -309,9 +309,34 @@ fn write_notice(cur: &Path, notice: &cast::Notice) -> anyhow::Result<()> {
 const HELD_WHY: &str =
     "This one adds a todo and completes it in one breath, so it is yours to say.";
 
-/// One day's review written through the real stores without a model: a held line for each open
-/// triage card, as `secretary::review` writes on a real box.
+/// What the fixture's review round answers.
+const REVIEW_ANSWER: &str = "I withdrew nothing. One card adds a todo and completes it in one \
+                             breath, so I left it for you.";
+
+/// What the fixture's sweep round answers.
+const SWEEP_ANSWER: &str = "Nothing in the later mail says an open todo is done, so I proposed \
+                            nothing.";
+
+/// The fixture's sweep prompt, in the shape sweeps wrote before they wrote mail out as text: each
+/// message as `show`'s JSON, with its body's line breaks escaped and a guest list as raw JSON, so
+/// the stream is seen drawing a store's older rounds.
+fn sweep_prompt() -> anyhow::Result<String> {
+    let shown = serde_json::to_string_pretty(&serde_json::json!({
+        "headers": {"from": "Garden Co <billing@garden.example>", "subject": "Invoice paid"},
+        "body": "Hello,\nThe invoice is paid.\nThanks",
+    }))?;
+    Ok(format!(
+        "Below is every open todo with later mail that might bear on it.\n\n### todo:life/garden\n\n\
+         - candidate mail:3f2a at 2025-09-01T10:00:00Z (the same thread):\n{shown}\n\
+         guests: [{{\"name\":\"Ana\",\"email\":\"ana@garden.example\"}}]\n"
+    ))
+}
+
+/// Today's review and sweep, written through the real stores without a model, as
+/// `secretary::review` and `secretary::sweep` write them on a real box: each the box's unstamped
+/// prompt and the secretary's answer, then a held line for each open triage card.
 fn a_review(root: &Path) -> anyhow::Result<()> {
+    use suzatary_core::secretary::daily::Daily;
     use suzatary_core::secretary::store::{Decision, Entry};
 
     let read = crate::instance::Instance::open(&root.join("instance.toml"))?;
@@ -324,20 +349,43 @@ fn a_review(root: &Path) -> anyhow::Result<()> {
     );
     let at = SystemClock.now();
     let day = read.persona.zone.day(fpl::instant_of(at));
-    let id = suzatary_core::secretary::store::ConversationId::daily(
-        suzatary_core::secretary::daily::Daily::Review,
-        day,
-    );
     let store = read.conversation_stores();
-    suzatary_core::secretary::transcript::start(
-        store.conversations(),
-        &id,
-        &Entry::Opened {
-            at,
-            title: suzatary_core::secretary::words::Words::kept("Review".to_owned()),
-            model: "scripted/fixture".to_owned(),
-            kind: suzatary_core::secretary::store::Kind::Review,
-        },
+    let round = |daily: Daily, prompt: String, answer: &str| {
+        let id = suzatary_core::secretary::store::ConversationId::daily(daily, day);
+        suzatary_core::secretary::transcript::start(
+            store.conversations(),
+            &id,
+            &Entry::Opened {
+                at,
+                title: suzatary_core::secretary::words::Words::kept(daily.title().to_owned()),
+                model: "scripted/fixture".to_owned(),
+                kind: suzatary_core::secretary::store::Kind::Review,
+            },
+        )?;
+        for turn in [
+            suzatary_core::capability::Turn::Person {
+                text: prompt,
+                references: Vec::new(),
+                attachments: Vec::new(),
+            },
+            suzatary_core::capability::Turn::Model {
+                text: answer.to_owned(),
+                calls: Vec::new(),
+            },
+        ] {
+            suzatary_core::secretary::transcript::push(
+                store.conversations(),
+                &id,
+                &Entry::Said { at, turn, by: None },
+            )?;
+        }
+        anyhow::Ok(id)
+    };
+    round(Daily::Sweep, sweep_prompt()?, SWEEP_ANSWER)?;
+    let id = round(
+        Daily::Review,
+        suzatary_core::secretary::review::ASK.to_owned(),
+        REVIEW_ANSWER,
     )?;
     for (card, changeset) in open {
         suzatary_core::secretary::transcript::push(
@@ -1173,7 +1221,8 @@ pub struct Args {
     /// the empty Inbox.
     #[arg(long)]
     propose: bool,
-    /// Write today's review: the open triage card held with a reason.
+    /// Write today's review and sweep: each the box's prompt and the secretary's answer, and the
+    /// open triage card held with a reason.
     #[arg(long, requires = "propose")]
     reviewed: bool,
     /// Declare a calendar and write the fixture's own `secretspec.toml`; the caller must isolate

@@ -19,7 +19,8 @@
  * 4. A URL in the box's own act turn is a link; in a model's prose it is not.
  * 5. The transcript keeps the reader's scroll and its drawn rounds as answers land.
  *
- * Every scene runs on `E2E_BASE_WRITE`, because each one moves a conversation.
+ * Every scene that moves a conversation runs on `E2E_BASE_WRITE`; the one that reads the box's own rounds runs
+ * on `E2E_BASE_PROPOSED`, whose store holds today's review and sweep.
  */
 
 import assert from "node:assert/strict";
@@ -27,7 +28,7 @@ import { mkdirSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { DESKTOP, PHONE, SIGNED_POST, suite, topicRounds, WRITE_BASE } from "./harness";
+import { DESKTOP, PHONE, PROPOSED_BASE, SIGNED_POST, suite, topicRounds, WRITE_BASE } from "./harness";
 import cast from "../test/cast";
 
 const { todos, owner, counsel } = cast.world;
@@ -1265,4 +1266,42 @@ app.scene("Regenerate answers again beside an earlier attempt, and ↑ edits the
     "the reworded question is the current one",
   );
   assert.equal(await app.page.evaluate<boolean>(shown(".composeediting")), false, "and the composer is asking again");
+});
+
+/**
+ * A ROUND THE BOX ASKED READS AS ITS TITLE: the reviewed deployment's sweep and review, each written as the box writes
+ * them (its prompt unstamped, the sweep's in the older shape with `show`'s JSON), draw one title line and the
+ * secretary's answer, with none of the prompt on the screen, and a tap opens the prompt.
+ */
+app.scene("a round the box asked reads as its title and answer, its prompt a tap away, at 390 px", async () => {
+  await app.resize(PHONE);
+  await app.open(PROPOSED_BASE);
+  await app.page.evaluate(`location.hash = "#/secretary"`);
+  const boxRounds = `[...document.querySelectorAll(".streamround")].filter((r) => r.querySelector(".streamtitle") !== null)`;
+  await app.page.waitFor(`${boxRounds}.length === 2`, { timeout: 15000 });
+  // What a reader sees of a round: its text without the body of a disclosure left closed. Read off the DOM, since a
+  // round off the screen is not laid out (`content-visibility: auto`) and has no `innerText` yet.
+  const shown = `((r) => { const c = r.cloneNode(true); c.querySelectorAll("details:not([open]) > :not(summary)").forEach((n) => n.remove()); return c.textContent; })`;
+  const drawn = await app.page.evaluate<{ title: string; lines: number; asked: boolean; text: string }[]>(`${boxRounds}.map((r) => {
+    const head = r.querySelector(".streamtitle");
+    return {
+      title: head.querySelector("a").textContent,
+      lines: Math.round(head.getBoundingClientRect().height / parseFloat(getComputedStyle(head).lineHeight)),
+      asked: r.querySelector(".streamasked") !== null,
+      text: ${shown}(r),
+    };
+  })`);
+  assert.deepEqual(drawn.map((r) => r.title).sort(), ["Review of triage's batches", "Sweep of later mail"]);
+  for (const r of drawn) {
+    assert.equal(r.lines, 1, `${r.title}: its title is one line`);
+    assert.equal(r.asked, false, `${r.title}: no question is drawn in the title's place`);
+    assert.ok(!r.text.includes("\\n") && !r.text.includes('{"'), `${r.title}: no JSON on the screen, got ${JSON.stringify(r.text)}`);
+  }
+  const answers: Record<string, string> = { "Sweep of later mail": "proposed nothing", "Review of triage's batches": "withdrew nothing" };
+  for (const r of drawn) assert.ok(r.text.includes(answers[r.title] ?? "?"), `${r.title}: its answer stands under it, got ${JSON.stringify(r.text)}`);
+
+  const sweep = `${boxRounds}.find((r) => r.querySelector(".streamtitle a").textContent === "Sweep of later mail")`;
+  await app.page.evaluate(`${sweep}.scrollIntoView()`);
+  await app.page.click(`.streamround:has(.streamtitle a[href*="-sweep"]) .streamprompt summary`);
+  await app.page.waitFor(`${sweep}.querySelector(".streamprompt").open && ${shown}(${sweep}).includes("candidate mail:3f2a")`, { timeout: 8000 });
 });

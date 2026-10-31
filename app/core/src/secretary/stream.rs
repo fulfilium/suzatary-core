@@ -13,6 +13,7 @@ use prodrome_core::event::Hash;
 use crate::capability::Turn;
 use crate::secretary::outline::{Outline, Round, Rounds, Voices};
 use crate::secretary::readings::{Dress, Place, turn};
+use crate::secretary::stamp::Stamp;
 use crate::secretary::store::{ConversationId, Entry, NotAConversation, Said, heading};
 use crate::secretary::topics::reading::Reading;
 use crate::secretary::topics::target::Target;
@@ -245,6 +246,7 @@ pub fn row(
         title: heading(title).into_owned(),
         turn: round.opening.0,
         opening: drawn(round.opening),
+        asked: asked(round.conversation, round.opening.1),
         answer: round
             .turns()
             .rev()
@@ -252,5 +254,18 @@ pub fn row(
             .map(drawn),
         room: MAX_TOPICS.saturating_sub(on.len()),
         topics: on.into_iter().map(String::from).collect(),
+    }
+}
+
+/// Who wrote `opening`, a round's first turn in `conversation`. The box writes the question of
+/// each of its daily rounds unstamped, in the conversation `ConversationId::daily` names, which
+/// every round of it has carried since the first, so no stored line needs to say so. A line an
+/// actor stamped there is the owner's own.
+fn asked(conversation: &ConversationId, opening: &Said) -> wire::RoundAsked {
+    match conversation.daily_round() {
+        Some(daily) if !Stamp::owners(opening.by.as_ref()) => wire::RoundAsked::Box {
+            title: daily.heading().to_owned(),
+        },
+        Some(_) | None => wire::RoundAsked::Person {},
     }
 }

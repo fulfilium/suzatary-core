@@ -34,6 +34,15 @@ impl Daily {
             Daily::Sweep => "Sweep",
         }
     }
+
+    /// What one of its rounds is called in the stream, in place of the prompt the box wrote.
+    #[must_use]
+    pub fn heading(self) -> &'static str {
+        match self {
+            Daily::Review => "Review of triage's batches",
+            Daily::Sweep => "Sweep of later mail",
+        }
+    }
 }
 
 /// Today's round of one kind: its conversation, and that conversation as it stands when it was

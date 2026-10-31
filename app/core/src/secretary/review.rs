@@ -40,7 +40,7 @@ impl Reviewed {
 }
 
 /// The question the review asks, as a person turn; the rule itself stays in `SECRETARY.md`.
-const ASK: &str = "Review the triage agent's open cards, below. Withdraw duplicates and noise \
+pub const ASK: &str = "Review the triage agent's open cards, below. Withdraw duplicates and noise \
                    with triage_withdraw, naming the card and WHY, and leave every other card \
                    for my tap, per \"Reviewing the agent's cards\" in your brief. Then tell me, \
                    in a few sentences, what you withdrew and what you left for me and why. \
