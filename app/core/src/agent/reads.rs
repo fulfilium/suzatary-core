@@ -127,7 +127,10 @@ pub fn context(
     let least = wire_len(super::remembered::TOO_BIG);
     let mut answer = manual_within(manuals, deployment, CONTEXT_CAP - key - least);
     let room = (CONTEXT_CAP + memory_bytes).saturating_sub(wire_len(&answer) + key);
-    answer["memory"] = Value::String(super::remembered::remembered(memory, record, room));
+    answer["memory"] = Value::String(crate::timings::timed(
+        crate::timings::Phase::Remembered,
+        || super::remembered::remembered(memory, record, room),
+    ));
     answer
 }
 

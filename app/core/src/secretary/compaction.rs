@@ -69,7 +69,7 @@ impl Reading {
     /// [`ReadDigests::whole`]'s, and the stores' own.
     pub fn of(digests: &ReadDigests<'_>) -> Result<Self, Refusal> {
         digests.whole()?;
-        let lines = digests.lines.lines.objects()?;
+        let lines = digests.line_objects()?;
         let opened = digests.opened(&lines);
         Ok(Self {
             digest: digests.read_over(&lines, &opened)?,

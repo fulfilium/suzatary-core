@@ -28,7 +28,7 @@ impl<'a> Recollection<'a> {
     /// # Errors
     /// [`ReadMemories::read`]'s.
     pub fn facts(&self) -> Result<Memory, Refusal> {
-        self.memories.read()
+        crate::timings::timed(crate::timings::Phase::Facts, || self.memories.read())
     }
 
     /// The record of every conversation, in the owner's words alone.

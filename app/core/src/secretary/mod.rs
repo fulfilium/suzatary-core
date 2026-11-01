@@ -59,6 +59,8 @@ pub mod key_ring;
 pub mod line_event;
 pub mod line_shape;
 pub mod line_words;
+#[cfg(any(test, feature = "nothing"))]
+pub mod live_shape;
 pub mod locked_text;
 pub mod mail_health;
 pub mod memories;

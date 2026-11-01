@@ -33,9 +33,11 @@ pub(crate) fn remembered(
             return if fits(&why) { why } else { UNREAD.to_owned() };
         }
     };
+    let probes = std::cell::Cell::new(0usize);
     let mut newest = memory.facts.clone();
     newest.sort_by_key(|fact| std::cmp::Reverse(fact.id));
     let told = |kept: usize, view: usize| {
+        probes.set(probes.get() + 1);
         let shown = Memory {
             facts: newest[..kept].to_vec(),
             forgotten: Vec::new(),
@@ -65,7 +67,9 @@ pub(crate) fn remembered(
     let kept = largest(newest.len(), |kept| fits(&told(kept, 0)));
     // Then the record, in what they leave.
     let view = largest(room, |view| fits(&told(kept, view)));
-    told(kept, view)
+    let answer = told(kept, view);
+    crate::timings::counted(crate::timings::Phase::Remembered, "views", probes.get());
+    answer
 }
 
 /// The largest `n` in `0..=most` that `holds`, by bisection, for a `holds` that holds at 0: the

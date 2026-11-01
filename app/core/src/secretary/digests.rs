@@ -21,6 +21,7 @@ use crate::secretary::memories::Held;
 use crate::secretary::salted_text::{Text, TextName};
 use crate::secretary::texts::Naming;
 use crate::store::{Doc, Gets, Prodrome, Reads};
+use crate::timings::{Phase, timed};
 
 /// Who every attempt is written as: the compactor, whose word binds about summaries alone.
 pub const COMPACTOR: &str = "compactor";
@@ -86,8 +87,18 @@ impl ReadDigests<'_> {
     /// # Errors
     /// The stores' own; [`Refusal::internal`] for lines in a cycle, which no store can hold.
     pub fn read(&self) -> Result<Digest, Refusal> {
-        let lines = self.lines.lines.objects()?;
+        let lines = self.line_objects()?;
         self.read_over(&lines, &self.opened(&lines))
+    }
+
+    /// The conversations' line objects, in the store's order.
+    ///
+    /// # Errors
+    /// The store's own.
+    pub fn line_objects(
+        &self,
+    ) -> Result<Vec<(Hash, prodrome_core::event::Envelope<LineEvent>)>, Refusal> {
+        Ok(timed(Phase::Lines, || self.lines.lines.objects())?)
     }
 
     /// Each of `lines` as read, by name: its words opened by the conversations' keys.
@@ -96,7 +107,9 @@ impl ReadDigests<'_> {
         &self,
         lines: &[(Hash, prodrome_core::event::Envelope<LineEvent>)],
     ) -> std::collections::BTreeMap<Hash, crate::secretary::store::Entry> {
-        crate::secretary::transcript::opened(lines, &self.lines.slots())
+        timed(Phase::Opened, || {
+            crate::secretary::transcript::opened(lines, &self.lines.slots())
+        })
     }
 
     /// The reading over `lines`, the conversations' objects as already read, and `opened`, each
@@ -109,8 +122,11 @@ impl ReadDigests<'_> {
         lines: &[(Hash, prodrome_core::event::Envelope<LineEvent>)],
         opened: &std::collections::BTreeMap<Hash, crate::secretary::store::Entry>,
     ) -> Result<Digest, Refusal> {
-        digest::digest(lines, opened, &self.history.nodes()?, self.owners, |name| {
-            self.words(name)
+        let history = timed(Phase::History, || self.history.nodes())?;
+        timed(Phase::Fold, || {
+            digest::digest(lines, opened, &history, self.owners, |name| {
+                self.words(name)
+            })
         })
         .map_err(|cycle| {
             Refusal::internal(format!(
@@ -134,8 +150,10 @@ impl ReadDigests<'_> {
     /// # Errors
     /// As [`crate::secretary::memories`]'s sweep: naming the store and what it left out.
     pub fn whole(&self) -> Result<(), Refusal> {
-        crate::secretary::memories::whole(self.history, "digests")?;
-        crate::secretary::memories::whole(self.lines.lines, "conversations")
+        timed(Phase::Whole, || {
+            crate::secretary::memories::whole(self.history, "digests")?;
+            crate::secretary::memories::whole(self.lines.lines, "conversations")
+        })
     }
 
     /// The words kept under `name`; `None` once deleted or lost.

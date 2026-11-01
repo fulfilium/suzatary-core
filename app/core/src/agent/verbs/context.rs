@@ -2,6 +2,7 @@ use serde_json::Value;
 
 use crate::agent::{Call, TriageSurface, reads};
 use crate::refusal::Refusal;
+use crate::timings::{Phase, timed};
 use crate::verb::{NoArgs, Verb};
 
 /// The manuals and the vocabularies, first.
@@ -21,12 +22,14 @@ impl Verb for Context {
 
     fn run(call: &Call<'_>, _: NoArgs) -> Result<Value, Refusal> {
         let memory = call.caps.memory;
-        Ok(reads::context(
-            call.caps.manuals,
-            call.deployment,
-            memory.facts().as_ref(),
-            memory.record().as_ref(),
-            memory.budget(),
-        ))
+        Ok(timed(Phase::Context, || {
+            reads::context(
+                call.caps.manuals,
+                call.deployment,
+                memory.facts().as_ref(),
+                memory.record().as_ref(),
+                memory.budget(),
+            )
+        }))
     }
 }

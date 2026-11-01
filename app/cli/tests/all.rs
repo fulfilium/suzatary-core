@@ -35,6 +35,8 @@ mod clienterrors;
 mod coding;
 #[path = "connections.rs"]
 mod connections;
+#[path = "context_disk.rs"]
+mod context_disk;
 #[path = "context_headroom.rs"]
 mod context_headroom;
 #[path = "decision_tap.rs"]

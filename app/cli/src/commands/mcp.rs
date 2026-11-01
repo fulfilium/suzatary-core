@@ -188,10 +188,13 @@ impl Interpreters {
 
 /// `suzatary mcp`: serve the agent's tools over stdio until the client goes.
 ///
-/// Logs go to stderr only, since one stray line on stdout desynchronises the client.
+/// Logs go to stderr only, since one stray line on stdout desynchronises the client, as plain
+/// lines that a file or a journal keeps readable. `RUST_LOG=warn,suzatary::timings=info` adds how
+/// long each phase of reading the memory took ([`suzatary_core::timings`]).
 pub fn run(path: &std::path::Path) -> anyhow::Result<()> {
     tracing_subscriber::fmt()
         .with_writer(std::io::stderr)
+        .with_ansi(false)
         .with_env_filter(
             tracing_subscriber::EnvFilter::try_from_default_env().unwrap_or_else(|_| "warn".into()),
         )
