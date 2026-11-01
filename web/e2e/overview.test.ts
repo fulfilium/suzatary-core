@@ -57,10 +57,12 @@ const calendarLine = '.settingsline[data-line="credential:ics/work"]';
 const boxCard = `${calendarLine} .proposal.proposal-act-secret[data-conversation="setup"]`;
 
 /** Open `#/settings` and wait until the calendar's line has drawn: it waits on `GET /api/overview` and `GET /api/me`. */
+// The page draws from the overview first and each line's cards once they arrive: a scene reads both.
 async function openSettings(base: string): Promise<void> {
   await app.page.navigate(`${base}/#/settings`);
   await app.page.reload();
   await app.page.waitFor(`document.querySelector('${calendarLine}') !== null`, { timeout: 15000 });
+  await app.page.waitFor(`document.querySelector(".settingscards") === null`, { timeout: 15000 });
 }
 
 

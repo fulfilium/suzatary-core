@@ -16,6 +16,7 @@ import { when } from "../view/format"
 import frame from "../view/frame"
 import asked from "../app/asked"
 import reading from "../algebra/reading"
+import lo from "../algebra/lo"
 import { hrefOf } from "../shell/route"
 import address from "../shell/address"
 import act from "../view/act"
@@ -73,7 +74,7 @@ export namespace settingsPage {
   }
 
   const group = (v: T) => (g: OverviewGroup): HTMLElement => {
-    const cards = (l: OverviewLine) => overview.cards(l, v.rows)
+    const cards = (l: OverviewLine) => overview.cards(l, lo.withDefault(v.rows, []))
     return el(
       "section",
       { class: "settingsgroup", "data-group": g.group },
@@ -115,6 +116,14 @@ export namespace settingsPage {
     )
   }
 
+  // Where the Inbox's cards stand while they are not here: each line draws its cards once they are.
+  const proposals = (v: T): Child =>
+    lo.fold(v.rows, {
+      loading: () => el("p", { class: "settingsmeta settingscards" }, "The Inbox's cards are on their way."),
+      error: e => el("p", { class: "settingshealth settingshealth-failing settingscards" }, `The Inbox's cards could not be read: ${e}`),
+      val: () => null,
+    })
+
   export const view = (v: T, fx: Effects): Child => {
     // What this browser answers for itself, and nothing if it cannot.
     const here = el("div", { class: "settingshere" }, v.device === null ? null : [el("h2", null, "This device"), device.view(v.device, {
@@ -127,6 +136,7 @@ export namespace settingsPage {
     return [
       first ? here : null,
       el("div", { class: "settingsask" }, ask(v, "Ask to add or change anything")),
+      proposals(v),
       offered(v),
       el("div", { class: "settingsbody" }, overview.connected(v.overview).map(group(v))),
       first ? null : here,
@@ -134,10 +144,12 @@ export namespace settingsPage {
   }
 
   // What of the Inbox a line draws: its proposals, which the tab holds, so the box answering for its folds moves
-  // nothing here.
-  const proposed = reading.settled(
-    reading.map(inboxPage.waits, w => w.rows.filter(r => r.kind === "proposal")),
-    sameRows,
+  // nothing here. Never waited on: they wait on the conversations' sync, and the overview draws without them.
+  const proposed = reading.unwaited(
+    reading.settled(
+      reading.map(inboxPage.waits, w => w.rows.filter(r => r.kind === "proposal")),
+      sameRows,
+    ),
   )
 
   // The overview and what this browser keeps, asked together, and asked again when the inbox or the conversations

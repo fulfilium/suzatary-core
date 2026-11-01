@@ -185,9 +185,38 @@ pub struct Declared<'a> {
     /// Where the data is kept.
     pub storage: &'a Storage,
     /// The program this box runs.
-    pub build: &'a wire::AboutPayload,
+    pub build: &'a Build,
     /// How the person reaches the app at a terminal, which a step's command is spelled in.
     pub reach: &'a connect::Reach,
+}
+
+/// The program this box runs, as its line reads it: what `GET /api/about` says, less each
+/// completed todo's price now, so it is a function of the project chain's objects alone.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Build {
+    /// The version, or `dev`.
+    pub version: String,
+    /// The revision it was built from, or `dev`.
+    pub revision: String,
+    /// What the version completed: each todo's title, or its id where the chain does not hold
+    /// it.
+    pub completed: Vec<String>,
+}
+
+impl Build {
+    /// What `about` says of the build.
+    #[must_use]
+    pub fn of(about: &wire::AboutPayload) -> Self {
+        Self {
+            version: about.version.clone(),
+            revision: about.build.clone(),
+            completed: about
+                .completes
+                .iter()
+                .map(|c| c.held.as_ref().map_or(&c.todo, |held| &held.title).clone())
+                .collect(),
+        }
+    }
 }
 
 /// One job the deployment runs a model for, as the deployment names it.
@@ -215,6 +244,47 @@ pub enum Calls {
     },
     /// No call is recorded, so the line says only what runs.
     Unrecorded,
+}
+
+/// What the secret store answered of every declared name and every account's grants: the part
+/// of the overview that asks the store, kept apart so it can be asked once and read many times.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Asked {
+    secrets: BTreeMap<String, SecretState>,
+    grants: BTreeMap<String, MailGrants>,
+}
+
+impl Asked {
+    /// `secrets` asked for each of `settables` and each of `accounts`' grants, once each; a
+    /// locked store is waited on once ([`crate::capability::Snapshot`]).
+    #[must_use]
+    pub fn of(
+        secrets: &dyn crate::capability::Secrets,
+        settables: &crate::settings::Settables,
+        accounts: &[MailAccount],
+    ) -> Self {
+        let snapshot = crate::capability::Snapshot::read(secrets, settables.iter());
+        Self {
+            secrets: settables
+                .iter()
+                .map(|settable| (settable.name().to_owned(), snapshot.state(&settable)))
+                .collect(),
+            grants: accounts
+                .iter()
+                .map(|account| (account.email.to_string(), secrets.mail_grants(account)))
+                .collect(),
+        }
+    }
+
+    /// What the stores say, these answers with `registers`.
+    #[must_use]
+    pub fn observed<'a>(&'a self, registers: Registers<'a>) -> Observed<'a> {
+        Observed {
+            secrets: &self.secrets,
+            grants: &self.grants,
+            registers,
+        }
+    }
 }
 
 /// What the box's stores say of it now; a name or account they hold nothing about reads as
@@ -857,12 +927,12 @@ fn this_box(declared: &Declared<'_>) -> Overview {
             format!("Suzatary {}", build.version),
             Some(format!(
                 "{}{}",
-                if build.build == "dev" {
+                if build.revision == "dev" {
                     "A development build outside the flake.".to_owned()
                 } else {
-                    format!("Built from revision {}.", build.build)
+                    format!("Built from revision {}.", build.revision)
                 },
-                completed(&build.completes)
+                completed(&build.completed)
             )),
             Standing::Kept,
         ),
@@ -870,16 +940,8 @@ fn this_box(declared: &Declared<'_>) -> Overview {
 }
 
 /// What a version completed, as a sentence after the build's, or nothing.
-fn completed(completes: &[wire::Shipped]) -> String {
-    let titles: Vec<&str> = completes
-        .iter()
-        .map(|c| {
-            c.held
-                .as_ref()
-                .map_or(c.todo.as_str(), |held| held.title.as_str())
-        })
-        .collect();
-    match titles.as_slice() {
+fn completed(titles: &[String]) -> String {
+    match titles {
         [] => String::new(),
         [one] => format!(" It completed {one}."),
         [rest @ .., last] => format!(" It completed {} and {last}.", rest.join(", ")),
@@ -1016,10 +1078,10 @@ pub(crate) mod tests {
         fn read(&self) -> (Overview, Vec<String>) {
             let deployment = self.deployment();
             let settables = self.settables();
-            let build = wire::AboutPayload {
+            let build = Build {
                 version: "0.0.0".to_owned(),
-                build: "dev".to_owned(),
-                completes: Vec::new(),
+                revision: "dev".to_owned(),
+                completed: Vec::new(),
             };
             let declared = Declared {
                 deployment: &deployment,

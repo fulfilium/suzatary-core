@@ -3346,6 +3346,8 @@ fn performer(
                 kept: kept_store(&caps.root),
                 signing,
                 google,
+                // A test server runs no filing task to ring.
+                ended: Arc::new(|| {}),
             })
         }
     }

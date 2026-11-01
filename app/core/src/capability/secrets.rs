@@ -184,6 +184,79 @@ pub trait Secrets: std::marker::Sync {
     fn google_grant(&self, account: &crate::mail::address::EmailAddress) -> crate::google::Held;
 }
 
+/// Each answer a secret store gave, by its question: the store as it stood when last asked.
+/// Empty until something asks; [`SecretAnswers::forget`] empties it again.
+#[derive(Debug, Clone, Default)]
+pub struct SecretAnswers {
+    states: std::collections::BTreeMap<String, SecretState>,
+    grants: std::collections::BTreeMap<String, MailGrants>,
+    google: std::collections::BTreeMap<String, crate::google::Held>,
+}
+
+impl SecretAnswers {
+    /// Every answer dropped, so each question is asked of the store again.
+    pub fn forget(&mut self) {
+        *self = Self::default();
+    }
+}
+
+/// `store` asked through `answers`: a question already answered there is answered from there,
+/// and any other is asked of `store` once and its answer kept. The store is asked with nothing
+/// held, so a slow question holds up no other reader.
+pub struct Remembering<'a> {
+    /// The store asked.
+    pub store: &'a dyn Secrets,
+    /// What it answered so far.
+    pub answers: &'a std::sync::Mutex<SecretAnswers>,
+}
+
+impl Remembering<'_> {
+    fn answer<K: Ord + Clone, V: Clone>(
+        &self,
+        table: impl Fn(&mut SecretAnswers) -> &mut std::collections::BTreeMap<K, V>,
+        key: &K,
+        ask: impl FnOnce() -> V,
+    ) -> V {
+        let held = || {
+            self.answers
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+        };
+        if let Some(answer) = table(&mut held()).get(key) {
+            return answer.clone();
+        }
+        let answer = ask();
+        table(&mut held()).insert(key.clone(), answer.clone());
+        answer
+    }
+}
+
+impl Secrets for Remembering<'_> {
+    fn secret_state(&self, settable: &Settable) -> SecretState {
+        self.answer(
+            |answers| &mut answers.states,
+            &settable.name().to_owned(),
+            || self.store.secret_state(settable),
+        )
+    }
+
+    fn mail_grants(&self, account: &MailAccount) -> MailGrants {
+        self.answer(
+            |answers| &mut answers.grants,
+            &account.email.to_string(),
+            || self.store.mail_grants(account),
+        )
+    }
+
+    fn google_grant(&self, account: &crate::mail::address::EmailAddress) -> crate::google::Held {
+        self.answer(
+            |answers| &mut answers.google,
+            &account.to_string(),
+            || self.store.google_grant(account),
+        )
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::SecretState::{self, Failed, Locked, Missing, Set};

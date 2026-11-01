@@ -85,6 +85,8 @@ mod migrate_models;
 mod objects;
 #[path = "operator.rs"]
 mod operator;
+#[path = "overview_cost.rs"]
+mod overview_cost;
 #[path = "paths.rs"]
 mod paths;
 #[path = "perf_fold_chain.rs"]

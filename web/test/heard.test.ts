@@ -32,6 +32,12 @@ test("law: both reads each part now, as lo.combine's monoid", () =>
     assert.deepEqual(reading.both(a.r, b.r).now(), lo.map(lo.combine(a.r.now(), b.r.now()), ([x, y]) => [x, y]))
   }))
 
+test("law: both with an unwaited part waits on the other part alone, and carries the unwaited part's state", () =>
+  forAll(200, r => {
+    const [a, b] = [cell(state(r)), cell(state(r))]
+    assert.deepEqual(reading.both(a.r, reading.unwaited(b.r)).now(), lo.map(a.r.now(), x => [x, b.r.now()]))
+  }))
+
 test("law: a reading that did not move hands back the same object; one that moved, a new one", () =>
   forAll(200, r => {
     const [a, b] = [cell(state(r)), cell(state(r))]

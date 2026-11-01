@@ -81,6 +81,8 @@ pub enum Acting {
         signing: Arc<crate::commands::serve::sign_ins::SignIns>,
         /// What a tapped calendar event is written through.
         google: Arc<suzatary_io::google::Grants>,
+        /// Rung when a device flow ends, so the box files again and reads the grant it stored.
+        ended: Arc<dyn Fn() + Send + Sync>,
     },
     /// The fixture's performer: never touches the network and runs on no thread, so a
     /// browser scene against it is deterministic.
@@ -228,6 +230,7 @@ impl Acting {
         instance: &Instance,
         workers: Arc<crate::commands::serve::Workers>,
         signing: Arc<crate::commands::serve::sign_ins::SignIns>,
+        ended: Arc<dyn Fn() + Send + Sync>,
     ) -> Self {
         Acting::Real {
             roster: Arc::new(crate::instance::InstanceEdits::new(instance.path.clone())),
@@ -249,6 +252,7 @@ impl Acting {
             workers,
             signing,
             google: Arc::new(crate::commands::mail::google_grants(instance)),
+            ended,
         }
     }
 
@@ -468,13 +472,14 @@ impl suzatary_core::secretary::routes::Perform for Acting {
                 tokens,
                 inbox,
                 workers,
+                ended,
                 ..
             } => begin_real(
                 roster.as_ref(),
                 conversations,
                 tokens,
                 inbox,
-                workers,
+                (workers, ended),
                 (id, index),
                 object,
                 act,
@@ -501,7 +506,10 @@ fn begin_real(
     conversations: ActingConversations,
     tokens: &suzatary_io::oauth::TokenStore,
     inbox: &ActingInbox,
-    workers: &Arc<crate::commands::serve::Workers>,
+    (workers, ended): (
+        &Arc<crate::commands::serve::Workers>,
+        &Arc<dyn Fn() + Send + Sync>,
+    ),
     (id, index): (&suzatary_core::secretary::store::ConversationId, usize),
     object: &suzatary_core::secretary::inbox::ProposalId,
     act: &suzatary_core::secretary::acts::Act,
@@ -563,6 +571,7 @@ fn begin_real(
         conversations,
         inbox,
         workers,
+        ended,
         at: (id, index),
         object,
     };
@@ -578,6 +587,7 @@ struct Flow<'a> {
     conversations: ActingConversations,
     inbox: &'a ActingInbox,
     workers: &'a Arc<crate::commands::serve::Workers>,
+    ended: &'a Arc<dyn Fn() + Send + Sync>,
     at: (&'a suzatary_core::secretary::store::ConversationId, usize),
     object: &'a suzatary_core::secretary::inbox::ProposalId,
 }
@@ -602,6 +612,7 @@ impl Flow<'_> {
             conversations,
             inbox,
             workers,
+            ended,
             at: (id, index),
             object,
         } = self;
@@ -645,6 +656,7 @@ impl Flow<'_> {
         let done_inbox = *inbox;
         let done_object = object.clone();
         let done_workers = Arc::clone(workers);
+        let done_ended = Arc::clone(ended);
         std::thread::spawn(move || {
             finish_act(
                 pending,
@@ -657,6 +669,7 @@ impl Flow<'_> {
                 &done_id,
                 &done_workers,
             );
+            done_ended();
         });
 
         Performed::Tried(Tried::Running {

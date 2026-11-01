@@ -191,6 +191,16 @@ pub struct Inner {
             >,
         >,
     >,
+    /// Settings' build line, a tabulation by the project chain's heads and the build, so the
+    /// chain is priced again only when it moves.
+    pub built: Arc<
+        std::sync::Mutex<
+            prodrome_core::memo::Cache<
+                suzatary_core::settings::overview::Build,
+                prodrome_core::memo::Lru,
+            >,
+        >,
+    >,
     /// The box's signing keys, which only a tapped device card reaches (to register a key, signed
     /// by the root); `None` for a deployment that declares no root.
     pub keys: Option<Arc<suzatary_core::signatures::BoxKeys>>,
@@ -221,6 +231,11 @@ pub struct Inner {
     /// filing reads the calendars' stores not at all; `None` until the first hearing, which
     /// holds the quiet calendars' cards.
     pub noticing: Arc<std::sync::Mutex<Option<Heard>>>,
+    /// What the secret store answered since the last filing ([`State::notice`]), which forgets
+    /// it first: a filing follows every act that can move a secret (a tap, a sign-in's callback,
+    /// an edit of the instance file) and the hourly tick, which sees a hand edit at a terminal.
+    /// Every other reader asks through it, so a page load asks the store nothing it answered.
+    pub secrets_answered: Arc<std::sync::Mutex<suzatary_core::capability::SecretAnswers>>,
     /// Each store's epoch, which every objects answer carries.
     pub epochs: Arc<suzatary_core::epoch::Epochs>,
     /// Each store's recorded frontiers, which every pull names and every answer records.
@@ -427,6 +442,9 @@ impl State {
             asking: Arc::new(std::sync::Mutex::new(prodrome_core::memo::Cache::new(
                 prodrome_core::memo::Lru::new(4),
             ))),
+            built: Arc::new(std::sync::Mutex::new(prodrome_core::memo::Cache::new(
+                prodrome_core::memo::Lru::new(4),
+            ))),
             keys: None,
             requests: None,
             pairings: None,
@@ -437,6 +455,7 @@ impl State {
             verify: Arc::new(Unverified),
             consenting,
             noticing: Arc::default(),
+            secrets_answered: Arc::default(),
             // A test's server keeps its epochs in memory; `listen` keeps the box's on disk.
             epochs: Arc::new(suzatary_core::epoch::Epochs::remembered()),
             frontiers: Arc::new(prodrome_core::store::frontier::Frontiers::remembered(
@@ -678,6 +697,18 @@ impl State {
         *live = next;
     }
 
+    /// `caps`' secret store asked through what it answered since the last filing.
+    #[must_use]
+    pub fn secrets<'a>(
+        &'a self,
+        caps: &'a suzatary_core::capability::Server<'_>,
+    ) -> suzatary_core::capability::Remembering<'a> {
+        suzatary_core::capability::Remembering {
+            store: caps.secretary.secrets,
+            answers: &self.secrets_answered,
+        }
+    }
+
     /// The same state with `/api/about`'s build read from `stamp`.
     #[must_use]
     pub fn with_stamp(mut self, stamp: Stamp) -> Self {
@@ -759,9 +790,11 @@ impl State {
             .ok();
         let now = prodrome_core::fpl::instant_of(caps.secretary.clock.now());
         let model = self.models.recorded();
+        locks::held(&self.secrets_answered).forget();
+        let secrets = self.secrets(caps);
         let seen = suzatary_core::secretary::noticed::Seen {
             settables: &settables,
-            secrets: caps.secretary.secrets,
+            secrets: &secrets,
             model: &model,
             answered: &answered,
             open: &open,
@@ -1450,7 +1483,7 @@ fn performers(
         );
     }
     (
-        real_acting(instance, &signing),
+        real_acting(instance, &signing, moved),
         Arc::clone(&signing),
         Arc::new(interpreters::Verifying::Real {
             instance: Arc::new(instance.clone()),
@@ -1491,15 +1524,19 @@ fn real_postman(instance: &Instance) -> crate::commands::secretary::Postman {
     crate::commands::secretary::Postman::Real(Arc::new(instance.clone()))
 }
 
-/// The device flow, for real, over a fresh [`Workers`] table `listen` reads back.
+/// The device flow, for real, over a fresh [`Workers`] table `listen` reads back, ringing
+/// `moved` when a flow ends.
 fn real_acting(
     instance: &Instance,
     signing: &Arc<sign_ins::SignIns>,
+    moved: &Arc<tokio::sync::Notify>,
 ) -> crate::commands::secretary::Acting {
+    let moved = Arc::clone(moved);
     crate::commands::secretary::Acting::real(
         instance,
         Arc::new(Workers::new()),
         Arc::clone(signing),
+        Arc::new(move || moved.notify_one()),
     )
 }
 
@@ -1601,7 +1638,8 @@ fn heard(
 /// File what the box owes before the first request, so a fresh deployment's missing secrets are
 /// cards before anyone opens Settings, and once an hour from then on: a secret can stop
 /// resolving, a sign-in lapse and a model stop answering with no request to say so; and at
-/// once whenever `moved` rings (a model starts or stops answering, a sign-in lapses). The
+/// once whenever `moved` rings (a model starts or stops answering, a sign-in lapses, a
+/// Microsoft account's device flow ends). The
 /// calendars are heard before each hourly filing, the first at once and beside the server,
 /// never before it listens; the Drive's probe is the source timer's (`suzatary plugin sync`).
 async fn notice_from_now_on(state: State, moved: Arc<tokio::sync::Notify>) {

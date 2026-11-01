@@ -81,6 +81,13 @@ export namespace reading {
     return { now: () => read(r.now()), hear: r.hear, again: r.again, behind: r.behind }
   }
 
+  // The same reading never waited on: its value is where it stands (on its way, failed or here), so a page reading it
+  // beside another draws once the other arrives, and this part fills in when it does.
+  export const unwaited = <V>(r: Reading<V>): Reading<lo.T<V>> => {
+    const read = last((l: lo.T<V>): lo.T<lo.T<V>> => lo.val(l))
+    return { now: () => read(r.now()), hear: r.hear, again: r.again, behind: r.behind }
+  }
+
   // An applicative on two readings, of `lo.combine`'s monoid: the first failure, else a wait, else both.
   export const both = <A, B>(a: Reading<A>, b: Reading<B>): Reading<readonly [A, B]> => {
     const pair = (x: lo.T<A>, y: lo.T<B>): lo.T<readonly [A, B]> =>

@@ -14,7 +14,7 @@ use prodrome_core::policy::Untrusted;
 
 use crate::chain_set::ChainSet;
 
-use crate::capability::{Answers, Briefings, Clock, Datetime, Mailbox, Query, Render, SecretState};
+use crate::capability::{Answers, Briefings, Clock, Datetime, Mailbox, Query, Render};
 use crate::chains::{ChainName, ChainPolicy};
 use crate::deployment::Deployment;
 use crate::refusal::{Answered, Refusal, shown};
@@ -1800,33 +1800,17 @@ pub fn usage(
     ))
 }
 
-/// `GET /api/overview`: what is connected, by group, read from `declared` and what the box's
-/// stores say of it now. The secret store is asked once for every declared name.
+/// `GET /api/overview`: what is connected, by group, read from `declared`, what the secret
+/// store answered (`asked`) and what the box's registers say of it now.
 #[must_use]
 pub fn overview(
     declared: &crate::settings::overview::Declared<'_>,
-    secrets: &dyn crate::capability::Secrets,
-    observed: &crate::settings::overview::Registers<'_>,
+    asked: &crate::settings::overview::Asked,
+    registers: crate::settings::overview::Registers<'_>,
     asking: &[crate::settings::overview::Asking],
 ) -> wire::Overview {
-    let settables = declared.settables;
-    let snapshot = crate::capability::Snapshot::read(secrets, settables.iter());
-    let states: BTreeMap<String, SecretState> = settables
-        .iter()
-        .map(|settable| (settable.name().to_owned(), snapshot.state(&settable)))
-        .collect();
-    let grants = declared
-        .accounts
-        .iter()
-        .map(|account| (account.email.to_string(), secrets.mail_grants(account)))
-        .collect();
-    let observed = crate::settings::overview::Observed {
-        secrets: &states,
-        grants: &grants,
-        registers: *observed,
-    };
-    crate::settings::overview::overview(declared, &observed).wire(
-        &settables.names(),
+    crate::settings::overview::overview(declared, &asked.observed(registers)).wire(
+        &declared.settables.names(),
         asking,
         crate::secretary::noticed::CONVERSATION.as_str().to_owned(),
         crate::connect::offered(declared.channels)
@@ -1865,6 +1849,7 @@ pub fn calendar(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::capability::SecretState;
 
     /// A value the fake's store reads as locked: it holds the name and cannot say what it is.
     const LOCKED: &str = "<the store is locked>";
@@ -1970,7 +1955,7 @@ mod tests {
         accounts: crate::mail::account::Roster,
         jobs: Vec<crate::settings::overview::ModelJob>,
         plugins: Vec<crate::plugin::Manifest>,
-        build: wire::AboutPayload,
+        build: crate::settings::overview::Build,
     }
 
     impl Instance {
@@ -2030,10 +2015,10 @@ mod tests {
                 }],
                 channels,
                 plugins,
-                build: wire::AboutPayload {
+                build: crate::settings::overview::Build {
                     version: "dev".to_owned(),
-                    build: "dev".to_owned(),
-                    completes: Vec::new(),
+                    revision: "dev".to_owned(),
+                    completed: Vec::new(),
                 },
             }
         }
@@ -2064,8 +2049,12 @@ mod tests {
             )]);
             overview(
                 &declared,
-                secrets,
-                &crate::settings::overview::Registers {
+                &crate::settings::overview::Asked::of(
+                    secrets,
+                    &self.settables,
+                    self.accounts.accounts(),
+                ),
+                crate::settings::overview::Registers {
                     health: &crate::health::Healths::default(),
                     answered: &crate::health::Healths::default(),
                     plugins: &calendar,

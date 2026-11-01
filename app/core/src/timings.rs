@@ -10,7 +10,8 @@ use std::time::Instant;
 /// The target every timing is logged at.
 pub const TARGET: &str = "suzatary::timings";
 
-/// A phase of reading the secretary's memory, as its timing names it.
+/// A phase of a costly read, as its timing names it: the secretary's memory, or Settings'
+/// overview.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Phase {
     /// Checking that the digest's history and the lines both read whole.
@@ -29,6 +30,35 @@ pub enum Phase {
     Remembered,
     /// The agent's whole `context` call.
     Context,
+    /// One part of `GET /api/overview`.
+    Overview(Part),
+}
+
+/// A part of `GET /api/overview`, in the order the route reads them.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Part {
+    /// The sources' health register.
+    Sources,
+    /// The model health register.
+    Models,
+    /// The Drive folders the instance file allows.
+    Drive,
+    /// The build line: the version and the titles of the todos it completed.
+    Build,
+    /// The data repository's git configuration.
+    Storage,
+    /// The Inbox's open connection cards.
+    Inbox,
+    /// Each declared plugin's store.
+    Plugins,
+    /// The data repository's reflogs.
+    Pushes,
+    /// Where each declared secret and each mail grant stands.
+    Secrets,
+    /// The page drawn from all of the above.
+    Drawn,
+    /// The whole request.
+    Whole,
 }
 
 impl Phase {
@@ -42,6 +72,19 @@ impl Phase {
             Phase::Facts => "facts",
             Phase::Remembered => "remembered",
             Phase::Context => "context",
+            Phase::Overview(part) => match part {
+                Part::Sources => "overview.sources",
+                Part::Models => "overview.models",
+                Part::Drive => "overview.drive",
+                Part::Build => "overview.build",
+                Part::Storage => "overview.storage",
+                Part::Inbox => "overview.inbox",
+                Part::Plugins => "overview.plugins",
+                Part::Pushes => "overview.pushes",
+                Part::Secrets => "overview.secrets",
+                Part::Drawn => "overview.drawn",
+                Part::Whole => "overview",
+            },
         }
     }
 }

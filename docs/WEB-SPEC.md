@@ -583,6 +583,11 @@ which answered last.
   `lo.combine`'s monoid on two types. — `heard.test.ts` "law: map is a
   functor on what is read now", "law: both reads each part now, as
   lo.combine's monoid".
+- **An `unwaited` part holds up nothing**: `both` with one waits on the
+  other part alone and carries the unwaited part's state, so Settings draws
+  from the overview while the Inbox's cards are on their way. —
+  `heard.test.ts` "law: both with an unwaited part waits on the other part
+  alone…".
 - **A reading that did not move hands back the same object,** so the frame,
   which takes only a new reading, draws nothing for it. — `heard.test.ts`
   "law: a reading that did not move hands back the same object…".

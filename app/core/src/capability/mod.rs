@@ -89,7 +89,10 @@ pub use render_cache::RenderCache;
 pub use repositories::{MAX_FILE_BYTES, MAX_TEXT_BYTES, RepoFailure, Repositories, readable};
 pub use repository::{Repository, RepositoryError};
 pub use secretary::Secretary;
-pub use secrets::{Answer, Locked, MailCredential, MailGrants, SecretState, Secrets, Snapshot};
+pub use secrets::{
+    Answer, Locked, MailCredential, MailGrants, Remembering, SecretAnswers, SecretState, Secrets,
+    Snapshot,
+};
 pub use server::Server;
 pub use typeset::{Diagnostic, Rejected, Typeset, parsed};
 pub use upload_index::{IndexError, UploadIndex};

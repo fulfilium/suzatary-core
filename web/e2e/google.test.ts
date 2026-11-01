@@ -170,7 +170,7 @@ app.scene("a Google account connects from Settings in one walk, and a lieer acco
   const lieer = lineOf(LIEER);
   const lineSays = `[...document.querySelectorAll('${lieer} .settingsmeta, ${lieer} .settingshealth')].map((p) => p.textContent).join(" | ")`;
   await app.page.navigate(`${GOOGLE}/#/settings`);
-  await app.page.waitFor(`document.querySelector('${lieer}') !== null`, { timeout: 20000 });
+  await app.page.waitFor(`document.querySelector('${lieer}') !== null && document.querySelector(".settingscards") === null`, { timeout: 20000 });
   const lieerSaid = await app.page.evaluate<string>(lineSays);
   await begin(LIEER);
   assert.equal(accounts(), before, "no second mail account");
@@ -180,7 +180,7 @@ app.scene("a Google account connects from Settings in one walk, and a lieer acco
   assert.match(lieerSaid, /Gmail, through lieer's own grant\./);
   await signIn(LIEER);
   await app.page.navigate(`${GOOGLE}/#/settings`);
-  await app.page.waitFor(`document.querySelector('${lieer}') !== null`, { timeout: 20000 });
+  await app.page.waitFor(`document.querySelector('${lieer}') !== null && document.querySelector(".settingscards") === null`, { timeout: 20000 });
   assert.equal(await app.page.evaluate<number>(`document.querySelectorAll('${cardOf("google_client")}').length`), 0, "one client serves every account");
   assert.match(stored(), /GOOGLE_GRANT_HER_AT_EXAMPLE_INVALID=mail,calendar /, "its grant is kept under its own name");
   assert.match(instance(), /email = "her@example\.invalid"[^[]*sync = "google"/, "its sync moved once the grant read its mail");

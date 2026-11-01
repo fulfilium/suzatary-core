@@ -11,8 +11,12 @@ use suzatary_core::calendar::Occurrence;
 use suzatary_core::plugin::PluginName;
 use suzatary_core::refusal::Refusal;
 use suzatary_core::routes;
-use suzatary_core::settings::overview::{Asking, Declared, Registers, Storage, Store};
+use suzatary_core::settings::overview::{
+    Asked, Asking, Build, Declared, Registers, Storage, Store,
+};
 use suzatary_core::settings::remote::{self, Pushed, Tip};
+use suzatary_core::store::StoreError;
+use suzatary_core::timings::{Part, Phase, timed};
 use suzatary_core::wire;
 use suzatary_io::plugin_store::PluginStore;
 
@@ -20,43 +24,43 @@ use super::State;
 use super::call::Call;
 use super::guard::Reader;
 
-/// `GET /api/overview`: what is connected, by group, as the stores read now.
-///
-/// Each part is timed, and the parts are logged under `suzatary::overview`: at `info` when the
-/// whole took a second or more, at `debug` otherwise.
+/// `GET /api/overview`: what is connected, by group, as the stores read now. Each part is a
+/// phase of [`suzatary_core::timings`].
 ///
 /// # Errors
 /// A health register that cannot be read, which is not one with nothing in it.
 pub fn overview(call: &Call<Reader, (), ()>) -> Result<Json<wire::Overview>, Refusal> {
+    timed(Phase::Overview(Part::Whole), || drawn(call))
+}
+
+fn drawn(call: &Call<Reader, (), ()>) -> Result<Json<wire::Overview>, Refusal> {
     let state = &call.state;
     let caps = call.chain.caps;
-    let mut timed = Timed::start();
+    let part = |part| Phase::Overview(part);
     let super::Live {
         settables,
         channels,
         accounts,
         plugins,
     } = state.live();
-    let health = timed.part("sources", || {
+    let health = timed(part(Part::Sources), || {
         caps.secretary
             .health
             .healths()
             .map_err(|failed| Refusal::internal(format!("the sources' health register: {failed}")))
     })?;
-    let answered = timed.part("models", || {
+    let answered = timed(part(Part::Models), || {
         state
             .answered
             .healths()
             .map_err(|failed| Refusal::internal(format!("the model health register: {failed}")))
     })?;
-    let drive = timed.part("drive", || caps.secretary.drive.allowed_folders());
-    let build = timed.part("about", || {
-        state
-            .stamp
-            .about(&state.chains_read().set(caps.secretary.clock.now()))
+    let drive = timed(part(Part::Drive), || caps.secretary.drive.allowed_folders());
+    let build = timed(part(Part::Build), || {
+        build(state, caps.secretary.clock.now())
     })?;
-    let storage = timed.part("storage", || storage(state));
-    let asking = timed.part("inbox", || {
+    let storage = timed(part(Part::Storage), || storage(state));
+    let asking = timed(part(Part::Inbox), || {
         suzatary_core::store::memoised(
             &state.asking,
             b"settings::overview::Asking::open of the inbox's fold",
@@ -68,8 +72,11 @@ pub fn overview(call: &Call<Reader, (), ()>) -> Result<Json<wire::Overview>, Ref
             },
         )
     })?;
-    let stores = timed.part("plugins", || stores(state, &plugins));
-    let pushes = timed.part("pushes", || pushes(state.data.as_path()));
+    let stores = timed(part(Part::Plugins), || stores(state, &plugins));
+    let pushes = timed(part(Part::Pushes), || pushes(state.data.as_path()));
+    let asked = timed(part(Part::Secrets), || {
+        Asked::of(&state.secrets(caps), &settables, accounts.accounts())
+    });
     let jobs = state.models.jobs();
     let declared = Declared {
         deployment: &state.deployment,
@@ -83,118 +90,45 @@ pub fn overview(call: &Call<Reader, (), ()>) -> Result<Json<wire::Overview>, Ref
         build: &build,
         reach: &state.reach,
     };
-    let secrets = Stopwatch::over(caps.secretary.secrets);
-    let at = std::time::Instant::now();
-    let overview = routes::overview(
-        &declared,
-        &secrets,
-        &Registers {
-            health: &health,
-            answered: &answered,
-            plugins: &stores,
-            pushes: pushes.as_ref(),
-        },
-        &asking,
+    Ok(Json(timed(part(Part::Drawn), || {
+        routes::overview(
+            &declared,
+            &asked,
+            Registers {
+                health: &health,
+                answered: &answered,
+                plugins: &stores,
+                pushes: pushes.as_ref(),
+            },
+            &asking,
+        )
+    })))
+}
+
+/// The build line, read again only when the project chain's heads or the build move: its titles
+/// are that chain's, and its version and revision the binary's.
+fn build(state: &State, now: suzatary_core::capability::Datetime) -> Result<Build, Refusal> {
+    let about = || {
+        state
+            .stamp
+            .about(&state.chains_read().set(now))
+            .map(|about| Build::of(&about))
+    };
+    let plan = suzatary_core::release::Plan::declared()
+        .map_err(|failed| Refusal::internal(failed.to_string()))?;
+    let Some(project) = state.chains.get(plan.chain()) else {
+        return about();
+    };
+    let function = format!(
+        "settings::overview::Build::of GET /api/about, built {}",
+        state.stamp.build()
     );
-    timed.apart(("drawn", at.elapsed()), ("secrets", secrets.took()));
-    timed.said();
-    Ok(Json(overview))
-}
-
-/// How long each part of one overview took, in the order it was read.
-struct Timed {
-    started: std::time::Instant,
-    parts: Vec<(&'static str, std::time::Duration)>,
-}
-
-impl Timed {
-    fn start() -> Self {
-        Self {
-            started: std::time::Instant::now(),
-            parts: Vec::new(),
-        }
-    }
-
-    fn part<T>(&mut self, name: &'static str, work: impl FnOnce() -> T) -> T {
-        let at = std::time::Instant::now();
-        let value = work();
-        self.parts.push((name, at.elapsed()));
-        value
-    }
-
-    // A part that took `whole` with `inner` inside it, said as the two apart.
-    fn apart(
-        &mut self,
-        (name, whole): (&'static str, std::time::Duration),
-        (inner, took): (&'static str, std::time::Duration),
-    ) {
-        self.parts.push((inner, took));
-        self.parts.push((name, whole.saturating_sub(took)));
-    }
-
-    fn said(&self) {
-        let total = self.started.elapsed();
-        let parts = self
-            .parts
-            .iter()
-            .map(|(name, took)| format!("{name}={}ms", took.as_millis()))
-            .collect::<Vec<_>>()
-            .join(" ");
-        if total >= std::time::Duration::from_secs(1) {
-            tracing::info!(target: "suzatary::overview", "overview took {}ms: {parts}", total.as_millis());
-        } else {
-            tracing::debug!(target: "suzatary::overview", "overview took {}ms: {parts}", total.as_millis());
-        }
-    }
-}
-
-/// The secrets' store, asked by the overview, the time each question took added up.
-struct Stopwatch<'a> {
-    secrets: &'a dyn suzatary_core::capability::Secrets,
-    took: std::sync::Mutex<std::time::Duration>,
-}
-
-impl<'a> Stopwatch<'a> {
-    fn over(secrets: &'a dyn suzatary_core::capability::Secrets) -> Self {
-        Self {
-            secrets,
-            took: std::sync::Mutex::new(std::time::Duration::ZERO),
-        }
-    }
-
-    fn timed<T>(&self, ask: impl FnOnce() -> T) -> T {
-        let at = std::time::Instant::now();
-        let answer = ask();
-        *super::locks::held(&self.took) += at.elapsed();
-        answer
-    }
-
-    fn took(&self) -> std::time::Duration {
-        *super::locks::held(&self.took)
-    }
-}
-
-impl suzatary_core::capability::Secrets for Stopwatch<'_> {
-    fn secret_state(
-        &self,
-        settable: &suzatary_core::settings::Settable,
-    ) -> suzatary_core::capability::SecretState {
-        self.timed(|| self.secrets.secret_state(settable))
-    }
-
-    fn mail_grants(
-        &self,
-        account: &suzatary_core::mail::account::MailAccount,
-    ) -> suzatary_core::capability::MailGrants {
-        self.timed(|| self.secrets.mail_grants(account))
-    }
-
-    fn google_grant(
-        &self,
-        account: &suzatary_core::mail::address::EmailAddress,
-    ) -> suzatary_core::google::Held {
-        self.timed(|| self.secrets.google_grant(account))
-    }
+    Ok(suzatary_core::store::memoised(
+        &state.built,
+        function.as_bytes(),
+        project.caps.secretary.chain,
+        |_| about().map_err(|refused| StoreError::unreadable("chain", refused.message())),
+    )?)
 }
 
 /// The data repository and the `origin` its git config names, read now.
@@ -252,9 +186,25 @@ fn pushes(root: &std::path::Path) -> Option<suzatary_core::health::Health> {
     let (dir, common) = git_dirs(root).ok()?;
     let head = std::fs::read_to_string(dir.join("HEAD")).ok()?;
     let branch = head.trim().strip_prefix("ref: refs/heads/")?;
-    let tip = |log: PathBuf| Tip::of_reflog(&std::fs::read_to_string(log).ok()?);
-    let upstream = tip(common.join("logs/refs/remotes/origin").join(branch));
-    remote::pushes(&tip(dir.join("logs/HEAD"))?, upstream.as_ref())
+    let upstream = tip(&common.join("logs/refs/remotes/origin").join(branch));
+    remote::pushes(&tip(&dir.join("logs/HEAD"))?, upstream.as_ref())
+}
+
+/// How much of a reflog's end is read: its last line is two commit names, an identity, a time
+/// and a commit's subject, well within this.
+const REFLOG_TAIL: u64 = 64 * 1024;
+
+/// The last move the reflog at `log` records, read from its end: a reflog only grows, by one
+/// line per move, and its tip is its last line.
+fn tip(log: &std::path::Path) -> Option<Tip> {
+    use std::io::{Read as _, Seek as _};
+    let mut file = std::fs::File::open(log).ok()?;
+    let length = file.metadata().ok()?.len();
+    file.seek(std::io::SeekFrom::Start(length.saturating_sub(REFLOG_TAIL)))
+        .ok()?;
+    let mut tail = Vec::new();
+    file.read_to_end(&mut tail).ok()?;
+    Tip::of_reflog(&String::from_utf8_lossy(&tail))
 }
 
 /// Each declared plugin's store as the schema beside it reads, a store that cannot be read
@@ -350,6 +300,18 @@ mod tests {
             Some(Reading::Ok { .. })
         ));
         std::fs::write(git.join("logs/HEAD"), line("bbbb", 1_791_370_800)).expect("a log");
+        assert!(matches!(
+            pushes(root.path()).map(|health| health.reading()),
+            Some(Reading::Failing { .. })
+        ));
+        // A log longer than the end that is read: its last line is still its tip.
+        let long = format!(
+            "{}{}",
+            line("aaaa", 1_791_363_600).repeat(2_000),
+            line("bbbb", 1_791_370_800)
+        );
+        assert!(u64::try_from(long.len()).is_ok_and(|length| length > REFLOG_TAIL));
+        std::fs::write(git.join("logs/HEAD"), long).expect("a log");
         assert!(matches!(
             pushes(root.path()).map(|health| health.reading()),
             Some(Reading::Failing { .. })
