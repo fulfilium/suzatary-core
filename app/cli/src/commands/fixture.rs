@@ -666,7 +666,9 @@ fn a_coding_session(root: &Path) -> anyhow::Result<()> {
     let inbox = read.inbox_store();
     let id = ConversationId::new(CODING_CONVERSATION)?;
     let now = SystemClock.now();
-    let url = "https://claude.ai/code/session_01fixture";
+    // As the live ones do: the routine answers the `cse_` spelling, and the session names
+    // itself `session_` in its report.
+    let url = "https://claude.ai/code/cse_01fixture";
     let asking = serde_json::json!({
         "say": "A session would do it.",
         "calls": [{"verb": "propose_coding_session", "args": {
@@ -703,11 +705,11 @@ fn a_coding_session(root: &Path) -> anyhow::Result<()> {
     })
     .map_err(|refusal| anyhow::anyhow!("{}", refusal.message()))?;
     let fired = Fired {
-        id: "session_01fixture".parse()?,
+        id: "cse_01fixture".parse()?,
         url: url.parse()?,
     };
     suzatary_core::secretary::coding::fired(store.conversations(), &id, 0, fired, now)?;
-    let seen = the_branch_back(url)?;
+    let seen = the_branch_back("https://claude.ai/code/session_01fixture")?;
     suzatary_core::secretary::coding::advance(store.conversations(), &[seen], now)?;
     Ok(())
 }
@@ -715,13 +717,13 @@ fn a_coding_session(root: &Path) -> anyhow::Result<()> {
 /// The `claude/` branch [`a_coding_session`]'s poll sees: its report names
 /// `url`, and it is not merged.
 fn the_branch_back(url: &str) -> anyhow::Result<suzatary_core::coding::Seen> {
-    use suzatary_core::coding::{FileStat, Lines, Seen};
+    use suzatary_core::coding::{FileStat, Lines, ReportFile, Seen};
     let path = |text: &str| suzatary_core::repos::RepoPath::try_from(text.to_owned());
     Ok(Seen {
         branch: "claude/retitle".parse()?,
         tip: suzatary_core::repos::CommitId::try_from("c0de".repeat(10))?,
         merged: false,
-        reports: vec![(
+        reports: vec![ReportFile::read(
             path("docs/reports/retitle.md")?,
             format!("# Retitle\n\nSession: {url}\n\nGates: cargo test and web-test green.\n"),
         )],

@@ -202,7 +202,7 @@ mod tests {
         Task::try_from("Fix the typo in the README.\nRun the gates.".to_owned()).expect("a task")
     }
 
-    const ANSWER: &str = r#"{"claude_code_session_id":"session_01fake","claude_code_session_url":"https://claude.ai/code/session_01fake"}"#;
+    const ANSWER: &str = r#"{"claude_code_session_id":"cse_01fake","claude_code_session_url":"https://claude.ai/code/cse_01fake"}"#;
 
     fn answering(status: u16, body: &str) -> Scripted {
         Scripted::always(Ok(Resp::new(status, body)))
@@ -216,8 +216,8 @@ mod tests {
     fn a_fire_is_exactly_the_documented_request_and_reads_its_answer() {
         let endpoint = over(answering(200, ANSWER));
         let fired = endpoint.fire(&task()).expect("fires");
-        assert_eq!(fired.id.as_str(), "session_01fake");
-        assert_eq!(fired.url.as_str(), "https://claude.ai/code/session_01fake");
+        assert_eq!(fired.id.to_string(), "cse_01fake");
+        assert_eq!(fired.url.as_str(), "https://claude.ai/code/cse_01fake");
         let sent = endpoint.http.sent();
         let req = &sent[0];
         assert_eq!(
@@ -259,7 +259,7 @@ mod tests {
                 200,
                 r#"{"claude_code_session_id":"a b","claude_code_session_url":"https://claude.ai/x"}"#,
                 FireError::Malformed(
-                    "a session id is up to 256 characters with no whitespace, got \"a b\""
+                    "a session id is cse_ or session_ then up to 256 letters, digits, '_' and '-', got \"a b\""
                         .to_owned(),
                 ),
             ),
@@ -320,7 +320,7 @@ mod tests {
         let endpoint = Endpoint::resolve_over(base, routine(), &Holding(Some(TOKEN)), Ureq::new())
             .expect("a token");
         let fired = endpoint.fire(&task()).expect("fires over the wire");
-        assert_eq!(fired.id.as_str(), "session_01fake");
+        assert_eq!(fired.id.to_string(), "cse_01fake");
         let (head, body) = server.join().expect("the server ran");
         assert_eq!(
             head[0],

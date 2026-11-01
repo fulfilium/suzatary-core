@@ -42,7 +42,9 @@ pub enum CodingError {
     #[error("a routine id is letters, digits, '_' and '-', got {0:?}")]
     Routine(String),
     /// Not a session id.
-    #[error("a session id is up to 256 characters with no whitespace, got {0:?}")]
+    #[error(
+        "a session id is cse_ or session_ then up to 256 letters, digits, '_' and '-', got {0:?}"
+    )]
     Session(String),
     /// Not a claude.ai URL.
     #[error("a session URL is https://claude.ai/…, got {0:?}")]
@@ -177,17 +179,111 @@ impl RoutineId {
     }
 }
 
-parsed!(
-    /// `claude_code_session_id`, as the fire answered it: only "one token", because a fire
-    /// that went must never be lost to a stricter guess at an undocumented shape.
-    SessionId,
+/// The two prefixes one session's id is spelled with: the routine API answers `cse_…`, and the
+/// session names itself `session_…`, both with the same body.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Spelling {
+    /// `cse_`, as the fire answers.
+    Cse,
+    /// `session_`, as the session writes in its report.
     Session,
-    |text| token(text, 256)
-);
+}
+
+impl Spelling {
+    const ALL: [Self; 2] = [Self::Cse, Self::Session];
+
+    const fn prefix(self) -> &'static str {
+        match self {
+            Self::Cse => "cse_",
+            Self::Session => "session_",
+        }
+    }
+}
+
+/// Whether `c` can be part of a session id's body.
+fn id_char(c: char) -> bool {
+    c.is_ascii_alphanumeric() || matches!(c, '_' | '-')
+}
+
+/// The body of a session id: what both spellings share, and all that says which session it is.
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct SessionKey(String);
+
+/// A session's id in either spelling. Two ids are the same session exactly when their bodies
+/// are equal; the spelling is kept only to print the id back as it came.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(try_from = "String", into = "String")]
+pub struct SessionId {
+    spelling: Spelling,
+    key: SessionKey,
+}
+
+impl SessionId {
+    /// Whether `other` names the same session, in whichever spelling.
+    #[must_use]
+    pub fn is(&self, other: &Self) -> bool {
+        self.key == other.key
+    }
+}
+
+impl TryFrom<String> for SessionId {
+    type Error = CodingError;
+    fn try_from(text: String) -> Result<Self, Self::Error> {
+        let parsed = Spelling::ALL.into_iter().find_map(|spelling| {
+            text.strip_prefix(spelling.prefix())
+                .filter(|body| !body.is_empty() && body.len() <= 256 && body.chars().all(id_char))
+                .map(|body| Self {
+                    spelling,
+                    key: SessionKey(body.to_owned()),
+                })
+        });
+        parsed.ok_or(CodingError::Session(text))
+    }
+}
+
+impl std::str::FromStr for SessionId {
+    type Err = CodingError;
+    fn from_str(text: &str) -> Result<Self, Self::Err> {
+        Self::try_from(text.to_owned())
+    }
+}
+
+impl From<SessionId> for String {
+    fn from(id: SessionId) -> Self {
+        id.to_string()
+    }
+}
+
+impl fmt::Display for SessionId {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}{}", self.spelling.prefix(), self.key.0)
+    }
+}
+
+/// Where a session's page is. A report names its session by this page's URL, so the poll
+/// reads only ids that follow it.
+pub const SESSION_PAGE: &str = "https://claude.ai/code/";
+
+/// Every session `text` names by its page's URL. The id is the whole run of id characters
+/// after the page, so `…_1` is never read out of `…_12`, and a URL that goes on with `/`
+/// names some other page.
+fn sessions_named(text: &str) -> Vec<SessionId> {
+    text.match_indices(SESSION_PAGE)
+        .filter_map(|(at, page)| {
+            let rest = &text[at + page.len()..];
+            let end = rest.find(|c| !id_char(c)).unwrap_or(rest.len());
+            if rest[end..].starts_with('/') {
+                None
+            } else {
+                rest[..end].parse().ok()
+            }
+        })
+        .collect()
+}
 
 parsed!(
-    /// `claude_code_session_url`: an https URL on claude.ai, one token. The
-    /// report a session writes names it, which is how its branch is found.
+    /// `claude_code_session_url`: an https URL on claude.ai, one token, where the session can
+    /// be watched.
     SessionUrl,
     Url,
     |text| text.starts_with("https://claude.ai/") && token(text, 512)
@@ -212,20 +308,6 @@ parsed!(
                 .all(|c| c.is_ascii_alphanumeric() || matches!(c, '/' | '_' | '-' | '.'))
     }
 );
-
-impl SessionUrl {
-    /// Whether `text` names this URL whole, so `…/session_1` is not named by a report about
-    /// `…/session_12`.
-    #[must_use]
-    pub fn named_in(&self, text: &str) -> bool {
-        text.match_indices(self.as_str()).any(|(at, url)| {
-            text[at + url.len()..]
-                .chars()
-                .next()
-                .is_none_or(|c| !(c.is_ascii_alphanumeric() || matches!(c, '_' | '-' | '/')))
-        })
-    }
-}
 
 /// `[coding]` in the instance file, parsed: which routine a tap fires and which repository its
 /// branches come back to.
@@ -441,24 +523,59 @@ pub struct Seen {
     /// Whether the tip is on the default branch.
     pub merged: bool,
     /// Every report the branch adds or changes under [`REPORTS_DIR`], whole.
-    pub reports: Vec<(RepoPath, String)>,
+    pub reports: Vec<ReportFile>,
     /// Its diff against the default branch.
     pub stat: Vec<FileStat>,
 }
 
+/// One report file as a branch carries it, and the sessions its text names, read once.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ReportFile {
+    path: RepoPath,
+    text: String,
+    names: Vec<SessionId>,
+}
+
+impl ReportFile {
+    /// The file at `path` saying `text`.
+    #[must_use]
+    pub fn read(path: RepoPath, text: String) -> Self {
+        let names = sessions_named(&text);
+        Self { path, text, names }
+    }
+
+    /// The file.
+    #[must_use]
+    pub const fn path(&self) -> &RepoPath {
+        &self.path
+    }
+
+    /// Its text, whole.
+    #[must_use]
+    pub fn text(&self) -> &str {
+        &self.text
+    }
+
+    /// Whether the text names session `id`, in either spelling.
+    #[must_use]
+    pub fn speaks_for(&self, id: &SessionId) -> bool {
+        self.names.iter().any(|named| named.is(id))
+    }
+}
+
 /// What the poll does to one session: a fired one is reported by the first branch whose report
-/// names its URL; a reported one is merged once its own branch's tip is on the default branch.
+/// names its id; a reported one is merged once its own branch's tip is on the default branch.
 #[must_use]
 pub fn next(session: &Session, seen: &[Seen]) -> Option<Step> {
     match session {
-        Session::Fired { url, .. } => seen.iter().find_map(|found| {
+        Session::Fired { id, .. } => seen.iter().find_map(|found| {
             found
                 .reports
                 .iter()
-                .find(|(_, text)| url.named_in(text))
-                .map(|(path, text)| Step::Report {
+                .find(|file| file.speaks_for(id))
+                .map(|file| Step::Report {
                     branch: found.branch.clone(),
-                    report: Report::new(path.clone(), text, found.stat.clone()),
+                    report: Report::new(file.path.clone(), &file.text, found.stat.clone()),
                 })
         }),
         Session::Reported { branch, .. } => seen
@@ -572,15 +689,59 @@ mod tests {
         }
     }
 
-    /// A report names a URL only whole, and punctuation after it still names it.
+    fn file(text: &str) -> ReportFile {
+        ReportFile::read(
+            RepoPath::try_from("docs/reports/x.md".to_owned()).expect("a path"),
+            text.to_owned(),
+        )
+    }
+
+    fn id(text: &str) -> SessionId {
+        text.parse().expect("a session id")
+    }
+
+    /// The routine API and the session spell one id two ways, and a report in either spelling
+    /// speaks for the session; the spelling still prints back as it came.
     #[test]
-    fn a_url_is_named_only_whole() {
-        let url: SessionUrl = "https://claude.ai/code/session_1".parse().expect("a url");
-        assert!(url.named_in("Session: https://claude.ai/code/session_1"));
-        assert!(url.named_in("(https://claude.ai/code/session_1)."));
-        assert!(!url.named_in("https://claude.ai/code/session_12"));
-        assert!(!url.named_in("https://claude.ai/code/session_1/other"));
-        assert!(url.named_in("https://claude.ai/code/session_12 https://claude.ai/code/session_1"));
+    fn both_spellings_of_an_id_are_one_session() {
+        let answered = id("cse_01T8xs3hEcBw7tQfi7Hzu3mG");
+        let written = id("session_01T8xs3hEcBw7tQfi7Hzu3mG");
+        assert!(answered.is(&written) && written.is(&answered));
+        assert_ne!(answered, written);
+        assert_eq!(answered.to_string(), "cse_01T8xs3hEcBw7tQfi7Hzu3mG");
+        let line = serde_json::to_string(&written).expect("serialises");
+        assert_eq!(line, "\"session_01T8xs3hEcBw7tQfi7Hzu3mG\"");
+        assert_eq!(
+            serde_json::from_str::<SessionId>(&line).expect("reads"),
+            written
+        );
+        for bad in [
+            "01abc",
+            "cse_",
+            "session_",
+            "sess_01abc",
+            "cse_01 abc",
+            "cse_01/abc",
+        ] {
+            assert!(bad.parse::<SessionId>().is_err(), "{bad}");
+        }
+    }
+
+    /// A report names a session only by its page's URL with the id whole, and punctuation
+    /// after it still names it.
+    #[test]
+    fn a_report_names_a_session_only_whole() {
+        let one = id("cse_1");
+        assert!(file("Session: https://claude.ai/code/session_1").speaks_for(&one));
+        assert!(file("(https://claude.ai/code/cse_1).").speaks_for(&one));
+        assert!(!file("https://claude.ai/code/session_12").speaks_for(&one));
+        assert!(!file("https://claude.ai/code/session_1/other").speaks_for(&one));
+        assert!(!file("Session: session_1").speaks_for(&one));
+        assert!(!file("https://claude.ai/code/session_2").speaks_for(&one));
+        assert!(
+            file("https://claude.ai/code/session_12 https://claude.ai/code/session_1")
+                .speaks_for(&one)
+        );
     }
 
     #[test]
@@ -611,18 +772,15 @@ mod tests {
             branch: branch.parse().expect("a branch"),
             tip: sha(),
             merged,
-            reports: vec![(
-                RepoPath::try_from("docs/reports/x.md".to_owned()).expect("a path"),
-                report.to_owned(),
-            )],
+            reports: vec![file(report)],
             stat: Vec::new(),
         }
     }
 
-    /// The poll reports a fired session only by a report naming its URL, and merges a
-    /// reported one only on its own branch's merge.
+    /// The poll reports a fired session only by a report naming its id, in either spelling,
+    /// and merges a reported one only on its own branch's merge.
     #[test]
-    fn the_poll_reports_by_the_url_and_merges_by_the_branch() {
+    fn the_poll_reports_by_the_id_and_merges_by_the_branch() {
         let other = seen(
             "claude/other",
             false,
@@ -651,6 +809,39 @@ mod tests {
             next(&reported, &[seen("claude/readme-typo", true, "")]),
             Some(Step::Merge { sha: sha() })
         );
+    }
+
+    /// As on the live box: the fire answered `cse_…`, the session wrote `session_…`, and the
+    /// reverse; a report naming another id reports nothing.
+    #[test]
+    fn a_report_in_the_other_spelling_reports_the_session() {
+        let fired_as = |spelling: &str| Session::Fired {
+            id: id(&format!("{spelling}01T8")),
+            url: format!("https://claude.ai/code/{spelling}01T8")
+                .parse()
+                .expect("a url"),
+            at: "2026-11-01T09:00:00".to_owned(),
+        };
+        for (answered, written) in [("cse_", "session_"), ("session_", "cse_")] {
+            let back = seen(
+                "claude/changelog-typo",
+                false,
+                &format!("Session: https://claude.ai/code/{written}01T8\n"),
+            );
+            assert!(
+                matches!(
+                    next(&fired_as(answered), std::slice::from_ref(&back)),
+                    Some(Step::Report { .. })
+                ),
+                "{answered} fired, {written} written"
+            );
+            let elsewhere = seen(
+                "claude/other",
+                false,
+                &format!("Session: https://claude.ai/code/{written}01T9\n"),
+            );
+            assert_eq!(next(&fired_as(answered), &[elsewhere]), None);
+        }
     }
 
     fn any_step() -> impl Strategy<Value = Step> {

@@ -12,7 +12,9 @@ use std::time::{Duration, Instant};
 
 use base64::Engine as _;
 use suzatary_core::capability::{MAX_FILE_BYTES, RepoFailure, Repositories, Secret};
-use suzatary_core::coding::{BRANCH_PREFIX, Branch, FileStat, Lines, REPORTS_DIR, Seen};
+use suzatary_core::coding::{
+    BRANCH_PREFIX, Branch, FileStat, Lines, REPORTS_DIR, ReportFile, Seen,
+};
 use suzatary_core::repos::{
     CommitId, Declared, Patch, RepoName, RepoPath, RepoRow, RepoTarget, Rev, TOKEN, Visibility,
 };
@@ -259,7 +261,7 @@ impl Mirrors {
                 )
                 .map_err(RepoFailure::from)
                 .ok()?;
-                Some((RepoPath::try_from(path).ok()?, text.out()))
+                Some(ReportFile::read(RepoPath::try_from(path).ok()?, text.out()))
             })
             .collect();
             let stat = lines(&Self::local(&dir, &["diff", "--numstat", &range])?)
@@ -1234,8 +1236,8 @@ mod tests {
         assert_eq!(branch.branch.as_str(), "claude/retitle");
         assert!(!branch.merged);
         assert_eq!(branch.reports.len(), 1);
-        assert_eq!(branch.reports[0].0.as_str(), "docs/reports/retitle.md");
-        assert!(branch.reports[0].1.contains("session_01fake"));
+        assert_eq!(branch.reports[0].path().as_str(), "docs/reports/retitle.md");
+        assert!(branch.reports[0].text().contains("session_01fake"));
         let files: Vec<(&str, Lines)> = branch
             .stat
             .iter()

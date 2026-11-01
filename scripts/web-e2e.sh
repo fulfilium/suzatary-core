@@ -262,6 +262,18 @@ cleanup() {
       journalctl -k --since "-1h" 2>/dev/null | grep -iE "out of memory|killed process" | tail -n 5 | sed 's/^/  kernel: /' || true
     } >&2
   fi
+  # Each server's whole output goes beside the failed scenes' screenshots, which the gate
+  # uploads, so a server that died names its own death there: its last lines and its exit
+  # (written by `start`). One directory per run, named by its files, since the shards share
+  # $shots.
+  if (( status != 0 )) && [[ -d "$work" ]]; then
+    local kept; kept="$shots/servers/$(printf '%s-' "${names[@]}" | head -c 120)$(basename "$work")"
+    mkdir -p "$kept"
+    for log in "$work"/*.log; do
+      [[ -e "$log" ]] && cp "$log" "$kept/"
+    done
+    echo "==> the fixture servers' output is kept in $kept" >&2
+  fi
   for pid in "${servers[@]:-}"; do
     [[ -n "$pid" ]] || continue
     kill -- "-$pid" 2>/dev/null || kill "$pid" 2>/dev/null || true
@@ -546,7 +558,13 @@ start() { # name [fixture-chain flags…] [-- serve flags…]
   # does not have. See flake.nix for why that is a separate build and not a flag.
   # `setsid` gives it its own process group so cleanup's `kill -- -"$pid"`
   # reaches every subprocess it spawns, not only itself.
-  setsid "${serve_env[@]}" "$fixture_bin" serve \
+  # A bash between `setsid` and the server writes how the server ended into its log: an exit
+  # status, or 128 plus the signal that killed it (137 is SIGKILL, as the OOM killer sends;
+  # 134 is an abort). Cleanup's kill of the group ends the bash too, so a run's own stop
+  # writes nothing.
+  # shellcheck disable=SC2016
+  setsid "${serve_env[@]}" bash -c '"$@"; echo "==> suzatary serve ended: exit $?"' serve \
+    "$fixture_bin" serve \
     --instance "$work/$name/instance.toml" \
     --whois-fixture "$login" \
     --model-fixture "$script" \

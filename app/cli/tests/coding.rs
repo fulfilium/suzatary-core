@@ -13,7 +13,10 @@ use suzatary_cli::commands::coding::Firing;
 use suzatary_core::cast::CAST;
 
 const TOKEN: &str = "sk-ant-routine-fake";
-const URL: &str = "https://claude.ai/code/session_01fake";
+/// What the fake routine answers, in the `cse_` spelling the live one answers.
+const URL: &str = "https://claude.ai/code/cse_01fake";
+/// What the fake session writes in its report, in the `session_` spelling the live one writes.
+const WRITTEN: &str = "https://claude.ai/code/session_01fake";
 
 fn owner() -> suzatary_core::capability::Login {
     common::login("ada@example.com")
@@ -71,7 +74,7 @@ fn fake_routine() -> (String, std::thread::JoinHandle<(Vec<String>, String)>) {
         let mut body = vec![0; length];
         reader.read_exact(&mut body).expect("the body");
         let answer = format!(
-            r#"{{"claude_code_session_id":"session_01fake","claude_code_session_url":"{URL}"}}"#
+            r#"{{"claude_code_session_id":"cse_01fake","claude_code_session_url":"{URL}"}}"#
         );
         let mut stream = stream;
         write!(
@@ -365,7 +368,7 @@ fn a_session_is_reported_then_merged() {
     std::fs::create_dir_all(work.join("docs/reports")).expect("reports");
     std::fs::write(
         work.join("docs/reports/retitle.md"),
-        format!("# Retitle\n\nSession: {URL}\n\nGates: cargo test green.\n"),
+        format!("# Retitle\n\nSession: {WRITTEN}\n\nGates: cargo test green.\n"),
     )
     .expect("a report");
     std::fs::write(work.join("cv.typ"), "= Ada Quill\nPrincipal investigator\n").expect("cv");
@@ -402,6 +405,79 @@ fn a_session_is_reported_then_merged() {
         answer(&base, &id, "drop", &serde_json::json!({"reason": "late"})).0,
         409,
         "a merged session is final"
+    );
+}
+
+/// The server's poll tick never takes the server down: a repository the instance does not
+/// declare (the fixture world's) and one whose remote is gone are each logged and move nothing,
+/// the server still answers, and the next tick reads a report that is not UTF-8.
+#[test]
+fn a_poll_that_fails_leaves_the_server_answering() {
+    let (routine, served) = fake_routine();
+    let (base, fakes) = scene(
+        "coding-poll-fails",
+        Firing::Endpoint {
+            base: routine,
+            routine: "trig_01fake".parse().expect("a routine id"),
+            secrets: Arc::new(Holding),
+        },
+    );
+    let (id, _) = proposed(&base);
+    assert_eq!(answer(&base, &id, "tap", &serde_json::json!({})).0, 200);
+    served.join().expect("the fake ran");
+
+    let runtime = tokio::runtime::Builder::new_multi_thread()
+        .enable_all()
+        .build()
+        .expect("a runtime");
+    let conversations = Arc::new(fakes.conversations.reopened());
+    let workers = suzatary_cli::commands::serve::Workers::new();
+    let tick = |mirrors: suzatary_io::repos::Mirrors, repo: &str| {
+        let repo: suzatary_core::repos::RepoName = repo.parse().expect("a name");
+        runtime.block_on(suzatary_cli::commands::coding::poll_once(
+            &conversations,
+            &Arc::new(mirrors),
+            &repo,
+            &workers,
+        ))
+    };
+
+    let root = common::scratch("coding-poll-fails-repos");
+    assert_eq!(tick(common::local_mirrors(&root), "bmabsout/fixture"), 0);
+    assert_eq!(
+        tick(common::local_mirrors(&root), "bmabsout/cv"),
+        0,
+        "no remote yet"
+    );
+    assert_eq!(
+        conversation(&base, &id)["proposals"][0]["coding"]["state"],
+        "fired",
+        "the server answers"
+    );
+
+    let _ = common::local_repos(&root);
+    let work = root.join("cv-work");
+    let remote = root.join("remotes/bmabsout/cv.git");
+    git(&work, &["checkout", "-q", "-b", "claude/retitle"]);
+    std::fs::create_dir_all(work.join("docs/reports")).expect("reports");
+    let mut report = format!("# Retitle\n\nSession: {WRITTEN}\n\n").into_bytes();
+    report.extend_from_slice(b"Gates: \xff\xfe green.\n");
+    std::fs::write(work.join("docs/reports/retitle.md"), report).expect("a report");
+    git(&work, &["add", "."]);
+    git(&work, &["commit", "-q", "-m", "Retitle"]);
+    git(
+        &work,
+        &[
+            "push",
+            "-q",
+            remote.to_str().expect("utf-8"),
+            "claude/retitle",
+        ],
+    );
+    assert_eq!(tick(common::local_mirrors(&root), "bmabsout/cv"), 1);
+    assert_eq!(
+        conversation(&base, &id)["proposals"][0]["coding"]["state"],
+        "reported"
     );
 }
 

@@ -169,8 +169,7 @@ pub fn poll(
     .map_err(|refused| anyhow::anyhow!("{}", refused.message()))
 }
 
-/// The server's poll, every [`EVERY`]; each session moved wakes its conversation's
-/// page, and a failed poll is logged and retried next tick.
+/// The server's poll, every [`EVERY`], one [`poll_once`] a tick.
 pub async fn polling(
     conversations: Arc<ConversationStores>,
     mirrors: Arc<suzatary_io::repos::Mirrors>,
@@ -180,28 +179,44 @@ pub async fn polling(
     let mut every = tokio::time::interval(EVERY);
     loop {
         every.tick().await;
-        let (conversations, mirrors, repo) = (
-            Arc::clone(&conversations),
-            Arc::clone(&mirrors),
-            repo.clone(),
-        );
-        match tokio::task::spawn_blocking(move || poll(&conversations, &mirrors, &repo)).await {
-            Ok(Ok(moved)) => {
-                for advanced in moved {
-                    tracing::info!(
-                        conversation = %advanced.conversation,
-                        proposal = advanced.index,
-                        state = advanced.session.word(),
-                        "coding session moved"
-                    );
-                    workers.announce(&advanced.conversation);
-                }
+        poll_once(&conversations, &mirrors, &repo, &workers).await;
+    }
+}
+
+/// One tick of the server's poll, off the async threads: each session moved wakes its
+/// conversation's page, and a poll that fails or panics is logged and answers how many
+/// sessions moved (none), so the server and the next tick go on.
+pub async fn poll_once(
+    conversations: &Arc<ConversationStores>,
+    mirrors: &Arc<suzatary_io::repos::Mirrors>,
+    repo: &suzatary_core::repos::RepoName,
+    workers: &crate::commands::serve::Workers,
+) -> usize {
+    let (conversations, mirrors, repo) =
+        (Arc::clone(conversations), Arc::clone(mirrors), repo.clone());
+    match tokio::task::spawn_blocking(move || poll(&conversations, &mirrors, &repo)).await {
+        Ok(Ok(moved)) => {
+            for advanced in &moved {
+                tracing::info!(
+                    conversation = %advanced.conversation,
+                    proposal = advanced.index,
+                    state = advanced.session.word(),
+                    "coding session moved"
+                );
+                workers.announce(&advanced.conversation);
             }
-            Ok(Err(failed)) => tracing::warn!(
+            moved.len()
+        }
+        Ok(Err(failed)) => {
+            tracing::warn!(
                 "coding poll: {}",
                 suzatary_core::excerpt::Excerpt::of(&format!("{failed:#}"))
-            ),
-            Err(panicked) => tracing::warn!("coding poll: {panicked}"),
+            );
+            0
+        }
+        Err(panicked) => {
+            tracing::warn!("coding poll: {panicked}");
+            0
         }
     }
 }
