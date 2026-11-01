@@ -265,6 +265,8 @@ app.scene("an inbox row a build before the keys kept is taken again from the box
   await app.page.navigate(`${WRITE_BASE}/?bare=1#/inbox`)
   await app.page.waitFor(`document.querySelector(".pagetitle") !== null`, { timeout: 15000 })
   await app.page.waitFor(`${nodes}.then((ns) => ns.length > 0)`, { timeout: 20000 })
+  // The old row is deleted in its own step, which can end after the nodes are written.
+  await app.page.waitFor(`${oldRow}.then((row) => row === null)`, { timeout: 20000 })
   assert.equal(await app.page.evaluate<unknown>(oldRow), null, "the old row is gone")
   assert.equal(
     await app.page.evaluate<boolean>(`document.querySelector('#excluded li[data-row="store/inbox"]') === null`),
