@@ -827,7 +827,7 @@ pub struct DevicePayload {
 
 /// One stored object as a replica carries it: the name and the bytes, not
 /// the server's summary of them.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
 pub struct StoredObject {
     /// sha256 of the literal, rehashed by the receiver.
     pub hash: String,
@@ -837,7 +837,7 @@ pub struct StoredObject {
 
 /// The frontier a replica holds once it has taken an answer: the digest the box recorded its
 /// heads under, which the replica names back as `since`, and how many objects lie under it.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
 pub struct Frontier {
     /// 64 hex digits.
     pub digest: String,
@@ -847,7 +847,7 @@ pub struct Frontier {
 
 /// How the box read a request's `since`: the frontier it names, or one it does not hold, which
 /// it answered as a replica holding nothing.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, TS)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
 pub enum SinceRead {
     /// Nothing, or a frontier the box recorded.
     Known,
@@ -857,7 +857,7 @@ pub enum SinceRead {
 
 /// `GET /api/objects?since=<frontier>`: what the caller lacks, with the box's
 /// heads and the trust policy it folds them under.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
 pub struct ObjectsPayload {
     /// Every head, sorted.
     pub heads: Vec<String>,
@@ -885,7 +885,7 @@ pub struct ObjectsPayload {
 
 /// `GET /api/stores/<store>/objects?since=<heads>`: what a replica of one of the secretary's
 /// stores lacks, and the keys that open its words.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
 pub struct StorePayload {
     /// The objects, as every store's pull answers them.
     #[serde(flatten)]
@@ -1020,7 +1020,7 @@ pub struct PostedObjects {
 
 /// `POST /api/secretary/conversations` and `…/title`: a topic's title; `""` leaves it to the
 /// title job.
-#[derive(Debug, Clone, PartialEq, Eq, Deserialize, TS)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[serde(deny_unknown_fields)]
 pub struct Titling {
     /// The title.
@@ -1028,7 +1028,7 @@ pub struct Titling {
 }
 
 /// `POST …/say` and `…/edit`: a person's turn, the chips it names and the files it carries.
-#[derive(Debug, Clone, PartialEq, Eq, Deserialize, TS)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[serde(deny_unknown_fields)]
 pub struct Saying {
     /// The words.
@@ -1048,7 +1048,7 @@ pub struct Saying {
 }
 
 /// One file a turn names.
-#[derive(Debug, Clone, PartialEq, Eq, Deserialize, TS)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[serde(deny_unknown_fields)]
 pub struct PickedFile {
     /// Its id in the store, 64 hex.
@@ -2625,7 +2625,7 @@ pub struct CodingFile {
 
 /// One SSE frame of `GET …/stream`. A delta and a working verb are never
 /// written down; `Turn` says the transcript grew, refetch it.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[serde(tag = "kind", rename_all = "lowercase")]
 pub enum Frame {
     /// The answering state changed.

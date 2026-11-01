@@ -6,9 +6,9 @@ use std::path::Path;
 use clap::Subcommand;
 
 use crate::commands::{
-    coding, decision, device, doctor, heartbeat, init, instance, leaks, mail, mcp, notify, plugin,
-    ran, release, replica, secretary, secretspec, serve, site, sources, todo, todos, typeset, up,
-    vault, verify, weather,
+    call, coding, decision, device, doctor, heartbeat, init, instance, leaks, mail, mcp, notify,
+    plugin, ran, release, replica, secretary, secretspec, serve, site, sources, tap, todo, todos,
+    typeset, up, vault, verify, weather,
 };
 
 /// Every verb the deployed binary answers.
@@ -76,6 +76,12 @@ pub enum Verb {
     Up,
     /// Talk to the secretary: open a briefing conversation, list them, read one.
     Secretary(secretary::Args),
+    /// Ask a route of the running server as the box's operator, signed with the root key: for
+    /// testing the live box. A card that sends mail stays the owner's tap.
+    Call(call::Args),
+    /// Tap a card as the box's operator, through the route a device's tap takes; the box refuses
+    /// every card that sends mail.
+    Tap(tap::Args),
     /// One line of weather for the briefing, for `[persona]`'s city.
     Weather,
     /// Poll cloud coding sessions against their `claude/` branches; starting one is the app's tap.
@@ -133,6 +139,8 @@ impl Verb {
             Verb::Replica(args) => replica::run(&args),
             Verb::Up => up::run(path),
             Verb::Secretary(args) => secretary::run(path, &args),
+            Verb::Call(args) => call::run(path, &args),
+            Verb::Tap(args) => tap::run(path, &args),
             Verb::Weather => weather::run(path),
             Verb::Coding(args) => coding::run(path, &args),
             Verb::Plugin(args) => plugin::run(path, &args),

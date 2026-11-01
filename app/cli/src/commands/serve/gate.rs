@@ -127,6 +127,7 @@ pub async fn admit(
         forwarded: gate::PROXY_HEADERS
             .into_iter()
             .find(|header| request.headers().contains_key(*header)),
+        operator: claim(request.headers()),
     };
     let admitted = gate::admit(
         &Remembered(state.first.caps.whois, &state.known),
@@ -145,6 +146,15 @@ pub async fn admit(
             next.run(request).await
         }
     }
+}
+
+/// The key and actor a request names as its operator's, where it names both.
+fn claim(headers: &axum::http::HeaderMap) -> Option<gate::Claim<'_>> {
+    let read = |name: &str| headers.get(name).and_then(|value| value.to_str().ok());
+    Some(gate::Claim {
+        key: read(super::asked::KEY_HEADER)?,
+        actor: read(gate::OPERATOR_HEADER)?,
+    })
 }
 
 /// What the gate decided about this request. A request the gate never saw is refused, never

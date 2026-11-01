@@ -1166,6 +1166,14 @@ pub struct Args {
 
 #[derive(Debug, clap::Subcommand)]
 enum Action {
+    /// Ask the secretary as the box's operator, through the route a device's question takes, and
+    /// print the round's answer: for testing the live box, never for mail.
+    Ask {
+        /// The conversation's id, or `new` for a topic of its own.
+        conversation: crate::commands::ask::Conversation,
+        /// The question.
+        text: String,
+    },
     /// Say the day's delta into the default conversation and let the secretary answer it.
     Brief {
         /// What a fresh conversation is about; read only with `--new`.
@@ -1350,6 +1358,14 @@ const STALE_HOURS: f64 = 1.0;
 pub fn run(path: &Path, args: &Args) -> anyhow::Result<()> {
     let instance = Instance::open(path)?;
     match &args.action {
+        Action::Ask { conversation, text } => {
+            let operator = crate::commands::call::Operator::of(&instance)?;
+            let asked = crate::commands::ask::ask(&operator, conversation, text)?;
+            println!("{}", asked.answer);
+            eprintln!("conversation: {}", asked.conversation);
+            eprintln!("request: {}", asked.request.as_str());
+            Ok(())
+        }
         Action::Brief {
             title,
             new,

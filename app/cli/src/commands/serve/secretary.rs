@@ -8,9 +8,10 @@ use suzatary_core::attachment::{Attachment, AttachmentId};
 use suzatary_core::file_read::Withheld;
 use suzatary_core::reference::Reference;
 use suzatary_core::refusal::{Refusal, shown};
+use suzatary_core::seat::Seat;
 use suzatary_core::secretary::readings;
 use suzatary_core::secretary::routes as secretary_routes;
-use suzatary_core::secretary::stamp::{self, Stamp};
+use suzatary_core::secretary::stamp::{self, Speaker, Stamp};
 use suzatary_core::secretary::store::ConversationId;
 use suzatary_core::wire;
 use suzatary_io::attachments::{Stored, UploadError};
@@ -354,21 +355,22 @@ pub fn block(call: &Call<Reader, Block, ()>) -> Result<Json<wire::BlockRender>, 
         .map_err(|refused| Refusal::unprocessable(refused.to_string()))
 }
 
-/// The stamp the gate's `actor` puts on a turn pointing at `references`
-/// ([`stamp::pointing`]); the chains are read only when one is a todo.
-fn stamped(state: &State, actor: &Actor, references: &[Reference]) -> Stamp {
+/// The stamp the gate's `actor`, asking from where the gate's answer says, puts on a turn
+/// pointing at `references` ([`stamp::pointing`]); the chains are read only when one is a todo.
+fn stamped<P, B>(call: &Call<Actor, P, B>, references: &[Reference]) -> Stamp {
+    let speaker = Speaker::at(call.guard.as_str(), Seat::of(&call.admitted));
     if references
         .iter()
         .any(|reference| matches!(reference, Reference::Todo(_)))
     {
-        let read = state.chains_read();
+        let read = call.state.chains_read();
         stamp::pointing(
-            actor.as_str(),
+            speaker,
             references,
-            &read.set(state.first.caps.secretary.clock.now()),
+            &read.set(call.state.first.caps.secretary.clock.now()),
         )
     } else {
-        Stamp::Actor(actor.as_str().to_owned())
+        Stamp::Actor(speaker)
     }
 }
 
@@ -384,7 +386,7 @@ pub fn say(
         after,
     } = &call.body;
     let id = &call.params;
-    let by = stamped(&call.state, &call.guard, references);
+    let by = stamped(call, references);
     call.state
         .with_cards(|caps, cards| {
             secretary_routes::say(caps, cards, id, say, references, attachments, by, *after)
@@ -416,7 +418,7 @@ pub fn edit(
         ..
     } = &call.body;
     let id = &call.params;
-    let by = stamped(&call.state, &call.guard, references);
+    let by = stamped(call, references);
     call.state
         .with_cards(|caps, cards| {
             secretary_routes::edit(

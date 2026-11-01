@@ -99,6 +99,14 @@ IDLE watcher that starts the timer's sync early). Nothing performs a card you
 file except the owner's tap, and you must not ask for one, for the same reason
 you must not ask for `confirm`.
 
+Three more are the operator's, for testing the live box, and you have no verb
+for them: `call get|post <route>` asks any route of the running server,
+`secretary ask <conversation|new> "<text>"` asks the secretary, and
+`tap proposal:<conversation>/<n>` taps a card. Each request is signed with the
+box's root key and recorded as the operator's. They exist for testing only.
+Sending stays {{persona.name}}'s tap: the box refuses the operator's tap on
+every card that sends mail.
+
 ## Dispositions
 - **todo** — actionable. `todo_add(...)`, then `mark <hash> todo --todo-id <id>`.
 - **noise** — automated/marketing/bot you never want again. `mark <hash> noise`,

@@ -60,6 +60,7 @@ pub mod repos;
 pub mod routes;
 pub mod rule;
 pub mod rule_version;
+pub mod seat;
 pub mod secretary;
 pub mod settings;
 pub mod signatures;

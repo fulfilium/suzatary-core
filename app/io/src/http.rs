@@ -306,6 +306,38 @@ impl Http for Ureq {
     }
 }
 
+impl Ureq {
+    /// Send a GET and hand each line of its body to `each` as the line arrives, until `each`
+    /// breaks or the body ends: a server-sent stream, read with no timeout. Answers the status;
+    /// a body that is not 2xx is handed over line by line all the same.
+    ///
+    /// # Errors
+    /// The connection's failure, as [`Http::send`] names it.
+    pub fn lines(
+        &self,
+        req: &Req,
+        each: &mut dyn FnMut(&str) -> std::ops::ControlFlow<()>,
+    ) -> Result<u16, HttpError> {
+        use std::io::BufRead as _;
+        let builder = req
+            .headers
+            .iter()
+            .fold(self.agent.get(&req.url), |builder, (name, value)| {
+                builder.header(name, value)
+            });
+        let mut response = builder.call().map_err(|failed| failure(&failed))?;
+        let status = response.status().as_u16();
+        let reader = std::io::BufReader::new(response.body_mut().as_reader());
+        for line in reader.lines() {
+            let line = line.map_err(|failed| HttpError::Lost(failed.to_string()))?;
+            if each(&line).is_break() {
+                break;
+            }
+        }
+        Ok(status)
+    }
+}
+
 /// The resolver's [`HttpError::Private`] comes back as itself, carried through `ureq`'s error as a
 /// value and read by its type, never by its words.
 fn failure(error: &ureq::Error) -> HttpError {

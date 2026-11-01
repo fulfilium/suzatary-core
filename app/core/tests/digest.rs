@@ -300,6 +300,7 @@ fn tap() -> suzatary_core::secretary::tap::Tap {
             site: Some("same-origin"),
             client: Some(suzatary_core::gate::CLIENT),
         },
+        suzatary_core::seat::Seat::Device,
     )
     .expect("the owner's tap")
 }
@@ -1763,7 +1764,9 @@ fn an_acts_note_keeps_a_todo_id_out_of_the_record() {
             ),
             note: "paid at the counter".to_owned(),
         },
-        suzatary_core::secretary::stamp::Stamp::Actor("ada".to_owned()),
+        suzatary_core::secretary::stamp::Stamp::Actor(
+            suzatary_core::secretary::stamp::Speaker::device("ada"),
+        ),
     )
     .expect("noted");
     let told = the.told(100_000);

@@ -88,9 +88,25 @@ fn fake_routine() -> (String, std::thread::JoinHandle<(Vec<String>, String)>) {
 const TASK: &str = "Retitle the CV to Principal investigator.\\nRun the gates.";
 
 fn scene(tag: &str, firing: Firing) -> (String, Arc<Fakes>) {
+    let (running, fakes) = served(
+        tag,
+        firing,
+        common::FakeWhois::new().naming(common::v4(), owner()),
+        Vec::new(),
+    );
+    (running.base, fakes)
+}
+
+/// [`scene`] with `whois` naming its peers and `this_box` the box's own addresses.
+fn served(
+    tag: &str,
+    firing: Firing,
+    whois: common::FakeWhois,
+    this_box: Vec<std::net::IpAddr>,
+) -> (common::Running, Arc<Fakes>) {
     let fakes = Arc::new(
         Fakes::new(tag)
-            .whois(common::FakeWhois::new().naming(common::v4(), owner()))
+            .whois(whois)
             .model(FakeModel::saying([
                 format!(
                     r#"{{"say": "A session would do it.", "calls": [{{"verb": "propose_coding_session", "args": {{
@@ -103,7 +119,7 @@ fn scene(tag: &str, firing: Firing) -> (String, Arc<Fakes>) {
                 r#"{"say": "Proposed."}"#,
             ])),
     );
-    let server = common::Server::new(Arc::clone(&fakes), deployment(), Vec::new())
+    let server = common::Server::new(Arc::clone(&fakes), deployment(), this_box)
         .real_acts(
             tag,
             "her@study.test",
@@ -111,7 +127,7 @@ fn scene(tag: &str, firing: Firing) -> (String, Arc<Fakes>) {
             common::ScriptedOauth::new(Vec::new()),
         )
         .firing(firing);
-    (server.start().base, fakes)
+    (server.start(), fakes)
 }
 
 fn proposed(base: &str) -> (String, serde_json::Value) {
@@ -246,6 +262,61 @@ fn a_tapped_session_fires_the_routine_with_the_task_alone() {
         serde_json::json!({ "text": TASK.replace("\\n", "\n") }),
         "the payload is the task and nothing else"
     );
+}
+
+/// The operator at the box's terminal asks for the session and taps its card: the tap fires
+/// the routine through the route a device's tap takes, and the box records it under the root
+/// key, which no device holds.
+#[test]
+fn an_operators_tap_starts_a_session() {
+    use suzatary_cli::commands::{ask, tap};
+    let (routine, served_routine) = fake_routine();
+    let (running, _fakes) = served(
+        "coding-operator",
+        Firing::Endpoint {
+            base: routine,
+            routine: "trig_01fake".parse().expect("a routine id"),
+            secrets: Arc::new(Holding),
+        },
+        common::FakeWhois::new(),
+        common::loopback_is_this_box(),
+    );
+    let base = &running.base;
+    let operator = common::operator(base);
+    let asked = ask::ask(&operator, &ask::Conversation::New, "retitle my cv properly")
+        .expect("the operator asks");
+    let id = asked.conversation;
+    let proposal = &conversation(base, id.as_str())["proposals"][0];
+    assert_eq!(proposal["act"]["kind"], "coding_session", "{proposal}");
+
+    let card = suzatary_core::reference::ProposalRef {
+        conversation: id,
+        index: 0,
+    };
+    let tapped = tap::tap(
+        &operator,
+        &card,
+        "",
+        &suzatary_core::secretary::routes::TapAnswer::Plain,
+    )
+    .expect("the operator taps");
+    let proposal = &tapped.conversation["proposals"][0];
+    assert_eq!(proposal["state"], "acted", "{proposal}");
+    assert_eq!(proposal["coding"]["state"], "fired");
+    let (_, body) = served_routine.join().expect("the fake ran");
+    assert_eq!(
+        serde_json::from_str::<serde_json::Value>(&body).expect("json"),
+        serde_json::json!({ "text": TASK.replace("\\n", "\n") })
+    );
+
+    let record = running
+        .requests
+        .get(&tapped.request)
+        .expect("the records read")
+        .expect("the tap is recorded");
+    assert_eq!(record.key, common::cast_keys().root().public().as_str());
+    assert_eq!(record.actor, CAST.owner.actor);
+    assert_eq!(record.status, 200);
 }
 
 fn git(dir: &std::path::Path, args: &[&str]) {

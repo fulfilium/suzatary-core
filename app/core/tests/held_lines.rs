@@ -887,7 +887,7 @@ fn the_box_s_notes_are_left_out_and_the_owner_s_reason_is_drawn() {
                 references: Vec::new(),
             },
             by: Some(suzatary_core::secretary::stamp::Stamp::Actor(
-                "ada".to_owned(),
+                suzatary_core::secretary::stamp::Speaker::device("ada"),
             )),
         },
         Entry::Said {

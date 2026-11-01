@@ -17,6 +17,11 @@ pub enum Admitted {
     Peer(Login),
     /// This box's own node, as whois names it by its stable identity, and therefore nameless.
     Local,
+    /// This box's own node on a request that names the deployment's root key and an actor some
+    /// login writes as: the box's operator at its terminal. The gate does not prove the claim;
+    /// the door proves the root's signature before any write ([`writer_of`]), and [`actor_of`]
+    /// refuses it, so a read route never takes an actor from it.
+    Operator(Actor),
 }
 
 impl Admitted {
@@ -25,7 +30,7 @@ impl Admitted {
     pub fn login(&self) -> Option<&Login> {
         match self {
             Admitted::Peer(login) => Some(login),
-            Admitted::Local => None,
+            Admitted::Local | Admitted::Operator(_) => None,
         }
     }
 }
@@ -100,12 +105,29 @@ pub struct Knock<'a> {
     pub addressed: Option<Named<'a>>,
     /// The first of [`PROXY_HEADERS`] the request carries.
     pub forwarded: Option<&'static str>,
+    /// The key and actor the request names as the operator's, `None` where it names no actor.
+    pub operator: Option<Claim<'a>>,
+}
+
+/// The header in which a request from this box names the actor its operator writes as.
+pub const OPERATOR_HEADER: &str = "x-suzatary-operator";
+
+/// What a request from this box names to be read as its operator's: the key that signs it, and
+/// the actor it writes as.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Claim<'a> {
+    /// The key the request names, as its header carries it.
+    pub key: &'a str,
+    /// The actor it writes as, as its header carries it.
+    pub actor: &'a str,
 }
 
 /// May this request read? Asked in order, the first two without a lookup: a request through a
 /// proxy is refused, and so is one addressed anywhere but `door`; then only whois answers: a peer
 /// that is this box's own node reads and never writes, whichever of its addresses it dialled; a
-/// listed login reads; anything else, loopback included, is refused.
+/// listed login reads; anything else, loopback included, is refused. A request from this box's
+/// own node that claims the operator, by the root key and a writer's actor, is admitted as
+/// [`Admitted::Operator`].
 pub fn admit<W: Whois + ?Sized>(
     whois: &W,
     deployment: &Deployment,
@@ -124,12 +146,39 @@ pub fn admit<W: Whois + ?Sized>(
         ));
     }
     match whois.peer(knock.peer) {
-        Ok(Peer::ThisBox) => Ok(Admitted::Local),
+        Ok(Peer::ThisBox) => operator(deployment, knock.operator),
         Ok(Peer::Known(login)) if deployment.may_view(&login) => Ok(Admitted::Peer(login)),
         // The login goes to the log, not the body, so a stranger learns no logins to claim.
         Ok(_) | Err(WhoisError::Unreachable { .. }) => {
             Err(Refusal::forbidden("not a viewer of this app"))
         }
+    }
+}
+
+/// This box's own node, as its operator where `claim` names the deployment's root key: refused
+/// when it names an actor no login writes as, so the operator never writes as the agent.
+fn operator(deployment: &Deployment, claim: Option<Claim<'_>>) -> Result<Admitted, Refusal> {
+    let Some(claim) = claim else {
+        return Ok(Admitted::Local);
+    };
+    if claim.key != deployment.chains.first().root.as_str() {
+        return Ok(Admitted::Local);
+    }
+    match Actor::new(claim.actor) {
+        Ok(actor) if deployment.writers().contains(&actor) => Ok(Admitted::Operator(actor)),
+        Ok(_) | Err(_) => Err(Refusal::forbidden(format!(
+            "the operator writes as an actor a device writes as, and {} is not one",
+            shown(claim.actor)
+        ))),
+    }
+}
+
+/// The actor a write's door proves the request's signature for: the mapping's value for a
+/// peer, and the claimed actor for the operator, whose signature must be the root's.
+pub fn writer_of(deployment: &Deployment, admitted: &Admitted) -> Result<Actor, Refusal> {
+    match admitted {
+        Admitted::Operator(actor) => Ok(actor.clone()),
+        Admitted::Peer(_) | Admitted::Local => actor_of(deployment, admitted),
     }
 }
 
@@ -327,6 +376,7 @@ mod tests {
                 port: None,
             }),
             forwarded: None,
+            operator: None,
         }
     }
 
@@ -369,6 +419,43 @@ mod tests {
         let admitted = admit(&Daemon, &deployed, THIS_BOX).expect("it reads");
         assert_eq!(admitted, Admitted::Local);
         assert!(actor_of(&deployed, &admitted).is_err());
+    }
+
+    /// This box's own node is its operator only where the request names the root key and an
+    /// actor a login writes as; the claim gives a write's door its actor and a read route none.
+    #[test]
+    fn this_box_is_its_operator_only_by_the_root_key_and_a_writers_actor() {
+        let deployed = deployment();
+        let root = crate::cast::keys::root();
+        let claiming = |key: &str, actor: &str, peer: &str| {
+            super::admit(
+                &Daemon,
+                &deployed,
+                &door(),
+                &Knock {
+                    operator: Some(Claim { key, actor }),
+                    ..knock(peer)
+                },
+            )
+        };
+        let operator = claiming(root.as_str(), "ada", THIS_BOX).expect("the operator");
+        assert_eq!(operator, Admitted::Operator(actor("ada")));
+        assert_eq!(writer_of(&deployed, &operator), Ok(actor("ada")));
+        assert!(actor_of(&deployed, &operator).is_err());
+        assert_eq!(
+            claiming(&"1".repeat(64), "ada", THIS_BOX),
+            Ok(Admitted::Local),
+            "another key is no claim"
+        );
+        for actor in ["triage", "Not An Actor"] {
+            let refused = claiming(root.as_str(), actor, THIS_BOX).expect_err("no writer");
+            assert_eq!(refused.status().code(), 403, "{actor}");
+        }
+        assert_eq!(
+            claiming(root.as_str(), "ada", "100.64.0.1"),
+            Ok(Admitted::Peer(Login::from_whois(HERS))),
+            "a peer's claim is ignored"
+        );
     }
 
     /// The local shell resolves like any peer: a whois that names loopback admits it as that login.

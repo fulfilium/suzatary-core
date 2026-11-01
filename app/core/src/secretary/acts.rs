@@ -1040,7 +1040,7 @@ mod tests {
                     reference: a_todo_reference(),
                     note: "not now".to_owned(),
                 },
-                Stamp::Actor("ada".to_owned()),
+                Stamp::Actor(crate::secretary::stamp::Speaker::device("ada")),
             )
             .expect("appends");
         };
@@ -1059,7 +1059,7 @@ mod tests {
         let stored = super::super::read(clean.lines.conversations(), &DEFAULT).expect("reads");
         assert!(matches!(
             &stored.turns[0].by,
-            Some(Stamp::Actor(actor)) if actor == "ada"
+            Some(Stamp::Actor(speaker)) if speaker.actor == "ada"
         ));
         assert!(!crate::secretary::taint::tainted(&stored));
         assert!(crate::secretary::taint::opener(&stored).is_some());

@@ -19,7 +19,7 @@ use axum::http::{HeaderValue, StatusCode, header};
 use axum::response::{IntoResponse, Response};
 use prodrome_core::event::Hash;
 use prodrome_core::sign::PublicKey;
-use suzatary_core::gate::{Admitted, actor_of};
+use suzatary_core::gate::{Admitted, actor_of, writer_of};
 use suzatary_core::record::TodoEvent;
 use suzatary_core::refusal::Refusal;
 use suzatary_core::signatures::{Answer, Asking, Proven, Request, Requested, refused};
@@ -89,7 +89,7 @@ pub async fn asked<P: Proof>(
             key: header(KEY_HEADER),
             signature: header(SIGNATURE_HEADER),
         },
-        actor_of(&state.deployment, admitted)?,
+        writer_of(&state.deployment, admitted)?,
         (state.wall)(),
     )?;
     let proof =

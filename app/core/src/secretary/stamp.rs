@@ -9,19 +9,46 @@ use serde::{Deserialize, Serialize};
 
 use crate::chain_set::ChainSet;
 use crate::reference::{Reference, TodoRef};
+use crate::seat::Seat;
 
 /// A said line's stamp.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(from = "String", into = "String")]
 pub enum Stamp {
-    /// An actor the gate admitted: the owner on one of his devices.
-    Actor(String),
+    /// An actor the gate admitted: the owner on one of his devices or at the box's terminal.
+    Actor(Speaker),
     /// The box, writing a sentence it composed from its own state.
     Box,
     /// An actor the gate admitted, on a line that points at a todo no trusted actor confirmed:
     /// its id, which the model is shown beside the line, may have been chosen by mail the agent
     /// read, so the line is his and is not clean.
-    Unconfirmed(String),
+    Unconfirmed(Speaker),
+}
+
+/// An actor the gate admitted, and where the request was made.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Speaker {
+    /// The actor.
+    pub actor: String,
+    /// Where it asked from.
+    pub seat: Seat,
+}
+
+impl Speaker {
+    /// `actor` on one of the owner's devices.
+    #[must_use]
+    pub fn device(actor: &str) -> Self {
+        Self::at(actor, Seat::Device)
+    }
+
+    /// `actor`, asking from `seat`.
+    #[must_use]
+    pub fn at(actor: &str, seat: Seat) -> Self {
+        Self {
+            actor: actor.to_owned(),
+            seat,
+        }
+    }
 }
 
 /// How [`Stamp::Box`] is printed in a stored line: not an actor's name (an actor matches
@@ -32,14 +59,36 @@ const BOX: &str = "the box";
 /// holds, so it never reads as an actor's own stamp.
 const UNCONFIRMED: &str = " pointing at an unconfirmed todo";
 
+/// What follows an actor's name in a stored stamp of the operator's, before any
+/// [`UNCONFIRMED`]: a space again, so it never reads as an actor's own name.
+const OPERATOR: &str = " at the box's terminal";
+
 impl From<String> for Stamp {
     fn from(printed: String) -> Self {
         if printed == BOX {
             Stamp::Box
-        } else if let Some(actor) = printed.strip_suffix(UNCONFIRMED) {
-            Stamp::Unconfirmed(actor.to_owned())
+        } else if let Some(speaker) = printed.strip_suffix(UNCONFIRMED) {
+            Stamp::Unconfirmed(Speaker::from(speaker))
         } else {
-            Stamp::Actor(printed)
+            Stamp::Actor(Speaker::from(printed.as_str()))
+        }
+    }
+}
+
+impl From<&str> for Speaker {
+    fn from(printed: &str) -> Self {
+        match printed.strip_suffix(OPERATOR) {
+            Some(actor) => Speaker::at(actor, Seat::Operator),
+            None => Speaker::device(printed),
+        }
+    }
+}
+
+impl From<&Speaker> for String {
+    fn from(speaker: &Speaker) -> Self {
+        match speaker.seat {
+            Seat::Device => speaker.actor.clone(),
+            Seat::Operator => format!("{}{OPERATOR}", speaker.actor),
         }
     }
 }
@@ -57,9 +106,9 @@ impl From<&str> for Stamp {
 impl From<Stamp> for String {
     fn from(stamp: Stamp) -> Self {
         match stamp {
-            Stamp::Actor(actor) => actor,
+            Stamp::Actor(speaker) => String::from(&speaker),
             Stamp::Box => BOX.to_owned(),
-            Stamp::Unconfirmed(actor) => actor + UNCONFIRMED,
+            Stamp::Unconfirmed(speaker) => String::from(&speaker) + UNCONFIRMED,
         }
     }
 }
@@ -79,19 +128,19 @@ impl Stamp {
     #[must_use]
     pub fn actor(&self) -> Option<&str> {
         match self {
-            Stamp::Actor(actor) | Stamp::Unconfirmed(actor) => Some(actor),
+            Stamp::Actor(speaker) | Stamp::Unconfirmed(speaker) => Some(&speaker.actor),
             Stamp::Box => None,
         }
     }
 }
 
-/// The stamp the gate's `actor` puts on a line pointing at `references`, as `set` reads the chains
+/// The stamp the gate's `speaker` puts on a line pointing at `references`, as `set` reads the chains
 /// when the line is written: the actor's own, unless a reference names a todo whose content is
 /// still an untrusted writer's ([`crate::view::provisional_content`]), or one the set cannot show
 /// to be otherwise, which makes it [`Stamp::Unconfirmed`]. What decides is who wrote the todo's
 /// words, its id among them; an untrusted claim about a todo he wrote leaves them his.
 #[must_use]
-pub fn pointing(actor: &str, references: &[Reference], set: &ChainSet<'_>) -> Stamp {
+pub fn pointing(speaker: Speaker, references: &[Reference], set: &ChainSet<'_>) -> Stamp {
     let mut todos: BTreeMap<_, BTreeSet<&str>> = BTreeMap::new();
     for reference in references {
         if let Reference::Todo(TodoRef { chain, id }) = reference {
@@ -107,9 +156,9 @@ pub fn pointing(actor: &str, references: &[Reference], set: &ChainSet<'_>) -> St
         })
     });
     if confirmed {
-        Stamp::Actor(actor.to_owned())
+        Stamp::Actor(speaker)
     } else {
-        Stamp::Unconfirmed(actor.to_owned())
+        Stamp::Unconfirmed(speaker)
     }
 }
 
@@ -117,16 +166,24 @@ pub fn pointing(actor: &str, references: &[Reference], set: &ChainSet<'_>) -> St
 mod tests {
     use super::*;
 
-    /// A stamp prints and reads back as itself, and an actor's name never reads as the box.
+    /// A stamp prints and reads back as itself, an actor's name never reads as the box, and a
+    /// device's stamp prints as it did before the operator's existed.
     #[test]
     fn a_stamp_reads_back_as_itself() {
-        for stamp in [
-            Stamp::Box,
-            Stamp::Actor("ada".to_owned()),
-            Stamp::Unconfirmed("ada".to_owned()),
-        ] {
-            assert_eq!(Stamp::from(String::from(stamp.clone())), stamp);
+        for seat in [Seat::Device, Seat::Operator] {
+            for stamp in [
+                Stamp::Box,
+                Stamp::Actor(Speaker::at("ada", seat)),
+                Stamp::Unconfirmed(Speaker::at("ada", seat)),
+            ] {
+                assert_eq!(Stamp::from(String::from(stamp.clone())), stamp);
+            }
         }
-        assert_eq!(Stamp::from("box"), Stamp::Actor("box".to_owned()));
+        assert_eq!(Stamp::from("box"), Stamp::Actor(Speaker::device("box")));
+        assert_eq!(String::from(Stamp::Actor(Speaker::device("ada"))), "ada");
+        assert_eq!(
+            Stamp::from("ada at the box's terminal pointing at an unconfirmed todo"),
+            Stamp::Unconfirmed(Speaker::at("ada", Seat::Operator))
+        );
     }
 }

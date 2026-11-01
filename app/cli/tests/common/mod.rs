@@ -3412,6 +3412,18 @@ pub fn phone() -> prodrome_core::sign::Secret {
     suzatary_core::cast::keys::secret(suzatary_core::cast::keys::PHONE)
 }
 
+/// The box's operator at the test server at `base`: the cast's root key, the owner's actor, and
+/// the instant every test server reads as now.
+#[must_use]
+pub fn operator(base: &str) -> suzatary_cli::commands::call::Operator {
+    suzatary_cli::commands::call::Operator::new(
+        base,
+        Arc::clone(cast_keys().root()),
+        actor(CAST.owner.actor),
+    )
+    .stamping(stamped)
+}
+
 /// The instant a test's device stamps on its requests: the fake clock's own, and every test
 /// server's UTC now as a request's window reads it.
 pub const STAMPED: &str = "2026-09-02T12:00:00.000Z";
@@ -3505,28 +3517,21 @@ fn sent_bytes_signed(
     at: &str,
     nonce: &str,
 ) -> ureq::http::Response<ureq::Body> {
-    let named = suzatary_core::signatures::request_name(
-        "POST",
-        &target_of(url),
-        at,
-        nonce,
-        &suzatary_core::signatures::body_digest(bytes),
-        key.public().as_str(),
-    );
-    let signed = key.sign(&named);
-    agent()
-        .post(url)
-        .header("x-suzatary-act", "1")
-        .header(
-            suzatary_core::gate::CLIENT_HEADER,
-            suzatary_core::gate::CLIENT_MIN.to_string(),
+    suzatary_cli::commands::call::Signed::of("POST", &target_of(url), bytes, key, at, nonce)
+        .headers
+        .into_iter()
+        .fold(
+            agent()
+                .post(url)
+                .header("x-suzatary-act", "1")
+                .header(
+                    suzatary_core::gate::CLIENT_HEADER,
+                    suzatary_core::gate::CLIENT_MIN.to_string(),
+                )
+                .header("sec-fetch-site", "same-origin")
+                .header("content-type", "application/json"),
+            |request, (name, value)| request.header(name, value),
         )
-        .header("sec-fetch-site", "same-origin")
-        .header("content-type", "application/json")
-        .header("x-suzatary-at", at)
-        .header("x-suzatary-nonce", nonce)
-        .header("x-suzatary-key", signed.key.as_str())
-        .header("x-suzatary-signature", signed.signature.as_str())
         .send(bytes)
         .expect("the request completes")
 }
@@ -3537,21 +3542,12 @@ pub fn get_signed(
     url: &str,
     key: &prodrome_core::sign::Secret,
 ) -> ureq::http::Response<ureq::Body> {
-    let name = suzatary_core::signatures::request_name(
-        "GET",
-        &target_of(url),
-        STAMPED,
-        NONCE,
-        &suzatary_core::signatures::body_digest(b""),
-        key.public().as_str(),
-    );
-    let signed = key.sign(&name);
-    agent()
-        .get(url)
-        .header("x-suzatary-at", STAMPED)
-        .header("x-suzatary-nonce", NONCE)
-        .header("x-suzatary-key", signed.key.as_str())
-        .header("x-suzatary-signature", signed.signature.as_str())
+    suzatary_cli::commands::call::Signed::of("GET", &target_of(url), b"", key, STAMPED, NONCE)
+        .headers
+        .into_iter()
+        .fold(agent().get(url), |request, (name, value)| {
+            request.header(name, value)
+        })
         .call()
         .expect("the request completes")
 }

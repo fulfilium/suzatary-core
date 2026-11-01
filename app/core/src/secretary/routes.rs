@@ -961,6 +961,7 @@ pub fn tap(
     let (id, index) = (&card.conversation, card.index);
     let stored = super::read(caps.secretary.conversations, id)?;
     let standing = stored.standing(index, &inbox::fold(caps.secretary.inbox)?)?;
+    tap.performs(&standing.object.asked.proposal)?;
     let hold = || caps.secretary.memories.hold();
     let prepared = Prepared::of(
         &standing.object.asked.proposal,
@@ -1004,7 +1005,10 @@ pub fn tap(
                 note: note.to_owned(),
             },
             // A proposal's index is the box's; nothing it points at was chosen by mail.
-            crate::secretary::stamp::Stamp::Actor(tap.who().as_str().to_owned()),
+            crate::secretary::stamp::Stamp::Actor(crate::secretary::stamp::Speaker::at(
+                tap.who().as_str(),
+                tap.seat(),
+            )),
         )?;
     }
     payload(&super::read(caps.secretary.conversations, id)?, caps, cards)
@@ -2732,6 +2736,7 @@ mod tests {
                 content_type: Some("application/json"),
                 site: Some("same-origin"),
             },
+            crate::seat::Seat::Device,
         )
         .expect("a tap")
     }

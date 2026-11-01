@@ -6,6 +6,7 @@ use suzatary_core::capability::Datetime;
 use suzatary_core::reference::TodoRef;
 use suzatary_core::refusal::{Refusal, Status};
 use suzatary_core::routes;
+use suzatary_core::seat::Seat;
 use suzatary_core::secretary::acts::{self, ActLine};
 use suzatary_core::secretary::store::DEFAULT;
 use suzatary_core::secretary::tap::Tap;
@@ -252,6 +253,7 @@ pub fn take_objects(
             &call.state,
             &heard,
             call.state.first.caps.secretary.clock.now(),
+            Seat::of(&call.admitted),
         );
     }
     Ok(Json(receipt))
@@ -293,15 +295,16 @@ pub fn author(
             reference,
             note: note.clone(),
         };
-        noted(&call.state, &[line], now);
+        noted(&call.state, &[line], now, Seat::of(&call.admitted));
     }
     Ok(Json(built))
 }
 
-/// Append acts to the default conversation, opening it if nobody has, and hear it.
+/// Append acts, written from `from`, to the default conversation, opening it if nobody has, and
+/// hear it.
 ///
 /// A failure to note is not the write's failure, so it is a line in the log, not the answer's.
-fn noted(state: &State, lines: &[ActLine], now: Datetime) {
+fn noted(state: &State, lines: &[ActLine], now: Datetime, from: Seat) {
     let first = state.first.caps;
     let noting = suzatary_core::secretary::read_or_open_default(
         first.secretary.conversations,
@@ -314,7 +317,7 @@ fn noted(state: &State, lines: &[ActLine], now: Datetime) {
         let set = read.set(now);
         lines.iter().try_for_each(|line| {
             let by = suzatary_core::secretary::stamp::pointing(
-                &line.actor,
+                suzatary_core::secretary::stamp::Speaker::at(&line.actor, from),
                 std::slice::from_ref(&line.reference),
                 &set,
             );

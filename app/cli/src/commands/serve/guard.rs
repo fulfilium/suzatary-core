@@ -4,7 +4,7 @@ use axum::http::HeaderMap;
 use prodrome_core::event::Actor;
 use prodrome_core::sign::PublicKey;
 use suzatary_core::capability::Login;
-use suzatary_core::gate::{ActHeaders, Admitted, actor_of, check_csrf};
+use suzatary_core::gate::{ActHeaders, Admitted, actor_of, check_csrf, writer_of};
 use suzatary_core::record::TodoEvent;
 use suzatary_core::refusal::Refusal;
 use suzatary_core::secretary::tap::Tap;
@@ -39,7 +39,8 @@ impl Guard {
     }
 
     /// The checks of the gate's own answers, before anything of the request is read: any viewer
-    /// reads, and every other guard needs a peer mapped to an actor and the CSRF triple.
+    /// reads, and every other guard needs a peer mapped to an actor, or the operator, and the
+    /// CSRF triple. A guard whose witness asks no proof refuses the operator in its own check.
     ///
     /// # Errors
     /// The refusal of whichever check failed.
@@ -52,7 +53,7 @@ impl Guard {
         if self == Guard::Read {
             return Ok(());
         }
-        actor_of(&state.deployment, admitted)?;
+        writer_of(&state.deployment, admitted)?;
         check_csrf(headers)
     }
 }
@@ -216,11 +217,11 @@ impl Guarded for Tap {
 
     fn check(
         _: &State,
-        _: &Admitted,
+        admitted: &Admitted,
         headers: &ActHeaders<'_>,
         proof: &Trusted,
     ) -> Result<Self, Refusal> {
-        Tap::of(proof, headers)
+        Tap::of(proof, headers, suzatary_core::seat::Seat::of(admitted))
     }
 }
 

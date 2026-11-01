@@ -540,10 +540,14 @@ mod tests {
                 said(calling("remember"), None),
             ])
         };
-        let pointing = after(Stamp::Unconfirmed("ada".to_owned()));
+        let pointing = after(Stamp::Unconfirmed(
+            crate::secretary::stamp::Speaker::device("ada"),
+        ));
         assert!(tainted(&pointing));
         assert!(opener(&pointing).is_some(), "his round, so a card");
-        assert!(!tainted(&after(Stamp::Actor("ada".to_owned()))));
+        assert!(!tainted(&after(Stamp::Actor(
+            crate::secretary::stamp::Speaker::device("ada")
+        ))));
     }
 
     #[test]

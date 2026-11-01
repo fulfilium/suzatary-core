@@ -2,11 +2,11 @@
 
 use super::Stored;
 use crate::secretary::turn_shape::TurnShape;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
 /// A conversation's answering state, as a polling page reads it: a queued question, a running
 /// round and a streaming reply are three facts.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, ts_rs::TS)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS)]
 #[serde(rename_all = "lowercase")]
 pub enum ConversationState {
     /// Nothing is owed: the last turn is a model turn with no calls, an act,

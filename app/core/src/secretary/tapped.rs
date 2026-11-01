@@ -100,6 +100,7 @@ mod tests {
                 content_type: Some("application/json"),
                 site: Some("same-origin"),
             },
+            crate::seat::Seat::Device,
         )
         .expect("a tap")
     }

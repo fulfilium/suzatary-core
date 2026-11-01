@@ -83,6 +83,8 @@ mod migrate_health;
 mod migrate_models;
 #[path = "objects.rs"]
 mod objects;
+#[path = "operator.rs"]
+mod operator;
 #[path = "paths.rs"]
 mod paths;
 #[path = "perf_fold_chain.rs"]

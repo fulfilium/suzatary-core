@@ -6,7 +6,7 @@
 //! It authors no markup: the only HTML it serves is `dist`'s files and typst's
 //! rendering of content a trusted actor wrote.
 
-mod asked;
+pub(crate) mod asked;
 mod body;
 mod call;
 mod chain;
@@ -29,7 +29,7 @@ pub mod models;
 mod params;
 mod proposals;
 mod reply;
-mod route;
+pub(crate) mod route;
 mod secretary;
 mod settings;
 pub mod sign_ins;

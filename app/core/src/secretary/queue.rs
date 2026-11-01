@@ -244,7 +244,9 @@ mod tests {
         assert!(Pending::of(&stored(&lines)).is_none(), "nothing wakes");
         let mut owner = said("2026-09-13T09:03:00", person("add my Work calendar"));
         if let Entry::Said { by, .. } = &mut owner {
-            *by = Some(Stamp::Actor("ada".to_owned()));
+            *by = Some(Stamp::Actor(crate::secretary::stamp::Speaker::device(
+                "ada",
+            )));
         }
         lines.push(owner);
         let waiting = stored(&lines);
@@ -256,7 +258,9 @@ mod tests {
                 text: "Ada dismissed it: not now".to_owned(),
                 references: Vec::new(),
             },
-            by: Some(Stamp::Actor("ada".to_owned())),
+            by: Some(Stamp::Actor(crate::secretary::stamp::Speaker::device(
+                "ada",
+            ))),
         };
         assert!(
             Pending::of(&stored(&[opened(), dismissed])).is_some(),

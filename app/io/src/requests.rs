@@ -175,6 +175,18 @@ const RECORD: DocCodec<Hash, Requested> = DocCodec {
     },
 };
 
+/// A request's nonce, as a device draws it: 128 bits from the system's generator, in lowercase
+/// hex ([`suzatary_core::signatures::is_nonce`]).
+///
+/// # Errors
+/// The generator failing.
+pub fn fresh_nonce() -> Result<String, String> {
+    let bytes: [u8; 16] = ring::rand::generate(&ring::rand::SystemRandom::new())
+        .map(ring::rand::Random::expose)
+        .map_err(|_| "the system's random generator failed".to_owned())?;
+    Ok(hex::encode(bytes))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
