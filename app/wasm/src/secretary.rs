@@ -70,17 +70,19 @@ impl Lines {
         snapshot::snapshot(&self.0).map_err(|e| refused(e.to_string()))
     }
 
-    /// These lines replaced by those `bytes` snapshot, as if their every node and key had been
-    /// handed over; or, for bytes that are no snapshot of this build's form, left as they are.
+    /// The skeleton and the keys replaced by those `bytes` snapshot, as if their every node and
+    /// key had been handed over, the prints held kept; or, for bytes that are no snapshot of this
+    /// build's form, left as they are.
     pub fn load(&mut self, bytes: &[u8]) -> Result<(), JsError> {
-        self.0 = snapshot::from_snapshot(bytes).map_err(|e| refused(e.to_string()))?;
+        let loaded = snapshot::from_snapshot(bytes).map_err(|e| refused(e.to_string()))?;
+        self.0.regiven(loaded);
         Ok(())
     }
 
-    /// Nothing held again: what a tab does when the rows it reads are not those its snapshot was
-    /// of, so it hands every node and key over from them.
+    /// No node or key held again, the prints kept: what a tab does when the rows it reads are
+    /// not those its snapshot was of, so it hands every node and key over from them.
     pub fn clear(&mut self) {
-        self.0 = HeldReplica::default();
+        self.0.regiven(HeldReplica::default());
     }
 
     /// `add`, `[{hash, text}]`, each hashed against its name and held, and `drop`,

@@ -79,6 +79,14 @@ impl KeyRing {
         moved
     }
 
+    /// These keys replaced by `ring`'s; the names held before or after and not both.
+    pub fn replace(&mut self, mut ring: KeyRing) -> std::collections::BTreeSet<KeyName> {
+        let was = KeyRing(std::mem::replace(&mut self.0, std::mem::take(&mut ring.0)));
+        let came = self.0.keys().filter(|name| !was.holds(name));
+        let went = was.0.keys().filter(|name| !self.holds(name));
+        came.chain(went).cloned().collect()
+    }
+
     /// Whether the key named `name` is held.
     #[must_use]
     pub fn holds(&self, name: &KeyName) -> bool {

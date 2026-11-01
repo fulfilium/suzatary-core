@@ -8,6 +8,7 @@
 
 import type { AttachmentRow, ConversationState, Frame, ProposalRow, TurnRow, UnplacedProposal } from "../wire/generated/wire";
 import type { Reference } from "./refs";
+import type questions from "../prodrome/questions";
 import asks from "../prodrome/asks";
 import intentsync from "../prodrome/intentsync";
 import dressed from "./dressed";
@@ -100,7 +101,14 @@ export interface NotHere {
   readonly why: string;
 }
 
-export type SourceState = Loading | Loaded | Failed | NotHere;
+/** The device holds no line of the conversation and the box has not said whether it holds one: drawn as loading. */
+export interface Unheard {
+  readonly kind: "unheard";
+  readonly id: string;
+  readonly about: Reference | undefined;
+}
+
+export type SourceState = Loading | Loaded | Failed | NotHere | Unheard;
 
 export type SourceEvent =
   | {
@@ -114,7 +122,8 @@ export type SourceEvent =
     }
   | { readonly kind: "frame"; readonly frame: Frame; readonly at: number }
   | { readonly kind: "failed"; readonly reason: string }
-  | { readonly kind: "nothere"; readonly lines: number; readonly why: string };
+  | { readonly kind: "nothere"; readonly lines: number; readonly why: string }
+  | { readonly kind: "unheard" };
 
 /** Whether Stop could end a round: the one reading the Stop control and Esc share. */
 export type Answering = "running" | "idle";
@@ -190,6 +199,8 @@ export function step(state: SourceState, event: SourceEvent): SourceState {
     case "nothere":
       if (state.kind === "loaded") return { ...state, problem: storesync.notHere(event.lines, "this conversation", event.why) };
       return { kind: "nothere", id: state.id, about: state.about, lines: event.lines, why: event.why };
+    case "unheard":
+      return state.kind === "loaded" ? state : { kind: "unheard", id: state.id, about: state.about };
   }
 }
 
@@ -229,21 +240,22 @@ export function createSource(
   let effectiveAbout: Reference | undefined = about;
 
   // A window holding every turn the page holds, and with an older one the turns before them too; or lines not on this
-  // device.
+  // device, or a conversation the box has not answered for.
   type Reading =
     | { readonly type: "Read"; readonly payload: grouped.Window; readonly fallback: boolean; readonly mode: "older" | "newest" }
-    | { readonly type: "NotHere"; readonly lines: number; readonly why: string };
+    | { readonly type: "NotHere"; readonly lines: number; readonly why: string }
+    | questions.Unheard;
 
   async function fetchApplyingFallback(mode: "older" | "newest"): Promise<Reading> {
     const aboutText = effectiveAbout === undefined ? undefined : print(effectiveAbout);
     const first = await deps.fetchWindow(id, asking(fold.state(), mode, aboutText));
-    if (first.type === "NotHere") return first;
+    if (first.type !== "Read") return first;
     if (aboutText === undefined || first.payload.turns.length > 0) {
       return { type: "Read", payload: first.payload, fallback: false, mode };
     }
     effectiveAbout = undefined;
     const whole = await deps.fetchWindow(id, asking(fold.state(), mode, undefined));
-    return whole.type === "NotHere" ? whole : { type: "Read", payload: whole.payload, fallback: true, mode };
+    return whole.type !== "Read" ? whole : { type: "Read", payload: whole.payload, fallback: true, mode };
   }
 
   let unwatch = (): void => {};
@@ -263,7 +275,9 @@ export function createSource(
         ? { kind: "failed", reason: l.e }
         : l.v.type === "Read"
           ? { kind: "window", mode: l.v.mode, payload: l.v.payload, fallback: l.v.fallback, at: time.now() }
-          : { kind: "nothere", lines: l.v.lines, why: l.v.why },
+          : l.v.type === "NotHere"
+            ? { kind: "nothere", lines: l.v.lines, why: l.v.why }
+            : { kind: "unheard" },
     ),
   );
   const newest = readings.ask;
@@ -274,7 +288,7 @@ export function createSource(
   const openAt = (turn: number): Promise<void> =>
     newest(async (): Promise<Reading> => {
       const w = await deps.fetchWindow(id, { before: turn + 1 });
-      return w.type === "NotHere" ? w : { type: "Read", payload: w.payload, fallback: false, mode: "newest" };
+      return w.type !== "Read" ? w : { type: "Read", payload: w.payload, fallback: false, mode: "newest" };
     });
 
   // In the readings' order, so a newest reading asked before it, which holds less, never lands over it.
@@ -320,8 +334,9 @@ export function createSource(
     ...fold,
     start: () => {
       void (at === undefined ? refresh() : openAt(at));
-      // A stream that opens again may mean the box answers again, so lines not on this device are asked for again.
-      close = stream.open(() => deps.openStream(id), { frame: heard, opened: () => (fold.state().kind === "nothere" ? void read() : undefined) }, deps.wake);
+      // A stream that opens again may mean the box answers again, so lines not on this device, and a conversation it has
+      // not answered for, are asked for again.
+      close = stream.open(() => deps.openStream(id), { frame: heard, opened: () => (fold.state().kind === "nothere" || fold.state().kind === "unheard" ? void read() : undefined) }, deps.wake);
       unwatch = deps.watch(id, () => void read());
     },
     refresh,

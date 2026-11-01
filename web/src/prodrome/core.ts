@@ -193,9 +193,10 @@ export interface Lines {
   chosen: (topics: TopicReading, chosen: string, pages: number) => string;
   /** What these lines were handed, the skeleton and the keys, in the core's own form; it throws where they do not print. */
   snapshot: () => Uint8Array;
-  /** These lines replaced by those a snapshot prints; it throws for bytes that print none of this build's form. */
+  /** The skeleton and the keys replaced by those a snapshot prints, the prints held kept; it throws for bytes that
+   * print none of this build's form. */
   load: (bytes: Uint8Array) => void;
-  /** Nothing held again. */
+  /** No node or key held again, the prints kept. */
   clear: () => void;
   /** The newest `pages` pages of every conversation's rounds carrying each topic of `chosen`, a JSON array. */
   stream: (topics: TopicReading, chosen: string, pages: number) => string;

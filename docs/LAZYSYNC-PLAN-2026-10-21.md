@@ -509,6 +509,24 @@ store's rows, keyed by what it was computed from:
   the snapshot by the same key: the core is told it holds them (no node or key
   is handed over), or it holds nothing again and is handed them whole.
 
+**What a snapshot replaces** (`staleconversation`). A snapshot is of
+what the core was given, the skeleton and the keys, so loading one, and
+clearing the core where the rows read are not those it was of, replace those
+two and keep the prints (`HeldReplica::regiven`). The prints are content held
+by name, and the tab counts each print it handed over as held until it lets it
+go. Before, both replaced the whole replica: where the rows moved between the
+snapshot's load and the rows' read (another tab landed), the core was cleared
+of the prints the stream had read while the tab still counted them held, so it
+never fetched them again and answered "no conversation named" for each of
+those conversations on every reading. The core is told a row only once it took
+the change (`linesync.telling`). The law, held by `web/test/warmload.test.ts`
+against the real core: after any interleaving of the box's landings, two tabs'
+pulls, snapshot writes and reloads, a tab's core holds the skeleton and keys a
+core handed its row whole holds, and every print it was handed. A conversation
+the lines hold no line of is pulled for first, drawn as loading while the box
+has not answered, and called absent only by a whole pull that still holds none
+of it.
+
 **Measured** (`web/e2e/snapshotmeasure.bench.ts`, `bigstore`'s shape, the
 browser on 0.67 of a core, in a page of the origin that runs no app): the
 snapshot is 6.0 MB for 14,903 nodes and 13,002 keys; one `get` of it took 15

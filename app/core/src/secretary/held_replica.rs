@@ -86,6 +86,17 @@ enum StepForm {
     Still,
 }
 
+impl HeldReplica {
+    /// The skeleton and the keys replaced by `other`'s, and the prints kept: what a snapshot
+    /// loaded, or nothing, replaces. A print is content held by its name whatever the skeleton
+    /// names, and the tab counts each print it handed over as held until it lets it go.
+    pub fn regiven(&mut self, other: HeldReplica) {
+        let HeldReplica { lines, outlines } = other;
+        self.outlines = outlines;
+        self.lines.rekey(lines.into_key_ring());
+    }
+}
+
 impl Held for HeldReplica {
     type Given = Given;
     /// 1: the skeleton's nodes as the wire's, and each key's bytes under its name.

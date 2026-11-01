@@ -84,14 +84,21 @@ export namespace questions {
   // A reading of every line, or how many lines the device lacks and why: the same shape as one conversation's.
   export type Whole<A> = { readonly type: "Held"; readonly v: A } | NotHere
 
-  // One conversation's window, absent where the lines hold no line of it, or not on this device.
-  export type One = { readonly type: "Absent" } | { readonly type: "Held"; readonly payload: ConversationPayload } | NotHere
+  // A conversation the lines hold no line of: absent, once a whole pull says the box holds none either, or unheard,
+  // while the box has not said so.
+  export type Unheard = { readonly type: "Unheard" }
+  export type Unheld = { readonly type: "Absent" } | Unheard
+  const ABSENT: Unheld = { type: "Absent" }
+  const UNHEARD: Unheard = { type: "Unheard" }
+
+  // One conversation's window, unheld, or not on this device.
+  export type One = Unheld | { readonly type: "Held"; readonly payload: ConversationPayload } | NotHere
   // The key each answer block is kept by, by its source.
   export type Keyed = Readonly<Record<string, string>>
 
-  // One conversation's window grouped into rounds, with the key of each of its answer blocks, absent, or not on this
+  // One conversation's window grouped into rounds, with the key of each of its answer blocks, unheld, or not on this
   // device.
-  export type Grouped = { readonly type: "Absent" } | { readonly type: "Held"; readonly payload: grouped.Window; readonly keys: Keyed } | NotHere
+  export type Grouped = Unheld | { readonly type: "Held"; readonly payload: grouped.Window; readonly keys: Keyed } | NotHere
 
   // A term's price: its value (`null` for ∅), or why it does not link.
   export type Priced = { readonly type: "Value"; readonly v: number | null } | { readonly type: "Refused"; readonly why: string }
@@ -262,6 +269,15 @@ export namespace questions {
         .then(() => sync.over(scope, (): Whole<A> => ({ type: "Held", v: read() })))
         .catch((e: unknown): Whole<A> => notHere(scope(), e))
     const whole = <A>(turn: Turn, read: () => A): Promise<Whole<A>> => scoped(turn, () => lines.WHOLE, read)
+    // A reading of conversation `id` once the lines hold a line of it. Where they hold none, a landed device may not have
+    // pulled it yet: the lines are pulled, and only a whole pull, the box's own answer, says the box holds none either.
+    const conversation = async <A>(id: string, turn: Turn, read: () => Promise<A> | A): Promise<A | Unheld> => {
+      await ready("All", turn)
+      if (sync.holds(id)) return read()
+      const pulled = await stores.pull()
+      await turn()
+      return sync.holds(id) ? read() : pulled ? ABSENT : UNHEARD
+    }
 
     // The Inbox's rows, read again only once the inbox, the chains held or the memory moved: until then an ask is
     // answered with the reading made at the instant of the first, which its `at` names.
@@ -382,24 +398,18 @@ export namespace questions {
           return whole(turn, () => listOfLines(held, proposals()))
         case "Conversation": {
           const { id, window, memory } = q
-          return ready("All", turn)
-            .then((): Promise<One> | One =>
-              sync.holds(id) ? sync.over(() => lines.one(id), (): One => ({ type: "Held", payload: conversationOf(held, proposals(), id, window, memory) })) : { type: "Absent" },
-            )
+          return conversation(id, turn, () => sync.over(() => lines.one(id), (): One => ({ type: "Held", payload: conversationOf(held, proposals(), id, window, memory) })))
             .catch((e: unknown): One => notHere(lines.one(id), e))
         }
         case "Window": {
           const { id, window, memory, zone } = q
           const read = (w: Window): ConversationPayload => conversationOf(held, proposals(), id, w, memory)
-          return ready("All", turn)
-            .then((): Promise<Grouped> | Grouped =>
-              sync.holds(id)
-                ? sync.over(() => lines.one(id), (): Grouped => {
-                    const payload = grouped.of(grouped.covering(window, read), zone)
-                    return { type: "Held", payload, keys: keyed(payload.turns) }
-                  })
-                : { type: "Absent" },
-            )
+          return conversation(id, turn, () =>
+            sync.over(() => lines.one(id), (): Grouped => {
+              const payload = grouped.of(grouped.covering(window, read), zone)
+              return { type: "Held", payload, keys: keyed(payload.turns) }
+            }),
+          )
             .catch((e: unknown): Grouped => notHere(lines.one(id), e))
         }
         case "Search":

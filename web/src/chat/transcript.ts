@@ -604,7 +604,7 @@ export function mountTranscript(
   /** Idempotent: a keyed-round diff, so an unchanged state moves nothing. */
   function redraw(state: SourceState): void {
     drawing.cancel();
-    if (state.kind !== "loading") coming.remove();
+    if (state.kind !== "loading" && state.kind !== "unheard") coming.remove();
     notHere.hidden = state.kind !== "nothere";
     notHere.textContent = state.kind === "nothere" ? storesync.notHere(state.lines, "this conversation", state.why) : "";
     if (state.kind !== "loaded") {

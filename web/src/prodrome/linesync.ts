@@ -113,22 +113,29 @@ export namespace linesync {
   // form 3 reads it as `asks`, so the box's notes would be drawn as rounds.
   export const FORMAT = 4
 
-  export const of = (held: Lines, fx: Effects, blocks: rendered.Store): T => {
-    // What the core holds of the lines: the row it was last told, or, on a warm load until the rows are read, the
-    // snapshot it was loaded from.
+  // How the core is told the lines' row: `took` a move of it, `printed` its snapshot beside the row it holds, and
+  // `reader` how a warm load loads it from a snapshot. The core holds the row it was last told, or the snapshot it was
+  // loaded from until the rows are read: never less than a core handed that row whole, whatever came between.
+  export type Telling = {
+    readonly took: (was: locked.Row<SkeletonNode>, now: locked.Row<SkeletonNode>) => void
+    readonly printed: () => noderows.Printed<SkeletonNode>
+    readonly reader: pull.Reader<SkeletonNode>
+  }
+
+  export const telling = (held: Lines, moved: (conversations: Moved) => void): Telling => {
     type Told = { readonly type: "Row"; readonly row: locked.Row<SkeletonNode> } | { readonly type: "Snapshot" }
     const NOTHING: Told = { type: "Row", row: locked.none() }
     let told: Told = NOTHING
     // The core opens words with the row's keys and reads the row's skeleton: told what changed since what it holds, so a
     // purge's key is let go now, and the stream chooses its rounds by the row it reads. A core that holds a snapshot no
-    // row was named for holds nothing again and is told the row whole.
+    // row was named for holds no node or key again and is told the row whole. The row is what it holds only once it took
+    // the change, so a change it refused is told again with the next.
     const took = (_: locked.Row<SkeletonNode>, row: locked.Row<SkeletonNode>): void => {
       if (told.type === "Snapshot") {
         held.clear()
         told = NOTHING
       }
       const was = told.row
-      told = { type: "Row", row }
       const add = Object.fromEntries(Object.entries(row.keys).filter(([n, k]) => was.keys[n] !== k))
       const drop = Object.keys(was.keys).filter(n => row.keys[n] === undefined)
       if (Object.keys(add).length > 0 || drop.length > 0) held.keys(JSON.stringify(add), JSON.stringify(drop))
@@ -141,17 +148,11 @@ export namespace linesync {
         if (came.length > 0 || went.length > 0) nodesInto(held, came, went)
         phases.mark("lines nodes held")
       }
-      fx.moved(touched(was, row, new Set([...Object.keys(add), ...drop])))
+      told = { type: "Row", row }
+      moved(touched(was, row, new Set([...Object.keys(add), ...drop])))
     }
-    // What a purge or a retirement takes from the rendered blocks, taken from the page's table as well as the device's.
-    // A block forgotten here is gone from the device and marked there before the page hears of it, so no tab's worker,
-    // whatever it heard, writes it back.
-    const forget = (gone: readonly string[]): Promise<lo.Settled<null>> => blocks.forget(gone).then(done => (fx.forgot(gone), done))
-    const clear = (): Promise<lo.Settled<null>> => blocks.clear().then(done => (fx.cleared(), done))
-    // The device's rows of the lines, one node per row. Rows of another form go with their keys, so the blocks those
-    // keys could find are cleared first.
-    // Beside them, the core's snapshot of the row it was told; none while it holds a snapshot no row was named for, or
-    // where it does not print.
+    // Beside the rows, the core's snapshot of the row it was told; none while it holds a snapshot no row was named for,
+    // or where it does not print.
     const printed = (): noderows.Printed<SkeletonNode> => {
       if (told.type !== "Row") return { type: "Other" }
       try {
@@ -160,7 +161,6 @@ export namespace linesync {
         return { type: "Other" }
       }
     }
-    const place = noderows.placeOf(LINE_ROWS, payload.SkeletonNode, { version: FORMAT, dropped: clear }, { type: "Snapshot", print: printed })
     // A warm load's core loaded from the snapshot, and told, once the rows are read, whether they are the rows it was of.
     const reader: pull.Reader<SkeletonNode> = {
       type: "Snapshot",
@@ -179,6 +179,19 @@ export namespace linesync {
         told = NOTHING
       },
     }
+    return { took, printed, reader }
+  }
+
+  export const of = (held: Lines, fx: Effects, blocks: rendered.Store): T => {
+    const { took, printed, reader } = telling(held, fx.moved)
+    // What a purge or a retirement takes from the rendered blocks, taken from the page's table as well as the device's.
+    // A block forgotten here is gone from the device and marked there before the page hears of it, so no tab's worker,
+    // whatever it heard, writes it back.
+    const forget = (gone: readonly string[]): Promise<lo.Settled<null>> => blocks.forget(gone).then(done => (fx.forgot(gone), done))
+    const clear = (): Promise<lo.Settled<null>> => blocks.clear().then(done => (fx.cleared(), done))
+    // The device's rows of the lines, one node per row, and the core's snapshot beside them. Rows of another form go
+    // with their keys, so the blocks those keys could find are cleared first.
+    const place = noderows.placeOf(LINE_ROWS, payload.SkeletonNode, { version: FORMAT, dropped: clear }, { type: "Snapshot", print: printed })
 
     // Whether a page is shown; none is until one says so.
     let shown = false

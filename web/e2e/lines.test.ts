@@ -14,12 +14,15 @@
  * 5. A conversation the device prefetched reads with no network, and one it lacks says so.
  * 6. A warm load answers the stream from the core's snapshot before it reads the lines' rows; rows changed beside the
  *    snapshot are restored from instead; and once an erasure's key is let go no snapshot holds it.
+ * 7. A conversation the box opened after the device kept its snapshot draws on a warm load, opened at once or from the
+ *    stream, and across a build update; and one the stream read from the snapshot draws though another tab moved the
+ *    rows before they were read.
  */
 
 import assert from "node:assert/strict"
 
 import type { Recorded } from "./harness"
-import { PHONE, SIGNED_POST, WORKER_MARKS, WORKER_QUESTIONS, WRITE_BASE, streamAnswered, suite } from "./harness"
+import { PHONE, SIGNED_POST, WORKER_MARKS, WORKER_QUESTIONS, WRITE_BASE, snapshotKept, streamAnswered, suite } from "./harness"
 
 const app = await suite("lines")
 
@@ -186,6 +189,74 @@ app.scene("a warm load answers the stream from the core's snapshot before it rea
   } finally {
     await unrecord()
     await app.page.evaluate(put("suzatary", "lines", `(s) => s.delete(${JSON.stringify(BOGUS)})`))
+  }
+})
+
+app.scene("a conversation the box opened after the device kept its snapshot draws on a warm load, across a build update too", async () => {
+  await app.resize(PHONE)
+  await app.open(WRITE_BASE)
+  await converse("give me a rendered answer")
+  await app.page.waitFor(`document.querySelector(".turn-model .answerblock") !== null`, { timeout: 20000 })
+  // A conversation the box opens once the device kept its snapshot of the lines (`noderows.QUIET_MS`), while no page
+  // of this device reads them: the Inbox pulls the inbox alone.
+  const opened = async (n: string): Promise<string> => {
+    await app.page.waitFor(snapshotKept("lines"), { timeout: 60000 })
+    await app.page.navigate(`${WRITE_BASE}/?away${n}#/inbox`)
+    await app.page.waitFor(`document.querySelector(".pagetitle") !== null`, { timeout: 15000 })
+    return app.page.evaluate<string>(`${SIGNED_POST}("/api/secretary/conversations", JSON.stringify({title: "Opened since ${n}"})).then((r) => r.json()).then((j) => j.id)`)
+  }
+  // The page draws the conversation, and nothing says it does not exist.
+  const drawn = async (id: string): Promise<void> => {
+    await app.page.waitFor(`document.querySelector(".composebox") !== null && document.querySelector(".pagetitle")?.textContent.includes("Opened since")`, { timeout: 20000 })
+    assert.equal(await app.page.evaluate<boolean>(`document.body.textContent.includes("no conversation named")`), false, `${id} is drawn`)
+  }
+  // Opened at once.
+  const first = await opened("1")
+  await app.page.navigate(`${WRITE_BASE}/?warm1#/secretary/${first}`)
+  await drawn(first)
+  // From the stream, whose answer the snapshot gave and whose rows were read behind it.
+  const second = await opened("2")
+  await app.page.navigate(`${WRITE_BASE}/?warm2#/secretary`)
+  await app.page.waitFor(`document.querySelector(".streamround") !== null`, { timeout: 20000 })
+  await app.page.evaluate(`void (location.hash = "#/secretary/${second}")`)
+  await drawn(second)
+  // Across a build update, as the upgrade scenes load one.
+  const third = await opened("3")
+  await app.page.navigate(`${WRITE_BASE}/?upgraded=1#/secretary/${third}`)
+  await drawn(third)
+})
+
+app.scene("a conversation the stream read from the snapshot draws, though another tab moved the rows before they were read", async () => {
+  await app.resize(PHONE)
+  await app.open(WRITE_BASE)
+  const id = await converse("give me a rendered answer")
+  await app.page.waitFor(`document.querySelector(".turn-model .answerblock") !== null`, { timeout: 20000 })
+  // Another tab of the device, reading the lines and landing what the box sends.
+  const other = await app.tab()
+  try {
+    await other.navigate(`${WRITE_BASE}/?other#/secretary`)
+    await other.waitFor(`document.querySelector(".streamround") !== null`, { timeout: 20000 })
+    await app.page.waitFor(snapshotKept("lines"), { timeout: 60000 })
+    // The stream's content is fetched from the box, and held there, so the rows are read only once it is released.
+    await app.page.evaluate(put("suzatary", "content", `(s) => s.clear()`))
+    const release = await app.page.holdRequests(["/api/stores/lines/content"])
+    try {
+      await app.page.navigate(`${WRITE_BASE}/?warm#/secretary`)
+      await app.page.untilHeld()
+      const marks = await app.page.inWorker<Readonly<Record<string, number>>>("prodromework", WORKER_MARKS)
+      assert.ok(marks["lines snapshot loaded"] !== undefined, `the core was loaded from the snapshot: ${JSON.stringify(marks)}`)
+      // Meanwhile the box opens a conversation, the other tab lands it, and the rows move beside the snapshot.
+      await other.evaluate(`${SIGNED_POST}("/api/secretary/conversations", JSON.stringify({title: "Opened meanwhile"}))`)
+      await app.page.waitFor(`${snapshotKept("lines")}.then((kept) => !kept)`, { timeout: 20000 })
+    } finally {
+      await release()
+    }
+    await app.page.waitFor(`document.querySelector(".streamround") !== null`, { timeout: 20000 })
+    await app.page.evaluate(`void (location.hash = "#/secretary/${id}")`)
+    await app.page.waitFor(`document.querySelector(".turn-model .answerblock") !== null || document.body.textContent.includes("no conversation named")`, { timeout: 20000 })
+    assert.equal(await app.page.evaluate<boolean>(`document.body.textContent.includes("no conversation named")`), false, "the conversation the stream read is drawn")
+  } finally {
+    await other.close()
   }
 })
 

@@ -78,8 +78,8 @@ export namespace dressed {
   export const inbox = (at: string, memory: MemoryPayload | null): Promise<Inbox> => storesync.proposals(at, memory, "Page")
 
   // A conversation's window, or how many of its lines are not on this device and why, refused in the core's words where
-  // the store holds no line of it.
-  type Held = { readonly type: "Read"; readonly payload: ConversationPayload } | questions.NotHere
+  // the box holds no line of it.
+  type Held = { readonly type: "Read"; readonly payload: ConversationPayload } | questions.NotHere | questions.Unheard
   const held = (id: string, w: Window, memory: MemoryPayload | null): Promise<Held> =>
     storesync.conversation(id, w, memory).then((one): Held => (one.type === "Absent" ? storesync.absent(id) : one.type === "Held" ? { type: "Read", payload: one.payload } : one))
 
@@ -88,6 +88,7 @@ export namespace dressed {
   export const cards = async (id: string, memory: MemoryPayload | null): Promise<ConversationPayload> => {
     const one = await held(id, { limit: 1 }, memory)
     if (one.type === "NotHere") throw new Error(storesync.notHere(one.lines, "this conversation", one.why))
+    if (one.type === "Unheard") throw new Error(storesync.unheard)
     return { ...one.payload, proposals: await proposalsOf(id, one.payload.proposals) }
   }
 
@@ -101,20 +102,20 @@ export namespace dressed {
     return { ...read, stream: { ...read.stream, rounds } }
   }
 
-  // A window grouped into rounds, or how many of the conversation's lines are not on this device and why, as the
-  // worker says.
-  export type Windowed = { readonly type: "Read"; readonly payload: grouped.Window } | questions.NotHere
+  // A window grouped into rounds, or how many of the conversation's lines are not on this device and why, or a
+  // conversation the box has not answered for, as the worker says.
+  export type Windowed = { readonly type: "Read"; readonly payload: grouped.Window } | questions.NotHere | questions.Unheard
 
   // A window, grouped into rounds on the owner's days in `zone`.
   export const window = async (id: string, w: grouped.Asked, zone: time.Zone): Promise<Windowed> => {
-    type At = { readonly type: "Held"; readonly payload: grouped.Window; readonly keys: questions.Keyed } | questions.NotHere
+    type At = { readonly type: "Held"; readonly payload: grouped.Window; readonly keys: questions.Keyed } | questions.NotHere | questions.Unheard
     const at = (m: MemoryPayload | null): Promise<At> =>
       storesync.window(id, w, m, zone).then((one): At => (one.type === "Absent" ? storesync.absent(id) : one))
     const bare = await at(null)
-    if (bare.type === "NotHere") return bare
+    if (bare.type !== "Held") return bare
     const m = await memory(bare.payload)
     const read = m === null ? bare : await at(m)
-    if (read.type === "NotHere") return read
+    if (read.type !== "Held") return read
     const [turns, proposals] = await Promise.all([
       turnsOf(read.payload.turns.map(turn => ({ id, turn })), read.keys),
       proposalsOf(id, read.payload.proposals),

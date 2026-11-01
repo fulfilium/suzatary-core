@@ -523,6 +523,24 @@ impl HeldLines {
     /// at once, not at the next reading: the leaves naming it, their conversations and the store.
     pub fn keys(&mut self, given: &BTreeMap<KeyName, String>, gone: &[KeyName]) {
         let moved = self.keys.change(given, gone);
+        self.rekeyed(&moved);
+    }
+
+    /// The keys replaced by `ring`, read as [`HeldLines::keys`] reads a change; the prints stay.
+    pub fn rekey(&mut self, ring: KeyRing) {
+        let moved = self.keys.replace(ring);
+        self.rekeyed(&moved);
+    }
+
+    /// The keys taken out of the ring.
+    #[must_use]
+    pub fn into_key_ring(self) -> KeyRing {
+        self.keys
+    }
+
+    /// Each conversation a line of which names a key of `moved` read again, and what was opened
+    /// with a key no longer held forgotten.
+    fn rekeyed(&mut self, moved: &BTreeSet<KeyName>) {
         let lost: BTreeSet<&KeyName> = moved.iter().filter(|name| !self.keys.holds(name)).collect();
         let ids: BTreeSet<ConversationId> = moved
             .iter()
