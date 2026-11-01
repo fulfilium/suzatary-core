@@ -19,7 +19,9 @@ pub(crate) const TOO_BIG: &str =
 /// What a memory that did not read reads as, when why does not fit.
 const UNREAD: &str = "The memory could not be read.";
 
-/// `memory` and `record` as one string costing at most `room` bytes on the wire.
+/// `memory` and `record` as one string costing at most `room` bytes on the wire: the newest facts
+/// that fit, then the newest lines of the record's view within `room` that fit beside them. The
+/// view is built once; the searches for how many facts and lines fit only print text.
 pub(crate) fn remembered(
     memory: Result<&Memory, &Refusal>,
     record: Result<&OwnersRecord, &Refusal>,
@@ -33,18 +35,19 @@ pub(crate) fn remembered(
             return if fits(&why) { why } else { UNREAD.to_owned() };
         }
     };
-    let probes = std::cell::Cell::new(0usize);
+    let views = crate::secretary::digest::views();
+    // The view is built once, within all the room there is; each probe below fits its lines.
+    let lines = record.map(|record| record.lines(room));
     let mut newest = memory.facts.clone();
     newest.sort_by_key(|fact| std::cmp::Reverse(fact.id));
     let told = |kept: usize, view: usize| {
-        probes.set(probes.get() + 1);
         let shown = Memory {
             facts: newest[..kept].to_vec(),
             forgotten: Vec::new(),
             merged: Vec::new(),
             version: memory.version,
         };
-        let told = told(&shown, record, view);
+        let told = told(&shown, lines.as_deref().map_err(|refused| *refused), view);
         let all = newest.len();
         match (told.is_empty(), all - kept) {
             (true, 0) => NOTHING.to_owned(),
@@ -68,7 +71,11 @@ pub(crate) fn remembered(
     // Then the record, in what they leave.
     let view = largest(room, |view| fits(&told(kept, view)));
     let answer = told(kept, view);
-    crate::timings::counted(crate::timings::Phase::Remembered, "views", probes.get());
+    crate::timings::counted(
+        crate::timings::Phase::Remembered,
+        "views",
+        crate::secretary::digest::views() - views,
+    );
     answer
 }
 
@@ -85,4 +92,72 @@ fn largest(most: usize, holds: impl Fn(usize) -> bool) -> usize {
         }
     }
     low
+}
+
+#[cfg(test)]
+mod tests {
+    use proptest::prelude::*;
+
+    use super::*;
+    use crate::secretary::live_shape::{Shape, Summaries};
+
+    fn nothing_remembered() -> Memory {
+        Memory {
+            facts: Vec::new(),
+            forgotten: Vec::new(),
+            merged: Vec::new(),
+            version: 0,
+        }
+    }
+
+    proptest! {
+        #![proptest_config(ProptestConfig { cases: 16, ..ProptestConfig::default() })]
+
+        /// THE RECORD IS ONE VIEW AND ITS NEWEST LINES THAT FIT: over a generated memory, partly
+        /// or wholly summarised, the answer builds one view within its room, fits the room, and
+        /// shows the newest of that view's lines, as many as fit and no fewer.
+        #[test]
+        fn the_record_is_one_view_and_its_newest_lines_that_fit(
+            lines in 4usize..120,
+            conversations in 1usize..4,
+            answer_bytes in 10usize..2_000,
+            summarised in prop::option::of(0usize..40),
+            room in 100usize..12_000,
+        ) {
+            let stores = Shape {
+                lines,
+                conversations,
+                answer_bytes,
+                summaries: summarised.map_or(Summaries::Every, Summaries::First),
+            }
+            .build();
+            let memory = stores.recollection(room);
+            let (facts, record) = (memory.facts(), memory.record());
+            let record = record.expect("the record reads");
+            let before = crate::secretary::digest::views();
+            let answer = remembered(facts.as_ref(), Ok(&record), room);
+            prop_assert_eq!(crate::secretary::digest::views() - before, 1, "one view");
+            prop_assert!(wire_len(&answer) <= room, "{} bytes in {room}", wire_len(&answer));
+
+            let all = record.lines(room);
+            let told_with = |newest: usize| {
+                let bytes = all[all.len() - newest..].iter().map(|line| line.len() + 1).sum();
+                told(&nothing_remembered(), Ok(&all), bytes).text()
+            };
+            if answer == TOO_BIG {
+                prop_assert!(wire_len(&told_with(0)) > room);
+                return Ok(());
+            }
+            let shown = (0..=all.len())
+                .rev()
+                .find(|&newest| {
+                    newest == 0
+                        || answer.ends_with(&format!("\n{}", all[all.len() - newest..].join("\n")))
+                })
+                .expect("none is always a suffix");
+            if shown < all.len() {
+                prop_assert!(wire_len(&told_with(shown + 1)) > room, "one more line fits");
+            }
+        }
+    }
 }

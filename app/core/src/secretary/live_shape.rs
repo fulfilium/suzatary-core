@@ -36,6 +36,18 @@ pub struct Shape {
     /// How many bytes each of the secretary's answers holds; every other line is one of them in
     /// three conversations of four.
     pub answer_bytes: usize,
+    /// How much of the digest's tree the compactor has summarised.
+    pub summaries: Summaries,
+}
+
+/// How much of the digest's tree is summarised: what a compactor that runs at a budget's pace,
+/// and finds some nodes unfit, has written so far.
+#[derive(Debug, Clone, Copy)]
+pub enum Summaries {
+    /// Every node.
+    Every,
+    /// The first this many nodes the compactor takes: the smallest first, level by level.
+    First(usize),
 }
 
 /// The conversations, the digest and the facts, in memory.
@@ -130,8 +142,8 @@ impl Shape {
         }
     }
 
-    /// The memory of this shape: its lines, then every node of the digest's tree summarised,
-    /// level by level, each summary after the call that asked for it.
+    /// The memory of this shape: its lines, then the digest's tree summarised as [`Shape::summaries`]
+    /// says, level by level, each summary after the call that asked for it.
     ///
     /// # Panics
     /// Never for a shape of at least one conversation: every write is one the stores take.
@@ -161,13 +173,19 @@ impl Shape {
             }
         }
         let salts = Counting::default();
+        let mut left = match self.summaries {
+            Summaries::Every => usize::MAX,
+            Summaries::First(most) => most,
+        };
         loop {
             let read = stores.digests().reads().read().expect("the digest reads");
             let pending = read.pending();
-            if pending.is_empty() {
+            if pending.is_empty() || left == 0 {
                 return stores;
             }
-            for node in pending {
+            let taken = pending.len().min(left);
+            left -= taken;
+            for node in pending.into_iter().take(taken) {
                 let label = *read.node(&node).expect("in the tree").measure();
                 let text = Text::new(
                     Line::new(&format!("The owner asked about the permit, node {node}."))

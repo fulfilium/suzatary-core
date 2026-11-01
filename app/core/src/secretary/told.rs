@@ -89,6 +89,37 @@ pub fn context_of(
     budget: usize,
     asking: Option<Asking<'_>>,
 ) -> Told {
+    of(
+        memory,
+        topics,
+        record.map(|reading| {
+            digest_view::fit(record_lines(reading, budget, asking), budget, Keep::Latest)
+        }),
+    )
+}
+
+/// The view of `reading` within `budget` bytes, less what `asking` sends as turns, one line per
+/// part as [`Told::text`] prints them, oldest first: the record before it is fitted to a budget.
+#[must_use]
+pub fn record_lines(reading: &Reading, budget: usize, asking: Option<Asking<'_>>) -> Vec<String> {
+    let entries = reading.entries();
+    let sent = asking.map_or_else(BTreeSet::new, |asking| sent(reading, asking));
+    let shown: Vec<Shown> =
+        digest_view::view(reading.digest(), &entries, budget, OwnersWords::shows)
+            .into_iter()
+            .filter(|shown| !shown.part.span.clone().all(|at| sent.contains(&at)))
+            .collect();
+    lines(&shown)
+}
+
+/// What a session opening over `memory` and `topics` is told, with `record`'s lines as fitted
+/// (or why the record was not read).
+#[must_use]
+pub fn of(
+    memory: &Memory,
+    topics: Result<&Topics, &Refusal>,
+    record: Result<Vec<String>, &Refusal>,
+) -> Told {
     let mut facts = memory.facts.clone();
     facts.sort_by_key(|fact| {
         (
@@ -96,19 +127,6 @@ pub fn context_of(
             fact.id,
         )
     });
-    let record = match record {
-        Ok(reading) => {
-            let entries = reading.entries();
-            let sent = asking.map_or_else(BTreeSet::new, |asking| sent(reading, asking));
-            let shown: Vec<Shown> =
-                digest_view::view(reading.digest(), &entries, budget, OwnersWords::shows)
-                    .into_iter()
-                    .filter(|shown| !shown.part.span.clone().all(|at| sent.contains(&at)))
-                    .collect();
-            Record::Shown(digest_view::fit(lines(&shown), budget, Keep::Latest))
-        }
-        Err(refused) => Record::Unread(refused.message().to_owned()),
-    };
     Told {
         facts,
         version: memory.version,
@@ -116,7 +134,10 @@ pub fn context_of(
             Ok(topics) => InUse::Read(crate::secretary::topics::reading::in_use(topics)),
             Err(refused) => InUse::Unread(refused.message().to_owned()),
         },
-        record,
+        record: match record {
+            Ok(lines) => Record::Shown(lines),
+            Err(refused) => Record::Unread(refused.message().to_owned()),
+        },
     }
 }
 

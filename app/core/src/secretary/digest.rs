@@ -47,6 +47,17 @@ use crate::secretary::store::Entry;
 use crate::secretary::taint::Taint;
 use crate::secretary::texts::{Liveness, Naming};
 
+thread_local! {
+    static VIEWS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
+/// How many views this thread has built ([`Digest::view`]), so a reader's cost can be counted:
+/// a view costs a pass over the whole tree.
+#[must_use]
+pub fn views() -> usize {
+    VIEWS.with(std::cell::Cell::get)
+}
+
 /// The conversations read through their summaries.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Digest {
@@ -619,6 +630,7 @@ impl Digest {
     /// The view under `budget` bytes ([`digest::view`]); `None` while there are no lines.
     #[must_use]
     pub fn view(&self, budget: u64) -> Option<View> {
+        VIEWS.with(|count| count.set(count.get() + 1));
         self.tree()
             .map(|tree| digest::view(tree, |node| self.summarized(node), budget))
     }

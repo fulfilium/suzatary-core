@@ -86,6 +86,13 @@ impl<S: Shows> ShownRecord<S> {
         told::zoom(&self.reading, handle, S::shows)
     }
 
+    /// The view within `budget` bytes, one line per part as a session opening is told it, oldest
+    /// first, before it is fitted ([`told()`]).
+    #[must_use]
+    pub fn lines(&self, budget: usize) -> Vec<String> {
+        told::record_lines(&self.reading, budget, None)
+    }
+
     /// The summaries this reader reads in words in the view a session opening is told, within
     /// `budget` bytes, in the record's order, each with its part.
     #[must_use]
@@ -146,16 +153,15 @@ impl<S: Shows> ShownRecord<S> {
     }
 }
 
-/// What a session opening over `memory` and `record` (or why it was not read) is told, its view
-/// within `budget` bytes, as [`told::context_of`] tells it and with no topic, since a topic is
-/// the secretary's own word for a conversation.
+/// What a session opening over `memory` is told, with the newest of `lines` (the record's, as
+/// [`ShownRecord::lines`] reads them, or why it was not read) that fit `budget` bytes, as
+/// [`told::context_of`] tells it and with no topic, since a topic is the secretary's own word for
+/// a conversation.
 #[must_use]
-pub fn told(memory: &Memory, record: Result<&OwnersRecord, &Refusal>, budget: usize) -> Told {
-    told::context_of(
+pub fn told(memory: &Memory, lines: Result<&[String], &Refusal>, budget: usize) -> Told {
+    told::of(
         memory,
         Ok(&Topics::default()),
-        record.map(|record| &record.reading),
-        budget,
-        None,
+        lines.map(|lines| digest_view::fit(lines.to_vec(), budget, digest_view::Keep::Latest)),
     )
 }

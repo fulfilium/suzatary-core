@@ -9,7 +9,7 @@
 
 use std::time::Duration;
 
-use suzatary_core::secretary::live_shape::{self, Shape, Stores};
+use suzatary_core::secretary::live_shape::{self, Shape, Stores, Summaries};
 
 /// `lines` lines over `conversations` conversations, the secretary's answers about 3 kB.
 fn store(lines: usize, conversations: usize) -> Stores {
@@ -17,6 +17,7 @@ fn store(lines: usize, conversations: usize) -> Stores {
         lines,
         conversations,
         answer_bytes: 3_000,
+        summaries: Summaries::Every,
     }
     .build()
 }

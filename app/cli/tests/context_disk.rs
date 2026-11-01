@@ -11,7 +11,7 @@ use std::sync::Arc;
 use prodrome_core::event::{Hash, canonical_envelope};
 use suzatary_core::secretary::compacting::Compacting;
 use suzatary_core::secretary::digests::ReadDigests;
-use suzatary_core::secretary::live_shape::{self, Shape};
+use suzatary_core::secretary::live_shape::{self, Shape, Summaries};
 use suzatary_core::secretary::memories::ReadMemories;
 use suzatary_core::secretary::recollection::Recollection;
 use suzatary_core::store::{Doc as _, Gets as _, Prodrome, Reads};
@@ -100,6 +100,7 @@ fn measure_the_context_over_the_disk_stores_at_the_live_size() {
         lines: 15_900,
         conversations: 100,
         answer_bytes: 16_000,
+        summaries: Summaries::First(4_000),
     }
     .build();
     let written = Disk::open(root.path(), memory.owners.clone());
@@ -119,6 +120,16 @@ fn measure_the_context_over_the_disk_stores_at_the_live_size() {
         let (bytes, files) = footprint(&root.path().join(store));
         eprintln!("{store}: {files} files, {} kB", bytes / 1_000);
     }
+    let started = std::time::Instant::now();
+    let read: u64 = ["lines", "digests"]
+        .iter()
+        .map(|store| read_every_file(&root.path().join(store)))
+        .sum();
+    eprintln!(
+        "every line and digest file read raw, {} kB, in {:?}: what `whole` spends beyond this is parsing",
+        read / 1_000,
+        started.elapsed()
+    );
     let subscriber = tracing_subscriber::fmt()
         .with_writer(std::io::stderr)
         .with_ansi(false)
@@ -138,5 +149,32 @@ fn measure_the_context_over_the_disk_stores_at_the_live_size() {
                 answer.to_string().len()
             );
         }
+        let record = Disk::open(root.path(), memory.owners.clone())
+            .recollection()
+            .record()
+            .expect("the record reads");
+        let started = std::time::Instant::now();
+        let lines = record.lines(16 * 1024);
+        eprintln!(
+            "-- one view within 16 kB: {} lines in {:?}",
+            lines.len(),
+            started.elapsed()
+        );
     });
+}
+
+/// The bytes of every file under `dir`, each read whole, as a store's first read reads them.
+fn read_every_file(dir: &Path) -> u64 {
+    let mut total = 0;
+    let mut stack = vec![dir.to_path_buf()];
+    while let Some(dir) = stack.pop() {
+        for entry in std::fs::read_dir(&dir).expect("a directory").flatten() {
+            if entry.metadata().expect("its metadata").is_dir() {
+                stack.push(entry.path());
+            } else {
+                total += std::fs::read(entry.path()).expect("a file").len() as u64;
+            }
+        }
+    }
+    total
 }
