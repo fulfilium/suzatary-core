@@ -23,8 +23,7 @@ use suzatary_bench::{extract, join, pool, score, sheet};
 use suzatary_core::capability::{
     Conversation, Corpus as _, Manual, Manuals as _, Model, ModelError, Query, Reply,
 };
-use suzatary_core::mail::known::Known;
-use suzatary_core::mail::local_state::Kept;
+use suzatary_core::mail::hash_prefix::{HashPrefix, Resolved};
 use suzatary_core::record::{Envelope, EventStore, TodoEvent};
 
 use crate::commands::mcp::Interpreters;
@@ -356,25 +355,25 @@ fn frozen_mail(
     instance: &Instance,
     cases: &[Case],
 ) -> anyhow::Result<BTreeMap<String, FrozenMessage>> {
-    let state = super::mail::ledger(instance)
-        .read()
-        .map_err(|failed| anyhow::anyhow!("reading the triage's bookkeeping: {failed}"))?;
     let corpus = super::mail::notmuch(instance);
     let mut mail = BTreeMap::new();
     for hash in cases.iter().filter_map(Case::message_hash) {
-        // `show` finds a hash only through its recorded locator, so a replay could show no more.
-        let Some(Kept {
-            native_id: Some(id),
-            ..
-        }) = state.local.messages.get(hash)
-        else {
-            continue;
-        };
         if mail.contains_key(hash) {
             continue;
         }
+        // `show` finds a hash only where a listing recorded it, so a replay could show no more.
+        let Some(prefix) = HashPrefix::parse(hash) else {
+            continue;
+        };
+        let id = match corpus
+            .locate(&prefix)
+            .with_context(|| format!("locating message {hash}"))?
+        {
+            Resolved::One(_, id) => id,
+            Resolved::Unlisted | Resolved::Ambiguous(_) => continue,
+        };
         let files = corpus
-            .files_holding(id, hash)
+            .files_holding(&id, hash)
             .with_context(|| format!("reading the files of message {hash}"))?
             .into_iter()
             .map(|(path, bytes)| {
@@ -385,13 +384,7 @@ fn frozen_mail(
             })
             .collect::<anyhow::Result<Vec<_>>>()?;
         if !files.is_empty() {
-            mail.insert(
-                hash.to_owned(),
-                FrozenMessage {
-                    id: id.clone(),
-                    files,
-                },
-            );
+            mail.insert(hash.to_owned(), FrozenMessage { id, files });
         }
     }
     Ok(mail)
@@ -824,8 +817,8 @@ fn seed(
     Ok(held)
 }
 
-/// Write the case's `mail` into the scratch maildir, index it there, and record its locator in
-/// the scratch ledger, so `show` finds it by hash as the box's corpus found it.
+/// Write the case's `mail` into the scratch maildir, index it there, and record where it lives by
+/// its hash, so `show` finds it by hash as the box's corpus found it.
 fn seed_mail(
     ground: &crate::wiring::Ground,
     case_scratch: &Path,
@@ -861,22 +854,10 @@ fn seed_mail(
         .index()
         .map_err(|failed| anyhow::anyhow!("indexing the case's scratch mail: {failed}"))?;
     if let (Some(hash), Some(message)) = (case.message_hash(), mail) {
-        let Known { pushed, local, key } = ground
-            .ledger
-            .read()
-            .map_err(|failed| anyhow::anyhow!("reading the scratch ledger: {failed}"))?;
-        let kept = Kept {
-            native_id: Some(message.id.clone()),
-            note: String::new(),
-        };
         ground
-            .ledger
-            .write(&Known {
-                pushed,
-                local: local.keep(hash, kept),
-                key,
-            })
-            .map_err(|failed| anyhow::anyhow!("writing the scratch ledger: {failed}"))?;
+            .located()
+            .record(hash, &message.id)
+            .map_err(|failed| anyhow::anyhow!("recording the case's message: {failed}"))?;
     }
     Ok(())
 }

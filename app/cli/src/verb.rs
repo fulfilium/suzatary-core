@@ -55,6 +55,9 @@ pub enum Verb {
     Show(mail::ShowArgs),
     /// Record a decision about a canonical message.
     Mark(mail::MarkArgs),
+    /// Hash every message the index holds and record where each lives, so a hash cited before
+    /// listings recorded hashes shows; reads every file once.
+    LocateMail,
     /// Manage the wholesale-ignore list.
     Noise(mail::NoiseArgs),
     /// A read-only pull of a whole server folder into its own maildir leaf, kept out of `sync`.
@@ -120,6 +123,7 @@ impl Verb {
             Verb::Search(args) => mail::search(path, &args),
             Verb::Show(args) => mail::show(path, &args),
             Verb::Mark(args) => mail::mark(path, &args),
+            Verb::LocateMail => mail::locate_mail(path),
             Verb::Noise(args) => mail::noise(path, &args),
             Verb::Backfill(args) => mail::backfill(path, &args),
             Verb::Send(args) => mail::send(path, &args),

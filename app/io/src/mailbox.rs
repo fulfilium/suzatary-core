@@ -8,6 +8,7 @@ pub mod attachments;
 pub mod dedup;
 pub mod forwarded;
 pub mod held;
+pub mod located;
 pub mod message;
 pub mod text;
 
@@ -37,8 +38,8 @@ use suzatary_core::file_read::FileRead;
 use suzatary_core::held_value::HeldFile;
 use suzatary_core::held_value::{self, Reopened, Reveal};
 use suzatary_core::mail::account::{MailAccount, Roster};
+use suzatary_core::mail::hash_prefix::{Ambiguous, HashPrefix, Resolved};
 use suzatary_core::mail::known::Known;
-use suzatary_core::mail::local_state::{Ambiguous, Kept};
 use suzatary_core::mail::verbs;
 use suzatary_core::mail::{
     AttachmentFile, AttachmentMeta, MAX_BODY_CHARS, MailLink, MailMessage, MailRow, Stored, clip,
@@ -50,8 +51,10 @@ pub struct Notmuch {
     binary: PathBuf,
     /// The root each account's `subdir` is relative to.
     mail_root: PathBuf,
-    /// The triage's bookkeeping, read for badges and hash prefixes.
+    /// The triage's bookkeeping, read for badges and the queue.
     ledger: crate::state::Ledger,
+    /// Where each listed hash lives: every listing writes it, every lookup by hash reads it.
+    located: located::Located,
     /// Every account there is.
     accounts: Roster,
     /// Never inherited, so a fixture cannot read the box's own index.
@@ -72,18 +75,20 @@ impl std::fmt::Debug for Notmuch {
 }
 
 impl Notmuch {
-    /// The maildir under `mail_root`, the triage's bookkeeping in `ledger`, and the accounts
-    /// there are.
+    /// The maildir under `mail_root`, the triage's bookkeeping in `ledger`, where the listed
+    /// hashes live in `located`, and the accounts there are.
     #[must_use]
     pub fn new(
         mail_root: impl Into<PathBuf>,
         ledger: crate::state::Ledger,
+        located: located::Located,
         accounts: Roster,
     ) -> Self {
         Self {
             binary: PathBuf::from("notmuch"),
             mail_root: mail_root.into(),
             ledger,
+            located,
             accounts,
             config: None,
             pdftotext: crate::pdftotext::Pdftotext::new("."),
@@ -149,8 +154,9 @@ impl Notmuch {
         parse_id_array(&raw)
     }
 
-    /// Every message `query` matches, folded by content hash; it reads and hashes each file, so
-    /// page reads bound `query` through [`Self::newest_ids`] first.
+    /// Every message `query` matches, folded by content hash, each hash recorded in
+    /// [`located::Located`] before it is answered, so every hash a verb prints resolves; it reads
+    /// and hashes each file, so page reads bound `query` through [`Self::newest_ids`] first.
     fn load_messages(&self, query: &str) -> Result<BTreeMap<String, CanonicalMessage>, MailError> {
         let raw = self.run(&["show", "--format=json", "--body=false", query])?;
         let mut messages: BTreeMap<String, CanonicalMessage> = BTreeMap::new();
@@ -206,6 +212,10 @@ impl Notmuch {
                     also: Vec::new(),
                 });
         }
+        for message in messages.values() {
+            self.located
+                .record(&message.hash, &message.primary.native_id)?;
+        }
         Ok(messages)
     }
 
@@ -221,26 +231,36 @@ impl Notmuch {
         Ok(self.show_query(&format!("id:{id}"))?.into_iter().next())
     }
 
-    /// A canonical-hash prefix's notmuch id, from the locators `state.json` recorded.
-    fn native_id_for_hash(&self, prefix: &str) -> Result<Option<String>, MailError> {
-        let state = self.load_state()?;
-        Ok(resolve_locator(&state, prefix)?.id())
+    /// The notmuch id recorded for the one listed hash `prefix` begins.
+    ///
+    /// # Errors
+    /// The locators could not be read.
+    pub fn locate(&self, prefix: &HashPrefix) -> Result<Resolved<String>, MailError> {
+        self.located.resolve(prefix)
     }
 
-    /// Resolve `id` as a notmuch id, then as a hash prefix through the recorded locators.
-    ///
-    /// Never [`Self::scan_for_hash`]: its eight-second rescan must not sit behind a URL, so an
-    /// unrecorded hash is a 404.
+    /// One message by notmuch id, or by a listed hash's prefix.
+    fn shown_by(&self, id: &str) -> Result<Lookup, MailError> {
+        let shown = |found: Option<Shown>| found.map_or(Lookup::Absent, Lookup::Shown);
+        if let Some(found) = self.show_by_native_id(id)? {
+            return Ok(Lookup::Shown(found));
+        }
+        let Some(prefix) = HashPrefix::parse(id) else {
+            return Ok(Lookup::Absent);
+        };
+        Ok(match self.locate(&prefix)? {
+            Resolved::Unlisted => Lookup::Absent,
+            Resolved::One(_, native) => shown(self.show_by_native_id(&native)?),
+            Resolved::Ambiguous(ambiguous) => Lookup::Ambiguous(ambiguous),
+        })
+    }
+
+    /// [`Self::shown_by`], an ambiguous prefix a query error.
     fn resolve_show(&self, id: &str) -> Result<Option<Shown>, MailError> {
-        if let Some(shown) = self.show_by_native_id(id)? {
-            return Ok(Some(shown));
-        }
-        if !is_hex_prefix(id) {
-            return Ok(None);
-        }
-        match self.native_id_for_hash(id)? {
-            Some(native) => self.show_by_native_id(&native),
-            None => Ok(None),
+        match self.shown_by(id)? {
+            Lookup::Shown(shown) => Ok(Some(shown)),
+            Lookup::Absent => Ok(None),
+            Lookup::Ambiguous(ambiguous) => Err(MailError::Query(ambiguous.to_string())),
         }
     }
 
@@ -381,36 +401,14 @@ impl Notmuch {
         Ok(Self::newest_first(fresh, limit))
     }
 
-    /// One message in full, by notmuch id or by canonical hash (bridged through `state.json`'s
-    /// recorded locators, since notmuch indexes only `Message-ID`s).
-    pub fn full_message(&self, id: &str, state: &Known) -> Result<verbs::Show, MailError> {
-        let shown = match self.show_by_native_id(id)? {
-            Some(shown) => Some(shown),
-            None if is_hex_prefix(id) => match state.local.resolve(id) {
-                Err(ambiguous) => return Ok(verbs::Show::Ambiguous(ambiguous)),
-                Ok(Some((
-                    _,
-                    Kept {
-                        native_id: Some(native),
-                        ..
-                    },
-                ))) => self.show_by_native_id(native)?,
-                Ok(
-                    Some((
-                        _,
-                        Kept {
-                            native_id: None, ..
-                        },
-                    ))
-                    | None,
-                ) => None,
-            },
-            None => None,
-        };
-        Ok(shown.map_or_else(
-            || verbs::Show::NotFound { id: id.to_owned() },
-            |shown| verbs::Show::Shown(Self::message_of(shown)),
-        ))
+    /// One message in full, by notmuch id or by canonical hash (bridged through the listed
+    /// hashes' locators, since notmuch indexes only `Message-ID`s).
+    pub fn full_message(&self, id: &str) -> Result<verbs::Show, MailError> {
+        Ok(match self.shown_by(id)? {
+            Lookup::Shown(shown) => verbs::Show::Shown(Self::message_of(shown)),
+            Lookup::Absent => verbs::Show::NotFound { id: id.to_owned() },
+            Lookup::Ambiguous(ambiguous) => verbs::Show::Ambiguous(ambiguous),
+        })
     }
 
     /// A shown message as the agent reads it.
@@ -477,15 +475,13 @@ impl Notmuch {
         Ok(bytes)
     }
 
-    /// A last-resort hash-prefix lookup by re-hashing thirty days of mail (about eight seconds),
-    /// so only a hand-run write may call it.
-    pub fn scan_for_hash(&self, prefix: &str) -> Result<Option<String>, MailError> {
-        for (hash, message) in self.load_messages("date:30d..")? {
-            if hash.starts_with(prefix) {
-                return Ok(Some(message.primary.native_id));
-            }
-        }
-        Ok(None)
+    /// Hash every message the index holds and record where each lives, for the hashes cited
+    /// before listings recorded them; how many there are. It reads every file once.
+    ///
+    /// # Errors
+    /// notmuch cannot be asked, or a locator cannot be written.
+    pub fn locate_all(&self) -> Result<usize, MailError> {
+        Ok(self.load_messages("*")?.len())
     }
 
     /// Each file notmuch holds for the message `id` whose bytes have the canonical hash `hash`,
@@ -521,39 +517,6 @@ impl Notmuch {
             }
         }
         Ok(files)
-    }
-}
-
-/// What a hash prefix resolved to in the dedup authority.
-enum Locator {
-    /// No marked message begins with this prefix.
-    Unmarked,
-    /// One does, marked before locators were recorded, so only a rescan finds it.
-    Unrecorded,
-    /// One does, and this is its notmuch id.
-    Known(String),
-}
-
-impl Locator {
-    fn id(self) -> Option<String> {
-        match self {
-            Locator::Known(id) => Some(id),
-            Locator::Unmarked | Locator::Unrecorded => None,
-        }
-    }
-}
-
-/// The locator `state.json` recorded for a hash prefix; an ambiguous prefix is a query error.
-fn resolve_locator(state: &Known, prefix: &str) -> Result<Locator, MailError> {
-    match state.local.resolve(prefix) {
-        Ok(None) => Ok(Locator::Unmarked),
-        Ok(Some((_, entry))) => Ok(entry
-            .native_id
-            .clone()
-            .map_or(Locator::Unrecorded, Locator::Known)),
-        Err(Ambiguous { prefix, matches }) => {
-            Err(MailError::Query(Ambiguous { prefix, matches }.to_string()))
-        }
     }
 }
 
@@ -674,14 +637,6 @@ fn container_of(tags: &[String]) -> String {
         .unwrap_or_else(|| "inbox".to_owned())
 }
 
-/// A canonical-hash prefix, `[0-9a-f]{6,64}`; a mixed-case id is a notmuch id.
-fn is_hex_prefix(id: &str) -> bool {
-    (6..=64).contains(&id.len())
-        && id
-            .bytes()
-            .all(|b| b.is_ascii_digit() || matches!(b, b'a'..=b'f'))
-}
-
 /// `notmuch search`'s flat array of ids; any other shape is refused.
 fn parse_id_array(raw: &[u8]) -> Result<Vec<String>, MailError> {
     let text = message::Text::of(raw);
@@ -692,6 +647,17 @@ fn parse_id_array(raw: &[u8]) -> Result<Vec<String>, MailError> {
         Some(id) => Err(message::unnamed(id)),
         None => Ok(ids),
     }
+}
+
+/// What a notmuch id or a hash prefix finds.
+enum Lookup {
+    /// The message.
+    Shown(Shown),
+    /// No message: notmuch holds no such id, and no listed hash begins so, or one does and
+    /// notmuch no longer holds its message.
+    Absent,
+    /// A prefix more than one listed hash begins with.
+    Ambiguous(Ambiguous),
 }
 
 /// One `notmuch show` message, shared by the message and thread paths so a thread costs one
@@ -963,58 +929,40 @@ pub(crate) fn read_of(
     Ok(FileRead::of(file, name, mime, content, layer.as_deref()))
 }
 
+/// A maildir indexed by the real notmuch, for the tests of this module and of the corpus.
 #[cfg(test)]
-mod tests {
-    use super::*;
-    use suzatary_core::held_value::{Handle, Holder};
-    use suzatary_core::redact::Kind;
+pub(crate) mod fixture {
+    use super::{Cmd, MailAccount, Notmuch, Roster, located};
 
-    /// Synthetic numbers no person holds: SSN area 000, ITIN area 912, an EIN of zeros.
-    const SSN: &str = "000-12-3456";
-    const ITIN: &str = "912-70-1234";
-    const EIN: &str = "00-0000001";
-    const PASSPORT: &str = "X12345678";
-    const A_NUMBER: &str = "A-012-345-678";
-
-    /// A sent, an inbound and a clean message under `root`, indexed by the real notmuch under a
-    /// config of their own, and the reader over them.
-    fn indexed(root: &std::path::Path) -> (Notmuch, Known) {
+    /// `files`, each a path under the maildir root and its text, written under `root/Mail` and
+    /// indexed by the real notmuch under a config of their own that tags new mail `tags`
+    /// (`;`-separated), the account `ada@example.test` reading `ada/`; the reader over them, and
+    /// its ledger.
+    pub(crate) fn indexed(
+        root: &std::path::Path,
+        tags: &str,
+        files: &[(&str, String)],
+    ) -> (Notmuch, crate::state::Ledger) {
         let mail = root.join("Mail");
-        for leaf in [
-            "ada/Sent/cur",
-            "ada/Inbox/cur",
-            "ada/Inbox/new",
-            "ada/Inbox/tmp",
-        ] {
+        for leaf in ["ada/Inbox/cur", "ada/Inbox/new", "ada/Inbox/tmp"] {
             std::fs::create_dir_all(mail.join(leaf)).expect("a leaf");
+        }
+        for (path, text) in files {
+            let path = mail.join(path);
+            std::fs::create_dir_all(path.parent().expect("a file in a folder")).expect("a leaf");
+            std::fs::write(&path, text).expect("a message");
         }
         let config = root.join("notmuch-config");
         std::fs::write(
             &config,
             format!(
-                "[database]\npath={}\n[user]\nname=Ada\nprimary_email=ada@example.test\n\
-             [new]\ntags=new\n",
-                mail.display()
+                "[database]\npath={}\nhook_dir={}\n[user]\nname=Ada\n\
+                 primary_email=ada@example.test\n[new]\ntags={tags}\n",
+                mail.display(),
+                root.join("hooks").display()
             ),
         )
         .expect("a notmuch config");
-        let sent = format!(
-            "From: ada@example.test\nTo: counsel@example.test\nSubject: ITIN {ITIN}\n\
-         Message-ID: <form-1@example.test>\nDate: Mon, 06 Mar 2023 10:00:00 +0000\n\n\
-         My SSN is {SSN}; the zebra form is attached.\n"
-        );
-        let inbound = format!(
-            "From: counsel@example.test\nTo: ada@example.test\nSubject: filed\n\
-         Message-ID: <in-1@example.test>\nDate: Tue, 07 Mar 2023 10:00:00 +0000\n\n\
-         The trust's EIN: {EIN} is on the yak filing.\n\
-         Passport No. {PASSPORT}, A-Number {A_NUMBER}.\n"
-        );
-        let clean = "From: counsel@example.test\nTo: ada@example.test\nSubject: thanks\n\
-                 Message-ID: <ok-1@example.test>\nDate: Wed, 08 Mar 2023 10:00:00 +0000\n\n\
-                 Received with thanks, ibex 123456789.\n";
-        std::fs::write(mail.join("ada/Sent/cur/1:2,S"), &sent).expect("sent");
-        std::fs::write(mail.join("ada/Inbox/cur/2:2,S"), &inbound).expect("inbound");
-        std::fs::write(mail.join("ada/Inbox/cur/3:2,S"), clean).expect("clean");
         crate::run::succeed(
             &Cmd::new("notmuch")
                 .arg("new")
@@ -1038,9 +986,66 @@ mod tests {
                 .expect("a key"))
             },
         );
-        let mailbox = Notmuch::new(&mail, keyed.clone(), roster).with_config(&config);
-        let known = keyed.read().expect("no ledger is an empty one");
-        (mailbox, known)
+        let mailbox = Notmuch::new(
+            &mail,
+            keyed.clone(),
+            located::Located::open(root.join("located")),
+            roster,
+        )
+        .with_config(&config);
+        (mailbox, keyed)
+    }
+
+    /// Whether the real notmuch is on PATH; a test that needs it says so when it is not.
+    pub(crate) fn notmuch_present(test: &str) -> bool {
+        let present = crate::run::run(&Cmd::new("notmuch").arg("--version")).is_ok();
+        if !present {
+            eprintln!("notmuch is not on PATH: {test} is not run");
+        }
+        present
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use suzatary_core::held_value::{Handle, Holder};
+    use suzatary_core::redact::Kind;
+
+    /// Synthetic numbers no person holds: SSN area 000, ITIN area 912, an EIN of zeros.
+    const SSN: &str = "000-12-3456";
+    const ITIN: &str = "912-70-1234";
+    const EIN: &str = "00-0000001";
+    const PASSPORT: &str = "X12345678";
+    const A_NUMBER: &str = "A-012-345-678";
+
+    /// A sent, an inbound and a clean message under `root`, indexed by the real notmuch under a
+    /// config of their own, and the reader over them.
+    fn indexed(root: &std::path::Path) -> Notmuch {
+        let sent = format!(
+            "From: ada@example.test\nTo: counsel@example.test\nSubject: ITIN {ITIN}\n\
+         Message-ID: <form-1@example.test>\nDate: Mon, 06 Mar 2023 10:00:00 +0000\n\n\
+         My SSN is {SSN}; the zebra form is attached.\n"
+        );
+        let inbound = format!(
+            "From: counsel@example.test\nTo: ada@example.test\nSubject: filed\n\
+         Message-ID: <in-1@example.test>\nDate: Tue, 07 Mar 2023 10:00:00 +0000\n\n\
+         The trust's EIN: {EIN} is on the yak filing.\n\
+         Passport No. {PASSPORT}, A-Number {A_NUMBER}.\n"
+        );
+        let clean = "From: counsel@example.test\nTo: ada@example.test\nSubject: thanks\n\
+                 Message-ID: <ok-1@example.test>\nDate: Wed, 08 Mar 2023 10:00:00 +0000\n\n\
+                 Received with thanks, ibex 123456789.\n";
+        fixture::indexed(
+            root,
+            "new",
+            &[
+                ("ada/Sent/cur/1:2,S", sent),
+                ("ada/Inbox/cur/2:2,S", inbound),
+                ("ada/Inbox/cur/3:2,S", clean.to_owned()),
+            ],
+        )
+        .0
     }
 
     /// With the real notmuch, where it is on PATH: every reading a model or a page gets of a sent
@@ -1049,12 +1054,11 @@ mod tests {
     /// value, and a clean message reads as it is.
     #[test]
     fn every_reading_holds_placeholders_and_a_handle_reveals_its_value() {
-        if crate::run::run(&Cmd::new("notmuch").arg("--version")).is_err() {
-            eprintln!("notmuch is not on PATH: the real-index half of held values is not run");
+        if !fixture::notmuch_present("the real-index half of held values") {
             return;
         }
         let scratch = tempfile::tempdir().expect("a scratch directory");
-        let (mailbox, known) = indexed(scratch.path());
+        let mailbox = indexed(scratch.path());
         let query = |text: &str| Query::new(text).expect("a query");
 
         // The index is the box's own and still finds the number.
@@ -1077,18 +1081,10 @@ mod tests {
             serde_json::to_string(&mailbox.thread("form-1@example.test", 10).ok()).expect("JSON"),
             serde_json::to_string(&mailbox.summaries("folder:ada/Sent", None).expect("rows"))
                 .expect("JSON"),
-            serde_json::to_string(
-                &mailbox
-                    .full_message("form-1@example.test", &known)
-                    .expect("shown"),
-            )
-            .expect("JSON"),
-            serde_json::to_string(
-                &mailbox
-                    .full_message("in-1@example.test", &known)
-                    .expect("shown"),
-            )
-            .expect("JSON"),
+            serde_json::to_string(&mailbox.full_message("form-1@example.test").expect("shown"))
+                .expect("JSON"),
+            serde_json::to_string(&mailbox.full_message("in-1@example.test").expect("shown"))
+                .expect("JSON"),
         ];
         for reading in &readings {
             for number in [SSN, ITIN, EIN, PASSPORT, A_NUMBER, "012345678"] {
@@ -1151,6 +1147,34 @@ mod tests {
         }
     }
 
+    /// With the real notmuch: a message no listing has printed, such as one a todo cited before
+    /// listings recorded hashes, is not found by its hash until `locate_all` records the index.
+    #[test]
+    fn locating_all_records_a_hash_no_listing_printed() {
+        if !fixture::notmuch_present("the rebuild of the locators") {
+            return;
+        }
+        let scratch = tempfile::tempdir().expect("a scratch directory");
+        let text = "From: counsel@example.test\nTo: ada@example.test\nSubject: cited\n\
+                    Message-ID: <cited-1@example.test>\nDate: Wed, 08 Mar 2023 10:00:00 +0000\n\n\
+                    Cited by a todo.\n";
+        let (mailbox, _) = fixture::indexed(
+            scratch.path(),
+            "new",
+            &[("ada/Inbox/cur/1:2,S", text.to_owned())],
+        );
+        let hash = dedup::canonical_hash(text.as_bytes());
+        assert_eq!(
+            mailbox.full_message(&hash).expect("answers"),
+            verbs::Show::NotFound { id: hash.clone() }
+        );
+        assert_eq!(mailbox.locate_all().expect("located"), 1);
+        let verbs::Show::Shown(shown) = mailbox.full_message(&hash[..8]).expect("answers") else {
+            panic!("the cited message is found once located");
+        };
+        assert_eq!(shown.id, "cited-1@example.test");
+    }
+
     /// A ledger no test here reads: its key never resolves.
     /// With the real notmuch: a search row, and the agent's row of the same message, say which
     /// kinds of held value it names, from the values its mask counted, and hold none of them.
@@ -1161,7 +1185,7 @@ mod tests {
             return;
         }
         let scratch = tempfile::tempdir().expect("a scratch directory");
-        let (mailbox, _) = indexed(scratch.path());
+        let mailbox = indexed(scratch.path());
         let query = Query::new("zebra or yak or ibex").expect("a query");
         let rows = mailbox.search(&query, None, 10, None).expect("rows");
         let kinds: Vec<(&str, Vec<Kind>)> = rows
@@ -1248,9 +1272,14 @@ mod tests {
 
     #[test]
     fn a_configured_notmuch_carries_notmuch_config_as_an_explicit_env_var() {
-        let nm = Notmuch::new("/tmp/mail", ledger(), roster(vec![]))
-            .with_binary("notmuch")
-            .with_config("/tmp/notmuch-config");
+        let nm = Notmuch::new(
+            "/tmp/mail",
+            ledger(),
+            located::Located::open("/tmp/located"),
+            roster(vec![]),
+        )
+        .with_binary("notmuch")
+        .with_config("/tmp/notmuch-config");
         let command = nm
             .command(&["search"])
             .expect("a configured Notmuch builds a command");
@@ -1273,8 +1302,13 @@ mod tests {
     #[test]
     fn an_unconfigured_notmuch_refuses_a_search_without_spawning_anything() {
         // A nonexistent binary: the refusal must come from the missing config, not a spawn.
-        let nm = Notmuch::new("/tmp/mail", ledger(), roster(vec![]))
-            .with_binary("/definitely/not/a/real/notmuch/binary");
+        let nm = Notmuch::new(
+            "/tmp/mail",
+            ledger(),
+            located::Located::open("/tmp/located"),
+            roster(vec![]),
+        )
+        .with_binary("/definitely/not/a/real/notmuch/binary");
         let err = nm
             .command(&["search"])
             .expect_err("no config named means no command built");

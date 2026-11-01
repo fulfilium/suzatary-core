@@ -57,6 +57,7 @@ fn resolved(instance: &Instance) -> Vec<(&'static str, &Path)> {
         ("secretspec", &paths.secretspec),
         ("oauth", &paths.oauth),
         ("imap_state", &paths.imap_state),
+        ("mail_hashes", &paths.mail_hashes),
         ("devices", &paths.devices),
         ("markup_cache", &paths.markup_cache),
         ("repos", &paths.repos),

@@ -2,6 +2,7 @@
 secretspec = /home/ada/.local/state/suzatary/secretspec/%2Fsrv%2Fsuzatary%2Fdata
 oauth = /home/ada/.local/state/suzatary/oauth
 imap_state = /home/ada/.local/state/suzatary/imap
+mail_hashes = /home/ada/.local/state/suzatary/mail-hashes/%2Fsrv%2Fsuzatary%2Fdata
 devices = /home/ada/.local/state/suzatary/devices
 markup_cache = /home/ada/.cache/suzatary/markup
 repos = /home/ada/.cache/suzatary/repos
@@ -18,6 +19,7 @@ whois_socket = /run/tailscale/tailscaled.sock
 secretspec = /xdg/state/suzatary/secretspec/%2Fsrv%2Fsuzatary%2Fdata
 oauth = /xdg/state/suzatary/oauth
 imap_state = /xdg/state/suzatary/imap
+mail_hashes = /xdg/state/suzatary/mail-hashes/%2Fsrv%2Fsuzatary%2Fdata
 devices = /xdg/state/suzatary/devices
 markup_cache = /xdg/cache/suzatary/markup
 repos = /xdg/cache/suzatary/repos

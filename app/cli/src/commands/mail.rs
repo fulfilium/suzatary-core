@@ -186,6 +186,13 @@ pub fn show(path: &Path, args: &ShowArgs) -> anyhow::Result<()> {
     emit(&operator(&Instance::open(path)?).show(&args.id)?)
 }
 
+/// `suzatary locate-mail`: record where every message the index holds lives, by canonical
+/// hash, and print how many there are.
+pub fn locate_mail(path: &Path) -> anyhow::Result<()> {
+    let located = notmuch(&Instance::open(path)?).locate_all()?;
+    emit(&serde_json::json!({ "located": located }))
+}
+
 /// What `suzatary mark` was told.
 #[derive(Debug, clap::Args)]
 pub struct MarkArgs {
@@ -200,8 +207,8 @@ pub struct MarkArgs {
     /// The todo a `todo` disposition named.
     #[arg(long)]
     todo_id: Option<String>,
-    /// The notmuch id from the same row. Passing it is free and keeps the
-    /// hash resolvable by `show` without a rescan.
+    /// The notmuch id from the same row; without it, the one the listing that printed the hash
+    /// recorded.
     #[arg(long)]
     native_id: Option<String>,
 }

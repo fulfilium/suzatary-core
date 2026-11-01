@@ -1,8 +1,8 @@
 //! What the box knows of its mail beside the decisions: never pushed, carried by the vault.
 //!
 //! `local/mail.json` in the box-local tier, keyed by the canonical content hash, which may be
-//! named here because nothing here leaves the box: where each decided message lives (a notmuch
-//! locator, so a hash can be shown without rehashing the corpus), the agent's one-line note,
+//! named here because nothing here leaves the box: where each decided message lived when it was
+//! marked (a notmuch locator), the agent's one-line note,
 //! and the senders whose mail is ignored wholesale. Every message the box decides about has an
 //! entry, so these keys are also the hashes behind the pushed file's keyed names.
 
@@ -35,22 +35,6 @@ pub enum LocalError {
     /// Another version.
     #[error("the mail's box-local file is version {0:?}; this program reads {SCHEMA_VERSION}")]
     Version(Option<u64>),
-}
-
-/// A hash prefix matched more than one marked message.
-///
-/// It names the matches, since "use more characters" alone is a dead end.
-#[derive(Debug, Clone, thiserror::Error, PartialEq, Eq)]
-#[error(
-    "hash prefix {prefix:?} matches {} marked messages ({}) — use more characters",
-    matches.len(),
-    matches.iter().map(|h| h.chars().take(12).collect::<String>()).collect::<Vec<_>>().join(", ")
-)]
-pub struct Ambiguous {
-    /// What was asked for.
-    pub prefix: String,
-    /// Every hash it matched, sorted.
-    pub matches: Vec<String>,
 }
 
 /// The box-local mail state.
@@ -127,27 +111,6 @@ impl LocalState {
     pub fn keep(mut self, hash: &str, kept: Kept) -> Self {
         self.messages.insert(hash.to_owned(), kept);
         self
-    }
-
-    /// The one decided message a hash prefix names; `None` when nothing matches, which is an
-    /// answer, not an error.
-    ///
-    /// # Errors
-    /// [`Ambiguous`] naming every match.
-    pub fn resolve(&self, prefix: &str) -> Result<Option<(&String, &Kept)>, Ambiguous> {
-        let matches: Vec<(&String, &Kept)> = self
-            .messages
-            .iter()
-            .filter(|(hash, _)| hash.starts_with(prefix))
-            .collect();
-        match matches.as_slice() {
-            [] => Ok(None),
-            [one] => Ok(Some(*one)),
-            many => Err(Ambiguous {
-                prefix: prefix.to_owned(),
-                matches: many.iter().map(|(hash, _)| (*hash).clone()).collect(),
-            }),
-        }
     }
 }
 

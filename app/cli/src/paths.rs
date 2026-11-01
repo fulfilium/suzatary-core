@@ -114,6 +114,10 @@ pub struct Paths {
     pub oauth: PathBuf,
     /// The IMAP sync state, one file per account and folder.
     pub imap_state: PathBuf,
+    /// Where each message the corpus has listed lives, by canonical hash
+    /// (`suzatary_io::mailbox::located`): box state, the instance's own, rebuilt by
+    /// `suzatary locate-mail`.
+    pub mail_hashes: PathBuf,
     /// The phones registered for push.
     pub devices: PathBuf,
     /// The answers a device's request was given, kept for its replay while it could be one.
@@ -165,6 +169,7 @@ impl Paths {
             secretspec: state.join("secretspec").join(instance_key(data)),
             oauth: state.join("oauth"),
             imap_state: state.join("imap"),
+            mail_hashes: state.join("mail-hashes").join(instance_key(data)),
             devices: state.join("devices"),
             answers: state.join("answers"),
             epochs: state.join("epochs").join(instance_key(data)),

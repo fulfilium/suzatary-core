@@ -27,8 +27,7 @@ impl Verb for Mark {
     const DESCRIPTION: &'static str = "Record a decision about a message. disposition: 'todo', 'noise', or \
         'skip'. Pass todo_id when disposition is 'todo', matching the id you gave \
         to `todo_add`; a 'todo' without it, or a 'noise' or 'skip' with it, is refused. Pass native_id as the `id` from the same new/search row \
-        this `hash` came from — it costs nothing and lets a later `show` resolve \
-        the hash directly instead of rescanning the maildir.";
+        this `hash` came from; without it, the `id` that row was listed under is kept.";
 
     fn run(call: &Call<'_>, args: MarkArgs) -> Result<Value, Refusal> {
         let decision = Decision::parse(&args.disposition, args.todo_id.as_deref())

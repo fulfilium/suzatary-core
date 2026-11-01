@@ -2065,6 +2065,7 @@ mod tests {
                     .map_err(|refused| refused.to_string())
                 },
             ),
+            suzatary_io::mailbox::located::Located::open(root.join("located")),
             Roster::new(vec![account.clone()]).expect("one account is a roster"),
         )
         .with_config(&config);

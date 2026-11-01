@@ -45,6 +45,8 @@ pub struct Ground {
     /// `None` is a box with no mail index, which every read refuses.
     notmuch_config: Option<PathBuf>,
     pub(crate) ledger: suzatary_io::state::Ledger,
+    /// Where each listed message lives, by canonical hash.
+    mail_hashes: PathBuf,
     /// The accounts a message's folder is read as.
     accounts: Roster,
     /// The accounts a sync pulls.
@@ -69,6 +71,7 @@ impl Ground {
             notmuch: instance.mail.notmuch.clone(),
             notmuch_config: instance.mail.notmuch_config.clone(),
             ledger: crate::commands::mail::ledger(instance),
+            mail_hashes: instance.paths.mail_hashes.clone(),
             accounts: instance.mail.accounts.clone(),
             pulled: instance.mail.accounts.clone(),
             mbsyncrc: instance.mail.mbsyncrc.clone(),
@@ -101,6 +104,7 @@ impl Ground {
                 local.join("mail.json"),
                 scratch_key,
             ),
+            mail_hashes: state.join("mail-hashes"),
             accounts: instance.mail.accounts.clone(),
             pulled: Roster::default(),
             mbsyncrc: dir.join("mbsyncrc"),
@@ -151,12 +155,19 @@ impl Ground {
         )
     }
 
+    /// Where each message this ground's corpus has listed lives, by canonical hash.
+    #[must_use]
+    pub fn located(&self) -> suzatary_io::mailbox::located::Located {
+        suzatary_io::mailbox::located::Located::open(self.mail_hashes.clone())
+    }
+
     /// The corpus, read-only, `pdftotext` falling back through `code`.
     #[must_use]
     pub fn notmuch(&self, code: &Path) -> suzatary_io::mailbox::Notmuch {
         let notmuch = suzatary_io::mailbox::Notmuch::new(
             self.mail_root.clone(),
             self.ledger.clone(),
+            self.located(),
             self.accounts.clone(),
         )
         .with_binary(self.notmuch.clone())

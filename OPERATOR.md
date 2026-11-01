@@ -189,9 +189,7 @@ refused with its line and column if it fails, so backslash a literal `\$ \@ \#
 - `source_*` — where it came from. `source_hash` is the canonical hash from the
   `new`/`search` row; the first 8 hex characters are enough. `show` accepts it
   (full or any unique prefix), so the source message can be pulled back up
-  months later. That only works if the message was marked — `mark` records the
-  notmuch locator behind the hash. Pass `native_id` (the `id` from the same
-  row) when you mark, or `mark` has to rescan the maildir to find it again.
+  months later: every hash a `new` or `search` row prints is one `show` finds.
 
 **THE SCALE HAS ANCHORS** (the owner, 2026-09-09). Price against this table, never
 by feel; a number outside the row its consequence belongs to is wrong even if

@@ -1138,8 +1138,13 @@ mod tests {
             ),
         )
         .expect("a notmuch config");
-        let corpus =
-            crate::mailbox::Notmuch::new(&mail_root, ledger(&root), roster()).with_config(&config);
+        let corpus = crate::mailbox::Notmuch::new(
+            &mail_root,
+            ledger(&root),
+            crate::mailbox::located::Located::open(root.join("located")),
+            roster(),
+        )
+        .with_config(&config);
         let log = Arc::new(Mutex::new(Vec::new()));
         let older = servers(
             &root,
@@ -1159,11 +1164,7 @@ mod tests {
             .expect("the 2023 invite, as the index reads it");
         assert_eq!(first.title, "Team invite");
 
-        let shown = older
-            .index
-            .mail
-            .full_message(&first.id, &ledger(&root).read().expect("the ledger"))
-            .expect("a read");
+        let shown = older.index.mail.full_message(&first.id).expect("a read");
         let suzatary_core::mail::verbs::Show::Shown(shown) = shown else {
             panic!("show finds the pulled message, and answered {shown:?}");
         };

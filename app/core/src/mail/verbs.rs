@@ -73,8 +73,8 @@ pub enum Show {
         /// What was asked for.
         id: String,
     },
-    /// A hash prefix that names more than one decided message.
-    Ambiguous(crate::mail::local_state::Ambiguous),
+    /// A hash prefix that names more than one listed message.
+    Ambiguous(crate::mail::hash_prefix::Ambiguous),
 }
 
 /// The three answers as the agent reads them: the message itself, `{gone, id}`, or
