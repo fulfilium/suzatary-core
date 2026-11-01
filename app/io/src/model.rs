@@ -6,6 +6,7 @@
 //! (a mail sender among them) and the box's files out of reach of a prompt that
 //! carries other people's mail. None of the three is optional.
 
+pub mod failure;
 pub mod stream;
 pub mod stream_event;
 pub mod summary;
@@ -26,8 +27,9 @@ use crate::blobs::Blobs;
 use crate::blocks::{Blocks, Stores};
 use crate::clock::SystemClock;
 use crate::prompt::{delta_prompt, prompt_of};
-use crate::run::{Cmd, RunError, succeed, watch, zero};
+use crate::run::{Cmd, RunError, run, watch, zero};
 use crate::secrets::SecretError;
+use failure::{Heard, failed};
 use stream::{Ended, Unreadable, delta_of, result_of};
 
 /// The long-lived setup token an unattended run authenticates with.
@@ -259,16 +261,31 @@ impl ClaudeCli {
             }
             RunError::TimedOut { .. } => ModelError::TimedOut(self.timeout),
             RunError::Halted { .. } => ModelError::Halted,
-            RunError::Wait { source, .. } => failed(source.to_string()),
-            exited @ RunError::Exited { .. } => failed(exited.to_string()),
+            RunError::Wait { source, .. } => failed(source.to_string(), now()),
+            exited @ RunError::Exited { .. } => failed(exited.to_string(), now()),
         }
     }
+
+    /// `cmd` run to its end and its result line read, or why it failed: what its stdout said
+    /// first, since the CLI prints a limit there and not on stderr.
+    fn ended(&self, cmd: &Cmd) -> Result<Ended, ModelError> {
+        let ran = run(cmd).map_err(|e| self.failure(e))?;
+        let out = ran.out();
+        let heard = Heard::of(&out);
+        zero(cmd, ran).map_err(|exited| heard.failure(exited.to_string(), now()))?;
+        clean(last_result(&out, &heard)?, &heard)
+    }
+}
+
+/// The instant a failure is read at.
+fn now() -> suzatary_core::health::Instant {
+    prodrome_core::fpl::instant_of(SystemClock.now())
 }
 
 /// The name the CLI at `model` answers as, and its calls are recorded under.
 #[must_use]
 pub fn name_of(model: &str) -> String {
-    format!("claude-cli/{model}")
+    format!("{}/{model}", suzatary_core::capability::SUBSCRIPTION)
 }
 
 impl Model for ClaudeCli {
@@ -285,9 +302,7 @@ impl Model for ClaudeCli {
             prompt_of(conversation, tools, crate::prompt::Reads::Files).joined(),
             &conversation.turns,
         )?;
-        let ran = succeed(&self.command(Mode::Stateless, stdin, token.as_ref()))
-            .map_err(|e| self.failure(e))?;
-        let ended = last_result(&ran.out())?;
+        let ended = self.ended(&self.command(Mode::Stateless, stdin, token.as_ref()))?;
         let usage = ended.usage.map(TokenUsage::from);
         Ok(Reply::parse(&reply_of(ended)?).with_usage(usage))
     }
@@ -306,25 +321,28 @@ impl ClaudeCli {
     pub fn plain(&self, system: &ForModel, text: ForModel) -> Result<String, ModelError> {
         let token = self.ready()?;
         let stdin = stdin_of(text, Blocks::default());
-        let ran = succeed(&self.command(Mode::Plain { system }, stdin, token.as_ref()))
-            .map_err(|e| self.failure(e))?;
-        reply_of(last_result(&ran.out())?)
+        reply_of(self.ended(&self.command(Mode::Plain { system }, stdin, token.as_ref()))?)
     }
 }
 
 /// The stream's last `result` line. A stream with none is the CLI's own prose, as a signed-out
-/// CLI prints; one this box cannot read says so, never that the CLI is signed out.
-fn last_result(out: &str) -> Result<Ended, ModelError> {
+/// CLI prints, unless what it `heard` says more; one this box cannot read says so, never that the
+/// CLI is signed out.
+fn last_result(out: &str, heard: &Heard) -> Result<Ended, ModelError> {
     out.lines()
         .rev()
         .find_map(|line| result_of(line).transpose())
-        .ok_or_else(|| failed("the model printed no result (not logged in?)".to_owned()))?
+        .ok_or_else(|| {
+            heard.failure(
+                "the model printed no result (not logged in?)".to_owned(),
+                now(),
+            )
+        })?
         .map_err(|unreadable| ModelError::Failed(unreadable.to_string()))
 }
 
-/// A run's reply, or how it ended without one.
+/// A cleaned run's reply, or that it ended without one.
 fn reply_of(ended: Ended) -> Result<String, ModelError> {
-    let ended = clean(ended)?;
     ended.result.ok_or_else(|| {
         ModelError::Failed(format!(
             "the model's run ended {} with no reply",
@@ -335,54 +353,12 @@ fn reply_of(ended: Ended) -> Result<String, ModelError> {
 
 /// A result line the CLI marked an error is a failure, never a reply: its text is the CLI's own
 /// words ("Prompt is too long"), which would otherwise reach the owner as the model's answer.
-fn clean(ended: Ended) -> Result<Ended, ModelError> {
+fn clean(ended: Ended, heard: &Heard) -> Result<Ended, ModelError> {
     if !ended.is_error {
         return Ok(ended);
     }
-    Err(failed(ended.result.unwrap_or_else(|| {
-        format!("the model's run ended {}", ended.subtype)
-    })))
+    Err(heard.failure(format!("the model's run ended {}", ended.subtype), now()))
 }
-
-/// The CLI's words for a failure, read once: a prompt longer than the model reads is
-/// [`ModelError::TooLong`], so the round can say which answer was too big; a refused credential
-/// (a 401 or 403, an invalid or expired key or token, a login asked for) is
-/// [`ModelError::Refused`], so the box asks for a new one; anything else is
-/// [`ModelError::Failed`].
-pub(crate) fn failed(words: String) -> ModelError {
-    let lower = words.to_lowercase();
-    let status = lower
-        .split(|c: char| !c.is_ascii_alphanumeric())
-        .any(|token| token == "401" || token == "403");
-    if TOO_LONG.iter().any(|said| lower.contains(said)) {
-        ModelError::TooLong(words)
-    } else if status || REFUSALS.iter().any(|refusal| lower.contains(refusal)) {
-        ModelError::Refused(words)
-    } else {
-        ModelError::Failed(words)
-    }
-}
-
-/// How the CLI says it refused the credential, lowercased: the API's error types it passes on
-/// and its own lines.
-const REFUSALS: [&str; 9] = [
-    "authentication_error",
-    "permission_error",
-    "invalid api key",
-    "invalid x-api-key",
-    "invalid bearer token",
-    "token has expired",
-    "please run /login",
-    "not logged in",
-    "unauthorized",
-];
-
-/// How the CLI, the Messages API and an OpenAI-shaped API say a prompt is too long, lowercased.
-const TOO_LONG: [&str; 3] = [
-    "prompt is too long",
-    "context_length_exceeded",
-    "maximum context length",
-];
 
 impl SessionModel for ClaudeCli {
     fn open(
@@ -442,9 +418,11 @@ impl ClaudeCli {
     ) -> Result<Sessioned, ModelError> {
         let mut assembled = String::new();
         let mut result: Option<Result<Ended, Unreadable>> = None;
+        let mut heard = Heard::default();
         watch(
             cmd,
             &mut |line| {
+                heard.line(line);
                 if let Some(text) = delta_of(line) {
                     on_delta(&text);
                     assembled.push_str(&text);
@@ -466,12 +444,13 @@ impl ClaudeCli {
             {
                 ModelError::Lost(stderr.to_string())
             }
+            exited @ RunError::Exited { .. } => heard.failure(exited.to_string(), now()),
             other => self.failure(other),
         })?;
         let result = result
             .transpose()
             .map_err(|unreadable| ModelError::Failed(unreadable.to_string()))?
-            .map(clean)
+            .map(|ended| clean(ended, &heard))
             .transpose()?;
         // A sessioned run's reply is also its streamed deltas, so a result with no text keeps them.
         let (text, usage) = match result {
@@ -635,32 +614,108 @@ mod tests {
 
     use suzatary_core::attachment::Attachment;
 
-    /// Only a refused credential is [`ModelError::Refused`]: a rate limit, an overload or a
-    /// timeout is not, whatever numbers its words hold.
+    /// A CLI that met a limit exits 1 with nothing on stderr and says why on stdout; each shape
+    /// it prints reaches the caller as its class, on the stateless, plain and session paths
+    /// alike, and never as "exited 1" with no reason.
     #[test]
-    fn only_a_refused_credential_reads_as_refused() {
-        for refused in [
-            "API Error: 401 {\"type\":\"error\",\"error\":{\"type\":\"authentication_error\"}}",
-            "status 403: forbidden",
-            "OAuth token has expired. Please obtain a new token",
-            "Invalid API key · Please run /login",
-        ] {
-            assert!(
-                matches!(failed(refused.to_owned()), ModelError::Refused(_)),
-                "{refused}"
+    fn a_failed_run_names_its_failure_from_what_the_cli_printed() {
+        use suzatary_core::capability::{Halt, Limit, Limited};
+        let dir = tempfile::tempdir().expect("scratch");
+        let result = |text: &str| {
+            format!(
+                r#"{{"type":"result","subtype":"success","is_error":true,"num_turns":1,"duration_ms":5,"session_id":"00000000-0000-4000-8000-000000000001","result":"{text}"}}"#
+            )
+        };
+        let refused_window = r#"{"type":"rate_limit_event","rate_limit_info":{"status":"rejected","resetsAt":1761926400,"rateLimitType":"seven_day"}}"#;
+        let class = |failed: &ModelError| match failed {
+            ModelError::Limited(Limited {
+                limit: Limit::Usage,
+                until,
+            }) => format!("usage until {until}"),
+            ModelError::Limited(Limited {
+                limit: Limit::UsageUntold,
+                ..
+            }) => "usage untold".to_owned(),
+            ModelError::Limited(Limited {
+                limit: Limit::Rate, ..
+            }) => "rate".to_owned(),
+            ModelError::Overloaded(_) => "overloaded".to_owned(),
+            ModelError::Refused(_) => "refused".to_owned(),
+            ModelError::Failed(words) => format!("failed: {words}"),
+            ModelError::Unreachable(_)
+            | ModelError::TimedOut(_)
+            | ModelError::TooLong(_)
+            | ModelError::Lost(_)
+            | ModelError::Halted => format!("other: {failed}"),
+        };
+        for (n, (stdout, stderr, expected)) in [
+            (
+                format!(
+                    "{refused_window}\n{}",
+                    result("You've hit your limit · resets 3pm (UTC)")
+                ),
+                "",
+                "usage until 2025-10-31 16:00:00",
+            ),
+            (
+                result("Claude AI usage limit reached|1761926400"),
+                "",
+                "usage until 2025-10-31 16:00:00",
+            ),
+            (
+                result("5-hour limit reached ∙ resets 2pm"),
+                "",
+                "usage untold",
+            ),
+            (result("API Error: 429 rate_limit_error"), "", "rate"),
+            (result("API Error: 529 overloaded_error"), "", "overloaded"),
+            (
+                String::new(),
+                "Invalid API key · Please run /login",
+                "refused",
+            ),
+            (String::new(), "", "failed: "),
+        ]
+        .into_iter()
+        .enumerate()
+        {
+            let (out, err) = (
+                dir.path().join(format!("out-{n}")),
+                dir.path().join(format!("err-{n}")),
             );
-        }
-        for not in [
-            "API Error: 429 rate_limit_error",
-            "Claude AI usage limit reached|1760000000",
-            "529 overloaded_error",
-            "timed out after 4010 ms",
-            "exit status 1",
-        ] {
-            assert!(
-                matches!(failed(not.to_owned()), ModelError::Failed(_)),
-                "{not}"
+            std::fs::write(&out, stdout).expect("its stdout");
+            std::fs::write(&err, stderr).expect("its stderr");
+            let script = suzatary_testkit::fake_program(
+                dir.path(),
+                &format!("claude-{n}"),
+                &format!(
+                    "#!/bin/sh\ncat > /dev/null\ncat {}\ncat {} >&2\nexit 1\n",
+                    out.display(),
+                    err.display()
+                ),
             );
+            let cli = ClaudeCli::new("m", shipped()).with_binary(script.display().to_string());
+            let conversation = Conversation {
+                system: String::new(),
+                turns: vec![person_with(Vec::new())],
+            };
+            let failures = [
+                cli.turn(&conversation, &serde_json::json!([]))
+                    .expect_err("exit 1"),
+                cli.plain(&ForModel::of("s"), ForModel::of("hi"))
+                    .expect_err("exit 1"),
+                cli.open(
+                    &a_session_id(),
+                    &conversation,
+                    &serde_json::json!([]),
+                    &Halt::new(),
+                )
+                .expect_err("exit 1"),
+            ];
+            for failed in &failures {
+                let said = class(failed);
+                assert!(said.starts_with(expected), "{n}: {said}");
+            }
         }
     }
 

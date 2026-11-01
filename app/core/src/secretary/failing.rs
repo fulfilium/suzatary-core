@@ -176,6 +176,7 @@ fn said(class: Failure) -> String {
         Failure::NeedsLogin => "it needs its sign-in again".to_owned(),
         Failure::Unresolved => "it reads a secret stored nowhere".to_owned(),
         Failure::KeyRefused => "its key was refused".to_owned(),
+        Failure::Limited(limited) => limited.to_string(),
         Failure::Unusable => "the link stored for it is not one the box sends".to_owned(),
         Failure::Unreachable => {
             "its address could not be reached: check the link and set it again".to_owned()

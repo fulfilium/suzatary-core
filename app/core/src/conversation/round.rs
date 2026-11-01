@@ -203,6 +203,13 @@ fn model_failed(failed: &ModelError, after: Option<&ToolName>) -> String {
         (ModelError::Unreachable(words), _) => format!(
             "I could not finish: the model could not be reached ({words}). Ask again in a minute."
         ),
+        (ModelError::Limited(limited), _) => {
+            format!("I could not finish: {limited}. Ask again after then.")
+        }
+        (ModelError::Overloaded(_), _) => {
+            "I could not finish: the model's service is overloaded. Ask again in a few minutes."
+                .to_owned()
+        }
         (ModelError::Refused(words), _) => format!(
             "I could not finish: the model refused its sign-in ({words}). Sign in again from \
              Settings."

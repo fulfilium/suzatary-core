@@ -26,6 +26,8 @@ pub enum Failure {
     Unresolved,
     /// The model refused its key or token.
     KeyRefused,
+    /// The model's account is under a limit, which ends by itself.
+    Limited(crate::capability::Limited),
     /// The value stored for its link is not one the box sends: not a URL it reads, or one in
     /// the clear. Nothing was sent, so no service answered.
     Unusable,
@@ -116,12 +118,12 @@ impl Failure {
             | Failure::KeyRefused
             | Failure::Unusable => Remedy::Secret,
             Failure::NeedsLogin => Remedy::Auth,
-            Failure::Unreachable | Failure::Unclassified => Remedy::Retry,
+            Failure::Limited(_) | Failure::Unreachable | Failure::Unclassified => Remedy::Retry,
         }
     }
 
     /// Every class, each revocation once: what a law ranges over.
-    pub const ALL: [Failure; 9] = [
+    pub const ALL: [Failure; 10] = [
         Failure::Revoked {
             status: Revocation::Unauthorized,
         },
@@ -134,6 +136,10 @@ impl Failure {
         Failure::NeedsLogin,
         Failure::Unresolved,
         Failure::KeyRefused,
+        Failure::Limited(crate::capability::Limited {
+            limit: crate::capability::Limit::Usage,
+            until: chrono::DateTime::UNIX_EPOCH.naive_utc(),
+        }),
         Failure::Unusable,
         Failure::Unreachable,
         Failure::Unclassified,

@@ -188,6 +188,13 @@ pub enum ModelError {
     /// It did not answer within the interpreter's time limit, and was ended.
     #[error("the model did not answer within {0:?}")]
     TimedOut(std::time::Duration),
+    /// The account it runs under is limited, so it answers nothing until the limit ends.
+    #[error("{0}")]
+    Limited(super::Limited),
+    /// Its service is overloaded, in the interpreter's own words: no pause, since it is
+    /// over in minutes.
+    #[error("the model's service is overloaded: {0}")]
+    Overloaded(String),
     /// What it was sent is longer than it reads, in the interpreter's own words.
     #[error("what the model was sent is longer than it reads: {0}")]
     TooLong(String),
@@ -441,12 +448,23 @@ pub trait Model: Sync {
         conversation: &Conversation,
         tools: &serde_json::Value,
     ) -> Result<Reply, ModelError>;
+
+    /// The limit its account is under now, on its own clock, which every call refuses with while
+    /// it stands ([`super::Limited::standing`]); none for a model whose calls the box records
+    /// nowhere.
+    fn limited(&self) -> Option<super::Limited> {
+        None
+    }
 }
 
 /// A model lent: the same model, asked through a reference.
 impl<M: Model + ?Sized> Model for &M {
     fn name(&self) -> String {
         (**self).name()
+    }
+
+    fn limited(&self) -> Option<super::Limited> {
+        (**self).limited()
     }
 
     fn turn(

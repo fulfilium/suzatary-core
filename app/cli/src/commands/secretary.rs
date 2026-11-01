@@ -2057,21 +2057,8 @@ fn brief(
     // Also before it: what the box files needing no model.
     unasked(instance, &chains, &id);
 
-    let answered = suzatary_core::secretary::converse(
-        caps,
-        &instance.deployment,
-        &instance.settables,
-        &chains,
-        &id,
-        // A briefing asks about the whole chain, so it points at nothing, and the box opened it.
-        suzatary_core::secretary::Saying {
-            text: BRIEF,
-            references: &[],
-            by: None,
-        },
-        &system_prompt(caps.manuals),
-    )
-    .map_err(|refusal| anyhow::anyhow!("{}", refusal.message()))?;
+    let limited = caps.model.limited();
+    let answered = ask_brief(instance, &wired, &chains, &id, limited)?;
 
     let url = format!("{}/#/secretary/{}", instance.deployment.app_url, id);
     // The box's turn is the conversation's last, so `notify brief` still tells the owner; the
@@ -2104,11 +2091,50 @@ fn brief(
             );
             println!("secretary: {} round(s); open it at {url}", answered.rounds);
         }
+        None if limited.is_some() => println!("secretary: no round ran; open it at {url}"),
         None => println!("secretary: nothing waited, so no round ran; open it at {url}"),
     }
     // On its own line, for a caller without `--json` to hand to `notify brief <id>`.
     println!("{id}");
     Ok(())
+}
+
+/// The brief's round in `id`; under `limited`, no round: a box round under a limit writes no
+/// question and no failure, and one note says why, so `notify brief` still points the owner at it.
+fn ask_brief(
+    instance: &Instance,
+    wired: &Wired,
+    chains: &[suzatary_core::secretary::Bound<'_>],
+    id: &ConversationId,
+    limited: Option<suzatary_core::capability::Limited>,
+) -> anyhow::Result<Option<suzatary_core::secretary::Answered>> {
+    let caps = &wired.secretary();
+    let Some(limited) = limited else {
+        return suzatary_core::secretary::converse(
+            caps,
+            &instance.deployment,
+            &instance.settables,
+            chains,
+            id,
+            // A briefing asks about the whole chain, so it points at nothing, and the box
+            // opened it.
+            suzatary_core::secretary::Saying {
+                text: BRIEF,
+                references: &[],
+                by: None,
+            },
+            &system_prompt(caps.manuals),
+        )
+        .map_err(|refusal| anyhow::anyhow!("{}", refusal.message()));
+    };
+    append_note(
+        &wired.opened.remembering.conversations,
+        id,
+        caps.clock.now(),
+        format!("No brief this time: {limited}."),
+    );
+    eprintln!("secretary: the brief did not start: {limited}");
+    Ok(None)
 }
 
 /// Name in today's review each conversation that does not read, paging the first time a set of
@@ -2149,7 +2175,10 @@ fn review(
         &chains,
         &system_prompt(caps.manuals),
     ) {
-        Ok(reviewed) => reviewed,
+        Ok(suzatary_core::secretary::daily::Run::Done(reviewed)) => reviewed,
+        Ok(suzatary_core::secretary::daily::Run::Paused(limited)) => {
+            paused("review", &limited, json, serde_json::json!({"reviewed": 0}))
+        }
         Err(refusal) => {
             let today = instance
                 .persona
@@ -2237,6 +2266,29 @@ fn review(
     Ok(())
 }
 
+/// The exit status of a box round that did not start because the model is under a limit: neither
+/// a success, which would stamp the day's sweep, nor a failure, which would fail the pass.
+pub const PAUSED: i32 = 3;
+
+/// Say that the box round `what` did not start for `limited`, its counts `counts` under `json`,
+/// and exit [`PAUSED`].
+fn paused(
+    what: &str,
+    limited: &suzatary_core::capability::Limited,
+    json: bool,
+    mut counts: serde_json::Value,
+) -> ! {
+    if json {
+        counts["failed"] = false.into();
+        counts["paused"] = true.into();
+        counts["reason"] = limited.to_string().into();
+        println!("{counts}");
+    } else {
+        println!("secretary: the {what} did not start and wrote nothing: {limited}");
+    }
+    std::process::exit(PAUSED);
+}
+
 /// `suzatary secretary sweep --dry-run`: print what a sweep would lay before the model.
 fn sweep_dry_run(instance: &Instance, first: Option<&str>, json: bool) -> anyhow::Result<()> {
     let wired = wired(instance, first)?;
@@ -2283,10 +2335,10 @@ fn sweep_dry_run(instance: &Instance, first: Option<&str>, json: bool) -> anyhow
 ///
 /// # Errors
 /// The refusal, after it is printed.
-pub fn swept_or_failed(
-    outcome: Result<suzatary_core::secretary::sweep::Swept, suzatary_core::refusal::Refusal>,
+pub fn swept_or_failed<T>(
+    outcome: Result<T, suzatary_core::refusal::Refusal>,
     json: bool,
-) -> anyhow::Result<suzatary_core::secretary::sweep::Swept> {
+) -> anyhow::Result<T> {
     outcome.map_err(|refusal| {
         if json {
             println!(
@@ -2320,6 +2372,12 @@ fn sweep(instance: &Instance, first: Option<&str>, json: bool) -> anyhow::Result
         ),
         json,
     )?;
+    let swept = match swept {
+        suzatary_core::secretary::daily::Run::Done(swept) => swept,
+        suzatary_core::secretary::daily::Run::Paused(limited) => {
+            paused("sweep", &limited, json, serde_json::json!({"proposed": 0}))
+        }
+    };
     if json {
         println!(
             "{}",

@@ -408,11 +408,20 @@ fn a_review(root: &Path) -> anyhow::Result<()> {
 fn answers(read: &crate::instance::Instance, no_model: bool) -> anyhow::Result<()> {
     use suzatary_core::capability::Clock as _;
     let at = prodrome_core::fpl::instant_of(SystemClock.now());
+    let (outcome, words) = if no_model {
+        (
+            suzatary_core::health::Outcome::Failed(suzatary_core::connect::Failure::KeyRefused),
+            "the fixture's model is not connected",
+        )
+    } else {
+        (suzatary_core::health::Outcome::Succeeded, "")
+    };
     suzatary_io::model_health::beside(&read.mail.heartbeat)
         .record(
             &suzatary_io::model::name_of(read.secretary.model.as_str()),
             at,
-            no_model.then_some("the fixture's model is not connected"),
+            outcome,
+            words,
         )
         .context("writing the fixture's model health")
 }

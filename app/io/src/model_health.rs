@@ -1,11 +1,11 @@
 //! Whether the model each job runs answers, on disk, as a [`Register`]: the value and its join
-//! are [`suzatary_core::health`]'s, keyed by the model's name. It lives beside the sources'
+//! are [`suzatary_core::health`]'s, keyed by the model's name, and the limits the subscription
+//! meets under [`suzatary_core::capability::SUBSCRIPTION`]. It lives beside the sources'
 //! health, box-local and never pushed, because it is this box's account of its own calls.
 
 use std::path::Path;
 use std::sync::Arc;
 
-use suzatary_core::connect::Failure;
 use suzatary_core::health::{Healths, Instant, Outcome, Reading, Register};
 use suzatary_core::store::StoreError;
 
@@ -31,9 +31,8 @@ impl Answered {
         }
     }
 
-    /// Join one call of `entry` at `at`, `refused` saying why its credential was refused and
-    /// `None` for an answer, and ring when its reading moved. The register holds no other
-    /// failure, so each it holds is of the class [`Failure::KeyRefused`].
+    /// Join one call of `entry` at `at`, `outcome` what it came to and `words` why it failed, and
+    /// ring when its reading moved between answering and not.
     ///
     /// # Errors
     /// The register's own, when it cannot be read or written.
@@ -41,7 +40,8 @@ impl Answered {
         &self,
         entry: &str,
         at: Instant,
-        refused: Option<&str>,
+        outcome: Outcome,
+        words: &str,
     ) -> Result<(), StoreError> {
         let answering = |healths: &Healths<String>| {
             healths
@@ -49,10 +49,7 @@ impl Answered {
                 .map(|reading| matches!(reading, Reading::Ok { .. }))
         };
         let before = answering(&self.file.healths()?);
-        let after = answering(&self.file.join(&match refused {
-            Some(words) => Healths::one(entry, at, Outcome::Failed(Failure::KeyRefused), words),
-            None => Healths::one(entry, at, Outcome::Succeeded, ""),
-        })?);
+        let after = answering(&self.file.join(&Healths::one(entry, at, outcome, words))?);
         if before != after {
             (self.moved)();
         }
@@ -86,6 +83,7 @@ mod tests {
     use std::sync::atomic::{AtomicUsize, Ordering};
 
     use super::*;
+    use suzatary_core::connect::Failure;
 
     /// A call that answered and later ones that did not read back as their join, from the file,
     /// and the bell rings only when the reading moves.
@@ -103,9 +101,16 @@ mod tests {
                 .expect("an instant")
         };
         let entry = "claude-cli/a-model";
-        store.record(entry, at(1), None).expect("recorded");
-        store.record(entry, at(2), Some("401")).expect("recorded");
-        store.record(entry, at(3), Some("401")).expect("recorded");
+        let refused = Outcome::Failed(Failure::KeyRefused);
+        store
+            .record(entry, at(1), Outcome::Succeeded, "")
+            .expect("recorded");
+        store
+            .record(entry, at(2), refused, "401")
+            .expect("recorded");
+        store
+            .record(entry, at(3), refused, "401")
+            .expect("recorded");
         assert!(dir.path().join(FILE).is_file());
         let read = store.healths().expect("readable");
         assert_eq!(

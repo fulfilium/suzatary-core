@@ -9,10 +9,27 @@ use suzatary_core::capability::Clock as _;
 use suzatary_core::reference::ProposalRef;
 use suzatary_core::secretary::Bound;
 use suzatary_core::secretary::changes::{Act, Changeset, Provenance};
+use suzatary_core::secretary::daily::Run;
 use suzatary_core::secretary::filed::TriageCards;
-use suzatary_core::secretary::review::{review, reviews};
+use suzatary_core::secretary::review::{Reviewed, reviews};
 use suzatary_core::secretary::store::{Outcome, Reasons, Settle};
 use suzatary_core::store::Reads as _;
+
+/// The review run to its end; a scripted model is under no limit, so it always starts.
+fn review(
+    caps: &suzatary_core::capability::Secretary<'_>,
+    deployment: &suzatary_core::deployment::Deployment,
+    settables: &suzatary_core::settings::Settables,
+    chains: &[Bound<'_>],
+    system: &str,
+) -> Result<Reviewed, suzatary_core::refusal::Refusal> {
+    suzatary_core::secretary::review::review(caps, deployment, settables, chains, system).map(
+        |run| match run {
+            Run::Done(reviewed) => reviewed,
+            Run::Paused(limited) => panic!("a scripted model is never limited: {limited}"),
+        },
+    )
+}
 
 /// Three cards, as the triage agent files them: two adds and a completion. Their lines go to
 /// a store the review does not read, since the review reads cards from the inbox alone.
@@ -341,6 +358,55 @@ fn an_unreadable_conversation_is_named_and_paged_once() {
         .filter(|said| matches!(&said.turn, suzatary_core::capability::Turn::Act { text, .. } if text.contains("2026-01-02-1")))
         .count();
     assert_eq!(named, 1, "named once in today's review");
+}
+
+/// While the model is under a limit, the review and the sweep do not start: they ask the model
+/// nothing and write no line, so a limit fills no conversation with failed rounds.
+#[test]
+fn a_limited_model_starts_no_box_round_and_writes_nothing() {
+    let caps = Fakes::new("review-limited");
+    let _ = three_cards(&caps);
+    let policy = common::chain();
+    let deployment = deployment();
+    let limited = suzatary_core::capability::Limited {
+        limit: suzatary_core::capability::Limit::Usage,
+        until: prodrome_core::fpl::instant_of(caps.clock.now()) + chrono::Duration::hours(3),
+    };
+    let caps = caps.model(FakeModel::saying([]).limited(limited));
+    let chains = [Bound {
+        name: "life",
+        caps: caps.secretary(),
+        policy: &policy,
+    }];
+    let lines = || {
+        caps.conversations
+            .conversations()
+            .lines
+            .objects()
+            .expect("the lines read")
+            .len()
+    };
+    let before = lines();
+    let reviewed = suzatary_core::secretary::review::review(
+        &caps.secretary(),
+        &deployment,
+        &suzatary_core::settings::Settables::default(),
+        &chains,
+        "a brief",
+    )
+    .expect("a pause is no refusal");
+    assert_eq!(reviewed, Run::Paused(limited));
+    let swept = suzatary_core::secretary::sweep::sweep(
+        &caps.secretary(),
+        &deployment,
+        &suzatary_core::settings::Settables::default(),
+        &chains,
+        "a brief",
+    )
+    .expect("a pause is no refusal");
+    assert!(matches!(swept, Run::Paused(paused) if paused == limited));
+    assert_eq!(lines(), before, "no line was written");
+    assert!(caps.model.asked().is_empty(), "the model was asked nothing");
 }
 
 /// A review that could not run leaves a record saying so, while the caller still exits zero.

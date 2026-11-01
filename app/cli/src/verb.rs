@@ -125,7 +125,7 @@ impl Verb {
             Verb::New(args) => mail::queue(path, &args),
             Verb::Gate => mail::gate(path),
             Verb::Heartbeat(args) => heartbeat::run(path, &args),
-            Verb::Ran(args) => ran::run(&args),
+            Verb::Ran(args) => ran::run(path, &args),
             Verb::Search(args) => mail::search(path, &args),
             Verb::Show(args) => mail::show(path, &args),
             Verb::Mark(args) => mail::mark(path, &args),

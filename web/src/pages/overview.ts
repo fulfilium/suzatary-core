@@ -27,13 +27,14 @@ export namespace overview {
   const and = (xs: readonly string[]): string =>
     xs.length < 2 ? xs.join("") : `${xs.slice(0, -1).join(", ")} and ${xs[xs.length - 1]}`
 
-  /** What a failure's class asks of the owner, `""` for a class nothing but time mends; the status a service answered
+  /** What a failure's class asks of the owner, `""` for an unclassified failure; the status a service answered
    * is in the failure's own words, so a revoked link's remedy does not say it again. */
   export const cause = (c: FailureClass): string =>
     c.kind === "revoked" ? " Its link was changed or revoked, so store the new one."
     : c.kind === "needs_login" ? " Its sign-in lapsed: sign in again."
     : c.kind === "unresolved" ? " A secret it reads is stored nowhere: set it."
     : c.kind === "key_refused" ? " Its key was refused: the card below connects it again."
+    : c.kind === "limited" ? " The limit ends by itself, and the box asks the model nothing until then."
     : c.kind === "unusable" ? " The link stored for it is not one the box sends: set it again."
     : c.kind === "unreachable" ? " Check the link and set it again."
     : ""

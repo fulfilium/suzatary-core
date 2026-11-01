@@ -77,7 +77,11 @@ pub fn summary_of(text: &str) -> Result<Option<Summary>, Unreadable> {
         Ok(Event::Result(ended)) => Some(Ok(ended)),
         Err(unreadable) => Some(Err(*unreadable)),
         Ok(
-            Event::System(_) | Event::Assistant { .. } | Event::StreamEvent { .. } | Event::Other,
+            Event::System(_)
+            | Event::Assistant { .. }
+            | Event::StreamEvent { .. }
+            | Event::RateLimitEvent { .. }
+            | Event::Other,
         ) => None,
     });
     let Some(ended) = last.transpose()? else {
@@ -92,6 +96,7 @@ pub fn summary_of(text: &str) -> Result<Option<Summary>, Unreadable> {
             | Event::Assistant { .. }
             | Event::StreamEvent { .. }
             | Event::Result(_)
+            | Event::RateLimitEvent { .. }
             | Event::Other => &[],
         })
         .map(String::as_str)
@@ -102,7 +107,11 @@ pub fn summary_of(text: &str) -> Result<Option<Summary>, Unreadable> {
         .iter()
         .flat_map(|event| match event {
             Event::Assistant { message } => message.content.as_slice(),
-            Event::System(_) | Event::StreamEvent { .. } | Event::Result(_) | Event::Other => &[],
+            Event::System(_)
+            | Event::StreamEvent { .. }
+            | Event::Result(_)
+            | Event::RateLimitEvent { .. }
+            | Event::Other => &[],
         })
         .filter_map(|block| match block {
             Block::ToolUse { name } => Some(name.as_str()),

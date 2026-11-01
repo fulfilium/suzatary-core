@@ -73,6 +73,14 @@ impl Model for Brain {
             Brain::Scripted(scripted) => scripted.turn(conversation, tools),
         }
     }
+
+    fn limited(&self) -> Option<suzatary_core::capability::Limited> {
+        match self {
+            Brain::Cli(cli) => cli.limited(),
+            #[cfg(feature = "fixture")]
+            Brain::Scripted(scripted) => scripted.limited(),
+        }
+    }
 }
 
 /// Only the `claude` CLI subprocess holds a session.
@@ -191,22 +199,100 @@ fn probe(cli: &suzatary_io::model::ClaudeCli) -> Result<(), ModelError> {
 }
 
 /// Join one call of the model named `model` into `answered`, now, `failed` saying why it did
-/// not answer. Only a refused credential is joined as a failure: a rate limit, a timeout or an
-/// outage says nothing of whether the model answers this box, so it is joined as nothing. A
-/// register that cannot be written costs the call nothing, since the next call writes it again.
+/// not answer. Only a refused credential and a limit are joined as failures, a limit under the
+/// subscription ([`suzatary_core::capability::SUBSCRIPTION`]) every model shares: a timeout, an
+/// overload or an outage says nothing of whether the model answers this box, nor does a halt (a
+/// person's) or a lost session (the CLI's), so each is joined as nothing. A register that cannot
+/// be written costs the call nothing, since the next call writes it again.
 pub fn answered_by(
     answered: &suzatary_io::model_health::Answered,
     model: &str,
     failed: Option<&ModelError>,
 ) {
     use suzatary_core::capability::Clock as _;
-    if failed.is_some_and(|failed| !matches!(failed, ModelError::Refused(_))) {
-        return;
-    }
+    use suzatary_core::health::Outcome;
+    let (entry, outcome) = match failed {
+        None => (model, Outcome::Succeeded),
+        Some(ModelError::Refused(_)) => (
+            model,
+            Outcome::Failed(suzatary_core::connect::Failure::KeyRefused),
+        ),
+        Some(ModelError::Limited(limited)) => (
+            suzatary_core::capability::SUBSCRIPTION,
+            Outcome::Failed(suzatary_core::connect::Failure::Limited(*limited)),
+        ),
+        Some(
+            ModelError::Unreachable(_)
+            | ModelError::Failed(_)
+            | ModelError::Overloaded(_)
+            | ModelError::TimedOut(_)
+            | ModelError::TooLong(_)
+            | ModelError::Lost(_)
+            | ModelError::Halted,
+        ) => return,
+    };
     let at = prodrome_core::fpl::instant_of(suzatary_io::clock::SystemClock.now());
-    let words = failed.map(ToString::to_string);
-    if let Err(failed) = answered.record(model, at, words.as_deref()) {
+    let words = failed.map(ToString::to_string).unwrap_or_default();
+    if let Err(failed) = answered.record(entry, at, outcome, &words) {
         tracing::warn!("model health: {failed}");
+    }
+}
+
+/// The limit standing now in `instance`'s model health: what every caller outside a [`Door`]
+/// (the triage pass's gate) reads before it asks the model.
+#[must_use]
+pub fn limited_now(instance: &Instance) -> Option<suzatary_core::capability::Limited> {
+    limited_in(&suzatary_io::model_health::beside(&instance.mail.heartbeat))
+}
+
+/// The limit standing now in `answered`; none when the register does not read, since the next
+/// call reads it again.
+fn limited_in(
+    answered: &suzatary_io::model_health::Answered,
+) -> Option<suzatary_core::capability::Limited> {
+    use suzatary_core::capability::Clock as _;
+    use suzatary_core::health::Register as _;
+    let now = prodrome_core::fpl::instant_of(suzatary_io::clock::SystemClock.now());
+    answered
+        .healths()
+        .inspect_err(|failed| tracing::warn!("model health: {failed}"))
+        .ok()
+        .and_then(|calls| suzatary_core::capability::Limited::standing(&calls, now))
+}
+
+/// The one way the box asks a model it records: nothing while a limit stands in the model health
+/// ([`suzatary_core::capability::Limited::standing`]), and each call joined into it under `entry`.
+#[derive(Clone)]
+pub struct Door {
+    answered: suzatary_io::model_health::Answered,
+    entry: String,
+}
+
+impl Door {
+    /// The door of the model recorded as `entry` in `answered`.
+    #[must_use]
+    pub fn new(answered: suzatary_io::model_health::Answered, entry: String) -> Self {
+        Self { answered, entry }
+    }
+
+    /// The limit standing now.
+    #[must_use]
+    pub fn limited(&self) -> Option<suzatary_core::capability::Limited> {
+        limited_in(&self.answered)
+    }
+
+    /// `call`, unless a limit stands, and what it came to joined into the register
+    /// ([`answered_by`]).
+    ///
+    /// # Errors
+    /// [`ModelError::Limited`] while a limit stands, with no call made; `call`'s own.
+    pub fn ask<T>(&self, call: impl FnOnce() -> Result<T, ModelError>) -> Result<T, ModelError> {
+        if let Some(limited) = self.limited() {
+            return Err(ModelError::Limited(limited));
+        }
+        let result = call();
+        answered_by(&self.answered, &self.entry, result.as_ref().err());
+        result
     }
 }
 
@@ -522,26 +608,14 @@ pub fn brain(instance: &Instance, answered: suzatary_io::model_health::Answered)
         instance.secretary.model.as_str(),
         &instance.secrets(),
     );
-    Brain::Cli(Box::new(Recorded { cli, answered }))
+    let door = Door::new(answered, cli.name());
+    Brain::Cli(Box::new(Recorded { cli, door }))
 }
 
-/// The `claude` subprocess, each of its calls joined into the model health under its name.
+/// The `claude` subprocess behind its [`Door`].
 pub struct Recorded {
     cli: suzatary_io::model::ClaudeCli,
-    answered: suzatary_io::model_health::Answered,
-}
-
-impl Recorded {
-    /// Join `result` unless it says nothing of whether the model answers: a halt is a person's,
-    /// and a lost session is the CLI's.
-    fn noted<T>(&self, result: Result<T, ModelError>) -> Result<T, ModelError> {
-        match &result {
-            Err(ModelError::Halted | ModelError::Lost(_)) => {}
-            Ok(_) => answered_by(&self.answered, &self.cli.name(), None),
-            Err(failed) => answered_by(&self.answered, &self.cli.name(), Some(failed)),
-        }
-        result
-    }
+    door: Door,
 }
 
 impl Model for Recorded {
@@ -554,7 +628,11 @@ impl Model for Recorded {
         conversation: &Conversation,
         tools: &serde_json::Value,
     ) -> Result<Reply, ModelError> {
-        self.noted(self.cli.turn(conversation, tools))
+        self.door.ask(|| self.cli.turn(conversation, tools))
+    }
+
+    fn limited(&self) -> Option<suzatary_core::capability::Limited> {
+        self.door.limited()
     }
 }
 
@@ -566,7 +644,8 @@ impl SessionModel for Recorded {
         tools: &serde_json::Value,
         halt: &suzatary_core::capability::Halt,
     ) -> Result<suzatary_core::capability::Sessioned, ModelError> {
-        self.noted(self.cli.open(id, conversation, tools, halt))
+        self.door
+            .ask(|| self.cli.open(id, conversation, tools, halt))
     }
 
     fn resume(
@@ -577,7 +656,8 @@ impl SessionModel for Recorded {
         on_delta: &dyn Fn(&str),
         halt: &suzatary_core::capability::Halt,
     ) -> Result<suzatary_core::capability::Sessioned, ModelError> {
-        self.noted(self.cli.resume(session, delta, tools, on_delta, halt))
+        self.door
+            .ask(|| self.cli.resume(session, delta, tools, on_delta, halt))
     }
 }
 
@@ -596,6 +676,7 @@ fn five_hour(allowance: &suzatary_io::usage::Allowance) -> suzatary_core::usage:
 /// has room above the reserve it never takes.
 pub struct CompactorModel {
     asked: suzatary_io::model::ClaudeCli,
+    door: Door,
     name: suzatary_core::model_name::ModelName,
     allowance: suzatary_io::usage::Allowance,
     reserve: Reserve,
@@ -615,11 +696,16 @@ impl CompactorModel {
             }
         }
         let secrets = instance.secrets();
+        let asked = suzatary_io::model::ClaudeCli::new(name.as_str(), fence(instance))
+            .in_directory(empty.clone())
+            .with_config_dir(config.clone())
+            .with_token(suzatary_io::model::TokenSource::from_store(secrets));
         Self {
-            asked: suzatary_io::model::ClaudeCli::new(name.as_str(), fence(instance))
-                .in_directory(empty.clone())
-                .with_config_dir(config.clone())
-                .with_token(suzatary_io::model::TokenSource::from_store(secrets)),
+            door: Door::new(
+                suzatary_io::model_health::beside(&instance.mail.heartbeat),
+                asked.name(),
+            ),
+            asked,
             name,
             allowance: suzatary_io::usage::Allowance::new(
                 transcripts(instance),
@@ -637,7 +723,8 @@ impl CompactorModel {
     /// reserve; the compactor and the topics backfill ask through it.
     ///
     /// # Errors
-    /// [`ModelError::Unreachable`] at the reserve, or the CLI's own failure.
+    /// [`ModelError::Unreachable`] at the reserve, [`ModelError::Limited`] while a limit stands,
+    /// or the CLI's own failure.
     pub fn ask(
         &self,
         system: &suzatary_core::for_model::ForModel,
@@ -648,7 +735,7 @@ impl CompactorModel {
                 "the subscription is down to the reserve automated jobs never take".to_owned(),
             ));
         }
-        self.asked.plain(system, text)
+        self.door.ask(|| self.asked.plain(system, text))
     }
 }
 

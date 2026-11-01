@@ -783,7 +783,7 @@ fn models(declared: &Declared<'_>, observed: &Observed<'_>) -> Overview {
                 // What a model's calls said outranks whether its key resolves, as the bootstrap
                 // reads it: the model may hold a sign-in of its own that no store here names.
                 Calls::Recorded { key, credential } => (
-                    match observed.registers.answered.reading(key) {
+                    match crate::capability::reading_of(observed.registers.answered, key) {
                         Some(reading) => Standing::of_calls(Some(reading)),
                         None => observed.secret(credential).join(Standing::Unobserved),
                     },

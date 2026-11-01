@@ -157,7 +157,9 @@ push_pass() {
 }
 
 # Gate: the triage RULE (`suzatary_core::mail::triage`) fires only on new
-# mail, and this script is its interpreter. A failed account is not the
+# mail, and this script is its interpreter. While the model is under a limit
+# the model health records, the gate exits 3 too and says so: no model runs,
+# the mail stays queued, and the first pass after the limit ends triages it. A failed account is not the
 # model's: the health register shows it, and the morning brief proposes a
 # todo for one failing a day. `suzatary gate` prints the queue and the firing,
 # and exits 3 when the rule does not fire; any other failure fails the run,
@@ -173,8 +175,9 @@ if [ "$GATE_STATUS" -eq 3 ]; then
   push_pass "$(cat <<'EOF'
 hourly triage: the server's writes (quiet pass)
 
-No mail arrived and no model ran. These are the objects the server wrote
-since the last pass: taps, proposals, conversations, writes from the app.
+No model ran: no mail arrived, or the model is under a limit. These are
+the objects the server wrote since the last pass: taps, proposals,
+conversations, writes from the app.
 EOF
 )"
   # A quiet inbox is success, not silence, so it is recorded here: the trap
@@ -332,6 +335,8 @@ FENCE="$(scripts/triage-fence.sh "$REPO")" || {
 # `suzatary secretary reviews --since <date>`: if the rejection and hold rates
 # climb over the week, put this back. todo:suzatary/triagemodeltier carries it.
 #
+TRIAGE_MODEL=claude-sonnet-5
+#
 # --tools ToolSearch is the second layer under the hook: of the CLI's built-in
 # tools it leaves only ToolSearch, through which the verbs (MCP tools, which
 # --tools does not name) arrive, so a shell or a file tool is absent rather
@@ -383,7 +388,7 @@ export CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1 DISABLE_TELEMETRY=1 \
   DISABLE_BUG_COMMAND=1 DISABLE_FEEDBACK_COMMAND=1 \
   CLAUDE_CODE_DISABLE_FEEDBACK_SURVEY=1 DO_NOT_TRACK=1
 claude -p "$PROMPT" \
-  --model claude-sonnet-5 \
+  --model "$TRIAGE_MODEL" \
   --mcp-config .claude/mcp-suzatary.json \
   --strict-mcp-config \
   --settings "$FENCE" \
@@ -401,8 +406,10 @@ claude -p "$PROMPT" \
 # in the state directory, readable by this user alone, until the next pass
 # replaces it. Mail arrived, so a pass that called no verb triaged nothing,
 # however it narrates: `--needs` makes that its exit code.
+# `--model` joins a limit the run met into the model health, so the review, the
+# sweep and the next passes' gate ask the model nothing until it ends; exit 14.
 RAN_STATUS=0
-RAN="$(app ran --needs mcp__suzatary__ "$SESSION")" || RAN_STATUS=$?
+RAN="$(app ran --needs mcp__suzatary__ --model "$TRIAGE_MODEL" "$SESSION")" || RAN_STATUS=$?
 echo "hourly-triage: $RAN"
 
 # A STAGE PAST THE MAIL'S READING CAN FAIL WITHOUT STOPPING THE PASS: what
@@ -418,7 +425,9 @@ defer() { [ -n "$DEFERRED" ] || DEFERRED="$1"; }
 # message would not say what to do; and mail arrived, so a pass that called no
 # verb triaged nothing, however it narrates or exits.
 AGENT_FAILED=""
-if [ "$RAN_STATUS" -eq 10 ] || grep -qiE '^not logged in|please run /login' "$SESSION.err"; then
+if [ "$RAN_STATUS" -eq 14 ]; then
+  AGENT_FAILED="claude met a limit (said above); nothing asks the model until it ends"
+elif [ "$RAN_STATUS" -eq 10 ] || grep -qiE '^not logged in|please run /login' "$SESSION.err"; then
   AGENT_FAILED="claude is not authenticated — run 'claude' interactively and /login"
 elif [ "${CLAUDE_STATUS:-0}" -ne 0 ]; then
   AGENT_FAILED="claude exited ${CLAUDE_STATUS}"
@@ -455,10 +464,14 @@ echo "hourly-triage: handing the cards to the secretary for review"
 # cadence), the verb pushes to the phone itself, once per outage: a rate-limit
 # minute should not page, and a day of silence (11-12 Sep) must not recur.
 # The threshold is the operator's, so it is passed here.
+# Exit 3 is a review that did not start because the model is under a limit:
+# it wrote nothing, and the health line says why.
 REVIEW_STATUS=0
 REVIEW_JSON="$(app secretary review --json --page-after 12 2>&1)" || REVIEW_STATUS=$?
 printf '%s\n' "$REVIEW_JSON" | tail -3
-if [ "$REVIEW_STATUS" -ne 0 ]; then
+if [ "$REVIEW_STATUS" -eq 3 ]; then
+  echo "hourly-triage: the review waits for the model's limit to end"
+elif [ "$REVIEW_STATUS" -ne 0 ]; then
   echo "hourly-triage: the review failed (exit $REVIEW_STATUS)" >&2
   defer review
 fi
@@ -481,6 +494,8 @@ if [ "$LAST_SWEEP" != "$TODAY_UTC" ]; then
   printf '%s\n' "$SWEEP_JSON" | tail -3
   if [ "$SWEEP_STATUS" -eq 0 ]; then
     echo "$TODAY_UTC" > "$SWEEP_STAMP"
+  elif [ "$SWEEP_STATUS" -eq 3 ]; then
+    echo "hourly-triage: the sweep waits for the model's limit to end; it runs at a later pass"
   else
     echo "hourly-triage: the sweep failed (exit $SWEEP_STATUS); it runs again next pass" >&2
     defer sweep

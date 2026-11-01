@@ -5,7 +5,7 @@
 //! every card open.
 
 use super::Bound;
-use super::daily::{Daily, daily_round};
+use super::daily::{Daily, Run, begin, daily_round};
 use super::found::{Found, Unreadable};
 use super::store::{ConversationId, Decision, Entry, Outcome, Review, Stored};
 use super::surface::{Effect, SecretaryVerb, Subset};
@@ -63,7 +63,7 @@ pub const SURFACE: Subset = Subset {
 };
 
 /// Review every open triage card in one round, then write a `held` line for each card still
-/// open.
+/// open; nothing while the model is under a limit.
 ///
 /// The seed is `triage_cards`' own answer as a `Turn::Tool`, and spends no rounds.
 ///
@@ -75,17 +75,20 @@ pub fn review(
     settables: &crate::settings::Settables,
     chains: &[Bound<'_>],
     system: &str,
-) -> Result<Reviewed, Refusal> {
-    let round = daily_round(caps, deployment.zone, Daily::Review)?;
+) -> Result<Run<Reviewed>, Refusal> {
+    let round = match begin(caps, deployment.zone, Daily::Review)? {
+        Run::Done(round) => round,
+        Run::Paused(limited) => return Ok(Run::Paused(limited)),
+    };
     let id = round.id.clone();
     if standing(caps.inbox)?.is_empty() {
         // Nothing standing opens no conversation and spawns no model.
-        return Ok(Reviewed {
+        return Ok(Run::Done(Reviewed {
             stored: round.idle(caps),
             rounds: 0,
             decided: Vec::new(),
             standing: 0,
-        });
+        }));
     }
     let already = round.open(caps)?.reviews.len();
 
@@ -163,12 +166,12 @@ pub fn review(
     let standing = hold_the_rest(caps, &id, &after)?;
 
     let stored = super::read(caps.conversations, &id)?;
-    Ok(Reviewed {
+    Ok(Run::Done(Reviewed {
         decided: stored.reviews[already.min(stored.reviews.len())..].to_vec(),
         rounds,
         stored,
         standing,
-    })
+    }))
 }
 
 /// Name in today's review every conversation the store holds that does not read, once a day for

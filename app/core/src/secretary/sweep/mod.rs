@@ -6,7 +6,7 @@ pub mod candidates;
 use serde_json::{Map, Value};
 
 use super::changes::Act;
-use super::daily::{Daily, daily_round};
+use super::daily::{Daily, Run, begin};
 use super::store::{ConversationId, Entry, Proposal, Stored};
 use super::surface::{Effect, SecretaryCall, SecretaryVerb, Subset};
 use super::verbs::Show;
@@ -112,7 +112,8 @@ pub struct Swept {
     pub proposed: Vec<(usize, super::store::Standing)>,
 }
 
-/// Sweeps the first chain's open list in one round; a todo with no later mail proposes nothing.
+/// Sweeps the first chain's open list in one round; a todo with no later mail proposes nothing,
+/// and nothing runs while the model is under a limit.
 ///
 /// # Errors
 /// The stores' failures and the model's.
@@ -122,20 +123,23 @@ pub fn sweep(
     settables: &crate::settings::Settables,
     chains: &[Bound<'_>],
     system: &str,
-) -> Result<Swept, Refusal> {
+) -> Result<Run<Swept>, Refusal> {
     let bound = chains
         .first()
         .ok_or_else(|| Refusal::internal("a deployment names at least one chain"))?;
-    let round = daily_round(caps, deployment.zone, Daily::Sweep)?;
+    let round = match begin(caps, deployment.zone, Daily::Sweep)? {
+        Run::Done(round) => round,
+        Run::Paused(limited) => return Ok(Run::Paused(limited)),
+    };
     let id = round.id.clone();
     let gathered = gather(bound, deployment.zone)?;
     if gathered.todos.is_empty() {
         // A day with nothing to sweep opens no conversation and runs no model.
-        return Ok(Swept {
+        return Ok(Run::Done(Swept {
             stored: round.idle(caps),
             rounds: 0,
             proposed: Vec::new(),
-        });
+        }));
     }
     let already = round.open(caps)?.proposals.len();
 
@@ -197,11 +201,11 @@ pub fn sweep(
         })
         .map(|standing| (standing.asking.index, standing))
         .collect();
-    Ok(Swept {
+    Ok(Run::Done(Swept {
         stored,
         rounds: answered.map_or(0, |answered| answered.rounds),
         proposed,
-    })
+    }))
 }
 
 /// What a sweep would lay before the model, as counts.

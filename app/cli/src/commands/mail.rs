@@ -147,6 +147,10 @@ pub fn gate(path: &Path) -> anyhow::Result<()> {
         .with_context(|| format!("reading {}", instance.paths.last_sync.display()))?
         .map(|(report, _)| report);
     let queue = Queue::of(&rows, report);
+    if let Some(limited) = crate::commands::serve::interpreters::limited_now(&instance) {
+        println!("{queue}; the model is not asked: {limited}");
+        std::process::exit(3);
+    }
     // Each pass is a fresh process: the memo that lasts is the dedup authority, whose
     // dispositions take what the last pass triaged out of the queue.
     let Some((_, firing)) = suzatary_core::rule::Engine::new(vec![Triage]).due(&Mailbox, &queue)

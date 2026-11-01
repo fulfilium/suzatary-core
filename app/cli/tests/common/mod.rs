@@ -998,6 +998,8 @@ pub struct FakeModel {
     holding: Mutex<Option<Gate>>,
     /// The verb names each ask was shown, in order.
     shown: Mutex<Vec<Vec<String>>>,
+    /// The limit its account is under, as a door reads it.
+    limited: Option<suzatary_core::capability::Limited>,
 }
 
 impl FakeModel {
@@ -1020,6 +1022,7 @@ impl FakeModel {
             mid: Mutex::new(None),
             holding: Mutex::new(None),
             shown: Mutex::new(Vec::new()),
+            limited: None,
         }
     }
 
@@ -1037,6 +1040,7 @@ impl FakeModel {
             mid: Mutex::new(None),
             holding: Mutex::new(None),
             shown: Mutex::new(Vec::new()),
+            limited: None,
         }
     }
 
@@ -1143,6 +1147,15 @@ impl FakeModel {
         self.shown.lock().expect("not poisoned").push(names);
     }
 
+    /// The same model, its account under `limited`.
+    #[must_use]
+    pub fn limited(self, limited: suzatary_core::capability::Limited) -> Self {
+        Self {
+            limited: Some(limited),
+            ..self
+        }
+    }
+
     /// The next `resume` fails once with `ModelError::Lost`.
     #[must_use]
     pub fn losing_next_resume(self) -> Self {
@@ -1175,6 +1188,10 @@ impl Model for FakeModel {
             // make a green run mean nothing.
             None => Err(ModelError::Failed("the script ran out".to_owned())),
         }
+    }
+
+    fn limited(&self) -> Option<suzatary_core::capability::Limited> {
+        self.limited
     }
 }
 

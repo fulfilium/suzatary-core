@@ -55,6 +55,28 @@ pub struct Round {
     held: Option<Stored>,
 }
 
+/// What a daily round came to: its work, or no start while the model is under a limit, in which
+/// case the round wrote nothing and asked the model nothing.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Run<T> {
+    /// It ran, to this.
+    Done(T),
+    /// It did not start.
+    Paused(crate::capability::Limited),
+}
+
+/// Today's round of `daily`, unless the model is under a limit now: the one check every box
+/// round makes before it writes its question, so a limit fills no conversation with failures.
+///
+/// # Errors
+/// As [`daily_round`].
+pub fn begin(caps: &Secretary<'_>, zone: Zone, daily: Daily) -> Result<Run<Round>, Refusal> {
+    match caps.model.limited() {
+        Some(limited) => Ok(Run::Paused(limited)),
+        None => daily_round(caps, zone, daily).map(Run::Done),
+    }
+}
+
 /// Today's round of `daily`, in `zone`'s day: its conversation read when it exists.
 ///
 /// # Errors

@@ -357,7 +357,10 @@ fn wiring_the_triage_script_passes_the_fence_strict_mcp_and_one_built_in_tool() 
     assert!(src.contains("--tools ToolSearch"));
     assert!(src.contains("--output-format stream-json --verbose"));
     assert!(
-        src.contains("RAN=\"$(app ran --needs mcp__suzatary__ \"$SESSION\")\" || RAN_STATUS=$?"),
+        src.contains(
+            "RAN=\"$(app ran --needs mcp__suzatary__ --model \"$TRIAGE_MODEL\" \"$SESSION\")\" \
+             || RAN_STATUS=$?"
+        ),
         "the stream is read by the binary, which prints only its summary"
     );
     assert!(
@@ -478,8 +481,8 @@ fn wiring_the_triage_script_journals_a_summary_and_keeps_its_files_private() {
         "the run's output is the CLI's stream, read by `suzatary ran`"
     );
     assert!(
-        code.iter()
-            .any(|line| line.contains("app ran --needs mcp__suzatary__ \"$SESSION\"")),
+        code.iter().any(|line| line
+            .contains("app ran --needs mcp__suzatary__ --model \"$TRIAGE_MODEL\" \"$SESSION\"")),
         "the journal line is `suzatary ran`'s summary"
     );
     for line in &code {

@@ -26,7 +26,12 @@ pub enum Event {
     },
     /// The run's end.
     Result(Ended),
-    /// A line this box does not read (a tool's answer, a rate-limit notice).
+    /// Where the account stands against its limits, as the CLI saw it before a request.
+    RateLimitEvent {
+        /// What the limit said.
+        rate_limit_info: RateLimitInfo,
+    },
+    /// A line this box does not read (a tool's answer).
     #[serde(other)]
     Other,
 }
@@ -86,6 +91,28 @@ pub struct Ended {
     /// The calls a permission refused; an absent list is none refused.
     #[serde(default)]
     pub permission_denials: Vec<Denial>,
+}
+
+/// A `rate_limit_event`'s `rate_limit_info`, read for whether the request was refused and when
+/// the window resets.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
+pub struct RateLimitInfo {
+    /// Whether the limit let the request through.
+    pub status: LimitStatus,
+    /// When the window resets, in unix seconds; absent where the CLI did not say.
+    #[serde(rename = "resetsAt")]
+    pub resets_at: Option<i64>,
+}
+
+/// A `rate_limit_info`'s `status`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum LimitStatus {
+    /// The window refused the request.
+    Rejected,
+    /// It let it through, with or without a warning.
+    #[serde(other)]
+    Allowed,
 }
 
 /// Token counts off a `result` line's `usage` object.
@@ -162,7 +189,11 @@ impl Event {
 pub fn delta_of(line: &str) -> Option<String> {
     match Event::of(line)? {
         Event::StreamEvent { event } => event.text().map(str::to_owned),
-        Event::System(_) | Event::Assistant { .. } | Event::Result(_) | Event::Other => None,
+        Event::System(_)
+        | Event::Assistant { .. }
+        | Event::Result(_)
+        | Event::RateLimitEvent { .. }
+        | Event::Other => None,
     }
 }
 
@@ -174,7 +205,11 @@ pub fn result_of(line: &str) -> Result<Option<Ended>, Unreadable> {
     match Event::read(line).transpose()? {
         Some(Event::Result(ended)) => Ok(Some(ended)),
         Some(
-            Event::System(_) | Event::Assistant { .. } | Event::StreamEvent { .. } | Event::Other,
+            Event::System(_)
+            | Event::Assistant { .. }
+            | Event::StreamEvent { .. }
+            | Event::RateLimitEvent { .. }
+            | Event::Other,
         )
         | None => Ok(None),
     }

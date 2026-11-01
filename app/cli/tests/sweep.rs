@@ -16,9 +16,26 @@ use suzatary_core::capability::Datetime;
 use suzatary_core::record::{EventStore, TodoEvent, mk_source};
 use suzatary_core::secretary::Bound;
 use suzatary_core::secretary::changes::Act;
+use suzatary_core::secretary::daily::Run;
 use suzatary_core::secretary::store::Proposal;
-use suzatary_core::secretary::sweep::{dry_run, sweep};
+use suzatary_core::secretary::sweep::{Swept, dry_run};
 use suzatary_core::store::Reads as _;
+
+/// The sweep run to its end; a scripted model is under no limit, so it always starts.
+fn sweep(
+    caps: &suzatary_core::capability::Secretary<'_>,
+    deployment: &suzatary_core::deployment::Deployment,
+    settables: &suzatary_core::settings::Settables,
+    chains: &[Bound<'_>],
+    system: &str,
+) -> Result<Swept, suzatary_core::refusal::Refusal> {
+    suzatary_core::secretary::sweep::sweep(caps, deployment, settables, chains, system).map(|run| {
+        match run {
+            Run::Done(swept) => swept,
+            Run::Paused(limited) => panic!("a scripted model is never limited: {limited}"),
+        }
+    })
+}
 
 /// The instant every todo below is authored, well before [`common::now`], so a candidate between
 /// the two is unambiguously later.
