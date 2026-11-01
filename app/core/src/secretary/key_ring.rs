@@ -6,9 +6,33 @@ use std::collections::BTreeMap;
 use crate::secretary::locked_text::{KEY_BYTES, KeyName, TextKey};
 use crate::secretary::words::{Gone, Words};
 
-/// Keys by name; a name given bytes that are not its key is not held.
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
+/// Keys by name; a name given bytes that are not its key is not held. It prints as each key's
+/// bytes under its name, for a snapshot of a replica, and reads back only where every name is
+/// its bytes' own.
+#[derive(Debug, Clone, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(try_from = "BTreeMap<KeyName, [u8; KEY_BYTES]>")]
 pub struct KeyRing(BTreeMap<KeyName, [u8; KEY_BYTES]>);
+
+/// A key whose bytes are not the key its name names.
+#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
+#[error("the bytes under {0} are not the key it names")]
+pub struct NotItsKey(KeyName);
+
+impl TryFrom<BTreeMap<KeyName, [u8; KEY_BYTES]>> for KeyRing {
+    type Error = NotItsKey;
+
+    fn try_from(keys: BTreeMap<KeyName, [u8; KEY_BYTES]>) -> Result<Self, NotItsKey> {
+        let ring = Self(keys);
+        match ring
+            .0
+            .iter()
+            .find(|(name, bytes)| TextKey::parse(name, *bytes).is_none())
+        {
+            Some((name, _)) => Err(NotItsKey(name.clone())),
+            None => Ok(ring),
+        }
+    }
+}
 
 impl Drop for KeyRing {
     fn drop(&mut self) {

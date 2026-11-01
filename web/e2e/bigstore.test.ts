@@ -28,7 +28,8 @@ import { writeFileSync } from "node:fs"
 
 import marks from "../src/chat/marks"
 import wait from "../src/wire/wait"
-import { PHONE, SIGNED_POST, suite, trustThisDevice } from "./harness"
+import type { Recorded } from "./harness"
+import { PHONE, SIGNED_POST, WORKER_MARKS, WORKER_QUESTIONS, snapshotKept, suite, trustThisDevice } from "./harness"
 
 type Shape = { readonly lines: number; readonly conversations: number; readonly reseals: number; readonly proposals: number; readonly topics: number; readonly todos: number }
 // The stores' shape as `scripts/web-e2e.sh` hands it to the fixture.
@@ -171,6 +172,8 @@ app.scene("a warm load of the conversations draws them from the device, with eve
   const deadline = Date.now() + 600000
   while (reads(journal.inFlight()).length > 0 && Date.now() < deadline) await new Promise((done) => setTimeout(done, 200))
   assert.deepEqual(reads(journal.inFlight()), [], "the cold load ended")
+  // As a page left open does: the lines are quiet, so the core's snapshot of them is kept.
+  await app.page.waitFor(snapshotKept("lines"), { timeout: 120000 })
   journal.mark("warm load")
   // Every request to the box's API is held until the stream has drawn, so what draws is drawn from the device.
   const release = await app.page.holdRequests(["/api/"])
@@ -195,32 +198,9 @@ app.scene("a warm load of the conversations draws them from the device, with eve
   assert.ok(drawn.held.length > 0, `the box was asked and answered nothing before the stream drew:\n${journal.lines().join("\n")}`)
 })
 
-// In the core's worker, before its own script: each question as it arrives (its number, lane and kind) and each
-// answer as it is sent, in the order the worker saw them, each at the worker's clock.
-const RECORD = `(() => {
-  const seen = (self.__questions = [])
-  self.addEventListener("message", (e) => {
-    const d = e.data
-    if (d !== null && typeof d === "object" && typeof d.id === "number" && "question" in d) seen.push(["asked", d.id, Math.round(performance.now()), d.lane, d.question.type])
-  })
-  const post = self.postMessage.bind(self)
-  self.postMessage = (m, ...rest) => {
-    if (m !== null && typeof m === "object" && typeof m.id === "number" && "answer" in m) seen.push(["answered", m.id, Math.round(performance.now())])
-    return post(m, ...rest)
-  }
-})()`
-
-type Recorded = readonly ["asked", number, number, string, string] | readonly ["answered", number, number]
-
-// The core worker's marks (`pull`, `noderows`, `linesync`, `questions`), each the first of its name, in milliseconds from
-// the first stream asked.
-const PHASES = `(() => {
-  const marks = performance.getEntriesByType("mark")
-  const first = new Map()
-  for (const m of marks) if (!first.has(m.name)) first.set(m.name, m.startTime)
-  const from = first.get("stream asked") ?? 0
-  return Object.fromEntries([...first].map(([name, at]) => [name, Math.round(at - from)]))
-})()`
+// The worker's marks in milliseconds from the first stream asked.
+const fromStream = (marks: Readonly<Record<string, number>>): Readonly<Record<string, number>> =>
+  Object.fromEntries(Object.entries(marks).map(([name, at]) => [name, Math.round(at - (marks["stream asked"] ?? 0))]))
 
 // How many warm loads the scene reads, each reported.
 const LOADS = 3
@@ -234,8 +214,10 @@ app.scene("a warm load of the conversations answers the page's first stream befo
   const deadline = Date.now() + 600000
   while (reads(journal.inFlight()).length > 0 && Date.now() < deadline) await new Promise((done) => setTimeout(done, 200))
   assert.deepEqual(reads(journal.inFlight()), [], "the cold load ended")
+  // As a page left open does: the lines are quiet, so the core's snapshot of them is kept.
+  await app.page.waitFor(snapshotKept("lines"), { timeout: 120000 })
   // The box answers as it does live, so the shell asks what it asks on every load.
-  const unrecord = await app.page.beforeEveryWorker(RECORD)
+  const unrecord = await app.page.beforeEveryWorker(WORKER_QUESTIONS)
   type Load = { readonly draw: Phase; readonly seen: readonly Recorded[]; readonly phases: Readonly<Record<string, number>> }
   const loads = await (async (): Promise<Load[]> => {
     const each: Load[] = []
@@ -244,7 +226,7 @@ app.scene("a warm load of the conversations answers the page's first stream befo
       for (let n = 0; n < LOADS; n += 1) {
         await app.page.reload()
         const draw = await phase(BULK, 0)
-        each.push({ draw, seen: await app.page.inWorker<Recorded[]>("prodromework", "self.__questions"), phases: await app.page.inWorker<Record<string, number>>("prodromework", PHASES) })
+        each.push({ draw, seen: await app.page.inWorker<Recorded[]>("prodromework", "self.__questions"), phases: fromStream(await app.page.inWorker<Readonly<Record<string, number>>>("prodromework", WORKER_MARKS)) })
       }
       return each
     } finally {

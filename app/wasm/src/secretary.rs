@@ -11,14 +11,16 @@ use prodrome_core::event::Hash;
 use prodrome_core::fpl::datetime_of;
 use prodrome_wasm_exports::wire::parse_instant;
 use suzatary_core::query;
-use suzatary_core::secretary::held_lines::{Admitted, HeldLines};
+use suzatary_core::secretary::held_lines::Admitted;
+use suzatary_core::secretary::held_replica::HeldReplica;
 use suzatary_core::secretary::inbox::Fold;
 use suzatary_core::secretary::key_ring::KeyRing;
 use suzatary_core::secretary::locked_text::KeyName;
-use suzatary_core::secretary::outlines::{Outlines, Parsed};
+use suzatary_core::secretary::outlines::Parsed;
 use suzatary_core::secretary::readings::{self, DEFAULT_TURN_WINDOW, Dress, Window};
 use suzatary_core::secretary::store::{ConversationId, Stored};
 use suzatary_core::secretary::stream;
+use suzatary_core::snapshot;
 use suzatary_core::wire::MemoryPayload;
 use wasm_bindgen::prelude::*;
 
@@ -51,10 +53,7 @@ impl Proposals {
 /// A slot whose key is not held reads as missing, and one an erasure names as erased. Beside the
 /// prints, the skeleton's line nodes, whose outlines the stream chooses its rounds by.
 #[wasm_bindgen]
-pub struct Lines {
-    held: HeldLines,
-    outlines: Outlines,
-}
+pub struct Lines(HeldReplica);
 
 #[wasm_bindgen]
 impl Lines {
@@ -62,16 +61,32 @@ impl Lines {
     #[wasm_bindgen(constructor)]
     #[must_use]
     pub fn new() -> Lines {
-        Lines {
-            held: HeldLines::new(),
-            outlines: Outlines::default(),
-        }
+        Lines(HeldReplica::default())
+    }
+
+    /// What these lines were handed, the skeleton and the keys, as the core's snapshot of them
+    /// (`suzatary_core::snapshot`): what a tab keeps beside the rows they were read from.
+    pub fn snapshot(&self) -> Result<Vec<u8>, JsError> {
+        snapshot::snapshot(&self.0).map_err(|e| refused(e.to_string()))
+    }
+
+    /// These lines replaced by those `bytes` snapshot, as if their every node and key had been
+    /// handed over; or, for bytes that are no snapshot of this build's form, left as they are.
+    pub fn load(&mut self, bytes: &[u8]) -> Result<(), JsError> {
+        self.0 = snapshot::from_snapshot(bytes).map_err(|e| refused(e.to_string()))?;
+        Ok(())
+    }
+
+    /// Nothing held again: what a tab does when the rows it reads are not those its snapshot was
+    /// of, so it hands every node and key over from them.
+    pub fn clear(&mut self) {
+        self.0 = HeldReplica::default();
     }
 
     /// `add`, `[{hash, text}]`, each hashed against its name and held, and `drop`,
     /// `[<name>, …]`, let go.
     pub fn hold(&mut self, add: &str, drop: &str) -> Result<(), JsError> {
-        self.held.hold(objects(add)?, &names(drop, "drop")?);
+        self.0.lines.hold(objects(add)?, &names(drop, "drop")?);
         Ok(())
     }
 
@@ -82,7 +97,7 @@ impl Lines {
             .into_iter()
             .map(|(name, bytes)| Admitted::vouched(name, bytes))
             .collect();
-        self.held.hold_admitted(add, &names(drop, "drop")?);
+        self.0.lines.hold_admitted(add, &names(drop, "drop")?);
         Ok(())
     }
 
@@ -95,7 +110,7 @@ impl Lines {
             .map(Parsed::of)
             .collect::<Result<Vec<_>, _>>()
             .map_err(|e| refused(e.to_string()))?;
-        self.outlines.hold(add, &names(drop, "drop")?);
+        self.0.outlines.hold(add, &names(drop, "drop")?);
         Ok(())
     }
 
@@ -105,7 +120,7 @@ impl Lines {
             serde_json::from_str(add).map_err(|e| refused(format!("keys: {e}")))?;
         let drop: Vec<KeyName> =
             serde_json::from_str(drop).map_err(|e| refused(format!("keys: {e}")))?;
-        self.held.keys(&add, &drop);
+        self.0.lines.keys(&add, &drop);
         Ok(())
     }
 
@@ -140,7 +155,8 @@ impl Lines {
         };
         let memory = memory_of(memory)?;
         let stored = self
-            .held
+            .0
+            .lines
             .conversation(&id)
             .ok_or_else(|| refused(format!("no conversation named {id}")))?
             .map_err(|e| refused(e.to_string()))?;
@@ -156,8 +172,9 @@ impl Lines {
         ))
     }
 
-    /// `[<name>, …]`: every line whose words the newest `pages` pages of the stream read, chosen by
-    /// the skeleton's outlines alone, which a page holds before it reads the stream.
+    /// `[{hash, parents, size, header}, …]`: the node, as it was given, of every line whose words
+    /// the newest `pages` pages of the stream read, chosen by the skeleton's outlines alone, which a
+    /// page holds before it reads the stream.
     pub fn chosen(
         &self,
         topics: &crate::topics::TopicReading,
@@ -166,7 +183,7 @@ impl Lines {
     ) -> Result<String, JsError> {
         let chosen = crate::topics::topics_of(chosen)?;
         let choice = stream::choose(
-            self.outlines.outlines(),
+            self.0.outlines.outlines(),
             &topics.0,
             &chosen,
             pages_of(pages)?,
@@ -176,7 +193,7 @@ impl Lines {
             &choice
                 .objects()
                 .iter()
-                .map(Hash::as_str)
+                .filter_map(|name| self.0.outlines.node(name))
                 .collect::<Vec<_>>(),
         )
     }
@@ -192,10 +209,10 @@ impl Lines {
     ) -> Result<String, JsError> {
         let chosen = crate::topics::topics_of(chosen)?;
         let pages = pages_of(pages)?;
-        let held = &mut self.held;
+        let held = &mut self.0.lines;
         json(
             &stream::stream(
-                self.outlines.outlines(),
+                self.0.outlines.outlines(),
                 |id, turn, objects| held.round(id, turn, objects),
                 &topics.0,
                 &chosen,
@@ -221,7 +238,8 @@ impl Lines {
         let told: BTreeSet<KeyName> =
             serde_json::from_str(told).map_err(|e| refused(format!("told: {e}")))?;
         let erased: BTreeMap<KeyName, Vec<String>> = self
-            .held
+            .0
+            .lines
             .erased(&ring(keys)?, &told)
             .into_iter()
             .map(|(name, blocks)| {
@@ -237,7 +255,7 @@ impl Lines {
 
     /// `[<name>, …]`: every key an erasure line of its own conversation names.
     pub fn dead(&mut self) -> Result<String, JsError> {
-        json(&self.held.dead())
+        json(&self.0.lines.dead())
     }
 
     /// `{excluded}`: what the history leaves out, `[{name, why, resting}]` in name order, as every
@@ -245,8 +263,9 @@ impl Lines {
     /// the skeleton does not hold either.
     pub fn excluded(&self) -> Result<String, JsError> {
         let excluded: Vec<serde_json::Value> = self
-            .held
-            .excluded(|name| self.outlines.holds(name))
+            .0
+            .lines
+            .excluded(|name| self.0.outlines.holds(name))
             .into_iter()
             .map(|out| {
                 serde_json::json!({
@@ -268,7 +287,7 @@ impl Default for Lines {
 
 impl Lines {
     fn stored(&mut self) -> Result<Vec<std::sync::Arc<Stored>>, JsError> {
-        self.held.read().0.map_err(|e| refused(e.to_string()))
+        self.0.lines.read().0.map_err(|e| refused(e.to_string()))
     }
 }
 

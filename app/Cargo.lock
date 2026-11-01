@@ -4176,6 +4176,7 @@ dependencies = [
  "hex",
  "hmac",
  "mail-builder",
+ "postcard",
  "prodrome-core",
  "prodrome-wasm-exports",
  "proptest",

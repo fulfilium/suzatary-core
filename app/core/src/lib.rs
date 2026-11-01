@@ -64,6 +64,7 @@ pub mod secretary;
 pub mod settings;
 pub mod signatures;
 pub mod site;
+pub mod snapshot;
 pub mod source_key;
 pub mod store;
 pub mod sync;

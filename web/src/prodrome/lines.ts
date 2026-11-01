@@ -7,11 +7,12 @@ import type { SkeletonNode } from "../wire/generated/wire"
 
 export namespace lines {
   // The whole store, for the list and a search; some conversations, each of which reads its own lines and what they
-  // rest on, for a window; or the lines whose words the stream's drawn rounds read, and nothing they rest on.
+  // rest on, for a window; or the lines whose words the stream's drawn rounds read, and nothing they rest on, as the
+  // core's skeleton names them, so a reading of them needs no row of the device's.
   export type Scope =
     | { readonly type: "Whole" }
     | { readonly type: "Conversations"; readonly ids: readonly string[] }
-    | { readonly type: "Objects"; readonly names: readonly string[] }
+    | { readonly type: "Objects"; readonly nodes: readonly SkeletonNode[] }
 
   export const WHOLE: Scope = { type: "Whole" }
   export const one = (id: string): Scope => ({ type: "Conversations", ids: [id] })
@@ -31,10 +32,7 @@ export namespace lines {
   // erases only its own conversation's words, so its closure reads as the whole store reads it.
   export const nodesOf = (skeleton: Replica<SkeletonNode>, scope: Scope): readonly SkeletonNode[] => {
     if (scope.type === "Whole") return skeleton.objects
-    if (scope.type === "Objects") {
-      const names = new Set(scope.names)
-      return skeleton.objects.filter(n => names.has(n.hash))
-    }
+    if (scope.type === "Objects") return scope.nodes
     const ids = new Set(scope.ids)
     return closure(skeleton.objects, n => n.header.node === "line" && ids.has(n.header.conversation))
   }

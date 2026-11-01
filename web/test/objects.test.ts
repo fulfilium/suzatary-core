@@ -25,7 +25,7 @@ type Req = {
 const later = (f: () => void): void => void setTimeout(f, 0)
 // The one key range the rows' store is asked for: every name from one bound to the other.
 type Range = { readonly includes: (k: string) => boolean }
-Object.assign(globalThis, { IDBKeyRange: { bound: (lower: string, upper: string): Range => ({ includes: k => lower <= k && k <= upper }) } })
+Object.assign(globalThis, { IDBKeyRange: { bound: (lower: string, upper: string, lowerOpen = false): Range => ({ includes: k => (lowerOpen ? lower < k : lower <= k) && k <= upper }) } })
 // A device at `version`, holding `rows` in its one store; an upgrade runs before the open answers, as IndexedDB's does.
 const fakeIndexedDB = (at = 0, rows: Readonly<Record<string, unknown>> = {}) => {
   // The connections the app's door kept open belong to the device before.
@@ -310,6 +310,13 @@ test("version 6 gives every row of version 5 a frontier of nothing, so its first
   assert.equal(await rawOf("objects:store/lines"), undefined, "the lines' row, whose nodes carry no step, is dropped")
   assert.equal(await rawOf("objects:store/lines/piece/000000000001"), undefined, "and its pieces with it")
   assert.equal(await rawOf("objects:store/rendered-owed"), true, "and the tab is told to clear the blocks its keys fed")
+})
+
+test("version 10 carries every row of version 9 as it was, beside a store of snapshots", async () => {
+  const kept = { generation: 0, objects: [BOX], synced: [BOX.hash], refused: [], words: [], frontier: { type: "Nothing" } }
+  Object.assign(globalThis, { indexedDB: fakeIndexedDB(9, { "objects:life": kept }) })
+  assert.ok((await row()) !== null, "a chain's row reads")
+  assert.deepEqual(await rawOf("objects:life"), kept, "as it was")
 })
 
 test("a row version 1 kept is dropped, never read as a replica sealing onto heads it did not compute", async () => {

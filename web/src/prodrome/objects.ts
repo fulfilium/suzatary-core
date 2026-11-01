@@ -20,6 +20,7 @@ const LINES_NAME = "lines";
 const INBOX_NAME = "inbox";
 const TOPICS_NAME = "topics";
 const ALIASES_NAME = "topic-aliases";
+const SNAPSHOTS_NAME = "snapshots";
 
 /**
  * One row per chain, which only climbs: every tab of this origin joins into it, so none erases what another sealed.
@@ -76,14 +77,16 @@ export const parseReplica = (raw: unknown): lo.Settled<Replica> => lo.map(Stored
  * no key is left to find them by; the content by name stays. Version 9 keeps the inbox and the two topic stores one node
  * per row as the lines are kept, each in a store of its own, and a head row names the nodes the box has not taken: a
  * version 8 lines' head names none, and the rows of those stores in the rows' store are carried by the core's worker
- * the first time it restores them (`objectsync`).
+ * the first time it restores them (`objectsync`). Version 10 adds a store of snapshots, one per store name: what the
+ * core's worker held of that store's rows, in the core's own form, so a warm load reads it instead of every row
+ * (`noderows`); no row is carried or dropped.
  */
 const DB: idb.Db = {
   name: DB_NAME,
-  version: 9,
+  version: 10,
   store: STORE_NAME,
   upgrade: (db, tx, from) => {
-    if (from === 8) {
+    if (from >= 8) {
       // The rows' store is carried as it is.
     } else if (from >= 3 && from <= 7) {
       const rows = tx.objectStore(STORE_NAME);
@@ -103,7 +106,7 @@ const DB: idb.Db = {
     if (!db.objectStoreNames.contains(LINES_NAME)) db.createObjectStore(LINES_NAME);
     else if (from < 8) tx.objectStore(LINES_NAME).clear();
     else if (from === 8) unsentNone(tx.objectStore(LINES_NAME));
-    for (const name of [INBOX_NAME, TOPICS_NAME, ALIASES_NAME]) if (!db.objectStoreNames.contains(name)) db.createObjectStore(name);
+    for (const name of [INBOX_NAME, TOPICS_NAME, ALIASES_NAME, SNAPSHOTS_NAME]) if (!db.objectStoreNames.contains(name)) db.createObjectStore(name);
   },
 };
 
@@ -124,6 +127,9 @@ export const LINE_ROWS: idb.Db = { ...DB, store: LINES_NAME };
 export const INBOX_ROWS: idb.Db = { ...DB, store: INBOX_NAME };
 export const TOPIC_ROWS: idb.Db = { ...DB, store: TOPICS_NAME };
 export const ALIAS_ROWS: idb.Db = { ...DB, store: ALIASES_NAME };
+
+/** Beside those stores, a snapshot of what the core's worker held of each, by the store's name (`noderows`). */
+export const SNAPSHOTS: idb.Db = { ...DB, store: SNAPSHOTS_NAME };
 
 /** The lines' head row of version 8, which the box alone writes, naming no node the box has not taken, in the lines' first format. */
 function unsentNone(store: IDBObjectStore): void {

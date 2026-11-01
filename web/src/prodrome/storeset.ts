@@ -36,10 +36,11 @@ export namespace storeset {
     | { readonly type: "Cleared" }
     | { readonly type: "Refused"; readonly why: string }
 
-  // What a reading reads: the inbox alone, or every store.
-  export type Scope = "Inbox" | "All"
-  const SCOPES: { readonly [S in Scope]: readonly stores.Name[] } = { Inbox: ["inbox"], All: stores.NAMES }
-  const SCOPE_NAMES: readonly Scope[] = ["Inbox", "All"]
+  // What a reading reads: the inbox alone, every store, or every store as a store's reader holds it, from a snapshot of
+  // its rows where one was loaded (the stream, which reads the lines through the core's skeleton alone).
+  export type Scope = "Inbox" | "All" | "Loaded"
+  const SCOPES: { readonly [S in Scope]: readonly stores.Name[] } = { Inbox: ["inbox"], All: stores.NAMES, Loaded: stores.NAMES }
+  const SCOPE_NAMES: readonly Scope[] = ["Inbox", "All", "Loaded"]
 
   // The core's replica of each topic store and its one reading of them.
   export type Topics = { readonly replicas: { readonly [N in topics.Store]: TopicStore }; readonly reading: TopicReading }
@@ -52,6 +53,8 @@ export namespace storeset {
     // Local-first, store by store: a store this device has landed answers at once and is pulled behind; one it never
     // landed is waited for until it is whole, so a reading never reads part of it and never reads nothing for empty.
     readonly ready: (scope: Scope) => Promise<void>
+    // `read`, every store's rows read only once it ended, where a reader was loaded from a snapshot.
+    readonly first: <A>(read: () => Promise<A>) => Promise<A>
     // Every store pulled, what this tab wrote handed over first; whether every pull ended whole.
     readonly pull: () => Promise<boolean>
     // The box's stream named a store's heads, or opened again.
@@ -177,14 +180,24 @@ export namespace storeset {
       return inbox.want()
     }
 
-    const readyOf = (names: readonly stores.Name[], pulling: () => Promise<boolean>): once.T<void> =>
+    // A store is ready once its rows are restored, or, where `loaded` allows, once its reader was loaded from a snapshot:
+    // a snapshot is kept only of rows a landing wrote, so such a store has landed.
+    const readyOf = (names: readonly stores.Name[], pulling: () => Promise<boolean>, loaded: "Loaded" | "Rows"): once.T<void> =>
       once.of(() =>
-        Promise.all(names.map(name => engines[name].sync.restored.get())).then(() => {
+        Promise.all(
+          names.map(name => {
+            const sync = engines[name].sync
+            const restored = (): Promise<readonly stores.Name[]> => sync.restored.get().then(() => (sync.landed() ? [] : [name]))
+            return loaded === "Loaded" ? sync.loaded().then(l => (l ? [] : restored())) : restored()
+          }),
+        ).then(unlanded => {
           void pulling()
-          return Promise.all(names.filter(name => !engines[name].sync.landed()).map(name => engines[name].sync.whole())).then(() => undefined)
+          return Promise.all(unlanded.flat().map(name => engines[name].sync.whole())).then(() => undefined)
         }),
       )
-    const readies: { readonly [S in Scope]: once.T<void> } = { Inbox: readyOf(SCOPES.Inbox, inboxOnly), All: readyOf(SCOPES.All, all) }
+    const readies: { readonly [S in Scope]: once.T<void> } = { Inbox: readyOf(SCOPES.Inbox, inboxOnly, "Rows"), All: readyOf(SCOPES.All, all, "Rows"), Loaded: readyOf(SCOPES.Loaded, all, "Loaded") }
+
+    const first = <A>(read: () => Promise<A>): Promise<A> => stores.NAMES.reduce((inner: () => Promise<A>, name) => () => engines[name].sync.first(inner), read)()
 
     const write = async (w: topics.Write, at: string, actor: string): Promise<void> => {
       await readies.All.get()
@@ -203,6 +216,7 @@ export namespace storeset {
       proposals,
       topics: topicsNow,
       ready: scope => readies[scope].get(),
+      first,
       pull: all,
       heard: (store, box) => engines[store].heard(box),
       opened: () => void (wanted === "All" ? all() : wanted === "Inbox" ? inboxOnly() : undefined),

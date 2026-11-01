@@ -257,8 +257,8 @@ export namespace questions {
     // The stores `scope` reads once they are ready, and the question's turn after the wait.
     const ready = (scope: storeset.Scope, turn: Turn): Promise<void> => stores.ready(scope).then(turn)
     // A reading of every line once they are held, or how many the device lacks where they cannot be fetched.
-    const scoped = <A>(turn: Turn, scope: () => lines.Scope, read: () => A): Promise<Whole<A>> =>
-      ready("All", turn)
+    const scoped = <A>(turn: Turn, scope: () => lines.Scope, read: () => A, stores: storeset.Scope = "All"): Promise<Whole<A>> =>
+      ready(stores, turn)
         .then(() => sync.over(scope, (): Whole<A> => ({ type: "Held", v: read() })))
         .catch((e: unknown): Whole<A> => notHere(scope(), e))
     const whole = <A>(turn: Turn, read: () => A): Promise<Whole<A>> => scoped(turn, () => lines.WHOLE, read)
@@ -418,19 +418,23 @@ export namespace questions {
           return own
         case "AnswerKeys":
           return q.sources.map(source => core.answer_key(source))
-        // The rounds are chosen by the skeleton's outlines, and only the lines whose words they read are read.
+        // The rounds are chosen by the core's skeleton, and only the lines whose words they read are read. It reads no row
+        // of the lines' own, so on a warm load it is answered from the core's snapshot before the rows are read.
         case "Stream":
           phases.mark("stream asked")
-          return scoped(
-            turn,
-            () => ({ type: "Objects", names: chosenOf(held, stores.topics().reading, q.chosen, q.pages) }),
-            () => {
-              phases.mark("stream content held")
-              const read = stores.topics()
-              const stream = streamOf(held, read.reading, q.chosen, q.pages)
-              phases.mark("stream drawn")
-              return { stream, bar: barOf(read.reading), keys: keyed(stream.rounds.flatMap(r => (r.answer === null ? [] : [r.answer]))) }
-            },
+          return stores.first(() =>
+            scoped(
+              turn,
+              () => ({ type: "Objects", nodes: chosenOf(held, stores.topics().reading, q.chosen, q.pages) }),
+              () => {
+                phases.mark("stream content held")
+                const read = stores.topics()
+                const stream = streamOf(held, read.reading, q.chosen, q.pages)
+                phases.mark("stream drawn")
+                return { stream, bar: barOf(read.reading), keys: keyed(stream.rounds.flatMap(r => (r.answer === null ? [] : [r.answer]))) }
+              },
+              "Loaded",
+            ),
           )
         case "Topic":
           return stores.write(q.write, q.at, q.actor).then(() => null)

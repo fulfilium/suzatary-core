@@ -50,6 +50,8 @@ export namespace engine {
   export type Spec<N extends Obj> = {
     readonly name: string
     readonly place: noderows.Place<N>
+    // How its reader is loaded on a warm load: from the rows, or from the snapshot its place keeps beside them.
+    readonly reader: pull.Reader<N>
     readonly ask: (since: string) => Promise<pull.Answer<N>>
     readonly content: Content<N>
     readonly words: Words<N>
@@ -86,7 +88,7 @@ export namespace engine {
   }
 
   // What a store is, whatever it holds: what a set of stores asks of each by its name.
-  export type Any = Pick<T<Obj>, "want" | "wanted" | "heard" | "reset"> & { readonly sync: Pick<pull.Sync<Obj>, "restored" | "landed" | "whole"> }
+  export type Any = Pick<T<Obj>, "want" | "wanted" | "heard" | "reset"> & { readonly sync: Pick<pull.Sync<Obj>, "restored" | "loaded" | "first" | "landed" | "whole"> }
 
   export const of = <N extends Obj>(spec: Spec<N>, fx: Effects): T<N> => {
     let row = locked.none<N>()
@@ -117,6 +119,7 @@ export namespace engine {
         }),
         held: () => row,
         place: spec.place,
+        reader: spec.reader,
         ask: spec.ask,
         landed: spec.landed,
         restoring: spec.restoring,

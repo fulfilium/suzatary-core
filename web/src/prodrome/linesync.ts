@@ -114,9 +114,21 @@ export namespace linesync {
   export const FORMAT = 4
 
   export const of = (held: Lines, fx: Effects, blocks: rendered.Store): T => {
-    // The core opens words with the row's keys and reads the row's skeleton: told what changed, so a purge's key is let
-    // go now, and the stream chooses its rounds by the row it reads.
-    const took = (was: locked.Row<SkeletonNode>, row: locked.Row<SkeletonNode>): void => {
+    // What the core holds of the lines: the row it was last told, or, on a warm load until the rows are read, the
+    // snapshot it was loaded from.
+    type Told = { readonly type: "Row"; readonly row: locked.Row<SkeletonNode> } | { readonly type: "Snapshot" }
+    const NOTHING: Told = { type: "Row", row: locked.none() }
+    let told: Told = NOTHING
+    // The core opens words with the row's keys and reads the row's skeleton: told what changed since what it holds, so a
+    // purge's key is let go now, and the stream chooses its rounds by the row it reads. A core that holds a snapshot no
+    // row was named for holds nothing again and is told the row whole.
+    const took = (_: locked.Row<SkeletonNode>, row: locked.Row<SkeletonNode>): void => {
+      if (told.type === "Snapshot") {
+        held.clear()
+        told = NOTHING
+      }
+      const was = told.row
+      told = { type: "Row", row }
       const add = Object.fromEntries(Object.entries(row.keys).filter(([n, k]) => was.keys[n] !== k))
       const drop = Object.keys(was.keys).filter(n => row.keys[n] === undefined)
       if (Object.keys(add).length > 0 || drop.length > 0) held.keys(JSON.stringify(add), JSON.stringify(drop))
@@ -138,7 +150,35 @@ export namespace linesync {
     const clear = (): Promise<lo.Settled<null>> => blocks.clear().then(done => (fx.cleared(), done))
     // The device's rows of the lines, one node per row. Rows of another form go with their keys, so the blocks those
     // keys could find are cleared first.
-    const place = noderows.placeOf(LINE_ROWS, payload.SkeletonNode, { version: FORMAT, dropped: clear })
+    // Beside them, the core's snapshot of the row it was told; none while it holds a snapshot no row was named for, or
+    // where it does not print.
+    const printed = (): noderows.Printed<SkeletonNode> => {
+      if (told.type !== "Row") return { type: "Other" }
+      try {
+        return { type: "Of", row: told.row, bytes: held.snapshot() }
+      } catch {
+        return { type: "Other" }
+      }
+    }
+    const place = noderows.placeOf(LINE_ROWS, payload.SkeletonNode, { version: FORMAT, dropped: clear }, { type: "Snapshot", print: printed })
+    // A warm load's core loaded from the snapshot, and told, once the rows are read, whether they are the rows it was of.
+    const reader: pull.Reader<SkeletonNode> = {
+      type: "Snapshot",
+      load: bytes => {
+        try {
+          held.load(bytes)
+        } catch {
+          return false
+        }
+        told = { type: "Snapshot" }
+        return true
+      },
+      holds: row => void (told = { type: "Row", row }),
+      lost: () => {
+        held.clear()
+        told = NOTHING
+      },
+    }
 
     // Whether a page is shown; none is until one says so.
     let shown = false
@@ -246,6 +286,7 @@ export namespace linesync {
       {
         name: "lines",
         place,
+        reader,
         ask: since => {
           // A pull that lacks nothing is not sent the heads again: they are those of what this tab holds.
           const mine = store.sync.holding().heads
@@ -294,9 +335,11 @@ export namespace linesync {
       engine: store,
       over: (scope, read) => store.over(scope().type === "Whole" ? "Behind" : "First", () => lines.nodesOf(store.row().replica, scope()), read),
       holds: id => lines.holds(store.row().replica, id),
+      // A page hidden may be closed: the snapshot owed is written now.
       shown: on => {
         shown = on
         if (on) fetcher.wake()
+        else void place.settle()
       },
       lacking: scope => store.lacking(lines.nodesOf(store.row().replica, scope)).filter(n => n.header.node === "line").length,
     }

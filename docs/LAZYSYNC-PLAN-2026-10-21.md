@@ -460,3 +460,91 @@ then the tab prefetches the content of every conversation the device lacks,
 newest first, one answer of at most a megabyte at a time behind the page's own
 fetches. A device whose list was opened under stage 2 already holds every
 line and fetches nothing. After the prefetch every conversation reads offline.
+
+## 16. A warm load from a snapshot (`warmsnapshot`, 2.2)
+
+#286 measured a warm load of `bigstore` at the live shape with the whole
+browser on 0.67 of a core: the first draw 4.6 to 5.5 s, of which, from the
+first `Stream` asked, 0.9 to 1.2 s read the lines' 14,903 node rows from
+IndexedDB, 0.1 to 0.2 s decoded them, and 0.3 to 0.8 s and 0.3 to 0.7 s handed
+13,002 keys and the nodes to the core as JSON, before the stream's content was
+held (0.29 s) and drawn (0.1 s).
+
+**What was built.** A SNAPSHOT is a memo of what the core's worker holds of a
+store's rows, keyed by what it was computed from:
+
+- `suzatary_core::snapshot` prints a held replica (`snapshot::Held`: what it
+  was given, and a form number) as its form in four bytes and then postcard,
+  and reads it back only in this build's form. Nothing in it names
+  Suzatary, so it can join the Prodrome beside `memo`. The lines' replica,
+  `secretary::held_replica::HeldReplica`, is the core's `HeldLines` and
+  `Outlines` together; it was given the skeleton's nodes as the wire sends them
+  and the keys' bytes, and that pair is its snapshot (form 1). The prints are
+  content and stay out: the device keeps them by name already.
+- The device keeps one snapshot per store name in the `snapshots` store
+  (database version 10), with the key of the rows it was of: a SHA-256 over
+  the head row as printed, the count of node rows and the names of every key
+  row. Within one generation and epoch the node rows only grow, by joins, and
+  a reader's row is one of those joins, so the same head and as many nodes
+  are the same rows; the head alone is not enough, since a join keeps the
+  later of two frontiers.
+- Every transaction that writes a row deletes the snapshot in that
+  transaction: a landing, a forget of keys (a purge), a reset, a reformat and
+  a piece kept. A wipe deletes the database it is in. The snapshot is written
+  later, in a transaction of its own (`noderows`' `settle`), once the store has
+  been quiet for 30 s (`QUIET_MS`) or the page goes hidden, and only where the
+  head, the node count and the key names of the row the core holds are still
+  those on the device, read in that same transaction. A burst of landings
+  writes one snapshot; a restore under no current snapshot owes one too, so a
+  page that loaded from the rows writes it once it is quiet.
+- A warm load reads the head, the node count, the key names and the snapshot in one
+  transaction (`noderows.prime`). Where the key is that of the rows, the core
+  loads from it (`Lines.load`) and `storeset`'s `Loaded` readiness lets the
+  stream read: the stream's lines are chosen by the core's skeleton, and
+  `Lines.chosen` answers their nodes, so it reads no row of the tab's. The
+  rows are read only once every reading run through `pull.first` has ended,
+  and then in runs of 250 nodes within one transaction, each run a task of its
+  own, so the page's next questions (its blocks) are answered between them.
+  The pull lands nothing until they are read. Read, the rows are compared with
+  the snapshot by the same key: the core is told it holds them (no node or key
+  is handed over), or it holds nothing again and is handed them whole.
+
+**Measured** (`web/e2e/snapshotmeasure.bench.ts`, `bigstore`'s shape, the
+browser on 0.67 of a core, in a page of the origin that runs no app): the
+snapshot is 6.0 MB for 14,903 nodes and 13,002 keys; one `get` of it took 15
+to 72 ms, the head and the key names 40 to 86 ms, and the core's load from it
+105 to 186 ms, over three loads. In the app, at the same CPU and on the same
+machine, against master 2.1.40, each run three warm loads after the snapshot
+was written (`bigstore`'s last scene):
+
+| | first draw, from the document's start | the stream answered, from asked |
+|---|---|---|
+| before, run 1 | 5.10, 3.97, 4.18 s | 2.99, 2.99, 3.20 s |
+| before, run 2 | 4.99, 3.66, 3.89 s | 2.91, 2.50, 2.40 s |
+| after, run 1 | 5.11, 3.70, 4.20 s | 2.70, 1.70, 2.19 s |
+| after, run 2 | 4.61, 2.77, 3.08 s | 2.59, 1.48, 1.49 s |
+
+Over the six loads the worker answers the stream 0.8 s sooner on average
+(2.03 s against 2.83 s), and the first draw comes 0.4 s sooner (3.91 s against
+4.30 s), almost all of it on the second and third load; the first load after a
+cold one gains nothing. The first draw gains less than the answer, since the
+page then asks for the stream's rendered blocks and the worker answers them
+between the runs of the rows it is reading, and the snapshot's load (0.3 to
+0.9 s here) shares the worker with the inbox's and the topics' restores.
+
+**What it costs.** No landing writes a snapshot: it deletes the old one in its
+own transaction, which costs nothing. A store quiet for 30 s, or a page
+hidden, prints the snapshot once (25 ms for this shape in a page that runs
+nothing else) and writes 6 MB in a transaction of its own; a device that
+refuses that write keeps no snapshot and loses no landing. A load whose key
+does not match, and a load after a purge, restore from the rows as before,
+and write the snapshot once quiet.
+
+**The next stage.** The warm load still reads every row, behind the answer,
+because the tab's own row (`locked.Row` of every node) is still what its pull,
+its purge, `keep.plan`, the eviction and a conversation's scope read. With the
+core holding the skeleton, each of those can ask the core instead
+(`Lines.nodes`-shaped questions by conversation, the retired keys, the plan),
+and the warm load then reads the head, the key names and the snapshot, and no
+node row at all. The snapshot could also shrink by about half by holding names
+as 32 bytes rather than 64 hex characters.

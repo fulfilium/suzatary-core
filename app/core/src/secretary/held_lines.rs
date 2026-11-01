@@ -431,6 +431,21 @@ impl HeldLines {
         }
     }
 
+    /// Nothing held but the keys `keys`.
+    #[must_use]
+    pub fn of_keys(keys: KeyRing) -> Self {
+        Self {
+            keys,
+            ..Self::new()
+        }
+    }
+
+    /// The keys held.
+    #[must_use]
+    pub fn key_ring(&self) -> &KeyRing {
+        &self.keys
+    }
+
     /// `add`, each print beside the name it is claimed to have, hashed against it and decoded
     /// once, and `drop` let go. A print whose bytes are not an object at the schema is held as
     /// unread, and what rests on it stays out of the history.

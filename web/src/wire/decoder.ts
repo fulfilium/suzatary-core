@@ -23,6 +23,8 @@ export namespace d {
     typeof u === "number" && Number.isFinite(u) ? lo.val(u) : expected("a number", u)
   export const bool: Decoder<boolean> = u => (typeof u === "boolean" ? lo.val(u) : expected("a boolean", u))
   export const unknown: Decoder<unknown> = lo.val
+  // Bytes as the device keeps them: a structured clone of a `Uint8Array` reads back as one.
+  export const bytes: Decoder<Uint8Array> = u => (u instanceof Uint8Array ? lo.val(u) : expected("bytes", u))
 
   export const lit =
     <const L extends string | number | boolean | null>(l: L): Decoder<L> =>

@@ -78,14 +78,14 @@ export namespace idb {
   // answers that its connection to the database's server was lost.
   const lost = (e: unknown): boolean => e instanceof DOMException && (e.name === "InvalidStateError" || e.name === "UnknownError")
 
-  // `work` runs in one transaction over the database `d` names, and answers once that transaction has committed. A lost
-  // connection is let go, so the next transaction reopens it.
-  const over = async <T>(d: Db, mode: IDBTransactionMode, work: (s: IDBObjectStore) => Promise<T>): Promise<T> => {
+  // `work` runs in one transaction over the store `d` names and the stores `beside` name in the same database, and
+  // answers once that transaction has committed. A lost connection is let go, so the next transaction reopens it.
+  const over = async <T>(d: Db, beside: readonly string[], mode: IDBTransactionMode, work: (s: IDBObjectStore, tx: IDBTransaction) => Promise<T>): Promise<T> => {
     const connection = open(d)
     const db = await connection
     const tx = (() => {
       try {
-        return db.transaction(d.store, mode)
+        return db.transaction(beside.length === 0 ? d.store : [d.store, ...beside], mode)
       } catch (e: unknown) {
         if (lost(e)) forget(d.name, connection)
         throw e
@@ -98,13 +98,21 @@ export namespace idb {
         no(new Error(String(tx.error)))
       }
     })
-    const [answer] = await Promise.all([work(tx.objectStore(d.store)), committed])
+    const [answer] = await Promise.all([work(tx.objectStore(d.store), tx), committed])
     return answer
   }
 
   export const within = async <T>(d: Db, mode: IDBTransactionMode, work: (s: IDBObjectStore) => Promise<T>): Promise<T> => {
     if (!available()) throw new Error("this browser keeps nothing (no IndexedDB)")
-    return over(d, mode, work)
+    return over(d, [], mode, s => work(s))
+  }
+
+  // `within` over `d`'s store and `beside`'s, which is a store of the same database: one transaction over both, so a
+  // write to one commits with the write to the other or neither does.
+  export const withBeside = async <T>(d: Db, beside: Db, mode: IDBTransactionMode, work: (s: IDBObjectStore, beside: IDBObjectStore) => Promise<T>): Promise<T> => {
+    if (!available()) throw new Error("this browser keeps nothing (no IndexedDB)")
+    if (beside.name !== d.name) throw new Error(`a transaction spans one database, not ${d.name} and ${beside.name}`)
+    return over(d, [beside.store], mode, (s, tx) => work(s, tx.objectStore(beside.store)))
   }
 
   const held = <A>(l: lo.Settled<A>): Row<A> => (l.type === "Val" ? { type: "Held", v: l.v } : { type: "Unreadable", why: l.e })
@@ -116,7 +124,7 @@ export namespace idb {
       ? Promise.resolve({ type: "Absent" })
       : open(d).then(
           () =>
-            over(d, "readonly", (s): Promise<unknown> => done(s.get(key))).then(
+            over(d, [], "readonly", (s): Promise<unknown> => done(s.get(key))).then(
               (u): Row<A> => (u === undefined ? { type: "Absent" } : held(parse(u))),
               (e: unknown): Row<A> => ({ type: "Unreadable", why: lo.reason(e) }),
             ),

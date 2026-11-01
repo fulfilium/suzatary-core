@@ -4,6 +4,14 @@
 // nodes and keys it brought and the head, never the store, and two tabs writing the same node write the same row. A
 // key's bytes are in its key row alone, a piece's included, so a forget is one delete. A reset or a later epoch empties
 // the store and writes what replaces it.
+//
+// Beside the rows a store may keep a SNAPSHOT of its reader: what the core's worker held of exactly those rows, in the
+// core's own form, under a key computed from the head, the count of node rows and the names of the keys (`keyOf`), so a
+// warm load reads those and the snapshot, and not every node. Every transaction that writes a row deletes the snapshot, so none
+// outlives the rows it was of, and none holds a key the rows let go. The snapshot is written later, in a transaction of
+// its own, once the store has been quiet for `QUIET_MS` or the page is hidden, and only where the head and the key names
+// it was printed from are still those on the device, read in that same transaction: a burst of landings writes one
+// snapshot, not one each.
 
 import idb from "../app/idb"
 import lo from "../algebra/lo"
@@ -11,11 +19,12 @@ import d from "../wire/decoder"
 import payload from "../wire/generated/payload"
 import type { RefusedObject } from "../wire/generated/wire"
 import locked from "./locked"
-import { Spoken, Standing, storeRows } from "./objects"
+import { SNAPSHOTS, Spoken, Standing, storeRows } from "./objects"
 import phases from "./phases"
-import type pull from "./pull"
+import pull from "./pull"
 import type { Frontier, Held, Obj, Replica, Word } from "./replica"
 import { empty, epochOf, replicaOf, restsOn } from "./replica"
+import { sha256Hex } from "./verify"
 
 export namespace noderows {
   // What the head row holds: the format the rows were written in, the row's generation, the box's words, its refusals,
@@ -33,6 +42,8 @@ export namespace noderows {
   const Head = d.obj<Head>({ format: d.num, generation: d.num, words: d.arr(Spoken), refused: d.arr(payload.RefusedObject), frontier: Standing, unsent: d.arr(d.str) })
 
   const NODE = "node/"
+  // How many nodes one read of a store's rows asks for at once.
+  const RUN = 250
   const KEY = "key/"
   const PIECE = "piece/"
   const range = (prefix: string): IDBKeyRange => IDBKeyRange.bound(prefix, `${prefix}￿`)
@@ -96,14 +107,37 @@ export namespace noderows {
   // Each key of the row's words a row of its own: the one place the store holds a key's bytes.
   const keysOf = (s: IDBObjectStore, keys: locked.Keys): Promise<unknown>[] => Object.entries(keys).map(([name, hex]) => idb.done(s.put(hex, `${KEY}${name}`)))
 
+  // What a store keeps beside its rows of its reader: nothing, or the snapshot `print` makes of the row the reader holds,
+  // with that row; none where the reader holds no row (a snapshot loaded and not yet named) or its row does not print.
+  export type Memo<N extends Obj> = { readonly type: "None" } | { readonly type: "Snapshot"; readonly print: () => Printed<N> }
+  export type Printed<N extends Obj> = { readonly type: "Of"; readonly row: locked.Row<N>; readonly bytes: Uint8Array } | { readonly type: "Other" }
+
+  // How long a store's rows stay unwritten before the snapshot of them is: a burst of landings writes it once.
+  export const QUIET_MS = 30_000
+  export const NO_MEMO: Memo<never> = { type: "None" }
+
+  // A snapshot as the device keeps it, under the store's name: the key of the rows it was of, and its bytes.
+  type Kept = { readonly key: string; readonly bytes: Uint8Array }
+  const Kept = d.obj<Kept>({ key: d.str, bytes: d.bytes })
+
+  // The key of a store's rows: their head as printed, how many node rows there are, and the names of every key row. A
+  // forget moves the names; a reset or a later epoch the head. Within one generation and epoch the node rows only grow,
+  // by joins, and a reader's row is one of those joins, so a reader's row and the device's rows with the same head and
+  // as many nodes are the same rows: the head alone is not enough, since a join keeps the later of two frontiers.
+  const keyOf = (head: string, nodes: number, keys: readonly string[]): Promise<string> => sha256Hex(`${head}\n${nodes}\n${[...keys].sort().join("\n")}`)
+
   // How a store's rows are written: `version` counts the forms of its nodes, and a store whose head names another is
   // dropped and taken again from the box at restore, its content by name kept, since a name holds one literal;
   // `dropped` runs first, for what the old rows found (the lines' rendered blocks, by their keys), and a failure of it
   // keeps them, said, to be dropped at the next load.
   export type Format = { readonly version: number; readonly dropped: () => Promise<lo.Settled<null>> }
 
-  // Where a store's row lives, and how keys are taken out of it, whatever else another tab wrote there.
-  export type Place<N extends Obj> = pull.Place<N> & { readonly forget: (gone: readonly string[]) => Promise<lo.Settled<null>> }
+  // Where a store's row lives, and how keys are taken out of it, whatever else another tab wrote there; and `settle`,
+  // the snapshot owed written now rather than after the quiet (the page went hidden).
+  export type Place<N extends Obj> = pull.Place<N> & {
+    readonly forget: (gone: readonly string[]) => Promise<lo.Settled<null>>
+    readonly settle: () => Promise<void>
+  }
 
   // The place of the store `db` names, whose nodes read by `node`. It remembers the row the device last confirmed holding
   // and the head it held then: while the store's head is still that one, no other tab has written, and a landing writes
@@ -113,9 +147,47 @@ export namespace noderows {
   // store is never cleared, so another tab's nodes stay. A later generation or epoch on either side is written whole. A
   // head that does not read, or that names another format, is never written over by a landing: only a reset, or the
   // restore's reformat, writes over it.
-  export const placeOf = <N extends Obj>(db: idb.Db, node: d.Decoder<N>, format: Format): Place<N> => {
+  export const placeOf = <N extends Obj>(db: idb.Db, node: d.Decoder<N>, format: Format, memo: Memo<N> = NO_MEMO): Place<N> => {
     const headOf = (r: Replica<N>): Head => headWith(format.version, r)
     const NONE = locked.none<N>()
+
+    // A transaction that writes rows, and `drop`, which deletes the snapshot beside them in it. A store that keeps none
+    // writes its rows alone.
+    const writing = <T>(work: (s: IDBObjectStore, drop: () => void) => Promise<T>): Promise<T> =>
+      memo.type === "None"
+        ? idb.within(db, "readwrite", s => work(s, () => {}))
+        : idb.withBeside(db, SNAPSHOTS, "readwrite", (s, kept) => work(s, () => void kept.delete(db.store)))
+
+    // The snapshot owed: once rows were written, or read under no current snapshot, it is written after the quiet.
+    let owed: { readonly type: "None" } | { readonly type: "Owed"; readonly timer: ReturnType<typeof setTimeout> } = { type: "None" }
+    const owe = (): void => {
+      if (memo.type === "None") return
+      if (owed.type === "Owed") clearTimeout(owed.timer)
+      owed = { type: "Owed", timer: setTimeout(() => void settle(), QUIET_MS) }
+    }
+    // The reader's snapshot of the row it holds, kept where the device's head and key names are still that row's, read
+    // in the same transaction; otherwise nothing, and the next write of rows owes it again. A put the device refuses (a
+    // full one) leaves none, since every write of rows deleted the one before.
+    const settle = async (): Promise<void> => {
+      if (owed.type === "None" || memo.type === "None" || !idb.available()) return
+      clearTimeout(owed.timer)
+      owed = { type: "None" }
+      const p = memo.print()
+      if (p.type === "Other") return
+      const head = printed(headOf(p.row.replica))
+      const names = Object.keys(p.row.keys).sort()
+      const nodes = p.row.replica.held.objects.length
+      const key = await keyOf(head, nodes, names)
+      await idb
+        .withBeside(db, SNAPSHOTS, "readwrite", async (s, kept) => {
+          const [raw, count, onDevice] = await Promise.all([idb.done(s.get(HEAD)), idb.done(s.count(range(NODE))), idb.done(s.getAllKeys(range(KEY)))])
+          const there = onDevice.flatMap(name => (typeof name === "string" ? [name.slice(KEY.length)] : [])).sort()
+          if (raw === undefined || printed(raw) !== head || count !== nodes || there.length !== names.length || there.some((n, i) => n !== names[i])) return
+          await idb.done(kept.put({ key, bytes: p.bytes }, db.store))
+          phases.mark(`${db.store} snapshot written`)
+        })
+        .catch(() => {})
+    }
     // A piece's row holds its nodes alone; its keys are key rows.
     const pieceRows = storeRows(node, NONE, () => [])
 
@@ -124,28 +196,41 @@ export namespace noderows {
       readonly head: Head | null
       // The head as the store holds it, printed, or null for none.
       readonly printed: string | null
+      // The name of every key row, a piece's included.
+      readonly named: readonly string[]
       readonly row: locked.Row<N>
       readonly keys: locked.Keys
       readonly pieces: readonly locked.Row<N>[]
       readonly unread: readonly string[]
     }
-    const readAll = (s: IDBObjectStore): Promise<Read> =>
-      Promise.all([
+    // The nodes in runs of `RUN`, each asked once the one before answered, in the same transaction: each run is a task
+    // of its own, so the worker answers what a page asks between them rather than after every node.
+    const nodesIn = (s: IDBObjectStore, unread: string[]): Promise<N[]> => {
+      const out: N[] = []
+      const run = async (from: IDBKeyRange): Promise<N[]> => {
+        const [names, raws] = await Promise.all([idb.done(s.getAllKeys(from, RUN)), idb.done(s.getAll(from, RUN))])
+        for (const raw of raws) {
+          const n = node(raw)
+          if (n.type === "Error") unread.push(`a node of ${db.store} does not read (${n.e})`)
+          else out.push(n.v)
+        }
+        const last = names.at(-1)
+        return names.length < RUN || typeof last !== "string" ? out : run(IDBKeyRange.bound(last, `${NODE}￿`, true))
+      }
+      return run(range(NODE))
+    }
+    const readAll = (s: IDBObjectStore): Promise<Read> => {
+      const unread: string[] = []
+      return Promise.all([
         idb.done(s.get(HEAD)),
-        idb.done(s.getAll(range(NODE))),
+        nodesIn(s, unread),
         idb.done(s.getAllKeys(range(KEY))),
         idb.done(s.getAll(range(KEY))),
         idb.done(s.getAll(range(PIECE))),
-      ]).then(([rawHead, rawNodes, keyNames, keyValues, rawPieces]) => {
+      ]).then(([rawHead, nodes, keyNames, keyValues, rawPieces]) => {
         phases.mark(`${db.store} rows read`)
-        const unread: string[] = []
         const head = headIn(rawHead)
         if (rawHead !== undefined && head === null) unread.push(`the head row of ${db.store} does not read`)
-        const nodes = rawNodes.flatMap(raw => {
-          const n = node(raw)
-          if (n.type === "Error") unread.push(`a node of ${db.store} does not read (${n.e})`)
-          return n.type === "Val" ? [n.v] : []
-        })
         const keys: Record<string, string> = {}
         keyNames.forEach((name, i) => {
           const v = keyValues[i]
@@ -157,8 +242,10 @@ export namespace noderows {
           return p.type === "Val" ? [p.v] : []
         })
         phases.mark(`${db.store} rows decoded`)
-        return { head, printed: rawHead === undefined ? null : printed(rawHead), row: head === null ? NONE : rowOf(head, nodes, keys), keys, pieces, unread }
+        const named = keyNames.flatMap(name => (typeof name === "string" ? [name.slice(KEY.length)] : []))
+        return { head, printed: rawHead === undefined ? null : printed(rawHead), named, row: head === null ? NONE : rowOf(head, nodes, keys), keys, pieces, unread }
       })
+    }
 
     // `row` written whole over what the store holds: a reset's, or a later epoch's.
     const writeAll = (s: IDBObjectStore, row: locked.Row<N>): Promise<unknown> => {
@@ -197,10 +284,11 @@ export namespace noderows {
       without(
         () =>
           confirm(
-            idb.within(db, "readwrite", async (s): Promise<lo.Settled<locked.Row<N>>> => {
+            writing(async (s, drop): Promise<lo.Settled<locked.Row<N>>> => {
               const head = headIn(await idb.done(s.get(HEAD)))
               const generation = Math.max(head?.generation ?? 0, held.replica.generation) + 1
               const row = locked.of(replicaOf<N>({ ...empty<N>().held, generation }))
+              drop()
               await writeAll(s, row)
               return lo.val(row)
             }),
@@ -216,45 +304,78 @@ export namespace noderows {
     type Restored = Awaited<ReturnType<Place<N>["restore"]>>
     const reformat = async (read: Read & { readonly head: Head }): Promise<Restored> => {
       const why = (e: string): string => `the copy of ${db.store} is in format ${read.head.format}, this build's is ${format.version}, and it was not dropped (${e})`
-      const failed = (e: string): Restored => ({ row: { type: "Unreadable", why: why(e) }, pieces: [], unread: [] })
+      const failed = (e: string): Restored => ({ row: { type: "Unreadable", why: why(e) }, pieces: [], unread: [], key: pull.UNKEYED })
       const unsent = new Set(read.head.unsent)
       const own = read.row.replica.held.objects.filter(n => unsent.has(n.hash))
       if (own.length < unsent.size) return failed(`${unsent.size - own.length} of the objects this tab wrote and the box has not taken do not read in this build's form`)
       const dropped = await format.dropped()
       if (dropped.type === "Error") return failed(dropped.e)
       const row = await confirm(
-        idb.within(db, "readwrite", async (s): Promise<lo.Settled<locked.Row<N>>> => {
+        writing(async (s, drop): Promise<lo.Settled<locked.Row<N>>> => {
           const now = headIn(await idb.done(s.get(HEAD)))
           if (now !== null && now.format === format.version) return lo.val((await readAll(s)).row)
           const generation = Math.max(now?.generation ?? 0, read.head.generation) + 1
           const row = locked.of(replicaOf<N>({ ...empty<N>().held, generation, objects: own }))
+          drop()
           await writeAll(s, row)
           return lo.val(row)
         }),
         row => row,
       )
-      return row.type === "Error" ? failed(row.e) : { row: { type: "Held", row: row.v }, pieces: [], unread: [] }
+      return row.type === "Error" ? failed(row.e) : { row: { type: "Held", row: row.v }, pieces: [], unread: [], key: pull.UNKEYED }
     }
+
+    // The snapshot beside the rows, where it is of the rows the store holds now: read with the head and the names of the
+    // keys in one transaction, and not one node.
+    const NOT_PRIMED: pull.Primed = { type: "None" }
+    // The key of the snapshot this page's warm load found current, so a restore of those very rows owes none.
+    let primed = ""
+    const prime = async (): Promise<pull.Primed> => {
+      if (memo.type === "None" || !idb.available()) return NOT_PRIMED
+      const read = await idb
+        .withBeside(db, SNAPSHOTS, "readonly", (s, kept) =>
+          Promise.all([idb.done(s.get(HEAD)), idb.done(s.count(range(NODE))), idb.done(s.getAllKeys(range(KEY))), idb.done(kept.get(db.store))]),
+        )
+        .catch(() => null)
+      phases.mark(`${db.store} snapshot read`)
+      if (read === null) return NOT_PRIMED
+      const [rawHead, nodes, keyNames, raw] = read
+      const head = headIn(rawHead)
+      const snapshot = Kept(raw)
+      if (head === null || head.format !== format.version || snapshot.type === "Error") return NOT_PRIMED
+      const key = await keyOf(printed(rawHead), nodes, keyNames.flatMap(name => (typeof name === "string" ? [name.slice(KEY.length)] : [])))
+      if (key !== snapshot.v.key) return NOT_PRIMED
+      primed = key
+      return { type: "Current", bytes: snapshot.v.bytes, key }
+    }
+
     return {
+      prime,
       restore: () =>
         without(
           async () => {
             const read = await idb.within(db, "readonly", readAll).catch((e: unknown): Read | string => lo.reason(e))
-            if (typeof read === "string") return { row: { type: "Unreadable", why: read }, pieces: [], unread: [] }
+            if (typeof read === "string") return { row: { type: "Unreadable", why: read }, pieces: [], unread: [], key: pull.UNKEYED }
             if (read.head !== null && read.head.format !== format.version) return reformat({ ...read, head: read.head })
             confirmed = read.unread.length === 0 && read.printed !== null ? { row: read.row, head: read.printed } : null
             // The pieces' keys are the store's key rows, which hold the row's as well: a union, so either holds them.
             const pieces = read.pieces.map(p => locked.of(p.replica, read.keys))
-            return { row: read.head === null ? { type: "Absent" } : { type: "Held", row: read.row }, pieces, unread: read.unread }
+            // A row of which a node does not read is no row a snapshot was of.
+            const key: pull.Key =
+              read.printed === null || read.unread.length > 0 ? pull.UNKEYED : { type: "Of", key: await keyOf(read.printed, read.row.replica.held.objects.length, read.named) }
+            if (key.type === "Of" && key.key !== primed) owe()
+            return { row: read.head === null ? { type: "Absent" } : { type: "Held", row: read.row }, pieces, unread: read.unread, key }
           },
-          { row: { type: "Absent" }, pieces: [], unread: [] },
+          { row: { type: "Absent" }, pieces: [], unread: [], key: pull.UNKEYED },
         ),
-      // The piece's nodes joined into its row, and its keys each a key row: never a key's bytes inside a piece.
+      // The piece's nodes joined into its row, and its keys each a key row: never a key's bytes inside a piece. The key
+      // rows it adds are not the rows a snapshot was of, so it goes.
       keepPiece: (at, piece) =>
         without(
           () =>
             settled(
-              idb.within(db, "readwrite", async s => {
+              writing(async (s, drop) => {
+                drop()
                 const raw: unknown = await idb.done(s.get(pieceAt(at)))
                 const was = raw === undefined ? null : pieceRows.parse(raw)
                 const nodes = locked.of(piece.replica)
@@ -266,17 +387,19 @@ export namespace noderows {
           lo.val(null),
         ),
       // The join of what the store holds and `now`, written: what it holds beyond the store's row within one generation
-      // and epoch, or whole over a row of another. Nothing new is the store's row, answered as it is.
+      // and epoch, or whole over a row of another. Nothing new is the store's row, answered as it is. A landing that
+      // writes deletes the snapshot, and owes the next.
       land: now =>
         without(
-          () =>
-            confirm(
-              idb.within(db, "readwrite", async (s): Promise<lo.Settled<locked.Row<N>>> => {
+          async () => {
+            const row = await confirm(
+              writing(async (s, drop): Promise<lo.Settled<locked.Row<N>>> => {
                 const read = await deviceRow(s)
                 if (read.type === "Error") return read
                 const device = read.v
                 const joined = locked.join(device, now)
                 if (joined === device) return lo.val(device)
+                drop()
                 if (!sameEpoch(joined, device)) {
                   await writeAll(s, joined)
                   return lo.val(joined)
@@ -290,18 +413,28 @@ export namespace noderows {
                 return lo.val(joined)
               }),
               row => row,
-            ).then(row => ({ row, unread: row.type === "Error" ? row.e : null })),
+            )
+            if (row.type === "Val") owe()
+            return { row, unread: row.type === "Error" ? row.e : null }
+          },
           { row: lo.val(now), unread: null },
         ),
       dropPieces: () => without(() => settled(idb.within(db, "readwrite", s => idb.done(s.delete(range(PIECE))).then(() => lo.val(null)))), lo.val(null)),
       reset,
+      settle,
+      // The snapshot holds every key, so it goes in the transaction that lets the keys go; the next is owed.
       forget: gone =>
         without(
           () =>
             confirm(
-              settled(idb.within(db, "readwrite", s => Promise.all(gone.map(name => idb.done(s.delete(`${KEY}${name}`)))).then(() => lo.val(null)))),
+              settled(
+                writing((s, drop) => {
+                  drop()
+                  return Promise.all(gone.map(name => idb.done(s.delete(`${KEY}${name}`)))).then(() => lo.val(null))
+                }),
+              ),
               () => (confirmed === null ? null : locked.without(confirmed.row, gone)),
-            ),
+            ).then(done => (owe(), done)),
           lo.val(null),
         ),
     }

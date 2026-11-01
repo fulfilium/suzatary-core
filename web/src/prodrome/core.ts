@@ -189,8 +189,14 @@ export interface Lines {
     memory: string | undefined,
   ) => string;
   search: (q: string) => string;
-  /** `[<name>, …]`: every line whose words the newest `pages` pages of the stream read, by the skeleton alone. */
+  /** `[<node>, …]`: the node of every line whose words the newest `pages` pages of the stream read, by the skeleton alone. */
   chosen: (topics: TopicReading, chosen: string, pages: number) => string;
+  /** What these lines were handed, the skeleton and the keys, in the core's own form; it throws where they do not print. */
+  snapshot: () => Uint8Array;
+  /** These lines replaced by those a snapshot prints; it throws for bytes that print none of this build's form. */
+  load: (bytes: Uint8Array) => void;
+  /** Nothing held again. */
+  clear: () => void;
   /** The newest `pages` pages of every conversation's rounds carrying each topic of `chosen`, a JSON array. */
   stream: (topics: TopicReading, chosen: string, pages: number) => string;
   /** `{<name>: [<answer key>, …]}`: every key an erasure names, with the blocks its words fed where `keys` opens it. */
@@ -642,8 +648,8 @@ export const searchOf = (lines: Lines, q: string): SearchPayload => checked("sea
 /** `nodes` held in the core's skeleton and `gone` let go. */
 export const nodesInto = (lines: Lines, nodes: readonly SkeletonNode[], gone: readonly string[]): void => lines.nodes(JSON.stringify(nodes), JSON.stringify(gone));
 
-export const chosenOf = (lines: Lines, topics: TopicReading, chosen: readonly string[], pages: number): readonly string[] =>
-  checked("chosen", lines.chosen(topics, JSON.stringify(chosen), pages), arr(str));
+export const chosenOf = (lines: Lines, topics: TopicReading, chosen: readonly string[], pages: number): readonly SkeletonNode[] =>
+  checked("chosen", lines.chosen(topics, JSON.stringify(chosen), pages), arr(payload.SkeletonNode));
 
 export const streamOf = (lines: Lines, topics: TopicReading, chosen: readonly string[], pages: number): StreamPayload =>
   checked("stream", lines.stream(topics, JSON.stringify(chosen), pages), payload.StreamPayload);

@@ -57,6 +57,7 @@ hex.workspace = true
 # Words locked under a key of their own (`secretary::locked_text`), erased by destroying it.
 chacha20poly1305.workspace = true
 zeroize.workspace = true
+postcard.workspace = true
 # THE OUTGOING MESSAGE IS BUILT HERE, PURE (§8.6, `mail::send::build_mime`):
 # `ms_smtp_send.build_mime` took its Message-Id and Date as arguments precisely
 # so it could be unit-tested with no network, and that property is worth a

@@ -38,10 +38,19 @@ export namespace pull {
     | { readonly type: "Unreadable"; readonly why: string }
     | { readonly type: "Dropped"; readonly failed: string | null }
 
+  // The snapshot of its reader a store keeps beside its rows, as a warm load finds it: none, or one whose key is that of
+  // the rows the store holds now.
+  export type Primed = { readonly type: "None" } | { readonly type: "Current"; readonly bytes: Uint8Array; readonly key: string }
+  // The key of the rows a restore read, which a snapshot of them is kept under, or none for rows no snapshot is of.
+  export type Key = { readonly type: "Of"; readonly key: string } | { readonly type: "None" }
+  export const UNKEYED: Key = { type: "None" }
+
   // Where a store's row lives on the device, and its pieces beside it. Without a device store every write answers done
   // and holds nothing, and what is held in memory is the only copy.
   export type Place<O extends Obj> = {
-    readonly restore: () => Promise<{ readonly row: Restored<locked.Row<O>>; readonly pieces: readonly locked.Row<O>[]; readonly unread: readonly string[] }>
+    // The snapshot beside the rows, read with the head and nothing else of them.
+    readonly prime: () => Promise<Primed>
+    readonly restore: () => Promise<{ readonly row: Restored<locked.Row<O>>; readonly pieces: readonly locked.Row<O>[]; readonly unread: readonly string[]; readonly key: Key }>
     // A piece kept by itself, named by how many objects were held when it was asked for.
     readonly keepPiece: (at: number, piece: locked.Row<O>) => Promise<lo.Settled<null>>
     // The row a landing moved to, `now`, written, and what the device holds now, another tab's included.
@@ -58,8 +67,22 @@ export namespace pull {
     readonly erasing: (erased: readonly string[], rest: number, pending: locked.Row<O>) => Promise<locked.Row<O>>
   }
 
+  // How a store's reader is loaded on a warm load: from its rows, or first from the snapshot its place keeps, the rows
+  // then read behind. `load` answers whether the reader took the snapshot; once the rows are read, `holds` says the
+  // reader holds them already, the snapshot having been of them, and `lost` that it does not, so it holds nothing again
+  // and is handed them whole.
+  export type Reader<O extends Obj> =
+    | { readonly type: "Rows" }
+    | {
+        readonly type: "Snapshot"
+        readonly load: (bytes: Uint8Array) => boolean
+        readonly holds: (row: locked.Row<O>) => void
+        readonly lost: () => void
+      }
+
   // What differs between the stores: how they take in what comes, where their row is kept, and how a piece is asked for.
   export type Store<O extends Obj> = Taking<O> & {
+    readonly reader: Reader<O>
     readonly name: string
     readonly held: () => locked.Row<O>
     readonly place: Place<O>
@@ -86,6 +109,11 @@ export namespace pull {
   // One store's pull, its pieces kept beside its row, and its landing.
   export type Sync<O extends Obj> = {
     readonly restored: once.T<void>
+    // Whether this page's reader was loaded from a snapshot of the rows the device holds, asked once; the rows are read
+    // behind it.
+    readonly loaded: () => Promise<boolean>
+    // `read`, the rows read only once it and every other such reading ended: a reading a loaded reader answers goes first.
+    readonly first: <A>(read: () => Promise<A>) => Promise<A>
     readonly pull: () => Promise<boolean>
     readonly holding: () => Replica<O>
     readonly landed: () => boolean
@@ -180,11 +208,52 @@ export namespace pull {
     // The two parts of it, each asked on its own whether a later epoch overtook it.
     const parts = (): readonly Replica<O>[] => [st.held().replica, pending.replica]
 
-    // One read of the row per page.
+    // The readings `first` runs: while one is, the rows wait.
+    let early = 0
+    let waiting: (() => void)[] = []
+    const noneEarly = (): Promise<void> => (early === 0 ? Promise.resolve() : new Promise(go => void waiting.push(go)))
+    const first = async <A>(read: () => Promise<A>): Promise<A> => {
+      early += 1
+      try {
+        return await read()
+      } finally {
+        early -= 1
+        // On a later task, so the reading's answer goes out before the rows are read.
+        if (early === 0) {
+          const go = waiting
+          waiting = []
+          setTimeout(() => go.forEach(f => f()), 0)
+        }
+      }
+    }
+
+    // A page's first restore reads the snapshot first, and the reader takes it, or not.
+    const NOT_PRIMED: Primed = { type: "None" }
+    const primed = once.of(async (): Promise<Primed> => {
+      const r = st.reader
+      if (r.type === "Rows") return NOT_PRIMED
+      await st.restoring()
+      const p = await st.place.prime()
+      if (p.type === "None" || !r.load(p.bytes)) return NOT_PRIMED
+      phases.mark(`${name} snapshot loaded`)
+      return p
+    })
+    // A snapshot is the first restore's alone: a later restore follows a reset, which deleted it.
+    let restores = 0
+
+    // One read of the row per page; where the reader was loaded from a snapshot, after every reading it answers first.
     const restoredOne = async (): Promise<void> => {
       phases.mark(`${name} restore`)
-      await st.restoring()
+      const p = restores === 0 ? await primed.get() : NOT_PRIMED
+      restores += 1
+      if (p.type === "Current") await noneEarly()
+      else await st.restoring()
       const read = await st.place.restore()
+      const r = st.reader
+      if (p.type === "Current" && r.type === "Snapshot") {
+        if (read.row.type === "Held" && read.key.type === "Of" && read.key.key === p.key) r.holds(read.row.row)
+        else r.lost()
+      }
       if (read.row.type === "Dropped") return told(read.row.failed)
       told(read.row.type === "Unreadable" ? read.row.why : null)
       if (read.row.type === "Held") await st.take([], read.row.row)
@@ -327,7 +396,18 @@ export namespace pull {
     // One pull at a time, so a pull asked for during another is a pull that starts after it.
     const purgeNow = (): Promise<void> => restored.get().then(() => st.take([], none))
 
-    return { restored, pull: serial.of(pullNow), holding, landed, whole, reset, keep: keepOwn, purge: serial.of(purgeNow) }
+    return {
+      restored,
+      loaded: () => primed.get().then(p => p.type === "Current"),
+      first,
+      pull: serial.of(pullNow),
+      holding,
+      landed,
+      whole,
+      reset,
+      keep: keepOwn,
+      purge: serial.of(purgeNow),
+    }
   }
 }
 export default pull

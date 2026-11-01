@@ -1,6 +1,7 @@
 //! The skeleton's lines by conversation, each conversation's outline kept until a line of it comes
 //! or goes: what the stream counts and chooses its rounds by, with no line's object read. Beside
-//! them, the name of every node the skeleton holds, which says what the store holds.
+//! them, every node the skeleton holds as it was given, which says what the store holds and is
+//! what a snapshot of it prints.
 
 use std::cell::OnceCell;
 use std::collections::{BTreeMap, BTreeSet};
@@ -15,20 +16,25 @@ use crate::secretary::step::Step;
 use crate::secretary::store::ConversationId;
 use crate::wire;
 
-/// The skeleton's lines held, by conversation, and the name of every node it holds.
+/// The skeleton's lines held, by conversation, and every node it holds as it was given.
 #[derive(Default)]
 pub struct Outlines {
     nodes: BTreeMap<Hash, Node>,
     conversations: BTreeMap<ConversationId, Conversation>,
-    names: BTreeSet<Hash>,
+    given: BTreeMap<Hash, wire::SkeletonNode>,
 }
 
-/// One skeleton node, parsed once where it arrives: a line, or a node that carries none.
+/// One skeleton node, parsed once where it arrives, beside the node as it was given.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum Parsed {
-    /// A line.
+pub struct Parsed {
+    given: wire::SkeletonNode,
+    read: Read,
+}
+
+/// What a node is: a line, or a node that carries none, such as the genesis, by its name.
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum Read {
     Line(Node),
-    /// A node that carries no line, such as the genesis, by its name.
     Structure(Hash),
 }
 
@@ -54,34 +60,35 @@ impl Parsed {
     /// # Errors
     /// [`NotANode`] for a name, a conversation, an instant or a key that does not read.
     pub fn of(node: wire::SkeletonNode) -> Result<Self, NotANode> {
-        let name = |text: String| Hash::new(text).map_err(|e| NotANode(e.to_string()));
-        let wire::NodeHeader::Line {
-            conversation,
-            at,
-            keys,
-            step,
-            ..
-        } = node.header
-        else {
-            return Ok(Parsed::Structure(name(node.hash)?));
+        let name = |text: &str| Hash::new(text).map_err(|e| NotANode(e.to_string()));
+        let read = match &node.header {
+            wire::NodeHeader::Structure { .. } => Read::Structure(name(&node.hash)?),
+            wire::NodeHeader::Line {
+                conversation,
+                at,
+                keys,
+                step,
+                ..
+            } => Read::Line(Node {
+                name: name(&node.hash)?,
+                conversation: ConversationId::new(conversation.clone())
+                    .map_err(|e| NotANode(e.to_string()))?,
+                at: fpl::parse_iso(at)
+                    .map_err(|e| NotANode(e.to_string()))
+                    .and_then(|at| fpl::datetime_of(at).map_err(|e| NotANode(e.to_string())))?,
+                parents: node
+                    .parents
+                    .iter()
+                    .map(|parent| name(parent))
+                    .collect::<Result<_, _>>()?,
+                keys: keys
+                    .iter()
+                    .map(|key| KeyName::new(key.clone()).map_err(|e| NotANode(e.to_string())))
+                    .collect::<Result<_, _>>()?,
+                step: step.clone(),
+            }),
         };
-        Ok(Parsed::Line(Node {
-            name: name(node.hash)?,
-            conversation: ConversationId::new(conversation).map_err(|e| NotANode(e.to_string()))?,
-            at: fpl::parse_iso(&at)
-                .map_err(|e| NotANode(e.to_string()))
-                .and_then(|at| fpl::datetime_of(at).map_err(|e| NotANode(e.to_string())))?,
-            parents: node
-                .parents
-                .into_iter()
-                .map(name)
-                .collect::<Result<_, _>>()?,
-            keys: keys
-                .into_iter()
-                .map(|key| KeyName::new(key).map_err(|e| NotANode(e.to_string())))
-                .collect::<Result<_, _>>()?,
-            step,
-        }))
+        Ok(Parsed { given: node, read })
     }
 }
 
@@ -97,7 +104,7 @@ impl Outlines {
     pub fn hold(&mut self, add: Vec<Parsed>, drop: &[Hash]) {
         let mut moved = BTreeSet::new();
         for name in drop {
-            self.names.remove(name);
+            self.given.remove(name);
             if let Some(node) = self.nodes.remove(name) {
                 if let Some(conversation) = self.conversations.get_mut(&node.conversation) {
                     conversation.lines.remove(name);
@@ -105,17 +112,18 @@ impl Outlines {
                 moved.insert(node.conversation);
             }
         }
-        for parsed in add {
-            let node = match parsed {
-                Parsed::Line(node) => node,
-                Parsed::Structure(name) => {
-                    self.names.insert(name);
+        for Parsed { given, read } in add {
+            let node = match read {
+                Read::Line(node) => node,
+                Read::Structure(name) => {
+                    self.given.entry(name).or_insert(given);
                     continue;
                 }
             };
-            if !self.names.insert(node.name.clone()) {
+            if self.given.contains_key(&node.name) {
                 continue;
             }
+            self.given.insert(node.name.clone(), given);
             self.conversations
                 .entry(node.conversation.clone())
                 .or_insert_with(|| Conversation {
@@ -141,7 +149,18 @@ impl Outlines {
     /// Whether the skeleton holds a node named `name`.
     #[must_use]
     pub fn holds(&self, name: &Hash) -> bool {
-        self.names.contains(name)
+        self.given.contains_key(name)
+    }
+
+    /// Every node held, as it was given, by name.
+    pub fn given(&self) -> impl Iterator<Item = &wire::SkeletonNode> {
+        self.given.values()
+    }
+
+    /// The node named `name`, as it was given.
+    #[must_use]
+    pub fn node(&self, name: &Hash) -> Option<&wire::SkeletonNode> {
+        self.given.get(name)
     }
 
     /// Every conversation's outline, by id, each folded again only if a line of it moved.

@@ -527,3 +527,48 @@ export async function switchChain(page: Page, name: string): Promise<void> {
   }
   await page.waitFor(`document.querySelector("#view .pagetitle")?.textContent === ${JSON.stringify(label)}`);
 }
+
+/**
+ * In the core's worker, before its own script: each question as it arrives (its number, lane and kind) and each answer
+ * as it is sent, in the order the worker saw them, each at the worker's clock; read back as `self.__questions`.
+ */
+export const WORKER_QUESTIONS = `(() => {
+  const seen = (self.__questions = [])
+  self.addEventListener("message", (e) => {
+    const d = e.data
+    if (d !== null && typeof d === "object" && typeof d.id === "number" && "question" in d) seen.push(["asked", d.id, Math.round(performance.now()), d.lane, d.question.type])
+  })
+  const post = self.postMessage.bind(self)
+  self.postMessage = (m, ...rest) => {
+    if (m !== null && typeof m === "object" && typeof m.id === "number" && "answer" in m) seen.push(["answered", m.id, Math.round(performance.now())])
+    return post(m, ...rest)
+  }
+})()`;
+
+/** What `WORKER_QUESTIONS` records: a question asked, or answered. */
+export type Recorded = readonly ["asked", number, number, string, string] | readonly ["answered", number, number];
+
+/** In the core's worker: each of its phases' marks (`prodrome/phases.ts`), the first of each name, at the worker's clock. */
+export const WORKER_MARKS = `(() => {
+  const first = {}
+  for (const m of performance.getEntriesByType("mark")) if (!(m.name in first)) first[m.name] = m.startTime
+  return first
+})()`;
+
+/** When the worker answered its first `Stream`, at its clock, from what `WORKER_QUESTIONS` recorded. */
+export const streamAnswered = (seen: readonly Recorded[]): number => {
+  const asked = seen.find((s) => s[0] === "asked" && s[4] === "Stream");
+  const answered = asked === undefined ? undefined : seen.find((s) => s[0] === "answered" && s[1] === asked[1]);
+  if (answered === undefined) throw new Error(`the worker answered no stream: ${JSON.stringify(seen)}`);
+  return answered[2];
+};
+
+/** Whether the device keeps a snapshot of the store `store`, which `noderows` writes once the store is quiet. */
+export const snapshotKept = (store: string): string => `new Promise((ok, no) => {
+  const r = indexedDB.open("suzatary")
+  r.onerror = () => no(String(r.error))
+  r.onsuccess = () => {
+    const q = r.result.transaction("snapshots").objectStore("snapshots").getAllKeys()
+    q.onsuccess = () => (r.result.close(), ok(q.result.includes(${JSON.stringify(store)})))
+  }
+})`;

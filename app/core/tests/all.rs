@@ -50,6 +50,8 @@ mod pieces;
 mod puller_port;
 #[path = "release.rs"]
 mod release;
+#[path = "snapshot.rs"]
+mod snapshot;
 #[path = "surface.rs"]
 mod surface;
 #[path = "topics.rs"]

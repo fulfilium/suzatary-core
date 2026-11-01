@@ -71,6 +71,7 @@ export namespace objectsync {
       {
         name,
         place,
+        reader: { type: "Rows" },
         ask: since =>
           storereads.objects(name, since).then(a => ({ said: a, erased: [], piece: r => locked.of(r), rest: a.rest, size: a.size, weight: a.weight })),
         content: engine.INLINE,

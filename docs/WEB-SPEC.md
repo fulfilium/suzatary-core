@@ -1761,6 +1761,22 @@ Each pattern written once, in `web/src/algebra/once.ts`, `latest.ts`,
   kept is dropped…", "version 5 drops the lines' row and its pieces…"; e2e `upgrade8.test.ts`; `replica.test.ts` "a row in a form an earlier build
   kept does not read…"; e2e `upgrade.test.ts` "a device holding a version 2
   replica drops it on its first load…".
+- **A snapshot is served only for the rows it was of, and holds no key let
+  go:** a store's snapshot of the core is kept under the key of its head row,
+  its count of node rows and its key rows' names. Every write of a row deletes
+  it in that transaction (a landing, a purge, a reset, a piece kept); it is
+  written in a transaction of its own once the store is quiet, only where the
+  row it was printed from is still the device's, so a burst of landings
+  writes one. A warm load serves it only under that key, and with a current
+  one answers its first stream before it reads the lines' rows. —
+  `noderows.test.ts` "a landing deletes the snapshot and owes the next…", "a
+  burst of landings writes at most one snapshot…", "a snapshot is written only
+  where the device holds the rows it was printed of", "a purge deletes the
+  snapshot in the transaction that lets its keys go…", "a reset and a piece
+  kept each delete the snapshot…"; `wipe.test.ts` "the lines' row, its keys
+  among it, its snapshot…"; e2e `lines.test.ts` "a warm load answers the
+  stream from the core's snapshot before it reads the lines' rows…", "Erase
+  draws a turn by its shape…".
 - **A verdict says what it found as a sum.** Each object the walk reached
   carries its depth and one it never reached says so (`verify.Walk`), and a
   chain's check is `Reached`, or `Unreached` with every problem, never an

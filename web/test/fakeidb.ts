@@ -19,7 +19,7 @@ type Key = string | Range
 const later = (f: () => void): void => void setTimeout(f, 0)
 const within = (k: Key | undefined) => (x: string): boolean => (k === undefined ? true : typeof k === "string" ? x === k : k.includes(x))
 
-Object.assign(globalThis, { IDBKeyRange: { bound: (lower: string, upper: string): Range => ({ includes: k => lower <= k && k <= upper }) } })
+Object.assign(globalThis, { IDBKeyRange: { bound: (lower: string, upper: string, lowerOpen = false): Range => ({ includes: k => (lowerOpen ? lower < k : lower <= k) && k <= upper }) } })
 
 export type Fake = {
   // The keys whose writes are refused while it answers true.
@@ -54,9 +54,11 @@ export const fakeIndexedDB = (): Fake => {
   const database = (name: string) => {
     const d = dbs.get(name) ?? { version: 0, stores: new Map<string, Map<string, unknown>>(), paths: new Map<string, string>() }
     dbs.set(name, d)
-    const transaction = (store: string) => {
+    // A transaction over one store or several, each staged on its own and all committed together.
+    const transaction = (over: string | readonly string[]) => {
       transactions += 1
-      const staged = new Map(d.stores.get(store) ?? [])
+      const names = typeof over === "string" ? [over] : over
+      const stagedOf = new Map(names.map(n => [n, new Map(d.stores.get(n) ?? [])]))
       let open = 0
       let asked = false
       let failed = false
@@ -65,7 +67,7 @@ export const fakeIndexedDB = (): Fake => {
         if (open === 0)
           later(() => {
             if (open !== 0 || failed) return
-            d.stores.set(store, staged)
+            for (const [n, staged] of stagedOf) d.stores.set(n, staged)
             tx.oncomplete?.()
           })
       }
@@ -74,7 +76,10 @@ export const fakeIndexedDB = (): Fake => {
         onerror: null as (() => void) | null,
         onabort: null as (() => void) | null,
         error: null as unknown,
-        objectStore: () => {
+        objectStore: (name?: string) => {
+          const store = name ?? names[0]!
+          const staged = stagedOf.get(store)
+          if (staged === undefined) throw new Error(`the transaction does not span ${store}`)
           const ask = (f: () => unknown, refused = false): Req => {
             asked = true
             open += 1
@@ -119,13 +124,15 @@ export const fakeIndexedDB = (): Fake => {
               return r
             },
             get: (k: string) => ask(() => ((read += 1), structuredClone(staged.get(k)))),
-            getAll: (k?: Key) =>
+            // At most `count` rows, the first in key order, as IndexedDB's own.
+            getAll: (k?: Key, count?: number) =>
               ask(() => {
-                const all = keys(k)
+                const all = keys(k).slice(0, count)
                 read += all.length
                 return all.map(x => structuredClone(staged.get(x)))
               }),
-            getAllKeys: (k?: Key) => ask(() => keys(k)),
+            getAllKeys: (k?: Key, count?: number) => ask(() => keys(k).slice(0, count)),
+            count: (k?: Key) => ask(() => keys(k).length),
             put: (v: unknown, k?: string) => ask(() => void staged.set(keyOf(v, k), structuredClone(v)), fake.failing(keyOf(v, k))),
             delete: (k: Key) => ((deletes += 1), ask(() => keys(k).forEach(x => staged.delete(x)))),
             clear: () => ((deletes += 1), ask(() => staged.clear())),

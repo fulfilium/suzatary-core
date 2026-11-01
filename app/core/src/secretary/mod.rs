@@ -48,6 +48,7 @@ pub mod found;
 pub mod google_sign_in;
 pub mod heartbeat;
 pub mod held_lines;
+pub mod held_replica;
 pub mod inbox;
 pub mod inbox_event;
 #[cfg(feature = "wasm")]

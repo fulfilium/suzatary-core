@@ -12,11 +12,14 @@
  * 4. A device that kept the plaintext conversations is upgraded: that row goes once the lines
  *    are held, and nothing plaintext is left on the device.
  * 5. A conversation the device prefetched reads with no network, and one it lacks says so.
+ * 6. A warm load answers the stream from the core's snapshot before it reads the lines' rows; rows changed beside the
+ *    snapshot are restored from instead; and once an erasure's key is let go no snapshot holds it.
  */
 
 import assert from "node:assert/strict"
 
-import { PHONE, SIGNED_POST, WRITE_BASE, suite } from "./harness"
+import type { Recorded } from "./harness"
+import { PHONE, SIGNED_POST, WORKER_MARKS, WORKER_QUESTIONS, WRITE_BASE, streamAnswered, suite } from "./harness"
 
 const app = await suite("lines")
 
@@ -67,6 +70,24 @@ const put = (name: string, store: string, write: string): string => `new Promise
 const rowsOf = (name: string, store: string): string =>
   `${held(name)}.then((all) => JSON.parse(all)[${JSON.stringify(store)}] ?? [])`
 
+/** How many snapshots the device keeps, and which of `hexes`, each bytes in hex, any of them holds. */
+const snapshotHolds = (hexes: readonly string[]): string => `new Promise((ok, no) => {
+  const r = indexedDB.open("suzatary")
+  r.onerror = () => no(String(r.error))
+  r.onsuccess = () => {
+    const q = r.result.transaction("snapshots").objectStore("snapshots").getAll()
+    q.onsuccess = () => {
+      r.result.close()
+      const printed = q.result.map((v) => [...v.bytes].map((b) => b.toString(16).padStart(2, "0")).join(""))
+      ok({ kept: printed.length, holds: ${JSON.stringify(hexes)}.filter((h) => printed.some((p) => p.includes(h))) })
+    }
+  }
+})`
+type Holds = { readonly kept: number; readonly holds: readonly string[] }
+// The bytes of the keys `names` name. A snapshot names every key the nodes name, an erasure's own node among them, so it
+// is the bytes that a let-go key's snapshot must not hold.
+const keyBytes = (keys: Readonly<Record<string, string>>, names: readonly string[]): string[] => names.flatMap((name) => keys[name] ?? [])
+
 const said = (who: string): string =>
   `[...document.querySelectorAll(".turns .turn-${who} .turntext")].map((t) => t.textContent).join("\\n")`
 
@@ -107,6 +128,9 @@ app.scene("Erase draws a turn by its shape and the device forgets the blocks its
   await converse("give me a rendered answer")
   await app.page.waitFor(`document.querySelector(".turn-model .answerblock") !== null`, { timeout: 20000 })
   await app.page.waitFor(`${held("suzatary-rendered")}.then((all) => all.includes("compiled to HTML"))`, { timeout: 15000 })
+  // Once the lines are quiet (`noderows.QUIET_MS`), the core's snapshot of them is kept, the answer's key in it.
+  const keys = await app.page.evaluate<Record<string, string>>(`${linesRow}.then((row) => row.keys)`)
+  await app.page.waitFor(`${snapshotHolds(keyBytes(keys, Object.keys(keys)))}.then((s) => s.holds.length > 0)`, { timeout: 60000 })
   await app.page.click(".turn-model .turnmorebutton")
   await app.page.click(".turn-model .turnerase .act-erase")
   await app.page.waitFor(`document.querySelector(".turn-model .turnerase .act-erase.confirming") !== null`, { timeout: 5000 })
@@ -119,6 +143,50 @@ app.scene("Erase draws a turn by its shape and the device forgets the blocks its
   assert.ok(!(await app.page.evaluate<string>(said("model"))).includes("compiled to HTML"))
   await app.page.waitFor(`${held("suzatary-rendered")}.then((all) => !all.includes("compiled to HTML"))`, { timeout: 15000 })
   assert.ok(!(await app.page.evaluate<string>(held("suzatary"))).includes("compiled to HTML"), "nothing the device holds says it")
+  const erased = await app.page.evaluate<string[]>(`${linesRow}.then((row) => ${JSON.stringify(Object.keys(keys))}.filter((k) => !(k in row.keys)))`)
+  assert.ok(erased.length > 0, "the erased answer's key went")
+  const after = await app.page.evaluate<Holds>(snapshotHolds(keyBytes(keys, erased)))
+  assert.deepEqual(after.holds, [], `no snapshot holds the purged key's bytes (${after.kept} kept)`)
+})
+
+app.scene("a warm load answers the stream from the core's snapshot before it reads the lines' rows, and rows changed beside it are restored from", async () => {
+  await app.resize(PHONE)
+  await app.open(WRITE_BASE)
+  await converse("give me a rendered answer")
+  await app.page.waitFor(`document.querySelector(".turn-model .answerblock") !== null`, { timeout: 20000 })
+  // Kept once the lines are quiet (`noderows.QUIET_MS`).
+  await app.page.waitFor(`${snapshotHolds([])}.then((s) => s.kept > 0)`, { timeout: 60000 })
+  const unrecord = await app.page.beforeEveryWorker(WORKER_QUESTIONS)
+  // A load of the stream, and when the worker answered it, read the lines' rows and loaded the snapshot.
+  const load = async (n: string): Promise<{ readonly answered: number; readonly marks: Readonly<Record<string, number>> }> => {
+    await app.page.navigate(`${WRITE_BASE}/?${n}#/secretary`)
+    await app.page.waitFor(`document.querySelector(".streamround") !== null`, { timeout: 20000 })
+    const seen = await app.page.inWorker<Recorded[]>("prodromework", "self.__questions")
+    // The rows are read behind the answer: once they are, the marks name them.
+    const deadline = Date.now() + 20000
+    let marks = await app.page.inWorker<Readonly<Record<string, number>>>("prodromework", WORKER_MARKS)
+    while (marks["lines rows read"] === undefined && Date.now() < deadline) {
+      await new Promise((done) => setTimeout(done, 100))
+      marks = await app.page.inWorker<Readonly<Record<string, number>>>("prodromework", WORKER_MARKS)
+    }
+    return { answered: streamAnswered(seen), marks }
+  }
+  const BOGUS = `key/${"f".repeat(64)}`
+  try {
+    const warm = await load("warm")
+    assert.ok(warm.marks["lines snapshot loaded"] !== undefined, `the core was loaded from the snapshot: ${JSON.stringify(warm.marks)}`)
+    const rows = warm.marks["lines rows read"]
+    assert.ok(rows !== undefined && warm.answered < rows, `the stream was answered at ${warm.answered}, before the lines' rows were read at ${rows}`)
+    // A key row more than the snapshot was of: its key no longer names the rows.
+    await app.page.evaluate(put("suzatary", "lines", `(s) => s.put("00", ${JSON.stringify(BOGUS)})`))
+    const changed = await load("changed")
+    assert.equal(changed.marks["lines snapshot loaded"], undefined, "the snapshot of other rows is not loaded")
+    const read = changed.marks["lines rows read"]
+    assert.ok(read !== undefined && read < changed.answered, "the stream was answered from the rows, read first")
+  } finally {
+    await unrecord()
+    await app.page.evaluate(put("suzatary", "lines", `(s) => s.delete(${JSON.stringify(BOGUS)})`))
+  }
 })
 
 app.scene("forgetting a fact erases what it caused, and the tab's tap erases what it offers", async () => {

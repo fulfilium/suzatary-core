@@ -10,7 +10,7 @@ import idb from "../src/app/idb"
 import lo from "../src/algebra/lo"
 import linesync from "../src/prodrome/linesync"
 import noderows from "../src/prodrome/noderows"
-import { CONTENT, DB_NAME, INBOX_ROWS, LINE_ROWS } from "../src/prodrome/objects"
+import { CONTENT, DB_NAME, INBOX_ROWS, LINE_ROWS, SNAPSHOTS } from "../src/prodrome/objects"
 import payload from "../src/wire/generated/payload"
 import locked from "../src/prodrome/locked"
 import type { Frontier, Word } from "../src/prodrome/replica"
@@ -21,6 +21,23 @@ import type { LineStep, SkeletonNode, StoredObject } from "../src/wire/generated
 const KEEP = (): Promise<lo.Settled<null>> => Promise.resolve(lo.val(null))
 const lineRows = (version = 1, dropped = KEEP): noderows.Place<SkeletonNode> => noderows.placeOf(LINE_ROWS, payload.SkeletonNode, { version, dropped })
 const inboxRows = (): noderows.Place<StoredObject> => noderows.placeOf(INBOX_ROWS, payload.StoredObject, { version: 1, dropped: KEEP })
+
+// The rows of the lines with a snapshot beside them, of a reader that holds the row `reader.row`: its snapshot prints
+// the names and bytes of the keys it holds, so a test reads what a snapshot holds, and it counts its prints.
+type Reader = { row: locked.Row<SkeletonNode> | null; prints: number }
+const printOf = (r: locked.Row<SkeletonNode>): Uint8Array => new TextEncoder().encode(JSON.stringify(r.keys))
+const snapshotRows = (reader: Reader): noderows.Place<SkeletonNode> =>
+  noderows.placeOf(LINE_ROWS, payload.SkeletonNode, { version: 1, dropped: KEEP }, {
+    type: "Snapshot",
+    print: () => {
+      if (reader.row === null) return { type: "Other" }
+      reader.prints += 1
+      return { type: "Of", row: reader.row, bytes: printOf(reader.row) }
+    },
+  })
+// What the device's snapshot store holds, by store name, as text.
+const snapshots = (device: ReturnType<typeof fakeIndexedDB>): ReadonlyMap<string, string> =>
+  new Map([...device.rows(DB_NAME, SNAPSHOTS.store)].map(([k, v]) => [k, new TextDecoder().decode((v as { bytes: Uint8Array }).bytes)]))
 
 const node = (hash: string): SkeletonNode => ({
   hash: hash.repeat(64).slice(0, 64),
@@ -256,4 +273,125 @@ test("a reformat keeps what this tab wrote and the box has not taken, or keeps e
   const refused = await inbox(2).restore()
   assert.ok(refused.row.type === "Unreadable" && refused.row.why.includes("do not read"), JSON.stringify(refused.row))
   assert.ok((await inbox(1).restore()).row.type === "Held", "the old rows are kept")
+})
+
+const K = "k".repeat(64)
+
+test("a landing deletes the snapshot and owes the next, written once the store is quiet under its rows' key, and a row changed beside it is found by no warm load", async () => {
+  const device = fakeIndexedDB()
+  const reader: Reader = { row: null, prints: 0 }
+  const place = snapshotRows(reader)
+  reader.row = locked.of(row([node("a"), node("b")], at(2)).replica, { [K]: "00" })
+  assert.equal((await place.land(reader.row)).row.type, "Val")
+  assert.equal(snapshots(device).size, 0, "the landing writes none")
+  await place.settle()
+  const primed = await snapshotRows(reader).prime()
+  assert.ok(primed.type === "Current", "a warm load finds the snapshot")
+  assert.deepEqual(primed.bytes, printOf(reader.row), "of the row the landing wrote")
+  const restoring = snapshotRows(reader)
+  const read = await restoring.restore()
+  assert.deepEqual(read.key, { type: "Of", key: primed.key }, "under the key of the rows a restore reads")
+  // A page that loaded under no current snapshot owes one; settled here, so no timer outlives the test.
+  await restoring.settle()
+  // Another build, or a hand, changes the head and leaves the snapshot: the key no longer names those rows.
+  const head: unknown = await idb.within(LINE_ROWS, "readonly", s => idb.done(s.get("head")))
+  await idb.within(LINE_ROWS, "readwrite", s => idb.done(s.put({ ...(head as object), frontier: at(9) }, "head")))
+  assert.equal((await snapshotRows(reader).prime()).type, "None", "a changed head")
+  await idb.within(LINE_ROWS, "readwrite", s => idb.done(s.put(head, "head")))
+  assert.equal((await snapshotRows(reader).prime()).type, "Current", "the head as it was")
+  await idb.within(LINE_ROWS, "readwrite", s => idb.done(s.put("11", `key/${"m".repeat(64)}`)))
+  assert.equal((await snapshotRows(reader).prime()).type, "None", "a key row more")
+})
+
+test("a burst of landings writes at most one snapshot, of the last", async () => {
+  const device = fakeIndexedDB()
+  const reader: Reader = { row: null, prints: 0 }
+  const place = snapshotRows(reader)
+  for (let n = 1; n <= 5; n += 1) {
+    reader.row = locked.of(row(["a", "b", "c", "d", "e"].slice(0, n).map(node), at(n)).replica, { [K]: "00" })
+    assert.equal((await place.land(reader.row)).row.type, "Val")
+    assert.equal(snapshots(device).size, 0, `landing ${n} writes none`)
+  }
+  await place.settle()
+  await place.settle()
+  assert.equal(reader.prints, 1, "one snapshot printed")
+  assert.equal(snapshots(device).size, 1)
+  assert.equal((await snapshotRows(reader).prime()).type, "Current", "of the rows on the device")
+})
+
+test("a snapshot is written only where the device holds the rows it was printed of", async () => {
+  const device = fakeIndexedDB()
+  const mine: Reader = { row: null, prints: 0 }
+  const theirs: Reader = { row: null, prints: 0 }
+  const [first, second] = [snapshotRows(mine), snapshotRows(theirs)]
+  await Promise.all([first.restore(), second.restore()])
+  theirs.row = row([node("b")], at(5))
+  assert.equal((await second.land(theirs.row)).row.type, "Val")
+  mine.row = row([node("a")], at(2))
+  assert.equal((await first.land(mine.row)).row.type, "Val")
+  await Promise.all([first.settle(), second.settle()])
+  assert.equal(snapshots(device).size, 0, "the device holds the join, which neither reader printed")
+  const none: Reader = { row: null, prints: 0 }
+  const third = snapshotRows(none)
+  assert.equal((await third.land(row([node("c")], at(7)))).row.type, "Val")
+  await third.settle()
+  assert.equal(snapshots(device).size, 0, "a reader that holds no row prints none")
+})
+
+test("a purge deletes the snapshot in the transaction that lets its keys go, so no snapshot holds a purged key", async () => {
+  const device = fakeIndexedDB()
+  const reader: Reader = { row: null, prints: 0 }
+  const place = snapshotRows(reader)
+  const [gone, kept] = ["g".repeat(64), "h".repeat(64)]
+  reader.row = locked.of(row([node("a")], at(1)).replica, { [gone]: "00", [kept]: "01" })
+  assert.equal((await place.land(reader.row)).row.type, "Val")
+  await place.settle()
+  assert.ok(snapshots(device).get(LINE_ROWS.store)?.includes(gone), "the snapshot holds the key")
+  assert.equal((await place.forget([gone])).type, "Val")
+  assert.equal(snapshots(device).size, 0, "the snapshot went with it")
+  // The reader let the key go first; the snapshot owed is of what it holds now.
+  reader.row = locked.without(reader.row, [gone])
+  await place.settle()
+  assert.ok([...snapshots(device).values()].every(s => !s.includes(gone)), "no snapshot holds the purged key")
+  assert.equal(snapshots(device).size, 1, "the next snapshot is written")
+})
+
+test("a reset and a piece kept each delete the snapshot in their own transaction", async () => {
+  const device = fakeIndexedDB()
+  const reader: Reader = { row: null, prints: 0 }
+  const place = snapshotRows(reader)
+  const landed = async (): Promise<void> => {
+    const r = await held(lineRows())
+    reader.row = locked.of(replicaOf<SkeletonNode>({ ...r.replica.held, objects: [node("a")], synced: [node("a").hash], frontier: at(r.replica.held.frontier.type === "Named" ? r.replica.held.frontier.count + 1 : 1) }), { [K]: "00" })
+    assert.equal((await place.land(reader.row)).row.type, "Val")
+    await place.settle()
+    assert.ok(snapshots(device).has(LINE_ROWS.store))
+  }
+  await place.land(row([], at(0)))
+  await landed()
+  assert.equal((await place.reset(reader.row ?? locked.none())).type, "Val")
+  assert.equal(snapshots(device).size, 0, "a reset")
+  await landed()
+  assert.equal((await place.keepPiece(1, row([node("b")], at(9)))).type, "Val")
+  assert.equal(snapshots(device).size, 0, "a piece, whose keys are key rows")
+})
+
+test("a snapshot the device refuses is not kept, and fails no landing", async () => {
+  const device = fakeIndexedDB()
+  const reader: Reader = { row: null, prints: 0 }
+  const place = snapshotRows(reader)
+  device.failing = k => k === LINE_ROWS.store
+  reader.row = row([node("a")], at(1))
+  assert.equal((await place.land(reader.row)).row.type, "Val")
+  await place.settle()
+  device.failing = () => false
+  assert.equal(snapshots(device).size, 0)
+  assert.deepEqual(names(await held(lineRows())), [node("a").hash])
+})
+
+test("a store of more nodes than one read asks for reads back every node, each once", async () => {
+  fakeIndexedDB()
+  const many = Array.from({ length: 2345 }, (_, i) => ({ ...node("a"), hash: i.toString(16).padStart(64, "0") }))
+  assert.equal((await lineRows().land(row(many, at(1)))).row.type, "Val")
+  assert.deepEqual(names(await held(lineRows())), many.map(n => n.hash).sort())
 })
