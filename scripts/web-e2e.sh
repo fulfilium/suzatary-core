@@ -398,6 +398,14 @@ cat > "$script" <<'SCRIPT'
     "reply": "{\"say\": \"I will ask to add it.\", \"calls\": [{\"verb\": \"propose_act\", \"args\": {\"act\": \"connect\", \"template\": \"ics\", \"params\": [\"Family\"], \"why\": \"Ada asked to add the Family calendar.\", \"sources\": \"briefing:2026-09-02\"}}]}"
   },
   {
+    "when": "ada@example.test",
+    "reply": "{\"say\": \"I will ask to connect it.\", \"calls\": [{\"verb\": \"propose_act\", \"args\": {\"act\": \"connect\", \"template\": \"google\", \"params\": [\"ada@example.test\"], \"why\": \"Ada asked to connect this Google account.\", \"sources\": \"briefing:2026-09-02\"}}]}"
+  },
+  {
+    "when": "her@example.invalid",
+    "reply": "{\"say\": \"I will ask to sign it in with Google.\", \"calls\": [{\"verb\": \"propose_act\", \"args\": {\"act\": \"connect\", \"template\": \"google\", \"params\": [\"her@example.invalid\"], \"why\": \"Ada asked to connect this Google account.\", \"sources\": \"briefing:2026-09-02\"}}]}"
+  },
+  {
     "when": "propose_act",
     "reply": "{\"say\": \"Proposed. Tap Run and the sign-in code will land here.\"}"
   },

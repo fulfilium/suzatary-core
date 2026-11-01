@@ -31,6 +31,31 @@ impl Template {
     pub const fn shape(&self) -> Shape {
         self.table.shape()
     }
+
+    /// What a conversation that connects it is titled: `Connect a Google account`.
+    #[must_use]
+    pub fn called(&self) -> String {
+        let what = self.title.split(" (").next().unwrap_or(self.title);
+        format!("Connect {what}")
+    }
+
+    /// The setup conversation's first line for it: what it connects, each step in order, and
+    /// what to reply to begin.
+    #[must_use]
+    pub fn opening(&self) -> String {
+        let steps = self.steps.iter().enumerate().map(|(at, step)| {
+            let when = if at == 0 { "First," } else { "Then" };
+            format!("{when} {}.", step.sentence())
+        });
+        std::iter::once(format!("Connect {}.", self.title))
+            .chain(steps)
+            .chain([
+                format!("To begin, {}.", self.shape().asked()),
+                "Each step after it stands on its line in Settings and in the Inbox.".to_owned(),
+            ])
+            .collect::<Vec<_>>()
+            .join(" ")
+    }
 }
 
 /// The table of the instance file a template writes, from a closed vocabulary: each arm is
@@ -289,8 +314,8 @@ impl TemplateId {
         TemplateId::GitRemote,
         TemplateId::DriveCli,
         TemplateId::Ics,
-        TemplateId::Gmail,
         TemplateId::Google,
+        TemplateId::Gmail,
         TemplateId::MsImap,
         TemplateId::Proton,
         TemplateId::Model,

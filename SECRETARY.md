@@ -476,12 +476,25 @@ propose_act(act="connect", template="imap-device-code", params=["<address>", "co
 propose_act(act="connect", template="drive-cli", params=["/my-files/Taxes"], why="…", sources="…")
 ```
 
-The templates are the box's catalog: `ics` (a calendar, by the label the owner
-gives it), `lieer` (Gmail), `imap-device-code` (Outlook with `consumers`,
-Microsoft 365 with `organizations`), `bridge` (Proton Mail), `drive-cli` (a
-Drive folder you may read), `ntfy` and `fcm` (notifications, no parameters).
-Take the label, the address or the folder from their own words; if they did
-not say one, ask. CALL IT FIRST: in a round that has read
+The templates are the box's catalog: `google` (a Google account's mail and
+calendars, by one sign-in with Google: the one to offer for any Gmail or Google
+address), `lieer` (Gmail through lieer's own sign-in at a terminal),
+`imap-device-code` (Outlook with `consumers`, Microsoft 365 with
+`organizations`), `bridge` (Proton Mail), `ics` (a calendar that is not
+Google's, by the label the owner gives it), `drive-cli` (a Drive folder you may
+read), `ntfy` and `fcm` (notifications, no parameters). Take the label, the
+address or the folder from their own words; if they did not say one, ask. A
+`google` connection for an address lieer already reads moves that account onto
+the sign-in with Google, so file it when they ask for that account's calendars.
+Its tap changes nothing at first: lieer reads the mail until the sign-in is
+kept and has read the mail through Google's grant, and only then does the box
+move the account; its mail stays where it is and its calendars are read too.
+
+When Settings' "Connect an account" opens a conversation for one template,
+the box's own first line says which template, each step, and what to reply ("Connect a
+Google account (its mail and calendars). First, …"). Their reply is the
+parameter that line asked for: file the `connect` act for that template with
+it, in the same round, and say in one sentence which card comes next. CALL IT FIRST: in a round that has read
 anything but their own words it is refused, since an account or a folder to
 add is theirs to name. Something already connected is refused too. Their tap
 writes it into the instance file, and the box then files a card of its own

@@ -464,9 +464,9 @@ fn secretspec(root: &Path) -> anyhow::Result<()> {
 /// The cards a fixture's `--connected` leaves standing.
 fn standing_cards(root: &Path, connected: Connected) -> anyhow::Result<()> {
     match connected {
-        Connected::Nothing => Ok(()),
+        // The Google scene connects its accounts from Settings, through the setup conversation.
+        Connected::Nothing | Connected::Google => Ok(()),
         Connected::Calendar => a_connected_calendar(root),
-        Connected::Google => a_google_account_to_connect(root),
     }
 }
 
@@ -523,54 +523,8 @@ fn a_connected_calendar(root: &Path) -> anyhow::Result<()> {
     Ok(())
 }
 
-/// The Google account a `--connected google` fixture's Connect card connects.
+/// The account `suzatary-dev fake-google` signs in when a consent names none.
 pub const GOOGLE_ACCOUNT: &str = "ada@example.test";
-
-/// A Connect card for a Google account standing in the `connect` conversation, as the setup
-/// agent files it: its tap writes the account, and the box asks for the client and the sign-in.
-fn a_google_account_to_connect(root: &Path) -> anyhow::Result<()> {
-    use suzatary_core::secretary::store::{ConversationId, Entry, Kind, Proposal, Reasons};
-
-    let account =
-        suzatary_core::connect::Connection::parse("google", &[GOOGLE_ACCOUNT.to_owned()])?;
-    let read = crate::instance::Instance::open(&root.join("instance.toml"))?;
-    let store = read.conversation_stores();
-    let conversations = store.conversations();
-    let inbox = read.inbox_store();
-    let id = ConversationId::new(CONNECT_CONVERSATION)?;
-    let now = SystemClock.now();
-    suzatary_core::secretary::transcript::start(
-        conversations,
-        &id,
-        &Entry::Opened {
-            at: now,
-            title: suzatary_core::secretary::words::Words::kept("Google".to_owned()),
-            model: "scripted".to_owned(),
-            kind: Kind::Topic,
-        },
-    )?;
-    suzatary_core::secretary::filed::file(
-        conversations,
-        &inbox,
-        &[],
-        now,
-        suzatary_core::secretary::filed::Filing {
-            conversation: &id,
-            proposer: suzatary_core::secretary::proposer::Proposer::Secretary,
-            proposal: Proposal::Act(suzatary_core::secretary::acts::Act::Connect {
-                connection: account,
-            }),
-            reasons: Reasons::new(
-                "Ada asked to connect her Google account's mail and calendars",
-                vec![format!("todo:life/{}", CAST.todos.urgent.id).parse()?],
-            )?,
-            serves: None,
-            revises: None,
-        },
-    )
-    .map_err(|refusal| anyhow::anyhow!("{}", refusal.message()))?;
-    Ok(())
-}
 
 /// What `suzatary-dev fake-google` was told.
 #[derive(Debug, clap::Args)]
@@ -583,13 +537,14 @@ pub struct FakeGoogleArgs {
     account: String,
 }
 
-/// `suzatary-dev fake-google`: serve the fake Google the cargo tests use, printing its base URL,
-/// until killed.
+/// `suzatary-dev fake-google`: serve the fake Google the cargo tests use, signing in the account
+/// each consent names, printing its base URL, until killed.
 ///
 /// # Errors
 /// Never; a port that cannot be bound panics with the fake's own words.
 pub fn fake_google(args: &FakeGoogleArgs) -> anyhow::Result<()> {
     let fake = fake_google::FakeGoogle::start(args.port, &args.account);
+    fake.following_hints();
     println!("{}", serde_json::json!({ "base": fake.base }));
     loop {
         std::thread::park();
@@ -1732,8 +1687,8 @@ pub enum Connected {
     Nothing,
     /// A calendar whose link is not set, and its removal standing.
     Calendar,
-    /// A Google account's Connect card standing, as the setup agent files it, for the scene
-    /// that signs it in with the fake Google (`suzatary-dev fake-google`).
+    /// Nothing standing, on the server whose scene connects Google accounts from Settings
+    /// through the fake Google (`suzatary-dev fake-google`), with a store of its own.
     Google,
 }
 

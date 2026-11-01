@@ -935,6 +935,7 @@ fn the_standings_vector_is_every_standing_a_line_can_take() {
                 })
                 .collect(),
             ask: "setup".to_owned(),
+            offers: Vec::new(),
         },
         "standings.json",
     );
@@ -2829,6 +2830,11 @@ fn the_answers_vector_holds_every_answer() {
                 })
                 .collect(),
             ask: "setup".to_owned(),
+            offers: vec![wire::Offer {
+                template: "google".to_owned(),
+                group: Group::Mail,
+                title: "a Google account (its mail and calendars)".to_owned(),
+            }],
         }]);
     }
     {

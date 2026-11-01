@@ -16,6 +16,7 @@ pub struct Endpoints {
     authorize: String,
     token: String,
     calendar: String,
+    mail: String,
 }
 
 impl Endpoints {
@@ -26,6 +27,7 @@ impl Endpoints {
             authorize: "https://accounts.google.com/o/oauth2/v2/auth".to_owned(),
             token: "https://oauth2.googleapis.com/token".to_owned(),
             calendar: "https://www.googleapis.com/calendar/v3".to_owned(),
+            mail: "https://gmail.googleapis.com/gmail/v1".to_owned(),
         }
     }
 
@@ -38,6 +40,7 @@ impl Endpoints {
             authorize: format!("{base}/o/oauth2/v2/auth"),
             token: format!("{base}/token"),
             calendar: format!("{base}/calendar/v3"),
+            mail: format!("{base}/gmail/v1"),
         }
     }
 
@@ -51,6 +54,12 @@ impl Endpoints {
     #[must_use]
     pub fn calendar(&self) -> &str {
         &self.calendar
+    }
+
+    /// The Gmail API's root.
+    #[must_use]
+    pub fn mail(&self) -> &str {
+        &self.mail
     }
 }
 

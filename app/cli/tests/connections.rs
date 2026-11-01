@@ -8,11 +8,9 @@ mod common;
 use std::sync::Arc;
 
 use common::{DeclaredStore, Fakes, SecretRecorder, SettingsFixture};
-use suzatary_core::capability::Clock as _;
 use suzatary_core::connect::Connection;
 use suzatary_core::secretary::acts::Act;
 use suzatary_core::secretary::noticed::CONVERSATION;
-use suzatary_core::secretary::store::Proposal;
 
 /// The scratch instance: every required table, one account and nothing connected beside it.
 const INSTANCE: &str = r#"# Ada's box, a scratch copy.
@@ -204,42 +202,9 @@ fn file(served: &Box) -> String {
 /// The conversation the setup agent's cards are drawn in, here.
 const CONNECT: &str = "connect";
 
-/// `act` filed as the secretary's, as the setup agent will file it: the box files only what a
-/// reading owes, and withdraws any other card of its own.
+/// `act` filed as the secretary's in the `connect` conversation, as the setup agent files it.
 fn asked(fakes: &Fakes, act: Act) {
-    use suzatary_core::secretary::store::{ConversationId, Entry, Kind, Reasons};
-    let id = ConversationId::new(CONNECT).expect("a slug");
-    let opened = Entry::Opened {
-        at: suzatary_core::capability::Datetime::new(2026, 9, 2, 11, 0, 0, 0).expect("an instant"),
-        title: suzatary_core::secretary::words::Words::kept("Connect".to_owned()),
-        model: "a fake".to_owned(),
-        kind: Kind::Topic,
-    };
-    // Opened by the first card, as a conversation is.
-    let _ = suzatary_core::secretary::transcript::start(
-        fakes.conversations.conversations(),
-        &id,
-        &opened,
-    );
-    suzatary_core::secretary::filed::file(
-        fakes.conversations.conversations(),
-        &fakes.inbox,
-        &[],
-        fakes.clock.now(),
-        suzatary_core::secretary::filed::Filing {
-            conversation: &id,
-            proposer: suzatary_core::secretary::proposer::Proposer::Secretary,
-            proposal: Proposal::Act(act),
-            reasons: Reasons::new(
-                "the test asks",
-                vec!["briefing:2026-09-02".parse().expect("a reference")],
-            )
-            .expect("reasons"),
-            serves: None,
-            revises: None,
-        },
-    )
-    .expect("filed");
+    common::asked(fakes, CONNECT, act);
 }
 
 /// Connect writes the calendar's table, and the box asks for its link at once; a link from an
@@ -814,9 +779,10 @@ fn a_link_in_the_clear_is_refused_before_any_grant() {
 }
 
 /// A link to a Google calendar is stored nowhere, since the box reads a Google account's
-/// calendars through its sign-in with Google: a calendar the deployment's account holds, or one
-/// that is no account's own, asks for nothing more, and another account's own calendar asks for
-/// that account's connection, never for a grant of Google's origin.
+/// calendars through its sign-in with Google: a calendar that is no account's own asks for
+/// nothing more, and an account's own calendar asks for that account's connection, never for a
+/// grant of Google's origin, for the deployment's account, which lieer reads, too; that
+/// connection's tap leaves the instance file as it was.
 #[test]
 fn a_google_calendar_s_link_asks_for_its_google_account() {
     let served = serving(
@@ -831,38 +797,46 @@ fn a_google_calendar_s_link_asks_for_its_google_account() {
     let google = |id: &str| {
         format!("https://calendar.google.com/calendar/ical/{id}/private-7f3a9c/basic.ics")
     };
-    for asks_nothing in ["ada%40example.test", "c_1f2e%40group.calendar.google.com"] {
-        let (status, after) = tap(
-            base,
-            setup,
-            0,
-            &serde_json::json!({ "value": google(asks_nothing) }),
-        );
-        assert_eq!(status, 200, "{after}");
-        assert_eq!(after["proposals"][0]["state"], "failed", "{after}");
-        assert_eq!(
-            after["proposals"].as_array().map(Vec::len),
-            Some(1),
-            "{after}"
-        );
-    }
     let (status, after) = tap(
         base,
         setup,
         0,
-        &serde_json::json!({ "value": google("bea%40example.test") }),
+        &serde_json::json!({ "value": google("c_1f2e%40group.calendar.google.com") }),
     );
     assert_eq!(status, 200, "{after}");
     assert_eq!(after["proposals"][0]["state"], "failed", "{after}");
-    let card = &after["proposals"][1]["act"];
-    assert_eq!(card["kind"], "connect", "{after}");
-    assert!(
-        card["connection"]
-            .as_str()
-            .is_some_and(|called| called.contains("bea@example.test")),
+    assert_eq!(
+        after["proposals"].as_array().map(Vec::len),
+        Some(1),
         "{after}"
     );
+    for (account, card) in [("ada", 1), ("bea", 2)] {
+        let (status, after) = tap(
+            base,
+            setup,
+            0,
+            &serde_json::json!({ "value": google(&format!("{account}%40example.test")) }),
+        );
+        assert_eq!(status, 200, "{after}");
+        assert_eq!(after["proposals"][0]["state"], "failed", "{after}");
+        let asked = &after["proposals"][card]["act"];
+        assert_eq!(asked["kind"], "connect", "{after}");
+        assert!(
+            asked["connection"]
+                .as_str()
+                .is_some_and(|called| called.contains(&format!("{account}@example.test"))),
+            "{after}"
+        );
+    }
     assert!(served.secrets.calls().is_empty(), "nothing was stored");
+
+    // The tap writes nothing: lieer reads the account until its sign-in with Google is kept and
+    // has read its mail (`google::a_lieer_account_moves_onto_the_sign_in_only_once_its_grant_reads_its_mail`).
+    let before = file(&served);
+    let (status, after) = tap(base, setup, 1, &serde_json::json!({}));
+    assert_eq!(status, 200, "{after}");
+    assert_eq!(after["proposals"][1]["state"], "acted", "{after}");
+    assert_eq!(file(&served), before, "the instance file is as it was");
     let _ = std::fs::remove_file(&served.path);
 }
 

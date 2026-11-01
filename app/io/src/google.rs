@@ -39,9 +39,9 @@ impl std::fmt::Debug for Google {
     }
 }
 
-/// What a calendar sync could not do.
+/// What a read of Google's APIs (the calendars, the mailbox) could not do.
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
-pub enum CalendarError {
+pub enum ReadError {
     /// The account's grant mints no token: only the owner's sign-in mends it.
     #[error("{0}")]
     NeedsLogin(NeedsLogin),
@@ -132,7 +132,7 @@ impl Google {
         if resp.ok() {
             Ok(resp.body)
         } else {
-            Err(format!("the Calendar API answered {}", resp.status))
+            Err(format!("Google answered {}", resp.status))
         }
     }
 
@@ -141,19 +141,19 @@ impl Google {
     /// `MAX_ANSWER` bytes.
     ///
     /// # Errors
-    /// [`CalendarError`]: a grant that needs the owner's sign-in, or a read that failed.
+    /// [`ReadError`]: a grant that needs the owner's sign-in, or a read that failed.
     pub fn occurrences(
         &self,
         grant: &Grant,
         now: NaiveDateTime,
-    ) -> Result<Vec<Occurrence>, CalendarError> {
+    ) -> Result<Vec<Occurrence>, ReadError> {
         let token = self.token(grant)?;
         let listed = self
             .read(&token, &suzatary_core::google::list_url(&self.endpoints))
             .and_then(|body| {
                 suzatary_core::google::read_calendars(&body).map_err(|failed| failed.to_string())
             })
-            .map_err(CalendarError::Failed)?;
+            .map_err(ReadError::Failed)?;
         let window = suzatary_core::google::window(now);
         let mut occurrences = Vec::new();
         for calendar in listed.iter() {
@@ -167,10 +167,26 @@ impl Google {
                     suzatary_core::google::read_events(&body, &name)
                         .map_err(|failed| failed.to_string())
                 })
-                .map_err(CalendarError::Failed)?;
+                .map_err(ReadError::Failed)?;
             occurrences.extend(read);
         }
         Ok(occurrences)
+    }
+
+    /// How many messages `grant`'s account's mailbox holds, read through the grant: what shows
+    /// the grant reads the account's mail before the box hands lieer its tokens.
+    ///
+    /// # Errors
+    /// [`ReadError`]: a grant that needs the owner's sign-in, or a read that failed, a mailbox
+    /// of another account among them.
+    pub fn mailbox(&self, grant: &Grant) -> Result<u64, ReadError> {
+        let token = self.token(grant)?;
+        self.read(&token, &suzatary_core::google::profile_url(&self.endpoints))
+            .and_then(|body| {
+                suzatary_core::google::read_profile(&body, &grant.account)
+                    .map_err(|failed| failed.to_string())
+            })
+            .map_err(ReadError::Failed)
     }
 
     /// Write `event` into `grant`'s account's own calendar.
@@ -203,13 +219,13 @@ impl Google {
     }
 
     /// An access token for `grant`, or why there is none.
-    fn token(&self, grant: &Grant) -> Result<AccessToken, CalendarError> {
+    fn token(&self, grant: &Grant) -> Result<AccessToken, ReadError> {
         match self
             .access(&grant.client, &grant.refresh, &grant.account)
-            .map_err(|failed| CalendarError::Failed(failed.to_string()))?
+            .map_err(|failed| ReadError::Failed(failed.to_string()))?
         {
             Silent::Token(token) => Ok(token),
-            Silent::NeedsLogin(needs) => Err(CalendarError::NeedsLogin(needs)),
+            Silent::NeedsLogin(needs) => Err(ReadError::NeedsLogin(needs)),
         }
     }
 }
@@ -541,7 +557,7 @@ mod tests {
             .expect("an instant");
         assert!(matches!(
             google.occurrences(&grant(), now),
-            Err(CalendarError::NeedsLogin(NeedsLogin::Google { .. }))
+            Err(ReadError::NeedsLogin(NeedsLogin::Google { .. }))
         ));
         assert_eq!(http.sent().len(), 1, "only the token endpoint was asked");
     }

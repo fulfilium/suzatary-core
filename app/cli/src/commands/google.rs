@@ -7,17 +7,19 @@ use suzatary_core::connect::Failure;
 use suzatary_core::health::{Healths, Outcome};
 use suzatary_core::mail::account::Sync;
 use suzatary_core::source_key::SourceKey;
-use suzatary_io::google::CalendarError;
+use suzatary_io::google::ReadError;
 
 use crate::instance::Instance;
 
-/// Sync every Google account's calendars: one line each, and whether every one was stored.
+/// Sync every Google account's calendars, asking `google`: one line each, and whether every one
+/// was stored.
 #[must_use]
 pub fn sync_calendars(
     instance: &Instance,
+    google: suzatary_io::google::Google,
     health: &suzatary_io::source_health::Health,
 ) -> (Vec<String>, bool) {
-    let grants = super::mail::google_grants(instance);
+    let grants = suzatary_io::google::Grants::new(google, std::sync::Arc::new(instance.secrets()));
     let now = suzatary_io::clock::SystemClock.now();
     let at = prodrome_core::fpl::instant_of(now);
     let mut healths = Healths::default();
@@ -39,8 +41,8 @@ pub fn sync_calendars(
                 }
                 let read = grants.google().occurrences(&grant, at);
                 read.map_err(|failed| match failed {
-                    CalendarError::NeedsLogin(_) => (Failure::NeedsLogin, failed.to_string()),
-                    CalendarError::Failed(why) => (Failure::Unclassified, why),
+                    ReadError::NeedsLogin(_) => (Failure::NeedsLogin, failed.to_string()),
+                    ReadError::Failed(why) => (Failure::Unclassified, why),
                 })
             })
             .and_then(|occurrences| {

@@ -301,6 +301,51 @@ pub fn open(
     payload(&stored, caps, cards)
 }
 
+/// `POST /api/secretary/setup/<template>`: a conversation of its own begun on `template`, titled
+/// for it, whose first line is the template's [opening](crate::connect::Template::opening),
+/// written by the box as its own note, which wakes no model. One conversation per connection: an
+/// earlier connection's verb answers would make a later round read more than the owner's words,
+/// and the secretary files a Connect card only in a round of the owner's words alone.
+///
+/// # Errors
+/// The conversation store's.
+pub fn setup(
+    caps: &Server<'_>,
+    cards: &Cards<'_>,
+    template: crate::connect::TemplateId,
+) -> Answered<wire::ConversationPayload> {
+    let taken = transcript::keys(caps.secretary.conversations)
+        .map_err(|failed| Refusal::internal(failed.to_string()))?;
+    let at = caps.secretary.clock.now();
+    let today = cards
+        .deployment
+        .zone
+        .day(prodrome_core::fpl::instant_of(at));
+    let id = ConversationId::minted(today, &taken);
+    let template = template.template();
+    let title: String = Title::new(template.called())
+        .map_err(|refused| Refusal::internal(refused.to_string()))?
+        .into();
+    super::start(
+        caps.secretary.conversations,
+        caps.secretary.model,
+        &id,
+        &title,
+        Kind::Topic,
+        at,
+    )?;
+    super::append(
+        caps.secretary.conversations,
+        &id,
+        &Entry::noted(at, template.opening(), Vec::new()),
+    )?;
+    payload(
+        &super::read(caps.secretary.conversations, &id)?,
+        caps,
+        cards,
+    )
+}
+
 /// `POST …/<id>/title`: rename one, as the actor the gate resolved.
 ///
 /// # Errors
@@ -1123,6 +1168,8 @@ enum Then {
     Grant(crate::plugin::PluginName, crate::plugin::Origin),
     /// The Google account whose calendar's link was pasted: its connection's card is asked for.
     Connect(crate::connect::Connection),
+    /// The link a signed-in Google account's calendar was pasted as: its removal is asked for.
+    Retire(crate::connect::Connection),
     /// A plugin whose link was stored, synced once so the link is checked now.
     Check(crate::plugin::PluginName),
     /// What the box kept for a removed account, deleted outside the inbox's hold, since it
@@ -1153,9 +1200,14 @@ fn afterwards(
         Some(Then::Grant(plugin, origin)) => {
             crate::secretary::connections::grant(caps, &plugin, &origin)
         }
-        Some(Then::Connect(connection)) => crate::secretary::connections::connect(caps, connection),
+        Some(Then::Connect(connection)) => {
+            crate::secretary::connections::connect(caps, connection, card)
+        }
+        Some(Then::Retire(link)) => crate::secretary::connections::retire(caps, link, card),
         Some(Then::Check(plugin)) => {
-            effectors.checks.check(&plugin);
+            effectors
+                .checks
+                .check(&crate::source_key::SourceKey::Plugin(plugin));
             Ok(())
         }
         Some(Then::Forget(account, removal)) => {
@@ -1191,6 +1243,9 @@ enum Link {
     /// A Google account's own calendar, which the deployment does not hold: the account's
     /// connection is asked for in its place.
     Connect(crate::connect::Connection),
+    /// A calendar of a Google account the deployment holds signed in with Google, pasted as this
+    /// link: the link's removal is asked for in its place.
+    Retire(crate::connect::Connection),
 }
 
 /// Where `value` stands as `name`'s link, read against the manifests the file declares now; a
@@ -1228,7 +1283,7 @@ fn linked(
             manifest.name()
         )),
         Some(url) if let Some(calendar) = crate::google::ical::linked(&url) => {
-            google_calendar(&declared, calendar)
+            google_calendar(&declared, name.name(), calendar)
         }
         // The plugin's fetch sends a secret link over TLS or loopback alone, so a grant for any
         // other origin would allow what is never fetched.
@@ -1244,11 +1299,14 @@ fn linked(
     }
 }
 
-/// A link to a Google calendar: never stored, since a Google account's calendars are read through
-/// its sign-in with Google. An account's own calendar asks for that account's connection, unless
-/// the deployment already holds the account.
+/// A link to a Google calendar, pasted into the card for `name`: never stored, since a Google
+/// account's calendars are read through its sign-in with Google. An account's own calendar asks
+/// for that account's connection, and an account lieer reads is asked to move onto that sign-in;
+/// for an account signed in with Google already, the link `name` asks for is not needed, so its
+/// removal is asked for instead.
 fn google_calendar(
     declared: &crate::connect::Declared,
+    name: &str,
     calendar: crate::google::ical::Linked,
 ) -> Link {
     use crate::google::ical::Linked;
@@ -1258,10 +1316,20 @@ fn google_calendar(
         return Link::Refused(format!("{READ}; connect the Google account that holds it"));
     };
     match crate::connect::Connection::parse("google", &[account.as_str().to_owned()]) {
-        Ok(connection) if declared.connections().contains_key(&connection.key()) => {
-            Link::Refused(format!("{READ}, and {account} is connected already"))
-        }
-        Ok(connection) => Link::Connect(connection),
+        Ok(connection) => match declared.connections().get(&connection.key()) {
+            Some(held) if !connection.moves(held) => declared
+                .connections()
+                .into_values()
+                .find(|link| {
+                    matches!(link.template().table, crate::connect::Table::Link(_))
+                        && link.secrets().first().map(String::as_str) == Some(name)
+                })
+                .map_or_else(
+                    || Link::Refused(format!("{READ}, and {account} is connected already")),
+                    Link::Retire,
+                ),
+            Some(_) | None => Link::Connect(connection),
+        },
         Err(failed) => Link::Refused(format!("{READ}; {account} cannot be connected: {failed}")),
     }
 }
@@ -1314,6 +1382,15 @@ fn secret(
             *then = Some(Then::Connect(connection));
             Performed::Tried(Tried::NotSent { reason })
         }
+        Link::Retire(link) => {
+            let reason = format!(
+                "nothing was stored: that calendar is a Google account's the box reads through \
+                 its sign-in with Google, so the card beside this one removes {}",
+                link.called()
+            );
+            *then = Some(Then::Retire(link));
+            Performed::Tried(Tried::NotSent { reason })
+        }
     }
 }
 
@@ -1322,6 +1399,23 @@ fn connected(
     edits: &dyn crate::settings::Edits,
     connection: &crate::connect::Connection,
 ) -> Performed {
+    // A lieer account keeps reading its mail with lieer's own sign-in until its sign-in with
+    // Google is kept and has read its mail: the Google callback moves it then, never this tap.
+    let moves = edits.declared().is_ok_and(|declared| {
+        declared
+            .connections()
+            .get(&connection.key())
+            .is_some_and(|held| connection.moves(held))
+    });
+    if moves {
+        return Performed::Done(Done::Acted {
+            what: format!(
+                "nothing changed yet: lieer reads {}'s mail as before until its sign-in with \
+                 Google is kept and has read its mail, which the box asks for next",
+                connection.key().name
+            ),
+        });
+    }
     match edits.add_connection(connection) {
         Ok(()) => Performed::Done(Done::Acted {
             what: format!(

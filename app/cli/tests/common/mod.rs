@@ -1548,11 +1548,14 @@ impl CheckRecorder {
 }
 
 impl suzatary_core::settings::Checks for CheckRecorder {
-    fn check(&self, plugin: &suzatary_core::plugin::PluginName) {
-        self.0
-            .lock()
-            .expect("not poisoned")
-            .push(plugin.as_str().to_owned());
+    fn check(&self, source: &suzatary_core::source_key::SourceKey) {
+        self.0.lock().expect("not poisoned").push(match source {
+            suzatary_core::source_key::SourceKey::Plugin(plugin) => plugin.as_str().to_owned(),
+            suzatary_core::source_key::SourceKey::Mail(_)
+            | suzatary_core::source_key::SourceKey::Link { .. }
+            | suzatary_core::source_key::SourceKey::GoogleCalendar(_)
+            | suzatary_core::source_key::SourceKey::Drive => source.to_string(),
+        });
     }
 }
 
@@ -4192,4 +4195,42 @@ pub fn pdf_saying(text: &str) -> Vec<u8> {
         .as_bytes(),
     );
     out
+}
+
+/// `act` filed as the secretary's in `conversation`, as the setup agent files it: the box files only what a
+/// reading owes, and withdraws any other card of its own.
+pub fn asked(fakes: &Fakes, conversation: &str, act: suzatary_core::secretary::acts::Act) {
+    use suzatary_core::secretary::store::{ConversationId, Entry, Kind, Reasons};
+    let id = ConversationId::new(conversation).expect("a slug");
+    let opened = Entry::Opened {
+        at: suzatary_core::capability::Datetime::new(2026, 9, 2, 11, 0, 0, 0).expect("an instant"),
+        title: suzatary_core::secretary::words::Words::kept("Connect".to_owned()),
+        model: "a fake".to_owned(),
+        kind: Kind::Topic,
+    };
+    // Opened by the first card, as a conversation is.
+    let _ = suzatary_core::secretary::transcript::start(
+        fakes.conversations.conversations(),
+        &id,
+        &opened,
+    );
+    suzatary_core::secretary::filed::file(
+        fakes.conversations.conversations(),
+        &fakes.inbox,
+        &[],
+        fakes.clock.now(),
+        suzatary_core::secretary::filed::Filing {
+            conversation: &id,
+            proposer: suzatary_core::secretary::proposer::Proposer::Secretary,
+            proposal: suzatary_core::secretary::store::Proposal::Act(act),
+            reasons: Reasons::new(
+                "the test asks",
+                vec!["briefing:2026-09-02".parse().expect("a reference")],
+            )
+            .expect("reasons"),
+            serves: None,
+            revises: None,
+        },
+    )
+    .expect("filed");
 }

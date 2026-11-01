@@ -116,6 +116,18 @@ impl Connection {
         }
     }
 
+    /// Whether writing it changes `held`, the connection under its key, rather than duplicating
+    /// it: a Gmail account read through lieer's own sign-in is signed in with Google instead,
+    /// which reads the same mail and its calendars too.
+    #[must_use]
+    pub fn moves(&self, held: &Connection) -> bool {
+        self.key() == held.key()
+            && matches!(
+                (held.template, self.template),
+                (TemplateId::Gmail, TemplateId::Google)
+            )
+    }
+
     /// The sources its health is read from: an account's mail, and a Google account's
     /// calendars too; a link's fetches; the Drive, for a folder it may read. None for what the
     /// box reads nothing from (the data repository, the model, a channel).

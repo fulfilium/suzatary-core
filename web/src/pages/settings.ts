@@ -3,7 +3,7 @@
 // A secret is set only by tapping its card, whose field sends it once; the box never answers with it.
 
 import device from "../app/device"
-import { askTrust, getOverview, pairDevice } from "../wire/api"
+import { askTrust, beginSetup, getOverview, pairDevice } from "../wire/api"
 import pairing from "../app/pairing"
 import { signingHere, watchReplica } from "../prodrome/sync"
 import signer from "../prodrome/signer"
@@ -17,6 +17,8 @@ import frame from "../view/frame"
 import asked from "../app/asked"
 import reading from "../algebra/reading"
 import { hrefOf } from "../shell/route"
+import address from "../shell/address"
+import act from "../view/act"
 import inboxPage from "./inbox"
 import { proposalCard } from "../inbox/proposal"
 import { sameRows } from "../inbox/inbox"
@@ -87,13 +89,29 @@ export namespace settingsPage {
   const ask = (v: T, words: string): Child =>
     v.me === null ? null : el("a", { class: "act act-ask", href: hrefOf({ type: "conversation", id: v.overview.ask, refs: [], focus: true }) }, words)
 
+  // Each tap opens a conversation of its own on its template, whose first line says every step.
+  const begin = (template: string) => (): Promise<act.Outcome> =>
+    beginSetup(template).then(c => (address.go({ type: "conversation", id: c.id, refs: [], focus: true }), act.AGAIN))
+
   const offered = (v: T): Child => {
     const gs = overview.offered(v.overview)
     return gs.length === 0 ? null : el(
       "section",
       { class: "settingsoffered" },
-      el("p", { class: "settingsmeta" }, `Nothing connected for ${gs.map(g => overview.title(g).toLowerCase()).join(", ")}.`),
-      ask(v, "Ask to add one"),
+      el("h2", null, "Connect an account"),
+      el("p", { class: "settingsmeta" }, "Tap one: a conversation opens and says each step."),
+      gs.map(g => el(
+        "div",
+        { class: "settingsoffers", "data-group": g.group },
+        el("h3", null, overview.title(g.group)),
+        g.offers.map(x =>
+          act.offered(
+            act.gate(v.writes),
+            () => act.view({ label: overview.named(x), cls: `act settingsoffer settingsoffer-${x.template}`, run: begin(x.template) }),
+            el("p", { class: "settingsmeta settingsoffer" }, overview.named(x)),
+          ),
+        ),
+      )),
     )
   }
 
@@ -109,7 +127,8 @@ export namespace settingsPage {
     return [
       first ? here : null,
       el("div", { class: "settingsask" }, ask(v, "Ask to add or change anything")),
-      el("div", { class: "settingsbody" }, overview.connected(v.overview).map(group(v)), offered(v)),
+      offered(v),
+      el("div", { class: "settingsbody" }, overview.connected(v.overview).map(group(v))),
       first ? null : here,
     ]
   }

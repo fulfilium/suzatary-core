@@ -1,6 +1,6 @@
 // What is connected, by group: what a line draws, which groups hold lines, and the open cards each line's references name.
 
-import type { FailureClass, Group, LineStanding, Overview, OverviewGroup, OverviewLine } from "../wire/generated/wire"
+import type { FailureClass, Group, LineStanding, Offer, Overview, OverviewGroup, OverviewLine } from "../wire/generated/wire"
 import type { Row } from "../inbox/inbox"
 
 export namespace overview {
@@ -80,9 +80,20 @@ export namespace overview {
   export const unfinished = (p: Progress): string | null =>
     p.type === "Finished" ? null : `Finish setting up · ${p.done} of ${p.of} done`
 
-  /** The groups something is connected to, in order; the rest are only offered. */
+  /** The groups something is connected to, in order. */
   export const connected = (o: Overview): readonly OverviewGroup[] => o.groups.filter(g => g.lines.length > 0)
-  export const offered = (o: Overview): readonly Group[] => o.groups.filter(g => g.lines.length === 0).map(g => g.group)
+
+  /** What may be added, by group, in the order the box offers it. */
+  export type Offered = { readonly group: Group; readonly offers: readonly Offer[] }
+
+  export const offered = (o: Overview): readonly Offered[] =>
+    o.offers.reduce<readonly Offered[]>((gs, x) => {
+      const last = gs[gs.length - 1]
+      return last !== undefined && last.group === x.group ? [...gs.slice(0, -1), { group: x.group, offers: [...last.offers, x] }] : [...gs, { group: x.group, offers: [x] }]
+    }, [])
+
+  /** An offer as its button says it: its title begun with a capital. */
+  export const named = (x: Offer): string => `${x.title.charAt(0).toUpperCase()}${x.title.slice(1)}`
 
   /** A row's reference, as the box names a card. */
   export const reference = (r: Row): string | null => (r.kind === "proposal" ? `proposal:${r.conversation.id}/${r.proposal.index}` : null)

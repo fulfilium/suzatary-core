@@ -104,13 +104,19 @@ impl Settables {
     }
 
     /// What a deployment's Google accounts read: the box's one Google Cloud client while any is
-    /// declared, and each account's own sign-in with Google. Each is asked for by its own card,
-    /// never a Secret card ([`Declaration::own_card`]).
+    /// declared, and each account's own sign-in with Google. A Gmail account lieer reads counts,
+    /// since a sign-in with Google moves it once its grant is kept. Each is asked for by its own
+    /// card, never a Secret card ([`Declaration::own_card`]).
     #[must_use]
     pub fn google(accounts: &[crate::mail::account::MailAccount]) -> Self {
         let addresses: Vec<&crate::mail::address::EmailAddress> = accounts
             .iter()
-            .filter(|account| matches!(account.sync, crate::mail::account::Sync::Google))
+            .filter(|account| {
+                matches!(
+                    account.sync,
+                    crate::mail::account::Sync::Google | crate::mail::account::Sync::Gmail
+                )
+            })
             .map(|account| account.email.address())
             .collect();
         let client = addresses.first().map(|_| {
@@ -269,12 +275,12 @@ pub trait Verify {
     fn verify(&self, name: &Settable, value: &crate::capability::Secret) -> Result<(), String>;
 }
 
-/// What runs a plugin's sync once, at the tap that stored one of its links, so the link's line
-/// says what its check found then and not at the plugin's next timer; held in no capability
-/// record, as [`Verify`] is not.
+/// What reads one source once, at the act that made it readable (a link stored, a sign-in with
+/// Google kept), so its line says what the check found then and not at the source's next
+/// timer; held in no capability record, as [`Verify`] is not.
 pub trait Checks {
-    /// Sync `plugin` once: every link of it is fetched, and what each came to joins its health.
-    fn check(&self, plugin: &crate::plugin::PluginName);
+    /// Read `source` once, as its timer would, and join what it came to into its health.
+    fn check(&self, source: &crate::source_key::SourceKey);
 }
 
 /// Edits the instance file; held in no capability bundle, like [`Writes`].

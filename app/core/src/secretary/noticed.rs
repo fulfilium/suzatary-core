@@ -45,6 +45,8 @@ pub struct Noticed {
     /// When its episode began: a card of the box's for it asked before then, and no longer
     /// waiting, is a past episode's, so it is asked again; `None` holds every card for it.
     pub since: Option<Datetime>,
+    /// The earlier cards it rests on beside itself, which its sources name.
+    pub about: Vec<Reference>,
 }
 
 /// The set of proposals the box owes, and whether it holds its waiting cards as they stand; the
@@ -84,6 +86,7 @@ impl Owed {
                 proposal,
                 why: why.into(),
                 since: None,
+                about: Vec::new(),
             }],
             stale: Stale::Withdrawn,
         }
@@ -95,6 +98,39 @@ impl Owed {
         for noticed in &mut self.owed {
             noticed.since = Some(at);
         }
+        self
+    }
+
+    /// This set, each proposal resting on `cards` too.
+    #[must_use]
+    pub fn about(mut self, cards: &[Reference]) -> Self {
+        for noticed in &mut self.owed {
+            noticed.about.extend_from_slice(cards);
+        }
+        self
+    }
+
+    /// This set without the secret of any link whose removal it owes because that link was pasted
+    /// as a Google account's calendar (a removal resting on the link's card): the box never asks
+    /// to set a link it retires. A removal offered for another reason, such as a quiet calendar,
+    /// leaves the link's card standing beside it, since either answer is the owner's.
+    #[must_use]
+    pub fn retiring(mut self) -> Self {
+        use crate::secretary::acts::Act;
+        let removed: Vec<String> = self
+            .owed
+            .iter()
+            .filter_map(|noticed| {
+                let Proposal::Act(Act::Disconnect { connection }) = &noticed.proposal else {
+                    return None;
+                };
+                (!noticed.about.is_empty()).then(|| connection.secrets())
+            })
+            .flatten()
+            .collect();
+        self.owed.retain(|noticed| {
+            !matches!(&noticed.proposal, Proposal::Act(Act::Secret { name, .. }) if removed.contains(name))
+        });
         self
     }
 
@@ -170,8 +206,11 @@ impl Owed {
                 conversation,
                 &Entry::noted(at, why.clone(), vec![card.clone()]),
             )?;
-            let reasons = Reasons::new(why, vec![card])
-                .map_err(|failed| Refusal::internal(failed.to_string()))?;
+            let reasons = Reasons::new(
+                why,
+                [card].into_iter().chain(noticed.about.clone()).collect(),
+            )
+            .map_err(|failed| Refusal::internal(failed.to_string()))?;
             let (_, object) = filed::file(
                 conversations,
                 inbox,
@@ -359,7 +398,7 @@ pub fn due(seen: &Seen<'_>, inbox: &inbox::Fold) -> Owed {
         }),
         (None, _) | (_, None) => Owed::default().holding(),
     };
-    let owed = owed.join(failing);
+    let owed = owed.join(failing).retiring();
     if answers.values().any(|answer| *answer == Answer::Failed) {
         owed.holding()
     } else {
@@ -417,6 +456,7 @@ mod tests {
                 proposal: secret(name),
                 why: format!("{name} is owed"),
                 since: None,
+                about: Vec::new(),
             })
             .collect()
     }
@@ -677,6 +717,8 @@ mod tests {
         failed: Vec<&'static str>,
         set: Vec<String>,
         asked: std::sync::atomic::AtomicUsize,
+        /// The parts every Google account's grant holds, or `None` for no grant.
+        granted: Option<crate::google::Scopes>,
     }
 
     impl crate::capability::Secrets for Store {
@@ -704,7 +746,10 @@ mod tests {
         }
 
         fn google_grant(&self, _: &crate::mail::address::EmailAddress) -> crate::google::Held {
-            crate::google::Held::NotSignedIn
+            self.granted.clone().map_or(
+                crate::google::Held::NotSignedIn,
+                crate::google::Held::Signed,
+            )
         }
     }
 
@@ -963,6 +1008,107 @@ mod tests {
             );
         }
         assert_eq!(asking(), 1, "one card asks for the link");
+    }
+
+    /// A link a Google account's calendar was pasted as is asked for until that account reads its
+    /// calendars; then its removal is asked for instead, and its link no longer is, while a link
+    /// nothing tied to the account is still asked for.
+    #[test]
+    fn a_link_pasted_as_a_google_calendar_is_retired_once_the_account_reads_its_calendars() {
+        use crate::secretary::acts::Act;
+        let calendar = |label: &str| {
+            crate::connect::Connection::parse("ics", &[label.to_owned()]).expect("a calendar")
+        };
+        let (work, home) = (calendar("Work"), calendar("Home"));
+        let ada = crate::connect::Connection::parse("google", &["ada@example.test".to_owned()])
+            .expect("a Google account");
+        let declared = [&work, &home, &ada]
+            .into_iter()
+            .try_fold(
+                crate::connect::Declared::default(),
+                |declared, connection| declared.with(connection),
+            )
+            .expect("declared");
+        let settables = crate::settings::Settables::derive(
+            crate::settings::MODEL_TOKEN,
+            [],
+            None,
+            &declared.plugins,
+        );
+        let conversations = crate::secretary::conversations::InMemory::default();
+        let inbox_store = InMemory::<InboxEvent>::default();
+        let notice_at = |store: &Store, minute: u32| {
+            let seen = Seen {
+                settables: &settables,
+                secrets: store,
+                model: "a-cli/large",
+                answered: &crate::health::Healths::default(),
+                open: &[],
+                declared: Some(&declared),
+                health: Some(&crate::health::Healths::default()),
+                heard: Some(&std::collections::BTreeSet::new()),
+                pushed: &crate::settings::remote::Pushed::Nowhere,
+                now: prodrome_core::fpl::instant_of(at(minute)),
+                redirect: None,
+            };
+            notice(
+                &seen,
+                conversations.conversations(),
+                &inbox_store,
+                at(minute),
+            )
+            .expect("filed")
+        };
+        let link = |connection: &crate::connect::Connection| connection.secrets().remove(0);
+        let asks = |wanted: &str| {
+            open(&inbox_store)
+                .iter()
+                .any(|act| matches!(act, Act::Secret { name, .. } if name == wanted))
+        };
+        let removes = |link: &crate::connect::Connection| {
+            open(&inbox_store)
+                .iter()
+                .any(|act| matches!(act, Act::Disconnect { connection } if connection == link))
+        };
+        let unsigned = Store::default();
+        notice_at(&unsigned, 0);
+        assert!(asks(&link(&work)) && asks(&link(&home)));
+        let pasted = inbox::fold(&inbox_store)
+            .expect("reads")
+            .objects()
+            .find(|object| {
+                matches!(&object.asked.proposal, Proposal::Act(Act::Secret { name, .. }) if *name == link(&work))
+            })
+            .map(|object| Reference::Proposal(object.asked.asked.clone()))
+            .expect("the Work calendar's card");
+        // What a tap of that card with a link to one of ada's calendars files.
+        Owed::one(Proposal::Act(Act::Connect { connection: ada }), "pasted")
+            .about(&[pasted])
+            .since(at(1))
+            .holding()
+            .file(conversations.conversations(), &inbox_store, at(1))
+            .expect("filed");
+        notice_at(&unsigned, 2);
+        assert!(
+            asks(&link(&work)),
+            "the account does not read its calendars yet"
+        );
+        assert!(!removes(&work));
+
+        let signed = Store {
+            granted: Some(crate::google::Scopes::all()),
+            ..Store::default()
+        };
+        notice_at(&signed, 3);
+        assert!(!asks(&link(&work)), "its link is no longer asked for");
+        assert!(removes(&work), "its removal is asked for");
+        assert!(
+            asks(&link(&home)) && !removes(&home),
+            "the other calendar is still asked for"
+        );
+        let settled = open(&inbox_store);
+        notice_at(&signed, 4);
+        assert_eq!(open(&inbox_store), settled, "filing again changes nothing");
     }
 
     /// A locked answer is the store's: the box asks once and files the unlock card, and never

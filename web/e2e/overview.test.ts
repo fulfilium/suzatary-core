@@ -13,7 +13,7 @@
  * THE PLAN'S SCENES 1, 8 AND 2, THEN TWO KEPT FROM THE PAGE BEFORE IT:
  *
  * 1. Only what is connected is drawn, grouped: no Notifications heading on a
- *    deployment with no channel, only the offer, and no key name anywhere on
+ *    deployment with no channel, only its offer, and no key name anywhere on
  *    the page, its cards included, nor in `/api/overview`'s answer or a
  *    drawn card's row.
  * 8. A read-only login sees the lines and the cards, and no control at all.
@@ -21,6 +21,8 @@
  *    the link from it makes the line healthy, and the CDP network log shows
  *    the value in the tap's request and nowhere else.
  * -  The answered card says what it stored in words on its conversation page.
+ * -  At phone width, "Connect an account" offers a Google account first under Mail on the first
+ *    screen, and its tap opens a conversation of its own already begun on that template.
  * -  A key revoked at the terminal is answered with the wipe, and the device
  *    deletes what it holds and comes back with a new key; a wipe a reload cut
  *    short is finished by the next load.
@@ -69,9 +71,10 @@ app.scene("only what is connected is drawn, grouped, and no line names a key", a
     ["Models", "Mail", "Calendar", "Storage", "This box"],
     "a group nothing is connected to has no heading",
   );
-  assert.match(
-    await app.page.evaluate<string>(`document.querySelector(".settingsoffered").textContent`),
-    /Nothing connected for drive, notifications, coding sessions, other connections\./,
+  assert.deepEqual(
+    await app.page.evaluate<string[]>(`[...document.querySelectorAll(".settingsoffers h3")].map((h) => h.textContent)`),
+    ["Mail", "Calendar", "Drive", "Notifications"],
+    "every group the box can add to is offered, in the overview's order",
   );
   assert.equal(
     await app.page.evaluate<string>(`document.querySelector('${calendarLine} h3').textContent`),
@@ -188,6 +191,30 @@ app.scene("the answered card names the link on its conversation page, never the 
   );
   assert.match(outcome, new RegExp(`stored ${LINK_LABEL}`), `the outcome, in the box's words: ${outcome}`);
   assert.equal((await app.page.evaluate<string>(`document.body.textContent`)).includes(FIXTURE_VALUE), false, "never the value");
+});
+
+// THE CATALOG, ONE TAP EACH (`connectlist`): Settings names what the box can connect, a Google account first under
+// Mail, and a tap opens a conversation of its own already begun on that template, its first line naming the first step.
+app.scene("Settings offers each account the box can connect, and a tap begins its setup conversation", async () => {
+  await app.page.viewport(PHONE[0], PHONE[1]);
+  await openSettings(WRITE_BASE);
+  const google = `.settingsoffered .settingsoffers[data-group="mail"] .settingsoffer-google`;
+  await app.page.waitFor(`document.querySelector('${google}') !== null`, { timeout: 15000 });
+  assert.equal(await app.page.evaluate<string>(`document.querySelector(".settingsoffered h2").textContent`), "Connect an account");
+  assert.equal(
+    await app.page.evaluate<string>(`document.querySelector('.settingsoffers[data-group="mail"] button').textContent`),
+    "A Google account (its mail and calendars)",
+    "a Google account comes first under Mail",
+  );
+  assert.ok(
+    await app.page.evaluate<boolean>(`document.querySelector('${google}').getBoundingClientRect().bottom <= window.innerHeight`),
+    "it is on the first screen at phone width",
+  );
+  await app.page.click(google);
+  await app.page.waitFor(`location.hash.startsWith("#/secretary/") && !location.hash.startsWith("#/secretary/setup")`, { timeout: 15000 });
+  const opening = "Connect a Google account (its mail and calendars). First, make the box's Google Cloud client";
+  await app.page.waitFor(`document.body.textContent.includes(${JSON.stringify(opening)})`, { timeout: 15000 });
+  assert.ok(await app.page.evaluate<boolean>(`document.querySelector(".composebox") !== null`), "the reply it asks for is typed here");
 });
 
 // Last in the file: it revokes this browser's key, which every writing scene before it signs with.

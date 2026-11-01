@@ -169,10 +169,31 @@ const FCM: Template = Template {
     check: Check::Delivered,
 };
 
-/// Every default template, in [`TemplateId::ALL`]'s order.
+/// Every default template, in [`TemplateId::ALL`]'s order: within a group, the order Settings
+/// offers them, so a Google account comes before Gmail through lieer.
 pub const CATALOG: [Template; 10] = [
-    GIT_REMOTE, DRIVE_CLI, ICS, GMAIL, GOOGLE, MS_IMAP, PROTON, MODEL, NTFY, FCM,
+    GIT_REMOTE, DRIVE_CLI, ICS, GOOGLE, GMAIL, MS_IMAP, PROTON, MODEL, NTFY, FCM,
 ];
+
+/// The templates a person may add, in [`Group::ALL`]'s order and the catalog's within a group:
+/// every one whose table the box writes, but a channel `held` already names, which is one per
+/// deployment.
+#[must_use]
+pub fn offered(held: &[Channel]) -> Vec<&'static Template> {
+    Group::ALL
+        .into_iter()
+        .flat_map(|group| {
+            CATALOG
+                .iter()
+                .filter(move |template| template.group == group)
+        })
+        .filter(|template| match template.table {
+            Table::Link(_) | Table::Account(_) | Table::Folder => true,
+            Table::Channel(channel) => !held.contains(&channel),
+            Table::Always | Table::Model => false,
+        })
+        .collect()
+}
 
 /// The template `id` names.
 pub(super) const fn of(id: TemplateId) -> &'static Template {

@@ -18,7 +18,9 @@ use toml_edit::{ArrayOfTables, DocumentMut, Item, TableLike, Value};
 /// # Errors
 /// The algebra's refusal, or a file that is not the document this edit expects.
 pub(crate) fn add(path: &Path, text: &str, connection: &Connection) -> Result<String, EditError> {
-    let expected = declared(path, text)?.with(connection)?;
+    let before = declared(path, text)?;
+    let expected = before.with(connection)?;
+    let moved = before.connections().contains_key(&connection.key());
     let mut doc = parse(text)?;
     match connection.template().table {
         Table::Account(kind) => {
@@ -26,7 +28,17 @@ pub(crate) fn add(path: &Path, text: &str, connection: &Connection) -> Result<St
             let spelled = toml::to_string(&account)
                 .map_err(|failed| EditError::Malformed(failed.to_string()))?;
             let table = parse(&spelled)?.as_table().clone();
-            append(table_mut(&mut doc, "mail")?, "accounts", table)?;
+            let mail = table_mut(&mut doc, "mail")?;
+            if moved {
+                let sync = table
+                    .get("sync")
+                    .and_then(Item::as_value)
+                    .cloned()
+                    .ok_or_else(|| not_a("mail.accounts.sync", "string"))?;
+                resync(mail, &connection.key().name, &sync)?;
+            } else {
+                append(mail, "accounts", table)?;
+            }
         }
         Table::Link(fragment) => {
             let credential = link(connection)?;
@@ -220,6 +232,32 @@ fn append(parent: &mut dyn TableLike, key: &str, table: toml_edit::Table) -> Res
             list.push(table);
             parent.insert(key, Item::ArrayOfTables(list));
         }
+    }
+    Ok(())
+}
+
+/// The `sync` of the account `email` in `[mail] accounts` set to `sync`, its comments and its
+/// other keys left as they were.
+fn resync(mail: &mut dyn TableLike, email: &str, sync: &Value) -> Result<(), EditError> {
+    let held = |account: &dyn TableLike| account.get("email").and_then(Item::as_str) == Some(email);
+    let set = |account: &mut dyn TableLike| {
+        if let Some(Item::Value(value)) = account.get_mut("sync") {
+            let decor = value.decor().clone();
+            *value = sync.clone();
+            *value.decor_mut() = decor;
+        }
+    };
+    match mail.get_mut("accounts") {
+        Some(Item::ArrayOfTables(list)) => list
+            .iter_mut()
+            .filter(|account| held(*account))
+            .for_each(|account| set(account)),
+        Some(Item::Value(Value::Array(list))) => list
+            .iter_mut()
+            .filter_map(Value::as_inline_table_mut)
+            .filter(|account| held(*account))
+            .for_each(|account| set(account)),
+        _ => return Err(not_a("mail.accounts", "list of tables")),
     }
     Ok(())
 }
@@ -434,6 +472,14 @@ sync = "gmail"
         fn an_add_and_its_remove_leave_the_file_as_it_was(text in edited(), connection in connection()) {
             let before = declared(&path(), &text).expect("the file reads");
             match add(&path(), &text, &connection) {
+                // A move changes one account's sync and nothing else.
+                Ok(moved) if before.connections().contains_key(&connection.key()) => {
+                    prop_assert_eq!(
+                        declared(&path(), &moved),
+                        before.with(&connection).map_err(EditError::from)
+                    );
+                    prop_assert_eq!(moved.len(), text.len() + "google".len() - "gmail".len());
+                }
                 Ok(added) => {
                     prop_assert!(one_insertion(&text, &added), "--- before\n{text}\n--- after\n{added}");
                     let with = before.with(&connection).expect("the algebra agrees");
@@ -485,6 +531,20 @@ sync = "gmail"
         assert_eq!(
             remove(&path(), &added, &work),
             Ok(format!("{BASE}{}", ICS[2]))
+        );
+    }
+
+    /// Signing a lieer account in with Google changes its `sync` alone: its folder, the comment
+    /// above it and every other byte stay, and the roster holds the address once.
+    #[test]
+    fn a_lieer_account_moves_onto_google_in_place() {
+        let hers =
+            Connection::parse("google", &["her@example.test".to_owned()]).expect("an account");
+        let moved = add(&path(), BASE, &hers).expect("moved");
+        assert_eq!(moved, BASE.replace("sync = \"gmail\"", "sync = \"google\""));
+        assert_eq!(
+            add(&path(), &moved, &hers),
+            Err(EditError::Connection(Refused::Duplicate(hers.called())))
         );
     }
 

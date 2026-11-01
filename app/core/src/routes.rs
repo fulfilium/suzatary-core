@@ -1829,6 +1829,14 @@ pub fn overview(
         &settables.names(),
         asking,
         crate::secretary::noticed::CONVERSATION.as_str().to_owned(),
+        crate::connect::offered(declared.channels)
+            .into_iter()
+            .map(|template| wire::Offer {
+                template: template.id.as_str().to_owned(),
+                group: template.group,
+                title: template.title.to_owned(),
+            })
+            .collect(),
     )
 }
 

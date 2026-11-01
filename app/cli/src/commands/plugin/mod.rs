@@ -84,7 +84,11 @@ fn sync_all(path: &Path, args: &SyncArgs) -> anyhow::Result<()> {
     let health = suzatary_io::source_health::beside(&instance.mail.heartbeat);
     let (google, calendars_stored) = if args.names.is_empty() {
         probe_drive(&instance, &health);
-        super::google::sync_calendars(&instance, &health)
+        super::google::sync_calendars(
+            &instance,
+            suzatary_io::google::Google::new(suzatary_core::google::Endpoints::google()),
+            &health,
+        )
     } else {
         (Vec::new(), true)
     };

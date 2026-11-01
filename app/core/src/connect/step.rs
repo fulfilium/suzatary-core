@@ -85,6 +85,45 @@ pub enum Step {
 }
 
 impl StepShape {
+    /// What the person does, before any parameter is chosen: the words the setup conversation
+    /// begins with.
+    #[must_use]
+    pub fn sentence(&self) -> String {
+        match self {
+            StepShape::Secret { help, .. } => format!(
+                "paste {} into the field of its card. {}",
+                help.label.replace("{label} ", ""),
+                help.text
+            ),
+            StepShape::DeviceCode => {
+                "tap the account's sign-in card, open the link it shows and type the code it shows"
+                    .to_owned()
+            }
+            StepShape::SendingConsent => {
+                "tap its second sign-in card the same way, which lets the box send mail from it"
+                    .to_owned()
+            }
+            StepShape::GoogleClient => {
+                "make the box's Google Cloud client, once for every Google account (skip this when \
+                 the box holds one): its card lists each step in the Google Cloud console and \
+                 takes the file Google gives you"
+                    .to_owned()
+            }
+            StepShape::AuthCode => {
+                "tap the account's Sign in with Google card: Google asks you to allow its mail and \
+                 calendars, then sends you back here"
+                    .to_owned()
+            }
+            StepShape::SignIn => "tap the model's sign-in card".to_owned(),
+            StepShape::Terminal { why, .. } => {
+                format!(
+                    "run one command at a terminal on the box ({why}); its line in Settings shows \
+                     the command"
+                )
+            }
+        }
+    }
+
     /// This step for a connection of `params`, on `plugin` where the template writes a
     /// plugin's credential; `None` where its blanks name a parameter the shape lacks, which
     /// the catalog's law rules out for every template.

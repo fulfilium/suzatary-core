@@ -110,6 +110,12 @@ pub fn table() -> Vec<Route> {
             proposals::drop_session,
         ),
         Route::post("/api/secretary/conversations", Scope::Box, secretary::open),
+        // The setup conversation begun on one template of the catalog, as Settings offers it.
+        Route::post(
+            "/api/secretary/setup/{template}",
+            Scope::Box,
+            secretary::setup,
+        ),
         Route::post(
             "/api/secretary/conversations/{conversation}/title",
             Scope::Box,

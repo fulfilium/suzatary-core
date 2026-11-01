@@ -141,6 +141,10 @@ const proposalPath = (id: string, index: number, verb: string): string =>
 export const openConversation = (title: string): Promise<ConversationPayload> =>
   http.act("/api/secretary/conversations", { title } satisfies Titling, payload.ConversationPayload);
 
+/** The setup conversation begun on one template of the box's catalog: the box writes its first line. */
+export const beginSetup = (template: string): Promise<ConversationPayload> =>
+  http.act(`/api/secretary/setup/${encodeURIComponent(template)}`, {}, payload.ConversationPayload);
+
 export const renameConversation = (id: string, title: string): Promise<ConversationPayload> =>
   http.act(conversationPath(id, "/title"), { title } satisfies Titling, payload.ConversationPayload);
 

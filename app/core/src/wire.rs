@@ -2820,6 +2820,19 @@ pub struct Overview {
     pub groups: Vec<OverviewGroup>,
     /// The conversation Ask opens.
     pub ask: String,
+    /// What the box can connect, from its catalog, in the order Settings offers it.
+    pub offers: Vec<Offer>,
+}
+
+/// One template of the box's catalog a person may add.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]
+pub struct Offer {
+    /// Its name, which `POST /api/secretary/setup/<template>` takes.
+    pub template: String,
+    /// Where it is drawn.
+    pub group: crate::connect::Group,
+    /// What it connects, as a sentence ends with it: `a Google account (its mail and calendars)`.
+    pub title: String,
 }
 
 /// One group and what of it is connected.

@@ -32,12 +32,12 @@ fn ada() -> EmailAddress {
     EmailAddress::new(ADA).expect("an address")
 }
 
-fn account() -> MailAccount {
+fn account(sync: Sync) -> MailAccount {
     MailAccount {
         email: suzatary_core::mail::account_email::AccountEmail::new(ADA)
             .expect("a lower-case address"),
         subdir: "ada-at-example-test".to_owned(),
-        sync: Sync::Google,
+        sync,
     }
 }
 
@@ -47,9 +47,17 @@ struct Serving {
     base: String,
     fake: FakeGoogle,
     secrets: Arc<SecretRecorder>,
+    edits: Arc<EditsRecorder>,
+    checks: Arc<common::CheckRecorder>,
+    fakes: Arc<Fakes>,
 }
 
 fn serving(tag: &str, model: Option<common::FakeModel>) -> Serving {
+    serving_as(tag, model, Sync::Google)
+}
+
+/// [`serving`], its one account synced by `sync`.
+fn serving_as(tag: &str, model: Option<common::FakeModel>, sync: Sync) -> Serving {
     let fake = FakeGoogle::start(0, ADA);
     let secrets = Arc::new(SecretRecorder::new());
     let login = common::login("ada@example.com");
@@ -65,7 +73,7 @@ fn serving(tag: &str, model: Option<common::FakeModel>) -> Serving {
         ],
     );
     let declared = suzatary_core::connect::Declared {
-        accounts: vec![account()],
+        accounts: vec![account(sync)],
         ..suzatary_core::connect::Declared::default()
     };
     let settables =
@@ -73,13 +81,15 @@ fn serving(tag: &str, model: Option<common::FakeModel>) -> Serving {
             suzatary_core::settings::Settables::google(&declared.accounts),
         );
     let empty = SettingsFixture::empty();
+    let edits = Arc::new(EditsRecorder::declaring(declared));
+    let checks = Arc::new(common::CheckRecorder::default());
     let settings = SettingsFixture {
         live: suzatary_cli::serve::Live {
             settables,
             ..empty.live.clone()
         },
         secrets: Arc::clone(&secrets) as _,
-        edits: Arc::new(EditsRecorder::declaring(declared)),
+        edits: Arc::clone(&edits) as _,
         ..empty
     };
     let fakes = Fakes::new(tag)
@@ -96,6 +106,7 @@ fn serving(tag: &str, model: Option<common::FakeModel>) -> Serving {
             suzatary_core::google::Endpoints::at(&fake.base),
             Arc::clone(&secrets) as _,
         )
+        .checks(Arc::clone(&checks))
         .real_acts_over_instance(
             tag,
             common::again(&fakes.conversations),
@@ -106,6 +117,9 @@ fn serving(tag: &str, model: Option<common::FakeModel>) -> Serving {
         base: running.base,
         fake,
         secrets,
+        edits,
+        checks,
+        fakes,
     }
 }
 
@@ -640,7 +654,7 @@ fn a_revoked_grant_needs_the_sign_in_and_a_missing_client_the_client() {
     let refused = grants.live(&ada()).expect_err("no client is kept");
     assert_eq!(refused.class(), suzatary_core::connect::Failure::Unresolved);
 
-    let settables = suzatary_core::settings::Settables::google(&[account()]);
+    let settables = suzatary_core::settings::Settables::google(&[account(Sync::Google)]);
     let write = |name: &str, value: &str| {
         use suzatary_core::settings::Writes as _;
         secrets
@@ -674,7 +688,7 @@ fn the_calendars_are_read_bounded_and_learned_once() {
     let fake = FakeGoogle::start(0, ADA);
     fake.answering_events(400);
     let secrets = Arc::new(SecretRecorder::new());
-    let settables = suzatary_core::settings::Settables::google(&[account()]);
+    let settables = suzatary_core::settings::Settables::google(&[account(Sync::Google)]);
     for (name, value) in [
         (suzatary_core::google::CLIENT_ID, fake_google::CLIENT_ID),
         (
@@ -845,4 +859,124 @@ fn the_google_calendar_writes_the_calendar_plugins_schema() {
     )
     .expect("the plugin's schema");
     assert_eq!(declared, suzatary_core::google::SCHEMA);
+}
+
+/// A Gmail account lieer reads moves onto the sign-in with Google only once Google's grant is
+/// kept and has read its mail. Its Connect card's tap writes nothing. A sign-in abandoned before
+/// Google's page, one whose callback never comes, one Google sends back refused, and one whose
+/// grant cannot read the mail each leave the instance as it was, keep no grant and read nothing.
+/// A grant that reads the mail is kept, and the account's sync moves to Google, its folder kept.
+#[test]
+fn a_lieer_account_moves_onto_the_sign_in_only_once_its_grant_reads_its_mail() {
+    use suzatary_core::settings::Configuration as _;
+    let serving = serving_as("google-lieer", None, Sync::Gmail);
+    let base = &serving.base;
+    let declared = || {
+        serving
+            .edits
+            .declared()
+            .expect("the recorder reads")
+            .accounts
+    };
+    let unchanged = |case: &str| {
+        assert_eq!(
+            declared(),
+            vec![account(Sync::Gmail)],
+            "{case}: the instance is as it was"
+        );
+        assert!(
+            !serving
+                .secrets
+                .calls()
+                .iter()
+                .any(|(name, _)| name == GRANT),
+            "{case}: no grant is kept"
+        );
+        assert!(
+            serving.checks.checked().is_empty(),
+            "{case}: nothing was read"
+        );
+    };
+    common::asked(
+        &serving.fakes,
+        "connect",
+        suzatary_core::secretary::acts::Act::Connect {
+            connection: suzatary_core::connect::Connection::parse("google", &[ADA.to_owned()])
+                .expect("a Google account"),
+        },
+    );
+    let mut tapped = common::act(
+        &format!("{base}/api/secretary/conversations/connect/proposals/0/tap"),
+        &serde_json::json!({}),
+    );
+    assert_eq!(common::status(&tapped), 200);
+    let tapped = common::body_json(&mut tapped);
+    assert_eq!(tapped["proposals"][0]["state"], "acted", "{tapped}");
+    unchanged("the Connect card's tap");
+
+    // Abandoned: the sign-in tapped, Google's page never opened.
+    let link = consent(&serving);
+    unchanged("a sign-in abandoned before Google's page");
+    // Google's page consented to, and its callback never reached the box.
+    let callback = consented(&serving, &link);
+    unchanged("a callback that never comes");
+    // Google sends the browser back refused.
+    let state = callback
+        .split(['?', '&'])
+        .find_map(|part| part.strip_prefix("state="))
+        .expect("the callback carries its state");
+    let path = suzatary_core::google::CALLBACK;
+    let (status, _) = redirected(&format!("{base}{path}?state={state}&error=access_denied"));
+    assert_eq!(status, 303);
+    unchanged("a sign-in Google refused");
+
+    // A grant that cannot read the mail is kept nowhere.
+    serving.fake.refusing_mail(true);
+    let (status, _) = redirected(&consented(&serving, &again(&serving)));
+    assert_eq!(status, 303);
+    unchanged("a grant that cannot read the mail");
+    let read = setup(base);
+    let ended = card(&read, "google_sign_in", "failed").expect("the card says it failed");
+    assert!(
+        read["proposals"][ended]["outcome"]
+            .as_str()
+            .is_some_and(|said| said.contains("lieer reads its mail as before")),
+        "{read}"
+    );
+
+    serving.fake.refusing_mail(false);
+    let (status, _) = redirected(&consented(&serving, &again(&serving)));
+    assert_eq!(status, 303);
+    assert_eq!(
+        declared(),
+        vec![account(Sync::Google)],
+        "the account moved, its folder kept"
+    );
+    assert!(
+        serving
+            .secrets
+            .calls()
+            .iter()
+            .any(|(name, _)| name == GRANT)
+    );
+    assert_eq!(
+        serving.checks.checked().len(),
+        1,
+        "its calendars are read at once"
+    );
+}
+
+/// The sign-in card tapped again after it ended: its consent's link.
+fn again(serving: &Serving) -> String {
+    let base = &serving.base;
+    let sign_in = card(&setup(base), "google_sign_in", "failed")
+        .expect("the sign-in card ended without a grant");
+    let started = tap(base, sign_in, &serde_json::json!({}));
+    let path = started["proposals"][sign_in]["card"]["link"]["href"]
+        .as_str()
+        .expect("the card draws the consent as its button")
+        .to_owned();
+    let (status, link) = redirected(&format!("{base}{path}"));
+    assert_eq!(status, 303, "the box sends the browser on to Google");
+    link
 }

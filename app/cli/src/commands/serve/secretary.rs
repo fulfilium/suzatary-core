@@ -78,6 +78,13 @@ impl Params for ConversationId {
     }
 }
 
+impl Params for suzatary_core::connect::TemplateId {
+    fn parse(asked: &Asked, _: &Chained) -> Result<Self, Refusal> {
+        Self::parse(asked.segment("template")?)
+            .map_err(|refused| Refusal::bad_request(refused.to_string()))
+    }
+}
+
 impl Params for Block {
     fn parse(asked: &Asked, _: &Chained) -> Result<Self, Refusal> {
         Ok(Self {
@@ -280,6 +287,16 @@ pub fn open(
 ) -> Result<Json<wire::ConversationPayload>, Refusal> {
     call.state
         .with_cards(|caps, cards| secretary_routes::open(caps, cards, &call.body.title))
+        .map(Json)
+}
+
+/// `POST /api/secretary/setup/<template>`: begin the setup conversation on a template of the
+/// catalog.
+pub fn setup(
+    call: &Call<Writer, suzatary_core::connect::TemplateId, ()>,
+) -> Result<Json<wire::ConversationPayload>, Refusal> {
+    call.state
+        .with_cards(|caps, cards| secretary_routes::setup(caps, cards, call.params))
         .map(Json)
 }
 

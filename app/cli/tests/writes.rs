@@ -126,6 +126,7 @@ fn every_secretary_write_refuses_a_bare_post_from_loopback() {
     let base = base();
     for path in [
         "/api/secretary/conversations",
+        "/api/secretary/setup/google",
         "/api/secretary/conversations/anything/say",
         "/api/secretary/conversations/anything/title",
         "/api/secretary/conversations/anything/stop",
@@ -413,7 +414,9 @@ fn the_tap_is_minted_only_by_the_guard_from_a_proof() {
 
 /// What edits the instance file's connections, and what deletes an account's mail or its
 /// sign-ins, is called from the tap's route, the server's wrappers and the fixture alone, so no
-/// verb, read or other route reaches any of them.
+/// verb, read or other route reaches any of them. The one other caller of an edit is the Google
+/// callback, which finishes a tapped sign-in: it is admitted only by the state drawn for that
+/// tap, for the actor who tapped, and it moves a lieer account only once the grant read its mail.
 #[test]
 fn the_connection_edits_and_the_mail_delete_are_called_from_the_tap_alone() {
     let app = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
@@ -475,6 +478,7 @@ fn the_connection_edits_and_the_mail_delete_are_called_from_the_tap_alone() {
         editing,
         [
             "cli/src/commands/fixture.rs",
+            "cli/src/commands/serve/google.rs",
             "cli/src/commands/serve/proposals.rs",
             "core/src/secretary/routes.rs",
         ],

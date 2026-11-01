@@ -2839,6 +2839,13 @@
             "group": "box",
             "lines": []
           }
+        ],
+        "offers": [
+          {
+            "group": "mail",
+            "template": "google",
+            "title": "a Google account (its mail and calendars)"
+          }
         ]
       },
       "maps": []

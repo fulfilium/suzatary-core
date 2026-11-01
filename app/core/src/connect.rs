@@ -23,7 +23,7 @@ mod standing;
 mod step;
 mod template;
 
-pub use catalog::{CATALOG, plugin_called, secret_words};
+pub use catalog::{CATALOG, offered, plugin_called, secret_words};
 pub use check::Check;
 pub use connection::{CONNECTION, Connection, Key};
 pub use declared::Declared;

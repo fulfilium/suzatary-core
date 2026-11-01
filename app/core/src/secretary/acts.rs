@@ -248,9 +248,15 @@ impl Act {
             }
             Act::Connect { connection } => format!(
                 "connect {}: the box writes {} into the instance file, then asks for each step \
-                 it needs",
+                 it needs{}",
                 connection.called(),
-                connection.writes()
+                connection.writes(),
+                if connection.id() == crate::connect::TemplateId::Google {
+                    "; an address lieer reads already keeps its entry, read by lieer, until its \
+                     sign-in with Google is kept and has read its mail"
+                } else {
+                    ""
+                }
             ),
             Act::Disconnect { connection } => format!(
                 "remove {}: {} goes from the instance file, and its todos, cards and \

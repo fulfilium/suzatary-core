@@ -381,10 +381,17 @@ impl Overview {
     }
 
     /// Every group in [`Group::ALL`]'s order, each with its lines, `ask` naming where Ask
-    /// opens. Every secret's name a line would show is put in words first, and each need's card
-    /// is placed on the first line, in this order, that needs it: a partition of the cards.
+    /// opens and `offers` what may be added. Every secret's name a line would show is put in
+    /// words first, and each need's card is placed on the first line, in this order, that needs
+    /// it: a partition of the cards.
     #[must_use]
-    pub fn wire(self, names: &[&str], asking: &[Asking], ask: String) -> wire::Overview {
+    pub fn wire(
+        self,
+        names: &[&str],
+        asking: &[Asking],
+        ask: String,
+        offers: Vec<wire::Offer>,
+    ) -> wire::Overview {
         let worded = Words::of(names);
         let mut cards = Self::drawn(asking);
         let mut lines: BTreeMap<Group, Vec<wire::OverviewLine>> = BTreeMap::new();
@@ -408,6 +415,7 @@ impl Overview {
                 })
                 .collect(),
             ask,
+            offers,
         }
     }
 }
@@ -615,14 +623,18 @@ fn mail(declared: &Declared<'_>, observed: &Observed<'_>, connected: &Connected<
                             .standing(Group::Mail, account.email.as_str(), checked)
                             .join(read),
                     ),
-                    matches!(account.sync, crate::mail::account::Sync::Google)
-                        .then_some(Need::GoogleClient)
-                        .into_iter()
-                        .chain([
-                            Need::MailSignIn(account.email.to_string()),
-                            Need::MailSending(account.email.to_string()),
-                            removal(Group::Mail, account.email.as_str()),
-                        ]),
+                    // A lieer account's move onto the sign-in asks for the client too.
+                    matches!(
+                        account.sync,
+                        crate::mail::account::Sync::Google | crate::mail::account::Sync::Gmail
+                    )
+                    .then_some(Need::GoogleClient)
+                    .into_iter()
+                    .chain([
+                        Need::MailSignIn(account.email.to_string()),
+                        Need::MailSending(account.email.to_string()),
+                        removal(Group::Mail, account.email.as_str()),
+                    ]),
                 ),
             )
         })
@@ -1043,7 +1055,7 @@ pub(crate) mod tests {
             let (overview, names) = self.read();
             let borrowed: Vec<&str> = names.iter().map(String::as_str).collect();
             (
-                overview.wire(&borrowed, &self.asking, "setup".to_owned()),
+                overview.wire(&borrowed, &self.asking, "setup".to_owned(), Vec::new()),
                 names,
             )
         }

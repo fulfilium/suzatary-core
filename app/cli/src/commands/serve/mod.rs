@@ -1099,7 +1099,7 @@ pub async fn listen(instance: &Instance, serving: Serving) -> anyhow::Result<()>
     .with_portal(instance.portal.clone())
     .with_mail_cache(mail_cache::MailCache::of(instance))
     .with_reveal(Arc::new(crate::commands::mail::notmuch(instance)))
-    .with_checks(Arc::new(checks::Synced::of(instance.path.clone())))
+    .with_checks(Arc::new(checks::Synced::of(instance, &serving.google)))
     .with_answered(Arc::new(serving.answered))
     .with_books(
         Arc::new(epochs::open(instance.paths.epochs.clone())),

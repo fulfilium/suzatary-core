@@ -4,7 +4,7 @@ use std::collections::BTreeMap;
 
 use super::{AccountKind, Channel, Connection, Key, Label, Params, Refused, Table, TemplateId};
 use crate::drive::DrivePath;
-use crate::mail::account::{MailAccount, Roster};
+use crate::mail::account::{MailAccount, Roster, Sync};
 use crate::plugin::{Manifest, Origin, PluginName};
 
 /// What the instance declares where a connection lives, each table parsed: the one value the
@@ -80,17 +80,28 @@ impl Declared {
             .find(|manifest| manifest.name() == plugin)
     }
 
-    /// These tables with `connection` written into them.
+    /// These tables with `connection` written into them. A connection that
+    /// [moves](Connection::moves) the one under its key changes that account's sync alone, so
+    /// its folder and its mail stay where they are.
     ///
     /// # Errors
     /// [`Refused::Duplicate`] for a key already held, [`Refused::Unwritten`] for a template no
     /// table holds, and the refusal the file would get for the table it would leave.
     pub fn with(&self, connection: &Connection) -> Result<Self, Refused> {
         let key = connection.key();
-        if self.connections().contains_key(&key) {
-            return Err(Refused::Duplicate(connection.called()));
-        }
         let mut next = self.clone();
+        match self.connections().get(&key) {
+            None => {}
+            Some(held) if connection.moves(held) => {
+                for account in &mut next.accounts {
+                    if account.email.as_str() == key.name {
+                        account.sync = Sync::Google;
+                    }
+                }
+                return Ok(next);
+            }
+            Some(_) => return Err(Refused::Duplicate(connection.called())),
+        }
         match (connection.template().table, connection.params()) {
             (Table::Link(fragment), Params::Label(_)) => {
                 let name = link_name(connection)?;

@@ -46,6 +46,11 @@ struct Issued {
 struct Held {
     /// Who signs in on the consent page.
     account: String,
+    /// Whether the consent page signs in the account its `login_hint` names instead.
+    hinted: bool,
+    /// Whether the Gmail API refuses to read the mailbox, as an account with Gmail turned off
+    /// does.
+    mailless: bool,
     codes: BTreeMap<String, Issued>,
     used: BTreeSet<String>,
     refresh: BTreeSet<String>,
@@ -105,6 +110,18 @@ impl FakeGoogle {
     /// Sign `account` in on the consent page from now on.
     pub fn signing_in(&self, account: &str) {
         account.clone_into(&mut self.held().account);
+    }
+
+    /// Sign in, from now on, the account each consent's `login_hint` names, as a person signed in
+    /// to that account would.
+    pub fn following_hints(&self) {
+        self.held().hinted = true;
+    }
+
+    /// Refuse every read of a mailbox from now on, as an account with Gmail turned off does, or
+    /// answer them again.
+    pub fn refusing_mail(&self, refusing: bool) {
+        self.held().mailless = refusing;
     }
 
     /// Revoke every grant: a refresh answers `invalid_grant`, as a revoked or 7-day grant does.
@@ -264,6 +281,7 @@ fn answer(stream: TcpStream, held: &Mutex<Held>) -> std::io::Result<()> {
         ("GET", "/o/oauth2/v2/auth") => consent(stream, &request, &mut held),
         ("POST", "/token") => token(stream, &request, &mut held),
         (_, path) if path.starts_with("/calendar/v3/") => calendar(stream, &request, &mut held),
+        ("GET", "/gmail/v1/users/me/profile") => profile(stream, &request, &held),
         _ => respond(stream, 404, &[], "{}"),
     }
     Ok(())
@@ -283,6 +301,9 @@ fn consent(stream: TcpStream, request: &Request, held: &mut Held) {
             "a consent needs a code and an S256 challenge",
         );
         return;
+    }
+    if held.hinted && !asked("login_hint").is_empty() {
+        held.account = asked("login_hint");
     }
     // The person grants what was asked and not unticked; with include_granted_scopes, Google
     // answers with that and everything the account granted the client before.
@@ -389,6 +410,23 @@ fn granted(stream: TcpStream, issued: &Issued, held: &mut Held) {
 
 /// The Calendar API: the account's calendars, each answering `held.events` events whatever it
 /// was asked for, and an insert into its own calendar, recorded.
+/// The Gmail API's profile of the account signed in, for its access token alone.
+fn profile(stream: TcpStream, request: &Request, held: &Held) {
+    if request.authorization.as_deref() != Some(&format!("Bearer {ACCESS}")) {
+        respond(stream, 401, &[], r#"{"error": {"code": 401}}"#);
+    } else if held.mailless {
+        respond(
+            stream,
+            400,
+            &[],
+            r#"{"error": {"code": 400, "message": "Mail service not enabled"}}"#,
+        );
+    } else {
+        let profile = serde_json::json!({"emailAddress": held.account, "messagesTotal": 3});
+        respond(stream, 200, &[], &profile.to_string());
+    }
+}
+
 fn calendar(stream: TcpStream, request: &Request, held: &mut Held) {
     if request.authorization.as_deref() != Some(&format!("Bearer {ACCESS}")) {
         respond(stream, 401, &[], r#"{"error": {"code": 401}}"#);

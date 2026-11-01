@@ -33,6 +33,7 @@ fn connection() -> impl Strategy<Value = Connection> {
             Params::Label(suzatary_core::connect::Label::parse(&label).expect("a label"))
         )),
         email().prop_map(move |email| made(TemplateId::Gmail, Params::Address(email))),
+        email().prop_map(move |email| made(TemplateId::Google, Params::Address(email))),
         email().prop_map(move |email| made(TemplateId::Proton, Params::Address(email))),
         (
             email(),
@@ -138,7 +139,8 @@ proptest! {
     /// add declared, which stays, and adding twice is refused.
     #[test]
     fn removing_what_was_added_leaves_what_was_there(declared in declared(), connection in connection()) {
-        if let Ok(written) = declared.with(&connection) {
+        let moved = declared.connections().contains_key(&connection.key());
+        if let (Ok(written), false) = (declared.with(&connection), moved) {
             let mut kept = declared.clone();
             kept.plugins.extend(
                 written
@@ -155,13 +157,24 @@ proptest! {
         }
     }
 
-    /// Only a template no table holds is refused on an instance without its key.
+    /// Only a template no table holds is refused on an instance without its key, and a held key
+    /// is written over only by a connection that moves it: the address's one account, its folder
+    /// kept, synced as the new template says.
     #[test]
     fn a_new_connection_is_written_unless_no_table_holds_it(declared in declared(), connection in connection()) {
-        let held = declared.connections().contains_key(&connection.key());
+        let held = declared.connections().get(&connection.key()).cloned();
         match declared.with(&connection) {
-            Ok(_) => prop_assert!(!held),
-            Err(Refused::Duplicate(_)) => prop_assert!(held),
+            Ok(written) => match held {
+                None => {}
+                Some(held) => {
+                    prop_assert!(connection.moves(&held));
+                    prop_assert_eq!(written.accounts.len(), declared.accounts.len());
+                    let subdirs = |tables: &Declared| tables.accounts.iter().map(|account| account.subdir.clone()).collect::<Vec<_>>();
+                    prop_assert_eq!(subdirs(&written), subdirs(&declared));
+                    prop_assert_eq!(written.connections().get(&connection.key()).cloned(), Some(connection.clone()));
+                }
+            },
+            Err(Refused::Duplicate(_)) => prop_assert!(held.is_some_and(|held| !connection.moves(&held))),
             Err(Refused::Unwritten { .. }) => prop_assert!(matches!(
                 connection.id(),
                 TemplateId::GitRemote | TemplateId::Model

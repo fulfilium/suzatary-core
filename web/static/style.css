@@ -6270,6 +6270,37 @@ body:has(> .secretarypanel) .askrow {
   margin: 0 0 var(--s-4);
 }
 
+/* What the box can connect: one tap per template, each a full-width row so a long title wraps inside it. */
+.settingsoffered {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-3);
+  margin: 0 0 var(--s-6);
+}
+
+.settingsoffered h2,
+.settingsoffered p {
+  margin: 0;
+}
+
+.settingsoffers {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-2);
+}
+
+.settingsoffers h3 {
+  margin: 0;
+}
+
+.settingsoffer.act {
+  justify-content: flex-start;
+  width: 100%;
+  padding: var(--s-2) var(--s-4);
+  text-align: left;
+  white-space: normal;
+}
+
 /* A price's controls sit in the form's own column, as they did before one control drew them. */
 .pricefields {
   display: contents;

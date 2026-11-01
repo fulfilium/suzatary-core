@@ -24,6 +24,7 @@ mod calendar;
 mod client;
 mod flow;
 pub mod ical;
+mod mailbox;
 mod pkce;
 mod scope;
 
@@ -37,6 +38,7 @@ pub use flow::{
     AccessToken, Callback, Code, Endpoints, Exchanged, Held, KeptGrant, RefreshToken, authorize,
     exchange, grant_name, read_exchange, read_refresh, refresh,
 };
+pub use mailbox::{Unprofiled, profile_url, read_profile};
 pub use pkce::{Challenge, State, Verifier};
 pub use scope::{RedirectUri, Scope, Scopes};
 

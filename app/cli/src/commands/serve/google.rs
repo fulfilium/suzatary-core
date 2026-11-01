@@ -12,11 +12,12 @@ use std::sync::{Arc, Mutex};
 use axum::response::Redirect;
 use suzatary_core::capability::Entropy;
 use suzatary_core::google::{Callback, Endpoints, RedirectUri, Scopes, State as Drawn, Verifier};
+use suzatary_core::mail::account::Sync as Strategy;
 use suzatary_core::mail::address::EmailAddress;
 use suzatary_core::refusal::Refusal;
 use suzatary_core::secretary::google_sign_in::{self, Begun, Open, Taken};
 use suzatary_core::secretary::inbox::ProposalId;
-use suzatary_core::secretary::responded::{Performed, Tried};
+use suzatary_core::secretary::responded::{Done, Performed, Tried};
 use suzatary_core::secretary::store::stamp;
 use suzatary_io::google::Google;
 use suzatary_io::secrets::Resolves;
@@ -83,13 +84,17 @@ impl Consenting {
             .unwrap_or_else(std::sync::PoisonError::into_inner)
     }
 
-    /// Whether the instance file declares `account` as a Google account now.
-    fn declared(&self, account: &EmailAddress) -> Result<bool, String> {
+    /// How the instance file declares `account` now: a Google account, a Gmail account lieer
+    /// reads (which only a sign-in with Google its Connect card asked for begins with), or
+    /// neither.
+    fn declared(&self, account: &EmailAddress) -> Result<Option<Strategy>, String> {
         let declared = self.edits.declared().map_err(|failed| failed.to_string())?;
-        Ok(declared.accounts.iter().any(|held| {
-            held.email.is(account.as_str())
-                && matches!(held.sync, suzatary_core::mail::account::Sync::Google)
-        }))
+        Ok(declared
+            .accounts
+            .iter()
+            .find(|held| held.email.is(account.as_str()))
+            .map(|held| held.sync.clone())
+            .filter(|sync| matches!(sync, Strategy::Google | Strategy::Gmail)))
     }
 }
 
@@ -104,8 +109,8 @@ impl google_sign_in::Consents for Consenting {
     ) -> Performed {
         let not_sent = |reason: String| Performed::Tried(Tried::NotSent { reason });
         match self.declared(account) {
-            Ok(true) => {}
-            Ok(false) => {
+            Ok(Some(_)) => {}
+            Ok(None) => {
                 return not_sent(format!(
                     "{account} is not a Google account the instance file declares"
                 ));
@@ -251,7 +256,20 @@ pub fn callback(call: &Call<Reader, Callback, ()>) -> Result<Redirect, Refusal> 
             None => return Err(Refusal::bad_request(NOT_OPEN)),
         },
     };
+    // A grant just kept is read from at once, so the account's line says what its calendars
+    // came to before the owner leaves the page.
+    let kept = if let (Taken::Yours(begun), Performed::Done(_)) = (&taken, &performed) {
+        Some(suzatary_core::source_key::SourceKey::GoogleCalendar(
+            suzatary_core::mail::account_email::AccountEmail::folded(&begun.account),
+        ))
+    } else {
+        None
+    };
     ended(state, &card, now, performed)?;
+    if let Some(calendars) = kept {
+        state.checks.check(&calendars);
+        state.notice();
+    }
     match taken {
         Taken::NotYours(_) => Err(Refusal::forbidden(
             "this sign-in with Google was begun by someone else, so nothing was kept",
@@ -284,18 +302,69 @@ fn exchanged(
     let Some(kept) = kept else {
         return performed;
     };
+    let not_sent = |reason: String| Performed::Tried(Tried::NotSent { reason });
+    // A Gmail account lieer reads moves onto the grant only once the grant has read its mail;
+    // until then nothing is kept and lieer reads it as before.
+    let moving = match state.consenting.declared(&begun.account) {
+        Ok(sync) => matches!(sync, Some(Strategy::Gmail)),
+        Err(failed) => {
+            return not_sent(format!(
+                "Google granted it, and the instance file does not read, so nothing was kept: \
+                 {failed}"
+            ));
+        }
+    };
+    if moving {
+        let grant = suzatary_io::google::Grant {
+            account: begun.account.clone(),
+            client: begun.client.clone(),
+            refresh: kept.refresh.clone(),
+            parts: kept.parts.clone(),
+        };
+        if let Err(failed) = google.mailbox(&grant) {
+            return not_sent(format!(
+                "Google granted it, and reading {}'s mail through it failed ({failed}), so \
+                 nothing was kept and lieer reads its mail as before; tap Sign in with Google to \
+                 try again",
+                begun.account
+            ));
+        }
+    }
     let name = suzatary_core::google::grant_name(&begun.account);
-    let kept = suzatary_core::settings::Settable::mint(&state.settables(), &name)
+    let stored = suzatary_core::settings::Settable::mint(&state.settables(), &name)
         .map_err(|failed| failed.to_string())
         .and_then(|name| state.secrets.write_secret(&name, &kept.print()));
-    match kept {
-        Ok(()) => performed,
-        Err(failed) => Performed::Tried(Tried::NotSent {
-            reason: format!(
-                "Google granted it, and the secret store did not keep it: {failed}; tap Sign in \
-                 with Google to ask again"
+    if let Err(failed) = stored {
+        return not_sent(format!(
+            "Google granted it, and the secret store did not keep it: {failed}; tap Sign in with \
+             Google to ask again"
+        ));
+    }
+    if !moving {
+        return performed;
+    }
+    let moved =
+        suzatary_core::connect::Connection::parse("google", &[begun.account.as_str().to_owned()])
+            .map_err(|failed| failed.to_string())
+            .and_then(|connection| {
+                state
+                    .consenting
+                    .edits
+                    .add_connection(&connection)
+                    .map_err(|failed| failed.to_string())
+            });
+    match (moved, performed) {
+        (Ok(()), Performed::Done(Done::Acted { what })) => Performed::Done(Done::Acted {
+            what: format!(
+                "{what}; its mail is read through this sign-in now, in place of lieer's own"
             ),
         }),
+        (Ok(()), performed) => performed,
+        (Err(failed), _) => not_sent(format!(
+            "the grant is kept, and the instance file was not changed ({failed}), so lieer \
+             reads {}'s mail as before; tap Sign in with Google to try again",
+            begun.account
+        )),
     }
 }
 

@@ -33,6 +33,28 @@ impl Shape {
             Shape::Folder => "a Drive folder",
         }
     }
+
+    /// What to reply to choose it, as the setup conversation asks.
+    #[must_use]
+    pub const fn asked(self) -> &'static str {
+        match self {
+            Shape::Nothing => "reply to go ahead, and the card that connects it comes next",
+            Shape::Label => {
+                "reply with a name for it, such as Work, and the card that connects it comes next"
+            }
+            Shape::Address => {
+                "reply with its email address, and the card that connects it comes next"
+            }
+            Shape::Microsoft => {
+                "reply with its email address and whether it is a work or school account or a \
+                 personal one, and the card that connects it comes next"
+            }
+            Shape::Folder => {
+                "reply with the folder's path in your Drive, such as /Documents/Taxes, and the \
+                 card that lets the secretary read it comes next"
+            }
+        }
+    }
 }
 
 /// The parameters of one connection, each parsed by its own constructor: a person or a model

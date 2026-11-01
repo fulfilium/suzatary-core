@@ -265,5 +265,6 @@
       "lines": []
     }
   ],
-  "ask": "setup"
+  "ask": "setup",
+  "offers": []
 }
