@@ -31,7 +31,12 @@ pub struct Args {
 #[derive(Debug, clap::Subcommand)]
 enum Verb {
     /// Read the `claude/` branches once and move every session a report or merge speaks for.
-    Poll,
+    Poll {
+        /// Move nothing: print each waiting session, each branch seen with its reports and the
+        /// sessions they name, and how the poll reads each session.
+        #[arg(long)]
+        explain: bool,
+    },
 }
 
 /// Where a tap's fire goes.
@@ -152,21 +157,53 @@ pub fn poll(
     mirrors: &suzatary_io::repos::Mirrors,
     repo: &suzatary_core::repos::RepoName,
 ) -> anyhow::Result<Vec<Advanced>> {
-    if suzatary_core::secretary::coding::waiting(conversations.conversations())
-        .map_err(|refused| anyhow::anyhow!("{}", refused.message()))?
-        .is_empty()
-    {
+    let waiting = waiting(conversations)?;
+    if waiting.is_empty() {
+        tracing::debug!("coding poll: no session waits, so nothing is fetched");
         return Ok(Vec::new());
     }
-    let seen = mirrors
-        .seen(repo)
-        .map_err(|failed| anyhow::anyhow!("reading {repo}: {failed}"))?;
+    let seen = seen(mirrors, repo)?;
+    for line in suzatary_core::secretary::coding::explained(&waiting, &seen) {
+        tracing::debug!("coding poll: {line}");
+    }
     suzatary_core::secretary::coding::advance(
         conversations.conversations(),
         &seen,
         suzatary_io::clock::SystemClock.now(),
     )
     .map_err(|refused| anyhow::anyhow!("{}", refused.message()))
+}
+
+/// Every session still waiting on a branch.
+fn waiting(conversations: &ConversationStores) -> anyhow::Result<Vec<Advanced>> {
+    suzatary_core::secretary::coding::waiting(conversations.conversations())
+        .map_err(|refused| anyhow::anyhow!("{}", refused.message()))
+}
+
+/// Every `claude/` branch of `repo`, as the mirror holds it after a fetch.
+fn seen(
+    mirrors: &suzatary_io::repos::Mirrors,
+    repo: &suzatary_core::repos::RepoName,
+) -> anyhow::Result<Vec<suzatary_core::coding::Seen>> {
+    mirrors
+        .seen(repo)
+        .map_err(|failed| anyhow::anyhow!("reading {repo}: {failed}"))
+}
+
+/// What `suzatary coding poll --explain` prints. It moves nothing; it fetches the mirror as a
+/// poll would, and reads the branches even while no session waits.
+///
+/// # Errors
+/// The mirror's or the store's own failures.
+pub fn explain(
+    conversations: &ConversationStores,
+    mirrors: &suzatary_io::repos::Mirrors,
+    repo: &suzatary_core::repos::RepoName,
+) -> anyhow::Result<Vec<String>> {
+    Ok(suzatary_core::secretary::coding::explained(
+        &waiting(conversations)?,
+        &seen(mirrors, repo)?,
+    ))
 }
 
 /// The server's poll, every [`EVERY`], one [`poll_once`] a tick.
@@ -239,16 +276,27 @@ pub fn spawn_polling(instance: &Instance, workers: &Arc<crate::commands::serve::
 /// No `[coding]` in the instance, or the poll's own failures.
 pub fn run(path: &Path, args: &Args) -> anyhow::Result<()> {
     let instance = Instance::open(path)?;
-    let Verb::Poll = args.command;
+    let Verb::Poll {
+        explain: explaining,
+    } = args.command;
     let coding =
         instance.deployment.coding.clone().ok_or_else(|| {
             anyhow::anyhow!("{}: no [coding] routine is declared", path.display())
         })?;
-    let moved = poll(
-        &instance.conversation_stores(),
-        &crate::commands::serve::interpreters::mirrors(&instance),
-        &coding.repo,
-    )?;
+    let (conversations, mirrors) = (
+        instance.conversation_stores(),
+        crate::commands::serve::interpreters::mirrors(&instance),
+    );
+    if explaining {
+        for line in explain(&conversations, &mirrors, &coding.repo)? {
+            println!("{line}");
+        }
+        return Ok(());
+    }
+    let moved = poll(&conversations, &mirrors, &coding.repo)?;
+    if moved.is_empty() {
+        println!("no session moved; `suzatary coding poll --explain` says why");
+    }
     for advanced in moved {
         println!(
             "{} proposal {}: {}",

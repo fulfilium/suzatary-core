@@ -224,6 +224,12 @@ impl SessionId {
     pub fn is(&self, other: &Self) -> bool {
         self.key == other.key
     }
+
+    /// The body: what both spellings share.
+    #[must_use]
+    pub fn body(&self) -> &str {
+        &self.key.0
+    }
 }
 
 impl TryFrom<String> for SessionId {
@@ -561,30 +567,110 @@ impl ReportFile {
     pub fn speaks_for(&self, id: &SessionId) -> bool {
         self.names.iter().any(|named| named.is(id))
     }
+
+    /// Every session the text names, as it spelled each.
+    #[must_use]
+    pub fn names(&self) -> &[SessionId] {
+        &self.names
+    }
 }
 
-/// What the poll does to one session: a fired one is reported by the first branch whose report
-/// names its id; a reported one is merged once its own branch's tip is on the default branch.
+/// How the poll reads one session against the branches it saw: the step it takes, or why it
+/// takes none.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Reading<'a> {
+    /// A fired session's report is on this branch.
+    Reported {
+        /// The branch.
+        found: &'a Seen,
+        /// The report naming the session.
+        file: &'a ReportFile,
+    },
+    /// A reported session's branch is on the default branch.
+    Merged {
+        /// The branch.
+        found: &'a Seen,
+    },
+    /// A fired session, and no branch the poll saw carries a report.
+    NoReport,
+    /// A fired session, and every report the poll saw names other sessions or none.
+    OtherSessions,
+    /// A reported session whose branch the poll did not see.
+    NotSeen,
+    /// A reported session whose branch is not on the default branch yet.
+    NotMerged,
+    /// A merged or dropped session, which the poll never moves.
+    Ended,
+}
+
+impl fmt::Display for Reading<'_> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Reported { found, file } => {
+                write!(f, "reported by {} in {}", found.branch, file.path.as_str())
+            }
+            Self::Merged { found } => {
+                write!(f, "merged: {} is on the default branch", found.branch)
+            }
+            Self::NoReport => {
+                f.write_str(&format!("no branch carries a report under {REPORTS_DIR}"))
+            }
+            Self::OtherSessions => f.write_str("every report names another session, or none"),
+            Self::NotSeen => f.write_str("its branch is not among the branches seen"),
+            Self::NotMerged => f.write_str("its branch is not on the default branch yet"),
+            Self::Ended => f.write_str("it has ended, so the poll leaves it"),
+        }
+    }
+}
+
+/// How the poll reads `session` against `seen`: a fired one is reported by the first branch
+/// whose report names its id; a reported one is merged once its own branch's tip is on the
+/// default branch.
+#[must_use]
+pub fn read<'a>(session: &Session, seen: &'a [Seen]) -> Reading<'a> {
+    match session {
+        Session::Fired { id, .. } => seen
+            .iter()
+            .find_map(|found| {
+                found
+                    .reports
+                    .iter()
+                    .find(|file| file.speaks_for(id))
+                    .map(|file| Reading::Reported { found, file })
+            })
+            .unwrap_or_else(|| {
+                if seen.iter().all(|found| found.reports.is_empty()) {
+                    Reading::NoReport
+                } else {
+                    Reading::OtherSessions
+                }
+            }),
+        Session::Reported { branch, .. } => match seen.iter().find(|found| &found.branch == branch)
+        {
+            None => Reading::NotSeen,
+            Some(found) if found.merged => Reading::Merged { found },
+            Some(_) => Reading::NotMerged,
+        },
+        Session::Merged { .. } | Session::Dropped { .. } => Reading::Ended,
+    }
+}
+
+/// The step the poll takes for one session, as [`read`] reads it.
 #[must_use]
 pub fn next(session: &Session, seen: &[Seen]) -> Option<Step> {
-    match session {
-        Session::Fired { id, .. } => seen.iter().find_map(|found| {
-            found
-                .reports
-                .iter()
-                .find(|file| file.speaks_for(id))
-                .map(|file| Step::Report {
-                    branch: found.branch.clone(),
-                    report: Report::new(file.path.clone(), &file.text, found.stat.clone()),
-                })
+    match read(session, seen) {
+        Reading::Reported { found, file } => Some(Step::Report {
+            branch: found.branch.clone(),
+            report: Report::new(file.path.clone(), &file.text, found.stat.clone()),
         }),
-        Session::Reported { branch, .. } => seen
-            .iter()
-            .find(|found| &found.branch == branch && found.merged)
-            .map(|found| Step::Merge {
-                sha: found.tip.clone(),
-            }),
-        Session::Merged { .. } | Session::Dropped { .. } => None,
+        Reading::Merged { found } => Some(Step::Merge {
+            sha: found.tip.clone(),
+        }),
+        Reading::NoReport
+        | Reading::OtherSessions
+        | Reading::NotSeen
+        | Reading::NotMerged
+        | Reading::Ended => None,
     }
 }
 

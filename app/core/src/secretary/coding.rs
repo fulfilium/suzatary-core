@@ -43,6 +43,55 @@ pub fn waiting(
         .collect())
 }
 
+/// What `suzatary coding poll --explain` prints, one line each: every waiting session, every
+/// branch seen with each report it carries and the sessions that report names, then how the poll
+/// reads each waiting session against those branches.
+#[must_use]
+pub fn explained(waiting: &[Advanced], seen: &[Seen]) -> Vec<String> {
+    let mut lines = vec![format!("{} waiting session(s):", waiting.len())];
+    lines.extend(waiting.iter().map(|advanced| {
+        format!(
+            "  {} proposal {}: {} {}",
+            advanced.conversation,
+            advanced.index,
+            advanced.session.word(),
+            advanced.session.id().body()
+        )
+    }));
+    lines.push(format!("{} branch(es) seen:", seen.len()));
+    for found in seen {
+        lines.push(format!(
+            "  {} at {}{}: {} report(s)",
+            found.branch,
+            found.tip.short(),
+            if found.merged { ", merged" } else { "" },
+            found.reports.len()
+        ));
+        lines.extend(found.reports.iter().map(|file| {
+            let names: Vec<String> = file.names().iter().map(ToString::to_string).collect();
+            format!(
+                "    {} names {}",
+                file.path().as_str(),
+                if names.is_empty() {
+                    "no session".to_owned()
+                } else {
+                    names.join(", ")
+                }
+            )
+        }));
+    }
+    lines.push("how the poll reads each:".to_owned());
+    lines.extend(waiting.iter().map(|advanced| {
+        format!(
+            "  {} proposal {}: {}",
+            advanced.conversation,
+            advanced.index,
+            crate::coding::read(&advanced.session, seen)
+        )
+    }));
+    lines
+}
+
 /// The tap fired a session: its first line, and the act the secretary reads.
 ///
 /// # Errors

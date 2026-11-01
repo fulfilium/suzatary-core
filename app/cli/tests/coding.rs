@@ -134,10 +134,12 @@ fn served(
 }
 
 fn proposed(base: &str) -> (String, serde_json::Value) {
-    let mut opened = common::act(
-        &format!("{base}/api/secretary/conversations"),
-        &serde_json::json!({"title": "The CV"}),
-    );
+    proposed_in(base, &serde_json::json!({"title": "The CV"}))
+}
+
+/// [`proposed`] in a conversation opened with `opening`.
+fn proposed_in(base: &str, opening: &serde_json::Value) -> (String, serde_json::Value) {
+    let mut opened = common::act(&format!("{base}/api/secretary/conversations"), opening);
     let id = common::body_json(&mut opened)["id"]
         .as_str()
         .expect("an id")
@@ -479,6 +481,102 @@ fn a_poll_that_fails_leaves_the_server_answering() {
         conversation(&base, &id)["proposals"][0]["coding"]["state"],
         "reported"
     );
+}
+
+/// The live case of 2026-11-01: a session fired in a new, untitled conversation with a `cse_`
+/// id, and among many `claude/` branches (some merged, some reporting other sessions, one with
+/// no report) the one whose only change is a report naming the `session_` URL, on a base the
+/// default branch has since moved past. The explanation says which branch reports it, and the
+/// poll moves it.
+#[test]
+fn a_new_conversations_session_is_reported_by_one_branch_among_many() {
+    let (routine, served) = fake_routine();
+    let (base, fakes) = scene(
+        "coding-among-many",
+        Firing::Endpoint {
+            base: routine,
+            routine: "trig_01fake".parse().expect("a routine id"),
+            secrets: Arc::new(Holding),
+        },
+    );
+    let (id, _) = proposed_in(&base, &serde_json::json!({"title": ""}));
+    assert_eq!(answer(&base, &id, "tap", &serde_json::json!({})).0, 200);
+    served.join().expect("the fake ran");
+
+    let root = common::scratch("coding-among-many-repos");
+    let _ = common::local_repos(&root);
+    let work = root.join("cv-work");
+    let remote = root.join("remotes/bmabsout/cv.git");
+    let remote = remote.to_str().expect("a utf-8 path");
+    let report = |name: &str, text: &str| {
+        std::fs::create_dir_all(work.join("docs/reports")).expect("reports");
+        std::fs::write(work.join(format!("docs/reports/{name}.md")), text).expect("a report");
+    };
+    git(&work, &["checkout", "-q", "-b", "claude/changelog-typo"]);
+    report(
+        "changelog-typo",
+        &format!("# Report: changelog-typo\n\nSession: {WRITTEN}\n\n## The task\n"),
+    );
+    git(&work, &["add", "."]);
+    git(
+        &work,
+        &[
+            "commit",
+            "-q",
+            "-m",
+            "docs: report the changelog typo check",
+        ],
+    );
+    git(&work, &["push", "-q", remote, "claude/changelog-typo"]);
+    for n in 0..24 {
+        let branch = format!("claude/other-{n:02}");
+        git(&work, &["checkout", "-q", "main"]);
+        git(&work, &["checkout", "-q", "-b", &branch]);
+        match n % 3 {
+            0 => report(
+                &format!("other-{n:02}"),
+                &format!("Session: https://claude.ai/code/session_01other{n:02}\n"),
+            ),
+            1 => std::fs::write(work.join(format!("other-{n:02}.txt")), "no report\n")
+                .expect("a file"),
+            _ => report(&format!("other-{n:02}"), "Session: none written\n"),
+        }
+        git(&work, &["add", "."]);
+        git(&work, &["commit", "-q", "-m", &branch]);
+        git(&work, &["push", "-q", remote, &branch]);
+        if n % 4 == 0 {
+            git(&work, &["checkout", "-q", "main"]);
+            git(&work, &["merge", "-q", "--no-edit", &branch]);
+            git(&work, &["push", "-q", remote, "main"]);
+        }
+    }
+
+    let mirrors = common::local_mirrors(&root);
+    let repo: suzatary_core::repos::RepoName = "bmabsout/cv".parse().expect("a name");
+    let explained = suzatary_cli::commands::coding::explain(&fakes.conversations, &mirrors, &repo)
+        .expect("explains");
+    let said = explained.join("\n");
+    assert!(
+        said.contains(&format!("{id} proposal 0: fired 01fake")),
+        "{said}"
+    );
+    assert!(said.contains("25 branch(es) seen"), "{said}");
+    assert!(
+        said.contains("docs/reports/changelog-typo.md names session_01fake"),
+        "{said}"
+    );
+    assert!(
+        said.contains(&format!(
+            "{id} proposal 0: reported by claude/changelog-typo in docs/reports/changelog-typo.md"
+        )),
+        "{said}"
+    );
+    let moved =
+        suzatary_cli::commands::coding::poll(&fakes.conversations, &mirrors, &repo).expect("polls");
+    assert_eq!(moved.len(), 1, "{said}");
+    let coding = conversation(&base, &id)["proposals"][0]["coding"].clone();
+    assert_eq!(coding["state"], "reported", "{coding}");
+    assert_eq!(coding["branch"], "claude/changelog-typo");
 }
 
 /// A drop needs a reason, and the reason is what the session ends on.
