@@ -22,7 +22,7 @@ use suzatary_core::deployment::Deployment;
 use suzatary_core::mail::junk::{ChurnList, JunkHeader, JunkMessage, Uid};
 use suzatary_core::mail::verbs::{AccountSync, SyncReport};
 use suzatary_core::mail::{AttachmentFile, AttachmentMeta, MailMessage, MailRow};
-use suzatary_core::record::{Envelope, EventStore, Node, TodoEvent};
+use suzatary_core::record::{Envelope, EventStore, TodoEvent};
 use suzatary_core::refusal::Refusal;
 use suzatary_core::repos::{CommitId, Patch, RepoName, RepoPath, RepoRow, Rev, Visibility};
 use suzatary_core::secretary::Bound;
@@ -108,11 +108,6 @@ impl Fixed {
 impl Reads<TodoEvent> for Fixed {
     fn objects(&self) -> Result<Vec<(Hash, Envelope)>, StoreError> {
         linearised(&self.events).map_err(|e| StoreError::unreadable("chain", e.to_string()))
-    }
-    fn nodes(&self) -> Result<Vec<Node>, StoreError> {
-        prodrome_core::dag::Dag::from_iter(self.objects()?)
-            .nodes()
-            .map_err(|e| StoreError::unreadable("chain", e.to_string()))
     }
     fn excluded(&self) -> Result<std::collections::BTreeSet<Hash>, StoreError> {
         Ok(std::collections::BTreeSet::new())

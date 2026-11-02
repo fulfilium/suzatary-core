@@ -32,6 +32,13 @@ pub(crate) fn run(exe: &std::path::Path) -> Command {
     command
 }
 
+/// `suzatary-dev`, the binary with the fixture's verbs (`fixture-chain`, `serve --whois-fixture`), run
+/// as [`suzatary`] runs the binary.
+#[cfg(feature = "fixture")]
+pub(crate) fn fixture() -> Command {
+    run(std::path::Path::new(env!("CARGO_BIN_EXE_suzatary-dev")))
+}
+
 /// [`suzatary`] holding the cast's keys, as a box holds its own in the secret store: every
 /// deployment signs and names its mail by its dedup key, so a run that writes needs them.
 pub(crate) fn keyed() -> Command {

@@ -54,11 +54,11 @@ impl std::fmt::Display for TheDigest {
     }
 }
 
-/// What the rule reads: the digest, and the lines it is of, read whole.
+/// What the rule reads: the digest, and each line it is of, read whole.
 #[derive(Debug, Clone)]
 pub struct Reading {
     digest: Digest,
-    lines: Vec<(Hash, Envelope<LineEvent>)>,
+    lines: std::sync::Arc<crate::store::Graph<LineEvent>>,
     opened: std::collections::BTreeMap<Hash, Entry>,
 }
 
@@ -69,11 +69,12 @@ impl Reading {
     /// [`ReadDigests::whole`]'s, and the stores' own.
     pub fn of(digests: &ReadDigests<'_>) -> Result<Self, Refusal> {
         digests.whole()?;
-        let lines = digests.line_objects()?;
+        let graph = digests.line_graph()?;
+        let lines: Vec<_> = graph.objects().collect();
         let opened = digests.opened(&lines);
         Ok(Self {
             digest: digests.read_over(&lines, &opened)?,
-            lines,
+            lines: graph,
             opened,
         })
     }
@@ -85,9 +86,8 @@ impl Reading {
     }
 
     /// The lines the digest is of, in the store's order.
-    #[must_use]
-    pub fn lines(&self) -> &[(Hash, Envelope<LineEvent>)] {
-        &self.lines
+    pub fn lines(&self) -> impl Iterator<Item = (&Hash, &Envelope<LineEvent>)> {
+        self.lines.objects()
     }
 
     /// Each line as read, by its name.

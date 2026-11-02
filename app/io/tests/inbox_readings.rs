@@ -109,7 +109,7 @@ fn the_frozen_proposal_store_reads_as_pinned() {
     let asked: std::collections::BTreeMap<String, String> = store
         .nodes()
         .expect("the proposal store reads")
-        .into_iter()
+        .iter()
         .filter_map(|node| {
             let event = node.event()?;
             matches!(event.said, Said::Asked(_)).then(|| {

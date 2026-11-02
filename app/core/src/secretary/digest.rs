@@ -144,7 +144,7 @@ pub struct Summary {
 /// # Errors
 /// [`Cycle`] for lines that rest on one another in a cycle, which no store of objects can hold.
 pub fn digest(
-    lines: &[(Hash, Envelope<LineEvent>)],
+    lines: &[(&Hash, &Envelope<LineEvent>)],
     opened: &BTreeMap<Hash, Entry>,
     history: &[Node<DigestEvent>],
     owners: &BTreeSet<Actor>,
@@ -346,13 +346,16 @@ pub fn attempts(history: &[Node<DigestEvent>]) -> Vec<(Hash, Datetime, Spent)> {
     clippy::type_complexity,
     reason = "two maps over the same lines, read together"
 )]
-fn leaves_of(
-    lines: &[(Hash, Envelope<LineEvent>)],
-) -> (BTreeMap<&Hash, &Hash>, BTreeMap<&Hash, (Hash, bool)>) {
+fn leaves_of<'l>(
+    lines: &[(&'l Hash, &'l Envelope<LineEvent>)],
+) -> (
+    BTreeMap<&'l Hash, &'l Hash>,
+    BTreeMap<&'l Hash, (Hash, bool)>,
+) {
     let gone = crate::secretary::transcript::erased(lines);
     let mut carries = BTreeMap::new();
     let mut leaves = BTreeMap::new();
-    for (name, object) in lines {
+    for &(name, object) in lines {
         let Some(line) = object.event() else {
             continue;
         };
@@ -383,7 +386,7 @@ fn leaves_of(
 /// lines taken in the order given, which is the store's causal order. A line whose words are
 /// erased still counts: a mail read whose words went still taints the answer after it.
 fn taints<'l>(
-    lines: &'l [(Hash, Envelope<LineEvent>)],
+    lines: &'l [(&'l Hash, &'l Envelope<LineEvent>)],
     opened: &'l BTreeMap<Hash, Entry>,
 ) -> BTreeMap<&'l Hash, Taint> {
     let mut conversations: BTreeMap<_, Vec<(&Hash, &Entry)>> = BTreeMap::new();
@@ -411,18 +414,18 @@ fn taints<'l>(
 /// # Errors
 /// [`Cycle`] for lines in a cycle, which no store of objects can hold.
 fn line_order<'l>(
-    lines: &'l [(Hash, Envelope<LineEvent>)],
+    lines: &'l [(&'l Hash, &'l Envelope<LineEvent>)],
     carries: &BTreeMap<&'l Hash, &'l Hash>,
 ) -> Result<Vec<&'l Hash>, Cycle> {
     // A reseal is no leaf, so a line resting on one rests on what the reseal rests on.
     let reseals: BTreeMap<&Hash, Vec<Hash>> = lines
         .iter()
         .filter(|(_, object)| object.event().is_some_and(resealing))
-        .map(|(name, object)| (name, parents_of(object)))
+        .map(|&(name, object)| (name, parents_of(object)))
         .collect();
     let parents: BTreeMap<&Hash, Vec<&Hash>> = lines
         .iter()
-        .filter_map(|(name, object)| Some((carries.get(name).copied()?, object)))
+        .filter_map(|&(name, object)| Some((carries.get(name).copied()?, object)))
         .map(|(carried, object)| {
             let mut pending = parents_of(object);
             let mut seen = BTreeSet::new();

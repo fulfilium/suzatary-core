@@ -112,8 +112,8 @@ fn failed_fire(failed: &FireError) -> Performed {
 pub struct Coder {
     /// The routine.
     pub firing: Firing,
-    /// The conversations a session's lines are written into.
-    pub conversations: ConversationStores,
+    /// The conversations a session's lines are written into: the server's own handle.
+    pub conversations: crate::commands::secretary::ActingConversations,
 }
 
 impl Coder {
@@ -208,7 +208,7 @@ pub fn explain(
 
 /// The server's poll, every [`EVERY`], one [`poll_once`] a tick.
 pub async fn polling(
-    conversations: Arc<ConversationStores>,
+    conversations: crate::commands::secretary::ActingConversations,
     mirrors: Arc<suzatary_io::repos::Mirrors>,
     repo: suzatary_core::repos::RepoName,
     workers: Arc<crate::commands::serve::Workers>,
@@ -216,7 +216,7 @@ pub async fn polling(
     let mut every = tokio::time::interval(EVERY);
     loop {
         every.tick().await;
-        poll_once(&conversations, &mirrors, &repo, &workers).await;
+        poll_once(conversations, &mirrors, &repo, &workers).await;
     }
 }
 
@@ -224,14 +224,13 @@ pub async fn polling(
 /// conversation's page, and a poll that fails or panics is logged and answers how many
 /// sessions moved (none), so the server and the next tick go on.
 pub async fn poll_once(
-    conversations: &Arc<ConversationStores>,
+    conversations: crate::commands::secretary::ActingConversations,
     mirrors: &Arc<suzatary_io::repos::Mirrors>,
     repo: &suzatary_core::repos::RepoName,
     workers: &crate::commands::serve::Workers,
 ) -> usize {
-    let (conversations, mirrors, repo) =
-        (Arc::clone(conversations), Arc::clone(mirrors), repo.clone());
-    match tokio::task::spawn_blocking(move || poll(&conversations, &mirrors, &repo)).await {
+    let (mirrors, repo) = (Arc::clone(mirrors), repo.clone());
+    match tokio::task::spawn_blocking(move || poll(conversations, &mirrors, &repo)).await {
         Ok(Ok(moved)) => {
             for advanced in &moved {
                 tracing::info!(
@@ -258,11 +257,15 @@ pub async fn poll_once(
     }
 }
 
-/// Spawn the server's poll when `[coding]` names a routine.
-pub fn spawn_polling(instance: &Instance, workers: &Arc<crate::commands::serve::Workers>) {
+/// Spawn the server's poll when `[coding]` names a routine, reading the server's own `conversations`.
+pub fn spawn_polling(
+    instance: &Instance,
+    conversations: crate::commands::secretary::ActingConversations,
+    workers: &Arc<crate::commands::serve::Workers>,
+) {
     if let Some(coding) = &instance.deployment.coding {
         tokio::spawn(polling(
-            Arc::new(instance.conversation_stores()),
+            conversations,
             crate::commands::serve::interpreters::mirrors(instance),
             coding.repo.clone(),
             Arc::clone(workers),

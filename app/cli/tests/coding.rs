@@ -432,12 +432,12 @@ fn a_poll_that_fails_leaves_the_server_answering() {
         .enable_all()
         .build()
         .expect("a runtime");
-    let conversations = Arc::new(fakes.conversations.reopened());
+    let conversations: &'static _ = Box::leak(Box::new(fakes.conversations.reopened()));
     let workers = suzatary_cli::commands::serve::Workers::new();
     let tick = |mirrors: suzatary_io::repos::Mirrors, repo: &str| {
         let repo: suzatary_core::repos::RepoName = repo.parse().expect("a name");
         runtime.block_on(suzatary_cli::commands::coding::poll_once(
-            &conversations,
+            conversations,
             &Arc::new(mirrors),
             &repo,
             &workers,

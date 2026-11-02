@@ -147,7 +147,6 @@ fn sent(reading: &Reading, asking: Asking<'_>) -> BTreeSet<usize> {
     let entries = reading.entries();
     let lines: Vec<(&Hash, &Entry)> = reading
         .lines()
-        .iter()
         .filter_map(|(name, object)| {
             let line = object.event()?;
             (line.conversation() == asking.conversation).then_some((name, *entries.get(name)?))

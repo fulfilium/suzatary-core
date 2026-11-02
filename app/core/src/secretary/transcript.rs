@@ -638,6 +638,12 @@ impl<'l> Named<'l> for (&'l Hash, &'l Envelope<LineEvent>) {
     }
 }
 
+impl<'l> Named<'l> for &'l (&'l Hash, &'l Envelope<LineEvent>) {
+    fn named(self) -> (&'l Hash, &'l Envelope<LineEvent>) {
+        *self
+    }
+}
+
 /// The objects' lines, by name.
 fn lines_of<'l>(
     objects: impl IntoIterator<Item = impl Named<'l>>,
@@ -720,8 +726,8 @@ fn erased_lines<'l>(
 /// Every line the objects hold, by name, read: each slot opened by the key `key` answers, or
 /// erased where an erasure line of its own conversation names its key.
 #[must_use]
-pub fn opened(
-    objects: &[(Hash, Envelope<LineEvent>)],
+pub fn opened<'l>(
+    objects: impl IntoIterator<Item = impl Named<'l>>,
     slots: &impl Slots,
 ) -> BTreeMap<Hash, Entry> {
     by_conversation(lines_of(objects))

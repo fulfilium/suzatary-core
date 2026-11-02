@@ -101,6 +101,9 @@ mod reads;
 mod release;
 #[path = "repos.rs"]
 mod repos;
+#[cfg(feature = "fixture")]
+#[path = "resident.rs"]
+mod resident;
 #[path = "review.rs"]
 mod review;
 #[path = "rewind.rs"]

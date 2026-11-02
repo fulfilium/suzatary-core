@@ -116,6 +116,13 @@ if ! [ -r "$TLS_DIR/cert.pem" ] || ! [ -r "$TLS_DIR/key.pem" ]; then
   exit 1
 fi
 echo "serve-web: suzatary serve https://$HOST:$PORT (reads GET, writes POST /api/act/*, gated by tailscale whois)" >&2
+# TWO MALLOC ARENAS. glibc gives each thread, up to eight per core, an arena of
+# its own and keeps what a request freed there, so a request that reads a whole
+# store on one of the server's blocking threads leaves about that store's size
+# resident after it ends. At the live shape, over the same rounds of the
+# page's requests, the server settled at 1.6 GB with glibc's default and at
+# 1.04 GB with two arenas (servememory, 2026-11-02).
+export MALLOC_ARENA_MAX=2
 # scripts/app-bin.sh resolves the `.#suzatary` derivation's store path and
 # execs it with these args; the `.#triage` shell wrap stays because `serve`
 # reaches typst as a subprocess for the pages it renders and notmuch for

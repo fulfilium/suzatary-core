@@ -945,8 +945,11 @@ pub struct Serving {
     pub compacting: Compacting,
     /// What puts a tapped proposal on a wire.
     pub postman: crate::commands::secretary::Postman,
-    /// What performs a tapped act.
-    pub acting: crate::commands::secretary::Acting,
+    /// What performs a tapped act, made by [`listen`] over the server's own stores.
+    pub acting: Performing,
+    /// The stream table the performer and the server share, so a tap's announcements reach the
+    /// server's subscribers.
+    pub workers: Arc<Workers>,
     /// Where the usage page reads its transcripts from.
     pub ledger: interpreters::Ledger,
     /// Where `GET /api/about`'s build comes from.
@@ -1050,6 +1053,16 @@ pub const POLICY: &str = "default-src 'self'; script-src 'self' 'wasm-unsafe-eva
     style-src-attr 'unsafe-inline'; worker-src 'self'; object-src 'none'; base-uri 'none'; \
     form-action 'none'; frame-ancestors 'none'";
 
+/// What performs a tapped act, made once the server's stores are open: an act writes through the
+/// handles the pages read, so the process holds one copy of each store.
+pub type Performing = Box<
+    dyn FnOnce(
+            crate::commands::secretary::ActingStores,
+            Arc<Workers>,
+        ) -> crate::commands::secretary::Acting
+        + Send,
+>;
+
 /// Bind and run.
 pub async fn listen(instance: &Instance, serving: Serving) -> anyhow::Result<()> {
     use suzatary_io::{epochs, frontiers};
@@ -1083,11 +1096,8 @@ pub async fn listen(instance: &Instance, serving: Serving) -> anyhow::Result<()>
     });
     let first = bound.next().context("an instance names a chain")?;
     let rest: Vec<Chained> = bound.collect();
-    // Share the acting's table, so a tap's announcements reach this state's subscribers.
-    let workers = serving
-        .acting
-        .workers()
-        .unwrap_or_else(|| Arc::new(Workers::new()));
+    let stores = world.acting_stores();
+    let workers = serving.workers;
     let state = State::over(
         first.clone(),
         rest.clone(),
@@ -1095,7 +1105,7 @@ pub async fn listen(instance: &Instance, serving: Serving) -> anyhow::Result<()>
         serving.door,
         Performers {
             postman: Arc::new(serving.postman),
-            acting: Arc::new(serving.acting),
+            acting: Arc::new((serving.acting)(stores, Arc::clone(&workers))),
         },
         workers,
         Settings {
@@ -1160,7 +1170,7 @@ pub async fn listen(instance: &Instance, serving: Serving) -> anyhow::Result<()>
     notice_from_now_on(state.clone(), serving.moved).await;
     resume_waiting(&state).await;
     tokio::spawn(instance_watched(state.clone(), instance.path.clone()));
-    watch_from_now_on(instance, &state, &first, rest);
+    watch_from_now_on(instance, stores, &state, &first, rest);
 
     let router = app(state, &serving.dist);
     let service = router.into_make_service_with_connect_info::<SocketAddr>();
@@ -1371,6 +1381,7 @@ fn serving(instance: &Instance, args: Args) -> anyhow::Result<Serving> {
         compacting,
         postman,
         acting,
+        workers: Arc::new(Workers::new()),
         ledger,
         stamp,
         signing,
@@ -1462,7 +1473,7 @@ fn performers(
     moved: &Arc<tokio::sync::Notify>,
     #[cfg(feature = "fixture")] (scripted, google): (bool, &suzatary_core::google::Endpoints),
 ) -> (
-    crate::commands::secretary::Acting,
+    Performing,
     Arc<sign_ins::SignIns>,
     Arc<dyn suzatary_core::settings::Verify + Send + Sync>,
 ) {
@@ -1524,20 +1535,22 @@ fn real_postman(instance: &Instance) -> crate::commands::secretary::Postman {
     crate::commands::secretary::Postman::Real(Arc::new(instance.clone()))
 }
 
-/// The device flow, for real, over a fresh [`Workers`] table `listen` reads back, ringing
-/// `moved` when a flow ends.
+/// The device flow, for real, ringing `moved` when a flow ends.
 fn real_acting(
     instance: &Instance,
     signing: &Arc<sign_ins::SignIns>,
     moved: &Arc<tokio::sync::Notify>,
-) -> crate::commands::secretary::Acting {
-    let moved = Arc::clone(moved);
-    crate::commands::secretary::Acting::real(
-        instance,
-        Arc::new(Workers::new()),
-        Arc::clone(signing),
-        Arc::new(move || moved.notify_one()),
-    )
+) -> Performing {
+    let (instance, signing, moved) = (instance.clone(), Arc::clone(signing), Arc::clone(moved));
+    Box::new(move |stores, workers| {
+        crate::commands::secretary::Acting::real(
+            &instance,
+            stores,
+            workers,
+            signing,
+            Arc::new(move || moved.notify_one()),
+        )
+    })
 }
 
 /// The fixture's recording device flow, so a browser suite never dials Microsoft.
@@ -1546,13 +1559,11 @@ fn recording_acting(
     instance: &Instance,
     signing: &Arc<sign_ins::SignIns>,
     google: &suzatary_core::google::Endpoints,
-) -> crate::commands::secretary::Acting {
-    crate::commands::secretary::Acting::recording(
-        instance,
-        Arc::new(Workers::new()),
-        Arc::clone(signing),
-        google,
-    )
+) -> Performing {
+    let (instance, signing, google) = (instance.clone(), Arc::clone(signing), google.clone());
+    Box::new(move |stores, workers| {
+        crate::commands::secretary::Acting::recording(&instance, stores, workers, signing, &google)
+    })
 }
 
 /// Warm the usage page's transcript cache in a blocking task, since a cold first view
@@ -1600,8 +1611,14 @@ async fn open_default(chain: &Chained) {
 
 /// The coding poll and each chain's watcher; only the first chain pushes, the others are warmed
 /// but notify nobody.
-fn watch_from_now_on(instance: &Instance, state: &State, first: &Chained, rest: Vec<Chained>) {
-    crate::commands::coding::spawn_polling(instance, &state.workers);
+fn watch_from_now_on(
+    instance: &Instance,
+    stores: crate::commands::secretary::ActingStores,
+    state: &State,
+    first: &Chained,
+    rest: Vec<Chained>,
+) {
+    crate::commands::coding::spawn_polling(instance, stores.conversations, &state.workers);
     tokio::spawn(watch::watcher(
         first.caps,
         instance.deployment.clone(),

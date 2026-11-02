@@ -410,6 +410,7 @@ const NAMED_AS_DATA: &[(&str, &str)] = &[
     ("app/cli/src/wiring.rs", "memory"),
     ("app/cli/tests/common/mod.rs", "memory"),
     ("app/cli/tests/memory.rs", "memory"),
+    ("app/cli/tests/resident.rs", "memory"),
     ("app/cli/tests/signatures.rs", "memory"),
     ("app/cli/tests/stores.rs", "memory"),
     ("app/cli/tests/writes.rs", "memory"),

@@ -6,7 +6,6 @@ use std::collections::BTreeSet;
 use std::sync::Arc;
 
 use prodrome_core::event::{Envelope, Hash};
-use prodrome_core::registers::Node;
 use prodrome_core::schema::Schema;
 
 use super::{Gets, Graph, Reads, StoreError};
@@ -37,10 +36,6 @@ impl<E: Schema, S: Reads<E>> Reads<E> for Only<S> {
 
     fn sizes(&self, names: &[Hash]) -> Result<Vec<Option<usize>>, StoreError> {
         self.0.sizes(names)
-    }
-
-    fn nodes(&self) -> Result<Vec<Node<E>>, StoreError> {
-        self.0.nodes()
     }
 
     fn events(&self) -> Result<Vec<E>, StoreError> {
@@ -82,10 +77,6 @@ impl<E: Schema, S: Reads<E> + ?Sized> Reads<E> for &S {
 
     fn sizes(&self, names: &[Hash]) -> Result<Vec<Option<usize>>, StoreError> {
         (**self).sizes(names)
-    }
-
-    fn nodes(&self) -> Result<Vec<Node<E>>, StoreError> {
-        (**self).nodes()
     }
 
     fn events(&self) -> Result<Vec<E>, StoreError> {

@@ -1812,11 +1812,13 @@ fn a_carried_line_is_leafed_by_the_line_it_carries() {
         .find(|(_, object)| object.event().is_some())
         .expect("the line");
     let opened = [(name.clone(), entry)].into();
+    let named: Vec<_> = objects
+        .iter()
+        .map(|(name, object)| (name, object))
+        .collect();
     let read =
-        suzatary_core::secretary::digest::digest(&objects, &opened, &[], &BTreeSet::new(), |_| {
-            None
-        })
-        .expect("reads");
+        suzatary_core::secretary::digest::digest(&named, &opened, &[], &BTreeSet::new(), |_| None)
+            .expect("reads");
     assert_eq!(order(&read), std::slice::from_ref(&old));
     assert_eq!(read.line(&old), name);
 }

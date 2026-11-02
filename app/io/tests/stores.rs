@@ -951,11 +951,15 @@ fn lines_at_scale() {
         transcript::push(stores(warm), &id, &said(1_501)).expect("said");
     });
     let objects = lines.objects().expect("objects");
+    let named: Vec<_> = objects
+        .iter()
+        .map(|(name, object)| (name, object))
+        .collect();
     let digest = |opened| {
         let read = stores(opened);
         let entries = transcript::opened(&objects, &read.reads().slots());
         suzatary_core::secretary::digest::digest(
-            &objects,
+            &named,
             &entries,
             &[],
             &std::collections::BTreeSet::new(),

@@ -13,7 +13,7 @@ use crate::escape::Escaped;
 use crate::mail::state::Decision;
 use crate::mail::verbs::{Marked, NoiseAdded, Show, Summary, SyncReport};
 use crate::mail::{AttachmentMeta, MailMessage, MailRow};
-use crate::record::{Envelope, Node, TodoEvent};
+use crate::record::{Envelope, TodoEvent};
 use crate::refusal::Refusal;
 use crate::repos::{CommitId, Patch, RepoName, RepoPath, RepoRow, Rev, Visibility};
 use crate::store::{Prodrome, Reads, StoreError, WriteLock};
@@ -140,9 +140,6 @@ fn absent(kind: &'static str, name: &str) -> MailError {
 
 impl Reads<TodoEvent> for Nothing {
     fn objects(&self) -> Result<Vec<(Hash, Envelope)>, StoreError> {
-        Ok(Vec::new())
-    }
-    fn nodes(&self) -> Result<Vec<Node>, StoreError> {
         Ok(Vec::new())
     }
     fn excluded(&self) -> Result<std::collections::BTreeSet<Hash>, StoreError> {

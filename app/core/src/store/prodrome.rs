@@ -115,14 +115,16 @@ pub trait Reads<E: Schema>: Sync {
             .collect())
     }
 
-    /// The objects as the register folds read them.
+    /// The objects as the register folds read them: the graph's, shared by every reader at the
+    /// same heads, never copied per call.
     ///
     /// # Errors
     /// [`StoreError::Unreadable`].
-    fn nodes(&self) -> Result<Vec<Node<E>>, StoreError> {
-        prodrome_core::dag::Dag::from_iter(self.objects()?)
-            .nodes()
-            .map_err(|e| StoreError::unreadable("store", e))
+    fn nodes(&self) -> Result<std::sync::Arc<[Node<E>]>, StoreError>
+    where
+        E: Send + Sync + 'static,
+    {
+        self.graph()?.nodes()
     }
 
     /// The event of every object that carries one, in the same order.

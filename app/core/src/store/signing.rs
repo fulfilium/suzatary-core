@@ -2,7 +2,6 @@ use std::collections::BTreeSet;
 use std::sync::Arc;
 
 use prodrome_core::event::{Envelope, Hash, canonical_envelope, seal_hash};
-use prodrome_core::registers::Node;
 use prodrome_core::schema::Schema;
 use prodrome_core::sign::Secret;
 
@@ -86,10 +85,6 @@ impl<E: Schema, S: Reads<E>> Reads<E> for Signing<S> {
 
     fn graph(&self) -> Result<std::sync::Arc<super::Graph<E>>, StoreError> {
         self.store.graph()
-    }
-
-    fn nodes(&self) -> Result<Vec<Node<E>>, StoreError> {
-        self.store.nodes()
     }
 
     fn literals(&self, names: &[Hash]) -> Result<Vec<Option<String>>, StoreError> {

@@ -3288,19 +3288,22 @@ fn performer(
             signing,
         }),
         #[cfg(feature = "fixture")]
-        Performer::Recording(conversations) => Arc::new(Acting::Recording {
-            coder: Arc::new(Coder {
-                firing,
-                conversations: again(&conversations),
-            }),
-            conversations: Box::leak(conversations),
-            workers: Arc::clone(workers),
-            publishing,
-            drive,
-            kept: kept_store(&caps.root),
-            signing,
-            google,
-        }),
+        Performer::Recording(conversations) => {
+            let conversations: &'static Conversations = Box::leak(conversations);
+            Arc::new(Acting::Recording {
+                coder: Arc::new(Coder {
+                    firing,
+                    conversations,
+                }),
+                conversations,
+                workers: Arc::clone(workers),
+                publishing,
+                drive,
+                kept: kept_store(&caps.root),
+                signing,
+                google,
+            })
+        }
         Performer::Real {
             tag,
             account,
@@ -3329,13 +3332,14 @@ fn performer(
             let root = scratch(&format!("{tag}-acting-real"));
             let tokens =
                 suzatary_io::oauth::TokenStore::with_http(root.join("oauth"), Arc::new(oauth));
+            let conversations: &'static Conversations = Box::leak(conversations);
             Arc::new(Acting::Real {
                 roster,
                 coder: Arc::new(Coder {
                     firing,
-                    conversations: again(&conversations),
+                    conversations,
                 }),
-                conversations: Box::leak(conversations),
+                conversations,
                 tokens,
                 // The same store `caps` reads, so an act's end lands where
                 // the test's own reads find it.

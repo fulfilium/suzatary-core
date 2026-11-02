@@ -16,7 +16,6 @@ use std::sync::{Mutex, PoisonError};
 use prodrome_core::declared::{Declaration, Declared};
 use prodrome_core::event::{Envelope, Hash, TodoEvent};
 use prodrome_core::policy::Untrusted;
-use prodrome_core::registers::Node;
 use prodrome_core::schema::Schema;
 use prodrome_core::store::{EventStore, Replica};
 use suzatary_core::record::Record;
@@ -45,7 +44,6 @@ struct Remembered<E: Schema> {
     heads: Vec<Hash>,
     /// The objects as one graph, which a pull reads through and every reading of it is kept in.
     graph: std::sync::Arc<suzatary_core::store::Graph<E>>,
-    nodes: Vec<Node<E>>,
     /// What the read left out.
     excluded: std::collections::BTreeSet<Hash>,
     /// The fsck's findings, filled on the first ask, since few callers ask.
@@ -172,16 +170,11 @@ impl<E: Store> Objects<E> {
             return Ok(look(held));
         }
         let dag = self.events.dag().map_err(|e| Self::unreadable(e))?;
-        let nodes = dag.nodes().map_err(|e| Self::unreadable(e))?;
-        let objects = nodes
-            .iter()
-            .map(|node| (node.name().clone(), dag.objects()[node.name()].clone()))
-            .collect();
+        let excluded = suzatary_core::store::left_out(&dag);
         Ok(look(slot.insert(Remembered {
             heads,
-            graph: std::sync::Arc::new(suzatary_core::store::Graph::of(objects)),
-            nodes,
-            excluded: suzatary_core::store::left_out(&dag),
+            graph: std::sync::Arc::new(suzatary_core::store::Graph::over(dag)?),
+            excluded,
             verified: None,
         })))
     }
@@ -207,10 +200,6 @@ impl<E: Store> Reads<E> for Objects<E> {
 
     fn graph(&self) -> Result<std::sync::Arc<suzatary_core::store::Graph<E>>, StoreError> {
         self.with(|held| std::sync::Arc::clone(&held.graph))
-    }
-
-    fn nodes(&self) -> Result<Vec<Node<E>>, StoreError> {
-        self.with(|held| held.nodes.clone())
     }
 
     /// Each the bytes of its own file, checked against its name. A missing file, or one the
@@ -531,6 +520,35 @@ mod tests {
             .expect("appends");
         assert_eq!(store.objects().expect("reads").len(), 3);
         assert_eq!(store.nodes().expect("reads").len(), 3);
+    }
+
+    proptest::proptest! {
+        #![proptest_config(proptest::prelude::ProptestConfig::with_cases(16))]
+
+        /// THE STORE KEEPS ONE VERSION, AND SHARES IT. Over any run of writes, each read at the
+        /// same heads is the one value (the nodes are not copied per read), and once the heads move
+        /// the store lets go of every earlier version: what a reader still holds is held by the
+        /// reader alone, so a store's memory is one version of it however many were read.
+        #[test]
+        fn the_store_keeps_only_its_newest_version(writes in 1usize..6) {
+            let (_dir, store) = store("versions");
+            let mut earlier = Vec::new();
+            for day in 1..=writes {
+                let day = u32::try_from(day).expect("a few days");
+                store
+                    .append(mk_created(&format!("todo-{day}"), at(day), "ada", "", "").expect("valid"))
+                    .expect("appends");
+                let (graph, nodes) = (store.graph().expect("reads"), store.nodes().expect("reads"));
+                proptest::prop_assert!(std::sync::Arc::ptr_eq(&nodes, &store.nodes().expect("reads")));
+                proptest::prop_assert!(std::sync::Arc::ptr_eq(&graph, &store.graph().expect("reads")));
+                earlier.push((graph, nodes));
+            }
+            let newest = earlier.pop().expect("one write at least");
+            for (graph, _) in &earlier {
+                proptest::prop_assert_eq!(std::sync::Arc::strong_count(graph), 1);
+            }
+            proptest::prop_assert_eq!(std::sync::Arc::strong_count(&newest.0), 2);
+        }
     }
 
     /// A conversation on disk is a `Genesis` and then a `Change` per line, no object holding its

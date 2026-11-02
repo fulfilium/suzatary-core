@@ -87,25 +87,25 @@ impl ReadDigests<'_> {
     /// # Errors
     /// The stores' own; [`Refusal::internal`] for lines in a cycle, which no store can hold.
     pub fn read(&self) -> Result<Digest, Refusal> {
-        let lines = self.line_objects()?;
+        let graph = self.line_graph()?;
+        let lines: Vec<_> = graph.objects().collect();
         self.read_over(&lines, &self.opened(&lines))
     }
 
-    /// The conversations' line objects, in the store's order.
+    /// The conversations' lines as the store's graph, which every reader at the same heads
+    /// shares: walk it with [`crate::store::Graph::objects`], in the store's order.
     ///
     /// # Errors
     /// The store's own.
-    pub fn line_objects(
-        &self,
-    ) -> Result<Vec<(Hash, prodrome_core::event::Envelope<LineEvent>)>, Refusal> {
-        Ok(timed(Phase::Lines, || self.lines.lines.objects())?)
+    pub fn line_graph(&self) -> Result<std::sync::Arc<crate::store::Graph<LineEvent>>, Refusal> {
+        Ok(timed(Phase::Lines, || self.lines.lines.graph())?)
     }
 
     /// Each of `lines` as read, by name: its words opened by the conversations' keys.
     #[must_use]
     pub fn opened(
         &self,
-        lines: &[(Hash, prodrome_core::event::Envelope<LineEvent>)],
+        lines: &[(&Hash, &prodrome_core::event::Envelope<LineEvent>)],
     ) -> std::collections::BTreeMap<Hash, crate::secretary::store::Entry> {
         timed(Phase::Opened, || {
             crate::secretary::transcript::opened(lines, &self.lines.slots())
@@ -119,7 +119,7 @@ impl ReadDigests<'_> {
     /// As [`ReadDigests::read`].
     pub fn read_over(
         &self,
-        lines: &[(Hash, prodrome_core::event::Envelope<LineEvent>)],
+        lines: &[(&Hash, &prodrome_core::event::Envelope<LineEvent>)],
         opened: &std::collections::BTreeMap<Hash, crate::secretary::store::Entry>,
     ) -> Result<Digest, Refusal> {
         let history = timed(Phase::History, || self.history.nodes())?;

@@ -4,7 +4,10 @@ use std::sync::{Arc, Mutex, PoisonError};
 
 use prodrome_core::dag::Dag;
 use prodrome_core::event::{Envelope, Hash};
+use prodrome_core::registers::Node;
 use prodrome_core::schema::Schema;
+
+use super::StoreError;
 
 /// A store's objects at one set of heads, read once and shared by every answer that reads the
 /// same heads: the DAG, the linearisation, the heads, the prodromes they are the objects of, and
@@ -14,7 +17,7 @@ pub struct Graph<E: Schema> {
     heads: BTreeSet<Hash>,
     geneses: BTreeSet<Hash>,
     order: Vec<Hash>,
-    dag: Dag<E>,
+    dag: Arc<Dag<E>>,
     names: Arc<BTreeSet<String>>,
     readings: Mutex<BTreeMap<&'static str, Arc<dyn Any + Send + Sync>>>,
 }
@@ -25,8 +28,23 @@ impl<E: Schema> Graph<E> {
     #[must_use]
     pub fn of(objects: Vec<(Hash, Envelope<E>)>) -> Self {
         let order: Vec<Hash> = objects.iter().map(|(name, _)| name.clone()).collect();
+        Self::ordered(Arc::new(objects.into_iter().collect()), order)
+    }
+
+    /// The graph of `dag` itself, in its linearisation's order: the database's own objects, shared
+    /// and never copied, so a store holds its objects once beside its database.
+    ///
+    /// # Errors
+    /// [`StoreError::Unreadable`] for objects that rest on one another in a cycle.
+    pub fn over(dag: Arc<Dag<E>>) -> Result<Self, StoreError> {
+        let order = dag
+            .linearise()
+            .map_err(|cycle| StoreError::unreadable("store", cycle))?;
+        Ok(Self::ordered(dag, order))
+    }
+
+    fn ordered(dag: Arc<Dag<E>>, order: Vec<Hash>) -> Self {
         let names = Arc::new(order.iter().map(|name| name.as_str().to_owned()).collect());
-        let dag: Dag<E> = objects.into_iter().collect();
         Self {
             heads: dag.tips(),
             geneses: dag.geneses(),
@@ -78,6 +96,28 @@ impl<E: Schema> Graph<E> {
         self.order
             .iter()
             .filter_map(|name| Some((name, self.dag.get(name)?)))
+    }
+
+    /// The objects as the register folds read them, in the linearisation's order: made once and
+    /// shared by every reader of this graph.
+    ///
+    /// # Errors
+    /// [`StoreError::Unreadable`] for objects that rest on one another in a cycle.
+    pub fn nodes(&self) -> Result<Arc<[Node<E>]>, StoreError>
+    where
+        E: Send + Sync + 'static,
+    {
+        let nodes = self.reading("nodes", |graph| {
+            graph
+                .dag
+                .nodes()
+                .map(Arc::from)
+                .map_err(|cycle| cycle.to_string())
+        });
+        match &*nodes {
+            Ok(nodes) => Ok(Arc::clone(nodes)),
+            Err(cycle) => Err(StoreError::unreadable("store", cycle)),
+        }
     }
 
     /// `read` of these objects under the name `reading`: made once, then kept as long as the

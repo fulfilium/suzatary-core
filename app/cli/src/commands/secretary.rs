@@ -120,6 +120,16 @@ pub type ActingConversations = &'static suzatary_io::conversations::Conversation
 pub type ActingInbox =
     &'static dyn suzatary_core::store::Prodrome<suzatary_core::secretary::inbox_event::InboxEvent>;
 
+/// The stores an act writes through: the server's own handles, so a tap, the coding poll and the
+/// pages read one copy of each store in the process.
+#[derive(Clone, Copy)]
+pub struct ActingStores {
+    /// The conversations.
+    pub conversations: ActingConversations,
+    /// The inbox.
+    pub inbox: ActingInbox,
+}
+
 /// The fixture's declared repositories under the data root's `fixture-repos/`, never GitHub.
 #[cfg(feature = "fixture")]
 #[must_use]
@@ -228,15 +238,16 @@ impl Acting {
     #[must_use]
     pub fn real(
         instance: &Instance,
+        stores: ActingStores,
         workers: Arc<crate::commands::serve::Workers>,
         signing: Arc<crate::commands::serve::sign_ins::SignIns>,
         ended: Arc<dyn Fn() + Send + Sync>,
     ) -> Self {
         Acting::Real {
             roster: Arc::new(crate::instance::InstanceEdits::new(instance.path.clone())),
-            conversations: conversations_of(instance),
+            conversations: stores.conversations,
             tokens: crate::commands::mail::tokens(instance),
-            inbox: inbox_of(instance),
+            inbox: stores.inbox,
             publishing: Arc::new(Publishing {
                 mirrors: crate::commands::serve::interpreters::mirrors(instance),
                 author: suzatary_io::repos::Author::of_this_box(),
@@ -247,7 +258,7 @@ impl Acting {
             kept: crate::commands::serve::interpreters::file_store(instance),
             coder: Arc::new(crate::commands::coding::Coder {
                 firing: crate::commands::coding::Firing::of(instance),
-                conversations: conversations(instance),
+                conversations: stores.conversations,
             }),
             workers,
             signing,
@@ -262,12 +273,13 @@ impl Acting {
     #[must_use]
     pub fn recording(
         instance: &Instance,
+        stores: ActingStores,
         workers: Arc<crate::commands::serve::Workers>,
         signing: Arc<crate::commands::serve::sign_ins::SignIns>,
         google: &suzatary_core::google::Endpoints,
     ) -> Self {
         Acting::Recording {
-            conversations: conversations_of(instance),
+            conversations: stores.conversations,
             workers,
             publishing: Arc::new(Publishing {
                 mirrors: fixture_mirrors(instance),
@@ -282,7 +294,7 @@ impl Acting {
             kept: crate::commands::serve::interpreters::file_store(instance),
             coder: Arc::new(crate::commands::coding::Coder {
                 firing: crate::commands::coding::Firing::Undeclared,
-                conversations: conversations(instance),
+                conversations: stores.conversations,
             }),
             signing,
             google: Arc::new(suzatary_io::google::Grants::new(
@@ -370,17 +382,6 @@ impl Acting {
                 kept,
                 ..
             } => drive_turn(conversations, kept, id, path, drive.read(path)),
-        }
-    }
-
-    /// The stream table this arm holds, so the server shares it rather than minting one.
-    #[must_use]
-    pub fn workers(&self) -> Option<Arc<crate::commands::serve::Workers>> {
-        match self {
-            Acting::NotYet => None,
-            Acting::Real { workers, .. } => Some(Arc::clone(workers)),
-            #[cfg(feature = "fixture")]
-            Acting::Recording { workers, .. } => Some(Arc::clone(workers)),
         }
     }
 }
@@ -1807,21 +1808,11 @@ fn conversations(instance: &Instance) -> suzatary_io::conversations::Conversatio
     instance.conversation_stores()
 }
 
-/// [`conversations`], held for the life of the serving process as [`ActingConversations`].
-fn conversations_of(instance: &Instance) -> ActingConversations {
-    Box::leak(Box::new(conversations(instance)))
-}
-
 /// The inbox store at the proposal schema, beside the instance's `[secretary] inbox`.
 fn inbox(
     instance: &Instance,
 ) -> suzatary_io::objects::Objects<suzatary_core::secretary::inbox_event::InboxEvent> {
     instance.inbox_store()
-}
-
-/// [`inbox`], held for the life of the serving process as an [`ActingInbox`].
-fn inbox_of(instance: &Instance) -> ActingInbox {
-    Box::leak(Box::new(inbox(instance)))
 }
 
 /// The operator's twin of `POST …/proposals/<n>/dismiss`; public so the CLI's tests drive it.

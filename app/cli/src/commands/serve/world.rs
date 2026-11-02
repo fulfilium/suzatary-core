@@ -80,6 +80,15 @@ impl World {
         self.opened.topics.begin()
     }
 
+    /// The stores a tapped act and the coding poll write through: this world's own handles.
+    #[must_use]
+    pub fn acting_stores(&'static self) -> crate::commands::secretary::ActingStores {
+        crate::commands::secretary::ActingStores {
+            conversations: &self.opened.remembering.conversations,
+            inbox: &self.opened.remembering.inbox,
+        }
+    }
+
     /// The server's record over one chain's stores: the secretary's, and what only a server
     /// holds beside it.
     #[must_use]

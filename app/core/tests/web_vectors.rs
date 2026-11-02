@@ -28,9 +28,7 @@ use suzatary_core::chains::{ChainName, ChainPolicy};
 use suzatary_core::deployment::Deployment;
 use suzatary_core::escape::Escaped;
 use suzatary_core::record::TodoEvent;
-use suzatary_core::record::{
-    Envelope, EventStore, Node, SubTodo, mk_authored, mk_source, mk_subtodo,
-};
+use suzatary_core::record::{Envelope, EventStore, SubTodo, mk_authored, mk_source, mk_subtodo};
 use suzatary_core::reference::{ProposalRef, Reference};
 use suzatary_core::routes;
 use suzatary_core::secretary::about;
@@ -438,12 +436,6 @@ fn server_of(bundle: &Bundle) -> Server<'_> {
 impl Reads<TodoEvent> for Bundle {
     fn objects(&self) -> Result<Vec<(Hash, Envelope)>, StoreError> {
         linearised(&self.events).map_err(|e| StoreError::unreadable("chain", e.to_string()))
-    }
-
-    fn nodes(&self) -> Result<Vec<Node>, StoreError> {
-        prodrome_core::dag::Dag::from_iter(self.objects()?)
-            .nodes()
-            .map_err(|e| StoreError::unreadable("chain", e.to_string()))
     }
 
     fn excluded(&self) -> Result<std::collections::BTreeSet<Hash>, StoreError> {
