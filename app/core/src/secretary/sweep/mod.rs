@@ -12,7 +12,7 @@ use super::surface::{Effect, SecretaryCall, SecretaryVerb, Subset};
 use super::verbs::Show;
 use super::{Bound, MAX_ROUNDS};
 use crate::believed::one_outcome;
-use crate::capability::{Halt, Secretary, Turn};
+use crate::capability::{Halt, Secretary};
 use crate::conversation::ask::Ask;
 use crate::conversation::round::{Rules, Sink};
 use crate::deployment::Deployment;
@@ -147,15 +147,7 @@ pub fn sweep(
     super::append(
         caps.conversations,
         &id,
-        &Entry::Said {
-            at: caps.clock.now(),
-            turn: Turn::Person {
-                text,
-                references: Vec::new(),
-                attachments: Vec::new(),
-            },
-            by: None,
-        },
+        &Entry::asked_by_the_box(caps.clock.now(), Daily::Sweep.into(), text, Vec::new()),
     )?;
 
     // A `complete`/`cancel` may name only the todos this round showed, not any open one.

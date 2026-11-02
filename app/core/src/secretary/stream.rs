@@ -12,6 +12,7 @@ use prodrome_core::event::Hash;
 
 use crate::capability::Turn;
 use crate::secretary::outline::{Outline, Round, Rounds, Voices};
+use crate::secretary::own_round::OwnRound;
 use crate::secretary::readings::{Dress, Place, turn};
 use crate::secretary::stamp::Stamp;
 use crate::secretary::store::{ConversationId, Entry, NotAConversation, Said, heading};
@@ -257,15 +258,20 @@ pub fn row(
     }
 }
 
-/// Who wrote `opening`, a round's first turn in `conversation`. The box writes the question of
-/// each of its daily rounds unstamped, in the conversation `ConversationId::daily` names, which
-/// every round of it has carried since the first, so no stored line needs to say so. A line an
-/// actor stamped there is the owner's own.
+/// Who asked `opening`, a round's first turn in `conversation`: the one place the stream decides
+/// it. The box records the round its question opens on the line (`Stamp::Asking`). A line written
+/// before it did carries no stamp, and is read by the rule those lines were drawn by: an unstamped
+/// question in the conversation `ConversationId::daily` names is that daily round's.
 fn asked(conversation: &ConversationId, opening: &Said) -> wire::RoundAsked {
-    match conversation.daily_round() {
-        Some(daily) if !Stamp::owners(opening.by.as_ref()) => wire::RoundAsked::Box {
-            title: daily.heading().to_owned(),
+    let round = match &opening.by {
+        Some(Stamp::Asking(round)) => Some(*round),
+        None => conversation.daily_round().map(OwnRound::from),
+        Some(Stamp::Actor(_) | Stamp::Unconfirmed(_) | Stamp::Box) => None,
+    };
+    match round {
+        Some(round) => wire::RoundAsked::Box {
+            title: round.heading().to_owned(),
         },
-        Some(_) | None => wire::RoundAsked::Person {},
+        None => wire::RoundAsked::Person {},
     }
 }

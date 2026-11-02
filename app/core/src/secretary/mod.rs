@@ -73,6 +73,7 @@ pub mod opening;
 pub mod outcome;
 pub mod outline;
 pub mod outlines;
+pub mod own_round;
 pub mod phase;
 pub mod proposer;
 pub mod provenance;
@@ -192,16 +193,24 @@ pub(crate) fn typst_prose_line(text: &str) -> Option<&str> {
     None
 }
 
-/// A person's turn as [`converse`] takes it: the words, what they point at, and whose own words
-/// they are; `None` is a round the box opened.
+/// A question as [`converse`] takes it: the words, what they point at, and who asks them.
 #[derive(Debug, Clone, Copy)]
 pub struct Saying<'a> {
     /// The words.
     pub text: &'a str,
     /// What they point at.
     pub references: &'a [Reference],
-    /// Whose own words they are.
-    pub by: Option<Speaker<'a>>,
+    /// Who asks them.
+    pub by: Asker<'a>,
+}
+
+/// Who asks a [`Saying`].
+#[derive(Debug, Clone, Copy)]
+pub enum Asker<'a> {
+    /// A person, in their own words.
+    Person(Speaker<'a>),
+    /// The box, opening one of its own rounds.
+    Box(own_round::OwnRound),
 }
 
 /// Whose own words a [`Saying`] is. A person's words make a round clean, so claiming them is the
@@ -235,17 +244,22 @@ pub fn converse(
     system: &str,
 ) -> Result<Option<Answered>, Refusal> {
     let now = caps.clock.now();
+    let text = said.text.to_owned();
+    let references = said.references.to_vec();
     append(
         caps.conversations,
         id,
-        &Entry::Said {
-            at: now,
-            turn: Turn::Person {
-                text: said.text.to_owned(),
-                references: said.references.to_vec(),
-                attachments: Vec::new(),
+        &match said.by {
+            Asker::Person(Speaker(actor)) => Entry::Said {
+                at: now,
+                turn: Turn::Person {
+                    text,
+                    references,
+                    attachments: Vec::new(),
+                },
+                by: Some(actor.as_str().into()),
             },
-            by: said.by.map(|Speaker(actor)| actor.as_str().into()),
+            Asker::Box(round) => Entry::asked_by_the_box(now, round, text, references),
         },
     )?;
     answer(

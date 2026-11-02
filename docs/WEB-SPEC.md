@@ -1879,10 +1879,13 @@ the page holds no filter of its own and no second reading of the topics.
   anything is written, and a topic added by tap reaches the box's topic store.
   — `web/e2e/secretary.test.ts` "two topics chosen show the rounds holding
   both, and a topic added by tap lands on the round".
-- **A round the box asked reads as its title.** The box's daily rounds are
-  known by their conversation (`ConversationId::daily_round`) with a question
-  no actor stamped, so a round already on a store needs no new line. Such a
-  round draws its title and the answer, and its prompt is a tap away. —
+- **A round the box asked reads as its title.** Who asked is written on the
+  question's line: the box's review, sweep and brief questions all come from
+  `Entry::asked_by_the_box`, stamped `Stamp::Asking` with their round. A line
+  written before that has no stamp, and `stream::asked`, the one place that
+  decides, reads an unstamped question in a daily round's conversation as
+  that round's, so no stored line changes. Such a round draws its title and
+  the answer, and its question is a tap away. —
   `web/e2e/secretary.test.ts` "a round the box asked reads as its title and
   answer, its prompt a tap away, at 390 px".
 

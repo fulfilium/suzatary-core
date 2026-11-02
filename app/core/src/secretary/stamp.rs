@@ -10,6 +10,7 @@ use serde::{Deserialize, Serialize};
 use crate::chain_set::ChainSet;
 use crate::reference::{Reference, TodoRef};
 use crate::seat::Seat;
+use crate::secretary::own_round::OwnRound;
 
 /// A said line's stamp.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -23,6 +24,9 @@ pub enum Stamp {
     /// its id, which the model is shown beside the line, may have been chosen by mail the agent
     /// read, so the line is his and is not clean.
     Unconfirmed(Speaker),
+    /// The box, asking the question of one of its own rounds. Its words may carry what it did not
+    /// compose (a sweep loads mail into its question), so it is not clean, and it is nobody's own.
+    Asking(OwnRound),
 }
 
 /// An actor the gate admitted, and where the request was made.
@@ -63,10 +67,19 @@ const UNCONFIRMED: &str = " pointing at an unconfirmed todo";
 /// [`UNCONFIRMED`]: a space again, so it never reads as an actor's own name.
 const OPERATOR: &str = " at the box's terminal";
 
+/// What a stored [`Stamp::Asking`] begins with, before its round's word: spaces and a comma, which
+/// no actor's name holds.
+const ASKING: &str = "the box, asking the ";
+
 impl From<String> for Stamp {
     fn from(printed: String) -> Self {
+        let asking = printed
+            .strip_prefix(ASKING)
+            .and_then(|word| OwnRound::ALL.into_iter().find(|round| round.word() == word));
         if printed == BOX {
             Stamp::Box
+        } else if let Some(round) = asking {
+            Stamp::Asking(round)
         } else if let Some(speaker) = printed.strip_suffix(UNCONFIRMED) {
             Stamp::Unconfirmed(Speaker::from(speaker))
         } else {
@@ -109,6 +122,7 @@ impl From<Stamp> for String {
             Stamp::Actor(speaker) => String::from(&speaker),
             Stamp::Box => BOX.to_owned(),
             Stamp::Unconfirmed(speaker) => String::from(&speaker) + UNCONFIRMED,
+            Stamp::Asking(round) => format!("{ASKING}{}", round.word()),
         }
     }
 }
@@ -120,7 +134,7 @@ impl Stamp {
     pub fn owners(by: Option<&Self>) -> bool {
         match by {
             Some(Stamp::Actor(_) | Stamp::Unconfirmed(_)) => true,
-            Some(Stamp::Box) | None => false,
+            Some(Stamp::Box | Stamp::Asking(_)) | None => false,
         }
     }
 
@@ -129,7 +143,7 @@ impl Stamp {
     pub fn actor(&self) -> Option<&str> {
         match self {
             Stamp::Actor(speaker) | Stamp::Unconfirmed(speaker) => Some(&speaker.actor),
-            Stamp::Box => None,
+            Stamp::Box | Stamp::Asking(_) => None,
         }
     }
 }
@@ -166,8 +180,8 @@ pub fn pointing(speaker: Speaker, references: &[Reference], set: &ChainSet<'_>) 
 mod tests {
     use super::*;
 
-    /// A stamp prints and reads back as itself, an actor's name never reads as the box, and a
-    /// device's stamp prints as it did before the operator's existed.
+    /// A stamp prints and reads back as itself, the box's own rounds' included, an actor's name
+    /// never reads as the box, and a device's stamp prints as it did before the operator's existed.
     #[test]
     fn a_stamp_reads_back_as_itself() {
         for seat in [Seat::Device, Seat::Operator] {
@@ -178,6 +192,10 @@ mod tests {
             ] {
                 assert_eq!(Stamp::from(String::from(stamp.clone())), stamp);
             }
+        }
+        for round in OwnRound::ALL {
+            let stamp = Stamp::Asking(round);
+            assert_eq!(Stamp::from(String::from(stamp.clone())), stamp);
         }
         assert_eq!(Stamp::from("box"), Stamp::Actor(Speaker::device("box")));
         assert_eq!(String::from(Stamp::Actor(Speaker::device("ada"))), "ada");

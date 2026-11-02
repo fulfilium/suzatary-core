@@ -1269,16 +1269,17 @@ app.scene("Regenerate answers again beside an earlier attempt, and ↑ edits the
 });
 
 /**
- * A ROUND THE BOX ASKED READS AS ITS TITLE: the reviewed deployment's sweep and review, each written as the box writes
- * them (its prompt unstamped, the sweep's in the older shape with `show`'s JSON), draw one title line and the
- * secretary's answer, with none of the prompt on the screen, and a tap opens the prompt.
+ * A ROUND THE BOX ASKED READS AS ITS TITLE: the reviewed deployment's review and brief, run through `secretary review`'s
+ * and `secretary brief`'s own paths and stamped with their round, and its sweep, an older unstamped line in the shape
+ * sweeps wrote with `show`'s JSON, each draw one title line and the secretary's answer, with none of the question on
+ * the screen, and a tap opens the question.
  */
 app.scene("a round the box asked reads as its title and answer, its prompt a tap away, at 390 px", async () => {
   await app.resize(PHONE);
   await app.open(PROPOSED_BASE);
   await app.page.evaluate(`location.hash = "#/secretary"`);
   const boxRounds = `[...document.querySelectorAll(".streamround")].filter((r) => r.querySelector(".streamtitle") !== null)`;
-  await app.page.waitFor(`${boxRounds}.length === 2`, { timeout: 15000 });
+  await app.page.waitFor(`${boxRounds}.length === 3`, { timeout: 15000 });
   // What a reader sees of a round: its text without the body of a disclosure left closed. Read off the DOM, since a
   // round off the screen is not laid out (`content-visibility: auto`) and has no `innerText` yet.
   const shown = `((r) => { const c = r.cloneNode(true); c.querySelectorAll("details:not([open]) > :not(summary)").forEach((n) => n.remove()); return c.textContent; })`;
@@ -1291,13 +1292,13 @@ app.scene("a round the box asked reads as its title and answer, its prompt a tap
       text: ${shown}(r),
     };
   })`);
-  assert.deepEqual(drawn.map((r) => r.title).sort(), ["Review of triage's batches", "Sweep of later mail"]);
+  assert.deepEqual(drawn.map((r) => r.title).sort(), ["Review of triage's batches", "Sweep of later mail", "The day's brief"]);
   for (const r of drawn) {
     assert.equal(r.lines, 1, `${r.title}: its title is one line`);
     assert.equal(r.asked, false, `${r.title}: no question is drawn in the title's place`);
     assert.ok(!r.text.includes("\\n") && !r.text.includes('{"'), `${r.title}: no JSON on the screen, got ${JSON.stringify(r.text)}`);
   }
-  const answers: Record<string, string> = { "Sweep of later mail": "proposed nothing", "Review of triage's batches": "withdrew nothing" };
+  const answers: Record<string, string> = { "Sweep of later mail": "proposed nothing", "Review of triage's batches": "yours to say", "The day's brief": "nothing waits on you" };
   for (const r of drawn) assert.ok(r.text.includes(answers[r.title] ?? "?"), `${r.title}: its answer stands under it, got ${JSON.stringify(r.text)}`);
 
   const sweep = `${boxRounds}.find((r) => r.querySelector(".streamtitle a").textContent === "Sweep of later mail")`;

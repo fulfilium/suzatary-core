@@ -3,6 +3,7 @@
 use super::{Decision, Kind, Namer, Scope, Title};
 use crate::capability::{Datetime, SessionId, Turn};
 use crate::reference::Reference;
+use crate::secretary::own_round::OwnRound;
 use crate::secretary::stamp::Stamp;
 use crate::secretary::words::Words;
 use serde::Serialize;
@@ -284,6 +285,26 @@ impl Entry {
             at,
             turn: Turn::Act { text, references },
             by: Some(Stamp::Box),
+        }
+    }
+
+    /// The question of one of the box's own rounds: the line every such question is, stamped
+    /// with the round it opens, so a reader is told who asked rather than guessing it.
+    #[must_use]
+    pub fn asked_by_the_box(
+        at: Datetime,
+        round: OwnRound,
+        text: String,
+        references: Vec<Reference>,
+    ) -> Self {
+        Entry::Said {
+            at,
+            turn: Turn::Person {
+                text,
+                references,
+                attachments: Vec::new(),
+            },
+            by: Some(Stamp::Asking(round)),
         }
     }
 }

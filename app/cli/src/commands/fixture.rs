@@ -309,9 +309,8 @@ fn write_notice(cur: &Path, notice: &cast::Notice) -> anyhow::Result<()> {
 const HELD_WHY: &str =
     "This one adds a todo and completes it in one breath, so it is yours to say.";
 
-/// What the fixture's review round answers.
-const REVIEW_ANSWER: &str = "I withdrew nothing. One card adds a todo and completes it in one \
-                             breath, so I left it for you.";
+/// What the fixture's brief answers.
+const BRIEF_ANSWER: &str = "Nothing is due today, and nothing waits on you.";
 
 /// What the fixture's sweep round answers.
 const SWEEP_ANSWER: &str = "Nothing in the later mail says an open todo is done, so I proposed \
@@ -332,16 +331,18 @@ fn sweep_prompt() -> anyhow::Result<String> {
     ))
 }
 
-/// Today's review and sweep, written through the real stores without a model, as
-/// `secretary::review` and `secretary::sweep` write them on a real box: each the box's unstamped
-/// prompt and the secretary's answer, then a held line for each open triage card.
+/// Today's review, a brief and a sweep, as a box writes them. The review and the brief run
+/// through `suzatary secretary review`'s and `secretary brief --new`'s own paths over a scripted
+/// model, so each question carries the stamp the box writes now. The sweep is written as a sweep
+/// wrote it before its question was stamped: unstamped, in the shape sweeps wrote before they
+/// wrote mail out as text. So the scene reads both the stamp and the rule for older lines; a real
+/// sweep also needs later mail that a scene's corpus does not hold.
 fn a_review(root: &Path) -> anyhow::Result<()> {
     use suzatary_core::secretary::daily::Daily;
-    use suzatary_core::secretary::store::{Decision, Entry};
+    use suzatary_core::secretary::store::Entry;
 
     let read = crate::instance::Instance::open(&root.join("instance.toml"))?;
-    let inbox = read.inbox_store();
-    let open = suzatary_core::secretary::verbs::standing(&inbox)
+    let open = suzatary_core::secretary::verbs::standing(&read.inbox_store())
         .map_err(|refusal| anyhow::anyhow!("{}", refusal.message()))?;
     anyhow::ensure!(
         !open.is_empty(),
@@ -350,57 +351,43 @@ fn a_review(root: &Path) -> anyhow::Result<()> {
     let at = SystemClock.now();
     let day = read.persona.zone.day(fpl::instant_of(at));
     let store = read.conversation_stores();
-    let round = |daily: Daily, prompt: String, answer: &str| {
-        let id = suzatary_core::secretary::store::ConversationId::daily(daily, day);
-        suzatary_core::secretary::transcript::start(
-            store.conversations(),
-            &id,
-            &Entry::Opened {
-                at,
-                title: suzatary_core::secretary::words::Words::kept(daily.title().to_owned()),
-                model: "scripted/fixture".to_owned(),
-                kind: suzatary_core::secretary::store::Kind::Review,
-            },
-        )?;
-        for turn in [
-            suzatary_core::capability::Turn::Person {
-                text: prompt,
-                references: Vec::new(),
-                attachments: Vec::new(),
-            },
-            suzatary_core::capability::Turn::Model {
-                text: answer.to_owned(),
-                calls: Vec::new(),
-            },
-        ] {
-            suzatary_core::secretary::transcript::push(
-                store.conversations(),
-                &id,
-                &Entry::Said { at, turn, by: None },
-            )?;
-        }
-        anyhow::Ok(id)
-    };
-    round(Daily::Sweep, sweep_prompt()?, SWEEP_ANSWER)?;
-    let id = round(
-        Daily::Review,
-        suzatary_core::secretary::review::ASK.to_owned(),
-        REVIEW_ANSWER,
+    let id = suzatary_core::secretary::store::ConversationId::daily(Daily::Sweep, day);
+    suzatary_core::secretary::transcript::start(
+        store.conversations(),
+        &id,
+        &Entry::Opened {
+            at,
+            title: suzatary_core::secretary::words::Words::kept(Daily::Sweep.title().to_owned()),
+            model: "scripted/fixture".to_owned(),
+            kind: suzatary_core::secretary::store::Kind::Review,
+        },
     )?;
-    for (card, changeset) in open {
+    for turn in [
+        suzatary_core::capability::Turn::Person {
+            text: sweep_prompt()?,
+            references: Vec::new(),
+            attachments: Vec::new(),
+        },
+        suzatary_core::capability::Turn::Model {
+            text: SWEEP_ANSWER.to_owned(),
+            calls: Vec::new(),
+        },
+    ] {
         suzatary_core::secretary::transcript::push(
             store.conversations(),
             &id,
-            &Entry::Reviewed {
-                at,
-                chain: changeset.chain().to_owned(),
-                batch: card.to_string(),
-                decision: Decision::Held,
-                why: suzatary_core::secretary::words::Words::kept(HELD_WHY.to_owned()),
-            },
+            &Entry::Said { at, turn, by: None },
         )?;
     }
-    Ok(())
+    crate::commands::secretary::scripted_review(
+        &read,
+        Scripted::answering(&[("", serde_json::json!({ "say": HELD_WHY }).to_string())]),
+    )?;
+    crate::commands::secretary::scripted_brief(
+        &read,
+        "Brief",
+        Scripted::answering(&[("", serde_json::json!({ "say": BRIEF_ANSWER }).to_string())]),
+    )
 }
 
 /// The fixture's model is scripted, so it answers, and the model health says so; under

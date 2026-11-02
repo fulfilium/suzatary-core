@@ -1974,12 +1974,60 @@ pub fn scripted_round(
         suzatary_core::secretary::Saying {
             text: said,
             references: &[],
-            by: Some(suzatary_core::secretary::Speaker::scripted(&owner)),
+            by: suzatary_core::secretary::Asker::Person(
+                suzatary_core::secretary::Speaker::scripted(&owner),
+            ),
         },
         "the fixture's scripted round",
     )
     .map_err(|refusal| anyhow::anyhow!("{}", refusal.message()))?;
     Ok(())
+}
+
+/// Today's review run as `suzatary secretary review` runs it, over a scripted model: the same
+/// question, the same `triage_cards` turn and the same held lines a box's timer writes.
+///
+/// # Errors
+/// The instance's chains, the stores, and whatever the review refuses.
+#[cfg(feature = "fixture")]
+pub fn scripted_review(
+    instance: &Instance,
+    script: crate::commands::fixture::Scripted,
+) -> anyhow::Result<()> {
+    let mut wired = wired(instance, None)?;
+    wired.brain = crate::commands::serve::Brain::Scripted(script);
+    let chains = wired.bound();
+    let caps = &wired.secretary();
+    match suzatary_core::secretary::review::review(
+        caps,
+        &instance.deployment,
+        &instance.settables,
+        &chains,
+        &system_prompt(caps.manuals),
+    )
+    .map_err(|refusal| anyhow::anyhow!("{}", refusal.message()))?
+    {
+        suzatary_core::secretary::daily::Run::Done(_) => Ok(()),
+        suzatary_core::secretary::daily::Run::Paused(limited) => {
+            anyhow::bail!("the fixture's review did not start: {limited}")
+        }
+    }
+}
+
+/// A brief run as `suzatary secretary brief --new` runs it, over a scripted model, in a new
+/// conversation titled `title`.
+///
+/// # Errors
+/// The instance's chains, the stores, and whatever the brief refuses.
+#[cfg(feature = "fixture")]
+pub fn scripted_brief(
+    instance: &Instance,
+    title: &str,
+    script: crate::commands::fixture::Scripted,
+) -> anyhow::Result<()> {
+    let mut wired = wired(instance, None)?;
+    wired.brain = crate::commands::serve::Brain::Scripted(script);
+    run_brief(instance, &wired, title, true).map(|_| ())
 }
 
 /// What a brief files before its round, needing no model: an account failing past a day
@@ -2020,58 +2068,16 @@ fn brief(
     json: bool,
 ) -> anyhow::Result<()> {
     let wired = wired(instance, first)?;
-    let chains = wired.bound();
     let caps = &wired.secretary();
-
-    let id = if new {
-        let taken = suzatary_core::secretary::transcript::keys(caps.conversations)
-            .context("reading the conversations directory")?;
-        let today = instance
-            .persona
-            .zone
-            .day(prodrome_core::fpl::instant_of(caps.clock.now()));
-        let id = ConversationId::minted(today, &taken);
-        let opened = suzatary_core::secretary::start(
-            caps.conversations,
-            caps.model,
-            &id,
-            title,
-            suzatary_core::secretary::store::Kind::Topic,
-            caps.clock.now(),
-        )
-        .map_err(|refusal| anyhow::anyhow!("{}", refusal.message()))?;
-        if !json {
-            println!("secretary: opened {} ({})", opened.id, opened.model);
-        }
-        id
-    } else {
-        let id = DEFAULT.clone();
-        suzatary_core::secretary::read_or_open_default(
-            caps.conversations,
-            caps.model,
-            &id,
-            caps.clock.now(),
-        )
-        .map_err(|refusal| anyhow::anyhow!("{}", refusal.message()))?;
-        if !json {
+    let limited = caps.model.limited();
+    let (id, answered) = run_brief(instance, &wired, title, new)?;
+    if !json {
+        if new {
+            println!("secretary: opened {id} ({})", caps.model.name());
+        } else {
             println!("secretary: the default conversation ({id})");
         }
-        id
-    };
-
-    // Before `converse`, so the alarm lands even when the model is unreachable.
-    maybe_append_triage_alarm(
-        caps.corpus,
-        caps.clock,
-        &wired.opened.remembering.conversations,
-        &id,
-    );
-
-    // Also before it: what the box files needing no model.
-    unasked(instance, &chains, &id);
-
-    let limited = caps.model.limited();
-    let answered = ask_brief(instance, &wired, &chains, &id, limited)?;
+    }
 
     let url = format!("{}/#/secretary/{}", instance.deployment.app_url, id);
     // The box's turn is the conversation's last, so `notify brief` still tells the owner; the
@@ -2112,6 +2118,61 @@ fn brief(
     Ok(())
 }
 
+/// The brief's round in a new conversation titled `title`, or in the default one, with what the
+/// box files before it: the conversation it went in, and the round's answer when one ran.
+fn run_brief(
+    instance: &Instance,
+    wired: &Wired,
+    title: &str,
+    new: bool,
+) -> anyhow::Result<(ConversationId, Option<suzatary_core::secretary::Answered>)> {
+    let chains = wired.bound();
+    let caps = &wired.secretary();
+    let id = if new {
+        let taken = suzatary_core::secretary::transcript::keys(caps.conversations)
+            .context("reading the conversations directory")?;
+        let today = instance
+            .persona
+            .zone
+            .day(prodrome_core::fpl::instant_of(caps.clock.now()));
+        let id = ConversationId::minted(today, &taken);
+        suzatary_core::secretary::start(
+            caps.conversations,
+            caps.model,
+            &id,
+            title,
+            suzatary_core::secretary::store::Kind::Topic,
+            caps.clock.now(),
+        )
+        .map_err(|refusal| anyhow::anyhow!("{}", refusal.message()))?;
+        id
+    } else {
+        let id = DEFAULT.clone();
+        suzatary_core::secretary::read_or_open_default(
+            caps.conversations,
+            caps.model,
+            &id,
+            caps.clock.now(),
+        )
+        .map_err(|refusal| anyhow::anyhow!("{}", refusal.message()))?;
+        id
+    };
+
+    // Before `converse`, so the alarm lands even when the model is unreachable.
+    maybe_append_triage_alarm(
+        caps.corpus,
+        caps.clock,
+        &wired.opened.remembering.conversations,
+        &id,
+    );
+
+    // Also before it: what the box files needing no model.
+    unasked(instance, &chains, &id);
+
+    let answered = ask_brief(instance, wired, &chains, &id, caps.model.limited())?;
+    Ok((id, answered))
+}
+
 /// The brief's round in `id`; under `limited`, no round: a box round under a limit writes no
 /// question and no failure, and one note says why, so `notify brief` still points the owner at it.
 fn ask_brief(
@@ -2134,7 +2195,9 @@ fn ask_brief(
             suzatary_core::secretary::Saying {
                 text: BRIEF,
                 references: &[],
-                by: None,
+                by: suzatary_core::secretary::Asker::Box(
+                    suzatary_core::secretary::own_round::OwnRound::Brief,
+                ),
             },
             &system_prompt(caps.manuals),
         )

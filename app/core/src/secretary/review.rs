@@ -40,7 +40,7 @@ impl Reviewed {
 }
 
 /// The question the review asks, as a person turn; the rule itself stays in `SECRETARY.md`.
-pub const ASK: &str = "Review the triage agent's open cards, below. Withdraw duplicates and noise \
+const ASK: &str = "Review the triage agent's open cards, below. Withdraw duplicates and noise \
                    with triage_withdraw, naming the card and WHY, and leave every other card \
                    for my tap, per \"Reviewing the agent's cards\" in your brief. Then tell me, \
                    in a few sentences, what you withdrew and what you left for me and why. \
@@ -95,15 +95,12 @@ pub fn review(
     transcript::push(
         caps.conversations,
         &id,
-        &Entry::Said {
-            at: caps.clock.now(),
-            turn: Turn::Person {
-                text: ASK.to_owned(),
-                references: Vec::new(),
-                attachments: Vec::new(),
-            },
-            by: None,
-        },
+        &Entry::asked_by_the_box(
+            caps.clock.now(),
+            Daily::Review.into(),
+            ASK.to_owned(),
+            Vec::new(),
+        ),
     )?;
     transcript::push(
         caps.conversations,

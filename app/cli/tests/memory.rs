@@ -490,7 +490,9 @@ fn a_round_the_box_opened_remembers_nothing() {
         suzatary_core::secretary::Saying {
             text: "What changed since the last briefing?",
             references: &[],
-            by: None,
+            by: suzatary_core::secretary::Asker::Box(
+                suzatary_core::secretary::own_round::OwnRound::Brief,
+            ),
         },
         "system prompt",
     )

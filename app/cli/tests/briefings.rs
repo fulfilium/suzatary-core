@@ -62,7 +62,9 @@ fn a_day_the_secretary_briefed_is_its_brief_block_by_block() {
         suzatary_core::secretary::Saying {
             text: BRIEF,
             references: &[],
-            by: None,
+            by: suzatary_core::secretary::Asker::Box(
+                suzatary_core::secretary::own_round::OwnRound::Brief,
+            ),
         },
         "system prompt",
     )

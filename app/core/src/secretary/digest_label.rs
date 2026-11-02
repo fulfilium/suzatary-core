@@ -120,7 +120,7 @@ impl Kind {
     pub(crate) fn act(by: Option<&Stamp>) -> Self {
         match by {
             Some(Stamp::Box) => Kind::Noted,
-            Some(Stamp::Actor(_) | Stamp::Unconfirmed(_)) | None => Kind::Act,
+            Some(Stamp::Actor(_) | Stamp::Unconfirmed(_) | Stamp::Asking(_)) | None => Kind::Act,
         }
     }
 }

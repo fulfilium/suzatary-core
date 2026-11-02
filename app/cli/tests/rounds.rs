@@ -53,7 +53,9 @@ fn conversed(caps: &Fakes, said: &str) -> Result<Option<usize>, String> {
         suzatary_core::secretary::Saying {
             text: said,
             references: &[],
-            by: None,
+            by: suzatary_core::secretary::Asker::Box(
+                suzatary_core::secretary::own_round::OwnRound::Brief,
+            ),
         },
         "you are the secretary",
     )
