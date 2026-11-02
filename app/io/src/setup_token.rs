@@ -230,13 +230,7 @@ impl Running {
 impl Drop for Running {
     /// A sign-in left unfinished leaves no CLI behind, nor anything it started.
     fn drop(&mut self) {
-        let group = i32::try_from(self.child.id())
-            .ok()
-            .and_then(rustix::process::Pid::from_raw);
-        if let Some(group) = group {
-            let _ = rustix::process::kill_process_group(group, rustix::process::Signal::KILL);
-        }
-        let _ = self.child.kill();
+        let _ = crate::run::end_group(&self.child);
         let _ = self.child.wait();
     }
 }

@@ -13,7 +13,8 @@
 //! and the secret store. What it holds is only what it was not told.
 //! A child leads a process group of its own, and the group is what a timeout
 //! or a halt kills, so a grandchild (the `cargo` under `sh -c`) dies with it
-//! and cannot hold the output pipe open.
+//! and cannot hold the output pipe open. Once a child has started, `run`
+//! answers, with an error or not, only when no process of its group runs.
 
 use std::ffi::{OsStr, OsString};
 use std::io::{ErrorKind, Read, Write as _};
@@ -410,19 +411,96 @@ fn exited(child: &Child) -> std::io::Result<bool> {
     .is_some())
 }
 
-/// Kill `child`'s group. The child leads it ([`Cmd::command`]) and is not yet reaped, so its
-/// id still names the group and no other.
-fn kill_group(child: &Child) {
-    let _ = rustix::process::kill_process_group(
-        rustix::process::Pid::from_child(child),
-        rustix::process::Signal::KILL,
-    );
+/// Kill `child`'s group and return once no process in it runs: each is gone or a zombie, which
+/// runs no code and holds no file. A signal is only queued by `kill`, so the group is looked for
+/// in `/proc` until it is dead. The child must lead the group (spawned with
+/// `process_group(0)`) and must not be reaped before this returns, so that its id names this
+/// group and no other while it is looked for.
+///
+/// A member this process may not signal (a set-user-ID program) or one in uninterruptible sleep
+/// holds this until the kernel lets it end, as it would hold a `wait` on the child.
+pub(crate) fn end_group(child: &Child) -> std::io::Result<()> {
+    let group = rustix::process::Pid::from_child(child);
+    // Killed again before each look, so the answer does not rest on the kernel refusing a fork
+    // to a process it is killing.
+    loop {
+        rustix::process::kill_process_group(group, rustix::process::Signal::KILL)?;
+        if !runs_in(group)? {
+            return Ok(());
+        }
+        std::thread::sleep(POLL);
+    }
+}
+
+/// Whether a thread of a process whose group is `group` is neither a zombie nor dead.
+fn runs_in(group: rustix::process::Pid) -> std::io::Result<bool> {
+    for entry in std::fs::read_dir("/proc")? {
+        let process = entry?.path();
+        let is_pid = process
+            .file_name()
+            .and_then(OsStr::to_str)
+            .is_some_and(|name| name.parse::<u32>().is_ok());
+        if is_pid
+            && stat(&process.join("stat"))?
+                .is_some_and(|(_, pgrp)| pgrp == group.as_raw_nonzero().get())
+            && any_thread_runs(&process)?
+        {
+            return Ok(true);
+        }
+    }
+    Ok(false)
+}
+
+/// Whether a thread of `process` (a `/proc/<pid>` directory) is neither a zombie nor dead. The
+/// main thread's state is not the process's: it can be a zombie while other threads run.
+fn any_thread_runs(process: &Path) -> std::io::Result<bool> {
+    let threads = match std::fs::read_dir(process.join("task")) {
+        Err(failed) if gone(&failed) => return Ok(false),
+        threads => threads?,
+    };
+    for thread in threads {
+        if stat(&thread?.path().join("stat"))?.is_some_and(|(state, _)| !matches!(state, 'Z' | 'X'))
+        {
+            return Ok(true);
+        }
+    }
+    Ok(false)
+}
+
+/// The state and process group in a `/proc` stat file, or `None` when the process has gone.
+fn stat(path: &Path) -> std::io::Result<Option<(char, i32)>> {
+    let text = match std::fs::read_to_string(path) {
+        Err(failed) if gone(&failed) => return Ok(None),
+        text => text?,
+    };
+    // `pid (comm) state ppid pgrp …`, where comm may hold any byte but a NUL, and a process
+    // being released (`X`) has no group: its pgrp is -1.
+    let mut fields = text
+        .rsplit_once(')')
+        .map_or("", |(_, rest)| rest)
+        .split_whitespace();
+    let state = fields.next().and_then(|state| state.chars().next());
+    let pgrp = fields.nth(1).and_then(|pgrp| pgrp.parse().ok());
+    match (state, pgrp) {
+        (Some(state), Some(pgrp)) => Ok(Some((state, pgrp))),
+        _ => Err(std::io::Error::new(
+            ErrorKind::InvalidData,
+            format!("{} is not a stat line: {text}", path.display()),
+        )),
+    }
+}
+
+/// Whether a `/proc` read failed because its process exited between the listing and the read.
+fn gone(failed: &std::io::Error) -> bool {
+    failed.kind() == ErrorKind::NotFound
+        || failed.raw_os_error() == Some(rustix::io::Errno::SRCH.raw_os_error())
 }
 
 /// A child is done when it has exited and both its streams have closed. When the leader exits,
 /// whatever it left in its group is killed, since nothing waits for it and it would hold the
 /// streams open; and the one deadline covers both streams and the exit, so a child is answered
-/// within its timeout or is a [`RunError::TimedOut`].
+/// within its timeout or is a [`RunError::TimedOut`]. Every way out after the spawn passes
+/// [`end_group`], so no process of the group runs once this returns.
 fn drive(
     cmd: &Cmd,
     mut on_line: Option<&mut dyn FnMut(&str)>,
@@ -447,14 +525,14 @@ fn drive(
     );
 
     let deadline = cmd.timeout.map(|after| Instant::now() + after);
-    let stop = |child: &mut Child, why: RunError| {
-        kill_group(child);
-        let _ = child.wait();
-        why
-    };
     let waiting = |source| RunError::Wait {
         program: cmd.name(),
         source,
+    };
+    let stop = |child: &mut Child, why: RunError| match end_group(child).and_then(|()| child.wait())
+    {
+        Ok(_) => why,
+        Err(source) => waiting(source),
     };
 
     let (mut stdout, mut stderr) = (Vec::new(), Vec::new());
@@ -478,13 +556,15 @@ fn drive(
             ));
         }
         if !done {
-            done = match exited(&child) {
+            done = match exited(&child).and_then(|exited| {
+                if exited {
+                    end_group(&child)?;
+                }
+                Ok(exited)
+            }) {
                 Ok(done) => done,
                 Err(source) => return Err(stop(&mut child, waiting(source))),
             };
-            if done {
-                kill_group(&child);
-            }
         }
         if closed {
             std::thread::sleep(POLL);
@@ -570,7 +650,8 @@ mod tests {
     }
 
     /// The hole a timeout left: `sh` was killed and the `sleep` it started lived on, holding
-    /// the output pipe.
+    /// the output pipe. Then `run` answered as soon as the kill was sent, and on a loaded
+    /// machine the `sleep` still ran seconds later.
     #[test]
     fn a_timeout_kills_the_grandchildren_too() {
         let dir = tempfile::tempdir().expect("scratch");
@@ -582,22 +663,12 @@ mod tests {
         .expect_err("killed");
         assert!(matches!(failed, RunError::TimedOut { .. }), "{failed}");
         let pid = std::fs::read_to_string(&pid_file).expect("the grandchild's pid");
-        let alive = || {
-            std::fs::read_to_string(format!("/proc/{}/stat", pid.trim())).is_ok_and(|stat| {
-                !stat
-                    .split(") ")
-                    .nth(1)
-                    .is_some_and(|rest| rest.starts_with('Z'))
-            })
-        };
-        let started = Instant::now();
-        while alive() && started.elapsed() < Duration::from_secs(2) {
-            std::thread::sleep(POLL);
-        }
+        let pid = pid.trim().parse::<u32>().expect("a pid");
+        let process = PathBuf::from(format!("/proc/{pid}"));
+        let state = stat(&process.join("stat")).expect("a stat line");
         assert!(
-            !alive(),
-            "the grandchild {} outlived the timeout",
-            pid.trim()
+            !any_thread_runs(&process).expect("its threads"),
+            "the grandchild {pid} outlived the timeout: {state:?}"
         );
     }
 
