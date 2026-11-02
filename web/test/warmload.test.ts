@@ -1,6 +1,7 @@
 // A warm load holds what a cold one holds: after any interleaving of the box's landings, two tabs' pulls, the device's
 // snapshot writes and reloads, the skeleton and keys a tab's core holds are those of a core handed the tab's row whole,
-// and every print the tab handed its core is held still, so a conversation it read is never one the core lacks.
+// and every print the tab handed its core is held still, so a conversation it read is never one the core lacks. Which
+// prints are held is the core's alone to say: a fetch hands it exactly those it lacks, whatever came before.
 
 import { test } from "node:test"
 import assert from "node:assert/strict"
@@ -8,7 +9,8 @@ import { createRequire } from "node:module"
 import { readFileSync } from "node:fs"
 
 import type { Core, Lines, Named } from "../src/prodrome/core"
-import { conversationOf, nodesInto, objectsOf } from "../src/prodrome/core"
+import { conversationOf, heldOf, holdAdmitted, lackingOf, nodesInto, objectsOf } from "../src/prodrome/core"
+import content from "../src/prodrome/content"
 import engine from "../src/prodrome/engine"
 import linesync from "../src/prodrome/linesync"
 import locked from "../src/prodrome/locked"
@@ -186,4 +188,93 @@ test("a warm load's core holds what a cold load's does, and keeps every print it
     }
   })
   assert.ok(seen.warm > 0 && seen.moved > 0, `the runs loaded warm (${seen.warm}) and moved the rows beside a snapshot (${seen.moved})`)
+})
+
+// What a core handed the first `count` nodes and every key holds, as its snapshot prints it.
+const snapshotOf = (count: number): Uint8Array => {
+  const held = new core.Lines()
+  try {
+    nodesInto(held, order.slice(0, count), [])
+    held.keys(JSON.stringify(box.keys), "[]")
+    return held.snapshot()
+  } finally {
+    held.free()
+  }
+}
+
+test("law: a fetch hands the core exactly the prints it lacks, and asks the box for none it holds, whatever came before", async () => {
+  const lines = order.filter(n => literals.has(n.hash))
+  const names = (nodes: readonly SkeletonNode[]): string[] => nodes.map(n => n.hash)
+  // How many fetches found a print the core held and one it lacked, so the runs read both.
+  const seen = { held: 0, lacked: 0 }
+  await forAllAsync(40, async r => {
+    fakeIndexedDB()
+    let held = new core.Lines()
+    let handed: string[] = []
+    let asked: string[] = []
+    const fetcherOf = (reader: Lines): content.Fetcher =>
+      content.fetcher({
+        ask: hashes => {
+          asked.push(...hashes)
+          return Promise.resolve({ objects: hashes.map(h => ({ hash: h, literal: literals.get(h)! })) })
+        },
+        asked: () => {},
+        came: () => {},
+        lost: () => {},
+        atOnce: () => 4,
+        lacking: wanted => lackingOf(reader, wanted),
+        held: rows => {
+          handed.push(...rows.map(x => content.rowOf(x).hash))
+          holdAdmitted(reader, rows)
+          return Promise.resolve()
+        },
+        shown: () => true,
+      })
+    let fetcher = fetcherOf(held)
+    try {
+      for (let step = 0; step < 12; step += 1) {
+        const op = r.pick(["Fetch", "Clear", "Load", "Land", "Evict", "Reload"] as const)
+        switch (op) {
+          case "Fetch": {
+            const some = lines.filter(() => r.bool())
+            const lacked = lackingOf(held, names(some))
+            if (lacked.size > 0) seen.lacked += 1
+            if (lacked.size < some.length) seen.held += 1
+            handed = []
+            asked = []
+            await fetcher.fetch(r.pick(["First", "Behind"] as const), some)
+            assert.deepEqual([...handed].sort(), [...lacked].sort(), "the core is handed exactly the prints it lacked")
+            assert.ok(asked.every(h => lacked.has(h)), "the box is asked for none the core held")
+            assert.equal(lackingOf(held, names(some)).size, 0, "and the core lacks none of them after")
+            break
+          }
+          case "Clear":
+            held.clear()
+            break
+          case "Load":
+            held.load(snapshotOf(1 + r.int(order.length)))
+            break
+          case "Land":
+            nodesInto(held, order.slice(0, 1 + r.int(order.length)), [])
+            break
+          case "Evict": {
+            const kept = new Set(names(lines.filter(() => r.bool())))
+            const was = heldOf(held)
+            const done = await content.keepOnly(kept, was, drop => Promise.resolve(held.hold("[]", JSON.stringify(drop))))
+            assert.equal(done.type, "Val")
+            assert.deepEqual([...lackingOf(held, was)].sort(), was.filter(n => !kept.has(n)).sort(), "an eviction lets go exactly what it does not keep")
+            break
+          }
+          case "Reload":
+            held.free()
+            held = new core.Lines()
+            fetcher = fetcherOf(held)
+            break
+        }
+      }
+    } finally {
+      held.free()
+    }
+  })
+  assert.ok(seen.held > 0 && seen.lacked > 0, `the runs fetched prints the core held (${seen.held}) and lacked (${seen.lacked})`)
 })

@@ -8,7 +8,7 @@ import { createRequire } from "node:module"
 import { readFileSync } from "node:fs"
 
 import type { Core, Named, Todos } from "../src/prodrome/core"
-import { chainsOf, entriesOf, foldObjects, linked, linker, linkerOf, objectsOf, verifyObjects } from "../src/prodrome/core"
+import { entriesOf, foldObjects, linked, linker, linkerOf, objectsOf, verifyObjects } from "../src/prodrome/core"
 import lo from "../src/algebra/lo"
 import questions from "../src/prodrome/questions"
 import remote from "../src/prodrome/remote"
@@ -16,7 +16,7 @@ import thirty from "../src/todo/thirty"
 import time from "../src/app/time"
 import type { SpecNode } from "../src/wire/generated/wire"
 import { forAllAsync } from "./gen"
-import { heldChain } from "./held"
+import { heldChain, holdAll } from "./held"
 
 const built = process.env["SUZATARY_PRODROME_WASM"]
 if (built === undefined || built === "") throw new Error("SUZATARY_PRODROME_WASM is unset — run scripts/web-test.sh")
@@ -69,7 +69,7 @@ test("law: an answer by message is the in-thread core's answer, as holdings grow
     const held = [{ name: "life", objects: life, untrusted: chain.untrusted }, ...other.filter(c => c.objects.length > 0)]
     await r.hold(held)
     const at = instant(rg.int(24 * 40))
-    const set = chainsOf(core, held.map(c => heldChain(c.name, c.objects, c.untrusted)))
+    const set = holdAll(new core.Chains(), held.map(c => heldChain(c.name, c.objects, c.untrusted)))
     try {
       assert.deepEqual(await r.ask({ type: "List", chain: "life", at }, "Page"), entriesOf(core, life, at, chain.untrusted, "life", set))
       const read = await r.ask({ type: "Reading", chain: "life", at }, "Page")

@@ -689,6 +689,18 @@ three warm loads after the snapshot is written; the target is under 2.5 s).
    is fetched exactly when the core lacks its print, under any interleaving of
    loads, clears, landings and evictions (`warmload.test.ts`). *Measure:* lines
    removed (about 40 in `content.ts`, 15 in `engine.ts`).
+
+   *As built (stages 0 and 1, one PR).* The core answers `Lines.held` and a
+   count of moves, `Lines.version`, which moves with every change of the prints
+   it holds. `core.lackingOf` reads `held` again whenever the count moves, a
+   view keyed by the core's version that nothing else writes; a `Lines.lacking`
+   that took names as JSON cost about 150 ms more per warm load at the
+   `bigstore` shape, since the purge asks it of the whole skeleton after each
+   reading. Stage 0 removed 56 production lines of TypeScript; stage 1 removed
+   the record and its six helpers and added the view, net +2 lines of
+   TypeScript and +19 of Rust. The capped warm first draw (`bigstore`, 0.67 of
+   a core, nine loads each, alternating): master median 3,149 ms (2,553 to
+   3,893), this stage 2,895 ms (2,547 to 3,472).
 2. **The core reads its own skeleton.** Delete `linesync.retiredBy`, `touched`,
    `keep.ts`, and `lines.nodesOf`, `naming`, `holds` in favour of `Lines.retired`,
    the moved conversations `take` answers, `Lines.plan`, `Lines.lacking` and

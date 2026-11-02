@@ -4,7 +4,7 @@
 // ahead of any page, and a reading reads a conversation's lines and what they rest on.
 
 import type { Lines } from "./core"
-import { deadOf, erasedOf, holdAdmitted, nodesInto } from "./core"
+import { deadOf, erasedOf, heldOf, holdAdmitted, lackingOf, nodesInto } from "./core"
 import content from "./content"
 import engine from "./engine"
 import excluded from "./excluded"
@@ -202,6 +202,7 @@ export namespace linesync {
       came: bytes => fx.bars({ type: "Came", name: "lines", bytes }),
       lost: bytes => fx.bars({ type: "Lost", name: "lines", bytes }),
       atOnce: () => content.atOnce(http.protocol()),
+      lacking: names => lackingOf(held, names),
       held: rows => Promise.resolve(holdAdmitted(held, rows)),
       shown: () => shown,
     })
@@ -223,12 +224,12 @@ export namespace linesync {
       return planned.nodes
     }
 
-    // What the device keeps of the lines' content: the plan within the budget, and what a reading read, so a reading
-    // that fetched a line is not left fetching it again.
+    // What the device keeps of the lines' content: the plan within the budget, and every print the core holds, which a
+    // reading loaded (a prefetch hands the core nothing), so a reading that fetched a line is not left fetching it again.
     const keeping = async (skeleton: Replica<SkeletonNode>): Promise<ReadonlySet<string>> => {
       const names = new Set((await planOf(skeleton)).map(n => n.hash))
-      const read = content.read()
-      for (const n of skeleton.objects) if (read.has(n.hash)) names.add(n.hash)
+      const prints = new Set(heldOf(held))
+      for (const n of skeleton.objects) if (prints.has(n.hash)) names.add(n.hash)
       return names
     }
 
@@ -316,7 +317,7 @@ export namespace linesync {
             }
           })
         },
-        content: { type: "ByName", has: content.has, holds: content.holds, fetch: fetching, version: content.version, ended: () => ended() },
+        content: { type: "ByName", lacking: names => lackingOf(held, names), fetch: fetching, version: () => held.version(), ended: () => ended() },
         words: {
           // The keys the row's nodes retire, given the keys the row holds, and the keys the content held names as dead:
           // the core reads the largest down-set of the skeleton whose content it has. The nodes name every erasure and
@@ -335,7 +336,7 @@ export namespace linesync {
         restoring: cleared,
         landed: async r => {
           if (r.replica.objects.length > 0) await retire()
-          const gone = await content.keepOnly(await keeping(r.replica), drop => Promise.resolve(held.hold("[]", JSON.stringify(drop))))
+          const gone = await content.keepOnly(await keeping(r.replica), heldOf(held), drop => Promise.resolve(held.hold("[]", JSON.stringify(drop))))
           if (gone.type === "Error") fx.told(`row/${pull.kept("lines")}`, pull.unread("lines", gone.e))
           // Only once a page reads the lines: a page that reads no conversation prefetches nothing.
           if (store.wanted()) prefetched(r.replica)

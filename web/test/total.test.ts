@@ -9,10 +9,9 @@ import { createRequire } from "node:module"
 import { readFileSync } from "node:fs"
 
 import type { Core, Lines, Named, Proposals } from "../src/prodrome/core"
-import { conversationOf, entriesOf, excludedOf, inboxOf, keptChains, linesLeft, listOfLines, objectsOf, searchOf } from "../src/prodrome/core"
+import { conversationOf, entriesOf, excludedOf, holdIn, inboxOf, linesLeft, listOfLines, objectsOf, searchOf } from "../src/prodrome/core"
 import excluded from "../src/prodrome/excluded"
 import type { MemoryPayload } from "../src/wire/generated/wire"
-import { heldChain } from "./held"
 
 const core = ((): Core => {
   const built = process.env["SUZATARY_PRODROME_WASM"]
@@ -84,13 +83,12 @@ test("law: what was left out is exactly the print, in the parse's words, with wh
 test("law: a chain held over an unreadable print reads what it can, and the set says what it left out", () => {
   const junk = print("Sealed(prev=None, event=Nonsense())")
   assert.deepEqual(entriesOf(core, [junk], null, [], "life", none).entries, [])
-  const kept = keptChains(core)
+  const set = new core.Chains()
   try {
-    const left = kept([heldChain("life", [junk], [])]).left.get("life")
-    assert.deepEqual(left?.objects.map(x => x.name), [junk.hash])
-    assert.deepEqual(left?.chains, [])
-    assert.equal(kept([]).left.size, 0, "a chain no longer held says nothing")
+    const left = holdIn(set, "life", [junk], [])
+    assert.deepEqual(left.objects.map(x => x.name), [junk.hash])
+    assert.deepEqual(left.chains, [])
   } finally {
-    kept([]).chains.free()
+    set.free()
   }
 })

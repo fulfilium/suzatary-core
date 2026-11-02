@@ -1669,6 +1669,13 @@ under in every larger union and never wins.
   supersedes nothing…", over the box's vector `retired.json`; e2e
   `rescrub.test.ts`; the core's `known_pull` "a pull that lacks nothing
   sends nothing and reads no object".
+  Which prints are held is the core's alone to answer (`Lines.held`, read
+  again whenever the core's count of moves, `Lines.version`, moves):
+  nothing in the worker's JavaScript records what it handed over, so a fetch
+  hands the core exactly the prints it lacks, whatever loads, clears,
+  landings and evictions came before, and asks the box for none it holds. —
+  `warmload.test.ts` "law: a fetch hands the core exactly the prints it
+  lacks…".
   Content no node names is dropped after a landing. — `lazylines.test.ts` "law: a reading of part-fetched
   lines is the whole pull's reading at the same skeleton, or names what it
   fetches", "law: content is taken only where its bytes hash to the name
@@ -1692,8 +1699,9 @@ under in every larger union and never wins.
   page tells the worker, `LinesShown`), and
   its first failure stops it until the next landing; what it
   fetches goes to the device's `content` store, not to the tab's memory. After
-  a landing the tab keeps only the plan's content and the content of every
-  node a reading of this page read; it drops the rest, which a reading fetches
+  a landing the tab keeps only the plan's content and every print the core
+  holds, which only a reading loaded (a prefetch hands the core none); it
+  drops the rest, which a reading fetches
   again by name. Eviction changes only whether a reading can be made, never
   what it says, since a reading is whole or not made. A conversation whose
   lines are not held and cannot be fetched is answered `NotHere` by the

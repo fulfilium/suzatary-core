@@ -103,6 +103,17 @@ impl Lines {
         Ok(())
     }
 
+    /// `[<name>, …]`: every print these lines hold.
+    pub fn held(&self) -> Result<String, JsError> {
+        json(&self.0.lines.names().map(Hash::as_str).collect::<Vec<_>>())
+    }
+
+    /// Moves with each change of the prints held: a reading of which are held is named by it.
+    #[must_use]
+    pub fn version(&self) -> u32 {
+        self.0.lines.moves()
+    }
+
     /// The skeleton's nodes `add`, as the box sent them, held, and `drop`, `[<name>, …]`, let go.
     pub fn nodes(&mut self, add: &str, drop: &str) -> Result<(), JsError> {
         let add: Vec<suzatary_core::wire::SkeletonNode> =

@@ -6,12 +6,12 @@ import { createRequire } from "node:module"
 import { readFileSync } from "node:fs"
 
 import type { Core } from "../src/prodrome/core"
-import { appendTo, chainsOf, foldObjects, lifecycleEvent, linked, linker, linkerOf, objectsOf, within } from "../src/prodrome/core"
+import { appendTo, foldObjects, lifecycleEvent, linked, linker, linkerOf, objectsOf, within } from "../src/prodrome/core"
 import curve from "../src/todo/curve"
 import time from "../src/app/time"
 import thirty from "../src/todo/thirty"
 import cast from "./cast"
-import { heldChain } from "./held"
+import { heldChain, holdAll } from "./held"
 
 const core = (): Core => {
   const built = process.env["SUZATARY_PRODROME_WASM"]
@@ -87,7 +87,7 @@ test("a reference into another chain is linked through the set the rows are pric
   const f = foldObjects(wasm, chain.links, "2026-09-02T12:00:00", chain.untrusted)
   const home = linked(wasm, linker(within(wasm, f.functions)), f.env, f.at)({ kind: "ref", todo: urgent })
   assert.ok(home !== null, "the todo prices in its own chain")
-  const held = chainsOf(wasm, [heldChain("life", chain.links, chain.untrusted)])
+  const held = holdAll(new wasm.Chains(), [heldChain("life", chain.links, chain.untrusted)])
   try {
     const across = { kind: "refIn", store: "life", entity: urgent } as const
     const [through, nothing] = [linkerOf(held, {}, f.at), linkerOf(none, {}, f.at)]

@@ -86,6 +86,8 @@ pub struct HeldLines {
     root: Option<Hash>,
     /// Each round read on its own, by its conversation and opening turn, as last read.
     rounds: BTreeMap<(ConversationId, usize), RoundRead>,
+    /// Counts each change of the prints held, wrapping: what names a reading of which are held.
+    moves: u32,
 }
 
 /// A round as last read: the objects it read and its node, whose entries a later reading of the
@@ -428,6 +430,7 @@ impl HeldLines {
             algebra: Reader::new(),
             root: None,
             rounds: BTreeMap::new(),
+            moves: 0,
         }
     }
 
@@ -438,6 +441,17 @@ impl HeldLines {
             keys,
             ..Self::new()
         }
+    }
+
+    /// The name of every print held.
+    pub fn names(&self) -> impl Iterator<Item = &Hash> {
+        self.prints.keys()
+    }
+
+    /// Moves with each change of the prints held, so two equal counts read the same prints.
+    #[must_use]
+    pub fn moves(&self) -> u32 {
+        self.moves
     }
 
     /// The keys held.
@@ -505,6 +519,9 @@ impl HeldLines {
             DECODES.with(|count| count.set(count.get() + 1));
             self.prints.insert(name.clone(), print);
             arrived.push(name);
+        }
+        if !dropped.is_empty() || !arrived.is_empty() {
+            self.moves = self.moves.wrapping_add(1);
         }
         if dropped.is_empty() {
             for name in &arrived {

@@ -24,9 +24,7 @@ import d from "../wire/decoder";
 import payload from "../wire/generated/payload";
 import content from "./content";
 import excluded from "./excluded";
-import heads from "./heads";
 import type { Replica } from "./replica";
-import { untrustedOf } from "./replica";
 
 /**
  * Hand-written because the generated `prodrome.d.ts` is a build output `tsc` cannot wait for; the names
@@ -113,15 +111,6 @@ export interface HeldChain {
   readonly replica: Replica;
 }
 
-/** What names a chain's reading: its heads and its policy, so the same key holds the same objects read the same way. */
-const keyOf = (c: HeldChain): string => `${heads.of(c.replica.heads).join(",")}|${[...untrustedOf(c.replica)].sort().join(",")}`;
-
-/** The set the core holds, and what each chain's reading left out: its unread objects, or the chain itself. */
-export interface Kept {
-  readonly chains: Chains;
-  readonly left: ReadonlyMap<string, excluded.Left>;
-}
-
 const Held = (chain: string): d.Decoder<excluded.Left> =>
   d.alt(
     d.map(obj<{ why: string }>({ why: str }), (h) => excluded.left(excluded.NONE, [{ chain, why: h.why }])),
@@ -134,40 +123,6 @@ export function holdIn(chains: Chains, name: string, objects: readonly Named[], 
 }
 
 /**
- * One `Chains` kept across readings: each call holds again only a chain whose heads or policy moved and drops one no longer
- * held, so the core reads a chain once per change of it and keeps each chain's reading at the last instant asked.
- */
-export function keptChains(core: Core): (held: readonly HeldChain[]) => Kept {
-  const read = new core.Chains();
-  const keys = new Map<string, { key: string; left: excluded.Left }>();
-  return (held) => {
-    for (const c of held) {
-      const key = keyOf(c);
-      if (keys.get(c.name)?.key === key) continue;
-      keys.delete(c.name);
-      keys.set(c.name, { key, left: holdIn(read, c.name, c.replica.objects, untrustedOf(c.replica)) });
-    }
-    for (const name of [...keys.keys()]) {
-      if (held.some((c) => c.name === name)) continue;
-      read.drop(name);
-      keys.delete(name);
-    }
-    return { chains: read, left: new Map([...keys].map(([name, k]) => [name, k.left])) };
-  };
-}
-
-/** `held` read once into the core as one set of its own; the caller frees it. */
-export function chainsOf(core: Core, held: readonly HeldChain[]): Chains {
-  const kept = keptChains(core);
-  try {
-    return kept(held).chains;
-  } catch (error: unknown) {
-    kept([]).chains.free();
-    throw error;
-  }
-}
-
-/**
  * The lines a tab holds, each print decoded once as it is held and each key by name, read through the core's memoised
  * fold, so a reading computes only the conversations and lines that moved since the last one. A slot without its key
  * reads as missing, one an erasure names as erased.
@@ -176,6 +131,10 @@ export interface Lines {
   hold: (add: string, drop: string) => void;
   /** `hold` of literals the content's admission checked against their names, so none is hashed again. */
   hold_admitted: (add: string, drop: string) => void;
+  /** `[<name>, …]`: every print held. */
+  held: () => string;
+  /** Moves with each change of the prints held. */
+  version: () => number;
   /** The skeleton's nodes `add`, as the box sent them, held, and the names `drop` let go. */
   nodes: (add: string, drop: string) => void;
   keys: (add: string, drop: string) => void;
@@ -665,6 +624,21 @@ export const erasedOf = (lines: Lines, keys: Readonly<Record<string, string>>, t
   checked("erased", lines.erased(JSON.stringify(keys), JSON.stringify(told)), Erased);
 
 export const deadOf = (lines: Lines): readonly string[] => checked("dead", lines.dead(), arr(str));
+
+export const heldOf = (lines: Lines): readonly string[] => checked("held", lines.held(), arr(str));
+
+// The names a core holds prints of, read again from it whenever its count of moves moves, and never written here: a
+// view of the core's answer, so it cannot say a print is held that the core let go.
+const views = new WeakMap<Lines, { readonly version: number; readonly names: ReadonlySet<string> }>();
+
+/** The names of `names` whose print the core does not hold: the one answer to "is this fetched yet". */
+export function lackingOf(lines: Lines, names: readonly string[]): ReadonlySet<string> {
+  const version = lines.version();
+  const known = views.get(lines);
+  const view = known !== undefined && known.version === version ? known : { version, names: new Set(heldOf(lines)) };
+  views.set(lines, view);
+  return new Set(names.filter((n) => !view.names.has(n)));
+}
 
 /** Literals the content's admission checked, held without hashing them again: the one caller of `hold_admitted`
  * (`scripts/web-static.sh`), so only an admitted row reaches the path that does not hash. */

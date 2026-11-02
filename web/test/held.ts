@@ -1,9 +1,10 @@
 // A replica made the one way one is: from what it holds, read by `replicaOf`; a box word only when the test names one.
 
 import type { RefusedObject, StoredObject } from "../src/wire/generated/wire"
-import type { HeldChain } from "../src/prodrome/core"
+import type { Chains, HeldChain } from "../src/prodrome/core"
+import { holdIn } from "../src/prodrome/core"
 import type { Frontier, Replica } from "../src/prodrome/replica"
-import { NO_FRONTIER, prodromeOf, replicaOf } from "../src/prodrome/replica"
+import { NO_FRONTIER, prodromeOf, replicaOf, untrustedOf } from "../src/prodrome/replica"
 
 // The prodromes `objects` are in, as a box serving them names them.
 export const held = (objects: readonly StoredObject[]): string[] => [...new Set(objects.flatMap(o => prodromeOf(o) ?? []))].sort()
@@ -44,3 +45,9 @@ export const heldChain = (name: string, objects: readonly StoredObject[], untrus
 
 /** What an answer from a box that knew the frontier asked from says of it: known, and a frontier of nothing. */
 export const KNOWN = { since: "Known", frontier: { digest: "0".repeat(64), count: 0 } } as const
+
+// Each of `held` held in `set` as the core's worker holds it (`questions.serve`): a chain held again replaces its last holding.
+export const holdAll = (set: Chains, held: readonly HeldChain[]): Chains => {
+  for (const c of held) holdIn(set, c.name, c.replica.objects, [...untrustedOf(c.replica)])
+  return set
+}

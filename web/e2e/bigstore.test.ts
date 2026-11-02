@@ -235,6 +235,9 @@ app.scene("a warm load of the conversations answers the page's first stream befo
       await unobserve()
     }
   })()
+  // The one number each stage of docs/ONEOWNER-PLAN-2026-11-02.md reports, printed before any assertion can stop the scene.
+  const draws = loads.map((l) => l.draw.ms).sort((a, b) => a - b)
+  console.log(`warm first draw ${draws[Math.floor(draws.length / 2)]} ms (median of ${LOADS} loads, cpu ${process.env["SUZATARY_E2E_BROWSER_CPU"] ?? "all"})`)
   for (const { draw, seen, phases } of loads) {
     const asked = new Map(seen.flatMap((s) => (s[0] === "asked" ? [[s[1], { lane: s[3], kind: s[4], at: s[2] }] as const] : [])))
     const at = (type: Recorded[0], id: number): number => seen.findIndex((s) => s[0] === type && s[1] === id)

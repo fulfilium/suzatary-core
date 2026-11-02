@@ -16,15 +16,14 @@ import type { Obj } from "./replica"
 import { behind } from "./replica"
 
 export namespace engine {
-  // Whether a store's nodes carry their content, or name it, fetched by name: `has` asked of a reading, which keeps what
-  // it read; `holds` asked of a count, which keeps nothing; `version` counting each move of what is held; and `ended`
+  // Whether a store's nodes carry their content, or name it, fetched by name: `lacking` the names whose content the
+  // reader does not hold, as the reader answers it; `version` moving with each change of what it holds; and `ended`
   // told once a reading ends.
   export type Content<N extends Obj> =
     | { readonly type: "Inline" }
     | {
         readonly type: "ByName"
-        readonly has: (name: string) => boolean
-        readonly holds: (name: string) => boolean
+        readonly lacking: (names: readonly string[]) => ReadonlySet<string>
         readonly fetch: (lane: content.Lane, nodes: readonly N[]) => Promise<void>
         readonly version: () => number
         readonly ended: () => void
@@ -98,8 +97,12 @@ export namespace engine {
       if (row !== was) spec.took(was, row)
     }
 
-    const holds = (c: Content<N>): ((name: string) => boolean) => (c.type === "Inline" ? () => true : c.holds)
-    const lacking = (nodes: readonly N[], held: (name: string) => boolean): readonly N[] => nodes.filter(n => !held(n.hash))
+    const lacking = (nodes: readonly N[]): readonly N[] => {
+      const c = spec.content
+      if (c.type === "Inline") return []
+      const missing = c.lacking(nodes.map(n => n.hash))
+      return nodes.filter(n => missing.has(n.hash))
+    }
 
     // Whether a reading wants the store yet: before one does, nothing pulls it.
     let wanted: "No" | "Yes" = "No"
@@ -133,7 +136,7 @@ export namespace engine {
     const purge = (): void => {
       const version = spec.content.type === "Inline" ? 0 : spec.content.version()
       if (purged?.row === row && purged.content === version) return
-      if (lacking(row.replica.objects, holds(spec.content)).length > 0) return
+      if (lacking(row.replica.objects).length > 0) return
       purged = { row, content: version }
       // On a later task, so the reading's answer goes out first.
       setTimeout(() => void sync.purge(), 0)
@@ -143,7 +146,7 @@ export namespace engine {
       const c = spec.content
       try {
         for (;;) {
-          const need = c.type === "Inline" ? [] : lacking(nodes(), c.has)
+          const need = lacking(nodes())
           if (c.type === "Inline" || need.length === 0) {
             const answer = read()
             purge()
@@ -170,7 +173,7 @@ export namespace engine {
         if (wanted === "Yes" && behind(box, sync.holding())) void sync.pull()
       },
       over,
-      lacking: nodes => lacking(nodes, holds(spec.content)),
+      lacking,
       reset: async () => {
         const said: string[] = []
         await sync.reset(why => said.push(why))

@@ -38,6 +38,16 @@ const inbox: Named[] = box.inbox.map(o => ({ hash: o.hash, literal: o.text }))
 const literals = new Map(box.conversations.map(o => [o.hash, o.text]))
 const ids = [...new Set(box.skeleton.nodes.flatMap(n => (n.header.node === "line" ? [n.header.conversation] : [])))]
 
+// A fetcher's reader: the prints handed to it, and those of some names it lacks, as the core's `Lines` answers them.
+const readerOf = (): { readonly prints: ReadonlySet<string>; readonly lacking: content.Effects["lacking"]; readonly held: content.Effects["held"] } => {
+  const prints = new Set<string>()
+  return {
+    prints,
+    lacking: names => new Set(names.filter(n => !prints.has(n))),
+    held: rows => Promise.resolve(void rows.forEach(r => prints.add(content.rowOf(r).hash))),
+  }
+}
+
 // A down-set of the skeleton the box's pieces could have left, in the order they arrived.
 const skeleton = (r: Rng): Replica<SkeletonNode> => {
   const held = new Set<string>()
@@ -131,7 +141,7 @@ test("an opened conversation's names go out before the whole store's batches sti
     came: () => {},
     lost: () => {},
     atOnce: () => 4,
-    held: () => Promise.resolve(),
+    ...readerOf(),
     shown: () => true,
   })
   // One name a batch, so the whole store queues more batches than go out at once.
@@ -191,7 +201,6 @@ test("law: the plan keeps the newest conversations whole, in order, within the b
 })
 
 test("a prefetch goes out one answer at a time, only when no other is out, and stops at its first failure", async () => {
-  // Names of their own, so no earlier test's fetch already holds them.
   const own = new Map(await Promise.all(Array.from({ length: 9 }, async (_, i): Promise<[string, string]> => [await sha256Hex(`prefetched line ${i}`), `prefetched line ${i}`])))
   const template = box.skeleton.nodes[0]!
   const one = [...own.keys()].map(hash => ({ ...template, hash, parents: [], size: content.MOST_BYTES }))
@@ -208,7 +217,7 @@ test("a prefetch goes out one answer at a time, only when no other is out, and s
     came: () => {},
     lost: () => {},
     atOnce: () => 4,
-    held: () => Promise.resolve(),
+    ...readerOf(),
     shown: () => true,
   })
   const tick = (): Promise<void> => new Promise(done => setTimeout(done, 0))
@@ -243,7 +252,7 @@ test("a prefetch sends nothing while the page is hidden, and once it is shown a 
     came: () => {},
     lost: () => {},
     atOnce: () => 4,
-    held: () => Promise.resolve(),
+    ...readerOf(),
     shown: () => shown,
   })
   const tick = (): Promise<void> => new Promise(done => setTimeout(done, 0))
@@ -261,17 +270,19 @@ test("a prefetch sends nothing while the page is hidden, and once it is shown a 
 
 test("concurrent whole readings read each object the device keeps once, in one transaction, and ask the box nothing", async () => {
   const device = fakeIndexedDB()
-  await content.keepOnly(new Set(), () => Promise.resolve())
+  await content.keepOnly(new Set(), [], () => Promise.resolve())
   const nodes = box.skeleton.nodes
   await idb.within(CONTENT, "readwrite", s => Promise.all(nodes.map(n => idb.done(s.put(literals.get(n.hash)!, n.hash)))))
   const handed: string[] = []
+  const reader = readerOf()
   const { fetch } = content.fetcher({
     ask: () => Promise.reject(new Error("the device keeps every object")),
     asked: () => {},
     came: () => {},
     lost: () => {},
     atOnce: () => 4,
-    held: rows => Promise.resolve(void handed.push(...rows.map(r => content.rowOf(r).hash))),
+    lacking: reader.lacking,
+    held: rows => reader.held(rows).then(() => void handed.push(...rows.map(r => content.rowOf(r).hash))),
     shown: () => true,
   })
   const before = [device.transactions(), device.read()] as const
@@ -284,5 +295,5 @@ test("concurrent whole readings read each object the device keeps once, in one t
   assert.equal(device.transactions() - begun, 1, "one transaction for the one batch")
   assert.ok(device.read() - read <= nodes.length, `${device.read() - read} values read for ${nodes.length} objects`)
   assert.deepEqual([...handed].sort(), nodes.map(n => n.hash).sort(), "each object handed to the reader once")
-  assert.ok(nodes.every(n => content.holds(n.hash)))
+  assert.ok(nodes.every(n => reader.prints.has(n.hash)))
 })

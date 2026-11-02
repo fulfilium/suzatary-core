@@ -12,8 +12,8 @@ import type { FoldPayload } from "../wire/generated/wire";
 import primed from "../app/primed";
 import { cacheKey, fits, parseFold, printFold } from "../app/cache";
 import app from "../app/app";
-import type { Chains, Core, HeldChain, Kept, Standing } from "./core";
-import { keptChains, loadCore, signedObject } from "./core";
+import type { HeldChain, Standing } from "./core";
+import { loadCore, signedObject } from "./core";
 import remote from "./remote";
 import type questions from "./questions";
 import type lanes from "./lanes";
@@ -192,28 +192,6 @@ export async function restoreReplica(): Promise<void> {
 }
 
 
-/** Every chain the tab holds at one instant, the core's one reading of them, and what names that reading. */
-export interface HeldSet {
-  readonly held: readonly HeldChain[];
-  /** The tab's; never freed by a reader. */
-  readonly chains: Chains;
-  /** Each held chain's heads and policy: the same key is the same set. */
-  readonly key: string;
-}
-
-let kept: { readonly core: Core; readonly of: (held: readonly HeldChain[]) => Kept } | null = null;
-// The chains last told to `readings`, so one the set no longer holds is cleared there too.
-let told: ReadonlySet<string> = new Set();
-
-/**
- * Every chain the box serves as this tab holds it: the open one read now from memory, unsent acts included, each other
- * from memory once its row on this device was read. A chain held nowhere yet is left out, and a reading says what refers
- * into it is not yet priced.
- */
-export async function heldChains(): Promise<readonly HeldChain[]> {
-  return (await heldNow()).held;
-}
-
 /** The chains held now, and the open chain's name and replica as the holding read it. */
 async function heldNow(): Promise<Holding> {
   await restoreReplica();
@@ -230,25 +208,6 @@ async function heldNow(): Promise<Holding> {
     return r?.type !== "Val" || r.v.objects.length === 0 ? [] : [{ name, replica: r.v }];
   });
   return { held, holding, replica: open };
-}
-
-/**
- * The one set `held` makes in the core, at once: the tab's `Chains`, holding a chain again only when its heads or policy
- * moved. It is shared, so a reading that awaits nothing between this and its last use prices exactly `held`.
- */
-export function setOf(core: Core, held: readonly HeldChain[]): HeldSet {
-  if (kept?.core !== core) kept = { core, of: keptChains(core) };
-  const key = held.map((c) => `${c.name}:${heads.of(c.replica.heads).join(",")}|${[...untrustedOf(c.replica)].sort().join(",")}`).join(";");
-  const { chains, left } = kept.of(held);
-  tellLeft(left);
-  return { held, chains, key };
-}
-
-/** Each chain's reading's leavings, told under its own name by the one set that holds it, whichever page read it. */
-function tellLeft(left: ReadonlyMap<string, excluded.Left>): void {
-  for (const name of told) if (!left.has(name)) readings.told(`chain/${name}`, excluded.NOTHING);
-  for (const [name, l] of left) readings.told(`chain/${name}`, l);
-  told = new Set(left.keys());
 }
 
 /** What the core's worker holds once every chain held now is sent to it: the chains, and the open one as read. */

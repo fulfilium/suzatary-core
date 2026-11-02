@@ -6,13 +6,13 @@ import assert from "node:assert/strict"
 import { createRequire } from "node:module"
 import { readFileSync } from "node:fs"
 
-import type { Core, Lines, Named, Window } from "../src/prodrome/core"
-import { chainsOf, conversationOf, erasedOf, inboxOf, keptChains, listOfLines, objectsOf } from "../src/prodrome/core"
+import type { Chains, Core, Lines, Named, Window } from "../src/prodrome/core"
+import { conversationOf, erasedOf, inboxOf, listOfLines, objectsOf } from "../src/prodrome/core"
 import { parentsOf } from "../src/prodrome/replica"
 import type { MemoryPayload } from "../src/wire/generated/wire"
 import turns from "../src/chat/turns"
 import { forAll, type Rng } from "./gen"
-import { heldChain } from "./held"
+import { heldChain, holdAll } from "./held"
 
 const core = ((): Core => {
   const built = process.env["SUZATARY_PRODROME_WASM"]
@@ -185,7 +185,7 @@ test("a proposal is priced by the todo it serves, and by nothing where the tab h
 test("the decoded readings are the wire's shapes", () => {
   const lines = linesOf(conversations)
   const p = new core.Proposals(objectsOf(inbox))
-  const held = chainsOf(core, chains.map(c => heldChain(c.name, c.objects, c.untrusted)))
+  const held = holdAll(new core.Chains(), chains.map(c => heldChain(c.name, c.objects, c.untrusted)))
   const s = {
     inbox: (at: string, memory: MemoryPayload | null, chains: typeof held) => inboxOf(p, at, memory, chains),
     list: () => listOfLines(lines, p),
@@ -235,7 +235,7 @@ test("a chain whose policy alone moved is held again, and links as a fresh set u
       t.free()
     }
   })
-  const linkedIn = (set: ReturnType<typeof chainsOf>): string => {
+  const linkedIn = (set: Chains): string => {
     const l = set.linker("{}", box.at)
     try {
       return l.link(JSON.stringify(served))
@@ -244,20 +244,20 @@ test("a chain whose policy alone moved is held again, and links as a fresh set u
     }
   }
   const fresh = (untrusted: string[]): string => {
-    const set = chainsOf(core, completed.map(c => heldChain(c.name, c.objects, untrusted)))
+    const set = holdAll(new core.Chains(), completed.map(c => heldChain(c.name, c.objects, untrusted)))
     try {
       return linkedIn(set)
     } finally {
       set.free()
     }
   }
-  const kept = keptChains(core)
+  const kept = new core.Chains()
   try {
     for (const untrusted of [[], ["triage"], [], ["triage"]]) {
-      assert.equal(linkedIn(kept(completed.map(c => heldChain(c.name, c.objects, untrusted))).chains), fresh(untrusted), `under [${untrusted.join(", ")}]`)
+      assert.equal(linkedIn(holdAll(kept, completed.map(c => heldChain(c.name, c.objects, untrusted)))), fresh(untrusted), `under [${untrusted.join(", ")}]`)
     }
     assert.notEqual(fresh([]), fresh(["triage"]), "the policy moves what the todo links to")
   } finally {
-    kept([]).chains.free()
+    kept.free()
   }
 })

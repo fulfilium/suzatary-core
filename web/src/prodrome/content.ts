@@ -1,5 +1,6 @@
 // The lines' content on this device: each object's literal by its name, taken only when its bytes hash to that name,
-// kept in the device's store and handed to the core's worker, which reads it; this thread keeps only the names.
+// kept in the device's store and handed to the core's worker, which reads it. Which prints are held is the reader's to
+// answer (`lacking`): nothing here records what was handed over.
 
 import type { ContentPayload, SkeletonNode } from "../wire/generated/wire"
 import idb from "../app/idb"
@@ -21,7 +22,9 @@ export namespace content {
     readonly lost: (bytes: number) => void
     // How many answers may be out at once, asked as each goes out.
     readonly atOnce: () => number
-    // Literals now held, handed to the reader once each; it settles once the reader has them.
+    // Those of `names` whose print the reader does not hold.
+    readonly lacking: (names: readonly string[]) => ReadonlySet<string>
+    // Literals the reader lacks, handed to it; it settles once the reader has them.
     readonly held: (rows: readonly Admitted[]) => Promise<void>
     // Whether the page is shown: a prefetch sends nothing while it is not.
     readonly shown: () => boolean
@@ -52,21 +55,6 @@ export namespace content {
   const admitted = (r: Row): Admitted => ({ [ADMITTED]: r })
   export const rowOf = (a: Admitted): Row => a[ADMITTED]
 
-  const memory = new Set<string>()
-  let moves = 0
-
-  // Every name a reading asked for: the page keeps their content while it is open.
-  const asked = new Set<string>()
-  export const has = (name: string): boolean => {
-    asked.add(name)
-    return memory.has(name)
-  }
-  // The same, without keeping it: what a count reads.
-  export const holds = (name: string): boolean => memory.has(name)
-  export const read = (): ReadonlySet<string> => asked
-  // Counts every change of what is held, so a reading of it is named by it.
-  export const version = (): number => moves
-
   const byName = (x: SkeletonNode, y: SkeletonNode): number => (x.hash < y.hash ? -1 : x.hash > y.hash ? 1 : 0)
 
   // The longest run from the front of `queue` within `MOST_HASHES` items and `MOST_BYTES` by `size`, one item alone
@@ -96,16 +84,15 @@ export namespace content {
     return wrong.length > 0 ? lo.error(`the box's bytes for ${wrong.join(", ")} are not what those names hash to`) : lo.val(answer.objects.map(o => admitted({ hash: o.hash, literal: o.literal })))
   }
 
-  // Rows handed to the reader in runs of at most `MOST_BYTES`, so no one message holds the thread long.
+  // The rows the reader lacks handed to it in runs of at most `MOST_BYTES`, so no one message holds the thread long.
   const take = async (fx: Effects, rows: readonly Admitted[]): Promise<void> => {
-    const fresh = rows.filter(r => !memory.has(rowOf(r).hash))
+    const lacking = fx.lacking(rows.map(r => rowOf(r).hash))
+    const fresh = rows.filter(r => lacking.has(rowOf(r).hash))
     for (let at = 0; at < fresh.length; ) {
       const run = batch(fresh.slice(at), r => rowOf(r).literal.length)
       await fx.held(run)
-      for (const r of run) memory.add(rowOf(r).hash)
       at += run.length
     }
-    if (fresh.length > 0) moves += 1
   }
 
   // What the device's store holds of `names`, read in one transaction over one opened database: the names alone for a
@@ -240,7 +227,8 @@ export namespace content {
     }
 
     const fetch = async (lane: Lane, nodes: readonly SkeletonNode[]): Promise<void> => {
-      const lacking = nodes.filter(n => !memory.has(n.hash))
+      const missing = fx.lacking(nodes.map(n => n.hash))
+      const lacking = nodes.filter(n => missing.has(n.hash))
       const fresh = lacking.filter(n => !waits.has(n.hash))
       for (const n of fresh) {
         waits.set(n.hash, wait(n))
@@ -264,15 +252,11 @@ export namespace content {
     return { fetch, wake: pump }
   }
 
-  // Every row no name in `named` holds dropped, on the device, here and by the reader (`letGo`): content of an object
-  // the skeleton no longer names is read by nothing.
-  export const keepOnly = async (named: ReadonlySet<string>, letGo: (names: readonly string[]) => Promise<void>): Promise<lo.Settled<null>> => {
-    const gone = [...memory].filter(n => !named.has(n))
-    for (const n of gone) memory.delete(n)
-    if (gone.length > 0) {
-      moves += 1
-      await letGo(gone)
-    }
+  // Every row no name in `named` holds dropped, on the device and by the reader, of those it holds (`held`, let go by
+  // `letGo`): content of an object the skeleton no longer names is read by nothing.
+  export const keepOnly = async (named: ReadonlySet<string>, held: readonly string[], letGo: (names: readonly string[]) => Promise<void>): Promise<lo.Settled<null>> => {
+    const gone = held.filter(n => !named.has(n))
+    if (gone.length > 0) await letGo(gone)
     if (!idb.available()) return lo.val(null)
     return idb
       .within(CONTENT, "readwrite", async s => {
