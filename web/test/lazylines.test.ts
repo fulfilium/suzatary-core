@@ -7,11 +7,10 @@ import assert from "node:assert/strict"
 import { createRequire } from "node:module"
 import { readFileSync } from "node:fs"
 
-import type { Core, Named } from "../src/prodrome/core"
-import { conversationOf, listOfLines, objectsOf, searchOf } from "../src/prodrome/core"
+import type { Core, Lines, Named } from "../src/prodrome/core"
+import { conversationOf, lackingIn, listOfLines, nodesInto, objectsOf, planOf, searchOf } from "../src/prodrome/core"
 import lines from "../src/prodrome/lines"
 import content from "../src/prodrome/content"
-import keep from "../src/prodrome/keep"
 import { sha256Hex } from "../src/prodrome/verify"
 import { empty, pulled } from "../src/prodrome/replica"
 import type { Replica } from "../src/prodrome/replica"
@@ -68,7 +67,7 @@ const fetched = (r: Rng, s: Replica<SkeletonNode>): ReadonlyMap<string, string> 
   new Map(s.objects.filter(() => r.bool(0.7)).map(n => [n.hash, literals.get(n.hash)!]))
 
 // Every answer the worker's lines holding `objects` give about `scope`, or the refusal they give instead.
-const read = (objects: readonly Named[], scope: Exclude<lines.Scope, { readonly type: "Objects" }>): string => {
+const read = (objects: readonly Named[], scope: Extract<lines.Scope, { readonly type: "Whole" | "Conversations" }>): string => {
   const held = new core.Lines()
   const proposals = new core.Proposals(objectsOf(inbox))
   try {
@@ -87,8 +86,16 @@ const read = (objects: readonly Named[], scope: Exclude<lines.Scope, { readonly 
 
 // The stream's scope, the drawn rounds' objects, is the Rust's law (`held_lines.rs`), since only the core chooses it.
 const scopes = [lines.WHOLE, ...ids.map(lines.one), lines.one("never-opened"), { type: "Conversations", ids } satisfies lines.Scope].flatMap(s =>
-  s.type === "Objects" ? [] : [s],
+  s.type === "Whole" || s.type === "Conversations" ? [s] : [],
 )
+
+// A core holding the skeleton `s` and the prints `kept`: what the core's worker asks of its own skeleton.
+const coreOf = (s: Replica<SkeletonNode>, kept: ReadonlyMap<string, string>): Lines => {
+  const held = new core.Lines()
+  nodesInto(held, s.objects, [])
+  held.hold(objectsOf([...kept].map(([hash, literal]) => ({ hash, literal }))), "[]")
+  return held
+}
 
 test("law: a reading of part-fetched lines is the whole pull's reading at the same skeleton, or names what it fetches", () => {
   forAll(40, r => {
@@ -98,14 +105,19 @@ test("law: a reading of part-fetched lines is the whole pull's reading at the sa
     const names = new Set(s.objects.map(n => n.hash))
     // What the box's whole pull at this skeleton would have sent: every node with its literal.
     const whole = s.objects.map(n => ({ hash: n.hash, literal: literals.get(n.hash)! }))
-    for (const scope of scopes) {
-      const need = lines.nodesOf(s, scope).filter(n => !has(n.hash))
-      if (need.length > 0) {
-        assert.ok(need.every(n => names.has(n.hash)), "it fetches only what the skeleton names and the device lacks")
-        continue
+    const asked = coreOf(s, kept)
+    try {
+      for (const scope of scopes) {
+        const need = lackingIn(asked, scope)
+        if (need.length > 0) {
+          assert.ok(need.every(n => names.has(n.hash) && !has(n.hash)), "it fetches only what the skeleton names and the device lacks")
+          continue
+        }
+        const held = [...kept].map(([hash, literal]) => ({ hash, literal }))
+        assert.equal(read(held, scope), read(whole, scope), JSON.stringify(scope))
       }
-      const held = [...kept].map(([hash, literal]) => ({ hash, literal }))
-      assert.equal(read(held, scope), read(whole, scope), JSON.stringify(scope))
+    } finally {
+      asked.free()
     }
   })
 })
@@ -178,24 +190,48 @@ test("over HTTP/1.1 one content answer is out at a time, beside the three stream
   assert.equal(content.atOnce("h2"), 4)
 })
 
-test("law: the plan keeps the newest conversations whole, in order, within the budget", () => {
+test("law: the core's plan keeps the newest conversations whole, in order, within the budget", () => {
   forAll(60, r => {
     const s = skeleton(r)
     const total = s.objects.reduce((k, n) => k + n.size, 0)
     const budget = r.int(total + 2)
-    const planned = keep.plan(s, budget)
+    const held = coreOf(s, new Map())
+    const plan = ((): ReturnType<typeof planOf> => {
+      try {
+        return planOf(held, budget)
+      } finally {
+        held.free()
+      }
+    })()
+    // No print is held, so every name kept is the plan's, and the plan's nodes all lack their print.
+    const planned = plan.ahead
     const kept = new Set(planned.map(n => n.hash))
+    assert.deepEqual([...plan.keep].sort(), [...kept].sort(), "the names kept are the plan's")
     assert.equal(kept.size, planned.length, "each node once")
     assert.ok(planned.reduce((k, n) => k + n.size, 0) <= budget, "within the budget")
     assert.ok(planned.every(n => n.parents.every(p => kept.has(p) || !s.objects.some(o => o.hash === p))), "a down-set of the skeleton")
-    const recent = keep.recent(s)
-    const whole = recent.map(c => c.nodes.every(n => kept.has(n.hash)))
+    // Each conversation, newest line first, with every node its lines rest on.
+    const byName = new Map(s.objects.map(n => [n.hash, n]))
+    const under = (id: string): Set<string> => {
+      const out = new Set<string>()
+      const walk = s.objects.filter(n => n.header.node === "line" && n.header.conversation === id).map(n => n.hash)
+      for (let h = walk.pop(); h !== undefined; h = walk.pop()) {
+        if (out.has(h) || !byName.has(h)) continue
+        out.add(h)
+        walk.push(...byName.get(h)!.parents)
+      }
+      return out
+    }
+    const newest = (id: string): string =>
+      s.objects.reduce((m, n) => (n.header.node === "line" && n.header.conversation === id && n.header.at > m ? n.header.at : m), "")
+    const recent = [...new Set(s.objects.flatMap(n => (n.header.node === "line" ? [n.header.conversation] : [])))].sort((a, b) =>
+      newest(a) < newest(b) ? 1 : newest(a) > newest(b) ? -1 : a < b ? -1 : 1,
+    )
+    const whole = recent.map(id => [...under(id)].every(h => kept.has(h)))
     const first = whole.indexOf(false)
     assert.ok(first === -1 || whole.slice(first).every(w => !w), "the conversations kept are the newest, each whole")
-    const ofKept = new Set(recent.filter((_, i) => whole[i]).map(c => c.id))
+    const ofKept = new Set(recent.filter((_, i) => whole[i]))
     assert.ok(planned.every(n => n.header.node !== "line" || ofKept.has(n.header.conversation)), "no line of a conversation not kept whole")
-    const newest = (c: keep.Conversation): string => c.nodes.reduce((m, n) => (n.header.node === "line" && n.header.at > m ? n.header.at : m), "")
-    assert.ok(recent.every((c, i) => i === 0 || newest(recent[i - 1]!) >= newest(c)), "newest first")
     if (budget >= total) assert.ok(s.objects.every(n => n.header.node !== "line" || kept.has(n.hash)), "a budget past the store keeps every line")
   })
 })

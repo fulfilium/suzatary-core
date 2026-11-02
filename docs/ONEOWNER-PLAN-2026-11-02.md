@@ -709,6 +709,24 @@ three warm loads after the snapshot is written; the target is under 2.5 s).
    `retired` over generated stores with reseals of reseals and erasures (the
    rule of 10-26, one implementation). *Measure:* about 150 lines of TypeScript
    out, about 60 of Rust in.
+
+   *As built.* The core answers over its skeleton and any nodes it was not
+   told yet (`beside`): a purge reads the row joined with a pull's pieces
+   before the core holds them, so `Lines.retired(beside, held)` and
+   `Lines.lacking(scope, beside)` take them, and `linesync.telling` names
+   them (`untold`). A first version asked of the core's skeleton alone, and
+   the erasure law of `onewriter.test.ts` caught a cut pull whose erasure
+   found no line to open. The law is the core's `web_vectors`
+   `law_the_core_s_retired_keys_are_the_box_s` (128 generated stores, the
+   device pulling, starting over or away); it catches a rule that does not
+   follow a reseal of a reseal. Production lines: TypeScript −100, Rust +337,
+   far past the estimate, since the scope, the plan and the rule each read
+   nodes held and nodes beside them, and the module parses a scope at its
+   edge. J1 is still read by `pull` (`holding`, the frontier) and by `untold`,
+   until stage 3. The capped warm first draw did not move measurably: two
+   sets of three alternating runs, nine loads each side a set, gave master
+   medians of 3,381 and 3,801 ms and this stage 3,887 and 3,078 ms; the sets
+   disagree in direction, and the runs vary by about 0.8 s.
 3. **One form for the lines (`coreskeleton`).** The snapshot and log of §3.1
    replace D1-D5 for the lines; the core holds the head and the pieces; J1, J2,
    J4 and J5 for the lines go, with `telling`, `Reader`, `Primed`, `Key`,

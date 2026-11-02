@@ -4,7 +4,7 @@
 // ahead of any page, and a reading reads a conversation's lines and what they rest on.
 
 import type { Lines } from "./core"
-import { deadOf, erasedOf, heldOf, holdAdmitted, lackingOf, nodesInto } from "./core"
+import { deadOf, erasedOf, heldOf, holdAdmitted, keysInto, lackingIn, lackingOf, lacksIn, nodesInto, planOf, retiredOf } from "./core"
 import content from "./content"
 import engine from "./engine"
 import excluded from "./excluded"
@@ -58,53 +58,6 @@ export namespace linesync {
     readonly lacking: (scope: lines.Scope) => number
   }
 
-  // The conversations a move from `was` to `now` touched, `keys` the names of the keys given or taken.
-  export const touched = (was: locked.Row<SkeletonNode>, now: locked.Row<SkeletonNode>, keys: ReadonlySet<string>): Moved => {
-    if (was.replica.generation !== now.replica.generation || epochOf(was.replica.held) !== epochOf(now.replica.held)) return "All"
-    const before = new Set(was.replica.objects.map(n => n.hash))
-    const after = new Set(now.replica.objects.map(n => n.hash))
-    const out = new Set<string>()
-    const of = (n: SkeletonNode, moved: boolean): void => {
-      if (n.header.node === "line" && (moved || n.header.keys.some(k => keys.has(k)))) out.add(n.header.conversation)
-    }
-    for (const n of now.replica.objects) of(n, !before.has(n.hash))
-    for (const n of was.replica.objects) if (!after.has(n.hash)) of(n, true)
-    return [...out].sort()
-  }
-
-  // The keys `nodes` retire, by the box's rule (`transcript::Retired`), of those a conversation's own lines name: each
-  // key an erasure of it names, and each key of a reseal of a slot it names; and each seal a reseal of it was sealed
-  // again from, where the reseal's own key `holds` or a later reseal of it supersedes that key in turn.
-  export const retiredBy = (nodes: readonly SkeletonNode[], holds: (key: string) => boolean): Set<string> => {
-    type Conversation = { readonly named: Set<string>; readonly erased: Set<string>; readonly reseals: { readonly of: string; readonly from: string; readonly keys: readonly string[] }[] }
-    const by = new Map<string, Conversation>()
-    for (const n of nodes) {
-      if (n.header.node !== "line") continue
-      const c = by.get(n.header.conversation) ?? { named: new Set<string>(), erased: new Set<string>(), reseals: [] }
-      by.set(n.header.conversation, c)
-      for (const k of n.header.keys) c.named.add(k)
-      const s = n.header.step
-      if (s.step === "erased") for (const k of s.keys) c.erased.add(k)
-      if (s.step === "resealed") c.reseals.push({ of: s.of, from: s.from, keys: n.header.keys })
-    }
-    const out = new Set<string>()
-    for (const c of by.values()) {
-      const erased = new Set([...c.erased, ...c.reseals.filter(r => c.erased.has(r.of)).flatMap(r => r.keys)])
-      for (const k of erased) if (c.named.has(k)) out.add(k)
-      const sealedFrom = new Map<string, string[]>()
-      for (const r of c.reseals) for (const k of r.keys) sealedFrom.set(k, [...(sealedFrom.get(k) ?? []), r.from])
-      const walking = c.reseals.filter(r => r.keys.some(holds)).map(r => r.from)
-      const superseded = new Set<string>()
-      for (let k = walking.pop(); k !== undefined; k = walking.pop()) {
-        if (superseded.has(k)) continue
-        superseded.add(k)
-        walking.push(...(sealedFrom.get(k) ?? []))
-      }
-      for (const k of superseded) if (c.named.has(k)) out.add(k)
-    }
-    return out
-  }
-
   // The form of the lines' nodes on the device: a change of the skeleton's node moves it, and the lines are taken again.
   // 2: a line's step names a conversation's title lines, the slot each reseal seals and the keys each erasure names,
   // which a round's lines are found by; a node of form 1 reads them as `still`, so the reseals and erasures go unseen.
@@ -118,6 +71,8 @@ export namespace linesync {
   // loaded from until the rows are read: never less than a core handed that row whole, whatever came between.
   export type Telling = {
     readonly took: (was: locked.Row<SkeletonNode>, now: locked.Row<SkeletonNode>) => void
+    // Those of `nodes` the core was not told: every one while it holds a snapshot no row was named for.
+    readonly untold: (nodes: readonly SkeletonNode[]) => readonly SkeletonNode[]
     readonly printed: () => noderows.Printed<SkeletonNode>
     readonly reader: pull.Reader<SkeletonNode>
   }
@@ -136,20 +91,24 @@ export namespace linesync {
         told = NOTHING
       }
       const was = told.row
-      const add = Object.fromEntries(Object.entries(row.keys).filter(([n, k]) => was.keys[n] !== k))
-      const drop = Object.keys(was.keys).filter(n => row.keys[n] === undefined)
-      if (Object.keys(add).length > 0 || drop.length > 0) held.keys(JSON.stringify(add), JSON.stringify(drop))
-      phases.mark("lines keys held")
+      // The conversations a line of which came or went, then those whose lines name a key given or taken, as the core
+      // answers each change; every conversation where the row was reset or heard a later epoch.
+      const touched = new Set<string>()
       if (was.replica.objects !== row.replica.objects) {
         const before = new Set(was.replica.objects.map(n => n.hash))
         const after = new Set(row.replica.objects.map(n => n.hash))
         const came = row.replica.objects.filter(n => !before.has(n.hash))
         const went = was.replica.objects.flatMap(n => (after.has(n.hash) ? [] : [n.hash]))
-        if (came.length > 0 || went.length > 0) nodesInto(held, came, went)
+        if (came.length > 0 || went.length > 0) for (const id of nodesInto(held, came, went)) touched.add(id)
         phases.mark("lines nodes held")
       }
+      const add = Object.fromEntries(Object.entries(row.keys).filter(([n, k]) => was.keys[n] !== k))
+      const drop = Object.keys(was.keys).filter(n => row.keys[n] === undefined)
+      if (Object.keys(add).length > 0 || drop.length > 0) for (const id of keysInto(held, add, drop)) touched.add(id)
+      phases.mark("lines keys held")
       told = { type: "Row", row }
-      moved(touched(was, row, new Set([...Object.keys(add), ...drop])))
+      const anew = was.replica.generation !== row.replica.generation || epochOf(was.replica.held) !== epochOf(row.replica.held)
+      moved(anew ? "All" : [...touched].sort())
     }
     // Beside the rows, the core's snapshot of the row it was told; none while it holds a snapshot no row was named for,
     // or where it does not print.
@@ -179,11 +138,16 @@ export namespace linesync {
         told = NOTHING
       },
     }
-    return { took, printed, reader }
+    const untold = (nodes: readonly SkeletonNode[]): readonly SkeletonNode[] => {
+      if (told.type !== "Row") return nodes
+      const known = new Set(told.row.replica.objects.map(n => n.hash))
+      return nodes.filter(n => !known.has(n.hash))
+    }
+    return { took, printed, reader, untold }
   }
 
   export const of = (held: Lines, fx: Effects, blocks: rendered.Store): T => {
-    const { took, printed, reader } = telling(held, fx.moved)
+    const { took, printed, reader, untold } = telling(held, fx.moved)
     // What a purge or a retirement takes from the rendered blocks, taken from the page's table as well as the device's.
     // A block forgotten here is gone from the device and marked there before the page hears of it, so no tab's worker,
     // whatever it heard, writes it back.
@@ -215,23 +179,10 @@ export namespace linesync {
       return keep.budget(quota === undefined ? { type: "Unknown" } : { type: "Known", bytes: quota })
     }).get
 
-    // The plan of a skeleton, made once for its landing's eviction and its prefetch.
-    let planned: { readonly skeleton: Replica<SkeletonNode>; readonly nodes: readonly SkeletonNode[] } | null = null
-    const planOf = async (skeleton: Replica<SkeletonNode>): Promise<readonly SkeletonNode[]> => {
-      const most = await budget()
-      if (planned?.skeleton === skeleton) return planned.nodes
-      planned = { skeleton, nodes: keep.plan(skeleton, most) }
-      return planned.nodes
-    }
-
-    // What the device keeps of the lines' content: the plan within the budget, and every print the core holds, which a
-    // reading loaded (a prefetch hands the core nothing), so a reading that fetched a line is not left fetching it again.
-    const keeping = async (skeleton: Replica<SkeletonNode>): Promise<ReadonlySet<string>> => {
-      const names = new Set((await planOf(skeleton)).map(n => n.hash))
-      const prints = new Set(heldOf(held))
-      for (const n of skeleton.objects) if (prints.has(n.hash)) names.add(n.hash)
-      return names
-    }
+    // The core's plan of the skeleton it holds, within the budget: what the device keeps of the lines' content (the plan,
+    // and every print the core holds, which a reading loaded, since a prefetch hands the core nothing), and what of the
+    // plan a prefetch fetches.
+    const planned = async (): Promise<ReturnType<typeof planOf>> => planOf(held, await budget())
 
     // The skeleton last prefetched, so each is prefetched once, and again after a prefetch that failed.
     let ahead: Replica<SkeletonNode> | null = null
@@ -243,8 +194,7 @@ export namespace linesync {
     const prefetch = serial.of(async (): Promise<void> => {
       await firstRead
       if (!idb.available()) return
-      const skeleton = store.row().replica
-      await fetching("Ahead", await planOf(skeleton)).catch(() => {
+      await fetching("Ahead", (await planned()).ahead).catch(() => {
         ahead = null
       })
     })
@@ -308,8 +258,9 @@ export namespace linesync {
             const row = store.row()
             return {
               said: { ...a, heads: a.heads.are === "held" ? mine : a.heads.heads, objects: a.nodes, untrusted: [], root: null },
-              // What this piece's own nodes retire, given the keys it and the row hold, purged before the pull goes on.
-              erased: [...retiredBy(a.nodes, k => a.keys[k] !== undefined || row.keys[k] !== undefined)],
+              // What this piece's nodes retire beside the skeleton the core holds, given the keys it and the row hold,
+              // purged before the pull goes on.
+              erased: [...retiredOf(held, untold(a.nodes), [...new Set([...Object.keys(a.keys), ...Object.keys(row.keys)])])],
               piece: r => locked.of(r, a.keys),
               rest: a.rest,
               size: a.size,
@@ -319,15 +270,16 @@ export namespace linesync {
         },
         content: { type: "ByName", lacking: names => lackingOf(held, names), fetch: fetching, version: () => held.version(), ended: () => ended() },
         words: {
-          // The keys the row's nodes retire, given the keys the row holds, and the keys the content held names as dead:
-          // the core reads the largest down-set of the skeleton whose content it has. The nodes name every erasure and
-          // reseal, so a key a round's lines held alone retire is found here too.
-          dead: r => Promise.resolve(new Set([...deadOf(held), ...retiredBy(r.replica.objects, k => r.keys[k] !== undefined)])),
+          // The keys the row's nodes retire, given the keys the row holds, read by the core over its skeleton and the
+          // row's nodes it was not told yet; and the keys the content held names as dead: the core reads the largest
+          // down-set of the skeleton whose content it has. The nodes name every erasure and reseal, so a key a round's
+          // lines held alone retire is found here too.
+          dead: r => Promise.resolve(new Set([...deadOf(held), ...retiredOf(held, untold(r.replica.objects), locked.names(r.keys))])),
           // The blocks a key's words fed are found by opening its lines, so their content is fetched first; a fetch
           // that fails rejects, and the keys stay owed. Every owed key is dead, a replaced one too: its old words may
           // have fed blocks under the older rules, so its blocks are forgotten before the key, as an erased key's are.
           erased: async r => {
-            await fetching("First", lines.naming(r.replica, locked.names(r.keys)))
+            await fetching("First", lackingIn(held, { type: "Naming", keys: locked.names(r.keys) }, untold(r.replica.objects)))
             return erasedOf(held, r.keys, locked.names(r.keys))
           },
           forget,
@@ -336,7 +288,7 @@ export namespace linesync {
         restoring: cleared,
         landed: async r => {
           if (r.replica.objects.length > 0) await retire()
-          const gone = await content.keepOnly(await keeping(r.replica), heldOf(held), drop => Promise.resolve(held.hold("[]", JSON.stringify(drop))))
+          const gone = await content.keepOnly(new Set((await planned()).keep), heldOf(held), drop => Promise.resolve(held.hold("[]", JSON.stringify(drop))))
           if (gone.type === "Error") fx.told(`row/${pull.kept("lines")}`, pull.unread("lines", gone.e))
           // Only once a page reads the lines: a page that reads no conversation prefetches nothing.
           if (store.wanted()) prefetched(r.replica)
@@ -347,15 +299,15 @@ export namespace linesync {
 
     return {
       engine: store,
-      over: (scope, read) => store.over(scope().type === "Whole" ? "Behind" : "First", () => lines.nodesOf(store.row().replica, scope()), read),
-      holds: id => lines.holds(store.row().replica, id),
+      over: (scope, read) => store.over(scope().type === "Whole" ? "Behind" : "First", () => lackingIn(held, scope()), read),
+      holds: id => held.holds(id),
       // A page hidden may be closed: the snapshot owed is written now.
       shown: on => {
         shown = on
         if (on) fetcher.wake()
         else void place.settle()
       },
-      lacking: scope => store.lacking(lines.nodesOf(store.row().replica, scope)).filter(n => n.header.node === "line").length,
+      lacking: scope => lacksIn(held, scope).lines,
     }
   }
 }

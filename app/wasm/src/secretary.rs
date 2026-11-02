@@ -16,7 +16,7 @@ use suzatary_core::secretary::held_replica::HeldReplica;
 use suzatary_core::secretary::inbox::Fold;
 use suzatary_core::secretary::key_ring::KeyRing;
 use suzatary_core::secretary::locked_text::KeyName;
-use suzatary_core::secretary::outlines::Parsed;
+use suzatary_core::secretary::outlines::{Parsed, Scope};
 use suzatary_core::secretary::readings::{self, DEFAULT_TURN_WINDOW, Dress, Window};
 use suzatary_core::secretary::store::{ConversationId, Stored};
 use suzatary_core::secretary::stream;
@@ -114,27 +114,72 @@ impl Lines {
         self.0.lines.moves()
     }
 
-    /// The skeleton's nodes `add`, as the box sent them, held, and `drop`, `[<name>, …]`, let go.
-    pub fn nodes(&mut self, add: &str, drop: &str) -> Result<(), JsError> {
-        let add: Vec<suzatary_core::wire::SkeletonNode> =
-            serde_json::from_str(add).map_err(|e| refused(format!("nodes: {e}")))?;
-        let add = add
-            .into_iter()
-            .map(Parsed::of)
-            .collect::<Result<Vec<_>, _>>()
-            .map_err(|e| refused(e.to_string()))?;
-        self.0.outlines.hold(add, &names(drop, "drop")?);
-        Ok(())
+    /// The skeleton's nodes `add`, as the box sent them, held, and `drop`, `[<name>, …]`, let go:
+    /// `[<conversation>, …]`, those a line of which came or went.
+    pub fn nodes(&mut self, add: &str, drop: &str) -> Result<String, JsError> {
+        let moved = self.0.outlines.hold(parsed(add)?, &names(drop, "drop")?);
+        json(&moved.iter().map(ConversationId::as_str).collect::<Vec<_>>())
     }
 
-    /// The keys `add`, `{<name>: <hex>}`, held, and `drop`, `[<name>, …]`, let go.
-    pub fn keys(&mut self, add: &str, drop: &str) -> Result<(), JsError> {
+    /// The keys `add`, `{<name>: <hex>}`, held, and `drop`, `[<name>, …]`, let go:
+    /// `[<conversation>, …]`, those whose lines the skeleton holds name a key of either.
+    pub fn keys(&mut self, add: &str, drop: &str) -> Result<String, JsError> {
         let add: BTreeMap<KeyName, String> =
             serde_json::from_str(add).map_err(|e| refused(format!("keys: {e}")))?;
         let drop: Vec<KeyName> =
             serde_json::from_str(drop).map_err(|e| refused(format!("keys: {e}")))?;
         self.0.lines.keys(&add, &drop);
-        Ok(())
+        let moved = self
+            .0
+            .outlines
+            .naming(&add.into_keys().chain(drop).collect());
+        json(&moved.iter().map(ConversationId::as_str).collect::<Vec<_>>())
+    }
+
+    /// `[{hash, parents, size, header}, …]`: every node `scope` reads of the skeleton held and
+    /// `beside` (nodes as the box sends them, not held yet) whose print is not held, as it was
+    /// given. `scope` is `{"type": "Whole"}`, `{"type": "Conversations", "ids": […]}`,
+    /// `{"type": "Objects", "names": […]}` or `{"type": "Naming", "keys": […]}`.
+    pub fn lacking(&self, scope: &str, beside: &str) -> Result<String, JsError> {
+        let beside = parsed(beside)?;
+        json(&self.0.lacking(&scope_of(scope)?, &beside))
+    }
+
+    /// `{nodes, lines}`: how many of the nodes `scope` reads, and of its line nodes, lack their
+    /// print.
+    pub fn lacks(&self, scope: &str) -> Result<String, JsError> {
+        let lacking = self.0.lacking(&scope_of(scope)?, &[]);
+        let lines = lacking
+            .iter()
+            .filter(|node| matches!(node.header, suzatary_core::wire::NodeHeader::Line { .. }))
+            .count();
+        json(&serde_json::json!({ "nodes": lacking.len(), "lines": lines }))
+    }
+
+    /// Whether the skeleton holds a line of conversation `id`.
+    pub fn holds(&self, id: &str) -> Result<bool, JsError> {
+        let id = ConversationId::new(id).map_err(|e| refused(e.to_string()))?;
+        Ok(self.0.outlines.holds_conversation(&id))
+    }
+
+    /// `[<name>, …]`: the keys the skeleton held and the nodes `beside` (as the box sends them, not
+    /// yet held) retire, given that the keys `held` (`[<name>, …]`) are held.
+    pub fn retired(&self, beside: &str, held: &str) -> Result<String, JsError> {
+        let beside = parsed(beside)?;
+        let held: BTreeSet<KeyName> =
+            serde_json::from_str(held).map_err(|e| refused(format!("held: {e}")))?;
+        let retired = self.0.outlines.retired(&beside, &|key| held.contains(key));
+        json(&retired.iter().map(KeyName::as_str).collect::<Vec<_>>())
+    }
+
+    /// `{keep, ahead}`: the names whose content the device keeps within `budget` bytes, the plan
+    /// and every print held, and the plan's nodes whose print is not held, newest first.
+    pub fn plan(&self, budget: usize) -> Result<String, JsError> {
+        let plan = self.0.plan(budget);
+        json(&serde_json::json!({
+            "keep": plan.keep.iter().map(|name| name.as_str()).collect::<Vec<_>>(),
+            "ahead": plan.ahead,
+        }))
     }
 
     /// Every conversation, newest first, with what of each stands in `inbox`.
@@ -290,6 +335,53 @@ impl Lines {
             .collect();
         json(&serde_json::json!({ "excluded": excluded }))
     }
+}
+
+/// Skeleton nodes as the box sends them, each parsed.
+fn parsed(text: &str) -> Result<Vec<Parsed>, JsError> {
+    let nodes: Vec<suzatary_core::wire::SkeletonNode> =
+        serde_json::from_str(text).map_err(|e| refused(format!("nodes: {e}")))?;
+    nodes
+        .into_iter()
+        .map(Parsed::of)
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|e| refused(e.to_string()))
+}
+
+/// A scope as the page spells it.
+#[derive(serde::Deserialize)]
+#[serde(tag = "type")]
+enum Spelled {
+    Whole,
+    Conversations { ids: Vec<String> },
+    Objects { names: Vec<String> },
+    Naming { keys: Vec<String> },
+}
+
+/// The scope `text` spells, parsed once.
+fn scope_of(text: &str) -> Result<Scope, JsError> {
+    let spelled: Spelled =
+        serde_json::from_str(text).map_err(|e| refused(format!("scope: {e}")))?;
+    let fail = |e: String| refused(format!("scope: {e}"));
+    Ok(match spelled {
+        Spelled::Whole => Scope::Whole,
+        Spelled::Conversations { ids } => Scope::Conversations(
+            ids.into_iter()
+                .map(|id| ConversationId::new(id).map_err(|e| fail(e.to_string())))
+                .collect::<Result<_, _>>()?,
+        ),
+        Spelled::Objects { names } => Scope::Objects(
+            names
+                .into_iter()
+                .map(|name| Hash::new(name).map_err(|e| fail(e.to_string())))
+                .collect::<Result<_, _>>()?,
+        ),
+        Spelled::Naming { keys } => Scope::Naming(
+            keys.into_iter()
+                .map(|key| KeyName::new(key).map_err(|e| fail(e.to_string())))
+                .collect::<Result<_, _>>()?,
+        ),
+    })
 }
 
 impl Default for Lines {

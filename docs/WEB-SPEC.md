@@ -1621,7 +1621,8 @@ under in every larger union and never wins.
   when it reads them and hears what moved: which conversations a landing
   touched (a line come or gone, a key of their words given or taken), or all
   of them after a reset or a later epoch, heard once a frame, so an open
-  conversation reads again only when its own lines moved (`touched.test.ts`). The lines' row holds the skeleton
+  conversation reads again only when its own lines moved, as the core answers
+  each change it took (`touched.test.ts`). The lines' row holds the skeleton
   (`GET /api/stores/lines/skeleton`, pulled by the same pieces), kept one
   node and one key per row in the database's `lines` store beside a head row
   (`noderows.ts`, which keeps every store so, each in its own object store), so a landing writes only what arrived. Each store's head row records the format its rows were written in (`noderows.Format`); a restore that finds another drops what those rows found (the lines: their rendered blocks), empties the store to a row of the generation after and takes it again from the box, while the content by name stays, so a change of a node's form moves the store's format and never the database's version (`noderows.test.ts` "rows of another format are dropped at restore…"); the lines' format 2 is the nodes that say what their lines retire; version 8 drops every earlier
@@ -1652,7 +1653,8 @@ under in every larger union and never wins.
   node's step says what its line retires (`Step::Erased`'s keys, or the
   seal `Step::Resealed` was sealed again from), so the purge
   reads every dead key from the nodes the device holds, by the box's own
-  rule (`linesync.retiredBy`, `transcript::erased` and
+  rule, read by the core over its own skeleton and the nodes it was not told
+  yet (`Lines.retired`, `Outlines::retired`; `transcript::erased` and
   `transcript::superseded`): in a conversation, every key an erasure names
   and every key of a reseal of a slot it names, and every seal a reseal was
   sealed from whose own key the device holds or a later reseal supersedes in
@@ -1664,9 +1666,10 @@ under in every larger union and never wins.
   the heads it holds (`wire::Heads::Held`). A slot whose seal a reseal
   supersedes is read from the reseal whether or not its old key is still
   held. The keys a row holds are the only ones its purge counts as held, so
-  a key given before the row started over supersedes nothing. — `retired.test.ts` "law: the keys the held nodes retire leave a
-  device the box's keys", "a key given before the row started over
-  supersedes nothing…", over the box's vector `retired.json`; e2e
+  a key given before the row started over supersedes nothing. — the core's
+  `web_vectors` "law_the_core_s_retired_keys_are_the_box_s" (generated stores
+  with reseals of reseals and erasures, the device pulling, starting over or
+  away) and "every_way_a_key_dies_leaves_a_device_the_box_s_keys"; e2e
   `rescrub.test.ts`; the core's `known_pull` "a pull that lacks nothing
   sends nothing and reads no object".
   Which prints are held is the core's alone to answer (`Lines.held`, read
@@ -1692,7 +1695,7 @@ under in every larger union and never wins.
   Once a page has read the lines, the core's worker (`linesync`, at each
   landing) prefetches the content of the
   newest conversations, each whole, newest first, up to a byte budget
-  (`keep.plan`): a tenth of the origin's quota from
+  (`Lines.plan`, over the core's own skeleton): a tenth of the origin's quota from
   `navigator.storage.estimate()`, at most 256 MiB, and 64 MiB where the
   browser does not say (`keep.budget`). A prefetch goes out one answer at a
   time, only when no other content answer is out and a page is shown (as the
@@ -1708,8 +1711,8 @@ under in every larger union and never wins.
   worker (`questions.One`), with how many lines it lacks, and draws "Not on
   this device yet: N lines of this conversation", with why, never an empty
   transcript or a
-  placeholder that does not end. — `lazylines.test.ts` "law: the plan keeps
-  the newest conversations whole, in order, within the budget", "a prefetch
+  placeholder that does not end. — `lazylines.test.ts` "law: the core's plan
+  keeps the newest conversations whole, in order, within the budget", "a prefetch
   goes out one answer at a time…"; `e2e/lines.test.ts` "a conversation the
   device prefetched reads with no network, and one it lacks says so".
 - **A sync says how far it has come, in bytes.** Every piece of a store's

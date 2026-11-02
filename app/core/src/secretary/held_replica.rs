@@ -8,7 +8,11 @@ use serde::{Deserialize, Serialize};
 use crate::secretary::held_lines::HeldLines;
 use crate::secretary::key_ring::KeyRing;
 use crate::secretary::locked_text::KeyName;
-use crate::secretary::outlines::{Outlines, Parsed};
+use std::collections::BTreeSet;
+
+use prodrome_core::event::Hash;
+
+use crate::secretary::outlines::{Outlines, Parsed, Scope};
 use crate::secretary::step::Step;
 use crate::snapshot::Held;
 use crate::wire::{NodeHeader, SkeletonNode};
@@ -94,6 +98,53 @@ impl HeldReplica {
         let HeldReplica { lines, outlines } = other;
         self.outlines = outlines;
         self.lines.rekey(lines.into_key_ring());
+    }
+}
+
+/// What a device keeps of the lines' content: the plan within the budget and every print held,
+/// which a reading loaded; and what of the plan the prints held lack, which a prefetch fetches.
+pub struct Plan<'r> {
+    /// Every name whose content the device keeps.
+    pub keep: BTreeSet<&'r Hash>,
+    /// The nodes of the plan whose print is not held, newest conversation first.
+    pub ahead: Vec<&'r SkeletonNode>,
+}
+
+impl HeldReplica {
+    /// Every node `scope` reads of the skeleton held and `beside` (nodes not held yet) whose print
+    /// is not held, as it was given.
+    #[must_use]
+    pub fn lacking<'r>(&'r self, scope: &Scope, beside: &'r [Parsed]) -> Vec<&'r SkeletonNode> {
+        let given: std::collections::BTreeMap<&Hash, &SkeletonNode> = beside
+            .iter()
+            .map(|node| (node.name(), node.given()))
+            .collect();
+        self.outlines
+            .scope(scope, beside)
+            .into_iter()
+            .filter(|name| !self.lines.holds(name))
+            .filter_map(|name| {
+                self.outlines
+                    .node(name)
+                    .or_else(|| given.get(name).copied())
+            })
+            .collect()
+    }
+
+    /// The plan of the skeleton held within `budget`, beside the prints held.
+    #[must_use]
+    pub fn plan(&self, budget: usize) -> Plan<'_> {
+        let planned = self.outlines.plan(budget);
+        let ahead = planned
+            .iter()
+            .filter(|name| !self.lines.holds(name))
+            .filter_map(|name| self.outlines.node(name))
+            .collect();
+        let held = self.lines.names().filter(|name| self.outlines.holds(name));
+        Plan {
+            keep: planned.into_iter().chain(held).collect(),
+            ahead,
+        }
     }
 }
 

@@ -435,7 +435,7 @@ export namespace questions {
           return stores.first(() =>
             scoped(
               turn,
-              () => ({ type: "Objects", nodes: chosenOf(held, stores.topics().reading, q.chosen, q.pages) }),
+              () => ({ type: "Objects", names: chosenOf(held, stores.topics().reading, q.chosen, q.pages).map(n => n.hash) }),
               () => {
                 phases.mark("stream content held")
                 const read = stores.topics()

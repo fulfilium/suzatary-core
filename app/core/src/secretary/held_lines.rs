@@ -443,6 +443,12 @@ impl HeldLines {
         }
     }
 
+    /// Whether the print named `name` is held, read or not.
+    #[must_use]
+    pub fn holds(&self, name: &Hash) -> bool {
+        self.prints.contains_key(name)
+    }
+
     /// The name of every print held.
     pub fn names(&self) -> impl Iterator<Item = &Hash> {
         self.prints.keys()

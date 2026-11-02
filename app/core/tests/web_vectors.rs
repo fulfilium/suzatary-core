@@ -3025,19 +3025,6 @@ fn a_stored_slot_is_under_the_rules_this_build_names() {
     );
 }
 
-/// What a device held at the end of one scenario, and what the box keeps: the nodes of every
-/// skeleton answer it took, the name of every key those answers gave it, and the name of every
-/// key the box still holds. `linesync.retiredBy` over the nodes, given the keys the device holds,
-/// must leave the device the box's keys and no other (`web/test/retired.test.ts`).
-#[derive(Serialize)]
-struct Retirement {
-    name: &'static str,
-    nodes: Vec<wire::SkeletonNode>,
-    device: Vec<String>,
-    #[serde(rename = "box")]
-    kept: Vec<String>,
-}
-
 /// A device that pulls the lines' skeleton whole from the frontier its last answer named, and
 /// holds every node and key it was given.
 struct Device {
@@ -3199,12 +3186,13 @@ fn reseal_again(lines: &suzatary_core::secretary::conversations::InMemory) {
     }
 }
 
-/// What a device does after a step of the box: pulls from where it stands, or starts over, as
-/// one does when a later epoch replaces its row, and pulls from nothing.
-#[derive(Clone, Copy)]
+/// What a device does after a step of the box: pulls from where it stands, starts over, as one
+/// does when a later epoch replaces its row, and pulls from nothing, or is away and pulls nothing.
+#[derive(Debug, Clone, Copy)]
 enum Then {
     Pull,
     StartOver,
+    Away,
 }
 
 /// One step of a scenario, and what the device does after it.
@@ -3285,14 +3273,17 @@ fn erase_a_reseal_s_key(lines: &suzatary_core::secretary::conversations::InMemor
     );
 }
 
-/// What a device that pulls once before `steps`, and after each as it says, holds, and what the
-/// box keeps; checked first by the box's own rule, given the keys the device holds.
+/// A device that pulls once before `steps`, after each as it says, and once at the end, is left
+/// the box's keys by
+/// the box's own rule over the objects (`transcript::dead`), and by the core's rule over the
+/// skeleton it took (`Outlines::retired`, what a tab's core reads), given the keys it holds.
 fn converged(
-    name: &'static str,
+    name: &str,
     lines: &suzatary_core::secretary::conversations::InMemory,
     steps: &[Step<'_>],
-) -> Retirement {
+) {
     use suzatary_core::secretary::locked_text::KeyName;
+    use suzatary_core::secretary::outlines::{self, Parsed};
     let (epochs, frontiers) = (
         suzatary_core::epoch::Epochs::remembered(),
         prodrome_core::store::frontier::Frontiers::remembered(prodrome_core::store::frontier::KEPT),
@@ -3306,11 +3297,15 @@ fn converged(
     for (step, then) in steps {
         step(lines);
         match then {
-            Then::Pull => {}
-            Then::StartOver => device = fresh(),
+            Then::Pull => device.pull(lines, books),
+            Then::StartOver => {
+                device = fresh();
+                device.pull(lines, books);
+            }
+            Then::Away => {}
         }
-        device.pull(lines, books);
     }
+    device.pull(lines, books);
     let kept: Vec<String> = lines
         .keys
         .names()
@@ -3334,19 +3329,36 @@ fn converged(
     .into_iter()
     .map(|(_, _, key)| key.as_str().to_owned())
     .collect();
-    let left: Vec<String> = device
-        .keys
-        .keys()
-        .filter(|name| !dead.contains(*name))
-        .cloned()
-        .collect();
-    assert_eq!(left, kept, "{name}: the device converges on the box's keys");
-    Retirement {
-        name,
-        nodes: device.nodes.into_values().collect(),
-        device: device.keys.into_keys().collect(),
+    let left = |dead: &dyn Fn(&str) -> bool| -> Vec<String> {
+        device
+            .keys
+            .keys()
+            .filter(|name| !dead(name))
+            .cloned()
+            .collect()
+    };
+    assert_eq!(
+        left(&|name| dead.contains(name)),
         kept,
-    }
+        "{name}: the device converges on the box's keys"
+    );
+    // Half the nodes held by the core's outlines, the rest beside them, as a landing's are before
+    // the core holds them: the rule reads both alike.
+    let nodes: Vec<Parsed> = device
+        .nodes
+        .values()
+        .cloned()
+        .map(|node| Parsed::of(node).expect("a node"))
+        .collect();
+    let (held, beside) = nodes.split_at(nodes.len() / 2);
+    let mut outlines = outlines::Outlines::default();
+    outlines.hold(held.to_vec(), &[]);
+    let retired = outlines.retired(beside, &|key| ring.holds(key));
+    assert_eq!(
+        left(&|name| retired.iter().any(|key| key.as_str() == name)),
+        kept,
+        "{name}: the core's rule over the skeleton leaves the device the box's keys"
+    );
 }
 
 /// Every scenario the device's key hygiene must converge through: an erasure, a migration while
@@ -3356,7 +3368,7 @@ fn converged(
 /// with its reseals and without their keys while the device starts over, so each first seal is
 /// live again, and an erasure of a reseal's own key, which the box refuses.
 #[test]
-fn the_retired_vector_is_every_way_a_key_dies() {
+fn every_way_a_key_dies_leaves_a_device_the_box_s_keys() {
     use suzatary_core::secretary::scrubbed_under::ScrubbedUnder;
     let (current, unversioned) = (ScrubbedUnder::current(()), ScrubbedUnder::Unversioned);
     let migrate_twice = |lines: &suzatary_core::secretary::conversations::InMemory| {
@@ -3368,44 +3380,41 @@ fn the_retired_vector_is_every_way_a_key_dies() {
     let restore = |lines: &suzatary_core::secretary::conversations::InMemory| {
         restore_keys_from_before(lines, &before);
     };
-    let vector = vec![
-        converged(
-            "an erasure",
-            &three_turns(&current),
-            &[(&|l| erase_line(l, 2), Then::Pull)],
-        ),
-        converged(
-            "a migration while the device was away",
-            &three_turns(&unversioned),
-            &[(&migrate, Then::Pull)],
-        ),
-        converged(
-            "two migrations, the first one's reseals taken in an earlier pull",
-            &three_turns(&unversioned),
-            &[(&migrate, Then::Pull), (&migrate_again, Then::Pull)],
-        ),
-        converged(
-            "two migrations while the device was away",
-            &three_turns(&unversioned),
-            &[(&migrate_twice, Then::Pull)],
-        ),
-        converged(
-            "an erasure of a slot sealed again",
-            &three_turns(&unversioned),
-            &[(&migrate, Then::Pull), (&|l| erase_line(l, 1), Then::Pull)],
-        ),
-        converged(
-            "the box restored without the reseals' keys, the device starting over",
-            &restored,
-            &[(&migrate, Then::Pull), (&restore, Then::StartOver)],
-        ),
-        converged(
-            "an erasure naming a reseal's own key, refused",
-            &three_turns(&unversioned),
-            &[(&migrate, Then::Pull), (&erase_a_reseal_s_key, Then::Pull)],
-        ),
-    ];
-    write_or_check(&vector, "retired.json");
+    converged(
+        "an erasure",
+        &three_turns(&current),
+        &[(&|l| erase_line(l, 2), Then::Pull)],
+    );
+    converged(
+        "a migration while the device was away",
+        &three_turns(&unversioned),
+        &[(&migrate, Then::Pull)],
+    );
+    converged(
+        "two migrations, the first one's reseals taken in an earlier pull",
+        &three_turns(&unversioned),
+        &[(&migrate, Then::Pull), (&migrate_again, Then::Pull)],
+    );
+    converged(
+        "two migrations while the device was away",
+        &three_turns(&unversioned),
+        &[(&migrate_twice, Then::Pull)],
+    );
+    converged(
+        "an erasure of a slot sealed again",
+        &three_turns(&unversioned),
+        &[(&migrate, Then::Pull), (&|l| erase_line(l, 1), Then::Pull)],
+    );
+    converged(
+        "the box restored without the reseals' keys, the device starting over",
+        &restored,
+        &[(&migrate, Then::Pull), (&restore, Then::StartOver)],
+    );
+    converged(
+        "an erasure naming a reseal's own key, refused",
+        &three_turns(&unversioned),
+        &[(&migrate, Then::Pull), (&erase_a_reseal_s_key, Then::Pull)],
+    );
 }
 
 /// A slot sealed again twice, before the sweep, while both reseals' keys are held: it reads from
@@ -3443,5 +3452,64 @@ fn a_slot_resealed_twice_reads_its_newest_reseal() {
                 "both reseals' keys are held"
             );
         }
+    }
+}
+
+/// One step a generated store takes: a migration (`migrate-scrub`), every reseal sealed again
+/// from its own seal, or one line of the conversation erased.
+#[derive(Debug, Clone, Copy)]
+enum Move {
+    Migrate,
+    SealAgain,
+    Erase(usize),
+}
+
+proptest::proptest! {
+    #![proptest_config(proptest::prelude::ProptestConfig::with_cases(128))]
+
+    /// Law: over generated stores with reseals of reseals and erasures, the device pulling after
+    /// each step, starting over, or away until a later pull, the core's rule over the skeleton the device took leaves it the
+    /// keys the box keeps, as the box's own rule over the objects does (`converged`).
+    #[test]
+    fn law_the_core_s_retired_keys_are_the_box_s(
+        moves in proptest::collection::vec(
+            (
+                proptest::prop_oneof![
+                    proptest::strategy::Just(Move::Migrate),
+                    proptest::strategy::Just(Move::SealAgain),
+                    proptest::strategy::Strategy::prop_map(1usize..=3, Move::Erase),
+                ],
+                proptest::prop_oneof![
+                    proptest::strategy::Just(Then::Pull),
+                    proptest::strategy::Just(Then::StartOver),
+                    proptest::strategy::Just(Then::Away),
+                ],
+            ),
+            1..6,
+        )
+    ) {
+        use suzatary_core::secretary::scrubbed_under::ScrubbedUnder;
+        // A migration reseals the stale slots once; a second finds none. Sealing again reads every
+        // slot's words, so it comes after a migration and before any erasure. A line is erased once.
+        let mut migrated = false;
+        let mut erased = std::collections::BTreeSet::<usize>::new();
+        let taken: Vec<(Move, Then)> = moves
+            .into_iter()
+            .filter(|&(step, _)| match step {
+                Move::Migrate => !std::mem::replace(&mut migrated, true),
+                Move::SealAgain => migrated && erased.is_empty(),
+                Move::Erase(at) => erased.insert(at),
+            })
+            .collect();
+        let run = |step: Move| -> Box<dyn Fn(&suzatary_core::secretary::conversations::InMemory)> {
+            match step {
+                Move::Migrate => Box::new(migrate),
+                Move::SealAgain => Box::new(migrate_again),
+                Move::Erase(at) => Box::new(move |lines| erase_line(lines, at)),
+            }
+        };
+        let steps: Vec<_> = taken.iter().map(|(step, then)| (run(*step), *then)).collect();
+        let steps: Vec<Step<'_>> = steps.iter().map(|(step, then)| (step.as_ref(), *then)).collect();
+        converged(&format!("{taken:?}"), &three_turns(&ScrubbedUnder::Unversioned), &steps);
     }
 }

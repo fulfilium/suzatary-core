@@ -661,7 +661,7 @@ box's own reading of which slots are dead (`transcript::{dead, fed}`, the
 module's `Conversations.erased`), a forget that fails keeping the key until
 one succeeds. Which keys are dead the tab reads from the nodes it holds:
 each node's step says what its line retires (`Step::Erased`, `Step::Resealed`), and
-`linesync.retiredBy` applies the box's rule to them (`transcript::erased`,
+the core applies the box's rule to them over its own skeleton (`Lines.retired`) (`transcript::erased`,
 and `transcript::superseded`, which follows a reseal of a reseal), so no
 answer carries a list of dead keys and a tab converges on the box's keys
 whichever pulls it heard the erasures and reseals in. Its plaintext row of the old store is deleted once

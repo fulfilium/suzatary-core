@@ -24,6 +24,7 @@ import d from "../wire/decoder";
 import payload from "../wire/generated/payload";
 import content from "./content";
 import excluded from "./excluded";
+import type lines from "./lines";
 import type { Replica } from "./replica";
 
 /**
@@ -135,9 +136,20 @@ export interface Lines {
   held: () => string;
   /** Moves with each change of the prints held. */
   version: () => number;
-  /** The skeleton's nodes `add`, as the box sent them, held, and the names `drop` let go. */
-  nodes: (add: string, drop: string) => void;
-  keys: (add: string, drop: string) => void;
+  /** The skeleton's nodes `add`, as the box sent them, held, and the names `drop` let go: the conversations moved. */
+  nodes: (add: string, drop: string) => string;
+  /** The keys `add` held and `drop` let go: the conversations whose lines name one. */
+  keys: (add: string, drop: string) => string;
+  /** The nodes a scope reads of the skeleton and `beside` (nodes not held yet) whose print is not held. */
+  lacking: (scope: string, beside: string) => string;
+  /** `{nodes, lines}`: how many nodes a scope reads, and of its line nodes, lack their print. */
+  lacks: (scope: string) => string;
+  /** Whether the skeleton holds a line of a conversation. */
+  holds: (id: string) => boolean;
+  /** `[<name>, …]`: the keys the skeleton and the nodes `beside` retire, given the keys `held` names. */
+  retired: (beside: string, held: string) => string;
+  /** `{keep, ahead}`: the names the device keeps within a budget, and the plan's nodes lacking their print. */
+  plan: (budget: number) => string;
   list: (inbox: Proposals) => string;
   conversation: (
     id: string,
@@ -606,7 +618,32 @@ export const conversationOf = (lines: Lines, inbox: Proposals, id: string, windo
 export const searchOf = (lines: Lines, q: string): SearchPayload => checked("search", lines.search(q), payload.SearchPayload);
 
 /** `nodes` held in the core's skeleton and `gone` let go. */
-export const nodesInto = (lines: Lines, nodes: readonly SkeletonNode[], gone: readonly string[]): void => lines.nodes(JSON.stringify(nodes), JSON.stringify(gone));
+/** `nodes` held and `gone` let go, answering the conversations a line of which came or went. */
+export const nodesInto = (lines: Lines, nodes: readonly SkeletonNode[], gone: readonly string[]): readonly string[] =>
+  checked("nodes", lines.nodes(JSON.stringify(nodes), JSON.stringify(gone)), arr(str));
+
+/** The keys `add` held and `gone` let go, answering the conversations whose lines name one. */
+export const keysInto = (lines: Lines, add: Readonly<Record<string, string>>, gone: readonly string[]): readonly string[] =>
+  checked("keys", lines.keys(JSON.stringify(add), JSON.stringify(gone)), arr(str));
+
+/** The nodes `scope` reads whose print the core does not hold, by the core's skeleton and `beside`, nodes it was not told. */
+export const lackingIn = (held: Lines, scope: lines.Scope, beside: readonly SkeletonNode[] = []): readonly SkeletonNode[] =>
+  checked("lacking", held.lacking(JSON.stringify(scope), JSON.stringify(beside)), arr(payload.SkeletonNode));
+
+/** How many nodes `scope` reads lack their print, and how many of those are lines. */
+export const lacksIn = (held: Lines, scope: lines.Scope): { readonly nodes: number; readonly lines: number } =>
+  checked("lacks", held.lacks(JSON.stringify(scope)), obj<{ nodes: number; lines: number }>({ nodes: num, lines: num }));
+
+/**
+ * The keys the core's skeleton and `beside` (nodes it does not hold yet) retire, given the keys `held` names: the box's
+ * rule over the steps (`transcript::Retired`), read by the core alone.
+ */
+export const retiredOf = (lines: Lines, beside: readonly SkeletonNode[], held: readonly string[]): ReadonlySet<string> =>
+  new Set(checked("retired", lines.retired(JSON.stringify(beside), JSON.stringify(held)), arr(str)));
+
+/** The names the device keeps of the lines' content within `budget` bytes, and the plan's nodes the core lacks. */
+export const planOf = (lines: Lines, budget: number): { readonly keep: readonly string[]; readonly ahead: readonly SkeletonNode[] } =>
+  checked("plan", lines.plan(budget), obj<{ keep: string[]; ahead: SkeletonNode[] }>({ keep: arr(str), ahead: arr(payload.SkeletonNode) }));
 
 export const chosenOf = (lines: Lines, topics: TopicReading, chosen: readonly string[], pages: number): readonly SkeletonNode[] =>
   checked("chosen", lines.chosen(topics, JSON.stringify(chosen), pages), arr(payload.SkeletonNode));
