@@ -100,16 +100,18 @@ fn completion(performed: &Performed) -> Option<&Done> {
 fn answered(response: &Response) -> Option<Done> {
     let said = match response {
         Response::Ran(responded) => responded.clone(),
-        Response::Recorded(Reading::One(answer)) => match &answer.response {
-            Responded::Checked(check) => {
-                return Some(Done::MayHaveGone {
-                    reason: check.reason().to_owned(),
-                });
-            }
-            Responded::Done(done) => Responded::Done(done.clone()),
+        Response::Recorded(reading) => match reading.as_ref() {
+            Reading::One(answer) => match &answer.response {
+                Responded::Checked(check) => {
+                    return Some(Done::MayHaveGone {
+                        reason: check.reason().to_owned(),
+                    });
+                }
+                Responded::Done(done) => Responded::Done(done.clone()),
+                _ => return None,
+            },
             _ => return None,
         },
-        Response::Recorded(_) => return None,
     };
     match said {
         Responded::Done(done) => Some(done),

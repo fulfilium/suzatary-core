@@ -670,8 +670,9 @@ impl Fold {
 pub enum Response {
     /// Recorded by this call.
     Ran(Responded),
-    /// What stood before it: returned, and nothing performed or recorded.
-    Recorded(Reading),
+    /// What stood before it: returned, and nothing performed or recorded. Boxed, because a
+    /// reading of a conflict holds two answers in place.
+    Recorded(Box<Reading>),
 }
 
 impl Fold {
@@ -746,7 +747,7 @@ pub fn transition_held<C: Prodrome<InboxEvent> + ?Sized>(
     let fold = fold(caps)?;
     let object = fold.one(id)?;
     match step(object)? {
-        Step::Answer => Ok(Response::Recorded(object.reading.clone())),
+        Step::Answer => Ok(Response::Recorded(Box::new(object.reading.clone()))),
         Step::Record(responded) => {
             caps.append(InboxEvent {
                 proposal: object.id.clone(),

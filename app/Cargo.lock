@@ -3184,10 +3184,11 @@ dependencies = [
 [[package]]
 name = "prodrome-core"
 version = "0.9.0"
-source = "git+https://github.com/fulfilium/prodrome?rev=293443e6603d659e04b016bb1bd0dd528b7e3af2#293443e6603d659e04b016bb1bd0dd528b7e3af2"
+source = "git+https://github.com/fulfilium/prodrome?rev=d5717fe244eaad00215fe7ed72d97f38fb2b0c2e#d5717fe244eaad00215fe7ed72d97f38fb2b0c2e"
 dependencies = [
  "chrono",
  "ed25519-dalek",
+ "memchr",
  "rustix",
  "sha2",
  "thiserror",
@@ -3197,7 +3198,7 @@ dependencies = [
 [[package]]
 name = "prodrome-typst-wasm"
 version = "0.1.0"
-source = "git+https://github.com/fulfilium/prodrome?rev=293443e6603d659e04b016bb1bd0dd528b7e3af2#293443e6603d659e04b016bb1bd0dd528b7e3af2"
+source = "git+https://github.com/fulfilium/prodrome?rev=d5717fe244eaad00215fe7ed72d97f38fb2b0c2e#d5717fe244eaad00215fe7ed72d97f38fb2b0c2e"
 dependencies = [
  "serde",
  "serde_json",
@@ -3209,7 +3210,7 @@ dependencies = [
 [[package]]
 name = "prodrome-wasm-exports"
 version = "0.9.0"
-source = "git+https://github.com/fulfilium/prodrome?rev=293443e6603d659e04b016bb1bd0dd528b7e3af2#293443e6603d659e04b016bb1bd0dd528b7e3af2"
+source = "git+https://github.com/fulfilium/prodrome?rev=d5717fe244eaad00215fe7ed72d97f38fb2b0c2e#d5717fe244eaad00215fe7ed72d97f38fb2b0c2e"
 dependencies = [
  "prodrome-core",
  "serde",
