@@ -28,12 +28,15 @@ pub enum Place<'a> {
     Ask(&'a str),
     /// The secretary's stream.
     Secretary,
-    /// A conversation: opened at a turn, or with a reference attached (`""` for none).
+    /// A conversation: opened at a turn, or with a reference attached (`""` for none), its
+    /// composer focused or not.
     Conversation {
         /// Its id.
         id: &'a str,
         /// A reference to attach.
         reference: &'a str,
+        /// Whether the composer takes the focus.
+        focus: bool,
         /// The turn its window ends at.
         at: Option<u32>,
     },
@@ -59,12 +62,18 @@ impl Place<'_> {
             Place::Thread(id) => format!("#/mail/thread/{}", component(id)),
             Place::Ask(reference) => format!("#/secretary{}", search(&[("ref", reference)])),
             Place::Secretary => "#/secretary".to_owned(),
-            Place::Conversation { id, reference, at } => {
+            Place::Conversation {
+                id,
+                reference,
+                focus,
+                at,
+            } => {
                 let at = at.map(|t| t.to_string()).unwrap_or_default();
+                let focus = if focus { "1" } else { "" };
                 format!(
                     "#/secretary/{}{}",
                     component(id),
-                    search(&[("ref", reference), ("at", &at)])
+                    search(&[("ref", reference), ("focus", focus), ("at", &at)])
                 )
             }
             Place::Chain => "#/chain".to_owned(),
@@ -75,7 +84,7 @@ impl Place<'_> {
     }
 }
 
-/// A question the box answers.
+/// A question or an act the box answers.
 #[derive(Debug, Clone, Copy)]
 pub enum Question<'a> {
     /// A page of the inbox by date, from `before` (`""` for the newest).
@@ -102,6 +111,14 @@ pub enum Question<'a> {
     Watches,
     /// A watch cancelled (a POST), answered by the watches that still wait.
     Cancel(&'a str),
+    /// What is connected, by group.
+    Overview,
+    /// A setup conversation begun on a template (a POST), answered by the conversation.
+    Setup(&'a str),
+    /// This device's card filed for a trusted device to tap (a POST).
+    Key,
+    /// This device trusted with the code from the box (a POST).
+    Pair,
     /// The secretary's memory.
     Memory,
     /// A fact forgotten (a POST).
@@ -145,6 +162,10 @@ impl Question<'_> {
             Question::Thread(id) => format!("/api/mail/thread/{}?limit={THREAD}", component(id)),
             Question::Watches => "/api/mail/watches".to_owned(),
             Question::Cancel(id) => format!("/api/mail/watches/{}/cancel", component(id)),
+            Question::Overview => "/api/overview".to_owned(),
+            Question::Setup(template) => format!("/api/secretary/setup/{}", component(template)),
+            Question::Key => "/api/act/key".to_owned(),
+            Question::Pair => "/api/act/pair".to_owned(),
             Question::Memory => "/api/secretary/memory".to_owned(),
             Question::Forget(id) => format!("/api/secretary/memory/{id}/forget"),
             Question::Record => "/api/secretary/record".to_owned(),

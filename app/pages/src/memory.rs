@@ -12,7 +12,7 @@ use viewtree::{Node, Program, view};
 use crate::chrome::{self, Chrome, Masthead, Shape, callout, counted, empty, link};
 use crate::places::{Place, Question};
 use crate::reading::{Nothing, Opened};
-use crate::runtime::{Answer, Context, Effect, Gate, Held, Input};
+use crate::runtime::{Answer, Body, Context, Effect, Gate, Held, Input};
 
 /// The page's two questions.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
@@ -43,6 +43,7 @@ impl Act {
         Effect::Post {
             ask: self.clone(),
             path,
+            body: Body::Empty {},
         }
     }
 }
@@ -272,6 +273,7 @@ fn said(class: &str, s: &SaidOn, words: Option<String>) -> Node<Msg> {
         Place::Conversation {
             id,
             reference: &card,
+            focus: false,
             at,
         },
         words.unwrap_or(own),

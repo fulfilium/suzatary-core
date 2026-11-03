@@ -32,6 +32,10 @@ name = "boundary"
 path = "tests/boundary.rs"
 
 [[test]]
+name = "device"
+path = "tests/device.rs"
+
+[[test]]
 name = "laws"
 path = "tests/laws.rs"
 

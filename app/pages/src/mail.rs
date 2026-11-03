@@ -16,7 +16,7 @@ use viewtree::{Node, Program, view};
 use crate::chrome::{self, Chrome, Masthead, Shape, mark};
 use crate::mailrow::{account, arrived, decided, folder, held, sender, subject, todo};
 use crate::places::{PAGE, Place, Question};
-use crate::runtime::{Context, Effect, Gate, Held, Input, answered, read};
+use crate::runtime::{Body, Context, Effect, Gate, Held, Input, answered, read};
 use crate::zone::when;
 
 /// Which listing: the inbox or a query, and an account or every one, as the address names them.
@@ -201,6 +201,7 @@ impl Program for Mail {
                 vec![Effect::Post {
                     path: Question::Cancel(&id).path(),
                     ask: Ask::Cancel { id },
+                    body: Body::Empty {},
                 }]
             }
             Msg::Retry => vec![
@@ -318,7 +319,7 @@ fn watch(m: &Model, w: &MailWatch) -> Node<Msg> {
         Gate::Writes => Some(
             view! { Button "act act-cancel" {Type => "button", AriaLabel => format!("Stop watching for {}", what(w)), Disabled => m.cancelling.contains(&w.id)} @click(Msg::Cancel(w.id.clone())) ["Cancel"] },
         ),
-        Gate::Reads => None,
+        Gate::Reads | Gate::Views => None,
     };
     let until = when(&m.flags.context.offsets, &w.until);
     view! { Li "watchrow" {Data("watch") => &w.id} [

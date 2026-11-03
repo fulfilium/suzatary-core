@@ -1,14 +1,13 @@
 // Every route the box answers, named once: its path, its method, and the decoder its answer passes through `http`.
 
 import app from "../app/app";
-import type { AboutPayload, AttachmentRow, Authoring, AuthoredPayload, BlockRender, BriefingPayload, BriefingsPayload, CalendarPayload, ChainPayload, ConversationPayload, DevicePayload, DrawnPayload, Erasing, FactId, FoldPayload, KeyAsked, MailSearchPayload, MePayload, MemoryPayload, NewTodo, ObjectsPayload, Overview, Pairing, PostedObjects, Reasoning, ReceiptPayload, RecordPayload, Registering, ReleasesPayload, Revealing, SayPayload, Saying, Tapping, Titling, TodoPayload, UpdateTodo, Uploaded, Uploading, UsagePayload, WaitingPayload } from "./generated/wire";
+import type { AboutPayload, AttachmentRow, Authoring, AuthoredPayload, BlockRender, BriefingPayload, BriefingsPayload, CalendarPayload, ChainPayload, ConversationPayload, DevicePayload, DrawnPayload, Erasing, FactId, FoldPayload, MailSearchPayload, MePayload, MemoryPayload, NewTodo, ObjectsPayload, Overview, PostedObjects, Reasoning, ReceiptPayload, RecordPayload, Registering, ReleasesPayload, Revealing, SayPayload, Saying, Tapping, Titling, TodoPayload, UpdateTodo, Uploaded, Uploading, UsagePayload, WaitingPayload } from "./generated/wire";
 import { print } from "../chat/refs";
 import type { Reference } from "../chat/refs";
 import heads from "../prodrome/heads";
 import http from "./http";
 import storereads from "./storereads";
 import once from "../algebra/once";
-import d from "./decoder";
 import type heldvalue from "../view/heldvalue";
 import payload from "./generated/payload";
 
@@ -122,10 +121,6 @@ const proposalPath = (id: string, index: number, verb: string): string =>
 /** A blank title is left for the box to name after the first answer. */
 export const openConversation = (title: string): Promise<ConversationPayload> =>
   http.act("/api/secretary/conversations", { title } satisfies Titling, payload.ConversationPayload);
-
-/** The setup conversation begun on one template of the box's catalog: the box writes its first line. */
-export const beginSetup = (template: string): Promise<ConversationPayload> =>
-  http.act(`/api/secretary/setup/${encodeURIComponent(template)}`, {}, payload.ConversationPayload);
 
 export const renameConversation = (id: string, title: string): Promise<ConversationPayload> =>
   http.act(conversationPath(id, "/title"), { title } satisfies Titling, payload.ConversationPayload);
@@ -246,14 +241,6 @@ export const revealHeld = (conversation: string | null): heldvalue.Reveal => (ha
 /** The Android portal's push token, which this page signs for the native code that holds no key. */
 export const reportPushToken = (token: string): Promise<DevicePayload> =>
   http.act("/api/act/device", { platform: "android", token } satisfies Registering, payload.DevicePayload);
-
-/** A device asks to be trusted: the box files one Inbox card, which a tap from a trusted device answers. */
-export const askTrust = (key: string): Promise<{ proposed: number }> =>
-  http.act("/api/act/key", { key } satisfies KeyAsked, d.obj({ proposed: d.num }));
-
-/** The code `suzatary device pair` printed at the box: the box trusts the key that signs this request, and answers it. */
-export const pairDevice = (code: string): Promise<{ trusted: string }> =>
-  http.act("/api/act/pair", { code } satisfies Pairing, d.obj({ trusted: d.str }));
 
 export const forgetFact = (id: FactId): Promise<MemoryPayload> =>
   http.act(`/api/secretary/memory/${id}/forget`, {}, payload.MemoryPayload);

@@ -14,10 +14,10 @@ use suzatary_core::wire::{
     Neighbour, RecordPayload, RecordSummary, ReleaseItem, ReleaseRow, ReleasesPayload, SaidOn,
 };
 use suzatary_pages::reading::{Nothing, One, Opened};
-use suzatary_pages::runtime::{Answer, Behind, Context, Effect, Gate, Input};
+use suzatary_pages::runtime::{Answer, Behind, Body, Context, Effect, Gate, Input};
 use suzatary_pages::zone::Offset;
 use suzatary_pages::{
-    about, briefing, briefings, calendar, mail, memory, message, reading as one, thread,
+    about, briefing, briefings, calendar, mail, memory, message, reading as one, settings, thread,
 };
 use viewtree::Runtime;
 use viewtree::dom::page_laws;
@@ -234,6 +234,7 @@ fn a_cancel_runs_once_until_it_is_answered() {
                 id: "w0".to_owned()
             },
             path: "/api/mail/watches/w0/cancel".to_owned(),
+            body: Body::Empty {},
         }]
     );
     assert_eq!(second, Vec::new());
@@ -579,7 +580,8 @@ fn a_forget_runs_once_until_it_is_answered() {
         sent,
         vec![Effect::Post {
             ask: memory::Act::Forget(FactId(3)),
-            path: "/api/secretary/memory/3/forget".to_owned()
+            path: "/api/secretary/memory/3/forget".to_owned(),
+            body: Body::Empty {},
         }]
     );
     assert_eq!(rt.step(tap()).1, Vec::new());
@@ -598,4 +600,104 @@ fn a_forget_runs_once_until_it_is_answered() {
         1,
         "an answered act may be tapped again"
     );
+}
+
+fn overview() -> impl Strategy<Value = Value> {
+    let line = |n: u8, standing: Value, cards: Value| {
+        json!({"key": format!("l{n}"), "label": format!("Line {n}"), "detail": null,
+            "standing": standing, "cards": cards})
+    };
+    (
+        proptest::collection::vec(
+            (
+                0u8..4,
+                prop::sample::select(vec![
+                    json!({"kind": "kept"}),
+                    json!({"kind": "synced", "at": "2026-10-05T04:00:00"}),
+                    json!({"kind": "locked"}),
+                    json!({"kind": "missing", "what": ["a key", "a link"]}),
+                    json!({"kind": "by_hand", "command": "suzatary auth", "why": "sign in"}),
+                ]),
+                prop::sample::select(vec![json!([]), json!(["proposal:setup/1"])]),
+            ),
+            0..4,
+        ),
+        any::<bool>(),
+    )
+        .prop_map(move |(lines, offers)| {
+            let lines: Vec<Value> = lines.into_iter().map(|(n, s, c)| line(n, s, c)).collect();
+            json!({"groups": [{"group": "models", "lines": lines}, {"group": "mail", "lines": []}],
+                "ask": "setup",
+                "offers": if offers { json!([{"template": "google", "group": "mail", "title": "a Google account"}]) } else { json!([]) }})
+        })
+}
+
+fn device() -> impl Strategy<Value = Value> {
+    prop::sample::select(vec![
+        json!(null),
+        json!({"persist": {"type": "Granted"}, "usage": {"bytes": 1024.0, "count": 1}, "budget": 1e6,
+            "signing": {"type": "Keyed", "key": "ab".repeat(32), "standing": "untrusted"}}),
+        json!({"persist": {"type": "Denied"}, "usage": {"bytes": 0.0, "count": 0}, "budget": 1e6,
+            "signing": {"type": "Unreadable", "e": "it does not read"}}),
+    ])
+}
+
+fn cards() -> impl Strategy<Value = Value> {
+    prop::sample::select(vec![
+        json!([]),
+        json!([{"reference": "proposal:setup/1", "act": "secret", "stands": "open", "version": "a"}]),
+        json!([{"reference": "proposal:setup/1", "act": "sign_in", "stands": "settled", "version": "b"}]),
+    ])
+}
+
+fn settings_act() -> impl Strategy<Value = settings::Act> {
+    prop_oneof![
+        Just(settings::Act::Begin {
+            template: "google".to_owned()
+        }),
+        Just(settings::Act::AskTrust {
+            key: "ab".repeat(32)
+        }),
+        Just(settings::Act::Renew),
+        Just(settings::Act::Pair {
+            code: "BCDF-GHJK".to_owned()
+        }),
+    ]
+}
+
+fn settings_msg() -> impl Strategy<Value = settings::Msg> {
+    let host = |i: Input<settings::Hold, settings::Ask>| settings::Msg::Host(Box::new(i));
+    prop_oneof![
+        held(settings::Hold::Overview, overview()).prop_map(host),
+        held(settings::Hold::Device, device()).prop_map(host),
+        held(settings::Hold::Cards, cards()).prop_map(host),
+        any::<bool>().prop_map(move |w| host(Input::Context(context(w)))),
+        settings_act().prop_map(settings::Msg::Run),
+        (settings_act(), any::<bool>()).prop_map(move |(ask, done)| host(Input::Answered {
+            ask,
+            answer: if done {
+                Answer::Done {
+                    body: json!({"id": "setup-1"}),
+                }
+            } else {
+                Answer::Refused {
+                    status: 403,
+                    words: "no".to_owned(),
+                }
+            }
+        })),
+        Just(settings::Msg::Pairing(settings::Pairing::Closed)),
+        prop::sample::select(vec!["", "BCDF"])
+            .prop_map(|c| settings::Msg::Pairing(settings::Pairing::Open { code: c.to_owned() })),
+        Just(settings::Msg::Retry),
+    ]
+}
+
+proptest! {
+    #![proptest_config(ProptestConfig::with_cases(256))]
+
+    #[test]
+    fn settings_laws(writes: bool, msgs in proptest::collection::vec(settings_msg(), 0..12)) {
+        page_laws::<settings::Settings>(|| settings::Flags { context: context(writes) }, &msgs);
+    }
 }

@@ -2,7 +2,7 @@
 
 This is the design pass for the todo `frameworksplit` (2.3). It holds a plan and one measured
 prototype: the Settings page converted to the new shape behind a flag. The stages in §7 complete
-the todo; this document does not. Paths are relative to the repository root, read at `10c7f82`
+the todo; this document does not. Stage 1 removed the flag (§7.1). Paths are relative to the repository root, read at `10c7f82`
 (2.1.55); review round 1 rewrote the prototype and its numbers on 2.1.56 (`87584c3`).
 
 **The owner's decisions (2026-11-02), which this plan takes as given:**
@@ -545,6 +545,49 @@ with the readings once it is in the service worker's cache and compiled. *Size:*
 
 Stages 4 to 8 can run in parallel once stage 2 has landed. Stage 10 can happen any time after
 stage 3.
+
+### 7.1 Stage 1, as built (on 2.1.60, after stage 5)
+
+Stage 5 (#316) landed the runtime's sums first, so stage 1 built Settings on them rather than on a
+second runtime.
+
+- **The runtime's sums.** Settings uses `Hold` and `Again` for the overview, `Go` for a begun
+  conversation, `Toast`, and three arms this stage adds, each generic: `Post` carries the route's
+  request (`Body`, a closed sum of the core's request types), `NewKey` puts a new key in this
+  device's place, and `Watch` holds a reading the tab keeps (`Local`: this device, the Inbox's
+  cards; `web/src/pages/local.ts`), handed over as `Input::Held`, as the box's answers are.
+  `Gate` gains `Views` (no actor), which Settings needs to hide Ask, and the host sends the
+  context again when the actor or whether it writes changes. The next page adds a `Local` arm or a
+  `Body` arm, never a handler; `Write` comes with LOCALWRITES stage 4.
+- **The host.** Settings is mounted by `program.mount` as the mail pages are, and draws its head and
+  status through `chrome.rs`. `settingsview.ts`, `settings.ts`, `settings.state.ts`, `pairing.ts`
+  and `device.ts`'s view are gone. The Inbox's cards are parts in `parts.ts` until stage 6. When
+  the watched cards change, the program asks the overview again, since a card the box files changes
+  which line asks for what. Nothing in `web/src/painter` names a page.
+- **The laws.** `settings_laws` in `app/pages/tests/laws.rs`, and in a browser
+  `web/e2e/painter.test.ts` (WEB-SPEC §3.22) over Settings' program through `Runtime::fresh`; with
+  the painter's move made a no-op the browser scene fails at its first seed.
+- **Behaviour.** With no flag, `overview` (7), `pairing` (2), `google`, `tapsecret`, `connections`
+  (3) and `bootstrap` pass, 15 of 15, and so do stage 5's `mail`, `waiting`, `keyboard` and
+  `desktop`. The Inbox's card for this device no longer carries a code field: it links to
+  Settings, where the code is typed.
+- **Size** (`scripts/size.sh` against stage 5's branch, `8b1aafc`): Rust +2,801 characters (+130
+  lines), TypeScript −15,115 characters (−375 lines).
+- **The bench** (§6.2, the same container, two runs each, warm medians of nine):
+
+  | | Run 1 | Run 2 |
+  | --- | --- | --- |
+  | Today's page, before (`50232d3`, no flag) | 599 ms (518 to 786) | 606 ms (591 to 681) |
+  | The Rust page, before (`50232d3`, flag on) | 614 ms (595 to 784) | 696 ms (614 to 797) |
+  | The Rust page, after (no flag) | 500 ms (410 to 692) | 491 ms (399 to 590) |
+
+  The "before" rows read the end of the draw that first showed the lines (`page:draw`); the "after"
+  row reads a mark set when the first line stands in the document, since that measure belonged to
+  the host this stage deletes. The page draws sooner because the overview no longer waits on this
+  device's reading beside it. The module's load is 95 ms on every warm visit, before and after: a
+  fresh document compiles it again, so a load that no longer shares the core is not met yet. A
+  keystroke is 0.4 to 0.5 ms and a 23-byte patch (12 to 34). The module, now four pages, is 737,922
+  bytes after `wasm-opt`.
 
 ## 8. The plan read two ways
 

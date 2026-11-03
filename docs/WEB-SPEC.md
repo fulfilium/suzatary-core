@@ -1766,7 +1766,8 @@ Each pattern written once, in `web/src/algebra/once.ts`, `latest.ts`,
   asked again next time, since a browser resumed from sleep may open it; and a
   key held again, a renewed one's included, moves the tab back to writing
   (`App`'s `Signs`). — `signer.test.ts` "law: an unreadable signer row never mints a
-  key"; `device.test.ts` "an unreadable key row is offered a new key…";
+  key"; `app/pages/tests/device.rs`
+  "an_unreadable_key_row_is_offered_a_new_key_and_a_device_with_no_key_row_is_not";
   `app.test.ts` "a renewed or newly trusted key writes again without a
   reload".
 - **The device keeps no format but this build's:** nothing is carried from
@@ -1922,13 +1923,18 @@ the page holds no filter of its own and no second reading of the topics.
 
 ### 3.22 The view tree
 
-A page drawn by a Rust program (`docs/FRAMEWORK-PLAN-2026-11-02.md`; Settings,
-behind the `suzatary.viewtree` flag) is a `viewtree::Program`: a model, a
-pure `update` that answers effects as data, and a `view` that is a tree of
-data whose handlers are messages. `viewtree::Painter` diffs it against the
-tree last painted and answers patches; `web/src/painter/painter.ts` applies
-them. In `app/viewtree/tests/laws.rs`, over generated views and a DOM kept
-as data:
+A page drawn by a Rust program (`docs/FRAMEWORK-PLAN-2026-11-02.md`; Mail,
+a message, a thread and Settings) is a `viewtree::Program`: a model, a pure
+`update` that answers effects as data, and a `view` that is a tree of data
+whose handlers are messages. `viewtree::Painter` diffs it against the tree
+last painted and answers patches; `web/src/painter/painter.ts` applies them.
+Every page asks for the same effects and is handed the same inputs, the
+runtime's two closed sums (`app/pages/src/runtime.rs`), and
+`web/src/pages/program.ts` performs each effect the same way for every page.
+A page holds the box's answers (`Hold`) and the tab's own readings (`Watch`,
+`web/src/pages/local.ts`) alike, as `Input::Held`; an act (`Post`, `NewKey`)
+carries the page's own name for it, which comes back unread with its answer. In `app/viewtree/tests/laws.rs`, over generated views and a DOM
+kept as data:
 
 - **A patch applied equals a fresh draw.** —
   "a_patch_applied_equals_a_fresh_draw".
@@ -1959,6 +1965,21 @@ too; each page's laws in `app/pages/tests/laws.rs` ("memory_laws",
 - **The release sample reads as the box reads it.** An item completed once
   stays done, a dropped one moved out, what is owed first. — `releases.rs`
   "the_box_sample_reads_as_the_box_reads_it".
+
+The same laws hold in a real browser, against `painter.ts` and `run.ts` and
+the module the box serves, over Settings' program driven by generated
+readings, taps, typing and answers with a pure handler:
+
+- **A patch applied equals a fresh draw, after every step**, compared node
+  by node with a new painter's draw of `fresh()`, the program's current view
+  drawn from nothing.
+- **The view is a function of the model:** a second run of the same steps
+  paints the same DOM and asks the same effects.
+- **Painting a view again patches nothing:** a reading handed twice patches
+  nothing the second time.
+
+— `web/e2e/painter.test.ts` "a patch applied equals a fresh draw, and the
+same steps paint the same DOM, for Settings' program".
 
 ## 4. The vectors
 

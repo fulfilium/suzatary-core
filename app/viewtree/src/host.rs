@@ -54,6 +54,12 @@ impl<P: Hosted> Host<P> {
         }
     }
 
+    /// The current view drawn from nothing ([`Runtime::fresh`]).
+    #[must_use]
+    pub fn fresh(&self) -> Vec<u8> {
+        self.runtime.fresh()
+    }
+
     /// The effects asked for since the host last took them, as a JSON array.
     ///
     /// # Errors
@@ -70,7 +76,8 @@ impl<P: Hosted> Host<P> {
 }
 
 /// A wasm-bindgen class named `$class` over the [`Hosted`] program `$program`: `new(flags)`,
-/// `first()` (the first paint's bytes), `input(json)`, `event(id, on, words)` and `effects()`.
+/// `first()` (the first paint's bytes), `input(json)`, `event(id, on, words)`, `fresh()` and
+/// `effects()`.
 /// The calling crate depends on `wasm-bindgen`.
 #[macro_export]
 macro_rules! export {
@@ -102,6 +109,10 @@ macro_rules! export {
 
             pub fn event(&mut self, id: u32, on: u8, words: String) -> Vec<u8> {
                 self.host.event(id, on, words)
+            }
+
+            pub fn fresh(&self) -> Vec<u8> {
+                self.host.fresh()
             }
 
             pub fn effects(&mut self) -> Result<String, wasm_bindgen::JsError> {

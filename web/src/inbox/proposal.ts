@@ -8,9 +8,7 @@
 // it shows is the row, then the intents about it that the row does not yet hold.
 
 import app from "../app/app";
-import pairing from "../app/pairing";
-import signer from "../prodrome/signer";
-import { attachmentUrl, pairDevice, revealHeld } from "../wire/api";
+import { attachmentUrl, revealHeld } from "../wire/api";
 import type { CardAnswer, CardFile, FileFrom, ProposalRow, ProposedObject, Revises } from "../wire/generated/wire";
 import proposed from "./proposed";
 import type { Child } from "../view/dom";
@@ -293,11 +291,10 @@ export function proposalCard(id: string, proposal: ProposalRow, frame: ProposalF
   }
 
   // A login the box names no actor for sees no button: the box would refuse the tap. A device whose key is not trusted
-  // is sent to trust it, and on its own card is offered the box's code.
+  // is sent to Settings to trust it.
   if (!writes) {
     const now = app.now();
     const key = now.who.type === "Writes" ? now.who.key.type : null;
-    const here = signer.signing();
     const settings = (words: string, link: string): HTMLElement =>
       el("div", { class: "proposaloutcome readonly" }, words, " ", el("a", { class: "act act-trustit", href: hrefOf({ type: "settings" }) }, link));
     node.appendChild(
@@ -307,8 +304,6 @@ export function proposalCard(id: string, proposal: ProposalRow, frame: ProposalF
           ? settings("This device's key was revoked.", "Put a new key in its place →")
           : el("div", { class: "proposaloutcome readonly" }, card.readonly),
     );
-    if (key === "Untrusted" && proposal.act.kind === "device" && here.type === "Held" && proposal.act.key === here.key)
-      node.appendChild(pairing.view(cardui.of(pairing.KEY), pairing.acts(pairDevice, () => {})));
     return node;
   }
 

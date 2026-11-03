@@ -42,14 +42,13 @@ app.scene("an untrusted device is trusted with the code from the box, its card l
     "This device stands before everything else while it is untrusted",
   );
 
-  // Its own card in the Inbox sends it to Settings and offers the code there too.
+  // Its own card in the Inbox sends it to Settings, where the code is typed.
   await app.page.click(".settingshere .act-asktrust");
   await app.page.navigate(`${WRITE_BASE}/#/inbox`);
   const mine = `[...document.querySelectorAll(".proposal-act-device.proposal-standing")].find((c) => c.textContent.includes(${JSON.stringify(key)}))`;
   await app.page.waitFor(`(${mine}) !== undefined`, { timeout: 20000 });
   assert.match(await app.page.evaluate<string>(`${mine}.querySelector(".readonly").textContent`), /^This device is not trusted yet\. Trust it →$/);
   assert.equal(await app.page.evaluate<string>(`${mine}.querySelector(".readonly a").getAttribute("href")`), "#/settings");
-  assert.equal(await app.page.evaluate<string>(`${mine}.querySelector(".act-pair").textContent`), "Enter the code from the box");
 
   const code = pairAtTheBox();
   await app.page.navigate(`${WRITE_BASE}/#/settings`);

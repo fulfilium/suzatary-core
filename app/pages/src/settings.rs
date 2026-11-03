@@ -1,15 +1,15 @@
 //! Settings: what is connected, by group, and this device, as a model, an update and a view.
 //!
-//! The host (`web/src/pages/settingsview.ts`) hands over what the page reads (`Input::Shown`)
-//! and what each act came to (`Input::Answered`); every tap is a message here, and everything
-//! the page asks of the world is an [`Effect`]. A proposal card is still the Inbox's TypeScript,
-//! placed as a foreign part by its reference, until the Inbox is converted.
+//! The page holds the box's overview, and watches what the tab keeps of this device and the
+//! Inbox's open cards; every tap is a message here, and everything the page asks of the world is
+//! one of the runtime's effects. A proposal card is still the Inbox's TypeScript, placed as a
+//! foreign part by its reference, until the Inbox is converted.
 
 use std::collections::BTreeSet;
 
 use serde::{Deserialize, Serialize};
 use suzatary_core::connect::{Failure, Group, Standing};
-use suzatary_core::wire::{Offer, Overview, OverviewGroup, OverviewLine};
+use suzatary_core::wire::{self, Offer, Overview, OverviewGroup, OverviewLine};
 use ts_rs::TS;
 use viewtree::Attr::{
     AriaLabel, Autocapitalize, Autocomplete, Class, Data, Href, Placeholder, Spellcheck, Type,
@@ -19,28 +19,33 @@ use viewtree::kit::{Reading, button, disclosure, para};
 use viewtree::node::foreign;
 use viewtree::{Node, Program, view};
 
-use crate::runtime::Gate;
-use crate::zone::{Offset, when};
+use crate::chrome::{self, Chrome, Masthead, Shape};
+use crate::places::{Place, Question};
+use crate::runtime::{self, Answer, Body, Context, Gate, Held, Local, read};
+use crate::zone::when;
 
-/// What the page reads, as the host last read it.
+/// What the page starts from.
 #[derive(Debug, Clone, Deserialize, TS)]
-pub struct Shown {
+#[ts(rename = "SettingsFlags")]
+pub struct Flags {
+    /// The tab's context.
+    pub context: Context,
+}
+
+/// What the page holds and watches.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(rename = "SettingsHold")]
+pub enum Hold {
     /// The box's overview.
-    pub overview: Overview,
-    /// The Inbox's open cards, on their way while the conversations sync.
-    pub rows: Reading<Vec<Card>>,
-    /// Whether this login writes: the acts are offered only then.
-    pub gate: Gate,
-    /// Where Ask goes, printed by the shell's router; `None` for a login with no actor.
-    pub ask: Option<String>,
-    /// This device, or `None` when the browser answers nothing for itself.
-    pub device: Option<Device>,
-    /// The owner's zone as offsets from UTC, oldest first, each from the instant it starts.
-    pub offsets: Vec<Offset>,
+    Overview,
+    /// This device, as the tab keeps it.
+    Device,
+    /// The Inbox's open cards.
+    Cards,
 }
 
 /// One proposal card, by its reference, with what this page decides from it.
-#[derive(Debug, Clone, Deserialize, TS)]
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, TS)]
 pub struct Card {
     /// `proposal:<conversation>/<n>`, as a line's `cards` names it.
     pub reference: String,
@@ -151,6 +156,7 @@ pub enum KeyStanding {
 
 /// An act the page asks the world for; its button is disabled until it is answered.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize, TS)]
+#[ts(rename = "SettingsAct")]
 #[serde(tag = "type")]
 pub enum Act {
     /// Open a conversation of its own on a template and go to it.
@@ -172,51 +178,41 @@ pub enum Act {
     },
 }
 
-/// What an act came to.
-#[derive(Debug, Clone, Deserialize, TS)]
-#[serde(tag = "type")]
-pub enum Outcome {
-    /// It was done.
-    Done,
-    /// The box refused it, in its words.
-    Refused {
-        /// The words.
-        words: String,
-    },
+impl Act {
+    /// What the runtime performs for it.
+    fn effect(&self) -> Effect {
+        let post = |q: Question, body| Effect::Post {
+            ask: self.clone(),
+            path: q.path(),
+            body,
+        };
+        match self {
+            Act::Begin { template } => post(Question::Setup(template), Body::Empty {}),
+            Act::AskTrust { key } => post(
+                Question::Key,
+                Body::Key(wire::KeyAsked { key: key.clone() }),
+            ),
+            Act::Renew => Effect::NewKey { ask: self.clone() },
+            Act::Pair { code } => post(
+                Question::Pair,
+                Body::Pair(wire::Pairing { code: code.clone() }),
+            ),
+        }
+    }
 }
 
-/// What the host hands the page.
-#[derive(Debug, Clone, Deserialize, TS)]
-#[serde(tag = "type")]
-pub enum Input {
-    /// A new reading.
-    Shown(Box<Shown>),
-    /// An act answered.
-    Answered {
-        /// Which.
-        act: Act,
-        /// What it came to.
-        outcome: Outcome,
-    },
+/// What the setup route answers that the page reads: the conversation it opened.
+#[derive(Debug, Deserialize)]
+struct Opened {
+    id: String,
 }
 
+/// The page's one-time asks, as the runtime names them: its acts.
+pub type Ask = Act;
 /// What the page asks of the world.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]
-#[serde(tag = "type")]
-pub enum Effect {
-    /// Perform an act and answer what it came to.
-    Run {
-        /// The act.
-        act: Act,
-    },
-    /// Say something briefly.
-    Toast {
-        /// What.
-        words: String,
-    },
-    /// Read what the page reads again.
-    Again,
-}
+pub type Effect = runtime::Effect<Hold, Act>;
+/// What the runtime hands the page.
+pub type Input = runtime::Input<Hold, Act>;
 
 /// The pairing field: closed (its button) or open with the words typed.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -233,7 +229,10 @@ pub enum Pairing {
 /// Everything the page knows.
 #[derive(Debug, Clone)]
 pub struct Model {
-    shown: Shown,
+    context: Context,
+    overview: Held<Overview>,
+    device: Reading<Option<Device>>,
+    cards: Reading<Vec<Card>>,
     pairing: Pairing,
     running: BTreeSet<Act>,
 }
@@ -241,12 +240,14 @@ pub struct Model {
 /// Everything that can happen to the page.
 #[derive(Debug, Clone)]
 pub enum Msg {
-    /// From the host.
+    /// From the runtime.
     Host(Box<Input>),
     /// A tap that asks the world for an act.
     Run(Act),
     /// The pairing field opened, closed or edited.
     Pairing(Pairing),
+    /// Ask the overview again.
+    Retry,
 }
 
 /// The page as a program.
@@ -257,96 +258,190 @@ impl Program for Settings {
     type Model = Model;
     type Msg = Msg;
     type Effect = Effect;
-    type Flags = Shown;
+    type Flags = Flags;
 
-    fn init(shown: Shown) -> (Model, Vec<Effect>) {
-        (
-            Model {
-                shown,
-                pairing: Pairing::Closed,
-                running: BTreeSet::new(),
+    fn init(flags: Flags) -> (Model, Vec<Effect>) {
+        let model = Model {
+            context: flags.context,
+            overview: Held::loading(),
+            device: Reading::Loading,
+            cards: Reading::Loading,
+            pairing: Pairing::Closed,
+            running: BTreeSet::new(),
+        };
+        let watch = |ask, local| Effect::Watch { ask, local };
+        let effects = vec![
+            Effect::Hold {
+                ask: Hold::Overview,
+                path: Question::Overview.path(),
             },
-            Vec::new(),
-        )
+            watch(Hold::Device, Local::Device),
+            watch(Hold::Cards, Local::Cards),
+        ];
+        (model, effects)
     }
 
     fn update(m: &mut Model, msg: Msg) -> Vec<Effect> {
         match msg {
             Msg::Host(input) => match *input {
-                Input::Shown(shown) => {
-                    m.shown = *shown;
+                Input::Context(c) => {
+                    m.context = c;
                     Vec::new()
                 }
-                Input::Answered { act, outcome } => {
-                    m.running.remove(&act);
-                    let paired = matches!((&act, &outcome), (Act::Pair { .. }, Outcome::Done));
-                    if paired {
-                        m.pairing = Pairing::Closed;
+                Input::Held {
+                    ask,
+                    reading,
+                    behind,
+                } => {
+                    match ask {
+                        Hold::Overview => {
+                            m.overview = Held::of(reading, behind);
+                            Vec::new()
+                        }
+                        Hold::Device => {
+                            m.device = read(reading);
+                            Vec::new()
+                        }
+                        // A card the box files changes which line asks for what.
+                        Hold::Cards => {
+                            let cards = read(reading);
+                            let moved = matches!(&cards, Reading::Val { v } if !matches!(&m.cards, Reading::Val { v: was } if was == v));
+                            m.cards = cards;
+                            moved.then(again).into_iter().collect()
+                        }
                     }
-                    let words = match outcome {
-                        Outcome::Done => paired.then(|| "This device is trusted.".to_owned()),
-                        Outcome::Refused { words } => Some(words),
-                    };
-                    let again = paired || matches!(act, Act::AskTrust { .. } | Act::Renew);
-                    words
-                        .map(|words| Effect::Toast { words })
-                        .into_iter()
-                        .chain(again.then_some(Effect::Again))
-                        .collect()
+                }
+                Input::Answered { ask, answer } => {
+                    m.running.remove(&ask);
+                    answered(m, &ask, answer)
                 }
             },
             Msg::Run(act) => m
                 .running
                 .insert(act.clone())
-                .then_some(Effect::Run { act })
+                .then(|| act.effect())
                 .into_iter()
                 .collect(),
             Msg::Pairing(p) => {
                 m.pairing = p;
                 Vec::new()
             }
+            Msg::Retry => vec![again()],
         }
     }
 
     fn view(m: &Model) -> Node<Msg> {
-        let here = view! { Div "settingshere" [m.shown.device.as_ref().map(|d| vec![view! { H2 ["This device"] }, device(m, d)])] };
-        let first = matches!(
-            &m.shown.device,
-            Some(Device {
-                signing: Signing::Keyed {
-                    standing: KeyStanding::Untrusted,
-                    ..
-                },
-                ..
-            })
-        );
-        let (before, after) = if first {
-            (Some(here), None)
-        } else {
-            (None, Some(here))
+        let c = Chrome {
+            class: "settingspage",
+            title: "Settings".to_owned(),
+            masthead: Masthead::Page,
+            back: None,
+            legend: None,
+            now: Vec::new(),
+            shape: Shape::Lines,
         };
-        let ask =
-            m.shown.ask.as_ref().map(
-                |href| view! { A "act act-ask" {Href => href} ["Ask to add or change anything"] },
-            );
-        let groups = m
-            .shown
-            .overview
-            .groups
-            .iter()
-            .filter(|g| !g.lines.is_empty());
-        view! { Div "settingsview" [
-            before,
-            view! { Div "settingsask" [ask] },
-            match &m.shown.rows {
-                Reading::Loading => Some(para("settingsmeta settingscards", "The Inbox's cards are on their way.")),
-                Reading::Error { e } => Some(para("settingshealth settingshealth-failing settingscards", format!("The Inbox's cards could not be read: {e}"))),
-                Reading::Val { .. } => None,
+        let status = chrome::status(
+            &m.overview.reading,
+            m.overview.behind.as_ref(),
+            &m.context.offsets,
+            Msg::Retry,
+        );
+        let body = match &m.overview.reading {
+            Reading::Val { v } => vec![shown(m, v)],
+            Reading::Loading | Reading::Error { .. } => Vec::new(),
+        };
+        chrome::page(c, status, body)
+    }
+}
+
+/// Ask the overview again: after an act that moves it, or a Retry.
+fn again() -> Effect {
+    Effect::Again {
+        path: Question::Overview.path(),
+    }
+}
+
+/// A conversation's address, its composer focused.
+fn focused(id: &str) -> String {
+    Place::Conversation {
+        id,
+        reference: "",
+        focus: true,
+        at: None,
+    }
+    .href()
+}
+
+/// What the page shows once the box's overview is here.
+fn shown(m: &Model, o: &Overview) -> Node<Msg> {
+    let device = match &m.device {
+        Reading::Val { v: Some(d) } => Some(d),
+        Reading::Val { v: None } | Reading::Loading | Reading::Error { .. } => None,
+    };
+    let here = view! { Div "settingshere" [device.map(|d| vec![view! { H2 ["This device"] }, self::device(m, d)])] };
+    let first = matches!(
+        device,
+        Some(Device {
+            signing: Signing::Keyed {
+                standing: KeyStanding::Untrusted,
+                ..
             },
-            offered(m),
-            view! { Div "settingsbody" => groups.map(|g| (key(g.group).to_owned(), group(m, g))) },
-            after,
-        ] }
+            ..
+        })
+    );
+    let (before, after) = if first {
+        (Some(here), None)
+    } else {
+        (None, Some(here))
+    };
+    let ask = match m.context.gate {
+        Gate::Writes | Gate::Reads => Some(
+            view! { A "act act-ask" {Href => focused(&o.ask)} ["Ask to add or change anything"] },
+        ),
+        Gate::Views => None,
+    };
+    let groups = o.groups.iter().filter(|g| !g.lines.is_empty());
+    view! { Div "settingsview" [
+        before,
+        view! { Div "settingsask" [ask] },
+        match &m.cards {
+            Reading::Loading => Some(para("settingsmeta settingscards", "The Inbox's cards are on their way.")),
+            Reading::Error { e } => Some(para("settingshealth settingshealth-failing settingscards", format!("The Inbox's cards could not be read: {e}"))),
+            Reading::Val { .. } => None,
+        },
+        offered(m, o),
+        view! { Div "settingsbody" => groups.map(|g| (key(g.group).to_owned(), group(m, g))) },
+        after,
+    ] }
+}
+
+/// What an answered act asks next: a refusal is said in its words, a conversation begun is gone
+/// to, a trust is said, and the overview is asked again after the acts that move it.
+fn answered(m: &mut Model, act: &Act, answer: Answer) -> Vec<Effect> {
+    match answer {
+        Answer::Refused { words, .. } => {
+            let said = Effect::Toast { words };
+            match act {
+                Act::AskTrust { .. } | Act::Renew => vec![said, again()],
+                Act::Begin { .. } | Act::Pair { .. } => vec![said],
+            }
+        }
+        Answer::Done { body } => match act {
+            Act::Begin { .. } => vec![match runtime::answered::<Opened>(Answer::Done { body }) {
+                Ok(Opened { id }) => Effect::Go { href: focused(&id) },
+                Err(words) => Effect::Toast { words },
+            }],
+            Act::Pair { .. } => {
+                m.pairing = Pairing::Closed;
+                vec![
+                    Effect::Toast {
+                        words: "This device is trusted.".to_owned(),
+                    },
+                    again(),
+                ]
+            }
+            Act::AskTrust { .. } | Act::Renew => vec![again()],
+        },
     }
 }
 
@@ -379,7 +474,7 @@ fn title(g: Group) -> &'static str {
 }
 
 fn cards<'a>(m: &'a Model, l: &OverviewLine) -> Vec<&'a Card> {
-    match &m.shown.rows {
+    match &m.cards {
         Reading::Val { v } => l
             .cards
             .iter()
@@ -483,8 +578,10 @@ fn health<'a>(
     Some((asks, words, None))
 }
 
+/// An instant for a sentence, `11:32 on 2026-09-04` on the owner's clock; one that does not
+/// parse is said as written, as `web/src/view/format.ts`'s `when` does.
 fn line(m: &Model, g: Group, l: &OverviewLine) -> Node<Msg> {
-    let said = health(&l.standing, &|t| when(&m.shown.offsets, t));
+    let said = health(&l.standing, &|t| when(&m.context.offsets, t));
     let (asks, words, command) = said.map_or((false, None, None), |(a, w, c)| (a, Some(w), c));
     let (line, health) = if asks {
         (
@@ -543,20 +640,20 @@ fn offer(m: &Model, x: &Offer) -> Node<Msg> {
         template: x.template.clone(),
     };
     let busy = m.running.contains(&act);
-    match m.shown.gate {
+    match m.context.gate {
         Gate::Writes => button(
             &format!("act settingsoffer settingsoffer-{}", x.template),
             &capital(&x.title),
             Msg::Run(act),
             busy,
         ),
-        Gate::Reads => para("settingsmeta settingsoffer", capital(&x.title)),
+        Gate::Reads | Gate::Views => para("settingsmeta settingsoffer", capital(&x.title)),
     }
 }
 
-fn offered(m: &Model) -> Option<Node<Msg>> {
+fn offered(m: &Model, o: &Overview) -> Option<Node<Msg>> {
     let mut groups: Vec<(Group, Vec<&Offer>)> = Vec::new();
-    for x in &m.shown.overview.offers {
+    for x in &o.offers {
         match groups.last_mut() {
             Some((g, xs)) if *g == x.group => xs.push(x),
             Some(_) | None => groups.push((x.group, vec![x])),

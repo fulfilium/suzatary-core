@@ -1119,7 +1119,7 @@ pub struct Reasoning {
 }
 
 /// `POST /api/act/key`: a device asking to be trusted.
-#[derive(Debug, Clone, PartialEq, Eq, Deserialize, TS)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[serde(deny_unknown_fields)]
 pub struct KeyAsked {
     /// Its public key, 64 hex.
@@ -1127,7 +1127,7 @@ pub struct KeyAsked {
 }
 
 /// `POST /api/act/pair`: a device typing the code `suzatary device pair` printed at the box.
-#[derive(Debug, Clone, PartialEq, Eq, Deserialize, TS)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[serde(deny_unknown_fields)]
 pub struct Pairing {
     /// The code, as typed.

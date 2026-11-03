@@ -1,5 +1,5 @@
-// Every screen's page, keyed by its tag: the router looks a screen up here and never switches on it. The four pages that
-// carry most code of their own and are rarely where a start lands (the Typst list, the chain, usage and settings) are
+// Every screen's page, keyed by its tag: the router looks a screen up here and never switches on it. The three pages that
+// carry most code of their own and are rarely where a start lands (the Typst list, the chain and usage) are
 // chunks of their own, loaded as each is first drawn, under the build's name as the app is (`scripts/build-web.sh`).
 // The rest share most of their code with the shell, so splitting them would cut the app into many more files for
 // little.
@@ -10,7 +10,6 @@ import { hrefOf } from "../shell/route"
 import { el } from "../view/dom"
 import frame from "../view/frame"
 import reading from "../algebra/reading"
-import kv from "../app/kv"
 import todos from "./todos"
 import conversation from "./conversation"
 import inbox from "./inbox"
@@ -43,9 +42,7 @@ export namespace pages {
     chain: (root, s) => import("./chain").then(m => m.mount(root, s.focus)),
     usage: root => import("./usage").then(m => m.default.mount(root)),
     about: root => program.mount(root, "AboutPage", {}),
-    // Drawn by its Rust program while the prototype's flag is on (docs/FRAMEWORK-PLAN-2026-11-02.md §6).
-    settings: root =>
-      kv.local.get("suzatary.viewtree") === "on" ? import("./settingsview").then(m => m.default.mount(root)) : import("./settings").then(m => m.default.mount(root)),
+    settings: root => program.mount(root, "SettingsPage", {}),
     memory: root => program.mount(root, "MemoryPage", {}),
     briefings: root => program.mount(root, "BriefingsPage", {}),
     briefing: (root, s) => program.mount(root, "BriefingPage", { date: s.date }),

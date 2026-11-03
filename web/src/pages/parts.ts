@@ -1,7 +1,8 @@
 // The parts a Rust page names and this tab draws (`Foreign` in the view): the marks drawn in SVG, Typst's HTML through the
-// tripwire, a mail body with its held values' chips, the todos a message produced as the list's own cards, and an
-// answer's blocks as the conversation draws them, until the conversation is a program too. Each is drawn from its props alone; a
-// part that keeps listening says how to stop, which the painter asks when it takes the part out.
+// tripwire, a mail body with its held values' chips, the todos a message produced as the list's own cards, an answer's
+// blocks as the conversation draws them (until the conversation is a program too), and the Inbox's proposal cards (until
+// the Inbox is). Each is drawn from its props alone; a part that keeps listening says how to stop, which the painter
+// asks when it takes the part out.
 
 import { el } from "../view/dom"
 import { chevronIcon } from "../view/icons"
@@ -16,6 +17,10 @@ import time from "../app/time"
 import onscreen, { store } from "../app/store"
 import { cardList } from "../todo/card"
 import { DEFAULT_FILTER, listing } from "../todo/todos"
+import type { Row } from "../inbox/inbox"
+import { proposalCard } from "../inbox/proposal"
+import kept from "../inbox/kept"
+import local from "./local"
 import pie from "../view/pie"
 import { richOrText } from "../rich"
 import { answerBlocks, answerCopies, more } from "../chat/transcript"
@@ -61,6 +66,19 @@ export namespace parts {
     return cards.node
   }
 
+  // The box's own cards, whose sources name earlier cards and never a todo.
+  const card = (r: Row, taken?: () => void): HTMLElement => {
+    if (r.kind !== "proposal") throw new Error("a card a page named is not a proposal")
+    return proposalCard(r.conversation.id, r.proposal, { titles: new Map(), ...(taken === undefined ? {} : { taken }) })
+  }
+
+  // A grant drawn inside the link's card it was asked for: allowing the origin sends the link again, once. The props'
+  // first line is the grant's reference.
+  const allowing = (link: Row, grant: Row): HTMLElement => {
+    const node = card(link)
+    node.appendChild(el("div", { class: "proposalallow" }, card(grant, () => kept.resend(link))))
+    return node
+  }
   // A part's props as `app/pages` prints them; props that do not read are the module's mistake, thrown as one.
   const read = <A>(kind: string, decoder: d.Decoder<A>, props: string): A => {
     const r = d.json(decoder)(props)
@@ -86,6 +104,10 @@ export namespace parts {
         return heldvalue.within(el("div", { class: "mailbody" }, props), revealHeld(null))
       case "todos":
         return todos(props)
+      case "proposal":
+        return card(local.row(key))
+      case "allowing":
+        return allowing(local.row(key), local.row(props.split("\n")[0] ?? ""))
       default:
         throw new Error(`no part ${kind}`)
     }

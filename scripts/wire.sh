@@ -2,10 +2,10 @@
 # The wire for the browser, into web/src/wire/generated/ (output, git-ignored
 # like web/dist/): wire.ts, the types app/core/src/wire.rs declares, written by
 # ts-rs; and payload.ts, a decoder for every type a route answers, folded from
-# the same text (`suzatary_core::wire::shape`); and settings.ts and pages.ts,
-# what a host hands each page of app/pages and what the page asks of it, the
-# runtime's effects and inputs among them (no decoders: the page's module
-# reads its own inputs). THE WIRE IS DECLARED ONCE, IN
+# the same text (`suzatary_core::wire::shape`); and pages.ts, what a host
+# hands each page of app/pages and what the page asks of it, the runtime's
+# effects and inputs among them (no decoders: the page's module reads its own
+# inputs). THE WIRE IS DECLARED ONCE, IN
 # RUST (docs/ARCHITECTURE.md §2): a field the Rust adds is in both files, and a
 # caller that reads it wrong is a tsc error rather than an `undefined` on a page.
 #
@@ -36,7 +36,7 @@ fi
 generated=web/src/wire/generated
 rm -rf "$generated"
 mkdir -p "$generated"
-for file in wire.ts payload.ts settings.ts pages.ts; do
+for file in wire.ts payload.ts pages.ts; do
   test -s "$wire_dir/$file" || {
     echo "wire.sh: $wire_dir/$file is missing or empty" >&2
     exit 1

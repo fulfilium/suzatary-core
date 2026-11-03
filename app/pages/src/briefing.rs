@@ -85,6 +85,7 @@ impl View for Briefing {
                 let reply = Place::Conversation {
                     id: conversation,
                     reference: "",
+                    focus: false,
                     at: None,
                 };
                 vec![

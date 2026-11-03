@@ -1,5 +1,6 @@
 //! Suzatary's pages in the view-tree shape (docs/FRAMEWORK-PLAN-2026-11-02.md): each a
-//! [`viewtree::Program`], run as wasm in the tab, its patches painted by `web/src/painter`.
+//! [`viewtree::Program`] over the runtime's sums ([`runtime`]), run as wasm in the tab, its
+//! patches painted by `web/src/painter`.
 #![forbid(unsafe_code)]
 
 pub mod about;
@@ -19,13 +20,6 @@ pub mod settings;
 pub mod thread;
 pub mod zone;
 
-impl viewtree::host::Hosted for settings::Settings {
-    type Input = settings::Input;
-    fn input(input: settings::Input) -> settings::Msg {
-        settings::Msg::Host(Box::new(input))
-    }
-}
-
 /// A page whose inputs are the runtime's: each is its message `Host`.
 macro_rules! hosted {
     ($($page:ident :: $program:ident),*) => {$(
@@ -38,7 +32,7 @@ macro_rules! hosted {
     )*};
 }
 
-hosted!(mail::Mail, memory::Memory, about::About);
+hosted!(mail::Mail, memory::Memory, about::About, settings::Settings);
 
 impl<V: reading::View> viewtree::host::Hosted for reading::One<V> {
     type Input = runtime::Input<reading::Hold, runtime::Never>;

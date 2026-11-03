@@ -66,6 +66,13 @@ impl<P: Program> Runtime<P> {
         (self.painter.paint(P::view(&self.model)), effects)
     }
 
+    /// The current view drawn from nothing, as a new painter draws it: what a painted DOM must
+    /// equal, whatever patches brought it there.
+    #[must_use]
+    pub fn fresh(&self) -> Vec<u8> {
+        patch::encode(&Painter::start(P::view(&self.model)).1)
+    }
+
     /// An event the painter reported: the message its element carries, stepped; nothing when
     /// no handler answers it any more.
     pub fn event(&mut self, id: u32, on: On, words: String) -> Frame<P::Effect> {

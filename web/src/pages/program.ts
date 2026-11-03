@@ -3,7 +3,7 @@
 // page. Nothing here knows a page: a page names the box's paths, the app's addresses and its own questions, and this
 // asks, goes and says what it was told.
 
-import type { Answer, BriefingAt, CalendarAt, Context, Effect, Input, MailFlags, MessageAt, Nothing, Reading, ThreadAt } from "../wire/generated/pages"
+import type { Answer, BriefingAt, CalendarAt, Context, Effect, Input, MailFlags, MessageAt, Nothing, Reading, SettingsFlags, ThreadAt } from "../wire/generated/pages"
 import type { Mounted } from "../view/page"
 import http from "../wire/http"
 import d from "../wire/decoder"
@@ -18,7 +18,9 @@ import frame from "../view/frame"
 import address from "../shell/address"
 import { parseRoute } from "../shell/route"
 import run from "../painter/run"
+import signer from "../prodrome/signer"
 import parts from "./parts"
+import local from "./local"
 
 export namespace program {
   // The module and its glue in one round trip, once per tab; the load is a User Timing measure the bench reads.
@@ -41,7 +43,15 @@ export namespace program {
     return made
   }
 
-  const context = (): Context => ({ gate: app.writes(app.now()) ? "writes" : "reads", offsets: [...offsetsOf(app.now().zone)] })
+  // Who writes, and whether this device writes as them: what a page's gate is read from.
+  type Who = { readonly me: string | null; readonly writes: boolean }
+  const whoOf = (a: app.App): Who => ({ me: app.actor(a), writes: app.writes(a) })
+  const same = (w: Who, was: Who): boolean => w.me === was.me && w.writes === was.writes
+
+  const context = (): Context => {
+    const w = whoOf(app.now())
+    return { gate: w.writes ? "writes" : w.me !== null ? "reads" : "views", offsets: [...offsetsOf(app.now().zone)] }
+  }
 
   // A 4xx is the box deciding no, an answer the page reads; no answer, or a 5xx, is a failure.
   const answer = (p: Promise<unknown>): Promise<Answer> =>
@@ -77,6 +87,7 @@ export namespace program {
     readonly CalendarPage: CalendarAt
     readonly BriefingsPage: Nothing
     readonly BriefingPage: BriefingAt
+    readonly SettingsPage: Omit<SettingsFlags, "context">
   }
   export type Page = keyof Args
   type In = Input<unknown, unknown>
@@ -99,12 +110,20 @@ export namespace program {
           stops.push(q.hear(tell))
           return tell()
         }
+        case "Watch": {
+          const r = local.of(e.local)
+          const tell = (): void => send({ type: "Held", ask: e.ask, reading: lo.map(r.now(), (body): Answer => ({ type: "Done", body })), behind: null })
+          stops.push(r.hear(tell))
+          return tell()
+        }
         case "Again":
           return held(e.path).again()
         case "Get":
           return void settled(http.get(e.path, d.unknown)).then(a => send({ type: "Answered", ask: e.ask, answer: a }))
         case "Post":
-          return void settled(http.act(e.path, {}, d.unknown)).then(a => send({ type: "Answered", ask: e.ask, answer: a }))
+          return void settled(http.act(e.path, e.body, d.unknown)).then(a => send({ type: "Answered", ask: e.ask, answer: a }))
+        case "NewKey":
+          return void settled(signer.renew().then(() => null)).then(a => send({ type: "Answered", ask: e.ask, answer: a }))
         case "Go":
           return address.go(parseRoute(e.href))
         case "Back":
@@ -119,7 +138,7 @@ export namespace program {
     const program = new glue[page](JSON.stringify({ ...args, context: context() }))
     const running = run.start<In, Out>(root, program, parts.draw, handle, parts.gone)
     performance.measure("page:draw", { start: t0, end: performance.now(), detail: { page, read: "Program" } })
-    stops.push(app.hear(app.actor, () => running.send({ type: "Context", ...context() })))
+    stops.push(app.hear(whoOf, () => running.send({ type: "Context", ...context() }), same))
     return { destroy: () => (stops.forEach(stop => stop()), running.destroy()) }
   }
 }

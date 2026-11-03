@@ -292,8 +292,6 @@ export async function suite(prefix: string, size: readonly [number, number] = PH
   // and every write the writer's box performs asks for a key it trusts.
   let trusted: Promise<string> | null = trustThisDevice(page, WRITE_BASE);
   await trusted;
-  // `SUZATARY_E2E_VIEWTREE=on` runs every scene with the pages the prototype draws from Rust (`web/src/pages/table.ts`).
-  if (process.env["SUZATARY_E2E_VIEWTREE"] === "on") await page.beforeEveryDocument(`try { localStorage.setItem("suzatary.viewtree", "on") } catch {}`);
   // Every scene runs under the box's Content-Security-Policy and must leave it unviolated: what a
   // page is refused is kept per tab and origin, and read after the scene.
   await page.beforeEveryDocument(

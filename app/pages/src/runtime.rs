@@ -16,8 +16,10 @@ use crate::zone::Offset;
 pub enum Gate {
     /// It writes: each act is a button.
     Writes,
-    /// It only reads: an act is not offered.
+    /// It has an actor, and this device does not write as it yet: an act is not offered.
     Reads,
+    /// It names no actor: an act is not offered, and nothing can be asked of the secretary.
+    Views,
 }
 
 /// What every page reads of the tab: whether its login writes, and the owner's zone.
@@ -57,12 +59,29 @@ pub enum Effect<H, A> {
         /// The box's path.
         path: String,
     },
-    /// An act: one POST of `{}` to `path`, answered once as [`Input::Answered`].
+    /// An act: one POST of `body` to `path`, signed by this device, answered once as
+    /// [`Input::Answered`].
     Post {
         /// Which act.
         ask: A,
         /// The box's path.
         path: String,
+        /// The route's request.
+        #[ts(type = "unknown")]
+        body: Body,
+    },
+    /// Put a new key in this device's place, answered once as [`Input::Answered`] with `null`.
+    NewKey {
+        /// Which act.
+        ask: A,
+    },
+    /// Hold a reading the tab keeps of its own, as `Hold` holds the box's: handed over now and
+    /// whenever it moves, as [`Input::Held`].
+    Watch {
+        /// Which question.
+        ask: H,
+        /// Which reading.
+        local: Local,
     },
     /// Go to a place in the app.
     Go {
@@ -79,6 +98,28 @@ pub enum Effect<H, A> {
         /// What.
         words: String,
     },
+}
+
+/// A POST's request, printed as the box's route reads it.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(untagged)]
+pub enum Body {
+    /// A route that reads no field.
+    Empty {},
+    /// `POST /api/act/key`.
+    Key(suzatary_core::wire::KeyAsked),
+    /// `POST /api/act/pair`.
+    Pair(suzatary_core::wire::Pairing),
+}
+
+/// A reading the tab keeps of its own, which no GET answers.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, TS)]
+#[serde(rename_all = "snake_case")]
+pub enum Local {
+    /// What this browser keeps and who it signs as, or `null` when it answers nothing.
+    Device,
+    /// The Inbox's open proposal cards, by reference.
+    Cards,
 }
 
 /// No question: the `A` of a page that asks nothing once, so it has no answer to read.
