@@ -8,7 +8,9 @@
 use std::collections::BTreeSet;
 
 /// What an element may be. Closed, so a view cannot make a `script`, an `iframe` or a `style`.
+/// Its number on the wire is its place here, the index of the painter's table of tag names.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[repr(u8)]
 pub enum Tag {
     /// `div`.
     Div,
@@ -34,26 +36,59 @@ pub enum Tag {
     Code,
     /// `span`.
     Span,
+    /// `h1`.
+    H1,
+    /// `ul`.
+    Ul,
+    /// `li`.
+    Li,
+    /// `dl`.
+    Dl,
+    /// `dt`.
+    Dt,
+    /// `dd`.
+    Dd,
+    /// `strong`.
+    Strong,
+    /// `form`, whose submit the painter reports and never performs.
+    Form,
 }
 
 impl Tag {
-    /// Its number on the wire, the index of the painter's table of tag names.
+    /// Every tag, in the order of their numbers.
+    pub const ALL: [Tag; 20] = [
+        Tag::Div,
+        Tag::Section,
+        Tag::H2,
+        Tag::H3,
+        Tag::P,
+        Tag::A,
+        Tag::Button,
+        Tag::Input,
+        Tag::Details,
+        Tag::Summary,
+        Tag::Code,
+        Tag::Span,
+        Tag::H1,
+        Tag::Ul,
+        Tag::Li,
+        Tag::Dl,
+        Tag::Dt,
+        Tag::Dd,
+        Tag::Strong,
+        Tag::Form,
+    ];
+
+    /// Its number on the wire.
     #[must_use]
     pub const fn code(self) -> u8 {
-        match self {
-            Tag::Div => 0,
-            Tag::Section => 1,
-            Tag::H2 => 2,
-            Tag::H3 => 3,
-            Tag::P => 4,
-            Tag::A => 5,
-            Tag::Button => 6,
-            Tag::Input => 7,
-            Tag::Details => 8,
-            Tag::Summary => 9,
-            Tag::Code => 10,
-            Tag::Span => 11,
-        }
+        self as u8
+    }
+
+    /// The tag its number names, if any.
+    #[must_use]
+    pub fn of(code: u8) -> Option<Tag> {
+        Self::ALL.get(usize::from(code)).copied()
     }
 
     /// Its name in HTML.
@@ -72,6 +107,14 @@ impl Tag {
             Tag::Summary => "summary",
             Tag::Code => "code",
             Tag::Span => "span",
+            Tag::H1 => "h1",
+            Tag::Ul => "ul",
+            Tag::Li => "li",
+            Tag::Dl => "dl",
+            Tag::Dt => "dt",
+            Tag::Dd => "dd",
+            Tag::Strong => "strong",
+            Tag::Form => "form",
         }
     }
 }
@@ -82,8 +125,22 @@ impl Tag {
 pub enum Attr {
     /// `class`.
     Class,
-    /// `href`, which the painter sets only for an address inside the app.
+    /// `href`: an address inside the app (`#…`), or an `https:`, `http:` or `mailto:` one, which
+    /// the painter opens in a new tab with no handle back on this one; any other it drops.
     Href,
+    /// `title`, the words a pointer shows.
+    Title,
+    /// `role`.
+    Role,
+    /// `aria-current`.
+    AriaCurrent,
+    /// `enterkeyhint`.
+    EnterKeyHint,
+    /// `open`, present or absent: a `details` drawn open. A person opening one changes the DOM
+    /// and not the view, so the painter sets it only when the view's own value moves.
+    Open,
+    /// `hidden`, present or absent.
+    Hidden,
     /// `type`.
     Type,
     /// `placeholder`.
@@ -111,6 +168,12 @@ impl Attr {
         match self {
             Attr::Class => "class".to_owned(),
             Attr::Href => "href".to_owned(),
+            Attr::Title => "title".to_owned(),
+            Attr::Role => "role".to_owned(),
+            Attr::AriaCurrent => "aria-current".to_owned(),
+            Attr::EnterKeyHint => "enterkeyhint".to_owned(),
+            Attr::Open => "open".to_owned(),
+            Attr::Hidden => "hidden".to_owned(),
             Attr::Type => "type".to_owned(),
             Attr::Placeholder => "placeholder".to_owned(),
             Attr::AriaLabel => "aria-label".to_owned(),
@@ -131,6 +194,8 @@ pub enum On {
     Click,
     /// A field's words changed; the painter reports the field's value.
     Input,
+    /// A form was submitted (Enter in its field); the painter performs nothing and reports no words.
+    Submit,
 }
 
 impl On {
@@ -140,6 +205,7 @@ impl On {
         match self {
             On::Click => 0,
             On::Input => 1,
+            On::Submit => 2,
         }
     }
 
@@ -149,16 +215,20 @@ impl On {
         match code {
             0 => Some(On::Click),
             1 => Some(On::Input),
+            2 => Some(On::Submit),
             _ => None,
         }
     }
 }
 
-/// A handler as data: the message a click sends, or the function from a field's words to one.
+/// A handler as data: the message a click or a submit sends, or the function from a field's words
+/// to one.
 #[derive(Debug, Clone)]
 pub enum Listener<M> {
     /// A click sends this message.
     Click(M),
+    /// A form's submit sends this message.
+    Submit(M),
     /// The field's words, as typed, make this message.
     Input(fn(String) -> M),
 }
@@ -169,6 +239,7 @@ impl<M> Listener<M> {
     pub const fn on(&self) -> On {
         match self {
             Listener::Click(_) => On::Click,
+            Listener::Submit(_) => On::Submit,
             Listener::Input(_) => On::Input,
         }
     }
@@ -280,6 +351,12 @@ impl AttrValue for &String {
     }
 }
 
+impl<V: AttrValue> AttrValue for Option<V> {
+    fn text(self) -> Option<String> {
+        self.and_then(AttrValue::text)
+    }
+}
+
 impl AttrValue for bool {
     fn text(self) -> Option<String> {
         self.then(String::new)
@@ -351,6 +428,12 @@ impl<M> El<M> {
         self.on(Listener::Click(m))
     }
 
+    /// A submit of the form sends `m`.
+    #[must_use]
+    pub fn submit(self, m: M) -> Self {
+        self.on(Listener::Submit(m))
+    }
+
     /// Each edit of the field sends `f` of its words.
     #[must_use]
     pub fn input(self, f: fn(String) -> M) -> Self {
@@ -396,7 +479,7 @@ impl<M> El<M> {
 /// view!{ Div "rows" => rows.iter().map(|r| (r.key.clone(), row(r))) }
 /// ```
 ///
-/// A tag, an optional class, `{attribute => value, ...}`, `@click(message)` or
+/// A tag, an optional class, `{attribute => value, ...}`, `@click(message)`, `@submit(message)` or
 /// `@input(function)`, then the children in `[...]` (anything [`Child`]) or `=> keyed pairs`.
 #[macro_export]
 macro_rules! view {

@@ -77,7 +77,7 @@ callers in `web/src/`.
 | `POST /todo/{id}/build` (`routes.rs:2096`) | lines and inbox: a coding-session card | none until tapped | yes (`todo/todoview.ts:336`) | a disabled button |
 | `POST /api/secretary/memory/{id}/forget` (`routes.rs:2230`) | memory: `Forgotten` | none | yes (`chat/memory.ts:27`) | nothing |
 | `POST /api/secretary/record/{node}/retract` (`routes.rs:2267`) | digests: `Retracted` | none | yes (`chat/memory.ts:23`) | nothing |
-| `POST /api/mail/watches/{id}/cancel` (`mail/watch.rs:430`) | watches log: `Cancelled` | none | yes (`pages/watches.ts:21`) | a disabled button |
+| `POST /api/mail/watches/{id}/cancel` (`mail/watch.rs:430`) | watches log: `Cancelled` | none | yes (`app/pages/src/mail.rs`, `Msg::Cancel`) | a disabled button |
 | `POST /api/secretary/attachments` (`secretary::upload`) | uploads store, or the Drive vault when private | a Drive write when private | yes (`chat/composer.ts:148,206`) | a pending thumbnail; Send refuses meanwhile |
 | `POST /api/act/device` (`core/devices.rs:69`) | push tokens: `Push(Device)` | none | no: background (`app/pushtoken.ts:53-59`) | nothing |
 | `POST /api/act/key` (`routes.rs:1468`) | lines and inbox: a `Device` card (at most 3 waiting) | none until tapped | yes (`pages/settings.ts:103`) | Settings, redrawn after |

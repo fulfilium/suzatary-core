@@ -21,9 +21,7 @@ import inbox from "./inbox"
 import memory from "./memory"
 import secretary from "./secretary"
 import todoview from "../todo/todoview"
-import { mount as mail } from "./mail"
-import { mount as message } from "./message"
-import { mount as thread } from "./thread"
+import program from "./program"
 
 export namespace pages {
   type Screens = { readonly [K in Screen["type"]]: Extract<Screen, { readonly type: K }> }
@@ -42,9 +40,9 @@ export namespace pages {
     inbox: (root, s) => inbox.mount(root, s.open),
     todo: (root, s) => frame.mount(root, todoview.page(s.id, true)),
     typst: (root, s) => import("./typstlist").then(m => m.default.mount(root, s.open)),
-    mail: (root, s) => mail(root, { query: s.query, account: s.account }),
-    message: (root, s) => message(root, s.id),
-    thread: (root, s) => thread(root, s.id),
+    mail: (root, s) => program.mount(root, "MailPage", { query: s.query, account: s.account }),
+    message: (root, s) => program.mount(root, "MessagePage", { id: s.id }),
+    thread: (root, s) => program.mount(root, "ThreadPage", { id: s.id }),
     chain: (root, s) => import("./chain").then(m => m.mount(root, s.focus)),
     usage: root => import("./usage").then(m => m.default.mount(root)),
     about: root => about.mount(root),

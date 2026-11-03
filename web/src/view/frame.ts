@@ -175,6 +175,8 @@ export namespace frame {
   // Settles once a page first draws what it read, or why it could not: what the shell's own readings wait for.
   let drew = (): void => {}
   export const firstDrawn: Promise<void> = new Promise(done => (drew = done))
+  // The same, said by a page the frame does not draw (`pages/program.ts`).
+  export const drawn = (): void => drew()
 
   // Synchronous, so a caller swapping one page for another can destroy it without waiting.
   export const open =<S, E = never, K extends string = never>(root: HTMLElement, f: Page<S, E, K>): Mounted => {

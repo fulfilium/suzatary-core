@@ -91,7 +91,7 @@ impl From<Option<crate::authoring::Reversal>> for Reverses {
 }
 
 /// The message a todo was authored from; `""` where its era recorded nothing.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
 pub struct AuthoredSource {
     /// The From header.
     pub sender: String,
@@ -119,7 +119,7 @@ pub struct SubTodo {
 /// Typst's HTML for the prose fields. `null` when absent, not compiled,
 /// refused, or not a trusted actor's (rendered means confirmed); the page
 /// then shows the source, which always travels beside it.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
 pub struct Rich {
     /// The action line.
     pub body: Option<String>,
@@ -135,7 +135,7 @@ pub struct Rich {
 
 /// Each field's key in the tabulation of rendered HTML ([`crate::rendering::key`] of the markup it renders): the
 /// core names it for the box and the tab alike, so neither derives the other's.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
 pub struct RichKeys {
     /// The action line's.
     pub body: Option<String>,
@@ -149,7 +149,7 @@ pub struct RichKeys {
 
 /// What a content record is drawn as, read once from its constructor's name: a decision is a
 /// choice awaiting the owner's tap and never a todo on a list.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[serde(tag = "kind", rename_all = "lowercase")]
 pub enum Block {
     /// `#decision(..)`.
@@ -184,7 +184,7 @@ impl Block {
 }
 
 /// A todo's content as the confirmed fold sees it. `""` is absent.
-#[derive(Debug, Clone, PartialEq, Serialize, TS)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
 pub struct Authored {
     /// Typst's HTML beside the source.
     pub rich: Rich,
@@ -220,7 +220,7 @@ pub struct Authored {
 
 /// A todo's confirmed lifecycle. The `From` matches `Outcome` with no
 /// wildcard, so a new binding fails the build instead of reading as open.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, TS)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "lowercase")]
 pub enum EntryState {
     /// No binding.
@@ -243,7 +243,7 @@ impl From<Option<prodrome_core::fpl::Outcome>> for EntryState {
 
 /// What an untrusted actor's event would bind where the confirmed fold
 /// disagrees. Agreement is spelled `""`, which the stored pins print.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, TS)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
 pub enum ClaimedState {
     /// Nothing is claimed.
     #[serde(rename = "")]
@@ -310,7 +310,7 @@ impl Fulfillment {
 }
 
 /// One todo as the folds see it at a moment.
-#[derive(Debug, Clone, PartialEq, Serialize, TS)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
 pub struct Entry {
     /// The todo's id.
     pub todo: String,
@@ -677,7 +677,7 @@ pub enum BriefingDay {
 }
 
 /// One message page: the message beside the todos it produced now.
-#[derive(Debug, Clone, PartialEq, Serialize, TS)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
 #[ts(rename = "MailMessage")]
 pub struct MailPage {
     /// The message.
@@ -690,7 +690,7 @@ pub struct MailPage {
 
 /// `GET /api/mail/inbox`: recent inbox mail by date; the roster rides along
 /// so the filter chips are every account, not the page's.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
 pub struct InboxPayload {
     /// Every account.
     pub accounts: Vec<String>,
@@ -700,14 +700,14 @@ pub struct InboxPayload {
 
 /// `GET /api/mail/watches`, and what a cancel answers: every watch that waits, the soonest to
 /// expire first.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
 pub struct WatchesPayload {
     /// The watches.
     pub watches: Vec<MailWatch>,
 }
 
 /// One watch on mail the owner expects.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
 pub struct MailWatch {
     /// Its name, which a cancel takes.
     pub id: String,
@@ -722,7 +722,7 @@ pub struct MailWatch {
 }
 
 /// Which part of a message a watch matches.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, TS)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "lowercase")]
 pub enum WatchOn {
     /// The sender's address or name.
@@ -732,7 +732,7 @@ pub enum WatchOn {
 }
 
 /// `GET /api/mail/search`: a notmuch query, newest first.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
 pub struct MailSearchPayload {
     /// The query, echoed; it lives in the page's hash.
     pub q: String,
@@ -743,7 +743,7 @@ pub struct MailSearchPayload {
 }
 
 /// `GET /api/mail/thread/{id}`: oldest first.
-#[derive(Debug, Clone, PartialEq, Serialize, TS)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
 pub struct ThreadPayload {
     /// The thread id.
     pub thread: String,

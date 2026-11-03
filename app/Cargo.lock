@@ -4235,6 +4235,7 @@ name = "suzatary-pages"
 version = "0.0.0"
 dependencies = [
  "chrono",
+ "proptest",
  "serde",
  "serde_json",
  "suzatary-core",

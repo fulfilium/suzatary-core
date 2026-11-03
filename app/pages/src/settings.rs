@@ -7,7 +7,6 @@
 
 use std::collections::BTreeSet;
 
-use chrono::{DateTime, Duration, NaiveDateTime};
 use serde::{Deserialize, Serialize};
 use suzatary_core::connect::{Failure, Group, Standing};
 use suzatary_core::wire::{Offer, Overview, OverviewGroup, OverviewLine};
@@ -19,6 +18,9 @@ use viewtree::Attr::{
 use viewtree::kit::{Reading, button, disclosure, para};
 use viewtree::node::foreign;
 use viewtree::{Node, Program, view};
+
+use crate::runtime::Gate;
+use crate::zone::{Offset, when};
 
 /// What the page reads, as the host last read it.
 #[derive(Debug, Clone, Deserialize, TS)]
@@ -35,26 +37,6 @@ pub struct Shown {
     pub device: Option<Device>,
     /// The owner's zone as offsets from UTC, oldest first, each from the instant it starts.
     pub offsets: Vec<Offset>,
-}
-
-/// An offset of the owner's zone from UTC, from an instant on.
-#[derive(Debug, Clone, Copy, Deserialize, TS)]
-pub struct Offset {
-    /// From when, in epoch milliseconds.
-    #[ts(type = "number")]
-    pub from: i64,
-    /// The offset, in minutes east of UTC.
-    pub minutes: i32,
-}
-
-/// Whether this login's acts are offered.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, TS)]
-#[serde(rename_all = "snake_case")]
-pub enum Gate {
-    /// It writes: each offer is a button.
-    Writes,
-    /// It only reads: each offer is its words.
-    Reads,
 }
 
 /// One proposal card, by its reference, with what this page decides from it.
@@ -501,32 +483,8 @@ fn health<'a>(
     Some((asks, words, None))
 }
 
-/// An instant for a sentence, `11:32 on 2026-09-04` on the owner's clock; one that does not
-/// parse is said as written, as `web/src/view/format.ts`'s `when` does.
-fn stamp(offsets: &[Offset], at: &str) -> String {
-    let t = DateTime::parse_from_rfc3339(at)
-        .map(|t| t.naive_utc())
-        .or_else(|_| NaiveDateTime::parse_from_str(at, "%Y-%m-%dT%H:%M:%S%.f"))
-        .or_else(|_| NaiveDateTime::parse_from_str(at, "%Y-%m-%d %H:%M:%S%.f"));
-    let Ok(t) = t else { return at.to_owned() };
-    let ms = t.and_utc().timestamp_millis();
-    let offset = offsets
-        .iter()
-        .take_while(|o| o.from <= ms)
-        .last()
-        .or(offsets.first())
-        .map_or(0, |o| o.minutes);
-    if ms == 0 {
-        "an unknown time".to_owned()
-    } else {
-        (t + Duration::minutes(offset.into()))
-            .format("%H:%M on %Y-%m-%d")
-            .to_string()
-    }
-}
-
 fn line(m: &Model, g: Group, l: &OverviewLine) -> Node<Msg> {
-    let said = health(&l.standing, &|t| stamp(&m.shown.offsets, t));
+    let said = health(&l.standing, &|t| when(&m.shown.offsets, t));
     let (asks, words, command) = said.map_or((false, None, None), |(a, w, c)| (a, Some(w), c));
     let (line, health) = if asks {
         (

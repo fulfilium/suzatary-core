@@ -2,13 +2,14 @@
 # The wire for the browser, into web/src/wire/generated/ (output, git-ignored
 # like web/dist/): wire.ts, the types app/core/src/wire.rs declares, written by
 # ts-rs; and payload.ts, a decoder for every type a route answers, folded from
-# the same text (`suzatary_core::wire::shape`); and settings.ts (one file per page), what a host hands
-# each page of app/pages and what the page asks of it (no decoders: the page's
-# module reads its own inputs). THE WIRE IS DECLARED ONCE, IN
+# the same text (`suzatary_core::wire::shape`); and settings.ts and pages.ts,
+# what a host hands each page of app/pages and what the page asks of it, the
+# runtime's effects and inputs among them (no decoders: the page's module
+# reads its own inputs). THE WIRE IS DECLARED ONCE, IN
 # RUST (docs/ARCHITECTURE.md §2): a field the Rust adds is in both files, and a
 # caller that reads it wrong is a tsc error rather than an `undefined` on a page.
 #
-# `$SUZATARY_WIRE_TS` names a directory holding all three already (`nix build
+# `$SUZATARY_WIRE_TS` names a directory holding all four already (`nix build
 # .#suzatary-web-ts`, CI). Without it (the ordinary `.#triage` shell, which
 # does not carry that derivation) this runs the SAME `cargo test` the
 # derivation runs, with the shell's cargo, into a scratch directory.
@@ -35,7 +36,7 @@ fi
 generated=web/src/wire/generated
 rm -rf "$generated"
 mkdir -p "$generated"
-for file in wire.ts payload.ts settings.ts; do
+for file in wire.ts payload.ts settings.ts pages.ts; do
   test -s "$wire_dir/$file" || {
     echo "wire.sh: $wire_dir/$file is missing or empty" >&2
     exit 1

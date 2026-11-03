@@ -511,7 +511,17 @@ with the readings once it is in the service worker's cache and compiled. *Size:*
 4. **The small pages:** memory (25), watches (31), calendar (37), briefings (48), about (52),
    thread (60), briefing (62), releases (98), each with its `.state.ts` where it has one; the
    lazy node (§1.3) lands first. *Size:* about −15,000 characters, −413 lines of TS.
-5. **Mail and message** (148, 152, with `mailrow.ts`).
+5. **Mail and message** (148, 152, with `mailrow.ts`). *Built (2026-11-03):* Mail, a message and
+   a thread (`thread.ts` read `mailrow.ts` too, so it moved with it, and `watches.ts` with Mail, its
+   one reader) are `app/pages/src/{mail,message,thread}.rs`. They speak the runtime's sums
+   (`runtime.rs`: `Effect<H, A>` holds a question, asks it again, gets or posts once, goes, goes
+   back, toasts; `Input<H, A>` is the context, a held reading or an answer), performed by one host
+   that knows no page (`web/src/pages/program.ts`), and draw their chrome as `frame.ts` does
+   (`chrome.rs`) until stage 9. *Size:* the pages are 17,752 characters and 813 lines of Rust
+   against 13,056 and 422 of TypeScript (1.36 times in characters); the generic pieces they added
+   (the runtime, the zone, the addresses, the chrome) are 7,965 more, and the DOM as data
+   (`viewtree::dom`, 4,648) moved out of the painter's tests so every page's laws share it. The
+   TypeScript fell by 8,986 characters and 279 lines, with the host and its parts (4,801) counted.
 6. **Conversation, secretary and the Inbox** (179, 238, 244, with `secretary.state.ts`,
    `inbox.state.ts`, `web/src/chat` and `web/src/inbox`): the foreign parts go with the Inbox's
    cards. *Size:* about −164,000 characters, −4,700 lines of TS.

@@ -30,13 +30,13 @@ pub mod triage;
 pub mod verbs;
 pub mod watch;
 
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
 use crate::capability::Datetime;
 
 /// A link as it appeared in the mail; the label is what tells lookalike links apart.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
 pub struct MailLink {
     /// Where it goes, filtered to http/https/mailto before it reaches a page.
     pub url: String,
@@ -45,7 +45,7 @@ pub struct MailLink {
 }
 
 /// One header of a message.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
 pub struct MailHeader {
     /// The header's name.
     pub name: String,
@@ -54,7 +54,7 @@ pub struct MailHeader {
 }
 
 /// One row of the app's mail list.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
 pub struct MailRow {
     /// The canonical content hash, of which a todo's `source.hash` is a prefix.
     pub hash: String,
@@ -81,7 +81,7 @@ pub struct MailRow {
 
 /// What triage decided about a message, as a row shows it: nothing yet, or its decision, the
 /// todo only beside the one decision that names one.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[serde(tag = "kind", rename_all = "lowercase")]
 pub enum Disposed {
     /// Triage has decided nothing about it.
@@ -111,7 +111,7 @@ impl From<Option<&state::Decision>> for Disposed {
 }
 
 /// One message as a page; which todos it produced is the chain's fact, joined by the route.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
 pub struct MailMessage {
     /// Its list row.
     pub row: MailRow,
@@ -322,8 +322,8 @@ pub fn headers_of(headers: &[(String, String)]) -> Vec<MailHeader> {
 }
 
 mod date {
-    use prodrome_core::fpl::{instant_of, iso};
-    use serde::Serializer;
+    use prodrome_core::fpl::{datetime_of, instant_of, iso, parse_iso};
+    use serde::{Deserialize, Deserializer, Serializer};
 
     use crate::capability::Datetime;
 
@@ -333,6 +333,19 @@ mod date {
         serializer: S,
     ) -> Result<S::Ok, S::Error> {
         serializer.serialize_str(&at.map_or_else(String::new, |at| iso(instant_of(at))))
+    }
+
+    /// `""` is no date; anything else is an instant `serialize` printed.
+    pub fn deserialize<'de, D: Deserializer<'de>>(d: D) -> Result<Option<Datetime>, D::Error> {
+        let s = String::deserialize(d)?;
+        if s.is_empty() {
+            return Ok(None);
+        }
+        parse_iso(&s)
+            .map_err(|e| e.to_string())
+            .and_then(|t| datetime_of(t).map_err(|e| e.to_string()))
+            .map(Some)
+            .map_err(serde::de::Error::custom)
     }
 }
 
@@ -432,6 +445,14 @@ mod tests {
         };
         let json = decided(&state::Decision::Noise);
         assert_eq!(json["date"], "2026-09-01T08:30:00");
+        // A page reads the row back as the box printed it, with or without a date.
+        for printed in [
+            serde_json::to_value(&row).expect("serialises"),
+            json.clone(),
+        ] {
+            let read: MailRow = serde_json::from_value(printed.clone()).expect("reads back");
+            assert_eq!(serde_json::to_value(read).expect("serialises"), printed);
+        }
         assert_eq!(json["disposition"], serde_json::json!({"kind": "noise"}));
         let todo = state::Decision::parse("todo", Some("renewcard")).expect("a decision");
         assert_eq!(

@@ -141,8 +141,8 @@ Known debt:
 - `line_shape::join` uses `_ => None` over `LineWords`.
 - `activeFor` (`web/src/shell/nav.ts`) and `referenceInView` (`web/src/chat/inview.ts`) use
   `default` over our own `Route` and `Screen` types.
-- `badgeOf` (`web/src/pages/mailrow.ts`) and `digest.phrase` (`web/src/inbox/digest.ts`) use
-  `default` over strings. The wire sends a string where a sum type belongs.
+- `digest.phrase` (`web/src/inbox/digest.ts`) uses `default` over strings. The wire sends a
+  string where a sum type belongs.
 
 ### 5. Defunctionalize a closed set of behaviours
 

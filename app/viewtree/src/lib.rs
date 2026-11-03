@@ -9,6 +9,7 @@
 //! happened, and the painter here turns it into the message the view put on that node.
 #![forbid(unsafe_code)]
 
+pub mod dom;
 #[cfg(feature = "host")]
 pub mod host;
 pub mod kit;

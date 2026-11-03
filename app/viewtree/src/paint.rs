@@ -52,7 +52,7 @@ impl<M: Clone> Painter<M> {
             .iter()
             .find(|l| l.on() == on)
             .map(|l| match l {
-                Listener::Click(m) => m.clone(),
+                Listener::Click(m) | Listener::Submit(m) => m.clone(),
                 Listener::Input(f) => f(words),
             })
     }

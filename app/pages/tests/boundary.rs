@@ -22,6 +22,30 @@ fn generates_the_settings_boundary_types() {
     }
 }
 
+/// `web/src/wire/generated/pages.ts`: the runtime's effects and inputs, and what each page that
+/// speaks them starts from and asks, declared once, here.
+#[test]
+fn generates_the_pages_boundary_types() {
+    use suzatary_pages::{mail, message, runtime, thread};
+    let mut d = Declarations::default();
+    d.visit::<runtime::Effect<runtime::Never, runtime::Never>>();
+    d.visit::<runtime::Input<runtime::Never, runtime::Never>>();
+    d.visit::<mail::Flags>();
+    d.visit::<mail::Hold>();
+    d.visit::<mail::Ask>();
+    d.visit::<message::Flags>();
+    d.visit::<thread::Flags>();
+    let mut out = String::from(
+        "// GENERATED FROM app/pages/src BY `cargo test -p suzatary-pages`. DO NOT EDIT.\n",
+    );
+    exported(&mut out, d.out);
+    if let Ok(dir) = std::env::var("TS_RS_EXPORT_DIR") {
+        std::fs::create_dir_all(&dir).expect("the export directory is writable");
+        std::fs::write(std::path::Path::new(&dir).join("pages.ts"), out)
+            .expect("pages.ts is writable");
+    }
+}
+
 fn shown() -> Shown {
     serde_json::from_value(serde_json::json!({
         "overview": { "groups": [], "ask": "default", "offers": [] },

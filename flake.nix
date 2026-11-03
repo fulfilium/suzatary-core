@@ -689,7 +689,7 @@
           '';
           installPhase = ''
             runHook preInstall
-            test -s $out/settings.ts
+            test -s $out/settings.ts && test -s $out/pages.ts
             runHook postInstall
           '';
           meta.description = "The TypeScript of the pages' boundary, generated from suzatary-pages";

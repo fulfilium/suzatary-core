@@ -24,6 +24,18 @@ pub enum Reading<T> {
     },
 }
 
+#[cfg(feature = "host")]
+impl<T> Reading<T> {
+    /// The value read, made into another; on its way or failed as it was.
+    pub fn map<U>(self, f: impl FnOnce(T) -> U) -> Reading<U> {
+        match self {
+            Reading::Loading => Reading::Loading,
+            Reading::Error { e } => Reading::Error { e },
+            Reading::Val { v } => Reading::Val { v: f(v) },
+        }
+    }
+}
+
 /// Words in a paragraph of a class.
 pub fn para<M>(class: &str, words: impl Child<M>) -> Node<M> {
     view! { P {Attr::Class => class} [words] }

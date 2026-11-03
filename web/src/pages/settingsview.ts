@@ -4,7 +4,6 @@
 
 import { askTrust, beginSetup, pairDevice } from "../wire/api"
 import type { Act, Card, CardAct, Effect, Input, Shown } from "../wire/generated/settings"
-import time from "../app/time"
 import type { Row } from "../inbox/inbox"
 import signer from "../prodrome/signer"
 import app from "../app/app"
@@ -12,10 +11,10 @@ import { el } from "../view/dom"
 import { toast } from "../view/toast"
 import frame from "../view/frame"
 import lo from "../algebra/lo"
-import once from "../algebra/once"
 import { hrefOf } from "../shell/route"
 import address from "../shell/address"
 import run from "../painter/run"
+import program from "./program"
 import overview from "./overview"
 import settingsPage from "./settings"
 import type settingsState from "./settings.state"
@@ -33,33 +32,14 @@ export namespace settingsView {
       : []
   }
 
-  // The owner's zone over the two years before now and the day after, read once per zone: every instant Settings names.
-  const offsets = new Map<string, readonly time.Offset[]>()
-  const offsetsOf = (z: time.Zone): readonly time.Offset[] => {
-    const known = offsets.get(z.name)
-    if (known !== undefined) return known
-    const made = time.offsets(z, time.now() - 2 * 365 * 86_400_000, time.now() + 86_400_000)
-    offsets.set(z.name, made)
-    return made
-  }
-
   const shown = (v: T): Shown => ({
     overview: v.overview,
     rows: lo.map(v.rows, rs => rs.flatMap(cardOf)),
     gate: v.writes ? "writes" : "reads",
     ask: v.me === null ? null : hrefOf({ type: "conversation", id: v.overview.ask, refs: [], focus: true }),
     device: v.device,
-    offsets: [...offsetsOf(app.now().zone)],
+    offsets: [...program.offsetsOf(app.now().zone)],
   })
-
-  // The module and its glue in one round trip, once per tab; the load is a User Timing measure the bench reads.
-  const module = once.of(async () => {
-    const t0 = performance.now()
-    const [glue, response] = await Promise.all([import("./views.js"), fetch(new URL("./views_bg.wasm", import.meta.url).href)])
-    await glue.default({ module_or_path: response })
-    performance.measure("views:load", { start: t0, end: performance.now() })
-    return glue
-  }).get
 
   const perform = (a: Act): Promise<unknown> => {
     switch (a.type) {
@@ -103,7 +83,7 @@ export namespace settingsView {
     return node
   }
 
-  type Glue = Awaited<ReturnType<typeof module>>
+  type Glue = Awaited<ReturnType<typeof program.module>>
   // Where the island stands: nothing yet, a value before the module, the module before a value, running, or gone.
   type Running =
     | { readonly type: "Empty" }
@@ -124,7 +104,7 @@ export namespace settingsView {
       return { type: "Running", page }
     }
     // Asked as the page opens, so the module loads while the page's readings are asked, never after them.
-    module().then(
+    program.module().then(
       glue => (running = running.type === "Empty" ? { type: "Loaded", glue } : running.type === "Valued" ? start(glue, running.v) : running),
       (e: unknown) => toast(`Settings could not load: ${lo.reason(e)}`),
     )

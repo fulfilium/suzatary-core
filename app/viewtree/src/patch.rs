@@ -270,24 +270,8 @@ impl Reader<'_> {
     }
 
     fn tag(&mut self) -> Result<Tag, Malformed> {
-        const TAGS: [Tag; 12] = [
-            Tag::Div,
-            Tag::Section,
-            Tag::H2,
-            Tag::H3,
-            Tag::P,
-            Tag::A,
-            Tag::Button,
-            Tag::Input,
-            Tag::Details,
-            Tag::Summary,
-            Tag::Code,
-            Tag::Span,
-        ];
         let at = self.at;
-        TAGS.get(usize::from(self.byte()?))
-            .copied()
-            .ok_or(Malformed(at))
+        Tag::of(self.byte()?).ok_or(Malformed(at))
     }
 
     fn on(&mut self) -> Result<On, Malformed> {

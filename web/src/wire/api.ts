@@ -1,7 +1,7 @@
 // Every route the box answers, named once: its path, its method, and the decoder its answer passes through `http`.
 
 import app from "../app/app";
-import type { AboutPayload, AttachmentRow, Authoring, AuthoredPayload, BlockRender, BriefingPayload, BriefingsPayload, CalendarPayload, ChainPayload, ConversationPayload, DevicePayload, DrawnPayload, Erasing, FactId, FoldPayload, InboxPayload, KeyAsked, MailMessage, MailSearchPayload, MePayload, MemoryPayload, NewTodo, ObjectsPayload, Overview, Pairing, PostedObjects, Reasoning, ReceiptPayload, RecordPayload, Registering, ReleasesPayload, Revealing, SayPayload, Saying, Tapping, ThreadPayload, Titling, TodoPayload, UpdateTodo, Uploaded, Uploading, UsagePayload, WaitingPayload, WatchesPayload } from "./generated/wire";
+import type { AboutPayload, AttachmentRow, Authoring, AuthoredPayload, BlockRender, BriefingPayload, BriefingsPayload, CalendarPayload, ChainPayload, ConversationPayload, DevicePayload, DrawnPayload, Erasing, FactId, FoldPayload, KeyAsked, MailSearchPayload, MePayload, MemoryPayload, NewTodo, ObjectsPayload, Overview, Pairing, PostedObjects, Reasoning, ReceiptPayload, RecordPayload, Registering, ReleasesPayload, Revealing, SayPayload, Saying, Tapping, Titling, TodoPayload, UpdateTodo, Uploaded, Uploading, UsagePayload, WaitingPayload } from "./generated/wire";
 import { print } from "../chat/refs";
 import type { Reference } from "../chat/refs";
 import heads from "../prodrome/heads";
@@ -93,27 +93,9 @@ const paged = (account: string, before: string): string =>
   (account === "" ? "" : `&account=${encodeURIComponent(account)}`) +
   (before === "" ? "" : `&before=${encodeURIComponent(before)}`);
 
-/** Newest first; `before` is the ISO date of the oldest row shown, and "" asks for the newest. */
-export const inbox = (account: string, limit: number, before = ""): Promise<InboxPayload> =>
-  http.get(`/api/mail/inbox?limit=${limit}${paged(account, before)}`, payload.InboxPayload);
-
-/** A notmuch query, passed through, paged by `before` like the inbox. */
+/** A notmuch query, passed through, paged by `before`: the oldest row shown, "" for the newest. */
 export const mailSearch = (q: string, account: string, limit: number, before = ""): Promise<MailSearchPayload> =>
   http.get(`/api/mail/search?q=${encodeURIComponent(q)}&limit=${limit}${paged(account, before)}`, payload.MailSearchPayload);
-
-/** By notmuch id or by a todo's `source.hash`: the box resolves both. */
-export const mailMessage = (id: string): Promise<MailMessage> =>
-  http.get(`/api/mail/message/${encodeURIComponent(id)}`, payload.MailMessage);
-
-export const mailThread = (id: string, limit: number): Promise<ThreadPayload> =>
-  http.get(`/api/mail/thread/${encodeURIComponent(id)}?limit=${limit}`, payload.ThreadPayload);
-
-/** Every watch on expected mail that waits, the soonest to expire first. */
-export const mailWatches = (): Promise<WatchesPayload> => http.get("/api/mail/watches", payload.WatchesPayload);
-
-/** The owner's cancel, answered by the watches that still wait. */
-export const cancelWatch = (id: string): Promise<WatchesPayload> =>
-  http.act(`/api/mail/watches/${encodeURIComponent(id)}/cancel`, {}, payload.WatchesPayload);
 
 export const briefings = (): Promise<BriefingsPayload> => http.get("/api/briefings", payload.BriefingsPayload);
 

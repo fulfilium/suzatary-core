@@ -9,8 +9,9 @@ export namespace painter {
   export type Report = (id: number, on: number, words: string) => void
   export type T = { readonly apply: (patches: Uint8Array) => void; readonly destroy: () => void }
 
-  const TAGS: readonly (keyof HTMLElementTagNameMap)[] = ["div", "section", "h2", "h3", "p", "a", "button", "input", "details", "summary", "code", "span"]
-  const EVENTS: readonly string[] = ["click", "input"]
+  // In the order of `Tag` and `On` (`app/viewtree/src/node.rs`), whose numbers index them.
+  const TAGS: readonly (keyof HTMLElementTagNameMap)[] = ["div", "section", "h2", "h3", "p", "a", "button", "input", "details", "summary", "code", "span", "h1", "ul", "li", "dl", "dt", "dd", "strong", "form"]
+  const EVENTS: readonly string[] = ["click", "input", "submit"]
 
   type Reader = { readonly bytes: Uint8Array; at: number }
 
@@ -39,10 +40,14 @@ export namespace painter {
     return s
   }
 
-  // An address inside the app, or none: a view names its links by route, so anything else is dropped.
-  const inside = (href: string): boolean => href.startsWith("#")
+  // An address inside the app, one outside it on a scheme a link may name, or none: anything else is dropped. An outside
+  // one opens a new tab with no handle back on this one, whatever the view asked.
+  type Href = "Inside" | "Outside" | "Refused"
+  const hrefOf = (href: string): Href =>
+    href.startsWith("#") ? "Inside" : /^(https?:|mailto:)/i.test(href) ? "Outside" : "Refused"
 
-  export const create = (root: HTMLElement, foreign: Foreign, report: Report): T => {
+  // `gone` hears each foreign part the painter takes out, so the host can stop what it started for it.
+  export const create = (root: HTMLElement, foreign: Foreign, report: Report, gone: (n: Node) => void = () => {}): T => {
     const nodes = new Map<number, Node>([[0, root]])
     const ids = new WeakMap<Node, number>()
     // Each foreign part's kind and key, so new props ask the host for the same part again.
@@ -69,15 +74,21 @@ export namespace painter {
       if (id === undefined) return
       nodes.delete(id)
       for (const e of EVENTS) heard.delete(`${id}:${e}`)
-      if (foreigns.delete(id)) return
+      if (foreigns.delete(id)) return gone(n)
       n.childNodes.forEach(forget)
     }
 
     const set = (e: Element, name: string, value: string): void => {
       if (name === "value" && e instanceof HTMLInputElement) {
         if (e.value !== value) e.value = value
-      } else if (name !== "href" || inside(value)) e.setAttribute(name, value)
-      else e.removeAttribute(name)
+      } else if (name !== "href") e.setAttribute(name, value)
+      else {
+        const h = hrefOf(value)
+        if (h === "Refused") return e.removeAttribute(name)
+        e.setAttribute(name, value)
+        if (h === "Outside") (e.setAttribute("target", "_blank"), e.setAttribute("rel", "noopener noreferrer"))
+        else (e.removeAttribute("target"), e.removeAttribute("rel"))
+      }
     }
 
     const apply = (patches: Uint8Array): void => {
@@ -114,6 +125,7 @@ export namespace painter {
             const e = element(varint(r))
             const name = string(r)
             if (name === "value" && e instanceof HTMLInputElement) e.value = ""
+            if (name === "href") (e.removeAttribute("target"), e.removeAttribute("rel"))
             e.removeAttribute(name)
             break
           }
@@ -132,6 +144,7 @@ export namespace painter {
             nodes.set(id, now)
             ids.set(now, id)
             was.parentNode?.replaceChild(now, was)
+            gone(was)
             break
           }
           case 7: {
@@ -151,7 +164,11 @@ export namespace painter {
             const name = EVENTS[on]
             if (name === undefined) throw new Error(`no event ${on}`)
             const e = element(id)
-            const listener: EventListener = () => report(id, on, e instanceof HTMLInputElement ? e.value : "")
+            // A submit is reported and never performed: the page decides where it goes.
+            const listener: EventListener = (ev: Event) => {
+              if (name === "submit") ev.preventDefault()
+              report(id, on, e instanceof HTMLInputElement ? e.value : "")
+            }
             heard.set(`${id}:${name}`, listener)
             e.addEventListener(name, listener)
             break
@@ -171,7 +188,7 @@ export namespace painter {
       }
     }
 
-    return { apply, destroy: () => root.replaceChildren() }
+    return { apply, destroy: () => (foreigns.forEach((_, id) => gone(node(id))), root.replaceChildren()) }
   }
 }
 export default painter

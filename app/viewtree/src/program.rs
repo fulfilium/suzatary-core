@@ -49,6 +49,11 @@ impl<P: Program> Runtime<P> {
         (Self { model, painter }, frame(&patches, effects))
     }
 
+    /// The model as it stands: what a law draws a fresh view of.
+    pub fn model(&self) -> &P::Model {
+        &self.model
+    }
+
     /// One message stepped and painted.
     pub fn send(&mut self, msg: P::Msg) -> Frame<P::Effect> {
         let (patches, effects) = self.step(msg);
