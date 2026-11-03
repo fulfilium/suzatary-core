@@ -162,7 +162,7 @@ impl Syncer {
             }),
             Sync::MsImap(ms) => Box::new(Microsoft {
                 account: account.clone(),
-                sent_folder: ms.sent_folder.clone(),
+                declares: ms.clone(),
                 maildir,
                 state_dir: self.state_dir.clone(),
                 open: Granted::new(self.tokens.clone()),
@@ -192,12 +192,15 @@ impl Syncer {
         let fetched = pull_into(
             &mut session,
             &self.mail_root.join(&account.subdir).join(&leaf),
-            &state_file(&self.state_dir, account, Some(folder)),
+            // Its own state, by its leaf: one shared with the routine pull of the same folder
+            // would mark the window's messages fetched, and they would never land unread.
+            &state_file(&self.state_dir, account, Some(&format!("backfill {leaf}"))),
             &Pull::Backfill {
                 folder: folder.to_owned(),
                 limit,
             },
-        )?;
+        )?
+        .fetched;
         session.logout()?;
         self.index().map_err(|failed| ImapError::Maildir {
             what: "indexed",

@@ -75,12 +75,13 @@ impl std::fmt::Display for Authority {
 pub struct MsImap {
     /// Which tenant to authenticate against.
     pub authority: Authority,
-    /// The leaves under the account's maildir that count as triage input. The
-    /// syncer pulls INBOX only, so widening this means teaching it to fetch more.
+    /// The leaves under the account's maildir that count as triage input, each
+    /// pulled from the server folder of its name (the leaf `Inbox` from INBOX) by
+    /// [`crate::mail::declared`]; a name the server does not list fails the sync.
     pub inbox_folders: Folders,
     /// The server-side name of the sent folder ("Sent Items" on M365, "Sent" on
-    /// personal Outlook: list the folders, do not guess), kept fresh through the
-    /// read-only backfill path so "did I reply to X" has evidence.
+    /// personal Outlook: list the folders, do not guess), pulled whole and
+    /// read-only on every sync so "did I reply to X" has evidence.
     pub sent_folder: String,
 }
 
@@ -163,6 +164,10 @@ impl MailAccount {
 
     /// What the syncer may blanket-tag `+inbox`: narrower than
     /// [`MailAccount::query`], which would put years of sent mail in the queue.
+    ///
+    /// Each leaf's path is quoted, since a server folder's name may hold a space
+    /// (`Junk Email`) and notmuch reads an unquoted space as the end of the term,
+    /// which matches nothing.
     #[must_use]
     pub fn inbox_query(&self) -> String {
         let folders = match &self.sync {
@@ -173,7 +178,10 @@ impl MailAccount {
         let leaves: Vec<String> = folders
             .as_slice()
             .iter()
-            .map(|folder| format!("path:{}/{folder}/**", self.subdir))
+            .map(|folder| {
+                let path = format!("{}/{folder}/**", self.subdir).replace('"', "\"\"");
+                format!("path:\"{path}\"")
+            })
             .collect();
         format!("({})", leaves.join(" or "))
     }

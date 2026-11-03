@@ -7,9 +7,10 @@ use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
 
 use suzatary_core::connect::Failure;
-use suzatary_core::mail::account::MailAccount;
+use suzatary_core::mail::account::{MailAccount, MsImap};
 use suzatary_core::mail::address::EmailAddress;
-use suzatary_core::mail::imap::{ImapError, Pull, Session, pull};
+use suzatary_core::mail::declared::{Declared, Landed, declared, line};
+use suzatary_core::mail::imap::{INBOX, ImapError, Pull, Pulled, Session, pull};
 use suzatary_core::mail::puller::{Puller, Unpulled};
 
 use crate::google::{Grants, NotReady};
@@ -23,13 +24,16 @@ pub const LIEER: &str = "gmi";
 /// mbsync's program, looked up on `PATH`.
 pub const MBSYNC: &str = "mbsync";
 
-/// A Microsoft account: its INBOX window, then its Sent folder read-only into its own leaf and
-/// landed read, so sent mail is searchable and never queued.
+/// A Microsoft account: every folder it declares ([`declared`]), each pulled on its own so one
+/// that fails costs that folder alone: its inbox folders as windows that land unread, then its
+/// Sent folder read-only into its own leaf and landed read, so sent mail is searchable and never
+/// queued. A declared folder the server does not list is not asked for, and fails the pull by
+/// name.
 pub struct Microsoft<O> {
     /// The account, whose address the session signs in as and whose slug names its state files.
     pub account: MailAccount,
-    /// Its server's Sent folder.
-    pub sent_folder: String,
+    /// Its folders as the instance file declares them.
+    pub declares: MsImap,
     /// Its maildir, `<mail root>/<subdir>`.
     pub maildir: PathBuf,
     /// Where each leaf's sync state is kept.
@@ -41,23 +45,31 @@ pub struct Microsoft<O> {
 impl<O: Open> Puller for Microsoft<O> {
     fn pull(&self, since: chrono::NaiveDate) -> Result<String, Unpulled> {
         let mut session = self.open.open(&self.account)?;
-        let inbox = pull_into(
-            &mut session,
-            &self.maildir.join("Inbox"),
-            &state_file(&self.state_dir, &self.account, None),
-            &Pull::Inbox { since },
-        )?;
-        let sent = pull_into(
-            &mut session,
-            &self.maildir.join("Sent"),
-            &state_file(&self.state_dir, &self.account, Some(&self.sent_folder)),
-            &Pull::Backfill {
-                folder: self.sent_folder.clone(),
-                limit: None,
-            },
-        )?;
+        let listed = session.list()?;
+        let landed: Vec<(Declared, Landed)> = declared(&self.declares, since)
+            .into_iter()
+            .map(|folder| {
+                let landed = if folder.listed_in(&listed) {
+                    let state = match folder.pull.folder() {
+                        INBOX => None,
+                        other => Some(other),
+                    };
+                    pull_into(
+                        &mut session,
+                        &self.maildir.join(&folder.leaf),
+                        &state_file(&self.state_dir, &self.account, state),
+                        &folder.pull,
+                    )
+                    .map_or_else(Landed::Failed, Landed::Pulled)
+                } else {
+                    Landed::Unlisted
+                };
+                (folder, landed)
+            })
+            .collect();
+        let said = line(&landed);
         session.logout()?;
-        Ok(format!("{inbox} new, {sent} sent"))
+        said
     }
 }
 
@@ -108,18 +120,18 @@ impl Open for Granted {
 }
 
 /// One [`Pull`] into the maildir leaf `leaf`, its state kept at `state`, so a backfill and the
-/// INBOX pull never share UID sets; how many messages it wrote.
+/// INBOX pull never share UID sets; what it did.
 pub(crate) fn pull_into<S: Session + ?Sized>(
     session: &mut S,
     leaf: &Path,
     state: &Path,
     plan: &Pull,
-) -> Result<usize, ImapError> {
+) -> Result<Pulled, ImapError> {
     let folder = Folder::new(leaf);
     folder.ensure()?;
     let done = pull(session, &folder, read_sync_state(state)?, plan)?;
     write_sync_state(state, &done.state)?;
-    Ok(done.fetched)
+    Ok(done)
 }
 
 /// A Gmail account through lieer (`gmi sync` in its maildir), which reads lieer's own grant

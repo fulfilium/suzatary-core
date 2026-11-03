@@ -4,7 +4,7 @@
 //! lieer's on the Google grant minting its token from a scripted token endpoint. What lands is
 //! read back from the maildir on disk.
 
-use std::collections::VecDeque;
+use std::collections::{BTreeMap, VecDeque};
 use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -18,6 +18,7 @@ use suzatary_core::mail::address::EmailAddress;
 use suzatary_core::mail::folders::Folders;
 use suzatary_core::mail::imap::ImapError;
 use suzatary_core::mail::mailroom::Server;
+use suzatary_core::mail::puller::Puller as _;
 use suzatary_io::google::{Google as Api, Grants};
 use suzatary_io::http::{HttpError, Resp, Scripted};
 use suzatary_io::imap::Outlook;
@@ -322,11 +323,11 @@ fn lieer_on_the_google_grant_keeps_every_law_behind_a_fake_gmail() {
 /// The one message the fake server's Sent folder holds.
 const SENT: &[u8] = b"Message-ID: <sent@example.test>\r\nSubject: Re: the lease\r\n\r\nThanks.\r\n";
 
-/// An IMAP server whose INBOX holds `inbox`, UID `n` its `n`th message, and whose Sent folder
-/// holds [`SENT`]; `selected` holds the selected folder's messages, and a command it does not
-/// know is `BAD`.
+/// An IMAP server holding `folders`, each by its server name, UID `n` its `n`th message;
+/// `selected` holds the selected folder's messages. A folder it does not hold is refused with
+/// `NO`, and a command it does not know is `BAD`.
 struct Imap {
-    inbox: Vec<Vec<u8>>,
+    folders: BTreeMap<String, Vec<Vec<u8>>>,
     selected: Vec<Vec<u8>>,
     written: Vec<u8>,
     answer: VecDeque<u8>,
@@ -340,23 +341,38 @@ impl Imap {
     fn command(&mut self, line: &str) {
         let (tag, command) = line.split_once(' ').expect("a tagged command");
         let ok = format!("{tag} OK done\r\n");
+        let opened = command
+            .strip_prefix("SELECT ")
+            .map(|folder| (folder, "READ-WRITE"))
+            .or_else(|| {
+                command
+                    .strip_prefix("EXAMINE ")
+                    .map(|folder| (folder, "READ-ONLY"))
+            });
         if command.starts_with("LOGIN ") || command.starts_with("UID STORE ") {
             self.say(ok.as_bytes());
-        } else if command == "SELECT \"INBOX\"" {
-            self.selected = self.inbox.clone();
-            let exists = self.inbox.len();
-            self.say(
-                format!(
-                    "* {exists} EXISTS\r\n* OK [UIDVALIDITY 7] ok\r\n{tag} OK [READ-WRITE] done\r\n"
-                )
-                .as_bytes(),
-            );
-        } else if command == "EXAMINE \"Sent Items\"" {
-            self.selected = vec![SENT.to_vec()];
-            self.say(
-                format!("* 1 EXISTS\r\n* OK [UIDVALIDITY 9] ok\r\n{tag} OK [READ-ONLY] done\r\n")
-                    .as_bytes(),
-            );
+        } else if command.starts_with("LIST ") {
+            let listed: String = self
+                .folders
+                .keys()
+                .flat_map(|name| ["* LIST (\\HasNoChildren) \"/\" \"", name, "\"\r\n"])
+                .collect();
+            self.say(format!("{listed}{ok}").as_bytes());
+        } else if let Some((folder, mode)) = opened {
+            let name = folder.trim_matches('"');
+            match self.folders.get(name).cloned() {
+                Some(messages) => {
+                    let exists = messages.len();
+                    self.selected = messages;
+                    self.say(
+                        format!(
+                            "* {exists} EXISTS\r\n* OK [UIDVALIDITY 7] ok\r\n{tag} OK [{mode}] done\r\n"
+                        )
+                        .as_bytes(),
+                    );
+                }
+                None => self.say(format!("{tag} NO no such folder\r\n").as_bytes()),
+            }
         } else if command.starts_with("UID SEARCH ") {
             let uids: Vec<String> = (1..=self.selected.len())
                 .map(|uid| uid.to_string())
@@ -407,24 +423,21 @@ impl Read for Imap {
     }
 }
 
-/// Opens a session on a fresh [`Imap`] serving what the far end holds.
-struct Dial(Server);
+/// Opens a session on a fresh [`Imap`] holding `folders`, or none at all.
+struct Dial(Option<BTreeMap<String, Vec<Vec<u8>>>>);
 
 impl Open for Dial {
     type Stream = Imap;
 
     fn open(&self, _account: &MailAccount) -> Result<Outlook<Imap>, ImapError> {
-        let inbox = match &self.0 {
-            Server::Holding(messages) => messages.clone(),
-            Server::Unreachable => {
-                return Err(ImapError::Server {
-                    what: "the connection".to_owned(),
-                    why: "no route to the server".to_owned(),
-                });
-            }
+        let Some(folders) = self.0.clone() else {
+            return Err(ImapError::Server {
+                what: "the connection".to_owned(),
+                why: "no route to the server".to_owned(),
+            });
         };
         let mut client = imap::Client::new(Imap {
-            inbox,
+            folders,
             selected: Vec::new(),
             written: Vec::new(),
             answer: b"* OK scripted IMAP ready\r\n".iter().copied().collect(),
@@ -438,27 +451,37 @@ impl Open for Dial {
     }
 }
 
-struct Outlook365(tempfile::TempDir);
+/// Server folders by name, each with its messages, oldest first.
+type Held<'a> = [(&'a str, &'a [Vec<u8>])];
 
-impl Outlook365 {
-    fn puller(&self, server: Server) -> Microsoft<Dial> {
-        Microsoft {
-            account: MailAccount {
-                email: AccountEmail::new(ADA).expect("a lower-case address"),
-                subdir: "ada".to_owned(),
-                sync: Sync::MsImap(MsImap {
-                    authority: Authority::Organizations,
-                    inbox_folders: Folders::new(vec!["Inbox".to_owned()]).expect("a folder"),
-                    sent_folder: "Sent Items".to_owned(),
-                }),
-            },
-            sent_folder: "Sent Items".to_owned(),
-            maildir: self.0.path().join("Mail/ada"),
-            state_dir: self.0.path().join("state"),
-            open: Dial(server),
-        }
+/// Ada's Microsoft account, declaring `inbox_folders` and a Sent folder named `Sent Items`,
+/// with its maildir and state under `dir`.
+fn microsoft(dir: &Path, inbox_folders: &[&str], folders: Option<&Held<'_>>) -> Microsoft<Dial> {
+    let declares = MsImap {
+        authority: Authority::Organizations,
+        inbox_folders: Folders::new(inbox_folders.iter().map(|&leaf| leaf.to_owned()).collect())
+            .expect("a folder"),
+        sent_folder: "Sent Items".to_owned(),
+    };
+    Microsoft {
+        account: MailAccount {
+            email: AccountEmail::new(ADA).expect("a lower-case address"),
+            subdir: "ada".to_owned(),
+            sync: Sync::MsImap(declares.clone()),
+        },
+        declares,
+        maildir: dir.join("Mail/ada"),
+        state_dir: dir.join("state"),
+        open: Dial(folders.map(|folders| {
+            folders
+                .iter()
+                .map(|(name, messages)| ((*name).to_owned(), messages.to_vec()))
+                .collect()
+        })),
     }
 }
+
+struct Outlook365(tempfile::TempDir);
 
 impl Rig for Outlook365 {
     type Puller = Microsoft<Dial>;
@@ -466,11 +489,15 @@ impl Rig for Outlook365 {
     const UNREACHABLE: Failure = Failure::Unclassified;
 
     fn holding(&self, messages: &[Vec<u8>]) -> Microsoft<Dial> {
-        self.puller(Server::Holding(messages.to_vec()))
+        microsoft(
+            self.0.path(),
+            &["Inbox"],
+            Some(&[("INBOX", messages), ("Sent Items", &[SENT.to_vec()])]),
+        )
     }
 
     fn unreachable(&self) -> Microsoft<Dial> {
-        self.puller(Server::Unreachable)
+        microsoft(self.0.path(), &["Inbox"], None)
     }
 
     fn landed(&self) -> Vec<Vec<u8>> {
@@ -487,5 +514,74 @@ fn the_microsoft_pull_keeps_every_law_behind_a_fake_imap_server() {
         (read(&sent.join("cur")), read(&sent.join("new"))),
         (vec![SENT.to_vec()], vec![]),
         "the Sent folder lands read in its own leaf, once"
+    );
+}
+
+/// Every folder an account declares syncs, each on its own: an inbox, a junk folder named in
+/// `inbox_folders` and the sent folder all land, the first two unread and the third read. A
+/// declared folder the server does not list fails the account by its name while the others
+/// still land, and once the server lists it again the next sync lands what it holds.
+#[test]
+fn every_declared_folder_syncs_and_one_the_server_does_not_list_fails_by_name() {
+    let dir = tempfile::tempdir().expect("a scratch dir");
+    let message = |id: &str| {
+        format!("Message-ID: <{id}@example.test>\r\nSubject: {id}\r\n\r\n{id}\r\n").into_bytes()
+    };
+    let (inbox, junk, sent) = (message("inbox"), message("junk"), message("sent"));
+    let leaf = |name: &str, half: &str| {
+        let mut held = read(&dir.path().join("Mail/ada").join(name).join(half));
+        held.sort();
+        held
+    };
+    let pull = |folders: &Held<'_>| {
+        microsoft(dir.path(), &["Inbox", "Junk Email"], Some(folders)).pull(since())
+    };
+
+    let said = pull(&[
+        ("INBOX", std::slice::from_ref(&inbox)),
+        ("Junk Email", std::slice::from_ref(&junk)),
+        ("Sent Items", std::slice::from_ref(&sent)),
+    ])
+    .expect("every folder syncs");
+    assert_eq!(said, "INBOX: 1 new; Junk Email: 1 new; Sent Items: 1 new");
+    assert_eq!(leaf("Inbox", "new"), vec![inbox.clone()]);
+    assert_eq!(leaf("Junk Email", "new"), vec![junk.clone()]);
+    assert_eq!(leaf("Sent", "cur"), vec![sent.clone()]);
+
+    let (later, replied) = (message("later"), message("replied"));
+    let failed = pull(&[
+        ("INBOX", &[inbox.clone(), later.clone()]),
+        ("Sent Items", &[sent.clone(), replied.clone()]),
+    ])
+    .expect_err("a declared folder the server does not list fails the account");
+    assert_eq!(failed.class, Failure::Unclassified);
+    assert_eq!(
+        failed.said,
+        "INBOX: 1 new; Junk Email: the server lists no folder of this name; Sent Items: 1 new"
+    );
+    let mut inbox_now = vec![inbox.clone(), later];
+    inbox_now.sort();
+    let mut sent_now = vec![sent.clone(), replied];
+    sent_now.sort();
+    assert_eq!(leaf("Inbox", "new"), inbox_now, "the inbox still syncs");
+    assert_eq!(leaf("Sent", "cur"), sent_now, "the sent folder still syncs");
+
+    let spam = message("spam");
+    let caught_up = pull(&[
+        ("INBOX", &[]),
+        ("Junk Email", &[junk.clone(), spam.clone()]),
+        ("Sent Items", &[]),
+    ])
+    .expect("the folder syncs again");
+    assert_eq!(
+        caught_up,
+        "INBOX: 0 new; Junk Email: 1 new; Sent Items: 0 new"
+    );
+    let mut junk_now = vec![junk, spam];
+    junk_now.sort();
+    assert_eq!(
+        leaf("Junk Email", "new"),
+        junk_now,
+        "the next sync catches up"
     );
 }

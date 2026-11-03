@@ -165,7 +165,9 @@ confirm. Everything below derives from this.
   INBOX + 7 days; anything older or elsewhere needs `backfill` or the
   secretary's `search_older` (→ `syncanddeepsearch`). The queue is HASH-gated,
   not read-flag-gated (→ `hashgatedqueue`). Sent = continuous everywhere.
-  **Junk unsynced by choice** (monthly `junksweep`). A folder is not an
+  **Junk syncs only where an account names it in `inbox_folders`** (else the
+  monthly `junksweep`). Every folder an account declares syncs on its own, and
+  one the server does not list fails the account by name. A folder is not an
   account. `suzatary mail idle` only triggers the 5-minute timer early (→
   `mailidle`).
 - Read full bodies (`suzatary show` strips HTML); never truncate. Never read

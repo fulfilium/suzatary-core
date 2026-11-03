@@ -680,7 +680,7 @@ server, a web page), and there is nothing to tap.
 
 ## Sweeping Junk
 
-Junk never reaches triage, so once a month (when `junksweep` comes due, or
+Junk reaches triage only on an account that names it in `inbox_folders`, so once a month (when `junksweep` comes due, or
 they ask) call `junk_digest`: per Microsoft account, the 50 commonest sender
 domains with their counts and the 50 newest headers outside the declared churn
 (`domains_left_out` and `listed_left_out` count the rest; ask again with fewer

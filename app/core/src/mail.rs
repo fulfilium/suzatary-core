@@ -5,6 +5,7 @@ pub mod account;
 pub mod account_email;
 pub mod address;
 pub mod cache;
+pub mod declared;
 pub mod dedup_key;
 pub mod folders;
 pub mod gone;

@@ -5,7 +5,7 @@ use std::cell::RefCell;
 use std::collections::BTreeMap;
 use std::rc::Rc;
 
-use super::imap::{ImapError, Maildir, Pull, Selected, Session, SyncState, pull};
+use super::imap::{INBOX, ImapError, Maildir, Pull, Selected, Session, SyncState, pull};
 use super::puller::{Puller, Unpulled};
 use crate::connect::Failure;
 
@@ -74,7 +74,10 @@ impl Puller for Mailroom {
             &mut Inbox(messages),
             self.maildir.as_ref(),
             state,
-            &Pull::Inbox { since },
+            &Pull::Window {
+                folder: INBOX.to_owned(),
+                since,
+            },
         )?;
         *self.maildir.state.borrow_mut() = pulled.state;
         Ok(format!("{} new", pulled.fetched))
@@ -91,6 +94,10 @@ impl Inbox<'_> {
 }
 
 impl Session for Inbox<'_> {
+    fn list(&mut self) -> Result<Vec<String>, ImapError> {
+        Ok(vec![INBOX.to_owned()])
+    }
+
     fn select(&mut self, _folder: &str, _readonly: bool) -> Result<Selected, ImapError> {
         Ok(Selected {
             uidvalidity: "1".to_owned(),

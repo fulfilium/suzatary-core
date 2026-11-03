@@ -31,7 +31,7 @@ pub const MAX_TERMS: usize = 12;
 
 /// The server folder an older search reads on an IMAP account. Sent is not searched: the
 /// routine sync already keeps the whole of it on the box.
-pub const IMAP_FOLDER: &str = "INBOX";
+pub const IMAP_FOLDER: &str = crate::mail::imap::INBOX;
 
 /// The maildir leaf, under an account's folder, that an older search writes into.
 #[must_use]
@@ -876,6 +876,9 @@ mod tests {
     }
 
     impl Session for Server {
+        fn list(&mut self) -> Result<Vec<String>, ImapError> {
+            Ok(vec![crate::mail::imap::INBOX.to_owned()])
+        }
         fn select(&mut self, _folder: &str, readonly: bool) -> Result<Selected, ImapError> {
             self.readonly = Some(readonly);
             Ok(Selected {
@@ -1014,7 +1017,11 @@ mod tests {
         let criteria = imap_criteria(&query("invite"), r).expect("ascii");
         assert!(criteria.contains(&format!("BEFORE {}", imap_date(window))));
         assert_eq!(
-            crate::mail::imap::Pull::Inbox { since: window }.criteria(),
+            crate::mail::imap::Pull::Window {
+                folder: crate::mail::imap::INBOX.to_owned(),
+                since: window
+            }
+            .criteria(),
             format!("SINCE {}", imap_date(window))
         );
     }

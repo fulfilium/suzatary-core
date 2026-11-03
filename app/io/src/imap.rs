@@ -243,6 +243,17 @@ pub(crate) fn authenticated(
 }
 
 impl<S: Read + Write> suzatary_core::mail::imap::Session for Outlook<S> {
+    fn list(&mut self) -> Result<Vec<String>, ImapError> {
+        let names = self
+            .session
+            .list(Some(""), Some("*"))
+            .map_err(|error| ImapError::Server {
+                what: "LIST".to_owned(),
+                why: error.to_string(),
+            })?;
+        Ok(names.iter().map(|name| name.name().to_owned()).collect())
+    }
+
     fn select(&mut self, folder: &str, readonly: bool) -> Result<Selected, ImapError> {
         // Raw: the crate quotes it (module docs).
         let mailbox = if readonly {
@@ -287,11 +298,12 @@ impl<S: Read + Write> suzatary_core::mail::imap::Session for Outlook<S> {
                 what: format!("UID FETCH {uid}"),
                 why: error.to_string(),
             })?;
-        // No body is a message expunged since the search: `None`, not an error.
+        // The answer for this UID, since a server may send FETCH responses for other messages
+        // beside it. No body is a message expunged since the search: `None`, not an error.
         Ok(fetches
             .iter()
-            .next()
-            .and_then(|fetch| fetch.body())
+            .find(|fetch| fetch.uid == Some(uid))
+            .and_then(imap::types::Fetch::body)
             .map(<[u8]>::to_vec))
     }
 
@@ -394,7 +406,7 @@ mod tests {
     use std::cell::RefCell;
     use std::collections::BTreeMap;
 
-    use suzatary_core::mail::imap::{Pull, Session, SyncState, maildir_name, pull};
+    use suzatary_core::mail::imap::{INBOX, Pull, Session, SyncState, maildir_name, pull};
 
     use super::*;
 
@@ -450,6 +462,10 @@ mod tests {
     }
 
     impl Session for FakeSession {
+        fn list(&mut self) -> Result<Vec<String>, ImapError> {
+            Ok(vec![INBOX.to_owned()])
+        }
+
         fn select(&mut self, _folder: &str, _readonly: bool) -> Result<Selected, ImapError> {
             Ok(Selected {
                 uidvalidity: self.uidvalidity.clone(),
@@ -494,7 +510,8 @@ mod tests {
             &mut session,
             &folder,
             SyncState::default(),
-            &Pull::Inbox {
+            &Pull::Window {
+                folder: INBOX.to_owned(),
                 since: chrono::NaiveDate::from_ymd_opt(2026, 9, 1).expect("a date"),
             },
         )

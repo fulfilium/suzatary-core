@@ -75,8 +75,14 @@ pub struct Selected {
     pub uidvalidity: String,
 }
 
+/// The server name of the inbox, which RFC 3501 makes case-insensitive.
+pub const INBOX: &str = "INBOX";
+
 /// An IMAP conversation as a capability, UID-based throughout.
 pub trait Session {
+    /// `LIST "" "*"`: the name of every folder the server holds.
+    fn list(&mut self) -> Result<Vec<String>, ImapError>;
+
     /// Select a mailbox. `readonly` is `EXAMINE`, through which the server
     /// cannot be mutated, so a backfill can never mark a mailbox all-read.
     fn select(&mut self, folder: &str, readonly: bool) -> Result<Selected, ImapError>;
@@ -221,12 +227,14 @@ pub fn locally_seen_uids<S: AsRef<str>>(names: &[S]) -> BTreeSet<u32> {
 /// of its kind.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Pull {
-    /// The routine INBOX pull: mail since `since`, seen or unseen, landing unread, with local
-    /// read-flags pushed back.
+    /// The routine pull of a folder that is triage input: mail since `since`, seen or unseen,
+    /// landing unread, with local read-flags pushed back.
     ///
     /// Seen or unseen on purpose: the queue is hash-gated, so mail read on the phone before a
     /// sync must still arrive to be triaged exactly once.
-    Inbox {
+    Window {
+        /// The server-side folder name, unquoted. The transport quotes it.
+        folder: String,
         /// The first day searched, on the owner's calendar.
         since: chrono::NaiveDate,
     },
@@ -246,8 +254,7 @@ impl Pull {
     #[must_use]
     pub fn folder(&self) -> &str {
         match self {
-            Pull::Inbox { .. } => "INBOX",
-            Pull::Backfill { folder, .. } => folder,
+            Pull::Window { folder, .. } | Pull::Backfill { folder, .. } => folder,
         }
     }
 
@@ -255,7 +262,7 @@ impl Pull {
     #[must_use]
     pub fn criteria(&self) -> String {
         match self {
-            Pull::Inbox { since } => format!("SINCE {}", imap_date(*since)),
+            Pull::Window { since, .. } => format!("SINCE {}", imap_date(*since)),
             Pull::Backfill { .. } => "ALL".to_owned(),
         }
     }
@@ -264,7 +271,7 @@ impl Pull {
     #[must_use]
     pub fn readonly(&self) -> bool {
         match self {
-            Pull::Inbox { .. } => false,
+            Pull::Window { .. } => false,
             Pull::Backfill { .. } => true,
         }
     }
@@ -280,7 +287,7 @@ impl Pull {
     #[must_use]
     pub fn limit(&self) -> Option<usize> {
         match self {
-            Pull::Inbox { .. } => None,
+            Pull::Window { .. } => None,
             Pull::Backfill { limit, .. } => *limit,
         }
     }
@@ -291,6 +298,10 @@ impl Pull {
 pub struct Pulled {
     /// How many messages were newly written.
     pub fetched: usize,
+    /// How many messages the search found and the fetch did not return: expunged since the
+    /// search, or held back by the server. None is recorded as fetched, so the next pull asks
+    /// again, and the count is in the sync's line, never dropped.
+    pub unreturned: usize,
     /// How many read-flags were pushed upstream.
     pub pushed: usize,
     /// The state to persist. The caller writes it; this module decides it.
@@ -319,6 +330,7 @@ pub fn pull<S: Session + ?Sized, M: Maildir + ?Sized>(
         wanted.drain(..wanted.len() - cap);
     }
 
+    let asked = wanted.len();
     let mut fetched: BTreeSet<u32> = BTreeSet::new();
     for uid in wanted {
         // A message expunged since the search costs one message, not the run.
@@ -346,6 +358,7 @@ pub fn pull<S: Session + ?Sized, M: Maildir + ?Sized>(
 
     Ok(Pulled {
         fetched: fetched.len(),
+        unreturned: asked - fetched.len(),
         pushed: pushed.len(),
         state: SyncState {
             uidvalidity: state.uidvalidity,
@@ -362,7 +375,8 @@ mod tests {
     use std::collections::BTreeMap;
 
     fn inbox() -> Pull {
-        Pull::Inbox {
+        Pull::Window {
+            folder: INBOX.to_owned(),
             since: chrono::NaiveDate::from_ymd_opt(2026, 9, 1).expect("a date"),
         }
     }
@@ -403,6 +417,9 @@ mod tests {
     }
 
     impl Session for FakeServer {
+        fn list(&mut self) -> Result<Vec<String>, ImapError> {
+            Ok(vec![INBOX.to_owned()])
+        }
         fn select(&mut self, _folder: &str, readonly: bool) -> Result<Selected, ImapError> {
             self.selected_readonly = Some(readonly);
             Ok(Selected {
@@ -576,6 +593,10 @@ mod tests {
         let maildir = FakeMaildir::default();
         let done = pull(&mut server, &maildir, SyncState::default(), &inbox()).expect("a pull");
         assert_eq!(done.fetched, 2);
+        assert_eq!(
+            done.unreturned, 1,
+            "the vanished message is counted, not dropped"
+        );
         assert_eq!(done.state.synced, [1u32, 3].into_iter().collect());
     }
 
