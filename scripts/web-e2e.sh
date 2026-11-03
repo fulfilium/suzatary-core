@@ -42,6 +42,7 @@
 #   scripts/web-e2e.sh typstmeasure  only web/e2e/typstmeasure.bench.ts, the Typst list's draw timed
 #   scripts/web-e2e.sh snapshotmeasure  only web/e2e/snapshotmeasure.bench.ts, a warm load's snapshot timed
 #   scripts/web-e2e.sh writewait  only web/e2e/writewait.bench.ts, the box's answer to each write route timed
+#   scripts/web-e2e.sh settingsbench  only web/e2e/settingsbench.bench.ts, Settings today against its Rust program
 #                                 no gate runs any of them (`*.bench.ts` is outside every glob)
 #
 # Screenshots of failures land in $SUZATARY_E2E_SHOTS (a temp dir by default);
@@ -58,6 +59,7 @@
 set -euo pipefail
 
 # $SUZATARY_E2E_SCENES, a pattern, runs only the scenes whose names match it.
+# $SUZATARY_E2E_VIEWTREE=on runs every scene with the pages the prototype draws from Rust.
 # $SUZATARY_E2E_PART=<k>/<n> runs only the k-th of n parts of the files (below); empty, every file.
 # $SUZATARY_E2E_TRACE_REQUESTS=1 logs every signed request: the tab's stages to
 # the console (a failure's trace keeps it) and the box's to each server's log.

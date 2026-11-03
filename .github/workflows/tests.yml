@@ -122,12 +122,12 @@ jobs:
       # so these steps stay Nix builds and never invoke cargo themselves.
       - name: Build the web app (tsc + esbuild)
         run: |
-          export SUZATARY_WIRE_TS="$(nix build .#suzatary-wire-ts --no-link --print-out-paths)"
+          export SUZATARY_WIRE_TS="$(nix build .#suzatary-web-ts --no-link --print-out-paths)"
           nix develop .#triage --command scripts/build-web.sh
 
       - name: Run the web app's node tests
         run: |
-          export SUZATARY_WIRE_TS="$(nix build .#suzatary-wire-ts --no-link --print-out-paths)"
+          export SUZATARY_WIRE_TS="$(nix build .#suzatary-web-ts --no-link --print-out-paths)"
           export SUZATARY_PRODROME_CONFORMANCE="$(nix build .#suzatary-vector-json --no-link --print-out-paths)"
           nix develop .#triage --command scripts/web-test.sh
 

@@ -2814,7 +2814,7 @@ pub struct SayPayload {
 }
 
 /// `GET /api/overview`: what is connected, by group, and never a secret's name or value.
-#[derive(Debug, Clone, PartialEq, Serialize, TS)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
 pub struct Overview {
     /// Every group, in `Group::ALL`'s order; one nothing is connected to holds no line.
     pub groups: Vec<OverviewGroup>,
@@ -2825,7 +2825,7 @@ pub struct Overview {
 }
 
 /// One template of the box's catalog a person may add.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
 pub struct Offer {
     /// Its name, which `POST /api/secretary/setup/<template>` takes.
     pub template: String,
@@ -2836,7 +2836,7 @@ pub struct Offer {
 }
 
 /// One group and what of it is connected.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
 pub struct OverviewGroup {
     /// Which.
     pub group: crate::connect::Group,
@@ -2845,7 +2845,7 @@ pub struct OverviewGroup {
 }
 
 /// One connection: what the owner calls it and where it stands.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
 pub struct OverviewLine {
     /// Its identity within its group, never a secret's name.
     pub key: String,
@@ -3064,7 +3064,14 @@ pub fn typescript() -> String {
     let mut out = String::from(HEADER);
     out.push_str(SPEC_NODE);
     out.push('\n');
-    for decl in declared() {
+    exported(&mut out, declared());
+    out
+}
+
+/// Each declaration exported, one per paragraph: the body of a generated TypeScript module, this
+/// one's and the pages' (`app/pages/tests/boundary.rs`).
+pub fn exported(out: &mut String, declarations: impl IntoIterator<Item = String>) {
+    for decl in declarations {
         out.push_str("\nexport ");
         out.push_str(&decl);
         if !decl.ends_with(';') {
@@ -3072,7 +3079,6 @@ pub fn typescript() -> String {
         }
         out.push('\n');
     }
-    out
 }
 
 /// The browser's decoders, `web/src/wire/generated/payload.ts`: one per type a
@@ -3207,11 +3213,13 @@ impl TypeVisitor for Names {
     }
 }
 
-/// A walk over the roots' dependencies, each type's declaration after theirs.
+/// A walk over the roots' dependencies, each type's declaration after theirs; `out` is what the
+/// walk declared, in order.
 #[derive(Default)]
-struct Declarations {
+pub struct Declarations {
     seen: std::collections::BTreeSet<std::any::TypeId>,
-    out: Vec<String>,
+    /// The declarations, each once.
+    pub out: Vec<String>,
 }
 
 impl TypeVisitor for Declarations {

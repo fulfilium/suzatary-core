@@ -1,0 +1,32 @@
+[package]
+name = "suzatary-pages"
+description = "Suzatary's pages in the view-tree shape: each a model, an update and a view, painted by web/src/painter"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish = false
+
+[lib]
+name = "suzatary_pages"
+path = "src/lib.rs"
+# The browser's module (`scripts/pages-wasm.sh`) and a library the box and the tests link.
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+suzatary-core.workspace = true
+viewtree = { path = "../viewtree", features = ["host"] }
+serde.workspace = true
+serde_json.workspace = true
+ts-rs.workspace = true
+chrono.workspace = true
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+wasm-bindgen = "=0.2.127"
+
+[[test]]
+name = "boundary"
+path = "tests/boundary.rs"
+
+[lints]
+workspace = true

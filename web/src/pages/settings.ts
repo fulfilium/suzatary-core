@@ -40,20 +40,21 @@ export namespace settingsPage {
   }
 
   // Settings draws the box's own cards, whose sources name earlier cards and never a todo.
-  const card = (r: Row, taken?: () => void): HTMLElement | null =>
+  export const card = (r: Row, taken?: () => void): HTMLElement | null =>
     r.kind === "proposal" ? proposalCard(r.conversation.id, r.proposal, { titles: new Map(), ...(taken === undefined ? {} : { taken }) }) : null
 
   // A grant drawn inside the link's card it was asked for: allowing the origin sends the link again, once.
+  export const allowing = (a: overview.Allowing): HTMLElement | null => {
+    const node = card(a.link)
+    const grant = card(a.grant, () => kept.resend(a.link))
+    if (node !== null && grant !== null) node.appendChild(el("div", { class: "proposalallow" }, grant))
+    return node
+  }
+
   const linkCards = (cards: readonly Row[]): Child[] => {
     const a = overview.allowing(cards)
     if (a === null) return cards.map(r => card(r))
-    return cards.filter(r => r !== a.grant).map(r => {
-      const node = card(r)
-      if (r !== a.link || node === null) return node
-      const grant = card(a.grant, () => kept.resend(a.link))
-      if (grant !== null) node.appendChild(el("div", { class: "proposalallow" }, grant))
-      return node
-    })
+    return cards.filter(r => r !== a.grant).map(r => (r === a.link ? allowing(a) : card(r)))
   }
 
   // The box's own cards to connect a model: while one stands, no model answers.

@@ -1,6 +1,6 @@
 //! Where a line of the overview, and so a connection, stands.
 
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
 use crate::capability::SecretState;
@@ -12,7 +12,7 @@ use crate::settings::Help;
 /// two steps by hand, the earlier. A connection's standing is
 /// the join of its steps' ([`super::Connection::standing`]) and its check's results, never kept,
 /// so a restart, a second device and a second conversation read the same answer.
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Serialize, TS)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize, TS)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 #[ts(rename = "LineStanding")]
 pub enum Standing {

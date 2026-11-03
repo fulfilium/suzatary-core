@@ -10,6 +10,7 @@ import { hrefOf } from "../shell/route"
 import { el } from "../view/dom"
 import frame from "../view/frame"
 import reading from "../algebra/reading"
+import kv from "../app/kv"
 import todos from "./todos"
 import about from "./about"
 import briefing from "./briefing"
@@ -47,7 +48,9 @@ export namespace pages {
     chain: (root, s) => import("./chain").then(m => m.mount(root, s.focus)),
     usage: root => import("./usage").then(m => m.default.mount(root)),
     about: root => about.mount(root),
-    settings: root => import("./settings").then(m => m.default.mount(root)),
+    // Drawn by its Rust program while the prototype's flag is on (docs/FRAMEWORK-PLAN-2026-11-02.md §6).
+    settings: root =>
+      kv.local.get("suzatary.viewtree") === "on" ? import("./settingsview").then(m => m.default.mount(root)) : import("./settings").then(m => m.default.mount(root)),
     memory: root => memory.mount(root),
     briefings: root => briefings.mount(root),
     briefing: (root, s) => briefing.mount(root, s.date),

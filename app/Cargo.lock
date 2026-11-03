@@ -4231,6 +4231,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "suzatary-pages"
+version = "0.0.0"
+dependencies = [
+ "chrono",
+ "serde",
+ "serde_json",
+ "suzatary-core",
+ "ts-rs",
+ "viewtree",
+ "wasm-bindgen",
+]
+
+[[package]]
 name = "suzatary-plugin"
 version = "0.0.0"
 dependencies = [
@@ -5376,6 +5389,16 @@ name = "version_check"
 version = "0.9.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0b928f33d975fc6ad9f86c8f283853ad26bdd5b10b7f1542aa2fa15e2289105a"
+
+[[package]]
+name = "viewtree"
+version = "0.0.0"
+dependencies = [
+ "proptest",
+ "serde",
+ "serde_json",
+ "ts-rs",
+]
 
 [[package]]
 name = "wait-timeout"

@@ -56,6 +56,7 @@ esbuild app=web/src/main.ts \
   --define:__DEV__="$dev" \
   --external:./prodrome.js \
   --external:./typst.js \
+  --external:./views.js \
   --chunk-names='[name]-[hash]' \
   --metafile="$meta/app.json" \
   --outdir=web/dist
@@ -156,6 +157,12 @@ echo "==> suzatary-wasm from $SUZATARY_PRODROME_WASM"
 cp "$SUZATARY_PRODROME_WASM/web/prodrome.js" "$SUZATARY_PRODROME_WASM/web/prodrome_bg.wasm" web/dist/
 chmod u+w web/dist/prodrome.js web/dist/prodrome_bg.wasm
 echo "    prodrome_bg.wasm: $(du -h web/dist/prodrome_bg.wasm | cut -f1)"
+
+# THE PAGES' MODULE (`app/pages`), copied the same way and loaded by the page drawn from it.
+echo "==> suzatary-views-wasm from $SUZATARY_VIEWS_WASM"
+cp "$SUZATARY_VIEWS_WASM/web/views.js" "$SUZATARY_VIEWS_WASM/web/views_bg.wasm" web/dist/
+chmod u+w web/dist/views.js web/dist/views_bg.wasm
+sed 's/^/    /' "$SUZATARY_VIEWS_WASM/SIZES"
 
 # TYPST FOR THE TAB, copied the same way and loaded the same way: lazily, by
 # `web/src/typst/compiler.ts`, the first time a Typst view is drawn.

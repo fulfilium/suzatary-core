@@ -612,7 +612,7 @@ lane=web
 # wire's the very derivation nix-web and public-tree build the bundle from, so it is built once a
 # gate), outside the cargo lock the Rust lanes hold: web-inputs waited behind clippy for 20
 # minutes of a cold gate, and cargo built the core twice more for them, in its own feature set.
-# The four are one `nix build`, so Nix builds them side by side. Each is keyed by the sources
+# The five are one `nix build`, so Nix builds them side by side. Each is keyed by the sources
 # its crates compile (the browser module's by app/core/src and app/wasm, the wire's and the
 # vectors' by the core's library and examples), so a change to the CLI, the server's crates or a
 # test file builds none of them again. The dependency builds they start from are rooted beside
@@ -620,13 +620,14 @@ lane=web
 # the wasm32 dependencies again, five minutes.
 # shellcheck disable=SC1091,SC2329
 web_inputs() {
-  nix_outs suzatary-wire-ts suzatary-vector-json suzatary-wasm suzatary-typst-wasm &&
-    nix_out suzatary-wasm-deps >/dev/null && nix_out suzatary-core-deps >/dev/null &&
-    SUZATARY_WIRE_TS="$(nix_out suzatary-wire-ts)" &&
+  nix_outs suzatary-web-ts suzatary-vector-json suzatary-wasm suzatary-views-wasm suzatary-typst-wasm &&
+    nix_out suzatary-wasm-deps >/dev/null && nix_out suzatary-views-wasm-deps >/dev/null && nix_out suzatary-core-deps >/dev/null &&
+    SUZATARY_WIRE_TS="$(nix_out suzatary-web-ts)" &&
     SUZATARY_PRODROME_CONFORMANCE="$(nix_out suzatary-vector-json)" &&
     SUZATARY_PRODROME_WASM="$(nix_out suzatary-wasm)" &&
+    SUZATARY_VIEWS_WASM="$(nix_out suzatary-views-wasm)" &&
     SUZATARY_TYPST_WASM="$(nix_out suzatary-typst-wasm)" &&
-    export SUZATARY_WIRE_TS SUZATARY_PRODROME_CONFORMANCE SUZATARY_PRODROME_WASM SUZATARY_TYPST_WASM &&
+    export SUZATARY_WIRE_TS SUZATARY_PRODROME_CONFORMANCE SUZATARY_PRODROME_WASM SUZATARY_VIEWS_WASM SUZATARY_TYPST_WASM &&
     . scripts/web-inputs.sh
 }
 step tree web-inputs      $web    web_inputs
@@ -733,7 +734,7 @@ lane=live
 live_reads=(CLAUDE.md app/Cargo.toml app/Cargo.lock app/conformance app/wit app/core app/io app/plugin app/bench
   app/plugin-ics/Cargo.toml app/plugin-ics/ics.schema app/plugin-fence/Cargo.toml app/wasm/Cargo.toml
   app/cli/Cargo.toml app/cli/src app/cli/tests/common app/cli/tests/this_box.rs app/cli/tests/all.rs
-  app/cli/tests/live.rs app/testkit)
+  app/cli/tests/live.rs app/testkit app/viewtree/Cargo.toml app/pages/Cargo.toml)
 for module in "${live_modules[@]}"; do live_reads+=("app/cli/tests/$module.rs"); done
 live_only="only:$(IFS=,; echo "${live_reads[*]}")"
 # The public tree holds no live pins, so it has no live step.
@@ -752,7 +753,7 @@ step live live-guards     unkept  cargo_app test -q --workspace --test guards
 # or changelog change moves (it ran 452 s of a docs-only train); the full gate runs it daily.
 # shellcheck disable=SC2329
 with_flake_wire() {
-  SUZATARY_WIRE_TS="$(nix_out suzatary-wire-ts)" &&
+  SUZATARY_WIRE_TS="$(nix_out suzatary-web-ts)" &&
     SUZATARY_PRODROME_CONFORMANCE="$(nix_out suzatary-vector-json)" &&
     export SUZATARY_WIRE_TS SUZATARY_PRODROME_CONFORMANCE &&
     "$@"

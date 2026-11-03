@@ -78,6 +78,26 @@ export namespace time {
     return Date.UTC(part("year"), part("month") - 1, part("day"), part("hour"), part("minute"), part("second"), ((t % 1000) + 1000) % 1000)
   }
 
+  // A zone's offsets from UTC over [from, to], in minutes, each from the instant it starts: read by the day, and each
+  // change found to the minute, so a reader of the offsets alone (a Rust page) needs no zone database of its own.
+  export type Offset = { readonly from: number; readonly minutes: number }
+  export const offsets = (z: Zone, from: number, to: number): readonly Offset[] => {
+    const at = (t: number): number => Math.round((wall(z, t) - t) / MINUTE_MS)
+    const out: Offset[] = [{ from, minutes: at(from) }]
+    for (let t = from + DAY_MS; t < to + DAY_MS; t += DAY_MS) {
+      const was = out[out.length - 1]?.minutes
+      if (at(t) === was) continue
+      let [lo, hi] = [t - DAY_MS, t]
+      while (hi - lo > MINUTE_MS) {
+        const mid = lo + Math.floor((hi - lo) / 2 / MINUTE_MS) * MINUTE_MS
+        if (at(mid) === was) lo = mid
+        else hi = mid
+      }
+      out.push({ from: hi, minutes: at(hi) })
+    }
+    return out
+  }
+
   /** The owner's day at `t`, `YYYY-MM-DD`: what a date input's `min` and a deadline compare against. */
   export const date = (z: Zone, t: number = now()): string => naive(wall(z, t)).slice(0, 10)
 

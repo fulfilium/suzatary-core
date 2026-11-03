@@ -208,6 +208,8 @@
             ./app/plugin-fence
             ./app/plugin-ics
             ./app/testkit
+            ./app/viewtree
+            ./app/pages
             ./app/wasm
             # The plugin worlds the host binds at compile time.
             ./app/wit
@@ -308,27 +310,27 @@
         # generator and the conformance vectors compile, so an edit to the
         # server, the CLI, a live pin or the core's own integration tests moves
         # neither.
-        coreSrc = lib.fileset.toSource {
-          root = ./.;
-          fileset = lib.fileset.unions [
-            ./app/Cargo.toml
-            ./app/Cargo.lock
-            ./app/bench/Cargo.toml
-            ./app/cli/Cargo.toml
-            ./app/io/Cargo.toml
-            ./app/plugin/Cargo.toml
-            ./app/plugin-fence/Cargo.toml
-            ./app/plugin-ics/Cargo.toml
-            ./app/plugin-ics/ics.schema
-            ./app/testkit/Cargo.toml
-            ./app/wasm/Cargo.toml
-            ./app/core/Cargo.toml
-            ./app/core/src
-            ./app/core/releases.toml
-            ./app/core/examples
-            ./app/core/tests/support
-          ];
-        };
+        coreFiles = lib.fileset.unions [
+          ./app/Cargo.toml
+          ./app/Cargo.lock
+          ./app/bench/Cargo.toml
+          ./app/cli/Cargo.toml
+          ./app/io/Cargo.toml
+          ./app/plugin/Cargo.toml
+          ./app/plugin-fence/Cargo.toml
+          ./app/plugin-ics/Cargo.toml
+          ./app/plugin-ics/ics.schema
+          ./app/testkit/Cargo.toml
+          ./app/viewtree/Cargo.toml
+          ./app/pages/Cargo.toml
+          ./app/wasm/Cargo.toml
+          ./app/core/Cargo.toml
+          ./app/core/src
+          ./app/core/releases.toml
+          ./app/core/examples
+          ./app/core/tests/support
+        ];
+        coreSrc = lib.fileset.toSource { root = ./.; fileset = coreFiles; };
         # In cargo's own profiles (`CARGO_PROFILE` empty: no `--release`), since
         # the generators are a `cargo test` and a `cargo run`, and with the core's
         # own feature set (`-p suzatary-core`): built against the release,
@@ -434,69 +436,98 @@
         # The source is the manifests and the two crates the module links, so an
         # edit to the server or the CLI does not rebuild it. Panic locations are
         # remapped off the vendor directory, so no store path is in the bytes.
-        wasmArgs = commonArgs // {
-          pname = "suzatary-wasm";
-          src = lib.fileset.toSource {
-            root = ./.;
-            fileset = lib.fileset.unions [
-              ./app/Cargo.toml
-              ./app/Cargo.lock
-              ./app/bench/Cargo.toml
-              ./app/cli/Cargo.toml
-              ./app/io/Cargo.toml
-              ./app/plugin/Cargo.toml
-              ./app/plugin-fence/Cargo.toml
-              ./app/plugin-ics/Cargo.toml
-              ./app/testkit/Cargo.toml
-              ./app/core/Cargo.toml
-              ./app/core/src
-              # The release plan, which the core compiles in.
-              ./app/core/releases.toml
-              ./app/wasm
-            ];
+        # ONE SHAPE FOR EVERY BROWSER MODULE: `package` compiled to wasm32 from the
+        # manifests, the core and `crates`, its glue named `name` for `web` and
+        # `nodejs`. The core's module and the pages' module are its two instances.
+        wasmModule = { pname, package, name, crates, description }: let
+          args = commonArgs // {
+            inherit pname;
+            src = lib.fileset.toSource {
+              root = ./.;
+              fileset = lib.fileset.unions ([
+                ./app/Cargo.toml
+                ./app/Cargo.lock
+                ./app/bench/Cargo.toml
+                ./app/cli/Cargo.toml
+                ./app/io/Cargo.toml
+                ./app/plugin/Cargo.toml
+                ./app/plugin-fence/Cargo.toml
+                ./app/plugin-ics/Cargo.toml
+                ./app/testkit/Cargo.toml
+                ./app/viewtree/Cargo.toml
+                ./app/pages/Cargo.toml
+                ./app/wasm/Cargo.toml
+                ./app/core/Cargo.toml
+                ./app/core/src
+                # The release plan, which the core compiles in.
+                ./app/core/releases.toml
+              ] ++ crates);
+            };
+            inherit cargoVendorDir;
+            preBuild = ''
+              for registry in "$cargoVendorDir"/*/; do
+                export CARGO_BUILD_RUSTFLAGS="--remap-path-prefix=''${registry%/}=/build/cargo-vendor-dir"
+              done
+            '';
+            nativeBuildInputs = [ pkgs.lld ];
+            doCheck = false;
+            buildPhaseCargoCommand = ''
+              cargo build --offline --frozen \
+                --profile wasm-release --target wasm32-unknown-unknown -p ${package}
+            '';
           };
-          inherit cargoVendorDir;
-          preBuild = ''
-            for registry in "$cargoVendorDir"/*/; do
-              export CARGO_BUILD_RUSTFLAGS="--remap-path-prefix=''${registry%/}=/build/cargo-vendor-dir"
-            done
-          '';
-          nativeBuildInputs = [ pkgs.lld ];
-          doCheck = false;
-          buildPhaseCargoCommand = ''
-            cargo build --offline --frozen \
-              --profile wasm-release --target wasm32-unknown-unknown -p suzatary-wasm
-          '';
+          # Its dependency build, keyed on the lock like `cargoArtifacts`, exposed so the merge
+          # gate can root it: a build-time input no output holds, which a collection of the
+          # store took, five minutes of wasm32 dependencies each time.
+          deps = depsOf args;
+        in {
+          inherit deps;
+          module = craneLib.mkCargoDerivation (args // {
+            cargoArtifacts = deps;
+            nativeBuildInputs = [ pkgs.lld pkgs.wasm-bindgen-cli_0_2_127 pkgs.binaryen ];
+            doInstallCargoArtifacts = false;
+            # `wasm-opt -Os` over what bindgen emits, with the proposals rustc's wasm32
+            # baseline already uses named, since wasm-opt's older default refuses them
+            # rather than dropping them. `SIZES` is the module before and after it, which
+            # is what a first visit pays.
+            installPhaseCommand = ''
+              wasm=target/wasm32-unknown-unknown/wasm-release/${builtins.replaceStrings ["-"] ["_"] package}.wasm
+              features="--enable-bulk-memory --enable-bulk-memory-opt --enable-sign-ext"
+              features="$features --enable-nontrapping-float-to-int --enable-mutable-globals"
+              features="$features --enable-multivalue --enable-reference-types"
+              for target in web nodejs; do
+                wasm-bindgen --target "$target" --out-dir "$out/$target" --out-name ${name} "$wasm"
+                bound=$(stat -c %s "$out/$target/${name}_bg.wasm")
+                # shellcheck disable=SC2086
+                wasm-opt -Os $features -o "$out/$target/${name}_bg.wasm" "$out/$target/${name}_bg.wasm"
+              done
+              printf 'cargo\t%s bytes\nbindgen\t%s bytes\nwasm-opt\t%s bytes\n' \
+                "$(stat -c %s "$wasm")" "$bound" "$(stat -c %s "$out/web/${name}_bg.wasm")" | tee "$out/SIZES"
+            '';
+            meta.description = description;
+          });
         };
-        # Its dependency build, keyed on the lock like `cargoArtifacts`, and exposed as
-        # `.#suzatary-wasm-deps` so the merge gate can root it: a build-time input no output
-        # holds, which a collection of the store took, five minutes of wasm32 dependencies each time.
-        suzatary-wasm-deps = depsOf wasmArgs;
-        suzatary-wasm = craneLib.mkCargoDerivation (wasmArgs // {
-          cargoArtifacts = suzatary-wasm-deps;
-          nativeBuildInputs = [ pkgs.lld pkgs.wasm-bindgen-cli_0_2_127 pkgs.binaryen ];
-          doInstallCargoArtifacts = false;
-          # The glue keeps the name `prodrome` the loader and the tests have always
-          # fetched. `wasm-opt -Os` over what bindgen emits, with the proposals
-          # rustc's wasm32 baseline already uses named, since wasm-opt's older
-          # default refuses them rather than dropping them. `SIZES` is the module
-          # before and after it, which is what a first visit pays.
-          installPhaseCommand = ''
-            wasm=target/wasm32-unknown-unknown/wasm-release/suzatary_wasm.wasm
-            features="--enable-bulk-memory --enable-bulk-memory-opt --enable-sign-ext"
-            features="$features --enable-nontrapping-float-to-int --enable-mutable-globals"
-            features="$features --enable-multivalue --enable-reference-types"
-            for target in web nodejs; do
-              wasm-bindgen --target "$target" --out-dir "$out/$target" --out-name prodrome "$wasm"
-              bound=$(stat -c %s "$out/$target/prodrome_bg.wasm")
-              # shellcheck disable=SC2086
-              wasm-opt -Os $features -o "$out/$target/prodrome_bg.wasm" "$out/$target/prodrome_bg.wasm"
-            done
-            printf 'cargo\t%s bytes\nbindgen\t%s bytes\nwasm-opt\t%s bytes\n' \
-              "$(stat -c %s "$wasm")" "$bound" "$(stat -c %s "$out/web/prodrome_bg.wasm")" | tee "$out/SIZES"
-          '';
-          meta.description = "Suzatary's browser module: the Prodrome's exports at Suzatary's schemas, with the JS glue";
-        });
+        # The core: the glue keeps the name `prodrome` the loader and the tests have always fetched.
+        coreModule = wasmModule {
+          pname = "suzatary-wasm";
+          package = "suzatary-wasm";
+          name = "prodrome";
+          crates = [ ./app/wasm ];
+          description = "Suzatary's browser module: the Prodrome's exports at Suzatary's schemas, with the JS glue";
+        };
+        suzatary-wasm-deps = coreModule.deps;
+        suzatary-wasm = coreModule.module;
+        # The pages in the view-tree shape (docs/FRAMEWORK-PLAN-2026-11-02.md), loaded by the page
+        # that is drawn from them.
+        viewsModule = wasmModule {
+          pname = "suzatary-views-wasm";
+          package = "suzatary-pages";
+          name = "views";
+          crates = [ ./app/viewtree ./app/pages ];
+          description = "Suzatary's pages as Rust programs, with the JS glue the painter loads";
+        };
+        suzatary-views-wasm-deps = viewsModule.deps;
+        suzatary-views-wasm = viewsModule.module;
 
         # THE PLUGIN HOST'S ADVERSARY (`nix build .#suzatary-plugin-fence`):
         # `app/plugin-fence`, a plugin whose every mode tries to break one of the
@@ -522,6 +553,8 @@
               ./app/plugin/Cargo.toml
               ./app/plugin-ics/Cargo.toml
               ./app/testkit/Cargo.toml
+              ./app/viewtree/Cargo.toml
+              ./app/pages/Cargo.toml
               ./app/wasm/Cargo.toml
               ./app/plugin-fence
               ./app/wit
@@ -568,6 +601,8 @@
               ./app/plugin/Cargo.toml
               ./app/plugin-fence/Cargo.toml
               ./app/testkit/Cargo.toml
+              ./app/viewtree/Cargo.toml
+              ./app/pages/Cargo.toml
               ./app/wasm/Cargo.toml
               ./app/plugin-ics
               ./app/wit
@@ -635,6 +670,35 @@
           '';
           meta.description = "The TypeScript for Suzatary's wire, generated from suzatary-core";
         };
+        # THE PAGES' BOUNDARY TYPES (`app/pages/tests/boundary.rs`): what a host hands each page
+        # of `app/pages` and what the page asks of it, from the core's sources and the two
+        # crates of the view tree, so the wire's own derivation stays the core's alone.
+        suzatary-pages-ts = coreCrate {
+          pname = "suzatary-pages-ts";
+          src = lib.fileset.toSource {
+            root = ./.;
+            fileset = lib.fileset.unions [ coreFiles ./app/viewtree ./app/pages ];
+          };
+          doCheck = false;
+          doNotPostBuildInstallCargoBinaries = true;
+          buildPhase = ''
+            runHook preBuild
+            mkdir -p $out
+            TS_RS_EXPORT_DIR=$out cargo test --offline -p suzatary-pages --test boundary -- generates
+            runHook postBuild
+          '';
+          installPhase = ''
+            runHook preInstall
+            test -s $out/settings.ts
+            runHook postInstall
+          '';
+          meta.description = "The TypeScript of the pages' boundary, generated from suzatary-pages";
+        };
+        # What `scripts/wire.sh` copies into web/src/wire/generated: the wire's files and the pages'.
+        suzatary-web-ts = pkgs.symlinkJoin {
+          name = "suzatary-web-ts";
+          paths = [ suzatary-wire-ts suzatary-pages-ts ];
+        };
 
         # THE FRONTEND BUNDLE, AS A BUILD (`todo:suzatary/servedisabuild`,
         # 2026-09-20). Before this, `instance.toml`'s `dist` named `web/dist` —
@@ -685,8 +749,9 @@
           };
           nativeBuildInputs = [ pkgs.esbuild pkgs.typescript pkgs.nodejs_24 pkgs.brotli ];
           SUZATARY_PRODROME_WASM = "${suzatary-wasm}";
+          SUZATARY_VIEWS_WASM = "${suzatary-views-wasm}";
           SUZATARY_TYPST_WASM = "${suzatary-typst-wasm}";
-          SUZATARY_WIRE_TS = "${suzatary-wire-ts}";
+          SUZATARY_WIRE_TS = "${suzatary-web-ts}";
           TYPST_PACKAGE_PATH = "${typstPackages}";
           dontConfigure = true;
           buildPhase = ''
@@ -898,10 +963,12 @@
           suzatary-deps = cargoArtifacts;
           # The other two dependency builds, the browser module's and the core's
           # alone (the wire's and the vectors'), exposed to be rooted the same way.
-          inherit suzatary-wasm-deps suzatary-core-deps;
+          inherit suzatary-wasm-deps suzatary-views-wasm-deps suzatary-core-deps;
           # `nix build .#suzatary-wire-ts` — the frontend's wire declarations,
           # generated from suzatary-core rather than mirrored by hand.
           inherit suzatary-wire-ts;
+          # `nix build .#suzatary-web-ts` — the wire's TypeScript and the pages', in one directory.
+          inherit suzatary-pages-ts suzatary-web-ts;
           # `nix build .#suzatary-web` — the frontend bundle itself, the same
           # `scripts/build-web.sh` run produces, as a derivation. Resolved and
           # rooted by `scripts/web-dist.sh`, the way `.#suzatary` is by
@@ -914,6 +981,8 @@
           # `nix build .#suzatary-wasm` — the browser's module, exposed so
           # scripts/build-web.sh and scripts/web-test.sh can resolve it by name.
           inherit suzatary-wasm;
+          # `nix build .#suzatary-views-wasm` — the pages' module, resolved the same way.
+          inherit suzatary-views-wasm;
           # `nix build .#suzatary-plugin-fence` — the components the plugin
           # host's fence tests load; resolved by scripts/merge-gate.sh.
           inherit suzatary-plugin-fence;

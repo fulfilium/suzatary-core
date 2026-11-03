@@ -24,6 +24,7 @@ web_module() {
 
 bash "$root/scripts/web-static.sh" &&
   web_module SUZATARY_PRODROME_WASM suzatary-wasm &&
+  web_module SUZATARY_VIEWS_WASM suzatary-views-wasm &&
   web_module SUZATARY_TYPST_WASM suzatary-typst-wasm &&
   bash "$root/scripts/wire.sh" &&
   export SUZATARY_WEB_INPUTS="$root"

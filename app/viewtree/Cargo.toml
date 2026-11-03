@@ -1,0 +1,33 @@
+[package]
+name = "viewtree"
+description = "A page's view as data, the keyed diff that paints it, and the patches a painter applies"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+# Names no Suzatary type, so it can move to the framework's own repository
+# (docs/FRAMEWORK-PLAN-2026-11-02.md §5) as it is.
+publish = false
+
+[lib]
+name = "viewtree"
+path = "src/lib.rs"
+
+[features]
+# A program a host page drives over JSON (`host`, `export!`).
+host = ["dep:serde", "dep:serde_json", "dep:ts-rs"]
+
+[dependencies]
+serde = { workspace = true, optional = true }
+serde_json = { workspace = true, optional = true }
+ts-rs = { workspace = true, optional = true }
+
+[dev-dependencies]
+proptest.workspace = true
+
+[[test]]
+name = "laws"
+path = "tests/laws.rs"
+
+[lints]
+workspace = true

@@ -1,11 +1,11 @@
 //! Which part of the deployment a line of the overview, and so a connection, belongs to.
 
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
 /// What a connection is for; a connection is in exactly one, and the overview draws them in
 /// [`Group::ALL`]'s order.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, TS)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize, TS)]
 #[serde(rename_all = "snake_case")]
 pub enum Group {
     /// Where the data is kept: the data repository and where it is pushed.

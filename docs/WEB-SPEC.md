@@ -1900,6 +1900,28 @@ the page holds no filter of its own and no second reading of the topics.
   `web/e2e/secretary.test.ts` "a round the box asked reads as its title and
   answer, its prompt a tap away, at 390 px".
 
+### 3.22 The view tree
+
+A page drawn by a Rust program (`docs/FRAMEWORK-PLAN-2026-11-02.md`; Settings,
+behind the `suzatary.viewtree` flag) is a `viewtree::Program`: a model, a
+pure `update` that answers effects as data, and a `view` that is a tree of
+data whose handlers are messages. `viewtree::Painter` diffs it against the
+tree last painted and answers patches; `web/src/painter/painter.ts` applies
+them. In `app/viewtree/tests/laws.rs`, over generated views and a DOM kept
+as data:
+
+- **A patch applied equals a fresh draw.** —
+  "a_patch_applied_equals_a_fresh_draw".
+- **Painting a view again patches nothing.** —
+  "painting_a_view_again_patches_nothing".
+- **The bytes are the patches.** — "the_bytes_read_back_as_the_patches".
+- **Reordering keyed rows makes and removes nothing.** —
+  "reordering_keyed_rows_keeps_every_node".
+- **An event is answered by the current view's handler.** —
+  "an_event_is_answered_by_the_current_view".
+- **An act runs once until it is answered.** —
+  `app/pages/tests/boundary.rs` "an_act_runs_once_until_it_is_answered".
+
 ## 4. The vectors
 
 What the Rust writes and the TypeScript must agree with, never refresh:

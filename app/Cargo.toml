@@ -23,7 +23,7 @@
 # make and run.
 [workspace]
 resolver = "3"
-members = ["core", "io", "cli", "bench", "wasm", "plugin", "plugin-fence", "plugin-ics", "testkit"]
+members = ["core", "io", "cli", "bench", "wasm", "plugin", "plugin-fence", "plugin-ics", "testkit", "viewtree", "pages"]
 
 [workspace.package]
 # FIXED, AND NOT THE RELEASE (CLAUDE.md, "Versioning"): the version is a reading of
