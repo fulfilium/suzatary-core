@@ -46,7 +46,12 @@ questions in a row end the wait. When the run failed, never appeared, ran
 past the wait, or could not be started or asked about, the train says which
 and the box builds the public tree itself, as before. Then the live half
 runs on the box, and its `deploy-build` finds the same builds in the store.
-The `gate.yml` run is waited on beside it. When the half ends, and when a
+The `gate.yml` run is waited on beside it. The first job whose gate is red
+makes the tree half red at once. The train then stops the live half (its
+process group, named by the pid the train started) and cancels the run's
+other jobs, and its report prints that job's failing lines. A red live half
+ends the wait on the run in the same way, and a red `box_before` or
+`box_after` keeps the live half from starting. When the half ends, and when a
 train is killed, the train cancels the gate commit's runs that have not
 ended, then deletes the branch.
 

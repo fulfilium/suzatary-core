@@ -152,9 +152,17 @@
 # The gate run's verdict is the half's: success green; red where a job's `red` step failed, which
 # it does only when its gate exited 1; and anything else (the run cancelled or timed out, a runner
 # lost, a job that never reached its gate, a gate that did not start) no verdict, as a lost
-# Codespace is, so only a gate's own red makes the tree red. When the half ends, and in the exit
-# trap of a killed train, the gate commit's runs that have not ended are cancelled and the branch
-# is deleted.
+# Codespace is, so only a gate's own red makes the tree red. The first job whose `red` step failed
+# makes the half red, while the other jobs still run. When the half ends, and in the exit trap of a
+# killed train, the gate commit's runs that have not ended are cancelled and the branch is deleted.
+#
+# A RED HALF STOPS THE OTHER. A tree lands only when both halves passed it, so once one half is red
+# the other's verdict changes nothing: a remote tree half that ends red stops the live half on the
+# box (30 to 45 minutes) at once, a live half that ends red stops the remote tree half and lets its
+# machine go, and a tree half red on the box keeps the live half from starting. The report then
+# prints the red half's failing lines, a red job's own among them. Only red stops the other half; a
+# half with no verdict leaves the other to finish, since its steps' passes are kept and shorten the
+# next gate.
 #
 # SUZATARY_TRAIN_GATE names another gate script, for the test's stub. Its
 # verdicts are keyed by its own bytes, apart from the real gate's, so a
@@ -191,11 +199,12 @@ mkdir -p "$state"
 exec 9>"$state/lock"
 flock -n 9 || die "another scripts/train.sh is running in this checkout; wait for it to finish."
 
-# What leaving undoes: the branch to return to, the tree half running beside
-# the live one, the Codespace's ref, keep-alive and machine (remote_close), a gate branch and
-# its commit's runs (cloud_close), and a gate's worktree (worktree_close).
-return_to="" codespace="" ref="" keeper="" there="" cloud="" gate_branch="" gate_pushed=""
+# What leaving undoes: the branch to return to, the live half's process group (live_stop) and the
+# tree half running beside it, the Codespace's ref, keep-alive and machine (remote_close), a gate
+# branch and its commit's runs (cloud_close), and a gate's worktree (worktree_close).
+return_to="" codespace="" ref="" keeper="" there="" live="" cloud="" gate_branch="" gate_pushed=""
 finish() {
+  [[ -z "$live" ]] || live_stop
   [[ -z "$there" ]] || { kill "$there" 2>/dev/null; wait "$there" 2>/dev/null; } || true
   [[ -z "$ref" ]] || remote_close
   [[ -z "$gate_branch" ]] || cloud_close
@@ -985,11 +994,19 @@ cloud_build() {
   ((code == 0)) || record tree "$commit" "$code"
 }
 
+# The jobs of <repo>'s run <run> whose `red` step failed, `<id> <name>` a line: each one's gate
+# exited 1, a finding about the tree.
+red_jobs() {
+  timeout 60 "$gh" api "repos/$1/actions/runs/$2/jobs?per_page=100" \
+    --jq '.jobs[] | select(any((.steps // [])[]; .name == "red" and .conclusion == "failure")) | "\(.id) \(.name)"'
+}
+
 # Wait for the gate workflow's run on <pushed>, the gate commit of <commit>, and record its
-# verdict: success green, a job's `red` step failed red, anything else none. Each job's log is
-# kept in the half's log; a red job's ends with the gate's failing steps.
+# verdict: red as soon as one job's `red` step failed, whatever the other jobs are still doing
+# (cloud_close cancels them); otherwise, once the run ends, success green and anything else none.
+# Each red job's log is kept in the half's log, and ends with the gate's failing steps.
 cloud_wait() {
-  local commit="$1" pushed="$2" repo log run="" status="" misses=0 red job name deadline
+  local commit="$1" pushed="$2" repo log run="" status="" misses=0 red="" job name deadline
   repo="$(core_repo)"
   log="$(log_of tree "$commit")"
   deadline=$((SECONDS + cloud_hours * 3600))
@@ -1005,15 +1022,18 @@ cloud_wait() {
   fi
   say "waiting on https://github.com/$repo/actions/runs/$run"
   misses=0
-  while [[ "$status" != completed\ * ]] && ((misses < 10 && SECONDS < deadline)); do
+  # The status is read before the jobs, so a run read as ended has every job's verdict in the
+  # jobs read after it.
+  while [[ -z "$red" && "$status" != completed\ * ]] && ((misses < 10 && SECONDS < deadline)); do
     sleep "${SUZATARY_TRAIN_POLL:-60}"
-    if status="$(timeout 60 "$gh" api "repos/$repo/actions/runs/$run" --jq '.status + " " + (.conclusion // "")')"; then
+    if status="$(timeout 60 "$gh" api "repos/$repo/actions/runs/$run" --jq '.status + " " + (.conclusion // "")')" \
+      && red="$(red_jobs "$repo" "$run")"; then
       misses=0
     else
-      misses=$((misses + 1)) status=""
+      misses=$((misses + 1)) status="" red=""
     fi
   done
-  if [[ "$status" != completed\ * ]]; then
+  if [[ -z "$red" && "$status" != completed\ * ]]; then
     say "the run $run on $repo did not end (${status:-unreachable}), so the tree half says nothing of ${commit:0:12}"
     return 2
   fi
@@ -1022,12 +1042,6 @@ cloud_wait() {
     record tree "$commit" 0
     return
   fi
-  # Each job whose `red` step failed: its gate exited 1, a finding about the tree.
-  red="$(timeout 60 "$gh" api "repos/$repo/actions/runs/$run/jobs?per_page=100" \
-    --jq '.jobs[] | select(any((.steps // [])[]; .name == "red" and .conclusion == "failure")) | "\(.id) \(.name)"')" || {
-    say "the jobs of run $run could not be read, so the tree half says nothing of ${commit:0:12}"
-    return 2
-  }
   if [[ -z "$red" ]]; then
     say "the run $run ended ${status#completed }, and no job's gate found the tree red (a runner lost, a cancel, a gate that did not start), so the tree half says nothing of ${commit:0:12}"
     return 2
@@ -1075,9 +1089,64 @@ train_commit() {
 # When a tree that passed a full gate in both halves last landed, in seconds since the epoch.
 full_at="$state/full-at"
 
-# Both halves, side by side when the tree half is in a Codespace: neither
-# reads the other. The Codespace is let go as soon as its half is done, not
-# when the live half here is: an idle machine waiting on the box is billed.
+# The live half of <commit>, started in the background in a process group of its own: monitor
+# mode makes its pid the group's id, so live_stop reaches every process of it (the gate's lanes,
+# their cargo and nix) by that pid alone, never by a pattern, which could match the caller's shell.
+live_start() {
+  set -m
+  run_half live "$1" </dev/null &
+  live=$!
+  set +m
+}
+
+# The live half stopped: TERM to its group, then KILL to whatever of it is left five seconds
+# later. Its verdict is not recorded, and its worktree is removed.
+live_stop() {
+  local tries=0
+  kill -TERM -- "-$live" 2>/dev/null || true
+  wait "$live" 2>/dev/null || true
+  while kill -0 -- "-$live" 2>/dev/null && ((tries++ < 50)); do sleep 0.1; done
+  kill -KILL -- "-$live" 2>/dev/null || true
+  live=""
+  worktree_close
+}
+
+# The live half of <commit> here, beside the tree half already running in the background
+# ($there), until both end or one of them ends red: a red half makes the train red whatever the
+# other would say, so the other is stopped at once, the live half by live_stop and the tree half
+# by a kill and then <undo> (what lets its machine go). Neither half reads the other.
+beside() {
+  local commit="$1" undo="$2" ended code=0
+  live_start "$commit"
+  wait -n -p ended "$there" "$live" || code=$?
+  if [[ "$ended" == "$there" ]]; then
+    there=""
+    if ((code == 1)); then
+      say "the tree half is red, so the live half is stopped"
+      live_stop
+    else
+      wait "$live" || true
+      live=""
+    fi
+  else
+    live=""
+    if ((code == 1)); then
+      say "the live half is red, so the tree half is stopped"
+      kill "$there" 2>/dev/null || true
+      wait "$there" 2>/dev/null || true
+      there=""
+      "$undo"
+    else
+      wait "$there" || true
+      there=""
+    fi
+  fi
+}
+
+# Both halves, side by side when the tree half is remote, one after the other when both run
+# here; a half that is red stops the other, or keeps it from starting. The Codespace is let go
+# as soon as its half is done, not when the live half here is: an idle machine waiting on the
+# box is billed.
 gate() {
   gate_environment gate "$@"
   if [[ "${1:-}" == --full ]]; then full=1 && shift; fi
@@ -1089,39 +1158,62 @@ gate() {
     full=1 && say "no tree that passed a full gate has landed in the last day, so this gate runs full"
   fi
   remote_open
+  local code=0
   if [[ -n "$codespace" ]]; then
-    { run_half tree "$commit" || true; remote_close; } &
+    { run_half tree "$commit" || code=$?; remote_close; exit "$code"; } &
     there=$!
-    run_half live "$commit" || true
-    wait "$there" || true
-    there="" ref="" keeper=""
+    beside "$commit" remote_close
+    ref="" keeper=""
   elif [[ -n "$cloud" ]]; then
     # The box's steps first, in the worktree the live half then uses, so the live half's
     # deploy-build finds the public tree's builds in the store; the gate run is waited on beside
     # the live half.
     local pushed
-    if pushed="$(cloud_push "$commit")"; then
+    pushed="$(cloud_push "$commit")" || code=$?
+    if ((code == 0)); then
       gate_branch="gate/$commit" gate_pushed="$pushed"
-      if cloud_build "$commit" "$pushed"; then
-        { cloud_wait "$commit" "$pushed" || true; } &
+      cloud_build "$commit" "$pushed" || code=$?
+      if ((code == 0)); then
+        cloud_wait "$commit" "$pushed" &
         there=$!
-      else
-        cloud_close
+        beside "$commit" :
       fi
-    fi
-    run_half live "$commit" || true
-    if [[ -n "$there" ]]; then
-      wait "$there" || true
-      there=""
       cloud_close
     fi
+    case "$code" in
+      1) say "the tree half is red on the box, so the live half does not run" ;;
+      2) run_half live "$commit" || true ;;
+    esac
   else
-    run_half tree "$commit" || true
-    run_half live "$commit" || true
+    run_half tree "$commit" || code=$?
+    if ((code == 1)); then
+      say "the tree half is red, so the live half does not run"
+    else
+      run_half live "$commit" || true
+    fi
   fi
   # A red full gate is no full pass, and until a fully passed tree lands every gate is full.
   if ((full)) && [[ "$(verdict tree "$commit" full)/$(verdict live "$commit" full)" != ok/ok ]]; then rm -f "$full_at"; fi
   report "$commit"
+}
+
+# The failing lines of a red half's <log>, so the operator reads why without fetching a job's
+# log: for each `--- job <name>` section (cloud_wait's, one section where there is none), the
+# gate's "failing steps' last lines" block up to the first line printed after it (the gate's size
+# and free-disk lines, the Codespace's exit line, the next GitHub step), and where a section holds
+# no block, its last 20 lines that name an error (merge-gate.sh's pattern, and GitHub's `##[error]`).
+failing_lines() {
+  awk '
+    function flush(  i) {
+      if (!block) for (i = (n > 20 ? n - 19 : 1); i <= n; i++) print errors[i]
+      n = 0
+    }
+    /^--- job / { flush(); block = inside = 0; print; next }
+    /^==> the failing steps. last lines$/ { block = inside = 1; print; next }
+    inside && /^(size: |free after the gate: |train-gate-exit: |##\[)/ { inside = 0 }
+    inside { print; next }
+    /FAILED|panicked|^error|not ok|✖|^##\[error\]/ { errors[++n] = $0 }
+    END { flush() }' "$1"
 }
 
 # Say what the table knows of <commit>, the train gated, half by half; succeeds
@@ -1132,8 +1224,7 @@ report() {
   for h in "${halves[@]}"; do
     v="$(verdict "$h" "$commit")"
     say "$h half: $v"
-    [[ "$v" != failed || ! -s "$(log_of "$h" "$commit")" ]] \
-      || sed -n "/^==> the failing steps' last lines/,\$p" "$(log_of "$h" "$commit")" >&2
+    [[ "$v" != failed || ! -s "$(log_of "$h" "$commit")" ]] || failing_lines "$(log_of "$h" "$commit")" >&2
   done
   case "$(verdict_all "$commit")" in
     ok) say "green: the train $short may land (scripts/train.sh land)" ;;

@@ -34,7 +34,10 @@ struct Train {
 /// `…/runs/<id>/jobs…` answers `7 gate (tests)` for a failed gate, whose `red` step failed; and
 /// `…/jobs/7/logs` the gate's output, each line stamped with a time as GitHub's are. With
 /// `GH_RUN=cancelled` the run is cancelled, and with `GH_RUN=lost` it fails with no red step, as
-/// a lost runner's does, and with `GH_RUN=running` it never ends; none of them runs the gate.
+/// a lost runner's does, and with `GH_RUN=running` it never ends; none of them runs the gate. With
+/// `GH_RUN=checks-red` the run never ends either, and its jobs already hold `8 gate (checks)`,
+/// whose `red` step failed and whose log (`…/jobs/8/logs`) is a real one's shape: clippy's error,
+/// the gate's failing steps' last lines, the gate's size and free-disk lines, GitHub's next steps.
 ///
 /// `workflow run publication.yml --repo <repo> --ref master -f commit=<sha>`, the train's dispatch
 /// of master's publication workflow, appends `dispatch <master> <sha>` to `<TRAIN_PROBES>.args`
@@ -81,6 +84,7 @@ if [ "$1" = api ]; then
           cancelled) echo "completed cancelled" >"$here/runs/$sha" ;;
           lost) echo "completed failure" >"$here/runs/$sha" ;;
           running) echo "in_progress " >"$here/runs/$sha" ;;
+          checks-red) echo "in_progress " >"$here/runs/$sha" && : >"$here/runs/$sha.checks" ;;
           *)
             git clone -q "$here/core.git" "$here/runner-$sha" && git -C "$here/runner-$sha" checkout -q --detach "$sha"
             if (cd "$here/runner-$sha" && "$here/bin/gate" --no-live --steps cloud) >"$here/runs/$sha.log" 2>&1; then
@@ -102,9 +106,16 @@ if [ "$1" = api ]; then
     repos/*/actions/runs/*/cancel) ;;
     repos/*/actions/runs/*/jobs*)
       run="${2#*/runs/}" && run="${run%%/*}"
-      [ ! -e "$here/runs/$run.red" ] || echo "7 gate (tests)" ;;
+      [ ! -e "$here/runs/$run.red" ] || echo "7 gate (tests)"
+      [ ! -e "$here/runs/$run.checks" ] || echo "8 gate (checks)" ;;
     repos/*/actions/runs/*) cat "$here/runs/${2##*/}" ;;
     repos/*/actions/jobs/7/logs) sed 's/^/2026-10-20T10:00:00.1234567Z /' "$(ls -t "$here"/runs/*.log | head -n 1)" ;;
+    repos/*/actions/jobs/8/logs)
+      printf '%s\n' '##[group]Run nix develop .#triage -c scripts/merge-gate.sh --no-live --steps "$STEPS"' \
+        '==> clippy: FAILED (101)   42s' 'error[E0308]: mismatched types' \
+        "==> the failing steps' last lines" '--- clippy' 'error[E0308]: mismatched types' \
+        'size: rust 1 characters, 1 lines' 'free after the gate: 9G' '##[group]Run exit 1' \
+        '##[error]Process completed with exit code 1.' | sed 's/^/2026-10-20T10:00:00.1234567Z /' ;;
     *) exit 64 ;;
   esac
   exit 0
@@ -135,7 +146,7 @@ esac
 /// The stub merge gate, `[--full] --no-live` or `[--full] --only-live`, a full run noted in
 /// `<TRAIN_PROBES>.full`. With `GATE_HOLD` set, the tree half says so on the `<GATE_HOLD>.up`
 /// fifo and waits on `<GATE_HOLD>` to go on, and with `GATE_HOLD_LIVE` the live half does the
-/// same. A full run of a tree holding `missed` fails, as a selection that missed a step would.
+/// same, its pid written to `<GATE_HOLD_LIVE>.pid` first. A full run of a tree holding `missed` fails, as a selection that missed a step would.
 /// With `GATE_RED_TEXT` set, the tree half is red on a tree whose CHANGELOG.md holds that text.
 /// Each run writes the environment it was handed to `<TRAIN_PROBES>.env`, and its arguments, a
 /// line, to `<TRAIN_PROBES>.args`. Run with `--steps` naming `changelog`, the box's part of a
@@ -150,7 +161,7 @@ if [ "$1" = --full ]; then full=1; shift; echo "$1 $(git rev-parse HEAD)" >>"$TR
 echo "$1 $(git rev-parse HEAD) $(pwd)" >>"$TRAIN_PROBES"
 [ -z "$full" ] || [ ! -e missed ] || { echo "missed is in the tree" >&2; exit 1; }
 [ -z "$GATE_HOLD" ] || [ "$1" != --no-live ] || { echo up >"$GATE_HOLD.up"; cat "$GATE_HOLD" >/dev/null; }
-[ -z "$GATE_HOLD_LIVE" ] || [ "$1" != --only-live ] || { echo up >"$GATE_HOLD_LIVE.up"; cat "$GATE_HOLD_LIVE" >/dev/null; }
+[ -z "$GATE_HOLD_LIVE" ] || [ "$1" != --only-live ] || { echo $$ >"$GATE_HOLD_LIVE.pid"; echo up >"$GATE_HOLD_LIVE.up"; cat "$GATE_HOLD_LIVE" >/dev/null; }
 case "$1" in
   --no-live)
     bad=broken
@@ -474,12 +485,7 @@ impl Train {
         std::fs::read_to_string(self.scratch.join("keepers"))
             .unwrap_or_default()
             .lines()
-            .filter(|pid| {
-                std::fs::read_to_string(format!("/proc/{pid}/stat")).is_ok_and(|stat| {
-                    stat.rsplit_once(") ")
-                        .is_some_and(|(_, rest)| !rest.starts_with('Z'))
-                })
-            })
+            .filter(|pid| runs(pid))
             .map(str::to_string)
             .collect()
     }
@@ -543,6 +549,14 @@ impl Train {
         .map(str::to_string)
         .collect()
     }
+}
+
+/// Whether the process <pid> still runs, a zombie counted as gone.
+fn runs(pid: &str) -> bool {
+    std::fs::read_to_string(format!("/proc/{pid}/stat")).is_ok_and(|stat| {
+        stat.rsplit_once(") ")
+            .is_some_and(|(_, rest)| !rest.starts_with('Z'))
+    })
 }
 
 /// A command that reads no global or system git configuration and commits as one
@@ -1219,7 +1233,11 @@ fn train_bisect_names_the_merge_that_broke_the_train() {
     assert!(t.train(&["build", "1", "2", "3", "4"]).status.success());
     assert!(!t.train(&["gate"]).status.success(), "the train is red");
     assert_eq!(t.probes("--no-live"), 1);
-    assert_eq!(t.probes("--only-live"), 1, "a gate runs both halves");
+    assert_eq!(
+        t.probes("--only-live"),
+        0,
+        "a red tree half keeps the live half from starting"
+    );
     // The PRs in the order the train merged them, by their heads.
     let order: Vec<String> = t
         .merges()
@@ -1261,7 +1279,7 @@ fn train_bisect_names_the_merge_that_broke_the_train() {
         3,
         "four merges, two probes of the red half"
     );
-    assert_eq!(t.probes("--only-live"), 1, "the green half is not probed");
+    assert_eq!(t.probes("--only-live"), 0, "the live half is not probed");
 
     assert!(t.train(&["bisect"]).status.success());
     assert_eq!(
@@ -1350,20 +1368,37 @@ fn train_gate_remote_runs_the_tree_half_in_the_codespace_and_stops_it() {
     assert_eq!(t.origin_master(), t.git(&["rev-parse", "train"]));
 }
 
+/// A red tree half in the Codespace stops the live half here at once, held as it is, and the
+/// report prints the Codespace gate's failing lines.
 #[test]
-fn train_gate_remote_red_blocks_the_land_with_its_last_lines() {
+fn train_gate_remote_red_stops_the_live_half_and_blocks_the_land_with_its_last_lines() {
     let t = Train::new("remote-red");
     t.pr(1, "the first", &[("broken", "x\n")]);
     let seed = t.origin_master();
     assert!(t.train(&["build", "1"]).status.success());
 
-    let red = t.train(&["gate", "--remote", "cs"]);
+    // Polled once a second, so the live half is up before the tree half's red is read.
+    let (hold, _said) = holding(&t, "hold-live");
+    let hold_path = hold.to_str().expect("a UTF-8 path");
+    let gating = t
+        .command(
+            &["gate", "--remote", "cs"],
+            &[("GATE_HOLD_LIVE", hold_path), ("SUZATARY_TRAIN_POLL", "1")],
+        )
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::piped())
+        .spawn()
+        .expect("train.sh starts");
+    let red = ends_within_twenty_seconds(gating);
     let stderr = text(&red.stderr);
     assert!(!red.status.success(), "a red tree half is a red train");
     assert!(
-        stderr.contains("tree half: failed") && stderr.contains("live half: ok"),
+        stderr.contains("tree half: failed")
+            && stderr.contains("the tree half is red, so the live half is stopped")
+            && stderr.contains("live half: unknown"),
         "{stderr}"
     );
+    live_half_stopped(&hold);
     assert!(
         stderr.contains("broken is in the tree"),
         "the remote failing steps' last lines: {stderr}"
@@ -1523,6 +1558,49 @@ fn holding(t: &Train, name: &str) -> (PathBuf, std::io::BufReader<std::fs::File>
         .open(&up)
         .expect("the fifo opens");
     (hold, std::io::BufReader::new(said))
+}
+
+/// The output of `child`, a train, which must end within twenty seconds; one that does not is
+/// killed and fails the test, so a half that was never stopped fails it rather than hangs it.
+fn ends_within_twenty_seconds(child: std::process::Child) -> Output {
+    let pid = child.id().to_string();
+    let (said, ended) = std::sync::mpsc::channel();
+    std::thread::spawn(move || said.send(child.wait_with_output()));
+    let Ok(out) = ended.recv_timeout(std::time::Duration::from_secs(20)) else {
+        let _ = Command::new("kill").args(["-KILL", &pid]).status();
+        panic!(
+            "the train did not end within twenty seconds: a half it should have stopped still runs"
+        );
+    };
+    out.expect("the train ends")
+}
+
+/// The processes that hold `path` open, by pid.
+fn holders(path: &Path) -> Vec<String> {
+    let path = path.canonicalize().expect("the path");
+    std::fs::read_dir("/proc")
+        .expect("/proc reads")
+        .flatten()
+        .filter_map(|entry| {
+            let pid = entry.file_name().to_string_lossy().into_owned();
+            let fds = std::fs::read_dir(entry.path().join("fd")).ok()?;
+            fds.flatten()
+                .any(|fd| std::fs::read_link(fd.path()).is_ok_and(|to| to == path))
+                .then_some(pid)
+        })
+        .collect()
+}
+
+/// Asserts the live half held on `hold` was stopped whole: the stub gate's process is gone, and
+/// so is every process that held its fifo (its `cat`, a child the gate's pid alone would miss).
+fn live_half_stopped(hold: &Path) {
+    let pid = std::fs::read_to_string(hold.with_extension("pid")).expect("the live half ran");
+    assert!(!runs(pid.trim()), "the live half's gate {pid} was stopped");
+    assert_eq!(
+        holders(hold),
+        Vec::<String>::new(),
+        "no process of the live half is left"
+    );
 }
 
 /// Polls `done` for twenty seconds.
@@ -1785,10 +1863,7 @@ fn train_gate_github_red_run_is_the_halfs_red() {
     let red = t.train(&["gate", "--remote", "github"]);
     let stderr = text(&red.stderr);
     assert!(!red.status.success());
-    assert!(
-        stderr.contains("tree half: failed") && stderr.contains("live half: ok"),
-        "{stderr}"
-    );
+    assert!(stderr.contains("tree half: failed"), "{stderr}");
     assert!(
         stderr.contains("broken is in the tree") && stderr.contains("red: gate (tests)"),
         "the job's failing lines: {stderr}"
@@ -1797,6 +1872,126 @@ fn train_gate_github_red_run_is_the_halfs_red() {
     let refused = t.train(&["land"]);
     assert!(text(&refused.stderr).contains("tree: failed"));
     assert_eq!(t.origin_master(), seed, "nothing landed");
+}
+
+/// The `checks` job red while the run's other jobs still run (a compile break): the tree half is
+/// red at once, the live half here is stopped whole, the run's other jobs are cancelled, and the
+/// report prints the job's own failing lines, the gate's block and not what GitHub ran after it.
+#[test]
+fn train_gate_github_red_checks_job_stops_the_live_half_at_once() {
+    let t = Train::new("github-checks-red");
+    t.on_github();
+    t.pr(1, "the first", &[("a.txt", "a\n")]);
+    let seed = t.origin_master();
+    assert!(t.train(&["build", "1"]).status.success());
+
+    // Polled once a second, so the live half is up before the job's red is read.
+    let (hold, _said) = holding(&t, "hold-live");
+    let hold_path = hold.to_str().expect("a UTF-8 path");
+    let gating = t
+        .command(
+            &["gate", "--remote", "github"],
+            &[
+                ("GH_RUN", "checks-red"),
+                ("GATE_HOLD_LIVE", hold_path),
+                ("SUZATARY_TRAIN_POLL", "1"),
+            ],
+        )
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::piped())
+        .spawn()
+        .expect("train.sh starts");
+    let red = ends_within_twenty_seconds(gating);
+    let stderr = text(&red.stderr);
+    assert!(!red.status.success(), "{stderr}");
+    assert!(
+        stderr.contains("red: gate (checks)")
+            && stderr.contains("the tree half is red, so the live half is stopped")
+            && stderr.contains("tree half: failed")
+            && stderr.contains("live half: unknown"),
+        "{stderr}"
+    );
+    let report = &stderr[stderr.find("tree half: failed").expect("the report")..];
+    assert!(
+        report.contains("--- job gate (checks)")
+            && report.contains("==> the failing steps' last lines\n--- clippy\nerror[E0308]")
+            && !report.contains("free after the gate")
+            && !report.contains("##[error]"),
+        "the report prints the job's failing lines alone: {report}"
+    );
+    live_half_stopped(&hold);
+    let pushed = t
+        .core_pushes()
+        .first()
+        .and_then(|line| line.split(' ').nth(1))
+        .expect("the gate commit")
+        .to_owned();
+    assert!(
+        t.github_calls()
+            .iter()
+            .any(|call| call.ends_with(&format!("/actions/runs/{pushed}/cancel"))),
+        "the run's other jobs were cancelled: {:?}",
+        t.github_calls()
+    );
+    assert_eq!(t.core(&["for-each-ref", "refs/heads/gate/"]), "");
+    assert!(text(&t.train(&["land"]).stderr).contains("tree: failed"));
+    assert_eq!(t.origin_master(), seed, "nothing landed");
+}
+
+/// The live half red while the run on GitHub's runners has not ended: the run is cancelled at once
+/// and the train is red, rather than waiting on a run whose verdict could not land the tree.
+#[test]
+fn train_gate_github_red_live_half_stops_the_run() {
+    let t = Train::new("github-live-red");
+    t.on_github();
+    t.pr(1, "the first", &[("broken-live", "x\n")]);
+    assert!(t.train(&["build", "1"]).status.success());
+
+    // The live half is held until the train waits on the run, then goes on to its red.
+    let (hold, _said) = holding(&t, "hold-live");
+    let hold_path = hold.to_str().expect("a UTF-8 path");
+    let gating = t
+        .command(
+            &["gate", "--remote", "github"],
+            &[("GH_RUN", "running"), ("GATE_HOLD_LIVE", hold_path)],
+        )
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::piped())
+        .spawn()
+        .expect("train.sh starts");
+    assert!(
+        within_twenty_seconds(|| t
+            .github_calls()
+            .iter()
+            .any(|call| call.contains("/actions/runs/") && !call.contains("head_sha"))),
+        "the train waits on the run: {:?}",
+        t.github_calls()
+    );
+    std::fs::write(&hold, "").expect("the held live half goes on");
+    let red = ends_within_twenty_seconds(gating);
+    let stderr = text(&red.stderr);
+    assert!(!red.status.success(), "{stderr}");
+    assert!(
+        stderr.contains("the live half is red, so the tree half is stopped")
+            && stderr.contains("tree half: unknown")
+            && stderr.contains("live half: failed")
+            && stderr.contains("broken-live is in the tree"),
+        "{stderr}"
+    );
+    let pushed = t
+        .core_pushes()
+        .first()
+        .and_then(|line| line.split(' ').nth(1))
+        .expect("the gate commit")
+        .to_owned();
+    assert!(
+        t.github_calls()
+            .iter()
+            .any(|call| call.ends_with(&format!("/actions/runs/{pushed}/cancel"))),
+        "the run was cancelled: {:?}",
+        t.github_calls()
+    );
+    assert_eq!(t.core(&["for-each-ref", "refs/heads/gate/"]), "");
 }
 
 /// A run the cloud ended (cancelled, or failed with no gate red, as a lost runner's) says nothing
@@ -1846,7 +2041,7 @@ fn train_gate_github_cancelled_or_lost_run_is_no_verdict() {
     }
 }
 
-/// The box's steps red: the half is red, and nothing goes to core.
+/// The box's steps red: the half is red, nothing goes to core, and the live half never starts.
 #[test]
 fn train_gate_github_red_on_the_box_pushes_nothing() {
     let t = Train::new("github-box-red");
@@ -1863,6 +2058,7 @@ fn train_gate_github_red_on_the_box_pushes_nothing() {
     );
     assert_eq!(t.core_pushes(), Vec::<String>::new(), "nothing pushed");
     assert_eq!(t.github_calls(), Vec::<String>::new(), "no run asked for");
+    assert_eq!(t.probes("--only-live"), 0, "and the live half never starts");
 }
 
 /// A publication run that failed, ran past the wait, or that GitHub would not start leaves the
@@ -1917,7 +2113,7 @@ fn train_gate_github_builds_on_the_box_when_the_publication_run_gave_nothing() {
 }
 
 /// The box's build of the public tree red, after the push: the half is red, no run of the gate is
-/// waited on, the branch is deleted, and nothing lands.
+/// waited on, the live half never starts, the branch is deleted, and nothing lands.
 #[test]
 fn train_gate_github_red_build_on_the_box_is_the_halfs_red() {
     let t = Train::new("github-build-red");
@@ -1937,6 +2133,7 @@ fn train_gate_github_red_build_on_the_box_is_the_halfs_red() {
         "no gate run is waited on: {:?}",
         t.github_calls()
     );
+    assert_eq!(t.probes("--only-live"), 0, "and the live half never starts");
     assert_eq!(t.core(&["for-each-ref", "refs/heads/gate/"]), "");
     assert!(text(&t.train(&["land"]).stderr).contains("tree: failed"));
     assert_eq!(t.origin_master(), seed, "nothing landed");
@@ -3476,8 +3673,8 @@ fn train_full_red_beside_a_selective_green_is_a_finding() {
     assert!(!t.train(&["gate"]).status.success());
     assert_eq!(
         t.full_runs().len(),
-        4,
-        "the gate after a red full gate runs full"
+        2,
+        "the gate after a red full gate runs full (its tree half, red, keeps the live half from starting)"
     );
 }
 
