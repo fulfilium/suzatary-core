@@ -122,8 +122,11 @@ fn flags() -> String {
 /// # Errors
 /// The text does not compile there, or the tripwire refuses what it made.
 pub fn html(guide: &str) -> anyhow::Result<String> {
-    let html = suzatary_io::typeset::compile(&source(World::Closed, guide)?)
-        .map_err(|rejected| anyhow::anyhow!("the guide does not compile: {rejected:?}"))?;
+    let html = suzatary_io::typeset::compile(&suzatary_core::template::Job::text(&source(
+        World::Closed,
+        guide,
+    )?))
+    .map_err(|rejected| anyhow::anyhow!("the guide does not compile: {rejected:?}"))?;
     if let Some(reason) = suzatary_core::tripwire::suspicious(&html) {
         anyhow::bail!("the tripwire refuses the guide: {reason}");
     }

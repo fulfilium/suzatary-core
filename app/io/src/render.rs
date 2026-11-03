@@ -1,54 +1,40 @@
-//! Typst's HTML export as the one renderer of markup ([`Render`]).
+//! Typst's HTML export as the one renderer: a template called with a value ([`Called`]), compiled
+//! by a [`Compiler`], narrowed to its body and past the tripwire ([`suspicious`]).
 //!
-//! A todo's markup and a secretary's answer are compiled in the closed world
-//! (`crate::typeset`): no `html` module, so no element or attribute but typst's
-//! own, and typst escapes all text it emits, so [`suspicious`] is a tripwire
-//! that refuses the impossible case, never a sanitiser that edits it. A page
-//! this box printed (`reading`, the static site) is compiled by the `typst`
-//! binary, since its template draws with `html.elem` and every datum in it is
-//! a string literal. What each function computes is kept in one structure,
-//! [`Rendered`], keyed by the function and its source: bodies and answers in
-//! the process and on disk; a page, printed from the observed value of every
-//! price on it (`reading::SHOWN`), hits until that value moves, and still
-//! moves with the clock, so it is kept in the process only.
+//! A body and an answer evaluate a writer's or a model's markup in the closed world, so no
+//! `html` element or attribute but typst's own, and typst escapes all text it emits; the
+//! tripwire refuses the impossible case, never edits it. A page's template is ours and reads every
+//! datum as data. What each call computes is kept where its template says: a body and an answer
+//! in the process and on disk; a page, printed from the observed value of every price on it
+//! (`reading::SHOWN`), in the process only, since it moves with the clock.
 
 use std::path::PathBuf;
 use std::sync::Arc;
-use std::time::Duration;
 
-use prodrome_core::memo::{Finding, Key};
+use prodrome_core::memo::Finding;
 use suzatary_core::capability::{
     AnswerError, Answers, Html, Rejected, Render, RenderError, Typeset,
 };
 use suzatary_core::escape::Escaped;
 use suzatary_core::narrowing::narrowed;
-use suzatary_core::reading::Page;
-use suzatary_core::rendering::{self, ANSWER, ANSWER_PREAMBLE, CLOSED, MARKUP, PAGE};
+use suzatary_core::rendering::{self, ANSWER, CLOSED, MARKUP, Markup};
 use suzatary_core::secretary::answer::Renderable;
-use suzatary_core::site::page::Page as SitePage;
 use suzatary_core::table::Table;
+use suzatary_core::template::{Called, Job, Kept, Output, Unprintable, named};
 use suzatary_core::tripwire::suspicious;
 
 use crate::rendered::Rendered;
-use crate::run::{RunError, succeed};
-use crate::scratch::Scratch;
-
-/// typst has no offline switch, so a fragment reaching for a package is
-/// bounded by this.
-const DEFAULT_TIMEOUT: Duration = Duration::from_secs(20);
+use crate::typeset::Compiler;
 
 const FRAGMENTS_KEPT: usize = 4096;
 
 const PAGES_KEPT: usize = 256;
 
-/// Typst's HTML export for one checkout (its nix fallback), one cache
-/// directory and one closed world.
+/// Typst's HTML export over one cache directory and one compiler.
 pub struct Typst {
-    repo: PathBuf,
-    timeout: Duration,
     fragments: Rendered,
     pages: Rendered,
-    closed: Arc<dyn Typeset + Send>,
+    compiler: Arc<dyn Compiler>,
     /// The closed world's answers, so a page that redraws a proposal on every poll spawns
     /// one compile per text, not one per poll.
     answers: Table<Result<String, Rejected>>,
@@ -58,125 +44,70 @@ impl std::fmt::Debug for Typst {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("Typst")
             .field("fragments", &self.fragments)
-            .field("repo", &self.repo)
             .finish_non_exhaustive()
     }
 }
 
 impl Typst {
-    /// `repo` is typst's nix fallback for pages; `cache` is where fragments
-    /// are stored by content; `closed` compiles every fragment.
+    /// `cache` is where bodies and answers are stored by key; `compiler` compiles every call.
     #[must_use]
-    pub fn new(
-        repo: impl Into<PathBuf>,
-        cache: impl Into<PathBuf>,
-        closed: impl Typeset + Send + 'static,
-    ) -> Self {
+    pub fn new(cache: impl Into<PathBuf>, compiler: impl Compiler + 'static) -> Self {
         Self {
-            repo: repo.into(),
-            timeout: DEFAULT_TIMEOUT,
             fragments: Rendered::on_disk(cache, FRAGMENTS_KEPT, &rendering::kept()),
             pages: Rendered::in_memory(PAGES_KEPT),
-            closed: Arc::new(closed),
+            compiler: Arc::new(compiler),
             answers: Table::new(PAGES_KEPT),
         }
     }
 
-    /// One page this box printed to typst's whole HTML document, compiled in
-    /// a fresh directory that is its `--root`, so `#read` and `#import` reach
-    /// nothing of this box.
-    fn compile(&self, source: &str) -> Compilation {
-        let scratch = match Scratch::temporary("suzatary-markup-") {
-            Ok(scratch) => scratch,
-            Err(err) => return Compilation::Unavailable(err.to_string()),
-        };
-        let home = scratch.path();
-        let src = home.join("fragment.typ");
-        let out = home.join("fragment.html");
-        if let Err(err) = std::fs::write(&src, source) {
-            return Compilation::Unavailable(err.to_string());
-        }
-        let cmd = crate::tool::tool(&self.repo, "typst")
-            .args(["compile", "--features", "html", "--format", "html"])
-            .arg("--root")
-            .arg(home)
-            .arg("--package-path")
-            .arg(home)
-            .arg("--package-cache-path")
-            .arg(home)
-            .arg(&src)
-            .arg(&out)
-            // typst reads it in `datetime.today()`, and every nix shell sets it.
-            .unset("SOURCE_DATE_EPOCH")
-            .timeout(self.timeout);
-        match succeed(&cmd) {
-            Ok(_) => match std::fs::read_to_string(&out) {
-                Ok(document) => Compilation::Rendered(document),
-                Err(err) => Compilation::Unavailable(err.to_string()),
-            },
-            Err(RunError::Exited { stderr, .. }) => {
-                Compilation::Rejected(stderr.as_str().to_owned())
-            }
-            Err(RunError::TimedOut { .. }) => {
-                Compilation::Unavailable(format!("typst did not finish within {:?}", self.timeout))
-            }
-            Err(failed) => Compilation::Unavailable(failed.to_string()),
+    /// The table `called`'s output is kept in, if any.
+    fn table(&self, called: &Called) -> Option<&Rendered> {
+        match called.kept() {
+            Kept::Disk => Some(&self.fragments),
+            Kept::Process => Some(&self.pages),
+            Kept::Nowhere => None,
         }
     }
-}
 
-impl Typst {
-    /// One answer block to typst's HTML, through the same compile, cache and
-    /// tripwire as a todo's body.
+    /// `called`'s output: what its key keeps, or else compiled, narrowed and kept.
     ///
     /// # Errors
     /// [`RenderError`], as for [`Render::html`].
-    pub fn answer(&self, block: &Renderable) -> Result<Html, RenderError> {
-        self.rendered(
-            Rendered::key(&ANSWER, block.as_str()),
-            &format!("{ANSWER_PREAMBLE}{}", block.as_str()),
-        )
-    }
-
-    /// One page of the static site, the whole document, through the binary
-    /// and the same tripwire as a body. Never cached: every page prints the
-    /// moment it was generated.
-    ///
-    /// # Errors
-    /// [`RenderError`], as for [`Render::html`].
-    pub fn document(&self, page: &SitePage) -> Result<String, RenderError> {
-        match self.compile(page.as_str()) {
-            Compilation::Rendered(document) => match suspicious(&document) {
-                Some(reason) => Err(RenderError::Suspicious(reason.to_string())),
-                None => Ok(document),
-            },
-            Compilation::Rejected(reason) | Compilation::Unavailable(reason) => {
-                Err(RenderError::Refused(reason))
-            }
-        }
-    }
-
-    /// `source` compiled in the closed world, or what `key` keeps of it.
-    fn rendered(&self, key: Key, source: &str) -> Result<Html, RenderError> {
-        if let Some(kept) = self
-            .fragments
-            .recall(&key)
-            .map_err(|failed| unread(&failed))?
+    pub fn rendered(&self, called: &Called) -> Result<Html, RenderError> {
+        let table = self.table(called);
+        if let Some(table) = table
+            && let Some(kept) = table.recall(called.key()).map_err(|e| unread(&e))?
         {
             return Ok(Html::from_render(kept));
         }
         let document = self
-            .closed
-            .closed(source)
-            .map_err(|rejected| RenderError::Refused(rejected.said(source)))?;
-        let body = narrowed(&document)?;
-        // A finding is kept as evidence and answers nothing; this compile's body is still the answer.
-        let _ = self.fragments.remember(key, &body);
-        Ok(Html::from_render(body))
+            .compiler
+            .compile(called.job())
+            .map_err(|rejected| RenderError::Refused(rejected.said(called.job().main_text())))?;
+        let output = match called.output() {
+            Output::Body => narrowed(&document)?,
+            Output::Document => match suspicious(&document) {
+                Some(reason) => return Err(RenderError::Suspicious(reason.to_string())),
+                None => document,
+            },
+        };
+        if let Some(table) = table {
+            // A finding is kept as evidence and answers nothing; this compile is still the answer.
+            let _ = table.remember(called.key().clone(), &output);
+        }
+        Ok(Html::from_render(output))
+    }
+
+    /// One answer block to typst's HTML.
+    ///
+    /// # Errors
+    /// [`RenderError`], as for [`Render::html`].
+    pub fn answer(&self, block: &Renderable) -> Result<Html, RenderError> {
+        self.rendered(&ANSWER.call(block).map_err(|e| unprintable(&e))?)
     }
 
     /// Every key whose tabulation holds two values: a compile that was not a function of its
-    /// source, or a file on disk another writer left.
+    /// call, or a file on disk another writer left.
     #[must_use]
     pub fn findings(&self) -> Vec<Finding> {
         [
@@ -186,25 +117,26 @@ impl Typst {
         ]
         .concat()
     }
+}
 
-    /// One page through the binary, narrowed to its `<body>` and past the tripwire.
-    fn body(&self, source: &str) -> Result<String, RenderError> {
-        let document = match self.compile(source) {
-            Compilation::Rendered(document) => document,
-            Compilation::Rejected(stderr) => return Err(RenderError::Refused(stderr)),
-            Compilation::Unavailable(reason) => return Err(RenderError::Refused(reason)),
-        };
-        narrowed(&document)
-    }
+fn markup(markup: &Escaped) -> Result<Called, RenderError> {
+    MARKUP
+        .call(&Markup {
+            source: markup.clone(),
+        })
+        .map_err(|e| unprintable(&e))
 }
 
 impl Typeset for Typst {
     fn closed(&self, source: &str) -> Result<String, Rejected> {
-        let key = Rendered::key(&CLOSED, source);
+        let key = prodrome_core::memo::Key {
+            function: CLOSED.clone(),
+            argument: named(source),
+        };
         if let Some(known) = self.answers.kept(&key) {
             return known;
         }
-        let answer = self.closed.closed(source);
+        let answer = self.compiler.compile(&Job::text(source));
         // A refusal typst located is a fact about the text; one about nothing (a timeout, a
         // child that would not start) may be about the box, so it is asked again next time.
         if answer
@@ -218,15 +150,20 @@ impl Typeset for Typst {
 }
 
 impl Render for Typst {
-    fn html(&self, markup: &Escaped) -> Result<Html, RenderError> {
-        self.rendered(Rendered::key(&MARKUP, markup.as_str()), markup.as_str())
+    fn html(&self, escaped: &Escaped) -> Result<Html, RenderError> {
+        self.rendered(&markup(escaped)?)
     }
 
-    fn cached(&self, markup: &Escaped) -> Option<Html> {
+    fn cached(&self, escaped: &Escaped) -> Option<Html> {
         // A peek that never compiles: a cache that cannot be read is said by `html`, which reads
         // it again.
+        let key = MARKUP
+            .key_of(&Markup {
+                source: escaped.clone(),
+            })
+            .ok()?;
         self.fragments
-            .recall(&Rendered::key(&MARKUP, markup.as_str()))
+            .recall(&key)
             .ok()
             .flatten()
             .map(Html::from_render)
@@ -239,14 +176,8 @@ impl Render for Typst {
             .count()
     }
 
-    fn page(&self, page: &Page) -> Result<Html, RenderError> {
-        let key = Rendered::key(&PAGE, page.as_str());
-        if let Some(kept) = self.pages.recall(&key).map_err(|failed| unread(&failed))? {
-            return Ok(Html::from_render(kept));
-        }
-        let body = self.body(page.as_str())?;
-        let _ = self.pages.remember(key, &body);
-        Ok(Html::from_render(body))
+    fn page(&self, page: &Called) -> Result<Html, RenderError> {
+        self.rendered(page)
     }
 
     fn findings(&self) -> Vec<Finding> {
@@ -254,11 +185,12 @@ impl Render for Typst {
     }
 }
 
-/// An answer block's HTML is kept under the answer function and its source alone.
+/// An answer block's HTML is kept under the answer template and the block alone.
 impl suzatary_core::capability::RenderCache for Typst {
     fn forget(&self, block: &Renderable) -> Result<(), String> {
+        let key = ANSWER.key_of(block).map_err(|e| e.to_string())?;
         self.fragments
-            .forget(&Rendered::key(&ANSWER, block.as_str()))
+            .forget(&key)
             .map_err(|failed| failed.to_string())
     }
 }
@@ -276,18 +208,16 @@ fn unread(failed: &std::io::Error) -> RenderError {
     RenderError::Refused(format!("the rendered cache could not be read: {failed}"))
 }
 
-/// Bad markup is a fact about the text, an unavailable typst one about the
-/// box; both reach [`Render`] as [`RenderError::Refused`].
-enum Compilation {
-    Rendered(String),
-    Rejected(String),
-    Unavailable(String),
+fn unprintable(failed: &Unprintable) -> RenderError {
+    RenderError::Refused(failed.to_string())
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::tool::on_path;
+    use suzatary_core::reading::{CalendarPage, Content, Explained, Prose, todo};
+    use suzatary_core::rendering::{CALENDAR, TODO};
+    use suzatary_core::wire;
 
     fn scratch_cache(name: &str) -> PathBuf {
         let root = std::env::temp_dir().join(format!(
@@ -301,29 +231,39 @@ mod tests {
 
     fn typst_at(name: &str) -> (Typst, PathBuf) {
         let cache = scratch_cache(name);
-        (
-            Typst::new(PathBuf::from("."), &cache, crate::typeset::InProcess),
-            cache,
-        )
+        (Typst::new(&cache, crate::typeset::InProcess), cache)
     }
 
-    /// Counts its compiles, answering as the in-process closed world does.
-    struct Counted(std::sync::Arc<std::sync::atomic::AtomicUsize>);
-    impl Typeset for Counted {
-        fn closed(&self, source: &str) -> Result<String, Rejected> {
+    fn entry(value: f64) -> wire::Entry {
+        wire::Entry {
+            todo: "file-permit".to_owned(),
+            state: wire::EntryState::Open,
+            states: vec![wire::EntryState::Open],
+            at: String::new(),
+            claimed: wire::ClaimedState::Agrees,
+            value: Some(wire::Fulfillment::Number(value)),
+            recurring: false,
+            unconfirmed: false,
+            conflicts: std::collections::BTreeMap::new(),
+            authored: None,
+            candidates: Vec::new(),
+            stream: Vec::new(),
+        }
+    }
+
+    /// Counts its compiles, answering as the in-process compiler does.
+    struct Counted(Arc<std::sync::atomic::AtomicUsize>);
+    impl Compiler for Counted {
+        fn compile(&self, job: &Job) -> Result<String, Rejected> {
             self.0.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
-            crate::typeset::compile(source)
+            crate::typeset::compile(job)
         }
     }
 
     #[test]
     fn a_text_is_compiled_once_however_often_it_is_asked_about() {
-        let count = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
-        let typst = Typst::new(
-            PathBuf::from("."),
-            scratch_cache("counted"),
-            Counted(count.clone()),
-        );
+        let count = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+        let typst = Typst::new(scratch_cache("counted"), Counted(count.clone()));
         for _ in 0..3 {
             assert!(typst.closed("Renew *it*").is_ok());
             assert!(typst.closed("a ] b").is_err());
@@ -334,12 +274,16 @@ mod tests {
     #[test]
     fn cached_reads_a_fragment_another_process_kept_on_the_same_disk() {
         let cache = scratch_cache("read-from-disk");
-        let source = "= Kept\n";
-        Rendered::on_disk(&cache, 8, &[&MARKUP, &ANSWER])
-            .remember(Rendered::key(&MARKUP, source), "<p>kept</p>")
+        let markup = Escaped::from_chain("= Kept\n");
+        let key = MARKUP
+            .key_of(&Markup {
+                source: markup.clone(),
+            })
+            .expect("prints");
+        Rendered::on_disk(&cache, 8, &rendering::kept())
+            .remember(key, "<p>kept</p>")
             .expect("no finding");
-        let typst = Typst::new(PathBuf::from("."), &cache, crate::typeset::InProcess);
-        let markup = Escaped::from_chain(source);
+        let typst = Typst::new(&cache, crate::typeset::InProcess);
         assert_eq!(
             typst.cached(&markup).map(|html| html.as_str().to_string()),
             Some("<p>kept</p>".to_string())
@@ -348,32 +292,9 @@ mod tests {
     }
 
     #[test]
-    fn a_body_and_a_page_of_one_source_are_two_functions() {
-        let cache = scratch_cache("two-functions");
-        let source = "= Same bytes\n";
-        let typst = Typst::new(PathBuf::from("."), &cache, crate::typeset::InProcess);
-        typst
-            .fragments
-            .remember(Rendered::key(&PAGE, source), "<p>a page</p>")
-            .expect("no finding");
-        assert_eq!(
-            typst
-                .fragments
-                .recall(&Rendered::key(&PAGE, source))
-                .expect("read")
-                .as_deref(),
-            Some("<p>a page</p>"),
-            "the page's value is there to be read"
-        );
-        assert_eq!(typst.cached(&Escaped::from_chain(source)), None);
-        let _ = std::fs::remove_dir_all(&cache);
-    }
-
-    #[test]
     fn an_answer_block_is_html_with_mathml_in_the_closed_world() {
         let (typst, cache) = typst_at("answer-blocks");
-        let answer =
-            |source: &str| typst.answer(&suzatary_core::secretary::answer::Renderable::of(source));
+        let answer = |source: &str| typst.answer(&Renderable::of(source));
         let block = |source: &str| answer(source).expect("the block compiles");
         assert!(block("$ x^2 $").as_str().contains("<math"), "MathML");
         assert!(
@@ -397,34 +318,20 @@ mod tests {
         let _ = std::fs::remove_dir_all(&cache);
     }
 
+    /// A page's every datum is data: a hostile name, a stranger's title and an untrusted body
+    /// are drawn as text, and only a trusted body is evaluated as markup.
     #[test]
-    fn a_todo_page_is_classed_html_and_its_data_stays_text_when_typst_is_reachable() {
+    fn a_page_is_classed_html_and_its_data_stays_text() {
         use prodrome_core::fpl::Explanation;
         use prodrome_core::term::TermF;
-        use suzatary_core::reading::{Content, Explained, Prose, todo};
-        use suzatary_core::wire;
-        if !on_path("typst") {
-            eprintln!("skipping a_todo_page_is_classed_html: typst is not on PATH");
-            return;
-        }
         let (typst, cache) = typst_at("todo-page");
-        let entry = wire::Entry {
-            todo: "file-permit".to_owned(),
-            state: wire::EntryState::Open,
-            states: vec![wire::EntryState::Open],
-            at: String::new(),
-            claimed: wire::ClaimedState::Agrees,
-            value: Some(wire::Fulfillment::Number(0.25)),
-            recurring: false,
-            unconfirmed: false,
-            conflicts: std::collections::BTreeMap::new(),
-            authored: None,
-            candidates: Vec::new(),
-            stream: Vec::new(),
-        };
         let content = Content {
-            body: Prose::Rendered(Escaped::from_chain("*File* the deed \\(signed\\)")),
-            detail: Some(Prose::Source("<script>alert(1)</script> #html".to_owned())),
+            body: Prose::Rendered {
+                source: Escaped::from_chain("*File* the deed \\(signed\\)"),
+            },
+            detail: Some(Prose::Source {
+                text: "<script>alert(1)</script> #html".to_owned(),
+            }),
         };
         let node = |value, node| Explanation {
             value,
@@ -445,13 +352,14 @@ mod tests {
                 p: -4.0,
             },
         ));
+        let page = todo(
+            &entry(0.25),
+            Some(&content),
+            Some(&why),
+            suzatary_core::zone::Zone::UTC,
+        );
         let html = typst
-            .page(&todo(
-                &entry,
-                Some(&content),
-                Some(&why),
-                suzatary_core::zone::Zone::UTC,
-            ))
+            .page(&TODO.call(&page).expect("prints"))
             .expect("the page compiles");
         let html = html.as_str();
         assert!(html.starts_with("<div class=\"todohead\">"), "{html}");
@@ -461,6 +369,10 @@ mod tests {
             ),
             "{html}"
         );
+        assert!(
+            html.contains("&lt;script>alert(1)&lt;/script> #html"),
+            "{html}"
+        );
         assert!(html.contains("<details class=\"why\" open>"), "{html}");
         assert!(html.contains("<ul class=\"tree\">"), "{html}");
         assert!(html.contains("Why this number — 25.0%"), "{html}");
@@ -468,8 +380,36 @@ mod tests {
             html.contains("<p class=\"says\">25.0%: 1 part taken together"),
             "{html}"
         );
+        assert!(html.contains("a\"]#html.elem(\"script\")["), "{html}");
         assert!(!html.contains("<script"), "{html}");
         assert!(!html.contains("style="), "{html}");
+
+        let stranger = "Review\"] #eval(\"x\") [<script>";
+        let calendar = CalendarPage {
+            days: vec![suzatary_core::reading::CalendarDay {
+                heading: "Monday 5 October".to_owned(),
+                entries: vec![suzatary_core::reading::CalendarRow {
+                    time: "09:00–10:00".to_owned(),
+                    title: stranger.to_owned(),
+                    place: Some("Room #4".to_owned()),
+                    calendar: "WORK".to_owned(),
+                    status: "cancelled".to_owned(),
+                    notes: vec!["cancelled".to_owned()],
+                }],
+            }],
+        };
+        let html = typst
+            .page(&CALENDAR.call(&calendar).expect("prints"))
+            .expect("the calendar compiles");
+        let html = html.as_str();
+        assert!(
+            html.contains("Review\"] #eval(\"x\") [&lt;script>"),
+            "{html}"
+        );
+        assert!(
+            html.contains("<li class=\"calendarentry cancelled\">"),
+            "{html}"
+        );
         let _ = std::fs::remove_dir_all(&cache);
     }
 
@@ -477,39 +417,26 @@ mod tests {
     fn a_page_read_at_two_instants_writes_nothing_under_the_cache() {
         use prodrome_core::fpl::Explanation;
         use prodrome_core::term::TermF;
-        use suzatary_core::reading::{Explained, todo};
-        use suzatary_core::wire;
-        if !on_path("typst") {
-            eprintln!("skipping a_page_read_at_two_instants_writes_nothing: typst is not on PATH");
-            return;
-        }
         let (typst, cache) = typst_at("pages-stay-in-memory");
         let at = |value: f64| {
-            let entry = wire::Entry {
-                todo: "file-permit".to_owned(),
-                state: wire::EntryState::Open,
-                states: vec![wire::EntryState::Open],
-                at: String::new(),
-                claimed: wire::ClaimedState::Agrees,
-                value: Some(wire::Fulfillment::Number(value)),
-                recurring: false,
-                unconfirmed: false,
-                conflicts: std::collections::BTreeMap::new(),
-                authored: None,
-                candidates: Vec::new(),
-                stream: Vec::new(),
-            };
             let why = Explained::of(Explanation {
                 value: Some(value),
                 notes: std::collections::BTreeMap::new(),
                 node: Box::new(TermF::Flat { value }),
             });
-            todo(&entry, None, Some(&why), suzatary_core::zone::Zone::UTC)
+            todo(
+                &entry(value),
+                None,
+                Some(&why),
+                suzatary_core::zone::Zone::UTC,
+            )
         };
         let (morning, evening) = (at(0.31), at(0.24));
-        assert_ne!(morning, evening, "two instants are two sources");
+        assert_ne!(morning, evening, "two instants are two values");
         for page in [&morning, &evening, &morning] {
-            typst.page(page).expect("the page compiles");
+            typst
+                .page(&TODO.call(page).expect("prints"))
+                .expect("the page compiles");
         }
         let files = |dir: &std::path::Path| std::fs::read_dir(dir).map_or(0, Iterator::count);
         assert_eq!(files(&cache), 0, "a page wrote to the disk cache");

@@ -3,7 +3,7 @@
 
 use suzatary_core::capability::{Html, Rejected, Render, RenderError, Typeset};
 use suzatary_core::escape::Escaped;
-use suzatary_core::reading::Page;
+use suzatary_core::template::Called;
 
 /// Compiles nothing and holds nothing.
 pub struct Unrendered;
@@ -29,7 +29,7 @@ impl Render for Unrendered {
         0
     }
 
-    fn page(&self, _page: &Page) -> Result<Html, RenderError> {
+    fn page(&self, _page: &Called) -> Result<Html, RenderError> {
         Err(RenderError::Refused(NONE.into()))
     }
 }

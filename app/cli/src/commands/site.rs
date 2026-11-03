@@ -10,8 +10,9 @@ use std::path::{Path, PathBuf};
 use anyhow::Context;
 use suzatary_core::capability::Clock;
 use suzatary_core::capability::RenderError;
+use suzatary_core::rendering::SITE;
 use suzatary_core::site;
-use suzatary_core::site::page::Page;
+use suzatary_core::site::page::SitePage;
 use suzatary_io::clock::SystemClock;
 use suzatary_io::render::Typst;
 
@@ -52,17 +53,21 @@ pub fn run(path: &Path, args: &Args) -> anyhow::Result<()> {
     let files =
         site::render_site(&chain.policy.name, &set, &problems).context("rendering the site")?;
     let typst = Typst::new(
-        instance.code().to_path_buf(),
         instance.paths.markup_cache.clone(),
         suzatary_io::typeset::Closed::this_binary(),
     );
+    let drawn = |page: &SitePage| {
+        SITE.call(page)
+            .map_err(|e| RenderError::Refused(e.to_string()))
+            .and_then(|called| typst.rendered(&called))
+            .map(|html| html.as_str().to_owned())
+    };
     for (relative, page) in &files.pages {
-        let html = match typst.document(page) {
+        let html = match drawn(page) {
             Ok(html) => html,
             Err(RenderError::Suspicious(reason)) => {
                 eprintln!("suzatary web: {relative} refused: {reason}");
-                typst
-                    .document(&Page::refused(relative, &reason, &files.footer))
+                drawn(&SitePage::refused(relative, &reason, &files.footer))
                     .with_context(|| format!("rendering the refusal of {relative}"))?
             }
             Err(refused) => {

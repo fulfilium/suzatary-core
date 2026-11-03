@@ -191,9 +191,10 @@ pub fn todo(
     let content =
         view::content_of(row, &by_hash).map(|record| view::content(render, record, untrusted));
     let why = view::explain(row, at, &env).map(reading::Explained::of);
-    let reading = render
-        .page(&reading::todo(&entry, content.as_ref(), why.as_ref(), zone))
+    let reading = crate::rendering::TODO
+        .call(&reading::todo(&entry, content.as_ref(), why.as_ref(), zone))
         .ok()
+        .and_then(|page| render.page(&page).ok())
         .map(|html| html.as_str().to_owned());
     Ok(wire::TodoPayload {
         todo: id.to_owned(),
@@ -1839,9 +1840,10 @@ pub fn calendar(
         from: from.to_string(),
         days: DAYS,
         text: crate::reading::calendar_text(&days),
-        rich: render
-            .page(&crate::reading::calendar(&days))
+        rich: crate::rendering::CALENDAR
+            .call(&crate::reading::calendar(&days))
             .ok()
+            .and_then(|page| render.page(&page).ok())
             .map(|html| html.as_str().to_owned()),
     })
 }

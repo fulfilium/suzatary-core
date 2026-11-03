@@ -22,7 +22,10 @@ pub const STRING_SPECIALS: &[char] = &['\\', '"'];
 
 /// Typst markup that prose went through [`escape_markup`] to become: the one prose → markup
 /// door, and the type [`crate::capability::Render`] takes.
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(
+    Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, serde::Serialize, schemars::JsonSchema,
+)]
+#[serde(transparent)]
 pub struct Escaped(String);
 
 impl Escaped {

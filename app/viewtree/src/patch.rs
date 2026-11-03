@@ -108,6 +108,28 @@ pub enum Patch {
         /// The event.
         on: On,
     },
+    /// Place a Typst output by its key, its plain text shown until its HTML is held.
+    Block {
+        /// Its new id.
+        id: u32,
+        /// The element it goes in.
+        parent: u32,
+        /// The node it goes before; `None` for the end.
+        before: Option<u32>,
+        /// The key its HTML is kept under.
+        key: String,
+        /// Its plain text.
+        fallback: String,
+    },
+    /// Place another output in a block.
+    Rekey {
+        /// The block.
+        id: u32,
+        /// The key its HTML is kept under.
+        key: String,
+        /// Its plain text.
+        fallback: String,
+    },
 }
 
 const ELEMENT: u8 = 0;
@@ -121,6 +143,8 @@ const MOVE: u8 = 7;
 const REMOVE: u8 = 8;
 const LISTEN: u8 = 9;
 const UNLISTEN: u8 = 10;
+const BLOCK: u8 = 11;
+const REKEY: u8 = 12;
 
 fn varint(out: &mut Vec<u8>, mut n: u32) {
     while n >= 0x80 {
@@ -219,6 +243,24 @@ pub fn encode(patches: &[Patch]) -> Vec<u8> {
                 out.push(UNLISTEN);
                 varint(&mut out, *id);
                 out.push(on.code());
+            }
+            Patch::Block {
+                id,
+                parent,
+                before,
+                key,
+                fallback,
+            } => {
+                out.push(BLOCK);
+                place(&mut out, *id, *parent, *before);
+                string(&mut out, key);
+                string(&mut out, fallback);
+            }
+            Patch::Rekey { id, key, fallback } => {
+                out.push(REKEY);
+                varint(&mut out, *id);
+                string(&mut out, key);
+                string(&mut out, fallback);
             }
         }
     }
@@ -348,6 +390,21 @@ pub fn decode(bytes: &[u8]) -> Result<Vec<Patch>, Malformed> {
             UNLISTEN => Patch::Unlisten {
                 id: r.varint()?,
                 on: r.on()?,
+            },
+            BLOCK => {
+                let (id, parent, before) = r.place()?;
+                Patch::Block {
+                    id,
+                    parent,
+                    before,
+                    key: r.string()?,
+                    fallback: r.string()?,
+                }
+            }
+            REKEY => Patch::Rekey {
+                id: r.varint()?,
+                key: r.string()?,
+                fallback: r.string()?,
             },
             _ => return Err(Malformed(r.at - 1)),
         });

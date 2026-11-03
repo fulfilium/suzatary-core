@@ -20,3 +20,5 @@ mod puller_port;
 mod store_laws;
 #[path = "stores.rs"]
 mod stores;
+#[path = "templates.rs"]
+mod templates;

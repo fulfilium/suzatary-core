@@ -51,7 +51,6 @@ impl Bench {
         let events = EventStore::new(deployment.first().events.clone(), untrusted);
         let fakes = common::Fakes::with_store(tag, events);
         let render = Typst::new(
-            deployment.code().to_path_buf(),
             deployment.paths.markup_cache.clone(),
             suzatary_io::typeset::InProcess,
         );

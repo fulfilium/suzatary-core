@@ -18,6 +18,7 @@ import frame from "../view/frame"
 import address from "../shell/address"
 import { parseRoute } from "../shell/route"
 import run from "../painter/run"
+import blocks from "../app/blocks"
 import signer from "../prodrome/signer"
 import parts from "./parts"
 import local from "./local"
@@ -136,7 +137,7 @@ export namespace program {
     root.replaceChildren()
     const t0 = performance.now()
     const program = new glue[page](JSON.stringify({ ...args, context: context() }))
-    const running = run.start<In, Out>(root, program, parts.draw, handle, parts.gone)
+    const running = run.start<In, Out>(root, program, parts.draw, blocks.held, handle, parts.gone)
     performance.measure("page:draw", { start: t0, end: performance.now(), detail: { page, read: "Program" } })
     stops.push(app.hear(whoOf, () => running.send({ type: "Context", ...context() }), same))
     return { destroy: () => (stops.forEach(stop => stop()), running.destroy()) }

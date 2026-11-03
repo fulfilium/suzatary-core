@@ -12,7 +12,7 @@ use anyhow::{Context, bail};
 use clap::Subcommand;
 use prodrome_core::event::Actor;
 use prodrome_core::literal::Datetime;
-use suzatary_core::capability::{Clock, Typeset};
+use suzatary_core::capability::Clock;
 use suzatary_core::decisions::{Decision, DecisionId, Decisions, Draft, Ledger};
 use suzatary_io::clock::SystemClock;
 use suzatary_io::objects::Objects;
@@ -63,9 +63,9 @@ pub enum Action {
         /// The decision.
         id: String,
     },
-    /// The decisions as a Typst document on stdout, or compiled to HTML with `--html`.
+    /// The decisions as typst's HTML, compiled in the closed world, on stdout or into `--html`.
     View {
-        /// Write typst's HTML, compiled in the closed world, here.
+        /// Write the HTML here instead.
         #[arg(long, value_name = "FILE")]
         html: Option<PathBuf>,
     },
@@ -161,19 +161,19 @@ pub fn run(path: &Path, args: &Args) -> anyhow::Result<()> {
             );
         }
         Action::View { html } => {
-            let source = suzatary_core::decisions::document(&decisions.ledger()?);
+            use suzatary_io::typeset::Compiler as _;
+            let called = suzatary_core::rendering::DECISIONS
+                .call(&suzatary_core::decisions::document(&decisions.ledger()?))?;
+            let page = typeset.compile(called.job()).map_err(|rejected| {
+                anyhow::anyhow!("{}", rejected.said(called.job().main_text()))
+            })?;
+            if let Some(reason) = suzatary_core::tripwire::suspicious(&page) {
+                bail!("typst's HTML for the decisions carried {reason}; not written");
+            }
             match html {
-                None => print!("{source}"),
-                Some(out) => {
-                    let page = typeset
-                        .closed(&source)
-                        .map_err(|rejected| anyhow::anyhow!("{}", rejected.said(&source)))?;
-                    if let Some(reason) = suzatary_core::tripwire::suspicious(&page) {
-                        bail!("typst's HTML for the decisions carried {reason}; not written");
-                    }
-                    std::fs::write(out, page)
-                        .with_context(|| format!("writing {}", out.display()))?;
-                }
+                None => print!("{page}"),
+                Some(out) => std::fs::write(out, page)
+                    .with_context(|| format!("writing {}", out.display()))?,
             }
         }
     }

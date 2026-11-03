@@ -4,7 +4,6 @@ use std::path::{Path, PathBuf};
 
 use prodrome_core::event::Hash;
 use prodrome_core::memo::{Finding, Key};
-use suzatary_core::rendering;
 use suzatary_core::table::Table;
 use suzatary_core::tripwire::suspicious;
 
@@ -64,15 +63,6 @@ impl Rendered {
             table: Table::new(capacity),
             disk: None,
             writes: std::sync::atomic::AtomicUsize::new(0),
-        }
-    }
-
-    /// The key of `function` at `source`: the source named by its bytes, as a memo node is.
-    #[must_use]
-    pub fn key(function: &Hash, source: &str) -> Key {
-        Key {
-            function: function.clone(),
-            argument: rendering::source(source),
         }
     }
 
@@ -240,10 +230,17 @@ mod tests {
         memo::name(b"a renderer under test", [])
     }
 
+    fn key(function: &Hash, source: &str) -> Key {
+        Key {
+            function: function.clone(),
+            argument: suzatary_core::template::named(source),
+        }
+    }
+
     #[test]
     fn a_value_remembered_is_recalled_from_memory_and_from_a_cold_process_on_the_same_disk() {
         let dir = scratch("cold");
-        let key = Rendered::key(&function(), "= A heading");
+        let key = key(&function(), "= A heading");
         Rendered::on_disk(&dir, 8, &[&function()])
             .remember(key.clone(), "<h2>A heading</h2>")
             .expect("no finding");
@@ -265,7 +262,7 @@ mod tests {
     #[test]
     fn an_unreadable_file_is_an_error_never_a_miss() {
         let dir = scratch("unreadable");
-        let key = Rendered::key(&function(), "= Unreadable");
+        let key = key(&function(), "= Unreadable");
         let rendered = Rendered::on_disk(&dir, 8, &[&function()]);
         std::fs::create_dir_all(rendered.file(&key).expect("on disk")).expect("a directory");
         assert!(rendered.recall(&key).is_err());
@@ -275,7 +272,7 @@ mod tests {
     #[test]
     fn a_suspicious_file_is_no_value() {
         let dir = scratch("suspicious");
-        let key = Rendered::key(&function(), "= Suspicious");
+        let key = key(&function(), "= Suspicious");
         let rendered = Rendered::on_disk(&dir, 8, &[&function()]);
         write(
             &rendered.file(&key).expect("on disk"),
@@ -288,7 +285,7 @@ mod tests {
     #[test]
     fn two_values_at_one_key_are_a_finding_and_neither_is_recalled() {
         let rendered = Rendered::in_memory(8);
-        let key = Rendered::key(&function(), "x");
+        let key = key(&function(), "x");
         rendered.remember(key.clone(), "<p>one</p>").expect("first");
         assert_eq!(
             rendered.remember(key.clone(), "<p>two</p>"),
@@ -301,7 +298,7 @@ mod tests {
     #[test]
     fn a_second_value_deletes_the_file_and_no_writer_wins() {
         let dir = scratch("second");
-        let key = Rendered::key(&function(), "y");
+        let key = key(&function(), "y");
         let one = Rendered::on_disk(&dir, 8, &[&function()]);
         one.remember(key.clone(), "<p>one</p>").expect("first");
         assert!(one.remember(key.clone(), "<p>two</p>").is_err());
@@ -318,7 +315,7 @@ mod tests {
     #[test]
     fn a_value_another_process_left_that_disagrees_is_a_finding_and_the_file_goes() {
         let dir = scratch("disagrees");
-        let key = Rendered::key(&function(), "z");
+        let key = key(&function(), "z");
         Rendered::on_disk(&dir, 8, &[&function()])
             .remember(key.clone(), "<p>theirs</p>")
             .expect("first");
@@ -346,7 +343,7 @@ mod tests {
         );
         for n in 0..10 {
             rendered
-                .remember(Rendered::key(&function(), &n.to_string()), "<p>x</p>")
+                .remember(key(&function(), &n.to_string()), "<p>x</p>")
                 .expect("kept");
         }
         let sub = dir.join(function().as_str());
@@ -360,7 +357,7 @@ mod tests {
         let dir = scratch("renamed");
         let old = memo::name(b"a renderer of an older build", []);
         Rendered::on_disk(&dir, 8, &[&old])
-            .remember(Rendered::key(&old, "x"), "<p>old</p>")
+            .remember(key(&old, "x"), "<p>old</p>")
             .expect("kept");
         std::fs::create_dir_all(dir.join("not-a-function")).expect("dir");
         let _ = Rendered::on_disk(&dir, 8, &[&function()]);
@@ -383,18 +380,18 @@ mod tests {
         let old = memo::name(b"a renderer of an older build", []);
         let here = Rendered::on_disk(&dir, 8, &[&function()]);
         Rendered::on_disk(&dir, 8, &[&old])
-            .remember(Rendered::key(&old, "erased words"), "<p>erased words</p>")
+            .remember(key(&old, "erased words"), "<p>erased words</p>")
             .expect("kept");
-        here.remember(Rendered::key(&function(), "kept"), "<p>kept</p>")
+        here.remember(key(&function(), "kept"), "<p>kept</p>")
             .expect("kept");
-        here.forget(&Rendered::key(&function(), "erased words"))
+        here.forget(&key(&function(), "erased words"))
             .expect("forgot");
         assert!(
             !dir.join(old.as_str()).exists(),
             "the older build's folder went"
         );
         assert_eq!(
-            here.recall(&Rendered::key(&function(), "kept"))
+            here.recall(&key(&function(), "kept"))
                 .expect("read")
                 .as_deref(),
             Some("<p>kept</p>"),
@@ -408,12 +405,9 @@ mod tests {
         let rendered = Rendered::in_memory(8);
         let other = memo::name(b"another renderer", []);
         rendered
-            .remember(Rendered::key(&function(), "x"), "<p>mine</p>")
+            .remember(key(&function(), "x"), "<p>mine</p>")
             .expect("no finding");
-        assert_eq!(
-            rendered.recall(&Rendered::key(&other, "x")).expect("read"),
-            None
-        );
+        assert_eq!(rendered.recall(&key(&other, "x")).expect("read"), None);
     }
 
     #[test]
@@ -422,7 +416,7 @@ mod tests {
         let rendered = Rendered::on_disk(&dir, 1, &[&function()]);
         let keys: Vec<Key> = ["a", "b", "c"]
             .iter()
-            .map(|s| Rendered::key(&function(), s))
+            .map(|s| key(&function(), s))
             .collect();
         for (key, html) in keys.iter().zip(["<p>a</p>", "<p>b</p>", "<p>c</p>"]) {
             rendered.remember(key.clone(), html).expect("no finding");

@@ -14,7 +14,7 @@ use std::cell::Cell;
 use proptest::prelude::*;
 use viewtree::Attr::{Disabled, Value};
 use viewtree::dom::{Dom, Shape, fresh};
-use viewtree::node::{el, foreign, lazy, text};
+use viewtree::node::{block, el, foreign, lazy, text};
 use viewtree::patch::{self, ROOT};
 use viewtree::{Node, On, Painter, Patch, Tag, view};
 
@@ -49,13 +49,14 @@ fn drawn(n: &u8) -> Node<Msg> {
     }
 }
 
-/// A generated view: elements of a few tags and classes, texts, foreign parts, lazy parts, and
-/// children by position or by key, each key drawn from a small set so that rows are kept, moved
-/// and lost.
+/// A generated view: elements of a few tags and classes, texts, foreign parts, Typst blocks, lazy
+/// parts, and children by position or by key, each key drawn from a small set so that rows are
+/// kept, moved and lost.
 fn view() -> impl Strategy<Value = Node<Msg>> {
     let leaf = prop_oneof![
         (0u8..4).prop_map(|n| text(words(n))),
         (0u8..3, 0u8..3).prop_map(|(k, p)| foreign("card", format!("k{k}"), words(p))),
+        (0u8..3, 0u8..4).prop_map(|(k, w)| block(format!("t v{k}"), words(w))),
         (0u8..9).prop_map(|n| lazy(drawn, n)),
     ];
     leaf.prop_recursive(4, 40, 6, |inner| {

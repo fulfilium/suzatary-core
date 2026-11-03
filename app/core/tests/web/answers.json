@@ -51,7 +51,7 @@
     {
       "value": {
         "html": "<h2>Plan</h2>",
-        "key": "000b92b6f939f352eddf0c0508e96fbbb185f492fa8210e5469a871d2f7df79d 266d2060e6dac05335b265a3e597db872813ff00b7cae23d2ac4d21b986bf55a"
+        "key": "87d1d644f48b6bd3fc3e48c010ec611898f1290d2fc53f83762cab2b306e9d0b 372be93ea221cfe10e9e9ba29284f60cf3cd75eb9d90ae53709336a2e12fd106"
       },
       "maps": []
     }
@@ -1273,7 +1273,7 @@
                 "body": "Book the flight to Oslo",
                 "detail": null,
                 "keys": {
-                  "body": "48f77af7fac46b6bfb8ef153bb3cc193e3930f092b044ed6fe84e0549a0a77e5 c2072248859e3446b96ddf260cb31e52173a78941bb49e95c9793e63a6f956a2",
+                  "body": "44a62ddde52da8116f19ddbf9514cda8db3d762c2dbc3b7b65be425bfd425894 2248e4d96ed708f9dbcaeab4f6eaa3f6615d2192aee2e74f297a044bb13fecf7",
                   "detail": null,
                   "rationale": null,
                   "waiting_on": null
@@ -1384,9 +1384,9 @@
                 "body": "File the *permit* renewal",
                 "detail": null,
                 "keys": {
-                  "body": "48f77af7fac46b6bfb8ef153bb3cc193e3930f092b044ed6fe84e0549a0a77e5 896c2340da6b59b9d43a810338accc2a0a7365e00e7232103b6dbf5baa69f19b",
+                  "body": "44a62ddde52da8116f19ddbf9514cda8db3d762c2dbc3b7b65be425bfd425894 d0d0006316e0ab05b3ff3a150a8f82a3ce46f99481c41d1047f3c7b6188a8fae",
                   "detail": null,
-                  "rationale": "48f77af7fac46b6bfb8ef153bb3cc193e3930f092b044ed6fe84e0549a0a77e5 ca90975d3f41c6abd1237c1e01904cda7d9ddcf94265032ba2baad295f27da9b",
+                  "rationale": "44a62ddde52da8116f19ddbf9514cda8db3d762c2dbc3b7b65be425bfd425894 830db6cc79b63407a2bdae7328e1637d57fca9dc7299340aba19d3e313d1c57a",
                   "waiting_on": null
                 },
                 "rationale": "Missing it is not recoverable.",
@@ -1439,8 +1439,8 @@
                 "body": "Pack for the trip",
                 "detail": "After #link(\"todo:book-flight\")[the flight] is booked.",
                 "keys": {
-                  "body": "48f77af7fac46b6bfb8ef153bb3cc193e3930f092b044ed6fe84e0549a0a77e5 a252ebd0578c647109521c8b48f313f2085ad44097445c4e230e8cd0476ac242",
-                  "detail": "48f77af7fac46b6bfb8ef153bb3cc193e3930f092b044ed6fe84e0549a0a77e5 dc59c280347aec710bb475535f6e988793eb62a4f59b644e9b083e164f393b3f",
+                  "body": "44a62ddde52da8116f19ddbf9514cda8db3d762c2dbc3b7b65be425bfd425894 ab997e8d05f1184515a135aae8992d5e00426695e0a6a8822645f02ad16bcc37",
+                  "detail": "44a62ddde52da8116f19ddbf9514cda8db3d762c2dbc3b7b65be425bfd425894 b4048bd3725d3218909d763d18681cc5e14eee76ee81331356e051b07f719c86",
                   "rationale": null,
                   "waiting_on": null
                 },
@@ -1499,7 +1499,7 @@
                 "body": "Renew the library card",
                 "detail": null,
                 "keys": {
-                  "body": "48f77af7fac46b6bfb8ef153bb3cc193e3930f092b044ed6fe84e0549a0a77e5 f2727cc595a94a7eddd5f8085b5005f9d6b4513bdd5e2023a8a6f3515d13139d",
+                  "body": "44a62ddde52da8116f19ddbf9514cda8db3d762c2dbc3b7b65be425bfd425894 d7377e7ca95f87cf381a82995a35691e0e3d4be3ea2974d9b35b4684dad3c11a",
                   "detail": null,
                   "rationale": null,
                   "waiting_on": null
@@ -1551,7 +1551,7 @@
                 "body": "Water the plants",
                 "detail": null,
                 "keys": {
-                  "body": "48f77af7fac46b6bfb8ef153bb3cc193e3930f092b044ed6fe84e0549a0a77e5 3000954fb14594d63173b3b5d99f178bcfecea8d0473e561ae51e5c1398aff6a",
+                  "body": "44a62ddde52da8116f19ddbf9514cda8db3d762c2dbc3b7b65be425bfd425894 268def1561738cf0be8b92e851da5021bcc72dede4c802b31aed9da62d033828",
                   "detail": null,
                   "rationale": null,
                   "waiting_on": null
@@ -1654,7 +1654,7 @@
                 "body": "Book the flight to Oslo",
                 "detail": null,
                 "keys": {
-                  "body": "48f77af7fac46b6bfb8ef153bb3cc193e3930f092b044ed6fe84e0549a0a77e5 c2072248859e3446b96ddf260cb31e52173a78941bb49e95c9793e63a6f956a2",
+                  "body": "44a62ddde52da8116f19ddbf9514cda8db3d762c2dbc3b7b65be425bfd425894 2248e4d96ed708f9dbcaeab4f6eaa3f6615d2192aee2e74f297a044bb13fecf7",
                   "detail": null,
                   "rationale": null,
                   "waiting_on": null
@@ -1774,9 +1774,9 @@
                 "body": "File the *permit* renewal",
                 "detail": null,
                 "keys": {
-                  "body": "48f77af7fac46b6bfb8ef153bb3cc193e3930f092b044ed6fe84e0549a0a77e5 896c2340da6b59b9d43a810338accc2a0a7365e00e7232103b6dbf5baa69f19b",
+                  "body": "44a62ddde52da8116f19ddbf9514cda8db3d762c2dbc3b7b65be425bfd425894 d0d0006316e0ab05b3ff3a150a8f82a3ce46f99481c41d1047f3c7b6188a8fae",
                   "detail": null,
-                  "rationale": "48f77af7fac46b6bfb8ef153bb3cc193e3930f092b044ed6fe84e0549a0a77e5 ca90975d3f41c6abd1237c1e01904cda7d9ddcf94265032ba2baad295f27da9b",
+                  "rationale": "44a62ddde52da8116f19ddbf9514cda8db3d762c2dbc3b7b65be425bfd425894 830db6cc79b63407a2bdae7328e1637d57fca9dc7299340aba19d3e313d1c57a",
                   "waiting_on": null
                 },
                 "rationale": "Missing it is not recoverable.",
@@ -1829,8 +1829,8 @@
                 "body": "Pack for the trip",
                 "detail": "After #link(\"todo:book-flight\")[the flight] is booked.",
                 "keys": {
-                  "body": "48f77af7fac46b6bfb8ef153bb3cc193e3930f092b044ed6fe84e0549a0a77e5 a252ebd0578c647109521c8b48f313f2085ad44097445c4e230e8cd0476ac242",
-                  "detail": "48f77af7fac46b6bfb8ef153bb3cc193e3930f092b044ed6fe84e0549a0a77e5 dc59c280347aec710bb475535f6e988793eb62a4f59b644e9b083e164f393b3f",
+                  "body": "44a62ddde52da8116f19ddbf9514cda8db3d762c2dbc3b7b65be425bfd425894 ab997e8d05f1184515a135aae8992d5e00426695e0a6a8822645f02ad16bcc37",
+                  "detail": "44a62ddde52da8116f19ddbf9514cda8db3d762c2dbc3b7b65be425bfd425894 b4048bd3725d3218909d763d18681cc5e14eee76ee81331356e051b07f719c86",
                   "rationale": null,
                   "waiting_on": null
                 },
@@ -1889,7 +1889,7 @@
                 "body": "Renew the library card",
                 "detail": null,
                 "keys": {
-                  "body": "48f77af7fac46b6bfb8ef153bb3cc193e3930f092b044ed6fe84e0549a0a77e5 f2727cc595a94a7eddd5f8085b5005f9d6b4513bdd5e2023a8a6f3515d13139d",
+                  "body": "44a62ddde52da8116f19ddbf9514cda8db3d762c2dbc3b7b65be425bfd425894 d7377e7ca95f87cf381a82995a35691e0e3d4be3ea2974d9b35b4684dad3c11a",
                   "detail": null,
                   "rationale": null,
                   "waiting_on": null
@@ -1941,7 +1941,7 @@
                 "body": "Water the plants",
                 "detail": null,
                 "keys": {
-                  "body": "48f77af7fac46b6bfb8ef153bb3cc193e3930f092b044ed6fe84e0549a0a77e5 3000954fb14594d63173b3b5d99f178bcfecea8d0473e561ae51e5c1398aff6a",
+                  "body": "44a62ddde52da8116f19ddbf9514cda8db3d762c2dbc3b7b65be425bfd425894 268def1561738cf0be8b92e851da5021bcc72dede4c802b31aed9da62d033828",
                   "detail": null,
                   "rationale": null,
                   "waiting_on": null
@@ -5305,7 +5305,7 @@
           "in": [],
           "out": []
         },
-        "reading": "#let el(tag, class, ..body) = html.elem(tag, attrs: (class: class), ..body)\n#let bare(tag, ..body) = html.elem(tag, ..body)\n#let chevron = html.elem(\"svg\", attrs: (viewBox: \"0 0 24 24\", width: \"22\", height: \"22\", fill: \"none\", stroke: \"currentColor\", \"stroke-width\": \"1.7\", \"stroke-linecap\": \"round\", \"stroke-linejoin\": \"round\", \"aria-hidden\": \"true\"), html.elem(\"path\", attrs: (d: \"M8.5 5.5l7 6.5-7 6.5\")))\n#let fold(summary, ..body) = html.elem(\"details\", attrs: (class: \"why\", open: \"\"), { html.elem(\"summary\", { summary; chevron }); body.pos().join() })\n#el(\"div\", \"todohead\")[#el(\"div\", \"todofulfil\")[#el(\"span\", \"todopct\")[#\"66.0%\"]]#el(\"div\", \"todolead\")[#el(\"div\", \"todobody assource\")[#\"Email *Harrow* about the deed\"]]#el(\"code\", \"todoid\")[#\"email-harrow\"]#el(\"div\", \"cardmeta\")[#el(\"span\", \"chip\")[#\"open\"]#el(\"span\", \"chip cat\")[#\"other\"]#el(\"span\", \"chip kind\")[#\"todo\"]#el(\"span\", \"chip prov\")[#\"unconfirmed\"]]#el(\"p\", \"legend\")[#\"Shown the way it was written until you confirm it.\"]]#el(\"section\", \"whytree\")[#el(\"h2\", \"\")[#\"Why this number — 66.0%\"]#el(\"p\", \"says\")[#\"66.0%, flat: the same whatever the date.\"]]",
+        "reading": "{\"head\":{\"fulfil\":{\"type\":\"Priced\",\"shown\":\"66.0%\"},\"body\":{\"type\":\"Source\",\"text\":\"Email *Harrow* about the deed\"},\"id\":\"email-harrow\",\"chips\":[{\"label\":\"open\",\"kind\":\"plain\"},{\"label\":\"other\",\"kind\":\"cat\"},{\"label\":\"todo\",\"kind\":\"kind\"},{\"label\":\"unconfirmed\",\"kind\":\"prov\"}],\"note\":\"Shown the way it was written until you confirm it.\"},\"detail\":null,\"why\":{\"type\":\"Priced\",\"heading\":\"Why this number — 66.0%\",\"says\":\"66.0%, flat: the same whatever the date.\",\"passes\":[],\"parts\":[]}}",
         "stream": [
           {
             "actor": "ada",

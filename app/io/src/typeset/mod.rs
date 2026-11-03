@@ -1,13 +1,12 @@
-//! Authored markup compiled in the closed world, in this process: the Prodrome's
-//! `Project::restricted()`, the same Rust the tab runs as WebAssembly, so the box and the tab
-//! admit a text by one rule.
+//! Typst compiled in this process: the Prodrome's `Project`, the same Rust the tab runs as
+//! WebAssembly, so the box and the tab admit a text by one rule.
 //!
-//! The restricted project's library is typst's own with `html` (any element and attribute) and
-//! `plugin` (WebAssembly) removed from its global scope and from `std`, so no spelling, field
-//! access or `eval` reaches either; its world holds only the files a caller sets, so `read`,
-//! `json`, `image` and `#import` find nothing and no package is fetched; it has no font, which
-//! HTML export does not need, and no clock. In-process the compile has no time bound, so the
-//! box runs it in a child it can kill; this is what that child runs.
+//! A [`Job`] names its library. The closed one is typst's own with `html` (any element and
+//! attribute) and `plugin` (WebAssembly) removed from its global scope and from `std`, so no
+//! spelling, field access or `eval` reaches either. Either world holds only the files a job sets,
+//! so `read`, `json`, `image` and `#import` find nothing else and no package is fetched; it has
+//! no font, which HTML export does not need, and no clock. In-process the compile has no time
+//! bound, so the box runs it in a child it can kill; this is what that child runs.
 
 pub mod closed;
 
@@ -15,27 +14,48 @@ pub use closed::Closed;
 use prodrome_typst_wasm::Project;
 use serde::Deserialize;
 use suzatary_core::capability::{Diagnostic, Rejected, Typeset};
+use suzatary_core::template::{Job, Library};
 
-/// The key the text is compiled under.
-const MAIN: &str = "/main.typ";
+/// Compiling a job: a template called with a value, or a lone text.
+pub trait Compiler: Sync + Send {
+    /// Typst's whole HTML document for `job`, or what typst said was wrong with it.
+    ///
+    /// # Errors
+    /// What typst refused, or why the compile did not finish.
+    fn compile(&self, job: &Job) -> Result<String, Rejected>;
+}
 
 /// The closed world, compiled here and now.
 #[derive(Debug, Clone, Copy, Default)]
 pub struct InProcess;
 
-impl Typeset for InProcess {
-    fn closed(&self, source: &str) -> Result<String, Rejected> {
-        compile(source)
+impl Compiler for InProcess {
+    fn compile(&self, job: &Job) -> Result<String, Rejected> {
+        compile(job)
     }
 }
 
-/// `source` in the closed world: typst's whole HTML document, or its errors.
-pub fn compile(source: &str) -> Result<String, Rejected> {
-    let mut project = Project::restricted();
-    if let Some(refused) = project.set(MAIN, source) {
-        return Err(Rejected::whole(refused));
+impl Typeset for InProcess {
+    fn closed(&self, source: &str) -> Result<String, Rejected> {
+        compile(&Job::text(source))
     }
-    read(source, &project.compile(MAIN, "{}"))
+}
+
+/// `job` compiled: typst's whole HTML document, or its errors.
+///
+/// # Errors
+/// What typst refused.
+pub fn compile(job: &Job) -> Result<String, Rejected> {
+    let mut project = match job.library {
+        Library::Closed => Project::restricted(),
+        Library::Open => Project::new(),
+    };
+    for (key, text) in &job.files {
+        if let Some(refused) = project.set(key, text) {
+            return Err(Rejected::whole(refused));
+        }
+    }
+    read(job, &project.compile(&job.main, &job.state))
 }
 
 /// The project's answer, as its JSON spells it.
@@ -65,8 +85,8 @@ enum Severity {
 }
 
 /// The answer read into a value: a warning is not a failure, and an error's UTF-16 span over
-/// the text becomes the byte span the core counts in.
-fn read(source: &str, printed: &str) -> Result<String, Rejected> {
+/// the compiled file becomes the byte span the core counts in.
+fn read(job: &Job, printed: &str) -> Result<String, Rejected> {
     let answer: Answer = serde_json::from_str(printed)
         .map_err(|e| Rejected::whole(format!("the compile answered an unexpected shape: {e}")))?;
     let diagnostics: Vec<Diagnostic> = answer
@@ -78,7 +98,10 @@ fn read(source: &str, printed: &str) -> Result<String, Rejected> {
         })
         .map(|d| Diagnostic {
             span: match (d.file.as_deref(), d.from, d.to) {
-                (Some(MAIN), Some(from), Some(to)) => Some(byte(source, from)..byte(source, to)),
+                (Some(file), Some(from), Some(to)) if file == job.main => {
+                    let text = job.main_text();
+                    Some(byte(text, from)..byte(text, to))
+                }
                 _ => None,
             },
             message: d.message,
@@ -108,8 +131,12 @@ fn byte(text: &str, utf16: usize) -> usize {
 mod tests {
     use super::*;
 
+    fn text(source: &str) -> Result<String, Rejected> {
+        compile(&Job::text(source))
+    }
+
     fn refused(source: &str) -> String {
-        compile(source).expect_err(source).said(source)
+        text(source).expect_err(source).said(source)
     }
 
     /// The library holds neither binding, however it is spelled.
@@ -124,7 +151,7 @@ mod tests {
         assert!(refused("#eval(\"std.html\")").contains("does not contain `html`"));
         assert!(refused("#plugin(\"x.wasm\")").contains("unknown variable: plugin"));
         assert!(refused("#std.plugin").contains("does not contain `plugin`"));
-        let probed = compile("#if \"html\" in dictionary(std) [yes] else [no]").expect("compiles");
+        let probed = text("#if \"html\" in dictionary(std) [yes] else [no]").expect("compiles");
         assert!(probed.contains("<p>no</p>"), "{probed}");
     }
 
@@ -161,7 +188,7 @@ mod tests {
             serde_json::from_str(&std::fs::read_to_string(path).expect("the vectors read"))
                 .expect("the vectors parse");
         for v in vectors {
-            let admitted = compile(&v.text)
+            let admitted = text(&v.text)
                 .is_ok_and(|html| suzatary_core::tripwire::suspicious(&html).is_none());
             assert_eq!(admitted, v.admitted, "{}", v.text);
         }
@@ -171,7 +198,7 @@ mod tests {
     #[test]
     fn escaped_prose_compiles_to_itself() {
         let escaped = suzatary_core::escape::escape_markup("Pay $40 to ada@x.test [#1] *now*");
-        let html = compile(escaped.as_str()).expect("escaped prose compiles");
+        let html = text(escaped.as_str()).expect("escaped prose compiles");
         assert!(html.contains("Pay $40 to ada@x.test [#1] *now*"), "{html}");
     }
 
@@ -184,13 +211,19 @@ mod tests {
                 r#"{{"html":"<p>x</p>","diagnostics":[{{"severity":"{severity}","message":"m","file":"/main.typ","from":0,"to":1}}]}}"#
             )
         };
-        assert_eq!(read("x", &said("warning")).expect("a warning"), "<p>x</p>");
         assert_eq!(
-            read("x", &said("error")).expect_err("an error").diagnostics[0].span,
+            read(&Job::text("x"), &said("warning")).expect("a warning"),
+            "<p>x</p>"
+        );
+        assert_eq!(
+            read(&Job::text("x"), &said("error"))
+                .expect_err("an error")
+                .diagnostics[0]
+                .span,
             Some(0..1)
         );
         assert!(
-            read("x", &said("fatal"))
+            read(&Job::text("x"), &said("fatal"))
                 .expect_err("not a severity")
                 .said("x")
                 .contains("unexpected shape")

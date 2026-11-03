@@ -1,12 +1,18 @@
 //! The keys the box keeps rendered blocks under, named by the same core the box runs.
 
+use suzatary_core::rendering::ANSWER;
+use suzatary_core::secretary::answer::Renderable;
 use wasm_bindgen::prelude::*;
 
-/// The answer function's key at `source`, as the box prints it beside the block's HTML.
+/// The answer template's key at `source`, as the box prints it beside the block's HTML.
+///
+/// # Errors
+/// The block does not print as JSON.
 #[wasm_bindgen]
-#[must_use]
-pub fn answer_key(source: &str) -> String {
-    suzatary_core::rendering::key(&suzatary_core::rendering::ANSWER, source)
+pub fn answer_key(source: &str) -> Result<String, JsError> {
+    ANSWER
+        .key(&Renderable::of(source))
+        .map_err(|e| JsError::new(&e.to_string()))
 }
 
 /// The names of the functions a device keeps blocks of, as JSON `[<name>, …]`: a block under any

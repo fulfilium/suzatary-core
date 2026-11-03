@@ -30,8 +30,14 @@ app.scene("a new topic is named, asked and answered, and a draft left unsent wri
   assert.deepEqual(dated(), before, "a draft left unsent opens no conversation");
 
   await app.page.click(".act-newtopic");
-  await app.page.waitFor(`document.querySelector(".topicname") !== null`, { timeout: 8000 });
+  // The draft's own name field, shown and on the draft's route: a field left from another page cannot take focus, and
+  // the words would go to the composer that has it.
+  await app.page.waitFor(
+    `location.hash === "#/secretary/new" && document.activeElement?.classList.contains("composebox") === true && (document.querySelector(".topicname")?.getClientRects().length ?? 0) > 0`,
+    { timeout: 8000 },
+  );
   await app.page.type(".topicname", "The zephyr filing");
+  await app.page.waitFor(`document.querySelector(".topicname")?.value === "The zephyr filing"`, { timeout: 8000 });
   await app.page.type(".composebox", "when is the zephyr filing due");
   await app.page.click(".composesend");
   await app.page.waitFor(`/^#\\/secretary\\/\\d{4}-\\d{2}-\\d{2}-\\d+$/.test(location.hash)`, { timeout: 15000 });

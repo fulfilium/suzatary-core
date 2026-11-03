@@ -4,7 +4,7 @@ use prodrome_core::memo::Finding;
 
 use super::Typeset;
 use crate::escape::Escaped;
-use crate::reading::Page;
+use crate::template::Called;
 
 /// Typst's own HTML for a fragment of markup; only a [`Render`] can make one.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -52,8 +52,8 @@ pub trait Render: Typeset {
     /// Render every fragment not cached yet, in this thread, and answer how many now have HTML.
     fn warm(&self, markup: &[Escaped]) -> usize;
 
-    /// Render a page this crate printed ([`crate::reading`]), compiling it if unseen.
-    fn page(&self, page: &Page) -> Result<Html, RenderError>;
+    /// Render a page: a template called with the value it draws ([`crate::reading`]), compiled if unseen.
+    fn page(&self, page: &Called) -> Result<Html, RenderError>;
 
     /// Every key this renderer's tabulation holds two values for: a render that was not a
     /// function of its source, or a value another writer left. None, for a renderer that keeps

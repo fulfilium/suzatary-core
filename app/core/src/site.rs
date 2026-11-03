@@ -4,10 +4,10 @@
 //! rehash. It reads only the objects and `view::entries`, so it is evidence
 //! about the stored format.
 //!
-//! Each page is Typst this module prints ([`Page`]), which a renderer compiles
+//! Each page is a value ([`SitePage`]) its template draws, which a renderer compiles
 //! to HTML; every string on it came out of mail an attacker controls, so it
-//! enters the source only as a string literal through [`crate::escape::escape_string`].
-//! Same inputs, same bytes: the one moment printed is the one passed in.
+//! enters the page only as data, drawn as text.
+//! Same inputs, same pages: the one moment printed is the one passed in.
 
 use std::collections::BTreeMap;
 
@@ -23,13 +23,13 @@ use prodrome_core::{fpl, view};
 
 pub mod page;
 
-use page::{Expr, Page, facts, hash, hashes, link, lit, rows, span, strong, tag};
+use page::{Expr, SitePage, Tag, facts, hash, hashes, link, lit, rows, span, strong, tag};
 
 /// The whole site: pages to compile, and the objects copied as they are.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Files {
-    /// `index.html`, `chain.html` and `todo/<id>.html`, as Typst.
-    pub pages: BTreeMap<String, Page>,
+    /// `index.html`, `chain.html` and `todo/<id>.html`, as values to draw.
+    pub pages: BTreeMap<String, SitePage>,
     /// `objects/<hash>.py`: the canonical literal, byte for byte what the store holds.
     pub objects: BTreeMap<String, String>,
     /// The line every page ends on, for a page printed after the fact.
@@ -202,7 +202,7 @@ fn table(entries: &[&Entry], site: &Site) -> Expr {
     rows(COLUMNS, entries.iter().map(|entry| row(entry, site)))
 }
 
-fn index_page(site: &Site) -> Page {
+fn index_page(site: &Site) -> SitePage {
     let cutoff = spaced(
         fpl::datetime_of(site.instant - chrono::Duration::days(RECENT_DAYS))
             .unwrap_or_else(|_| site.instant_as_datetime()),
@@ -222,21 +222,21 @@ fn index_page(site: &Site) -> Page {
         (right.at(), right.key.as_str()).cmp(&(left.at(), left.key.as_str()))
     });
     let all: Vec<&Entry> = site.entries.iter().collect();
-    Page::of(
+    SitePage::of(
         "Todos on the chain",
         "",
         &site.footer(),
         vec![
-            tag("h1", [lit("Todos on the chain")]),
-            tag("p", [lit(LEGEND)]),
-            tag("h2", [lit(&format!("Open ({})", open.len()))]),
+            tag(Tag::H1, [lit("Todos on the chain")]),
+            tag(Tag::P, [lit(LEGEND)]),
+            tag(Tag::H2, [lit(&format!("Open ({})", open.len()))]),
             table(&open, site),
             tag(
-                "h2",
+                Tag::H2,
                 [lit(&format!("Recently resolved ({})", resolved.len()))],
             ),
             table(&resolved, site),
-            tag("h2", [lit(&format!("Everything ({})", all.len()))]),
+            tag(Tag::H2, [lit(&format!("Everything ({})", all.len()))]),
             table(&all, site),
         ],
     )
@@ -273,7 +273,7 @@ fn about(entry: &Entry, site: &Site) -> Expr {
 }
 
 fn pre(source: &str) -> Expr {
-    tag("pre", [lit(source)])
+    tag(Tag::Pre, [lit(source)])
 }
 
 fn source_block(record: Option<&Authored>) -> Vec<Expr> {
@@ -282,7 +282,7 @@ fn source_block(record: Option<&Authored>) -> Vec<Expr> {
     };
     let or_dash = |value: &str| lit(if value.is_empty() { "—" } else { value });
     vec![
-        tag("h2", [lit("Source message")]),
+        tag(Tag::H2, [lit("Source message")]),
         facts(vec![
             ("sender", lit(source.sender.as_str())),
             ("subject", lit(source.subject.as_str())),
@@ -299,7 +299,7 @@ fn source_block(record: Option<&Authored>) -> Vec<Expr> {
 fn content_block(record: Option<&Authored>) -> Vec<Expr> {
     let Some(record) = record else {
         return vec![tag(
-            "p",
+            Tag::P,
             [lit(
                 "The chain holds no Authored record for this todo — only lifecycle events.",
             )],
@@ -307,35 +307,35 @@ fn content_block(record: Option<&Authored>) -> Vec<Expr> {
     };
     let payload = &record.payload;
     let mut blocks = vec![
-        tag("h2", [lit("Content (typst markup source)")]),
+        tag(Tag::H2, [lit("Content (typst markup source)")]),
         pre(payload.body.as_str()),
     ];
     if !payload.detail.as_str().is_empty() {
-        blocks.extend([tag("h3", [lit("detail")]), pre(payload.detail.as_str())]);
+        blocks.extend([tag(Tag::H3, [lit("detail")]), pre(payload.detail.as_str())]);
     }
     if !payload.rationale.is_empty() {
         blocks.extend([
-            tag("h3", [lit("rationale")]),
+            tag(Tag::H3, [lit("rationale")]),
             pre(&payload.rationale.join("\n")),
         ]);
     }
     if !payload.subtodos.is_empty() {
-        blocks.push(tag("h3", [lit("subtodos")]));
+        blocks.push(tag(Tag::H3, [lit("subtodos")]));
         blocks.push(tag(
-            "ul",
+            Tag::Ul,
             payload.subtodos.iter().map(|sub| {
                 let mark = if sub.done { "x" } else { " " };
-                tag("li", [lit(&format!("[{mark}] {}", sub.body))])
+                tag(Tag::Li, [lit(&format!("[{mark}] {}", sub.body))])
             }),
         ));
     }
     if !payload.notes.is_empty() {
-        blocks.push(tag("h3", [lit("notes")]));
+        blocks.push(tag(Tag::H3, [lit("notes")]));
         blocks.push(tag(
-            "ul",
+            Tag::Ul,
             payload.notes.iter().map(|note| {
                 tag(
-                    "li",
+                    Tag::Li,
                     [lit(&format!(
                         "on {}: {}",
                         note.on.as_str(),
@@ -351,7 +351,7 @@ fn content_block(record: Option<&Authored>) -> Vec<Expr> {
 /// The price as the chain stores it, and its value at the site's moment; "Why
 /// this number" is the app's reading page, not this site's.
 fn price_block(entry: &Entry) -> Vec<Expr> {
-    let without = |why: &str| vec![tag("h2", [lit("Price")]), tag("p", [lit(why)])];
+    let without = |why: &str| vec![tag(Tag::H2, [lit("Price")]), tag(Tag::P, [lit(why)])];
     if matches!(entry.spec().out(), TermF::Absent) {
         return without("The chain records no priority spec for this todo.");
     }
@@ -359,11 +359,14 @@ fn price_block(entry: &Entry) -> Vec<Expr> {
         return without("This todo's price refers to another todo that does not link.");
     }
     vec![
-        tag("h2", [lit(&format!("Price — {}", pct(entry.value())))]),
-        tag("h3", [lit("spec, as the chain stores it")]),
+        tag(Tag::H2, [lit(&format!("Price — {}", pct(entry.value())))]),
+        tag(Tag::H3, [lit("spec, as the chain stores it")]),
         // The core's own print: a second spelling of a term is a second reading of it.
         // One line, so inline code, which a phone wraps where a `<pre>` would not.
-        tag("p", [tag("code", [lit(&fpl::print_term(entry.spec()))])]),
+        tag(
+            Tag::P,
+            [tag(Tag::Code, [lit(&fpl::print_term(entry.spec()))])],
+        ),
     ]
 }
 
@@ -405,7 +408,7 @@ fn diff(previous: Option<&Authored>, current: &Authored) -> Vec<Expr> {
         .collect();
     if changed.is_empty() {
         return vec![tag(
-            "p",
+            Tag::P,
             [lit(
                 "no content change against the previous Authored record",
             )],
@@ -417,16 +420,16 @@ fn diff(previous: Option<&Authored>, current: &Authored) -> Vec<Expr> {
         format!("{} field(s) changed", changed.len())
     };
     vec![
-        tag("p", [lit(&intro)]),
+        tag(Tag::P, [lit(&intro)]),
         tag(
-            "ul",
+            Tag::Ul,
             changed.into_iter().map(|(name, old, new)| {
                 let old = if old.is_empty() {
                     "—".to_owned()
                 } else {
                     old
                 };
-                tag("li", [lit(&format!("{name} {old} → {new}"))])
+                tag(Tag::Li, [lit(&format!("{name} {old} → {new}"))])
             }),
         ),
     ]
@@ -437,7 +440,7 @@ fn diff(previous: Option<&Authored>, current: &Authored) -> Vec<Expr> {
 fn event_article(link: &Link, previous: Option<&Authored>) -> Option<Expr> {
     let event = link.event()?;
     let mut kids = vec![tag(
-        "h3",
+        Tag::H3,
         [lit(&format!(
             "{} — {} — {}",
             event.kind_name(),
@@ -446,14 +449,14 @@ fn event_article(link: &Link, previous: Option<&Authored>) -> Option<Expr> {
         ))],
     )];
     if !note_of(event).is_empty() {
-        kids.push(tag("p", [lit(&format!("note: {}", note_of(event)))]));
+        kids.push(tag(Tag::P, [lit(&format!("note: {}", note_of(event)))]));
     }
     if let TodoEvent::Authored(record) = event {
         kids.extend(diff(previous, record));
     }
-    kids.push(tag("p", [span([lit("hash "), hash(&link.hash)])]));
-    kids.push(tag("p", [link.parentage()]));
-    Some(tag("article", kids))
+    kids.push(tag(Tag::P, [span([lit("hash "), hash(&link.hash)])]));
+    kids.push(tag(Tag::P, [link.parentage()]));
+    Some(tag(Tag::Article, kids))
 }
 
 fn history_block(entry: &Entry, site: &Site) -> Vec<Expr> {
@@ -461,11 +464,11 @@ fn history_block(entry: &Entry, site: &Site) -> Vec<Expr> {
         site.links.iter().map(|link| (&link.hash, link)).collect();
     let mut blocks = vec![
         tag(
-            "h2",
+            Tag::H2,
             [lit(&format!("History ({} events)", entry.stream.len()))],
         ),
         tag(
-            "p",
+            Tag::P,
             [lit(
                 "Chronological. Every object is verifiable at objects/<hash>.py, a copy of events/objects/.",
             )],
@@ -481,14 +484,14 @@ fn history_block(entry: &Entry, site: &Site) -> Vec<Expr> {
     blocks
 }
 
-fn todo_page(entry: &Entry, site: &Site) -> Page {
+fn todo_page(entry: &Entry, site: &Site) -> SitePage {
     let record = site.record(entry);
-    let mut body = vec![tag("h1", [lit(entry.key.as_str())]), about(entry, site)];
+    let mut body = vec![tag(Tag::H1, [lit(entry.key.as_str())]), about(entry, site)];
     body.extend(content_block(record));
     body.extend(source_block(record));
     body.extend(price_block(entry));
     body.extend(history_block(entry, site));
-    Page::of(entry.key.as_str(), "../", &site.footer(), body)
+    SitePage::of(entry.key.as_str(), "../", &site.footer(), body)
 }
 
 // --- chain.html and objects/ -------------------------------------------------------
@@ -529,26 +532,26 @@ fn link_to_todo(todo: &str) -> Expr {
 fn health(problems: &[String]) -> Vec<Expr> {
     if problems.is_empty() {
         return vec![tag(
-            "p",
+            Tag::P,
             [lit("healthy — store.verify() reported no problems.")],
         )];
     }
     vec![
         tag(
-            "p",
+            Tag::P,
             [lit(&format!(
                 "{} problem(s) reported by store.verify():",
                 problems.len()
             ))],
         ),
         tag(
-            "ul",
-            problems.iter().map(|problem| tag("li", [lit(problem)])),
+            Tag::Ul,
+            problems.iter().map(|problem| tag(Tag::Li, [lit(problem)])),
         ),
     ]
 }
 
-fn chain_page(site: &Site) -> Page {
+fn chain_page(site: &Site) -> SitePage {
     let actors: Vec<&str> = site
         .untrusted
         .actors()
@@ -561,9 +564,9 @@ fn chain_page(site: &Site) -> Page {
         actors.join(", ")
     };
     let mut body = vec![
-        tag("h1", [lit("The chain")]),
+        tag(Tag::H1, [lit("The chain")]),
         tag(
-            "p",
+            Tag::P,
             [lit(&format!(
                 "{} objects, tip first. Each names the objects it rests on.",
                 site.links.len()
@@ -572,13 +575,13 @@ fn chain_page(site: &Site) -> Page {
     ];
     body.extend(health(&site.problems));
     body.extend([
-        tag("h2", [lit("Provisional writers")]),
-        tag("p", [lit(&format!("untrusted actors: {named}"))]),
-        tag("p", [lit(PROVISIONAL)]),
-        tag("h2", [lit("Objects")]),
+        tag(Tag::H2, [lit("Provisional writers")]),
+        tag(Tag::P, [lit(&format!("untrusted actors: {named}"))]),
+        tag(Tag::P, [lit(PROVISIONAL)]),
+        tag(Tag::H2, [lit("Objects")]),
         rows(CHAIN_COLUMNS, site.links.iter().rev().map(chain_row)),
     ]);
-    Page::of("The chain", "", &site.footer(), body)
+    SitePage::of("The chain", "", &site.footer(), body)
 }
 
 /// `objects/<hash>.py` → the canonical literal, byte for byte what the store

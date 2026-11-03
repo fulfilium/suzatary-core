@@ -131,10 +131,10 @@ impl Lines {
                 let blocks = blocks
                     .iter()
                     .map(|block| crate::rendering::answer_key(block.as_str()))
-                    .collect();
-                (name, blocks)
+                    .collect::<Result<_, _>>()?;
+                Ok((name, blocks))
             })
-            .collect();
+            .collect::<Result<_, JsError>>()?;
         json(&owed)
     }
 
@@ -270,10 +270,10 @@ impl Lines {
                 let blocks = blocks
                     .iter()
                     .map(|block| crate::rendering::answer_key(block.as_str()))
-                    .collect();
-                (name, blocks)
+                    .collect::<Result<_, _>>()?;
+                Ok((name, blocks))
             })
-            .collect();
+            .collect::<Result<_, JsError>>()?;
         json(&erased)
     }
 

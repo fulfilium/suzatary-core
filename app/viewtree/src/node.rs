@@ -264,6 +264,17 @@ pub struct Foreign {
     pub props: String,
 }
 
+/// A Typst output, placed by the key it is kept under. The painter asks the host for the HTML of
+/// `key` and places it through the host's one door from a string to markup; it shows `fallback`
+/// as text until the HTML is held. The view holds the key, never the HTML.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Block {
+    /// The key the output is kept under: its template's name and its value's.
+    pub key: String,
+    /// What the block says as plain text.
+    pub fallback: String,
+}
+
 /// A part of a view drawn only when what it is drawn from changes: the function that draws it,
 /// the value it draws, and the hash of both, which the painter compares with the hash of the
 /// part it drew at the same place (Elm's `Html.Lazy`).
@@ -346,6 +357,8 @@ pub enum Node<M, I = (), L = Lazy<M>> {
     Element(Box<Element<M, I, L>>),
     /// A part another painter draws.
     Foreign(I, Foreign),
+    /// A Typst output, by its key.
+    Block(I, Block),
     /// A part drawn only when what it is drawn from changes.
     Lazy(L),
 }
@@ -363,6 +376,17 @@ pub fn foreign<M>(kind: &'static str, key: impl Into<String>, props: impl Into<S
             kind,
             key: key.into(),
             props: props.into(),
+        },
+    )
+}
+
+/// A Typst output, by the key it is kept under, with its plain text.
+pub fn block<M>(key: impl Into<String>, fallback: impl Into<String>) -> Node<M> {
+    Node::Block(
+        (),
+        Block {
+            key: key.into(),
+            fallback: fallback.into(),
         },
     )
 }

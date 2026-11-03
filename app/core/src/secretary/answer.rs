@@ -232,21 +232,25 @@ fn raw(node: &SyntaxNode, out: &mut String) {
 }
 
 /// A block for the box to render, in the closed world and nowhere else: `Answers` takes only
-/// this.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Renderable(String);
+/// this, and it is the value the answer template (`rendering::ANSWER`) is called with.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
+pub struct Renderable {
+    source: String,
+}
 
 impl Renderable {
     /// The model's block, as it wrote it.
     #[must_use]
     pub fn of(source: &str) -> Self {
-        Self(source.to_owned())
+        Self {
+            source: source.to_owned(),
+        }
     }
 
     /// The Typst.
     #[must_use]
     pub fn as_str(&self) -> &str {
-        &self.0
+        &self.source
     }
 }
 

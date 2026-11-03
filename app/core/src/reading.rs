@@ -1,8 +1,9 @@
-//! What a page reads, printed as Typst and compiled by a [`crate::capability::Render`].
+//! What a page reads, as the typed values its templates draw (`rendering::TODO`,
+//! `rendering::CALENDAR`).
 //!
-//! Every piece of data enters as a string literal through [`escape_string`], so it is text
-//! whatever it spells; the one exception is a trusted record's markup, evaluated in place (see
-//! [`Prose`]). The HTML carries classes and no colour, so one render serves both themes.
+//! Every datum is a string in the value, read by the template as data, so it is text whatever it
+//! spells; the one exception is a trusted record's markup, evaluated in place (see [`Prose`]).
+//! The HTML carries classes and no colour, so one render serves both themes.
 
 use std::cmp::Ordering;
 use std::num::NonZeroU32;
@@ -12,54 +13,11 @@ use chrono::{NaiveDateTime, NaiveTime};
 use prodrome_core::fpl::{Delta, Explanation, Instant, Note, Scalar, total_seconds};
 use prodrome_core::observe::{Observation, Rounding};
 use prodrome_core::term::{CurvePoint, TermF};
+use schemars::JsonSchema;
+use serde::Serialize;
 
-use crate::escape::{Escaped, escape_string};
+use crate::escape::Escaped;
 use crate::wire;
-
-/// Typst this crate printed for a page. Only the printers below construct one, so a route
-/// cannot hand a [`crate::capability::Render`] Typst it assembled from a request.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Page(String);
-
-impl Page {
-    /// The source, for the compiler.
-    #[must_use]
-    pub fn as_str(&self) -> &str {
-        &self.0
-    }
-
-    fn of(body: &str) -> Self {
-        Self(format!("{PREAMBLE}{body}"))
-    }
-}
-
-/// The vocabulary every page is printed in: an element with a class, and one
-/// without. Ours, so it may use the `html` module a model's block may not.
-const PREAMBLE: &str = "\
-#let el(tag, class, ..body) = html.elem(tag, attrs: (class: class), ..body)
-#let bare(tag, ..body) = html.elem(tag, ..body)
-#let chevron = html.elem(\"svg\", attrs: (viewBox: \"0 0 24 24\", width: \"22\", height: \"22\", fill: \"none\", stroke: \"currentColor\", \"stroke-width\": \"1.7\", \"stroke-linecap\": \"round\", \"stroke-linejoin\": \"round\", \"aria-hidden\": \"true\"), html.elem(\"path\", attrs: (d: \"M8.5 5.5l7 6.5-7 6.5\")))
-#let fold(summary, ..body) = html.elem(\"details\", attrs: (class: \"why\", open: \"\"), { html.elem(\"summary\", { summary; chevron }); body.pos().join() })
-";
-
-/// A string, as a Typst string literal.
-fn lit(s: &str) -> String {
-    format!("\"{}\"", escape_string(s).as_str())
-}
-
-/// A string, as markup that shows it as text.
-fn text(s: &str) -> String {
-    format!("#{}", lit(s))
-}
-
-/// `<tag class="class">` around already-printed children.
-fn el(tag: &str, class: &str, children: &[String]) -> String {
-    format!("#el(\"{tag}\", \"{class}\")[{}]", children.concat())
-}
-
-fn bare(tag: &str, children: &[String]) -> String {
-    format!("#bare(\"{tag}\")[{}]", children.concat())
-}
 
 /// What a page shows of a fulfillment: tenths of a percent, to the nearest. A page is printed from
 /// this observation of every price on it, so its bytes, and the memo that keys a page by them,
@@ -86,26 +44,21 @@ fn reads(value: Option<f64>) -> String {
 // --- Prose: a record's field, rendered or shown as its source ------------------
 
 /// One field of a record, as a page shows it.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, JsonSchema)]
+#[serde(tag = "type")]
 pub enum Prose {
     /// A trusted actor's markup that compiles on its own: evaluated in place,
     /// so it reads exactly as its own rendering does.
-    Rendered(Escaped),
+    Rendered {
+        /// The markup.
+        source: Escaped,
+    },
     /// Anything else, shown as its source text: an untrusted actor's (rendered means
     /// confirmed), or markup Typst refused.
-    Source(String),
-}
-
-impl Prose {
-    fn print(&self, class: &str) -> String {
-        match self {
-            Prose::Rendered(markup) => format!(
-                "#el(\"div\", \"{class} rich\", eval(\"{}\", mode: \"markup\"))",
-                escape_string(markup.as_str()).as_str()
-            ),
-            Prose::Source(source) => el("div", &format!("{class} assource"), &[text(source)]),
-        }
-    }
+    Source {
+        /// The source, as text.
+        text: String,
+    },
 }
 
 // --- Why this number -----------------------------------------------------------
@@ -459,26 +412,6 @@ fn says(z: Zone, node: &Explanation) -> String {
     }
 }
 
-fn item(z: Zone, label: &str, node: &Explanation) -> String {
-    let mut children = vec![el(
-        "div",
-        "node",
-        &[text(&format!("{label}{}", says(z, node)))],
-    )];
-    let kids = parts(node);
-    if !kids.is_empty() {
-        children.push(el(
-            "ul",
-            "tree",
-            &kids
-                .iter()
-                .map(|(label, kid)| item(z, label, kid))
-                .collect::<Vec<_>>(),
-        ));
-    }
-    bare("li", &children)
-}
-
 /// What a reference names: a todo of this chain, or an entity of another store.
 fn referred(store: Option<&String>, entity: &str) -> String {
     store.map_or_else(
@@ -487,24 +420,59 @@ fn referred(store: Option<&String>, entity: &str) -> String {
     )
 }
 
+/// One part of a price and its own parts, each in one sentence.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, JsonSchema)]
+pub struct Part {
+    /// Its label and its sentence.
+    pub says: String,
+    /// Its parts.
+    pub parts: Vec<Part>,
+}
+
+fn part(z: Zone, label: &str, node: &Explanation) -> Part {
+    Part {
+        says: format!("{label}{}", says(z, node)),
+        parts: parts(node)
+            .iter()
+            .map(|(label, kid)| part(z, label, kid))
+            .collect(),
+    }
+}
+
 /// "Why this number": the price in one sentence, then its parts in words, or the sentence for
-/// a todo with none. The sentence is the piece in force's, and which piece that is gets a line.
-fn why_section(z: Zone, tree: Option<&Explained>) -> String {
-    let without = |why: &str| {
-        el(
-            "section",
-            "whytree",
-            &[
-                el("h2", "", &[text("Why this number")]),
-                bare("p", &[text(why)]),
-            ],
-        )
-    };
+/// a todo with none.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, JsonSchema)]
+#[serde(tag = "type")]
+pub enum Why {
+    /// The todo has no number, and the sentence says why.
+    Unpriced {
+        /// Why.
+        says: String,
+    },
+    /// The piece in force's sentence, which piece that is and the last pass, and its parts.
+    Priced {
+        /// The heading, with the price.
+        heading: String,
+        /// The sentence.
+        says: String,
+        /// Which spec prices it, and its last pass, a line each.
+        passes: Vec<String>,
+        /// Its parts.
+        parts: Vec<Part>,
+    },
+}
+
+fn why(z: Zone, tree: Option<&Explained>) -> Why {
     let Some(Explained(root)) = tree else {
-        return without("This todo's price names a todo that cannot be read, so it has no number.");
+        return Why::Unpriced {
+            says: "This todo's price names a todo that cannot be read, so it has no number."
+                .to_owned(),
+        };
     };
     if matches!(*root.node, TermF::Absent) {
-        return without("The chain records no priority spec for this todo.");
+        return Why::Unpriced {
+            says: "The chain records no priority spec for this todo.".to_owned(),
+        };
     }
     let mut price = root;
     let mut revision = None;
@@ -512,39 +480,19 @@ fn why_section(z: Zone, tree: Option<&Explained>) -> String {
         revision.get_or_insert_with(|| spec(z, price));
         price = schedule.head();
     }
-    let mut children = vec![
-        el(
-            "h2",
-            "",
-            &[text(&format!("Why this number — {}", reads(root.value)))],
-        ),
-        el("p", "says", &[text(&says(z, price))]),
-    ];
-    if let Some(revision) = revision {
-        children.push(el("p", "pass", &[text(&format!("Priced by {revision}."))]));
+    Why::Priced {
+        heading: format!("Why this number — {}", reads(root.value)),
+        says: says(z, price),
+        passes: revision
+            .map(|revision| format!("Priced by {revision}."))
+            .into_iter()
+            .chain(pass(z, root).map(|pass| format!("Last pass: {pass}.")))
+            .collect(),
+        parts: parts(price)
+            .iter()
+            .map(|(label, kid)| part(z, label, kid))
+            .collect(),
     }
-    if let Some(pass) = pass(z, root) {
-        children.push(el("p", "pass", &[text(&format!("Last pass: {pass}."))]));
-    }
-    let kids = parts(price);
-    if !kids.is_empty() {
-        children.push(el(
-            "ul",
-            "tree",
-            &kids
-                .iter()
-                .map(|(label, kid)| item(z, label, kid))
-                .collect::<Vec<_>>(),
-        ));
-        children.push(el(
-            "p",
-            "legend",
-            &[text(
-                "Each part is priced at the moment its parent read it. The box computed every number.",
-            )],
-        ));
-    }
-    el("section", "whytree", &children)
 }
 
 // --- A todo's reading part -------------------------------------------------------
@@ -559,157 +507,209 @@ pub struct Content {
 }
 
 /// Why the body reads as written, in one line under the header; a body typst drew needs no line.
-fn render_note(body: &Prose, unconfirmed: bool) -> Option<&'static str> {
+fn render_note(body: &Prose, unconfirmed: bool) -> Option<String> {
     match (body, unconfirmed) {
-        (Prose::Rendered(_), _) => None,
-        (Prose::Source(_), true) => Some("Shown the way it was written until you confirm it."),
-        (Prose::Source(_), false) => Some("Shown the way it was written: Typst could not draw it."),
+        (Prose::Rendered { .. }, _) => None,
+        (Prose::Source { .. }, true) => {
+            Some("Shown the way it was written until you confirm it.".to_owned())
+        }
+        (Prose::Source { .. }, false) => {
+            Some("Shown the way it was written: Typst could not draw it.".to_owned())
+        }
     }
 }
 
-fn chip(label: &str, kind: &str) -> String {
-    el(
-        "span",
-        &if kind.is_empty() {
-            "chip".to_owned()
-        } else {
-            format!("chip {kind}")
-        },
-        &[text(label)],
-    )
+/// What a chip says of a todo, which its class names.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, JsonSchema)]
+#[serde(rename_all = "lowercase")]
+pub enum ChipKind {
+    /// Its state while open, or a count.
+    Plain,
+    /// Its state once closed.
+    Done,
+    /// Its category.
+    Cat,
+    /// Its record's kind.
+    Kind,
+    /// Its provenance.
+    Prov,
+}
+
+/// One chip of the header.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, JsonSchema)]
+pub struct Chip {
+    /// Its words.
+    pub label: String,
+    /// What it says.
+    pub kind: ChipKind,
+}
+
+fn chip(label: impl Into<String>, kind: ChipKind) -> Chip {
+    Chip {
+        label: label.into(),
+        kind,
+    }
+}
+
+/// The number at the head of a todo's page.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, JsonSchema)]
+#[serde(tag = "type")]
+pub enum Fulfil {
+    /// Its fulfillment, as [`SHOWN`] prints it.
+    Priced {
+        /// "62.3%".
+        shown: String,
+    },
+    /// Nothing prices it.
+    Unpriced,
+    /// Its price names a todo that cannot be read.
+    Unlinked,
 }
 
 /// The header: the number, the body as the title, the id, the chips.
-fn head(entry: &wire::Entry, content: Option<&Content>) -> String {
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, JsonSchema)]
+pub struct Head {
+    /// The number.
+    pub fulfil: Fulfil,
+    /// The body, where the page has the record.
+    pub body: Option<Prose>,
+    /// The todo's id.
+    pub id: String,
+    /// Its chips.
+    pub chips: Vec<Chip>,
+    /// Why the body reads as written, where it is not drawn.
+    pub note: Option<String>,
+}
+
+fn head(entry: &wire::Entry, content: Option<&Content>) -> Head {
     let authored = entry.authored.as_ref();
     let closed = |word: &str| {
         let day = entry.at.get(..10).unwrap_or_default();
-        chip(format!("{word} {day}").trim_end(), "done")
+        chip(format!("{word} {day}").trim_end(), ChipKind::Done)
     };
     let state = match entry.state {
-        wire::EntryState::Open => chip("open", ""),
+        wire::EntryState::Open => chip("open", ChipKind::Plain),
         wire::EntryState::Completed => closed("completed"),
         wire::EntryState::Cancelled => closed("cancelled"),
     };
     let subs = authored.map_or(0, |a| a.subtodos.len());
     let done = authored.map_or(0, |a| a.subtodos.iter().filter(|s| s.done).count());
     let category = authored.map_or("", |a| a.category.as_str());
-    let mut chips = vec![state];
-    if !category.is_empty() {
-        chips.push(chip(category, "cat"));
+    let chips = std::iter::once(state)
+        .chain((!category.is_empty()).then(|| chip(category, ChipKind::Cat)))
+        .chain(authored.map(|a| chip(a.block.name(), ChipKind::Kind)))
+        .chain(
+            entry
+                .unconfirmed
+                .then(|| chip("unconfirmed", ChipKind::Prov)),
+        )
+        .chain((subs > 0).then(|| chip(format!("{done} of {subs} done"), ChipKind::Plain)))
+        .collect();
+    Head {
+        fulfil: match entry.value {
+            Some(wire::Fulfillment::Number(v)) => Fulfil::Priced { shown: pct(v) },
+            Some(wire::Fulfillment::Absent(_)) => Fulfil::Unpriced,
+            None => Fulfil::Unlinked,
+        },
+        body: content.map(|c| c.body.clone()),
+        id: entry.todo.clone(),
+        chips,
+        note: content.and_then(|c| render_note(&c.body, entry.unconfirmed)),
     }
-    if let Some(authored) = authored {
-        chips.push(chip(authored.block.name(), "kind"));
-    }
-    if entry.unconfirmed {
-        chips.push(chip("unconfirmed", "prov"));
-    }
-    if subs > 0 {
-        chips.push(chip(&format!("{done} of {subs} done"), ""));
-    }
-    let mut children = vec![el(
-        "div",
-        "todofulfil",
-        &[match entry.value {
-            Some(wire::Fulfillment::Number(v)) => el("span", "todopct", &[text(&pct(v))]),
-            Some(wire::Fulfillment::Absent(_)) => chip("unpriced", ""),
-            None => chip("does not link", ""),
-        }],
-    )];
-    if let Some(content) = content {
-        children.push(el("div", "todolead", &[content.body.print("todobody")]));
-    }
-    children.push(el("code", "todoid", &[text(&entry.todo)]));
-    children.push(el("div", "cardmeta", &chips));
-    if let Some(note) = content.and_then(|c| render_note(&c.body, entry.unconfirmed)) {
-        children.push(el("p", "legend", &[text(note)]));
-    }
-    el("div", "todohead", &children)
 }
 
-/// A todo's reading part, one page: the header first (the page puts its
-/// acts under it), then the detail and "Why this number".
+/// A todo's reading part, one page: the header first (the page puts its acts under it), then
+/// the detail and "Why this number".
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, JsonSchema)]
+pub struct TodoPage {
+    /// The header.
+    pub head: Head,
+    /// The detail, where it has one.
+    pub detail: Option<Prose>,
+    /// Why this number.
+    pub why: Why,
+}
+
+/// A todo's page.
 #[must_use]
 pub fn todo(
     entry: &wire::Entry,
     content: Option<&Content>,
-    why: Option<&Explained>,
+    explained: Option<&Explained>,
     z: Zone,
-) -> Page {
-    let mut parts = vec![head(entry, content)];
-    if let Some(detail) = content.and_then(|c| c.detail.as_ref()) {
-        parts.push(format!(
-            "#fold({})[{}]",
-            lit("Detail"),
-            detail.print("todobody")
-        ));
+) -> TodoPage {
+    TodoPage {
+        head: head(entry, content),
+        detail: content.and_then(|c| c.detail.clone()),
+        why: why(z, explained),
     }
-    parts.push(why_section(z, why));
-    Page::of(&parts.concat())
 }
 
 // --- The calendar ----------------------------------------------------------------
 
-/// The days of the calendar, one section each, as a page reads them: every title, place and
-/// name is a string literal, so a stranger's invite is text whatever it spells.
-#[must_use]
-pub fn calendar(days: &[crate::calendar::Day]) -> Page {
-    let sections: Vec<String> = days
-        .iter()
-        .map(|day| {
-            let heading = bare("h2", &[text(&day.date.format("%A %-d %B").to_string())]);
-            let body = if day.entries.is_empty() {
-                el("p", "empty", &[text("Nothing on the calendar.")])
-            } else {
-                el(
-                    "ul",
-                    "calendarlist",
-                    &day.entries.iter().map(calendar_entry).collect::<Vec<_>>(),
-                )
-            };
-            el("section", "calendarday", &[heading, body])
-        })
-        .collect();
-    let legend = el(
-        "p",
-        "legend",
-        &[text(
-            "Titles, places and names come from the calendars' feeds: other people's words. A \
-             meeting is never a todo.",
-        )],
-    );
-    Page::of(&format!("{}{legend}", sections.concat()))
+/// The days of the calendar, one section each. Every title, place and name is data, so a
+/// stranger's invite is text whatever it spells.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, JsonSchema)]
+pub struct CalendarPage {
+    /// The days.
+    pub days: Vec<CalendarDay>,
 }
 
-fn calendar_entry(entry: &crate::calendar::Entry) -> String {
+/// One day of the calendar.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, JsonSchema)]
+pub struct CalendarDay {
+    /// "Monday 5 October".
+    pub heading: String,
+    /// What is on it.
+    pub entries: Vec<CalendarRow>,
+}
+
+/// One entry of a day.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, JsonSchema)]
+pub struct CalendarRow {
+    /// When, on the owner's clock.
+    pub time: String,
+    /// Its title, "" for none.
+    pub title: String,
+    /// Its place, where it has one.
+    pub place: Option<String>,
+    /// The calendar it is on.
+    pub calendar: String,
+    /// Its status, as its class.
+    pub status: String,
+    /// What the reader is told beside it: a status but confirmed, two syncs that disagree.
+    pub notes: Vec<String>,
+}
+
+/// The calendar's page.
+#[must_use]
+pub fn calendar(days: &[crate::calendar::Day]) -> CalendarPage {
+    CalendarPage {
+        days: days
+            .iter()
+            .map(|day| CalendarDay {
+                heading: day.date.format("%A %-d %B").to_string(),
+                entries: day.entries.iter().map(calendar_row).collect(),
+            })
+            .collect(),
+    }
+}
+
+fn calendar_row(entry: &crate::calendar::Entry) -> CalendarRow {
     let status = entry.content.status().as_str();
-    let mut parts = vec![
-        el("span", "calendartime", &[text(&entry.time())]),
-        el(
-            "span",
-            "calendartitle",
-            &[text(if entry.content.title().is_empty() {
-                "(no title)"
-            } else {
-                entry.content.title()
-            })],
-        ),
-    ];
-    if !entry.content.place().is_empty() {
-        parts.push(el("span", "calendarplace", &[text(entry.content.place())]));
+    let place = entry.content.place();
+    CalendarRow {
+        time: entry.time(),
+        title: entry.content.title().to_owned(),
+        place: (!place.is_empty()).then(|| place.to_owned()),
+        calendar: entry.id.calendar().label().to_owned(),
+        status: status.to_owned(),
+        notes: (status != "confirmed")
+            .then(|| status.to_owned())
+            .into_iter()
+            .chain(entry.conflicted.then(|| "two syncs disagree".to_owned()))
+            .collect(),
     }
-    parts.push(el(
-        "span",
-        "calendarname",
-        &[text(entry.id.calendar().label())],
-    ));
-    if status != "confirmed" {
-        parts.push(el("span", "calendarstatus", &[text(status)]));
-    }
-    if entry.conflicted {
-        parts.push(el("span", "calendarstatus", &[text("two syncs disagree")]));
-    }
-    el("li", &format!("calendarentry {status}"), &parts)
 }
 
 /// The same days as plain text, for a page that has no rendering yet.
@@ -751,7 +751,6 @@ pub fn calendar_text(days: &[crate::calendar::Day]) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::collections::BTreeMap;
 
     use chrono::Duration;
     use prodrome_core::fpl::{Env, explained, mk_decay};
@@ -761,29 +760,12 @@ mod tests {
         NaiveDateTime::parse_from_str(s, "%Y-%m-%dT%H:%M:%S").expect("an instant")
     }
 
-    #[test]
-    fn every_datum_is_one_string_literal() {
-        let hostile = Explanation {
-            value: Some(0.5),
-            notes: BTreeMap::new(),
-            node: Box::new(TermF::Ref {
-                store: None,
-                entity: "a\"]#x[".to_owned(),
-            }),
-        };
-        let section = why_section(Zone::UTC, Some(&Explained::of(hostile)));
-        assert!(
-            section.contains(r#"[#"50.0%: the price of todo a\"]#x[."]"#),
-            "{section}"
-        );
-    }
-
     proptest! {
         /// Between an instant and its next change as [`SHOWN`] sees the price, a todo's page
-        /// prints the same bytes whatever the clock says, so the memo keyed by them hits; at an
-        /// exact change it prints otherwise.
+        /// is the same value whatever the clock says, so the memo keyed by it hits; at an exact
+        /// change it is another.
         #[test]
-        fn a_page_is_the_same_bytes_until_its_observed_value_moves(
+        fn a_page_is_the_same_value_until_its_observed_value_moves(
             start in 0.0f64..0.98,
             end in 0.0f64..0.9,
             days in 1i64..30,
@@ -837,83 +819,5 @@ mod tests {
             candidates: Vec::new(),
             stream: Vec::new(),
         }
-    }
-
-    #[test]
-    fn prose_is_evaluated_only_when_rendered() {
-        let rendered = Prose::Rendered(Escaped::from_chain("*a* \"b\"")).print("todobody");
-        assert_eq!(
-            rendered,
-            r#"#el("div", "todobody rich", eval("*a* \"b\"", mode: "markup"))"#
-        );
-        let source = Prose::Source("#eval(\"x\")".to_owned()).print("todobody");
-        assert_eq!(
-            source,
-            r##"#el("div", "todobody assource")[#"#eval(\"x\")"]"##
-        );
-    }
-
-    #[test]
-    fn the_reading_leads_with_its_header_and_says_how_the_body_reads() {
-        let content = Content {
-            body: Prose::Source("File the deed".to_owned()),
-            detail: Some(Prose::Source("Mail it certified.".to_owned())),
-        };
-        let page = todo(
-            &entry(wire::EntryState::Open, true),
-            Some(&content),
-            None,
-            Zone::UTC,
-        );
-        let body = page.as_str().strip_prefix(PREAMBLE).expect("the preamble");
-        assert!(body.starts_with(r#"#el("div", "todohead")"#), "{body}");
-        assert!(body.contains(r#"#"62.3%""#), "{body}");
-        assert!(body.contains(r#"#"unconfirmed""#), "{body}");
-        assert!(body.contains("until you confirm it"), "{body}");
-        assert!(body.contains(r#"#fold("Detail")"#), "{body}");
-        assert!(body.ends_with(&why_section(Zone::UTC, None)), "{body}");
-    }
-
-    #[test]
-    fn a_calendar_page_prints_every_strangers_word_as_a_literal() {
-        use crate::calendar::{CalendarName, Content, Day, Entry, OccurrenceId, Status, When};
-        let date = chrono::NaiveDate::from_ymd_opt(2026, 10, 5).expect("a day");
-        let at = |hour| date.and_hms_opt(hour, 0, 0).expect("a time");
-        let days = [Day {
-            date,
-            entries: vec![Entry {
-                id: OccurrenceId::new(
-                    CalendarName::parse("PLUGIN_ICS_WORK").expect("a name"),
-                    "x",
-                    "20261005T090000Z",
-                )
-                .expect("an id"),
-                content: Content::new(
-                    "Review\"] #eval(\"x\") [".to_owned(),
-                    When::timed(at(9), at(10)).expect("a span"),
-                    "Room #4".to_owned(),
-                    Vec::new(),
-                    Status::Cancelled,
-                )
-                .expect("content"),
-                local: Some((at(9), at(10))),
-                conflicted: false,
-            }],
-        }];
-        let source = calendar(&days).as_str().to_owned();
-        assert!(
-            source.contains(r#"#"Review\"] #eval(\"x\") [""#),
-            "{source}"
-        );
-        assert!(
-            source.contains(r#"#el("li", "calendarentry cancelled")"#),
-            "{source}"
-        );
-        assert!(source.contains(r#"#"Monday 5 October""#), "{source}");
-        let plain = calendar_text(&days);
-        assert_eq!(
-            plain,
-            "Monday 5 October\n  09:00–10:00 Review\"] #eval(\"x\") [, Room #4 (cancelled)"
-        );
     }
 }

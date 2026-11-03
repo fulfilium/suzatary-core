@@ -247,7 +247,13 @@ fn rich<R: Render + ?Sized>(render: &R, record: &Authored, untrusted: &Untrusted
             .map(|html| html.as_str().to_owned())
     };
     let key = |name: &str| {
-        source(name).map(|source| crate::rendering::key(&crate::rendering::MARKUP, source.as_str()))
+        source(name).and_then(|source| {
+            crate::rendering::MARKUP
+                .key(&crate::rendering::Markup {
+                    source: source.clone(),
+                })
+                .ok()
+        })
     };
     wire::Rich {
         body: found("body"),
@@ -273,9 +279,11 @@ pub fn content<R: Render + ?Sized>(
     let prose = |markup: &str| {
         let escaped = Escaped::from_chain(markup.to_owned());
         if trusted && render.html(&escaped).is_ok() {
-            crate::reading::Prose::Rendered(escaped)
+            crate::reading::Prose::Rendered { source: escaped }
         } else {
-            crate::reading::Prose::Source(markup.to_owned())
+            crate::reading::Prose::Source {
+                text: markup.to_owned(),
+            }
         }
     };
     let detail = record.payload.detail.as_str();
@@ -832,8 +840,8 @@ mod tests {
         fn warm(&self, markup: &[Escaped]) -> usize {
             markup.len()
         }
-        fn page(&self, page: &crate::reading::Page) -> Result<Html, RenderError> {
-            Ok(Html::from_render(page.as_str()))
+        fn page(&self, page: &crate::template::Called) -> Result<Html, RenderError> {
+            Ok(Html::from_render(page.job().state.clone()))
         }
     }
 

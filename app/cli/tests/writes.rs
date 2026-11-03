@@ -597,8 +597,9 @@ fn stored_markup_is_minted_only_where_it_is_read() {
 }
 
 /// The closed world is the Prodrome's restricted project, and this application builds no typst
-/// world or library of its own, nor the Prodrome's unrestricted project: a second world would be
-/// a second containment to keep in step with the tab's.
+/// world or library of its own: a second world would be a second containment to keep in step
+/// with the tab's. The Prodrome's unrestricted project is built in the same one file, for a
+/// template whose library is `Library::Open`, and only the templates name that library.
 #[test]
 fn the_closed_world_is_the_one_world_and_library_built_here() {
     for needle in [
@@ -606,7 +607,6 @@ fn the_closed_world_is_the_one_world_and_library_built_here() {
         ["impl typst::World", " for "].concat(),
         ["Library::", "builder("].concat(),
         ["Library::", "default("].concat(),
-        ["Project::", "new("].concat(),
     ] {
         assert_eq!(
             production_callers(&needle),
@@ -614,9 +614,19 @@ fn the_closed_world_is_the_one_world_and_library_built_here() {
             "{needle}"
         );
     }
+    for needle in [
+        ["Project::", "restricted("].concat(),
+        ["Project::", "new("].concat(),
+    ] {
+        assert_eq!(
+            production_callers(&needle),
+            vec!["io/src/typeset/mod.rs"],
+            "{needle}"
+        );
+    }
     assert_eq!(
-        production_callers(&["Project::", "restricted("].concat()),
-        vec!["io/src/typeset/mod.rs"]
+        production_callers(&["Library::", "Open,"].concat()),
+        vec!["core/src/rendering.rs"]
     );
 }
 

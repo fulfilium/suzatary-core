@@ -356,6 +356,9 @@ pub fn block(call: &Call<Reader, Block, ()>) -> Result<Json<wire::BlockRender>, 
         )));
     };
     let block = suzatary_core::secretary::answer::Renderable::of(&source);
+    let key = suzatary_core::rendering::ANSWER
+        .key(&block)
+        .map_err(|e| Refusal::internal(e.to_string()))?;
     call.chain
         .caps
         .answers
@@ -363,10 +366,7 @@ pub fn block(call: &Call<Reader, Block, ()>) -> Result<Json<wire::BlockRender>, 
         .map(|html| {
             Json(wire::BlockRender {
                 html: html.as_str().to_owned(),
-                key: suzatary_core::rendering::key(
-                    &suzatary_core::rendering::ANSWER,
-                    block.as_str(),
-                ),
+                key,
             })
         })
         .map_err(|refused| Refusal::unprocessable(refused.to_string()))

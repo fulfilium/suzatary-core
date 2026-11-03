@@ -137,7 +137,6 @@ impl Instance {
     #[must_use]
     pub fn answers(&self) -> suzatary_io::render::Typst {
         suzatary_io::render::Typst::new(
-            self.code().to_path_buf(),
             self.secretary.renders.join("blocks"),
             suzatary_io::typeset::Closed::this_binary(),
         )

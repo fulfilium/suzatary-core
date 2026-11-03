@@ -105,6 +105,17 @@ impl<M: Clone> Painter<M> {
                 });
                 Node::Foreign(id, f)
             }
+            Node::Block((), b) => {
+                let id = self.id();
+                out.push(Patch::Block {
+                    id,
+                    parent,
+                    before,
+                    key: b.key.clone(),
+                    fallback: b.fallback.clone(),
+                });
+                Node::Block(id, b)
+            }
             Node::Element(e) => {
                 let Element {
                     tag,
@@ -181,7 +192,7 @@ impl<M: Clone> Painter<M> {
     ) -> Painted<M> {
         let view = match view {
             Node::Lazy(l) => return self.lazy(old, &l, parent, out),
-            Node::Text(..) | Node::Element(_) | Node::Foreign(..) => view,
+            Node::Text(..) | Node::Element(_) | Node::Foreign(..) | Node::Block(..) => view,
         };
         // What stands here now is drawn by no lazy part, whatever drew it before.
         self.lazies.remove(&id_of(&old));
@@ -205,6 +216,16 @@ impl<M: Clone> Painter<M> {
                     });
                 }
                 Node::Foreign(id, f)
+            }
+            (Node::Block(id, was), Node::Block((), b)) => {
+                if was != b {
+                    out.push(Patch::Rekey {
+                        id,
+                        key: b.key.clone(),
+                        fallback: b.fallback.clone(),
+                    });
+                }
+                Node::Block(id, b)
             }
             (Node::Element(was), Node::Element(e)) if was.tag == e.tag => {
                 self.element(*was, *e, out)
@@ -383,7 +404,7 @@ enum Matched<M> {
 
 fn id_of<M>(n: &Painted<M>) -> u32 {
     match n {
-        Node::Text(id, _) | Node::Foreign(id, _) => *id,
+        Node::Text(id, _) | Node::Foreign(id, _) | Node::Block(id, _) => *id,
         Node::Element(e) => e.id,
         Node::Lazy(never) => match *never {},
     }

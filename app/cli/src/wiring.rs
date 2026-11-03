@@ -254,11 +254,7 @@ impl Grounds {
             repository: suzatary_io::repository::Checkout::new(ground.data.clone()),
             manuals: suzatary_io::manuals::Handbook::new(code.to_path_buf(), persona.clone()),
             mail: ground.notmuch(code),
-            render: suzatary_io::render::Typst::new(
-                code.to_path_buf(),
-                ground.markup_cache.clone(),
-                typeset,
-            ),
+            render: suzatary_io::render::Typst::new(ground.markup_cache.clone(), typeset),
             clock: suzatary_io::clock::SystemClock,
         }
     }

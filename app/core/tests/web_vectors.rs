@@ -496,8 +496,8 @@ impl Render for Bundle {
         markup.len()
     }
 
-    fn page(&self, page: &suzatary_core::reading::Page) -> Result<Html, RenderError> {
-        Ok(Html::from_render(page.as_str()))
+    fn page(&self, page: &suzatary_core::template::Called) -> Result<Html, RenderError> {
+        Ok(Html::from_render(page.job().state.clone()))
     }
 }
 
@@ -1514,7 +1514,9 @@ fn forgotten(
             suzatary_core::secretary::transcript::fed(line, slot, key)
                 .iter()
                 .map(|block| {
-                    suzatary_core::rendering::key(&suzatary_core::rendering::ANSWER, block.as_str())
+                    suzatary_core::rendering::ANSWER
+                        .key(block)
+                        .expect("a block prints")
                 })
                 .collect()
         });
@@ -2590,7 +2592,9 @@ fn the_answers_vector_holds_every_answer() {
     ]);
     samples.add([wire::BlockRender {
         html: "<h2>Plan</h2>".to_owned(),
-        key: suzatary_core::rendering::key(&suzatary_core::rendering::ANSWER, "= Plan"),
+        key: suzatary_core::rendering::ANSWER
+            .key(&suzatary_core::secretary::answer::Renderable::of("= Plan"))
+            .expect("a block prints"),
     }]);
     samples.add([row(1)]);
     samples.add([

@@ -75,12 +75,15 @@ export namespace painterlaws {
     readonly destroy: () => void;
   };
 
+  // The device holds no block: a block shows its plain text, in both draws alike.
+  const held: painter.Blocks = () => Promise.resolve(null);
+
   const started = (make: () => Program): Ran => {
     const root = document.createElement("div");
     const program = make();
     const effects: unknown[] = [];
     const waiting: Ask[] = [];
-    const page = run.start(root, program, foreign, e => {
+    const page = run.start(root, program, foreign, held, e => {
       effects.push(e);
       if (isAsk(e)) waiting.push(e);
     });
@@ -113,7 +116,7 @@ export namespace painterlaws {
 
   const drawnFresh = (p: Program): HTMLElement => {
     const root = document.createElement("div");
-    painter.create(root, foreign, () => {}).apply(p.fresh());
+    painter.create(root, foreign, held, () => {}).apply(p.fresh());
     return root;
   };
 

@@ -362,7 +362,8 @@ it in the same series. Two applications that both work is the failure mode.
 5. ✅ **The decoration** (§7) and `pdf` (2026-09-07). `suzatary_core::decoration`
    reads; `suzatary_io::build` stages and compiles; `suzatary_core::site` is
    the attestable-history site (its `Html` newtype went 2026-09-30: each page
-   is Typst, `site::page::Page`, compiled by `render::Typst::document`); verbs
+   is a typed value, `site::page::SitePage`, drawn by the template
+   `rendering::SITE`); verbs
    `pdf`, `smoke`, `web`, `todos open`. Deleted: `document.py`,
    `typst_ast.py`, `build.py`, `web.py`, `view.py`, `todos.py`.
    `/doc/*.pdf|svg` stages through the function `suzatary pdf` calls, so a
@@ -1493,8 +1494,8 @@ of an earlier one is recorded as a revision or a note, not a link. Specs and
 laws stay files; a decision names the file it summarises. Writers:
 `suzatary decision record|revise|withdraw` (the main session), and the owner's
 tap on the secretary's `propose_decision` card; the secretary reads with
-`decisions`. `suzatary decision view` is the Typst document, a section per
-lineage.
+`decisions`. `suzatary decision view` is the decisions' HTML, drawn by the
+template `rendering::DECISIONS`, a section per lineage.
 
 **10.9 ✅ Deploy is a commit to the user repository — built 2026-10-04**
 (`docs/USERREPO-PLAN-2026-10-01.md` stage 2). What the box runs is a function

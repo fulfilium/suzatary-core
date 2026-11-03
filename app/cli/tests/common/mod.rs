@@ -603,7 +603,7 @@ impl FakeRender {
 /// The real closed world: a door a test drives is the door the box has.
 impl suzatary_core::capability::Typeset for FakeRender {
     fn closed(&self, source: &str) -> Result<String, suzatary_core::capability::Rejected> {
-        suzatary_io::typeset::compile(source)
+        suzatary_io::typeset::compile(&suzatary_core::template::Job::text(source))
     }
 }
 
@@ -634,8 +634,11 @@ impl Render for FakeRender {
         markup.iter().filter(|m| self.html(m).is_ok()).count()
     }
 
-    fn page(&self, page: &suzatary_core::reading::Page) -> Result<Html, RenderError> {
-        Ok(Html::from_render(format!("<pre>{}</pre>", page.as_str())))
+    fn page(&self, page: &suzatary_core::template::Called) -> Result<Html, RenderError> {
+        Ok(Html::from_render(format!(
+            "<pre>{}</pre>",
+            page.job().state
+        )))
     }
 }
 

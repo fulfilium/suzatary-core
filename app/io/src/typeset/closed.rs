@@ -1,4 +1,4 @@
-//! The closed world bounded: each compile is a child process (`suzatary typeset`) that caps its
+//! A compile bounded: each one is a child process (`suzatary typeset`) that caps its
 //! own CPU time and address space before it reads the text (`commands::typeset`), since a
 //! parent's `pre_exec` is `unsafe` and every crate here forbids it. A text that loops is refused
 //! when it has used [`CPU_SECONDS`] of CPU, however busy the box is; a child that blocks without
@@ -11,7 +11,9 @@ use std::time::Duration;
 
 use rustix::process::Signal;
 use suzatary_core::capability::{Rejected, Typeset};
+use suzatary_core::template::Job;
 
+use super::Compiler;
 use crate::run::{Cmd, RunError, succeed};
 
 /// The CPU time one compile may use, counted from the child's start, so its start and every
@@ -24,10 +26,10 @@ pub const CPU_SECONDS: u64 = 2;
 /// busy box, which slows a child down but leaves its CPU time alone, never reaches it.
 pub const BACKSTOP: Duration = Duration::from_mins(1);
 
-/// A document longer than this is not a todo's body.
-const MAX_ANSWER: usize = 4 << 20;
+/// A document longer than this is not a page.
+const MAX_ANSWER: usize = 32 << 20;
 
-/// The closed world, one child process per compile.
+/// Typst, one child process per compile.
 #[derive(Debug, Clone)]
 pub struct Closed {
     exe: PathBuf,
@@ -56,9 +58,17 @@ impl Closed {
 
 impl Typeset for Closed {
     fn closed(&self, source: &str) -> Result<String, Rejected> {
+        self.compile(&Job::text(source))
+    }
+}
+
+impl Compiler for Closed {
+    fn compile(&self, job: &Job) -> Result<String, Rejected> {
+        let job = serde_json::to_vec(job)
+            .map_err(|e| Rejected::whole(format!("the job does not print as JSON: {e}")))?;
         let cmd = Cmd::new(&self.exe)
             .arg("typeset")
-            .stdin(source.as_bytes().to_vec())
+            .stdin(job)
             .timeout(self.backstop)
             .max_stdout(MAX_ANSWER);
         match succeed(&cmd) {

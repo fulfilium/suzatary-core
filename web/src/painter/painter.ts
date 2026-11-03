@@ -1,10 +1,16 @@
 // The DOM painter: reads the patches a Rust program answers (`app/viewtree/src/patch.rs` says the format) and applies
 // them to the DOM under a root, and reports each event it was told to hear as an element's id. It decides nothing:
 // every node, attribute and listener is one a patch named, and the only state it keeps is which node each id is.
+// A Typst block is placed by its key: the host answers the HTML it holds for the key, and the painter places it
+// through `rich.ts`, the one door from a string to markup, showing the block's plain text until then.
+
+import { richOrText } from "../rich"
 
 export namespace painter {
   // A part the host draws (`Foreign` in the view), asked for by kind and key and drawn from its props.
   export type Foreign = (kind: string, key: string, props: string) => Node
+  // The HTML the host holds for a block's key, or null where it holds none.
+  export type Blocks = (key: string) => Promise<string | null>
   // What a person did on element `id`: `on` is the event's code, `words` a field's value.
   export type Report = (id: number, on: number, words: string) => void
   export type T = { readonly apply: (patches: Uint8Array) => void; readonly destroy: () => void }
@@ -47,11 +53,13 @@ export namespace painter {
     href.startsWith("#") ? "Inside" : /^(https?:|mailto:)/i.test(href) ? "Outside" : "Refused"
 
   // `gone` hears each foreign part the painter takes out, so the host can stop what it started for it.
-  export const create = (root: HTMLElement, foreign: Foreign, report: Report, gone: (n: Node) => void = () => {}): T => {
+  export const create = (root: HTMLElement, foreign: Foreign, blocks: Blocks, report: Report, gone: (n: Node) => void = () => {}): T => {
     const nodes = new Map<number, Node>([[0, root]])
     const ids = new WeakMap<Node, number>()
     // Each foreign part's kind and key, so new props ask the host for the same part again.
     const foreigns = new Map<number, readonly [string, string]>()
+    // Each block's key, so an answer for a key the block no longer shows is dropped.
+    const keys = new Map<number, string>()
     const heard = new Map<string, EventListener>()
 
     const node = (id: number): Node => {
@@ -75,7 +83,26 @@ export namespace painter {
       nodes.delete(id)
       for (const e of EVENTS) heard.delete(`${id}:${e}`)
       if (foreigns.delete(id)) return gone(n)
+      if (keys.delete(id)) return
       n.childNodes.forEach(forget)
+    }
+
+    // A node standing for node `id`, in its place; answers the node it replaced.
+    const replaced = (id: number, now: Node): Node => {
+      const was = node(id)
+      nodes.set(id, now)
+      ids.set(now, id)
+      was.parentNode?.replaceChild(now, was)
+      return was
+    }
+
+    // Block `id` shows `fallback` now, and the host's HTML for `key` once it answers, if it still shows `key` then.
+    const block = (id: number, key: string, fallback: string): HTMLElement => {
+      keys.set(id, key)
+      void blocks(key).then(html => {
+        if (html !== null && keys.get(id) === key) replaced(id, richOrText(html, fallback, { class: "block" }))
+      })
+      return richOrText(null, fallback, { class: "block" })
     }
 
     const set = (e: Element, name: string, value: string): void => {
@@ -137,14 +164,9 @@ export namespace painter {
           case 6: {
             const id = varint(r)
             const props = string(r)
-            const was = node(id)
             const part = foreigns.get(id)
             if (part === undefined) throw new Error(`node ${id} is not a foreign part`)
-            const now = foreign(part[0], part[1], props)
-            nodes.set(id, now)
-            ids.set(now, id)
-            was.parentNode?.replaceChild(now, was)
-            gone(was)
+            gone(replaced(id, foreign(part[0], part[1], props)))
             break
           }
           case 7: {
@@ -180,6 +202,19 @@ export namespace painter {
             if (name === undefined || listener === undefined) throw new Error(`node ${id} does not hear that event`)
             element(id).removeEventListener(name, listener)
             heard.delete(`${id}:${name}`)
+            break
+          }
+          case 11: {
+            const [id, parent, before] = [varint(r), varint(r), varint(r)]
+            const [key, fallback] = [string(r), string(r)]
+            placed(id, block(id, key, fallback), parent, before)
+            break
+          }
+          case 12: {
+            const id = varint(r)
+            const [key, fallback] = [string(r), string(r)]
+            if (!keys.has(id)) throw new Error(`node ${id} is not a block`)
+            replaced(id, block(id, key, fallback))
             break
           }
           default:

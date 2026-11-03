@@ -14,6 +14,9 @@ export namespace blocks {
     own: () => remote.ask({ type: "BlocksOwn" }, "Page"),
   })
 
+  // The HTML this device holds for `key`, or none: what the painter places a block from.
+  export const held = (key: table.Key): Promise<string | null> => store.get([key]).then(r => r[0] ?? null)
+
   // The key an answer block of `source` is kept by, or none where the worker does not answer.
   export const answerKey = (source: string): Promise<table.Key | null> =>
     remote.ask({ type: "AnswerKeys", sources: [source] }, "Page").then(ks => ks[0] ?? null, () => null)

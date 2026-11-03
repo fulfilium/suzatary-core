@@ -71,6 +71,7 @@ pub mod source_key;
 pub mod store;
 pub mod sync;
 pub mod table;
+pub mod template;
 pub mod term_json;
 pub mod timings;
 pub mod todo;

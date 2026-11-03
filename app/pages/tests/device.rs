@@ -39,6 +39,7 @@ fn words<M>(n: &Node<M>) -> String {
     match n {
         Node::Text((), t) => t.clone(),
         Node::Foreign(..) => String::new(),
+        Node::Block((), b) => b.fallback.clone(),
         Node::Lazy(l) => words(&l.draw()),
         Node::Element(e) => kids(&e.kids).map(words).collect(),
     }
@@ -66,7 +67,7 @@ fn offered(signing: &serde_json::Value, act: &str) -> Vec<String> {
                 kids(&e.kids).for_each(|k| walk(k, act, out));
             }
             Node::Lazy(l) => walk(&l.draw(), act, out),
-            Node::Text(..) | Node::Foreign(..) => {}
+            Node::Text(..) | Node::Foreign(..) | Node::Block(..) => {}
         }
     }
     let model = model(signing);

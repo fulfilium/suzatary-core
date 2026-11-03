@@ -31,4 +31,4 @@ pub use refused::NotADecision;
 pub use registers::{ContentRegister, DecisionRegister, DecisionRegisters, LifeRegister};
 pub use statement::Statement;
 pub use store::Decisions;
-pub use view::document;
+pub use view::{DecisionsPage, Shown, Standing, document};

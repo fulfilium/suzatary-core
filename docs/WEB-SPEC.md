@@ -240,8 +240,9 @@ Three; the build enforces the count:
      record arrives as source and is drawn as text;
    - a secretary's answer, block by block, compiled in the same closed world
      (a block that does not compile there is text);
-   - a page the box printed (`suzatary_core::reading`): a todo's reading part
-     with "Why this number", every datum a Typst string literal;
+   - a page the box drew (`suzatary_core::reading`): a todo's reading part
+     with "Why this number", a template (`app/core/src/rendering/`) called
+     with a typed value, every datum read as data;
    - the Inbox's decision prose, and a day's briefing;
    - a Typst view the tab compiled with typst-wasm (`#/typst`, stages 0 and 4
      of `docs/APP-AS-READING-PLAN-2026-10-02.md`): the kit (`web/typst/`)
@@ -1965,6 +1966,26 @@ too; each page's laws in `app/pages/tests/laws.rs` ("memory_laws",
 - **The release sample reads as the box reads it.** An item completed once
   stays done, a dropped one moved out, what is owed first. — `releases.rs`
   "the_box_sample_reads_as_the_box_reads_it".
+
+A Typst output is a node of its own, `Node::Block { key, fallback }`. The
+view holds the key the output is kept under, never its HTML. The painter
+asks the host for the HTML the device holds for that key, places it through
+`rich.ts`, and shows the plain text until it is held. The laws above cover
+blocks among the generated views; a block whose key stays patches nothing.
+
+A Typst template (`app/core/src/rendering/*.typ`) is called with one value
+of a Rust type, read through accessors generated from that type
+(`suzatary_core::template::schema`). In `app/io/tests/templates.rs` and
+`app/core/src/template.rs`:
+
+- **Every template compiles against every example of its type**, the
+  examples taking every arm of every sum and leaving every option empty
+  once. — "every_template_compiles_against_every_example_of_its_type".
+- **Removing any field fails the build.** —
+  "removing_any_field_fails_the_build".
+- **A template's text names every key it makes, and nothing else moves
+  the key's function.** —
+  "changing_a_templates_text_changes_every_key_and_nothing_else_does".
 
 The same laws hold in a real browser, against `painter.ts` and `run.ts` and
 the module the box serves, over Settings' program driven by generated

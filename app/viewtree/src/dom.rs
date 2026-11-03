@@ -31,6 +31,10 @@ pub enum Shape {
         key: String,
         props: String,
     },
+    Block {
+        key: String,
+        fallback: String,
+    },
 }
 
 /// A node as a reader of the page sees it: no ids.
@@ -47,6 +51,10 @@ pub enum Seen {
         kind: String,
         key: String,
         props: String,
+    },
+    Block {
+        key: String,
+        fallback: String,
     },
 }
 
@@ -125,6 +133,32 @@ impl Dom {
                     );
                     self.insert(*id, *parent, *before);
                 }
+                Patch::Block {
+                    id,
+                    parent,
+                    before,
+                    key,
+                    fallback,
+                } => {
+                    self.nodes.insert(
+                        *id,
+                        Shape::Block {
+                            key: key.clone(),
+                            fallback: fallback.clone(),
+                        },
+                    );
+                    self.insert(*id, *parent, *before);
+                }
+                Patch::Rekey { id, key, fallback } => match self.nodes.get_mut(id) {
+                    Some(Shape::Block {
+                        key: k,
+                        fallback: f,
+                    }) => {
+                        k.clone_from(key);
+                        f.clone_from(fallback);
+                    }
+                    other => panic!("rekey on {other:?}"),
+                },
                 Patch::Set { id, name, value } => match self.nodes.get_mut(id) {
                     Some(Shape::Element { attrs, .. }) => {
                         attrs.insert(name.clone(), value.clone());
@@ -203,6 +237,10 @@ impl Dom {
                 kind: kind.clone(),
                 key: key.clone(),
                 props: props.clone(),
+            },
+            Shape::Block { key, fallback } => Seen::Block {
+                key: key.clone(),
+                fallback: fallback.clone(),
             },
         }
     }

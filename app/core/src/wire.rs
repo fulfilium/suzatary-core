@@ -133,7 +133,7 @@ pub struct Rich {
     pub keys: RichKeys,
 }
 
-/// Each field's key in the tabulation of rendered HTML ([`crate::rendering::key`] of the markup it renders): the
+/// Each field's key in the tabulation of rendered HTML ([`crate::template::Template::key`] of the markup template at the field): the
 /// core names it for the box and the tab alike, so neither derives the other's.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
 pub struct RichKeys {
@@ -2667,7 +2667,7 @@ pub enum Frame {
 pub struct BlockRender {
     /// The block's HTML, through the render tripwire.
     pub html: String,
-    /// The key it is kept under ([`crate::rendering::key`] of the answer function at its source).
+    /// The key it is kept under ([`crate::template::Template::key`] of the answer template at the block).
     pub key: String,
 }
 

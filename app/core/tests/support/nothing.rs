@@ -296,8 +296,8 @@ impl Render for Nothing {
     fn warm(&self, markup: &[Escaped]) -> usize {
         markup.len()
     }
-    fn page(&self, page: &crate::reading::Page) -> Result<Html, RenderError> {
-        Ok(Html::from_render(page.as_str()))
+    fn page(&self, page: &crate::template::Called) -> Result<Html, RenderError> {
+        Ok(Html::from_render(page.job().state.clone()))
     }
 }
 

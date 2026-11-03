@@ -1,4 +1,4 @@
-//! `suzatary typeset`: one text on stdin compiled in the closed world, its answer on stdout.
+//! `suzatary typeset`: one job on stdin (`suzatary_core::template::Job`) compiled, its answer on stdout.
 //!
 //! The box runs this as a child of itself (`suzatary_io::typeset::Closed`). The child caps its
 //! own CPU time, so a text that loops is stopped by the kernel after the same amount of work
@@ -38,11 +38,15 @@ pub fn run() -> anyhow::Result<()> {
         maximum: Some(0),
     };
     setrlimit(Resource::Core, no_core).context("turning off the compile's core dump")?;
-    let mut source = String::new();
+    let mut job = String::new();
     std::io::stdin()
-        .read_to_string(&mut source)
-        .context("reading the text")?;
-    let answer = suzatary_io::typeset::compile(&source);
+        .read_to_string(&mut job)
+        .context("reading the job")?;
+    let answer = serde_json::from_str::<suzatary_core::template::Job>(&job)
+        .map_err(|e| {
+            suzatary_core::capability::Rejected::whole(format!("the job does not parse: {e}"))
+        })
+        .and_then(|job| suzatary_io::typeset::compile(&job));
     std::io::stdout()
         .write_all(suzatary_io::typeset::closed::print(&answer).as_bytes())
         .context("writing the answer")

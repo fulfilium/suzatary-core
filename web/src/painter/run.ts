@@ -20,7 +20,7 @@ export namespace run {
   // is generated from, so it is read as that type without a decoder of its own.
   const parse = <E>(json: string): readonly E[] => JSON.parse(json)
 
-  export const start = <I, E>(root: HTMLElement, page: Module, foreign: painter.Foreign, handle: Handler<I, E>, gone?: (n: Node) => void): T<I> => {
+  export const start = <I, E>(root: HTMLElement, page: Module, foreign: painter.Foreign, blocks: painter.Blocks, handle: Handler<I, E>, gone?: (n: Node) => void): T<I> => {
     let live = true
     const step = (name: string, patches: () => Uint8Array): void => {
       if (!live) return
@@ -32,7 +32,7 @@ export namespace run {
       for (const e of effects) handle(e, send)
     }
     const send = (input: I): void => step("input", () => page.input(JSON.stringify(input)))
-    const dom = painter.create(root, foreign, (id, on, words) => step("event", () => page.event(id, on, words)), gone)
+    const dom = painter.create(root, foreign, blocks, (id, on, words) => step("event", () => page.event(id, on, words)), gone)
     step("first", () => page.first())
     return { send, destroy: () => ((live = false), dom.destroy(), page.free()) }
   }
