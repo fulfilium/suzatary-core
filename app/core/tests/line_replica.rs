@@ -16,7 +16,9 @@ use suzatary_core::replica::pulling::Delta;
 use suzatary_core::replica::row::Row;
 use suzatary_core::secretary::held_replica::{HeldReplica, Moved};
 use suzatary_core::secretary::key_ring::KeyRing;
-use suzatary_core::secretary::line_form::{LineDelta, LinePulling, frame, unframe};
+use suzatary_core::secretary::line_form::{
+    LineDelta, LineFrame, LinePulling, LineReplica, frame, unframe,
+};
 use suzatary_core::secretary::locked_text::KeyName;
 use suzatary_core::secretary::outlines::Parsed;
 use suzatary_core::secretary::step::Step;
@@ -220,8 +222,24 @@ fn delta(rows: &mut LinePulling, op: &Op) -> LineDelta {
     }
 }
 
+/// `rows` as the device keeps them, holding no husk.
+fn replica(rows: &LinePulling) -> LineReplica {
+    LineReplica {
+        rows: rows.clone(),
+        ..LineReplica::default()
+    }
+}
+
 fn printed(rows: &LinePulling) -> Vec<u8> {
-    snapshot(rows).expect("prints")
+    snapshot(&replica(rows)).expect("prints")
+}
+
+/// `delta` as a frame that husks nothing.
+fn framed(delta: &LineDelta) -> LineFrame {
+    LineFrame {
+        delta: delta.clone(),
+        husked: Vec::new(),
+    }
 }
 
 proptest! {
@@ -269,11 +287,11 @@ proptest! {
         // And through the device's form: each delta framed and read back.
         let mut read = LinePulling::default();
         for d in &deltas {
-            read.apply(&unframe(&frame(d).expect("frames")).expect("reads").expect("of this form"));
+            read.apply(&unframe(&frame(&framed(d)).expect("frames")).expect("reads").expect("of this form").delta);
         }
         prop_assert_eq!(printed(&read), printed(&live));
-        let back: LinePulling = from_snapshot(&printed(&live)).expect("reads back");
-        prop_assert_eq!(&back, &live, "a snapshot reads back as the rows it printed");
+        let back: LineReplica = from_snapshot(&printed(&live)).expect("reads back");
+        prop_assert_eq!(&back.rows, &live, "a snapshot reads back as the rows it printed");
     }
 
     #[test]
@@ -306,7 +324,7 @@ proptest! {
                 prop_assert_eq!(anew, moved == Moved::All, "every conversation, exactly where the row was reset or heard a later epoch");
             }
             if let Some(d) = theirs.next() {
-                held.apply(d);
+                held.apply(&framed(d));
             }
         }
     }
@@ -315,7 +333,7 @@ proptest! {
 #[test]
 fn a_frame_of_another_form_is_passed_over() {
     let mut rows = LinePulling::default();
-    let mut bytes = frame(&rows.start_over()).expect("frames");
+    let mut bytes = frame(&framed(&rows.start_over())).expect("frames");
     bytes[0] ^= 1;
     assert!(matches!(unframe(&bytes), Ok(None)));
     assert_eq!(rows.landed().replica().frontier(), &Frontier::Nothing);

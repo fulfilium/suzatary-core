@@ -458,11 +458,12 @@ The box's pull names a key as erased, or the skeleton's own `Erased` node does.
    those lines first; a fetch that fails keeps the key, owed, as today.
 2. The JavaScript runs one transaction over `snapshot`, `log`, `blocks` and
    `content`: it deletes each block, deletes from `content` the print of every
-   line whose slots the erasure leaves erased, writes the snapshot the core
-   prints *without* the keys, and deletes every log entry. Nothing else holds a
-   key or those prints: not a row, not a piece, not a shadow.
+   line every slot of which the erasure leaves erased, writes the snapshot the
+   core prints *without* the keys, and deletes every log entry. Nothing else
+   holds a key or those prints: not a row, not a piece, not a shadow.
 3. The core lets the keys go (`HeldLines::keys` already forgets every word they
-   opened, at once) and drops those prints from `HeldLines.prints`.
+   opened, at once) and keeps each of those lines as its husk in place of its
+   print.
 4. The worker tells the page which blocks went, and the page drops any it drew.
 
 **How the single form forgets:** the log is append-only, so it cannot remove a
@@ -470,28 +471,32 @@ key from an earlier entry. The compaction removes the whole log and writes a
 snapshot that never held the key. The deleted entries are gone as IndexedDB
 deletes them, which is what deleting a key row does today.
 
-**No print of an erased slot** (decided by the owner, §7). After an erasure no
-key it names is in IndexedDB, in the core, or in any message; no word it opened
-is in the core's memo, in `blocks`, or in the page; and no print of an erased
-slot is in IndexedDB or in the core. The browser's HTTP cache keeps every content
-answer for a year (`immutable`) and no page can delete it, so a ciphertext print
-can stay there, where without its key it opens nothing; the law covers what the
-device's own code holds.
+**No print whose every slot is erased** (decided by the owner, §7, and refined
+for stage 3b). After an erasure no key it names is in IndexedDB, in the core, or
+in any message; no word it opened is in the core's memo, in `blocks`, or in the
+page; and no print of a line every slot of which is erased is in IndexedDB or in
+the core. The browser's HTTP cache keeps every content answer for a year
+(`immutable`) and no page can delete it, so a ciphertext print can stay there,
+where without its key it opens nothing; the law covers what the device's own
+code holds.
 
-Two consequences for the core:
+Two consequences for the core, both decided by the owner for stage 3b:
 
-- **A line whose print is gone reads from its node.** Its skeleton node names
-  its slots' keys and its step, so the core reads each erased slot as `Erased`
-  from the header, and `lacking` never names the print of a line every slot of
-  which is erased. Without this, a reading would find the print missing, fetch
-  it from the HTTP cache, and hold it again.
-- **A line that seals an erased slot and a live one.** An erasure names keys, not
-  lines, and a forget erases only the copies its remembering wrote, so one print
-  can seal both. The law as decided drops that print too, and its live slot then
-  reads as `Missing` on this device. Stage 3 counts such lines on the live store
-  and the `bigstore` fixture; if there are any, the PR shows the count and the
-  owner chooses between dropping them (the decided law) and keeping the print of
-  a line while a slot of it still opens.
+- **A line whose print is gone reads from its husk.** Its skeleton node names
+  its slots' keys and its step, but not its shape (who said it, its act), which
+  an erased turn is drawn by, so the node alone cannot stand for it. At the
+  erasure the core keeps the line without its sealed words, its husk, in its
+  snapshot and frames, and deletes the print from `content`. The husk is the
+  device's alone; the snapshot's form moves to 3, and the one more download of
+  the skeleton that costs is accepted. A reading reads the husk as the line read
+  without its keys, and `lacking` never names a line held as one, so its print
+  is never fetched again.
+- **A line that seals an erased slot and a live one keeps its print.** An
+  erasure names keys, not lines, and a forget erases only the copies its
+  remembering wrote, so one print can seal both. The print is deleted only when
+  every slot of its line is erased; until then its erased slots stay unreadable,
+  since their keys are gone. This refines the earlier decision to delete every
+  print of an erased slot.
 
 ### 3.4 Eviction
 
@@ -727,7 +732,7 @@ three warm loads after the snapshot is written; the target is under 2.5 s).
    sets of three alternating runs, nine loads each side a set, gave master
    medians of 3,381 and 3,801 ms and this stage 3,887 and 3,078 ms; the sets
    disagree in direction, and the runs vary by about 0.8 s.
-3. **One form for the lines (`coreskeleton`).** The owner split it in three:
+3. **One form for the lines (`coreskeleton`).** It is split in three PRs:
    3a, the core holds the lines' replica and the device keeps the core's
    snapshot and log; 3b, the erased slots' prints deleted at an erasure; 3c, a
    `BroadcastChannel` wake and a Web Lock for compaction.
@@ -756,7 +761,33 @@ three warm loads after the snapshot is written; the target is under 2.5 s).
    Production lines: Rust +1,186, TypeScript +77. The Rust is the replica
    algebra the core now owns; the TypeScript copy of it stays until the inbox,
    the topics (stage 4) and the chains (stage 6) move to the core, which is
-   where its lines go. The snapshot and log of §3.1
+   where its lines go.
+
+   *As built (3b).* A purge's forget husks every line the rows read, held with
+   words each key of which no row holds (`HeldReplica::bare`): the line with
+   each slot's words dropped (`Dropped(key, rules)`, which no store's
+   vocabulary reads), held where its print stood and never let go by a drop.
+   The core's form is 3: the snapshot is the rows and the husks
+   (`LineReplica`), each frame the rows' delta and the lines it husked. A purge
+   also runs when a line is to be husked with no key owed (a device that took
+   the line after its keys were erased); it keeps its step as a frame before it
+   compacts, so a tab that compacts first takes the forget and the husks
+   instead of writing a snapshot without them; and every compaction deletes, in
+   its transaction over the log and `content`, the print of each line the core
+   holds as a husk. A content answer is no longer kept beside the reads, since
+   it carried the ciphertext past the erasure. The fake IndexedDB ran two
+   transactions over one store at once and lost the first one's writes;
+   it now runs them in IndexedDB's order. Stage 7's deletions came forward (the
+   owner's direction of 2026-11-03): the upgrade carries nothing (`carry`,
+   `framed`, `carried`, `objectsync.carried` and its hook, `linesync.retire`,
+   `RENDERED_OWED` with `owedClear` and the worker's `Cleared`, the old upgrade
+   scenes), keeps a device's chains' rows from version 8, since they hold what
+   the tab wrote, and the rendered store's version 4 drops every block once.
+   Laws: the core's `held_lines` "a line whose keys are gone reads the same as
+   its husk"; `onewriter.test.ts` (no row, message or kept answer holds an erased
+   line's ciphertext, and a reload reads without it); `warmload.test.ts` "a husk
+   one tab's purge kept stands through another tab's compaction…";
+   `objects.test.ts` (the upgrade keeps a chain's unsent act, from version 8). The snapshot and log of §3.1
    replace D1-D5 for the lines; the core holds the head and the pieces; J1, J2,
    J4 and J5 for the lines go, with `telling`, `Reader`, `Primed`, `Key`,
    `pull.first` and the snapshot's key. Erasure by compaction (§3.3); two tabs by
@@ -787,13 +818,12 @@ three warm loads after the snapshot is written; the target is under 2.5 s).
    reload and build update. *Measure:* lines removed (most of `sync.ts`'s 470,
    `remote.ts`'s delta), the todo list's warm draw.
 7. **The last upgrade.** Version 12 keeps every unsent literal of the `chain`
-   rows and deletes the `chain` store, every D9 row and the upgrade's branches;
+   rows and deletes the `chain` store and every D9 row. The upgrade's branches,
    `carry`, `framed`, `carried`, `unsentNone`, `objectsync.carried`,
-   `linesync.retire` and `owedClear` go, with the three upgrade scenes, which
-   become one: a device at each shipped version (1 to 11) upgrades, keeps every
-   unsent object, and reads like a cold load. From here the schema is fixed.
-   *Measure:* lines removed (the 70 lines of the upgrade and its carries, about
-   80 in `linesync.ts`, the old scenes).
+   `linesync.retire`, `owedClear` and the old upgrade scenes went in stages 3a
+   and 3b, by the owner's direction of 2026-11-03: each stage deletes the old
+   shapes it leaves unused, and a device on an old format takes its stores
+   again. From here the schema is fixed.
 8. **The local fold goes, if measured.** With the chains warm from the core,
    measure the todo list's first draw from the core alone. If it is within the
    first-paint budget, delete L1, `primed` and `boxFolds`. If not, L1 stays, and

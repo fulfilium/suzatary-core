@@ -1,6 +1,7 @@
 //! The lines' replica in the device's form: its snapshot ([`crate::snapshot::Held`]) and its
-//! deltas, each name printed as its 32 bytes rather than 64 hex characters. A node reads back
-//! through [`Parsed::of`], as the box's are read, so a snapshot holds nothing a pull could not.
+//! frames, each name printed as its 32 bytes rather than 64 hex characters. A node reads back
+//! through [`Parsed::of`], as the box's are read, so a snapshot holds nothing a pull could not;
+//! a husk reads back through [`Husk::read`], which reads no words.
 
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -13,6 +14,7 @@ use crate::replica::pulling::{Delta, Pulling};
 use crate::replica::row::Row;
 use crate::replica::word::Word;
 use crate::secretary::key_ring::KeyRing;
+use crate::secretary::line_event::Husk;
 use crate::secretary::locked_text::{KEY_BYTES, KeyName};
 use crate::secretary::outlines::Parsed;
 use crate::secretary::step::Step;
@@ -28,12 +30,67 @@ pub type LineDelta = Delta<Parsed, KeyRing>;
 /// A name's 32 bytes: an object's, or a key's.
 type Name = [u8; 32];
 
-/// What a snapshot of the lines' rows prints.
+/// A line the device keeps as its husk ([`Husk`]): its name, the names it rests on, and the husk.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Husked {
+    /// The line's object's name.
+    pub name: Hash,
+    /// The names it rests on.
+    pub parents: Vec<Hash>,
+    /// The line, its words dropped.
+    pub husk: Husk,
+}
+
+/// The lines' replica as the device keeps it: the rows, and the husk of every line each key of
+/// whose words it let go, by name. A husk stands where its print stood, so it is never fetched
+/// again.
+#[derive(Debug, Default, PartialEq)]
+pub struct LineReplica {
+    /// The rows.
+    pub rows: LinePulling,
+    /// The husks.
+    pub husks: BTreeMap<Hash, Husked>,
+}
+
+/// One move of the replica: the rows' delta, and the lines it husked.
+#[derive(Debug, Clone)]
+pub struct LineFrame {
+    /// The rows' move.
+    pub delta: LineDelta,
+    /// The lines it husked.
+    pub husked: Vec<Husked>,
+}
+
+impl LineReplica {
+    /// `frame` taken: another tab's, or one read back from the log.
+    pub fn apply(&mut self, frame: &LineFrame) {
+        self.rows.apply(&frame.delta);
+        for husked in &frame.husked {
+            self.husks.insert(husked.name.clone(), husked.clone());
+        }
+    }
+}
+
+/// What a snapshot of the lines' replica prints.
 #[derive(Serialize, Deserialize)]
 pub struct Given {
     landed: RowForm,
     landings: u64,
     pending: RowForm,
+    husks: Vec<HuskForm>,
+}
+
+#[derive(Serialize, Deserialize)]
+struct HuskForm {
+    name: Name,
+    parents: Vec<Name>,
+    line: String,
+}
+
+#[derive(Serialize, Deserialize)]
+struct FrameForm {
+    delta: DeltaForm,
+    husked: Vec<HuskForm>,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -105,35 +162,51 @@ enum DeltaForm {
     Forgot(Vec<Name>),
 }
 
-impl snapshot::Held for LinePulling {
+impl snapshot::Held for LineReplica {
     type Given = Given;
-    /// 2: the landed row and the pending pieces, each with its nodes, keys, words and frontier,
-    /// every name as its 32 bytes.
-    const FORM: u32 = 2;
+    /// 3: the landed row and the pending pieces, each with its nodes, keys, words and frontier,
+    /// every name as its 32 bytes, and the husks, each line's print with its words dropped.
+    const FORM: u32 = 3;
 
     fn given(&self) -> Given {
         Given {
-            landed: row_form(self.landed()),
-            landings: self.landings(),
-            pending: row_form(self.pending()),
+            landed: row_form(self.rows.landed()),
+            landings: self.rows.landings(),
+            pending: row_form(self.rows.pending()),
+            husks: self.husks.values().map(husk_form).collect(),
         }
     }
 
     fn of_given(given: Given) -> Result<Self, String> {
-        Ok(Pulling::of(
-            row_of(given.landed)?,
-            given.landings,
-            row_of(given.pending)?,
-        ))
+        Ok(Self {
+            rows: Pulling::of(
+                row_of(given.landed)?,
+                given.landings,
+                row_of(given.pending)?,
+            ),
+            husks: given
+                .husks
+                .iter()
+                .map(|form| husked(form).map(|h| (h.name.clone(), h)))
+                .collect::<Result<_, _>>()?,
+        })
     }
 }
 
-/// `delta` as a frame of the log: the snapshot's form, then the delta in postcard.
+/// `frame` as a frame of the log: the snapshot's form, then the frame in postcard.
 ///
 /// # Errors
 /// [`Unprinted`] where it refuses to print.
-pub fn frame(delta: &LineDelta) -> Result<Vec<u8>, Unprinted> {
-    let form = match delta {
+pub fn frame(frame: &LineFrame) -> Result<Vec<u8>, Unprinted> {
+    let form = FrameForm {
+        delta: delta_form(&frame.delta),
+        husked: frame.husked.iter().map(husk_form).collect(),
+    };
+    snapshot::print(<LineReplica as snapshot::Held>::FORM, &form)
+}
+
+fn delta_form(delta: &LineDelta) -> DeltaForm {
+    match delta {
         Delta::Piece { landings, row } => DeltaForm::Piece {
             landings: *landings,
             row: row_form(row),
@@ -146,38 +219,61 @@ pub fn frame(delta: &LineDelta) -> Result<Vec<u8>, Unprinted> {
             generation: *generation,
         },
         Delta::Forgot(gone) => DeltaForm::Forgot(gone.iter().map(|k| bytes(k.as_str())).collect()),
-    };
-    snapshot::print(<LinePulling as snapshot::Held>::FORM, &form)
+    }
 }
 
-/// The delta a frame prints, or none for a frame of another form, which this build passes over.
+/// The frame `bytes` prints, or none for a frame of another form, which this build passes over.
 ///
 /// # Errors
 /// [`NotASnapshot`]: a frame of this form cut short, unread, or holding what no replica holds.
-pub fn unframe(bytes: &[u8]) -> Result<Option<LineDelta>, NotASnapshot> {
-    let form = match snapshot::read(<LinePulling as snapshot::Held>::FORM, bytes) {
+pub fn unframe(bytes: &[u8]) -> Result<Option<LineFrame>, NotASnapshot> {
+    let form: FrameForm = match snapshot::read(<LineReplica as snapshot::Held>::FORM, bytes) {
         Ok(form) => form,
         Err(NotASnapshot::Form { .. }) => return Ok(None),
         Err(e) => return Err(e),
     };
-    let delta = match form {
+    Ok(Some(LineFrame {
+        delta: delta_of(form.delta).map_err(NotASnapshot::Refused)?,
+        husked: form
+            .husked
+            .iter()
+            .map(husked)
+            .collect::<Result<_, _>>()
+            .map_err(NotASnapshot::Refused)?,
+    }))
+}
+
+fn delta_of(form: DeltaForm) -> Result<LineDelta, String> {
+    Ok(match form {
         DeltaForm::Piece { landings, row } => Delta::Piece {
             landings,
-            row: row_of(row).map_err(NotASnapshot::Refused)?,
+            row: row_of(row)?,
         },
         DeltaForm::Landed { landings, row } => Delta::Landed {
             landings,
-            row: row_of(row).map_err(NotASnapshot::Refused)?,
+            row: row_of(row)?,
         },
         DeltaForm::StartedOver { generation } => Delta::StartedOver { generation },
-        DeltaForm::Forgot(gone) => Delta::Forgot(
-            gone.iter()
-                .map(key_name)
-                .collect::<Result<_, _>>()
-                .map_err(NotASnapshot::Refused)?,
-        ),
-    };
-    Ok(Some(delta))
+        DeltaForm::Forgot(gone) => {
+            Delta::Forgot(gone.iter().map(key_name).collect::<Result<_, _>>()?)
+        }
+    })
+}
+
+fn husk_form(husked: &Husked) -> HuskForm {
+    HuskForm {
+        name: bytes(husked.name.as_str()),
+        parents: husked.parents.iter().map(|p| bytes(p.as_str())).collect(),
+        line: husked.husk.print(),
+    }
+}
+
+fn husked(form: &HuskForm) -> Result<Husked, String> {
+    Ok(Husked {
+        name: hash(&form.name)?,
+        parents: form.parents.iter().map(hash).collect::<Result<_, _>>()?,
+        husk: Husk::read(&form.line).map_err(|e| e.to_string())?,
+    })
 }
 
 fn row_form(row: &Row<Parsed, KeyRing>) -> RowForm {

@@ -3,7 +3,9 @@
 import { test } from "node:test"
 import assert from "node:assert/strict"
 
+import idb from "../src/app/idb"
 import rendered from "../src/app/rendered"
+import { fakeIndexedDB } from "./fakeidb"
 import table from "../src/algebra/table"
 import { forAll, forAllAsync, keys } from "./gen"
 import type { Rng } from "./gen"
@@ -98,3 +100,19 @@ test("law: the device holds blocks of its own functions alone, and a forget leav
     await store.forget(named)
     assert.ok(rows.pairs().every(([k]) => own.has(table.fnOf(k)) && !named.includes(k)), "a forget leaves no stranger and nothing named")
   }))
+
+test("a block under a key the device forgot, back on the device another way, goes at the next forget", async () => {
+  const device = fakeIndexedDB()
+  const store = rendered.device(new Set(["answer"]))
+  const [erased, kept] = [table.key("answer", "erased"), table.key("answer", "kept")]
+  await store.join([[erased, "<p>erased words</p>"], [kept, "<p>other words</p>"]])
+  await store.forget([erased])
+  // A copy written past the worker, as a tab closed mid-write leaves one: the words of a husked line no longer name it.
+  await idb.within({ name: rendered.DB, version: 4, store: rendered.ROWS, upgrade: () => {} }, "readwrite", s =>
+    idb.done(s.put({ key: erased, html: "<p>erased words</p>", bytes: 1, used: 1 })),
+  )
+  assert.ok(device.printed().some(r => r.includes("erased words")), "the block is back")
+  await store.forget([])
+  assert.ok(!device.printed().some(r => r.includes("erased words")), "and goes at the next forget")
+  assert.ok(device.printed().some(r => r.includes("other words")), "with nothing else")
+})

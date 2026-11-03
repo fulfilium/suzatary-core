@@ -1543,17 +1543,21 @@ under in every larger union and never wins.
   sent before it heard of an erasure writes nothing back. A key an erasure
   names is let go only once its blocks are forgotten, wherever it is held,
   the row or a pull's pieces. — `onewriter.test.ts` "law: once the box erases
-  words, no row, message or page holds them or their key…". A store's row in the shape of a
-  build before the keys (a bare replica) is deleted under a reset's rule
-  before it is read and taken again from the box; the plaintext row of the
-  store the lines replaced is deleted under the same rule once the lines'
-  row holds objects, the rendered blocks cleared first; a wipe deletes both
-  databases. — `linekeys.test.ts` "law: the row's join is a semilattice…",
+  words, no row, message or page holds them or their key…". Nor is the ciphertext of
+  a line every slot of which is erased: the core keeps such a line as its husk
+  (the line with each slot's words dropped, the key's name all that is left,
+  which no store's vocabulary reads), a reading reads the husk as the line read
+  without its keys and never fetches its print again, and every compaction
+  deletes the print of each line the core holds as a husk. A line a slot of
+  which still opens keeps its print; its erased slots stay unreadable, their
+  keys gone. A content answer is never kept with the reads. A wipe deletes
+  both databases. — `onewriter.test.ts` (the ciphertext among what nothing
+  holds); the core's `held_lines` "a line whose keys are gone reads the same as
+  its husk"; `linekeys.test.ts` "law: the row's join is a semilattice…",
   "law: a key an erasure names opens nothing…", "law: after a purge nothing
   the row or the rendered blocks hold decodes to the erased words", "a key a
   tab that never purged left on the device is forgotten…", "a purge that
-  cannot forget a block keeps the key…"; `objects.test.ts` "a row a build no
-  longer reads is deleted…"; `wipe.test.ts` "the lines' row…";
+  cannot forget a block keeps the key…"; `wipe.test.ts` "the lines' row…";
   `e2e/lines.test.ts`.
 - **A store's later epoch drops the copy in the join that brings it.** A
   store is a copy of the box's alone, so its rows are ordered by generation
@@ -1621,13 +1625,11 @@ under in every larger union and never wins.
   (`GET /api/stores/lines/skeleton`, pulled by the same pieces); the worker's
   JavaScript holds no node, key or head (`linesync.ts`). The device keeps the
   replica as the core's own form, a snapshot and the frames appended since
-  (`replicalog.ts`, the database's `replica` store, version 11), each frame
-  the delta of one move; a warm load hands the core the snapshot and the
-  frames and reads no row. A snapshot of another form is a miss: the log is
-  dropped and the lines taken again. Version 11 drops every earlier lines'
-  row and the snapshots beside them, with no converter, and clears the
-  rendered blocks their keys could find (`RENDERED_OWED`), so the skeleton is
-  pulled again once.
+  (`replicalog.ts`, the database's `replica` store, version 11; the core's
+  form 3), each frame the delta of one move and the lines it husked, and the
+  snapshot the rows and the husks; a warm load hands the core the snapshot and
+  the frames and reads no row. A snapshot of another form is a miss: the log
+  is dropped and the lines taken again, with no converter.
   again. It is a replica of nodes: each object's name, what it rests
   on, its size and its header, never its literal (`replica.Obj`). Each
   literal is kept by its name in the database's `content` store
@@ -1768,15 +1770,15 @@ Each pattern written once, in `web/src/algebra/once.ts`, `latest.ts`,
   key"; `device.test.ts` "an unreadable key row is offered a new key…";
   `app.test.ts` "a renewed or newly trusted key writes again without a
   reload".
-- **A replica row is read in one form:** the database's upgrade drops every
-  row an earlier version kept (version 2's and version 1's alike, and
-  version 4's lines, kept as literals, with their pieces), the tab
-  pulls each chain and store again from the box, and the reader holds no
-  shim. What a dropped row held that the box had not taken is lost. —
-  `objects.test.ts` "a row version 2 kept is dropped…", "a row version 1
-  kept is dropped…", "version 5 drops the lines' row and its pieces…"; e2e `upgrade8.test.ts`; `replica.test.ts` "a row in a form an earlier build
-  kept does not read…"; e2e `upgrade.test.ts` "a device holding a version 2
-  replica drops it on its first load…".
+- **The device keeps no format but this build's:** nothing is carried from
+  another. The rows' store of version 8 or later is this build's and holds
+  what the tab wrote and the box has not taken, so the upgrade keeps it, less
+  every row that is no chain's; every other store is made anew and taken again
+  from the box, and a device before version 8 keeps nothing. The rendered
+  store's version 4 drops every block once. What a dropped row held that the
+  box had not taken is lost. — `objects.test.ts` "a device from version 8 keeps
+  its chains' rows as they were…", "a device before version 8 keeps no row…";
+  `replica.test.ts` "a row in a form an earlier build kept does not read…".
 - **A warm load reads what a cold load reads, two tabs converge, and no key
   let go stays on the device.** Every move of the lines is a frame appended to
   the device's log, and each frame but a purge's is a join, so two tabs
@@ -1786,10 +1788,13 @@ Each pattern written once, in `web/src/algebra/once.ts`, `latest.ts`,
   one transaction it takes the frames after what its core held, writes the
   core's snapshot as of the last and deletes every frame up to it, and it
   writes nothing where another tab's snapshot came first, which the tab reads
-  instead. A purge forgets a dead key's blocks, then the key, from the core
-  and, by that compaction, from every snapshot and frame. — `warmload.test.ts`
-  "law: a warm load reads what a cold load reads, and two tabs converge…"
-  (every reload read with the box gone); `linereplica.test.ts` "law: the
+  instead, and it deletes the print of each line the core holds as a husk. A
+  purge forgets a dead key's blocks, then the key, from the core, husks every
+  line each key of whose words is then gone, keeps that step as a frame, so a
+  tab that compacts first takes it, and compacts, so no snapshot or frame
+  holds the key. — `warmload.test.ts` "law: a warm load reads what a cold load
+  reads, and two tabs converge…" (every reload read with the box gone), "a
+  husk one tab's purge kept stands through another tab's compaction…"; `linereplica.test.ts` "law: the
   core's rows of the lines are the TypeScript replica's…"; the core's
   `line_replica` laws; `onewriter.test.ts` "law: once the box erases words…";
   `wipe.test.ts` "the lines' snapshot and frames…"; e2e `lines.test.ts` "a warm

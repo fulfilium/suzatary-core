@@ -66,8 +66,6 @@ export namespace pull {
     readonly ask: (since: string) => Promise<Answer<O>>
     // What follows a landing that moved the row.
     readonly landed: (row: locked.Row<O>) => Promise<void>
-    // What runs before the row is first read.
-    readonly restoring: () => Promise<void>
   }
 
   // How far a pull has come: a piece came, `size` bytes lacking when it was asked for and `weight` of them brought; or
@@ -183,7 +181,6 @@ export namespace pull {
     // One read of the row per page.
     const restoredOne = async (): Promise<void> => {
       phases.mark(`${name} restore`)
-      await st.restoring()
       const read = await st.place.restore()
       if (read.row.type === "Dropped") return told(read.row.failed)
       told(read.row.type === "Unreadable" ? read.row.why : null)

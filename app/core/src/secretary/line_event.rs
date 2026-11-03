@@ -55,8 +55,25 @@ pub struct LineEvent {
 /// One slot's words as stored: locked, and the rules they passed before they were locked.
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct SealedSlot {
-    locked: Locked<LineSlot>,
+    seal: Seal,
     under: ScrubbedUnder,
+}
+
+/// A slot's words: locked, or, in a husk, dropped, the name of the key they were locked under
+/// all that is left of them.
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum Seal {
+    Locked(Locked<LineSlot>),
+    Dropped(KeyName),
+}
+
+impl Seal {
+    fn key(&self) -> &KeyName {
+        match self {
+            Self::Locked(locked) => locked.key(),
+            Self::Dropped(key) => key,
+        }
+    }
 }
 
 impl SealedSlot {
@@ -67,7 +84,10 @@ impl SealedSlot {
     /// (`secretary::opened`, the tab's held lines) scrubs a stale slot once, and no reader opens
     /// a seal a reseal supersedes ([`crate::secretary::transcript::Through`]).
     fn open(&self, binding: &LineSlot, key: &TextKey) -> Option<Words<LineWords>> {
-        let words = self.locked.open(binding, key)?;
+        let Seal::Locked(locked) = &self.seal else {
+            return None;
+        };
+        let words = locked.open(binding, key)?;
         Some(if self.under.is_current(()) {
             Words::kept(words)
         } else {
@@ -206,7 +226,7 @@ impl LineEvent {
             let key = FreshKey::draw(entropy).map_err(NotALine::NoKey)?;
             let (locked, opens) = Locked::lock(&line.slot(slot, under), words, key);
             line.words.push(SealedSlot {
-                locked,
+                seal: Seal::Locked(locked),
                 under: under.clone(),
             });
             keys.push(opens);
@@ -277,7 +297,7 @@ impl LineEvent {
 
     /// The name of each slot's key, in slot order.
     pub fn keys(&self) -> impl Iterator<Item = &KeyName> {
-        self.words.iter().map(|sealed| sealed.locked.key())
+        self.words.iter().map(|sealed| sealed.seal.key())
     }
 
     /// The rules each slot's words passed, in slot order.
@@ -305,7 +325,10 @@ impl LineEvent {
     /// through the door ([`LineEvent::reseal`]), never for a reader.
     pub(crate) fn unscrubbed(&self, slot: usize, key: &TextKey) -> Option<LineWords> {
         let sealed = self.words.get(slot)?;
-        sealed.locked.open(&self.slot(slot, &sealed.under), key)
+        let Seal::Locked(locked) = &sealed.seal else {
+            return None;
+        };
+        locked.open(&self.slot(slot, &sealed.under), key)
     }
 
     /// Slot `slot`'s words as `slots` reads them by its key's name, opened with this line's
@@ -316,12 +339,13 @@ impl LineEvent {
             return Gone::Missing.into();
         };
         let binding = self.slot(slot, &sealed.under);
-        slots.words(
-            sealed.locked.key(),
-            &binding.0,
-            sealed.locked.sealed(),
-            &|key| sealed.open(&binding, key),
-        )
+        let bytes = match &sealed.seal {
+            Seal::Locked(locked) => locked.sealed(),
+            Seal::Dropped(_) => &[],
+        };
+        slots.words(sealed.seal.key(), &binding.0, bytes, &|key| {
+            sealed.open(&binding, key)
+        })
     }
 
     /// The line as read: each slot read by `slots` by its key's name, opened with this line's
@@ -401,7 +425,13 @@ fn seal(
     let under = ScrubbedUnder::Version(Rules::current(()).clone());
     let key = FreshKey::draw(entropy).map_err(NotALine::NoKey)?;
     let (locked, opens) = Locked::lock(&line.slot(slot, &under), &words, key);
-    Ok((SealedSlot { locked, under }, opens))
+    Ok((
+        SealedSlot {
+            seal: Seal::Locked(locked),
+            under,
+        },
+        opens,
+    ))
 }
 
 /// The fields a shape prints after the head, in signature order.
@@ -561,16 +591,33 @@ const SCRUBBED: Constructor = ("Scrubbed", &["key", "box", "rules"]);
 /// `Locked(key, box)`: a slot locked before lines recorded their rules.
 const LOCKED: Constructor = ("Locked", &["key", "box"]);
 
+/// `Dropped(key, rules)`: a husk's slot, its words dropped, the key's name and the rules they had
+/// passed. No store's vocabulary reads it: a husk is the device's, and never an object.
+const DROPPED: Constructor = ("Dropped", &["key", "rules"]);
+
+/// `DroppedLocked(key)`: a husk's slot locked before lines recorded their rules.
+const DROPPED_LOCKED: Constructor = ("DroppedLocked", &["key"]);
+
 /// A slot's words as stored.
 impl Literal for SealedSlot {
     fn to_value(&self) -> Value {
-        let key = self.locked.key().to_value();
-        let sealed = base64::engine::general_purpose::STANDARD
-            .encode(self.locked.sealed())
-            .to_value();
-        match &self.under {
-            ScrubbedUnder::Version(rules) => record(SCRUBBED, vec![key, sealed, rules.to_value()]),
-            ScrubbedUnder::Unversioned => record(LOCKED, vec![key, sealed]),
+        let key = self.seal.key().to_value();
+        match (&self.seal, &self.under) {
+            (Seal::Locked(locked), under) => {
+                let sealed = base64::engine::general_purpose::STANDARD
+                    .encode(locked.sealed())
+                    .to_value();
+                match under {
+                    ScrubbedUnder::Version(rules) => {
+                        record(SCRUBBED, vec![key, sealed, rules.to_value()])
+                    }
+                    ScrubbedUnder::Unversioned => record(LOCKED, vec![key, sealed]),
+                }
+            }
+            (Seal::Dropped(_), ScrubbedUnder::Version(rules)) => {
+                record(DROPPED, vec![key, rules.to_value()])
+            }
+            (Seal::Dropped(_), ScrubbedUnder::Unversioned) => record(DROPPED_LOCKED, vec![key]),
         }
     }
 
@@ -585,7 +632,7 @@ impl Literal for SealedSlot {
             ScrubbedUnder::Unversioned
         };
         Ok(Self {
-            locked: Locked::read(fields.get("key")?, sealed),
+            seal: Seal::Locked(Locked::read(fields.get("key")?, sealed)),
             under,
         })
     }
@@ -842,30 +889,7 @@ impl Schema for LineEvent {
     }
 
     fn from_value(_: &LineVocabulary, value: &Value) -> Result<Self, ProdromeError> {
-        let fields = Fields::among(value, LINES)?;
-        let shape = shape_of(fields)?;
-        let words: Vec<SealedSlot> = if has_words(signature(&shape)) {
-            fields.get("words")?
-        } else {
-            Vec::new()
-        };
-        if words.len() != shape.slots() {
-            return Err(ProdromeError::invalid(format!(
-                "{} holds {} slots of words, and its shape {}",
-                fields.name(),
-                words.len(),
-                shape.slots()
-            )));
-        }
-        Ok(Self {
-            conversation: fields.get("conversation")?,
-            at: fields.get("at")?,
-            actor: fields.get("actor")?,
-            held: fields.get("held")?,
-            carried: fields.get("carried")?,
-            shape,
-            words,
-        })
+        line_of(value, |fields| fields.get("words"))
     }
 
     fn key(&self) -> &ConversationId {
@@ -888,6 +912,133 @@ impl Schema for LineEvent {
 /// A part of a line still spelled as JSON inside its literal: a turn's shape, who named a
 /// conversation, a coding session, an erasure. Changing it moves each slot's binding, so it
 /// changes only with a carry that locks every slot again.
+/// The line `value` prints, its words read by `words` from its fields.
+fn line_of(
+    value: &Value,
+    words: impl FnOnce(Fields<'_>) -> Result<Vec<SealedSlot>, ProdromeError>,
+) -> Result<LineEvent, ProdromeError> {
+    let fields = Fields::among(value, LINES)?;
+    let shape = shape_of(fields)?;
+    let words = if has_words(signature(&shape)) {
+        words(fields)?
+    } else {
+        Vec::new()
+    };
+    if words.len() != shape.slots() {
+        return Err(ProdromeError::invalid(format!(
+            "{} holds {} slots of words, and its shape {}",
+            fields.name(),
+            words.len(),
+            shape.slots()
+        )));
+    }
+    Ok(LineEvent {
+        conversation: fields.get("conversation")?,
+        at: fields.get("at")?,
+        actor: fields.get("actor")?,
+        held: fields.get("held")?,
+        carried: fields.get("carried")?,
+        shape,
+        words,
+    })
+}
+
+/// What a device keeps of a line every key of whose words it let go: the line with each slot's
+/// words dropped, the name of the key they were locked under all that is left of them. It reads as
+/// the line read once its keys are gone, and it is the device's alone: no store's vocabulary reads
+/// a dropped slot, so a husk is never an object.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Husk(LineEvent);
+
+/// A husk's print that does not read.
+#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
+#[error("a husk that does not read: {0}")]
+pub struct NotAHusk(String);
+
+impl LineEvent {
+    /// The line with every slot's words dropped; `None` for a line that holds no words, which
+    /// has nothing to drop.
+    #[must_use]
+    pub fn husk(&self) -> Option<Husk> {
+        if self.words.is_empty() {
+            return None;
+        }
+        let mut husk = self.clone();
+        for slot in &mut husk.words {
+            slot.seal = Seal::Dropped(slot.seal.key().clone());
+        }
+        Some(Husk(husk))
+    }
+}
+
+impl Husk {
+    /// The line it reads as.
+    #[must_use]
+    pub fn line(&self) -> &LineEvent {
+        &self.0
+    }
+
+    /// Its print: the line's, each slot `Dropped(key, rules)`.
+    #[must_use]
+    pub fn print(&self) -> String {
+        print_literal(&self.0.to_value())
+    }
+
+    /// The husk `text` prints.
+    ///
+    /// # Errors
+    /// [`NotAHusk`] for a print that is no line, or a line any slot of which is not dropped.
+    pub fn read(text: &str) -> Result<Self, NotAHusk> {
+        let value = prodrome_core::literal::parse_literal(text, &HuskVocabulary)
+            .map_err(|e| NotAHusk(e.to_string()))?;
+        let line = line_of(&value, |fields| {
+            Ok(fields
+                .get::<Vec<DroppedSlot>>("words")?
+                .into_iter()
+                .map(|DroppedSlot(slot)| slot)
+                .collect())
+        })
+        .map_err(|e| NotAHusk(e.to_string()))?;
+        if line.words.is_empty() {
+            return Err(NotAHusk("a line with no words has no husk".to_owned()));
+        }
+        Ok(Self(line))
+    }
+}
+
+/// A husk's whitelist: the lines' constructors and the two dropped slots.
+struct HuskVocabulary;
+
+impl Vocabulary for HuskVocabulary {
+    fn signature(&self, name: &str) -> Option<prodrome_core::literal::Signature<'_>> {
+        Table(LINES)
+            .find(name)
+            .or_else(|| Table(&[DROPPED, DROPPED_LOCKED]).find(name))
+    }
+}
+
+/// A husk's slot, read: dropped, and nothing else.
+struct DroppedSlot(SealedSlot);
+
+impl Literal for DroppedSlot {
+    fn to_value(&self) -> Value {
+        self.0.to_value()
+    }
+
+    fn from_value(value: &Value) -> Result<Self, ProdromeError> {
+        let fields = Fields::among(value, &[DROPPED, DROPPED_LOCKED])?;
+        let under = if fields.name() == DROPPED.0 {
+            ScrubbedUnder::Version(fields.get("rules")?)
+        } else {
+            ScrubbedUnder::Unversioned
+        };
+        Ok(Self(SealedSlot {
+            seal: Seal::Dropped(fields.get("key")?),
+            under,
+        }))
+    }
+}
+
 fn json(value: &impl Serialize) -> Value {
     Value::str(serde_json::to_string(value).expect("a line's parts are plain data"))
 }
@@ -1031,7 +1182,13 @@ mod tests {
             &Counting::default(),
         )
         .expect("a line");
-        let SealedSlot { locked, under } = &line.words[0];
+        let SealedSlot {
+            seal: Seal::Locked(locked),
+            under,
+        } = &line.words[0]
+        else {
+            panic!("a written line's slot is locked");
+        };
         let opens = |binding: LineSlot| locked.open(&binding, &keys[0]).is_some();
         assert!(!opens(other.slot(0, under)), "another line");
         assert!(!opens(line.slot(1, under)), "another slot");

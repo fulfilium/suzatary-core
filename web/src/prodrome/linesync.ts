@@ -3,17 +3,18 @@
 // for what the core lacks and hands it over, and keeps each move the core answers on the device, as the frame the core
 // printed (`replicalog`); it holds no node, key or head of its own. A warm load hands the core its snapshot and the frames
 // after it and reads no row. Another tab's frames are taken as they are read, each a join; a compaction, after a quiet,
-// when the page is hidden, or once a purge let keys go, is the one way bytes leave the device.
+// when the page is hidden, or once a purge let keys go, is the one way bytes leave the device, the prints of the lines
+// the core holds as husks among them.
 
 import type { Lines } from "./core"
-import { framed, heldOf, holdAdmitted, lackingIn, lackingOf, lacksIn, movedOf, owedOf, planOf } from "./core"
+import { framed, heldOf, holdAdmitted, husksOf, lackingIn, lackingOf, lacksIn, movedOf, owedOf, planOf } from "./core"
 import content from "./content"
 import type engine from "./engine"
 import excluded from "./excluded"
 import type heads from "./heads"
 import keep from "./keep"
 import type lines from "./lines"
-import { CHAIN, RENDERED_OWED, dropRow, heldRow } from "./objects"
+import { CONTENT } from "./objects"
 import phases from "./phases"
 import pieces from "./pieces"
 import type progress from "./progress"
@@ -34,14 +35,12 @@ export namespace linesync {
   // them, when the row was reset or heard a later epoch.
   export type Moved = "All" | readonly string[]
 
-  // Who hears the lines: a reading's leavings by reader, a pull's progress, a move, and the rendered blocks forgotten
-  // (by name, or all of them).
+  // Who hears the lines: a reading's leavings by reader, a pull's progress, a move, and the rendered blocks forgotten.
   export type Effects = {
     readonly told: (reader: string, left: excluded.Left) => void
     readonly bars: (e: progress.Event) => void
     readonly moved: (conversations: Moved) => void
     readonly forgot: (blocks: readonly string[]) => void
-    readonly cleared: () => void
     readonly replaced: () => void
   }
 
@@ -77,15 +76,14 @@ export namespace linesync {
   }
 
   export const of = (held: Lines, fx: Effects, blocks: rendered.Store): T => {
-    const log = replicalog.of(NAME)
+    const log = replicalog.of(NAME, CONTENT)
     const told = (why: string | null): void => fx.told(`row/${KEPT}`, pull.unread(NAME, why))
     const moved = (said: string): void => fx.moved(movedOf(said))
 
-    // What a purge or a retirement takes from the rendered blocks, taken from the page's table as well as the device's.
+    // What a purge takes from the rendered blocks, taken from the page's table as well as the device's.
     // A block forgotten here is gone from the device and marked there before the page hears of it, so no tab's worker,
     // whatever it heard, writes it back.
     const forget = (gone: readonly string[]): Promise<lo.Settled<null>> => blocks.forget(gone).then(done => (fx.forgot(gone), done))
-    const clear = (): Promise<lo.Settled<null>> => blocks.clear().then(done => (fx.cleared(), done))
 
     // Whether a page is shown; none is until one says so.
     let shown = false
@@ -134,48 +132,6 @@ export namespace linesync {
       void prefetch()
     }
 
-    // The plaintext conversations a build before the lines kept: deleted once the lines' row holds what replaces them,
-    // under a reset's rule, the blocks they rendered cleared first, since nothing names which of those words went since.
-    const PLAIN = "store/conversations"
-    const retired = once.of(async (): Promise<void> => {
-      const was = await heldRow(CHAIN, PLAIN)
-      if (was.type === "Absent") return
-      const cleared = await clear()
-      if (cleared.type === "Error") throw new Error(cleared.e)
-      const gone = await dropRow(CHAIN, PLAIN, new Set())
-      if (gone.type === "Error") throw new Error(gone.e)
-    })
-    // A retirement that failed is said, and tried again at the next pull of the lines.
-    const retire = (): Promise<void> =>
-      retired.get().then(
-        () => fx.told(`row/${PLAIN}`, excluded.NOTHING),
-        (e: unknown) =>
-          fx.told(
-            `row/${PLAIN}`,
-            excluded.left(excluded.NONE, [], [{ chain: PLAIN, why: `the conversations a build before the lines kept are still on this device (${lo.reason(e)}); it tries again at the next sync`, cure: "None" }]),
-          ),
-      )
-
-    // The blocks a build before version 5 rendered, cleared once after the upgrade that dropped the lines they were
-    // rendered from, since no purge can find them by their words any more; a failure is said and tried again.
-    const owedClear = once.of(async (): Promise<void> => {
-      const owed = await heldRow({ parse: raw => (raw === true ? lo.val(true) : lo.error("not the upgrade's mark")) }, RENDERED_OWED)
-      if (owed.type === "Absent") return
-      const done = await clear()
-      if (done.type === "Error") throw new Error(done.e)
-      const gone = await dropRow(CHAIN, RENDERED_OWED, new Set())
-      if (gone.type === "Error") throw new Error(gone.e)
-    })
-    const cleared = (): Promise<void> =>
-      owedClear.get().then(
-        () => fx.told(`row/${RENDERED_OWED}`, excluded.NOTHING),
-        (e: unknown) =>
-          fx.told(
-            `row/${RENDERED_OWED}`,
-            excluded.left(excluded.NONE, [], [{ chain: RENDERED_OWED, why: `the blocks a build before this one rendered are still on this device (${lo.reason(e)}); it tries again at the next load`, cure: "None" }]),
-          ),
-      )
-
     // Where this tab stands in the device's log: every frame up to `after` is held, and the frames it appended itself,
     // which the core already holds, are passed over when it reads the log again.
     let after = 0
@@ -219,7 +175,7 @@ export namespace linesync {
       quiet = undefined
       if (!idb.available()) return
       for (let tries = 0; tries < 2; tries += 1) {
-        const done = await log.compact(after, take, () => held.snapshot())
+        const done = await log.compact(after, take, () => held.snapshot(), () => husksOf(held))
         if (done.type === "Error") return
         if (done.v.type === "Through") {
           after = done.v.at
@@ -263,11 +219,12 @@ export namespace linesync {
     }
     // Every dead key the core holds, landed or in a pull's pieces, let go: the content of the lines naming it fetched, so
     // the blocks its words fed are found; those blocks forgotten; then the key, from the core, and from the device by a
-    // compaction, so no frame holds it. A step that fails keeps the keys, owed.
+    // compaction, so no frame holds it; and every line each key of whose words is then gone kept as its husk, its print
+    // deleted by the same compaction. A step that fails keeps the keys, owed.
     const purge = serial.of(async (): Promise<void> => {
       const owed = owedOf(held, [])
       const names = Object.keys(owed)
-      if (names.length === 0) return owing(null)
+      if (names.length === 0 && !held.husking()) return owing(null)
       try {
         await fetching("First", lackingIn(held, { type: "Naming", keys: names }))
       } catch (e: unknown) {
@@ -276,10 +233,9 @@ export namespace linesync {
       const found = owedOf(held, [])
       const forgot = await forget(Object.values(found).flat())
       if (forgot.type === "Error") return owing(forgot.e)
-      const step = held.forget(JSON.stringify(Object.keys(found)))
-      const said = step.moved
-      step.free()
-      moved(said)
+      // Kept as a frame first, so a tab that compacts before taking it is behind this one and takes it: its frame names
+      // the keys and holds none, and the compaction that follows deletes it.
+      await stepped(held.forget(JSON.stringify(Object.keys(found))))
       await compact()
       owing(null)
     })
@@ -297,7 +253,6 @@ export namespace linesync {
     // One read of the device's log per page: the core loaded from it, before anything reads the lines.
     const restored = once.of(async (): Promise<void> => {
       phases.mark("lines restore")
-      await cleared()
       if (idb.available()) {
         const kept = await log.read()
         // Nothing reads the lines before they are restored, so what the load moved is told to no one.
@@ -319,10 +274,8 @@ export namespace linesync {
       settled()
     }
 
-    // After a landing: the plaintext of a build before the lines retired, the content outside the plan let go, and the
-    // plan prefetched once a page reads the lines.
+    // After a landing: the content outside the plan let go, and the plan prefetched once a page reads the lines.
     const landedNow = async (): Promise<void> => {
-      if (held.heard()) await retire()
       const gone = await content.keepOnly(new Set((await planned()).keep), heldOf(held), drop => Promise.resolve(held.hold("[]", JSON.stringify(drop))))
       if (gone.type === "Error") fx.told(`row/${pull.kept("lines")}`, pull.unread("lines", gone.e))
       if (wanted === "Yes") prefetched(held.heads())

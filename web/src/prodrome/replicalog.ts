@@ -3,8 +3,9 @@
 // the core's; this keeps them in order and nothing else. Every write of a frame is an append, so two tabs appending
 // lose nothing, and a frame is a join, so the order of two tabs' joins does not matter. A compaction is the one way
 // bytes leave: in one transaction it reads the frames after what its core took, hands them to the core, writes the
-// core's snapshot as of the last frame and deletes every frame up to it. IndexedDB runs one read-write transaction over
-// a store at a time, so a compaction never deletes a frame its snapshot does not hold.
+// core's snapshot as of the last frame, deletes every frame up to it, and deletes from the store's prints each print
+// the core holds a husk of instead. IndexedDB runs one read-write transaction over a store at a time, so a compaction
+// never deletes a frame its snapshot does not hold, and the snapshot that holds a husk is kept with its print's delete.
 
 import idb from "../app/idb"
 import lo from "../algebra/lo"
@@ -32,10 +33,10 @@ export namespace replicalog {
     readonly since: (after: number) => Promise<lo.Settled<Kept>>
     // `bytes` appended after the last frame; the place it was appended at.
     readonly append: (bytes: Uint8Array) => Promise<lo.Settled<number>>
-    // The frames after `after` handed to `take`, then `print`'s snapshot kept as of the last frame and every frame up to
-    // it deleted, all in one transaction; or nothing, where another tab's compaction folded frames after `after` that
-    // this tab did not take, so it reads them first (`since`).
-    readonly compact: (after: number, take: (frames: readonly Frame[]) => void, print: () => Uint8Array) => Promise<lo.Settled<Compacted>>
+    // The frames after `after` handed to `take`, then `print`'s snapshot kept as of the last frame, every frame up to it
+    // deleted and each print `husked` names deleted, all in one transaction; or nothing, where another tab's compaction
+    // folded frames after `after` that this tab did not take, so it reads them first (`since`).
+    readonly compact: (after: number, take: (frames: readonly Frame[]) => void, print: () => Uint8Array, husked: () => readonly string[]) => Promise<lo.Settled<Compacted>>
     // The snapshot and every frame deleted: the store is taken again from the box.
     readonly drop: () => Promise<lo.Settled<null>>
   }
@@ -43,7 +44,8 @@ export namespace replicalog {
   const PLACE = 12
   const placed = (at: number): string => String(at).padStart(PLACE, "0")
 
-  export const of = (store: string): T => {
+  // The replica of `store`, whose content by name is kept in `prints`, a store of the same database.
+  export const of = (store: string, prints: idb.Db): T => {
     const SNAPSHOT = `${store}/snapshot`
     const LOG = `${store}/log/`
     const log = (after: number): IDBKeyRange => IDBKeyRange.bound(`${LOG}${placed(after)}`, `${LOG}￿`, true)
@@ -90,15 +92,19 @@ export namespace replicalog {
             return at
           }),
         ),
-      compact: (after, take, print) =>
+      compact: (after, take, print, husked) =>
         settled(
-          idb.within(REPLICA, "readwrite", async (s): Promise<Compacted> => {
+          idb.withBeside(REPLICA, prints, "readwrite", async (s, content): Promise<Compacted> => {
             const snapshot = await snapshotIn(s)
             if (snapshot !== null && snapshot.through > after) return { type: "Behind" }
             const missed = await frames(s, after)
             take(missed)
             const through = missed.at(-1)?.at ?? after
-            await Promise.all([idb.done(s.put({ through, bytes: print() }, SNAPSHOT)), idb.done(s.delete(IDBKeyRange.bound(`${LOG}`, `${LOG}${placed(through)}`)))])
+            await Promise.all([
+              idb.done(s.put({ through, bytes: print() }, SNAPSHOT)),
+              idb.done(s.delete(IDBKeyRange.bound(`${LOG}`, `${LOG}${placed(through)}`))),
+              ...husked().map(name => idb.done(content.delete(name))),
+            ])
             return { type: "Through", at: through }
           }),
         ),

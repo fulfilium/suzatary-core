@@ -9,13 +9,11 @@
  *    the blocks its words were rendered to.
  * 3. Forgetting a fact erases what it caused and offers the rest on a card, which the tab's
  *    tap erases.
- * 4. A device that kept the plaintext conversations is upgraded: that row goes once the lines
- *    are held, and nothing plaintext is left on the device.
- * 5. A conversation the device prefetched reads with no network, and one it lacks says so.
- * 6. A warm load answers the stream from the core's snapshot and the frames after it, and reads no row; a snapshot of
+ * 4. A conversation the device prefetched reads with no network, and one it lacks says so.
+ * 5. A warm load answers the stream from the core's snapshot and the frames after it, and reads no row; a snapshot of
  *    another form is passed over and the lines taken again; and once an erasure's key is let go no snapshot or frame
  *    holds it.
- * 7. A conversation the box opened after the device kept its snapshot draws on a warm load, opened at once or from the
+ * 6. A conversation the box opened after the device kept its snapshot draws on a warm load, opened at once or from the
  *    stream, and across a build update; and one another tab landed draws from the device with the box's lines held.
  */
 
@@ -194,7 +192,7 @@ app.scene("a conversation the box opened after the device kept its snapshot draw
   await app.page.waitFor(`document.querySelector(".streamround") !== null`, { timeout: 20000 })
   await app.page.evaluate(`void (location.hash = "#/secretary/${second}")`)
   await drawn(second)
-  // Across a build update, as the upgrade scenes load one.
+  // Across a build update: a load the browser cannot answer from what it holds.
   const third = await opened("3")
   await app.page.navigate(`${WRITE_BASE}/?upgraded=1#/secretary/${third}`)
   await drawn(third)
@@ -246,74 +244,6 @@ app.scene("forgetting a fact erases what it caused, and the tab's tap erases wha
   assert.ok(!(await app.page.evaluate<string>(said("person"))).includes("calls after ten"), "the turn that said it is erased")
   assert.ok(!(await app.page.evaluate<string>(said("model"))).includes("Noted."), "and the round's prose")
   await app.page.waitFor(`${held("suzatary")}.then((all) => !all.includes("calls after ten"))`, { timeout: 15000 })
-})
-
-app.scene("a device that kept the plaintext conversations is upgraded, and nothing plaintext remains", async () => {
-  const OLD = "the old plaintext words of a line"
-  await app.resize(PHONE)
-  await app.open(WRITE_BASE)
-  await converse("hello there")
-  await app.page.waitFor(`${REPLICA_ROWS}.then((rows) => rows.length > 0)`, { timeout: 20000 })
-  // A row as a build before the lines kept it, and a block it rendered, put where that build put them.
-  const hash = "e".repeat(64)
-  const plain = {
-    generation: 0,
-    objects: [{ hash, literal: `Change(genesis='${"f".repeat(64)}', deps=(), event=Said(conversation='default', at=datetime(2026, 9, 2, 12, 0, 0), actor='assistant', held=0, turn='{"who":"person","text":"${OLD}","references":[]}', by=None))` }],
-    synced: [hash],
-    refused: [],
-    words: [],
-  }
-  await app.page.evaluate(`new Promise((ok, no) => {
-    const put = (name, store, write) => new Promise((done, fail) => {
-      const r = indexedDB.open(name)
-      r.onerror = () => fail(String(r.error))
-      r.onsuccess = () => {
-        const tx = r.result.transaction(store, "readwrite")
-        write(tx.objectStore(store))
-        tx.oncomplete = () => (r.result.close(), done(true))
-        tx.onerror = () => fail(String(tx.error))
-      }
-    })
-    put("suzatary", "chain", (s) => s.put(${JSON.stringify(plain)}, "objects:store/conversations"))
-      .then(() => put("suzatary-rendered", "rows", (s) => s.put({ key: "answer old", html: "<p>${OLD}</p>", bytes: 2, used: 1 })))
-      .then(ok, no)
-  })`)
-  assert.ok((await app.page.evaluate<string>(held("suzatary"))).includes(OLD), "the old row is on the device")
-  // A new load: the build reads what the device holds afresh.
-  await app.page.navigate(`${WRITE_BASE}/?upgraded=1#/secretary/default`)
-  await app.page.waitFor(`document.querySelector(".pagetitle") !== null`, { timeout: 15000 })
-  await app.page.waitFor(`${held("suzatary")}.then((all) => !all.includes("objects:store/conversations"))`, { timeout: 20000 })
-  assert.ok(!(await app.page.evaluate<string>(held("suzatary"))).includes(OLD), "the old row is gone")
-  assert.ok(!(await app.page.evaluate<string>(held("suzatary-rendered"))).includes(OLD), "and what it rendered")
-  assert.ok((await app.page.evaluate<unknown[]>(REPLICA_ROWS)).length > 0, "the lines stay")
-})
-
-app.scene("an inbox row a build before the keys kept is taken again from the box, and nothing says it does not read", async () => {
-  await app.resize(PHONE)
-  await app.open(WRITE_BASE)
-  await app.page.navigate(`${WRITE_BASE}/#/inbox`)
-  const rowAt = (key: string): string => `${rowsOf("suzatary", "chain")}.then((rows) => rows.find(([k]) => k === "${key}")?.[1] ?? null)`
-  const nodes = `${rowsOf("suzatary", "inbox")}.then((rows) => rows.filter(([k]) => k.startsWith("node/")).map(([, v]) => v))`
-  const oldRow = rowAt("objects:store/inbox")
-  await app.page.waitFor(`${nodes}.then((ns) => ns.length > 0)`, { timeout: 20000 })
-  // The row as the build before the keys wrote it: the bare replica, under the store's name, and the inbox's own store
-  // emptied.
-  const objects = await app.page.evaluate<unknown[]>(nodes)
-  const bare = { generation: 0, objects, synced: [], refused: [], words: [], frontier: { type: "Nothing" } }
-  await app.page.evaluate(put("suzatary", "inbox", `(s) => s.clear()`))
-  await app.page.evaluate(put("suzatary", "chain", `(s) => s.put(${JSON.stringify(bare)}, "objects:store/inbox")`))
-  assert.equal(await app.page.evaluate<boolean>(`${oldRow}.then((row) => row !== null && row.replica === undefined)`), true, "the old shape is on the device")
-  await app.page.navigate(`${WRITE_BASE}/?bare=1#/inbox`)
-  await app.page.waitFor(`document.querySelector(".pagetitle") !== null`, { timeout: 15000 })
-  await app.page.waitFor(`${nodes}.then((ns) => ns.length > 0)`, { timeout: 20000 })
-  // The old row is deleted in its own step, which can end after the nodes are written.
-  await app.page.waitFor(`${oldRow}.then((row) => row === null)`, { timeout: 20000 })
-  assert.equal(await app.page.evaluate<unknown>(oldRow), null, "the old row is gone")
-  assert.equal(
-    await app.page.evaluate<boolean>(`document.querySelector('#excluded li[data-row="store/inbox"]') === null`),
-    true,
-    "no line says the inbox does not read",
-  )
 })
 
 app.scene("a key a closed tab left on the device is forgotten with the blocks it fed, by the next tab that reads the row", async () => {

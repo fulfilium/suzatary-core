@@ -24,7 +24,7 @@ use prodrome_core::memo::{self, Algebra, Cache, Report, Tree};
 use crate::secretary::answer::Renderable;
 use crate::secretary::erasure::Erasure;
 use crate::secretary::key_ring::KeyRing;
-use crate::secretary::line_event::{LineEvent, LineVocabulary};
+use crate::secretary::line_event::{Husk, LineEvent, LineVocabulary};
 use crate::secretary::line_shape::LineShape;
 use crate::secretary::line_words::LineWords;
 use crate::secretary::locked_text::{KeyName, TextKey};
@@ -88,6 +88,9 @@ pub struct HeldLines {
     rounds: BTreeMap<(ConversationId, usize), RoundRead>,
     /// Counts each change of the prints held, wrapping: what names a reading of which are held.
     moves: u32,
+    /// The lines held as their husks, which no drop lets go: a husk stands where its print stood,
+    /// so a reading never lacks it.
+    husks: BTreeSet<Hash>,
 }
 
 /// A round as last read: the objects it read and its node, whose entries a later reading of the
@@ -431,6 +434,7 @@ impl HeldLines {
             root: None,
             rounds: BTreeMap::new(),
             moves: 0,
+            husks: BTreeSet::new(),
         }
     }
 
@@ -506,7 +510,74 @@ impl HeldLines {
         self.held(add, drop);
     }
 
+    /// Each line of `names` held as a print, with words, swapped for its husk: what is left of a
+    /// line once every key of its words is let go. The husks, with what they rest on.
+    pub fn husk(&mut self, names: &BTreeSet<Hash>) -> Vec<(Hash, Vec<Hash>, Husk)> {
+        let husked: Vec<(Hash, Vec<Hash>, Husk)> = names
+            .iter()
+            .filter(|name| !self.husks.contains(*name))
+            .filter_map(|name| match self.prints.get(name) {
+                Some(Print::Line { line, parents }) => line
+                    .husk()
+                    .map(|husk| (name.clone(), parents.clone(), husk)),
+                Some(Print::Structure { .. } | Print::Unread(_)) | None => None,
+            })
+            .collect();
+        self.hold_husks(husked.clone());
+        husked
+    }
+
+    /// `husks` held, each in place of its line's print where one is held.
+    pub fn hold_husks(&mut self, husks: Vec<(Hash, Vec<Hash>, Husk)>) {
+        if husks.is_empty() {
+            return;
+        }
+        let names: Vec<Hash> = husks.iter().map(|(name, ..)| name.clone()).collect();
+        self.husks.extend(names.iter().cloned());
+        let add = husks
+            .into_iter()
+            .map(|(name, parents, husk)| {
+                let line = Arc::new(husk.line().clone());
+                (name, Print::Line { line, parents })
+            })
+            .collect();
+        self.swapped(add, &names);
+    }
+
+    /// Whether the line named `name` is held as its husk.
+    #[must_use]
+    pub fn husked(&self, name: &Hash) -> bool {
+        self.husks.contains(name)
+    }
+
+    /// The name of every line held with words each slot of which is locked under a key `held`
+    /// says is not held: the lines to husk.
+    pub fn bare(&self, held: impl Fn(&KeyName) -> bool) -> BTreeSet<Hash> {
+        self.prints
+            .iter()
+            .filter(|(name, _)| !self.husks.contains(*name))
+            .filter_map(|(name, print)| match print {
+                Print::Line { line, .. }
+                    if line.keys().next().is_some() && line.keys().all(|key| !held(key)) =>
+                {
+                    Some(name.clone())
+                }
+                Print::Line { .. } | Print::Structure { .. } | Print::Unread(_) => None,
+            })
+            .collect()
+    }
+
     fn held(&mut self, add: Vec<(Hash, Print)>, drop: &[Hash]) {
+        let drop: Vec<Hash> = drop
+            .iter()
+            .filter(|name| !self.husks.contains(*name))
+            .cloned()
+            .collect();
+        self.swapped(add, &drop);
+    }
+
+    /// `drop` let go, then `add` held.
+    fn swapped(&mut self, add: Vec<(Hash, Print)>, drop: &[Hash]) {
         let dropped: BTreeSet<&Hash> = drop
             .iter()
             .filter(|name| self.prints.remove(*name).is_some())

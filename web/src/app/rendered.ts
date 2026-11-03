@@ -54,8 +54,6 @@ export namespace rendered {
     get: (ks: readonly table.Key[]) => Promise<(string | null)[]>
     join: (pairs: readonly Pair[]) => Promise<table.Key[]>
     forget: (ks: readonly table.Key[]) => Promise<lo.Settled<null>>
-    // Every key, done once the device holds none.
-    clear: () => Promise<lo.Settled<null>>
     usage: () => Promise<Usage>
   }
 
@@ -77,7 +75,6 @@ export namespace rendered {
       get: ks => Promise.resolve(ks.map(k => table.hit(t.get(k)) ?? null)),
       join: ps => Promise.resolve(t.join(gone.fresh(ps).filter(([k]) => ours(fs)(k)))),
       forget: ks => (gone.add(ks), taken(fs, ks, t.pairs().map(([k]) => k)).forEach(k => t.remove(k)), Promise.resolve(DONE)),
-      clear: () => (t.pairs().forEach(([k]) => t.remove(k)), Promise.resolve(DONE)),
       usage: () => Promise.resolve(usageOf(t.pairs().map(([key, html]) => ({ key, bytes: bytesOf(html), used: 0 })))),
     }
   }
@@ -128,10 +125,11 @@ export namespace rendered {
   export const DB = "suzatary-rendered"
   export const ROWS = "rows"
 
-  // A store from before keys were the box's own is dropped whole: a cache is a function of the code that reads it.
+  // A store of another version is dropped whole: a cache is a function of the code that reads it. Version 4 drops every
+  // block a build before the lines' version 11 rendered, whose keys those builds dropped with nothing left to find them.
   const kept: idb.Db = {
     name: DB,
-    version: 3,
+    version: 4,
     store: ROWS,
     upgrade: db => {
       if (db.objectStoreNames.contains(ROWS)) db.deleteObjectStore(ROWS)
@@ -251,7 +249,8 @@ export namespace rendered {
         return found
       },
       // A device that keeps nothing holds nothing to forget; one whose store fails to answer has not forgotten. Each
-      // forgotten key is marked, so no tab's join writes it back.
+      // forgotten key is marked, so no tab's join writes it back, and a block under a marked key that came back another
+      // way goes at the next forget: a block's key is found from its words, which a husk no longer holds.
       forget: async ks => {
         gone.add(ks)
         const fs = await fx.own()
@@ -260,22 +259,11 @@ export namespace rendered {
           ? DONE
           : idb
               .within(kept, "readwrite", async s => {
-                const rows = (await idb.done(s.getAllKeys())).filter((k): k is string => typeof k === "string" && !marked(k))
-                await Promise.all(taken(fs, ks, rows).map(k => idb.done(s.delete(k))))
+                const all = (await idb.done(s.getAllKeys())).filter((k): k is string => typeof k === "string")
+                const struck = new Set(all.filter(marked).map(k => k.slice(STRUCK.length)))
+                const rows = all.filter(k => !marked(k))
+                await Promise.all([...taken(fs, ks, rows), ...rows.filter(k => struck.has(k))].map(k => idb.done(s.delete(k))))
                 await Promise.all(ks.map(k => idb.done(s.put({ key: mark(k) }))))
-                return DONE
-              })
-              .catch((e: unknown) => lo.error(lo.reason(e)))
-      },
-      // Every block, its marks kept.
-      clear: () => {
-        t.pairs().forEach(([k]) => t.remove(k))
-        return !idb.available()
-          ? Promise.resolve(DONE)
-          : idb
-              .within(kept, "readwrite", async s => {
-                const rows = (await idb.done(s.getAllKeys())).filter((k): k is string => typeof k === "string" && !marked(k))
-                await Promise.all(rows.map(k => idb.done(s.delete(k))))
                 return DONE
               })
               .catch((e: unknown) => lo.error(lo.reason(e)))
@@ -305,7 +293,7 @@ export namespace rendered {
   // The page's blocks: a view in memory by name over the worker's, never written to the device from here. What the view
   // lacks is asked of the worker; the box's answers are handed to the worker to keep, and held in view when they are of
   // a function the worker keeps. The worker forgets erased blocks from the device first and then says so, so `forget`
-  // and `clear` take them from the view alone, and a join landing after takes none of them again.
+  // takes them from the view alone, and a join landing after takes none of them again.
   export const viaWorker = (ask: Asking, t: table.Table<string> = table.of(table.lru(KEPT))): Store => {
     const gone = struck()
     const kept = once.of(() => ask.own().catch(() => new Set<string>()))
@@ -334,7 +322,6 @@ export namespace rendered {
         return findings
       },
       forget: ks => (gone.add(ks), ks.forEach(k => t.remove(k)), Promise.resolve(DONE)),
-      clear: () => (t.pairs().forEach(([k]) => t.remove(k)), Promise.resolve(DONE)),
       usage: () => ask.usage().catch(() => none),
     }
   }

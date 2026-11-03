@@ -26,14 +26,13 @@ import type { StoredObject } from "../wire/generated/wire"
 
 export namespace storeset {
   // What the worker says of the stores: a reading's leavings by reader, a pull's progress, that a store moved (the
-  // conversations a move of the lines touched), the rendered blocks it forgot (by name, or all of them), and a topic this
-  // tab wrote that the box refused, in the box's words.
+  // conversations a move of the lines touched), the rendered blocks it forgot, and a topic this tab wrote that the box
+  // refused, in the box's words.
   export type Said =
     | { readonly type: "Told"; readonly reader: string; readonly left: excluded.Left }
     | { readonly type: "Bars"; readonly e: progress.Event }
     | { readonly type: "Moved"; readonly conversations: linesync.Moved }
     | { readonly type: "Forgot"; readonly blocks: readonly string[] }
-    | { readonly type: "Cleared" }
     | { readonly type: "Refused"; readonly why: string }
 
   // What a reading reads: the inbox alone, or every store.
@@ -101,7 +100,6 @@ export namespace storeset {
         bars,
         moved: conversations => say({ type: "Moved", conversations }),
         forgot: gone => say({ type: "Forgot", blocks: gone }),
-        cleared: () => say({ type: "Cleared" }),
         replaced: replaced("lines"),
       },
       blocks,

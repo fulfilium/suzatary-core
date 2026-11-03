@@ -663,8 +663,11 @@ each node's step says what its line retires (`Step::Erased`, `Step::Resealed`), 
 the core applies the box's rule to them over its own skeleton (`Lines.retired`) (`transcript::erased`,
 and `transcript::superseded`, which follows a reseal of a reseal), so no
 answer carries a list of dead keys and a tab converges on the box's keys
-whichever pulls it heard the erasures and reseals in. Its plaintext row of the old store is deleted once
-the lines' row holds objects, its rendered blocks cleared first.
+whichever pulls it heard the erasures and reseals in. A line every key of whose
+words is gone is kept as its husk, the line with each slot's words dropped, and
+every compaction deletes its print from the device (stage 3b); a line a slot of
+which still opens keeps its print. The device keeps no format but this build's:
+an upgrade carries nothing, and what it drops is taken again from the box.
 
 *(4b) TOPICS* (`docs/TOPICS-PLAN-2026-10-21.md`, `secretary::topics`). Two
 stores of their own, named by `[secretary] topics`: `secretary-topics/`, one
@@ -1587,14 +1590,13 @@ rules and points here for the modules. The web contract is `docs/WEB-SPEC.md`.
   conversations join the chains. Every store is held by the core's worker
   (the set of them `storeset.ts`). The lines' replica is the core's own, kept
   on the device as its snapshot and frames (`linesync.ts`, `replicalog.ts`,
-  2026-11, `docs/ONEOWNER-PLAN-2026-11-02.md` stage 3a); the inbox and the
+  2026-11, `docs/ONEOWNER-PLAN-2026-11-02.md` stages 3a and 3b); the inbox and the
   topic stores are each one instance of one engine
   (`web/src/prodrome/engine.ts`, 2026-10-27): a row that is the store's replica as a
   semilattice (union of the objects, the heads of the later contact) and the
   keys of its words (none for a store that locks no words), kept in
-  IndexedDB one node per row in an object store of its own (`noderows.ts`,
-  database version 9, which carries a build's rows of the inbox and the topic
-  stores once), pulled from the frontier the last answer named (§5), `GET /api/stores/<store>/objects?since=`
+  IndexedDB one node per row in an object store of its own (`noderows.ts`),
+  pulled from the frontier the last answer named (§5), `GET /api/stores/<store>/objects?since=`
   (the conversations first, then the inbox, which the box writes first) in
   pieces of at most a megabyte of literals, each kept before the next is asked
   from the heads it left (2026-10-13: the whole lines store was 34 MB, which a

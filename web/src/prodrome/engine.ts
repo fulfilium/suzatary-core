@@ -54,8 +54,6 @@ export namespace engine {
     readonly words: Words<N>
     // The row moved from `was` to `now`: its reader told, before any reading of `now`.
     readonly took: (was: locked.Row<N>, now: locked.Row<N>) => void
-    // What runs before the row is first read, and after each landing that moved it.
-    readonly restoring: () => Promise<void>
     readonly landed: (row: locked.Row<N>) => Promise<void>
   }
 
@@ -122,7 +120,6 @@ export namespace engine {
         place: spec.place,
         ask: spec.ask,
         landed: spec.landed,
-        restoring: spec.restoring,
       },
       { told: fx.told, bars: fx.bars, replaced: fx.replaced, again: () => void (wanted === "Yes" ? sync.pull() : undefined) },
     )

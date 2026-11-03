@@ -161,8 +161,12 @@ export interface Lines {
   land: () => LineStep;
   /** Every row reset, in the generation after both. */
   start_over: () => LineStep;
-  /** The keys `[<name>, …]` let go from every row. */
+  /** The keys `[<name>, …]` let go from every row, and each line every key of whose words is then gone kept as its husk. */
   forget: (gone: string) => LineStep;
+  /** `[<name>, …]`: every line held as its husk, whose print the device deletes. */
+  husks: () => string;
+  /** Whether a line the rows read is held with words each key of which is gone: one a purge husks. */
+  husking: () => boolean;
   /** Another tab's frame taken: the conversations moved, `"All"` or `[<id>, …]`. */
   apply: (frame: Uint8Array) => string;
   /** `{landed, pending, holding, landings}`: each row's generation, epoch, box word, frontier, nodes read, heads and keys. */
@@ -189,11 +193,11 @@ export interface Lines {
   search: (q: string) => string;
   /** `[<node>, …]`: the node of every line whose words the newest `pages` pages of the stream read, by the skeleton alone. */
   chosen: (topics: TopicReading, chosen: string, pages: number) => string;
-  /** The rows, whole, in the core's own form; it throws where they do not print. */
+  /** The rows and the husks, whole, in the core's own form; it throws where they do not print. */
   snapshot: () => Uint8Array;
-  /** The rows replaced by a snapshot's (none for the empty rows), then each frame of `frames` taken in order, each frame
-   * after its length as four little-endian bytes, the prints held kept: the conversations moved. It throws for a
-   * snapshot of another form or a frame that does not read, holding what it held. */
+  /** The replica replaced by a snapshot's (none for the empty one), then each frame of `frames` taken in order, each
+   * frame after its length as four little-endian bytes, the prints held kept and each husk standing for its line: the
+   * conversations moved. It throws for a snapshot of another form or a frame that does not read, holding what it held. */
   load: (bytes: Uint8Array | undefined, frames: Uint8Array) => string;
   /** The newest `pages` pages of every conversation's rounds carrying each topic of `chosen`, a JSON array. */
   stream: (topics: TopicReading, chosen: string, pages: number) => string;
@@ -695,6 +699,9 @@ export const erasedOf = (lines: Lines, keys: Readonly<Record<string, string>>, t
 export const deadOf = (lines: Lines): readonly string[] => checked("dead", lines.dead(), arr(str));
 
 export const heldOf = (lines: Lines): readonly string[] => checked("held", lines.held(), arr(str));
+
+/** Every line the core holds as its husk, whose print the device deletes. */
+export const husksOf = (lines: Lines): readonly string[] => checked("husks", lines.husks(), arr(str));
 
 // The names a core holds prints of, read again from it whenever its count of moves moves, and never written here: a
 // view of the core's answer, so it cannot say a print is held that the core let go.

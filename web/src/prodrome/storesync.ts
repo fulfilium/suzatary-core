@@ -147,8 +147,6 @@ export namespace storesync {
         return bars.dispatch(s.e)
       case "Forgot":
         return void blocks.forget(s.blocks)
-      case "Cleared":
-        return void blocks.clear()
       case "Refused":
         return handover.told(s.why)
       case "Moved": {

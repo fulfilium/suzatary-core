@@ -2,7 +2,8 @@
 //! answers, its landing, a start over and a purge, each answering the delta the worker appends to
 //! the device's log (bytes, a `Uint8Array`) and the conversations it moved; and the snapshot and
 //! log a warm load reads back. The worker keeps no state of the rows: every question is asked of
-//! the core.
+//! the core. A husk stands for its line's print, which the worker deletes from the device in every
+//! transaction that compacts the log.
 //!
 //! `moved` is JSON: `"All"`, or `[<conversation>, …]`.
 
@@ -13,7 +14,7 @@ use suzatary_core::replica::frontier::Frontier;
 use suzatary_core::replica::row::Row;
 use suzatary_core::secretary::held_replica::{Moved, Took};
 use suzatary_core::secretary::key_ring::KeyRing;
-use suzatary_core::secretary::line_form::{self, LinePulling};
+use suzatary_core::secretary::line_form::{self, LineFrame, LineReplica};
 use suzatary_core::secretary::locked_text::KeyName;
 use suzatary_core::secretary::outlines::Parsed;
 use suzatary_core::secretary::store::ConversationId;
@@ -24,7 +25,7 @@ use wasm_bindgen::prelude::*;
 use crate::secretary::Lines;
 use crate::{json, refused};
 
-/// One move of the rows: its delta's frame and what it moved. Free it once read.
+/// One move of the rows: its frame and what it moved. Free it once read.
 #[wasm_bindgen]
 pub struct Step {
     delta: Vec<u8>,
@@ -106,7 +107,11 @@ impl Lines {
             .0
             .piece(answer, KeyRing::of(&keys), whole(fetched_at, "fetched_at")?)
             .map_err(|e| refused(e.to_string()))?;
-        line_form::frame(&delta).map_err(|e| refused(e.to_string()))
+        line_form::frame(&LineFrame {
+            delta,
+            husked: Vec::new(),
+        })
+        .map_err(|e| refused(e.to_string()))
     }
 
     /// The pending pieces landed.
@@ -120,42 +125,64 @@ impl Lines {
         step(&self.0.start_over())
     }
 
-    /// The keys `gone` (`[<name>, …]`) let go from every row: a purge's.
+    /// The keys `gone` (`[<name>, …]`) let go from every row, and every line each key of whose
+    /// words is then gone husked: a purge's.
     pub fn forget(&mut self, gone: &str) -> Result<Step, JsError> {
         let gone: BTreeSet<KeyName> =
             serde_json::from_str(gone).map_err(|e| refused(format!("gone: {e}")))?;
         step(&self.0.forget(gone))
     }
 
+    /// Whether a line the rows read is held with words each key of which is gone: one a purge
+    /// husks, though no key is owed, as on a device that took a line after its keys were erased.
+    #[must_use]
+    pub fn husking(&self) -> bool {
+        !self.0.bare().is_empty()
+    }
+
+    /// `[<name>, …]`: every line held as its husk, whose print the device deletes.
+    pub fn husks(&self) -> Result<String, JsError> {
+        json(
+            &self
+                .0
+                .kept()
+                .husks
+                .keys()
+                .map(Hash::as_str)
+                .collect::<Vec<_>>(),
+        )
+    }
+
     /// A frame another tab appended taken: `moved`. A frame of another form moves nothing.
     pub fn apply(&mut self, frame: &[u8]) -> Result<String, JsError> {
         match line_form::unframe(frame).map_err(|e| refused(e.to_string()))? {
-            Some(delta) => moved(&self.0.apply(&delta)),
+            Some(frame) => moved(&self.0.apply(&frame)),
             None => moved(&Moved::These(BTreeSet::new())),
         }
     }
 
-    /// The rows, whole, in the core's form: what the device keeps, and the log after it emptied.
+    /// The rows and the husks, whole, in the core's form: what the device keeps, and the log after
+    /// it emptied.
     pub fn snapshot(&self) -> Result<Vec<u8>, JsError> {
-        snapshot::snapshot(self.0.rows()).map_err(|e| refused(e.to_string()))
+        snapshot::snapshot(self.0.kept()).map_err(|e| refused(e.to_string()))
     }
 
-    /// The rows replaced by the snapshot `bytes` (none for the empty rows) and then each frame of
-    /// `frames` taken in order, the prints held kept: `moved`. `frames` is the log's frames one
+    /// The replica replaced by the snapshot `bytes` (none for the empty one) and then each frame of
+    /// `frames` taken in order, the prints held kept and each husk standing for its line: `moved`. `frames` is the log's frames one
     /// after another, each after its length as four little-endian bytes; a frame of another form
     /// is passed over. Refused, holding what it held, for a snapshot of another form or a frame
     /// that does not read.
     pub fn load(&mut self, bytes: Option<Vec<u8>>, frames: &[u8]) -> Result<String, JsError> {
-        let mut rows: LinePulling = match bytes {
-            None => LinePulling::default(),
+        let mut kept: LineReplica = match bytes {
+            None => LineReplica::default(),
             Some(bytes) => snapshot::from_snapshot(&bytes).map_err(|e| refused(e.to_string()))?,
         };
         for frame in snapshot::frames(frames).map_err(|e| refused(e.to_string()))? {
-            if let Some(delta) = line_form::unframe(frame).map_err(|e| refused(e.to_string()))? {
-                rows.apply(&delta);
+            if let Some(frame) = line_form::unframe(frame).map_err(|e| refused(e.to_string()))? {
+                kept.apply(&frame);
             }
         }
-        moved(&self.0.load(rows))
+        moved(&self.0.load(kept))
     }
 
     /// `{landed, pending, holding, landings}`, each row
@@ -205,7 +232,7 @@ fn names(set: &BTreeSet<Hash>) -> Vec<&str> {
 
 fn step(took: &Took) -> Result<Step, JsError> {
     Ok(Step {
-        delta: line_form::frame(&took.delta).map_err(|e| refused(e.to_string()))?,
+        delta: line_form::frame(&took.frame).map_err(|e| refused(e.to_string()))?,
         moved: moved(&took.moved)?,
     })
 }

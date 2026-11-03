@@ -20,7 +20,7 @@ const worker = (): { readonly port: questions.Port<questions.Out, questions.Aske
   }
 }
 
-test("what the worker says it forgot, by name or all of it, is forgotten from the page's table, and stays forgotten", async () => {
+test("what the worker says it forgot is forgotten from the page's table, and stays forgotten", async () => {
   const page = rendered.memory(new Set(["answer"]))
   const [gone, kept] = [table.key("answer", "erased"), table.key("answer", "kept")]
   await page.join([[gone, "<p>erased words</p>"], [kept, "<p>other words</p>"]])
@@ -32,6 +32,4 @@ test("what the worker says it forgot, by name or all of it, is forgotten from th
   // A join asked before the purge that lands after it does not bring the erased block back.
   await page.join([[gone, "<p>erased words</p>"]])
   assert.deepEqual(await page.get([gone]), [null])
-  w.say({ type: "Cleared" })
-  assert.deepEqual(await page.get([kept]), [null])
 })

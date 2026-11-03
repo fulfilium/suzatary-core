@@ -20,7 +20,8 @@ use suzatary_core::secretary::erasure::Erasure;
 use suzatary_core::secretary::held_lines::{Admitted, HeldLines, decodes, hashes};
 use suzatary_core::secretary::inbox::ProposalId;
 use suzatary_core::secretary::key_ring::{KeyRing, spelled};
-use suzatary_core::secretary::line_event::{LineEvent, LineVocabulary};
+use suzatary_core::secretary::line_event::{Husk, LineEvent, LineVocabulary};
+use suzatary_core::secretary::line_form::{Husked, LineReplica};
 use suzatary_core::secretary::line_shape::LineShape;
 use suzatary_core::secretary::locked_text::KeyName;
 use suzatary_core::secretary::locked_text::opens;
@@ -36,6 +37,7 @@ use suzatary_core::secretary::topics::reading::Reading;
 use suzatary_core::secretary::topics::targets::rounds;
 use suzatary_core::secretary::transcript::{self, Transcript};
 use suzatary_core::secretary::words::Words;
+use suzatary_core::snapshot::{from_snapshot, snapshot};
 use suzatary_core::store::Prodrome as _;
 use suzatary_core::store::Reads as _;
 use suzatary_core::store::{Doc as _, Gets as _};
@@ -382,6 +384,71 @@ proptest! {
             }
             prop_assert_eq!(memoised(&mut lines, &skeleton), plain(&holding, &ring, &skeleton));
         }
+    }
+}
+
+proptest! {
+    #![proptest_config(ProptestConfig { cases: 32, ..ProptestConfig::default() })]
+
+    /// THE HUSK LAW: with some keys let go, every line each key of whose words is gone is swapped
+    /// for its husk, and the reading is the same; a husk's print holds no words and reads back as
+    /// the husk; a line a slot of which still opens is kept whole; a drop lets no husk go; and the
+    /// device's snapshot of the husks reads back as them.
+    #[test]
+    fn a_line_whose_keys_are_gone_reads_the_same_as_its_husk(
+        script in proptest::collection::vec(step(), 1..24),
+        gone in proptest::collection::vec(any::<prop::sample::Index>(), 0..6),
+    ) {
+        let held = written(&script);
+        let all = prints(&held);
+        let mut given: BTreeMap<KeyName, String> = keys(&held).into_iter().collect();
+        for which in &gone {
+            if given.is_empty() {
+                break;
+            }
+            let name = given.keys().nth(which.index(given.len())).cloned().expect("given");
+            given.remove(&name);
+        }
+        let ring = KeyRing::of(&given);
+        let mut lines = HeldLines::new();
+        lines.keys(&given, &[]);
+        lines.hold(all.clone(), &[]);
+        let skeleton: BTreeSet<Hash> = all.iter().map(|(name, _)| name.clone()).collect();
+        let before = memoised(&mut lines, &skeleton);
+        let bare = lines.bare(|key| ring.holds(key));
+        let husked = lines.husk(&bare);
+        prop_assert_eq!(husked.len(), bare.len(), "every bare line is husked");
+        prop_assert_eq!(memoised(&mut lines, &skeleton), before, "the reading is the same");
+        let vocabulary = LineVocabulary;
+        for (name, bytes) in &all {
+            let Ok(envelope) = prodrome_core::dag::decode::<LineEvent>(&vocabulary, name, bytes) else {
+                continue;
+            };
+            let Some(line) = envelope.into_event() else { continue };
+            let keyed = line.keys().next().is_some();
+            prop_assert_eq!(
+                bare.contains(name),
+                keyed && line.keys().all(|key| !ring.holds(key)),
+                "a line is husked exactly when it has words and every key of them is gone"
+            );
+        }
+        for (name, _, husk) in &husked {
+            let print = husk.print();
+            prop_assert!(!print.contains("Scrubbed(") && !print.contains("Locked("), "no words in {}", print);
+            prop_assert_eq!(&Husk::read(&print).expect("reads back"), husk);
+            prop_assert!(lines.husked(name));
+        }
+        lines.hold(Vec::new(), &bare.iter().cloned().collect::<Vec<_>>());
+        prop_assert!(bare.iter().all(|name| lines.holds(name)), "a drop lets no husk go");
+        let kept = LineReplica {
+            husks: husked
+                .into_iter()
+                .map(|(name, parents, husk)| (name.clone(), Husked { name, parents, husk }))
+                .collect(),
+            ..LineReplica::default()
+        };
+        let back: LineReplica = from_snapshot(&snapshot(&kept).expect("prints")).expect("reads back");
+        prop_assert_eq!(back, kept);
     }
 }
 

@@ -10,7 +10,7 @@ use sha2::{Digest, Sha256};
 use prodrome_core::event::Hash;
 use suzatary_core::replica::held::Said;
 use suzatary_core::secretary::key_ring::KeyRing;
-use suzatary_core::secretary::line_form::LinePulling;
+use suzatary_core::secretary::line_form::{LinePulling, LineReplica};
 use suzatary_core::secretary::locked_text::KeyName;
 use suzatary_core::secretary::outlines::Parsed;
 use suzatary_core::secretary::step::Step;
@@ -45,7 +45,7 @@ fn line(seed: u8, parents: &[String], keys: &[&KeyName], step: Step) -> Skeleton
 
 /// Rows whose landed row holds a genesis, a line of every step and the keys of two slots, and
 /// whose pending piece holds the genesis again.
-fn held() -> LinePulling {
+fn held() -> LineReplica {
     let ((a, a_bytes), (b, b_bytes)) = (key(1), key(2));
     let genesis = SkeletonNode {
         hash: name(0),
@@ -102,14 +102,17 @@ fn held() -> LinePulling {
         KeyRing::default(),
         2_000,
     );
-    rows
+    LineReplica {
+        rows,
+        ..LineReplica::default()
+    }
 }
 
 #[test]
 fn a_snapshot_reads_back_holding_the_same_rows() {
     let rows = held();
     let bytes = snapshot(&rows).expect("prints");
-    let back: LinePulling = from_snapshot(&bytes).expect("reads back");
+    let back: LineReplica = from_snapshot(&bytes).expect("reads back");
     assert_eq!(back, rows, "the same nodes, keys, words and frontiers");
     assert_eq!(
         snapshot(&back),
@@ -129,15 +132,15 @@ fn bytes_of_another_form_cut_short_or_holding_a_wrong_key_read_as_no_rows() {
     let mut other = bytes.clone();
     other[0] ^= 1;
     assert!(matches!(
-        from_snapshot::<LinePulling>(&other),
+        from_snapshot::<LineReplica>(&other),
         Err(NotASnapshot::Form { .. })
     ));
     assert!(matches!(
-        from_snapshot::<LinePulling>(&bytes[..2]),
+        from_snapshot::<LineReplica>(&bytes[..2]),
         Err(NotASnapshot::Short(2))
     ));
     assert!(matches!(
-        from_snapshot::<LinePulling>(&bytes[..bytes.len() - 1]),
+        from_snapshot::<LineReplica>(&bytes[..bytes.len() - 1]),
         Err(NotASnapshot::Unread(_))
     ));
     let (_, key_bytes) = key(1);
@@ -149,7 +152,7 @@ fn bytes_of_another_form_cut_short_or_holding_a_wrong_key_read_as_no_rows() {
     tampered[at] ^= 1;
     assert!(
         matches!(
-            from_snapshot::<LinePulling>(&tampered),
+            from_snapshot::<LineReplica>(&tampered),
             Err(NotASnapshot::Refused(_))
         ),
         "a key whose bytes are not its name's"

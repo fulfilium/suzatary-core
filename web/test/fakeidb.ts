@@ -42,7 +42,9 @@ const hexed = (_: string, v: unknown): unknown => (v instanceof Uint8Array ? [..
 export const fakeIndexedDB = (): Fake => {
   // The connections the app's door kept open belong to the device before.
   idb.reset()
-  const dbs = new Map<string, { version: number; stores: Map<string, Map<string, unknown>>; paths: Map<string, string> }>()
+  // Each database's stores, and the transactions over it not yet ended, which a later one over a store they span waits for.
+  type Open = { readonly names: readonly string[]; readonly writes: boolean; readonly done: Promise<void> }
+  const dbs = new Map<string, { version: number; stores: Map<string, Map<string, unknown>>; paths: Map<string, string>; open: Open[] }>()
   let read = 0
   let transactions = 0
   let deletes = 0
@@ -55,22 +57,39 @@ export const fakeIndexedDB = (): Fake => {
     printed: () => [...dbs].flatMap(([name, d]) => [...d.stores].flatMap(([store, rows]) => [...rows].map(([k, v]) => `${name}/${store}/${k} ${JSON.stringify(v, hexed)}`))),
   }
   const database = (name: string) => {
-    const d = dbs.get(name) ?? { version: 0, stores: new Map<string, Map<string, unknown>>(), paths: new Map<string, string>() }
+    const d = dbs.get(name) ?? { version: 0, stores: new Map<string, Map<string, unknown>>(), paths: new Map<string, string>(), open: [] }
     dbs.set(name, d)
-    // A transaction over one store or several, each staged on its own and all committed together.
-    const transaction = (over: string | readonly string[]) => {
+    // A transaction over one store or several, each staged on its own and all committed together. As IndexedDB's, it
+    // waits for every transaction begun before it over a store it spans where either writes, and is staged from the
+    // stores as that last one left them, so no transaction's commit writes over another's.
+    const transaction = (over: string | readonly string[], mode: IDBTransactionMode = "readonly") => {
       transactions += 1
       const names = typeof over === "string" ? [over] : over
-      const stagedOf = new Map(names.map(n => [n, new Map(d.stores.get(n) ?? [])]))
+      const writes = mode !== "readonly"
+      const blockers = d.open.filter(t => (t.writes || writes) && t.names.some(n => names.includes(n))).map(t => t.done)
+      let release = (): void => {}
+      const mine = { names, writes, done: new Promise<void>(ended => (release = ended)) }
+      d.open.push(mine)
+      const end = (): void => {
+        d.open = d.open.filter(t => t !== mine)
+        release()
+      }
+      let stagedOf = new Map<string, Map<string, unknown>>()
+      let begun = false
+      const queued: (() => void)[] = []
+      const once = (f: () => void): void => (begun ? f() : void queued.push(f))
       let open = 0
       let asked = false
       let failed = false
+      let ended = false
       // Once nothing is asked, what was staged is the store's, unless a request failed.
       const settle = (): void => {
         if (open === 0)
           later(() => {
-            if (open !== 0 || failed) return
+            if (open !== 0 || failed || ended) return
+            ended = true
             for (const [n, staged] of stagedOf) d.stores.set(n, staged)
+            end()
             tx.oncomplete?.()
           })
       }
@@ -81,27 +100,30 @@ export const fakeIndexedDB = (): Fake => {
         error: null as unknown,
         objectStore: (name?: string) => {
           const store = name ?? names[0]!
-          const staged = stagedOf.get(store)
-          if (staged === undefined) throw new Error(`the transaction does not span ${store}`)
+          if (!names.includes(store)) throw new Error(`the transaction does not span ${store}`)
+          const staged = (): Map<string, unknown> => stagedOf.get(store)!
           const ask = (f: () => unknown, refused = false): Req => {
             asked = true
             open += 1
             const r: Req = { result: undefined, error: null, onsuccess: null, onerror: null }
-            later(() => {
-              open -= 1
-              if (refused || failed) {
-                failed = true
-                r.error = tx.error = "QuotaExceededError"
-                r.onerror?.()
-                return later(() => tx.onerror?.())
-              }
-              r.result = f()
-              r.onsuccess?.()
-              settle()
-            })
+            once(() =>
+              later(() => {
+                open -= 1
+                if (refused || failed) {
+                  failed = true
+                  r.error = tx.error = "QuotaExceededError"
+                  r.onerror?.()
+                  if (!ended) (ended = true), end()
+                  return later(() => tx.onerror?.())
+                }
+                r.result = f()
+                r.onsuccess?.()
+                settle()
+              }),
+            )
             return r
           }
-          const keys = (k?: Key): string[] => [...staged.keys()].filter(within(k)).sort()
+          const keys = (k?: Key): string[] => [...staged().keys()].filter(within(k)).sort()
           const path = d.paths.get(store)
           const keyOf = (v: unknown, k?: string): string => k ?? String((v as Record<string, unknown>)[path ?? ""])
           return {
@@ -110,45 +132,59 @@ export const fakeIndexedDB = (): Fake => {
             openCursor: () => {
               asked = true
               open += 1
-              const rows = keys().map(x => structuredClone(staged.get(x)))
               const r: Req = { result: undefined, error: null, onsuccess: null, onerror: null }
-              let at = 0
-              const step = (): void => {
-                if (at < rows.length) {
-                  r.result = { value: rows[at], continue: () => void ((at += 1), later(step)) }
-                  return r.onsuccess?.()
+              once(() => {
+                const rows = keys().map(x => structuredClone(staged().get(x)))
+                let at = 0
+                const step = (): void => {
+                  if (at < rows.length) {
+                    r.result = { value: rows[at], continue: () => void ((at += 1), later(step)) }
+                    return r.onsuccess?.()
+                  }
+                  r.result = null
+                  open -= 1
+                  r.onsuccess?.()
+                  settle()
                 }
-                r.result = null
-                open -= 1
-                r.onsuccess?.()
-                settle()
-              }
-              later(step)
+                later(step)
+              })
               return r
             },
-            get: (k: string) => ask(() => ((read += 1), structuredClone(staged.get(k)))),
+            get: (k: string) => ask(() => ((read += 1), structuredClone(staged().get(k)))),
             // At most `count` rows, the first in key order, as IndexedDB's own.
             getAll: (k?: Key, count?: number) =>
               ask(() => {
                 const all = keys(k).slice(0, count)
                 read += all.length
-                return all.map(x => structuredClone(staged.get(x)))
+                return all.map(x => structuredClone(staged().get(x)))
               }),
             getAllKeys: (k?: Key, count?: number) => ask(() => keys(k).slice(0, count)),
             count: (k?: Key) => ask(() => keys(k).length),
-            put: (v: unknown, k?: string) => ask(() => void staged.set(keyOf(v, k), structuredClone(v)), fake.failing(keyOf(v, k))),
-            delete: (k: Key) => ((deletes += 1), ask(() => keys(k).forEach(x => staged.delete(x)))),
-            clear: () => ((deletes += 1), ask(() => staged.clear())),
+            put: (v: unknown, k?: string) => ask(() => void staged().set(keyOf(v, k), structuredClone(v)), fake.failing(keyOf(v, k))),
+            delete: (k: Key) => ((deletes += 1), ask(() => keys(k).forEach(x => staged().delete(x)))),
+            clear: () => ((deletes += 1), ask(() => staged().clear())),
           }
         },
       }
-      // A transaction asked nothing commits, as IndexedDB's does.
-      later(() => later(() => (asked ? undefined : tx.oncomplete?.())))
+      void Promise.all(blockers).then(() => {
+        stagedOf = new Map(names.map(n => [n, new Map(d.stores.get(n) ?? [])]))
+        begun = true
+        for (const f of queued.splice(0)) f()
+        // A transaction asked nothing commits, as IndexedDB's does.
+        later(() =>
+          later(() => {
+            if (asked || ended) return
+            ended = true
+            end()
+            tx.oncomplete?.()
+          }),
+        )
+      })
       return tx
     }
     const connection = {
       onversionchange: null as (() => void) | null,
-      objectStoreNames: { contains: (n: string) => d.stores.has(n) },
+      objectStoreNames: { contains: (n: string) => d.stores.has(n), [Symbol.iterator]: () => [...d.stores.keys()][Symbol.iterator]() },
       createObjectStore: (n: string, o?: { keyPath?: string }) => {
         d.stores.set(n, new Map())
         if (o?.keyPath !== undefined) d.paths.set(n, o.keyPath)
@@ -174,7 +210,7 @@ export const fakeIndexedDB = (): Fake => {
           const from = db.version()
           if (from < wanted) {
             // The version change's own transaction writes straight through: nothing in it is refused here.
-            r.transaction = { objectStore: (n: string) => db.transaction(n).objectStore() }
+            r.transaction = { objectStore: (n: string) => db.transaction(n, "versionchange").objectStore() }
             r.onupgradeneeded?.({ oldVersion: from })
             db.setVersion(wanted)
           }

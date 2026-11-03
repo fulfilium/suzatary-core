@@ -8,7 +8,7 @@ import type { StoredObject } from "../src/wire/generated/wire"
 import type { Replica } from "../src/prodrome/replica"
 import { NOTHING, appended, join, landed, losses } from "../src/prodrome/replica"
 import type { Write } from "../src/prodrome/objects"
-import { CHAIN, alterRow, dropRow, heldRow, holdRow, keepRow } from "../src/prodrome/objects"
+import { CHAIN, alterRow, heldRow, holdRow, keepRow } from "../src/prodrome/objects"
 import { replicaWith } from "./held"
 import door from "../src/app/idb"
 
@@ -33,7 +33,7 @@ const fakeIndexedDB = (at = 0, rows: Readonly<Record<string, unknown>> = {}) => 
   const stores = new Map<string, Map<string, unknown>>(at === 0 ? [] : [["chain", new Map(Object.entries(rows))]])
   let version = at
   const db = {
-    objectStoreNames: { contains: (n: string) => stores.has(n) },
+    objectStoreNames: { contains: (n: string) => stores.has(n), [Symbol.iterator]: () => [...stores.keys()][Symbol.iterator]() },
     createObjectStore: (n: string) => void stores.set(n, new Map()),
     deleteObjectStore: (n: string) => void stores.delete(n),
     close: () => {},
@@ -173,19 +173,6 @@ test("two resets in turn take two generations, so neither keeps what the other d
   assert.deepEqual((await row())?.objects, [])
 })
 
-test("a row a build no longer reads is deleted under a reset's rule, and never with an unsent act it was not shown", async () => {
-  Object.assign(globalThis, { indexedDB: fakeIndexedDB() })
-  await holdRow(CHAIN, "store/conversations", keep_(appended(synced, [change(name("b"), [BOX.hash], "beta")])))
-  const refused = await dropRow(CHAIN, "store/conversations", new Set())
-  assert.ok(refused.type === "Error" && refused.e.includes("unsent act"), "a row holding an act it was not shown stays")
-  assert.equal((await heldRow(CHAIN, "store/conversations")).type, "Held")
-  await holdRow(CHAIN, "store/lines", keep_(synced))
-  assert.equal((await dropRow(CHAIN, "store/conversations", new Set([name("b")]))).type, "Val")
-  assert.equal((await heldRow(CHAIN, "store/conversations")).type, "Absent", "nothing of it is left")
-  assert.equal((await heldRow(CHAIN, "store/lines")).type, "Held", "and no other row moved")
-  assert.equal((await dropRow(CHAIN, "store/conversations", new Set())).type, "Val", "deleting what is gone is done")
-})
-
 test("a row is altered in its own transaction, and one not there or not read is left as it is", async () => {
   const idb = fakeIndexedDB()
   Object.assign(globalThis, { indexedDB: idb })
@@ -245,33 +232,6 @@ test("a save that fails over a row that reads says the row reads, and one over a
   assert.ok(spoiled.unread !== null && spoiled.unread.length > 0, "and a row that does not read says why")
 })
 
-test("a row version 2 kept is dropped with its database's rows, never read as a replica, and the chain is pulled again", async () => {
-  const old = { objects: [BOX], synced: [BOX.hash], refused: [{ hash: name("b"), reason: "its event is triage's" }], boxHeads: [BOX.hash], untrusted: ["triage"], root: null, fetchedAt: 5 }
-  Object.assign(globalThis, { indexedDB: fakeIndexedDB(2, { "objects:life": old, "objects:store/inbox": old }) })
-  assert.equal((await heldRow(CHAIN, "life")).type, "Absent")
-  assert.equal((await heldRow(CHAIN, "store/inbox")).type, "Absent", "every row of the old version goes")
-  assert.equal((await holdRow(CHAIN, "life", keep_(synced))).type, "Val")
-  assert.deepEqual(await row(), join(NOTHING, synced), "what the pull brings is joined into nothing left of the old row")
-})
-
-test("a row version 3 kept is carried: its objects stay, and a word of the box that said no geneses is dropped", async () => {
-  const said = { epoch: 1, heads: [BOX.hash], untrusted: [], root: null, fetchedAt: 5, geneses: [name("0")] }
-  const unsaid = { ...said, epoch: 2, fetchedAt: 6, geneses: null }
-  const unsent = change(name("c"), [BOX.hash], "beta")
-  const kept = { generation: 0, objects: [BOX, unsent], synced: [BOX.hash], refused: [], words: [said, unsaid] }
-  Object.assign(globalThis, { indexedDB: fakeIndexedDB(3, { "objects:life": kept, "objects:store/inbox": { replica: { ...kept, words: [unsaid] }, keys: {} } }) })
-  const life = await row()
-  assert.ok(life !== null, "the row reads")
-  assert.deepEqual(life.objects.map(o => o.hash), [BOX.hash, unsent.hash], "the unsent act is kept")
-  assert.deepEqual(life.held.words, [said], "the word that said no geneses is gone, the other stays")
-  const raw = await new Promise<unknown>(done => {
-    const db = (globalThis as unknown as { indexedDB: { open: (n: string) => { result: { transaction: (n: string) => { objectStore: () => { get: (k: string) => { result: unknown; onsuccess: (() => void) | null } } } } } } }).indexedDB.open("suzatary").result
-    const r = db.transaction("chain").objectStore().get("objects:store/inbox")
-    r.onsuccess = () => done(r.result)
-  })
-  assert.deepEqual(raw, { replica: { ...kept, words: [], frontier: { type: "Nothing" } }, keys: {} }, "a store's row is carried the same way")
-})
-
 // What the device's rows' store holds under `key`, as it was written.
 const rawOf = (key: string): Promise<unknown> =>
   new Promise<unknown>(done => {
@@ -280,46 +240,26 @@ const rawOf = (key: string): Promise<unknown> =>
     r.onsuccess = () => done(r.result)
   })
 
-test("version 5 drops the lines' row and its pieces, kept as literals, marks their blocks owed, and keeps every other row, from version 3 or 4", async () => {
-  const kept = { generation: 0, objects: [BOX], synced: [BOX.hash], refused: [], words: [] }
-  const lines = { replica: kept, keys: { [name("k")]: "00" } }
-  for (const from of [3, 4]) {
+test("a device from version 8 keeps its chains' rows as they were, the tab's unsent act among them, and no other row", async () => {
+  const unsent = change(name("c"), [BOX.hash], "beta")
+  const kept = { generation: 0, objects: [BOX, unsent], synced: [BOX.hash], refused: [], words: [], frontier: { type: "Nothing" } }
+  for (const from of [8, 9, 10]) {
     Object.assign(globalThis, {
-      indexedDB: fakeIndexedDB(from, {
-        "objects:life": kept,
-        "objects:store/inbox": { replica: kept, keys: {} },
-        "objects:store/lines": lines,
-        "objects:store/lines/piece/000000000001": lines,
-      }),
+      indexedDB: fakeIndexedDB(from, { "objects:life": kept, "objects:store/inbox": { replica: kept, keys: {} }, "objects:store/rendered-owed": true, "objects:pages/topics": kept }),
     })
-    assert.ok((await row()) !== null, "a chain's row reads")
-    assert.equal(await rawOf("objects:store/lines"), undefined, `from ${from}`)
-    assert.equal(await rawOf("objects:store/lines/piece/000000000001"), undefined, "and its pieces with it")
-    assert.deepEqual(await rawOf("objects:store/inbox"), { replica: { ...kept, frontier: { type: "Nothing" } }, keys: {} }, "the inbox's row stays")
-    assert.equal(await rawOf("objects:store/rendered-owed"), true, "and the tab is told to clear the blocks the lines fed")
+    const life = await row()
+    assert.deepEqual(life?.objects.map(o => o.hash), [BOX.hash, unsent.hash], `the unsent act is kept, from ${from}`)
+    assert.deepEqual(await rawOf("objects:life"), kept, "as it was")
+    for (const other of ["objects:store/inbox", "objects:store/rendered-owed", "objects:pages/topics"]) assert.equal(await rawOf(other), undefined, `${other} goes`)
   }
 })
 
-test("version 6 gives every row of version 5 a frontier of nothing, so its first pull asks from nothing, and version 8 drops its lines' row and marks its blocks owed", async () => {
-  const kept = { generation: 0, objects: [BOX], synced: [BOX.hash], refused: [], words: [] }
-  Object.assign(globalThis, {
-    indexedDB: fakeIndexedDB(5, { "objects:life": kept, "objects:store/lines": { replica: kept, keys: {} }, "objects:store/lines/piece/000000000001": { replica: kept, keys: {} } }),
-  })
-  assert.ok((await row()) !== null, "a chain's row reads")
-  assert.deepEqual(await rawOf("objects:life"), { ...kept, frontier: { type: "Nothing" } })
-  assert.equal(await rawOf("objects:store/lines"), undefined, "the lines' row, whose nodes carry no step, is dropped")
-  assert.equal(await rawOf("objects:store/lines/piece/000000000001"), undefined, "and its pieces with it")
-  assert.equal(await rawOf("objects:store/rendered-owed"), true, "and the tab is told to clear the blocks its keys fed")
-})
-
-test("version 10 carries every row of version 9 as it was, beside a store of snapshots", async () => {
-  const kept = { generation: 0, objects: [BOX], synced: [BOX.hash], refused: [], words: [], frontier: { type: "Nothing" } }
-  Object.assign(globalThis, { indexedDB: fakeIndexedDB(9, { "objects:life": kept }) })
-  assert.ok((await row()) !== null, "a chain's row reads")
-  assert.deepEqual(await rawOf("objects:life"), kept, "as it was")
-})
-
-test("a row version 1 kept is dropped, never read as a replica sealing onto heads it did not compute", async () => {
-  Object.assign(globalThis, { indexedDB: fakeIndexedDB(1, { "objects:life": { objects: [BOX] } }) })
-  assert.equal((await heldRow(CHAIN, "life")).type, "Absent")
+test("a device before version 8 keeps no row, and every chain is pulled again", async () => {
+  for (const from of [1, 2, 3, 5, 7]) {
+    Object.assign(globalThis, { indexedDB: fakeIndexedDB(from, { "objects:life": { objects: [BOX] }, "objects:store/inbox": { replica: { objects: [BOX] }, keys: {} } }) })
+    assert.equal((await heldRow(CHAIN, "life")).type, "Absent", `from ${from}`)
+    assert.equal(await rawOf("objects:store/inbox"), undefined)
+    assert.equal((await holdRow(CHAIN, "life", keep_(synced))).type, "Val")
+    assert.deepEqual(await row(), join(NOTHING, synced), "what the pull brings is joined into nothing left of the old row")
+  }
 })

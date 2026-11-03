@@ -143,6 +143,9 @@ test("law: a warm load reads what a cold load reads, and two tabs converge, what
     down = false
     holds = 1 + r.int(order.length)
     const tabs = [tab(), tab()]
+    // Every tab this run made, settled before the next run: a tab's purge runs after the reading that asked for it, and
+    // one that ran on the next run's device would write this run's lines there. A pull waits for the purge before it.
+    const made = [...tabs]
     // A device that never landed the lines waits for the box to read them, and a pull brings their skeleton alone, their
     // content coming as a reading reads it: each tab lands and reads them first, so the device holds what a reload reads.
     for (const t of tabs) {
@@ -171,6 +174,7 @@ test("law: a warm load reads what a cold load reads, and two tabs converge, what
           down = true
           try {
             tabs[i] = tab()
+            made.push(tabs[i]!)
             assert.equal(await offline(listed(tabs[i]!)), await cold(), "a reload reads what a cold core reads, with no answer from the box")
           } finally {
             down = false
@@ -183,6 +187,7 @@ test("law: a warm load reads what a cold load reads, and two tabs converge, what
         assert.equal(await listed(t), await cold(), `after ${op} of tab ${i}, a tab reads what a cold core reads`)
       }
     }
+    for (const t of made) await t.ask({ type: "Pull" })
   })
   assert.ok(seen.frames > 0 && seen.snapshots > 0, `the reloads read frames (${seen.frames}) and a snapshot (${seen.snapshots})`)
 })
@@ -277,4 +282,42 @@ test("law: a fetch hands the core exactly the prints it lacks, and asks the box 
     }
   })
   assert.ok(seen.held > 0 && seen.lacked > 0, `the runs fetched prints the core held (${seen.held}) and lacked (${seen.lacked})`)
+})
+
+test("a husk one tab's purge kept stands through another tab's compaction, and a reload reads its line with no box", async () => {
+  const device = fakeIndexedDB()
+  down = false
+  holds = order.length
+  const [quiet, reading] = [tab(), tab()]
+  assert.equal(await reading.ask({ type: "Pull" }), true)
+  assert.equal(await quiet.ask({ type: "Pull" }), true)
+  // The quiet tab compacts; then the reading tab reads the lines, a line whose every key is gone among them, and its purge
+  // husks that line and deletes its print. The quiet tab read nothing, so it holds no husk of its own.
+  await quiet.ask({ type: "Shown", on: false })
+  await listed(reading)
+  const husked = (): string[] => {
+    const rows = [...device.rows("suzatary", "replica").entries()]
+    const probe = new core.Lines()
+    try {
+      const snapshot = rows.find(([k]) => k === "lines/snapshot")?.[1] as { readonly bytes: Uint8Array } | undefined
+      probe.load(snapshot?.bytes, framed(rows.filter(([k]) => String(k).startsWith("lines/log/")).map(([, v]) => v as Uint8Array)))
+      return JSON.parse(probe.husks()) as string[]
+    } finally {
+      probe.free()
+    }
+  }
+  // The purge runs after the reading, and nothing else is asked meanwhile, so no frame comes after its own.
+  const done = (): boolean => husked().length > 0 && husked().every(n => !device.rows("suzatary", "content").has(n))
+  for (let waited = 0; !done() && waited < 200; waited += 1) await new Promise(next => setTimeout(next, 5))
+  const was = husked()
+  assert.ok(was.length > 0, "the purge husked a line")
+  assert.ok(was.every(n => !device.rows("suzatary", "content").has(n)), "and deleted its print")
+  await quiet.ask({ type: "Shown", on: false })
+  assert.deepEqual(husked(), was, "the quiet tab's compaction keeps the husk")
+  down = true
+  try {
+    assert.equal(await offline(listed(tab())), await cold(), "a reload reads the husked line with no answer from the box")
+  } finally {
+    down = false
+  }
 })

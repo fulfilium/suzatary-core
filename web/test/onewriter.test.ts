@@ -2,8 +2,9 @@
 // rendered blocks each tab's worker reads and writes under the marks an erasure leaves there, while the page holds the
 // blocks in view and asks the worker for the rest. So once the box erases words, run through the worker itself
 // (`questions.serve` over the real core, a fake box and the fake IndexedDB): no row of the device, no message the worker
-// sends, no answer its reads keep and nothing the page holds carries the erased words or the bytes of their key, a join
-// the page or another tab sends after the erase writes nothing back, and a reload brings none back.
+// sends, no answer its reads keep and nothing the page holds carries the erased words, the bytes of their key, or the
+// ciphertext of a line every slot of which is erased, a join the page or another tab sends after the erase writes
+// nothing back, and a reload brings none back.
 
 import { test } from "node:test"
 import assert from "node:assert/strict"
@@ -41,6 +42,12 @@ const WORDS = "I will draft that now."
 const KEY = box.skeleton.nodes.flatMap(n => (n.header.node === "line" && n.header.step.step === "erased" ? n.header.step.keys : []))[0]!
 const BYTES = box.stale[KEY]!
 const FED = box.erased[KEY]!
+// The ciphertext of each line every key of whose words the erasure names: the device keeps such a line as its husk.
+const ERASED = new Set(box.skeleton.nodes.flatMap(n => (n.header.node === "line" && n.header.step.step === "erased" ? n.header.step.keys : [])))
+const SEALED = box.skeleton.nodes
+  .flatMap(n => (n.header.node === "line" && n.header.keys.length > 0 && n.header.keys.every(k => ERASED.has(k)) ? [literals.get(n.hash) ?? ""] : []))
+  .flatMap(literal => [...literal.matchAll(/box='([^']+)'/g)].map(m => m[1]!))
+if (SEALED.length === 0) throw new Error("replicas.json erases no line whole")
 
 const headsOf = (nodes: readonly SkeletonNode[]): string[] => {
   const under = new Set(nodes.flatMap(n => n.parents))
@@ -106,7 +113,6 @@ const worker = () => {
   const serve = questions.serve(core, said => {
     posted.push(JSON.stringify(said))
     if (said.type === "Forgot") void page?.forget(said.blocks)
-    if (said.type === "Cleared") void page?.clear()
   })
   const ask = async <K extends questions.Kind>(q: questions.Of<K>): Promise<questions.Answer<K>> => {
     const a = (await serve(q, () => Promise.resolve())) as questions.Answer<K>
@@ -142,10 +148,11 @@ test("law: once the box erases words, no row, message or page holds them or thei
   assert.ok(device.printed().some(r => r.includes(WORDS)), "the device holds the rendered words")
   assert.deepEqual(await first.page.get(FED), FED.map(() => `<p>${WORDS}</p>`))
 
+  const holds = (text: string): boolean => text.includes(WORDS) || text.includes(BYTES) || SEALED.some(c => text.includes(c))
   const holders = (posted: readonly string[]): string[] => [
-    ...device.printed().filter(r => r.includes(WORDS) || r.includes(BYTES)).map(r => r.slice(0, r.indexOf(" "))),
-    ...posted.filter(m => m.includes(WORDS) || m.includes(BYTES)).map(m => `message ${m.slice(0, 60)}`),
-    ...http.keptTexts().filter(t => t.includes(WORDS) || t.includes(BYTES)).map(t => `kept answer ${t.slice(0, 60)}`),
+    ...device.printed().filter(holds).map(r => r.slice(0, r.indexOf(" "))),
+    ...posted.filter(holds).map(m => `message ${m.slice(0, 60)}`),
+    ...http.keptTexts().filter(holds).map(t => `kept answer ${t.slice(0, 60)}`),
   ]
 
   // The erasure comes in the first piece of the next pull, and the rest after it; the landing's write fails, so its
@@ -171,7 +178,7 @@ test("law: once the box erases words, no row, message or page holds them or thei
   // content it holds in memory is this process's, so its readings are the first worker's; the rows are what a reload
   // reads.)
   const reloaded = worker()
-  assert.equal(await reloaded.ask({ type: "Pull" }), true)
+  await read(reloaded)
   assert.deepEqual(holders(reloaded.posted), [], "a reload brings none back")
   assert.deepEqual(await reloaded.page.get(FED), FED.map(() => null))
 })

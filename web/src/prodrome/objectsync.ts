@@ -6,11 +6,7 @@ import engine from "./engine"
 import type excluded from "./excluded"
 import locked from "./locked"
 import noderows from "./noderows"
-import { dropRows, heldNames, heldRow, parseReplica, storeRows } from "./objects"
 import type progress from "./progress"
-import pull from "./pull"
-import { losses } from "./replica"
-import type { Replica } from "./replica"
 import type stores from "./stores"
 import idb from "../app/idb"
 import lo from "../algebra/lo"
@@ -32,38 +28,6 @@ export namespace objectsync {
     readonly replaced: () => void
   }
 
-  // The rows a build before version 9 kept of the store in the rows' store: its replica under `pages/<name>`, and under
-  // `store/<name>` beside the keys of its words, always none, or bare in a build before the keys. Each may hold what
-  // this tab wrote and the box has not taken, so each is joined into the store's own rows, then deleted with its pieces.
-  // A row that does not read, or a read that fails, deletes nothing and is said, to be carried at the next load.
-  const keyedRows = storeRows(payload.StoredObject, locked.NONE, losses)
-  const oldRows = {
-    parse: (raw: unknown): lo.Settled<Replica> => {
-      const keyed = keyedRows.parse(raw)
-      return keyed.type === "Val" ? lo.val(keyed.v.replica) : parseReplica(raw)
-    },
-  }
-  export const carried = async (name: Name, place: noderows.Place<StoredObject>): Promise<lo.Settled<null>> => {
-    const prefixes = [`pages/${name}`, pull.kept(name)]
-    const there = await Promise.all(prefixes.map(heldNames))
-    const unlisted = there.flatMap((t, i) => (t.type === "Error" ? [`${prefixes[i]}: ${t.e}`] : []))
-    if (unlisted.length > 0) return lo.error(`the rows a build before this one kept could not be listed (${unlisted.join("; ")})`)
-    if (there.every(t => t.type === "Val" && t.v.length === 0)) return lo.val(null)
-    const read = await Promise.all(prefixes.map(prefix => heldRow(oldRows, prefix)))
-    const unread = read.flatMap((r, i) => (r.type === "Unreadable" ? [`${prefixes[i]}: ${r.why}`] : []))
-    if (unread.length > 0) return lo.error(`a row a build before this one kept does not read (${unread.join("; ")})`)
-    const rows = read.flatMap(r => (r.type === "Held" ? [locked.of(r.v)] : []))
-    if (rows.length > 0) {
-      const landed = await place.land(rows.reduce(locked.join))
-      if (landed.row.type === "Error") return landed.row
-    }
-    for (const prefix of prefixes) {
-      const dropped = await dropRows(prefix)
-      if (dropped.type === "Error") return dropped
-    }
-    return lo.val(null)
-  }
-
   export const of = (name: Name, db: idb.Db, fx: Effects): engine.T<StoredObject> => {
     // Its rows lock no words, so rows of another form find no block.
     const place = noderows.placeOf(db, payload.StoredObject, { version: FORMAT, dropped: () => Promise.resolve(lo.val(null)) })
@@ -76,11 +40,6 @@ export namespace objectsync {
         content: engine.INLINE,
         words: engine.open(),
         took: () => fx.moved(),
-        // A carry that failed is said, and tried again at the next load.
-        restoring: () =>
-          (idb.available() ? carried(name, place) : Promise.resolve(lo.val(null))).then(done =>
-            fx.told(`carry/${pull.kept(name)}`, pull.unread(name, done.type === "Error" ? `the copy a build before this one kept was not moved: ${done.e}; it is tried again at the next load` : null)),
-          ),
         landed: () => Promise.resolve(),
       },
       { told: fx.told, bars: e => fx.bars({ ...e, name }), replaced: fx.replaced },

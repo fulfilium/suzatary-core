@@ -22,9 +22,11 @@ export namespace storereads {
   // It carries the keys of the lines' words, so it is never kept beside the reads (`http.Keeping`).
   export const skeleton = (since: string): Promise<SkeletonPayload> => http.get(sinceIn("/api/stores/lines/skeleton", since), payload.SkeletonPayload, BOUND, "Never")
 
-  // The literals of `hashes`, in ascending order with none twice, so one set has one URL the browser keeps for good.
+  // The literals of `hashes`, in ascending order with none twice, so one set has one URL the browser keeps for good. A
+  // name's literal never changes, so nothing is asked again by its tag, and the answer is never kept beside the reads: it
+  // can hold the words of a line an erasure later lets go.
   export const content = (store: string, hashes: readonly string[]): Promise<ContentPayload> =>
-    http.get(`/api/stores/${encodeURIComponent(store)}/content?hashes=${hashes.join(",")}`, payload.ContentPayload, BOUND)
+    http.get(`/api/stores/${encodeURIComponent(store)}/content?hashes=${hashes.join(",")}`, payload.ContentPayload, BOUND, "Never")
 
   // What a replica of a topic store holding the frontier `since` lacks on the box: the box takes each as the actor the
   // request was proven for.

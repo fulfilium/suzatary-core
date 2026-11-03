@@ -1,9 +1,10 @@
 //! The lines a tab's core holds, whole: the rows of their skeleton as its pull moves them
 //! ([`LinePulling`]), and what the landed row means, read through [`Outlines`] (its nodes) and
 //! [`HeldLines`] (the prints, opened with its keys). Every move of the rows answers a
-//! [`LineDelta`] and the conversations it moved, and the readings are told the landed row's
+//! [`LineFrame`] and the conversations it moved, and the readings are told the landed row's
 //! readable nodes and keys after each, so they read that row and nothing else. A print is content
-//! held by name, kept whatever the rows name.
+//! held by name, kept whatever the rows name; a line every key of whose words is let go is kept
+//! as its husk ([`LineReplica`]), and its print is the device's to delete.
 
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -13,7 +14,7 @@ use crate::replica::held::Said;
 use crate::secretary::answer::Renderable;
 use crate::secretary::held_lines::HeldLines;
 use crate::secretary::key_ring::KeyRing;
-use crate::secretary::line_form::{LineDelta, LinePulling};
+use crate::secretary::line_form::{Husked, LineDelta, LineFrame, LinePulling, LineReplica};
 use crate::secretary::locked_text::KeyName;
 use crate::secretary::outlines::{NotANode, Outlines, Parsed, Scope};
 use crate::secretary::store::ConversationId;
@@ -25,7 +26,7 @@ pub struct HeldReplica {
     /// The prints and the keys of their words, the landed row's keys.
     pub lines: HeldLines,
     outlines: Outlines,
-    rows: LinePulling,
+    kept: LineReplica,
 }
 
 /// Which conversations a move of the landed row moved: every one, where the row was reset or
@@ -39,11 +40,11 @@ pub enum Moved {
     These(BTreeSet<ConversationId>),
 }
 
-/// A move of the rows: the delta that makes it, and what it moved.
+/// A move of the rows: the frame that makes it, and what it moved.
 #[derive(Debug, Clone)]
 pub struct Took {
     /// What another replica takes to make the same move.
-    pub delta: LineDelta,
+    pub frame: LineFrame,
     /// What it moved.
     pub moved: Moved,
 }
@@ -74,7 +75,13 @@ impl HeldReplica {
     /// The rows.
     #[must_use]
     pub fn rows(&self) -> &LinePulling {
-        &self.rows
+        &self.kept.rows
+    }
+
+    /// The replica as the device keeps it: the rows and the husks.
+    #[must_use]
+    pub fn kept(&self) -> &LineReplica {
+        &self.kept
     }
 
     /// The piece the box answered, `answer` heard at `fetched_at` with the keys `keys`, kept
@@ -99,7 +106,7 @@ impl HeldReplica {
             ..
         } = answer;
         let heads = match heads {
-            Heads::Held => self.rows.holding().replica().read().heads(),
+            Heads::Held => self.kept.rows.holding().replica().read().heads(),
             Heads::These { heads } => names(heads)?,
         };
         let said = Said {
@@ -114,7 +121,7 @@ impl HeldReplica {
             digest: name(frontier.digest)?,
             count: u64::try_from(frontier.count).unwrap_or(u64::MAX),
         };
-        Ok(self.rows.piece(said, keys, fetched_at))
+        Ok(self.kept.rows.piece(said, keys, fetched_at))
     }
 
     /// The pending pieces landed.
@@ -127,32 +134,92 @@ impl HeldReplica {
         self.took(LinePulling::start_over)
     }
 
-    /// The keys `gone` let go, from every row.
+    /// The keys `gone` let go, from every row, and every line the rows read each key of whose
+    /// words is then let go kept as its husk ([`HeldReplica::bare`]).
     pub fn forget(&mut self, gone: BTreeSet<KeyName>) -> Took {
-        self.took(|rows| rows.forget(gone))
+        let (delta, moved) = self.moving(|rows| rows.forget(gone));
+        let names = self.bare();
+        let husked: Vec<Husked> = self
+            .lines
+            .husk(&names)
+            .into_iter()
+            .map(|(name, parents, husk)| Husked {
+                name,
+                parents,
+                husk,
+            })
+            .collect();
+        for husked in &husked {
+            self.kept.husks.insert(husked.name.clone(), husked.clone());
+        }
+        Took {
+            frame: LineFrame { delta, husked },
+            moved,
+        }
     }
 
-    /// `delta` taken: another tab's, or one read back from the log.
-    pub fn apply(&mut self, delta: &LineDelta) -> Moved {
-        self.moving(|rows| rows.apply(delta)).1
+    /// The name of every line the rows read, landed or in a pull's pieces, held as a print with
+    /// words each key of which no row holds: a line every slot of which is erased, which a purge
+    /// keeps as its husk. A line a slot of which still opens is kept whole.
+    #[must_use]
+    pub fn bare(&self) -> BTreeSet<Hash> {
+        let holding = self.kept.rows.holding();
+        let ring = holding.keys();
+        let pending: BTreeSet<Hash> = self.pending().iter().map(|n| n.name().clone()).collect();
+        self.lines
+            .bare(|key| ring.holds(key))
+            .into_iter()
+            .filter(|name| self.outlines.holds(name) || pending.contains(name))
+            .collect()
     }
 
-    /// The rows replaced by `rows`, as a warm load reads them; the prints are kept.
-    pub fn load(&mut self, rows: LinePulling) -> Moved {
-        self.moving(|held| *held = rows).1
+    /// `frame` taken: another tab's, or one read back from the log.
+    pub fn apply(&mut self, frame: &LineFrame) -> Moved {
+        let moved = self.moving(|rows| rows.apply(&frame.delta)).1;
+        self.husked(frame.husked.iter().cloned());
+        moved
+    }
+
+    /// The replica replaced by `kept`, as a warm load reads it; the prints are kept, and each of
+    /// its husks stands in place of its line's print.
+    pub fn load(&mut self, kept: LineReplica) -> Moved {
+        let LineReplica { rows, husks } = kept;
+        let moved = self.moving(|held| *held = rows).1;
+        self.kept.husks = BTreeMap::new();
+        self.husked(husks.into_values());
+        moved
+    }
+
+    fn husked(&mut self, husks: impl IntoIterator<Item = Husked>) {
+        let husks: Vec<Husked> = husks.into_iter().collect();
+        self.lines.hold_husks(
+            husks
+                .iter()
+                .map(|h| (h.name.clone(), h.parents.clone(), h.husk.clone()))
+                .collect(),
+        );
+        self.kept
+            .husks
+            .extend(husks.into_iter().map(|h| (h.name.clone(), h)));
     }
 
     fn took(&mut self, step: impl FnOnce(&mut LinePulling) -> LineDelta) -> Took {
         let (delta, moved) = self.moving(step);
-        Took { delta, moved }
+        Took {
+            frame: LineFrame {
+                delta,
+                husked: Vec::new(),
+            },
+            moved,
+        }
     }
 
     /// `step` taken, and the readings told the landed row it leaves.
     fn moving<A>(&mut self, step: impl FnOnce(&mut LinePulling) -> A) -> (A, Moved) {
-        let landed = self.rows.landed();
+        let landed = self.kept.rows.landed();
         let was = (landed.generation(), landed.replica().epoch());
-        let taken = step(&mut self.rows);
-        let landed = self.rows.landed();
+        let taken = step(&mut self.kept.rows);
+        let landed = self.kept.rows.landed();
         let reading = landed.replica().read();
         let came: Vec<Parsed> = reading
             .nodes()
@@ -225,7 +292,7 @@ impl HeldReplica {
     /// (what the box's pull says an erasure names); each with the blocks its words fed where the
     /// keys held open them. What a purge forgets, the blocks first and then the keys.
     pub fn owed(&mut self, told: &BTreeSet<KeyName>) -> BTreeMap<KeyName, Vec<Renderable>> {
-        let holding = self.rows.holding().into_owned();
+        let holding = self.kept.rows.holding().into_owned();
         let ring = holding.keys();
         let pending = self.pending();
         let mut dead = self.lines.dead();
@@ -247,7 +314,8 @@ impl HeldReplica {
 
     /// The nodes a pull's pieces read that the landed row's readings do not hold.
     fn pending(&self) -> Vec<Parsed> {
-        self.rows
+        self.kept
+            .rows
             .pending()
             .replica()
             .read()
