@@ -806,6 +806,36 @@ three warm loads after the snapshot is written; the target is under 2.5 s).
    *Law:* warm equals cold for each store; two tabs converge on each. *Measure:*
    lines removed (`objectsync.ts` 74, `noderows.ts` 344 with stage 3's share,
    `locked.ts` 50), the warm draw of the Inbox.
+
+   *As built.* The inbox and the two topic stores are each a replica of
+   objects the core holds (`app/core/src/replica/objects.rs`): the generic
+   rows of 3a (`Pulling`) with no keys, beside the objects the tab wrote,
+   each with the box's answer (unsent, refused until trusted or for good,
+   taken), which only climbs, so every move is a join. What the tab wrote
+   stands through a reset or a later epoch of the rows. The rows' form is one
+   form for every store (`replica/form.rs`, the lines' bytes unchanged at
+   form 3); the objects' form is 1. In the worker one store (`object_rows.rs`,
+   one macro for the three classes) answers each move as a frame, and its
+   readings read the Prodrome's replica of the standing objects, made once per
+   move of them and counted by `version`; `replicasync.ts` drives each store
+   as `linesync.ts` drives the lines, minus content and keys. Deleted:
+   `objectsync.ts`, `noderows.ts`, `engine.ts`, `pull.ts`, `locked.ts`,
+   `take.ts`, `purge.ts`, `storeset.readOf`'s rebuilds and the stores' rows;
+   version 12 drops the rows with no converter. Laws: `warmload.test.ts` (the
+   inbox and the topics read from a warm load what they read cold, and two
+   tabs converge, whatever they write, each reload read with the box gone);
+   the core's `object_replica` (the moves are joins, shuffled and repeated;
+   the snapshot and frames read back; what the tab wrote stands until the box
+   answers; the later-epoch law of `epochdrop.test.ts`, now over the core's
+   rows). Production code against 3b: Rust +17,254 characters (+791 lines),
+   web −21,923 characters (−592 lines), net −4,669 characters. The Inbox's
+   first draw in a fresh tab of a warm device (`pagebench`, the Inbox alone,
+   `SUZATARY_E2E_BROWSER_CPU=0.67` and throttling 4, nine loads each, three
+   alternating pairs): 3b medians 3,408, 3,324 and 3,494 ms, this stage 3,578,
+   3,397 and 3,122 ms; no measurable change, with about 0.4 s between runs.
+   Next: `linesync.ts` restores, pulls, lands and compacts as
+   `replicasync.ts` does, and becomes its instance once 3c's wake and lock
+   land in one place for all four stores.
 5. **Rendered blocks beside the replica.** R1 moves into `blocks`; the erasure's
    transaction deletes blocks with the keys; R2's marks and P6 go;
    `suzatary-rendered` is deleted at the worker's start. *Law:* an erasure

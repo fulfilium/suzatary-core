@@ -6,7 +6,6 @@ import { test } from "node:test"
 import assert from "node:assert/strict"
 import { readFileSync } from "node:fs"
 
-import locked from "../src/prodrome/locked"
 import pieces from "../src/prodrome/pieces"
 import { NOTHING, behind, boxHeadsOf, headsOf, join, parentsOf, prodromeOf, pulled, replicaOf, reset, sinceOf } from "../src/prodrome/replica"
 import type { Replica } from "../src/prodrome/replica"
@@ -79,7 +78,7 @@ const tab = (ask: (since: string) => Promise<StorePayload>) => {
   const holding = (): Replica => join(row, pending)
   const show = (replica: Replica): void => {
     const was = row
-    row = locked.taken(locked.of(row), { type: "Held", row: locked.of(replica) }).replica
+    row = join(row, replica)
     if (row !== was) counts.shown += 1
   }
   const fx: pieces.Effects<StorePayload> = {

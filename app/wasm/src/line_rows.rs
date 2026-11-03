@@ -32,6 +32,13 @@ pub struct Step {
     moved: String,
 }
 
+impl Step {
+    /// The frame `delta` and what it moved, `moved`.
+    pub(crate) fn of(delta: Vec<u8>, moved: String) -> Self {
+        Step { delta, moved }
+    }
+}
+
 #[wasm_bindgen]
 impl Step {
     /// The delta's frame, for the device's log and the other tabs.
@@ -244,7 +251,7 @@ fn moved(moved: &Moved) -> Result<String, JsError> {
     }
 }
 
-fn hashes(text: &str, what: &str) -> Result<BTreeSet<Hash>, JsError> {
+pub(crate) fn hashes(text: &str, what: &str) -> Result<BTreeSet<Hash>, JsError> {
     let names: Vec<String> =
         serde_json::from_str(text).map_err(|e| refused(format!("{what}: {e}")))?;
     names
@@ -257,7 +264,7 @@ fn hashes(text: &str, what: &str) -> Result<BTreeSet<Hash>, JsError> {
 const SAFE: f64 = 9_007_199_254_740_991.0;
 
 /// A JavaScript number that is a whole number from 0 to 2^53 - 1, as one.
-fn whole(n: f64, what: &str) -> Result<u64, JsError> {
+pub(crate) fn whole(n: f64, what: &str) -> Result<u64, JsError> {
     if n.is_finite() && n.fract() == 0.0 && (0.0..=SAFE).contains(&n) {
         #[expect(
             clippy::cast_possible_truncation,

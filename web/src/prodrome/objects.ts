@@ -7,7 +7,6 @@
 import d from "../wire/decoder";
 import lo from "../algebra/lo";
 import idb from "../app/idb";
-import locked from "./locked";
 import payload from "../wire/generated/payload";
 import type { Frontier, Held, Obj, Replica, Word } from "./replica";
 import type { StoredObject } from "../wire/generated/wire";
@@ -16,9 +15,6 @@ import { NOTHING, canonical, join, losses, replicaOf, reset } from "./replica";
 export const DB_NAME = "suzatary";
 const STORE_NAME = "chain";
 const CONTENT_NAME = "content";
-const INBOX_NAME = "inbox";
-const TOPICS_NAME = "topics";
-const ALIASES_NAME = "topic-aliases";
 const REPLICA_NAME = "replica";
 
 /**
@@ -31,7 +27,7 @@ function keyFor(chain: string): string {
 }
 
 /** A word of the box as a row keeps it. */
-export const Spoken = d.obj<Word>({
+const Spoken = d.obj<Word>({
   epoch: d.num,
   heads: d.arr(d.str),
   untrusted: d.arr(d.str),
@@ -41,10 +37,10 @@ export const Spoken = d.obj<Word>({
 });
 
 /** Where a replica stands with the box, as a row keeps it. */
-export const Standing: d.Decoder<Frontier> = d.sum<Frontier, "type">("type", { Nothing: {}, Named: { digest: d.str, count: d.num, era: d.num } });
+const Standing: d.Decoder<Frontier> = d.sum<Frontier, "type">("type", { Nothing: {}, Named: { digest: d.str, count: d.num, era: d.num } });
 
 /** A replica's row, its objects read by `objects`. */
-export const replicaRow = <O extends Obj>(objects: d.Decoder<O>): d.Decoder<Held<O>> =>
+const replicaRow = <O extends Obj>(objects: d.Decoder<O>): d.Decoder<Held<O>> =>
   d.obj<Held<O>>({
     generation: d.num,
     objects: d.arr(objects),
@@ -66,18 +62,19 @@ export const parseReplica = (raw: unknown): lo.Settled<Replica> => lo.map(Stored
  * is taken again from the box. The one thing a device holds that the box does not is what this tab wrote and the box
  * has not taken, in a chain's row, so the rows' store of version 8 or later, which is this build's, is kept; its rows
  * that are no chain's, which a build before this one kept, are deleted, and every other store goes and is made anew. A
- * device before version 8 keeps nothing. Version 11 keeps the lines as the core's own form (`replicalog`).
+ * device before version 8 keeps nothing. Version 11 keeps the lines as the core's own form (`replicalog`), and version
+ * 12 the inbox and the topic stores as well.
  */
 const DB: idb.Db = {
   name: DB_NAME,
-  version: 11,
+  version: 12,
   store: STORE_NAME,
   upgrade: (db, tx, from) => {
     const kept = from >= 8 && db.objectStoreNames.contains(STORE_NAME);
     for (const name of Array.from(db.objectStoreNames)) if (!(kept && name === STORE_NAME)) db.deleteObjectStore(name);
     if (kept) for (const prefix of OTHERS) tx.objectStore(STORE_NAME).delete(under(prefix));
     else db.createObjectStore(STORE_NAME);
-    for (const name of [CONTENT_NAME, INBOX_NAME, TOPICS_NAME, ALIASES_NAME, REPLICA_NAME]) db.createObjectStore(name);
+    for (const name of [CONTENT_NAME, REPLICA_NAME]) db.createObjectStore(name);
   },
 };
 
@@ -87,17 +84,12 @@ const OTHERS = ["store/", "pages/"];
 /** The device's content by name: one literal per object name, written once and never rewritten. */
 export const CONTENT: idb.Db = { ...DB, store: CONTENT_NAME };
 
-/** Each store the core's worker holds as rows, one row per node beside a head row (`noderows`). */
-export const INBOX_ROWS: idb.Db = { ...DB, store: INBOX_NAME };
-export const TOPIC_ROWS: idb.Db = { ...DB, store: TOPICS_NAME };
-export const ALIAS_ROWS: idb.Db = { ...DB, store: ALIASES_NAME };
-
 /** The replicas the core keeps in its own form, a snapshot and the frames after it, by the store's name (`replicalog`). */
 export const REPLICA: idb.Db = { ...DB, store: REPLICA_NAME };
 
 /**
- * What a kind of row holds and how it reads, joins and starts over: a chain's row is its replica, a store's its replica
- * and its keys. Every row holds a replica, which is what a reset is checked against.
+ * What a chain's row holds and how it reads, joins and starts over: its replica, which is what a reset is checked
+ * against.
  */
 export interface Rows<A> {
   readonly parse: (raw: unknown) => lo.Settled<A>;
@@ -110,20 +102,6 @@ export interface Rows<A> {
   readonly after: (generation: number) => A;
   readonly nothing: A;
 }
-
-/** A store's row: its replica of `O`s and the keys of their words, a reset's the empty row of the generation after. */
-export const storeRows = <O extends Obj>(objects: d.Decoder<O>, none: locked.Row<O>, unsent: (r: Replica<O>) => readonly StoredObject[]): Rows<locked.Row<O>> => {
-  const Kept = d.obj<{ replica: Held<O>; keys: locked.Keys }>({ replica: replicaRow(objects), keys: d.rec(d.str) });
-  return {
-    parse: (raw) => lo.map(Kept(raw), (k) => locked.of(replicaOf(canonical(k.replica)), k.keys)),
-    print: (r) => ({ replica: r.replica.held, keys: r.keys }),
-    generation: (r) => r.replica.generation,
-    unsent: (r) => unsent(r.replica),
-    join: locked.join,
-    after: (g) => locked.of(replicaOf<O>({ ...none.replica.held, generation: g + 1 })),
-    nothing: none,
-  };
-};
 
 export const CHAIN: Rows<Replica> = {
   parse: parseReplica,
@@ -213,8 +191,7 @@ function written<A>(rows: Rows<A>, row: lo.Settled<A>, raw: unknown, write: Writ
 
 /** The generation a row that does not read says it is of, read off its print; 0 for one that does not say. */
 function generationOf(raw: unknown): number {
-  const held = typeof raw === "object" && raw !== null && "replica" in raw ? raw.replica : raw;
-  return typeof held === "object" && held !== null && "generation" in held && typeof held.generation === "number" ? held.generation : 0;
+  return typeof raw === "object" && raw !== null && "generation" in raw && typeof raw.generation === "number" ? raw.generation : 0;
 }
 
 /** The names under `prefix`: a key range of the rows' store. */

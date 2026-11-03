@@ -45,7 +45,9 @@ const DEFAULT = `(async () => {
   lines.hold(objects(kept), "[]");
   lines.piece(${JSON.stringify(JSON.stringify(NOTHING))}, JSON.stringify(kept.keys), 0);
   lines.land().free();
-  const inbox = new core.Proposals(objects(asked));
+  const inbox = new core.Proposals();
+  inbox.piece(JSON.stringify(asked), 0);
+  inbox.land().free();
   try {
     return JSON.parse(lines.conversation("default", inbox));
   } finally {

@@ -612,14 +612,18 @@ export const LANDED_ROW = withCore(`
 `)
 export type Landed = { readonly generation: number; readonly epoch: number; readonly frontier: { readonly digest: string } | null; readonly nodes: readonly string[]; readonly keys: readonly string[] }
 
-/** The lines as the device keeps them, the core's snapshot and frames (`replicalog`), each value's bytes in hex, by key. */
+/**
+ * The lines as the device keeps them, the core's snapshot and frames (`replicalog`), each value's bytes in hex, by key:
+ * the lines' rows alone, since the inbox and the topic stores are kept in the same store under their own names.
+ */
 export const REPLICA_ROWS = `new Promise((ok, no) => {
   const r = indexedDB.open("suzatary")
   r.onerror = () => no(String(r.error))
   r.onsuccess = () => {
     const tx = r.result.transaction("replica", "readonly")
-    const keys = tx.objectStore("replica").getAllKeys()
-    const values = tx.objectStore("replica").getAll()
+    const lines = IDBKeyRange.bound("lines/", "lines/\\uffff")
+    const keys = tx.objectStore("replica").getAllKeys(lines)
+    const values = tx.objectStore("replica").getAll(lines)
     const hex = (bytes) => [...bytes].map((b) => b.toString(16).padStart(2, "0")).join("")
     values.onsuccess = () => {
       r.result.close()

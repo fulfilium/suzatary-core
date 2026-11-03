@@ -8,6 +8,7 @@ import { createRequire } from "node:module"
 import { readFileSync } from "node:fs"
 
 import type { Core, Lines, Named } from "../src/prodrome/core"
+import { storeOf } from "./held"
 import { conversationOf, lackingIn, listOfLines, objectsOf, planOf, searchOf } from "../src/prodrome/core"
 import lines from "../src/prodrome/lines"
 import content from "../src/prodrome/content"
@@ -81,7 +82,7 @@ const landed = (held: Lines, nodes: readonly SkeletonNode[], keys: Readonly<Reco
 // Every answer the worker's lines holding `objects` give about `scope`, or the refusal they give instead.
 const read = (objects: readonly Named[], scope: Extract<lines.Scope, { readonly type: "Whole" | "Conversations" }>): string => {
   const held = new core.Lines()
-  const proposals = new core.Proposals(objectsOf(inbox))
+  const proposals = storeOf(new core.Proposals(), inbox)
   try {
     held.hold(objectsOf(objects), "[]")
     landed(held, [], box.keys)

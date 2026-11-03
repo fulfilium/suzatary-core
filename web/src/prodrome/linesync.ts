@@ -9,7 +9,7 @@
 import type { Lines } from "./core"
 import { framed, heldOf, holdAdmitted, husksOf, lackingIn, lackingOf, lacksIn, movedOf, owedOf, planOf } from "./core"
 import content from "./content"
-import type engine from "./engine"
+import replicasync from "./replicasync"
 import excluded from "./excluded"
 import type heads from "./heads"
 import keep from "./keep"
@@ -18,7 +18,6 @@ import { CONTENT } from "./objects"
 import phases from "./phases"
 import pieces from "./pieces"
 import type progress from "./progress"
-import pull from "./pull"
 import replicalog from "./replicalog"
 import lo from "../algebra/lo"
 import once from "../algebra/once"
@@ -46,7 +45,7 @@ export namespace linesync {
 
   export type T = {
     // The store as the set of stores asks each of its stores.
-    readonly engine: engine.Any
+    readonly engine: replicasync.Store
     // `read` once every line `scope` reads is held, a conversation's fetched before the whole store's. The scope is
     // asked again after each fetch, of the skeleton then held.
     readonly over: <A>(scope: () => lines.Scope, read: () => A) => Promise<A>
@@ -60,7 +59,7 @@ export namespace linesync {
   }
 
   const NAME = "lines"
-  const KEPT = pull.kept(NAME)
+  const KEPT = replicasync.kept(NAME)
   // How long the lines stay unmoved before their log is compacted: a burst of landings is compacted once.
   export const QUIET_MS = 30_000
   // A pull that did not end whole is asked again after a wait that doubles from two seconds to a minute.
@@ -77,7 +76,7 @@ export namespace linesync {
 
   export const of = (held: Lines, fx: Effects, blocks: rendered.Store): T => {
     const log = replicalog.of(NAME, CONTENT)
-    const told = (why: string | null): void => fx.told(`row/${KEPT}`, pull.unread(NAME, why))
+    const told = (why: string | null): void => fx.told(`row/${KEPT}`, replicasync.unread(NAME, why))
     const moved = (said: string): void => fx.moved(movedOf(said))
 
     // What a purge takes from the rendered blocks, taken from the page's table as well as the device's.
@@ -277,7 +276,7 @@ export namespace linesync {
     // After a landing: the content outside the plan let go, and the plan prefetched once a page reads the lines.
     const landedNow = async (): Promise<void> => {
       const gone = await content.keepOnly(new Set((await planned()).keep), heldOf(held), drop => Promise.resolve(held.hold("[]", JSON.stringify(drop))))
-      if (gone.type === "Error") fx.told(`row/${pull.kept("lines")}`, pull.unread("lines", gone.e))
+      if (gone.type === "Error") fx.told(`row/${replicasync.kept("lines")}`, replicasync.unread("lines", gone.e))
       if (wanted === "Yes") prefetched(held.heads())
     }
 

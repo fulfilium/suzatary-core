@@ -273,7 +273,9 @@ async function decisionOf(conversation: string): Promise<string | undefined> {
       const core = await import("/b/dev/prodrome.js");
       await core.default({ module_or_path: "/b/dev/prodrome_bg.wasm" });
       const held = await (await fetch("/api/stores/inbox/objects")).json();
-      const inbox = new core.Proposals(JSON.stringify(held.objects.map((o) => ({ hash: o.hash, text: o.literal }))));
+      const inbox = new core.Proposals();
+      inbox.piece(JSON.stringify(held), 0);
+      inbox.land().free();
       const chains = new core.Chains();
       try {
         return JSON.parse(inbox.inbox(new Date().toISOString().slice(0, 19), chains)).proposals;

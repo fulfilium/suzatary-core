@@ -15,7 +15,7 @@ import type {
   TopicsPayload,
   TurnRow,
 } from "../wire/generated/wire"
-import type { Acted, Chains, Core, CoreEnv, CoreFold, Linker, Named, Proposals, Standing, Todos, Window } from "./core"
+import type { Acted, Chains, Core, CoreEnv, CoreFold, Linker, Named, Standing, Todos, Window } from "./core"
 import {
   appendTo,
   barOf,
@@ -281,8 +281,8 @@ export namespace questions {
 
     // The Inbox's rows, read again only once the inbox, the chains held or the memory moved: until then an ask is
     // answered with the reading made at the instant of the first, which its `at` names.
-    const inbox = last.of<{ readonly of: Proposals; readonly set: string; readonly memory: string }, InboxProposalsPayload>(
-      (a, b) => a.of === b.of && a.set === b.set && a.memory === b.memory,
+    const inbox = last.of<{ readonly version: number; readonly set: string; readonly memory: string }, InboxProposalsPayload>(
+      (a, b) => a.version === b.version && a.set === b.set && a.memory === b.memory,
     )
 
     // The key each answer block of `turns` is kept by, named once here, where the core is.
@@ -385,13 +385,13 @@ export namespace questions {
           stores.opened()
           return null
         case "Shown":
-          return sync.shown(q.on).then(() => null)
+          return stores.shown(q.on).then(() => null)
         case "Reset":
           return stores.reset(q.store)
         case "Proposals":
           return ready("Inbox", turn).then(() => {
             const of = proposals()
-            return inbox({ of, set: setNow(), memory: JSON.stringify(q.memory) }, () => inboxOf(of, q.at, q.memory, set))
+            return inbox({ version: of.version(), set: setNow(), memory: JSON.stringify(q.memory) }, () => inboxOf(of, q.at, q.memory, set))
           })
         case "Conversations":
           return whole(turn, () => listOfLines(held, proposals()))

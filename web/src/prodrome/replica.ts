@@ -90,11 +90,6 @@ export const UNHEARD: Box = { type: "Unheard" };
 /** `heard` of the box's word, or `unheard` before the box has spoken. */
 export const said = <R>(b: Box, unheard: R, heard: (w: Word) => R): R => (b.type === "Heard" ? heard(b.word) : unheard);
 
-/**
- * The epoch of the box's words a replica holds, 0 before the box has spoken: every epoch it answers with is 1 or more,
- * and the union keeps the latest epoch's words alone.
- */
-export const epochOf = (held: { readonly words: readonly Word[] }): number => Math.max(0, ...held.words.map((w) => w.epoch));
 
 /**
  * A replica read: what it holds, and what that means, made only by `replicaOf`, so no reading is carried beside the

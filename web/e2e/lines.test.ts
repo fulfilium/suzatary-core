@@ -20,7 +20,7 @@
 import assert from "node:assert/strict"
 
 import type { Recorded } from "./harness"
-import { PHONE, REPLICA_ROWS, SIGNED_POST, WORKER_MARKS, WORKER_QUESTIONS, WRITE_BASE, snapshotKept, streamAnswered, suite } from "./harness"
+import { LANDED_ROW, PHONE, REPLICA_ROWS, SIGNED_POST, WORKER_MARKS, WORKER_QUESTIONS, WRITE_BASE, snapshotKept, streamAnswered, suite } from "./harness"
 
 const app = await suite("lines")
 
@@ -209,11 +209,11 @@ app.scene("a conversation another tab landed draws from the device, with the box
     await other.waitFor(`document.querySelector(".streamround") !== null`, { timeout: 20000 })
     // This tab runs no app now, so only the other tab's worker can land what the box opens next.
     await app.page.navigate(`${WRITE_BASE}/api/about`)
-    const frames = await other.evaluate<number>(`${REPLICA_ROWS}.then((rows) => rows.length)`)
+    const held = await other.evaluate<number>(`${LANDED_ROW}.then((row) => row.nodes.length)`)
     const id = await other.evaluate<string>(`${SIGNED_POST}("/api/secretary/conversations", JSON.stringify({title: "Opened in the other tab"})).then((r) => r.json()).then((j) => j.id)`)
-    // The other tab hears the box's heads move and lands the new line: one frame more on the device. (A tab in the
-    // background draws nothing, so its worker's frame is what is waited for.)
-    await other.waitFor(`${REPLICA_ROWS}.then((rows) => rows.length > ${frames})`, { timeout: 20000 })
+    // The other tab hears the box's heads move and lands the new line: the landed row the device keeps grows. (A tab in
+    // the background draws nothing, so its worker's landing is what is waited for; a piece's frame alone lands nothing.)
+    await other.waitFor(`${LANDED_ROW}.then((row) => row.nodes.length > ${held})`, { timeout: 20000 })
     // This tab loads with the box's lines held, so it reads the conversation from what the other tab kept.
     const release = await app.page.holdRequests(["/api/stores/lines/skeleton"])
     try {

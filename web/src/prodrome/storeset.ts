@@ -1,28 +1,26 @@
-// Every store the tab holds, in the core's worker: one engine each (`engine`), the lines' content named and the rest
-// carried in their nodes, and the core's readings of each made again once per move of its row. The page holds none of
-// it: it asks questions, says what the box's stream says of each store's heads and whether it is shown, and hears what
-// moved. A tab's own topic is written here, into its store's row, and handed to the box from here.
+// Every store the tab holds, in the core's worker: the lines (`linesync`), whose content is named and fetched, and the
+// inbox and the two topic stores (`replicasync`), whose objects carry their literals. The core holds each store's
+// replica and answers every reading of it; this drives their pulls, hands the box what this tab wrote in a topic
+// store, and says what moved. The page holds none of it: it asks questions, says what the box's stream says of each
+// store's heads and whether it is shown, and hears what moved.
 
-import type { Core, Lines, Proposals, TopicReading, TopicStore } from "./core"
-import { appendTopic, objectsOf } from "./core"
-import type engine from "./engine"
+import type { Core, Lines, ObjectStore, Proposals, TopicReading, TopicStore } from "./core"
+import { CoreError } from "./core"
 import type excluded from "./excluded"
-import handover from "./handover"
 import type heads from "./heads"
 import linesync from "./linesync"
-import locked from "./locked"
-import { ALIAS_ROWS, INBOX_ROWS, TOPIC_ROWS } from "./objects"
-import objectsync from "./objectsync"
 import type progress from "./progress"
-import { appended, standing } from "./replica"
+import replicasync from "./replicasync"
 import stores from "./stores"
 import topics from "./topics"
 import last from "../algebra/last"
+import lo from "../algebra/lo"
 import once from "../algebra/once"
-import type idb from "../app/idb"
 import type rendered from "../app/rendered"
+import d from "../wire/decoder"
+import http from "../wire/http"
 import storereads from "../wire/storereads"
-import type { StoredObject } from "../wire/generated/wire"
+import type { StorePayload } from "../wire/generated/wire"
 
 export namespace storeset {
   // What the worker says of the stores: a reading's leavings by reader, a pull's progress, that a store moved (the
@@ -40,12 +38,12 @@ export namespace storeset {
   const SCOPES: { readonly [S in Scope]: readonly stores.Name[] } = { Inbox: ["inbox"], All: stores.NAMES }
   const SCOPE_NAMES: readonly Scope[] = ["Inbox", "All"]
 
-  // The core's replica of each topic store and its one reading of them.
+  // The core's two topic stores and their one reading, made once per move of either.
   export type Topics = { readonly replicas: { readonly [N in topics.Store]: TopicStore }; readonly reading: TopicReading }
 
   export type T = {
     readonly lines: linesync.T
-    // The core's reading of the inbox and of the topics as held, made once per move of their rows.
+    // The core's inbox, and its reading of the topics as held.
     readonly proposals: () => Proposals
     readonly topics: () => Topics
     // Local-first, store by store: a store this device has landed answers at once and is pulled behind; one it never
@@ -56,10 +54,12 @@ export namespace storeset {
     // The box's stream named a store's heads, or opened again.
     readonly heard: (store: stores.Name, box: heads.Heads) => void
     readonly opened: () => void
-    // A store's row written over by a reset and taken again, with what the reset could not do.
+    // Whether a page is shown, as the page says: a hidden page may be closed, so every store's log is compacted.
+    readonly shown: (on: boolean) => Promise<void>
+    // A store's copy dropped and taken again, with what the reset could not do.
     readonly reset: (store: stores.Name) => Promise<readonly string[]>
-    // `w` planned from the topics as held, written into its store's row as `actor` and handed to the box; a refusal
-    // rejects in the box's words, and a post with no answer leaves it for the next sync.
+    // `w` planned from the topics as held, written into its store as `actor` and handed to the box; a refusal rejects in
+    // the box's words, and a post with no answer leaves it for the next sync.
     readonly write: (w: topics.Write, at: string, actor: string) => Promise<void>
   }
 
@@ -69,13 +69,11 @@ export namespace storeset {
   const KEPT: Pushed = { type: "Kept" }
   const TOPIC_STORES: readonly topics.Store[] = ["topics", "topic-aliases"]
 
-  // The core's reading made from some rows, again only once one of them moved, the reading it replaces freed.
-  const readOf = <R extends Readonly<Record<string, locked.Row<StoredObject>>>, A>(rows: () => R, make: (rows: R) => A, free: (a: A) => void): (() => A) => {
-    const kept = last.of<R, A>((was, now) => Object.keys(now).every(k => now[k] === was[k]), free)
-    return () => {
-      const now = rows()
-      return kept(now, () => make(now))
-    }
+  const Unsent = d.json(d.arr(d.obj<{ hash: string; literal: string }>({ hash: d.str, literal: d.str })))
+  const unsentIn = (store: ObjectStore): readonly { readonly hash: string; readonly literal: string }[] => {
+    const read = Unsent(store.unsent())
+    if (read.type === "Val") return read.v
+    throw new CoreError(`unsent: unexpected shape (${read.e})`)
   }
 
   export const of = (core: Core, held: Lines, say: (s: Said) => void, blocks: rendered.Store): T => {
@@ -85,13 +83,20 @@ export namespace storeset {
     const replaced = (name: stores.Name) => (): void => {
       for (const s of SCOPE_NAMES) if (SCOPES[s].includes(name)) readies[s].forget()
     }
-    const objectStore = (name: objectsync.Name, db: idb.Db): engine.T<StoredObject> =>
-      objectsync.of(name, db, {
-        told,
-        bars,
-        moved: () => say({ type: "Moved", conversations: "All" }),
-        replaced: replaced(name),
-      })
+    // A store of objects: the core's, driven as its pull asks, a move of what it reads touching every conversation.
+    const objectStore = <S extends ObjectStore>(name: Exclude<stores.Name, "lines">, store: S): { readonly store: S; readonly sync: replicasync.T } => ({
+      store,
+      sync: replicasync.of<StorePayload>(
+        {
+          name,
+          held: store,
+          ask: since => storereads.objects(name, since),
+          piece: (a, at) => store.piece(JSON.stringify(a), at),
+          landed: () => Promise.resolve(),
+        },
+        { told, bars, moved: said => (said === "[]" ? undefined : say({ type: "Moved", conversations: "All" })), replaced: replaced(name) },
+      ),
+    })
 
     const lines = linesync.of(
       held,
@@ -104,48 +109,41 @@ export namespace storeset {
       },
       blocks,
     )
-    const inbox = objectStore("inbox", INBOX_ROWS)
-    const topicStores: { readonly [N in topics.Store]: engine.T<StoredObject> } = {
-      topics: objectStore("topics", TOPIC_ROWS),
-      "topic-aliases": objectStore("topic-aliases", ALIAS_ROWS),
+    const inbox = objectStore("inbox", new core.Proposals())
+    const topicStores = { topics: objectStore("topics", new core.Memberships()), "topic-aliases": objectStore("topic-aliases", new core.TopicAliases()) }
+    const engines: { readonly [N in stores.Name]: replicasync.Store } = { lines: lines.engine, inbox: inbox.sync, topics: topicStores.topics.sync, "topic-aliases": topicStores["topic-aliases"].sync }
+
+    // The topics as the core reads both stores, read again once either moved.
+    const reading = last.of<string, TopicReading>(
+      (a, b) => a === b,
+      r => r.free(),
+    )
+    const topicsNow = (): Topics => {
+      const replicas = { topics: topicStores.topics.store, "topic-aliases": topicStores["topic-aliases"].store }
+      return { replicas, reading: reading(`${replicas.topics.version()}/${replicas["topic-aliases"].version()}`, () => new core.TopicReading(replicas.topics, replicas["topic-aliases"])) }
     }
-    const engines: { readonly [N in stores.Name]: engine.Any } = { lines: lines.engine, inbox, ...topicStores }
 
-    const proposals = readOf(
-      () => ({ inbox: inbox.row() }),
-      r => new core.Proposals(objectsOf(r.inbox.replica.objects)),
-      p => p.free(),
-    )
-    // A reading of a topic store reads no object the box refused, nor what rests on one.
-    const topicsNow = readOf(
-      () => ({ memberships: topicStores.topics.row(), aliases: topicStores["topic-aliases"].row() }),
-      (r): Topics => {
-        const memberships = new core.Memberships(objectsOf(standing(r.memberships.replica)))
-        const aliases = new core.TopicAliases(objectsOf(standing(r.aliases.replica)))
-        return { replicas: { topics: memberships, "topic-aliases": aliases }, reading: new core.TopicReading(memberships, aliases) }
-      },
-      t => [t.reading, t.replicas.topics, t.replicas["topic-aliases"]].forEach(x => x.free()),
-    )
-
-    // What this tab wrote in a topic store and the box has not taken, handed over. A refused object stays held as
-    // refused, so it leaves the reading and is never posted again; a post with no answer leaves everything for the next
-    // sync.
+    // What this tab wrote in a topic store and the box has not taken, handed over, the box's answer kept as a move of the
+    // store. A refused object stays held as refused, so it leaves the reading and is never posted again; a post with no
+    // answer leaves everything for the next sync.
     const push = async (name: topics.Store): Promise<Pushed> => {
-      const store = topicStores[name]
-      const ended = await handover.of(() => store.row().replica, true, (literals, since) => storereads.post(name, literals, since))
-      switch (ended.type) {
-        case "Nothing":
-          return SENT
-        case "Unanswered":
-          return KEPT
-        case "Outdated":
-          return { type: "Refused", why: "the box runs a newer build: reload, and this topic goes with the next sync" }
-        case "Refused":
-          await store.sync.keep(locked.of(ended.replica))
-          return { type: "Refused", why: `the box refused this topic: ${ended.reason}` }
-        case "Taken":
-          await store.sync.keep(locked.of(ended.replica))
-          return ended.refused.length === 0 ? SENT : { type: "Refused", why: `the box refused this topic: ${ended.refused.map(r => r.reason).join("; ")}` }
+      const { store, sync } = topicStores[name]
+      const posting = unsentIn(store)
+      if (posting.length === 0) return SENT
+      try {
+        const receipt = await storereads.post(
+          name,
+          posting.map(o => o.literal),
+          store.since(),
+        )
+        await sync.stepped(store.answered(JSON.stringify(receipt)))
+        return receipt.refused.length === 0 ? SENT : { type: "Refused", why: `the box refused this topic: ${receipt.refused.map(r => r.reason).join("; ")}` }
+      } catch (e: unknown) {
+        if (e instanceof http.ApiError && e.status === http.OUTDATED) return { type: "Refused", why: "the box runs a newer build: reload, and this topic goes with the next sync" }
+        if (http.unanswered(e)) return KEPT
+        const reason = lo.reason(e)
+        await sync.stepped(store.refuse(JSON.stringify(posting.map(o => o.hash)), reason))
+        return { type: "Refused", why: `the box refused this topic: ${reason}` }
       }
     }
 
@@ -160,19 +158,19 @@ export namespace storeset {
       wanted = "All"
       const topicPulls = Promise.all(
         TOPIC_STORES.map(name =>
-          topicStores[name].sync.restored
+          topicStores[name].sync.sync.restored
             .get()
             .then(() => push(name))
             .then(pushed => (pushed.type === "Refused" ? say({ type: "Refused", why: pushed.why }) : undefined), () => undefined)
-            .then(() => topicStores[name].want()),
+            .then(() => topicStores[name].sync.want()),
         ),
       )
-      return lines.engine.want().then(l => inbox.want().then(i => topicPulls.then(ts => l && i && ts.every(t => t))))
+      return lines.engine.want().then(l => inbox.sync.want().then(i => topicPulls.then(ts => l && i && ts.every(t => t))))
     }
     // The inbox alone, for a reading of the proposals; a move pulls the rest too once a reading asked for all.
     const inboxOnly = (): Promise<boolean> => {
       if (wanted === "None") wanted = "Inbox"
-      return inbox.want()
+      return inbox.sync.want()
     }
 
     // A store is ready once it is restored, and, where it never landed, once a pull of it ended whole.
@@ -190,26 +188,28 @@ export namespace storeset {
       )
     const readies: { readonly [S in Scope]: once.T<void> } = { Inbox: readyOf(SCOPES.Inbox, inboxOnly), All: readyOf(SCOPES.All, all) }
 
+    // Each event the topics as held plan for `w`, sealed into its store as this tab's and kept, then handed to the box.
     const write = async (w: topics.Write, at: string, actor: string): Promise<void> => {
       await readies.All.get()
-      const read = topicsNow()
       const name = topics.store(w)
-      const objects = topics.plan(read.reading, w, at, actor).flatMap(e => appendTopic(read.replicas[name], e).objects)
-      if (objects.length === 0) return
-      const store = topicStores[name]
-      await store.sync.keep(locked.of(appended(store.row().replica, objects)))
+      const { store, sync } = topicStores[name]
+      for (const event of topics.plan(topicsNow().reading, w, at, actor)) {
+        const step = store.append(event)
+        if (step !== undefined) await sync.stepped(step)
+      }
       const pushed = await push(name)
       if (pushed.type === "Refused") throw new Error(pushed.why)
     }
 
     return {
       lines,
-      proposals,
+      proposals: () => inbox.store,
       topics: topicsNow,
       ready: scope => readies[scope].get(),
       pull: all,
       heard: (store, box) => engines[store].heard(box),
       opened: () => void (wanted === "All" ? all() : wanted === "Inbox" ? inboxOnly() : undefined),
+      shown: on => Promise.all([lines.shown(on), inbox.sync.shown(on), ...TOPIC_STORES.map(n => topicStores[n].sync.shown(on))]).then(() => undefined),
       reset: store => engines[store].reset(),
       write,
     }

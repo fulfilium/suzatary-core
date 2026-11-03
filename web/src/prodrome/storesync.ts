@@ -15,7 +15,7 @@ import excluded from "./excluded"
 import handover from "./handover"
 import readings from "./readings"
 import progress from "./progress"
-import pull from "./pull"
+import replicasync from "./replicasync"
 import stores from "./stores"
 import type topics from "./topics"
 import type time from "../app/time"
@@ -122,7 +122,7 @@ export namespace storesync {
   }
 
   // The store a reading's row names, or none for a chain's.
-  export const named = (key: string): stores.Name | null => stores.NAMES.find(name => pull.kept(name) === key) ?? null
+  export const named = (key: string): stores.Name | null => stores.NAMES.find(name => replicasync.kept(name) === key) ?? null
 
   // A store's row that does not read, written over by a reset and taken again from the box; a reset that fails is said.
   export const reset = async (name: stores.Name, said: (why: string) => void): Promise<void> =>

@@ -12,7 +12,7 @@ import { parentsOf } from "../src/prodrome/replica"
 import type { MemoryPayload } from "../src/wire/generated/wire"
 import turns from "../src/chat/turns"
 import { forAll, type Rng } from "./gen"
-import { heldChain, holdAll } from "./held"
+import { heldChain, holdAll, storeOf } from "./held"
 import { keyed } from "./keyed"
 
 const core = ((): Core => {
@@ -52,7 +52,7 @@ const linesOf = (c: readonly Named[], given: Record<string, string> = box.keys):
 
 /** Every answer the box gave, read by the module from the inbox `i` and the lines `t`: the raw strings, so equal means byte for byte. */
 const read = (i: readonly Named[], t: Lines, held = chains): string[] => {
-  const p = new core.Proposals(objectsOf(i))
+  const p = storeOf(new core.Proposals(), i)
   const priced = new core.Chains()
   try {
     for (const h of held) priced.hold(h.name, objectsOf(h.objects), JSON.stringify(h.untrusted))
@@ -185,7 +185,7 @@ test("a proposal is priced by the todo it serves, and by nothing where the tab h
 
 test("the decoded readings are the wire's shapes", () => {
   const lines = linesOf(conversations)
-  const p = new core.Proposals(objectsOf(inbox))
+  const p = storeOf(new core.Proposals(), inbox)
   const held = holdAll(new core.Chains(), chains.map(c => heldChain(c.name, c.objects, c.untrusted)))
   const s = {
     inbox: (at: string, memory: MemoryPayload | null, chains: typeof held) => inboxOf(p, at, memory, chains),

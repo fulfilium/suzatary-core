@@ -8,18 +8,19 @@
 
 import { test } from "node:test"
 import assert from "node:assert/strict"
+import { createHash } from "node:crypto"
 import { createRequire } from "node:module"
 import { readFileSync } from "node:fs"
 
 import type { Core, Lines, Named } from "../src/prodrome/core"
-import { framed, heldOf, holdAdmitted, lackingOf, listOfLines, objectsOf } from "../src/prodrome/core"
+import { barOf, framed, heldOf, holdAdmitted, inboxOf, lackingOf, listOfLines } from "../src/prodrome/core"
 import content from "../src/prodrome/content"
 import questions from "../src/prodrome/questions"
 import { headsOf as objectHeads } from "../src/prodrome/replica"
-import type { ContentPayload, SkeletonNode, SkeletonPayload, StorePayload, StoredObject } from "../src/wire/generated/wire"
+import type { ContentPayload, PostedObjects, ReceiptPayload, SkeletonNode, SkeletonPayload, StorePayload, StoredObject } from "../src/wire/generated/wire"
 import { fakeIndexedDB } from "./fakeidb"
 import { forAllAsync } from "./gen"
-import { held as prodromes } from "./held"
+import { held as prodromes, storeOf } from "./held"
 
 const built = process.env["SUZATARY_PRODROME_WASM"]
 if (built === undefined || built === "") throw new Error("SUZATARY_PRODROME_WASM is unset — run scripts/web-test.sh")
@@ -70,23 +71,39 @@ const answer = (held: number, since: string): SkeletonPayload => {
 }
 
 const objectsAnswer = (objects: readonly StoredObject[], since: string): StorePayload => {
-  const frontier = { digest: "9".repeat(64), count: objects.length }
+  const frontier = { digest: String(objects.length).padStart(64, "9"), count: objects.length }
   const sent = since === frontier.digest ? [] : [...objects]
   return { objects: sent, heads: objectHeads(objects), untrusted: [], root: null, geneses: prodromes(objects), epoch: 1, since: "Known", frontier, keys: {}, rest: 0, size: 0, weight: 0, erased: [] }
 }
 
-// The box as `fetch` reaches it: `holds` of its lines, its inbox, two topic stores holding nothing; or no box at all.
+// A store's first object, as the box begins one.
+const begun = (label: string): StoredObject => {
+  const literal = `Genesis(label='${label}', nonce='${"0".repeat(32)}')`
+  return { hash: createHash("sha256").update(literal, "utf8").digest("hex"), literal }
+}
+// The box as `fetch` reaches it: `holds` of its lines, its inbox's first `proposals` objects, and its two topic stores,
+// which take what a tab posts; or no box at all.
 let holds = 1
+let proposals = box.inbox.length
+let topicStores: Record<"topics" | "topic-aliases", StoredObject[]> = { topics: [begun("topics")], "topic-aliases": [begun("topic-aliases")] }
 let down = false
 const json = (v: unknown): Response => new Response(JSON.stringify(v), { status: 200, headers: { "content-type": "application/json" } })
 Object.assign(globalThis, {
-  fetch: async (input: string | URL): Promise<Response> => {
+  fetch: async (input: string | URL, init?: RequestInit): Promise<Response> => {
     if (down) return new Response("", { status: 503 })
+    const method = init?.method ?? "GET"
     const url = new URL(String(input), "http://box")
     const since = url.searchParams.get("since") ?? ""
     if (url.pathname === "/api/stores/lines/skeleton") return json(answer(holds, since))
-    const store = /^\/api\/stores\/(inbox|topics|topic-aliases)\/objects$/.exec(url.pathname)?.[1]
-    if (store !== undefined) return json(objectsAnswer(store === "inbox" ? box.inbox.map(o => ({ hash: o.hash, literal: o.text })) : [], since))
+    const store = /^\/api\/stores\/(inbox|topics|topic-aliases)\/objects$/.exec(url.pathname)?.[1] as "inbox" | "topics" | "topic-aliases" | undefined
+    if (store !== undefined && method === "POST" && store !== "inbox") {
+      const posted = JSON.parse(String(init?.body)) as PostedObjects
+      const held = topicStores[store]
+      const adopted = posted.objects.map(literal => ({ hash: createHash("sha256").update(literal, "utf8").digest("hex"), literal })).filter(o => !held.some(h => h.hash === o.hash))
+      held.push(...adopted)
+      return json({ heads: objectHeads(held), adopted: adopted.map(o => o.hash), already: [], refused: [], since: "Known", frontier: { digest: "8".repeat(64), count: held.length } } satisfies ReceiptPayload)
+    }
+    if (store !== undefined) return json(objectsAnswer(store === "inbox" ? inbox.slice(0, proposals) : topicStores[store], since))
     if (url.pathname === "/api/stores/lines/content") {
       const hashes = (url.searchParams.get("hashes") ?? "").split(",")
       return json({ objects: hashes.flatMap(hash => (literals.has(hash) ? [{ hash, literal: literals.get(hash)! }] : [])) } satisfies ContentPayload)
@@ -95,11 +112,22 @@ Object.assign(globalThis, {
   },
 })
 
-// A tab's worker over the device.
+// A tab's worker over the device. Every tab made is kept until `settled`, since its timers outlive the run that made it.
 type Tab = { readonly ask: <K extends questions.Kind>(q: questions.Of<K>) => Promise<questions.Answer<K>> }
+let live: Tab[] = []
 const tab = (): Tab => {
   const serve = questions.serve(core)
-  return { ask: async q => (await serve(q, () => Promise.resolve())) as never }
+  const t: Tab = { ask: async q => (await serve(q, () => Promise.resolve())) as never }
+  live.push(t)
+  return t
+}
+// Every tab made since the last settling pulled whole with the box answering, which stops its retries, then hidden, which
+// compacts and stops its quiet timer: a timer left running would pull or compact into the next run's device.
+const settled = async (): Promise<void> => {
+  down = false
+  for (const t of live) await t.ask({ type: "Pull" })
+  for (const t of live) await t.ask({ type: "Shown", on: false })
+  live = []
 }
 
 // The conversations as a tab's worker lists them.
@@ -117,7 +145,7 @@ const offline = <A>(read: Promise<A>): Promise<A> =>
 // The conversations as a core handed the box's whole store, cold, lists them.
 const cold = async (): Promise<string> => {
   const held = new core.Lines()
-  const proposals = new core.Proposals(objectsOf(inbox))
+  const proposals = storeOf(new core.Proposals(), inbox)
   try {
     const whole = answer(holds, "")
     held.piece(JSON.stringify(whole), JSON.stringify(whole.keys), 0)
@@ -143,9 +171,6 @@ test("law: a warm load reads what a cold load reads, and two tabs converge, what
     down = false
     holds = 1 + r.int(order.length)
     const tabs = [tab(), tab()]
-    // Every tab this run made, settled before the next run: a tab's purge runs after the reading that asked for it, and
-    // one that ran on the next run's device would write this run's lines there. A pull waits for the purge before it.
-    const made = [...tabs]
     // A device that never landed the lines waits for the box to read them, and a pull brings their skeleton alone, their
     // content coming as a reading reads it: each tab lands and reads them first, so the device holds what a reload reads.
     for (const t of tabs) {
@@ -174,7 +199,6 @@ test("law: a warm load reads what a cold load reads, and two tabs converge, what
           down = true
           try {
             tabs[i] = tab()
-            made.push(tabs[i]!)
             assert.equal(await offline(listed(tabs[i]!)), await cold(), "a reload reads what a cold core reads, with no answer from the box")
           } finally {
             down = false
@@ -187,7 +211,7 @@ test("law: a warm load reads what a cold load reads, and two tabs converge, what
         assert.equal(await listed(t), await cold(), `after ${op} of tab ${i}, a tab reads what a cold core reads`)
       }
     }
-    for (const t of made) await t.ask({ type: "Pull" })
+    await settled()
   })
   assert.ok(seen.frames > 0 && seen.snapshots > 0, `the reloads read frames (${seen.frames}) and a snapshot (${seen.snapshots})`)
 })
@@ -320,4 +344,84 @@ test("a husk one tab's purge kept stands through another tab's compaction, and a
   } finally {
     down = false
   }
+  await settled()
+})
+
+// The Inbox's rows and the topics in use as a tab's worker reads them, at one instant.
+const AT = "2026-11-03T09:00:00"
+const storesRead = async (t: Tab): Promise<string> => {
+  const rows = await t.ask({ type: "Proposals", at: AT, memory: null })
+  const stream = await t.ask({ type: "Stream", chosen: [], pages: 1 })
+  assert.equal(stream.type, "Held", JSON.stringify(stream))
+  return JSON.stringify({ rows, bar: stream.type === "Held" ? stream.v.bar : null })
+}
+// The same, as cores handed the box's whole stores, cold, read them.
+const storesCold = (): string => {
+  const [i, m, a] = [storeOf(new core.Proposals(), inbox.slice(0, proposals)), storeOf(new core.Memberships(), topicStores.topics), storeOf(new core.TopicAliases(), topicStores["topic-aliases"])]
+  const chains = new core.Chains()
+  const reading = new core.TopicReading(m, a)
+  try {
+    return JSON.stringify({ rows: inboxOf(i, AT, null, chains), bar: barOf(reading) })
+  } finally {
+    for (const x of [reading, chains, i, m, a]) x.free()
+  }
+}
+
+test("law: the inbox and the topics read from a warm load what they read cold, and two tabs converge on each, whatever they write", async () => {
+  const seen = { snapshots: 0, frames: 0, writes: 0 }
+  await forAllAsync(20, async r => {
+    const device = fakeIndexedDB()
+    down = false
+    holds = order.length
+    proposals = 1 + r.int(inbox.length)
+    topicStores = { topics: [begun("topics")], "topic-aliases": [begun("topic-aliases")] }
+    const tabs = [tab(), tab()]
+    // Each tab reads once while the box answers, so the device holds the lines' prints the stream reads on a reload.
+    for (const t of tabs) {
+      assert.equal(await t.ask({ type: "Pull" }), true)
+      await storesRead(t)
+    }
+    for (let step = 0; step < 10; step += 1) {
+      const i = r.int(tabs.length)
+      const op = r.pick(["Grow", "Write", "Pull", "Hide", "Reload"] as const)
+      switch (op) {
+        case "Grow":
+          proposals = Math.min(inbox.length, proposals + 1 + r.int(4))
+          break
+        case "Write": {
+          const write = r.bool(0.7)
+            ? { type: "Add" as const, target: `round:default/${r.int(4)}`, topic: r.pick(["travel", "work"]) }
+            : { type: "Rename" as const, from: "travel", to: "trips" }
+          await tabs[i]!.ask({ type: "Topic", write, at: `2026-11-03T08:${String(10 + step).padStart(2, "0")}:00`, actor: "owner" })
+          seen.writes += 1
+          break
+        }
+        case "Pull":
+          assert.equal(await tabs[i]!.ask({ type: "Pull" }), true, "the pull ends whole")
+          break
+        case "Hide":
+          await tabs[i]!.ask({ type: "Shown", on: false })
+          break
+        case "Reload": {
+          const kept = [...device.rows("suzatary", "replica").keys()].map(String)
+          if (kept.some(k => /^(inbox|topics|topic-aliases)\/snapshot$/.test(k))) seen.snapshots += 1
+          if (kept.some(k => /^(inbox|topics|topic-aliases)\/log\//.test(k))) seen.frames += 1
+          down = true
+          try {
+            tabs[i] = tab()
+            assert.equal(await offline(storesRead(tabs[i]!)), storesCold(), "a reload reads what cold cores read, with no answer from the box")
+          } finally {
+            down = false
+          }
+          break
+        }
+      }
+      for (const t of tabs) {
+        await t.ask({ type: "Pull" })
+        assert.equal(await storesRead(t), storesCold(), `after ${op} of tab ${i}, a tab reads what cold cores read`)
+      }
+    }
+    await settled()
+  })
+  assert.ok(seen.frames > 0 && seen.snapshots > 0 && seen.writes > 0, `the reloads read frames (${seen.frames}) and a snapshot (${seen.snapshots}), and the tabs wrote (${seen.writes})`)
 })

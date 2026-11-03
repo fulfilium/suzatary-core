@@ -1591,11 +1591,10 @@ rules and points here for the modules. The web contract is `docs/WEB-SPEC.md`.
   (the set of them `storeset.ts`). The lines' replica is the core's own, kept
   on the device as its snapshot and frames (`linesync.ts`, `replicalog.ts`,
   2026-11, `docs/ONEOWNER-PLAN-2026-11-02.md` stages 3a and 3b); the inbox and the
-  topic stores are each one instance of one engine
-  (`web/src/prodrome/engine.ts`, 2026-10-27): a row that is the store's replica as a
-  semilattice (union of the objects, the heads of the later contact) and the
-  keys of its words (none for a store that locks no words), kept in
-  IndexedDB one node per row in an object store of its own (`noderows.ts`),
+  topic stores are each a replica of objects the core holds
+  (`app/core/src/replica/objects.rs`, stage 4), the rows of its pull beside what
+  the tab wrote with the box's answer to it, kept the same way
+  (`web/src/prodrome/replicasync.ts`), and each
   pulled from the frontier the last answer named (§5), `GET /api/stores/<store>/objects?since=`
   (the conversations first, then the inbox, which the box writes first) in
   pieces of at most a megabyte of literals, each kept before the next is asked

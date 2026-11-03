@@ -1240,7 +1240,7 @@ impl<'de> Deserialize<'de> for Yes {
 }
 
 /// One posted literal refused.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
 pub struct RefusedObject {
     /// Its name, or `""` when the bytes were not an object.
     pub hash: String,
@@ -1251,7 +1251,7 @@ pub struct RefusedObject {
 }
 
 /// What a replica may do with a refused object: a sum, because the tab branches on it.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, TS)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "lowercase")]
 pub enum RefusalKind {
     /// Never taken as it is: held and named, and everything resting on it with it.
@@ -1262,7 +1262,7 @@ pub enum RefusalKind {
 
 /// What `POST /api/objects` did. The lists are always present: a key that
 /// appears conditionally is read as absent when it means none.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
 pub struct ReceiptPayload {
     /// Every head after the post, sorted.
     pub heads: Vec<String>,

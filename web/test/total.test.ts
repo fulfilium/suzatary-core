@@ -9,6 +9,7 @@ import { createRequire } from "node:module"
 import { readFileSync } from "node:fs"
 
 import type { Core, Lines, Named, Proposals } from "../src/prodrome/core"
+import { storeOf } from "./held"
 import { conversationOf, entriesOf, excludedOf, holdIn, inboxOf, linesLeft, listOfLines, objectsOf, searchOf } from "../src/prodrome/core"
 import excluded from "../src/prodrome/excluded"
 import type { MemoryPayload } from "../src/wire/generated/wire"
@@ -58,7 +59,7 @@ const answers = ({ p, lines }: Reading): unknown[] => [
 const leftOf = ({ p, lines }: Reading): excluded.T => excluded.join(excludedOf(p), linesLeft(lines))
 const reading = <A>(i: readonly Named[], ask: (s: Reading) => A): A => {
   const lines = new core.Lines()
-  const p = new core.Proposals(objectsOf(i))
+  const p = storeOf(new core.Proposals(), i)
   try {
     lines.hold(objectsOf(conversations), "[]")
     keyed(lines, box.keys)

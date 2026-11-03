@@ -33,10 +33,10 @@ import type { Replica } from "./replica";
  */
 export interface Core {
   Todos: new (objects: string) => Todos;
-  Proposals: new (objects: string) => Proposals;
+  Proposals: new () => Proposals;
   Lines: new () => Lines;
-  Memberships: new (objects: string) => TopicStore;
-  TopicAliases: new (objects: string) => TopicStore;
+  Memberships: new () => TopicStore;
+  TopicAliases: new () => TopicStore;
   TopicReading: new (memberships: TopicStore, aliases: TopicStore) => TopicReading;
   Chains: new () => Chains;
   /** `undefined` where the term reads `∅`. */
@@ -81,13 +81,43 @@ export interface Todos {
   free: () => void;
 }
 
-/** A set of inbox objects read once at the proposal schema. */
-export interface Proposals {
+/**
+ * A store of objects the core holds (`object_rows::Store`): what its pull asks and each move it makes, each answering the
+ * frame the worker keeps; what the tab wrote and the box's answers to it; and its readings, read once per move of what
+ * they read, which `version` counts.
+ */
+export interface ObjectStore {
+  since: () => string;
+  heads: () => string;
+  heard: () => boolean;
+  behind: (heads: string) => boolean;
+  overtaken: (epoch: number) => boolean;
+  went_back: (epoch: number) => boolean;
+  /** The box's `StorePayload` kept as a piece beside the landed row, heard at `fetchedAt`: its frame. */
+  piece: (answer: string, fetchedAt: number) => Uint8Array;
+  land: () => LineStep;
+  start_over: () => LineStep;
+  /** `event` sealed as a `Change` over the store's reading and kept as the tab's, unsent; none for a twin. */
+  append: (event: string) => LineStep | undefined;
+  /** `[<print>, …]`: what the tab wrote that the box may take and has not. */
+  unsent: () => string;
+  /** The box's `ReceiptPayload` for a post of what the tab wrote. */
+  answered: (receipt: string) => LineStep;
+  /** The objects `names` (a JSON array) refused for good in the box's words. */
+  refuse: (names: string, reason: string) => LineStep;
+  apply: (frame: Uint8Array) => string;
+  load: (bytes: Uint8Array | undefined, frames: Uint8Array) => string;
+  snapshot: () => Uint8Array;
+  version: () => number;
   tips: () => string;
   readings: (at: string | null, untrusted: string) => string;
+  free: () => void;
+}
+
+/** The inbox the tab holds. */
+export interface Proposals extends ObjectStore {
   /** The Inbox's list at `at`, each proposal priced through `chains`: the box's own answer. */
   inbox: (at: string, chains: Chains, memory?: string) => string;
-  free: () => void;
 }
 
 /** The todo chains held, the set a proposal is priced through: each its objects, read once, and its policy. */
@@ -203,17 +233,12 @@ export interface Lines {
   stream: (topics: TopicReading, chosen: string, pages: number) => string;
   /** `{<name>: [<answer key>, …]}`: every key an erasure names, with the blocks its words fed where `keys` opens it. */
   erased: (keys: string, told: string) => string;
-  dead: () => string;
   excluded: () => string;
   free: () => void;
 }
 
-/** A replica of one topic store: the memberships, or the aliases. */
-export interface TopicStore {
-  /** `event` sealed as a `Change` over this replica's fold: `{hash, objects}`, the objects the box lacks of it. */
-  append: (event: string, genesis: string | null) => string;
-  free: () => void;
-}
+/** A topic store the tab holds: the memberships, or the aliases. */
+export type TopicStore = ObjectStore;
 
 /** The topics both replicas read as, and the events that change them, printed for `append`. */
 export interface TopicReading {
@@ -522,11 +547,6 @@ export function appendTo(todos: Todos, event: string): Appended {
   return checked("append", todos.append(event, null), Appended);
 }
 
-/** `event` written into a topic store's replica, as `appendTo` writes a todo's. */
-export function appendTopic(store: TopicStore, event: string): Appended {
-  return checked("append", store.append(event, null), Appended);
-}
-
 /** An act and the fold after it, answered by one reading of the replica. */
 export interface Acted {
   appended: Appended;
@@ -601,13 +621,8 @@ const ProposalReadings = obj<Read<{ readings: ProposalReading[] }>>({
 });
 
 /** Every proposal's registers at `at` (`null` for every write held) under `untrusted`, read by the core, which answers what it left out itself. */
-export function proposalReadings(
-  core: Core,
-  links: readonly Named[],
-  at: string | null,
-  untrusted: readonly string[],
-): Read<{ readings: ProposalReading[] }> {
-  return checked("readings", asked(core.Proposals, links, (p) => p.readings(at, JSON.stringify(untrusted))), ProposalReadings);
+export function proposalReadings(proposals: Proposals, at: string | null, untrusted: readonly string[]): Read<{ readings: ProposalReading[] }> {
+  return checked("readings", proposals.readings(at, JSON.stringify(untrusted)), ProposalReadings);
 }
 
 // --- the secretary's two stores ---------------------------------------------------
@@ -695,8 +710,6 @@ export const barOf = (topics: TopicReading): TopicsPayload => checked("topics", 
  */
 export const erasedOf = (lines: Lines, keys: Readonly<Record<string, string>>, told: readonly string[]): Erased =>
   checked("erased", lines.erased(JSON.stringify(keys), JSON.stringify(told)), Erased);
-
-export const deadOf = (lines: Lines): readonly string[] => checked("dead", lines.dead(), arr(str));
 
 export const heldOf = (lines: Lines): readonly string[] => checked("held", lines.held(), arr(str));
 

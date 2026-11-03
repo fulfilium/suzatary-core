@@ -46,6 +46,8 @@ mod memory;
 mod memory_schema;
 #[path = "model_port.rs"]
 mod model_port;
+#[path = "object_replica.rs"]
+mod object_replica;
 #[path = "operator_tap.rs"]
 mod operator_tap;
 #[path = "pieces.rs"]

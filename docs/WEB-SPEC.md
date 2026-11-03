@@ -74,14 +74,17 @@ real browser); each section says which.
   store's pull is kept standing where the question it answers stood, so its
   era is read against that frontier, and a row whose frontier alone moved is
   a step (`stores.same`), since the next pull asks from it.
-- **A store's row** (`web/src/prodrome/locked.ts`): every store the tab holds
-  (the inbox, the lines and the two topic stores) is one `locked.Row` in the
-  core's worker, its `Replica` and the keys of its words (none for a store
-  that locks no words), each held by one engine (`engine.ts`, the set of
-  them `storeset.ts`). A `Held` event joins by the row's join (§3.18); one that
-  adds nothing (the same objects, heads and policy, `replica.same`) returns the
-  same value, and one that changes only the policy is a step
-  (`web/test/stores.test.ts`). The page asks every
+- **A store's replica** (`app/core/src/replica/`): every store the tab holds
+  is the core's, in the core's worker: the lines (`Lines`), and the inbox
+  and the two topic stores, each a replica of objects at its schema
+  (`Proposals`, `Memberships`, `TopicAliases`;
+  `replica/objects.rs`). The worker drives each (`linesync.ts` for the
+  lines, `replicasync.ts` for a store of objects, the set of them
+  `storeset.ts`) and holds no object, key, word or frontier of its own:
+  every move is the core's, answered as a frame, and every move but a purge's
+  is a join (the core's `line_replica` and `object_replica` laws). A
+  reading of a store of objects reads the core's replica, made once per move
+  of what it reads, which the store's `version` counts. The page asks every
   reading of the core's worker (`questions.ts`), which holds the stores by
   what changed and reads the lines through a memoised fold: the memoised
   reading is the plain one (`app/core/tests/held_lines.rs`
@@ -1518,19 +1521,20 @@ under in every larger union and never wins.
   `objects.test.ts` "a row that does not read is said", "a save that fails
   over a row that reads …", "a reset told it
   writes over a copy that does not read …"; `e2e/excluded.test.ts` "a
-  chain's copy that does not read is named …", "a store's copy that does
-  not read …".
+  chain's copy that does not read is named …", "the line stays open while a
+  reset moves it, and a store's copy that does not read is taken again
+  unsaid".
 
 - **A store's row holds its keys, and a key an erasure names is owed.** A
-  store's row is its replica and the keys of its words (`locked.Row`),
-  written in one transaction, and its join is a pair of unions, the free
+  store's row is its replica and the keys of its words (the core's `Row`),
+  and its join is a pair of unions, the free
   semilattice on both, within one generation and one epoch of the box's
   word. A key the objects name as erased (the core's reading,
   `transcript::dead`) opens nothing, whatever copy brought it, and is OWED:
   whichever tab reads it, a pull or the device's row (one another tab wrote
   and never purged included), forgets the blocks its words were rendered to,
-  then drops it, in memory and on the device (`purge.forgotten`,
-  `objects.alterRow`), before the row is drawn. A forget that fails keeps the
+  then drops it, from the core and from the device by a compaction, before
+  the row is drawn. A forget that fails keeps the
   key, says so in the shell's line and is asked again at the next sync; it
   never stops a reading, since the words read as erased meanwhile. The
   core's worker is the one reader and writer of the device's rendered blocks
@@ -1553,27 +1557,24 @@ under in every larger union and never wins.
   keys gone. A content answer is never kept with the reads. A wipe deletes
   both databases. — `onewriter.test.ts` (the ciphertext among what nothing
   holds); the core's `held_lines` "a line whose keys are gone reads the same as
-  its husk"; `linekeys.test.ts` "law: the row's join is a semilattice…",
-  "law: a key an erasure names opens nothing…", "law: after a purge nothing
-  the row or the rendered blocks hold decodes to the erased words", "a key a
-  tab that never purged left on the device is forgotten…", "a purge that
-  cannot forget a block keeps the key…"; `wipe.test.ts` "the lines' row…";
+  its husk"; the core's `line_replica` "the row join is a semilattice";
+  `wipe.test.ts` "the lines' row…";
   `e2e/lines.test.ts`.
 - **A store's later epoch drops the copy in the join that brings it.** A
   store is a copy of the box's alone, so its rows are ordered by generation
-  and then by the epoch of the box's word (`locked.join`), and the later row
+  and then by the epoch of the box's word (the core's `Row::join`), and the later row
   is kept whole: the join that takes in a later epoch's word is the one that
   drops every object and key of the epochs before, so no row holds that word
   beside an object the box no longer holds, in whatever order a pull, a piece
   kept from before, another tab's pull and a reset land. A pull answered in a
   later epoch than either part of what the tab holds heard, the row or the
-  pieces kept beside it (`stores.overtaken`, asked of each part, since a
+  pieces kept beside it (`Pulling::overtaken`, asked of each part, since a
   piece of the later epoch beside a row of the one before joins to the piece
   alone), still starts over (`startOver`): its piece was asked from heads of
   the epoch before and is not a set the box could have sent, so the row is
-  reset and the store asked for again from nothing. — `epochdrop.test.ts`
-  "law: in every order, the device never holds the box's later word beside
-  an object it no longer holds"; `e2e/epoch.test.ts`.
+  reset and the store asked for again from nothing. — the core's
+  `object_replica` "law: the landed row never holds a later word beside an
+  object the box dropped"; `e2e/epoch.test.ts`.
 - **A store is pulled by pieces, and only for a page that reads it.** The
   boot never pulls the lines: the core's worker (`storeset`) restores and
   pulls a store the first time a question reads it (every reading and `Pull`
@@ -1607,25 +1608,24 @@ under in every larger union and never wins.
   leaves the tab holding the ancestors…", "another tab's reset that lands
   while a piece is on its way…", "a many-piece pull lands once and writes
   each object once…", "a frame naming what the tab does not hold takes a cut
-  pull up again…"; `stores.test.ts` "a reset is a step even of a row that
-  holds nothing…"; `linekeys.test.ts` "a key the box's pull says is erased is
-  forgotten…"; `e2e/secretary.test.ts` "a new request pops up in an open
+  pull up again…"; `e2e/secretary.test.ts` "a new request pops up in an open
   app…"; `e2e/lines.test.ts` "the list draws and the badge is
   counted with no request for the lines…".
 - **The lines are a skeleton, and their content is fetched by name.** The
-  core's worker pulls, lands and reads them (`linesync.ts`, the lines'
-  instance of `engine.ts`, whose content is named rather than carried); the page says
+  core's worker pulls, lands and reads them (`linesync.ts`, whose content is
+  named rather than carried); the page says
   when it reads them and hears what moved: which conversations a landing
   touched (a line come or gone, a key of their words given or taken), or all
   of them after a reset or a later epoch, heard once a frame, so an open
   conversation reads again only when its own lines moved, as the core answers
-  each change it took (`linereplica.test.ts`). The core holds the lines'
+  each change it took (the core's `line_replica` "the readings are told the
+  landed row after every move"). The core holds the lines'
   replica whole (`Lines`, `app/core/src/replica/`): the landed row and a
   pull's pieces, the box's word, the frontier, the generation and the keys
   (`GET /api/stores/lines/skeleton`, pulled by the same pieces); the worker's
   JavaScript holds no node, key or head (`linesync.ts`). The device keeps the
   replica as the core's own form, a snapshot and the frames appended since
-  (`replicalog.ts`, the database's `replica` store, version 11; the core's
+  (`replicalog.ts`, the database's `replica` store, version 12; the core's
   form 3), each frame the delta of one move and the lines it husked, and the
   snapshot the rows and the husks; a warm load hands the core the snapshot and
   the frames and reads no row. A snapshot of another form is a miss: the log
@@ -1687,8 +1687,7 @@ under in every larger union and never wins.
   asked for, in the place asked", "an opened conversation's names go out
   before the whole store's batches still queued…", "over HTTP/1.1 one
   content answer is out at a time…", "concurrent whole readings read each
-  object the device keeps once…"; `linekeys.test.ts` "a
-  purge that cannot find the blocks…"; the core's `held_lines`
+  object the device keeps once…"; the core's `held_lines`
   `a_replica_holding_the_replaced_keys_reads_the_reseals_and_scrubs_nothing`;
   `e2e/rescrub.test.ts`; `e2e/lines.test.ts` "a conversation is
   read from the lines…", "the list draws and the badge is counted with no
@@ -1774,7 +1773,8 @@ Each pattern written once, in `web/src/algebra/once.ts`, `latest.ts`,
   another. The rows' store of version 8 or later is this build's and holds
   what the tab wrote and the box has not taken, so the upgrade keeps it, less
   every row that is no chain's; every other store is made anew and taken again
-  from the box, and a device before version 8 keeps nothing. The rendered
+  from the box (version 12 drops the inbox's and the topic stores' rows of
+  version 11), and a device before version 8 keeps nothing. The rendered
   store's version 4 drops every block once. What a dropped row held that the
   box had not taken is lost. — `objects.test.ts` "a device from version 8 keeps
   its chains' rows as they were…", "a device before version 8 keeps no row…";
@@ -1794,14 +1794,25 @@ Each pattern written once, in `web/src/algebra/once.ts`, `latest.ts`,
   tab that compacts first takes it, and compacts, so no snapshot or frame
   holds the key. — `warmload.test.ts` "law: a warm load reads what a cold load
   reads, and two tabs converge…" (every reload read with the box gone), "a
-  husk one tab's purge kept stands through another tab's compaction…"; `linereplica.test.ts` "law: the
-  core's rows of the lines are the TypeScript replica's…"; the core's
-  `line_replica` laws; `onewriter.test.ts` "law: once the box erases words…";
+  husk one tab's purge kept stands through another tab's compaction…"; the
+  core's `line_replica` laws; `onewriter.test.ts` "law: once the box erases words…";
   `wipe.test.ts` "the lines' snapshot and frames…"; e2e `lines.test.ts` "a warm
   load answers the stream from the core's snapshot and the frames after it…",
   "a conversation another tab landed draws from the device…", "Erase draws a
   turn by its shape…", "a key a closed tab left on the device is forgotten…";
   `rescrub.test.ts`; `epoch.test.ts`.
+- **The inbox and the topic stores are kept the same way.** Each is a replica
+  of objects the core holds, whose nodes carry their literals, so it fetches
+  nothing by name and locks no word (`replicasync.ts`, the core's objects form
+  1, under the store's name in the `replica` store). What the tab wrote in a
+  topic store is part of that replica, with the box's answer to it (unsent,
+  refused until trusted or for good, taken), which only climbs: it stands
+  through a reset or a later epoch of the rows, is posted until the box takes
+  it, and a refusal for good holds it back from every reading, with what rests
+  on it. — `warmload.test.ts` "law: the inbox and the topics read from a warm
+  load what they read cold, and two tabs converge on each, whatever they
+  write"; the core's `object_replica` "law: the moves of a store of objects
+  are joins", "law: what a replica wrote stands until the box answers".
 - **A verdict says what it found as a sum.** Each object the walk reached
   carries its depth and one it never reached says so (`verify.Walk`), and a
   chain's check is `Reached`, or `Unreached` with every problem, never an

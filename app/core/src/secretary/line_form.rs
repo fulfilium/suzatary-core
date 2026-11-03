@@ -3,16 +3,14 @@
 //! through [`Parsed::of`], as the box's are read, so a snapshot holds nothing a pull could not;
 //! a husk reads back through [`Husk::read`], which reads no words.
 
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeMap;
 
 use prodrome_core::event::Hash;
 use serde::{Deserialize, Serialize};
 
-use crate::replica::frontier::Frontier;
-use crate::replica::held::Held;
+use crate::replica::form::{self, DeltaForm, Name, RowForm, bytes, hash};
 use crate::replica::pulling::{Delta, Pulling};
 use crate::replica::row::Row;
-use crate::replica::word::Word;
 use crate::secretary::key_ring::KeyRing;
 use crate::secretary::line_event::Husk;
 use crate::secretary::locked_text::{KEY_BYTES, KeyName};
@@ -26,9 +24,6 @@ pub type LinePulling = Pulling<Parsed, KeyRing>;
 
 /// One move of the lines' rows.
 pub type LineDelta = Delta<Parsed, KeyRing>;
-
-/// A name's 32 bytes: an object's, or a key's.
-type Name = [u8; 32];
 
 /// A line the device keeps as its husk ([`Husk`]): its name, the names it rests on, and the husk.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -74,9 +69,9 @@ impl LineReplica {
 /// What a snapshot of the lines' replica prints.
 #[derive(Serialize, Deserialize)]
 pub struct Given {
-    landed: RowForm,
+    landed: LineRowForm,
     landings: u64,
-    pending: RowForm,
+    pending: LineRowForm,
     husks: Vec<HuskForm>,
 }
 
@@ -89,18 +84,12 @@ struct HuskForm {
 
 #[derive(Serialize, Deserialize)]
 struct FrameForm {
-    delta: DeltaForm,
+    delta: DeltaForm<LineRowForm, Name>,
     husked: Vec<HuskForm>,
 }
 
-#[derive(Serialize, Deserialize)]
-struct RowForm {
-    generation: u64,
-    nodes: Vec<NodeForm>,
-    keys: Vec<(Name, [u8; KEY_BYTES])>,
-    words: Vec<WordForm>,
-    frontier: Option<FrontierForm>,
-}
+/// A row of the lines: each node with its header, and each key's bytes by its name.
+type LineRowForm = RowForm<NodeForm, Vec<(Name, [u8; KEY_BYTES])>>;
 
 #[derive(Serialize, Deserialize)]
 struct NodeForm {
@@ -137,29 +126,6 @@ enum StepForm {
     Resealed { of: Name, from: Name },
     Erased { keys: Vec<Name> },
     Still,
-}
-
-#[derive(Serialize, Deserialize)]
-struct WordForm {
-    epoch: u64,
-    heads: Vec<Name>,
-    geneses: Vec<Name>,
-    fetched_at: u64,
-}
-
-#[derive(Serialize, Deserialize)]
-struct FrontierForm {
-    era: u64,
-    count: u64,
-    digest: Name,
-}
-
-#[derive(Serialize, Deserialize)]
-enum DeltaForm {
-    Piece { landings: u64, row: RowForm },
-    Landed { landings: u64, row: RowForm },
-    StartedOver { generation: u64 },
-    Forgot(Vec<Name>),
 }
 
 impl snapshot::Held for LineReplica {
@@ -199,27 +165,10 @@ impl snapshot::Held for LineReplica {
 /// [`Unprinted`] where it refuses to print.
 pub fn frame(frame: &LineFrame) -> Result<Vec<u8>, Unprinted> {
     let form = FrameForm {
-        delta: delta_form(&frame.delta),
+        delta: form::delta_form(&frame.delta, row_form, |k| bytes(k.as_str())),
         husked: frame.husked.iter().map(husk_form).collect(),
     };
     snapshot::print(<LineReplica as snapshot::Held>::FORM, &form)
-}
-
-fn delta_form(delta: &LineDelta) -> DeltaForm {
-    match delta {
-        Delta::Piece { landings, row } => DeltaForm::Piece {
-            landings: *landings,
-            row: row_form(row),
-        },
-        Delta::Landed { landings, row } => DeltaForm::Landed {
-            landings: *landings,
-            row: row_form(row),
-        },
-        Delta::StartedOver { generation } => DeltaForm::StartedOver {
-            generation: *generation,
-        },
-        Delta::Forgot(gone) => DeltaForm::Forgot(gone.iter().map(|k| bytes(k.as_str())).collect()),
-    }
 }
 
 /// The frame `bytes` prints, or none for a frame of another form, which this build passes over.
@@ -233,7 +182,7 @@ pub fn unframe(bytes: &[u8]) -> Result<Option<LineFrame>, NotASnapshot> {
         Err(e) => return Err(e),
     };
     Ok(Some(LineFrame {
-        delta: delta_of(form.delta).map_err(NotASnapshot::Refused)?,
+        delta: form::delta_of(form.delta, row_of, key_name).map_err(NotASnapshot::Refused)?,
         husked: form
             .husked
             .iter()
@@ -241,23 +190,6 @@ pub fn unframe(bytes: &[u8]) -> Result<Option<LineFrame>, NotASnapshot> {
             .collect::<Result<_, _>>()
             .map_err(NotASnapshot::Refused)?,
     }))
-}
-
-fn delta_of(form: DeltaForm) -> Result<LineDelta, String> {
-    Ok(match form {
-        DeltaForm::Piece { landings, row } => Delta::Piece {
-            landings,
-            row: row_of(row)?,
-        },
-        DeltaForm::Landed { landings, row } => Delta::Landed {
-            landings,
-            row: row_of(row)?,
-        },
-        DeltaForm::StartedOver { generation } => Delta::StartedOver { generation },
-        DeltaForm::Forgot(gone) => {
-            Delta::Forgot(gone.iter().map(key_name).collect::<Result<_, _>>()?)
-        }
-    })
 }
 
 fn husk_form(husked: &Husked) -> HuskForm {
@@ -276,73 +208,30 @@ fn husked(form: &HuskForm) -> Result<Husked, String> {
     })
 }
 
-fn row_form(row: &Row<Parsed, KeyRing>) -> RowForm {
-    let replica = row.replica();
-    RowForm {
-        generation: replica.generation(),
-        nodes: replica.nodes().map(|n| node_form(n.given())).collect(),
-        keys: row
-            .keys()
-            .iter()
-            .map(|(name, key)| (bytes(name.as_str()), *key))
-            .collect(),
-        words: replica
-            .words()
-            .iter()
-            .map(|w| WordForm {
-                epoch: w.epoch,
-                heads: w.heads.iter().map(|h| bytes(h.as_str())).collect(),
-                geneses: w.geneses.iter().map(|h| bytes(h.as_str())).collect(),
-                fetched_at: w.fetched_at,
-            })
-            .collect(),
-        frontier: match replica.frontier() {
-            Frontier::Nothing => None,
-            Frontier::Named { era, count, digest } => Some(FrontierForm {
-                era: *era,
-                count: *count,
-                digest: bytes(digest.as_str()),
-            }),
+fn row_form(row: &Row<Parsed, KeyRing>) -> LineRowForm {
+    form::row_form(
+        row,
+        |n| node_form(n.given()),
+        |keys| {
+            keys.iter()
+                .map(|(name, key)| (bytes(name.as_str()), *key))
+                .collect()
         },
-    }
+    )
 }
 
-fn row_of(form: RowForm) -> Result<Row<Parsed, KeyRing>, String> {
-    let nodes = form
-        .nodes
-        .into_iter()
-        .map(|n| Parsed::of(node_of(n)?).map_err(|e| e.to_string()))
-        .collect::<Result<Vec<_>, _>>()?;
-    let keys: BTreeMap<KeyName, [u8; KEY_BYTES]> = form
-        .keys
-        .iter()
-        .map(|(name, key)| Ok((key_name(name)?, *key)))
-        .collect::<Result<_, String>>()?;
-    let keys = KeyRing::try_from(keys).map_err(|e| e.to_string())?;
-    let words = form
-        .words
-        .into_iter()
-        .map(|w| {
-            Ok(Word {
-                epoch: w.epoch,
-                heads: hashes(&w.heads)?,
-                geneses: hashes(&w.geneses)?,
-                fetched_at: w.fetched_at,
-            })
-        })
-        .collect::<Result<Vec<_>, String>>()?;
-    let frontier = match form.frontier {
-        None => Frontier::Nothing,
-        Some(f) => Frontier::Named {
-            era: f.era,
-            count: f.count,
-            digest: hash(&f.digest)?,
+fn row_of(form: LineRowForm) -> Result<Row<Parsed, KeyRing>, String> {
+    form::row_of(
+        form,
+        |n| Parsed::of(node_of(n)?).map_err(|e| e.to_string()),
+        |keys| {
+            let keys: BTreeMap<KeyName, [u8; KEY_BYTES]> = keys
+                .iter()
+                .map(|(name, key)| Ok((key_name(name)?, *key)))
+                .collect::<Result<_, String>>()?;
+            KeyRing::try_from(keys).map_err(|e| e.to_string())
         },
-    };
-    Ok(Row::of(
-        Held::of(form.generation, nodes, words, frontier),
-        keys,
-    ))
+    )
 }
 
 fn node_form(node: &SkeletonNode) -> NodeForm {
@@ -436,32 +325,6 @@ fn step_of(form: StepForm) -> Result<Step, String> {
         },
         StepForm::Still => Step::Still,
     })
-}
-
-/// The 32 bytes 64 hex digits spell. Every name printed here is a [`Hash`] or a [`KeyName`], or
-/// was parsed as one where its node arrived, so each is 64 lowercase hex and every digit reads.
-fn bytes(hex: &str) -> Name {
-    let mut out = [0; 32];
-    for (byte, pair) in out.iter_mut().zip(hex.as_bytes().chunks(2)) {
-        *byte = pair.iter().fold(0, |acc, digit| acc << 4 | nibble(*digit));
-    }
-    out
-}
-
-fn nibble(digit: u8) -> u8 {
-    match digit {
-        b'0'..=b'9' => digit - b'0',
-        b'a'..=b'f' => digit - b'a' + 10,
-        _ => 0,
-    }
-}
-
-fn hash(bytes: &Name) -> Result<Hash, String> {
-    Hash::new(hex::encode(bytes)).map_err(|e| e.to_string())
-}
-
-fn hashes(names: &[Name]) -> Result<BTreeSet<Hash>, String> {
-    names.iter().map(hash).collect()
 }
 
 fn key_name(bytes: &Name) -> Result<KeyName, String> {

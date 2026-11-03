@@ -19,8 +19,8 @@ use wasm_bindgen::prelude::*;
 
 use crate::{json, refused};
 
-prodrome_wasm_exports::schema!(Memberships = MembershipEvent);
-prodrome_wasm_exports::schema!(TopicAliases = AliasEvent);
+crate::object_rows::objects_store!(Memberships = MembershipEvent);
+crate::object_rows::objects_store!(TopicAliases = AliasEvent);
 
 /// The topics both classes' objects read as, read once.
 #[wasm_bindgen]
@@ -31,8 +31,8 @@ impl TopicReading {
     /// The memberships and the aliases read together.
     #[wasm_bindgen(constructor)]
     pub fn new(memberships: &Memberships, aliases: &TopicAliases) -> Result<TopicReading, JsError> {
-        let memberships = memberships.0.read().map_err(refused)?;
-        let aliases = aliases.0.read().map_err(refused)?;
+        let memberships = memberships.0.reading()?.read().map_err(refused)?;
+        let aliases = aliases.0.reading()?.read().map_err(refused)?;
         suzatary_core::secretary::topics::reading::of(memberships.nodes, aliases.nodes)
             .map(Self)
             .map_err(|several| refused(several.to_string()))

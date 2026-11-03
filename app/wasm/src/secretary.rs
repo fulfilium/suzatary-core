@@ -277,11 +277,6 @@ impl Lines {
         json(&erased)
     }
 
-    /// `[<name>, …]`: every key an erasure line of its own conversation names.
-    pub fn dead(&mut self) -> Result<String, JsError> {
-        json(&self.0.lines.dead())
-    }
-
     /// `{excluded}`: what the history leaves out, `[{name, why, resting}]` in name order, as every
     /// class's `tips` answers it: a print that does not read, and a name a held line rests on that
     /// the skeleton does not hold either.
@@ -416,7 +411,7 @@ fn memory_of(memory: Option<String>) -> Result<Option<MemoryPayload>, JsError> {
 
 impl Proposals {
     fn fold(&self) -> Result<Fold, JsError> {
-        let read = self.0.read().map_err(refused)?;
+        let read = self.0.reading()?.read().map_err(refused)?;
         Ok(Fold::of(read.nodes))
     }
 }

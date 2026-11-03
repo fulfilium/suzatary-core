@@ -69,6 +69,7 @@ pub mod memories;
 pub mod memory;
 pub mod memory_event;
 pub mod noticed;
+pub mod object_stores;
 pub mod opened;
 pub mod opening;
 pub mod outcome;
