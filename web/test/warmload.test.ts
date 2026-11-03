@@ -1,7 +1,10 @@
-// A warm load holds what a cold one holds: after any interleaving of the box's landings, two tabs' pulls, the device's
-// snapshot writes and reloads, the skeleton and keys a tab's core holds are those of a core handed the tab's row whole,
-// and every print the tab handed its core is held still, so a conversation it read is never one the core lacks. Which
-// prints are held is the core's alone to say: a fetch hands it exactly those it lacks, whatever came before.
+// A warm load holds what a cold one holds, and two tabs converge, and a fetch hands the core exactly the prints it
+// lacks: the lines are the core's replica the lines are the core's replica, kept on the device as
+// its snapshot and the frames after it (`replicalog`), and a tab's worker (`questions.serve` over the real core, a fake
+// box and the fake IndexedDB) reads them back on a reload. After any interleaving of the box's growth, two tabs' pulls,
+// compactions and reloads, each tab, once pulled, reads the conversations exactly as a core handed the box's whole store
+// reads them; and a reload reads what the device kept with no answer from the box at all. Which prints are held is the
+// core's alone to say, whatever its loads, landings and evictions.
 
 import { test } from "node:test"
 import assert from "node:assert/strict"
@@ -9,25 +12,18 @@ import { createRequire } from "node:module"
 import { readFileSync } from "node:fs"
 
 import type { Core, Lines, Named } from "../src/prodrome/core"
-import { conversationOf, heldOf, holdAdmitted, lackingOf, nodesInto, objectsOf } from "../src/prodrome/core"
+import { framed, heldOf, holdAdmitted, lackingOf, listOfLines, objectsOf } from "../src/prodrome/core"
 import content from "../src/prodrome/content"
-import engine from "../src/prodrome/engine"
-import linesync from "../src/prodrome/linesync"
-import locked from "../src/prodrome/locked"
-import noderows from "../src/prodrome/noderows"
-import { LINE_ROWS } from "../src/prodrome/objects"
-import type pull from "../src/prodrome/pull"
-import lo from "../src/algebra/lo"
-import payload from "../src/wire/generated/payload"
-import type { SkeletonNode, SkeletonPayload } from "../src/wire/generated/wire"
+import questions from "../src/prodrome/questions"
+import { headsOf as objectHeads } from "../src/prodrome/replica"
+import type { ContentPayload, SkeletonNode, SkeletonPayload, StorePayload, StoredObject } from "../src/wire/generated/wire"
 import { fakeIndexedDB } from "./fakeidb"
 import { forAllAsync } from "./gen"
+import { held as prodromes } from "./held"
 
-const core = ((): Core => {
-  const built = process.env["SUZATARY_PRODROME_WASM"]
-  if (built === undefined || built === "") throw new Error("SUZATARY_PRODROME_WASM is unset — run scripts/web-test.sh")
-  return createRequire(import.meta.url)(`${built}/nodejs/prodrome.js`) as Core
-})()
+const built = process.env["SUZATARY_PRODROME_WASM"]
+if (built === undefined || built === "") throw new Error("SUZATARY_PRODROME_WASM is unset — run scripts/web-test.sh")
+const core = createRequire(import.meta.url)(`${built}/nodejs/prodrome.js`) as Core
 
 type Shipped = { hash: string; text: string }
 const box = JSON.parse(readFileSync("app/core/tests/web/replicas.json", "utf8")) as {
@@ -50,156 +46,163 @@ const order = ((): SkeletonNode[] => {
   return out
 })()
 
-// The box holding the first `held` nodes answers with all of them and the keys they name.
-const answer = (held: number): pull.Answer<SkeletonNode> => {
+// The frontier the box names after its first `held` nodes, which a replica names back as `since`.
+const digestOf = (held: number): string => String(held).padStart(64, "0")
+
+// The box holding its first `held` nodes, answering a replica at `since` with the nodes it lacks and the keys they name.
+const answer = (held: number, since: string): SkeletonPayload => {
   const nodes = order.slice(0, held)
-  const named = new Set(nodes.flatMap(n => (n.header.node === "line" ? n.header.keys : [])))
-  const keys = Object.fromEntries(Object.entries(box.keys).filter(([name]) => named.has(name)))
+  const from = nodes.findIndex((_, i) => digestOf(i + 1) === since) + 1
+  const sent = since === "" ? nodes : nodes.slice(from)
+  const named = new Set(sent.flatMap(n => (n.header.node === "line" ? n.header.keys : [])))
   const parents = new Set(nodes.flatMap(n => n.parents))
   return {
-    said: {
-      heads: nodes.filter(n => !parents.has(n.hash)).map(n => n.hash),
-      untrusted: [],
-      root: null,
-      geneses: box.skeleton.geneses,
-      epoch: box.skeleton.epoch,
-      objects: nodes,
-      since: "Known",
-      frontier: { digest: String(held).padStart(64, "0"), count: held },
-    },
-    erased: [],
-    piece: r => locked.of(r, keys),
+    ...box.skeleton,
+    heads: { are: "these", heads: nodes.filter(n => !parents.has(n.hash)).map(n => n.hash) },
+    nodes: sent,
+    since: since === "" || from > 0 ? "Known" : "Unknown",
+    frontier: { digest: digestOf(held), count: held },
+    keys: Object.fromEntries(Object.entries(box.keys).filter(([name]) => named.has(name))),
     rest: 0,
     size: 0,
     weight: 0,
   }
 }
 
-const KEEP = (): Promise<lo.Settled<null>> => Promise.resolve(lo.val(null))
-
-// A tab of the device: its core, the lines' rows with the core's snapshot beside them, and its store, asking the box.
-type Tab = { readonly held: Lines; readonly place: noderows.Place<SkeletonNode>; readonly store: engine.T<SkeletonNode> }
-const tabOf = (boxHolds: () => number): Tab => {
-  const held = new core.Lines()
-  const told = linesync.telling(held, () => {})
-  const place = noderows.placeOf(LINE_ROWS, payload.SkeletonNode, { version: linesync.FORMAT, dropped: KEEP }, { type: "Snapshot", print: told.printed })
-  const store = engine.of<SkeletonNode>(
-    {
-      name: "lines",
-      place,
-      reader: told.reader,
-      ask: () => Promise.resolve(answer(boxHolds())),
-      content: engine.INLINE,
-      words: engine.open(),
-      took: told.took,
-      restoring: () => Promise.resolve(),
-      landed: () => Promise.resolve(),
-    },
-    { told: () => {}, bars: () => {}, replaced: () => {} },
-  )
-  return { held, place, store }
+const objectsAnswer = (objects: readonly StoredObject[], since: string): StorePayload => {
+  const frontier = { digest: "9".repeat(64), count: objects.length }
+  const sent = since === frontier.digest ? [] : [...objects]
+  return { objects: sent, heads: objectHeads(objects), untrusted: [], root: null, geneses: prodromes(objects), epoch: 1, since: "Known", frontier, keys: {}, rest: 0, size: 0, weight: 0, erased: [] }
 }
 
-// What a core handed `row` whole holds, as its snapshot prints it.
-const cold = (row: locked.Row<SkeletonNode>): Uint8Array => {
+// The box as `fetch` reaches it: `holds` of its lines, its inbox, two topic stores holding nothing; or no box at all.
+let holds = 1
+let down = false
+const json = (v: unknown): Response => new Response(JSON.stringify(v), { status: 200, headers: { "content-type": "application/json" } })
+Object.assign(globalThis, {
+  fetch: async (input: string | URL): Promise<Response> => {
+    if (down) return new Response("", { status: 503 })
+    const url = new URL(String(input), "http://box")
+    const since = url.searchParams.get("since") ?? ""
+    if (url.pathname === "/api/stores/lines/skeleton") return json(answer(holds, since))
+    const store = /^\/api\/stores\/(inbox|topics|topic-aliases)\/objects$/.exec(url.pathname)?.[1]
+    if (store !== undefined) return json(objectsAnswer(store === "inbox" ? box.inbox.map(o => ({ hash: o.hash, literal: o.text })) : [], since))
+    if (url.pathname === "/api/stores/lines/content") {
+      const hashes = (url.searchParams.get("hashes") ?? "").split(",")
+      return json({ objects: hashes.flatMap(hash => (literals.has(hash) ? [{ hash, literal: literals.get(hash)! }] : [])) } satisfies ContentPayload)
+    }
+    return new Response("", { status: 404 })
+  },
+})
+
+// A tab's worker over the device.
+type Tab = { readonly ask: <K extends questions.Kind>(q: questions.Of<K>) => Promise<questions.Answer<K>> }
+const tab = (): Tab => {
+  const serve = questions.serve(core)
+  return { ask: async q => (await serve(q, () => Promise.resolve())) as never }
+}
+
+// The conversations as a tab's worker lists them.
+const listed = async (t: Tab): Promise<string> => {
+  const a = await t.ask({ type: "Conversations" })
+  assert.equal(a.type, "Held", JSON.stringify(a))
+  return JSON.stringify(a.type === "Held" ? a.v : null)
+}
+
+// A reading of a reload with the box gone, which never answers when the device does not hold the lines landed: it
+// waits for a landing no box can bring. That is said, rather than waited on.
+const offline = <A>(read: Promise<A>): Promise<A> =>
+  Promise.race([read, new Promise<never>((_, no) => setTimeout(() => no(new Error("the reload waits for the box: the device does not hold the lines landed")), 10_000))])
+
+// The conversations as a core handed the box's whole store, cold, lists them.
+const cold = async (): Promise<string> => {
   const held = new core.Lines()
+  const proposals = new core.Proposals(objectsOf(inbox))
   try {
-    nodesInto(held, row.replica.objects, [])
-    held.keys(JSON.stringify(row.keys), "[]")
-    return held.snapshot()
+    const whole = answer(holds, "")
+    held.piece(JSON.stringify(whole), JSON.stringify(whole.keys), 0)
+    held.land().free()
+    const rows = await content.admit(
+      order.slice(0, holds).map(n => n.hash),
+      { objects: order.slice(0, holds).map(n => ({ hash: n.hash, literal: literals.get(n.hash)! })) },
+    )
+    assert.equal(rows.type, "Val")
+    if (rows.type === "Val") holdAdmitted(held, rows.v)
+    return JSON.stringify(listOfLines(held, proposals))
   } finally {
+    proposals.free()
     held.free()
   }
 }
 
-// The prints of `nodes` a stream's reading handed the core, the lines and what they rest on, and the conversations
-// they are of.
-const handed = (held: Lines, nodes: readonly SkeletonNode[]): string[] => {
-  held.hold(objectsOf(nodes.flatMap(n => (literals.has(n.hash) ? [{ hash: n.hash, literal: literals.get(n.hash)! }] : []))), "[]")
-  return [...new Set(nodes.flatMap(n => (n.header.node === "line" ? [n.header.conversation] : [])))]
-}
-
-const holdsWhatColdHolds = (t: Tab, said: string): void =>
-  assert.deepEqual([...t.held.snapshot()], [...cold(t.store.row())], `${said}: the core holds what a core handed its row whole holds`)
-
-test("a warm load's core holds what a cold load's does, and keeps every print it was handed", async () => {
-  // How many reloads were warm, and how many of those read rows that had moved beside their snapshot.
-  const seen = { warm: 0, moved: 0 }
-  await forAllAsync(40, async r => {
-    fakeIndexedDB()
-    let holds = 1 + r.int(order.length)
-    const boxHolds = (): number => holds
-    const tabs: Tab[] = [tabOf(boxHolds), tabOf(boxHolds)]
-    for (const t of tabs) await t.store.sync.restored.get()
-    const proposals = new core.Proposals(objectsOf(inbox))
-    try {
-      for (let step = 0; step < 14; step += 1) {
-        const i = r.int(tabs.length)
-        const op = r.pick(["Grow", "Pull", "Settle", "Reload"] as const)
-        switch (op) {
-          case "Grow":
-            holds = Math.min(order.length, holds + 1 + r.int(4))
-            break
-          case "Pull":
-            await tabs[i]!.store.want()
-            break
-          case "Settle":
-            await tabs[i]!.place.settle()
-            break
-          case "Reload": {
-            await tabs[i]!.place.settle()
-            tabs[i]!.held.free()
-            const t = tabOf(boxHolds)
-            tabs[i] = t
-            const loaded = await t.store.sync.loaded()
-            // A stream answered from the snapshot hands the core the prints of what it read, before the rows are read.
-            const read = loaded ? handed(t.held, order) : []
-            // Meanwhile the other tab may land what the box opened since, and the rows move beside the snapshot.
-            if (loaded) seen.warm += 1
-            if (r.bool()) {
-              if (loaded) seen.moved += 1
-              holds = Math.min(order.length, holds + 1 + r.int(4))
-              await tabs[1 - i]!.store.want()
-            }
-            await t.store.sync.restored.get()
-            for (const id of read) {
-              const refused = ((): string | null => {
-                try {
-                  conversationOf(t.held, proposals, id, {}, null)
-                  return null
-                } catch (e: unknown) {
-                  return String(e)
-                }
-              })()
-              assert.equal(refused, null, `${id}, read before the rows, is read after them`)
-            }
-            break
+test("law: a warm load reads what a cold load reads, and two tabs converge, whatever their pulls, compactions and reloads", async () => {
+  // How many reloads read a log with frames, and how many read a snapshot, so the runs read both.
+  const seen = { frames: 0, snapshots: 0 }
+  await forAllAsync(30, async r => {
+    const device = fakeIndexedDB()
+    down = false
+    holds = 1 + r.int(order.length)
+    const tabs = [tab(), tab()]
+    // A device that never landed the lines waits for the box to read them, and a pull brings their skeleton alone, their
+    // content coming as a reading reads it: each tab lands and reads them first, so the device holds what a reload reads.
+    for (const t of tabs) {
+      assert.equal(await t.ask({ type: "Pull" }), true)
+      await listed(t)
+    }
+    for (let step = 0; step < 12; step += 1) {
+      const i = r.int(tabs.length)
+      const op = r.pick(["Grow", "Pull", "Hide", "Reload"] as const)
+      switch (op) {
+        case "Grow":
+          holds = Math.min(order.length, holds + 1 + r.int(4))
+          break
+        case "Pull":
+          assert.equal(await tabs[i]!.ask({ type: "Pull" }), true, "the pull ends whole")
+          break
+        case "Hide":
+          await tabs[i]!.ask({ type: "Shown", on: false })
+          break
+        case "Reload": {
+          const kept = [...device.rows("suzatary", "replica").keys()].map(String)
+          if (kept.includes("lines/snapshot")) seen.snapshots += 1
+          if (kept.some(k => k.startsWith("lines/log/"))) seen.frames += 1
+          // The tabs pulled after the step before, so the device holds the box's lines: a reload with the box gone reads
+          // them from the device alone.
+          down = true
+          try {
+            tabs[i] = tab()
+            assert.equal(await offline(listed(tabs[i]!)), await cold(), "a reload reads what a cold core reads, with no answer from the box")
+          } finally {
+            down = false
           }
+          break
         }
-        for (const [n, t] of tabs.entries()) holdsWhatColdHolds(t, `after ${op} of tab ${i}, tab ${n}`)
       }
-    } finally {
-      // Each settle clears the quiet's timer, so nothing waits on it.
       for (const t of tabs) {
-        await t.place.settle()
-        t.held.free()
+        await t.ask({ type: "Pull" })
+        assert.equal(await listed(t), await cold(), `after ${op} of tab ${i}, a tab reads what a cold core reads`)
       }
-      proposals.free()
     }
   })
-  assert.ok(seen.warm > 0 && seen.moved > 0, `the runs loaded warm (${seen.warm}) and moved the rows beside a snapshot (${seen.moved})`)
+  assert.ok(seen.frames > 0 && seen.snapshots > 0, `the reloads read frames (${seen.frames}) and a snapshot (${seen.snapshots})`)
 })
 
-// What a core handed the first `count` nodes and every key holds, as its snapshot prints it.
+// What a core that landed the box's first `count` nodes holds, as its snapshot prints it.
 const snapshotOf = (count: number): Uint8Array => {
   const held = new core.Lines()
   try {
-    nodesInto(held, order.slice(0, count), [])
-    held.keys(JSON.stringify(box.keys), "[]")
+    landed(held, count)
     return held.snapshot()
   } finally {
     held.free()
   }
+}
+
+// `held` with the box's first `count` nodes landed, and the keys they name.
+const landed = (held: Lines, count: number): void => {
+  const whole = answer(count, "")
+  held.piece(JSON.stringify(whole), JSON.stringify(whole.keys), 0)
+  held.land().free()
 }
 
 test("law: a fetch hands the core exactly the prints it lacks, and asks the box for none it holds, whatever came before", async () => {
@@ -233,7 +236,7 @@ test("law: a fetch hands the core exactly the prints it lacks, and asks the box 
     let fetcher = fetcherOf(held)
     try {
       for (let step = 0; step < 12; step += 1) {
-        const op = r.pick(["Fetch", "Clear", "Load", "Land", "Evict", "Reload"] as const)
+        const op = r.pick(["Fetch", "Load", "Land", "Evict", "Reload"] as const)
         switch (op) {
           case "Fetch": {
             const some = lines.filter(() => r.bool())
@@ -248,14 +251,11 @@ test("law: a fetch hands the core exactly the prints it lacks, and asks the box 
             assert.equal(lackingOf(held, names(some)).size, 0, "and the core lacks none of them after")
             break
           }
-          case "Clear":
-            held.clear()
-            break
           case "Load":
-            held.load(snapshotOf(1 + r.int(order.length)))
+            held.load(snapshotOf(1 + r.int(order.length)), framed([]))
             break
           case "Land":
-            nodesInto(held, order.slice(0, 1 + r.int(order.length)), [])
+            landed(held, 1 + r.int(order.length))
             break
           case "Evict": {
             const kept = new Set(names(lines.filter(() => r.bool())))

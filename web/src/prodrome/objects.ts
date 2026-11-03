@@ -21,6 +21,7 @@ const INBOX_NAME = "inbox";
 const TOPICS_NAME = "topics";
 const ALIASES_NAME = "topic-aliases";
 const SNAPSHOTS_NAME = "snapshots";
+const REPLICA_NAME = "replica";
 
 /**
  * One row per chain, which only climbs: every tab of this origin joins into it, so none erases what another sealed.
@@ -79,11 +80,14 @@ export const parseReplica = (raw: unknown): lo.Settled<Replica> => lo.map(Stored
  * version 8 lines' head names none, and the rows of those stores in the rows' store are carried by the core's worker
  * the first time it restores them (`objectsync`). Version 10 adds a store of snapshots, one per store name: what the
  * core's worker held of that store's rows, in the core's own form, so a warm load reads it instead of every row
- * (`noderows`); no row is carried or dropped.
+ * (`noderows`); no row is carried or dropped. Version 11 keeps the lines as the core's own form, a snapshot and the
+ * frames appended since, in a store of replicas (`replicalog`), so the lines' rows and the store of snapshots are
+ * dropped and the lines' skeleton is taken again from the box, once, with no row carried over; the content by name
+ * stays, and the blocks the dropped keys fed are cleared.
  */
 const DB: idb.Db = {
   name: DB_NAME,
-  version: 10,
+  version: 11,
   store: STORE_NAME,
   upgrade: (db, tx, from) => {
     if (from >= 8) {
@@ -103,10 +107,10 @@ const DB: idb.Db = {
       if (from > 0) tx.objectStore(STORE_NAME).put(true, keyFor(RENDERED_OWED));
     }
     if (!db.objectStoreNames.contains(CONTENT_NAME)) db.createObjectStore(CONTENT_NAME);
-    if (!db.objectStoreNames.contains(LINES_NAME)) db.createObjectStore(LINES_NAME);
-    else if (from < 8) tx.objectStore(LINES_NAME).clear();
-    else if (from === 8) unsentNone(tx.objectStore(LINES_NAME));
-    for (const name of [INBOX_NAME, TOPICS_NAME, ALIASES_NAME, SNAPSHOTS_NAME]) if (!db.objectStoreNames.contains(name)) db.createObjectStore(name);
+    // The lines' rows of every version before 11, and the snapshots of them, go whole: the box alone writes the lines.
+    for (const name of [LINES_NAME, SNAPSHOTS_NAME]) if (db.objectStoreNames.contains(name)) db.deleteObjectStore(name);
+    if (from >= 8 && from <= 10) tx.objectStore(STORE_NAME).put(true, keyFor(RENDERED_OWED));
+    for (const name of [INBOX_NAME, TOPICS_NAME, ALIASES_NAME, REPLICA_NAME]) if (!db.objectStoreNames.contains(name)) db.createObjectStore(name);
   },
 };
 
@@ -122,23 +126,13 @@ export const RENDERED_OWED = "store/rendered-owed";
 /** The device's content by name: one literal per object name, written once and never rewritten. */
 export const CONTENT: idb.Db = { ...DB, store: CONTENT_NAME };
 
-/** Each store the core's worker holds, one row per node and per key beside a head row (`noderows`). */
-export const LINE_ROWS: idb.Db = { ...DB, store: LINES_NAME };
+/** Each store the core's worker holds as rows, one row per node beside a head row (`noderows`). */
 export const INBOX_ROWS: idb.Db = { ...DB, store: INBOX_NAME };
 export const TOPIC_ROWS: idb.Db = { ...DB, store: TOPICS_NAME };
 export const ALIAS_ROWS: idb.Db = { ...DB, store: ALIASES_NAME };
 
-/** Beside those stores, a snapshot of what the core's worker held of each, by the store's name (`noderows`). */
-export const SNAPSHOTS: idb.Db = { ...DB, store: SNAPSHOTS_NAME };
-
-/** The lines' head row of version 8, which the box alone writes, naming no node the box has not taken, in the lines' first format. */
-function unsentNone(store: IDBObjectStore): void {
-  const head = store.get("head");
-  head.onsuccess = () => {
-    const row: unknown = head.result;
-    if (typeof row === "object" && row !== null) store.put({ ...row, unsent: [], format: 1 }, "head");
-  };
-}
+/** The replicas the core keeps in its own form, a snapshot and the frames after it, by the store's name (`replicalog`). */
+export const REPLICA: idb.Db = { ...DB, store: REPLICA_NAME };
 
 /** Every row rewritten by `step`, in the upgrade's own transaction. */
 function carry(store: IDBObjectStore, step: (row: unknown) => unknown): void {

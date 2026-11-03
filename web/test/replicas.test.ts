@@ -13,6 +13,7 @@ import type { MemoryPayload } from "../src/wire/generated/wire"
 import turns from "../src/chat/turns"
 import { forAll, type Rng } from "./gen"
 import { heldChain, holdAll } from "./held"
+import { keyed } from "./keyed"
 
 const core = ((): Core => {
   const built = process.env["SUZATARY_PRODROME_WASM"]
@@ -45,7 +46,7 @@ const chains = box.chains.map(c => ({ name: c.name, untrusted: c.untrusted, obje
 const linesOf = (c: readonly Named[], given: Record<string, string> = box.keys): Lines => {
   const t = new core.Lines()
   t.hold(objectsOf(c), "[]")
-  t.keys(JSON.stringify(given), "[]")
+  keyed(t, given)
   return t
 }
 
@@ -141,7 +142,7 @@ test("a sync cut anywhere reads, and the last round reads as the box, in lines h
     // One tab's lines, each round's new objects held on top of the last's, so every round reads through what the
     // rounds before it computed.
     const t = new core.Lines()
-    t.keys(JSON.stringify(box.keys), "[]")
+    keyed(t, box.keys)
     try {
       let held = 0
       for (const lines of c) {

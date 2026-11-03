@@ -12,6 +12,7 @@ import type { Core, Lines, Named, Proposals } from "../src/prodrome/core"
 import { conversationOf, entriesOf, excludedOf, holdIn, inboxOf, linesLeft, listOfLines, objectsOf, searchOf } from "../src/prodrome/core"
 import excluded from "../src/prodrome/excluded"
 import type { MemoryPayload } from "../src/wire/generated/wire"
+import { keyed } from "./keyed"
 
 const core = ((): Core => {
   const built = process.env["SUZATARY_PRODROME_WASM"]
@@ -60,7 +61,7 @@ const reading = <A>(i: readonly Named[], ask: (s: Reading) => A): A => {
   const p = new core.Proposals(objectsOf(i))
   try {
     lines.hold(objectsOf(conversations), "[]")
-    lines.keys(JSON.stringify(box.keys), "[]")
+    keyed(lines, box.keys)
     return ask({ p, lines })
   } finally {
     p.free()

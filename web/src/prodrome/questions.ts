@@ -385,8 +385,7 @@ export namespace questions {
           stores.opened()
           return null
         case "Shown":
-          sync.shown(q.on)
-          return null
+          return sync.shown(q.on).then(() => null)
         case "Reset":
           return stores.reset(q.store)
         case "Proposals":
@@ -428,23 +427,19 @@ export namespace questions {
           return own
         case "AnswerKeys":
           return q.sources.map(source => core.answer_key(source))
-        // The rounds are chosen by the core's skeleton, and only the lines whose words they read are read. It reads no row
-        // of the lines' own, so on a warm load it is answered from the core's snapshot before the rows are read.
+        // The rounds are chosen by the core's skeleton, and only the lines whose words they read are read.
         case "Stream":
           phases.mark("stream asked")
-          return stores.first(() =>
-            scoped(
-              turn,
-              () => ({ type: "Objects", names: chosenOf(held, stores.topics().reading, q.chosen, q.pages).map(n => n.hash) }),
-              () => {
-                phases.mark("stream content held")
-                const read = stores.topics()
-                const stream = streamOf(held, read.reading, q.chosen, q.pages)
-                phases.mark("stream drawn")
-                return { stream, bar: barOf(read.reading), keys: keyed(stream.rounds.flatMap(r => (r.answer === null ? [] : [r.answer]))) }
-              },
-              "Loaded",
-            ),
+          return scoped(
+            turn,
+            () => ({ type: "Objects", names: chosenOf(held, stores.topics().reading, q.chosen, q.pages).map(n => n.hash) }),
+            () => {
+              phases.mark("stream content held")
+              const read = stores.topics()
+              const stream = streamOf(held, read.reading, q.chosen, q.pages)
+              phases.mark("stream drawn")
+              return { stream, bar: barOf(read.reading), keys: keyed(stream.rounds.flatMap(r => (r.answer === null ? [] : [r.answer]))) }
+            },
           )
         case "Topic":
           return stores.write(q.write, q.at, q.actor).then(() => null)

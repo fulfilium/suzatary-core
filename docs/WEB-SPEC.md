@@ -1622,12 +1622,19 @@ under in every larger union and never wins.
   touched (a line come or gone, a key of their words given or taken), or all
   of them after a reset or a later epoch, heard once a frame, so an open
   conversation reads again only when its own lines moved, as the core answers
-  each change it took (`touched.test.ts`). The lines' row holds the skeleton
-  (`GET /api/stores/lines/skeleton`, pulled by the same pieces), kept one
-  node and one key per row in the database's `lines` store beside a head row
-  (`noderows.ts`, which keeps every store so, each in its own object store), so a landing writes only what arrived. Each store's head row records the format its rows were written in (`noderows.Format`); a restore that finds another drops what those rows found (the lines: their rendered blocks), empties the store to a row of the generation after and takes it again from the box, while the content by name stays, so a change of a node's form moves the store's format and never the database's version (`noderows.test.ts` "rows of another format are dropped at restore…"); the lines' format 2 is the nodes that say what their lines retire; version 8 drops every earlier
-  skeleton, whose nodes carry no step, with its keys, clears the rendered
-  blocks those keys could find (`RENDERED_OWED`), and pulls the skeleton
+  each change it took (`linereplica.test.ts`). The core holds the lines'
+  replica whole (`Lines`, `app/core/src/replica/`): the landed row and a
+  pull's pieces, the box's word, the frontier, the generation and the keys
+  (`GET /api/stores/lines/skeleton`, pulled by the same pieces); the worker's
+  JavaScript holds no node, key or head (`linesync.ts`). The device keeps the
+  replica as the core's own form, a snapshot and the frames appended since
+  (`replicalog.ts`, the database's `replica` store, version 11), each frame
+  the delta of one move; a warm load hands the core the snapshot and the
+  frames and reads no row. A snapshot of another form is a miss: the log is
+  dropped and the lines taken again. Version 11 drops every earlier lines'
+  row and the snapshots beside them, with no converter, and clears the
+  rendered blocks their keys could find (`RENDERED_OWED`), so the skeleton is
+  pulled again once.
   again. It is a replica of nodes: each object's name, what it rests
   on, its size and its header, never its literal (`replica.Obj`). Each
   literal is kept by its name in the database's `content` store
@@ -1777,22 +1784,26 @@ Each pattern written once, in `web/src/algebra/once.ts`, `latest.ts`,
   kept is dropped…", "version 5 drops the lines' row and its pieces…"; e2e `upgrade8.test.ts`; `replica.test.ts` "a row in a form an earlier build
   kept does not read…"; e2e `upgrade.test.ts` "a device holding a version 2
   replica drops it on its first load…".
-- **A snapshot is served only for the rows it was of, and holds no key let
-  go:** a store's snapshot of the core is kept under the key of its head row,
-  its count of node rows and its key rows' names. Every write of a row deletes
-  it in that transaction (a landing, a purge, a reset, a piece kept); it is
-  written in a transaction of its own once the store is quiet, only where the
-  row it was printed from is still the device's, so a burst of landings
-  writes one. A warm load serves it only under that key, and with a current
-  one answers its first stream before it reads the lines' rows. —
-  `noderows.test.ts` "a landing deletes the snapshot and owes the next…", "a
-  burst of landings writes at most one snapshot…", "a snapshot is written only
-  where the device holds the rows it was printed of", "a purge deletes the
-  snapshot in the transaction that lets its keys go…", "a reset and a piece
-  kept each delete the snapshot…"; `wipe.test.ts` "the lines' row, its keys
-  among it, its snapshot…"; e2e `lines.test.ts` "a warm load answers the
-  stream from the core's snapshot before it reads the lines' rows…", "Erase
-  draws a turn by its shape…".
+- **A warm load reads what a cold load reads, two tabs converge, and no key
+  let go stays on the device.** Every move of the lines is a frame appended to
+  the device's log, and each frame but a purge's is a join, so two tabs
+  appending lose nothing and a tab takes another's frames as it reads the log
+  again (before each pull). A compaction (when the lines are quiet, when the
+  page is hidden, and at once after a purge) is the one way bytes leave: in
+  one transaction it takes the frames after what its core held, writes the
+  core's snapshot as of the last and deletes every frame up to it, and it
+  writes nothing where another tab's snapshot came first, which the tab reads
+  instead. A purge forgets a dead key's blocks, then the key, from the core
+  and, by that compaction, from every snapshot and frame. — `warmload.test.ts`
+  "law: a warm load reads what a cold load reads, and two tabs converge…"
+  (every reload read with the box gone); `linereplica.test.ts` "law: the
+  core's rows of the lines are the TypeScript replica's…"; the core's
+  `line_replica` laws; `onewriter.test.ts` "law: once the box erases words…";
+  `wipe.test.ts` "the lines' snapshot and frames…"; e2e `lines.test.ts` "a warm
+  load answers the stream from the core's snapshot and the frames after it…",
+  "a conversation another tab landed draws from the device…", "Erase draws a
+  turn by its shape…", "a key a closed tab left on the device is forgotten…";
+  `rescrub.test.ts`; `epoch.test.ts`.
 - **A verdict says what it found as a sum.** Each object the walk reached
   carries its depth and one it never reached says so (`verify.Walk`), and a
   chain's check is `Reached`, or `Unreached` with every problem, never an

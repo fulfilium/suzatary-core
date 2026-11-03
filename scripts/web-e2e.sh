@@ -40,7 +40,6 @@
 #   scripts/web-e2e.sh bootbench  only web/e2e/bootbench.bench.ts, a measurement
 #   scripts/web-e2e.sh pagebench  only web/e2e/pagebench.bench.ts, every page measured
 #   scripts/web-e2e.sh typstmeasure  only web/e2e/typstmeasure.bench.ts, the Typst list's draw timed
-#   scripts/web-e2e.sh snapshotmeasure  only web/e2e/snapshotmeasure.bench.ts, a warm load's snapshot timed
 #   scripts/web-e2e.sh writewait  only web/e2e/writewait.bench.ts, the box's answer to each write route timed
 #   scripts/web-e2e.sh settingsbench  only web/e2e/settingsbench.bench.ts, Settings today against its Rust program
 #                                 no gate runs any of them (`*.bench.ts` is outside every glob)

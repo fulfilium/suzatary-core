@@ -11,41 +11,33 @@
 
 import assert from "node:assert/strict"
 
-import { SIGNED_POST, WRITE_BASE, suite } from "./harness"
+import type { Landed } from "./harness"
+import { LANDED_ROW, SIGNED_POST, WRITE_BASE, suite } from "./harness"
 
 const app = await suite("upgrade8")
 
-type Rows = {
-  readonly version: number
-  readonly nodes: readonly { readonly hash: string; readonly header: { readonly node: string; readonly step?: unknown } }[]
-  readonly all: readonly (readonly [string, unknown])[]
-  readonly content: readonly (readonly [string, unknown])[]
-}
+type Rows = { readonly version: number; readonly stores: readonly string[]; readonly content: readonly (readonly [string, unknown])[] }
 
-// The database's version, the lines' store's rows and its nodes, and the content store's rows.
+// The database's version, its stores, and the content store's rows.
 const rows = `new Promise((done, fail) => {
   const r = indexedDB.open("suzatary")
   r.onerror = () => fail(String(r.error))
   r.onsuccess = () => {
     const db = r.result
-    const tx = db.transaction(["lines", "content"], "readonly")
-    const keys = tx.objectStore("lines").getAllKeys()
-    const values = tx.objectStore("lines").getAll()
+    const tx = db.transaction(["content"], "readonly")
     const ckeys = tx.objectStore("content").getAllKeys()
     const cvalues = tx.objectStore("content").getAll()
     tx.oncomplete = () => {
       db.close()
-      const all = keys.result.map((k, i) => [k, values.result[i]])
-      done({
-        version: db.version,
-        nodes: all.filter(([k]) => k.startsWith("node/")).map(([, n]) => n),
-        all,
-        content: ckeys.result.map((k, i) => [k, cvalues.result[i]]),
-      })
+      done({ version: db.version, stores: [...db.objectStoreNames], content: ckeys.result.map((k, i) => [k, cvalues.result[i]]) })
     }
     tx.onerror = () => fail(String(tx.error))
   }
 })`
+
+// The lines' skeleton as the box answers this login: its nodes and the keys they name.
+type Box = { readonly nodes: readonly { readonly hash: string; readonly header: { readonly node: string; readonly step?: unknown } }[]; readonly keys: Readonly<Record<string, string>> }
+const BOX = `fetch("/api/stores/lines/skeleton").then((r) => r.json())`
 
 const SAID = `[...document.querySelectorAll(".turns .turn-person .turntext")].some((t) => t.textContent.includes("the words that stay"))`
 
@@ -59,10 +51,15 @@ app.scene("a device holding version 7's lines' skeleton drops it and every rende
   await app.page.type(".composebox", "the words that stay")
   await app.page.click(".composesend")
   await app.page.waitFor(SAID, { timeout: 20000 })
-  await app.page.waitFor(`${rows}.then((r) => r.nodes.length > 1 && r.content.length > 1)`, { timeout: 20000 })
+  await app.page.waitFor(`${rows}.then((r) => r.content.length > 1)`, { timeout: 20000 })
   const now = await app.page.evaluate<Rows>(rows)
-  // The same rows as version 7 kept them: every node without its step.
-  const old = now.all.map(([k, v]) => [k, k.startsWith("node/") ? { ...(v as Rows["nodes"][number]), header: { ...(v as Rows["nodes"][number]).header, step: undefined } } : v] as const)
+  const box = await app.page.evaluate<Box>(BOX)
+  // The lines as version 7 kept them: a head row, every node without its step, and every key, one row each.
+  const old = [
+    ["head", { generation: 0 }],
+    ...box.nodes.map((n) => [`node/${n.hash}`, { ...n, header: { ...n.header, step: undefined } }]),
+    ...Object.entries(box.keys).map(([name, hex]) => [`key/${name}`, hex]),
+  ]
   await app.page.navigate(`${WRITE_BASE}/api/about`)
   const planted = await app.page.evaluate<boolean>(`new Promise((done, fail) => {
     const gone = indexedDB.deleteDatabase("suzatary")
@@ -116,9 +113,11 @@ app.scene("a device holding version 7's lines' skeleton drops it and every rende
     }
   })`, { timeout: 20000 })
   const pulled = await app.page.evaluate<Rows>(rows)
-  assert.equal(pulled.version, 10)
-  assert.ok(pulled.nodes.length >= now.nodes.length, "the skeleton is pulled again")
-  assert.ok(pulled.nodes.every((n) => n.header.node !== "line" || n.header.step !== undefined), "every line's node carries its step")
+  assert.equal(pulled.version, 11)
+  assert.ok(!pulled.stores.includes("lines"), "no row of the lines is kept")
+  await app.page.waitFor(`${LANDED_ROW}.then((row) => row.nodes.length >= ${box.nodes.length})`, { timeout: 20000 })
+  const landed = await app.page.evaluate<Landed>(LANDED_ROW)
+  assert.ok(box.nodes.every((n) => landed.nodes.includes(n.hash)), "the skeleton is pulled again, into the core's own form")
   assert.ok(now.content.every(([k]) => pulled.content.some(([c]) => c === k)), "the content by name stays")
   const kept = new Set(now.content.map(([k]) => k))
   const asked = journal.lines().filter((l) => l.includes("/api/stores/lines/content") && [...kept].some((k) => l.includes(k)))

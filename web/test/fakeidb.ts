@@ -35,6 +35,9 @@ export type Fake = {
   readonly deletes: () => number
 }
 
+// Bytes printed as hex, so a row holding a key's bytes, as the core's frames and snapshots do, is found by them.
+const hexed = (_: string, v: unknown): unknown => (v instanceof Uint8Array ? [...v].map(b => b.toString(16).padStart(2, "0")).join("") : v)
+
 // A device holding nothing, set as the global `indexedDB`; `failing` refuses nothing until a test sets it.
 export const fakeIndexedDB = (): Fake => {
   // The connections the app's door kept open belong to the device before.
@@ -49,7 +52,7 @@ export const fakeIndexedDB = (): Fake => {
     read: () => read,
     failing: () => false,
     rows: (name, store) => dbs.get(name)?.stores.get(store) ?? new Map(),
-    printed: () => [...dbs].flatMap(([name, d]) => [...d.stores].flatMap(([store, rows]) => [...rows].map(([k, v]) => `${name}/${store}/${k} ${JSON.stringify(v)}`))),
+    printed: () => [...dbs].flatMap(([name, d]) => [...d.stores].flatMap(([store, rows]) => [...rows].map(([k, v]) => `${name}/${store}/${k} ${JSON.stringify(v, hexed)}`))),
   }
   const database = (name: string) => {
     const d = dbs.get(name) ?? { version: 0, stores: new Map<string, Map<string, unknown>>(), paths: new Map<string, string>() }

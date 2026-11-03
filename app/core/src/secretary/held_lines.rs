@@ -550,15 +550,11 @@ impl HeldLines {
     }
 
     /// The keys replaced by `ring`, read as [`HeldLines::keys`] reads a change; the prints stay.
-    pub fn rekey(&mut self, ring: KeyRing) {
+    /// The names held before or after and not both.
+    pub fn rekey(&mut self, ring: KeyRing) -> BTreeSet<KeyName> {
         let moved = self.keys.replace(ring);
         self.rekeyed(&moved);
-    }
-
-    /// The keys taken out of the ring.
-    #[must_use]
-    pub fn into_key_ring(self) -> KeyRing {
-        self.keys
+        moved
     }
 
     /// Each conversation a line of which names a key of `moved` read again, and what was opened

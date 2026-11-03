@@ -126,7 +126,7 @@ export namespace rendered {
   }
 
   export const DB = "suzatary-rendered"
-  const ROWS = "rows"
+  export const ROWS = "rows"
 
   // A store from before keys were the box's own is dropped whole: a cache is a function of the code that reads it.
   const kept: idb.Db = {

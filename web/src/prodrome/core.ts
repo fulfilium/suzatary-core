@@ -123,6 +123,13 @@ export function holdIn(chains: Chains, name: string, objects: readonly Named[], 
   return checked("hold", chains.hold(name, objectsOf(objects), JSON.stringify(untrusted)), Held(name));
 }
 
+/** One move of the lines' rows: its delta's frame and the conversations it moved; freed once read. */
+export interface LineStep {
+  readonly delta: Uint8Array;
+  readonly moved: string;
+  free: () => void;
+}
+
 /**
  * The lines a tab holds, each print decoded once as it is held and each key by name, read through the core's memoised
  * fold, so a reading computes only the conversations and lines that moved since the last one. A slot without its key
@@ -136,18 +143,38 @@ export interface Lines {
   held: () => string;
   /** Moves with each change of the prints held. */
   version: () => number;
-  /** The skeleton's nodes `add`, as the box sent them, held, and the names `drop` let go: the conversations moved. */
-  nodes: (add: string, drop: string) => string;
-  /** The keys `add` held and `drop` let go: the conversations whose lines name one. */
-  keys: (add: string, drop: string) => string;
-  /** The nodes a scope reads of the skeleton and `beside` (nodes not held yet) whose print is not held. */
-  lacking: (scope: string, beside: string) => string;
+  /** The frontier a pull names as `since`, of what is held, landed and not; `""` for none. */
+  since: () => string;
+  /** `[<name>, …]`, sorted: the heads of what is held, landed and not. */
+  heads: () => string;
+  /** Whether the landed row has heard the box. */
+  heard: () => boolean;
+  /** Whether the box's heads (`[<name>, …]`) name a node what is held does not read. */
+  behind: (heads: string) => boolean;
+  /** Whether an answer of this epoch is of a later epoch than either row heard: the store starts over first. */
+  overtaken: (epoch: number) => boolean;
+  /** Whether an answer of this epoch is of an earlier epoch than the word held. */
+  went_back: (epoch: number) => boolean;
+  /** A skeleton answer (`SkeletonPayload` JSON) kept as a piece holding the keys `{<name>: <hex>}`, heard at ms: the delta's frame. */
+  piece: (answer: string, keys: string, fetchedAt: number) => Uint8Array;
+  /** The pending pieces landed. */
+  land: () => LineStep;
+  /** Every row reset, in the generation after both. */
+  start_over: () => LineStep;
+  /** The keys `[<name>, …]` let go from every row. */
+  forget: (gone: string) => LineStep;
+  /** Another tab's frame taken: the conversations moved, `"All"` or `[<id>, …]`. */
+  apply: (frame: Uint8Array) => string;
+  /** `{landed, pending, holding, landings}`: each row's generation, epoch, box word, frontier, nodes read, heads and keys. */
+  rows: () => string;
+  /** The nodes a scope reads, of the landed row and a pull's pieces, whose print is not held. */
+  lacking: (scope: string) => string;
   /** `{nodes, lines}`: how many nodes a scope reads, and of its line nodes, lack their print. */
   lacks: (scope: string) => string;
   /** Whether the skeleton holds a line of a conversation. */
   holds: (id: string) => boolean;
-  /** `[<name>, …]`: the keys the skeleton and the nodes `beside` retire, given the keys `held` names. */
-  retired: (beside: string, held: string) => string;
+  /** `{<name>: [<answer key>, …]}`: every dead key held, landed or pending, with the blocks its words fed. */
+  owed: (told: string) => string;
   /** `{keep, ahead}`: the names the device keeps within a budget, and the plan's nodes lacking their print. */
   plan: (budget: number) => string;
   list: (inbox: Proposals) => string;
@@ -162,13 +189,12 @@ export interface Lines {
   search: (q: string) => string;
   /** `[<node>, …]`: the node of every line whose words the newest `pages` pages of the stream read, by the skeleton alone. */
   chosen: (topics: TopicReading, chosen: string, pages: number) => string;
-  /** What these lines were handed, the skeleton and the keys, in the core's own form; it throws where they do not print. */
+  /** The rows, whole, in the core's own form; it throws where they do not print. */
   snapshot: () => Uint8Array;
-  /** The skeleton and the keys replaced by those a snapshot prints, the prints held kept; it throws for bytes that
-   * print none of this build's form. */
-  load: (bytes: Uint8Array) => void;
-  /** No node or key held again, the prints kept. */
-  clear: () => void;
+  /** The rows replaced by a snapshot's (none for the empty rows), then each frame of `frames` taken in order, each frame
+   * after its length as four little-endian bytes, the prints held kept: the conversations moved. It throws for a
+   * snapshot of another form or a frame that does not read, holding what it held. */
+  load: (bytes: Uint8Array | undefined, frames: Uint8Array) => string;
   /** The newest `pages` pages of every conversation's rounds carrying each topic of `chosen`, a JSON array. */
   stream: (topics: TopicReading, chosen: string, pages: number) => string;
   /** `{<name>: [<answer key>, …]}`: every key an erasure names, with the blocks its words fed where `keys` opens it. */
@@ -617,29 +643,35 @@ export const conversationOf = (lines: Lines, inbox: Proposals, id: string, windo
 
 export const searchOf = (lines: Lines, q: string): SearchPayload => checked("search", lines.search(q), payload.SearchPayload);
 
-/** `nodes` held in the core's skeleton and `gone` let go. */
-/** `nodes` held and `gone` let go, answering the conversations a line of which came or went. */
-export const nodesInto = (lines: Lines, nodes: readonly SkeletonNode[], gone: readonly string[]): readonly string[] =>
-  checked("nodes", lines.nodes(JSON.stringify(nodes), JSON.stringify(gone)), arr(str));
-
-/** The keys `add` held and `gone` let go, answering the conversations whose lines name one. */
-export const keysInto = (lines: Lines, add: Readonly<Record<string, string>>, gone: readonly string[]): readonly string[] =>
-  checked("keys", lines.keys(JSON.stringify(add), JSON.stringify(gone)), arr(str));
-
-/** The nodes `scope` reads whose print the core does not hold, by the core's skeleton and `beside`, nodes it was not told. */
-export const lackingIn = (held: Lines, scope: lines.Scope, beside: readonly SkeletonNode[] = []): readonly SkeletonNode[] =>
-  checked("lacking", held.lacking(JSON.stringify(scope), JSON.stringify(beside)), arr(payload.SkeletonNode));
+/** The nodes `scope` reads, of the landed row and a pull's pieces, whose print the core does not hold. */
+export const lackingIn = (held: Lines, scope: lines.Scope): readonly SkeletonNode[] =>
+  checked("lacking", held.lacking(JSON.stringify(scope)), arr(payload.SkeletonNode));
 
 /** How many nodes `scope` reads lack their print, and how many of those are lines. */
 export const lacksIn = (held: Lines, scope: lines.Scope): { readonly nodes: number; readonly lines: number } =>
   checked("lacks", held.lacks(JSON.stringify(scope)), obj<{ nodes: number; lines: number }>({ nodes: num, lines: num }));
 
 /**
- * The keys the core's skeleton and `beside` (nodes it does not hold yet) retire, given the keys `held` names: the box's
- * rule over the steps (`transcript::Retired`), read by the core alone.
+ * Every key the core holds, landed or in a pull's pieces, that is dead (the prints name it erased, the box's rule over the
+ * steps retires it, or `told` names it), with the blocks its words fed: what a purge forgets, the blocks first.
  */
-export const retiredOf = (lines: Lines, beside: readonly SkeletonNode[], held: readonly string[]): ReadonlySet<string> =>
-  new Set(checked("retired", lines.retired(JSON.stringify(beside), JSON.stringify(held)), arr(str)));
+export const owedOf = (lines: Lines, told: readonly string[]): Erased => checked("owed", lines.owed(JSON.stringify(told)), Erased);
+
+/** What a move of the lines' rows moved, as the core says it. */
+export const movedOf = (said: string): "All" | readonly string[] => checked("moved", said, d.alt(d.lit("All"), arr(str)));
+
+/** The frames of a log as `Lines.load` takes them: each after its length as four little-endian bytes. */
+export const framed = (frames: readonly Uint8Array[]): Uint8Array => {
+  const out = new Uint8Array(frames.reduce((k, f) => k + 4 + f.length, 0));
+  const view = new DataView(out.buffer);
+  let at = 0;
+  for (const f of frames) {
+    view.setUint32(at, f.length, true);
+    out.set(f, at + 4);
+    at += 4 + f.length;
+  }
+  return out;
+};
 
 /** The names the device keeps of the lines' content within `budget` bytes, and the plan's nodes the core lacks. */
 export const planOf = (lines: Lines, budget: number): { readonly keep: readonly string[]; readonly ahead: readonly SkeletonNode[] } =>

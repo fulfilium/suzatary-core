@@ -149,6 +149,25 @@ impl Parsed {
     }
 }
 
+/// A node of the lines' replica: a genesis is its own prodrome, and a line rests on its genesis
+/// through its parents.
+impl crate::replica::held::Node for Parsed {
+    fn name(&self) -> &Hash {
+        Parsed::name(self)
+    }
+
+    fn rests_on(&self) -> &[Hash] {
+        self.parents()
+    }
+
+    fn prodrome(&self) -> Option<&Hash> {
+        match &self.given.header {
+            wire::NodeHeader::Structure { kind } => (kind == "Genesis").then(|| self.name()),
+            wire::NodeHeader::Line { .. } => None,
+        }
+    }
+}
+
 /// One conversation's lines, and its outline once folded, emptied whenever a line comes or goes.
 struct Conversation {
     lines: BTreeSet<Hash>,
@@ -332,6 +351,11 @@ impl Outlines {
     #[must_use]
     pub fn holds(&self, name: &Hash) -> bool {
         self.given.contains_key(name)
+    }
+
+    /// The name of every node held.
+    pub fn names(&self) -> impl Iterator<Item = &Hash> {
+        self.given.keys()
     }
 
     /// Every node held, as it was given, by name.

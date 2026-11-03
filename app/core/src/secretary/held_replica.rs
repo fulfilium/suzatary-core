@@ -1,106 +1,193 @@
-//! The lines a tab's core holds, whole: the prints and keys read through [`HeldLines`], and the
-//! skeleton's nodes read through [`Outlines`]. What it was handed is the skeleton and the keys,
-//! so that pair is what its snapshot prints ([`crate::snapshot`]); the prints are content, kept
-//! by name on the device and handed over again as a reading needs them.
+//! The lines a tab's core holds, whole: the rows of their skeleton as its pull moves them
+//! ([`LinePulling`]), and what the landed row means, read through [`Outlines`] (its nodes) and
+//! [`HeldLines`] (the prints, opened with its keys). Every move of the rows answers a
+//! [`LineDelta`] and the conversations it moved, and the readings are told the landed row's
+//! readable nodes and keys after each, so they read that row and nothing else. A print is content
+//! held by name, kept whatever the rows name.
 
-use serde::{Deserialize, Serialize};
-
-use crate::secretary::held_lines::HeldLines;
-use crate::secretary::key_ring::KeyRing;
-use crate::secretary::locked_text::KeyName;
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 
 use prodrome_core::event::Hash;
 
-use crate::secretary::outlines::{Outlines, Parsed, Scope};
-use crate::secretary::step::Step;
-use crate::snapshot::Held;
-use crate::wire::{NodeHeader, SkeletonNode};
+use crate::replica::held::Said;
+use crate::secretary::answer::Renderable;
+use crate::secretary::held_lines::HeldLines;
+use crate::secretary::key_ring::KeyRing;
+use crate::secretary::line_form::{LineDelta, LinePulling};
+use crate::secretary::locked_text::KeyName;
+use crate::secretary::outlines::{NotANode, Outlines, Parsed, Scope};
+use crate::secretary::store::ConversationId;
+use crate::wire::{Heads, SkeletonNode, SkeletonPayload};
 
-/// The lines held, and the skeleton they are read beside.
+/// The lines held: the rows, and the readings of the landed one.
 #[derive(Default)]
 pub struct HeldReplica {
-    /// The prints and the keys of their words.
+    /// The prints and the keys of their words, the landed row's keys.
     pub lines: HeldLines,
-    /// The skeleton's nodes.
-    pub outlines: Outlines,
+    outlines: Outlines,
+    rows: LinePulling,
 }
 
-/// What a replica was handed: every node of its skeleton, by name, and its keys.
-#[derive(Serialize, Deserialize)]
-pub struct Given {
-    nodes: Vec<Node>,
-    keys: KeyRing,
+/// Which conversations a move of the landed row moved: every one, where the row was reset or
+/// heard a later epoch; else those with a line come or gone, or a key of their words given or
+/// taken.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Moved {
+    /// Every conversation.
+    All,
+    /// These.
+    These(BTreeSet<ConversationId>),
 }
 
-/// A node in the snapshot's form. The wire's header and step are tagged inside their fields,
-/// which a binary form without field names cannot read back, so they are given here by their
-/// constructor instead, each field of the wire's own type checked against it by serde.
-#[derive(Serialize, Deserialize)]
-struct Node(#[serde(with = "NodeForm")] SkeletonNode);
-
-#[derive(Serialize, Deserialize)]
-#[serde(remote = "SkeletonNode")]
-struct NodeForm {
-    hash: String,
-    parents: Vec<String>,
-    size: usize,
-    #[serde(with = "HeaderForm")]
-    header: NodeHeader,
+/// A move of the rows: the delta that makes it, and what it moved.
+#[derive(Debug, Clone)]
+pub struct Took {
+    /// What another replica takes to make the same move.
+    pub delta: LineDelta,
+    /// What it moved.
+    pub moved: Moved,
 }
 
-#[derive(Serialize, Deserialize)]
-#[serde(remote = "NodeHeader")]
-enum HeaderForm {
-    Structure {
-        kind: String,
-    },
-    Line {
-        conversation: String,
-        at: String,
-        kind: String,
-        keys: Vec<String>,
-        #[serde(with = "StepForm")]
-        step: Step,
-    },
-}
-
-#[derive(Serialize, Deserialize)]
-#[serde(remote = "Step")]
-enum StepForm {
-    Opened,
-    Asks,
-    Noted,
-    Answers,
-    Rewound {
-        to: usize,
-    },
-    Proposed,
-    Coding {
-        proposal: usize,
-    },
-    Titled,
-    Resealed {
-        of: KeyName,
-        from: KeyName,
-    },
-    Erased {
-        keys: std::collections::BTreeSet<KeyName>,
-    },
-    Still,
+/// A skeleton's answer that does not read.
+#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
+pub enum NotAnAnswer {
+    /// A name that is no object's.
+    #[error("the answer names {0:?}, which is no object's name")]
+    Name(String),
+    /// A node that does not read.
+    #[error(transparent)]
+    Node(#[from] NotANode),
 }
 
 impl HeldReplica {
-    /// The skeleton and the keys replaced by `other`'s, and the prints kept: what a snapshot
-    /// loaded, or nothing, replaces. A print is content held by its name whatever the skeleton
-    /// names, and the tab counts each print it handed over as held until it lets it go.
-    pub fn regiven(&mut self, other: HeldReplica) {
-        let HeldReplica { lines, outlines } = other;
-        self.outlines = outlines;
-        self.lines.rekey(lines.into_key_ring());
+    /// The skeleton's nodes the landed row reads.
+    #[must_use]
+    pub fn outlines(&self) -> &Outlines {
+        &self.outlines
+    }
+
+    /// The skeleton's nodes beside the prints, each to read the other by.
+    pub fn reading(&mut self) -> (&Outlines, &mut HeldLines) {
+        (&self.outlines, &mut self.lines)
+    }
+
+    /// The rows.
+    #[must_use]
+    pub fn rows(&self) -> &LinePulling {
+        &self.rows
+    }
+
+    /// The piece the box answered, `answer` heard at `fetched_at` with the keys `keys`, kept
+    /// beside the landed row; it moves no reading. The answer's own `keys` are not read: `keys`
+    /// is what the piece holds. Heads the answer leaves unsaid are those of what is held now.
+    ///
+    /// # Errors
+    /// [`NotAnAnswer`] for a name or a node that does not read; nothing is kept.
+    pub fn piece(
+        &mut self,
+        answer: SkeletonPayload,
+        keys: KeyRing,
+        fetched_at: u64,
+    ) -> Result<LineDelta, NotAnAnswer> {
+        let SkeletonPayload {
+            heads,
+            geneses,
+            epoch,
+            nodes,
+            since,
+            frontier,
+            ..
+        } = answer;
+        let heads = match heads {
+            Heads::Held => self.rows.holding().replica().read().heads(),
+            Heads::These { heads } => names(heads)?,
+        };
+        let said = Said {
+            heads,
+            geneses: names(geneses)?,
+            epoch,
+            nodes: nodes
+                .into_iter()
+                .map(Parsed::of)
+                .collect::<Result<_, _>>()?,
+            since,
+            digest: name(frontier.digest)?,
+            count: u64::try_from(frontier.count).unwrap_or(u64::MAX),
+        };
+        Ok(self.rows.piece(said, keys, fetched_at))
+    }
+
+    /// The pending pieces landed.
+    pub fn land(&mut self) -> Took {
+        self.took(LinePulling::land)
+    }
+
+    /// Every row reset, in the generation after both: a later epoch overtook what is held.
+    pub fn start_over(&mut self) -> Took {
+        self.took(LinePulling::start_over)
+    }
+
+    /// The keys `gone` let go, from every row.
+    pub fn forget(&mut self, gone: BTreeSet<KeyName>) -> Took {
+        self.took(|rows| rows.forget(gone))
+    }
+
+    /// `delta` taken: another tab's, or one read back from the log.
+    pub fn apply(&mut self, delta: &LineDelta) -> Moved {
+        self.moving(|rows| rows.apply(delta)).1
+    }
+
+    /// The rows replaced by `rows`, as a warm load reads them; the prints are kept.
+    pub fn load(&mut self, rows: LinePulling) -> Moved {
+        self.moving(|held| *held = rows).1
+    }
+
+    fn took(&mut self, step: impl FnOnce(&mut LinePulling) -> LineDelta) -> Took {
+        let (delta, moved) = self.moving(step);
+        Took { delta, moved }
+    }
+
+    /// `step` taken, and the readings told the landed row it leaves.
+    fn moving<A>(&mut self, step: impl FnOnce(&mut LinePulling) -> A) -> (A, Moved) {
+        let landed = self.rows.landed();
+        let was = (landed.generation(), landed.replica().epoch());
+        let taken = step(&mut self.rows);
+        let landed = self.rows.landed();
+        let reading = landed.replica().read();
+        let came: Vec<Parsed> = reading
+            .nodes()
+            .filter(|node| !self.outlines.holds(node.name()))
+            .cloned()
+            .collect();
+        let went: Vec<Hash> = self
+            .outlines
+            .names()
+            .filter(|name| !reading.holds(name))
+            .cloned()
+            .collect();
+        let mut touched = if came.is_empty() && went.is_empty() {
+            BTreeSet::new()
+        } else {
+            self.outlines.hold(came, &went)
+        };
+        let rekeyed = self.lines.rekey(landed.keys().clone());
+        touched.extend(self.outlines.naming(&rekeyed));
+        let moved = if (landed.generation(), landed.replica().epoch()) == was {
+            Moved::These(touched)
+        } else {
+            Moved::All
+        };
+        (taken, moved)
     }
 }
 
+fn name(text: String) -> Result<Hash, NotAnAnswer> {
+    Hash::new(text.clone()).map_err(|_| NotAnAnswer::Name(text))
+}
+
+fn names(texts: Vec<String>) -> Result<BTreeSet<Hash>, NotAnAnswer> {
+    texts.into_iter().map(name).collect()
+}
 /// What a device keeps of the lines' content: the plan within the budget and every print held,
 /// which a reading loaded; and what of the plan the prints held lack, which a prefetch fetches.
 pub struct Plan<'r> {
@@ -111,16 +198,17 @@ pub struct Plan<'r> {
 }
 
 impl HeldReplica {
-    /// Every node `scope` reads of the skeleton held and `beside` (nodes not held yet) whose print
-    /// is not held, as it was given.
+    /// Every node `scope` reads, of the landed row and of a pull's pieces not landed yet, whose
+    /// print is not held, as it was given.
     #[must_use]
-    pub fn lacking<'r>(&'r self, scope: &Scope, beside: &'r [Parsed]) -> Vec<&'r SkeletonNode> {
-        let given: std::collections::BTreeMap<&Hash, &SkeletonNode> = beside
+    pub fn lacking(&self, scope: &Scope) -> Vec<SkeletonNode> {
+        let pending = self.pending();
+        let given: BTreeMap<&Hash, &SkeletonNode> = pending
             .iter()
             .map(|node| (node.name(), node.given()))
             .collect();
         self.outlines
-            .scope(scope, beside)
+            .scope(scope, &pending)
             .into_iter()
             .filter(|name| !self.lines.holds(name))
             .filter_map(|name| {
@@ -128,6 +216,44 @@ impl HeldReplica {
                     .node(name)
                     .or_else(|| given.get(name).copied())
             })
+            .cloned()
+            .collect()
+    }
+
+    /// Every key held, landed or in a pull's pieces, that is dead: one the prints held name as
+    /// erased, one the box's rule retires over the landed row and the pieces, or one in `told`
+    /// (what the box's pull says an erasure names); each with the blocks its words fed where the
+    /// keys held open them. What a purge forgets, the blocks first and then the keys.
+    pub fn owed(&mut self, told: &BTreeSet<KeyName>) -> BTreeMap<KeyName, Vec<Renderable>> {
+        let holding = self.rows.holding().into_owned();
+        let ring = holding.keys();
+        let pending = self.pending();
+        let mut dead = self.lines.dead();
+        dead.extend(self.outlines.retired(&pending, &|key| ring.holds(key)));
+        dead.extend(told.iter().cloned());
+        let owed: BTreeSet<KeyName> = ring
+            .iter()
+            .map(|(name, _)| name)
+            .filter(|name| dead.contains(*name))
+            .cloned()
+            .collect();
+        let mut erased = self.lines.erased(ring, &owed);
+        erased.retain(|name, _| owed.contains(name));
+        for name in owed {
+            erased.entry(name).or_default();
+        }
+        erased
+    }
+
+    /// The nodes a pull's pieces read that the landed row's readings do not hold.
+    fn pending(&self) -> Vec<Parsed> {
+        self.rows
+            .pending()
+            .replica()
+            .read()
+            .nodes()
+            .filter(|node| !self.outlines.holds(node.name()))
+            .cloned()
             .collect()
     }
 
@@ -145,33 +271,5 @@ impl HeldReplica {
             keep: planned.into_iter().chain(held).collect(),
             ahead,
         }
-    }
-}
-
-impl Held for HeldReplica {
-    type Given = Given;
-    /// 1: the skeleton's nodes as the wire's, and each key's bytes under its name.
-    const FORM: u32 = 1;
-
-    fn given(&self) -> Given {
-        Given {
-            nodes: self.outlines.given().cloned().map(Node).collect(),
-            keys: self.lines.key_ring().clone(),
-        }
-    }
-
-    fn of_given(given: Given) -> Result<Self, String> {
-        let nodes = given
-            .nodes
-            .into_iter()
-            .map(|Node(node)| Parsed::of(node))
-            .collect::<Result<Vec<_>, _>>()
-            .map_err(|e| e.to_string())?;
-        let mut outlines = Outlines::default();
-        outlines.hold(nodes, &[]);
-        Ok(Self {
-            lines: HeldLines::of_keys(given.keys),
-            outlines,
-        })
     }
 }

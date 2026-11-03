@@ -38,6 +38,8 @@ mod inbox_schema;
 mod known_pull;
 #[path = "laws.rs"]
 mod laws;
+#[path = "line_replica.rs"]
+mod line_replica;
 #[path = "memory.rs"]
 mod memory;
 #[path = "memory_schema.rs"]

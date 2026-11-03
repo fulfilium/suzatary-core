@@ -16,11 +16,10 @@ use suzatary_core::secretary::held_replica::HeldReplica;
 use suzatary_core::secretary::inbox::Fold;
 use suzatary_core::secretary::key_ring::KeyRing;
 use suzatary_core::secretary::locked_text::KeyName;
-use suzatary_core::secretary::outlines::{Parsed, Scope};
+use suzatary_core::secretary::outlines::Scope;
 use suzatary_core::secretary::readings::{self, DEFAULT_TURN_WINDOW, Dress, Window};
 use suzatary_core::secretary::store::{ConversationId, Stored};
 use suzatary_core::secretary::stream;
-use suzatary_core::snapshot;
 use suzatary_core::wire::MemoryPayload;
 use wasm_bindgen::prelude::*;
 
@@ -53,7 +52,7 @@ impl Proposals {
 /// A slot whose key is not held reads as missing, and one an erasure names as erased. Beside the
 /// prints, the skeleton's line nodes, whose outlines the stream chooses its rounds by.
 #[wasm_bindgen]
-pub struct Lines(HeldReplica);
+pub struct Lines(pub(crate) HeldReplica);
 
 #[wasm_bindgen]
 impl Lines {
@@ -62,27 +61,6 @@ impl Lines {
     #[must_use]
     pub fn new() -> Lines {
         Lines(HeldReplica::default())
-    }
-
-    /// What these lines were handed, the skeleton and the keys, as the core's snapshot of them
-    /// (`suzatary_core::snapshot`): what a tab keeps beside the rows they were read from.
-    pub fn snapshot(&self) -> Result<Vec<u8>, JsError> {
-        snapshot::snapshot(&self.0).map_err(|e| refused(e.to_string()))
-    }
-
-    /// The skeleton and the keys replaced by those `bytes` snapshot, as if their every node and
-    /// key had been handed over, the prints held kept; or, for bytes that are no snapshot of this
-    /// build's form, left as they are.
-    pub fn load(&mut self, bytes: &[u8]) -> Result<(), JsError> {
-        let loaded = snapshot::from_snapshot(bytes).map_err(|e| refused(e.to_string()))?;
-        self.0.regiven(loaded);
-        Ok(())
-    }
-
-    /// No node or key held again, the prints kept: what a tab does when the rows it reads are
-    /// not those its snapshot was of, so it hands every node and key over from them.
-    pub fn clear(&mut self) {
-        self.0.regiven(HeldReplica::default());
     }
 
     /// `add`, `[{hash, text}]`, each hashed against its name and held, and `drop`,
@@ -114,41 +92,18 @@ impl Lines {
         self.0.lines.moves()
     }
 
-    /// The skeleton's nodes `add`, as the box sent them, held, and `drop`, `[<name>, …]`, let go:
-    /// `[<conversation>, …]`, those a line of which came or went.
-    pub fn nodes(&mut self, add: &str, drop: &str) -> Result<String, JsError> {
-        let moved = self.0.outlines.hold(parsed(add)?, &names(drop, "drop")?);
-        json(&moved.iter().map(ConversationId::as_str).collect::<Vec<_>>())
-    }
-
-    /// The keys `add`, `{<name>: <hex>}`, held, and `drop`, `[<name>, …]`, let go:
-    /// `[<conversation>, …]`, those whose lines the skeleton holds name a key of either.
-    pub fn keys(&mut self, add: &str, drop: &str) -> Result<String, JsError> {
-        let add: BTreeMap<KeyName, String> =
-            serde_json::from_str(add).map_err(|e| refused(format!("keys: {e}")))?;
-        let drop: Vec<KeyName> =
-            serde_json::from_str(drop).map_err(|e| refused(format!("keys: {e}")))?;
-        self.0.lines.keys(&add, &drop);
-        let moved = self
-            .0
-            .outlines
-            .naming(&add.into_keys().chain(drop).collect());
-        json(&moved.iter().map(ConversationId::as_str).collect::<Vec<_>>())
-    }
-
-    /// `[{hash, parents, size, header}, …]`: every node `scope` reads of the skeleton held and
-    /// `beside` (nodes as the box sends them, not held yet) whose print is not held, as it was
-    /// given. `scope` is `{"type": "Whole"}`, `{"type": "Conversations", "ids": […]}`,
-    /// `{"type": "Objects", "names": […]}` or `{"type": "Naming", "keys": […]}`.
-    pub fn lacking(&self, scope: &str, beside: &str) -> Result<String, JsError> {
-        let beside = parsed(beside)?;
-        json(&self.0.lacking(&scope_of(scope)?, &beside))
+    /// `[{hash, parents, size, header}, …]`: every node `scope` reads, of the landed row and a
+    /// pull's pieces, whose print is not held, as it was given. `scope` is `{"type": "Whole"}`,
+    /// `{"type": "Conversations", "ids": […]}`, `{"type": "Objects", "names": […]}` or
+    /// `{"type": "Naming", "keys": […]}`.
+    pub fn lacking(&self, scope: &str) -> Result<String, JsError> {
+        json(&self.0.lacking(&scope_of(scope)?))
     }
 
     /// `{nodes, lines}`: how many of the nodes `scope` reads, and of its line nodes, lack their
     /// print.
     pub fn lacks(&self, scope: &str) -> Result<String, JsError> {
-        let lacking = self.0.lacking(&scope_of(scope)?, &[]);
+        let lacking = self.0.lacking(&scope_of(scope)?);
         let lines = lacking
             .iter()
             .filter(|node| matches!(node.header, suzatary_core::wire::NodeHeader::Line { .. }))
@@ -159,17 +114,28 @@ impl Lines {
     /// Whether the skeleton holds a line of conversation `id`.
     pub fn holds(&self, id: &str) -> Result<bool, JsError> {
         let id = ConversationId::new(id).map_err(|e| refused(e.to_string()))?;
-        Ok(self.0.outlines.holds_conversation(&id))
+        Ok(self.0.outlines().holds_conversation(&id))
     }
 
-    /// `[<name>, …]`: the keys the skeleton held and the nodes `beside` (as the box sends them, not
-    /// yet held) retire, given that the keys `held` (`[<name>, …]`) are held.
-    pub fn retired(&self, beside: &str, held: &str) -> Result<String, JsError> {
-        let beside = parsed(beside)?;
-        let held: BTreeSet<KeyName> =
-            serde_json::from_str(held).map_err(|e| refused(format!("held: {e}")))?;
-        let retired = self.0.outlines.retired(&beside, &|key| held.contains(key));
-        json(&retired.iter().map(KeyName::as_str).collect::<Vec<_>>())
+    /// `{<name>: [<answer key>, …]}`: every key held, landed or in a pull's pieces, that is dead (the
+    /// prints name it erased, the box's rule retires it, or `told`, `[<name>, …]`, names it), with
+    /// the answer keys of the blocks its words fed: what a purge forgets, the blocks first.
+    pub fn owed(&mut self, told: &str) -> Result<String, JsError> {
+        let told: BTreeSet<KeyName> =
+            serde_json::from_str(told).map_err(|e| refused(format!("told: {e}")))?;
+        let owed: BTreeMap<KeyName, Vec<String>> = self
+            .0
+            .owed(&told)
+            .into_iter()
+            .map(|(name, blocks)| {
+                let blocks = blocks
+                    .iter()
+                    .map(|block| crate::rendering::answer_key(block.as_str()))
+                    .collect();
+                (name, blocks)
+            })
+            .collect();
+        json(&owed)
     }
 
     /// `{keep, ahead}`: the names whose content the device keeps within `budget` bytes, the plan
@@ -241,7 +207,7 @@ impl Lines {
     ) -> Result<String, JsError> {
         let chosen = crate::topics::topics_of(chosen)?;
         let choice = stream::choose(
-            self.0.outlines.outlines(),
+            self.0.outlines().outlines(),
             &topics.0,
             &chosen,
             pages_of(pages)?,
@@ -251,7 +217,7 @@ impl Lines {
             &choice
                 .objects()
                 .iter()
-                .filter_map(|name| self.0.outlines.node(name))
+                .filter_map(|name| self.0.outlines().node(name))
                 .collect::<Vec<_>>(),
         )
     }
@@ -267,10 +233,10 @@ impl Lines {
     ) -> Result<String, JsError> {
         let chosen = crate::topics::topics_of(chosen)?;
         let pages = pages_of(pages)?;
-        let held = &mut self.0.lines;
+        let (outlines, held) = self.0.reading();
         json(
             &stream::stream(
-                self.0.outlines.outlines(),
+                outlines.outlines(),
                 |id, turn, objects| held.round(id, turn, objects),
                 &topics.0,
                 &chosen,
@@ -323,7 +289,7 @@ impl Lines {
         let excluded: Vec<serde_json::Value> = self
             .0
             .lines
-            .excluded(|name| self.0.outlines.holds(name))
+            .excluded(|name| self.0.outlines().holds(name))
             .into_iter()
             .map(|out| {
                 serde_json::json!({
@@ -335,17 +301,6 @@ impl Lines {
             .collect();
         json(&serde_json::json!({ "excluded": excluded }))
     }
-}
-
-/// Skeleton nodes as the box sends them, each parsed.
-fn parsed(text: &str) -> Result<Vec<Parsed>, JsError> {
-    let nodes: Vec<suzatary_core::wire::SkeletonNode> =
-        serde_json::from_str(text).map_err(|e| refused(format!("nodes: {e}")))?;
-    nodes
-        .into_iter()
-        .map(Parsed::of)
-        .collect::<Result<Vec<_>, _>>()
-        .map_err(|e| refused(e.to_string()))
 }
 
 /// A scope as the page spells it.

@@ -962,7 +962,7 @@ pub enum NodeHeader {
 }
 
 /// A store's heads as a pull answers them.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[serde(tag = "are", rename_all = "lowercase")]
 pub enum Heads {
     /// The heads the asker's `since` names, which it holds, so they are not sent again.
@@ -979,7 +979,7 @@ pub enum Heads {
 /// heads, prodromes, epoch and keys that pull answers. Joined to the literals fetched by hash, the
 /// pieces of a skeleton are what the objects' pull sends. It names no erased or replaced key: each
 /// node's step says what its line retires, so a replica reads both from the nodes it holds.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
 pub struct SkeletonPayload {
     /// Every head.
     pub heads: Heads,

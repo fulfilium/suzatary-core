@@ -25,6 +25,7 @@ import assert from "node:assert/strict";
 
 import { WRITE_BASE, doneFromList, everyTodo, fold, openInPlace, openTodo, row, suite, untilReplica, pickCategory } from "./harness";
 import cast from "../test/cast";
+import { NOTHING } from "../test/keyed";
 
 const { todos, owner } = cast.world;
 
@@ -42,7 +43,8 @@ const DEFAULT = `(async () => {
   const [kept, asked] = [await pulled("lines"), await pulled("inbox")];
   const lines = new core.Lines();
   lines.hold(objects(kept), "[]");
-  lines.keys(JSON.stringify(kept.keys), "[]");
+  lines.piece(${JSON.stringify(JSON.stringify(NOTHING))}, JSON.stringify(kept.keys), 0);
+  lines.land().free();
   const inbox = new core.Proposals(objects(asked));
   try {
     return JSON.parse(lines.conversation("default", inbox));

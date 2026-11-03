@@ -510,9 +510,11 @@ declare -A unit_fallback=([crates]="all-but:${rust_base//,/ }" [files:web/test]=
 # Where a test file's unread files can be: the test files and the modules, whichever directory
 # imports them, so the import graph alone decides. And what every unit reads although no import
 # names it: the token check reads web/src/view/tokens.ts; a scene drives the whole app bundle,
-# so it reads all of web/src; and the typst scene bundles web/e2e/typstbench.ts for the page.
+# so it reads all of web/src; and the typst scene bundles web/e2e/typstbench.ts for the page. A
+# path one unit alone reads is named `<test>=<path>`: e2estores.test.ts reads every scene for the
+# IndexedDB stores it names, and no other unit test reads a scene.
 declare -A unit_scopes=([web/test]="web/src web/test web/e2e" [web/e2e]="web/src web/test web/e2e")
-declare -A unit_shared=([web/test]="web/src/view/tokens.ts" [web/e2e]="web/src web/e2e/typstbench.ts")
+declare -A unit_shared=([web/test]="web/src/view/tokens.ts web/test/e2estores.test.ts=web/e2e" [web/e2e]="web/src web/e2e/typstbench.ts")
 
 # Invoked through `step`. The manifest goes right after the subcommand, never
 # after a `--`, which would hand it to clippy-driver instead of cargo.

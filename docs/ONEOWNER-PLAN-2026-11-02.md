@@ -727,7 +727,36 @@ three warm loads after the snapshot is written; the target is under 2.5 s).
    sets of three alternating runs, nine loads each side a set, gave master
    medians of 3,381 and 3,801 ms and this stage 3,887 and 3,078 ms; the sets
    disagree in direction, and the runs vary by about 0.8 s.
-3. **One form for the lines (`coreskeleton`).** The snapshot and log of §3.1
+3. **One form for the lines (`coreskeleton`).** The owner split it in three:
+   3a, the core holds the lines' replica and the device keeps the core's
+   snapshot and log; 3b, the erased slots' prints deleted at an erasure; 3c, a
+   `BroadcastChannel` wake and a Web Lock for compaction.
+
+   *As built (3a).* The core holds the landed row, a pull's pieces, the box's
+   words, the frontier and the generation (`app/core/src/replica/`, generic
+   over a node and its keys, a port of `replica.ts` and `locked.ts` checked
+   step by step against them by `linereplica.test.ts`); every move answers a
+   delta, and each delta but a purge's is a join. `linesync.ts` keeps each
+   delta as a frame (`replicalog.ts`) and reads the log back on a load and
+   before each pull, so two tabs converge without a lock: a compaction is one
+   IndexedDB transaction that writes nothing where another tab's snapshot came
+   first. Version 11 drops the lines' rows and the snapshots store with no
+   converter. Deleted: J1, J2, J4 and J5 for the lines, `telling`,
+   `untold`, `Reader`, `Primed`, `Key`, `pull.first`, `pull.loaded`, the
+   `Loaded` scope, and `noderows`' snapshot (`Memo`, `prime`, `settle`, its
+   key). Laws: `warmload.test.ts` (warm equals cold and two tabs converge, each
+   reload read with the box gone; a fetch hands the core exactly what it
+   lacks), `onewriter.test.ts` (no key of an erasure in any row, message or
+   reload), the core's `line_replica` laws. The bigstore snapshot is 3,517,325
+   bytes for 13,000 lines with names as 32 bytes, against 6.0 MB before. The
+   capped warm first draw, three alternating pairs of three loads: master
+   median 2,197 ms (mean 2,420, 1,893 to 3,575), 3a median 1,981 ms (mean
+   2,113, 1,689 to 2,909); in the worker the lines are restored 0.4 to 0.8 s
+   after the stream is asked, where master read its rows 3.3 to 3.8 s after.
+   Production lines: Rust +1,186, TypeScript +77. The Rust is the replica
+   algebra the core now owns; the TypeScript copy of it stays until the inbox,
+   the topics (stage 4) and the chains (stage 6) move to the core, which is
+   where its lines go. The snapshot and log of §3.1
    replace D1-D5 for the lines; the core holds the head and the pieces; J1, J2,
    J4 and J5 for the lines go, with `telling`, `Reader`, `Primed`, `Key`,
    `pull.first` and the snapshot's key. Erasure by compaction (§3.3); two tabs by

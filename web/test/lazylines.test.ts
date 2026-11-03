@@ -8,7 +8,7 @@ import { createRequire } from "node:module"
 import { readFileSync } from "node:fs"
 
 import type { Core, Lines, Named } from "../src/prodrome/core"
-import { conversationOf, lackingIn, listOfLines, nodesInto, objectsOf, planOf, searchOf } from "../src/prodrome/core"
+import { conversationOf, lackingIn, listOfLines, objectsOf, planOf, searchOf } from "../src/prodrome/core"
 import lines from "../src/prodrome/lines"
 import content from "../src/prodrome/content"
 import { sha256Hex } from "../src/prodrome/verify"
@@ -66,13 +66,25 @@ const skeleton = (r: Rng): Replica<SkeletonNode> => {
 const fetched = (r: Rng, s: Replica<SkeletonNode>): ReadonlyMap<string, string> =>
   new Map(s.objects.filter(() => r.bool(0.7)).map(n => [n.hash, literals.get(n.hash)!]))
 
+// The core's lines given `nodes` and `keys` as one landed piece of the box's skeleton.
+const landed = (held: Lines, nodes: readonly SkeletonNode[], keys: Readonly<Record<string, string>>): void => {
+  const parents = new Set(nodes.flatMap(n => n.parents))
+  const answer: SkeletonPayload = {
+    ...box.skeleton,
+    heads: { are: "these", heads: nodes.filter(n => !parents.has(n.hash)).map(n => n.hash) },
+    nodes: [...nodes],
+  }
+  held.piece(JSON.stringify(answer), JSON.stringify(keys), 1)
+  held.land().free()
+}
+
 // Every answer the worker's lines holding `objects` give about `scope`, or the refusal they give instead.
 const read = (objects: readonly Named[], scope: Extract<lines.Scope, { readonly type: "Whole" | "Conversations" }>): string => {
   const held = new core.Lines()
   const proposals = new core.Proposals(objectsOf(inbox))
   try {
     held.hold(objectsOf(objects), "[]")
-    held.keys(JSON.stringify(box.keys), "[]")
+    landed(held, [], box.keys)
     return scope.type === "Whole"
       ? JSON.stringify([listOfLines(held, proposals), searchOf(held, "draft"), searchOf(held, "train")])
       : JSON.stringify(scope.ids.map(id => conversationOf(held, proposals, id, {}, null)))
@@ -92,7 +104,7 @@ const scopes = [lines.WHOLE, ...ids.map(lines.one), lines.one("never-opened"), {
 // A core holding the skeleton `s` and the prints `kept`: what the core's worker asks of its own skeleton.
 const coreOf = (s: Replica<SkeletonNode>, kept: ReadonlyMap<string, string>): Lines => {
   const held = new core.Lines()
-  nodesInto(held, s.objects, [])
+  landed(held, s.objects, {})
   held.hold(objectsOf([...kept].map(([hash, literal]) => ({ hash, literal }))), "[]")
   return held
 }

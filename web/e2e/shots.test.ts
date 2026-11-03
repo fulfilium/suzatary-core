@@ -391,15 +391,21 @@ const SHOTS: readonly Shot[] = [
     ready: `document.querySelectorAll(".tree .row").length > 0`,
     base: WRITE_BASE,
     act: async (page: Page): Promise<void> => {
+      // Cleared from a page that runs no app, so no tab's core writes its snapshot back as it is hidden.
+      await page.navigate(`${WRITE_BASE}/api/about`);
       await page.evaluate(`new Promise((done, fail) => {
         const r = indexedDB.open("suzatary")
         r.onerror = () => fail(String(r.error))
         r.onsuccess = () => {
-          const tx = r.result.transaction(["lines", "content"], "readwrite")
-          tx.objectStore("lines").clear()
-          tx.objectStore("content").clear()
-          tx.oncomplete = () => (r.result.close(), done(true))
-          tx.onerror = () => fail(String(tx.error))
+          try {
+            const tx = r.result.transaction(["replica", "content"], "readwrite")
+            tx.objectStore("replica").delete(IDBKeyRange.bound("lines/", "lines/\\uffff"))
+            tx.objectStore("content").clear()
+            tx.oncomplete = () => (r.result.close(), done(true))
+            tx.onerror = () => fail(String(tx.error))
+          } catch (e) {
+            fail(String(e))
+          }
         }
       })`);
       held = await page.holdRequests(["/api/stores/lines/content"]);

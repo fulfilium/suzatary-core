@@ -1,18 +1,21 @@
-//! A held replica's snapshot is a stored format: the lines a tab's core holds print, and read
-//! back holding the same nodes and keys, whatever step each line takes; a print of the read-back
-//! replica is the same bytes; and bytes of another form, cut short, or holding a key that is not
-//! its name's read as no replica, never as another one.
+//! The lines' rows' snapshot is a stored format: rows print, and read back holding the same
+//! nodes, keys, words and frontiers, whatever step each line takes; a print of the read-back
+//! rows is the same bytes; every name prints as its 32 bytes; and bytes of another form, cut
+//! short, or holding a key that is not its name's read as no rows, never as other ones.
 
-use std::collections::BTreeMap;
+use std::collections::BTreeSet;
 
 use sha2::{Digest, Sha256};
 
-use suzatary_core::secretary::held_replica::HeldReplica;
+use prodrome_core::event::Hash;
+use suzatary_core::replica::held::Said;
+use suzatary_core::secretary::key_ring::KeyRing;
+use suzatary_core::secretary::line_form::LinePulling;
 use suzatary_core::secretary::locked_text::KeyName;
 use suzatary_core::secretary::outlines::Parsed;
 use suzatary_core::secretary::step::Step;
 use suzatary_core::snapshot::{NotASnapshot, from_snapshot, snapshot};
-use suzatary_core::wire::{NodeHeader, SkeletonNode};
+use suzatary_core::wire::{NodeHeader, SinceRead, SkeletonNode};
 
 fn name(seed: u8) -> String {
     hex::encode(Sha256::digest([seed]))
@@ -40,8 +43,9 @@ fn line(seed: u8, parents: &[String], keys: &[&KeyName], step: Step) -> Skeleton
     }
 }
 
-/// A replica holding a genesis and a line of every step, and the keys of two slots.
-fn held() -> HeldReplica {
+/// Rows whose landed row holds a genesis, a line of every step and the keys of two slots, and
+/// whose pending piece holds the genesis again.
+fn held() -> LinePulling {
     let ((a, a_bytes), (b, b_bytes)) = (key(1), key(2));
     let genesis = SkeletonNode {
         hash: name(0),
@@ -74,68 +78,79 @@ fn held() -> HeldReplica {
     for (at, step) in (1u8..).zip(steps) {
         nodes.push(line(at, &root, &[&a, &b], step));
     }
-    let mut replica = HeldReplica::default();
-    replica.outlines.hold(
-        nodes
-            .into_iter()
-            .map(|n| Parsed::of(n).expect("a node"))
-            .collect(),
-        &[],
+    let nodes: Vec<Parsed> = nodes
+        .into_iter()
+        .map(|n| Parsed::of(n).expect("a node"))
+        .collect();
+    let hash = |seed: u8| Hash::new(name(seed)).expect("a name");
+    let said = |nodes: Vec<Parsed>, heads: BTreeSet<Hash>| Said {
+        heads,
+        geneses: [hash(0)].into(),
+        epoch: 7,
+        nodes,
+        since: SinceRead::Known,
+        digest: hash(200),
+        count: 12,
+    };
+    let keys = KeyRing::of(&[(a, hex::encode(a_bytes)), (b, hex::encode(b_bytes))].into());
+    let mut rows = LinePulling::default();
+    let heads = (1..12).map(hash).collect();
+    rows.piece(said(nodes.clone(), heads), keys, 1_000);
+    rows.land();
+    rows.piece(
+        said(nodes[..1].to_vec(), [hash(0)].into()),
+        KeyRing::default(),
+        2_000,
     );
-    let keys: BTreeMap<KeyName, String> =
-        [(a, hex::encode(a_bytes)), (b, hex::encode(b_bytes))].into();
-    replica.lines.keys(&keys, &[]);
-    replica
-}
-
-fn given(replica: &HeldReplica) -> Vec<SkeletonNode> {
-    replica.outlines.given().cloned().collect()
-}
-
-#[test]
-fn a_snapshot_reads_back_holding_the_same_nodes_and_keys() {
-    let replica = held();
-    let bytes = snapshot(&replica).expect("prints");
-    let back: HeldReplica = from_snapshot(&bytes).expect("reads back");
-    assert_eq!(given(&back), given(&replica), "the same nodes, as given");
-    assert_eq!(
-        back.lines.key_ring(),
-        replica.lines.key_ring(),
-        "the same keys"
-    );
-    assert_eq!(
-        back.outlines.outlines().collect::<Vec<_>>(),
-        replica.outlines.outlines().collect::<Vec<_>>(),
-        "the same outlines, which the stream chooses its rounds by"
-    );
-    assert_eq!(snapshot(&back), Ok(bytes), "and it prints the same bytes");
+    rows
 }
 
 #[test]
-fn bytes_of_another_form_cut_short_or_holding_a_wrong_key_read_as_no_replica() {
+fn a_snapshot_reads_back_holding_the_same_rows() {
+    let rows = held();
+    let bytes = snapshot(&rows).expect("prints");
+    let back: LinePulling = from_snapshot(&bytes).expect("reads back");
+    assert_eq!(back, rows, "the same nodes, keys, words and frontiers");
+    assert_eq!(
+        snapshot(&back),
+        Ok(bytes.clone()),
+        "and it prints the same bytes"
+    );
+    let hex = name(1);
+    assert!(
+        !bytes.windows(hex.len()).any(|w| w == hex.as_bytes()),
+        "no name is printed as its hex"
+    );
+}
+
+#[test]
+fn bytes_of_another_form_cut_short_or_holding_a_wrong_key_read_as_no_rows() {
     let bytes = snapshot(&held()).expect("prints");
     let mut other = bytes.clone();
     other[0] ^= 1;
     assert!(matches!(
-        from_snapshot::<HeldReplica>(&other),
+        from_snapshot::<LinePulling>(&other),
         Err(NotASnapshot::Form { .. })
     ));
     assert!(matches!(
-        from_snapshot::<HeldReplica>(&bytes[..2]),
+        from_snapshot::<LinePulling>(&bytes[..2]),
         Err(NotASnapshot::Short(2))
     ));
     assert!(matches!(
-        from_snapshot::<HeldReplica>(&bytes[..bytes.len() - 1]),
+        from_snapshot::<LinePulling>(&bytes[..bytes.len() - 1]),
         Err(NotASnapshot::Unread(_))
     ));
-    // The last key's bytes end the print, so the last byte is one of them.
+    let (_, key_bytes) = key(1);
+    let at = bytes
+        .windows(32)
+        .position(|w| w == key_bytes)
+        .expect("the key is printed");
     let mut tampered = bytes.clone();
-    let last = tampered.len() - 1;
-    tampered[last] ^= 1;
+    tampered[at] ^= 1;
     assert!(
         matches!(
-            from_snapshot::<HeldReplica>(&tampered),
-            Err(NotASnapshot::Unread(_))
+            from_snapshot::<LinePulling>(&tampered),
+            Err(NotASnapshot::Refused(_))
         ),
         "a key whose bytes are not its name's"
     );

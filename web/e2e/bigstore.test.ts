@@ -29,7 +29,7 @@ import { writeFileSync } from "node:fs"
 import marks from "../src/chat/marks"
 import wait from "../src/wire/wait"
 import type { Recorded } from "./harness"
-import { PHONE, SIGNED_POST, WORKER_MARKS, WORKER_QUESTIONS, snapshotKept, suite, trustThisDevice } from "./harness"
+import { PHONE, REPLICA_ROWS, SIGNED_POST, WORKER_MARKS, WORKER_QUESTIONS, snapshotKept, suite, trustThisDevice } from "./harness"
 
 type Shape = { readonly lines: number; readonly conversations: number; readonly reseals: number; readonly proposals: number; readonly topics: number; readonly todos: number }
 // The stores' shape as `scripts/web-e2e.sh` hands it to the fixture.
@@ -147,17 +147,19 @@ const DRAWN = `[...new Set([...document.querySelectorAll(".streamround .streamme
 // In the core's worker: how many prints its lines decoded, hashed and opened, and how many objects the device's skeleton
 // holds, in all and of the conversations `ids` and the structure every line rests on, which bounds what drawing their
 // rounds needs.
-const DECODED = (ids: readonly string[]): string => `(async () => {
-  const m = await import(new URL("prodrome.js", self.location.href).href)
-  const db = await new Promise((done, fail) => { const r = indexedDB.open("suzatary"); r.onsuccess = () => done(r.result); r.onerror = () => fail(r.error) })
-  const nodes = await new Promise((done, fail) => {
-    const r = db.transaction("lines").objectStore("lines").getAll(IDBKeyRange.bound("node/", "node/\uffff"))
-    r.onsuccess = () => done(r.result); r.onerror = () => fail(r.error)
-  })
-  db.close()
-  const ids = new Set(${JSON.stringify(ids)})
-  const needed = nodes.filter((n) => n.header.node === "structure" || ids.has(n.header.conversation)).length
-  return { decoded: m.decodes(), hashed: m.hashes(), opened: m.opens(), needed, all: nodes.length }
+// How many prints the core's worker decoded, hashed and opened, asked of the glue module it loaded.
+const DECODED = `import(new URL("prodrome.js", self.location.href).href).then((m) => ({ decoded: m.decodes(), hashed: m.hashes(), opened: m.opens() }))`
+
+// The box's whole skeleton, piece after piece: what the drawn rounds' conversations need is counted from it.
+type Skeleton = { readonly nodes: readonly { readonly header: { readonly node: string; readonly conversation?: string } }[] }
+const SKELETON = `(async () => {
+  const nodes = []
+  for (let since = ""; ; ) {
+    const a = await fetch("/api/stores/lines/skeleton" + (since === "" ? "" : "?since=" + since)).then((r) => r.json())
+    nodes.push(...a.nodes)
+    if (a.rest === 0) return { nodes }
+    since = a.frontier.digest
+  }
 })()`
 
 type Cost = { decoded: number; hashed: number; opened: number; needed: number; all: number }
@@ -174,6 +176,9 @@ app.scene("a warm load of the conversations draws them from the device, with eve
   assert.deepEqual(reads(journal.inFlight()), [], "the cold load ended")
   // As a page left open does: the lines are quiet, so the core's snapshot of them is kept.
   await app.page.waitFor(snapshotKept("lines"), { timeout: 120000 })
+  const kept = await app.page.evaluate<number>(`${REPLICA_ROWS}.then((rows) => (rows.find(([k]) => k === "lines/snapshot")?.[1].length ?? 0) / 2)`)
+  console.log(`lines snapshot ${kept} bytes for ${SHAPE.lines} lines`)
+  const skeleton = await app.page.evaluate<Skeleton>(SKELETON)
   journal.mark("warm load")
   // Every request to the box's API is held until the stream has drawn, so what draws is drawn from the device.
   const release = await app.page.holdRequests(["/api/"])
@@ -183,7 +188,10 @@ app.scene("a warm load of the conversations draws them from the device, with eve
       await app.page.reload()
       const draw = await phase(BULK, 0)
       const ids = await app.page.evaluate<string[]>(DRAWN)
-      return { ms: draw.ms, longest: draw.longest, held: app.page.heldUrls(), cost: await app.page.inWorker<Cost>("prodromework", DECODED(ids)) }
+      const counted = await app.page.inWorker<Pick<Cost, "decoded" | "hashed" | "opened">>("prodromework", DECODED)
+      const of = new Set(ids)
+      const needed = skeleton.nodes.filter((n) => n.header.node === "structure" || of.has(n.header.conversation ?? "")).length
+      return { ms: draw.ms, longest: draw.longest, held: app.page.heldUrls(), cost: { ...counted, needed, all: skeleton.nodes.length } }
     } finally {
       await app.page.throttle(1)
       await release()

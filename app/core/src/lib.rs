@@ -56,6 +56,7 @@ pub mod reference;
 pub mod refusal;
 pub mod release;
 pub mod rendering;
+pub mod replica;
 pub mod repos;
 pub mod routes;
 pub mod rule;

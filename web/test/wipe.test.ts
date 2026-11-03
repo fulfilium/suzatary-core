@@ -233,11 +233,11 @@ test("it deletes the replica, the rendered text and the key, whatever the browse
   assert.deepEqual([...wipe.known()].sort(), ["suzatary", "suzatary-keys", "suzatary-rendered"])
 })
 
-test("the lines' row, its keys among it, its snapshot and the rendered blocks are in databases a wipe deletes even unlisted", async () => {
-  const { DB_NAME, SNAPSHOTS } = await import("../src/prodrome/objects")
+test("the lines' snapshot and frames, their keys among them, and the rendered blocks are in databases a wipe deletes even unlisted", async () => {
+  const { DB_NAME, REPLICA } = await import("../src/prodrome/objects")
   const rendered = (await import("../src/app/rendered")).default
   assert.ok(wipe.known().includes(DB_NAME), "every store's row, objects and keys, is a row of the replica's database")
-  assert.ok(wipe.known().includes(SNAPSHOTS.name), "and so is every snapshot, which holds the keys")
+  assert.ok(wipe.known().includes(REPLICA.name), "and so is the lines' snapshot and its frames, which hold the keys")
   assert.ok(wipe.known().includes(rendered.DB))
   const { fx, seen } = effects([], [], new Set())
   await wipe.all(fx, "Gone")

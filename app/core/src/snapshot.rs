@@ -53,8 +53,7 @@ pub struct Unprinted(String);
 /// # Errors
 /// [`Unprinted`] where what it was given refuses to print.
 pub fn snapshot<H: Held>(held: &H) -> Result<Vec<u8>, Unprinted> {
-    postcard::to_extend(&held.given(), H::FORM.to_le_bytes().to_vec())
-        .map_err(|e| Unprinted(e.to_string()))
+    print(H::FORM, &held.given())
 }
 
 /// The replica `bytes` print, when they print one of this build's form.
@@ -62,16 +61,50 @@ pub fn snapshot<H: Held>(held: &H) -> Result<Vec<u8>, Unprinted> {
 /// # Errors
 /// [`NotASnapshot`]: too short, of another form, unread, or refused by the replica.
 pub fn from_snapshot<H: Held>(bytes: &[u8]) -> Result<H, NotASnapshot> {
-    let Some((form, rest)) = bytes.split_first_chunk::<4>() else {
+    H::of_given(read(H::FORM, bytes)?).map_err(NotASnapshot::Refused)
+}
+
+/// `value` printed under `form`: the form as four little-endian bytes, then `value` in postcard.
+/// A replica's deltas are printed so, under its snapshot's form.
+///
+/// # Errors
+/// [`Unprinted`] where `value` refuses to print.
+pub fn print<T: Serialize>(form: u32, value: &T) -> Result<Vec<u8>, Unprinted> {
+    postcard::to_extend(value, form.to_le_bytes().to_vec()).map_err(|e| Unprinted(e.to_string()))
+}
+
+/// The value `bytes` print under `form`.
+///
+/// # Errors
+/// [`NotASnapshot`]: too short, of another form, or unread.
+pub fn read<T: DeserializeOwned>(form: u32, bytes: &[u8]) -> Result<T, NotASnapshot> {
+    let Some((found, rest)) = bytes.split_first_chunk::<4>() else {
         return Err(NotASnapshot::Short(bytes.len()));
     };
-    let found = u32::from_le_bytes(*form);
-    if found != H::FORM {
-        return Err(NotASnapshot::Form {
-            found,
-            reads: H::FORM,
-        });
+    let found = u32::from_le_bytes(*found);
+    if found != form {
+        return Err(NotASnapshot::Form { found, reads: form });
     }
-    let given = postcard::from_bytes(rest).map_err(|e| NotASnapshot::Unread(e.to_string()))?;
-    H::of_given(given).map_err(NotASnapshot::Refused)
+    postcard::from_bytes(rest).map_err(|e| NotASnapshot::Unread(e.to_string()))
+}
+
+/// The frames `bytes` hold one after another, each after its length as four little-endian bytes.
+///
+/// # Errors
+/// [`NotASnapshot::Short`] where a length or a frame is cut short.
+pub fn frames(mut bytes: &[u8]) -> Result<Vec<&[u8]>, NotASnapshot> {
+    let mut out = Vec::new();
+    while !bytes.is_empty() {
+        let Some((length, rest)) = bytes.split_first_chunk::<4>() else {
+            return Err(NotASnapshot::Short(bytes.len()));
+        };
+        let length = usize::try_from(u32::from_le_bytes(*length))
+            .map_err(|e| NotASnapshot::Unread(e.to_string()))?;
+        let Some((frame, rest)) = rest.split_at_checked(length) else {
+            return Err(NotASnapshot::Short(rest.len()));
+        };
+        out.push(frame);
+        bytes = rest;
+    }
+    Ok(out)
 }

@@ -19,6 +19,7 @@ mod chains;
 mod counts;
 mod evaluator;
 mod lifecycle;
+mod line_rows;
 mod memo;
 mod prose;
 mod rendering;

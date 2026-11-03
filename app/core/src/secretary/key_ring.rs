@@ -103,6 +103,37 @@ impl KeyRing {
     }
 }
 
+impl KeyRing {
+    /// Every key, by name.
+    pub fn iter(&self) -> impl Iterator<Item = (&KeyName, &[u8; KEY_BYTES])> {
+        self.0.iter()
+    }
+}
+
+impl crate::replica::row::Keys for KeyRing {
+    type Name = KeyName;
+
+    fn union(mut self, other: &Self) -> Self {
+        for (name, bytes) in &other.0 {
+            self.0.entry(name.clone()).or_insert(*bytes);
+        }
+        self
+    }
+
+    fn without(mut self, gone: &std::collections::BTreeSet<KeyName>) -> Self {
+        for name in gone {
+            if let Some(mut bytes) = self.0.remove(name) {
+                zeroize::Zeroize::zeroize(&mut bytes);
+            }
+        }
+        self
+    }
+
+    fn is_empty(&self) -> bool {
+        self.0.is_empty()
+    }
+}
+
 /// A key as the pull spells it: its bytes in hex.
 #[must_use]
 pub fn spelled(key: &TextKey) -> String {

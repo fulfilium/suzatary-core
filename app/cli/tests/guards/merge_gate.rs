@@ -2457,10 +2457,30 @@ fn merge_gate_web_tests_name_only_paths_every_unit_reads() {
     ] {
         let mut files = Vec::new();
         files_under(&repo().join(dir), &mut files);
+        // A path named `<test>=<path>` is read by that test alone, so it must name one.
+        for entry in shared
+            .iter()
+            .filter_map(|s| s.split_once('=').map(|(t, _)| t))
+        {
+            if !repo().join(entry).is_file() {
+                wrong.push(format!("unit_shared names {entry}, which is no test file"));
+            }
+        }
         for file in files
             .iter()
             .filter(|f| f.extension().is_some_and(|e| e == "ts"))
         {
+            let name = file
+                .strip_prefix(repo())
+                .map(|p| p.to_string_lossy().into_owned())
+                .unwrap_or_default();
+            let shared = shared
+                .iter()
+                .filter_map(|s| match s.split_once('=') {
+                    None => Some(s.as_str()),
+                    Some((test, path)) => (test == name).then_some(path),
+                })
+                .collect::<Vec<_>>();
             let source = std::fs::read_to_string(file).unwrap_or_default();
             for path in repo_paths(&source)
                 .into_iter()

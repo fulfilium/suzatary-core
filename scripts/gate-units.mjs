@@ -8,9 +8,10 @@
 //       and each <path> declared for it or for a member it depends on. It skips the --base paths
 //       it does not declare, and what the other members' directories hold but their manifests:
 //       features unify across the workspace, so every member's Cargo.toml is every unit's input.
-//   node scripts/gate-units.mjs files <metafile.json> <tree> <entries> --scope <dir>... [--shared <path>...] [--base <path>...]
+//   node scripts/gate-units.mjs files <metafile.json> <tree> <entries> --scope <dir>... [--shared [<entry>=]<path>...] [--base <path>...]
 //       One unit per entry point under <entries>, from esbuild's metafile. An entry reads every
-//       file its imports reach, directly or through other files, and each --shared path. It
+//       file its imports reach, directly or through other files, and each --shared path; a
+//       path named `<entry>=<path>` is read by that entry alone. It
 //       skips the --base paths and the other files under each --scope.
 //
 // Any failure exits nonzero, an import under a --base path among them, and the gate then runs
@@ -77,7 +78,11 @@ const files = (metafile, treeFile, entries, rest) => {
     }
     const skipped = [...closure].find(p => base.some(b => under(p, b)));
     if (skipped !== undefined) fail(`${root} imports ${skipped}, which every unit skips`);
-    const reads = [...closure, ...shared, ...([...closure].some(p => under(p, generated)) ? ["web/src/wire"] : [])];
+    const own = shared.flatMap(s => {
+      const at = s.indexOf("=");
+      return at < 0 ? [s] : s.slice(0, at) === root ? [s.slice(at + 1)] : [];
+    });
+    const reads = [...closure, ...own, ...([...closure].some(p => under(p, generated)) ? ["web/src/wire"] : [])];
     const skips = tree.filter(p => scope.some(s => under(p, s)) && !reads.some(r => under(p, r)));
     console.log(`${root}\t${[...base, ...skips].join(" ")}`);
   }
@@ -86,5 +91,5 @@ const files = (metafile, treeFile, entries, rest) => {
 switch (mode) {
   case "crates": crates(args[0], args[1], args[2], args.slice(3)); break;
   case "files": files(args[0], args[1], args[2], args.slice(3)); break;
-  default: fail("usage: gate-units.mjs crates <metadata> <root> <tree> [--base <path>...] [<package>=<path>]... | files <metafile> <tree> <entries> --scope <dir>... [--shared <path>...] [--base <path>...]");
+  default: fail("usage: gate-units.mjs crates <metadata> <root> <tree> [--base <path>...] [<package>=<path>]... | files <metafile> <tree> <entries> --scope <dir>... [--shared [<entry>=]<path>...] [--base <path>...]");
 }

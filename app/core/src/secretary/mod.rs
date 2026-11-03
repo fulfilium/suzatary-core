@@ -58,6 +58,7 @@ pub mod inbox_registers;
 pub mod indexed_tree;
 pub mod key_ring;
 pub mod line_event;
+pub mod line_form;
 pub mod line_shape;
 pub mod line_words;
 #[cfg(any(test, feature = "nothing"))]

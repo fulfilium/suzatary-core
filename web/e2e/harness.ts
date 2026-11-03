@@ -565,12 +565,66 @@ export const streamAnswered = (seen: readonly Recorded[]): number => {
   return answered[2];
 };
 
-/** Whether the device keeps a snapshot of the store `store`, which `noderows` writes once the store is quiet. */
+/** Whether the device keeps a snapshot of the store `store`, which its log is compacted into once the store is quiet. */
 export const snapshotKept = (store: string): string => `new Promise((ok, no) => {
   const r = indexedDB.open("suzatary")
   r.onerror = () => no(String(r.error))
   r.onsuccess = () => {
-    const q = r.result.transaction("snapshots").objectStore("snapshots").getAllKeys()
-    q.onsuccess = () => (r.result.close(), ok(q.result.includes(${JSON.stringify(store)})))
+    const q = r.result.transaction("replica").objectStore("replica").getAllKeys()
+    q.onsuccess = () => (r.result.close(), ok(q.result.includes(${JSON.stringify(store)} + "/snapshot")))
   }
 })`;
+
+/**
+ * `body` run in the page with the core the box serves, `core` its module: the build the box names, its glue and its
+ * module, as the core's worker loads them, so the device is written and read in the core's own form.
+ */
+export const withCore = (body: string): string => `(async () => {
+  const build = (await (await fetch("/b/current", { cache: "no-store" })).text()).trim()
+  const glue = await import("/b/" + build + "/prodrome.js")
+  await glue.default({ module_or_path: fetch("/b/" + build + "/prodrome_bg.wasm") })
+  const core = glue
+  ${body}
+})()`
+
+/** The lines as the device keeps them, read back through the core: the landed row's generation, epoch, nodes and key names. */
+export const LANDED_ROW = withCore(`
+  const rows = await new Promise((ok, no) => {
+    const r = indexedDB.open("suzatary")
+    r.onerror = () => no(String(r.error))
+    r.onsuccess = () => {
+      const tx = r.result.transaction("replica", "readonly")
+      const keys = tx.objectStore("replica").getAllKeys()
+      const values = tx.objectStore("replica").getAll()
+      values.onsuccess = () => (r.result.close(), ok(keys.result.map((k, i) => [k, values.result[i]])))
+    }
+  })
+  const snapshot = rows.find(([k]) => k === "lines/snapshot")?.[1]?.bytes
+  const frames = rows.filter(([k]) => k.startsWith("lines/log/")).map(([, v]) => v)
+  const framed = new Uint8Array(frames.reduce((n, f) => n + 4 + f.length, 0))
+  let at = 0
+  for (const f of frames) (new DataView(framed.buffer).setUint32(at, f.length, true), framed.set(f, at + 4), (at += 4 + f.length))
+  const lines = new core.Lines()
+  lines.load(snapshot, framed)
+  const landed = JSON.parse(lines.rows()).landed
+  lines.free()
+  return landed
+`)
+export type Landed = { readonly generation: number; readonly epoch: number; readonly frontier: { readonly digest: string } | null; readonly nodes: readonly string[]; readonly keys: readonly string[] }
+
+/** The lines as the device keeps them, the core's snapshot and frames (`replicalog`), each value's bytes in hex, by key. */
+export const REPLICA_ROWS = `new Promise((ok, no) => {
+  const r = indexedDB.open("suzatary")
+  r.onerror = () => no(String(r.error))
+  r.onsuccess = () => {
+    const tx = r.result.transaction("replica", "readonly")
+    const keys = tx.objectStore("replica").getAllKeys()
+    const values = tx.objectStore("replica").getAll()
+    const hex = (bytes) => [...bytes].map((b) => b.toString(16).padStart(2, "0")).join("")
+    values.onsuccess = () => {
+      r.result.close()
+      ok(keys.result.map((k, i) => [k, hex(values.result[i] instanceof Uint8Array ? values.result[i] : values.result[i].bytes)]))
+    }
+  }
+})`
+

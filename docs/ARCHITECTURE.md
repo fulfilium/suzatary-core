@@ -647,14 +647,13 @@ its schema, the verb that carried it and its law are deleted, and the data
 repository's earlier commits hold it beside the code that read it. A carried
 line keeps the name of the object it carried (`Carried::From`), which the
 digest reads as its leaf; nothing writes one any more. A TAB holds the lines in
-the core's worker, one instance of the engine every store the tab holds runs
-on (`web/src/prodrome/engine.ts`, the lines' `linesync.ts`), which restores,
-pulls and lands them and answers every reading of them; on the device they
-are a store of their own, one row per skeleton node and per key beside a
-head row (`noderows.ts`, database version 8), so a landing writes what
-arrived. The
-row is its replica and the keys the pulls gave (`web/src/prodrome/locked.ts`),
-joined as a pair of unions; a key the objects name as erased opens nothing
+the core's worker, whose core holds their replica whole (the landed row and a
+pull's pieces, the box's word, the frontier, the keys; `app/core/src/replica/`)
+and answers every reading of them; `linesync.ts` hands it what the box and the
+device send and keeps each move it answers on the device as the core's own
+frame, a snapshot and the frames after it (`replicalog.ts`, database version
+11), so a warm load reads no row. The replica is a row and the keys the pulls
+gave, joined as a pair of unions; a key the objects name as erased opens nothing
 and is owed, so whichever tab reads it, from a pull or from the row another
 tab left, forgets the blocks its words rendered and then drops it, by the
 box's own reading of which slots are dead (`transcript::{dead, fed}`, the
@@ -1582,9 +1581,12 @@ rules and points here for the modules. The web contract is `docs/WEB-SPEC.md`.
   network. `GET /api/me` → `actor: null` means no act controls.
 - **Every store a replica in the tab** (2026-10-03,
   `docs/APP-AS-READING-PLAN-2026-10-02.md` stage 1). The inbox and the
-  conversations join the chains. Every store is held by the core's worker,
-  each one instance of one engine (`web/src/prodrome/engine.ts`, 2026-10-27;
-  the set of them `storeset.ts`): a row that is the store's replica as a
+  conversations join the chains. Every store is held by the core's worker
+  (the set of them `storeset.ts`). The lines' replica is the core's own, kept
+  on the device as its snapshot and frames (`linesync.ts`, `replicalog.ts`,
+  2026-11, `docs/ONEOWNER-PLAN-2026-11-02.md` stage 3a); the inbox and the
+  topic stores are each one instance of one engine
+  (`web/src/prodrome/engine.ts`, 2026-10-27): a row that is the store's replica as a
   semilattice (union of the objects, the heads of the later contact) and the
   keys of its words (none for a store that locks no words), kept in
   IndexedDB one node per row in an object store of its own (`noderows.ts`,

@@ -11,7 +11,7 @@ export namespace signer {
   export type Held = { type: "Unsupported"; e: string } | { type: "Unreadable"; e: string } | { type: "Held"; key: Key }
 
   export const DB = "suzatary-keys"
-  const STORE = "keys"
+  export const STORE = "keys"
   const DEVICE = "device"
   const ED25519 = { name: "Ed25519" }
   const keys: idb.Db = { name: DB, version: 1, store: STORE, upgrade: db => void db.createObjectStore(STORE) }

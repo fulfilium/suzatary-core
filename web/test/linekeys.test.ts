@@ -20,6 +20,7 @@ import rendered from "../src/app/rendered"
 import table from "../src/algebra/table"
 import type { StoredObject } from "../src/wire/generated/wire"
 import { forAll, rng, type Rng } from "./gen"
+import { keyed } from "./keyed"
 
 const core = ((): Core => {
   const built = process.env["SUZATARY_PRODROME_WASM"]
@@ -53,7 +54,7 @@ const over = <A>(r: Replica, keys: locked.Keys, ask: (lines: Lines) => A): A => 
   const lines = new core.Lines()
   try {
     lines.hold(objectsOf(r.objects), "[]")
-    lines.keys(JSON.stringify(keys), "[]")
+    keyed(lines, keys)
     return ask(lines)
   } finally {
     lines.free()
