@@ -6,11 +6,15 @@
 //! 3. The bytes read back as the patches they print.
 //! 4. Reordering keyed rows makes and removes nothing: every row keeps its node.
 //! 5. An event is answered by the handler the current view put on that node.
+//!
+//! The generated views hold lazy parts too, so laws 1, 2 and 5 hold of a part kept whole.
+
+use std::cell::Cell;
 
 use proptest::prelude::*;
 use viewtree::Attr::{Disabled, Value};
 use viewtree::dom::{Dom, Shape, fresh};
-use viewtree::node::{el, foreign, text};
+use viewtree::node::{el, foreign, lazy, text};
 use viewtree::patch::{self, ROOT};
 use viewtree::{Node, On, Painter, Patch, Tag, view};
 
@@ -31,12 +35,28 @@ fn input(s: String) -> Msg {
     u8::try_from(s.len()).unwrap_or(u8::MAX)
 }
 
-/// A generated view: elements of a few tags and classes, texts, foreign parts, and children by
-/// position or by key, each key drawn from a small set so that rows are kept, moved and lost.
+/// A lazy part's drawing: an element with a click, or a lazy part of its own, so a kept part
+/// keeps its handlers and a part can stand at the root of another.
+#[expect(
+    clippy::trivially_copy_pass_by_ref,
+    reason = "a lazy part's drawing borrows its value"
+)]
+fn drawn(n: &u8) -> Node<Msg> {
+    match n % 3 {
+        0 => lazy(drawn, n / 3 + 1),
+        1 => view! { P "lazy" @click(*n) [words(*n)] },
+        _ => view! { Span [words(*n), view! { Div "b" [words(n / 2)] }] },
+    }
+}
+
+/// A generated view: elements of a few tags and classes, texts, foreign parts, lazy parts, and
+/// children by position or by key, each key drawn from a small set so that rows are kept, moved
+/// and lost.
 fn view() -> impl Strategy<Value = Node<Msg>> {
     let leaf = prop_oneof![
         (0u8..4).prop_map(|n| text(words(n))),
         (0u8..3, 0u8..3).prop_map(|(k, p)| foreign("card", format!("k{k}"), words(p))),
+        (0u8..9).prop_map(|n| lazy(drawn, n)),
     ];
     leaf.prop_recursive(4, 40, 6, |inner| {
         (
@@ -80,13 +100,15 @@ enum Kids {
 proptest! {
     #![proptest_config(ProptestConfig::with_cases(512))]
 
-    /// Law 1, over a run of views: after each, the patched DOM is the fresh draw of that view.
+    /// Law 1, over a run of views walked there and back, so a view returns after another was
+    /// painted over it: after each, the patched DOM is the fresh draw of that view.
     #[test]
     fn a_patch_applied_equals_a_fresh_draw(first in view(), views in proptest::collection::vec(view(), 0..5)) {
-        let (mut painter, ps) = Painter::start(first);
+        let (mut painter, ps) = Painter::start(first.clone());
         let mut dom = Dom::default();
         dom.apply(&ps);
-        for v in views {
+        let back = views.iter().rev().skip(1).cloned().chain([first]);
+        for v in views.clone().into_iter().chain(back) {
             dom.apply(&painter.paint(v.clone()));
             prop_assert_eq!(dom.page(), fresh(&v));
         }
@@ -162,4 +184,34 @@ fn a_keystroke_patches_what_it_changed() {
     let ps = painter.paint(page("B"));
     assert_eq!(ps.len(), 2, "{ps:?}");
     assert!(patch::encode(&ps).len() < 24);
+}
+
+thread_local! {
+    static DRAWS: Cell<usize> = const { Cell::new(0) };
+}
+
+fn counted(k: &(usize, u8)) -> Node<Msg> {
+    DRAWS.with(|d| d.set(d.get() + 1));
+    view! { P "row" @click(k.1) [format!("row {} at {}", k.0, k.1)] }
+}
+
+/// A lazy row whose value is unchanged is neither drawn nor compared: a page of 200 rows with
+/// one changed draws one row and patches only it.
+#[test]
+fn an_unchanged_lazy_part_is_not_drawn_again() {
+    let page = |changed: u8| -> Node<Msg> {
+        el::<Msg>(Tag::Div)
+            .keyed((0..200).map(|k| {
+                let v = if k == 7 { changed } else { 0 };
+                (format!("row{k}"), lazy(counted, (k, v)))
+            }))
+            .node()
+    };
+    let (mut painter, _) = Painter::start(page(0));
+    DRAWS.with(|d| d.set(0));
+    let ps = painter.paint(page(1));
+    assert_eq!(DRAWS.with(Cell::get), 1);
+    assert_eq!(ps.len(), 1, "{ps:?}");
+    assert!(painter.paint(page(1)).is_empty());
+    assert_eq!(DRAWS.with(Cell::get), 1);
 }

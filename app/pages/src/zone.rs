@@ -2,7 +2,7 @@
 //! it starts, read from the browser by `time.offsets` (`web/src/app/time.ts`), so a page links no
 //! zone database. An instant older than the oldest offset is read at that offset.
 
-use chrono::{DateTime, Duration, NaiveDateTime};
+use chrono::{DateTime, Duration, NaiveDate, NaiveDateTime};
 use serde::Deserialize;
 use ts_rs::TS;
 
@@ -70,4 +70,14 @@ pub fn when_ms(offsets: &[Offset], ms: i64) -> String {
             .to_string(),
         None => "an unknown time".to_owned(),
     }
+}
+
+/// `n` days on from a day; a day is a date, so no change of offset moves it. A string that is no
+/// day is handed back.
+#[must_use]
+pub fn shift(day: &str, n: i64) -> String {
+    NaiveDate::parse_from_str(day, "%Y-%m-%d").map_or_else(
+        |_| day.to_owned(),
+        |d| (d + Duration::days(n)).format("%Y-%m-%d").to_string(),
+    )
 }

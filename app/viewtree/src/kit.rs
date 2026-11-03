@@ -34,6 +34,27 @@ impl<T> Reading<T> {
             Reading::Val { v } => Reading::Val { v: f(v) },
         }
     }
+
+    /// Two readings as one: failed when either failed (the first's reason first), on its way
+    /// when either is, else both values.
+    pub fn both<'a, U>(&'a self, other: &'a Reading<U>) -> Reading<(&'a T, &'a U)> {
+        match (self, other) {
+            (Reading::Error { e }, _) | (_, Reading::Error { e }) => {
+                Reading::Error { e: e.clone() }
+            }
+            (Reading::Loading, _) | (_, Reading::Loading) => Reading::Loading,
+            (Reading::Val { v: a }, Reading::Val { v: b }) => Reading::Val { v: (a, b) },
+        }
+    }
+
+    /// Whether it has settled, as a reading of nothing: what a page waits for and never shows.
+    #[must_use]
+    pub fn settled(&self) -> Reading<()> {
+        match self {
+            Reading::Loading => Reading::Loading,
+            Reading::Error { .. } | Reading::Val { .. } => Reading::Val { v: () },
+        }
+    }
 }
 
 /// Words in a paragraph of a class.

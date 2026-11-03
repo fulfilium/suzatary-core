@@ -26,6 +26,12 @@ declare class Page {
 export class MailPage extends Page {}
 export class MessagePage extends Page {}
 export class ThreadPage extends Page {}
+/** Memory, About, the calendar, the briefings and a briefing (`app/pages/src/{memory,about,calendar,briefings,briefing}.rs`). */
+export class MemoryPage extends Page {}
+export class AboutPage extends Page {}
+export class CalendarPage extends Page {}
+export class BriefingsPage extends Page {}
+export class BriefingPage extends Page {}
 
 export class SettingsPage {
   /** Started from `SettingsShown`'s JSON; throws when it does not read as one. */

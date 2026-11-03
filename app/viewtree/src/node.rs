@@ -1,11 +1,14 @@
 //! The view's vocabulary: elements of a closed set of tags, attributes of a closed set of names,
 //! text, keyed children, and foreign parts another painter draws.
 //!
-//! A node is generic over its id: a view builds `Node<M>` (no ids), and the painter keeps the
-//! same tree as `Node<M, u32>`, each node with the id the DOM knows it by. So the tree a view
-//! answers and the tree the painter remembers are one type, and nothing translates between them.
+//! A node is generic over its id and its lazy parts: a view builds `Node<M>` (no ids, lazy parts
+//! not yet drawn), and the painter keeps the same tree as `Node<M, u32, Never>`, each node with
+//! the id the DOM knows it by and every lazy part drawn. So the tree a view answers and the tree
+//! the painter remembers are one type, and nothing translates between them.
 
 use std::collections::BTreeSet;
+use std::hash::{DefaultHasher, Hash, Hasher};
+use std::rc::Rc;
 
 /// What an element may be. Closed, so a view cannot make a `script`, an `iframe` or a `style`.
 /// Its number on the wire is its place here, the index of the painter's table of tag names.
@@ -52,11 +55,13 @@ pub enum Tag {
     Strong,
     /// `form`, whose submit the painter reports and never performs.
     Form,
+    /// `pre`.
+    Pre,
 }
 
 impl Tag {
     /// Every tag, in the order of their numbers.
-    pub const ALL: [Tag; 20] = [
+    pub const ALL: [Tag; 21] = [
         Tag::Div,
         Tag::Section,
         Tag::H2,
@@ -77,6 +82,7 @@ impl Tag {
         Tag::Dd,
         Tag::Strong,
         Tag::Form,
+        Tag::Pre,
     ];
 
     /// Its number on the wire.
@@ -115,6 +121,7 @@ impl Tag {
             Tag::Dd => "dd",
             Tag::Strong => "strong",
             Tag::Form => "form",
+            Tag::Pre => "pre",
         }
     }
 }
@@ -257,9 +264,57 @@ pub struct Foreign {
     pub props: String,
 }
 
+/// A part of a view drawn only when what it is drawn from changes: the function that draws it,
+/// the value it draws, and the hash of both, which the painter compares with the hash of the
+/// part it drew at the same place (Elm's `Html.Lazy`).
+pub struct Lazy<M> {
+    /// The hash of the function and its value.
+    pub hash: u64,
+    draw: Rc<dyn Fn() -> Node<M>>,
+}
+
+impl<M> Lazy<M> {
+    /// The part drawn.
+    #[must_use]
+    pub fn draw(&self) -> Node<M> {
+        (self.draw)()
+    }
+}
+
+impl<M> Clone for Lazy<M> {
+    fn clone(&self) -> Self {
+        Self {
+            hash: self.hash,
+            draw: Rc::clone(&self.draw),
+        }
+    }
+}
+
+impl<M> std::fmt::Debug for Lazy<M> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "Lazy({:016x})", self.hash)
+    }
+}
+
+/// The painted tree's lazy parts: none, since the painter keeps each part as it drew it.
+#[derive(Debug, Clone, Copy)]
+pub enum Never {}
+
+/// `draw` of `a`, drawn again only when `a` changes. `draw` is a plain function, so it reads
+/// nothing but `a`, and the hash of the two names the part.
+pub fn lazy<M: 'static, A: Hash + 'static>(draw: fn(&A) -> Node<M>, a: A) -> Node<M> {
+    let mut h = DefaultHasher::new();
+    (draw as usize).hash(&mut h);
+    a.hash(&mut h);
+    Node::Lazy(Lazy {
+        hash: h.finish(),
+        draw: Rc::new(move || draw(&a)),
+    })
+}
+
 /// An element: its tag, its attributes, its handlers, and its children.
 #[derive(Debug, Clone)]
-pub struct Element<M, I = ()> {
+pub struct Element<M, I = (), L = Lazy<M>> {
     /// The id the DOM knows it by; `()` in a view.
     pub id: I,
     /// What it is.
@@ -269,28 +324,30 @@ pub struct Element<M, I = ()> {
     /// Its handlers, each event once (the builder keeps the last).
     pub on: Vec<Listener<M>>,
     /// Its children.
-    pub kids: Kids<M, I>,
+    pub kids: Kids<M, I, L>,
 }
 
 /// An element's children: by position, or by key, so a list keeps each row's node (and its
 /// focus and scroll) when rows move.
 #[derive(Debug, Clone)]
-pub enum Kids<M, I = ()> {
+pub enum Kids<M, I = (), L = Lazy<M>> {
     /// Matched by position.
-    Plain(Vec<Node<M, I>>),
+    Plain(Vec<Node<M, I, L>>),
     /// Matched by key; every key once.
-    Keyed(Vec<(String, Node<M, I>)>),
+    Keyed(Vec<(String, Node<M, I, L>)>),
 }
 
 /// One node of the view.
 #[derive(Debug, Clone)]
-pub enum Node<M, I = ()> {
+pub enum Node<M, I = (), L = Lazy<M>> {
     /// Text, set as text and never parsed.
     Text(I, String),
     /// An element.
-    Element(Box<Element<M, I>>),
+    Element(Box<Element<M, I, L>>),
     /// A part another painter draws.
     Foreign(I, Foreign),
+    /// A part drawn only when what it is drawn from changes.
+    Lazy(L),
 }
 
 /// Text.

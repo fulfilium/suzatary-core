@@ -4,19 +4,25 @@
 //! element by id, so an event the DOM reports by id becomes the message the view put there.
 //! A node whose kind and tag stay is kept and patched; keyed children are matched by key and
 //! the ones already in relative order (a longest increasing subsequence of their old places)
-//! stay where they are, so a move touches only the rows that moved.
+//! stay where they are, so a move touches only the rows that moved. A lazy part whose hash is
+//! the one drawn at its place last time is kept whole: neither drawn nor compared.
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use crate::node::{Element, Kids, Listener, Node, On};
+use crate::node::{Element, Kids, Lazy, Listener, Never, Node, On};
 use crate::patch::{Patch, ROOT};
 
-/// The tree last painted and the handlers on it.
+/// The tree as painted: every node with its id, every lazy part drawn.
+type Painted<M> = Node<M, u32, Never>;
+
+/// The tree last painted, the handlers on it, and the hash of each lazy part by the id of the
+/// node it drew.
 #[derive(Debug)]
 pub struct Painter<M> {
     next: u32,
-    painted: Node<M, u32>,
+    painted: Painted<M>,
     handlers: BTreeMap<u32, Vec<Listener<M>>>,
+    lazies: BTreeMap<u32, u64>,
 }
 
 impl<M: Clone> Painter<M> {
@@ -28,6 +34,7 @@ impl<M: Clone> Painter<M> {
             next: ROOT + 1,
             painted: Node::Text(ROOT, String::new()),
             handlers: BTreeMap::new(),
+            lazies: BTreeMap::new(),
         };
         painter.painted = painter.create(view, ROOT, None, &mut out);
         (painter, out)
@@ -69,8 +76,13 @@ impl<M: Clone> Painter<M> {
         parent: u32,
         before: Option<u32>,
         out: &mut Vec<Patch>,
-    ) -> Node<M, u32> {
+    ) -> Painted<M> {
         match view {
+            Node::Lazy(l) => {
+                let node = self.create(l.draw(), parent, before, out);
+                self.lazies.insert(id_of(&node), l.hash);
+                node
+            }
             Node::Text((), text) => {
                 let id = self.id();
                 out.push(Patch::Text {
@@ -144,12 +156,13 @@ impl<M: Clone> Painter<M> {
         }
     }
 
-    fn remove(&mut self, old: &Node<M, u32>, out: &mut Vec<Patch>) {
+    fn remove(&mut self, old: &Painted<M>, out: &mut Vec<Patch>) {
         out.push(Patch::Remove { id: id_of(old) });
         self.forget(old);
     }
 
-    fn forget(&mut self, old: &Node<M, u32>) {
+    fn forget(&mut self, old: &Painted<M>) {
+        self.lazies.remove(&id_of(old));
         if let Node::Element(e) = old {
             self.handlers.remove(&e.id);
             match &e.kids {
@@ -161,11 +174,17 @@ impl<M: Clone> Painter<M> {
 
     fn patch(
         &mut self,
-        old: Node<M, u32>,
+        old: Painted<M>,
         view: Node<M>,
         parent: u32,
         out: &mut Vec<Patch>,
-    ) -> Node<M, u32> {
+    ) -> Painted<M> {
+        let view = match view {
+            Node::Lazy(l) => return self.lazy(old, &l, parent, out),
+            Node::Text(..) | Node::Element(_) | Node::Foreign(..) => view,
+        };
+        // What stands here now is drawn by no lazy part, whatever drew it before.
+        self.lazies.remove(&id_of(&old));
         match (old, view) {
             (Node::Text(id, was), Node::Text((), text)) => {
                 if was != text {
@@ -198,12 +217,28 @@ impl<M: Clone> Painter<M> {
         }
     }
 
+    /// A lazy part kept whole where its hash is the one drawn here, else drawn and patched.
+    fn lazy(
+        &mut self,
+        old: Painted<M>,
+        l: &Lazy<M>,
+        parent: u32,
+        out: &mut Vec<Patch>,
+    ) -> Painted<M> {
+        if self.lazies.get(&id_of(&old)) == Some(&l.hash) {
+            return old;
+        }
+        let node = self.patch(old, l.draw(), parent, out);
+        self.lazies.insert(id_of(&node), l.hash);
+        node
+    }
+
     fn element(
         &mut self,
-        was: Element<M, u32>,
+        was: Element<M, u32, Never>,
         e: Element<M>,
         out: &mut Vec<Patch>,
-    ) -> Node<M, u32> {
+    ) -> Painted<M> {
         let id = was.id;
         for (a, _) in &was.attrs {
             if !e.attrs.iter().any(|(b, _)| b == a) {
@@ -261,11 +296,11 @@ impl<M: Clone> Painter<M> {
 
     fn plain(
         &mut self,
-        olds: Vec<Node<M, u32>>,
+        olds: Vec<Painted<M>>,
         news: Vec<Node<M>>,
         parent: u32,
         out: &mut Vec<Patch>,
-    ) -> Vec<Node<M, u32>> {
+    ) -> Vec<Painted<M>> {
         let mut olds = olds.into_iter();
         let mut made = Vec::with_capacity(news.len());
         for view in news {
@@ -282,13 +317,13 @@ impl<M: Clone> Painter<M> {
 
     fn keyed(
         &mut self,
-        olds: Vec<(String, Node<M, u32>)>,
+        olds: Vec<(String, Painted<M>)>,
         news: Vec<(String, Node<M>)>,
         parent: u32,
         out: &mut Vec<Patch>,
-    ) -> Vec<(String, Node<M, u32>)> {
+    ) -> Vec<(String, Painted<M>)> {
         let wanted: BTreeSet<&str> = news.iter().map(|(k, _)| k.as_str()).collect();
-        let mut kept: BTreeMap<String, (usize, Node<M, u32>)> = BTreeMap::new();
+        let mut kept: BTreeMap<String, (usize, Painted<M>)> = BTreeMap::new();
         for (at, (k, old)) in olds.into_iter().enumerate() {
             if wanted.contains(k.as_str()) {
                 kept.insert(k, (at, old));
@@ -342,14 +377,15 @@ impl<M: Clone> Painter<M> {
 
 /// A new keyed row: kept from the old list at its old place, already patched, or new.
 enum Matched<M> {
-    Kept { at: usize, node: Node<M, u32> },
+    Kept { at: usize, node: Painted<M> },
     New(Node<M>),
 }
 
-fn id_of<M>(n: &Node<M, u32>) -> u32 {
+fn id_of<M>(n: &Painted<M>) -> u32 {
     match n {
         Node::Text(id, _) | Node::Foreign(id, _) => *id,
         Node::Element(e) => e.id,
+        Node::Lazy(never) => match *never {},
     }
 }
 

@@ -343,7 +343,7 @@ pub struct Entry {
 }
 
 /// A todo as a neighbour row reads it.
-#[derive(Debug, Clone, PartialEq, Serialize, TS)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
 pub struct Neighbour {
     /// The todo's id.
     pub todo: String,
@@ -607,7 +607,7 @@ pub struct StoreFrame {
 }
 
 /// One saved briefing file.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
 pub struct BriefingRow {
     /// The day, ISO 8601.
     pub date: String,
@@ -618,7 +618,7 @@ pub struct BriefingRow {
 }
 
 /// One morning brief the secretary wrote, and where its answer is.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
 pub struct BriefRow {
     /// The day, ISO 8601.
     pub date: String,
@@ -635,7 +635,7 @@ pub struct BriefRow {
 }
 
 /// `GET /api/briefings`: newest first.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
 pub struct BriefingsPayload {
     /// The saved files, capped.
     pub briefings: Vec<BriefingRow>,
@@ -644,7 +644,7 @@ pub struct BriefingsPayload {
 }
 
 /// `GET /api/briefings/{date}`.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
 pub struct BriefingPayload {
     /// The day, ISO 8601.
     pub date: String,
@@ -653,7 +653,7 @@ pub struct BriefingPayload {
 }
 
 /// A day's briefing: the secretary's brief when it wrote one, else the saved file.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[serde(tag = "kind", rename_all = "lowercase")]
 pub enum BriefingDay {
     /// The brief, block by block as the conversation draws it.
@@ -1313,7 +1313,7 @@ impl From<&crate::portal::Portal> for PortalPayload {
 
 /// `GET /api/about`: the version and the revision this build is, and what the version
 /// completed.
-#[derive(Debug, Clone, PartialEq, Serialize, TS)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
 pub struct AboutPayload {
     /// The release this build was stamped with, or `dev`.
     pub version: String,
@@ -1325,7 +1325,7 @@ pub struct AboutPayload {
 }
 
 /// One todo a version completed.
-#[derive(Debug, Clone, PartialEq, Serialize, TS)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
 pub struct Shipped {
     /// The todo's id, on the release plan's chain.
     pub todo: String,
@@ -1335,7 +1335,7 @@ pub struct Shipped {
 }
 
 /// `GET /api/releases`: the releases the project chain reads, each with its items.
-#[derive(Debug, Clone, PartialEq, Serialize, TS)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
 pub struct ReleasesPayload {
     /// The chain the releases are todos of.
     pub chain: String,
@@ -1347,7 +1347,7 @@ pub struct ReleasesPayload {
 }
 
 /// One release: its todo, its version, where it stands in the plan, and its items.
-#[derive(Debug, Clone, PartialEq, Serialize, TS)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
 pub struct ReleaseRow {
     /// The release's todo.
     pub todo: String,
@@ -1364,7 +1364,7 @@ pub struct ReleaseRow {
 }
 
 /// One item of a release.
-#[derive(Debug, Clone, PartialEq, Serialize, TS)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
 pub struct ReleaseItem {
     /// The item's todo.
     pub todo: String,
@@ -1377,7 +1377,7 @@ pub struct ReleaseItem {
 }
 
 /// A todo the chain holds, as a release's row reads it.
-#[derive(Debug, Clone, PartialEq, Serialize, TS)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
 pub struct HeldTodo {
     /// Its state and fulfillment now.
     pub row: Neighbour,
@@ -1772,7 +1772,7 @@ impl From<&crate::secretary::words::Gone> for TurnGone {
 }
 
 /// One block of an answer.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
 pub struct BlockRow {
     /// Its typst with the blank line that ends it.
     pub source: String,
@@ -2860,7 +2860,7 @@ pub struct OverviewLine {
 }
 
 /// `GET /api/calendar/{date}`: a week of the owner's calendars.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
 pub struct CalendarPayload {
     /// The first day, ISO 8601.
     pub from: String,

@@ -127,7 +127,7 @@ fi
 # `web/src/wire/generated/` is excluded, as output nobody hand-edits; the decoders
 # narrow `unknown` through the one cast in `decoder.ts`.
 # A future commit may lower it and must never raise it.
-as_ceiling=27
+as_ceiling=23
 as_count=$(grep -rn --binary-files=text --include='*.ts' -e ' as ' web/src | grep -v '/generated/' | grep -cvE '^[^:]+:[0-9]+:[[:space:]]*(//|\*|/\*)')
 if [[ "$as_count" -gt "$as_ceiling" ]]; then
   echo "web-static.sh: web/src holds $as_count ' as ' occurrences outside generated/, over the ceiling of $as_ceiling" >&2

@@ -3,7 +3,7 @@
 // page. Nothing here knows a page: a page names the box's paths, the app's addresses and its own questions, and this
 // asks, goes and says what it was told.
 
-import type { Answer, Context, Effect, Input, MailFlags, MessageFlags, Reading, ThreadFlags } from "../wire/generated/pages"
+import type { Answer, BriefingAt, CalendarAt, Context, Effect, Input, MailFlags, MessageAt, Nothing, Reading, ThreadAt } from "../wire/generated/pages"
 import type { Mounted } from "../view/page"
 import http from "../wire/http"
 import d from "../wire/decoder"
@@ -11,6 +11,7 @@ import asked from "../app/asked"
 import app from "../app/app"
 import time from "../app/time"
 import lo from "../algebra/lo"
+import type reading from "../algebra/reading"
 import once from "../algebra/once"
 import { toast } from "../view/toast"
 import frame from "../view/frame"
@@ -62,11 +63,20 @@ export namespace program {
     (path: string) => answer(http.get(path, d.unknown)),
   )
 
+  // The register a page holds `path` by, for a TypeScript page that reads the same path, and a held answer read as an `A`.
+  export const read = (path: string): reading.Reading<Answer> => held(path)
+  export const decoded = <A>(a: Answer, decoder: d.Decoder<A>): lo.Settled<A> => (a.type === "Refused" ? lo.error(a.words) : decoder(a.body))
+
   // The pages the module exports, by the class `viewtree::export!` names each, with what a screen hands each.
   type Args = {
     readonly MailPage: Omit<MailFlags, "context">
-    readonly MessagePage: Omit<MessageFlags, "context">
-    readonly ThreadPage: Omit<ThreadFlags, "context">
+    readonly MessagePage: MessageAt
+    readonly ThreadPage: ThreadAt
+    readonly MemoryPage: Nothing
+    readonly AboutPage: Nothing
+    readonly CalendarPage: CalendarAt
+    readonly BriefingsPage: Nothing
+    readonly BriefingPage: BriefingAt
   }
   export type Page = keyof Args
   type In = Input<unknown, unknown>

@@ -4,7 +4,8 @@
 import { perform, undoOrRedo } from "../todo/acts"
 import { addSheet } from "../todo/addsheet"
 import type { AddSheet } from "../todo/addsheet"
-import briefingsPage from "./briefings"
+import program from "./program"
+import payload from "../wire/generated/payload"
 import asked from "../app/asked"
 import lo from "../algebra/lo"
 import latest from "../algebra/latest"
@@ -352,8 +353,10 @@ export namespace todos {
       step: todosState.step,
       listen: dispatch => {
         const { rebase, close } = rebasing(dispatch)
+        // The register the briefings page holds, asked once for both.
+        const briefs = program.read("/api/briefings")
         const briefed = (): void =>
-          lo.fold(briefingsPage.listed.now(), {
+          lo.fold(lo.bind(briefs.now(), a => program.decoded(a, payload.BriefingsPayload)), {
             loading: () => {},
             error: () => dispatch({ type: "Briefing", briefing: { type: "None" } }),
             val: p => {
@@ -361,7 +364,7 @@ export namespace todos {
               dispatch({ type: "Briefing", briefing: p.briefings.some(b => b.date === today) ? { type: "Today", date: today } : { type: "None" } })
             },
           })
-        const unbriefed = briefingsPage.listed.hear(briefed)
+        const unbriefed = briefs.hear(briefed)
         briefed()
         // Whether setup is finished; a box that does not answer leaves the line unsaid.
         const setupRead = (): void =>

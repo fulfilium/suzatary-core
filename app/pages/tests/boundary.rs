@@ -33,8 +33,11 @@ fn generates_the_pages_boundary_types() {
     d.visit::<mail::Flags>();
     d.visit::<mail::Hold>();
     d.visit::<mail::Ask>();
-    d.visit::<message::Flags>();
-    d.visit::<thread::Flags>();
+    d.visit::<message::At>();
+    d.visit::<thread::At>();
+    d.visit::<suzatary_pages::reading::Nothing>();
+    d.visit::<suzatary_pages::calendar::At>();
+    d.visit::<suzatary_pages::briefing::At>();
     let mut out = String::from(
         "// GENERATED FROM app/pages/src BY `cargo test -p suzatary-pages`. DO NOT EDIT.\n",
     );

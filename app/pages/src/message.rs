@@ -2,175 +2,96 @@
 //! todos whose latest record names it. The todos are drawn by the list's own cards, the host's
 //! part `todos`, until the todo pages are programs (plan §7 stage 8).
 
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 use suzatary_core::wire::MailPage;
 use ts_rs::TS;
 use viewtree::Attr::{Class, Href, Title};
-use viewtree::kit::{Reading, para};
+use viewtree::kit::para;
 use viewtree::node::foreign;
-use viewtree::{Node, Program, view};
+use viewtree::{Node, view};
 
-use crate::chrome::{self, Chrome, Shape, mark};
-use crate::mailrow::{account, ask, body, decided, folder, onward, subject};
+use crate::chrome::{Shape, ask, mark};
+use crate::mailrow::{account, body, decided, folder, onward, subject};
 use crate::places::{Place, Question};
-use crate::runtime::{Answer, Behind, Context, Effect, Held, Input, Never, answered};
-use crate::zone::minute;
+use crate::reading::{Msg, View, json};
+use crate::runtime::Answer;
+use crate::zone::{Offset, minute};
 
 /// Which message, by its notmuch id or a prefix of its hash, as the address names it.
 #[derive(Debug, Clone, Deserialize, TS)]
-#[ts(rename = "MessageFlags")]
-pub struct Flags {
-    /// The tab's context.
-    pub context: Context,
+#[ts(rename = "MessageAt")]
+pub struct At {
     /// The message.
     pub id: String,
-}
-
-/// The page's one question.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
-#[ts(rename = "MessageHold")]
-pub enum Hold {
-    /// The message, held.
-    Message,
 }
 
 /// The message, or the box's words for one it no longer keeps: a 404 is a fact about the maildir
 /// (its account removed with its mail, or never synced), drawn as one, never a Retry.
 #[derive(Debug, Clone)]
-enum Read {
+pub enum Read {
+    /// The message.
     Found(Box<MailPage>),
+    /// The box's words for a message it no longer keeps.
     Gone(String),
 }
 
-/// It asks nothing once.
-pub type Ask = Never;
-
-/// Everything the page knows.
-#[derive(Debug, Clone)]
-pub struct Model {
-    flags: Flags,
-    read: Held<Read>,
-}
-
-/// Everything that can happen to the page.
-#[derive(Debug, Clone)]
-pub enum Msg {
-    /// From the host.
-    Host(Box<Input<Hold, Ask>>),
-    /// Back pressed.
-    Back,
-    /// Retry pressed.
-    Retry,
-}
-
-/// The page as a program.
+/// One message.
 #[derive(Debug)]
 pub enum Message {}
 
-fn path(m: &Flags) -> String {
-    Question::Message(&m.id).path()
-}
+impl View for Message {
+    type At = At;
+    type Of = Read;
+    const CLASS: &'static str = "mailmessage";
+    const SHAPE: Shape = Shape::Lines;
 
-fn read(r: Reading<Answer>, behind: Option<Behind>) -> Held<Read> {
-    let reading = match r {
-        Reading::Loading => Reading::Loading,
-        Reading::Error { e } => Reading::Error { e },
-        Reading::Val {
-            v: Answer::Refused { status: 404, words },
-        } => Reading::Val {
-            v: Read::Gone(words),
-        },
-        Reading::Val { v } => match answered::<MailPage>(v) {
-            Ok(p) => Reading::Val {
-                v: Read::Found(Box::new(p)),
-            },
-            Err(e) => Reading::Error { e },
-        },
-    };
-    Held { reading, behind }
-}
-
-impl Program for Message {
-    type Model = Model;
-    type Msg = Msg;
-    type Effect = Effect<Hold, Ask>;
-    type Flags = Flags;
-
-    fn init(flags: Flags) -> (Model, Vec<Effect<Hold, Ask>>) {
-        let hold = Effect::Hold {
-            ask: Hold::Message,
-            path: path(&flags),
-        };
-        (
-            Model {
-                flags,
-                read: Held::loading(),
-            },
-            vec![hold],
-        )
+    fn path(a: &At) -> String {
+        Question::Message(&a.id).path()
     }
 
-    fn update(m: &mut Model, msg: Msg) -> Vec<Effect<Hold, Ask>> {
-        match msg {
-            Msg::Host(input) => match *input {
-                Input::Context(c) => m.flags.context = c,
-                Input::Held {
-                    ask: Hold::Message,
-                    reading,
-                    behind,
-                } => m.read = read(reading, behind),
-                Input::Answered { ask, .. } => match ask {},
+    fn back(_: &At) -> Option<(&'static str, Place<'_>)> {
+        Some((
+            "Mail",
+            Place::Mail {
+                query: "",
+                account: "",
             },
-            Msg::Back => {
-                return vec![Effect::Back {
-                    fallback: Place::Mail {
-                        query: "",
-                        account: "",
-                    }
-                    .href(),
-                }];
-            }
-            Msg::Retry => {
-                return vec![Effect::Again {
-                    path: path(&m.flags),
-                }];
-            }
+        ))
+    }
+
+    fn read(a: Answer) -> Result<Read, String> {
+        match a {
+            Answer::Refused { status: 404, words } => Ok(Read::Gone(words)),
+            Answer::Refused { words, .. } => Err(words),
+            Answer::Done { body } => json(Answer::Done { body }).map(|p| Read::Found(Box::new(p))),
         }
-        Vec::new()
     }
 
-    fn view(m: &Model) -> Node<Msg> {
-        let offsets = &m.flags.context.offsets;
-        let (title, legend, body) = match &m.read.reading {
-            Reading::Val { v: Read::Found(p) } => {
+    fn title(_: &At, v: Option<&Read>) -> String {
+        match v {
+            Some(Read::Found(p)) => subject(&p.message.row).to_owned(),
+            Some(Read::Gone(_)) | None => "Message".to_owned(),
+        }
+    }
+
+    fn legend(_: &At, offsets: &[Offset], v: Option<&Read>) -> Option<String> {
+        Some(match v {
+            Some(Read::Found(p)) => {
                 let row = &p.message.row;
-                let at = row
-                    .date
-                    .map_or_else(String::new, |d| minute(offsets, &d.isoformat()));
-                let legend = if at.is_empty() {
-                    row.sender.clone()
-                } else {
-                    format!("{} · {at}", row.sender)
-                };
-                (subject(row).to_owned(), legend, found(p))
+                match row.date.map(|d| minute(offsets, &d.isoformat())) {
+                    Some(at) if !at.is_empty() => format!("{} · {at}", row.sender),
+                    Some(_) | None => row.sender.clone(),
+                }
             }
-            Reading::Val {
-                v: Read::Gone(said),
-            } => ("Message".to_owned(), String::new(), gone(&m.flags.id, said)),
-            Reading::Loading | Reading::Error { .. } => {
-                ("Message".to_owned(), String::new(), Vec::new())
-            }
-        };
-        let chrome = Chrome {
-            class: "mailmessage",
-            title,
-            back: Some(("Mail", Msg::Back)),
-            legend: Some(legend),
-            now: Vec::new(),
-            shape: Shape::Lines,
-        };
-        let status = chrome::status(&m.read.reading, m.read.behind.as_ref(), offsets, Msg::Retry);
-        chrome::page(chrome, status, body)
+            Some(Read::Gone(_)) | None => String::new(),
+        })
+    }
+
+    fn body(a: &At, offsets: &[Offset], v: &Read) -> Vec<Node<Msg>> {
+        match v {
+            Read::Found(p) => found(offsets, p),
+            Read::Gone(said) => gone(&a.id, said),
+        }
     }
 }
 
@@ -192,7 +113,7 @@ fn gone(id: &str, said: &str) -> Vec<Node<Msg>> {
     ]
 }
 
-fn found(p: &MailPage) -> Vec<Node<Msg>> {
+fn found(_: &[Offset], p: &MailPage) -> Vec<Node<Msg>> {
     let message = &p.message;
     let row = &message.row;
     let thread = (!message.thread.is_empty()).then(|| {

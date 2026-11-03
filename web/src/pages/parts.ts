@@ -1,5 +1,6 @@
-// The parts a Rust page names and this tab draws (`Foreign` in the view): the marks drawn in SVG, a mail body with its
-// held values' chips, and the todos a message produced as the list's own cards. Each is drawn from its props alone; a
+// The parts a Rust page names and this tab draws (`Foreign` in the view): the marks drawn in SVG, Typst's HTML through the
+// tripwire, a mail body with its held values' chips, the todos a message produced as the list's own cards, and an
+// answer's blocks as the conversation draws them, until the conversation is a program too. Each is drawn from its props alone; a
 // part that keeps listening says how to stop, which the painter asks when it takes the part out.
 
 import { el } from "../view/dom"
@@ -15,12 +16,19 @@ import time from "../app/time"
 import onscreen, { store } from "../app/store"
 import { cardList } from "../todo/card"
 import { DEFAULT_FILTER, listing } from "../todo/todos"
+import pie from "../view/pie"
+import { richOrText } from "../rich"
+import { answerBlocks, answerCopies, more } from "../chat/transcript"
 
 export namespace parts {
   const stops = new WeakMap<Node, () => void>()
 
-  const mark = (name: string): Node => {
+  const mark = (name: string, props: string): Node => {
     switch (name) {
+      case "outline":
+        return marks.outline()
+      case "pie":
+        return pie.fulfilled(Number(props))
       case "chevron":
         return chevronIcon()
       case "rule":
@@ -53,10 +61,26 @@ export namespace parts {
     return cards.node
   }
 
+  // A part's props as `app/pages` prints them; props that do not read are the module's mistake, thrown as one.
+  const read = <A>(kind: string, decoder: d.Decoder<A>, props: string): A => {
+    const r = d.json(decoder)(props)
+    if (r.type === "Error") throw new Error(`the ${kind} a page named does not read: ${r.e}`)
+    return r.v
+  }
+  const turn = d.obj({ text: d.str, blocks: d.arr(payload.BlockRow) })
+
   export const draw = (kind: string, key: string, props: string): Node => {
     switch (kind) {
       case "mark":
-        return mark(key)
+        return mark(key, props)
+      case "rich": {
+        const r = read(kind, d.obj({ html: d.nullable(d.str), text: d.str, class: d.str }), props)
+        return richOrText(r.html, r.text, { class: r.class })
+      }
+      case "answer":
+        return answerBlocks(read(kind, turn, props))
+      case "answercopies":
+        return more(answerCopies(read(kind, turn, props))) ?? document.createTextNode("")
       // A stranger's prose, set as text; only a held value's placeholder becomes its chip.
       case "mailbody":
         return heldvalue.within(el("div", { class: "mailbody" }, props), revealHeld(null))

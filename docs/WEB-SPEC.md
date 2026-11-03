@@ -213,8 +213,7 @@ real browser); each section says which.
   the one door to the browser's storage (a throwing accessor reads as absent
   and loses the write) and the one read of the clock, with the wire's instant
   printers and parser.
-- **`briefing.Day`** (`web/src/pages/briefing.ts`): `brief | saved | none`,
-  what `briefing.day(date, fetch)` answers. **`usage.credits.Credits`**
+- **`usage.credits.Credits`**
   (`web/src/pages/usage.ts`): `disabled | spent | unspent`, what
   `usage.credits.of(window, refusal)` answers before anything draws it.
 - **`ViewReference`** (`web/src/chat/inview.ts`), **`ComposeDecision`**
@@ -630,14 +629,8 @@ which answered last.
 
 The pages' sums:
 
-- **`briefing.Day`'s fold is the sum.** — `briefing.test.ts` "law: folding
-  a day with the constructors rebuilds it".
 - **The brief wins.** A day the secretary briefed is its first brief for
   that date, wherever it stands in the list, whatever the saved files say.
-- **A 404 is an answer; nothing else is.** No brief reads the saved file,
-  a 404 for it is `none`, any other failure is rethrown for the frame's
-  Retry. — `briefing.test.ts` "a 404 is no briefing", "any other failure is a failure, so the frame
-  offers Retry".
 
 ### 3.9 The Todos tree
 
@@ -1930,8 +1923,26 @@ as data:
   "reordering_keyed_rows_keeps_every_node".
 - **An event is answered by the current view's handler.** —
   "an_event_is_answered_by_the_current_view".
+- **An unchanged lazy part is not drawn again.** A `lazy(draw, value)` part
+  whose hash is the one drawn at its place is kept whole. —
+  "an_unchanged_lazy_part_is_not_drawn_again"; the generated views of every
+  law above hold lazy parts.
 - **An act runs once until it is answered.** —
-  `app/pages/tests/boundary.rs` "an_act_runs_once_until_it_is_answered".
+  `app/pages/tests/boundary.rs` "an_act_runs_once_until_it_is_answered";
+  `app/pages/tests/laws.rs` "a_forget_runs_once_until_it_is_answered".
+
+Memory, About, the calendar, the briefings and a briefing are Rust programs
+too; each page's laws in `app/pages/tests/laws.rs` ("memory_laws",
+"about_laws", "calendar_laws", "briefings_laws", "briefing_laws") are
+`viewtree::dom::page_laws` over generated runs. A page of one reading is a
+`reading::View`, the program of any of them `reading::One`.
+
+- **A 404 is an answer; nothing else is.** A briefing the box answers 404
+  for is "no briefing that day"; any other refusal is a failure, with
+  Retry. — `briefing.rs` "a_404_is_no_briefing_and_nothing_else_is".
+- **The release sample reads as the box reads it.** An item completed once
+  stays done, a dropped one moved out, what is owed first. — `releases.rs`
+  "the_box_sample_reads_as_the_box_reads_it".
 
 ## 4. The vectors
 

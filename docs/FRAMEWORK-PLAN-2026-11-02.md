@@ -511,6 +511,14 @@ with the readings once it is in the service worker's cache and compiled. *Size:*
 4. **The small pages:** memory (25), watches (31), calendar (37), briefings (48), about (52),
    thread (60), briefing (62), releases (98), each with its `.state.ts` where it has one; the
    lazy node (§1.3) lands first. *Size:* about −15,000 characters, −413 lines of TS.
+   *Built (2026-11-03), on stage 5's runtime:* the lazy node (`viewtree::node::lazy`; the painted
+   tree is `Node<M, u32, Never>`, so no lazy node stands in it); memory, About (with the
+   releases), the calendar, the briefings and a briefing (`app/pages/src/`); thread and watches
+   went with stage 5. A page of one reading is a `reading::View` and `reading::One` its program,
+   which the thread and the message now use too. *Size:* the five pages are 17,485 characters and
+   753 lines of Rust against the 15,202 and 414 of TypeScript they replace (1.15 times in
+   characters); `reading.rs` is 2,821 more, and took 2,161 out of the thread and the message,
+   which brings stage 5's pages to 1.19 times.
 5. **Mail and message** (148, 152, with `mailrow.ts`). *Built (2026-11-03):* Mail, a message and
    a thread (`thread.ts` read `mailrow.ts` too, so it moved with it, and `watches.ts` with Mail, its
    one reader) are `app/pages/src/{mail,message,thread}.rs`. They speak the runtime's sums

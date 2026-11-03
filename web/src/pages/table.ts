@@ -12,16 +12,13 @@ import frame from "../view/frame"
 import reading from "../algebra/reading"
 import kv from "../app/kv"
 import todos from "./todos"
-import about from "./about"
-import briefing from "./briefing"
-import briefings from "./briefings"
-import calendar from "./calendar"
 import conversation from "./conversation"
 import inbox from "./inbox"
-import memory from "./memory"
 import secretary from "./secretary"
 import todoview from "../todo/todoview"
 import program from "./program"
+import time from "../app/time"
+import app from "../app/app"
 
 export namespace pages {
   type Screens = { readonly [K in Screen["type"]]: Extract<Screen, { readonly type: K }> }
@@ -45,14 +42,15 @@ export namespace pages {
     thread: (root, s) => program.mount(root, "ThreadPage", { id: s.id }),
     chain: (root, s) => import("./chain").then(m => m.mount(root, s.focus)),
     usage: root => import("./usage").then(m => m.default.mount(root)),
-    about: root => about.mount(root),
+    about: root => program.mount(root, "AboutPage", {}),
     // Drawn by its Rust program while the prototype's flag is on (docs/FRAMEWORK-PLAN-2026-11-02.md §6).
     settings: root =>
       kv.local.get("suzatary.viewtree") === "on" ? import("./settingsview").then(m => m.default.mount(root)) : import("./settings").then(m => m.default.mount(root)),
-    memory: root => memory.mount(root),
-    briefings: root => briefings.mount(root),
-    briefing: (root, s) => briefing.mount(root, s.date),
-    calendar: (root, s) => calendar.mount(root, s.date),
+    memory: root => program.mount(root, "MemoryPage", {}),
+    briefings: root => program.mount(root, "BriefingsPage", {}),
+    briefing: (root, s) => program.mount(root, "BriefingPage", { date: s.date }),
+    // The address's "" is today, on the owner's clock.
+    calendar: (root, s) => program.mount(root, "CalendarPage", { from: s.date === "" ? time.date(app.now().zone) : s.date }),
     secretary: (root, s) => secretary.mount(root, s.topics),
     conversation: (root, s) =>
       conversation.mount(root, s.id, { refs: s.refs, focus: s.focus === true, ...(s.at === undefined ? {} : { at: s.at }) }),

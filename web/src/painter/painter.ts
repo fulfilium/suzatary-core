@@ -10,7 +10,7 @@ export namespace painter {
   export type T = { readonly apply: (patches: Uint8Array) => void; readonly destroy: () => void }
 
   // In the order of `Tag` and `On` (`app/viewtree/src/node.rs`), whose numbers index them.
-  const TAGS: readonly (keyof HTMLElementTagNameMap)[] = ["div", "section", "h2", "h3", "p", "a", "button", "input", "details", "summary", "code", "span", "h1", "ul", "li", "dl", "dt", "dd", "strong", "form"]
+  const TAGS: readonly (keyof HTMLElementTagNameMap)[] = ["div", "section", "h2", "h3", "p", "a", "button", "input", "details", "summary", "code", "span", "h1", "ul", "li", "dl", "dt", "dd", "strong", "form", "pre"]
   const EVENTS: readonly string[] = ["click", "input", "submit"]
 
   type Reader = { readonly bytes: Uint8Array; at: number }

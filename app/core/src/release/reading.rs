@@ -8,7 +8,7 @@ use prodrome_core::literal::{Datetime, ProdromeError};
 use prodrome_core::policy::{Policy, Untrusted};
 use prodrome_core::term::{Term, TermF};
 
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
 use super::{Counted, Plan};
@@ -16,7 +16,7 @@ use crate::record;
 
 /// What became of a todo by an instant, joined over its events: completed once is completed,
 /// whatever came after (a reopening does not unship a release), and cancelled below completed.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, TS)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize, TS)]
 #[serde(rename_all = "snake_case")]
 pub enum Lot {
     /// No completion and no cancellation.
@@ -28,7 +28,7 @@ pub enum Lot {
 }
 
 /// Where a release stands in the plan, by the releases settled before it.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, TS)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, TS)]
 #[serde(rename_all = "snake_case")]
 pub enum Place {
     /// At or before the last settled release: shipped, cancelled or passed over.
@@ -41,7 +41,7 @@ pub enum Place {
 
 /// Whether an item is named by its release's spec now, or only by an earlier one. A dropped
 /// item stays an item, so the page can say it moved out.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, TS)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, TS)]
 #[serde(rename_all = "snake_case")]
 pub enum Named {
     /// The spec in force names it.

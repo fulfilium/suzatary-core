@@ -2,11 +2,18 @@
 //! [`viewtree::Program`], run as wasm in the tab, its patches painted by `web/src/painter`.
 #![forbid(unsafe_code)]
 
+pub mod about;
+pub mod briefing;
+pub mod briefings;
+pub mod calendar;
 pub mod chrome;
 pub mod mail;
 pub mod mailrow;
+pub mod memory;
 pub mod message;
 pub mod places;
+pub mod reading;
+pub mod releases;
 pub mod runtime;
 pub mod settings;
 pub mod thread;
@@ -31,13 +38,30 @@ macro_rules! hosted {
     )*};
 }
 
-hosted!(mail::Mail, message::Message, thread::Thread);
+hosted!(mail::Mail, memory::Memory, about::About);
+
+impl<V: reading::View> viewtree::host::Hosted for reading::One<V> {
+    type Input = runtime::Input<reading::Hold, runtime::Never>;
+    fn input(input: Self::Input) -> reading::Msg {
+        reading::Msg::Host(Box::new(input))
+    }
+}
 
 #[cfg(target_arch = "wasm32")]
 viewtree::export!(SettingsPage = settings::Settings);
 #[cfg(target_arch = "wasm32")]
 viewtree::export!(MailPage = mail::Mail);
 #[cfg(target_arch = "wasm32")]
-viewtree::export!(MessagePage = message::Message);
+viewtree::export!(MessagePage = reading::One<message::Message>);
 #[cfg(target_arch = "wasm32")]
-viewtree::export!(ThreadPage = thread::Thread);
+viewtree::export!(ThreadPage = reading::One<thread::Thread>);
+#[cfg(target_arch = "wasm32")]
+viewtree::export!(MemoryPage = memory::Memory);
+#[cfg(target_arch = "wasm32")]
+viewtree::export!(AboutPage = about::About);
+#[cfg(target_arch = "wasm32")]
+viewtree::export!(CalendarPage = reading::One<calendar::Calendar>);
+#[cfg(target_arch = "wasm32")]
+viewtree::export!(BriefingsPage = reading::One<briefings::Briefings>);
+#[cfg(target_arch = "wasm32")]
+viewtree::export!(BriefingPage = reading::One<briefing::Briefing>);

@@ -76,12 +76,6 @@ pub fn todo<M>(row: &MailRow) -> Option<Node<M>> {
     }
 }
 
-/// Ask the secretary about a reference: a link, so it middle-clicks and Back returns here.
-#[must_use]
-pub fn ask<M>(reference: &str) -> Node<M> {
-    view! { Div "askrow" [view! { A "asksecretary" {Href => Place::Ask(reference).href()} ["Ask the secretary"] }] }
-}
-
 /// A body as text, drawn by the host's part so a held value's placeholder is its chip.
 #[must_use]
 pub fn body<M>(row: &MailRow, body: &str) -> Node<M> {

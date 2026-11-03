@@ -13,7 +13,7 @@ use viewtree::Attr::{
 use viewtree::kit::{Reading, para};
 use viewtree::{Node, Program, view};
 
-use crate::chrome::{self, Chrome, Shape, mark};
+use crate::chrome::{self, Chrome, Masthead, Shape, mark};
 use crate::mailrow::{account, arrived, decided, folder, held, sender, subject, todo};
 use crate::places::{PAGE, Place, Question};
 use crate::runtime::{Context, Effect, Gate, Held, Input, answered, read};
@@ -227,6 +227,7 @@ impl Program for Mail {
         let chrome = Chrome {
             class: "mailpage",
             title: if searching { "Mail search" } else { "Mail" }.to_owned(),
+            masthead: Masthead::Page,
             back: None,
             legend: None,
             now: vec![para("legend", legend), search],

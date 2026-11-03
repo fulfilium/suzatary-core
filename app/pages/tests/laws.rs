@@ -5,9 +5,20 @@
 
 use proptest::prelude::*;
 use serde_json::{Value, json};
+use suzatary_core::release::{Lot, Named, Place};
+use suzatary_core::secretary::answer::Kind as BlockKind;
+use suzatary_core::secretary::memory::{FactId, Kind};
+use suzatary_core::wire::{
+    AboutPayload, BlockRow, BriefRow, BriefingDay, BriefingPayload, BriefingRow, BriefingsPayload,
+    CalendarPayload, EntryState, FactRow, FactSaid, Fulfillment, HeldTodo, MemoryPayload,
+    Neighbour, RecordPayload, RecordSummary, ReleaseItem, ReleaseRow, ReleasesPayload, SaidOn,
+};
+use suzatary_pages::reading::{Nothing, One, Opened};
 use suzatary_pages::runtime::{Answer, Behind, Context, Effect, Gate, Input};
 use suzatary_pages::zone::Offset;
-use suzatary_pages::{mail, message, thread};
+use suzatary_pages::{
+    about, briefing, briefings, calendar, mail, memory, message, reading as one, thread,
+};
 use viewtree::Runtime;
 use viewtree::dom::page_laws;
 use viewtree::kit::Reading;
@@ -192,31 +203,15 @@ proptest! {
     }
 
     #[test]
-    fn message_laws(writes: bool, msgs in proptest::collection::vec(prop_oneof![
-        held::<message::Hold, message::Ask>(message::Hold::Message, page()).prop_map(|i| message::Msg::Host(Box::new(i))),
-        any::<bool>().prop_map(|w| message::Msg::Host(Box::new(Input::Context(context(w))))),
-        Just(message::Msg::Back),
-        Just(message::Msg::Retry),
-    ], 0..8)) {
-        page_laws::<message::Message>(
-            || message::Flags { context: context(writes), id: "i1@example.test".to_owned() },
-            &msgs,
-        );
+    fn message_laws(writes: bool, msgs in one_msgs(page())) {
+        page_laws::<One<message::Message>>(|| opened(writes, message::At { id: "i1@example.test".to_owned() }), &msgs);
     }
 
     #[test]
-    fn thread_laws(msgs in proptest::collection::vec(prop_oneof![
-        held::<thread::Hold, thread::Ask>(
-            thread::Hold::Thread,
-            proptest::collection::vec(page(), 0..4).prop_map(|ms| json!({"thread": "t1", "messages": ms})),
-        ).prop_map(|i| thread::Msg::Host(Box::new(i))),
-        Just(thread::Msg::Back),
-        Just(thread::Msg::Retry),
-    ], 0..8)) {
-        page_laws::<thread::Thread>(
-            || thread::Flags { context: context(true), id: "t1".to_owned() },
-            &msgs,
-        );
+    fn thread_laws(msgs in one_msgs(
+        proptest::collection::vec(page(), 0..4).prop_map(|ms| json!({"thread": "t1", "messages": ms})),
+    )) {
+        page_laws::<One<thread::Thread>>(|| opened(true, thread::At { id: "t1".to_owned() }), &msgs);
     }
 }
 
@@ -288,5 +283,319 @@ fn a_search_goes_to_its_address() {
             href: "#/mail?q=from%3Aada%20subject%3A%22a%2Fb%22&account=me%40example.test"
                 .to_owned()
         }]
+    );
+}
+
+// The small pages of stage 4: their answers built from the core's own types and printed as the
+// box prints them.
+
+fn words() -> impl Strategy<Value = String> {
+    prop_oneof![
+        Just(String::new()),
+        Just("one".to_owned()),
+        Just("two words".to_owned()),
+        Just("<b>three</b> & more".to_owned()),
+    ]
+}
+
+fn printed<T: serde::Serialize>(t: &T) -> Value {
+    serde_json::to_value(t).expect("a payload prints")
+}
+
+fn said() -> impl Strategy<Value = SaidOn> {
+    prop_oneof![
+        (0u32..3).prop_map(|turn| SaidOn::Turn {
+            conversation: "c1".to_owned(),
+            turn
+        }),
+        (0u32..3).prop_map(|proposal| SaidOn::Tapped {
+            conversation: "c 2".to_owned(),
+            proposal
+        }),
+    ]
+}
+
+fn memory_payload() -> impl Strategy<Value = Value> {
+    let kind = prop_oneof![
+        Just(Kind::Owner),
+        Just(Kind::Person),
+        Just(Kind::Preference),
+        Just(Kind::Standing)
+    ];
+    let source = prop_oneof![
+        said().prop_map(|on| FactSaid::Said { on }),
+        (said(), said()).prop_map(|(o, round)| FactSaid::Merged {
+            from: vec![FactId(1), FactId(2)],
+            origins: vec![o],
+            round
+        }),
+    ];
+    let fact = (0u64..5, words(), kind, source).prop_map(|(id, fact, kind, said)| FactRow {
+        id: FactId(id),
+        at: "2026-09-01T00:00:00".to_owned(),
+        fact,
+        kind,
+        said,
+    });
+    proptest::collection::vec(fact, 0..5).prop_map(|facts| {
+        printed(&MemoryPayload {
+            facts,
+            cap: 40,
+            forgotten: Vec::new(),
+            merged: Vec::new(),
+            cards: Vec::new(),
+        })
+    })
+}
+
+fn record_payload() -> impl Strategy<Value = Value> {
+    let summary = (0u8..3, 1u32..3, words()).prop_map(|(n, lines, text)| RecordSummary {
+        node: format!("n{n}"),
+        handle: "1+2".to_owned(),
+        lines,
+        text,
+    });
+    proptest::collection::vec(summary, 0..3)
+        .prop_map(|summaries| printed(&RecordPayload { summaries }))
+}
+
+fn calendar_payload() -> impl Strategy<Value = Value> {
+    (words(), proptest::option::of(words())).prop_map(|(text, rich)| {
+        printed(&CalendarPayload {
+            from: "2026-09-07".to_owned(),
+            days: 7,
+            text,
+            rich,
+        })
+    })
+}
+
+fn briefings_payload() -> impl Strategy<Value = Value> {
+    let saved = (1u8..4, words()).prop_map(|(d, title)| BriefingRow {
+        date: format!("2026-08-0{d}"),
+        title,
+        words: 120,
+    });
+    let brief = (1u8..4, words()).prop_map(|(d, title)| BriefRow {
+        date: format!("2026-09-1{d}"),
+        conversation: "c1".to_owned(),
+        turn: 1,
+        title,
+        words: 1,
+        text: String::new(),
+    });
+    (
+        proptest::collection::vec(saved, 0..3),
+        proptest::collection::vec(brief, 0..3),
+    )
+        .prop_map(|(briefings, briefs)| printed(&BriefingsPayload { briefings, briefs }))
+}
+
+fn briefing_payload() -> impl Strategy<Value = Value> {
+    let block = (words(), proptest::option::of(words())).prop_map(|(source, html)| BlockRow {
+        plain: source.clone(),
+        source,
+        kind: BlockKind::Prose,
+        html,
+    });
+    let day = prop_oneof![
+        (words(), proptest::collection::vec(block, 0..3)).prop_map(|(text, blocks)| {
+            BriefingDay::Brief {
+                conversation: "c1".to_owned(),
+                turn: 2,
+                text,
+                blocks,
+            }
+        }),
+        (words(), proptest::option::of(words()))
+            .prop_map(|(source, rich)| BriefingDay::Saved { source, rich }),
+    ];
+    day.prop_map(|day| {
+        printed(&BriefingPayload {
+            date: "2026-09-04".to_owned(),
+            day,
+        })
+    })
+}
+
+fn held_todo() -> impl Strategy<Value = Option<HeldTodo>> {
+    let value = prop_oneof![
+        Just(None),
+        (0u8..=10).prop_map(|n| Some(Fulfillment::Number(f64::from(n) / 10.0))),
+        Just(Some(Fulfillment::Absent(
+            suzatary_core::wire::Absent::Absent
+        ))),
+    ];
+    proptest::option::of((value, words()).prop_map(|(value, title)| HeldTodo {
+        row: Neighbour {
+            todo: "t".to_owned(),
+            state: EntryState::Open,
+            value,
+            unconfirmed: false,
+        },
+        title,
+    }))
+}
+
+fn lot() -> impl Strategy<Value = Lot> {
+    prop_oneof![Just(Lot::Open), Just(Lot::Cancelled), Just(Lot::Completed)]
+}
+
+fn releases_payload() -> impl Strategy<Value = Value> {
+    let item =
+        (0u8..4, held_todo(), lot(), any::<bool>()).prop_map(|(n, held, lot, now)| ReleaseItem {
+            todo: format!("i{n}"),
+            held,
+            lot,
+            named: if now { Named::Current } else { Named::Dropped },
+        });
+    let place = prop_oneof![Just(Place::Earlier), Just(Place::Next), Just(Place::Later)];
+    let release = (
+        0u8..3,
+        held_todo(),
+        lot(),
+        place,
+        proptest::collection::vec(item, 0..4),
+    )
+        .prop_map(|(n, held, lot, place, items)| ReleaseRow {
+            todo: format!("r{n}"),
+            held,
+            version: "2.3".to_owned(),
+            lot,
+            place,
+            items,
+        });
+    proptest::collection::vec(release, 0..3).prop_map(|releases| {
+        printed(&ReleasesPayload {
+            chain: "suzatary".to_owned(),
+            reads: "2.2".to_owned(),
+            releases,
+        })
+    })
+}
+
+fn about_payload() -> impl Strategy<Value = Value> {
+    prop_oneof![Just("dev"), Just("abc1234")].prop_map(|build| {
+        printed(&AboutPayload {
+            version: "2.1.59".to_owned(),
+            build: build.to_owned(),
+            completes: Vec::new(),
+        })
+    })
+}
+
+fn one_msgs(answer: impl Strategy<Value = Value>) -> impl Strategy<Value = Vec<one::Msg>> {
+    proptest::collection::vec(
+        prop_oneof![
+            held::<one::Hold, one::Ask>(one::Hold::Page, answer)
+                .prop_map(|i| one::Msg::Host(Box::new(i))),
+            any::<bool>().prop_map(|w| one::Msg::Host(Box::new(Input::Context(context(w))))),
+            Just(one::Msg::Back),
+            Just(one::Msg::Retry),
+        ],
+        0..8,
+    )
+}
+
+fn answered<H: std::fmt::Debug, A: Clone + std::fmt::Debug + 'static>(
+    ask: impl Strategy<Value = A>,
+) -> impl Strategy<Value = Input<H, A>> {
+    (ask, any::<bool>()).prop_map(|(ask, done)| Input::Answered {
+        ask,
+        answer: if done {
+            Answer::Done { body: json!({}) }
+        } else {
+            Answer::Refused {
+                status: 409,
+                words: "refused".to_owned(),
+            }
+        },
+    })
+}
+
+fn opened<A>(writes: bool, at: A) -> Opened<A> {
+    Opened {
+        context: context(writes),
+        at,
+    }
+}
+
+fn act() -> impl Strategy<Value = memory::Act> {
+    prop_oneof![
+        (0u64..5).prop_map(|id| memory::Act::Forget(FactId(id))),
+        (0u8..3).prop_map(|n| memory::Act::Retract(format!("n{n}"))),
+    ]
+}
+
+proptest! {
+    #![proptest_config(ProptestConfig::with_cases(256))]
+
+    #[test]
+    fn memory_laws(writes: bool, msgs in proptest::collection::vec(prop_oneof![
+        held::<memory::Hold, memory::Ask>(memory::Hold::Memory, memory_payload()).prop_map(|i| memory::Msg::Host(Box::new(i))),
+        held::<memory::Hold, memory::Ask>(memory::Hold::Record, record_payload()).prop_map(|i| memory::Msg::Host(Box::new(i))),
+        answered::<memory::Hold, memory::Act>(act()).prop_map(|i| memory::Msg::Host(Box::new(i))),
+        any::<bool>().prop_map(|w| memory::Msg::Host(Box::new(Input::Context(context(w))))),
+        act().prop_map(memory::Msg::Run),
+        Just(memory::Msg::Back),
+        Just(memory::Msg::Retry),
+    ], 0..10)) {
+        page_laws::<memory::Memory>(|| opened(writes, Nothing {}), &msgs);
+    }
+
+    #[test]
+    fn about_laws(msgs in proptest::collection::vec(prop_oneof![
+        held::<about::Hold, about::Ask>(about::Hold::About, about_payload()).prop_map(|i| about::Msg::Host(Box::new(i))),
+        held::<about::Hold, about::Ask>(about::Hold::Releases, releases_payload()).prop_map(|i| about::Msg::Host(Box::new(i))),
+        Just(about::Msg::Retry),
+    ], 0..8)) {
+        page_laws::<about::About>(|| opened(true, Nothing {}), &msgs);
+    }
+
+    #[test]
+    fn calendar_laws(msgs in one_msgs(calendar_payload())) {
+        page_laws::<One<calendar::Calendar>>(|| opened(true, calendar::At { from: "2026-09-07".to_owned() }), &msgs);
+    }
+
+    #[test]
+    fn briefings_laws(msgs in one_msgs(briefings_payload())) {
+        page_laws::<One<briefings::Briefings>>(|| opened(true, Nothing {}), &msgs);
+    }
+
+    #[test]
+    fn briefing_laws(msgs in one_msgs(briefing_payload())) {
+        page_laws::<One<briefing::Briefing>>(|| opened(true, briefing::At { date: "2026-09-04".to_owned() }), &msgs);
+    }
+}
+
+/// A double tap would be two writes: a second Forget of the same fact sends nothing until the
+/// first is answered, and an answered one reads the memory again.
+#[test]
+fn a_forget_runs_once_until_it_is_answered() {
+    let (mut rt, _) = Runtime::<memory::Memory>::start(opened(true, Nothing {}));
+    let tap = || memory::Msg::Run(memory::Act::Forget(FactId(3)));
+    let sent = rt.step(tap()).1;
+    assert_eq!(
+        sent,
+        vec![Effect::Post {
+            ask: memory::Act::Forget(FactId(3)),
+            path: "/api/secretary/memory/3/forget".to_owned()
+        }]
+    );
+    assert_eq!(rt.step(tap()).1, Vec::new());
+    let done = Input::Answered {
+        ask: memory::Act::Forget(FactId(3)),
+        answer: Answer::Done { body: json!({}) },
+    };
+    assert_eq!(
+        rt.step(memory::Msg::Host(Box::new(done))).1,
+        vec![Effect::Again {
+            path: "/api/secretary/memory".to_owned()
+        }]
+    );
+    assert_eq!(
+        rt.step(tap()).1.len(),
+        1,
+        "an answered act may be tapped again"
     );
 }
