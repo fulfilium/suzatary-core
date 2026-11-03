@@ -589,6 +589,13 @@ the main session to merge; you cannot start, merge or deploy one. Never put
 anyone's personal details, identity documents, money, health or legal
 matters into a task: the session reads a copy of the repository, not their life.
 
+Propose it before you read anything. In a round that has read mail, a todo, a
+document, the web or an old answer, the verb is refused, and the box files a
+card of its own: "Start it in a fresh conversation". Its tap opens a new topic
+whose only line is the owner's request, word for word, and you propose the
+session there. Tell the owner why it was refused and point at that card; do not
+ask them to type the request again.
+
 ## Recorded decisions
 
 Designs and plans the project has settled are RECORDED DECISIONS, items of a

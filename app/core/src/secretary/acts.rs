@@ -164,6 +164,16 @@ pub enum Act {
         /// The words' keys.
         keys: std::collections::BTreeSet<crate::secretary::locked_text::KeyName>,
     },
+    /// Ask the owner's request again in a fresh conversation: filed by the box when a round that
+    /// read more than his words is refused a coding session. The tap opens a topic whose one
+    /// line is turn `turn` of `conversation`, copied only while that turn is his own clean words
+    /// ([`crate::secretary::afresh::Request::at_tap`]).
+    Afresh {
+        /// The conversation the request was said in, where the card is drawn.
+        conversation: ConversationId,
+        /// The request, by its index among that conversation's turns.
+        turn: usize,
+    },
 }
 
 impl Act {
@@ -189,6 +199,7 @@ impl Act {
             Act::GoogleSignIn { .. } => "google_sign_in",
             Act::CalendarEvent { .. } => "calendar_event",
             Act::Erase { .. } => "erase",
+            Act::Afresh { .. } => "afresh",
         }
     }
 
@@ -287,6 +298,9 @@ impl Act {
                 keys.len(),
                 if keys.len() == 1 { "" } else { "s" }
             ),
+            Act::Afresh { .. } => "start it in a fresh conversation: a new topic that holds only \
+                                   your request, word for word, and nothing this one read"
+                .to_owned(),
         }
     }
 }
@@ -467,6 +481,8 @@ pub const DISCONNECT: Constructor = ("Disconnect", &["connection"]);
 pub const GRANT: Constructor = ("Grant", &["plugin", "origin"]);
 /// `Erase(fact, keys)`.
 pub const ERASE: Constructor = ("Erase", &["fact", "keys"]);
+/// `Afresh(turn)`.
+pub const AFRESH: Constructor = ("Afresh", &["conversation", "turn"]);
 /// `GoogleClient(redirect)`.
 pub const GOOGLE_CLIENT: Constructor = ("GoogleClient", &["redirect"]);
 /// `GoogleSignIn(account, scopes)`.
@@ -539,6 +555,9 @@ impl Literal for Act {
                         .to_value(),
                 ],
             ),
+            Act::Afresh { conversation, turn } => {
+                record(AFRESH, vec![conversation.to_value(), turn.to_value()])
+            }
         }
     }
 
@@ -626,6 +645,13 @@ impl Literal for Act {
                                 .map_err(|failed| ProdromeError::invalid(failed.to_string()))
                         })
                         .collect::<Result<_, _>>()?,
+                }
+            }
+            "Afresh" => {
+                let fields = Fields::of(value, AFRESH)?;
+                Act::Afresh {
+                    conversation: fields.get("conversation")?,
+                    turn: fields.get("turn")?,
                 }
             }
             other => return Err(no_arm("an act the box performs", other)),

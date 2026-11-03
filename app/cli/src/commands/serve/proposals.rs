@@ -164,8 +164,11 @@ pub fn tap(
                 answer,
             )
         })
-        .inspect(|_| {
+        .inspect(|after| {
             state.heard(id);
+            if let Some(opened) = &after.opened {
+                state.heard(opened);
+            }
             // A connection or a setting written or removed moves what the box reads of the file.
             if edits.moved() {
                 state.reconnected(call.guard.who().as_str());
@@ -176,8 +179,9 @@ pub fn tap(
     // A tap whose answer never reached the page is answered from this line: what happened, and how long.
     let ms = started.elapsed().as_millis();
     match &answered {
-        Ok(payload) => {
-            let now = payload
+        Ok(after) => {
+            let now = after
+                .conversation
                 .proposals
                 .iter()
                 .find(|p| p.index == *index)
@@ -186,7 +190,7 @@ pub fn tap(
         }
         Err(refusal) => tracing::warn!(conversation = %id, index, ms, refused = %refusal, "tap"),
     }
-    answered.map(Json)
+    answered.map(|after| Json(after.conversation))
 }
 
 /// The instance file's editor, noting whether a tap moved the file.

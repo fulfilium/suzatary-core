@@ -47,6 +47,7 @@ fn every_kind() -> Vec<Proposal> {
         r#"{"act":"act","kind":"google_client","redirect":"https://box.example.test/api/oauth/google/callback"}"#.to_owned(),
         r#"{"act":"act","kind":"google_sign_in","account":"her@example.test","scopes":["mail"]}"#.to_owned(),
         r#"{"act":"act","kind":"erase","fact":3,"keys":[]}"#.to_owned(),
+        r#"{"act":"act","kind":"afresh","conversation":"default","turn":0}"#.to_owned(),
     ]
     .iter()
     .map(|json| read(json))
@@ -84,7 +85,8 @@ fn sends(proposal: &Proposal) -> bool {
             | Act::GoogleClient { .. }
             | Act::GoogleSignIn { .. }
             | Act::CalendarEvent { .. }
-            | Act::Erase { .. },
+            | Act::Erase { .. }
+            | Act::Afresh { .. },
         ) => false,
     }
 }

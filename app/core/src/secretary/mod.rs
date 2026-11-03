@@ -4,6 +4,7 @@
 pub mod about;
 pub mod act_vocabulary;
 pub mod acts;
+pub mod afresh;
 pub mod answer;
 pub mod attached;
 pub mod attachment_source;

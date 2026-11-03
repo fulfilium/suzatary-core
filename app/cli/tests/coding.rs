@@ -172,7 +172,7 @@ fn answer(base: &str, id: &str, verb: &str, body: &serde_json::Value) -> (u16, s
 }
 
 /// A task is the whole of what a session is told, so a round that read mail proposes none: the
-/// verb refuses and says why, and no card is filed.
+/// verb refuses and says why, and the one card filed is the box's, which asks again afresh.
 #[test]
 fn a_round_that_read_mail_proposes_no_session() {
     let fakes = Arc::new(
@@ -195,13 +195,13 @@ fn a_round_that_read_mail_proposes_no_session() {
         .start()
         .base;
     let (_, payload) = proposed(&base);
-    assert!(
-        payload["proposals"]
-            .as_array()
-            .expect("proposals")
-            .is_empty(),
-        "{payload}"
-    );
+    let kinds: Vec<&serde_json::Value> = payload["proposals"]
+        .as_array()
+        .expect("proposals")
+        .iter()
+        .map(|proposal| &proposal["act"]["kind"])
+        .collect();
+    assert_eq!(kinds, ["afresh"], "{payload}");
     let refused = payload["turns"]
         .as_array()
         .expect("turns")
@@ -771,4 +771,148 @@ fn a_todo_of_another_chain_is_not_built() {
     assert_eq!(status, 409, "{refused}");
     let fold = suzatary_core::secretary::inbox::fold(&fakes.inbox).expect("the inbox reads");
     assert_eq!(fold.objects().count(), 0, "nothing was filed");
+}
+
+/// A round that read mail is refused a session, and the box files one card that asks the
+/// owner's request again. Its tap opens a conversation whose first line is the owner's request,
+/// byte for byte, under the same stamp and clean; no other line of the old conversation is in
+/// it. The secretary there proposes the session, and its tap fires the routine.
+#[test]
+fn a_refused_session_starts_again_in_a_fresh_conversation() {
+    use suzatary_cli::commands::{ask, tap};
+    let (routine, served_routine) = fake_routine();
+    let (running, fakes) = afresh_box(routine);
+    let base = &running.base;
+    let operator = common::operator(base);
+    let asked = ask::ask(&operator, &ask::Conversation::New, "retitle my cv properly")
+        .expect("the operator asks");
+    let old = asked.conversation;
+    let proposals = conversation(base, old.as_str())["proposals"].clone();
+    assert_eq!(proposals.as_array().map(Vec::len), Some(1), "{proposals}");
+    assert_eq!(proposals[0]["act"]["kind"], "afresh", "{proposals}");
+    assert_eq!(
+        proposals[0]["card"]["answers"][0]["label"],
+        "Start it in a fresh conversation"
+    );
+    // The old topic's title job reads the script too, so it runs before the tap.
+    eventually(|| conversation(base, old.as_str())["title"] != "");
+
+    let card = |conversation| suzatary_core::reference::ProposalRef {
+        conversation,
+        index: 0,
+    };
+    let plain = suzatary_core::secretary::routes::TapAnswer::Plain;
+    let tapped = tap::tap(&operator, &card(old.clone()), "", &plain).expect("the operator taps");
+    assert_eq!(tapped.conversation["proposals"][0]["state"], "acted");
+    let conversations = || fakes.conversations.conversations();
+    let fresh = suzatary_core::secretary::transcript::keys(conversations())
+        .expect("the conversations read")
+        .into_iter()
+        .find(|id| *id != old && id.as_str() != "default")
+        .expect("a fresh conversation");
+    eventually(|| {
+        let now = conversation(base, fresh.as_str());
+        now["state"] == "idle" && !now["proposals"].as_array().is_none_or(Vec::is_empty)
+    });
+    only_the_request_crossed(
+        &suzatary_core::secretary::read(conversations(), &old).expect("reads"),
+        &suzatary_core::secretary::read(conversations(), &fresh).expect("reads"),
+    );
+    let proposal = &conversation(base, fresh.as_str())["proposals"][0];
+    assert_eq!(proposal["act"]["kind"], "coding_session", "{proposal}");
+
+    let started =
+        tap::tap(&operator, &card(fresh), "", &plain).expect("the owner taps the session's card");
+    assert_eq!(
+        started.conversation["proposals"][0]["coding"]["state"],
+        "fired"
+    );
+    let (_, body) = served_routine.join().expect("the fake ran");
+    assert_eq!(
+        serde_json::from_str::<serde_json::Value>(&body).expect("json"),
+        serde_json::json!({ "text": TASK.replace("\\n", "\n") })
+    );
+}
+
+/// A box whose loopback is its own terminal, firing at `routine`, with a model that searches
+/// mail, is refused a session, answers, titles the topic, then proposes the session afresh.
+fn afresh_box(routine: String) -> (common::Running, Arc<Fakes>) {
+    let propose = format!(
+        r#"{{"say": "", "calls": [{{"verb": "propose_coding_session", "args": {{
+            "task": "{TASK}",
+            "why": "The title is out of date and the change needs the gates.",
+            "sources": "todo:life/permitfiling"
+        }}}}]}}"#
+    )
+    .leak();
+    let fakes = Arc::new(Fakes::new("coding-afresh").model(FakeModel::saying([
+        r#"{"say": "", "calls": [{"verb": "search", "args": {"query": "cv"}}]}"#,
+        &*propose,
+        r#"{"say": "This conversation read mail; tap the card to start it afresh."}"#,
+        r#"{"say": "Retitling the CV"}"#,
+        &*propose,
+        r#"{"say": "Proposed."}"#,
+    ])));
+    let running = common::Server::new(
+        Arc::clone(&fakes),
+        deployment(),
+        common::loopback_is_this_box(),
+    )
+    .real_acts(
+        "coding-afresh",
+        "her@study.test",
+        common::again(&fakes.conversations),
+        common::ScriptedOauth::new(Vec::new()),
+    )
+    .firing(Firing::Endpoint {
+        base: routine,
+        routine: "trig_01fake".parse().expect("a routine id"),
+        secrets: Arc::new(Holding),
+    })
+    .start();
+    (running, fakes)
+}
+
+/// The law of a fresh conversation: its first line is the owner's request in `before`, byte for
+/// byte and under the same stamp, and clean; every later line is the fresh round's own, the
+/// model's calls and their answers, so no other line of `before` is in it.
+fn only_the_request_crossed(
+    before: &suzatary_core::secretary::store::Stored,
+    after: &suzatary_core::secretary::store::Stored,
+) {
+    use suzatary_core::capability::Turn;
+    use suzatary_core::secretary::taint::{self, Taint};
+    let request = before
+        .turns
+        .iter()
+        .find(|said| matches!(said.turn, Turn::Person { .. }))
+        .expect("the owner's request");
+    let first = &after.turns[0];
+    assert_eq!(
+        first.turn, request.turn,
+        "the owner's request, byte for byte"
+    );
+    assert_eq!(first.by, request.by, "under the owner's own stamp");
+    assert_eq!(taint::turn(first), Taint::Clean);
+    assert!(
+        matches!(after.turns[1].turn, Turn::Model { .. }),
+        "the model answered the request alone"
+    );
+    for said in &after.turns[1..] {
+        assert!(
+            matches!(said.turn, Turn::Model { .. } | Turn::Tool { .. }),
+            "a line the fresh round did not write: {said:?}"
+        );
+    }
+}
+
+/// Wait for `done`, which the box's worker makes true on its own thread.
+fn eventually(done: impl Fn() -> bool) {
+    for _ in 0..400 {
+        if done() {
+            return;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(25));
+    }
+    panic!("the box never got there");
 }

@@ -2136,6 +2136,11 @@ pub enum ProposedAct {
         /// The imperative.
         sentence: String,
     },
+    /// Ask the owner's request again in a fresh conversation.
+    Afresh {
+        /// The imperative.
+        sentence: String,
+    },
     /// The code an open sign-in waits for. No code field: the card's own password field sends
     /// it in the tap's body.
     #[serde(rename = "sign_in_code")]

@@ -81,6 +81,7 @@ fn every_act() -> Vec<String> {
         r#"{"act":"act","kind":"connect","connection":{"template":"git-remote","params":[]}}"#.to_owned(),
         r#"{"act":"act","kind":"disconnect","connection":{"template":"lieer","params":["ada@example.test"]}}"#.to_owned(),
         r#"{"act":"act","kind":"grant","plugin":"ics","origin":"https://cal.example.test"}"#.to_owned(),
+        r#"{"act":"act","kind":"afresh","conversation":"2026-11-01-2","turn":3}"#.to_owned(),
         r#"{"act":"decide","id":"literalacts","title":"Acts are literals","body":"The inbox stores *literals*.","rationale":"one walker","supersedes":["jsonacts"]}"#.to_owned(),
     ];
     for kind in ["owner", "person", "preference", "standing"] {

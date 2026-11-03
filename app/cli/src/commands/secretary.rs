@@ -538,7 +538,8 @@ fn begin_real(
         | Act::GoogleClient { .. }
         | Act::GoogleSignIn { .. }
         | Act::CalendarEvent { .. }
-        | Act::Erase { .. } => {
+        | Act::Erase { .. }
+        | Act::Afresh { .. } => {
             return Performed::Tried(Tried::NotSent {
                 reason: "a secret act is not a device flow".to_owned(),
             });
@@ -1034,7 +1035,8 @@ fn begin_recording(
         | Act::GoogleClient { .. }
         | Act::GoogleSignIn { .. }
         | Act::CalendarEvent { .. }
-        | Act::Erase { .. } => {
+        | Act::Erase { .. }
+        | Act::Afresh { .. } => {
             return Performed::Tried(Tried::NotSent {
                 reason: "a secret act is not a device flow".to_owned(),
             });

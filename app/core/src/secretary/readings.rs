@@ -870,6 +870,9 @@ fn act_on_wire(
         crate::secretary::acts::Act::Erase { .. } => wire::ProposedAct::Erase {
             sentence: act.sentence(),
         },
+        crate::secretary::acts::Act::Afresh { .. } => wire::ProposedAct::Afresh {
+            sentence: act.sentence(),
+        },
     }
 }
 

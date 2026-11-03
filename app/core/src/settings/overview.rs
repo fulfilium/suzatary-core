@@ -93,6 +93,7 @@ impl Asking {
                         | Act::CodingSession { .. }
                         | Act::Device(_)
                         | Act::Erase { .. }
+                        | Act::Afresh { .. }
                         | Act::CalendarEvent { .. },
                     )
                     | Proposal::Email(_)

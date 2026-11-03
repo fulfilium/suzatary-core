@@ -42,7 +42,8 @@ impl Sending {
                 | Act::GoogleSignIn { .. }
                 // A new event names no attendee, so the calendar invites nobody by mail.
                 | Act::CalendarEvent { .. }
-                | Act::Erase { .. } => Sending::SendsNothing,
+                | Act::Erase { .. }
+                | Act::Afresh { .. } => Sending::SendsNothing,
             },
         }
     }

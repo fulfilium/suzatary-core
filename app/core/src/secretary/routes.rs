@@ -283,22 +283,8 @@ pub fn open(
             .map_err(|refused| Refusal::bad_request(refused.to_string()))?
             .into()
     };
-    let taken = transcript::keys(caps.secretary.conversations)
-        .map_err(|failed| Refusal::internal(failed.to_string()))?;
-    let today = cards
-        .deployment
-        .zone
-        .day(prodrome_core::fpl::instant_of(caps.secretary.clock.now()));
-    let id = ConversationId::minted(today, &taken);
-    let stored = super::start(
-        caps.secretary.conversations,
-        caps.secretary.model,
-        &id,
-        &title,
-        Kind::Topic,
-        caps.secretary.clock.now(),
-    )?;
-    payload(&stored, caps, cards)
+    let id = begun(caps, cards, &title, None)?;
+    newest(caps, cards, &id)
 }
 
 /// `POST /api/secretary/setup/<template>`: a conversation of its own begun on `template`, titled
@@ -314,6 +300,28 @@ pub fn setup(
     cards: &Cards<'_>,
     template: crate::connect::TemplateId,
 ) -> Answered<wire::ConversationPayload> {
+    let template = template.template();
+    let title: String = Title::new(template.called())
+        .map_err(|refused| Refusal::internal(refused.to_string()))?
+        .into();
+    let at = caps.secretary.clock.now();
+    let id = begun(
+        caps,
+        cards,
+        &title,
+        Some(&Entry::noted(at, template.opening(), Vec::new())),
+    )?;
+    newest(caps, cards, &id)
+}
+
+/// Open a topic now under an id minted for today, titled `title`, and write `first` as its
+/// first line when there is one. Every route that opens a conversation calls it.
+fn begun(
+    caps: &Server<'_>,
+    cards: &Cards<'_>,
+    title: &str,
+    first: Option<&Entry>,
+) -> Result<ConversationId, Refusal> {
     let taken = transcript::keys(caps.secretary.conversations)
         .map_err(|failed| Refusal::internal(failed.to_string()))?;
     let at = caps.secretary.clock.now();
@@ -322,28 +330,18 @@ pub fn setup(
         .zone
         .day(prodrome_core::fpl::instant_of(at));
     let id = ConversationId::minted(today, &taken);
-    let template = template.template();
-    let title: String = Title::new(template.called())
-        .map_err(|refused| Refusal::internal(refused.to_string()))?
-        .into();
     super::start(
         caps.secretary.conversations,
         caps.secretary.model,
         &id,
-        &title,
+        title,
         Kind::Topic,
         at,
     )?;
-    super::append(
-        caps.secretary.conversations,
-        &id,
-        &Entry::noted(at, template.opening(), Vec::new()),
-    )?;
-    payload(
-        &super::read(caps.secretary.conversations, &id)?,
-        caps,
-        cards,
-    )
+    if let Some(first) = first {
+        super::append(caps.secretary.conversations, &id, first)?;
+    }
+    Ok(id)
 }
 
 /// `POST …/<id>/title`: rename one, as the actor the gate resolved.
@@ -777,6 +775,11 @@ enum Prepared<'p, 'c> {
     UnlockStore,
     /// Erase these passages.
     Erase(&'p std::collections::BTreeSet<crate::secretary::locked_text::KeyName>),
+    /// Open a topic holding turn `turn` of `conversation`, read again under the hold.
+    Afresh {
+        conversation: &'p ConversationId,
+        turn: usize,
+    },
     /// Register a vouched device's key on every chain.
     Device {
         enrolling: crate::signatures::Enrolling<'c>,
@@ -864,6 +867,7 @@ impl<'p, 'c> Prepared<'p, 'c> {
     }
 
     /// An act's card paired with its answer.
+    #[expect(clippy::too_many_lines, reason = "one arm per kind of act")]
     fn of_act(
         act: &'p Act,
         answer: &'p TapAnswer,
@@ -943,6 +947,13 @@ impl<'p, 'c> Prepared<'p, 'c> {
                 answer.plain()?;
                 Prepared::Erase(keys)
             }
+            Act::Afresh { conversation, turn } => {
+                answer.plain()?;
+                Prepared::Afresh {
+                    conversation,
+                    turn: *turn,
+                }
+            }
             Act::GoogleClient { redirect } => Prepared::GoogleClient {
                 redirect,
                 file: answer.value(": the client's downloaded file, whole")?,
@@ -1002,7 +1013,7 @@ pub fn tap(
     card: &ProposalRef,
     note: &str,
     answer: &TapAnswer,
-) -> Answered<wire::ConversationPayload> {
+) -> Answered<AfterTap> {
     let (id, index) = (&card.conversation, card.index);
     let stored = super::read(caps.secretary.conversations, id)?;
     let standing = stored.standing(index, &inbox::fold(caps.secretary.inbox)?)?;
@@ -1036,7 +1047,7 @@ pub fn tap(
             &mut then,
         )
     })?;
-    afterwards(caps, effectors, then, card)?;
+    let opened = afterwards(caps, effectors, then, card)?;
     summaries_after(caps, &standing.object.asked.proposal);
     if matches!(response, Response::Ran(_)) {
         crate::secretary::acts::note_act(
@@ -1056,7 +1067,20 @@ pub fn tap(
             )),
         )?;
     }
-    payload(&super::read(caps.secretary.conversations, id)?, caps, cards)
+    Ok(AfterTap {
+        conversation: payload(&super::read(caps.secretary.conversations, id)?, caps, cards)?,
+        opened,
+    })
+}
+
+/// What a tap answers.
+#[derive(Debug)]
+pub struct AfterTap {
+    /// The card's conversation, as it stands after the tap.
+    pub conversation: wire::ConversationPayload,
+    /// The conversation the tap opened, in which the caller wakes a model: a card that asks the
+    /// owner's request again opens one.
+    pub opened: Option<ConversationId>,
 }
 
 /// What performing a prepared card reaches.
@@ -1100,6 +1124,18 @@ fn performed(
         Prepared::Grant { plugin, origin } => granted(effectors.edits, plugin, origin),
         Prepared::UnlockStore => store_answers(caps.secretary.secrets, cards.settables),
         Prepared::Erase(keys) => erased(caps, id, keys, tap)?,
+        Prepared::Afresh { conversation, turn } => {
+            // A device may write an inbox object too, so a card copies only a request said in
+            // the conversation it is drawn in.
+            if conversation != id {
+                return Err(Refusal::conflict(format!(
+                    "this card asks again a request of {conversation}, and it is drawn in {id}"
+                )));
+            }
+            let (opened, performed) = afresh(caps, cards, conversation, turn)?;
+            *then = Some(Then::Opened(opened));
+            performed
+        }
         Prepared::Device {
             enrolling,
             enrolment,
@@ -1178,17 +1214,20 @@ enum Then {
         crate::mail::account::MailAccount,
         crate::mail::removal::Removal,
     ),
+    /// The conversation the tap opened, whose first line a model now owes an answer.
+    Opened(ConversationId),
 }
 
-/// Do what the tap of `card` left.
+/// Do what the tap of `card` left, and answer the conversation it opened, if any.
 fn afterwards(
     caps: &Server<'_>,
     effectors: &Effectors<'_>,
     then: Option<Then>,
     card: &ProposalRef,
-) -> Result<(), Refusal> {
-    match then {
+) -> Result<Option<ConversationId>, Refusal> {
+    let done = match then {
         None => Ok(()),
+        Some(Then::Opened(opened)) => return Ok(Some(opened)),
         Some(Then::End(began, ended)) => inbox::end(
             caps.secretary.inbox,
             &began,
@@ -1222,7 +1261,8 @@ fn afterwards(
                 ),
             )
         }
-    }
+    };
+    done.map(|()| None)
 }
 
 /// What a secret's tap does with its value: store it, or, for a plugin's link, refuse a value
@@ -1599,6 +1639,7 @@ pub fn ask_trust(
                 | Act::Disconnect { .. }
                 | Act::Grant { .. }
                 | Act::Erase { .. }
+                | Act::Afresh { .. }
                 | Act::GoogleClient { .. }
                 | Act::GoogleSignIn { .. }
                 | Act::CalendarEvent { .. },
@@ -1679,7 +1720,8 @@ pub fn withdraw_trusted(
                 | Act::GoogleClient { .. }
                 | Act::GoogleSignIn { .. }
                 | Act::CalendarEvent { .. }
-                | Act::Erase { .. },
+                | Act::Erase { .. }
+                | Act::Afresh { .. },
             )
             | Proposal::Email(_)
             | Proposal::Forward(_)
@@ -1962,6 +2004,29 @@ fn erased(
         ),
     }
     .into())
+}
+
+/// A topic opened for turn `turn` of `conversation`, whose one line is that turn as the owner
+/// said it, read again here so a turn erased or changed since the card was filed is refused.
+/// Nothing else of `conversation` is copied.
+fn afresh(
+    caps: &Server<'_>,
+    cards: &Cards<'_>,
+    conversation: &ConversationId,
+    turn: usize,
+) -> Result<(ConversationId, Performed), Refusal> {
+    let request = crate::secretary::afresh::Request::at_tap(
+        &super::read(caps.secretary.conversations, conversation)?,
+        turn,
+    )?;
+    let opened = begun(
+        caps,
+        cards,
+        "",
+        Some(&request.entry(caps.secretary.clock.now())),
+    )?;
+    let what = format!("asked your request again in a fresh conversation, {opened}");
+    Ok((opened, Done::Acted { what }.into()))
 }
 
 /// The store asked again for every declared name: the unlock card is done once it answers for

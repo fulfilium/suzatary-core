@@ -141,6 +141,7 @@ pub fn of(act: &ProposedAct) -> Card {
             sentence,
         } => grant(plugin, origin, sentence),
         ProposedAct::Erase { sentence } => erase(sentence),
+        ProposedAct::Afresh { sentence } => afresh(sentence),
         ProposedAct::GoogleClient {
             redirect, steps, ..
         } => google_client(redirect, steps),
@@ -923,6 +924,23 @@ fn erase(sentence: &str) -> Card {
             sentence,
             Vec::new(),
             "erase",
+        )
+    }
+}
+
+/// One answer that starts the request again: the tap only copies the owner's own words into a
+/// new topic, so it needs no second step.
+fn afresh(sentence: &str) -> Card {
+    Card {
+        answers: vec![CardAnswer {
+            done: "started afresh".to_owned(),
+            ..answer("start", "Start it in a fresh conversation")
+        }],
+        ..card(
+            "Ask again where nothing was read",
+            sentence,
+            Vec::new(),
+            "start",
         )
     }
 }

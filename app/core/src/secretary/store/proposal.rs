@@ -96,7 +96,8 @@ impl Proposal {
                 | Act::SignInCode { .. }
                 // An event written twice is two events.
                 | Act::CalendarEvent { .. }
-                | Act::Erase { .. } => false,
+                | Act::Erase { .. }
+                | Act::Afresh { .. } => false,
             },
         }
     }

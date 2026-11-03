@@ -163,6 +163,7 @@ fn unmet(
             | Act::SignInCode { .. }
             | Act::UnlockStore { .. }
             | Act::Erase { .. }
+            | Act::Afresh { .. }
             | Act::GoogleClient { .. }
             | Act::GoogleSignIn { .. }
             | Act::CalendarEvent { .. },

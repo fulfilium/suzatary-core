@@ -44,6 +44,7 @@ pub const SIGNATURES: &[Constructor] = &[
     acts::GRANT,
     crate::connect::CONNECTION,
     acts::ERASE,
+    acts::AFRESH,
     acts::GOOGLE_CLIENT,
     acts::GOOGLE_SIGN_IN,
     acts::CALENDAR_EVENT,
