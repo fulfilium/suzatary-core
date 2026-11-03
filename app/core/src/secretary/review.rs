@@ -63,7 +63,8 @@ pub const SURFACE: Subset = Subset {
 };
 
 /// Review every open triage card in one round, then write a `held` line for each card still
-/// open; nothing while the model is under a limit.
+/// open; nothing while the model is under a limit, and nothing when today's round already holds
+/// every open card.
 ///
 /// The seed is `triage_cards`' own answer as a `Turn::Tool`, and spends no rounds.
 ///
@@ -81,7 +82,8 @@ pub fn review(
         Run::Paused(limited) => return Ok(Run::Paused(limited)),
     };
     let id = round.id.clone();
-    if standing(caps.inbox)?.is_empty() {
+    let cards = standing(caps.inbox)?;
+    if cards.is_empty() {
         // Nothing standing opens no conversation and spawns no model.
         return Ok(Run::Done(Reviewed {
             stored: round.idle(caps),
@@ -90,7 +92,21 @@ pub fn review(
             standing: 0,
         }));
     }
-    let already = round.open(caps)?.reviews.len();
+    let opened = round.open(caps)?;
+    let known = held(&opened);
+    if cards
+        .iter()
+        .all(|(card, _)| known.contains(&card.to_string()))
+    {
+        // Every card was held earlier today and none is new, so the model has nothing to decide.
+        return Ok(Run::Done(Reviewed {
+            stored: opened,
+            rounds: 0,
+            decided: Vec::new(),
+            standing: cards.len(),
+        }));
+    }
+    let already = opened.reviews.len();
 
     transcript::push(
         caps.conversations,
@@ -228,12 +244,7 @@ fn hold_the_rest(
     answered: &Stored,
 ) -> Result<usize, Refusal> {
     let why = said(answered);
-    let known: std::collections::BTreeSet<String> = answered
-        .reviews
-        .iter()
-        .filter(|review| review.decision == Decision::Held)
-        .map(|review| review.batch.clone())
-        .collect();
+    let known = held(answered);
     let at = caps.clock.now();
     let held = standing(caps.inbox)?;
     for (card, changeset) in &held {
@@ -255,6 +266,16 @@ fn hold_the_rest(
         )?;
     }
     Ok(held.len())
+}
+
+/// The cards the round's conversation already holds, by reference.
+fn held(round: &Stored) -> std::collections::BTreeSet<String> {
+    round
+        .reviews
+        .iter()
+        .filter(|review| review.decision == Decision::Held)
+        .map(|review| review.batch.clone())
+        .collect()
 }
 
 /// The last thing the model said, which is what a hold's reason is.

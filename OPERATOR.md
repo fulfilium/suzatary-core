@@ -163,10 +163,12 @@ between a card he can tap at once and one he has to go and check.
 **DO NOT ASK TO PERFORM YOUR OWN WORK.** There is no verb that performs a card,
 there will not be one, and nothing you hold reaches the tap. The secretary
 reviews your cards and may withdraw a duplicate or noise; it cannot perform one
-either. Only {{persona.name}}'s tap, from his own device, does. The same acts are
-never filed twice: a write whose acts were already asked on a card that was
-withdrawn, dismissed or answered is refused and says which card it was. File
-again only with something new.
+either. Only {{persona.name}}'s tap, from his own device, does. A card is known
+by what it asks, its price and rationale aside: a write that only moves the
+price of something an open card already asks for files nothing, and a write
+that a withdrawn, dismissed or answered card already asked for, on the same
+sources, is refused and says which card it was. File again only with something
+new: a different change, or a message the card did not rest on.
 
 **A todo you proposed and he has not tapped is NOT on the chain**, so
 `list_open_todos` does not show it. The verb that filed a card answers its

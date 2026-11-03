@@ -82,6 +82,7 @@ pub mod queue;
 pub mod read_holders;
 pub mod readings;
 pub mod recollection;
+pub mod request;
 pub mod rescrub;
 pub mod responded;
 pub mod review;

@@ -1271,7 +1271,10 @@ performs it at once. The triage agent files it through `secretary::filed::Triage
 door its call holds, as a card asked by `Proposer::Triage` (stored `Triaged`) in the `triage`
 conversation, after building it against the chain as the tap would. A later write about a todo
 that an open triage card names joins that card and replaces it, so the Inbox holds one card per
-todo. The agent's record holds its chain as a `store::Reads`, the read half of `Prodrome`, so no
+todo. A card is known by its acts' requests (`secretary::request`, an act without its price and
+rationale, which the stateless agent re-reads off the date on every pass): a write the open card
+already asks for files nothing, a join adds only what the card does not ask, and a request an
+answered card asked for on the same sources is refused. The agent's record holds its chain as a `store::Reads`, the read half of `Prodrome`, so no
 append or accept is reachable from it (`capability::Agent`'s `compile_fail` tests); the box
 gives it `suzatary_io::reading::Reading`, and its replica (`events-triage/`) went with the
 batches. The one performer, `changes::apply`, takes the secretary's record, never the agent's. The secretary's review lists the open triage cards (`triage_cards`) and

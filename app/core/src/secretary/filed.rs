@@ -201,12 +201,15 @@ impl<'a> TriageCards<'a> {
         }
     }
 
-    /// File `act` as the triage agent's, at `at`. When an open triage card already asks for acts
-    /// on the same chain and todo, the new card holds those acts and then this one and replaces
-    /// it, so the Inbox holds one card per todo. `check` builds the whole changeset against the
-    /// chain first, so a card the tap would refuse is refused now.
+    /// File `act` as the triage agent's, at `at`. A card is known by its acts' requests
+    /// ([`crate::secretary::changes::Act::request`]), so a write the open card about its todo already asks for, whatever its
+    /// price now reads, files nothing; and when an open card asks for other acts on the same chain
+    /// and todo, the new card holds those acts and then this write's new ones and replaces it, so
+    /// the Inbox holds one card per todo. `check` builds the whole changeset against the chain
+    /// first, so a card the tap would refuse is refused now.
     ///
     /// # Errors
+    /// [`Refusal::conflict`] for a write an answered card already asked for on the same sources,
     /// `check`'s refusal, and the stores' failures.
     pub fn file(
         &self,
@@ -226,16 +229,33 @@ impl<'a> TriageCards<'a> {
         )?;
         let _held = self.inbox.locked()?;
         let fold = inbox::fold(self.inbox)?;
-        let (changeset, reasons, revises) = match open_card(&fold, &changeset) {
+        let open = open_card(&fold, &changeset);
+        if let Some((object, standing)) = open
+            && asks_for(standing, &changeset)
+        {
+            return Ok(Carded {
+                card: object.asked.asked.clone(),
+                acts: standing.acts().len(),
+                how: Carding::Already,
+            });
+        }
+        if let Some(answered) = answered_card(&fold, &changeset, &reasons) {
+            return Err(Refusal::conflict(format!(
+                "this was asked before, as {}, which reads {}; the same request, whatever its \
+                 price, is filed again only on a source that card did not rest on",
+                answered.asked.asked, answered.reading,
+            )));
+        }
+        let (changeset, reasons, revises) = match open {
             None => (changeset, reasons, None),
-            Some((object, standing)) => match joined(object, standing, &changeset, &reasons)? {
-                Joining::Already(carded) => return Ok(carded),
-                Joining::Joined(changeset, reasons) => (
+            Some((object, standing)) => {
+                let (changeset, reasons) = joined(object, standing, &changeset, &reasons)?;
+                (
                     changeset,
                     reasons,
                     Some((object.id.clone(), object.asked.asked.index)),
-                ),
-            },
+                )
+            }
         };
         check(&changeset)?;
         let acts = changeset.acts().len();
@@ -309,63 +329,88 @@ fn subject(changeset: &Changeset) -> Option<(&str, &str)> {
         .map(|act| (changeset.chain(), act.todo()))
 }
 
+/// The changeset of `object` when it is a card the triage agent filed, in any reading.
+#[must_use]
+pub fn triage_card(object: &inbox::Object) -> Option<&Changeset> {
+    match &object.asked.proposal {
+        Proposal::Changes(changeset) if object.asked.proposer == Proposer::Triage => {
+            Some(changeset)
+        }
+        Proposal::Changes(_)
+        | Proposal::Email(_)
+        | Proposal::Forward(_)
+        | Proposal::Act(_)
+        | Proposal::Remember { .. }
+        | Proposal::Decide(_) => None,
+    }
+}
+
+/// Every card the triage agent filed, in any reading, with its changeset.
+fn triage_cards(fold: &inbox::Fold) -> impl Iterator<Item = (&inbox::Object, &Changeset)> {
+    fold.objects()
+        .filter_map(|object| triage_card(object).map(|changeset| (object, changeset)))
+}
+
 /// The triage card about the same chain and todo as `changeset` that nobody has answered: a card
 /// the owner tapped, even one whose tap failed, is his, and a new write files a card of its own.
 fn open_card<'f>(
     fold: &'f inbox::Fold,
     changeset: &Changeset,
 ) -> Option<(&'f inbox::Object, &'f Changeset)> {
-    fold.objects()
-        .find_map(|object| match &object.asked.proposal {
-            Proposal::Changes(standing)
-                if object.asked.proposer == Proposer::Triage
-                    && matches!(
-                        object.reading,
-                        crate::secretary::inbox_reading::Reading::Standing
-                    )
-                    && subject(standing) == subject(changeset) =>
-            {
-                Some((object, standing))
-            }
-            Proposal::Changes(_)
-            | Proposal::Email(_)
-            | Proposal::Forward(_)
-            | Proposal::Act(_)
-            | Proposal::Remember { .. }
-            | Proposal::Decide(_) => None,
+    triage_cards(fold).find(|(object, standing)| {
+        matches!(object.reading, Reading::Standing) && subject(standing) == subject(changeset)
+    })
+}
+
+/// Whether `act` makes a request `card` already makes.
+fn asked_by(card: &Changeset, act: &crate::secretary::changes::Act) -> bool {
+    card.acts()
+        .iter()
+        .any(|asked| asked.request() == act.request())
+}
+
+/// Whether `card` asks for every act of `changeset`, on the same chain.
+fn asks_for(card: &Changeset, changeset: &Changeset) -> bool {
+    card.chain() == changeset.chain() && changeset.acts().iter().all(|act| asked_by(card, act))
+}
+
+/// A card somebody answered (tapped, dismissed or withdrew) that asked for every act of
+/// `changeset` on every source `reasons` names: the same request on the same evidence, which is
+/// never asked again. A source that card did not rest on makes the write a new request.
+fn answered_card<'f>(
+    fold: &'f inbox::Fold,
+    changeset: &Changeset,
+    reasons: &Reasons,
+) -> Option<&'f inbox::Object> {
+    triage_cards(fold)
+        .find(|(object, card)| {
+            !matches!(object.reading, Reading::Standing)
+                && asks_for(card, changeset)
+                && reasons
+                    .sources()
+                    .iter()
+                    .all(|source| object.asked.reasons.sources().contains(source))
         })
+        .map(|(object, _)| object)
 }
 
-/// What a new write about a todo comes to beside its open card.
-enum Joining {
-    /// The card already asks for every act: nothing is filed.
-    Already(Carded),
-    /// The card's acts, then the new ones, with both reasons.
-    Joined(Changeset, Reasons),
-}
-
-/// `changeset` joined to the open card `object` holding `standing`.
+/// `changeset` joined to the open card `object` holding `standing`: the card's acts, then those of
+/// `changeset` it does not already ask for, with both reasons.
 fn joined(
     object: &inbox::Object,
     standing: &Changeset,
     changeset: &Changeset,
     reasons: &Reasons,
-) -> Result<Joining, Refusal> {
-    if changeset
-        .acts()
-        .iter()
-        .all(|act| standing.acts().contains(act))
-    {
-        return Ok(Joining::Already(Carded {
-            card: object.asked.asked.clone(),
-            acts: standing.acts().len(),
-            how: Carding::Already,
-        }));
-    }
+) -> Result<(Changeset, Reasons), Refusal> {
     let acts = standing
         .acts()
         .iter()
-        .chain(changeset.acts())
+        .chain(
+            changeset
+                .acts()
+                .iter()
+                .filter(|act| !asked_by(standing, act)),
+        )
         .cloned()
         .collect();
     let joined = Changeset::new(standing.chain(), acts)
@@ -384,7 +429,7 @@ fn joined(
     let why = format!("{}\n{}", object.asked.reasons.why(), reasons.why());
     let reasons =
         Reasons::new(why, sources).map_err(|failed| Refusal::internal(failed.to_string()))?;
-    Ok(Joining::Joined(joined, reasons))
+    Ok((joined, reasons))
 }
 
 #[cfg(test)]
@@ -415,6 +460,161 @@ mod tests {
             serves: Some(serves),
             revises: None,
         }
+    }
+
+    /// `todo` asked for as a new todo (0), an update that names a price (1) or a reprice (2), at
+    /// `percent`, with a rationale that differs on every pass.
+    fn priced(shape: u8, todo: &str, percent: u32, pass: usize) -> crate::secretary::changes::Act {
+        use crate::secretary::changes::Act as ChainAct;
+        use crate::todo::{Patch, Price, TodoFields, TodoPatch};
+        let price = Price::Flat { percent };
+        let rationale = format!("read on pass {pass}");
+        match shape {
+            0 => ChainAct::Add {
+                todo: todo.to_owned(),
+                fields: TodoFields {
+                    body: "Answer the chat request".to_owned(),
+                    rationale,
+                    kind: "todo".to_owned(),
+                    category: String::new(),
+                    price,
+                    detail: String::new(),
+                    waiting_on: String::new(),
+                },
+                from: crate::secretary::changes::Provenance::default(),
+            },
+            1 => ChainAct::Update {
+                todo: todo.to_owned(),
+                fields: TodoPatch {
+                    detail_append: Patch::Set("The sender asked again.".to_owned()),
+                    rationale: Patch::Set(rationale),
+                    price: Patch::Set(price),
+                    ..TodoPatch::default()
+                },
+            },
+            _ => ChainAct::Reprice {
+                todo: todo.to_owned(),
+                priority: price,
+                rationale,
+            },
+        }
+    }
+
+    /// Reasons resting on `sources`, each a briefing's day.
+    fn resting_on(sources: &[&str]) -> Reasons {
+        Reasons::new(
+            "a message asks for it",
+            sources
+                .iter()
+                .map(|day| format!("briefing:{day}").parse().expect("a reference"))
+                .collect(),
+        )
+        .expect("reasons")
+    }
+
+    /// One triage write of `act` at `at`, every changeset admitted.
+    fn filed_triage(
+        cards: &TriageCards<'_>,
+        at: Datetime,
+        act: crate::secretary::changes::Act,
+        reasons: Reasons,
+    ) -> Result<Carded, Refusal> {
+        cards.file(
+            at,
+            Changeset::new("life", vec![act]).expect("one act"),
+            reasons,
+            None,
+            &|_| Ok(()),
+        )
+    }
+
+    proptest::proptest! {
+        /// THE REFILE LOOP: the triage agent proposing the same request on every pass, its price
+        /// and rationale read afresh each time, leaves exactly one standing card, the first, with
+        /// the first pass's one act; no pass files, joins or withdraws.
+        #[test]
+        fn the_same_request_on_every_pass_is_one_standing_card(
+            shape in 0u8..3,
+            percents in proptest::collection::vec(1u32..100, 1..12),
+        ) {
+            let conversations = crate::secretary::conversations::InMemory::default();
+            let inbox = InMemory::<InboxEvent>::default();
+            let cards = TriageCards::new(conversations.conversations(), &inbox);
+            let mut first = None;
+            for (pass, percent) in percents.iter().enumerate() {
+                let carded = filed_triage(
+                    &cards,
+                    at(u32::try_from(pass).expect("a minute")),
+                    priced(shape, "chatrequest", *percent, pass),
+                    resting_on(&["2026-11-03"]),
+                )
+                .expect("filed");
+                let first = first.get_or_insert_with(|| carded.card.clone());
+                proptest::prop_assert_eq!(&carded.card, &*first);
+                proptest::prop_assert_eq!(carded.acts, 1);
+                proptest::prop_assert_eq!(
+                    carded.how,
+                    if pass == 0 { Carding::New } else { Carding::Already }
+                );
+            }
+            let standing = crate::secretary::verbs::standing(&inbox).expect("the inbox reads");
+            proptest::prop_assert_eq!(standing.len(), 1, "{:?}", standing);
+            proptest::prop_assert_eq!(inbox::fold(&inbox).expect("reads").objects().count(), 1);
+        }
+    }
+
+    /// A request somebody answered is not asked again on the same sources at another price, and
+    /// is asked again, as a new card, on a source the answered card did not rest on.
+    #[test]
+    fn an_answered_request_comes_back_only_on_a_new_source() {
+        let conversations = crate::secretary::conversations::InMemory::default();
+        let inbox = InMemory::<InboxEvent>::default();
+        let cards = TriageCards::new(conversations.conversations(), &inbox);
+        let first = filed_triage(
+            &cards,
+            at(0),
+            priced(2, "permit", 62, 0),
+            resting_on(&["2026-11-02"]),
+        )
+        .expect("filed");
+        let id = inbox::fold(&inbox)
+            .expect("reads")
+            .objects()
+            .find(|object| object.asked.asked == first.card)
+            .expect("the card")
+            .id
+            .clone();
+        inbox::withdraw(
+            &inbox,
+            &id,
+            &super::super::writes_as(),
+            at(1),
+            crate::secretary::responded::Withdrawal::NoLongerNeeded {
+                why: "a repricing with no new fact".to_owned(),
+            },
+        )
+        .expect("withdrawn");
+        let refused = filed_triage(
+            &cards,
+            at(2),
+            priced(2, "permit", 61, 1),
+            resting_on(&["2026-11-02"]),
+        )
+        .expect_err("the same request on the same source");
+        assert!(
+            refused.message().contains(&first.card.to_string()),
+            "{}",
+            refused.message()
+        );
+        let again = filed_triage(
+            &cards,
+            at(3),
+            priced(2, "permit", 40, 2),
+            resting_on(&["2026-11-02", "2026-11-03"]),
+        )
+        .expect("a new source is a new request");
+        assert_eq!(again.how, Carding::New);
+        assert_ne!(again.card, first.card);
     }
 
     /// The limit is the filing door's, under the inbox's hold: with one build in progress, a

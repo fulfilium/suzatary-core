@@ -2,9 +2,8 @@ use serde_json::{Value, json};
 
 use crate::refusal::Refusal;
 use crate::secretary::changes::{self, Building, Changeset};
+use crate::secretary::filed::triage_card;
 use crate::secretary::inbox::{self, Object};
-use crate::secretary::proposer::Proposer;
-use crate::secretary::store::Proposal;
 use crate::secretary::{Bound, Call, SecretarySurface, bound_named};
 use crate::verb::{NoArgs, Verb};
 
@@ -32,17 +31,7 @@ impl Verb for TriageCards {
 
 /// One open triage card and its changeset.
 fn open_card(object: &Object) -> Option<&Changeset> {
-    if object.asked.proposer != Proposer::Triage || !object.reading.performs() {
-        return None;
-    }
-    match &object.asked.proposal {
-        Proposal::Changes(changeset) => Some(changeset),
-        Proposal::Email(_)
-        | Proposal::Forward(_)
-        | Proposal::Act(_)
-        | Proposal::Remember { .. }
-        | Proposal::Decide(_) => None,
-    }
+    triage_card(object).filter(|_| object.reading.performs())
 }
 
 /// Every open triage card: its reference and its changeset.

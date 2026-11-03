@@ -255,7 +255,8 @@ fn a_quiet_pass_asks_no_model_and_opens_no_conversation() {
     );
 }
 
-/// A second review of a card still held writes no second line.
+/// A second review of cards still held asks no model and writes no second line, so a pass with
+/// nothing new costs no round.
 #[test]
 fn holding_the_same_card_again_is_not_a_second_line() {
     let caps = Fakes::new("review-twice");
@@ -264,7 +265,6 @@ fn holding_the_same_card_again_is_not_a_second_line() {
     let deployment = deployment();
     let caps = caps.model(FakeModel::saying([
         r#"{"say": "These all change something of yours; I am leaving them."}"#,
-        r#"{"say": "Still leaving them."}"#,
     ]));
     let chains = [Bound {
         name: "life",
@@ -291,6 +291,8 @@ fn holding_the_same_card_again_is_not_a_second_line() {
             .any(|held| held.batch == completion.to_string())
     );
     let again = reviewed();
+    assert_eq!(again.rounds, 0, "nothing new was standing");
+    assert_eq!(again.standing, 3);
     assert!(
         again.decided.is_empty(),
         "a card already held today is already recorded: {:?}",

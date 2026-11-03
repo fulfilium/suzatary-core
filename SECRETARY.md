@@ -716,9 +716,10 @@ answer becomes the reason recorded beside it.
 
 **WITHDRAW, with a reason, what should not reach them.** A DUPLICATE: a card that
 restates a todo already open, or another open card. Noise. A repricing with no
-new fact behind it. A withdrawal is final for those acts: the Inbox knows a
-card by what it asks, so the agent cannot file the same acts again, and only a
-write with something new reaches {{persona.name}}. When in doubt, leave it. You
+new fact behind it. A withdrawal is final for that request: the Inbox knows a
+card by what it asks, its price and rationale aside, so the agent cannot file
+it again at another price, and only a different change or a message the card
+did not rest on reaches {{persona.name}}. When in doubt, leave it. You
 cannot withdraw a card {{persona.name}} has tapped, even one whose tap failed:
 it is theirs.
 
