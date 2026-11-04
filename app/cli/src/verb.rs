@@ -5,9 +5,9 @@ use std::path::Path;
 use clap::Subcommand;
 
 use crate::commands::{
-    call, coding, decision, device, doctor, heartbeat, init, instance, leaks, mail, mcp, notify,
-    plugin, ran, release, secretary, secretspec, serve, tap, todo, todos, typeset, up, vault,
-    verify, weather,
+    call, coding, context, decision, device, doctor, heartbeat, init, instance, leaks, mail, mcp,
+    notify, plugin, ran, release, secretary, secretspec, serve, tap, todo, todos, typeset, up,
+    vault, verify, weather,
 };
 
 /// Every verb the deployed binary answers.
@@ -83,6 +83,8 @@ pub enum Verb {
     Coding(coding::Args),
     /// Run the `[[plugins]]` sources (a calendar's links) into the cache tier; the box's timer.
     Plugin(plugin::Args),
+    /// How many tokens an agent reads to use and to develop each unit of the repository.
+    Context(context::Args),
     /// The leak guard's matcher: each line of a tree to publish that names this deployment.
     Leaks(leaks::Args),
     /// Check the store: every object rehashed, every parent present, every head reachable.
@@ -133,6 +135,7 @@ impl Verb {
             Verb::Weather => weather::run(path),
             Verb::Coding(args) => coding::run(path, &args),
             Verb::Plugin(args) => plugin::run(path, &args),
+            Verb::Context(args) => context::run(&args),
             Verb::Leaks(args) => leaks::run(&args),
             Verb::Verify => verify::run(path),
             Verb::Secretspec => secretspec::run(path),

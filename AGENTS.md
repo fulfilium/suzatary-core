@@ -58,6 +58,38 @@ in the binary. In `web/`, use no framework and no npm.
 - Never add a tool or a code path that sends mail.
 - Never push to `master`. Code reaches `master` only through `scripts/train.sh`.
 
+## Context budget
+
+An agent must be able to read what it changes. `context.toml` names the units (each crate in
+`app/` and the web app), and `scripts/context.sh` prints how many tokens an agent reads to USE
+each unit (its README and public interface, at most 25k) and to DEVELOP it (its source, scripts,
+cited documents and its dependencies' USE, at most 500k). The guard
+`app/cli/tests/guards/context.rs` enforces the figures, and the repository's reading set falls
+towards 500k by a ratchet. Follow these rules in every pull request:
+
+1. Show the context change. The guard prints each unit's figures against `origin/master`. If
+   the reading set grows, delete as much elsewhere in the same pull request, or say in its
+   description why the growth pays. The guard refuses growth past the ratchet plus 2k tokens;
+   when a change lowers the figures, run `scripts/context.sh record`.
+2. Write a comment only for what the code cannot say: an invariant, a hazard, a unit, or a
+   reason that the types cannot carry. Do not narrate, argue with the reviewer or tell history.
+   Git and the pull request hold the history.
+3. Do not merge a session report. A coding session writes its report under `docs/reports/` on
+   its branch, where the poll reads it. The reviewer deletes the report in a commit on the
+   branch before the train lands it, and the guard `app/cli/tests/guards/reports.rs` refuses a
+   report that the branch adds.
+4. When a plan's stages are done, cut the plan to its decisions and propose each decision for
+   `memory/` (see "The project's memory"). Delete a dated plan that nothing cites.
+   `scripts/context.sh` lists the plans under `docs/` that nothing in the reading set cites.
+5. In the pull request that makes something unused, delete it: old paths, tests, fixtures and
+   documents.
+6. Write a test as a law over generated inputs where you can, and delete an example test that a
+   law covers. Generate fixtures in the test, and check one in only when it pins a stored or
+   wire format.
+7. Use a library through its README and its public interface, and keep each unit's USE under
+   its budget (the guard enforces this). Do not reach into another unit's internals. To learn
+   which files a unit's figures read, run `scripts/context.sh files <unit>`.
+
 ## The style rules
 
 **Known debt** under a rule is code that breaks the rule today. Do not copy the debt. Fix it

@@ -1,0 +1,273 @@
+# The context budget: how many tokens an agent must read to USE each unit of this repository (its
+# README and its public interface) and to DEVELOP it (its own production source, its scripts, the
+# documents they and CLAUDE.md/AGENTS.md cite, and the USE of every unit it depends on).
+#
+# `suzatary context` reads this file; `scripts/context.sh` prints its table, and the guard
+# app/cli/tests/guards/context.rs fails when a unit's USE is over `budget.use` (or over its
+# `ratchet.use` plus `budget.allowance`), when the repository's reading set grows past
+# `ratchet.reading` plus `budget.allowance`, or when a unit's `depends` differs from what its
+# Cargo.toml or its `witnesses` say.
+
+[budget]
+# Tokens a dependent reads to use one unit.
+use = 25000
+# Tokens an agent reads to change one unit.
+develop = 500000
+# Tokens of one unit's tests (fixtures are reported beside them).
+tests = 500000
+# Tokens of the repository's reading set that the ratchet below falls towards.
+goal = 500000
+# Tokens a pull request may grow the reading set by before the guard refuses it.
+allowance = 2000
+
+[ratchet]
+# The repository's reading set in tokens. Only `scripts/context.sh record` writes it, and only
+# downward.
+reading = 3171106
+
+# The USE of each unit over `budget.use` today. Only `scripts/context.sh record` writes it, and
+# only downward; a unit back within budget leaves the table.
+[ratchet.use]
+cli = 98112
+core = 503160
+io = 66084
+
+# Characters per token for each kind of file, measured with Claude's tokenizer by
+# `scripts/context.sh calibrate` over the files of `tokens.sample`.
+[tokens]
+calibrated = "2026-11-04T07:18:17Z"
+
+[tokens.ratio]
+rust = 2.559
+typescript = 2.831
+markdown = 2.721
+shell = 2.432
+nix = 2.604
+toml = 2.482
+typst = 2.887
+other = 2.208
+
+[[tokens.sample]]
+path = "app/core/src/record.rs"
+characters = 27046
+tokens = 10235
+[[tokens.sample]]
+path = "app/io/src/run.rs"
+characters = 23433
+tokens = 9421
+[[tokens.sample]]
+path = "app/cli/src/verb.rs"
+characters = 9717
+tokens = 3428
+[[tokens.sample]]
+path = "app/viewtree/src/node.rs"
+characters = 16088
+tokens = 6730
+[[tokens.sample]]
+path = "web/src/algebra/lo.ts"
+characters = 2501
+tokens = 810
+[[tokens.sample]]
+path = "web/src/app/app.ts"
+characters = 11790
+tokens = 4379
+[[tokens.sample]]
+path = "web/src/painter/painter.ts"
+characters = 9668
+tokens = 3274
+[[tokens.sample]]
+path = "AGENTS.md"
+characters = 24123
+tokens = 8683
+[[tokens.sample]]
+path = "docs/TS-STYLE.md"
+characters = 2692
+tokens = 1127
+[[tokens.sample]]
+path = "OPERATOR.md"
+characters = 16931
+tokens = 6268
+[[tokens.sample]]
+path = "scripts/size.sh"
+characters = 2025
+tokens = 935
+[[tokens.sample]]
+path = "scripts/wire.sh"
+characters = 2071
+tokens = 1005
+[[tokens.sample]]
+path = "scripts/deploy.sh"
+characters = 36974
+tokens = 14946
+[[tokens.sample]]
+path = "flake.nix"
+characters = 66780
+tokens = 25650
+[[tokens.sample]]
+path = "app/Cargo.toml"
+characters = 20094
+tokens = 8050
+[[tokens.sample]]
+path = "app/cli/Cargo.toml"
+characters = 6501
+tokens = 2664
+[[tokens.sample]]
+path = "web/typst/kit.typ"
+characters = 3973
+tokens = 1340
+[[tokens.sample]]
+path = "tokens.typ"
+characters = 2948
+tokens = 1057
+[[tokens.sample]]
+path = "web/static/style.css"
+characters = 148422
+tokens = 67268
+[[tokens.sample]]
+path = "scripts/gen-tokens.mjs"
+characters = 4190
+tokens = 1863
+
+# What the repository's reading set holds beside every unit's production source, scripts and
+# README: the paths of production code that belong to no unit, and the manuals.
+[repository]
+include = ["CLAUDE.md", "AGENTS.md", "README.md", "OPERATOR.md", "SECRETARY.md", "flake.nix", "android", "nix", "scripts", "templates", "tokens.typ", "app/Cargo.toml", "app/wit"]
+# Logs that the manuals cite as a place to append to or search, which no agent reads whole.
+records = ["CHANGELOG.md"]
+# The directory of the documents: a bare document name resolves under it, and its dated plans that
+# nothing in the reading set cites are listed.
+documents = "docs"
+
+# One unit per workspace member, and the web app. `depends` names the units and the external
+# libraries this unit's code uses: for a crate, its Cargo.toml's `[dependencies]` (crates.io
+# libraries are not measured); for any unit, also a unit whose `witnesses` text appears in its
+# production source. `scripts` are the scripts an agent reads to build and test it.
+
+[[unit]]
+name = "core"
+path = "app/core"
+shape = "crate"
+depends = ["prodrome-core", "prodrome-wasm-exports"]
+scripts = ["scripts/wire.sh"]
+
+[[unit]]
+name = "io"
+path = "app/io"
+shape = "crate"
+depends = ["core", "prodrome-core", "prodrome-typst-wasm"]
+scripts = []
+
+[[unit]]
+name = "plugin"
+path = "app/plugin"
+shape = "crate"
+depends = ["core", "io", "prodrome-core"]
+scripts = ["scripts/plugin-sync.sh"]
+
+[[unit]]
+name = "cli"
+path = "app/cli"
+shape = "crate"
+depends = ["core", "io", "plugin", "prodrome-core"]
+scripts = ["scripts/app-bin.sh", "scripts/app-build.sh", "scripts/merge-gate.sh"]
+
+[[unit]]
+name = "wasm"
+path = "app/wasm"
+shape = "crate"
+depends = ["core", "prodrome-core", "prodrome-wasm-exports"]
+scripts = ["scripts/web-inputs.sh"]
+
+[[unit]]
+name = "viewtree"
+path = "app/viewtree"
+shape = "crate"
+depends = []
+scripts = []
+
+[[unit]]
+name = "pages"
+path = "app/pages"
+shape = "crate"
+depends = ["core", "viewtree"]
+scripts = ["scripts/wire.sh", "scripts/web-inputs.sh"]
+
+[[unit]]
+name = "plugin-ics"
+path = "app/plugin-ics"
+shape = "crate"
+depends = ["prodrome-core"]
+scripts = ["scripts/plugin-sync.sh"]
+
+[[unit]]
+name = "plugin-fence"
+path = "app/plugin-fence"
+shape = "crate"
+depends = []
+scripts = []
+
+[[unit]]
+name = "testkit"
+path = "app/testkit"
+shape = "crate"
+depends = []
+scripts = []
+
+[[unit]]
+name = "web"
+path = "web"
+shape = "web"
+# The modules the page and the service worker load; their exports are the web unit's interface.
+entries = ["web/src/boot.ts", "web/src/main.ts", "web/src/sw.ts", "web/src/typst/worker.ts", "web/src/prodrome/worker.ts"]
+depends = ["core", "pages", "prodrome-typst-wasm", "typst-design", "viewtree", "wasm"]
+scripts = ["scripts/build-web.sh", "scripts/web-dist.sh", "scripts/web-inputs.sh", "scripts/web-static.sh", "scripts/web-test.sh", "scripts/web-e2e.sh", "scripts/wire.sh", "scripts/gen-tokens.mjs", "scripts/typst-packages.mjs"]
+
+[unit.witnesses]
+"wire/generated/wire" = "core"
+"wire/generated/payload" = "core"
+"wire/generated/pages" = "pages"
+"views_bg.wasm" = "pages"
+"prodrome_bg.wasm" = "wasm"
+"typst_bg.wasm" = "prodrome-typst-wasm"
+"app/viewtree/" = "viewtree"
+"typst-design" = "typst-design"
+
+# The libraries this repository uses from outside it, each measured from its pinned source by
+# `scripts/context.sh external <name> <checkout>`. `pinned_in` is the file that holds `rev`, so
+# moving the pin without measuring again fails the guard.
+
+[[external]]
+name = "prodrome-core"
+source = "https://github.com/fulfilium/prodrome"
+rev = "a0e99598eb61866c447f386dcb75557b0520dad4"
+pinned_in = "app/Cargo.toml"
+path = "core"
+shape = "crate"
+use = 108987
+
+[[external]]
+name = "prodrome-wasm-exports"
+source = "https://github.com/fulfilium/prodrome"
+rev = "a0e99598eb61866c447f386dcb75557b0520dad4"
+pinned_in = "app/Cargo.toml"
+path = "wasm/exports"
+shape = "crate"
+use = 6478
+
+[[external]]
+name = "prodrome-typst-wasm"
+source = "https://github.com/fulfilium/prodrome"
+rev = "a0e99598eb61866c447f386dcb75557b0520dad4"
+pinned_in = "app/Cargo.toml"
+path = "typst-wasm"
+shape = "crate"
+use = 3954
+
+[[external]]
+name = "typst-design"
+source = "https://github.com/bmabsout/typst-design"
+rev = "79d9dbafcd6457f269c3cd8b6f88c0ac27e35851"
+pinned_in = "flake.nix"
+path = ""
+shape = "typst"
+use = 9991

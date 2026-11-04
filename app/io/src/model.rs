@@ -313,6 +313,21 @@ impl ClaudeCli {
         let stdin = stdin_of(text, Blocks::default());
         reply_of(self.ended(&self.command(Mode::Plain { system }, stdin, token.as_ref()))?)
     }
+
+    /// The tokens of the prompt that [`ClaudeCli::plain`] sends for `text` under `system`, as
+    /// the model's tokenizer counted them: fresh, written to the cache and read from it.
+    ///
+    /// # Errors
+    /// As [`ClaudeCli::plain`], and [`ModelError::Failed`] when the result carries no usage.
+    pub fn prompt_tokens(&self, system: &ForModel, text: ForModel) -> Result<u64, ModelError> {
+        let token = self.ready()?;
+        let stdin = stdin_of(text, Blocks::default());
+        let ended = self.ended(&self.command(Mode::Plain { system }, stdin, token.as_ref()))?;
+        let usage = ended
+            .usage
+            .ok_or_else(|| ModelError::Failed("the model's result carried no usage".to_owned()))?;
+        Ok(usage.input_tokens + usage.cache_creation_input_tokens + usage.cache_read_input_tokens)
+    }
 }
 
 /// The stream's last `result` line. A stream with none is the CLI's own prose, as a signed-out

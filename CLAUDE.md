@@ -65,6 +65,11 @@ confirm. Everything below derives from this.
   of lines cannot be bisected or explained by `git blame`. A single-commit
   branch is fast-forwarded, not merged with `--no-ff`. An agent brief says
   this in as many words.
+- **An agent can read what it changes**: `context.toml` names the units, and
+  `scripts/context.sh` prints what each costs to USE (README and public
+  interface, ≤ 25k tokens) and to DEVELOP (≤ 500k); the guard
+  `app/cli/tests/guards/context.rs` holds them, and the repository's reading
+  set only falls towards 500k (AGENTS.md, "Context budget").
 
 ## Semantics (the FPL layer)
 

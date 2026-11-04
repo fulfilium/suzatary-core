@@ -27,6 +27,8 @@ mod agent;
 mod binary;
 #[path = "guards/changelog.rs"]
 mod changelog;
+#[path = "guards/context.rs"]
+mod context;
 #[path = "guards/credential.rs"]
 mod credential;
 #[path = "guards/deploy.rs"]
@@ -45,6 +47,8 @@ mod lists;
 mod merge_gate;
 #[path = "guards/publication.rs"]
 mod publication;
+#[path = "guards/reports.rs"]
+mod reports;
 #[path = "guards/template.rs"]
 mod template;
 #[path = "this_box.rs"]

@@ -3,6 +3,7 @@
 pub mod ask;
 pub mod call;
 pub mod coding;
+pub mod context;
 pub mod decision;
 pub mod device;
 pub mod doctor;
