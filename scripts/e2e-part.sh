@@ -1,10 +1,6 @@
 #!/usr/bin/env bash
-# Part <k> of <n> of the browser suite's files, one name a line (`list` for web/e2e/list.test.ts),
-# so <n> machines each run one part (scripts/web-e2e.sh's SUZATARY_E2E_PART, the e2e jobs of
-# .github/workflows/gate.yml). The files named, or every web/e2e/*.test.ts, are dealt largest
-# first to the part holding the fewest bytes so far, ties to the lowest part and between files
-# of one size to the name sorting first. Sizes and names are the tree's and never a machine's
-# timings, so every machine deals the same parts, and the <n> parts hold each file once.
+# Part <k> of <n> of the browser suite's files, one name a line (`list` for web/e2e/list.test.ts).
+# Dealt largest first to the lightest part by bytes, so every machine deals the same parts.
 #
 #   scripts/e2e-part.sh <k>/<n> [<name>...]     from the repository's root; 64 on a bad part
 set -euo pipefail

@@ -1,19 +1,11 @@
 #!/usr/bin/env bash
-# THE MERGE GATE'S CODESPACE, MADE: the machine `scripts/train.sh gate --remote <name>` runs the
-# tree half in (.devcontainer/devcontainer.json says what it holds). What a Codespace is made
-# with stays with it, so it is spelled here once:
-#   machine       4 cores, 16 GB, 32 GB of disk (standardLinux32gb), the size the gate's
-#                 budget names (the gate-warm-fast report)
-#   idle timeout  10 minutes: it stops itself that long after its last session, the backstop
-#                 for a train that could not stop it (the account's default was 30, then 240)
-#   retention     30 days stopped before it is deleted, so its warm target and store outlive
-#                 a quiet fortnight
-# It prints the new Codespace's name, for `train.sh gate --remote`. Run it at a terminal, as
-# the operator: it makes a machine that is billed while it runs.
-#
-# It makes one only in a repository the logged-in account owns (an organisation's machines and
-# billing are never this script's), and only where no gate Codespace is: one machine holds the
-# warm target, and a second would be billed beside it.
+# Makes the Codespace `scripts/train.sh gate --remote <name>` runs the gate's tree half in, and
+# prints its name:
+#   machine       standardLinux32gb (4 cores, 16 GB, 32 GB of disk)
+#   idle timeout  10 minutes, the backstop for a train that could not stop it
+#   retention     30 days stopped, so its warm target outlives a quiet fortnight
+# Run it at a terminal: the machine is billed while it runs. It makes one only in a repository
+# the logged-in account owns (never an organisation's), and only where no gate Codespace exists.
 #
 #   scripts/gate-codespace.sh [<repo>]   (default: this checkout's origin)
 set -euo pipefail

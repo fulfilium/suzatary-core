@@ -1,12 +1,7 @@
 # shellcheck shell=bash
-# What every web step reads, prepared once: the browser's two modules, the two static checks
-# (scripts/web-static.sh) and the wire's TypeScript (scripts/wire.sh). Sourced, with `$root` the
-# checkout, so the modules it resolves are exported to the caller and its children; a step under
-# a caller that already prepared this checkout (the merge gate's `web-inputs`) prepares nothing.
-#
-# A module a caller passed is used as it is (the `suzatary-web` derivation passes all three);
-# otherwise it is built here and rooted (scripts/nix-out.sh), and a build that fails fails this.
-# The shell carries tools, not builds.
+# What every web step reads, prepared once: the wasm modules, the static checks and the wire's
+# TypeScript. Sourced with `$root` the checkout; exports the modules, and prepares nothing when
+# this checkout is already prepared. A module the caller passed is used as it is.
 [[ "${SUZATARY_WEB_INPUTS:-}" != "$root" ]] || return 0
 
 # shellcheck source=scripts/nix-out.sh

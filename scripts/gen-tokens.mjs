@@ -1,15 +1,9 @@
 #!/usr/bin/env node
-// Generates web/static/tokens.css and web/src/view/tokens.ts from tokens.typ,
-// the app's colour roles as samples of the owner's design system
-// (typst-design): typst evaluates them, so the hex a stylesheet prints is an
-// output of the package's ramps, never a second definition. No generated file
-// is hand-edited; edit tokens.typ and re-run, inside nix develop .#triage
-// (typst, and the package on TYPST_PACKAGE_PATH).
+// Generates web/static/tokens.css and web/src/view/tokens.ts from tokens.typ, evaluated by
+// typst, so no colour has a second definition. Run inside nix develop .#triage.
 //
 //   node scripts/gen-tokens.mjs          write both files
-//   node scripts/gen-tokens.mjs --check  fail if either committed file is
-//                                        stale against tokens.typ — the gate
-//                                        scripts/web-test.sh runs
+//   node scripts/gen-tokens.mjs --check  fail if either committed file is stale
 import { execFileSync } from "node:child_process";
 import { readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
@@ -17,8 +11,7 @@ import { fileURLToPath } from "node:url";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 
-// Each role as CSS hex, and each stop of the fulfillment scale as its OKLCH
-// channels and its position, read by typst from tokens.typ.
+// Each role as CSS hex; each fulfillment stop as OKLCH channels and its position.
 const READ = `{
   import "/tokens.typ": tokens
   let hex(c) = rgb(c).to-hex()
@@ -35,8 +28,7 @@ const READ = `{
 
 const tokens = JSON.parse(execFileSync("typst", ["eval", READ, "--root", root], { cwd: root, encoding: "utf8" }));
 
-// A CSS custom property per role, in the order tokens.typ lists them,
-// indented to sit inside a rule block at the given depth (2 spaces each).
+// Indented 2 spaces per depth.
 const cssVars = (theme, depth) =>
   Object.entries(tokens[theme])
     .map(([name, value]) => `${"  ".repeat(depth)}--${name}: ${value};`)

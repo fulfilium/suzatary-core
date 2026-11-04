@@ -1,13 +1,7 @@
 #!/usr/bin/env bash
 # `suzatary up` — converge the fetcher's services and health-check everything.
-#
-# Deliberately NOT a unit generator. The systemd units are declared once, in
-# nix/nixos-module.nix, because hand-conjured units are untracked files in
-# ~/.config/systemd/user that a fresh box silently lacks. `up` enables and
-# starts what the module
-# declared, then runs the doctor. On a box without the module it says so and
-# points at the one-line enablement — reboot persistence IS the module's job;
-# everything here can also be run by hand from the dev shell without it.
+# It generates no units: they are declared in nix/nixos-module.nix; `up` enables and starts
+# what the module declared, then runs the doctor.
 set -euo pipefail
 
 export XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"
@@ -18,16 +12,10 @@ UNITS=()
 say() { printf '%-28s %s\n' "$1" "$2"; }
 bad() { say "$1" "FAIL — $2"; FAIL=1; }
 
-# --- fetcher lock: exactly one box may run the fetcher role ---
-# The single-writer invariant, enforced instead of hoped for. A vault-restored
-# box has every credential needed to become a second fetcher, and ACTIVATING
-# them is what conflicts (git push races; MS refresh-token rotation that can
-# invalidate the original box's cache; duplicate Proton Bridge sessions).
-# `<data>/FETCHER` names the one box allowed to converge services: the data
-# repository's, since the box is this deployment's fact and the code names no
-# box. Taking over is editing it and committing — a deliberate, versioned act
-# with a git trail, not an accident a drill can stumble into. No file is a
-# refusal too: a lock nobody declared must not read as no lock.
+# Fetcher lock: exactly one box may run the fetcher role. A vault-restored box holds every
+# credential, and activating a second fetcher races git pushes, can invalidate the first box's
+# MS refresh tokens and duplicates Bridge sessions. `<data>/FETCHER` names the one box; a
+# missing file refuses too.
 INSTANCE="${SUZATARY_INSTANCE:-$REPO/instance.toml}"
 FETCHER_FILE="$(dirname "$(realpath "$INSTANCE" 2>/dev/null || echo "$INSTANCE")")/FETCHER"
 if [ ! -f "$FETCHER_FILE" ]; then
@@ -43,17 +31,14 @@ if [ "$(uname -n)" != "$(tr -d '[:space:]' < "$FETCHER_FILE")" ]; then
   exit 1
 fi
 
-# --- converge services (module-declared) ---
-# The dev shell can shadow enough env that systemctl misreports "no units" —
-# distinguish "cannot talk to systemd" from "module absent" before concluding.
-# And reload first: `up` most often runs right after a nixos-rebuild, which
-# leaves the user manager holding a stale unit view.
+# The dev shell can shadow enough env that systemctl misreports "no units", so tell "cannot
+# reach systemd" from "module absent". Reload first: after a nixos-rebuild the user manager
+# holds a stale unit view.
 systemctl --user daemon-reload 2>/dev/null || true
 if ! systemctl --user show-environment >/dev/null 2>&1; then
   bad "systemd" "cannot reach the user manager (env problem — run outside nix develop or check XDG_RUNTIME_DIR)"
 elif systemctl --user list-unit-files 2>/dev/null | grep -q "suzatary-triage"; then
-  # What the module declared for THIS box, asked of the manager rather than
-  # listed here: the bridge and the vault exist only where their options do.
+  # Asked of the manager: the bridge and the vault exist only where their options do.
   mapfile -t UNITS < <(systemctl --user list-unit-files --no-legend \
     proton-bridge.service 'suzatary-*.timer' 2>/dev/null | awk '{print $1}')
   for u in "${UNITS[@]}"; do
@@ -67,7 +52,6 @@ else
   echo "  -> everything below still works hand-run from 'nix develop .#triage'"
 fi
 
-# --- doctor ---
 AVAIL_MB=$(df -Pm "$REPO" | awk 'NR==2 {print $4}')
 [ "$AVAIL_MB" -ge 1024 ] && say "disk" "${AVAIL_MB}MB free" || bad "disk" "only ${AVAIL_MB}MB free"
 

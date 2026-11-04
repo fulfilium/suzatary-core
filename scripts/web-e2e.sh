@@ -1,39 +1,15 @@
 #!/usr/bin/env bash
-# The web app's BEHAVIOUR gate: the real frontend, in a real browser, against
-# the real backend.
+# The web app's behaviour gate: the real frontend in headless Chromium (web/e2e/cdp.ts, no npm)
+# against real `suzatary serve` fixture servers over temp chains, asserting on the DOM.
 #
-# scripts/build-web.sh is the type gate (tsc, and the one-door grep);
-# scripts/web-test.sh runs the pure modules under node. Neither renders a page.
-# This does: it starts three fixture servers over temp chains, launches a headless
-# Chromium per test file (web/e2e/cdp.ts — node 24's global WebSocket is the
-# whole DevTools client, so there is still no npm here), and asserts on the DOM
-# the app actually built.
+# The main servers (others below serve one file each):
+#   E2E_BASE           a viewer login: every write is the real 403, so its chain cannot move;
+#                      nothing waits in its Inbox.
+#   E2E_BASE_PROPOSED  the same viewer, with a triage card waiting and held by the review.
+#   E2E_BASE_WRITE     the writer login, with a chain and a card of its own.
 #
-# THREE SERVERS, AND THE DIFFERENCES ARE THE GATE AND THE INBOX.
-#   E2E_BASE           gated to a login this deployment knows as a VIEWER and
-#                      not an actor. Every write against it is the real 403, so
-#                      its chain cannot move — which is why every read-only file
-#                      can share it, and why the rollback test drives it. It has
-#                      NOTHING waiting, which is what makes the empty Inbox a
-#                      state some scene can actually see.
-#   E2E_BASE_PROPOSED  the same viewer login, over a chain whose triage run left
-#                      a CARD waiting (§10.6) AND whose secretary has REVIEWED
-#                      it: the card is held with its reason. One page cannot be
-#                      both empty and full, so the read-only Inbox is two
-#                      deployments rather than one deployment two files
-#                      disagree about.
-#   E2E_BASE_WRITE     gated to the writer login, with a chain of its own and a
-#                      card of its own. The files that complete and add todos,
-#                      and the ones that tap a card, move this one only.
-#
-# All three are the REAL `suzatary serve` — the Rust binary, every route and
-# every refusal — over a temp chain. They run a build with a whois fixture
-# compiled in, so a browser on this box arrives as a named peer, which a real
-# daemon never names loopback: `$SUZATARY_FIXTURE` (the `.#suzatary-fixture`
-# derivation) when set, CI's path — otherwise `scripts/app-build.sh
-# --fixture` builds it incrementally with the `.#triage` shell's cargo. The
-# SHIPPED `.#suzatary` does not contain that code at all either way; flake.nix
-# and app/cli/src/commands/fixture.rs say why it is a separate build and not a flag.
+# They run a build with a whois fixture compiled in (`$SUZATARY_FIXTURE`, else
+# `scripts/app-build.sh --fixture`); the shipped `.#suzatary` does not contain that code.
 #
 #   scripts/web-e2e.sh            every file
 #   scripts/web-e2e.sh list       only web/e2e/list.test.ts
@@ -44,23 +20,15 @@
 #   scripts/web-e2e.sh settingsbench  only web/e2e/settingsbench.bench.ts, Settings today against its Rust program
 #                                 no gate runs any of them (`*.bench.ts` is outside every glob)
 #
-# Screenshots of failures land in $SUZATARY_E2E_SHOTS (a temp dir by default);
-# the path is in the failure message. $SUZATARY_SHOTS is the other one — where
-# `web/e2e/shots.test.ts` files the deliberate gallery.
-#
-# $SUZATARY_E2E_WAIT_MS (default 15000, unset only) is how long a wait may
-# take, and it SCALES every timeout the scenes name rather than replacing them
-# (`web/e2e/cdp.ts`). Left unset, cdp.ts reads the box's own 1-minute load
-# average against its cores and raises the budget for you when the box is
-# busy (see below); set it yourself to override that, and CI always does
-# (60000). It is a budget, not a delay: a wait satisfied at once still costs
-# nothing.
+# $SUZATARY_E2E_SHOTS: failure screenshots (a temp dir by default). $SUZATARY_SHOTS: the gallery
+# `web/e2e/shots.test.ts` files.
+# $SUZATARY_E2E_WAIT_MS (default 15000, raised by load average when unset): scales every
+# timeout the scenes name (`web/e2e/cdp.ts`); a budget, not a delay.
 set -euo pipefail
 
 # $SUZATARY_E2E_SCENES, a pattern, runs only the scenes whose names match it.
 # $SUZATARY_E2E_PART=<k>/<n> runs only the k-th of n parts of the files (below); empty, every file.
-# $SUZATARY_E2E_TRACE_REQUESTS=1 logs every signed request: the tab's stages to
-# the console (a failure's trace keeps it) and the box's to each server's log.
+# $SUZATARY_E2E_TRACE_REQUESTS=1 logs every signed request, the tab's and each server's.
 if [[ "${SUZATARY_E2E_TRACE_REQUESTS:-}" == "1" ]]; then
   export RUST_LOG="${RUST_LOG:-info},suzatary::requests=debug"
 fi
@@ -69,22 +37,18 @@ root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$root"
 . "$root/scripts/nix-out.sh"
 
-# Each scene fails after $SUZATARY_E2E_SCENE_MS (default five minutes; the slowest scene takes about two).
-# Without a bound, one scene whose wait never ended held the gate for 7.7 hours (train 83, 2026-10-14).
+# Each scene fails after $SUZATARY_E2E_SCENE_MS (default five minutes; the slowest takes about
+# two), so a wait that never ends cannot hold the gate.
 
-# How many shards (below), refused before anything is built: a value that is no count is a
-# mistake to name, never one shard in silence. Unset, four, or one per core on a machine with
-# fewer: four shards on four cores ran the whole suite green in about 275 s against about 600 s
-# in one (2026-10-13, the gate's Codespace).
+# Shards: default four, or one per core where fewer; a non-count is refused before any build.
 shards="${SUZATARY_E2E_SHARDS:-$(( $(nproc) < 4 ? $(nproc) : 4 ))}"
 if [[ ! "$shards" =~ ^[1-9][0-9]*$ ]]; then
   echo "web-e2e.sh: SUZATARY_E2E_SHARDS is a count of shards, 1 or more, not '$shards'" >&2
   exit 64
 fi
 
-# A PART, so separate machines split the suite (.github/workflows/gate.yml's e2e jobs): the files
-# of part k of n (scripts/e2e-part.sh, dealt by the tree alone), in place of the files named, and
-# refused before anything is built as the shards are. A part dealt no file runs nothing.
+# A part, so separate machines split the suite (scripts/e2e-part.sh). A part dealt no file runs
+# nothing.
 if [[ -n "${SUZATARY_E2E_PART:-}" ]]; then
   part="$(scripts/e2e-part.sh "$SUZATARY_E2E_PART" "$@")" || exit $?
   echo "==> part $SUZATARY_E2E_PART: $(paste -sd' ' <<<"$part")"
@@ -100,12 +64,7 @@ if [[ ! -f web/dist/app.js ]]; then
   exit 1
 fi
 
-# ⚠️ AND A STALE BUNDLE IS REFUSED, NOT SERVED. This script does
-# not build the bundle — `build-web.sh` is the type gate and this is the
-# browser gate, deliberately two — so what it serves is whatever `web/dist`
-# holds, and the suite could pass against a bundle that predates the page
-# under test. A source file newer than the bundle is the whole of what that
-# costs to detect.
+# This script does not build the bundle, so a stale one is refused rather than tested.
 stale="$(find web/src web/static -type f -newer web/dist/app.js 2>/dev/null | head -1)"
 if [[ -n "$stale" ]]; then
   echo "web-e2e.sh: web/dist/app.js is older than $stale — run scripts/build-web.sh first" >&2
@@ -121,19 +80,12 @@ else
   fixture_bin="$(scripts/app-build.sh --fixture)"
 fi
 
-# SHARDS. $SUZATARY_E2E_SHARDS (default above) splits the files into that many shards run side by
-# side, each this script over its own files with ITS OWN servers, chains, ports, state, secrets
-# store and browser profiles, so a shard reads nothing another writes and a file sees what it
-# sees in a run of its own; the fixture binary is the one resolved above. Each shard's output is
-# printed whole when it ends, and the run fails if any shard does. `SUZATARY_E2E_SHARDS=1` runs
-# the files one after another, as the gate did until the scenes that lost their races under
-# shards' load were fixed.
+# Each shard is this script over its own files with its own servers, chains, ports, state,
+# secrets store and browser profiles, so no shard reads what another writes. The run fails if
+# any shard does.
 #
-# The files are dealt longest first to the shard with the least so far, by how long each took
-# the last time this machine ran it: its scenes' milliseconds, kept in $durations after every
-# sharded run (pagebench, now a bench outside the gate, once took 205 of the suite's 460 seconds on
-# 2026-10-10, which nothing in its source says). Until every file has a time there, by size.
-# Only the schedule reads that file; every file runs whatever it holds.
+# Files are dealt longest first to the least-loaded shard, by each file's last measured time in
+# $durations (by size until every file has one). Only the schedule reads that file.
 durations="${XDG_CACHE_HOME:-$HOME/.cache}/suzatary/e2e-durations"
 names=("$@")
 if [[ $# -eq 0 ]]; then
@@ -184,7 +136,7 @@ if ((shards > 1 && ${#names[@]} > 1)); then
     cat "$dealt/$i.log"
     ((code == 0)) || failed=1
   done
-  # Each file's scenes, `✔ <file>: <scene> (<ms>ms)`, summed, over what was kept for the others.
+  # Each file's scenes, `✔ <file>: <scene> (<ms>ms)`, summed; older times kept for the others.
   mkdir -p "$(dirname "$durations")"
   { cat "$dealt"/*.log | sed -nE 's/^(✔|✖) ([a-z]+): .* \(([0-9]+)(\.[0-9]+)?ms\)$/\2 \3/p' | sort -u |
       awk '{ ms[$1] += $2 } END { for (n in ms) print n, ms[n] }'
@@ -193,10 +145,8 @@ if ((shards > 1 && ${#names[@]} > 1)); then
   exit "$failed"
 fi
 
-# THE FIXTURE'S SIGNING SEEDS (SPEC law 42), test values and nobody's keys: the fixture declares
-# their root, and every server, the fixture's own agent run and the suite resolve them by name,
-# as secretspec would, from the environment. `app/cli/src/commands/fixture.rs`'s BOX_SEED and
-# AGENT_SEED are the same two, and a guard test pins that they are.
+# The fixture's signing seeds, test values and nobody's keys; they equal fixture.rs's BOX_SEED and
+# AGENT_SEED (pinned by a test).
 export SUZATARY_BOX_KEY="e2e0000000000000000000000000000000000000000000000000000000000b0c"
 export SUZATARY_AGENT_KEY="e2e0000000000000000000000000000000000000000000000000000000000a9e"
 # The mail's dedup key, a test value beside them, so a mail page reads its badges.
@@ -210,44 +160,21 @@ shots="${SUZATARY_E2E_SHOTS:-$work/shots}"
 mkdir -p "$shots"
 servers=()
 
-# THE SETTINGS FIXTURE'S OWN, ISOLATED secretspec STORE:
-# a tapped secret card really shells out to `secretspec set`, so a
-# server started with `--settings` gets ITS OWN `$HOME` and a `dotenv`-backed
-# provider under `$work` — never this box's real `pass` store. `start` below
-# only applies these when `--settings` is one of its own arguments.
+# A tapped secret card really runs `secretspec set`, so a `--settings` server gets its own `$HOME`
+# and a dotenv store under `$work`, never this box's real `pass` store.
 secrets_home="$work/secrets-home"
 mkdir -p "$secrets_home"
 secrets_store="$work/secrets-store.env"
 
-# `start` (below) is called as `read_base="$(start read …)"`, a command
-# substitution, which runs the function in a SUBSHELL; `servers+=("$!")`
-# inside it would mutate a COPY of the array and leave this loop nothing to
-# walk. So `start` drops the PID in a FILE (not subshell-scoped) and the
-# caller collects it in ITS OWN scope right after the substitution returns —
-# see the spot below.
+# `start` runs in a command substitution's subshell, so it writes each PID to a file and the main
+# shell collects them into `servers`.
 #
-# Each server is launched under `setsid`, so its PID is also its own
-# process-group id (a leaf `setsid CMD &` execs straight into CMD rather than
-# forking a wrapper — verified against `ps -o pid,pgid`). Killing the NEGATED
-# pid kills that whole group, not just the axum process, which matters
-# because it is what spawns typst as a subprocess at start-up (CLAUDE.md:
-# "compiled as a subprocess") — a plain `kill "$pid"` would leave a
-# straggling compile behind it. `INT`/`TERM` are trapped explicitly, not left
-# to EXIT alone, so a caller's plain `kill` (no `-9`) is caught the same way
-# a normal exit is.
-#
-# What this trap still cannot do anything about: a hard SIGKILL (the
-# harness's 10-minute command timeout escalating past a grace period, or an
-# impatient `pkill -9`) is unblockable, so no trap in this or any script runs
-# when it lands, and an orphaned server keeps running under init. That path
-# is operational, not this trap: run this script
-# detached (`setsid nohup scripts/web-e2e.sh & disown`, poll for completion)
-# so a caller-side timeout lands on a process this script does not own, and
-# prefer plain `kill`/SIGTERM over `-9` when stopping it early.
+# Each server runs under `setsid`, so its PID is its process group, and cleanup kills the whole
+# group (its typst subprocesses too). A SIGKILL runs no trap and orphans the servers: run this
+# detached (`setsid nohup scripts/web-e2e.sh & disown`) and stop it with SIGTERM.
 cleanup() {
   local status=$?
-  # A failed run says how each fixture server ended: a server that dies leaves its scenes failing
-  # with "Failed to fetch" or no warm markup, and its log is gone with $work.
+  # A failed run reports how each fixture server ended; its log is gone with $work.
   if (( status != 0 )) && [[ -d "$work" ]]; then
     {
       echo "==> the fixture servers, as this run (exit $status) ends"
@@ -262,10 +189,8 @@ cleanup() {
       journalctl -k --since "-1h" 2>/dev/null | grep -iE "out of memory|killed process" | tail -n 5 | sed 's/^/  kernel: /' || true
     } >&2
   fi
-  # Each server's whole output goes beside the failed scenes' screenshots, which the gate
-  # uploads, so a server that died names its own death there: its last lines and its exit
-  # (written by `start`). One directory per run, named by its files, since the shards share
-  # $shots.
+  # Server logs go beside the failure screenshots the gate uploads; one directory per run, since
+  # the shards share $shots.
   if (( status != 0 )) && [[ -d "$work" ]]; then
     local kept; kept="$shots/servers/$(printf '%s-' "${names[@]}" | head -c 120)$(basename "$work")"
     mkdir -p "$kept"
@@ -282,10 +207,7 @@ cleanup() {
 }
 trap cleanup EXIT INT TERM
 
-# A port nothing is listening on. The server is handed one rather than asking
-# the kernel for any, because it announces nothing on start-up and this script
-# has to know where to look; the window between the check and the bind is a
-# race nobody else on this box is running into.
+# The server announces no port, so it is handed one. The check-to-bind window is a race.
 free_port() {
   node -e '
 const net = require("net");
@@ -297,20 +219,10 @@ server.listen(0, "127.0.0.1", () => {
 '
 }
 
-# THE SECRETARY'S TWO SUBSTITUTIONS (docs/ARCHITECTURE.md §10.3), both behind
-# the same `fixture` feature the whois one is.
-#
-# `claude -p` cannot be part of a browser suite — it reaches the network, costs
-# money and answers differently every time — so the fixture server is handed a
-# SCRIPT: entries matched against the last turn (a person's words, or the name
-# of the verb that just answered), each carrying the raw text a model would
-# have printed. The core's own `Reply::parse` reads it, so the fake and the real
-# interpreter run one parser.
-#
-# And a tap must not reach a transport, so the fixture server RECORDS what would
-# have gone into a file instead. That is stronger than not calling it: the scene
-# asserts on the message. A scene fails a send on cue by writing `not_sent` or
-# `unknown` to "$sent.failures" (`commands::secretary::record`).
+# The model is a script: entries matched against the last turn (a person's words, or the verb
+# that just answered), each the raw text a model would print, read by the core's `Reply::parse`.
+# A tap reaches no transport: the server records what would have been sent. A scene fails a send
+# by writing `not_sent` or `unknown` to "$sent.failures" (`commands::secretary::record`).
 script="$work/model-script.json"
 cat > "$script" <<'SCRIPT'
 [
@@ -465,14 +377,12 @@ cat > "$script" <<'SCRIPT'
   }
 ]
 SCRIPT
-# The file a running "take your time" round waits for before it answers, written by a scene once it has seen the
-# round running; a Stop ends the wait too (`capability::pulled`), and the box drops that reply.
+# A "take your time" round waits for this file, which a scene writes; a Stop ends the wait too.
 release="$work/model-release"
 sed -i "s|MODEL_RELEASE|$release|" "$script"
 sent="$work/would-have-sent.jsonl"
 
-# THE FAKE `claude` A SIGN-IN RUNS (`commands::serve::sign_ins`): it draws a sign-in link, reads
-# one code from its terminal and prints a token for it; any other code ends it.
+# The fake `claude` a sign-in runs (`commands::serve::sign_ins`).
 fake_bin="$work/fake-bin"
 mkdir -p "$fake_bin"
 cat >"$fake_bin/claude" <<'FAKECLAUDE'
@@ -486,9 +396,7 @@ printf '\r\nYour OAuth token (valid for 1 year):\r\n\r\nsk-ant-oat01-E2Efake-tok
 FAKECLAUDE
 chmod +x "$fake_bin/claude"
 
-# Start one fixture server and print its base URL. It writes a single json line
-# and then serves, so the line is the readiness signal for the ADDRESS; `ready`
-# below is the readiness signal for the SOCKET.
+# Start one fixture server and print its base URL; `ready` waits for it to serve.
 start() { # name [fixture-chain flags…] [-- serve flags…]
   local name="$1"; shift
   local serve_flags=()
@@ -499,39 +407,21 @@ start() { # name [fixture-chain flags…] [-- serve flags…]
   done
   set -- "${chain_flags[@]}"
   local port; port="$(free_port)"
-  # The CHAIN and the instance file first — data, built by the same event
-  # constructors that own the event kinds (app/cli/src/commands/fixture.rs says why),
-  # over the REAL repo checkout so `instance.toml`'s `dist` finds the built
-  # frontend rather than a guess.
-  # `--connections lapsed` writes a sign-in into the state directory, so it is pointed at the
-  # server's own.
+  # `--connections lapsed` writes a sign-in into the state directory: point it at the server's.
   local chain_env=(env)
   if [[ " $* " == *" --connections lapsed "* ]]; then chain_env+=("XDG_STATE_HOME=$work/$name/state"); fi
   "${chain_env[@]}" "$fixture_bin" fixture-chain --root "$work/$name" --port "$port" --repo "$(pwd)" "$@" \
     >"$work/$name.json" 2>"$work/$name.log"
   local login; login="$(node -p "require('$work/$name.json').login")"
-  # ITS OWN STATE DIRECTORY, every server: what the box keeps there (each store's
-  # epoch above all, `suzatary_core::epoch`, keyed by chain name) is the box's,
-  # and a fixture writing into this box's own would move the live epochs and
-  # every fixture's answers would rest on another's record.
+  # Every server has its own state directory: writing into this box's would move the live epochs.
   local serve_env=(env "XDG_STATE_HOME=$work/$name/state")
-  # ISOLATED secretspec, ONLY for a server this call asked `--settings` of: a
-  # tapped secret card shells out to the real `secretspec set`, and what makes
-  # that safe is that its `$HOME` never sees this box's own
-  # `~/.config/secretspec/config.toml` (see the `secrets_home` note above).
-  #
-  # No name is declared here: every name a scene sets is the instance's own, which the server
-  # declares in the file it writes under its own state directory, beside the fixture's empty
-  # `secretspec.toml`, as a deployment's does beside its read-only code root.
+  # Isolated secretspec for a `--settings` server: its `$HOME` never sees this box's config.
   if [[ " $* " == *" --settings "* ]]; then
     local store="$secrets_store"
-    # The links scenes store a link of their own and read it back, so their store is their own.
     if [[ " $* " == *" --connections lapsed "* ]]; then
       store="$work/$name/secrets-store.env"
       : >"$store"
     fi
-    # A Google account's server keeps its client and its grant in a store of its own, which its
-    # scene reads.
     if [[ " $* " == *" --connected google "* ]]; then
       store="$work/$name/secrets-store.env"
       : >"$store"
@@ -542,26 +432,17 @@ start() { # name [fixture-chain flags…] [-- serve flags…]
       "SECRETSPEC_PROVIDER=dotenv://$store"
     )
   fi
-  # A server whose model does not answer connects one by signing in: its `claude` is the fake
-  # below, which draws what `claude setup-token` draws, so no scene ever reaches a real login.
+  # The fake `claude` on PATH, so no scene ever reaches a real login.
   if [[ " $* " == *" --model unanswered "* ]]; then
     serve_env+=("PATH=$fake_bin:$PATH")
   fi
-  # A link stored from a card is checked at the tap by syncing its plugin, which reads the
-  # reference plugins as the box's server does (scripts/serve-web.sh).
+  # A stored link is checked at the tap by syncing its plugin.
   if [[ " $* " == *" --connections lapsed "* ]]; then
     { [[ -n "${SUZATARY_PLUGINS:-}" ]] || SUZATARY_PLUGINS="$(nix_out suzatary-plugins)"; }
     serve_env+=("SUZATARY_PLUGINS=$SUZATARY_PLUGINS")
   fi
-  # Then the REAL server over it, with the whois fixture compiled in, which
-  # `.#suzatary` (the shipped derivation; `fixture_bin` is `suzatary-dev`)
-  # does not have. See flake.nix for why that is a separate build and not a flag.
-  # `setsid` gives it its own process group so cleanup's `kill -- -"$pid"`
-  # reaches every subprocess it spawns, not only itself.
-  # A bash between `setsid` and the server writes how the server ended into its log: an exit
-  # status, or 128 plus the signal that killed it (137 is SIGKILL, as the OOM killer sends;
-  # 134 is an abort). Cleanup's kill of the group ends the bash too, so a run's own stop
-  # writes nothing.
+  # The bash between `setsid` and the server logs how it ended (137 is SIGKILL, e.g. the OOM
+  # killer; 134 an abort). Cleanup kills the group, bash too, so a normal stop logs nothing.
   # shellcheck disable=SC2016
   setsid "${serve_env[@]}" bash -c '"$@"; echo "==> suzatary serve ended: exit $?"' serve \
     "$fixture_bin" serve \
@@ -571,19 +452,13 @@ start() { # name [fixture-chain flags…] [-- serve flags…]
     --smtp-fixture "$sent" \
     "${serve_flags[@]}" \
     >>"$work/$name.log" 2>&1 &
-  # ⚠️ THIS FUNCTION RUNS IN A SUBSHELL — the caller captures its stdout with
-  # `$(start …)` — so `servers+=("$!")` here would mutate a COPY of the array
-  # and leave `cleanup` an EMPTY `servers` to walk. A file is not
-  # subshell-scoped; the caller collects it once the substitution returns.
+  # A subshell: `servers+=` here would be lost, so the PID goes to a file.
   echo "$!" >"$work/$name.pid"
   node -p "require('$work/$name.json').base"
 }
 
-# READY MEANS THE MARKUP IS WARM, not merely that the socket answers. The
-# server compiles the chain's typst in the background at start-up — a cold
-# cache degrades to raw source for a moment, which is right for a person and
-# wrong for a test that asserts on a rendered <strong>. So this waits for the
-# one todo whose body carries markup to come back with its `rich.body` filled.
+# Ready means the markup is warm: the server compiles typst in the background and serves raw
+# source until then, so this waits for file-permit's `rich.body`.
 ready() { # name base
   local name=$1 base=$2 waited=0 started=$SECONDS
   until curl -fsS "$base/api/todo/file-permit" 2>/dev/null \
@@ -617,46 +492,27 @@ process.stdin.on("end", () => {
 }
 
 echo "==> fixture servers"
-# Started together: each one compiles the chain's markup with typst before it
-# listens, and doing that twice in sequence is the run's longest wait.
-# `--settings` declares a calendar link so the Settings page has a row to read and, on
-# `write_base`, to set — see `secrets_home`/`secrets_store` above for the
-# isolation that makes running the real `secretspec` safe here.
+# Started together: each compiles the chain's markup before it listens.
 read_base="$(start read --login e2e-reader@example.invalid --settings)"
-# `--reviewed` goes on the READ-ONLY one (§10.6): its triage card is HELD
-# by the secretary's review, with the reason recorded. The writer's deployment
-# deliberately has NO review, so "the secretary has looked at this" and "nobody
-# has" are two states on two servers, and no scene's result depends on file order.
+# Only this one has a review, so reviewed and unreviewed are two servers' states.
 proposed_base="$(start proposed --login e2e-reader@example.invalid --propose --reviewed)"
 write_base="$(start write --propose --settings)"
-# THE BOOTSTRAP'S SERVER: its model's last call failed, so the box files the card that connects
-# a model, and its sign-in runs the fake `claude` above.
+# Its model's last call failed, so the box files the card that connects a model.
 bootstrap_base="$(start bootstrap --settings --model unanswered)"
-# A CONNECTION'S CARDS' SERVER: a calendar connected with its link unset and its removal standing,
-# so their scenes move this instance file and no other server's.
 connect_base="$(start connect --settings --connected calendar)"
-# THE LINKS' SERVER: a calendar whose link is not stored and a
-# Microsoft account that reads its mail and cannot send yet (web/e2e/links.test.ts).
+# web/e2e/links.test.ts: an unstored calendar link and a Microsoft account that cannot send yet.
 links_base="$(start links --settings --connections lapsed)"
-# THE FAKE GOOGLE (`suzatary-dev fake-google`, the cargo tests' own fake) AND THE SERVER THAT SIGNS
-# A GOOGLE ACCOUNT IN THROUGH IT (web/e2e/google.test.ts): every request the box makes to Google,
-# its consent, its token endpoint and its Calendar API, reaches the fake and nothing else.
+# web/e2e/google.test.ts: every request the box makes to Google reaches the fake and nothing else.
 google_port="$(free_port)"
 "$fixture_bin" fake-google --port "$google_port" >"$work/fake-google.json" 2>"$work/fake-google.log" &
 echo "$!" >"$work/fake-google.pid"
 until [[ -s "$work/fake-google.json" ]]; do sleep 0.1; done
 google_fake="$(node -p "require('$work/fake-google.json').base")"
 google_base="$(start google --settings --connected google -- --google-fixture "$google_fake")"
-# THE EPOCH'S SERVER (web/e2e/epoch.test.ts): a writer whose lines a scene's tab holds in an
-# epoch before the box's, so what that tab resets and pulls again reaches no other file's server,
-# origin or state directory.
+# web/e2e/epoch.test.ts.
 epoch_base="$(start epoch)"
-# THE LINES' SERVER (web/e2e/bigstore.test.ts): a writer whose stores have the live shape, so a scene sees a
-# tab read stores of the size the owner's are: $SUZATARY_E2E_LINES generated lines (13,000) over
-# $SUZATARY_E2E_CONVERSATIONS conversations (100; 0 halves them instead), $SUZATARY_E2E_RESEALS of their
-# slots sealed again (1,500), so about 14,500 line objects; $SUZATARY_E2E_PROPOSALS proposals (400), so
-# about 730 inbox objects; a topic on $SUZATARY_E2E_TOPICS rounds (900); and $SUZATARY_E2E_TODOS todos on
-# the life chain (600), so about 1,900 more objects, which the proposals serve in turn.
+# web/e2e/bigstore.test.ts: stores of the live size (each count overridable; conversations 0
+# halves them instead).
 lines_shape=(
   --lines "${SUZATARY_E2E_LINES:-13000}"
   --conversations "${SUZATARY_E2E_CONVERSATIONS:-100}"
@@ -666,26 +522,19 @@ lines_shape=(
   --todos "${SUZATARY_E2E_TODOS:-600}"
 )
 lines_base="$(start lines "${lines_shape[@]}")"
-# THE RESCRUB SERVER (web/e2e/rescrub.test.ts): a writer whose generated lines were sealed before lines
-# recorded their rules, $SUZATARY_E2E_RESCRUB_LINES of them (1,500 by default) over
-# $SUZATARY_E2E_RESCRUB_CONVERSATIONS conversations (30), so a scene can run `migrate-scrub` under a tab.
+# web/e2e/rescrub.test.ts: lines sealed before lines recorded their rules, for `migrate-scrub`.
 rescrub_base="$(start rescrub --lines "${SUZATARY_E2E_RESCRUB_LINES:-1500}" --conversations "${SUZATARY_E2E_RESCRUB_CONVERSATIONS:-30}" --sealed unversioned)"
-# THE WIDE SERVER (web/e2e/wide.test.ts): 400 conversations of one line each, so a tab's replica of
-# the lines has 400 heads, and every pull names it by a frontier as short as one head's.
+# web/e2e/wide.test.ts: 400 heads.
 wide_base="$(start wide --wide 400)"
-# THE APP SHELL'S SERVER (web/src/sw.ts): a writer, so a page there has a
-# composer whose draft must outlive a new build, with the build `/api/about`
-# names read from a file per request, so a scene can deploy a new build under a
-# running tab. Its own server, because a worker it registers would otherwise
-# serve every other file's scenes from its cache.
+# The service worker's server: its build is read from a file per request, so a scene can deploy
+# under a running tab. Its own, or its worker would serve other files' scenes from cache.
 shell_build="$work/shell-build"
 echo "e2e-1" >"$shell_build"
 # Its own copy of the bundle, so a scene can deploy a build whose files differ.
 shell_dist="$work/shell-dist"
 cp -r web/dist "$shell_dist"
 shell_base="$(start shell -- --build-fixture "$shell_build" --dist "$shell_dist")"
-# Collected here, in the MAIN shell — not inside `start`'s subshell — which is
-# what makes `cleanup` able to reach them at all (see the note in `start`).
+# Collected in the main shell, so `cleanup` can reach them.
 servers+=("$(cat "$work/read.pid")" "$(cat "$work/proposed.pid")" "$(cat "$work/write.pid")" "$(cat "$work/shell.pid")" "$(cat "$work/bootstrap.pid")" "$(cat "$work/connect.pid")" "$(cat "$work/links.pid")" "$(cat "$work/epoch.pid")" "$(cat "$work/lines.pid")" "$(cat "$work/rescrub.pid")" "$(cat "$work/wide.pid")" "$(cat "$work/google.pid")" "$(cat "$work/fake-google.pid")")
 ready read "$read_base"
 ready proposed "$proposed_base"
@@ -723,12 +572,8 @@ esbuild "${files[@]}" \
   --outdir="$out"
 
 echo "==> chromium $(chromium --version 2>/dev/null || echo '(not on PATH)')"
-# One file at a time. Each launches its own browser and its own profile, and
-# four Chromiums racing for one server is a source of flakiness rather than of
-# speed on a run this short.
-# AND THE AGENT'S WRITER, FOR ONE SCENE (docs/ARCHITECTURE.md §10.6): a scene
-# files a triage card through the agent's own verbs and taps it, so it runs the
-# fixture binary under node the same way this script does.
+# One file at a time: Chromiums racing for one server are flaky. E2E_TRIAGE_BIN lets a scene
+# file a triage card through the agent's own verbs.
 E2E_BASE="$read_base" \
 E2E_BASE_PROPOSED="$proposed_base" \
 E2E_BASE_WRITE="$write_base" \

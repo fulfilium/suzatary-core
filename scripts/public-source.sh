@@ -1,16 +1,11 @@
 #!/usr/bin/env bash
-# WHETHER A CHECKOUT HOLDS THE PRIVATE HISTORY: a tripwire that master's
-# .github/workflows/publication.yml runs over the tree it builds, before any build. The privacy
-# boundary is the box's leak guard, which passes before a tree is pushed to core; this catches
-# only the gross mistake of pushing this private repository's own tree. scripts/public-tree.sh
-# writes a public tree with `git archive`, which leaves out every path `.gitattributes` marks
-# `export-ignore` (the private history), so this repository's checkout fails and a public tree,
-# which holds no `.gitattributes`, passes whatever else it holds.
+# Whether a checkout holds the private history: a tripwire publication.yml runs before any build.
+# The privacy boundary is the box's leak guard; this only catches pushing this private tree
+# itself. A public tree (scripts/public-tree.sh, `git archive`) drops every `export-ignore` path.
 #
 #   scripts/public-source.sh [<dir>]   (default: the current directory)
 #
-# It exits 0 when no file git tracks in <dir> is marked `export-ignore`, and 1 naming each one
-# that is.
+# Exits 0 when no tracked file in <dir> is marked `export-ignore`, else 1 naming each.
 set -euo pipefail
 
 if [[ "$#" -gt 1 ]]; then

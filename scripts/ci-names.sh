@@ -1,12 +1,8 @@
 #!/usr/bin/env bash
-# The name of what the quick-check job reads, at a commit: the hash of the
-# git tree entries (mode, blob, path) under every path but docs/, android/
-# and web/ (bar the one web file the Rust tests read), so the name moves when
-# one of those bytes does and for nothing else. CI only:
-# .github/workflows/quick.yml keeps the job's pass under it.
+# The key quick.yml keeps the quick-check job's pass under: the hash of the tree entries outside
+# docs/, android/ and web/ (bar the web file the Rust tests read).
 #
-# An empty list of entries is refused rather than named, since every empty
-# list has the same name and would pass for any commit.
+# An empty list is refused: every empty list has the same name and would pass for any commit.
 #
 #   scripts/ci-names.sh [<commit>]    prints rust=…
 set -euo pipefail

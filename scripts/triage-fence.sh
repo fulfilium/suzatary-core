@@ -1,26 +1,16 @@
 #!/usr/bin/env bash
-# THE TRIAGE AGENT'S FENCE, AS IT RUNS: scripts/triage-fence.sh <repo> prints
-# the settings JSON the agent is started with (`claude --settings <json>`),
-# after proving the hook it registers both denies and allows, or prints nothing
-# and exits 1.
+# scripts/triage-fence.sh <repo>: prints the triage agent's settings JSON (`claude --settings`)
+# after proving its hook both denies and allows, or prints nothing and exits 1.
 #
-# .claude/triage-settings.json is a template: each hook's command is a
-# placeholder this script fills with the guard's ABSOLUTE path under <repo>,
-# the path it then probes, so what is checked is what runs, never a second
-# spelling (`${CLAUDE_PROJECT_DIR}` was one: Claude Code resolves the project
-# directory itself, and it need not be the directory the preflight checked).
+# .claude/triage-settings.json is a template; each placeholder is filled with the guard's
+# absolute path, the same path probed, so what is checked is what runs (`${CLAUDE_PROJECT_DIR}`
+# need not be the directory checked here).
 #
-# FAIL CLOSED. Claude Code blocks a call only when a hook exits 2; a hook that
-# is missing, not executable or crashing exits otherwise and lets the call
-# through. So the registered command is `'<guard>' || exit 2`: the guard's own
-# 0 allows, and every other way it can end blocks.
+# Fail closed: Claude Code blocks only on exit 2, and a missing or crashing hook exits otherwise,
+# so the command is `'<guard>' || exit 2`.
 #
-# The probes run that registered command through `sh -c`, as Claude Code runs
-# it, read back from the JSON this script prints. Both directions are required,
-# because the two failures are opposite and both silent: a fence that denies
-# nothing runs the agent uncontained, and one that denies everything runs it
-# blind (the verbs arrive through ToolSearch, and a toolless agent narrates a
-# triage it never performed).
+# Both probes are required: a fence that denies nothing runs the agent uncontained, and one that
+# denies everything (ToolSearch included) runs it blind while it narrates a triage it never did.
 set -euo pipefail
 
 repo="${1:?usage: triage-fence.sh <repo>}"

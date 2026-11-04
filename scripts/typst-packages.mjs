@@ -1,15 +1,10 @@
 #!/usr/bin/env node
-// Every Typst package on a package path, as the files a compile in the tab is
-// handed: one JSON object from the key typst-wasm finds a file under
-// (`@local/typst-design:0.1.0/lib.typ`) to its text. The tab's kit and the
-// box's typst read the same package path (flake.nix, `typstPackages`), so the
-// two compile against one package.
+// Every Typst package on a package path as one JSON object, from typst-wasm's key
+// (`@local/typst-design:0.1.0/lib.typ`) to the file's text, for compiles in the tab.
 //
 //   node scripts/typst-packages.mjs [<package path>]   default $TYPST_PACKAGE_PATH
 //
-// A package's own `exclude` (its typst.toml) is honoured as typst's packaging
-// does, by path or by the directory a path starts with; only text a compile
-// can read is kept (`.typ` and the manifest).
+// Honours each package's `exclude`; keeps only `.typ` files and the manifest.
 import { readFileSync, readdirSync, statSync } from "node:fs"
 import { join, relative, sep } from "node:path"
 
@@ -27,7 +22,7 @@ const walk = (dir) =>
     return statSync(p).isDirectory() ? walk(p) : [p]
   })
 
-// The manifest's `exclude = [..]`, a list of plain strings in every package this reads.
+// Assumes `exclude = [..]` holds plain strings, as in every package this reads.
 const excluded = (manifest) => {
   const m = /^exclude\s*=\s*\[([^\]]*)\]/m.exec(manifest)
   return m === null ? [] : [...m[1].matchAll(/"([^"]*)"/g)].map((x) => x[1])

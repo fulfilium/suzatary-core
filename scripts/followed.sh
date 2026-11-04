@@ -1,45 +1,20 @@
 #!/usr/bin/env bash
-# THE BRANCH A DEPLOYMENT FOLLOWS, AS THIS BOX LAST FETCHED IT, AND THE
-# REVISIONS ITS DEPLOYS PINNED: the one check that a revision went through the
-# gate and was chosen by the operator, made alike by scripts/deploy.sh before it
-# moves the lock and by the roots run (nix/services.nix) before it builds what a
-# committed lock names.
+# The check that a revision went through the gate and was chosen by the operator, made by
+# scripts/deploy.sh before it moves the lock and by the roots run before it builds a lock.
 #
-#   followed.sh fetch <mirror> <remote> <branch>
-#       fetch <branch> of <remote> into the bare mirror (made when absent) and
-#       record <remote> as the one it follows; exit 1 when the fetch fails
-#   followed.sh check <mirror> <remote> <branch> <rev>
-#       exit 0 when the mirror follows <remote> and <rev> is a commit of
-#       <branch>'s first-parent chain in it, 1 (saying why) otherwise
-#   followed.sh pin <mirror> <rev> <branch>
-#       record, as a deploy moves the lock, that it pinned <rev> of <branch>
-#       and that <branch> is the one this box now follows; the pin before it
-#       becomes the way back, `previous`
-#   followed.sh admit <mirror> <remote> <branch> <rev>
-#       the roots run's question: exit 0 when <rev> of <branch> is what a
-#       deploy pinned from the branch this box follows, or the pin before the
-#       last (a revert's way back), and `check` holds for it; 1 (saying why)
-#       otherwise
+#   followed.sh fetch <mirror> <remote> <branch>          fetch into the bare mirror; record <remote>
+#   followed.sh check <mirror> <remote> <branch> <rev>    <rev> is on <branch>'s first-parent chain
+#   followed.sh pin <mirror> <rev> <branch>               record the pin; the last pin becomes `previous`
+#   followed.sh admit <mirror> <remote> <branch> <rev>    <rev> was pinned here (or is `previous`) and checks
 #
-# Only the branch's first-parent chain went through a gate (a merge's series
-# never did), and only scripts/train.sh land publishes, along master's first
-# parents. The mirror lives in the user repository's own .git on this box, so
-# what a check trusts is what the operator's deploy fetched and pinned: a lock
-# moved by a push to the user repository, by a token that leaked or anyone
-# else, names a revision no deploy here pinned, a branch this box does not
-# follow, or another remote, and is refused, however the lock reached the
-# working tree. Such a lock can still name an earlier revision a deploy here
-# did pin, by design (a rollback is a deploy of an earlier rev); never one no
-# deploy chose. The way back is the deploy's own last pin, never read from the
-# lock it replaces, which is the one thing a push can write. A branch is a NAME, compared exactly and
-# read as `refs/heads/<name>` only after it is one: `master^2` or `wip~1` is a
-# revision expression, not a branch. Nothing here reads the network but
-# `fetch`, so a run that cannot reach the remote refuses nothing it should take.
+# Only the first-parent chain went through a gate. The mirror lives in this box's .git, so a lock
+# moved by a push (a leaked token, anyone) names a revision no deploy here pinned and is refused;
+# it can still name an earlier pinned one, by design (a rollback). The way back is the deploy's
+# own last pin, never read from the lock, which a push can write. A branch is a name compared
+# exactly (`master^2` is not one). Only `fetch` reads the network.
 #
-# The log is read to its end with awk: a reader that quit at its first match
-# (the box's grep is ugrep, which does so with its output going nowhere) would
-# close the pipe, and under pipefail the log's broken pipe would read as a
-# refusal.
+# Logs are read to the end with awk: a reader that quits at its first match (the box's grep is
+# ugrep) breaks the pipe, which pipefail reads as a refusal.
 set -euo pipefail
 
 die() { echo "followed: $1" >&2; exit 1; }

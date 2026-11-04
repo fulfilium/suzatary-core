@@ -1,7 +1,6 @@
 #!/usr/bin/env bash
-# The staged files' cheap checks, before the gate finds them an hour later: rustfmt on the staged
-# Rust, and no term of the data repository's privacy lists in a staged line where those lists are
-# on this machine (the box; the gate's leak guard covers the rest).
+# Cheap checks on the staged files: rustfmt on staged Rust, and no term of the privacy lists in a
+# staged line where those lists are on this machine (the gate's leak guard covers the rest).
 set -euo pipefail
 cd "$(git rev-parse --show-toplevel)"
 

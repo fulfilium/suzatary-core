@@ -1,23 +1,12 @@
 #!/usr/bin/env bash
-# PreToolUse hook for the unattended triage session: no Edit or Write reaches
-# a file.
+# PreToolUse hook for the unattended triage session: denies every Edit or Write.
+# Edit(<glob>) argument scoping is not enforced by the permission system. A backstop
+# behind scripts/tool-guard.sh, in case a settings file quietly reverts.
 #
-# Why this exists: Edit(<glob>) argument-scoping is not enforced by the
-# permission system (measured). The agent writes only through its verbs, onto
-# its replica, so its writable set of files is empty and every call is denied
-# BEFORE the tool runs.
+# Registered in .claude/triage-settings.json, never a project settings.json, which
+# would stop every human session writing files.
 #
-# This is a BACKSTOP, not the fence. The agent holds
-# no Edit at all, and scripts/tool-guard.sh denies by default every tool
-# outside `mcp__suzatary__*`. Kept anyway, because a backstop costs nothing and
-# the failure it covers — a settings file quietly reverting — is real.
-#
-# Registered in .claude/triage-settings.json, NOT in a project settings.json:
-# aimed at the repo it would hit every human too, and a plain session in this
-# directory could not write a file.
-#
-# Exit codes per the hooks contract: 0 = allow, 2 = block (stderr shown to the
-# agent). It never answers 0.
+# Hooks contract: 0 = allow, 2 = block (stderr shown to the agent). It never answers 0.
 set -uo pipefail
 
 cat >/dev/null

@@ -1,8 +1,7 @@
 # shellcheck shell=bash
-# The credential `claude -p` runs the triage agent under, for scripts/hourly-triage.sh to
-# source: the year-long token `claude setup-token` mints, resolved through secretspec so it
-# never sits in a file the agent can read. claude reads it from its environment, and
-# `suzatary init` prints the step that sets it. Returns 1 when it is not set.
+# The triage agent's `claude -p` credential, sourced by scripts/hourly-triage.sh: resolved
+# through secretspec into the environment so it never sits in a file the agent can read.
+# Returns 1 when it is not set.
 claude_auth() {
   local token
   token=$(secretspec get CLAUDE_CODE_OAUTH_TOKEN --reason "hourly triage: headless claude auth" 2>/dev/null || true)

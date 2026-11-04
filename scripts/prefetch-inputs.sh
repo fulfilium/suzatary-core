@@ -1,8 +1,6 @@
 #!/usr/bin/env bash
-# Put every github: input of a flake.lock in the Nix store by git fetch.
-# A cloud session's proxy refuses GitHub's tarball downloads, which is how
-# Nix fetches github: inputs, but allows git; with each input in the store
-# at its locked hash, nix develop and nix flake check never ask GitHub.
+# Put every github: input of a flake.lock in the Nix store by git fetch: a cloud session's proxy
+# refuses GitHub's tarball downloads, which Nix uses, but allows git.
 #
 #   scripts/prefetch-inputs.sh [flake.lock]
 set -euo pipefail

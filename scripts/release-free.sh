@@ -1,12 +1,7 @@
 #!/usr/bin/env bash
-# THE BINARY IS NOT A FUNCTION OF ITS RELEASE. Every train ends with a release commit
-# (app/release.toml and CHANGELOG.md), and a docs change moves docs/ or CLAUDE.md; if any of
-# them reached `.#suzatary-bin`'s derivation, every train would compile the binary again, and
-# every step keyed on it would run again. This copies HEAD's tree, evaluates the binary's
-# derivation, changes those files in the copy (a new version, a changelog line, a CLAUDE.md
-# line, a new page under docs/) and evaluates it again: the binary's derivation must be the
-# same, and `.#suzatary`'s, the package that installs the release beside the binary, must
-# move, or the release would no longer reach `--version` and `GET /api/about`.
+# Checks that a release or docs change (app/release.toml, CHANGELOG.md, CLAUDE.md, docs/) leaves
+# `.#suzatary-bin`'s derivation unchanged, else every train recompiles it, and moves
+# `.#suzatary`'s, else the release no longer reaches `--version` and `GET /api/about`.
 #
 #   scripts/release-free.sh
 set -euo pipefail

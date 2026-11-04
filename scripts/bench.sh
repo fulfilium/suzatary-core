@@ -1,14 +1,12 @@
 #!/usr/bin/env bash
-# Latency and weight of the web app's routes, as numbers rather than a feeling.
+# Latency and weight of the web app's routes.
 #
 #   scripts/bench.sh [base-url] [requests-per-route] [todo-id]
 #
-# Prints p50 / p95 / max in milliseconds and the wire size (gzip accepted)
-# for each route, against a running `suzatary serve` (default: the instance
-# file's `app_url`, the tailnet unit).
+# Prints p50 / p95 / max in milliseconds and the gzip wire size per route, against a running
+# `suzatary serve` (default: the instance's `web.app_url`).
 set -euo pipefail
 instance="${SUZATARY_INSTANCE:-$(cd "$(dirname "$0")/.." && pwd)/instance.toml}"
-# The instance's own `app_url`, read by the box's parser (`SUZATARY_BIN`, else this checkout's).
 url() {
   local bin="${SUZATARY_BIN:-$("$(dirname "$0")/app-bin.sh")/bin/suzatary}"
   "$bin" --instance "$instance" instance get web.app_url 2>/dev/null || true

@@ -1,21 +1,14 @@
-// The merge gate's units (scripts/merge-gate.sh): a step that is split into units keeps a pass
-// for each unit, keyed by the files that unit reads. This prints one line per unit, the unit's
-// name, a tab and the space-separated paths of the tree the unit does not read.
+// The merge gate's units: prints `<unit>\t<space-separated paths it does not read>` per unit.
 //
 //   node scripts/gate-units.mjs crates <metadata.json> <root> <tree> [--base <path>...] [<package>=<path>]...
-//       One unit per workspace member. A member reads its own directory, the directories of the
-//       members it depends on (every kind of dependency, transitively, from `cargo metadata`)
-//       and each <path> declared for it or for a member it depends on. It skips the --base paths
-//       it does not declare, and what the other members' directories hold but their manifests:
-//       features unify across the workspace, so every member's Cargo.toml is every unit's input.
+//       One unit per workspace member, reading its own and its transitive dependencies'
+//       directories and declared paths. Every member's Cargo.toml is every unit's input:
+//       features unify across the workspace.
 //   node scripts/gate-units.mjs files <metafile.json> <tree> <entries> --scope <dir>... [--shared [<entry>=]<path>...] [--base <path>...]
-//       One unit per entry point under <entries>, from esbuild's metafile. An entry reads every
-//       file its imports reach, directly or through other files, and each --shared path; a
-//       path named `<entry>=<path>` is read by that entry alone. It
-//       skips the --base paths and the other files under each --scope.
+//       One unit per entry point, reading what its imports reach and each --shared path
+//       (`<entry>=<path>` for that entry alone).
 //
-// Any failure exits nonzero, an import under a --base path among them, and the gate then runs
-// the step whole.
+// Any failure, an import under a --base path among them, exits nonzero, and the step runs whole.
 import { readFileSync } from "node:fs";
 import { relative, dirname } from "node:path";
 
@@ -24,7 +17,7 @@ const under = (path, dir) => path === dir || path.startsWith(dir + "/");
 const fail = why => { console.error(`gate-units: ${why}`); process.exit(1); };
 const treeOf = file => readFileSync(file, "utf8").split("\n").filter(l => l !== "").map(l => l.slice(l.indexOf("\t") + 1));
 
-// The words after each flag, and the words before the first flag.
+// The words before the first flag are under "".
 const flags = words => {
   const out = { "": [] };
   let at = "";

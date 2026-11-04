@@ -1,31 +1,17 @@
 #!/usr/bin/env bash
-# THE SETTINGS OF CORE THAT LET IT RUN THE GATE, set once by the operator at a terminal
-# (docs/OPERATOR.md). Core is the public repository the train publishes to and runs the tree half
-# in (`scripts/train.sh gate --remote github`, .github/workflows/gate.yml); the train never runs
-# this, and nothing here is read by a gate.
+# The settings that let core (the public repository the train publishes to) run the gate, set
+# once by the operator at a terminal; the train never runs this.
 #
 #   scripts/core-settings.sh [<owner>/<repo>]   (default: the remote `core` of this checkout)
 #
-# Each setting is idempotent, so running it again sets the same values:
-#   - Actions on, running only GitHub's own actions, `cachix/install-nix-action` and
-#     `nix-community/cache-nix-action`, which the workflows below pin;
-#   - gate.yml, gate-store.yml and publication.yml on, and every other workflow off: the public
-#     tree carries this repository's other workflows, which are for the private repository
-#     (quick.yml would run on every publication, update-flake-lock.yml on its schedule);
-#   - the token a run is handed reads the repository and writes nothing, and cannot approve a
-#     pull request;
-#   - a run a pull request from any outside contributor starts waits for an approval (gate.yml
-#     names no pull request event, so this covers a workflow added later);
-#   - a ruleset under which only a repository administrator may move master, so no workflow
-#     (whose token is never an administrator) can move it, though a run may ask for
-#     `contents: write`: a workflow a gate branch carries could otherwise move master and so run
-#     code of its own in publication.yml, beside the cache's token;
-#   - the environment `cachix`, which only a run on master may enter, and in it the secret
-#     CACHIX_AUTH_TOKEN, the bmabsout cache's push token, which publication.yml alone names, read
-#     from secretspec and handed to `gh secret set` on its stdin, so it is in no argument, file or
-#     line printed; a repository-wide copy of it is deleted.
+# Idempotent. It sets: Actions on, limited to GitHub's own and the two pinned Nix actions;
+# gate.yml, gate-store.yml and publication.yml on, every other workflow off; the run token
+# read-only and unable to approve PRs; outside contributors' runs wait for approval; a ruleset
+# letting only an administrator move master (else a gate branch's workflow could move master and
+# run its own code beside the cache token); the environment `cachix`, entered only from master,
+# holding CACHIX_AUTH_TOKEN, passed on stdin so it is in no argument, file or printed line.
 #
-# It needs `gh` logged in as an administrator of core, and secretspec holding CACHIX_AUTH_TOKEN.
+# Needs `gh` logged in as an administrator of core, and secretspec holding CACHIX_AUTH_TOKEN.
 set -euo pipefail
 
 die() {
@@ -76,9 +62,8 @@ while IFS=$'\t' read -r id path state; do
   esac
 done < <(gh api --paginate "repos/$repo/actions/workflows" --jq '.workflows[] | "\(.id)\t\(.path)\t\(.state)"')
 
-# Only an administrator moves master: the train's publish pushes as the owner's login, which is
-# one, and a run's token is never one. The rule sits beside core's fast-forward ruleset, which
-# this leaves as it is.
+# The train's publish pushes as the owner, an administrator; a run's token never is one. Core's
+# fast-forward ruleset is left as it is.
 update_rules="master-updates-admin-only"
 echo "core-settings: the ruleset $update_rules, under which only an administrator may move master"
 ruleset="$(cat <<JSON
@@ -95,8 +80,8 @@ else
   gh api --silent -X POST "repos/$repo/rulesets" --input - <<<"$ruleset"
 fi
 
-# The token is the environment's, not the repository's: a gate branch runs the gate.yml of its
-# own commit, so a repository secret is one any workflow file a pushed commit carries can name.
+# An environment secret, not a repository one: a gate branch runs its own commit's workflows,
+# which could name any repository secret.
 echo "core-settings: the environment cachix, which a run on master alone enters"
 gh api --silent -X PUT "repos/$repo/environments/cachix" --input - <<'JSON'
 {"deployment_branch_policy": {"protected_branches": false, "custom_branch_policies": true}}

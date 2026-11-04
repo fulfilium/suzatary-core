@@ -1,10 +1,8 @@
 #!/usr/bin/env bash
 # Install the official Proton Drive CLI as ~/bin/proton-drive (idempotent).
 #
-# The binary is a Bun single-file executable. NEVER patchelf it — Bun's
-# embedded payload sits at fixed offsets and patchelf segfaults it.
-# On NixOS we run it through the nix glibc loader instead, GC-rooted so a
-# nix-collect-garbage can't break the wrapper; on generic Linux it runs as-is.
+# Never patchelf it: it is a Bun single-file executable whose payload sits at fixed offsets. On
+# NixOS it runs through a GC-rooted nix glibc loader instead.
 set -euo pipefail
 
 VER="${PROTON_DRIVE_CLI_VERSION:-0.8.0}"
@@ -27,7 +25,7 @@ chmod +x "$HOME/bin/proton-drive.bin"
 if "$HOME/bin/proton-drive.bin" --version >/dev/null 2>&1; then
   RUN="exec \"\$HOME/bin/proton-drive.bin\" \"\$@\""
 else
-  # NixOS: no /lib loader. Realize glibc and pin it as a GC root.
+  # NixOS has no /lib loader.
   nix build --out-link "$HOME/bin/.proton-drive-glibc" 'nixpkgs#glibc.out'
   LOADER=$(ls "$HOME"/bin/.proton-drive-glibc/lib/ld-linux-*.so.* | head -1)
   RUN="exec \"$LOADER\" \"\$HOME/bin/proton-drive.bin\" \"\$@\""

@@ -1,18 +1,10 @@
 #!/usr/bin/env bash
-# The wire for the browser, into web/src/wire/generated/ (output, git-ignored
-# like web/dist/): wire.ts, the types app/core/src/wire.rs declares, written by
-# ts-rs; and payload.ts, a decoder for every type a route answers, folded from
-# the same text (`suzatary_core::wire::shape`); and pages.ts, what a host
-# hands each page of app/pages and what the page asks of it, the runtime's
-# effects and inputs among them (no decoders: the page's module reads its own
-# inputs). THE WIRE IS DECLARED ONCE, IN
-# RUST (docs/ARCHITECTURE.md §2): a field the Rust adds is in both files, and a
-# caller that reads it wrong is a tsc error rather than an `undefined` on a page.
+# Generates the browser's wire into web/src/wire/generated/ (git-ignored): wire.ts (the types of
+# app/core/src/wire.rs, via ts-rs), payload.ts (their decoders) and pages.ts (each page's host
+# contract). The wire is declared once, in Rust.
 #
-# `$SUZATARY_WIRE_TS` names a directory holding all four already (`nix build
-# .#suzatary-web-ts`, CI). Without it (the ordinary `.#triage` shell, which
-# does not carry that derivation) this runs the SAME `cargo test` the
-# derivation runs, with the shell's cargo, into a scratch directory.
+# `$SUZATARY_WIRE_TS` names a directory holding them already (`nix build .#suzatary-web-ts`);
+# without it this runs the derivation's own `cargo test` into a scratch directory.
 #
 #   scripts/wire.sh
 set -euo pipefail

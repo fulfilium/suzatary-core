@@ -1,92 +1,38 @@
 #!/usr/bin/env bash
-# The tree a public repository of Suzatary would start from, and the guard
-# over it (docs/DATASPLIT-PLAN-2026-09-14.md §9). Publishing is the owner's
-# decision: this writes a directory and reads files, and never touches a git
-# remote or a repository's visibility.
+# The public tree of a commit, and the leak guard over it. Never touches a git remote or a
+# repository's visibility.
 #
 #   scripts/public-tree.sh <out> [<rev>]          materialise the public tree of <rev> (HEAD)
-#   scripts/public-tree.sh --store [<rev>]        the same, added to the Nix store as a
-#                                                 deploy fetches it; prints its store path
+#   scripts/public-tree.sh --store [<rev>]        the same, added to the Nix store as a deploy fetches it; prints its path
 #   scripts/public-tree.sh --check <dir>          the leak guard, every rule
-#   scripts/public-tree.sh --check --full ...     the same, reading every file again (THE
-#                                                 PASSES, below, are not read, and are kept;
-#                                                 SUZATARY_GUARD_FULL set is the same)
+#   scripts/public-tree.sh --check --full ...     the same, reading every file again (or SUZATARY_GUARD_FULL)
 #   scripts/public-tree.sh --check --strict <dir> the same, failing where a rule would skip
-#   scripts/public-tree.sh --check --lists [--admitted <manifest> | --text] <dir>
-#                                                 the guard another public repository's range
-#                                                 passes (scripts/public-scan.sh): the secret
-#                                                 scanner, the admitted files and the lists;
-#                                                 `--text` for words a person wrote (a commit
-#                                                 message), where nothing is admitted
-#   scripts/public-tree.sh --check --terms <dir>  the data repository's lists alone (this
-#                                                 private repository's own check)
+#   scripts/public-tree.sh --check --lists [--admitted <manifest> | --text] <dir>   secrets, admitted files and lists; `--text` admits nothing
+#   scripts/public-tree.sh --check --terms <dir>  the data repository's lists alone
 #
-# THE PUBLIC TREE is a FUNCTION OF A COMMIT'S TREE: <rev>'s (`git archive`, so no
-# uncommitted edit in a shared checkout is ever published) MINUS the private
-# history, which `.gitattributes` declares `export-ignore` (the reports, the
-# CLAUDE.md history and the changelog), with `scripts/public-changelog.md` as
-# its changelog: one that starts at the public release, at the workspace's
-# version and the date the real changelog gives it, else `unreleased` (never
-# the clock's date or the commit's, so one tree writes one tree on any day and
-# from any commit holding it). Every file it reads is <rev>'s. The template is itself in
-# the public tree, so the tree it writes holds what writes it again. Nothing
-# else is removed, so whatever else would leak is the
-# guard's to find, not a list's to hide. The public tree hosts itself: run
-# inside a commit of its own output, this writes that output again.
+# The tree is <rev>'s `git archive` (never an uncommitted edit) minus `export-ignore` paths, with
+# scripts/public-changelog.md as its changelog, dated from the real changelog or `unreleased`,
+# never the clock. Nothing else is removed: whatever else would leak is the guard's to find.
 #
-# THE GUARD'S INVARIANT: every byte of <dir> is EITHER plain text read by both
-# checks, the secret scanner (gitleaks) and the term matcher (`suzatary
-# leaks`), OR in a file `scripts/public-admitted.sha256` lists by its path and
-# the SHA-256 of its bytes, a line a person admitted at a terminal
-# (`scripts/train.sh publish --admit`). Neither check decodes for the other:
-# what an admitted file holds encoded is the admitting person's to see.
+# Invariant: every byte of <dir> is either plain text read by both gitleaks and `suzatary leaks`,
+# or in a file scripts/public-admitted.sha256 lists by path and SHA-256, admitted at a terminal.
 #
-# It reads every file of <dir> (what git tracks when <dir> is a work tree's
-# root, every file otherwise) and every file's path, and fails on:
-#   - a symbolic link, which a public tree never holds;
-#   - an email address outside the reserved example domains (`example.com`,
-#     `.org`, `.net` and their subdomains, `.test`, `.invalid`, `.example`,
-#     `.localhost`, or a domain whose first label is `example`), the cast's
-#     being all of them; a URL's userinfo (`scheme://user@`) is not an address;
-#   - a `.ts.net` name whose tailnet is not a placeholder (`example`, `tailnet`);
-#   - an absolute home path other than the cast owner's (`ada`) or `root`;
-#   - a path to a file of the private history this checkout holds;
-#   - this deployment's box, tailnet or Unix user, read from its configuration:
-#     `<data>/FETCHER`, the instance file's `app_url`, and the `/home/<user>`
-#     of its roots;
-#   - a term of `personal-terms.txt` or `context-terms.txt`, the two lists in
-#     the box-local tier `<data>/local`, which no push carries;
-#   - a tailnet node's address (100.64.0.0/10, but the cast's 100.64.0.0/24)
-#     or a telephone number (but the fictional 555 exchange);
-#   - outside `--terms`, a secret gitleaks finds (`secrets` below), unless the
-#     tree's `.gitleaksignore` names that finding by its fingerprint;
-#   - outside `--terms`, a file the matcher cannot read as words, judged over
-#     the whole file (`suzatary_core::leak::Opaque`: a binary, base64 or hex
-#     however it is cut up, or text spelled with escapes), or one holding a finding
-#     `.gitleaksignore` admits, that the manifest does not admit with these
-#     bytes (a fingerprint names a path, a rule and a line, never the bytes),
-#     the manifest being <dir>'s own unless `--admitted` names another;
-#   - with every rule, a relative link or picture of a front page
-#     (`README.md`, `CONTRIBUTING.md`, `SECURITY.md`, `docs/README.md`) that
-#     names no file of the tree, so what they show a stranger is there.
-# A path holding a newline or another control character is refused (2) before
-# anything reads it. The matcher reads text as words: compatibility-decomposed,
-# lowercased, without accents or Unicode's invisible format characters, every
-# run of whitespace (a line break and the comment marker opening the next line
-# included) one space, and a term or a name matches as a WHOLE WORD of that (a
-# word character is `[a-z0-9_]`), at the line it starts on. A binary is not
-# read.
-# <data> is the instance file's directory (`SUZATARY_INSTANCE`, else
-# `instance.toml` beside this checkout); where there is none, the rules that
-# need it skip with a line, or fail under `--strict`, the check a publication
-# passes. A hit prints its file and line (`:0` for a path, a link or a file
-# not admitted) and nothing else, so the guard never prints what it guards.
+# It fails on: a symbolic link; an email outside the reserved example domains (a URL's userinfo
+# is not one); a `.ts.net` name with a non-placeholder tailnet; a home path other than `ada` or
+# `root`; a path to a private-history file; this deployment's box, tailnet or Unix user; a term
+# of `<data>/local/{personal,context}-terms.txt`; a tailnet address outside 100.64.0.0/24 or a
+# phone number outside 555; outside `--terms`, a gitleaks secret not fingerprinted in
+# `.gitleaksignore`, or an opaque file (`suzatary_core::leak::Opaque`) or one with an ignored
+# finding that the manifest does not admit with these bytes; with every rule, a front page's
+# relative link to nothing.
+# A path with a control character is refused (2) before anything reads it. Terms match as whole
+# words (`[a-z0-9_]`) of NFKD-folded lowercase text with whitespace runs as one space.
+# <data> is the instance file's directory; without one the rules that need it skip, or fail
+# under `--strict`. A hit prints only `file:line` (`:0` for a path, link or unadmitted file),
+# never what it guards.
 #
-# THE CHECK'S VERDICT IS ITS STATUS, as grep's is: 0 the tree is clean, 1 the
-# check ran whole and found a hit, 2 it could not run whole (a rule that would
-# skip under `--strict`, a list missing, a scratch file not made, anything
-# that failed). Only a 1 says the tree leaks; a caller that acts on a leak
-# (`scripts/train.sh publish --skip`) never reads a 2 as one.
+# Exit, as grep's: 0 clean, 1 a hit, 2 could not run whole. Only 1 says the tree leaks; a caller
+# that acts on a leak must never read a 2 as one.
 set -euo pipefail
 
 REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -97,7 +43,7 @@ usage() {
   exit 2
 }
 
-# The files of a tree, NUL-separated and relative to it.
+# NUL-separated, relative to the tree.
 files_of() {
   if [ "$(git -C "$1" rev-parse --show-toplevel 2>/dev/null)" = "$(cd "$1" && pwd -P)" ]; then
     git -C "$1" ls-files -z
@@ -106,8 +52,7 @@ files_of() {
   fi
 }
 
-# <rev>'s public changelog at its release's version (app/release.toml; app/Cargo.toml for a
-# commit from before the release left the manifest), dated as its changelog dates that version.
+# app/Cargo.toml for a commit older than app/release.toml.
 fresh_changelog() {
   local rev="$1" version date
   version="$( { git -C "$REPO" show "$rev:app/release.toml" 2>/dev/null \
@@ -117,8 +62,7 @@ fresh_changelog() {
   git -C "$REPO" show "$rev:scripts/public-changelog.md" | sed "s/@VERSION@/$version/; s/@DATE@/$date/"
 }
 
-# `page:line` for each relative link of a front page of <dir> (Markdown's
-# `](target)`, HTML's `src=` and `href=`) that names no file of <dir>.
+# `page:line` for each relative link of a front page that names no file of <dir>.
 dangling_links() {
   local dir="$1" page line target path
   for page in "${FRONT_PAGES[@]}"; do
@@ -152,17 +96,13 @@ materialise() {
   }
   mkdir -p "$out"
   git -C "$REPO" archive --format=tar "$rev" | tar -x -C "$out"
-  # A directory all of whose files are `export-ignore` is left empty, and git
-  # holds no empty directory.
+  # git holds no empty directory.
   find "$out" -mindepth 1 -type d -empty -delete
   fresh_changelog "$rev" >"$out/CHANGELOG.md"
   echo "public-tree: wrote $(find "$out" -type f | wc -l) files to $out" >&2
 }
 
-# THE STORE PATH OF <rev>'s PUBLIC TREE, as `nix store add-path --name source` adds it. The tree
-# is a function of <rev>'s git tree and of this script, so the path is recorded under the hash of
-# the two in <git-common-dir>/public-trees, and a recorded path the store still holds is printed
-# without materialising the tree again.
+# Recorded in <git-common-dir>/public-trees under the hash of <rev>'s tree and this script.
 store_path() {
   local rev tree key record path dir code=0
   rev="$(git -C "$REPO" rev-parse --verify --quiet "${1:-HEAD}^{commit}")" || {
@@ -186,19 +126,11 @@ store_path() {
   echo "$path"
 }
 
-# THE SECRET SCANNER is gitleaks, offline: its maintained rules and this project's additions
-# (scripts/secret-rules.toml, the guard's own, read from this checkout as the matcher is), over
-# every file of <dir> and what each holds base64-, hex- or percent-encoded, three decodings deep.
-# It reads a COPY in which every file is named by a number alone, so no path rule of its own
-# (its default allowlist passes over `*.svg`, lock files, `node_modules/` and a path naming its
-# own config) can pass over a file, and each sealed slot the matcher recognises as ciphertext
-# (`suzatary_core::leak::slots`) is a placeholder, so its key's name is no finding while the
-# rest of its line is read (`suzatary leaks scan-copy`); the numbers are mapped back to paths
-# in what it prints. A
-# finding the tree's own `.gitleaksignore` names by its fingerprint (path, rule, line) is
-# admitted, that file rewritten to the numbers, and a `gitleaks:allow` comment admits nothing.
-# Each finding prints as `file:line`, never the secret, its rule on stderr. Its status is 0 or 3
-# (found) when it ran; anything else is a scan that did not.
+# gitleaks, offline, with scripts/secret-rules.toml, three decodings deep. It reads a copy with
+# every file named by a number, so gitleaks's default path allowlist (`*.svg`, lock files,
+# `node_modules/`) passes over nothing; sealed slots are placeholders (`suzatary leaks
+# scan-copy`). `.gitleaksignore` fingerprints admit; `gitleaks:allow` admits nothing. Prints
+# `file:line`, never the secret. gitleaks exits 0 or 3 (found) when it ran.
 secrets() {
   local code=0
   mkdir "$found.tree"
@@ -223,12 +155,10 @@ secrets() {
     "$found.index" "$found.secrets"
 }
 
-# One term per line, blank and `#` lines skipped, folded to lowercase.
 terms_of() {
   grep -vE '^[[:space:]]*(#|$)' "$1" | sed 's/^[[:space:]]*//; s/[[:space:]]*$//' | tr '[:upper:]' '[:lower:]'
 }
 
-# A rule that cannot run: a line, or under --strict a check that did not run whole.
 skipped() {
   if [ -n "$strict" ]; then
     echo "public-tree: $1, so the check is not whole (--strict)" >&2
@@ -237,8 +167,7 @@ skipped() {
   echo "public-tree: skipped $1" >&2
 }
 
-# The check with <rules>: `whole` (every rule), `lists` (the secret scanner, the admitted files
-# and the term lists) or `terms` (the term lists alone), the manifest <admitted> or <dir>'s own.
+# check <whole|lists|terms> <dir> <manifest or empty for dir's own>
 check() {
   local rules="$1" dir="$2" manifest="$3" instance data hits repo
   instance="${SUZATARY_INSTANCE-$REPO/instance.toml}"
@@ -249,16 +178,12 @@ check() {
   words="$(mktemp)"
   links="$(mktemp)"
   found="$(mktemp)"
-  # THE MATCHER is the binary's (`suzatary leaks`, `suzatary_core::leak`), one for every
-  # input: files, printing `file:line` (and `file:0` for one the manifest does not admit); with
-  # `--paths`, one path per line on stdin. `SUZATARY_BIN` names it (a test's own build), else
-  # this checkout's program, which scripts/app-bin.sh builds.
   local bin="${SUZATARY_BIN:-}"
   [ -n "$bin" ] || bin="$("$REPO/scripts/app-bin.sh")/bin/suzatary"
   [ -x "$bin" ] || { echo "public-tree: no matcher at $bin" >&2; exit 2; }
   if [ -n "$instance" ] && [ -f "$instance" ]; then
     data="$(dirname "$(realpath "$instance")")"
-    # The box-local tier, `suzatary_cli::instance::Local::DIR`.
+    # `suzatary_cli::instance::Local::DIR`.
     local_dir="$data/local"
     [ -f "$local_dir/personal-terms.txt" ] || {
       echo "public-tree: $local_dir/personal-terms.txt is missing" >&2
@@ -270,8 +195,7 @@ check() {
     else
       skipped "context-terms.txt: the box-local tier has none yet"
     fi
-    # Each value as the binary reads it (`suzatary instance get`): `repo`, which every instance
-    # names, so a file that does not read stops the check, and `app_url` and `data` where named.
+    # Every instance names `repo`, so a file that does not read stops the check.
     repo="$("$bin" --instance "$instance" instance get repo)" || {
       echo "public-tree: the binary ($bin) read no repo from $instance, so the check did not run whole" >&2
       exit 2
@@ -288,14 +212,12 @@ check() {
   fi
 
   if [ "$rules" = whole ]; then
-    # A file of the private history below the root (a root file the public
-    # tree writes afresh, or never needs, is not a link).
+    # Private-history files below the root (a root one is never linked).
     git -C "$REPO" ls-files | git -C "$REPO" check-attr --stdin export-ignore |
       sed -n 's/: export-ignore: set$//p' | grep / >"$links" || true
   fi
 
-  # A path holding a newline or another control character is refused before anything reads
-  # it: every reader after this one (the matcher, the train's paths) reads lines.
+  # Every reader after this one reads lines.
   local odd
   odd="$(files_of "$dir" | while IFS= read -r -d '' path; do
     if [[ "$path" =~ [[:cntrl:]] ]]; then printf '%q\n' "$path"; fi
@@ -313,13 +235,9 @@ check() {
     [ -f "$ignore" ] || ignore=/dev/null
     admitted=(--admitted "$manifest" --findings "$ignore" --admit-by "$admit_by")
   fi
-  # THE PASSES. The matcher and the secret scanner judge each file by its path, its bytes and
-  # the rules alone, so a file that passed under the same rules is not read again. The rules
-  # key hashes everything that judges a file: the mode, the three lists, the matcher's and
-  # gitleaks's executables, the secret rules, the manifest, the tree's `.gitleaksignore` and
-  # this script. A change to any of them names another table, which holds no pass. The table
-  # holds `<sha256>  <path>` lines and only clean files; a hit is never kept. The paths, the
-  # links and the symbolic links are checked whole every time.
+  # A file that passed under the same rules is not read again. The key hashes everything that
+  # judges a file. The table holds `<sha256>  <path>` lines of clean files only. Paths, links and
+  # symbolic links are checked whole every time.
   local passes key table read_from
   passes="${SUZATARY_GUARD_PASSES:-${XDG_CACHE_HOME:-$HOME/.cache}/suzatary/public-guard}"
   key="$({
@@ -337,11 +255,9 @@ check() {
   { files_of "$dir" | tr '\0' '\n' | grep -vxFf "$found.kept" || true; } >"$found.todo"
   echo "public-tree: reading $(wc -l <"$found.todo") files; $(wc -l <"$found.kept") passed these rules before" >&2
 
-  # Every reader's status is checked where it runs: the hits go to a file, never through a
-  # pipe's last command, so a matcher that fails (an older binary, a read error) is a check
-  # that did not run, never a clean tree.
+  # Hits go to a file, never through a pipe's last command, so a failing matcher is a check that
+  # did not run, never a clean tree.
   {
-    # A symbolic link: refused whatever it names.
     if [ "$rules" = terms ]; then
       :
     elif [ "$(git -C "$dir" rev-parse --show-toplevel 2>/dev/null)" = "$(cd "$dir" && pwd -P)" ]; then
@@ -349,8 +265,6 @@ check() {
     else
       (cd "$dir" && find . -type l | sed 's#^\./##; s#$#:0#') || failed=yes
     fi
-    # Every path, then every file: its lines, and outside `--terms`, where the matcher cannot
-    # read it as words, its admission by the manifest.
     files_of "$dir" | tr '\0' '\n' | "${match[@]}" --scope "$scope" --paths || failed=yes
     tr '\n' '\0' <"$found.todo" | (cd "$dir" && xargs -0 -r "${match[@]}" --scope "$scope" "${admitted[@]}" --) ||
       failed=yes
@@ -362,8 +276,7 @@ check() {
     exit 2
   fi
   hits="$(awk '!seen[$0]++' "$found")"
-  # Every file no hit names passed. The table grows by union and starts again from this tree's
-  # passes past 100000 lines; a lost pass costs a read, never a verdict.
+  # Past 100000 lines the table restarts; a lost pass costs a read, never a verdict.
   local fresh=""
   mkdir -p "$passes" && fresh="$(mktemp "$passes/.fresh.XXXXXX")" &&
     {

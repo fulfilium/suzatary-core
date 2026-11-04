@@ -1,12 +1,6 @@
 #!/usr/bin/env bash
-# `suzatary auth` — interactive credential setup for a box.
-#
-# The fetcher is the ONE box that holds credentials, fetches, triages and
-# sends (CLAUDE.md, "One fetcher"). This wizard is the human half of bringing
-# a box into that role;
-# `suzatary up` is the service half. Interactive on purpose — it is run by
-# the owner in a terminal, never by the agent, and secrets it touches go to the
-# pass store or nowhere.
+# `suzatary auth`: interactive credential setup for a box. Run by the owner at a terminal, never
+# by the agent; secrets it touches go to the pass store or nowhere.
 set -euo pipefail
 
 REPO="$(cd "$(dirname "$0")/.." && pwd)"
@@ -19,9 +13,8 @@ read -rp "> " ROLE
 case "$ROLE" in
   1)
     "$REPO/scripts/install-proton-drive.sh"
-    # Drive sessions live in the pass store; a fresh box has none yet. Stand up
-    # a disposable one so login has somewhere to put the session — the real
-    # store arrives inside the vault and replaces it.
+    # Drive sessions live in the pass store; a fresh box gets a disposable one, which the vault's
+    # store replaces.
     BOOTSTRAPPED=""
     if [ ! -d "$HOME/.password-store" ]; then
       echo "auth: creating a disposable bootstrap keyring for the Drive session"
@@ -39,9 +32,8 @@ Expire-Date: 0
 %commit
 EOF
       pass init "Suzatary Bootstrap" >/dev/null
-      # Marker: bootstrap-box.sh may replace a store carrying this file
-      # (and ONLY such a store). It swaps AFTER download+decrypt — the Drive
-      # session lives in this store, so order matters.
+      # bootstrap-box.sh may replace only a store carrying this marker, and only after the
+      # download and decrypt, since the Drive session lives in it.
       touch "$HOME/.password-store/.suzatary-bootstrap"
       BOOTSTRAPPED=1
     fi
@@ -50,8 +42,6 @@ EOF
     [ -f "$KEY" ] || { echo "auth: no such file: $KEY"; exit 1; }
     read -rp "the fetcher whose vault to restore (its FETCHER name): " BOX
     [ -n "$BOX" ] || { echo "auth: name the fetcher"; exit 1; }
-    # bootstrap-box.sh itself swaps marked bootstrap stores aside —
-    # after downloading with their Drive session.
     read -rp "repositories to clone (owner/name, space-separated): " -a CLONE
     "$REPO/scripts/bootstrap-box.sh" "$KEY" "$BOX" "${CLONE[@]}"
     cd "$REPO" && secretspec check || true

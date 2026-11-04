@@ -1,26 +1,14 @@
 #!/usr/bin/env bash
-# A commit message is a claim about a diff. This hook checks the one part of
-# that claim a machine can check: every FILE the message names, if it exists in
-# the repo, must be in the staged diff — or be declared as a mere reference.
-#
-# A message written from intent can claim a change its diff does not make;
-# this hook makes the cheapest version of "read the diff" automatic.
-#
-# What counts as naming a file: a token with a directory component or a source
-# extension that resolves to a tracked blob (a bare basename resolves only if
-# it is unique in the tree — `events.py` is ambiguous, `safe-push.sh` is not).
-# Directories are never checked: "moves out of daily/" is context, not a claim.
-# To mention a file you deliberately did not change, add a trailer:
+# Every tracked file a commit message names must be in the staged diff, or declared:
 #
 #     Mentions: scripts/safe-push.sh nix/services.nix
 #
-# Wired per clone with `git config core.hooksPath scripts/hooks`
-# (app/cli/tests/guards.rs exercises the hook). safe-push.sh does not
-# run it — its messages are fixed strings about fixed staging sets.
+# A token names a file when it has a directory or a source extension and resolves to a tracked
+# blob (a bare basename only if unique). Directories are never checked.
+# Wired per clone with `git config core.hooksPath scripts/hooks`.
 set -euo pipefail
 
 msg_file="$1"
-# Comment lines are template noise, not claims; trailers are read separately.
 body=$(grep -v '^#' "$msg_file" || true)
 subject=$(printf '%s\n' "$body" | grep -m1 . || true)
 if [ "${#subject}" -gt 72 ]; then
@@ -32,11 +20,8 @@ if printf '%s\n' "$body" | grep -qiE 'claude\.ai/code/session|^Claude-Session:';
   exit 1
 fi
 mentions=$(printf '%s\n' "$body" | grep -iE '^Mentions:' | sed -E 's/^[Mm]entions:[[:space:]]*//' | tr ',' ' ' || true)
-# The diff the message is a claim about: the index when git runs this as a
-# hook, or one existing commit when scripts/check-commits.sh replays it over
-# a range (CI runs that over every pushed commit, so the check cannot be
-# bypassed by a clobbered core.hooksPath or a --no-verify). Renames: the old
-# name is a legitimate thing to talk about in the message.
+# The index, or COMMIT_MSG_COMMIT when scripts/check-commits.sh replays it (CI, so --no-verify
+# cannot bypass it). A rename's old name may be named too.
 if [ -n "${COMMIT_MSG_COMMIT:-}" ]; then
   staged=$(git diff-tree --no-commit-id -r --name-only -M --diff-filter=ACDMRT "$COMMIT_MSG_COMMIT")
   staged="$staged
@@ -48,7 +33,6 @@ $(git diff --cached --name-status -M | awk '$1 ~ /^R/ {print $2}')"
 fi
 
 resolve() {
-  # Print the tracked path a token refers to, or nothing.
   local tok="$1"
   if git ls-files --error-unmatch -- "$tok" >/dev/null 2>&1 && ! git ls-files -- "$tok/" | grep -q .; then
     printf '%s\n' "$tok"; return

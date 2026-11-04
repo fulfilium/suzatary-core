@@ -1,23 +1,15 @@
 #!/usr/bin/env bash
-# Before anything lands in a PUBLIC repository (the Prodrome): the public tree's
-# own guard (`public-tree.sh --check --lists`) over what every commit of the
-# range adds, its messages, and the pull request's text, so both publication paths hold
-# one invariant: every byte is plain text the secret scanner and the term
-# matcher both read, or in a file a person admitted by its path and digest. The
-# lists live only in the box-local tier, so this runs here and never in the
-# public one. Prints where a hit is, never what it holds, and fails on any.
+# The leak guard (`public-tree.sh --check --lists`) over every commit a range would publish to a
+# public repository, its messages and the pull request's text. Prints where a hit is, never
+# what it holds.
 #
 #   scripts/public-scan.sh [--admit <path>]... <repo> <range> [<pr>]
 #   scripts/public-scan.sh ~/Documents/prodrome origin/main..land/p12 12
 #
-# A file the matcher cannot read as words (a binary, a run of base64 or hex, a
-# quoted-printable body), or one holding a finding the tip's `.gitleaksignore`
-# admits, is a hit until `--admit <path>`, given at a terminal and never from a
-# script, says a person looked at every version of it the range holds; the
-# admission is this scan's, by those bytes' digests.
+# An opaque file, or one with a finding `.gitleaksignore` admits, is a hit until `--admit
+# <path>`, taken only at a terminal, admits every version of it the range holds by digest.
 set -Eeuo pipefail
-# A scan that could not run is a 2, whatever stopped it, and only a hit is a 1:
-# a caller that reads 1 as "a private term is in it" never reads a failure so.
+# 2 when the scan could not run, 1 only for a hit: a caller must never read a failure as a hit.
 trap 'exit 2' ERR
 
 usage() {
@@ -40,25 +32,18 @@ range=$2
 pr=${3:-}
 
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-# The lists are the point: with no instance to find them, refuse rather than
-# pass a scan that read nothing.
+# Without the lists, refuse rather than pass a scan that read nothing.
 [ -f "${SUZATARY_INSTANCE:-$root/instance.toml}" ] || {
   echo "public-scan: no instance file, so no lists to scan with" >&2
   exit 2
 }
-# The scanned tree is `$scan/tree`; the scan's own scratch sits beside it, so an
-# early exit leaves nothing behind.
 scan="$(mktemp -d)"
 trap 'rm -rf "$scan"' EXIT
 mkdir -p "$scan/tree"
 
-# What the range would publish, laid out as one tree per commit (a push publishes every commit
-# of it, so a term added in one commit and removed in the next is still published): each file
-# the commit changes as that commit holds it, at its path in the repository, and that commit's
-# `.gitleaksignore`. Its message, and the pull request's text, are trees of their own, so no
-# file a commit adds stands where the scan writes its own words. The paths come NUL-separated and unquoted, deletions left out, so every path read is
-# one the commit holds: a file that cannot be read is a scan that did not run (2), never a file
-# skipped.
+# One tree per commit (a push publishes every commit, so a term added then removed still
+# leaks): the files it changes and its `.gitleaksignore`. Messages and the PR text are trees of
+# their own. A file that cannot be read is a scan that did not run (2), never a file skipped.
 empty="$(git -C "$repo" hash-object -t tree /dev/null)"
 git -C "$repo" rev-list --reverse "$range" >"$scan/commits"
 n=0
@@ -96,9 +81,7 @@ if [ -n "$pr" ]; then
   }
 fi
 
-# The admissions are this scan's: each path given, by the digest of every version of it the
-# range's commits hold, so a person's look covers each one a push would publish. A message or
-# the pull request's text is words a person writes, never admitted: it is read as words alone.
+# A message or the PR text is never admitted.
 for path in "${admits[@]}"; do
   touched=""
   for tree in "$scan"/files/*; do

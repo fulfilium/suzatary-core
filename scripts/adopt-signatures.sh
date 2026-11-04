@@ -3,13 +3,9 @@
 #
 #   scripts/adopt-signatures.sh
 #
-# Run as the owner on the fetcher, after `scripts/deploy.sh <rev>` has deployed a rev that
-# carries signatures; every verb runs from the DEPLOYED binary the units run
-# ($SUZATARY_ROOTS/lock-bin), never a checkout's build. Each step says what it did and checks
-# it before the next; a step already done is checked and passed, so a run that stopped is run
-# again. If anything fails after the writers stop, they are started again before it exits, so
-# the app is never left down: the web server, starting with the root declared, adopts every
-# chain; the other writers adopt nothing, and sign once the keys resolve.
+# Run as the owner on the fetcher after deploying a rev that signs; every verb runs from the
+# deployed binary ($SUZATARY_ROOTS/lock-bin). Each step is checked and idempotent, so a stopped
+# run is run again. If anything fails after the writers stop, they are started again on exit.
 set -euo pipefail
 
 # `systemctl --user` with no runtime directory answers empty rather than failing, so every
@@ -24,16 +20,14 @@ bin="$roots/lock-bin/bin/suzatary"
 instance="${SUZATARY_INSTANCE:?SUZATARY_INSTANCE names the instance file the units read}"
 instance="$(realpath "$instance")"
 data="$(dirname "$instance")"
-# The code root as the units have it: the deployed tree, whose secretspec.toml declares the keys,
-# never a checkout that may lag it.
+# The deployed tree, whose secretspec.toml declares the keys, never a checkout that may lag it.
 [ -d "$roots/app" ] || {
   echo "adopt-signatures: no deployed tree at $roots/app: deploy first (scripts/deploy.sh <rev>)" >&2
   exit 1
 }
 SUZATARY_REPO="$(readlink -f "$roots/app")"
 export SUZATARY_REPO
-# Everything that writes a chain: the server, the five-minute pass, and the IMAP watcher that
-# starts the pass early.
+# Everything that writes a chain.
 writers=(suzatary-web.service suzatary-triage.timer suzatary-mail-idle.service)
 
 step() { echo "==> $*"; }
@@ -60,8 +54,6 @@ was="$(declared)"
   fail "the instance declares the root $was and SUZATARY_BOX_KEY is $root: one is not this box's"
 
 stopped=0
-# On any exit with the writers stopped, start them again and check each; one that did not start
-# is named with the command that starts it.
 restart() {
   local status=$?
   [ "$stopped" -eq 1 ] || return "$status"
