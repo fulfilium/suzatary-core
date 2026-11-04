@@ -27,7 +27,6 @@ pub enum Guard {
 }
 
 impl Guard {
-    /// Its name in the surface listing.
     #[must_use]
     pub fn name(self) -> &'static str {
         match self {
@@ -38,9 +37,9 @@ impl Guard {
         }
     }
 
-    /// The checks of the gate's own answers, before anything of the request is read: any viewer
-    /// reads, and every other guard needs a peer mapped to an actor, or the operator, and the
-    /// CSRF triple. A guard whose witness asks no proof refuses the operator in its own check.
+    /// Checks the gate's answers before the request is read: every guard but `Read` needs a
+    /// peer mapped to an actor (or the operator) and the CSRF triple. A guard whose witness asks
+    /// no proof refuses the operator in its own check.
     ///
     /// # Errors
     /// The refusal of whichever check failed.
@@ -58,8 +57,7 @@ impl Guard {
     }
 }
 
-/// What a request must show of the device that sent it, under a deployment that signs: a sum,
-/// because the adapter branches on it and a route states it by the witness its work asks for.
+/// What a request must show of the device that sent it, under a deployment that signs.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Asks {
     /// Nothing: a read, an error report, or a post whose objects carry their own signatures.
@@ -71,7 +69,6 @@ pub enum Asks {
 }
 
 impl Asks {
-    /// Its word in the surface listing.
     #[must_use]
     pub fn name(self) -> &'static str {
         match self {
@@ -82,14 +79,12 @@ impl Asks {
     }
 }
 
-/// What the door proves of a request's device, by the type a route's witness asks for: nothing,
-/// that it holds the key it names, or that the history trusts that key for its actor.
+/// What the door proves of a request's device, by the type a route's witness asks for.
 pub trait Proof: Sized + Send + 'static {
-    /// The same, as the surface lists it.
     const ASKS: Asks;
 
-    /// The proof from the request the door read, `None` where it asks nothing, held to every
-    /// one of `trusting` under `root`. Run on the blocking pool: it may read a chain.
+    /// The proof from the request, held to every one of `trusting` under `root`. Run on the
+    /// blocking pool: it may read a chain.
     ///
     /// # Errors
     /// Why the request does not prove it.
@@ -99,7 +94,7 @@ pub trait Proof: Sized + Send + 'static {
         root: &PublicKey,
     ) -> Result<Self, Unproven>;
 
-    /// What a proof carries of the request, for its record; `None` for one that asked nothing.
+    /// `None` for a proof that asked nothing.
     fn proven(&self) -> Option<&Proven>;
 }
 
@@ -151,17 +146,12 @@ impl Proof for Trusted {
     }
 }
 
-/// What a guard mints when it passes; a route's work asks for one by type, and with it for the
-/// proof the door must make of the request first.
+/// The witness a guard mints when it passes; a route's work asks for one by type.
 pub trait Guarded: Sized + Send + 'static {
-    /// The guard this witness stands for.
     const GUARD: Guard;
 
-    /// What the request must show of its device.
     type Proof: Proof;
 
-    /// The witness, from the gate's answers and the door's proof.
-    ///
     /// # Errors
     /// The [`Refusal`] of whichever check failed.
     fn check(
@@ -200,7 +190,6 @@ impl Guarded for Actor {
     const GUARD: Guard = Guard::Act;
     type Proof = Trusted;
 
-    /// The actor the request was proven for, which is the gate's.
     fn check(
         _: &State,
         _: &Admitted,
@@ -273,8 +262,7 @@ impl Guarded for Poster {
     }
 }
 
-/// A device asking for its key to be trusted: it cannot be trusted yet, so it shows only that it
-/// holds the key it asks for. Its actor, the gate's, and the key that signed the request.
+/// A device asking for its key to be trusted: it shows only that it holds that key.
 pub struct Asker(pub Actor, pub PublicKey);
 
 impl Guarded for Asker {
@@ -294,7 +282,6 @@ impl Guarded for Asker {
     }
 }
 
-/// What the CSRF triple reads off a request.
 pub fn act_headers(headers: &HeaderMap) -> ActHeaders<'_> {
     let read = |name: &str| headers.get(name).and_then(|value| value.to_str().ok());
     ActHeaders {

@@ -2,8 +2,7 @@
 //! by the real `suzatary serve`.
 //!
 //! A browser on this box is always loopback, which may not write, so the suite's writes rest
-//! on `--whois-fixture`; both it and this verb exist only under the `fixture` cargo feature,
-//! so the deployed build does not contain them at all.
+//! on `--whois-fixture`; both exist only under the `fixture` cargo feature, never deployed.
 
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
@@ -54,9 +53,8 @@ fn fixture_root() -> prodrome_core::sign::PublicKey {
         .public()
 }
 
-/// The name, never a value, of the secret the fixture's standing secret card asks for: the
-/// coding routine's token, which the writing server's `[coding]` declares. Not the model's, which
-/// only its sign-in card asks for.
+/// The name of the secret the fixture's standing secret card asks for: the coding routine's
+/// token, which the writing server's `[coding]` declares.
 pub const SECRET_ASK_KEY: &str = suzatary_core::coding::ROUTINE_TOKEN;
 /// The one calendar link `--settings` declares, on the `ics` plugin, which nothing stores.
 pub const SETTINGS_CALENDAR_LINK: &str = "PLUGIN_ICS_WORK";
@@ -316,9 +314,8 @@ const BRIEF_ANSWER: &str = "Nothing is due today, and nothing waits on you.";
 const SWEEP_ANSWER: &str = "Nothing in the later mail says an open todo is done, so I proposed \
                             nothing.";
 
-/// The fixture's sweep prompt, in the shape sweeps wrote before they wrote mail out as text: each
-/// message as `show`'s JSON, with its body's line breaks escaped and a guest list as raw JSON, so
-/// the stream is seen drawing a store's older rounds.
+/// A sweep prompt in the older stored shape (each message as `show`'s JSON, a guest list as raw
+/// JSON), so the stream is seen drawing a store's older rounds.
 fn sweep_prompt() -> anyhow::Result<String> {
     let shown = serde_json::to_string_pretty(&serde_json::json!({
         "headers": {"from": "Garden Co <billing@garden.example>", "subject": "Invoice paid"},
@@ -331,12 +328,9 @@ fn sweep_prompt() -> anyhow::Result<String> {
     ))
 }
 
-/// Today's review, a brief and a sweep, as a box writes them. The review and the brief run
-/// through `suzatary secretary review`'s and `secretary brief --new`'s own paths over a scripted
-/// model, so each question carries the stamp the box writes now. The sweep is written as a sweep
-/// wrote it before its question was stamped: unstamped, in the shape sweeps wrote before they
-/// wrote mail out as text. So the scene reads both the stamp and the rule for older lines; a real
-/// sweep also needs later mail that a scene's corpus does not hold.
+/// Today's review, a brief and a sweep. The review and the brief run the real paths over a
+/// scripted model, so their questions are stamped; the sweep is written unstamped in the older
+/// shape, so the scene reads both stamped and older lines.
 fn a_review(root: &Path) -> anyhow::Result<()> {
     use suzatary_core::secretary::daily::Daily;
     use suzatary_core::secretary::store::Entry;
@@ -445,10 +439,8 @@ fn a_secret_ask(root: &Path) -> anyhow::Result<()> {
     )
 }
 
-/// The fixture's own `secretspec.toml`, its code root's, declaring no name: every name a scene
-/// sets (the calendar links, the subscription's token) is one its instance
-/// derives, which the server declares in the file it writes under its own state directory, as a
-/// deployment's does beside a read-only code root.
+/// The fixture's code-root `secretspec.toml`, declaring no name: every name a scene sets is
+/// derived from the instance and declared by the server under its own state directory.
 fn secretspec(root: &Path) -> anyhow::Result<()> {
     std::fs::write(
         root.join("secretspec.toml"),
@@ -1759,10 +1751,8 @@ struct Line {
     #[serde(default)]
     when: String,
     reply: String,
-    /// A file the model waits for before it answers, and deletes as it does, so a scene sees the
-    /// round running for as long as it looks; the round's own halt, pulled before the model was
-    /// asked or while it waits, ends the wait as well, so a scene's Stop always comes before the
-    /// answer, which the box then drops.
+    /// A file the model waits for, and deletes, before it answers; the round's own halt also ends
+    /// the wait, so a scene's Stop always comes before the answer, which the box then drops.
     #[serde(default)]
     release: Option<PathBuf>,
 }
@@ -1906,8 +1896,6 @@ mod tests {
         within.unwrap_or(false)
     }
 
-    /// The scripted model's wait ends on its own round's halt, pulled before it was asked or
-    /// while it waits, and never on another round's.
     #[test]
     fn a_waiting_script_line_ends_on_its_own_rounds_halt_whenever_it_is_pulled() {
         let ada = || prodrome_core::event::Actor::new("ada").expect("an actor");
@@ -1988,8 +1976,7 @@ mod tests {
         );
     }
 
-    /// Deleting an account's mail tells the index before the tap answers, so the inbox reads
-    /// without it and a message of it reads as no longer stored, never as the box's error.
+    /// Deleting an account's mail tells the index before the tap answers.
     #[test]
     fn forgotten_mail_reads_as_no_longer_stored_at_once() {
         use suzatary_core::capability::{MailError, Mailbox as _};

@@ -1,8 +1,7 @@
-//! `suzatary verify` — the stores' fsck.
+//! `suzatary verify`: the stores' fsck.
 //!
-//! Every object rehashed, every parent present, every failure the old health registers hold
-//! carried into the sources' one, one line per problem and a non-zero exit when there is one: `scripts/safe-push.sh` aborts on it before committing, since a bad
-//! object in a Merkle log is history that must not reach the remote.
+//! One line per problem and a non-zero exit when there is one: `scripts/safe-push.sh` aborts on
+//! it before committing, since a bad object in a Merkle log must not reach the remote.
 
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
@@ -15,12 +14,8 @@ use super::store_of;
 use crate::commands::serve::interpreters::{file_store, upload_store};
 use crate::instance::Instance;
 
-/// `suzatary verify` — fsck every store the data push stages.
-///
-/// The database's own fsck, [`Database::verify`], over every prodrome it holds, and beside it
-/// the request records, which the database does not hold. The plugins' stores are the cache
-/// tier, never pushed and rebuilt by syncing, so a damaged one is no reason to hold the data
-/// back.
+/// Fsck every store the data push stages. The plugins' stores are cache tier, never pushed,
+/// so they are not checked.
 pub fn run(path: &Path) -> anyhow::Result<()> {
     let instance = Instance::open(path)?;
     let mut findings: Vec<(String, Vec<String>)> = Vec::new();
@@ -75,8 +70,6 @@ pub fn run(path: &Path) -> anyhow::Result<()> {
     findings.extend(database.verify());
     findings.push(("requests".to_owned(), requests.verify()));
 
-    // Where each store lives, by the name its findings carry, so an OK line says which
-    // directory was read.
     let roots: BTreeMap<String, PathBuf> = Kind::ALL
         .iter()
         .flat_map(|kind| instance.directories(*kind))

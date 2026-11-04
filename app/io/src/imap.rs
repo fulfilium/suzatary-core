@@ -1,19 +1,12 @@
-//! Microsoft's mailbox over IMAP, and a real maildir to land it in: [`Outlook`] and [`Folder`]
-//! interpret the `Session` and [`Maildir`] traits of `suzatary_core::mail::imap`, whose `pull`
-//! decides everything. Each keeps the promises the core's properties rest on: UIDs sorted, reads
-//! peeked, folders quoted once.
+//! Microsoft's mailbox over IMAP and a maildir to land it in: [`Outlook`] and [`Folder`]
+//! interpret `suzatary_core::mail::imap`'s `Session` and [`Maildir`]. They keep the core's
+//! promises: UIDs sorted, reads peeked, folders quoted once.
 //!
-//! [`Outlook::connect`] hands `imap::Client::new` a stream from this workspace's own rustls
-//! rather than enabling the crate's `rustls-tls`, which pins an older rustls: one crypto stack
-//! to keep patched. The provider is `ring`, installed lazily because a caller may never reach
-//! `main.rs`'s install.
+//! The stream is this workspace's own rustls, not the crate's `rustls-tls`, which pins an older
+//! rustls: one crypto stack to keep patched.
 //!
-//! Folder names are passed raw: `imap`'s `select`/`examine` quote and escape their argument
-//! themselves, so quoting here would send `SELECT ""Sent Items""`, a mistake no test without a
-//! live mailbox would see.
-//!
-//! Delivery writes `tmp/<name>` and renames into `new/` or `cur/`, so no reader ever sees a
-//! half-written message.
+//! Folder names are passed raw: `imap`'s `select`/`examine` quote their argument themselves, so
+//! quoting here would send `SELECT ""Sent Items""`.
 
 use std::io::{Read, Write};
 use std::net::TcpStream;
@@ -25,8 +18,6 @@ use crate::present::Present as _;
 use suzatary_core::capability::ImapToken;
 use suzatary_core::mail::idle::Wake;
 use suzatary_core::mail::imap::{ImapError, Maildir, Selected};
-
-// --- The XOAUTH2 initial response, pure and testable without a socket ------
 
 /// The SASL `XOAUTH2` initial response, unencoded: `Client::authenticate` base64-encodes it.
 #[must_use]
@@ -49,22 +40,16 @@ impl imap::Authenticator for XOAuth2 {
     }
 }
 
-// --- Outlook: an IMAP session over this workspace's own rustls -------------
-
-/// Microsoft's IMAP endpoint.
 pub const IMAP_HOST: &str = "outlook.office365.com";
 /// Implicit TLS.
 pub const IMAP_PORT: u16 = 993;
 
-/// How long a read or write may block: room for a large message's fetch, and a stalled server
-/// is a failure rather than a hang.
+/// How long a read or write may block, so a stalled server is a failure rather than a hang.
 const TIMEOUT: Duration = Duration::from_mins(1);
 
-/// The raw TLS transport underneath the IMAP session: this workspace's own
-/// rustls, over a plain TCP socket.
 type RawTlsStream = rustls::StreamOwned<rustls::ClientConnection, TcpStream>;
 
-/// `RawTlsStream` in a local type, so the orphan rule lets it implement
+/// A local type, so the orphan rule lets it implement
 /// [`imap::extensions::idle::SetReadTimeout`], which [`Outlook::watch`] needs.
 pub struct TlsStream(RawTlsStream);
 
@@ -93,9 +78,8 @@ impl imap::extensions::idle::SetReadTimeout for TlsStream {
     }
 }
 
-/// [`suzatary_core::mail::imap::Session`], against Microsoft's IMAP server; connected by hand
-/// because `imap::ClientBuilder` builds only the TLS stacks this crate does not enable. Over
-/// any stream, so a session another door authenticated pulls through the same commands.
+/// [`suzatary_core::mail::imap::Session`] against Microsoft's IMAP server, connected by hand
+/// because `imap::ClientBuilder` builds only TLS stacks this crate does not enable.
 pub struct Outlook<S: Read + Write = TlsStream> {
     session: imap::Session<S>,
 }
@@ -107,11 +91,6 @@ impl<S: Read + Write> Outlook<S> {
         Self { session }
     }
 
-    /// `LOGOUT`, consuming the session.
-    ///
-    /// # Errors
-    /// [`ImapError::Server`] if the server answered anything but a normal close (a `BYE` is
-    /// one).
     pub fn logout(mut self) -> Result<(), ImapError> {
         self.session.logout().map_err(|error| ImapError::Server {
             what: "LOGOUT".to_owned(),
@@ -121,13 +100,8 @@ impl<S: Read + Write> Outlook<S> {
 }
 
 impl Outlook {
-    /// Connect to `host:port` over TLS and authenticate `email` with
-    /// XOAUTH2, using `token`'s bearer secret.
-    ///
-    /// # Errors
-    /// [`ImapError::Server`] for anything short of a completed handshake, and
-    /// [`ImapError::Unauthorised`] when the server refuses the XOAUTH2 exchange; neither
-    /// ever carries the bearer token.
+    /// Connect to `host:port` over TLS and authenticate `email` with XOAUTH2. No error ever
+    /// carries the bearer token.
     pub fn connect(
         host: &str,
         port: u16,
@@ -141,11 +115,8 @@ impl Outlook {
 
     /// `IDLE`, blocking until the mailbox changes or `renew_after` elapses; only
     /// `EXISTS`/`RECENT` wake it. The crate's own keepalive is off, so [`Wake::TimedOut`]
-    /// returns and [`suzatary_core::mail::idle::after`] decides whether to re-issue IDLE.
-    ///
-    /// # Errors
-    /// [`ImapError::Server`] for anything the connection could not recover from; the caller
-    /// reconnects.
+    /// returns and [`suzatary_core::mail::idle::after`] decides whether to re-issue IDLE. On an
+    /// error the caller reconnects.
     pub fn watch(&mut self, renew_after: Duration) -> Result<Wake, ImapError> {
         let outcome = self
             .session
@@ -170,11 +141,7 @@ impl Outlook {
     }
 }
 
-/// TCP, TLS and XOAUTH2 to `host:port` as `email`: an authenticated session
-/// with no mailbox selected yet, for [`Outlook`] and `crate::junk` alike.
-///
-/// # Errors
-/// As [`Outlook::connect`].
+/// TCP, TLS and XOAUTH2 to `host:port` as `email`, no mailbox selected yet.
 pub(crate) fn authenticated(
     host: &str,
     port: u16,
@@ -255,7 +222,7 @@ impl<S: Read + Write> suzatary_core::mail::imap::Session for Outlook<S> {
     }
 
     fn select(&mut self, folder: &str, readonly: bool) -> Result<Selected, ImapError> {
-        // Raw: the crate quotes it (module docs).
+        // Raw: the crate quotes it.
         let mailbox = if readonly {
             self.session.examine(folder)
         } else {
@@ -298,8 +265,8 @@ impl<S: Read + Write> suzatary_core::mail::imap::Session for Outlook<S> {
                 what: format!("UID FETCH {uid}"),
                 why: error.to_string(),
             })?;
-        // The answer for this UID, since a server may send FETCH responses for other messages
-        // beside it. No body is a message expunged since the search: `None`, not an error.
+        // A server may send FETCH responses for other messages too. No body is a message
+        // expunged since the search: `None`, not an error.
         Ok(fetches
             .iter()
             .find(|fetch| fetch.uid == Some(uid))
@@ -318,8 +285,6 @@ impl<S: Read + Write> suzatary_core::mail::imap::Session for Outlook<S> {
     }
 }
 
-// --- Folder: a real maildir leaf --------------------------------------------
-
 /// One maildir leaf, `~/Mail/<subdir>/<leaf>`, in the layout `notmuch new` walks.
 pub struct Folder {
     path: PathBuf,
@@ -333,9 +298,6 @@ impl Folder {
     }
 
     /// Create `new/`, `cur/` and `tmp/` under this leaf, idempotently.
-    ///
-    /// # Errors
-    /// [`ImapError::Maildir`] if any of the three could not be created.
     pub fn ensure(&self) -> Result<(), ImapError> {
         for leaf in ["new", "cur", "tmp"] {
             std::fs::create_dir_all(self.path.join(leaf)).map_err(|error| ImapError::Maildir {
@@ -346,7 +308,6 @@ impl Folder {
         Ok(())
     }
 
-    /// Where this leaf is, for the caller's log line.
     #[must_use]
     pub fn path(&self) -> &Path {
         &self.path
@@ -357,9 +318,8 @@ impl Maildir for Folder {
     fn write(&self, name: &str, unread: bool, raw: &[u8]) -> Result<(), ImapError> {
         let leaf = if unread { "new" } else { "cur" };
         let landed = self.path.join(leaf).join(name);
-        // Staged in `tmp/`, so no reader sees a partial file, and synced with its directory
-        // before the caller records the UID as fetched: a power cut never loses a message the
-        // state says it holds.
+        // Synced before the caller records the UID as fetched: a power cut never loses a
+        // message the state says it holds.
         crate::durable::deliver(
             &landed,
             &self.path.join("tmp"),
@@ -376,7 +336,6 @@ impl Maildir for Folder {
         let mut names = Vec::new();
         for leaf in ["new", "cur"] {
             let dir = self.path.join(leaf);
-            // A first sync may have no `cur/` yet: an empty listing, not a failure.
             let Some(entries) =
                 std::fs::read_dir(&dir)
                     .present()
@@ -410,7 +369,6 @@ mod tests {
 
     use super::*;
 
-    /// A short, process- and thread-unique scratch directory.
     fn scratch(tag: &str) -> PathBuf {
         std::env::temp_dir().join(format!(
             "suzatary-io-imap-{tag}-{}-{:?}",
@@ -423,10 +381,7 @@ mod tests {
         let _ = std::fs::remove_dir_all(path);
     }
 
-    // --- Folder -----------------------------------------------------------------
-
-    /// Writing the same name twice leaves one file, so a refetch never gives notmuch two
-    /// copies of one message.
+    /// A refetch never gives notmuch two copies of one message.
     #[test]
     fn writing_the_same_name_twice_leaves_one_file() {
         let root = scratch("write-idempotent");
@@ -452,9 +407,6 @@ mod tests {
         cleanup(&root);
     }
 
-    // --- pull, driven for real, against a fake Session and a real Folder ---------
-
-    /// A minimal IMAP server as a value, enough to drive the real `pull`.
     struct FakeSession {
         messages: BTreeMap<u32, Vec<u8>>,
         uidvalidity: String,
@@ -488,8 +440,6 @@ mod tests {
         }
     }
 
-    /// The real `pull` against a fake `Session` and a real [`Folder`] leaves exactly the files
-    /// [`maildir_name`] names: the transport and the core's naming agree.
     #[test]
     fn pull_writes_exactly_what_maildir_name_says_it_should() {
         let root = scratch("pull-payoff");
@@ -540,7 +490,6 @@ mod tests {
         for leaf in ["new", "cur", "tmp"] {
             assert!(root.join(leaf).is_dir(), "{leaf}/ should exist");
         }
-        // Idempotent: calling again does not fail.
         folder.ensure().expect("ensure is idempotent");
         cleanup(&root);
     }
@@ -576,7 +525,6 @@ mod tests {
         let root = scratch("file-names");
         let folder = Folder::new(&root);
 
-        // A first sync has no `cur/`.
         assert_eq!(
             folder.file_names().expect("an empty list, not an error"),
             Vec::<String>::new()

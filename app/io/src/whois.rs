@@ -21,14 +21,12 @@ const TIMEOUT: Duration = Duration::from_secs(5);
 /// [`Whois`], against tailscaled's local API over its unix socket.
 #[derive(Debug)]
 pub struct Tailscaled {
-    /// The local API's unix socket.
     socket: PathBuf,
-    /// The read/write timeout applied to each request.
     timeout: Duration,
 }
 
 impl Tailscaled {
-    /// Talk to the daemon over `socket`, with the standard 5-second timeout.
+    /// Talk to the daemon over `socket`.
     #[must_use]
     pub fn new(socket: impl Into<PathBuf>) -> Self {
         Self {
@@ -39,9 +37,8 @@ impl Tailscaled {
 }
 
 impl Whois for Tailscaled {
-    /// The peer's login from whois, and whether its node is this box's by the node's stable
-    /// identity against the daemon's own, never by address: an address can move to another
-    /// node, a node's identity cannot. A stranger is not asked about further.
+    /// The peer's login, and whether its node is this box's by the node's stable identity,
+    /// never by address: an address can move to another node.
     fn peer(&self, address: IpAddr) -> Result<Peer, WhoisError> {
         // The local API wants `IP:PORT` and ignores the port; an `IpAddr` needs no escaping.
         let whois = self.get(&format!("/localapi/v0/whois?addr={address}:0"), address)?;
@@ -64,8 +61,7 @@ impl Whois for Tailscaled {
 }
 
 impl Tailscaled {
-    /// The daemon's response body to `path`, or `Unreachable` (about `peer`, the address the
-    /// question serves) for any failure to get one.
+    /// The daemon's response body to `path`; any failure is `Unreachable` about `peer`.
     fn get(&self, path: &str, peer: IpAddr) -> Result<String, WhoisError> {
         let fail = |reason: String| WhoisError::Unreachable { peer, reason };
 
@@ -101,7 +97,6 @@ impl Tailscaled {
     }
 }
 
-/// Split a raw HTTP response into its header block and body.
 fn split_head_body(raw: &[u8]) -> Option<(&str, &[u8])> {
     let boundary = raw.windows(4).position(|w| w == b"\r\n\r\n")?;
     let head = std::str::from_utf8(&raw[..boundary]).ok()?;
@@ -182,8 +177,6 @@ mod tests {
         );
     }
 
-    /// A missing profile, an empty login, a missing node, bytes that are not JSON and an array
-    /// each name nobody.
     #[test]
     fn parse_refuses_what_names_no_login_on_a_node() {
         for body in [
@@ -248,8 +241,7 @@ mod tests {
     const WHOIS_PHONE: &str = r#"{"UserProfile":{"LoginName":"ada.login@example.com"},"Node":{"Name":"phone.tailnet.ts.net.","StableID":"nPHONE"}}"#;
     const STATUS: &str = r#"{"Self":{"ID":"nBOX","TailscaleIPs":["100.64.0.9"]}}"#;
 
-    /// The box's own node is known by identity, whichever address asked, and the owner's
-    /// phone, the same login on another node, is not the box.
+    /// The owner's phone, the same login on another node, is not the box.
     #[test]
     fn a_peer_is_this_box_by_its_node_s_identity_not_its_address() {
         let owner = || Peer::Known(Login::from_whois("ada.login@example.com"));
@@ -274,7 +266,6 @@ mod tests {
         }
     }
 
-    /// A stranger is refused on whois alone: the status is never asked.
     #[test]
     fn a_stranger_is_answered_on_whois_alone() {
         let path = scratch_socket("stranger");

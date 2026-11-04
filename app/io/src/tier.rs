@@ -1,9 +1,7 @@
-//! The box-local tier on disk: a directory that keeps itself out of every push, as `requests/`
-//! keeps its answers, so no hand edit of the data repository is what protects it.
+//! The box-local tier on disk: a directory whose own `.gitignore` keeps it out of every push.
 
 use std::path::Path;
 
-/// What the tier's `.gitignore` says: everything in it.
 const IGNORED: &str = "*\n";
 
 /// Make `dir` a tier: the directory, and its `.gitignore` written once.

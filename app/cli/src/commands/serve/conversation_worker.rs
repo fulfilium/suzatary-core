@@ -1,11 +1,10 @@
 //! The engine over the conversations: one task per conversation, nudged whenever a write
 //! moves its heads, running the conversation's rules (`secretary::rules`) on each new reading.
 //!
-//! One task per conversation keeps two rules from performing on it at once, so two rounds
-//! never answer the same question; the engine's memo fires each rule once per reading, so a
-//! nudge that moved nothing, or a round that wrote nothing, is never performed again. The lock
-//! is held only for a lookup, insert or removal, never across a firing, and a task leaves only
-//! under the lock [`Workers::nudge`] takes, so no nudge is lost.
+//! One task per conversation keeps two rounds from answering the same question; the engine's
+//! memo fires each rule once per reading. The lock is held only for a lookup, insert or removal,
+//! never across a firing, and a task leaves only under the lock [`Workers::nudge`] takes, so no
+//! nudge is lost.
 
 use std::collections::HashMap;
 use std::sync::{Arc, Condvar, Mutex, PoisonError};
@@ -44,7 +43,6 @@ struct Worker {
 /// The partial is never written to the file, and one mutex guards both it and every
 /// subscription so a snapshot and its broadcast position are the same instant.
 struct Stream {
-    /// The reply so far, this round, and the blocks closed in it.
     partial: Mutex<Partial>,
     frames: broadcast::Sender<wire::Frame>,
 }
@@ -254,9 +252,8 @@ impl Workers {
     }
 
     /// Stop the round running in this conversation, as `by`, and wait (at most `STOP_WAIT`)
-    /// for it to end, so whoever asked reads the stop and never the question still queued. A
-    /// question sent but not yet taken by a round is stopped by its line alone, written while the
-    /// halts are held, so no round starts on it in between.
+    /// for it to end. A question not yet taken by a round is stopped by its line alone, written
+    /// while the halts are held, so no round starts on it in between.
     ///
     /// Blocks: a route calls it off the async workers.
     ///
@@ -290,7 +287,6 @@ impl Workers {
         Ok(())
     }
 
-    /// A fresh halt for the round starting now.
     fn halt(&self, id: &ConversationId) -> Halt {
         let halt = Halt::new();
         super::locks::held(&self.halts).insert(id.clone(), halt.clone());

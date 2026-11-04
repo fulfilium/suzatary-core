@@ -71,12 +71,11 @@ pub(crate) fn reading_of(chain: &ChainDir) -> suzatary_io::reading::Reading {
 
 /// Run one of the repository's operator scripts, and exit with its status.
 ///
-/// These verbs stay scripts an operator can read first; `vault` is human-only and on no agent
-/// trait.
+/// `vault` is human-only and on no agent trait.
 pub fn script(instance: &Instance, name: &str) -> anyhow::Result<()> {
     let path = instance.code().join("scripts").join(name);
-    // The operator's whole environment, on purpose: an interactive command run at a terminal,
-    // whose script reads what the operator's shell set up (the store, the agent, the vault's key).
+    // The operator's whole environment, on purpose: the script reads what the shell set up
+    // (the store, the agent, the vault's key).
     let status = std::process::Command::new("bash")
         .arg(&path)
         .status()

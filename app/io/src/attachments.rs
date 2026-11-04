@@ -1,6 +1,5 @@
-//! The owner's uploads: one file per photo or PDF, named by its SHA-256, beside the
-//! conversations. Box-local and git-ignored like the transcripts; a turn names a file, never
-//! holds it.
+//! The owner's uploads: one file per photo or PDF, named by its SHA-256, box-local and
+//! git-ignored.
 
 use std::path::PathBuf;
 
@@ -31,14 +30,11 @@ pub struct AttachmentStore {
 pub enum Stored {
     /// On the box, with its bytes.
     Here {
-        /// What it is.
         attachment: Attachment,
-        /// Its bytes.
         bytes: Vec<u8>,
     },
     /// In the owner's Drive; the box holds only where.
     Private {
-        /// What it is.
         attachment: Attachment,
         /// Where it is kept, and its redacted text.
         copy: PrivateCopy,
@@ -46,7 +42,6 @@ pub enum Stored {
 }
 
 impl Stored {
-    /// What it is, wherever it is kept.
     #[must_use]
     pub fn attachment(&self) -> &Attachment {
         match self {
@@ -80,14 +75,11 @@ pub enum UploadError {
     /// The owner's Drive did not keep a private file.
     #[error("your Drive did not keep it: {0}")]
     Drive(DriveFailure),
-    /// The store failed.
     #[error(transparent)]
     Store(#[from] StoreError),
 }
 
 impl AttachmentStore {
-    /// A store rooted here, reading a PDF's text through `pdftotext`; the directory is made
-    /// on the first write.
     #[must_use]
     pub fn new(root: PathBuf, pdftotext: Pdftotext) -> Self {
         Self {
@@ -101,14 +93,8 @@ impl AttachmentStore {
         }
     }
 
-    /// Accept and keep these bytes, once: storing the same file twice is one file. A PDF is
-    /// kept only when [`FileRead::of`] would hand it to a model as itself, its text layer
-    /// read through `pdftotext`.
-    ///
-    /// # Errors
-    /// [`UploadError::Refused`] for bytes that are not a photo or a PDF,
-    /// [`UploadError::Withheld`] and [`UploadError::Unread`] for a PDF, and the store's
-    /// failures.
+    /// Accept and keep these bytes, once. A PDF is kept only when [`FileRead::of`] would hand it
+    /// to a model as itself.
     pub fn put(&self, bytes: &[u8]) -> Result<Attachment, UploadError> {
         let attachment = Attachment::accept(bytes)?;
         if attachment.media_type == Enclosure::Pdf {
@@ -129,13 +115,8 @@ impl AttachmentStore {
         Ok(attachment)
     }
 
-    /// Keep a file the owner said to keep private: in his Drive through `vault`, and on the
-    /// box only a note of where, which [`AttachmentStore::attachment`] reads back. A PDF's
-    /// text is read now and kept masked, each number a placeholder naming the upload, which is
-    /// all a model is ever given of it.
-    ///
-    /// # Errors
-    /// As [`AttachmentStore::put`], less the rule it keeps, and [`UploadError::Drive`].
+    /// Keep a private file in the owner's Drive through `vault`, the box holding only a note of
+    /// where. A PDF's text is kept masked, which is all a model is ever given of it.
     pub fn keep_private(
         &self,
         bytes: &[u8],
@@ -185,11 +166,8 @@ impl AttachmentStore {
         Ok(kept)
     }
 
-    /// The file, re-read and re-typed from its bytes, or a private file's note: a file
-    /// swapped under the store is absent rather than served as something else.
-    ///
-    /// # Errors
-    /// [`StoreError::Unreadable`], for bytes that are no longer a file this app accepts too.
+    /// The file, re-typed from its bytes, or a private file's note: a file swapped under the
+    /// store is absent rather than served as something else.
     pub fn attachment(&self, id: &AttachmentId) -> Result<Option<Stored>, StoreError> {
         if let Some(kept) = self.notes.get(id)? {
             return Ok(kept.private.clone().map(|copy| Stored::Private {
@@ -205,11 +183,7 @@ impl AttachmentStore {
         Ok(Some(Stored::Here { attachment, bytes }))
     }
 
-    /// Where the store keeps the upload, `None` when it holds none: a private note is read first,
-    /// as [`AttachmentStore::attachment`] reads it.
-    ///
-    /// # Errors
-    /// [`StoreError::Unreadable`].
+    /// Where the store keeps the upload, `None` when it holds none.
     pub fn place(&self, id: &AttachmentId) -> Result<Option<Place>, StoreError> {
         if self.notes.get(id)?.is_some() {
             return Ok(Some(Place::Private));
@@ -227,25 +201,15 @@ impl AttachmentStore {
     }
 
     /// A PDF's text layer, read as the store read it when it kept the PDF.
-    ///
-    /// # Errors
-    /// `pdftotext`'s sentence.
     pub fn layer(&self, pdf: &[u8]) -> Result<String, String> {
         self.pdftotext.text(pdf)
     }
 
     /// The file's size, before its bytes are read.
-    ///
-    /// # Errors
-    /// As [`Docs::size`].
     pub fn size(&self, id: &AttachmentId) -> Result<u64, StoreError> {
         self.files.size(id)
     }
 
-    /// The file's bytes.
-    ///
-    /// # Errors
-    /// [`StoreError::Absent`] when the store holds no such file, and the filesystem's others.
     pub fn bytes(&self, id: &AttachmentId) -> Result<Vec<u8>, StoreError> {
         self.files.get(id)?.ok_or_else(|| StoreError::Absent {
             what: "upload",
@@ -254,8 +218,7 @@ impl AttachmentStore {
     }
 }
 
-/// The uploads as the secretary reads them; it keeps none, since an upload is kept by the
-/// owner's route alone.
+/// The uploads as the secretary reads them; only the owner's route keeps one.
 impl Gets<AttachmentId, Upload> for AttachmentStore {
     fn get(&self, id: &AttachmentId) -> Result<Option<Upload>, StoreError> {
         Ok(self.attachment(id)?.map(|stored| match stored {
@@ -283,9 +246,6 @@ const NOTE: DocCodec<AttachmentId, Attachment> = DocCodec {
 };
 
 /// A file sent as base64 text, which is how a JSON upload carries it.
-///
-/// # Errors
-/// [`AttachmentError::Unreadable`] for text that is not base64.
 pub fn decoded(text: &str) -> Result<Vec<u8>, AttachmentError> {
     use base64::Engine as _;
     base64::engine::general_purpose::STANDARD
@@ -386,7 +346,6 @@ mod tests {
         let dir = tempfile::tempdir().expect("a scratch dir");
         let store = AttachmentStore::new(dir.path().to_path_buf(), Pdftotext::new("."));
         let vault = FakeVault::default();
-        // The test page holds one short line.
         let w2 = crate::pdftotext::minimal_pdf("SSN 123-45-6789");
         let kept = store
             .keep_private(&w2, "w2.pdf", &vault)

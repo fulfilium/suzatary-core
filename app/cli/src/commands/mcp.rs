@@ -20,8 +20,8 @@ use suzatary_core::secretary::filed::TriageCards;
 /// The server's name, which the tool guard matches as `mcp__suzatary__*`.
 pub const NAME: &str = "suzatary";
 
-/// The verbs over one record per chain, so the `chain` argument picks the store and its
-/// trust policy together, and the one door their writes go through, as cards.
+/// The verbs over one record per chain; the `chain` argument picks the store and its trust
+/// policy together, and every write goes through `cards`.
 pub struct Tools {
     chains: Arc<BTreeMap<String, Agent<'static>>>,
     cards: TriageCards<'static>,
@@ -29,7 +29,6 @@ pub struct Tools {
 }
 
 impl Tools {
-    /// Bind the surface to one record per chain, the Inbox's door and a deployment.
     #[must_use]
     pub fn new(
         chains: BTreeMap<String, Agent<'static>>,
@@ -146,7 +145,6 @@ pub struct Interpreters {
 }
 
 impl Interpreters {
-    /// The record the verbs are handed.
     pub fn agent(&self) -> Agent<'_> {
         self.grounds
             .agent(&self.chain, self.remembering.memory(self.view))
@@ -169,9 +167,8 @@ impl Interpreters {
 
 /// `suzatary mcp`: serve the agent's tools over stdio until the client goes.
 ///
-/// Logs go to stderr only, since one stray line on stdout desynchronises the client, as plain
-/// lines that a file or a journal keeps readable. `RUST_LOG=warn,suzatary::timings=info` adds how
-/// long each phase of reading the memory took ([`suzatary_core::timings`]).
+/// Logs go to stderr only: one stray line on stdout desynchronises the client.
+/// `RUST_LOG=warn,suzatary::timings=info` adds the memory-reading timings.
 pub fn run(path: &std::path::Path) -> anyhow::Result<()> {
     tracing_subscriber::fmt()
         .with_writer(std::io::stderr)
@@ -181,8 +178,7 @@ pub fn run(path: &std::path::Path) -> anyhow::Result<()> {
         )
         .init();
     let instance = crate::instance::Instance::open(path)?;
-    // Held for the life of the process, so every record borrows them for 'static: one set of
-    // grounds, and each chain, read.
+    // Leaked for the life of the process, so every record borrows them for 'static.
     let grounds: &'static crate::wiring::Grounds =
         Box::leak(Box::new(crate::wiring::Grounds::of(&instance)));
     let remembering: &'static crate::wiring::Recalling =
@@ -199,8 +195,7 @@ pub fn run(path: &std::path::Path) -> anyhow::Result<()> {
             )
         })
         .collect();
-    // The agent's writes are cards in the box's own Inbox, which only the owner's tap performs,
-    // drawn in the conversations the memory reads, opened once and without the answers' cache.
+    // The agent's writes are Inbox cards, which only the owner's tap performs.
     let cards = TriageCards::new(
         remembering.conversations.conversations(),
         &remembering.inbox,
@@ -216,9 +211,8 @@ pub fn run(path: &std::path::Path) -> anyhow::Result<()> {
 mod tests {
     use super::Interpreters;
 
-    /// The triage agent reads its chain, and the secretary's memory, through stores that only
-    /// read: the only way the MCP server builds its interpreters answers exactly that, and their
-    /// memory is a `Recalling`, whose memory and digest stores are each inside `store::Only`.
+    /// The triage agent's chain and memory stores only read: `Recalling` holds its memory and
+    /// digest stores inside `store::Only`.
     #[test]
     fn the_agent_reads_its_chain_and_memory_and_writes_none() {
         let assemble: fn(&crate::instance::Instance, &crate::instance::ChainDir) -> Interpreters =

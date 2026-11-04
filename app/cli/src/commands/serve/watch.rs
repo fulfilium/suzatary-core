@@ -9,8 +9,7 @@ use suzatary_core::{notify, routes, view};
 
 use super::watched::{Pace, Watched};
 
-/// The longest a steady stream of writes waits for its push: a burst that never falls quiet is
-/// announced once it has run this long.
+/// The longest a burst of writes that never falls quiet waits for its push.
 const CAP: std::time::Duration = std::time::Duration::from_mins(10);
 
 /// Compile every trusted record's markup on the blocking pool; untrusted ones are never served.
@@ -57,10 +56,6 @@ pub async fn warming(caps: &'static Server<'static>, chain: ChainPolicy) {
 }
 
 /// Page the phone about the agent's work, never the person's own taps.
-///
-/// The quiet period makes a burst of the agent's writes one notification, and [`CAP`] bounds
-/// how long a burst that never falls quiet waits; what moved and what was announced are
-/// [`Watched`]'s.
 pub async fn watcher(
     caps: &'static Server<'static>,
     deployment: Deployment,
@@ -111,8 +106,7 @@ pub async fn watcher(
     }
 }
 
-/// A read's answer, or nothing this round with a line saying why: an unreadable store is not
-/// an empty one.
+/// A read's answer, or nothing this round and a warning: an unreadable store is not an empty one.
 fn read<T>(what: &str, answer: Result<T, suzatary_core::store::StoreError>) -> Option<T> {
     answer
         .inspect_err(|failed| tracing::warn!("watch: {what} could not be read: {failed}"))
@@ -134,7 +128,6 @@ fn events(
     Ok(view::events_of(&caps.secretary.chain.nodes()?))
 }
 
-/// The head set.
 fn heads(caps: &'static Server<'static>) -> Result<Vec<String>, suzatary_core::store::StoreError> {
     Ok(caps
         .secretary

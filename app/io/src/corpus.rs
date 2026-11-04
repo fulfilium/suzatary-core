@@ -1,7 +1,7 @@
 //! The mail corpus as the agent operates it: the interpreter of `Corpus` on this box.
 //!
-//! It only composes the notmuch reads, the state writes and the sync; its answers are a versioned
-//! contract the stateless agent re-binds to every run. Nothing here sends.
+//! Its answers are a versioned contract the stateless agent re-binds to every run. Nothing here
+//! sends.
 
 use std::path::PathBuf;
 
@@ -18,21 +18,15 @@ use crate::sync::Syncer;
 /// The corpus operations, run against this box.
 pub struct Operator {
     sync_status: PathBuf,
-    /// How the triage passes have ended.
     pulse: crate::pulse::Pulse,
-    /// The corpus, read-only.
+    /// Read-only.
     mail: Notmuch,
-    /// The triage's bookkeeping, for the writes `mark` and `noise add` perform.
     ledger: crate::state::Ledger,
-    /// The pull.
     syncer: Syncer,
-    /// Each account's sync health, which every sync joins its report into.
     health: crate::source_health::Health,
-    /// The clock, for the sync window.
     clock: crate::clock::SystemClock,
     /// The owner's zone, whose day the sync window counts back from.
     zone: suzatary_core::zone::Zone,
-    /// The watches every sync rings.
     watches: crate::watches::Watches,
 }
 
@@ -45,9 +39,6 @@ impl std::fmt::Debug for Operator {
 }
 
 impl Operator {
-    /// The corpus, the dedup authority, the syncer, where a triage pass
-    /// marks that it reached its trusted push, where each sync keeps its report, the
-    /// owner's zone, and the watches each sync rings.
     #[must_use]
     pub fn new(
         mail: Notmuch,
@@ -72,7 +63,6 @@ impl Operator {
         }
     }
 
-    /// The triage's bookkeeping, read fresh.
     fn state(&self) -> Result<Known, CorpusError> {
         self.ledger.read().map_err(CorpusError::Refused)
     }
@@ -81,7 +71,6 @@ impl Operator {
         self.ledger.write(known).map_err(CorpusError::Refused)
     }
 
-    /// The owner's today, as the syncer's window is measured from.
     fn today(&self) -> chrono::NaiveDate {
         self.zone
             .day(prodrome_core::fpl::instant_of(self.clock.now()))
@@ -114,8 +103,8 @@ impl Operator {
             .map_err(|failed| CorpusError::Refused(failed.to_string()))
     }
 
-    /// Ring each open watch that the corpus now holds a match for. A failure is said on stderr
-    /// and fails nothing: the pull succeeded, and the next sync asks the same question again.
+    /// Ring each open watch the corpus now matches. A failure goes to stderr and fails nothing:
+    /// the next sync asks again.
     fn ring(&self) {
         let own: Vec<&str> = self
             .syncer
@@ -135,7 +124,6 @@ impl Operator {
         }
     }
 
-    /// The syncer, for the CLI's own `sync`.
     #[must_use]
     pub fn syncer(&self) -> &Syncer {
         &self.syncer
@@ -143,10 +131,8 @@ impl Operator {
 }
 
 impl Corpus for Operator {
-    /// Every sync, the timer's and the one `sync_mail` starts early alike, records each
-    /// account's health; one whose health is not recorded fails rather than passing silently.
-    /// Its report is kept where [`Operator::new`] was told, readable by this user alone, for the
-    /// gate, the briefing and the agent's `last_sync`.
+    /// Every sync records each account's health and fails when it cannot; its report is kept
+    /// private for the gate, the briefing and `last_sync`.
     fn sync(&self) -> Result<verbs::SyncReport, CorpusError> {
         let report = self.syncer.sync(self.today());
         self.ring();
@@ -190,8 +176,7 @@ impl Corpus for Operator {
             .map_err(|failed| CorpusError::Refused(failed.to_string()))
     }
 
-    /// One message in full; a miss or an ambiguous prefix is an answer the agent reads, the
-    /// latter naming the colliding hashes so it can correct itself.
+    /// One message in full; a miss or an ambiguous prefix is an answer the agent reads.
     fn show(&self, id: &str) -> Result<verbs::Show, CorpusError> {
         self.mail
             .full_message(id)
@@ -278,7 +263,6 @@ mod tests {
     use std::path::Path;
     use suzatary_core::mail::account::{MailAccount, Roster, Sync};
 
-    /// The operator over `root`, with no notmuch to ask.
     fn operator(root: &Path) -> Operator {
         let mail = Notmuch::new(
             root.join("Mail"),
@@ -300,7 +284,6 @@ mod tests {
         .expect("a roster")
     }
 
-    /// The operator over `mail` and `ledger`, its other files under `root`, pulling nothing.
     fn operator_over(root: &Path, mail: Notmuch, ledger: crate::state::Ledger) -> Operator {
         let syncer = Syncer::new(
             roster(),
@@ -352,7 +335,6 @@ mod tests {
         dir
     }
 
-    /// A message as a test writes it: from `sender`, under `subject` and `id`, sent `days` ago.
     fn message(sender: &str, subject: &str, id: &str, days: i64) -> String {
         let date = (chrono::Utc::now() - chrono::Duration::days(days)).to_rfc2822();
         format!(
@@ -361,10 +343,8 @@ mod tests {
         )
     }
 
-    /// The law of `mailgonestored`, with the real notmuch where it is on PATH: every hash `new`
-    /// or `search` prints, `show` shows, whole or by a prefix, whether or not the triage has
-    /// decided it; `mark` finds the locator of a hash it was not handed one for; and a hash no
-    /// listing printed is not found.
+    /// Every hash a listing prints, `show` shows, whole or by prefix; `mark` finds the locator;
+    /// a hash no listing printed is not found.
     #[test]
     fn every_hash_a_listing_prints_is_shown() {
         if !crate::mailbox::fixture::notmuch_present("the listed-hash law") {

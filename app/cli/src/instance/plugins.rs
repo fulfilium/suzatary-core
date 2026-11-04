@@ -23,8 +23,7 @@ impl Plugins {
         self.beside(name).join("store")
     }
 
-    /// Every declared plugin's store, which the calendar reads as one where its schema is a
-    /// calendar's.
+    /// Every declared plugin's store.
     #[must_use]
     pub fn stores(&self) -> Vec<PathBuf> {
         self.manifests
@@ -39,7 +38,6 @@ impl Plugins {
         self.cache.join("plugins").join(name.as_str())
     }
 
-    /// The manifest called `name`.
     #[must_use]
     pub fn named(&self, name: &str) -> Option<&suzatary_core::plugin::Manifest> {
         self.manifests

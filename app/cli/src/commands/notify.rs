@@ -1,7 +1,6 @@
 //! `suzatary notify`: push one of the core's [`Push`]es to the phone.
 //!
-//! A push is a closed sum with no text of its own, so this verb takes the notice it is, as a
-//! subcommand, and the day or the conversation it names, never a title or a message.
+//! The verb takes a notice and the day or conversation it names, never a title or a message.
 
 use std::path::Path;
 
@@ -86,8 +85,7 @@ pub fn run(path: &Path, args: &Args) -> anyhow::Result<()> {
     Ok(())
 }
 
-/// Push `push` through the channels this deployment names, the same list and the same
-/// builder the server pushes through. Returns how many devices it reached.
+/// Push `push` through the deployment's channels; returns how many devices it reached.
 ///
 /// # Errors
 /// No channel named, the device store unreadable, the secret store not answering, every channel
@@ -190,8 +188,7 @@ mod tests {
         }
     }
 
-    /// No channel, whether `[notify]` is absent or empty (one list, one spelling), resolves
-    /// nothing and pushes to nobody.
+    /// No channel resolves nothing and pushes to nobody.
     #[test]
     fn no_channel_resolves_nothing_and_is_absent() {
         let result = push(None, PanicsIfAsked, "test", "https://app", NoDevices);

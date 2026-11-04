@@ -1,9 +1,9 @@
 //! The owner's repositories, as bare mirrors read through `git` subprocesses.
 //!
-//! The instance file's declared list is the whole universe, met with what the owner's token
-//! lists as his own: a name outside the list is refused before GitHub or `git` is asked, and
-//! reading a mirror never executes a file in it. The token never touches argv or a file; it
-//! reaches `git` through `GIT_CONFIG_*` in the child's environment.
+//! Only the instance file's declared list is reachable, met with what the owner's token lists as
+//! his own: a name outside it is refused before GitHub or `git` is asked, and reading a mirror
+//! never executes a file in it. The token never touches argv or a file; it reaches `git` through
+//! `GIT_CONFIG_*` in the child's environment.
 
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
@@ -27,7 +27,7 @@ use crate::secrets::Resolves;
 /// How long a listing or a fetch is trusted before asking again.
 const FRESH: Duration = Duration::from_mins(2);
 
-/// How long a fetch or a push may take before it is a failure, not a request that never ends.
+/// How long a fetch or a push may take.
 const REMOTE: Duration = Duration::from_mins(5);
 
 /// The most entries a tree or a grep returns.
@@ -37,16 +37,11 @@ const MAX_LINES: usize = 400;
 pub enum Source {
     /// GitHub, listed through its API with the token.
     GitHub,
-    /// Bare repositories under a local directory (`<base>/<owner>/<name>.git`), each declared
-    /// one present there listed as public on `main`: the fixture's and the tests' source, with no
-    /// network and no token.
-    Local {
-        /// The directory holding them.
-        base: PathBuf,
-    },
+    /// Bare repositories at `<base>/<owner>/<name>.git`, each listed as public on `main`: the
+    /// fixture's and the tests' source, with no network and no token.
+    Local { base: PathBuf },
 }
 
-/// The mirrors, the listing and the token that reaches both.
 pub struct Mirrors {
     root: PathBuf,
     source: Source,
@@ -58,8 +53,6 @@ pub struct Mirrors {
 }
 
 impl Mirrors {
-    /// Mirrors of the `declared` repositories kept under `root`, with the token resolved through
-    /// `secrets`.
     #[must_use]
     pub fn new(
         root: impl Into<PathBuf>,
@@ -87,8 +80,7 @@ impl Mirrors {
             })
     }
 
-    /// The listed row for `repo`, or the refusal that it is not reachable; one the instance file
-    /// does not declare is refused here, before anything is asked.
+    /// The listed row for `repo`; an undeclared one is refused here, before anything is asked.
     fn row(&self, repo: &RepoName) -> Result<RepoRow, RepoFailure> {
         if self.declared.target(repo).is_none() {
             return Err(RepoFailure::Unknown(repo.to_string()));
@@ -127,7 +119,6 @@ impl Mirrors {
             .join(format!("{}.git", repo.name()))
     }
 
-    /// The mirror, cloned on first use and fetched when stale.
     fn mirror(&self, repo: &RepoName) -> Result<PathBuf, RepoFailure> {
         self.row(repo)?;
         let dir = self.dir(repo);
@@ -175,13 +166,12 @@ impl Mirrors {
         succeed(&Self::git(None).arg("--git-dir").arg(dir).args(args))
     }
 
-    /// [`Mirrors::local`] for a question whose exit status is the answer.
+    /// For a question whose exit status is the answer.
     fn asked(dir: &Path, args: &[&str]) -> Result<Ran, RunError> {
         run(&Self::git(None).arg("--git-dir").arg(dir).args(args))
     }
 
-    /// The patch applied to `base` in a scratch index, touching no ref:
-    /// `Ok` with the index file when it applies.
+    /// The patch applied to `base` in a scratch index, touching no ref.
     fn staged(&self, dir: &Path, base: &CommitId, patch: &Patch) -> Result<Index, RepoFailure> {
         let index = Index(self.scratch()?);
         let indexed = || {
@@ -204,12 +194,8 @@ impl Mirrors {
 }
 
 impl Mirrors {
-    /// Every `claude/` branch of `repo`: its tip, whether that tip is on the default branch,
-    /// the reports it adds under `docs/reports/`, and its diff stat. A branch or path that
-    /// does not parse is skipped, since it names no session.
-    ///
-    /// # Errors
-    /// [`RepoFailure`] when the repository is unknown or `git` fails.
+    /// Every `claude/` branch of `repo`: its tip, whether it is merged, the reports it adds and
+    /// its diff stat. A branch or path that does not parse is skipped.
     pub fn seen(&self, repo: &RepoName) -> Result<Vec<Seen>, RepoFailure> {
         let default = format!("refs/heads/{}", self.row(repo)?.default_branch);
         let dir = self.mirror(repo)?;
@@ -290,9 +276,8 @@ impl Mirrors {
 
 impl Mirrors {
     /// The default branch just before it took `tip`, so `<that>...<tip>` is the branch's own
-    /// commits: the first parent of the oldest commit of the default branch's first-parent line
-    /// that holds `tip`. That commit is a merge commit whose second parent leads to `tip`, or,
-    /// for a fast-forward, `tip` itself.
+    /// commits: the first parent of the oldest first-parent commit that holds `tip` (a merge
+    /// commit, or `tip` itself for a fast-forward).
     fn before_merge(dir: &Path, tip: &CommitId, default: &str) -> Result<String, RepoFailure> {
         let line = Self::local(
             dir,
@@ -315,8 +300,7 @@ impl Mirrors {
                 .collect())
         };
         let took = match oldest {
-            // The oldest descendant on the line is a merge commit unless it only sits on top
-            // of `tip`, which is then on the line itself: a fast-forward.
+            // A child whose first parent is `tip` means a fast-forward.
             Some(child) if parents(&child)?.first().map(String::as_str) != Some(tip.as_str()) => {
                 child
             }
@@ -344,17 +328,13 @@ fn file_stat(line: &str) -> Option<FileStat> {
 /// What a publish pushed, and the pull request it opened.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Published {
-    /// The commit on the branch.
     pub commit: CommitId,
-    /// The branch of its own it landed on.
     pub branch: String,
-    /// The request to merge that branch into the default one.
     pub pull: PullRequest,
 }
 
-/// Where a publish stopped. Publishing the same patch to the same branch again finishes it: a
-/// branch that already holds this change is not pushed again, and an open request for it is
-/// answered rather than opened twice.
+/// Where a publish stopped. Publishing the same patch to the same branch again finishes it,
+/// pushing and opening nothing twice.
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 pub enum Stopped {
     /// Refused for good: the patch no longer applies, its check fails, its base is gone or the
@@ -363,12 +343,8 @@ pub enum Stopped {
     Refused(RepoFailure),
     /// The branch already holds another commit, which is never forced.
     #[error("branch {branch} already holds another commit")]
-    Taken {
-        /// The branch.
-        branch: String,
-    },
-    /// Before anything left the box, for a reason that may pass: the repository or `git`
-    /// could not be reached.
+    Taken { branch: String },
+    /// Before anything left the box, for a reason that may pass.
     #[error("stopped before pushing: {0}")]
     Preparing(RepoFailure),
     /// At the push, which may have landed.
@@ -377,17 +353,13 @@ pub enum Stopped {
     /// The branch is on the remote and no pull request was opened.
     #[error("pushed {branch} ({}), stopped opening the pull request: {failure}", commit.short())]
     Opening {
-        /// The branch pushed.
         branch: String,
-        /// Its commit.
         commit: CommitId,
-        /// Why the request was not opened.
         failure: RepoFailure,
     },
 }
 
 impl Stopped {
-    /// A failure before the push, as for good or as one that may pass.
     fn before(failure: RepoFailure) -> Self {
         match failure {
             RepoFailure::Conflict(_)
@@ -405,10 +377,8 @@ enum Commit {
     Made(CommitId),
 }
 
-/// A pull request, by its number and where a person reads it.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PullRequest {
-    /// Its number in the repository.
     pub number: u64,
     /// Its page.
     pub url: String,
@@ -424,7 +394,6 @@ pub struct Author {
 }
 
 impl Author {
-    /// The identity `git config` answers on this box, if it has one.
     #[must_use]
     pub fn of_this_box() -> Option<Self> {
         let get = |key: &str| {
@@ -441,7 +410,6 @@ impl Author {
     }
 }
 
-/// How long a declared check may run.
 const CHECK_TIMEOUT: Duration = Duration::from_mins(10);
 
 impl Mirrors {
@@ -452,14 +420,9 @@ impl Mirrors {
     }
 
     /// Publish `patch` on `base` as a pull request: checked by the repository's declared check,
-    /// committed by `author`, pushed to the new `branch` (never forced, so a branch that already
-    /// holds something else is refused), and opened as a request to merge it into the default
-    /// branch, whose title is the message's first line. Nothing lands on the default branch; a
-    /// person merges it.
-    ///
-    /// # Errors
-    /// [`Stopped`], naming the step; in [`Stopped::Preparing`], [`RepoFailure::Conflict`] when
-    /// it no longer applies or the check fails (with its output).
+    /// committed by `author`, pushed to the new `branch` (never forced), and opened against the
+    /// default branch with the message's first line as title. Nothing lands on the default
+    /// branch; a person merges it.
     pub fn publish(
         &self,
         repo: &RepoName,
@@ -490,8 +453,8 @@ impl Mirrors {
         })
     }
 
-    /// The commit of `patch` on `base`: the one `branch` already holds when it is this change (a
-    /// publish that stopped after its push, whose check already passed), or a new one, checked.
+    /// The commit `branch` already holds when it is this change (its check already passed), or
+    /// a new one, checked.
     fn commit(
         &self,
         repo: &RepoName,
@@ -543,8 +506,7 @@ impl Mirrors {
         base: &CommitId,
         patch: &Patch,
     ) -> Result<(PathBuf, String, Option<String>), RepoFailure> {
-        // Asked again at the tap: the card was drawn from the listing, and the file or the
-        // repository may have changed since.
+        // Asked again at the tap: the instance file or the repository may have changed since.
         self.declared.pushable(repo, self.row(repo)?.visibility)?;
         let check = self
             .target(repo)
@@ -569,8 +531,7 @@ impl Mirrors {
         Ok((dir, tree, check))
     }
 
-    /// The commit `branch` holds, with its tree and its parents: the fetch just made copied the
-    /// remote's branches, so the mirror holds this one if the remote does.
+    /// The commit `branch` holds, with its tree and its parents; valid right after a fetch.
     fn held(dir: &Path, branch: &str) -> Result<Option<(CommitId, String, String)>, RepoFailure> {
         let held = Self::asked(
             dir,
@@ -593,7 +554,6 @@ impl Mirrors {
         Ok(Some((id, tree, parents)))
     }
 
-    /// Push `commit` to the new `branch`, never forced.
     fn push(&self, repo: &RepoName, commit: &CommitId, branch: &str) -> Result<(), RepoFailure> {
         let (token, url) = self.remote(repo)?;
         succeed(
@@ -616,7 +576,6 @@ impl Mirrors {
         Ok(())
     }
 
-    /// The open request to merge `branch` into the default branch, opened now unless one is.
     fn pull(
         &self,
         repo: &RepoName,
@@ -630,8 +589,8 @@ impl Mirrors {
         }
     }
 
-    /// The request already open for `branch`: through GitHub's API, or, for a local remote, a
-    /// `refs/pull/<n>/head` at `commit`.
+    /// The request already open for `branch`; for a local remote, a `refs/pull/<n>/head` at
+    /// `commit`.
     fn open_pull_of(
         &self,
         repo: &RepoName,
@@ -693,8 +652,7 @@ impl Mirrors {
         }
     }
 
-    /// Open a request to merge `branch` into the default branch: through GitHub's API with the
-    /// token, or, for a local remote, as GitHub spells one in git, `refs/pull/<n>/head`.
+    /// Open a request to merge `branch`; for a local remote, as `refs/pull/<n>/head`.
     fn open_pull(
         &self,
         repo: &RepoName,
@@ -759,7 +717,6 @@ impl Mirrors {
         }
     }
 
-    /// Run `check` in the tree `tree` unpacked into a scratch directory.
     fn checked_tree(&self, dir: &Path, tree: &str, check: &str) -> Result<(), RepoFailure> {
         let scratch = self.scratch()?;
         let archive = Self::local(dir, &["archive", "--format=tar", tree])?;
@@ -770,10 +727,9 @@ impl Mirrors {
                 .arg(scratch.path())
                 .stdin(archive.stdout),
         )?;
-        // Both streams to stderr, so the tail a failure quotes is everything the check said. It
-        // runs code the agent proposed, so it is passed nothing beyond `run`'s base; that keeps
-        // the server's variables from it, and is not a sandbox: HOME and XDG_RUNTIME_DIR still
-        // lead to the user's files, the gpg-agent socket and the secret store.
+        // Both streams to stderr, so a failure quotes everything the check said. It runs code the
+        // agent proposed and is passed only `run`'s base environment. This is NOT a sandbox: HOME
+        // and XDG_RUNTIME_DIR still lead to the user's files, gpg-agent and the secret store.
         let tail = match succeed(
             &Cmd::new("sh")
                 .args(["-c", &format!("exec 1>&2\n{check}")])
@@ -790,8 +746,7 @@ impl Mirrors {
         )))
     }
 
-    /// A scratch directory under the mirrors' root, so a tree unpacked for a check never
-    /// leaves the filesystem the mirrors are on.
+    /// Under the mirrors' root, so an unpacked tree stays on the mirrors' filesystem.
     fn scratch(&self) -> Result<Scratch, RepoFailure> {
         Scratch::under(&self.root, ".scratch-").map_err(|e| RepoFailure::Unavailable(e.to_string()))
     }
@@ -814,7 +769,7 @@ impl Mirrors {
     }
 }
 
-/// A scratch index file, in a scratch directory of its own that goes with it.
+/// A scratch index file in its own scratch directory, removed with it.
 struct Index(Scratch);
 
 impl Index {
@@ -837,8 +792,8 @@ impl From<RunError> for RepoFailure {
     }
 }
 
-/// git's refusal, which says the thing it was asked for is not there; git failing to run, or
-/// outliving its timeout, says nothing about the thing and is the mirror unavailable.
+/// git exiting non-zero means the thing is missing; git failing to run or timing out means the
+/// mirror is unavailable.
 fn refused_as_missing(what: impl FnOnce() -> String) -> impl FnOnce(RunError) -> RepoFailure {
     move |failed| match failed {
         RunError::Exited { .. } => RepoFailure::Missing(what()),
@@ -937,8 +892,6 @@ impl Repositories for Mirrors {
                 .map_err(|e| RepoFailure::Unavailable(format!("GitHub: {e}")))?;
             let items = body.as_array().map_or(&[][..], Vec::as_slice);
             let last = items.len() < 100;
-            // The listing is the owner's own repositories; met with the declared list, it is
-            // what the secretary reaches.
             rows.extend(
                 items
                     .iter()
@@ -973,8 +926,7 @@ impl Repositories for Mirrors {
         .map_err(refused_as_missing(|| format!("{name} in {repo}")))?;
         let commit = CommitId::try_from(output.out().trim().to_owned())
             .map_err(|e| RepoFailure::Unavailable(e.to_string()))?;
-        // Every commit the secretary names is on the default branch, so what it reads, attaches
-        // or writes a change against is the owner's own history and never a fork's.
+        // Only the default branch's history resolves, so nothing read is ever a fork's commit.
         let default = format!("refs/heads/{}", self.row(repo)?.default_branch);
         let on_default = Self::asked(
             &dir,
@@ -1176,8 +1128,6 @@ mod tests {
         (temp, mirrors, repo)
     }
 
-    /// A fork's commit served under `refs/pull/*`, or a branch not merged into the default one,
-    /// names nothing the secretary may read, attach or write against.
     #[test]
     fn only_the_default_branchs_history_resolves() {
         let (temp, mirrors, repo) = fixture("forks");
@@ -1324,8 +1274,6 @@ mod tests {
         assert!(seen[0].merged, "the tip is on main now");
     }
 
-    /// A session's branch merged with a merge commit before the first poll still carries its
-    /// report and its own diff, so the poll reports the session and then reads it merged.
     #[test]
     fn a_branch_merged_before_the_first_poll_is_reported_then_merged() {
         use suzatary_core::coding::{Session, Step, next};
@@ -1413,8 +1361,7 @@ mod tests {
         assert!(!temp.path().join("mirrors/bmabsout/present.git").exists());
     }
 
-    /// Against GitHub, an undeclared name is refused before the token is resolved, so before
-    /// any request: `NoToken` fails the test if it is asked.
+    /// `NoToken` fails the test if the token is asked for.
     #[test]
     fn an_undeclared_repository_is_refused_before_any_network() {
         let temp = tempfile::tempdir().expect("a temp dir");
@@ -1516,8 +1463,6 @@ mod tests {
         );
     }
 
-    /// A branch pushed whose request could not be opened stops there, and a publish again opens
-    /// the request on the commit pushed, pushing nothing again.
     #[test]
     fn a_pushed_branch_without_a_pull_request_is_finished_by_a_retry() {
         let (temp, mirrors, repo) = fixture("nopull");
@@ -1571,8 +1516,6 @@ mod tests {
         );
     }
 
-    /// A check runs in a tree unpacked for it, and the tree goes with the check, passed or
-    /// failed: nothing but the mirrors is left under their root.
     #[test]
     fn a_check_leaves_nothing_behind() {
         for (tag, check) in [("kept", "true"), ("gone", "exit 3")] {

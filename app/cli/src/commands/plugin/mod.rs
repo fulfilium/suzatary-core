@@ -1,10 +1,8 @@
 //! `suzatary plugin sync`: run each plugin `[[plugins]]` declares and learn what it reports into
 //! the cache tier; every Google account's calendars and the Drive's probe ride the same timer.
 //!
-//! Each item is admitted at the plugin's declared schema and learned only where its store does
-//! not already read it as reported, so a timer may sync as often as it likes. The cursor is saved
-//! after the learning, so a run cut short is run again. Each run prints one journal line and joins
-//! what came of it, and of each link it fetched, into the sources' health, which Settings reads.
+//! Learning is idempotent, so a timer may sync as often as it likes. The cursor is saved after
+//! the learning, so a run cut short is run again.
 
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -144,8 +142,8 @@ pub fn components(instance: &Instance, named: Option<PathBuf>) -> PathBuf {
         .unwrap_or_else(|| instance.data().to_path_buf())
 }
 
-/// What a plugin's sync reaches: the transport bounding every plugin (no redirect, nothing
-/// resolving off the public internet), the instance's secret store, and the clock.
+/// What a plugin's sync reaches: a transport with no redirect and nothing resolving off the
+/// public internet, and the instance's secret store.
 #[must_use]
 pub fn effects(instance: &Instance) -> Effects {
     Effects {
@@ -157,19 +155,15 @@ pub fn effects(instance: &Instance) -> Effects {
 /// What one plugin's sync came to.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Report {
-    /// The journal's line.
     pub line: String,
     /// What the store learned, or `None` when the run's learning was not stored (a run that
     /// reports nothing stores nothing, and that is stored).
     pub learnt: Option<Learnt>,
 }
 
-/// Sync one plugin with `effects`: load its component from `components`, run it from its
-/// cursor, admit each item into its declared schema, learn the admitted into its store, save the
-/// cursor, and join what came of the run and of each link it fetched into `health`.
+/// Sync one plugin and join what came of it into `health`.
 ///
-/// Never an error: whatever went wrong is the report's line and the plugin's health, and the
-/// next run tries again.
+/// Never an error: whatever went wrong is the report's line and the plugin's health.
 #[must_use]
 pub fn sync(
     host: &Host,
@@ -256,8 +250,8 @@ fn sync_once(
     (Report { line, learnt }, fetches)
 }
 
-/// The plugin's component and its declared schema, each read once from under `components`; the
-/// bytes returned are the bytes the host loads.
+/// The plugin's component and schema, each read once; the bytes returned are the bytes the
+/// host loads.
 fn bundle(manifest: &Manifest, components: &Path) -> Result<(Vec<u8>, String), String> {
     let component = inside(components, manifest.component().as_str())?;
     let bytes = std::fs::read(&component)

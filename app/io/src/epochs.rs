@@ -1,10 +1,7 @@
-//! The box's epochs on disk (`suzatary_core::epoch`): one small text file per store under the
-//! instance's own directory in the state directory, box-local and never pushed, so no rewrite of
-//! the data repository's history can take an epoch back; nor backed up
-//! (`scripts/vault-backup.sh` names none of it), since a box restored from a vault must start its
-//! epochs as a fresh box does, above what it answered. The file is the epoch on its first line,
-//! then `genesis <name>` and `head <name>` lines. A file in the first format, a bare genesis per
-//! line, is refused rather than read: none was ever deployed.
+//! The box's epochs on disk (`suzatary_core::epoch`), one text file per store in the state
+//! directory. Never pushed (a history rewrite must not take an epoch back) and never backed up
+//! (a restored box must start its epochs as a fresh one does). Format: the epoch on the first
+//! line, then `genesis <name>` and `head <name>` lines; any other line is refused.
 
 use std::collections::BTreeSet;
 use std::path::PathBuf;
@@ -101,7 +98,6 @@ mod tests {
         std::fs::remove_dir_all(dir).expect("cleaned");
     }
 
-    /// A file in the first format, a bare genesis per line, is refused, never read as a record.
     #[test]
     fn a_file_of_the_first_format_is_refused() {
         let dir = std::env::temp_dir().join(format!("suzatary-epochs-old-{}", std::process::id()));

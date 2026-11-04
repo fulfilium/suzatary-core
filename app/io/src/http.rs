@@ -1,6 +1,5 @@
-//! Every HTTP request this crate makes: a [`Req`] in, a [`Resp`] out, through
-//! one [`Http`] with a `ureq` interpreter and a scripted fake. A non-2xx
-//! status is an answer the caller reads, never an error.
+//! Every HTTP request this crate makes, through one [`Http`] with a `ureq` interpreter and a
+//! scripted fake. A non-2xx status is an answer the caller reads, never an error.
 
 use std::net::IpAddr;
 use std::sync::{Arc, Mutex};
@@ -10,44 +9,35 @@ use suzatary_core::web::is_public;
 use ureq::unversioned::resolver::{DefaultResolver, ResolvedSocketAddrs, Resolver};
 use ureq::unversioned::transport::{DefaultConnector, NextTimeout};
 
-/// The most of a body read unless a request says otherwise.
+/// Bytes of body read unless a request says otherwise.
 const DEFAULT_LIMIT: u64 = 10 * 1024 * 1024;
 
-/// A request's verb.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Method {
-    /// No body.
     Get,
-    /// With a body.
     Post,
 }
 
-/// One request. Its `Debug` names headers and never prints their values,
-/// which carry bearer tokens.
+/// One request. Its `Debug` never prints header values, which carry bearer tokens.
 #[derive(Clone)]
 pub struct Req {
-    /// The verb.
     pub method: Method,
-    /// The whole URL.
     pub url: String,
-    /// Headers, in order.
     pub headers: Vec<(String, String)>,
-    /// The body; empty for a GET.
+    /// Empty for a GET.
     pub body: Vec<u8>,
-    /// Past this the request fails; `None` waits.
+    /// `None` waits.
     pub timeout: Option<Duration>,
-    /// The most of the answer's body read.
+    /// Bytes of the answer's body read.
     pub limit: u64,
 }
 
 /// One answer, whatever its status.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Resp {
-    /// The status code.
     pub status: u16,
-    /// Headers, names lowercased.
+    /// Names lowercased.
     pub headers: Vec<(String, String)>,
-    /// The body.
     pub body: Vec<u8>,
 }
 
@@ -60,12 +50,7 @@ pub enum HttpError {
     /// It never left this box: [`Ureq::public_only`] refused a name resolving off the public
     /// internet.
     #[error("{host} resolves to {ip}, which is not on the public internet")]
-    Private {
-        /// The name asked for.
-        host: String,
-        /// The address it resolved to that is not public.
-        ip: IpAddr,
-    },
+    Private { host: String, ip: IpAddr },
     /// It left, and no answer came in time.
     #[error("{0}")]
     TimedOut(String),
@@ -76,10 +61,6 @@ pub enum HttpError {
 
 /// The one way a request leaves this box.
 pub trait Http: Send + Sync {
-    /// Send `req` and read the whole answer.
-    ///
-    /// # Errors
-    /// [`HttpError`] when nothing readable came back.
     fn send(&self, req: Req) -> Result<Resp, HttpError>;
 }
 
@@ -96,7 +77,6 @@ impl<T: Http + ?Sized> Http for Box<T> {
 }
 
 impl Req {
-    /// A GET of `url`.
     #[must_use]
     pub fn get(url: impl Into<String>) -> Self {
         Self {
@@ -109,7 +89,6 @@ impl Req {
         }
     }
 
-    /// A POST of `body` to `url`.
     #[must_use]
     pub fn post(url: impl Into<String>, body: impl Into<Vec<u8>>) -> Self {
         Self {
@@ -119,11 +98,8 @@ impl Req {
         }
     }
 
-    /// A POST of `body` as JSON.
-    ///
-    /// # Panics
-    /// Never on a body this crate builds: each is a map with string keys,
-    /// which serialises.
+    /// A POST of `body` as JSON; panics on a body that does not serialise (none this crate
+    /// builds).
     #[must_use]
     pub fn json(url: impl Into<String>, body: &impl serde::Serialize) -> Self {
         Self::post(
@@ -133,21 +109,18 @@ impl Req {
         .header("Content-Type", "application/json")
     }
 
-    /// A POST of `fields` as a form.
     #[must_use]
     pub fn form(url: impl Into<String>, fields: &[(&str, &str)]) -> Self {
         Self::post(url, suzatary_core::url::encode_form(fields))
             .header("Content-Type", "application/x-www-form-urlencoded")
     }
 
-    /// One more header.
     #[must_use]
     pub fn header(mut self, name: impl Into<String>, value: impl Into<String>) -> Self {
         self.headers.push((name.into(), value.into()));
         self
     }
 
-    /// Fail after `after`.
     #[must_use]
     pub fn timeout(mut self, after: Duration) -> Self {
         self.timeout = Some(after);
@@ -191,7 +164,6 @@ impl std::fmt::Debug for Req {
 }
 
 impl Resp {
-    /// An answer with `status` and `body` and no headers.
     #[must_use]
     pub fn new(status: u16, body: impl Into<Vec<u8>>) -> Self {
         Self {
@@ -201,7 +173,6 @@ impl Resp {
         }
     }
 
-    /// One more header.
     #[must_use]
     pub fn with_header(mut self, name: &str, value: impl Into<String>) -> Self {
         self.headers.push((name.to_ascii_lowercase(), value.into()));
@@ -223,7 +194,6 @@ impl Resp {
         String::from_utf8_lossy(&self.body).into_owned()
     }
 
-    /// Whether the status is 2xx.
     #[must_use]
     pub fn ok(&self) -> bool {
         (200..300).contains(&self.status)
@@ -254,11 +224,9 @@ impl Ureq {
         }
     }
 
-    /// An agent for addresses a model chose: it follows no redirect, and
-    /// every name must resolve only to public addresses, checked inside the
-    /// resolution so nothing can change between checking and connecting. It
-    /// takes no proxy from the environment, since through one the resolver
-    /// would check the proxy's address and never the one asked for.
+    /// An agent for addresses a model chose: no redirects, and every name must resolve only to
+    /// public addresses, checked inside the resolution so nothing changes between check and
+    /// connect. No proxy from the environment: the resolver would check the proxy's address.
     #[must_use]
     pub fn public_only() -> Self {
         let config = ureq::Agent::config_builder()
@@ -307,12 +275,9 @@ impl Http for Ureq {
 }
 
 impl Ureq {
-    /// Send a GET and hand each line of its body to `each` as the line arrives, until `each`
-    /// breaks or the body ends: a server-sent stream, read with no timeout. Answers the status;
-    /// a body that is not 2xx is handed over line by line all the same.
-    ///
-    /// # Errors
-    /// The connection's failure, as [`Http::send`] names it.
+    /// Send a GET and hand each line of its body to `each` as it arrives, until `each` breaks
+    /// or the body ends: a server-sent stream, read with no timeout. Answers the status; a
+    /// non-2xx body is handed over all the same.
     pub fn lines(
         &self,
         req: &Req,
@@ -338,8 +303,8 @@ impl Ureq {
     }
 }
 
-/// The resolver's [`HttpError::Private`] comes back as itself, carried through `ureq`'s error as a
-/// value and read by its type, never by its words.
+/// The resolver's [`HttpError::Private`] comes back as itself, read from `ureq`'s error by its
+/// type, never by its words.
 fn failure(error: &ureq::Error) -> HttpError {
     if let ureq::Error::Io(io) = error
         && let Some(private @ HttpError::Private { .. }) = io
@@ -370,7 +335,6 @@ fn failure(error: &ureq::Error) -> HttpError {
     }
 }
 
-/// A resolver that answers only public addresses.
 #[derive(Debug, Default)]
 struct PublicOnly(DefaultResolver);
 
@@ -397,8 +361,7 @@ impl Resolver for PublicOnly {
 
 type Answer = dyn Fn(&Req) -> Result<Resp, HttpError> + Send + Sync;
 
-/// A fake [`Http`]: answers from a function of the request, and keeps every
-/// request it was sent.
+/// A fake [`Http`] answering from a function of the request, keeping every request sent.
 pub struct Scripted {
     answer: Box<Answer>,
     sent: Mutex<Vec<Req>>,
@@ -411,7 +374,6 @@ impl std::fmt::Debug for Scripted {
 }
 
 impl Scripted {
-    /// Answer each request with `answer(request)`.
     #[must_use]
     pub fn new(answer: impl Fn(&Req) -> Result<Resp, HttpError> + Send + Sync + 'static) -> Self {
         Self {
@@ -420,10 +382,7 @@ impl Scripted {
         }
     }
 
-    /// Answer the requests in order with `answers`.
-    ///
-    /// # Panics
-    /// When asked more often than it has answers.
+    /// Answer the requests in order; panics when asked more often than it has answers.
     #[must_use]
     pub fn answering(answers: Vec<Result<Resp, HttpError>>) -> Self {
         let queue = Mutex::new(std::collections::VecDeque::from(answers));
@@ -436,13 +395,11 @@ impl Scripted {
         })
     }
 
-    /// Answer every request the same.
     #[must_use]
     pub fn always(answer: Result<Resp, HttpError>) -> Self {
         Self::new(move |_| answer.clone())
     }
 
-    /// Every request sent so far.
     #[must_use]
     pub fn sent(&self) -> Vec<Req> {
         self.sent
@@ -489,8 +446,6 @@ mod tests {
         );
     }
 
-    /// `HTTPS_PROXY` or `ALL_PROXY` in the box's environment would route a model's fetch through
-    /// the proxy, whose address is the only one the resolver would see.
     #[test]
     fn a_public_only_agent_takes_no_proxy_from_the_environment() {
         assert!(Ureq::public_only().agent.config().proxy().is_none());

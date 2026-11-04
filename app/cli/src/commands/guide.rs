@@ -1,7 +1,6 @@
-//! The guide (`docs/guide/guide.typ`): one Typst text, compiled in the closed world to HTML
-//! and by typst with its pictures to a PDF (`nix build .#docs`), around a demo deployment that
-//! is `init`'s own answer to the cast's flags, so the guide cannot show a file `init` would not
-//! write.
+//! The guide (`docs/guide/guide.typ`): one Typst text, compiled to HTML in the closed world and
+//! to a PDF by typst (`nix build .#docs`), around a demo deployment that is `init`'s own answer
+//! to the cast's flags.
 //!
 //! The text calls four names beyond typst's library, and each world defines them: `shot`, a
 //! picture (a link to it in the closed world, which reads no file), and `demo-command`,

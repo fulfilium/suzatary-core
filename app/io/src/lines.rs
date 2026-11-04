@@ -1,8 +1,7 @@
-//! Logs on disk, as an interpreter of [`Log`]: one file of lines per key in one directory, for
-//! the conversations, the secretary's memory and the devices.
+//! Logs on disk, as an interpreter of [`Log`]: one file of lines per key in one directory.
 //!
-//! A line is written whole with one `write_all`, so a failure cannot leave half of one; a
-//! replacement is [`durable::replace`]d, so a reader sees the old file or the new one. A key reaches a path only through its [`Layout`], whose stems are slugs.
+//! A line is written whole with one `write_all`; a replacement is [`durable::replace`]d. A key
+//! reaches a path only through its [`Layout`], whose stems are slugs.
 
 use std::io::Write as _;
 use std::path::PathBuf;
@@ -13,7 +12,6 @@ use suzatary_core::store::{Decide, Edit, Log, StoreError};
 use crate::durable::{self, Held};
 use crate::present::Present as _;
 
-/// Logs, one file per key under `dir`.
 #[derive(Debug, Clone)]
 pub struct Lines<K: 'static, E: 'static> {
     dir: PathBuf,
@@ -21,23 +19,19 @@ pub struct Lines<K: 'static, E: 'static> {
     codec: &'static Codec<E>,
 }
 
-/// How keys are files: what one log is called in a refusal, its extension, and its stem both
-/// ways; a file whose stem is no key is not a log.
+/// How keys are files; a file whose stem is no key is not a log.
 #[derive(Debug, Clone, Copy)]
 pub struct Layout<K> {
     /// What one log is, as a refusal names it.
     pub what: &'static str,
     /// The store as a failure names it.
     pub store: &'static str,
-    /// Every log file's extension.
     pub extension: &'static str,
-    /// The file stem for a key.
+    /// Must be a slug: no `/`, `\` or `.`.
     pub stem: fn(&K) -> String,
-    /// The key a stem names, if it names one.
     pub key: fn(&str) -> Option<K>,
     /// A file beside the logs whose `flock` [`Log::edit`] holds, if edits are serialised.
     pub lock: Option<&'static str>,
-    /// Whether a line is on the disk when its write returns.
     pub durability: Durability,
 }
 
@@ -46,17 +40,15 @@ pub struct Layout<K> {
 pub enum Durability {
     /// Handed to the kernel, which writes it out later.
     Written,
-    /// Synced to the disk before the write returns, for a log a decision outside the box rests
-    /// on.
+    /// Synced before the write returns, for a log a decision outside the box rests on.
     Synced,
 }
 
-/// How a line is text, both ways.
 #[derive(Debug, Clone, Copy)]
 pub struct Codec<E> {
     /// What one line is, as a failure names it.
     pub what: &'static str,
-    /// The line's text, without its newline.
+    /// Without its newline; must hold none.
     pub print: fn(&E) -> Result<String, String>,
     /// The line a text is; `None` for one the store drops rather than refuses.
     pub parse: fn(&str) -> Result<Option<E>, String>,
@@ -80,13 +72,11 @@ impl<E: serde::Serialize + serde::de::DeserializeOwned> Codec<E> {
 }
 
 impl<K: 'static, E: 'static> Lines<K, E> {
-    /// The logs under `dir`, made on the first write.
     #[must_use]
     pub fn new(dir: PathBuf, layout: &'static Layout<K>, codec: &'static Codec<E>) -> Self {
         Self { dir, layout, codec }
     }
 
-    /// Where one log lives.
     pub fn path(&self, key: &K) -> PathBuf {
         let stem = (self.layout.stem)(key);
         debug_assert!(!stem.contains(['/', '\\', '.']), "a stem is a slug");

@@ -1,9 +1,6 @@
-//! The routine's fire endpoint: the routine's bearer, the beta header and the
-//! API version, and a body that is the task and nothing else, because the
-//! routine's saved prompt is the containment and the task is data.
-//!
-//! The token comes only through [`Resolves`] by [`ROUTINE_TOKEN`], per fire:
-//! no constructor takes one as a value.
+//! The routine's fire endpoint. The body is the task and nothing else: the routine's saved
+//! prompt is the containment and the task is data. The token comes only through [`Resolves`]
+//! by [`ROUTINE_TOKEN`], per fire; no constructor takes one as a value.
 
 use std::time::Duration;
 
@@ -15,13 +12,11 @@ use suzatary_core::coding::{Fired, ROUTINE_TOKEN, RoutineId, SessionId, SessionU
 use crate::http::{Http, Req, Ureq};
 use crate::secrets::Resolves;
 
-/// Where the endpoint lives.
 pub const API: &str = "https://api.anthropic.com";
 
 /// The beta the fire endpoint is behind; a new date is a new header.
 pub const BETA: &str = "experimental-cc-routine-2026-04-01";
 
-/// The API version, pinned.
 pub const VERSION: &str = "2023-06-01";
 
 /// A fire starts a session and answers; it does not wait for the session.
@@ -30,35 +25,25 @@ const TIMEOUT: Duration = Duration::from_secs(30);
 /// Why a fire did not start a session. Never the token.
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 pub enum FireError {
-    /// Secretspec holds no token under [`ROUTINE_TOKEN`].
     #[error("{ROUTINE_TOKEN} is not set; set it from Settings, then tap again")]
     NoToken,
     /// The secret store could not say whether it holds one.
     #[error("{0}; nothing was fired")]
     Locked(crate::secrets::SecretError),
-    /// Nothing answered.
     #[error("the routine endpoint could not be reached: {0}")]
     Unreachable(String),
-    /// The token was refused.
     #[error("the routine refused the token ({0}); set a fresh {ROUTINE_TOKEN} from Settings")]
     Unauthorized(u16),
     /// The account's usage or the daily cap on routine runs.
     #[error("the routine is throttled{}", .0.as_ref().map(|after| format!(" (retry after {after}s)")).unwrap_or_default())]
     Throttled(Option<String>),
-    /// Any other status, with the endpoint's own message.
     #[error("the routine endpoint answered {status}: {message}")]
-    Refused {
-        /// The status.
-        status: u16,
-        /// Its message.
-        message: String,
-    },
+    Refused { status: u16, message: String },
     /// A 2xx whose body is not the documented answer.
     #[error("the routine endpoint answered something this cannot read: {0}")]
     Malformed(String),
 }
 
-/// One routine's fire endpoint, with its token resolved.
 #[derive(Debug)]
 pub struct Endpoint<H: Http = Ureq> {
     base: String,
@@ -69,9 +54,6 @@ pub struct Endpoint<H: Http = Ureq> {
 
 impl Endpoint<Ureq> {
     /// The routine at [`API`], its token read through `secrets`.
-    ///
-    /// # Errors
-    /// [`FireError::NoToken`] when nothing is set under [`ROUTINE_TOKEN`].
     pub fn resolve(routine: RoutineId, secrets: &dyn Resolves) -> Result<Self, FireError> {
         Self::resolve_over(API, routine, secrets, Ureq::new())
     }
@@ -79,9 +61,6 @@ impl Endpoint<Ureq> {
 
 impl<H: Http> Endpoint<H> {
     /// [`Endpoint::resolve`] over another base and transport.
-    ///
-    /// # Errors
-    /// [`FireError::NoToken`], as [`Endpoint::resolve`].
     pub fn resolve_over(
         base: impl Into<String>,
         routine: RoutineId,
@@ -110,9 +89,6 @@ struct Answer {
 
 impl<H: Http> Endpoint<H> {
     /// Start one session on `task`, and answer which.
-    ///
-    /// # Errors
-    /// [`FireError`], in words a card can show.
     pub fn fire(&self, task: &Task) -> Result<Fired, FireError> {
         let url = format!(
             "{}/v1/claude_code/routines/{}/fire",
@@ -143,7 +119,6 @@ impl<H: Http> Endpoint<H> {
     }
 }
 
-/// Parse the answer once into the names a session is known by.
 fn fired(text: &str) -> Result<Fired, FireError> {
     let malformed = |why: String| FireError::Malformed(why);
     let answer: Answer =
@@ -177,7 +152,6 @@ mod tests {
 
     const TOKEN: &str = "sk-ant-routine-fake-token";
 
-    /// One secret, by name, and nothing else.
     struct Holding(Option<&'static str>);
 
     impl Resolves for Holding {

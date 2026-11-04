@@ -5,7 +5,6 @@ use axum::routing::get;
 use super::route::{Route, Scope};
 use super::{chain, google, held, mail, proposals, secretary, settings, stores, stream, the_box};
 
-/// Every route.
 #[must_use]
 #[expect(
     clippy::too_many_lines,
@@ -23,7 +22,6 @@ pub fn table() -> Vec<Route> {
         Route::get("/me", Scope::Chain, chain::me),
         // Replica sync: the GET is what the caller lacks, the POST its objects, rehashed.
         Route::get("/objects", Scope::Chain, chain::objects),
-        // An object's literal by its name, kept for good by the browser: it never changes.
         Route::get("/content", Scope::Chain, chain::content),
         Route::post("/objects", Scope::Chain, chain::take_objects),
         // Appends nothing: the answer is an event's print, which the phone seals.
@@ -37,27 +35,23 @@ pub fn table() -> Vec<Route> {
         Route::get("/api/about", Scope::Box, the_box::about),
         Route::get("/api/releases", Scope::Box, the_box::releases),
         Route::get("/api/portal", Scope::Box, the_box::portal),
-        // A browser's failure: a write's gate, a per-login budget, one log line, nothing stored.
+        // A per-login budget, one log line, nothing stored.
         Route::post("/api/client-errors", Scope::Box, the_box::client_errors),
         Route::get("/api/usage", Scope::Box, the_box::usage),
         Route::post("/api/act/device", Scope::Box, the_box::device),
-        // A device asks to be trusted; the tap on its card, from a trusted device, trusts it.
+        // Only the tap on its card, from a trusted device, trusts the asking device.
         Route::post("/api/act/key", Scope::Box, the_box::key),
         Route::post("/api/act/pair", Scope::Box, the_box::pair),
         Route::post("/api/held/reveal", Scope::Box, held::reveal),
         // A GET under /api/act/ is 405 here, or the catch-all would answer the index.
         Route::special("/api/act/{*verb}", Scope::Box, get(the_box::act_read)),
-        // What is connected; a change to it is a card, tapped through the route below.
         Route::get("/api/overview", Scope::Box, settings::overview),
-        // Google sends the owner's browser back here from its consent page, so it is a GET with
-        // no CSRF triple: the state one tap drew, taken once and only for that tap's actor, is
-        // what admits it.
+        // A GET with no CSRF triple: the one-use state, taken only for the tapping actor, admits it.
         Route::get(
             suzatary_core::google::CALLBACK,
             Scope::Box,
             google::callback,
         ),
-        // A sign-in card's button: the browser is sent on to the consent its tap opened.
         Route::get(
             "/api/oauth/google/consent/{card}",
             Scope::Box,
@@ -73,13 +67,12 @@ pub fn table() -> Vec<Route> {
             Scope::Box,
             mail::cancel_watch,
         ),
-        // The secretary's stores, as replicas a tab pulls; a tab posts only to the topic stores.
+        // A tab posts only to the topic stores.
         Route::get("/api/stores/{store}/objects", Scope::Box, stores::objects),
         Route::post("/api/stores/{store}/objects", Scope::Box, stores::take),
         Route::get("/api/stores/{store}/content", Scope::Box, stores::content),
         Route::get("/api/stores/lines/skeleton", Scope::Box, stores::skeleton),
         Route::special("/api/stores/events", Scope::Box, get(stream::store_events)),
-        // The Inbox badge, counted on the box so a tab need not hold the conversations.
         Route::get("/api/waiting", Scope::Box, stores::waiting),
         Route::post(
             "/api/secretary/conversations/{conversation}/proposals/{index}/tap",
@@ -91,14 +84,11 @@ pub fn table() -> Vec<Route> {
             Scope::Box,
             proposals::dismiss,
         ),
-        // Drawn against the todo chains, which a tab does not hold whole: every proposal it
-        // names in one read.
         Route::get(
             "/api/secretary/conversations/{conversation}/drawn",
             Scope::Box,
             proposals::drawn,
         ),
-        // A send that may have gone waits until the owner has checked Sent.
         Route::post(
             "/api/secretary/conversations/{conversation}/proposals/{index}/acknowledge",
             Scope::Box,
@@ -110,7 +100,6 @@ pub fn table() -> Vec<Route> {
             proposals::drop_session,
         ),
         Route::post("/api/secretary/conversations", Scope::Box, secretary::open),
-        // The setup conversation begun on one template of the catalog, as Settings offers it.
         Route::post(
             "/api/secretary/setup/{template}",
             Scope::Box,
@@ -121,7 +110,7 @@ pub fn table() -> Vec<Route> {
             Scope::Box,
             secretary::rename,
         ),
-        // An erasure is answered by the same gate as a send: a witness that the owner asked.
+        // An erasure takes the same `Tap` witness as a send.
         Route::post(
             "/api/secretary/conversations/{conversation}/erase",
             Scope::Box,

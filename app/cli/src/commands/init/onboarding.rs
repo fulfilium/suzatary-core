@@ -1,9 +1,7 @@
 //! What a person tells the box when they start, and the deployment it means.
 //!
-//! [`Onboarding`] is the whole of `suzatary init`'s input; [`Onboarding::file`] is the
-//! `instance.toml` it denotes and [`Onboarding::steps`] the acts only the person can do (a
-//! secret typed at a prompt, an account's sign-in), printed and never run. Both are functions
-//! of the value, so the file and the advice cannot disagree.
+//! [`Onboarding::file`] is the `instance.toml` it denotes and [`Onboarding::steps`] the acts only
+//! the person can do, printed and never run; both are functions of the value.
 
 use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
@@ -23,7 +21,6 @@ use crate::instance::{Chain, File, Mail, Secretary, Serving, Web};
 /// Everything `init` asks.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Onboarding {
-    /// Who the deployment serves.
     person: Person,
     /// The actor their own writes carry; never an agent's.
     owner: Actor,
@@ -33,9 +30,7 @@ pub struct Onboarding {
     categories: Vec<String>,
     /// The first mail account, if any; more are added to the file by hand.
     mail: Option<FirstAccount>,
-    /// The code root, relative to the instance file.
     repo: PathBuf,
-    /// The data root, relative to the instance file.
     data: PathBuf,
 }
 
@@ -79,7 +74,6 @@ impl BoxName {
         Ok(Self(text.to_owned()))
     }
 
-    /// The name.
     #[must_use]
     pub fn as_str(&self) -> &str {
         &self.0
@@ -119,9 +113,7 @@ pub struct Person {
 /// A first account: an address and who serves it.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct FirstAccount {
-    /// Who serves it.
     pub provider: Provider,
-    /// The address.
     pub email: String,
 }
 
@@ -141,14 +133,12 @@ pub enum Provider {
 /// One act left to the person, as the command they type.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Step {
-    /// What to run.
     pub command: String,
     /// Why, in a few words.
     pub why: &'static str,
 }
 
-/// The header every written file carries: what a first-time reader needs, not a comment
-/// per field.
+/// The header every written instance file carries.
 pub(crate) const HEADER: &str = "\
 # WHAT MAKES THIS DEPLOYMENT YOURS, written by `suzatary init` (docs/guide/).
 #

@@ -24,13 +24,11 @@ use super::reply::Accepted;
 use super::{Chained, State};
 use suzatary_core::secretary::memory::FactId;
 
-/// A block of an answer, named by its sha.
 pub struct Block {
     id: ConversationId,
     sha: String,
 }
 
-/// A person's turn: the words, the chips and the files it names.
 pub struct Said {
     say: String,
     references: Vec<Reference>,
@@ -39,14 +37,13 @@ pub struct Said {
     after: Option<usize>,
 }
 
-/// A photo or PDF, decoded; the name it was picked with, and where the owner said to keep it.
+/// A photo or PDF, decoded.
 pub struct Upload {
     bytes: Vec<u8>,
     name: String,
     keep: Keep,
 }
 
-/// Where an upload is kept.
 enum Keep {
     /// In the box's store, unless it names an identity number, which holds it back.
     OnTheBox,
@@ -57,14 +54,11 @@ enum Keep {
 /// A stored upload's bytes, served so they never read as a page.
 pub struct Served(Attachment, Vec<u8>);
 
-/// A conversation's body is a person's turn, not a document.
 const MAX_SAY_BYTES: usize = 32_768;
 
 /// An upload: the largest PDF, grown by a third as base64, and room for the JSON around it.
 const MAX_UPLOAD_BYTES: usize = suzatary_core::file_read::MAX_PDF / 3 * 4 + 65_536;
 
-/// The conversation a path's segment names, parsed.
-///
 /// # Errors
 /// [`Refusal::bad_request`] for a name no conversation could have.
 pub fn conversation_named(asked: &Asked) -> Result<ConversationId, Refusal> {
@@ -103,7 +97,6 @@ impl Params for FactId {
     }
 }
 
-/// A digest node, by its content name.
 impl Params for prodrome_core::event::Hash {
     fn parse(asked: &Asked, _: &Chained) -> Result<Self, Refusal> {
         let node = asked.segment("node")?;
@@ -151,7 +144,7 @@ impl Body for Said {
 
     type Wire = wire::Saying;
 
-    /// Each photo reread from the store, so its type is the store's.
+    /// Each photo is reread from the store, so its type is the store's.
     fn parse(saying: wire::Saying, state: &State) -> Result<Self, Refusal> {
         let wire::Saying {
             say,
@@ -290,8 +283,7 @@ pub fn open(
         .map(Json)
 }
 
-/// `POST /api/secretary/setup/<template>`: begin the setup conversation on a template of the
-/// catalog.
+/// `POST /api/secretary/setup/<template>`: begin the setup conversation on a template.
 pub fn setup(
     call: &Call<Writer, suzatary_core::connect::TemplateId, ()>,
 ) -> Result<Json<wire::ConversationPayload>, Refusal> {
@@ -336,8 +328,8 @@ pub fn erase(
         .map(Json)
 }
 
-/// `GET …/blocks/<sha>`: one block of an answer as typst's HTML, a running round's or a stored
-/// one's: rendering is asked by content, and the box renders only what a model wrote.
+/// `GET …/blocks/<sha>`: one block of an answer as typst's HTML; the box renders only what a
+/// model wrote.
 ///
 /// A sha no answer holds is a 404, and a block kept as text is a 422 saying why.
 pub fn block(call: &Call<Reader, Block, ()>) -> Result<Json<wire::BlockRender>, Refusal> {
@@ -372,8 +364,8 @@ pub fn block(call: &Call<Reader, Block, ()>) -> Result<Json<wire::BlockRender>, 
         .map_err(|refused| Refusal::unprocessable(refused.to_string()))
 }
 
-/// The stamp the gate's `actor`, asking from where the gate's answer says, puts on a turn
-/// pointing at `references` ([`stamp::pointing`]); the chains are read only when one is a todo.
+/// The stamp on a turn pointing at `references` ([`stamp::pointing`]); the chains are read only
+/// when one is a todo.
 fn stamped<P, B>(call: &Call<Actor, P, B>, references: &[Reference]) -> Stamp {
     let speaker = Speaker::at(call.guard.as_str(), Seat::of(&call.admitted));
     if references
@@ -453,9 +445,8 @@ pub fn edit(
         .map(Accepted)
 }
 
-/// `POST …/stop`: stop the answer being worked on and answer once the stop is written, so the
-/// payload reads the act and nothing queued; with no round running it is a 409, never a halt left
-/// for the next question.
+/// `POST …/stop`: stop the running answer, answering once the stop is written; with no round
+/// running it is a 409, never a halt left for the next question.
 pub fn stop(
     call: &Call<Actor, ConversationId, ()>,
 ) -> Result<Accepted<wire::ConversationPayload>, Refusal> {

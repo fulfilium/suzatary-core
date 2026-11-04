@@ -1,5 +1,4 @@
-//! The argument tree both binaries share: every verb the deployed program
-//! answers, and the one `match` that runs it.
+//! The argument tree both binaries share, and the one `match` that runs it.
 
 use std::path::Path;
 
@@ -97,8 +96,6 @@ pub enum Verb {
 }
 
 impl Verb {
-    /// Do it, against the instance file at `path`.
-    ///
     /// # Errors
     /// The verb's own.
     pub fn run(self, path: &Path) -> anyhow::Result<()> {
@@ -164,15 +161,12 @@ mod tests {
 
     use super::Verb;
 
-    /// The argument tree alone, as the binaries parse it.
     #[derive(Debug, Parser)]
     struct Tree {
         #[command(subcommand)]
         verb: Verb,
     }
 
-    /// The one-time migrations that have run on the box are no verbs any more: each is refused as
-    /// an unknown subcommand, as is its `--check` or `--dry` form.
     #[test]
     fn the_migrations_that_ran_are_no_verbs() {
         for argv in [

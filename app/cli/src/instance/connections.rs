@@ -1,10 +1,8 @@
 //! A connection's tables written into the instance file's text, and taken out again.
 //!
-//! Each edit is a function of the text: it reads the tables as [`Declared`], asks the algebra
-//! for the tables it must leave ([`Declared::with`], [`Declared::without`],
-//! [`Declared::with_origin`]), which refuses a duplicate or a table the file would refuse,
-//! writes them with `toml_edit` so every other byte stays, and reads the result back: an edit
-//! whose text does not read as the algebra said is refused, never written.
+//! Each edit asks the [`Declared`] algebra for the tables it must leave, writes them with
+//! `toml_edit` so every other byte stays, and reads the result back: a text that does not read
+//! as the algebra said is refused, never written.
 
 use std::path::Path;
 
@@ -154,8 +152,7 @@ pub(crate) fn add_origin(
     written(path, &doc, &expected)
 }
 
-/// The tables connections are read from, as the instance at `path` holding `text` declares
-/// them: the same projection the running box reads ([`super::Instance::declared`]).
+/// The tables connections are read from, by [`super::Instance::declared`] over `text`.
 ///
 /// # Errors
 /// A text that does not read as an instance.
@@ -173,7 +170,6 @@ fn parse(text: &str) -> Result<DocumentMut, EditError> {
         .map_err(|failed: toml_edit::TomlError| EditError::Malformed(failed.to_string()))
 }
 
-/// The edited text, once it reads as `expected`.
 fn written(path: &Path, doc: &DocumentMut, expected: &Declared) -> Result<String, EditError> {
     let text = doc.to_string();
     if declared(path, &text)? == *expected {
@@ -185,7 +181,6 @@ fn written(path: &Path, doc: &DocumentMut, expected: &Declared) -> Result<String
     }
 }
 
-/// The credential a link connection names.
 fn link(connection: &Connection) -> Result<String, EditError> {
     connection
         .secrets()
@@ -236,8 +231,7 @@ fn append(parent: &mut dyn TableLike, key: &str, table: toml_edit::Table) -> Res
     Ok(())
 }
 
-/// The `sync` of the account `email` in `[mail] accounts` set to `sync`, its comments and its
-/// other keys left as they were.
+/// Sets the `sync` of the account `email`, keeping its comments and other keys.
 fn resync(mail: &mut dyn TableLike, email: &str, sync: &Value) -> Result<(), EditError> {
     let held = |account: &dyn TableLike| account.get("email").and_then(Item::as_str) == Some(email);
     let set = |account: &mut dyn TableLike| {
@@ -262,8 +256,7 @@ fn resync(mail: &mut dyn TableLike, email: &str, sync: &Value) -> Result<(), Edi
     Ok(())
 }
 
-/// Every table `is` picks taken out of the list of tables `key` of `parent`, answering how
-/// many are left.
+/// Removes every table `is` picks from the list `key`; answers how many are left.
 fn take(
     parent: &mut dyn TableLike,
     key: &str,
@@ -293,8 +286,7 @@ fn push(parent: &mut dyn TableLike, key: &str, text: &str) -> Result<(), EditErr
     Ok(())
 }
 
-/// Every entry `is` picks taken out of the list of strings `key` of `parent`; a list left empty
-/// goes, as it was before the add that made it.
+/// Removes every string `is` picks from the list `key`; a list left empty goes.
 fn pull(parent: &mut dyn TableLike, key: &str, is: impl Fn(&str) -> bool) -> Result<(), EditError> {
     let list = parent
         .get_mut(key)
@@ -380,8 +372,7 @@ subdir = "her-at-example-test"
 sync = "gmail"
 "#;
 
-    /// The calendar's plugin as a file may hold it, at most one: written by hand with a link,
-    /// or exactly as its template declares it, with none.
+    /// The calendar's plugin as a file may hold it: none, by hand with a link, or as its template.
     const ICS: [&str; 3] = [
         "",
         "\n# a calendar, by hand\n[[plugins]]\nname = \"ics\"\ncomponent = \"plugins/mine/ics.wasm\"\nschema = \"plugins/mine/ics.schema\"\norigins = [\"https://calendar.example.test\"]\ncredentials = [\"PLUGIN_ICS_HOME\"]\n",
@@ -439,7 +430,6 @@ sync = "gmail"
         ]
     }
 
-    /// A file, after some connections were added to it.
     fn edited() -> impl Strategy<Value = String> {
         (file(), proptest::collection::vec(connection(), 0..4)).prop_map(|(file, connections)| {
             connections.iter().fold(file, |text, connection| {
@@ -465,9 +455,7 @@ sync = "gmail"
     }
 
     proptest! {
-        /// An add inserts one run of text and moves nothing else, and the file it wrote reads as
-        /// the algebra's tables; its remove leaves the file byte for byte, but for a plugin's
-        /// manifest the add declared, which stays, so from then on the pair is exact.
+        /// A plugin's manifest the add declared stays after the remove.
         #[test]
         fn an_add_and_its_remove_leave_the_file_as_it_was(text in edited(), connection in connection()) {
             let before = declared(&path(), &text).expect("the file reads");
@@ -500,7 +488,6 @@ sync = "gmail"
             }
         }
 
-        /// A grant inserts the origin once, and granting again changes nothing.
         #[test]
         fn a_grant_inserts_one_origin_once(text in edited(), host in "[a-z]{1,8}") {
             let ics = PluginName::parse("ics").expect("a name");
@@ -517,8 +504,6 @@ sync = "gmail"
         }
     }
 
-    /// The template's manifest is declared with a calendar's first link, after every table the
-    /// operator wrote, and stays with its last, written exactly as the template declares it.
     #[test]
     fn a_first_calendar_declares_its_plugin_and_its_last_leaves_it_bare() {
         let work = Connection::parse("ics", &["Work".to_owned()]).expect("a calendar");
@@ -534,8 +519,6 @@ sync = "gmail"
         );
     }
 
-    /// Signing a lieer account in with Google changes its `sync` alone: its folder, the comment
-    /// above it and every other byte stay, and the roster holds the address once.
     #[test]
     fn a_lieer_account_moves_onto_google_in_place() {
         let hers =
@@ -548,8 +531,6 @@ sync = "gmail"
         );
     }
 
-    /// Removing an account takes its table, with the comment written above it, and nothing
-    /// else; the last one leaves the roster spelled empty, since the file requires it.
     #[test]
     fn removing_an_account_takes_its_table_only() {
         let hers =

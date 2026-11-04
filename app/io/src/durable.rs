@@ -1,11 +1,7 @@
-//! A file replaced whole and a file held: the one way this crate swaps a
-//! file's bytes and the one way it takes a lock across processes.
+//! The crate's one way to replace a file's bytes and one way to take a cross-process lock.
 //!
-//! A replacement is crash-consistent: the bytes reach the disk under a fresh,
-//! unpredictable name beside the target, the rename makes them the target,
-//! and the directory is synced so the rename itself survives a power cut. A
-//! reader, or a box rebooted at any instant, sees the old bytes or the new
-//! ones, never an empty or half-written file.
+//! A replacement is crash-consistent (temporary beside the target, sync, rename, sync the
+//! directory): a reader or a rebooted box sees the old bytes or the new, never a partial file.
 
 use crate::present::Present as _;
 use std::fs::{File, OpenOptions, Permissions};
@@ -20,8 +16,7 @@ pub enum Mode {
     Private,
     /// `0o644`: a document other users of the box may read.
     Readable,
-    /// The target's own bits, and `0o600` for a new one: a store whose readers were chosen
-    /// where it was made, and widened by nobody's rewrite.
+    /// The target's own bits, and `0o600` for a new one, so no rewrite widens them.
     Kept,
 }
 
@@ -40,24 +35,18 @@ impl Mode {
 /// Make `path` hold exactly `bytes`, durably, creating its directory.
 ///
 /// # Errors
-/// The directory, the temporary, the write, a sync or the rename failing. A failure before
-/// the rename leaves the target as it was and no temporary; a failed directory sync after it
-/// leaves the new bytes in place, not yet known to survive a power cut.
+/// A failure before the rename leaves the target as it was and no temporary; a failed directory
+/// sync after it leaves the new bytes in place, not yet known to survive a power cut.
 pub fn replace(path: &Path, bytes: &[u8], mode: Mode) -> io::Result<()> {
     deliver(path, parent(path)?, bytes, mode)
 }
 
-/// [`replace`], staged in `staging` rather than beside the target: a maildir's `tmp/`, so no
-/// reader of the target's directory sees a file before it is whole. `staging` is on the
-/// target's filesystem, so the rename is atomic.
-///
-/// # Errors
-/// As [`replace`].
+/// [`replace`], staged in `staging` (a maildir's `tmp/`) rather than beside the target.
+/// `staging` must be on the target's filesystem, so the rename is atomic.
 pub fn deliver(path: &Path, staging: &Path, bytes: &[u8], mode: Mode) -> io::Result<()> {
     let dir = parent(path)?;
     let new_dirs = create_dirs(dir)?;
-    // A private file's new directory is private too: a key store made here lists to this user
-    // alone, whatever the umask said.
+    // A private file's new directories are 0o700 too, whatever the umask said.
     if mode == Mode::Private {
         for new_dir in new_dirs {
             std::fs::set_permissions(new_dir, Permissions::from_mode(0o700))?;
@@ -82,12 +71,8 @@ pub fn deliver(path: &Path, staging: &Path, bytes: &[u8], mode: Mode) -> io::Res
     Ok(())
 }
 
-/// Make `path` absent, durably: the file removed, if it was there, and its directory synced, so
-/// a removal survives a power cut; answers whether a file was there to remove. Removing what is
-/// not there succeeds, and still syncs, since an earlier removal may not have reached the disk.
-///
-/// # Errors
-/// The removal or the sync failing.
+/// Make `path` absent, durably; answers whether a file was there. Removing what is not there
+/// still syncs the directory, since an earlier removal may not have reached the disk.
 pub fn remove(path: &Path) -> io::Result<bool> {
     let removed = std::fs::remove_file(path).present()?.is_some();
     File::open(parent(path)?)
@@ -102,11 +87,8 @@ pub struct Held {
     _file: File,
 }
 
-/// Wait for, then take, the lock on `path`, creating it (and its directory)
-/// empty when absent and never truncating it.
-///
-/// # Errors
-/// The directory, the file or the lock failing.
+/// Wait for, then take, the lock on `path`, creating it empty when absent and never truncating
+/// it.
 pub fn hold(path: &Path) -> io::Result<Held> {
     create_dirs(parent(path)?)?;
     let file = OpenOptions::new()
@@ -118,8 +100,7 @@ pub fn hold(path: &Path) -> io::Result<Held> {
     Ok(Held { _file: file })
 }
 
-/// `dir` and any missing ancestor, each new entry synced into its parent, so a directory
-/// made for a file survives a power cut with it; answers the directories it made.
+/// `dir` and any missing ancestor, each synced into its parent; answers the directories made.
 fn create_dirs(dir: &Path) -> io::Result<Vec<&Path>> {
     let mut missing = Vec::new();
     let mut at = dir;

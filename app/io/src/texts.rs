@@ -1,6 +1,5 @@
 //! Salted texts on disk, one file per [`Text`] named by its [`TextName`], as a [`Doc`]:
-//! box-local and git-ignored beside the objects that name a text and never hold it. Forgetting
-//! removes the file; a file swapped under the store, or whose words do not read, reads as absent.
+//! box-local and git-ignored. A swapped file, or one whose words do not read, reads as absent.
 //!
 //! [`Doc`]: suzatary_core::store::Doc
 

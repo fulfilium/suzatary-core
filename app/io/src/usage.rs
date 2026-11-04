@@ -71,11 +71,7 @@ impl Transcripts {
         self
     }
 
-    /// Read everything inside the lookback into the cache and return the file count,
-    /// so the first page view after a restart does not pay for a cold walk.
-    ///
-    /// # Errors
-    /// The files being unreadable.
+    /// Read everything inside the lookback into the cache and return the file count.
     pub fn warm(&self) -> Result<usize, UsageError> {
         let files = self.files()?;
         for (path, modified, len) in &files {
@@ -145,11 +141,8 @@ impl Transcripts {
         Ok(found)
     }
 
-    /// Which project directories contributed a file inside the lookback, and which
-    /// were found but skipped, so nothing is dropped silently.
-    ///
-    /// # Errors
-    /// The root or one of its entries being unreadable.
+    /// Which project directories contributed a file inside the lookback, and which were found
+    /// but skipped.
     pub fn read_scope(&self) -> Result<Scope, UsageError> {
         let all = shallow_project_dirs(&self.root)?;
         let mut counted: std::collections::BTreeSet<String> = std::collections::BTreeSet::new();
@@ -294,7 +287,6 @@ fn shallow_project_dirs(root: &Path) -> Result<Vec<String>, UsageError> {
     Ok(names)
 }
 
-/// A path that could not be read, as the reader's one failure.
 fn unreadable(path: &Path, failed: &std::io::Error) -> UsageError {
     UsageError::Unreadable(format!("{}: {failed}", path.display()))
 }
@@ -550,9 +542,8 @@ fn read_remembered(path: &Path) -> HashMap<Window, Reported> {
         .collect()
 }
 
-/// Replaced whole, so a crash leaves the last reading or this one, never half of either. A
-/// failure is the cache's miss on the next start ([`read_remembered`]): the in-memory reading
-/// still serves this process, and this crate does not log.
+/// Replaced whole. A failure is ignored: it is only a cache miss on the next start, and this
+/// crate does not log.
 fn write_remembered(path: &Path, last_reported: &HashMap<Window, Reported>) {
     let stored: HashMap<Window, StoredReported> = last_reported
         .iter()
@@ -569,11 +560,10 @@ fn write_remembered(path: &Path, last_reported: &HashMap<Window, Reported>) {
     let _ = crate::durable::replace(path, text.as_bytes(), crate::durable::Mode::Private);
 }
 
-/// The transcripts plus the allowance endpoint, which is what the server wires.
+/// The transcripts plus the allowance endpoint.
 ///
-/// The endpoint answers about once an hour, so its last answer is cached and a page
-/// never waits on a socket. The last successful reading is kept in memory and on disk,
-/// so a 429 reports `RateLimited` alongside it rather than hiding it.
+/// The endpoint is asked at most hourly. The last successful reading is kept in memory and on
+/// disk, so a 429 reports `RateLimited` alongside it.
 pub struct Allowance {
     transcripts: Transcripts,
     secrets: Box<dyn Resolves + Send + Sync>,
@@ -637,9 +627,6 @@ impl Allowance {
     }
 
     /// Warm the transcript cache.
-    ///
-    /// # Errors
-    /// The files being unreadable.
     pub fn warm(&self) -> Result<usize, UsageError> {
         self.transcripts.warm()
     }
@@ -893,7 +880,6 @@ mod tests {
             .horizon()
             .expect("a horizon, since not everything was read");
         assert!(horizon < Utc::now() && horizon > Utc::now() - chrono::Duration::days(9));
-        // And a longer lookback opens it.
         let (dir2, wide) = fixture("wide");
         let wide = wide.looking_back(60);
         let stale2 = dir2
@@ -935,8 +921,6 @@ mod tests {
         assert_eq!(second.len(), 3, "the grown file was re-read: {second:?}");
     }
 
-    /// A root that is there and cannot be listed (a file where the directory belongs) is a
-    /// failure of every read, never an empty report.
     #[test]
     fn an_unreadable_root_is_an_error_never_nothing() {
         let dir = tempfile::tempdir().expect("a temp dir");
@@ -1043,8 +1027,7 @@ mod tests {
         )
     }
 
-    /// A token without `user:profile` is refused for good, so the page is told the refusal's own
-    /// words rather than "not read yet", and a reading remembered from before is not shown as now.
+    /// A token without `user:profile` is refused for good.
     #[test]
     fn a_scope_refusal_is_said_in_the_endpoints_words_over_a_remembered_reading() {
         let dir = tempfile::tempdir().expect("a temp dir");
@@ -1118,7 +1101,6 @@ mod tests {
         let written = std::fs::read_to_string(&path).expect("the file was written");
         assert!(written.contains("0.55"), "{written}");
 
-        // A second, throttled `Allowance` seeded from what the first one wrote.
         let path2 = dir.path().join("second.json");
         std::fs::write(&path2, &written).expect("seed the second file");
         let second = allowance_over(throttled_429("10"), &path2);

@@ -1,6 +1,5 @@
-//! The triage pass's pulse on disk, as two [`Doc`]s: the heartbeat, when a pass last ended
-//! well, at the instance's `mail.heartbeat`, and the outcome of the last pass beside it. This is
-//! their one reader and one writer, so the path and the line are spelled once.
+//! The triage pass's pulse on disk, as two [`Doc`]s: the heartbeat (when a pass last ended
+//! well) at the instance's `mail.heartbeat`, and the outcome of the last pass beside it.
 //!
 //! [`Doc`]: suzatary_core::store::Doc
 
@@ -22,7 +21,6 @@ pub struct Pulse {
 }
 
 impl Pulse {
-    /// The heartbeat at `heartbeat`, and the outcome beside it.
     #[must_use]
     pub fn at(heartbeat: &Path) -> Self {
         let beat = heartbeat.to_owned();
@@ -50,11 +48,8 @@ impl Pulse {
         }
     }
 
-    /// Record one more pass, ended as `pass` at `now`: the outcome follows the last one, and an
-    /// ok moves the heartbeat too.
-    ///
-    /// An outcome file that does not read starts the run of failures again, as an absent one
-    /// does, so one bad write cannot stop every later pass from being recorded.
+    /// Record one more pass; an ok moves the heartbeat too. An outcome file that does not read
+    /// starts the run of failures again, so one bad write cannot stop later passes being recorded.
     ///
     /// # Errors
     /// A file that cannot be written; a heartbeat already moved stays moved.
@@ -111,8 +106,6 @@ mod tests {
         Pulse::at(&dir.path().join("state").join("triage-heartbeat"))
     }
 
-    /// What `record` writes is what the brief reads back, from the heartbeat's directory: a
-    /// failure leaves the heartbeat where the last good pass put it, and counts the run.
     #[test]
     fn recorded_passes_read_back_beside_the_heartbeat() {
         let dir = tempfile::tempdir().expect("a temp dir");
@@ -158,7 +151,7 @@ mod tests {
         );
     }
 
-    /// A line the wrapper wrote before the verb existed, with no count, starts the run at one.
+    /// A line with no count starts the run at one.
     #[test]
     fn a_line_without_a_count_is_followed_by_the_second_failure() {
         let dir = tempfile::tempdir().expect("a temp dir");
@@ -173,8 +166,6 @@ mod tests {
         assert_eq!(next.line(), "failed 2026-10-07T08:05:00 verify 2");
     }
 
-    /// A line of neither shape reads as unparseable, never as absent, and the next pass writes
-    /// over it, starting the run at one.
     #[test]
     fn a_garbled_line_is_unparseable_and_the_next_pass_replaces_it() {
         let dir = tempfile::tempdir().expect("a temp dir");

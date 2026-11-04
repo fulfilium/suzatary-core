@@ -1,9 +1,5 @@
-//! A scratch directory: made fresh for one job, private to this user, named
-//! unpredictably, and removed with everything in it when dropped.
-//!
-//! It is created exclusively (`mkdtemp`), so a directory another user made in
-//! a shared root beforehand is never adopted, and `0o700`, so nothing a job
-//! unpacks or compiles in it is readable by anyone else.
+//! A scratch directory for one job, removed whole when dropped. Created exclusively (`mkdtemp`),
+//! so another user's directory in a shared root is never adopted, and `0o700`.
 
 use std::fs::Permissions;
 use std::io;
@@ -18,23 +14,16 @@ pub struct Scratch(TempDir);
 
 impl Scratch {
     /// A fresh directory under `root`, which is made when absent.
-    ///
-    /// # Errors
-    /// `root` or the directory could not be made.
     pub fn under(root: &Path, prefix: &str) -> io::Result<Self> {
         std::fs::create_dir_all(root)?;
         builder(prefix).tempdir_in(root).map(Self)
     }
 
     /// A fresh directory under the system's temporary directory.
-    ///
-    /// # Errors
-    /// The directory could not be made.
     pub fn temporary(prefix: &str) -> io::Result<Self> {
         builder(prefix).tempdir().map(Self)
     }
 
-    /// Where it is.
     #[must_use]
     pub fn path(&self) -> &Path {
         self.0.path()

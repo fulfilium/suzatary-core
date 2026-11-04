@@ -1,7 +1,5 @@
-//! Whether the model each job runs answers, on disk, as a [`Register`]: the value and its join
-//! are [`suzatary_core::health`]'s, keyed by the model's name, and the limits the subscription
-//! meets under [`suzatary_core::capability::SUBSCRIPTION`]. It lives beside the sources'
-//! health, box-local and never pushed, because it is this box's account of its own calls.
+//! Whether the model each job runs answers, on disk, as a [`Register`] keyed by the model's
+//! name; box-local and never pushed.
 
 use std::path::Path;
 use std::sync::Arc;
@@ -13,8 +11,7 @@ use crate::docs::{DocCodec, Docs};
 use crate::health_file::HealthFile;
 
 /// The register, one document (absent is a box that has called no model yet), and what to ring
-/// when a call moves an entry's reading between answering and refused, so the box's cards follow
-/// at once rather than at the next hourly filing.
+/// when a call moves an entry's reading between answering and refused.
 #[derive(Clone)]
 pub struct Answered {
     file: HealthFile<String>,
@@ -22,7 +19,6 @@ pub struct Answered {
 }
 
 impl Answered {
-    /// The same register, ringing `moved` when a reading moves.
     #[must_use]
     pub fn ringing(self, moved: impl Fn() + Send + Sync + 'static) -> Self {
         Self {
@@ -63,7 +59,6 @@ impl Register<String> for Answered {
     }
 }
 
-/// Its file's name, beside the heartbeat as the mail health is.
 pub const FILE: &str = "model-health.json";
 
 /// The register beside `heartbeat`, its lock beside it, ringing nothing.

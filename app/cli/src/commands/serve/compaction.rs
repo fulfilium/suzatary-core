@@ -2,14 +2,9 @@
 //! (`secretary::compaction::Paced`), woken at startup and whenever a write moves a
 //! conversation's lines, and asleep until the instant a hold frees.
 //!
-//! Startup is a nudge like any other, so the lines already stored are compacted by the same
-//! rule at the same pace as new ones: an import is no special path. One coordinator takes each
-//! round, so a round hands its idle workers distinct nodes from one reading, and takes again
-//! whenever a worker finishes or a nudge comes. A worker whose step failed (the model
-//! unreachable, the subscription down to its reserve) keeps its node and waits out a
-//! [`Backoff`] of its own that no nudge shortens, doubling from [`RETRY`] to [`RETRY_MOST`]
-//! while its failures repeat, while the other workers go on with theirs. Every call was
-//! counted before it was made, so retrying spends within the budget like any other step.
+//! One coordinator takes each round, so idle workers get distinct nodes from one reading. A
+//! worker whose step failed keeps its node and waits out its own [`Backoff`], which no nudge
+//! shortens. Every call is counted before it is made, so retries spend within the budget.
 
 use std::num::NonZeroUsize;
 use std::sync::Arc;
@@ -57,7 +52,6 @@ impl Backoff {
         Self(RETRY)
     }
 
-    /// The wait this failure owes, and the next one doubled.
     fn failed(&mut self) -> std::time::Duration {
         let wait = self.0;
         self.0 = (self.0 * 2).min(RETRY_MOST);
@@ -186,7 +180,6 @@ async fn run(
     }
 }
 
-/// One worker: each claim handed to it performed, and the worker said idle once it is let go.
 async fn work(
     slot: usize,
     caps: &'static Server<'static>,
@@ -235,7 +228,6 @@ async fn work(
     }
 }
 
-/// A firing as a log line names it: the node by its first twelve digits.
 fn logged(done: &Compacted) -> String {
     let short = |hash: &prodrome_core::event::Hash| hash.as_str()[..12].to_owned();
     match done {

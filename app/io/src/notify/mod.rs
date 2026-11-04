@@ -39,7 +39,6 @@ pub struct Channels<D: Log<String, Device>> {
 }
 
 impl<D: Log<String, Device>> Channels<D> {
-    /// The channels given, over `devices`, linking into the app at `app`.
     #[must_use]
     pub fn new(
         http: Box<dyn Http>,
@@ -104,10 +103,8 @@ impl<D: Log<String, Device> + Clone + Send + Sync> Notify for Configured<D> {
 }
 
 /// Channels whose secrets the store has not yet answered for: every push asks it again, holding
-/// no lock while it waits, and the first answer is kept, so the first push after the store is
-/// unlocked is delivered. Pushes are made off any request's path, so the wait a locked store
-/// costs falls on no one waiting. A push it cannot make is an error naming the store, never a
-/// silent zero.
+/// no lock while it waits, and keeps the first answer. A push it cannot make is an error naming
+/// the store, never a silent zero.
 pub struct Waiting<D: Log<String, Device>> {
     secrets: Box<dyn Resolves + Send + Sync>,
     reason: String,
@@ -117,7 +114,6 @@ pub struct Waiting<D: Log<String, Device>> {
 }
 
 impl<D: Log<String, Device> + Clone> Waiting<D> {
-    /// Channels over `devices`, their secrets asked of `secrets` when first pushed through.
     #[must_use]
     pub fn new(
         secrets: Box<dyn Resolves + Send + Sync>,
@@ -197,8 +193,6 @@ mod tests {
 
     const APP: &str = "https://box.example.ts.net";
 
-    // --- the fan-out, over a fake Http and a fake Devices ----------------------
-
     /// The token endpoint, and a send that is refused for `dead-token`.
     fn fake_http() -> Box<dyn Http> {
         Box::new(Scripted::new(|req| {
@@ -216,7 +210,6 @@ mod tests {
         }))
     }
 
-    /// A device store that fails the test if anything reads or writes it.
     #[derive(Clone)]
     struct PanicsIfAsked;
 
@@ -238,7 +231,6 @@ mod tests {
         }
     }
 
-    /// The promise "a dead FCM token is forgotten" kept on a real store, not asserted.
     #[test]
     fn the_fanout_forgets_a_dead_token_and_counts_only_the_live_one() {
         let dir = tempfile::tempdir().expect("a scratch dir");

@@ -24,7 +24,6 @@ use super::serve::route::Method;
 pub enum Conversation {
     /// A topic opened for it, as the topic bar's new topic opens one.
     New,
-    /// This one.
     Named(ConversationId),
 }
 
@@ -44,7 +43,6 @@ impl FromStr for Conversation {
 /// A question asked and answered.
 #[derive(Debug)]
 pub struct Asked {
-    /// Where it was asked.
     pub conversation: ConversationId,
     /// The name the box keeps the question's record under, which names the root key.
     pub request: prodrome_core::event::Hash,

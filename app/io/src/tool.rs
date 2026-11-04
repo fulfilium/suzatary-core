@@ -5,10 +5,8 @@ use std::path::Path;
 
 use crate::run::Cmd;
 
-/// `name` on `PATH`, else the same tool through the repository's `triage` devShell: the pinned
-/// binary either way. The shell is named, because a bare store path (the deployed code root) is
-/// read by `nix develop` as a derivation, not a flake, and the triage shell is the one the roots
-/// service keeps built.
+/// `name` on `PATH`, else through the repository's `triage` devShell. The shell is named because
+/// `nix develop` reads a bare store path as a derivation, not a flake.
 #[must_use]
 pub fn tool(repo: &Path, name: &str) -> Cmd {
     if on_path(name) {

@@ -18,7 +18,6 @@ use super::route::blocking;
 use super::secretary::conversation_named;
 use super::stores;
 
-/// How often [`events`] polls.
 const POLL_SECONDS: f64 = 2.0;
 
 /// The heads now, and again whenever they change, per chain.
@@ -49,9 +48,8 @@ pub async fn events(AxumState(state): AxumState<State>, raw: RawPathParams) -> R
         .into_response()
 }
 
-/// `GET /api/stores/events`: each store's heads now, and again whenever they change, one frame
-/// per store that moved, polled as [`events`] polls a chain's. One stream for every store, so a
-/// store the box adds costs a tab no connection of its own.
+/// `GET /api/stores/events`: each store's heads now and whenever they change, one frame per
+/// store that moved, on one stream for every store.
 pub async fn store_events(AxumState(state): AxumState<State>) -> Response {
     let caps = state.first.caps;
     let stream = async_stream::stream! {
@@ -142,7 +140,6 @@ async fn transcript_state(state: &State, id: ConversationId) -> ConversationStat
     .unwrap_or(ConversationState::Idle)
 }
 
-/// One frame, as the `data:` line's text; an encode failure would be a bug here.
 fn frame_json(frame: &wire::Frame) -> String {
     serde_json::to_string(frame).unwrap_or_default()
 }

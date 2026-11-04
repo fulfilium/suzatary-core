@@ -1,7 +1,5 @@
-//! Documents on disk, as an interpreter of [`Doc`]: one file per key, replaced whole. A set
-//! writes a sibling, syncs it, renames it over the file and syncs the directory, so a reader sees
-//! the old document or the new one, an interrupted write leaves the old one standing, and a kept
-//! write survives a crash.
+//! Documents on disk, as an interpreter of [`Doc`]: one file per key, replaced whole and
+//! atomically (sibling, sync, rename, sync the directory).
 
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -24,10 +22,8 @@ pub struct Docs<K: 'static, T: 'static> {
 /// refuse a value its name does not name.
 #[derive(Debug, Clone, Copy)]
 pub struct DocCodec<K, T> {
-    /// The bytes to keep for this value under this key.
     pub print: fn(&K, &T) -> Result<Vec<u8>, String>,
-    /// The value these bytes are under this key; `None` for bytes the key does not name, which
-    /// read as absent rather than as something else.
+    /// `None` for bytes the key does not name, which read as absent.
     pub parse: fn(&K, Vec<u8>) -> Result<Option<T>, String>,
 }
 
@@ -52,7 +48,6 @@ pub struct Locked<T: 'static> {
 }
 
 impl<T: 'static> Locked<T> {
-    /// `docs`, rewritten under `lock`.
     #[must_use]
     pub fn new(docs: Docs<(), T>, lock: PathBuf) -> Self {
         Self { docs, lock }
@@ -61,18 +56,12 @@ impl<T: 'static> Locked<T> {
 
 impl<T: Sync + 'static> Locked<T> {
     /// The document, `None` before the first write.
-    ///
-    /// # Errors
-    /// [`StoreError::Unreadable`].
     pub fn get(&self) -> Result<Option<T>, StoreError> {
         self.docs.get(&())
     }
 
     /// Hold the lock, hand `step` what the document holds, and write what it answers, `None`
     /// writing nothing; answer what the document holds after.
-    ///
-    /// # Errors
-    /// The lock, the read or the write failing.
     pub fn rewrite(
         &self,
         step: impl FnOnce(Option<&T>) -> Option<T>,
@@ -127,16 +116,12 @@ impl<K: 'static, T: 'static> Docs<K, T> {
         }
     }
 
-    /// Where one document lives.
     #[must_use]
     pub fn path(&self, key: &K) -> PathBuf {
         (self.path)(key)
     }
 
     /// The document's size, from the filesystem and before its bytes are read.
-    ///
-    /// # Errors
-    /// [`StoreError::Absent`] and [`StoreError::Unreadable`].
     pub fn size(&self, key: &K) -> Result<u64, StoreError> {
         let path = self.path(key);
         std::fs::metadata(&path)

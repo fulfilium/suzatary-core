@@ -57,29 +57,22 @@ pub enum Acting {
     NotYet,
     /// The real performers; no `Instance` field, so a test can build one without an instance file.
     Real {
-        /// The instance file an account is resolved against as it reads at the tap, so an account
-        /// connected since the server started signs in like one `suzatary auth` reads.
+        /// Read at the tap, so an account connected since the server started signs in.
         roster: Arc<dyn suzatary_core::settings::Edits + Send + Sync>,
-        /// Where the act's turns land.
         conversations: ActingConversations,
-        /// Where the grant lands.
         tokens: suzatary_io::oauth::TokenStore,
-        /// The inbox the act's proposal is filed in, where the flow's thread records its end.
+        /// Where the flow's thread records the act's end.
         inbox: ActingInbox,
-        /// The stream table the server shares, so an announce here reaches an open page; the
-        /// flow writes its turns straight to the file, since the worker would claim Thinking.
+        /// So an announce reaches an open page; the flow writes its turns straight to the file,
+        /// since the worker would claim Thinking.
         workers: Arc<crate::commands::serve::Workers>,
-        /// What a tapped change to a repository is pushed through.
         publishing: Arc<Publishing>,
-        /// What a tapped document is read through.
         drive: Arc<suzatary_io::drive::ReadOnly>,
         /// Where a tapped document is kept for the model.
         kept: suzatary_io::blobs::Blobs,
-        /// What a tapped coding session is started through.
         coder: Arc<crate::commands::coding::Coder>,
-        /// The sign-ins a tapped Connect card begins, which the server's code cards finish.
+        /// Begun by a Connect card's tap, finished by the code card's.
         signing: Arc<crate::commands::serve::sign_ins::SignIns>,
-        /// What a tapped calendar event is written through.
         google: Arc<suzatary_io::google::Grants>,
         /// Rung when a device flow ends, so the box files again and reads the grant it stored.
         ended: Arc<dyn Fn() + Send + Sync>,
@@ -88,26 +81,17 @@ pub enum Acting {
     /// browser scene against it is deterministic.
     #[cfg(feature = "fixture")]
     Recording {
-        /// Where the act's turns land.
         conversations: ActingConversations,
-        /// The stream table the server shares, so an open page refetches.
         workers: Arc<crate::commands::serve::Workers>,
-        /// What a tapped change is pushed through: the fixture's own local
-        /// repositories, never GitHub.
+        /// The fixture's own local repositories, never GitHub.
         publishing: Arc<Publishing>,
-        /// What a tapped document is read through: the CLI the fixture's
-        /// instance names, where nothing is.
         drive: Arc<suzatary_io::drive::ReadOnly>,
-        /// Where a tapped document is kept for the model.
         kept: suzatary_io::blobs::Blobs,
-        /// What a tapped coding session is started through: the fixture
-        /// declares no routine, so a tap is refused in words.
+        /// The fixture declares no routine, so a tap is refused in words.
         coder: Arc<crate::commands::coding::Coder>,
-        /// The sign-ins a tapped Connect card begins, with the `claude` the fixture's `PATH`
-        /// finds (a fake, under the browser suite).
+        /// Uses the `claude` the fixture's `PATH` finds (a fake, under the browser suite).
         signing: Arc<crate::commands::serve::sign_ins::SignIns>,
-        /// What a tapped calendar event is written through: the fixture's fake Google, never
-        /// Google's own.
+        /// The fixture's fake Google, never Google's own.
         google: Arc<suzatary_io::google::Grants>,
     },
 }
@@ -124,9 +108,7 @@ pub type ActingInbox =
 /// pages read one copy of each store in the process.
 #[derive(Clone, Copy)]
 pub struct ActingStores {
-    /// The conversations.
     pub conversations: ActingConversations,
-    /// The inbox.
     pub inbox: ActingInbox,
 }
 
@@ -162,7 +144,6 @@ impl suzatary_io::secrets::Resolves for NoToken {
 /// What a tapped patch is proposed through, as a pull request: the mirrors, which hold each
 /// repository's check as the instance file declared it.
 pub struct Publishing {
-    /// The same mirrors the secretary's reads go through.
     pub mirrors: Arc<suzatary_io::repos::Mirrors>,
     /// Who commits a tapped patch, resolved once when the server starts; `None` refuses the
     /// push and says why.
@@ -170,7 +151,6 @@ pub struct Publishing {
 }
 
 impl Publishing {
-    /// Open one tapped patch as a pull request, or say why not.
     fn publish(
         &self,
         id: &suzatary_core::secretary::store::ConversationId,
@@ -234,7 +214,6 @@ impl Publishing {
 }
 
 impl Acting {
-    /// The shipped build's performers, read off the instance file.
     #[must_use]
     pub fn real(
         instance: &Instance,
@@ -304,7 +283,6 @@ impl Acting {
         }
     }
 
-    /// A tapped calendar event, written into the account's own calendar under its kept grant.
     fn calendar_event(
         &self,
         account: &suzatary_core::mail::address::EmailAddress,
@@ -344,7 +322,6 @@ impl Acting {
         }
     }
 
-    /// A tapped Connect card: the sign-in begun, holding its terminal until the code card's tap.
     fn sign_in(&self, object: &suzatary_core::secretary::inbox::ProposalId) -> Performed {
         use suzatary_core::capability::Clock as _;
         let now = suzatary_io::clock::SystemClock.now();
@@ -361,7 +338,6 @@ impl Acting {
         }
     }
 
-    /// A tapped document, read through the same interpreter as an allowed read.
     fn read_document(
         &self,
         id: &suzatary_core::secretary::store::ConversationId,
@@ -1348,7 +1324,6 @@ enum BackfillRun {
     Apply(std::path::PathBuf),
 }
 
-/// The morning brief's question, which lives in core so transcripts can be read for answers.
 pub(crate) use suzatary_core::secretary::briefs::BRIEF;
 
 /// How stale the triage heartbeat must be before [`brief`] says so; the timer fires every five
@@ -1737,20 +1712,18 @@ pub fn migrate_scrub(
     Ok(Some(done))
 }
 
-/// The conversations' store, beside the instance's `[secretary] conversations`.
 fn conversations(instance: &Instance) -> suzatary_io::conversations::ConversationStores {
     instance.conversation_stores()
 }
 
-/// The inbox store at the proposal schema, beside the instance's `[secretary] inbox`.
 fn inbox(
     instance: &Instance,
 ) -> suzatary_io::objects::Objects<suzatary_core::secretary::inbox_event::InboxEvent> {
     instance.inbox_store()
 }
 
-/// The operator's twin of `POST …/proposals/<n>/dismiss`; public so the CLI's tests drive it.
-/// With no `actor` it is the first chain's owner who dismisses.
+/// The operator's twin of `POST …/proposals/<n>/dismiss`; with no `actor`, the first chain's
+/// owner dismisses.
 ///
 /// # Errors
 /// The instance file's, the actor's, and the store's.
@@ -1844,7 +1817,6 @@ fn wired(instance: &Instance, first: Option<&str>) -> anyhow::Result<Wired> {
 }
 
 impl Wired {
-    /// The secretary's record over the first chain.
     fn secretary(&self) -> Secretary<'_> {
         self.opened.secretary(&self.first, &self.brain)
     }
@@ -1955,8 +1927,7 @@ pub fn scripted_brief(
     run_brief(instance, &wired, title, true).map(|_| ())
 }
 
-/// What a brief files before its round, needing no model: an account failing past a day
-/// proposes its todo once on the project's chain. A refusal is said and costs the brief nothing.
+/// What a brief files before its round, needing no model; a refusal costs the brief nothing.
 /// The box's own cards are the server's to file, since it alone holds the sign-ins they include.
 fn unasked(
     instance: &Instance,
@@ -2091,7 +2062,6 @@ fn run_brief(
         &id,
     );
 
-    // Also before it: what the box files needing no model.
     unasked(instance, &chains, &id);
 
     let answered = ask_brief(instance, wired, &chains, &id, caps.model.limited())?;
@@ -2429,7 +2399,6 @@ fn reviews(instance: &Instance, since: Option<&str>) -> anyhow::Result<()> {
     let store = conversations(instance);
     let found = suzatary_core::secretary::review::reviews(store.conversations(), day)
         .map_err(|refusal| anyhow::anyhow!("{}", refusal.message()))?;
-    // A conversation that does not read is said, and the log of the rest is still printed.
     for unreadable in &found.unreadable {
         eprintln!("secretary: {unreadable}");
     }
@@ -2467,7 +2436,6 @@ fn reviews(instance: &Instance, since: Option<&str>) -> anyhow::Result<()> {
     for (_, line) in lines {
         println!("{line}");
     }
-    // The outage's extent is a fact about the set, so it is stated once under the log.
     if let (Some(first), Some(last)) = (failed.first(), failed.last()) {
         println!(
             "secretary: {} review(s) could not run between {} and {} — {} batch(es) stood unanswered at the last one",

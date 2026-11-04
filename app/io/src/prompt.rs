@@ -1,6 +1,5 @@
-//! The one prompt builder, shared by every interpreter: what a transcript looks like to a model
-//! is the contract, and a second rendering would be a second reading of it. [`delta_prompt`]
-//! and [`prompt_of`] share `format_turn`, so a resumed session reads a turn as a cold one does.
+//! The one prompt builder, shared by every interpreter. [`delta_prompt`] and [`prompt_of`]
+//! share `format_turn`, so a resumed session reads a turn as a cold one does.
 
 use std::fmt::Write as _;
 
@@ -10,8 +9,8 @@ use suzatary_core::for_model::ForModel;
 use suzatary_core::reference::Reference;
 use suzatary_core::secretary::turn_shape::{self, TurnShape};
 
-/// The whole conversation in the two pieces a wire needs, built together rather than cut apart:
-/// a wire with no `system` field reads [`Prompt::joined`].
+/// The whole conversation as a system and a user piece; a wire with no `system` field reads
+/// [`Prompt::joined`].
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Prompt {
     /// The rules the secretary works under, from the conversation.
@@ -28,8 +27,7 @@ impl Prompt {
     }
 }
 
-/// The whole conversation as a [`Prompt`]: a labelled transcript and a JSON verb list, plain so
-/// any model that turns text into text can answer it.
+/// The whole conversation as a [`Prompt`]: a labelled transcript and a JSON verb list.
 #[must_use]
 pub fn prompt_of(conversation: &Conversation, tools: &serde_json::Value, reads: Reads) -> Prompt {
     let mut user = String::new();
@@ -63,8 +61,8 @@ pub fn prompt_of(conversation: &Conversation, tools: &serde_json::Value, reads: 
     }
 }
 
-/// The turns since the model last answered with no calls: `SessionModel::resume`'s message.
-/// No header or verb list, which the session already holds from the call that opened it.
+/// The turns since the model last answered with no calls: `SessionModel::resume`'s message,
+/// without the header or verb list the session already holds.
 #[must_use]
 pub fn delta_prompt(delta: &Delta, reads: Reads) -> ForModel {
     let mut out = String::new();
@@ -75,7 +73,6 @@ pub fn delta_prompt(delta: &Delta, reads: Reads) -> ForModel {
     ForModel::of(&out)
 }
 
-/// One turn, labelled; the one spelling [`prompt_of`] and [`delta_prompt`] share.
 fn format_turn(out: &mut String, turn: &Turn, reads: Reads) {
     match turn {
         Turn::Person {
@@ -86,9 +83,8 @@ fn format_turn(out: &mut String, turn: &Turn, reads: Reads) {
             out.push_str("OWNER: ");
             out.push_str(text);
             out.push_str(&pointing(references));
-            // The latest photos and PDFs travel as image and document blocks
-            // beside this text; the marker ties each one to the turn it came on.
-            // The whole id, since `{"upload": <id>}` is how propose_email attaches one.
+            // Photos and PDFs travel as blocks beside this text; the marker ties each to its
+            // turn. The whole id, since `{"upload": <id>}` is how propose_email attaches one.
             for upload in attachments {
                 let (id, media) = (upload.id.as_str(), upload.media_type.as_str());
                 let _ = match (&upload.private, &upload.name) {
@@ -109,8 +105,7 @@ fn format_turn(out: &mut String, turn: &Turn, reads: Reads) {
                 };
             }
         }
-        // An act is the box's sentence about what the owner did, not his words, so the model does
-        // not answer it as a question.
+        // The box's sentence about what the owner did, labelled so the model does not answer it.
         Turn::Act { text, references } => {
             out.push_str("OWNER DID: ");
             out.push_str(text);
@@ -143,7 +138,6 @@ fn format_turn(out: &mut String, turn: &Turn, reads: Reads) {
                 enclosed(out, file, reads);
             }
         }
-        // The kept prose, or the box's one sentence for why it is gone, under the turn's label.
         Turn::Erased { shape, words } => {
             let prose = turn_shape::prose(words);
             match shape {
@@ -194,7 +188,6 @@ pub enum Reads {
     Text,
 }
 
-/// One file on a verb's answer: a marker the file's block answers to, or its text in its place.
 fn enclosed(out: &mut String, file: &Enclosed, reads: Reads) {
     // The whole id: an email attaches this copy as {"kept": <id>}.
     let id = file.id.as_str();
@@ -225,8 +218,7 @@ fn enclosed(out: &mut String, file: &Enclosed, reads: Reads) {
     };
 }
 
-/// What a turn pointed at, in the text form the model answers in: an index, since the contents
-/// are already in the transcript as `VERB reference:` answers.
+/// An index only: the contents are already in the transcript as `VERB reference:` answers.
 fn pointing(references: &[Reference]) -> String {
     if references.is_empty() {
         return String::new();

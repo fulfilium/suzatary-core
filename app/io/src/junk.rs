@@ -19,24 +19,19 @@ use suzatary_core::mail::{MAX_BODY_CHARS, clip};
 use crate::imap::{IMAP_HOST, IMAP_PORT, TlsStream, authenticated};
 use crate::oauth::TokenStore;
 
-/// How many UIDs one header `FETCH` names.
+/// UIDs per header `FETCH`.
 const FETCH_CHUNK: usize = 200;
 
-/// The header fields a digest reads, peeked so nothing is marked seen.
+/// Peeked, so nothing is marked seen.
 const HEADERS: &str = "(UID BODY.PEEK[HEADER.FIELDS (FROM SUBJECT DATE)])";
 
-/// One whole message, peeked.
 const WHOLE: &str = "(UID BODY.PEEK[])";
 
 /// How a session is opened for an account: authenticated, nothing selected.
 pub trait Connect {
-    /// What the session runs over.
     type Stream: Read + Write;
 
-    /// An authenticated session for `account`.
-    ///
-    /// # Errors
-    /// [`JunkFailure::NeedsLogin`] without a silent token, else [`JunkFailure::Unreachable`].
+    /// [`JunkFailure::NeedsLogin`] without a silent token.
     fn open(&self, account: &MailAccount) -> Result<imap::Session<Self::Stream>, JunkFailure>;
 }
 
@@ -48,7 +43,6 @@ pub struct SignedIn {
 }
 
 impl SignedIn {
-    /// Over this store's grants.
     #[must_use]
     pub fn new(tokens: TokenStore) -> Self {
         Self { tokens }
@@ -72,7 +66,7 @@ impl Connect for SignedIn {
     }
 }
 
-/// Reads the seed file as the derivation wrote it, one normalised domain per line.
+/// The seed file as the derivation wrote it: one normalised domain per line.
 fn read_seed(path: &std::path::Path) -> std::io::Result<Vec<String>> {
     let text = std::fs::read_to_string(path)?;
     Ok(text
@@ -92,8 +86,6 @@ pub struct OutlookJunk<C> {
 }
 
 impl<C: Connect> OutlookJunk<C> {
-    /// The roster's Microsoft accounts, the declared churn, the seed's path and how to open a
-    /// session.
     #[must_use]
     pub fn new(roster: &Roster, churn: ChurnList, seed_path: Option<PathBuf>, connect: C) -> Self {
         Self {
@@ -116,7 +108,6 @@ impl<C: Connect> OutlookJunk<C> {
             .ok_or_else(|| JunkFailure::Unknown(email.to_owned()))
     }
 
-    /// Open, `EXAMINE` the Junk folder, run `read`, log out.
     fn reading<T>(
         &self,
         email: &str,
@@ -139,8 +130,7 @@ impl<C: Connect + Sync> Junk for OutlookJunk<C> {
     }
 
     fn churn(&self) -> ChurnList {
-        // The seed file is read on every digest so a rebuilt seed needs no restart; an unreadable
-        // one answers as no seed.
+        // Read on every digest so a rebuilt seed needs no restart.
         let Some(path) = &self.seed_path else {
             return self.churn.clone();
         };
@@ -174,7 +164,6 @@ struct Examined<S: Read + Write> {
 }
 
 impl<S: Read + Write> Examined<S> {
-    /// `LIST`, pick the Junk folder, `EXAMINE` it.
     fn open(mut session: imap::Session<S>, account: &MailAccount) -> Result<Self, JunkFailure> {
         let names = session
             .list(Some(""), Some("*"))
@@ -204,7 +193,6 @@ impl<S: Read + Write> Examined<S> {
         })
     }
 
-    /// Every header that arrived on or after `since`.
     fn headers(&mut self, since: NaiveDate) -> Result<Vec<JunkHeader>, JunkFailure> {
         let mut uids: Vec<u32> = self
             .session
@@ -231,7 +219,6 @@ impl<S: Read + Write> Examined<S> {
         Ok(headers)
     }
 
-    /// One message, whole.
     fn message(&mut self, uid: Uid) -> Result<JunkMessage, JunkFailure> {
         let fetches = self
             .session
@@ -248,7 +235,7 @@ impl<S: Read + Write> Examined<S> {
         Ok(message_of(self.account.email.as_str(), uid, raw))
     }
 
-    /// `LOGOUT`; a close the server fumbles changes nothing already read.
+    /// A close the server fumbles changes nothing already read.
     fn logout(mut self) {
         let _ = self.session.logout();
     }
@@ -261,7 +248,6 @@ fn unreachable(account: &MailAccount, failed: &impl std::fmt::Display) -> JunkFa
     }
 }
 
-/// A header block (or a whole message) read as a [`JunkHeader`].
 fn header_of(uid: Uid, bytes: &[u8]) -> JunkHeader {
     let parsed = MessageParser::default().parse(bytes);
     header_from(uid, parsed.as_ref())
@@ -326,7 +312,6 @@ mod tests {
 
     use super::*;
 
-    /// Every command a verb in this module may send.
     const ALLOWED: [&str; 6] = [
         "LOGIN",
         "LIST",
@@ -341,7 +326,6 @@ mod tests {
         "STORE", "COPY", "MOVE", "EXPUNGE", "APPEND", "DELETE", "SELECT", "CREATE", "RENAME",
     ];
 
-    /// One Junk message a scripted server holds.
     struct Held {
         header: String,
         raw: String,
@@ -468,8 +452,6 @@ mod tests {
         }
     }
 
-    /// A [`Connect`] that logs in to a fresh [`Scripted`] server, sharing its command log with the
-    /// test.
     struct Fake {
         log: Arc<Mutex<Vec<String>>>,
         folders: Vec<(&'static str, &'static str)>,
@@ -555,8 +537,6 @@ mod tests {
         NaiveDate::from_ymd_opt(2026, 8, 28).expect("a date")
     }
 
-    /// Every command on the wire is allowed, none forbidden, the folder is `EXAMINE`d and every
-    /// fetch peeks.
     #[test]
     fn a_digest_and_a_show_send_nothing_that_could_change_the_mailbox() {
         let (junk, log) = junk(vec![
@@ -617,8 +597,6 @@ mod tests {
         );
     }
 
-    /// An account with no stored grant is a sentence naming the verb to run, and nothing is
-    /// dialled.
     #[test]
     fn a_missing_grant_is_needs_login_and_nothing_is_dialled() {
         let dir = std::env::temp_dir().join(format!(

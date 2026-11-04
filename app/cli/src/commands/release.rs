@@ -1,7 +1,6 @@
 //! `suzatary release` — the version the project chain reads, and the release a train cuts.
 //!
-//! The rule is `suzatary_core::release`'s; this verb reads the chain the plan names, and
-//! `scripts/train.sh` writes a tree and a tag only from what it prints.
+//! `scripts/train.sh` writes a tree and a tag only from what this verb prints.
 
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
@@ -200,7 +199,6 @@ struct Chain<'a> {
 }
 
 impl Chain<'_> {
-    /// Its binding events.
     fn binding(&self) -> impl Iterator<Item = &suzatary_core::record::TodoEvent> {
         binding(self.nodes, &self.dir.policy.untrusted)
     }
@@ -220,7 +218,6 @@ impl Chain<'_> {
             .map(|record| markup_text(record.payload.body.as_str()))
     }
 
-    /// Whether `todo` was completed by a binding event.
     fn completed(&self, todo: &TodoId) -> bool {
         self.binding()
             .any(|event| matches!(event, TodoEvent::Completed(e) if e.todo == *todo))
@@ -426,7 +423,6 @@ impl Files {
     }
 }
 
-/// The release `files` declare.
 fn released(files: &Files) -> anyhow::Result<Released> {
     Released::parse(&readable(&files.released)?)
         .with_context(|| format!("reading {}", files.released.display()))

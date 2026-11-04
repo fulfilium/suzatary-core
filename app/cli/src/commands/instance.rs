@@ -219,8 +219,6 @@ mod tests {
         }
     }
 
-    /// LAW: on every key `instance.sample.toml` sets, `get` answers the value `Instance::read`
-    /// parsed there: the file's typed reading, printed back, holds that key and that value.
     #[test]
     fn get_agrees_with_the_reader_on_every_key_of_the_sample() {
         let path = sample();
@@ -244,8 +242,6 @@ mod tests {
         }
     }
 
-    /// `set` keeps every other byte, takes its key's type, makes the tables on its way, and
-    /// writes nothing the box would refuse.
     #[test]
     fn set_writes_one_value_and_nothing_the_box_would_refuse() {
         let dir = tempfile::tempdir().expect("scratch");
@@ -279,8 +275,6 @@ mod tests {
         assert_eq!(get(&path, &key("persona.city")).expect("reads"), "Paris");
     }
 
-    /// `set` and a tap's edit take the one lock beside the file: while another process holds
-    /// it, neither writes, and once it is let go both do, neither losing the other's change.
     #[test]
     fn set_and_a_tap_wait_for_the_lock_beside_the_file() {
         use suzatary_core::settings::Edits as _;

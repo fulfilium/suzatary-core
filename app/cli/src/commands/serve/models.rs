@@ -1,5 +1,4 @@
-//! The Claude models this deployment runs, as the server names them and the Models group lists
-//! them.
+//! The Claude models this deployment runs.
 
 use suzatary_core::model_name::ModelName;
 use suzatary_core::secretary::compacting::Compacting;
@@ -7,20 +6,17 @@ use suzatary_core::settings::overview::{Calls, ModelJob};
 
 use crate::instance::{Instance, Reserve};
 
-/// What `[secretary]` names: the model the conversation, the reviews and the titles run, and
-/// the compactor's.
+/// The models `[secretary]` names.
 #[derive(Debug, Clone)]
 pub struct Models {
-    /// `[secretary] model`.
+    /// `[secretary] model`: the conversation, the reviews and the titles.
     pub chat: ModelName,
-    /// `[secretary] compact` and the compactor's model.
     pub compacting: Compacting,
     /// `[secretary] reserve`, the share the compactor leaves.
     pub reserve: Reserve,
 }
 
 impl Models {
-    /// What `instance`'s `[secretary]` names.
     #[must_use]
     pub fn of(instance: &Instance) -> Self {
         Self {
@@ -36,7 +32,6 @@ impl Models {
         suzatary_io::model::name_of(self.chat.as_str())
     }
 
-    /// One line per job, the compactor's saying how much of the subscription it leaves.
     #[must_use]
     pub fn jobs(&self) -> Vec<ModelJob> {
         let compactor = match &self.compacting {

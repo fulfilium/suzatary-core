@@ -11,8 +11,8 @@ use suzatary_core::secretary::attached::Attached;
 
 use crate::docs::{DocCodec, Docs};
 
-/// The tapped files kept beside `kept`, the files verbs hand the model, in `tapped/` inside its
-/// directory and so in its tier: one document each, readable by this user alone.
+/// The tapped files, in `tapped/` beside `kept` and so in its tier: one document each, readable
+/// by this user alone.
 #[must_use]
 pub fn beside(kept: &crate::blobs::Blobs) -> Docs<HeldFile, Attached> {
     let dir = kept

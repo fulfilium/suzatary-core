@@ -1,8 +1,6 @@
-//! `suzatary weather` — the one line the briefing reads.
+//! `suzatary weather`: the one line the briefing reads.
 //!
-//! One line on stdout, caveat included: the only consumer reads a line, so a warning
-//! about an untrusted feed rides on it rather than on stderr, where nobody sees it.
-//! The city and timezone come from the instance's `[persona]`.
+//! A warning about an untrusted feed rides on that stdout line, not stderr, where nobody sees it.
 
 use std::path::Path;
 

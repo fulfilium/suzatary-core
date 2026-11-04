@@ -1,12 +1,11 @@
 //! The system clock, as an interpreter of [`Clock`].
 //!
-//! UTC, whatever zone the machine is set to: an `at` is a point in time, spelt naive because the
-//! Prodrome's literal has no zone, and UTC by definition so every writer spells one moment alike.
-//! `at` is data: nothing orders by it, and a wrong clock is reported, never clamped here.
+//! Always UTC whatever the machine's zone, spelt naive because the Prodrome's literal has no
+//! zone. A wrong clock is reported elsewhere, never clamped here.
 
 use suzatary_core::capability::{Clock, Datetime};
 
-/// The box's own wall clock; a clock that could be pointed elsewhere would be a fake.
+/// The box's own wall clock.
 #[derive(Debug, Clone, Copy, Default)]
 pub struct SystemClock;
 

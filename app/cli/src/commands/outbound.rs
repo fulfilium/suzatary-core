@@ -1,8 +1,5 @@
-//! What leaves the box, as the Markdown `AGENT.md` holds between its outbound markers: every
-//! destination this program sends to, what it receives and how to turn it off, read from the
-//! constants the code sends by (the hosts, the push's own words, the model's quiet switches,
-//! the box-local tier's files). `suzatary doctor --outbound` prints it, and a guard holds the
-//! committed file to it, so the guide cannot describe a box the code does not build.
+//! What leaves the box: the Markdown between `AGENT.md`'s outbound markers, built from the
+//! constants the code sends by. A guard holds the committed file to `markdown()`.
 
 use std::fmt::Write as _;
 use std::num::NonZeroUsize;
@@ -22,9 +19,7 @@ pub const END: &str = "<!-- end of outbound -->";
 
 /// One place something is sent.
 struct Destination {
-    /// Who, and where.
     to: String,
-    /// What it is handed.
     receives: String,
     /// How to send it nothing.
     off: String,

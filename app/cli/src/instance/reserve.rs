@@ -9,8 +9,6 @@ use serde::{Deserialize, Serialize};
 pub struct Reserve(f64);
 
 impl Reserve {
-    /// Parse one.
-    ///
     /// # Errors
     /// [`BadReserve`] outside `[0, 1]`, NaN included.
     pub fn parse(share: f64) -> Result<Self, BadReserve> {
@@ -21,7 +19,6 @@ impl Reserve {
         }
     }
 
-    /// The share.
     #[must_use]
     pub const fn get(self) -> f64 {
         self.0

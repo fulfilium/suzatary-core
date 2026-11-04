@@ -4,9 +4,9 @@ use std::path::{Path, PathBuf};
 
 use suzatary_core::settings::EditError;
 
-/// The lock every edit of the instance file at `path` holds from its read to its write, in this
-/// process or another (`suzatary instance set` takes it too): an `flock` on a file beside it,
-/// never on the file itself, which every write renames a new file over.
+/// The lock every edit of the instance file holds from read to write, across processes
+/// (`suzatary instance set` takes it too): an `flock` on a sidecar, never on the file itself,
+/// which every write renames a new file over.
 ///
 /// # Errors
 /// The lock file cannot be made or locked.
@@ -19,15 +19,12 @@ pub fn editing(path: &Path) -> Result<suzatary_io::durable::Held, EditError> {
 
 /// Edits to the instance file that keep every other byte of it.
 ///
-/// Through `toml_edit` rather than the serde `File`, because a serde round trip
-/// would keep the data and drop every comment the operator wrote.
+/// Through `toml_edit`, not the serde `File`, whose round trip drops the operator's comments.
 pub struct InstanceEdits {
-    /// Owned, so the editor can outlive one `Instance`.
     path: PathBuf,
 }
 
 impl InstanceEdits {
-    /// Edit the file at `path`.
     #[must_use]
     pub fn new(path: PathBuf) -> Self {
         Self { path }
@@ -37,9 +34,8 @@ impl InstanceEdits {
         std::fs::read_to_string(&self.path).map_err(|failed| EditError::Io(failed.to_string()))
     }
 
-    /// Under the lock: the file read once, `edit` asked what it becomes, and that written whole,
-    /// so a reader sees only the old file or the new one; a text `edit` leaves as it was is not
-    /// written.
+    /// Under the lock: read once, apply `edit`, replace the file whole (a reader sees old or new);
+    /// an unchanged text is not written.
     fn edit(
         &self,
         edit: impl FnOnce(&Path, &str) -> Result<String, EditError>,
@@ -68,7 +64,6 @@ impl InstanceEdits {
     }
 }
 
-/// `text` as concrete syntax.
 fn doc(text: &str) -> Result<toml_edit::DocumentMut, EditError> {
     text.parse()
         .map_err(|failed: toml_edit::TomlError| EditError::Malformed(failed.to_string()))
@@ -119,8 +114,7 @@ impl suzatary_core::settings::Edits for InstanceEdits {
 }
 
 impl InstanceEdits {
-    /// Append `text` to the `[secretary]` list `key`, once: an "Always allow"
-    /// already given is the same answer.
+    /// Append `text` to the `[secretary]` list `key`, once.
     fn allow(&self, key: &str, text: String) -> Result<(), EditError> {
         self.edit_doc(|doc| {
             let secretary = doc

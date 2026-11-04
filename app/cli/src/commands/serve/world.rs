@@ -8,8 +8,8 @@ use super::interpreters::{Brain, Ledger, Peers, transcripts};
 use crate::instance::Instance;
 use crate::wiring::{Opened, Stores};
 
-/// [`Opened`], once for every chain, and what only a server holds: who each peer is, push, the
-/// devices and the usage page. A second chain is a second [`Stores`].
+/// [`Opened`] plus what only a server holds (peers, push, devices, usage), and one [`Stores`]
+/// per chain.
 pub struct World {
     opened: Opened,
     peers: Peers,
@@ -19,9 +19,7 @@ pub struct World {
     usage: Metered,
     /// Each chain's stores, in the instance file's order.
     pub chains: Vec<Stores>,
-    /// What the box signs with: each chain's writer signs with the root, and a tapped device
-    /// card registers keys with it; missing keys leave every write refusing and every read as
-    /// it was.
+    /// What the box signs with; missing keys leave every write refusing and every read as it was.
     pub signers: suzatary_core::signatures::Signers,
 }
 
@@ -89,8 +87,7 @@ impl World {
         }
     }
 
-    /// The server's record over one chain's stores: the secretary's, and what only a server
-    /// holds beside it.
+    /// The server's record over one chain's stores.
     #[must_use]
     pub fn server<'a>(&'a self, stores: &'a Stores) -> Server<'a> {
         Server {

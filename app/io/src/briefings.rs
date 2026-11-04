@@ -19,7 +19,6 @@ pub struct BriefingFiles {
 }
 
 impl BriefingFiles {
-    /// The store over `dir`, ordinarily the data tree's `briefings/`.
     #[must_use]
     pub fn new(dir: PathBuf) -> Self {
         Self { dir }
@@ -29,7 +28,6 @@ impl BriefingFiles {
 impl Briefings for BriefingFiles {
     fn all(&self) -> Result<Vec<(NaiveDate, String)>, BriefingError> {
         let unreadable = |err: std::io::Error| BriefingError::Unreadable(err.to_string());
-        // No directory yet is no briefings yet.
         let Some(entries) = std::fs::read_dir(&self.dir).present().map_err(unreadable)? else {
             return Ok(Vec::new());
         };
@@ -56,14 +54,11 @@ impl Briefings for BriefingFiles {
             };
             rows.push((day, source));
         }
-        // Newest first; how many a page gets is the route's decision about a response size.
         rows.sort_by_key(|(day, _)| std::cmp::Reverse(*day));
         Ok(rows)
     }
 
     fn read(&self, day: NaiveDate) -> Result<String, BriefingError> {
-        // A parsed `NaiveDate` formats to `DATE_LEN` characters with no `/`, so no path this
-        // builds leaves `self.dir`.
         let stamp = day.format("%Y-%m-%d").to_string();
         debug_assert_eq!(stamp.len(), DATE_LEN);
         let path = self.dir.join(format!("{stamp}.typ"));

@@ -1,8 +1,5 @@
 //! The gate, one layer in front of everything including the static files.
 //!
-//! What a request shows before it is looked up (the proxy headers it carries, the address it was
-//! sent to) is read here and judged by `suzatary_core::gate`, beside who whois says it is.
-//!
 //! It resolves the peer once and stashes it in the request's extensions, so write
 //! routes never resolve their own.
 
@@ -33,7 +30,6 @@ const TTL: Duration = Duration::from_mins(1);
 /// cannot answer each other's whois.
 pub type Remembering = HashMap<IpAddr, (Peer, Instant)>;
 
-/// Ask, or remember.
 fn peer_of(
     known: &Mutex<Remembering>,
     whois: &dyn Whois,

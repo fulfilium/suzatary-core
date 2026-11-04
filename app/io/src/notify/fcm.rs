@@ -1,7 +1,6 @@
-//! FCM v1: a service-account key signs an RS256 assertion, the assertion buys
-//! a bearer, and one POST per device carries a DATA message with no
-//! `notification` block, so Google never draws a picture this app did not
-//! compose.
+//! FCM v1: a service-account key signs an RS256 assertion that buys a bearer, and one POST per
+//! device carries a DATA message with no `notification` block, so Google never draws a picture
+//! this app did not compose.
 
 use serde::{Deserialize, Serialize};
 use suzatary_core::capability::{Printed, Secret};
@@ -121,7 +120,6 @@ fn default_expires_in() -> u64 {
 /// Google's push service: one data message per registered phone.
 pub const API: &str = "https://fcm.googleapis.com";
 
-/// One DATA message.
 fn message(token: &str, push: &Printed) -> serde_json::Value {
     serde_json::json!({
         "message": {
@@ -208,8 +206,6 @@ impl Sender {
 pub(super) mod tests {
     use super::*;
 
-    // --- the FCM message body ------------------------------------------------
-
     #[test]
     fn the_fcm_body_is_a_data_message_with_no_notification_block() {
         let push = suzatary_core::capability::Push::Agent {
@@ -238,12 +234,9 @@ pub(super) mod tests {
         );
     }
 
-    // --- the JWT claims ------------------------------------------------------
-
     /// A throwaway RSA key that only signs a test JWT; it backs nothing and is no credential.
     pub(crate) const TEST_PRIVATE_KEY_PEM: &str = include_str!("../../tests/fixtures/fcm-key.pem");
 
-    /// The public half of [`TEST_PRIVATE_KEY_PEM`], for decoding the test JWT.
     const TEST_PUBLIC_KEY_PEM: &str = include_str!("../../tests/fixtures/fcm-key.pub.pem");
 
     pub(crate) fn test_account() -> ServiceAccount {

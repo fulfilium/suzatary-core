@@ -16,7 +16,6 @@ use super::{DataRoot, RESERVED};
 /// chain can never be folded under another chain's trust policy.
 #[derive(Debug, Clone)]
 pub struct ChainDir {
-    /// Whose events bind here, and which actors this store knows.
     pub policy: ChainPolicy,
     /// Where this chain's objects live, resolved under the data root.
     pub events: PathBuf,
@@ -25,9 +24,8 @@ pub struct ChainDir {
 }
 
 impl ChainDir {
-    /// One `[[chains]]` entry, its untrusted actors checked against its own
-    /// roster: a name the roster does not know reads as configured and
-    /// behaves as absent.
+    /// One `[[chains]]` entry, its untrusted actors checked against its roster: an unknown name
+    /// would read as configured and behave as absent.
     fn of(path: &Path, data: &DataRoot, chain: Chain, root: &PublicKey) -> anyhow::Result<Self> {
         let roster: BTreeSet<_> = chain.actors.into_iter().collect();
         if let Some(stranger) = chain.untrusted.iter().find(|actor| !roster.contains(actor)) {
@@ -68,8 +66,7 @@ impl ChainDir {
     }
 }
 
-/// Every chain's directories, as a head and a tail so there is always a first
-/// chain for a verb with no `--chain`.
+/// Every chain's directories, as a head and a tail so there is always a first chain.
 #[derive(Debug, Clone)]
 pub struct ChainDirs {
     first: ChainDir,
@@ -88,7 +85,7 @@ impl ChainDirs {
         std::iter::once(&self.first).chain(&self.rest)
     }
 
-    /// How many. At least one.
+    /// At least one.
     #[must_use]
     pub fn count(&self) -> usize {
         1 + self.rest.len()

@@ -25,7 +25,6 @@ enum Refused {
 }
 
 impl Heard {
-    /// Everything `out` printed, line by line.
     #[must_use]
     pub fn of(out: &str) -> Self {
         let mut heard = Self::default();
@@ -35,7 +34,6 @@ impl Heard {
         heard
     }
 
-    /// One more line of the run's stdout.
     pub fn line(&mut self, line: &str) {
         match Event::of(line) {
             Some(Event::RateLimitEvent { rate_limit_info }) => {
@@ -75,17 +73,13 @@ impl Heard {
     }
 }
 
-/// The instant of a unix second.
 fn unix(seconds: i64) -> Option<Instant> {
     chrono::DateTime::from_timestamp(seconds, 0).map(|at| at.naive_utc())
 }
 
-/// The CLI's words for a failure at `now`, read once: a prompt longer than the model reads is
-/// [`ModelError::TooLong`], so the round can say which answer was too big; a spent allowance or
-/// too many requests is [`ModelError::Limited`], so the box stops asking until it ends; an
-/// overloaded service is [`ModelError::Overloaded`]; a refused credential (a 401 or 403, an
-/// invalid or expired key or token, a login asked for) is [`ModelError::Refused`], so the box
-/// asks for a new one; anything else is [`ModelError::Failed`].
+/// The CLI's words for a failure at `now`, classified: too long, a spent allowance or rate
+/// limit, overloaded, a refused credential (401/403, a bad or expired key, a login asked for),
+/// else [`ModelError::Failed`].
 #[must_use]
 pub fn failed(words: String, now: Instant) -> ModelError {
     let lower = words.to_lowercase();
@@ -159,9 +153,8 @@ mod tests {
         unix(1_761_800_000).expect("an instant")
     }
 
-    /// Each class of failure the CLI prints reads as its own, whatever numbers its words hold:
-    /// only a refused credential is [`ModelError::Refused`], a limit is never a refusal, and an
-    /// overload or a timeout is neither.
+    /// Only a refused credential is [`ModelError::Refused`]; a limit, an overload or a timeout
+    /// never is.
     #[test]
     fn each_failure_the_cli_prints_reads_as_its_class() {
         let class = |error: &ModelError| match error {

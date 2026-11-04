@@ -1,8 +1,5 @@
 //! `instance.toml`, parsed: the one place this binary learns about a box, so
-//! `suzatary-core` and `suzatary-io` never see a path.
-//!
-//! The file holds nothing secret, and it is checked at startup so dead config
-//! refuses to start rather than surfacing later as a puzzling 403.
+//! `suzatary-core` and `suzatary-io` never see a path. It holds nothing secret.
 
 mod chain_dir;
 mod connections;
@@ -41,8 +38,7 @@ use suzatary_core::store::Kind;
 /// The environment variable that names an instance file.
 pub const ENV: &str = "SUZATARY_INSTANCE";
 
-/// The variable a deployment's wrapper sets to the app it runs, a store path; over the
-/// file's `repo`, which then names only a command line's checkout.
+/// The variable a deployment's wrapper sets to the app's store path, over the file's `repo`.
 pub const CODE_ENV: &str = "SUZATARY_REPO";
 
 /// Each actor a chain registered on adopting, with the key that signs its writes.
@@ -73,61 +69,46 @@ impl<'a> Adopted<'a> {
 
 /// Chain names the server's own routes would shadow.
 ///
-/// `/api/act/{*verb}` is a catch-all, and `/api/briefings/{date}` and
-/// `/api/todo/{id}` would read a chain's verb as a parameter; other routes
-/// cannot collide because matchit backtracks.
+/// `/api/act/{*verb}` is a catch-all, and `/api/briefings/{date}` and `/api/todo/{id}` would read
+/// a chain's verb as a parameter; other routes cannot collide because matchit backtracks.
 pub const RESERVED: &[&str] = &["act", "briefings", "todo"];
 
 /// Everything the binary learned from the file.
 #[derive(Debug, Clone)]
 pub struct Instance {
-    /// The instance file this came from, for a log line.
     pub path: PathBuf,
     /// Every path derived outside the instance file.
     pub paths: Paths,
-    /// The two roots every path in the file resolves under.
     pub roots: Roots,
-    /// Every chain in the file's order; `deployment.chains` is these policies,
-    /// built in the same pass so the two cannot disagree.
+    /// Every chain in the file's order; `deployment.chains` holds the same policies.
     pub chains: ChainDirs,
-    /// The deployment, as the pure layer reads it.
     pub deployment: Deployment,
-    /// Where and how to serve.
     pub serving: Serving,
-    /// The secretary's store and model.
     pub secretary: Secretary,
     /// What the triage agent is handed.
     pub agent: Triage,
-    /// Every repository the box may reach: `[[secretary.repos]]` and `[coding] repo`, all in one
-    /// account, read once.
+    /// Every repository the box may reach: `[[secretary.repos]]` and `[coding] repo`, one account.
     pub repos: suzatary_core::repos::Declared,
-    /// Every secret name this instance declares it needs, as the file read: the closed list a
-    /// secret card mints its [`suzatary_core::settings::Settable`] against. The server keeps its
-    /// own live copy, which a tap's edit derives again.
+    /// The closed list of secret names a secret card mints its
+    /// [`suzatary_core::settings::Settable`] against.
     pub settables: Settables,
-    /// Those names, to be declared to the secret store beside the code root's `secretspec.toml`
-    /// in a file under [`Paths::secretspec`]: reading the instance writes nothing, and the first
-    /// store call that needs the file, or a verb that declares, writes it.
+    /// Those names, for a file under [`Paths::secretspec`]: reading the instance writes nothing;
+    /// the first store call that needs the file writes it.
     pub declarations: suzatary_io::secrets::Declarations,
-    /// The user repository's script the environment named, read once with the rest of it.
+    /// The user repository's script the environment named.
     run: Option<String>,
-    /// The mail, its index and the triage bookkeeping beside it.
     pub mail: Mail,
-    /// The person this deployment serves, their prose read from [`Instance::local`].
     pub persona: suzatary_core::persona::Persona,
     /// The box-local tier: never pushed, carried by the vault.
     pub local: Local,
-    /// The channels `[notify]` names, the one list the server and `suzatary notify` push
-    /// through. `None`, the table absent or empty, is no push, and no push secret is resolved.
+    /// The channels `[notify]` names. `None` is no push, and no push secret is resolved.
     pub notify: Option<NonEmpty<Channel>>,
     /// What the box answers the Android portal at pairing.
     pub portal: suzatary_core::portal::Portal,
-    /// The plugins this box runs, and where their cache-tier stores live.
     pub plugins: Plugins,
 }
 
 impl Instance {
-    /// The checkout.
     #[must_use]
     pub fn code(&self) -> &Path {
         self.roots.code.as_path()
@@ -142,8 +123,7 @@ impl Instance {
         )
     }
 
-    /// Where each Google account's calendars are kept: the cache tier, beside the plugins'
-    /// stores, under the account's maildir folder.
+    /// Where a Google account's calendars are kept, in the cache tier.
     #[must_use]
     pub fn google_calendar(&self, account: &suzatary_core::mail::account::MailAccount) -> PathBuf {
         self.plugins
@@ -173,9 +153,8 @@ impl Instance {
             .conversation_stores(std::sync::Arc::new(self.answers()))
     }
 
-    /// How the person reaches the app from a terminal: through the user repository's script when
-    /// [`crate::paths::RUN_ENV`] named one, else the binary on `PATH`, whose `secretspec` verb
-    /// names this instance's secret store.
+    /// How the person reaches the app from a terminal: the script [`crate::paths::RUN_ENV`]
+    /// named, else the binary on `PATH`.
     #[must_use]
     pub fn reach(&self) -> suzatary_core::connect::Reach {
         match &self.run {
@@ -184,7 +163,7 @@ impl Instance {
         }
     }
 
-    /// The tables connections are read from, the one projection a tap's edit is read back by.
+    /// The tables connections are read from.
     #[must_use]
     pub fn declared(&self) -> suzatary_core::connect::Declared {
         suzatary_core::connect::Declared {
@@ -201,14 +180,12 @@ impl Instance {
         self.declarations.store()
     }
 
-    /// The data root.
     #[must_use]
     pub fn data(&self) -> &Path {
         self.roots.data.as_path()
     }
 
-    /// The first chain, what a verb with no `--chain` and the bare `/api/…`
-    /// paths mean.
+    /// The first chain: what a verb with no `--chain` and the bare `/api/…` paths mean.
     #[must_use]
     pub fn first(&self) -> &ChainDir {
         self.chains.first()
@@ -234,8 +211,7 @@ impl Instance {
             })
     }
 
-    /// A root resolved against the instance file's directory rather than the
-    /// working directory, so the same file works from any checkout.
+    /// A root resolved against the instance file's directory, not the working directory.
     fn beside(file: &Path, named: &Path) -> PathBuf {
         let here = match file.parent() {
             Some(dir) if !dir.as_os_str().is_empty() => dir.to_path_buf(),
@@ -245,32 +221,27 @@ impl Instance {
         std::fs::canonicalize(&resolved).unwrap_or(resolved)
     }
 
-    /// The code root beside `file`.
     pub(crate) fn repo_beside(file: &Path, repo: &Path) -> PathBuf {
         Self::beside(file, repo)
     }
 
-    /// The data root beside `file`.
     pub(crate) fn data_beside(file: &Path, data: &Path) -> PathBuf {
         Self::beside(file, data)
     }
 
-    /// The performed requests' records, `requests/` in the data tree: pushed with the data, as
-    /// the record of which device asked for what the box wrote.
+    /// The performed requests' records, `requests/` in the data tree, pushed with the data.
     #[must_use]
     pub fn requests(&self) -> PathBuf {
         self.roots.data.under(Path::new("requests"))
     }
 
-    /// The recorded decisions' store, `decisions/` in the data tree: pushed with the data, so
-    /// a path the instance file need not spell.
+    /// The recorded decisions' store, `decisions/` in the data tree, pushed with the data.
     #[must_use]
     pub fn decisions(&self) -> PathBuf {
         self.roots.data.under(Path::new("decisions"))
     }
 
-    /// Where each store of `kind` lives, beside the name the fsck reports it by: a chain once
-    /// per chain, a plugin's store once per plugin, every other store once.
+    /// Where each store of `kind` lives, by the name the fsck reports it under.
     #[must_use]
     pub fn directories(&self, kind: Kind) -> Vec<(String, PathBuf)> {
         let once = |path: PathBuf| vec![(kind.name().to_owned(), path)];
@@ -319,11 +290,9 @@ impl Instance {
         &self.chains.first().policy.root
     }
 
-    /// What the box signs with: both keys resolved from secretspec by name and checked against
-    /// the root, or the sentence saying why they are not at hand.
-    /// Never an error, so a box whose secrets are locked still starts and reads; every write it
-    /// would make refuses with that sentence instead. It only reads: adopting is [`Instance::adopt`],
-    /// which the server and `device init` ask for.
+    /// What the box signs with: both keys from secretspec, checked against the root, or why not.
+    /// Never an error, so a box whose secrets are locked still starts and reads; every write
+    /// refuses with that sentence instead. It only reads; adopting is [`Instance::adopt`].
     #[must_use]
     pub fn signers(&self) -> suzatary_core::signatures::Signers {
         use suzatary_core::signatures::{AGENT_KEY, BOX_KEY, BoxKeys, Signers};
@@ -348,11 +317,9 @@ impl Instance {
         }
     }
 
-    /// ADOPTION, asked of every chain, and a no-op where it was asked before: each chain
-    /// registers the box's and the agent's keys and takes its epoch. A revocation that reached
-    /// some chains and not others is completed. Under a lock beside each chain, so two processes adopting together adopt once.
-    /// Every chain is tried whatever one answers; answers each chain that adopted with the
-    /// actors it registered now, and what did not.
+    /// Adoption, asked of every chain (idempotent): each registers the box's and the agent's keys
+    /// and takes its epoch, and a revocation that reached only some chains is completed. Under a
+    /// lock beside each chain, so two processes adopt once. Every chain is tried.
     #[must_use]
     pub fn adopt(&self, signers: &suzatary_core::signatures::Signers) -> Adopted<'_> {
         let (adopted, failed): (Vec<_>, Vec<_>) = self
@@ -386,8 +353,7 @@ impl Instance {
         }
     }
 
-    /// One chain adopted, as [`Instance::adopt`] says: answers each actor registered now, with
-    /// the key that signs its writes.
+    /// One chain adopted: answers each actor registered now, with its key.
     ///
     /// # Errors
     /// The lock not taken, a store failing, or writes since the epoch that no key signed.
@@ -423,8 +389,8 @@ impl Instance {
         )
     }
 
-    /// The store one chain is WRITTEN through as `actor`: every append signed by the key
-    /// `actor` owns, or refused when the key is not at hand.
+    /// The store one chain is written through as `actor`: every append signed by `actor`'s key,
+    /// or refused when the key is not at hand.
     #[must_use]
     pub fn writer_of(
         chain: &ChainDir,
@@ -439,7 +405,7 @@ impl Instance {
         )
     }
 
-    /// The inbox's store, the one opener of it.
+    /// The inbox's store, its one opener.
     #[must_use]
     pub fn inbox_store(
         &self,
@@ -447,7 +413,7 @@ impl Instance {
         suzatary_io::objects::Objects::open(self.secretary.inbox.clone())
     }
 
-    /// The memory's history, the one opener of it, as [`Instance::inbox_store`] is.
+    /// The memory's history, its one opener.
     #[must_use]
     pub fn memory_store(
         &self,
@@ -455,7 +421,7 @@ impl Instance {
         suzatary_io::objects::Objects::open(self.secretary.memory.clone())
     }
 
-    /// The digest's history, the one opener of it, as [`Instance::inbox_store`] is.
+    /// The digest's history, its one opener.
     #[must_use]
     pub fn digest_store(
         &self,
@@ -466,8 +432,7 @@ impl Instance {
         )
     }
 
-    /// The instance file at `path`, read in this process's environment: the binary's door,
-    /// and the one caller of [`Env::read`].
+    /// The instance file at `path`, read in this process's environment.
     ///
     /// # Errors
     /// The environment's, then [`Instance::read`]'s.
@@ -483,8 +448,7 @@ impl Instance {
         Self::of(path, File::read(path)?, env)
     }
 
-    /// The file's sections checked against each other and rooted: what no one
-    /// value's type can say, because it names another part of the file.
+    /// The file's sections checked against each other and rooted.
     pub(crate) fn of(path: &Path, file: File, env: &Env) -> anyhow::Result<Instance> {
         let code = CodeRoot(Self::code_root_in(
             Self::repo_beside(path, &file.repo),
@@ -492,8 +456,7 @@ impl Instance {
         ));
         let data = DataRoot(Self::data_beside(path, &file.data));
         let chains = ChainDirs::of(path, &data, file.chains, &file.signatures.root)?;
-        // Derived from `chains`, so the pure layer's policies (no paths) and the
-        // binary's stores cannot name different chains.
+        // Derived from `chains`, so the policies and the stores cannot name different chains.
         let policies = Chains::of(chains.iter().map(|chain| chain.policy.clone()).collect())
             .map_err(|e| anyhow::anyhow!("{}: {e}", path.display()))?;
         let coding = file.coding;
@@ -535,8 +498,7 @@ impl Instance {
         };
         writers_checked(path, &deployment)?;
         let paths = Paths::of(&data, secretary.drive_cli.as_deref(), env);
-        // Every verb's store declares these names on its first call, so a calendar's link is one `secretspec` takes on a deployment whose code root is
-        // read-only; reading the instance writes nothing.
+        // Declared on a store's first call, never here: the code root may be read-only.
         let declarations = suzatary_io::secrets::Declarations::new(
             code.as_path().join("secretspec.toml"),
             paths.secretspec.clone(),
@@ -564,22 +526,20 @@ impl Instance {
         })
     }
 
-    /// The rule: an adopted code root, else the file's `repo` resolved beside it.
+    /// An adopted code root, else the file's `repo` resolved beside it.
     #[must_use]
     pub fn code_root_in(beside: PathBuf, adopted: Option<&Path>) -> PathBuf {
         adopted.map_or(beside, Path::to_path_buf)
     }
 
-    /// Where the instance file is, reading the environment here and deciding in
-    /// [`Self::locate_in`] so the rule is testable apart from the box it runs on.
+    /// Where the instance file is, by [`Self::locate_in`] over this process's environment.
     #[must_use]
     pub fn locate(flag: Option<&Path>) -> PathBuf {
         let exported = std::env::var(ENV).ok();
         Self::locate_in(flag, exported.as_deref())
     }
 
-    /// The rule itself: the flag, else a non-empty environment value, else
-    /// `instance.toml` in the working directory.
+    /// The flag, else a non-empty environment value, else `instance.toml` in the working directory.
     #[must_use]
     pub fn locate_in(flag: Option<&Path>, exported: Option<&str>) -> PathBuf {
         if let Some(named) = flag {
@@ -619,8 +579,7 @@ fn writers_checked(path: &Path, deployment: &Deployment) -> anyhow::Result<()> {
     Ok(())
 }
 
-/// The file lock adoption is taken under, beside the chain's objects: across processes, since
-/// every writer that starts may be the first.
+/// The cross-process file lock adoption is taken under: any writer that starts may be first.
 pub(crate) fn adoption_lock(events: &Path) -> anyhow::Result<suzatary_io::durable::Held> {
     suzatary_io::durable::hold(&events.join("adopt.lock"))
         .with_context(|| format!("locking {}/adopt.lock", events.display()))
@@ -679,7 +638,6 @@ inbox_folders = ["Inbox"]
 sent_folder = "Sent Items"
 "#;
 
-    /// An environment of the test's own, so no test reads this process's.
     fn env() -> Env {
         Env::under("/srv/ada-test/home", "/srv/ada-test/run")
     }
@@ -746,13 +704,11 @@ sent_folder = "Sent Items"
             instance.serving.dist,
             PathBuf::from("/tmp/suzatary-test/web/dist")
         );
-        // An absolute path in the file is left alone.
         assert_eq!(
             instance.serving.tls_dir,
             PathBuf::from("/var/lib/suzatary/tls")
         );
         assert_eq!(instance.mail.root, PathBuf::from("/home/ada/Mail"));
-        // A trailing slash is dropped, so a deep link is not built with two.
         assert_eq!(instance.deployment.app_url, "https://example.test");
         assert_eq!(
             instance
@@ -762,7 +718,6 @@ sent_folder = "Sent Items"
             Some("ada")
         );
         assert_eq!(instance.mail.accounts.accounts().len(), 1);
-        // `GOOD` has no `[notify]` table.
         assert_eq!(instance.notify, None);
         let _ = std::fs::remove_file(&path);
     }
@@ -774,9 +729,7 @@ sent_folder = "Sent Items"
         assert_eq!(instance.notify, None);
     }
 
-    /// Reading an instance is a parse: with a home no directory can be made under (a file, so
-    /// even root cannot), the sample, whose code root holds a `secretspec.toml`, reads and
-    /// nothing is written; the first secret asked of it is what fails, saying why.
+    /// The home is a file, so even root cannot write under it.
     #[test]
     fn reading_an_instance_writes_nothing_even_where_nothing_can_be_written() {
         let scratch = tempfile::tempdir().expect("a scratch directory");
@@ -828,9 +781,6 @@ sent_folder = "Sent Items"
             .to_path_buf()
     }
 
-    /// `repo` and `data` name two roots, each absolute or beside the file, and a file with no
-    /// `data` puts both beside it: the chains live under the data root, the bundle under the code
-    /// root.
     #[test]
     fn the_code_and_data_roots_resolve_from_the_file() {
         let base = std::env::temp_dir().join("suzatary-instance-roots");
@@ -872,10 +822,6 @@ sent_folder = "Sent Items"
         }
     }
 
-    /// An instance file the server would misread stops it starting, naming why: a writer who is
-    /// not a viewer (dead config), a writer's actor the roster does not know, a chain name that is
-    /// not a slug, a table the binary does not read (a model provider or a model order, which
-    /// would otherwise choose nothing), and a reserve outside zero to one.
     #[test]
     fn a_file_the_server_would_misread_stops_it_starting_and_says_why() {
         for (tag, text, said) in [
@@ -1069,8 +1015,6 @@ sent_folder = "Sent Items"
         let _ = std::fs::remove_file(&path);
     }
 
-    /// Each instance keeps its own epochs: a server over a scratch copy steps none of the live
-    /// instance's.
     #[test]
     fn each_instance_keeps_its_own_epochs() {
         let env = env();

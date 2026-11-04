@@ -1,8 +1,5 @@
-//! Content-addressed files, one per content and named by its SHA-256, as a [`Doc`]: the owner's
-//! uploads and the files a verb hands the model, box-local and git-ignored beside the
-//! conversations. A turn names a file, never holds it.
-//!
-//! [`Doc`]: suzatary_core::store::Doc
+//! Content-addressed files named by their SHA-256: uploads and files handed to the model,
+//! box-local and git-ignored. A turn names a file, never holds it.
 
 use std::path::PathBuf;
 
@@ -15,7 +12,6 @@ use crate::docs::{DocCodec, Docs};
 pub type Blobs = Docs<AttachmentId, Vec<u8>>;
 
 impl Blobs {
-    /// The files under `dir`, made on the first write.
     #[must_use]
     pub fn open(dir: PathBuf) -> Self {
         Docs::new(
@@ -26,20 +22,13 @@ impl Blobs {
     }
 
     /// Keep these bytes under their digest: keeping the same content twice is the same file.
-    ///
-    /// # Errors
-    /// [`StoreError::Unwritable`].
     pub fn put(&self, bytes: &[u8]) -> Result<AttachmentId, StoreError> {
         let id = AttachmentId::of(bytes);
         self.set(&id, &bytes.to_vec())?;
         Ok(id)
     }
 
-    /// The bytes by that name.
-    ///
-    /// # Errors
-    /// [`StoreError::Absent`] for none, or for a file swapped under the store, and
-    /// [`StoreError::Unreadable`].
+    /// The bytes by that name; [`StoreError::Absent`] also for a file swapped under the store.
     pub fn read(&self, id: &AttachmentId) -> Result<Vec<u8>, StoreError> {
         self.get(id)?.ok_or_else(|| StoreError::Absent {
             what: "file",

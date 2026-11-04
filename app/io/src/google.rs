@@ -1,6 +1,5 @@
-//! The transport for `suzatary_core::google`'s sans-I/O sign-in and Calendar API: each request it
-//! builds sent, each answer read through its parser. A secret's bytes go only onto the wire and
-//! into the secret store, never into a log or an error.
+//! The transport for `suzatary_core::google`'s sans-I/O sign-in and Calendar API. A secret's
+//! bytes go only onto the wire and into the secret store, never into a log or an error.
 
 use std::sync::Arc;
 use std::time::Duration;
@@ -18,13 +17,11 @@ use suzatary_core::mail::oauth::{NeedsLogin, OauthError, Silent};
 use crate::http::{Http, HttpError, Req, Ureq};
 use crate::secrets::{Resolves, SecretError};
 
-/// Long enough for a slow answer, short enough that a hung endpoint cannot stall a sync.
 const TIMEOUT: Duration = Duration::from_secs(30);
 
 /// Why the box asks the store, as its audit trail records it.
 const ASKING: &str = "a Google account's sign-in";
 
-/// Google, as the box reaches it.
 #[derive(Clone)]
 pub struct Google {
     http: Arc<dyn Http>,
@@ -50,10 +47,8 @@ pub enum ReadError {
     Failed(String),
 }
 
-/// What an event's insert came to.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Inserted {
-    /// Google answered with the event.
     Done,
     /// Nothing was written: the request never left, or Google refused it.
     NotSent(String),
@@ -62,30 +57,23 @@ pub enum Inserted {
 }
 
 impl Google {
-    /// Google's own endpoints, over rustls.
     #[must_use]
     pub fn new(endpoints: Endpoints) -> Self {
         Self::with_http(endpoints, Arc::new(Ureq::new()))
     }
 
-    /// The same, through `http`.
     #[must_use]
     pub fn with_http(endpoints: Endpoints, http: Arc<dyn Http>) -> Self {
         Self { http, endpoints }
     }
 
-    /// The endpoints it asks.
     #[must_use]
     pub fn endpoints(&self) -> &Endpoints {
         &self.endpoints
     }
 
-    /// Trade a callback's code for the grant, with the verifier and the redirect its consent
-    /// was made with, for the account the consent was for.
-    ///
-    /// # Errors
-    /// The exchange's refusal (a code used twice is Google's `invalid_grant`), a transport
-    /// failure, or a grant for another account.
+    /// Trade a callback's code for the grant of the account the consent was for; a grant for
+    /// another account is refused.
     pub fn exchange(
         &self,
         client: &Client,
@@ -102,9 +90,6 @@ impl Google {
     }
 
     /// A fresh access token for `account` from its kept grant.
-    ///
-    /// # Errors
-    /// A refusal no sign-in mends, or a transport failure.
     pub fn access(
         &self,
         client: &Client,
@@ -118,7 +103,6 @@ impl Google {
         suzatary_core::google::read_refresh(&answered, account)
     }
 
-    /// One bounded read of the API, its body limited where it is read.
     fn read(&self, token: &AccessToken, url: &str) -> Result<Vec<u8>, String> {
         let resp = self
             .http
@@ -136,12 +120,8 @@ impl Google {
         }
     }
 
-    /// The account's calendars' occurrences within the window around `now`: at most
-    /// `CALENDARS` calendars of at most `EVENTS` events each, each answer read only within
-    /// `MAX_ANSWER` bytes.
-    ///
-    /// # Errors
-    /// [`ReadError`]: a grant that needs the owner's sign-in, or a read that failed.
+    /// The account's calendars' occurrences within the window around `now`, each answer read
+    /// only within `MAX_ANSWER` bytes.
     pub fn occurrences(
         &self,
         grant: &Grant,
@@ -173,12 +153,8 @@ impl Google {
         Ok(occurrences)
     }
 
-    /// How many messages `grant`'s account's mailbox holds, read through the grant: what shows
-    /// the grant reads the account's mail before the box hands lieer its tokens.
-    ///
-    /// # Errors
-    /// [`ReadError`]: a grant that needs the owner's sign-in, or a read that failed, a mailbox
-    /// of another account among them.
+    /// How many messages the account's mailbox holds: proof the grant reads its mail before the
+    /// box hands lieer its tokens. Another account's mailbox fails.
     pub fn mailbox(&self, grant: &Grant) -> Result<u64, ReadError> {
         let token = self.token(grant)?;
         self.read(&token, &suzatary_core::google::profile_url(&self.endpoints))
@@ -218,7 +194,6 @@ impl Google {
         }
     }
 
-    /// An access token for `grant`, or why there is none.
     fn token(&self, grant: &Grant) -> Result<AccessToken, ReadError> {
         match self
             .access(&grant.client, &grant.refresh, &grant.account)
@@ -230,15 +205,12 @@ impl Google {
     }
 }
 
-/// One Google account's kept grant: the box's client and the account's refresh token, read from
-/// the secret store.
+/// One Google account's kept grant, read from the secret store.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Grant {
-    /// The account.
     pub account: EmailAddress,
     /// The box's client.
     pub client: Client,
-    /// The account's refresh token.
     pub refresh: RefreshToken,
     /// The parts Google granted it.
     pub parts: suzatary_core::google::Scopes,
@@ -247,7 +219,6 @@ pub struct Grant {
 /// What the secret store keeps for one Google account.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Kept {
-    /// Its grant, whole.
     Grant(Grant),
     /// No Google client the box can sign in through: its card asks for one.
     NoClient,
@@ -257,9 +228,6 @@ pub enum Kept {
 
 impl Grant {
     /// The box's Google client, as `store` keeps it; `None` when it keeps none Google issued.
-    ///
-    /// # Errors
-    /// The store's own failure.
     pub fn client(store: &dyn Resolves) -> Result<Option<Client>, SecretError> {
         let read = |name: &str| store.get(name, ASKING);
         Ok(
@@ -275,10 +243,6 @@ impl Grant {
         )
     }
 
-    /// What `store` keeps for `account`.
-    ///
-    /// # Errors
-    /// The store's own failure.
     pub fn read(store: &dyn Resolves, account: &EmailAddress) -> Result<Kept, SecretError> {
         let Some(client) = Self::client(store)? else {
             return Ok(Kept::NoClient);
@@ -303,7 +267,7 @@ impl Grant {
     }
 }
 
-/// Google and the store its grants are kept in, as a sync reaches them.
+/// Google and the store its grants are kept in.
 #[derive(Clone)]
 pub struct Grants {
     google: Google,
@@ -321,7 +285,6 @@ impl std::fmt::Debug for Grants {
 /// Why a Google account's sync did not reach lieer, as its health records it.
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 pub enum NotReady {
-    /// The box keeps no Google client.
     #[error("the box's Google client is not kept yet: paste it into its card in the Inbox")]
     NoClient,
     /// The account's grant is missing or Google refused it.
@@ -333,11 +296,8 @@ pub enum NotReady {
 }
 
 impl NotReady {
-    /// What the box lacks to use `grant` of `account`, or the failure's words when it lacks no
-    /// grant: a missing client, or a sign-in that is missing or that Google refused.
-    ///
-    /// # Errors
-    /// The words of a failure that is no missing grant.
+    /// What the box lacks to use `grant` of `account`, or the failure's words when it lacks
+    /// nothing.
     pub fn lacking(
         self,
         account: &EmailAddress,
@@ -365,35 +325,26 @@ impl NotReady {
 }
 
 impl Grants {
-    /// Grants kept in `store`, used against `google`.
     #[must_use]
     pub fn new(google: Google, store: Arc<dyn Resolves + Send + Sync>) -> Self {
         Self { google, store }
     }
 
-    /// Google.
     #[must_use]
     pub fn google(&self) -> &Google {
         &self.google
     }
 
     /// The grant kept for `account`, proved by minting a token from it.
-    ///
-    /// # Errors
-    /// [`NotReady`], by the class its fix card needs.
     pub fn live(&self, account: &EmailAddress) -> Result<Grant, NotReady> {
         self.minted(account).map(|(grant, _)| grant)
     }
 
     /// An access token minted from `account`'s grant, for one use of Google's APIs.
-    ///
-    /// # Errors
-    /// [`NotReady`], by the class its fix card needs.
     pub fn token(&self, account: &EmailAddress) -> Result<AccessToken, NotReady> {
         self.minted(account).map(|(_, token)| token)
     }
 
-    /// The grant kept for `account`, and the access token minted from it.
     fn minted(&self, account: &EmailAddress) -> Result<(Grant, AccessToken), NotReady> {
         let grant = match Grant::read(self.store.as_ref(), account)
             .map_err(|failed| NotReady::Failed(failed.to_string()))?
@@ -414,9 +365,6 @@ impl Grants {
 
     /// Hand lieer an access token minted now from `account`'s grant, in `maildir`, so the
     /// `gmi sync` that follows reads the mail with it.
-    ///
-    /// # Errors
-    /// [`NotReady`].
     pub fn ready(&self, account: &EmailAddress, maildir: &std::path::Path) -> Result<(), NotReady> {
         let token = self.token(account)?;
         hand_to_lieer(maildir, &token, chrono::Utc::now().naive_utc()).map_err(NotReady::Failed)
@@ -424,11 +372,7 @@ impl Grants {
 }
 
 /// Learn `occurrences` into the calendar store at `root`, written as Google's at `at`: only what
-/// the store does not already read, so a sync may run as often as it likes. The store is begun
-/// at the calendar's schema, which every calendar reader reads.
-///
-/// # Errors
-/// The store's refusal, in words.
+/// the store does not already read, so a sync may run as often as it likes.
 pub fn learn(
     root: &std::path::Path,
     occurrences: &[Occurrence],
@@ -451,8 +395,8 @@ pub fn learn(
     suzatary_core::store::learn(&store, items).map_err(|failed| failed.to_string())
 }
 
-/// What lieer reads its credentials from, in the account's maildir: the authorized-user form of
-/// Google's own library, which lieer loads with `Credentials.from_authorized_user_file`.
+/// lieer's credentials file in the account's maildir, in the authorized-user form lieer loads
+/// with `Credentials.from_authorized_user_file`.
 pub const LIEER_CREDENTIALS: &str = ".credentials.gmailieer.json";
 
 /// The fields `Credentials.from_authorized_user_info` requires to be present, which the box
@@ -460,13 +404,9 @@ pub const LIEER_CREDENTIALS: &str = ".credentials.gmailieer.json";
 const ABSENT: [&str; 3] = ["refresh_token", "client_id", "client_secret"];
 
 /// Hand lieer `token`, minted at `minted` (UTC), in `maildir` (owner-only): the access token and
-/// when it expires, and no refresh token or client secret, so lieer's file holds nothing that
-/// outlives the token, which is minted again before each sync. Google's library takes a token
-/// with no refresh token as valid until its expiry and asks for nothing else; a sync that
-/// outlives it fails, and the next one, five minutes on, resumes with a fresh token.
-///
-/// # Errors
-/// The file could not be written.
+/// its expiry, and no refresh token or client secret, so lieer's file holds nothing that
+/// outlives the token. Google's library takes such a token as valid until its expiry; a sync
+/// that outlives it fails, and the next one resumes with a fresh token.
 pub fn hand_to_lieer(
     maildir: &std::path::Path,
     token: &AccessToken,
@@ -526,8 +466,7 @@ mod tests {
         Resp::new(200, r#"{"access_token":"ya29.a","expires_in":3600}"#)
     }
 
-    /// A sync reads the list, then each calendar's events, each with a limit on the body read
-    /// and the token in the header alone.
+    /// Each read is bounded and carries the token in the header alone.
     #[test]
     fn a_sync_reads_the_list_then_each_calendar_bounded() {
         let http = Arc::new(Scripted::answering(vec![
@@ -564,7 +503,6 @@ mod tests {
         assert!(sent[2].url.contains("maxResults=250"), "{}", sent[2].url);
     }
 
-    /// A revoked grant reads as a sign-in to ask for, and asks the API nothing.
     #[test]
     fn a_revoked_grant_needs_a_sign_in_and_reads_nothing() {
         let http = Arc::new(Scripted::answering(vec![Ok(Resp::new(
@@ -582,8 +520,7 @@ mod tests {
         assert_eq!(http.sent().len(), 1, "only the token endpoint was asked");
     }
 
-    /// lieer is handed an access token and when it expires, and nothing that outlives it: the
-    /// fields Google's library requires are there, and null.
+    /// The fields Google's library requires are there, and null.
     #[test]
     fn lieer_is_handed_a_token_and_never_the_grant() {
         let dir = std::env::temp_dir().join(format!(
@@ -626,7 +563,6 @@ mod tests {
         let _ = std::fs::remove_dir_all(&dir);
     }
 
-    /// An event lost after it left may have been written; one refused was not.
     #[test]
     fn an_insert_says_whether_it_may_have_gone() {
         let event = NewEvent::new(

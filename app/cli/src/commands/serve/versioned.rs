@@ -1,12 +1,8 @@
-//! A shell file named by its build: `/b/<build>/<file>` is `dist`'s `<file>` while this box
-//! serves `<build>`, and nothing once it serves another. `/b/current` names the build served,
-//! so the page's loader learns it beside the files, whether or not the API answers.
+//! Shell files named by build: `/b/<build>/<file>` is `dist`'s `<file>` while this box serves
+//! `<build>`, and `/b/current` names the build served.
 //!
-//! A page loads only its own build's URLs, and so does every worker it starts, so no page runs
-//! two builds' files: a file of a build this box no longer serves is a 404, never the new
-//! build's file under the old name, and so is a build's file asked for by no build's name. The
-//! service worker keeps each build's files under these names, so a page on an older build is
-//! served from that build's cache. Only the page and what names no build pass as they are.
+//! No page may run two builds' files: another build's file is a 404, never the new build's file
+//! under the old name. The service worker caches each build's files under these names.
 
 use axum::extract::{Request, State as Extract};
 use axum::http::{HeaderValue, StatusCode, Uri, header};
@@ -21,8 +17,7 @@ pub const PREFIX: &str = "/b/";
 /// The path that names the build this box serves.
 pub const CURRENT: &str = "/b/current";
 
-/// The paths no build names, each build's the same name: the page, its loader, the worker's
-/// script, the manifest, the icons and the Android app's link file.
+/// The paths no build names, the same in every build.
 pub const ROOT: [&str; 9] = [
     "/",
     "/index.html",
@@ -84,8 +79,7 @@ pub fn named<'a>(path: &'a str, build: &str) -> Named<'a> {
     }
 }
 
-/// Serves an own build's file under its plain name, and refuses another build's and a build's
-/// file under no build's name. The build served is read once, and only for a path that names one.
+/// Serves this build's file under its plain name, and refuses another build's or an unnamed one.
 pub async fn serve(Extract(state): Extract<State>, mut request: Request, next: Next) -> Response {
     let path = request.uri().path().to_owned();
     match read(&path) {
@@ -123,8 +117,6 @@ pub async fn serve(Extract(state): Extract<State>, mut request: Request, next: N
 mod tests {
     use super::{Named, Path, named, read};
 
-    /// A file of the build served is its plain file, `current` names the build served whatever
-    /// it is, and a file of another build is refused, never served as this one.
     #[test]
     fn a_name_under_the_prefix_is_this_build_s_file_or_refused() {
         for (path, build, expected) in [
@@ -146,8 +138,6 @@ mod tests {
         }
     }
 
-    /// Only a path under the prefix needs the build; the root's own files are served plain, and
-    /// a build's file asked for under no build's name is refused.
     #[test]
     fn only_a_path_under_the_prefix_needs_the_build() {
         for (path, expected) in [

@@ -5,9 +5,8 @@ use std::path::{Path, PathBuf};
 use anyhow::Context;
 use suzatary_io::present::Present as _;
 
-/// The box-local tier, `<data>/local`: files no push carries (the tier ignores itself, and
-/// `safe-push.sh` stages none of it) and the vault does. Its place and each file have one name
-/// here, so the box, the scripts and the guards cannot disagree about them.
+/// The box-local tier, `<data>/local`: files no push carries and the vault does. Each file's
+/// name is spelled only here, so the box, the scripts and the guards agree.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Local(pub(super) PathBuf);
 
@@ -15,7 +14,6 @@ impl Local {
     /// The tier's directory, under the data root.
     pub const DIR: &str = "local";
 
-    /// Every file the tier holds, by name.
     pub const FILES: [&str; 6] = [
         "persona.toml",
         "personal-terms.txt",
@@ -25,7 +23,6 @@ impl Local {
         "watches",
     ];
 
-    /// The directory.
     #[must_use]
     pub fn path(&self) -> &Path {
         &self.0
@@ -62,7 +59,7 @@ impl Local {
         self.0.join(Self::FILES[5])
     }
 
-    /// The prose, or none when the file is absent (a deployment that wrote none).
+    /// The prose, or the default when the file is absent.
     ///
     /// # Errors
     /// A file that is there and does not read as prose.

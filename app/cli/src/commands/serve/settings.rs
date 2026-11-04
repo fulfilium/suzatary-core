@@ -24,8 +24,7 @@ use super::State;
 use super::call::Call;
 use super::guard::Reader;
 
-/// `GET /api/overview`: what is connected, by group, as the stores read now. Each part is a
-/// phase of [`suzatary_core::timings`].
+/// `GET /api/overview`: what is connected, by group, as the stores read now.
 ///
 /// # Errors
 /// A health register that cannot be read, which is not one with nothing in it.
@@ -105,8 +104,7 @@ fn drawn(call: &Call<Reader, (), ()>) -> Result<Json<wire::Overview>, Refusal> {
     })))
 }
 
-/// The build line, read again only when the project chain's heads or the build move: its titles
-/// are that chain's, and its version and revision the binary's.
+/// The build line, reread only when the project chain's heads or the build move.
 fn build(state: &State, now: suzatary_core::capability::Datetime) -> Result<Build, Refusal> {
     let about = || {
         state
@@ -131,7 +129,6 @@ fn build(state: &State, now: suzatary_core::capability::Datetime) -> Result<Buil
     )?)
 }
 
-/// The data repository and the `origin` its git config names, read now.
 fn storage(state: &State) -> Storage {
     Storage {
         pushed: pushed(state),
@@ -139,7 +136,6 @@ fn storage(state: &State) -> Storage {
     }
 }
 
-/// Where the data repository pushes, read from its git configuration now.
 pub(super) fn pushed(state: &State) -> Pushed {
     pushed_at(state.data.as_path())
 }
@@ -154,9 +150,8 @@ pub fn pushed_at(root: &std::path::Path) -> Pushed {
     }
 }
 
-/// The repository at `root`'s own git directory and the one it shares with its worktrees,
-/// through a `.git` file's `gitdir` (a worktree's names its own directory, whose `commondir`
-/// holds the shared one).
+/// The repository's own git directory and the one it shares with its worktrees (a worktree's
+/// `.git` file names its `gitdir`, whose `commondir` holds the shared one).
 fn git_dirs(root: &std::path::Path) -> std::io::Result<(PathBuf, PathBuf)> {
     let dot_git = root.join(".git");
     if !dot_git.is_file() {
@@ -174,14 +169,12 @@ fn git_dirs(root: &std::path::Path) -> std::io::Result<(PathBuf, PathBuf)> {
     Ok((dir, common))
 }
 
-/// The git configuration of the repository at `root`.
 fn git_config(root: &std::path::Path) -> std::io::Result<String> {
     std::fs::read_to_string(git_dirs(root)?.1.join("config"))
 }
 
-/// What the data repository's pushes read, from its reflogs: where its branch last moved, and
-/// where `origin`'s copy of it last moved, which a push moves. `None` when either log is not
-/// there to read: a repository on no branch, or one never pushed.
+/// The data repository's pushes, from the reflogs of its branch and of `origin`'s copy. `None`
+/// on no branch, or never pushed.
 fn pushes(root: &std::path::Path) -> Option<suzatary_core::health::Health> {
     let (dir, common) = git_dirs(root).ok()?;
     let head = std::fs::read_to_string(dir.join("HEAD")).ok()?;
@@ -190,12 +183,10 @@ fn pushes(root: &std::path::Path) -> Option<suzatary_core::health::Health> {
     remote::pushes(&tip(&dir.join("logs/HEAD"))?, upstream.as_ref())
 }
 
-/// How much of a reflog's end is read: its last line is two commit names, an identity, a time
-/// and a commit's subject, well within this.
+/// Bytes read from a reflog's end; its last line fits well within this.
 const REFLOG_TAIL: u64 = 64 * 1024;
 
-/// The last move the reflog at `log` records, read from its end: a reflog only grows, by one
-/// line per move, and its tip is its last line.
+/// The reflog's last line: a reflog only grows, one line per move.
 fn tip(log: &std::path::Path) -> Option<Tip> {
     use std::io::{Read as _, Seek as _};
     let mut file = std::fs::File::open(log).ok()?;
@@ -207,8 +198,6 @@ fn tip(log: &std::path::Path) -> Option<Tip> {
     Tip::of_reflog(&String::from_utf8_lossy(&tail))
 }
 
-/// Each declared plugin's store as the schema beside it reads, a store that cannot be read
-/// saying why.
 fn stores(
     state: &State,
     manifests: &[suzatary_core::plugin::Manifest],
@@ -239,8 +228,6 @@ fn stores(
 mod tests {
     use super::*;
 
-    /// A worktree's `.git` is a file: its configuration is the main checkout's, through the
-    /// worktree's `gitdir` and its `commondir`.
     #[test]
     fn a_worktree_reads_the_configuration_its_gitdir_shares() {
         let main = tempfile::tempdir().expect("a scratch directory");
@@ -276,8 +263,6 @@ mod tests {
         );
     }
 
-    /// A repository whose branch is where `origin`'s copy of it last moved was pushed then; one
-    /// whose branch moved on since is failing since that push; one never pushed observes nothing.
     #[test]
     fn the_pushes_are_read_from_the_reflogs() {
         use suzatary_core::health::Reading;

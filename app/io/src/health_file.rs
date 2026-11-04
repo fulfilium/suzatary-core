@@ -12,9 +12,6 @@ pub type HealthFile<K> = Locked<Healths<K>>;
 impl<K: Ord + Clone + Sync + 'static> Locked<Healths<K>> {
     /// Join `results` in, the read and the write one critical section, and answer what it holds
     /// now.
-    ///
-    /// # Errors
-    /// The lock, the read or the write failing.
     pub fn join(&self, results: &Healths<K>) -> Result<Healths<K>, StoreError> {
         let joined = self.rewrite(|held| Some(held.cloned().unwrap_or_default().join(results)))?;
         Ok(joined.unwrap_or_default())

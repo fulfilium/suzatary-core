@@ -1,14 +1,11 @@
-//! What a write shows of the device that sent it (SPEC law 42): a request is named by its content
-//! (its method, target, the instant its device stamped and its body's digest) and signed by a
-//! device key, and the box proves it (`suzatary_core::signatures::Asking`) by the same check a
-//! posted object's signature passes, against every chain the route can write, so a phone whose
-//! key was revoked writes through no route the box performs for it.
+//! Signed requests (SPEC law 42): a request is named by its method, target, device instant and
+//! body digest, signed by a device key, and proven against every chain the route can write, so a
+//! revoked key writes through no route.
 //!
-//! A request is performed ONCE: after its answer the box keeps a provenance record under its
-//! name, with the chain objects it wrote doing it, pushed with the data, and the answer itself on
-//! the box; the same request sent again is answered from there with no new effect. Its instant
-//! must be within `signatures::WINDOW_SECONDS` of the box's clock in UTC, so a request kept past that
-//! cannot be sent at all, and its answer need not be kept past twice that.
+//! A request is performed once: its record and answer are kept under its name, and a resend is
+//! answered from there with no new effect. Its instant must be within
+//! `signatures::WINDOW_SECONDS` of the box's UTC clock, so an answer need not be kept past twice
+//! that.
 
 use std::collections::BTreeSet;
 use std::sync::{Arc, Mutex};
@@ -45,9 +42,8 @@ const ANSWER_CAP: usize = 16 << 20;
 /// The names being performed now, so a request sent twice at once is performed once.
 pub type InFlight = Arc<Mutex<BTreeSet<Hash>>>;
 
-/// The body, read whole where a signature covers it, and the door's proof of the request, of the
-/// kind `P` the route's witness asks for. `trusting` is every chain the route can write, the key
-/// trusted for the gate's actor on each.
+/// The body, read whole where a signature covers it, and the door's proof `P` of the request.
+/// `trusting` is every chain the route can write.
 ///
 /// # Errors
 /// A body over its cap, a request dated outside the window, or one its signature does not prove,
@@ -98,12 +94,9 @@ pub async fn asked<P: Proof>(
     Ok((Body::from(bytes), proof))
 }
 
-/// A READ BY A REVOKED DEVICE IS NOT ANSWERED: a request the route asks nothing of is still
-/// checked when it is signed, and one its signature proves came from a key the history revoked
-/// for the gate's actor is answered [`Refusal::wipe`], on which the tab deletes what it holds. An
-/// unsigned read, or one whose signature does not verify (a body this door does not read), is a
-/// read by the login alone; so the device that is wiped is the one that proves it holds the
-/// revoked key.
+/// A signed read whose signature proves a key revoked for the gate's actor is answered
+/// [`Refusal::wipe`], on which the tab deletes what it holds. An unsigned or unverified read is a
+/// read by the login alone, so only a device that proves it holds the revoked key is wiped.
 async fn read_by_a_kept_key(
     state: &State,
     admitted: &Admitted,
@@ -199,7 +192,6 @@ pub struct Performing {
 }
 
 impl Performing {
-    /// The device key that signed the request.
     #[must_use]
     pub fn device(&self) -> &PublicKey {
         &self.device
@@ -225,9 +217,8 @@ impl Performing {
         })
     }
 
-    /// The route's answer kept on the box as `keeps` says, and the request's record, with its
-    /// status and what the box wrote doing it, kept under its name; the answer handed on as it
-    /// was given.
+    /// Keep the route's answer (as `keeps` says) and the request's record under its name, and
+    /// hand the answer on unchanged.
     ///
     /// # Errors
     /// An answer too large to keep, or the record store refusing it.

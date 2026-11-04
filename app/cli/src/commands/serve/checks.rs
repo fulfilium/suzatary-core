@@ -1,6 +1,5 @@
-//! A source's check at the act that made it readable: a link's plugin synced once, as the
-//! 15-minute timer syncs it, and a Google account's calendars read once, as `plugin sync` reads
-//! them, so the line says what the check found before the person leaves the page.
+//! A source's check at the act that made it readable: one sync, as its timer would run it, so
+//! the line says what it found before the person leaves the page.
 
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -18,7 +17,6 @@ pub struct Synced {
 }
 
 impl Synced {
-    /// Over `instance`'s file, asking Google at `google`.
     #[must_use]
     pub fn of(instance: &Instance, google: &suzatary_core::google::Endpoints) -> Self {
         Self {
@@ -51,7 +49,6 @@ impl suzatary_core::settings::Checks for Synced {
                     tracing::info!("check: {line}");
                 }
             }
-            // The mail and the Drive are read by their own timers alone.
             SourceKey::Mail(_) | SourceKey::Drive => {
                 tracing::info!("check: {source} is read by its timer alone");
             }

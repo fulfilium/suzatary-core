@@ -1,9 +1,8 @@
 //! The phones that asked to be woken: one `<actor>.tsv` per actor of `platform`, `token`,
 //! `registered-at` lines, interpreted by [`Lines`].
 //!
-//! The format is fixed because registered tokens are live on disk and a change would orphan every
-//! phone. A ragged line is dropped, costing one phone rather than the file: it is state, not the
-//! chain, and losing it costs only a re-registration.
+//! The format is fixed: a change would orphan every registered phone. A ragged line is dropped,
+//! costing one phone a re-registration rather than the file.
 
 use std::path::PathBuf;
 
@@ -16,7 +15,6 @@ use crate::lines::{Codec, Layout, Lines};
 pub type Devices = Lines<String, Device>;
 
 impl Devices {
-    /// The phones under `dir`, made on the first registration.
     #[must_use]
     pub fn open(dir: PathBuf) -> Self {
         Lines::new(dir, &LAYOUT, &CODEC)
@@ -67,7 +65,7 @@ const CODEC: Codec<Device> = Codec {
     },
 };
 
-/// An actor name made safe for a file name, the one door a device file's name comes through.
+/// An actor name made safe for a file name.
 fn safe_actor(actor: &str) -> String {
     let mapped: String = actor
         .chars()

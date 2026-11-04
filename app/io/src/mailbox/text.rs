@@ -1,5 +1,4 @@
-//! Body text and links from notmuch's `show --format=json` body, a nested forest of MIME parts;
-//! pure over the captured value.
+//! Body text and links from notmuch's `show --format=json` body, a nested forest of MIME parts.
 
 use std::sync::LazyLock;
 
@@ -47,12 +46,8 @@ pub fn body_text(body: &Value) -> String {
     html_to_text(&html_parts.concat())
 }
 
-// --- A minimal HTML entity unescape ------------------------------------------
-//
-// Deliberately narrow: the five common named entities, `&nbsp;` and numeric references; a full
-// named-entity table would be a dependency this crate does not take.
-
-/// One named or numeric character reference, without its `&`/`;`.
+/// One named or numeric character reference, without its `&`/`;`. Deliberately narrow: a full
+/// named-entity table would be a dependency this crate does not take.
 fn decode_entity(entity: &str) -> Option<char> {
     match entity {
         "amp" => Some('&'),
@@ -102,10 +97,8 @@ pub fn unescape_entities(text: &str) -> String {
     out
 }
 
-// --- The detagger: a minimal HTML -> text walk -------------------------------
-//
-// Not a renderer: the sentences survive, the layout need not. Byte slicing is safe because every
-// delimiter searched for is ASCII, which is never a UTF-8 continuation byte.
+// Byte slicing in the detagger is safe: every delimiter searched for is ASCII, which is never a
+// UTF-8 continuation byte.
 
 /// Tags whose content is markup or styling, never prose — dropped whole.
 const DROP: [&str; 4] = ["script", "style", "head", "title"];
@@ -131,8 +124,6 @@ static SPACES: LazyLock<Regex> =
 static BLANK_RUN: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r"\n{3,}").expect("a literal pattern"));
 
-/// Squeeze the walked text: `\xa0` to a space, each line's runs of space/tab to one space and
-/// the line trimmed, three or more newlines to two, and the whole trimmed.
 fn finish_text(joined: &str) -> String {
     let normalized = joined.replace('\u{a0}', " ");
     let lines: Vec<String> = normalized
@@ -202,8 +193,6 @@ pub fn html_to_text(html: &str) -> String {
     }
     finish_text(&out)
 }
-
-// --- Links --------------------------------------------------------------
 
 /// A labelled anchor, `href="…">…</a>`: the label may span lines, and the tag is
 /// case-insensitive.

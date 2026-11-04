@@ -1,7 +1,5 @@
-//! The syncer: pull every account through its kind's puller (`crate::pullers`), index once,
-//! and tag the leaves whose sync path carries no tags. The one module that writes the maildir
-//! and the index, beside `crate::older`, which writes what a server search matched into leaves
-//! of its own and indexes through [`Syncer::index`].
+//! The syncer: pull every account, index once, and tag the leaves whose sync path carries no
+//! tags. With `crate::older`, the only writer of the maildir and the index.
 //!
 //! One account's failure is an [`AccountSync`] with a failed outcome, and the run goes on.
 
@@ -80,7 +78,6 @@ impl Syncer {
         self
     }
 
-    /// The roster this syncer pulls.
     #[must_use]
     pub fn accounts(&self) -> &Roster {
         &self.accounts
@@ -105,9 +102,8 @@ impl Syncer {
             .collect();
 
         let indexed = said(&self.notmuch(&["new"])).unwrap_or_else(|failed| failed);
-        // lieer maps Gmail's labels to tags; IMAP and mbsync leave a folder
-        // untagged, and untagged mail never reaches the queue, so each account's failure to
-        // tag joins the report's line beside what indexing said.
+        // IMAP and mbsync leave a folder untagged (lieer does not), and untagged mail never
+        // reaches the queue.
         let untagged = self
             .accounts
             .accounts()
@@ -141,7 +137,6 @@ impl Syncer {
         }
     }
 
-    /// The puller for `account`'s kind.
     fn puller(&self, account: &MailAccount) -> Box<dyn Puller> {
         let maildir = self.mail_root.join(&account.subdir);
         let lieer = |maildir: PathBuf| Lieer {
@@ -260,8 +255,7 @@ pub(crate) fn said(cmd: &Cmd) -> Result<String, String> {
         .map_err(|failed| failed.to_string())
 }
 
-/// The report's notmuch line: what indexing said, then each account that could not be tagged,
-/// leaving out an index line that is empty so the line never opens with a separator.
+/// The report's notmuch line: what indexing said, then each account that could not be tagged.
 fn notmuch_line(indexed: &str, untagged: impl Iterator<Item = String>) -> String {
     std::iter::once(indexed.to_owned())
         .filter(|line| !line.is_empty())
@@ -282,8 +276,7 @@ pub(crate) fn tail(text: &str) -> String {
 mod tests {
     use super::*;
 
-    /// No state is a first sync; a state that is there and cannot be read is an error, never
-    /// a first sync that would fetch the whole folder again.
+    /// An unreadable state must not read as a first sync, which would refetch the whole folder.
     #[test]
     fn only_a_missing_sync_state_is_a_first_sync() {
         let dir = tempfile::tempdir().expect("a scratch dir");

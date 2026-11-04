@@ -11,7 +11,6 @@ pub const SLACK_SECONDS: u64 = 60;
 /// A freshly minted token and how many seconds it lives.
 #[derive(Debug, Clone)]
 pub struct Fresh<T> {
-    /// The token.
     pub token: T,
     /// Seconds until it expires.
     pub lifetime: u64,
@@ -19,15 +18,10 @@ pub struct Fresh<T> {
 
 /// What mints a bearer token: a service account, a refresh token.
 pub trait Grant {
-    /// The token it mints.
     type Token: Clone;
-    /// Why it could not.
     type Error;
 
     /// Mint one now.
-    ///
-    /// # Errors
-    /// [`Grant::Error`] when the grant is refused or unreachable.
     fn mint(&self, http: &dyn Http, now: u64) -> Result<Fresh<Self::Token>, Self::Error>;
 }
 
@@ -44,7 +38,6 @@ impl<G: Grant> std::fmt::Debug for Bearer<G> {
 }
 
 impl<G: Grant> Bearer<G> {
-    /// Nothing held yet.
     #[must_use]
     pub fn new(grant: G) -> Self {
         Self {
@@ -53,18 +46,13 @@ impl<G: Grant> Bearer<G> {
         }
     }
 
-    /// The grant.
     #[must_use]
     pub fn grant(&self) -> &G {
         &self.grant
     }
 
-    /// The held token while it has more than [`SLACK_SECONDS`] left at
-    /// `now` (unix seconds), else a freshly minted one. A failure holds
-    /// nothing.
-    ///
-    /// # Errors
-    /// The grant's, when a mint was due and failed.
+    /// The held token while it has more than [`SLACK_SECONDS`] left at `now` (unix seconds),
+    /// else a freshly minted one. A failed mint holds nothing.
     pub fn token(&self, http: &dyn Http, now: u64) -> Result<G::Token, G::Error> {
         let mut held = self
             .held

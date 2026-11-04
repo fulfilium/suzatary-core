@@ -1,8 +1,6 @@
-//! A compile bounded: each one is a child process (`suzatary typeset`) that caps its
-//! own CPU time and address space before it reads the text (`commands::typeset`), since a
-//! parent's `pre_exec` is `unsafe` and every crate here forbids it. A text that loops is refused
-//! when it has used [`CPU_SECONDS`] of CPU, however busy the box is; a child that blocks without
-//! using CPU is killed at the wall-clock [`BACKSTOP`].
+//! A compile bounded: each one is a child process (`suzatary typeset`) that caps its own CPU
+//! time and address space before it reads the text, since a parent's `pre_exec` is `unsafe` and
+//! every crate here forbids it.
 
 use std::os::unix::process::ExitStatusExt as _;
 use std::path::PathBuf;
@@ -16,14 +14,12 @@ use suzatary_core::template::Job;
 use super::Compiler;
 use crate::run::{Cmd, RunError, succeed};
 
-/// The CPU time one compile may use, counted from the child's start, so its start and every
-/// thread it runs count too. A todo's text uses 15 to 35 ms of it, about 15 ms of that the
-/// child's start; a text that loops uses it all.
+/// The CPU time one compile may use, counted from the child's start and across its threads.
+/// A todo's text uses 15 to 35 ms.
 pub const CPU_SECONDS: u64 = 2;
 
-/// The wall-clock time one compile may take. A compile is bounded by [`CPU_SECONDS`]; this
-/// catches only a child that waits on something without using CPU, and it is long enough that a
-/// busy box, which slows a child down but leaves its CPU time alone, never reaches it.
+/// The wall-clock limit, for a child that blocks without using CPU; long enough that a busy box
+/// never reaches it.
 pub const BACKSTOP: Duration = Duration::from_mins(1);
 
 /// A document longer than this is not a page.
@@ -37,8 +33,7 @@ pub struct Closed {
 }
 
 impl Closed {
-    /// `exe typeset` is the child; `exe` is this binary in production. The child is killed when
-    /// it has not answered within `backstop` of wall-clock time.
+    /// `exe typeset` is the child, killed after `backstop` of wall-clock time.
     #[must_use]
     pub fn new(exe: impl Into<PathBuf>, backstop: Duration) -> Self {
         Self {
@@ -47,8 +42,7 @@ impl Closed {
         }
     }
 
-    /// This very binary as the child, or `suzatary` on `PATH` where the
-    /// operating system cannot say where this process's executable is.
+    /// This binary as the child, or `suzatary` on `PATH` when its path is unknown.
     #[must_use]
     pub fn this_binary() -> Self {
         let exe = std::env::current_exe().unwrap_or_else(|_| PathBuf::from("suzatary"));

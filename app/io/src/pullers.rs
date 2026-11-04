@@ -1,7 +1,5 @@
 //! The four pullers, one per account kind: Microsoft's IMAP, mbsync from the Proton Bridge, and
-//! lieer from Gmail on its own grant or on the box's Google grant. Each pulls one account into
-//! its maildir as a `suzatary_core::mail::puller::Puller`; the syncer runs one per account and
-//! indexes once after them all.
+//! lieer from Gmail on its own grant or on the box's Google grant.
 
 use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
@@ -25,20 +23,14 @@ pub const LIEER: &str = "gmi";
 pub const MBSYNC: &str = "mbsync";
 
 /// A Microsoft account: every folder it declares ([`declared`]), each pulled on its own so one
-/// that fails costs that folder alone: its inbox folders as windows that land unread, then its
-/// Sent folder read-only into its own leaf and landed read, so sent mail is searchable and never
-/// queued. A declared folder the server does not list is not asked for, and fails the pull by
-/// name.
+/// that fails costs that folder alone. Sent lands read, so it is searchable and never queued. A
+/// declared folder the server does not list fails the pull by name.
 pub struct Microsoft<O> {
-    /// The account, whose address the session signs in as and whose slug names its state files.
     pub account: MailAccount,
-    /// Its folders as the instance file declares them.
     pub declares: MsImap,
-    /// Its maildir, `<mail root>/<subdir>`.
+    /// `<mail root>/<subdir>`.
     pub maildir: PathBuf,
-    /// Where each leaf's sync state is kept.
     pub state_dir: PathBuf,
-    /// How its session is opened.
     pub open: O,
 }
 
@@ -75,11 +67,8 @@ impl<O: Open> Puller for Microsoft<O> {
 
 /// How a Microsoft account's IMAP session is opened: authenticated, nothing selected.
 pub trait Open {
-    /// What the session runs over.
     type Stream: Read + Write;
 
-    /// An authenticated session for `account`.
-    ///
     /// # Errors
     /// [`ImapError::NeedsLogin`] when only a sign-in mends the account, else the token's or
     /// the server's failure.
@@ -93,7 +82,6 @@ pub struct Granted {
 }
 
 impl Granted {
-    /// Over this store's grants.
     #[must_use]
     pub fn new(tokens: TokenStore) -> Self {
         Self { tokens }
@@ -120,7 +108,7 @@ impl Open for Granted {
 }
 
 /// One [`Pull`] into the maildir leaf `leaf`, its state kept at `state`, so a backfill and the
-/// INBOX pull never share UID sets; what it did.
+/// INBOX pull never share UID sets.
 pub(crate) fn pull_into<S: Session + ?Sized>(
     session: &mut S,
     leaf: &Path,
@@ -137,7 +125,6 @@ pub(crate) fn pull_into<S: Session + ?Sized>(
 /// A Gmail account through lieer (`gmi sync` in its maildir), which reads lieer's own grant
 /// and maps Gmail's labels to tags itself.
 pub struct Lieer {
-    /// lieer's program, [`LIEER`] on the box.
     pub program: PathBuf,
     /// The account's maildir, lieer's repository.
     pub maildir: PathBuf,
@@ -156,11 +143,8 @@ impl Puller for Lieer {
 /// the box's grant (never the grant) before it syncs, its repository begun without lieer's own
 /// sign-in where none is.
 pub struct Google {
-    /// lieer, in the account's maildir.
     pub lieer: Lieer,
-    /// The account.
     pub account: EmailAddress,
-    /// The grants the token is minted from.
     pub grants: Grants,
 }
 
@@ -190,11 +174,9 @@ impl Puller for Google {
 /// A Proton account through mbsync from the Bridge, pinned to the deployment's configuration
 /// with `-c`, since which file it reads is a security property.
 pub struct Mbsync {
-    /// mbsync's program, [`MBSYNC`] on the box.
     pub program: PathBuf,
     /// The deployment's `mbsyncrc`.
     pub config: PathBuf,
-    /// The account's channel in it.
     pub channel: String,
 }
 

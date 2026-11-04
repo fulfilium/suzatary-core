@@ -1,6 +1,5 @@
-//! Every source's health on disk, as one [`Register`] keyed by [`SourceKey`]: the value and its
-//! join are [`suzatary_core::health`]'s. It lives beside the triage heartbeat, box-local and
-//! never pushed, because it is this box's account of its own reads.
+//! Every source's health on disk, as one [`Register`] keyed by [`SourceKey`]. It lives beside
+//! the triage heartbeat, box-local and never pushed.
 //!
 //! [`Register`]: suzatary_core::health::Register
 
@@ -14,7 +13,7 @@ use crate::health_file::HealthFile;
 /// The register; absent is a box that has read from nothing yet.
 pub type Health = HealthFile<SourceKey>;
 
-/// Its file's name, beside the heartbeat as the triage outcome is.
+/// The register's file name, beside the heartbeat.
 pub const FILE: &str = "source-health.json";
 
 /// The register beside `heartbeat`, its lock beside it.
@@ -61,8 +60,6 @@ mod tests {
         }
     }
 
-    /// A sync and a Drive probe recorded one after the other read back from the file, each
-    /// under its own key, as the join of what was recorded under it.
     #[test]
     fn results_recorded_into_the_file_read_back_as_their_join() {
         let dir = tempfile::tempdir().expect("a temp dir");
@@ -95,8 +92,7 @@ mod tests {
         );
     }
 
-    /// Writers that join at once, each through its own handle as each process opens its own,
-    /// lose none of each other's results: every join's read and write is one critical section.
+    /// Each writer opens its own handle, as each process does.
     #[test]
     fn writers_that_join_at_once_lose_no_result() {
         let dir = tempfile::tempdir().expect("a temp dir");

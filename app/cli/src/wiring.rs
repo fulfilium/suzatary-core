@@ -1,7 +1,5 @@
-//! The box's interpreters, opened once from the instance: what every record borrows, whichever
-//! process holds it. The agent's [`Grounds`] are part of the secretary's [`Opened`], and the
-//! server's `World` is [`Opened`] plus what only a server holds, so one interpreter of an effect
-//! is built in one place.
+//! The box's interpreters, opened once from the instance: what every record borrows. Each
+//! effect's interpreter is built in one place.
 
 use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
@@ -34,8 +32,7 @@ use suzatary_io::unrendered::Unrendered;
 use crate::commands::serve::interpreters::{Declared, DriveAccess, Forecast, Junk, WebAccess};
 use crate::instance::{ChainDir, Instance};
 
-/// The files a [`Grounds`] reads and writes, and the accounts its sync pulls, wired by [`Ground`]'s
-/// methods alone.
+/// The files a [`Grounds`] reads and writes, and the accounts its sync pulls.
 pub struct Ground {
     mail_root: PathBuf,
     notmuch: PathBuf,
@@ -58,7 +55,6 @@ pub struct Ground {
 }
 
 impl Ground {
-    /// The box's, from the instance file.
     #[must_use]
     pub fn of(instance: &Instance) -> Self {
         Self {
@@ -80,7 +76,6 @@ impl Ground {
         }
     }
 
-    /// The maildir root.
     #[must_use]
     pub fn mail_root(&self) -> &Path {
         &self.mail_root
@@ -98,7 +93,7 @@ impl Ground {
         )
     }
 
-    /// Where each message this ground's corpus has listed lives, by canonical hash.
+    /// Where each listed message lives, by canonical hash.
     #[must_use]
     pub fn located(&self) -> suzatary_io::mailbox::located::Located {
         suzatary_io::mailbox::located::Located::open(self.mail_hashes.clone())
@@ -121,7 +116,6 @@ impl Ground {
         }
     }
 
-    /// The pull.
     #[must_use]
     pub fn syncer(&self) -> suzatary_io::sync::Syncer {
         let syncer = suzatary_io::sync::Syncer::new(
@@ -164,7 +158,6 @@ pub struct Grounds {
 }
 
 impl Grounds {
-    /// The box's six, from the instance file.
     #[must_use]
     pub fn of(instance: &Instance) -> Self {
         Self::over(
@@ -175,8 +168,7 @@ impl Grounds {
         )
     }
 
-    /// The six over `ground`, the manuals and the renderer reading the code root `code`, the
-    /// renderer typesetting through `typeset`.
+    /// The six over `ground`, reading manuals and templates from the code root `code`.
     #[must_use]
     pub fn over(
         ground: &Ground,
@@ -224,15 +216,13 @@ pub struct Remembering {
     pub(crate) digest_texts: Texts<Line>,
     /// Whose retraction or erasure the digest believes.
     pub(crate) owners: BTreeSet<Actor>,
-    /// Whether the compactor runs, and within what.
     pub(crate) compacting: Compacting,
-    // One store for every chain, as a proposal is the box's question and not a chain's.
+    // One store for every chain: a proposal is the box's question, not a chain's.
     pub(crate) inbox: Objects<InboxEvent>,
 }
 
 impl Remembering {
-    /// The memory's stores, from the instance file, the conversations' answers drawn through
-    /// `renders`, the cache an erasure empties.
+    /// The memory's stores; `renders` is the answers' cache an erasure empties.
     #[must_use]
     pub fn of(instance: &Instance, renders: Arc<dyn RenderCache + Send + Sync>) -> Self {
         Self {
@@ -247,8 +237,7 @@ impl Remembering {
         }
     }
 
-    /// The memory's stores as a reader that draws no answer opens them: the secretary's answers'
-    /// cache, which sweeps its directory when it opens, is not opened.
+    /// The memory's stores without the answers' cache, which sweeps its directory when opened.
     #[must_use]
     pub fn reader(instance: &Instance) -> Self {
         Self::of(instance, Arc::new(Unrendered))
@@ -273,9 +262,9 @@ impl Remembering {
     }
 }
 
-/// The secretary's memory as the triage agent's process opens it: the facts, their words, the
-/// digest and its words each inside [`Only`], so no write handle to them exists in the process.
-/// The conversations and the inbox stay writable, since the agent's cards are filed there.
+/// The secretary's memory as the triage agent's process opens it: memory and digest inside
+/// [`Only`], so no write handle exists in the process. The conversations and the inbox stay
+/// writable, since the agent's cards are filed there.
 pub struct Recalling {
     pub(crate) conversations: ConversationStores,
     memory: Only<Objects<MemoryEvent>>,
@@ -288,7 +277,6 @@ pub struct Recalling {
 }
 
 impl Recalling {
-    /// The memory's stores, from the instance file, opened as [`Remembering::reader`] opens them.
     #[must_use]
     pub fn of(instance: &Instance) -> Self {
         Remembering::reader(instance).into()
@@ -329,16 +317,16 @@ impl From<Remembering> for Recalling {
     }
 }
 
-/// [`Grounds`] and every store and effect a secretary's record adds, one of each for every
-/// chain: a second chain is a second [`Stores`], never a second inbox, cache or mail handle.
+/// [`Grounds`] and every store and effect a secretary's record adds, one for all chains: a
+/// second chain is a second [`Stores`], never a second inbox, cache or mail handle.
 pub struct Opened {
     pub(crate) grounds: Grounds,
-    /// The answers' cache of typst blocks: the one the pages draw through is the one an
-    /// erasure empties, so it is opened once and the conversations hold it.
+    /// The answers' cache of typst blocks, opened once: the pages draw through the same cache
+    /// an erasure empties.
     pub(crate) answers: Arc<suzatary_io::render::Typst>,
     pub(crate) remembering: Remembering,
     pub(crate) decisions: Objects<DecisionEvent>,
-    /// The topics, box-local and never pushed; a server also serves them to a tab.
+    /// The topics, box-local and never pushed.
     pub(crate) topics: suzatary_io::topics::Topics,
     pub(crate) briefings: suzatary_io::briefings::BriefingFiles,
     pub(crate) weather: Forecast,
@@ -358,7 +346,6 @@ pub struct Opened {
         suzatary_core::held_value::HeldFile,
         suzatary_core::secretary::attached::Attached,
     >,
-    /// The model settings the instance file declares, read as a card is filed.
     pub(crate) configuration: crate::instance::InstanceEdits,
     pub(crate) watches: suzatary_io::watches::Watches,
     pub(crate) repos: Arc<suzatary_io::repos::Mirrors>,
@@ -406,13 +393,11 @@ impl Opened {
         }
     }
 
-    /// The memory and the digest, as one record reads and erases them.
     #[must_use]
     pub fn memories(&self) -> Memories<'_> {
         self.remembering.memories()
     }
 
-    /// The recorded decisions.
     #[must_use]
     pub fn decisions(&self) -> Decisions<'_> {
         Decisions {
@@ -462,14 +447,13 @@ impl Opened {
 
 /// One chain's stores and the policy they are read under, together.
 pub struct Stores {
-    /// Whose events bind here.
     pub policy: ChainPolicy,
-    /// Written through the box's key: every append the box makes is signed.
+    /// Every append the box makes is signed.
     pub(crate) chain: Signing<Objects<TodoEvent>>,
 }
 
 impl Stores {
-    /// Open one chain's stores under that chain's own trust rule, written as its owner.
+    /// One chain's stores under its own trust rule, written as its owner.
     #[must_use]
     pub fn of(chain: &ChainDir, signers: &Signers) -> Self {
         Self {

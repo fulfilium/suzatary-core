@@ -1,9 +1,6 @@
-//! The timer's own mail sync, started on demand: the systemd unit the timer starts, and the
-//! report its sync step leaves, read back as an interpreter of [`MailSync`].
-//!
-//! This is the one door to a sync outside the timer. `suzatary mail idle` and the secretary's
-//! `sync_mail` both start the same unit, which systemd never runs twice at once, so there is one
-//! pipeline however many things ask for it, and nothing reaches a server the timer does not.
+//! The timer's mail sync started on demand, as an interpreter of [`MailSync`]: the one door to a
+//! sync outside the timer. Every caller starts the same unit, which systemd never runs twice at
+//! once, so nothing reaches a server the timer does not.
 
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant, SystemTime};
@@ -20,10 +17,8 @@ pub const TRIAGE_UNIT: &str = "suzatary-triage.service";
 /// How long `start` waits for the sync step's report; the pass's triage, if any, carries on.
 const WAIT: Duration = Duration::from_secs(150);
 
-/// How often the report is looked at while waiting.
 const POLL: Duration = Duration::from_secs(2);
 
-/// The unit and the report its sync step writes.
 #[derive(Debug, Clone)]
 pub struct Timer {
     program: PathBuf,
@@ -32,8 +27,7 @@ pub struct Timer {
 }
 
 impl Timer {
-    /// The triage unit, whose sync writes `report` (`Paths::last_sync`, the state directory's
-    /// `last-sync.json`).
+    /// The triage unit, whose sync writes `report` (`Paths::last_sync`).
     #[must_use]
     pub fn new(report: impl Into<PathBuf>) -> Self {
         Self {
@@ -45,9 +39,6 @@ impl Timer {
 
     /// Start the unit and wait for its whole pass, as `mail idle`'s debounce does, so wakes
     /// that arrive during a pass start another after it.
-    ///
-    /// # Errors
-    /// The `systemctl` that could not be run.
     pub fn run_now(&self) -> Result<Ran, RunError> {
         run(&self.systemctl(&[]))
     }
@@ -96,12 +87,8 @@ impl MailSync for Timer {
     }
 }
 
-/// The sync report at `path` and when it was written: `None` before the first sync, and while
-/// one is being written, since a half-written report reads as none yet. A report that is there
-/// and cannot be read is an error.
-///
-/// # Errors
-/// Any failure to read the file but its absence.
+/// The sync report at `path` and when it was written: `None` before the first sync and while one
+/// is half-written. A report that is there and cannot be read is an error.
 pub fn read_report(path: &Path) -> std::io::Result<Option<(SyncReport, SystemTime)>> {
     let Some(text) = std::fs::read_to_string(path).present()? else {
         return Ok(None);
@@ -174,8 +161,6 @@ mod tests {
         let _ = std::fs::remove_dir_all(dir);
     }
 
-    /// A report that is there and cannot be read (a directory where the file belongs) is a
-    /// failure, never "no sync yet".
     #[test]
     fn an_unreadable_report_is_a_failure() {
         let dir = scratch("unreadable");

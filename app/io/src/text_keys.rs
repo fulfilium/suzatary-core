@@ -1,7 +1,6 @@
 //! The keys of locked texts on disk, one file per [`TextKey`] named by its [`KeyName`], as a
-//! [`Doc`]: box-local, readable by this user alone, in the vault and never pushed. A key is put
-//! once, read by name, and leaves only by `remove`, which destroys it and succeeds when it is
-//! already gone; a file swapped under the store reads as absent.
+//! [`Doc`]: box-local, readable by this user alone, in the vault and never pushed. `remove`
+//! destroys a key and succeeds when it is already gone; a swapped file reads as absent.
 //!
 //! [`Doc`]: suzatary_core::store::Doc
 

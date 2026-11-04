@@ -9,9 +9,7 @@ use suzatary_core::zone::Zone;
 use crate::plugin_store::PluginStore;
 use suzatary_core::store::Reads as _;
 
-/// The calendar every calendar plugin fills, read through
-/// [`suzatary_core::capability::Calendar`]: the union of the plugins' stores whose declared
-/// schema is a calendar's.
+/// The union of the plugin stores whose declared schema is a calendar's.
 #[derive(Debug)]
 pub struct Clocked {
     stores: Vec<PluginStore>,
@@ -19,9 +17,8 @@ pub struct Clocked {
 }
 
 impl Clocked {
-    /// The calendar over the plugins' stores at `roots`, its days the owner's in `zone`; a
-    /// store nothing has written, or one whose schema is not a calendar's, reads as no
-    /// occurrences.
+    /// The calendar over the plugin stores at `roots`, its days in `zone`; an unwritten or
+    /// non-calendar store reads as no occurrences.
     #[must_use]
     pub fn new(roots: impl IntoIterator<Item = std::path::PathBuf>, zone: Zone) -> Self {
         Self {

@@ -1,7 +1,5 @@
-//! The weather feed: one GET, and the hour in the forecast city's zone. The
-//! decisions are [`suzatary_core::weather`]'s; the city and its zone are one
-//! fact, `[persona]`'s, because an instant is UTC and the feed's slots are
-//! local.
+//! The weather feed: one GET, and the hour in the forecast city's zone (the feed's slots are
+//! local; the city and its zone are both `[persona]`'s).
 
 use std::time::Duration;
 

@@ -1,10 +1,8 @@
-//! The owner's Drive through the Proton Drive CLI, as a [`Port`]: every invocation is built
-//! from `Command`, a closed enum of the port's two reads and two writes. The writes serve
-//! `Port::keep` alone, which only the owner's confirm on a private upload reaches
-//! (`suzatary_core::vault`).
+//! The owner's Drive through the Proton Drive CLI, as a [`Port`]: every invocation is a
+//! `Command`, a closed enum of two reads and two writes. The writes serve only the owner's
+//! confirmed private upload (`suzatary_core::vault`).
 //!
-//! A download lands in a private scratch directory removed before returning; a read extracts
-//! its text as a mail attachment's is, and redacts it.
+//! A download lands in a private scratch directory removed before returning; a read redacts.
 
 use std::ffi::OsString;
 use std::path::{Path, PathBuf};
@@ -19,29 +17,28 @@ use suzatary_core::file_read::FileRead;
 use crate::run::{Cmd, RunError, succeed};
 use crate::scratch::Scratch;
 
-/// The most of a listing read from the CLI.
+/// Bytes of stdout.
 const MAX_LISTING: usize = 4 * 1024 * 1024;
 
-/// How long a listing may take.
 const LIST_TIMEOUT: Duration = Duration::from_secs(30);
 
-/// How long a download may take.
 const DOWNLOAD_TIMEOUT: Duration = Duration::from_mins(2);
 
-/// The only commands this program runs: the port's two reads and two writes.
+/// The only commands this program runs.
 #[derive(Debug, Clone, Copy)]
 enum Command<'a> {
-    /// `filesystem list -j <folder>`.
     List(&'a DrivePath),
-    /// `filesystem download <file> <into>`, into an empty local directory.
-    Download { file: &'a DrivePath, into: &'a Path },
-    /// `filesystem create-folder <parent> <name>`.
+    /// Into an empty local directory.
+    Download {
+        file: &'a DrivePath,
+        into: &'a Path,
+    },
     CreateFolder {
         parent: &'a DrivePath,
         name: &'a str,
     },
-    /// `filesystem upload -f skip -t <file> <parent>`: a file already there with the same
-    /// name is left as it is, since the name carries the content's digest.
+    /// `-f skip`: a file already there with the same name is left as it is, since the name
+    /// carries the content's digest.
     Upload {
         file: &'a Path,
         parent: &'a DrivePath,
@@ -89,7 +86,6 @@ impl Command<'_> {
     }
 }
 
-/// The Drive CLI at one path, with downloads landing under one root.
 #[derive(Debug, Clone)]
 pub struct ProtonDrive {
     cli: PathBuf,
@@ -99,9 +95,7 @@ pub struct ProtonDrive {
 }
 
 impl ProtonDrive {
-    /// The CLI at `cli`, downloading under `scratch` (a directory per read,
-    /// private to this user, removed when the read ends). `repo` is
-    /// `pdftotext`'s nix fallback, as for mail attachments.
+    /// The CLI at `cli`, downloading under `scratch`; `repo` is `pdftotext`'s nix fallback.
     #[must_use]
     pub fn new(cli: PathBuf, scratch: PathBuf, repo: PathBuf) -> Self {
         Self {
@@ -112,13 +106,12 @@ impl ProtonDrive {
         }
     }
 
-    /// This Drive, for reading alone: what a holder that must never write is given.
+    /// This Drive for a holder that must never write.
     #[must_use]
     pub fn read_only(self) -> ReadOnly {
         ReadOnly(self)
     }
 
-    /// Every command bounded by `timeout` instead of its own default.
     #[must_use]
     pub fn with_timeout(self, timeout: Duration) -> Self {
         Self {
@@ -129,9 +122,6 @@ impl ProtonDrive {
 
     /// One file read for the model, its text redacted; the download is gone when this returns.
     /// A type no model reads is refused by its extension before anything is downloaded.
-    ///
-    /// # Errors
-    /// As `Port::entry`, then the CLI's or `pdftotext`'s failures.
     pub fn read(&self, file: &DrivePath) -> Result<FileRead, DriveFailure> {
         self.entry(file)?;
         let name = file.name().unwrap_or_default();
@@ -146,7 +136,6 @@ impl ProtonDrive {
             .map_err(DriveFailure::Unreachable)
     }
 
-    /// Run one command, bounded, and answer its standard output.
     fn run(&self, command: &Command<'_>) -> Result<Vec<u8>, DriveFailure> {
         let timeout = self.timeout.unwrap_or_else(|| command.timeout());
         succeed(
@@ -175,8 +164,7 @@ impl ProtonDrive {
     }
 }
 
-/// Whether the CLI's own words say its session expired or was never begun, which its sign-in
-/// at a terminal mends. Read once, where the CLI's exit is observed.
+/// Whether the CLI's stderr says its session expired or was never begun.
 fn asks_for_sign_in(stderr: &str) -> bool {
     let said = stderr.to_ascii_lowercase();
     [
@@ -235,16 +223,12 @@ impl WritePort for ProtonDrive {
     }
 }
 
-/// The Drive CLI with its writes out of reach: a [`Port`] and the model's read, and no
-/// [`WritePort`], so whatever holds one (the tap's performer, the secretary's record) cannot
-/// write, and the vault is the one holder of a `ProtonDrive` that can.
+/// The Drive CLI with no [`WritePort`], so its holders (the tap's performer, the secretary's
+/// record) cannot write; the vault is the one holder of a writable `ProtonDrive`.
 #[derive(Debug, Clone)]
 pub struct ReadOnly(ProtonDrive);
 
 impl ReadOnly {
-    /// One file read for the model, as [`ProtonDrive::read`].
-    ///
-    /// # Errors
     /// As [`ProtonDrive::read`].
     pub fn read(&self, file: &DrivePath) -> Result<FileRead, DriveFailure> {
         self.0.read(file)
@@ -261,14 +245,10 @@ impl Port for ReadOnly {
     }
 }
 
-/// A listing's entries, from the CLI's `-j` output: one JSON object per
-/// entry. The top level answers `{"path": …}` per section; a folder answers
-/// the node itself, whose `name` is `{"ok": true, "value": …}`, `type` is
-/// `file` or `folder`, and size is its active revision's `claimedSize`. An
-/// entry whose name cannot be read, or is not one path segment, is left out.
-///
-/// # Errors
-/// A sentence when the output is not a JSON array.
+/// A listing's entries from the CLI's `-j` output. The top level answers `{"path": …}` per
+/// section; a folder answers nodes whose `name` is `{"ok": true, "value": …}`, `type` is `file`
+/// or `folder`, and size is `activeRevision.claimedSize`. An entry whose name cannot be read,
+/// or is not one path segment, is left out.
 pub fn entries(folder: &DrivePath, json: &[u8]) -> Result<Vec<DriveEntry>, String> {
     let value: serde_json::Value = serde_json::from_slice(json)
         .map_err(|failed| format!("the Drive CLI's listing is not JSON: {failed}"))?;
@@ -324,15 +304,14 @@ fn entry(folder: &DrivePath, row: &serde_json::Value) -> Option<DriveEntry> {
     })
 }
 
-/// A private directory for one download, removed with everything in it when
-/// dropped: a document is on disk only for the length of the call.
+/// A private directory for one download, removed with its contents when dropped.
 fn scratch(root: &Path) -> Result<Scratch, DriveFailure> {
     Scratch::under(root, "suzatary-drive-")
         .map_err(|failed| DriveFailure::Unreachable(format!("no scratch space: {failed}")))
 }
 
-/// The one regular file a download left in `dir`, read whole. A link, a
-/// folder, nothing, or more than one entry is refused.
+/// The one regular file a download left in `dir`; a link, a folder, nothing, or more than one
+/// entry is refused.
 fn only_file(dir: &Path) -> Result<Vec<u8>, DriveFailure> {
     let unreadable =
         |failed: std::io::Error| DriveFailure::Unreachable(format!("the download: {failed}"));
@@ -370,8 +349,7 @@ mod tests {
         text.parse().expect("a Drive path")
     }
 
-    /// The shape `filesystem list -j` printed for a folder, one node per
-    /// line, as the SDK serialises it.
+    /// The shape `filesystem list -j` printed for a folder, as the SDK serialises it.
     const LISTING: &str = r#"[
 {"uid":"u1","name":{"ok":true,"value":"letter.txt"},"type":"file","mediaType":"text/plain","creationTime":"2026-09-01T10:00:00.000Z","activeRevision":{"uid":"r1","claimedSize":120,"claimedModificationTime":"2026-09-01T09:00:00.000Z"}},
 {"uid":"u2","name":{"ok":true,"value":"Tax"},"type":"folder","creationTime":"2026-08-01T10:00:00.000Z"},
@@ -382,7 +360,6 @@ mod tests {
 {"uid":"u7","name":{"ok":true,"value":"lease.docx"},"type":"file","activeRevision":{"claimedSize":4096}}
 ]"#;
 
-    /// A fake CLI that logs every call and fails on anything but the two reads.
     struct Fake {
         dir: PathBuf,
         cli: PathBuf,
@@ -454,7 +431,6 @@ mod tests {
                 .collect()
         }
 
-        /// Every call the fake saw was one of the two reads.
         fn only_reads_ran(&self) {
             let calls = self.calls();
             assert!(!calls.is_empty(), "the CLI was called");
@@ -626,7 +602,6 @@ mod tests {
         fake.only_reads_ran();
     }
 
-    /// An image is handed over as itself, and its download removed.
     #[test]
     fn an_image_is_read_as_the_file_itself() {
         let fake = Fake::new("image");

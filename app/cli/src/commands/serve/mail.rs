@@ -26,7 +26,6 @@ pub struct Search {
     page: Page,
 }
 
-/// The message a path names.
 pub struct Message(String);
 
 /// The thread a path names, and how many of its messages.
@@ -60,7 +59,6 @@ impl Params for Message {
     }
 }
 
-/// The watch a path names.
 pub struct Watched(WatchId);
 
 impl Params for Watched {
@@ -143,8 +141,7 @@ pub fn watches(call: &Call<Reader, (), ()>) -> Result<Json<wire::WatchesPayload>
     Ok(Json(watch::listed(caps.secretary.watches, now)?))
 }
 
-/// `POST /api/mail/watches/<id>/cancel`: the owner's tap closes a watch before it rings, and
-/// the answer is the watches that still wait.
+/// `POST /api/mail/watches/<id>/cancel`: the owner's tap closes a watch; answers the rest.
 pub fn cancel_watch(call: &Call<Tap, Watched, ()>) -> Result<Json<wire::WatchesPayload>, Refusal> {
     let caps = call.chain.caps;
     let now = prodrome_core::fpl::instant_of(caps.secretary.clock.now());

@@ -1,8 +1,7 @@
-//! The box's recorded frontiers on disk (`prodrome_core::store::frontier`), under the instance's
-//! own directory in the state directory beside the epochs: box-local, never pushed and never
-//! backed up, since a lost record costs a replica one pull from nothing. Each store has a
-//! directory, its name the store's with `/` spelled `-`; each frontier is a file named by its
-//! token holding one tip per line, and `ring` lists the store's tokens, newest last.
+//! The box's recorded frontiers on disk (`prodrome_core::store::frontier`), box-local and never
+//! backed up: a lost record costs a replica one full pull. Layout: a directory per store (`/`
+//! spelled `-`), a file per frontier named by its token with one tip per line, and `ring`
+//! listing the store's tokens, newest last.
 
 use std::collections::BTreeSet;
 use std::path::PathBuf;
@@ -34,14 +33,12 @@ pub fn open(root: PathBuf) -> Frontiers {
     )
 }
 
-/// The key of one recorded frontier on disk: its store and its token.
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct Kept {
     store: String,
     token: Token,
 }
 
-/// The records as files: each set by its key, each store's ring beside them.
 struct OnDisk {
     sets: Docs<Kept, BTreeSet<Hash>>,
     rings: Docs<String, Vec<Token>>,
@@ -90,7 +87,6 @@ fn directory(root: &std::path::Path, store: &str) -> PathBuf {
     root.join(store.replace('/', "-"))
 }
 
-/// Each name on a line of its own.
 fn one_per_line<'a>(names: impl Iterator<Item = &'a str>) -> Vec<u8> {
     let mut text = String::new();
     for name in names {
@@ -100,7 +96,6 @@ fn one_per_line<'a>(names: impl Iterator<Item = &'a str>) -> Vec<u8> {
     text.into_bytes()
 }
 
-/// One name per line, each parsed by `parse`.
 fn lines<T>(bytes: Vec<u8>, parse: impl Fn(&str) -> Result<T, String>) -> Result<Vec<T>, String> {
     String::from_utf8(bytes)
         .map_err(|failed| failed.to_string())?
@@ -141,8 +136,7 @@ mod tests {
     use prodrome_core::store::frontier::{Reached, Since};
     use suzatary_core::secretary::topics::reading::MembershipEvent;
 
-    /// The token the box names a frontier by, and so each record file by, is the sha256 of the
-    /// tips, one on each line: the names of the files the box has already written.
+    /// A token is the sha256 of the tips, one per line: the stored file names depend on it.
     #[test]
     fn a_token_is_the_name_the_box_s_files_carry() {
         let tips: BTreeSet<Hash> = [Hash::new("a".repeat(64)).expect("a name")].into();

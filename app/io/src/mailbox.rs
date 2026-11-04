@@ -1,8 +1,7 @@
 //! notmuch and the maildir, read only, as [`Mailbox`].
 //!
-//! Every list asks the index for the newest ids first and only loads those:
-//! loading hashes every file a query matches, and notmuch has no LIMIT. The
-//! parsing ([`dedup`], [`text`]) is pure over captured output.
+//! Every list asks the index for the newest ids first and only loads those: loading hashes
+//! every file a query matches, and notmuch has no LIMIT.
 
 pub mod attachments;
 pub mod dedup;
@@ -21,9 +20,8 @@ use crate::run::{Cmd, succeed};
 /// What notmuch reads of its environment beyond [`crate::run::BASE`].
 const NOTMUCH: &[&str] = &["NOTMUCH_*"];
 
-/// `cmd` told which index to use: the `config` named, and no other `NOTMUCH_*` variable, since
-/// `NOTMUCH_DATABASE` or `NOTMUCH_PROFILE` from the environment would point it at another one;
-/// with none named, the environment's.
+/// `cmd` told which index to use: the `config` named and no other `NOTMUCH_*` variable (which
+/// could point it at another index); with none named, the environment's.
 #[must_use]
 pub fn indexed_by(cmd: Cmd, config: Option<&Path>) -> Cmd {
     match config {
@@ -51,11 +49,9 @@ pub struct Notmuch {
     binary: PathBuf,
     /// The root each account's `subdir` is relative to.
     mail_root: PathBuf,
-    /// The triage's bookkeeping, read for badges and the queue.
     ledger: crate::state::Ledger,
     /// Where each listed hash lives: every listing writes it, every lookup by hash reads it.
     located: located::Located,
-    /// Every account there is.
     accounts: Roster,
     /// Never inherited, so a fixture cannot read the box's own index.
     config: Option<PathBuf>,
@@ -75,8 +71,6 @@ impl std::fmt::Debug for Notmuch {
 }
 
 impl Notmuch {
-    /// The maildir under `mail_root`, the triage's bookkeeping in `ledger`, where the listed
-    /// hashes live in `located`, and the accounts there are.
     #[must_use]
     pub fn new(
         mail_root: impl Into<PathBuf>,
@@ -95,7 +89,6 @@ impl Notmuch {
         }
     }
 
-    /// A different `notmuch` binary.
     #[must_use]
     pub fn with_binary(mut self, notmuch: impl Into<PathBuf>) -> Self {
         self.binary = notmuch.into();
@@ -116,7 +109,7 @@ impl Notmuch {
         self
     }
 
-    /// The invocation, or the refusal when no config is named, spawning nothing.
+    /// Refuses, spawning nothing, when no config is named.
     fn command(&self, args: &[&str]) -> Result<Cmd, MailError> {
         let Some(config) = &self.config else {
             return Err(MailError::Unreachable(
@@ -126,15 +119,15 @@ impl Notmuch {
         Ok(indexed_by(Cmd::new(&self.binary).args(args), Some(config)))
     }
 
-    /// notmuch's answer as it wrote it: it copies a message's bytes into its JSON unchanged, so
-    /// the answer need not be UTF-8, and each reader decodes it (`message::Text`).
+    /// Raw bytes: notmuch copies a message's bytes into its JSON unchanged, so the answer need
+    /// not be UTF-8; each reader decodes it (`message::Text`).
     fn run(&self, args: &[&str]) -> Result<Vec<u8>, MailError> {
         Ok(succeed(&self.command(args)?)
             .map_err(|e| MailError::Unreachable(e.to_string()))?
             .stdout)
     }
 
-    /// The `limit` newest message ids matching `query`, from the index alone.
+    /// From the index alone.
     fn newest_ids(&self, query: &str, limit: usize) -> Result<Vec<String>, MailError> {
         let limit_flag = format!("--limit={limit}");
         let raw = self.run(&[
@@ -148,15 +141,14 @@ impl Notmuch {
         parse_id_array(&raw)
     }
 
-    /// Every thread `query` touches.
     fn thread_ids(&self, query: &str) -> Result<Vec<String>, MailError> {
         let raw = self.run(&["search", "--format=json", "--output=threads", query])?;
         parse_id_array(&raw)
     }
 
     /// Every message `query` matches, folded by content hash, each hash recorded in
-    /// [`located::Located`] before it is answered, so every hash a verb prints resolves; it reads
-    /// and hashes each file, so page reads bound `query` through [`Self::newest_ids`] first.
+    /// [`located::Located`] before it is answered so every printed hash resolves. It reads and
+    /// hashes each file, so page reads bound `query` through [`Self::newest_ids`] first.
     fn load_messages(&self, query: &str) -> Result<BTreeMap<String, CanonicalMessage>, MailError> {
         let raw = self.run(&["show", "--format=json", "--body=false", query])?;
         let mut messages: BTreeMap<String, CanonicalMessage> = BTreeMap::new();
@@ -219,27 +211,23 @@ impl Notmuch {
         Ok(messages)
     }
 
-    /// Every full message `query` matches; `--include-html` is required because without it
-    /// notmuch omits an html part's content and an html-only message arrives empty.
+    /// `--include-html` is required: without it an html-only message arrives empty.
     fn show_query(&self, query: &str) -> Result<Vec<Shown>, MailError> {
         let raw = self.run(&["show", "--format=json", "--include-html", query])?;
         Ok(message::matched(&raw)?.into_iter().map(shown_of).collect())
     }
 
-    /// One message by notmuch id, unquoted because the id is notmuch's own.
+    /// Unquoted because the id is notmuch's own.
     fn show_by_native_id(&self, id: &str) -> Result<Option<Shown>, MailError> {
         Ok(self.show_query(&format!("id:{id}"))?.into_iter().next())
     }
 
     /// The notmuch id recorded for the one listed hash `prefix` begins.
-    ///
-    /// # Errors
-    /// The locators could not be read.
     pub fn locate(&self, prefix: &HashPrefix) -> Result<Resolved<String>, MailError> {
         self.located.resolve(prefix)
     }
 
-    /// One message by notmuch id, or by a listed hash's prefix.
+    /// By notmuch id, or by a listed hash's prefix.
     fn shown_by(&self, id: &str) -> Result<Lookup, MailError> {
         let shown = |found: Option<Shown>| found.map_or(Lookup::Absent, Lookup::Shown);
         if let Some(found) = self.show_by_native_id(id)? {
@@ -264,7 +252,7 @@ impl Notmuch {
         }
     }
 
-    /// The triage's bookkeeping, read on every call because other processes write it.
+    /// Read on every call because other processes write it.
     fn load_state(&self) -> Result<Known, MailError> {
         self.ledger.read().map_err(MailError::Unreachable)
     }
@@ -300,7 +288,6 @@ impl Notmuch {
         }
     }
 
-    /// Newest ids from the index, then only those canonicalised.
     fn recent(
         &self,
         query: &str,
@@ -316,7 +303,6 @@ impl Notmuch {
         self.rows(&by_id_query(refs), limit)
     }
 
-    /// Any notmuch query as app rows, newest first.
     fn rows(&self, query: &str, limit: usize) -> Result<Vec<MailRow>, MailError> {
         let messages = self.load_messages(query)?;
         let state = self.load_state()?;
@@ -328,7 +314,6 @@ impl Notmuch {
 }
 
 impl Notmuch {
-    /// One canonical message as the agent reads a row.
     fn summary_of(message: &CanonicalMessage) -> verbs::Summary {
         let primary = &message.primary;
         verbs::Summary {
@@ -353,7 +338,6 @@ impl Notmuch {
         }
     }
 
-    /// Newest first, capped.
     fn newest_first(
         messages: BTreeMap<String, CanonicalMessage>,
         limit: Option<usize>,
@@ -366,10 +350,8 @@ impl Notmuch {
         ordered.iter().map(Self::summary_of).collect()
     }
 
-    /// Any notmuch query as the agent's summaries, newest first.
-    ///
-    /// Unlike [`Mailbox::search`] it loads every match and then truncates, so `limit` cuts a set
-    /// the agent can reason about rather than a window the index handed back.
+    /// Any notmuch query as the agent's summaries, newest first. Unlike [`Mailbox::search`] it
+    /// loads every match and then truncates.
     pub fn summaries(
         &self,
         query: &str,
@@ -378,10 +360,8 @@ impl Notmuch {
         Ok(Self::newest_first(self.load_messages(query)?, limit))
     }
 
-    /// The triage queue: inbox mail whose hash `state.json` has not seen.
-    ///
-    /// Gated on the hash, not the unread flag, so mail read on a phone is still triaged; the
-    /// 14-day floor only bounds a re-tag flood, since the fetch window is seven days.
+    /// The triage queue: inbox mail whose hash `state.json` has not seen. Gated on the hash, not
+    /// the unread flag; the 14-day floor only bounds a re-tag flood (the fetch window is 7 days).
     pub fn queue(
         &self,
         state: &Known,
@@ -411,7 +391,6 @@ impl Notmuch {
         })
     }
 
-    /// A shown message as the agent reads it.
     fn message_of(shown: Shown) -> verbs::Message {
         verbs::Message {
             id: shown.id,
@@ -475,11 +454,8 @@ impl Notmuch {
         Ok(bytes)
     }
 
-    /// Hash every message the index holds and record where each lives, for the hashes cited
-    /// before listings recorded them; how many there are. It reads every file once.
-    ///
-    /// # Errors
-    /// notmuch cannot be asked, or a locator cannot be written.
+    /// Hash every message the index holds and record where each lives; answers how many. It
+    /// reads every file once.
     pub fn locate_all(&self) -> Result<usize, MailError> {
         Ok(self.load_messages("*")?.len())
     }
@@ -537,13 +513,11 @@ impl CanonicalMessage {
         }
     }
 
-    /// How many places it was seen.
     fn sources(&self) -> usize {
         1 + self.also.len()
     }
 }
 
-/// One appearance of a canonical message.
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct Source {
     account: String,
@@ -560,7 +534,6 @@ fn epoch_of(message: &CanonicalMessage) -> i64 {
         .unwrap_or(0)
 }
 
-/// One [`MailRow`]: the message beside what `state.json` recorded about its hash.
 fn row_of(message: &CanonicalMessage, state: &Known) -> MailRow {
     let seen = state.decided(&message.hash);
     let primary = &message.primary;
@@ -616,10 +589,8 @@ fn parse_id_array(raw: &[u8]) -> Result<Vec<String>, MailError> {
 
 /// What a notmuch id or a hash prefix finds.
 enum Lookup {
-    /// The message.
     Shown(Shown),
-    /// No message: notmuch holds no such id, and no listed hash begins so, or one does and
-    /// notmuch no longer holds its message.
+    /// Also when a listed hash matches and notmuch no longer holds its message.
     Absent,
     /// A prefix more than one listed hash begins with.
     Ambiguous(Ambiguous),
@@ -695,7 +666,6 @@ pub(crate) fn by_id_query<'a>(ids: impl IntoIterator<Item = &'a str>) -> String 
         .join(" or ")
 }
 
-/// `query`, narrowed to one account's maildir.
 fn scoped_query(query: &str, account: Option<&MailAccount>) -> String {
     match account {
         None => query.to_owned(),
@@ -703,15 +673,12 @@ fn scoped_query(query: &str, account: Option<&MailAccount>) -> String {
     }
 }
 
-/// The inbox as notmuch spells it.
 fn inbox_query(account: Option<&MailAccount>) -> String {
     scoped_query("tag:inbox", account)
 }
 
-/// `query`, bounded to strictly before the page cursor, so a page never repeats a row.
-///
-/// The cursor is read as UTC because the wire type has no zone, which can skip or repeat one row
-/// at a page boundary.
+/// `query`, bounded to strictly before the page cursor. The cursor is read as UTC because the
+/// wire type has no zone, which can skip or repeat one row at a page boundary.
 fn before_query(query: &str, before: Option<Datetime>) -> String {
     match before {
         None => query.to_owned(),
@@ -877,9 +844,8 @@ impl Mailbox for Notmuch {
     }
 }
 
-/// A file read for the model, the file `file` names and calls `name`: a PDF with its text layer
-/// through `pdftotext` beside it, anything else as [`FileRead::of`] finds it; `Err` is a
-/// `pdftotext` failure, a fact about the box, not the file.
+/// A file read for the model, a PDF with its `pdftotext` layer; `Err` is a `pdftotext` failure,
+/// a fact about the box, not the file.
 pub(crate) fn read_of(
     file: &HeldFile,
     name: &str,
@@ -899,10 +865,8 @@ pub(crate) fn read_of(
 pub(crate) mod fixture {
     use super::{Cmd, MailAccount, Notmuch, Roster, located};
 
-    /// `files`, each a path under the maildir root and its text, written under `root/Mail` and
-    /// indexed by the real notmuch under a config of their own that tags new mail `tags`
-    /// (`;`-separated), the account `ada@example.test` reading `ada/`; the reader over them, and
-    /// its ledger.
+    /// `files` written under `root/Mail` and indexed by the real notmuch under their own config,
+    /// new mail tagged `tags` (`;`-separated), account `ada@example.test` reading `ada/`.
     pub(crate) fn indexed(
         root: &std::path::Path,
         tags: &str,
@@ -984,8 +948,7 @@ mod tests {
     const PASSPORT: &str = "X12345678";
     const A_NUMBER: &str = "A-012-345-678";
 
-    /// A sent, an inbound and a clean message under `root`, indexed by the real notmuch under a
-    /// config of their own, and the reader over them.
+    /// A sent, an inbound and a clean message under `root`.
     fn indexed(root: &std::path::Path) -> Notmuch {
         let sent = format!(
             "From: ada@example.test\nTo: counsel@example.test\nSubject: ITIN {ITIN}\n\
@@ -1013,10 +976,8 @@ mod tests {
         .0
     }
 
-    /// With the real notmuch, where it is on PATH: every reading a model or a page gets of a sent
-    /// and an inbound message naming numbers holds placeholders and never a number, the index
-    /// still finds the number (it is the box's own), a handle read off a placeholder reveals its
-    /// value, and a clean message reads as it is.
+    /// Every reading holds placeholders and never a number, the box's own index still finds the
+    /// number, a handle reveals its value, and a clean message reads as it is.
     #[test]
     fn every_reading_holds_placeholders_and_a_handle_reveals_its_value() {
         if !fixture::notmuch_present("the real-index half of held values") {
@@ -1026,7 +987,6 @@ mod tests {
         let mailbox = indexed(scratch.path());
         let query = |text: &str| Query::new(text).expect("a query");
 
-        // The index is the box's own and still finds the number.
         assert_eq!(
             mailbox.newest_ids(SSN, 5).expect("a search"),
             vec!["form-1@example.test"]
@@ -1112,8 +1072,7 @@ mod tests {
         }
     }
 
-    /// With the real notmuch: a message no listing has printed, such as one a todo cited before
-    /// listings recorded hashes, is not found by its hash until `locate_all` records the index.
+    /// A message no listing has printed is not found by its hash until `locate_all`.
     #[test]
     fn locating_all_records_a_hash_no_listing_printed() {
         if !fixture::notmuch_present("the rebuild of the locators") {
@@ -1140,9 +1099,7 @@ mod tests {
         assert_eq!(shown.id, "cited-1@example.test");
     }
 
-    /// A ledger no test here reads: its key never resolves.
-    /// With the real notmuch: a search row, and the agent's row of the same message, say which
-    /// kinds of held value it names, from the values its mask counted, and hold none of them.
+    /// A search row and the agent's row name the kinds of held value and hold none of them.
     #[test]
     fn a_search_row_names_the_kinds_its_message_holds_and_no_value() {
         if crate::run::run(&Cmd::new("notmuch").arg("--version")).is_err() {
@@ -1189,6 +1146,7 @@ mod tests {
         }
     }
 
+    /// A ledger no test here reads: its key never resolves.
     fn ledger() -> crate::state::Ledger {
         crate::state::Ledger::new(
             "/tmp/state.json".into(),
@@ -1197,8 +1155,6 @@ mod tests {
         )
     }
 
-    /// One message seen on three accounts is one row with three sources, the first read its
-    /// primary, and a place seen twice counts once.
     #[test]
     fn a_message_counts_each_place_it_was_seen_once() {
         let at = |account: &str| Source {

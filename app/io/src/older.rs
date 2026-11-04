@@ -1,15 +1,12 @@
 //! Searching each account's mail server for mail older than the routine sync's window: the
 //! interpreter of `suzatary_core::capability::OlderMail`.
 //!
-//! - A Microsoft account is `EXAMINE`d over the same IMAP session a backfill pulls through
-//!   (`crate::imap::Outlook`), searched with `suzatary_core::mail::older::imap_criteria`, and
-//!   pulled by `suzatary_core::mail::older::pull` into `<subdir>/older-inbox`, with a state
-//!   file of its own beside the routine pull's.
-//! - A Gmail account is searched through the Gmail API on lieer's grant (`crate::gmail`), or, for
-//!   a Google account, on a token the box mints from the account's sign-in with Google, with
-//!   `suzatary_core::mail::older::gmail_q`, into `<subdir>/older-all-mail`, each message named
-//!   by its Gmail id as lieer names its own, so one lieer already holds is never fetched again.
-//! - A Proton account is not searched: mbsync reaches the Bridge, and offers no server search.
+//! - A Microsoft account is `EXAMINE`d over IMAP and pulled into `<subdir>/older-inbox`, with a
+//!   state file of its own beside the routine pull's.
+//! - A Gmail or Google account is searched through the Gmail API into `<subdir>/older-all-mail`,
+//!   each message named by its Gmail id as lieer names its own, so one lieer already holds is
+//!   never fetched again.
+//! - A Proton account is not searched: mbsync reaches the Bridge, which offers no server search.
 //!
 //! Every leaf lands read and outside the `+inbox` tagging, so nothing pulled enters the triage
 //! queue. The pull runs under the sync's hold, and the index is updated once, after every
@@ -60,7 +57,6 @@ pub struct Notmuched {
 }
 
 impl Notmuched {
-    /// The syncer that indexes and the corpus that reads.
     #[must_use]
     pub fn new(syncer: crate::sync::Syncer, mail: crate::mailbox::Notmuch) -> Self {
         Self { syncer, mail }
@@ -209,8 +205,6 @@ fn imap_failed(failure: ImapError) -> Unsearched {
 }
 
 impl<C: Connect, H: Http, I: Index> Servers<C, H, I> {
-    /// The roster's servers, `connect` opening a Microsoft account's IMAP session and `http`
-    /// reaching the Gmail API, and `google` minting a Google account's token for it.
     #[must_use]
     pub fn new(
         roster: Roster,
@@ -527,8 +521,6 @@ mod tests {
     fn query(text: &str) -> OlderQuery {
         text.parse().expect("a query")
     }
-
-    // --- a scripted IMAP server under a real `imap::Client` -------------------------
 
     /// An IMAP server holding `messages`, whose `UID SEARCH` answers `matching` and logs what
     /// it was asked; any command it does not know is `BAD`.
@@ -922,7 +914,6 @@ mod tests {
         let _ = std::fs::remove_dir_all(&root);
     }
 
-    /// A server that cannot be reached.
     struct Down;
 
     impl Connect for Down {
@@ -969,8 +960,6 @@ mod tests {
         assert!(said.contains(&format!("{GMAIL}: not searched")), "{said}");
         let _ = std::fs::remove_dir_all(&root);
     }
-
-    // --- a scripted Gmail API -----------------------------------------------------
 
     fn lieer(root: &Path) {
         let dir = root.join("Mail/gil");
@@ -1078,8 +1067,6 @@ mod tests {
         );
         let _ = std::fs::remove_dir_all(&root);
     }
-
-    // --- the real index, where notmuch is on PATH ----------------------------------
 
     /// notmuch with its own config, never the box's.
     struct Real {

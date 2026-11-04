@@ -16,19 +16,15 @@ pub enum Event {
     System(System),
     /// A whole assistant message.
     Assistant {
-        /// The message.
         message: Message,
     },
     /// A Messages API stream event, as the CLI relays it.
     StreamEvent {
-        /// The event.
         event: StreamEvent,
     },
-    /// The run's end.
     Result(Ended),
     /// Where the account stands against its limits, as the CLI saw it before a request.
     RateLimitEvent {
-        /// What the limit said.
         rate_limit_info: RateLimitInfo,
     },
     /// A line this box does not read (a tool's answer).
@@ -53,7 +49,6 @@ pub enum System {
 /// An assistant message, read for the tools it called.
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
 pub struct Message {
-    /// Its blocks.
     pub content: Vec<Block>,
 }
 
@@ -61,7 +56,6 @@ pub struct Message {
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum Block {
-    /// A call of a tool.
     ToolUse {
         /// The name it called, as the model said it.
         name: String,
@@ -76,13 +70,9 @@ pub enum Block {
 pub struct Ended {
     /// How it ended (`success`, `error_max_turns`, …), verbatim.
     pub subtype: String,
-    /// Whether the CLI called the run an error.
     pub is_error: bool,
-    /// The session it ran as.
     pub session_id: SessionId,
-    /// The turns it took.
     pub num_turns: u64,
-    /// How long it ran, in milliseconds.
     pub duration_ms: u64,
     /// The reply's text; an error that ended the run before a reply has none.
     pub result: Option<String>,
@@ -97,7 +87,6 @@ pub struct Ended {
 /// the window resets.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
 pub struct RateLimitInfo {
-    /// Whether the limit let the request through.
     pub status: LimitStatus,
     /// When the window resets, in unix seconds; absent where the CLI did not say.
     #[serde(rename = "resetsAt")]
@@ -131,7 +120,6 @@ pub struct Usage {
 /// One refused call.
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
 pub struct Denial {
-    /// The tool it named.
     pub tool_name: String,
 }
 
@@ -164,7 +152,6 @@ enum Tag {
 }
 
 impl Event {
-    /// `line` read, or `None` for one that is not an event.
     #[must_use]
     pub fn of(line: &str) -> Option<Self> {
         serde_json::from_str(line).ok()

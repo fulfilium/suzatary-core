@@ -1,7 +1,6 @@
 //! The sign-ins this server holds open: each a `claude setup-token` in a pseudo-terminal, begun
-//! by a tapped Connect card and finished by its code card's tap. Held in no capability record, so
-//! only a tap reaches one, and in memory alone, so a restart closes every one, as it closes a
-//! device flow.
+//! and finished by taps. Held in no capability record (only a tap reaches one) and in memory
+//! alone (a restart closes every one).
 
 use std::collections::BTreeMap;
 use std::sync::{Arc, Mutex};
@@ -24,7 +23,6 @@ const WAIT: Duration = Duration::from_mins(1);
 pub const AT_A_TERMINAL: &str = "or, at a terminal on the box: claude setup-token, then \
                                  secretspec set CLAUDE_CODE_OAUTH_TOKEN with the token it prints";
 
-/// One open sign-in.
 struct Open {
     session: SignIn,
     began: ProposalId,
@@ -39,7 +37,7 @@ pub struct SignIns {
 }
 
 impl SignIns {
-    /// Sign-ins run with `program` (`claude`, found on the unit's `PATH`).
+    /// `program` is found on the unit's `PATH`.
     #[must_use]
     pub fn new(program: impl Into<String>) -> Self {
         Self {
@@ -49,8 +47,7 @@ impl SignIns {
         }
     }
 
-    /// The same table, ringing `closed` when a sign-in is closed for lapsing, so its code card
-    /// is withdrawn then rather than at the next filing.
+    /// Rings `closed` when a sign-in lapses, so its code card is withdrawn at once.
     #[must_use]
     pub fn ringing(self, closed: impl Fn() + Send + Sync + 'static) -> Self {
         Self {
@@ -59,8 +56,7 @@ impl SignIns {
         }
     }
 
-    /// Begin one for the card `began`, tapped at `now`: running until [`LASTS`] passes, or why it
-    /// could not start and what to run at a terminal instead.
+    /// Begin one for the card `began`, running until [`LASTS`] passes.
     #[must_use]
     pub fn begin(&self, began: &ProposalId, now: Datetime) -> Performed {
         match SignIn::start(&self.program, WAIT) {
@@ -93,8 +89,8 @@ impl SignIns {
 }
 
 impl SignIns {
-    /// Once [`LASTS`] has passed, close what lapsed by then, so an abandoned sign-in's CLI ends
-    /// on time whether or not anything reads the table again.
+    /// Once [`LASTS`] has passed, close what lapsed, so an abandoned sign-in's CLI ends on time
+    /// even if nothing reads the table again.
     fn close_when_lapsed(&self) {
         let (open, closed) = (Arc::clone(&self.open), Arc::clone(&self.closed));
         std::thread::spawn(move || {

@@ -1,7 +1,6 @@
-//! `suzatary call`: any route of the server's table, asked of the running server by the box's
-//! operator. The request meets the gate, the guards, the door and the handler that a device's
-//! request meets. It is signed with the root key, which the history trusts for every actor the
-//! box writes as, and the box keeps its record under that key, so every act is the operator's.
+//! `suzatary call`: any route of the server's table, asked of the running server by the operator.
+//! The request meets the same gate, guards, door and handler as a device's, signed with the root
+//! key, so every act is recorded as the operator's.
 
 use std::ops::ControlFlow;
 use std::path::Path;
@@ -135,7 +134,6 @@ impl Operator {
         ))
     }
 
-    /// The actor the requests write as.
     #[must_use]
     pub fn actor(&self) -> &Actor {
         &self.actor
@@ -265,7 +263,6 @@ pub struct Answered {
     /// The request's name, under which the box keeps its record when the route asks for a
     /// signature: the record names the root key, so it reads as the operator's.
     pub request: Hash,
-    /// The body.
     pub body: Vec<u8>,
 }
 
@@ -273,7 +270,6 @@ pub struct Answered {
 /// every slot of words they name.
 #[derive(Debug, Default)]
 pub struct Pulled {
-    /// Every object.
     pub objects: Vec<wire::StoredObject>,
     /// Each key's bytes in hex, by its name.
     pub keys: std::collections::BTreeMap<String, String>,
@@ -284,9 +280,7 @@ pub struct Pulled {
 /// the name, which the door checks.
 #[derive(Debug)]
 pub struct Signed {
-    /// The request's name.
     pub name: Hash,
-    /// The headers.
     pub headers: [(&'static str, String); 4],
 }
 
@@ -357,7 +351,6 @@ fn answers(pattern: &str, path: &str) -> bool {
 mod tests {
     use super::*;
 
-    /// A target reaches a route of the table, whatever its parameters, and nothing else.
     #[test]
     fn a_target_reaches_the_table_and_nothing_else() {
         for (method, target) in [

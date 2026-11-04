@@ -1,11 +1,10 @@
 //! Where each message the corpus has listed lives, by canonical hash: one file per hash, in a
 //! directory named by the hash's first two characters, holding the notmuch id the message was
-//! listed under. `Notmuch::load_messages` computes every hash a verb prints and records each one
-//! here before it answers, so a hash any listing printed resolves by reading one directory, and
-//! no read rehashes the corpus to find it (`corpus::tests::every_hash_a_listing_prints_is_shown`).
+//! listed under. `Notmuch::load_messages` records every hash a verb prints before it answers, so
+//! a printed hash resolves by reading one directory, without rehashing the corpus.
 //!
-//! Nothing removes an entry. A message deleted since it was listed keeps an id notmuch no longer
-//! holds, and showing it answers that the box does not hold it, which is true.
+//! Nothing removes an entry: a message deleted since it was listed keeps an id notmuch no longer
+//! holds, and showing it answers that the box does not hold it.
 
 use std::path::PathBuf;
 
@@ -96,7 +95,6 @@ impl Located {
     }
 }
 
-/// The directory a hash's file is in: its first two characters.
 fn shard(hash: &str) -> String {
     hash.chars().take(2).collect()
 }

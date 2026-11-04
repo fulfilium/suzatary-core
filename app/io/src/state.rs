@@ -1,7 +1,5 @@
-//! The triage's bookkeeping on disk: `state.json`, the pushed dedup authority, and the
-//! box-local `mail.json` beside the other files no push carries, each a [`Doc`] whose value
-//! and text are [`suzatary_core::mail`]'s, read together through the dedup key as one
-//! [`Known`].
+//! The triage's bookkeeping on disk: the pushed `state.json` (the dedup authority) and the
+//! box-local `mail.json`, each a [`Doc`], read together through the dedup key as one [`Known`].
 //!
 //! Neither can be rebuilt, so each is replaced atomically: a truncated `state.json` would read
 //! as nothing decided and re-triage the corpus.
@@ -62,8 +60,8 @@ const LOCAL: DocCodec<(), LocalState> = DocCodec {
     },
 };
 
-/// Where the key comes from: asked once it is first needed, and the first answer kept, so a
-/// store locked at startup costs nothing until a read needs the key.
+/// Where the key comes from: asked lazily, so a store locked at startup costs nothing until a
+/// read needs the key.
 type Source = Box<dyn Fn() -> Result<DedupKey, String> + Send + Sync>;
 
 /// Both documents and the key that joins them. Cloning shares the key.
@@ -160,13 +158,11 @@ impl Ledger {
             .map_err(|e| e.to_string())
     }
 
-    /// Where the pushed document is.
     #[must_use]
     pub fn pushed_path(&self) -> PathBuf {
         self.pushed.path(&())
     }
 
-    /// Where the box-local document is.
     #[must_use]
     pub fn local_path(&self) -> PathBuf {
         self.local.path(&())
@@ -236,8 +232,6 @@ mod tests {
         );
     }
 
-    /// A key that does not resolve is a refusal, never a ledger read as empty; it is asked
-    /// again at the next read, and the first answer is kept.
     #[test]
     fn a_key_that_does_not_resolve_refuses_the_read_and_is_asked_again() {
         let dir = tempfile::tempdir().expect("a scratch dir");

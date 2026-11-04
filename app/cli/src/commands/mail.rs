@@ -627,7 +627,7 @@ pub fn idle_watches(instance: &Instance) -> Vec<&str> {
         .collect()
 }
 
-/// One scope-prefixed line per state change, so the journal reads as a story.
+/// One scope-prefixed line per state change.
 fn log(scope: &str, message: &str) {
     eprintln!("mail idle: {scope}: {message}");
 }
@@ -686,7 +686,6 @@ fn idle_run(instance: &Instance) -> anyhow::Result<()> {
     bail!("the {ended} thread stopped; ending so the watch restarts whole")
 }
 
-/// A thread's body.
 type Job = Box<dyn FnOnce() + Send>;
 
 /// Run each named job on its own thread and answer the name of the first to end, by returning
@@ -823,8 +822,6 @@ fn trigger(unit: &Timer) {
 mod tests {
     use super::*;
 
-    /// A panicking watcher is heard while its siblings still run, so `mail idle` ends rather
-    /// than watching fewer accounts in silence.
     #[test]
     fn the_first_thread_to_end_is_named_even_when_it_panics() {
         let forever: Job = Box::new(|| {

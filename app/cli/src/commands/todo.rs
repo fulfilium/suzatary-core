@@ -1,7 +1,4 @@
-//! `suzatary todo` — author, read and record todos on the chain, trusted.
-//!
-//! The same authoring functions the agent's MCP verbs call; only the actor differs: a
-//! roster name here, `RecordedBy::Triage` there, and that asymmetry lives in the callers.
+//! `suzatary todo`: author, read and record todos on the chain, trusted.
 //!
 //! `confirm` is human-only like sending, with no MCP twin: an agent that can confirm its
 //! own writes has confirmed nothing.
@@ -194,8 +191,7 @@ pub struct Ends {
 }
 
 impl PriceFlags {
-    /// The one price these flags name, or `None` for none; days here, weeks in the
-    /// agent's verb, one duration in `Deadline`.
+    /// The one price these flags name, or `None` for none.
     fn price(self) -> anyhow::Result<Option<todo::Price>> {
         let deadline = match self.deadline {
             None => None,
@@ -267,11 +263,10 @@ pub struct Lifecycle {
     actor: Option<String>,
 }
 
-/// `suzatary todo <act>` — EVERY act, in one place.
+/// `suzatary todo <act>`.
 pub fn run(path: &Path, args: Args) -> anyhow::Result<()> {
     let instance = &Instance::open(path)?;
     let chain = instance.chain(args.chain.as_deref())?;
-    // Resolved once; a key not at hand refuses the write, naming why.
     let keys = &instance.signers();
     let who = |actor: Option<String>| actor.unwrap_or_else(|| chain.owner.as_str().to_owned());
     match args.action {
@@ -338,7 +333,6 @@ pub fn run(path: &Path, args: Args) -> anyhow::Result<()> {
         ),
         Action::Show { id } => show(chain, &id),
         Action::List => list(chain),
-        // One event under four names, differing only by constructor.
         Action::Done(event) => lifecycle(chain, keys, "done", mk_completed, &event),
         Action::Cancel(event) => lifecycle(chain, keys, "cancel", mk_cancelled, &event),
         Action::Reopen(event) => lifecycle(chain, keys, "reopen", mk_reopened, &event),
@@ -352,10 +346,7 @@ pub fn run(path: &Path, args: Args) -> anyhow::Result<()> {
     }
 }
 
-/// `suzatary todo confirm <id>` — re-append a provisional record as a trusted
-/// actor.
-///
-/// `--note` is where a confirming human says what they checked.
+/// `suzatary todo confirm <id>`: re-append a provisional record as a trusted actor.
 fn confirm(
     chain: &ChainDir,
     keys: &Signers,
@@ -399,32 +390,26 @@ fn confirm(
     Ok(())
 }
 
-/// What `suzatary todo add` was told, as a record so no call site can misorder it.
+/// What `suzatary todo add` was told.
 struct Authoring {
-    /// The id.
     id: String,
-    /// The action line, as Typst markup — admitted by the builder's door.
+    /// Typst markup, admitted by the builder's door.
     body: String,
-    /// Why this priority, in one sentence.
     rationale: String,
-    /// The block kind.
     kind: String,
-    /// The category, or "" for a kind that sets its own.
+    /// "" for a kind that sets its own.
     category: String,
-    /// What it is worth.
     price: todo::Price,
-    /// The detail, as Typst markup.
+    /// Typst markup.
     detail: String,
-    /// What it is blocked on, as plain text.
+    /// Plain text.
     waiting_on: String,
-    /// The todo it is a subtodo of.
     parent: Option<String>,
-    /// Who is authoring.
     actor: String,
 }
 
-/// The store `actor` writes through, after the roster check: signed by the key that actor
-/// owns, so an untrusted actor's write is the agent key's and never the box's.
+/// The store `actor` writes through, after the roster check, signed by that actor's key: an
+/// untrusted actor's write is the agent key's, never the box's.
 fn writer(
     chain: &ChainDir,
     signers: &Signers,
@@ -435,8 +420,7 @@ fn writer(
     Ok(Instance::writer_of(chain, signers, &actor))
 }
 
-/// The roster check every write begins with: an actor this chain does not know is a
-/// typo, not a new identity.
+/// Refuses an actor this chain does not know: a typo, not a new identity.
 fn on_the_roster(chain: &ChainDir, actor: &str) -> anyhow::Result<()> {
     if chain
         .policy
@@ -580,8 +564,8 @@ fn update(
     )
 }
 
-/// Render against the chain as it would be, then append, as the MCP verbs do: a block
-/// that does not parse back is a write that does not happen.
+/// Render against the chain as it would be, then append: a block that does not render is not
+/// written.
 fn appended(
     store: &impl Prodrome<suzatary_core::record::TodoEvent>,
     untrusted: &Untrusted,
@@ -620,7 +604,6 @@ fn appended(
     Ok(())
 }
 
-/// `suzatary todo show <id>` — one todo as the chain holds it.
 fn show(chain: &ChainDir, id: &str) -> anyhow::Result<()> {
     let store = store_of(chain);
     let now = SystemClock.now();
@@ -642,8 +625,7 @@ fn show(chain: &ChainDir, id: &str) -> anyhow::Result<()> {
     Ok(())
 }
 
-/// `suzatary todo list` — every open todo, ascending in fulfillment, so what hurts is
-/// first.
+/// `suzatary todo list`: every open todo, ascending in fulfillment.
 fn list(chain: &ChainDir) -> anyhow::Result<()> {
     let store = store_of(chain);
     let now = SystemClock.now();
@@ -683,10 +665,8 @@ type Build = fn(
     &str,
 ) -> Result<suzatary_core::record::TodoEvent, prodrome_core::literal::ProdromeError>;
 
-/// `suzatary todo done|cancel|reopen|tend <id>` — a trusted lifecycle event.
-///
-/// The kinds the agent's `record` writes; the actor differs, so these bind at once while
-/// the agent's wait for confirmation. An id no event mentions is a typo, refused.
+/// `suzatary todo done|cancel|reopen|tend <id>`: a trusted lifecycle event, binding at once.
+/// An id no event mentions is refused as a typo.
 fn lifecycle(
     chain: &ChainDir,
     keys: &Signers,
@@ -708,7 +688,6 @@ fn lifecycle(
     }
     let event = build(id, now, actor, note).map_err(|e| anyhow::anyhow!("{e}"))?;
     let digest = store.append(event).context("appending")?;
-    // The fold's answer, not this command's guess about what it did.
     let after = store.nodes().context("re-reading the chain")?;
     let todo = TodoId::new(id).map_err(|e| anyhow::anyhow!("{e}"))?;
     let state = suzatary_core::believed::spelled(
@@ -729,17 +708,13 @@ fn lifecycle(
     Ok(())
 }
 
-/// Which way `todo undo|redo` turns a todo's history.
 #[derive(Debug, Clone, Copy)]
 enum Turn {
-    /// The inverse of its last event.
     Undo,
-    /// The event an undo just undid, again.
     Redo,
 }
 
 impl Turn {
-    /// Its verb's name.
     fn as_str(self) -> &'static str {
         match self {
             Turn::Undo => "undo",
@@ -748,11 +723,7 @@ impl Turn {
     }
 }
 
-/// `suzatary todo undo|redo <id>` — the inverse of the todo's last event, or the event an
-/// undo just undid, appended again; trusted like `done`.
-///
-/// Prints what was appended and what it reversed, since "it worked" does not say which
-/// act happened; refusals are the route's own sentences.
+/// `suzatary todo undo|redo <id>`: appends the inverse of the last event, or redoes an undo.
 fn undo_redo(
     chain: &ChainDir,
     keys: &Signers,

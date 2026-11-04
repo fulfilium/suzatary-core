@@ -1,9 +1,7 @@
 //! `suzatary decision` — record, revise, withdraw, list and view the recorded decisions.
 //!
-//! A decision's body is Typst markup through the one door, as a todo's is; its title, rationale
-//! and reason are plain text. The store is `decisions/` in the data tree unless `--store` names
-//! another, read and written with no instance file: a scratch copy, or the project's memory,
-//! `memory/` in the code repository.
+//! A decision's body is Typst markup through the one door; its title, rationale and reason are
+//! plain text. `--store` names a store read with no instance file (e.g. `memory/`).
 
 use std::fmt::Write as _;
 use std::path::{Path, PathBuf};

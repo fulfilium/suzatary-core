@@ -1,9 +1,6 @@
-//! `suzatary todos open` — the open list as the folds see it, the rows the briefing and
-//! the agent's dedup read.
+//! `suzatary todos open`: the open list the briefing and the agent's dedup read.
 //!
-//! An unconfirmed triage-authored todo is marked where it stands in urgency order, never
-//! moved or sunk: a mis-priced provisional todo hidden at the bottom is the failure the
-//! marker prevents.
+//! An unconfirmed triage-authored todo is marked where it stands, never moved or sunk.
 
 use std::path::Path;
 
@@ -51,10 +48,7 @@ pub fn run(path: &Path, args: &Args) -> anyhow::Result<()> {
     }
 }
 
-/// `suzatary todos open` — every open todo, ascending in fulfillment (low is urgent).
-///
-/// Absence is openness: the confirmed fold names only completed or cancelled todos, so
-/// there is no open record to keep in sync.
+/// `suzatary todos open`: every open todo, ascending in fulfillment (low is urgent).
 fn open_todos(instance: &Instance, chain: &ChainDir, json: bool) -> anyhow::Result<()> {
     let read = super::chains_read(instance);
     let set = read.set(SystemClock.now());
@@ -67,8 +61,7 @@ fn open_todos(instance: &Instance, chain: &ChainDir, json: bool) -> anyhow::Resu
         .context("folding the chain")?;
     let records = suzatary_core::decoration::records_of(nodes);
 
-    // A decision is not a todo: the Inbox's held-batch records fold like todos, so they
-    // are dropped here as the web app drops them.
+    // The Inbox's held-batch decisions fold like todos and are dropped, as the web app does.
     let mut open: Vec<&Entry> = entries
         .iter()
         .filter(|entry| one_outcome(entry.outcome()).is_none() && !entry.content().is_empty())
@@ -123,13 +116,12 @@ fn open_todos(instance: &Instance, chain: &ChainDir, json: bool) -> anyhow::Resu
             Ok(None) => "      ∅".to_owned(),
             Err(_) => "      —".to_owned(),
         };
-        // The marker sits where the row does, and says nothing about ordering.
         let mark = if entry.confidence.is_provisional() {
             " (unconfirmed)"
         } else {
             ""
         };
-        // Plain text, not markup: this row is read by the briefing and the agent's dedup.
+        // Plain text: the briefing and the agent's dedup read this row.
         let body = record.map_or_else(String::new, |r| markup_text(r.payload.body.as_str()));
         println!("{price}  {:<24}{mark} {body}", entry.key.as_str());
     }

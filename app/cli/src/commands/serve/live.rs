@@ -15,11 +15,9 @@ use crate::instance::Instance;
 /// whole, so no reader sees a calendar without the name its link is set under.
 #[derive(Debug, Clone)]
 pub struct Live {
-    /// The secret names the deployment may set.
     pub settables: Settables,
     /// `[notify] channels`, `None` for no push.
     pub channels: Option<NonEmpty<Channel>>,
-    /// `[[mail.accounts]]`.
     pub accounts: Roster,
     /// `[[plugins]]`, each name once.
     pub plugins: Vec<Manifest>,
@@ -29,7 +27,6 @@ pub struct Live {
 pub type Shared = Arc<RwLock<Live>>;
 
 impl Live {
-    /// What `instance` declares.
     #[must_use]
     pub fn of(instance: &Instance) -> Self {
         Self {
@@ -40,7 +37,6 @@ impl Live {
         }
     }
 
-    /// Behind the one lock.
     #[must_use]
     pub fn shared(self) -> Shared {
         Arc::new(RwLock::new(self))

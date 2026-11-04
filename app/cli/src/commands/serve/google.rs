@@ -1,11 +1,9 @@
-//! Sign-ins with Google: the consents this server holds open, begun by a tapped card, and the
-//! callback Google sends the owner's browser back to, which finishes one. Held in no capability
-//! record, so only a tap begins one, and in memory alone, so a restart closes every one.
+//! Sign-ins with Google: consents opened by a tapped card and finished by Google's callback.
+//! Held in no capability record (only a tap begins one) and in memory alone (a restart closes
+//! every one).
 //!
-//! The callback is a GET, since Google sends the browser to it from its own page, so it carries
-//! none of the CSRF triple a write does; what stands in its place is the state the box drew for
-//! one consent and drops as it reads it (RFC 6749 §10.12), and the actor the gate maps the
-//! browser's tailnet login to, which must be the actor who tapped.
+//! The callback is a GET with no CSRF triple; in its place stand the one-use state (RFC 6749
+//! §10.12) and the gate's actor, which must be the actor who tapped.
 
 use std::sync::{Arc, Mutex};
 
@@ -27,28 +25,20 @@ use super::guard::Reader;
 use super::params::{Asked, Params};
 use super::{Chained, State};
 
-/// Where the browser is sent once the callback is read: the Inbox, where the card says how it
-/// ended.
 const BACK: &str = "/#/inbox";
 
 /// The consents this server holds open, and what it opens and finishes them with.
 pub struct Consenting {
     open: Mutex<Open>,
     google: Google,
-    /// Where the client is read from when a consent begins.
     store: Arc<dyn Resolves + Send + Sync>,
-    /// The roster as the instance file declares it now, which says whether an account is a
-    /// Google account.
     edits: Arc<dyn suzatary_core::settings::Edits + Send + Sync>,
-    /// The box's callback, `None` when the app's URL names no origin Google can send the owner
-    /// back to.
+    /// `None` when the app's URL names no origin Google can send the owner back to.
     redirect: Option<RedirectUri>,
     entropy: Arc<dyn Entropy + Send + Sync>,
 }
 
 impl Consenting {
-    /// Consents with `google`, reading the client from `store` and the roster through `edits`,
-    /// for the app served at `app_url`.
     #[must_use]
     pub fn new(
         google: Google,
@@ -66,13 +56,11 @@ impl Consenting {
         }
     }
 
-    /// The endpoints it asks.
     #[must_use]
     pub fn endpoints(&self) -> &Endpoints {
         self.google.endpoints()
     }
 
-    /// The box's callback, when the app's URL names one.
     #[must_use]
     pub fn redirect(&self) -> Option<&RedirectUri> {
         self.redirect.as_ref()
@@ -84,9 +72,7 @@ impl Consenting {
             .unwrap_or_else(std::sync::PoisonError::into_inner)
     }
 
-    /// How the instance file declares `account` now: a Google account, a Gmail account lieer
-    /// reads (which only a sign-in with Google its Connect card asked for begins with), or
-    /// neither.
+    /// `Google`, `Gmail` (read by lieer) or `None` for any other sync.
     fn declared(&self, account: &EmailAddress) -> Result<Option<Strategy>, String> {
         let declared = self.edits.declared().map_err(|failed| failed.to_string())?;
         Ok(declared
@@ -185,7 +171,6 @@ impl Params for Callback {
     }
 }
 
-/// The card a consent path names.
 pub struct Card(ProposalId);
 
 impl Params for Card {
@@ -196,9 +181,8 @@ impl Params for Card {
     }
 }
 
-/// `GET /api/oauth/google/consent/{card}`: the sign-in card's button. Sends the browser on to
-/// Google's consent page for the consent the card's tap opened, for the actor who tapped it;
-/// the page's link carries the state and the challenge, held in memory and never stored.
+/// `GET /api/oauth/google/consent/{card}`: redirects the tapping actor to Google's consent page.
+/// The state and challenge are held in memory, never stored.
 ///
 /// # Errors
 /// [`Refusal::forbidden`] for a browser whose login maps to no actor or another actor than the
@@ -219,11 +203,8 @@ pub fn consent(call: &Call<Reader, Card, ()>) -> Result<Redirect, Refusal> {
     Ok(Redirect::to(&begun.link))
 }
 
-/// `GET /api/oauth/google/callback`: Google sends the owner's browser back here with the state
-/// the consent was drawn with and a code, or Google's refusal. The state is taken once, and only
-/// for the actor who tapped; its code is traded for the grant with the consent's verifier, and the
-/// grant kept under the account's name. The card that began it ends saying how, and the browser
-/// is sent to the Inbox.
+/// `GET /api/oauth/google/callback`: trades Google's code for the grant and ends the card.
+/// The state is taken once, and only for the actor who tapped.
 ///
 /// # Errors
 /// [`Refusal::forbidden`] for a browser whose login maps to no actor, or to another actor than
@@ -256,8 +237,6 @@ pub fn callback(call: &Call<Reader, Callback, ()>) -> Result<Redirect, Refusal> 
             None => return Err(Refusal::bad_request(NOT_OPEN)),
         },
     };
-    // A grant just kept is read from at once, so the account's line says what its calendars
-    // came to before the owner leaves the page.
     let kept = if let (Taken::Yours(begun), Performed::Done(_)) = (&taken, &performed) {
         Some(suzatary_core::source_key::SourceKey::GoogleCalendar(
             suzatary_core::mail::account_email::AccountEmail::folded(&begun.account),
@@ -278,13 +257,11 @@ pub fn callback(call: &Call<Reader, Callback, ()>) -> Result<Redirect, Refusal> 
     }
 }
 
-/// Why a callback finished nothing, in the owner's words.
 const NOT_OPEN: &str = "this sign-in with Google is not open: it was finished already, it was \
                         never begun on this box, or the box restarted since. Tap Sign in with \
                         Google on its card to begin again.";
 
-/// Trade `code` for the grant and keep its refresh token under the account's name: the card's
-/// ending.
+/// Trade `code` for the grant and keep its refresh token under the account's name.
 fn exchanged(
     state: &State,
     google: &Google,
@@ -303,8 +280,7 @@ fn exchanged(
         return performed;
     };
     let not_sent = |reason: String| Performed::Tried(Tried::NotSent { reason });
-    // A Gmail account lieer reads moves onto the grant only once the grant has read its mail;
-    // until then nothing is kept and lieer reads it as before.
+    // A lieer-read Gmail account moves onto the grant only once the grant has read its mail.
     let moving = match state.consenting.declared(&begun.account) {
         Ok(sync) => matches!(sync, Some(Strategy::Gmail)),
         Err(failed) => {
@@ -368,7 +344,6 @@ fn exchanged(
     }
 }
 
-/// End `card` as `performed` says, saying so in its conversation, which is told.
 fn ended(
     state: &State,
     card: &ProposalId,

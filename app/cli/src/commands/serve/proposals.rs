@@ -22,8 +22,7 @@ pub struct Drawn {
     indices: Vec<usize>,
 }
 
-/// `GET …/<id>/drawn?indices=<n>,…`: the proposals named, drawn against the todo chains in one
-/// read.
+/// `GET …/<id>/drawn?indices=<n>,…`: the proposals named, drawn in one read.
 pub fn drawn(call: &Call<Reader, Drawn, ()>) -> Result<Json<wire::DrawnPayload>, Refusal> {
     let Drawn { id, indices } = &call.params;
     call.state
@@ -38,7 +37,6 @@ pub struct Answer {
     answer: TapAnswer,
 }
 
-/// One proposal: its conversation and its index there.
 impl Params for ProposalRef {
     fn parse(asked: &Asked, _: &Chained) -> Result<Self, Refusal> {
         let id = conversation_named(asked)?;
@@ -102,7 +100,6 @@ impl Body for Answer {
     }
 }
 
-/// A signing key and a signature, each checked as what it says it is.
 fn endorsement_of(
     endorsing: &wire::Endorsing,
 ) -> Result<suzatary_core::signatures::Endorsement, Refusal> {
@@ -169,14 +166,12 @@ pub fn tap(
             if let Some(opened) = &after.opened {
                 state.heard(opened);
             }
-            // A connection or a setting written or removed moves what the box reads of the file.
             if edits.moved() {
                 state.reconnected(call.guard.who().as_str());
             }
-            // A stored secret, a sign-in or a connection moves what the box owes.
             state.notice();
         });
-    // A tap whose answer never reached the page is answered from this line: what happened, and how long.
+    // A tap whose answer never reached the page is diagnosed from this line.
     let ms = started.elapsed().as_millis();
     match &answered {
         Ok(after) => {
@@ -207,7 +202,6 @@ impl<'a> Noting<'a> {
         }
     }
 
-    /// Whether an edit went through.
     fn moved(&self) -> bool {
         self.moved.load(std::sync::atomic::Ordering::Relaxed)
     }
@@ -272,10 +266,8 @@ pub fn dismiss(
         .map(Json)
 }
 
-/// `POST …/proposals/<n>/acknowledge`: the owner checked Sent for a send that may have
-/// gone; performs nothing and wakes nobody. Its act line is a notice the answer rule would
-/// owe, and a check must not cost a model round, so it is not heard until notices have a line
-/// kind of their own.
+/// `POST …/proposals/<n>/acknowledge`: the owner checked Sent for a send that may have gone;
+/// performs nothing and wakes nobody, so a check costs no model round.
 pub fn acknowledge(
     call: &Call<Tap, ProposalRef, ()>,
 ) -> Result<Json<wire::ConversationPayload>, Refusal> {

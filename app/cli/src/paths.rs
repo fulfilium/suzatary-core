@@ -1,13 +1,11 @@
-//! Every path the box derives outside the instance file, derived once from
-//! the instance and the environment it runs in.
+//! Every path the box derives outside the instance file, from the instance and the environment.
 
 use std::path::{Path, PathBuf};
 
 use crate::instance::DataRoot;
 
-/// The environment's part: the home directory, the XDG roots, and the code root a deployment's
-/// wrapper exported. Read once, at the binary's entry, and handed to [`crate::instance::Instance::read`],
-/// so a library call or a test never reads the process's environment.
+/// The environment's part: home, the XDG roots and the exported code root. Read once at the
+/// binary's entry, so a library call or a test never reads the process's environment.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Env {
     home: PathBuf,
@@ -44,8 +42,7 @@ impl Env {
         })
     }
 
-    /// An environment of `home` and `runtime` alone, the XDG roots their defaults beneath
-    /// `home` and no code root exported: what a test or a scratch deployment reads in.
+    /// An environment of `home` and `runtime` alone, XDG roots defaulted, no code root.
     #[must_use]
     pub fn under(home: impl Into<PathBuf>, runtime: impl Into<PathBuf>) -> Self {
         let home = home.into();
@@ -59,21 +56,18 @@ impl Env {
         }
     }
 
-    /// The same environment with `code` the code root a wrapper exported, which the instance
-    /// file's `repo` then gives way to.
+    /// The same environment with `code` as the exported code root.
     #[must_use]
     pub fn running(self, code: Option<PathBuf>) -> Self {
         Self { code, ..self }
     }
 
-    /// The code root a deployment's wrapper exported, if any.
     #[must_use]
     pub fn code(&self) -> Option<&Path> {
         self.code.as_deref()
     }
 
-    /// The user repository's script a deployment's wrapper exported, if any: how the person
-    /// reaches the app from a terminal.
+    /// The user repository's script a deployment's wrapper exported, if any.
     #[must_use]
     pub fn run(&self) -> Option<&str> {
         self.run.as_deref()
@@ -82,9 +76,8 @@ impl Env {
 
 /// The variable a deployment's wrapper names its user repository's script in.
 pub const RUN_ENV: &str = "SUZATARY_RUN";
-/// A directory name for the instance whose data is at `data`: its path with every byte but a
-/// letter, a digit, `.`, `_` and `-` spelled `%XX`, so two instances never share one and the same
-/// instance always finds its own.
+/// A directory name unique to the instance at `data`: its path with every byte but
+/// `[A-Za-z0-9._-]` spelled `%XX`.
 fn instance_key(data: &DataRoot) -> String {
     data.as_path()
         .as_os_str()
@@ -102,34 +95,27 @@ fn instance_key(data: &DataRoot) -> String {
 /// Where tailscaled's socket is on NixOS.
 const TAILSCALED_SOCKET: &str = "/run/tailscale/tailscaled.sock";
 
-/// The paths.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Paths {
-    /// The directory of the files declaring the secret names this instance derives beside the
-    /// code root's own `secretspec.toml` (`suzatary_io::secrets::Declarations`): box state, the
-    /// instance's own as `epochs` is, since a deployment's code root is read-only and the data
-    /// root is the checkpoint, which a derived file is not part of.
+    /// The derived secret-name declarations (`suzatary_io::secrets::Declarations`): box state,
+    /// per instance, since the code root may be read-only and the data root holds no derived file.
     pub secretspec: PathBuf,
     /// The Microsoft grants, one file per account.
     pub oauth: PathBuf,
     /// The IMAP sync state, one file per account and folder.
     pub imap_state: PathBuf,
-    /// Where each message the corpus has listed lives, by canonical hash
-    /// (`suzatary_io::mailbox::located`): box state, the instance's own, rebuilt by
-    /// `suzatary locate-mail`.
+    /// Where each listed message lives, by canonical hash; rebuilt by `suzatary locate-mail`.
     pub mail_hashes: PathBuf,
     /// The phones registered for push.
     pub devices: PathBuf,
-    /// The answers a device's request was given, kept for its replay while it could be one.
+    /// The answers a device's request was given, kept for its replay.
     pub answers: PathBuf,
     /// Each store's epoch, box-local so no rewrite of the data repository takes one back, and
-    /// the instance's own, so a server over a scratch instance never steps the live epochs.
+    /// per instance so a scratch server never steps the live epochs.
     pub epochs: PathBuf,
-    /// Each store's recorded frontiers, box-local and the instance's own as the epochs are: a
-    /// lost one costs a replica one pull from nothing.
+    /// Each store's recorded frontiers, per instance; a lost one costs a replica a full pull.
     pub frontiers: PathBuf,
-    /// The last pairing code's state (`suzatary device pair`): box state, the instance's own,
-    /// and never pushed, since a code trusts a device of this box alone.
+    /// The last pairing code's state, per instance and never pushed.
     pub pairing: PathBuf,
     /// Rendered markup, by the hash of its source.
     pub markup_cache: PathBuf,
@@ -137,12 +123,11 @@ pub struct Paths {
     pub repos: PathBuf,
     /// The allowance endpoint's last good answer.
     pub usage_cache: PathBuf,
-    /// The last mail sync's report, which the sync writes and the gate, the briefing and the
-    /// agent read: box state, never the instance's to place, and never under a shared `/tmp`.
+    /// The last mail sync's report: box state, never under a shared `/tmp`.
     pub last_sync: PathBuf,
     /// The compactor's working directory, kept empty so the CLI finds no `CLAUDE.md` there.
     pub compactor: PathBuf,
-    /// The compactor's CLI configuration, kept apart from the box user's, so no user-level
+    /// The compactor's CLI configuration, apart from the box user's, so no user-level
     /// `CLAUDE.md` or settings reach it.
     pub compactor_config: PathBuf,
     /// Claude Code's transcripts.
@@ -160,7 +145,6 @@ pub struct Paths {
 }
 
 impl Paths {
-    /// The paths of the instance whose data is at `data`, with the Drive CLI the instance names, under `env`.
     #[must_use]
     pub fn of(data: &DataRoot, drive_cli: Option<&Path>, env: &Env) -> Self {
         let state = env.state.join("suzatary");

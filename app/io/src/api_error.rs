@@ -6,14 +6,12 @@ use serde::Deserialize;
 /// An error answer's body.
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
 pub struct ApiError {
-    /// What failed.
     pub error: Said,
 }
 
 /// The endpoint's own words for a failure.
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
 pub struct Said {
-    /// Its message.
     pub message: String,
 }
 

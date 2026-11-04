@@ -1,6 +1,6 @@
-//! The last pairing code's state on disk, as [`Pairings`]: one private file per instance,
-//! box-local and never pushed, read and replaced under a lock beside it, so `suzatary device
-//! pair` and the server's tries never interleave. It holds the code's keyed hash, never the code.
+//! The last pairing code's state, as [`Pairings`]: one private box-local file, replaced under a
+//! lock so `device pair` and the server's tries never interleave. It holds the code's keyed hash,
+//! never the code.
 
 use std::path::PathBuf;
 
@@ -14,7 +14,6 @@ use crate::docs::{DocCodec, Docs, Locked};
 pub struct Pairings(Locked<Pairing>);
 
 impl Pairings {
-    /// The file at `path`, its lock beside it.
     #[must_use]
     pub fn at(path: PathBuf) -> Self {
         let lock = path.with_extension("lock");
@@ -86,8 +85,6 @@ mod tests {
         assert!(!text.contains(&code.shown()), "the file holds no code");
     }
 
-    /// A second `device pair` replaces the first code: the first then reads as a wrong try, and
-    /// the second matches.
     #[test]
     fn a_new_code_replaces_the_last() {
         use suzatary_core::signatures::{Presented, Refused, TRIES, present};
@@ -111,8 +108,7 @@ mod tests {
         );
     }
 
-    /// Two writers on one file, as the terminal and the server are: of eight tries of the right
-    /// code at once, one matches and every other finds it used.
+    /// Two writers on one file, as the terminal and the server are.
     #[test]
     fn of_tries_at_once_through_two_handles_one_matches() {
         use suzatary_core::signatures::{Presented, Refused, present};

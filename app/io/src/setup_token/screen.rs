@@ -63,9 +63,8 @@ impl Screen {
         self.text.len()
     }
 
-    /// Whether what was drawn after `mark` says the code typed there was refused (an error, an
-    /// invalid or expired code, a request to try again), the typed `code` itself not read, so a
-    /// CLI that asks again is answered at once rather than at the end of the wait.
+    /// Whether what was drawn after `mark` says the typed `code` was refused; the code's own
+    /// echo is not read.
     #[must_use]
     pub fn refused_after(&self, mark: usize, code: &str) -> bool {
         let drawn = self.text.get(mark..).unwrap_or_default();

@@ -1,7 +1,6 @@
-//! The requests devices made and the box performed, in two stores. The RECORDS, one JSON
-//! provenance record per request named by it, are pushed with the data, so who asked travels
-//! with the history; the ANSWERS a replay is given stay on the box, outside git, and are pruned
-//! once the request is past its window, since a replay is refused from then on anyway.
+//! The requests devices made and the box performed, in two stores: the records (one JSON
+//! provenance record per request) are pushed with the data; the answers a replay is given stay on
+//! the box, outside git, and are pruned once the request is past its window.
 
 use std::path::{Path, PathBuf};
 use std::time::{Duration, SystemTime};
@@ -13,8 +12,7 @@ use suzatary_core::store::{Doc, Gets as _, StoreError};
 use crate::docs::{DocCodec, Docs};
 use crate::present::Present as _;
 
-/// The requests' records under one directory and their answers under another, each at
-/// `<name>.json`.
+/// The records under one directory and the answers under another, each at `<name>.json`.
 #[derive(Clone)]
 pub struct Requests {
     records: Docs<Hash, Requested>,
@@ -32,15 +30,14 @@ impl std::fmt::Debug for Requests {
     }
 }
 
-/// What the records' store keeps out of git beside them: a record's write in progress.
+/// A record's write in progress stays out of git.
 const IGNORED: &str = "*.writing\n";
 
 /// How long an answer is kept: twice the window, so a request inside it always finds its own.
 const KEPT: Duration = Duration::from_secs(2 * WINDOW_SECONDS.unsigned_abs());
 
 impl Requests {
-    /// The records under `dir`, pushed with the data, and the answers under `answered`, on the
-    /// box alone; each made on the first request.
+    /// Records under `dir` (pushed), answers under `answered` (box-only); made on first request.
     #[must_use]
     pub fn open(dir: PathBuf, answered: PathBuf) -> Self {
         let (at, answered_at) = (dir.clone(), answered.clone());
@@ -61,26 +58,17 @@ impl Requests {
     }
 
     /// The record of `name`, if the box performed it.
-    ///
-    /// # Errors
-    /// [`StoreError::Unreadable`].
     pub fn get(&self, name: &Hash) -> Result<Option<Requested>, StoreError> {
         self.records.get(name)
     }
 
     /// The answer the box gave `name`, while it is kept.
-    ///
-    /// # Errors
-    /// [`StoreError::Unreadable`].
     pub fn answer(&self, name: &Hash) -> Result<Option<Answer>, StoreError> {
         self.answers.get(name)
     }
 
-    /// Keep `answer` on the box and `record` under its name, the answer first so a record never
-    /// stands without one; then drop every answer past its window.
-    ///
-    /// # Errors
-    /// [`StoreError::Unwritable`], and a record whose name is not one.
+    /// Keep `answer` and then `record`, so a record never stands without its answer; then drop
+    /// every answer past its window.
     pub fn keep(&self, record: &Requested, answer: &Answer) -> Result<(), StoreError> {
         let name = Hash::new(record.name.clone())
             .map_err(|e| StoreError::unwritable("request store", e.to_string()))?;
@@ -91,10 +79,8 @@ impl Requests {
         Ok(())
     }
 
-    /// The record store's fsck: every file but its `.gitignore` and a write in progress is a
-    /// `<name>.json` holding the record of that name, signed by the key it names; one line per
-    /// file that is not. A store never written is clean; one that cannot be listed is a finding,
-    /// never a clean store.
+    /// The record store's fsck: one line per file that is not a `<name>.json` holding that
+    /// name's record, signed by the key it names. A store that cannot be listed is a finding.
     #[must_use]
     pub fn verify(&self) -> Vec<String> {
         let unlisted = |e: std::io::Error| vec![format!("{}: {e}", self.dir.display())];
@@ -118,7 +104,6 @@ impl Requests {
             .collect()
     }
 
-    /// What is wrong with the file `file` of the record store, if anything.
     fn finding(&self, file: &str) -> Option<String> {
         let Some(stem) = file.strip_suffix(".json") else {
             return Some(format!("{file}: not a request record"));
@@ -136,7 +121,7 @@ impl Requests {
     }
 }
 
-/// The records' `.gitignore`, written once, so a write caught in progress never rides a push.
+/// The records' `.gitignore`, so a write caught in progress never rides a push.
 fn ignoring(dir: &Path) -> Result<(), StoreError> {
     let path = dir.join(".gitignore");
     if path.exists() {
@@ -149,8 +134,7 @@ fn ignoring(dir: &Path) -> Result<(), StoreError> {
     std::fs::write(&path, IGNORED).map_err(unwritable)
 }
 
-/// Remove each answer written more than [`KEPT`] before `now`. Best effort: an answer left
-/// behind is pruned by the next keep, and one that cannot be read for its age stays.
+/// Remove each answer written more than [`KEPT`] before `now`; best effort.
 fn prune(answered: &Path, now: SystemTime) {
     let Ok(entries) = std::fs::read_dir(answered) else {
         return;
@@ -175,11 +159,8 @@ const RECORD: DocCodec<Hash, Requested> = DocCodec {
     },
 };
 
-/// A request's nonce, as a device draws it: 128 bits from the system's generator, in lowercase
-/// hex ([`suzatary_core::signatures::is_nonce`]).
-///
-/// # Errors
-/// The generator failing.
+/// A request's nonce: 128 random bits in lowercase hex
+/// ([`suzatary_core::signatures::is_nonce`]).
 pub fn fresh_nonce() -> Result<String, String> {
     let bytes: [u8; 16] = ring::rand::generate(&ring::rand::SystemRandom::new())
         .map(ring::rand::Random::expose)
@@ -209,8 +190,6 @@ mod tests {
         }
     }
 
-    /// A record store holding only signed records under their own names verifies; a stray, a
-    /// record under another name, unreadable bytes and a forged signature are each named.
     #[test]
     fn the_record_store_names_every_file_that_is_not_its_record() {
         let dir = tempfile::tempdir().expect("a directory");
@@ -251,8 +230,6 @@ mod tests {
         assert_eq!(found[2], "stray.txt: not a request record");
     }
 
-    /// A record store never written is clean; one that is there and cannot be listed (a file
-    /// where the directory belongs) is a finding, never a clean store.
     #[test]
     fn an_unlistable_record_store_is_a_finding() {
         let dir = tempfile::tempdir().expect("a directory");
@@ -268,7 +245,6 @@ mod tests {
         );
     }
 
-    /// An answer older than twice the window goes, a fresh one stays.
     #[test]
     fn an_answer_past_its_window_is_pruned() {
         let dir = std::env::temp_dir().join(format!("suzatary-answers-{}", std::process::id()));

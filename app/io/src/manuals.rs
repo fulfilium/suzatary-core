@@ -1,6 +1,5 @@
 //! The manuals, as `suzatary_core::capability::Manuals`. No method takes a path, so the agent
-//! holds no file read. A missing file is `None`, an answer the agent can act
-//! on, never an error.
+//! holds no file read. A missing file is `None`, never an error.
 
 use std::path::PathBuf;
 
@@ -15,8 +14,8 @@ pub struct Handbook {
 }
 
 impl Handbook {
-    /// Point the reads at a repository's manuals. [`Manual::Operator`] and [`Manual::Secretary`] have their `{{persona.*}}` placeholders
-    /// filled from `persona` at read time, so nothing is written back.
+    /// The manuals of `repo`; [`Manual::Operator`] and [`Manual::Secretary`] have their
+    /// `{{persona.*}}` placeholders filled from `persona` at read time, never written back.
     #[must_use]
     pub fn new(repo: impl Into<PathBuf>, persona: Persona) -> Self {
         Self {
@@ -34,8 +33,6 @@ impl Manuals for Handbook {
             Manual::Secretary => self.repo.join("SECRETARY.md"),
         };
         let text = std::fs::read_to_string(path).ok()?;
-        // Only the two files that name the person are rendered; the constitution is this
-        // repository's own prose.
         Some(match which {
             Manual::Operator | Manual::Secretary => self.persona.render(&text),
             Manual::Constitution => text,

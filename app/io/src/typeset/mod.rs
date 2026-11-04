@@ -1,12 +1,10 @@
 //! Typst compiled in this process: the Prodrome's `Project`, the same Rust the tab runs as
 //! WebAssembly, so the box and the tab admit a text by one rule.
 //!
-//! A [`Job`] names its library. The closed one is typst's own with `html` (any element and
-//! attribute) and `plugin` (WebAssembly) removed from its global scope and from `std`, so no
-//! spelling, field access or `eval` reaches either. Either world holds only the files a job sets,
-//! so `read`, `json`, `image` and `#import` find nothing else and no package is fetched; it has
-//! no font, which HTML export does not need, and no clock. In-process the compile has no time
-//! bound, so the box runs it in a child it can kill; this is what that child runs.
+//! The closed library has `html` and `plugin` removed from its global scope and from `std`, so
+//! no spelling, field access or `eval` reaches either. Either world holds only the files a job
+//! sets: no package is fetched, and there is no font and no clock. The compile has no time
+//! bound, so the box runs it in a child it can kill ([`closed`]).
 
 pub mod closed;
 
@@ -58,7 +56,6 @@ pub fn compile(job: &Job) -> Result<String, Rejected> {
     read(job, &project.compile(&job.main, &job.state))
 }
 
-/// The project's answer, as its JSON spells it.
 #[derive(Deserialize)]
 struct Answer {
     html: Option<String>,
@@ -76,7 +73,6 @@ struct Said {
     to: Option<usize>,
 }
 
-/// How much a diagnostic weighs: only an error refuses a text.
 #[derive(Deserialize)]
 #[serde(rename_all = "lowercase")]
 enum Severity {
@@ -139,7 +135,6 @@ mod tests {
         text(source).expect_err(source).said(source)
     }
 
-    /// The library holds neither binding, however it is spelled.
     #[test]
     fn html_and_plugin_are_unreachable_by_any_spelling() {
         assert_eq!(
@@ -202,8 +197,6 @@ mod tests {
         assert!(html.contains("Pay $40 to ada@x.test [#1] *now*"), "{html}");
     }
 
-    /// A warning leaves the document standing; an error refuses it; a severity the project
-    /// does not print is an answer of another shape, never read as either.
     #[test]
     fn only_an_error_refuses_and_an_unknown_severity_is_not_guessed() {
         let said = |severity: &str| {

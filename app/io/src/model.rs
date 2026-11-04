@@ -55,13 +55,11 @@ const CONFIG_DIR_VAR: &str = "CLAUDE_CONFIG_DIR";
 pub struct Fence(PathBuf);
 
 impl Fence {
-    /// The fence at `path`.
     #[must_use]
     pub fn at(path: impl Into<PathBuf>) -> Self {
         Self(path.into())
     }
 
-    /// Where it is.
     #[must_use]
     pub fn path(&self) -> &Path {
         &self.0
@@ -94,7 +92,6 @@ impl TokenSource {
         Self::new(move || Ok(Some(token.clone())))
     }
 
-    /// [`TOKEN`] from `store`.
     #[must_use]
     pub fn from_store(store: crate::secrets::Secretspec) -> Self {
         Self::new(move || store.get(TOKEN, REASON))
@@ -131,7 +128,6 @@ pub struct ClaudeCli {
 }
 
 impl ClaudeCli {
-    /// `model`, fenced by `fence`.
     #[must_use]
     pub fn new(model: impl Into<String>, fence: Fence) -> Self {
         Self {
@@ -171,14 +167,12 @@ impl ClaudeCli {
         self
     }
 
-    /// A different binary.
     #[must_use]
     pub fn with_binary(mut self, binary: impl Into<String>) -> Self {
         self.binary = binary.into();
         self
     }
 
-    /// A different timeout.
     #[must_use]
     pub fn with_timeout(mut self, timeout: Duration) -> Self {
         self.timeout = timeout;
@@ -217,7 +211,6 @@ impl ClaudeCli {
         Ok(token)
     }
 
-    /// What goes down stdin, and the token it runs under.
     fn feed(
         &self,
         prompt: ForModel,
@@ -277,7 +270,6 @@ impl ClaudeCli {
     }
 }
 
-/// The instant a failure is read at.
 fn now() -> suzatary_core::health::Instant {
     prodrome_core::fpl::instant_of(SystemClock.now())
 }
@@ -310,10 +302,8 @@ impl Model for ClaudeCli {
 
 impl ClaudeCli {
     /// `text` down stdin as it stands, under `system` as the whole system prompt, with no
-    /// tools, no session and none of the secretary's framing (no speaker labels, no verb list,
-    /// no answer envelope); the answer's text as said. Run from an empty directory
-    /// ([`ClaudeCli::in_directory`]) under an empty configuration
-    /// ([`ClaudeCli::with_config_dir`]), so no `CLAUDE.md` is found, the project's or the user's.
+    /// tools, no session and none of the secretary's framing; the answer's text as said. Run it
+    /// from an empty directory under an empty configuration, so no `CLAUDE.md` is found.
     ///
     /// # Errors
     /// [`ModelError`] when the CLI could not be run, failed, printed no result or one this box
@@ -341,7 +331,6 @@ fn last_result(out: &str, heard: &Heard) -> Result<Ended, ModelError> {
         .map_err(|unreadable| ModelError::Failed(unreadable.to_string()))
 }
 
-/// A cleaned run's reply, or that it ended without one.
 fn reply_of(ended: Ended) -> Result<String, ModelError> {
     ended.result.ok_or_else(|| {
         ModelError::Failed(format!(
@@ -583,7 +572,6 @@ pub fn argv(model: &str, fence: &Fence, mode: Mode<'_>) -> Vec<String> {
 pub struct Stdin {
     /// Appended to [`argv`]'s output: empty for plain text.
     pub args: Vec<String>,
-    /// The bytes written.
     pub payload: String,
 }
 
@@ -736,7 +724,6 @@ mod tests {
         message
     }
 
-    /// The CLI's stream-json carries a verb's PDF as a document block, pinned as the exact line.
     #[test]
     fn a_pdf_a_verb_handed_over_goes_down_stream_json_as_a_document_block() {
         use suzatary_core::enclosed::{Enclosed, Enclosure};
@@ -788,7 +775,6 @@ mod tests {
         ))
     }
 
-    /// Every call carries the fence whatever its mode: no tools, no MCP server, the deny-all.
     #[test]
     fn every_mode_carries_the_whole_fence() {
         let id = a_session_id();
@@ -817,7 +803,6 @@ mod tests {
         assert!(shipped().stands(), "the repository ships its deny-all");
     }
 
-    /// A fence that is gone refuses the call; the model never runs unfenced.
     #[test]
     fn a_missing_fence_refuses_the_turn_and_runs_nothing() {
         let cli = ClaudeCli::new("m", Fence::at("/nonexistent/secretary-settings.json"))
@@ -857,7 +842,6 @@ mod tests {
         }
     }
 
-    /// The CLI is started with every quiet switch, whatever else its environment holds.
     #[test]
     fn the_cli_runs_with_non_essential_traffic_off() {
         let dir = tempfile::tempdir().expect("scratch");
@@ -908,7 +892,6 @@ mod tests {
             &format!("#!/bin/sh\ncat > /dev/null\nenv > {}\n", seen.display()),
         );
         let config = dir.path().join("config");
-        // What it answers does not matter here, only what it was started with.
         let _ = ClaudeCli::new("m", shipped())
             .with_binary(script.display().to_string())
             .with_config_dir(config.clone())
@@ -956,8 +939,7 @@ mod tests {
         assert!(unlisted.is_empty(), "the child saw {unlisted:?}");
     }
 
-    /// A store that could not say whether it holds the token refuses the turn, saying so, and
-    /// never runs the model under the box's own credentials in its place.
+    /// A locked store never runs the model under the box's own credentials in its place.
     #[test]
     fn a_locked_token_refuses_the_turn_and_runs_nothing() {
         let cli = ClaudeCli::new("m", shipped())

@@ -1,9 +1,7 @@
 //! The interpreters: `suzatary-core`'s capabilities, run against the world.
 //!
-//! No policy: every decision about what should happen is made in `suzatary-core` and handed
-//! here as a value, and when it happens is the binary's.
-//! No logging: a refusal is a value that comes back, and the binary decides what is worth a
-//! line.
+//! No policy (decisions arrive from `suzatary-core` as values) and no logging (a refusal is a
+//! returned value).
 
 #![forbid(unsafe_code)]
 

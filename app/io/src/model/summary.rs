@@ -1,4 +1,4 @@
-//! WHAT A JOURNAL MAY SAY OF A MODEL'S RUN: its counts and ids, read off the CLI's final
+//! What a journal may say of a model's run: its counts and ids, read off the CLI's final
 //! `result` object, and never its words, which quote the mail it read.
 
 use std::collections::{BTreeMap, BTreeSet};
@@ -10,25 +10,19 @@ use super::stream::{Block, Ended, Event, System, Unreadable, Usage};
 /// A run, summarised.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Summary {
-    /// The session it ran as.
     pub session_id: SessionId,
     /// How the CLI said it ended (`success`, `error_max_turns`, …), verbatim; printed, never
     /// read.
     pub ended: String,
-    /// What that ending was.
     pub outcome: Outcome,
-    /// The turns it took.
     pub turns: u64,
-    /// How long it ran, in milliseconds.
     pub duration_ms: u64,
-    /// The tokens it cost; `None` where the result did not say.
+    /// `None` where the result did not say.
     pub usage: Option<Usage>,
-    /// The tools a permission refused, by name, in the order refused, among those the session
-    /// was offered; a refused name it was not offered is counted in `unknown`.
+    /// The tools a permission refused, in order, among those the session was offered.
     pub refused: Vec<String>,
-    /// The tools it called, by name, with how often, among those the session's `init` event
-    /// offered it: a model an email steered can call a name made of the email's words, and a
-    /// name no tool has is counted in `unknown` and never printed.
+    /// The tools it called, with how often, among those the session's `init` event offered: a
+    /// model an email steered can call a name made of the email's words.
     pub called: BTreeMap<String, u64>,
     /// The calls to, and refusals of, a name the session was never offered: never printed, since
     /// a steered model names a call after the words it read.
@@ -42,8 +36,8 @@ pub enum Outcome {
     Clean,
     /// The CLI called it an error.
     Erred,
-    /// An error because the CLI is not signed in: an error whose text BEGINS so, so a narration
-    /// quoting an email that says it is not one.
+    /// An error whose text begins "not logged in", so a narration quoting an email that says so
+    /// is not one.
     SignedOut,
 }
 

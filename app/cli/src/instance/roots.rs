@@ -16,12 +16,10 @@ pub(super) fn resolve_under(root: &Path, named: &Path) -> PathBuf {
 pub struct CodeRoot(pub(super) PathBuf);
 
 impl CodeRoot {
-    /// A path under the checkout, or the path itself when it is absolute.
     pub(crate) fn under(&self, named: &Path) -> PathBuf {
         resolve_under(&self.0, named)
     }
 
-    /// The root itself.
     #[must_use]
     pub fn as_path(&self) -> &Path {
         &self.0
@@ -33,13 +31,10 @@ impl CodeRoot {
 pub struct DataRoot(pub(super) PathBuf);
 
 impl DataRoot {
-    /// A path under the data directory, or the path itself when it is
-    /// absolute.
     pub(crate) fn under(&self, named: &Path) -> PathBuf {
         resolve_under(&self.0, named)
     }
 
-    /// The root itself.
     #[must_use]
     pub fn as_path(&self) -> &Path {
         &self.0
@@ -49,8 +44,6 @@ impl DataRoot {
 /// Both roots, so every path in the file must declare which side it is on.
 #[derive(Debug, Clone)]
 pub struct Roots {
-    /// The checkout.
     pub code: CodeRoot,
-    /// The instance file's own directory.
     pub data: DataRoot,
 }

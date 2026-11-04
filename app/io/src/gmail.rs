@@ -1,9 +1,8 @@
 //! The Gmail API on lieer's grant: the grant read and a token minted from it, for the send
 //! transport, and the read-only search an older search makes.
 //!
-//! The grant is read from `<maildir>/.credentials.gmailieer.json`, read-only, because lieer owns
-//! and rewrites that file; a caller mints its own access token and persists nothing, so the two
-//! never race.
+//! The grant file is read-only here because lieer owns and rewrites it; a caller mints its own
+//! access token and persists nothing, so the two never race.
 
 use std::path::Path;
 use std::time::Duration;
@@ -16,17 +15,16 @@ use suzatary_core::mail::older::Matched;
 use crate::http::{Http, Req};
 use crate::tokens::{Fresh, Grant};
 
-/// An error body is cut to this many characters so a whole HTML page never lands in a refusal.
+/// Characters of an error body kept, so a whole HTML page never lands in a refusal.
 pub const ERROR_CAP: usize = 300;
 
 const TOKEN_TIMEOUT: Duration = Duration::from_secs(30);
 
 const READ_TIMEOUT: Duration = Duration::from_mins(1);
 
-/// The messages collection of the signed-in user.
 const MESSAGES_URL: &str = "https://gmail.googleapis.com/gmail/v1/users/me/messages";
 
-/// The most ids one listing asks for: the API's own page limit.
+/// The API's own page limit.
 pub const PAGE: usize = 500;
 
 /// lieer's grant could not be read or could not mint a token.
@@ -41,7 +39,6 @@ pub enum GrantError {
 }
 
 impl GrantError {
-    /// What went wrong, in words.
     #[must_use]
     pub fn why(&self) -> &str {
         match self {
@@ -69,9 +66,6 @@ struct RawLieer {
 
 impl Lieer {
     /// The grant in `text`, lieer's credentials file.
-    ///
-    /// # Errors
-    /// [`GrantError::Credentials`] for text that is not lieer's shape.
     pub fn parse(text: &str) -> Result<Self, GrantError> {
         let raw: RawLieer = serde_json::from_str(text)
             .map_err(|error| GrantError::Credentials(error.to_string()))?;
@@ -83,10 +77,6 @@ impl Lieer {
         })
     }
 
-    /// The grant in `<maildir>/.credentials.gmailieer.json`.
-    ///
-    /// # Errors
-    /// [`GrantError::Credentials`] naming the file when it cannot be read or parsed.
     pub fn read(maildir: &Path) -> Result<Self, GrantError> {
         let path = maildir.join(".credentials.gmailieer.json");
         let text = std::fs::read_to_string(&path).map_err(|error| {
@@ -157,7 +147,6 @@ impl Grant for Lieer {
 pub struct MessageId(String);
 
 impl MessageId {
-    /// An id, or `None` for text that is not one.
     #[must_use]
     pub fn parse(text: &str) -> Option<Self> {
         (!text.is_empty()
@@ -168,7 +157,6 @@ impl MessageId {
         .then(|| Self(text.to_owned()))
     }
 
-    /// The id as text.
     #[must_use]
     pub fn as_str(&self) -> &str {
         &self.0
@@ -219,9 +207,6 @@ fn get(http: &dyn Http, token: &Secret, url: &str, limit: u64) -> Result<Option<
 
 /// The ids `q` matches, newest first, one page of at most [`PAGE`]; spam and trash excluded,
 /// as the API does by default.
-///
-/// # Errors
-/// What the API said, or why it could not be asked.
 pub fn list(http: &dyn Http, token: &Secret, q: &str) -> Result<Listed, String> {
     let url = format!(
         "{MESSAGES_URL}?maxResults={PAGE}&q={}",
@@ -258,9 +243,6 @@ struct Raw {
 
 /// One message as it was received, or `None` when it is gone or larger than `cap` bytes, which
 /// is asked first so a large message is never downloaded.
-///
-/// # Errors
-/// What the API said, or why it could not be asked.
 pub fn message(
     http: &dyn Http,
     token: &Secret,
@@ -298,10 +280,8 @@ pub fn message(
     })
 }
 
-/// What fetching one message came to.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Fetched {
-    /// The message as it was received.
     Message(Vec<u8>),
     /// Larger than the cap, so not downloaded or not kept.
     TooLarge,
@@ -322,7 +302,6 @@ mod tests {
         }
     }
 
-    /// The listing asks with `q` encoded whole, and a page token says there were more.
     #[test]
     fn the_listing_sends_q_encoded_and_reads_more() {
         let http = Scripted::always(Ok(Resp::new(
@@ -352,7 +331,6 @@ mod tests {
         assert_eq!(sent[0].header_value("Authorization"), Some("Bearer tok"));
     }
 
-    /// A message over the cap is never downloaded: the size is asked first.
     #[test]
     fn a_large_message_is_never_downloaded() {
         let http = Scripted::answering(vec![Ok(Resp::new(200, r#"{"sizeEstimate": 99}"#))]);

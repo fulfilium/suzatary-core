@@ -1,10 +1,8 @@
 //! `suzatary init`: ask who the deployment serves, write `instance.toml`, begin the chains, and
 //! print what only the person can do next.
 //!
-//! The answers are one [`Onboarding`], parsed once here: flags first, a missing one asked for
-//! at a terminal and refused by name off one, the rule the device-code flow keeps. Nothing
-//! asked is a secret, so no secret is ever an argument; the steps say where each one is typed.
-//! An existing file is refused unless `--force`.
+//! The answers are one [`Onboarding`]: flags first, a missing one asked for at a terminal and
+//! refused by name off one. No secret is ever an argument; the steps say where each is typed.
 
 mod onboarding;
 pub mod options;
@@ -262,7 +260,6 @@ fn gather_from(args: Args, ask: &mut Asker<'_>) -> anyhow::Result<Onboarding> {
 
 /// Where answers come from: a terminal's lines and the screen they are asked on, or nowhere.
 enum Asker<'a> {
-    /// A terminal.
     At(
         &'a mut dyn Iterator<Item = std::io::Result<String>>,
         &'a mut dyn std::io::Write,
@@ -544,7 +541,6 @@ mod tests {
         }
     }
 
-    /// A fresh init begins both chains, each holding its `Genesis` alone.
     #[test]
     fn init_begins_every_chain() {
         let dir = temp_dir("chains");
@@ -574,7 +570,6 @@ mod tests {
         let _ = std::fs::remove_dir_all(&dir);
     }
 
-    /// The owner's actor defaults to their first name, and an agent's name is refused.
     #[test]
     fn the_owner_is_named_by_their_first_name_and_never_as_an_agent() {
         let ada = gather(parse(ADA), false).expect("gathered");
@@ -590,7 +585,6 @@ mod tests {
         assert!(refused.to_string().contains("agent"), "{refused}");
     }
 
-    /// A second init refuses without `--force`: an existing file is somebody's deployment.
     #[test]
     fn a_second_init_refuses_without_force() {
         let dir = temp_dir("noforce");
@@ -621,8 +615,6 @@ mod tests {
         let _ = std::fs::remove_dir_all(&dir);
     }
 
-    /// No flag takes a secret, so no secret is ever an argument: every one is set at
-    /// `secretspec`'s prompt, which the steps say, after the token is minted.
     #[test]
     fn no_secret_is_an_argument_and_the_steps_say_where_each_is_typed() {
         for argument in Wrapper::command().get_arguments() {

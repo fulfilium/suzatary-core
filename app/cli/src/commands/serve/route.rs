@@ -16,23 +16,19 @@ use super::reply::{Outcome, refused};
 
 /// One route: where it is mounted, who may call it, and what it runs.
 pub struct Route {
-    /// The one method it answers.
     pub method: Method,
     /// The whole path of a box route; a chain route's path after `/api` or `/api/{chain}`.
     pub path: &'static str,
-    /// Whether it is the box's or a chain's.
     pub scope: Scope,
-    /// Who may call it, taken from the type of witness its work asks for.
+    /// Taken from the type of witness its work asks for.
     pub guard: Guard,
-    /// What the request must show of its device, taken from the same witness.
+    /// Taken from the same witness.
     pub asks: Asks,
     handler: MethodRouter<State>,
 }
 
-/// The methods this server answers.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Method {
-    /// A read.
     Get,
     /// A write, or a read too large for a query string.
     Post,
@@ -41,7 +37,6 @@ pub enum Method {
 /// Whose route it is, which decides where it is mounted.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Scope {
-    /// The box's, at its path.
     Box,
     /// A chain's: bare under `/api` for the first chain, and under `/api/{chain}` for any.
     ///
@@ -55,7 +50,6 @@ pub enum Scope {
 pub type Run<W, P, B, O> = fn(&Call<W, P, B>) -> O;
 
 impl Route {
-    /// A GET running `run` behind the guard its witness `W` names.
     pub fn get<W: Guarded, P: Params, B: Body, O: Outcome>(
         path: &'static str,
         scope: Scope,
@@ -64,7 +58,6 @@ impl Route {
         Self::adapted(Method::Get, path, scope, run)
     }
 
-    /// A POST running `run` behind the guard its witness `W` names.
     pub fn post<W: Guarded, P: Params, B: Body, O: Outcome>(
         path: &'static str,
         scope: Scope,
@@ -110,7 +103,6 @@ impl Route {
         }
     }
 
-    /// Every path it is mounted at.
     #[must_use]
     pub fn paths(&self) -> Vec<String> {
         match self.scope {
@@ -136,7 +128,6 @@ impl Route {
             .collect()
     }
 
-    /// The router with this route added at each of its paths.
     pub fn mount(self, router: Router<State>) -> Router<State> {
         self.paths().into_iter().fold(router, |router, path| {
             router.route(&path, self.handler.clone())
@@ -144,8 +135,7 @@ impl Route {
     }
 }
 
-/// The guard, then the chain, the parameters and the body, then the work off the async
-/// workers: nothing about a request is read for a caller its guard refuses.
+/// The guard first: nothing about a request is read for a caller its guard refuses.
 async fn serve<W: Guarded, P: Params, B: Body, O: Outcome>(
     state: State,
     request: Request,
@@ -222,9 +212,8 @@ async fn serve<W: Guarded, P: Params, B: Body, O: Outcome>(
     Ok(kept)
 }
 
-/// A signed request's way through the door, logged at `debug` under `suzatary::requests`
-/// (`RUST_LOG=suzatary::requests=debug`): its name, the instant it was stamped, how it ended and
-/// how long each stage took. Never its nonce or body.
+/// A signed request's way through the door, logged at `debug` under `suzatary::requests`.
+/// Never its nonce or body.
 struct Traced {
     on: bool,
     target: String,

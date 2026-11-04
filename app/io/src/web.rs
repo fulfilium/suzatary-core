@@ -1,8 +1,6 @@
-//! The web fetcher behind `suzatary_core::capability::Web`: GET only, no
-//! cookies or credentials, a timeout, a bounded body, and no redirect
-//! followed (a 3xx is an answer naming a new request), over
-//! [`Ureq::public_only`], which refuses any name resolving off the public
-//! internet.
+//! The web fetcher behind `suzatary_core::capability::Web`: GET only, no cookies or
+//! credentials, a timeout, a bounded body, no redirect followed, over [`Ureq::public_only`],
+//! which refuses any name resolving off the public internet.
 
 use std::time::Duration;
 
@@ -12,16 +10,14 @@ use suzatary_core::web::{SEARCH_HOST, WebRequest};
 
 use crate::http::{Http, HttpError, Req, Ureq};
 
-/// The most of a body read.
+/// Bytes.
 const MAX_BODY: u64 = 2 * 1024 * 1024;
 
-/// The most text handed back to the model.
+/// The most text handed back to the model, in characters.
 pub const MAX_TEXT: usize = 60_000;
 
-/// How many search results are listed.
 const MAX_RESULTS: usize = 10;
 
-/// The fetcher.
 #[derive(Debug, Clone)]
 pub struct Fetcher {
     http: Ureq,
@@ -29,7 +25,7 @@ pub struct Fetcher {
 }
 
 impl Fetcher {
-    /// A fetcher with this patience per request.
+    /// A fetcher with this timeout per request.
     #[must_use]
     pub fn new(timeout: Duration) -> Self {
         Self {
@@ -118,7 +114,6 @@ impl Fetcher {
     }
 }
 
-/// One response, read.
 struct Got {
     status: u16,
     kind: String,
@@ -168,7 +163,6 @@ fn decode(text: &str) -> String {
     String::from_utf8_lossy(&out).into_owned()
 }
 
-/// One search result.
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct Hit {
     title: String,
@@ -249,8 +243,7 @@ fn listed(hits: &[Hit]) -> String {
 mod tests {
     use super::*;
 
-    /// Only the resolver's typed refusal is `Refused`; every other failure is `Unreachable`,
-    /// whatever its words say.
+    /// Classified by type, never by the error's words.
     #[test]
     fn only_a_private_address_is_refused() {
         let private = HttpError::Private {

@@ -7,13 +7,11 @@ use axum::response::{IntoResponse, Response};
 use serde::Serialize;
 use suzatary_core::refusal::{Refusal, Status};
 
-/// What a route's work returns: an answer, or an answer or the refusal it earned.
+/// What a route's work returns.
 pub trait Outcome: Send + 'static {
     /// What the box keeps of a signed request's answer, for a replay of it.
     const KEEPS: Keeps = Keeps::Answer;
 
-    /// The response, or the refusal.
-    ///
     /// # Errors
     /// The work's own [`Refusal`].
     fn outcome(self) -> Result<Response, Refusal>;
@@ -22,10 +20,9 @@ pub trait Outcome: Send + 'static {
 /// What the box keeps of an answer for a replay of its request.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Keeps {
-    /// The answer as it was given.
     Answer,
-    /// This JSON body in its place, with the answer's status: an answer that must not be kept
-    /// anywhere, as a held value's.
+    /// This JSON body in its place, with the answer's status: for an answer that must not be
+    /// kept anywhere, as a held value's.
     Instead(&'static str),
 }
 
@@ -56,17 +53,14 @@ impl<T: Serialize> IntoResponse for Accepted<T> {
     }
 }
 
-/// An answer that is a function of its URL alone, as an object's literal is of its name: the
-/// browser keeps it for good and never asks again (`immutable`), and keeps it for this person
-/// alone (`private`). The API's layer marks every answer `no-store`, and [`kept`], outside it,
-/// marks this one instead, so a refusal, a stream and every other answer stay `no-store`. A
-/// wipe's `Clear-Site-Data` clears what was kept.
+/// An answer that is a function of its URL alone, kept for good by the browser for this person
+/// alone. [`kept`], outside the API's `no-store` layer, marks only this one, so every other
+/// answer stays `no-store`. A wipe's `Clear-Site-Data` clears what was kept.
 pub struct Immutable<T>(pub T);
 
-/// What [`Immutable`] answers with: a year, the longest a cache is asked to keep anything.
+/// A year, the longest a cache is asked to keep anything.
 pub const IMMUTABLE: &str = "private, max-age=31536000, immutable";
 
-/// The mark an [`Immutable`] answer carries to [`kept`].
 #[derive(Debug, Clone, Copy)]
 struct KeptForGood;
 
@@ -78,8 +72,7 @@ impl<T: IntoResponse> IntoResponse for Immutable<T> {
     }
 }
 
-/// Marks an [`Immutable`] answer to be kept for good, after the API's layer marked it
-/// `no-store` with every other answer.
+/// Marks an [`Immutable`] answer to be kept for good, over the API layer's `no-store`.
 pub async fn kept(request: Request, next: Next) -> Response {
     let mut response = next.run(request).await;
     if response.extensions().get::<KeptForGood>().is_some() {
@@ -105,11 +98,9 @@ pub fn refused(refusal: &Refusal) -> Response {
                 .insert(header::ALLOW, header::HeaderValue::from_static("POST"));
         }
         // A 410 is cacheable by default, and a cached wipe would answer the new device the tab
-        // comes back as. The browser clears the origin's HTTP cache, which the tab cannot reach,
-        // so what the box served goes with what the tab deletes. Not `storage`: the tab deletes
-        // that itself, and a later 410 of the old page's would clear it again after the reload,
-        // the new device's key with it. `no-store` here as well as on the API's layer, since a
-        // refusal can come from the gate, which sits outside that layer.
+        // comes back as. Clear only `cache` (the tab cannot reach it): not `storage`, which the
+        // tab deletes itself, since a later 410 of the old page's would clear the new device's
+        // key. `no-store` here too, since the gate sits outside the API's layer.
         Status::Wipe => {
             let headers = response.headers_mut();
             headers.insert(

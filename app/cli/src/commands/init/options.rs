@@ -1,8 +1,6 @@
 //! The choices a deployment begins from, as the Markdown `AGENT.md` holds between its options
-//! markers: a reading of `init`'s own argument tree, its value enums and the steps
-//! [`Onboarding::steps`](super::Onboarding::steps) prints, never a second list of them. `suzatary init --options` prints
-//! it, and a guard holds the committed file to it, so the guide and the verb cannot offer
-//! different choices.
+//! markers: a reading of `init`'s argument tree, value enums and steps, never a second list. A
+//! guard holds the committed file to `suzatary init --options`.
 
 use std::fmt::Write as _;
 

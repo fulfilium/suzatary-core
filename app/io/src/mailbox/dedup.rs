@@ -1,11 +1,9 @@
 //! The canonical hash every `state.json` entry and todo `source.hash` is keyed on: sha256 of the
 //! provider-stable headers, never the body, `Message-ID` or a transit header, which a re-fetch
-//! mutates. A wrong hash silently unlinks a todo from its mail, so [`canonical_form`] is exported
-//! for tests to assert on the blob.
+//! mutates. A wrong hash silently unlinks a todo from its mail.
 //!
 //! Each normalisation follows `CPython`'s `email` module rather than RFC 5322, because that
-//! module produced every hash already on disk; where `mail-parser` disagrees, `CPython` wins
-//! (see [`parse_rfc2822_date`]).
+//! module produced every hash already on disk; where `mail-parser` disagrees, `CPython` wins.
 
 use std::sync::LazyLock;
 
@@ -18,11 +16,8 @@ use sha2::{Digest, Sha256};
 pub enum HashHeader {
     /// `Date:`, as its calendar day.
     Date,
-    /// `From:`, its addresses.
     From,
-    /// `To:`, its addresses.
     To,
-    /// `Cc:`, its addresses.
     Cc,
     /// `Subject:`, without its reply and list markers.
     Subject,
@@ -38,7 +33,6 @@ impl HashHeader {
         HashHeader::Subject,
     ];
 
-    /// The name the canonical form writes before its value.
     #[must_use]
     pub fn name(self) -> &'static str {
         match self {
@@ -63,7 +57,6 @@ impl HashHeader {
     }
 }
 
-/// Runs of whitespace, including a folded header's embedded newline, collapse to one space.
 fn collapse_ws(value: &str) -> String {
     value.split_whitespace().collect::<Vec<_>>().join(" ")
 }
@@ -74,7 +67,6 @@ static SUBJECT_PREFIX: LazyLock<Regex> = LazyLock::new(|| {
     Regex::new(r"(?i)^(?:(?:re|fwd?):\s+|\[\w[\w_-]*\w?\]\s+)+").expect("a literal pattern")
 });
 
-/// A decoded subject, stripped of all its leading reply/forward/list markers.
 fn normalize_subject(decoded: &str) -> String {
     let collapsed = collapse_ws(decoded);
     SUBJECT_PREFIX.replace(&collapsed, "").trim().to_owned()
@@ -82,7 +74,7 @@ fn normalize_subject(decoded: &str) -> String {
 
 /// Every address across every occurrence of an address header, lower-cased, trimmed,
 /// de-duplicated and sorted, display names dropped. UTF-8 byte order is scalar-value order, so
-/// a `BTreeSet` sorts as Python's `sorted()` did.
+/// a `BTreeSet` sorts as Python's `sorted()` does.
 fn normalize_addresses<'a>(occurrences: impl Iterator<Item = &'a HeaderValue<'a>>) -> String {
     let mut addrs: std::collections::BTreeSet<String> = std::collections::BTreeSet::new();
     for value in occurrences {
@@ -103,9 +95,7 @@ fn normalize_addresses<'a>(occurrences: impl Iterator<Item = &'a HeaderValue<'a>
     addrs.into_iter().collect::<Vec<_>>().join(", ")
 }
 
-// --- The date header, in CPython's grammar ---------------------------------
-//
-// The hash takes the calendar date CPython's parser read from the header, with no timezone
+// The hash takes the calendar date CPython's parser reads from the header, with no timezone
 // shift; `mail_parser::DateTime` disagrees on two-digit years, so the grammar is ported here.
 
 const DAYNAMES: [&str; 7] = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"];
@@ -147,7 +137,7 @@ fn named_zone(token: &str) -> Option<i32> {
     })
 }
 
-/// An "HHMM"-style signed integer (`-500`, `+0000`, `330`) to minutes east of UTC.
+/// An "HHMM"-style signed integer (`-500`, `330`) to minutes east of UTC.
 fn hhmm_to_minutes(value: i32) -> i32 {
     let sign = if value < 0 { -1 } else { 1 };
     let magnitude = value.abs();
@@ -160,23 +150,18 @@ fn hhmm_to_minutes(value: i32) -> i32 {
 pub struct ParsedDate {
     /// The four-digit year, after `CPython`'s two-digit correction.
     pub year: i32,
-    /// 1..=12.
     pub month: u32,
-    /// 1..=31.
     pub day: u32,
-    /// 0..=23.
     pub hour: u32,
-    /// 0..=59.
     pub minute: u32,
-    /// 0..=59.
     pub second: u32,
     /// Minutes east of UTC, or `None` when the header named no zone the grammar resolves.
     pub tz_offset_minutes: Option<i32>,
 }
 
 impl ParsedDate {
-    /// The numbers the header carried as a naive instant, no timezone applied, as the hash's
-    /// date reads them; `None` when they form no real calendar instant (a day of 32).
+    /// The header's numbers as a naive instant, no timezone applied; `None` when they form no
+    /// real calendar instant (a day of 32).
     #[must_use]
     pub fn to_naive_datetime(&self) -> Option<prodrome_core::literal::Datetime> {
         prodrome_core::literal::Datetime::new(
@@ -212,7 +197,6 @@ pub fn parse_rfc2822_date(text: &str) -> Option<ParsedDate> {
         return None;
     }
 
-    // Drop a leading day name, with or without its comma.
     let first_lower = tokens[0].to_ascii_lowercase();
     if tokens[0].ends_with(',') || DAYNAMES.contains(&first_lower.trim_end_matches(',')) {
         tokens.remove(0);
@@ -340,7 +324,6 @@ pub fn canonical_hash(raw: &[u8]) -> String {
 mod tests {
     use super::*;
 
-    /// A hand-built message with every field this module hashes.
     fn message(headers: &str, body: &str) -> Vec<u8> {
         format!("{headers}\r\n\r\n{body}").into_bytes()
     }

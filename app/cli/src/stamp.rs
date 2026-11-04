@@ -1,9 +1,6 @@
-//! What this binary runs as: its release, read at run time from the file installed beside it
-//! ([`BESIDE`]), and its build (`SUZATARY_BUILD`), a hash of the sources it was compiled from,
-//! which the flake sets. The release is data, not a compiled input: the flake builds the binary
-//! without it and copies it into a small package together with `app/release.toml`, so a release
-//! cut rebuilds nothing. A cargo build has no release file beside it and no build stamp, and
-//! says `dev`.
+//! What this binary runs as: its release, read at run time from the file beside it ([`BESIDE`])
+//! so a release cut rebuilds nothing, and its build (`SUZATARY_BUILD`, a source hash the flake
+//! sets). A cargo build has neither and says `dev`.
 
 use std::path::{Path, PathBuf};
 
@@ -65,14 +62,10 @@ impl Release {
     }
 }
 
-/// The release this binary runs as, read once from beside the running executable. The one
-/// reader of a binary's release: `--version`, `doctor`, the MCP handshake and `GET /api/about`
-/// all ask it.
+/// The release this binary runs as, read once from beside the running executable.
 ///
 /// # Errors
 /// The executable's path or its release file could not be read, or the file holds no release.
-/// The flake's package runs `--version` before it ships, so a release that does not read
-/// never ships.
 pub fn release() -> Result<&'static Release, &'static Unread> {
     static RELEASE: std::sync::OnceLock<Result<Release, Unread>> = std::sync::OnceLock::new();
     RELEASE
@@ -90,8 +83,7 @@ pub fn build() -> &'static str {
     option_env!("SUZATARY_BUILD").unwrap_or("dev")
 }
 
-/// The version `--version`, `doctor` and the MCP server's handshake name: the release's, `dev`
-/// with no release file, or what is wrong with the file. Read once.
+/// The version string: the release's, `dev` with no release file, or what is wrong with the file.
 #[must_use]
 pub fn version() -> &'static str {
     static VERSION: std::sync::OnceLock<String> = std::sync::OnceLock::new();

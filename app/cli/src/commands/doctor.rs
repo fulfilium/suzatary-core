@@ -1,7 +1,7 @@
 //! `suzatary doctor`: what this binary can do, and what it reads this deployment to be.
 //!
-//! It prints what it read, including grants and sync strategies, rather than merely
-//! parsing it, because a declaration says nothing about what is actually deployed.
+//! It prints what it read, grants and sync strategies included: a declaration is not what is
+//! deployed.
 
 use std::path::Path;
 
@@ -107,7 +107,6 @@ fn print_persona(persona: &suzatary_core::persona::Persona) {
     );
 }
 
-/// The `config` line's words.
 fn notmuch_config_line(config: Option<&Path>) -> String {
     config.map_or_else(
         || "none — mail search refuses (no ambient fallback)".to_owned(),
@@ -116,7 +115,6 @@ fn notmuch_config_line(config: Option<&Path>) -> String {
 }
 
 /// What this binary reads the deployment to be.
-// One line per fact is the shape `doctor` exists for, so this is not split into helpers.
 #[allow(clippy::too_many_lines)]
 fn deployment(path: &Path) {
     match instance::Instance::open(path) {

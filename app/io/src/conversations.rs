@@ -1,6 +1,5 @@
-//! The conversations on disk as one value: the lines, the keys that open their words, box-local
-//! and never pushed, the cache of what their words were rendered to, and the system's generator
-//! for new keys.
+//! The conversations on disk as one value: the lines, their keys (box-local, never pushed), the
+//! render cache, and the generator for new keys.
 
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -20,18 +19,15 @@ pub struct ConversationStores {
     pub lines: objects::Objects<LineEvent>,
     /// The keys, box-local, vaulted, never pushed.
     pub keys: TextKeys,
-    /// Where the keys are, so the stores can be opened again.
     keys_at: PathBuf,
-    /// The rendered answer blocks, the one a server draws through, so an erasure empties it.
+    /// The rendered answer blocks the server draws through, so an erasure empties it.
     renders: Arc<dyn RenderCache + Send + Sync>,
-    /// The words opened so far under these keys, one cache per keys directory in the process, so
-    /// a sweep by any holder forgets them for every holder.
+    /// One cache per keys directory in the process, so a sweep by any holder forgets the words
+    /// for every holder.
     opened: Arc<Opened>,
 }
 
 impl ConversationStores {
-    /// The lines at `lines`, their keys at `keys`, and `renders`, the cache their answers are
-    /// drawn through.
     #[must_use]
     pub fn open(
         lines: impl Into<PathBuf>,
@@ -70,9 +66,8 @@ impl ConversationStores {
     }
 }
 
-/// The one cache of words opened under the keys at `keys` in this process: every
-/// [`ConversationStores`] opened over one keys directory shares it, so the server, the acts it
-/// performs and the pollers it starts forget an erased slot together.
+/// The process-wide cache for the keys at `keys`, shared by every holder so all of them forget an
+/// erased slot together.
 fn opened_at(keys: &std::path::Path) -> Arc<Opened> {
     static OPENED: std::sync::LazyLock<
         std::sync::Mutex<std::collections::HashMap<PathBuf, Arc<Opened>>>,

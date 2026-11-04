@@ -20,9 +20,7 @@ pub struct NotmuchMessage {
     /// The first file holding it.
     #[serde(rename = "filename", deserialize_with = "first_file")]
     pub file: PathBuf,
-    /// Its tags.
     pub tags: Vec<String>,
-    /// Its headers by name.
     pub headers: HashMap<String, String>,
     /// Its MIME tree, absent under `--body=false`.
     pub body: Option<Value>,
@@ -43,9 +41,8 @@ struct Node(Option<NotmuchMessage>, Vec<Node>);
 /// The messages a `notmuch show` matched, in its order, parsed from its whole answer: a list of
 /// threads, each a list of nodes.
 ///
-/// One message that does not parse (no id, no file) refuses the whole answer rather than that
-/// one row. notmuch mints an id for every message it indexes, so such an answer is not notmuch's
-/// show format at all, and none of its rows is to be believed.
+/// One message that does not parse (no id, no file) refuses the whole answer, not that one row:
+/// notmuch mints an id for every message it indexes, so such an answer is not its show format.
 pub fn matched(raw: &[u8]) -> Result<Vec<NotmuchMessage>, MailError> {
     fn walk(nodes: Vec<Node>, out: &mut Vec<NotmuchMessage>) {
         for Node(message, replies) in nodes {
@@ -79,7 +76,6 @@ pub enum Text<'a> {
 }
 
 impl<'a> Text<'a> {
-    /// `raw` decoded.
     #[must_use]
     pub fn of(raw: &'a [u8]) -> Self {
         match String::from_utf8_lossy(raw) {
@@ -88,7 +84,6 @@ impl<'a> Text<'a> {
         }
     }
 
-    /// The text.
     #[must_use]
     pub fn as_str(&self) -> &str {
         match self {

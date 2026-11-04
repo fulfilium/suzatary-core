@@ -21,9 +21,8 @@ pub struct PluginStore {
 pub enum Begun {
     /// At the schema it already held: everything learned before still reads.
     Kept(Objects<Declared>),
-    /// Empty, at a schema it did not hold before. A cache is a tabulation of its source, so what
-    /// was learned at another schema is dropped and learned again, and a cursor kept for it is
-    /// no longer the store's.
+    /// Empty, at a schema it did not hold before: what was learned at another schema is dropped,
+    /// and a cursor kept for it is no longer the store's.
     Afresh(Objects<Declared>),
 }
 
@@ -40,7 +39,6 @@ impl Begun {
 const SCHEMA: &str = "schema";
 
 impl PluginStore {
-    /// The store at `root`.
     #[must_use]
     pub fn at(root: impl Into<PathBuf>) -> Self {
         Self { root: root.into() }

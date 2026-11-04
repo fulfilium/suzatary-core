@@ -48,7 +48,6 @@ const MS_TIMEOUT: Duration = Duration::from_mins(1);
 pub struct Microsoft<'a> {
     /// The account, which `From` must be.
     pub email: &'a str,
-    /// Its send grant.
     pub token: &'a SmtpToken,
 }
 
@@ -198,9 +197,7 @@ pub struct Bridge<'a> {
     pub address: SocketAddr,
     /// Where `PROTON_BRIDGE_PASSWORD` resolves.
     pub secrets: &'a dyn Resolves,
-    /// The pinned certificate.
     pub cert: &'a Path,
-    /// The account it authenticates as.
     pub smtp_user: &'a str,
 }
 
@@ -247,12 +244,7 @@ impl Transport for Bridge<'_> {
     }
 }
 
-/// Read and parse the pinned certificate at `path`.
-///
 /// The fix names the IMAP port because the Bridge presents the same certificate on both.
-///
-/// # Errors
-/// `Transport` at `Credentials`, naming `path` and the command that re-extracts it.
 fn read_bridge_certificate(path: &Path) -> Result<CertificateDer<'static>, SendError> {
     let failed = |doing: &str, error: &dyn std::fmt::Display| SendError::Transport {
         step: Step::Credentials,
@@ -343,8 +335,7 @@ impl Transport for Gmail<'_> {
     }
 }
 
-/// Send `out` via the Gmail API with `token`, which the box minted from a Google account's sign-in
-/// with Google.
+/// Send `out` via the Gmail API with a `token` the box minted from a Google sign-in.
 ///
 /// # Errors
 /// As [`Gmail`]'s, but for the credentials, which the caller read.
@@ -360,7 +351,6 @@ impl Transport for GoogleApi<'_> {
     }
 }
 
-/// Post `mime` to the Gmail API with `token`.
 fn gmail_api(
     http: &dyn Http,
     token: &Secret,

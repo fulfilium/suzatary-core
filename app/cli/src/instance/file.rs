@@ -1,8 +1,5 @@
-//! `instance.toml` as written: each value parsed to its type as it is read,
-//! each path as the file spells it until [`super::Instance::read`] roots it.
-//!
-//! `init` and the e2e fixture write the file through the same types, so the
-//! file is written and read by one shape.
+//! `instance.toml` as written: each value parsed to its type, each path unrooted until
+//! [`super::Instance::read`]. `init` and the e2e fixture write the file through these types.
 
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
@@ -25,8 +22,7 @@ use suzatary_core::web::AllowRule;
 
 use super::{CodeRoot, DataRoot, Reserve};
 
-/// The whole file. A key the binary does not read refuses the file, so a table left behind
-/// is never a setting that sets nothing.
+/// The whole file. A key the binary does not read refuses the file.
 #[derive(Debug, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 pub(crate) struct File {
@@ -44,29 +40,25 @@ pub(crate) struct File {
     pub(crate) agent: Triage,
     #[serde(default)]
     pub(crate) persona: Persona,
-    /// The intent to notify, declared rather than inferred from which push
-    /// secret resolves; TOML has no null, so "never" is the table absent.
+    /// The intent to notify, declared, not inferred from which secret resolves; absent is never.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub(crate) notify: Option<Notify>,
     /// Absent, a tap on a coding session is refused.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub(crate) coding: Option<Coding>,
-    /// The cache tier's root, under the data root: box-local, never pushed, rebuilt by syncing
-    /// again (`cache` when absent). The data repository ignores it.
+    /// The cache tier's root under the data root (`cache` when absent): box-local, never pushed.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub(crate) cache: Option<PathBuf>,
-    /// Every plugin this box runs, each parsed once into its authorities. Never serialised:
-    /// `init` declares none, and a calendar's tap writes its table through `toml_edit`
-    /// (`connections.rs`), keeping every other byte.
+    /// Every plugin this box runs. Never serialised: a tap writes its table through `toml_edit`
+    /// (`connections.rs`).
     #[serde(default, skip_serializing)]
     pub(crate) plugins: Vec<Manifest>,
-    /// The deployment's root (SPEC law 42), which every deployment declares: `suzatary init`
-    /// mints the box's key and writes it.
+    /// The deployment's root (SPEC law 42), required; `suzatary init` writes it.
     pub(crate) signatures: Signatures,
 }
 
-/// `[signatures]`: the root key, public, whose signatures make a device key count. Its seed is
-/// the box's own key, `SUZATARY_BOX_KEY` in secretspec, never written here.
+/// `[signatures]`: the public root key. Its seed, `SUZATARY_BOX_KEY` in secretspec, is never
+/// written here.
 #[derive(Debug, Clone, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 pub(crate) struct Signatures {
@@ -79,8 +71,7 @@ fn here() -> PathBuf {
 }
 
 impl File {
-    /// The file at `path`, each value parsed to its type: what [`super::Instance::read`] roots
-    /// and checks, and what `suzatary instance` answers against.
+    /// The file at `path`, each value parsed to its type.
     ///
     /// # Errors
     /// The file unreadable, or not an instance file.
@@ -122,8 +113,7 @@ impl File {
     }
 }
 
-/// One `[[chains]]` entry; the entries' order is meaning, the first being what
-/// a verb with no `--chain` and the bare `/api/…` paths serve.
+/// One `[[chains]]` entry; order matters: the first is the default chain.
 #[derive(Debug, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 pub(crate) struct Chain {
@@ -133,14 +123,12 @@ pub(crate) struct Chain {
     pub(crate) untrusted: Vec<Actor>,
     #[serde(with = "texts")]
     pub(crate) actors: Vec<Actor>,
-    /// The actor of the roster whose deployment this is: whom a command with no `--actor` acts
-    /// as. Trusted and on the roster, or the file does not read.
+    /// Whom a command with no `--actor` acts as; must be trusted and on the roster.
     #[serde(with = "text")]
     pub(crate) owner: Actor,
 }
 
-// `toml` serialises every plain value ahead of a table, so `act_as` and
-// `serving` come last.
+// `toml` serialises plain values ahead of tables, so `act_as` and `serving` come last.
 #[derive(Debug, Deserialize, Serialize)]
 pub(crate) struct Web {
     #[serde(with = "texts")]
@@ -154,15 +142,12 @@ pub(crate) struct Web {
 /// Where this deployment serves from and what it serves.
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct Serving {
-    /// The address to bind.
     pub host: String,
-    /// The port.
     pub port: u16,
     /// Where `tailscale cert` puts `cert.pem` and `key.pem`.
     pub tls_dir: PathBuf,
     /// The frontend build, the one directory served as files.
     pub dist: PathBuf,
-    /// The briefings.
     pub briefings: PathBuf,
 }
 
@@ -184,18 +169,15 @@ pub struct Mail {
     pub root: PathBuf,
     /// The triage state file, the sole dedup authority.
     pub state: PathBuf,
-    /// The notmuch binary.
     pub notmuch: PathBuf,
-    /// Absent means no mail index, which the mail capability reads as a
-    /// refusal rather than an ambient fallback.
+    /// Absent means no mail index: a refusal, never an ambient fallback.
     #[serde(default)]
     pub notmuch_config: Option<PathBuf>,
     /// The mbsync configuration the Proton channel is pinned to.
     pub mbsyncrc: PathBuf,
-    /// A bare timestamp of the last triage pass that pushed, kept off the chain
-    /// because the chain goes silent exactly when a pass cannot commit.
+    /// A bare timestamp of the last triage pass that pushed, kept off the chain because the
+    /// chain goes silent exactly when a pass cannot commit.
     pub heartbeat: PathBuf,
-    /// The account roster, checked for unique addresses and maildir folders.
     pub accounts: Roster,
     /// The churn and keep lists, before any maintained seed is folded in.
     #[serde(default, skip_serializing_if = "junk::is_empty", with = "junk")]
@@ -219,10 +201,8 @@ impl Mail {
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
 #[serde(default, deny_unknown_fields)]
 pub struct Triage {
-    /// What its `context` may spend on the secretary's memory beyond the manual's cap: the memory,
-    /// the newest facts first and then the record in the owner's words alone, gets this and what
-    /// the manual leaves of its cap. A token is at least one byte, so this many bytes are at most
-    /// this many tokens.
+    /// Bytes its `context` may spend on the secretary's memory beyond the manual's cap (at most
+    /// this many tokens, a token being at least one byte).
     pub memory_bytes: usize,
 }
 
@@ -240,59 +220,49 @@ impl Default for Triage {
     }
 }
 
-/// `[secretary]`, defaulted key by key: the secretary is never absent, because
-/// a route that 404s on one deployment is a frontend that has to ask.
+/// `[secretary]`, defaulted key by key, so the secretary's routes exist on every deployment.
 #[derive(Debug, Clone, Deserialize, Serialize)]
 #[serde(default, deny_unknown_fields)]
 pub struct Secretary {
-    /// The secretary's directory: the memory and the files a conversation holds; the
-    /// conversations themselves are [`Secretary::line_store`], beside it.
+    /// The secretary's directory: the memory and the files a conversation holds.
     pub conversations: PathBuf,
-    /// The cache of rendered answer blocks, a sibling of `conversations`
-    /// because the transcript is append-only bytes nothing else may touch.
+    /// The cache of rendered answer blocks, a sibling of `conversations`, whose transcript is
+    /// append-only bytes nothing else may touch.
     pub renders: PathBuf,
     /// The inbox's store: every proposal and what became of it.
     pub inbox: PathBuf,
-    /// The memory's history: which facts were remembered and which forgotten, by id; their words
-    /// are [`Secretary::memory_texts`].
+    /// The memory's history by id; the words are [`Secretary::memory_texts`].
     pub memory: PathBuf,
-    /// The digest's history: which nodes of the conversations' summary tree were summarised, by
-    /// the node's name; their words are [`Secretary::digest_texts`].
+    /// The digest's history by node name; the words are [`Secretary::digest_texts`].
     pub digests: PathBuf,
     /// The two topic stores, box-local, vaulted and never pushed.
     pub topics: Topics,
-    /// The Claude model the conversation, the reviews and the titles run, pinned because a
-    /// drifting default is a behaviour change nobody committed.
+    /// The model for the conversation, reviews and titles, pinned so it cannot drift.
     pub model: ModelName,
-    /// Whether the compactor summarises the conversations into the digest: off unless the file
-    /// says `true`, and `false` is its kill switch. The five keys after it are read only when
-    /// it runs ([`Secretary::compacting`]).
+    /// Whether the compactor runs; `false` is its kill switch. The five keys after it are read
+    /// only when it runs ([`Secretary::compacting`]).
     pub compact: bool,
-    /// The Claude model the compactor runs, over the subscription.
     pub compactor: ModelName,
     /// The share of the subscription the compactor never takes.
     pub reserve: Reserve,
-    /// The most calls the compactor makes in any hour.
     pub compact_calls_per_hour: u32,
     /// The most bytes it sends in any twenty-four hours.
     pub compact_bytes_per_day: u64,
     /// How many of its steps may run at once, each on a node no other step holds.
     pub compact_workers: std::num::NonZeroUsize,
-    /// The settings file that fences the model's subprocess, under the code root: always one,
-    /// the deny-all this repository ships unless the file names another.
+    /// The settings file that fences the model's subprocess, under the code root; the shipped
+    /// deny-all unless the file names another.
     pub settings: PathBuf,
     /// The hosts it may read without asking; "Always allow" appends here.
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub web_allow: Vec<AllowRule>,
-    /// The Drive folders it reads without asking; "Always allow this folder"
-    /// appends here.
+    /// The Drive folders it reads without asking; "Always allow this folder" appends here.
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub drive_allow: Vec<DrivePath>,
     /// The Proton Drive CLI; `$HOME/bin/proton-drive` when absent.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub drive_cli: Option<PathBuf>,
-    /// The repositories the secretary may reach, each with its check; one not named here (or
-    /// as `[coding] repo`) is refused before anything is asked.
+    /// The repositories the secretary may reach, each with its check; any other is refused.
     #[serde(skip_serializing_if = "is_none_declared", with = "repos")]
     pub repos: Declared,
 }
@@ -307,13 +277,11 @@ impl Default for Secretary {
             digests: PathBuf::from("digests"),
             topics: Topics::default(),
             model: ModelName::parse("claude-opus-5-5").expect("a model name"),
-            // Off until the owner turns it on: the first run compacts every line already stored.
+            // Off by default: the first run compacts every line already stored.
             compact: false,
-            // The latest Sonnet, the owner's choice for the compactor (2026-10-06).
             compactor: ModelName::parse("claude-sonnet-5-5").expect("a model name"),
             reserve: Reserve::default(),
-            // Thirty calls an hour and 32 MiB a day: an import of every past line takes days,
-            // never an afternoon of the subscription.
+            // An import of every past line takes days, never an afternoon of the subscription.
             compact_calls_per_hour: 30,
             compact_bytes_per_day: 32 * 1024 * 1024,
             compact_workers: std::num::NonZeroUsize::MIN,
@@ -344,22 +312,19 @@ impl Secretary {
         }
     }
 
-    /// The conversations' lines, pushed with their words locked: `conversations` with `-lines`
-    /// on its name, beside it.
+    /// The conversations' lines, pushed with their words locked.
     #[must_use]
     pub fn line_store(&self) -> PathBuf {
         self.beside("-lines")
     }
 
-    /// The keys of the lines' words, box-local, vaulted and never pushed: `conversations` with
-    /// `-lines-keys` on its name, beside it.
+    /// The keys of the lines' words: box-local, vaulted and never pushed.
     #[must_use]
     pub fn line_keys(&self) -> PathBuf {
         self.beside("-lines-keys")
     }
 
-    /// The conversations, their lines and their keys, emptying `renders` of what an erasure
-    /// takes.
+    /// The conversations, their lines and keys; an erasure also empties `renders`.
     #[must_use]
     pub fn conversation_stores(
         &self,
@@ -372,29 +337,25 @@ impl Secretary {
         )
     }
 
-    /// The memory's texts, box-local and never pushed: `conversations` with `-memory-texts` on
-    /// its name, beside it.
+    /// The memory's texts, box-local and never pushed.
     #[must_use]
     pub fn memory_texts(&self) -> PathBuf {
         self.beside("-memory-texts")
     }
 
-    /// The digest's summaries' words, box-local and never pushed: `conversations` with
-    /// `-digest-texts` on its name, beside it.
+    /// The digest's summaries' words, box-local and never pushed.
     #[must_use]
     pub fn digest_texts(&self) -> PathBuf {
         self.beside("-digest-texts")
     }
 
-    /// The owner's uploads: `attachments/` inside the conversations directory, box-local and
-    /// git-ignored with them.
+    /// The owner's uploads, box-local and git-ignored.
     #[must_use]
     pub fn uploads(&self) -> PathBuf {
         self.conversations.join("attachments")
     }
 
-    /// The files verbs hand the model: `files/` inside the conversations directory, beside the
-    /// uploads and git-ignored with them.
+    /// The files verbs hand the model, box-local and git-ignored.
     #[must_use]
     pub fn kept(&self) -> PathBuf {
         self.conversations.join("files")
@@ -429,8 +390,8 @@ impl Secretary {
     }
 }
 
-/// `[secretary] topics`: where the topics and their aliases are kept. A topic name is words, so
-/// both stores stay on the box: the vault carries them and the data push refuses them.
+/// `[secretary] topics`. A topic name is words, so both stores stay on the box: the vault
+/// carries them and the data push refuses them.
 #[derive(Debug, Clone, Deserialize, Serialize)]
 #[serde(default, deny_unknown_fields)]
 pub struct Topics {
@@ -450,16 +411,13 @@ impl Default for Topics {
 }
 
 impl Topics {
-    /// Both stores, opened.
     #[must_use]
     pub fn open(&self) -> suzatary_io::topics::Topics {
         suzatary_io::topics::Topics::open(self.memberships.clone(), self.aliases.clone())
     }
 }
 
-/// `[notify]`: a non-empty `channels` means push secrets are resolved at
-/// startup; `channels` is a checklist for a human, since an unset secret
-/// already resolves to nothing.
+/// `[notify]`: a non-empty `channels` means push secrets are resolved at startup.
 #[derive(Debug, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 pub(crate) struct Notify {
@@ -504,7 +462,6 @@ impl Text for PublicKey {
     }
 }
 
-/// One [`Text`] value.
 mod text {
     use serde::de::Error as _;
     use serde::{Deserialize, Deserializer, Serializer};
@@ -520,7 +477,6 @@ mod text {
     }
 }
 
-/// A list of [`Text`] values.
 mod texts {
     use serde::de::Error as _;
     use serde::{Deserialize, Deserializer, Serializer};
@@ -544,7 +500,6 @@ mod texts {
     }
 }
 
-/// A table of [`Text`] keys to [`Text`] values.
 mod text_map {
     use std::collections::BTreeMap;
 

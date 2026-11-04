@@ -51,7 +51,6 @@ pub struct Literals {
 }
 
 impl Literals {
-    /// The post as the routes read it.
     pub(super) fn posted(&self) -> routes::Posted<'_> {
         routes::Posted {
             objects: &self.objects,
@@ -300,10 +299,9 @@ pub fn author(
     Ok(Json(built))
 }
 
-/// Append acts, written from `from`, to the default conversation, opening it if nobody has, and
-/// hear it.
+/// Append acts, written from `from`, to the default conversation, opening it if needed.
 ///
-/// A failure to note is not the write's failure, so it is a line in the log, not the answer's.
+/// A failure to note is not the write's failure, so it is a log line, not the answer's.
 fn noted(state: &State, lines: &[ActLine], now: Datetime, from: Seat) {
     let first = state.first.caps;
     let noting = suzatary_core::secretary::read_or_open_default(

@@ -1,15 +1,9 @@
-//! A read of the API carries a validator, and a page that holds the same answer is told so.
+//! An `ETag` on each API read, and a 304 for a page that holds the same answer.
 //!
-//! The tag is a digest of the answer's bytes, not of the heads the route read: a fold prices
-//! every todo at the instant it is asked, so the same heads give different bytes an hour apart,
-//! and a tag of the heads would tell a page its old numbers still stand. A digest changes exactly
-//! when the bytes do. It is weak (`W/`), so the one tag stands for the answer under every content
-//! coding the compression layer outside this one may pick, which RFC 9110 §8.8.1 allows a weak
-//! validator and not a strong one.
-//!
-//! Every answer stays `no-store`: the browser's cache keeps nothing of the owner's, and the page
-//! keeps the last answer of each read itself and sends its tag (`web/src/wire/http.ts`). A 304
-//! saves the transfer and the page's parse, never the box's work.
+//! The tag digests the answer's bytes, not the heads read: a fold prices at the instant asked, so
+//! the same heads give different bytes an hour apart. It is weak (`W/`) so one tag covers every
+//! content coding the outer compression layer picks (RFC 9110 §8.8.1). Every answer stays
+//! `no-store`; the page keeps its own last answer (`web/src/wire/http.ts`).
 
 use axum::body::Body;
 use axum::extract::Request;
@@ -45,8 +39,7 @@ pub fn held(headers: &HeaderMap, tag: &HeaderValue) -> bool {
         .any(|listed| listed.trim_ascii() == b"*" || opaque(listed) == ours)
 }
 
-/// Tags a successful JSON answer to a GET, and answers 304 with no body when the request
-/// already holds it. A stream, a file and a refusal pass as they are.
+/// Tags a successful JSON answer to a GET, or answers 304 when the request already holds it.
 pub async fn revalidated(request: Request, next: Next) -> Response {
     let get = request.method() == Method::GET;
     let asked = request.headers().clone();
@@ -90,13 +83,11 @@ mod tests {
     }
 
     proptest! {
-        // The law: the tag changes exactly when the answer's bytes change.
         #[test]
         fn the_tag_changes_exactly_when_the_bytes_do(a in any::<Vec<u8>>(), b in any::<Vec<u8>>()) {
             prop_assert_eq!(tag(&a) == tag(&b), a == b);
         }
 
-        // An answer one byte apart is never the answer held.
         #[test]
         fn one_byte_moved_is_a_new_answer(mut a in proptest::collection::vec(any::<u8>(), 1..256), at in any::<prop::sample::Index>(), by in 1u8..) {
             let was = tag(&a);

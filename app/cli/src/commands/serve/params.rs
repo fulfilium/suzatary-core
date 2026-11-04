@@ -9,8 +9,6 @@ use super::Chained;
 
 /// A route's typed parameters.
 pub trait Params: Sized + Send + 'static {
-    /// The parameters, or the refusal their text earned.
-    ///
     /// # Errors
     /// A [`Refusal`] naming the parameter that did not parse.
     fn parse(asked: &Asked, chain: &Chained) -> Result<Self, Refusal>;
@@ -29,7 +27,6 @@ pub struct Asked {
 }
 
 impl Asked {
-    /// The segments axum matched, and the query.
     #[must_use]
     pub fn of(segments: &RawPathParams, query: HashMap<String, String>) -> Self {
         Self {
@@ -50,8 +47,6 @@ impl Asked {
             .map(|(_, value)| value.as_str())
     }
 
-    /// A segment the route's pattern names.
-    ///
     /// # Errors
     /// [`Refusal::internal`] when the pattern has no such segment, since tables get edited.
     pub fn segment(&self, key: &str) -> Result<&str, Refusal> {
@@ -62,7 +57,6 @@ impl Asked {
             .ok_or_else(|| Refusal::internal(format!("this route matched without a {key} segment")))
     }
 
-    /// A query parameter, if given.
     #[must_use]
     pub fn query(&self, key: &str) -> Option<&str> {
         self.query.get(key).map(String::as_str)

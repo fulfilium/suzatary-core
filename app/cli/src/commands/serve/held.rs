@@ -24,12 +24,11 @@ pub const NOT_KEPT: &str = r#"{"type":"NotKept"}"#;
 
 /// What a reveal names.
 pub enum Revealing {
-    /// A number in a message: the owner's own mail, which a mail page shows.
+    /// A number in the owner's own mail, which a mail page shows.
     InMail(Place),
-    /// A file, or a number in one, which only a conversation that read the file reveals: a
+    /// A file, or a number in one, revealed only in a conversation that read the file: a
     /// handle carries a file's source, so a model could write one naming any file.
     Read {
-        /// The handle.
         handle: Handle,
         /// The conversation the placeholder is drawn in.
         conversation: ConversationId,
@@ -71,8 +70,7 @@ impl Outcome for Revealed {
     }
 }
 
-/// `POST /api/held/reveal`: the value or file a handle names, read again from what holds it, for
-/// a trusted device of an actor the gate maps.
+/// `POST /api/held/reveal`: the value or file a handle names, read again from what holds it.
 pub fn reveal(call: &Call<Tap, (), Revealing>) -> Revealed {
     Revealed(revealed(call))
 }

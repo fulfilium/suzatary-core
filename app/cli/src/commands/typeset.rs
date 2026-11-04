@@ -1,10 +1,8 @@
 //! `suzatary typeset`: one job on stdin (`suzatary_core::template::Job`) compiled, its answer on stdout.
 //!
 //! The box runs this as a child of itself (`suzatary_io::typeset::Closed`). The child caps its
-//! own CPU time, so a text that loops is stopped by the kernel after the same amount of work
-//! however busy the box is, and its own address space, so a text that allocates without end fails
-//! here instead of drawing the kernel's OOM killer to the box. Both limits are set before the text
-//! is read, and the CPU limit counts the time the child used before it was set.
+//! own CPU time (a looping text is stopped by the kernel) and address space (an endless
+//! allocation fails here, not in the box's OOM killer), both before the text is read.
 
 use std::io::{Read as _, Write as _};
 
@@ -15,8 +13,6 @@ use suzatary_io::typeset::closed::CPU_SECONDS;
 /// Plenty for one text; typst reserves stacks and arenas well under this.
 const ADDRESS_SPACE: u64 = 2 << 30;
 
-/// Read, compile, print.
-///
 /// # Errors
 /// Stdin could not be read or stdout written; a refused text is an answer, not an error.
 pub fn run() -> anyhow::Result<()> {
@@ -32,7 +28,7 @@ pub fn run() -> anyhow::Result<()> {
         maximum: Some(ADDRESS_SPACE),
     };
     setrlimit(Resource::As, cap).context("capping the compile's address space")?;
-    // A text that outgrows the cap aborts this child, and that is its refusal, not a crash to keep.
+    // Outgrowing the cap aborts the child: a refusal, not a crash to keep.
     let no_core = Rlimit {
         current: Some(0),
         maximum: Some(0),

@@ -1,6 +1,5 @@
-//! The upload index on disk: one entry per upload a live turn names, `<id>.json` in its own
-//! directory beside the uploads. It is box-local and never pushed, as the uploads are, and it is
-//! a cache: deleting it loses nothing, because the next refresh reads every upload again.
+//! The upload index on disk: one `<id>.json` per upload a live turn names, beside the uploads.
+//! Box-local, never pushed, and a cache: the next refresh rebuilds it.
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::PathBuf;
@@ -27,8 +26,8 @@ pub struct UploadIndexFiles {
     entries: Docs<AttachmentId, Entry>,
 }
 
-/// One upload's words, and where the store kept it when they were read: an upload the owner
-/// later keeps private is read again from its private note.
+/// One upload's words, and where the store kept it when they were read, so an upload later
+/// kept private is read again.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 struct Entry {
     place: Place,
@@ -36,7 +35,7 @@ struct Entry {
 }
 
 impl UploadIndexFiles {
-    /// The index of `store`, its entries under `dir`, which the first write makes.
+    /// The index of `store`, its entries under `dir`.
     #[must_use]
     pub fn new(dir: PathBuf, store: AttachmentStore) -> Self {
         let root = dir.clone();
@@ -74,7 +73,6 @@ impl UploadIndexFiles {
         Ok(ids)
     }
 
-    /// One upload's standing, its entry written when it is indexed and removed when it is not.
     fn standing(&self, id: &AttachmentId) -> Result<UploadStanding, IndexError> {
         let Some(place) = self.store.place(id)? else {
             self.entries.remove(id)?;
@@ -198,7 +196,6 @@ mod tests {
         }
     }
 
-    /// A PDF on the box is indexed by its text, read once: a second refresh answers the entry.
     #[test]
     fn a_pdf_is_indexed_once_and_answered_from_its_entry() {
         let Some((dir, store, index)) = index() else {
@@ -224,15 +221,11 @@ mod tests {
         ));
     }
 
-    /// A PDF naming a held number that reached the store is held, with no entry, until the
-    /// owner keeps it private; then it is indexed by its masked text, each number a placeholder
-    /// naming the upload.
     #[test]
     fn a_held_pdf_is_not_indexed_until_it_is_kept_private() {
         let Some((dir, store, index)) = index() else {
             return;
         };
-        // The test page holds one short line.
         let w2 = minimal_pdf("SSN 123-45-6789");
         // As a store holds one kept before the rule it breaks.
         let id = crate::blobs::Blobs::open(dir.path().join("attachments"))
@@ -279,8 +272,6 @@ mod tests {
         }
     }
 
-    /// Two refreshes at once, as two rounds searching together run them, answer the same and
-    /// leave one entry per upload: an entry is a function of its upload, replaced whole.
     #[test]
     fn two_refreshes_at_once_agree() {
         let Some((_dir, store, index)) = index() else {
@@ -309,7 +300,6 @@ mod tests {
         assert_eq!(indexed, named.into_iter().collect::<Vec<_>>());
     }
 
-    /// An upload no live turn names leaves the index, and so does one the store no longer holds.
     #[test]
     fn an_erased_or_deleted_upload_leaves_the_index() {
         let Some((dir, store, index)) = index() else {

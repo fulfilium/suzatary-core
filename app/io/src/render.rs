@@ -2,11 +2,9 @@
 //! by a [`Compiler`], narrowed to its body and past the tripwire ([`suspicious`]).
 //!
 //! A body and an answer evaluate a writer's or a model's markup in the closed world, so no
-//! `html` element or attribute but typst's own, and typst escapes all text it emits; the
-//! tripwire refuses the impossible case, never edits it. A page's template is ours and reads every
-//! datum as data. What each call computes is kept where its template says: a body and an answer
-//! in the process and on disk; a page, printed from the observed value of every price on it
-//! (`reading::SHOWN`), in the process only, since it moves with the clock.
+//! `html` but typst's own; the tripwire refuses the impossible case, never edits it. A page's
+//! template reads every datum as data. A body and an answer are kept on disk; a page only in the
+//! process, since its prices move with the clock.
 
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -35,8 +33,7 @@ pub struct Typst {
     fragments: Rendered,
     pages: Rendered,
     compiler: Arc<dyn Compiler>,
-    /// The closed world's answers, so a page that redraws a proposal on every poll spawns
-    /// one compile per text, not one per poll.
+    /// The closed world's answers: one compile per text, not one per poll.
     answers: Table<Result<String, Rejected>>,
 }
 
@@ -60,7 +57,6 @@ impl Typst {
         }
     }
 
-    /// The table `called`'s output is kept in, if any.
     fn table(&self, called: &Called) -> Option<&Rendered> {
         match called.kept() {
             Kept::Disk => Some(&self.fragments),
@@ -70,9 +66,6 @@ impl Typst {
     }
 
     /// `called`'s output: what its key keeps, or else compiled, narrowed and kept.
-    ///
-    /// # Errors
-    /// [`RenderError`], as for [`Render::html`].
     pub fn rendered(&self, called: &Called) -> Result<Html, RenderError> {
         let table = self.table(called);
         if let Some(table) = table
@@ -99,9 +92,6 @@ impl Typst {
     }
 
     /// One answer block to typst's HTML.
-    ///
-    /// # Errors
-    /// [`RenderError`], as for [`Render::html`].
     pub fn answer(&self, block: &Renderable) -> Result<Html, RenderError> {
         self.rendered(&ANSWER.call(block).map_err(|e| unprintable(&e))?)
     }
@@ -155,8 +145,7 @@ impl Render for Typst {
     }
 
     fn cached(&self, escaped: &Escaped) -> Option<Html> {
-        // A peek that never compiles: a cache that cannot be read is said by `html`, which reads
-        // it again.
+        // Never compiles; an unreadable cache is reported by `html`, which reads it again.
         let key = MARKUP
             .key_of(&Markup {
                 source: escaped.clone(),
@@ -185,7 +174,6 @@ impl Render for Typst {
     }
 }
 
-/// An answer block's HTML is kept under the answer template and the block alone.
 impl suzatary_core::capability::RenderCache for Typst {
     fn forget(&self, block: &Renderable) -> Result<(), String> {
         let key = ANSWER.key_of(block).map_err(|e| e.to_string())?;
@@ -202,8 +190,7 @@ impl Answers for Typst {
     }
 }
 
-/// A rendered cache that is there and cannot be read is a fact about the box, said as one, so a
-/// broken disk is never a compile every request.
+/// An unreadable cache is an error, so a broken disk is never a compile every request.
 fn unread(failed: &std::io::Error) -> RenderError {
     RenderError::Refused(format!("the rendered cache could not be read: {failed}"))
 }
@@ -251,7 +238,6 @@ mod tests {
         }
     }
 
-    /// Counts its compiles, answering as the in-process compiler does.
     struct Counted(Arc<std::sync::atomic::AtomicUsize>);
     impl Compiler for Counted {
         fn compile(&self, job: &Job) -> Result<String, Rejected> {
@@ -318,8 +304,7 @@ mod tests {
         let _ = std::fs::remove_dir_all(&cache);
     }
 
-    /// A page's every datum is data: a hostile name, a stranger's title and an untrusted body
-    /// are drawn as text, and only a trusted body is evaluated as markup.
+    /// Only a trusted body is evaluated as markup; every other datum is drawn as text.
     #[test]
     fn a_page_is_classed_html_and_its_data_stays_text() {
         use prodrome_core::fpl::Explanation;

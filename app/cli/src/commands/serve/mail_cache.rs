@@ -1,5 +1,5 @@
-//! What this box kept for a removed account, deleted under the sync's hold: its sign-in, which
-//! goes with any account that holds one, and the mail its sync kept, on the card's wider yes.
+//! Deletes what this box kept for a removed account, under the sync's hold: its sign-in, and
+//! its kept mail on the card's wider yes.
 
 use std::path::PathBuf;
 
@@ -20,13 +20,11 @@ pub struct MailCache {
     /// The sync's hold, taken for the delete and the index, so a sync begun before the tap
     /// cannot pull the account's mail back after it, nor refresh a sign-in being revoked.
     lock: PathBuf,
-    /// Where the accounts' sign-ins are kept.
     tokens: suzatary_io::oauth::TokenStore,
 }
 
 impl MailCache {
-    /// The mail kept under `root`, indexed by the `notmuch` binary under `config`, or under the
-    /// config its environment names, as the sync's, and held against the sync by `lock`.
+    /// `config` `None` reads the notmuch config its environment names.
     #[must_use]
     pub fn new(
         root: PathBuf,
@@ -44,14 +42,12 @@ impl MailCache {
         }
     }
 
-    /// The mail `instance` keeps, indexed as its mailbox is and held as its sync holds.
     #[must_use]
     pub fn of(instance: &crate::instance::Instance) -> Self {
         crate::wiring::Ground::of(instance).mail_cache()
     }
 
-    /// The index told what the maildir no longer holds, so no reading asks it for a file gone;
-    /// no hook runs, since a hook may sync.
+    /// No hook runs, since a hook may sync.
     fn reindex(&self) -> Result<(), String> {
         let command = suzatary_io::mailbox::indexed_by(
             Cmd::new(&self.notmuch)
@@ -66,7 +62,6 @@ impl MailCache {
 }
 
 impl MailCache {
-    /// The account's kept mail deleted, and the index told.
     fn mail(&self, account: &MailAccount) -> Forgot {
         // Only a plain folder name is joined, so a delete never reaches outside the mail root.
         let Some(folder) = suzatary_core::mail::cache::folder(account) else {
@@ -82,8 +77,8 @@ impl MailCache {
             Err(failed) => Forgot::Failed {
                 why: failed.to_string(),
             },
-            // Before the tap answers: a message the index still names but the maildir lacks
-            // makes `notmuch show` fail, which every mail reading would answer as the box's.
+            // Before the tap answers: a message the index names but the maildir lacks makes
+            // `notmuch show` fail for every mail reading.
             Ok(Some(())) => match self.reindex() {
                 Ok(()) => Forgot::Deleted {
                     folder: folder.to_owned(),
@@ -113,7 +108,6 @@ impl suzatary_core::mail::cache::Forget for MailCache {
     }
 }
 
-/// An account's sign-ins revoked from `tokens`.
 fn revoked(
     tokens: &suzatary_io::oauth::TokenStore,
     account: &MailAccount,
@@ -167,9 +161,6 @@ mod tests {
         }
     }
 
-    /// One account's folder goes and its neighbours stay; a name that could reach outside the
-    /// root deletes nothing; a second delete finds nothing kept; and an index that could not be
-    /// told is said, the folder gone all the same.
     #[test]
     fn forgetting_deletes_one_account_s_folder_and_nothing_else() {
         let root = tempfile::tempdir().expect("a scratch root");

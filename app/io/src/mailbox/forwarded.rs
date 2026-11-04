@@ -1,5 +1,5 @@
-//! A message file as a forward reads it, pure over its bytes: the proposal's record and the tap's
-//! original are both read from one read of one file, attachments by their place in it.
+//! A message file as a forward reads it: the proposal's record and the tap's original, both from
+//! one read of one file, attachments by their place in it.
 
 use mail_parser::{Address, HeaderValue, Message, MessageParser, MimeHeaders as _};
 use suzatary_core::attachment::AttachmentId;
@@ -70,7 +70,6 @@ fn parts(raw: &[u8]) -> Vec<Attachment> {
         .collect()
 }
 
-/// The headers a page shows, decoded.
 fn headers(message: &Message<'_>) -> Vec<MailHeader> {
     let header = |name: &str, value: Option<String>| {
         value

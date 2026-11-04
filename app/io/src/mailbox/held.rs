@@ -43,7 +43,6 @@ fn textual(part: &mail_parser::MessagePart<'_>) -> bool {
     })
 }
 
-/// Every string a header's decoded value holds.
 fn value_text(value: &HeaderValue<'_>) -> Vec<String> {
     match value {
         HeaderValue::Text(text) => vec![text.to_string()],

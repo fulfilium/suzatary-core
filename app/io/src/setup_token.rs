@@ -1,10 +1,9 @@
 //! `claude setup-token`, driven from a card rather than a terminal.
 //!
-//! The CLI draws an interactive terminal program, so it runs in a pseudo-terminal this process
-//! holds: what it draws is read as a [`Screen`], its sign-in URL is handed to the card, the code
-//! the owner pastes into the card is typed into it, and the token it prints is captured as a
-//! [`Secret`] that only the caller stores. Nothing it draws after the code is typed is kept or
-//! said: an error past that point names what was waited for, never the screen.
+//! The CLI runs in a pseudo-terminal this process holds: its URL goes to the card, the owner's
+//! code is typed into it, and the token it prints is captured as a [`Secret`] only the caller
+//! stores. Nothing drawn after the code is typed is kept or said: an error past that point names
+//! what was waited for, never the screen.
 
 mod screen;
 
@@ -30,13 +29,12 @@ const COLUMNS: u16 = 1000;
 /// Between the code and the key that submits it, so a paste and an Enter arrive as two inputs.
 const SETTLE: Duration = Duration::from_millis(150);
 
-/// A sign-in in progress: the CLI running in a terminal this process holds, its URL drawn.
+/// A sign-in in progress, its URL drawn.
 pub struct SignIn {
     running: Running,
     url: SignInUrl,
 }
 
-/// The CLI running in a terminal this process holds, and what it has drawn so far.
 struct Running {
     child: Child,
     terminal: File,
@@ -47,50 +45,31 @@ struct Running {
 /// Why a sign-in did not give a token; never carries the code or the token.
 #[derive(Debug, thiserror::Error)]
 pub enum SignInError {
-    /// The pseudo-terminal could not be opened.
     #[error("the terminal for the sign-in could not be opened: {0}")]
     Terminal(#[from] std::io::Error),
-    /// The CLI could not be started.
     #[error("{program} could not be run: {source}")]
     Spawn {
-        /// The program, as given.
         program: String,
-        /// The operating system's reason.
         source: std::io::Error,
     },
-    /// The CLI drew no sign-in URL in time.
     #[error("no sign-in link was drawn within {after:?}; the CLI last said: {said}")]
     NoUrl {
-        /// How long it was given.
         after: Duration,
         /// The end of what it drew, which holds no code or token yet.
         said: String,
     },
-    /// The CLI exited before what was waited for.
     #[error("the sign-in ended before {waiting}")]
-    Ended {
-        /// What was waited for.
-        waiting: &'static str,
-    },
-    /// The CLI said the code was refused.
+    Ended { waiting: &'static str },
     #[error(
         "that code was not accepted: copy the whole code the sign-in page shows, or tap Connect again"
     )]
     Refused,
-    /// The code went in and no token came out in time.
     #[error("no token was printed within {after:?}: the code may be wrong or expired")]
-    NoToken {
-        /// How long it was given.
-        after: Duration,
-    },
+    NoToken { after: Duration },
 }
 
 impl SignIn {
     /// Start `program setup-token` in a fresh terminal and wait up to `wait` for its URL.
-    ///
-    /// # Errors
-    /// [`SignInError`] for a terminal that does not open, a program that does not start, or no
-    /// URL in time.
     pub fn start(program: &str, wait: Duration) -> Result<Self, SignInError> {
         let terminal =
             rustix::pty::openpt(OpenptFlags::RDWR | OpenptFlags::NOCTTY | OpenptFlags::CLOEXEC)
@@ -112,10 +91,9 @@ impl SignIn {
             OpenptFlags::RDWR | OpenptFlags::NOCTTY | OpenptFlags::CLOEXEC,
         )
         .map_err(std::io::Error::from)?;
-        // The CLI must mint a token of its own, not report the one this box already runs on, so
-        // it is given `run`'s base, the proxy and its config directory and nothing else (no
-        // token, no key); it opens no browser on the box (the link goes to the card), and runs
-        // in a group of its own, so ending the sign-in ends whatever it started.
+        // No token or key in its environment, so the CLI mints a new token instead of reporting
+        // the box's own. No browser on the box; its own process group, so ending the sign-in
+        // ends whatever it started.
         let child = Command::new(program)
             .arg(SUBCOMMAND)
             .env_clear()
@@ -167,17 +145,12 @@ impl SignIn {
         }
     }
 
-    /// The URL the owner opens to sign in.
     #[must_use]
     pub fn url(&self) -> &SignInUrl {
         &self.url
     }
 
     /// Type `code` and wait up to `wait` for the token it is exchanged for.
-    ///
-    /// # Errors
-    /// [`SignInError`] for a code that cannot be typed, a CLI that exits first, or no token in
-    /// time.
     pub fn finish(self, code: &Secret, wait: Duration) -> Result<Secret, SignInError> {
         let mut running = self.running;
         let code = code.expose().trim();
@@ -292,8 +265,7 @@ printf 'Use this token by setting: export CLAUDE_CODE_OAUTH_TOKEN=<token>\r\n'
         assert_eq!(token.expose(), TOKEN);
     }
 
-    /// The real CLI asks again after a wrong code; the sign-in says so at once, not when its
-    /// wait is up, and says nothing it drew.
+    /// The real CLI asks again after a wrong code; the refusal must not wait for the timeout.
     #[test]
     fn a_wrong_code_is_refused_at_once_and_says_nothing_it_drew() {
         let dir = tempfile::tempdir().expect("a directory");
@@ -311,7 +283,6 @@ printf 'Use this token by setting: export CLAUDE_CODE_OAUTH_TOKEN=<token>\r\n'
         assert!(!refused.to_string().contains("not-the-code"));
     }
 
-    /// Ending a sign-in ends what its CLI started too: the whole group goes.
     #[test]
     fn dropping_a_sign_in_ends_its_whole_group() {
         let dir = tempfile::tempdir().expect("a directory");

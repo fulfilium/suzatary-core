@@ -16,7 +16,6 @@ pub struct Checkout {
 }
 
 impl Checkout {
-    /// The diff of `data`.
     #[must_use]
     pub fn new(data: impl Into<PathBuf>) -> Self {
         Self { data: data.into() }

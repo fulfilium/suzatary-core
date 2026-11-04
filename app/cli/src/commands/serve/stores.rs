@@ -1,9 +1,6 @@
-//! The secretary's stores as replicas a tab holds: what a replica lacks, and their heads as they
-//! move. The inbox and the conversations' lines are written only by the box, so a tab only
-//! pulls, a piece at a time; the lines' pull carries the keys of the words it sends. The lines'
-//! skeleton is that pull without the literals, and every store's literals are asked for by hash
-//! (`docs/LAZYSYNC-PLAN-2026-10-21.md`). The two topic stores are written by a tab too, which
-//! posts its replica's changes.
+//! The secretary's stores as replicas a tab holds. The inbox and the lines are written only by
+//! the box, so a tab only pulls them; the lines' pull carries the keys of the words it sends.
+//! Literals are asked for by hash. The two topic stores are written by a tab too.
 
 use axum::Json;
 use suzatary_core::capability::Server;
@@ -19,8 +16,6 @@ use super::guard::Reader;
 use super::params::{Asked, Params};
 use super::reply::Immutable;
 
-/// The store a segment names; any other is not found.
-///
 /// # Errors
 /// [`Refusal::not_found`] for a name that is no store's.
 pub fn named(segment: &str) -> Result<StoreName, Refusal> {
@@ -30,7 +25,7 @@ pub fn named(segment: &str) -> Result<StoreName, Refusal> {
     {
         return Ok(store);
     }
-    // A page from before the lines asks for the store they replaced: it is told a new version is ready.
+    // An older page asks for the store the lines replaced.
     if segment == "conversations" {
         return Err(Refusal::new(
             suzatary_core::refusal::Status::UpgradeRequired,
@@ -98,11 +93,9 @@ pub fn objects(call: &Call<Reader, Since, ()>) -> Result<Json<wire::StorePayload
     .map(Json)
 }
 
-/// A store a tab writes, named by its path segment: one of the topic stores.
+/// A store a tab writes: one of the topic stores.
 pub enum Written {
-    /// `topics`.
     Topics,
-    /// `topic-aliases`.
     TopicAliases,
 }
 
@@ -118,8 +111,8 @@ impl Params for Written {
     }
 }
 
-/// `POST /api/stores/<store>/objects`: a replica of a topic store handing its changes over, each
-/// written as the actor the request was proven for.
+/// `POST /api/stores/<store>/objects`: a topic store replica's changes, each written as the
+/// actor the request was proven for.
 pub fn take(
     call: &Call<prodrome_core::event::Actor, Written, Literals>,
 ) -> Result<Json<wire::ReceiptPayload>, Refusal> {
@@ -132,7 +125,7 @@ pub fn take(
     .map(Json)
 }
 
-/// The lines' skeleton: the frontier a replica of them holds.
+/// The frontier a replica of the lines holds.
 pub struct LinesSince(prodrome_core::store::frontier::Since);
 
 impl Params for LinesSince {
@@ -141,8 +134,7 @@ impl Params for LinesSince {
     }
 }
 
-/// `GET /api/stores/lines/skeleton?since=<frontier>`: a piece of what a replica of the lines
-/// holding that frontier lacks, each object without its literal.
+/// `GET /api/stores/lines/skeleton?since=<frontier>`: what the replica lacks, without literals.
 pub fn skeleton(
     call: &Call<Reader, LinesSince, ()>,
 ) -> Result<Json<wire::SkeletonPayload>, Refusal> {
@@ -172,8 +164,7 @@ impl Params for Wanted {
     }
 }
 
-/// `GET /api/stores/<store>/content?hashes=<hashes>`: the literals of those objects of that
-/// store, kept for good by whoever asked.
+/// `GET /api/stores/<store>/content?hashes=<hashes>`: those objects' literals, kept for good.
 pub fn content(
     call: &Call<Reader, Wanted, ()>,
 ) -> Result<Immutable<Json<wire::ContentPayload>>, Refusal> {
@@ -188,8 +179,8 @@ pub fn content(
     .map(|answer| Immutable(Json(answer)))
 }
 
-/// `GET /api/waiting`: the Inbox badge's count, read here so a tab shows it without pulling the
-/// conversations. A decision names a batch on any chain this box serves.
+/// `GET /api/waiting`: the Inbox badge's count, so a tab shows it without pulling the
+/// conversations.
 pub fn waiting(call: &Call<Reader, (), ()>) -> Result<Json<wire::WaitingPayload>, Refusal> {
     let caps = call.state.first.caps;
     let inbox = suzatary_core::secretary::inbox::fold(caps.secretary.inbox)?;

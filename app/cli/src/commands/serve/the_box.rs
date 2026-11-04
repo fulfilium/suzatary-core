@@ -85,8 +85,7 @@ pub fn calendar(call: &Call<Reader, Day, ()>) -> Result<Json<wire::CalendarPaylo
     .map(Json)
 }
 
-/// `GET /api/presence`: a shown page's ping, which decides whether a decision rings the
-/// phone.
+/// `GET /api/presence`: a shown page's ping; it decides whether a decision rings the phone.
 pub fn presence(call: &Call<Reader, (), ()>) -> StatusCode {
     call.state.presence.seen();
     StatusCode::NO_CONTENT
@@ -101,8 +100,7 @@ pub fn about(call: &Call<Reader, (), ()>) -> Result<Json<wire::AboutPayload>, Re
         .map(Json)
 }
 
-/// `GET /api/portal`: how this box wakes the Android portal, which the portal reads before it
-/// keeps this box as its own.
+/// `GET /api/portal`: how this box wakes the Android portal.
 pub fn portal(call: &Call<Reader, (), ()>) -> Json<wire::PortalPayload> {
     Json(wire::PortalPayload::from(call.state.portal.as_ref()))
 }

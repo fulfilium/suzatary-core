@@ -1,11 +1,8 @@
 //! `suzatary device init|pair|trust|revoke|list`: the box's terminal door to who may write (SPEC
 //! law 42).
 //!
-//! The trusted keys are history, not configuration: each `trust` writes a `KeyAdded` into every
-//! chain and each `revoke` a `KeyRevoked`, both signed by the root, the box's own key. The
-//! Inbox's device card is the same write behind a tap (`suzatary_core::signatures::trust`), and
-//! `pair` prints a short code with which the server makes the same write for the one device
-//! that types it (`suzatary_core::signatures::Pairing`).
+//! Trusted keys are history: `trust` writes a `KeyAdded` and `revoke` a `KeyRevoked` into every
+//! chain, both signed by the root key.
 
 use std::collections::BTreeSet;
 use std::path::Path;
@@ -267,9 +264,8 @@ fn on_every_roster(instance: &Instance, actor: Option<&str>) -> anyhow::Result<A
 }
 
 /// The box's keys and the mail's dedup key, each seed kept where the store holds one and minted
-/// from the system's randomness, then stored, only where it says it holds none: a store that
-/// could not answer may hold the box's key, and minting over it would orphan every signature it
-/// made. `suzatary init` and `device init` alike.
+/// only where it says it holds none: a store that could not answer may hold the box's key, and
+/// minting over it would orphan every signature it made.
 ///
 /// # Errors
 /// The store not answering or refusing a seed, or a seed that is not one.
@@ -350,10 +346,8 @@ fn init(instance: &Instance) -> anyhow::Result<()> {
     Ok(())
 }
 
-/// THE REPAIR AFTER ADOPTION: a key of the box's registered for an actor whose writes the other
-/// signs, revoked, so each actor of one chain is left speaking with the key that signs its writes
-/// and no other of the box's. What a box adopted before custody needs; asked again, nothing. Each
-/// act is said.
+/// Revoke each box key registered for an actor whose writes the other box key signs, so each
+/// actor speaks only with the key that signs its writes. Idempotent.
 fn repair(chain: &crate::instance::ChainDir, keys: &BoxKeys) -> anyhow::Result<()> {
     let name = &chain.policy.name;
     let _held = chain_lock(chain)?;

@@ -1,6 +1,5 @@
 //! A message's attachments, read from the raw maildir file with `mail-parser`, because
-//! notmuch's JSON never carries a binary part's content. Pure over captured bytes; what a
-//! MIME type's text is belongs to the caller, which may need a subprocess.
+//! notmuch's JSON never carries a binary part's content.
 
 use mail_parser::{MessageParser, MimeHeaders as _};
 use suzatary_core::mail::AttachmentMeta;
@@ -33,8 +32,7 @@ fn meta_of(part: &mail_parser::MessagePart<'_>) -> AttachmentMeta {
     }
 }
 
-/// `Content-Disposition`'s `filename`, else `Content-Type`'s `name`, read one way by
-/// [`meta_of`] and [`find`].
+/// `Content-Disposition`'s `filename`, else `Content-Type`'s `name`.
 fn attachment_name(part: &mail_parser::MessagePart<'_>) -> String {
     part.attachment_name().unwrap_or_default().to_owned()
 }

@@ -1,23 +1,19 @@
 //! The server's one policy for a poisoned lock: read through it.
 //!
-//! A lock is poisoned when a thread panicked while holding it. Every section the server holds a
-//! lock for either replaces the value whole or makes one call on a map, so the value a panic
-//! leaves is one some write left, and the next request may read it. Refusing it instead would
-//! turn one panicked request into every later request panicking with it.
+//! Every section the server holds a lock for either replaces the value whole or makes one call
+//! on a map, so a panic leaves a value some write left whole. Refusing it would turn one
+//! panicked request into every later request panicking.
 
 use std::sync::{Mutex, MutexGuard, PoisonError, RwLock, RwLockReadGuard, RwLockWriteGuard};
 
-/// `mutex`, held, poisoned or not.
 pub fn held<T: ?Sized>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
     mutex.lock().unwrap_or_else(PoisonError::into_inner)
 }
 
-/// `lock`, read, poisoned or not.
 pub fn read<T: ?Sized>(lock: &RwLock<T>) -> RwLockReadGuard<'_, T> {
     lock.read().unwrap_or_else(PoisonError::into_inner)
 }
 
-/// `lock`, written, poisoned or not.
 pub fn write<T: ?Sized>(lock: &RwLock<T>) -> RwLockWriteGuard<'_, T> {
     lock.write().unwrap_or_else(PoisonError::into_inner)
 }
@@ -26,7 +22,6 @@ pub fn write<T: ?Sized>(lock: &RwLock<T>) -> RwLockWriteGuard<'_, T> {
 mod tests {
     use super::*;
 
-    /// A thread that panics holding each lock leaves its last whole write readable.
     #[test]
     fn a_poisoned_lock_reads_the_last_whole_write() {
         let mutex = Mutex::new(1);

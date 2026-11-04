@@ -20,8 +20,7 @@ use rustls_pki_types::{CertificateDer, ServerName, UnixTime};
 use suzatary_core::capability::Secret;
 use suzatary_core::mail::send::{SendError, Step};
 
-/// Where the Bridge listens, the certificate it must present, and how long
-/// any one read or write may block.
+/// The Bridge's address, its pinned certificate, and the per-read/write timeout.
 pub(super) struct Server {
     pub address: SocketAddr,
     pub pin: CertificateDer<'static>,
@@ -98,8 +97,6 @@ pub(super) fn submit(
     let _ = secure.command(Step::Message, "QUIT", Expect::Completion);
     Ok(())
 }
-
-// --- The pin ------------------------------------------------------------------
 
 /// A [`ServerCertVerifier`] that accepts exactly one certificate.
 #[derive(Debug)]
@@ -180,8 +177,6 @@ fn client_config(pin: CertificateDer<'static>) -> Result<rustls::ClientConfig, S
         .with_no_client_auth())
 }
 
-// --- The conversation -----------------------------------------------------------
-
 /// Which reply class a step expects: 2xx, or 3xx (DATA's "go ahead").
 #[derive(Clone, Copy)]
 enum Expect {
@@ -198,7 +193,6 @@ impl Expect {
     }
 }
 
-/// One reply: its code and the text of every line, in order.
 #[derive(Debug, PartialEq, Eq)]
 struct Reply {
     code: u16,
@@ -261,7 +255,6 @@ fn data_block(mime: &[u8]) -> Vec<u8> {
     out
 }
 
-/// A stream with a reader over it, writing commands and reading replies.
 struct Conversation<S> {
     stream: BufReader<S>,
 }
@@ -539,8 +532,6 @@ mod tests {
     const MIME: &[u8] = b"From: her@example.test\r\nSubject: dots\r\n\r\n\
         .one leading dot\r\n..two leading dots\r\n.\r\nplain\r\n";
 
-    /// A pinned CA:TRUE self-signed certificate is accepted, and the message arrives byte for
-    /// byte with one RCPT per envelope recipient.
     #[test]
     fn the_pinned_ca_certificate_is_accepted_and_the_message_arrives_intact() {
         let (address, bridge) = fake_bridge(Stop::Nowhere);
@@ -572,7 +563,6 @@ mod tests {
         );
     }
 
-    /// Any other certificate fails the handshake, saying why, and nothing past STARTTLS is sent.
     #[test]
     fn a_different_certificate_is_refused_by_name() {
         let (address, bridge) = fake_bridge(Stop::Nowhere);
@@ -594,8 +584,6 @@ mod tests {
         assert!(bridge.join().expect("the fake ran").is_err());
     }
 
-    /// A 535 names the AUTH step and the Bridge's words, and never the
-    /// password, raw or encoded.
     #[test]
     fn an_auth_failure_names_the_step_and_never_the_password() {
         let (address, bridge) = fake_bridge(Stop::Refuse(Step::Auth));
@@ -620,8 +608,6 @@ mod tests {
         bridge.join().expect("the fake ran").expect("it conversed");
     }
 
-    /// A failure at each step says whether the message may have gone: a refusal, or a loss
-    /// before the message was handed over, did not send; a loss after the final dot may have.
     #[test]
     fn a_failure_at_each_step_says_whether_the_message_may_have_gone() {
         use suzatary_core::mail::send::Delivery;
@@ -684,7 +670,6 @@ mod tests {
         );
     }
 
-    /// A secret store holding the Bridge's password and nothing else.
     struct BridgePassword;
 
     impl crate::secrets::Resolves for BridgePassword {
@@ -697,8 +682,6 @@ mod tests {
         }
     }
 
-    /// The Bridge transport keeps mail-out's laws against a fake Bridge that converses with
-    /// every connection and keeps each envelope and message it took.
     #[test]
     fn the_bridge_keeps_every_transport_law_behind_a_fake_bridge() {
         use suzatary_core::conformance::transport::{Case, check};

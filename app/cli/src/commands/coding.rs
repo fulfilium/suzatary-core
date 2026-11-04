@@ -46,9 +46,7 @@ pub enum Firing {
     /// The routine's fire endpoint at `base`, its token resolved through `secrets` at each
     /// fire; a test points `base` at a loopback server.
     Endpoint {
-        /// Where the endpoint is.
         base: String,
-        /// Which routine.
         routine: RoutineId,
         /// Where the token is read from: secretspec.
         secrets: Arc<dyn Resolves + Send + Sync>,
@@ -110,7 +108,6 @@ fn failed_fire(failed: &FireError) -> Performed {
 
 /// What a tapped coding session is started through, and where its lines land.
 pub struct Coder {
-    /// The routine.
     pub firing: Firing,
     /// The conversations a session's lines are written into: the server's own handle.
     pub conversations: crate::commands::secretary::ActingConversations,

@@ -2,13 +2,9 @@
 //! replicas, the inbox, the conversations, the memory's history, the digest's, the recorded
 //! decisions, the two topic stores and each plugin's store.
 //!
-//! `EventStore` does the work; around it this keeps two things the database does not.
-//!
-//! 1. A memo keyed by the head set. Every route wants the same objects, and a set of heads names
-//!    one set of objects in one order, so the same heads answer from memory. Keyed on every head,
-//!    because an adoption adds one beside the first and a rejection takes heads away.
-//! 2. The store's hold. `EventStore::append` takes an `flock` against other processes; a
-//!    `Hold` says what serialises a read-then-decide-then-append above it.
+//! Around `EventStore` this keeps a memo keyed by the whole head set (a set of heads names one
+//! set of objects in one order), and the store's hold: `EventStore::append` takes an `flock`
+//! against other processes, and a `Hold` serialises a read-then-decide-then-append above it.
 
 use std::collections::BTreeMap;
 use std::sync::{Mutex, PoisonError};
@@ -42,9 +38,7 @@ type Door<E> = Box<dyn Fn(&E) -> Result<(), String> + Send + Sync>;
 /// What one head set's read produced.
 struct Remembered<E: Schema> {
     heads: Vec<Hash>,
-    /// The objects as one graph, which a pull reads through and every reading of it is kept in.
     graph: std::sync::Arc<suzatary_core::store::Graph<E>>,
-    /// What the read left out.
     excluded: std::collections::BTreeSet<Hash>,
     /// The fsck's findings, filled on the first ask, since few callers ask.
     verified: Option<Vec<String>>,
@@ -78,11 +72,9 @@ impl<E: Store<Vocabulary: Default>> Objects<E> {
 }
 
 impl Objects<DigestEvent> {
-    /// The digest's history at `root`, held by `digests.lock` across processes: a `Genesis`
-    /// labelled `digests`, then one `Change` per event. Its summaries' words are a store of their
-    /// own beside it, [`crate::texts::Texts`], and its writes are made under the memory's hold.
-    /// Its door takes a retraction only from one of `owners`
-    /// ([`suzatary_core::secretary::digest_policy::Owners::admits`]), so a forged one is never
+    /// The digest's history at `root`, held by `digests.lock` across processes. Its summaries'
+    /// words live in [`crate::texts::Texts`] beside it, and its writes are made under the memory's
+    /// hold. Its door takes a retraction only from one of `owners`, so a forged one is never
     /// stored or pushed.
     #[must_use]
     pub fn digests(
@@ -100,9 +92,8 @@ impl Objects<DigestEvent> {
 }
 
 impl Objects<Declared> {
-    /// A plugin's store at `root`, opened at its admitted `schema`, a CACHE-tier store held by
-    /// `store.lock` across processes: a `Genesis` labelled `plugin`, then one `Change` per item
-    /// learned. [`crate::plugin_store::PluginStore`] keeps the schema's text beside it.
+    /// A plugin's cache-tier store at `root`, opened at its admitted `schema`, held by
+    /// `store.lock` across processes.
     #[must_use]
     pub fn plugin(root: impl Into<std::path::PathBuf>, schema: Declaration) -> Self {
         Self::new(EventStore::at(root, Untrusted::none(), schema))
@@ -110,7 +101,6 @@ impl Objects<Declared> {
 }
 
 impl<E: Schema> Objects<E> {
-    /// Open a store of its schema's kind. Nothing is read until something asks.
     fn new(events: EventStore<E, Untrusted>) -> Self {
         Self {
             events,
@@ -120,7 +110,6 @@ impl<E: Schema> Objects<E> {
         }
     }
 
-    /// The database underneath.
     #[must_use]
     pub fn inner(&self) -> &EventStore<E, Untrusted> {
         &self.events
@@ -202,9 +191,6 @@ impl<E: Store> Reads<E> for Objects<E> {
         self.with(|held| std::sync::Arc::clone(&held.graph))
     }
 
-    /// Each the bytes of its own file, checked against its name. A missing file, or one the
-    /// store's history leaves out, is not held; a file that cannot be read or does not hash to
-    /// its name makes the store unreadable.
     /// The file's own length, read from its metadata alone: what [`Self::literals`] answers of it.
     fn sizes(&self, names: &[Hash]) -> Result<Vec<Option<usize>>, StoreError> {
         names
@@ -226,6 +212,9 @@ impl<E: Store> Reads<E> for Objects<E> {
             .collect()
     }
 
+    /// Each the bytes of its own file, checked against its name. A missing file, or one the
+    /// store's history leaves out, is not held; a file that cannot be read or does not hash to
+    /// its name makes the store unreadable.
     fn literals(&self, names: &[Hash]) -> Result<Vec<Option<String>>, StoreError> {
         use sha2::Digest as _;
         let history = self.events.dag().map_err(|e| Self::unreadable(e))?;
@@ -492,7 +481,6 @@ mod tests {
         ));
     }
 
-    /// The memo answers the store's answer, and an append invalidates it.
     #[test]
     fn the_memo_is_rebuilt_when_a_head_moves() {
         let (_dir, store) = store("memo");
@@ -525,10 +513,8 @@ mod tests {
     proptest::proptest! {
         #![proptest_config(proptest::prelude::ProptestConfig::with_cases(16))]
 
-        /// THE STORE KEEPS ONE VERSION, AND SHARES IT. Over any run of writes, each read at the
-        /// same heads is the one value (the nodes are not copied per read), and once the heads move
-        /// the store lets go of every earlier version: what a reader still holds is held by the
-        /// reader alone, so a store's memory is one version of it however many were read.
+        /// Each read at the same heads is one shared value, and once the heads move the store
+        /// lets go of every earlier version.
         #[test]
         fn the_store_keeps_only_its_newest_version(writes in 1usize..6) {
             let (_dir, store) = store("versions");
@@ -862,7 +848,6 @@ mod tests {
         lines
     }
 
-    /// `name`'s file in the store `store` under `dir`.
     fn object_file(dir: &std::path::Path, store: &str, name: &Hash) -> std::path::PathBuf {
         dir.join(store)
             .join("objects")

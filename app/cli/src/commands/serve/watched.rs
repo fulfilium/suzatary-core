@@ -2,17 +2,11 @@
 
 use std::time::{Duration, Instant};
 
-/// The watcher's state over a chain's events `E` and the inbox's events `I`, apart from its
-/// effects so a poll is a function of the readings and the instant.
+/// The watcher's state, without effects: a poll is a function of the readings and the instant.
 ///
-/// What MOVED (the last heads and inbox length seen) is kept apart from what was ANNOUNCED (the
-/// counts a push has covered): a store that grew is quiet once it stops growing, whatever is
-/// still to announce. Every count is `None` until a read of it succeeds, and a first count
-/// announces nothing, so neither a restart nor a store unreadable for a while announces history.
-///
-/// A burst is announced once it has been quiet for the pace's `quiet`, or once it has been
-/// moving for the pace's `cap`, whichever comes first, so a steady stream of writes closer
-/// together than `quiet` is still announced every `cap`.
+/// What moved is kept apart from what was announced, so a store that grew is quiet once it stops
+/// growing. Every count is `None` until a read succeeds, and a first count announces nothing, so
+/// neither a restart nor an unreadable store announces history.
 #[derive(Debug)]
 pub struct Watched {
     pace: Pace,
@@ -50,16 +44,10 @@ enum Motion {
     /// Nothing has moved since the last announcement.
     Still,
     /// Something moved first at `first` and last at `last`.
-    Moving {
-        /// The burst's first movement.
-        first: Instant,
-        /// Its latest.
-        last: Instant,
-    },
+    Moving { first: Instant, last: Instant },
 }
 
 impl Motion {
-    /// A movement at `now` joins the burst, which keeps its first instant.
     fn moved(self, now: Instant) -> Motion {
         match self {
             Motion::Still => Motion::Moving {
@@ -99,8 +87,8 @@ impl Watched {
         }
     }
 
-    /// A poll at `now` read these heads and this inbox length (`None` for a read that failed,
-    /// which moves nothing); answers whether the heads moved, which is the cue to warm.
+    /// Records a poll's readings (`None` for a failed read, which moves nothing); answers whether
+    /// the heads moved, the cue to warm.
     pub fn polled(
         &mut self,
         heads: Option<Vec<String>>,
@@ -142,9 +130,8 @@ impl Watched {
         }
     }
 
-    /// Announce what `events` and `inbox` hold past what was announced, counting each to its end,
-    /// and begin a new burst. An inbox not read this round (`None`) keeps its count, and its
-    /// share is announced after the first poll that reads it.
+    /// Announce what `events` and `inbox` hold past what was announced, and begin a new burst.
+    /// An unread inbox (`None`) keeps its count; its share waits for the first poll that reads it.
     pub fn announce<E: Clone, I: Clone>(
         &mut self,
         events: &[E],
@@ -163,8 +150,7 @@ impl Watched {
     }
 }
 
-/// What `all` holds past the `seen` it was counted to, counting it to the end; nothing while
-/// `seen` was never counted, since a first count announces nothing.
+/// What `all` holds past `seen`, then counts it to the end; nothing while `seen` is `None`.
 fn fresh_since<T: Clone>(all: &[T], seen: &mut Option<usize>) -> Vec<T> {
     let fresh = seen
         .and_then(|count| all.get(count..))
@@ -185,8 +171,7 @@ mod tests {
         cap: Duration::from_secs(600),
     };
 
-    /// Poll every `POLL` from `start` for `polls` rounds over a fixed chain and inbox, announcing
-    /// whenever the watch is due; answers each non-empty announcement.
+    /// Polls `polls` rounds over a fixed chain and inbox; answers each non-empty announcement.
     fn run(
         watched: &mut Watched,
         start: Instant,
@@ -208,9 +193,6 @@ mod tests {
         said
     }
 
-    /// One new inbox event, then quiet: exactly one announcement once the quiet period has
-    /// passed, and nothing after it. Before, a count that only advanced at announcement re-armed
-    /// the quiet period on every poll, and nothing was ever announced.
     #[test]
     fn one_inbox_event_then_quiet_is_announced_exactly_once() {
         let start = Instant::now();
@@ -225,9 +207,6 @@ mod tests {
         );
     }
 
-    /// A chain that moved is announced while the inbox cannot be read, once: the burst ends
-    /// with it, so no later poll announces the chain again; the inbox's share waits, uncounted,
-    /// for the first poll that reads it, and is announced a quiet period after that.
     #[test]
     fn an_unreadable_inbox_holds_back_only_its_own_share() {
         let start = Instant::now();
@@ -249,8 +228,6 @@ mod tests {
         }
         let read = later + POLL * 11;
         watched.polled(Some(vec!["new".to_owned()]), Some(2), read);
-        // Readable and steady from here: the owed share moves the watch once, so it is due a
-        // quiet period after the first read, not at the cap.
         for round in 1..=4 {
             let now = read + POLL * round;
             watched.polled(Some(vec!["new".to_owned()]), Some(2), now);
@@ -266,8 +243,6 @@ mod tests {
         assert!(!watched.due(read + QUIET * 10));
     }
 
-    /// A steady stream, a new inbox event every poll and so never quiet, is still announced
-    /// once its burst has run for the cap, and again each cap after.
     #[test]
     fn a_steady_stream_is_announced_every_cap() {
         let start = Instant::now();
@@ -287,8 +262,6 @@ mod tests {
         assert_eq!(said, 9, "announced {said} times");
     }
 
-    /// A first count announces nothing: a store unread at start is counted from its first good
-    /// read, never announced whole.
     #[test]
     fn what_is_fresh_is_counted_from_the_first_read_that_succeeds() {
         let start = Instant::now();

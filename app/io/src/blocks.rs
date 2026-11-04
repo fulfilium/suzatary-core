@@ -9,20 +9,16 @@ use suzatary_core::enclosed::{Enclosed, Enclosure};
 use crate::attachments::AttachmentStore;
 use crate::blobs::Blobs;
 
-/// How many photos one exchange sends at most: the latest ones.
 pub const PHOTOS_PER_EXCHANGE: usize = 8;
 
-/// How many files one exchange sends at most: the latest ones.
 pub const FILES_PER_EXCHANGE: usize = 4;
 
-/// The most bytes one exchange's blocks carry before base64: the API takes 32 MB a
-/// request, and base64 grows the bytes by a third.
+/// Bytes before base64: the API takes 32 MB a request, and base64 grows the bytes by a third.
 pub const BYTES_PER_EXCHANGE: u64 = 20 * 1024 * 1024;
 
 /// Where an interpreter reads the bytes a turn names.
 #[derive(Debug, Clone, Default)]
 pub struct Stores {
-    /// The owner's uploaded photos and PDFs.
     pub uploads: Option<AttachmentStore>,
     /// The files verbs handed the model.
     pub files: Option<Blobs>,
@@ -32,15 +28,12 @@ pub struct Stores {
 #[derive(Debug, Clone, PartialEq, Default)]
 pub struct Blocks(Vec<Value>);
 
-/// One thing a turn names, before its bytes are read.
 enum Named<'a> {
     Upload(&'a Attachment),
     File(&'a Enclosed),
 }
 
 impl Named<'_> {
-    /// A photo counts against the photos; a PDF, uploaded or handed over, against the files
-    /// and the byte budget.
     fn is_photo(&self) -> bool {
         matches!(self, Named::Upload(upload) if matches!(upload.media_type, Enclosure::Image(_)))
     }
@@ -61,10 +54,7 @@ impl Named<'_> {
 impl Blocks {
     /// The blocks for `turns`: the latest photos and files, newest first until a count or the
     /// byte budget is reached, then put back in the order they were said.
-    ///
-    /// # Errors
-    /// [`ModelError::Failed`] when a turn names something no store holds, rather than sending
-    /// the request without it.
+    /// A turn naming something no store holds fails rather than sending the request without it.
     pub fn of(stores: &Stores, turns: &[Turn]) -> Result<Self, ModelError> {
         let (mut photos, mut files, mut bytes) = (0, 0, 0u64);
         let mut named: Vec<Named<'_>> = Vec::new();
@@ -106,7 +96,6 @@ impl Blocks {
             .map(Self)
     }
 
-    /// Whether there are none, so the request can be plain text.
     #[must_use]
     pub fn is_empty(&self) -> bool {
         self.0.is_empty()
@@ -208,7 +197,6 @@ mod tests {
         }
     }
 
-    /// A PDF is a document block and an image an image block, each with its bytes as base64.
     #[test]
     fn a_pdf_is_a_document_block_and_an_image_an_image_block() {
         use base64::Engine as _;
@@ -265,8 +253,7 @@ mod tests {
     fn an_uploaded_pdf_is_a_document_titled_as_it_was_picked_and_counts_as_a_file() {
         let dir = tempfile::tempdir().expect("scratch");
         let stores = stores(dir.path());
-        // Kept beside the store's own files: these bytes are no PDF pdftotext could read, and
-        // the rule `put` applies is the store's test, not this one.
+        // Written around `put`: these bytes are no PDF pdftotext could read.
         let beside = Blobs::open(dir.path().join("uploads"));
         let upload = |n: u8| {
             let bytes = [PDF, &[n]].concat();

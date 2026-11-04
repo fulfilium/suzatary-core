@@ -1,8 +1,5 @@
-//! The one place that chooses an interpreter for every capability.
-//!
-//! `suzatary-core` is generic over a record and `suzatary-io` implements the traits;
-//! this names which implementation each gets, so a fixture is a substitution the
-//! routes cannot tell apart.
+//! The one place that chooses an interpreter for every capability, so a fixture is a
+//! substitution the routes cannot tell apart.
 
 use std::net::IpAddr;
 use std::sync::Arc;
@@ -19,10 +16,9 @@ use crate::instance::{Instance, Reserve};
 
 /// Who names a peer.
 ///
-/// The fixture arm is test-only and compiled out of the shipped build; it exists because
-/// a headless browser here always arrives from loopback, which no daemon names.
+/// The fixture arm is compiled out of the shipped build; it exists because a headless browser
+/// always arrives from loopback, which no daemon names.
 pub enum Peers {
-    /// The local daemon, over its unix socket.
     Daemon(Tailscaled),
     /// Every address is this login; test only.
     #[cfg(feature = "fixture")]
@@ -42,11 +38,9 @@ impl Whois for Peers {
 
 /// Which model answers a conversation.
 ///
-/// The scripted arm is test-only and compiled out of the shipped build, because no
-/// browser test can drive a paid, networked, nondeterministic `claude -p`. Verbs are
-/// dispatched on this side of the trait, so any arm can only answer text.
+/// The scripted arm is compiled out of the shipped build. Verbs are dispatched on this side of
+/// the trait, so any arm can only answer text.
 pub enum Brain {
-    /// The `claude` CLI as a subprocess, each call joined into the model health.
     Cli(Box<Recorded>),
     /// A file of scripted replies; test only.
     #[cfg(feature = "fixture")]
@@ -83,7 +77,6 @@ impl Model for Brain {
     }
 }
 
-/// Only the `claude` CLI subprocess holds a session.
 impl Sessions for Brain {
     fn pick(&self) -> Pick<'_> {
         match self {
@@ -106,9 +99,7 @@ impl Weather for Forecast {
 
 /// Whether each declared secret resolves and which mail grants are held, never a value.
 pub struct Declared {
-    /// The secret store.
     pub secrets: Secretspec,
-    /// This box's OAuth slots.
     pub tokens: suzatary_io::oauth::TokenStore,
     /// The reason the store's audit records for each question.
     pub asking: &'static str,
@@ -166,26 +157,20 @@ impl suzatary_core::capability::Secrets for Declared {
 }
 
 /// One test call before the model's token is kept, with the value given and never the stored
-/// one, its result joined into the model health, so a model that answered is known to answer.
+/// one, its result joined into the model health.
 pub enum Verifying {
-    /// For real.
     Real {
-        /// The deployment, for the model's interpreter.
         instance: Arc<Instance>,
-        /// Where each call's result is joined.
         answered: suzatary_io::model_health::Answered,
     },
-    /// No call leaves: the fixture's model is scripted and answers whatever it is given.
+    /// No call leaves: the fixture's model is scripted.
     #[cfg(feature = "fixture")]
     Fixture {
-        /// The deployment, for the model's name.
         instance: Arc<Instance>,
-        /// Where the answer is joined.
         answered: suzatary_io::model_health::Answered,
     },
 }
 
-/// One call of the model with `token`, asking for a word.
 fn probe(cli: &suzatary_io::model::ClaudeCli) -> Result<(), ModelError> {
     let asked = Conversation {
         system: "This is a test that the model answers. Answer with the one word: ok.".to_owned(),
@@ -198,12 +183,10 @@ fn probe(cli: &suzatary_io::model::ClaudeCli) -> Result<(), ModelError> {
     cli.turn(&asked, &serde_json::json!([])).map(|_| ())
 }
 
-/// Join one call of the model named `model` into `answered`, now, `failed` saying why it did
-/// not answer. Only a refused credential and a limit are joined as failures, a limit under the
-/// subscription ([`suzatary_core::capability::SUBSCRIPTION`]) every model shares: a timeout, an
-/// overload or an outage says nothing of whether the model answers this box, nor does a halt (a
-/// person's) or a lost session (the CLI's), so each is joined as nothing. A register that cannot
-/// be written costs the call nothing, since the next call writes it again.
+/// Join one call of `model` into `answered`. Only a refused credential and a limit are joined
+/// as failures (a limit under the shared [`suzatary_core::capability::SUBSCRIPTION`]): a
+/// timeout, overload, outage, halt or lost session says nothing of whether the model answers
+/// this box. A register that cannot be written is only logged.
 pub fn answered_by(
     answered: &suzatary_io::model_health::Answered,
     model: &str,
@@ -238,15 +221,13 @@ pub fn answered_by(
     }
 }
 
-/// The limit standing now in `instance`'s model health: what every caller outside a [`Door`]
-/// (the triage pass's gate) reads before it asks the model.
+/// The limit standing now in `instance`'s model health, for callers outside a [`Door`].
 #[must_use]
 pub fn limited_now(instance: &Instance) -> Option<suzatary_core::capability::Limited> {
     limited_in(&suzatary_io::model_health::beside(&instance.mail.heartbeat))
 }
 
-/// The limit standing now in `answered`; none when the register does not read, since the next
-/// call reads it again.
+/// `None` also when the register does not read.
 fn limited_in(
     answered: &suzatary_io::model_health::Answered,
 ) -> Option<suzatary_core::capability::Limited> {
@@ -269,20 +250,17 @@ pub struct Door {
 }
 
 impl Door {
-    /// The door of the model recorded as `entry` in `answered`.
     #[must_use]
     pub fn new(answered: suzatary_io::model_health::Answered, entry: String) -> Self {
         Self { answered, entry }
     }
 
-    /// The limit standing now.
     #[must_use]
     pub fn limited(&self) -> Option<suzatary_core::capability::Limited> {
         limited_in(&self.answered)
     }
 
-    /// `call`, unless a limit stands, and what it came to joined into the register
-    /// ([`answered_by`]).
+    /// `call`, unless a limit stands, its result joined into the register ([`answered_by`]).
     ///
     /// # Errors
     /// [`ModelError::Limited`] while a limit stands, with no call made; `call`'s own.
@@ -336,9 +314,8 @@ impl suzatary_core::settings::Verify for Verifying {
 /// exceeds a browser scene's time budget.
 #[derive(Debug, Clone)]
 pub enum Ledger {
-    /// The box's own transcripts.
     Box,
-    /// An empty root the fixture owns; the usage page answers "nothing yet".
+    /// An empty root the fixture owns.
     Nowhere(std::path::PathBuf),
 }
 
@@ -350,7 +327,7 @@ impl Ledger {
             "suzatary-fixture-transcripts-{}",
             std::process::id()
         ));
-        // A directory that cannot be made reads as empty too, so failure is ignored.
+        // A directory that cannot be made reads as empty too.
         let _ = std::fs::create_dir_all(&root);
         Self::Nowhere(root)
     }
@@ -358,9 +335,8 @@ impl Ledger {
 
 /// Whether the subscription has room above the reserve.
 ///
-/// `RateLimited` and `Refused` are the allowance endpoint refusing to answer, not the
-/// subscription being full, so the first is judged by its remembered reading and either,
-/// with none, counts as room.
+/// `RateLimited` and `Refused` are the endpoint refusing to answer, not the subscription being
+/// full: the first is judged by its remembered reading, and either with none counts as room.
 fn subscription_has_room(allowance: &suzatary_core::usage::Allowance, reserve: Reserve) -> bool {
     let reserve = reserve.get();
     match allowance {
@@ -380,14 +356,13 @@ fn subscription_has_room(allowance: &suzatary_core::usage::Allowance, reserve: R
     }
 }
 
-/// The deny-all every call to the model's CLI is fenced by, as the instance names it.
+/// The deny-all every call to the model's CLI is fenced by.
 #[must_use]
 pub fn fence(instance: &Instance) -> suzatary_io::model::Fence {
     suzatary_io::model::Fence::at(instance.secretary.settings.clone())
 }
 
-/// The `claude` CLI subprocess at `model`, with the settings fence, working
-/// directory and token; the one spawner every caller shares so none can drift.
+/// The `claude` CLI at `model`, fenced: the one spawner every caller shares.
 #[must_use]
 pub fn cli_of(
     instance: &Instance,
@@ -403,8 +378,8 @@ pub fn cli_of(
 
 /// The web as the secretary may read it.
 ///
-/// Allow rules are reread from the instance file on every ask so a new rule counts
-/// without a restart; a file that no longer reads allows nothing.
+/// Allow rules are reread from the instance file on every ask; a file that no longer reads
+/// allows nothing.
 #[derive(Debug, Clone)]
 pub struct WebAccess {
     fetcher: suzatary_io::web::Fetcher,
@@ -412,7 +387,6 @@ pub struct WebAccess {
 }
 
 impl WebAccess {
-    /// Over this deployment's instance file, ten seconds a request.
     #[must_use]
     pub fn of(instance: &Instance) -> Self {
         Self {
@@ -439,8 +413,8 @@ impl suzatary_core::capability::Web for WebAccess {
 
 /// The owner's Drive as the secretary may read it.
 ///
-/// `[secretary] drive_allow` is reread on every ask so a new folder counts at once; a
-/// file that no longer reads allows nothing.
+/// `[secretary] drive_allow` is reread on every ask; a file that no longer reads allows
+/// nothing.
 #[derive(Debug, Clone)]
 pub struct DriveAccess {
     drive: suzatary_io::drive::ReadOnly,
@@ -448,7 +422,6 @@ pub struct DriveAccess {
 }
 
 impl DriveAccess {
-    /// Over this deployment's instance file and Drive CLI.
     #[must_use]
     pub fn of(instance: &Instance) -> Self {
         Self {
@@ -458,7 +431,6 @@ impl DriveAccess {
     }
 }
 
-/// Claude Code's transcripts on this box.
 pub(crate) fn transcripts(instance: &Instance) -> suzatary_io::usage::Transcripts {
     suzatary_io::usage::Transcripts::new(
         instance.paths.transcripts.clone(),
@@ -467,8 +439,8 @@ pub(crate) fn transcripts(instance: &Instance) -> suzatary_io::usage::Transcript
     )
 }
 
-/// The Drive CLI this instance names, downloading into the user's runtime
-/// directory (memory, private to the user) when there is one.
+/// The Drive CLI, downloading into the user's runtime directory (memory, private to the
+/// user) when there is one.
 #[must_use]
 pub fn proton_drive(instance: &Instance) -> suzatary_io::drive::ProtonDrive {
     suzatary_io::drive::ProtonDrive::new(
@@ -510,13 +482,11 @@ impl suzatary_core::vault::Vault for DriveVault {
     }
 }
 
-/// This instance's Drive, as the vault.
 #[must_use]
 pub fn drive_vault(instance: &Instance) -> DriveVault {
     DriveVault(proton_drive(instance))
 }
 
-/// The Junk reader the server and the CLI secretary hold.
 pub type Junk = suzatary_io::junk::OutlookJunk<suzatary_io::junk::SignedIn>;
 
 /// The roster's Microsoft accounts' Junk, with `[mail.junk]`'s churn.
@@ -540,9 +510,8 @@ pub type Older = suzatary_io::older::Servers<
     suzatary_io::older::Notmuched,
 >;
 
-/// The mail servers an older search reaches: each Microsoft account's IMAP session signed in
-/// silently, Gmail's API on lieer's grant or a Google account's own, its leaves under the mail root and its states beside
-/// the sync's, indexed as a sync indexes.
+/// The mail servers an older search reaches: Microsoft IMAP signed in silently, Gmail's API on
+/// lieer's grant or a Google account's own; leaves under the mail root, indexed as a sync does.
 #[must_use]
 pub fn older(instance: &Instance) -> Older {
     suzatary_io::older::Servers::new(
@@ -576,8 +545,8 @@ pub fn upload_store(instance: &Instance) -> suzatary_io::attachments::Attachment
     )
 }
 
-/// The upload index: `upload-index/` inside the conversations directory, beside the uploads it
-/// is read from, so it is box-local and git-ignored with them and never pushed.
+/// The upload index, `upload-index/` inside the conversations directory: box-local,
+/// git-ignored with the uploads, never pushed.
 #[must_use]
 pub fn upload_index(instance: &Instance) -> suzatary_io::upload_index::UploadIndexFiles {
     suzatary_io::upload_index::UploadIndexFiles::new(
@@ -592,8 +561,7 @@ pub fn file_store(instance: &Instance) -> suzatary_io::blobs::Blobs {
     suzatary_io::blobs::Blobs::open(instance.secretary.kept())
 }
 
-/// The `claude` CLI at `[secretary] model`, each call joined into `answered`: the model the
-/// conversation, the reviews and the titles run.
+/// The `claude` CLI at `[secretary] model`, each call joined into `answered`.
 #[must_use]
 pub fn brain(instance: &Instance, answered: suzatary_io::model_health::Answered) -> Brain {
     if !fence(instance).stands() {
@@ -661,7 +629,6 @@ impl SessionModel for Recorded {
     }
 }
 
-/// The five-hour window's allowance as `allowance` reads it now.
 fn five_hour(allowance: &suzatary_io::usage::Allowance) -> suzatary_core::usage::Allowance {
     allowance
         .allowance()
@@ -670,10 +637,9 @@ fn five_hour(allowance: &suzatary_io::usage::Allowance) -> suzatary_core::usage:
         .unwrap_or(suzatary_core::usage::Allowance::Unknown)
 }
 
-/// The compactor's model: `[secretary] compactor` through the subscription's `claude` CLI, on
-/// its plain path (the prompt as the whole system prompt, the ask's text as it stands, no
-/// tools), from an empty directory under an empty configuration, and only while the subscription
-/// has room above the reserve it never takes.
+/// The compactor's model: `[secretary] compactor` on the `claude` CLI's plain path (no tools),
+/// from an empty directory and configuration, only while the subscription has room above the
+/// reserve.
 pub struct CompactorModel {
     asked: suzatary_io::model::ClaudeCli,
     door: Door,
@@ -683,7 +649,6 @@ pub struct CompactorModel {
 }
 
 impl CompactorModel {
-    /// `name` over `instance`'s subscription, under `[secretary] reserve`.
     #[must_use]
     pub fn new(instance: &Instance, name: suzatary_core::model_name::ModelName) -> Self {
         let (empty, config) = (&instance.paths.compactor, &instance.paths.compactor_config);
@@ -720,7 +685,7 @@ impl CompactorModel {
 
 impl CompactorModel {
     /// `text` under `system` on the plain path, only while the subscription has room above the
-    /// reserve; the compactor and the topics backfill ask through it.
+    /// reserve.
     ///
     /// # Errors
     /// [`ModelError::Unreachable`] at the reserve, [`ModelError::Limited`] while a limit stands,
@@ -755,7 +720,6 @@ impl Compact for CompactorModel {
     }
 }
 
-/// The box's mirrors, built one way for the server and the CLI alike.
 #[must_use]
 pub fn mirrors(instance: &Instance) -> std::sync::Arc<suzatary_io::repos::Mirrors> {
     std::sync::Arc::new(suzatary_io::repos::Mirrors::new(
@@ -792,9 +756,6 @@ mod subscription_tests {
         }
     }
 
-    /// The compactor runs while no reading puts the subscription over the reserve's line: a rate
-    /// limit with no remembered reading, one remembered under the line and an unknown allowance
-    /// all leave it room.
     #[test]
     fn the_subscription_has_room_until_a_reading_crosses_the_reserve() {
         let reserve = Reserve::parse(0.30).expect("a share");

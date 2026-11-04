@@ -1,20 +1,12 @@
-//! The subprocesses this crate starts: fed on stdin, read whole, and killed
-//! when it outlives its timeout. The one started on a pseudo-terminal
-//! (`setup_token`) takes its environment from [`environment`]; the binary's two
-//! operator commands run at a terminal (`script`, `replica`) keep the
-//! operator's whole environment, each saying why.
+//! The subprocesses this crate starts: fed on stdin, read whole, and killed when they outlive
+//! their timeout.
 //!
-//! A child is given an explicit environment, never this process's whole one:
-//! [`BASE`] and the names its call site passes ([`Cmd::pass`]). So a secret
-//! placed in the server's environment reaches no child that did not ask for it
-//! by name, least of all a check command the agent proposed or the model's CLI.
-//! A cleared environment is not a sandbox: a child runs as the same user, and
-//! `HOME` and `XDG_RUNTIME_DIR` lead it to the user's files, the gpg-agent socket
-//! and the secret store. What it holds is only what it was not told.
-//! A child leads a process group of its own, and the group is what a timeout
-//! or a halt kills, so a grandchild (the `cargo` under `sh -c`) dies with it
-//! and cannot hold the output pipe open. Once a child has started, `run`
-//! answers, with an error or not, only when no process of its group runs.
+//! A child gets [`BASE`] and the names its call site passes ([`Cmd::pass`]), never this
+//! process's whole environment, so a secret in the server's environment reaches no child that
+//! did not name it. This is NOT a sandbox: the child runs as the same user, and `HOME` and
+//! `XDG_RUNTIME_DIR` lead it to the user's files, the gpg-agent socket and the secret store.
+//! A child leads its own process group, and a timeout or a halt kills the group, so a grandchild
+//! cannot hold the output pipe open. `run` answers only when no process of the group runs.
 
 use std::ffi::{OsStr, OsString};
 use std::io::{ErrorKind, Read, Write as _};
@@ -26,13 +18,10 @@ use std::time::{Duration, Instant};
 
 use suzatary_core::excerpt::Excerpt;
 
-/// How often a running child is asked whether it is done, late or halted.
 const POLL: Duration = Duration::from_millis(20);
 
-/// What every child is given of this process's environment: where programs
-/// and the user's files are, the locale and zone, the temporary and runtime
-/// directories, the TLS roots. A name ending in `*` passes every name with
-/// that prefix.
+/// What every child is given of this process's environment. A name ending in `*` passes every
+/// name with that prefix.
 pub const BASE: &[&str] = &[
     "PATH",
     "HOME",
@@ -57,8 +46,7 @@ pub const BASE: &[&str] = &[
     "NIX_SSL_CERT_FILE",
 ];
 
-/// What a child that reaches the network may need beyond [`BASE`]: the proxy, and the CA
-/// bundle each tool reads to trust it.
+/// What a child that reaches the network needs beyond [`BASE`]: the proxy and its CA bundles.
 pub const NETWORK: &[&str] = &[
     "NODE_EXTRA_CA_CERTS",
     "REQUESTS_CA_BUNDLE",
@@ -74,14 +62,11 @@ pub const NETWORK: &[&str] = &[
     "all_proxy",
 ];
 
-/// What `nix` reads of its environment beyond [`BASE`].
 pub const NIX: &[&str] = &["NIX_*"];
 
-/// What typst reads: its package and font paths, and fontconfig's.
 pub const TYPST: &[&str] = &["TYPST_*", "FONTCONFIG_*"];
 
-/// What a child is given of this process's environment: [`BASE`] and the names `pass` lists, for
-/// a child started outside [`Cmd`] (one on a pseudo-terminal) to be given the same.
+/// [`BASE`] and the names `pass` lists, for a child started outside [`Cmd`] (on a pty).
 pub fn environment<'a>(
     pass: impl Iterator<Item = &'a str> + Clone,
 ) -> impl Iterator<Item = (OsString, OsString)> {
@@ -101,7 +86,6 @@ fn passes<'a>(key: &OsStr, pass: impl Iterator<Item = &'a str>) -> bool {
         })
 }
 
-/// One program to run.
 #[derive(Debug, Clone)]
 pub struct Cmd {
     /// The executable, looked up on `PATH` when it has no slash.
@@ -122,58 +106,39 @@ pub struct Cmd {
     pub max_stdout: usize,
 }
 
-/// What a finished child left.
 #[derive(Debug, Clone)]
 pub struct Ran {
-    /// Its exit status.
     pub status: ExitStatus,
-    /// Its stdout (empty from [`watch`], which hands out lines instead).
+    /// Empty from [`watch`], which hands out lines instead.
     pub stdout: Vec<u8>,
-    /// Its stderr.
     pub stderr: Vec<u8>,
 }
 
 /// Why a child did not run to an exit status.
 #[derive(Debug, thiserror::Error)]
 pub enum RunError {
-    /// It could not be started.
     #[error("{program} could not be run: {source}")]
     Spawn {
-        /// The program, as given.
         program: String,
-        /// The operating system's reason.
         source: std::io::Error,
     },
     /// It outlived its timeout and was killed.
     #[error("{program} did not finish within {after:?}")]
-    TimedOut {
-        /// The program, as given.
-        program: String,
-        /// The timeout it had.
-        after: Duration,
-    },
+    TimedOut { program: String, after: Duration },
     /// The caller stopped it.
     #[error("{program} was stopped")]
-    Halted {
-        /// The program, as given.
-        program: String,
-    },
-    /// Waiting on it failed.
+    Halted { program: String },
     #[error("{program}: {source}")]
     Wait {
-        /// The program, as given.
         program: String,
-        /// The operating system's reason.
         source: std::io::Error,
     },
-    /// It ran to an exit that was not zero ([`succeed`] only).
+    /// A non-zero exit ([`succeed`] only).
     #[error("{program} exited {status}: {stderr}")]
     Exited {
-        /// The program, as given.
         program: String,
-        /// How it exited.
         status: ExitStatus,
-        /// The end of its stderr, as a log line may quote it.
+        /// The end of its stderr.
         stderr: Excerpt,
     },
 }
@@ -194,14 +159,12 @@ impl Cmd {
         }
     }
 
-    /// One more argument.
     #[must_use]
     pub fn arg(mut self, arg: impl AsRef<OsStr>) -> Self {
         self.args.push(arg.as_ref().to_owned());
         self
     }
 
-    /// More arguments.
     #[must_use]
     pub fn args<I: IntoIterator<Item = S>, S: AsRef<OsStr>>(mut self, args: I) -> Self {
         self.args
@@ -217,7 +180,6 @@ impl Cmd {
         self
     }
 
-    /// Set a variable.
     #[must_use]
     pub fn env(mut self, key: impl AsRef<OsStr>, value: impl AsRef<OsStr>) -> Self {
         self.env
@@ -225,35 +187,30 @@ impl Cmd {
         self
     }
 
-    /// Remove a variable.
     #[must_use]
     pub fn unset(mut self, key: impl AsRef<OsStr>) -> Self {
         self.env.push((key.as_ref().to_owned(), None));
         self
     }
 
-    /// Run in `dir`.
     #[must_use]
     pub fn cwd(mut self, dir: impl AsRef<Path>) -> Self {
         self.cwd = Some(dir.as_ref().to_owned());
         self
     }
 
-    /// Feed `bytes` on stdin.
     #[must_use]
     pub fn stdin(mut self, bytes: impl Into<Vec<u8>>) -> Self {
         self.stdin = Some(bytes.into());
         self
     }
 
-    /// Kill it after `after`.
     #[must_use]
     pub fn timeout(mut self, after: Duration) -> Self {
         self.timeout = Some(after);
         self
     }
 
-    /// Keep at most `bytes` of stdout.
     #[must_use]
     pub fn max_stdout(mut self, bytes: usize) -> Self {
         self.max_stdout = bytes;
@@ -290,8 +247,8 @@ impl Cmd {
         command
     }
 
-    /// Spawn, retrying `ETXTBSY`: a program another thread has just written
-    /// can still be open for writing in a sibling's fork.
+    /// Spawn, retrying `ETXTBSY`: a program another thread has just written can still be open
+    /// for writing in a sibling's fork.
     fn spawn(&self) -> Result<Child, RunError> {
         let mut tries = 0;
         loop {
@@ -312,7 +269,6 @@ impl Cmd {
 }
 
 impl Ran {
-    /// Whether it exited zero.
     #[must_use]
     pub fn ok(&self) -> bool {
         self.status.success()
@@ -332,18 +288,11 @@ impl Ran {
 }
 
 /// Run `cmd` and require it to exit zero.
-///
-/// # Errors
-/// As [`run`], plus [`RunError::Exited`] for a non-zero exit, quoting the
-/// tail of its stderr.
 pub fn succeed(cmd: &Cmd) -> Result<Ran, RunError> {
     zero(cmd, run(cmd)?)
 }
 
 /// `ran`, when `cmd` exited zero; [`RunError::Exited`] otherwise.
-///
-/// # Errors
-/// [`RunError::Exited`].
 pub fn zero(cmd: &Cmd, ran: Ran) -> Result<Ran, RunError> {
     if ran.ok() {
         Ok(ran)
@@ -356,20 +305,13 @@ pub fn zero(cmd: &Cmd, ran: Ran) -> Result<Ran, RunError> {
     }
 }
 
-/// Run `cmd` to its exit.
-///
-/// # Errors
-/// [`RunError`] when it cannot start, outlives its timeout, or cannot be
-/// waited on. A non-zero exit is an `Ok` [`Ran`].
+/// Run `cmd` to its exit. A non-zero exit is an `Ok` [`Ran`].
 pub fn run(cmd: &Cmd) -> Result<Ran, RunError> {
     drive(cmd, None, &|| false)
 }
 
-/// Run `cmd`, handing each stdout line to `on_line` as it arrives and
-/// killing the child as soon as `halted` answers true.
-///
-/// # Errors
-/// As [`run`], plus [`RunError::Halted`].
+/// Run `cmd`, handing each stdout line to `on_line` as it arrives and killing the child as soon
+/// as `halted` answers true.
 pub fn watch(
     cmd: &Cmd,
     on_line: &mut dyn FnMut(&str),
@@ -384,7 +326,6 @@ enum Said {
     Err(Vec<u8>),
 }
 
-/// Read `pipe` to its end into `said`, each piece tagged by `tag`.
 fn read_into(
     mut pipe: impl Read + Send + 'static,
     said: std::sync::mpsc::Sender<Said>,
@@ -411,18 +352,14 @@ fn exited(child: &Child) -> std::io::Result<bool> {
     .is_some())
 }
 
-/// Kill `child`'s group and return once no process in it runs: each is gone or a zombie, which
-/// runs no code and holds no file. A signal is only queued by `kill`, so the group is looked for
-/// in `/proc` until it is dead. The child must lead the group (spawned with
-/// `process_group(0)`) and must not be reaped before this returns, so that its id names this
-/// group and no other while it is looked for.
-///
-/// A member this process may not signal (a set-user-ID program) or one in uninterruptible sleep
-/// holds this until the kernel lets it end, as it would hold a `wait` on the child.
+/// Kill `child`'s group and return once no process in it runs (each gone or a zombie). `kill`
+/// only queues a signal, so `/proc` is polled until the group is dead. The child must lead the
+/// group (`process_group(0)`) and must not be reaped before this returns, so its id names this
+/// group alone. A member that cannot be signalled (set-user-ID) or is in uninterruptible sleep
+/// blocks this until the kernel lets it end.
 pub(crate) fn end_group(child: &Child) -> std::io::Result<()> {
     let group = rustix::process::Pid::from_child(child);
-    // Killed again before each look, so the answer does not rest on the kernel refusing a fork
-    // to a process it is killing.
+    // Killed again before each look: a fork racing the kill would otherwise survive.
     loop {
         rustix::process::kill_process_group(group, rustix::process::Signal::KILL)?;
         if !runs_in(group)? {
@@ -432,7 +369,6 @@ pub(crate) fn end_group(child: &Child) -> std::io::Result<()> {
     }
 }
 
-/// Whether a thread of a process whose group is `group` is neither a zombie nor dead.
 fn runs_in(group: rustix::process::Pid) -> std::io::Result<bool> {
     for entry in std::fs::read_dir("/proc")? {
         let process = entry?.path();
@@ -452,7 +388,7 @@ fn runs_in(group: rustix::process::Pid) -> std::io::Result<bool> {
 }
 
 /// Whether a thread of `process` (a `/proc/<pid>` directory) is neither a zombie nor dead. The
-/// main thread's state is not the process's: it can be a zombie while other threads run.
+/// main thread can be a zombie while other threads run.
 fn any_thread_runs(process: &Path) -> std::io::Result<bool> {
     let threads = match std::fs::read_dir(process.join("task")) {
         Err(failed) if gone(&failed) => return Ok(false),
@@ -497,10 +433,8 @@ fn gone(failed: &std::io::Error) -> bool {
 }
 
 /// A child is done when it has exited and both its streams have closed. When the leader exits,
-/// whatever it left in its group is killed, since nothing waits for it and it would hold the
-/// streams open; and the one deadline covers both streams and the exit, so a child is answered
-/// within its timeout or is a [`RunError::TimedOut`]. Every way out after the spawn passes
-/// [`end_group`], so no process of the group runs once this returns.
+/// what it left in its group is killed, since it would hold the streams open. One deadline
+/// covers streams and exit. Every way out after the spawn passes [`end_group`].
 fn drive(
     cmd: &Cmd,
     mut on_line: Option<&mut dyn FnMut(&str)>,
@@ -614,7 +548,6 @@ mod tests {
         assert!(started.elapsed() < Duration::from_secs(4));
     }
 
-    /// A variable this process holds reaches a child only when its call names it.
     #[test]
     fn a_child_sees_only_what_it_is_passed() {
         let Some(held) = std::env::var_os("CARGO_MANIFEST_DIR") else {
@@ -635,8 +568,7 @@ mod tests {
         );
     }
 
-    /// The hole the leader's exit left: a check sends both streams to stderr, the `sleep` it
-    /// left behind held stderr open, and the answer waited for the sleep, past the timeout.
+    /// A background `sleep` holding stderr open must not delay the answer past the timeout.
     #[test]
     fn what_a_child_leaves_behind_dies_with_it() {
         let started = Instant::now();
@@ -649,9 +581,6 @@ mod tests {
         assert!(started.elapsed() < Duration::from_secs(2));
     }
 
-    /// The hole a timeout left: `sh` was killed and the `sleep` it started lived on, holding
-    /// the output pipe. Then `run` answered as soon as the kill was sent, and on a loaded
-    /// machine the `sleep` still ran seconds later.
     #[test]
     fn a_timeout_kills_the_grandchildren_too() {
         let dir = tempfile::tempdir().expect("scratch");

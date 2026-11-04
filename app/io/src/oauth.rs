@@ -125,9 +125,7 @@ impl<P: Protocol> Grant for Stored<'_, P> {
 /// only replaces what the file holds.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Writing {
-    /// From a sign-in just given.
     Granted,
-    /// From a refresh, which the server rotated.
     Rotated,
 }
 
@@ -153,7 +151,6 @@ impl TokenStore {
         Self::with_http(dir, Arc::new(Ureq::new()))
     }
 
-    /// A store whose requests go through `http`.
     #[must_use]
     pub fn with_http(dir: impl Into<PathBuf>, http: Arc<dyn Http>) -> Self {
         Self {
@@ -183,8 +180,6 @@ impl TokenStore {
     /// Store `refresh` under `P::SLOT`, leaving every other slot as it was. A `Rotated` token
     /// replaces one the file holds and never makes the file, so a refresh that ends after the
     /// account's sign-in was revoked writes nothing back.
-    ///
-    /// Written to a temporary file and renamed, so a crash cannot leave a truncated grant.
     fn write_grant<P: Protocol>(
         &self,
         account: &MailAccount,
@@ -260,9 +255,8 @@ impl TokenStore {
         }
     }
 
-    /// Request a device code; `Pending::finish` is the blocking rest.
-    ///
-    /// Split off so a caller can record the code's expiry before the poll loop starts.
+    /// Request a device code; `Pending::finish` is the blocking rest, so a caller can record the
+    /// code's expiry before the poll loop starts.
     ///
     /// # Errors
     /// [`OauthError::NotMicrosoft`] for an account with no Microsoft
@@ -293,10 +287,8 @@ impl TokenStore {
         ))
     }
 
-    /// Run the device-code flow for this protocol and store the grant.
-    ///
-    /// `announce` receives the code once; `wait` sleeps between polls, supplied by the caller
-    /// so the flow can be driven with no clock.
+    /// Run the device-code flow for this protocol and store the grant. `announce` receives the
+    /// code once; `wait` sleeps between polls.
     ///
     /// # Errors
     /// Any error of `begin_device_flow` or `Pending::finish`.
@@ -344,9 +336,8 @@ impl TokenStore {
     }
 }
 
-/// A device flow whose code has been issued, waiting to be polled to completion.
-///
-/// Owns its store and account so the poll can run on a thread the caller spawns.
+/// A device flow whose code has been issued, waiting to be polled to completion; it owns its
+/// store and account so the poll can run on a thread the caller spawns.
 #[derive(Debug)]
 pub struct Pending<P: Protocol> {
     store: TokenStore,
@@ -434,8 +425,7 @@ mod tests {
         }
     }
 
-    /// A grant file names its tenant as one of the two the login URL is built from; any other
-    /// text is an unreadable file, never a sign-in that would answer 400 an hour later.
+    /// Any tenant but the two the login URL is built from is an unreadable file.
     #[test]
     fn a_stored_grant_names_a_tenant_this_program_knows() {
         let dir = scratch("tenant");
@@ -460,8 +450,6 @@ mod tests {
         let _ = std::fs::remove_dir_all(&dir);
     }
 
-    /// Revoking deletes both slots at once, and a refresh that ends afterwards writes nothing
-    /// back, so a revoked sign-in is not recreated; a sign-in given again makes the file anew.
     #[test]
     fn a_revoked_grant_is_never_recreated_by_a_refresh() {
         let store = TokenStore::new(scratch("revoke"));
