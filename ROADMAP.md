@@ -89,8 +89,8 @@ reason does not.
 - **Committing the rendered document, and releasing PDFs** — ended
   2026-09-02. A rendered tree is a function of the chain and the clock;
   checking it in was a second copy and a daily commit about it. The PDF
-  itself went on 2026-10-09 (the owner: "We don't need the pdfs anymore");
-  `suzatary web` is the site.
+  itself went on 2026-10-09 (the owner: "We don't need the pdfs anymore"),
+  and the static site `suzatary web` went on 2026-11-04 (nobody read it).
 - **A tree object / snapshot commit on the chain** — rejected for 1.0
   (2026-09-02): with one writer and ~500 events the fold is microseconds,
   and a snapshot is a derived index the writer must keep consistent with

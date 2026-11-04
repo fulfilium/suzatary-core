@@ -17,10 +17,9 @@
  * `fpl.py`/`series.py` with the crate's own parser (never a second one —
  * see `suzatary-vector-json`'s comment in `flake.nix`) and re-emits the SAME 900
  * samples and 1429 knots as the `fpl.json`/`series.json` this file always
- * read, so nothing below this comment changed. The live chain's own fold
- * pins went to the data repository with the chain (datasplit §9.2), and the
- * §6.7 one is read from there (`$SUZATARY_LIVE_VIEW`); this repository holds
- * no print of the chain's contents.
+ * read, so nothing below this comment changed. The live chain's objects are
+ * read from the data repository (`$SUZATARY_LIVE_EVENTS`); this repository
+ * holds no print of the chain's contents.
  *
  * SO THE CLAIM IS THE SPEC'S §9.8, MEASURED HERE: hashes and knot instants
  * EXACTLY, fulfillments to 1e-9. Not "the module loads".
@@ -44,7 +43,6 @@ import type { Core, CoreEnv, Todos } from "../src/prodrome/core";
 import { found } from "../src/prodrome/verify";
 import signer from "../src/prodrome/signer";
 import {
-  entriesOf,
   linked,
   linkedKnots,
   appendTo,
@@ -216,111 +214,6 @@ test("every series has the reference's knots, at the reference's instants", () =
     }
   }
   assert.equal(knots, 1429, "the vector file's 1429 knots, all of them");
-});
-
-// --- §6.7 the entry: the composition, in this browser ------------------------
-
-interface LiveView {
-  at: string;
-  entries: Record<string, unknown>[];
-  objects: number;
-  tip: string;
-  untrusted: string[];
-}
-
-/** The live chain's own §6.7 pin, from the data tree beside the chain
- * (datasplit §9.2): `$SUZATARY_LIVE_VIEW`, which `scripts/web-test.sh` exports
- * with `SUZATARY_LIVE_EVENTS`. Unset on a clone of the code alone, and the
- * test says so. */
-const pinned: { skip: string | false } = {
-  skip: process.env["SUZATARY_LIVE_VIEW"] === undefined ? "no fold pin: SUZATARY_LIVE_VIEW is unset" : false,
-};
-
-function liveView(): LiveView {
-  const path = process.env["SUZATARY_LIVE_VIEW"];
-  if (path === undefined) throw new Error("SUZATARY_LIVE_VIEW is unset");
-  return JSON.parse(readFileSync(path, "utf8")) as LiveView;
-}
-
-/**
- * The data tree's `conformance/view-live.json` was generated from the PYTHON
- * composition (`view.entries_of`, before `prodrome_core::view` existed), so
- * this is the claim that matters most in this file: the offline fold this tab
- * performs is the SAME reading the server performs, over this box's real
- * chain at the instant the reference read it — the claims, the prices, the
- * confirmation, the conflicts and the stream, field for field.
- *
- * The rows compared are the ones the tab shows: `entriesOf` is the box's own
- * fold route run in this module, so this pins one evaluator on two machines.
- * A wire row carries no content object's name and no print of its function:
- * it names a record exactly where the vector names one, and `live.rs` pins
- * the function's print against the same vector.
- *
- * AS OF THE VECTOR'S TIP, because the chain grows every hour and a composition
- * compared against the wrong history is worse than no comparison. The store is
- * a chain, so "the objects at that tip" is a walk back through `prev` —
- * `app/cli/tests/live.rs` asks the core for the same set with `read_dag_at`.
- *
- * What this no longer covers, and it is worth saying: forty SEEDED forked DAGs
- * with concurrent writes in them, which is where the conflicted rows were. That
- * half of `view.json` did not become public with the crate and is not
- * duplicated here; `web/test/candidates.test.ts` and `web/test/replica.test.ts`
- * are what pin the browser's conflict handling in the meantime.
- */
-test("the live view vector is the composition this browser computes", pinned, () => {
-  const view = liveView();
-  const byHash = new Map(objects.map((o): [string, string] => [o.hash, o.literal]));
-  const chain: { hash: string; literal: string }[] = [];
-  for (let hash: string | undefined = view.tip; hash !== undefined && hash !== ""; ) {
-    const literal = byHash.get(hash);
-    if (literal === undefined) throw new Error(`the store has lost object ${hash}`);
-    chain.push({ hash, literal });
-    hash = /^Sealed\(prev='([0-9a-f]{64})'/.exec(literal)?.[1];
-  }
-  assert.equal(chain.length, view.objects, "the chain's object count at the vector's tip");
-
-  const answer = entriesOf(core, chain, view.at, view.untrusted, "life", new core.Chains());
-  assert.equal(answer.at, view.at, "the moment is echoed back");
-  assert.equal(answer.entries.length, view.entries.length, "row count");
-  for (const [i, row] of answer.entries.entries()) {
-    const theirs = view.entries[i];
-    if (theirs === undefined) throw new Error(`row ${i} is missing`);
-    // `value` is the one float, and the spec's budget for one is 1e-9. The
-    // live chain holds no reference, so every row links: no value is null.
-    // The vector spells a register as the wasm did before change identity (as
-    // `live.rs`'s `row` does): one name, null for none, an array for a
-    // conflict; states joined by `|`.
-    const { value: reference, content, spec: _spec, ...expected } = theirs;
-    const mine = {
-      todo: row.todo,
-      state: row.states.join("|"),
-      at: row.at,
-      claimed: row.claimed,
-      unconfirmed: row.unconfirmed,
-      conflicts: row.conflicts,
-      stream: row.stream,
-    };
-    assert.deepEqual(mine, expected, `row ${i}`);
-    assert.equal(row.authored === null, content === null, `row ${i} names a record exactly where the vector does`);
-    const value = row.value;
-    if (value === null) throw new Error(`row ${i} does not link`);
-    if (typeof value !== "number" || typeof reference !== "number") {
-      assert.equal(value, reference, `row ${i} value`);
-    } else {
-      assert.ok(Math.abs(value - reference) <= 1e-9, `row ${i} value ${String(value)} vs ${String(reference)}`);
-    }
-  }
-  // The corpus is the point: a vector that stopped holding resolved todos, or
-  // todos with no price, would let this go quietly green on the easy half.
-  assert.ok(answer.entries.length > 100, `only ${answer.entries.length} rows`);
-  assert.ok(
-    answer.entries.some((row) => !row.states.includes("open")),
-    "some row is resolved",
-  );
-  assert.ok(
-    answer.entries.some((row) => row.value === "absent"),
-    "some row has no price",
-  );
 });
 
 // --- the guards --------------------------------------------------------------

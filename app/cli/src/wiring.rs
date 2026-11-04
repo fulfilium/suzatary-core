@@ -8,12 +8,10 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use prodrome_core::event::Actor;
-use suzatary_core::capability::Secret;
 use suzatary_core::capability::{Agent, Model, RenderCache, Secretary};
 use suzatary_core::chains::ChainPolicy;
 use suzatary_core::decisions::{DecisionEvent, Decisions};
 use suzatary_core::mail::account::Roster;
-use suzatary_core::mail::dedup_key::DedupKey;
 use suzatary_core::persona::Persona;
 use suzatary_core::record::TodoEvent;
 use suzatary_core::secretary::compacting::Compacting;
@@ -36,8 +34,7 @@ use suzatary_io::unrendered::Unrendered;
 use crate::commands::serve::interpreters::{Declared, DriveAccess, Forecast, Junk, WebAccess};
 use crate::instance::{ChainDir, Instance};
 
-/// The files a [`Grounds`] reads and writes, and the accounts its sync pulls: the box's own
-/// ([`Ground::of`]) or a bench case's scratch ([`Ground::scratch`]), both wired by [`Ground`]'s
+/// The files a [`Grounds`] reads and writes, and the accounts its sync pulls, wired by [`Ground`]'s
 /// methods alone.
 pub struct Ground {
     mail_root: PathBuf,
@@ -47,10 +44,8 @@ pub struct Ground {
     pub(crate) ledger: suzatary_io::state::Ledger,
     /// Where each listed message lives, by canonical hash.
     mail_hashes: PathBuf,
-    /// The accounts a message's folder is read as.
+    /// The accounts a message's folder is read as, and the accounts a sync pulls.
     accounts: Roster,
-    /// The accounts a sync pulls.
-    pulled: Roster,
     mbsyncrc: PathBuf,
     imap_state: PathBuf,
     tokens: suzatary_io::oauth::TokenStore,
@@ -73,7 +68,6 @@ impl Ground {
             ledger: crate::commands::mail::ledger(instance),
             mail_hashes: instance.paths.mail_hashes.clone(),
             accounts: instance.mail.accounts.clone(),
-            pulled: instance.mail.accounts.clone(),
             mbsyncrc: instance.mail.mbsyncrc.clone(),
             imap_state: instance.paths.imap_state.clone(),
             tokens: crate::commands::mail::tokens(instance),
@@ -86,61 +80,10 @@ impl Ground {
         }
     }
 
-    /// A bench case's, every file under `dir`: its own maildir and index, its own ledger under a
-    /// key of its own, its own data checkout, and no account pulled. The instance gives only the
-    /// notmuch program and the roster a folder is read by, so nothing a case does reaches the
-    /// box's mail, data, grants or secret store.
-    #[must_use]
-    pub fn scratch(dir: &Path, instance: &Instance) -> Self {
-        let data = dir.join("data");
-        let state = dir.join("state");
-        let local = data.join(crate::instance::Local::DIR);
-        Self {
-            mail_root: dir.join("mail"),
-            notmuch: instance.mail.notmuch.clone(),
-            notmuch_config: Some(Self::scratch_index(dir)),
-            ledger: suzatary_io::state::Ledger::new(
-                data.join("state.json"),
-                local.join("mail.json"),
-                scratch_key,
-            ),
-            mail_hashes: state.join("mail-hashes"),
-            accounts: instance.mail.accounts.clone(),
-            pulled: Roster::default(),
-            mbsyncrc: dir.join("mbsyncrc"),
-            imap_state: state.join("imap"),
-            tokens: suzatary_io::oauth::TokenStore::new(state.join("oauth")),
-            grants: suzatary_io::google::Grants::new(
-                suzatary_io::google::Google::new(suzatary_core::google::Endpoints::google()),
-                Arc::new(suzatary_io::secrets::Secretspec::new(
-                    dir.join("secretspec.toml"),
-                )),
-            ),
-            heartbeat: state.join("triage-heartbeat"),
-            last_sync: state.join("last-sync.json"),
-            watches: local.join("watches"),
-            data,
-            markup_cache: dir.join("markup"),
-        }
-    }
-
     /// The maildir root.
     #[must_use]
     pub fn mail_root(&self) -> &Path {
         &self.mail_root
-    }
-
-    /// The notmuch config of the index a scratch ground under `dir` reads and writes.
-    #[must_use]
-    pub fn scratch_index(dir: &Path) -> PathBuf {
-        dir.join("notmuch-config")
-    }
-
-    /// The hook directory that config names, empty: without one, notmuch runs the hooks under the
-    /// user's `$XDG_CONFIG_HOME`, which are the box's.
-    #[must_use]
-    pub fn scratch_hooks(dir: &Path) -> PathBuf {
-        dir.join("hooks")
     }
 
     /// The mail this ground keeps, held against its sync.
@@ -182,7 +125,7 @@ impl Ground {
     #[must_use]
     pub fn syncer(&self) -> suzatary_io::sync::Syncer {
         let syncer = suzatary_io::sync::Syncer::new(
-            self.pulled.clone(),
+            self.accounts.clone(),
             self.mail_root.clone(),
             self.notmuch.clone(),
             self.mbsyncrc.clone(),
@@ -208,14 +151,6 @@ impl Ground {
             suzatary_io::watches::Watches::open(self.watches.clone()),
         )
     }
-}
-
-/// A key no other ledger holds, so a scratch ledger names no message as the box's does.
-fn scratch_key() -> Result<DedupKey, String> {
-    use suzatary_core::capability::Entropy as _;
-    let mut bytes = [0u8; 32];
-    suzatary_io::texts::SystemEntropy.fill(&mut bytes)?;
-    DedupKey::of(&Secret::new(hex::encode(bytes))).map_err(|failed| failed.to_string())
 }
 
 /// What every record reads through, the triage agent's included: its six effects beside a chain.
@@ -319,26 +254,6 @@ impl Remembering {
         Self::of(instance, Arc::new(Unrendered))
     }
 
-    /// A memory that holds nothing, its stores under `dir`, which holds nothing either: what the
-    /// bench is told, so no case reaches a vendor with the box's memory or today's.
-    #[must_use]
-    pub fn empty_in(dir: &Path, instance: &Instance) -> Self {
-        Self {
-            conversations: ConversationStores::open(
-                dir.join("lines"),
-                dir.join("keys"),
-                Arc::new(Unrendered),
-            ),
-            memory: Objects::open(dir.join("memory")),
-            memory_texts: Texts::open(dir.join("memory-texts")),
-            digests: Objects::digests(dir.join("digests"), instance.deployment.writers()),
-            digest_texts: Texts::open(dir.join("digest-texts")),
-            owners: instance.deployment.writers(),
-            compacting: Compacting::Off,
-            inbox: Objects::open(dir.join("inbox")),
-        }
-    }
-
     /// The memory and the digest, as one record reads and erases them.
     #[must_use]
     pub fn memories(&self) -> Memories<'_> {
@@ -377,12 +292,6 @@ impl Recalling {
     #[must_use]
     pub fn of(instance: &Instance) -> Self {
         Remembering::reader(instance).into()
-    }
-
-    /// A memory that holds nothing, as [`Remembering::empty_in`].
-    #[must_use]
-    pub fn empty_in(dir: &Path, instance: &Instance) -> Self {
-        Remembering::empty_in(dir, instance).into()
     }
 
     /// The memory, read within `budget` bytes.

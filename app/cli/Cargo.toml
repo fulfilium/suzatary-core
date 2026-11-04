@@ -20,8 +20,8 @@ path = "src/lib.rs"
 name = "suzatary"
 path = "src/main.rs"
 
-# THE DEVELOPMENT BINARY: every verb of `suzatary`, plus `bench`,
-# `fixture-chain` and `fixture-triage`. It needs the `fixture` feature, so a
+# THE DEVELOPMENT BINARY: every verb of `suzatary`, plus
+# `fixture-chain`, `fixture-triage`, `fake-google` and `guide`. It needs the `fixture` feature, so a
 # build without it (`nix build .#suzatary`, the units' program) never compiles
 # it, and the deployed binary's argument tree has none of those verbs.
 [[bin]]
@@ -34,8 +34,6 @@ suzatary-core.workspace = true
 suzatary-io.workspace = true
 # The plugin host: `suzatary plugin sync` runs the `[[plugins]]` sources.
 suzatary-plugin.workspace = true
-# Only the development binary benchmarks (`fixture` below).
-suzatary-bench = { workspace = true, optional = true }
 prodrome_core.workspace = true
 clap = { version = "4", features = ["derive"] }
 # THE AGENT'S TOOLS, over stdio (§8.4).
@@ -78,7 +76,7 @@ async-stream = "0.3"
 # program does not contain the code: removal is checkable, a blocklist is not.
 [features]
 default = []
-fixture = ["dep:suzatary-bench", "suzatary-core/fixture"]
+fixture = ["suzatary-core/fixture"]
 
 # THE TWO TEST TARGETS THAT ARE NOT ABOUT THIS CRATE. `tests/guards.rs` live-fires
 # the repository's own containment layers — `scripts/tool-guard.sh`,
@@ -99,16 +97,14 @@ path = "tests/guards.rs"
 test = false
 
 # AND THE LIVE CHAIN'S PINS, BY THE SAME RULE (docs/ARCHITECTURE.md §8.8).
-# `tests/live.rs` is SPEC §9 against the repository's own `events/`, compared
-# with the reference's vectors in `app/conformance/`. Those tests were the
-# database's until the Prodrome became its own public repository: a crate a
+# `tests/live.rs` is SPEC §9 against the deployment's own `events/`. Those
+# tests were the database's until the Prodrome became its own public repository: a crate a
 # stranger can build must not read the owner's chain, so the crate kept the seeded
 # evidence and the deployment kept its own.
 #
 # `test = false` for exactly the reason above it: the sandbox is handed the
-# source trees and not the repository, so there is no `events/` in there and no
-# `app/conformance/` either. The merge gate's live half names it, which is what
-# keeps it on every train.
+# source trees and not the repository, so there is no `events/` in there. The
+# merge gate's live half names it, which is what keeps it on every train.
 [[test]]
 name = "live"
 path = "tests/live.rs"

@@ -108,8 +108,8 @@ confirm. Everything below derives from this.
   recurring-but-never-done items (a standing feedback request) aren't either.
 - **One evaluator prices**: the Prodrome's Rust core. Its conformance vectors
   are FROZEN: a disagreement is a finding, never a file to refresh. Here,
-  `app/cli/tests/live.rs` pins this box's chain; the fold pins live in
-  `<data>/conformance/` (→ `oneevaluator`).
+  `app/cli/tests/live.rs` pins this box's chain: its stored format, its DAG
+  and its prices (→ `oneevaluator`).
 - Typst only DRAWS a fulfillment the core wrote in: the number on a page, in a
   block and in a briefing is one `prodrome_core::view::entries` call, and
   `suzatary todos open` prices with the same function. There is no PDF (→
@@ -313,8 +313,7 @@ Threat model: an injected email can at worst mis-triage or write bad todo text
 - **One fetcher** (named in `<data>/FETCHER`; `suzatary up` refuses elsewhere) —
   activation, not restoration, is what splits brains. The lock is
   hostname-based: accident prevention, not adversary-proof (a clone named
-  exactly as the fetcher would pass). Replicas: `suzatary replica init|sync <host>`,
-  zero credentials.
+  exactly as the fetcher would pass).
 - Recovery = restore key (the owner's LastPass) + one Proton login:
   `bootstrap-box.sh` beside the daily encrypted vault on Drive, seven kept (pass
   store, GPG, OAuth caches, Bridge state, assistant memory; never transcripts
@@ -368,9 +367,7 @@ Threat model: an injected email can at worst mis-triage or write bad todo text
 - **A record is shown as a block** (`suzatary_core::decoration`): `raise_block`
   prints it as `#kind(fields)[body]`, and typst is READ with typst's own parser
   only to check that a write renders as what was built.
-- **`suzatary web <outdir>`** writes a static site of the attestable history,
-  every page Typst behind the tripwire (→ `staticsite`). `suzatary todos open`
-  is the open list the briefing reads.
+- `suzatary todos open` is the open list the briefing reads.
 - **The server is `app/`, in Rust** (`suzatary serve`, axum, default
   127.0.0.1:8787; the unit binds the tailnet via `scripts/serve-web.sh`).
   - Reads are GETs. The ONE chain write is `POST /api/objects`, a replica

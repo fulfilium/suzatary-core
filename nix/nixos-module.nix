@@ -304,11 +304,7 @@ in
     # a login shell that is not inside `nix develop` — and a credential helper
     # that only resolves inside a dev shell is a credential helper that fails at
     # the worst moment.
-    # muchsync/notmuch are system-wide for the same reason: a laptop running
-    # `muchsync <fetcher>` over SSH spawns muchsync in a plain login shell on
-    # this end, outside any dev shell (the server half of mail replicas,
-    # 2026-08-29).
-    environment.systemPackages = with pkgs; [ secretspec pass gnupg muchsync notmuch ];
+    environment.systemPackages = with pkgs; [ secretspec pass gnupg notmuch ];
 
     systemd.user.services.proton-bridge = lib.mkIf cfg.protonBridge.enable (baseUnit
       "Proton Mail Bridge (localhost IMAP 1143 / SMTP 1025)"

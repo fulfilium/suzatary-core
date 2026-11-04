@@ -44,8 +44,6 @@ The first public release. What exists:
   deployment can provide another implementation of it.
 - **Plugins.** WebAssembly components whose authority is their imports; the
   first reads calendars from their iCal links.
-- **The site.** A static site of the attestable history, built from the
-  chain.
 - **Deployment.** A template a user's private repository starts from; one
   `instance.toml`, written by `suzatary init`; a NixOS module with its user
   units; an Android portal onto the app; and a guide rendered by Typst

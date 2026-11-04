@@ -1,8 +1,6 @@
 //! One module per verb family; this file holds only what several families share.
 
 pub mod ask;
-#[cfg(feature = "fixture")]
-pub mod bench;
 pub mod call;
 pub mod coding;
 pub mod decision;
@@ -18,18 +16,14 @@ pub mod instance;
 pub mod leaks;
 pub mod mail;
 pub mod mcp;
-pub mod migrate_models;
 pub mod notify;
 pub mod outbound;
 pub mod plugin;
 pub mod ran;
 pub mod release;
-pub mod replica;
 pub mod secretary;
 pub mod secretspec;
 pub mod serve;
-pub mod site;
-pub mod sources;
 pub mod tap;
 pub mod todo;
 pub mod todos;

@@ -200,7 +200,6 @@
           fileset = lib.fileset.unions [
             ./app/Cargo.toml
             ./app/Cargo.lock
-            ./app/bench
             ./app/cli
             ./app/core
             ./app/io
@@ -313,7 +312,6 @@
         coreFiles = lib.fileset.unions [
           ./app/Cargo.toml
           ./app/Cargo.lock
-          ./app/bench/Cargo.toml
           ./app/cli/Cargo.toml
           ./app/io/Cargo.toml
           ./app/plugin/Cargo.toml
@@ -398,8 +396,7 @@
             || { echo "the binary does not read its release file as ${appVersion}" >&2; exit 1; }
         '';
 
-        # `suzatary-dev`: EVERY VERB OF THE BINARY, PLUS THE END-TO-END FIXTURE
-        # AND THE TRIAGE BENCHMARK, and it is a
+        # `suzatary-dev`: EVERY VERB OF THE BINARY, PLUS THE END-TO-END FIXTURE, and it is a
         # SECOND DERIVATION rather than a flag on the first for the reason
         # CLAUDE.md's Containment section gives: a flag in the shipped program
         # is a write path reachable by anything that can set an environment
@@ -417,7 +414,7 @@
           # `suzatary-dev` alone: the one binary built with the feature.
           cargoExtraArgs = "--features fixture --bin suzatary-dev";
           meta = {
-            description = "suzatary-dev: the end-to-end fixture and the triage benchmark — never deployed";
+            description = "suzatary-dev: the end-to-end fixture — never deployed";
             mainProgram = "suzatary-dev";
           };
         };
@@ -447,7 +444,6 @@
               fileset = lib.fileset.unions ([
                 ./app/Cargo.toml
                 ./app/Cargo.lock
-                ./app/bench/Cargo.toml
                 ./app/cli/Cargo.toml
                 ./app/io/Cargo.toml
                 ./app/plugin/Cargo.toml
@@ -546,7 +542,6 @@
             fileset = lib.fileset.unions [
               ./app/Cargo.toml
               ./app/Cargo.lock
-              ./app/bench/Cargo.toml
               ./app/cli/Cargo.toml
               ./app/io/Cargo.toml
               ./app/core/Cargo.toml
@@ -594,7 +589,6 @@
             fileset = lib.fileset.unions [
               ./app/Cargo.toml
               ./app/Cargo.lock
-              ./app/bench/Cargo.toml
               ./app/cli/Cargo.toml
               ./app/io/Cargo.toml
               ./app/core/Cargo.toml
@@ -993,7 +987,7 @@
           # scripts/build-web.sh the same way.
           inherit suzatary-typst-wasm;
           # `nix build .#suzatary-fixture` — `suzatary-dev`, the binary with
-          # the end-to-end fixture and the benchmark. NEVER DEPLOYED; the
+          # the end-to-end fixture. NEVER DEPLOYED; the
           # comment on the derivation says why it is a second one.
           inherit suzatary-fixture;
           # `nix build .#suzatary-junk-seed` — the monthly Junk sweep's churn
@@ -1186,7 +1180,6 @@
             # The type and lint gates are `cargo clippy` and `cargo fmt` now;
             # `ty` and `ruff` checked a package that no longer exists.
             notmuch lieer isync openssl curl
-            muchsync  # replicas: sync the notmuch store (messages + tags) to other machines over SSH; the fetcher stays the only one
             protonmail-bridge pass gnupg  # Proton: Bridge serves localhost IMAP; pass/gnupg back its keyring on this headless box
             # Resolves the static secrets declared in secretspec.toml out of the
             # `pass` store, so no password sits in plaintext in a config file.

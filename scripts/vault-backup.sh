@@ -6,7 +6,7 @@
 # (restoring these skips ~7 re-auth dances on a new box), the lieer
 # credentials, and the assistant's memory directory.
 #
-# DELIBERATELY EXCLUDED: the mail corpus (rebuildable / muchsync replicas),
+# DELIBERATELY EXCLUDED: the mail corpus (rebuildable),
 # Bridge's vault.enc (per-box; re-login is the documented recovery), anything
 # already in a git repo, and Claude Code's own session transcripts (they contain
 # pasted credentials and do not belong in any backup). The words of the

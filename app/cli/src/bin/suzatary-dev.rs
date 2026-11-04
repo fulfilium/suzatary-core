@@ -1,16 +1,15 @@
-//! The development binary: every verb of the deployed one, plus the triage
-//! benchmark, the end-to-end fixture and the guide's assembly, which the deployed one does not
-//! contain. It exists only under the `fixture` feature.
+//! The development binary: every verb of the deployed one, plus the end-to-end fixture and the
+//! guide's assembly, which the deployed one does not contain. It exists only under the `fixture` feature.
 
 #![forbid(unsafe_code)]
 
 use clap::{CommandFactory, FromArgMatches, Parser, Subcommand};
-use suzatary_cli::commands::{bench, fixture, guide};
+use suzatary_cli::commands::{fixture, guide};
 use suzatary_cli::instance::Instance;
 use suzatary_cli::verb::{Verb, exit_on};
 
-/// Suzatary's development binary: every verb of `suzatary`, plus the benchmark
-/// and the end-to-end fixture. Never deployed.
+/// Suzatary's development binary: every verb of `suzatary`, plus the end-to-end fixture.
+/// Never deployed.
 #[derive(Debug, Parser)]
 #[command(name = "suzatary-dev", long_about = None)]
 struct Cli {
@@ -24,8 +23,6 @@ struct Cli {
 
 #[derive(Debug, Subcommand)]
 enum Dev {
-    /// The triage benchmark over this box's own history.
-    Bench(bench::Args),
     /// Build the end-to-end fixture's chain and instance file.
     FixtureChain(fixture::Args),
     /// Run the agent's writer once against a fixture deployment.
@@ -50,7 +47,6 @@ fn main() {
     exit_on(
         "suzatary-dev",
         match cli.verb {
-            Dev::Bench(args) => bench::run(&path, &args),
             Dev::FixtureChain(args) => fixture::run(&args),
             Dev::FixtureTriage(args) => fixture::triage(&args),
             Dev::FakeGoogle(args) => fixture::fake_google(&args),

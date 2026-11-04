@@ -1,10 +1,9 @@
 #!/usr/bin/env bash
-# `suzatary auth` — interactive credential setup for a box, by role.
+# `suzatary auth` — interactive credential setup for a box.
 #
-# Roles are the architecture (see CLAUDE.md "Box roles"):
-#   fetcher — the ONE box that holds credentials, fetches, triages, sends.
-#   replica — holds a mail copy over SSH; ZERO provider credentials by design.
-# This wizard is the human half of bringing a box into one of those roles;
+# The fetcher is the ONE box that holds credentials, fetches, triages and
+# sends (CLAUDE.md, "One fetcher"). This wizard is the human half of bringing
+# a box into that role;
 # `suzatary up` is the service half. Interactive on purpose — it is run by
 # the owner in a terminal, never by the agent, and secrets it touches go to the
 # pass store or nowhere.
@@ -14,24 +13,10 @@ REPO="$(cd "$(dirname "$0")/.." && pwd)"
 
 echo "suzatary auth — what should this box become?"
 echo "  [1] fetcher   restore everything from the Proton Drive vault (needs your restore key)"
-echo "  [2] replica   local mail copy synced from a fetcher over SSH (no credentials)"
-echo "  [3] verify    report what this box already has"
+echo "  [2] verify    report what this box already has"
 read -rp "> " ROLE
 
 case "$ROLE" in
-  2)
-    read -rp "fetcher SSH host: " H
-    [ -n "$H" ] || { echo "auth: name the fetcher's SSH host"; exit 1; }
-    command -v muchsync >/dev/null || { echo "muchsync not on PATH — run inside 'nix develop .#triage'"; exit 1; }
-    if [ -d "$HOME/Mail/.notmuch" ]; then
-      echo "auth: existing store found — syncing instead of seeding"
-      muchsync "$H"
-    else
-      muchsync --init "$HOME/Mail" "$H"
-    fi
-    echo "auth: replica ready. Steady state: suzatary replica sync $H"
-    ;;
-
   1)
     "$REPO/scripts/install-proton-drive.sh"
     # Drive sessions live in the pass store; a fresh box has none yet. Stand up
@@ -78,7 +63,7 @@ EOF
     echo "auth: fetcher restored. Next: suzatary up"
     ;;
 
-  3)
+  2)
     echo "== secretspec:"; (cd "$REPO" && secretspec check) || true
     echo "== proton-drive session:"
     if [ -x "$HOME/bin/proton-drive" ] && "$HOME/bin/proton-drive" filesystem list / >/dev/null 2>&1; then

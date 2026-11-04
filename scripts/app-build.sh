@@ -16,8 +16,8 @@
 #                                     app/target/release/, prints the binary
 #                                     path
 #   scripts/app-build.sh --fixture   a DEV build of suzatary-dev, the binary
-#                                     with the end-to-end fixture and the
-#                                     benchmark (--features fixture,
+#                                     with the end-to-end fixture
+#                                     (--features fixture,
 #                                     app/cli/Cargo.toml), incremental, into
 #                                     app/target/ beside cargo test's own
 #                                     artifacts, prints the binary path

@@ -144,7 +144,7 @@ The design, as built:
   conversation; the page streams the answer over SSE as it is written rather
   than waiting for the whole of it.
 - *Answers are Typst, rendered as HTML, in blocks.* (`docs/CHAT-PLAN-2026-09-25.md`
-  §4.5–4.6, `docs/TYPST-FIRST-PLAN-2026-09-25.md`.) The secretary writes
+  §4.5–4.6.) The secretary writes
   Typst — every todo body is Typst prose, references are
   `#link("todo:<id>")` — so an answer is cut at top-level blank lines into
   blocks, each rendered as typst's own HTML (MathML for equations) through

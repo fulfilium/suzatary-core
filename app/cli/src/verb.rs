@@ -7,8 +7,8 @@ use clap::Subcommand;
 
 use crate::commands::{
     call, coding, decision, device, doctor, heartbeat, init, instance, leaks, mail, mcp, notify,
-    plugin, ran, release, replica, secretary, secretspec, serve, site, sources, tap, todo, todos,
-    typeset, up, vault, verify, weather,
+    plugin, ran, release, secretary, secretspec, serve, tap, todo, todos, typeset, up, vault,
+    verify, weather,
 };
 
 /// Every verb the deployed binary answers.
@@ -29,8 +29,6 @@ pub enum Verb {
     Mcp,
     /// Author, read and record todos on the chain (trusted).
     Todo(todo::Args),
-    /// Generate the static attestable-history site from the chain.
-    Web(site::Args),
     /// Read the todo list off the chain.
     Todos(todos::Args),
     /// Record, revise, withdraw, list and view the recorded decisions (designs and plans).
@@ -70,8 +68,6 @@ pub enum Verb {
     Mail(mail::MailArgs),
     /// Encrypted state snapshot to Proton Drive (human-only).
     Vault(vault::Args),
-    /// Mail replica via muchsync — run these ON the replica machine.
-    Replica(replica::Args),
     /// Enable the fetcher's services and run the doctor; refuses on a box not named in `<data>/FETCHER`.
     Up,
     /// Talk to the secretary: open a briefing conversation, list them, read one.
@@ -88,8 +84,6 @@ pub enum Verb {
     Coding(coding::Args),
     /// Run the `[[plugins]]` sources (a calendar's links) into the cache tier; the box's timer.
     Plugin(plugin::Args),
-    /// The sources the box reads from: their health register's migration.
-    Sources(sources::Args),
     /// The leak guard's matcher: each line of a tree to publish that names this deployment.
     Leaks(leaks::Args),
     /// Check the store: every object rehashed, every parent present, every head reachable.
@@ -116,7 +110,6 @@ impl Verb {
             Verb::Notify(args) => notify::run(path, &args),
             Verb::Mcp => mcp::run(path),
             Verb::Todo(args) => todo::run(path, args),
-            Verb::Web(args) => site::run(path, &args),
             Verb::Todos(args) => todos::run(path, &args),
             Verb::Decision(args) => decision::run(path, &args),
             Verb::Release(args) => release::run(path, &args),
@@ -136,7 +129,6 @@ impl Verb {
             Verb::Auth(args) => mail::auth(path, &args),
             Verb::Mail(args) => mail::mail_command(path, &args),
             Verb::Vault(args) => vault::run(path, &args),
-            Verb::Replica(args) => replica::run(&args),
             Verb::Up => up::run(path),
             Verb::Secretary(args) => secretary::run(path, &args),
             Verb::Call(args) => call::run(path, &args),
@@ -144,7 +136,6 @@ impl Verb {
             Verb::Weather => weather::run(path),
             Verb::Coding(args) => coding::run(path, &args),
             Verb::Plugin(args) => plugin::run(path, &args),
-            Verb::Sources(args) => sources::run(path, &args),
             Verb::Leaks(args) => leaks::run(&args),
             Verb::Verify => verify::run(path),
             Verb::Secretspec => secretspec::run(path),
@@ -193,6 +184,10 @@ mod tests {
             &["secretary", "migrate-inbox", "--dry"],
             &["secretary", "migrate-receipts"],
             &["secretary", "migrate-receipts", "--dry"],
+            &["secretary", "migrate-models"],
+            &["secretary", "migrate-models", "--dry"],
+            &["secretary", "migrate-setup"],
+            &["secretary", "migrate-setup", "--apply"],
             &["mail", "migrate-decisions"],
             &["mail", "migrate-decisions", "--dry"],
             &["mail", "migrate-health"],
@@ -200,6 +195,7 @@ mod tests {
             &["plugin", "migrate-ledgers"],
             &["plugin", "migrate-ledgers", "--check"],
             &["plugin", "migrate"],
+            &["sources", "migrate-health"],
         ] {
             let refused =
                 Tree::try_parse_from(std::iter::once("suzatary").chain(argv.iter().copied()))

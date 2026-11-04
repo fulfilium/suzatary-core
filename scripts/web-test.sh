@@ -61,14 +61,12 @@ fi
 
 # THE LIVE CHAIN, WHEN THIS BOX HAS ONE: the data tree is the
 # instance file's own directory, found through the checkout's link, and it
-# holds the chain and the chain's own fold pins (`conformance/`). A clone of
-# the code alone has none, and wasm.test.ts skips its
-# live-chain tests.
+# holds the chain. A clone of the code alone has none, and wasm.test.ts skips
+# its live-chain tests.
 instance="${SUZATARY_INSTANCE:-$root/instance.toml}"
 if [[ -f "$instance" ]]; then
   data="$(dirname "$(realpath "$instance")")"
   export SUZATARY_LIVE_EVENTS="$data/events"
-  export SUZATARY_LIVE_VIEW="$data/conformance/view-live.json"
 fi
 
 # `--external:./prodrome.js` for the same reason scripts/build-web.sh has it:

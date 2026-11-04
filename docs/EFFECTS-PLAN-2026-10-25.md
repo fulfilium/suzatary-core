@@ -562,8 +562,9 @@ recorded under. A plugin's run is a health result under `plugin:<name>`, so
 the plugin ledger went whole, and stage 2's ledger holds only the cursor.
 `suzatary sources migrate-health` carries the three old registers, folding a
 mail key written before addresses were folded, and `verify` refuses while
-the old ones hold a failure the new one lacks. `plugin migrate`, which ran
-in the 2.1.21 window, is deleted. Measured with `scripts/size.sh`: −31
+the old ones hold a failure the new one lacks. The verb ran on the box, and the
+verb and the check were deleted on 2026-11-04. `plugin migrate`, which ran in the 2.1.21 window, is
+deleted. Measured with `scripts/size.sh`: −31
 production lines before the merge of 2.1.28.
 
 ### Stage 2 (inputs): one source port and one runner

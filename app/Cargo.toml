@@ -7,13 +7,9 @@
 # REVISION rather than a relative path. What was a directory somebody could
 # edit in the same commit is a pin somebody has to publish first.
 #
-# Arrows point down only: cli → plugin → io → core → prodrome-core. `bench`
-# sits beside `io` (`docs/TRIAGEBENCH-PLAN-2026-09-19.md` §6): it depends on
-# `core` alone — its case types and the pure fold from a capability's
-# already-answered values to them need nothing an interpreter reads — and
-# `cli` is the only thing that depends on it, the same shape as everything
-# else the binary assembles. `wasm` is the browser's module: `core`'s schemas
-# through the Prodrome's generic exports, depended on by nothing. `plugin` is
+# Arrows point down only: cli → plugin → io → core → prodrome-core.
+# `wasm` is the browser's module: `core`'s schemas through the Prodrome's
+# generic exports, depended on by nothing. `plugin` is
 # the plugin host (docs/PLUGINS-PLAN-2026-10-02.md), a crate of its own
 # because wasmtime is the largest tree here and an interpreter only plugins
 # use; `cli` depends on it for `suzatary plugin sync`. `plugin-fence` is a
@@ -23,7 +19,7 @@
 # make and run.
 [workspace]
 resolver = "3"
-members = ["core", "io", "cli", "bench", "wasm", "plugin", "plugin-fence", "plugin-ics", "testkit", "viewtree", "pages"]
+members = ["core", "io", "cli", "wasm", "plugin", "plugin-fence", "plugin-ics", "testkit", "viewtree", "pages"]
 
 [workspace.package]
 # FIXED, AND NOT THE RELEASE (CLAUDE.md, "Versioning"): the version is a reading of
@@ -74,7 +70,6 @@ suzatary-io = { path = "io" }
 suzatary-plugin = { path = "plugin" }
 # The case types and the pure extraction fold (§6 commit 1). `cli` alone
 # depends on this, the same shape as `suzatary-io`.
-suzatary-bench = { path = "bench" }
 # The evaluator's time type is chrono's (`prodrome::fpl::Instant`), and a
 # `Clock` reads a local instant out of it. The same features prodrome-core
 # takes, plus "serde" (2026-09-11): a changeset act's `Priority::Deadline`

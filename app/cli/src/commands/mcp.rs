@@ -136,53 +136,34 @@ pub async fn serve(
     Ok(())
 }
 
-/// The agent's interpreters; `K` is the chain it reads, read-only for the triage agent.
-pub struct Interpreters<K = suzatary_io::reading::Reading> {
-    pub(crate) chain: K,
+/// The agent's interpreters over the chain it reads, read-only for the triage agent.
+pub struct Interpreters {
+    pub(crate) chain: suzatary_io::reading::Reading,
     pub(crate) grounds: crate::wiring::Grounds,
     pub(crate) remembering: crate::wiring::Recalling,
     /// `[agent] memory_bytes`.
     pub(crate) view: usize,
 }
 
-impl<K> Interpreters<K> {
-    /// `grounds` and `remembering` around one store, shared with the bench.
-    pub(crate) fn around(
-        instance: &crate::instance::Instance,
-        chain: K,
-        grounds: crate::wiring::Grounds,
-        remembering: crate::wiring::Recalling,
-    ) -> Self {
-        Self {
-            chain,
-            grounds,
-            remembering,
-            view: instance.agent.memory_bytes,
-        }
-    }
-}
-
-impl<K: suzatary_core::store::Reads<suzatary_core::record::TodoEvent>> Interpreters<K> {
+impl Interpreters {
     /// The record the verbs are handed.
     pub fn agent(&self) -> Agent<'_> {
         self.grounds
             .agent(&self.chain, self.remembering.memory(self.view))
     }
-}
 
-impl Interpreters {
     /// The triage agent's interpreters for one chain, which it reads and never writes.
     #[must_use]
     pub fn assemble(
         instance: &crate::instance::Instance,
         chain: &crate::instance::ChainDir,
     ) -> Self {
-        Self::around(
-            instance,
-            crate::commands::reading_of(chain),
-            crate::wiring::Grounds::of(instance),
-            crate::wiring::Recalling::of(instance),
-        )
+        Self {
+            chain: crate::commands::reading_of(chain),
+            grounds: crate::wiring::Grounds::of(instance),
+            remembering: crate::wiring::Recalling::of(instance),
+            view: instance.agent.memory_bytes,
+        }
     }
 }
 
@@ -240,10 +221,8 @@ mod tests {
     /// memory is a `Recalling`, whose memory and digest stores are each inside `store::Only`.
     #[test]
     fn the_agent_reads_its_chain_and_memory_and_writes_none() {
-        let assemble: fn(
-            &crate::instance::Instance,
-            &crate::instance::ChainDir,
-        ) -> Interpreters<suzatary_io::reading::Reading> = Interpreters::assemble;
+        let assemble: fn(&crate::instance::Instance, &crate::instance::ChainDir) -> Interpreters =
+            Interpreters::assemble;
         let memory: fn(&Interpreters) -> &crate::wiring::Recalling =
             |interpreters| &interpreters.remembering;
         let _ = (assemble, memory);

@@ -1,10 +1,5 @@
 *.pdf
 
-# The web frontend's output (`suzatary web site`). Generated from the chain,
-# and regenerable in a second — committing it would be a second
-# copy of the history to keep in step with the first.
-/site/
-
 # Python
 __pycache__/
 *.pyc

@@ -483,41 +483,6 @@ impl Notmuch {
     pub fn locate_all(&self) -> Result<usize, MailError> {
         Ok(self.load_messages("*")?.len())
     }
-
-    /// Each file notmuch holds for the message `id` whose bytes have the canonical hash `hash`,
-    /// with its path under the mail root; a file outside the mail root is left out, since no
-    /// account holds it.
-    ///
-    /// # Errors
-    /// notmuch cannot be asked, or a file it names cannot be read.
-    pub fn files_holding(
-        &self,
-        id: &str,
-        hash: &str,
-    ) -> Result<Vec<(PathBuf, Vec<u8>)>, MailError> {
-        let query = by_id_query(std::iter::once(id));
-        if query.is_empty() {
-            return Ok(Vec::new());
-        }
-        let listed = self.run(&["search", "--output=files", &query])?;
-        let mut files = Vec::new();
-        for line in String::from_utf8_lossy(&listed).lines().map(str::trim) {
-            let path = Path::new(line);
-            let Ok(relative) = path.strip_prefix(&self.mail_root) else {
-                continue;
-            };
-            let Some(bytes) = std::fs::read(path).present().map_err(|failed| {
-                MailError::Unreachable(format!("reading {}: {failed}", path.display()))
-            })?
-            else {
-                continue;
-            };
-            if dedup::canonical_hash(&bytes) == hash {
-                files.push((relative.to_path_buf(), bytes));
-            }
-        }
-        Ok(files)
-    }
 }
 
 /// A row plus what a page needs: thread, whitelisted headers, clipped body, filtered links.

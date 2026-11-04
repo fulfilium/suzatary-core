@@ -55,10 +55,6 @@ and the plans are how it got here.
 
 Reads of the whole tree at a moment, and what they found.
 
-- [`AUDIT-2026-09-09.md`](AUDIT-2026-09-09.md) — the structure, after the
-  port to Rust.
-- [`AUDIT-WEB-2026-09-10.md`](AUDIT-WEB-2026-09-10.md) — `web/`, after a
-  design pass.
 - [`AUDIT-UX-2026-09-12.md`](AUDIT-UX-2026-09-12.md) — the app, read as a
   person using it.
 
@@ -67,43 +63,31 @@ Reads of the whole tree at a moment, and what they found.
 Each plan was written before its work and is kept as written, so it records
 why a thing is the way it is. They are dated, and they are addressed to the
 project's owner; where a plan and the constitution disagree, the plan is the
-older word. Newest first.
+older word. A plan whose work is all built, or was replaced, is deleted, and
+the git history keeps it. Newest first.
 
 | Date | Plan | About |
 |---|---|---|
 | 2026-10-21 | [TOPICS](TOPICS-PLAN-2026-10-21.md) | One stream of rounds, with topics that merge |
 | 2026-10-21 | [LAZYSYNC](LAZYSYNC-PLAN-2026-10-21.md) | A store's skeleton eagerly, its content by hash on demand |
-| 2026-10-03 | [TWOPOINTOH](TWOPOINTOH-PLAN-2026-10-03.md) | 2.0 in waves: every item judged by the register-types structure |
 | 2026-10-02 | [APP-AS-READING](APP-AS-READING-PLAN-2026-10-02.md) | The whole app as one reading of history, intents, ui and time |
 | 2026-10-02 | [PLUGINS](PLUGINS-PLAN-2026-10-02.md) | The outside world behind WebAssembly interfaces |
 | 2026-10-01 | [USERREPO](USERREPO-PLAN-2026-10-01.md) | A private host repository that pins the public app |
-| 2026-09-30 | [CONVERSATIONPRODROME](CONVERSATIONPRODROME-PLAN-2026-09-30.md) | A conversation is a prodrome |
 | 2026-09-28 | [PROPOSALS](PROPOSALS-PLAN-2026-09-28.md) | A proposal is an object, so a submit is idempotent |
 | 2026-09-28 | [SIMPLIFY](SIMPLIFY-PLAN-2026-09-28.md) | The types tell the story |
 | 2026-09-27 | [CODINGSESSION](CODINGSESSION-PLAN-2026-09-27.md) | A coding session started from the phone |
 | 2026-09-27 | [MULTIPRODROME](MULTIPRODROME-PLAN-2026-09-27.md) | Many prodromes in many repositories |
 | 2026-09-27 | [SMALLBOX](SMALLBOX-PLAN-2026-09-27.md) | The box holds mail, secrets and the app, nothing else |
-| 2026-09-26 | [LIVEBRANCH](LIVEBRANCH-PLAN-2026-09-26.md) | The box serves a live checkout |
-| 2026-09-26 | [MODELCHOICE](MODELCHOICE-PLAN-2026-09-26.md) | Which model answers each job is chosen in Settings |
 | 2026-09-25 | [CHAT](CHAT-PLAN-2026-09-25.md) | Many chats, one memory |
 | 2026-09-25 | [DESIGN-DECISIONS](DESIGN-DECISIONS-2026-09-25.md) | The design system's decisions for the app |
-| 2026-09-25 | [RECURRENCE](RECURRENCE-PLAN-2026-09-25.md) | Recurrence in the term algebra |
 | 2026-09-25 | [REDESIGN](REDESIGN-PLAN-2026-09-25.md) | The web app redrawn in the design system |
-| 2026-09-25 | [SECRETARYDOCS](SECRETARYDOCS-PLAN-2026-09-25.md) | The secretary reads documents, by permission |
 | 2026-09-25 | [TODOTREE](TODOTREE-PLAN-2026-09-25.md) | Todos, subtodos and groups are one tree of terms |
-| 2026-09-25 | [TYPST-FIRST](TYPST-FIRST-PLAN-2026-09-25.md) | What is read is Typst; what reacts is TypeScript |
-| 2026-09-24 | [GENERALIZE](GENERALIZE-PLAN-2026-09-24.md) | One mechanism per idea |
-| 2026-09-24 | [REPOS](REPOS-PLAN-2026-09-24.md) | The secretary in the owner's repositories, by permission |
-| 2026-09-23 | [WEBACCESS](WEBACCESS-PLAN-2026-09-23.md) | The secretary on the web, by permission |
 | 2026-09-22 | [PHOTOS](PHOTOS-PLAN-2026-09-22.md) | A photo in the chat |
-| 2026-09-22 | [PROVIDERSETUP](PROVIDERSETUP-PLAN-2026-09-22.md) | A model provider declared from the app |
 | 2026-09-21 | [LAZYBUILDSTALL](LAZYBUILDSTALL-PLAN-2026-09-21.md) | Build when the tree moves, not when the box is asked |
 | 2026-09-21 | [OPENSWEEP](OPENSWEEP-PLAN-2026-09-21.md) | The open list swept for evidence, by proposal |
 | 2026-09-21 | [SECRETASK](SECRETASK-PLAN-2026-09-21.md) | A secret is asked for in the Inbox, never in a chat |
 | 2026-09-19 | [SETTINGS](SETTINGS-PLAN-2026-09-19.md) | A settings screen, and the first secret the app may write |
-| 2026-09-19 | [TRIAGEBENCH](TRIAGEBENCH-PLAN-2026-09-19.md) | A benchmark that gates any change of model |
 | 2026-09-17 | [INBOXPRODROME](INBOXPRODROME-PLAN-2026-09-17.md) | A decision is a prodrome |
-| 2026-09-17 | [MODELROUTER](MODELROUTER-PLAN-2026-09-17.md) | Each job names its own model |
 | 2026-09-16 | [WEBALGEBRA](WEBALGEBRA-PLAN-2026-09-16.md) | The web app to the Prodrome's standard |
 | 2026-09-15 | [CHATSHAPE](CHATSHAPE-PLAN-2026-09-15.md) | The chat, tightened |
 | 2026-09-14 | [DATASPLIT](DATASPLIT-PLAN-2026-09-14.md) | The data in a repository of its own |

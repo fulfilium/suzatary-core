@@ -41,8 +41,8 @@ suzatary-core   the application's MEANING, pure: wire types, view decoration, li
 prodrome-core   the database (unchanged in role; gains `view`, §4)
 ```
 
-`app/core`, `app/io`, `app/cli`, `app/bench`, `app/wasm`, `app/plugin`,
-`app/plugin-fence` and `app/plugin-ics` are the ONE Cargo workspace, at `app/`.
+`app/core`, `app/io`, `app/cli`, `app/wasm`, `app/plugin`, `app/plugin-fence`
+and `app/plugin-ics` are the ONE Cargo workspace, at `app/`.
 `app/plugin` is the plugin host (`docs/PLUGINS-PLAN-2026-10-02.md`), a crate of
 its own because wasmtime is the largest tree in the workspace and only plugins
 need it; `cli` depends on it for `suzatary plugin sync` (stage 2,
@@ -57,13 +57,11 @@ same fences.
 `flake.nix` pins the SAME sha as `inputs.prodrome`, and the tab's module is
 built here from that crate (`app/wasm`, `packages.suzatary-wasm`, §11.1), so the
 binary's evaluator and the tab's are one build. Upstream holds `core`, `wasm`, `SPEC.md`, the seeded conformance
-vectors; here stay `app/conformance/literals.json` and `app/cli/tests/live.rs`,
-the pins on THIS box's chain (the fold pins went to the data repository,
-2026-09-26). (`py`, the PyO3 binding, left in §8.6.)
+vectors; here stays `app/cli/tests/live.rs`, the pins on THIS box's chain. (`py`, the PyO3 binding, left in §8.6.)
 
-ONE MODULE PER VERB FAMILY (`docs/AUDIT-2026-09-09.md` finding 6):
+ONE MODULE PER VERB FAMILY:
 `app/cli/src/commands/<verb>.rs` owns the verb's clap types AND its function —
-`serve` (its own directory), `mcp`, `todo`, `todos`, `notify`, `site` (`web`), `mail` (ten corpus and transport verbs),
+`serve` (its own directory), `mcp`, `todo`, `todos`, `notify`, `mail` (ten corpus and transport verbs),
 `replica`, `vault`, `up`, `verify`, `weather`, `doctor`, `fixture`. `main.rs`
 is the argument tree, the instance file's location and a `match`; `lib.rs`
 re-exports `commands::serve` so tests can drive that router with fakes.
@@ -360,10 +358,9 @@ it in the same series. Two applications that both work is the failure mode.
    yields, and agent writes are provisional. It measures the result rather
    than trusting a blocklist.
 5. ✅ **The decoration** (§7) and `pdf` (2026-09-07). `suzatary_core::decoration`
-   reads; `suzatary_io::build` stages and compiles; `suzatary_core::site` is
-   the attestable-history site (its `Html` newtype went 2026-09-30: each page
-   is a typed value, `site::page::SitePage`, drawn by the template
-   `rendering::SITE`); verbs
+   reads; `suzatary_io::build` stages and compiles; `suzatary_core::site` was
+   the attestable-history site (deleted 2026-11-04, since nobody read it);
+   verbs
    `pdf`, `smoke`, `web`, `todos open`. Deleted: `document.py`,
    `typst_ast.py`, `build.py`, `web.py`, `view.py`, `todos.py`.
    `/doc/*.pdf|svg` stages through the function `suzatary pdf` calls, so a
@@ -435,7 +432,7 @@ it in the same series. Two applications that both work is the failure mode.
    **The tests decided the split**: four read this box's `events/` (the
    literal round trip, `read_dag`/`read_chain` agreement, the fold pin,
    §6.7's rows); a public crate reading a private chain builds for nobody, so
-   they are `app/cli/tests/live.rs` over `app/conformance/`, `test = false`
+   they are `app/cli/tests/live.rs`, `test = false`
    and named by the merge gate (like `tests/guards.rs`), since the build
    sandbox has neither store nor vectors. **Lost, stated**: the forty seeded,
    forked view DAGs (§6.7 with concurrent writes and refused claims) shared a
@@ -446,7 +443,12 @@ it in the same series. Two applications that both work is the failure mode.
    history, so they left the code repository for the data one
    (`<data>/conformance/`); their four Rust tests and one node test stay
    here and read them there, through the instance and `$SUZATARY_LIVE_VIEW`.
-   The round trip and the order stay as they were.
+   The round trip and the order stay as they were. **Deleted, 2026-11-04**:
+   the reference's linearisation (`app/conformance/literals.json`), the fold
+   pin and §6.7's rows were prints of the retired Python reference, so the
+   tests that compared against them went. `live.rs` keeps the round trip, the
+   DAG's shape and the law that every live function prices in [0, 1], now at
+   the instant the test runs.
 
 ## 10. After the port: what is decided and not yet built
 
@@ -462,7 +464,7 @@ application's decoration. `prodrome-core` is generic over a host payload
 crate is taken `default-features = false`, so the upstream REFERENCE payload
 is not linked. Bytes unchanged: `app/cli/tests/live.rs` pins that every object
 on this chain parses under `Record`, prints back byte for byte and hashes to
-its name, folds matching `app/conformance/`; no soak restart. The parameter
+its name; no soak restart. The parameter
 runs through events, folds and view directly (no API compatibility owed);
 `crate::record` names the applied types (`TodoEvent`, `Envelope`, `Authored`,
 `Node`, `EventStore`) once, so an IMPORT LINE shows the payload. The wasm's
@@ -554,7 +556,7 @@ the same `actor_of` as everywhere, keeping the triage agent away.
 
 *(4) A CONVERSATION IS A PRODROME OF ITS OWN, NEVER TURNS ON THE CHAIN*
 (2026-10-01, reversing 2026-09-08's "a conversation store, not the
-Prodrome"; `docs/CONVERSATIONPRODROME-PLAN-2026-09-30.md`). A turn has no
+Prodrome"). A turn has no
 fulfillment or lifecycle, so on the TODO chain it would be §10.1's generic
 payload reversed; that still holds. What changed is that the Prodrome is
 generic over a schema, and a conversation is one: `secretary::line_event`
@@ -1739,7 +1741,7 @@ rules and points here for the modules. The web contract is `docs/WEB-SPEC.md`.
 - **Escaping is the DOM** (`web/src/view/dom.ts`: `createElement`/`textContent`; the
   build refuses markup parsed from a string) with ONE exception: **typst's HTML
   is the one string the browser parses, through one door (`web/src/rich.ts`).**
-  What is read is Typst (`docs/TYPST-FIRST-PLAN-2026-09-25.md`): a body, a
+  What is read is Typst: a body, a
   secretary's answer block, the todo reading page (`suzatary_core::reading`:
   header, body, detail and "Why this number", one page per todo and no theme
   in its key, since the HTML carries classes and the stylesheet colours

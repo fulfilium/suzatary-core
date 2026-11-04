@@ -8,8 +8,8 @@
 # a derivation (#84), the guards needing a `.git` (#86).
 #
 # So this puts HEAD's public tree in the store as the deploy does, and runs from it:
-#   site    `suzatary web`, twice into one directory, with the code root that
-#           tree and typst reached through its shell;
+#   typst   `suzatary decision view`, which compiles a document in the closed
+#           world through the binary itself, with the code root that tree;
 #   push    `<tree>/scripts/safe-push.sh --dry` over a fresh deployment's data
 #           repository, as the triage pass runs it: no cargo on its PATH, so a
 #           push that reached for one is red here;
@@ -27,7 +27,7 @@ cd "$root"
 
 # Under /tmp, not a dev shell's private TMPDIR, so an unprivileged user can reach it.
 scratch="$(mktemp -d /tmp/deployed-shape.XXXXXX)"
-# A red run's evidence (the site's pages, the state it wrote) outlives the
+# A red run's evidence (the decisions page, the state it wrote) outlives the
 # scratch directory, in a directory of this step's own, the last 10 kept; its
 # path is the step log's last line.
 evidence="${XDG_STATE_HOME:-$HOME/.local/state}/suzatary/deployed-shape-failures"
@@ -37,7 +37,7 @@ leave() {
     local kept
     kept="$evidence/$(date -u +%Y%m%dT%H%M%SZ)"
     mkdir -p "$kept"
-    cp -r "$scratch/state" "$scratch/site" "$kept/" 2>/dev/null || true
+    cp -r "$scratch/state" "$scratch/decisions.html" "$kept/" 2>/dev/null || true
     find "$evidence" -mindepth 1 -maxdepth 1 -type d -printf '%T@ %p\n' | sort -rn |
       tail -n +11 | cut -d' ' -f2- | xargs -r rm -rf
     echo "deployed-shape: FAILED; its evidence is kept in $kept" >&2
@@ -60,7 +60,7 @@ echo "deployed-shape: HEAD's tree is $tree" >&2
 suzatary="$(nix build "$tree#suzatary" --out-link "$scratch/bin" --print-out-paths)/bin/suzatary"
 
 # THE UNITS' PATH: the packages of nix/services.nix's runtimeDeps that the
-# site and the push reach (the agent's and the vault's tools left out), from
+# typesetter and the push reach (the agent's and the vault's tools left out), from
 # the flake's nixpkgs, each whole as makeBinPath puts it, so neither the dev
 # shell nor anything else on this shell's PATH is on it.
 mapfile -t packages < <(nix build --no-link --print-out-paths --inputs-from . \
@@ -134,17 +134,15 @@ for name in NIX_SSL_CERT_FILE SSL_CERT_FILE CARGO_HTTP_CAINFO GIT_SSL_CAINFO; do
   units+=("$name=$scratch/certs/$name")
 done
 
-# A deployment to render the site from, made by the binary itself.
+# A deployment to typeset from and push from, made by the binary itself.
 "${units[@]}" "$scratch/suzatary" --instance "$scratch/data/instance.toml" init \
   --name Ada --city London --zone Europe/London --actor ada \
   --box ada-box.tailnet.ts.net --login her@example.test --repo "$tree" </dev/null >/dev/null
 
-echo "==> the site, twice into one directory, as uid $("${units[@]}" id -u)" >&2
-for round in 1 2; do
-  "${units[@]}" "SUZATARY_INSTANCE=$scratch/data/instance.toml" \
-    "$scratch/suzatary" web "$scratch/site" ||
-    { echo "deployed-shape: site round $round failed" >&2; exit 1; }
-done
+echo "==> the decisions page, typeset through the binary, as uid $("${units[@]}" id -u)" >&2
+"${units[@]}" "SUZATARY_INSTANCE=$scratch/data/instance.toml" \
+  "$scratch/suzatary" decision view --html "$scratch/decisions.html" ||
+  { echo "deployed-shape: the decisions page did not typeset" >&2; exit 1; }
 
 # The push its triage pass ends with, dry: the data repository is the fresh
 # deployment's, whose chains hold their `Genesis`, so there is something to

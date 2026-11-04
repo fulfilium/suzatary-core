@@ -404,7 +404,6 @@ const NAMED_AS_DATA: &[(&str, &str)] = &[
     ("app/core/tests/web_vectors.rs", "docs"),
     ("app/io/src/repos.rs", "docs"),
     // `memory` is also the data tree's store of the secretary's memory and its route's segment.
-    ("app/cli/src/commands/bench.rs", "memory"),
     ("app/cli/src/commands/fixture.rs", "memory"),
     ("app/cli/src/commands/serve/table.rs", "memory"),
     ("app/cli/src/wiring.rs", "memory"),
@@ -1792,11 +1791,11 @@ pub(super) fn on_path(tool: &str) -> bool {
 }
 
 /// A throwaway workspace of four members (`suzatary-core`, `suzatary-io` on it, `suzatary` on
-/// that, `suzatary-bench` on the core) and test files over two modules, written into `gate`.
+/// that, `suzatary-wasm` on the core) and test files over two modules, written into `gate`.
 fn units_fixture(gate: &Gate) {
     gate.write(
         "app/Cargo.toml",
-        "[workspace]\nresolver = \"3\"\nmembers = [\"core\", \"io\", \"cli\", \"bench\"]\n",
+        "[workspace]\nresolver = \"3\"\nmembers = [\"core\", \"io\", \"cli\", \"wasm\"]\n",
     );
     for (dir, name, dep) in [
         ("core", "suzatary-core", ""),
@@ -1807,8 +1806,8 @@ fn units_fixture(gate: &Gate) {
         ),
         ("cli", "suzatary", "suzatary-io = { path = \"../io\" }\n"),
         (
-            "bench",
-            "suzatary-bench",
+            "wasm",
+            "suzatary-wasm",
             "suzatary-core = { path = \"../core\" }\n",
         ),
     ] {
@@ -1869,7 +1868,7 @@ fn merge_gate_runs_only_the_units_whose_inputs_moved() {
     assert_eq!(
         gate.units_ran()["test"],
         set(&["suzatary-io", "suzatary"]),
-        "the member and the member that depends on it, never the core or the bench"
+        "the member and the member that depends on it, never the core or the wasm module"
     );
     assert!(!gate.units_ran().contains_key("web-test"));
 
@@ -1907,8 +1906,8 @@ fn merge_gate_runs_only_the_units_whose_inputs_moved() {
     assert!(!ran.contains_key("web-test"), "no unit test imports it");
 
     gate.write(
-        "app/bench/Cargo.toml",
-        "[package]\nname = \"suzatary-bench\"\nversion = \"0.1.0\"\nedition = \"2024\"\n\n[dependencies]\nsuzatary-core = { path = \"../core\" }\n\n[features]\nmore = []\n",
+        "app/wasm/Cargo.toml",
+        "[package]\nname = \"suzatary-wasm\"\nversion = \"0.1.0\"\nedition = \"2024\"\n\n[dependencies]\nsuzatary-core = { path = \"../core\" }\n\n[features]\nmore = []\n",
     );
     gate.commit();
     assert!(gate.run(&[]).0);

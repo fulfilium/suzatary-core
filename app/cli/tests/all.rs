@@ -21,8 +21,6 @@ mod adoption;
 mod attaching;
 #[path = "attachments.rs"]
 mod attachments;
-#[path = "bench.rs"]
-mod bench;
 #[path = "binary.rs"]
 mod binary;
 #[path = "briefings.rs"]
@@ -77,10 +75,6 @@ mod markup;
 mod mcp;
 #[path = "memory.rs"]
 mod memory;
-#[path = "migrate_health.rs"]
-mod migrate_health;
-#[path = "migrate_models.rs"]
-mod migrate_models;
 #[path = "objects.rs"]
 mod objects;
 #[path = "operator.rs"]
@@ -122,8 +116,6 @@ mod session;
 mod sign_in;
 #[path = "signatures.rs"]
 mod signatures;
-#[path = "site.rs"]
-mod site;
 #[path = "stop.rs"]
 mod stop;
 #[path = "stores.rs"]

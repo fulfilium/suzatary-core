@@ -318,8 +318,7 @@ remains, where its one decision is made, and why the page still does not wait.
 
 Every claim below is a box-local hold, a file lock on the fetcher. That is
 correct only because exactly one box performs effects: `suzatary up` refuses
-on any host but the one `<data>/FETCHER` names, and a replica box
-(`suzatary replica`) syncs objects and performs nothing. If two boxes ever
+on any host but the one `<data>/FETCHER` names. If two boxes ever
 performed, the claim would need a consensus, and this plan does not provide
 one.
 

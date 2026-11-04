@@ -32,8 +32,8 @@
 # deployment's, so named by whoever restores it.
 #
 # Afterwards: nixos-rebuild is a choice; Bridge may come up with NO re-login
-# (its vault + key both restore); seed mail via `muchsync <replica>` or
-# `suzatary sync`; `proton-drive auth login` once more if the Drive session is
+# (its vault + key both restore); seed mail via `suzatary sync`;
+# `proton-drive auth login` once more if the Drive session is
 # wanted (it died with the bootstrap store); `suzatary up` will REFUSE unless
 # this box is named in the data repository's FETCHER — that refusal is
 # correct (single-fetcher).

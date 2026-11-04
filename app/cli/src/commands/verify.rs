@@ -74,29 +74,13 @@ pub fn run(path: &Path) -> anyhow::Result<()> {
         suzatary_io::requests::Requests::open(instance.requests(), instance.paths.answers.clone());
     findings.extend(database.verify());
     findings.push(("requests".to_owned(), requests.verify()));
-    findings.push((
-        "source health".to_owned(),
-        super::sources::uncarried(&instance)?
-            .iter()
-            .map(|key| {
-                format!(
-                    "{key} fails in an old health register and not in this one: run `suzatary \
-                     sources migrate-health` before the deploy"
-                )
-            })
-            .collect(),
-    ));
 
     // Where each store lives, by the name its findings carry, so an OK line says which
     // directory was read.
-    let mut roots: BTreeMap<String, PathBuf> = Kind::ALL
+    let roots: BTreeMap<String, PathBuf> = Kind::ALL
         .iter()
         .flat_map(|kind| instance.directories(*kind))
         .collect();
-    roots.insert(
-        "source health".to_owned(),
-        (instance.mail.heartbeat).with_file_name(suzatary_io::source_health::FILE),
-    );
 
     let mut total = 0;
     for (what, problems) in &findings {

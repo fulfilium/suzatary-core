@@ -267,7 +267,7 @@ A page that reads no conversation (the Todos list, the boot) fetches nothing
 of the lines, before and after, as WEB-SPEC §3.18 already requires.
 
 These are estimates from the stores' recorded sizes; stage 2 measures them on
-the fixture and on the live store's shape with `suzatary-dev bench` and the
+the fixture and on the live store's shape with `scripts/bench.sh` and the
 e2e suite's network log, and replaces this table with the measured numbers.
 
 ## 10. The box's cost

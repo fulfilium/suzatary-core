@@ -9,8 +9,8 @@ should be public one day, it can also host the specific section of the code
 that acts like plugins and such".
 
 A design, not built. It extends `DATASPLIT-PLAN-2026-09-14.md` (the data tree
-split out of this repository) and replaces `LIVEBRANCH-PLAN-2026-09-26.md`'s
-live clone.
+split out of this repository) and replaces the live clone that an
+earlier plan, since deleted, described.
 
 ## 1. The graph
 

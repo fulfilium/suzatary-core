@@ -104,16 +104,6 @@ pub static CALENDAR: Template<crate::reading::CalendarPage> = Template::new(
     &[],
 );
 
-/// A page of the static site, the whole document, written once to a file.
-pub static SITE: Template<crate::site::page::SitePage> = Template::new(
-    "/site.typ",
-    &[("/site.typ", include_str!("rendering/site.typ"))],
-    Library::Open,
-    Output::Document,
-    Kept::Nowhere,
-    &[],
-);
-
 /// The recorded decisions, the whole document, in the closed world, since a body is a writer's
 /// markup.
 pub static DECISIONS: Template<crate::decisions::DecisionsPage> = Template::new(
@@ -127,8 +117,8 @@ pub static DECISIONS: Template<crate::decisions::DecisionsPage> = Template::new(
 
 /// Every template, for the build to compile against its type's examples.
 #[must_use]
-pub fn all() -> [&'static dyn Checked; 6] {
-    [&MARKUP, &ANSWER, &TODO, &CALENDAR, &SITE, &DECISIONS]
+pub fn all() -> [&'static dyn Checked; 5] {
+    [&MARKUP, &ANSWER, &TODO, &CALENDAR, &DECISIONS]
 }
 
 #[cfg(test)]

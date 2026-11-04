@@ -2009,8 +2009,7 @@ What the Rust writes and the TypeScript must agree with, never refresh:
 - **The wire.** `web/src/wire/generated/*.ts`, regenerated from `wire.rs` by
   `scripts/wire.sh`: the types and a decoder for each answer.
 - **Fulfillment.** `web/test/wasm.test.ts` drives `prodrome-wasm` under
-  node against the flake input's seeded vectors and this chain (`events/`,
-  `app/conformance/`).
+  node against the flake input's seeded vectors and this chain (`events/`).
 - **Rounds.** `app/core/tests/about-fixture.json`: one transcript both
   sides group identically.
 - **The fold, the chain and the conversation** (`webalgebra` §5 commit 6).
