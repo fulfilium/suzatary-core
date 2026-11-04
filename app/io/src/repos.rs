@@ -231,13 +231,21 @@ impl Mirrors {
             else {
                 continue;
             };
-            let range = format!("{default}...{}", tip.as_str());
             let merged = Self::asked(
                 &dir,
                 &["merge-base", "--is-ancestor", tip.as_str(), &default],
             )
             .map_err(|e| RepoFailure::Unavailable(e.to_string()))?
             .ok();
+            let range = if merged {
+                format!(
+                    "{}...{}",
+                    Self::before_merge(&dir, &tip, &default)?,
+                    tip.as_str()
+                )
+            } else {
+                format!("{default}...{}", tip.as_str())
+            };
             let reports = lines(&Self::local(
                 &dir,
                 &[
@@ -277,6 +285,44 @@ impl Mirrors {
             });
         }
         Ok(seen)
+    }
+}
+
+impl Mirrors {
+    /// The default branch just before it took `tip`, so `<that>...<tip>` is the branch's own
+    /// commits: the first parent of the oldest commit of the default branch's first-parent line
+    /// that holds `tip`. That commit is a merge commit whose second parent leads to `tip`, or,
+    /// for a fast-forward, `tip` itself.
+    fn before_merge(dir: &Path, tip: &CommitId, default: &str) -> Result<String, RepoFailure> {
+        let line = Self::local(
+            dir,
+            &[
+                "rev-list",
+                "--first-parent",
+                "--ancestry-path",
+                "--reverse",
+                &format!("{}..{default}", tip.as_str()),
+            ],
+        )?;
+        let oldest = lines(&line).into_iter().next();
+        let parents = |commit: &str| -> Result<Vec<String>, RepoFailure> {
+            let printed = Self::local(dir, &["rev-list", "--parents", "-n", "1", commit])?;
+            Ok(printed
+                .out()
+                .split_whitespace()
+                .skip(1)
+                .map(str::to_owned)
+                .collect())
+        };
+        let took = match oldest {
+            // The oldest descendant on the line is a merge commit unless it only sits on top
+            // of `tip`, which is then on the line itself: a fast-forward.
+            Some(child) if parents(&child)?.first().map(String::as_str) != Some(tip.as_str()) => {
+                child
+            }
+            Some(_) | None => tip.as_str().to_owned(),
+        };
+        Ok(format!("{took}^1"))
     }
 }
 
@@ -1276,6 +1322,66 @@ mod tests {
         );
         let seen = refetched.seen(&repo).expect("seen again");
         assert!(seen[0].merged, "the tip is on main now");
+    }
+
+    /// A session's branch merged with a merge commit before the first poll still carries its
+    /// report and its own diff, so the poll reports the session and then reads it merged.
+    #[test]
+    fn a_branch_merged_before_the_first_poll_is_reported_then_merged() {
+        use suzatary_core::coding::{Session, Step, next};
+        let (temp, mirrors, repo) = fixture("merged-first");
+        let work = temp.path().join("work");
+        let remote = temp.path().join("remotes/bmabsout/merged-first.git");
+        let remote = remote.to_str().expect("a utf-8 path");
+        run(&work, &["checkout", "-q", "-b", "claude/retitle"]);
+        std::fs::create_dir_all(work.join("docs/reports")).expect("reports dir");
+        std::fs::write(
+            work.join("docs/reports/retitle.md"),
+            "Session: https://claude.ai/code/session_01fake\nGates: green\n",
+        )
+        .expect("report");
+        run(&work, &["add", "."]);
+        run(&work, &["commit", "-q", "-m", "report"]);
+        std::fs::write(work.join("cv.typ"), "= Ada\nPrincipal investigator\n").expect("cv");
+        run(&work, &["commit", "-qam", "retitle"]);
+        run(&work, &["checkout", "-q", "main"]);
+        std::fs::write(work.join("docs/notes.md"), "notes, later\n").expect("notes");
+        run(&work, &["commit", "-qam", "meanwhile"]);
+        run(
+            &work,
+            &["merge", "-q", "--no-ff", "-m", "merge", "claude/retitle"],
+        );
+        std::fs::write(work.join("docs/notes.md"), "notes, after\n").expect("notes");
+        run(&work, &["commit", "-qam", "after"]);
+        run(&work, &["push", "-q", remote, "main", "claude/retitle"]);
+
+        let seen = mirrors.seen(&repo).expect("seen");
+        assert_eq!(seen.len(), 1, "{seen:?}");
+        let branch = &seen[0];
+        assert!(branch.merged, "the tip is on main");
+        assert_eq!(branch.reports.len(), 1, "{branch:?}");
+        let files: Vec<&str> = branch.stat.iter().map(|file| file.path.as_str()).collect();
+        assert_eq!(
+            files,
+            ["cv.typ", "docs/reports/retitle.md"],
+            "its own diff alone"
+        );
+
+        let fired = Session::Fired {
+            id: "session_01fake".parse().expect("an id"),
+            url: "https://claude.ai/code/session_01fake"
+                .parse()
+                .expect("a url"),
+            at: "2026-11-04T09:00:00Z".to_owned(),
+        };
+        let Some(step @ Step::Report { .. }) = next(&fired, &seen) else {
+            panic!("the first poll reports it: {:?}", next(&fired, &seen));
+        };
+        let reported = fired.step(step).expect("a fired session reports");
+        assert!(
+            matches!(next(&reported, &seen), Some(Step::Merge { .. })),
+            "the next poll reads it merged"
+        );
     }
 
     #[test]
