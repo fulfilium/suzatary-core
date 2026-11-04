@@ -20,7 +20,7 @@ use crate::template::{Checked, Kept, Library, Output, Template, named};
 /// `the_typesetter_is_the_one_cargo_lock_links`, fails when the lock moves without this, and
 /// prints what it must say.
 pub const LINKED: &str =
-    "prodrome-typst-wasm d5717fe244eaad00215fe7ed72d97f38fb2b0c2e, typst 0.15.1";
+    "prodrome-typst-wasm a0e99598eb61866c447f386dcb75557b0520dad4, typst 0.15.1";
 
 /// [`LINKED`]'s name, which every template's function and the closed world's answers carry.
 pub static TYPESETTER: LazyLock<Hash> = LazyLock::new(|| named(LINKED));
