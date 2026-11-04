@@ -2309,18 +2309,31 @@ pub struct Card {
     pub uncertain: String,
     /// What a login that may not answer sees.
     pub readonly: String,
-    /// A page the owner opens to do what the card asks, `null` for none: only ever a template's
-    /// own https link or a path on the box itself, so no model's words are drawn as a button.
+    /// A step the owner takes to do what the card asks, `null` for none: only ever a template's
+    /// own https link, a path on the box itself or a template's setup, so no model's words are
+    /// drawn as a button.
     pub link: Option<CardLink>,
 }
 
-/// A link a card draws as a button, from the box's own table.
+/// A step a card draws as a button, from the box's own table.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]
-pub struct CardLink {
-    /// What the button says.
-    pub label: String,
-    /// Where it goes: an https page, or a path on the box itself.
-    pub href: String,
+#[serde(tag = "kind", rename_all = "lowercase")]
+pub enum CardLink {
+    /// A page to open.
+    Page {
+        /// What the button says.
+        label: String,
+        /// Where it goes: an https page, or a path on the box itself.
+        href: String,
+    },
+    /// The setup conversation Settings' "Connect an account" begins on a template, through
+    /// `POST /api/secretary/setup/<template>`.
+    Setup {
+        /// What the button says.
+        label: String,
+        /// The template, as that route takes it.
+        template: String,
+    },
 }
 
 /// The held values a proposed email's body carries, as its card names them.

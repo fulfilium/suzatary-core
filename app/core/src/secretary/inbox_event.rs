@@ -71,6 +71,7 @@ pub const SIGNATURES: &[Constructor] = &[
         ],
     ),
     ("NotSent", &["proposal", "at", "actor", "attempt", "reason"]),
+    ("Lacks", &["proposal", "at", "actor", "attempt", "lacking"]),
     (
         "Started",
         &["proposal", "at", "actor", "attempt", "began", "expires_at"],
@@ -129,6 +130,10 @@ impl InboxEvent {
                 tried: Tried::NotSent {
                     reason: fields.get("reason")?,
                 },
+            })),
+            "Lacks" => Ok(Said::Responded(Responded::Tried {
+                attempt: attempt()?,
+                tried: Tried::Lacks(fields.get("lacking")?),
             })),
             "Started" => Ok(Said::Responded(Responded::Tried {
                 attempt: attempt()?,
@@ -255,8 +260,8 @@ mod tests {
     fn every_signature_is_the_head_and_a_body() {
         use crate::secretary::inbox::{ASKED, NOTICED, OFFERED, TRIAGED};
         use crate::secretary::responded::{
-            ACTED, APPLIED, CHECKED, DISMISSED, MAY_HAVE_GONE, NO_LONGER_NEEDED, NOT_SENT, SENT,
-            STARTED, SUPERSEDED,
+            ACTED, APPLIED, CHECKED, DISMISSED, LACKS, MAY_HAVE_GONE, NO_LONGER_NEEDED, NOT_SENT,
+            SENT, STARTED, SUPERSEDED,
         };
         let bodies = [
             ASKED,
@@ -264,6 +269,7 @@ mod tests {
             TRIAGED,
             OFFERED,
             NOT_SENT,
+            LACKS,
             STARTED,
             SENT,
             APPLIED,

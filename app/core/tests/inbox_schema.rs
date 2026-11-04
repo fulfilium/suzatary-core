@@ -118,6 +118,10 @@ fn a_response() -> impl Strategy<Value = Responded> {
         }),
         (1..4_u32).prop_map(|attempt| Responded::Tried {
             attempt,
+            tried: Tried::Lacks(suzatary_core::connect::Lacking::GoogleClient),
+        }),
+        (1..4_u32).prop_map(|attempt| Responded::Tried {
+            attempt,
             tried: Tried::Running {
                 began: "2026-10-01T09:00:00".to_owned(),
                 expires_at: "2026-10-01T09:15:00".to_owned(),

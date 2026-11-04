@@ -915,6 +915,10 @@ pub fn state(reading: &Reading) -> (wire::ProposalState, String) {
             ..
         }) => (wire::ProposalState::Failed, reason.clone()),
         Some(Responded::Tried {
+            tried: Tried::Lacks(lacking),
+            ..
+        }) => (wire::ProposalState::Failed, lacking.sentence()),
+        Some(Responded::Tried {
             tried: Tried::Running { began, expires_at },
             ..
         }) => (

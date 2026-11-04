@@ -327,9 +327,12 @@ impl Acting {
         let grant = match google.live(account) {
             Ok(grant) => grant,
             Err(failed) => {
-                return Performed::Tried(Tried::NotSent {
-                    reason: failed.to_string(),
-                });
+                return Performed::Tried(
+                    match failed.lacking(account, suzatary_core::connect::Grant::GoogleCalendar) {
+                        Ok(lacking) => Tried::Lacks(lacking),
+                        Err(reason) => Tried::NotSent { reason },
+                    },
+                );
             }
         };
         match google.google().insert(&grant, event) {

@@ -794,6 +794,10 @@ fn every_response() -> Vec<Responded> {
         Responded::Done(Done::MayHaveGone {
             reason: "the connection closed after the final dot".to_owned(),
         }),
+        Responded::Tried {
+            attempt: 1,
+            tried: Tried::Lacks(crate::connect::Lacking::GoogleClient),
+        },
         Responded::Dismissed {
             reason: "wrong person".to_owned(),
         },
@@ -833,13 +837,17 @@ fn arm(response: &Responded) -> usize {
         Responded::Checked(()) => 7,
         Responded::Withdrawn(Withdrawal::Superseded) => 8,
         Responded::Withdrawn(Withdrawal::NoLongerNeeded { .. }) => 9,
+        Responded::Tried {
+            tried: Tried::Lacks(_),
+            ..
+        } => 10,
     }
 }
 
 #[test]
 fn every_response_is_every_arm() {
     let arms: std::collections::BTreeSet<usize> = every_response().iter().map(arm).collect();
-    assert_eq!(arms, (0..10).collect());
+    assert_eq!(arms, (0..11).collect());
 }
 
 /// A proposal waits exactly until the inbox records a settled response, except a send that

@@ -1180,7 +1180,7 @@ fn performed(
                     act,
                     Consent::given_by_tap(tap),
                 ),
-                Err(reason) => Performed::Tried(Tried::NotSent { reason }),
+                Err(tried) => Performed::Tried(tried),
             }
         }
     })
@@ -1912,22 +1912,24 @@ fn forwarded(
     }
 }
 
-/// Whether the instance file declares `account` as a Google account now, or why not.
+/// Whether the instance file declares `account` as a Google account now, whose sign-in with
+/// Google may write its calendar; an account read through lieer alone gave no such grant.
 fn google_account(
     edits: &dyn crate::settings::Edits,
     account: &crate::mail::address::EmailAddress,
-) -> Result<(), String> {
-    let declared = edits.declared().map_err(|failed| {
-        format!("nothing was written: the instance file does not read ({failed})")
+) -> Result<(), Tried> {
+    let declared = edits.declared().map_err(|failed| Tried::NotSent {
+        reason: format!("nothing was written: the instance file does not read ({failed})"),
     })?;
     if declared.accounts.iter().any(|held| {
         held.email.is(account.as_str()) && matches!(held.sync, crate::mail::account::Sync::Google)
     }) {
         Ok(())
     } else {
-        Err(format!(
-            "nothing was written: {account} is not a Google account the instance file declares"
-        ))
+        Err(Tried::Lacks(crate::connect::Lacking::Grant {
+            account: account.clone(),
+            grant: crate::connect::Grant::GoogleCalendar,
+        }))
     }
 }
 

@@ -184,7 +184,7 @@ fn google_client(redirect: &str, steps: &[String]) -> Card {
             },
             ..answer("store", "Keep it")
         }],
-        link: Some(CardLink {
+        link: Some(CardLink::Page {
             label: "Open the Google Cloud console".to_owned(),
             href: crate::google::CONSOLE.to_owned(),
         }),
@@ -215,7 +215,7 @@ fn google_sign_in(account: &str, parts: &[String], consent: Option<&str>, senten
             },
             ..answer("sign_in", "Sign in with Google")
         }],
-        link: consent.map(|href| CardLink {
+        link: consent.map(|href| CardLink::Page {
             label: "Continue to Google".to_owned(),
             href: href.to_owned(),
         }),
@@ -413,6 +413,15 @@ pub fn at(card: Card, reading: &Reading) -> Card {
     match reading {
         Reading::Standing => card,
         Reading::One(answer) if answer.response.performs() => Card {
+            // A try that lacked a grant offers the setup that gives it, beside Try again.
+            link: answer
+                .response
+                .lacking()
+                .map(|lacking| CardLink::Setup {
+                    label: lacking.label(),
+                    template: lacking.fix().as_str().to_owned(),
+                })
+                .or(card.link),
             answers: card
                 .answers
                 .into_iter()
@@ -814,7 +823,7 @@ fn secret(label: &str, found: Option<&str>, link: Option<&str>) -> Card {
             },
             ..answer("store", "Store")
         }],
-        link: link.map(|href| CardLink {
+        link: link.map(|href| CardLink::Page {
             label: "Where to get it".to_owned(),
             href: href.to_owned(),
         }),
@@ -955,7 +964,7 @@ fn sign_in_code(url: &str, sentence: &str) -> Card {
             },
             ..answer("finish", "Finish")
         }],
-        link: Some(CardLink {
+        link: Some(CardLink::Page {
             label: "Sign in".to_owned(),
             href: url.to_owned(),
         }),
@@ -1099,10 +1108,13 @@ mod tests {
         );
         assert!(card.fields.is_empty(), "the help is the card's sentence");
         assert!(!card.sentence.is_empty(), "{card:?}");
-        assert_eq!(
-            card.link.map(|link| link.href).as_deref(),
-            Some("https://docs.ntfy.sh/subscribe/phone/"),
-            "the page that issues it is the card's link"
+        assert!(
+            matches!(
+                &card.link,
+                Some(CardLink::Page { href, .. }) if href == "https://docs.ntfy.sh/subscribe/phone/"
+            ),
+            "the page that issues it is the card's link: {:?}",
+            card.link
         );
     }
 
@@ -1242,6 +1254,26 @@ mod tests {
         );
         assert_eq!(ruled.answers.len(), 1);
         assert!(!widens(&ruled.answers[0]));
+        // A try that lacked a grant offers the setup that gives it, beside Try again.
+        let lacked = at(
+            email.clone(),
+            &one(Responded::Tried {
+                attempt: 1,
+                tried: Tried::Lacks(crate::connect::Lacking::Grant {
+                    account: crate::mail::address::EmailAddress::new("me@example.test")
+                        .expect("an address"),
+                    grant: crate::connect::Grant::GoogleCalendar,
+                }),
+            }),
+        );
+        assert_eq!(lacked.answers[0].label, "Try again");
+        assert_eq!(
+            lacked.link,
+            Some(CardLink::Setup {
+                label: "Connect me@example.test".to_owned(),
+                template: "google".to_owned(),
+            })
+        );
     }
 
     #[test]

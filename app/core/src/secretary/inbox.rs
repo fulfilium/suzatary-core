@@ -970,7 +970,7 @@ fn closing(object: &Object, closed: Responded) -> Result<Step, Refusal> {
     match shown(object) {
         None
         | Some(Responded::Tried {
-            tried: Tried::NotSent { .. },
+            tried: Tried::NotSent { .. } | Tried::Lacks(_),
             ..
         }) => Ok(Step::Record(closed)),
         Some(Responded::Dismissed { .. } | Responded::Withdrawn(_)) => Ok(Step::Answer),

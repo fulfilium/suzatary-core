@@ -821,6 +821,29 @@ fn an_event_is_written_only_by_its_tapped_card() {
         proposed["proposals"][0]["act"]["kind"], "calendar_event",
         "{proposed}"
     );
+    // Tapped before the box keeps a Google client, the card writes nothing and offers the
+    // Google setup, and tapping it again is still allowed.
+    let mut early = common::act(
+        &format!(
+            "{}/api/secretary/conversations/{id}/proposals/0/tap",
+            serving.base
+        ),
+        &serde_json::json!({}),
+    );
+    assert_eq!(common::status(&early), 200);
+    let early = common::body_json(&mut early);
+    let card = &early["proposals"][0];
+    assert_eq!(card["state"], "failed", "{early}");
+    assert_eq!(
+        card["outcome"],
+        "Nothing was done: set up Google in Settings: the box keeps no Google client to ask for \
+         the grant. Then tap Try again."
+    );
+    assert_eq!(
+        card["card"]["link"],
+        serde_json::json!({"kind": "setup", "label": "Set up Google", "template": "google"})
+    );
+    assert_eq!(card["card"]["answers"][0]["label"], "Try again");
     // The client and the grant, kept as the cards keep them: a sign-in writes no event.
     let link = consent(&serving);
     let (status, _) = redirected(&consented(&serving, &link));

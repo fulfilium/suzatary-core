@@ -15,6 +15,8 @@ pub enum Tried {
         /// Why.
         reason: String,
     },
+    /// Nothing was done: the box does not hold a grant the act needs.
+    Lacks(crate::connect::Lacking),
     /// A device-code flow was issued and ends by itself.
     Running {
         /// When the code was issued, as the flow stamped it.
@@ -33,7 +35,7 @@ impl Tried {
         match self {
             Tried::Running { expires_at, .. } => prodrome_core::fpl::parse_iso(expires_at)
                 .is_ok_and(|at| prodrome_core::fpl::instant_of(now) > at),
-            Tried::NotSent { .. } => false,
+            Tried::NotSent { .. } | Tried::Lacks(_) => false,
         }
     }
 }
@@ -102,9 +104,13 @@ impl From<Done> for Performed {
 }
 
 impl Performed {
-    /// A failed send, by what its transport knew: nothing sent, or a message that may have gone.
+    /// A failed send, by what its transport knew: nothing sent for want of a grant, nothing sent,
+    /// or a message that may have gone.
     #[must_use]
     pub fn of_send(failed: &crate::mail::send::SendError) -> Self {
+        if let crate::mail::send::SendError::Ungranted(lacking) = failed {
+            return Tried::Lacks(lacking.clone()).into();
+        }
         let reason = failed.to_string();
         match failed.delivery() {
             crate::mail::send::Delivery::NotSent => Tried::NotSent { reason }.into(),
@@ -128,6 +134,8 @@ impl CheckFields for () {
 
 /// `NotSent(attempt, reason)`, after an event's head.
 pub const NOT_SENT: Constructor = ("NotSent", &["attempt", "reason"]);
+/// `Lacks(attempt, lacking)`.
+pub const LACKS: Constructor = ("Lacks", &["attempt", "lacking"]);
 /// `Started(attempt, began, expires_at)`.
 pub const STARTED: Constructor = ("Started", &["attempt", "began", "expires_at"]);
 /// `Sent(recipients, message_id)`.
@@ -201,13 +209,32 @@ impl<C> Responded<C> {
         }
     }
 
+    /// The grant a try lacked, when that is why it did nothing.
+    #[must_use]
+    pub fn lacking(&self) -> Option<&crate::connect::Lacking> {
+        match self {
+            Responded::Tried {
+                tried: Tried::Lacks(lacking),
+                ..
+            } => Some(lacking),
+            Responded::Tried {
+                tried: Tried::NotSent { .. } | Tried::Running { .. },
+                ..
+            }
+            | Responded::Done(_)
+            | Responded::Checked(_)
+            | Responded::Dismissed { .. }
+            | Responded::Withdrawn(_) => None,
+        }
+    }
+
     /// Whether a tap performs it again: a try that sent nothing.
     #[must_use]
     pub fn performs(&self) -> bool {
         matches!(
             self,
             Responded::Tried {
-                tried: Tried::NotSent { .. },
+                tried: Tried::NotSent { .. } | Tried::Lacks(_),
                 ..
             }
         )
@@ -223,6 +250,10 @@ impl<C: CheckFields> Responded<C> {
                 attempt,
                 tried: Tried::NotSent { reason },
             } => (NOT_SENT, vec![attempt.to_value(), reason.to_value()]),
+            Responded::Tried {
+                attempt,
+                tried: Tried::Lacks(lacking),
+            } => (LACKS, vec![attempt.to_value(), lacking.to_value()]),
             Responded::Tried {
                 attempt,
                 tried: Tried::Running { began, expires_at },

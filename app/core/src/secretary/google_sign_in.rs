@@ -235,6 +235,7 @@ pub fn end(
     let said = match &performed {
         Performed::Done(Done::Acted { what }) => format!("Signed in: {what}."),
         Performed::Tried(Tried::NotSent { reason }) => format!("Not signed in: {reason}."),
+        Performed::Tried(Tried::Lacks(lacking)) => format!("Not signed in. {}", lacking.sentence()),
         Performed::Done(_) | Performed::Tried(Tried::Running { .. }) => String::new(),
     };
     crate::secretary::inbox::end(inbox, card, &super::writes_as(), at, performed)?;

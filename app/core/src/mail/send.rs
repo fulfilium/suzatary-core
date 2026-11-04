@@ -235,6 +235,9 @@ pub enum SendError {
     /// The server took the message for some recipients and not others.
     #[error("some recipients refused: {0:?}")]
     RecipientsRefused(Vec<String>),
+    /// The account holds no grant to send, so nothing left the box.
+    #[error("{}", .0.sentence())]
+    Ungranted(crate::connect::Lacking),
     /// The MIME could not be written, which is a bug rather than a refusal.
     #[error("the message could not be built: {0}")]
     Unbuildable(String),
@@ -293,6 +296,7 @@ impl SendError {
             SendError::Refused(_)
             | SendError::WrongIdentity { .. }
             | SendError::Transport { .. }
+            | SendError::Ungranted(_)
             | SendError::Unbuildable(_) => Delivery::NotSent,
             SendError::Unanswered(_) | SendError::RecipientsRefused(_) => Delivery::Unknown,
         }

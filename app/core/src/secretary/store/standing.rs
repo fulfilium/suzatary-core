@@ -47,7 +47,7 @@ pub fn refused(
     match reading.shown().map(|answer| &answer.response) {
         None
         | Some(Responded::Tried {
-            tried: Tried::NotSent { .. },
+            tried: Tried::NotSent { .. } | Tried::Lacks(_),
             ..
         }) => conflict(format!(
             "proposal {index} waits on the owner's tap; only they can answer it"

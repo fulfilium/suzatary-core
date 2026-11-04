@@ -8,8 +8,8 @@
 // it shows is the row, then the intents about it that the row does not yet hold.
 
 import app from "../app/app";
-import { attachmentUrl, revealHeld } from "../wire/api";
-import type { CardAnswer, CardFile, FileFrom, ProposalRow, ProposedObject, Revises } from "../wire/generated/wire";
+import { attachmentUrl, beginSetup, revealHeld } from "../wire/api";
+import type { CardAnswer, CardFile, CardLink, FileFrom, ProposalRow, ProposedObject, Revises } from "../wire/generated/wire";
 import proposed from "./proposed";
 import type { Child } from "../view/dom";
 import { el } from "../view/dom";
@@ -31,7 +31,32 @@ import asker from "./asker";
 import kept from "./kept";
 import spoken from "./spoken";
 import { hrefOf } from "../shell/route";
+import address from "../shell/address";
 import { toast } from "../view/toast";
+
+/** The card's step as a button: a page it opens, or a setup it begins and then shows. */
+const linkButton = (link: CardLink, writes: boolean): HTMLElement | null => {
+  switch (link.kind) {
+    case "page":
+      return el("a", { class: "act act-help proposallink", href: link.href, target: "_blank", rel: "noopener noreferrer" }, link.label);
+    case "setup":
+      return writes
+        ? el(
+            "button",
+            {
+              type: "button",
+              class: "act act-setup proposallink",
+              onclick: () =>
+                void beginSetup(link.template).then(
+                  (opened) => address.go({ type: "conversation", id: opened.id, refs: [] }),
+                  (e: unknown) => toast(e instanceof Error ? e.message : String(e)),
+                ),
+            },
+            link.label,
+          )
+        : null;
+  }
+};
 
 /** An answer with a confirm step: its question and its yes, and what its tap carries. */
 type Confirmed = Extract<CardAnswer, { asks: "confirm" | "always" | "endorse" }>;
@@ -227,8 +252,10 @@ export function proposalCard(id: string, proposal: ProposalRow, frame: ProposalF
   // A changeset says what it changes in one line, and why it reached him, before its rows.
   if (card.rows.length > 0) node.appendChild(overview(card.rows));
   // The box's own table names this page, never a model's words.
-  if (card.link !== null)
-    node.appendChild(el("a", { class: "act act-help proposallink", href: card.link.href, target: "_blank", rel: "noopener noreferrer" }, card.link.label));
+  if (card.link !== null) {
+    const link = linkButton(card.link, app.writes(app.now()));
+    if (link !== null) node.appendChild(link);
+  }
   // Why a changeset cannot apply is never folded away.
   if (card.problem !== "") node.appendChild(el("p", { class: "problem proposalproblem" }, `This changeset no longer applies: ${card.problem}`));
   // The step, the words and the details live in the card's register, so whatever redraws this card finds them where they were.

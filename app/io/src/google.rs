@@ -333,6 +333,26 @@ pub enum NotReady {
 }
 
 impl NotReady {
+    /// What the box lacks to use `grant` of `account`, or the failure's words when it lacks no
+    /// grant: a missing client, or a sign-in that is missing or that Google refused.
+    ///
+    /// # Errors
+    /// The words of a failure that is no missing grant.
+    pub fn lacking(
+        self,
+        account: &EmailAddress,
+        grant: suzatary_core::connect::Grant,
+    ) -> Result<suzatary_core::connect::Lacking, String> {
+        match self {
+            NotReady::NoClient => Ok(suzatary_core::connect::Lacking::GoogleClient),
+            NotReady::NeedsLogin(_) => Ok(suzatary_core::connect::Lacking::Grant {
+                account: account.clone(),
+                grant,
+            }),
+            NotReady::Failed(words) => Err(words),
+        }
+    }
+
     /// Its failure's class, which names its fix card.
     #[must_use]
     pub fn class(&self) -> suzatary_core::connect::Failure {

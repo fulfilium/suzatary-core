@@ -118,6 +118,10 @@ const conversationPath = (id: string, rest = ""): string =>
 const proposalPath = (id: string, index: number, verb: string): string =>
   conversationPath(id, `/proposals/${index}/${verb}`);
 
+/** The setup conversation of its own Settings' "Connect an account" begins on `template`. */
+export const beginSetup = (template: string): Promise<ConversationPayload> =>
+  http.act(`/api/secretary/setup/${encodeURIComponent(template)}`, {}, payload.ConversationPayload);
+
 /** A blank title is left for the box to name after the first answer. */
 export const openConversation = (title: string): Promise<ConversationPayload> =>
   http.act("/api/secretary/conversations", { title } satisfies Titling, payload.ConversationPayload);
