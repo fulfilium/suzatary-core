@@ -1,16 +1,13 @@
-//! What the owner is told when the box asks for a secret: the template's words and, where one is
-//! known, the page of the service that issues it. Data, keyed by the name, since every name a
-//! deployment may set is derived from the template that declares it.
+//! What the owner is told when the box asks for a secret, keyed by its name.
 
 use crate::coding::RoutineId;
 
 /// How to find one secret's value.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Help {
-    /// One sentence: where the value is found.
+    /// Where the value is found.
     pub text: &'static str,
-    /// The page that issues it; always https, and only ever this table's or the declared
-    /// routine's own.
+    /// The issuing page, always https.
     pub link: Option<String>,
 }
 
@@ -21,24 +18,23 @@ pub enum Page {
     Unknown,
     /// One fixed page.
     At(&'static str),
-    /// The page of the routine `[coding]` declares, which only a deployment knows.
+    /// The page of the routine `[coding]` declares.
     Routine,
 }
 
-/// A secret's words as data: what a template's step says of it, and where its value is issued.
+/// A secret's words as data.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Words {
-    /// What the owner calls it; in a plugin's link, `{label}` stands for the link's own label.
+    /// What the owner calls it; `{label}` is a plugin link's label.
     pub label: &'static str,
-    /// One sentence: where the value is found.
+    /// Where the value is found.
     pub text: &'static str,
     /// Where it is issued.
     pub page: Page,
 }
 
 impl Help {
-    /// The help for the secret named `name` on a deployment whose `[coding]` declares `routine`;
-    /// `None` for a name no template here knows, and for one issued by a routine none declares.
+    /// The help, or `None` for an unknown name or undeclared routine.
     #[must_use]
     pub fn of(name: &str, routine: Option<&RoutineId>) -> Option<Self> {
         let Words { text, page, .. } = Words::of(name)?;
@@ -50,9 +46,7 @@ impl Help {
         Some(Self { text, link })
     }
 
-    /// What the owner calls the secret named `name`: the table's label, a plugin's link named by
-    /// its own label, or for a name no template here knows, the plugin it belongs to, or that it
-    /// is a key the deployment declares.
+    /// What the owner calls the secret `name`, never the name itself.
     #[must_use]
     pub fn label(name: &str) -> String {
         let credential = name
@@ -74,8 +68,7 @@ impl Help {
 }
 
 impl Words {
-    /// The words for the secret named `name`: its template's step's, or for a name no default
-    /// template asks for, this table's.
+    /// The template's words for `name`, else this table's.
     fn of(name: &str) -> Option<Self> {
         crate::connect::secret_words(name).or_else(|| {
             match name {
@@ -84,8 +77,7 @@ impl Words {
                     text: "On the routine's page, generate its API trigger's token.",
                     page: Page::Routine,
                 }),
-                // Set at a terminal alone, as a mail transport's secret is; named here
-                // so a page says what it is without its name.
+                // Set only at a terminal; listed so a page can label it.
                 "PROTON_BRIDGE_PASSWORD" => Some(Self {
                     label: "the Proton Bridge password",
                     text: "In `protonmail-bridge --cli`, `info` prints it.",

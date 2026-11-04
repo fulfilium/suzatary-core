@@ -115,6 +115,8 @@ pub enum Question<'a> {
     Overview,
     /// A setup conversation begun on a template (a POST), answered by the conversation.
     Setup(&'a str),
+    /// File the card that asks for a new value of a stored secret, by its handle.
+    Replace(&'a str),
     /// This device's card filed for a trusted device to tap (a POST).
     Key,
     /// This device trusted with the code from the box (a POST).
@@ -164,6 +166,7 @@ impl Question<'_> {
             Question::Cancel(id) => format!("/api/mail/watches/{}/cancel", component(id)),
             Question::Overview => "/api/overview".to_owned(),
             Question::Setup(template) => format!("/api/secretary/setup/{}", component(template)),
+            Question::Replace(handle) => format!("/api/secretary/replace/{}", component(handle)),
             Question::Key => "/api/act/key".to_owned(),
             Question::Pair => "/api/act/pair".to_owned(),
             Question::Memory => "/api/secretary/memory".to_owned(),

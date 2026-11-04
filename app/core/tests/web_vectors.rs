@@ -919,6 +919,7 @@ fn the_standings_vector_is_every_standing_a_line_can_take() {
                                 detail: None,
                                 standing: standing.clone(),
                                 cards: Vec::new(),
+                                replaces: Vec::new(),
                             })
                             .collect()
                     } else {
@@ -2764,6 +2765,7 @@ fn the_answers_vector_holds_every_answer() {
                 detail: Some(format!("{label}, in a sentence.")),
                 standing,
                 cards: cards.iter().map(|card| (*card).to_owned()).collect(),
+                replaces: Vec::new(),
             };
         let lines = |group: Group| match group {
             Group::Storage => vec![line("repository", "Data repository", Standing::Kept, &[])],

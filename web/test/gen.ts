@@ -326,5 +326,6 @@ export function overviewLine(r: Rng): OverviewLine {
     detail: r.bool() ? null : r.string("abc ", 12),
     standing: lineStanding(r),
     cards: r.array(r.int(3), () => cardRef(r)),
+    replaces: r.array(r.int(2), () => ({ label: "the repositories' token", handle: r.string("0123456789abcdef", 16) })),
   };
 }

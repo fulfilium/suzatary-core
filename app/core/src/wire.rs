@@ -2875,6 +2875,17 @@ pub struct OverviewLine {
     pub standing: crate::connect::Standing,
     /// Its open cards, each a `proposal:<conversation>/<n>`, every need's on one line only.
     pub cards: Vec<String>,
+    /// Each stored secret it reads that a Secret card can replace.
+    pub replaces: Vec<Replace>,
+}
+
+/// A stored secret a line offers to replace, by `POST /api/secretary/replace/<handle>`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+pub struct Replace {
+    /// What the owner calls it.
+    pub label: String,
+    /// How the route names it: never the secret's name.
+    pub handle: String,
 }
 
 /// `GET /api/calendar/{date}`: a week of the owner's calendars.

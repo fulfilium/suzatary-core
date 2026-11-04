@@ -314,6 +314,37 @@ pub fn setup(
     newest(caps, cards, &id)
 }
 
+/// File the box's Secret card asking for a new value of the stored secret a page names by
+/// `handle`, in the setup conversation; while a card already asks for it, that card stands and
+/// nothing is filed. The value travels only in that card's tap.
+///
+/// # Errors
+/// [`Refusal::not_found`] for a handle no secret a Secret card asks for has; the stores' own.
+pub fn replace(caps: &Server<'_>, cards: &Cards<'_>, handle: &str) -> Result<(), Refusal> {
+    let name = cards
+        .settables
+        .by_handle(handle)
+        .filter(|name| {
+            cards.settables.declaration(name).is_some_and(|by| {
+                by.iter()
+                    .any(crate::settings::Declaration::by_a_secret_card)
+            })
+        })
+        .ok_or_else(|| {
+            Refusal::not_found(format!(
+                "no secret this deployment stores is named {}",
+                crate::refusal::shown(handle)
+            ))
+        })?;
+    let at = caps.secretary.clock.now();
+    crate::secretary::fixes::replace(&name, at).holding().file(
+        caps.secretary.conversations,
+        caps.secretary.inbox,
+        at,
+    )?;
+    Ok(())
+}
+
 /// Open a topic now under an id minted for today, titled `title`, and write `first` as its
 /// first line when there is one. Every route that opens a conversation calls it.
 fn begun(

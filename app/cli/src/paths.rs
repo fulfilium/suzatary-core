@@ -121,6 +121,8 @@ pub struct Paths {
     pub markup_cache: PathBuf,
     /// Bare mirrors of the owner's repositories.
     pub repos: PathBuf,
+    /// When each GitHub token expires, as GitHub last said.
+    pub github_tokens: PathBuf,
     /// The allowance endpoint's last good answer.
     pub usage_cache: PathBuf,
     /// The last mail sync's report: box state, never under a shared `/tmp`.
@@ -163,6 +165,7 @@ impl Paths {
                 .join(format!("{}.json", instance_key(data))),
             markup_cache: cache.join("markup"),
             repos: cache.join("repos"),
+            github_tokens: cache.join("github-tokens"),
             usage_cache: cache.join("usage"),
             last_sync: state.join("last-sync.json"),
             compactor: cache.join("compactor"),

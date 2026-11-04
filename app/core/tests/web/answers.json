@@ -2708,6 +2708,7 @@
                 "detail": "Chat, reviews and titles, in a sentence.",
                 "key": "job:Chat, reviews and titles",
                 "label": "Chat, reviews and titles",
+                "replaces": [],
                 "standing": {
                   "at": "2026-09-02T12:00:00",
                   "kind": "answered"
@@ -2725,6 +2726,7 @@
                 "detail": "her@example.invalid, in a sentence.",
                 "key": "account:ada@example.test",
                 "label": "her@example.invalid",
+                "replaces": [],
                 "standing": {
                   "at": "2026-09-02T12:00:00",
                   "class": {
@@ -2745,6 +2747,7 @@
                 "detail": "Home, in a sentence.",
                 "key": "credential:ics/home",
                 "label": "Home",
+                "replaces": [],
                 "standing": {
                   "at": "2026-09-02T12:00:00",
                   "kind": "synced"
@@ -2757,6 +2760,7 @@
                 "detail": "Work, in a sentence.",
                 "key": "credential:ics/work",
                 "label": "Work",
+                "replaces": [],
                 "standing": {
                   "kind": "missing",
                   "what": [
@@ -2778,6 +2782,7 @@
                 "detail": "Data repository, in a sentence.",
                 "key": "repository",
                 "label": "Data repository",
+                "replaces": [],
                 "standing": {
                   "kind": "kept"
                 }
@@ -2792,6 +2797,7 @@
                 "detail": "ntfy, in a sentence.",
                 "key": "channel:ntfy",
                 "label": "ntfy",
+                "replaces": [],
                 "standing": {
                   "kind": "locked"
                 }
@@ -2801,6 +2807,7 @@
                 "detail": "fcm, in a sentence.",
                 "key": "channel:fcm",
                 "label": "fcm",
+                "replaces": [],
                 "standing": {
                   "kind": "store_failed"
                 }
@@ -2819,6 +2826,7 @@
                 "detail": "due, in a sentence.",
                 "key": "plugin:due",
                 "label": "due",
+                "replaces": [],
                 "standing": {
                   "kind": "unobserved"
                 }
@@ -2828,6 +2836,7 @@
                 "detail": "rota, in a sentence.",
                 "key": "plugin:rota",
                 "label": "rota",
+                "replaces": [],
                 "standing": {
                   "kind": "unreadable",
                   "words": "its store could not be read"

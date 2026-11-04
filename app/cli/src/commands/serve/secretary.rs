@@ -1,4 +1,4 @@
-//! The secretary's routes: its conversations, a person's turns, photos and memory.
+//! The secretary's routes.
 
 use axum::Json;
 use axum::http::header;
@@ -33,7 +33,7 @@ pub struct Said {
     say: String,
     references: Vec<Reference>,
     attachments: Vec<Attachment>,
-    /// How many turns the asker saw; absent, a question is always a new line.
+    /// Turns the asker saw; `None` makes a question a new line.
     after: Option<usize>,
 }
 
@@ -45,22 +45,21 @@ pub struct Upload {
 }
 
 enum Keep {
-    /// In the box's store, unless it names an identity number, which holds it back.
+    /// Held back if it names an identity number.
     OnTheBox,
-    /// In the owner's Drive, on his say-so for a file the box held back.
+    /// In the owner's Drive.
     Private,
 }
 
-/// A stored upload's bytes, served so they never read as a page.
+/// Upload bytes, served so they never read as a page.
 pub struct Served(Attachment, Vec<u8>);
 
 const MAX_SAY_BYTES: usize = 32_768;
 
-/// An upload: the largest PDF, grown by a third as base64, and room for the JSON around it.
+/// The largest PDF as base64, plus JSON room.
 const MAX_UPLOAD_BYTES: usize = suzatary_core::file_read::MAX_PDF / 3 * 4 + 65_536;
 
-/// # Errors
-/// [`Refusal::bad_request`] for a name no conversation could have.
+/// The `conversation` segment.
 pub fn conversation_named(asked: &Asked) -> Result<ConversationId, Refusal> {
     ConversationId::new(asked.segment("conversation")?)
         .map_err(|failed| Refusal::bad_request(failed.to_string()))
@@ -144,7 +143,7 @@ impl Body for Said {
 
     type Wire = wire::Saying;
 
-    /// Each photo is reread from the store, so its type is the store's.
+    /// Each photo's type is reread from the store.
     fn parse(saying: wire::Saying, state: &State) -> Result<Self, Refusal> {
         let wire::Saying {
             say,
@@ -238,12 +237,12 @@ fn uploads(state: &State) -> Result<&super::Uploads, Refusal> {
         .ok_or_else(|| Refusal::not_found("this server keeps no uploads"))
 }
 
-/// `GET /api/secretary/memory`: every standing fact.
+/// `GET …/memory`.
 pub fn memory(call: &Call<Reader, (), ()>) -> Result<Json<wire::MemoryPayload>, Refusal> {
     secretary_routes::memory(call.chain.caps.secretary.memories).map(Json)
 }
 
-/// `POST /api/secretary/memory/<id>/forget`: erase one fact.
+/// `POST …/memory/<id>/forget`.
 pub fn forget(call: &Call<Actor, FactId, ()>) -> Result<Json<wire::MemoryPayload>, Refusal> {
     let caps = call.chain.caps;
     secretary_routes::forget(
@@ -255,12 +254,12 @@ pub fn forget(call: &Call<Actor, FactId, ()>) -> Result<Json<wire::MemoryPayload
     .map(Json)
 }
 
-/// `GET /api/secretary/record`: the summaries a session is told of the owner's words.
+/// `GET …/record`.
 pub fn record(call: &Call<Reader, (), ()>) -> Result<Json<wire::RecordPayload>, Refusal> {
     secretary_routes::record(&call.chain.caps.secretary.memories.digests).map(Json)
 }
 
-/// `POST /api/secretary/record/<node>/retract`: the owner's tap on a wrong summary.
+/// `POST …/record/<node>/retract`, by tap.
 pub fn retract(
     call: &Call<suzatary_core::secretary::tap::Tap, prodrome_core::event::Hash, ()>,
 ) -> Result<Json<wire::RecordPayload>, Refusal> {
@@ -274,7 +273,7 @@ pub fn retract(
     .map(Json)
 }
 
-/// `POST /api/secretary/conversations`: open a topic.
+/// `POST …/conversations`.
 pub fn open(
     call: &Call<Writer, (), wire::Titling>,
 ) -> Result<Json<wire::ConversationPayload>, Refusal> {
@@ -283,7 +282,7 @@ pub fn open(
         .map(Json)
 }
 
-/// `POST /api/secretary/setup/<template>`: begin the setup conversation on a template.
+/// `POST …/setup/<template>`.
 pub fn setup(
     call: &Call<Writer, suzatary_core::connect::TemplateId, ()>,
 ) -> Result<Json<wire::ConversationPayload>, Refusal> {
@@ -292,7 +291,25 @@ pub fn setup(
         .map(Json)
 }
 
-/// `POST …/<id>/title`: rename one, as the gate's actor.
+/// A stored secret's handle.
+pub struct Handle(String);
+
+impl Params for Handle {
+    fn parse(asked: &Asked, _: &Chained) -> Result<Self, Refusal> {
+        Ok(Self(asked.segment("handle")?.to_owned()))
+    }
+}
+
+/// `POST …/replace/<handle>`: the value comes only in the card's tap.
+pub fn replace(call: &Call<Writer, Handle, ()>) -> Result<Json<serde_json::Value>, Refusal> {
+    call.state
+        .with_cards(|caps, cards| secretary_routes::replace(caps, cards, &call.params.0))?;
+    call.state
+        .heard(&suzatary_core::secretary::noticed::CONVERSATION);
+    Ok(Json(serde_json::json!({})))
+}
+
+/// `POST …/<id>/title`.
 pub fn rename(
     call: &Call<Actor, ConversationId, wire::Titling>,
 ) -> Result<Json<wire::ConversationPayload>, Refusal> {
@@ -304,7 +321,7 @@ pub fn rename(
         .map(Json)
 }
 
-/// `POST …/<id>/erase`: erase turns of one, or all of it, as the owner's tap.
+/// `POST …/<id>/erase`, by tap.
 pub fn erase(
     call: &Call<suzatary_core::secretary::tap::Tap, ConversationId, secretary_routes::Erasing>,
 ) -> Result<Json<wire::ConversationPayload>, Refusal> {
@@ -313,7 +330,6 @@ pub fn erase(
             secretary_routes::erase(caps, cards, &call.guard, &call.params, &call.body)
         })
         .inspect(|_| {
-            // The erased turns' uploads leave the index now, not at the next search.
             let caps = call.chain.caps;
             if let Err(failed) = suzatary_core::secretary::file_search::reindex(
                 caps.secretary.conversations,
@@ -328,10 +344,7 @@ pub fn erase(
         .map(Json)
 }
 
-/// `GET …/blocks/<sha>`: one block of an answer as typst's HTML; the box renders only what a
-/// model wrote.
-///
-/// A sha no answer holds is a 404, and a block kept as text is a 422 saying why.
+/// `GET …/blocks/<sha>`: the box renders only blocks a model wrote.
 pub fn block(call: &Call<Reader, Block, ()>) -> Result<Json<wire::BlockRender>, Refusal> {
     let Block { id, sha } = &call.params;
     let source = match call.state.workers.closed(id, sha) {
@@ -364,8 +377,6 @@ pub fn block(call: &Call<Reader, Block, ()>) -> Result<Json<wire::BlockRender>, 
         .map_err(|refused| Refusal::unprocessable(refused.to_string()))
 }
 
-/// The stamp on a turn pointing at `references` ([`stamp::pointing`]); the chains are read only
-/// when one is a todo.
 fn stamped<P, B>(call: &Call<Actor, P, B>, references: &[Reference]) -> Stamp {
     let speaker = Speaker::at(call.guard.as_str(), Seat::of(&call.admitted));
     if references
@@ -383,8 +394,7 @@ fn stamped<P, B>(call: &Call<Actor, P, B>, references: &[Reference]) -> Stamp {
     }
 }
 
-/// `POST …/say`: 202 and a background turn, so a phone that gives up never retries into
-/// a second turn; a `say` mid-round only nudges, so two make one exchange.
+/// `POST …/say`: 202, so a phone that gives up never retries into a second turn.
 pub fn say(
     call: &Call<Actor, ConversationId, Said>,
 ) -> Result<Accepted<wire::SayPayload>, Refusal> {
@@ -404,8 +414,7 @@ pub fn say(
         .map(Accepted)
 }
 
-/// `POST …/regenerate`: ask the last round again; a round that wrote anything, or one
-/// still running, is a 409.
+/// `POST …/regenerate`: 409 if the round wrote or runs.
 pub fn regenerate(
     call: &Call<Actor, ConversationId, ()>,
 ) -> Result<Accepted<wire::ConversationPayload>, Refusal> {
@@ -416,7 +425,7 @@ pub fn regenerate(
         .map(Accepted)
 }
 
-/// `POST …/edit`: replace the last round's question, setting aside all after it.
+/// `POST …/edit`.
 pub fn edit(
     call: &Call<Actor, ConversationId, Said>,
 ) -> Result<Accepted<wire::ConversationPayload>, Refusal> {
@@ -445,8 +454,7 @@ pub fn edit(
         .map(Accepted)
 }
 
-/// `POST …/stop`: stop the running answer, answering once the stop is written; with no round
-/// running it is a 409, never a halt left for the next question.
+/// `POST …/stop`: 409 with no round running, never a halt left pending.
 pub fn stop(
     call: &Call<Actor, ConversationId, ()>,
 ) -> Result<Accepted<wire::ConversationPayload>, Refusal> {
@@ -459,7 +467,7 @@ pub fn stop(
         .map(Accepted)
 }
 
-/// `POST /api/secretary/attachments`: keep one photo or PDF, answer what it is.
+/// `POST …/attachments`.
 pub fn upload(call: &Call<Writer, (), Upload>) -> Result<Json<wire::Uploaded>, Refusal> {
     let uploads = uploads(&call.state)?;
     let Upload { bytes, name, keep } = &call.body;
@@ -473,7 +481,7 @@ pub fn upload(call: &Call<Writer, (), Upload>) -> Result<Json<wire::Uploaded>, R
         Ok(file) => Ok(Json(wire::Uploaded::Kept {
             file: wire::AttachmentRow::from(&file),
         })),
-        // Held back for the owner, who may keep it private in his Drive or not send it.
+        // Held back; the owner may keep it in his Drive.
         Err(UploadError::Withheld(why @ Withheld::HeldNumber)) => {
             Ok(Json(wire::Uploaded::Sensitive {
                 why: why.to_string(),
@@ -490,7 +498,7 @@ pub fn upload(call: &Call<Writer, (), Upload>) -> Result<Json<wire::Uploaded>, R
     }
 }
 
-/// `GET /api/secretary/attachments/<id>`: one upload.
+/// `GET …/attachments/<id>`.
 pub fn photo(call: &Call<Reader, AttachmentId, ()>) -> Result<Served, Refusal> {
     match uploads(&call.state)?
         .store

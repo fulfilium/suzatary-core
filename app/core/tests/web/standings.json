@@ -38,7 +38,8 @@
           "standing": {
             "kind": "kept"
           },
-          "cards": []
+          "cards": [],
+          "replaces": []
         },
         {
           "key": "plugin:p1",
@@ -48,7 +49,8 @@
             "kind": "synced",
             "at": "2026-09-02T12:00:00"
           },
-          "cards": []
+          "cards": [],
+          "replaces": []
         },
         {
           "key": "plugin:p2",
@@ -58,7 +60,8 @@
             "kind": "answered",
             "at": "2026-09-02T12:00:00"
           },
-          "cards": []
+          "cards": [],
+          "replaces": []
         },
         {
           "key": "plugin:p3",
@@ -67,7 +70,8 @@
           "standing": {
             "kind": "unobserved"
           },
-          "cards": []
+          "cards": [],
+          "replaces": []
         },
         {
           "key": "plugin:p4",
@@ -76,7 +80,8 @@
           "standing": {
             "kind": "locked"
           },
-          "cards": []
+          "cards": [],
+          "replaces": []
         },
         {
           "key": "plugin:p5",
@@ -85,7 +90,8 @@
           "standing": {
             "kind": "store_failed"
           },
-          "cards": []
+          "cards": [],
+          "replaces": []
         },
         {
           "key": "plugin:p6",
@@ -95,7 +101,8 @@
             "kind": "unreadable",
             "words": "its ledger could not be read"
           },
-          "cards": []
+          "cards": [],
+          "replaces": []
         },
         {
           "key": "plugin:p7",
@@ -107,7 +114,8 @@
               "your Work calendar's secret link"
             ]
           },
-          "cards": []
+          "cards": [],
+          "replaces": []
         },
         {
           "key": "plugin:p8",
@@ -118,7 +126,8 @@
             "command": "example-cli auth login",
             "why": "sign the CLI in"
           },
-          "cards": []
+          "cards": [],
+          "replaces": []
         },
         {
           "key": "plugin:p9",
@@ -134,7 +143,8 @@
             "words": "what the source said",
             "at": "2026-09-02T12:00:00"
           },
-          "cards": []
+          "cards": [],
+          "replaces": []
         },
         {
           "key": "plugin:p10",
@@ -150,7 +160,8 @@
             "words": "what the source said",
             "at": "2026-09-02T12:00:00"
           },
-          "cards": []
+          "cards": [],
+          "replaces": []
         },
         {
           "key": "plugin:p11",
@@ -166,7 +177,8 @@
             "words": "what the source said",
             "at": "2026-09-02T12:00:00"
           },
-          "cards": []
+          "cards": [],
+          "replaces": []
         },
         {
           "key": "plugin:p12",
@@ -181,7 +193,8 @@
             "words": "what the source said",
             "at": "2026-09-02T12:00:00"
           },
-          "cards": []
+          "cards": [],
+          "replaces": []
         },
         {
           "key": "plugin:p13",
@@ -196,7 +209,8 @@
             "words": "what the source said",
             "at": "2026-09-02T12:00:00"
           },
-          "cards": []
+          "cards": [],
+          "replaces": []
         },
         {
           "key": "plugin:p14",
@@ -211,7 +225,8 @@
             "words": "what the source said",
             "at": "2026-09-02T12:00:00"
           },
-          "cards": []
+          "cards": [],
+          "replaces": []
         },
         {
           "key": "plugin:p15",
@@ -228,7 +243,8 @@
             "words": "what the source said",
             "at": "2026-09-02T12:00:00"
           },
-          "cards": []
+          "cards": [],
+          "replaces": []
         },
         {
           "key": "plugin:p16",
@@ -243,7 +259,8 @@
             "words": "what the source said",
             "at": "2026-09-02T12:00:00"
           },
-          "cards": []
+          "cards": [],
+          "replaces": []
         },
         {
           "key": "plugin:p17",
@@ -258,7 +275,8 @@
             "words": "what the source said",
             "at": "2026-09-02T12:00:00"
           },
-          "cards": []
+          "cards": [],
+          "replaces": []
         },
         {
           "key": "plugin:p18",
@@ -273,7 +291,8 @@
             "words": "what the source said",
             "at": "2026-09-02T12:00:00"
           },
-          "cards": []
+          "cards": [],
+          "replaces": []
         }
       ]
     },

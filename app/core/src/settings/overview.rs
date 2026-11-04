@@ -1,12 +1,7 @@
-//! What is connected, by group: the Settings page's one reading, a pure function of what the
-//! instance declares and what the box's stores observed of it.
+//! What is connected, by group: the Settings page's one reading.
 //!
-//! The overview is the free join-semilattice on (group, line) pairs, read grouped: each table of
-//! the instance contributes its lines, [`Overview::join`] is their union, and no line depends on
-//! the order its table was written in. A group nothing is connected to holds no line. A line
-//! carries the owner's words only: before it leaves, every secret's name in it is replaced by
-//! what the owner calls that secret ([`Help::label`]), and its open cards travel as references,
-//! so a key name reaches no reader.
+//! A join-semilattice on (group, line) ([`Overview::join`] is union); a line's secret names
+//! become labels ([`Help::label`]) and its cards references, so a key name reaches no reader.
 
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -23,45 +18,40 @@ use crate::settings::remote::Pushed;
 use crate::source_key::SourceKey;
 use crate::wire;
 
-/// What an open card asks of the box, and so which lines it is about.
+/// What an open card asks.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum Need {
-    /// A mail account's sign-in, by its address. Mail drafted from it asks for no connection, so
-    /// a waiting draft never stands in for the sign-in.
+    /// A mail account's sign-in; no draft stands in for it.
     MailSignIn(String),
-    /// A Microsoft account's consent to send, by its address: a step after its sign-in to read,
-    /// so a card of its own.
+    /// A Microsoft account's consent to send.
     MailSending(String),
-    /// The box's Google client, which every Google account signs in through: drawn on the first
-    /// Google account's line.
+    /// The Google client, on the first Google account's line.
     GoogleClient,
-    /// A secret, by its stored name, which is matched here and never leaves.
+    /// A secret, by its stored name, which never leaves.
     Secret(String),
-    /// Connecting the subscription's model: starting its sign-in.
+    /// The subscription model's sign-in.
     SignIn,
-    /// The code an open sign-in waits for: a step after the sign-in, so a card of its own.
+    /// The code an open sign-in waits for.
     SignInCode,
-    /// Taking a connection out, by its key.
+    /// Removing a connection.
     Removal(Key),
-    /// Letting a plugin reach an origin a link of it was served from, drawn under the card that
-    /// asks for the link.
+    /// Letting a plugin reach its link's origin.
     Grant(PluginName),
 }
 
-/// One open card of the Inbox's: what it asks for, and the reference it is drawn by.
+/// One open Inbox card.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub struct Asking {
     /// What it asks for.
     pub need: Need,
-    /// When it was first asked, ISO 8601, UTC: the earliest card asking for a need is the one
-    /// drawn.
+    /// First asked, ISO 8601 UTC; the earliest per need is drawn.
     pub at: String,
     /// Its `proposal:<conversation>/<n>`.
     pub card: String,
 }
 
 impl Asking {
-    /// Every card still waiting in `inbox` whose act is about a connection.
+    /// The waiting connection cards.
     #[must_use]
     pub fn open(inbox: &crate::secretary::inbox::Fold) -> Vec<Self> {
         inbox
@@ -83,7 +73,7 @@ impl Asking {
                         Need::Removal(connection.key())
                     }
                     Proposal::Act(Act::Grant { plugin, .. }) => Need::Grant(plugin.clone()),
-                    // These cards stand on no line of the page.
+                    // No line draws these.
                     Proposal::Act(
                         Act::Connect { .. }
                         | Act::UnlockStore { .. }
@@ -112,7 +102,6 @@ impl Asking {
     }
 }
 
-/// What a line is, once in its group: the identity two contributions of one thing share.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 enum Slot {
     Repository,
@@ -124,10 +113,12 @@ enum Slot {
     Channel(connect::Channel),
     Routine,
     Build,
+    /// A stored secret no other line reads, by its handle.
+    Secret(String),
 }
 
 impl Slot {
-    /// Its print, unique within its group and never a secret's name.
+    /// Its print, unique in its group and never a secret's name.
     fn key(&self) -> String {
         match self {
             Self::Repository => "repository".to_owned(),
@@ -139,47 +130,48 @@ impl Slot {
             Self::Channel(name) => format!("channel:{name}"),
             Self::Routine => "routine".to_owned(),
             Self::Build => "build".to_owned(),
+            Self::Secret(handle) => format!("secret:{handle}"),
         }
     }
 }
 
-/// What a plugin's cache-tier store is, as its declared schema reads.
+/// A plugin's cache-tier store.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub enum Store {
-    /// Nothing has begun it: the plugin has not synced.
+    /// The plugin has not synced.
     #[default]
     NotBegun,
-    /// A store the calendar reads.
+    /// The calendar's schema.
     Calendar,
-    /// A store of another schema.
+    /// Another schema.
     Other,
-    /// A store whose schema could not be read, and why.
+    /// An unreadable schema, and why.
     Unreadable(String),
 }
 
 /// Where the data is kept.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Storage {
-    /// The data repository on this box.
+    /// The data repository.
     pub root: String,
     /// Where it is pushed.
     pub pushed: Pushed,
 }
 
-/// What the instance declares, as far as the overview reads it.
+/// What the instance declares.
 #[derive(Clone, Copy)]
 pub struct Declared<'a> {
     /// The chains and `[coding]`.
     pub deployment: &'a Deployment,
-    /// Every secret name declared now, which a new connection widens with no restart.
+    /// Every secret name declared now.
     pub settables: &'a crate::settings::Settables,
     /// `[notify].channels`.
     pub channels: &'a [connect::Channel],
-    /// Every mail account, a roster by construction.
+    /// Every mail account.
     pub accounts: &'a [MailAccount],
-    /// Each job the deployment runs a model for, in the order the page lists them.
+    /// Each model job, in page order.
     pub jobs: &'a [ModelJob],
-    /// Every `[[plugins]]` manifest.
+    /// `[[plugins]]`.
     pub plugins: &'a [Manifest],
     /// `[secretary] drive_allow`.
     pub drive: &'a [crate::drive::DrivePath],
@@ -187,20 +179,18 @@ pub struct Declared<'a> {
     pub storage: &'a Storage,
     /// The program this box runs.
     pub build: &'a Build,
-    /// How the person reaches the app at a terminal, which a step's command is spelled in.
+    /// How a command is spelled at a terminal.
     pub reach: &'a connect::Reach,
 }
 
-/// The program this box runs, as its line reads it: what `GET /api/about` says, less each
-/// completed todo's price now, so it is a function of the project chain's objects alone.
+/// `GET /api/about` without prices, so a function of the chain alone.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Build {
     /// The version, or `dev`.
     pub version: String,
-    /// The revision it was built from, or `dev`.
+    /// The build's revision, or `dev`.
     pub revision: String,
-    /// What the version completed: each todo's title, or its id where the chain does not hold
-    /// it.
+    /// Each completed todo's title, or its id.
     pub completed: Vec<String>,
 }
 
@@ -220,35 +210,32 @@ impl Build {
     }
 }
 
-/// One job the deployment runs a model for, as the deployment names it.
+/// One job the deployment runs a model for.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ModelJob {
-    /// What the owner calls the job.
+    /// The owner's name for the job.
     pub label: String,
-    /// What it runs, in the owner's words.
+    /// What it runs.
     pub detail: String,
     /// Whether the box records its calls.
     pub calls: Calls,
 }
 
-/// Whether the box records a job's calls, and so whether its line stands as they answered.
+/// Whether a job's calls are recorded.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Calls {
-    /// Each call is joined into the model health under `key`, and the model reads the secret
-    /// `credential`, which its sign-in stores.
+    /// Calls are recorded under `key`.
     Recorded {
-        /// The model health's key: the model's name as [`crate::capability::Model::name`]
-        /// spells it.
+        /// The model's name, as [`crate::capability::Model::name`] spells it.
         key: String,
         /// The secret the model reads.
         credential: String,
     },
-    /// No call is recorded, so the line says only what runs.
+    /// No call is recorded.
     Unrecorded,
 }
 
-/// What the secret store answered of every declared name and every account's grants: the part
-/// of the overview that asks the store, kept apart so it can be asked once and read many times.
+/// The secret store's answers, asked once.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Asked {
     secrets: BTreeMap<String, SecretState>,
@@ -256,8 +243,7 @@ pub struct Asked {
 }
 
 impl Asked {
-    /// `secrets` asked for each of `settables` and each of `accounts`' grants, once each; a
-    /// locked store is waited on once ([`crate::capability::Snapshot`]).
+    /// Asks the store once per name and grant; a locked one is waited on once.
     #[must_use]
     pub fn of(
         secrets: &dyn crate::capability::Secrets,
@@ -277,7 +263,7 @@ impl Asked {
         }
     }
 
-    /// What the stores say, these answers with `registers`.
+    /// These answers with `registers`.
     #[must_use]
     pub fn observed<'a>(&'a self, registers: Registers<'a>) -> Observed<'a> {
         Observed {
@@ -288,8 +274,7 @@ impl Asked {
     }
 }
 
-/// What the box's stores say of it now; a name or account they hold nothing about reads as
-/// never stored and never observed.
+/// What the stores say now; an unknown name is never stored.
 #[derive(Debug, Clone, Copy)]
 pub struct Observed<'a> {
     /// Where each declared secret stands.
@@ -301,8 +286,7 @@ pub struct Observed<'a> {
 }
 
 impl Observed<'_> {
-    /// What `sources` read: checked once any has succeeded, and standing as the join of their
-    /// readings, unobserved while nothing has reported any.
+    /// The join of `sources`' readings, unobserved until one reports.
     fn read(&self, sources: &[SourceKey]) -> (Checked, Standing) {
         let healths: Vec<&Health> = sources
             .iter()
@@ -333,8 +317,7 @@ impl Observed<'_> {
     }
 }
 
-/// What the box's registers hold, before the secret store is asked: each observation a line's
-/// check reads.
+/// The box's registers.
 #[derive(Debug, Clone, Copy)]
 pub struct Registers<'a> {
     /// Every source's results.
@@ -343,12 +326,11 @@ pub struct Registers<'a> {
     pub answered: &'a Healths<String>,
     /// Each plugin's store.
     pub plugins: &'a BTreeMap<PluginName, Store>,
-    /// The data repository's pushes, as its reflogs record them; `None` with no upstream.
+    /// The data repository's pushes, if it has an upstream.
     pub pushes: Option<&'a crate::health::Health>,
 }
 
-/// The connections the instance's tables hold, read through what the box observed: a line that
-/// is a connection stands where the connection's own reading says, joined with the line's.
+/// The tables' connections, as observed.
 struct Connected<'a> {
     connections: &'a BTreeMap<Key, Connection>,
     observed: &'a Observed<'a>,
@@ -363,7 +345,6 @@ impl Connected<'_> {
         })
     }
 
-    /// Where `connection`'s steps stand.
     fn of(&self, connection: &Connection, checked: Checked) -> Standing {
         let secret = |name: &str| {
             self.observed
@@ -393,20 +374,21 @@ impl Connected<'_> {
         })
     }
 
-    /// Where the connection keyed `group`/`name` stands; in place where the tables hold none.
+    /// Where a connection stands, in place if the tables hold none.
     fn standing(&self, group: Group, name: &str, checked: Checked) -> Standing {
         self.connection(group, name)
             .map_or(Standing::Kept, |connection| self.of(connection, checked))
     }
 }
 
-/// One line before it is put in words.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 struct Line {
     label: String,
     detail: Option<String>,
     standing: Standing,
     needs: BTreeSet<Need>,
+    /// Replaceable stored secrets: label and handle.
+    replaces: BTreeSet<(String, String)>,
 }
 
 /// What is connected: the free join-semilattice on (group, line).
@@ -418,7 +400,7 @@ impl Overview {
         Self(BTreeMap::from([((group, slot), line)]))
     }
 
-    /// The union, a line both hold being the greater of the two, so the join is commutative.
+    /// The union, the greater of a shared line, so the join is commutative.
     #[must_use]
     pub fn join(mut self, other: Self) -> Self {
         for (at, line) in other.0 {
@@ -436,7 +418,7 @@ impl Overview {
         self
     }
 
-    /// Each need's card, the earliest asked: one card per need, whoever asked for it.
+    /// One card per need, the earliest asked.
     fn drawn(asking: &[Asking]) -> BTreeMap<&Need, &str> {
         let mut earliest: BTreeMap<&Need, &Asking> = BTreeMap::new();
         for card in asking {
@@ -451,10 +433,7 @@ impl Overview {
             .collect()
     }
 
-    /// Every group in [`Group::ALL`]'s order, each with its lines, `ask` naming where Ask
-    /// opens and `offers` what may be added. Every secret's name a line would show is put in
-    /// words first, and each need's card is placed on the first line, in this order, that needs
-    /// it: a partition of the cards.
+    /// Every group, names in words; each need's card on its first line, a partition.
     #[must_use]
     pub fn wire(
         self,
@@ -491,8 +470,7 @@ impl Overview {
     }
 }
 
-/// Every secret's name, each with what the owner calls it, longest first so no name is replaced
-/// inside a longer one.
+/// Secret names with labels, longest first so none is replaced inside a longer one.
 struct Words(Vec<(String, String)>);
 
 impl Words {
@@ -537,6 +515,11 @@ impl Words {
                 other => other,
             },
             cards,
+            replaces: line
+                .replaces
+                .into_iter()
+                .map(|(label, handle)| wire::Replace { label, handle })
+                .collect(),
         }
     }
 }
@@ -568,6 +551,65 @@ pub fn overview(declared: &Declared<'_>, observed: &Observed<'_>) -> Overview {
     ]
     .into_iter()
     .fold(Overview::default(), Overview::join)
+    .replacing(declared, observed)
+}
+
+impl Overview {
+    /// Places each Secret-card secret on the lines reading it, else alone.
+    fn replacing(mut self, declared: &Declared<'_>, observed: &Observed<'_>) -> Self {
+        let carded: Vec<crate::settings::Settable> = declared
+            .settables
+            .declarations()
+            .filter(|(_, by)| {
+                by.iter()
+                    .any(|by| by.by_a_secret_card() && by.in_use(&declared.storage.pushed))
+            })
+            .map(|(name, _)| name)
+            .collect();
+        let read: BTreeSet<&str> = self
+            .0
+            .values()
+            .flat_map(|line| &line.needs)
+            .filter_map(|need| match need {
+                Need::Secret(name) => Some(name.as_str()),
+                Need::MailSignIn(_)
+                | Need::MailSending(_)
+                | Need::GoogleClient
+                | Need::SignIn
+                | Need::SignInCode
+                | Need::Removal(_)
+                | Need::Grant(_) => None,
+            })
+            .collect();
+        let alone: Vec<Overview> = carded
+            .iter()
+            .filter(|name| !read.contains(name.name()))
+            .map(|name| {
+                Overview::line(
+                    Group::Box,
+                    Slot::Secret(name.handle()),
+                    needing(
+                        line(
+                            crate::secretary::card::capitalised(&Help::label(name.name())),
+                            None,
+                            observed.secret(name.name()),
+                        ),
+                        [secret(name.name())],
+                    ),
+                )
+            })
+            .collect();
+        self = alone.into_iter().fold(self, Overview::join);
+        for line in self.0.values_mut() {
+            line.replaces = carded
+                .iter()
+                .filter(|name| line.needs.contains(&secret(name.name())))
+                .filter(|name| observed.secrets.get(name.name()) == Some(&SecretState::Set))
+                .map(|name| (Help::label(name.name()), name.handle()))
+                .collect();
+        }
+        self
+    }
 }
 
 fn line(label: impl Into<String>, detail: Option<String>, standing: Standing) -> Line {
@@ -576,6 +618,7 @@ fn line(label: impl Into<String>, detail: Option<String>, standing: Standing) ->
         detail,
         standing,
         needs: BTreeSet::new(),
+        replaces: BTreeSet::new(),
     }
 }
 
@@ -584,7 +627,6 @@ fn needing(mut line: Line, needs: impl IntoIterator<Item = Need>) -> Line {
     line
 }
 
-/// The removal of the connection keyed `group`/`name`.
 fn removal(group: Group, name: &str) -> Need {
     Need::Removal(Key {
         group,
@@ -596,7 +638,6 @@ fn secret(name: &str) -> Need {
     Need::Secret(name.to_owned())
 }
 
-/// `a, b and c`.
 fn listed(items: &[&str]) -> String {
     match items {
         [] => String::new(),
@@ -605,8 +646,6 @@ fn listed(items: &[&str]) -> String {
     }
 }
 
-/// The data repository: while it names nowhere to push to, its template's step to name one;
-/// once it does, its pushes as the push's own record reads them.
 fn storage(
     declared: &Declared<'_>,
     observed: &Observed<'_>,
@@ -716,9 +755,7 @@ const fn granted(yes: bool) -> &'static str {
     if yes { "signed in" } else { "not signed in" }
 }
 
-/// One line per credential a plugin declares, each a calendar where its store is one the
-/// calendar reads; a plugin that declares none is one line of its own. A store that cannot be
-/// read says so on every line of its plugin.
+/// Lines per plugin credential; an unreadable store says so on each.
 fn plugins(declared: &Declared<'_>, observed: &Observed<'_>) -> Overview {
     declared
         .plugins
@@ -793,9 +830,7 @@ fn plugins(declared: &Declared<'_>, observed: &Observed<'_>) -> Overview {
         .fold(Overview::default(), Overview::join)
 }
 
-/// One line for the Drive: every allowed folder's connection, joined, and its probes. While a
-/// probe fails for a reason a sign-in does not mend, the line is that failure in words, and no
-/// step of the template stands above it.
+/// The Drive's line; a failure no sign-in mends replaces the step.
 fn drive(declared: &Declared<'_>, observed: &Observed<'_>, connected: &Connected<'_>) -> Overview {
     if declared.drive.is_empty() {
         return Overview::default();
@@ -808,8 +843,7 @@ fn drive(declared: &Declared<'_>, observed: &Observed<'_>, connected: &Connected
         .collect();
     let probed = (sources.iter()).find_map(|key| observed.registers.health.health(key));
     let reading = probed.map(crate::health::Health::reading);
-    // A sign-in that lapsed is the template's terminal step again, however often the Drive
-    // listed before; a failure a sign-in does not mend shows no step.
+    // A lapsed sign-in is the terminal step again.
     let steps = match &reading {
         None | Some(crate::health::Reading::Ok { .. }) => Some(Checked::of(probed)),
         Some(crate::health::Reading::Failing { class, .. }) => match class.remedy() {
@@ -843,16 +877,13 @@ fn drive(declared: &Declared<'_>, observed: &Observed<'_>, connected: &Connected
     )
 }
 
-/// One line per job the deployment runs a model for: a job whose calls are recorded stands as
-/// they answered, or, never called, as its credential is stored.
 fn models(declared: &Declared<'_>, observed: &Observed<'_>) -> Overview {
     declared
         .jobs
         .iter()
         .map(|job| {
             let (standing, needs) = match &job.calls {
-                // What a model's calls said outranks whether its key resolves, as the bootstrap
-                // reads it: the model may hold a sign-in of its own that no store here names.
+                // Calls outrank the key: the model may hold its own sign-in.
                 Calls::Recorded { key, credential } => (
                     match crate::capability::reading_of(observed.registers.answered, key) {
                         Some(reading) => Standing::of_calls(Some(reading)),
@@ -940,7 +971,6 @@ fn this_box(declared: &Declared<'_>) -> Overview {
     )
 }
 
-/// What a version completed, as a sentence after the build's, or nothing.
 fn completed(titles: &[String]) -> String {
     match titles {
         [] => String::new(),

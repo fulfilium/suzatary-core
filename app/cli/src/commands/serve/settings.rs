@@ -1,5 +1,5 @@
-//! The settings page's route: what is connected. It writes nothing: every change is a card the
-//! owner taps, and no answer carries a secret's value.
+//! The settings route writes nothing: a change is a card the owner taps, and no answer carries a
+//! secret's value.
 
 use std::collections::BTreeMap;
 use std::path::PathBuf;
@@ -24,10 +24,7 @@ use super::State;
 use super::call::Call;
 use super::guard::Reader;
 
-/// `GET /api/overview`: what is connected, by group, as the stores read now.
-///
-/// # Errors
-/// A health register that cannot be read, which is not one with nothing in it.
+/// `GET /api/overview`: what is connected, by group.
 pub fn overview(call: &Call<Reader, (), ()>) -> Result<Json<wire::Overview>, Refusal> {
     timed(Phase::Overview(Part::Whole), || drawn(call))
 }
@@ -104,7 +101,6 @@ fn drawn(call: &Call<Reader, (), ()>) -> Result<Json<wire::Overview>, Refusal> {
     })))
 }
 
-/// The build line, reread only when the project chain's heads or the build move.
 fn build(state: &State, now: suzatary_core::capability::Datetime) -> Result<Build, Refusal> {
     let about = || {
         state
@@ -140,7 +136,7 @@ pub(super) fn pushed(state: &State) -> Pushed {
     pushed_at(state.data.as_path())
 }
 
-/// Where the data repository at `root` pushes, read from its git configuration now.
+/// Where the data repository at `root` pushes.
 #[must_use]
 pub fn pushed_at(root: &std::path::Path) -> Pushed {
     match git_config(root).present() {
@@ -150,8 +146,7 @@ pub fn pushed_at(root: &std::path::Path) -> Pushed {
     }
 }
 
-/// The repository's own git directory and the one it shares with its worktrees (a worktree's
-/// `.git` file names its `gitdir`, whose `commondir` holds the shared one).
+/// A worktree's `.git` file names its `gitdir`, whose `commondir` holds the shared one.
 fn git_dirs(root: &std::path::Path) -> std::io::Result<(PathBuf, PathBuf)> {
     let dot_git = root.join(".git");
     if !dot_git.is_file() {
@@ -173,8 +168,7 @@ fn git_config(root: &std::path::Path) -> std::io::Result<String> {
     std::fs::read_to_string(git_dirs(root)?.1.join("config"))
 }
 
-/// The data repository's pushes, from the reflogs of its branch and of `origin`'s copy. `None`
-/// on no branch, or never pushed.
+/// `None` on no branch, or never pushed.
 fn pushes(root: &std::path::Path) -> Option<suzatary_core::health::Health> {
     let (dir, common) = git_dirs(root).ok()?;
     let head = std::fs::read_to_string(dir.join("HEAD")).ok()?;
@@ -183,10 +177,9 @@ fn pushes(root: &std::path::Path) -> Option<suzatary_core::health::Health> {
     remote::pushes(&tip(&dir.join("logs/HEAD"))?, upstream.as_ref())
 }
 
-/// Bytes read from a reflog's end; its last line fits well within this.
+/// Bytes read from a reflog's end.
 const REFLOG_TAIL: u64 = 64 * 1024;
 
-/// The reflog's last line: a reflog only grows, one line per move.
 fn tip(log: &std::path::Path) -> Option<Tip> {
     use std::io::{Read as _, Seek as _};
     let mut file = std::fs::File::open(log).ok()?;

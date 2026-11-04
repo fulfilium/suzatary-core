@@ -1,18 +1,7 @@
-//! What the box itself asks the owner for, with no model asked: the proposals a reading of the
-//! deployment owes, filed in one conversation and kept equal to that set.
+//! The cards the box files itself, with no model asked, kept equal to the set a reading owes.
 //!
-//! [`Owed`] is a set of needs ([`crate::secretary::store::Need`]) joined by union, so each of
-//! the box's rules contributes its part, two rules asking for one need (a secret, by its name)
-//! are one card, and the box files the join of all of them at once. Filing is idempotent: a
-//! card is held by an open card for its need, or by its own content
-//! ([`crate::secretary::inbox::Fold::held`]), and no rule's words name an earlier card, so
-//! filing over the same state writes nothing, and a card filed anew is drawn under the box's
-//! line saying why it asks. The set owns the box's cards of the kinds its rules ask for
-//! (`owns`), wherever they are drawn, and no other card. One of those that still waits and that
-//! the set no longer holds is withdrawn, saying why: what asked for it is gone, and an open card
-//! nothing needs is a question nobody is asking. A set [holding](Owed::holding) withdraws
-//! nothing: while the secret store cannot answer, the box cannot tell a card still needed from
-//! one that is not.
+//! Filing is idempotent: an open card for the same need holds it. A waiting card of a kind the
+//! set `owns` that it no longer holds is withdrawn, unless the set is [holding](Owed::holding).
 
 use std::sync::LazyLock;
 
@@ -27,38 +16,35 @@ use crate::secretary::responded::Withdrawal;
 use crate::secretary::store::{ConversationId, Entry, Proposal, Reasons};
 use crate::store::Prodrome;
 
-/// The conversation the box's own cards are drawn in.
+/// The box's own conversation.
 pub static CONVERSATION: LazyLock<ConversationId> =
     LazyLock::new(|| ConversationId::new("setup").expect("\"setup\" is a conversation id"));
 
-/// Why a card nothing owes any more is withdrawn.
+/// Why a stale card is withdrawn.
 pub const WITHDRAWN: &str = "the box no longer asks for this: what it was needed for is in \
                              place, or what declared it is gone";
 
-/// One proposal a reading owes, and why, in the box's words.
+/// One proposal a reading owes, and why.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Noticed {
     /// The act.
     pub proposal: Proposal,
     /// Why the reading owes it.
     pub why: String,
-    /// When its episode began: a card of the box's for it asked before then, and no longer
-    /// waiting, is a past episode's, so it is asked again; `None` holds every card for it.
+    /// When its episode began; an ended card from before is asked again.
     pub since: Option<Datetime>,
-    /// The earlier cards it rests on beside itself, which its sources name.
+    /// Earlier cards it rests on, named in its sources.
     pub about: Vec<Reference>,
 }
 
-/// The set of proposals the box owes, and whether it holds its waiting cards as they stand; the
-/// empty set that holds nothing is its identity.
+/// The set of proposals the box owes; the empty set that holds nothing is its identity.
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct Owed {
     owed: Vec<Noticed>,
     stale: Stale,
 }
 
-/// What a filing does with a waiting card of the box's that the set does not hold, ordered so
-/// the join is the larger: one rule that cannot read what it rests on holds them for all.
+/// What a filing does with a waiting card the set does not hold; the join takes the larger.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, PartialOrd, Ord)]
 enum Stale {
     /// Withdrawn, saying why.
@@ -71,9 +57,9 @@ enum Stale {
 /// What one filing did.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct Filed {
-    /// Every proposal the set owes, filed now or before.
+    /// Every owed proposal, filed now or before.
     pub owed: Vec<ProposalId>,
-    /// The cards withdrawn because the set no longer owes them.
+    /// The cards withdrawn.
     pub withdrawn: Vec<ProposalId>,
 }
 
@@ -92,7 +78,7 @@ impl Owed {
         }
     }
 
-    /// This set, each proposal's episode begun at `at`.
+    /// Each proposal's episode begun at `at`.
     #[must_use]
     pub fn since(mut self, at: Datetime) -> Self {
         for noticed in &mut self.owed {
@@ -101,7 +87,7 @@ impl Owed {
         self
     }
 
-    /// This set, each proposal resting on `cards` too.
+    /// Each proposal resting on `cards` too.
     #[must_use]
     pub fn about(mut self, cards: &[Reference]) -> Self {
         for noticed in &mut self.owed {
@@ -110,10 +96,8 @@ impl Owed {
         self
     }
 
-    /// This set without the secret of any link whose removal it owes because that link was pasted
-    /// as a Google account's calendar (a removal resting on the link's card): the box never asks
-    /// to set a link it retires. A removal offered for another reason, such as a quiet calendar,
-    /// leaves the link's card standing beside it, since either answer is the owner's.
+    /// Drops the secret of any link whose removal rests on that link's card, so the box never
+    /// asks to set a link it retires.
     #[must_use]
     pub fn retiring(mut self) -> Self {
         use crate::secretary::acts::Act;
@@ -134,7 +118,7 @@ impl Owed {
         self
     }
 
-    /// This set, withdrawing none of the box's waiting cards when filed.
+    /// This set, withdrawing nothing when filed.
     #[must_use]
     pub fn holding(self) -> Self {
         Self {
@@ -143,8 +127,7 @@ impl Owed {
         }
     }
 
-    /// The union: a need both owe ([`crate::secretary::store::Need`]) is owed once, with the
-    /// first one's proposal and words; it holds when either does.
+    /// The union; a shared need keeps the first one's words, and it holds if either does.
     #[must_use]
     pub fn join(mut self, other: Self) -> Self {
         for noticed in other.owed {
@@ -156,7 +139,7 @@ impl Owed {
         self
     }
 
-    /// Whether what `proposal` asks for is owed, in whatever words.
+    /// Whether `proposal`'s need is owed, in whatever words.
     #[must_use]
     pub fn holds(&self, proposal: &Proposal) -> bool {
         self.owed
@@ -169,11 +152,7 @@ impl Owed {
         self.owed.iter()
     }
 
-    /// File every owed proposal as the box's in [`CONVERSATION`], opened by the first card it
-    /// draws, and withdraw every waiting card of the box's this set does not hold.
-    ///
-    /// # Errors
-    /// The stores' failures to read or append.
+    /// File every owed proposal in [`CONVERSATION`] and withdraw the stale ones.
     pub fn file(
         &self,
         conversations: crate::secretary::conversations::Conversations<'_>,
@@ -182,7 +161,7 @@ impl Owed {
     ) -> Result<Filed, Refusal> {
         let conversation = &*CONVERSATION;
         let mut done = Filed::default();
-        // Read once: what this filing adds are other proposals, so it changes no answer here.
+        // Read once: this filing adds only other proposals, so it changes no answer here.
         let before = inbox::fold(inbox)?;
         for noticed in &self.owed {
             let held = before
@@ -192,10 +171,8 @@ impl Owed {
                 done.owed.push(held);
                 continue;
             }
-            // Opened by the first card it draws, so a box that owes nothing has no conversation.
+            // Opened by the first card, so a box that owes nothing has no conversation.
             filed::opened(conversations, conversation, "Setup", &Proposer::Box, at)?;
-            // The card is its own evidence, as a device's request is: the reading it rests on is
-            // the box's, and the box says it in a line the card is drawn under.
             let card = Reference::Proposal(ProposalRef {
                 conversation: conversation.clone(),
                 index: super::read(conversations, conversation)?.proposals.len(),
@@ -254,9 +231,7 @@ impl Owed {
     }
 }
 
-/// Whether a card of the box's asking for `proposal` is this set's, filed and withdrawn by it
-/// alone: the kinds its rules ask for. The box's other cards (a build, an erasure) are their
-/// filers', wherever they are drawn.
+/// Whether a box card asking for `proposal` is this set's to file and withdraw.
 pub(crate) fn owns(proposal: &Proposal) -> bool {
     use crate::secretary::acts::Act;
     match proposal {
@@ -291,8 +266,7 @@ pub(crate) fn owns(proposal: &Proposal) -> bool {
     }
 }
 
-/// A rule's why as the owner reads it, on the card and on the box's line above it: one sentence,
-/// begun with a capital and ended with one full stop, whatever the rule wrote.
+/// A rule's why as one sentence, capitalised and ended with one full stop.
 #[must_use]
 pub fn said(why: &str) -> String {
     let trimmed = why.trim().trim_end_matches('.');
@@ -302,10 +276,10 @@ pub fn said(why: &str) -> String {
     })
 }
 
-/// What the box reads to know what it owes: each rule's input, one record.
+/// Each rule's input, one record.
 #[derive(Clone, Copy)]
 pub struct Seen<'a> {
-    /// Every secret name the deployment declares, with what declares it.
+    /// Every declared secret name.
     pub settables: &'a crate::settings::Settables,
     /// Where each stands.
     pub secrets: &'a dyn crate::capability::Secrets,
@@ -315,33 +289,24 @@ pub struct Seen<'a> {
     pub answered: &'a crate::health::Healths<String>,
     /// The sign-ins the box holds open.
     pub open: &'a [super::sign_in::SignInUrl],
-    /// The tables connections are read from, as the instance file declares them now; `None`
-    /// when the file does not read, which holds every waiting card, since a grant still needed
-    /// cannot be told from one that is not.
+    /// The connection tables now; `None` (unreadable) holds every card.
     pub declared: Option<&'a crate::connect::Declared>,
-    /// Every source's results; `None` when the register could not be read, which holds every
-    /// waiting card.
+    /// Every source's results; `None` (unreadable) holds every card.
     pub health: Option<&'a crate::health::Healths<crate::source_key::SourceKey>>,
-    /// The calendars holding an occurrence within [`super::failing::quiet`] of now; `None` when
-    /// they could not be read.
+    /// The calendars with an occurrence within [`super::failing::quiet`] of now.
     pub heard: Option<&'a std::collections::BTreeSet<crate::calendar::CalendarName>>,
-    /// Where the data repository pushes: its push token is asked for only where that is GitHub.
+    /// Where the data repository pushes: its token is asked for only on GitHub.
     pub pushed: &'a crate::settings::remote::Pushed,
     /// Now, UTC.
     pub now: crate::health::Instant,
-    /// The box's callback for a sign-in with Google, `None` when the app's URL names no origin
-    /// Google can send the owner back to.
+    /// The Google sign-in callback, if the app's URL has an origin Google can return to.
     pub redirect: Option<&'a crate::google::RedirectUri>,
 }
 
-/// Everything the box's rules owe at `seen`, joined: the one set every filing files, so no rule
-/// withdraws another's cards.
+/// Everything the rules owe at `seen`, as one set so no rule withdraws another's cards.
 ///
-/// While the store is locked, the rules cannot read what they rest on: a key it holds would read
-/// as one to ask for, and a card still needed as one to withdraw. So the set then holds every
-/// waiting card as it stands and owes only the card asking to unlock it. A name the store failed
-/// on is asked for by no card, and while one is, the set holds, since a card for it may still be
-/// needed; every missing name is asked for as ever.
+/// A locked store would make a stored key read as missing, so then the set holds every card and
+/// owes only the unlock card; it also holds while any name failed.
 #[must_use]
 pub fn due(seen: &Seen<'_>, inbox: &inbox::Fold) -> Owed {
     use crate::capability::Answer;
@@ -358,8 +323,6 @@ pub fn due(seen: &Seen<'_>, inbox: &inbox::Fold) -> Owed {
         settables: seen.settables,
         resolves: &resolves,
     };
-    // A data repository that pushes nowhere on GitHub needs no push token: its card waits until
-    // it is used.
     let in_use = seen.settables.restricted(|by| by.in_use(seen.pushed));
     let owed = super::fixes::owed(&in_use, answered(Answer::Missing), inbox)
         .join(super::bootstrap::owed(&answering, seen.open))
@@ -387,8 +350,7 @@ pub fn due(seen: &Seen<'_>, inbox: &inbox::Fold) -> Owed {
                 )
             },
         ));
-    // Joined after the rules above, since a secret or a sign-in one of them already asks for is
-    // that card, whatever made the connection fail.
+    // Joined after, so a secret or sign-in already asked for keeps its card.
     let failing = match (seen.declared, seen.health) {
         (Some(declared), Some(health)) => super::failing::owed(&super::failing::Observed {
             declared,
@@ -399,7 +361,10 @@ pub fn due(seen: &Seen<'_>, inbox: &inbox::Fold) -> Owed {
         }),
         (None, _) | (_, None) => Owed::default().holding(),
     };
-    let owed = owed.join(failing).retiring();
+    let owed = owed
+        .join(failing)
+        .join(super::fixes::replacing(seen.settables, inbox))
+        .retiring();
     if answers.values().any(|answer| *answer == Answer::Failed) {
         owed.holding()
     } else {
@@ -408,9 +373,6 @@ pub fn due(seen: &Seen<'_>, inbox: &inbox::Fold) -> Owed {
 }
 
 /// File what is [`due`] at `at`.
-///
-/// # Errors
-/// As [`Owed::file`].
 pub fn notice(
     seen: &Seen<'_>,
     conversations: crate::secretary::conversations::Conversations<'_>,

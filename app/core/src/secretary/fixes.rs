@@ -1,12 +1,7 @@
-//! The rule over the deployment's secrets: a name a table of the instance file declares, with
-//! nothing stored under it, is owed a Secret card the box files itself, with no model asked.
+//! A declared secret with nothing stored is owed a Secret card the box files itself.
 //!
-//! Its identity is (name, declaration, episode). The act's words name what declares the name and
-//! nothing else, so the same state asks for the same card. An episode begins when a card of the
-//! box's for the name ends without the owner's no (stored from the card, or withdrawn when the
-//! value was stored elsewhere), so asking again while nothing changed asks for the same card
-//! however it was answered (one the owner dismissed stays dismissed), and a value stored and then
-//! lost is asked for anew.
+//! A card's identity is (name, declaration, episode); an episode begins when the box's card for
+//! the name ends without the owner's no.
 
 use crate::capability::Datetime;
 use crate::secretary::acts::Act;
@@ -17,10 +12,8 @@ use crate::secretary::responded::{Done, Responded};
 use crate::secretary::store::{Need, Proposal};
 use crate::settings::{Declaration, Settable, Settables};
 
-/// Why the box asks for a declared secret nothing stores, in the owner's words.
 const MISSING: &str = "Nothing is stored for it yet, so what needs it cannot work.";
 
-/// Why the box asks for the secret store to be unlocked, in the owner's words.
 const LOCKED: &str = "The secret store did not answer, so no saved key can be read.";
 
 /// One declared name with nothing stored under it.
@@ -30,13 +23,12 @@ pub struct Fix {
     pub name: Settable,
     /// Every table declaring it.
     pub declared: Vec<Declaration>,
-    /// When the box's card for it last ended without the owner's no, once one has: its episode
-    /// begins there.
+    /// Where its episode begins.
     pub since: Option<Datetime>,
 }
 
 impl Fix {
-    /// The card's act: the secret, asked for in the box's words.
+    /// The card's act.
     #[must_use]
     pub fn act(&self) -> Act {
         let readers = self
@@ -51,7 +43,7 @@ impl Fix {
         }
     }
 
-    /// What it owes: its act, in its episode.
+    /// Its act, in its episode.
     #[must_use]
     pub fn owed(&self) -> Owed {
         let owed = Owed::one(Proposal::Act(self.act()), MISSING);
@@ -62,9 +54,8 @@ impl Fix {
     }
 }
 
-/// Every declared name a table of the instance file names that is `missing`, each with the
-/// instant the box's card for it last ended without the owner's no. The model's credential is no
-/// table's: whether the model answers is the model's rule to ask.
+/// Every table-declared name that is `missing`. The model's credential is no table's; the
+/// model's own rule asks for it.
 #[must_use]
 pub fn fixes(
     settables: &Settables,
@@ -77,7 +68,7 @@ pub fn fixes(
         .filter_map(|(name, declared)| {
             let declared: Vec<Declaration> = declared
                 .iter()
-                .filter(|declaration| declaration.by_a_table() && !declaration.own_card())
+                .filter(|declaration| declaration.by_a_secret_card())
                 .cloned()
                 .collect();
             (!declared.is_empty()).then(|| Fix {
@@ -105,7 +96,46 @@ pub fn owed(
         .fold(Owed::default(), Owed::join)
 }
 
-/// The card asking to unlock the store, which is locked.
+/// The act's words for a secret the owner asked to replace.
+pub const REPLACING: &str = "you asked to replace it";
+
+const REPLACE: &str = "You asked to replace it from Settings; what reads it keeps the stored \
+                       value until a new one is stored here.";
+
+/// The card asking for a new value of `name`, in an episode beginning at `at`.
+#[must_use]
+pub fn replace(name: &Settable, at: Datetime) -> Owed {
+    Owed::one(
+        Proposal::Act(Act::Secret {
+            name: name.name().to_owned(),
+            why: REPLACING.to_owned(),
+        }),
+        REPLACE,
+    )
+    .since(at)
+}
+
+/// Every waiting replace card of the box's: the card is the request, owed until answered.
+#[must_use]
+pub fn replacing(settables: &Settables, inbox: &inbox::Fold) -> Owed {
+    inbox
+        .objects()
+        .filter(|object| object.asked.proposer == Proposer::Box && object.reading.open())
+        .filter_map(|object| match &object.asked.proposal {
+            Proposal::Act(Act::Secret { name, why }) if why == REPLACING => {
+                Some(replace(&Settable::mint(settables, name).ok()?, object.at))
+            }
+            Proposal::Act(_)
+            | Proposal::Email(_)
+            | Proposal::Forward(_)
+            | Proposal::Changes(_)
+            | Proposal::Remember { .. }
+            | Proposal::Decide(_) => None,
+        })
+        .fold(Owed::default(), Owed::join)
+}
+
+/// The card asking to unlock the store.
 #[must_use]
 pub fn unlock(inbox: &inbox::Fold) -> Owed {
     let after = ended(inbox, |proposal| {
@@ -115,9 +145,8 @@ pub fn unlock(inbox: &inbox::Fold) -> Owed {
     Owed::one(Proposal::Act(Act::UnlockStore { after }), LOCKED)
 }
 
-/// The box's card asking for what `asks` picks that last ended without the owner's no: acted on
-/// from the card, or withdrawn by the box. The latest by its recorded instant and then its name,
-/// so the answer is a function of the inbox's objects.
+/// The box's latest card matching `asks` that ended without the owner's no, ordered by instant
+/// then name so the answer is a function of the inbox.
 fn ended(inbox: &inbox::Fold, asks: impl Fn(&Proposal) -> bool) -> Option<&inbox::Object> {
     inbox
         .objects()
@@ -316,5 +345,54 @@ mod tests {
             held.file(&settables, minute + 2);
             proptest::prop_assert_eq!(held.inbox.objects().expect("reads").len(), objects);
         }
+    }
+
+    /// A Replace stands until it is answered, whatever the box files meanwhile, and a stored
+    /// secret replaced once can be replaced again.
+    #[test]
+    fn a_replace_card_stands_until_it_is_answered() {
+        let settables = declared(&[Channel::Ntfy]);
+        let mut world = World::new();
+        world.stored.insert("NTFY_TOPIC".to_owned());
+        let name = Settable::mint(&settables, "NTFY_TOPIC").expect("declared");
+        let replace_at = |world: &World, minute| {
+            replace(&name, at(minute))
+                .holding()
+                .file(
+                    world.conversations.conversations(),
+                    &world.inbox,
+                    at(minute),
+                )
+                .expect("filed")
+        };
+        let filing = |world: &World, minute| {
+            owed(
+                &settables,
+                |name| !world.stored.contains(name.name()),
+                &world.fold(),
+            )
+            .join(replacing(&settables, &world.fold()))
+            .file(
+                world.conversations.conversations(),
+                &world.inbox,
+                at(minute),
+            )
+            .expect("filed")
+        };
+        assert!(world.open().is_empty());
+        replace_at(&world, 1);
+        assert_eq!(world.open(), ["NTFY_TOPIC"]);
+        replace_at(&world, 2);
+        filing(&world, 3);
+        assert_eq!(
+            world.open(),
+            ["NTFY_TOPIC"],
+            "one card, kept by the box's filing"
+        );
+        world.tap("NTFY_TOPIC", 4);
+        filing(&world, 5);
+        assert!(world.open().is_empty());
+        replace_at(&world, 6);
+        assert_eq!(world.open(), ["NTFY_TOPIC"], "replaced again, asked again");
     }
 }

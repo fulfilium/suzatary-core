@@ -1,7 +1,7 @@
-//! `suzatary serve`: the app's HTTP surface over axum; `table` lists every route.
+//! `suzatary serve`; `table` lists every route.
 //!
 //! It sends no CORS header, and `gate` refuses with 403 any peer whois cannot name.
-//! It authors no markup: the only HTML it serves is `dist`'s files and typst's rendering.
+//! The only HTML it serves is `dist`'s files and typst's rendering.
 
 pub(crate) mod asked;
 mod body;
@@ -34,6 +34,7 @@ mod stores;
 mod stream;
 pub mod table;
 mod the_box;
+mod token_expiry;
 mod validated;
 mod versioned;
 mod watch;
@@ -64,14 +65,13 @@ pub use live::Live;
 pub use settings::pushed_at;
 pub use world::World;
 
-/// The owner's uploads: the store on the box, and his Drive for private ones.
-/// The vault is in no record, so only his confirm on an upload reaches it.
+/// The owner's uploads; only his confirm reaches the vault.
 pub struct Uploads {
     pub store: suzatary_io::attachments::AttachmentStore,
     pub vault: Arc<dyn suzatary_core::vault::Vault>,
 }
 
-/// What every handler is handed: one shared [`Inner`].
+/// One shared [`Inner`].
 #[derive(Clone)]
 pub struct State(Arc<Inner>);
 
@@ -83,68 +83,66 @@ impl std::ops::Deref for State {
     }
 }
 
-/// What the settings page reads and its writes swap, with the writers outside every record.
+/// The settings page's stores.
 pub struct Settings {
     pub live: live::Shared,
     pub models: Arc<models::Models>,
     pub secrets: Arc<dyn suzatary_core::settings::Writes + Send + Sync>,
-    /// What declares `settables` to the store `secrets` writes to.
+    /// Declares `settables`.
     pub declares: Arc<dyn suzatary_core::settings::Declares + Send + Sync>,
     pub edits: Arc<dyn suzatary_core::settings::Edits + Send + Sync>,
     /// The data repository.
     pub data: Arc<std::path::PathBuf>,
 }
 
-/// What a tap reaches, outside every record: the postman and the act performer.
+/// What a tap reaches, outside every record.
 pub struct Performers {
     pub postman: Arc<dyn suzatary_core::secretary::routes::Post + Send + Sync>,
     pub acting: Arc<dyn suzatary_core::secretary::routes::Perform + Send + Sync>,
 }
 
-/// Everything a handler reads, held once per server.
+/// Everything a handler reads.
 #[derive(Clone)]
 pub struct Inner {
-    /// The first chain, which every bare `/api/…` path serves.
+    /// Serves every bare `/api/…` path.
     pub first: Chained,
-    /// Every chain by name, the first included.
+    /// Every chain by name.
     pub chains: Arc<BTreeMap<String, Chained>>,
     pub deployment: Arc<Deployment>,
-    /// Where `app_url` says the app answers, read once when `serve` starts.
+    /// The app's own URL.
     pub door: Arc<suzatary_core::gate::Door>,
-    /// Outside every record, reached only with a `Tap`.
+    /// Reached only with a `Tap`.
     pub postman: Arc<dyn suzatary_core::secretary::routes::Post + Send + Sync>,
-    /// Outside every record, reached only with a `Tap`.
+    /// Reached only with a `Tap`.
     pub acting: Arc<dyn suzatary_core::secretary::routes::Perform + Send + Sync>,
-    /// What tailscaled said about each peer, and until when; per server, never global.
+    /// Whois answers, per server.
     pub known: Arc<std::sync::Mutex<gate::Remembering>>,
     pub workers: Arc<Workers>,
-    /// Once serving, only [`State::reconnected`] writes it.
+    /// Only [`State::reconnected`] writes it.
     pub live: live::Shared,
     pub models: Arc<models::Models>,
-    /// Outside every record, reached only by a tapped card.
+    /// Reached only by a tapped card.
     pub secrets: Arc<dyn suzatary_core::settings::Writes + Send + Sync>,
-    /// The store refuses a name it was never declared; reached only through
-    /// [`State::reconnected`].
+    /// Refuses undeclared names.
     pub declares: Arc<dyn suzatary_core::settings::Declares + Send + Sync>,
-    /// Edits the instance file; outside every record, reached only by a tapped card.
+    /// Edits the instance file, by a tapped card.
     pub edits: Arc<dyn suzatary_core::settings::Edits + Send + Sync>,
-    /// Deletes what the box kept for a removed account; outside every record.
+    /// Deletes a removed account's data.
     pub forget: Arc<dyn suzatary_core::mail::cache::Forget + Send + Sync>,
-    /// Reads a held value back for the owner's tap; outside every record, so no verb of the
-    /// secretary or the agent can.
+    /// Reads a held value back for a tap; outside every record, so no agent verb can.
     pub reveal: Arc<dyn suzatary_core::held_value::Reveal + Send + Sync>,
-    /// Syncs a plugin once a tap stored its link; outside every record.
+    /// Syncs a plugin after a tap.
     pub checks: checks::Checks,
-    /// How the person reaches the app at a terminal.
+    /// How the person reaches the app.
     pub reach: Arc<suzatary_core::connect::Reach>,
     /// `None` refuses an upload by name.
     pub uploads: Option<Arc<Uploads>>,
-    /// `None` names a topic with the record's own model.
+    /// `None` names a topic with the record's model.
     pub titler: Option<Arc<dyn suzatary_core::capability::Sessions + Send + Sync>>,
     /// `None` while the compactor is off.
     pub compactor: Option<Arc<compaction::Compactor>>,
     pub presence: Presence,
-    /// Each login's budget of browser error reports, one table per server.
+    /// Error-report budgets per login.
     pub reports: Arc<std::sync::Mutex<suzatary_core::clienterror::Limiter>>,
     pub stamp: Stamp,
     /// `None` declares no plugin.
@@ -152,9 +150,9 @@ pub struct Inner {
     pub repos: Arc<suzatary_core::repos::Declared>,
     /// The data repository.
     pub data: Arc<std::path::PathBuf>,
-    /// The chains as the last request read them; only a chain whose heads moved is reread.
+    /// Only a chain whose heads moved is reread.
     pub read: Arc<std::sync::Mutex<suzatary_core::chain_set::Read>>,
-    /// The Inbox's open connection cards, memoised by the inbox's heads.
+    /// Open connection cards, memoised.
     pub asking: Arc<
         std::sync::Mutex<
             prodrome_core::memo::Cache<
@@ -163,7 +161,7 @@ pub struct Inner {
             >,
         >,
     >,
-    /// Settings' build line, memoised by the project chain's heads and the build.
+    /// Memoised build line.
     pub built: Arc<
         std::sync::Mutex<
             prodrome_core::memo::Cache<
@@ -172,34 +170,31 @@ pub struct Inner {
             >,
         >,
     >,
-    /// Reached only by a tapped device card; `None` for a deployment that declares no root.
+    /// Reached only by a tapped device card.
     pub keys: Option<Arc<suzatary_core::signatures::BoxKeys>>,
-    /// Each signed request the box performed, kept with its answer; `None` keeps none.
+    /// Signed requests and answers.
     pub requests: Option<Arc<suzatary_io::requests::Requests>>,
-    /// The last code `suzatary device pair` printed; `None` pairs no device.
+    /// The last pairing code.
     pub pairings: Option<Arc<dyn suzatary_core::signatures::Pairings>>,
-    /// The requests being performed now, so one sent twice at once is performed once.
+    /// So a request sent twice at once runs once.
     pub performing: asked::InFlight,
-    /// Now, in UTC: a device stamps UTC, so a request's window never reads the local clock.
+    /// Now, in UTC, since devices stamp UTC.
     pub wall: fn() -> chrono::DateTime<chrono::Utc>,
-    /// Whether each model entry answered its calls.
+    /// Whether each model answered.
     pub answered: Arc<dyn suzatary_core::health::Register<String> + Send + Sync>,
-    /// Outside every record, reached only with a `Tap`.
+    /// Reached only with a `Tap`.
     pub signing: Arc<dyn suzatary_core::secretary::sign_in::Sessions + Send + Sync>,
-    /// The one test call before a model's credential is kept; outside every record.
+    /// Tests a model credential.
     pub verify: Arc<dyn suzatary_core::settings::Verify + Send + Sync>,
-    /// Outside every record, begun only with a `Tap` and finished only by its callback.
+    /// Begun only with a `Tap`, finished only by its callback.
     pub consenting: Arc<google::Consenting>,
-    /// Held across one filing: two filings at once would each read the inbox before the other
-    /// wrote, and file the same card twice. Holds the calendars last heard, which only the
-    /// hourly pass (`hear`) rereads; `None` until the first hearing.
+    /// Held across a filing, so none files a card twice.
     pub noticing: Arc<std::sync::Mutex<Option<Heard>>>,
-    /// What the secret store answered since the last filing ([`State::notice`]), which forgets
-    /// it first; every other reader asks through it.
+    /// Secret store answers since the last filing.
     pub secrets_answered: Arc<std::sync::Mutex<suzatary_core::capability::SecretAnswers>>,
     pub epochs: Arc<suzatary_core::epoch::Epochs>,
     pub frontiers: Arc<prodrome_core::store::frontier::Frontiers>,
-    /// What `GET /api/portal` answers, read from `[notify]` when the server starts.
+    /// What `GET /api/portal` answers.
     pub portal: Arc<suzatary_core::portal::Portal>,
 }
 
@@ -236,7 +231,7 @@ impl suzatary_core::secretary::sign_in::Sessions for Closed {
     }
 }
 
-/// Keeps no credential of a model, so a key is never kept untested.
+/// Keeps no model credential.
 pub struct Unverified;
 
 impl suzatary_core::settings::Verify for Unverified {
@@ -252,12 +247,12 @@ impl suzatary_core::settings::Verify for Unverified {
     }
 }
 
-/// Where the build `GET /api/about` names comes from.
+/// The build `GET /api/about` names.
 #[derive(Debug, Clone, Default)]
 pub enum Stamp {
     #[default]
     Compiled,
-    /// The file's trimmed contents, read on every request; test only.
+    /// Read per request; test only.
     #[cfg(feature = "fixture")]
     File(Arc<PathBuf>),
 }
@@ -276,10 +271,6 @@ impl Stamp {
     }
 
     /// What `GET /api/about` answers.
-    ///
-    /// # Errors
-    /// A release file beside the binary that does not read, or the project chain held and not
-    /// read.
     pub fn about(
         &self,
         set: &suzatary_core::chain_set::ChainSet<'_>,
@@ -295,12 +286,11 @@ impl Stamp {
     }
 }
 
-/// Whether anyone has the app open: a ping heard within [`PRESENT_SECONDS`]; the phone is
-/// pushed only when nobody is.
+/// Whether a ping came within [`PRESENT_SECONDS`].
 #[derive(Debug, Clone, Default)]
 pub struct Presence(Arc<std::sync::Mutex<Option<std::time::Instant>>>);
 
-/// How long a ping counts: two missed pings and a margin.
+/// Two missed pings and a margin.
 pub const PRESENT_SECONDS: u64 = 70;
 
 impl Presence {
@@ -315,11 +305,10 @@ impl Presence {
     }
 }
 
-/// One chain's effects and its policy, together, so a store is never read under
-/// another chain's trust rule.
+/// One chain's effects under its own trust rule.
 #[derive(Clone)]
 pub struct Chained {
-    /// The effects whose `chain` is this chain's store; the rest is shared.
+    /// Effects whose `chain` is this chain's store.
     pub caps: &'static Server<'static>,
     pub policy: Arc<suzatary_core::chains::ChainPolicy>,
 }
@@ -342,7 +331,6 @@ impl State {
             data,
         }: Settings,
     ) -> Self {
-        // A test's server: its model answers; `listen` reads the box's own register instead.
         let answered = std::sync::Mutex::new(suzatary_core::health::Healths::one(
             models.recorded(),
             chrono::DateTime::UNIX_EPOCH.naive_utc(),
@@ -406,7 +394,6 @@ impl State {
             consenting,
             noticing: Arc::default(),
             secrets_answered: Arc::default(),
-            // A test's server keeps its epochs in memory; `listen` keeps the box's on disk.
             epochs: Arc::new(suzatary_core::epoch::Epochs::remembered()),
             frontiers: Arc::new(prodrome_core::store::frontier::Frontiers::remembered(
                 prodrome_core::store::frontier::KEPT,
@@ -416,7 +403,7 @@ impl State {
         }))
     }
 
-    /// The state being built, before any request shares it: copied only if it already is.
+    /// Copies only if already shared.
     fn building(&mut self) -> &mut Inner {
         Arc::make_mut(&mut self.0)
     }
@@ -450,8 +437,7 @@ impl State {
         self
     }
 
-    /// Reread which calendars hold an occurrence within the quiet span; a failed reading keeps
-    /// none, which holds the quiet calendars' cards.
+    /// Reread the busy calendars; a failed reading holds their cards.
     pub fn hear(&self) {
         let caps = self.first.caps;
         let now = prodrome_core::fpl::instant_of(caps.secretary.clock.now());
@@ -506,7 +492,7 @@ impl State {
         self
     }
 
-    /// Every chain's writer, the first first.
+    /// Every chain's writer.
     #[must_use]
     pub fn chain_stores(
         &self,
@@ -569,22 +555,20 @@ impl State {
         self
     }
 
-    /// The secret names the deployment may set as of now.
+    /// Settable secret names, as of now.
     #[must_use]
     pub fn settables(&self) -> suzatary_core::settings::Settables {
         locks::read(&self.live).settables.clone()
     }
 
-    /// What the instance file declares as of now, read once so its parts agree.
+    /// The instance file's declarations, read once.
     #[must_use]
     pub fn live(&self) -> live::Live {
         locks::read(&self.live).clone()
     }
 
-    /// `who` moved the instance file: reread [`live::Live`] and swap it in whole. The file is
-    /// read under the lock, so of two moves the last to swap read the file last. The names are
-    /// declared to the secret store before the swap, so no card is filed for a name the store
-    /// would refuse. A file that does not read, or names the store refuses, changes nothing.
+    /// Swap a reread [`live::Live`] in whole under the lock, after declaring its names to the
+    /// secret store; a failure changes nothing.
     pub fn reconnected(&self, who: &str) {
         let mut live = locks::write(&self.live);
         let read = self.edits.declared().and_then(|declared| {
@@ -623,7 +607,7 @@ impl State {
         *live = next;
     }
 
-    /// `caps`' secret store asked through what it answered since the last filing.
+    /// `caps`' secret store, as last answered.
     #[must_use]
     pub fn secrets<'a>(
         &'a self,
@@ -666,7 +650,7 @@ impl State {
         self
     }
 
-    /// A write moved this conversation's heads: nudge its task and the compactor.
+    /// Nudge this conversation's task and the compactor.
     pub fn heard(&self, id: &suzatary_core::secretary::store::ConversationId) {
         self.workers.nudge(id, Arc::new(self.clone()));
         if let Some(compactor) = &self.compactor {
@@ -674,8 +658,7 @@ impl State {
         }
     }
 
-    /// File the box's own cards it owes now and withdraw what it no longer owes; a failure is a
-    /// log line, never the request's.
+    /// File owed cards, withdraw the rest; failures are logged.
     pub fn notice(&self) {
         let heard = locks::held(&self.noticing);
         let live::Live {
@@ -738,7 +721,7 @@ impl State {
             Ok(_) => {}
             Err(failed) => tracing::warn!("noticed: {}", failed.message()),
         }
-        // A key trusted while no server ran, or before cards were withdrawn, leaves its card.
+        // A key trusted while no server ran leaves its card.
         if let Some(keys) = &self.keys {
             match suzatary_core::secretary::routes::withdraw_trusted(
                 caps.secretary.inbox,
@@ -773,10 +756,7 @@ impl State {
             .collect()
     }
 
-    /// Secretary work with every chain bound and the cards built.
-    ///
-    /// # Errors
-    /// The work's own [`Refusal`].
+    /// Runs secretary work with the cards built.
     pub fn with_cards<T>(
         &self,
         work: impl FnOnce(
@@ -799,12 +779,11 @@ impl State {
         work(self.first.caps, &cards)
     }
 
-    /// Every chain, reread only where its heads moved since the last request.
+    /// Every chain; only moved heads are reread.
     #[must_use]
     pub fn chains_read(&self) -> suzatary_core::chain_set::Read {
         let lock = || locks::held(&self.read);
-        // Read outside the lock so one request's disk read holds up no other; of two racing
-        // requests, the last to finish is kept.
+        // Read unlocked; of two racing requests the last to finish wins.
         let last = lock().clone();
         let now = last.moved(
             self.chains
@@ -815,10 +794,7 @@ impl State {
         now
     }
 
-    /// The chain a path segment named, or the first when the path had none.
-    ///
-    /// # Errors
-    /// [`Refusal::not_found`] on a name nothing is bound to.
+    /// The named chain, or the first.
     pub fn bound(&self, named: Option<&str>) -> Result<Chained, Refusal> {
         let Some(name) = named else {
             return Ok(self.first.clone());
@@ -843,20 +819,20 @@ fn logged(from: &live::Live, to: &live::Live, who: &str) {
 /// What `suzatary serve` was told.
 pub struct Serving {
     pub listening: listening::Listening,
-    /// Where the gate answers: `app_url`'s host, at the port `listening` binds.
+    /// `app_url`'s host at the `listening` port.
     pub door: suzatary_core::gate::Door,
     /// The frontend build.
     pub dist: PathBuf,
     pub live: live::Shared,
-    /// Who names a peer, loopback included.
+    /// Names a peer, loopback included.
     pub peers: Peers,
     pub brain: Brain,
     pub titler: Brain,
-    /// Off under every fixture, so no test asks a model.
+    /// Off under every fixture.
     pub compacting: Compacting,
     pub postman: crate::commands::secretary::Postman,
     pub acting: Performing,
-    /// Shared with the performer, so a tap's announcements reach the server's subscribers.
+    /// Shared with the performer for a tap's announcements.
     pub workers: Arc<Workers>,
     pub ledger: interpreters::Ledger,
     pub stamp: Stamp,
@@ -864,9 +840,9 @@ pub struct Serving {
     pub verify: Arc<dyn suzatary_core::settings::Verify + Send + Sync>,
     /// Rings `moved` when a reading moves.
     pub answered: suzatary_io::model_health::Answered,
-    /// Rung when a model starts or stops answering, so the box files at once.
+    /// Rung when a model starts or stops answering.
     pub moved: Arc<tokio::sync::Notify>,
-    /// Google's own endpoints, or the fixture's fake.
+    /// Google's endpoints, or a fake.
     pub google: suzatary_core::google::Endpoints,
 }
 
@@ -890,8 +866,7 @@ pub fn app(state: State, dist: &std::path::Path) -> Router {
         .into_iter()
         .fold(Router::new(), |api, route| route.mount(api));
 
-    // No SPA fallback: routes live in the fragment, so one would only answer 200 to typos.
-    // The frontend is brotli-compressed at build time, so it is served as its `.br` or as itself.
+    // No SPA fallback: routes live in the fragment.
     let frontend: Router<State> = if dist.is_dir() {
         let tag = fresh::tag_of(dist);
         Router::new()
@@ -907,9 +882,8 @@ pub fn app(state: State, dist: &std::path::Path) -> Router {
         Router::new().fallback(not_built)
     };
 
-    // Every API answer is the owner's mail or todos, so none is kept by a browser's cache, except
-    // an object's literal by name, which never changes (`reply::kept`). Compression at its
-    // fastest: on a private tailnet bytes cost less than compression time.
+    // Browsers cache no API answer but an object's literal (`reply::kept`).
+    // Fastest compression: bytes are cheap on a tailnet.
     api.layer(axum::middleware::from_fn(validated::revalidated))
         .layer(SetResponseHeaderLayer::overriding(
             header::CACHE_CONTROL,
@@ -927,13 +901,12 @@ pub fn app(state: State, dist: &std::path::Path) -> Router {
             state.clone(),
             gate::admit,
         ))
-        // A response with a stricter policy of its own (an attachment's sandbox) keeps it.
+        // An attachment's stricter policy wins.
         .layer(SetResponseHeaderLayer::if_not_present(
             header::CONTENT_SECURITY_POLICY,
             HeaderValue::from_static(POLICY),
         ))
-        // A page of another origin that opened this one keeps no handle on it, so it cannot post
-        // a message that reads as the Android app's (`web/src/app/pushtoken.ts`).
+        // So no other origin can pose as the Android app (`web/src/app/pushtoken.ts`).
         .layer(SetResponseHeaderLayer::overriding(
             header::HeaderName::from_static("cross-origin-opener-policy"),
             HeaderValue::from_static("same-origin"),
@@ -941,15 +914,12 @@ pub fn app(state: State, dist: &std::path::Path) -> Router {
         .with_state(state)
 }
 
-/// The content security policy of every page: behind the tripwire and the href door, a script
-/// that slipped both still does not run. Inline `style` attributes are allowed because typst's
-/// HTML lays out with them, and an attribute's CSS reaches no other origin.
+/// Every page's CSP; inline `style` is for typst's layout and reaches no other origin.
 pub const POLICY: &str = "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; \
     style-src-attr 'unsafe-inline'; worker-src 'self'; object-src 'none'; base-uri 'none'; \
     form-action 'none'; frame-ancestors 'none'";
 
-/// What performs a tapped act, made once the server's stores are open, so an act writes through
-/// the same handles the pages read.
+/// Performs a tapped act through the pages' handles.
 pub type Performing = Box<
     dyn FnOnce(
             crate::commands::secretary::ActingStores,
@@ -960,14 +930,14 @@ pub type Performing = Box<
 
 pub async fn listen(instance: &Instance, serving: Serving) -> anyhow::Result<()> {
     use suzatary_io::{epochs, frontiers};
-    // Declared before any store is asked, so a server that cannot write them does not start.
+    // Declared first, so a server that cannot write them does not start.
     instance
         .declarations
         .opened()
         .context("declaring this instance's secret names")?;
-    // Keys not at hand do not stop the server: it reads, and every write says why it cannot.
+    // Missing keys leave the server read-only.
     let signers = instance.signers();
-    // A chain that is not adopted is logged; the server still reads.
+    // The server still reads.
     if let Err(failed) = instance.adopt(&signers).whole() {
         tracing::warn!("{failed:#}");
     }
@@ -1000,13 +970,11 @@ pub async fn listen(instance: &Instance, serving: Serving) -> anyhow::Result<()>
         },
         workers,
         Settings {
-            // Settable names come from the instance file, never `secretspec.toml`, which also
-            // declares secrets the app may not set.
+            // Never `secretspec.toml`, which names unsettable secrets.
             live: Arc::clone(&serving.live),
             models: Arc::new(models::Models::of(instance)),
-            // The same store `secret_resolves` reads, so a write and its check agree.
+            // The store `secret_resolves` reads.
             secrets: Arc::new(instance.secrets()),
-            // Every later move goes through `State::reconnected`.
             declares: Arc::new(instance.declarations.clone()),
             edits: Arc::new(crate::instance::InstanceEdits::new(instance.path.clone())),
             data: Arc::new(instance.data().to_path_buf()),
@@ -1047,12 +1015,10 @@ pub async fn listen(instance: &Instance, serving: Serving) -> anyhow::Result<()>
     ));
     let state = compaction::started(state, instance, serving.compacting);
 
-    // Warmed here rather than in `app`, which every test calls.
     for chain in std::iter::once(&first).chain(&rest) {
         watch::warm_now(chain.caps, &chain.policy);
     }
     warm_usage(&first);
-    // Before the watcher: at startup any standing device-flow act was orphaned by this restart.
     reconcile_orphaned_acts(&first).await;
     erase_at_startup(&first).await;
     open_default(&first).await;
@@ -1156,7 +1122,6 @@ pub struct Args {
     google_fixture: Option<String>,
 }
 
-/// The flags' certificate pair, or else the one in `tls_dir`; clap refuses half a pair.
 fn tls(
     cert: Option<PathBuf>,
     key: Option<PathBuf>,
@@ -1190,7 +1155,7 @@ fn serving(instance: &Instance, args: Args) -> anyhow::Result<Serving> {
     #[cfg(feature = "fixture")]
     let google = match google_fixture {
         None => suzatary_core::google::Endpoints::google(),
-        // Test only: a fixture behind a real certificate is one somebody could reach.
+        // A fixture behind a real certificate is reachable.
         Some(_) if secure => {
             anyhow::bail!("--google-fixture is test-only and refuses to run with a certificate")
         }
@@ -1211,7 +1176,7 @@ fn serving(instance: &Instance, args: Args) -> anyhow::Result<Serving> {
     let peers = match whois_fixture {
         None => daemon_peers(&instance.paths.whois_socket),
         Some(login) => {
-            // Test only: a fixture behind a real certificate is one somebody could reach.
+            // A fixture behind a real certificate is reachable.
             if secure {
                 anyhow::bail!("--whois-fixture is test-only and refuses to run with a certificate");
             }
@@ -1222,8 +1187,7 @@ fn serving(instance: &Instance, args: Args) -> anyhow::Result<Serving> {
     #[cfg(not(feature = "fixture"))]
     let peers = daemon_peers(&instance.paths.whois_socket);
 
-    // A scripted model also swaps in the recording performer, so a browser test never
-    // reaches Microsoft.
+    // Records taps too, never reaching Microsoft.
     #[cfg(feature = "fixture")]
     let scripted = model_fixture.is_some();
     #[cfg(feature = "fixture")]
@@ -1245,8 +1209,7 @@ fn serving(instance: &Instance, args: Args) -> anyhow::Result<Serving> {
         #[cfg(feature = "fixture")]
         (scripted, &google),
     );
-    // Any fixture reads no transcripts (a cold walk times out browser scenes) and asks no
-    // compactor.
+    // No transcripts (a cold walk times out) and no compactor.
     #[cfg(feature = "fixture")]
     let fixture = any_fixture || scripted;
     #[cfg(not(feature = "fixture"))]
@@ -1305,7 +1268,7 @@ fn quiet(instance: &Instance, fixture: bool) -> (interpreters::Ledger, Compactin
     }
 }
 
-/// The secretary's model and postman under the fixtures; never behind a certificate.
+/// Fixtures only; never behind a certificate.
 #[cfg(feature = "fixture")]
 fn fixture_talking(
     instance: &Instance,
@@ -1345,7 +1308,6 @@ fn fixture_talking(
     })
 }
 
-/// The act performer, the sign-ins table and the credential test, sharing one table.
 fn performers(
     instance: &Instance,
     answered: &suzatary_io::model_health::Answered,
@@ -1382,7 +1344,7 @@ fn performers(
     )
 }
 
-/// `--build-fixture`: refused behind a certificate like every other fixture.
+/// `--build-fixture`; refused behind a certificate.
 #[cfg(feature = "fixture")]
 fn stamp_of(build_fixture: Option<PathBuf>, tls: bool) -> anyhow::Result<Stamp> {
     let Some(path) = build_fixture else {
@@ -1429,7 +1391,7 @@ fn real_acting(
     })
 }
 
-/// The fixture's recording device flow, so a browser suite never dials Microsoft.
+/// Never dials Microsoft.
 #[cfg(feature = "fixture")]
 fn recording_acting(
     instance: &Instance,
@@ -1442,7 +1404,6 @@ fn recording_acting(
     })
 }
 
-/// Warm the usage page's transcript cache, since a cold first view takes tens of seconds.
 fn warm_usage(first: &Chained) {
     let caps = first.caps;
     tokio::task::spawn_blocking(move || {
@@ -1457,7 +1418,7 @@ fn warm_usage(first: &Chained) {
     });
 }
 
-/// Open the default conversation if nobody has, since no read writes; a failure is logged.
+/// Open the default conversation; no read writes it.
 async fn open_default(chain: &Chained) {
     let caps = chain.caps;
     let now = caps.secretary.clock.now();
@@ -1483,7 +1444,7 @@ async fn open_default(chain: &Chained) {
     }
 }
 
-/// The coding poll and each chain's watcher; only the first chain pushes.
+/// Only the first chain pushes.
 fn watch_from_now_on(
     instance: &Instance,
     stores: crate::commands::secretary::ActingStores,
@@ -1492,6 +1453,13 @@ fn watch_from_now_on(
     rest: Vec<Chained>,
 ) {
     crate::commands::coding::spawn_polling(instance, stores.conversations, &state.workers);
+    tokio::spawn(token_expiry::watching(
+        state.clone(),
+        Arc::new(suzatary_io::github_tokens::GithubTokens::new(
+            instance.paths.github_tokens.clone(),
+            Box::new(instance.secrets()),
+        )),
+    ));
     tokio::spawn(watch::watcher(
         first.caps,
         instance.deployment.clone(),
@@ -1503,10 +1471,10 @@ fn watch_from_now_on(
     }
 }
 
-/// The calendars holding an occurrence within the quiet span of an instant, before or after it.
+/// Calendars busy within the quiet span.
 pub type Heard = std::collections::BTreeSet<suzatary_core::calendar::CalendarName>;
 
-/// `None` when the calendars could not be read, which is logged.
+/// `None`, logged, on a failed read.
 fn heard(
     calendar: &dyn suzatary_core::capability::Calendar,
     now: suzatary_core::health::Instant,
@@ -1524,9 +1492,7 @@ fn heard(
         })
 }
 
-/// File what the box owes before the first request, then hourly (a secret, sign-in or model can
-/// lapse with no request to say so) and whenever `moved` rings. The calendars are heard before
-/// each hourly filing, never before the server listens.
+/// File owed cards now, hourly (a secret, sign-in or model can lapse silently) and on `moved`.
 async fn notice_from_now_on(state: State, moved: Arc<tokio::sync::Notify>) {
     let first = state.clone();
     if let Err(join_error) = tokio::task::spawn_blocking(move || first.notice()).await {
@@ -1564,9 +1530,7 @@ async fn notice_from_now_on(state: State, moved: Arc<tokio::sync::Notify>) {
 
 const INSTANCE_POLL: std::time::Duration = std::time::Duration::from_secs(1);
 
-/// Poll the instance file and, whenever its bytes moved, reconnect ([`State::reconnected`]) and
-/// file what the box owes. A file that cannot be read for a moment (an editor's rename) is read
-/// again on the next tick.
+/// Reconnect and file when the instance file's bytes move; an unreadable one retries next tick.
 pub async fn instance_watched(state: State, path: PathBuf) {
     let mut last = tokio::fs::read(&path).await.ok();
     let mut every = tokio::time::interval(INSTANCE_POLL);
@@ -1593,8 +1557,6 @@ pub async fn instance_watched(state: State, path: PathBuf) {
     }
 }
 
-/// Nudge each conversation a restart left unanswered (`transcript::waiting`). A failure is
-/// logged, never fatal.
 async fn resume_waiting(state: &State) {
     let caps = state.first.caps;
     let answered = match state.answered.healths() {
@@ -1636,7 +1598,6 @@ async fn resume_waiting(state: &State) {
     }
 }
 
-/// Close acts orphaned by a restart; a failure is logged, never fatal.
 async fn reconcile_orphaned_acts(chain: &Chained) {
     let caps = chain.caps;
     let now = caps.secretary.clock.now();
@@ -1662,7 +1623,7 @@ async fn reconcile_orphaned_acts(chain: &Chained) {
     }
 }
 
-/// The listener's TLS over `ring`, passed rather than installed process-wide; HTTP/2 first.
+/// `ring` is passed, not installed process-wide.
 fn tls_config(cert: &Path, key: &Path) -> anyhow::Result<rustls::ServerConfig> {
     use rustls::pki_types::pem::PemObject as _;
     use rustls::pki_types::{CertificateDer, PrivateKeyDer};
@@ -1678,14 +1639,11 @@ fn tls_config(cert: &Path, key: &Path) -> anyhow::Result<rustls::ServerConfig> {
     Ok(config)
 }
 
-/// Finish erasing: append forgotten facts' erasures, destroy the keys they name, delete texts,
-/// and rebuild the upload index. Each step is a function of what is stored, so a restart
-/// finishes what a failure left; a failure is logged, never fatal.
+/// Each step reads only stored state, so a restart resumes it.
 async fn erase_at_startup(chain: &Chained) {
     let caps = chain.caps;
     let done = tokio::task::spawn_blocking(move || {
-        // Each step runs whatever the one before it did, so a key the lines' sweep kept never
-        // keeps a summary that read its words.
+        // In order, so a key the sweep kept keeps no summary that read its words.
         let erased = caps
             .secretary
             .memories
@@ -1728,9 +1686,6 @@ async fn erase_at_startup(chain: &Chained) {
 }
 
 /// `suzatary serve`.
-///
-/// # Errors
-/// Flags that do not resolve, and the server's own.
 pub fn run(path: &Path, args: Args) -> anyhow::Result<()> {
     let instance = Instance::open(path)?;
     tracing_subscriber::fmt()

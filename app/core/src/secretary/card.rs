@@ -857,7 +857,7 @@ pub fn secret_act(name: &str, routine: Option<&RoutineId>, model: Option<&str>) 
 }
 
 /// `words` with its first letter in capitals, for a label that opens a line.
-fn capitalised(words: &str) -> String {
+pub(crate) fn capitalised(words: &str) -> String {
     let mut chars = words.chars();
     chars
         .next()

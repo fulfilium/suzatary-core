@@ -1,28 +1,23 @@
-//! Where the data repository is pushed, as the owner reads it: a host and a path, with any
-//! credential a URL carries left behind; and whether what it holds was pushed there.
+//! Where the data repository is pushed, and whether it was.
 
 use crate::connect::Failure;
 use crate::health::{Health, Instant, Outcome};
 
-/// Where the data repository is pushed, as far as its git configuration could be read: "pushed
-/// nowhere" is a fact read from it, never what a failed read stands for.
+/// Where the data repository is pushed; a failed read is `Unread`, never `Nowhere`.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Pushed {
     /// To its `origin` on a host.
     To(Remote),
-    /// To its `origin` in a folder: a local path or a `file://` URL, as written.
+    /// To its `origin` in a folder, as written.
     Folder(String),
-    /// Nowhere: its configuration names no `origin`, or it is no git repository.
+    /// No `origin`, or no git repository.
     Nowhere,
-    /// Its configuration could not be read, and why.
+    /// The configuration could not be read, and why.
     Unread(String),
 }
 
 impl Pushed {
-    /// Where the `origin` a repository's git configuration names is: on a host, read as
-    /// [`Remote::parse`] reads it, or in a folder (a `file://` URL, or a path that is neither a
-    /// URL nor scp-like). Any other origin is unread, and its words never repeat it, since a URL
-    /// may carry a credential.
+    /// Where `origin` is; an unparsed URL is never repeated, as it may hold a credential.
     #[must_use]
     pub fn of_git_config(config: &str) -> Self {
         let mut origin = false;
@@ -47,8 +42,7 @@ impl Pushed {
         }
     }
 
-    /// Whether the data repository's push token is needed: while it pushes to GitHub, the one
-    /// host the token is for, and while its configuration could not be read, since it may.
+    /// Whether the push token is needed: for GitHub, or when unread.
     #[must_use]
     pub fn needs_push_token(&self) -> bool {
         match self {
@@ -58,7 +52,7 @@ impl Pushed {
         }
     }
 
-    /// The directory a `.git` FILE points at (a worktree's or a submodule's `gitdir: <path>`).
+    /// The directory a `.git` file's `gitdir:` line points at.
     #[must_use]
     pub fn gitdir(dot_git: &str) -> Option<&str> {
         dot_git
@@ -69,19 +63,18 @@ impl Pushed {
     }
 }
 
-/// `host:path`, as git reads a URL with no scheme: a colon before any slash.
+/// scp-like `host:path`: a colon before any slash.
 fn scp_like(url: &str) -> bool {
     url.split_once(':')
         .is_some_and(|(host, _)| !host.is_empty() && !host.contains('/'))
 }
 
-/// A git remote's host and path, `forge.example.test/ada/data`.
+/// A git remote as `host/path`.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Remote(String);
 
 impl Remote {
-    /// The remote a URL names, `https://`, `ssh://` or scp-like, its user, password, port and
-    /// `.git` dropped; `None` for a local path, a `file://` URL or anything without a host.
+    /// The host and path a URL names, credentials, port and `.git` dropped.
     #[must_use]
     pub fn parse(url: &str) -> Option<Self> {
         let url = url.trim();
@@ -112,7 +105,7 @@ impl Remote {
     }
 }
 
-/// Where a ref last moved, as its reflog's last line says: the commit it moved to, and when.
+/// A ref's last move, by its reflog.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Tip {
     /// The commit.
@@ -122,8 +115,7 @@ pub struct Tip {
 }
 
 impl Tip {
-    /// The last move a reflog's text records: `<old> <new> <name> <<email>> <seconds> <zone>`,
-    /// then a tab and the message; `None` for an empty log or a line not of that shape.
+    /// The reflog's last move; `None` if no line parses.
     #[must_use]
     pub fn of_reflog(log: &str) -> Option<Self> {
         let line = log.lines().rev().find(|line| !line.trim().is_empty())?;
@@ -138,10 +130,8 @@ impl Tip {
     }
 }
 
-/// What the data repository's pushes read, as the push's own record has it: its upstream's
-/// last move is a push that succeeded then, and a commit after it that the upstream does not
-/// name is one not pushed yet, so failing since that push. `None` while it has no upstream to
-/// push to, which observes nothing.
+/// The pushes' health: success at the upstream's last move, failure since if the head differs.
+/// `None` without an upstream.
 #[must_use]
 pub fn pushes(head: &Tip, upstream: Option<&Tip>) -> Option<Health> {
     let upstream = upstream?;

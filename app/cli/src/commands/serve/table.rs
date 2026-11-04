@@ -106,6 +106,11 @@ pub fn table() -> Vec<Route> {
             secretary::setup,
         ),
         Route::post(
+            "/api/secretary/replace/{handle}",
+            Scope::Box,
+            secretary::replace,
+        ),
+        Route::post(
             "/api/secretary/conversations/{conversation}/title",
             Scope::Box,
             secretary::rename,

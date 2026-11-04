@@ -19,6 +19,7 @@ pub mod drive;
 pub mod durable;
 pub mod epochs;
 pub mod frontiers;
+pub mod github_tokens;
 pub mod gmail;
 pub mod google;
 pub mod health_file;

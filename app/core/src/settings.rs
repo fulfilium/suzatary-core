@@ -1,7 +1,5 @@
-//! The closed list of secret names this app may write, and the gates and edits around it.
-//!
-//! The list is derived from what the instance file says the deployment reads, never from
-//! `secretspec.toml`, so release and mail-transport secrets are refused by absence.
+//! The closed list of secret names this app may write, derived from the instance file and never
+//! from `secretspec.toml`, so release and mail-transport secrets are refused by absence.
 
 mod declaration;
 mod help;
@@ -17,17 +15,10 @@ pub use help::{Help, Page, Words};
 #[cfg(test)]
 pub(crate) const MODEL_TOKEN: &str = "MODEL_TOKEN";
 
-/// The token `scripts/safe-push.sh` pushes the data repository with, through
-/// `scripts/git-credential-secretspec.sh`: scoped to that one repository, never the code's.
+/// The data repository's push token, scoped to that repository, never the code's.
 pub const DATA_PUSH_TOKEN: &str = "SUZATARY_DATA_PUSH_TOKEN";
 
-/// Every secret name this deployment has declared it needs, each with what declares it; the
-/// authority for [`Settable::mint`].
-///
-/// The free join-semilattice on (name, declaration) pairs, read as a map: [`Settables::join`] is
-/// the pointwise union, [`Settables::default`] its identity, and [`Settables::derive`] the join
-/// of one pair per declaring table, so deriving from two deployments' tables is joining what
-/// each derives.
+/// Every declared secret name with what declares it; a join-semilattice under pointwise union.
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct Settables(BTreeMap<String, BTreeSet<Declaration>>);
 
@@ -38,7 +29,7 @@ impl Settables {
         Self(BTreeMap::from([(name.to_owned(), BTreeSet::from([by]))]))
     }
 
-    /// The join: every name of either, declared by every table either says declares it.
+    /// The pointwise union.
     #[must_use]
     pub fn join(mut self, other: Self) -> Self {
         for (name, by) in other.0 {
@@ -47,9 +38,8 @@ impl Settables {
         self
     }
 
-    /// Every name a deployment may set: what [`Settables::derive`] reads of its tables, the
-    /// GitHub tokens its repositories need and what its Google accounts read. The one derivation a server starts and re-derives
-    /// with, so a name never drops out after a tap that moved the instance file.
+    /// Every name a deployment may set; a server re-derives with this one function, so no name
+    /// drops out after a tap edits the instance file.
     #[must_use]
     pub fn of_deployment(
         model: &str,
@@ -66,12 +56,8 @@ impl Settables {
             .join(Self::google(accounts))
     }
 
-    /// Derives the list from `model`, the name the deployment stores its model's credential
-    /// under, notify channels, `[coding]` and every
-    /// credential a `[[plugins]]` manifest declares (a calendar's link, by name; a manifest can
-    /// only name its own `PLUGIN_<NAME>_` namespace, so no plugin widens this to the app's keys).
-    ///
-    /// The model's credential is always present.
+    /// The names the model, channels, `[coding]` and plugins declare; a manifest names only its
+    /// own `PLUGIN_<NAME>_` namespace.
     #[must_use]
     pub fn derive(
         model: &str,
@@ -103,10 +89,7 @@ impl Settables {
             .fold(Self::default(), Self::join)
     }
 
-    /// What a deployment's Google accounts read: the box's one Google Cloud client while any is
-    /// declared, and each account's own sign-in with Google. A Gmail account lieer reads counts,
-    /// since a sign-in with Google moves it once its grant is kept. Each is asked for by its own
-    /// card, never a Secret card ([`Declaration::own_card`]).
+    /// The Google client and each Google account's grant, each asked for by its own card.
     #[must_use]
     pub fn google(accounts: &[crate::mail::account::MailAccount]) -> Self {
         let addresses: Vec<&crate::mail::address::EmailAddress> = accounts
@@ -136,9 +119,7 @@ impl Settables {
             .fold(Self::default(), Self::join)
     }
 
-    /// A deployment's GitHub tokens, one per purpose so no token does another's job: the data
-    /// repository's push, which every deployment makes, and, when the secretary reaches
-    /// `repos`, the token it reaches them with.
+    /// The GitHub tokens, one per purpose so no token does another's job.
     #[must_use]
     pub fn github(repos: &crate::repos::Declared) -> Self {
         let reached = repos
@@ -151,8 +132,7 @@ impl Settables {
         )
     }
 
-    /// The declarations `keep` keeps, a name none of its declarations kept being dropped: the
-    /// restriction, a homomorphism of the join.
+    /// The declarations `keep` keeps; a homomorphism of the join.
     #[must_use]
     pub fn restricted(&self, keep: impl Fn(&Declaration) -> bool) -> Self {
         Self(
@@ -173,17 +153,17 @@ impl Settables {
         self.0.keys().map(String::as_str).collect()
     }
 
-    /// Every declared name as a [`Settable`], sorted; a member is settable by construction.
+    /// Every declared name, sorted.
     pub fn iter(&self) -> impl Iterator<Item = Settable> + '_ {
         self.0.keys().cloned().map(Settable)
     }
 
-    /// Every declared name as a [`Settable`], with what declares it.
+    /// Every declared name with what declares it.
     pub fn declarations(&self) -> impl Iterator<Item = (Settable, &BTreeSet<Declaration>)> + '_ {
         self.0.iter().map(|(name, by)| (Settable(name.clone()), by))
     }
 
-    /// The name the model's credential is stored under, which the deployment chose.
+    /// The model credential's name.
     #[must_use]
     pub fn model(&self) -> Option<Settable> {
         self.declarations()
@@ -191,25 +171,26 @@ impl Settables {
             .map(|(name, _)| name)
     }
 
-    /// The tables that declare `name`, `None` for a name no longer declared.
+    /// The declared name with this handle.
+    #[must_use]
+    pub fn by_handle(&self, handle: &str) -> Option<Settable> {
+        self.iter().find(|name| name.handle() == handle)
+    }
+
+    /// The tables that declare `name`.
     #[must_use]
     pub fn declaration(&self, name: &Settable) -> Option<&BTreeSet<Declaration>> {
         self.0.get(name.name())
     }
 }
 
-/// A secret name this deployment declared, the only name a write route accepts.
-///
-/// [`Settable::mint`] is deliberately its only constructor, with no `From<String>` and no
-/// reader: a card stores the name as text, and its tap mints it against the names declared then.
+/// A declared secret name, the only name a write route accepts; [`Settable::mint`] is its only
+/// constructor, so a tap mints a card's name against the names declared then.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct Settable(String);
 
 impl Settable {
-    /// Mint one against the declared list, or say which name was refused.
-    ///
-    /// # Errors
-    /// [`SettableError::Undeclared`] when `candidate` is not a member of `declared`.
+    /// Mint one against the declared list.
     pub fn mint(declared: &Settables, candidate: &str) -> Result<Self, SettableError> {
         if declared.0.contains_key(candidate) {
             Ok(Self(candidate.to_owned()))
@@ -223,98 +204,76 @@ impl Settable {
     pub fn name(&self) -> &str {
         &self.0
     }
+
+    /// A digest of the name, so the name reaches no page.
+    #[must_use]
+    pub fn handle(&self) -> String {
+        use sha2::{Digest as _, Sha256};
+        let digest = Sha256::digest(format!("suzatary settable v1\0{}", self.0));
+        hex::encode(&digest[..8])
+    }
 }
 
-/// Why a candidate name did not mint a [`Settable`].
+/// Why a name did not mint.
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 pub enum SettableError {
-    /// Not a name this deployment declared.
+    /// Not declared.
     #[error("{0:?} is not a name this deployment has declared it needs")]
     Undeclared(String),
 }
 
-/// Writes a secret through the one store; held in no capability bundle, so no verb reaches it.
+/// Writes a secret; held in no capability bundle, so no verb reaches it.
 pub trait Writes {
-    /// Writes `name` to `value`: a name this deployment declares, so the store's other secrets
-    /// cannot be named.
+    /// Writes `name` to `value`.
     ///
     /// # Errors
-    /// The store's own words, summarised, never carrying the value.
+    /// Never carries the value.
     fn write_secret(
         &self,
         name: &Settable,
         value: &crate::capability::Secret,
     ) -> Result<(), String>;
 
-    /// Deletes what is stored under `name`, so a removed connection's secret resolves no more.
-    ///
-    /// # Errors
-    /// The store's own words, summarised.
+    /// Deletes what is stored under `name`.
     fn clear_secret(&self, name: &Settable) -> Result<(), String>;
 }
 
-/// Declares to the one store every name a deployment may set, since the store refuses a name
-/// it was never told of; held in no capability record, like [`Writes`].
+/// Declares names to the store, which refuses a name it was never told of.
 pub trait Declares {
-    /// Declares exactly `names` beside the store's own, so every [`Writes`] and every read
-    /// through the store takes each of them from now on.
-    ///
-    /// # Errors
-    /// Why they could not be declared; the names declared before stay declared.
+    /// Declares exactly `names` beside the store's own; on error, earlier names stay declared.
     fn declare(&self, names: &Settables) -> Result<(), String>;
 }
 
-/// One test call before a model's credential is kept; held in no capability record, like
-/// [`Writes`], so only a tap reaches it.
+/// One test call before a model's credential is kept; held in no capability record.
 pub trait Verify {
-    /// Whether `value`, kept under `name`, answers one call of the model that reads it; `Ok` for
-    /// a name the model does not read, since there is nothing to call.
+    /// Whether `value` answers one call of the model reading `name`; `Ok` if no model reads it.
     ///
     /// # Errors
-    /// Why the call did not answer, in words that never carry the value.
+    /// Never carries the value.
     fn verify(&self, name: &Settable, value: &crate::capability::Secret) -> Result<(), String>;
 }
 
-/// What reads one source once, at the act that made it readable (a link stored, a sign-in with
-/// Google kept), so its line says what the check found then and not at the source's next
-/// timer; held in no capability record, as [`Verify`] is not.
+/// Reads a source once, when an act makes it readable; held in no capability record.
 pub trait Checks {
-    /// Read `source` once, as its timer would, and join what it came to into its health.
+    /// Read `source` once and join the result into its health.
     fn check(&self, source: &crate::source_key::SourceKey);
 }
 
-/// Edits the instance file; held in no capability bundle, like [`Writes`].
+/// Edits the instance file; held in no capability bundle.
 pub trait Edits: Configuration {
-    /// Lets the secretary read what `rule` covers without asking; allowing twice is no error.
-    ///
-    /// # Errors
-    /// [`EditError::Io`] or [`EditError::Malformed`].
+    /// Lets the secretary read what `rule` covers; idempotent.
     fn allow_web(&self, rule: &crate::web::AllowRule) -> Result<(), EditError>;
 
-    /// Lets the secretary read files under `folder` without asking; allowing twice is no error.
-    ///
-    /// # Errors
-    /// [`EditError::Io`] or [`EditError::Malformed`].
+    /// Lets the secretary read files under `folder`; idempotent.
     fn allow_drive(&self, folder: &crate::drive::DrivePath) -> Result<(), EditError>;
 
-    /// Writes `connection`'s table, keeping every other byte of the file: an add followed by
-    /// its remove leaves the file as it was.
-    ///
-    /// # Errors
-    /// [`EditError::Connection`] for what the algebra refuses (a duplicate first), else
-    /// [`EditError::Io`] or [`EditError::Malformed`].
+    /// Writes `connection`'s table, keeping every other byte, so a remove undoes it.
     fn add_connection(&self, connection: &crate::connect::Connection) -> Result<(), EditError>;
 
-    /// Takes `connection`'s table out, the same way.
-    ///
-    /// # Errors
-    /// As [`Edits::add_connection`].
+    /// Takes `connection`'s table out, keeping every other byte.
     fn remove_connection(&self, connection: &crate::connect::Connection) -> Result<(), EditError>;
 
-    /// Lets `plugin` reach `origin`; granting twice is no error.
-    ///
-    /// # Errors
-    /// As [`Edits::add_connection`].
+    /// Lets `plugin` reach `origin`; idempotent.
     fn add_origin(
         &self,
         plugin: &crate::plugin::PluginName,
@@ -322,15 +281,9 @@ pub trait Edits: Configuration {
     ) -> Result<(), EditError>;
 }
 
-/// Reads the tables connections are read from, from the instance file as it is now; a read
-/// alone, so a record that files cards may hold it.
+/// Reads the connection tables; a read alone, so a record that files cards may hold it.
 pub trait Configuration: Send + Sync {
-    /// The tables, as the file declares them now, so a tap acts on the file rather than on what
-    /// a process read when it started, and a Connect card is filed only for what the file does
-    /// not hold yet.
-    ///
-    /// # Errors
-    /// [`EditError::Io`] or [`EditError::Malformed`].
+    /// The tables as the file declares them now, not as read at start.
     fn declared(&self) -> Result<crate::connect::Declared, EditError>;
 }
 
@@ -340,7 +293,7 @@ pub enum EditError {
     /// The file could not be read or written.
     #[error("could not edit the instance file: {0}")]
     Io(String),
-    /// The file did not parse as TOML, or as the document this edit expects.
+    /// The file did not parse as the document this edit expects.
     #[error("the instance file is malformed: {0}")]
     Malformed(String),
     /// The connection algebra refused the edit, which touched nothing.

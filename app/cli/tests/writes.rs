@@ -127,6 +127,8 @@ fn every_secretary_write_refuses_a_bare_post_from_loopback() {
     for path in [
         "/api/secretary/conversations",
         "/api/secretary/setup/google",
+        // Asking to replace a secret files its card.
+        "/api/secretary/replace/0000000000000000",
         "/api/secretary/conversations/anything/say",
         "/api/secretary/conversations/anything/title",
         "/api/secretary/conversations/anything/stop",

@@ -1,9 +1,6 @@
-//! Settings: what is connected, by group, and this device, as a model, an update and a view.
+//! Settings: what is connected, by group, and this device.
 //!
-//! The page holds the box's overview, and watches what the tab keeps of this device and the
-//! Inbox's open cards; every tap is a message here, and everything the page asks of the world is
-//! one of the runtime's effects. A proposal card is still the Inbox's TypeScript, placed as a
-//! foreign part by its reference, until the Inbox is converted.
+//! A proposal card is the Inbox's TypeScript, placed as a foreign part by its reference.
 
 use std::collections::BTreeSet;
 
@@ -24,7 +21,7 @@ use crate::places::{Place, Question};
 use crate::runtime::{self, Answer, Body, Context, Gate, Held, Local, read};
 use crate::zone::when;
 
-/// What the page starts from.
+/// Start flags.
 #[derive(Debug, Clone, Deserialize, TS)]
 #[ts(rename = "SettingsFlags")]
 pub struct Flags {
@@ -32,36 +29,36 @@ pub struct Flags {
     pub context: Context,
 }
 
-/// What the page holds and watches.
+/// What the page watches.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[ts(rename = "SettingsHold")]
 pub enum Hold {
     /// The box's overview.
     Overview,
-    /// This device, as the tab keeps it.
+    /// This device.
     Device,
-    /// The Inbox's open cards.
+    /// Open cards.
     Cards,
 }
 
-/// One proposal card, by its reference, with what this page decides from it.
+/// A proposal card as this page reads it.
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize, TS)]
 pub struct Card {
-    /// `proposal:<conversation>/<n>`, as a line's `cards` names it.
+    /// `proposal:<conversation>/<n>`.
     pub reference: String,
     /// What it does.
     pub act: CardAct,
-    /// Whether it still asks: standing, or tapped and failed.
+    /// Open while standing or tapped and failed.
     pub stands: Stands,
-    /// Changes whenever the card would draw differently, so its part is told.
+    /// Changes when its drawing would.
     pub version: String,
 }
 
-/// The acts of a card this page tells apart.
+/// A card's act.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, TS)]
 #[serde(rename_all = "snake_case")]
 pub enum CardAct {
-    /// Connect a model by signing in, or by a code.
+    /// Connect a model.
     SignIn,
     /// Store a secret.
     Secret,
@@ -71,7 +68,7 @@ pub enum CardAct {
     Other,
 }
 
-/// Whether a card still asks something.
+/// Whether a card asks.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, TS)]
 #[serde(rename_all = "snake_case")]
 pub enum Stands {
@@ -81,24 +78,24 @@ pub enum Stands {
     Settled,
 }
 
-/// What this browser keeps and who it signs as (`web/src/app/device.ts`'s `Report`).
+/// `web/src/app/device.ts`'s `Report`.
 #[derive(Debug, Clone, Deserialize, TS)]
 pub struct Device {
-    /// Whether the browser may evict what it keeps.
+    /// Eviction policy.
     pub persist: Persist,
-    /// How much of the render budget is spent.
+    /// Budget spent.
     pub usage: Usage,
-    /// The budget, in bytes.
+    /// Bytes.
     pub budget: f64,
     /// Who it signs as.
     pub signing: Signing,
 }
 
-/// Whether storage is persistent.
+/// Storage persistence.
 #[derive(Debug, Clone, Copy, Deserialize, TS)]
 #[serde(tag = "type")]
 pub enum Persist {
-    /// The browser cannot say.
+    /// Unknown.
     Unsupported,
     /// Persistent.
     Granted,
@@ -106,7 +103,7 @@ pub enum Persist {
     Denied,
 }
 
-/// The rendered text kept.
+/// Rendered text kept.
 #[derive(Debug, Clone, Copy, Deserialize, TS)]
 pub struct Usage {
     /// Bytes.
@@ -115,34 +112,34 @@ pub struct Usage {
     pub count: u32,
 }
 
-/// Who this device writes as, by its key.
+/// This device's signing key.
 #[derive(Debug, Clone, Deserialize, TS)]
 #[serde(tag = "type")]
 pub enum Signing {
-    /// It has not read the box's root yet.
+    /// Root not read yet.
     Unheard,
-    /// This login only reads.
+    /// Read-only login.
     Reads,
     /// The browser cannot sign.
     Unsupported {
         /// Why.
         e: String,
     },
-    /// Its key could not be read.
+    /// Key unreadable.
     Unreadable {
         /// Why.
         e: String,
     },
-    /// It signs with this key.
+    /// Signs with a key.
     Keyed {
         /// The key.
         key: String,
-        /// Whether the chain trusts it.
+        /// Its trust.
         standing: KeyStanding,
     },
 }
 
-/// A key's standing on the chain.
+/// A key's trust.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, TS)]
 #[serde(rename_all = "snake_case")]
 pub enum KeyStanding {
@@ -154,32 +151,36 @@ pub enum KeyStanding {
     Revoked,
 }
 
-/// An act the page asks the world for; its button is disabled until it is answered.
+/// An act; its button is disabled until answered.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize, TS)]
 #[ts(rename = "SettingsAct")]
 #[serde(tag = "type")]
 pub enum Act {
-    /// Open a conversation of its own on a template and go to it.
+    /// Open a conversation on a template.
     Begin {
         /// The template.
         template: String,
     },
-    /// File this device's card for a trusted device to tap.
+    /// File a trust card for this device.
     AskTrust {
-        /// This device's key.
+        /// The key.
         key: String,
     },
-    /// Make a new key for this device.
+    /// New key.
     Renew,
-    /// Send the pairing code as typed.
+    /// Send the pairing code.
     Pair {
         /// The code.
         code: String,
     },
+    /// Ask for a card replacing a secret.
+    Replace {
+        /// Its handle.
+        handle: String,
+    },
 }
 
 impl Act {
-    /// What the runtime performs for it.
     fn effect(&self) -> Effect {
         let post = |q: Question, body| Effect::Post {
             ask: self.clone(),
@@ -197,36 +198,36 @@ impl Act {
                 Question::Pair,
                 Body::Pair(wire::Pairing { code: code.clone() }),
             ),
+            Act::Replace { handle } => post(Question::Replace(handle), Body::Empty {}),
         }
     }
 }
 
-/// What the setup route answers that the page reads: the conversation it opened.
 #[derive(Debug, Deserialize)]
 struct Opened {
     id: String,
 }
 
-/// The page's one-time asks, as the runtime names them: its acts.
+/// One-time asks.
 pub type Ask = Act;
-/// What the page asks of the world.
+/// Effects.
 pub type Effect = runtime::Effect<Hold, Act>;
-/// What the runtime hands the page.
+/// Inputs.
 pub type Input = runtime::Input<Hold, Act>;
 
-/// The pairing field: closed (its button) or open with the words typed.
+/// The pairing field.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Pairing {
-    /// The button that opens it.
+    /// Its button.
     Closed,
-    /// The field, holding the words typed.
+    /// Open.
     Open {
         /// As typed.
         code: String,
     },
 }
 
-/// Everything the page knows.
+/// The model.
 #[derive(Debug, Clone)]
 pub struct Model {
     context: Context,
@@ -237,20 +238,20 @@ pub struct Model {
     running: BTreeSet<Act>,
 }
 
-/// Everything that can happen to the page.
+/// Messages.
 #[derive(Debug, Clone)]
 pub enum Msg {
     /// From the runtime.
     Host(Box<Input>),
-    /// A tap that asks the world for an act.
+    /// Run an act.
     Run(Act),
-    /// The pairing field opened, closed or edited.
+    /// Pairing field edited.
     Pairing(Pairing),
-    /// Ask the overview again.
+    /// Refetch the overview.
     Retry,
 }
 
-/// The page as a program.
+/// The page.
 #[derive(Debug)]
 pub enum Settings {}
 
@@ -302,7 +303,7 @@ impl Program for Settings {
                             m.device = read(reading);
                             Vec::new()
                         }
-                        // A card the box files changes which line asks for what.
+                        // A new card changes the overview.
                         Hold::Cards => {
                             let cards = read(reading);
                             let moved = matches!(&cards, Reading::Val { v } if !matches!(&m.cards, Reading::Val { v: was } if was == v));
@@ -354,14 +355,12 @@ impl Program for Settings {
     }
 }
 
-/// Ask the overview again: after an act that moves it, or a Retry.
 fn again() -> Effect {
     Effect::Again {
         path: Question::Overview.path(),
     }
 }
 
-/// A conversation's address, its composer focused.
 fn focused(id: &str) -> String {
     Place::Conversation {
         id,
@@ -372,7 +371,6 @@ fn focused(id: &str) -> String {
     .href()
 }
 
-/// What the page shows once the box's overview is here.
 fn shown(m: &Model, o: &Overview) -> Node<Msg> {
     let device = match &m.device {
         Reading::Val { v: Some(d) } => Some(d),
@@ -415,14 +413,12 @@ fn shown(m: &Model, o: &Overview) -> Node<Msg> {
     ] }
 }
 
-/// What an answered act asks next: a refusal is said in its words, a conversation begun is gone
-/// to, a trust is said, and the overview is asked again after the acts that move it.
 fn answered(m: &mut Model, act: &Act, answer: Answer) -> Vec<Effect> {
     match answer {
         Answer::Refused { words, .. } => {
             let said = Effect::Toast { words };
             match act {
-                Act::AskTrust { .. } | Act::Renew => vec![said, again()],
+                Act::AskTrust { .. } | Act::Renew | Act::Replace { .. } => vec![said, again()],
                 Act::Begin { .. } | Act::Pair { .. } => vec![said],
             }
         }
@@ -441,6 +437,12 @@ fn answered(m: &mut Model, act: &Act, answer: Answer) -> Vec<Effect> {
                 ]
             }
             Act::AskTrust { .. } | Act::Renew => vec![again()],
+            Act::Replace { .. } => vec![
+                Effect::Toast {
+                    words: "Type the new value in the card on this line; the old one stays until you store it.".to_owned(),
+                },
+                again(),
+            ],
         },
     }
 }
@@ -484,7 +486,7 @@ fn cards<'a>(m: &'a Model, l: &OverviewLine) -> Vec<&'a Card> {
     }
 }
 
-/// A line's cards; a link's card and the grant its origin needs, when both stand, as one part.
+/// A link card and its origin grant, both open, draw as one part.
 fn line_cards(cs: &[&Card]) -> Vec<(String, Node<Msg>)> {
     let open = |act| cs.iter().find(|c| c.act == act && c.stands == Stands::Open);
     let allowing = open(CardAct::Secret).zip(open(CardAct::Grant));
@@ -532,8 +534,6 @@ fn capital(s: &str) -> String {
         .unwrap_or_default()
 }
 
-/// A standing in a sentence, whether it asks something of the owner, and the command a terminal
-/// runs for it; `None` for one in place with nothing to say.
 fn health<'a>(
     s: &'a Standing,
     at: &dyn Fn(&str) -> String,
@@ -578,8 +578,6 @@ fn health<'a>(
     Some((asks, words, None))
 }
 
-/// An instant for a sentence, `11:32 on 2026-09-04` on the owner's clock; one that does not
-/// parse is said as written, as `web/src/view/format.ts`'s `when` does.
 fn line(m: &Model, g: Group, l: &OverviewLine) -> Node<Msg> {
     let said = health(&l.standing, &|t| when(&m.context.offsets, t));
     let (asks, words, command) = said.map_or((false, None, None), |(a, w, c)| (a, Some(w), c));
@@ -591,7 +589,7 @@ fn line(m: &Model, g: Group, l: &OverviewLine) -> Node<Msg> {
     } else {
         ("settingsline", "settingshealth")
     };
-    // Keyed, so a card arriving or leaving moves no other: the line's own parts under fixed keys.
+    // Fixed keys, so a card arriving or leaving moves no other part.
     let head = [
         Some(("label", view! { H3 [l.label.as_str()] })),
         l.detail
@@ -609,10 +607,33 @@ fn line(m: &Model, g: Group, l: &OverviewLine) -> Node<Msg> {
             )
         }),
     ];
+    let replaces = match m.context.gate {
+        Gate::Writes => l
+            .replaces
+            .iter()
+            .map(|r| {
+                let act = Act::Replace {
+                    handle: r.handle.clone(),
+                };
+                let busy = m.running.contains(&act);
+                (
+                    format!("replace:{}", r.handle),
+                    button(
+                        "act act-replace",
+                        &format!("Replace {}", r.label),
+                        Msg::Run(act),
+                        busy,
+                    ),
+                )
+            })
+            .collect(),
+        Gate::Reads | Gate::Views => Vec::new(),
+    };
     let parts = head
         .into_iter()
         .flatten()
         .map(|(k, n)| (k.to_owned(), n))
+        .chain(replaces)
         .chain(line_cards(&cards(m, l)));
     view! { Section {Class => line, Data("group") => key(g), Data("line") => &l.key, Data("key") => &l.key} => parts }
 }
