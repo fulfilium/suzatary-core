@@ -215,6 +215,9 @@ sentences:
     round:default/12             the round turn 12 of that conversation opened
     note:default/14              the note `draft_note` wrote at turn 14
 
+The box puts the round you are answering first among every card's sources, so
+leave it out. Cite another round only by a name you read in an answer.
+
 **Name things that way when you write.** The app turns each one into a link, so
 "I would reply to thread:0000000000001b2c before touching todo:life/permitfiling"
 is two taps away from being checked, where "the counsel thread" is a sentence

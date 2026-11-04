@@ -12,6 +12,16 @@ use suzatary_core::secretary::topics::target::Target;
 use suzatary_core::secretary::topics::topic::Topic;
 
 fn call(fakes: &Fakes, args: Value) -> Result<Value, suzatary_core::refusal::Refusal> {
+    call_in(fakes, &DEFAULT, "add_topics", args)
+}
+
+/// `verb` called with `args` in a round of conversation `id`.
+fn call_in(
+    fakes: &Fakes,
+    id: &ConversationId,
+    verb: &str,
+    args: Value,
+) -> Result<Value, suzatary_core::refusal::Refusal> {
     let deployment = common::deployment([], []);
     let policy = common::chain();
     let chains = [suzatary_core::secretary::Bound {
@@ -26,8 +36,8 @@ fn call(fakes: &Fakes, args: Value) -> Result<Value, suzatary_core::refusal::Ref
         &deployment,
         &suzatary_core::settings::Settables::default(),
         &chains,
-        &DEFAULT.clone(),
-        "add_topics",
+        id,
+        verb,
         &args,
     )
     .map(|answer| answer.value)
@@ -35,11 +45,15 @@ fn call(fakes: &Fakes, args: Value) -> Result<Value, suzatary_core::refusal::Ref
 
 /// Writes `turns` to the default conversation, each a person's turn stamped as the owner's.
 fn say(fakes: &Fakes, turns: Vec<Turn>) {
+    say_in(fakes, &DEFAULT, turns);
+}
+
+/// Writes `turns` to conversation `id`, opened as a topic unless it is the default.
+fn say_in(fakes: &Fakes, id: &ConversationId, turns: Vec<Turn>) {
     let conversations = fakes.secretary().conversations;
     let at = |minute: u32| {
         prodrome_core::literal::Datetime::new(2026, 10, 24, 9, minute, 0, 0).expect("an instant")
     };
-    let id: &ConversationId = &DEFAULT;
     if suzatary_core::secretary::read(conversations, id).is_err() {
         suzatary_core::secretary::transcript::start(
             conversations,
@@ -48,7 +62,11 @@ fn say(fakes: &Fakes, turns: Vec<Turn>) {
                 at: at(0),
                 title: suzatary_core::secretary::words::Words::kept("Secretary".to_owned()),
                 model: "scripted".to_owned(),
-                kind: suzatary_core::secretary::store::Kind::Default,
+                kind: if id == &*DEFAULT {
+                    suzatary_core::secretary::store::Kind::Default
+                } else {
+                    suzatary_core::secretary::store::Kind::Topic
+                },
             },
         )
         .expect("opened");
@@ -170,4 +188,43 @@ fn mail_can_choose_a_topic_in_use_and_never_make_one() {
     assert_eq!(again["existing"], "garden (2), hedge (1), trip (1)");
     assert_eq!(topics_on(&fakes, answering), ["garden"]);
     assert!(topics_on(&fakes, "round:default/8").is_empty());
+}
+
+/// A card asked for in a topic cites that topic's round first, where the model, which is never
+/// told a conversation's id, cited a round of the default conversation.
+#[test]
+fn a_card_asked_in_a_topic_cites_the_topics_round() {
+    let fakes = Fakes::new("add-topics-card-round");
+    let topic = ConversationId::new("2026-11-01-1").expect("a slug");
+    say_in(&fakes, &topic, vec![asked("record the plugins decision")]);
+    let filed = call_in(
+        &fakes,
+        &topic,
+        "propose_decision",
+        json!({"id": "plugins", "title": "Plugins hold only their imports",
+               "body": "A plugin is a component.", "rationale": "Authority is its imports.",
+               "why": "We settled it today.", "sources": "round:default/0, mail:a1b2c3d4e5f6"}),
+    )
+    .expect("filed");
+    assert_eq!(filed["proposed"], 0, "{filed}");
+    let caps = fakes.secretary();
+    let stored = suzatary_core::secretary::read(caps.conversations, &topic).expect("reads");
+    let inbox = suzatary_core::secretary::inbox::fold(caps.inbox).expect("folds");
+    let standing = stored.standing(0, &inbox).expect("standing");
+    let sources: Vec<String> = standing
+        .object
+        .asked
+        .reasons
+        .sources()
+        .iter()
+        .map(ToString::to_string)
+        .collect();
+    assert_eq!(
+        sources,
+        [
+            "round:2026-11-01-1/0",
+            "round:default/0",
+            "mail:a1b2c3d4e5f6"
+        ]
+    );
 }

@@ -62,6 +62,14 @@ impl Reasons {
     pub fn sources(&self) -> &[Reference] {
         &self.sources
     }
+
+    /// These reasons resting on `source` first, and on it once.
+    #[must_use]
+    pub fn citing(mut self, source: Reference) -> Self {
+        self.sources.retain(|held| *held != source);
+        self.sources.insert(0, source);
+        self
+    }
 }
 
 impl TryFrom<RawReasons> for Reasons {

@@ -146,9 +146,15 @@ pub(crate) fn propose(
     serves: Option<TodoRef>,
     revises: Option<usize>,
 ) -> Result<usize, Refusal> {
+    let stored = super::read(caps.conversations, id)?;
     if let Some(old) = revises {
-        withdrawable(caps, &super::read(caps.conversations, id)?, old)?;
+        withdrawable(caps, &stored, old)?;
     }
+    // The box names the round a card was asked in; the model knows no conversation's id.
+    let reasons = match add_topics::round_answered(&stored) {
+        Some(round) => reasons.clone().citing(Reference::Target(round)),
+        None => reasons.clone(),
+    };
     let (filed, _) = super::filed::file(
         caps.conversations,
         caps.inbox,
@@ -158,7 +164,7 @@ pub(crate) fn propose(
             conversation: id,
             proposer: Proposer::Secretary,
             proposal,
-            reasons: reasons.clone(),
+            reasons,
             serves,
             revises,
         },

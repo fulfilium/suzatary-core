@@ -190,8 +190,13 @@ fn an_exchange_stores_a_proposal_with_the_exact_message() {
     );
     assert_eq!(
         proposal["sources"],
-        serde_json::json!(["mail:a1b2c3d4e5f6", "todo:life/permitfiling",]),
-        "the sources reach the wire in their text form, which the page parses"
+        serde_json::json!([
+            format!("round:{}/0", payload["id"].as_str().expect("an id")),
+            "mail:a1b2c3d4e5f6",
+            "todo:life/permitfiling",
+        ]),
+        "the sources reach the wire in their text form, which the page parses, the round the \
+         card was asked in first"
     );
 }
 

@@ -109,29 +109,36 @@ impl Verb for AddTopics {
 /// the first person's or act's turn of them, which a round the box opened (a brief, a sweep) has;
 /// or, `on` a note, the note it drafted last among them.
 fn answering(stored: &Stored, on: On) -> Result<Target, Refusal> {
-    let delta = queue::delta(stored);
     match on {
-        On::Round => {
-            let opens = |said: &Said| {
-                matches!(
-                    shape(&said.turn),
-                    TurnShape::Person { .. } | TurnShape::Act { .. }
-                )
-            };
-            delta
-                .iter()
-                .find(|(_, said)| opens(said) && Stamp::owners(said.by.as_ref()))
-                .or_else(|| delta.iter().find(|(_, said)| opens(said)))
-                .map(|(turn, _)| Target::Round {
-                    conversation: stored.id.clone(),
-                    turn: *turn,
-                })
-                .ok_or_else(|| Refusal::conflict("no question is being answered here"))
-        }
-        On::Note => notes_in(&stored.id, &delta).pop().ok_or_else(|| {
-            Refusal::bad_request("this round has drafted no note; leave `on` out for the round")
-        }),
+        On::Round => round_answered(stored)
+            .ok_or_else(|| Refusal::conflict("no question is being answered here")),
+        On::Note => notes_in(&stored.id, &queue::delta(stored))
+            .pop()
+            .ok_or_else(|| {
+                Refusal::bad_request("this round has drafted no note; leave `on` out for the round")
+            }),
     }
+}
+
+/// The round being answered in `stored`, named by its own conversation: the first turn the owner
+/// wrote of those the model is answering, else the first person's or act's turn of them. `None`
+/// when no question is being answered.
+pub(super) fn round_answered(stored: &Stored) -> Option<Target> {
+    let delta = queue::delta(stored);
+    let opens = |said: &Said| {
+        matches!(
+            shape(&said.turn),
+            TurnShape::Person { .. } | TurnShape::Act { .. }
+        )
+    };
+    delta
+        .iter()
+        .find(|(_, said)| opens(said) && Stamp::owners(said.by.as_ref()))
+        .or_else(|| delta.iter().find(|(_, said)| opens(said)))
+        .map(|(turn, _)| Target::Round {
+            conversation: stored.id.clone(),
+            turn: *turn,
+        })
 }
 
 /// 1 to [`MAX_TOPICS`] topics, each spelled as [`Topic::new`] reads it; every refusal is named.
