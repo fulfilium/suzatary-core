@@ -2438,7 +2438,7 @@ a.chipbtn {
   }
 }
 
-/* WHICH LIST, above the destinations (docs/ARCHITECTURE.md §10.2). A chain is
+/* WHICH LIST, above the destinations. A chain is
    not a destination — it is which store every destination is about — so it is a
    row at the top of this sheet rather than a sixth tab or a control pinned over
    one page. Absent entirely on a deployment serving one chain. */
@@ -3079,7 +3079,7 @@ h1[tabindex="-1"]:focus {
   color: var(--ink);
 }
 
-/* THE SECRETARY (docs/ARCHITECTURE.md §10.3): a list of conversations, one
+/* THE SECRETARY: a list of conversations, one
    conversation, and the proposal cards.
 
    The list borrows the briefings' row shape for the same reason that one
@@ -4142,7 +4142,7 @@ h1[tabindex="-1"]:focus {
   outline-offset: 2px;
 }
 
-/* Photos (docs/PHOTOS-PLAN-2026-09-22.md): attached photos show as thumbnails
+/* Photos: attached photos show as thumbnails
    above the field, and a turn's photos as a row under its words, each opening
    full size. */
 .composethumbs,
@@ -4727,7 +4727,7 @@ h1[tabindex="-1"]:focus {
   color: var(--primary);
 }
 
-/* --- A BATCH IN THE INBOX (docs/ARCHITECTURE.md §10.6) ---------------------
+/* --- A BATCH IN THE INBOX ---------------------------------------------------
    The proposal cards above are the secretary's, drawn by `proposal.ts`; a BATCH
    is the triage agent's, and it is a different shape — a list of diffs with
    ticks, over one heading. It keeps its own class names rather than borrowing

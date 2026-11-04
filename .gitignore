@@ -25,9 +25,7 @@ __pycache__/
 web/dist/
 web/dev/
 
-# The application's build directory (docs/ARCHITECTURE.md §2, the `app/`
-# workspace — the only one here since the database became its own repository,
-# §8.8, which is why `prodrome/target/` is no longer a line above this one).
+# The application's build directory (the `app/` workspace).
 # Same rule as web/dist/: cargo writes it from app/*/src, and it is
 # output, not source. `app/Cargo.lock` IS committed — the workspace's
 # deliverable is a binary, and one of its dependencies is a git revision, so the
@@ -39,8 +37,8 @@ app/target-*/
 
 # The wire's TypeScript, generated from app/core/src/wire.rs by
 # `nix build .#suzatary-wire-ts` and copied in by scripts/build-web.sh. Output,
-# not source — committing it would be the second declaration ARCHITECTURE §2
-# exists to prevent, kept in step by hand.
+# not source — committing it would be a second declaration of the wire,
+# kept in step by hand.
 web/src/wire/generated/
 
 # proptest's shrunk counterexamples. A cache of seeds, not source: this repo
@@ -48,7 +46,7 @@ web/src/wire/generated/
 # would pin the generator it happened to have that afternoon.
 proptest-regressions/
 
-# The secretary's conversations (docs/ARCHITECTURE.md §10.3). BOX-LOCAL, like
+# The secretary's conversations. BOX-LOCAL, like
 # the maildir and unlike `events/`: a transcript quotes mail, and mail is never
 # committed. It is not rebuildable either, which makes it the one piece of state
 # here that only this box has — said out loud rather than discovered.

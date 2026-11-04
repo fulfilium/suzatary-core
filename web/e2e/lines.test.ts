@@ -366,7 +366,7 @@ app.scene("a conversation the device prefetched reads with no network, and one i
   }
 })
 
-// A FRACTION IS A PIE (WEB-SPEC §3.20): the line under the header draws a sync's share as the neutral pie, named in
+// A FRACTION IS A PIE: the line under the header draws a sync's share as the neutral pie, named in
 // words. The lines' content is held at the box, so the line stands while it is read.
 app.scene("a store's sync is drawn as a neutral pie, named in words", async () => {
   await app.open(WRITE_BASE)

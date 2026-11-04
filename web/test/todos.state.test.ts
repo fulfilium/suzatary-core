@@ -1,4 +1,4 @@
-// The Todos page's step (docs/WEB-SPEC.md §3.7): one test per event, the fold law over random walks, and the tree kept in step with its inputs.
+// The Todos page's step: one test per event, the fold law over random walks, and the tree kept in step with its inputs.
 
 import { test } from "node:test"
 import assert from "node:assert/strict"

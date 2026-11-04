@@ -26,7 +26,7 @@ pub struct Args {
     /// Which act.
     #[command(subcommand)]
     action: Action,
-    /// WHICH CHAIN this act touches (docs/ARCHITECTURE.md §10.2). Absent is the
+    /// WHICH CHAIN this act touches. Absent is the
     /// FIRST chain the instance file names — `life`, the owner's own todos — so
     /// every command written before there were two means what it always did.
     /// `--chain suzatary` writes to this project's own store: the roadmap, and

@@ -4,7 +4,7 @@ The owner's secretary system: FPL-driven typst todos + autonomous 7-account mail
 triage on this box (the fetcher). Three Claude roles: the **main assistant
 session** (full tools, talks to the owner), the **5-minute triage agent**
 (MCP-restricted; manual `OPERATOR.md`), and the **secretary** (a conversation
-in the app; manual `SECRETARY.md`, `docs/ARCHITECTURE.md` §10.3), trusted to
+in the app; manual `SECRETARY.md`), trusted to
 author as `assistant` and still unable to send. This file is the constitution:
 the rules a session obeys on every turn. [`AGENTS.md`](AGENTS.md) is the style
 guide for the Rust, the TypeScript, the comments and the written English. The
@@ -35,9 +35,10 @@ confirm. Everything below derives from this.
   `blameignorerevs`).
 - **The web app is held to the same standard**: a page is a closed
   `PageState` with a pure `step` and an idempotent `draw` over one `Source`,
-  every law of `docs/WEB-SPEC.md` names its node test, and the cast ceiling in
-  `scripts/web-static.sh` only moves down (→ `webalgebra`). The TypeScript
-  follows `docs/TS-STYLE.md` (→ `tsstyle`).
+  the web's laws are its tests (`docs/WEB-SPEC.md` holds the three doors and
+  the laws no test can check), and the cast ceiling in `scripts/web-static.sh`
+  only moves down (→ `webalgebra`). The TypeScript follows `docs/TS-STYLE.md`
+  (→ `tsstyle`).
 - **The look is the owner's design system**, `@local/typst-design`;
   `tokens.typ` names each colour role and `scripts/gen-tokens.mjs` prints the
   rest. Keep no second definition of a colour, mark or template; HTML pages
@@ -67,9 +68,10 @@ confirm. Everything below derives from this.
   this in as many words.
 - **An agent can read what it changes**: `context.toml` names the units, and
   `scripts/context.sh` prints what each costs to USE (README and public
-  interface, ≤ 25k tokens) and to DEVELOP (≤ 500k); the guard
-  `app/cli/tests/guards/context.rs` holds them, and the repository's reading
-  set only falls towards 500k (AGENTS.md, "Context budget").
+  interface, ≤ 25k tokens) and to DEVELOP (≤ 500k). The goal is no unit over
+  either, and the table names each unit still over; the guard
+  `app/cli/tests/guards/context.rs` holds USE, and the repository's reading
+  set only falls (AGENTS.md, "Context budget").
 
 ## Semantics (the FPL layer)
 
@@ -376,7 +378,7 @@ Threat model: an injected email can at worst mis-triage or write bad todo text
 - **The server is `app/`, in Rust** (`suzatary serve`, axum, default
   127.0.0.1:8787; the unit binds the tailnet via `scripts/serve-web.sh`).
   - Reads are GETs. The ONE chain write is `POST /api/objects`, a replica
-    handing over its objects (ARCHITECTURE §5). `POST /api/author` builds an
+    handing over its objects. `POST /api/author` builds an
     event and appends nothing; `POST /api/act/device` writes a push token;
     `app/cli/tests/writes.rs` pins that nothing else answers a POST.
   - A tab is a trusted actor exactly when the local Tailscale daemon names its
@@ -398,7 +400,7 @@ Threat model: an injected email can at worst mis-triage or write bad todo text
   - **Mail** is read-only: notmuch as a subprocess, bodies as capped text, the
     agent's disposition a BADGE, never a filter (→ `mailreads`).
 - **`web/` is the app's frontend**: TypeScript, one esbuild bundle, no
-  framework, no npm (→ `webphone`; ARCHITECTURE §11.1). The rules:
+  framework, no npm (→ `webphone`). The rules:
   - The browser never computes a fulfillment of its own: it runs the same
     core as `suzatary-wasm` (→ `onebrowserevaluator`).
   - **Escaping is the DOM** (`web/src/view/dom.ts`) with ONE exception:

@@ -1,5 +1,5 @@
 /**
- * THE SECRETARY, END TO END (docs/ARCHITECTURE.md §10.3).
+ * THE SECRETARY, END TO END.
  *
  * The real `suzatary serve`, the real routes, the real conversation store on
  * disk — and two substitutions, both compiled out of the shipped binary:
@@ -695,7 +695,7 @@ app.scene("a second message lands without rebuilding the first round's answer", 
 });
 
 /**
- * THE BOX EMPTIES WHEN A QUESTION LEAVES, NOT WHEN THE BOX ANSWERS IT (WEB-SPEC §3.6). The first `say` is held at
+ * THE BOX EMPTIES WHEN A QUESTION LEAVES, NOT WHEN THE BOX ANSWERS IT. The first `say` is held at
  * the network, so the next question is typed while the first send has not settled; let through, the first is answered
  * and read again, and the next question is still in the box, where Send finds it. Before, the box was emptied once
  * the send settled, wiping what had been typed since: the flake both scenes above it timed out on.
@@ -823,8 +823,7 @@ async function sendsFrom(scope: string, said: string, by: "button" | "Enter" | "
 }
 
 /**
- * A PHOTO SENT IN THE CHAT IS DRAWN ON ITS TURN
- * (`docs/PHOTOS-PLAN-2026-09-22.md`). The photo is a real JPEG the page draws
+ * A PHOTO SENT IN THE CHAT IS DRAWN ON ITS TURN. The photo is a real JPEG the page draws
  * on a canvas, uploaded through the same gated route the composer uses; the
  * scene then waits for the transcript to draw it at its own size, which
  * proves the store, the say, the wire and the read route in one pass.

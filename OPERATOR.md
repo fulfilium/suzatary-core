@@ -139,7 +139,7 @@ WHICH STORE it lives in. A `suzateryTodo` about a bill {{persona.name}} owes thi
 is still his and goes to `life`; a plain `todo` about a broken test is the
 system's and goes to `suzatary`.
 
-**YOUR WRITES ARE CARDS, ONE CARD PER TODO** (`docs/ARCHITECTURE.md` §10.6).
+**YOUR WRITES ARE CARDS, ONE CARD PER TODO.**
 Nothing you write goes on a chain. `todo_add`, `todo_update` and `record` each
 file a CARD in the owner's Inbox, the same kind of card the secretary files
 with `propose_changes`, tagged as yours. A later write about a todo that an

@@ -160,8 +160,7 @@ mark. Its colour says what kind of fraction it is: the fulfillment scale only
 for a judgement (a todo's fulfillment, an allowance left), and the one neutral
 accent (`accent` in `tokens.typ`, the blue ramp) for everything else: a sync,
 a fetch, an import, a share of a whole, the loading mark. The sync line and
-the usage page's bars became pies. The contract and its test are
-`docs/WEB-SPEC.md` §3.20.
+the usage page's bars became pies.
 
 ## E. Everything else: agreed (as in `design-review.md`)
 

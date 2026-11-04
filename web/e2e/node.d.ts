@@ -64,7 +64,7 @@ declare module "node:fs" {
   export function readFileSync(path: string): Uint8Array<ArrayBuffer>;
   /** The store's objects, by name. `web/test/wasm.test.ts` reads
    * `events/objects/` directly since the live chain's vectors stopped carrying
-   * a copy of those bytes (docs/ARCHITECTURE.md §8.8). */
+   * a copy of those bytes. */
   export function readdirSync(path: string): string[];
   export function writeFileSync(path: string, data: string, encoding?: string): void;
   export function existsSync(path: string): boolean;

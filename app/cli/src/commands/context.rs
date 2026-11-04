@@ -222,18 +222,89 @@ pub fn table(plan: &Plan, report: &Report, base: &Base) -> String {
     out
 }
 
-/// The repository's lines of the table: the reading set, the ratchets and the uncited plans.
+/// A figure that the goal holds every unit to.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Budgeted {
+    /// Its USE, against `budget.use`.
+    Use,
+    /// Its DEVELOP, against `budget.develop`.
+    Develop,
+}
+
+/// A unit's figure that is over its budget.
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct Over {
+    /// The unit.
+    unit: String,
+    /// The figure.
+    figure: Budgeted,
+    /// The figure's tokens.
+    tokens: u64,
+    /// The budget it is over.
+    budget: u64,
+}
+
+/// Every unit's USE and DEVELOP that is over its budget, in the plan's order: what stands
+/// between the tree and the goal.
+#[must_use]
+fn over_budget(plan: &Plan, report: &Report) -> Vec<Over> {
+    report
+        .units
+        .iter()
+        .flat_map(|unit| {
+            [
+                (Budgeted::Use, unit.figures.use_, plan.budget.use_),
+                (Budgeted::Develop, unit.figures.develop, plan.budget.develop),
+            ]
+            .into_iter()
+            .filter(|(_, tokens, budget)| tokens > budget)
+            .map(|(figure, tokens, budget)| Over {
+                unit: unit.name.clone(),
+                figure,
+                tokens,
+                budget,
+            })
+        })
+        .collect()
+}
+
+/// The repository's lines of the table: the goal, the reading set, the ratchets and the uncited
+/// plans.
 fn footer(plan: &Plan, report: &Report, base: &Base) -> String {
     let mut out = String::new();
+    let over = over_budget(plan, report);
+    let goal = format!(
+        "goal: no unit over use {} or develop {}",
+        short(plan.budget.use_),
+        short(plan.budget.develop)
+    );
+    if over.is_empty() {
+        let _ = writeln!(out, "{goal}: reached");
+    } else {
+        let rows: Vec<String> = over
+            .iter()
+            .map(|over| {
+                format!(
+                    "{} {} {} by {}",
+                    over.unit,
+                    match over.figure {
+                        Budgeted::Use => "use",
+                        Budgeted::Develop => "develop",
+                    },
+                    short(over.tokens),
+                    short(over.tokens - over.budget)
+                )
+            })
+            .collect();
+        let _ = writeln!(out, "{goal}; {} over: {}", over.len(), rows.join(", "));
+    }
     let then = base.report().map(|report| report.reading.total());
     let _ = writeln!(
         out,
-        "repository    reading set {}; ratchet {} plus {}; goal {}, {} to go",
+        "repository    reading set {}; ratchet {} plus {}",
         cell(report.reading.total(), then, None),
         short(plan.ratchet.reading),
-        short(plan.budget.allowance),
-        short(plan.budget.goal),
-        short(report.reading.total().saturating_sub(plan.budget.goal))
+        short(plan.budget.allowance)
     );
     if !plan.ratchet.use_.is_empty() {
         let held: Vec<String> = plan

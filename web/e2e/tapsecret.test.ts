@@ -1,6 +1,5 @@
 /**
- * A SECRET, ASKED FOR IN THE INBOX (`docs/SECRETASK-PLAN-2026-09-21.md` §3
- * commit 3): a card whose act is `kind: "secret"` — the standing proposal
+ * A SECRET, ASKED FOR IN THE INBOX: a card whose act is `kind: "secret"` — the standing proposal
  * `app/cli/src/commands/fixture.rs::a_secret_ask` seeds directly through the
  * real conversation store rather than driving the scripted model — over
  * the SAME isolated `secretspec` store every `--settings` server shares
@@ -18,8 +17,7 @@
  * disabled until something is typed, and tapping it does what any proposal's
  * tap does in the Inbox (`inbox.test.ts`'s own "tapping a proposal … drops
  * the count" scene) — SETTLES THE DECISION, so the card leaves the Inbox
- * entirely rather than sitting there re-drawn as `Acted`
- * (`docs/INBOXPRODROME-PLAN-2026-09-17.md` §5(a)). The rendering rule this
+ * entirely rather than sitting there re-drawn as `Acted`. The rendering rule this
  * card obeys once answered — "stored", and no field — is checked instead on
  * the CONVERSATION page, which draws every proposal whatever its state
  * (`proposal.ts`'s own header: "ONE implementation, mounted in two places").

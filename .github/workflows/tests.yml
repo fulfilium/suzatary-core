@@ -96,7 +96,7 @@ jobs:
         run: nix flake check --print-build-logs
 
       # The application's binary, built as its own step so a failure here is
-      # attributable to it (docs/ARCHITECTURE.md §2). `doctor` is the smoke:
+      # attributable to it. `doctor` is the smoke:
       # it names which capabilities have an interpreter, so a binary that
       # builds and can do nothing says so out loud.
       - name: Build the application (nix build .#suzatary)

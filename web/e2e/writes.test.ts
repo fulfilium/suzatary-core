@@ -416,7 +416,7 @@ app.scene("a deferral to a date not after today is refused in the box's own word
   assert.equal(await stateOf(id), "open");
 });
 
-// --- Undo and redo (docs/ARCHITECTURE.md §10.5) -------------------------------
+// --- Undo and redo ------------------------------------------------------------
 //
 // The chain never rewrites, so undoing is an append, not a rollback — which is
 // why this scene checks the SAME instrument every write scene does: the fold

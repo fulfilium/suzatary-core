@@ -1,6 +1,5 @@
 /**
- * SETTINGS AS WHAT IS CONNECTED, END TO END (`docs/SETUPAGENT-PLAN-2026-10-07.md`
- * §8 and §12, the guided setup's stage 2, `overview`).
+ * SETTINGS AS WHAT IS CONNECTED, END TO END (the guided setup's `overview`).
  *
  * The fixture is `--settings`: the model's token and one
  * calendar link on the `ics` plugin (`fixture.rs::SETTINGS_CALENDAR_LINK`),

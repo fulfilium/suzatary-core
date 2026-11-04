@@ -1,7 +1,7 @@
 /**
- * THE LAWS, AS PROPERTIES (`docs/WEB-SPEC.md` §3) — each `test` here is the
- * pin a sentence of the spec names. Random inputs from `gen.ts`, many seeds,
- * the failing seed in the message.
+ * THE LAWS, AS PROPERTIES — each `test` here is a law, its name the law's
+ * statement. Random inputs from `gen.ts`, many seeds, the failing seed in the
+ * message.
  */
 
 import { test } from "node:test";
@@ -12,7 +12,7 @@ import { isWide, screenFor } from "../src/shell/layout";
 import { reconcile } from "../src/algebra/reconcile";
 import { forAll, keys, reshuffled, route, width } from "./gen";
 
-// --- §3.1 The address ---------------------------------------------------------
+// --- The address ---------------------------------------------------------------
 
 test("law: a route survives print and parse (hrefOf then parseRoute)", () => {
   forAll(400, (r) => {
@@ -31,7 +31,7 @@ test("law: parsing is total — any hash yields a route, and an unknown one name
   });
 });
 
-// --- §3.2 The screen -----------------------------------------------------------
+// --- The screen -----------------------------------------------------------------
 
 test("law: screenFor is total, and a todo is a pane at 62rem and a page below it", () => {
   forAll(400, (r) => {
@@ -60,7 +60,7 @@ test("law: the same route at the same width always resolves to the same screen",
   });
 });
 
-// --- §3.3 The reconciler ------------------------------------------------------
+// --- The reconciler ------------------------------------------------------------
 
 /** Apply a plan to a key list the way `dom` would: removals, then inserts and
  * moves before their anchor. */

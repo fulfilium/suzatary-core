@@ -10,7 +10,8 @@ Read these files too:
   data and operations.
 - [`docs/TS-STYLE.md`](docs/TS-STYLE.md) adds layout rules for the TypeScript in `web/`. Name
   it in every brief that touches `web/`.
-- [`docs/WEB-SPEC.md`](docs/WEB-SPEC.md) contains the web app's types, laws and tests.
+- [`docs/WEB-SPEC.md`](docs/WEB-SPEC.md) contains the web app's three doors, the laws no test
+  can check, and its vectors. The web's other laws are its tests.
 - [`AGENT.md`](AGENT.md) (no "S") is a different file. Use it only to set up a new deployment.
 
 ## The project's memory
@@ -63,9 +64,12 @@ in the binary. In `web/`, use no framework and no npm.
 An agent must be able to read what it changes. `context.toml` names the units (each crate in
 `app/` and the web app), and `scripts/context.sh` prints how many tokens an agent reads to USE
 each unit (its README and public interface, at most 25k) and to DEVELOP it (its source, scripts,
-cited documents and its dependencies' USE, at most 500k). The guard
-`app/cli/tests/guards/context.rs` enforces the figures, and the repository's reading set falls
-towards 500k by a ratchet. Follow these rules in every pull request:
+cited documents and its dependencies' USE, at most 500k). The goal is that no unit is over
+either budget. A unit split into libraries meets the goal when each library does. The table
+names each unit that is still over, and by how much. The guard
+`app/cli/tests/guards/context.rs` refuses a unit's USE over its budget or its ratchet. The
+repository's reading set has a ratchet that only falls. Follow these rules in every pull
+request:
 
 1. Show the context change. The guard prints each unit's figures against `origin/master`. If
    the reading set grows, delete as much elsewhere in the same pull request, or say in its
@@ -255,15 +259,16 @@ make it smaller by removing a capability that someone uses.
 
 A *law* is a property that must hold for every input, such as "parsing a printed route gives
 the same route". When a type cannot express a law, write the law as a test. Run it over many
-generated inputs. Write the test's name next to the law in the docs.
+generated inputs. Write the test's name next to the law in the docs, except for `web/`
+(below).
 
 - Rust tests use `proptest`. For example, `inbox_schema.rs` has
   `the_state_order_is_a_partial_order`.
 - TypeScript tests run in `node:test` over the seeded generator in `web/test/gen.ts`. A failure
   prints the seed. `lo.test.ts` has "law: map preserves identity and composition".
-- In `docs/WEB-SPEC.md` §3, each law is followed by the name of its test. For example:
-  "Round trip. `parseRoute(hrefOf(r)) = r` for every route. — `laws.test.ts` 'a route
-  survives print and parse'."
+- In `web/`, the test is the law, and its name states the law: `laws.test.ts` has "a route
+  survives print and parse". No document repeats it. `docs/WEB-SPEC.md` §3 holds only the
+  laws that no test can check, one sentence each.
 - The Rust code writes test vectors to `app/core/tests/web/`. The TypeScript modules must give
   the same answers for them.
 

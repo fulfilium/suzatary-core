@@ -96,7 +96,7 @@ name = "guards"
 path = "tests/guards.rs"
 test = false
 
-# AND THE LIVE CHAIN'S PINS, BY THE SAME RULE (docs/ARCHITECTURE.md §8.8).
+# AND THE LIVE CHAIN'S PINS, BY THE SAME RULE.
 # `tests/live.rs` is SPEC §9 against the deployment's own `events/`. Those
 # tests were the database's until the Prodrome became its own public repository: a crate a
 # stranger can build must not read the owner's chain, so the crate kept the seeded

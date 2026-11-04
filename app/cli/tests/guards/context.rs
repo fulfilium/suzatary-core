@@ -1,7 +1,8 @@
-//! The context budget (`context.toml`): no unit's USE is over its budget, the repository's
-//! reading set does not grow past the ratchet, and the plan matches the code. The test prints
-//! every unit's figures and their change against `origin/master`, so each gate's log shows what a
-//! change costs to read.
+//! The context budget (`context.toml`). Its goal is that no unit is over `budget.use` or
+//! `budget.develop`; the table names each unit still over and by how much. The test refuses a
+//! unit's USE over its budget or its ratchet, a reading set grown past the ratchet, and a plan
+//! that no longer matches the code. It prints every unit's figures and their change against
+//! `origin/master`, so each gate's log shows what a change costs to read.
 
 use super::repo;
 

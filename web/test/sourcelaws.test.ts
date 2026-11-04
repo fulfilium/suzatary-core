@@ -1,5 +1,5 @@
 /**
- * THE SOURCE'S LAWS (`docs/WEB-SPEC.md` §3.7): a source is exactly the fold
+ * THE SOURCE'S LAWS: a source is exactly the fold
  * of its events, listeners see every committed state once and in order, and
  * an event that changes nothing commits nothing.
  */

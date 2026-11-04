@@ -383,7 +383,7 @@ const SHOTS: readonly Shot[] = [
     },
     undo: release(`document.querySelector("#view .transcriptcontent .placeholder") === null`),
   },
-  // A store's sync (WEB-SPEC §3.20): the lines forgotten and their content held at the box, so the line under the
+  // A store's sync: the lines forgotten and their content held at the box, so the line under the
   // header stands with its neutral pie while the secretary's page waits.
   {
     name: "syncing",

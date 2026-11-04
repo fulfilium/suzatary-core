@@ -8,8 +8,7 @@
  * `wasm-opt`'s rewrite, the JSON shapes in `web/src/prodrome/core.ts`, its guards — is a
  * place an answer could change, and none of them is covered by a `cargo test`.
  *
- * THE VECTORS COME FROM TWO PLACES SINCE THE SPLIT (docs/ARCHITECTURE.md
- * §8.8), and which place a file is in says what it is evidence ABOUT.
+ * THE VECTORS COME FROM TWO PLACES, and which place a file is in says what it is evidence ABOUT.
  * `$SUZATARY_PRODROME_CONFORMANCE` is the seeded, frozen evidence that
  * travels with the crate — since prodrome 0.4 (`conformance/*.py`, "the
  * evidence is a literal") it is the crate's own §2 grammar rather than JSON,

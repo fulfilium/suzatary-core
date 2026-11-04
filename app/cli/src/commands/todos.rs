@@ -20,7 +20,7 @@ pub struct Args {
     /// Which reading.
     #[command(subcommand)]
     action: Action,
-    /// WHICH CHAIN to read (docs/ARCHITECTURE.md §10.2). Absent is the FIRST
+    /// WHICH CHAIN to read. Absent is the FIRST
     /// chain the instance file names — `life`, the owner's own todos — which is
     /// what the briefing reads and what this verb has always meant.
     #[arg(long, value_name = "NAME")]

@@ -1,4 +1,5 @@
-// A disabled act is visible in both colour sets: its outline holds WCAG's 3:1 for a control's edge against the card it sits on.
+// A disabled act and a neutral pie are visible in both colour sets: each outline holds WCAG's 3:1 for a graphical edge
+// against what it sits on.
 
 import { test } from "node:test"
 import assert from "node:assert/strict"
@@ -45,6 +46,18 @@ test("a disabled act is not faded, and its outline and words stand out from the 
     for (const property of ["border-color", "color"]) {
       const colour = r.get(role(property)) ?? ""
       assert.ok(contrast(colour, card) >= 3, `${set}: ${property} ${colour} on ${card} is ${contrast(colour, card).toFixed(2)}:1`)
+    }
+  }
+})
+
+test("a neutral pie wears the accent, whose outline stands out from the ground and the card in light and dark", () => {
+  assert.match(block(style, ".pieneutral"), /color:\s*var\(--accent\)/)
+  for (const set of ["light", "dark"] as const) {
+    const r = roles(set)
+    const accent = r.get("accent") ?? ""
+    for (const under of ["ground", "sheet-solid"]) {
+      const behind = r.get(under) ?? ""
+      assert.ok(contrast(accent, behind) >= 3, `${set}: the accent ${accent} on ${under} ${behind} is ${contrast(accent, behind).toFixed(2)}:1`)
     }
   }
 })

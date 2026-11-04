@@ -2,8 +2,8 @@
 
 The owner's own, from his scanman codebase (2026-09-25). Every new or rewritten
 module in `web/src/` follows it; a brief for any agent touching `web/` points
-here. The laws and doors of `docs/WEB-SPEC.md` still hold, and so do
-the style rules in `AGENTS.md`, which apply to both languages.
+here. The web's laws (its tests) and the doors of `docs/WEB-SPEC.md` still
+hold, and so do the style rules in `AGENTS.md`, which apply to both languages.
 
 ## The rules
 

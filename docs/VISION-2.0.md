@@ -36,7 +36,7 @@ the abstractions"). Revised 2026-09-28: §1b is new, and §5, §6, §7, §9 and
 └─────────────────────────────────────────────────────────────────┘
 ┌──────────────── one small machine ──────────────────────────────┐
 │ Box             mail daemons, the search index, secrets, serve  │
-│                 (SMALLBOX-PLAN); reached over a tailnet          │
+│                 reached over a tailnet                          │
 └─────────────────────────────────────────────────────────────────┘
       code changes: cloud sessions (routines, or any ACP agent)
 ```
@@ -80,7 +80,7 @@ Four ideas that make the rest simpler:
 
 And one for documents:
 - **Contracts are files, decisions are items.** Whatever the code must obey
-  (SPEC, the laws in WEB-SPEC, CLAUDE.md) changes in the same PR as the code
+  (SPEC, WEB-SPEC, CLAUDE.md) changes in the same PR as the code
   and stays a file. Whatever has a lifecycle (designs, plans, proposals,
   decisions: proposed, accepted, built, superseded) becomes an item in the
   project prodrome, with a Typst body, `Absent` by default, and a

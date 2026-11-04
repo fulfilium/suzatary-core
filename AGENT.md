@@ -71,11 +71,8 @@ take some effort: there is no shortcut for them today.
      `.ts.net.` (for Ada, `ada-box.tailnet.ts.net.`). `tailscale whois` on the phone's
      address names the person's login.
 4. **A coding agent on the box.** This is you. Claude Code installs from
-   <https://code.claude.com/docs>. *Why:* setup, deploys and connectors are commands and
-   code, and the person should not have to type them all by hand.
-5. **A model for the secretary.** Either a Claude subscription (the default) or an API
-   key. *Why:* the secretary and the mail triage answer with it. See
-   [the choices](#3-the-choices).
+   <https://code.claude.com/docs>.
+5. **A Claude subscription.** The secretary and the mail triage answer with it (§3).
 6. **SSH into the box from that laptop**, if any mail account is Gmail: either
    `services.openssh.enable = true;` or Tailscale SSH (`sudo tailscale up --ssh`). *Why:*
    Gmail's sign-in finishes on the box's `localhost`, which the laptop reaches through an
@@ -354,11 +351,9 @@ a port other than 8080, use that port in the tunnel instead.
   job reads `(none — claude-cli/…)`. If its token is not set yet, `doctor` says so and
   names the command; skipping it is fine, since the app asks for it. The token is checked
   by the first triage run in §4.8.
-- `doctor`'s `door` line names the app's address, `ada-box.tailnet.ts.net:443`. Run from a
-  shell, it adds that the unit binds `services.suzatary.web.port` (443 by default) and that
-  a `serve` run by hand would bind 8787. That is expected here, not a failure: the unit
-  serves the door, and nothing runs `serve` by hand. Only when `doctor` runs under the unit
-  does it say `it will not start`, and then the fix is to set `web.port` to the door's port
+- `doctor`'s `door` line names the app's address, `ada-box.tailnet.ts.net:443`. From a
+  shell it also says that a `serve` run by hand would bind 8787: that is expected. Only
+  `it will not start` is a failure, and the fix is to set `web.port` to the door's port
   (§4.8).
 
 ### 4.6 Signing keys
@@ -446,12 +441,10 @@ declared in the options, never masked:
 - `vault.enable = true;` once the user repository holds `VAULT_RECIPIENT` and the Proton
   Drive CLI at `~/bin/proton-drive` is signed in. It runs the daily encrypted snapshot
   (`suzatary-vault.timer`), keeping the newest seven. A declared vault that cannot upload
-  fails the unit every day,
-  so declare it only then.
+  fails the unit every day, so declare it only then.
 
-A box set up by an earlier version of this guide masked these two; unmask them after the
-rebuild that declares them (`systemctl --user unmask proton-bridge.service
-suzatary-vault.timer`), since a mask outranks the module.
+A mask outranks the module: if either unit is masked, unmask it after the rebuild that
+declares it (`systemctl --user unmask proton-bridge.service suzatary-vault.timer`).
 
 `systemctl --user` answers with nothing unless `XDG_RUNTIME_DIR` is set, and
 `deploy.sh` refuses to run without it. Export it in every shell you run these commands
@@ -495,23 +488,12 @@ and the push helper needs it.
   within five minutes `journalctl --user -u suzatary-triage -n 50` shows a pass that
   pushed.
 
-What is pushed holds no conversation's words: `secretary-lines/` holds each line's
-shape and its words sealed, and the keys that open them, `secretary-lines-keys/`, stay on
-the box (the user repository's `.gitignore` lists it) and in the daily vault, so losing
-the box and the vault together loses the words. What is pushed in the clear is each line's
-shape: who and when, the verbs called, the references and file sizes, and a coding
-session's branch name (`claude/<task-slug>`); an erased line's shape stays readable. Any
-login the app lets view receives the keys when it pulls, the same people who could read the
-conversations before. A device whose key was revoked is answered 410 on a signed read and
-deletes what it holds, but it can still pull keys with unsigned reads while its login can
-view: reads stay open to any device on the owner's login. Erasing a turn destroys its keys.
-What erasing cannot reach is said plainly to the person: a push notification already
-shown, the day's `briefings/`, the server's memory until it restarts (the words it keeps
-opened, up to 32 MiB of them, are forgotten by the erasure itself), Anthropic's
-own transcripts, a conversation's title (written from its first answer, and not offered by
-a forget), and the fact that an erased line was there and when. The conversations from
-before the words were locked were carried into `secretary-lines/` and their plain store
-removed; the repository's earlier commits still hold them in the clear.
+What is pushed holds no conversation's words: `secretary-lines/` holds each line's shape
+and its words sealed, and the keys that open them, `secretary-lines-keys/`, stay on the box
+and in the vault. So losing the box and the vault together loses the words. Erasing a turn
+destroys its keys. Tell the person what erasing cannot reach: a push notification already
+shown, the day's `briefings/`, Anthropic's own transcripts, a conversation's title, and the
+fact that an erased line was there and when.
 
 ### 4.10 The phone
 
@@ -533,7 +515,7 @@ trusted with a short code from the box's terminal.
 If the code expired, was used or was mistyped five times, the phone says so: run `device
 pair` again for a new one. Every later device can do the same, or ask with **Ask to trust
 this device** and be tapped in the Inbox on a device that is already trusted.
-`./suzatary device trust <key>` still trusts a key typed whole, and withdraws its card.
+`./suzatary device trust <key>` trusts a key typed whole, and withdraws its card.
 Revoking a key is done at the terminal only: `./suzatary device revoke <key>`.
 
 - Check: Settings' **This device** reads `…which the chain trusts`, and adding a todo
@@ -560,10 +542,8 @@ origins = ["https://calendar.example.test"]
 credentials = ["PLUGIN_ICS_WORK"]
 ```
 
-The running app sees the edit with no restart: the server reads `instance.toml` again
-within a second of any change to it, so the calendar's line appears in Settings and the box
-files its Secret card. The same holds for a mail account or a `[secretary] drive_allow`
-folder added by hand; a new `drive_cli` path is read when the server starts.
+The running app reads the edit within a second, with no restart, and files the calendar's
+Secret card. A new `drive_cli` path is read only when the server starts.
 
 The person copies the link from their calendar service's settings (it is usually called
 the secret address in iCal format). They set it with `./suzatary secret
@@ -573,11 +553,8 @@ once: the line says "Synced" or why it failed, and a failing link gets a card to
 again. A link served from an origin not in `origins` gets an Allow card inside the link's
 card in Settings; allowing it stores the link the person already pasted.
 
-secretspec sets only a name its file declares, and the app's `secretspec.toml` in the code
-root declares no `PLUGIN_*` names. So the app writes a second file under its state
-directory, the first time a verb asks for a secret, that extends the code root's and declares every name the instance derives (each
-plugin credential, the model's token); `./suzatary secretspec` prints it, and the script's
-`secret` and the Secret card both set the link through it. Never write the link into a file.
+`./suzatary secretspec` prints the file that declares every name the instance derives (each
+plugin credential, the model's token). Never write the link into a file.
 
 - Check: `systemctl --user start suzatary-plugins` runs the sync (the unit passes the
   app's own components), `journalctl --user -u suzatary-plugins -n 20` shows no

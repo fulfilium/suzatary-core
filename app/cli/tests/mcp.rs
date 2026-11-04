@@ -77,7 +77,7 @@ repo = "{repo}"
 [signatures]
 root = "836884e1723c7b17f8b87e76a0272f012de6cff08f134eb9dcdb2670695b1818"
 
-# TWO CHAINS (docs/ARCHITECTURE.md §10.2). `life` is the default — what a verb
+# TWO CHAINS. `life` is the default — what a verb
 # with no `chain` writes to — and `suzatary` is the one a verb has to NAME.
 [[chains]]
 name = "life"

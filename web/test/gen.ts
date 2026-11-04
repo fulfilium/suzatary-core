@@ -1,6 +1,6 @@
 /**
  * THE GENERATOR — the web app's `proptest`, by hand
- * (`docs/WEBALGEBRA-PLAN-2026-09-16.md` §3; `docs/WEB-SPEC.md` §3).
+ * (`docs/WEBALGEBRA-PLAN-2026-09-16.md` §3).
  *
  * The Rust side checks its laws on random logs because an example is a
  * sentence and a property is a rule. This module is what lets the TypeScript

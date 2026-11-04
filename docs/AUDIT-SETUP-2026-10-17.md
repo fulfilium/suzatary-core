@@ -23,9 +23,8 @@ card on the owner's own phone says "Use one of your own devices".
 
 - **Code.** origin/master at `3771081` (release 1.22.1). The fixture binary
   `suzatary-dev` (`scripts/app-build.sh --fixture`) and the production web
-  bundle (`scripts/build-web.sh`). Setup stages 1 to 5 of
-  `docs/SETUPAGENT-PLAN-2026-10-07.md` are in that tree; stage 6, the setup
-  agent, is not. The first pictures (01 to 21) were taken with a bundle that
+  bundle (`scripts/build-web.sh`). The guided setup's first five
+  stages are in that tree; the setup agent is not. The first pictures (01 to 21) were taken with a bundle that
   also held #178's storesync change (a page left open across a later epoch
   waits for the store again); it does not touch any setup page, and the
   bundle was rebuilt on master for pictures 21 onward.

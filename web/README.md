@@ -1,8 +1,8 @@
 # web
 
 The app's frontend: TypeScript, one esbuild bundle, no framework and no npm. The box serves it,
-and the Android portal shows it. `docs/WEB-SPEC.md` holds its types, laws and tests, and
-`docs/TS-STYLE.md` its layout rules.
+and the Android portal shows it. Its laws are its tests; `docs/WEB-SPEC.md` holds its doors and
+the laws no test can check, and `docs/TS-STYLE.md` its layout rules.
 
 ## Use
 

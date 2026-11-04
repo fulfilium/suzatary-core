@@ -77,9 +77,9 @@ use as well"). A todo's own links and history stay on its page.
 Stated once, so the next feature is judged against the flows rather than
 against a page.
 
-**The frontend has a contract.** `docs/WEB-SPEC.md` names its types, its
-three doors and its laws, each pinned by a node test over a seeded
-generator; a page is a closed state with a pure step and an idempotent draw
+**The frontend has a contract.** Its laws are its tests, most of them node
+tests over a seeded generator, and `docs/WEB-SPEC.md` names its three doors
+and the laws no test can check; a page is a closed state with a pure step and an idempotent draw
 over one source (`web/src/algebra/source.ts`), and the Rust writes vectors the pure
 modules must agree with (`webalgebra`, 2026-09-16). A feature that adds a
 closure flag, a second copy of state or a cast is judged against that
@@ -118,8 +118,7 @@ conversation that happens to arrive at 07:03.
 the format of conversation that we have here with continuous memory, I want
 the chat in the suzatary to be similar … by far most of the time I want to have
 1 default chat where the agent knows everything"). BUILT 2026-09-14 (chain
-item `onechat`, `docs/ONECHAT-PLAN-2026-09-13.md`, `docs/ARCHITECTURE.md`
-§10.3); until then a conversation was a transcript re-sent whole to a
+item `onechat`, `docs/ONECHAT-PLAN-2026-09-13.md`); until then a conversation was a transcript re-sent whole to a
 stateless `claude -p` on every turn, the page disabled Send while a turn ran,
 and each conversation started knowing only what its system prompt carried.
 The design, as built:

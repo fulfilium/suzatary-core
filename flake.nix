@@ -5,7 +5,7 @@
     nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
     flake-utils.url = "github:numtide/flake-utils";
 
-    # THE DATABASE, AS AN INPUT (docs/ARCHITECTURE.md §1, §8.8). It was
+    # THE DATABASE, AS AN INPUT (docs/ARCHITECTURE.md §2). It was
     # `prodrome/` in this tree until 2026-09-09; it is
     # https://github.com/fulfilium/prodrome now, public under MIT OR Apache-2.0,
     # and this repository takes it the way it takes any other dependency.
@@ -1031,7 +1031,7 @@
             inherit nixpkgs system;
             module = self.nixosModules.default;
           };
-          # `cargo test` over the workspace (docs/ARCHITECTURE.md §2): the
+          # `cargo test` over the workspace: the
           # escape's laws, the capability bundles' shapes, the wire's
           # declarations — and clippy at `-D warnings` over `--all-targets`.
           # Both start from `cargoArtifacts` (crane, 2026-09-13): the tests
@@ -1098,7 +1098,7 @@
         # left is one workspace and one shell to edit it in.
         devShells.rust = pkgs.mkShell {
           # `rust-analyzer` is the editor's. Nothing else — no pkg-config, no
-          # OpenSSL, no interpreter: rustls, never OpenSSL (ARCHITECTURE §2),
+          # OpenSSL, no interpreter: rustls, never OpenSSL (CLAUDE.md),
           # and there is no build script here that asks a Python about itself.
           packages = rustToolchain.packages ++ testTools.packages ++ [ pkgs.rust-analyzer ];
           inherit (rustToolchain) RUST_BACKTRACE CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_RUSTFLAGS

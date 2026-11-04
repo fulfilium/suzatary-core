@@ -424,8 +424,7 @@ in
     };
 
     # BUILD WHEN THE LOCK MOVES, NOT WHEN THE BOX IS ASKED
-    # (docs/LAZYBUILDSTALL-PLAN-2026-09-21.md; the lock since
-    # docs/USERREPO-PLAN-2026-10-01.md stage 2). The user repository's
+    # (the lock since docs/USERREPO-PLAN-2026-10-01.md stage 2). The user repository's
     # flake.lock IS the deployment's version: scripts/deploy.sh is the one
     # thing that moves it, in a commit, so a stamp of history says which code
     # ran when. Its service is the one reader of the lock (nix/services.nix
@@ -471,8 +470,7 @@ in
         # see its header for why a bind address is half this app's access
         # control.
         #
-        # WHAT IT RUNS IS THE RUST BINARY since stage 2 of
-        # docs/ARCHITECTURE.md: `suzatary serve`, out of the pure `.#suzatary`
+        # WHAT IT RUNS IS THE RUST BINARY: `suzatary serve`, out of the pure `.#suzatary`
         # derivation (scripts/app-bin.sh resolves and runs it on demand, not
         # a `.#triage` shell package — see that shell's comment in flake.nix),
         # reading the user repository's `instance.toml` for the roster, the
@@ -523,7 +521,7 @@ in
     #
     # THE CODE IS NOW DELETED TOO (2026-09-08). It was Python — `suzatary/voice/`,
     # `scripts/voice-server.sh` and the `.#voice` devShell — and it went with
-    # the rest of the Python in stage 6 of docs/ARCHITECTURE.md, three weeks
+    # the rest of the Python, three weeks
     # after its last request. Reviving it means writing it again, against the
     # Rust binary, AND making the tailnet exist for it: real HTTPS certificates
     # are what phone browsers require for getUserMedia, which is why

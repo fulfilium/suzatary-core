@@ -1,5 +1,5 @@
 /**
- * TWO LISTS, AND THEY ARE NOT EACH OTHER (`docs/ARCHITECTURE.md` §10.2).
+ * TWO LISTS, AND THEY ARE NOT EACH OTHER.
  *
  * The fixture deployment serves two chains: `life`, the six-todo chain every
  * other scene reads, and `suzatary`, which is EMPTY. Empty is what makes these

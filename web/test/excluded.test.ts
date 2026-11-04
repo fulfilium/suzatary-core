@@ -59,3 +59,14 @@ test("law: a reader's step replaces only its own, and a repeat wakes nobody", ()
     assert.deepEqual(excluded.all(excluded.step(s, { type: "Read", reader: "chain/life", left: excluded.NOTHING })), b)
   })
 })
+
+test("a chain the box's fold holds as a failure is named once in the one line, with why, and goes when no reading fails it", () => {
+  const failed = [{ chain: "life", why: "the chain life does not verify: a hole at its head" }]
+  const readers = ["box/life", "inbox"]
+  const told = readers.reduce((s, reader) => excluded.step(s, { type: "Read", reader, left: excluded.left(excluded.NONE, failed) }), excluded.UNSEEN)
+  const all = excluded.all(told)
+  assert.deepEqual(all.chains, failed, "the chain and why, once, whichever readings told it")
+  assert.equal(excluded.said(all), "The chain life could not be read, so what refers into it is unpriced until it reads")
+  const cleared = readers.reduce((s, reader) => excluded.step(s, { type: "Read", reader, left: excluded.NOTHING }), told)
+  assert.ok(excluded.empty(excluded.all(cleared)))
+})

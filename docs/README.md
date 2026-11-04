@@ -14,9 +14,8 @@ and the plans are how it got here.
   Where any other document disagrees, this one wins. Each rule's history is a
   decision in `../memory/`: `suzatary decision list --store memory --grep
   <words>` finds one, and `decision show <id> --store memory` prints it.
-- [`ARCHITECTURE.md`](ARCHITECTURE.md) — the crates and which way the arrows
-  point, rules as types, the laws at the application layer, the replicas, and
-  §10's design decisions as built.
+- [`ARCHITECTURE.md`](ARCHITECTURE.md) — the map: each unit, the data flow,
+  the stores, and the invariants a change can break.
 - [`guide/guide.typ`](guide/guide.typ) — running your own, from nothing:
   the template, `suzatary init`, the tailnet, the model, mail, deploying.
   `nix build .#docs` renders it to HTML and PDF.
@@ -33,8 +32,9 @@ and the plans are how it got here.
   — the shape everything here follows: the history is the free
   join-semilattice, a type supplies an order, the application is a reading,
   replicas sync by union, caches are memoised pure functions.
-- [`WEB-SPEC.md`](WEB-SPEC.md) — the web app's own contract: its types, the
-  doors untyped data enters by, its laws, each naming the test that pins it.
+- [`WEB-SPEC.md`](WEB-SPEC.md) — the web app's contract: where to start
+  reading, the doors untyped data enters by, the laws no test can check, and
+  the vectors. The web's other laws are its tests.
 - [`../AGENTS.md`](../AGENTS.md) — instructions for a coding agent: the
   commands, the style rules for the Rust and the TypeScript, and the rules
   for written English.
@@ -77,17 +77,10 @@ the git history keeps it. Newest first.
 | 2026-09-28 | [SIMPLIFY](SIMPLIFY-PLAN-2026-09-28.md) | The types tell the story |
 | 2026-09-27 | [CODINGSESSION](CODINGSESSION-PLAN-2026-09-27.md) | A coding session started from the phone |
 | 2026-09-27 | [MULTIPRODROME](MULTIPRODROME-PLAN-2026-09-27.md) | Many prodromes in many repositories |
-| 2026-09-27 | [SMALLBOX](SMALLBOX-PLAN-2026-09-27.md) | The box holds mail, secrets and the app, nothing else |
 | 2026-09-25 | [CHAT](CHAT-PLAN-2026-09-25.md) | Many chats, one memory |
 | 2026-09-25 | [DESIGN-DECISIONS](DESIGN-DECISIONS-2026-09-25.md) | The design system's decisions for the app |
 | 2026-09-25 | [REDESIGN](REDESIGN-PLAN-2026-09-25.md) | The web app redrawn in the design system |
 | 2026-09-25 | [TODOTREE](TODOTREE-PLAN-2026-09-25.md) | Todos, subtodos and groups are one tree of terms |
-| 2026-09-22 | [PHOTOS](PHOTOS-PLAN-2026-09-22.md) | A photo in the chat |
-| 2026-09-21 | [LAZYBUILDSTALL](LAZYBUILDSTALL-PLAN-2026-09-21.md) | Build when the tree moves, not when the box is asked |
-| 2026-09-21 | [OPENSWEEP](OPENSWEEP-PLAN-2026-09-21.md) | The open list swept for evidence, by proposal |
-| 2026-09-21 | [SECRETASK](SECRETASK-PLAN-2026-09-21.md) | A secret is asked for in the Inbox, never in a chat |
-| 2026-09-19 | [SETTINGS](SETTINGS-PLAN-2026-09-19.md) | A settings screen, and the first secret the app may write |
-| 2026-09-17 | [INBOXPRODROME](INBOXPRODROME-PLAN-2026-09-17.md) | A decision is a prodrome |
 | 2026-09-16 | [WEBALGEBRA](WEBALGEBRA-PLAN-2026-09-16.md) | The web app to the Prodrome's standard |
 | 2026-09-15 | [CHATSHAPE](CHATSHAPE-PLAN-2026-09-15.md) | The chat, tightened |
 | 2026-09-14 | [DATASPLIT](DATASPLIT-PLAN-2026-09-14.md) | The data in a repository of its own |

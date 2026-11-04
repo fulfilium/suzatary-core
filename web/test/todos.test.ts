@@ -146,7 +146,7 @@ test("the signature ignores the stream: an append no card shows is not a redraw"
 });
 
 /**
- * A DECISION IS NOT A TODO (`docs/INBOXPRODROME-PLAN-2026-09-17.md`). The
+ * A DECISION IS NOT A TODO. The
  * document has separated them since the kind existed; this pins that the
  * list does too, because a decision priced at 55% sitting among the open
  * todos is exactly what shipped to the box on 19 September.

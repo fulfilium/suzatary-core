@@ -1,5 +1,5 @@
 /**
- * THE INBOX, END TO END (`docs/INBOXPRODROME-PLAN-2026-09-17.md` §5 commit 4).
+ * THE INBOX, END TO END.
  *
  * A DECISION IS A RECORD, and this file is the browser's own check of that:
  * the real `suzatary serve`, the real fold, a real triage card and a real

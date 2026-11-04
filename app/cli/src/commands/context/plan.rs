@@ -42,8 +42,6 @@ pub struct Budget {
     pub develop: u64,
     /// One unit's tests.
     pub tests: u64,
-    /// The reading set the ratchet falls towards.
-    pub goal: u64,
     /// How far a change may grow the reading set past the ratchet.
     pub allowance: u64,
 }

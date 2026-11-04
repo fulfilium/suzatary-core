@@ -2,8 +2,9 @@
 # README and its public interface) and to DEVELOP it (its own production source, its scripts, the
 # documents they and CLAUDE.md/AGENTS.md cite, and the USE of every unit it depends on).
 #
-# `suzatary context` reads this file; `scripts/context.sh` prints its table, and the guard
-# app/cli/tests/guards/context.rs fails when a unit's USE is over `budget.use` (or over its
+# The goal is that no unit is over `budget.use` or `budget.develop`. `suzatary context` reads this
+# file; `scripts/context.sh` prints its table and names each unit still over and by how much. The
+# guard app/cli/tests/guards/context.rs fails when a unit's USE is over `budget.use` (or over its
 # `ratchet.use` plus `budget.allowance`), when the repository's reading set grows past
 # `ratchet.reading` plus `budget.allowance`, or when a unit's `depends` differs from what its
 # Cargo.toml or its `witnesses` say.
@@ -15,22 +16,20 @@ use = 25000
 develop = 500000
 # Tokens of one unit's tests (fixtures are reported beside them).
 tests = 500000
-# Tokens of the repository's reading set that the ratchet below falls towards.
-goal = 500000
 # Tokens a pull request may grow the reading set by before the guard refuses it.
 allowance = 2000
 
 [ratchet]
 # The repository's reading set in tokens. Only `scripts/context.sh record` writes it, and only
 # downward.
-reading = 3171106
+reading = 2949645
 
 # The USE of each unit over `budget.use` today. Only `scripts/context.sh record` writes it, and
 # only downward; a unit back within budget leaves the table.
 [ratchet.use]
-cli = 98112
+cli = 85018
 core = 503160
-io = 66084
+io = 52820
 
 # Characters per token for each kind of file, measured with Claude's tokenizer by
 # `scripts/context.sh calibrate` over the files of `tokens.sample`.

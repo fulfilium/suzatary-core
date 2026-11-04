@@ -1,8 +1,7 @@
 /**
- * The route is a register and the browser's history is its log
- * (`docs/WEB-SPEC.md` §3.17): back after going somewhere is the place as it
- * was left, drawn again from the readings and the ui registers alone, and a
- * deep link is a route printed.
+ * The route is a register and the browser's history is its log: back after
+ * going somewhere is the place as it was left, drawn again from the readings
+ * and the ui registers alone, and a deep link is a route printed.
  */
 
 import assert from "node:assert/strict";
