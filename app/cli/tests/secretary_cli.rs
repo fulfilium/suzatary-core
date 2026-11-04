@@ -894,6 +894,9 @@ fn the_digest_census_prints_counts_and_no_word() {
     assert!(!said.contains("CENSUSWORDS"), "{said}");
     let census = suzatary_core::secretary::digest_census::Census::of(
         &memories.digests.reads().read().expect("the digest reads"),
+        &suzatary_core::secretary::compaction::Compaction {
+            ladder: instance.secretary.compactors.clone(),
+        },
     );
     let current = census
         .count(|_, _, state| state == suzatary_core::secretary::digest_census::State::Current);

@@ -1,10 +1,13 @@
 //! The digest's summaries counted, for the operator: every inner node of the tree by its label's
-//! group, its level and how its summary stands. Counts only, never a word.
+//! group, its level and how its summary stands, and the name of each node no model of the
+//! ladder found a line for. Counts and names only, never a word.
 
 use std::collections::BTreeMap;
 
 use prodrome_core::digest::Node;
+use prodrome_core::event::Hash;
 
+use crate::secretary::compaction::{Compaction, Rung, short};
 use crate::secretary::digest::{Digest, Standing};
 use crate::secretary::digest_label::Label;
 
@@ -50,31 +53,35 @@ pub enum State {
     Stale,
     /// No summary whose words read.
     Unsummarized,
+    /// No summary, and every model of the ladder found no line for it.
+    Unfit,
 }
 
 /// Every inner node, counted by group, level (a node over lines alone is level 1) and state.
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct Census {
     counts: BTreeMap<(Group, usize, State), usize>,
+    unfit: Vec<Hash>,
 }
 
 impl Census {
-    /// The census of `digest`.
+    /// The census of `digest`, a node's fit judged by `rule`'s ladder.
     #[must_use]
-    pub fn of(digest: &Digest) -> Self {
-        fn walk(digest: &Digest, node: &Node<Label>, census: &mut Census) -> usize {
+    pub fn of<R: Rung>(digest: &Digest, rule: &Compaction<R>) -> Self {
+        fn walk(digest: &Digest, unfit: &[Hash], node: &Node<Label>, census: &mut Census) -> usize {
             if node.is_leaf() {
                 return 0;
             }
             let level = 1 + node
                 .children()
                 .iter()
-                .map(|child| walk(digest, child, census))
+                .map(|child| walk(digest, unfit, child, census))
                 .max()
                 .unwrap_or(0);
             let state = match digest.standing(node.name()) {
                 Some(Standing::Current) => State::Current,
                 Some(Standing::Stale | Standing::OverRetracted) => State::Stale,
+                None if unfit.contains(node.name()) => State::Unfit,
                 None => State::Unsummarized,
             };
             *census
@@ -83,9 +90,13 @@ impl Census {
                 .or_default() += 1;
             level
         }
-        let mut census = Census::default();
+        let mut census = Census {
+            unfit: rule.unfit(digest),
+            ..Census::default()
+        };
         if let Some(tree) = digest.tree() {
-            walk(digest, tree.root(), &mut census);
+            let unfit = census.unfit.clone();
+            walk(digest, &unfit, tree.root(), &mut census);
         }
         census
     }
@@ -108,10 +119,11 @@ impl std::fmt::Display for Census {
             let of = |state| self.count(|group, level, at| keep(group, level) && at == state);
             writeln!(
                 f,
-                "{} current, {} stale, {} unsummarized",
+                "{} current, {} stale, {} unsummarized, {} unfit",
                 of(State::Current),
                 of(State::Stale),
-                of(State::Unsummarized)
+                of(State::Unsummarized),
+                of(State::Unfit)
             )
         };
         write!(f, "all nodes: ")?;
@@ -125,6 +137,10 @@ impl std::fmt::Display for Census {
         for (group, level) in rows {
             write!(f, "{}, level {level}: ", group.name())?;
             line(f, &|at, on| at == group && on == level)?;
+        }
+        if !self.unfit.is_empty() {
+            let named: Vec<&str> = self.unfit.iter().map(short).collect();
+            writeln!(f, "unfit for every model: {}", named.join(", "))?;
         }
         Ok(())
     }

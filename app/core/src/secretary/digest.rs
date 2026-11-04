@@ -37,7 +37,7 @@ use crate::rule_version::Under;
 use crate::secretary::compact_ask::{Asking, Beside};
 use crate::secretary::digest_event::{DigestEvent, Said};
 use crate::secretary::digest_label::Label;
-use crate::secretary::digest_line::Line;
+use crate::secretary::digest_line::{Line, NODE_BYTES};
 use crate::secretary::digest_policy::Owners;
 use crate::secretary::digest_spent::Spent;
 use crate::secretary::indexed_tree::IndexedTree;
@@ -67,6 +67,9 @@ pub struct Digest {
     named: Vec<(Hash, Hash, TextName)>,
     /// Every call's object, instant and what it spent, in the history's order.
     attempts: Vec<(Hash, Datetime, Spent)>,
+    /// The models each node's history records as finding no line at today's [`NODE_BYTES`] or
+    /// above, from every outcome and not only the reading's, since a later outcome supersedes it.
+    unfit: BTreeMap<Hash, BTreeSet<ModelName>>,
     /// The line of every leaf renamed because words of it were erased.
     renamed: BTreeMap<Hash, Hash>,
     /// Every summary object written over a retracted summary, at any depth: stale until its node
@@ -225,6 +228,7 @@ pub fn digest(
             Said::Unfit { .. } | Said::Asked { .. } | Said::Retracted => None,
         })
         .collect();
+    let unfit = unfit(history);
     let attempts = attempts(history);
     let over_retracted = over_retracted(history, &retracted);
     let standings = tree.as_ref().map_or_else(BTreeMap::new, |tree| {
@@ -237,6 +241,7 @@ pub fn digest(
         said,
         named,
         attempts,
+        unfit,
         renamed: leaf_of
             .into_iter()
             .filter(|(line, (leaf, _))| leaf != *line)
@@ -245,6 +250,24 @@ pub fn digest(
         over_retracted,
         standings,
     })
+}
+
+/// The models each node's `history` records as finding no line at today's [`NODE_BYTES`] or
+/// above.
+fn unfit(history: &[Node<DigestEvent>]) -> BTreeMap<Hash, BTreeSet<ModelName>> {
+    let mut unfit: BTreeMap<Hash, BTreeSet<ModelName>> = BTreeMap::new();
+    for object in history {
+        if let Some(event) = object.event()
+            && let Said::Unfit { model, limit, .. } = event.body()
+            && usize::try_from(*limit).unwrap_or(usize::MAX) >= NODE_BYTES
+        {
+            unfit
+                .entry(event.key().clone())
+                .or_default()
+                .insert(model.clone());
+        }
+    }
+    unfit
 }
 
 /// How the least-named candidate's summary of `node` stands, when it is a summary of a node of
@@ -522,6 +545,14 @@ impl Digest {
     #[must_use]
     pub fn candidates(&self, node: &Hash) -> &[Candidate] {
         self.said.get(node).map_or(&[], Vec::as_slice)
+    }
+
+    /// Whether `model` found no line for `node` at today's [`NODE_BYTES`] or above.
+    #[must_use]
+    pub fn found_unfit(&self, node: &Hash, model: &ModelName) -> bool {
+        self.unfit
+            .get(node)
+            .is_some_and(|models| models.contains(model))
     }
 
     /// The summary a single-record reading shows: the least-named candidate's, when it is a

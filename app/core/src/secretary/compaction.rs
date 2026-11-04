@@ -2,7 +2,9 @@
 //! compact the most pending node, append its outcome"), discharged by the outcome it records.
 //!
 //! The most pending node is the first the Prodrome's `pending` offers (smallest, then
-//! leftmost), the owner's nodes first, that this rule's model has not already found unfit. A
+//! leftmost), the owner's nodes first, that some model of the rule's ladder has not already found
+//! unfit; it is owed to the first such model, so a node one model cannot say in a line goes to
+//! the next instead of holding back every summary above it. A
 //! node whose summary is stale, asked under an older asking or over a child's summary since
 //! replaced ([`crate::secretary::digest::Standing`]), is pending again once its children are
 //! current, and its new summary is appended over the old one, which it replaces. The outcome is
@@ -28,13 +30,14 @@ use prodrome_core::literal::Datetime;
 
 use crate::capability::{Clock, Compact};
 use crate::model_name::ModelName;
+use crate::nonempty::NonEmpty;
 use crate::refusal::Refusal;
 use crate::rule::{Named, ReadingName, Rule};
 use crate::secretary::compact_ask::Ask;
 use crate::secretary::compact_budget::{Budget, Hold};
 use crate::secretary::compacting::Compacting;
 use crate::secretary::compactor::{self, Outcome};
-use crate::secretary::digest::{self, Digest, Written};
+use crate::secretary::digest::{self, Digest};
 use crate::secretary::digest_event::{self, DigestEvent};
 use crate::secretary::digest_line::NODE_BYTES;
 use crate::secretary::digest_spent::Spent;
@@ -113,9 +116,9 @@ impl Reading {
     ///
     /// # Errors
     /// As [`Reading::ask`].
-    fn next_call(&self, rule: &Compaction) -> Result<Option<Spent>, Refusal> {
+    fn next_call<R: Rung>(&self, rule: &Compaction<R>) -> Result<Option<Spent>, Refusal> {
         rule.due(&self.digest)
-            .map(|node| Ok(Spent::call(self.ask(&node)?.0.bytes())))
+            .map(|(node, _)| Ok(Spent::call(self.ask(&node)?.0.bytes())))
             .transpose()
     }
 }
@@ -127,53 +130,82 @@ impl Named for Reading {
     }
 }
 
-/// Compact with `model`: the rule's own field, since what is owed is what that model has not
-/// already found unfit.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Compaction {
-    /// The model the compactor runs.
-    pub model: ModelName,
+/// One model of the compactor's ladder: its name, or the compactor that runs it.
+pub trait Rung {
+    /// The model, as an outcome records it.
+    fn model(&self) -> &ModelName;
 }
 
-impl Compaction {
-    /// Every node owed a summary, most pending first: what `pending` offers, a stale summary
-    /// read as none, less each this model found unfit at today's [`NODE_BYTES`] or above, so
-    /// another model, or a larger limit, is owed it again. The nodes labelled the owner's alone
-    /// come first, since a stale one of those is the summary a reader could take for the owner's
-    /// words; each part keeps `pending`'s order.
+impl Rung for ModelName {
+    fn model(&self) -> &ModelName {
+        self
+    }
+}
+
+impl Rung for &dyn Compact {
+    fn model(&self) -> &ModelName {
+        Compact::model(*self)
+    }
+}
+
+/// Compact with the models of `ladder`, in order: the rule's own field, since what is owed, and
+/// to which model, is what each model has not already found unfit.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Compaction<R = ModelName> {
+    /// The models, the one tried first first.
+    pub ladder: NonEmpty<R>,
+}
+
+impl<R: Rung> Compaction<R> {
+    /// The first model of the ladder that has not found `node` unfit; `None` once every one has.
+    fn rung(&self, digest: &Digest, node: &Hash) -> Option<&R> {
+        self.ladder
+            .as_slice()
+            .iter()
+            .find(|rung| !digest.found_unfit(node, rung.model()))
+    }
+
+    /// Every node owed a summary, most pending first, with the model it is owed to: what
+    /// `pending` offers, a stale summary read as none, less each node every model found unfit.
+    /// The nodes labelled the owner's alone come first, since a stale one of those is the summary
+    /// a reader could take for the owner's words; each part keeps `pending`'s order.
     #[must_use]
-    pub fn owed(&self, digest: &Digest) -> Vec<Hash> {
+    pub fn owed(&self, digest: &Digest) -> Vec<(Hash, &R)> {
         let owners = |node: &Hash| {
             digest
                 .node(node)
                 .is_some_and(|node| node.measure().is_owners())
         };
-        let (mut first, rest): (Vec<Hash>, Vec<Hash>) = digest
+        let (mut first, rest): (Vec<_>, Vec<_>) = digest
             .pending()
             .into_iter()
-            .filter(|node| {
-                !digest.candidates(node).iter().any(|candidate| {
-                    matches!(
-                        &candidate.said,
-                        Written::Unfit { model, limit, .. }
-                            if model == &self.model
-                                && usize::try_from(*limit).unwrap_or(usize::MAX) >= NODE_BYTES
-                    )
-                })
+            .filter_map(|node| {
+                let rung = self.rung(digest, &node)?;
+                Some((node, rung))
             })
-            .partition(|node| owners(node));
+            .partition(|(node, _)| owners(node));
         first.extend(rest);
         first
     }
 
-    /// The most pending node.
+    /// The most pending node, and its model.
     #[must_use]
-    pub fn due(&self, digest: &Digest) -> Option<Hash> {
+    pub fn due(&self, digest: &Digest) -> Option<(Hash, &R)> {
         self.owed(digest).into_iter().next()
+    }
+
+    /// The pending nodes every model of the ladder found unfit: nothing above them is summarised.
+    #[must_use]
+    pub fn unfit(&self, digest: &Digest) -> Vec<Hash> {
+        digest
+            .pending()
+            .into_iter()
+            .filter(|node| self.rung(digest, node).is_none())
+            .collect()
     }
 }
 
-impl Rule for Compaction {
+impl<R: Rung> Rule for Compaction<R> {
     type Key = TheDigest;
     type Reading = Reading;
     type Witness = ();
@@ -206,9 +238,9 @@ pub enum Compacted {
     },
 }
 
-/// Perform the rule on `reading`: ask `compact` for the most pending node's line and record
-/// the outcome at the instant it came, as [`Claim::perform`] does for a claimed node. `None`
-/// when nothing is owed.
+/// Perform `rule` on `reading`: ask the most pending node's model for its line and record the
+/// outcome at the instant it came, as [`Claim::perform`] does for a claimed node. `None` when
+/// nothing is owed.
 ///
 /// # Errors
 /// The budget's hold, as a [`Refusal::conflict`]; [`Refusal::unprocessable`] for a compactor
@@ -216,19 +248,16 @@ pub enum Compacted {
 /// something out) and the stores' own.
 pub fn perform(
     memories: &Memories<'_>,
-    compact: &dyn Compact,
+    rule: &Compaction<&dyn Compact>,
     reading: &Reading,
     budget: Budget,
     clock: &dyn Clock,
 ) -> Result<Option<Compacted>, Refusal> {
-    let rule = Compaction {
-        model: compact.model().clone(),
-    };
-    let Some(node) = rule.due(&reading.digest) else {
+    let Some((node, compact)) = rule.due(&reading.digest) else {
         return Ok(None);
     };
     let (ask, over) = reading.ask(&node)?;
-    attempt(memories, compact, &node, ask, over, budget, clock).map(Some)
+    attempt(memories, *compact, &node, ask, over, budget, clock).map(Some)
 }
 
 /// Ask `compact` for `node`'s line and record the outcome at the instant it came; a question
@@ -298,30 +327,30 @@ type Taken = Arc<Mutex<BTreeSet<Hash>>>;
 /// out nodes no live [`Claim`] holds, read after every earlier claim was let go, so no two
 /// workers ever compact one node. The box keeps one for as long as it runs; a restart's fresh
 /// one takes nothing already recorded, since every outcome moves the reading.
-#[derive(Debug)]
-pub struct Paced {
-    rule: Compaction,
+pub struct Paced<'c> {
+    rule: Compaction<&'c dyn Compact>,
     budget: Budget,
     taken: Taken,
 }
 
 /// What one round of [`Paced::take`] came to.
 #[derive(Debug)]
-pub enum Round {
+pub enum Round<'c> {
     /// Nodes to compact, each held by its claim until the claim is dropped.
-    Taken(Vec<Claim>),
+    Taken(Vec<Claim<'c>>),
     /// Work is owed and the budget holds its next call back until [`Hold::until`].
     Held(Hold),
     /// Nothing is owed that no worker holds.
     Idle,
 }
 
-/// One node taken for one worker, with the question its reading asks of it. No other claim on
-/// the node exists while this one does. [`Claim::perform`] spends it and lets the node go
-/// after its write, so whatever it wrote is in the reading the next round takes from.
-#[derive(Debug)]
-pub struct Claim {
+/// One node taken for one worker, with the question its reading asks of it and the model it is
+/// owed to. No other claim on the node exists while this one does. [`Claim::perform`] spends it
+/// and lets the node go after its write, so whatever it wrote is in the reading the next round
+/// takes from.
+pub struct Claim<'c> {
     node: Hash,
+    compact: &'c dyn Compact,
     ask: Ask,
     over: Vec<Hash>,
     budget: Budget,
@@ -337,14 +366,12 @@ pub enum Performed {
     Held(Hold),
 }
 
-impl Paced {
-    /// The rule for `compact`'s model, held to `budget`.
+impl<'c> Paced<'c> {
+    /// `rule`, held to `budget`.
     #[must_use]
-    pub fn new(compact: &dyn Compact, budget: Budget) -> Self {
+    pub fn new(rule: Compaction<&'c dyn Compact>, budget: Budget) -> Self {
         Self {
-            rule: Compaction {
-                model: compact.model().clone(),
-            },
+            rule,
             budget,
             taken: Taken::default(),
         }
@@ -363,14 +390,14 @@ impl Paced {
         memories: &Memories<'_>,
         free: usize,
         clock: &dyn Clock,
-    ) -> Result<Round, Refusal> {
+    ) -> Result<Round<'c>, Refusal> {
         let mut taken = self.taken.lock().unwrap_or_else(PoisonError::into_inner);
         let reading = Reading::of(&memories.digests.reads())?;
         let now = clock.now();
         let mut spent: Vec<_> = reading.digest.attempts().collect();
         let mut chosen = Vec::new();
         let owed = self.rule.owed(&reading.digest);
-        for node in owed.into_iter().filter(|node| !taken.contains(node)) {
+        for (node, compact) in owed.into_iter().filter(|(node, _)| !taken.contains(node)) {
             if chosen.len() == free {
                 break;
             }
@@ -385,7 +412,7 @@ impl Paced {
                 }
                 spent.push((now, first));
             }
-            chosen.push((node, ask, over));
+            chosen.push((node, *compact, ask, over));
         }
         if chosen.is_empty() {
             return Ok(Round::Idle);
@@ -395,10 +422,11 @@ impl Paced {
         Ok(Round::Taken(
             chosen
                 .into_iter()
-                .map(|(node, ask, over)| {
+                .map(|(node, compact, ask, over)| {
                     taken.insert(node.clone());
                     Claim {
                         node,
+                        compact,
                         ask,
                         over,
                         budget: self.budget,
@@ -410,21 +438,29 @@ impl Paced {
     }
 }
 
-impl Claim {
-    /// Compact the node at `clock`'s instants, asking `compact`, as [`perform`] does, over the
-    /// question the claim was taken with, once, since the claim is spent by it. A refusal while
-    /// the budget holds the node's first call is that hold, not a failure.
+impl<'c> Claim<'c> {
+    /// Compact the node at `clock`'s instants, asking the model it is owed to, as [`perform`]
+    /// does, over the question the claim was taken with, once, since the claim is spent by it. A
+    /// refusal while the budget holds the node's first call is that hold, not a failure.
     ///
     /// # Errors
     /// [`perform`]'s refusals, as a [`Failed`] that keeps the node until it is dropped.
     pub fn perform(
         self,
         memories: &Memories<'_>,
-        compact: &dyn Compact,
         clock: &dyn Clock,
-    ) -> Result<Performed, Failed> {
+    ) -> Result<Performed, Failed<'c>> {
         let (ask, over) = (self.ask.clone(), self.over.clone());
-        let refused = match attempt(memories, compact, &self.node, ask, over, self.budget, clock) {
+        let attempted = attempt(
+            memories,
+            self.compact,
+            &self.node,
+            ask,
+            over,
+            self.budget,
+            clock,
+        );
+        let refused = match attempted {
             Ok(done) => return Ok(Performed::Compacted(done)),
             Err(refused) => refused,
         };
@@ -451,12 +487,12 @@ impl Claim {
 /// A claim's step that failed, still holding its node, so a worker can wait out its backoff
 /// without another taking the node meanwhile.
 #[derive(Debug)]
-pub struct Failed {
+pub struct Failed<'c> {
     refused: Refusal,
-    _claim: Box<Claim>,
+    _claim: Box<Claim<'c>>,
 }
 
-impl Failed {
+impl Failed<'_> {
     /// Why the step failed.
     #[must_use]
     pub fn refusal(&self) -> &Refusal {
@@ -464,7 +500,16 @@ impl Failed {
     }
 }
 
-impl Drop for Claim {
+impl std::fmt::Debug for Claim<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Claim")
+            .field("node", &self.node)
+            .field("model", Compact::model(self.compact))
+            .finish_non_exhaustive()
+    }
+}
+
+impl Drop for Claim<'_> {
     fn drop(&mut self) {
         self.taken
             .lock()
@@ -480,9 +525,9 @@ pub struct Waiting {
     pub nodes: usize,
     /// What keeps them waiting, if anything does.
     pub why: Option<Why>,
-    /// How many waiting nodes the compactor's model found no line for; every node above one
-    /// waits for good, until another model or a larger limit is owed it.
-    pub unfit: usize,
+    /// The waiting nodes every model of the ladder found no line for; every node above one
+    /// waits until the ladder names another model.
+    pub unfit: Vec<Hash>,
 }
 
 /// What keeps owed summaries waiting.
@@ -507,12 +552,15 @@ impl std::fmt::Display for Waiting {
             }
             None => write!(f, "{} summaries wait", self.nodes)?,
         }
-        if self.unfit > 0 {
+        if !self.unfit.is_empty() {
+            let named: Vec<&str> = self.unfit.iter().map(short).collect();
             write!(
                 f,
-                "; {} found no line of {NODE_BYTES} bytes, so nothing above them is summarised \
-                 until another model or a larger limit is tried",
-                self.unfit
+                "; no model of the ladder found a line of {NODE_BYTES} bytes for {} ({}), so \
+                 nothing above them is summarised until the instance file's `compactors` names \
+                 another model",
+                self.unfit.len(),
+                named.join(", ")
             )?;
         }
         Ok(())
@@ -526,29 +574,34 @@ impl std::fmt::Display for Waiting {
 /// [`Reading::of`]'s.
 pub fn waiting(digests: &Digests<'_>, now: Datetime) -> Result<Option<Waiting>, Refusal> {
     let reading = Reading::of(&digests.reads())?;
-    let pending = reading.digest.pending().len();
-    let (owed, why) = match digests.compacting {
-        Compacting::Off => (pending, Some(Why::Off)),
-        Compacting::On { model, budget, .. } => {
+    let (owed, why, unfit) = match digests.compacting {
+        Compacting::Off => (reading.digest.pending().len(), Some(Why::Off), Vec::new()),
+        Compacting::On { ladder, budget, .. } => {
             let spent: Vec<_> = reading.digest.attempts().collect();
             let rule = Compaction {
-                model: model.clone(),
+                ladder: ladder.clone(),
             };
             let held = reading
                 .next_call(&rule)?
                 .filter(|next| budget.admits(*next))
                 .and_then(|next| budget.hold(&spent, next, instant_of(now)));
-            (rule.owed(&reading.digest).len(), held.map(Why::Held))
+            (
+                rule.owed(&reading.digest).len(),
+                held.map(Why::Held),
+                rule.unfit(&reading.digest),
+            )
         }
     };
-    let unfit = match digests.compacting {
-        Compacting::Off => 0,
-        Compacting::On { .. } => pending - owed,
-    };
-    let waits = (why.is_some() && owed > 0) || unfit > 0;
+    let waits = (why.is_some() && owed > 0) || !unfit.is_empty();
     Ok(waits.then_some(Waiting {
         nodes: owed,
         why: why.filter(|_| owed > 0),
         unfit,
     }))
+}
+
+/// A node's name as a line names it: its first twelve characters.
+#[must_use]
+pub fn short(node: &Hash) -> &str {
+    &node.as_str()[..12]
 }

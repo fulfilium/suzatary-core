@@ -36,9 +36,13 @@ impl Models {
     pub fn jobs(&self) -> Vec<ModelJob> {
         let compactor = match &self.compacting {
             Compacting::Off => "Off: the conversations are not summarised.".to_owned(),
-            Compacting::On { model, .. } => format!(
-                "It runs {} and leaves {:.0}% of the subscription for you.",
-                model.as_str(),
+            Compacting::On { ladder, .. } => format!(
+                "It runs {}, each span by the next model when one cannot say it in a line, and \
+                 leaves {:.0}% of the subscription for you.",
+                ladder
+                    .map(|model| model.as_str().to_owned())
+                    .as_slice()
+                    .join(", then "),
                 self.reserve.get() * 100.0
             ),
         };

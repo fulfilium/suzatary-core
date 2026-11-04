@@ -77,7 +77,8 @@ fn models(out: &mut String, reach: &Reach) {
     out.push_str(
         "Every job runs a Claude model through the `claude` CLI on the Claude subscription: \
          `[secretary] model` for the chat, the reviews and the titles, and `[secretary] \
-         compactor` for the compactor. Its token is set at a terminal as below, or, once the app \
+         compactors` for the compactor, a list of models tried in order when one cannot write a \
+         summary line. Its token is set at a terminal as below, or, once the app \
          runs, from the **Connect a model** card the box files in the Inbox whenever the model \
          does not answer.\n\n",
     );

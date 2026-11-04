@@ -242,7 +242,9 @@ pub struct Secretary {
     /// Whether the compactor runs; `false` is its kill switch. The five keys after it are read
     /// only when it runs ([`Secretary::compacting`]).
     pub compact: bool,
-    pub compactor: ModelName,
+    /// The compactor's models, in the order a span is owed to them: a span one model cannot say
+    /// in a line goes to the next.
+    pub compactors: suzatary_core::nonempty::NonEmpty<ModelName>,
     /// The share of the subscription the compactor never takes.
     pub reserve: Reserve,
     pub compact_calls_per_hour: u32,
@@ -279,7 +281,10 @@ impl Default for Secretary {
             model: ModelName::parse("claude-opus-5-5").expect("a model name"),
             // Off by default: the first run compacts every line already stored.
             compact: false,
-            compactor: ModelName::parse("claude-sonnet-5-5").expect("a model name"),
+            compactors: suzatary_core::nonempty::NonEmpty::new(
+                ModelName::parse("claude-sonnet-5-5").expect("a model name"),
+                vec![ModelName::parse("claude-opus-5-5").expect("a model name")],
+            ),
             reserve: Reserve::default(),
             // An import of every past line takes days, never an afternoon of the subscription.
             compact_calls_per_hour: 30,
@@ -295,7 +300,7 @@ impl Default for Secretary {
 }
 
 impl Secretary {
-    /// The compactor as these keys set it: off, or a model within a budget.
+    /// The compactor as these keys set it: off, or its models within a budget.
     #[must_use]
     pub fn compacting(&self) -> suzatary_core::secretary::compacting::Compacting {
         use suzatary_core::secretary::compacting::Compacting;
@@ -303,7 +308,7 @@ impl Secretary {
             return Compacting::Off;
         }
         Compacting::On {
-            model: self.compactor.clone(),
+            ladder: self.compactors.clone(),
             budget: suzatary_core::secretary::compact_budget::Budget {
                 calls_per_hour: self.compact_calls_per_hour,
                 bytes_per_day: self.compact_bytes_per_day,

@@ -118,7 +118,7 @@ fn destinations() -> Vec<Destination> {
                 .to_owned()
                 + &quiet.join(", ")
                 + ".",
-            off: "Set `[secretary] model` and `[secretary] compactor` in the instance file \
+            off: "Set `[secretary] model` and `[secretary] compactors` in the instance file \
                   to choose which Claude model each job runs, and `[secretary] compact = \
                   false` to stop the compactor. There is no secretary without a model."
                 .to_owned(),

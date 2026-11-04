@@ -637,7 +637,7 @@ fn five_hour(allowance: &suzatary_io::usage::Allowance) -> suzatary_core::usage:
         .unwrap_or(suzatary_core::usage::Allowance::Unknown)
 }
 
-/// The compactor's model: `[secretary] compactor` on the `claude` CLI's plain path (no tools),
+/// One model of `[secretary] compactors` on the `claude` CLI's plain path (no tools),
 /// from an empty directory and configuration, only while the subscription has room above the
 /// reserve.
 pub struct CompactorModel {

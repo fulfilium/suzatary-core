@@ -1405,7 +1405,7 @@ pub fn run(path: &Path, args: &Args) -> anyhow::Result<()> {
                 BackfillRun::Plan(plan) => {
                     let model = crate::commands::serve::interpreters::CompactorModel::new(
                         &instance,
-                        instance.secretary.compactor.clone(),
+                        instance.secretary.compactors.first().clone(),
                     );
                     let mut asked =
                         |system: &suzatary_core::for_model::ForModel,
@@ -1427,10 +1427,13 @@ pub fn run(path: &Path, args: &Args) -> anyhow::Result<()> {
 pub fn census(instance: &Instance, out: &mut dyn std::io::Write) -> anyhow::Result<()> {
     let remembering = crate::wiring::Remembering::reader(instance);
     let digest = remembering.memories().digests.reads().read()?;
+    let rule = suzatary_core::secretary::compaction::Compaction {
+        ladder: instance.secretary.compactors.clone(),
+    };
     write!(
         out,
         "{}",
-        suzatary_core::secretary::digest_census::Census::of(&digest)
+        suzatary_core::secretary::digest_census::Census::of(&digest, &rule)
     )?;
     Ok(())
 }

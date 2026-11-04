@@ -708,6 +708,20 @@ const ROOMY: suzatary_core::secretary::compact_budget::Budget =
         bytes_per_day: u64::MAX,
     };
 
+/// The ladder of `rungs`, in order.
+fn ladder<'c>(
+    rungs: &[&'c dyn suzatary_core::capability::Compact],
+) -> suzatary_core::secretary::compaction::Compaction<&'c dyn suzatary_core::capability::Compact> {
+    suzatary_core::secretary::compaction::Compaction {
+        ladder: suzatary_core::nonempty::NonEmpty::of(rungs.to_vec()).expect("a rung"),
+    }
+}
+
+/// One model alone, by name.
+fn named(model: ModelName) -> suzatary_core::nonempty::NonEmpty<ModelName> {
+    suzatary_core::nonempty::NonEmpty::new(model, Vec::new())
+}
+
 impl Box {
     /// Run the compaction rule through an engine until nothing is owed; every firing's outcome.
     fn compact_all(
@@ -715,11 +729,9 @@ impl Box {
         compactor: &dyn suzatary_core::capability::Compact,
     ) -> Vec<suzatary_core::secretary::compaction::Compacted> {
         use suzatary_core::rule::Engine;
-        use suzatary_core::secretary::compaction::{Compaction, Reading, TheDigest, perform};
-        let rule = Compaction {
-            model: compactor.model().clone(),
-        };
-        let mut engine = Engine::new(vec![rule]);
+        use suzatary_core::secretary::compaction::{Reading, TheDigest, perform};
+        let rule = ladder(&[compactor]);
+        let mut engine = Engine::new(vec![rule.clone()]);
         let mut done = Vec::new();
         loop {
             let reading = Reading::of(&self.digests().reads()).expect("reads whole");
@@ -727,8 +739,7 @@ impl Box {
                 return done;
             }
             done.extend(
-                perform(&self.memories(), compactor, &reading, ROOMY, &At(at(0)))
-                    .expect("performed"),
+                perform(&self.memories(), &rule, &reading, ROOMY, &At(at(0))).expect("performed"),
             );
         }
     }
@@ -870,11 +881,10 @@ proptest! {
 }
 
 /// An attempt whose every answer is too long is recorded `Unfit`: the node stays pending and
-/// says why, the rule takes the next node, and a different model is owed it again.
+/// says why, and the rule takes the next node.
 #[test]
 fn an_unfit_node_stays_pending_and_says_why() {
-    use suzatary_core::rule::Rule as _;
-    use suzatary_core::secretary::compaction::{Compacted, Compaction, Reading};
+    use suzatary_core::secretary::compaction::Compacted;
     let the = Box::default();
     the.say("a", 40);
     let long = Recording {
@@ -898,12 +908,8 @@ fn an_unfit_node_stays_pending_and_says_why() {
         the.kept().is_empty(),
         "no words were kept for a line that did not fit"
     );
-    let other = Compaction {
-        model: ModelName::parse("another").expect("a model"),
-    };
-    assert!(other.holds(&Reading::of(&the.digests().reads()).expect("reads")));
     let on = suzatary_core::secretary::compacting::Compacting::On {
-        model: long.model().clone(),
+        ladder: named(long.model().clone()),
         budget: ROOMY,
         workers: std::num::NonZeroUsize::MIN,
     };
@@ -916,9 +922,10 @@ fn an_unfit_node_stays_pending_and_says_why() {
     )
     .expect("reads")
     .expect("the unfit are said");
-    assert_eq!(said.unfit, done.len());
+    assert_eq!(said.unfit.len(), done.len());
     assert!(
-        said.to_string().contains("found no line of 512 bytes"),
+        said.to_string()
+            .contains("no model of the ladder found a line of 512 bytes"),
         "{said}"
     );
     let spent: u32 = read.attempts().map(|(_, spent)| spent.calls).sum();
@@ -926,6 +933,118 @@ fn an_unfit_node_stays_pending_and_says_why() {
         spent,
         u32::try_from(done.len()).expect("few") * suzatary_core::secretary::compactor::TRIES
     );
+}
+
+/// `inner` under another model's name.
+struct Renamed<'c>(&'c dyn suzatary_core::capability::Compact, ModelName);
+
+impl suzatary_core::capability::Compact for Renamed<'_> {
+    fn model(&self) -> &ModelName {
+        &self.1
+    }
+
+    fn compact(
+        &self,
+        ask: &suzatary_core::secretary::compact_ask::Ask,
+    ) -> Result<String, suzatary_core::capability::ModelError> {
+        self.0.compact(ask)
+    }
+}
+
+/// A node the first model of the ladder finds unfit is owed to the second, and once the second
+/// fits it the node's parent is pending, owed to the first again; a ladder of the first alone
+/// leaves the tree unsummarised and names the node in the brief's line and the census.
+#[test]
+fn a_node_one_model_finds_unfit_is_owed_to_the_next() {
+    use suzatary_core::secretary::compacting::Compacting;
+    use suzatary_core::secretary::compaction::{Compacted, Reading, perform, waiting};
+    use suzatary_core::secretary::digest::Written;
+    use suzatary_core::secretary::digest_census::{Census, State};
+    let the = Box::default();
+    the.say("a", 40);
+    let long = Recording {
+        long: Some(900),
+        ..Recording::joining()
+    };
+    let long = Renamed(&long, ModelName::parse("long").expect("a model"));
+    let fits = Recording::joining();
+    let rule = ladder(&[&long, &fits]);
+    let reading = || Reading::of(&the.digests().reads()).expect("reads whole");
+    let Some(Compacted::Unfit { node, .. }) =
+        perform(&the.memories(), &rule, &reading(), ROOMY, &At(at(0))).expect("performed")
+    else {
+        panic!("the first model finds no line");
+    };
+    let (owed, to) = rule.due(&the.read()).expect("owed again");
+    assert_eq!((&owed, to.model()), (&node, fits.model()));
+    let Some(Compacted::Summarized { node: fitted, .. }) =
+        perform(&the.memories(), &rule, &reading(), ROOMY, &At(at(1))).expect("performed")
+    else {
+        panic!("the second model fits it");
+    };
+    assert_eq!(fitted, node);
+    while perform(&the.memories(), &rule, &reading(), ROOMY, &At(at(2)))
+        .expect("performed")
+        .is_some()
+    {}
+    let read = the.read();
+    assert!(read.pending().is_empty(), "every node is summarised");
+    let summarised = |node: &Hash| {
+        matches!(
+            read.candidates(node).first().map(|candidate| &candidate.said),
+            Some(Written::Summary(summary)) if &summary.model == fits.model()
+        ) && read.found_unfit(node, long.model())
+    };
+    let parent = summarised_or_not(read.tree().expect("lines"))
+        .into_iter()
+        .find(|parent| parent.children().iter().any(|child| child.name() == &node))
+        .expect("the node has a parent");
+    assert!(summarised(&node));
+    assert!(
+        summarised(parent.name()),
+        "the parent is summarised by the second model, after the first"
+    );
+
+    let alone = Box::default();
+    alone.say("a", 40);
+    let first = ladder(&[&long]);
+    while perform(
+        &alone.memories(),
+        &first,
+        &Reading::of(&alone.digests().reads()).expect("reads"),
+        ROOMY,
+        &At(at(0)),
+    )
+    .expect("performed")
+    .is_some()
+    {}
+    let unfit = first.unfit(&alone.read());
+    assert!(!unfit.is_empty());
+    let on = Compacting::On {
+        ladder: named(long.model().clone()),
+        budget: ROOMY,
+        workers: std::num::NonZeroUsize::MIN,
+    };
+    let said = waiting(
+        &Digests {
+            compacting: &on,
+            ..alone.digests()
+        },
+        at(1),
+    )
+    .expect("reads")
+    .expect("the unfit are said");
+    assert_eq!(said.unfit, unfit);
+    let census = Census::of(&alone.read(), &first);
+    assert_eq!(
+        census.count(|_, _, state| state == State::Unfit),
+        unfit.len()
+    );
+    let printed = census.to_string();
+    for node in &unfit {
+        assert!(said.to_string().contains(&node.as_str()[..12]), "{said}");
+        assert!(printed.contains(&node.as_str()[..12]), "{printed}");
+    }
 }
 
 /// A clock that moves a minute every time it is read.
@@ -950,7 +1069,7 @@ fn each_call_is_stamped_at_its_own_instant() {
     };
     let clock = Ticking(std::sync::atomic::AtomicUsize::new(0));
     let reading = Reading::of(&the.digests().reads()).expect("reads whole");
-    perform(&the.memories(), &long, &reading, ROOMY, &clock)
+    perform(&the.memories(), &ladder(&[&long]), &reading, ROOMY, &clock)
         .expect("performed")
         .expect("a node was owed");
     let stamps: Vec<Datetime> = the.read().attempts().map(|(at, _)| at).collect();
@@ -982,9 +1101,8 @@ enum Stepped {
 }
 
 fn step(
-    paced: &suzatary_core::secretary::compaction::Paced,
+    paced: &suzatary_core::secretary::compaction::Paced<'_>,
     memories: &Memories<'_>,
-    compact: &dyn suzatary_core::capability::Compact,
     clock: &dyn suzatary_core::capability::Clock,
 ) -> Result<Stepped, suzatary_core::refusal::Refusal> {
     use suzatary_core::secretary::compaction::{Performed, Round};
@@ -997,7 +1115,7 @@ fn step(
         return Ok(Stepped::Idle);
     };
     let performed = claim
-        .perform(memories, compact, clock)
+        .perform(memories, clock)
         .map_err(|failed| failed.refusal().clone())?;
     Ok(match performed {
         Performed::Compacted(done) => Stepped::Compacted(done),
@@ -1011,16 +1129,14 @@ impl Box {
     /// stopped, so a hold never frees.
     fn compact_with_workers(
         &self,
-        paced: &suzatary_core::secretary::compaction::Paced,
+        paced: &suzatary_core::secretary::compaction::Paced<'_>,
         compactor: &dyn suzatary_core::capability::Compact,
         workers: usize,
         round: usize,
     ) {
         use suzatary_core::rule::Rule as _;
-        use suzatary_core::secretary::compaction::{Compaction, Reading, Round};
-        let owes = Compaction {
-            model: compactor.model().clone(),
-        };
+        use suzatary_core::secretary::compaction::{Reading, Round};
+        let owes = ladder(&[compactor]);
         std::thread::scope(|scope| {
             for _ in 0..workers {
                 scope.spawn(|| {
@@ -1031,8 +1147,7 @@ impl Box {
                         {
                             Round::Taken(claims) => {
                                 for claim in claims {
-                                    let performed =
-                                        claim.perform(&self.memories(), compactor, &At(at(0)));
+                                    let performed = claim.perform(&self.memories(), &At(at(0)));
                                     assert!(performed.is_ok(), "a step: {performed:?}");
                                 }
                             }
@@ -1102,16 +1217,16 @@ proptest! {
         accept_lines(&many.lines, &one.lines, |prints| prints);
         accept_lines(&tight.lines, &one.lines, |prints| prints);
         let compactor = Recording::joining();
-        one.compact_with_workers(&Paced::new(&compactor, ROOMY), &compactor, 1, 1);
+        one.compact_with_workers(&Paced::new(ladder(&[&compactor]), ROOMY), &compactor, 1, 1);
         let alone = one.written();
         prop_assert!(one.read().pending().is_empty(), "one worker writes the whole tree");
         prop_assert!(alone.values().all(|words| words.len() == 1 && words[0].is_some()));
-        many.compact_with_workers(&Paced::new(&compactor, ROOMY), &compactor, workers, round);
+        many.compact_with_workers(&Paced::new(ladder(&[&compactor]), ROOMY), &compactor, workers, round);
         prop_assert_eq!(many.written(), alone);
 
         let counted = Recording::joining();
         let budget = Budget { calls_per_hour: calls, bytes_per_day: bytes };
-        tight.compact_with_workers(&Paced::new(&counted, budget), &counted, workers, round);
+        tight.compact_with_workers(&Paced::new(ladder(&[&counted]), budget), &counted, workers, round);
         let spent: Vec<_> = tight.read().attempts().map(|(_, spent)| spent).collect();
         prop_assert_eq!(spent.len(), counted.asked().len(), "every call made was counted");
         let total: suzatary_core::secretary::digest_spent::Spent = spent.into_iter().sum();
@@ -1132,14 +1247,13 @@ fn the_budget_paces_the_rule_and_a_hold_consumes_no_firing() {
     the.say("a", 60);
     let compactor = Recording::joining();
     let paced = Paced::new(
-        &compactor,
+        ladder(&[&compactor]),
         Budget {
             calls_per_hour: 2,
             bytes_per_day: u64::MAX,
         },
     );
-    let step =
-        |paced: &Paced, now| step(paced, &the.memories(), &compactor, &At(now)).expect("a step");
+    let step = |paced: &Paced, now| step(paced, &the.memories(), &At(now)).expect("a step");
     for _ in 0..2 {
         assert!(matches!(step(&paced, at(0)), Stepped::Compacted(_)));
     }
@@ -1154,7 +1268,7 @@ fn the_budget_paces_the_rule_and_a_hold_consumes_no_firing() {
         "the held work is done"
     );
     let free = Paced::new(
-        &compactor,
+        ladder(&[&compactor]),
         Budget {
             calls_per_hour: u32::MAX,
             bytes_per_day: u64::MAX,
@@ -1176,9 +1290,8 @@ fn a_call_larger_than_what_is_left_of_the_day_is_held_and_never_made() {
     the.say("a", 40);
     let compactor = Recording::joining();
     let Stepped::Compacted(_) = step(
-        &Paced::new(&compactor, ROOMY),
+        &Paced::new(ladder(&[&compactor]), ROOMY),
         &the.memories(),
-        &compactor,
         &At(at(0)),
     )
     .expect("a step") else {
@@ -1190,9 +1303,8 @@ fn a_call_larger_than_what_is_left_of_the_day_is_held_and_never_made() {
         bytes_per_day: sent + sent / 2,
     };
     let step = step(
-        &Paced::new(&compactor, tight),
+        &Paced::new(ladder(&[&compactor]), tight),
         &the.memories(),
-        &compactor,
         &At(at(1)),
     )
     .expect("a step");
@@ -1225,9 +1337,8 @@ fn a_question_larger_than_the_days_cap_is_unfit_and_never_asked() {
         bytes_per_day: 10,
     };
     let step = step(
-        &Paced::new(&compactor, tiny),
+        &Paced::new(ladder(&[&compactor]), tiny),
         &the.memories(),
-        &compactor,
         &At(at(0)),
     )
     .expect("a step");
@@ -1238,7 +1349,7 @@ fn a_question_larger_than_the_days_cap_is_unfit_and_never_asked() {
     assert_eq!(the.read().attempts().count(), 0, "nor counted");
     assert!(the.read().pending().contains(&node));
     let on = Compacting::On {
-        model: compactor.model().clone(),
+        ladder: named(compactor.model().clone()),
         budget: tiny,
         workers: std::num::NonZeroUsize::MIN,
     };
@@ -1251,7 +1362,7 @@ fn a_question_larger_than_the_days_cap_is_unfit_and_never_asked() {
     )
     .expect("reads")
     .expect("said");
-    assert!(said.unfit >= 1, "{said}");
+    assert!(!said.unfit.is_empty(), "{said}");
 }
 
 /// A model that always fails cannot spend past the cap, however often it is retried: every call
@@ -1275,9 +1386,8 @@ fn a_model_that_always_fails_spends_no_more_than_the_cap() {
     for minute in 0..240 {
         // A fresh one every minute, as a restart makes one.
         let step = step(
-            &Paced::new(&failing, budget),
+            &Paced::new(ladder(&[&failing]), budget),
             &the.memories(),
-            &failing,
             &At(at(minute)),
         );
         match step {
@@ -1990,7 +2100,15 @@ mod recompacting {
                 };
                 *store.entry((Group::of(&label), state)).or_default() += 1;
             }
-            (Census::of(&read), store)
+            (
+                Census::of(
+                    &read,
+                    &Compaction {
+                        ladder: named(model()),
+                    },
+                ),
+                store,
+            )
         }
 
         /// The census by group and state.
@@ -2034,10 +2152,13 @@ mod recompacting {
         }
         let read = the.read();
         let tree = read.tree().expect("lines");
-        let owed: BTreeSet<Hash> = Compaction { model: model() }
-            .owed(&read)
-            .into_iter()
-            .collect();
+        let owed: BTreeSet<Hash> = Compaction {
+            ladder: named(model()),
+        }
+        .owed(&read)
+        .into_iter()
+        .map(|(node, _)| node)
+        .collect();
         let mut stack = vec![tree.root()];
         while let Some(node) = stack.pop() {
             let current = read.standing(node.name()) == Some(Standing::Current);
@@ -2121,10 +2242,10 @@ mod recompacting {
             the.write_lines("a", conversation(&kinds, true));
             the.summarise_unversioned();
             let joining = Recording::joining();
-            let rule = Compaction { model: joining.model().clone() };
+            let rule = ladder(&[&joining]);
             for _ in 0..stop {
                 let reading = Reading::of(&the.digests().reads()).expect("reads whole");
-                if perform(&the.memories(), &joining, &reading, ROOMY, &At(at(0)))
+                if perform(&the.memories(), &rule, &reading, ROOMY, &At(at(0)))
                     .expect("performed")
                     .is_none()
                 {
@@ -2132,7 +2253,7 @@ mod recompacting {
                 }
             }
             // The process stopped between recording a call and hearing its answer.
-            if let Some(node) = rule.due(&the.read()) {
+            if let Some((node, _)) = rule.due(&the.read()) {
                 the.history
                     .append(digest_event::asked(node, at(0), compactor(), 9).expect("a call"))
                     .expect("recorded");

@@ -5,6 +5,26 @@
 pub struct NonEmpty<T>(Vec<T>);
 
 impl<T> NonEmpty<T> {
+    /// `first`, then `rest`.
+    #[must_use]
+    pub fn new(first: T, rest: Vec<T>) -> Self {
+        let mut items = vec![first];
+        items.extend(rest);
+        Self(items)
+    }
+
+    /// The first item.
+    #[must_use]
+    pub fn first(&self) -> &T {
+        &self.0[0]
+    }
+
+    /// Each item through `f`, in order.
+    #[must_use]
+    pub fn map<U>(&self, f: impl FnMut(&T) -> U) -> NonEmpty<U> {
+        NonEmpty(self.0.iter().map(f).collect())
+    }
+
     /// `items`, or `None` when there are none.
     #[must_use]
     pub fn of(items: Vec<T>) -> Option<Self> {

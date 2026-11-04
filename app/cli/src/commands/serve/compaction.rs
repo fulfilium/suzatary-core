@@ -10,9 +10,12 @@ use std::num::NonZeroUsize;
 use std::sync::Arc;
 
 use suzatary_core::capability::{Compact, Server};
+use suzatary_core::nonempty::NonEmpty;
 use suzatary_core::secretary::compact_budget::{Budget, Hold};
 use suzatary_core::secretary::compacting::Compacting;
-use suzatary_core::secretary::compaction::{Claim, Compacted, Paced, Performed, Round};
+use suzatary_core::secretary::compaction::{
+    Claim, Compacted, Compaction, Paced, Performed, Round, short,
+};
 use tokio::sync::mpsc;
 
 use super::State;
@@ -25,13 +28,16 @@ pub fn started(state: State, instance: &Instance, compacting: Compacting) -> Sta
     match compacting {
         Compacting::Off => state,
         Compacting::On {
-            model,
+            ladder,
             budget,
             workers,
         } => {
-            let model = Arc::new(CompactorModel::new(instance, model));
+            // One model per rung for the life of the server, as `caps` is.
+            let ladder = ladder.map(|model| -> &'static dyn Compact {
+                Box::leak(Box::new(CompactorModel::new(instance, model.clone())))
+            });
             let caps = state.first.caps;
-            state.with_compactor(Compactor::spawn(caps, model, budget, workers))
+            state.with_compactor(Compactor::spawn(caps, ladder, budget, workers))
         }
     }
 }
@@ -65,17 +71,17 @@ pub struct Compactor {
 }
 
 impl Compactor {
-    /// Start the task over `caps`'s memory and clock, asking `compact` from `workers` steps at
-    /// once, all held to `budget`; it takes its first round at once.
+    /// Start the task over `caps`'s memory and clock, asking the models of `ladder` from
+    /// `workers` steps at once, all held to `budget`; it takes its first round at once.
     #[must_use]
     pub fn spawn(
         caps: &'static Server<'static>,
-        compact: Arc<dyn Compact + Send + Sync>,
+        ladder: NonEmpty<&'static dyn Compact>,
         budget: Budget,
         workers: NonZeroUsize,
     ) -> Self {
         let (nudge, nudged) = mpsc::channel(1);
-        tokio::spawn(run(caps, compact, budget, workers, nudged));
+        tokio::spawn(run(caps, ladder, budget, workers, nudged));
         Self { nudge }
     }
 
@@ -90,23 +96,17 @@ impl Compactor {
 /// again, which starts the next round.
 async fn run(
     caps: &'static Server<'static>,
-    compact: Arc<dyn Compact + Send + Sync>,
+    ladder: NonEmpty<&'static dyn Compact>,
     budget: Budget,
     workers: NonZeroUsize,
     mut nudged: mpsc::Receiver<()>,
 ) {
-    let paced = Arc::new(Paced::new(compact.as_ref(), budget));
+    let paced = Arc::new(Paced::new(Compaction { ladder }, budget));
     let (finished, mut free) = mpsc::unbounded_channel();
-    let slots: Vec<mpsc::Sender<Claim>> = (0..workers.get())
+    let slots: Vec<mpsc::Sender<Claim<'static>>> = (0..workers.get())
         .map(|slot| {
             let (hand, handed) = mpsc::channel(1);
-            tokio::spawn(work(
-                slot,
-                caps,
-                Arc::clone(&compact),
-                handed,
-                finished.clone(),
-            ));
+            tokio::spawn(work(slot, caps, handed, finished.clone()));
             hand
         })
         .collect();
@@ -183,19 +183,13 @@ async fn run(
 async fn work(
     slot: usize,
     caps: &'static Server<'static>,
-    compact: Arc<dyn Compact + Send + Sync>,
-    mut handed: mpsc::Receiver<Claim>,
+    mut handed: mpsc::Receiver<Claim<'static>>,
     finished: mpsc::UnboundedSender<usize>,
 ) {
     let mut backoff = Backoff::new();
     while let Some(claim) = handed.recv().await {
-        let asked = Arc::clone(&compact);
         let performed = tokio::task::spawn_blocking(move || {
-            claim.perform(
-                &caps.secretary.memories,
-                asked.as_ref(),
-                caps.secretary.clock,
-            )
+            claim.perform(&caps.secretary.memories, caps.secretary.clock)
         })
         .await;
         match performed {
@@ -229,7 +223,6 @@ async fn work(
 }
 
 fn logged(done: &Compacted) -> String {
-    let short = |hash: &prodrome_core::event::Hash| hash.as_str()[..12].to_owned();
     match done {
         Compacted::Summarized { node, object } => {
             format!("summarised {} as {}", short(node), short(object))

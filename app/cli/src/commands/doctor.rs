@@ -257,9 +257,12 @@ fn print_models(read: &instance::Instance) {
         suzatary_core::secretary::compacting::Compacting::Off => {
             println!("  compactor                 off");
         }
-        suzatary_core::secretary::compacting::Compacting::On { model, .. } => println!(
+        suzatary_core::secretary::compacting::Compacting::On { ladder, .. } => println!(
             "  compactor                 {}, leaving {:.0}% of the subscription",
-            suzatary_io::model::name_of(model.as_str()),
+            ladder
+                .map(|model| suzatary_io::model::name_of(model.as_str()))
+                .as_slice()
+                .join(", then "),
             read.secretary.reserve.get() * 100.0
         ),
     }

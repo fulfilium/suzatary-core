@@ -139,7 +139,7 @@ differs.
 
 - **The model vendor: Anthropic, through the `claude` CLI on the Claude subscription.**
   Receives: Whatever a job puts in its prompt: the secretary's conversations and what its verbs read (mail bodies, todos, calendar titles, files you attach), the triage agent's mail and the open list, the manuals, your persona's prose and your triage notes. Every `claude` the box starts keeps no session it was not asked to and runs with `CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1`, `DISABLE_TELEMETRY=1`, `DISABLE_ERROR_REPORTING=1`, `DISABLE_GROWTHBOOK=1`, `DISABLE_AUTOUPDATER=1`, `DISABLE_BUG_COMMAND=1`, `DISABLE_FEEDBACK_COMMAND=1`, `CLAUDE_CODE_DISABLE_FEEDBACK_SURVEY=1`, `DO_NOT_TRACK=1`.
-  Off: Set `[secretary] model` and `[secretary] compactor` in the instance file to choose which Claude model each job runs, and `[secretary] compact = false` to stop the compactor. There is no secretary without a model.
+  Off: Set `[secretary] model` and `[secretary] compactors` in the instance file to choose which Claude model each job runs, and `[secretary] compact = false` to stop the compactor. There is no secretary without a model.
 
 - **The data repository's git remote (GitHub, or wherever you point it), on every push `safe-push.sh` makes.**
   Receives: The stores: the todo chains (each todo's text, price and history, and `mail:` references by hash prefix), the inbox (each proposal whole: a drafted email's recipients, subject and body), the conversations (each line's shape, its words sealed), the memory's and the digest's histories (names, never the words), the decisions, `requests/` (who asked for each write) and `state.json` (how many messages were decided and how, each under an HMAC no one without SUZATARY_DEDUP_KEY can tie to a message); `instance.toml` (your name, city, zone, logins, accounts and the app's address, which names the box) and `FETCHER` (the box's hostname). Never the box-local tier, `local/`: `persona.toml`, `personal-terms.txt`, `context-terms.txt`, `mail.json`, `triage-notes.md`, `watches`. The repository's earlier commits keep whatever it held before: moving a file into the tier stops it being pushed, and rewrites no history.
@@ -182,7 +182,7 @@ before asking the next.
    *Ask:* where the remote is, or whether they want none.
 2. **Which Claude model answers.** Every job runs a Claude model through the `claude`
    CLI on the owner's Claude subscription; `[secretary] model` and `[secretary]
-   compactor` name the models. The box asks for a missing token itself: a card in the
+   compactors` name the models. The box asks for a missing token itself: a card in the
    Inbox, and **Connect a model** whenever the model does not answer.
 3. **Their first mail account**: its address and its provider. More accounts can be added
    later.
@@ -248,7 +248,7 @@ One account at `init` (`--email` and `--mail-provider`); more are added to `[[ma
 
 ### Model
 
-Every job runs a Claude model through the `claude` CLI on the Claude subscription: `[secretary] model` for the chat, the reviews and the titles, and `[secretary] compactor` for the compactor. Its token is set at a terminal as below, or, once the app runs, from the **Connect a model** card the box files in the Inbox whenever the model does not answer.
+Every job runs a Claude model through the `claude` CLI on the Claude subscription: `[secretary] model` for the chat, the reviews and the titles, and `[secretary] compactors` for the compactor, a list of models tried in order when one cannot write a summary line. Its token is set at a terminal as below, or, once the app runs, from the **Connect a model** card the box files in the Inbox whenever the model does not answer.
 
 
   ```console

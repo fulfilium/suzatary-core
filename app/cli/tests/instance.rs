@@ -553,8 +553,13 @@ fn the_compactor_is_off_by_default_and_on_by_its_switch() {
     assert_eq!(
         read(&on),
         Compacting::On {
-            model: suzatary_core::model_name::ModelName::parse("claude-sonnet-5-5")
-                .expect("a model"),
+            ladder: suzatary_core::nonempty::NonEmpty::new(
+                suzatary_core::model_name::ModelName::parse("claude-sonnet-5-5").expect("a model"),
+                vec![
+                    suzatary_core::model_name::ModelName::parse("claude-opus-5-5")
+                        .expect("a model")
+                ],
+            ),
             budget: Budget {
                 calls_per_hour: 30,
                 bytes_per_day: 32 * 1024 * 1024,
@@ -565,16 +570,16 @@ fn the_compactor_is_off_by_default_and_on_by_its_switch() {
     let tuned = edited(
         model,
         &format!(
-            "{model}compact = true\ncompactor = \"claude-haiku-4-5\"\ncompact_calls_per_hour = 4\ncompact_workers = 4\n"
+            "{model}compact = true\ncompactors = [\"claude-haiku-4-5\"]\ncompact_calls_per_hour = 4\ncompact_workers = 4\n"
         ),
     );
     assert!(matches!(
         read(&tuned),
-        Compacting::On { budget: Budget { calls_per_hour: 4, .. }, model, workers } if model.as_str() == "claude-haiku-4-5" && workers.get() == 4
+        Compacting::On { budget: Budget { calls_per_hour: 4, .. }, ladder, workers } if ladder.as_slice().len() == 1 && ladder.first().as_str() == "claude-haiku-4-5" && workers.get() == 4
     ));
     let off = edited(
         model,
-        &format!("{model}compact = false\ncompactor = \"claude-haiku-4-5\"\n"),
+        &format!("{model}compact = false\ncompactors = [\"claude-haiku-4-5\"]\n"),
     );
     assert_eq!(read(&off), Compacting::Off);
     let _ = std::fs::remove_dir_all(&dir);
