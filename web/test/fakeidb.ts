@@ -22,6 +22,8 @@ const within = (k: Key | undefined) => (x: string): boolean => (k === undefined 
 Object.assign(globalThis, { IDBKeyRange: { bound: (lower: string, upper: string, lowerOpen = false): Range => ({ includes: k => (lowerOpen ? lower < k : lower <= k) && k <= upper }) } })
 
 export type Fake = {
+  // Whether a message the device's tabs post on a `BroadcastChannel` is lost; none is until a test sets it.
+  lose: () => boolean
   // The keys whose writes are refused while it answers true.
   failing: (key: string) => boolean
   // What the store `store` of the database `name` holds, as committed.
@@ -53,6 +55,7 @@ export const fakeIndexedDB = (): Fake => {
     deletes: () => deletes,
     read: () => read,
     failing: () => false,
+    lose: () => false,
     rows: (name, store) => dbs.get(name)?.stores.get(store) ?? new Map(),
     printed: () => [...dbs].flatMap(([name, d]) => [...d.stores].flatMap(([store, rows]) => [...rows].map(([k, v]) => `${name}/${store}/${k} ${JSON.stringify(v, hexed)}`))),
   }
@@ -201,7 +204,24 @@ export const fakeIndexedDB = (): Fake => {
   }
   // Every connection opened, by database: a delete asks each to let go, as IndexedDB's `versionchange` does.
   const connections = new Map<string, { onversionchange: (() => void) | null }[]>()
+  // The device's tabs' `BroadcastChannel`: a message reaches every other channel of its name on a later task, unless the
+  // device loses it. A channel holds nothing open, so a test's process ends.
+  const channels = new Map<string, Set<Channel>>()
+  class Channel {
+    onmessage: ((e: { readonly data: unknown }) => void) | null = null
+    constructor(readonly name: string) {
+      channels.set(name, (channels.get(name) ?? new Set()).add(this))
+    }
+    postMessage(data: unknown): void {
+      if (fake.lose()) return
+      for (const c of channels.get(this.name) ?? []) if (c !== this) later(() => c.onmessage?.({ data }))
+    }
+    close(): void {
+      channels.get(this.name)?.delete(this)
+    }
+  }
   Object.assign(globalThis, {
+    BroadcastChannel: Channel,
     indexedDB: {
       open: (name: string, wanted = 0) => {
         const db = database(name)

@@ -1,11 +1,7 @@
-// A store's replica as the device keeps it: the core's snapshot of it and the frames the core appended since, each a
-// change of the replica in the core's own form, in the database's `replica` store under the store's name. The bytes are
-// the core's; this keeps them in order and nothing else. Every write of a frame is an append, so two tabs appending
-// lose nothing, and a frame is a join, so the order of two tabs' joins does not matter. A compaction is the one way
-// bytes leave: in one transaction it reads the frames after what its core took, hands them to the core, writes the
-// core's snapshot as of the last frame, deletes every frame up to it, and deletes from the store's prints each print
-// the core holds a husk of instead. IndexedDB runs one read-write transaction over a store at a time, so a compaction
-// never deletes a frame its snapshot does not hold, and the snapshot that holds a husk is kept with its print's delete.
+// A store's replica on the device: the core's snapshot and the frames appended since, in the core's own bytes. Each
+// write of a frame is an append and each frame a join, so two tabs lose nothing. A compaction is the one way bytes
+// leave, in one transaction, so it never deletes a frame its snapshot does not hold. An append wakes the other tabs on
+// a `BroadcastChannel`, never carrying the data, and a compaction runs under a Web Lock, both named for the store.
 
 import idb from "../app/idb"
 import lo from "../algebra/lo"
@@ -16,8 +12,7 @@ export namespace replicalog {
   // One frame, by the place it was appended at.
   export type Frame = { readonly at: number; readonly bytes: Uint8Array }
 
-  // What the device keeps of a store: nothing, or the snapshot and the place of the last frame it holds; and the frames
-  // after it, in order.
+  // The snapshot, if any, and the frames after it, in order.
   export type Kept = { readonly snapshot: { readonly through: number; readonly bytes: Uint8Array } | null; readonly frames: readonly Frame[] }
 
   // How a compaction ended: the snapshot holds every frame through `at`, or this tab is behind another's snapshot.
@@ -28,17 +23,17 @@ export namespace replicalog {
   export type T = {
     // The snapshot and every frame after it, in one transaction.
     readonly read: () => Promise<lo.Settled<Kept>>
-    // What a tab that took every frame up to `after` lacks: the frames after it, or, where a compaction folded frames it
-    // did not take into a snapshot, that snapshot and the frames after it.
+    // What a tab that took every frame up to `after` lacks: the frames after it, or a snapshot that folded some.
     readonly since: (after: number) => Promise<lo.Settled<Kept>>
     // `bytes` appended after the last frame; the place it was appended at.
     readonly append: (bytes: Uint8Array) => Promise<lo.Settled<number>>
-    // The frames after `after` handed to `take`, then `print`'s snapshot kept as of the last frame, every frame up to it
-    // deleted and each print `husked` names deleted, all in one transaction; or nothing, where another tab's compaction
-    // folded frames after `after` that this tab did not take, so it reads them first (`since`).
+    // In one transaction: the frames after `after` handed to `take`, `print`'s snapshot kept, every frame up to it and
+    // each print `husked` names deleted; or `Behind`, where another tab's snapshot folded frames this tab did not take.
     readonly compact: (after: number, take: (frames: readonly Frame[]) => void, print: () => Uint8Array, husked: () => readonly string[]) => Promise<lo.Settled<Compacted>>
     // The snapshot and every frame deleted: the store is taken again from the box.
     readonly drop: () => Promise<lo.Settled<null>>
+    // `wake` run each time another tab appends to the log.
+    readonly heard: (wake: () => void) => void
   }
 
   const PLACE = 12
@@ -46,6 +41,14 @@ export namespace replicalog {
 
   // The replica of `store`, whose content by name is kept in `prints`, a store of the same database.
   export const of = (store: string, prints: idb.Db): T => {
+    const NAME = `replica/${store}`
+    // A device that keeps nothing has no log to wake a tab for.
+    const channel = typeof BroadcastChannel === "undefined" || !idb.available() ? null : new BroadcastChannel(NAME)
+    // `work` alone among every tab's compactions of this store, where the browser keeps locks.
+    const alone = <A>(work: () => Promise<A>): Promise<A> => {
+      const locks = typeof navigator === "undefined" ? undefined : navigator.locks
+      return locks === undefined ? work() : locks.request(NAME, work)
+    }
     const SNAPSHOT = `${store}/snapshot`
     const LOG = `${store}/log/`
     const log = (after: number): IDBKeyRange => IDBKeyRange.bound(`${LOG}${placed(after)}`, `${LOG}￿`, true)
@@ -91,22 +94,30 @@ export namespace replicalog {
             await idb.done(s.put(bytes, `${LOG}${placed(at)}`))
             return at
           }),
-        ),
+        ).then(at => {
+          if (at.type === "Val") channel?.postMessage(at.v)
+          return at
+        }),
+      heard: wake => {
+        if (channel !== null) channel.onmessage = () => wake()
+      },
       compact: (after, take, print, husked) =>
-        settled(
-          idb.withBeside(REPLICA, prints, "readwrite", async (s, content): Promise<Compacted> => {
-            const snapshot = await snapshotIn(s)
-            if (snapshot !== null && snapshot.through > after) return { type: "Behind" }
-            const missed = await frames(s, after)
-            take(missed)
-            const through = missed.at(-1)?.at ?? after
-            await Promise.all([
-              idb.done(s.put({ through, bytes: print() }, SNAPSHOT)),
-              idb.done(s.delete(IDBKeyRange.bound(`${LOG}`, `${LOG}${placed(through)}`))),
-              ...husked().map(name => idb.done(content.delete(name))),
-            ])
-            return { type: "Through", at: through }
-          }),
+        alone(() =>
+          settled(
+            idb.withBeside(REPLICA, prints, "readwrite", async (s, content): Promise<Compacted> => {
+              const snapshot = await snapshotIn(s)
+              if (snapshot !== null && snapshot.through > after) return { type: "Behind" }
+              const missed = await frames(s, after)
+              take(missed)
+              const through = missed.at(-1)?.at ?? after
+              await Promise.all([
+                idb.done(s.put({ through, bytes: print() }, SNAPSHOT)),
+                idb.done(s.delete(IDBKeyRange.bound(`${LOG}`, `${LOG}${placed(through)}`))),
+                ...husked().map(name => idb.done(content.delete(name))),
+              ])
+              return { type: "Through", at: through }
+            }),
+          ),
         ),
       drop: () =>
         settled(

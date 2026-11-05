@@ -787,7 +787,23 @@ three warm loads after the snapshot is written; the target is under 2.5 s).
    its husk"; `onewriter.test.ts` (no row, message or kept answer holds an erased
    line's ciphertext, and a reload reads without it); `warmload.test.ts` "a husk
    one tab's purge kept stands through another tab's compaction…";
-   `objects.test.ts` (the upgrade keeps a chain's unsent act, from version 8). The snapshot and log of §3.1
+   `objects.test.ts` (the upgrade keeps a chain's unsent act, from version 8).
+
+   *As built (3c).* Each append is told on a `BroadcastChannel` named
+   `replica/<store>`, and a tab that hears it reads the log from where it
+   stands; the log is the data, so a lost message is caught up at the next
+   pull. A compaction runs under a Web Lock of the same name, where the browser
+   keeps locks; the IndexedDB transaction stays what makes it safe. Waking a
+   tab mid-pull showed that taking another tab's frames between a pull's pieces
+   and its landing loses the pieces: a landing of the other tab, at a later
+   count of landings, replaces the pending pieces, and the pull then lands
+   nothing. A tab's pull, its compactions and its reads of the log now take
+   turns, and a compaction its own purge asks for during a pull runs once the
+   pull ends. The generation-moved check of §3.6 was not needed: a compaction
+   that finds another tab's later snapshot already reads it instead. Law:
+   `warmload.test.ts` "a tab another tab's landing wakes reads it with no pull
+   of its own…", which fails without the wake, and the convergence law with
+   the wake on. The snapshot and log of §3.1
    replace D1-D5 for the lines; the core holds the head and the pieces; J1, J2,
    J4 and J5 for the lines go, with `telling`, `Reader`, `Primed`, `Key`,
    `pull.first` and the snapshot's key. Erasure by compaction (§3.3); two tabs by

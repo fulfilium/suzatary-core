@@ -425,3 +425,48 @@ test("law: the inbox and the topics read from a warm load what they read cold, a
   })
   assert.ok(seen.frames > 0 && seen.snapshots > 0 && seen.writes > 0, `the reloads read frames (${seen.frames}) and a snapshot (${seen.snapshots}), and the tabs wrote (${seen.writes})`)
 })
+
+test("a tab another tab's landing wakes reads it with no pull of its own, and with every wake lost reads it at its next pull", async () => {
+  for (const lost of [false, true]) {
+    const device = fakeIndexedDB()
+    down = false
+    // The box's inbox and topics whole, as another law may have left them otherwise.
+    proposals = inbox.length
+    topicStores = { topics: [begun("topics")], "topic-aliases": [begun("topic-aliases")] }
+    holds = Math.ceil(order.length / 2)
+    const [landing, woken] = [tab(), tab()]
+    for (const t of [landing, woken]) {
+      assert.equal(await t.ask({ type: "Pull" }), true)
+      await listed(t)
+    }
+    const before = await cold()
+    device.lose = () => lost
+    holds = order.length
+    assert.equal(await landing.ask({ type: "Pull" }), true)
+    await listed(landing)
+    // The box is gone, so the woken tab learns of the landing from the device's log alone.
+    down = true
+    try {
+      const now = await cold()
+      assert.notEqual(now, before, "the landing moved the conversations")
+      if (!lost) {
+        let read = await listed(woken)
+        for (let waited = 0; read !== now && waited < 100; waited += 1) {
+          await new Promise(next => setTimeout(next, 10))
+          read = await listed(woken)
+        }
+        assert.equal(read, now, "the wake brings the other tab's landing")
+      } else {
+        await new Promise(next => setTimeout(next, 200))
+        assert.equal(await listed(woken), before, "with every wake lost, the tab reads what it held")
+        down = false
+        assert.equal(await woken.ask({ type: "Pull" }), true)
+        assert.equal(await listed(woken), await cold(), "and its next pull reads the log and the box")
+      }
+    } finally {
+      down = false
+      device.lose = () => false
+    }
+    for (const t of [landing, woken]) await t.ask({ type: "Pull" })
+  }
+})
