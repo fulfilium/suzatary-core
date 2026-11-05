@@ -26,8 +26,7 @@ $ git config core.hooksPath scripts/hooks
 $ git config blame.ignoreRevsFile .git-blame-ignore-revs
 ```
 
-The commit hook checks that a commit message names only files that the commit changes. With the
-`.devcontainer/` directory, you get the same shell in a GitHub Codespace.
+The commit hook checks that a commit message names only files that the commit changes.
 
 ## The gate
 

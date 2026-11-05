@@ -1,6 +1,6 @@
 //! The merge gate's two halves (`scripts/merge-gate.sh`): every test that reads the owner's
-//! data tree is in the live half, so the tree half, which runs where the data never is (a
-//! Codespace) or with it hidden, leaves nothing unread that only the live half would read.
+//! data tree is in the live half, so the tree half, which runs where the data never is (GitHub's
+//! runners) or with it hidden, leaves nothing unread that only the live half would read.
 //! And its kept passes: a step whose inputs did not move is not run again, so each step's
 //! declared reads must cover what it reads, and the gate run with a stub in every step's place
 //! runs exactly the steps whose inputs moved.
@@ -245,15 +245,23 @@ fn merge_gate_every_test_that_reads_the_data_tree_is_in_the_live_half() {
         }
     }
 
+    // The live half's web step runs the unit tests `live_web_units` names against the live chain.
+    let gate = std::fs::read_to_string(repo().join("scripts/merge-gate.sh")).expect("reads");
+    let units: Vec<&str> = gate
+        .lines()
+        .find_map(|l| l.strip_prefix("live_web_units=(")?.strip_suffix(')'))
+        .expect("the live half names its web units")
+        .split_whitespace()
+        .collect();
+    let web_live = live.iter().any(|c| c.trim() == "web_live");
     let mut web = Vec::new();
     files_under(&repo().join("web/test"), &mut web);
     for file in web {
         let source = std::fs::read_to_string(&file).unwrap_or_default();
-        if reads_the_data_tree(&source)
-            && !live
-                .iter()
-                .any(|c| c.split_whitespace().any(|w| w == "scripts/web-test.sh"))
-        {
+        let named = file
+            .strip_prefix(repo())
+            .is_ok_and(|p| units.iter().any(|u| Path::new(u) == p));
+        if reads_the_data_tree(&source) && !(web_live && named) {
             missing.push(file.display().to_string());
         }
     }
@@ -532,10 +540,20 @@ fn merge_gate_no_rust_source_names_a_path_its_cargo_steps_skip() {
 }
 
 /// The stub run in every step's place: it logs the step's name and fails a step named in
-/// `red`.
+/// `red`. Run where a scene would, it records that each scene it runs fetched what the ignored
+/// file `fetches-<scene>` names, as web/e2e/harness.ts records what a scene's tabs fetched, and
+/// nothing for a scene the ignored file `unrecorded-<scene>` names.
 const STUB: &str = r#"#!/bin/sh
 echo "$1" >>"$GATE_PROBES"
 echo "$1 ${SUZATARY_GATE_UNITS:-*}" >>"$GATE_PROBES.units"
+if [ -n "$SUZATARY_E2E_READS" ]; then
+  mkdir -p "$SUZATARY_E2E_READS"
+  for unit in ${SUZATARY_GATE_UNITS:-web/e2e/*.test.ts}; do
+    name="$(basename "$unit" .test.ts)"
+    [ ! -e "unrecorded-$name" ] || continue
+    cat "fetches-$name" >"$SUZATARY_E2E_READS/$name" 2>/dev/null || : >"$SUZATARY_E2E_READS/$name"
+  done
+fi
 ! grep -qx "$1" red 2>/dev/null
 "#;
 
@@ -578,7 +596,10 @@ impl Gate {
         ] {
             gate.write(path, "a line\n");
         }
-        gate.write(".gitignore", "red\nprobes*\nstub*\n");
+        gate.write(
+            ".gitignore",
+            "red\nprobes*\nstub*\nfetches-*\nunrecorded-*\n",
+        );
         gate.write(".gitattributes", PRIVATE);
         gate.program("stub", STUB);
         gate.git(&["init", "-q", "-b", "master"]);
@@ -1429,7 +1450,8 @@ fn merge_gate_never_keeps_a_writer_without_its_reader() {
 
 /// A kept scene reads nothing, so a scene is kept across a change that build-web runs for only
 /// when its key holds every input of the bundle build-web writes: no path an e2e unit skips is
-/// one the bundle is built from.
+/// one the bundle is built from, but the inputs a scene reads once it fetched them
+/// (`merge_gate_a_scene_is_kept_by_what_it_fetched`).
 #[test]
 fn merge_gate_a_scene_reads_every_input_of_the_bundle() {
     let gate = std::fs::read_to_string(repo().join("scripts/merge-gate.sh")).expect("reads");
@@ -1588,10 +1610,11 @@ fn merge_gate_live_half_builds_what_the_deploy_builds() {
     );
 }
 
-/// The gate roots the environment it runs in before anything collects: `nix develop` roots
-/// nothing, and a collection took gitleaks from under the guards mid-gate on 2026-10-11. So the
-/// rooting comes before the room is made, and what it roots holds every store path on the
-/// running shell's PATH in its closure, which is what a collection keeps.
+/// The gate roots the environment it runs in before it builds anything: `nix develop` roots
+/// nothing, and the daemon's collection, short of disk, took gitleaks from under the guards
+/// mid-gate. So the rooting comes before the disk is checked, the gate collects nothing itself,
+/// and what it roots holds every store path on the running shell's PATH in its closure, which is
+/// what a collection keeps.
 #[test]
 fn merge_gate_roots_the_shell_it_runs_in_before_it_collects() {
     let gate = std::fs::read_to_string(repo().join("scripts/merge-gate.sh")).expect("reads");
@@ -1600,30 +1623,15 @@ fn merge_gate_roots_the_shell_it_runs_in_before_it_collects() {
             .position(|l| l.trim_start().starts_with(needle))
             .unwrap_or_else(|| panic!("the gate has no line starting {needle:?}"))
     };
-    let call = gate
-        .lines()
-        .position(|l| l.trim() == "codespace_make_room")
-        .expect("the gate makes room");
     assert!(
-        line("if ! root_environment") < call,
-        "the environment is rooted before the room is made"
+        line("if ! root_environment") < line("if [ \"$(free_gb)\" -lt 16 ]"),
+        "the environment is rooted before the disk is checked"
     );
-    let collects: Vec<usize> = gate
-        .lines()
-        .enumerate()
-        .filter(|(_, l)| l.contains("nix-collect-garbage") && !l.trim_start().starts_with('#'))
-        .map(|(i, _)| i)
-        .collect();
-    let room = line("codespace_make_room() {");
-    let room_end = room
-        + gate
-            .lines()
-            .skip(room)
-            .position(|l| l == "}")
-            .expect("its end");
     assert!(
-        collects.iter().all(|&i| room < i && i < room_end),
-        "the room is the gate's one collector"
+        !gate
+            .lines()
+            .any(|l| l.contains("nix-collect-garbage") && !l.trim_start().starts_with('#')),
+        "the gate collects nothing itself"
     );
 
     let on_path: Vec<String> = std::env::var("PATH")
@@ -1660,128 +1668,6 @@ fn merge_gate_roots_the_shell_it_runs_in_before_it_collects() {
         unheld.is_empty(),
         "a collection would take these tools of the running shell: {unheld:?}"
     );
-}
-
-/// A Codespace's gate making room (`codespace_make_room`, run from the script's own text) with
-/// `free_gb` GB free, stubs for the disk, cargo, the compiler and the store, in a scratch
-/// checkout whose target holds one marker, after `edit` runs on it. Whether the target was kept,
-/// and the stubs' log: each collection and `cargo sweep`, in order.
-fn make_room(scratch: &Path, free_gb: u32, edit: &str) -> (bool, Vec<String>) {
-    let gate = std::fs::read_to_string(repo().join("scripts/merge-gate.sh")).expect("reads");
-    let start = gate.find("\ncodespace_room=").expect("the room's settings");
-    let end = start
-        + gate[start..]
-            .find("\n}\n")
-            .and_then(|f| gate[start + f + 3..].find("\n}\n").map(|g| f + 3 + g + 3))
-            .expect("codespace_make_room's end");
-    let bin = scratch.join("bin");
-    std::fs::create_dir_all(&bin).expect("bin");
-    for (name, body) in [
-        (
-            "cargo",
-            r#"if [ "$1" = sweep ]; then echo "$*" >>log; echo $(($(cat free) + 2)) >free; else echo cargo 1; fi"#,
-        ),
-        ("rustc", "echo rustc 1"),
-        ("nix-collect-garbage", "echo collect >>log"),
-        ("sudo", "true"),
-    ] {
-        let _ =
-            suzatary_testkit::fake_program(&bin, name, &format!("#!/usr/bin/env bash\n{body}\n"));
-    }
-    let free = format!("{free_gb}\n");
-    for (path, text) in [
-        ("app/Cargo.lock", "lock\n"),
-        ("flake.lock", "{}\n"),
-        (
-            "app/Cargo.toml",
-            "[profile.dev]\n# why\nopt-level = 0\n\n[profile.release]\nlto = true\n",
-        ),
-        ("app/target/debug/marker", ""),
-        ("free", free.as_str()),
-        ("log", ""),
-    ] {
-        let path = scratch.join(path);
-        std::fs::create_dir_all(path.parent().expect("a parent")).expect("dirs");
-        std::fs::write(path, text).expect("writes");
-    }
-    let script = format!(
-        "{}\nfree_gb() {{ cat free; }}\n\
-         codespace_toolchain_now >\"$codespace_toolchain\" && codespace_locks_now >\"$codespace_locks\" &&\n\
-         {edit}\ncodespace_make_room",
-        &gate[start..end]
-    );
-    let out = Command::new("bash")
-        .arg("-c")
-        .arg(script)
-        .current_dir(scratch)
-        .env(
-            "PATH",
-            format!(
-                "{}:{}",
-                bin.display(),
-                std::env::var("PATH").unwrap_or_default()
-            ),
-        )
-        .env_remove("RUSTFLAGS")
-        .output()
-        .expect("bash runs");
-    assert!(out.status.success(), "codespace_make_room: {out:?}");
-    let log = std::fs::read_to_string(scratch.join("log")).expect("log");
-    (
-        scratch.join("app/target/debug/marker").exists(),
-        log.lines().map(str::to_owned).collect(),
-    )
-}
-
-/// A Codespace's room is swept by age alone, oldest first, and only until there is room: never
-/// `cargo sweep --maxsize`, whose first fit (0.8.0) deletes the newest set's small units once one
-/// older unit does not fit, and took the set the gate before had just built (the gate-build-once
-/// report). And a move of a dev or test profile, or of the Rust flags, clears the target as a new
-/// compiler does, where a release profile or a comment moves nothing.
-#[test]
-fn merge_gate_sweeps_a_codespace_target_by_age_alone() {
-    let gate = std::fs::read_to_string(repo().join("scripts/merge-gate.sh")).expect("reads");
-    assert!(
-        gate.lines()
-            .filter(|l| !l.trim_start().starts_with('#'))
-            .all(|l| !l.contains("--maxsize")),
-        "no sweep by size"
-    );
-    let scratch = Scratch::new("make-room");
-    let sweeps = |from: u32| {
-        let (kept, log) = make_room(&scratch, from, "true");
-        assert!(kept, "a warm target is kept");
-        log
-    };
-    assert_eq!(
-        sweeps(4),
-        [
-            "collect",
-            "sweep --time 7 app",
-            "sweep --time 3 app",
-            "sweep --time 1 app"
-        ],
-        "the store first, then the units a week unread, three days, one"
-    );
-    assert_eq!(
-        sweeps(6),
-        ["collect", "sweep --time 7 app", "sweep --time 3 app"],
-        "and no younger sweep once there is room"
-    );
-    assert_eq!(sweeps(20), Vec::<String>::new(), "nothing with room");
-
-    for (edit, clears) in [
-        (
-            "sed -i 's/opt-level = 0/opt-level = 1/' app/Cargo.toml",
-            true,
-        ),
-        ("export RUSTFLAGS=-Cforce-frame-pointers", true),
-        ("sed -i 's/lto = true/lto = false/' app/Cargo.toml", false),
-        ("sed -i 's/# why/# because/' app/Cargo.toml", false),
-    ] {
-        let (kept, _) = make_room(&scratch, 20, edit);
-        assert_eq!(!kept, clears, "{edit}");
-    }
 }
 
 /// Whether `tool` is on PATH.
@@ -1821,6 +1707,16 @@ fn units_fixture(gate: &Gate) {
     }
     gate.write("web/src/a.ts", "export const a = 1\n");
     gate.write("web/src/b.ts", "export const b = 2\n");
+    // The app: a module it loads, a chunk it loads by a dynamic import, and the other bundles.
+    gate.write(
+        "web/src/main.ts",
+        "import { a } from \"./a\"\nconsole.log(a)\nvoid import(\"./later\").then(m => console.log(m.later))\n",
+    );
+    gate.write("web/src/later.ts", "export const later = 1\n");
+    for bundle in ["boot", "sw", "typst/worker", "prodrome/worker"] {
+        gate.write(&format!("web/src/{bundle}.ts"), "console.log(1)\n");
+    }
+    gate.write("app/pages/src/lib.rs", "a page\n");
     gate.write(
         "web/test/a.test.ts",
         "import { a } from \"../src/a\"\nconsole.log(a)\n",
@@ -1950,6 +1846,79 @@ fn merge_gate_runs_only_the_units_whose_inputs_moved() {
     );
 }
 
+/// A SCENE IS KEPT BY WHAT IT FETCHED: its imports, every module of the app as it loads, and the
+/// chunks and the Rust pages' crates its tabs fetched. A change to a chunk no scene fetched runs
+/// no scene; once one fetched it, a change to it runs that scene and no other, and a scene that
+/// fetched the Rust pages' module reruns when their crates move. A scene that records nothing
+/// (another part ran it) keeps no pass.
+#[test]
+fn merge_gate_a_scene_is_kept_by_what_it_fetched() {
+    if !on_path("esbuild") || !on_path("cargo") || !on_path("node") {
+        eprintln!("merge_gate_a_scene_is_kept_by_what_it_fetched: no esbuild, cargo or node");
+        return;
+    }
+    let gate = Gate::new();
+    units_fixture(&gate);
+    let e2e = |gate: &Gate| gate.units_ran().get("e2e").cloned();
+    assert!(gate.run(&[]).0);
+    assert_eq!(
+        e2e(&gate),
+        Some(names(&["*"])),
+        "a first gate runs every scene"
+    );
+
+    gate.write("web/src/later.ts", "export const later = 2\n");
+    gate.commit();
+    assert!(gate.run(&[]).0);
+    assert_eq!(e2e(&gate), None, "no scene fetched the chunk");
+
+    gate.write("fetches-list", "web/src/later.ts\n");
+    gate.write("fetches-two", "app/pages\napp/viewtree\n");
+    gate.write("web/e2e/harness.ts", "export const h = 3\n");
+    gate.commit();
+    assert!(
+        gate.run(&[]).0,
+        "both scenes run, and record what they fetched"
+    );
+
+    gate.write("web/src/later.ts", "export const later = 3\n");
+    gate.commit();
+    assert!(gate.run(&[]).0);
+    assert_eq!(
+        e2e(&gate),
+        Some(names(&["web/e2e/list.test.ts"])),
+        "the scene that fetched the chunk, and no other"
+    );
+
+    gate.write("app/pages/src/lib.rs", "another page\n");
+    gate.commit();
+    assert!(gate.run(&[]).0);
+    assert_eq!(
+        e2e(&gate),
+        Some(names(&["web/e2e/two.test.ts"])),
+        "the scene that fetched the Rust pages' module"
+    );
+
+    gate.write("web/src/a.ts", "export const a = 9\n");
+    gate.commit();
+    assert!(gate.run(&[]).0);
+    assert_eq!(
+        e2e(&gate),
+        Some(names(&["*"])),
+        "a module the app loads is every scene's"
+    );
+
+    gate.write("unrecorded-list", "");
+    gate.write("web/e2e/harness.ts", "export const h = 4\n");
+    gate.commit();
+    assert!(gate.run(&[]).0);
+    assert!(gate.run(&[]).0);
+    assert_eq!(
+        e2e(&gate),
+        Some(names(&["web/e2e/list.test.ts"])),
+        "the scene that recorded nothing runs again, and the one that did keeps its pass"
+    );
+}
 /// The paths `<dir>` names that the merge gate declares a workspace member reads beyond its
 /// dependencies (`crate_reads`), as `<package>=<path>`.
 fn crate_reads() -> Vec<String> {
@@ -2385,7 +2354,7 @@ fn merge_gate_web_inputs_are_built_from_the_core_library_alone() {
 }
 
 /// No output holds the dependency builds the browser module and the core's builds start from,
-/// so web-inputs roots them where it builds, on the box as on a Codespace: a collection that took
+/// so web-inputs roots them where it builds, on the box as on a runner: a collection that took
 /// one cost a gate the wasm32 dependencies again.
 #[test]
 fn merge_gate_roots_the_web_inputs_dependency_builds() {
@@ -2716,5 +2685,67 @@ fn the_changelog_step_reads_the_commit_before_a_release() {
     assert!(
         !step(),
         "a train with no entry fails even under its release"
+    );
+}
+
+/// Every script the gate, the train or a workflow runs by its path is executable in the index: a
+/// checkout takes its mode from there, and a script that lost it fails every step that runs it,
+/// on a runner, long after the commit. A script sourced (`.`, `source`) or handed to an
+/// interpreter (`bash`, `sh`, `node`) needs no mode.
+#[test]
+fn merge_gate_every_script_run_by_path_is_executable() {
+    let modes = Command::new("git")
+        .args(["ls-files", "-s", "scripts"])
+        .current_dir(repo())
+        .output()
+        .expect("git runs");
+    let modes = String::from_utf8_lossy(&modes.stdout);
+    let mode_of = |path: &str| {
+        modes
+            .lines()
+            .find(|l| l.ends_with(&format!("\t{path}")))
+            .map(|l| l.split_whitespace().next().unwrap_or_default().to_owned())
+    };
+    let mut runners = vec![
+        "scripts/merge-gate.sh".to_owned(),
+        "scripts/train.sh".to_owned(),
+    ];
+    for entry in std::fs::read_dir(repo().join(".github/workflows")).expect("the workflows") {
+        let name = entry.expect("a workflow").file_name();
+        runners.push(format!(".github/workflows/{}", name.to_string_lossy()));
+    }
+    let mut lost = Vec::new();
+    for runner in &runners {
+        let text = std::fs::read_to_string(repo().join(runner)).expect("reads");
+        for line in text.lines() {
+            let code = line.split(" #").next().unwrap_or_default();
+            if code.trim_start().starts_with('#') {
+                continue;
+            }
+            let words: Vec<&str> = code.split_whitespace().collect();
+            for (i, word) in words.iter().enumerate() {
+                let Some(at) = word.find("scripts/") else {
+                    continue;
+                };
+                let path: String = word[at..]
+                    .chars()
+                    .take_while(|c| c.is_ascii_alphanumeric() || "/._-".contains(*c))
+                    .collect();
+                let interpreted =
+                    i > 0 && [".", "source", "bash", "sh", "node"].contains(&words[i - 1]);
+                if Path::new(&path).extension().is_none_or(|e| e != "sh") || interpreted {
+                    continue;
+                }
+                if mode_of(&path).as_deref() != Some("100755") {
+                    lost.push(format!("{runner} runs {path}"));
+                }
+            }
+        }
+    }
+    lost.sort();
+    lost.dedup();
+    assert!(
+        lost.is_empty(),
+        "these scripts are run by path and are not 100755 in the index: {lost:?}"
     );
 }

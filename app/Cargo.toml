@@ -281,7 +281,7 @@ incremental = false
 
 # The dependencies are optimised, the workspace's own crates not: the tests spend their time in
 # the Prodrome's folds, proptest, wasmtime's compiler and the rest, all compiled once per lock.
-# On the gate Codespace, 2026-10-11: the workspace's tests ran in 112 s against 173, the three
+# On a four-core gate machine, 2026-10-11: the workspace's tests ran in 112 s against 173, the three
 # named suites in 80 against 161, and a rebuild after a core change took 180 s against 222 (the
 # proc macros run faster); the dependencies' own build, once per lock, took 1269 s cold.
 [profile.dev.package."*"]

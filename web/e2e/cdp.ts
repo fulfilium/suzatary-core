@@ -1227,6 +1227,8 @@ export interface Browser {
   readonly page: Page;
   /** Another tab of the same browser, its profile and storage shared: what one tab of a device does, the others hear. */
   tab: () => Promise<Page>;
+  /** The path of every request its tabs sent, as each tab's own recorder saw it. */
+  fetched: () => ReadonlySet<string>;
   close: () => Promise<void>;
 }
 
@@ -1268,10 +1270,21 @@ export async function launch(): Promise<Browser> {
     said += `\n${error.message}`;
   });
 
-  const connection = await Connection.open(await devtoolsUrl(profile, child, () => said));
+  const devtools = await devtoolsUrl(profile, child, () => said);
+  const connection = await Connection.open(devtools);
+  // Every tab is recorded over a connection of its own, attached before the tab is handed out, so a scene's own Network
+  // domain cannot hide a fetch and no scene's listener hears the recorder.
+  const recording = await Connection.open(devtools);
+  const fetched = new Set<string>();
+  recording.on("Network.requestWillBeSent", (params) => {
+    const url = (params["request"] as { url?: string } | undefined)?.url;
+    if (url !== undefined) fetched.add(new URL(url).pathname);
+  });
   // Each in a window of its own: a background tab is hidden, and a hidden page draws nothing on its frames.
   const tab = async (): Promise<Page> => {
     const target = await connection.send("Target.createTarget", { url: "about:blank", newWindow: true });
+    const recorder = String((await recording.send("Target.attachToTarget", { targetId: target["targetId"], flatten: true }))["sessionId"]);
+    await recording.send("Network.enable", {}, recorder);
     const attached = await connection.send("Target.attachToTarget", {
       targetId: target["targetId"],
       flatten: true,
@@ -1286,6 +1299,7 @@ export async function launch(): Promise<Browser> {
   return {
     page,
     tab,
+    fetched: () => fetched,
     close: async () => {
       try {
         await connection.send("Browser.close");
@@ -1293,6 +1307,7 @@ export async function launch(): Promise<Browser> {
         // A browser that has already gone is a browser that is closed.
       }
       connection.close();
+      recording.close();
       child.kill("SIGKILL");
       await gone(child);
       await discard(profile);

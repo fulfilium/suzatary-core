@@ -4,7 +4,7 @@
 #![forbid(unsafe_code)]
 
 use clap::{CommandFactory, FromArgMatches, Parser, Subcommand};
-use suzatary_cli::commands::{fixture, guide};
+use suzatary_cli::commands::{fixture, fixture_live, guide};
 use suzatary_cli::instance::Instance;
 use suzatary_cli::verb::{Verb, exit_on};
 
@@ -25,6 +25,8 @@ struct Cli {
 enum Dev {
     /// Build the end-to-end fixture's chain and instance file.
     FixtureChain(fixture::Args),
+    /// Copy a deployment's data tree for a server the browser suite reads it through.
+    FixtureLive(fixture_live::Args),
     /// Run the agent's writer once against a fixture deployment.
     FixtureTriage(fixture::TriageArgs),
     /// Serve the fake Google the browser suite signs an account in with.
@@ -48,6 +50,7 @@ fn main() {
         "suzatary-dev",
         match cli.verb {
             Dev::FixtureChain(args) => fixture::run(&args),
+            Dev::FixtureLive(args) => fixture_live::run(&args),
             Dev::FixtureTriage(args) => fixture::triage(&args),
             Dev::FakeGoogle(args) => fixture::fake_google(&args),
             Dev::Guide(args) => guide::run(&args),

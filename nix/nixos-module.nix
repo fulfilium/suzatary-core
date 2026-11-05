@@ -1,122 +1,46 @@
 # Suzatary's background jobs, declared.
 #
-# WHY THIS EXISTS. Until 2026-08-08 these four units were hand-written files in
-# ~/.config/systemd/user/ that existed in no repository, plus a fifth (Proton
-# Bridge) conjured at boot by `systemd-run` from the host config's suzatary-up.sh. Three
-# problems, in ascending order of severity:
-#
-#   1. A fresh machine got none of it. "Set up Suzatary on a new box" meant
-#      remembering four unit files nobody had written down.
-#   2. `systemd-run --unit=proton-bridge` makes a *transient* unit: invisible to
-#      nixos-rebuild, absent from any config, gone on reboot until the bring-up
-#      script re-ran it.
-#   3. The units pinned claude-code by raw store path
-#      (/nix/store/2lyv...-claude-code-2.1.191/bin). Nothing held a GC root on
-#      it, and the host's configuration.nix now runs `nix.gc` weekly with
-#      --delete-older-than 30d. That path was scheduled to be collected out from
-#      under the triage timer, which would have failed the way the July 26 auth
-#      lapse failed: quietly, hourly, until somebody read the journal.
-#
-# ⚠️ THIS MODULE CAN BE SILENTLY OVERRIDDEN. `~/.config/systemd/user/` takes
-# PRECEDENCE over the `/etc/systemd/user/` units NixOS writes from here. The
-# hand-enabled leftovers from problem 1 above were still there — symlinks made
-# 2026-08-29 15:28 pointing at that day's store paths, which are immutable, so
-# they froze the units at that generation forever. Every rebuild between then
-# and 2026-09-01 updated /etc and changed nothing that ran: the 5-minute triage
-# cadence was committed on 08-30 and the box kept running hourly (24-29 starts
-# a day in the journal, never ~288) until the shadows were removed. A rebuild
-# reporting success is NOT evidence that a unit changed. Check the thing that
-# actually runs:
+# ⚠️ `~/.config/systemd/user/` takes precedence over the `/etc/systemd/user/` units written here,
+# and a rebuild reporting success is no evidence a unit changed. Check what runs:
 #
 #   systemctl --user show -p FragmentPath suzatary-triage.timer
 #
-# It must be under /etc/systemd/user. If it is under ~/.config or /nix/store,
-# this file is decorative for that unit.
+# It must be under /etc/systemd/user.
 #
-# WHAT THE UNITS RUN IS THE APP THE USER REPOSITORY'S LOCK NAMES
-# (docs/USERREPO-PLAN-2026-10-01.md stage 2): one option, `userRepo`, names the
-# user checkout, and everything else is derived from it. The roots refresh
-# reads its flake.lock and links the app's store path; every unit runs the
-# app's scripts from there, and they commit and push the DATA tree, never the
-# code. A deploy is a commit that moves the lock (scripts/deploy.sh).
+# The units run the app the user repository's flake.lock names (`userRepo`); a deploy is a
+# commit that moves the lock (scripts/deploy.sh).
 { config, lib, pkgs, ... }:
 
 let
   cfg = config.services.suzatary;
 
-  # What these jobs need in order to run now lives in nix/services.nix, next to
-  # the executables it produces, so a machine without this module can still get
-  # it. This module is left with the part that is genuinely systemd's business:
-  # when to run, under whose manager, and what happens on failure.
+  # What the jobs need lives in nix/services.nix; this module says when and under whom they run.
   services = import ./services.nix { inherit pkgs; };
   inherit (services) runtimeDeps;
 
-  # Common shape for every Suzatary user unit. ConditionUser is load-bearing,
-  # not decoration: NixOS renders systemd.user.* into EVERY user's manager, and
-  # this box has `services.getty.autologinUser = "root"`. Without the condition,
-  # logging in on the console would start a second Proton Bridge as root, which
-  # would fight over vault.enc. It also keeps the units from firing under any
-  # future user.
-  #
-  # Do not replace the substituter gate with `after = [ "network-online.target"
-  # ]`. That target does not exist in a USER manager — `systemctl --user`
-  # reports it not-found — so systemd silently drops the ordering. It looks like
-  # a gate and is not one.
-  #
-  # The gate itself now lives INSIDE the wrappers (nix/services.nix), because it
-  # is a property of "this job re-enters the flake at run time", not of "systemd
-  # started this job" — and something running a wrapper by hand on
-  # another box needs it just as much. There is no ExecStartPre here any more.
-  #
-  # `path` stays even though the wrappers set their own PATH. It is what a
-  # process started under this unit inherits BEFORE the wrapper prepends to it,
-  # and Proton Bridge in particular used to get the whole .#triage devShell on
-  # PATH; narrowing that to exactly what its wrapper names would be a guess
-  # about a daemon that has historically been the flakiest piece here.
+  # ConditionUser: NixOS renders systemd.user.* into every user's manager, and root autologs in
+  # on the console, where a second Proton Bridge would fight over vault.enc. The substituter gate
+  # lives in the wrappers (nix/services.nix): `network-online.target` does not exist in a user
+  # manager. `path` is what a process inherits before its wrapper prepends to it.
   baseUnit = description: serviceConfig: {
     inherit description;
     path = runtimeDeps;
     unitConfig.ConditionUser = cfg.user;
-    # The user repository: its flake.lock names the app (read by the roots
-    # refresh alone), and its instance file the chains, state.json and the
-    # briefings, which safe-push commits into it. SUZATARY_REPO is not set
-    # here: each wrapper sets it to the app's store path (nix/services.nix).
+    # SUZATARY_REPO is each wrapper's own: the app's store path (nix/services.nix).
     environment.SUZATARY_USER_REPO = cfg.userRepo;
     environment.SUZATARY_INSTANCE = "${cfg.userRepo}/instance.toml";
-    # The units' own root links: `app` (the tree the lock names, once built),
-    # `app-bin`, `web-dist`, and each unit's own roots of what it runs.
-    # scripts/app-bin.sh, web-dist.sh and root-serving.sh link here, and into
-    # `roots-dev` when this is unset, so a dev shell's build never repoints
-    # what these units run.
+    # The units' root links; unset, scripts link into `roots-dev`, so a dev build never repoints them.
     environment.SUZATARY_ROOTS = cfg.rootsDir;
-    # THE JUNK SWEEP'S CHURN SEED (2026-09-27, `app/core/src/mail/junk.rs`):
-    # `cfg.junkSeed`'s `domains.txt`, or unset when the option is null — a dev
-    # shell or a host that has not wired it, which the binary reads as no
-    # seed (a real state, not an error; the digest says `seed: none`). Every
-    # unit gets it, on `baseUnit`'s usual grounds ("in baseUnit or on the
-    # units that serve and review", 2026-09-27): only `suzatary-web` and the
-    # secretary's `review` pass ever build a `ChurnList` from it, and an
-    # unused environment variable on the rest is harmless.
+    # The junk sweep's churn seed; unset when the option is null, which the binary reads as no seed.
     environment.SUZATARY_JUNK_SEED =
       if cfg.junkSeed == null then null else "${cfg.junkSeed}/domains.txt";
-    # EVERY UNIT'S FILES ARE ITS USER'S, AND ITS /tmp ITS OWN. These jobs write
-    # what quotes mail (a sync's report, an agent's run, their logs), so a file
-    # is created 0600 whatever a script forgets, and nothing lands in a /tmp
-    # another user or unit shares. Nothing here reads another unit's /tmp: the
-    # sync's report and every log are in the state directory, Bridge serves
-    # IMAP and SMTP on loopback TCP, and the vault stages in its own mktemp. In
-    # a user manager PrivateTmp implies PrivateUsers, which maps every uid but
-    # this one to nobody; nothing here changes uid, and a socket's peer is
-    # still seen as its real uid by tailscaled, the nix daemon and the bus.
+    # These jobs write what quotes mail: files 0600 whatever a script forgets, and a /tmp of their
+    # own. No unit reads another's /tmp.
     serviceConfig = { PrivateTmp = true; UMask = "0077"; } // serviceConfig;
   };
 
-  # A unit that runs the app for as long as it is up, rather than one job: it
-  # read the app at its start and goes on running that app until it restarts.
-  # So it is PartOf the target, whose ConsistsOf is the list scripts/deploy.sh
-  # try-restarts once the roots run links a new app; a unit joins the list
-  # here, where it is declared. nix/module-check.nix fails on a long-running
-  # unit that runs one of the app's wrappers and is not on it.
+  # A long-running unit runs the app it started with, so it is PartOf the target scripts/deploy.sh
+  # try-restarts; nix/module-check.nix fails on one that is not.
   servingUnit = description: serviceConfig: baseUnit description serviceConfig // {
     partOf = [ "suzatary-app.target" ];
     wantedBy = [ "default.target" ];
@@ -252,8 +176,16 @@ in
       '';
     };
 
-    # SUNSET 2026-08-18: no `voice` option. The voice secretary is not declared
-    # here any more — see the note at the bottom of this file.
+    nightlyGate.checkout = lib.mkOption {
+      type = lib.types.nullOr (lib.types.pathWith { inStore = false; absolute = true; });
+      apply = path: if path == null then null else toString path;
+      default = null;
+      example = "/home/ada/src/suzatary";
+      description = ''
+        The code checkout where `scripts/train.sh nightly` runs each night.
+        Null runs no nightly gate.
+      '';
+    };
   };
 
   config = lib.mkIf cfg.enable {
@@ -314,13 +246,7 @@ in
         # piece — hence always, not on-failure.
         Restart = "always";
         RestartSec = "10";
-        # Was `nix develop <repo>#triage --command protonmail-bridge`,
-        # which evaluated the flake on every start — at boot, before DNS, which
-        # is exactly the 2026-08-10 failure where this unit reported "active
-        # (running)" for minutes while compiling bootstrap-tools instead of
-        # serving IMAP. A store path has nothing left to evaluate. Same
-        # derivation the .#triage devShell hands out, so the bridge version
-        # vault.enc was written by is unchanged.
+        # A store path, so a start evaluates nothing; the .#triage shell's bridge, which wrote vault.enc.
         ExecStart = "${services.protonBridge}/bin/suzatary-proton-bridge";
       } // {
         wantedBy = [ "default.target" ];
@@ -337,23 +263,12 @@ in
       };
 
     systemd.user.timers.suzatary-triage = {
-      # The description is load-bearing evidence, not decoration: the journal
-      # line "Starting Suzatary hourly ..." is what proved, on 2026-09-01, that
-      # the deployed unit was still the Aug 29 one. Keep it in step with
-      # OnCalendar so the journal cannot lie about the cadence.
+      # The journal's "Starting …" line is the evidence of the cadence: keep it in step with OnCalendar.
       description = "Run Suzatary triage every 5 minutes";
       wantedBy = [ "timers.target" ];
       timerConfig = {
-        # Every 5 minutes since 2026-08-30 (was hourly — a default, never a
-        # decision). Cheap because the wrapper already gates the LLM on
-        # queue-nonempty: empty ticks cost one sync sweep and no tokens.
-        # Bursts still batch: a running oneshot delays the next tick rather
-        # than overlapping it. THIS STAYS THE FALLBACK even now that
-        # suzatary-mail-idle (below) exists: IDLE lowers the latency between
-        # a real message arriving and the pipeline seeing it, it does not
-        # become a second source of truth — an account IDLE does not watch
-        # (Gmail, Proton) or a dropped IDLE connection still needs this timer
-        # to be the one thing nothing else depends on staying up.
+        # Empty ticks cost one sync and no tokens. This stays the fallback beside the IDLE watcher,
+        # which does not watch every account and can drop.
         OnCalendar = "*:0/5";
         # Catch up after downtime rather than silently skipping the missed hour.
         Persistent = true;
@@ -377,33 +292,17 @@ in
       };
 
     systemd.user.timers.suzatary-plugins = {
-      # Kept in step with OnCalendar, as the triage timer's is: the journal's
-      # "Starting …" line is the evidence of the cadence.
       description = "Run Suzatary's plugin sync every 15 minutes";
       wantedBy = [ "timers.target" ];
       timerConfig = {
-        # Every 15 minutes: a calendar link is a published file the providers
-        # themselves refresh on the order of minutes to hours, and a meeting
-        # booked this quarter-hour reaches the briefing and the secretary at
-        # most one tick late. Odd minutes, off the 5-minute triage ticks.
+        # Odd minutes, off the 5-minute triage ticks.
         OnCalendar = "*:02/15";
         Persistent = true;
       };
     };
 
-    # IMAP IDLE: one connection per Microsoft account, watching for new mail
-    # and starting suzatary-triage.service on a debounced wake — a LONG-
-    # RUNNING watcher, not a periodic job, rather than the oneshot-under-a-
-    # timer shape above. It never syncs itself: the 5-minute timer above
-    # stays the fallback source of truth, and this unit only lowers the
-    # latency.
-    #
-    # WHAT IT WATCHES IS THE INSTANCE'S, read by the binary at start: a watch
-    # that ends is an error (the verb bails so the whole watch restarts), and
-    # a roster with no Microsoft account is the empty watch, which exits 0.
-    # So on-failure, not always: the first restarts, the second stays down,
-    # and a box without such an account runs no watcher. A roster that gains
-    # one is read on the unit's next start.
+    # IMAP IDLE for each Microsoft account, starting the triage on a debounced wake; it never syncs.
+    # A watch that ends fails and restarts; a roster with no such account exits 0 and stays down.
     systemd.user.services.suzatary-mail-idle = servingUnit
       "Suzatary IMAP IDLE watcher (lowers triage latency; the 5-minute timer stays the fallback)"
       {
@@ -464,19 +363,8 @@ in
         Type = "simple";
         Restart = "on-failure";
         RestartSec = "10";
-        # The wrapper supplies PATH and the substituter gate, then execs the
-        # app's scripts/serve-web.sh. That script resolves the
-        # tailnet address and refuses to start without it or a certificate —
-        # see its header for why a bind address is half this app's access
-        # control.
-        #
-        # WHAT IT RUNS IS THE RUST BINARY: `suzatary serve`, out of the pure `.#suzatary`
-        # derivation (scripts/app-bin.sh resolves and runs it on demand, not
-        # a `.#triage` shell package — see that shell's comment in flake.nix),
-        # reading the user repository's `instance.toml` for the roster, the
-        # trust policy and the paths. The two variables below stay because
-        # they are the two things this MODULE decides and that file cannot —
-        # where the certificate lands, and which port an option set.
+        # scripts/serve-web.sh resolves the tailnet address and refuses to start without it or a
+        # certificate. The two variables are what the module decides and the instance file cannot.
         ExecStart = "${services.web}/bin/suzatary-web";
         Environment = [
           "SUZATARY_TLS_DIR=${cfg.web.tlsDir}"
@@ -508,24 +396,36 @@ in
       };
     };
 
-    # The voice secretary used to be declared here. Sunset 2026-08-18 (the owner:
-    # "i think lets sunset the voice thing for now").
-    #
-    # It was not a hard call, because the thing had already stopped being real:
-    # the unit had been up 8 days and served ZERO requests, and the reason is
-    # that `tailscaled` is inactive on this box with no tailscale binary in the
-    # system profile. The server was listening on 127.0.0.1:8787 with no route
-    # to it from anywhere — the phone could not have reached it. It was costing
-    # a whisper-cpp/ffmpeg/gtk4 closure and a boot-time flake evaluation to
-    # answer nobody.
-    #
-    # THE CODE IS NOW DELETED TOO (2026-09-08). It was Python — `suzatary/voice/`,
-    # `scripts/voice-server.sh` and the `.#voice` devShell — and it went with
-    # the rest of the Python, three weeks
-    # after its last request. Reviving it means writing it again, against the
-    # Rust binary, AND making the tailnet exist for it: real HTTPS certificates
-    # are what phone browsers require for getUserMedia, which is why
-    # `tailscale serve` was the transport. `git log -- suzatary/voice` is the
-    # design, and the entry above is why it was not worth keeping warm.
+    # No baseUnit: the train refuses an inherited variable the gate reads, so this sets the
+    # instance alone, never SUZATARY_ROOTS.
+    systemd.user.services.suzatary-nightly-gate = lib.mkIf (cfg.nightlyGate.checkout != null) {
+      description = "Suzatary nightly gate: both halves, full, on origin/master";
+      unitConfig.ConditionUser = cfg.user;
+      path = [ config.nix.package pkgs.git pkgs.bash pkgs.coreutils pkgs.util-linux pkgs.openssh pkgs.secretspec ];
+      environment.SUZATARY_INSTANCE = "${cfg.userRepo}/instance.toml";
+      serviceConfig = {
+        Type = "oneshot";
+        WorkingDirectory = cfg.nightlyGate.checkout;
+        ExecStart = "${config.nix.package}/bin/nix develop .#triage --command scripts/train.sh nightly";
+        # Behind the triage timer and the web, as the roots refresh is.
+        Nice = 10;
+        IOSchedulingClass = "idle";
+        # A night's gate, and the wait for a train before it, ends by morning.
+        TimeoutStartSec = "8h";
+        PrivateTmp = true;
+        UMask = "0077";
+      };
+    };
+
+    systemd.user.timers.suzatary-nightly-gate = lib.mkIf (cfg.nightlyGate.checkout != null) {
+      description = "Run Suzatary's nightly gate at 01:43";
+      wantedBy = [ "timers.target" ];
+      timerConfig = {
+        # An odd minute, so it never lands on a triage tick, and long before the vault's 04:17.
+        OnCalendar = "*-*-* 01:43:00";
+        # A night missed is not run in the day, beside the trains.
+        Persistent = false;
+      };
+    };
   };
 }

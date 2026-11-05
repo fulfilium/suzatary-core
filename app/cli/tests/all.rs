@@ -47,6 +47,9 @@ mod default_conversation;
 mod drive;
 #[path = "erase.rs"]
 mod erase;
+#[cfg(feature = "fixture")]
+#[path = "fixture_live.rs"]
+mod fixture_live;
 #[path = "forwarding.rs"]
 mod forwarding;
 #[path = "frontend.rs"]

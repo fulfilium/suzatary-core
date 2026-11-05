@@ -19,6 +19,8 @@
 #   scripts/web-e2e.sh writewait  only web/e2e/writewait.bench.ts, the box's answer to each write route timed
 #   scripts/web-e2e.sh settingsbench  only web/e2e/settingsbench.bench.ts, Settings today against its Rust program
 #                                 no gate runs any of them (`*.bench.ts` is outside every glob)
+#   SUZATARY_E2E_LIVE=<instance> scripts/web-e2e.sh pages
+#                                 web/e2e/pages.test.ts against a copy of that deployment's data tree
 #
 # $SUZATARY_E2E_SHOTS: failure screenshots (a temp dir by default). $SUZATARY_SHOTS: the gallery
 # `web/e2e/shots.test.ts` files.
@@ -55,6 +57,12 @@ if [[ -n "${SUZATARY_E2E_PART:-}" ]]; then
   [[ -n "$part" ]] || exit 0
   mapfile -t parted <<<"$part"
   set -- "${parted[@]}"
+fi
+
+# A live run names its scenes: every other scene asks for a fixture server it does not start.
+if [[ -n "${SUZATARY_E2E_LIVE:-}" && $# -eq 0 ]]; then
+  echo "web-e2e.sh: SUZATARY_E2E_LIVE runs only the scenes named, and none was" >&2
+  exit 64
 fi
 
 echo "==> wait budget $(node -e 'import("./web/e2e/budget.ts").then(b => console.log(b.WAIT_MS))') ms (web/e2e/budget.ts)"
@@ -491,6 +499,64 @@ process.stdin.on("end", () => {
   done
 }
 
+# The scene files, one at a time (Chromiums racing for one server are flaky), against `e2e_env`.
+e2e_env=()
+run_scenes() {
+  local out="$work/bundle" files=(web/e2e/*.test.ts) name
+  if [[ ${#names_given[@]} -gt 0 ]]; then
+    files=()
+    for name in "${names_given[@]}"; do
+      if [[ -f "web/e2e/$name.bench.ts" ]]; then files+=("web/e2e/$name.bench.ts"); else files+=("web/e2e/$name.test.ts"); fi
+    done
+  fi
+  echo "==> esbuild ${#files[@]} test file(s)"
+  esbuild "${files[@]}" \
+    --bundle \
+    --platform=node \
+    --format=esm \
+    --target=es2022 \
+    --out-extension:.js=.mjs \
+    --outdir="$out"
+  echo "==> chromium $(chromium --version 2>/dev/null || echo '(not on PATH)')"
+  env "${e2e_env[@]}" SUZATARY_E2E_SHOTS="$shots" \
+    node --test --test-concurrency=1 --test-timeout="${SUZATARY_E2E_SCENE_MS:-300000}" ${SUZATARY_E2E_SCENES:+"--test-name-pattern=$SUZATARY_E2E_SCENES"} "$out"/*.mjs
+}
+names_given=("$@")
+
+# THE LIVE SMOKE: one server over a COPY of the deployment's data tree (`fixture-live`), as a viewer
+# that acts as nobody, with its own state, home and an empty secrets store, so nothing a scene does
+# reaches the data tree.
+if [[ -n "${SUZATARY_E2E_LIVE:-}" ]]; then
+  [[ -f "$SUZATARY_E2E_LIVE" ]] || { echo "web-e2e.sh: SUZATARY_E2E_LIVE names no instance file: $SUZATARY_E2E_LIVE" >&2; exit 64; }
+  echo "==> a copy of the data tree of $SUZATARY_E2E_LIVE"
+  port="$(free_port)"
+  "$fixture_bin" fixture-live --from "$SUZATARY_E2E_LIVE" --root "$work/live" --port "$port" --repo "$(pwd)" \
+    >"$work/live.json" 2>"$work/live.log"
+  live_home="$work/live-home"
+  mkdir -p "$live_home/.config"
+  : >"$work/live-secrets.env"
+  # shellcheck disable=SC2016
+  setsid env -u SUZATARY_BOX_KEY -u SUZATARY_AGENT_KEY -u SUZATARY_DEDUP_KEY \
+    "XDG_STATE_HOME=$work/live-state" "XDG_CACHE_HOME=$work/live-cache" "HOME=$live_home" \
+    "XDG_CONFIG_HOME=$live_home/.config" "SECRETSPEC_PROVIDER=dotenv://$work/live-secrets.env" \
+    bash -c '"$@"; echo "==> suzatary serve ended: exit $?"' serve \
+    "$fixture_bin" serve --instance "$work/live/instance.toml" --dist "$(pwd)/web/dist" \
+    --whois-fixture "$(node -p "require('$work/live.json').login")" \
+    --model-fixture "$script" --smtp-fixture "$sent" \
+    >>"$work/live.log" 2>&1 &
+  echo "$!" >"$work/live.pid"
+  servers+=("$(cat "$work/live.pid")")
+  live_base="$(node -p "require('$work/live.json').base")"
+  until curl -fsS "$live_base/api/tip" >/dev/null 2>&1; do
+    kill -0 "$(cat "$work/live.pid")" 2>/dev/null || { echo "web-e2e.sh: the live copy's server ended:" >&2; tail -n 40 "$work/live.log" >&2; exit 1; }
+    sleep 0.2
+  done
+  echo "    live     $live_base (a viewer of the copy)"
+  e2e_env=("E2E_BASE=$live_base" "E2E_BASE_PROPOSED=$live_base" "E2E_BASE_WRITE=$live_base")
+  run_scenes
+  exit
+fi
+
 echo "==> fixture servers"
 # Started together: each compiles the chain's markup before it listens.
 read_base="$(start read --login e2e-reader@example.invalid --settings)"
@@ -553,61 +619,43 @@ echo "    proposed $proposed_base (the same viewer, with a card waiting)"
 echo "    writes   $write_base"
 echo "    shell    $shell_base (a writer, its build read from $shell_build)"
 
-out="$work/bundle"
-files=(web/e2e/*.test.ts)
-if [[ $# -gt 0 ]]; then
-  files=()
-  for name in "$@"; do
-    if [[ -f "web/e2e/$name.bench.ts" ]]; then files+=("web/e2e/$name.bench.ts"); else files+=("web/e2e/$name.test.ts"); fi
-  done
-fi
 
-echo "==> esbuild ${#files[@]} test file(s)"
-esbuild "${files[@]}" \
-  --bundle \
-  --platform=node \
-  --format=esm \
-  --target=es2022 \
-  --out-extension:.js=.mjs \
-  --outdir="$out"
-
-echo "==> chromium $(chromium --version 2>/dev/null || echo '(not on PATH)')"
-# One file at a time: Chromiums racing for one server are flaky. E2E_TRIAGE_BIN lets a scene
-# file a triage card through the agent's own verbs.
-E2E_BASE="$read_base" \
-E2E_BASE_PROPOSED="$proposed_base" \
-E2E_BASE_WRITE="$write_base" \
-E2E_BASE_SHELL="$shell_base" \
-E2E_BASE_BOOTSTRAP="$bootstrap_base" \
-E2E_BOOTSTRAP_INSTANCE="$work/bootstrap/instance.toml" \
-E2E_BASE_CONNECT="$connect_base" \
-E2E_CONNECT_INSTANCE="$work/connect/instance.toml" \
-E2E_BASE_LINKS="$links_base" \
-E2E_LINKS_INSTANCE="$work/links/instance.toml" \
-E2E_LINKS_STORE="$work/links/secrets-store.env" \
-E2E_BASE_GOOGLE="$google_base" \
-E2E_GOOGLE_INSTANCE="$work/google/instance.toml" \
-E2E_GOOGLE_STORE="$work/google/secrets-store.env" \
-E2E_FAKE_GOOGLE="$google_fake" \
-E2E_BASE_EPOCH="$epoch_base" \
-E2E_EPOCH_INSTANCE="$work/epoch/instance.toml" \
-E2E_BASE_LINES="$lines_base" \
-E2E_LINES_INSTANCE="$work/lines/instance.toml" \
-E2E_BASE_RESCRUB="$rescrub_base" \
-E2E_RESCRUB_INSTANCE="$work/rescrub/instance.toml" \
-E2E_BASE_WIDE="$wide_base" \
-E2E_WIDE_INSTANCE="$work/wide/instance.toml" \
-E2E_SECRETS_STORE="$secrets_store" \
-E2E_WRITE_LOG="$work/write.log" \
-E2E_SHELL_BUILD="$shell_build" \
-E2E_SHELL_DIST="$shell_dist" \
-E2E_SHELL_INSTANCE="$work/shell/instance.toml" \
-E2E_TRIAGE_BIN="$fixture_bin" \
-E2E_TRIAGE_INSTANCE="$work/write/instance.toml" \
-E2E_WRITE_STATE="$work/write/state" \
-E2E_SETTINGS_KEY="SUZATARY_ROUTINE_TOKEN" \
-SUZATARY_E2E_SENT="$sent" \
-E2E_WRITE_MAIL="$work/write/Mail/her/cur" \
-E2E_MODEL_RELEASE="$release" \
-SUZATARY_E2E_SHOTS="$shots" \
-  node --test --test-concurrency=1 --test-timeout="${SUZATARY_E2E_SCENE_MS:-300000}" ${SUZATARY_E2E_SCENES:+"--test-name-pattern=$SUZATARY_E2E_SCENES"} "$out"/*.mjs
+# E2E_TRIAGE_BIN lets a scene file a triage card through the agent's own verbs.
+e2e_env=(
+  "E2E_BASE=$read_base"
+  "E2E_BASE_PROPOSED=$proposed_base"
+  "E2E_BASE_WRITE=$write_base"
+  "E2E_BASE_SHELL=$shell_base"
+  "E2E_BASE_BOOTSTRAP=$bootstrap_base"
+  "E2E_BOOTSTRAP_INSTANCE=$work/bootstrap/instance.toml"
+  "E2E_BASE_CONNECT=$connect_base"
+  "E2E_CONNECT_INSTANCE=$work/connect/instance.toml"
+  "E2E_BASE_LINKS=$links_base"
+  "E2E_LINKS_INSTANCE=$work/links/instance.toml"
+  "E2E_LINKS_STORE=$work/links/secrets-store.env"
+  "E2E_BASE_GOOGLE=$google_base"
+  "E2E_GOOGLE_INSTANCE=$work/google/instance.toml"
+  "E2E_GOOGLE_STORE=$work/google/secrets-store.env"
+  "E2E_FAKE_GOOGLE=$google_fake"
+  "E2E_BASE_EPOCH=$epoch_base"
+  "E2E_EPOCH_INSTANCE=$work/epoch/instance.toml"
+  "E2E_BASE_LINES=$lines_base"
+  "E2E_LINES_INSTANCE=$work/lines/instance.toml"
+  "E2E_BASE_RESCRUB=$rescrub_base"
+  "E2E_RESCRUB_INSTANCE=$work/rescrub/instance.toml"
+  "E2E_BASE_WIDE=$wide_base"
+  "E2E_WIDE_INSTANCE=$work/wide/instance.toml"
+  "E2E_SECRETS_STORE=$secrets_store"
+  "E2E_WRITE_LOG=$work/write.log"
+  "E2E_SHELL_BUILD=$shell_build"
+  "E2E_SHELL_DIST=$shell_dist"
+  "E2E_SHELL_INSTANCE=$work/shell/instance.toml"
+  "E2E_TRIAGE_BIN=$fixture_bin"
+  "E2E_TRIAGE_INSTANCE=$work/write/instance.toml"
+  "E2E_WRITE_STATE=$work/write/state"
+  "E2E_SETTINGS_KEY=SUZATARY_ROUTINE_TOKEN"
+  "SUZATARY_E2E_SENT=$sent"
+  "E2E_WRITE_MAIL=$work/write/Mail/her/cur"
+  "E2E_MODEL_RELEASE=$release"
+)
+run_scenes

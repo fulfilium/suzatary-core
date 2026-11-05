@@ -9,6 +9,8 @@ pub mod device;
 pub mod doctor;
 #[cfg(feature = "fixture")]
 pub mod fixture;
+#[cfg(feature = "fixture")]
+pub mod fixture_live;
 pub mod google;
 pub mod guide;
 pub mod heartbeat;

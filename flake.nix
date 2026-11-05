@@ -1122,7 +1122,7 @@
           # scripts/train.sh gates only inside this shell.
           SUZATARY_SHELL = "triage";
           SUZATARY_SHELL_SETS = builtins.concatStringsSep " " (builtins.attrNames sets);
-          # The browser's fonts are the shell's, not the machine's: a Codespace
+          # The browser's fonts are the shell's, not the machine's: a runner
           # has none, and chromium dies in Skia's font manager with nothing to
           # fall back to. DejaVu Sans alone is the one font this box holds, so
           # the e2e suite measures the same text on both.
@@ -1202,9 +1202,6 @@
             # actionlint: the guards lint .github/workflows/gate.yml, the workflow core runs a
             # train's tree half with (app/cli/tests/guards/gate_yml.rs).
             actionlint
-            # cargo-sweep: a Codespace's merge gate drops the target's units no
-            # gate has read lately, where it used to clear the whole target.
-            cargo-sweep
           ] ++ rustToolchain.packages ++ testTools.packages;
         });
       }

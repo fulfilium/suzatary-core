@@ -74,7 +74,7 @@ jobs:
         with:
           persist-credentials: false
 
-      # The settings the gate's Codespace is made with (.devcontainer/devcontainer.json).
+      # Nix with flakes, reading the public Cachix as a plain substituter.
       - uses: cachix/install-nix-action@2126ae7fc54c9df00dd18f7f18754393182c73cd # v31.9.1
         with:
           extra_nix_config: |
@@ -90,6 +90,21 @@ jobs:
         with:
           primary-key: gate-store-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('flake.nix', 'flake.lock', 'app/Cargo.lock', 'app/**/Cargo.toml') }}
           restore-prefixes-first-match: gate-store-${{ runner.os }}-${{ runner.arch }}-
+
+      # THE PASSES THE LAST GATES KEPT, which gate-passes.yml saves on master from each run's artifacts: a step or a
+      # unit whose inputs passed before is kept here as on the box (scripts/merge-gate.sh, A PASS IS KEPT BY WHAT
+      # THE STEP READ). A miss runs every step; the key names this run, which no entry holds, so the newest one is read.
+      - name: the passes
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        continue-on-error: true
+        with:
+          path: passes
+          key: gate-passes-${{ github.run_id }}
+          restore-keys: gate-passes-
+
+      # Into the checkout's git directory, where the gate keeps them, and out of its tree, which must be HEAD's.
+      - name: the passes, where the gate reads them
+        run: if [ -d passes ]; then mv passes .git/gate; fi
 
       # The shell the gate runs in, apart, so a download that fails here stops the job before its
       # gate, as no verdict. A shell the tree cannot build is red on the box, whose public-tree
@@ -117,6 +132,18 @@ jobs:
           path: ${{ runner.temp }}/e2e-shots
           if-no-files-found: ignore
           retention-days: 7
+
+      # What this job's gate kept, for gate-passes.yml to save for the next gate, whatever the verdict: a red step keeps no
+      # pass, and a passed one is a function of its inputs.
+      - name: the passes kept
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: passes-${{ matrix.lane }}
+          path: .git/gate
+          include-hidden-files: true
+          if-no-files-found: ignore
+          retention-days: 1
 
       - name: red
         if: always() && steps.gate.outputs.code == '1'

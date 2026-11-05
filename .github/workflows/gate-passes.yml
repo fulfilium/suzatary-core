@@ -1,0 +1,76 @@
+name: Gate passes
+
+# THE PASSES THE GATE'S JOBS KEEP FOR EACH OTHER (.github/workflows/gate.yml). Each gate runs on a
+# new branch `gate/<train sha>`, and a run on a branch reads only the Actions caches saved on that
+# branch or on master, so a gate job cannot leave a pass to the next gate's. This runs on master
+# when a Gate run ends: it takes the passes the last gates kept, adds those each job of that run
+# uploaded, and saves them under the run's id, which every gate job restores; then it purges every
+# older entry. So a scene, a unit test or a step whose inputs a train before passed is kept on the
+# runners as it is on the box (scripts/merge-gate.sh, A PASS IS KEPT BY WHAT THE STEP READ).
+#
+# A pass names the tree entries and the environment its step read, so a pass saved here keeps a
+# step only on a tree and a runner image that read the same. It is the word of a gate job, which
+# only a push to a `gate/**` branch runs, and only someone with write access to core can push one.
+#
+# WHO REACHES WHAT. Only a completed Gate run starts this, in the public repository alone; no pull
+# request runs it. It names no secret and pushes nothing. Its token reads the run's artifacts and may
+# delete this repository's Actions caches (`actions: write`), which the purge needs.
+on:
+  workflow_run:
+    workflows: [Gate]
+    types: [completed]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: gate-passes
+
+jobs:
+  passes:
+    if: ${{ !github.event.repository.private }}
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      actions: write
+    steps:
+      - name: The passes so far
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        continue-on-error: true
+        with:
+          path: passes
+          key: gate-passes-${{ github.event.workflow_run.id }}
+          restore-keys: gate-passes-
+
+      - name: The passes the run kept
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          pattern: passes-*
+          merge-multiple: true
+          path: passes
+          run-id: ${{ github.event.workflow_run.id }}
+          github-token: ${{ github.token }}
+
+      # A pass no gate has kept for a month names a tree no train gates again.
+      - name: Drop the passes a month old
+        run: |
+          mkdir -p passes
+          find passes -type f -mtime +30 -delete
+          echo "$(find passes -type f | wc -l) files, $(du -sh passes | cut -f1)"
+
+      - name: Save the passes
+        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: passes
+          key: gate-passes-${{ github.event.workflow_run.id }}
+
+      - name: Purge the older passes
+        env:
+          GH_TOKEN: ${{ github.token }}
+          KEY: gate-passes-${{ github.event.workflow_run.id }}
+        run: |
+          set -euo pipefail
+          gh api --paginate "repos/$GITHUB_REPOSITORY/actions/caches?key=gate-passes-" \
+            --jq '.actions_caches[] | select(.key != env.KEY) | .id' |
+            while read -r id; do gh api -X DELETE "repos/$GITHUB_REPOSITORY/actions/caches/$id"; done

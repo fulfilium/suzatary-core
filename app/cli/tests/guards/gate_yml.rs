@@ -253,7 +253,7 @@ fn gate_store_yml_saves_the_one_store_on_master() {
     for entry in workflows {
         let name = entry.expect("a workflow").file_name();
         let name = name.to_string_lossy();
-        if name != "gate-store.yml" {
+        if name != "gate-store.yml" && name != "gate-passes.yml" {
             assert!(
                 !code(&format!(".github/workflows/{name}")).contains("actions: write"),
                 "{name} may not delete the Actions cache"
@@ -305,6 +305,65 @@ fn gate_store_yml_saves_the_one_store_on_master() {
     assert!(store.contains("if ((bytes > LIMIT)); then"));
 }
 
+/// gate-passes.yml runs on master when a Gate run ends, in the public repository alone, names no
+/// secret, saves the passes under a key with the prefix gate.yml restores, at the path it restores
+/// them to, and purges its own older entries alone. Each gate job uploads what its gate kept,
+/// whatever its verdict, and moves the restored passes out of its tree before the gate reads it.
+#[test]
+fn gate_passes_yml_hands_each_gate_the_passes_of_the_last() {
+    let passes = code(".github/workflows/gate-passes.yml");
+    let gate = code(".github/workflows/gate.yml");
+    assert_eq!(
+        trigger(&passes),
+        [
+            "workflow_run:",
+            "workflows: [Gate]",
+            "types: [completed]",
+            ""
+        ],
+        "a completed Gate run and nothing else"
+    );
+    assert!(
+        gate.starts_with("name: Gate\n"),
+        "the run it follows is gate.yml's"
+    );
+    assert!(!passes.contains("pull_request"));
+    assert!(passes.contains("if: ${{ !github.event.repository.private }}"));
+    assert!(!passes.contains("secrets."), "no secret");
+    assert_pinned(&passes);
+    assert!(passes.contains("      contents: read\n      actions: write\n"));
+    assert_eq!(
+        values(&passes, "restore-keys"),
+        values(&gate, "restore-keys"),
+        "gate.yml restores what this saves"
+    );
+    assert_eq!(
+        values(&gate, "restore-keys"),
+        BTreeSet::from(["gate-passes-"])
+    );
+    let keys = values(&passes, "key");
+    assert_eq!(
+        keys,
+        BTreeSet::from(["gate-passes-${{ github.event.workflow_run.id }}"]),
+        "one key, the run's, restored and saved"
+    );
+    assert!(
+        values(&gate, "path").contains("passes") && values(&passes, "path").contains("passes"),
+        "an entry restores only at the path it was saved from"
+    );
+    assert!(
+        passes.contains("select(.key != env.KEY)") && passes.contains("caches?key=gate-passes-")
+    );
+    assert!(gate.contains("run: if [ -d passes ]; then mv passes .git/gate; fi"));
+    let at = |needle: &str| {
+        gate.find(needle)
+            .unwrap_or_else(|| panic!("gate.yml has {needle:?}"))
+    };
+    assert!(at("mv passes .git/gate") < at("scripts/merge-gate.sh --no-live"));
+    assert!(at("name: passes-${{ matrix.lane }}") < at("- name: red"));
+    assert!(gate.contains("path: .git/gate\n          include-hidden-files: true"));
+}
+
 /// actionlint passes the workflows the gate and the caches rest on: their syntax, their
 /// expressions, their runner labels and the shell of each step.
 #[test]
@@ -313,6 +372,7 @@ fn gate_workflows_pass_actionlint() {
         .args([
             ".github/workflows/gate.yml",
             ".github/workflows/gate-store.yml",
+            ".github/workflows/gate-passes.yml",
             ".github/workflows/publication.yml",
         ])
         .current_dir(repo())

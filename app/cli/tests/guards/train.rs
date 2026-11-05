@@ -1,7 +1,7 @@
 //! The merge queue (`scripts/train.sh`), run as the real script against a throwaway
 //! origin: a bare repository whose `refs/pull/<n>/head` are the pull requests, a stub
-//! `gh` that answers their titles and plays a Codespace (a clone of origin its `codespace
-//! ssh` runs commands in), and a stub gate whose halves' verdicts are functions of the tree.
+//! `gh` that answers their titles and plays GitHub, and a stub gate whose halves' verdicts
+//! are functions of the tree.
 
 use super::{Scratch, repo};
 use std::collections::BTreeSet;
@@ -16,15 +16,7 @@ struct Train {
 
 /// The stub `gh`. `pr view <n> --json title,url,headRefOid --jq …` answers the title, URL and
 /// head commit in `prs/<n>`, tab-separated, and `pr view <n> --json body …` the description in
-/// `prs/<n>.body`, empty when there is none; `codespace ssh -c <name> -- <command>` runs the
-/// command in the `codespace` clone, or fails as a dropped connection when `GH_SSH_DOWN` is set
-/// or when it is the `GH_SSH_DROP_AT`th such call; `codespace ssh -c <name> -- -t …`,
-/// the keep-alive, is logged as `keep`, writes its pid to `keepers` and holds on
-/// until it is stopped, unless the connection is down; `codespace stop -c <name>`
-/// is logged. The first command of a run waits on the `awake` fifo for the first
-/// keep-alive (ten seconds at most, so a train that starts none fails rather than
-/// hangs), so a gate's keep-alive is always the first call it logs. The stub holds
-/// none of the train's lock: what it starts in the Codespace is not the train.
+/// `prs/<n>.body`, empty when there is none.
 ///
 /// It also plays GitHub's API over the gate branches pushed to `core.git`, logging each call to
 /// `github.log`: `api …/actions/runs?head_sha=<sha>…` answers nothing until core holds `<sha>`,
@@ -37,7 +29,9 @@ struct Train {
 /// a lost runner's does, and with `GH_RUN=running` it never ends; none of them runs the gate. With
 /// `GH_RUN=checks-red` the run never ends either, and its jobs already hold `8 gate (checks)`,
 /// whose `red` step failed and whose log (`…/jobs/8/logs`) is a real one's shape: clippy's error,
-/// the gate's failing steps' last lines, the gate's size and free-disk lines, GitHub's next steps.
+/// the gate's failing steps' last lines, the gate's size and free-disk lines, GitHub's next steps. With
+/// `GH_RUN=e2e-red` its jobs hold `9 gate (e2e-1)` instead, whose log is an e2e job's stopped before
+/// its gate's summary: a coloured failed scene, its `Error:` and `last:` lines, and no block.
 ///
 /// `workflow run publication.yml --repo <repo> --ref master -f commit=<sha>`, the train's dispatch
 /// of master's publication workflow, appends `dispatch <master> <sha>` to `<TRAIN_PROBES>.args`
@@ -85,6 +79,7 @@ if [ "$1" = api ]; then
           lost) echo "completed failure" >"$here/runs/$sha" ;;
           running) echo "in_progress " >"$here/runs/$sha" ;;
           checks-red) echo "in_progress " >"$here/runs/$sha" && : >"$here/runs/$sha.checks" ;;
+          e2e-red) echo "in_progress " >"$here/runs/$sha" && : >"$here/runs/$sha.e2e" ;;
           *)
             git clone -q "$here/core.git" "$here/runner-$sha" && git -C "$here/runner-$sha" checkout -q --detach "$sha"
             if (cd "$here/runner-$sha" && "$here/bin/gate" --no-live --steps cloud) >"$here/runs/$sha.log" 2>&1; then
@@ -107,9 +102,15 @@ if [ "$1" = api ]; then
     repos/*/actions/runs/*/jobs*)
       run="${2#*/runs/}" && run="${run%%/*}"
       [ ! -e "$here/runs/$run.red" ] || echo "7 gate (tests)"
-      [ ! -e "$here/runs/$run.checks" ] || echo "8 gate (checks)" ;;
+      [ ! -e "$here/runs/$run.checks" ] || echo "8 gate (checks)"
+      [ ! -e "$here/runs/$run.e2e" ] || echo "9 gate (e2e-1)" ;;
     repos/*/actions/runs/*) cat "$here/runs/${2##*/}" ;;
     repos/*/actions/jobs/7/logs) sed 's/^/2026-10-20T10:00:00.1234567Z /' "$(ls -t "$here"/runs/*.log | head -n 1)" ;;
+    repos/*/actions/jobs/9/logs)
+      printf '%b\n' '##[group]Run nix develop .#triage -c scripts/merge-gate.sh --no-live --steps "$STEPS"' \
+        '==> e2e (quiet lane)' '\033[32m✔ list: a row (12ms)\033[39m' '\033[31m✖ destinations: the inbox opens (240100ms)\033[39m' \
+        '  Error: waited 240000ms for the inbox' '    last: it stayed false' '      at TestContext.<anonymous> (file:///b.mjs:1:1)' \
+        '##[error]Process completed with exit code 1.' | sed 's/^/2026-10-20T10:00:00.1234567Z /' ;;
     repos/*/actions/jobs/8/logs)
       printf '%s\n' '##[group]Run nix develop .#triage -c scripts/merge-gate.sh --no-live --steps "$STEPS"' \
         '==> clippy: FAILED (101)   42s' 'error[E0308]: mismatched types' \
@@ -124,27 +125,13 @@ case "$1 $2" in
   "pr view")
     if [ "$5" = body ]; then cat "$here/prs/$3.body" 2>/dev/null; exit 0; fi
     exec cat "$here/prs/$3" ;;
-  "codespace ssh")
-    if [ "$6" = -t ]; then
-      echo "keep $4" >>"$here/codespace.log"
-      [ ! -p "$here/awake" ] || : >"$here/awake"
-      [ -z "$GH_SSH_DOWN" ] || exit 255
-      echo $$ >>"$here/keepers"
-      exec sleep 600
-    fi
-    [ ! -p "$here/awake" ] || { timeout 10 cat "$here/awake" >/dev/null; rm "$here/awake"; }
-    echo "ssh $4" >>"$here/codespace.log"
-    [ -z "$GH_SSH_DOWN" ] || { echo "connection reset" >&2; exit 255; }
-    [ "$(grep -c '^ssh ' "$here/codespace.log")" != "${GH_SSH_DROP_AT:-0}" ] || { echo "connection reset" >&2; exit 255; }
-    shift 5
-    CODESPACE_VSCODE_FOLDER="$here/codespace" exec bash -c "$*" ;;
-  "codespace stop") echo "stop $4" >>"$here/codespace.log" ;;
   *) exit 64 ;;
 esac
 "#;
 
-/// The stub merge gate, `[--full] --no-live` or `[--full] --only-live`, a full run noted in
-/// `<TRAIN_PROBES>.full`. With `GATE_HOLD` set, the tree half says so on the `<GATE_HOLD>.up`
+/// The stub merge gate, `[--full | --nightly] --no-live` or `[--full | --nightly] --only-live`, a
+/// full run noted in `<TRAIN_PROBES>.full` with its flag last. A red run names its one step,
+/// `stub`, in a summary row. With `GATE_HOLD` set, the tree half says so on the `<GATE_HOLD>.up`
 /// fifo and waits on `<GATE_HOLD>` to go on, and with `GATE_HOLD_LIVE` the live half does the
 /// same, its pid written to `<GATE_HOLD_LIVE>.pid` first. A full run of a tree holding `missed` fails, as a selection that missed a step would.
 /// With `GATE_RED_TEXT` set, the tree half is red on a tree whose CHANGELOG.md holds that text.
@@ -157,7 +144,7 @@ const GATE: &str = r#"#!/bin/sh
 env >"$TRAIN_PROBES.env"
 echo "$*" >>"$TRAIN_PROBES.args"
 full=""
-if [ "$1" = --full ]; then full=1; shift; echo "$1 $(git rev-parse HEAD)" >>"$TRAIN_PROBES.full"; fi
+if [ "$1" = --full ] || [ "$1" = --nightly ]; then full="$1"; shift; echo "$1 $(git rev-parse HEAD) $full" >>"$TRAIN_PROBES.full"; fi
 echo "$1 $(git rev-parse HEAD) $(pwd)" >>"$TRAIN_PROBES"
 [ -z "$full" ] || [ ! -e missed ] || { echo "missed is in the tree" >&2; exit 1; }
 [ -z "$GATE_HOLD" ] || [ "$1" != --no-live ] || { echo up >"$GATE_HOLD.up"; cat "$GATE_HOLD" >/dev/null; }
@@ -174,7 +161,7 @@ case "$1" in
 esac
 [ -z "$GATE_RED_TEXT" ] || [ "$1" != --no-live ] || ! grep -qs "$GATE_RED_TEXT" CHANGELOG.md || bad=CHANGELOG.md
 test -e "$bad" || exit 0
-printf '==> the failing steps'"'"' last lines\n--- stub\n%s is in the tree\n' "$bad" >&2
+printf 'stub             FAILED (1)\n==> the failing steps'"'"' last lines\n--- stub\n%s is in the tree\n' "$bad" >&2
 exit 1
 "#;
 
@@ -215,7 +202,6 @@ impl Train {
         run_git(&author, &["commit", "-q", "-m", "seed"]);
         run_git(&author, &["push", "-q", "origin", "master"]);
         run_git(root, &["clone", "-q", "origin.git", "work"]);
-        run_git(root, &["clone", "-q", "origin.git", "codespace"]);
         // The repository deployments run, populated once before the train published anything,
         // holding every path these tests land (empty), so a publication holds no new path
         // unless a test means it to.
@@ -273,7 +259,6 @@ impl Train {
         for (stub, body) in [("gh", GH), ("gate", GATE), ("public", PUBLIC)] {
             let _ = suzatary_testkit::fake_program(&bin, stub, body);
         }
-        run(Command::new("mkfifo").arg(root.join("awake")), "mkfifo");
         train
     }
 
@@ -469,48 +454,6 @@ impl Train {
                     .then(|| dir.canonicalize().unwrap_or(dir))
             })
             .collect()
-    }
-
-    /// What the stub Codespace was asked, one line per call.
-    fn codespace_calls(&self) -> Vec<String> {
-        std::fs::read_to_string(self.scratch.join("codespace.log"))
-            .unwrap_or_default()
-            .lines()
-            .map(str::to_string)
-            .collect()
-    }
-
-    /// The stub keep-alives still running: their pids, a zombie counted as gone.
-    fn keepers_running(&self) -> Vec<String> {
-        std::fs::read_to_string(self.scratch.join("keepers"))
-            .unwrap_or_default()
-            .lines()
-            .filter(|pid| runs(pid))
-            .map(str::to_string)
-            .collect()
-    }
-
-    /// Asserts the gate held the Codespace awake and left no keep-alive behind.
-    fn kept_awake_and_let_go(&self) {
-        let calls = self.codespace_calls();
-        assert_eq!(
-            calls.first().map(String::as_str),
-            Some("keep cs"),
-            "a keep-alive was started before anything ran: {calls:?}"
-        );
-        assert_eq!(
-            self.keepers_running(),
-            Vec::<String>::new(),
-            "no keep-alive outlives the gate"
-        );
-    }
-
-    /// The refs origin holds under `refs/heads/train/`.
-    fn train_refs_on_origin(&self) -> String {
-        run_git(
-            &self.scratch.join("origin.git"),
-            &["for-each-ref", "refs/heads/train/"],
-        )
     }
 
     fn probes_file(&self) -> PathBuf {
@@ -1335,215 +1278,6 @@ fn train_land_needs_both_halves_and_bisect_follows_the_red_one() {
     );
 }
 
-#[test]
-fn train_gate_remote_runs_the_tree_half_in_the_codespace_and_stops_it() {
-    let t = Train::new("remote");
-    t.pr(1, "the first", &[("a.txt", "a\n")]);
-    assert!(t.train(&["build", "1"]).status.success());
-
-    let out = t.train(&["gate", "--remote", "cs"]);
-    assert!(out.status.success(), "gate: {}", text(&out.stderr));
-    let codespace = t.scratch.join("codespace");
-    assert_eq!(
-        t.ran_in("--no-live"),
-        [codespace.canonicalize().expect("the clone")],
-        "the tree half ran in the Codespace"
-    );
-    let live = t.ran_in("--only-live");
-    assert!(
-        live.len() == 1 && live[0] != t.work().canonicalize().expect("the clone"),
-        "the live half ran here, in a worktree of its own: {live:?}"
-    );
-    assert_eq!(
-        t.codespace_calls().last().map(String::as_str),
-        Some("stop cs"),
-        "stopped after: {:?}",
-        t.codespace_calls()
-    );
-    t.kept_awake_and_let_go();
-    assert_eq!(t.train_refs_on_origin(), "", "the train's ref is deleted");
-
-    let landed = t.train(&["land"]);
-    assert!(landed.status.success(), "land: {}", text(&landed.stderr));
-    assert_eq!(t.origin_master(), t.git(&["rev-parse", "train"]));
-}
-
-/// A red tree half in the Codespace stops the live half here at once, held as it is, and the
-/// report prints the Codespace gate's failing lines.
-#[test]
-fn train_gate_remote_red_stops_the_live_half_and_blocks_the_land_with_its_last_lines() {
-    let t = Train::new("remote-red");
-    t.pr(1, "the first", &[("broken", "x\n")]);
-    let seed = t.origin_master();
-    assert!(t.train(&["build", "1"]).status.success());
-
-    // Polled once a second, so the live half is up before the tree half's red is read.
-    let (hold, _said) = holding(&t, "hold-live");
-    let hold_path = hold.to_str().expect("a UTF-8 path");
-    let gating = t
-        .command(
-            &["gate", "--remote", "cs"],
-            &[("GATE_HOLD_LIVE", hold_path), ("SUZATARY_TRAIN_POLL", "1")],
-        )
-        .stdout(std::process::Stdio::null())
-        .stderr(std::process::Stdio::piped())
-        .spawn()
-        .expect("train.sh starts");
-    let red = ends_within_twenty_seconds(gating);
-    let stderr = text(&red.stderr);
-    assert!(!red.status.success(), "a red tree half is a red train");
-    assert!(
-        stderr.contains("tree half: failed")
-            && stderr.contains("the tree half is red, so the live half is stopped")
-            && stderr.contains("live half: unknown"),
-        "{stderr}"
-    );
-    live_half_stopped(&hold);
-    assert!(
-        stderr.contains("broken is in the tree"),
-        "the remote failing steps' last lines: {stderr}"
-    );
-    assert_eq!(
-        t.codespace_calls().last().map(String::as_str),
-        Some("stop cs"),
-        "stopped after a red gate too"
-    );
-    t.kept_awake_and_let_go();
-    assert_eq!(t.train_refs_on_origin(), "", "the train's ref is deleted");
-
-    let refused = t.train(&["land"]);
-    assert!(
-        !refused.status.success(),
-        "the live half alone does not land"
-    );
-    assert!(
-        text(&refused.stderr).contains("tree: failed"),
-        "{}",
-        text(&refused.stderr)
-    );
-    assert_eq!(t.origin_master(), seed, "nothing landed");
-}
-
-#[test]
-fn train_gate_remote_that_drops_records_no_verdict() {
-    let t = Train::new("remote-down");
-    t.pr(1, "the first", &[("a.txt", "a\n")]);
-    assert!(t.train(&["build", "1"]).status.success());
-
-    let out = t.train_with(&["gate", "--remote", "cs"], &[("GH_SSH_DOWN", "1")]);
-    let stderr = text(&out.stderr);
-    assert!(!out.status.success(), "no tree verdict, no green: {stderr}");
-    assert!(
-        stderr.contains("did not finish") && stderr.contains("connection reset"),
-        "{stderr}"
-    );
-    assert_eq!(
-        t.codespace_calls().last().map(String::as_str),
-        Some("stop cs"),
-        "stopped after a dropped connection too"
-    );
-    t.kept_awake_and_let_go();
-    assert_eq!(t.train_refs_on_origin(), "");
-
-    let refused = t.train(&["land"]);
-    assert!(
-        text(&refused.stderr).contains("tree: unknown"),
-        "a dropped connection is no verdict, so the train is ungated: {}",
-        text(&refused.stderr)
-    );
-
-    assert!(
-        t.train(&["gate", "--remote", "cs"]).status.success(),
-        "the next gate, connected, is green: the drop left nothing behind"
-    );
-}
-
-#[test]
-fn train_gate_remote_outlives_a_dropped_poll_and_regates_a_commit_it_holds() {
-    let t = Train::new("remote-poll");
-    t.pr(1, "the first", &[("a.txt", "a\n")]);
-    assert!(t.train(&["build", "1"]).status.success());
-
-    // Call 1 reads the Codespace's HEAD, 2 starts the gate, 3 is the first poll (the
-    // keep-alive's calls are not counted).
-    let out = t.train_with(&["gate", "--remote", "cs"], &[("GH_SSH_DROP_AT", "3")]);
-    assert!(
-        out.status.success(),
-        "a poll lost to a drop is read again: {}",
-        text(&out.stderr)
-    );
-
-    let again = t.train(&["gate", "--remote", "cs"]);
-    assert!(
-        again.status.success(),
-        "the Codespace already holds the commit, so nothing is sent: {}",
-        text(&again.stderr)
-    );
-    assert_eq!(t.probes("--no-live"), 2, "the tree half ran each time");
-}
-
-#[test]
-fn train_gate_remote_killed_by_the_operator_lets_the_codespace_go() {
-    let t = Train::new("remote-killed");
-    t.pr(1, "the first", &[("a.txt", "a\n")]);
-    assert!(t.train(&["build", "1"]).status.success());
-
-    // The tree half says `up` on this fifo once it runs, and the train's waiter says
-    // `gone` once the train ends, so a train that dies first fails here, never hangs.
-    let hold = t.scratch.join("hold");
-    let up = hold.with_extension("up");
-    for fifo in [&hold, &up] {
-        run(Command::new("mkfifo").arg(fifo), "mkfifo");
-    }
-    let mut said = std::io::BufReader::new(
-        std::fs::OpenOptions::new()
-            .read(true)
-            .write(true)
-            .open(&up)
-            .expect("the fifo opens"),
-    );
-    let hold_path = hold.to_str().expect("a UTF-8 path");
-    let mut gating = t
-        .command(&["gate", "--remote", "cs"], &[("GATE_HOLD", hold_path)])
-        .stdout(std::process::Stdio::null())
-        .stderr(std::process::Stdio::null())
-        .spawn()
-        .expect("train.sh starts");
-    let pid = gating.id().to_string();
-    let waiter = std::thread::spawn(move || {
-        let status = gating.wait().expect("the train ends");
-        std::fs::write(&up, "gone\n").expect("the waiter says so");
-        status
-    });
-    let mut line = String::new();
-    std::io::BufRead::read_line(&mut said, &mut line).expect("the fifo reads");
-    assert_eq!(
-        line, "up\n",
-        "the tree half was running when the train was killed"
-    );
-    run(Command::new("kill").arg(&pid), "kill the train");
-    assert!(
-        !waiter.join().expect("the waiter").success(),
-        "a killed train is not green"
-    );
-
-    // A poll already in flight may still log after the stop, so the stop is looked
-    // for, not read last.
-    assert!(
-        t.codespace_calls().iter().any(|call| call == "stop cs"),
-        "stopped after the operator's kill too: {:?}",
-        t.codespace_calls()
-    );
-    t.kept_awake_and_let_go();
-    let after = t.train(&["land"]);
-    assert!(
-        text(&after.stderr).contains("tree: unknown"),
-        "the tree half's polls ended with the train, so its lock is free: {}",
-        text(&after.stderr)
-    );
-    std::fs::write(&hold, "").expect("the held gate goes on");
-}
-
 /// A held gate's two fifos: `<name>`, which it waits on, and `<name>.up`, on which it says it
 /// runs, opened read-write here so a gate that never comes up fails a read, never hangs it.
 fn holding(t: &Train, name: &str) -> (PathBuf, std::io::BufReader<std::fs::File>) {
@@ -1611,93 +1345,6 @@ fn within_twenty_seconds(done: impl Fn() -> bool) -> bool {
             false
         }
     })
-}
-
-/// The Codespace is let go when its half is done, while the live half here still runs: a
-/// Codespace waiting on the box is billed for nothing.
-#[test]
-fn train_gate_remote_lets_the_codespace_go_before_the_live_half_ends() {
-    let t = Train::new("remote-early");
-    t.pr(1, "the first", &[("a.txt", "a\n")]);
-    assert!(t.train(&["build", "1"]).status.success());
-
-    let (hold, mut said) = holding(&t, "hold-live");
-    let hold_path = hold.to_str().expect("a UTF-8 path");
-    let gating = t
-        .command(
-            &["gate", "--remote", "cs"],
-            &[("GATE_HOLD_LIVE", hold_path)],
-        )
-        .stdout(std::process::Stdio::null())
-        .stderr(std::process::Stdio::piped())
-        .spawn()
-        .expect("train.sh starts");
-    let mut line = String::new();
-    std::io::BufRead::read_line(&mut said, &mut line).expect("the fifo reads");
-    assert_eq!(line, "up\n", "the live half runs");
-    assert!(
-        within_twenty_seconds(|| t.codespace_calls().iter().any(|call| call == "stop cs")),
-        "the Codespace was stopped while the live half ran: {:?}",
-        t.codespace_calls()
-    );
-    assert_eq!(
-        t.keepers_running(),
-        Vec::<String>::new(),
-        "and its keep-alive with it"
-    );
-    std::fs::write(&hold, "").expect("the held live half goes on");
-    let out = gating.wait_with_output().expect("the train ends");
-    assert!(out.status.success(), "gate: {}", text(&out.stderr));
-    assert_eq!(
-        t.codespace_calls()
-            .iter()
-            .filter(|call| *call == "stop cs")
-            .count(),
-        1,
-        "stopped once: {:?}",
-        t.codespace_calls()
-    );
-}
-
-/// A train killed with no chance to run its trap takes its keep-alive with it, which stops the
-/// Codespace as the trap would have, so nothing holds it up or leaves it running.
-#[test]
-fn train_gate_remote_keep_alive_ends_with_a_train_killed_outright() {
-    let t = Train::new("remote-sigkill");
-    t.pr(1, "the first", &[("a.txt", "a\n")]);
-    assert!(t.train(&["build", "1"]).status.success());
-
-    let (hold, mut said) = holding(&t, "hold");
-    let hold_path = hold.to_str().expect("a UTF-8 path");
-    let mut gating = t
-        .command(&["gate", "--remote", "cs"], &[("GATE_HOLD", hold_path)])
-        .stdout(std::process::Stdio::null())
-        .stderr(std::process::Stdio::null())
-        .spawn()
-        .expect("train.sh starts");
-    let mut line = String::new();
-    std::io::BufRead::read_line(&mut said, &mut line).expect("the fifo reads");
-    assert_eq!(line, "up\n", "the tree half runs");
-    assert!(
-        !t.keepers_running().is_empty(),
-        "a keep-alive holds the Codespace up while the gate runs"
-    );
-    run(
-        Command::new("kill").args(["-KILL", &gating.id().to_string()]),
-        "kill -KILL the train",
-    );
-    gating.wait().expect("the train ends");
-    assert!(
-        within_twenty_seconds(|| t.keepers_running().is_empty()),
-        "the keep-alive ended with the train: {:?} still run",
-        t.keepers_running()
-    );
-    assert!(
-        within_twenty_seconds(|| t.codespace_calls().iter().any(|call| call == "stop cs")),
-        "and the Codespace was stopped: {:?}",
-        t.codespace_calls()
-    );
-    std::fs::write(&hold, "").expect("the held gate goes on");
 }
 
 impl Train {
@@ -3590,67 +3237,13 @@ impl Train {
             .map(str::to_string)
             .collect()
     }
-
-    /// Records that a full gate passed `seconds_ago`.
-    fn full_passed(&self, seconds_ago: u64) {
-        let now = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .expect("after the epoch")
-            .as_secs();
-        write(
-            &self.work(),
-            ".git/train/full-at",
-            &format!("{}\n", now - seconds_ago),
-        );
-    }
-}
-
-/// The first train gated when no tree that passed a full gate has landed in the last day is gated
-/// full; landing it records the day, and the trains after it are selective until a day passes.
-#[test]
-fn train_gate_runs_full_once_a_day() {
-    let t = Train::new("full-daily");
-    t.pr(1, "the first", &[("a.txt", "a\n")]);
-    assert!(t.train(&["build", "1"]).status.success());
-    let first = t.train(&["gate"]);
-    assert!(first.status.success(), "{}", text(&first.stderr));
-    assert!(
-        text(&first.stderr).contains("no tree that passed a full gate has landed in the last day")
-    );
-    assert_eq!(t.full_runs().len(), 2, "both halves ran full");
-    assert!(
-        !t.work().join(".git/train/full-at").exists(),
-        "a gate records nothing: only a landed tree does"
-    );
-    let landed = t.train(&["land"]);
-    assert!(landed.status.success(), "{}", text(&landed.stderr));
-
-    t.pr(2, "the second", &[("b.txt", "b\n")]);
-    assert!(t.train(&["build", "2"]).status.success());
-    assert!(t.train(&["gate"]).status.success());
-    assert_eq!(
-        t.full_runs().len(),
-        2,
-        "a fully passed tree landed today: this gate is selective"
-    );
-
-    t.full_passed(86_400);
-    t.pr(3, "the third", &[("c.txt", "c\n")]);
-    assert!(t.train(&["build", "2", "3"]).status.success());
-    assert!(t.train(&["gate"]).status.success());
-    assert_eq!(
-        t.full_runs().len(),
-        4,
-        "a day later the gate runs full again"
-    );
 }
 
 /// A full gate that fails where a selective one passed the same tree is a finding, and nothing
-/// lands over it; a red full gate is not a full pass, so the next gate runs full again.
+/// lands over it, and no gate after it reads it otherwise.
 #[test]
 fn train_full_red_beside_a_selective_green_is_a_finding() {
     let t = Train::new("full-finding");
-    t.full_passed(0);
     t.pr(1, "the first", &[("missed", "x\n")]);
     let seed = t.origin_master();
     assert!(t.train(&["build", "1"]).status.success());
@@ -3673,8 +3266,8 @@ fn train_full_red_beside_a_selective_green_is_a_finding() {
     assert!(!t.train(&["gate"]).status.success());
     assert_eq!(
         t.full_runs().len(),
-        2,
-        "the gate after a red full gate runs full (its tree half, red, keeps the live half from starting)"
+        1,
+        "only the gate named full ran full (its tree half, red, kept the live half from starting)"
     );
 }
 
@@ -3731,4 +3324,160 @@ fn app_bin_builds_a_named_commit_from_its_public_tree() {
         lines[1].starts_with(&format!("nix build {}#suzatary ", tree.display())),
         "the public tree's package is built: {asked}"
     );
+}
+
+impl Train {
+    /// The todos the nightly gate filed on the fixture's project chain, by id.
+    fn nightly_todos(data: &Path) -> BTreeSet<String> {
+        suzatary_core::record::EventStore::new(
+            data.join("events-suzatary"),
+            prodrome_core::policy::Untrusted::none(),
+        )
+        .events()
+        .expect("the chain reads")
+        .iter()
+        .filter_map(|e| match e {
+            suzatary_core::record::TodoEvent::Authored(made)
+                if made.todo.as_str().starts_with("nightly")
+                    && made.actor.as_str() == "assistant" =>
+            {
+                Some(made.todo.as_str().to_owned())
+            }
+            _ => None,
+        })
+        .collect()
+    }
+}
+
+/// THE NIGHTLY GATE gates origin/master in both halves, full and with the live half's web suite
+/// whole (`--nightly`), and a green night files nothing.
+#[test]
+fn train_nightly_gates_master_whole_and_files_nothing_when_green() {
+    let t = Train::new("nightly-green");
+    let data = t.scratch.join("data");
+    std::fs::create_dir_all(&data).expect("a data root");
+    let env = release_env(&a_release_deployment(&data));
+    let env: Vec<(&str, &str)> = env.iter().map(|(k, v)| (*k, v.as_str())).collect();
+    t.master_moves(&[("a.txt", "a\n")]);
+    let master = t.origin_master();
+    let out = t.train_with(&["nightly"], &env);
+    assert!(out.status.success(), "{}", text(&out.stderr));
+    let runs = t.full_runs();
+    assert_eq!(
+        runs,
+        [
+            format!("--no-live {master} --nightly"),
+            format!("--only-live {master} --nightly")
+        ],
+        "both halves of master, nightly"
+    );
+    assert!(Train::nightly_todos(&data).is_empty());
+}
+
+/// A red night runs both halves whatever the first says, files one todo for the tree on the
+/// project chain naming the failing steps, and files it once however many nights find it red.
+#[test]
+fn train_nightly_red_files_one_todo_naming_the_failing_steps() {
+    let t = Train::new("nightly-red");
+    let data = t.scratch.join("data");
+    std::fs::create_dir_all(&data).expect("a data root");
+    let env = release_env(&a_release_deployment(&data));
+    let env: Vec<(&str, &str)> = env.iter().map(|(k, v)| (*k, v.as_str())).collect();
+    t.master_moves(&[("broken", "x\n")]);
+    let out = t.train_with(&["nightly"], &env);
+    assert!(!out.status.success(), "a red night fails");
+    assert_eq!(
+        t.full_runs().len(),
+        2,
+        "the live half ran beside a red tree half"
+    );
+    let tree = t.git(&["rev-parse", "--short=8", "origin/master^{tree}"]);
+    assert_eq!(
+        Train::nightly_todos(&data),
+        BTreeSet::from([format!("nightly{tree}")])
+    );
+    assert!(
+        text(&out.stderr).contains(&format!("filed todo:suzatary/nightly{tree} for stub")),
+        "{}",
+        text(&out.stderr)
+    );
+    let again = t.train_with(&["nightly"], &env);
+    assert!(!again.status.success());
+    assert_eq!(Train::nightly_todos(&data).len(), 1, "filed once");
+}
+
+/// The nightly gate waits for a running train and runs once its lock is free, where a train
+/// refuses to start beside another and names what holds the lock.
+#[test]
+fn train_nightly_waits_for_a_running_train() {
+    let t = Train::new("nightly-waits");
+    let data = t.scratch.join("data");
+    std::fs::create_dir_all(&data).expect("a data root");
+    let env = release_env(&a_release_deployment(&data));
+    let env: Vec<(&str, &str)> = env.iter().map(|(k, v)| (*k, v.as_str())).collect();
+    t.master_moves(&[("a.txt", "a\n")]);
+    let lock = t.work().join(".git/train/lock");
+    std::fs::create_dir_all(lock.parent().expect("its directory")).expect("the train's state");
+    write(&t.work(), ".git/train/lock.holder", "build, pid 1\n");
+    let mut holder = Command::new("flock")
+        .arg(&lock)
+        .args(["sleep", "3"])
+        .spawn()
+        .expect("flock runs");
+    std::thread::sleep(std::time::Duration::from_millis(300));
+    let refused = t.train(&["gate"]);
+    assert!(!refused.status.success());
+    assert!(
+        text(&refused.stderr).contains("(build, pid 1)"),
+        "{}",
+        text(&refused.stderr)
+    );
+    let out = t.train_with(&["nightly"], &env);
+    holder.wait().expect("the holder ends");
+    assert!(out.status.success(), "{}", text(&out.stderr));
+    assert!(
+        text(&out.stderr).contains("the nightly gate waits for it"),
+        "{}",
+        text(&out.stderr)
+    );
+    assert_eq!(t.full_runs().len(), 2);
+}
+
+/// A red job whose gate printed no "failing steps' last lines" block (an e2e job stopped before its
+/// summary) is reported by its failed scenes and the lines under them, its colours removed, so the
+/// operator never fetches the job's log.
+#[test]
+fn train_gate_github_reports_a_red_scene_without_a_block() {
+    let t = Train::new("github-e2e-red");
+    t.on_github();
+    t.pr(1, "the first", &[("a.txt", "a\n")]);
+    assert!(t.train(&["build", "1"]).status.success());
+    let (hold, _said) = holding(&t, "hold-live");
+    let hold_path = hold.to_str().expect("a UTF-8 path");
+    let gating = t
+        .command(
+            &["gate", "--remote", "github"],
+            &[
+                ("GH_RUN", "e2e-red"),
+                ("GATE_HOLD_LIVE", hold_path),
+                ("SUZATARY_TRAIN_POLL", "1"),
+            ],
+        )
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::piped())
+        .spawn()
+        .expect("train.sh starts");
+    let red = ends_within_twenty_seconds(gating);
+    let stderr = text(&red.stderr);
+    assert!(!red.status.success(), "{stderr}");
+    let report = &stderr[stderr.find("tree half: failed").expect("the report")..];
+    assert!(
+        report.contains(
+            "--- job gate (e2e-1)\n✖ destinations: the inbox opens (240100ms)\n  Error: waited 240000ms for the inbox\n    last: it stayed false\n"
+        ) && !report.contains("✔ list")
+            && !report.contains("TestContext")
+            && !report.contains('\u{1b}'),
+        "the report names the failed scene and why: {report}"
+    );
+    live_half_stopped(&hold);
 }

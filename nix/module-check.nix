@@ -171,6 +171,27 @@ let
         "suzatary-vault.service"
         "suzatary-vault.timer"
       ]);
+    "a nightly gate adds its timer, at 01:43 and never caught up in the day" =
+      let
+        nightly = { services.suzatary.nightlyGate.checkout = "/home/ada/src/suzatary"; };
+        timer = (host nightly).config.systemd.user.timers.suzatary-nightly-gate.timerConfig;
+      in
+      unitsOf nightly == lib.sort lib.lessThan (core ++ [ "suzatary-nightly-gate.timer" ])
+      && timer.OnCalendar == "*-*-* 01:43:00" && timer.Persistent == false;
+    "the nightly gate runs the checkout's train in the triage shell, naming the data tree and no roots" =
+      let
+        unit = (host { services.suzatary.nightlyGate.checkout = "/home/ada/src/suzatary"; })
+          .config.systemd.user.services.suzatary-nightly-gate;
+      in
+      unit.serviceConfig.WorkingDirectory == "/home/ada/src/suzatary"
+      && lib.hasSuffix "/bin/nix develop .#triage --command scripts/train.sh nightly" (execOf unit)
+      && lib.filterAttrs (name: _: lib.hasPrefix "SUZATARY_" name) unit.environment
+        == { SUZATARY_INSTANCE = "${userRepo}/instance.toml"; }
+      && unit.serviceConfig.PrivateTmp && unit.serviceConfig.UMask == "0077";
+    "the nightly gate's checkout refuses a relative path" =
+      !(builtins.tryEval (builtins.deepSeq
+        (host { services.suzatary.nightlyGate.checkout = "src/suzatary"; }).config.services.suzatary.nightlyGate.checkout
+        true)).success;
     "a declared vault snapshots daily, at a minute no triage tick lands on" =
       (host { services.suzatary.vault.enable = true; })
         .config.systemd.user.timers.suzatary-vault.timerConfig.OnCalendar == "*-*-* 04:17:00";

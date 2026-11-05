@@ -11,17 +11,19 @@
 #                                    version; then its todos recorded done, then publish it
 #   scripts/train.sh record [<rev>]  the todos the release at <rev> (master) completed, recorded
 #                                    done where they are not yet: a land's last step, again
+#   scripts/train.sh nightly         both halves of the gate, full, on origin/master; a red one
+#                                    files a todo on the project chain
 #   scripts/train.sh publish [--skip <sha>]... [--admit <path>]... [<rev>]
 #                                    core's master += one commit per landed commit up to <rev>
 #                                    (master's tip), each the public tree of its source; a
 #                                    skipped commit is named by the next one's `Skipped:` trailer,
 #                                    an admitted path by its row's `Admitted:` trailer
 #
-# `--remote <codespace>` runs the tree half in that Codespace; `--remote github` runs it on core's
-# GitHub runners. The box keeps the live half, which reads the owner's data.
+# `--remote github` runs the tree half on core's GitHub runners. The box keeps the live half,
+# which reads the owner's data.
 #
 # Run inside `nix develop .#triage`, from a clean checkout. It reaches GitHub through `gh`; it
-# never creates or deletes a Codespace, never promotes and never touches the data repository.
+# never promotes and never touches the data repository.
 #
 # Publication: core's master is a table, one commit per landed first-parent commit, each the
 # public tree of its `Source:`. It only climbs (never rewritten), and a tree is published only
@@ -56,6 +58,9 @@
 # branch's workflow. The box waits for that run so Nix can substitute its builds. Only a gate's own
 # red makes a tree red (a cancelled or lost run is no verdict), and a red half stops the other.
 #
+# `nightly` gates origin/master in both halves with `merge-gate.sh --nightly`, waiting for a running
+# train and holding its lock; a red night files one todo per tree on the project chain.
+#
 # Test seams: SUZATARY_TRAIN_GATE (another gate script; its verdicts are keyed by its own bytes,
 # so a stub's green never lands a train), SUZATARY_TRAIN_GH, SUZATARY_TRAIN_POLL (seconds, 60),
 # SUZATARY_TRAIN_PUBLIC, SUZATARY_TRAIN_CACHE_TIMEOUT (seconds, 12000), SUZATARY_TRAIN_BIN.
@@ -67,7 +72,7 @@ die() {
 }
 say() { printf 'train: %s\n' "$*" >&2; }
 usage() {
-  echo "usage: scripts/train.sh build <pr>... | gate [--full] [--remote <codespace> | --remote github] | bisect [--remote <codespace> | --remote github] | land | record [<rev>] | publish [--skip <sha>]... [--admit <path>]... [<rev>]" >&2
+  echo "usage: scripts/train.sh build <pr>... | gate [--full] [--remote github] | bisect [--remote github] | land | record [<rev>] | nightly | publish [--skip <sha>]... [--admit <path>]... [<rev>]" >&2
   exit 64
 }
 
@@ -78,16 +83,21 @@ cd "$root"
 # In .git, never in the tree.
 state="$(git rev-parse --path-format=absolute --git-common-dir)/train"
 mkdir -p "$state"
-# One train at a time: runs share this checkout, its verdict table and the Codespace.
-exec 9>"$state/lock"
-flock -n 9 || die "another scripts/train.sh is running in this checkout; wait for it to finish."
+# One train at a time: runs share this checkout, its verdict table and its worktree. The nightly
+# gate waits for a running train instead of refusing.
+exec 9>>"$state/lock"
+if [[ "${1:-}" == nightly ]]; then
+  flock -n 9 || { say "a train is running here: the nightly gate waits for it"; flock 9; }
+else
+  flock -n 9 || die "another scripts/train.sh is running in this checkout ($(cat "$state/lock.holder" 2>/dev/null)); wait for it to finish."
+fi
+echo "${1:-}, pid $$, since $(date -u +%FT%TZ)" >"$state/lock.holder"
 
 # What the exit trap undoes.
-return_to="" codespace="" ref="" keeper="" there="" live="" cloud="" gate_branch="" gate_pushed=""
+return_to="" there="" live="" cloud="" gate_branch="" gate_pushed=""
 finish() {
   [[ -z "$live" ]] || live_stop
   [[ -z "$there" ]] || { kill "$there" 2>/dev/null; wait "$there" 2>/dev/null; } || true
-  [[ -z "$ref" ]] || remote_close
   [[ -z "$gate_branch" ]] || cloud_close
   worktree_close
   [[ -z "$return_to" ]] || git checkout --quiet "$return_to"
@@ -448,10 +458,13 @@ build() {
 }
 
 halves=(tree live)
-# `gate --full`, or a day without a fully passed tree landing.
-full=0
+# `gate --full`, or `nightly`, which also runs the live web suite whole.
+full=0 nightly=0
 half_flag() { case "$1" in tree) echo --no-live ;; live) echo --only-live ;; esac; }
-gate_flags() { ((!full)) || printf -- '--full '; half_flag "$1"; }
+gate_flags() {
+  if ((nightly)); then printf -- '--nightly '; elif ((full)); then printf -- '--full '; fi
+  half_flag "$1"
+}
 
 # verdicts <half> <commit> [full]: the verdicts file. A stub gate's are keyed by its bytes.
 verdicts() {
@@ -521,10 +534,6 @@ worktree_close() {
 # Gate <half> of <commit> and record the verdict: 0 green, 1 red, 2 no verdict.
 run_half() {
   local half="$1" commit="$2" code=0
-  if [[ "$half" == tree && -n "$codespace" ]]; then
-    run_remote "$half" "$commit"
-    return
-  fi
   if [[ "$half" == tree && -n "$cloud" ]]; then
     cloud_half "$commit"
     return
@@ -576,127 +585,13 @@ gate_environment() {
   fi
 }
 
-# `--remote <codespace>`, `--remote github`, or nothing.
+# `--remote github`, or nothing.
 remote_opt() {
   case "$#/${1:-}/${2:-}" in
     0//) ;;
     2/--remote/github) cloud=github ;;
-    2/--remote/?*) codespace="$2" ;;
     *) usage ;;
   esac
-}
-
-# Each commit goes to the Codespace as a git bundle over ssh, so it needs no credentials (one with
-# a token could push). Kept awake until remote_close.
-remote_open() {
-  [[ -n "$codespace" && -z "$ref" ]] || return 0
-  ref="bundle"
-  say "the tree half runs in $codespace, each commit sent as a bundle (gh codespace ssh starts it if it is stopped)"
-  # The idle timeout is fixed at creation; scripts/gate-codespace.sh makes one of 10 minutes.
-  local idle
-  idle="$("$gh" codespace view -c "$codespace" --json idleTimeoutMinutes -q .idleTimeoutMinutes 2>/dev/null)" || idle=""
-  if [[ "$idle" =~ ^[0-9]+$ ]] && ((idle > 10)); then
-    say "$codespace stops itself after $idle idle minutes, not 10: scripts/gate-codespace.sh makes one that does"
-  fi
-  keep_awake </dev/null >/dev/null 2>&1 9>&- &
-  keeper=$!
-}
-
-# Holds an interactive pty session open (only those count as activity), reopened when it drops.
-# It holds none of the train's files (its output, the lock).
-#
-# It never outlives the train: a train killed without its trap would leave the Codespace up and
-# billed for good. So it checks for the train every few seconds and stops the Codespace when it is
-# gone (a TERM from remote_close stops nothing), and each session ends itself after an hour.
-keep_awake() {
-  local session kept="" train=$$
-  session="$(printf '%q codespace ssh -c %q -- -t %q' "$gh" "$codespace" 'for minute in $(seq 60); do date; sleep 60; done')"
-  # Children are waited on in the background, so a TERM is heard at once.
-  trap 'kill "$kept" 2>/dev/null; wait "$kept" 2>/dev/null; exit 0' TERM
-  while kill -0 "$train" 2>/dev/null; do
-    script -qec "$session" /dev/null </dev/null >/dev/null 2>&1 &
-    kept=$!
-    while kill -0 "$kept" 2>/dev/null; do
-      kill -0 "$train" 2>/dev/null || { kill "$kept" 2>/dev/null; break 2; }
-      sleep 5 &
-      wait $! || true
-    done
-    wait "$kept" || true
-    sleep "${SUZATARY_TRAIN_POLL:-60}" &
-    wait $! || true
-  done
-  "$gh" codespace stop -c "$codespace" >/dev/null 2>&1 || true
-}
-
-remote_close() {
-  ref=""
-  { kill "$keeper" && wait "$keeper"; } 2>/dev/null || true
-  keeper=""
-  "$gh" codespace stop -c "$codespace" >/dev/null || say "could not stop $codespace: stop it by hand (gh codespace stop -c $codespace)"
-}
-
-# remote_bundle <commit> <out>: a bundle of <commit> over the Codespace's HEAD (whole if the box
-# does not know that HEAD; nothing if it is <commit>).
-remote_bundle() {
-  local commit="$1" out="$2" base
-  base="$("$gh" codespace ssh -c "$codespace" -- 'git -C "${CODESPACE_VSCODE_FOLDER:-/workspaces/Suzatary}" rev-parse HEAD' 2>/dev/null | tail -1)" || base=""
-  [[ "$base" != "$commit" ]] || return 0
-  git branch --quiet --force train-bundle "$commit"
-  if [[ "$base" =~ ^[0-9a-f]{40}$ ]] && git merge-base --is-ancestor "$base" "$commit" 2>/dev/null; then
-    git bundle create --quiet "$out" "$base..train-bundle"
-  else
-    git bundle create --quiet "$out" train-bundle
-  fi
-  git branch --quiet -D train-bundle
-}
-
-# The tree half of <commit> in the Codespace. The gate runs detached and the box polls its log, so
-# a dropped ssh costs one poll, not the run. The exit code comes back as a log line; a gate gone
-# without one is no verdict. The polls' short ssh commands do not count as activity; keep_awake's
-# session does.
-run_remote() {
-  local half="$1" commit="$2" log code gate bundle chunk errs inner misses=0
-  log="$(log_of "$half" "$commit")"
-  gate="nix develop .#triage -c scripts/merge-gate.sh"
-  [[ -z "${SUZATARY_TRAIN_GATE:-}" ]] || gate="$(printf %q "$SUZATARY_TRAIN_GATE")"
-  inner="$gate $(gate_flags "$half"); code=\$?; echo train-gate-exit: \$code"
-  bundle="$(mktemp)" chunk="$(mktemp)" errs="$(mktemp)"
-  remote_bundle "$commit" "$bundle"
-  : >"$log"
-  "$gh" codespace ssh -c "$codespace" -- "set -e
-    export PATH=/nix/var/nix/profiles/default/bin:\$PATH
-    cd \"\${CODESPACE_VSCODE_FOLDER:-/workspaces/Suzatary}\"
-    cat > .git/train.bundle
-    [ ! -s .git/train.bundle ] || git fetch --quiet .git/train.bundle train-bundle
-    git checkout --quiet --force --detach $commit
-    git clean --quiet -fd
-    setsid nohup bash -c $(printf %q "$inner") >.git/train-gate.log 2>&1 </dev/null &
-    echo \$! >.git/train-gate.pid" <"$bundle" >"$errs" 2>&1 \
-    || { cat "$errs" >>"$log"; misses=10; }
-  rm -f "$bundle"
-  # Liveness is read before the log, so a gate ending between the two has its last line read.
-  # The polls end with the train: a poll's ssh starts a stopped Codespace.
-  while ((misses < 10)) && kill -0 $$ 2>/dev/null && ! grep -q '^train-gate-exit:' "$log"; do
-    sleep "${SUZATARY_TRAIN_POLL:-60}"
-    if "$gh" codespace ssh -c "$codespace" -- "cd \"\${CODESPACE_VSCODE_FOLDER:-/workspaces/Suzatary}\"
-      kill -0 \$(cat .git/train-gate.pid) 2>/dev/null && alive=1 || alive=0
-      tail -c +$(($(stat -c %s "$log") + 1)) .git/train-gate.log
-      [ \$alive = 1 ] || echo train-gate-gone >&2" >"$chunk" 2>"$errs"; then
-      cat "$chunk" >>"$log"
-      misses=0
-      if grep -q train-gate-gone "$errs" && ! grep -q '^train-gate-exit:' "$log"; then misses=10; fi
-    else
-      misses=$((misses + 1))
-    fi
-  done
-  rm -f "$chunk" "$errs"
-  code="$(sed -n 's/^train-gate-exit: \([0-9]*\)$/\1/p' "$log" | tail -1)"
-  if [[ -z "$code" ]]; then
-    say "the $half half in $codespace did not finish, so it says nothing of the tree; its last lines ($log):"
-    tail -n 20 "$log" >&2
-    return 2
-  fi
-  record "$half" "$commit" "$code"
 }
 
 # The tree half's steps that read this private repository run on the box: before the push, and
@@ -875,9 +770,6 @@ train_commit() {
   git rev-parse --verify --quiet "train^{commit}" || die "there is no train; scripts/train.sh build <pr>... first."
 }
 
-# When a fully passed tree last landed, in seconds since the epoch.
-full_at="$state/full-at"
-
 # Monitor mode makes its pid a process group, so live_stop reaches every process by that pid,
 # never by a pattern, which could match the caller's shell.
 live_start() {
@@ -898,10 +790,10 @@ live_stop() {
   worktree_close
 }
 
-# beside <commit> <undo>: the live half here beside the background tree half ($there), until both
-# end or one ends red, which stops the other at once (<undo> lets the tree half's machine go).
+# beside <commit>: the live half here beside the background tree half ($there), until both end or
+# one ends red, which stops the other at once.
 beside() {
-  local commit="$1" undo="$2" ended code=0
+  local commit="$1" ended code=0
   live_start "$commit"
   wait -n -p ended "$there" "$live" || code=$?
   if [[ "$ended" == "$there" ]]; then
@@ -920,7 +812,6 @@ beside() {
       kill "$there" 2>/dev/null || true
       wait "$there" 2>/dev/null || true
       there=""
-      "$undo"
     else
       wait "$there" || true
       there=""
@@ -928,8 +819,7 @@ beside() {
   fi
 }
 
-# Halves side by side when the tree half is remote, in sequence here. The Codespace is let go as
-# soon as its half is done: an idle machine is billed.
+# Halves side by side when the tree half is remote, in sequence here.
 gate() {
   gate_environment gate "$@"
   if [[ "${1:-}" == --full ]]; then full=1 && shift; fi
@@ -937,17 +827,8 @@ gate() {
   sync
   local commit
   commit="$(train_commit)"
-  if ((!full && $(date +%s) - $(cat "$full_at" 2>/dev/null || echo 0) >= 86400)); then
-    full=1 && say "no tree that passed a full gate has landed in the last day, so this gate runs full"
-  fi
-  remote_open
   local code=0
-  if [[ -n "$codespace" ]]; then
-    { run_half tree "$commit" || code=$?; remote_close; exit "$code"; } &
-    there=$!
-    beside "$commit" remote_close
-    ref="" keeper=""
-  elif [[ -n "$cloud" ]]; then
+  if [[ -n "$cloud" ]]; then
     # The box's steps first, so the live half's deploy-build finds their builds in the store.
     local pushed
     pushed="$(cloud_push "$commit")" || code=$?
@@ -957,7 +838,7 @@ gate() {
       if ((code == 0)); then
         cloud_wait "$commit" "$pushed" &
         there=$!
-        beside "$commit" :
+        beside "$commit"
       fi
       cloud_close
     fi
@@ -973,24 +854,29 @@ gate() {
       run_half live "$commit" || true
     fi
   fi
-  # Until a fully passed tree lands, every gate is full.
-  if ((full)) && [[ "$(verdict tree "$commit" full)/$(verdict live "$commit" full)" != ok/ok ]]; then rm -f "$full_at"; fi
   report "$commit"
 }
 
 # Per `--- job <name>` section of a red half's <log>: the gate's "failing steps' last lines"
-# block, else its last 20 lines naming an error.
+# block, else its last 20 lines naming an error, each failed test (`✖`, `not ok`) with its
+# `Error`, `waited` and `last:` lines, once each and uncoloured.
 failing_lines() {
   awk '
     function flush(  i) {
       if (!block) for (i = (n > 20 ? n - 19 : 1); i <= n; i++) print errors[i]
       n = 0
+      delete seen
     }
-    /^--- job / { flush(); block = inside = 0; print; next }
+    function keep(line) { if (!(line in seen)) { seen[line]; errors[++n] = line } }
+    { gsub(/\033\[[0-9;]*m/, "") }
+    /^--- job / { flush(); block = inside = under = 0; print; next }
     /^==> the failing steps. last lines$/ { block = inside = 1; print; next }
-    inside && /^(size: |free after the gate: |train-gate-exit: |##\[)/ { inside = 0 }
+    inside && /^(size: |free after the gate: |##\[)/ { inside = 0 }
     inside { print; next }
-    /FAILED|panicked|^error|not ok|✖|^##\[error\]/ { errors[++n] = $0 }
+    /✖|not ok/ { keep($0); under = 6; next }
+    under > 0 && /Error|waited|last:/ { keep($0); under--; next }
+    under > 0 && !/^[[:space:]]/ { under = 0 }
+    /FAILED|panicked|^error|^##\[error\]/ { keep($0) }
     END { flush() }' "$1"
 }
 
@@ -1046,7 +932,6 @@ bisect() {
     seen="$(verdict "$half" "$commit")"
     if [[ "$seen" == unknown ]]; then
       say "probe: every merge, through #$(pr_of "$commit"), without the release on top"
-      [[ "$half" != tree ]] || remote_open
       run_half "$half" "$commit" || true
       seen="$(verdict "$half" "$commit")"
     fi
@@ -1060,7 +945,6 @@ bisect() {
   fi
   while ((1 << probes < hi)); do probes=$((probes + 1)); done
   say "bisecting ${hi} merges over the $half half: at most ${probes} probes, each that half of the merge gate (a prefix gated before is read from the table)"
-  [[ "$half" != tree ]] || remote_open
   while ((hi - lo > 1)); do
     mid=$(((lo + hi) / 2))
     commit="${merges[mid - 1]}"
@@ -1090,6 +974,55 @@ bisect() {
     fi
   done
   printf 'next: scripts/train.sh build %s, then gate\n' "${prs[*]:-}"
+}
+
+# Both halves run whatever the first says, so one night names every red step.
+nightly_gate() {
+  (($# == 0)) || usage
+  gate_environment nightly
+  full=1 nightly=1
+  sync
+  local commit h code failed=() unknown=()
+  commit="$(git rev-parse --verify origin/master)"
+  for h in "${halves[@]}"; do
+    code=0
+    run_half "$h" "$commit" || code=$?
+    case "$code" in
+      0) ;;
+      1) failed+=("$h") ;;
+      *) unknown+=("$h") ;;
+    esac
+  done
+  code=0
+  report_nightly "$commit" "${failed[@]}" || code=$?
+  ((${#unknown[@]} == 0)) || die "the ${unknown[*]} half gave no verdict on origin/master ${commit:0:12}; the logs are in $state/logs/."
+  return "$code"
+}
+
+# The failing steps of <commit>'s red halves, from the gate's summary rows, filed once per tree.
+report_nightly() {
+  local commit="$1" h steps=() logs=() id
+  shift
+  for h in "${halves[@]}"; do say "$h half: $(verdict "$h" "$commit" full)"; done
+  (($#)) || { say "the nightly gate passed origin/master ${commit:0:12}"; return 0; }
+  for h; do
+    logs+=(".git/train/logs/${h}-$(git rev-parse "$commit^{tree}").log")
+    mapfile -t -O "${#steps[@]}" steps < <(sed -n 's/^\([a-z][a-z0-9-]*\) \{1,\}FAILED.*/\1/p' "$(log_of "$h" "$commit")" | awk '!seen[$0]++')
+  done
+  ((${#steps[@]})) || steps=("$@")
+  id="nightly$(git rev-parse --short=8 "$commit^{tree}")"
+  resolve_app origin/master
+  if "$app_bin" todo show --chain suzatary "$id" >/dev/null 2>&1; then
+    say "red: $id already names this tree's failing steps on the project chain"
+  else
+    "$app_bin" todo add --chain suzatary --actor assistant --kind suzateryTodo --priority 55 "$id" \
+      --body "The nightly gate is red on master ${commit:0:12}: ${steps[*]}." \
+      --detail "The gate's logs are in ${logs[*]}." \
+      --rationale "A step red on master either let a broken change land or no longer reads the data, and every later train inherits it." >&2 \
+      || die "the nightly gate is red (${steps[*]}), and the todo naming it could not be filed (above). The logs are in $state/logs/."
+    say "red: filed todo:suzatary/$id for ${steps[*]}"
+  fi
+  return 1
 }
 
 # HEAD's release version, once the chain with its todos done reads at least it and origin has no
@@ -1200,7 +1133,6 @@ land() {
   local landed
   landed="$(git rev-parse HEAD)"
   printf 'landed: master is %s%s\n' "$landed" "${version:+, tagged v$version}"
-  [[ "$(verdict tree HEAD full)/$(verdict live HEAD full)" != ok/ok ]] || date +%s >"$full_at"
   # Recorded only once origin holds the release; a failure still lets the publication run.
   local recorded=0
   if [[ -n "$version" ]]; then
@@ -1484,6 +1416,7 @@ case "${1:-}" in
   bisect) shift && bisect "$@" ;;
   land) shift && land "$@" ;;
   record) shift && record_done "$@" ;;
+  nightly) shift && nightly_gate "$@" ;;
   publish) shift && sync && publish "$@" ;;
   *) usage ;;
 esac

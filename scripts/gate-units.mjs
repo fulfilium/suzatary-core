@@ -7,6 +7,11 @@
 //   node scripts/gate-units.mjs files <metafile.json> <tree> <entries> --scope <dir>... [--shared [<entry>=]<path>...] [--base <path>...]
 //       One unit per entry point, reading what its imports reach and each --shared path
 //       (`<entry>=<path>` for that entry alone).
+//   node scripts/gate-units.mjs scenes <metafile.json> <tree> <entries> --app <app-metafile> --static <metafile> [--later <path>...] (and files' flags)
+//       As `files`, each scene also skipping what a page runs only once it fetches it: the
+//       inputs of the app's dynamically loaded chunks, and the --later paths.
+//   node scripts/gate-units.mjs narrow <skips-file> <reads-file>
+//       The skips a scene keeps once it fetched the paths <reads-file> names.
 //
 // Any failure, an import under a --base path among them, exits nonzero, and the step runs whole.
 import { readFileSync } from "node:fs";
@@ -53,7 +58,7 @@ const crates = (metadataFile, root, treeFile, rest) => {
   }
 };
 
-const files = (metafile, treeFile, entries, rest) => {
+const units = (metafile, treeFile, entries, rest) => {
   const { scope = [], shared = [], base = [] } = flags(rest);
   const inputs = JSON.parse(readFileSync(metafile, "utf8")).inputs;
   const tree = treeOf(treeFile);
@@ -61,7 +66,7 @@ const files = (metafile, treeFile, entries, rest) => {
   const generated = "web/src/wire/generated";
   const roots = Object.keys(inputs).filter(p => dirname(p) === entries && p.endsWith(".test.ts"));
   if (roots.length === 0) fail(`no entry under ${entries} in ${metafile}`);
-  for (const root of roots.sort()) {
+  return roots.sort().map(root => {
     const closure = new Set([root]);
     const todo = [root];
     while (todo.length > 0) {
@@ -77,12 +82,49 @@ const files = (metafile, treeFile, entries, rest) => {
     });
     const reads = [...closure, ...own, ...([...closure].some(p => under(p, generated)) ? ["web/src/wire"] : [])];
     const skips = tree.filter(p => scope.some(s => under(p, s)) && !reads.some(r => under(p, r)));
-    console.log(`${root}\t${[...base, ...skips].join(" ")}`);
+    return { root, closure, skips: [...base, ...skips] };
+  });
+};
+
+const files = (metafile, treeFile, entries, rest) => {
+  for (const { root, skips } of units(metafile, treeFile, entries, rest)) console.log(`${root}\t${skips.join(" ")}`);
+};
+
+// A page runs a dynamically loaded chunk only once it fetched it, so its inputs, but those the
+// --static bundles read, are skipped until `narrow` names them.
+const scenes = (metafile, treeFile, entries, rest) => {
+  const { app = [], static: fixed = [], later = [] } = flags(rest);
+  if (app.length !== 1 || fixed.length !== 1) fail("scenes takes --app <metafile> and --static <metafile>");
+  const outputs = JSON.parse(readFileSync(app[0], "utf8")).outputs;
+  const always = new Set(Object.keys(JSON.parse(readFileSync(fixed[0], "utf8")).inputs));
+  const main = Object.keys(outputs).find(p => /(^|\/)app\.js$/.test(p));
+  if (main === undefined) fail(`no app.js among the outputs of ${app[0]}`);
+  const loaded = new Set([main]);
+  const todo = [main];
+  while (todo.length > 0) {
+    for (const { path, kind } of outputs[todo.pop()].imports) {
+      if (kind === "import-statement" && outputs[path] !== undefined && !loaded.has(path)) { loaded.add(path); todo.push(path); }
+    }
   }
+  const dynamic = Object.entries(outputs).filter(([path]) => path.endsWith(".js") && !loaded.has(path))
+    .flatMap(([, out]) => Object.keys(out.inputs)).filter(path => !always.has(path));
+  const tree = treeOf(treeFile);
+  const fetched = tree.filter(p => [...dynamic, ...later].some(d => under(p, d)));
+  for (const { root, closure, skips } of units(metafile, treeFile, entries, rest)) {
+    console.log(`${root}\t${[...new Set([...skips, ...fetched.filter(p => !closure.has(p))])].join(" ")}`);
+  }
+};
+
+const narrow = (skipsFile, readsFile) => {
+  const reads = readFileSync(readsFile, "utf8").split("\n").filter(l => l !== "");
+  const skips = readFileSync(skipsFile, "utf8").split(/\s+/).filter(s => s !== "");
+  console.log(skips.filter(s => !reads.some(r => under(s, r))).join(" "));
 };
 
 switch (mode) {
   case "crates": crates(args[0], args[1], args[2], args.slice(3)); break;
   case "files": files(args[0], args[1], args[2], args.slice(3)); break;
-  default: fail("usage: gate-units.mjs crates <metadata> <root> <tree> [--base <path>...] [<package>=<path>]... | files <metafile> <tree> <entries> --scope <dir>... [--shared [<entry>=]<path>...] [--base <path>...]");
+  case "scenes": scenes(args[0], args[1], args[2], args.slice(3)); break;
+  case "narrow": narrow(args[0], args[1]); break;
+  default: fail("usage: gate-units.mjs crates <metadata> <root> <tree> [--base <path>...] [<package>=<path>]... | files <metafile> <tree> <entries> --scope <dir>... [--shared [<entry>=]<path>...] [--base <path>...] | scenes <metafile> <tree> <entries> --app <metafile> --static <metafile> [--later <path>...] (and files' flags) | narrow <skips> <reads>");
 }

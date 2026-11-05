@@ -26,10 +26,10 @@
 import assert from "node:assert/strict";
 import { after } from "node:test";
 import { test } from "node:test";
-import { mkdirSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { execFileSync } from "node:child_process";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { basename, join, normalize } from "node:path";
 
 import type { Browser, Journal, Page } from "./cdp";
 import { WAIT_MS, launch } from "./cdp";
@@ -273,7 +273,11 @@ export function pairAtTheBox(): string {
   return code;
 }
 
-export async function suite(prefix: string, size: readonly [number, number] = PHONE): Promise<Suite> {
+/** What a file's scenes do to the servers: `Writes` trusts this browser's key on the writer's server first, which a
+ * file that only reads (the live smoke, against a server whose writer is nobody) does not ask for. */
+export type Reach = "Reads" | "Writes"
+
+export async function suite(prefix: string, size: readonly [number, number] = PHONE, reach: Reach = "Writes"): Promise<Suite> {
   mkdirSync(SHOTS, { recursive: true });
   // EVERY SERVER, BEFORE THE BROWSER. `open` waits too, but half the files
   // navigate straight to a hash without it (the chain, the gallery),
@@ -282,7 +286,9 @@ export async function suite(prefix: string, size: readonly [number, number] = PH
   // question for every scene in the file.
   await Promise.all([serving(BASE), serving(PROPOSED_BASE), serving(WRITE_BASE)]);
   const browser: Browser = await launch();
+  let failed = 0;
   after(async () => {
+    if (failed === 0) recordReads(browser.fetched());
     await browser.close();
   });
   const page = browser.page;
@@ -290,7 +296,7 @@ export async function suite(prefix: string, size: readonly [number, number] = PH
   let journal: Promise<Journal> | null = null;
   // Once per browser, before any scene: its profile, and so its key, lives as long as the suite,
   // and every write the writer's box performs asks for a key it trusts.
-  let trusted: Promise<string> | null = trustThisDevice(page, WRITE_BASE);
+  let trusted: Promise<string> | null = reach === "Writes" ? trustThisDevice(page, WRITE_BASE) : null;
   await trusted;
   // Every scene runs under the box's Content-Security-Policy and must leave it unviolated: what a
   // page is refused is kept per tab and origin, and read after the scene.
@@ -317,6 +323,7 @@ export async function suite(prefix: string, size: readonly [number, number] = PH
           const refused = await violations();
           assert.deepEqual(refused, [], "the page's policy refused something it loads or runs");
         } catch (error: unknown) {
+          failed += 1;
           const path = join(SHOTS, `${prefix}-${slug(name)}.png`);
           try {
             const html = await page.evaluate<string>(`new XMLSerializer().serializeToString(document)`);
@@ -630,3 +637,30 @@ export const REPLICA_ROWS = `new Promise((ok, no) => {
   }
 })`
 
+
+/**
+ * What this file's scenes read beyond their imports, for the merge gate's key (`SUZATARY_E2E_READS`), written only when
+ * every scene passed. A script `web/dist` does not hold is another build's (the shell scene deploys one), so it reads
+ * every module.
+ */
+function recordReads(fetched: ReadonlySet<string>): void {
+  const dir = process.env["SUZATARY_E2E_READS"];
+  if (dir === undefined || dir === "") return;
+  const dist = "web/dist";
+  const reads = new Set<string>();
+  for (const path of fetched) {
+    // A build's files are served under `/b/<build>/` as well as at the root.
+    const file = path.replace(/^\/+/, "").replace(/^b\/[^/]+\//, "");
+    if (/^views(_bg\.wasm|\.js)$/.test(file)) {
+      reads.add("app/pages");
+      reads.add("app/viewtree");
+    } else if (file.endsWith(".js") && !existsSync(join(dist, file))) {
+      reads.add("web/src");
+    } else if (file.endsWith(".js") && existsSync(join(dist, `${file}.map`))) {
+      const map = JSON.parse(readFileSync(join(dist, `${file}.map`), "utf8")) as { sources: string[] };
+      for (const source of map.sources) reads.add(normalize(join(dist, source)));
+    }
+  }
+  mkdirSync(dir, { recursive: true });
+  writeFileSync(join(dir, basename(process.argv[1] ?? "", ".mjs").replace(/\.test$/, "")), [...reads].sort().join("\n") + "\n");
+}

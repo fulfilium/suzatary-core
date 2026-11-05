@@ -21,6 +21,7 @@
 #   nix develop .#triage -c scripts/merge-gate.sh --no-live     the tree half
 #   nix develop .#triage -c scripts/merge-gate.sh --only-live   the live half
 #   nix develop .#triage -c scripts/merge-gate.sh --full ...    every step and every unit, no pass read
+#   nix develop .#triage -c scripts/merge-gate.sh --nightly ... --full, and the live half's web suite whole
 #   nix develop .#triage -c scripts/merge-gate.sh --no-live --steps fmt,doc   those steps alone
 #   scripts/merge-gate.sh --list                                every step: half, lane, reads
 #
@@ -32,6 +33,7 @@
 # Where the graph cannot be read, the step runs whole.
 #
 # --full reads no pass and runs every step whole (SUZATARY_GUARD_FULL); its verdict is kept apart.
+# --nightly is --full with the live half's web suite whole (scripts/train.sh nightly).
 #
 # SUZATARY_GATE_RUN names a stub run in each step's place; its passes are keyed by its bytes.
 #
@@ -40,13 +42,14 @@
 set -uo pipefail
 
 usage() {
-  echo "usage: scripts/merge-gate.sh [--full] [--no-live | --only-live] [--steps <name>[,<name>...]] (in any order) | --list" >&2
+  echo "usage: scripts/merge-gate.sh [--full | --nightly] [--no-live | --only-live] [--steps <name>[,<name>...]] (in any order) | --list" >&2
   exit 64
 }
-halves=(tree live) list=0 full=0 half="" only="" given=$#
+halves=(tree live) list=0 full=0 nightly=0 half="" only="" given=$#
 while (($#)); do
   case "$1" in
     --full) ((!full)) || usage; full=1 ;;
+    --nightly) ((!full)) || usage; full=1 nightly=1 ;;
     --no-live | --only-live) [[ -z "$half" ]] || usage; half="$1" ;;
     --steps) [[ -z "$only" && -n "${2:-}" ]] || usage; only="$2"; shift ;;
     --list) list=1 ;;
@@ -193,6 +196,23 @@ heavy() {
   done
 }
 
+# The passes step <i> made: a kept path, or an observed unit's key and its reads file. An observed
+# unit that recorded nothing ran elsewhere (another part) and keeps nothing.
+passes() {
+  local i="$1" line unit at reads narrowed
+  while read -r line; do
+    if [[ "$line" == "observe "* ]]; then
+      read -r _ unit at <<<"$line"
+      reads="$SUZATARY_E2E_READS/$(basename "$unit" .test.ts)"
+      [[ -e "$reads" ]] || continue
+      narrowed="$(node scripts/gate-units.mjs narrow "$at" "$reads")" &&
+        echo "$(kept_at "${s_name[i]}" "$unit" "all-but:$narrowed") $reads"
+    else
+      echo "$line"
+    fi
+  done <<<"${todo_kept[i]}"
+}
+
 # Runs in its lane's shell so a step that exports (the resolvers) hands the value on. The heavy
 # lock's descriptor is not inherited by the step, so a process it leaves running holds nothing.
 run_step() {
@@ -215,6 +235,7 @@ run_step() {
   fi
   echo "==> $name (${s_lane[i]} lane)" >&2
   if [[ "${s_half[i]}" == tree ]]; then local -x SUZATARY_INSTANCE="$logs/no-data-tree/instance.toml"; fi
+  if [[ "${s_reads[i]}" == "$observed" ]]; then local -x SUZATARY_E2E_READS="$logs/reads-$name"; fi
   if [[ -n "${todo_units[i]:-}" ]]; then
     local -x SUZATARY_GATE_UNITS="${todo_units[i]}"
     of+=" ($(wc -w <<<"${todo_units[i]}") of $(wc -w <<<"${units[i]}") units)"
@@ -225,7 +246,7 @@ run_step() {
   [[ -z "${s_heavy[i]:-}" ]] || exec 7>&-
   printf '%-16s %s  %4ds%s\n' "$name" "$([ "$code" -eq 0 ] && echo ok || echo "FAILED ($code)")" "$took" "$of" >"$logs/$name.row"
   if [ "$code" -eq 0 ]; then
-    [[ -z "${todo_kept[i]:-}" ]] || echo "${todo_kept[i]}" >"$logs/$name.pass"
+    [[ -z "${todo_kept[i]:-}" ]] || passes "$i" >"$logs/$name.pass"
   else
     : >"$logs/$name.failed"
   fi
@@ -262,62 +283,6 @@ run_half() {
   run_lane "$1" quiet
 }
 
-# The Codespace's disk (CODESPACES=true, 32 GB) keeps the target between gates. The target is
-# cleared only when no unit in it is read again (a new compiler, dev/test profile or Rust flags).
-# Room is made in the order the next gate reuses least: unrooted store paths, then units no gate
-# read for 7, 3, 1 days (cargo-sweep by fingerprint atime), then the whole target.
-# Never sweep by size: `cargo sweep --maxsize` (0.8.0, `remove_older_until_fits`) keeps deleting
-# every newer unit that fits once one does not, including the newest set.
-# Sizes in GB: a warm gate needs `codespace_room` free; a gate whose locks moved (or with no
-# record of them) rebuilds the dependencies beside the old units and needs `codespace_cold_room`.
-codespace_room=9
-codespace_cold_room=15
-codespace_toolchain="app/target/.gate-toolchain"
-codespace_locks="app/target/.gate-locks"
-# The compiler, the dev and test profiles' settings (not their comments; crane builds the release
-# profiles) and the Rust flags.
-codespace_toolchain_now() {
-  { rustc -vV && cargo -V &&
-    awk '/^\[/ { profile = /^\[profile\.(dev|test)[].]/ } profile && !/^[[:space:]]*(#|$)/' app/Cargo.toml &&
-    { env | grep -E '^CARGO_[A-Z0-9_]*RUSTFLAGS=|^RUSTFLAGS=' || true; } | LC_ALL=C sort; } |
-    sha256sum | cut -c1-40
-}
-codespace_locks_now() { cat app/Cargo.lock flake.lock | sha256sum | cut -c1-40; }
-codespace_make_room() {
-  local toolchain days room=$codespace_room
-  toolchain="$(codespace_toolchain_now)"
-  if [[ -e "$codespace_toolchain" && "$(cat "$codespace_toolchain")" != "$toolchain" ]]; then
-    echo "==> the compiler, a dev or test profile or the Rust flags moved since the target was built, so no unit in it is read again: clearing it" >&2
-    rm -rf app/target
-  fi
-  if [[ "$(cat "$codespace_locks" 2>/dev/null)" != "$(codespace_locks_now)" ]]; then
-    room=$codespace_cold_room
-    echo "==> the locks moved since the target was built: this gate builds the dependencies again beside it, and needs $room GB" >&2
-  fi
-  # Nix never removes the scratch of builds killed with a stopped Codespace. No gate runs beside
-  # this one, so no build is live.
-  rm -rf app/target/debug/incremental
-  sudo -n find /nix/var/nix/builds -mindepth 1 -maxdepth 1 -mmin +60 -exec rm -rf {} +
-  if [ "$(free_gb)" -lt "$room" ]; then
-    echo "==> $(free_gb) GB free: collecting the Nix store's unrooted paths" >&2
-    nix-collect-garbage >/dev/null 2>&1
-  fi
-  for days in 7 3 1; do
-    if [[ ! -d app/target ]] || (($(free_gb) >= room)); then break; fi
-    echo "==> $(free_gb) GB free: sweeping the target's units no gate read in ${days}d" >&2
-    cargo sweep --time "$days" app >/dev/null
-  done
-  if [ "$(free_gb)" -lt "$room" ]; then
-    echo "==> $(free_gb) GB free: clearing app/target for a cold build" >&2
-    rm -rf app/target
-    if [ "$(free_gb)" -lt "$room" ]; then
-      echo "==> only $(free_gb) GB free with no target: not starting a gate that needs $room" >&2
-      exit 75
-    fi
-  fi
-  mkdir -p app/target && echo "$toolchain" >"$codespace_toolchain"
-}
-
 # shellcheck source=scripts/nix-out.sh
 . "$root/scripts/nix-out.sh"
 
@@ -335,17 +300,13 @@ if ((!list)) && [[ -z "${SUZATARY_GATE_RUN:-}" ]]; then
     echo "==> could not root the environment this gate runs in, so it collects nothing: not starting" >&2
     exit 75
   fi
-  if [ "${CODESPACES:-}" = true ]; then
-    codespace_make_room
-  else
-    # The box: a cold gate grows the disk by about 10 GB, and a full disk stops the triage pass.
-    if [ "$(free_gb)" -lt 16 ]; then
-      echo "==> $(free_gb) GB free: clearing app/target/debug for a cold build" >&2
-      rm -rf app/target/debug
-      if [ "$(free_gb)" -lt 12 ]; then
-        echo "==> only $(free_gb) GB free after clearing the debug target: not starting a cold gate that needs 12" >&2
-        exit 75
-      fi
+  # A cold gate grows the disk by about 10 GB, and a full disk stops the triage pass.
+  if [ "$(free_gb)" -lt 16 ]; then
+    echo "==> $(free_gb) GB free: clearing app/target/debug for a cold build" >&2
+    rm -rf app/target/debug
+    if [ "$(free_gb)" -lt 12 ]; then
+      echo "==> only $(free_gb) GB free after clearing the debug target: not starting a cold gate that needs 12" >&2
+      exit 75
     fi
   fi
 fi
@@ -374,6 +335,11 @@ declare -A unit_fallback=([crates]="all-but:${rust_base//,/ }" [files:web/test]=
 # naming it; `<test>=<path>` is read by that unit alone.
 declare -A unit_scopes=([web/test]="web/src web/test web/e2e" [web/e2e]="web/src web/test web/e2e")
 declare -A unit_shared=([web/test]="web/src/view/tokens.ts web/test/e2estores.test.ts=web/e2e" [web/e2e]="web/src web/e2e/typstbench.ts web/e2e/painter.test.ts=web/e2e/painterlaws.ts")
+# A scene's reads are observed: a page runs a dynamically loaded chunk, or the Rust pages' module
+# (`scene_later`), only once it fetched it, so a scene file's pass is keyed by its imports and
+# what its tabs fetched (web/e2e/harness.ts, SUZATARY_E2E_READS).
+observed=files:web/e2e
+scene_later=(app/pages app/viewtree)
 
 # The manifest goes right after the subcommand, never after a `--`, which would hand it to
 # clippy-driver instead of cargo.
@@ -534,7 +500,7 @@ changelog_entry() {
 step tree changelog       unkept  changelog_entry
 
 lane=live
-# The live tests are kept by the code that reads the data, not by the data; the daily full gate
+# The live tests are kept by the code that reads the data, not by the data; the nightly gate
 # reruns them. merge_gate.rs fails when a path their sources name is outside this list.
 live_reads=(CLAUDE.md app/Cargo.toml app/Cargo.lock app/conformance app/wit app/core app/io app/plugin app/bench
   app/plugin-ics/Cargo.toml app/plugin-ics/ics.schema app/plugin-fence/Cargo.toml app/wasm/Cargo.toml
@@ -549,15 +515,25 @@ fi
 step live live-all        $live_only cargo_app test -q --workspace --test all -- "${live_modules[@]/%/::}"
 # Unkept: the leak guard must read every tracked file, docs included.
 step live live-guards     unkept  cargo_app test -q --workspace --test guards
-# Kept by the web's reads, as the live pins are by the code; the full gate runs it daily.
+# A smoke per gate: the unit tests that read the live chain and the scenes over a copy of the data
+# tree; --nightly runs every unit test. merge_gate.rs fails when a unit test that reads the live
+# chain is not in `live_web_units`. The scenes read the server's code, so this is kept by all but
+# docs/, memory/, android/ and `cli_only`.
+live_web_units=(web/test/wasm.test.ts)
+live_scenes=(pages)
 # shellcheck disable=SC2329
-with_flake_wire() {
-  SUZATARY_WIRE_TS="$(nix_out suzatary-web-ts)" &&
-    SUZATARY_PRODROME_CONFORMANCE="$(nix_out suzatary-vector-json)" &&
-    export SUZATARY_WIRE_TS SUZATARY_PRODROME_CONFORMANCE &&
-    "$@"
-}
-step live web-live        $web    with_flake_wire scripts/web-test.sh
+web_live() (
+  instance="${SUZATARY_INSTANCE:-$root/instance.toml}"
+  web_inputs || exit
+  if ((nightly)); then
+    scripts/web-test.sh || exit
+  else
+    SUZATARY_GATE_UNITS="${live_web_units[*]}" scripts/web-test.sh || exit
+  fi
+  [[ -f "$instance" ]] || { echo "web-live: the scenes skipped: no instance file at $instance"; exit 0; }
+  scripts/build-web.sh >/dev/null && SUZATARY_E2E_LIVE="$instance" scripts/web-e2e.sh "${live_scenes[@]}"
+)
+step live web-live        all-but:android,docs,memory,$cli_only web_live
 lane=deploy
 # The deploy's build, done here so the deploy of this commit finds every output in the store (the
 # same `-source` path). The two steps after it run $SUZATARY_DEPLOY_BIN, each in a subshell, so a
@@ -584,7 +560,7 @@ public_check() (
 step live public-check    unkept  public_check
 
 # In the order they take the machine: the one with the most work behind it in its lane first.
-heavy build web-inputs public-tree clippy clippy-fixture doc live-all live-guards deploy-build
+heavy build web-inputs public-tree clippy clippy-fixture doc live-all live-guards web-live deploy-build
 
 ((list)) && exit 0
 
@@ -607,6 +583,22 @@ units_for() {
         node scripts/gate-units.mjs crates "$logs/metadata" "$root" "$logs/tree" \
           --base ${unit_base[crates]} -- "${crate_reads[@]}"
       ;;
+    files:web/e2e)
+      # The app's metafile names its dynamically loaded chunks; the other bundles every page loads.
+      esbuild web/e2e/*.test.ts --bundle --platform=node --format=esm --log-level=silent \
+        --external:./prodrome.js --external:./typst.js --metafile="$logs/web/e2e.meta" \
+        --outdir="$logs/web/e2e.bundle" >/dev/null 2>&1 &&
+        esbuild app=web/src/main.ts --bundle --splitting --format=esm --log-level=silent \
+          --external:./prodrome.js --external:./typst.js --external:./views.js --define:__DEV__=false \
+          --metafile="$logs/app.meta" --outdir="$logs/app.bundle" >/dev/null 2>&1 &&
+        esbuild web/src/boot.ts web/src/sw.ts web/src/typst/worker.ts web/src/prodrome/worker.ts --outbase=web/src \
+          --bundle --format=esm --log-level=silent --external:./prodrome.js --external:./typst.js \
+          --define:__DEV__=false --define:__PRELOAD__='[]' --define:__CHUNKS__='[]' \
+          --metafile="$logs/static.meta" --outdir="$logs/static.bundle" >/dev/null 2>&1 &&
+        node scripts/gate-units.mjs scenes "$logs/web/e2e.meta" "$logs/tree" web/e2e \
+          --app "$logs/app.meta" --static "$logs/static.meta" --later "${scene_later[@]}" \
+          --scope ${unit_scopes[web/e2e]} --shared ${unit_shared[web/e2e]} --base ${unit_base[files:web/e2e]}
+      ;;
     files:*)
       dir="${s_reads[i]#files:}"
       esbuild "$dir"/*.test.ts --bundle --platform=node --format=esm --log-level=silent \
@@ -621,7 +613,7 @@ units_for() {
 # Sets `kept`/`units` (all) and `todo_kept`/`todo_units` (those with no pass). An empty
 # `todo_units` means the step runs whole.
 plan_step() {
-  local i="$1" lines unit skips path n=0 todo=0 k specs=()
+  local i="$1" lines unit skips path n=0 todo=0 k specs=() at reads narrowed
   if [[ "${s_reads[i]}" == crates || "${s_reads[i]}" == files:* ]]; then
     if lines="$(units_for "$i")" && [[ -n "$lines" ]]; then
       while IFS=$'\t' read -r unit skips; do
@@ -635,6 +627,28 @@ plan_step() {
   kept[i]="" units[i]="" todo_kept[i]="" todo_units[i]=""
   for ((k = 0; k < ${#specs[@]}; k += 2)); do
     unit="${specs[k]}"
+    if [[ -n "$unit" && "${s_reads[i]}" == "$observed" ]]; then
+      # Kept under any set of reads the unit was seen to make.
+      at="$logs/observe-${s_name[i]}-${unit//\//%}.skips"
+      echo "${specs[k + 1]#all-but:}" >"$at"
+      path=""
+      if ((!full)); then
+        for reads in "$kept_dir/${s_name[i]}/${unit//\//%}/reads"/*; do
+          [[ -e "$reads" ]] || continue
+          narrowed="$(node scripts/gate-units.mjs narrow "$at" "$reads")" &&
+            path="$(kept_at "${s_name[i]}" "$unit" "all-but:$narrowed")" || return 1
+          [[ ! -s "$path" ]] || break
+          path=""
+        done
+      fi
+      n=$((n + 1)) units[i]+="$unit "
+      if [[ -n "$path" ]]; then
+        kept[i]+="$path"$'\n'
+      else
+        todo=$((todo + 1)) todo_kept[i]+="observe $unit $at"$'\n' todo_units[i]+="$unit "
+      fi
+      continue
+    fi
     path="$(kept_at "${s_name[i]}" "$unit" "${specs[k + 1]}")" || return 1
     n=$((n + 1)) kept[i]+="$path"$'\n' units[i]+="${unit:+$unit }"
     if ((full)) || [[ ! -s "$path" ]]; then
@@ -676,26 +690,14 @@ fi
 
 failures=()
 for half in "${halves[@]}"; do run_half "$half"; done
-# Keep what a Codespace's next gate reuses: sweep units unread for two days, root the shell and
-# crane's dependency build.
-if [[ "${CODESPACES:-}" == true && -z "${SUZATARY_GATE_RUN:-}" ]]; then
-  [[ ! -d app/target ]] || cargo sweep --time 2 app >/dev/null 2>&1 || echo "==> could not sweep app/target" >&2
-  [[ ! -d app/target ]] || codespace_locks_now >"$codespace_locks"
-  roots="$(git rev-parse --path-format=absolute --git-common-dir)/gate-roots"
-  # A profile grows a generation per build and roots every one; the current is kept.
-  mkdir -p "$roots" && nix develop .#triage --profile "$roots/triage" -c true >/dev/null 2>&1 &&
-    nix profile wipe-history --profile "$roots/triage" >/dev/null 2>&1
-  deps="$(nix eval --raw ".#suzatary-deps.outPath" 2>/dev/null)"
-  [[ -z "$deps" || ! -e "$deps" ]] || nix-store --add-root "$roots/deps" -r "$deps" >/dev/null 2>&1
-fi
-
 # A pass is kept only if the checkout is still the tree its key named.
 if [[ -n "$head" ]]; then
   if [[ "$(git rev-parse HEAD)" == "$head" ]] && keeping >/dev/null; then
     for pass in "$logs"/*.pass; do
       [[ -e "$pass" ]] || continue
-      while read -r file; do
+      while read -r file reads; do
         mkdir -p "${file%/*}" && printf 'ok %s %s\n' "$head" "$(date -u +%FT%TZ)" >>"$file"
+        [[ -z "$reads" ]] || { mkdir -p "${file%/*}/reads" && cp "$reads" "${file%/*}/reads/${file##*/}"; }
       done <"$pass"
     done
   else
@@ -715,7 +717,7 @@ for i in "${!s_name[@]}"; do
 done
 case "${halves[*]}" in
   tree) echo "halves: tree ran; live skipped (it reads the owner's data tree: --only-live on the box)" >&2 ;;
-  live) echo "halves: live ran; tree skipped (--no-live, here or on a Codespace)" >&2 ;;
+  live) echo "halves: live ran; tree skipped (--no-live, here or on GitHub's runners)" >&2 ;;
   *) echo "halves: tree and live ran" >&2 ;;
 esac
 if ((${#failures[@]})); then

@@ -85,6 +85,8 @@ declare module "node:os" {
 declare module "node:path" {
   export function join(...parts: readonly string[]): string;
   export function dirname(path: string): string;
+  export function basename(path: string, suffix?: string): string;
+  export function normalize(path: string): string;
 }
 
 /** Only what the harness reads. */
@@ -92,6 +94,7 @@ declare const process: {
   readonly env: Record<string, string | undefined>;
   readonly platform: string;
   readonly pid: number;
+  readonly argv: readonly string[];
 };
 
 declare module "node:url" {
