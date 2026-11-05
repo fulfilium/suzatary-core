@@ -1,8 +1,5 @@
-// Every screen's page, keyed by its tag: the router looks a screen up here and never switches on it. The three pages that
-// carry most code of their own and are rarely where a start lands (the Typst list, the chain and usage) are
-// chunks of their own, loaded as each is first drawn, under the build's name as the app is (`scripts/build-web.sh`).
-// The rest share most of their code with the shell, so splitting them would cut the app into many more files for
-// little.
+// Every screen's page by its tag; the router never switches on it. The Typst list, chain and usage are lazy chunks: big
+// and rarely landed on. The rest share most code with the shell, so splitting them gains little.
 
 import type { Mounted } from "../view/page"
 import type { Screen } from "../shell/layout"
@@ -11,9 +8,6 @@ import { el } from "../view/dom"
 import frame from "../view/frame"
 import reading from "../algebra/reading"
 import todos from "./todos"
-import conversation from "./conversation"
-import inbox from "./inbox"
-import secretary from "./secretary"
 import todoview from "../todo/todoview"
 import program from "./program"
 import time from "../app/time"
@@ -33,7 +27,7 @@ export namespace pages {
 
   export const table: Table = {
     todos: (root, s) => todos.mount(root, s.selected, s.prefill),
-    inbox: (root, s) => inbox.mount(root, s.open),
+    inbox: (root, s) => program.mount(root, "InboxPage", { open: s.open ?? "" }),
     todo: (root, s) => frame.mount(root, todoview.page(s.id, true)),
     typst: (root, s) => import("./typstlist").then(m => m.default.mount(root, s.open)),
     mail: (root, s) => program.mount(root, "MailPage", { query: s.query, account: s.account }),
@@ -46,16 +40,16 @@ export namespace pages {
     memory: root => program.mount(root, "MemoryPage", {}),
     briefings: root => program.mount(root, "BriefingsPage", {}),
     briefing: (root, s) => program.mount(root, "BriefingPage", { date: s.date }),
-    // The address's "" is today, on the owner's clock.
+    // "" is today, on the owner's clock.
     calendar: (root, s) => program.mount(root, "CalendarPage", { from: s.date === "" ? time.date(app.now().zone) : s.date }),
-    secretary: (root, s) => secretary.mount(root, s.topics),
+    secretary: (root, s) => program.mount(root, "SecretaryPage", { topics: [...s.topics] }),
     conversation: (root, s) =>
-      conversation.mount(root, s.id, { refs: s.refs, focus: s.focus === true, ...(s.at === undefined ? {} : { at: s.at }) }),
-    newtopic: root => frame.mount(root, conversation.draft()),
+      program.mount(root, "ConversationPage", { at: { type: "Page", id: s.id, refs: [...s.refs], focus: s.focus === true, at: s.at ?? null } }),
+    newtopic: root => program.mount(root, "DraftPage", {}),
     unknown: (root, s) => frame.mount(root, unknown(s.hash)),
   }
 
-  // Whether a screen draws the fold the shell keeps (`app/store`): its rows, or the titles of the todos it names.
+  // Whether a screen draws the shell's fold (`app/store`): its rows, or the titles of the todos it names.
   export type Fold = "Shown" | "Unshown"
   export const folds: { readonly [K in keyof Screens]: Fold } = {
     todos: "Shown",

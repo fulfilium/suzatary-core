@@ -1,17 +1,18 @@
 //! The device section offers a new key wherever this device holds a key row, read or not, and
 //! nowhere else; and the code from the box only to a key nobody trusts yet.
 
-use suzatary_pages::runtime::{Answer, Context, Gate, Input};
+use suzatary_pages::runtime::{Answer, Context, Gate, Input, Reach};
 use suzatary_pages::settings::{Flags, Hold, Model, Msg, Settings};
 use viewtree::kit::Reading;
 use viewtree::{Attr, Kids, Node, Program};
 
-/// The page once the box's overview and this device are held.
 fn model(signing: &serde_json::Value) -> Model {
     let (mut model, _) = Settings::init(Flags {
         context: Context {
             gate: Gate::Writes,
+            reach: Reach::Writes,
             offsets: Vec::new(),
+            wide: false,
         },
     });
     let held = |ask, body: serde_json::Value| {
@@ -52,7 +53,6 @@ fn kids<M>(k: &Kids<M>) -> Box<dyn Iterator<Item = &Node<M>> + '_> {
     }
 }
 
-/// The words of every element of the page whose class names `act`.
 fn offered(signing: &serde_json::Value, act: &str) -> Vec<String> {
     fn walk<M>(n: &Node<M>, act: &str, out: &mut Vec<String>) {
         match n {

@@ -1,11 +1,6 @@
-//! What the secretary may ask of the web.
-//!
-//! A request is a closed value: a search, or a fetch of one URL. A URL is
-//! parsed into scheme, host and path, and refused outright when its host is
-//! this box, its network, or the tailnet, so no request can reach the app's
-//! own routes. An [`AllowRule`] is a host or a domain, optionally narrowed
-//! to a path, matched label by label on the parsed host: a look-alike such as
-//! `wikipedia.org.evil.example` never matches `*.wikipedia.org`.
+//! What the secretary may ask of the web: a search, or a fetch of one URL. A URL whose host is
+//! this box, its network or the tailnet is refused, so no request reaches the app's own routes.
+//! Rules match label by label: `wikipedia.org.evil.example` never matches `*.wikipedia.org`.
 
 use std::fmt;
 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
@@ -14,34 +9,27 @@ use std::str::FromStr;
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
-/// The longest URL accepted.
 pub const MAX_URL: usize = 2048;
 
-/// The longest search query accepted.
 pub const MAX_QUERY: usize = 300;
 
-/// The host a search is a fetch of; allowing it lets searches run untapped.
+/// Allowing this host lets searches run untapped.
 pub const SEARCH_HOST: &str = "html.duckduckgo.com";
 
-/// Why a URL, query or rule is refused.
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 pub enum WebError {
-    /// Not an `http` or `https` URL this grammar reads.
     #[error("not an http(s) URL: {0}")]
     NotAUrl(String),
-    /// A host this box must never be asked to reach.
     #[error("{0} is this box, its network or the tailnet, and is never fetched")]
     Private(String),
-    /// Credentials in the URL, which would travel with the request.
+    /// Credentials in the URL would travel with the request.
     #[error("a URL may not carry credentials")]
     Credentials,
-    /// Over the length bound.
     #[error("longer than {0} characters")]
     TooLong(usize),
-    /// An empty search.
     #[error("the search is empty")]
     EmptyQuery,
-    /// A rule this grammar does not read, or one too broad to allow.
+    /// Unreadable, or too broad to allow.
     #[error("not an allow rule: {0}")]
     NotARule(String),
 }
@@ -49,9 +37,9 @@ pub enum WebError {
 /// A URL's host: a DNS name (lowercase, no trailing dot) or an address.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Host {
-    /// A name, at least two labels.
+    /// At least two labels.
     Name(String),
-    /// An address literal, already checked to be public.
+    /// Already checked to be public.
     Ip(IpAddr),
 }
 
@@ -65,7 +53,7 @@ impl fmt::Display for Host {
     }
 }
 
-/// An `http(s)` URL with a public host, as sent.
+/// An `http(s)` URL with a public host.
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
 #[serde(try_from = "String")]
 pub struct WebUrl {
@@ -81,13 +69,12 @@ impl WebUrl {
         &self.text
     }
 
-    /// Its host.
     #[must_use]
     pub fn host(&self) -> &Host {
         &self.host
     }
 
-    /// Its path, `/` when the URL names none; the query is not part of it.
+    /// `/` when the URL names none; excludes the query.
     #[must_use]
     pub fn path(&self) -> &str {
         &self.path
@@ -153,8 +140,7 @@ impl TryFrom<String> for WebUrl {
     }
 }
 
-/// The host part of an authority (port dropped), or `None` when it is not
-/// a name or an address literal.
+/// The host of an authority (port dropped); `None` when neither a name nor an address literal.
 fn host_of(authority: &str) -> Option<Host> {
     if let Some(bracketed) = authority.strip_prefix('[') {
         let (inside, tail) = bracketed.split_once(']')?;
@@ -200,7 +186,6 @@ fn name_ok(name: &str) -> bool {
         })
 }
 
-/// Names that are this box, its network or the tailnet.
 const PRIVATE_SUFFIXES: [&str; 5] = ["localhost", "local", "internal", "ts.net", "home.arpa"];
 
 fn check_public(host: &Host) -> Result<(), WebError> {
@@ -217,13 +202,9 @@ fn check_public(host: &Host) -> Result<(), WebError> {
     }
 }
 
-/// Whether an address is on the public internet: not loopback, private,
-/// link-local, CGNAT (which is where the tailnet lives), multicast,
-/// broadcast, unspecified or documentation. An IPv6 address that carries an
-/// IPv4 one (mapped, compatible, NAT64's `64:ff9b::/96`, 6to4's `2002::/16`)
-/// is as public as the address it carries, since a translator or relay
-/// delivers it there; local NAT64 and Teredo are never public. The fetcher
-/// asks this of every address a name resolves to, before connecting.
+/// Not loopback, private, link-local, CGNAT (the tailnet), multicast, broadcast, unspecified or
+/// documentation. An IPv6 address carrying an IPv4 one (mapped, compatible, NAT64, 6to4) is as
+/// public as the one it carries; local NAT64 and Teredo never are. Asked of every resolved address.
 #[must_use]
 pub fn is_public(ip: IpAddr) -> bool {
     match ip {
@@ -278,13 +259,12 @@ fn carried(v6: std::net::Ipv6Addr) -> Option<std::net::Ipv4Addr> {
     }
 }
 
-/// A search, as typed: non-empty, bounded, one line.
+/// Non-empty, bounded, one line.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(try_from = "String", into = "String")]
 pub struct SearchQuery(String);
 
 impl SearchQuery {
-    /// The words searched for.
     #[must_use]
     pub fn as_str(&self) -> &str {
         &self.0
@@ -317,34 +297,22 @@ impl From<SearchQuery> for String {
     }
 }
 
-/// Which of the two things a [`WebRequest`] asks, as a card names it.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, TS)]
+/// Names a [`WebRequest`] on a card.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "lowercase")]
 pub enum WebKind {
-    /// A search.
     Search,
-    /// A page read.
     Fetch,
 }
 
-/// One thing the secretary asks of the web.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "lowercase")]
 pub enum WebRequest {
-    /// Search the provider for these words.
-    Search {
-        /// What to search for.
-        query: SearchQuery,
-    },
-    /// Read one page.
-    Fetch {
-        /// The page.
-        url: WebUrl,
-    },
+    Search { query: SearchQuery },
+    Fetch { url: WebUrl },
 }
 
 impl WebRequest {
-    /// Which of the two it is.
     #[must_use]
     pub fn kind(&self) -> WebKind {
         match self {
@@ -353,7 +321,7 @@ impl WebRequest {
         }
     }
 
-    /// The host the request goes to: the page's, or the search provider's.
+    /// The page's host, or the search provider's.
     #[must_use]
     pub fn host(&self) -> Host {
         match self {
@@ -362,7 +330,7 @@ impl WebRequest {
         }
     }
 
-    /// The path the rule matching checks: the page's, or `/` for a search.
+    /// The page's path, or `/` for a search.
     #[must_use]
     pub fn path(&self) -> &str {
         match self {
@@ -371,7 +339,7 @@ impl WebRequest {
         }
     }
 
-    /// What goes out, in words, for the card and the transcript.
+    /// For the card and the transcript.
     #[must_use]
     pub fn sentence(&self) -> String {
         match self {
@@ -386,18 +354,15 @@ impl WebRequest {
     }
 }
 
-/// Which hosts a rule covers.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum HostScope {
-    /// This host and nothing else.
     Exact(String),
     /// This domain and every name under it.
     Domain(String),
 }
 
-/// A host or domain the secretary may read without asking, optionally
-/// narrowed to a path prefix. Its text form is `host`, `*.domain`, either
-/// followed by `/path`: `docs.rs`, `*.wikipedia.org`, `github.com/bmabsout`.
+/// A host or domain readable untapped, optionally narrowed to a path prefix. Text form: `host` or
+/// `*.domain`, then optional `/path`: `docs.rs`, `*.wikipedia.org`, `github.com/bmabsout`.
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
 #[serde(try_from = "String")]
 pub struct AllowRule {
@@ -406,8 +371,7 @@ pub struct AllowRule {
 }
 
 impl AllowRule {
-    /// Whether this rule lets `request` run without a tap. Only names match;
-    /// an address literal is always asked.
+    /// Only names match; an address literal is always asked.
     #[must_use]
     pub fn allows(&self, request: &WebRequest) -> bool {
         let Host::Name(host) = request.host() else {
@@ -427,7 +391,6 @@ impl AllowRule {
             })
     }
 
-    /// The rule in words, for the card.
     #[must_use]
     pub fn sentence(&self) -> String {
         let hosts = match &self.scope {
@@ -441,7 +404,6 @@ impl AllowRule {
     }
 }
 
-/// Whether any rule lets `request` run without a tap.
 #[must_use]
 pub fn allowed(rules: &[AllowRule], request: &WebRequest) -> bool {
     rules.iter().any(|rule| rule.allows(request))
@@ -508,9 +470,7 @@ prodrome_core::text_literal!(
     AllowRule => ToString::to_string,
 );
 
-/// `Search(query)`.
 pub const SEARCH: prodrome_core::literal::codec::Constructor = ("Search", &["query"]);
-/// `Fetch(url)`.
 pub const FETCH: prodrome_core::literal::codec::Constructor = ("Fetch", &["url"]);
 
 impl prodrome_core::literal::codec::Literal for WebRequest {
@@ -592,8 +552,7 @@ mod tests {
         }
     }
 
-    /// An IPv6 address that a translator or relay delivers to an IPv4 one is as public as that
-    /// address: so the box, its network and the tailnet are unreachable through each spelling.
+    /// The box, its network and the tailnet stay unreachable through every IPv6 spelling.
     #[test]
     fn an_ipv6_address_carrying_a_private_ipv4_one_is_private() {
         let ip = |text: &str| text.parse::<IpAddr>().expect("an address");

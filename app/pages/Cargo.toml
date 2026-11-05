@@ -39,5 +39,9 @@ path = "tests/device.rs"
 name = "laws"
 path = "tests/laws.rs"
 
+[[test]]
+name = "vectors"
+path = "tests/vectors.rs"
+
 [lints]
 workspace = true

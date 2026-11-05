@@ -32,9 +32,6 @@ export namespace clock {
   // The owner's next midnight after `ms`, when what is printed to the day (an age, today's date) moves.
   export const nextDay = (zone: time.Zone, ms: number): Next => at(time.nextDay(zone, ms))
 
-  // The next whole second of an elapsed count from `since`, when "12 s" becomes "13 s".
-  export const nextSecond = (since: number, now: number): Next => at(since + 1000 * (Math.floor(Math.max(0, now - since) / 1000) + 1))
-
   // How long a bound that comes back at once is waited for: the first wait, doubling to the longest. An exact answer
   // is waited for exactly; a conservative one may come before anything moves, and asked again at once could come back
   // at once again (a window over a term that moves answers "now"), so it is paced.

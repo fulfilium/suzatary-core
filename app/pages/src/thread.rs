@@ -1,5 +1,4 @@
-//! One mail thread, oldest first, with only the newest open: read the way it happened. Bodies are
-//! text.
+//! One mail thread, oldest first, with only the newest open. Bodies are text.
 
 use serde::Deserialize;
 use suzatary_core::wire::{MailPage, ThreadPayload};
@@ -15,15 +14,12 @@ use crate::reading::{Msg, View, json};
 use crate::runtime::Answer;
 use crate::zone::Offset;
 
-/// Which thread, as the address names it.
 #[derive(Debug, Clone, Deserialize, TS)]
 #[ts(rename = "ThreadAt")]
 pub struct At {
-    /// The thread.
     pub id: String,
 }
 
-/// One thread.
 #[derive(Debug)]
 pub enum Thread {}
 
@@ -69,7 +65,7 @@ impl View for Thread {
 
     fn body(_: &At, offsets: &[Offset], v: &ThreadPayload) -> Vec<Node<Msg>> {
         let n = v.messages.len();
-        // Ask about the whole conversation, the reference only this page can offer.
+        // The whole-conversation reference is one only this page can offer.
         std::iter::once(ask(&format!("thread:{}", v.thread)))
             .chain(
                 v.messages
@@ -99,7 +95,7 @@ fn block(offsets: &[Offset], p: &MailPage, open: bool) -> Node<Msg> {
             todo(row),
             view! { A "hashlink" {Href => Place::Message(&row.id).href()} ["open"] },
         ] },
-        body(row, &p.message.body),
+        body(&p.message.body),
         cut,
     ] }
 }

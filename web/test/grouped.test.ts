@@ -1,6 +1,6 @@
-// A page holds one answer of the worker, never a join of several: it asks for every turn it holds (`source.asking`) and
-// the worker reads back to them (`grouped.covering`). So whatever it reads, newest or older, as the conversation grows,
-// it holds every turn from its first to the newest and never fewer than it held, and its rounds are those turns'.
+// A page holds one answer of the worker, never a join of several: it asks for every turn it holds, back to its first
+// (`app/pages/src/conversation.rs`'s `asking`), and the worker reads back to that turn (`grouped.covering`), so the
+// window holds every turn from it to the newest, and its rounds are those turns'.
 
 import { test } from "node:test"
 import assert from "node:assert/strict"
@@ -8,8 +8,6 @@ import assert from "node:assert/strict"
 import type { ConversationPayload, ProposalRow, TurnRow } from "../src/wire/generated/wire"
 import type { Window } from "../src/prodrome/core"
 import grouped from "../src/chat/grouped"
-import { asking, step } from "../src/chat/source"
-import type { SourceState } from "../src/chat/source"
 import time from "../src/app/time"
 import { aCard } from "./cards"
 import { forAll, type Rng } from "./gen"
@@ -65,24 +63,16 @@ const reader = (c: ReturnType<typeof conversation>, total: number) => (w: Window
   }
 }
 
-test("law: whatever a page reads, it holds every turn from its first to the newest, never fewer, grouped", () =>
+test("law: a window asked to reach back to a turn holds every turn from it to the newest, grouped as its turns are", () =>
   forAll(300, r => {
     const c = conversation(r)
-    let total = 1 + r.int(c.turns.length)
-    let state: SourceState = { kind: "loading", id: "c", about: undefined }
-    let held: readonly number[] = []
-    for (let k = 0; k < 8; k += 1) {
-      const older = state.kind === "loaded" && state.first > 0 && r.bool(0.4)
-      total = Math.min(c.turns.length, total + r.int(older ? 2 : 80))
-      const read = reader(c, total)
-      const payload = grouped.of(grouped.covering(asking(state, older ? "older" : "newest", undefined), read), time.UTC)
-      state = step(state, { kind: "window", mode: older ? "older" : "newest", payload, fallback: false, at: 0 })
-      assert.ok(state.kind === "loaded")
-      const indices = state.turns.map(t => t.index)
-      const what = `after read ${k} (${older ? "older" : "newest"}, total ${total})`
-      assert.deepEqual(indices, Array.from({ length: total - state.first }, (_, i) => state.kind === "loaded" ? state.first + i : 0), `${what}: every turn from the first to the newest`)
-      assert.ok(held.every(i => indices.includes(i)), `${what}: every turn it held`)
-      assert.deepEqual(state.rounds, grouped.of({ ...read({}), turns: [...state.turns], first: state.first }, time.UTC).rounds, `${what}: its rounds are its turns'`)
-      held = indices
-    }
+    const total = 1 + r.int(c.turns.length)
+    const read = reader(c, total)
+    const from = r.int(total)
+    const limit = 1 + r.int(80)
+    const p = grouped.covering({ limit, from }, read)
+    const indices = p.turns.map(t => t.index)
+    assert.ok(p.first <= from, `it reaches turn ${from} (from ${p.first})`)
+    assert.deepEqual(indices, Array.from({ length: total - p.first }, (_, i) => p.first + i), "every turn from its first to the newest")
+    assert.deepEqual(grouped.of(p, time.UTC).rounds, grouped.of({ ...read({}), turns: [...p.turns], first: p.first }, time.UTC).rounds, "its rounds are its turns'")
   }))

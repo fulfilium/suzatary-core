@@ -9,7 +9,6 @@ use crate::reading::{Msg, Nothing, View, json};
 use crate::runtime::Answer;
 use crate::zone::Offset;
 
-/// The briefings.
 #[derive(Debug)]
 pub enum Briefings {}
 

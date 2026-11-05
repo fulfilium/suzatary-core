@@ -149,3 +149,29 @@ test("a family keeps at most KEPT registers nobody reads, and never drops one be
   assert.equal(asks, before, "it was never dropped, so a second reader asks nothing")
   off()
 })
+
+test("law: an ask made while a read is in flight is a second read, started after the first lands", async () => {
+  // The box may change while the first read is on its way, after that read already read its state: the second
+  // read is what shows the change, so it is never merged into the first.
+  const started: number[] = []
+  const pending: ((v: number) => void)[] = []
+  const q = asked.question(() => new Promise<number>(ok => (started.push(pending.length), pending.push(ok))))
+  const settle = async (): Promise<void> => {
+    for (let i = 0; i < 10; i++) await Promise.resolve()
+  }
+  const off = q.hear(() => {})
+  await settle()
+  assert.equal(started.length, 1, "the first read starts")
+  q.again()
+  q.again()
+  await settle()
+  assert.equal(started.length, 1, "nothing more starts while the first is in flight")
+  pending[0]?.(1)
+  await settle()
+  assert.equal(started.length, 2, "one more read starts once the first lands")
+  pending[1]?.(2)
+  await settle()
+  assert.deepEqual(q.now(), lo.val(2), "and its answer stands")
+  assert.equal(started.length, 2, "and nothing more is asked")
+  off()
+})

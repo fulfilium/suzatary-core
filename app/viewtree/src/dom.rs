@@ -1,5 +1,5 @@
-//! A DOM kept as data, which applies patches the way `web/src/painter/painter.ts` does: what the
-//! painter's laws (`tests/laws.rs`) and every page's laws compare a patched page with.
+//! A DOM kept as data that applies patches as `web/src/painter/painter.ts` does; the painter's
+//! and every page's laws compare a patched page with it.
 
 use std::collections::BTreeMap;
 
@@ -8,16 +8,12 @@ use crate::paint::Painter;
 use crate::patch::{Patch, ROOT};
 use crate::program::{Program, Runtime};
 
-/// A DOM as data: each node by id, an element's attributes, listeners and children in order.
 #[derive(Debug, Clone, Default)]
 pub struct Dom {
-    /// Each node by id.
     pub nodes: BTreeMap<u32, Shape>,
-    /// Each element's children, in order.
     pub kids: BTreeMap<u32, Vec<u32>>,
 }
 
-/// One node as the DOM holds it.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Shape {
     Element {
@@ -37,7 +33,7 @@ pub enum Shape {
     },
 }
 
-/// A node as a reader of the page sees it: no ids.
+/// A node as a reader sees it: no ids.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Seen {
     Element {
@@ -85,7 +81,7 @@ impl Dom {
         clippy::too_many_lines,
         reason = "one arm per patch, as the painter's own table"
     )]
-    /// The patches applied, as the painter applies them; a patch the DOM cannot take panics.
+    /// Panics on a patch the DOM cannot take.
     pub fn apply(&mut self, patches: &[Patch]) {
         for p in patches {
             match p {
@@ -245,7 +241,6 @@ impl Dom {
         }
     }
 
-    /// The page under the root, as a reader sees it.
     #[must_use]
     pub fn page(&self) -> Vec<Seen> {
         self.kids
@@ -254,7 +249,6 @@ impl Dom {
             .unwrap_or_default()
     }
 
-    /// The ids of every node in the page, in order.
     pub fn ids(&self, id: u32, out: &mut Vec<u32>) {
         for &k in self.kids.get(&id).map(Vec::as_slice).unwrap_or_default() {
             out.push(k);
@@ -271,10 +265,8 @@ pub fn fresh<M: Clone>(view: &Node<M>) -> Vec<Seen> {
     dom.page()
 }
 
-/// A page's two laws, over one run of messages from `flags`: the view is a pure function of the
-/// model (a second run of the same messages paints the same bytes, and the view drawn twice is
-/// the same tree), and a patch applied equals a fresh draw (after every step the patched DOM is a
-/// fresh draw of the model's view). Panics where one fails.
+/// A page's two laws over one run of `msgs`: the view is a pure function of the model (a rerun
+/// paints the same bytes), and after every step the patched DOM equals a fresh draw.
 pub fn page_laws<P: Program<Msg: std::fmt::Debug>>(flags: impl Fn() -> P::Flags, msgs: &[P::Msg]) {
     let (mut one, first) = Runtime::<P>::start(flags());
     let (mut two, again) = Runtime::<P>::start(flags());

@@ -1,5 +1,4 @@
-//! A week of the owner's calendars from a day, drawn by Typst on the box; every title is a
-//! stranger's words.
+//! A week of the owner's calendars, drawn by Typst on the box; every title is a stranger's words.
 
 use serde::Deserialize;
 use suzatary_core::wire::CalendarPayload;
@@ -12,15 +11,14 @@ use crate::reading::{Msg, View, json};
 use crate::runtime::Answer;
 use crate::zone::{Offset, shift};
 
-/// The day the week starts, which the router resolves from `""` to today.
+/// The router resolves `""` to today.
 #[derive(Debug, Clone, Deserialize, TS)]
 #[ts(rename = "CalendarAt")]
 pub struct At {
-    /// The day, `YYYY-MM-DD`.
+    /// `YYYY-MM-DD`.
     pub from: String,
 }
 
-/// The calendar from a day.
 #[derive(Debug)]
 pub enum Calendar {}
 

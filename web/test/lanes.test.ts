@@ -32,9 +32,9 @@ test("law: a shell question starts, reads and is answered only while no page que
       },
       addEventListener: (_, f) => void (deliver = f),
     }
-    // The question's number travels as its one source, and comes back as its one key.
+    // The question's number travels as its one pair's key, and comes back as its one key.
     const answer: questions.Answering = (q, turn) => {
-      const id = q.type === "AnswerKeys" ? Number(q.sources[0]) : -1
+      const id = q.type === "KeepBlocks" ? Number(q.pairs[0]?.[0]) : -1
       seen.push({ type: "Started", id })
       const read = (): string[] => (seen.push({ type: "Read", id }), [String(id)])
       const waited = (): Promise<void> => new Promise<void>(done => waiting.set(id, done))
@@ -56,7 +56,7 @@ test("law: a shell question starts, reads and is answered only while no page que
         const id = next
         next += 1
         seen.push({ type: "Arrived", id })
-        deliver({ data: { id, lane: asked[id]?.lane ?? "Page", question: { type: "AnswerKeys", sources: [String(id)] } } })
+        deliver({ data: { id, lane: asked[id]?.lane ?? "Page", question: { type: "KeepBlocks", pairs: [[String(id), ""]] } } })
       } else if (step === "Resolve") {
         const [id, done] = r.pick([...waiting])
         waiting.delete(id)

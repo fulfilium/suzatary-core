@@ -1,36 +1,26 @@
-//! Finding a turn across every conversation, for the search route and `recall`.
-//!
-//! A case-folded substring over what the owner said and what the secretary answered, never a
-//! verb's answer, which quotes mail: neither a list nor `recall` should surface a line an email
-//! wrote.
+//! Finding a turn across every conversation, for the search route and `recall`: what the owner
+//! said and the secretary answered, never a verb's answer, which quotes mail.
 
 use std::borrow::Borrow;
 
 use crate::capability::Turn;
 use crate::secretary::store::{ConversationId, Kind, Stored};
 
-/// What to look for: trimmed, never empty, at most [`Needle::MAX`] characters, and kept
-/// case-folded because that is the only way it is used.
+/// Trimmed, never empty, at most [`Needle::MAX`] characters, kept case-folded.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Needle(Vec<char>);
 
-/// Text that cannot be searched for.
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 pub enum NotANeedle {
-    /// Nothing but whitespace.
     #[error("say what to search for")]
     Empty,
-    /// Longer than [`Needle::MAX`] characters.
     #[error("a search is at most {} characters", Needle::MAX)]
     Long,
 }
 
 impl Needle {
-    /// The longest search, in characters.
     pub const MAX: usize = 200;
 
-    /// Parse one.
-    ///
     /// # Errors
     /// [`NotANeedle`] naming which rule it broke.
     pub fn new(text: &str) -> Result<Self, NotANeedle> {
@@ -44,68 +34,54 @@ impl Needle {
         }
     }
 
-    /// Whether `text` holds it.
     #[must_use]
     pub fn found_in(&self, text: &str) -> bool {
         excerpt(text, self, 0).is_some()
     }
 
-    /// Its first match in `text` with `context` characters either side, on one line; `None`
-    /// when `text` does not hold it.
+    /// With `context` characters either side, on one line.
     #[must_use]
     pub fn excerpt(&self, text: &str, context: usize) -> Option<String> {
         excerpt(text, self, context)
     }
 }
 
-/// Which side of the conversation a hit is on.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, ts_rs::TS)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize, ts_rs::TS)]
 #[serde(rename_all = "lowercase")]
 #[ts(rename = "SearchSide")]
 pub enum Side {
-    /// The owner's own words.
     Person,
-    /// The secretary's answer.
     Answer,
 }
 
-/// One turn that matched.
-#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, ts_rs::TS)]
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize, ts_rs::TS)]
 #[ts(rename = "SearchHit")]
 pub struct Hit {
-    /// The conversation.
     #[ts(type = "string")]
     pub conversation: ConversationId,
-    /// Its heading ([`Stored::heading`]).
+    /// [`Stored::heading`].
     pub title: String,
-    /// What it is for.
     pub kind: Kind,
-    /// The turn's absolute index, which a window opens at.
+    /// Absolute index, which a window opens at.
     pub turn: usize,
-    /// When it was said.
     pub at: String,
-    /// Who said it.
     pub side: Side,
-    /// The match with `context` characters either side, on one line.
+    /// With `context` characters either side, on one line.
     pub excerpt: String,
 }
 
-/// How much a list's hit keeps either side of the match, in characters:
-/// enough to recognise the line.
+/// Characters a list's hit keeps either side of the match.
 pub const LIST_CONTEXT: usize = 48;
 
-/// How much `recall`'s hit keeps: enough to read what was decided, never a whole transcript
-/// through a side door.
+/// Enough to read what was decided, never a whole transcript through a side door.
 pub const RECALL_CONTEXT: usize = 280;
 
-/// How many hits `recall` answers when asked for `asked`: ten when asked for no number, and
-/// between one and fifty.
+/// Ten when asked for no number; between one and fifty.
 #[must_use]
 pub fn recall_limit(asked: Option<usize>) -> usize {
     asked.unwrap_or(10).clamp(1, 50)
 }
 
-/// `hits` for `query` as `recall` answers them.
 #[must_use]
 pub fn recalled(query: &str, hits: &[Hit]) -> serde_json::Value {
     serde_json::json!({
@@ -124,11 +100,8 @@ pub fn recalled(query: &str, hits: &[Hit]) -> serde_json::Value {
     })
 }
 
-/// Every turn that holds `needle`, newest first, at most `limit`, each cut to `context`
-/// characters either side of the match.
-///
-/// Ties on `at` break by conversation and index, so the order is stable. An answer is a finished
-/// one (a model turn with no calls); text on the way to a verb is part of the trace.
+/// Newest first, at most `limit`; ties on `at` break by conversation and index. An answer is a
+/// finished one (a model turn with no calls); text on the way to a verb is part of the trace.
 #[must_use]
 pub fn search<S: Borrow<Stored>>(
     conversations: &[S],
@@ -176,14 +149,13 @@ pub fn search<S: Borrow<Stored>>(
     hits
 }
 
-/// One character, case-folded to one character, so a match's position in the folded text is its
-/// position in the original (`str::to_lowercase` can lengthen a string).
+/// One character to one, so a match's position in the folded text is its position in the
+/// original (`str::to_lowercase` can lengthen a string).
 pub(crate) fn fold(c: char) -> char {
     c.to_lowercase().next().unwrap_or(c)
 }
 
-/// The first match in `text`, with `context` characters either side and
-/// every run of whitespace one space; `None` when there is none.
+/// Every run of whitespace one space; `None` when there is no match.
 fn excerpt(text: &str, needle: &Needle, context: usize) -> Option<String> {
     let chars: Vec<char> = text.chars().collect();
     let width = needle.0.len();
@@ -196,8 +168,7 @@ fn excerpt(text: &str, needle: &Needle, context: usize) -> Option<String> {
     Some(around(&chars, at, width, context))
 }
 
-/// The `width` characters at `at` with `context` characters either side, every run of whitespace
-/// one space, and an ellipsis where the text was cut.
+/// Every run of whitespace one space, and an ellipsis where the text was cut.
 pub(crate) fn around(chars: &[char], at: usize, width: usize, context: usize) -> String {
     let from = at.saturating_sub(context);
     let to = (at + width + context).min(chars.len());
@@ -276,8 +247,7 @@ mod tests {
         Needle::new(text).expect("a needle")
     }
 
-    /// Person turns and finished answers match, case-folded; a verb's answer never does, because it
-    /// quotes mail, nor the text on the way to a verb.
+    /// A verb's answer never matches, because it quotes mail, nor the text on the way to a verb.
     #[test]
     fn it_reads_what_was_said_and_answered_and_never_a_verb() {
         let all = [

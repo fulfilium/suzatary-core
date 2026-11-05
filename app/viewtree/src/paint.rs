@@ -1,22 +1,15 @@
 //! The keyed diff: the tree last painted, a new view, and the patches between them.
-//!
-//! The painter keeps the tree it last painted with each node's id, and the handlers of each
-//! element by id, so an event the DOM reports by id becomes the message the view put there.
-//! A node whose kind and tag stay is kept and patched; keyed children are matched by key and
-//! the ones already in relative order (a longest increasing subsequence of their old places)
-//! stay where they are, so a move touches only the rows that moved. A lazy part whose hash is
-//! the one drawn at its place last time is kept whole: neither drawn nor compared.
+//! Keyed rows already in relative order (a longest increasing subsequence) stay put; a lazy part
+//! whose hash is the one drawn at its place last time is neither drawn nor compared.
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use crate::node::{Element, Kids, Lazy, Listener, Never, Node, On};
+use crate::node::{Element, Key, Kids, Lazy, Listener, Never, Node, On, Picked};
 use crate::patch::{Patch, ROOT};
 
-/// The tree as painted: every node with its id, every lazy part drawn.
 type Painted<M> = Node<M, u32, Never>;
 
-/// The tree last painted, the handlers on it, and the hash of each lazy part by the id of the
-/// node it drew.
+/// Also the hash of each lazy part, by the id of the node it drew.
 #[derive(Debug)]
 pub struct Painter<M> {
     next: u32,
@@ -26,7 +19,6 @@ pub struct Painter<M> {
 }
 
 impl<M: Clone> Painter<M> {
-    /// A painter that has painted `view` into an empty root, and the patches that did it.
     #[must_use]
     pub fn start(view: Node<M>) -> (Self, Vec<Patch>) {
         let mut out = Vec::new();
@@ -40,7 +32,7 @@ impl<M: Clone> Painter<M> {
         (painter, out)
     }
 
-    /// The patches that turn what was painted into `view`, which is painted from then on.
+    /// The patches that turn what was painted into `view`.
     pub fn paint(&mut self, view: Node<M>) -> Vec<Patch> {
         let mut out = Vec::new();
         // The empty text stands in only while the old tree is patched into the new one.
@@ -49,9 +41,8 @@ impl<M: Clone> Painter<M> {
         out
     }
 
-    /// The message the view put on element `id` for `on`, made from the field's words for an
-    /// input; `None` when the element is gone or does not listen for it (an event the DOM
-    /// queued before a patch removed its handler).
+    /// `None` when the element is gone or does not listen for `on` (an event the DOM queued before
+    /// a patch removed its handler), or its handler answers none (a key left to the browser).
     #[must_use]
     pub fn message(&self, id: u32, on: On, words: String) -> Option<M> {
         self.handlers
@@ -59,9 +50,12 @@ impl<M: Clone> Painter<M> {
             .iter()
             .find(|l| l.on() == on)
             .map(|l| match l {
-                Listener::Click(m) | Listener::Submit(m) => m.clone(),
-                Listener::Input(f) => f(words),
-            })
+                Listener::Click(m) | Listener::Submit(m) => Some(m.clone()),
+                Listener::Input(f) => Some(f.call(words)),
+                Listener::Keydown(f) => Key::read(&words).and_then(|k| f.call(k)),
+                Listener::Toggle(f) => Some(f.call(!words.is_empty())),
+                Listener::Files(f) => Some(f.call(Picked::read(&words))),
+            })?
     }
 
     fn id(&mut self) -> u32 {
@@ -238,7 +232,6 @@ impl<M: Clone> Painter<M> {
         }
     }
 
-    /// A lazy part kept whole where its hash is the one drawn here, else drawn and patched.
     fn lazy(
         &mut self,
         old: Painted<M>,
@@ -396,7 +389,6 @@ impl<M: Clone> Painter<M> {
     }
 }
 
-/// A new keyed row: kept from the old list at its old place, already patched, or new.
 enum Matched<M> {
     Kept { at: usize, node: Painted<M> },
     New(Node<M>),

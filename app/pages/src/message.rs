@@ -1,6 +1,5 @@
-//! One message: its body as text (mail is never markup here), its links, its headers, and the
-//! todos whose latest record names it. The todos are drawn by the list's own cards, the host's
-//! part `todos`, until the todo pages are programs (plan §7 stage 8).
+//! One message: its body as text (mail is never markup here), its links, headers and todos. The
+//! todos are the host's part `todos` until the todo pages are programs (plan §7 stage 8).
 
 use serde::Deserialize;
 use suzatary_core::wire::MailPage;
@@ -17,25 +16,21 @@ use crate::reading::{Msg, View, json};
 use crate::runtime::Answer;
 use crate::zone::{Offset, minute};
 
-/// Which message, by its notmuch id or a prefix of its hash, as the address names it.
+/// Its notmuch id or a prefix of its hash.
 #[derive(Debug, Clone, Deserialize, TS)]
 #[ts(rename = "MessageAt")]
 pub struct At {
-    /// The message.
     pub id: String,
 }
 
-/// The message, or the box's words for one it no longer keeps: a 404 is a fact about the maildir
-/// (its account removed with its mail, or never synced), drawn as one, never a Retry.
+/// A 404 is a fact about the maildir (its account removed with its mail, or never synced), drawn
+/// as `Gone`, never a Retry.
 #[derive(Debug, Clone)]
 pub enum Read {
-    /// The message.
     Found(Box<MailPage>),
-    /// The box's words for a message it no longer keeps.
     Gone(String),
 }
 
-/// One message.
 #[derive(Debug)]
 pub enum Message {}
 
@@ -123,9 +118,8 @@ fn found(_: &[Offset], p: &MailPage) -> Vec<Node<Msg>> {
             "Whole conversation",
         )
     });
-    // Every URL is shown beside its label, because a label is the sender's claim about where a
-    // link goes. The URL is clamped by CSS, never cut: cutting would be this app deciding what a
-    // link says.
+    // Every URL is shown beside its label, which is the sender's claim. CSS clamps the URL; cutting
+    // it would be this app deciding what a link says.
     let links = (!message.links.is_empty()).then(|| {
         let items: Vec<_> = message
             .links
@@ -143,8 +137,7 @@ fn found(_: &[Offset], p: &MailPage) -> Vec<Node<Msg>> {
     } else {
         "Every todo whose latest record names this message. The numbers are today's."
     };
-    // The box's entries as it printed them, for the cards the host draws; a print of entries,
-    // whose maps are keyed by strings, does not fail.
+    // A print of entries, whose maps are keyed by strings, does not fail.
     let todos = serde_json::to_string(&p.todos).unwrap_or_default();
     let cut = message.truncated.then(|| {
         para(
@@ -155,7 +148,7 @@ fn found(_: &[Offset], p: &MailPage) -> Vec<Node<Msg>> {
     [
         Some(view! { Div "mailchips" [account(row), folder(row), decided(row), thread] }),
         Some(ask(&format!("mail:{}", row.hash))),
-        Some(body(row, &message.body)),
+        Some(body(&message.body)),
         cut,
         links,
         Some(view! { H2 [format!("Todos from this mail ({n})")] }),
@@ -168,8 +161,7 @@ fn found(_: &[Offset], p: &MailPage) -> Vec<Node<Msg>> {
     .collect()
 }
 
-// Collapsed: open, it would repeat the title and the line under it and push the body below a
-// phone's fold.
+// Collapsed: open, it would repeat the title and push the body below a phone's fold.
 fn headers(p: &MailPage) -> Node<Msg> {
     let row = &p.message.row;
     let fact = |name: &str, value: Node<Msg>| vec![view! { Dt [name] }, view! { Dd [value] }];

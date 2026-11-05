@@ -8,15 +8,15 @@ import type vouch from "./vouch"
 import type topics from "./topics"
 
 export namespace asks {
-  // A proposal the way its card saw it: `from` is its signature then, and any later climb of the machine holds the ask.
+  // `from` is the signature the card saw; any later climb of the machine holds the ask.
   export type Proposal = { readonly conversation: string; readonly index: number; readonly from: string }
-  // The owner's answers to one proposal, each performed at most once under the inbox's lock.
+  // Each performed at most once under the inbox's lock.
   export type Answer =
     | { readonly type: "Tap"; readonly note: string; readonly always: boolean; readonly endorsement?: vouch.Endorsement }
     | { readonly type: "Dismiss"; readonly reason: string }
     | { readonly type: "Acknowledge" }
     | { readonly type: "Drop"; readonly reason: string }
-  // A question the way its asker saw the conversation: `after` turns stood, so the box's line for it is at or past `after`.
+  // The box's line for the question is at or past `after`.
   export type Question = {
     readonly conversation: string
     readonly after: number
@@ -27,14 +27,13 @@ export namespace asks {
 
   export type Ask =
     | { readonly type: "Seal"; readonly chain: string; readonly event: string }
-    // `at` is when it was asked, so the same write asked again after the history took the first is a new ask.
+    // `at` makes the same write asked again after the history took the first a new ask.
     | { readonly type: "Topic"; readonly write: topics.Write; readonly at: string }
     | { readonly type: "Answer"; readonly at: Proposal; readonly answer: Answer }
     | { readonly type: "Question"; readonly kind: "Say" | "Edit"; readonly question: Question }
     | { readonly type: "Round"; readonly kind: "Stop" | "Regenerate"; readonly conversation: string; readonly after: number }
     | { readonly type: "Rename"; readonly conversation: string; readonly title: string }
     | { readonly type: "Forget"; readonly fact: FactId }
-    // A summary of the record the owner says is wrong, by its node's name.
     | { readonly type: "Retract"; readonly node: string }
     | { readonly type: "Erase"; readonly conversation: string; readonly turns: readonly number[] }
 
@@ -55,24 +54,18 @@ export namespace asks {
     }
   }
 
-  // What a reading of the replicas answers about one conversation; `null` for one the tab does not hold.
+  // `null` for a conversation the tab does not hold.
   export type Reading = (conversation: string) => ConversationPayload | null
 
-  // What moves when the box records an answer to a proposal: its machine and the session it started.
   export const signature = (p: ProposalRow): string =>
     `${p.state}:${p.tries}:${p.coding?.state ?? ""}`
 
-  // Every ask about one proposal's card.
   export const about = (conversation: string, index: number) => (a: Ask): boolean =>
     a.type === "Answer" && a.at.conversation === conversation && a.at.index === index
 
   const moved = (at: Proposal, row: ProposalRow | undefined): boolean => row !== undefined && signature(row) !== at.from
 
-  // The proposal's row decides alone, so a card asks it of the row it draws.
-  export const holdsRow = (row: ProposalRow) => (a: Ask): boolean => a.type === "Answer" && moved(a.at, row)
-
-  // Whether the history holds the act: a monotone act once sealed, a request once the box's record of it is read.
-  // A request whose record no replica carries (a forgotten fact, a retracted summary) is held only by the box's own answer.
+  // A request whose record no replica carries (a forgotten fact, a retracted summary) is held only by the box's answer.
   export const holds = (read: Reading): ((a: Ask) => boolean) =>
     fold<boolean>({
       Seal: () => false,
@@ -89,7 +82,7 @@ export namespace asks {
       },
     })
 
-  // The conversation an ask's record lands in, which a settle reads; none for a todo's seal, a fact or a summary.
+  // Where an ask's record lands, which a settle reads.
   export const conversation = fold<string | null>({
     Seal: () => null,
     Topic: () => null,
@@ -111,8 +104,8 @@ export namespace asks {
   const asked = (kind: "Say" | "Edit", { conversation: c, text, references, files, after }: Question): Promise<unknown> =>
     kind === "Say" ? say(c, text, parsed(references), files, after) : editQuestion(c, text, parsed(references), files)
 
-  // How a request reaches the box: the route that names it. A secret's value travels beside the ask, never in it,
-  // so no key, set or log holds it; a seal and a topic are the shell's, since each writes the tab's own replica.
+  // A secret's value travels beside the ask, never in it, so no key, set or log holds it. A seal and a topic are the
+  // shell's, since each writes the tab's own replica.
   export const send = (a: Exclude<Ask, { type: "Seal" | "Topic" }>, secret?: string): Promise<unknown> =>
     a.type === "Answer" ? answered(a.at, a.answer, secret)
     : a.type === "Question" ? asked(a.kind, a.question)

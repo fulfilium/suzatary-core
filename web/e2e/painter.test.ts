@@ -1,7 +1,7 @@
 /**
  * THE PAINTER'S LAWS, IN A BROWSER: `web/src/painter/painter.ts` and `run.ts` drive Settings' program from the module the
- * box serves, with a pure handler in place of the runtime's, over generated inputs (the overview, this device and the
- * Inbox's cards held, the context), taps, typing and answers. After every step the painted DOM equals what a fresh
+ * box serves, with a pure handler in place of the runtime's, over generated inputs (the overview, this device and what
+ * waits held, the context), taps, typing and answers. After every step the painted DOM equals what a fresh
  * painter draws of the program's current view, node by node; a second run of the same steps paints the same DOM and
  * asks the same effects; and an input handed twice patches nothing the second time. `app/viewtree/tests/laws.rs` holds the same laws over generated views and a DOM kept as data.
  */
@@ -12,7 +12,7 @@ import { execFileSync } from "node:child_process";
 import { BASE, PHONE, suite } from "./harness";
 import { GROUPS, overviewLine, reshuffled, rng } from "../test/gen";
 import type { Rng } from "../test/gen";
-import type { Card, Context, Device, SettingsFlags, SettingsHold } from "../src/wire/generated/pages";
+import type { Context, Device, SettingsFlags, SettingsHold } from "../src/wire/generated/pages";
 import type { Offer, Overview, OverviewLine } from "../src/wire/generated/wire";
 import type painterlaws from "./painterlaws";
 
@@ -42,13 +42,6 @@ const STEPS = 30;
 const pool = (r: Rng): ReadonlyMap<string, readonly OverviewLine[]> =>
   new Map(GROUPS.map((g) => [g, r.bool(0.5) ? [] : Array.from({ length: 1 + r.int(4) }, (_, i) => ({ ...overviewLine(r), key: `${g}:${i}` }))]));
 
-const card = (r: Rng, reference: string): Card => ({
-  reference,
-  act: r.pick(["sign_in", "secret", "grant", "other"] as const),
-  stands: r.pick(["open", "settled"] as const),
-  version: r.string("ab", 2),
-});
-
 const device = (r: Rng): Device => ({
   persist: r.pick([{ type: "Unsupported" }, { type: "Granted" }, { type: "Denied" }] as const),
   usage: { bytes: r.int(10_000_000), count: r.int(3) },
@@ -74,7 +67,15 @@ const overview = (r: Rng, lines: ReadonlyMap<string, readonly OverviewLine[]>): 
   offers: r.array(r.int(4), () => offer(r)),
 });
 
-const context = (r: Rng): Context => ({ gate: r.pick(["writes", "reads", "views"] as const), offsets: [{ from: 0, minutes: r.pick([0, 60, -300]) }] });
+const context = (r: Rng): Context => {
+  const gate = r.pick(["writes", "reads", "views"] as const);
+  return {
+    wide: r.bool(),
+    gate,
+    reach: gate === "writes" ? { type: "Writes" } : { type: "Reads", said: "This device reads only.", settings: r.bool(), key: r.pick(["untrusted", "revoked", "not_the_key"] as const) },
+    offsets: [{ from: 0, minutes: r.pick([0, 60, -300]) }],
+  };
+};
 
 // What the tab's register of a question may hold, as the host hands it over.
 const held = (r: Rng, ask: SettingsHold, body: unknown): unknown => ({
@@ -86,11 +87,10 @@ const held = (r: Rng, ask: SettingsHold, body: unknown): unknown => ({
 
 const input = (r: Rng, lines: ReadonlyMap<string, readonly OverviewLine[]>): unknown => {
   const o = overview(r, lines);
-  const refs = [...new Set(o.groups.flatMap((g) => g.lines.flatMap((l) => l.cards)))];
   return r.pick([
     () => held(r, "Overview", o),
     () => held(r, "Device", r.bool(0.8) ? device(r) : null),
-    () => held(r, "Cards", refs.filter(() => r.bool(0.7)).map((ref) => card(r, ref))),
+    () => held(r, { Rows: { type: "Proposals" } }, { payload: { at: "2026-10-05T04:00:00", proposals: [], failed: [] }, held: [] }),
     () => ({ type: "Context", ...context(r) }),
   ])();
 };

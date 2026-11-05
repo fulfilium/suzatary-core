@@ -254,7 +254,7 @@ app.scene("a one-row change computes and places exactly that row's spine, and ke
   await app.page.evaluate(`(window.__bench.done(), true)`);
 });
 
-app.scene("the core and typst-wasm compile while they stream, as application/wasm, never from bytes read whole", async () => {
+app.scene("the core, typst-wasm and the pages compile while they stream, as application/wasm, never from bytes read whole", async () => {
   const stop = await app.page.beforeEveryDocument(`(() => {
     const w = WebAssembly, streaming = w.instantiateStreaming, whole = w.instantiate;
     window.__wasm = { streamed: [], whole: 0 };
@@ -269,7 +269,7 @@ app.scene("the core and typst-wasm compile while they stream, as application/was
     await app.page.navigate("about:blank");
     await typst();
     const got = await app.page.evaluate<{ streamed: string[]; whole: number }>(`window.__wasm`);
-    assert.deepEqual([...got.streamed].sort(), ["/b/dev/prodrome_bg.wasm application/wasm", "/b/dev/typst_bg.wasm application/wasm"], "each under its build's name");
+    assert.deepEqual([...got.streamed].sort(), ["/b/dev/prodrome_bg.wasm application/wasm", "/b/dev/typst_bg.wasm application/wasm", "/b/dev/views_bg.wasm application/wasm"], "each under its build's name: the pages too, since the popup of what newly waits is one on every screen");
     assert.equal(got.whole, 0, "a module was instantiated from bytes read whole");
   } finally {
     await app.page.cold(false);

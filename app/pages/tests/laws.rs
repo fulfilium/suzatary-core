@@ -1,7 +1,5 @@
-//! Each page's two laws (`viewtree::dom::page_laws`) over generated runs: whatever the box answers
-//! and whatever a person does, the view is a pure function of the model, and the patched page is a
-//! fresh draw of it. The box's answers are generated as the JSON it prints, so a run also steps
-//! through refusals, failures, answers of the wrong shape, and answers that move under a page.
+//! Each page's two laws (`viewtree::dom::page_laws`) over generated runs, with the box's answers
+//! generated as the JSON it prints: refusals, failures, wrong shapes, answers that move.
 
 use proptest::prelude::*;
 use serde_json::{Value, json};
@@ -14,10 +12,14 @@ use suzatary_core::wire::{
     Neighbour, RecordPayload, RecordSummary, ReleaseItem, ReleaseRow, ReleasesPayload, SaidOn,
 };
 use suzatary_pages::reading::{Nothing, One, Opened};
-use suzatary_pages::runtime::{Answer, Behind, Body, Context, Effect, Gate, Input};
+use suzatary_pages::runtime::{
+    Answer, Behind, Body, Context, Effect, Gate, Input, Reach, Untrusted,
+};
+use suzatary_pages::waiting::Watched;
 use suzatary_pages::zone::Offset;
 use suzatary_pages::{
-    about, briefing, briefings, calendar, mail, memory, message, reading as one, settings, thread,
+    about, briefing, briefings, calendar, card, chats, composer, conversation, draft, inbox, mail,
+    memory, message, needsyou, reading as one, secretary, settings, thread,
 };
 use viewtree::Runtime;
 use viewtree::dom::page_laws;
@@ -26,6 +28,15 @@ use viewtree::kit::Reading;
 fn context(writes: bool) -> Context {
     Context {
         gate: if writes { Gate::Writes } else { Gate::Reads },
+        reach: if writes {
+            Reach::Writes
+        } else {
+            Reach::Reads {
+                said: "This device is not trusted to write yet.".to_owned(),
+                settings: true,
+                key: Untrusted::Untrusted,
+            }
+        },
         offsets: vec![
             Offset {
                 from: 0,
@@ -36,6 +47,7 @@ fn context(writes: bool) -> Context {
                 minutes: 120,
             },
         ],
+        wide: writes,
     }
 }
 
@@ -88,7 +100,6 @@ fn behind() -> impl Strategy<Value = Option<Behind>> {
     )
 }
 
-/// What the tab's register of a question may hold: on its way, failed, refused, or an answer.
 fn reading(answer: impl Strategy<Value = Value>) -> impl Strategy<Value = Reading<Answer>> {
     prop_oneof![
         Just(Reading::Loading),
@@ -176,10 +187,10 @@ fn mail_msg() -> impl Strategy<Value = mail::Msg> {
     ]
 }
 
-fn held<H: Clone + std::fmt::Debug + 'static, A: std::fmt::Debug>(
+fn held<H: Clone + std::fmt::Debug + 'static, A: std::fmt::Debug, S: std::fmt::Debug>(
     ask: H,
     answer: impl Strategy<Value = Value>,
-) -> impl Strategy<Value = Input<H, A>> {
+) -> impl Strategy<Value = Input<H, A, S>> {
     (reading(answer), behind()).prop_map(move |(reading, behind)| Input::Held {
         ask: ask.clone(),
         reading,
@@ -215,8 +226,7 @@ proptest! {
     }
 }
 
-/// A double tap on Cancel is two writes unless the act is running: the second tap asks nothing
-/// until the first is answered, and a refusal is said and lets it be tapped again.
+/// A second Cancel tap asks nothing until the first is answered; a refusal lets it be tapped again.
 #[test]
 fn a_cancel_runs_once_until_it_is_answered() {
     let (mut rt, _) = Runtime::<mail::Mail>::start(mail::Flags {
@@ -261,8 +271,7 @@ fn a_cancel_runs_once_until_it_is_answered() {
     );
 }
 
-/// A search is a navigation: the address carries the query as typed, trimmed, and the account the
-/// listing had, each encoded as the router reads it.
+/// The address carries the query trimmed and the listing's account, encoded as the router reads.
 #[test]
 fn a_search_goes_to_its_address() {
     let (mut rt, first) = Runtime::<mail::Mail>::start(mail::Flags {
@@ -287,8 +296,7 @@ fn a_search_goes_to_its_address() {
     );
 }
 
-// The small pages of stage 4: their answers built from the core's own types and printed as the
-// box prints them.
+// The small pages: answers built from the core's types and printed as the box prints them.
 
 fn words() -> impl Strategy<Value = String> {
     prop_oneof![
@@ -488,7 +496,7 @@ fn about_payload() -> impl Strategy<Value = Value> {
 fn one_msgs(answer: impl Strategy<Value = Value>) -> impl Strategy<Value = Vec<one::Msg>> {
     proptest::collection::vec(
         prop_oneof![
-            held::<one::Hold, one::Ask>(one::Hold::Page, answer)
+            held::<one::Hold, one::Ask, _>(one::Hold::Page, answer)
                 .prop_map(|i| one::Msg::Host(Box::new(i))),
             any::<bool>().prop_map(|w| one::Msg::Host(Box::new(Input::Context(context(w))))),
             Just(one::Msg::Back),
@@ -533,8 +541,8 @@ proptest! {
 
     #[test]
     fn memory_laws(writes: bool, msgs in proptest::collection::vec(prop_oneof![
-        held::<memory::Hold, memory::Ask>(memory::Hold::Memory, memory_payload()).prop_map(|i| memory::Msg::Host(Box::new(i))),
-        held::<memory::Hold, memory::Ask>(memory::Hold::Record, record_payload()).prop_map(|i| memory::Msg::Host(Box::new(i))),
+        held::<memory::Hold, memory::Ask, _>(memory::Hold::Memory, memory_payload()).prop_map(|i| memory::Msg::Host(Box::new(i))),
+        held::<memory::Hold, memory::Ask, _>(memory::Hold::Record, record_payload()).prop_map(|i| memory::Msg::Host(Box::new(i))),
         answered::<memory::Hold, memory::Act>(act()).prop_map(|i| memory::Msg::Host(Box::new(i))),
         any::<bool>().prop_map(|w| memory::Msg::Host(Box::new(Input::Context(context(w))))),
         act().prop_map(memory::Msg::Run),
@@ -546,8 +554,8 @@ proptest! {
 
     #[test]
     fn about_laws(msgs in proptest::collection::vec(prop_oneof![
-        held::<about::Hold, about::Ask>(about::Hold::About, about_payload()).prop_map(|i| about::Msg::Host(Box::new(i))),
-        held::<about::Hold, about::Ask>(about::Hold::Releases, releases_payload()).prop_map(|i| about::Msg::Host(Box::new(i))),
+        held::<about::Hold, about::Ask, _>(about::Hold::About, about_payload()).prop_map(|i| about::Msg::Host(Box::new(i))),
+        held::<about::Hold, about::Ask, _>(about::Hold::Releases, releases_payload()).prop_map(|i| about::Msg::Host(Box::new(i))),
         Just(about::Msg::Retry),
     ], 0..8)) {
         page_laws::<about::About>(|| opened(true, Nothing {}), &msgs);
@@ -569,8 +577,8 @@ proptest! {
     }
 }
 
-/// A double tap would be two writes: a second Forget of the same fact sends nothing until the
-/// first is answered, and an answered one reads the memory again.
+/// A second Forget of the same fact sends nothing until the first is answered; an answer rereads
+/// the memory.
 #[test]
 fn a_forget_runs_once_until_it_is_answered() {
     let (mut rt, _) = Runtime::<memory::Memory>::start(opened(true, Nothing {}));
@@ -604,8 +612,13 @@ fn a_forget_runs_once_until_it_is_answered() {
 
 fn overview() -> impl Strategy<Value = Value> {
     let line = |n: u8, standing: Value, cards: Value| {
+        let replaces = if n.is_multiple_of(2) {
+            json!([{"label": "its token", "handle": format!("h{n}")}])
+        } else {
+            json!([])
+        };
         json!({"key": format!("l{n}"), "label": format!("Line {n}"), "detail": null,
-            "standing": standing, "cards": cards})
+            "standing": standing, "cards": cards, "replaces": replaces})
     };
     (
         proptest::collection::vec(
@@ -642,12 +655,120 @@ fn device() -> impl Strategy<Value = Value> {
     ])
 }
 
-fn cards() -> impl Strategy<Value = Value> {
-    prop::sample::select(vec![
-        json!([]),
-        json!([{"reference": "proposal:setup/1", "act": "secret", "stands": "open", "version": "a"}]),
-        json!([{"reference": "proposal:setup/1", "act": "sign_in", "stands": "settled", "version": "b"}]),
-    ])
+/// A link to store (a typed value), a grant (a confirmed yes), or an email (a confirmed send),
+/// standing, failed, or answered.
+fn proposal(index: usize) -> impl Strategy<Value = Value> {
+    (
+        prop::sample::select(vec!["secret", "grant", "email"]),
+        prop::sample::select(vec!["standing", "failed", "unknown", "sent"]),
+        prop::sample::select(vec![json!({"kind": "setup"}), json!({"kind": "secretary"}), json!({"kind": "triage"})]),
+        prop::sample::select(vec!["", "This changeset no longer applies"]),
+        prop::sample::select(vec![
+            json!(null),
+            json!({"kind": "page", "label": "Where to get it", "href": "https://example.test/token"}),
+            json!({"kind": "setup", "label": "Set it up", "template": "microsoft"}),
+        ]),
+    )
+        .prop_map(move |(kind, state, by, problem, link)| {
+            let (act, answer) = match kind {
+                "secret" => (
+                    json!({"kind": "secret", "label": "the calendar's link", "found": null, "link": null}),
+                    json!({"verb": "store", "label": "Store", "done": "Stored", "asks": "value", "input": "The link"}),
+                ),
+                "grant" => (
+                    json!({"kind": "grant", "plugin": "ics", "origin": "https://cal.example.test", "sentence": "Allow it."}),
+                    json!({"verb": "allow", "label": "Allow", "done": "Allowed", "asks": "confirm", "question": "Allow it?", "yes": "Allow"}),
+                ),
+                _ => (
+                    json!({"kind": "email", "account": "me@example.test", "to": ["ada@example.test"], "cc": [], "subject": "Hello", "body": "Dear Ada", "reply_to": null, "attachments": [], "held": {"type": "Read", "values": []}, "sentence": "Send it."}),
+                    json!({"verb": "send", "label": "Send", "done": "Sent", "asks": "confirm", "question": "Send to ada@example.test?", "yes": "Send"}),
+                ),
+            };
+            json!({"index": index, "act": act, "why": "Because", "sources": ["todo:life/renewcard"], "at": "2026-10-05T04:00:00",
+                "state": state, "outcome": "", "tries": 0, "turn": 1, "coding": null, "announced": null, "revises": null,
+                "card": {"title": "A card", "by": by, "sentence": "Do it.", "fields": [{"label": "To", "value": "ada@example.test"}],
+                    "body": "", "rows": [], "files": [], "problem": problem, "answers": [answer], "uncertain": "Check Sent.",
+                    "readonly": "You may read this.", "link": link}})
+        })
+}
+
+fn conversation_cards(id: &'static str) -> impl Strategy<Value = Value> {
+    proptest::collection::vec(any::<bool>(), 0..3).prop_flat_map(move |shown| {
+        let rows: Vec<_> = (0..shown.len()).map(proposal).collect();
+        rows.prop_map(move |proposals| {
+            json!({"id": id, "title": "Setup", "model": "", "opened": "", "turns": [], "proposals": proposals,
+                "unplaced": [], "state": "idle", "first": 0, "total": 0, "again": null})
+        })
+    })
+}
+
+fn inbox_read() -> impl Strategy<Value = Value> {
+    proptest::collection::vec(
+        (
+            prop::sample::select(vec!["setup", "talk"]),
+            0usize..3,
+            prop::sample::select(vec![json!({"kind": "open"}), json!({"kind": "completed", "at": "2026-10-05T04:00:00"}), json!({"kind": "unreadable", "reason": "garbled"})]),
+            prop::sample::select(vec![json!(0.4), json!(null), json!(0.8)]),
+        ),
+        0..4,
+    )
+    .prop_map(|ps| {
+        let proposals: Vec<Value> = ps
+            .into_iter()
+            .enumerate()
+            .map(|(n, (c, i, state, value))| {
+                json!({"id": format!("p{n}"), "asked": format!("proposal:{c}/{i}"), "serves": "todo:life/renewcard",
+                    "headline": "A card", "by": {"kind": "setup"}, "why": "Because", "state": state, "value": value,
+                    "at": "2026-10-05T04:00:00"})
+            })
+            .collect();
+        json!({"payload": {"at": "2026-10-05T04:00:00", "proposals": proposals, "failed": []}, "held": ["life"]})
+    })
+}
+
+fn watched() -> impl Strategy<Value = (Watched, Value)> {
+    prop_oneof![
+        inbox_read().prop_map(|v| (Watched::Proposals, v)),
+        conversation_cards("setup").prop_map(|v| (Watched::Cards("setup".to_owned()), v)),
+        conversation_cards("talk").prop_map(|v| (Watched::Cards("talk".to_owned()), v)),
+        Just((Watched::Conversations, json!({"conversations": []}))),
+    ]
+}
+
+fn card_ev() -> impl Strategy<Value = (card::Key, card::Ev)> {
+    (
+        prop::sample::select(vec!["setup", "talk"]),
+        0u32..3,
+        prop_oneof![
+            Just(card::Ev::Open(card::Step::Confirming {
+                verb: "allow".to_owned()
+            })),
+            Just(card::Ev::Open(card::Step::Confirming {
+                verb: "send".to_owned()
+            })),
+            Just(card::Ev::Open(card::Step::Saying {
+                verb: "dismiss".to_owned()
+            })),
+            prop::sample::select(vec!["", "not yet"]).prop_map(|t| card::Ev::Typed(t.to_owned())),
+            Just(card::Ev::Close),
+            any::<bool>().prop_map(card::Ev::Details),
+            (0usize..2).prop_map(card::Ev::Yes),
+            any::<bool>().prop_map(card::Ev::Value),
+            Just(card::Ev::Dismiss),
+            Just(card::Ev::Acknowledge),
+            Just(card::Ev::Reply),
+            Just(card::Ev::Setup),
+        ],
+    )
+        .prop_map(|(c, index, ev)| {
+            (
+                card::Key {
+                    conversation: c.to_owned(),
+                    index,
+                },
+                ev,
+            )
+        })
 }
 
 fn settings_act() -> impl Strategy<Value = settings::Act> {
@@ -662,6 +783,9 @@ fn settings_act() -> impl Strategy<Value = settings::Act> {
         Just(settings::Act::Pair {
             code: "BCDF-GHJK".to_owned()
         }),
+        Just(settings::Act::Replace {
+            handle: "h0".to_owned()
+        }),
     ]
 }
 
@@ -670,11 +794,14 @@ fn settings_msg() -> impl Strategy<Value = settings::Msg> {
     prop_oneof![
         held(settings::Hold::Overview, overview()).prop_map(host),
         held(settings::Hold::Device, device()).prop_map(host),
-        held(settings::Hold::Cards, cards()).prop_map(host),
+        watched()
+            .prop_flat_map(move |(w, v)| held(settings::Hold::Rows(w), Just(v)))
+            .prop_map(host),
+        card_ev().prop_map(|(k, ev)| settings::Msg::Card(k, ev)),
         any::<bool>().prop_map(move |w| host(Input::Context(context(w)))),
         settings_act().prop_map(settings::Msg::Run),
         (settings_act(), any::<bool>()).prop_map(move |(ask, done)| host(Input::Answered {
-            ask,
+            ask: settings::Ask::Run(ask),
             answer: if done {
                 Answer::Done {
                     body: json!({"id": "setup-1"}),
@@ -700,4 +827,375 @@ proptest! {
     fn settings_laws(writes: bool, msgs in proptest::collection::vec(settings_msg(), 0..12)) {
         page_laws::<settings::Settings>(|| settings::Flags { context: context(writes) }, &msgs);
     }
+}
+
+fn inbox_msg() -> impl Strategy<Value = inbox::Msg> {
+    let host = |i: Input<inbox::Hold, inbox::Ask>| inbox::Msg::Host(Box::new(i));
+    prop_oneof![
+        watched().prop_flat_map(move |(w, v)| held(inbox::Hold::Rows(w), Just(v))).prop_map(host),
+        held(inbox::Hold::Rows(Watched::Decisions("life".to_owned())), Just(json!({"at": "2026-10-05T04:00:00", "heads": [], "entries": [], "failed": [], "next": null}))).prop_map(host),
+        held(inbox::Hold::Intents, Just(json!({"asked": [{"act": {"type": "Answer", "at": {"conversation": "setup", "index": 0, "from": "standing:0:"}, "answer": {"type": "Dismiss", "reason": "no"}}, "answer": null, "retracted": false}]}))).prop_map(host),
+        card_ev().prop_map(|(k, ev)| inbox::Msg::Card(k, ev)),
+        any::<bool>().prop_map(inbox::Msg::Setup),
+        any::<bool>().prop_map(inbox::Msg::Settled),
+        any::<bool>().prop_map(move |w| host(Input::Context(context(w)))),
+    ]
+}
+
+proptest! {
+    #![proptest_config(ProptestConfig::with_cases(256))]
+
+    #[test]
+    fn inbox_laws(writes: bool, opened: bool, msgs in proptest::collection::vec(inbox_msg(), 0..12)) {
+        page_laws::<inbox::Inbox>(
+            || inbox::Flags { context: context(writes), open: if opened { "p0".to_owned() } else { String::new() }, now: 1_790_000_000_000 },
+            &msgs,
+        );
+    }
+}
+
+fn turn_row(index: usize) -> impl Strategy<Value = Value> {
+    (
+        prop::sample::select(vec!["person", "model", "verb", "act", "gone"]),
+        prop::sample::select(vec!["", "see todo:life/renewcard", "https://example.test/x"]),
+    )
+        .prop_map(move |(who, text)| {
+            let base = json!({"index": index, "text": text, "at": "2026-10-05T04:00:00", "attempt": "current", "gone": null});
+            let mut t = base.as_object().cloned().unwrap_or_default();
+            let extra = match who {
+                "person" => json!({"who": "person", "references": [], "attachments": [{"id": "a1", "media_type": "image/jpeg", "name": "", "private": ""}], "queued": false}),
+                "model" => json!({"who": "model", "blocks": [{"source": "Hi\n\n", "plain": "Hi", "kind": "prose", "html": null}]}),
+                "verb" => json!({"who": "verb", "verb": "search", "outcome": {"is": "remembered", "receipt": {"state": "standing", "fact": 3, "text": "calls after ten"}}}),
+                "act" => json!({"who": "act", "references": ["todo:life/renewcard"]}),
+                _ => json!({"who": "model", "blocks": [], "gone": {"why": "asked", "by": "ada"}}),
+            };
+            for (k, v) in extra.as_object().cloned().unwrap_or_default() {
+                t.insert(k, v);
+            }
+            Value::Object(t)
+        })
+}
+
+fn stream_read() -> impl Strategy<Value = Value> {
+    proptest::collection::vec((turn_row(0), prop::sample::select(vec![json!([]), json!(["garden"]), json!(["garden", "trip"])]), any::<bool>()), 0..4).prop_map(|rs| {
+        let rounds: Vec<Value> = rs
+            .into_iter()
+            .enumerate()
+            .map(|(n, (opening, topics, boxed))| {
+                json!({"target": format!("round:c{n}/0"), "conversation": format!("c{n}"), "title": "", "turn": 0,
+                    "opening": opening, "asked": if boxed { json!({"by": "box", "title": "The day's brief"}) } else { json!({"by": "person"}) },
+                    "answer": null, "topics": topics, "room": 2})
+            })
+            .collect();
+        let total = rounds.len() + 1;
+        json!({"stream": {"rounds": rounds, "total": total}, "bar": {"topics": [{"topic": "garden", "rounds": 2, "disputed": []}, {"topic": "trip", "rounds": 1, "disputed": ["travel"]}]}})
+    })
+}
+
+fn outcome() -> impl Strategy<Value = Answer> {
+    prop::sample::select(vec![
+        Answer::Done {
+            body: json!({"type": "Answered", "answer": {"type": "Taken"}, "held": true}),
+        },
+        Answer::Done {
+            body: json!({"type": "Answered", "answer": {"type": "Refused", "e": "the box refused this topic"}, "held": false}),
+        },
+        Answer::Done {
+            body: json!({"type": "Answered", "answer": {"type": "Lost", "e": "offline"}, "held": true}),
+        },
+        Answer::Done {
+            body: json!({"type": "Already"}),
+        },
+        Answer::Refused {
+            status: 0,
+            words: "no answer".to_owned(),
+        },
+    ])
+}
+
+fn secretary_msg() -> impl Strategy<Value = secretary::Msg> {
+    let host = |i: Input<secretary::Hold, secretary::Ask>| secretary::Msg::Host(Box::new(i));
+    prop_oneof![
+        held(secretary::Hold::Stream, stream_read()).prop_map(host),
+        held(secretary::Hold::Found, Just(json!({"query": "zephyr", "hits": [{"conversation": "c0", "title": "", "kind": "topic", "turn": 0, "at": "2026-10-05T04:00:00", "side": "person", "excerpt": "when"}]}))).prop_map(host),
+        held(secretary::Hold::Scroll, prop::sample::select(vec![json!({"by": "reader", "at": "above"}), json!({"by": "page", "at": "bottom"})])).prop_map(host),
+        Just(secretary::Msg::Earlier),
+        prop::sample::select(vec!["garden", "trip"]).prop_map(|t| secretary::Msg::Rename(t.to_owned())),
+        Just(secretary::Msg::Add("round:c0/0".to_owned())),
+        Just(secretary::Msg::Remove("round:c0/0".to_owned(), "garden".to_owned())),
+        prop::sample::select(vec!["", "Trip", "trip", "garden"]).prop_map(|t| secretary::Msg::Typed(t.to_owned())),
+        Just(secretary::Msg::Write("trip".to_owned())),
+        Just(secretary::Msg::Submit),
+        Just(secretary::Msg::Close),
+        prop::sample::select(vec!["", "zephyr", " zephyr "]).prop_map(|t| secretary::Msg::Searched(t.to_owned())),
+        (0u32..4).prop_map(move |n| host(Input::Answered { ask: secretary::Ask::Search(chats::Asking::Rested(n)), answer: Answer::Done { body: json!(1_790_000_000_000_i64) } })),
+        outcome().prop_map(move |answer| host(Input::Answered { ask: secretary::Ask::Topic(secretary::Wrote { renamed: Some(("garden".to_owned(), "yard".to_owned())), closes: true }), answer })),
+        any::<bool>().prop_map(move |w| host(Input::Context(context(w)))),
+    ]
+}
+
+fn windowed() -> impl Strategy<Value = Value> {
+    prop_oneof![
+        3 => (proptest::collection::vec(any::<bool>(), 0..5), conversation_cards("talk"), prop::sample::select(vec!["idle", "thinking"])).prop_flat_map(|(shape, cards, state)| {
+            let rows: Vec<_> = (0..shape.len()).map(turn_row).collect();
+            rows.prop_map(move |turns| {
+                let rounds: Vec<Value> = (0..turns.len())
+                    .map(|i| json!({"key": i, "startIndex": i, "endIndex": i, "opening": i, "trace": [], "answer": null,
+                        "proposals": if i == 0 { json!([0, 1]) } else { json!([]) }, "earlier": [], "day": "2026-10-05", "label": "Monday 5 October", "marked": i == 0}))
+                    .collect();
+                let total = turns.len();
+                let mut c = cards.clone();
+                c["turns"] = json!(turns);
+                c["rounds"] = json!(rounds);
+                c["total"] = json!(total);
+                c["state"] = json!(state);
+                c["again"] = if total > 0 { json!(0) } else { json!(null) };
+                json!({"type": "Read", "payload": c})
+            })
+        }),
+        1 => Just(json!({"type": "NotHere", "lines": 3, "why": "offline"})),
+        1 => Just(json!({"type": "Unheard"})),
+    ]
+}
+
+fn frame() -> impl Strategy<Value = String> {
+    prop::sample::select(vec![
+        r#"{"kind":"state","state":"thinking"}"#,
+        r#"{"kind":"working","verb":"search"}"#,
+        r#"{"kind":"delta","text":"Hi\n\nthere"}"#,
+        r#"{"kind":"block","n":0,"sha":"ab","source":"Hi\n\n"}"#,
+        r#"{"kind":"turn"}"#,
+        r#"{"kind":"state","state":"idle"}"#,
+        "not a frame",
+    ])
+    .prop_map(str::to_owned)
+}
+
+fn composer_ev() -> impl Strategy<Value = composer::Ev> {
+    prop_oneof![
+        prop::sample::select(vec!["", "hello", "  "])
+            .prop_map(|t| composer::Ev::Typed(t.to_owned())),
+        Just(composer::Ev::Picked(vec![viewtree::Picked {
+            media: "application/pdf".to_owned(),
+            base64: "JVBE".to_owned(),
+            name: "w2.pdf".to_owned()
+        }])),
+        Just(composer::Ev::Detached("todo:life/renewcard".to_owned())),
+        Just(composer::Ev::Unfiled("a1".to_owned())),
+        Just(composer::Ev::KeepPrivate(0)),
+        Just(composer::Ev::Drop(0)),
+        Just(composer::Ev::KeepMine),
+        Just(composer::Ev::Take("other".to_owned())),
+        Just(composer::Ev::Cancel),
+        Just(composer::Ev::Send),
+        Just(composer::Ev::Stop),
+        Just(composer::Ev::Up),
+    ]
+}
+
+fn uploaded() -> impl Strategy<Value = Answer> {
+    prop::sample::select(vec![
+        Answer::Done {
+            body: json!({"kind": "kept", "file": {"id": "f1", "media_type": "application/pdf", "name": "w2.pdf", "private": ""}}),
+        },
+        Answer::Done {
+            body: json!({"kind": "sensitive", "why": "its text names an identity number", "folder": "/my-files/Suzatary/Private"}),
+        },
+        Answer::Refused {
+            status: 413,
+            words: "too big".to_owned(),
+        },
+    ])
+}
+
+fn conversation_msg() -> impl Strategy<Value = conversation::Msg> {
+    use conversation::{Ask, Hold, Msg};
+    let host = |i: conversation::Input| Msg::Host(Box::new(i));
+    prop_oneof![
+        (reading(windowed()), behind()).prop_map(move |(reading, behind)| host(Input::Held { ask: Hold::Window, reading, behind })),
+        frame().prop_map(move |frame| host(Input::Heard { ask: conversation::Stream::Conversation, frame })),
+        held(Hold::Draft, prop::sample::select(vec![json!({"text": "", "others": []}), json!({"text": "draft", "others": ["elsewhere"]})])).prop_map(host),
+        held(Hold::Scroll, prop::sample::select(vec![json!({"by": "reader", "at": "above"}), json!({"by": "reader", "at": "bottom"}), json!({"by": "page", "at": "above"})])).prop_map(host),
+        held(Hold::Block("ab".to_owned()), Just(json!({"html": "<p>Hi</p>", "key": "k"}))).prop_map(host),
+        held(Hold::Chats, Just(json!({"conversations": [{"id": "talk", "title": "", "kind": "topic", "opened": "", "turns": 2, "standing": 1, "unplaced": [], "last": "hi", "last_at": "2026-10-05T04:00:00"}]}))).prop_map(host),
+        composer_ev().prop_map(Msg::Composer),
+        card_ev().prop_map(|(k, ev)| Msg::Card(k, ev)),
+        Just(Msg::Quote("a line".to_owned())),
+        Just(Msg::Earlier),
+        Just(Msg::Pill),
+        Just(Msg::Stop),
+        Just(Msg::Regenerate),
+        Just(Msg::Edit),
+        (0usize..3).prop_map(|t| Msg::Erasing(Some(t))),
+        Just(Msg::Erasing(None)),
+        (0usize..3).prop_map(Msg::Erase),
+        Just(Msg::Forget(3)),
+        Just(Msg::Rename),
+        Just(Msg::Renamed("A name".to_owned())),
+        prop::option::of(Just("A name".to_owned())).prop_map(Msg::Named),
+        prop::sample::select(vec!["", "zephyr"]).prop_map(|t| Msg::Searched(t.to_owned())),
+        outcome().prop_map(move |answer| host(Input::Answered { ask: Ask::Said(Box::new(conversation::Spoken { text: "hello".to_owned(), references: Vec::new(), files: Vec::new(), edit: false })), answer })),
+        outcome().prop_map(move |answer| host(Input::Answered { ask: Ask::Rename, answer })),
+        uploaded().prop_map(move |answer| host(Input::Answered { ask: Ask::Composer(composer::Asking::Upload(1)), answer })),
+        Just(host(Input::Answered { ask: Ask::Slice, answer: Answer::Done { body: json!(1_790_000_005_000_i64) } })),
+        Just(host(Input::Opened { ask: conversation::Stream::Conversation })),
+        any::<bool>().prop_map(move |w| host(Input::Context(context(w)))),
+    ]
+}
+
+fn draft_msg() -> impl Strategy<Value = draft::Msg> {
+    let host = |i: draft::Input| draft::Msg::Host(Box::new(i));
+    prop_oneof![
+        composer_ev().prop_map(draft::Msg::Composer),
+        prop::sample::select(vec!["", "The zephyr filing"])
+            .prop_map(|t| draft::Msg::Named(t.to_owned())),
+        prop::sample::select(vec![
+            Answer::Done {
+                body: json!({"id": "2026-10-05-1"})
+            },
+            Answer::Refused {
+                status: 403,
+                words: "no".to_owned()
+            }
+        ])
+        .prop_map(move |answer| host(Input::Answered {
+            ask: draft::Ask::Open,
+            answer
+        })),
+        outcome().prop_map(move |answer| host(Input::Answered {
+            ask: draft::Ask::Said("2026-10-05-1".to_owned()),
+            answer
+        })),
+        any::<bool>().prop_map(move |w| host(Input::Context(context(w)))),
+    ]
+}
+
+fn needsyou_msg() -> impl Strategy<Value = needsyou::Msg> {
+    let host = |i: needsyou::Input| needsyou::Msg::Host(Box::new(i));
+    prop_oneof![
+        inbox_read()
+            .prop_flat_map(move |v| held(needsyou::Hold::Rows(Watched::Proposals), Just(v)))
+            .prop_map(host),
+        held(
+            needsyou::Hold::Route,
+            prop::sample::select(vec![
+                json!({"page": "inbox", "conversation": ""}),
+                json!({"page": "todos", "conversation": ""}),
+                json!({"page": "conversation", "conversation": "talk"})
+            ])
+        )
+        .prop_map(host),
+        (0u8..4).prop_map(|n| needsyou::Msg::Close(format!("p{n}"))),
+    ]
+}
+
+proptest! {
+    #![proptest_config(ProptestConfig::with_cases(256))]
+
+    #[test]
+    fn secretary_laws(writes: bool, chosen: bool, msgs in proptest::collection::vec(secretary_msg(), 0..14)) {
+        page_laws::<secretary::Secretary>(
+            || secretary::Flags { context: context(writes), topics: if chosen { vec!["trip".to_owned(), "garden".to_owned()] } else { Vec::new() }, now: 1_790_000_000_000 },
+            &msgs,
+        );
+    }
+
+    #[test]
+    fn conversation_laws(writes: bool, panel: bool, msgs in proptest::collection::vec(conversation_msg(), 0..16)) {
+        let at = if panel {
+            conversation::At::Panel { about: "todo:life/renewcard".to_owned() }
+        } else {
+            conversation::At::Page { id: "talk".to_owned(), refs: vec!["todo:life/renewcard".to_owned()], focus: true, at: None }
+        };
+        page_laws::<conversation::Conversation>(|| conversation::Flags { context: context(writes), at: at.clone(), now: 1_790_000_000_000 }, &msgs);
+    }
+
+    #[test]
+    fn draft_laws(writes: bool, msgs in proptest::collection::vec(draft_msg(), 0..12)) {
+        page_laws::<draft::Draft>(|| draft::Flags { context: context(writes) }, &msgs);
+    }
+
+    #[test]
+    fn needsyou_laws(msgs in proptest::collection::vec(needsyou_msg(), 0..12)) {
+        page_laws::<needsyou::NeedsYou>(|| needsyou::Flags { context: context(true) }, &msgs);
+    }
+}
+
+/// A card Settings reads that changes in any field, its outcome after the box's check say, asks
+/// the overview again, waiting or settled: the line's health is in the overview, and nothing
+/// else moves when a check lands after the tap's answer.
+#[test]
+fn a_card_that_changes_asks_the_overview_again() {
+    use proptest::strategy::ValueTree;
+    use proptest::test_runner::TestRunner;
+    let mut runner = TestRunner::deterministic();
+    let row = proposal(0).new_tree(&mut runner).expect("a row").current();
+    let with = |state: &str, outcome: &str| {
+        let mut r = row.clone();
+        r["state"] = json!(state);
+        r["outcome"] = json!(outcome);
+        let body = json!({"id": "setup", "title": "Setup", "model": "", "opened": "", "turns": [], "proposals": [r],
+            "unplaced": [], "state": "idle", "first": 0, "total": 0, "again": null});
+        settings::Msg::Host(Box::new(Input::Held {
+            ask: settings::Hold::Rows(Watched::Cards("setup".to_owned())),
+            reading: Reading::Val {
+                v: Answer::Done { body },
+            },
+            behind: None,
+        }))
+    };
+    let again = |effects: &[Effect<settings::Hold, settings::Ask>]| {
+        effects
+            .iter()
+            .any(|e| matches!(e, Effect::Again { path } if path == "/api/overview"))
+    };
+    let (mut rt, _) = Runtime::<settings::Settings>::start(settings::Flags {
+        context: context(true),
+    });
+    rt.step(with("sent", ""));
+    assert!(
+        again(&rt.step(with("sent", "its address could not be reached")).1),
+        "a settled card's new outcome"
+    );
+    rt.step(with("standing", ""));
+    assert!(
+        again(&rt.step(with("standing", "checked")).1),
+        "a waiting card's new outcome"
+    );
+    assert!(
+        !again(&rt.step(with("standing", "checked")).1),
+        "the same reading asks nothing"
+    );
+}
+
+/// A card's tap answered asks the overview again: the box checks what the tap stored before it
+/// answers, so the answer is when the line's health has moved.
+#[test]
+fn a_card_tap_answered_asks_the_overview_again() {
+    let (mut rt, _) = Runtime::<settings::Settings>::start(settings::Flags {
+        context: context(true),
+    });
+    let answered = settings::Msg::Host(Box::new(Input::Answered {
+        ask: settings::Ask::Card(card::Asking::Act {
+            key: card::Key {
+                conversation: "setup".to_owned(),
+                index: 0,
+            },
+            then: card::Then {
+                done: "Stored".to_owned(),
+                yes: false,
+            },
+            signed: "standing:0:".to_owned(),
+        }),
+        answer: Answer::Done {
+            body: json!({"type": "Answered", "answer": {"type": "Taken"}, "held": true}),
+        },
+    }));
+    let effects = rt.step(answered).1;
+    assert!(
+        effects
+            .iter()
+            .any(|e| matches!(e, Effect::Again { path } if path == "/api/overview")),
+        "{effects:?}"
+    );
 }

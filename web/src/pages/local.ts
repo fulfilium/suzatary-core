@@ -1,68 +1,171 @@
-// What the tab keeps of its own that a page watches (`Local` in `app/pages/src/runtime.rs`): this device, and the
-// Inbox's open cards. Each is a reading, handed to a page by the host as it hands the box's answers; no GET answers it.
+// What the tab keeps of its own that a page watches (`Local` in `app/pages/src/runtime.rs`), each a reading read again
+// whenever what it reads moves. Nothing here knows a page.
 
-import type { Card, CardAct, Device, Local } from "../wire/generated/pages"
-import type { Row } from "../inbox/inbox"
-import { sameRows } from "../inbox/inbox"
+import type { Local, Register } from "../wire/generated/pages"
 import device from "../app/device"
 import asked from "../app/asked"
 import app from "../app/app"
-import { signingHere, watchReplica } from "../prodrome/sync"
+import ui from "../app/ui"
+import registers from "../app/registers"
+import time from "../app/time"
+import { boxFolds, signingHere, watchOthers, watchReplica } from "../prodrome/sync"
 import signer from "../prodrome/signer"
 import storesync from "../prodrome/storesync"
+import intentsync from "../prodrome/intentsync"
+import intents from "../prodrome/intents"
+import readings from "../prodrome/readings"
+import excluded from "../prodrome/excluded"
 import reading from "../algebra/reading"
-import lo from "../algebra/lo"
-import inboxPage from "./inbox"
-import overview from "./overview"
+import dressed from "../chat/dressed"
+import drafts from "../chat/drafts"
+import draftbox from "../chat/draftbox"
+import onScreen from "../inbox/onscreen"
+import scroll from "../painter/scroll"
+import d from "../wire/decoder"
 
 export namespace local {
-  // What this browser keeps, asked again when the stores move.
   const kept = reading.againOn(
     asked.question(() => device.kept().catch(() => null)),
     storesync.watch,
   )
 
-  // Who this device writes as, read again when what it reads moves: the replica (a key trusted or revoked arrives there
-  // after the box moved, so the box moving is too early to read it), this device's key and who writes.
+  // Reads the replica: a key trusted or revoked arrives there after the box moved.
   const signing = reading.againOn(asked.question(() => device.signing(() => signingHere("Page"))), heard => {
     const unhear = [watchReplica(heard), signer.watch(heard), app.hear(app.actor, heard)]
     return () => unhear.forEach(u => u())
   })
 
-  const here: reading.Reading<Device | null> = reading.map(reading.both(kept, signing), ([k, s]) => (k === null ? null : { ...k, signing: s }))
+  const here = reading.map(reading.both(kept, signing), ([k, s]) => (k === null ? null : { ...k, signing: s }))
 
-  // The Inbox's proposals, which the tab holds: on their way while the conversations sync.
-  const proposals = reading.settled(
-    reading.map(inboxPage.waits, w => w.rows.filter(r => r.kind === "proposal")),
-    sameRows,
+  // From the inbox alone; what it was priced without goes to the shell's line of what the device left out.
+  const proposals = reading.againOn(
+    asked.question(async () => {
+      const read = await dressed.inbox(time.moment(), await dressed.asked())
+      readings.told("inbox", excluded.left(excluded.NONE, read.payload.failed))
+      return read
+    }),
+    storesync.watch,
   )
 
-  const actOf = (kind: string): CardAct =>
-    kind === "sign_in" || kind === "sign_in_code" ? "sign_in" : kind === "secret" ? "secret" : kind === "grant" ? "grant" : "other"
+  // Kept while the chain's heads stand.
+  // Decision entries alone, so a page waiting on them does not decode every todo when the chain moves.
+  const decisions = asked.family(
+    (chain: string) => chain,
+    (chain: string) => boxFolds.of(chain).then(f => ({ ...f, entries: f.entries.filter(e => e.authored?.block.kind === "decision") })),
+  )
 
-  const cardOf = (r: Row): readonly Card[] => {
-    const reference = overview.reference(r)
-    return r.kind === "proposal" && reference !== null
-      ? [{ reference, act: actOf(r.proposal.act.kind), stands: r.proposal.state === "standing" || r.proposal.state === "failed" ? "open" : "settled", version: JSON.stringify(r.proposal) }]
-      : []
+  const listed = reading.againOn(asked.question(() => storesync.list()), storesync.watch)
+
+  const searches = asked.family((q: string) => q, (q: string) => storesync.search(q))
+
+  type Stream = Extract<Local, { type: "Stream" }>
+  const streams = asked.family(
+    (s: Stream) => JSON.stringify([s.chosen, s.pages]),
+    (s: Stream) => dressed.stream(s.chosen, s.pages).then(r => ({ stream: r.stream, bar: r.bar })),
+  )
+
+  type Window = Extract<Local, { type: "Window" }>
+  const windows = asked.family(
+    (w: Window) => JSON.stringify([w.id, w.window]),
+    (w: Window) => dressed.window(w.id, w.window, app.now().zone),
+  )
+
+  const cards = asked.family((id: string) => id, (id: string) => dressed.asked().then(m => dressed.cards(id, m)))
+
+  // A seal and a summary are no page's; a topic is named without its instant.
+  const held = (): unknown => {
+    const t = intentsync.held()
+    return {
+      asked: [...t.asked].flatMap(([key, v]) =>
+        v.act.type === "Seal" || v.act.type === "Retract"
+          ? []
+          : [{ act: v.act.type === "Topic" ? { type: "Topic", write: v.act.write } : v.act, answer: v.answer, retracted: !intents.isIn(t, key) }],
+      ),
+    }
+  }
+  const asking = reading.held(held, intentsync.watch)
+
+  const titles = reading.map(onScreen.titles, t => Object.fromEntries(t))
+
+  // One per conversation for the tab's life: what the box holds, and the other words a conflict sets beside it.
+  const boxes = new Map<string, { readonly draft: drafts.Draft; box: draftbox.T }>()
+  const boxOf = (id: string): { readonly draft: drafts.Draft; box: draftbox.T } => {
+    const known = boxes.get(id)
+    if (known !== undefined) return known
+    const draft = drafts.of(ui.tab, id)
+    const made = { draft, box: draftbox.open(draft) }
+    boxes.set(id, made)
+    return made
+  }
+  const draftOf = (id: string): reading.Reading<unknown> => {
+    const b = boxOf(id)
+    const now = (): unknown => {
+      const g = b.draft.read()
+      return { text: b.box.text, others: g.type === "Conflict" ? g.vs.filter(v => v !== b.box.text) : [] }
+    }
+    return reading.held(now, heard => b.draft.hear(() => ((b.box = draftbox.heard(b.draft, b.box)), heard())))
   }
 
-  const cards: reading.Reading<readonly Card[]> = reading.map(proposals, rs => rs.flatMap(cardOf))
+  const route = reading.held(
+    () => {
+      const r = app.route(app.now())
+      return { page: r.type, conversation: r.type === "conversation" ? r.id : "" }
+    },
+    heard => app.hear(app.route, heard),
+  )
 
-  export const of = (l: Local): reading.Reading<unknown> => {
-    switch (l) {
-      case "device":
+  const page = (key: string): reading.Reading<unknown> => {
+    const c = ui.cell(registers.page, key)
+    return reading.held(c.get, c.hear)
+  }
+
+  export const of = (l: Local, box: Element): reading.Reading<unknown> => {
+    switch (l.type) {
+      case "Device":
         return here
-      case "cards":
-        return cards
+      case "Proposals":
+        return proposals
+      case "Decisions":
+        return reading.againOn(decisions(l.chain), watchOthers)
+      case "Conversations":
+        return listed
+      case "Search":
+        return searches(l.q)
+      case "Stream":
+        return reading.againOn(streams(l), storesync.watch)
+      case "Window":
+        return reading.againOn(windows(l), heard => storesync.watchConversation(l.id, heard))
+      case "Cards":
+        return reading.againOn(reading.againOn(cards(l.conversation), storesync.watch), watchOthers)
+      case "Intents":
+        return asking
+      case "Titles":
+        return titles
+      case "Draft":
+        return draftOf(l.id)
+      case "Ui":
+        return page(l.key)
+      case "Scroll":
+        return scroll.of(box)
+      case "Route":
+        return route
     }
   }
 
-  // The proposal a page names by reference, from what the tab holds now: the cards a page places as parts.
-  export const row = (ref: string): Row => {
-    const r = lo.withDefault(proposals.now(), []).find(x => overview.reference(x) === ref)
-    if (r === undefined) throw new Error(`no card ${ref} in what the tab holds`)
-    return r
+  const drafted = d.obj({ type: d.oneOf({ Typed: null, Settled: null }), text: d.str })
+
+  export const keep = (r: Register, value: unknown): void => {
+    switch (r.type) {
+      case "Draft": {
+        const b = boxOf(r.id)
+        const v = drafted(value)
+        if (v.type === "Error") throw new Error(`a draft a page kept does not read: ${v.e}`)
+        b.box = v.v.type === "Typed" ? draftbox.typed(b.draft, b.box, v.v.text) : draftbox.settled(b.draft, v.v.text)
+        return
+      }
+      case "Ui":
+        return ui.cell(registers.page, r.key).set(value)
+    }
   }
 }
 export default local

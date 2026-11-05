@@ -19,7 +19,7 @@ import payload from "./wire/generated/payload";
 import { remember } from "./app/chain";
 import type stores from "./prodrome/stores";
 import once from "./algebra/once";
-import { installNeedsYou } from "./inbox/needsyou";
+import program from "./pages/program";
 import { installPresence } from "./app/presence";
 import { byId, clear, el } from "./view/dom";
 import { announce } from "./view/focus";
@@ -60,7 +60,7 @@ import ownerzone from "./app/ownerzone";
 import login from "./app/login";
 import page from "./shell/page";
 
-// The body and the stylesheets are this build's own, drawn before anything reads a host by its id.
+// Drawn before anything reads a host by its id.
 await page.draw(import.meta.url);
 
 let current: Mounted = inert;
@@ -92,10 +92,9 @@ const paint = chrome.painter({
   },
 });
 
-// A page that absorbs the change keeps its data, its filter and its scroll; a new chain is always a new page.
-// A hash change is silent to a screen reader, so a new page's heading is announced, except the first, unasked-for one.
-// A place read again (back or forward) is put back as it was left, its focus over the heading's; any other page drawn
-// (gone to afresh, the width crossing its edge, another chain) opens at the top.
+// A page that absorbs the change keeps its data, filter and scroll; a new chain is always a new page. A hash change is
+// silent to a screen reader, so a new page's heading is announced, except the first. A place read again (back or
+// forward) is restored as left, its focus over the heading's; any other page opens at the top.
 async function mount(a: app.App, fresh: boolean, heard: boolean, again: boolean): Promise<void> {
   const view = byId("view");
   const screen = app.screen(a);
@@ -104,7 +103,7 @@ async function mount(a: app.App, fresh: boolean, heard: boolean, again: boolean)
   current = inert;
   if (!again) window.scrollTo(0, 0);
   current = await pages.mount(view, screen);
-  // In a task of its own, since focusing the heading lays the new page out; a page that took the focus keeps it.
+  // In its own task, since focusing the heading lays the page out; a page that took the focus keeps it.
   if (heard) setTimeout(() => (view.contains(document.activeElement) ? undefined : announce(view)), 0);
   if (again) kept.restore(routelog.here(a.log).kept, () => drawn !== null && drawn.log === a.log);
 }
@@ -125,7 +124,7 @@ const tipFrame = d.json(payload.TipFrame);
 function connect(): void {
   close();
   close = stream.open(stream.of(`${app.apiBase(app.now())}/events`), {
-    // A connection opened again may have missed a deploy, and the login the box could not name.
+    // A reopened connection may have missed a deploy, or a login the box could not name.
     opened: () => {
       app.dispatch({ type: "Opened" });
       void sync();
@@ -133,7 +132,7 @@ function connect(): void {
       askAgain();
     },
     frame: heardTip,
-    // Given up (a server with no /events, or failing): the live dot says the fold may be moving unheard.
+    // The live dot says the fold may be moving unheard.
     gaveUp: () => app.dispatch({ type: "GaveUp" }),
   });
 }
@@ -157,7 +156,6 @@ function heardTip(data: string): void {
   void keepObjects().catch(() => {});
 }
 
-// Who writes (a login with no actor gets no acts) and which chains are served, both asked of the box.
 function askWhoAndWhere(): void {
   void me()
     .then((answer) => {
@@ -174,15 +172,13 @@ function askWhoAndWhere(): void {
     .catch(() => app.dispatch({ type: "Unmet" }));
 }
 
-// A box that did not say who this login is is asked again whenever the page may reach it again; the `Unmet` line
-// stands meanwhile, never a login with no actor.
+// The `Unmet` line stands meanwhile, never a login with no actor.
 function askAgain(): void {
   if (app.now().who.type === "Unmet") askWhoAndWhere();
 }
 
-// A writer's key as the replica reads it, after `/api/me` and after every change the replica takes: a key the chain does
-// not trust, a revoked one or a browser that cannot sign is said where the page is read, rather than refused at the
-// first write; a key trusted since, a renewed one's included, writes again.
+// Read after `/api/me` and after every replica change, so an untrusted or revoked key, or a browser that cannot sign,
+// is said on the page rather than refused at the first write.
 function keyed(): void {
   if (app.now().who.type !== "Writes") return;
   void signingHere("Shell")
@@ -203,8 +199,8 @@ const keyOf = (s: device.Signing): app.Key => {
   }
 };
 
-// The Inbox badge, asked here because a badge is for the pages the reader is not on, and counted on the box, so the
-// tab holds no conversation to show it; no badge beats a wrong one.
+// Asked here because a badge is for pages the reader is not on; counted on the box, so the tab holds no conversation
+// for it. No badge beats a wrong one.
 const refreshWaiting = once.shared(() =>
   waitingCount()
     .then((w) => app.dispatch({ type: "Waiting", count: w.count }))
@@ -226,11 +222,10 @@ const seen = (): chrome.Seen => ({ fold: store.state(), excluded: readings.left(
 
 let drawn: app.App | null = null;
 
-// The first reading of the owner's zone loads its rules, a long task on a phone: read once the first page is drawn and
-// the thread is idle, so no page's draw carries it.
+// The first reading of the owner's zone loads its rules, a long task on a phone, so it waits for an idle thread.
 const idle = (f: () => void): void => void ("requestIdleCallback" in window ? requestIdleCallback(f, { timeout: 2000 }) : setTimeout(f, 1000));
-// What the shell asks of the chains for itself waits until a page has drawn what it read and the thread is idle: the fold
-// of the todo chains on a route that does not show it, what "Needs you" reads and whether this device signs.
+// The shell's own reads (the fold on a route that does not show it, "Needs you", whether this device signs) wait until a
+// page has drawn and the thread is idle.
 shellAsksAfter(frame.firstDrawn.then(() => new Promise<void>((done) => idle(done))));
 foldWhere(() => (pages.folds[app.screen(app.now()).type] === "Shown" ? "Page" : "Shell"));
 
@@ -250,55 +245,46 @@ function draw(a: app.App): void {
 
 // Before the rest of startup, so a failure in any of it reaches the box.
 beacon.install();
-// A key of the box's HTML answered twice, differently, is a finding the box hears about.
 rendered.hear((k) => beacon.tell("finding", `the box rendered ${k} twice, differently`));
-// What this page does about a wipe: a page that could not delete what it holds says so where it says who writes.
 const wiping = wipe.page({ ...wipe.browser, stuck: () => app.dispatch({ type: "Undeleted" }) });
-// A request this device's revoked key signed is answered with the wipe: it deletes what it holds.
+// A request signed by this device's revoked key is answered with the wipe.
 http.whenGone(wiping.gone);
 // A wipe a reload cut short is finished before this load opens anything.
 wiping.resume();
-// Another tab of this device changing the mark: this tab holds the same replica in memory, and must not write it back.
+// This tab holds the same replica in memory and must not write it back.
 window.addEventListener("storage", (e) => {
   if (e.key === wipe.MARK) wiping.heard();
 });
-// Shown again from the back and forward cache: a wipe marked, or one that ended while the page was cached.
+// From the bfcache: a wipe marked, or one that ended while the page was cached.
 window.addEventListener("pageshow", (e) => {
   if (e.persisted) void wiping.shown();
 });
-// Every write the box performs is asked by this device's key, where it has one.
 http.signWith(async () => {
   const held = await signer.held();
   return held.type === "Held" ? { key: held.key.public, sign: (name: string) => signer.sign(held.key, name) } : null;
 });
-// The Android portal's push token: the one the boot script held, and any the app sends later.
 pushtoken.install(reportPushToken);
 installKeyboard();
-// Another tab's write to a register this browser keeps is heard as that register moving.
 ui.install();
-// The keys the registers replaced, once: a draft moves in, the rest go.
+// A replaced draft key moves in; the rest go.
 sweep.run(sweep.local, ui.tab);
 // The palette reads the keyboard's target, so the keyboard cannot import it back.
 setPaletteOpener(openPalette);
-// The first route may pin another chain than the one remembered, and the replica was loaded holding that one.
+// The first route may pin another chain than the remembered one the replica was loaded with.
 const loaded = app.now();
 app.dispatch({ type: "Replaced", route: address.install() });
 app.dispatch({ type: "Resized", wide: isWide(window.innerWidth) });
 address.settle();
 if (app.now().chain !== loaded.chain) forgetChainReplica();
-// Theme, cached fold and replica before the first route: the first paint is the last fold seen, in the right colours.
+// Before the first route, so the first paint is the last fold seen, in the right colours.
 restoreTheme();
 restoreFold();
 void restoreReplica().then(() => sync());
 askWhoAndWhere();
-// The secretary's stores are replicas too, told of a move by one stream; the inbox's first frame and each move after it
-// ask the box for the badge.
 const heardStore = (name: stores.Name): void => void (name === "inbox" && refreshWaiting());
 let closeStores = storesync.listen(heardStore);
 storesync.watchProgress(syncing.install(byId("syncing")));
-// Each move of the replicas retracts the intents it holds; in memory, so it outlives every page.
 intentsync.listen();
-// The streams and the page close as the document goes into the back/forward cache, and open as it comes back.
 bfcache.across(window, {
   close: () => {
     closeStores();
@@ -316,18 +302,17 @@ bfcache.across(window, {
 const builds = newbuild.install((line) => app.dispatch({ type: "Build", line }));
 // A refused write or an answer this build cannot read: perhaps a newer build is served.
 http.whenStale(() => void builds.check().catch(() => {}));
-// What the core's worker says unasked: the lines' moves and leavings, and what the box answered a read it made.
 storesync.hearWorker({
   gone: () => wiping.gone(),
   stale: () => void builds.check().catch(() => {}),
   unloaded: (why) => beacon.tell("core", new Error(why)),
 });
 void device.persist().catch(() => {});
-installNeedsYou(byId("needsyou"));
+// Started once the screen has drawn and the tab is idle, so its first draw (and compiling its module) is not the screen's.
+void frame.firstDrawn.then(() => idle(() => void program.mount(byId("needsyou"), "NeedsYouPage", {}, { box: () => byId("needsyou") })));
 app.tab.subscribe(draw);
-// The fold, the replica and what its readings left out move without App: the chrome is redrawn from each.
+// These move without App, so each redraws the chrome.
 store.subscribe(() => paint(chrome.of(app.now(), seen())));
-// What this tab's acts the box has not taken come to is said once, on whatever page is open.
 let told = outbox.EMPTY;
 let telling = 0;
 const tell = (): void => {
@@ -349,8 +334,7 @@ watchReplica(() => {
 });
 readings.watch(() => paint(chrome.of(app.now(), seen())));
 hearTheme(() => paint(chrome.of(app.now(), seen())));
-// The clock as a source: the fold is read again when what it shows next moves (`due`), and at no other instant; held
-// objects first, the box where the tab holds none. A bound that comes back at once, or a read that moved nothing, is
+// The fold is read again when what it shows next moves (`due`), and at no other instant. A read that moved nothing is
 // paced, so a tab that cannot read waits longer each time and never stops.
 const rearm = clock.pacer();
 const arm = (n: clock.Next): void =>
@@ -364,9 +348,8 @@ const arm = (n: clock.Next): void =>
       });
   });
 store.subscribe((s) => arm(due.of(s, Date.now(), app.now().zone)));
-// A timer counts the time this device is awake: one that slept overnight is armed again on waking.
-// A device that wakes asks again whether it signs: a store that did not open before sleep may open now.
-// A page coming back from the background may have missed a deploy.
+// A timer counts only awake time, so it is armed again on waking; a store that did not open before sleep may open now,
+// and a deploy may have been missed.
 const woke = (): void => {
   if (document.visibilityState !== "visible") return;
   arm(due.of(store.state(), Date.now(), app.now().zone));
@@ -375,9 +358,9 @@ const woke = (): void => {
   askAgain();
 };
 document.addEventListener("visibilitychange", woke);
-// A page the back/forward cache kept comes back; the page's first show is its load, already asked.
+// The page's first show is its load, already asked.
 window.addEventListener("pageshow", (e) => void (e.persisted ? woke() : undefined));
-// The More sheet is a disclosure: a click anywhere outside it closes it (its own controls stop the click).
+// Closes the More sheet; its own controls stop the click.
 document.addEventListener("click", () => app.dispatch({ type: "More", open: false }));
 // The same route is a different page either side of the breakpoint; `matchMedia` fires once at the edge.
 window.matchMedia(`(min-width: ${WIDE_MIN_PX}px)`).addEventListener("change", () => app.dispatch({ type: "Resized", wide: isWide(window.innerWidth) }));
@@ -385,5 +368,5 @@ draw(app.now());
 connect();
 installPresence();
 signer.watch(keyed);
-// The app has started, said on the document: the loader brings it in after the document's own load.
+// The loader brings the app in after the document's own load.
 document.documentElement.dataset["started"] = "app";

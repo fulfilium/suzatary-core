@@ -86,7 +86,7 @@ export namespace painterlaws {
     const page = run.start(root, program, foreign, held, e => {
       effects.push(e);
       if (isAsk(e)) waiting.push(e);
-    });
+    }, undefined, () => document.scrollingElement ?? document.documentElement);
     const step = (s: Step): void => {
       switch (s.type) {
         case "input":
@@ -116,7 +116,7 @@ export namespace painterlaws {
 
   const drawnFresh = (p: Program): HTMLElement => {
     const root = document.createElement("div");
-    painter.create(root, foreign, held, () => {}).apply(p.fresh());
+    painter.create(root, foreign, held, () => false).apply(p.fresh());
     return root;
   };
 

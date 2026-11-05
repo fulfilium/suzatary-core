@@ -75,7 +75,7 @@ fi
 
 # A ceiling on ` as `, that only moves down: never raise it. Counts the substring on lines that
 # are not whole-line comments (`import x as y` counts), outside web/src/wire/generated/.
-as_ceiling=23
+as_ceiling=20
 as_count=$(grep -rn --binary-files=text --include='*.ts' -e ' as ' web/src | grep -v '/generated/' | grep -cvE '^[^:]+:[0-9]+:[[:space:]]*(//|\*|/\*)')
 if [[ "$as_count" -gt "$as_ceiling" ]]; then
   echo "web-static.sh: web/src holds $as_count ' as ' occurrences outside generated/, over the ceiling of $as_ceiling" >&2

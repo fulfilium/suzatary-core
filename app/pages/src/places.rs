@@ -1,59 +1,66 @@
-//! Where a page's links go and what it asks the box, printed once: the app's addresses as
-//! `web/src/shell/route.ts` reads them, and the box's routes as `app/cli` answers them.
+//! The app's addresses as `web/src/shell/route.ts` reads them, and the box's routes as `app/cli`
+//! answers them, each printed in one place.
 
 use crate::runtime::{component, search};
 
-/// The rows the box answers per page of mail (its own cap, `MAX_MAIL`), so "Load more" asks for
-/// a page.
-pub const PAGE: usize = 50;
+/// The box's own cap on mail rows per page (`MAX_MAIL`).
+pub(crate) const PAGE: usize = 50;
 
-/// A thread longer than this comes back as its newest messages: the end, the part being read.
-pub const THREAD: usize = 100;
+/// A longer thread comes back as its newest messages.
+pub(crate) const THREAD: usize = 100;
 
-/// A place in the app.
 #[derive(Debug, Clone, Copy)]
 pub enum Place<'a> {
-    /// The mail, by a notmuch query (`""` for the inbox) and an account (`""` for every one).
+    /// `""` for the inbox and for every account.
     Mail {
-        /// The query.
         query: &'a str,
-        /// The account.
         account: &'a str,
     },
-    /// One message, by its notmuch id or a prefix of its hash.
+    /// By its notmuch id or a prefix of its hash.
     Message(&'a str),
-    /// One thread.
     Thread(&'a str),
     /// The secretary, asked about a reference (`mail:<hash>`, `thread:<id>`).
     Ask(&'a str),
-    /// The secretary's stream.
-    Secretary,
-    /// A conversation: opened at a turn, or with a reference attached (`""` for none), its
-    /// composer focused or not.
+    /// The stream, filtered to the rounds carrying every topic named.
+    Secretary(&'a [String]),
+    Memory,
+    NewTopic,
+    Inbox(&'a str),
+    Settings,
+    Todo(&'a str),
+    /// An uploaded file, served as itself by the box.
+    Attachment(&'a str),
+    /// A todo's route drops the chain; a proposal, round or note goes to its conversation, a
+    /// batch to the Inbox.
+    Reference(&'a suzatary_core::reference::Reference),
     Conversation {
-        /// Its id.
         id: &'a str,
-        /// A reference to attach.
+        /// `""` for none.
         reference: &'a str,
-        /// Whether the composer takes the focus.
         focus: bool,
         /// The turn its window ends at.
         at: Option<u32>,
     },
-    /// The chain page, nothing focused.
     Chain,
-    /// The saved briefings.
     Briefings,
-    /// One day's briefing.
     Briefing(&'a str),
-    /// A week of the calendars from a day.
     Calendar(&'a str),
 }
 
-impl Place<'_> {
-    /// Its address.
+impl<'a> Place<'a> {
+    /// Opened at its newest turn with nothing attached.
     #[must_use]
-    pub fn href(self) -> String {
+    pub(crate) const fn conversation(id: &'a str) -> Place<'a> {
+        Place::Conversation {
+            id,
+            reference: "",
+            focus: false,
+            at: None,
+        }
+    }
+
+    #[must_use]
+    pub(crate) fn href(self) -> String {
         match self {
             Place::Mail { query, account } => {
                 format!("#/mail{}", search(&[("q", query), ("account", account)]))
@@ -61,7 +68,37 @@ impl Place<'_> {
             Place::Message(id) => format!("#/mail/{}", component(id)),
             Place::Thread(id) => format!("#/mail/thread/{}", component(id)),
             Place::Ask(reference) => format!("#/secretary{}", search(&[("ref", reference)])),
-            Place::Secretary => "#/secretary".to_owned(),
+            Place::Secretary(topics) => {
+                format!("#/secretary{}", search(&[("topics", &topics.join(","))]))
+            }
+            Place::Memory => "#/secretary/memory".to_owned(),
+            Place::NewTopic => "#/secretary/new".to_owned(),
+            Place::Inbox(open) => format!("#/inbox{}", search(&[("open", open)])),
+            Place::Settings => "#/settings".to_owned(),
+            Place::Todo(id) => format!("#/todo/{}", component(id)),
+            Place::Attachment(id) => format!("/api/secretary/attachments/{}", component(id)),
+            Place::Reference(r) => {
+                use suzatary_core::reference::Reference;
+                match r {
+                    Reference::Todo(t) => Place::Todo(t.id.as_str()).href(),
+                    Reference::Mail { hash } => Place::Message(hash.as_str()).href(),
+                    Reference::Thread { id } => Place::Thread(id.as_str()).href(),
+                    Reference::Briefing { date } => {
+                        Place::Briefing(&date.format("%Y-%m-%d").to_string()).href()
+                    }
+                    Reference::Proposal(p) => Place::conversation(p.conversation.as_str()).href(),
+                    Reference::Batch { .. } => Place::Inbox("").href(),
+                    Reference::Target(
+                        suzatary_core::secretary::topics::target::Target::Round {
+                            conversation,
+                            ..
+                        }
+                        | suzatary_core::secretary::topics::target::Target::Note {
+                            conversation, ..
+                        },
+                    ) => Place::conversation(conversation.as_str()).href(),
+                }
+            }
             Place::Conversation {
                 id,
                 reference,
@@ -84,67 +121,51 @@ impl Place<'_> {
     }
 }
 
-/// A question or an act the box answers.
 #[derive(Debug, Clone, Copy)]
-pub enum Question<'a> {
-    /// A page of the inbox by date, from `before` (`""` for the newest).
+pub(crate) enum Question<'a> {
     Inbox {
-        /// The account, `""` for every one.
+        /// `""` for every one.
         account: &'a str,
-        /// The oldest row's instant already shown; the box answers rows older than it.
+        /// The oldest row's instant already shown; the box answers older rows. `""` for the
+        /// newest.
         before: &'a str,
     },
-    /// A page of a notmuch query, paged as the inbox is.
+    /// A notmuch query, paged as the inbox is.
     Search {
-        /// The query.
         q: &'a str,
-        /// The account, `""` for every one.
         account: &'a str,
-        /// As the inbox's.
         before: &'a str,
     },
-    /// One message and the todos it produced.
     Message(&'a str),
-    /// One thread, oldest first.
     Thread(&'a str),
-    /// Every watch on expected mail that waits.
     Watches,
-    /// A watch cancelled (a POST), answered by the watches that still wait.
+    /// A POST, answered by the watches that still wait.
     Cancel(&'a str),
-    /// What is connected, by group.
     Overview,
-    /// A setup conversation begun on a template (a POST), answered by the conversation.
+    /// A POST beginning a setup conversation on a template, answered by the conversation.
     Setup(&'a str),
-    /// File the card that asks for a new value of a stored secret, by its handle.
+    /// A POST filing the card that asks for a new value of a stored secret, by its handle.
     Replace(&'a str),
-    /// This device's card filed for a trusted device to tap (a POST).
+    /// A POST filing this device's card for a trusted device to tap.
     Key,
-    /// This device trusted with the code from the box (a POST).
+    /// A POST trusting this device with the code from the box.
     Pair,
-    /// The secretary's memory.
     Memory,
-    /// A fact forgotten (a POST).
     Forget(u64),
     /// The summaries of the owner's words a conversation is told.
     Record,
-    /// A summary written again from the owner's lines (a POST).
+    /// A POST rewriting a summary from the owner's lines.
     Retract(&'a str),
-    /// The briefs and the saved briefings.
     Briefings,
-    /// One day's briefing.
     Briefing(&'a str),
-    /// A week of the calendars from a day.
     Calendar(&'a str),
-    /// What the box runs.
     About,
-    /// The releases the project chain reads.
     Releases,
 }
 
 impl Question<'_> {
-    /// Its path.
     #[must_use]
-    pub fn path(self) -> String {
+    pub(crate) fn path(self) -> String {
         let limit = PAGE.to_string();
         match self {
             Question::Inbox { account, before } => format!(

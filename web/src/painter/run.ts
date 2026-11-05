@@ -2,36 +2,50 @@
 // the patches, and the host's handler performs each effect and answers it with an input. Nothing here knows the page.
 
 import painter from "./painter"
+import scroll from "./scroll"
 
 export namespace run {
-  // A page's class, as `viewtree::export!` makes it.
   export type Module = {
     readonly first: () => Uint8Array
     readonly input: (json: string) => Uint8Array
-    readonly event: (id: number, on: number, words: string) => Uint8Array
+    readonly event: (id: number, on: number, words: string) => Uint8Array | undefined
     readonly effects: () => string
     readonly free: () => void
   }
-  // Performs one effect; what it comes to, now or later, is an input sent back.
-  export type Handler<I, E> = (effect: E, send: (input: I) => void) => void
+  // `stepped.fromEnd`: the scroll box's distance from its end before the step's patches.
+  export type Handler<I, E> = (effect: E, send: (input: I) => void, stepped: Stepped) => void
+  export type Stepped = { readonly fromEnd: number }
   export type T<I> = { readonly send: (input: I) => void; readonly destroy: () => void }
 
-  // `effects` is the module's JSON of the program's own `Effect` sum, printed by serde from the type the host's handler
-  // is generated from, so it is read as that type without a decoder of its own.
+  // Serde prints the `Effect` sum the handler's type is generated from, so it needs no decoder.
   const parse = <E>(json: string): readonly E[] => JSON.parse(json)
 
-  export const start = <I, E>(root: HTMLElement, page: Module, foreign: painter.Foreign, blocks: painter.Blocks, handle: Handler<I, E>, gone?: (n: Node) => void): T<I> => {
+  // A `Keep` restores the place of the scroll box `box` finds (one a page draws itself is there once drawn).
+  export const start = <I, E>(
+    root: HTMLElement,
+    page: Module,
+    foreign: painter.Foreign,
+    blocks: painter.Blocks,
+    handle: Handler<I, E>,
+    gone: ((n: Node) => void) | undefined,
+    box: () => Element,
+  ): T<I> => {
     let live = true
-    const step = (name: string, patches: () => Uint8Array): void => {
-      if (!live) return
+    const step = (name: string, patches: () => Uint8Array | undefined): boolean => {
+      if (!live) return false
       const t0 = performance.now()
+      const b = box()
+      const fromEnd = b.scrollHeight - b.scrollTop
       const bytes = patches()
+      if (bytes === undefined) return false
       dom.apply(bytes)
+      scroll.settle(box())
       const effects = parse<E>(page.effects())
       performance.measure("painter:step", { start: t0, end: performance.now(), detail: { step: name, bytes: bytes.length, effects: effects.length } })
-      for (const e of effects) handle(e, send)
+      for (const e of effects) handle(e, send, { fromEnd })
+      return true
     }
-    const send = (input: I): void => step("input", () => page.input(JSON.stringify(input)))
+    const send = (input: I): void => void step("input", () => page.input(JSON.stringify(input)))
     const dom = painter.create(root, foreign, blocks, (id, on, words) => step("event", () => page.event(id, on, words)), gone)
     step("first", () => page.first())
     return { send, destroy: () => ((live = false), dom.destroy(), page.free()) }

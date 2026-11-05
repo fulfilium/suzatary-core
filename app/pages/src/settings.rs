@@ -1,6 +1,4 @@
 //! Settings: what is connected, by group, and this device.
-//!
-//! A proposal card is the Inbox's TypeScript, placed as a foreign part by its reference.
 
 use std::collections::BTreeSet;
 
@@ -13,169 +11,88 @@ use viewtree::Attr::{
     Value,
 };
 use viewtree::kit::{Reading, button, disclosure, para};
-use viewtree::node::foreign;
 use viewtree::{Node, Program, view};
 
+use crate::card::{self, Cards, Drawn, Placed};
 use crate::chrome::{self, Chrome, Masthead, Shape};
+use crate::intents::Intents;
 use crate::places::{Place, Question};
 use crate::runtime::{self, Answer, Body, Context, Gate, Held, Local, read};
+use crate::waiting::{Readings, Row, Watched};
 use crate::zone::when;
 
-/// Start flags.
 #[derive(Debug, Clone, Deserialize, TS)]
 #[ts(rename = "SettingsFlags")]
 pub struct Flags {
-    /// The tab's context.
     pub context: Context,
 }
 
-/// What the page watches.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[ts(rename = "SettingsHold")]
 pub enum Hold {
-    /// The box's overview.
     Overview,
-    /// This device.
     Device,
-    /// Open cards.
-    Cards,
+    Rows(Watched),
+    Card(card::Key),
+    Intents,
 }
 
-/// A proposal card as this page reads it.
-#[derive(Debug, Clone, PartialEq, Eq, Deserialize, TS)]
-pub struct Card {
-    /// `proposal:<conversation>/<n>`.
-    pub reference: String,
-    /// What it does.
-    pub act: CardAct,
-    /// Open while standing or tapped and failed.
-    pub stands: Stands,
-    /// Changes when its drawing would.
-    pub version: String,
-}
-
-/// A card's act.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, TS)]
-#[serde(rename_all = "snake_case")]
-pub enum CardAct {
-    /// Connect a model.
-    SignIn,
-    /// Store a secret.
-    Secret,
-    /// Allow an origin.
-    Grant,
-    /// Anything else.
-    Other,
-}
-
-/// Whether a card asks.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, TS)]
-#[serde(rename_all = "snake_case")]
-pub enum Stands {
-    /// It asks.
-    Open,
-    /// It is settled.
-    Settled,
-}
-
-/// `web/src/app/device.ts`'s `Report`.
 #[derive(Debug, Clone, Deserialize, TS)]
 pub struct Device {
-    /// Eviction policy.
-    pub persist: Persist,
-    /// Budget spent.
-    pub usage: Usage,
-    /// Bytes.
-    pub budget: f64,
-    /// Who it signs as.
-    pub signing: Signing,
+    pub(crate) persist: Persist,
+    pub(crate) usage: Usage,
+    pub(crate) budget: f64,
+    pub(crate) signing: Signing,
 }
 
-/// Storage persistence.
 #[derive(Debug, Clone, Copy, Deserialize, TS)]
 #[serde(tag = "type")]
-pub enum Persist {
-    /// Unknown.
+pub(crate) enum Persist {
     Unsupported,
-    /// Persistent.
     Granted,
-    /// Best-effort.
     Denied,
 }
 
-/// Rendered text kept.
 #[derive(Debug, Clone, Copy, Deserialize, TS)]
-pub struct Usage {
-    /// Bytes.
-    pub bytes: f64,
-    /// Pieces.
-    pub count: u32,
+pub(crate) struct Usage {
+    pub(crate) bytes: f64,
+    pub(crate) count: u32,
 }
 
-/// This device's signing key.
 #[derive(Debug, Clone, Deserialize, TS)]
 #[serde(tag = "type")]
-pub enum Signing {
-    /// Root not read yet.
+pub(crate) enum Signing {
     Unheard,
-    /// Read-only login.
     Reads,
-    /// The browser cannot sign.
-    Unsupported {
-        /// Why.
-        e: String,
-    },
-    /// Key unreadable.
-    Unreadable {
-        /// Why.
-        e: String,
-    },
-    /// Signs with a key.
-    Keyed {
-        /// The key.
-        key: String,
-        /// Its trust.
-        standing: KeyStanding,
-    },
+    Unsupported { e: String },
+    Unreadable { e: String },
+    Keyed { key: String, standing: KeyStanding },
 }
 
-/// A key's trust.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, TS)]
 #[serde(rename_all = "snake_case")]
-pub enum KeyStanding {
-    /// Trusted.
+pub(crate) enum KeyStanding {
     Trusted,
-    /// Not yet.
     Untrusted,
-    /// Revoked.
     Revoked,
 }
 
-/// An act; its button is disabled until answered.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize, TS)]
 #[ts(rename = "SettingsAct")]
 #[serde(tag = "type")]
 pub enum Act {
-    /// Open a conversation on a template.
     Begin {
-        /// The template.
         template: String,
     },
-    /// File a trust card for this device.
     AskTrust {
-        /// The key.
         key: String,
     },
-    /// New key.
     Renew,
-    /// Send the pairing code.
     Pair {
-        /// The code.
         code: String,
     },
-    /// Ask for a card replacing a secret.
+    /// A card asking for a new value of the stored secret `handle`.
     Replace {
-        /// Its handle.
         handle: String,
     },
 }
@@ -183,7 +100,7 @@ pub enum Act {
 impl Act {
     fn effect(&self) -> Effect {
         let post = |q: Question, body| Effect::Post {
-            ask: self.clone(),
+            ask: Ask::Run(self.clone()),
             path: q.path(),
             body,
         };
@@ -193,7 +110,9 @@ impl Act {
                 Question::Key,
                 Body::Key(wire::KeyAsked { key: key.clone() }),
             ),
-            Act::Renew => Effect::NewKey { ask: self.clone() },
+            Act::Renew => Effect::NewKey {
+                ask: Ask::Run(self.clone()),
+            },
             Act::Pair { code } => post(
                 Question::Pair,
                 Body::Pair(wire::Pairing { code: code.clone() }),
@@ -208,50 +127,43 @@ struct Opened {
     id: String,
 }
 
-/// One-time asks.
-pub type Ask = Act;
-/// Effects.
-pub type Effect = runtime::Effect<Hold, Act>;
-/// Inputs.
-pub type Input = runtime::Input<Hold, Act>;
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize, TS)]
+#[ts(rename = "SettingsAsk")]
+#[serde(tag = "type", content = "of")]
+pub enum Ask {
+    Run(Act),
+    Card(card::Asking),
+}
+pub(crate) type Effect = runtime::Effect<Hold, Ask>;
+pub(crate) type Input = runtime::Input<Hold, Ask>;
 
-/// The pairing field.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Pairing {
-    /// Its button.
     Closed,
-    /// Open.
-    Open {
-        /// As typed.
-        code: String,
-    },
+    Open { code: String },
 }
 
-/// The model.
 #[derive(Debug, Clone)]
 pub struct Model {
     context: Context,
     overview: Held<Overview>,
     device: Reading<Option<Device>>,
-    cards: Reading<Vec<Card>>,
+    rows: Readings,
+    cards: Cards,
+    intents: Intents,
     pairing: Pairing,
     running: BTreeSet<Act>,
 }
 
-/// Messages.
 #[derive(Debug, Clone)]
 pub enum Msg {
-    /// From the runtime.
     Host(Box<Input>),
-    /// Run an act.
     Run(Act),
-    /// Pairing field edited.
     Pairing(Pairing),
-    /// Refetch the overview.
     Retry,
+    Card(card::Key, card::Ev),
 }
 
-/// The page.
 #[derive(Debug)]
 pub enum Settings {}
 
@@ -262,23 +174,31 @@ impl Program for Settings {
     type Flags = Flags;
 
     fn init(flags: Flags) -> (Model, Vec<Effect>) {
+        let (rows, watched) = Readings::of(&[]);
         let model = Model {
             context: flags.context,
             overview: Held::loading(),
             device: Reading::Loading,
-            cards: Reading::Loading,
+            rows,
+            cards: Cards::default(),
+            intents: Intents::default(),
             pairing: Pairing::Closed,
             running: BTreeSet::new(),
         };
         let watch = |ask, local| Effect::Watch { ask, local };
-        let effects = vec![
+        let mut effects = vec![
             Effect::Hold {
                 ask: Hold::Overview,
                 path: Question::Overview.path(),
             },
             watch(Hold::Device, Local::Device),
-            watch(Hold::Cards, Local::Cards),
+            watch(Hold::Intents, Local::Intents),
         ];
+        effects.extend(
+            watched
+                .into_iter()
+                .map(|w| watch(Hold::Rows(w.clone()), w.local())),
+        );
         (model, effects)
     }
 
@@ -303,18 +223,58 @@ impl Program for Settings {
                             m.device = read(reading);
                             Vec::new()
                         }
-                        // A new card changes the overview.
-                        Hold::Cards => {
-                            let cards = read(reading);
-                            let moved = matches!(&cards, Reading::Val { v } if !matches!(&m.cards, Reading::Val { v: was } if was == v));
-                            m.cards = cards;
-                            moved.then(again).into_iter().collect()
+                        // A card the box files changes which line asks for what.
+                        Hold::Rows(w) => {
+                            let was = shown_cards(m);
+                            let new = m.rows.held(w, reading);
+                            let mut effects: Vec<Effect> = new
+                                .into_iter()
+                                .map(|w| Effect::Watch {
+                                    local: w.local(),
+                                    ask: Hold::Rows(w),
+                                })
+                                .collect();
+                            effects.extend(seen(m));
+                            if shown_cards(m) != was {
+                                effects.push(again());
+                            }
+                            effects
+                        }
+                        Hold::Card(key) => {
+                            if let Reading::Val { v } = read::<serde_json::Value>(reading) {
+                                m.cards.held(key, v);
+                            }
+                            Vec::new()
+                        }
+                        Hold::Intents => {
+                            if let Reading::Val { v } = read(reading) {
+                                m.intents = v;
+                            }
+                            Vec::new()
                         }
                     }
                 }
-                Input::Answered { ask, answer } => {
-                    m.running.remove(&ask);
-                    answered(m, &ask, answer)
+                Input::Heard { ask, .. } | Input::Opened { ask } => match ask {},
+                Input::Answered {
+                    ask: Ask::Run(act),
+                    answer,
+                } => {
+                    m.running.remove(&act);
+                    answered(m, &act, answer)
+                }
+                Input::Answered {
+                    ask: Ask::Card(asking),
+                    answer,
+                } => {
+                    let follows = grant_taken(m, &asking, &answer);
+                    let readings = &m.rows;
+                    let mut outs = m.cards.asked(asking, answer, |k| readings.card(k));
+                    outs.extend(follows);
+                    // The box checks a stored link inside the tap, so the line's health is
+                    // read again once the tap is answered, whatever else moves after it.
+                    let mut effects = out(outs);
+                    effects.push(again());
+                    effects
                 }
             },
             Msg::Run(act) => m
@@ -328,6 +288,16 @@ impl Program for Settings {
                 Vec::new()
             }
             Msg::Retry => vec![again()],
+            Msg::Card(key, ev) => {
+                let rows = m.rows.rows();
+                match row_of(&rows, &key) {
+                    Some(row) => {
+                        let row = row.clone();
+                        out(m.cards.update(&key, &row, ev))
+                    }
+                    None => Vec::new(),
+                }
+            }
         }
     }
 
@@ -402,10 +372,10 @@ fn shown(m: &Model, o: &Overview) -> Node<Msg> {
     view! { Div "settingsview" [
         before,
         view! { Div "settingsask" [ask] },
-        match &m.cards {
-            Reading::Loading => Some(para("settingsmeta settingscards", "The Inbox's cards are on their way.")),
+        match &m.rows.proposals {
             Reading::Error { e } => Some(para("settingshealth settingshealth-failing settingscards", format!("The Inbox's cards could not be read: {e}"))),
-            Reading::Val { .. } => None,
+            Reading::Loading | Reading::Val { .. } if !m.rows.answered() => Some(para("settingsmeta settingscards", "The Inbox's cards are on their way.")),
+            Reading::Loading | Reading::Val { .. } => None,
         },
         offered(m, o),
         view! { Div "settingsbody" => groups.map(|g| (key(g.group).to_owned(), group(m, g))) },
@@ -413,6 +383,8 @@ fn shown(m: &Model, o: &Overview) -> Node<Msg> {
     ] }
 }
 
+/// A refusal is said in its words, a conversation begun is gone to, a trust is said, and the
+/// overview is asked again after the acts that move it.
 fn answered(m: &mut Model, act: &Act, answer: Answer) -> Vec<Effect> {
     match answer {
         Answer::Refused { words, .. } => {
@@ -475,33 +447,200 @@ fn title(g: Group) -> &'static str {
     }
 }
 
-fn cards<'a>(m: &'a Model, l: &OverviewLine) -> Vec<&'a Card> {
-    match &m.cards {
-        Reading::Val { v } => l
-            .cards
-            .iter()
-            .flat_map(|c| v.iter().filter(move |r| &r.reference == c))
-            .collect(),
-        Reading::Loading | Reading::Error { .. } => Vec::new(),
+fn open_cards(rows: &[Row<'_>]) -> Vec<(String, card::Key)> {
+    rows.iter()
+        .filter_map(|r| match r {
+            Row::Card(_, c, row) => Some((c.id.clone(), card::Key::of(&c.id, row))),
+            Row::Unresolved(_) => None,
+        })
+        .collect()
+}
+
+fn row_of<'a>(rows: &[Row<'a>], key: &card::Key) -> Option<&'a suzatary_core::wire::ProposalRow> {
+    rows.iter().find_map(|r| match r {
+        Row::Card(_, c, row) if card::Key::of(&c.id, row) == *key => Some(*row),
+        Row::Card(..) | Row::Unresolved(_) => None,
+    })
+}
+
+/// Every card the page reads, waiting or settled, each whole: any change to one (the outcome a
+/// check writes after the tap, say) can change what its line says, so the overview is asked
+/// again.
+fn shown_cards(m: &Model) -> Vec<(String, suzatary_core::wire::ProposalRow)> {
+    m.rows
+        .cards
+        .iter()
+        .flat_map(|(id, read)| match read {
+            Reading::Val { v } => v
+                .proposals
+                .iter()
+                .map(|p| (id.clone(), p.clone()))
+                .collect(),
+            Reading::Loading | Reading::Error { .. } => Vec::new(),
+        })
+        .collect()
+}
+
+fn seen(m: &mut Model) -> Vec<Effect> {
+    let rows = m.rows.rows();
+    let outs = m.cards.seen(rows.iter().filter_map(|r| match r {
+        Row::Card(_, c, row) => Some((c.id.as_str(), *row)),
+        Row::Unresolved(_) => None,
+    }));
+    let readings = &m.rows;
+    let settled = m.cards.settled(|k| readings.card(k));
+    out(outs.into_iter().chain(settled).collect())
+}
+
+fn out(outs: Vec<card::Out>) -> Vec<Effect> {
+    card::effects(outs, Hold::Card, Ask::Card).0
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Kind {
+    SignIn,
+    Link,
+    Grant,
+    Other,
+}
+
+fn kind(row: &suzatary_core::wire::ProposalRow) -> Kind {
+    use suzatary_core::wire::ProposedAct;
+    match &row.act {
+        ProposedAct::SignIn { .. } | ProposedAct::SignInCode { .. } => Kind::SignIn,
+        ProposedAct::Secret { .. } => Kind::Link,
+        ProposedAct::Grant { .. } => Kind::Grant,
+        ProposedAct::Email { .. }
+        | ProposedAct::Forward { .. }
+        | ProposedAct::Changes { .. }
+        | ProposedAct::Auth { .. }
+        | ProposedAct::AuthSend { .. }
+        | ProposedAct::Web { .. }
+        | ProposedAct::Patch { .. }
+        | ProposedAct::Drive { .. }
+        | ProposedAct::CodingSession { .. }
+        | ProposedAct::Afresh { .. }
+        | ProposedAct::Device { .. }
+        | ProposedAct::UnlockStore { .. }
+        | ProposedAct::Erase { .. }
+        | ProposedAct::GoogleClient { .. }
+        | ProposedAct::GoogleSignIn { .. }
+        | ProposedAct::CalendarEvent { .. }
+        | ProposedAct::Connect { .. }
+        | ProposedAct::Disconnect { .. }
+        | ProposedAct::Remember { .. }
+        | ProposedAct::Decision { .. } => Kind::Other,
     }
 }
 
-/// A link card and its origin grant, both open, draw as one part.
-fn line_cards(cs: &[&Card]) -> Vec<(String, Node<Msg>)> {
-    let open = |act| cs.iter().find(|c| c.act == act && c.stands == Stands::Open);
-    let allowing = open(CardAct::Secret).zip(open(CardAct::Grant));
-    let part = |c: &Card| match allowing {
-        Some((link, grant)) if c.reference == link.reference => foreign(
-            "allowing",
-            &c.reference,
-            format!("{}\n{}\n{}", grant.reference, c.version, grant.version),
-        ),
-        Some(_) | None => foreign("proposal", &c.reference, &c.version),
+/// The grant is drawn inside the link's card it was asked for, and its yes sends the link again.
+fn allowing<'a>(
+    rows: &[&'a suzatary_core::wire::ProposalRow],
+) -> Option<(
+    &'a suzatary_core::wire::ProposalRow,
+    &'a suzatary_core::wire::ProposalRow,
+)> {
+    let open = |k| {
+        rows.iter()
+            .copied()
+            .find(|r| kind(r) == k && card::answerable(r.state))
     };
-    let shown = |c: &&&Card| allowing.is_none_or(|(_, grant)| c.reference != grant.reference);
-    cs.iter()
-        .filter(shown)
-        .map(|c| (format!("card:{}", c.reference), part(c)))
+    open(Kind::Link).zip(open(Kind::Grant))
+}
+
+/// Sends the link again, once, with the link the tab kept, whatever the grant's card reads since.
+fn grant_taken(m: &Model, asking: &card::Asking, a: &Answer) -> Vec<card::Out> {
+    let card::Asking::Act { key, then, .. } = asking else {
+        return Vec::new();
+    };
+    if !then.yes || !card::taken(a) {
+        return Vec::new();
+    }
+    let Some(named) = m.overview_line(&key.reference()) else {
+        return Vec::new();
+    };
+    // The grant may be settled by the time its answer is read; its card is read whatever its state.
+    let granted = m.rows.card(key).is_some_and(|r| kind(r) == Kind::Grant);
+    let link = named
+        .iter()
+        .filter_map(|k| m.rows.card(k))
+        .find(|r| kind(r) == Kind::Link && card::answerable(r.state));
+    match link {
+        Some(asked) if granted => vec![Cards::resend(
+            &card::Key::of(&key.conversation, asked),
+            asked,
+        )],
+        Some(_) | None => Vec::new(),
+    }
+}
+
+impl Model {
+    fn overview_line(&self, reference: &str) -> Option<Vec<card::Key>> {
+        let Reading::Val { v } = &self.overview.reading else {
+            return None;
+        };
+        let rows = self.rows.rows();
+        let open = open_cards(&rows);
+        v.groups
+            .iter()
+            .flat_map(|g| &g.lines)
+            .find(|l| l.cards.iter().any(|c| c == reference))
+            .map(|l| {
+                l.cards
+                    .iter()
+                    .filter_map(|c| {
+                        open.iter()
+                            .find(|(_, k)| k.reference() == *c)
+                            .map(|(_, k)| k.clone())
+                    })
+                    .collect()
+            })
+    }
+}
+
+static NO_TITLES: card::Titles = card::Titles::new();
+
+/// A link's card and the grant its origin needs, when both stand, as one card holding the other.
+fn line_cards(m: &Model, l: &OverviewLine) -> Vec<(String, Node<Msg>)> {
+    let rows = m.rows.rows();
+    let cards: Vec<(&str, &suzatary_core::wire::ProposalRow)> = l
+        .cards
+        .iter()
+        .filter_map(|c| {
+            rows.iter().find_map(|r| match r {
+                Row::Card(_, conv, row) if card::Key::of(&conv.id, row).reference() == *c => {
+                    Some((conv.id.as_str(), *row))
+                }
+                Row::Card(..) | Row::Unresolved(_) => None,
+            })
+        })
+        .collect();
+    let bare: Vec<_> = cards.iter().map(|(_, r)| *r).collect();
+    let pair = allowing(&bare);
+    let drawn = |conversation, row| Drawn {
+        conversation,
+        row,
+        placed: Placed::Settings,
+        reach: &m.context.reach,
+        intents: &m.intents,
+        titles: &NO_TITLES,
+        opened: false,
+    };
+    cards
+        .iter()
+        .filter(|(_, r)| pair.is_none_or(|(_, grant)| r.index != grant.index))
+        .map(|&(conversation, row)| {
+            let within = match pair {
+                Some((link, grant)) if link.index == row.index => {
+                    vec![view! { Div "proposalallow" [m.cards.view(drawn(conversation, grant), Vec::new(), Vec::new(), Msg::Card)] }]
+                }
+                Some(_) | None => Vec::new(),
+            };
+            (
+                format!("card:{}", card::Key::of(conversation, row).reference()),
+                m.cards.view(drawn(conversation, row), Vec::new(), within, Msg::Card),
+            )
+        })
         .collect()
 }
 
@@ -534,6 +673,7 @@ fn capital(s: &str) -> String {
         .unwrap_or_default()
 }
 
+/// `None` for a standing in place with nothing to say.
 fn health<'a>(
     s: &'a Standing,
     at: &dyn Fn(&str) -> String,
@@ -578,6 +718,8 @@ fn health<'a>(
     Some((asks, words, None))
 }
 
+/// `11:32 on 2026-09-04` on the owner's clock; one that does not parse is said as written, as
+/// `web/src/view/format.ts`'s `when` does.
 fn line(m: &Model, g: Group, l: &OverviewLine) -> Node<Msg> {
     let said = health(&l.standing, &|t| when(&m.context.offsets, t));
     let (asks, words, command) = said.map_or((false, None, None), |(a, w, c)| (a, Some(w), c));
@@ -634,7 +776,7 @@ fn line(m: &Model, g: Group, l: &OverviewLine) -> Node<Msg> {
         .flatten()
         .map(|(k, n)| (k.to_owned(), n))
         .chain(replaces)
-        .chain(line_cards(&cards(m, l)));
+        .chain(line_cards(m, l));
     view! { Section {Class => line, Data("group") => key(g), Data("line") => &l.key, Data("key") => &l.key} => parts }
 }
 
@@ -642,8 +784,12 @@ fn group(m: &Model, g: &OverviewGroup) -> Node<Msg> {
     let signs_in = g.group == Group::Models
         && g.lines
             .iter()
-            .flat_map(|l| cards(m, l))
-            .any(|c| c.act == CardAct::SignIn);
+            .any(|l| {
+                let rows = m.rows.rows();
+                l.cards.iter().any(|c| {
+                    rows.iter().any(|r| matches!(r, Row::Card(_, conv, row) if card::Key::of(&conv.id, row).reference() == *c && kind(row) == Kind::SignIn))
+                })
+            });
     let unanswered = view! { P "settingshealth settingshealth-failing settingsunanswered" ["No model answers on this box yet. Connect one:"] };
     let head = [
         Some(("title", view! { H2 [title(g.group)] })),

@@ -153,12 +153,6 @@ export function anchor(reference: Reference, className = "reflink", label = prin
   return el("a", { class: `${className} ref-${reference.kind}`, href: hrefOf(reference) }, label);
 }
 
-/** A reference off the wire, as a link; text the grammar refuses stays text. */
-export const anchorOf = (text: string, className = "reflink"): HTMLElement | string => {
-  const reference = parse(text);
-  return reference === null ? text : anchor(reference, className);
-};
-
 /** The references among these texts, in order. */
 export const parsed = (texts: readonly string[]): Reference[] =>
   texts.flatMap((text) => {

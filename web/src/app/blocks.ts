@@ -1,6 +1,5 @@
-// The rendered blocks as the page reads them: a view in memory by name over the core's worker, the one reader and writer
-// of the device's rows (`rendered.device`), and the key a block is kept by, which the worker's core names. The page
-// writes no block to the device and hashes no source.
+// The rendered blocks as the page reads them, through the core's worker, the one reader and writer of the device's rows.
+// The page writes no block to the device and hashes no source.
 
 import rendered from "./rendered"
 import remote from "../prodrome/remote"
@@ -14,11 +13,6 @@ export namespace blocks {
     own: () => remote.ask({ type: "BlocksOwn" }, "Page"),
   })
 
-  // The HTML this device holds for `key`, or none: what the painter places a block from.
   export const held = (key: table.Key): Promise<string | null> => store.get([key]).then(r => r[0] ?? null)
-
-  // The key an answer block of `source` is kept by, or none where the worker does not answer.
-  export const answerKey = (source: string): Promise<table.Key | null> =>
-    remote.ask({ type: "AnswerKeys", sources: [source] }, "Page").then(ks => ks[0] ?? null, () => null)
 }
 export default blocks

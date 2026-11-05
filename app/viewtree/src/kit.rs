@@ -1,32 +1,20 @@
-//! Parts every page draws the same way, as functions of their values: a reading on its way, a
-//! paragraph, a button that may be busy, a disclosure.
+//! Parts every page draws the same way, as functions of their values.
 
 use crate::node::{Child, Node};
 use crate::{Attr, view};
 
-/// A value the page reads: on its way, failed with a reason, or there; the web's `lo` printed
-/// the same way, so a host hands one over as it holds it.
+/// Printed the same way as the web's `lo`, so a host hands one over as it holds it.
 #[cfg(feature = "host")]
-#[derive(Debug, Clone, serde::Deserialize, ts_rs::TS)]
+#[derive(Debug, Clone, PartialEq, serde::Deserialize, ts_rs::TS)]
 #[serde(tag = "type")]
 pub enum Reading<T> {
-    /// On its way.
     Loading,
-    /// It could not be read.
-    Error {
-        /// Why.
-        e: String,
-    },
-    /// Read.
-    Val {
-        /// What was read.
-        v: T,
-    },
+    Error { e: String },
+    Val { v: T },
 }
 
 #[cfg(feature = "host")]
 impl<T> Reading<T> {
-    /// The value read, made into another; on its way or failed as it was.
     pub fn map<U>(self, f: impl FnOnce(T) -> U) -> Reading<U> {
         match self {
             Reading::Loading => Reading::Loading,
@@ -35,8 +23,7 @@ impl<T> Reading<T> {
         }
     }
 
-    /// Two readings as one: failed when either failed (the first's reason first), on its way
-    /// when either is, else both values.
+    /// An error wins over loading; the first's error wins over the second's.
     pub fn both<'a, U>(&'a self, other: &'a Reading<U>) -> Reading<(&'a T, &'a U)> {
         match (self, other) {
             (Reading::Error { e }, _) | (_, Reading::Error { e }) => {
@@ -47,7 +34,7 @@ impl<T> Reading<T> {
         }
     }
 
-    /// Whether it has settled, as a reading of nothing: what a page waits for and never shows.
+    /// What a page waits for and never shows.
     #[must_use]
     pub fn settled(&self) -> Reading<()> {
         match self {
@@ -57,17 +44,14 @@ impl<T> Reading<T> {
     }
 }
 
-/// Words in a paragraph of a class.
 pub fn para<M>(class: &str, words: impl Child<M>) -> Node<M> {
     view! { P {Attr::Class => class} [words] }
 }
 
-/// A button of a class that sends `m`, disabled while `busy`.
 pub fn button<M>(class: &str, label: &str, m: M, busy: bool) -> Node<M> {
     view! { Button {Attr::Type => "button", Attr::Class => class, Attr::Disabled => busy} @click(m) [label] }
 }
 
-/// A summary that opens onto `body`.
 pub fn disclosure<M>(class: &str, summary: impl Child<M>, body: impl Child<M>) -> Node<M> {
     view! { Details {Attr::Class => class} [view! { Summary [summary] }, body] }
 }

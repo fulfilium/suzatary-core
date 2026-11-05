@@ -1,11 +1,8 @@
-// The parts a Rust page names and this tab draws (`Foreign` in the view): the marks drawn in SVG, Typst's HTML through the
-// tripwire, a mail body with its held values' chips, the todos a message produced as the list's own cards, an answer's
-// blocks as the conversation draws them (until the conversation is a program too), and the Inbox's proposal cards (until
-// the Inbox is). Each is drawn from its props alone; a part that keeps listening says how to stop, which the painter
-// asks when it takes the part out.
+// The parts a Rust page names and this tab draws (`Foreign` in the view), each from its props alone. A part that keeps
+// listening says how to stop, which the painter asks when it takes the part out.
 
 import { el } from "../view/dom"
-import { chevronIcon } from "../view/icons"
+import { chevronIcon, clipIcon, crossIcon, docIcon, lockIcon, plusIcon, sendIcon } from "../view/icons"
 import marks from "../view/marks"
 import loadmark from "../view/loadmark"
 import heldvalue from "../view/heldvalue"
@@ -17,16 +14,29 @@ import time from "../app/time"
 import onscreen, { store } from "../app/store"
 import { cardList } from "../todo/card"
 import { DEFAULT_FILTER, listing } from "../todo/todos"
-import type { Row } from "../inbox/inbox"
-import { proposalCard } from "../inbox/proposal"
-import kept from "../inbox/kept"
-import local from "./local"
 import pie from "../view/pie"
 import { richOrText } from "../rich"
-import { answerBlocks, answerCopies, more } from "../chat/transcript"
+import { textWithReferences } from "../chat/refs"
 
 export namespace parts {
   const stops = new WeakMap<Node, () => void>()
+
+  // By key, so new words (a verb, a count) keep its count; forgotten once no node stands for it.
+  const clocks = new Map<string, { readonly from: number; node: Node }>()
+  const elapsed = (key: string, lead: string): Node => {
+    const node = el("span", { class: "elapsed" })
+    const known = clocks.get(key)
+    const from = known?.from ?? time.now()
+    clocks.set(key, { from, node })
+    const tell = (): void => void (node.textContent = `${lead}${Math.max(0, Math.floor((time.now() - from) / 1000))} s`)
+    tell()
+    const every = setInterval(tell, 1000)
+    stops.set(node, () => {
+      clearInterval(every)
+      if (clocks.get(key)?.node === node) clocks.delete(key)
+    })
+    return node
+  }
 
   const mark = (name: string, props: string): Node => {
     switch (name) {
@@ -40,14 +50,26 @@ export namespace parts {
         return marks.rule()
       case "loadmark":
         return loadmark.view()
+      case "diamond":
+        return marks.diamond()
+      case "send":
+        return sendIcon()
+      case "clip":
+        return clipIcon()
+      case "cross":
+        return crossIcon()
+      case "plus":
+        return plusIcon()
+      case "doc":
+        return docIcon()
+      case "lock":
+        return lockIcon()
       default:
         throw new Error(`no mark ${name}`)
     }
   }
 
-  // The box's entries for one message, drawn as the list's cards with their acts: "all", not "open", since hiding the
-  // done ones would make a source look like it produced nothing. Each draw reads the tab's own entry where it holds one,
-  // so an act's answer shows; the actor arriving draws the buttons.
+  // "all", not "open": hiding the done ones would make a source look like it produced nothing.
   const todos = (json: string): Node => {
     const read = d.json(d.arr(payload.Entry))(json)
     if (read.type === "Error") throw new Error(`the todos a page named do not read: ${read.e}`)
@@ -66,48 +88,43 @@ export namespace parts {
     return cards.node
   }
 
-  // The box's own cards, whose sources name earlier cards and never a todo.
-  const card = (r: Row, taken?: () => void): HTMLElement => {
-    if (r.kind !== "proposal") throw new Error("a card a page named is not a proposal")
-    return proposalCard(r.conversation.id, r.proposal, { titles: new Map(), ...(taken === undefined ? {} : { taken }) })
-  }
-
-  // A grant drawn inside the link's card it was asked for: allowing the origin sends the link again, once. The props'
-  // first line is the grant's reference.
-  const allowing = (link: Row, grant: Row): HTMLElement => {
-    const node = card(link)
-    node.appendChild(el("div", { class: "proposalallow" }, card(grant, () => kept.resend(link))))
-    return node
-  }
-  // A part's props as `app/pages` prints them; props that do not read are the module's mistake, thrown as one.
+  // Props that do not read are the module's mistake, thrown as one.
   const read = <A>(kind: string, decoder: d.Decoder<A>, props: string): A => {
     const r = d.json(decoder)(props)
     if (r.type === "Error") throw new Error(`the ${kind} a page named does not read: ${r.e}`)
     return r.v
   }
-  const turn = d.obj({ text: d.str, blocks: d.arr(payload.BlockRow) })
+
+  const tags = { div: null, p: null, pre: null, span: null }
+  const speakers = { person: null, model: null, verb: null, act: null, box: null }
+  const proseOf = d.obj({
+    tag: d.oneOf(tags),
+    class: d.str,
+    text: d.str,
+    who: d.nullable(d.oneOf(speakers)),
+    held: d.bool,
+    conversation: d.nullable(d.str),
+  })
+  const richOf = d.obj({ html: d.nullable(d.str), text: d.str, class: d.str, kind: d.nullable(d.str) })
 
   export const draw = (kind: string, key: string, props: string): Node => {
     switch (kind) {
       case "mark":
         return mark(key, props)
       case "rich": {
-        const r = read(kind, d.obj({ html: d.nullable(d.str), text: d.str, class: d.str }), props)
-        return richOrText(r.html, r.text, { class: r.class })
+        const r = read(kind, richOf, props)
+        return richOrText(r.html, r.text, r.kind === null ? { class: r.class } : { class: r.class, "data-kind": r.kind })
       }
-      case "answer":
-        return answerBlocks(read(kind, turn, props))
-      case "answercopies":
-        return more(answerCopies(read(kind, turn, props))) ?? document.createTextNode("")
-      // A stranger's prose, set as text; only a held value's placeholder becomes its chip.
-      case "mailbody":
-        return heldvalue.within(el("div", { class: "mailbody" }, props), revealHeld(null))
+      // A stranger's or a model's words: text nodes and built links only; a held value's placeholder becomes its chip.
+      case "prose": {
+        const p = read(kind, proseOf, props)
+        const node = el(p.tag, { class: p.class }, ...(p.who === null ? [p.text] : textWithReferences(p.text, p.who)))
+        return p.held ? heldvalue.within(node, revealHeld(p.conversation)) : node
+      }
       case "todos":
         return todos(props)
-      case "proposal":
-        return card(local.row(key))
-      case "allowing":
-        return allowing(local.row(key), local.row(props.split("\n")[0] ?? ""))
+      case "elapsed":
+        return elapsed(key, props)
       default:
         throw new Error(`no part ${kind}`)
     }

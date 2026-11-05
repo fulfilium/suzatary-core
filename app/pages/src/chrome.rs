@@ -1,8 +1,5 @@
-//! What stands around every page, drawn the way `web/src/view/frame.ts` draws it for the pages still
-//! in TypeScript, so a page reads the same in either: a Back button, the title on its sheet, the
-//! legend, the line of what the page holds now, its status (waiting, failed, maybe behind), and
-//! its body. The marks drawn in SVG (the rule, the chevron, the loading mark) are the host's parts.
-//! When the shell is a program (plan §7 stage 9), `frame.ts` goes and this is the only one.
+//! What stands around every page (Back, title, legend, status, body), drawn as
+//! `web/src/view/frame.ts` draws it for the pages still in TypeScript, so both read the same.
 
 use serde::Serialize;
 use viewtree::Attr::{AriaLabel, Class, Href, Role, Type};
@@ -15,48 +12,37 @@ use crate::places::Place;
 use crate::runtime::Behind;
 use crate::zone::{Offset, when_ms};
 
-/// A mark the host draws in SVG: `rule`, `chevron`, `outline` or `loadmark`
-/// (`web/src/pages/parts.ts`).
+/// A mark the host draws in SVG (`web/src/pages/parts.ts`): `rule`, `chevron`, `outline`,
+/// `loadmark`, `diamond`, or an icon (`send`, `clip`, `cross`, `plus`, `doc`, `lock`).
 #[must_use]
-pub fn mark<M>(name: &'static str) -> Node<M> {
+pub(crate) fn mark<M>(name: &'static str) -> Node<M> {
     foreign("mark", name, "")
 }
 
-/// The shape of what a page draws, for the placeholder shown while it waits.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Shape {
-    /// Lines of text.
     Lines,
-    /// Rows of a list.
     Rows,
+    Cards,
+    Turns,
 }
 
-/// What a page says above its body about what it read.
 #[derive(Debug, Clone)]
-pub enum Status<M> {
-    /// It waits on its first answer: the placeholder.
+pub(crate) enum Status<M> {
     Waiting,
-    /// Its first answer failed: why, and a Retry.
     Failed {
-        /// Why.
         e: String,
-        /// What Retry sends.
         retry: M,
     },
-    /// What it shows may be behind the box.
     Behind {
-        /// Since when, on the owner's clock.
         since: String,
-        /// Why the last ask failed and what Retry sends, or `None` while one is on its way.
+        /// `None` while an ask is on its way.
         failed: Option<(String, M)>,
     },
-    /// Nothing to say.
     Quiet,
 }
 
-/// What a held reading says, frame's way: the first answer awaited or failed, or one shown and
-/// maybe behind.
-pub fn status<T, M>(
+pub(crate) fn status<T, M>(
     r: &Reading<T>,
     behind: Option<&Behind>,
     offsets: &[Offset],
@@ -76,53 +62,65 @@ pub fn status<T, M>(
     }
 }
 
-/// How a page's title stands: a page's own, or a destination's, drawn larger.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Masthead {
-    /// A page's title.
     Page,
-    /// A destination of the bar's (the briefings).
+    /// A destination of the bar's (the briefings), drawn larger.
     Destination,
 }
 
-/// A page's parts other than its body.
 #[derive(Debug)]
-pub struct Chrome<M> {
-    /// The page's class, beside `column`.
-    pub class: &'static str,
-    /// Its title.
-    pub title: String,
-    /// How the title stands.
-    pub masthead: Masthead,
-    /// The Back button's label and what it sends, for a page under another.
-    pub back: Option<(&'static str, M)>,
-    /// The line under the title, for a page that has one (`""` hides it until there is one).
-    pub legend: Option<String>,
+pub(crate) struct Chrome<M> {
+    /// Beside `column`.
+    pub(crate) class: &'static str,
+    pub(crate) title: String,
+    pub(crate) masthead: Masthead,
+    pub(crate) back: Option<(&'static str, M)>,
+    /// `""` hides it until there is one.
+    pub(crate) legend: Option<String>,
     /// What stands above the status whatever the page read (a search field).
-    pub now: Vec<Node<M>>,
-    /// The placeholder's shape.
-    pub shape: Shape,
+    pub(crate) now: Vec<Node<M>>,
+    pub(crate) shape: Shape,
 }
 
 fn retry<M>(m: M) -> Node<M> {
     view! { Button "retry" {Type => "button"} @click(m) ["Retry"] }
 }
 
-fn placeholder<M>(shape: Shape) -> Node<M> {
+#[must_use]
+pub(crate) fn placeholder<M>(shape: Shape) -> Node<M> {
     let bars = |n| (0..n).map(|_| view! { Span "phbar" }).collect::<Vec<_>>();
+    let each = |n, class: &'static str, inner| {
+        (0..n)
+            .map(|_| view! { Span {Class => class} [bars(inner)] })
+            .collect::<Vec<_>>()
+    };
     let (class, parts) = match shape {
         Shape::Lines => ("placeholder ph-lines", bars(5)),
-        Shape::Rows => (
-            "placeholder ph-rows",
-            (0..5).map(|_| view! { Span "phrow" [bars(2)] }).collect(),
-        ),
+        Shape::Rows => ("placeholder ph-rows", each(5, "phrow", 2)),
+        Shape::Cards => ("placeholder ph-cards", each(3, "phcard", 3)),
+        Shape::Turns => ("placeholder ph-turns", each(4, "phturn", 2)),
     };
     view! { Div {Class => class, Role => "status", AriaLabel => "Loading"} [mark("loadmark"), parts] }
 }
 
-/// The page: its chrome, its status, and its body.
 #[must_use]
-pub fn page<M: Clone>(c: Chrome<M>, status: Status<M>, body: Vec<Node<M>>) -> Node<M> {
+pub(crate) fn page<M: Clone>(c: Chrome<M>, status: Status<M>, body: Vec<Node<M>>) -> Node<M> {
+    let title = view! { H1 {Class => match c.masthead {
+        Masthead::Page => "pagetitle",
+        Masthead::Destination => "pagetitle destination",
+    }} [c.title.clone()] };
+    page_headed(c, title, status, body)
+}
+
+/// `page`, its title drawn as `head` (a heading that becomes a field).
+#[must_use]
+pub(crate) fn page_headed<M: Clone>(
+    c: Chrome<M>,
+    head: Node<M>,
+    status: Status<M>,
+    body: Vec<Node<M>>,
+) -> Node<M> {
     let waiting = matches!(status, Status::Waiting);
     let said = match status {
         Status::Waiting => Some(view! { Div "pagewait" [placeholder(c.shape)] }),
@@ -156,13 +154,7 @@ pub fn page<M: Clone>(c: Chrome<M>, status: Status<M>, body: Vec<Node<M>>) -> No
     // Keyed, so the status line coming and going moves the body and never draws it again.
     let parts = [
         back.map(|n| ("back", n)),
-        Some((
-            "head",
-            view! { Div "pagehead" [view! { H1 {Class => match c.masthead {
-                Masthead::Page => "pagetitle",
-                Masthead::Destination => "pagetitle destination",
-            }} [c.title] }, mark("rule")] },
-        )),
+        Some(("head", view! { Div "pagehead" [head, mark("rule")] })),
         legend.map(|n| ("legend", n)),
         Some(("now", view! { Div "pagenow" [c.now] })),
         said.map(|n| ("status", n)),
@@ -171,9 +163,9 @@ pub fn page<M: Clone>(c: Chrome<M>, status: Status<M>, body: Vec<Node<M>>) -> No
     view! { Div {Class => column} => parts.into_iter().flatten().map(|(k, n)| (k.to_owned(), n)) }
 }
 
-/// A chip: `.chip` and one of the modifiers `style.css` gives it (`""`, `ok`, `cat`, `kind`).
+/// `kind` is one of the modifiers `style.css` gives `.chip` (`""`, `ok`, `cat`, `kind`).
 #[must_use]
-pub fn chip<M>(label: &str, kind: &str) -> Node<M> {
+pub(crate) fn chip<M>(label: &str, kind: &str) -> Node<M> {
     let class = if kind.is_empty() {
         "chip".to_owned()
     } else {
@@ -182,58 +174,149 @@ pub fn chip<M>(label: &str, kind: &str) -> Node<M> {
     view! { Span {Class => class} [label] }
 }
 
-/// A fraction in [0, 1] as the app's pie, on the fulfillment scale.
+/// A fraction in [0, 1] on the fulfillment scale.
 #[must_use]
-pub fn pie<M>(share: f64) -> Node<M> {
+pub(crate) fn pie<M>(share: f64) -> Node<M> {
     foreign("mark", "pie", share.to_string())
 }
 
-/// What a `rich` part is drawn from.
 #[derive(Serialize)]
 struct Rich<'a> {
     html: Option<&'a str>,
     text: &'a str,
     class: &'a str,
+    kind: Option<suzatary_core::secretary::answer::Kind>,
 }
 
 /// Typst's HTML placed through the tripwire (`web/src/rich.ts`), or its source as text where
 /// nothing rendered it.
 #[must_use]
-pub fn rich<M>(html: Option<&str>, text: &str, class: &'static str) -> Node<M> {
-    let props = serde_json::to_string(&Rich { html, text, class }).expect("strings print as JSON");
+pub(crate) fn rich<M>(html: Option<&str>, text: &str, class: &'static str) -> Node<M> {
+    let props = serde_json::to_string(&Rich {
+        html,
+        text,
+        class,
+        kind: None,
+    })
+    .expect("strings print as JSON");
     foreign("rich", class, props)
 }
 
-/// A link of a class to a place in the app.
+/// One block of an answer, as `rich` draws it, marked with its kind.
 #[must_use]
-pub fn link<M>(class: &str, to: Place<'_>, words: impl Child<M>) -> Node<M> {
+pub(crate) fn rich_block<M>(
+    html: Option<&str>,
+    text: &str,
+    kind: suzatary_core::secretary::answer::Kind,
+) -> Node<M> {
+    let props = serde_json::to_string(&Rich {
+        html,
+        text,
+        class: "answerblock",
+        kind: Some(kind),
+    })
+    .expect("strings print as JSON");
+    foreign("rich", "answerblock", props)
+}
+
+#[must_use]
+pub(crate) fn link<M>(class: &str, to: Place<'_>, words: impl Child<M>) -> Node<M> {
     view! { A {Class => class, Href => to.href()} [words] }
 }
 
-/// Ask the secretary about a reference: a link, so it middle-clicks and Back returns here.
+/// A link, so it middle-clicks and Back returns here.
 #[must_use]
-pub fn ask<M>(reference: &str) -> Node<M> {
+pub(crate) fn ask<M>(reference: &str) -> Node<M> {
     view! { Div "askrow" [link("asksecretary", Place::Ask(reference), "Ask the secretary")] }
 }
 
-/// What a list says when it holds nothing.
 #[must_use]
-pub fn empty<M>(said: &str) -> Node<M> {
+pub(crate) fn empty<M>(said: &str) -> Node<M> {
     view! { P "empty" [said] }
 }
 
-/// A callout: a title and its body inside the outline.
 #[must_use]
-pub fn callout<M>(title: &str, body: impl Child<M>) -> Node<M> {
+pub(crate) fn callout<M>(title: &str, body: impl Child<M>) -> Node<M> {
     view! { Section "callout" [mark("outline"), view! { H2 "callouttitle" [title] }, body] }
 }
 
-/// `1 fact` or `3 facts`.
 #[must_use]
-pub fn counted(n: usize, one: &str, many: &str) -> String {
+pub(crate) fn counted(n: usize, one: &str, many: &str) -> String {
     if n == 1 {
         format!("1 {one}")
     } else {
         format!("{n} {many}")
     }
+}
+
+/// The mark alone beside a control waiting on the box, shown at once: the person pressed it, so
+/// the wait is theirs.
+#[must_use]
+pub(crate) fn inline_wait<M>() -> Node<M> {
+    view! { Span "placeholder phinline" {Role => "status", AriaLabel => "Waiting"} [mark("loadmark")] }
+}
+
+/// Whose words a text is decides what is linked: references in anyone's, URLs only in the box's
+/// own and an act's (`web/src/chat/refs.ts`'s `textWithReferences`).
+#[derive(Debug, Clone, Copy)]
+pub(crate) enum Words<'a> {
+    Plain,
+    /// Said by `who` (a turn's speaker).
+    Said(&'a str),
+}
+
+/// Whether a held value's placeholder in a text becomes the chip a tap reveals, and where from.
+#[derive(Debug, Clone, Copy)]
+pub(crate) enum Chips<'a> {
+    None,
+    Mail,
+    Conversation(&'a str),
+}
+
+#[derive(Serialize)]
+struct Prose<'a> {
+    tag: &'a str,
+    class: &'a str,
+    text: &'a str,
+    who: Option<&'a str>,
+    held: bool,
+    conversation: Option<&'a str>,
+}
+
+/// A stranger's or a model's text, drawn by the host as text nodes and built links only, never
+/// parsed as markup (`web/src/pages/parts.ts`'s `prose`).
+#[must_use]
+pub(crate) fn prose<M>(
+    tag: &str,
+    class: &str,
+    text: &str,
+    words: Words<'_>,
+    chips: Chips<'_>,
+) -> Node<M> {
+    let (held, conversation) = match chips {
+        Chips::None => (false, None),
+        Chips::Mail => (true, None),
+        Chips::Conversation(c) => (true, Some(c)),
+    };
+    let who = match words {
+        Words::Plain => None,
+        Words::Said(who) => Some(who),
+    };
+    let props = serde_json::to_string(&Prose {
+        tag,
+        class,
+        text,
+        who,
+        held,
+        conversation,
+    })
+    .expect("strings print as JSON");
+    foreign("prose", class.to_owned(), props)
+}
+
+/// `lead` and the whole seconds since the clock of `key` first stood, counted by the host
+/// (`web/src/pages/parts.ts`'s `elapsed`), so a clock asks no step of the page.
+#[must_use]
+pub(crate) fn clock<M>(key: &str, lead: &str) -> Node<M> {
+    foreign("elapsed", key.to_owned(), lead.to_owned())
 }

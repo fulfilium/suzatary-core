@@ -14,20 +14,15 @@ use crate::reading::{Nothing, Opened};
 use crate::releases;
 use crate::runtime::{Context, Effect, Held, Input, Never};
 
-/// The page's two questions.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[ts(rename = "AboutHold")]
 pub enum Hold {
-    /// What the box runs.
     About,
-    /// The releases.
     Releases,
 }
 
-/// It asks nothing once.
 pub type Ask = Never;
 
-/// Everything the page knows.
 #[derive(Debug, Clone)]
 pub struct Model {
     context: Context,
@@ -35,20 +30,16 @@ pub struct Model {
     releases: Held<ReleasesPayload>,
 }
 
-/// Everything that can happen to the page.
 #[derive(Debug, Clone)]
 pub enum Msg {
-    /// From the host.
     Host(Box<Input<Hold, Never>>),
-    /// Retry pressed.
     Retry,
 }
 
-/// The page as a program.
 #[derive(Debug)]
 pub enum About {}
 
-/// The claim is the system's argument about itself; it has a page, not a footer.
+/// The claim has a page, not a footer.
 fn claims() -> Vec<Node<Msg>> {
     let prose = |words: Vec<Node<Msg>>| para("aboutprose", words);
     vec![
@@ -78,7 +69,7 @@ fn claims() -> Vec<Node<Msg>> {
     ]
 }
 
-/// What the box runs, which only the box can say: never this module's own idea.
+/// Only the box can say what it runs: never this module's own idea.
 fn version(p: &AboutPayload) -> Node<Msg> {
     let built = if p.build == "dev" {
         ", a development build outside the flake.".to_owned()
@@ -127,7 +118,9 @@ impl Program for About {
                     reading,
                     behind,
                 } => m.releases = Held::of(reading, behind),
-                Input::Answered { ask, .. } => match ask {},
+                Input::Answered { ask, .. } | Input::Heard { ask, .. } | Input::Opened { ask } => {
+                    match ask {}
+                }
             },
             Msg::Retry => {
                 return [Question::About, Question::Releases]
@@ -139,8 +132,7 @@ impl Program for About {
     }
 
     fn view(m: &Model) -> Node<Msg> {
-        // The page waits for both; releases that cannot be read are said in the page and lose
-        // nothing else.
+        // Releases that cannot be read are said in the page and lose nothing else.
         let settled = m.releases.reading.settled();
         let reading = m.running.reading.both(&settled);
         let body = match &reading {

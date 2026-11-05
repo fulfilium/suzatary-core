@@ -1,5 +1,4 @@
-//! The releases the project chain reads: how far each is, and what became of each of its items.
-//! A part of About.
+//! The releases the project chain reads, as a part of About.
 
 use suzatary_core::release::{Lot, Named, Place};
 use suzatary_core::wire::{Fulfillment, HeldTodo, ReleaseItem, ReleaseRow, ReleasesPayload};
@@ -9,8 +8,7 @@ use viewtree::{Node, view};
 
 use crate::chrome::{chip, pie};
 
-/// What became of an item, as the page draws it; an open item a revision dropped apart from
-/// what is owed.
+/// An open item a revision dropped is kept apart from what is owed.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Mark {
     Owed,
@@ -30,7 +28,6 @@ impl Mark {
         }
     }
 
-    /// What is still owed first, then what is done, then what is moot.
     fn rank(self) -> usize {
         match self {
             Mark::Owed => 0,
@@ -50,8 +47,7 @@ impl Mark {
     }
 }
 
-/// What is owed is what is done or still open in the release now; a cancelled or dropped item
-/// leaves the count.
+/// A cancelled or dropped item leaves the count of what is owed.
 fn sentence(r: &ReleaseRow) -> String {
     let mut n = [0usize; 4];
     for i in &r.items {
@@ -82,7 +78,7 @@ fn standing(r: &ReleaseRow) -> &'static str {
     }
 }
 
-/// A held todo's fulfillment as the pie, or `unpriced`; nothing where it does not link.
+/// `unpriced` where a held todo has no fulfillment; nothing where it does not link.
 fn value<M>(held: Option<&HeldTodo>) -> Option<Node<M>> {
     match held.and_then(|h| h.row.value) {
         Some(Fulfillment::Number(v)) => Some(pie(v)),
@@ -119,9 +115,9 @@ fn release<M>(r: &ReleaseRow) -> Node<M> {
     ] }
 }
 
-/// The releases as the box answered them, or why it could not read them, which is shown and
-/// never hidden; nothing while they are on their way or where the box serves no project chain.
-pub fn view<M>(r: &Reading<ReleasesPayload>) -> Option<Node<M>> {
+/// Why the box could not read them is shown, never hidden; nothing while they are on their way
+/// or where the box serves no project chain.
+pub(crate) fn view<M>(r: &Reading<ReleasesPayload>) -> Option<Node<M>> {
     match r {
         Reading::Loading => None,
         Reading::Error { e } => Some(
@@ -142,8 +138,8 @@ pub fn view<M>(r: &Reading<ReleasesPayload>) -> Option<Node<M>> {
 mod tests {
     use super::*;
 
-    /// The box's release sample (`app/core/tests/web/answers.json`) reads as the box reads it:
-    /// an item completed once stays done, a dropped one moved out, and what is owed comes first.
+    /// The box's release sample (`app/core/tests/web/answers.json`): an item completed once stays
+    /// done, a dropped one moves out, and what is owed comes first.
     #[test]
     fn the_box_sample_reads_as_the_box_reads_it() {
         let text = std::fs::read_to_string(concat!(

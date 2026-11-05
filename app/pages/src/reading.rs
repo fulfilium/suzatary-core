@@ -1,5 +1,5 @@
-//! A page that is a view of one held question and has no acts of its own: the calendar, the
-//! briefings and a briefing are each a [`View`], and [`One`] is the program of any of them.
+//! A page that is a view of one held question and has no acts of its own; `One` is the program
+//! of any `View`.
 
 use std::marker::PhantomData;
 
@@ -13,65 +13,46 @@ use crate::places::Place;
 use crate::runtime::{Answer, Behind, Context, Effect, Input, Never, answered};
 use crate::zone::Offset;
 
-/// One page of one reading: what its address names, the path it holds, how the answer reads,
-/// and how it looks.
 pub trait View {
-    /// What the address names.
     type At: std::fmt::Debug + Clone + serde::de::DeserializeOwned;
-    /// What the answer reads as.
     type Of: std::fmt::Debug + Clone;
-    /// The page's class.
     const CLASS: &'static str;
-    /// The placeholder's shape.
     const SHAPE: Shape = Shape::Rows;
-    /// How its title stands.
     const MASTHEAD: Masthead = Masthead::Page;
-    /// The path it holds.
     fn path(f: &Self::At) -> String;
-    /// Back's label and where it goes when the tab has nothing to go back to.
+    /// Back's label, and where it goes when the tab has nothing to go back to.
     #[must_use]
     fn back(_: &Self::At) -> Option<(&'static str, Place<'_>)> {
         None
     }
-    /// The answer read; a refusal is a failure unless the page says otherwise.
+    /// A refusal is a failure unless the page says otherwise.
     fn read(a: Answer) -> Result<Self::Of, String>;
-    /// Its title, from what is read once there is something.
     fn title(f: &Self::At, v: Option<&Self::Of>) -> String;
-    /// The line under the title.
     #[must_use]
     fn legend(_: &Self::At, _: &[Offset], _: Option<&Self::Of>) -> Option<String> {
         None
     }
-    /// Its body.
     fn body(f: &Self::At, offsets: &[Offset], v: &Self::Of) -> Vec<Node<Msg>>;
 }
 
-/// Such a page asks nothing once.
 pub type Ask = Never;
 
-/// The one question such a page holds.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[ts(rename = "OneHold")]
 pub enum Hold {
-    /// The page's reading.
     Page,
 }
 
-/// What the host opens a page with: the tab's context, and what the address names.
 #[derive(Debug, Clone, Deserialize)]
 pub struct Opened<A> {
-    /// The tab's context.
     pub context: Context,
-    /// What the address names.
     #[serde(flatten)]
     pub at: A,
 }
 
-/// The address of a page that names nothing.
 #[derive(Debug, Clone, Deserialize, TS)]
 pub struct Nothing {}
 
-/// Everything such a page knows.
 #[derive(Debug, Clone)]
 pub struct Model<V: View> {
     context: Context,
@@ -80,18 +61,14 @@ pub struct Model<V: View> {
     behind: Option<Behind>,
 }
 
-/// Everything that can happen to it.
 #[derive(Debug, Clone)]
 pub enum Msg {
-    /// From the host.
     Host(Box<Input<Hold, Never>>),
-    /// Back pressed.
     Back,
-    /// Retry pressed.
     Retry,
+    Copy(String),
 }
 
-/// The program of a [`View`].
 #[derive(Debug)]
 pub struct One<V>(PhantomData<V>);
 
@@ -134,7 +111,9 @@ impl<V: View> Program for One<V> {
                     };
                     m.behind = behind;
                 }
-                Input::Answered { ask, .. } => match ask {},
+                Input::Answered { ask, .. } | Input::Heard { ask, .. } | Input::Opened { ask } => {
+                    match ask {}
+                }
             },
             Msg::Back => {
                 return V::back(&m.at)
@@ -149,6 +128,7 @@ impl<V: View> Program for One<V> {
                     path: V::path(&m.at),
                 }];
             }
+            Msg::Copy(text) => return vec![Effect::Copy { text }],
         }
         Vec::new()
     }
@@ -178,10 +158,7 @@ impl<V: View> Program for One<V> {
     }
 }
 
-/// The answer read as JSON of `T`: the default reading of a [`View`].
-///
-/// # Errors
-/// The box refused, or answered in another shape.
-pub fn json<T: serde::de::DeserializeOwned>(a: Answer) -> Result<T, String> {
+/// The default reading of a `View`; fails when the box refused or answered in another shape.
+pub(crate) fn json<T: serde::de::DeserializeOwned>(a: Answer) -> Result<T, String> {
     answered(a)
 }

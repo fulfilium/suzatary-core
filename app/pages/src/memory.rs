@@ -1,5 +1,5 @@
-//! `#/secretary/memory`: every fact the secretary keeps, by kind, each with Forget, and the
-//! summaries of the owner's words a conversation is told, each with Wrong.
+//! `#/secretary/memory`: every fact the secretary keeps, each with Forget, and the summaries of
+//! the owner's words a conversation is told, each with Wrong.
 
 use serde::{Deserialize, Serialize};
 use suzatary_core::secretary::memory::{FactId, Kind};
@@ -14,21 +14,16 @@ use crate::places::{Place, Question};
 use crate::reading::{Nothing, Opened};
 use crate::runtime::{Answer, Body, Context, Effect, Gate, Held, Input};
 
-/// The page's two questions.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[ts(rename = "MemoryHold")]
 pub enum Hold {
-    /// The facts.
     Memory,
-    /// The summaries.
     Record,
 }
 
-/// A tap that asks the box to change the memory.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[ts(rename = "MemoryAct")]
 pub enum Act {
-    /// Erase a fact.
     Forget(FactId),
     /// Write a summary again from the owner's lines.
     Retract(String),
@@ -48,33 +43,24 @@ impl Act {
     }
 }
 
-/// Its one-time asks are its acts.
 pub type Ask = Act;
 
-/// Everything the page knows.
 #[derive(Debug, Clone)]
 pub struct Model {
     context: Context,
     memory: Held<MemoryPayload>,
     record: Held<RecordPayload>,
-    /// The acts sent and not yet answered.
     running: Vec<Act>,
 }
 
-/// Everything that can happen to the page.
 #[derive(Debug, Clone)]
 pub enum Msg {
-    /// From the host.
     Host(Box<Input<Hold, Act>>),
-    /// Back pressed.
     Back,
-    /// Retry pressed.
     Retry,
-    /// Forget or Wrong tapped.
     Run(Act),
 }
 
-/// The page as a program.
 #[derive(Debug)]
 pub enum Memory {}
 
@@ -119,9 +105,10 @@ impl Program for Memory {
                     reading,
                     behind,
                 } => m.record = Held::of(reading, behind),
+                Input::Heard { ask, .. } | Input::Opened { ask } => match ask {},
                 Input::Answered { ask, answer } => {
                     m.running.retain(|a| *a != ask);
-                    // What was forgotten or written again is read again; a refusal names the act.
+                    // What was changed is read again; a refusal names the act.
                     return vec![match (ask, answer) {
                         (Act::Forget(_), Answer::Done { .. }) => Effect::Again {
                             path: Question::Memory.path(),
@@ -140,7 +127,7 @@ impl Program for Memory {
             },
             Msg::Back => {
                 return vec![Effect::Back {
-                    fallback: Place::Secretary.href(),
+                    fallback: Place::Secretary(&[]).href(),
                 }];
             }
             Msg::Retry => return READS.map(|q| Effect::Again { path: q.path() }).into(),
@@ -245,8 +232,8 @@ fn group(
     ] }
 }
 
-/// The round that said it: the conversation windowed at the turn, or the card a tap answered;
-/// in its own words unless `words` says otherwise.
+/// The conversation windowed at the turn, or the card a tap answered; in its own words unless
+/// `words` says otherwise.
 fn said(class: &str, s: &SaidOn, words: Option<String>) -> Node<Msg> {
     let (id, card, at, own) = match s {
         SaidOn::Turn {
@@ -280,7 +267,7 @@ fn said(class: &str, s: &SaidOn, words: Option<String>) -> Node<Msg> {
     )
 }
 
-/// Where a fact comes from: the round that said it, or the facts it replaced and where each was said.
+/// The round that said it, or the facts it replaced and where each was said.
 fn provenance(s: &FactSaid) -> Node<Msg> {
     match s {
         FactSaid::Said { on } => said("memorysaid", on, None),
@@ -304,7 +291,7 @@ fn provenance(s: &FactSaid) -> Node<Msg> {
     }
 }
 
-/// An act's button, offered only to a login that writes and disabled while it runs.
+/// Offered only to a login that writes, and disabled while it runs.
 fn act(m: &Model, class: &str, label: &str, a: Act) -> Option<Node<Msg>> {
     let busy = m.running.contains(&a);
     (m.context.gate == Gate::Writes)

@@ -1,4 +1,4 @@
-// Every route the box answers, named once: its path, its method, and the decoder its answer passes through `http`.
+// Every route the box answers, named once with its method and decoder.
 
 import app from "../app/app";
 import type { AboutPayload, AttachmentRow, Authoring, AuthoredPayload, BlockRender, BriefingPayload, BriefingsPayload, CalendarPayload, ChainPayload, ConversationPayload, DevicePayload, DrawnPayload, Erasing, FactId, FoldPayload, MailSearchPayload, MePayload, MemoryPayload, NewTodo, ObjectsPayload, Overview, PostedObjects, Reasoning, ReceiptPayload, RecordPayload, Registering, ReleasesPayload, Revealing, SayPayload, Saying, Tapping, Titling, TodoPayload, UpdateTodo, Uploaded, Uploading, UsagePayload, WaitingPayload } from "./generated/wire";
@@ -15,8 +15,6 @@ import payload from "./generated/payload";
 const onChain = (route: string, chain?: string): string =>
   chain === undefined ? `${app.apiBase(app.now())}/${route}` : `/api/${encodeURIComponent(chain)}/${route}`;
 
-// --- the chain ---------------------------------------------------------------
-
 // The biggest answer, kept while the tip stands still; a rejected fetch is never kept.
 const chainKept = once.of((): Promise<ChainPayload> => http.get(onChain("chain"), payload.ChainPayload));
 
@@ -29,23 +27,20 @@ export const fold = (chain?: string): Promise<FoldPayload> => http.get(onChain("
 export const todo = (id: string): Promise<TodoPayload> =>
   http.get(onChain(`todo/${encodeURIComponent(id)}`), payload.TodoPayload);
 
-/** The box files the coding-session card that builds this todo; only a tap on that card starts a session. */
+/** Files the coding-session card; only a tap on that card starts a session. */
 export const buildTodo = (id: string): Promise<ConversationPayload> =>
   http.act(onChain(`todo/${encodeURIComponent(id)}/build`), {}, payload.ConversationPayload);
 
-/** Who the gate says we are on this chain: `actor: null` is a viewer, who gets no act buttons. */
+/** `actor: null` is a viewer, who gets no act buttons. */
 export const me = (): Promise<MePayload> => http.get(onChain("me"), payload.MePayload);
 
-/** Not per chain: the build that is running. */
 export const about = (): Promise<AboutPayload> => http.get("/api/about", payload.AboutPayload);
 export const getReleases = (): Promise<ReleasesPayload> => http.get("/api/releases", payload.ReleasesPayload);
-
-/** `path` asked from the frontier `since`, an answer's digest, or from nothing: a request that does not grow with the replica. */
 
 /** The objects the frontier `since` does not reach; none asks for all. */
 export const objectsSince = (since: string, chain?: string): Promise<ObjectsPayload> => http.get(onChain(storereads.sinceIn("objects", since), chain), payload.ObjectsPayload);
 
-// The heads our own last sync produced, so `/events` does not announce our write back; asking consumes them.
+// Our last sync's heads, so `/events` does not announce our write back; asking consumes them.
 let ourHeads: heads.Heads | null = null;
 
 export const wasOurWrite = (h: heads.Heads): boolean => {
@@ -69,30 +64,24 @@ export const postObjects = (objects: readonly string[], since: string): Promise<
     return receipt;
   });
 
-// The authoring a replica cannot do for itself. It appends nothing: sealing the answer is the replica's job,
-// and no body names an actor, which the box takes from the peer the gate named.
+// Appends nothing: the replica seals the answer. No body names an actor; the box takes it from the gate's peer.
 const author = (body: Authoring): Promise<AuthoredPayload> => http.act(onChain("author"), body, payload.AuthoredPayload);
 
 export const authorTodo = (todo: NewTodo): Promise<AuthoredPayload> => author({ add: todo });
 export const authorConfirm = (todo: string, note = ""): Promise<AuthoredPayload> => author({ confirm: { todo, note } });
-/** Only the fields the caller sets travel; the rest are untouched on the box's own reading. */
+/** Only the fields the caller sets travel; the rest stay as the box reads them. */
 export const authorUpdate = (edit: UpdateTodo, note = ""): Promise<AuthoredPayload> => author({ update: { ...edit, note } });
 // Undo asks the box even for a lifecycle event: undoing an edit needs the whole stream's folds, which the wasm lacks.
 export const authorUndo = (todo: string): Promise<AuthoredPayload> => author({ undo: todo });
 export const authorRedo = (todo: string): Promise<AuthoredPayload> => author({ redo: todo });
 
-// --- the Inbox ---------------------------------------------------------------
-
-/** The Inbox badge's count, read on the box. */
 export const waitingCount = (): Promise<WaitingPayload> => http.get("/api/waiting", payload.WaitingPayload);
-
-// --- mail and briefings ------------------------------------------------------
 
 const paged = (account: string, before: string): string =>
   (account === "" ? "" : `&account=${encodeURIComponent(account)}`) +
   (before === "" ? "" : `&before=${encodeURIComponent(before)}`);
 
-/** A notmuch query, passed through, paged by `before`: the oldest row shown, "" for the newest. */
+/** A notmuch query, passed through; `before` is the oldest row shown, "" for the newest. */
 export const mailSearch = (q: string, account: string, limit: number, before = ""): Promise<MailSearchPayload> =>
   http.get(`/api/mail/search?q=${encodeURIComponent(q)}&limit=${limit}${paged(account, before)}`, payload.MailSearchPayload);
 
@@ -103,24 +92,16 @@ export const briefing = (date: string): Promise<BriefingPayload> =>
 export const calendar = (date: string): Promise<CalendarPayload> =>
   http.get(`/api/calendar/${encodeURIComponent(date)}`, payload.CalendarPayload);
 
-// --- usage and settings ------------------------------------------------------
-
 export const usage = (): Promise<UsagePayload> => http.get("/api/usage", payload.UsagePayload);
 
 export const getOverview = (): Promise<Overview> => http.get("/api/overview", payload.Overview);
 
-// --- the secretary ----------------------------------------------------------
-//
 // Not under `app.apiBase`: a conversation reads every chain and the mail, so it is no chain's.
 
 const conversationPath = (id: string, rest = ""): string =>
   `/api/secretary/conversations/${encodeURIComponent(id)}${rest}`;
 const proposalPath = (id: string, index: number, verb: string): string =>
   conversationPath(id, `/proposals/${index}/${verb}`);
-
-/** The setup conversation of its own Settings' "Connect an account" begins on `template`. */
-export const beginSetup = (template: string): Promise<ConversationPayload> =>
-  http.act(`/api/secretary/setup/${encodeURIComponent(template)}`, {}, payload.ConversationPayload);
 
 /** A blank title is left for the box to name after the first answer. */
 export const openConversation = (title: string): Promise<ConversationPayload> =>
@@ -129,13 +110,13 @@ export const openConversation = (title: string): Promise<ConversationPayload> =>
 export const renameConversation = (id: string, title: string): Promise<ConversationPayload> =>
   http.act(conversationPath(id, "/title"), { title } satisfies Titling, payload.ConversationPayload);
 
-/** The owner's tap: the turns' words destroyed on the box and, at their next pull, on every device. */
+/** The owner's tap: the words are destroyed on the box and, at their next pull, on every device. */
 export const eraseTurns = (id: string, turns: readonly number[]): Promise<ConversationPayload> =>
   http.act(conversationPath(id, "/erase"), { turns: [...turns] } satisfies Erasing, payload.ConversationPayload);
 
-// The chips travel by value, not inside the sentence: the box parses each, so one it cannot resolve is a 400 rather than a dead link.
-/** 202 with the person's turn on it; the model runs behind that. `after` is how many turns its asker saw, so the
- * box answers the same question asked twice with the first one's line. */
+// The chips travel by value, not inside the sentence: one the box cannot resolve is a 400 rather than a dead link.
+/** 202 with the person's turn; the model runs behind it. `after` is how many turns the asker saw, so the same question
+ * asked twice gets the first one's line. */
 export const say = (
   id: string,
   text: string,
@@ -145,7 +126,7 @@ export const say = (
 ): Promise<SayPayload> =>
   http.act(conversationPath(id, "/say"), { ...asked(text, references, attachments), ...(after === undefined ? {} : { after }) } satisfies Saying, payload.SayPayload);
 
-/** Replace the last round's question: `say`'s body, the old question and all after it set aside first. */
+/** `say`'s body; the old question and all after it are set aside first. */
 export const editQuestion = (
   id: string,
   text: string,
@@ -167,33 +148,27 @@ export const stopAnswer = (id: string): Promise<ConversationPayload> =>
 export const regenerate = (id: string): Promise<ConversationPayload> =>
   http.act(conversationPath(id, "/regenerate"), {}, payload.ConversationPayload);
 
-/** A conversation's proposals drawn against the todo chains, which no replica in the tab holds whole: each the box's whole row, in one read. */
+/** Drawn by the box, since no replica in the tab holds the todo chains whole. */
 export const drawnProposals = (id: string, indices: readonly number[]): Promise<DrawnPayload> =>
   http.get(conversationPath(id, `/drawn?indices=${indices.join(",")}`), payload.DrawnPayload);
 
-/** A block of an answer, streaming or stored, named by its sha and never by its text, so the box renders only what the model wrote. */
+/** Named by its sha, never by its text, so the box renders only what the model wrote. */
 export const block = (id: string, sha: string): Promise<BlockRender> =>
   http.get(conversationPath(id, `/blocks/${encodeURIComponent(sha)}`), payload.BlockRender);
 
-/** A block by its source: the route names it by the sha-256 of its source. */
 export const blockBySource = async (id: string, source: string): Promise<BlockRender> =>
   block(id, [...new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(source)))].map((b) => b.toString(16).padStart(2, "0")).join(""));
 
-/** Base64, since the write gate takes JSON only; a `say` then names the id. `private` is the owner's
- * say-so for a file the box held back: it goes to his Drive, not the box. */
+/** Base64, since the write gate takes JSON only; a `say` then names the id. `private` sends a file the box held back
+ * to the owner's Drive, not the box. */
 export const upload = (base64: string, name: string, keepPrivate = false): Promise<Uploaded> =>
   http.act("/api/secretary/attachments", { file: base64, name, private: keepPrivate } satisfies Uploading, payload.Uploaded);
 
-/** A URL for an `<img src>`, never a fetch. */
-export const attachmentUrl = (id: string): string => `/api/secretary/attachments/${encodeURIComponent(id)}`;
-
-/**
- * The one call that ends in an irreversible act. It carries an index, never a body that could change what is
- * performed; `note` is a line for the conversation, and `value` belongs to a secret act alone.
- */
 /** A send answers in seconds; past this the card asks the box what happened. */
 export const TAP_BOUND = 30_000;
 
+/** The irreversible act. It carries an index, never a body that could change what is performed; `value` is a secret
+ * act's alone. */
 export const tapProposal = (
   id: string,
   index: number,
@@ -204,7 +179,7 @@ export const tapProposal = (
 ): Promise<ConversationPayload> =>
   http.act(
     proposalPath(id, index, "tap"),
-    // `always` and `endorsement` only when set: every other tap's body stays what it was.
+    // `always` and `endorsement` only when set, so every other tap's body is unchanged.
     {
       note,
       ...(value === undefined ? {} : { value }),
@@ -215,21 +190,21 @@ export const tapProposal = (
     TAP_BOUND,
   );
 
-/** Behind the tap's own gate; the reason goes into the transcript the secretary reads. */
+/** Behind the tap's own gate. */
 export const dismissProposal = (id: string, index: number, reason: string): Promise<ConversationPayload> =>
   http.act(proposalPath(id, index, "dismiss"), { reason } satisfies Reasoning, payload.ConversationPayload);
 
-/** The owner has checked Sent for a send that may have gone; it performs nothing. */
+/** The owner checked Sent for a send that may have gone; performs nothing. */
 export const acknowledgeProposal = (id: string, index: number): Promise<ConversationPayload> =>
   http.act(proposalPath(id, index, "acknowledge"), {}, payload.ConversationPayload);
 
-/** Let a coding session go, with the reason the secretary reads. */
 export const dropSession = (id: string, index: number, reason: string): Promise<ConversationPayload> =>
   http.act(proposalPath(id, index, "drop"), { reason } satisfies Reasoning, payload.ConversationPayload);
 
 export const getMemory = (): Promise<MemoryPayload> => http.get("/api/secretary/memory", payload.MemoryPayload);
 
-/** The owner's tap on a held value's placeholder drawn in `conversation` (`null` on a mail page): the number or the file, answered once and kept nowhere; `Gone` when the box holds it no more or answered a replay. */
+/** `conversation` is `null` on a mail page. Answered once and kept nowhere; `Gone` when the box holds it no more or
+ * answered a replay. */
 export const revealHeld = (conversation: string | null): heldvalue.Reveal => (handle) =>
   http.act("/api/held/reveal", { handle, conversation } satisfies Revealing, payload.RevealPayload).then((p): heldvalue.Opened => {
     switch (p.type) {
@@ -242,7 +217,7 @@ export const revealHeld = (conversation: string | null): heldvalue.Reveal => (ha
     }
   });
 
-/** The Android portal's push token, which this page signs for the native code that holds no key. */
+/** Signed here for the native code, which holds no key. */
 export const reportPushToken = (token: string): Promise<DevicePayload> =>
   http.act("/api/act/device", { platform: "android", token } satisfies Registering, payload.DevicePayload);
 
@@ -251,6 +226,5 @@ export const forgetFact = (id: FactId): Promise<MemoryPayload> =>
 
 export const getRecord = (): Promise<RecordPayload> => http.get("/api/secretary/record", payload.RecordPayload);
 
-/** The owner's tap on a wrong summary of the record: the box asks its node again, and every summary above it. */
 export const retractSummary = (node: string): Promise<RecordPayload> =>
   http.act(`/api/secretary/record/${node}/retract`, {}, payload.RecordPayload);

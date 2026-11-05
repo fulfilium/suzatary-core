@@ -532,7 +532,7 @@ with the readings once it is in the service worker's cache and compiled. *Size:*
    TypeScript fell by 8,986 characters and 279 lines, with the host and its parts (4,801) counted.
 6. **Conversation, secretary and the Inbox** (179, 238, 244, with `secretary.state.ts`,
    `inbox.state.ts`, `web/src/chat` and `web/src/inbox`): the foreign parts go with the Inbox's
-   cards. *Size:* about −164,000 characters, −4,700 lines of TS.
+   cards. *Size:* about −164,000 characters, −4,700 lines of TS. *Built (2026-11-03):* §7.2.
 7. **Usage and chain** (275, 283).
 8. **Todos and the todo page** (416 + 223, with `web/src/todo`), after ONEOWNER stage 6 puts the
    chains in the core. *Measure:* the list's first draw at the live shape, against today's.
@@ -588,6 +588,27 @@ second runtime.
   fresh document compiles it again, so a load that no longer shares the core is not met yet. A
   keystroke is 0.4 to 0.5 ms and a 23-byte patch (12 to 34). The module, now four pages, is 737,922
   bytes after `wasm-opt`.
+
+### 7.2 Stage 6, as built
+
+- **The pages:** `inbox.rs`, `secretary.rs` (with `chats.rs`), `conversation.rs` (placed `Page`
+  or `Panel`), `draft.rs` and `needsyou.rs`. Their shared parts are `card.rs` (with
+  `digest.rs`), `waiting.rs`, `composer.rs`, `answer.rs`, `intents.rs` and `slices.rs` (a long
+  list drawn two rounds a step, so no task draws it whole). Settings draws the Rust card;
+  `parts.ts` keeps the marks, Typst's HTML, prose, a seconds clock and a message's todos.
+- **The runtime** gained, all generic: the core's readings as `Local`s; `Act` (an intent whose
+  typed value never reaches the page, told as answered or as held), `Sync`, `Endorse`, `Listen`,
+  `Timer`, `Focus`, `Scroll`, `Copy`, `Replace`, `Mark`, `Tell`; the reach and width in
+  `Context`. The host is `program.ts`, `local.ts`, `painter/scroll.ts` and `painter/files.ts`.
+- **The view tree** gained the tags, the keydown, toggle and file events, an untaken event left
+  to the browser, `Node::map` and `keydown_of`.
+- **The laws** are in `app/pages/tests/laws.rs` for every page, with the vectors' open
+  proposals in `app/pages/tests/vectors.rs`.
+- **Stays in TypeScript** until stages 2 and 9: the readings' adapters (`dressed.ts`,
+  `drafts.ts`, `draftbox.ts`), the worker's grouping (`grouped.ts`, `rounds.ts`, `days.ts`),
+  `refs.ts`, and the panel's placement (`aside.ts`, `inview.ts`).
+- **Next:** an `Effect::map` over held and asked names, as `Node::map` is over messages, would
+  replace the hand lifts `card::effects`, `composer::effects` and `Searching::typed`.
 
 ## 8. The plan read two ways
 

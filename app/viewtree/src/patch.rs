@@ -1,133 +1,79 @@
-//! What the painter is told to do, and the bytes that tell it.
-//!
-//! The format, read by `web/src/painter/patches.ts`: a sequence of patches, each an opcode byte
-//! and its fields. An id is a LEB128 `u32`; `before` is the id of the node to insert before plus
-//! one, or `0` for the end; a string is its UTF-8 length as a LEB128 `u32`, then its bytes. Id
-//! `0` is the root the painter was given.
+//! What the painter is told to do, and the bytes `web/src/painter/patches.ts` reads: each patch is
+//! an opcode byte and its fields; an id is a LEB128 `u32` (`0` is the root); `before` is the id
+//! plus one, `0` for the end; a string is its UTF-8 length as LEB128, then its bytes.
 
 use crate::node::{On, Tag};
 
-/// The root the painter was given.
 pub const ROOT: u32 = 0;
 
-/// One instruction to the painter.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Patch {
-    /// Make an element and insert it.
     Element {
-        /// Its new id.
         id: u32,
-        /// The element it goes in.
         parent: u32,
-        /// The node it goes before; `None` for the end.
         before: Option<u32>,
-        /// What it is.
         tag: Tag,
     },
-    /// Make a text node and insert it.
     Text {
-        /// Its new id.
         id: u32,
-        /// The element it goes in.
         parent: u32,
-        /// The node it goes before; `None` for the end.
         before: Option<u32>,
-        /// Its text.
         text: String,
     },
-    /// Ask the host for a foreign part and insert it.
     Foreign {
-        /// Its new id.
         id: u32,
-        /// The element it goes in.
         parent: u32,
-        /// The node it goes before; `None` for the end.
         before: Option<u32>,
-        /// Which of the host's parts.
         kind: String,
-        /// Which one.
         key: String,
-        /// What it is drawn from.
         props: String,
     },
-    /// Set an attribute.
     Set {
-        /// The element.
         id: u32,
-        /// Its name.
         name: String,
-        /// Its value.
         value: String,
     },
-    /// Remove an attribute.
     Unset {
-        /// The element.
         id: u32,
-        /// Its name.
         name: String,
     },
-    /// Set a text node's text.
     Retext {
-        /// The text node.
         id: u32,
-        /// Its new text.
         text: String,
     },
-    /// Tell a foreign part its new props.
     Reprop {
-        /// The part.
         id: u32,
-        /// What it is now drawn from.
         props: String,
     },
-    /// Move a node, keeping it (and its focus, scroll and children).
+    /// Keeps the node's focus, scroll and children.
     Move {
-        /// The node.
         id: u32,
-        /// The element it goes in.
         parent: u32,
-        /// The node it goes before; `None` for the end.
         before: Option<u32>,
     },
-    /// Remove a node and everything in it.
+    /// Removes everything in it too.
     Remove {
-        /// The node.
         id: u32,
     },
-    /// Start reporting an event on an element.
     Listen {
-        /// The element.
         id: u32,
-        /// The event.
         on: On,
     },
-    /// Stop reporting an event on an element.
     Unlisten {
-        /// The element.
         id: u32,
-        /// The event.
         on: On,
     },
-    /// Place a Typst output by its key, its plain text shown until its HTML is held.
+    /// Its plain text is shown until its HTML is held.
     Block {
-        /// Its new id.
         id: u32,
-        /// The element it goes in.
         parent: u32,
-        /// The node it goes before; `None` for the end.
         before: Option<u32>,
-        /// The key its HTML is kept under.
         key: String,
-        /// Its plain text.
         fallback: String,
     },
-    /// Place another output in a block.
     Rekey {
-        /// The block.
         id: u32,
-        /// The key its HTML is kept under.
         key: String,
-        /// Its plain text.
         fallback: String,
     },
 }
@@ -165,7 +111,6 @@ fn place(out: &mut Vec<u8>, id: u32, parent: u32, before: Option<u32>) {
     varint(out, before.map_or(0, |b| b + 1));
 }
 
-/// The patches as the bytes the painter reads.
 #[must_use]
 pub fn encode(patches: &[Patch]) -> Vec<u8> {
     let mut out = Vec::new();
@@ -267,7 +212,6 @@ pub fn encode(patches: &[Patch]) -> Vec<u8> {
     out
 }
 
-/// Why bytes are not patches.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Malformed(pub usize);
 
@@ -322,10 +266,10 @@ impl Reader<'_> {
     }
 }
 
-/// The bytes read back as patches: the painter's reading, here so its round trip is a law.
+/// The painter's reading, here so the round trip is a law.
 ///
 /// # Errors
-/// [`Malformed`], at the byte where the bytes stop being patches.
+/// [`Malformed`], at the byte offset where the bytes stop being patches.
 pub fn decode(bytes: &[u8]) -> Result<Vec<Patch>, Malformed> {
     let mut r = Reader { bytes, at: 0 };
     let mut out = Vec::new();

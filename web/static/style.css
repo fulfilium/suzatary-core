@@ -5518,6 +5518,11 @@ body:has(> .secretarypanel) .askrow {
     font-size: var(--t-small);
   }
 
+  /* The panel's program draws its body into this host, which lays out as the body itself. */
+  .panelhost {
+    display: contents;
+  }
+
   .panelbody {
     flex: 1 1 auto;
     min-width: 0;

@@ -25,7 +25,6 @@ import wire from "../src/wire/generated/payload";
 import { DEFAULT_FILTER, listing, total } from "../src/todo/todos";
 import { found, verifyChain } from "../src/prodrome/verify";
 import { rounds } from "../src/chat/rounds";
-import stage from "../src/inbox/stage";
 
 function vector<T>(file: string, decoder: d.Decoder<T>): T {
   const decoded = decoder(JSON.parse(readFileSync(`app/core/tests/web/${file}`, "utf8")));
@@ -112,21 +111,14 @@ test("the conversation: round spans and proposal placement match the Rust's abou
   assert.deepEqual(proposalRounds, wants.proposal_rounds);
 });
 
-// --- the proposals: a card at every stage, and whether it is open -------------
+// --- the proposals: a card at every stage (whether it is open is the Rust card's, `app/pages/tests/vectors.rs`) --
 
 test("law: every open proposal's card offers an answer, runs its own act or asks for his check, and no closed one does", () => {
   const rows = vector("proposals.json", d.arr(wire.ProposalRow));
   const wants = answer<{ readonly open: boolean }[]>("proposals.answer.json");
   assert.equal(rows.length, wants.length);
   assert.ok(rows.some((row) => row.state === "unknown") && rows.some((row) => row.state === "checked"));
-  rows.forEach((row, i) => {
-    const open = wants[i]?.open;
-    assert.equal(stage.open(row.state), open, `${row.state}: the page and the box agree it is open`);
-    assert.equal(
-      stage.answerable(row.state) || row.state === "started" || row.state === "unknown",
-      open,
-      `${row.state}: an open proposal has something to press, a closed one nothing`,
-    );
+  rows.forEach((row) => {
     assert.equal(
       row.card.answers.length > 0,
       row.state === "standing" || row.state === "failed",

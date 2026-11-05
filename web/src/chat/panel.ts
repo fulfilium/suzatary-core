@@ -1,128 +1,88 @@
-// The secretary beside every page but its own at 62rem and up: a `chat.mount` in its own scroll box, open by the
-// owner's rule (`aside.ts`); closed, only its toggle shows, in the same place. Below that width it is out of the
-// document with no source open, not merely hidden.
+// The secretary beside every page but its own at 62rem and up, open by the owner's rule (`aside.ts`). Below that width
+// it is out of the document with no conversation mounted, not merely hidden.
 
-import ui from "../app/ui";
-import registers from "../app/registers";
-import aside from "./aside";
-import chat from "./chat";
-import { clear, el } from "../view/dom";
+import ui from "../app/ui"
+import registers from "../app/registers"
+import aside from "./aside"
+import { el } from "../view/dom"
+import type { Mounted } from "../view/page"
+import program from "../pages/program"
+import d from "../wire/decoder"
 
-const DEFAULT_CONVERSATION = "default";
-const presses = ui.cell(registers.panel);
+const presses = ui.cell(registers.panel)
 
-/** The header: "About <ref> ·", or "Nothing about <ref> yet ·" when nothing in the conversation is about it, beside a link to the whole conversation. */
-function drawFrameHeader(target: HTMLElement, aboutText: string | undefined, fallback: boolean): void {
-  clear(target);
-  if (fallback) {
-    target.appendChild(el("span", {}, `Nothing about ${aboutText ?? ""} yet · `));
-    target.appendChild(el("a", { href: "#/secretary/default" }, "whole conversation →"));
-    return;
-  }
-  target.appendChild(el("span", {}, aboutText === undefined ? "" : `About ${aboutText} · `));
-  target.appendChild(el("a", { href: "#/secretary/default" }, "Whole conversation →"));
+const told = d.obj({ talk: d.oneOf<aside.Talk>({ Quiet: null, Talking: null }) })
+
+type Chrome = { readonly root: HTMLElement; readonly toggle: HTMLElement; readonly body: HTMLElement }
+
+// `talk` is as the program last told.
+type Beside = { page: aside.Page; talk: aside.Talk; readonly mounted: Promise<Mounted>; readonly unheard: () => void }
+
+// The module's one mutable cell; `beside` is replaced whole on every mount.
+const cell: { chrome: Chrome | null; beside: Beside | null } = { chrome: null, beside: null }
+
+const apply = (c: Chrome, b: Beside): void => {
+  const open = aside.shown(b.page, presses.get(), b.talk)
+  c.root.classList.toggle("panelclosed", !open)
+  c.toggle.setAttribute("aria-expanded", open ? "true" : "false")
+  c.toggle.textContent = open ? "Hide" : "Secretary"
 }
 
-interface Chrome {
-  readonly root: HTMLElement;
-  readonly toggle: HTMLElement;
-  /** Refilled on every mount, since `frameHeaderLine` is a new node each time. */
-  readonly header: HTMLElement;
-  readonly scrollBox: HTMLElement;
-  readonly composeSlot: HTMLElement;
+const chromeOf = (): Chrome => {
+  if (cell.chrome !== null) return cell.chrome
+  const toggle = el("button", { type: "button", class: "panelcollapse" })
+  const body = el("div", { class: "panelhost" })
+  const root = el("aside", { class: "secretarypanel", "aria-label": "Secretary" }, toggle, body)
+  document.body.appendChild(root)
+  cell.chrome = { root, toggle, body }
+  return cell.chrome
 }
 
-/** A conversation beside a page: `talk` is whether it holds talk about the page, and `page` moves between pages of many things. */
-interface Mounted {
-  readonly chrome: Chrome;
-  page: aside.Page;
-  talk: aside.Talk;
-  readonly chat: chat.Chat;
-  readonly unheard: (() => void)[];
+const unmount = (): void => {
+  const b = cell.beside
+  if (b === null) return
+  b.unheard()
+  void b.mounted.then(m => m.destroy())
+  cell.beside = null
 }
 
-type State = { readonly type: "Unmounted" } | { readonly type: "Mounted"; readonly m: Mounted };
+window.addEventListener("pagehide", unmount)
 
-/** The module's one mutable cell: `chrome` lives as long as the app once built, `state` is replaced whole on every remount. */
-const cell: { chrome: Chrome | null; state: State } = { chrome: null, state: { type: "Unmounted" } };
-
-function apply(m: Mounted): void {
-  const open = aside.shown(m.page, presses.get(), m.talk);
-  m.chrome.root.classList.toggle("panelclosed", !open);
-  m.chrome.toggle.setAttribute("aria-expanded", open ? "true" : "false");
-  m.chrome.toggle.textContent = open ? "Hide" : "Secretary";
-}
-
-function ensureChrome(): Chrome {
-  if (cell.chrome !== null) return cell.chrome;
-  const toggle = el("button", { type: "button", class: "panelcollapse" });
-  const scrollBox = el("div", { class: "panelscroll" });
-  const composeSlot = el("div", { class: "panelcompose" });
-  const header = el("div", { class: "panelheader" });
-  const body = el("div", { class: "panelbody" }, header, scrollBox, composeSlot);
-  const root = el("aside", { class: "secretarypanel", "aria-label": "Secretary" }, toggle, body);
-  document.body.appendChild(root);
-  cell.chrome = { root, toggle, header, scrollBox, composeSlot };
-  return cell.chrome;
-}
-
-function unmount(): void {
-  if (cell.state.type !== "Mounted") return;
-  cell.state.m.unheard.forEach((u) => u());
-  cell.state.m.chat.destroy();
-  cell.state = { type: "Unmounted" };
-}
-
-// The panel's stream goes with the document, as main.ts's own `pagehide` does.
-window.addEventListener("pagehide", unmount);
-
-function mount(chrome: Chrome, page: aside.Page): void {
-  const about = page.type === "One" ? page.reference : undefined;
-  const aboutText = page.type === "One" ? page.key : undefined;
-  const frameHeaderLine = el("div", { class: "frameheader" });
-  clear(chrome.header);
-  chrome.header.appendChild(frameHeaderLine);
-  const talk = chat.mount({
-    id: DEFAULT_CONVERSATION,
-    ...(about === undefined ? {} : { about }),
-    seeded: about === undefined ? [] : [about],
-    focus: false,
-    scroll: chrome.scrollBox,
-    place: (transcript, composer) => {
-      chrome.scrollBox.replaceChildren(transcript);
-      chrome.composeSlot.replaceChildren(composer);
-    },
-    loaded: (state) => drawFrameHeader(frameHeaderLine, aboutText, state.fallback),
-  });
-  const m: Mounted = { chrome, page, talk: "Quiet", chat: talk, unheard: [] };
-  chrome.toggle.onclick = () => presses.set(aside.pressed(m.page, presses.get(), m.talk));
-  m.unheard.push(
-    presses.hear(() => apply(m)),
-    talk.source.subscribe((state) => {
-      if (state.kind !== "loaded" || aside.talk(state) === m.talk) return;
-      m.talk = aside.talk(state);
-      apply(m);
+const mount = (c: Chrome, page: aside.Page): void => {
+  // The program draws the panel's scroll box; it scrolls itself, never the page under it.
+  const box = (): Element => c.body.querySelector(".panelscroll") ?? c.body
+  const b: Beside = {
+    page,
+    talk: "Quiet",
+    mounted: program.mount(c.body, "ConversationPage", { at: { type: "Panel", about: page.type === "One" ? page.key : "" } }, {
+      box,
+      told: said => {
+        const t = told(said)
+        if (t.type === "Val" && cell.beside === b && b.talk !== t.v.talk) (b.talk = t.v.talk, apply(c, b))
+      },
     }),
-  );
-  cell.state = { type: "Mounted", m };
-  apply(m);
+    unheard: presses.hear(() => (cell.beside === b ? apply(c, b) : undefined)),
+  }
+  c.toggle.onclick = () => presses.set(aside.pressed(b.page, presses.get(), b.talk))
+  cell.beside = b
+  apply(c, b)
 }
 
-/** Remounts only when the conversation's slice moved, so an unchanged conversation keeps its node. */
+/** Remounts only when what the conversation is about moved, so moving between pages of many things keeps it. */
 export function updatePanel(placement: aside.Placement): void {
   if (placement.type === "Absent") {
-    unmount();
-    cell.chrome?.root.remove();
-    return;
+    unmount()
+    cell.chrome?.root.remove()
+    return
   }
-  const chrome = ensureChrome();
-  if (!chrome.root.isConnected) document.body.appendChild(chrome.root);
-  // Two pages of many things show the same whole conversation, so moving between them keeps it and moves the page.
-  const about = (page: aside.Page): string => (page.type === "One" ? page.key : "");
-  if (cell.state.type === "Mounted" && about(cell.state.m.page) === about(placement.page)) {
-    cell.state.m.page = placement.page;
-    return apply(cell.state.m);
+  const c = chromeOf()
+  if (!c.root.isConnected) document.body.appendChild(c.root)
+  const about = (page: aside.Page): string => (page.type === "One" ? page.key : "")
+  const b = cell.beside
+  if (b !== null && about(b.page) === about(placement.page)) {
+    b.page = placement.page
+    return apply(c, b)
   }
-  unmount();
-  mount(chrome, placement.page);
+  unmount()
+  mount(c, placement.page)
 }

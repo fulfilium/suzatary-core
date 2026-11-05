@@ -1,67 +1,45 @@
-//! The view's vocabulary: elements of a closed set of tags, attributes of a closed set of names,
-//! text, keyed children, and foreign parts another painter draws.
-//!
-//! A node is generic over its id and its lazy parts: a view builds `Node<M>` (no ids, lazy parts
-//! not yet drawn), and the painter keeps the same tree as `Node<M, u32, Never>`, each node with
-//! the id the DOM knows it by and every lazy part drawn. So the tree a view answers and the tree
-//! the painter remembers are one type, and nothing translates between them.
+//! The view's vocabulary: closed sets of tags and attributes, text, keyed children, foreign parts.
+//! A view builds `Node<M>`; the painter keeps the same type as `Node<M, u32, Never>`, with DOM ids.
 
 use std::collections::BTreeSet;
 use std::hash::{DefaultHasher, Hash, Hasher};
 use std::rc::Rc;
 
-/// What an element may be. Closed, so a view cannot make a `script`, an `iframe` or a `style`.
-/// Its number on the wire is its place here, the index of the painter's table of tag names.
+/// Closed: no `script`, `iframe` or `style`. The wire number is the index in `ALL`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[repr(u8)]
 pub enum Tag {
-    /// `div`.
     Div,
-    /// `section`.
     Section,
-    /// `h2`.
     H2,
-    /// `h3`.
     H3,
-    /// `p`.
     P,
-    /// `a`, whose `href` the painter checks.
     A,
-    /// `button`.
     Button,
-    /// `input`.
     Input,
-    /// `details`.
     Details,
-    /// `summary`.
     Summary,
-    /// `code`.
     Code,
-    /// `span`.
     Span,
-    /// `h1`.
     H1,
-    /// `ul`.
     Ul,
-    /// `li`.
     Li,
-    /// `dl`.
     Dl,
-    /// `dt`.
     Dt,
-    /// `dd`.
     Dd,
-    /// `strong`.
     Strong,
-    /// `form`, whose submit the painter reports and never performs.
     Form,
-    /// `pre`.
     Pre,
+    Textarea,
+    Nav,
+    Article,
+    Img,
+    Label,
+    Aside,
 }
 
 impl Tag {
-    /// Every tag, in the order of their numbers.
-    pub const ALL: [Tag; 21] = [
+    pub const ALL: [Tag; 27] = [
         Tag::Div,
         Tag::Section,
         Tag::H2,
@@ -83,21 +61,24 @@ impl Tag {
         Tag::Strong,
         Tag::Form,
         Tag::Pre,
+        Tag::Textarea,
+        Tag::Nav,
+        Tag::Article,
+        Tag::Img,
+        Tag::Label,
+        Tag::Aside,
     ];
 
-    /// Its number on the wire.
     #[must_use]
     pub const fn code(self) -> u8 {
         self as u8
     }
 
-    /// The tag its number names, if any.
     #[must_use]
     pub fn of(code: u8) -> Option<Tag> {
         Self::ALL.get(usize::from(code)).copied()
     }
 
-    /// Its name in HTML.
     #[must_use]
     pub const fn name(self) -> &'static str {
         match self {
@@ -122,54 +103,54 @@ impl Tag {
             Tag::Strong => "strong",
             Tag::Form => "form",
             Tag::Pre => "pre",
+            Tag::Textarea => "textarea",
+            Tag::Nav => "nav",
+            Tag::Article => "article",
+            Tag::Img => "img",
+            Tag::Label => "label",
+            Tag::Aside => "aside",
         }
     }
 }
 
-/// An attribute's name. Closed, so a view cannot set a handler (`onclick`) or a `style`; a
-/// `data-` attribute names its suffix.
+/// Closed: no handler (`onclick`) and no `style`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum Attr {
-    /// `class`.
     Class,
-    /// `href`: an address inside the app (`#…`), or an `https:`, `http:` or `mailto:` one, which
-    /// the painter opens in a new tab with no handle back on this one; any other it drops.
+    /// `#…` inside the app, or `https:`/`http:`/`mailto:`, opened in a new tab with no handle
+    /// back on this one; the painter drops any other.
     Href,
-    /// `title`, the words a pointer shows.
     Title,
-    /// `role`.
     Role,
-    /// `aria-current`.
     AriaCurrent,
-    /// `enterkeyhint`.
     EnterKeyHint,
-    /// `open`, present or absent: a `details` drawn open. A person opening one changes the DOM
-    /// and not the view, so the painter sets it only when the view's own value moves.
+    /// A person opening a `details` changes the DOM and not the view, so the painter sets it
+    /// only when the view's own value moves.
     Open,
-    /// `hidden`, present or absent.
     Hidden,
-    /// `type`.
     Type,
-    /// `placeholder`.
     Placeholder,
-    /// `aria-label`.
     AriaLabel,
-    /// `autocomplete`.
     Autocomplete,
-    /// `autocapitalize`.
     Autocapitalize,
-    /// `spellcheck`.
     Spellcheck,
-    /// `disabled`, present or absent.
     Disabled,
-    /// An input's value: the painter sets the property, and only when the field holds another.
+    /// Set as the property, and only when the field holds another.
     Value,
-    /// `data-<suffix>`.
+    AriaPressed,
+    AriaExpanded,
+    Rows,
+    Accept,
+    Multiple,
+    /// A path on the box, or the painter drops it.
+    Src,
+    Alt,
+    Loading,
+    Maxlength,
     Data(&'static str),
 }
 
 impl Attr {
-    /// Its name on the wire, as the DOM spells it.
     #[must_use]
     pub fn name(self) -> String {
         match self {
@@ -189,103 +170,293 @@ impl Attr {
             Attr::Spellcheck => "spellcheck".to_owned(),
             Attr::Disabled => "disabled".to_owned(),
             Attr::Value => "value".to_owned(),
+            Attr::AriaPressed => "aria-pressed".to_owned(),
+            Attr::AriaExpanded => "aria-expanded".to_owned(),
+            Attr::Rows => "rows".to_owned(),
+            Attr::Accept => "accept".to_owned(),
+            Attr::Multiple => "multiple".to_owned(),
+            Attr::Src => "src".to_owned(),
+            Attr::Alt => "alt".to_owned(),
+            Attr::Loading => "loading".to_owned(),
+            Attr::Maxlength => "maxlength".to_owned(),
             Attr::Data(suffix) => format!("data-{suffix}"),
         }
     }
 }
 
-/// What the painter listens for on an element.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum On {
-    /// A click or a tap.
     Click,
-    /// A field's words changed; the painter reports the field's value.
+    /// Reports the field's value.
     Input,
-    /// A form was submitted (Enter in its field); the painter performs nothing and reports no words.
+    /// Performs nothing and reports no words.
     Submit,
+    /// Reports `Key::print`; the key's own effect is kept only when the handler answers no
+    /// message.
+    Keydown,
+    /// Reports `"1"` for open, `""` for closed.
+    Toggle,
+    /// Reports `Picked::print`.
+    Files,
 }
 
 impl On {
-    /// Its number on the wire.
     #[must_use]
     pub const fn code(self) -> u8 {
         match self {
             On::Click => 0,
             On::Input => 1,
             On::Submit => 2,
+            On::Keydown => 3,
+            On::Toggle => 4,
+            On::Files => 5,
         }
     }
 
-    /// The event its number names, if any.
     #[must_use]
     pub const fn of(code: u8) -> Option<On> {
         match code {
             0 => Some(On::Click),
             1 => Some(On::Input),
             2 => Some(On::Submit),
+            3 => Some(On::Keydown),
+            4 => Some(On::Toggle),
+            5 => Some(On::Files),
             _ => None,
         }
     }
 }
 
-/// A handler as data: the message a click or a submit sends, or the function from a field's words
-/// to one.
+/// A handler as data. A view writes each function as a plain `fn`, so it reads only the event.
 #[derive(Debug, Clone)]
 pub enum Listener<M> {
-    /// A click sends this message.
     Click(M),
-    /// A form's submit sends this message.
     Submit(M),
-    /// The field's words, as typed, make this message.
-    Input(fn(String) -> M),
+    Input(Handler<String, M>),
+    /// `None` leaves the key to the browser.
+    Keydown(Handler<Key, Option<M>>),
+    Toggle(Handler<bool, M>),
+    Files(Handler<Vec<Picked>, M>),
+}
+
+pub struct Handler<A, B>(Rc<dyn Fn(A) -> B>);
+
+impl<A, B> Handler<A, B> {
+    pub fn call(&self, a: A) -> B {
+        (self.0)(a)
+    }
+}
+
+impl<A: 'static, B: 'static> Handler<A, B> {
+    #[must_use]
+    pub fn of(f: fn(A) -> B) -> Self {
+        Handler(Rc::new(f))
+    }
+
+    fn then<C: 'static>(self, g: Rc<dyn Fn(B) -> C>) -> Handler<A, C> {
+        Handler(Rc::new(move |a| g((self.0)(a))))
+    }
+}
+
+impl<A, B> Clone for Handler<A, B> {
+    fn clone(&self) -> Self {
+        Handler(Rc::clone(&self.0))
+    }
+}
+
+impl<A, B> std::fmt::Debug for Handler<A, B> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("Handler")
+    }
+}
+
+impl<M: 'static> Listener<M> {
+    fn map<N: 'static>(self, f: &Rc<dyn Fn(M) -> N>) -> Listener<N> {
+        let g = Rc::clone(f);
+        match self {
+            Listener::Click(m) => Listener::Click(f(m)),
+            Listener::Submit(m) => Listener::Submit(f(m)),
+            Listener::Input(h) => Listener::Input(h.then(g)),
+            Listener::Keydown(h) => {
+                Listener::Keydown(h.then(Rc::new(move |m: Option<M>| m.map(&*g))))
+            }
+            Listener::Toggle(h) => Listener::Toggle(h.then(g)),
+            Listener::Files(h) => Listener::Files(h.then(g)),
+        }
+    }
+}
+
+impl<M: 'static> Node<M> {
+    /// Lifts a part's messages into its page's (Elm's `Html.map`). A lazy part inside is drawn
+    /// now, since its hash does not name `f`.
+    #[must_use]
+    pub fn map<N: 'static>(self, f: impl Fn(M) -> N + 'static) -> Node<N> {
+        self.mapped(&(Rc::new(f) as Rc<dyn Fn(M) -> N>))
+    }
+
+    fn mapped<N: 'static>(self, f: &Rc<dyn Fn(M) -> N>) -> Node<N> {
+        match self {
+            Node::Text((), t) => Node::Text((), t),
+            Node::Foreign((), x) => Node::Foreign((), x),
+            Node::Block((), b) => Node::Block((), b),
+            Node::Lazy(l) => l.draw().mapped(f),
+            Node::Element(e) => {
+                let Element {
+                    id: (),
+                    tag,
+                    attrs,
+                    on,
+                    kids,
+                } = *e;
+                Node::Element(Box::new(Element {
+                    id: (),
+                    tag,
+                    attrs,
+                    on: on.into_iter().map(|l| l.map(f)).collect(),
+                    kids: match kids {
+                        Kids::Plain(ns) => {
+                            Kids::Plain(ns.into_iter().map(|n| n.mapped(f)).collect())
+                        }
+                        Kids::Keyed(ns) => {
+                            Kids::Keyed(ns.into_iter().map(|(k, n)| (k, n.mapped(f))).collect())
+                        }
+                    },
+                }))
+            }
+        }
+    }
+}
+
+/// Carries the field's words when the key went down: a field a script filled hears no input.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Key {
+    /// As `KeyboardEvent.key` spells it.
+    pub name: String,
+    pub ctrl: bool,
+    pub meta: bool,
+    pub shift: bool,
+    pub words: String,
+}
+
+impl Key {
+    /// `0`/`1` for each of ctrl, meta and shift, the name, a NUL (which no key's name holds), then
+    /// the field's words.
+    #[must_use]
+    pub fn print(&self) -> String {
+        let bit = |b: bool| if b { '1' } else { '0' };
+        format!(
+            "{}{}{}{}\0{}",
+            bit(self.ctrl),
+            bit(self.meta),
+            bit(self.shift),
+            self.name,
+            self.words
+        )
+    }
+
+    #[must_use]
+    pub fn read(words: &str) -> Option<Key> {
+        let mut bits = words.chars();
+        let mut bit = || match bits.next() {
+            Some('1') => Some(true),
+            Some('0') => Some(false),
+            _ => None,
+        };
+        let (ctrl, meta, shift) = (bit()?, bit()?, bit()?);
+        let (name, field) = words.get(3..)?.split_once('\0')?;
+        Some(Key {
+            name: name.to_owned(),
+            ctrl,
+            meta,
+            shift,
+            words: field.to_owned(),
+        })
+    }
+}
+
+/// A photo is redrawn as a JPEG (its metadata gone); any other file is its own bytes.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Picked {
+    pub media: String,
+    pub base64: String,
+    pub name: String,
+}
+
+impl Picked {
+    /// One line per file, `media`, `base64` and `name` split by tabs: no media type or base64
+    /// holds a tab, and the name is the rest of its line.
+    #[must_use]
+    pub fn print(files: &[Picked]) -> String {
+        files
+            .iter()
+            .map(|f| {
+                format!(
+                    "{}\t{}\t{}",
+                    f.media,
+                    f.base64,
+                    f.name.replace(['\n', '\r'], " ")
+                )
+            })
+            .collect::<Vec<_>>()
+            .join("\n")
+    }
+
+    #[must_use]
+    pub fn read(words: &str) -> Vec<Picked> {
+        words
+            .lines()
+            .filter_map(|line| {
+                let mut parts = line.splitn(3, '\t');
+                Some(Picked {
+                    media: parts.next()?.to_owned(),
+                    base64: parts.next()?.to_owned(),
+                    name: parts.next()?.to_owned(),
+                })
+            })
+            .collect()
+    }
 }
 
 impl<M> Listener<M> {
-    /// What it listens for.
     #[must_use]
     pub const fn on(&self) -> On {
         match self {
             Listener::Click(_) => On::Click,
             Listener::Submit(_) => On::Submit,
             Listener::Input(_) => On::Input,
+            Listener::Keydown(_) => On::Keydown,
+            Listener::Toggle(_) => On::Toggle,
+            Listener::Files(_) => On::Files,
         }
     }
 }
 
-/// A part another painter draws (a host's card, today), named by a kind and a key; `props` is
-/// all it is told, and a change of `props` is the only change it is told about.
+/// A part another painter draws; `props` is all it is told, and a change of `props` is the
+/// only change it is told about.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Foreign {
-    /// Which of the host's parts.
     pub kind: &'static str,
-    /// Which one, stable across draws.
     pub key: String,
-    /// What it is drawn from.
     pub props: String,
 }
 
-/// A Typst output, placed by the key it is kept under. The painter asks the host for the HTML of
-/// `key` and places it through the host's one door from a string to markup; it shows `fallback`
-/// as text until the HTML is held. The view holds the key, never the HTML.
+/// The painter places the host's HTML for `key` through the host's one door from a string to
+/// markup, showing `fallback` as text until it is held. The view never holds the HTML.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Block {
-    /// The key the output is kept under: its template's name and its value's.
+    /// Its template's name and its value's.
     pub key: String,
-    /// What the block says as plain text.
     pub fallback: String,
 }
 
-/// A part of a view drawn only when what it is drawn from changes: the function that draws it,
-/// the value it draws, and the hash of both, which the painter compares with the hash of the
-/// part it drew at the same place (Elm's `Html.Lazy`).
+/// Redrawn only when `hash` (of the function and its value) differs from the part drawn at
+/// the same place (Elm's `Html.Lazy`).
 pub struct Lazy<M> {
-    /// The hash of the function and its value.
     pub hash: u64,
     draw: Rc<dyn Fn() -> Node<M>>,
 }
 
 impl<M> Lazy<M> {
-    /// The part drawn.
     #[must_use]
     pub fn draw(&self) -> Node<M> {
         (self.draw)()
@@ -307,12 +478,11 @@ impl<M> std::fmt::Debug for Lazy<M> {
     }
 }
 
-/// The painted tree's lazy parts: none, since the painter keeps each part as it drew it.
+/// The painter keeps each lazy part as it drew it, so a painted tree holds none.
 #[derive(Debug, Clone, Copy)]
 pub enum Never {}
 
-/// `draw` of `a`, drawn again only when `a` changes. `draw` is a plain function, so it reads
-/// nothing but `a`, and the hash of the two names the part.
+/// `draw` is a plain `fn`, so it reads nothing but `a`, and the hash of the two names the part.
 pub fn lazy<M: 'static, A: Hash + 'static>(draw: fn(&A) -> Node<M>, a: A) -> Node<M> {
     let mut h = DefaultHasher::new();
     (draw as usize).hash(&mut h);
@@ -323,52 +493,39 @@ pub fn lazy<M: 'static, A: Hash + 'static>(draw: fn(&A) -> Node<M>, a: A) -> Nod
     })
 }
 
-/// An element: its tag, its attributes, its handlers, and its children.
 #[derive(Debug, Clone)]
 pub struct Element<M, I = (), L = Lazy<M>> {
-    /// The id the DOM knows it by; `()` in a view.
     pub id: I,
-    /// What it is.
     pub tag: Tag,
-    /// Its attributes, each name once (the builder keeps the last).
+    /// Each name once (the builder keeps the last).
     pub attrs: Vec<(Attr, String)>,
-    /// Its handlers, each event once (the builder keeps the last).
+    /// Each event once (the builder keeps the last).
     pub on: Vec<Listener<M>>,
-    /// Its children.
     pub kids: Kids<M, I, L>,
 }
 
-/// An element's children: by position, or by key, so a list keeps each row's node (and its
-/// focus and scroll) when rows move.
+/// By key, a list keeps each row's node (and its focus and scroll) when rows move.
 #[derive(Debug, Clone)]
 pub enum Kids<M, I = (), L = Lazy<M>> {
-    /// Matched by position.
     Plain(Vec<Node<M, I, L>>),
-    /// Matched by key; every key once.
+    /// Every key once.
     Keyed(Vec<(String, Node<M, I, L>)>),
 }
 
-/// One node of the view.
 #[derive(Debug, Clone)]
 pub enum Node<M, I = (), L = Lazy<M>> {
-    /// Text, set as text and never parsed.
+    /// Set as text, never parsed.
     Text(I, String),
-    /// An element.
     Element(Box<Element<M, I, L>>),
-    /// A part another painter draws.
     Foreign(I, Foreign),
-    /// A Typst output, by its key.
     Block(I, Block),
-    /// A part drawn only when what it is drawn from changes.
     Lazy(L),
 }
 
-/// Text.
 pub fn text<M>(s: impl Into<String>) -> Node<M> {
     Node::Text((), s.into())
 }
 
-/// A foreign part.
 pub fn foreign<M>(kind: &'static str, key: impl Into<String>, props: impl Into<String>) -> Node<M> {
     Node::Foreign(
         (),
@@ -380,7 +537,6 @@ pub fn foreign<M>(kind: &'static str, key: impl Into<String>, props: impl Into<S
     )
 }
 
-/// A Typst output, by the key it is kept under, with its plain text.
 pub fn block<M>(key: impl Into<String>, fallback: impl Into<String>) -> Node<M> {
     Node::Block(
         (),
@@ -391,7 +547,6 @@ pub fn block<M>(key: impl Into<String>, fallback: impl Into<String>) -> Node<M> 
     )
 }
 
-/// An element of `tag`, built by the methods below and finished by [`El::node`].
 #[must_use]
 pub fn el<M>(tag: Tag) -> El<M> {
     El(Element {
@@ -403,14 +558,11 @@ pub fn el<M>(tag: Tag) -> El<M> {
     })
 }
 
-/// An element being built.
 #[derive(Debug)]
 pub struct El<M>(Element<M>);
 
-/// What an attribute is set to: words, or for a present-or-absent attribute (`disabled`) a bool,
-/// whose `false` leaves it out.
+/// Words, or a bool for a present-or-absent attribute (`disabled`), whose `false` leaves it out.
 pub trait AttrValue {
-    /// The attribute's text, or `None` to leave it out.
     fn text(self) -> Option<String>;
 }
 
@@ -444,9 +596,7 @@ impl AttrValue for bool {
     }
 }
 
-/// What may stand among an element's children: a node, words, or none, one or many of them.
 pub trait Child<M> {
-    /// Appends itself to `to`.
     fn add_to(self, to: &mut Vec<Node<M>>);
 }
 
@@ -484,8 +634,38 @@ impl<M, C: Child<M>> Child<M> for Vec<C> {
     }
 }
 
+impl<M: 'static> El<M> {
+    #[must_use]
+    pub fn input(self, f: fn(String) -> M) -> Self {
+        self.on(Listener::Input(Handler::of(f)))
+    }
+
+    #[must_use]
+    pub fn keydown(self, f: fn(Key) -> Option<M>) -> Self {
+        self.on(Listener::Keydown(Handler::of(f)))
+    }
+
+    /// `data` carries what the view was drawn from (whether the field holds words), as a click
+    /// carries its message.
+    #[must_use]
+    pub fn keydown_of<C: Clone + 'static>(self, data: C, f: fn(C, Key) -> Option<M>) -> Self {
+        self.on(Listener::Keydown(Handler(Rc::new(move |k| {
+            f(data.clone(), k)
+        }))))
+    }
+
+    #[must_use]
+    pub fn toggle(self, f: fn(bool) -> M) -> Self {
+        self.on(Listener::Toggle(Handler::of(f)))
+    }
+
+    #[must_use]
+    pub fn files(self, f: fn(Vec<Picked>) -> M) -> Self {
+        self.on(Listener::Files(Handler::of(f)))
+    }
+}
+
 impl<M> El<M> {
-    /// Sets an attribute, replacing one of the same name; a `false` removes it.
     #[must_use]
     pub fn set(mut self, a: Attr, value: impl AttrValue) -> Self {
         self.0.attrs.retain(|(b, _)| *b != a);
@@ -495,7 +675,6 @@ impl<M> El<M> {
         self
     }
 
-    /// A handler, replacing one for the same event.
     #[must_use]
     pub fn on(mut self, l: Listener<M>) -> Self {
         self.0.on.retain(|m| m.on() != l.on());
@@ -503,25 +682,16 @@ impl<M> El<M> {
         self
     }
 
-    /// A click sends `m`.
     #[must_use]
     pub fn click(self, m: M) -> Self {
         self.on(Listener::Click(m))
     }
 
-    /// A submit of the form sends `m`.
     #[must_use]
     pub fn submit(self, m: M) -> Self {
         self.on(Listener::Submit(m))
     }
 
-    /// Each edit of the field sends `f` of its words.
-    #[must_use]
-    pub fn input(self, f: fn(String) -> M) -> Self {
-        self.on(Listener::Input(f))
-    }
-
-    /// Children by position, after any already given.
     #[must_use]
     pub fn child(mut self, c: impl Child<M>) -> Self {
         let mut had = match self.0.kids {
@@ -533,8 +703,7 @@ impl<M> El<M> {
         self
     }
 
-    /// Children by key, in order; a key given twice keeps its first node, so a view cannot
-    /// name one key twice.
+    /// A key given twice keeps its first node.
     #[must_use]
     pub fn keyed(mut self, xs: impl IntoIterator<Item = (String, Node<M>)>) -> Self {
         let mut seen = BTreeSet::new();
@@ -546,22 +715,18 @@ impl<M> El<M> {
         self
     }
 
-    /// The element as a node.
     #[must_use]
     pub fn node(self) -> Node<M> {
         Node::Element(Box::new(self.0))
     }
 }
 
-/// An element written as data, expanding to [`el`] and [`El`]'s methods and nothing else:
+/// An element as data, expanding to `el` and `El`'s methods only:
 ///
 /// ```text
 /// view!{ Section "line" {Data("key") => k} @click(Msg::Open) [ view!{ H3 [label] }, detail ] }
 /// view!{ Div "rows" => rows.iter().map(|r| (r.key.clone(), row(r))) }
 /// ```
-///
-/// A tag, an optional class, `{attribute => value, ...}`, `@click(message)`, `@submit(message)` or
-/// `@input(function)`, then the children in `[...]` (anything [`Child`]) or `=> keyed pairs`.
 #[macro_export]
 macro_rules! view {
     ($tag:ident $($class:literal)? $({ $($a:expr => $v:expr),* $(,)? })? $(@ $ev:ident ($l:expr))* => $keyed:expr) => {

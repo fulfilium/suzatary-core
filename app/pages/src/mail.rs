@@ -1,6 +1,5 @@
-//! Mail by date, or any notmuch query, and the watches on mail the owner expects. Triage's reading
-//! is a badge, never a filter, so what it dismissed stays visible. The query is in the address, so
-//! a search is a link and a navigation. Every string came out of mail and is set as text.
+//! Mail by date or any notmuch query, and the owner's watches on mail. Triage's reading is a
+//! badge, never a filter, so what it dismissed stays visible. Every string from mail is text.
 
 use serde::{Deserialize, Serialize};
 use suzatary_core::mail::MailRow;
@@ -19,44 +18,32 @@ use crate::places::{PAGE, Place, Question};
 use crate::runtime::{Body, Context, Effect, Gate, Held, Input, answered, read};
 use crate::zone::when;
 
-/// Which listing: the inbox or a query, and an account or every one, as the address names them.
 #[derive(Debug, Clone, Deserialize, TS)]
 #[ts(rename = "MailFlags")]
 pub struct Flags {
-    /// The tab's context.
     pub context: Context,
-    /// The notmuch query, `""` for the inbox.
+    /// `""` for the inbox.
     pub query: String,
-    /// The account, `""` for every one.
+    /// `""` for every account.
     pub account: String,
 }
 
-/// The page's held questions.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[ts(rename = "MailHold")]
 pub enum Hold {
-    /// The listing's first page.
     First,
-    /// The watches.
     Watches,
 }
 
-/// What the page asks once.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[serde(tag = "type")]
 #[ts(rename = "MailAsk")]
 pub enum Ask {
-    /// The page after the rows shown.
     More,
-    /// A watch cancelled.
-    Cancel {
-        /// Which.
-        id: String,
-    },
+    Cancel { id: String },
 }
 
-/// The pages after the rows shown: one may be asked, one is on its way, the last ask failed, or
-/// the last page came back short and there are none.
+/// `Ended`: the last page came back short.
 #[derive(Debug, Clone, PartialEq, Eq)]
 enum More {
     Open,
@@ -66,45 +53,33 @@ enum More {
 }
 
 impl More {
-    /// After a page of `n` rows.
     fn after(n: usize) -> More {
         if n < PAGE { More::Ended } else { More::Open }
     }
 }
 
-/// Everything the page knows.
 #[derive(Debug, Clone)]
 pub struct Model {
     flags: Flags,
     typed: String,
-    /// The first page; a search answers the inbox's fields and its query, so both read as the
-    /// inbox's.
+    /// A search answers the inbox's fields, so both read as the inbox's.
     first: Held<InboxPayload>,
     watches: Held<Vec<MailWatch>>,
-    /// The rows of the pages after the first.
     after: Vec<MailRow>,
     more: More,
     cancelling: Vec<String>,
 }
 
-/// Everything that can happen to the page.
 #[derive(Debug, Clone)]
 pub enum Msg {
-    /// From the host.
     Host(Box<Input<Hold, Ask>>),
-    /// The search field's words.
     Typed(String),
-    /// The search submitted.
     Search,
-    /// Load more pressed.
     More,
-    /// A watch's Cancel pressed.
     Cancel(String),
-    /// A Retry pressed.
     Retry,
 }
 
-/// The page as a program.
 #[derive(Debug)]
 pub enum Mail {}
 
@@ -263,8 +238,7 @@ fn answer(m: &mut Model, input: Input<Hold, Ask>) -> Vec<Effect<Hold, Ask>> {
         } => {
             let first = Held::<InboxPayload>::of(reading, behind);
             if let Reading::Val { v } = &first.reading {
-                // A new first page stands for the listing: the pages after it were read after
-                // another first page, so they go, as the TypeScript page's did.
+                // The pages after were read after another first page, so they go.
                 m.after.clear();
                 m.more = More::after(v.messages.len());
             }
@@ -280,6 +254,7 @@ fn answer(m: &mut Model, input: Input<Hold, Ask>) -> Vec<Effect<Hold, Ask>> {
                 behind,
             };
         }
+        Input::Heard { ask, .. } | Input::Opened { ask } => match ask {},
         Input::Answered {
             ask: Ask::More,
             answer,
@@ -328,7 +303,7 @@ fn watch(m: &Model, w: &MailWatch) -> Node<Msg> {
     ] }
 }
 
-// The whole row is an honest `<a>`: unlike a card, it holds no buttons.
+// An honest `<a>`: unlike a card, a row holds no buttons.
 fn row(m: &Model, r: &MailRow) -> Node<Msg> {
     view! { A "mailrow" {Href => Place::Message(&r.id).href()} [
         view! { Div "mailmeta" [

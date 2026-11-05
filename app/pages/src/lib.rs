@@ -1,26 +1,37 @@
-//! Suzatary's pages in the view-tree shape (docs/FRAMEWORK-PLAN-2026-11-02.md): each a
-//! [`viewtree::Program`] over the runtime's sums ([`runtime`]), run as wasm in the tab, its
-//! patches painted by `web/src/painter`.
+//! Suzatary's pages as `viewtree::Program`s, run as wasm in the tab and painted by
+//! `web/src/painter` (docs/FRAMEWORK-PLAN-2026-11-02.md).
 #![forbid(unsafe_code)]
 
 pub mod about;
+pub mod answer;
 pub mod briefing;
 pub mod briefings;
 pub mod calendar;
+pub mod card;
+pub mod chats;
 pub mod chrome;
+pub mod composer;
+pub mod conversation;
+pub mod digest;
+pub mod draft;
+pub mod inbox;
+pub mod intents;
 pub mod mail;
 pub mod mailrow;
 pub mod memory;
 pub mod message;
+pub mod needsyou;
 pub mod places;
 pub mod reading;
 pub mod releases;
 pub mod runtime;
+pub mod secretary;
 pub mod settings;
+pub mod slices;
 pub mod thread;
+pub mod waiting;
 pub mod zone;
 
-/// A page whose inputs are the runtime's: each is its message `Host`.
 macro_rules! hosted {
     ($($page:ident :: $program:ident),*) => {$(
         impl viewtree::host::Hosted for $page::$program {
@@ -32,7 +43,23 @@ macro_rules! hosted {
     )*};
 }
 
-hosted!(mail::Mail, memory::Memory, about::About, settings::Settings);
+hosted!(
+    mail::Mail,
+    memory::Memory,
+    about::About,
+    settings::Settings,
+    inbox::Inbox,
+    secretary::Secretary,
+    draft::Draft,
+    needsyou::NeedsYou
+);
+
+impl viewtree::host::Hosted for conversation::Conversation {
+    type Input = conversation::Input;
+    fn input(input: conversation::Input) -> conversation::Msg {
+        conversation::Msg::Host(Box::new(input))
+    }
+}
 
 impl<V: reading::View> viewtree::host::Hosted for reading::One<V> {
     type Input = runtime::Input<reading::Hold, runtime::Never>;
@@ -59,3 +86,13 @@ viewtree::export!(CalendarPage = reading::One<calendar::Calendar>);
 viewtree::export!(BriefingsPage = reading::One<briefings::Briefings>);
 #[cfg(target_arch = "wasm32")]
 viewtree::export!(BriefingPage = reading::One<briefing::Briefing>);
+#[cfg(target_arch = "wasm32")]
+viewtree::export!(InboxPage = inbox::Inbox);
+#[cfg(target_arch = "wasm32")]
+viewtree::export!(SecretaryPage = secretary::Secretary);
+#[cfg(target_arch = "wasm32")]
+viewtree::export!(ConversationPage = conversation::Conversation);
+#[cfg(target_arch = "wasm32")]
+viewtree::export!(DraftPage = draft::Draft);
+#[cfg(target_arch = "wasm32")]
+viewtree::export!(NeedsYouPage = needsyou::NeedsYou);
