@@ -21,7 +21,7 @@ use crate::secretary::inbox::{self, ProposalId, Response};
 use crate::secretary::opening::Opening;
 use crate::secretary::read_holders::ReadHolders;
 use crate::secretary::readings::{self, Draw, Dress, Window};
-use crate::secretary::responded::{Done, Performed, Tried, Withdrawal};
+use crate::secretary::responded::{Done, Performed, Tried};
 use crate::secretary::store::{ConversationId, Draft, Entry, Kind, Proposal, Stored, Title};
 use crate::secretary::tap::Tap;
 use crate::secretary::transcript;
@@ -1717,9 +1717,9 @@ pub fn ask_trust(
 pub const ALREADY_TRUSTED: &str =
     "this device's key is trusted now: it was trusted at the box or with a pairing code";
 
-/// Withdraw every waiting device card whose key `history` already trusts for its actor under
-/// `root`: a key trusted at the terminal or with a pairing code leaves no request behind it.
-/// Answers the cards withdrawn; run again, it withdraws nothing.
+/// Close, as done another way, every waiting device card whose key `history` already trusts for
+/// its actor under `root`: a key trusted at the terminal or with a pairing code leaves no request
+/// behind it. Answers the cards closed; run again, it closes nothing.
 ///
 /// # Errors
 /// The stores' own.
@@ -1729,55 +1729,19 @@ pub fn withdraw_trusted(
     root: &prodrome_core::sign::PublicKey,
     at: crate::capability::Datetime,
 ) -> Result<Vec<ProposalId>, Refusal> {
-    let waiting: Vec<(ProposalId, crate::signatures::Enrolment)> = inbox::fold(inbox)?
-        .objects()
-        .filter(|object| object.reading.performs())
-        .filter_map(|object| match &object.asked.proposal {
-            Proposal::Act(Act::Device(enrolment)) => Some((object.id.clone(), enrolment.clone())),
-            Proposal::Act(
-                Act::Auth { .. }
-                | Act::AuthSend { .. }
-                | Act::Secret { .. }
-                | Act::Web { .. }
-                | Act::Patch { .. }
-                | Act::DriveRead { .. }
-                | Act::CodingSession { .. }
-                | Act::SignIn { .. }
-                | Act::SignInCode { .. }
-                | Act::UnlockStore { .. }
-                | Act::Connect { .. }
-                | Act::Disconnect { .. }
-                | Act::Grant { .. }
-                | Act::GoogleClient { .. }
-                | Act::GoogleSignIn { .. }
-                | Act::CalendarEvent { .. }
-                | Act::Erase { .. }
-                | Act::Afresh { .. },
-            )
-            | Proposal::Email(_)
-            | Proposal::Forward(_)
-            | Proposal::Changes(_)
-            | Proposal::Remember { .. }
-            | Proposal::Decide(_) => None,
+    let swept = crate::secretary::done_elsewhere::sweep(inbox, at, |proposal| {
+        use crate::secretary::done_elsewhere::Seen;
+        let Proposal::Act(Act::Device(enrolment)) = proposal else {
+            return Ok(Seen::Waits);
+        };
+        let trusted = crate::signatures::trusted_for(history, root, &enrolment.key)?;
+        Ok(if trusted.contains(&enrolment.actor) {
+            Seen::Done(ALREADY_TRUSTED.to_owned())
+        } else {
+            Seen::Waits
         })
-        .collect();
-    let mut withdrawn = Vec::new();
-    for (id, enrolment) in waiting {
-        if crate::signatures::trusted_for(history, root, &enrolment.key)?.contains(&enrolment.actor)
-        {
-            inbox::withdraw(
-                inbox,
-                &id,
-                &super::writes_as(),
-                at,
-                Withdrawal::NoLongerNeeded {
-                    why: ALREADY_TRUSTED.to_owned(),
-                },
-            )?;
-            withdrawn.push(id);
-        }
-    }
-    Ok(withdrawn)
+    })?;
+    Ok(swept.closed)
 }
 
 /// A device card's endorsement checked before anything runs, and refused on any other card: a

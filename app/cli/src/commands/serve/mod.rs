@@ -24,6 +24,7 @@ mod mail;
 pub mod mail_cache;
 pub mod models;
 mod params;
+mod patches;
 mod proposals;
 mod reply;
 pub(crate) mod route;
@@ -1453,6 +1454,10 @@ fn watch_from_now_on(
     rest: Vec<Chained>,
 ) {
     crate::commands::coding::spawn_polling(instance, stores.conversations, &state.workers);
+    tokio::spawn(patches::sweeping(
+        state.clone(),
+        interpreters::mirrors(instance),
+    ));
     tokio::spawn(token_expiry::watching(
         state.clone(),
         Arc::new(suzatary_io::github_tokens::GithubTokens::new(

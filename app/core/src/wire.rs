@@ -1576,6 +1576,11 @@ pub enum ProposalState {
     Sent,
     /// A tap failed and nothing happened: Try again or Dismiss.
     Failed,
+    /// A tap was refused for a cause a tap again meets, and nothing happened: Dismiss.
+    Refused,
+    /// A tap did part of the act and stopped; the card links where it stands: Try again, which
+    /// finishes it, or Dismiss.
+    Unfinished,
     /// A tap failed and it may have happened: never performed again until checked.
     Unknown,
     /// A send that may have gone, which the owner has checked.
@@ -1585,6 +1590,9 @@ pub enum ProposalState {
     Superseded,
     /// The box or the secretary took it back; `outcome` says why. Not the owner's no.
     Withdrawn,
+    /// The box took it back because what it asks for was done another way; `outcome` says what
+    /// the box saw.
+    DoneElsewhere,
     /// A changeset's acts are on the chain; nothing left the box.
     Applied,
     /// An act's device-code flow is running; a second tap is refused.
@@ -1838,6 +1846,10 @@ pub struct Card {
     /// The first is the main one.
     pub answers: Vec<CardAnswer>,
     pub uncertain: String,
+    /// The answer that says the owner did that check.
+    pub check: String,
+    /// What a tap that did nothing is called before its reason: "Not sent" for mail.
+    pub failed: String,
     pub readonly: String,
     /// `null` for none: only a template's own https link, a path on the box or a template's setup,
     /// so no model's words are drawn as a button.

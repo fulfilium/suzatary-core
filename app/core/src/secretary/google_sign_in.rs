@@ -1,10 +1,6 @@
-//! A sign-in with Google in progress: the consents the box holds open, each begun by a tapped
-//! card and bound to the owner who tapped it, until Google sends the owner's browser back to the
-//! box's callback with its state.
-//!
-//! A consent is held in memory alone, as a device flow is, so a restart closes every one (the
-//! card's own reconcile says so) and nothing of its verifier is ever written down. The table is a
-//! value with pure steps ([`Open`]); the server holds it behind a lock and does the exchange.
+//! The Google consents the box holds open, each begun by a tapped card and bound to the actor who
+//! tapped it. A consent lives in memory alone, so a restart closes every one and no verifier is
+//! ever written down. [`Open`] is pure; the server holds it behind a lock and does the exchange.
 
 use std::collections::BTreeMap;
 
@@ -17,7 +13,7 @@ use crate::mail::oauth::OauthError;
 use crate::secretary::inbox::ProposalId;
 use crate::secretary::responded::{Done, Performed, Tried};
 
-/// How long a consent stays open: long enough to read Google's page and its one warning.
+/// Long enough to read Google's page and its one warning.
 #[must_use]
 pub fn lasts() -> chrono::Duration {
     chrono::Duration::minutes(LASTS_MINUTES)
@@ -26,8 +22,7 @@ pub fn lasts() -> chrono::Duration {
 /// [`lasts`], in minutes.
 pub const LASTS_MINUTES: i64 = 10;
 
-/// One consent the box began, and everything its callback is checked and exchanged with. Its
-/// `Debug` leaves out the link, which carries the state in the clear.
+/// One open consent. Its `Debug` redacts the link, which carries the state in the clear.
 #[derive(Clone, PartialEq, Eq)]
 pub struct Begun {
     /// The card whose tap began it.
@@ -36,7 +31,7 @@ pub struct Begun {
     pub account: EmailAddress,
     /// What it asks for.
     pub scopes: Scopes,
-    /// The actor whose tap began it: only a callback from the same actor is read.
+    /// Only a callback from this actor is read.
     pub by: Actor,
     /// The verifier its challenge was made from.
     pub verifier: Verifier,
@@ -44,7 +39,7 @@ pub struct Begun {
     pub client: Client,
     /// Where Google sends the owner back.
     pub redirect: RedirectUri,
-    /// The consent page's URL, which the card's button is sent on to while it is open.
+    /// The consent page's URL.
     pub link: String,
     /// When it lapses, UTC.
     pub until: NaiveDateTime,
@@ -69,7 +64,7 @@ impl std::fmt::Debug for Begun {
 /// What a callback's state found.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Taken {
-    /// No consent is open under it: never drawn here, already used, or closed by a restart.
+    /// Never drawn here, already used, or closed by a restart.
     Unknown,
     /// A consent past its time.
     Lapsed(Begun),
@@ -84,22 +79,20 @@ pub enum Taken {
 pub struct Open(BTreeMap<State, Begun>);
 
 impl Open {
-    /// Hold `begun` open under `state`, closing any consent its card held before: a card tapped
-    /// again asks Google again, and the earlier link opens nothing.
+    /// Closes any consent the same card held, so the earlier link opens nothing.
     pub fn open(&mut self, state: State, begun: Begun) {
         self.0.retain(|_, held| held.card != begun.card);
         self.0.insert(state, begun);
     }
 
-    /// The consent `card`'s tap opened: until its callback is read or a later consent closes
-    /// it, so a link followed late reaches the callback, which says it lapsed.
+    /// Held past its lapse until read or replaced, so a late link reaches the callback, which
+    /// says it lapsed.
     #[must_use]
     pub fn begun(&self, card: &ProposalId) -> Option<&Begun> {
         self.0.values().find(|begun| begun.card == *card)
     }
 
-    /// Take the consent `state` names, by `by` at `now`. The state is closed whatever it finds,
-    /// so a callback is read once: a code replayed with the same state finds nothing.
+    /// The state is closed whatever it finds, so a replayed code finds nothing.
     pub fn take(&mut self, state: &State, by: &Actor, now: NaiveDateTime) -> Taken {
         match self.0.remove(state) {
             None => Taken::Unknown,
@@ -109,7 +102,7 @@ impl Open {
         }
     }
 
-    /// Close every consent past its time at `now`, answering their cards.
+    /// Closes every lapsed consent, returning its card.
     pub fn lapse(&mut self, now: NaiveDateTime) -> Vec<ProposalId> {
         let (lapsed, open): (BTreeMap<_, _>, BTreeMap<_, _>) = std::mem::take(&mut self.0)
             .into_iter()
@@ -119,11 +112,9 @@ impl Open {
     }
 }
 
-/// The consents the box holds open; held in no capability record, so only a tap begins one and
-/// only the callback route finishes one.
+/// In no capability record, so only a tap begins a consent and only the callback finishes one.
 pub trait Consents: Sync {
-    /// Begin a consent for `card`, tapped by `by` at `now`, asking `scopes` of `account`:
-    /// running until it lapses, its link drawn on the card, or why it could not begin.
+    /// Running until it lapses, or why it could not begin.
     fn begin(
         &self,
         card: &ProposalId,
@@ -134,12 +125,9 @@ pub trait Consents: Sync {
     ) -> Performed;
 }
 
-/// Tap again, in the card's words.
 const AGAIN: &str = "tap Sign in with Google to ask Google again";
 
-/// What a callback's exchange came to, as the card that began it ends: signed in, naming the
-/// parts the grant holds and any the owner left unticked on Google's page, or why not. The grant
-/// to keep, with the parts it holds, is the second.
+/// How the card ends, and the grant to keep; a grant without mail access is not kept.
 #[must_use]
 pub fn exchanged(
     begun: &Begun,
@@ -190,7 +178,7 @@ pub fn exchanged(
     }
 }
 
-/// What a callback that finished no consent ends its card with, when it found one.
+/// How a callback that finished no consent ends the card it found.
 #[must_use]
 pub fn refused(taken: &Taken, error: Option<&str>) -> Option<(ProposalId, Performed)> {
     let ended = |begun: &Begun, why: String| {
@@ -220,8 +208,7 @@ pub fn refused(taken: &Taken, error: Option<&str>) -> Option<(ProposalId, Perfor
     }
 }
 
-/// End `card` as `performed` says, by the box, and say so in the card's conversation: the
-/// conversation it was said in, `None` when the inbox no longer names the card's.
+/// Ends `card` as the box and says so in its conversation, which it returns.
 ///
 /// # Errors
 /// The stores' own failures.
@@ -234,9 +221,13 @@ pub fn end(
 ) -> Result<Option<crate::secretary::store::ConversationId>, crate::refusal::Refusal> {
     let said = match &performed {
         Performed::Done(Done::Acted { what }) => format!("Signed in: {what}."),
-        Performed::Tried(Tried::NotSent { reason }) => format!("Not signed in: {reason}."),
+        Performed::Tried(Tried::NotSent { reason } | Tried::Refused { reason }) => {
+            format!("Not signed in: {reason}.")
+        }
         Performed::Tried(Tried::Lacks(lacking)) => format!("Not signed in. {}", lacking.sentence()),
-        Performed::Done(_) | Performed::Tried(Tried::Running { .. }) => String::new(),
+        Performed::Done(_) | Performed::Tried(Tried::Running { .. } | Tried::Unfinished { .. }) => {
+            String::new()
+        }
     };
     crate::secretary::inbox::end(inbox, card, &super::writes_as(), at, performed)?;
     let fold = crate::secretary::inbox::fold(inbox)?;

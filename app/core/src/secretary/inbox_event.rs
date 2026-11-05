@@ -1,14 +1,8 @@
-//! The inbox's schema: a proposal asked, and each response to it, about a [`ProposalId`].
+//! The inbox's schema: a proposal asked, and each response to it.
 //!
-//! `Asked` (the secretary's), `Triaged` (the triage agent's), `Offered` (a plugin's, naming it)
-//! and `Noticed` (the box's own)
-//! write the content register and
-//! every response the state register, whose values are the machine's
-//! [`Phase`](crate::secretary::phase::Phase)s, declared inflationary, so the store refuses a
-//! response below or beside the reading it supersedes. Its valuation is a [`Price`] alone (no
-//! `History` or `Bind`, which carry a todo's history and environment): what each content
-//! candidate serves, as a qualified reference into that todo's chain, read through the chains'
-//! set ([`crate::chain_set`]).
+//! An asking writes the content register; a response writes the state register, whose
+//! [`Phase`](crate::secretary::phase::Phase)s are inflationary, so the store refuses a response
+//! below or beside the reading it supersedes. Its valuation is a [`Price`] alone.
 
 use prodrome_core::event::Actor;
 use prodrome_core::fold::Product as _;
@@ -35,10 +29,10 @@ pub struct InboxEvent {
     pub said: Said,
 }
 
-/// What an event says: the proposal itself, whoever asked for it, or a response to it.
+/// What an event says: the proposal itself, or a response to it.
 #[derive(Debug, Clone, PartialEq)]
 pub enum Said {
-    /// The act, its reasons, what it serves and its price.
+    /// The proposal.
     Asked(Box<Asked>),
     /// What became of it.
     Responded(Responded),
@@ -72,6 +66,11 @@ pub const SIGNATURES: &[Constructor] = &[
     ),
     ("NotSent", &["proposal", "at", "actor", "attempt", "reason"]),
     ("Lacks", &["proposal", "at", "actor", "attempt", "lacking"]),
+    ("Refused", &["proposal", "at", "actor", "attempt", "reason"]),
+    (
+        "Unfinished",
+        &["proposal", "at", "actor", "attempt", "reason", "link"],
+    ),
     (
         "Started",
         &["proposal", "at", "actor", "attempt", "began", "expires_at"],
@@ -87,10 +86,10 @@ pub const SIGNATURES: &[Constructor] = &[
     ("Dismissed", &["proposal", "at", "actor", "reason"]),
     ("Superseded", &["proposal", "at", "actor"]),
     ("NoLongerNeeded", &["proposal", "at", "actor", "why"]),
+    ("DoneElsewhere", &["proposal", "at", "actor", "what"]),
 ];
 
-/// The inbox's whitelist: its constructors, an act's, then §7's terms, which an `Asked`'s spec
-/// nests.
+/// The inbox's whitelist: its constructors, an act's, then §7's terms for a spec.
 #[derive(Debug, Clone, Default)]
 pub struct InboxVocabulary;
 
@@ -104,7 +103,6 @@ impl Vocabulary for InboxVocabulary {
 }
 
 impl InboxEvent {
-    /// Its constructor's own fields, after the head, and their values.
     fn body(&self) -> (Constructor, Vec<Value>) {
         match &self.said {
             Said::Asked(asked) => asked.body(),
@@ -129,6 +127,19 @@ impl InboxEvent {
                 attempt: attempt()?,
                 tried: Tried::NotSent {
                     reason: fields.get("reason")?,
+                },
+            })),
+            "Refused" => Ok(Said::Responded(Responded::Tried {
+                attempt: attempt()?,
+                tried: Tried::Refused {
+                    reason: fields.get("reason")?,
+                },
+            })),
+            "Unfinished" => Ok(Said::Responded(Responded::Tried {
+                attempt: attempt()?,
+                tried: Tried::Unfinished {
+                    reason: fields.get("reason")?,
+                    link: fields.get("link")?,
                 },
             })),
             "Lacks" => Ok(Said::Responded(Responded::Tried {
@@ -162,6 +173,11 @@ impl InboxEvent {
             })),
             "Superseded" => Ok(Said::Responded(Responded::Withdrawn(
                 Withdrawal::Superseded,
+            ))),
+            "DoneElsewhere" => Ok(Said::Responded(Responded::Withdrawn(
+                Withdrawal::DoneElsewhere {
+                    what: fields.get("what")?,
+                },
             ))),
             "NoLongerNeeded" => Ok(Said::Responded(Responded::Withdrawn(
                 Withdrawal::NoLongerNeeded {
@@ -230,8 +246,7 @@ impl Schema for InboxEvent {
     }
 }
 
-/// A proposal prices as what it serves: one term per candidate of its content register, so two
-/// askings that disagree price as the more urgent ([`prodrome_core::fold::price`], `Least`).
+/// One term per content candidate, so askings that disagree price as the more urgent (`Least`).
 impl Price for InboxEvent {
     fn terms(registers: &InboxRegisters<'_>) -> Result<Vec<Term>, FplError> {
         Ok(registers
@@ -260,8 +275,8 @@ mod tests {
     fn every_signature_is_the_head_and_a_body() {
         use crate::secretary::inbox::{ASKED, NOTICED, OFFERED, TRIAGED};
         use crate::secretary::responded::{
-            ACTED, APPLIED, CHECKED, DISMISSED, LACKS, MAY_HAVE_GONE, NO_LONGER_NEEDED, NOT_SENT,
-            SENT, STARTED, SUPERSEDED,
+            ACTED, APPLIED, CHECKED, DISMISSED, DONE_ELSEWHERE, LACKS, MAY_HAVE_GONE,
+            NO_LONGER_NEEDED, NOT_SENT, REFUSED, SENT, STARTED, SUPERSEDED, UNFINISHED,
         };
         let bodies = [
             ASKED,
@@ -270,6 +285,8 @@ mod tests {
             OFFERED,
             NOT_SENT,
             LACKS,
+            REFUSED,
+            UNFINISHED,
             STARTED,
             SENT,
             APPLIED,
@@ -279,6 +296,7 @@ mod tests {
             DISMISSED,
             SUPERSEDED,
             NO_LONGER_NEEDED,
+            DONE_ELSEWHERE,
         ];
         assert_eq!(SIGNATURES.len(), bodies.len());
         for ((name, fields), (body, own)) in SIGNATURES.iter().zip(bodies) {

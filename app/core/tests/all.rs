@@ -8,6 +8,8 @@
 mod act_literal;
 #[path = "calls.rs"]
 mod calls;
+#[path = "card_stages.rs"]
+mod card_stages;
 #[path = "card_words.rs"]
 mod card_words;
 #[path = "connect.rs"]

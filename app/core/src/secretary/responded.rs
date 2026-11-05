@@ -1,13 +1,11 @@
-//! What became of a proposal: each response its state register records, built from what
-//! performing it answered ([`Performed`]), a check of a send that may have gone, the owner's no,
-//! or a withdrawal by the box or the secretary.
+//! The responses a proposal's state register records. The constructors below are a stored format.
 
 use prodrome_core::literal::{Datetime, Value};
 
 use crate::secretary::phase::Phase;
 use prodrome_core::literal::codec::{Constructor, Literal as _, record};
 
-/// A try that did not settle the proposal, so a tap may perform it again.
+/// A try that did not settle the proposal.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Tried {
     /// Nothing was sent.
@@ -15,11 +13,23 @@ pub enum Tried {
         /// Why.
         reason: String,
     },
-    /// Nothing was done: the box does not hold a grant the act needs.
+    /// The box lacks a grant the act needs.
     Lacks(crate::connect::Lacking),
+    /// A tap again would meet the same refusal, so none is offered.
+    Refused {
+        /// Why.
+        reason: String,
+    },
+    /// Part of the act left the box; a tap again finishes it without repeating that part.
+    Unfinished {
+        /// What happened.
+        reason: String,
+        /// An https page the box builds, never a model's.
+        link: String,
+    },
     /// A device-code flow was issued and ends by itself.
     Running {
-        /// When the code was issued, as the flow stamped it.
+        /// As the flow stamped it.
         began: String,
         /// When it goes stale.
         expires_at: String,
@@ -27,15 +37,17 @@ pub enum Tried {
 }
 
 impl Tried {
-    /// Whether it has gone stale by `now`: a flow past its code's expiry. An expiry that does not
-    /// parse is never past, so a running act refuses "already running" rather than admit a claim
-    /// this box cannot check.
+    /// A flow past its code's expiry. An unparsable expiry is never past, so the box refuses
+    /// "already running" rather than admit a claim it cannot check.
     #[must_use]
     pub fn stale(&self, now: Datetime) -> bool {
         match self {
             Tried::Running { expires_at, .. } => prodrome_core::fpl::parse_iso(expires_at)
                 .is_ok_and(|at| prodrome_core::fpl::instant_of(now) > at),
-            Tried::NotSent { .. } | Tried::Lacks(_) => false,
+            Tried::NotSent { .. }
+            | Tried::Lacks(_)
+            | Tried::Refused { .. }
+            | Tried::Unfinished { .. } => false,
         }
     }
 }
@@ -45,14 +57,14 @@ impl Tried {
 pub enum Done {
     /// The far end took the mail.
     Sent {
-        /// Every address the envelope carried.
+        /// The envelope's addresses.
         recipients: Vec<String>,
         /// The `Message-Id` this box minted.
         message_id: String,
     },
     /// The changeset's acts are on the chain.
     Applied {
-        /// Every object appended, in the order the acts were made.
+        /// In the order the acts were made.
         objects: Vec<String>,
         /// Which chain.
         chain: String,
@@ -69,20 +81,24 @@ pub enum Done {
     },
 }
 
-/// Why the box or the secretary took a card back before anyone answered it.
+/// Why a card was taken back before anyone answered it.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Withdrawal {
-    /// A later card of the same conversation replaces it; the conversation's line for that card
-    /// names which (`revises`).
+    /// A later card replaces it; that card's line names which (`revises`).
     Superseded,
     /// Nothing needs it any more.
     NoLongerNeeded {
-        /// Why, in the words of whoever withdrew it.
+        /// In the withdrawer's words.
         why: String,
+    },
+    /// The box saw it done another way.
+    DoneElsewhere {
+        /// What the box saw.
+        what: String,
     },
 }
 
-/// What performing a proposal answered: a try, or what it settled.
+/// What performing a proposal answered.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Performed {
     /// Tried, and not settled.
@@ -104,8 +120,7 @@ impl From<Done> for Performed {
 }
 
 impl Performed {
-    /// A failed send, by what its transport knew: nothing sent for want of a grant, nothing sent,
-    /// or a message that may have gone.
+    /// A failed send, by what its transport knew.
     #[must_use]
     pub fn of_send(failed: &crate::mail::send::SendError) -> Self {
         if let crate::mail::send::SendError::Ungranted(lacking) = failed {
@@ -119,7 +134,7 @@ impl Performed {
     }
 }
 
-/// What a check prints: its signature, after an event's head, and its values.
+/// What a check prints after an event's head.
 pub trait CheckFields {
     /// Its signature and values, in print order.
     fn body(&self) -> (Constructor, Vec<Value>);
@@ -132,36 +147,42 @@ impl CheckFields for () {
     }
 }
 
-/// `NotSent(attempt, reason)`, after an event's head.
+/// Stored after an event's head.
 pub const NOT_SENT: Constructor = ("NotSent", &["attempt", "reason"]);
-/// `Lacks(attempt, lacking)`.
+/// Stored.
 pub const LACKS: Constructor = ("Lacks", &["attempt", "lacking"]);
-/// `Started(attempt, began, expires_at)`.
+/// Stored.
+pub const REFUSED: Constructor = ("Refused", &["attempt", "reason"]);
+/// Stored.
+pub const UNFINISHED: Constructor = ("Unfinished", &["attempt", "reason", "link"]);
+/// Stored for [`Tried::Running`].
 pub const STARTED: Constructor = ("Started", &["attempt", "began", "expires_at"]);
-/// `Sent(recipients, message_id)`.
+/// Stored.
 pub const SENT: Constructor = ("Sent", &["recipients", "message_id"]);
-/// `Applied(objects, chain)`.
+/// Stored.
 pub const APPLIED: Constructor = ("Applied", &["objects", "chain"]);
-/// `Acted(what)`.
+/// Stored.
 pub const ACTED: Constructor = ("Acted", &["what"]);
-/// `MayHaveGone(reason)`.
+/// Stored.
 pub const MAY_HAVE_GONE: Constructor = ("MayHaveGone", &["reason"]);
-/// `Checked()`, as written.
+/// Stored, as written.
 pub const CHECKED: Constructor = ("Checked", &[]);
-/// `Dismissed(reason)`.
+/// Stored.
 pub const DISMISSED: Constructor = ("Dismissed", &["reason"]);
-/// `Superseded()`.
+/// Stored.
 pub const SUPERSEDED: Constructor = ("Superseded", &[]);
-/// `NoLongerNeeded(why)`.
+/// Stored.
 pub const NO_LONGER_NEEDED: Constructor = ("NoLongerNeeded", &["why"]);
+/// Stored.
+pub const DONE_ELSEWHERE: Constructor = ("DoneElsewhere", &["what"]);
 
-/// One response. A check holds `C`: nothing as it is written, and the send it checks once a
-/// reading has found that send beneath it ([`crate::secretary::inbox::Check`]), so a check of nothing has no reading.
+/// One response. A check holds `C`: nothing as written, and the send it checks once a reading
+/// finds it ([`crate::secretary::inbox::Check`]), so a check of nothing has no reading.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Responded<C = ()> {
-    /// The `attempt`-th try, which did not settle it.
+    /// A try that did not settle it.
     Tried {
-        /// One for the first try, one more for each after it.
+        /// One for the first try.
         attempt: u32,
         /// What it came to.
         tried: Tried,
@@ -175,12 +196,12 @@ pub enum Responded<C = ()> {
         /// His words, verbatim.
         reason: String,
     },
-    /// The box or the secretary took it back before anyone answered it.
+    /// Taken back before anyone answered it.
     Withdrawn(Withdrawal),
 }
 
 impl Responded {
-    /// The response performing answered, as the `attempt`-th try where it is one.
+    /// The response performing answered.
     #[must_use]
     pub fn performed(performed: Performed, attempt: u32) -> Self {
         match performed {
@@ -191,7 +212,7 @@ impl Responded {
 }
 
 impl<C> Responded<C> {
-    /// Its point of the machine.
+    /// Its phase.
     #[must_use]
     pub fn phase(&self) -> Phase {
         match self {
@@ -209,7 +230,7 @@ impl<C> Responded<C> {
         }
     }
 
-    /// The grant a try lacked, when that is why it did nothing.
+    /// The grant a try lacked.
     #[must_use]
     pub fn lacking(&self) -> Option<&crate::connect::Lacking> {
         match self {
@@ -218,7 +239,11 @@ impl<C> Responded<C> {
                 ..
             } => Some(lacking),
             Responded::Tried {
-                tried: Tried::NotSent { .. } | Tried::Running { .. },
+                tried:
+                    Tried::NotSent { .. }
+                    | Tried::Running { .. }
+                    | Tried::Refused { .. }
+                    | Tried::Unfinished { .. },
                 ..
             }
             | Responded::Done(_)
@@ -228,13 +253,39 @@ impl<C> Responded<C> {
         }
     }
 
-    /// Whether a tap performs it again: a try that sent nothing.
+    /// The link of a try that stopped partway.
+    #[must_use]
+    pub fn unfinished(&self) -> Option<&str> {
+        match self {
+            Responded::Tried {
+                tried: Tried::Unfinished { link, .. },
+                ..
+            } => Some(link),
+            Responded::Tried {
+                tried:
+                    Tried::NotSent { .. }
+                    | Tried::Lacks(_)
+                    | Tried::Running { .. }
+                    | Tried::Refused { .. },
+                ..
+            }
+            | Responded::Done(_)
+            | Responded::Checked(_)
+            | Responded::Dismissed { .. }
+            | Responded::Withdrawn(_) => None,
+        }
+    }
+
+    /// A try that sent nothing, which a tap performs again.
     #[must_use]
     pub fn performs(&self) -> bool {
         matches!(
             self,
             Responded::Tried {
-                tried: Tried::NotSent { .. } | Tried::Lacks(_),
+                tried: Tried::NotSent { .. }
+                    | Tried::Lacks(_)
+                    | Tried::Refused { .. }
+                    | Tried::Unfinished { .. },
                 ..
             }
         )
@@ -242,7 +293,7 @@ impl<C> Responded<C> {
 }
 
 impl<C: CheckFields> Responded<C> {
-    /// Its signature, after an event's head, and its values, in print order.
+    /// Its signature and values, in print order.
     #[must_use]
     pub fn body(&self) -> (Constructor, Vec<Value>) {
         match self {
@@ -254,6 +305,17 @@ impl<C: CheckFields> Responded<C> {
                 attempt,
                 tried: Tried::Lacks(lacking),
             } => (LACKS, vec![attempt.to_value(), lacking.to_value()]),
+            Responded::Tried {
+                attempt,
+                tried: Tried::Refused { reason },
+            } => (REFUSED, vec![attempt.to_value(), reason.to_value()]),
+            Responded::Tried {
+                attempt,
+                tried: Tried::Unfinished { reason, link },
+            } => (
+                UNFINISHED,
+                vec![attempt.to_value(), reason.to_value(), link.to_value()],
+            ),
             Responded::Tried {
                 attempt,
                 tried: Tried::Running { began, expires_at },
@@ -277,12 +339,15 @@ impl<C: CheckFields> Responded<C> {
             Responded::Withdrawn(Withdrawal::NoLongerNeeded { why }) => {
                 (NO_LONGER_NEEDED, vec![why.to_value()])
             }
+            Responded::Withdrawn(Withdrawal::DoneElsewhere { what }) => {
+                (DONE_ELSEWHERE, vec![what.to_value()])
+            }
             Responded::Checked(check) => check.body(),
         }
     }
 }
 
-/// Its literal: the constructor and its fields, as an event prints them after its head.
+/// As an event prints it after its head.
 impl<C: CheckFields> std::fmt::Display for Responded<C> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let (signature, values) = self.body();

@@ -141,6 +141,18 @@ fn a_response() -> impl Strategy<Value = Responded> {
         reason.prop_map(|reason| Responded::Dismissed { reason }),
         Just(Responded::Withdrawn(Withdrawal::Superseded)),
         reason.prop_map(|why| Responded::Withdrawn(Withdrawal::NoLongerNeeded { why })),
+        (1..4_u32, reason).prop_map(|(attempt, reason)| Responded::Tried {
+            attempt,
+            tried: Tried::Refused { reason }
+        }),
+        (1..4_u32, reason).prop_map(|(attempt, reason)| Responded::Tried {
+            attempt,
+            tried: Tried::Unfinished {
+                reason,
+                link: "https://github.com/owner/name/pulls".to_owned(),
+            }
+        }),
+        reason.prop_map(|what| Responded::Withdrawn(Withdrawal::DoneElsewhere { what })),
     ]
 }
 

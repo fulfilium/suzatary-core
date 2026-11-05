@@ -2374,6 +2374,8 @@ fn the_answers_vector_holds_every_answer() {
                 problem: String::new(),
                 answers: Vec::new(),
                 uncertain: String::new(),
+                check: String::new(),
+                failed: String::new(),
                 readonly: String::new(),
                 link: None,
             },

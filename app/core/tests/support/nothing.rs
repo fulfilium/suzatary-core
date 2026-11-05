@@ -497,6 +497,13 @@ impl Repositories for Nothing {
     ) -> Result<(), RepoFailure> {
         Err(RepoFailure::Unknown(repo.to_string()))
     }
+    fn merged(
+        &self,
+        repo: &RepoName,
+        _patch: &Patch,
+    ) -> Result<Option<crate::capability::InBranch>, RepoFailure> {
+        Err(RepoFailure::Unknown(repo.to_string()))
+    }
     fn pushable(&self, repo: &RepoName, _visibility: Visibility) -> Result<(), RepoFailure> {
         Err(RepoFailure::Unknown(repo.to_string()))
     }

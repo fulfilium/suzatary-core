@@ -1,6 +1,4 @@
-//! `suzatary secretary`: the conversation from a terminal, and the tap's one path to mail.
-//!
-//! [`Postman::send`] is reached only through the tap route; no CLI verb here sends.
+//! `suzatary secretary`. Only the tap route reaches [`Postman`]; no CLI verb here sends.
 
 use std::path::Path;
 use std::sync::Arc;
@@ -18,8 +16,7 @@ use suzatary_core::secretary::store::{ConversationId, DEFAULT, Draft};
 
 use crate::instance::Instance;
 
-/// The secretary's system prompt, `SECRETARY.md`; without one the model is told to propose
-/// nothing, since a model with no brief acts on nobody's decision.
+/// `SECRETARY.md`; without it the model is told to propose nothing.
 #[must_use]
 pub fn system_prompt(manuals: &dyn Manuals) -> String {
     manuals.document(Manual::Secretary).unwrap_or_else(|| {
@@ -29,12 +26,11 @@ pub fn system_prompt(manuals: &dyn Manuals) -> String {
     })
 }
 
-/// What puts a tapped proposal on a wire; a value so the end-to-end suite can substitute a
-/// recorder, since a browser test cannot send real mail.
+/// What sends a tapped proposal.
 pub enum Postman {
-    /// The real transports, through `crate::commands::mail::deliver`.
+    /// Through `crate::commands::mail::deliver`.
     Real(Arc<Instance>),
-    /// Writes what would have gone to a file; a cargo feature so the deployed build lacks it.
+    /// Records to a file; behind a feature so the deployed build lacks it.
     #[cfg(feature = "fixture")]
     Recording(std::path::PathBuf),
 }
@@ -51,68 +47,57 @@ impl Post for Postman {
     }
 }
 
-/// What performs a tapped act, held beside the record rather than in it like [`Postman`].
+/// What performs a tapped act, held beside the record rather than in it.
 pub enum Acting {
-    /// No act can be performed by this build; a tap records why rather than a false success.
+    /// This build performs no act; a tap records why.
     NotYet,
-    /// The real performers; no `Instance` field, so a test can build one without an instance file.
+    /// The real performers.
     Real {
-        /// Read at the tap, so an account connected since the server started signs in.
+        /// Read at the tap, so an account added since startup signs in.
         roster: Arc<dyn suzatary_core::settings::Edits + Send + Sync>,
         conversations: ActingConversations,
         tokens: suzatary_io::oauth::TokenStore,
-        /// Where the flow's thread records the act's end.
         inbox: ActingInbox,
-        /// So an announce reaches an open page; the flow writes its turns straight to the file,
-        /// since the worker would claim Thinking.
+        /// For announcing only: the worker would claim Thinking.
         workers: Arc<crate::commands::serve::Workers>,
         publishing: Arc<Publishing>,
         drive: Arc<suzatary_io::drive::ReadOnly>,
-        /// Where a tapped document is kept for the model.
         kept: suzatary_io::blobs::Blobs,
         coder: Arc<crate::commands::coding::Coder>,
-        /// Begun by a Connect card's tap, finished by the code card's.
         signing: Arc<crate::commands::serve::sign_ins::SignIns>,
         google: Arc<suzatary_io::google::Grants>,
-        /// Rung when a device flow ends, so the box files again and reads the grant it stored.
+        /// Rung when a device flow ends, so the box files again.
         ended: Arc<dyn Fn() + Send + Sync>,
     },
-    /// The fixture's performer: never touches the network and runs on no thread, so a
-    /// browser scene against it is deterministic.
+    /// The fixture's performer: no network and no thread, so browser scenes are deterministic.
     #[cfg(feature = "fixture")]
     Recording {
         conversations: ActingConversations,
         workers: Arc<crate::commands::serve::Workers>,
-        /// The fixture's own local repositories, never GitHub.
         publishing: Arc<Publishing>,
         drive: Arc<suzatary_io::drive::ReadOnly>,
         kept: suzatary_io::blobs::Blobs,
-        /// The fixture declares no routine, so a tap is refused in words.
         coder: Arc<crate::commands::coding::Coder>,
-        /// Uses the `claude` the fixture's `PATH` finds (a fake, under the browser suite).
         signing: Arc<crate::commands::serve::sign_ins::SignIns>,
-        /// The fixture's fake Google, never Google's own.
         google: Arc<suzatary_io::google::Grants>,
     },
 }
 
-/// The conversations an act's turns land in, held for the life of the serving process, since a
-/// flow's own thread writes its end.
+/// The conversations store, `'static` because a flow's own thread writes its end.
 pub type ActingConversations = &'static suzatary_io::conversations::ConversationStores;
 
-/// The inbox an act ends in; a trait object so a test can hand it the store it reads back.
+/// The inbox an act ends in.
 pub type ActingInbox =
     &'static dyn suzatary_core::store::Prodrome<suzatary_core::secretary::inbox_event::InboxEvent>;
 
-/// The stores an act writes through: the server's own handles, so a tap, the coding poll and the
-/// pages read one copy of each store in the process.
+/// The server's own store handles, so the process holds one copy of each.
 #[derive(Clone, Copy)]
 pub struct ActingStores {
     pub conversations: ActingConversations,
     pub inbox: ActingInbox,
 }
 
-/// The fixture's declared repositories under the data root's `fixture-repos/`, never GitHub.
+/// The fixture's local repositories under `fixture-repos/`, never GitHub.
 #[cfg(feature = "fixture")]
 #[must_use]
 pub fn fixture_mirrors(instance: &Instance) -> Arc<suzatary_io::repos::Mirrors> {
@@ -126,7 +111,7 @@ pub fn fixture_mirrors(instance: &Instance) -> Arc<suzatary_io::repos::Mirrors> 
     ))
 }
 
-/// No secret resolves: the fixture's repositories are local.
+/// Resolves no secret.
 #[cfg(feature = "fixture")]
 struct NoToken;
 
@@ -141,12 +126,10 @@ impl suzatary_io::secrets::Resolves for NoToken {
     }
 }
 
-/// What a tapped patch is proposed through, as a pull request: the mirrors, which hold each
-/// repository's check as the instance file declared it.
+/// What opens a tapped patch as a pull request.
 pub struct Publishing {
     pub mirrors: Arc<suzatary_io::repos::Mirrors>,
-    /// Who commits a tapped patch, resolved once when the server starts; `None` refuses the
-    /// push and says why.
+    /// Who commits; `None` refuses the push.
     pub author: Option<suzatary_io::repos::Author>,
 }
 
@@ -175,7 +158,7 @@ impl Publishing {
                 reason: "this box has no git user.name and user.email to commit as".to_owned(),
             });
         };
-        // A branch of its own, named by the proposal, so the default branch is a person's merge.
+        // Never the default branch: merging is a person's.
         let branch = format!("secretary/{id}-{index}");
         let message = format!(
             "{}\n\nProposed-by: {}, proposal:{id}/{index}\n",
@@ -195,19 +178,24 @@ impl Publishing {
                     published.pull.url
                 ),
             }),
-            Err(
-                stopped @ (suzatary_io::repos::Stopped::Refused(_)
-                | suzatary_io::repos::Stopped::Taken { .. }),
-            ) => Performed::Tried(Tried::NotSent {
-                reason: stopped.to_string(),
-            }),
-            // A tap again finishes it from where it stopped, never pushing or opening twice.
-            Err(
-                stopped @ (suzatary_io::repos::Stopped::Preparing(_)
-                | suzatary_io::repos::Stopped::Pushing(_)
-                | suzatary_io::repos::Stopped::Opening { .. }),
-            ) => Performed::Tried(Tried::NotSent {
-                reason: format!("{stopped}. Tap again to finish it."),
+            Err(suzatary_io::repos::Stopped::Refused(why)) => {
+                Performed::Tried(Tried::Refused { reason: why })
+            }
+            Err(suzatary_io::repos::Stopped::Failed(why)) => {
+                Performed::Tried(Tried::NotSent { reason: why })
+            }
+            Err(suzatary_io::repos::Stopped::Pushed {
+                branch,
+                commit,
+                failure,
+                link,
+            }) => Performed::Tried(Tried::Unfinished {
+                reason: format!(
+                    "pushed {branch} ({}), and a pull request may be open: {failure}. Try again \
+                     finishes it without pushing or opening anything twice",
+                    commit.short()
+                ),
+                link,
             }),
         }
     }
@@ -246,8 +234,7 @@ impl Acting {
         }
     }
 
-    /// `--model-fixture`'s performers, with nothing that could reach the network: Google is
-    /// the fake at `google`.
+    /// `--model-fixture`'s performers; nothing reaches the network.
     #[cfg(feature = "fixture")]
     #[must_use]
     pub fn recording(
@@ -375,7 +362,6 @@ impl suzatary_core::secretary::routes::Perform for Acting {
         act: &suzatary_core::secretary::acts::Act,
         consent: suzatary_core::mail::oauth::Consent,
     ) -> Performed {
-        // The sign-in runs on the box and holds its terminal until the code card's tap.
         if let suzatary_core::secretary::acts::Act::SignIn { .. } = act {
             return self.sign_in(object);
         }
@@ -405,11 +391,10 @@ impl suzatary_core::secretary::routes::Perform for Acting {
                 }
             };
         }
-        // Written only on the tap, under the account's own grant.
         if let suzatary_core::secretary::acts::Act::CalendarEvent { account, event } = act {
             return self.calendar_event(account, event);
         }
-        // The same interpreter as an allowed read, so a tapped document arrives redacted.
+        // The allowed read's interpreter, so the document arrives redacted.
         if let suzatary_core::secretary::acts::Act::DriveRead { path, .. } = act {
             return self.read_document(id, path, act);
         }
@@ -475,8 +460,7 @@ impl suzatary_core::secretary::routes::Perform for Acting {
     }
 }
 
-/// Begin a tapped device flow: request the code synchronously, announce it, and poll on a
-/// blocking OS thread.
+/// Begin a tapped device flow.
 #[expect(
     clippy::too_many_arguments,
     reason = "one value per thing the flow needs, none of them optional"
@@ -498,7 +482,7 @@ fn begin_real(
     use suzatary_core::mail::oauth::{Imap, Smtp};
     use suzatary_core::secretary::acts::Act;
 
-    // The tap route handles a secret act itself, so this arm is unreachable in practice.
+    // Unreachable in practice: the tap route handles these acts itself.
     let (account, sending) = match act {
         Act::Auth { account } => (account, false),
         Act::AuthSend { account } => (account, true),
@@ -563,7 +547,7 @@ fn begin_real(
     }
 }
 
-/// What a tapped device flow reports into, once it has begun.
+/// Where a begun device flow reports.
 struct Flow<'a> {
     conversations: ActingConversations,
     inbox: &'a ActingInbox,
@@ -574,7 +558,7 @@ struct Flow<'a> {
 }
 
 impl Flow<'_> {
-    /// Request the code for `P`'s grant, announce it, and poll on a blocking OS thread.
+    /// Request the code, announce it, and poll on an OS thread.
     fn begin<P>(
         self,
         tokens: &suzatary_io::oauth::TokenStore,
@@ -612,8 +596,7 @@ impl Flow<'_> {
 
         let started = suzatary_io::clock::SystemClock.now();
         let at = started;
-        // A deadline past the code's own expiry is the belt for an endpoint that keeps answering
-        // pending; saturating and clamped, so an absurd server answer cannot overflow it.
+        // Bounds an endpoint that keeps answering pending; clamped against absurd answers.
         let deadline_seconds = code
             .expires_in_seconds
             .saturating_add(2 * code.interval_seconds)
@@ -623,7 +606,7 @@ impl Flow<'_> {
             + chrono::Duration::seconds(i64::try_from(expiry_seconds).unwrap_or(i64::MAX));
         let expires_at = prodrome_core::fpl::iso(expiry_instant);
 
-        // Never the device code: only the message, URL, user code and expiry may be seen.
+        // Never the device code.
         let announced = format!(
             "{} for {account}; the code expires at {expires_at}",
             code.message
@@ -660,7 +643,7 @@ impl Flow<'_> {
     }
 }
 
-/// Wait for the device flow behind a deadline, then end the act in the inbox and announce.
+/// Wait for the device flow up to a deadline, then end the act.
 #[expect(
     clippy::too_many_arguments,
     reason = "one value per thing the flow's own end needs, none of them optional"
@@ -692,8 +675,6 @@ fn finish_act<P: suzatary_core::mail::oauth::Protocol + Send + 'static>(
     workers.announce(id);
 }
 
-/// A tapped web request's answer, appended as a `web` verb answer so the
-/// secretary reads it the way it reads any other, and the outcome to record.
 fn web_turn(
     conversations: &suzatary_io::conversations::ConversationStores,
     id: &suzatary_core::secretary::store::ConversationId,
@@ -712,7 +693,7 @@ fn web_turn(
                 what: request.sentence(),
             }),
         ),
-        // A read, so a failure is plainly not sent: asking again cannot do harm.
+        // A read: retrying is harmless.
         Err(failed) => (
             failed.to_string(),
             Outcome::Refused,
@@ -741,8 +722,8 @@ fn web_turn(
     outcome
 }
 
-/// Keep what the tap read of a withheld document, so a proposal that sends it records it without
-/// reading it again; a model is told neither its size nor its digest.
+/// Keep a withheld document's record so a proposal can send it unread; the model learns
+/// neither its size nor its digest.
 fn keep_tapped(
     kept: &suzatary_io::blobs::Blobs,
     path: &suzatary_core::drive::DrivePath,
@@ -769,8 +750,6 @@ fn keep_tapped(
     }
 }
 
-/// A tapped document as a `drive_read` answer in the conversation, the file itself kept for the
-/// model the way an allowed read keeps it, and the outcome the tap records.
 fn drive_turn(
     conversations: &suzatary_io::conversations::ConversationStores,
     kept: &suzatary_io::blobs::Blobs,
@@ -837,8 +816,7 @@ fn drive_turn(
     outcome
 }
 
-/// Append an act line relaying words from elsewhere (a sign-in provider's message), unstamped, so
-/// taint reads it as what it is.
+/// Append an act line relaying outside words, unstamped so taint reads them as foreign.
 fn append_act_turn(
     conversations: &suzatary_io::conversations::ConversationStores,
     (id, index): (&suzatary_core::secretary::store::ConversationId, usize),
@@ -853,7 +831,6 @@ fn append_act_turn(
         id,
         &Entry::Said {
             at,
-            // It points at the card it answers, which draws it while the act runs.
             turn: Turn::Act {
                 text,
                 references: vec![suzatary_core::reference::Reference::Proposal(
@@ -870,10 +847,7 @@ fn append_act_turn(
     }
 }
 
-/// Append the box's own act line ([`Entry::noted`]): a sentence it composed from its own state,
-/// so taint reads it clean; a failure to record is logged.
-///
-/// [`Entry::noted`]: suzatary_core::secretary::store::Entry::noted
+/// Append the box's own line, which taint reads clean.
 fn append_note(
     conversations: &suzatary_io::conversations::ConversationStores,
     id: &suzatary_core::secretary::store::ConversationId,
@@ -891,8 +865,7 @@ fn append_note(
     }
 }
 
-/// Append the triage heartbeat's alarm line, if it has one; it takes no model, so the alarm
-/// cannot depend on one being reachable.
+/// Append the triage heartbeat's alarm, if any; no model is needed.
 fn maybe_append_triage_alarm(
     corpus: &dyn suzatary_core::capability::Corpus,
     clock: &dyn suzatary_core::capability::Clock,
@@ -911,10 +884,8 @@ fn maybe_append_triage_alarm(
     }
 }
 
-/// How a sign-in act ended, and the line its conversation gets: the box's own note when it
-/// composed the sentence (granted, or the code expired), and an unstamped line when the
-/// sentence carries the provider's own error text, which taint must read as somebody else's.
-/// Its log lines name the account as the journal does (`named`), never by its address.
+/// How a sign-in act ended, and its line: a note when the box wrote the sentence, unstamped
+/// when it carries the provider's error text. Logs use `named`, never the address.
 fn completion<E: std::fmt::Display>(
     account: &impl std::fmt::Display,
     named: &str,
@@ -959,8 +930,7 @@ fn completion<E: std::fmt::Display>(
     }
 }
 
-/// End the act in the inbox, authored as the secretary rather than the tapper, and append its
-/// line to the conversation; a failure to record is logged, never a panic on the flow's thread.
+/// End the act as the secretary, not the tapper, and append its line; failures are logged.
 fn append_completion(
     conversations: &suzatary_io::conversations::ConversationStores,
     inbox: &ActingInbox,
@@ -985,8 +955,7 @@ fn append_completion(
     }
 }
 
-/// The fixture's device flow: writes the two turns a real flow writes and answers `Acted`,
-/// not `Started`, since nothing is left pending; the tap records the one response.
+/// The fixture's device flow: a real flow's two turns, then `Acted`, since nothing is pending.
 #[cfg(feature = "fixture")]
 fn begin_recording(
     conversations: &suzatary_io::conversations::ConversationStores,
@@ -1021,7 +990,7 @@ fn begin_recording(
             });
         }
     };
-    // Fixed, so a browser scene against this arm is byte-stable.
+    // Fixed, for byte-stable scenes.
     let now =
         prodrome_core::literal::Datetime::new(2026, 9, 14, 9, 0, 0, 0).expect("a real instant");
     let at = now;
@@ -1037,8 +1006,7 @@ fn begin_recording(
     Performed::Done(Done::Acted { what })
 }
 
-/// Build the message and hand it to the transport its account resolves to; the `From` is the
-/// roster's canonical address, never the model-written `account`.
+/// Send through the account's transport; `From` is the roster's address, never the model's.
 fn post(instance: &Instance, draft: &Draft, body: Filled, attachments: Checked) -> Performed {
     let Some(sender) = instance.mail.accounts.sending(&draft.account) else {
         return Performed::Tried(Tried::NotSent {
@@ -1073,10 +1041,8 @@ fn post(instance: &Instance, draft: &Draft, body: Filled, attachments: Checked) 
     }
 }
 
-/// The fixture's recorder: one JSON line per message that would have gone, the draft's fields as
-/// stored and the whole MIME message `send.rs` built with the held values written in, unless the
-/// first line of `<file>.failures` (`not_sent` or `unknown`) is consumed to fail this send on
-/// cue: what failed is the error.
+/// Append one JSON line per message: the draft plus its MIME. A first line of `<file>.failures`
+/// (`not_sent` or `unknown`) is consumed to fail this send instead.
 #[cfg(feature = "fixture")]
 fn record(
     path: &Path,
@@ -1123,7 +1089,7 @@ fn record(
         references: Vec::new(),
     })
     .map_err(|failed| not_sent(&failed))?;
-    // A fixed date, so a recorded message is byte-stable apart from its boundary.
+    // Fixed date, for byte-stable records.
     let mime = suzatary_core::mail::send::build_mime(&out, "recorded@fixture", 1_788_912_000)
         .map_err(|failed| not_sent(&failed))?;
     let mut recorded = serde_json::to_value(draft).map_err(|failed| not_sent(&failed))?;
@@ -1304,36 +1270,30 @@ enum TopicsAction {
     },
 }
 
-/// What `suzatary secretary topics carry` does, parsed from its flags.
+/// What `topics carry` does.
 #[derive(Debug, Clone)]
 pub enum CarryRun {
-    /// List every conversation: its id, date, round count and title.
+    /// List every conversation.
     List,
-    /// Print what each conversation would get from the map, and write nothing.
+    /// Print what the map would give; write nothing.
     Show(std::path::PathBuf),
-    /// Write what the map gives each conversation.
+    /// Write what the map gives.
     Write(std::path::PathBuf),
 }
 
-/// What `suzatary secretary topics backfill` does, parsed from its flags.
+/// What `topics backfill` does.
 #[derive(Debug, Clone)]
 enum BackfillRun {
-    /// Ask the model and print what it proposes, keeping the plan in the file when one is named.
     Plan(Option<std::path::PathBuf>),
-    /// Write the plan the file holds.
     Apply(std::path::PathBuf),
 }
 
 pub(crate) use suzatary_core::secretary::briefs::BRIEF;
 
-/// How stale the triage heartbeat must be before [`brief`] says so; the timer fires every five
-/// minutes, so an hour is twelve consecutive misses.
+/// Hours before a stale triage heartbeat alarms: twelve missed five-minute timers.
 const STALE_HOURS: f64 = 1.0;
 
-/// `suzatary secretary`: run one verb.
-///
-/// # Errors
-/// The instance file's, the store's, and the model's.
+/// `suzatary secretary`.
 pub fn run(path: &Path, args: &Args) -> anyhow::Result<()> {
     let instance = Instance::open(path)?;
     match &args.action {
@@ -1420,10 +1380,7 @@ pub fn run(path: &Path, args: &Args) -> anyhow::Result<()> {
     }
 }
 
-/// `suzatary secretary digest census`, said on `out`.
-///
-/// # Errors
-/// A store that does not read.
+/// `suzatary secretary digest census`.
 pub fn census(instance: &Instance, out: &mut dyn std::io::Write) -> anyhow::Result<()> {
     let remembering = crate::wiring::Remembering::reader(instance);
     let digest = remembering.memories().digests.reads().read()?;
@@ -1438,12 +1395,8 @@ pub fn census(instance: &Instance, out: &mut dyn std::io::Write) -> anyhow::Resu
     Ok(())
 }
 
-/// `suzatary secretary topics backfill --dry-run [--plan <file>]`, said on `out`, each batch
-/// asked of `model`; writes the plan to `file` when given, and nothing to the stores. Answers how
-/// many rounds the plan gives a topic.
-///
-/// # Errors
-/// A store that does not read, or the plan file not written.
+/// `topics backfill --dry-run`: writes the plan to `file`, never the stores. Returns how many
+/// rounds get a topic.
 pub fn backfill_plan(
     instance: &Instance,
     file: Option<&std::path::Path>,
@@ -1514,12 +1467,7 @@ pub fn backfill_plan(
     Ok(count)
 }
 
-/// `suzatary secretary topics backfill --apply <file>`, said on `out`: the plan as the dry run
-/// wrote it, as the assistant, asking no model. Answers how many memberships it wrote.
-///
-/// # Errors
-/// A plan that does not read, one a target of which is no longer live or has gained another
-/// topic (nothing is written then), a store that does not read, or a membership not written.
+/// `topics backfill --apply`: writes the plan as the assistant. Returns the memberships written.
 pub fn backfill_apply(
     instance: &Instance,
     file: &std::path::Path,
@@ -1552,12 +1500,7 @@ pub fn backfill_apply(
     Ok(count)
 }
 
-/// `suzatary secretary topics carry`, said on `out`. Answers how many memberships it wrote, or
-/// would write; a listing answers 0.
-///
-/// # Errors
-/// A map that does not read or is refused, a store that does not read, or a membership not
-/// written.
+/// `topics carry`. Returns the memberships written or that would be; a listing returns 0.
 pub fn carry(
     instance: &Instance,
     run: &CarryRun,
@@ -1646,12 +1589,7 @@ pub fn carry(
     Ok(count)
 }
 
-/// `suzatary secretary migrate-scrub [--apply]`, said on `out`: how the lines stand against the
-/// current redaction rules, and with `apply`, the run. Answers what the run did, or `None` for a
-/// dry run.
-///
-/// # Errors
-/// The stores' own, and the run's refusals (`suzatary_core::secretary::rescrub::run`).
+/// `migrate-scrub`; `None` for a dry run.
 pub fn migrate_scrub(
     instance: &Instance,
     apply: bool,
@@ -1725,11 +1663,7 @@ fn inbox(
     instance.inbox_store()
 }
 
-/// The operator's twin of `POST …/proposals/<n>/dismiss`; with no `actor`, the first chain's
-/// owner dismisses.
-///
-/// # Errors
-/// The instance file's, the actor's, and the store's.
+/// The operator's twin of `POST …/proposals/<n>/dismiss`; the first chain's owner by default.
 pub fn dismiss(
     instance: &Instance,
     conversation: &str,
@@ -1737,7 +1671,7 @@ pub fn dismiss(
     reason: &str,
     actor: Option<&str>,
 ) -> anyhow::Result<()> {
-    // Checked against the roster, so a typo is a refusal rather than a new actor.
+    // Roster-checked, so a typo is refused rather than a new actor.
     let chain = instance.chain(None)?;
     let actor = actor.unwrap_or(chain.owner.as_str());
     let who =
@@ -1764,7 +1698,7 @@ pub fn dismiss(
     Ok(())
 }
 
-/// A remember card's words, read from the memory's text store while it keeps them.
+/// A remember card's words, from the memory's text store.
 fn words_of(
     instance: &Instance,
 ) -> impl Fn(
@@ -1774,7 +1708,7 @@ fn words_of(
     let texts = suzatary_io::texts::Texts::<suzatary_core::secretary::memory::Fact>::open(
         instance.secretary.memory_texts(),
     );
-    // A store that did not answer found nothing out: the words are unread, never gone.
+    // A failed read is unread, never gone.
     move |name| match texts.get(name) {
         Ok(kept) => suzatary_core::secretary::inbox_reading::Words::of(
             kept.map(|text| text.words().clone()),
@@ -1786,11 +1720,10 @@ fn words_of(
     }
 }
 
-/// What the secretary's audit says it asks the secret store for.
+/// The secret store's audit reason.
 const DECLARED: &str = "the secretary: checking whether a declared secret resolves";
 
-/// The secretary's interpreters: the box's, opened once, and each chain's stores, the one its
-/// record writes to first, since routing is decided per todo.
+/// The secretary's interpreters and every chain's stores.
 struct Wired {
     opened: crate::wiring::Opened,
     first: crate::wiring::Stores,
@@ -1824,7 +1757,7 @@ impl Wired {
         self.opened.secretary(&self.first, &self.brain)
     }
 
-    /// The `Bound`s the core's dispatcher takes, the first first.
+    /// Each chain bound, the first first.
     fn bound(&self) -> Vec<suzatary_core::secretary::Bound<'_>> {
         std::iter::once(&self.first)
             .chain(&self.rest)
@@ -1837,10 +1770,7 @@ impl Wired {
     }
 }
 
-/// One round of a scripted model over the instance's stores, with its verbs run for real.
-///
-/// # Errors
-/// The instance's chains, the stores, and whatever the round refuses.
+/// One scripted-model round, its verbs run for real.
 #[cfg(feature = "fixture")]
 pub fn scripted_round(
     instance: &Instance,
@@ -1884,11 +1814,7 @@ pub fn scripted_round(
     Ok(())
 }
 
-/// Today's review run as `suzatary secretary review` runs it, over a scripted model: the same
-/// question, the same `triage_cards` turn and the same held lines a box's timer writes.
-///
-/// # Errors
-/// The instance's chains, the stores, and whatever the review refuses.
+/// `secretary review` over a scripted model.
 #[cfg(feature = "fixture")]
 pub fn scripted_review(
     instance: &Instance,
@@ -1914,11 +1840,7 @@ pub fn scripted_review(
     }
 }
 
-/// A brief run as `suzatary secretary brief --new` runs it, over a scripted model, in a new
-/// conversation titled `title`.
-///
-/// # Errors
-/// The instance's chains, the stores, and whatever the brief refuses.
+/// `secretary brief --new` over a scripted model.
 #[cfg(feature = "fixture")]
 pub fn scripted_brief(
     instance: &Instance,
@@ -1930,8 +1852,7 @@ pub fn scripted_brief(
     run_brief(instance, &wired, title, true).map(|_| ())
 }
 
-/// What a brief files before its round, needing no model; a refusal costs the brief nothing.
-/// The box's own cards are the server's to file, since it alone holds the sign-ins they include.
+/// What a brief files before its round; the box's own cards are the server's.
 fn unasked(
     instance: &Instance,
     chains: &[suzatary_core::secretary::Bound<'_>],
@@ -1957,8 +1878,7 @@ fn unasked(
     }
 }
 
-/// `suzatary secretary brief`: say the morning into [`DEFAULT`], or a dated conversation with
-/// `--new`.
+/// `suzatary secretary brief`.
 fn brief(
     instance: &Instance,
     title: &str,
@@ -1979,8 +1899,7 @@ fn brief(
     }
 
     let url = format!("{}/#/secretary/{}", instance.deployment.app_url, id);
-    // The box's turn is the conversation's last, so `notify brief` still tells the owner; the
-    // operator reads why here.
+    // `notify brief` still tells the owner; this tells the operator.
     if let Some(Ending::Ended { why }) = answered.as_ref().map(|answered| &answered.ending) {
         eprintln!(
             "secretary: the round ended without an answer: {}",
@@ -1993,7 +1912,6 @@ fn brief(
             serde_json::json!({
                 "conversation": id.as_str(),
                 "url": url,
-                // The day the Briefings page files it under, from the same clock.
                 "briefing": instance.persona.zone.day(prodrome_core::fpl::instant_of(caps.clock.now()))
                 .to_string(),
             })
@@ -2012,13 +1930,12 @@ fn brief(
         None if limited.is_some() => println!("secretary: no round ran; open it at {url}"),
         None => println!("secretary: nothing waited, so no round ran; open it at {url}"),
     }
-    // On its own line, for a caller without `--json` to hand to `notify brief <id>`.
+    // For `notify brief <id>`.
     println!("{id}");
     Ok(())
 }
 
-/// The brief's round in a new conversation titled `title`, or in the default one, with what the
-/// box files before it: the conversation it went in, and the round's answer when one ran.
+/// The brief's conversation, and its answer if a round ran.
 fn run_brief(
     instance: &Instance,
     wired: &Wired,
@@ -2057,7 +1974,7 @@ fn run_brief(
         id
     };
 
-    // Before `converse`, so the alarm lands even when the model is unreachable.
+    // Before `converse`, so it lands even with no model.
     maybe_append_triage_alarm(
         caps.corpus,
         caps.clock,
@@ -2071,8 +1988,7 @@ fn run_brief(
     Ok((id, answered))
 }
 
-/// The brief's round in `id`; under `limited`, no round: a box round under a limit writes no
-/// question and no failure, and one note says why, so `notify brief` still points the owner at it.
+/// The brief's round; under `limited`, only a note saying why.
 fn ask_brief(
     instance: &Instance,
     wired: &Wired,
@@ -2088,8 +2004,6 @@ fn ask_brief(
             &instance.settables,
             chains,
             id,
-            // A briefing asks about the whole chain, so it points at nothing, and the box
-            // opened it.
             suzatary_core::secretary::Saying {
                 text: BRIEF,
                 references: &[],
@@ -2111,8 +2025,7 @@ fn ask_brief(
     Ok(None)
 }
 
-/// Name in today's review each conversation that does not read, paging the first time a set of
-/// them is seen; a store that does not list is said and pages nobody.
+/// Name each unreadable conversation in today's review, paging on a new set.
 fn name_unreadable(instance: &Instance, caps: &Secretary<'_>, page_after: usize) {
     match suzatary_core::secretary::review::note_unreadable(caps, instance.persona.zone) {
         Ok(Some(page)) if page_after > 0 => {
@@ -2130,8 +2043,7 @@ fn name_unreadable(instance: &Instance, caps: &Secretary<'_>, page_after: usize)
     }
 }
 
-/// `suzatary secretary review`: settle what can be settled, hold the rest. A failed review
-/// prints and exits zero, so the triage pass that read the mail is not reported as failed.
+/// `suzatary secretary review`. A failed review exits zero, so the triage pass does not fail.
 fn review(
     instance: &Instance,
     first: Option<&str>,
@@ -2176,7 +2088,7 @@ fn review(
                 eprintln!("secretary: the outage page was not delivered: {failed:#}");
             }
             if json {
-                // Not known is null, never a count of none.
+                // Unknown is null, not 0.
                 println!(
                     "{}",
                     serde_json::json!({
@@ -2222,7 +2134,6 @@ fn review(
             println!("  {line}");
         }
     }
-    // The model's last words once, rather than once per held card that carries them.
     if let Some(text) = reviewed
         .stored
         .turns
@@ -2240,12 +2151,11 @@ fn review(
     Ok(())
 }
 
-/// The exit status of a box round that did not start because the model is under a limit: neither
-/// a success, which would stamp the day's sweep, nor a failure, which would fail the pass.
+/// Exit status of a round paused by a model limit: success would stamp the day's sweep, failure
+/// would fail the pass.
 pub const PAUSED: i32 = 3;
 
-/// Say that the box round `what` did not start for `limited`, its counts `counts` under `json`,
-/// and exit [`PAUSED`].
+/// Say the round did not start, and exit [`PAUSED`].
 fn paused(
     what: &str,
     limited: &suzatary_core::capability::Limited,
@@ -2263,7 +2173,7 @@ fn paused(
     std::process::exit(PAUSED);
 }
 
-/// `suzatary secretary sweep --dry-run`: print what a sweep would lay before the model.
+/// `suzatary secretary sweep --dry-run`.
 fn sweep_dry_run(instance: &Instance, first: Option<&str>, json: bool) -> anyhow::Result<()> {
     let wired = wired(instance, first)?;
     let chains = wired.bound();
@@ -2303,12 +2213,8 @@ fn sweep_dry_run(instance: &Instance, first: Option<&str>, json: bool) -> anyhow
     Ok(())
 }
 
-/// A sweep's outcome as the verb answers it: a refusal is printed and is the verb's error, so the
-/// exit status the triage wrapper reads says the day went unswept, while every open todo stays
-/// where it was.
-///
-/// # Errors
-/// The refusal, after it is printed.
+/// A sweep's refusal is printed and becomes the error, so the exit status says the day went
+/// unswept.
 pub fn swept_or_failed<T>(
     outcome: Result<T, suzatary_core::refusal::Refusal>,
     json: bool,
@@ -2331,7 +2237,7 @@ pub fn swept_or_failed<T>(
     })
 }
 
-/// `suzatary secretary sweep`: propose closings from the open list's later mail.
+/// `suzatary secretary sweep`.
 fn sweep(instance: &Instance, first: Option<&str>, json: bool) -> anyhow::Result<()> {
     let wired = wired(instance, first)?;
     let chains = wired.bound();
@@ -2389,8 +2295,7 @@ fn sweep(instance: &Instance, first: Option<&str>, json: bool) -> anyhow::Result
     Ok(())
 }
 
-/// `suzatary secretary reviews --since`: the delegated decisions, one line each in the store's
-/// own words, so a briefing and a person reading the file see the same sentence.
+/// `suzatary secretary reviews`, in the store's own words.
 fn reviews(instance: &Instance, since: Option<&str>) -> anyhow::Result<()> {
     let day = match since {
         None => instance.persona.zone.day(prodrome_core::fpl::instant_of(
@@ -2406,7 +2311,7 @@ fn reviews(instance: &Instance, since: Option<&str>) -> anyhow::Result<()> {
         eprintln!("secretary: {unreadable}");
     }
     let found = found.items;
-    // Outages interleave with decisions by instant, so the log cannot look complete.
+    // Outages interleave, so a gap cannot look complete.
     let failed = suzatary_core::secretary::review::failures(store.conversations(), day)
         .map_err(|refusal| anyhow::anyhow!("{}", refusal.message()))?
         .items;
@@ -2490,7 +2395,6 @@ fn show(instance: &Instance, id: &str) -> anyhow::Result<()> {
     Ok(())
 }
 
-/// A conversation's proposal lines against the inbox.
 fn lines_of(
     instance: &Instance,
     stored: &suzatary_core::secretary::store::Stored,
@@ -2500,8 +2404,7 @@ fn lines_of(
         .map_err(|refusal| anyhow::anyhow!("{}", refusal.message()))
 }
 
-/// A conversation, printed as plain text, since the model's prose is the least trusted string
-/// this program handles.
+/// Print a conversation as plain text; the model's prose is the least trusted string here.
 fn transcript(
     stored: &suzatary_core::secretary::store::Stored,
     lines: &suzatary_core::secretary::store::Lines,
@@ -2536,7 +2439,6 @@ fn transcript(
     for review in &stored.reviews {
         println!("REVIEW {review}");
     }
-    // In index order, a line the inbox cannot place where it stands.
     for line in lines.iter() {
         let standing = match line {
             suzatary_core::secretary::store::Line::Placed(standing) => standing,
@@ -2549,7 +2451,6 @@ fn transcript(
             }
         };
         let index = standing.asking.index;
-        // The wire's state and words, which the page and the secretary's verbs read too.
         let (state, said) = suzatary_core::secretary::readings::state(&standing.object.reading);
         let state = serde_json::to_value(state)
             .ok()

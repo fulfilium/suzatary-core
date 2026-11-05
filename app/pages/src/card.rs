@@ -174,7 +174,13 @@ fn coding_state(c: &CodingSession) -> &'static str {
 
 #[must_use]
 pub const fn answerable(s: ProposalState) -> bool {
-    matches!(s, ProposalState::Standing | ProposalState::Failed)
+    matches!(
+        s,
+        ProposalState::Standing
+            | ProposalState::Failed
+            | ProposalState::Refused
+            | ProposalState::Unfinished
+    )
 }
 
 fn tried(n: u32) -> String {
@@ -199,18 +205,25 @@ pub(crate) fn said(p: &ProposalRow) -> String {
         ProposalState::Applied => format!("Applied: {o}{again}"),
         ProposalState::Started => format!("Running: {o}"),
         ProposalState::Acted => format!("Done: {o}{again}"),
-        ProposalState::Failed => format!("Not sent, {}: {o}", tried(p.tries)),
+        ProposalState::Failed => format!("{}, {}: {o}", p.card.failed, tried(p.tries)),
+        ProposalState::Refused => format!(
+            "{}, {}: {o}. Trying again would be refused the same way.",
+            p.card.failed,
+            tried(p.tries)
+        ),
+        ProposalState::Unfinished => format!("Unfinished, {}: {o}", tried(p.tries)),
         ProposalState::Unknown => {
             format!("Failed, {}: {o}. {}", tried(p.tries), p.card.uncertain)
         }
         ProposalState::Checked => format!(
-            "Failed, {}: {o}. You checked Sent; it is never sent again.",
+            "Failed, {}: {o}. You checked it; it is never tried again.",
             tried(p.tries)
         ),
         ProposalState::Dismissed => format!("Dismissed: {o}"),
         // Housekeeping, never the owner's words: `outcome` is not read.
         ProposalState::Superseded => "Replaced by a later draft.".to_owned(),
         ProposalState::Withdrawn => format!("Withdrawn: {o}"),
+        ProposalState::DoneElsewhere => format!("Done another way: {o}"),
         ProposalState::Unreadable => format!("Cannot be read: {o}"),
     }
 }
@@ -516,7 +529,7 @@ fn wants(key: &Key, row: &ProposalRow, ui: &Ui, ev: Ev) -> Wants {
         Ev::Dismiss => reason(|reason| Answering::Dismiss { reason }, "dismissed"),
         Ev::Drop => reason(|reason| Answering::Drop { reason }, "Dropped"),
         Ev::Acknowledge => {
-            Wants::Answer(Answering::Acknowledge, "Checked".to_owned(), Secret::None)
+            Wants::Answer(Answering::Acknowledge, row.card.check.clone(), Secret::None)
         }
         Ev::Reply => Wants::Out(Out::Reply(key.clone())),
         Ev::Setup => match &row.card.link {
@@ -865,11 +878,7 @@ fn acts(
             } else {
                 vec![
                     line,
-                    Some(button(
-                        "act act-acknowledge",
-                        "I checked Sent",
-                        Ev::Acknowledge,
-                    )),
+                    Some(button("act act-acknowledge", &card.check, Ev::Acknowledge)),
                 ]
             }
         });

@@ -1,9 +1,10 @@
-//! A proposal's card, derived once: every word and answer is decided here, so the web app draws
-//! any card with one function and never asks which kind it is.
+//! Every card's words and answers are decided here, so the web app draws any card with one
+//! function and never asks its kind.
 
 use crate::coding::RoutineId;
 use crate::repos::Visibility;
 use crate::secretary::inbox_reading::Reading;
+use crate::secretary::responded::{Responded, Tried};
 use crate::secretary::store::Style;
 use crate::web::WebKind;
 use crate::wire::{
@@ -159,8 +160,6 @@ pub fn of(act: &ProposedAct) -> Card {
     }
 }
 
-/// The box's Google Cloud client: every step to make it, numbered, with the address it must
-/// list written into its step, and a field the downloaded file is pasted into whole.
 fn google_client(redirect: &str, steps: &[String]) -> Card {
     let numbered: Vec<String> = steps
         .iter()
@@ -201,8 +200,7 @@ fn google_client(redirect: &str, steps: &[String]) -> Card {
     }
 }
 
-/// A sign-in with Google: the tap opens a consent, whose page the card's button opens while it
-/// is open.
+/// The tap opens a consent; the card's button opens its page while it is open.
 fn google_sign_in(account: &str, parts: &[String], consent: Option<&str>, sentence: &str) -> Card {
     Card {
         answers: vec![CardAnswer {
@@ -236,7 +234,6 @@ fn google_sign_in(account: &str, parts: &[String], consent: Option<&str>, senten
     }
 }
 
-/// An event to add to a Google account's own calendar.
 fn calendar_event(account: &str, event: &str, sentence: &str) -> Card {
     Card {
         answers: vec![CardAnswer {
@@ -258,7 +255,7 @@ fn calendar_event(account: &str, event: &str, sentence: &str) -> Card {
     }
 }
 
-/// A Microsoft account's consent to send: the device-code sign-in for the SMTP grant alone.
+/// The device-code sign-in for the SMTP grant alone.
 fn auth_send(account: &str, sentence: &str) -> Card {
     Card {
         answers: vec![CardAnswer {
@@ -280,8 +277,6 @@ fn auth_send(account: &str, sentence: &str) -> Card {
     }
 }
 
-/// A connection to make: what it writes, what it may reach and the steps that follow, each a
-/// card of its own once the tap has written it.
 fn connect(
     connection: &str,
     writes: &str,
@@ -310,8 +305,7 @@ fn connect(
     }
 }
 
-/// A connection to remove: what goes and what stays; a mail account's card also offers to
-/// delete the mail kept as its cache, as its wider yes.
+/// A mail account's card also offers deleting its cached mail, as the wider yes.
 fn disconnect(
     connection: &str,
     writes: &str,
@@ -370,7 +364,7 @@ fn disconnect(
     }
 }
 
-/// One more origin a plugin may reach, named alone: the link it was read from is never stored.
+/// The origin is named alone: the link it was read from is never stored.
 fn grant(plugin: &str, origin: &str, sentence: &str) -> Card {
     Card {
         answers: vec![CardAnswer {
@@ -404,34 +398,48 @@ fn grant(plugin: &str, origin: &str, sentence: &str) -> Card {
     }
 }
 
-/// The card at its reading: the yes a tap may still perform, none where no yes is safe.
-///
-/// After a failure that sent nothing it is the main answer again as Try again, never "Always
-/// allow", whose rule was written before the act that failed.
+/// The card at its reading: only a yes that is still safe. After a failure that sent nothing,
+/// the main answer becomes Try again, never "Always allow", whose rule predates the failure.
 #[must_use]
 pub fn at(card: Card, reading: &Reading) -> Card {
     match reading {
         Reading::Standing => card,
         Reading::One(answer) if answer.response.performs() => Card {
-            // A try that lacked a grant offers the setup that gives it, beside Try again.
+            // A try that stopped partway links where it stands; one lacking a grant, its setup.
             link: answer
                 .response
-                .lacking()
-                .map(|lacking| CardLink::Setup {
-                    label: lacking.label(),
-                    template: lacking.fix().as_str().to_owned(),
+                .unfinished()
+                .map(|link| CardLink::Page {
+                    label: "See where it stands".to_owned(),
+                    href: link.to_owned(),
+                })
+                .or_else(|| {
+                    answer.response.lacking().map(|lacking| CardLink::Setup {
+                        label: lacking.label(),
+                        template: lacking.fix().as_str().to_owned(),
+                    })
                 })
                 .or(card.link),
-            answers: card
-                .answers
-                .into_iter()
-                .filter(|answer| !matches!(answer.asks, Asks::Always { .. }))
-                .take(1)
-                .map(|answer| CardAnswer {
-                    label: "Try again".to_owned(),
-                    ..answer
-                })
-                .collect(),
+            // A refusal a tap again meets offers no Try again.
+            answers: if matches!(
+                answer.response,
+                Responded::Tried {
+                    tried: Tried::Refused { .. },
+                    ..
+                }
+            ) {
+                Vec::new()
+            } else {
+                card.answers
+                    .into_iter()
+                    .filter(|answer| !matches!(answer.asks, Asks::Always { .. }))
+                    .take(1)
+                    .map(|answer| CardAnswer {
+                        label: "Try again".to_owned(),
+                        ..answer
+                    })
+                    .collect()
+            },
             ..card
         },
         Reading::One(_) | Reading::Conflict(_) | Reading::Unreadable(_) => Card {
@@ -441,8 +449,6 @@ pub fn at(card: Card, reading: &Reading) -> Card {
     }
 }
 
-/// A coding session's card: the whole task, and Start saying what a start
-/// spends and hands over.
 fn coding_session(task: &str, sentence: &str) -> Card {
     Card {
         body: task.to_owned(),
@@ -458,8 +464,7 @@ fn coding_session(task: &str, sentence: &str) -> Card {
     }
 }
 
-/// A device's card: the whole key, and a yes that this device signs, so only a device already
-/// trusted can say it.
+/// The yes is signed by the tapping device, so only a device already trusted can say it.
 fn device(actor: &str, key: &str, sentence: &str) -> Card {
     Card {
         answers: vec![CardAnswer {
@@ -481,7 +486,6 @@ fn device(actor: &str, key: &str, sentence: &str) -> Card {
     }
 }
 
-/// A decision's card: every field whole, and Record saying what it supersedes.
 fn decision(
     title: &str,
     body: &str,
@@ -514,8 +518,7 @@ fn decision(
     }
 }
 
-/// A remember card: the fact whole, and Remember; once its words are deleted, or where they are
-/// not read, what it was about and no answer, since there is nothing to show to remember.
+/// Without its words (deleted or unread) the card has no answer: there is nothing to remember.
 fn remember(words: &RememberWords, about: crate::secretary::memory::Kind, sentence: &str) -> Card {
     let about = about.as_str();
     match words {
@@ -552,8 +555,7 @@ fn remember(words: &RememberWords, about: crate::secretary::memory::Kind, senten
     }
 }
 
-/// A patch's card: the whole diff, and Open saying when the repository is public, since its
-/// branch is readable the moment it is pushed.
+/// Open warns of a public repository, whose branch is readable once pushed.
 fn patch(
     repo: &str,
     visibility: Visibility,
@@ -580,8 +582,10 @@ fn patch(
             ..answer("open", "Open pull request")
         }],
         uncertain: format!(
-            "It may have been opened. Check {repo}'s pull requests; it is never opened again."
+            "A pull request may be open. Check {repo}'s pull requests; it is never opened again."
         ),
+        check: format!("I checked {repo}'s pull requests"),
+        failed: "Not published".to_owned(),
         ..card(
             "Proposed change",
             sentence,
@@ -596,8 +600,6 @@ fn patch(
     }
 }
 
-/// A document request's card: the file, where it is, Allow once (this file, read now and
-/// attachable from the copy kept here), and Always allow this folder.
 fn document(name: &str, folder: &str, size: &str, sentence: &str) -> Card {
     let size = if size.is_empty() { "unknown" } else { size };
     Card {
@@ -640,7 +642,7 @@ fn document(name: &str, folder: &str, size: &str, sentence: &str) -> Card {
 #[must_use]
 pub(crate) fn bytes(size: u64) -> String {
     const KB: u64 = 1024;
-    // Tenths, in integers: a document's size is never near u64's limit.
+    // Integer tenths; a document's size is never near u64's limit.
     let tenths = |unit: u64| {
         let scaled = size.saturating_mul(10) / unit;
         format!("{}.{}", scaled / 10, scaled % 10)
@@ -654,7 +656,7 @@ pub(crate) fn bytes(size: u64) -> String {
     }
 }
 
-/// A web request's card: Allow, and Always allow when a rule was drafted.
+/// Always allow only when a rule was drafted.
 fn web(request: WebKind, target: &str, host: &str, always: &str, sentence: &str) -> Card {
     let mut answers = vec![CardAnswer {
         done: format!("reading {host}"),
@@ -686,8 +688,7 @@ fn web(request: WebKind, target: &str, host: &str, always: &str, sentence: &str)
     }
 }
 
-/// An email's card: every field whole, the body verbatim, and Send asking
-/// who it goes to.
+/// Every field whole, the body verbatim, and Send naming who it goes to.
 fn email(
     account: &str,
     (to, cc): (&[String], &[String]),
@@ -747,13 +748,14 @@ fn email(
             ..answer("send", "Send")
         }],
         uncertain: "It may have been sent. Check Sent; it is never sent again.".to_owned(),
+        check: "I checked Sent".to_owned(),
+        failed: "Not sent".to_owned(),
         sentence,
         ..card("Proposed email", "", fields, "send")
     }
 }
 
-/// A forward: an email's card, its original named above the note, and its question naming the
-/// original and every held value the tap sends as the message holds it.
+/// The question names the original and every held value the tap sends.
 fn forward(
     email: Card,
     to: &str,
@@ -790,13 +792,12 @@ fn forward(
     }
 }
 
-/// A card with the defaults every kind shares: no body, rows or problem, and the read-only line
-/// in the main verb's words.
+/// The defaults every kind shares; `verb` words the read-only line.
 fn card(title: &str, sentence: &str, fields: Vec<CardField>, verb: &str) -> Card {
     Card {
         title: title.to_owned(),
         by: Asker::Secretary {},
-        // An act's sentence is an imperative written to follow a name; on a card it stands alone.
+        // An act's sentence is written to follow a name; on a card it stands alone.
         sentence: crate::secretary::noticed::said(sentence),
         fields,
         body: String::new(),
@@ -805,6 +806,8 @@ fn card(title: &str, sentence: &str, fields: Vec<CardField>, verb: &str) -> Card
         problem: String::new(),
         answers: Vec::new(),
         uncertain: "It may have gone through; it is never done again.".to_owned(),
+        check: "I checked".to_owned(),
+        failed: "Not done".to_owned(),
         readonly: format!(
             "This device can read this but not {verb} it. Use one of your own devices."
         ),
@@ -812,8 +815,7 @@ fn card(title: &str, sentence: &str, fields: Vec<CardField>, verb: &str) -> Card
     }
 }
 
-/// A secret: a labelled field the value goes in, and the template's words on where to find it;
-/// its stored name is the box's alone and never drawn.
+/// The secret's stored name is the box's alone and never drawn.
 fn secret(label: &str, found: Option<&str>, link: Option<&str>) -> Card {
     Card {
         answers: vec![CardAnswer {
@@ -836,9 +838,7 @@ fn secret(label: &str, found: Option<&str>, link: Option<&str>) -> Card {
     }
 }
 
-/// A secret the box asks for, as the wire carries it on a deployment whose `[coding]` declares
-/// `routine` and whose model's credential is stored under `model`: in the owner's words, its
-/// stored name left on the box.
+/// A secret ask in the owner's words; its stored name stays on the box.
 #[must_use]
 pub fn secret_act(name: &str, routine: Option<&RoutineId>, model: Option<&str>) -> ProposedAct {
     if model == Some(name) {
@@ -865,7 +865,6 @@ pub(crate) fn capitalised(words: &str) -> String {
         .unwrap_or_default()
 }
 
-/// Connect a model: the tap starts the deployment's sign-in.
 fn sign_in(sentence: &str) -> Card {
     Card {
         answers: vec![CardAnswer {
@@ -877,7 +876,7 @@ fn sign_in(sentence: &str) -> Card {
     }
 }
 
-/// The secret store, locked: the tap asks it again once it is unlocked at the box.
+/// The tap asks the store again once it is unlocked at the box.
 fn unlock_store(sentence: &str) -> Card {
     Card {
         answers: vec![CardAnswer {
@@ -889,7 +888,6 @@ fn unlock_store(sentence: &str) -> Card {
     }
 }
 
-/// A changeset to a chain, row by row.
 fn changeset(changes: &[crate::wire::ProposedObject], problem: &str) -> Card {
     let n = changes.len();
     Card {
@@ -913,7 +911,6 @@ fn changeset(changes: &[crate::wire::ProposedObject], problem: &str) -> Card {
     }
 }
 
-/// The turns around a forgotten fact, offered for erasure.
 fn erase(sentence: &str) -> Card {
     Card {
         answers: vec![CardAnswer {
@@ -937,8 +934,7 @@ fn erase(sentence: &str) -> Card {
     }
 }
 
-/// One answer that starts the request again: the tap only copies the owner's own words into a
-/// new topic, so it needs no second step.
+/// No second step: the tap only copies the owner's own words into a new topic.
 fn afresh(sentence: &str) -> Card {
     Card {
         answers: vec![CardAnswer {
@@ -954,7 +950,7 @@ fn afresh(sentence: &str) -> Card {
     }
 }
 
-/// The code a sign-in waits for: its link, the box's own reading of the CLI, and a field.
+/// The link is the box's own reading of the CLI.
 fn sign_in_code(url: &str, sentence: &str) -> Card {
     Card {
         answers: vec![CardAnswer {
@@ -980,7 +976,7 @@ fn sign_in_code(url: &str, sentence: &str) -> Card {
     }
 }
 
-/// The answer `verb`, drawn as `label`, tapped at once; a caller says what it asks first.
+/// Asks nothing first unless the caller says so.
 fn answer(verb: &str, label: &str) -> CardAnswer {
     CardAnswer {
         verb: verb.to_owned(),

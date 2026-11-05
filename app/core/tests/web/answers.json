@@ -552,6 +552,8 @@
               "by": {
                 "kind": "triage"
               },
+              "check": "",
+              "failed": "",
               "fields": [],
               "files": [],
               "link": null,
@@ -711,6 +713,8 @@
               "by": {
                 "kind": "secretary"
               },
+              "check": "I checked Sent",
+              "failed": "Not sent",
               "fields": [
                 {
                   "label": "From",
@@ -770,6 +774,8 @@
               "by": {
                 "kind": "secretary"
               },
+              "check": "I checked Sent",
+              "failed": "Not sent",
               "fields": [
                 {
                   "label": "From",
@@ -829,6 +835,8 @@
               "by": {
                 "kind": "secretary"
               },
+              "check": "I checked Sent",
+              "failed": "Not sent",
               "fields": [
                 {
                   "label": "From",
@@ -897,6 +905,8 @@
               "by": {
                 "kind": "secretary"
               },
+              "check": "I checked Sent",
+              "failed": "Not sent",
               "fields": [
                 {
                   "label": "From",
@@ -956,6 +966,8 @@
               "by": {
                 "kind": "secretary"
               },
+              "check": "I checked Sent",
+              "failed": "Not sent",
               "fields": [
                 {
                   "label": "From",
@@ -1015,6 +1027,8 @@
               "by": {
                 "kind": "secretary"
               },
+              "check": "I checked Sent",
+              "failed": "Not sent",
               "fields": [
                 {
                   "label": "From",
@@ -1074,6 +1088,8 @@
               "by": {
                 "kind": "secretary"
               },
+              "check": "I checked Sent",
+              "failed": "Not sent",
               "fields": [
                 {
                   "label": "From",
@@ -1133,6 +1149,8 @@
               "by": {
                 "kind": "secretary"
               },
+              "check": "I checked Sent",
+              "failed": "Not sent",
               "fields": [
                 {
                   "label": "From",
@@ -1192,6 +1210,8 @@
               "by": {
                 "kind": "secretary"
               },
+              "check": "I checked Sent",
+              "failed": "Not sent",
               "fields": [
                 {
                   "label": "From",
@@ -3200,6 +3220,8 @@
                 "by": {
                   "kind": "secretary"
                 },
+                "check": "I checked Sent",
+                "failed": "Not sent",
                 "fields": [
                   {
                     "label": "From",
@@ -3344,6 +3366,8 @@
                 "by": {
                   "kind": "secretary"
                 },
+                "check": "I checked Sent",
+                "failed": "Not sent",
                 "fields": [
                   {
                     "label": "From",
@@ -3403,6 +3427,8 @@
                 "by": {
                   "kind": "secretary"
                 },
+                "check": "I checked Sent",
+                "failed": "Not sent",
                 "fields": [
                   {
                     "label": "From",
@@ -3462,6 +3488,8 @@
                 "by": {
                   "kind": "secretary"
                 },
+                "check": "I checked Sent",
+                "failed": "Not sent",
                 "fields": [
                   {
                     "label": "From",
@@ -3530,6 +3558,8 @@
                 "by": {
                   "kind": "secretary"
                 },
+                "check": "I checked Sent",
+                "failed": "Not sent",
                 "fields": [
                   {
                     "label": "From",
@@ -3589,6 +3619,8 @@
                 "by": {
                   "kind": "secretary"
                 },
+                "check": "I checked Sent",
+                "failed": "Not sent",
                 "fields": [
                   {
                     "label": "From",
@@ -3648,6 +3680,8 @@
                 "by": {
                   "kind": "secretary"
                 },
+                "check": "I checked Sent",
+                "failed": "Not sent",
                 "fields": [
                   {
                     "label": "From",
@@ -3707,6 +3741,8 @@
                 "by": {
                   "kind": "secretary"
                 },
+                "check": "I checked Sent",
+                "failed": "Not sent",
                 "fields": [
                   {
                     "label": "From",
@@ -3766,6 +3802,8 @@
                 "by": {
                   "kind": "secretary"
                 },
+                "check": "I checked Sent",
+                "failed": "Not sent",
                 "fields": [
                   {
                     "label": "From",
@@ -3825,6 +3863,8 @@
                 "by": {
                   "kind": "secretary"
                 },
+                "check": "I checked Sent",
+                "failed": "Not sent",
                 "fields": [
                   {
                     "label": "From",
@@ -3964,6 +4004,8 @@
                 "by": {
                   "kind": "secretary"
                 },
+                "check": "I checked Sent",
+                "failed": "Not sent",
                 "fields": [
                   {
                     "label": "From",
@@ -4075,6 +4117,8 @@
                 "by": {
                   "kind": "secretary"
                 },
+                "check": "I checked Sent",
+                "failed": "Not sent",
                 "fields": [
                   {
                     "label": "From",
@@ -4134,6 +4178,8 @@
                 "by": {
                   "kind": "secretary"
                 },
+                "check": "I checked Sent",
+                "failed": "Not sent",
                 "fields": [
                   {
                     "label": "From",
@@ -4202,6 +4248,8 @@
                 "by": {
                   "kind": "secretary"
                 },
+                "check": "I checked Sent",
+                "failed": "Not sent",
                 "fields": [
                   {
                     "label": "From",
@@ -4261,6 +4309,8 @@
                 "by": {
                   "kind": "secretary"
                 },
+                "check": "I checked Sent",
+                "failed": "Not sent",
                 "fields": [
                   {
                     "label": "From",
@@ -4320,6 +4370,8 @@
                 "by": {
                   "kind": "secretary"
                 },
+                "check": "I checked Sent",
+                "failed": "Not sent",
                 "fields": [
                   {
                     "label": "From",
@@ -4379,6 +4431,8 @@
                 "by": {
                   "kind": "secretary"
                 },
+                "check": "I checked Sent",
+                "failed": "Not sent",
                 "fields": [
                   {
                     "label": "From",
@@ -4438,6 +4492,8 @@
                 "by": {
                   "kind": "secretary"
                 },
+                "check": "I checked Sent",
+                "failed": "Not sent",
                 "fields": [
                   {
                     "label": "From",
@@ -4497,6 +4553,8 @@
                 "by": {
                   "kind": "secretary"
                 },
+                "check": "I checked Sent",
+                "failed": "Not sent",
                 "fields": [
                   {
                     "label": "From",

@@ -51,6 +51,8 @@
         }
       ],
       "uncertain": "It may have been sent. Check Sent; it is never sent again.",
+      "check": "I checked Sent",
+      "failed": "Not sent",
       "readonly": "This device can read this but not send it. Use one of your own devices.",
       "link": null
     },
@@ -110,6 +112,8 @@
       "problem": "",
       "answers": [],
       "uncertain": "It may have been sent. Check Sent; it is never sent again.",
+      "check": "I checked Sent",
+      "failed": "Not sent",
       "readonly": "This device can read this but not send it. Use one of your own devices.",
       "link": null
     },
@@ -169,6 +173,8 @@
       "problem": "",
       "answers": [],
       "uncertain": "It may have been sent. Check Sent; it is never sent again.",
+      "check": "I checked Sent",
+      "failed": "Not sent",
       "readonly": "This device can read this but not send it. Use one of your own devices.",
       "link": null
     },
@@ -237,6 +243,8 @@
         }
       ],
       "uncertain": "It may have been sent. Check Sent; it is never sent again.",
+      "check": "I checked Sent",
+      "failed": "Not sent",
       "readonly": "This device can read this but not send it. Use one of your own devices.",
       "link": null
     },
@@ -296,6 +304,8 @@
       "problem": "",
       "answers": [],
       "uncertain": "It may have been sent. Check Sent; it is never sent again.",
+      "check": "I checked Sent",
+      "failed": "Not sent",
       "readonly": "This device can read this but not send it. Use one of your own devices.",
       "link": null
     },
@@ -355,6 +365,8 @@
       "problem": "",
       "answers": [],
       "uncertain": "It may have been sent. Check Sent; it is never sent again.",
+      "check": "I checked Sent",
+      "failed": "Not sent",
       "readonly": "This device can read this but not send it. Use one of your own devices.",
       "link": null
     },
@@ -414,6 +426,8 @@
       "problem": "",
       "answers": [],
       "uncertain": "It may have been sent. Check Sent; it is never sent again.",
+      "check": "I checked Sent",
+      "failed": "Not sent",
       "readonly": "This device can read this but not send it. Use one of your own devices.",
       "link": null
     },
@@ -473,6 +487,8 @@
       "problem": "",
       "answers": [],
       "uncertain": "It may have been sent. Check Sent; it is never sent again.",
+      "check": "I checked Sent",
+      "failed": "Not sent",
       "readonly": "This device can read this but not send it. Use one of your own devices.",
       "link": null
     },
@@ -532,6 +548,8 @@
       "problem": "",
       "answers": [],
       "uncertain": "It may have been sent. Check Sent; it is never sent again.",
+      "check": "I checked Sent",
+      "failed": "Not sent",
       "readonly": "This device can read this but not send it. Use one of your own devices.",
       "link": null
     },

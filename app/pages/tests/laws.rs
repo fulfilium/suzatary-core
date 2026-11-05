@@ -660,7 +660,15 @@ fn device() -> impl Strategy<Value = Value> {
 fn proposal(index: usize) -> impl Strategy<Value = Value> {
     (
         prop::sample::select(vec!["secret", "grant", "email"]),
-        prop::sample::select(vec!["standing", "failed", "unknown", "sent"]),
+        prop::sample::select(vec![
+            "standing",
+            "failed",
+            "refused",
+            "unfinished",
+            "unknown",
+            "sent",
+            "doneelsewhere",
+        ]),
         prop::sample::select(vec![json!({"kind": "setup"}), json!({"kind": "secretary"}), json!({"kind": "triage"})]),
         prop::sample::select(vec!["", "This changeset no longer applies"]),
         prop::sample::select(vec![
@@ -687,7 +695,7 @@ fn proposal(index: usize) -> impl Strategy<Value = Value> {
             json!({"index": index, "act": act, "why": "Because", "sources": ["todo:life/renewcard"], "at": "2026-10-05T04:00:00",
                 "state": state, "outcome": "", "tries": 0, "turn": 1, "coding": null, "announced": null, "revises": null,
                 "card": {"title": "A card", "by": by, "sentence": "Do it.", "fields": [{"label": "To", "value": "ada@example.test"}],
-                    "body": "", "rows": [], "files": [], "problem": problem, "answers": [answer], "uncertain": "Check Sent.",
+                    "body": "", "rows": [], "files": [], "problem": problem, "answers": [answer], "uncertain": "Check Sent.", "check": "I checked Sent", "failed": "Not sent",
                     "readonly": "You may read this.", "link": link}})
         })
 }

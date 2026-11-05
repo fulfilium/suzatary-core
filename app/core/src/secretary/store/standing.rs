@@ -4,31 +4,29 @@ use super::Asking;
 use crate::capability::Datetime;
 use crate::secretary::responded::{Done, Responded, Tried, Withdrawal};
 
-/// A proposal and whatever became of it: its line joined with its inbox object
-/// ([`Stored::standing`](super::Stored::standing)).
+/// A proposal's conversation line joined with its inbox object.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Standing {
     /// The proposal as its conversation records it.
     pub asking: Asking,
-    /// Its inbox object: the act, its reasons and its reading.
+    /// Its inbox object.
     pub object: crate::secretary::inbox::Object,
-    /// The proposal it replaces, and how much of that one it carries.
+    /// The proposal it replaces.
     pub revises: Option<Revised>,
 }
 
-/// The proposal a card replaces, as its reader is shown it.
+/// The proposal a card replaces.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Revised {
     /// The replaced proposal's index in the same conversation.
     pub card: usize,
-    /// How many of this card's changeset rows, from the first, the replaced card already asked
-    /// for: every row after them is new. `0` where either is not a changeset.
+    /// How many leading changeset rows the replaced card already asked for; `0` unless both are
+    /// changesets.
     pub carried: usize,
 }
 
-/// Why proposal `index`, at `reading`, may not be withdrawn or revised: only one
-/// nothing completed may, since a send that may have gone is never replaced by a second draft.
-/// `now` is only for a running flow, the one response that goes stale on its own.
+/// Why proposal `index` may not be withdrawn or revised. Only one nothing completed may: a send
+/// that may have gone is never replaced. `now` judges whether a running flow went stale.
 #[must_use]
 pub fn refused(
     index: usize,
@@ -47,7 +45,11 @@ pub fn refused(
     match reading.shown().map(|answer| &answer.response) {
         None
         | Some(Responded::Tried {
-            tried: Tried::NotSent { .. } | Tried::Lacks(_),
+            tried:
+                Tried::NotSent { .. }
+                | Tried::Lacks(_)
+                | Tried::Refused { .. }
+                | Tried::Unfinished { .. },
             ..
         }) => conflict(format!(
             "proposal {index} waits on the owner's tap; only they can answer it"
@@ -88,6 +90,9 @@ pub fn refused(
         }
         Some(Responded::Withdrawn(Withdrawal::NoLongerNeeded { why })) => {
             conflict(format!("proposal {index} was withdrawn ({why})"))
+        }
+        Some(Responded::Withdrawn(Withdrawal::DoneElsewhere { what })) => {
+            conflict(format!("proposal {index} was done another way ({what})"))
         }
     }
 }

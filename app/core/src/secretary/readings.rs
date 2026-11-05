@@ -1,10 +1,5 @@
-//! The box's readings of the secretary's two stores, the inbox and the conversations, as pure
-//! functions of their folds: what a route answers and what the tab's module answers from its
-//! replicas are these functions applied to the same objects.
-//!
-//! What lies beyond the two stores (the rendered blocks, the memory's words, a changeset drawn
-//! against its chain, the routine the deployment declares) is a [`Dress`], passed in as a value: the box dresses with its renderer, its
-//! memory and its chains, and [`Dress::BARE`] dresses with nothing.
+//! Pure readings of the inbox and the conversations; the box's routes and the tab's module apply
+//! the same functions to the same objects. Anything beyond the two stores comes in as a [`Dress`].
 
 use crate::chain_set::ChainSet;
 
@@ -24,20 +19,19 @@ use crate::secretary::store::{Forward, Proposal, Said, Standing, Stored, Style, 
 use crate::secretary::turn_shape::TurnShape;
 use crate::wire;
 
-/// One window of a conversation: the turns before `before` (the newest when `None`), at most
-/// `limit` of them, narrowed to the rounds touching `about`.
+/// At most `limit` turns before `before` (newest when `None`), narrowed to rounds touching `about`.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Window {
     /// An absolute turn index, clamped to the transcript.
     pub before: Option<usize>,
-    /// How many turns, already capped.
+    /// Already capped.
     pub limit: usize,
     /// The reference the rounds must touch.
     pub about: Option<Reference>,
 }
 
 impl Window {
-    /// The newest window, full-size, which always holds the round that just happened.
+    /// The newest full-size window.
     #[must_use]
     pub fn newest() -> Self {
         Self {
@@ -54,21 +48,19 @@ pub const DEFAULT_TURN_WINDOW: usize = 60;
 /// How many hits one search answers.
 pub const SEARCH_LIMIT: usize = 50;
 
-/// What a reading is dressed with from beyond the two stores.
+/// What a reading takes from beyond the two stores.
 #[derive(Clone, Copy)]
 pub struct Dress<'a> {
     /// Renders a model's blocks.
     pub answers: &'a dyn Answers,
-    /// The memory as its route reads it, for a receipt's words; `None` reads every receipt as
-    /// unread.
+    /// For a receipt's words; `None` reads every receipt as unread.
     pub memory: Option<&'a wire::MemoryPayload>,
     /// Draws a changeset against its chain.
     pub draws: &'a dyn Draw,
 }
 
 impl Dress<'static> {
-    /// Nothing from beyond the stores: every block as its source, every receipt unread, no
-    /// changeset drawn.
+    /// Every block as its source, every receipt unread, no changeset drawn.
     pub const BARE: Self = Self {
         answers: &Unrendered,
         memory: None,
@@ -76,27 +68,22 @@ impl Dress<'static> {
     };
 }
 
-/// A changeset drawn against the chain it names, and the routine the deployment declares:
-/// readings of the todo chains and the instance file, which only the box holds.
+/// Readings of the todo chains and the instance file, which only the box holds.
 pub trait Draw {
     /// The rows, and the box's own refusal when an act would no longer build.
     fn shown(&self, changeset: &Changeset) -> (Vec<wire::ProposedObject>, String);
     /// The routine `[coding]` declares, whose page its token's card opens.
     fn routine(&self) -> Option<&crate::coding::RoutineId>;
-    /// The name the deployment stores its model's credential under, which its card words as the
-    /// model's sign-in.
+    /// The secret name of the model's credential, which its card words as the model's sign-in.
     fn model(&self) -> Option<&str>;
-    /// The origins the instance file lets `plugin` fetch from now, `None` while it declares no
-    /// such plugin.
+    /// The origins `plugin` may fetch from now; `None` while no such plugin is declared.
     fn origins(&self, plugin: &str) -> Option<Vec<String>>;
     /// How the person reaches the app at a terminal, which a step's command is spelled in.
     fn reach(&self) -> &crate::connect::Reach;
-    /// The message or file a held value comes from, in the box's words: a message by its
-    /// sender, subject and date, a file by its source.
+    /// In the box's words: a message by sender, subject and date, a file by its source.
     fn source(&self, handle: &crate::held_value::Handle) -> String;
 }
 
-/// Renders nothing, so every block stays its source.
 struct Unrendered;
 
 impl Answers for Unrendered {
@@ -105,7 +92,6 @@ impl Answers for Unrendered {
     }
 }
 
-/// Draws nothing.
 struct Undrawn;
 
 impl Draw for Undrawn {
@@ -137,7 +123,7 @@ impl Draw for Undrawn {
 /// What a card says of a held value's message where the reading reads no mail.
 pub const UNREAD_SOURCE: &str = "from a message this reading does not look up";
 
-/// The held values `body` carries, each with its message, read with the one parse the tap reads.
+/// Parsed exactly as the tap parses it.
 fn held_in(body: &str, draws: &dyn Draw) -> wire::HeldIn {
     use crate::held_value::{Reach, Written};
     match Written::parse(body) {
@@ -161,8 +147,7 @@ fn held_in(body: &str, draws: &dyn Draw) -> wire::HeldIn {
     }
 }
 
-/// The source of the block named `sha` among a conversation's answers, earlier attempts included:
-/// what the page asks the box to render, by name and never by text.
+/// The block named `sha`, earlier attempts included; the page asks by name, never by text.
 #[must_use]
 pub fn block_named(stored: &Stored, sha: &str) -> Option<String> {
     stored.turns.iter().find_map(|said| {
@@ -183,7 +168,7 @@ pub fn block_named(stored: &Stored, sha: &str) -> Option<String> {
     })
 }
 
-/// Every conversation, newest first: what the list draws.
+/// Every conversation, newest first.
 #[must_use]
 pub fn conversations<S: std::borrow::Borrow<Stored>>(
     stored: &[S],
@@ -194,8 +179,7 @@ pub fn conversations<S: std::borrow::Borrow<Stored>>(
     }
 }
 
-/// A remember card's words as `memory` keeps them by the name the card gives them; with no
-/// memory, unread.
+/// A remember card's words, looked up by name in `memory`.
 #[must_use]
 pub fn words(text: &TextName, memory: Option<&wire::MemoryPayload>) -> Words {
     match memory {
@@ -210,8 +194,7 @@ pub fn words(text: &TextName, memory: Option<&wire::MemoryPayload>) -> Words {
     }
 }
 
-/// Every proposal in the inbox, oldest first, with its state and its value at the set's instant,
-/// priced through the chains' `set`; a remember card's headline finds its words in `memory`.
+/// Every proposal, oldest first, priced through `set` at its instant.
 #[must_use]
 pub fn inbox(
     fold: &inbox::Fold,
@@ -268,8 +251,7 @@ pub fn inbox(
     }
 }
 
-/// The proposals waiting on the owner at the set's instant, in the Inbox's order (`web/src/inbox/waiting.ts`):
-/// ascending in value, an unpriced one after every priced one, ties by id.
+/// Open proposals in `web/src/inbox/waiting.ts`'s order: ascending value, unpriced last, ties by id.
 #[must_use]
 pub fn waiting(fold: &inbox::Fold, set: &ChainSet<'_>) -> Vec<wire::InboxProposal> {
     let mut open: Vec<wire::InboxProposal> = inbox(fold, set, None)
@@ -293,7 +275,7 @@ pub fn waiting(fold: &inbox::Fold, set: &ChainSet<'_>) -> Vec<wire::InboxProposa
 /// Every conversation's turns holding `q`, newest first.
 ///
 /// # Errors
-/// [`Refusal::bad_request`] for a blank or over-long `q`.
+/// A blank or over-long `q`.
 pub fn search<S: std::borrow::Borrow<Stored>>(
     stored: &[S],
     q: &str,
@@ -312,11 +294,8 @@ pub fn search<S: std::borrow::Borrow<Stored>>(
     })
 }
 
-/// One conversation over one window of its transcript, optionally narrowed by `about`; proposals
-/// are filtered by `about` but never windowed. A function of the two stores' readings and what
-/// `dress` brings from beyond them.
-///
-/// A proposal line the inbox's reading cannot place is drawn in `unplaced`, never dropped.
+/// One window of a conversation; proposals are filtered by `about` but never windowed, and a
+/// line the inbox cannot place goes in `unplaced`, never dropped.
 #[must_use]
 pub fn conversation(
     stored: &Stored,
@@ -332,7 +311,6 @@ pub fn conversation(
         .map(|(index, _)| index)
         .collect();
     let spans = crate::secretary::about::round_spans(&stored.turns);
-    // With no `about` every span is touched, so the unfiltered path is the same windowing.
     let touched: Vec<bool> = window.about.as_ref().map_or_else(
         || vec![true; spans.len()],
         |reference| {
@@ -371,8 +349,7 @@ pub fn conversation(
             .collect(),
         proposals: lines
             .standings()
-            // `owning_span` mirrors `web/src/chat/rounds.ts`'s placement, so this drops exactly what
-            // the page would.
+            // Mirrors `web/src/chat/rounds.ts`'s placement.
             .filter(|standing| {
                 spans.is_empty()
                     || touched[crate::secretary::about::owning_span(
@@ -398,7 +375,6 @@ pub fn conversation(
     }
 }
 
-/// Every line the inbox's reading cannot place, as the wire carries it.
 fn unplaced(lines: &crate::secretary::store::Lines) -> Vec<wire::UnplacedProposal> {
     lines
         .unplaced()
@@ -429,7 +405,7 @@ fn row(stored: &Stored, fold: &inbox::Fold) -> wire::ConversationRow {
     }
 }
 
-/// Proposal `index` of `stored`, drawn by `draws`, with the session its tap started.
+/// Proposal `index`, with the session its tap started.
 pub(crate) fn drawn(
     stored: &Stored,
     index: usize,
@@ -444,7 +420,7 @@ pub(crate) fn drawn(
     }
 }
 
-/// While the act at `index` runs, the box's last line pointing at it: what the act waits for.
+/// While the act runs, the box's last line pointing at it.
 fn announced(stored: &Stored, index: usize, standing: &Standing) -> Option<String> {
     if !standing.object.reading.running() {
         return None;
@@ -467,7 +443,7 @@ fn announced(stored: &Stored, index: usize, standing: &Standing) -> Option<Strin
         })
 }
 
-/// The list's second line: the last thing said or answered as prose, never a verb's answer.
+/// The last prose line, never a verb's answer.
 fn last_line(stored: &Stored) -> String {
     let line = stored
         .live()
@@ -492,11 +468,7 @@ pub(crate) fn window(total: usize, before: usize, limit: usize) -> (usize, usize
     (start, end)
 }
 
-/// The absolute turn indices one `?about=` window draws, filtering first and then paging over the
-/// kept indices.
-///
-/// Returns `(selected, first, total)`: the indices to draw, the first of them (or `total_turns`),
-/// and the paged length.
+/// Filters, then pages. Returns `(selected, first or total_turns, paged length)`.
 fn about_window(
     spans: &[(usize, usize)],
     touched: &[bool],
@@ -517,7 +489,6 @@ fn about_window(
     (selected, first, sequence.len())
 }
 
-/// Where a turn stands: its index, and what the queue and the rewinds say of it.
 #[derive(Clone, Copy)]
 pub(crate) struct Place {
     pub(crate) index: usize,
@@ -526,7 +497,6 @@ pub(crate) struct Place {
 }
 
 impl Place {
-    /// A live turn nothing waits on.
     #[cfg(test)]
     pub(crate) fn at(index: usize) -> Self {
         Self {
@@ -570,13 +540,11 @@ pub(crate) fn turn<A: Answers + ?Sized>(
                 queued,
             },
         ),
-        // Neither the model speaking nor a verb answering, so drawn as its own kind: the box's
-        // own note as the box's, never as the owner's.
+        // The box's own note is drawn as the box's, never as the owner's.
         crate::capability::Turn::Act { text, references } => {
             row(text, acted_by(said.by.as_ref(), references.clone()))
         }
-        // The calls are not listed, since each gets its own verb turn; each block's `html` is a
-        // cached compile.
+        // Each call gets its own verb turn.
         crate::capability::Turn::Model { text, .. } => row(
             text,
             wire::Speaker::Model {
@@ -600,7 +568,6 @@ pub(crate) fn turn<A: Answers + ?Sized>(
     }
 }
 
-/// A verb's turn: its name, and how its call ended, a fact it wrote read from `memory`.
 fn verb_turn(
     verb: &crate::secretary::tool_name::ToolName,
     outcome: crate::secretary::outcome::Outcome,
@@ -619,7 +586,7 @@ fn verb_turn(
     }
 }
 
-/// Who an act turn is: the owner's act, when the gate stamped it so; the box's line otherwise.
+/// The owner's act only when the gate stamped it so; the box's otherwise.
 fn acted_by(
     by: Option<&crate::secretary::stamp::Stamp>,
     references: Vec<crate::reference::Reference>,
@@ -631,7 +598,6 @@ fn acted_by(
     }
 }
 
-/// Who said an erased turn, read off its shape, which keeps everything but the words.
 fn erased(
     shape: &TurnShape,
     by: Option<&crate::secretary::stamp::Stamp>,
@@ -644,14 +610,13 @@ fn erased(
             queued: false,
         },
         TurnShape::Model { .. } => wire::Speaker::Model { blocks: Vec::new() },
-        // The receipt is the shape's, so a remember answer whose words are gone, by a forget or
-        // by the owner's erasure, still names its fact.
+        // A remember answer whose words are erased still names its fact.
         TurnShape::Tool { verb, outcome, .. } => verb_turn(verb, *outcome, memory),
         TurnShape::Act { references } => acted_by(by, references.clone()),
     }
 }
 
-/// An answer's blocks, each rendered or not; a block the closed world refuses is its text.
+/// A block the closed world refuses stays its text.
 pub(crate) fn blocks_of<A: Answers + ?Sized>(answers: &A, text: &str) -> Vec<wire::BlockRow> {
     crate::secretary::answer::blocks(text)
         .into_iter()
@@ -667,8 +632,7 @@ pub(crate) fn blocks_of<A: Answers + ?Sized>(answers: &A, text: &str) -> Vec<wir
         .collect()
 }
 
-/// The receipt of fact `fact`, a `remember` turn's: its words from the memory, so a forgotten
-/// fact's receipt says it was forgotten and never what it said.
+/// A forgotten fact's receipt says it was forgotten, never what it said.
 fn receipt(
     fact: crate::secretary::memory::FactId,
     memory: Option<&wire::MemoryPayload>,
@@ -692,8 +656,6 @@ fn receipt(
     }
 }
 
-/// A connection to make, as its card reads it: what it writes, its steps spelled as the box
-/// reaches the app, and what its plugin may reach now.
 fn connect_on_wire(
     connection: &crate::connect::Connection,
     draws: &dyn Draw,
@@ -724,8 +686,6 @@ fn connect_on_wire(
     }
 }
 
-/// A connection to remove, as its card reads it: what goes, the secrets forgotten with it, and
-/// what the box keeps as its cache.
 fn disconnect_on_wire(
     connection: &crate::connect::Connection,
     sentence: String,
@@ -755,8 +715,7 @@ fn disconnect_on_wire(
     }
 }
 
-/// An act, as the wire carries it, its sentence on every arm; `consent` is the box's path to the
-/// consent a running sign-in opened.
+/// `consent` is the box's path to the consent a running sign-in opened.
 #[expect(clippy::too_many_lines, reason = "one arm per kind of act")]
 fn act_on_wire(
     act: &crate::secretary::acts::Act,
@@ -876,7 +835,6 @@ fn act_on_wire(
     }
 }
 
-/// One attachment as its card shows it.
 fn card_file(attached: &attached::Attached) -> wire::CardFile {
     wire::CardFile {
         name: attached.name.clone(),
@@ -901,8 +859,7 @@ fn card_file(attached: &attached::Attached) -> wire::CardFile {
     }
 }
 
-/// A proposal's state on the wire and the words beside it, from the response its reading shows,
-/// `None` while nothing answered it.
+/// A proposal's state and the words beside it.
 #[must_use]
 pub fn state(reading: &Reading) -> (wire::ProposalState, String) {
     if let Reading::Unreadable(why) = reading {
@@ -919,6 +876,14 @@ pub fn state(reading: &Reading) -> (wire::ProposalState, String) {
             ..
         }) => (wire::ProposalState::Failed, lacking.sentence()),
         Some(Responded::Tried {
+            tried: Tried::Refused { reason },
+            ..
+        }) => (wire::ProposalState::Refused, reason.clone()),
+        Some(Responded::Tried {
+            tried: Tried::Unfinished { reason, .. },
+            ..
+        }) => (wire::ProposalState::Unfinished, reason.clone()),
+        Some(Responded::Tried {
             tried: Tried::Running { began, expires_at },
             ..
         }) => (
@@ -928,7 +893,7 @@ pub fn state(reading: &Reading) -> (wire::ProposalState, String) {
         Some(Responded::Done(Done::Sent { recipients, .. })) => {
             (wire::ProposalState::Sent, recipients.join(", "))
         }
-        // The chain is named by its id alone, which is no word of the owner's, so the line counts.
+        // A chain id is no word of the owner's, so the line counts.
         Some(Responded::Done(Done::Applied { objects, .. })) => (
             wire::ProposalState::Applied,
             if objects.len() == 1 {
@@ -945,18 +910,20 @@ pub fn state(reading: &Reading) -> (wire::ProposalState, String) {
             (wire::ProposalState::Checked, check.reason().to_owned())
         }
         Some(Responded::Dismissed { reason }) => (wire::ProposalState::Dismissed, reason.clone()),
-        // Never the owner's words: a card replaced by a later one is the secretary's housekeeping.
+        // The secretary's housekeeping, never the owner's words.
         Some(Responded::Withdrawn(Withdrawal::Superseded)) => {
             (wire::ProposalState::Superseded, String::new())
         }
         Some(Responded::Withdrawn(Withdrawal::NoLongerNeeded { why })) => {
             (wire::ProposalState::Withdrawn, why.clone())
         }
+        Some(Responded::Withdrawn(Withdrawal::DoneElsewhere { what })) => {
+            (wire::ProposalState::DoneElsewhere, what.clone())
+        }
     }
 }
 
-/// A forward's card fields: its own message's, the original named in one line, and the files
-/// it sends, each opening the original.
+/// The original is named in one line; each file it sends opens the original.
 fn forward_on_wire(forward: &Forward) -> wire::ProposedAct {
     let original = &forward.message;
     let file = &original.file;
@@ -1026,7 +993,7 @@ pub(crate) fn proposal(
             held: held_in(&draft.body, draws),
         },
         Proposal::Forward(forward) => forward_on_wire(forward),
-        // The diff is derived against the chain as it stands, and only while the proposal stands.
+        // Drawn against the chain now, and only while the proposal stands.
         Proposal::Changes(changeset) => {
             let (changes, problem) = if standing.object.reading.performs() {
                 draws.shown(changeset)
@@ -1039,8 +1006,7 @@ pub(crate) fn proposal(
                 problem,
             }
         }
-        // `Act::sentence` is the one place that knows the imperative.
-        // The box's own path, which sends the browser on to the consent the tap opened.
+        // The box's own path to the consent the tap opened.
         Proposal::Act(act) => act_on_wire(
             act,
             standing
@@ -1106,7 +1072,6 @@ pub(crate) fn proposal(
     }
 }
 
-/// A session on the wire.
 fn session_on_wire(session: &crate::coding::Session) -> wire::CodingSession {
     use crate::coding::{Lines, Session};
     match session {

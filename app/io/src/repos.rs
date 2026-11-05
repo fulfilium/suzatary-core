@@ -9,7 +9,7 @@ use std::sync::Mutex;
 use std::time::{Duration, Instant};
 
 use base64::Engine as _;
-use suzatary_core::capability::{MAX_FILE_BYTES, RepoFailure, Repositories, Secret};
+use suzatary_core::capability::{InBranch, MAX_FILE_BYTES, RepoFailure, Repositories, Secret};
 use suzatary_core::coding::{
     BRANCH_PREFIX, Branch, FileStat, Lines, REPORTS_DIR, ReportFile, Seen,
 };
@@ -165,8 +165,14 @@ impl Mirrors {
         run(&Self::git(None).arg("--git-dir").arg(dir).args(args))
     }
 
-    /// Applies the patch in a scratch index, touching no ref.
-    fn staged(&self, dir: &Path, base: &CommitId, patch: &Patch) -> Result<Index, RepoFailure> {
+    /// Applies the patch in a scratch index, `how` it says, touching no ref.
+    fn staged(
+        &self,
+        dir: &Path,
+        base: &CommitId,
+        patch: &Patch,
+        how: Apply,
+    ) -> Result<Index, RepoFailure> {
         let index = Index(self.scratch()?);
         let indexed = || {
             Self::git(None)
@@ -177,7 +183,13 @@ impl Mirrors {
         succeed(&indexed().args(["read-tree", base.as_str()]))
             .map_err(refused_as_missing(|| format!("commit {}", base.short())))?;
         let applied = run(&indexed()
-            .args(["apply", "--cached", "--whitespace=nowarn", "-"])
+            .args(["apply", "--cached", "--whitespace=nowarn"])
+            .args(match how {
+                Apply::Exact => &[][..],
+                Apply::ThreeWay => &["--3way"][..],
+                Apply::Reverse => &["--reverse"][..],
+            })
+            .arg("-")
             .stdin(patch.as_str()))
         .map_err(|e| RepoFailure::Unavailable(e.to_string()))?;
         if !applied.ok() {
@@ -185,6 +197,32 @@ impl Mirrors {
         }
         Ok(index)
     }
+
+    /// The tree an index holds.
+    fn tree_of(dir: &Path, index: &Index) -> Result<String, RepoFailure> {
+        Ok(succeed(
+            &Self::git(None)
+                .env("GIT_INDEX_FILE", index.path())
+                .arg("--git-dir")
+                .arg(dir)
+                .arg("write-tree"),
+        )?
+        .out()
+        .trim()
+        .to_owned())
+    }
+}
+
+/// How a patch is applied to a commit.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Apply {
+    /// Its context must match the commit exactly, as a publish needs.
+    Exact,
+    /// Merged with what changed since, so a change the commit already holds applies as nothing.
+    /// It needs the blobs the patch's `index` lines name; without them it applies exactly.
+    ThreeWay,
+    /// Undone: it applies exactly when the commit holds the patch's result.
+    Reverse,
 }
 
 impl Mirrors {
@@ -324,35 +362,34 @@ pub struct Published {
 /// Where a publish stopped; publishing again finishes it, doing nothing twice.
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 pub enum Stopped {
-    /// Refused for good; publishing again is refused too.
-    #[error("refused: {0}")]
-    Refused(RepoFailure),
-    /// The branch holds another commit; it is never forced.
-    #[error("branch {branch} already holds another commit")]
-    Taken { branch: String },
-    /// Before anything left the box.
-    #[error("stopped before pushing: {0}")]
-    Preparing(RepoFailure),
-    /// At the push, which may have landed.
-    #[error("stopped at the push, which may have landed: {0}")]
-    Pushing(RepoFailure),
-    /// Pushed, but no pull request opened.
-    #[error("pushed {branch} ({}), stopped opening the pull request: {failure}", commit.short())]
-    Opening {
+    /// Before any push, for a cause a publish again meets; a branch is never forced.
+    #[error("{0}")]
+    Refused(String),
+    /// Before any push, for a cause that can change.
+    #[error("{0}")]
+    Failed(String),
+    /// After the push, which may have landed: a pull request may be open at `link`.
+    #[error("{failure}")]
+    Pushed {
         branch: String,
         commit: CommitId,
         failure: RepoFailure,
+        /// The repository's pull requests from `branch`.
+        link: String,
     },
 }
 
-impl Stopped {
-    fn before(failure: RepoFailure) -> Self {
+/// A failure before any push, by whether a publish again meets it.
+impl From<RepoFailure> for Stopped {
+    fn from(failure: RepoFailure) -> Self {
         match failure {
             RepoFailure::Conflict(_)
             | RepoFailure::Public(_)
             | RepoFailure::Missing(_)
-            | RepoFailure::TooLarge { .. } => Stopped::Refused(failure),
-            RepoFailure::Unknown(_) | RepoFailure::Unavailable(_) => Stopped::Preparing(failure),
+            | RepoFailure::TooLarge { .. } => Stopped::Refused(failure.to_string()),
+            RepoFailure::Unknown(_) | RepoFailure::Unavailable(_) => {
+                Stopped::Failed(failure.to_string())
+            }
         }
     }
 }
@@ -418,22 +455,42 @@ impl Mirrors {
         let commit = match self.commit(repo, base, patch, message, author, branch)? {
             Commit::Pushed(id) => id,
             Commit::Made(id) => {
-                self.push(repo, &id, branch).map_err(Stopped::Pushing)?;
+                self.push(repo, &id, branch)
+                    .map_err(|failure| self.pushed(repo, branch, &id, failure))?;
                 id
             }
         };
         let pull = self
             .pull(repo, branch, &commit, message)
-            .map_err(|failure| Stopped::Opening {
-                branch: branch.to_owned(),
-                commit: commit.clone(),
-                failure,
-            })?;
+            .map_err(|failure| self.pushed(repo, branch, &commit, failure))?;
         Ok(Published {
             commit,
             branch: branch.to_owned(),
             pull,
         })
+    }
+
+    fn pushed(
+        &self,
+        repo: &RepoName,
+        branch: &str,
+        commit: &CommitId,
+        failure: RepoFailure,
+    ) -> Stopped {
+        let link = match &self.source {
+            Source::GitHub => {
+                format!("https://github.com/{repo}/pulls?q=is%3Apr+head%3A{branch}")
+            }
+            Source::Local { .. } => self
+                .remote(repo)
+                .map_or_else(|_| String::new(), |(_, url)| format!("{url}#{branch}")),
+        };
+        Stopped::Pushed {
+            branch: branch.to_owned(),
+            commit: commit.clone(),
+            failure,
+            link,
+        }
     }
 
     /// Reuses the commit `branch` holds when it is this change, whose check already passed.
@@ -446,20 +503,17 @@ impl Mirrors {
         author: &Author,
         branch: &str,
     ) -> Result<Commit, Stopped> {
-        let (dir, tree, check) = self
-            .staged_tree(repo, base, patch)
-            .map_err(Stopped::before)?;
-        match Self::held(&dir, branch).map_err(Stopped::before)? {
+        let (dir, tree, check) = self.staged_tree(repo, base, patch).map_err(Stopped::from)?;
+        match Self::held(&dir, branch).map_err(Stopped::from)? {
             Some((id, held_tree, parent)) if held_tree == tree && parent == base.as_str() => {
                 Ok(Commit::Pushed(id))
             }
-            Some(_) => Err(Stopped::Taken {
-                branch: branch.to_owned(),
-            }),
+            Some(_) => Err(Stopped::Refused(format!(
+                "the branch {branch} already holds another commit, which is never forced"
+            ))),
             None => {
                 if let Some(check) = &check {
-                    self.checked_tree(&dir, &tree, check)
-                        .map_err(Stopped::before)?;
+                    self.checked_tree(&dir, &tree, check)?;
                 }
                 let made = succeed(
                     &Self::git(None)
@@ -472,10 +526,10 @@ impl Mirrors {
                         .args(["commit-tree", &tree, "-p", base.as_str(), "-F", "-"])
                         .stdin(message),
                 )
-                .map_err(|e| Stopped::before(e.into()))?;
+                .map_err(|e| Stopped::from(RepoFailure::from(e)))?;
                 CommitId::try_from(made.out().trim().to_owned())
                     .map(Commit::Made)
-                    .map_err(|e| Stopped::Preparing(RepoFailure::Unavailable(e.to_string())))
+                    .map_err(|e| Stopped::Failed(e.to_string()))
             }
         }
     }
@@ -497,17 +551,8 @@ impl Mirrors {
             .map_err(|_| RepoFailure::Unavailable("the fetch table is poisoned".to_owned()))?
             .remove(repo);
         let dir = self.mirror(repo)?;
-        let index = self.staged(&dir, base, patch)?;
-        let tree = succeed(
-            &Self::git(None)
-                .env("GIT_INDEX_FILE", index.path())
-                .arg("--git-dir")
-                .arg(&dir)
-                .arg("write-tree"),
-        )?
-        .out()
-        .trim()
-        .to_owned();
+        let index = self.staged(&dir, base, patch, Apply::Exact)?;
+        let tree = Self::tree_of(&dir, &index)?;
         Ok((dir, tree, check))
     }
 
@@ -694,18 +739,23 @@ impl Mirrors {
         }
     }
 
-    fn checked_tree(&self, dir: &Path, tree: &str, check: &str) -> Result<(), RepoFailure> {
-        let scratch = self.scratch()?;
-        let archive = Self::local(dir, &["archive", "--format=tar", tree])?;
-        succeed(
-            &Cmd::new("tar")
-                .arg("-x")
-                .arg("-C")
-                .arg(scratch.path())
-                .stdin(archive.stdout),
-        )?;
-        // This runs agent-proposed code and is NOT a sandbox: HOME and XDG_RUNTIME_DIR still lead
-        // to the user's files, gpg-agent and the secret store.
+    fn checked_tree(&self, dir: &Path, tree: &str, check: &str) -> Result<(), Stopped> {
+        let unpack = || -> Result<Scratch, RepoFailure> {
+            let scratch = self.scratch()?;
+            let archive = Self::local(dir, &["archive", "--format=tar", tree])?;
+            succeed(
+                &Cmd::new("tar")
+                    .arg("-x")
+                    .arg("-C")
+                    .arg(scratch.path())
+                    .stdin(archive.stdout),
+            )?;
+            Ok(scratch)
+        };
+        let scratch = unpack().map_err(Stopped::from)?;
+        // Both streams to stderr, so a failure quotes the check whole. This runs agent-proposed
+        // code and is NOT a sandbox: HOME and XDG_RUNTIME_DIR still lead to the user's files,
+        // gpg-agent and the secret store.
         let tail = match succeed(
             &Cmd::new("sh")
                 .args(["-c", &format!("exec 1>&2\n{check}")])
@@ -715,9 +765,13 @@ impl Mirrors {
             Ok(_) => return Ok(()),
             Err(RunError::Exited { stderr, .. }) => stderr.as_str().to_owned(),
             Err(RunError::TimedOut { after, .. }) => format!("timed out after {after:?}"),
-            Err(failed) => return Err(RepoFailure::Unavailable(format!("the check: {failed}"))),
+            Err(failed) => {
+                return Err(Stopped::Failed(format!(
+                    "the check could not run: {failed}"
+                )));
+            }
         };
-        Err(RepoFailure::Conflict(format!(
+        Err(Stopped::Failed(format!(
             "the check `{check}` failed:\n{tail}"
         )))
     }
@@ -1007,7 +1061,29 @@ impl Repositories for Mirrors {
 
     fn applies(&self, repo: &RepoName, base: &CommitId, patch: &Patch) -> Result<(), RepoFailure> {
         let mirror = self.mirror(repo)?;
-        self.staged(&mirror, base, patch).map(|_| ())
+        self.staged(&mirror, base, patch, Apply::Exact).map(|_| ())
+    }
+
+    fn merged(&self, repo: &RepoName, patch: &Patch) -> Result<Option<InBranch>, RepoFailure> {
+        let tip = self.resolve(repo, None)?;
+        let branch = self.row(repo)?.default_branch;
+        let dir = self.mirror(repo)?;
+        let undone = match self.staged(&dir, &tip, patch, Apply::Reverse) {
+            Ok(_) => true,
+            Err(RepoFailure::Conflict(_)) => false,
+            Err(failure) => return Err(failure),
+        };
+        let holds = undone
+            || match self.staged(&dir, &tip, patch, Apply::ThreeWay) {
+                Ok(index) => {
+                    let tree =
+                        Self::local(&dir, &["rev-parse", &format!("{}^{{tree}}", tip.as_str())])?;
+                    Self::tree_of(&dir, &index)? == tree.out().trim()
+                }
+                Err(RepoFailure::Conflict(_)) => false,
+                Err(failure) => return Err(failure),
+            };
+        Ok(holds.then_some(InBranch { branch, tip }))
     }
 
     fn pushable(&self, repo: &RepoName, visibility: Visibility) -> Result<(), RepoFailure> {
@@ -1452,7 +1528,7 @@ mod tests {
                 "secretary/x",
             )
         };
-        let Err(Stopped::Opening { commit, .. }) = publish() else {
+        let Err(Stopped::Pushed { commit, .. }) = publish() else {
             panic!("the branch is pushed and no request is opened");
         };
         assert_eq!(
@@ -1471,13 +1547,54 @@ mod tests {
         );
     }
 
+    /// A change is in the default branch once applying it to the tip changes nothing, however
+    /// many commits came after it; another change to the same lines is not that change.
+    #[test]
+    fn a_change_is_merged_once_the_default_branch_holds_it() {
+        let (temp, mirrors, repo) = fixture("merged");
+        assert_eq!(mirrors.merged(&repo, &retitle()).expect("read"), None);
+        let work = temp.path().join("work");
+        let remote = temp.path().join("remotes/bmabsout/merged.git");
+        std::fs::write(work.join("cv.typ"), "= Ada\nPrincipal investigator\n").expect("cv");
+        run(
+            &work,
+            &["commit", "-qam", "retitle, by another pull request"],
+        );
+        std::fs::write(work.join("docs/notes.md"), "notes, later\n").expect("notes");
+        run(&work, &["commit", "-qam", "later"]);
+        run(
+            &work,
+            &["push", "-q", remote.to_str().expect("a utf-8 path"), "main"],
+        );
+        let refetched = Mirrors::new(
+            temp.path().join("mirrors"),
+            Source::Local {
+                base: temp.path().join("remotes"),
+            },
+            declared(&repo),
+            Box::new(NoToken),
+        );
+        let held = refetched
+            .merged(&repo, &retitle())
+            .expect("read")
+            .expect("merged");
+        assert_eq!(held.branch, "main");
+        assert_eq!(held.tip, refetched.resolve(&repo, None).expect("the tip"));
+        let other = Patch::try_from(
+            "--- a/cv.typ\n+++ b/cv.typ\n@@ -1,2 +1,2 @@\n = Ada\n-Research engineer\n+Professor\n"
+                .to_owned(),
+        )
+        .expect("a patch");
+        assert_eq!(refetched.merged(&repo, &other).expect("read"), None);
+    }
+
     #[test]
     fn a_failing_check_pushes_nothing() {
         let (temp, mirrors, repo) = checked_fixture("chk", Some("echo broken; exit 3"));
         let base = mirrors.resolve(&repo, None).expect("a head");
         let refused = mirrors.publish(&repo, &base, &retitle(), "x", &author(), "secretary/x");
         assert!(
-            matches!(&refused, Err(Stopped::Refused(RepoFailure::Conflict(said))) if said.contains("broken")),
+            matches!(&refused, Err(Stopped::Failed(said)) if said.contains("broken")),
             "{refused:?}"
         );
         assert_eq!(
@@ -1527,7 +1644,7 @@ mod tests {
         )
         .expect("a patch");
         let stale = mirrors.publish(&repo, &base, &other, "second", &author(), "secretary/one");
-        assert!(matches!(stale, Err(Stopped::Taken { .. })), "{stale:?}");
+        assert!(matches!(stale, Err(Stopped::Refused(_))), "{stale:?}");
         assert_eq!(
             on_remote(&temp, "moved", &["rev-parse", "secretary/one"]),
             first.commit.as_str()

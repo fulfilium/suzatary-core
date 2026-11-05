@@ -319,6 +319,13 @@ impl Repositories for Fixed {
     ) -> Result<(), RepoFailure> {
         Ok(())
     }
+    fn merged(
+        &self,
+        _repo: &RepoName,
+        _patch: &Patch,
+    ) -> Result<Option<suzatary_core::capability::InBranch>, RepoFailure> {
+        Ok(None)
+    }
     fn pushable(&self, _repo: &RepoName, _visibility: Visibility) -> Result<(), RepoFailure> {
         Ok(())
     }

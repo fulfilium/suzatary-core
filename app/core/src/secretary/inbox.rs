@@ -1,15 +1,11 @@
-//! The inbox: its own prodrome at its own schema ([`InboxEvent`]), where a proposal is asked
-//! once and each response is a write to its state register, a machine that only climbs
+//! The inbox: a prodrome of its own schema ([`InboxEvent`]). A proposal is asked once, and each
+//! response is a write to its state register, a machine that only climbs
 //! ([`crate::secretary::phase::Phase`]).
 //!
-//! Its id is its content ([`ProposalId::of`] hashes the act, and the instant for an act that
-//! recurs), so the same draft proposed twice is one object, and [`submit`] runs the effect only
-//! while the state register's reading says it still stands: a retried or second submit gets the
-//! recorded response. Every reading here ([`fold`]) is monotone in the objects and takes no
-//! lock; only the writes ask a negation of it, under the inbox's one lock.
-//!
-//! The act is a literal of the inbox's own vocabulary
-//! ([`crate::secretary::act_vocabulary`]), read by the walker that reads every other field.
+//! A proposal's id hashes its content, so the same draft proposed twice is one object. [`submit`]
+//! performs only while the reading says the proposal still stands; a retry gets the recorded
+//! response. Readings are monotone and take no lock; only writes ask a negation, under the
+//! inbox's one lock.
 
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -37,10 +33,8 @@ use crate::secretary::tapped::Tapped;
 use crate::store::Prodrome;
 use prodrome_core::literal::codec::{Constructor, Fields, Literal};
 
-/// Its fulfillment at the set's instant, its price linked in `set`: what it serves, read as that
-/// todo's chain reads it, and `∅` for a chain or a todo the set does not hold; `None` where its
-/// own spec names something nothing links, or its askings do not price ([`Fold::findings`] says
-/// why).
+/// Its fulfillment at the set's instant, priced through `set`; `∅` for a todo the set does not
+/// hold, `None` where its spec does not link or price.
 #[must_use]
 pub fn value(object: &Object, set: &ChainSet<'_>) -> Option<crate::wire::Fulfillment> {
     let price = object.price.as_ref().ok()?;
@@ -53,9 +47,7 @@ pub fn value(object: &Object, set: &ChainSet<'_>) -> Option<crate::wire::Fulfill
 /// One proposal, as the inbox stores it.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Asked {
-    /// Who asked for it: the secretary's is printed `Asked`, the triage agent's `Triaged`, a
-    /// plugin's `Offered` with the plugin's name and the box's own `Noticed`, so no stored `Asked`
-    /// moved when others began to propose.
+    /// Who asked for it; its constructor (`Asked`, `Triaged`, `Offered`, `Noticed`) is stored.
     pub proposer: Proposer,
     /// The act, whole: what the card shows is what a submit performs.
     pub proposal: Proposal,
@@ -70,15 +62,14 @@ pub struct Asked {
 /// What prices a proposal: the todo it serves, or a spec of its own where it serves none.
 #[derive(Debug, Clone, PartialEq)]
 pub enum Price {
-    /// It serves this todo, so it is priced as that todo is: stored `serves=<todo>, spec=None`.
+    /// Priced as this todo: stored `serves=<todo>, spec=None`.
     Serves(TodoRef),
-    /// It serves no todo and carries its own spec, the empty term while nothing prices it: stored
-    /// `serves=None, spec=<term>`, the empty term as `spec=None`.
+    /// Its own spec: stored `serves=None, spec=<term>`, the empty term as `spec=None`.
     Own(Term),
 }
 
 impl Price {
-    /// No todo and no spec of its own: the empty term, whose value is `∅`.
+    /// The empty term, whose value is `∅`.
     #[must_use]
     pub fn unpriced() -> Self {
         Price::Own(mk_absent())
@@ -93,13 +84,11 @@ impl Price {
         }
     }
 
-    /// Its term: `RefIn(<chain>, <todo>)` for what it serves, so it moves exactly when that
-    /// todo's history does, and its own spec where it serves none.
+    /// Its term: `RefIn(<chain>, <todo>)` for a todo it serves, else its own spec.
     #[must_use]
     pub fn term(&self) -> Term {
         match self {
-            // Built whole rather than through `mk_ref_in`, whose checks the reference's own types
-            // already made: a chain name is a todo id's alphabet, and a todo id holds no `/`.
+            // Not `mk_ref_in`: the reference's types already made its checks.
             Price::Serves(TodoRef { chain, id }) => Term::new(TermF::Ref {
                 store: Some(chain.as_str().to_owned()),
                 entity: id.as_str().to_owned(),
@@ -108,8 +97,7 @@ impl Price {
         }
     }
 
-    /// Its two stored fields, `serves` and `spec`; the empty term is stored `spec=None`, so it has
-    /// one spelling on disk.
+    /// Its stored `serves` and `spec`.
     fn fields(&self) -> [Value; 2] {
         match self {
             Price::Serves(todo) => [todo.to_value(), Value::None],
@@ -118,7 +106,7 @@ impl Price {
         }
     }
 
-    /// Read back what [`Price::fields`] printed: a todo, or a spec, never both.
+    /// Read back what [`Price::fields`] printed.
     fn of_fields(fields: Fields<'_>) -> Result<Self, ProdromeError> {
         match (
             fields.get::<Option<TodoRef>>("serves")?,
@@ -135,17 +123,14 @@ impl Price {
 }
 
 impl Asked {
-    /// Whether asking it again later is a new request ([`ProposalId::of`]): an act meant to
-    /// recur, asked by anyone but the box, whose proposals are functions of a reading and so of
-    /// their content alone, but where a reading's card has episodes
-    /// ([`Proposal::episodic`]).
+    /// Whether asking it again later is a new request: a recurring act, unless the box asked it
+    /// and the act has no episodes ([`Proposal::episodic`]).
     #[must_use]
     pub fn recurs(&self) -> bool {
         self.proposal.recurs() && (self.proposer != Proposer::Box || self.proposal.episodic())
     }
 
-    /// Its constructor's own fields, after the proposal, the instant and the actor, and their
-    /// values.
+    /// Its constructor and field values, after the proposal, the instant and the actor.
     pub(crate) fn body(&self) -> (Constructor, Vec<Value>) {
         let [serves, spec] = self.price.fields();
         let asked = [
@@ -170,9 +155,6 @@ impl Asked {
     }
 
     /// Read back what [`Asked::body`] printed.
-    ///
-    /// # Errors
-    /// [`ProdromeError`] naming the field that does not read.
     pub(crate) fn of_fields(fields: Fields<'_>) -> Result<Self, ProdromeError> {
         let invalid =
             |failed: String| ProdromeError::invalid(format!("{}: {failed}", fields.name()));
@@ -198,34 +180,33 @@ impl Asked {
     }
 }
 
-/// `Asked(act, why, sources, asked, serves, spec)`: the secretary's asking, after the head.
+/// The secretary's asking, after the head.
 pub const ASKED: Constructor = (
     "Asked",
     &["act", "why", "sources", "asked", "serves", "spec"],
 );
-/// `Noticed(..)`: the box's own, the same fields.
+/// The box's own asking.
 pub const NOTICED: Constructor = (
     "Noticed",
     &["act", "why", "sources", "asked", "serves", "spec"],
 );
-/// `Triaged(..)`: the triage agent's, the same fields.
+/// The triage agent's asking.
 pub const TRIAGED: Constructor = (
     "Triaged",
     &["act", "why", "sources", "asked", "serves", "spec"],
 );
-/// `Offered(plugin, ..)`: a plugin's, naming it.
+/// A plugin's asking, naming it.
 pub const OFFERED: Constructor = (
     "Offered",
     &["plugin", "act", "why", "sources", "asked", "serves", "spec"],
 );
 
-/// What a proposal is, as its name is the content of: its act, and the instant it was asked when
-/// the act recurs ([`Asked::recurs`]). Never stored: only its print is hashed.
+/// What a proposal's name hashes: its act, with the instant when the act recurs. Never stored.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Identity {
-    /// An act that is the same request whenever it is asked: the act's own literal.
+    /// The same request whenever asked: the act's own literal.
     Once(Proposal),
-    /// An act meant to recur, asked at `at`: `Recurring(at, act)`.
+    /// A recurring act, asked at `at`.
     Recurring {
         /// When it was asked.
         at: Datetime,
@@ -234,7 +215,6 @@ pub enum Identity {
     },
 }
 
-/// `Recurring(at, act)`.
 const RECURRING: prodrome_core::literal::codec::Constructor = ("Recurring", &["at", "act"]);
 
 impl Identity {
@@ -276,10 +256,9 @@ impl Literal for Identity {
     }
 }
 
-/// A proposal's name: `p` and the first 32 hex digits of its [`Identity`]'s [`ContentId`],
-/// given when the content is first asked. It names, it does not identify: a proposal carried
-/// from an earlier print keeps the name that print gave it, and the reading names every
-/// proposal by its content as well ([`Fold::holding`]).
+/// A proposal's name: `p` and the first 32 hex digits of its [`Identity`]'s [`ContentId`]. It
+/// names, it does not identify: an older print keeps its name, so look one up by content with
+/// [`Fold::holding`].
 #[derive(
     Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, serde::Serialize, serde::Deserialize,
 )]
@@ -301,23 +280,16 @@ impl From<ProposalId> for String {
 
 impl ProposalId {
     /// The id `asked`, asked at `at`, is stored under.
-    ///
-    /// # Panics
-    /// Never: `p` and hex digits are a todo id.
     #[must_use]
     pub fn of(asked: &Asked, at: Datetime) -> Self {
         Self::named(&ContentId::of(&Identity::of(asked, at)))
     }
 
-    /// The name an identity's content id gives.
     fn named(content: &ContentId<Identity>) -> Self {
         Self(TodoId::new(format!("p{}", &content.as_str()[..32])).expect("hex is a todo id"))
     }
 
     /// Parse one read back off a conversation line.
-    ///
-    /// # Errors
-    /// [`ProdromeError`] for text that is not a todo id.
     pub fn new(text: impl Into<String>) -> Result<Self, ProdromeError> {
         TodoId::new(text).map(Self)
     }
@@ -329,7 +301,6 @@ impl ProposalId {
     }
 }
 
-/// A proposal's literal is its name.
 impl prodrome_core::literal::codec::Literal for ProposalId {
     fn to_value(&self) -> Value {
         Value::str(self.as_str())
@@ -352,7 +323,7 @@ impl std::fmt::Display for ProposalId {
     }
 }
 
-/// One proposal and what became of it, as its registers read.
+/// One proposal and what became of it.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Object {
     /// Its name.
@@ -365,15 +336,12 @@ pub struct Object {
     pub responses: Vec<Responded>,
     /// Its state register, read.
     pub reading: Reading,
-    /// Its content register's reading priced by the Prodrome's [`prodrome_core::fold::price`]
-    /// (`Least` of every asking's), unlinked: what [`value`] reads through the chains' set; why
-    /// not, for askings that do not price, which cost only this proposal its number.
+    /// Its askings' price (`Least` of each), unlinked; an error costs only this proposal.
     pub price: Result<Term, FplError>,
 }
 
 impl Object {
-    /// How many times a tap performed it: every response a performer gave, a flow and the response
-    /// that ended it counted once.
+    /// How many times a tap performed it; a flow and the response that ended it count once.
     #[must_use]
     pub fn tries(&self) -> usize {
         let before = std::iter::once(None).chain(self.responses.iter().map(Some));
@@ -394,9 +362,8 @@ impl Object {
     }
 }
 
-/// What a check holds as the reading finds it: the send that may have gone it checks, by its
-/// reason. Its field is this module's, so the fold is the only place one is made, and a
-/// `Responded<Check>` exists only where a send that may have gone stands beneath the check.
+/// A check as the reading finds it. Only the fold makes one, so a `Responded<Check>` exists
+/// only above a send that may have gone.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Check {
     reason: String,
@@ -410,28 +377,24 @@ impl Check {
     }
 }
 
-/// A check as the reading holds it prints the reason of the send it checks.
 impl CheckFields for Check {
     fn body(&self) -> (Constructor, Vec<Value>) {
         (("Checked", &["reason"]), vec![self.reason.to_value()])
     }
 }
 
-/// Why a proposal's state cannot be read: its reading holds a check of a send that may have gone,
-/// with no such send beneath it.
+/// A proposal's reading holds a check with no send that may have gone beneath it.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
 #[error("it checks a send that nothing says may have gone")]
 pub struct Unchecked;
 
-/// Every proposal, its registers read, and every one answered and never asked, which reads as no
-/// proposal: the reading is total over what the store holds (the Prodrome's law 44), so one
-/// unreadable proposal costs only itself.
+/// Every proposal, its registers read, and every one answered and never asked. The reading is
+/// total (the Prodrome's law 44): one unreadable proposal costs only itself.
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct Fold {
     objects: BTreeMap<ProposalId, Object>,
     unasked: BTreeSet<ProposalId>,
-    /// Each object's name by the name its content gives it ([`ProposalId::of`]) and by the name
-    /// its act alone gives it, the least where two objects hold one.
+    /// Each object's id by its content's name and by its act's name, the least on a tie.
     named: BTreeMap<ProposalId, ProposalId>,
 }
 
@@ -442,7 +405,7 @@ fn responded(stamp: &Stamp<InboxEvent>) -> Option<&Responded> {
     }
 }
 
-/// What the send that may have gone `check` checks said, found by ancestry.
+/// The reason of the send that may have gone beneath `check`, found by ancestry.
 fn checked<'s>(stream: &'s [Stamp<InboxEvent>], check: &Stamp<InboxEvent>) -> Option<&'s str> {
     stream
         .iter()
@@ -454,8 +417,7 @@ fn checked<'s>(stream: &'s [Stamp<InboxEvent>], check: &Stamp<InboxEvent>) -> Op
         })
 }
 
-/// A state write as the reading holds it, a check holding the send it checks; `None` for a check
-/// with no such send beneath it.
+/// A state write as the reading holds it; `None` for a check with no send beneath it.
 fn answer(stream: &[Stamp<InboxEvent>], stamp: &Stamp<InboxEvent>) -> Option<Answer> {
     let response = match responded(stamp)? {
         Responded::Tried { attempt, tried } => Responded::Tried {
@@ -478,7 +440,7 @@ fn answer(stream: &[Stamp<InboxEvent>], stamp: &Stamp<InboxEvent>) -> Option<Ans
     })
 }
 
-/// One proposal's registers read off its stream; `None` for one answered and never asked.
+/// One proposal's registers; `None` for one never asked.
 fn object(id: &ProposalId, stream: &[Stamp<InboxEvent>]) -> Option<Object> {
     let registers = prodrome_core::fold::read(stream, None, &Everything);
     let (at, asked) = registers
@@ -489,7 +451,7 @@ fn object(id: &ProposalId, stream: &[Stamp<InboxEvent>]) -> Option<Object> {
             Said::Asked(asked) => Some((stamp.event.at, asked.as_ref().clone())),
             Said::Responded(_) => None,
         })?;
-    // `Least` of the askings, and the content register holds one, so none is no price either.
+    // An asking is held, so no price here is an error.
     let price = prodrome_core::fold::price::<InboxEvent>(&registers).and_then(|price| {
         price.ok_or_else(|| FplError("an asked proposal prices as nothing".to_owned()))
     });
@@ -522,8 +484,7 @@ fn object(id: &ProposalId, stream: &[Stamp<InboxEvent>]) -> Option<Object> {
 }
 
 impl Fold {
-    /// Read every proposal's registers off the store's objects, leaving out each proposal whose
-    /// objects read as none.
+    /// Read every proposal's registers off the store's objects.
     #[must_use]
     pub fn of(nodes: &[Node<InboxEvent>]) -> Self {
         let folded = prodrome_core::registers::fold(nodes);
@@ -531,8 +492,7 @@ impl Fold {
         for (id, stream) in folded.entities() {
             match object(id, stream) {
                 Some(object) => {
-                    // Its own identity, and its act alone: an asking that does not recur is the
-                    // same request as any proposal of that act, whoever asked it and when.
+                    // A non-recurring asking is the same request as any proposal of its act.
                     let act = ContentId::of(&Identity::Once(object.asked.proposal.clone()));
                     for name in [
                         ProposalId::of(&object.asked, object.at),
@@ -550,11 +510,7 @@ impl Fold {
         fold
     }
 
-    /// The events as one chain, each sealed on the one before: a history written by one writer
-    /// in turn, for a test.
-    ///
-    /// # Panics
-    /// Never: each object rests on the one before it, which is held.
+    /// The events as one chain, each sealed on the one before, for a test.
     #[must_use]
     pub fn of_chain(events: &[InboxEvent]) -> Self {
         let mut objects: Vec<(Hash, Envelope<InboxEvent>)> = Vec::new();
@@ -577,7 +533,7 @@ impl Fold {
         self.objects.values()
     }
 
-    /// Every proposal answered and never asked, left out of the reading.
+    /// Every proposal answered and never asked.
     #[must_use]
     pub fn unasked(&self) -> &BTreeSet<ProposalId> {
         &self.unasked
@@ -606,7 +562,7 @@ impl Fold {
         unasked.chain(unreadable).chain(unpriced).collect()
     }
 
-    /// The texts the remember cards name: each card's, live while the owner may still tap it.
+    /// The texts the remember cards name, live while a card is open.
     #[must_use]
     pub fn naming(&self) -> crate::secretary::texts::Naming<crate::secretary::memory::Fact> {
         use crate::secretary::texts::Liveness;
@@ -629,12 +585,8 @@ impl Fold {
             .collect()
     }
 
-    /// The proposal holding `asked`'s content, whatever print named it: the same [`Identity`], so
-    /// an act that recurs at the same instant, and one that does not by its act alone, whoever
-    /// asked it. A proposal is its content; its id is only the name [`ProposalId::of`] gave that
-    /// content when it was first asked, so for every proposal one proposer filed through this
-    /// build this is `get(&ProposalId::of(asked, at))`. The box's asking is held as
-    /// [`Self::held`] says, its episode begun at the asking.
+    /// The proposal holding `asked`'s content, whatever print named it and whoever asked it. The
+    /// box's asking is held as [`Self::held`] says, its episode begun at `at`.
     #[must_use]
     pub fn holding(&self, asked: &Asked, at: Datetime) -> Option<&Object> {
         match asked.proposer {
@@ -645,11 +597,9 @@ impl Fold {
         }
     }
 
-    /// The card that holds the box's asking of `proposal`, whoever asked it: an open card asking
-    /// for the same [`Need`](crate::secretary::store::Need), in whatever words; else, for an act
-    /// with episodes ([`Proposal::episodic`]), a card of its act asked at or after `since`, when
-    /// its episode began (`None`: any card); for any other act, any card of its act. The one
-    /// rule for whether the box has asked, so one need has one card.
+    /// The card holding the box's asking of `proposal`: an open card for the same
+    /// [`Need`](crate::secretary::store::Need), else a card of its act (for an episodic act, one
+    /// asked at or after `since`). The one rule for whether the box has asked: one need, one card.
     #[must_use]
     pub fn held(&self, proposal: &Proposal, since: Option<Datetime>) -> Option<&Object> {
         let open = self.objects.values().find(|object| {
@@ -664,23 +614,17 @@ impl Fold {
     }
 }
 
-/// What a transition answered: a response it recorded now, or the reading as it stood, recording
-/// nothing.
+/// What a transition answered: the response it recorded, or the reading as it stood.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Response {
     /// Recorded by this call.
     Ran(Responded),
-    /// What stood before it: returned, and nothing performed or recorded. Boxed, because a
-    /// reading of a conflict holds two answers in place.
+    /// What stood before; nothing performed or recorded.
     Recorded(Box<Reading>),
 }
 
 impl Fold {
-    /// The proposal a write acts on: one the inbox holds, whose reading is no conflict.
-    ///
-    /// # Errors
-    /// [`Refusal::not_found`] for a proposal the inbox does not hold, and [`Refusal::conflict`]
-    /// for one whose reading is a conflict.
+    /// The proposal a write acts on. A proposal in conflict performs nothing, so it refuses one.
     pub fn one(&self, id: &ProposalId) -> Result<&Object, Refusal> {
         if self.unasked.contains(id) {
             return Err(Refusal::conflict(format!(
@@ -704,7 +648,7 @@ impl Fold {
     }
 }
 
-/// What a transition does with one proposal, decided from its object alone.
+/// What a transition does with one proposal.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Step {
     /// Record this response.
@@ -713,15 +657,9 @@ pub enum Step {
     Answer,
 }
 
-/// The one transition of one proposal: under the inbox's hold, read it, let `step` decide from
-/// its object alone, and record what `step` says before the hold is let go. Every negation a
-/// write asks of the history ("is it still standing?", "is it a send that may have gone?") is a
-/// `step`, so each is asked under the same hold, and each is a pure function of a value but
-/// [`submit`]'s, which performs inside its step.
-///
-/// # Errors
-/// [`Refusal::not_found`] for a proposal the inbox does not hold, [`Refusal::conflict`] for one in
-/// conflict, whatever `step` refuses, and the store's own failures.
+/// The one transition of one proposal: under the inbox's lock, read it, let `step` decide, and
+/// record what it says before the lock is let go. Every negation a write asks of the history is
+/// a `step`, so each is asked under the lock; only [`submit`]'s step performs.
 pub fn transition<C: Prodrome<InboxEvent> + ?Sized>(
     caps: &C,
     id: &ProposalId,
@@ -733,10 +671,7 @@ pub fn transition<C: Prodrome<InboxEvent> + ?Sized>(
     transition_held(caps, id, by, at, step)
 }
 
-/// [`transition`], under the inbox's one hold, which the caller has taken.
-///
-/// # Errors
-/// As [`transition`].
+/// [`transition`], under the inbox's lock, which the caller has taken.
 pub fn transition_held<C: Prodrome<InboxEvent> + ?Sized>(
     caps: &C,
     id: &ProposalId,
@@ -761,15 +696,11 @@ pub fn transition_held<C: Prodrome<InboxEvent> + ?Sized>(
 }
 
 /// Read the inbox.
-///
-/// # Errors
-/// [`Refusal::internal`] for a store that cannot be read.
 pub fn fold<C: Prodrome<InboxEvent> + ?Sized>(caps: &C) -> Result<Fold, Refusal> {
     Ok(Fold::of(&caps.nodes()?))
 }
 
-/// What `verify` reports of the inbox: the store's own findings, then every proposal its reading
-/// cannot read, and why, or why the inbox does not read at all.
+/// What `verify` reports of the inbox: the store's findings, then the reading's.
 #[must_use]
 pub fn findings(store: &dyn Prodrome<InboxEvent>) -> Vec<String> {
     let mut found = store.verify();
@@ -780,11 +711,7 @@ pub fn findings(store: &dyn Prodrome<InboxEvent>) -> Vec<String> {
     found
 }
 
-/// File a proposal and answer its id; the same content asked again ([`Fold::holding`]) is the
-/// same proposal, whatever id it is filed under, and writes nothing.
-///
-/// # Errors
-/// The store's own failures.
+/// File a proposal and answer its id; content already held ([`Fold::holding`]) writes nothing.
 pub fn ask<C: Prodrome<InboxEvent> + ?Sized>(
     caps: &C,
     asked: Asked,
@@ -795,11 +722,7 @@ pub fn ask<C: Prodrome<InboxEvent> + ?Sized>(
     ask_held(caps, asked, by, at)
 }
 
-/// [`ask`], under the inbox's one hold, which the caller has taken: a filing that must decide
-/// more than the ask (the card's index, a plugin's room) decides it under the same hold.
-///
-/// # Errors
-/// The store's own failures.
+/// [`ask`], under the inbox's lock, which the caller has taken.
 pub fn ask_held<C: Prodrome<InboxEvent> + ?Sized>(
     caps: &C,
     asked: Asked,
@@ -819,13 +742,9 @@ pub fn ask_held<C: Prodrome<InboxEvent> + ?Sized>(
     Ok(id)
 }
 
-/// `submit(id) -> response`: perform the proposal while the tap's rule ([`Tapped`]) holds on its
-/// reading, recording what performing answered as the reading's next try where it is one; the
-/// NON-MONOTONE question that guards an effect ("is it still standing, so I may perform?"). A
+/// Perform the proposal while the tap's rule ([`Tapped`]) holds, and record what performing
+/// answered. "Is it still standing?" is the non-monotone question that guards the effect; a
 /// `perform` that refuses records nothing.
-///
-/// # Errors
-/// As [`transition`], and whatever `perform` refuses.
 pub fn submit<C: Prodrome<InboxEvent> + ?Sized>(
     caps: &C,
     id: &ProposalId,
@@ -846,12 +765,8 @@ pub fn submit<C: Prodrome<InboxEvent> + ?Sized>(
     })
 }
 
-/// Dismiss a proposal nothing completed, with `reason`; dismissing one already dismissed answers
-/// the recorded dismissal.
-///
-/// # Errors
-/// As [`transition`], and [`Refusal::conflict`] for one completed or running: what happened
-/// cannot be answered no.
+/// Dismiss a proposal nothing completed, with `reason`. What happened cannot be answered no, so
+/// it refuses one completed or running.
 pub fn dismiss<C: Prodrome<InboxEvent> + ?Sized>(
     caps: &C,
     id: &ProposalId,
@@ -863,10 +778,7 @@ pub fn dismiss<C: Prodrome<InboxEvent> + ?Sized>(
 }
 
 /// Withdraw a proposal nothing completed, saying why: the box's or the secretary's act, never
-/// the owner's no. Withdrawing one already withdrawn or dismissed answers what was recorded.
-///
-/// # Errors
-/// As [`transition`], and [`Refusal::conflict`] for one completed or running.
+/// the owner's no.
 pub fn withdraw<C: Prodrome<InboxEvent> + ?Sized>(
     caps: &C,
     id: &ProposalId,
@@ -877,11 +789,8 @@ pub fn withdraw<C: Prodrome<InboxEvent> + ?Sized>(
     transition(caps, id, by, at, |object| withdrawing(object, withdrawal))
 }
 
-/// [`withdraw`] a proposal nobody has answered yet: once the owner has tapped it, even a tap that
-/// failed, the card is his to settle, and this refuses.
-///
-/// # Errors
-/// As [`transition`], and [`Refusal::conflict`] for a proposal with any response.
+/// [`withdraw`] a proposal nobody has answered: once the owner has tapped it, even in vain, the
+/// card is his to settle.
 pub fn withdraw_unanswered<C: Prodrome<InboxEvent> + ?Sized>(
     caps: &C,
     id: &ProposalId,
@@ -900,10 +809,7 @@ pub fn withdraw_unanswered<C: Prodrome<InboxEvent> + ?Sized>(
     })
 }
 
-/// [`withdraw`], under the inbox's one hold, which the caller has taken.
-///
-/// # Errors
-/// As [`withdraw`].
+/// [`withdraw`], under the inbox's lock, which the caller has taken.
 pub fn withdraw_held<C: Prodrome<InboxEvent> + ?Sized>(
     caps: &C,
     id: &ProposalId,
@@ -914,11 +820,7 @@ pub fn withdraw_held<C: Prodrome<InboxEvent> + ?Sized>(
     transition_held(caps, id, by, at, |object| withdrawing(object, withdrawal))
 }
 
-/// The owner has checked a send that may have gone: records his check and performs nothing;
-/// acknowledging one already acknowledged answers the recorded check.
-///
-/// # Errors
-/// As [`transition`], and [`Refusal::conflict`] for one that is no send that may have gone.
+/// Record the owner's check of a send that may have gone; performs nothing.
 pub fn acknowledge<C: Prodrome<InboxEvent> + ?Sized>(
     caps: &C,
     id: &ProposalId,
@@ -928,11 +830,7 @@ pub fn acknowledge<C: Prodrome<InboxEvent> + ?Sized>(
     transition(caps, id, by, at, checking)
 }
 
-/// End a running act with what its flow came to, at `at` (the flow's thread and a restart hold
-/// no clock). An act no longer running records nothing and answers `false`.
-///
-/// # Errors
-/// As [`transition`].
+/// End a running act with what its flow came to; `false` for one no longer running.
 pub fn end<C: Prodrome<InboxEvent> + ?Sized>(
     caps: &C,
     id: &ProposalId,
@@ -944,12 +842,10 @@ pub fn end<C: Prodrome<InboxEvent> + ?Sized>(
         .map(|response| matches!(response, Response::Ran(_)))
 }
 
-/// What the response a reading shows is, `None` while nothing answered it.
 fn shown(object: &Object) -> Option<&Responded<Check>> {
     object.reading.shown().map(|answer| &answer.response)
 }
 
-/// [`dismiss`]'s step: record the no while nothing completed it.
 fn dismissing(object: &Object, reason: &str) -> Result<Step, Refusal> {
     closing(
         object,
@@ -959,18 +855,20 @@ fn dismissing(object: &Object, reason: &str) -> Result<Step, Refusal> {
     )
 }
 
-/// [`withdraw`]'s step: record the withdrawal while nothing completed it.
 fn withdrawing(object: &Object, withdrawal: Withdrawal) -> Result<Step, Refusal> {
     closing(object, Responded::Withdrawn(withdrawal))
 }
 
-/// Record `closed`, a no or a withdrawal, while nothing completed the proposal; one already
-/// dismissed or withdrawn answers what was recorded.
+/// Record `closed` while nothing completed the proposal; one already closed answers its record.
 fn closing(object: &Object, closed: Responded) -> Result<Step, Refusal> {
     match shown(object) {
         None
         | Some(Responded::Tried {
-            tried: Tried::NotSent { .. } | Tried::Lacks(_),
+            tried:
+                Tried::NotSent { .. }
+                | Tried::Lacks(_)
+                | Tried::Refused { .. }
+                | Tried::Unfinished { .. },
             ..
         }) => Ok(Step::Record(closed)),
         Some(Responded::Dismissed { .. } | Responded::Withdrawn(_)) => Ok(Step::Answer),
@@ -988,7 +886,6 @@ fn closing(object: &Object, closed: Responded) -> Result<Step, Refusal> {
     }
 }
 
-/// [`acknowledge`]'s step: record the check of a send that may have gone.
 fn checking(object: &Object) -> Result<Step, Refusal> {
     match shown(object) {
         Some(Responded::Done(Done::MayHaveGone { .. })) => Ok(Step::Record(Responded::Checked(()))),
@@ -1006,7 +903,6 @@ fn checking(object: &Object) -> Result<Step, Refusal> {
     }
 }
 
-/// [`end`]'s step: record what a running flow came to.
 fn ending(object: &Object, ended: Performed) -> Step {
     if object.reading.running() {
         Step::Record(Responded::performed(ended, object.reading.next_attempt()))

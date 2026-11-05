@@ -194,7 +194,7 @@ export const tapProposal = (
 export const dismissProposal = (id: string, index: number, reason: string): Promise<ConversationPayload> =>
   http.act(proposalPath(id, index, "dismiss"), { reason } satisfies Reasoning, payload.ConversationPayload);
 
-/** The owner checked Sent for a send that may have gone; performs nothing. */
+/** The owner has checked a tap that may have gone through; it performs nothing. */
 export const acknowledgeProposal = (id: string, index: number): Promise<ConversationPayload> =>
   http.act(proposalPath(id, index, "acknowledge"), {}, payload.ConversationPayload);
 

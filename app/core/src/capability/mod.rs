@@ -86,7 +86,9 @@ pub use older_mail::OlderMail;
 pub use pdf_text::PdfText;
 pub use render::{Html, Render, RenderError};
 pub use render_cache::RenderCache;
-pub use repositories::{MAX_FILE_BYTES, MAX_TEXT_BYTES, RepoFailure, Repositories, readable};
+pub use repositories::{
+    InBranch, MAX_FILE_BYTES, MAX_TEXT_BYTES, RepoFailure, Repositories, readable,
+};
 pub use repository::{Repository, RepositoryError};
 pub use secretary::Secretary;
 pub use secrets::{

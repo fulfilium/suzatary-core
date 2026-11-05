@@ -436,10 +436,14 @@ fn a_pushed_branch_without_a_pull_request_is_finished_by_a_tap_again() {
     let said = stopped.to_string();
     assert!(
         said.contains(&format!("pushed secretary/{id}-0 ("))
-            && said.contains("stopped opening the pull request"),
+            && said.contains("a pull request may be open"),
         "{stopped}"
     );
-    assert_eq!(stopped["proposals"][0]["state"], "failed", "{stopped}");
+    assert_eq!(stopped["proposals"][0]["state"], "unfinished", "{stopped}");
+    assert_eq!(
+        stopped["proposals"][0]["card"]["link"]["label"], "See where it stands",
+        "{stopped}"
+    );
     std::fs::remove_file(pulls.join("head.lock")).expect("the lock goes");
     let finished = tap();
     assert_eq!(finished["proposals"][0]["state"], "acted", "{finished}");

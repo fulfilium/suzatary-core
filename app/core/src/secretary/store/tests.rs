@@ -816,6 +816,22 @@ fn every_response() -> Vec<Responded> {
         Responded::Withdrawn(Withdrawal::NoLongerNeeded {
             why: "she replied first".to_owned(),
         }),
+        Responded::Tried {
+            attempt: 1,
+            tried: Tried::Refused {
+                reason: "the patch does not apply".to_owned(),
+            },
+        },
+        Responded::Tried {
+            attempt: 1,
+            tried: Tried::Unfinished {
+                reason: "pushed secretary/x".to_owned(),
+                link: "https://github.com/owner/name/pulls".to_owned(),
+            },
+        },
+        Responded::Withdrawn(Withdrawal::DoneElsewhere {
+            what: "its change is already in main".to_owned(),
+        }),
     ]
 }
 
@@ -841,13 +857,22 @@ fn arm(response: &Responded) -> usize {
             tried: Tried::Lacks(_),
             ..
         } => 10,
+        Responded::Tried {
+            tried: Tried::Refused { .. },
+            ..
+        } => 11,
+        Responded::Tried {
+            tried: Tried::Unfinished { .. },
+            ..
+        } => 12,
+        Responded::Withdrawn(Withdrawal::DoneElsewhere { .. }) => 13,
     }
 }
 
 #[test]
 fn every_response_is_every_arm() {
     let arms: std::collections::BTreeSet<usize> = every_response().iter().map(arm).collect();
-    assert_eq!(arms, (0..11).collect());
+    assert_eq!(arms, (0..14).collect());
 }
 
 /// A proposal waits exactly until the inbox records a settled response, except a send that
