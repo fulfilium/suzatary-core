@@ -252,9 +252,10 @@ impl Notmuch {
         }
     }
 
-    /// Read on every call because other processes write it.
-    fn load_state(&self) -> Result<Known, MailError> {
-        self.ledger.read().map_err(MailError::Unreachable)
+    /// Read on every call because other processes write it; `None` on a device with no key,
+    /// whose rows say so rather than fail.
+    fn load_state(&self) -> Result<Option<Known>, MailError> {
+        self.ledger.read_if_keyed().map_err(MailError::Unreachable)
     }
 
     /// The account whose maildir `path` lives under, or `""` (the one spelling of absence).
@@ -309,7 +310,10 @@ impl Notmuch {
         let mut ordered: Vec<&CanonicalMessage> = messages.values().collect();
         ordered.sort_by_key(|m| std::cmp::Reverse(epoch_of(m)));
         ordered.truncate(limit);
-        Ok(ordered.into_iter().map(|m| row_of(m, &state)).collect())
+        Ok(ordered
+            .into_iter()
+            .map(|m| row_of(m, state.as_ref()))
+            .collect())
     }
 }
 
@@ -465,7 +469,7 @@ impl Notmuch {
 fn full(
     message: &CanonicalMessage,
     shown: Option<&Shown>,
-    state: &Known,
+    state: Option<&Known>,
     thread: String,
 ) -> MailMessage {
     let raw_body = shown.map_or("", |s| s.body.as_str());
@@ -534,8 +538,10 @@ fn epoch_of(message: &CanonicalMessage) -> i64 {
         .unwrap_or(0)
 }
 
-fn row_of(message: &CanonicalMessage, state: &Known) -> MailRow {
-    let seen = state.decided(&message.hash);
+fn row_of(message: &CanonicalMessage, state: Option<&Known>) -> MailRow {
+    let disposition = state.map_or(suzatary_core::mail::Disposed::Unkeyed, |state| {
+        suzatary_core::mail::Disposed::from(state.decided(&message.hash))
+    });
     let primary = &message.primary;
     MailRow {
         hash: message.hash.clone(),
@@ -545,7 +551,7 @@ fn row_of(message: &CanonicalMessage, state: &Known) -> MailRow {
         date: message.timestamp.and_then(|p| p.to_naive_datetime()),
         container: primary.container.clone(),
         account: primary.account.clone(),
-        disposition: suzatary_core::mail::Disposed::from(seen),
+        disposition,
         held: message.held,
     }
 }
@@ -773,7 +779,7 @@ impl Mailbox for Notmuch {
             MailError::Unreachable(format!("notmuch names no thread for {}", shown.id))
         })?;
         let state = self.load_state()?;
-        Ok(full(message, Some(&shown), &state, thread))
+        Ok(full(message, Some(&shown), state.as_ref(), thread))
     }
 
     fn thread(&self, thread: &str, limit: usize) -> Result<Vec<MailMessage>, MailError> {
@@ -793,7 +799,12 @@ impl Mailbox for Notmuch {
             .rev()
             .map(|m| {
                 let native = m.primary.native_id.as_str();
-                full(m, by_native.get(native).copied(), &state, thread.to_owned())
+                full(
+                    m,
+                    by_native.get(native).copied(),
+                    state.as_ref(),
+                    thread.to_owned(),
+                )
             })
             .collect())
     }

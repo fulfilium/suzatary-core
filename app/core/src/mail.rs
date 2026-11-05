@@ -95,6 +95,8 @@ pub enum Disposed {
     Noise,
     /// Seen, not actionable, not noise.
     Skip,
+    /// Unknown here: this device holds no dedup key, which triage's record is read by.
+    Unkeyed,
 }
 
 impl From<Option<&state::Decision>> for Disposed {

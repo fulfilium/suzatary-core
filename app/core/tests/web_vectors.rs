@@ -2664,6 +2664,7 @@ fn the_answers_vector_holds_every_answer() {
             suzatary_core::mail::Disposed::Undecided,
             suzatary_core::mail::Disposed::Noise,
             suzatary_core::mail::Disposed::Skip,
+            suzatary_core::mail::Disposed::Unkeyed,
         ]
         .into_iter()
         .map(|disposition| suzatary_core::mail::MailRow {

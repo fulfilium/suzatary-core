@@ -1,38 +1,15 @@
 # What a Suzatary service IS, independent of how it gets started.
 #
-# WHY THIS EXISTS. Until now every fact about how to run these jobs lived in
-# nix/nixos-module.nix — the PATH they need, the network gate, which repo they
-# operate on. That made the jobs a property of *this NixOS machine* rather than
-# of this repo: a plain Linux box with nix installed could clone Suzatary and
-# still have no way to start Proton Bridge or the web server, because the
-# knowledge was in a systemd module it could not evaluate.
-#
-# So the split is now: THIS file says what a service needs and produces a real
-# executable for it; the NixOS module says only when to run it and under whose
-# manager. `nix run .#web` and the systemd unit end up invoking the same
-# store path, which is the point — one definition, two schedulers.
-#
-# WHAT THEY RUN IS THE APP THE USER REPOSITORY'S LOCK NAMES
-# (docs/USERREPO-PLAN-2026-10-01.md stage 2). The `roots` service below reads
-# `$SUZATARY_USER_REPO/flake.lock`, builds the binary and the bundle from the
-# tree it names, and only then links that tree at `$SUZATARY_ROOTS/app`; every
-# other wrapper execs its script from that link, as a store path, never from a
-# git checkout. What the scripts write goes to the data tree, the state and
-# the cache, so the code they run from is read-only.
+# This file says what a service needs and builds its executable; nix/nixos-module.nix says when
+# and under whom it runs. The `roots` service reads `$SUZATARY_USER_REPO/flake.lock`, builds the
+# tree it names and links it at `$SUZATARY_ROOTS/app`; every other wrapper execs its script from
+# there, read-only.
 { pkgs }:
 
 let
   inherit (pkgs) lib;
 
-  # Everything the wrapper scripts shell out to. This used to be whatever
-  # happened to be on the interactive login PATH, which is why the old
-  # hand-written units carried a hardcoded /nix/store path: nobody could say
-  # what they actually needed.
-  #
-  # `nix` is here because the scripts re-enter the flake (`nix develop
-  # .#triage`) to get python/notmuch/lieer. That indirection is kept on purpose
-  # — it means the toolchain comes from THIS repo's pinned nixpkgs, not from
-  # whatever nixpkgs the host's system config happens to be on.
+  # Everything the wrapper scripts shell out to; `nix` re-enters this repo's pinned flake.
   runtimeDeps = with pkgs; [
     bash
     coreutils     # df, date, cat, cp, rm, mktemp, sleep
@@ -55,16 +32,8 @@ let
     gnupg
   ];
 
-  # A nix evaluation that starts before DNS is up does not fail; it concludes
-  # cache.nixos.org is unreachable and starts building from source. On
-  # 2026-08-10 that put Proton Bridge into a from-scratch bootstrap-tools
-  # compile at boot instead of serving IMAP — the unit reported "active
-  # (running)" throughout, and Restart=always was powerless because nothing had
-  # failed. Substituting the same shell took ~15s once the network was up.
-  #
-  # This gate only matters for services that evaluate the flake AT RUN TIME.
-  # Anything whose ExecStart is already a store path has nothing left to
-  # substitute and does not need it — see protonBridge below.
+  # A nix evaluation before DNS is up does not fail: it builds from source. So a service that
+  # evaluates the flake at run time waits for the substituter first.
   waitForNetwork = pkgs.writeShellScript "suzatary-wait-for-substituter" ''
     for _ in $(seq 1 60); do
       ${pkgs.curl}/bin/curl -sf --max-time 5 -o /dev/null \
@@ -203,16 +172,7 @@ rec {
     waitForNet = true;
   };
 
-  # No `voice` service: sunset 2026-08-18, see nix/nixos-module.nix for why.
-  # The code and the `.#voice` devShell are still here for running it by hand.
-
-  # Bridge is the one service that is not a repo script, and pointing straight
-  # at the binary is a real improvement over the old `nix develop <repo>#triage
-  # --command protonmail-bridge`. That re-entry evaluated the flake on every
-  # start — at boot, before the network, which is precisely the 2026-08-10
-  # bootstrap-compile failure. This package IS the one the .#triage devShell
-  # hands out (same nixpkgs, same derivation), so the version pinning that
-  # vault.enc depends on is unchanged; only the evaluation at start-up is gone.
+  # Bridge runs the .#triage shell's own package, by store path, so a start evaluates nothing.
   #
   # pass/gnupg stay on PATH: Bridge shells out to `pass` for its keyring, since
   # `keyring` needs a DBus secret-service and dies headless.

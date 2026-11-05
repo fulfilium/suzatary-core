@@ -7,6 +7,7 @@
 //! another, that writes to the cache.
 
 use super::{Scratch, repo};
+use std::collections::BTreeSet;
 use std::path::Path;
 use std::process::Command;
 
@@ -144,19 +145,36 @@ fn publication_cache_runs_only_masters_code_over_the_tree() {
     assert!(at(build, "cache-nix-action/restore@") < at(build, check));
     assert!(at(build, check) < at(build, "      - name: Build what a deploy builds"));
     assert!(!text.contains("cache-nix-action/save@"), "never saved");
-    let builds: Vec<&str> = build.lines().filter(|l| l.contains("nix build")).collect();
-    assert_eq!(builds.len(), 3, "{builds:?}");
-    for (line, attr) in builds
-        .iter()
-        .zip(["suzatary", "suzatary-web", "suzatary-plugins"])
-    {
+    // Every build is of the tree, with no flake configuration of its own and no lock written, and of
+    // an output this list names: what a deploy builds, and what the gate's live half reads.
+    let allowed = [
+        "suzatary",
+        "suzatary-web",
+        "suzatary-plugins",
+        "suzatary-fixture",
+        "suzatary-web-ts",
+        "suzatary-vector-json",
+        "suzatary-wasm",
+        "suzatary-views-wasm",
+        "suzatary-typst-wasm",
+    ];
+    let mut outputs = BTreeSet::new();
+    for line in build.lines().filter(|l| l.contains("nix build")) {
+        let line = line.trim();
+        let attr = line.rsplit_once(" ./tree#").map(|(_, attr)| attr);
         assert!(
-            line.trim_start()
-                .starts_with("nix build --option accept-flake-config false --no-update-lock-file ")
-                && line.trim_end().ends_with(&format!(" ./tree#{attr}")),
-            "a build of ./tree#{attr} without its flake configuration or a lock written: {line}"
+            line.starts_with("nix build --option accept-flake-config false --no-update-lock-file ")
+                && attr.is_some_and(|a| allowed.contains(&a)),
+            "a build of an output the list does not name, or without its flake configuration or a \
+             lock written: {line}"
         );
+        outputs.extend(attr);
     }
+    assert_eq!(
+        outputs,
+        allowed.into_iter().collect(),
+        "every allowed output is built"
+    );
     let code: Vec<&str> = text
         .lines()
         .filter(|l| !l.trim_start().starts_with('#'))

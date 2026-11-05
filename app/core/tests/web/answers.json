@@ -2126,6 +2126,22 @@
             "container": "inbox",
             "date": "2026-09-02T12:00:00",
             "disposition": {
+              "kind": "unkeyed"
+            },
+            "hash": "aaaaaaaaaaaaaaaa",
+            "held": [
+              "ssn",
+              "passport"
+            ],
+            "id": "m1@example.test",
+            "sender": "counsel@example.test",
+            "subject": "The deed"
+          },
+          {
+            "account": "her@example.invalid",
+            "container": "inbox",
+            "date": "2026-09-02T12:00:00",
+            "disposition": {
               "kind": "todo",
               "todo": "email-harrow"
             },

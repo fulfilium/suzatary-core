@@ -419,16 +419,19 @@ lane=web
 # cargo lock the Rust lanes hold. The dependency builds are rooted too: no output holds them.
 # shellcheck disable=SC1091,SC2329
 web_inputs() {
-  nix_outs suzatary-web-ts suzatary-vector-json suzatary-wasm suzatary-views-wasm suzatary-typst-wasm &&
+  web_outputs &&
     nix_out suzatary-wasm-deps >/dev/null && nix_out suzatary-views-wasm-deps >/dev/null && nix_out suzatary-core-deps >/dev/null &&
-    SUZATARY_WIRE_TS="$(nix_out suzatary-web-ts)" &&
-    SUZATARY_PRODROME_CONFORMANCE="$(nix_out suzatary-vector-json)" &&
-    SUZATARY_PRODROME_WASM="$(nix_out suzatary-wasm)" &&
-    SUZATARY_VIEWS_WASM="$(nix_out suzatary-views-wasm)" &&
-    SUZATARY_TYPST_WASM="$(nix_out suzatary-typst-wasm)" &&
-    export SUZATARY_WIRE_TS SUZATARY_PRODROME_CONFORMANCE SUZATARY_PRODROME_WASM SUZATARY_VIEWS_WASM SUZATARY_TYPST_WASM &&
     . scripts/web-inputs.sh
 }
+# The web steps' flake outputs, exported; publication.yml pushes them for the live half.
+# shellcheck disable=SC2329
+web_outputs() {
+  local o v
+  nix_outs "${web_outputs[@]#*=}" || return
+  for o in "${web_outputs[@]}"; do v="$(nix_out "${o#*=}")" || return; export "${o%%=*}=$v"; done
+}
+web_outputs=(SUZATARY_WIRE_TS=suzatary-web-ts SUZATARY_PRODROME_CONFORMANCE=suzatary-vector-json
+  SUZATARY_PRODROME_WASM=suzatary-wasm SUZATARY_VIEWS_WASM=suzatary-views-wasm SUZATARY_TYPST_WASM=suzatary-typst-wasm)
 step tree web-inputs      $web    web_inputs
 step tree web-test        files:web/test scripts/web-test.sh
 step tree build-web       $web    scripts/build-web.sh
@@ -521,16 +524,27 @@ step live live-guards     unkept  cargo_app test -q --workspace --test guards
 # docs/, memory/, android/ and `cli_only`.
 live_web_units=(web/test/wasm.test.ts)
 live_scenes=(pages)
+# The fixture binary of HEAD's public tree, which publication.yml pushes: the private tree's holds the
+# live pins, so no cache serves it.
 # shellcheck disable=SC2329
+public_fixture() {
+  local tree
+  tree="$(scripts/public-tree.sh --store HEAD)" &&
+    SUZATARY_FIXTURE="$(nix build "$tree#suzatary-fixture" --print-out-paths \
+      --out-link "$(git rev-parse --path-format=absolute --git-common-dir)/gate-roots/public-fixture")" &&
+    export SUZATARY_FIXTURE
+}
+# shellcheck disable=SC1091,SC2329
 web_live() (
   instance="${SUZATARY_INSTANCE:-$root/instance.toml}"
-  web_inputs || exit
+  web_outputs && . scripts/web-inputs.sh || exit
   if ((nightly)); then
     scripts/web-test.sh || exit
   else
     SUZATARY_GATE_UNITS="${live_web_units[*]}" scripts/web-test.sh || exit
   fi
   [[ -f "$instance" ]] || { echo "web-live: the scenes skipped: no instance file at $instance"; exit 0; }
+  public_fixture || exit
   scripts/build-web.sh >/dev/null && SUZATARY_E2E_LIVE="$instance" scripts/web-e2e.sh "${live_scenes[@]}"
 )
 step live web-live        all-but:android,docs,memory,$cli_only web_live

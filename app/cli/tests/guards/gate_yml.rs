@@ -434,3 +434,45 @@ fn e2e_parts_hold_every_file_once() {
         assert_eq!(part(bad).0, Some(64), "{bad:?} is refused");
     }
 }
+
+/// The live half's web step substitutes what it reads from the Cachix, which holds only what
+/// publication.yml builds from the gate commit: so it builds every web output the step reads and
+/// the fixture binary, and pushes their closures with the deploy's.
+#[test]
+fn publication_builds_what_the_live_web_step_reads() {
+    let gate = std::fs::read_to_string(repo().join("scripts/merge-gate.sh")).expect("reads");
+    let start = gate
+        .find("\nweb_outputs=(")
+        .expect("the web outputs are named")
+        + "\nweb_outputs=(".len();
+    let end = start + gate[start..].find(')').expect("the list ends");
+    let outputs: Vec<&str> = gate[start..end]
+        .split_whitespace()
+        .filter_map(|o| o.split_once('=').map(|(_, out)| out))
+        .collect();
+    assert_eq!(
+        outputs.len(),
+        5,
+        "every web output is named with its variable"
+    );
+    assert!(
+        gate.contains("\"$tree#suzatary-fixture\""),
+        "the fixture is the public tree's"
+    );
+    let publication = code(".github/workflows/publication.yml");
+    let built: Vec<&str> = publication
+        .lines()
+        .filter_map(|l| l.trim().rsplit_once(" ./tree#").map(|(_, attr)| attr))
+        .collect();
+    for output in outputs.iter().chain(&["suzatary-fixture"]) {
+        assert!(
+            built.contains(output),
+            "publication.yml does not build {output}"
+        );
+    }
+    assert_eq!(
+        publication.matches("./result-live-*").count(),
+        2,
+        "measured and pushed with the deploy's builds"
+    );
+}

@@ -145,7 +145,19 @@ jobs:
           nix build --option accept-flake-config false --no-update-lock-file --print-build-logs --out-link result-dist ./tree#suzatary-web
           nix build --option accept-flake-config false --no-update-lock-file --print-build-logs --out-link result-plugins ./tree#suzatary-plugins
 
-      # What the push adds to the cache: every path of the three closures that
+      # What the gate's live half reads from the same tree (merge-gate.sh's web-live), so the box
+      # substitutes it. Never deployed.
+      - name: Build what the gate's live half reads
+        run: |
+          set -euo pipefail
+          nix build --option accept-flake-config false --no-update-lock-file --print-build-logs --out-link result-live-suzatary-fixture ./tree#suzatary-fixture
+          nix build --option accept-flake-config false --no-update-lock-file --print-build-logs --out-link result-live-suzatary-web-ts ./tree#suzatary-web-ts
+          nix build --option accept-flake-config false --no-update-lock-file --print-build-logs --out-link result-live-suzatary-vector-json ./tree#suzatary-vector-json
+          nix build --option accept-flake-config false --no-update-lock-file --print-build-logs --out-link result-live-suzatary-wasm ./tree#suzatary-wasm
+          nix build --option accept-flake-config false --no-update-lock-file --print-build-logs --out-link result-live-suzatary-views-wasm ./tree#suzatary-views-wasm
+          nix build --option accept-flake-config false --no-update-lock-file --print-build-logs --out-link result-live-suzatary-typst-wasm ./tree#suzatary-typst-wasm
+
+      # What the push adds to the cache: every path of the built closures that
       # neither cache.nixos.org nor the cache already serves, by its NAR size
       # (an upper bound of what Cachix stores, which compresses it). The
       # `bmabsout` cache holds 5 GB on Cachix's free plan and evicts the least
@@ -158,7 +170,7 @@ jobs:
           LIMIT: 1000000000
         run: |
           set -euo pipefail
-          nix path-info --recursive ./result-bin ./result-dist ./result-plugins | sort -u >closure.txt
+          nix path-info --recursive ./result-bin ./result-dist ./result-plugins ./result-live-* | sort -u >closure.txt
           # A path is served when its cache answers its narinfo.
           for cache in https://cache.nixos.org https://bmabsout.cachix.org; do
             # shellcheck disable=SC2016
@@ -178,7 +190,7 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p publication
-          nix-store --query --requisites ./result-bin ./result-dist ./result-plugins | grep -Fx -f unserved.txt >publication/unserved.txt || true
+          nix-store --query --requisites ./result-bin ./result-dist ./result-plugins ./result-live-* | grep -Fx -f unserved.txt >publication/unserved.txt || true
           cp served.txt publication/served.txt
           if [[ -s publication/unserved.txt ]]; then
             mapfile -t paths <publication/unserved.txt

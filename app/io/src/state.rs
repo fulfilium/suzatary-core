@@ -61,8 +61,12 @@ const LOCAL: DocCodec<(), LocalState> = DocCodec {
 };
 
 /// Where the key comes from: asked lazily, so a store locked at startup costs nothing until a
-/// read needs the key.
-type Source = Box<dyn Fn() -> Result<DedupKey, String> + Send + Sync>;
+/// read needs the key; `None` is a store that holds none.
+type Source = Box<dyn Fn() -> Result<Option<DedupKey>, String> + Send + Sync>;
+
+fn unkeyed() -> String {
+    format!("{DEDUP_KEY} does not resolve: `suzatary device init` mints it")
+}
 
 /// Both documents and the key that joins them. Cloning shares the key.
 #[derive(Clone)]
@@ -89,6 +93,14 @@ impl Ledger {
         local: PathBuf,
         key: impl Fn() -> Result<DedupKey, String> + Send + Sync + 'static,
     ) -> Self {
+        Self::sourced(pushed, local, move || key().map(Some))
+    }
+
+    fn sourced(
+        pushed: PathBuf,
+        local: PathBuf,
+        key: impl Fn() -> Result<Option<DedupKey>, String> + Send + Sync + 'static,
+    ) -> Self {
         Self {
             pushed: State::open(pushed),
             local: Local::open(local),
@@ -103,41 +115,52 @@ impl Ledger {
         local: PathBuf,
         secrets: impl Resolves + Send + Sync + 'static,
     ) -> Self {
-        Self::new(pushed, local, move || {
-            let secret = secrets
+        Self::sourced(pushed, local, move || {
+            secrets
                 .get(DEDUP_KEY, "the triage names messages by it")
                 .map_err(|locked| format!("{DEDUP_KEY}: {locked}"))?
-                .ok_or_else(|| {
-                    format!("{DEDUP_KEY} does not resolve: `suzatary device init` mints it")
-                })?;
-            DedupKey::of(&secret).map_err(|e| e.to_string())
+                .map(|secret| DedupKey::of(&secret).map_err(|e| e.to_string()))
+                .transpose()
         })
     }
 
-    /// The key, asked of its source until it answers, then kept.
+    /// The key, asked of its source until it answers one, then kept; `None` while none is held.
+    fn held_key(&self) -> Result<Option<DedupKey>, String> {
+        if let Some(key) = self.key.0.get() {
+            return Ok(Some(key.clone()));
+        }
+        Ok((self.key.1)()?.map(|key| self.key.0.get_or_init(|| key).clone()))
+    }
+
+    /// The key.
     ///
     /// # Errors
     /// A key that does not resolve.
     pub fn read_key(&self) -> Result<DedupKey, String> {
-        if let Some(key) = self.key.0.get() {
-            return Ok(key.clone());
-        }
-        let key = (self.key.1)()?;
-        Ok(self.key.0.get_or_init(|| key).clone())
+        self.held_key()?.ok_or_else(unkeyed)
     }
 
-    /// Both documents, read fresh (other processes write them), and the key.
+    /// Both documents, read fresh (other processes write them), and the key; `None` on a device
+    /// that holds no key, for a reader that can draw without triage's record.
+    ///
+    /// # Errors
+    /// A document that does not read, or a store that could not say.
+    pub fn read_if_keyed(&self) -> Result<Option<Known>, String> {
+        let pushed = self.pushed.get(&()).map_err(|e| e.to_string())?;
+        let local = self.local.get(&()).map_err(|e| e.to_string())?;
+        Ok(self.held_key()?.map(|key| Known {
+            pushed: pushed.unwrap_or_default(),
+            local: local.unwrap_or_default(),
+            key,
+        }))
+    }
+
+    /// Both documents and the key.
     ///
     /// # Errors
     /// A document that does not read, or a key that does not resolve.
     pub fn read(&self) -> Result<Known, String> {
-        let pushed = self.pushed.get(&()).map_err(|e| e.to_string())?;
-        let local = self.local.get(&()).map_err(|e| e.to_string())?;
-        Ok(Known {
-            pushed: pushed.unwrap_or_default(),
-            local: local.unwrap_or_default(),
-            key: self.read_key()?,
-        })
+        self.read_if_keyed()?.ok_or_else(unkeyed)
     }
 
     /// Write both, the box-local one first: a crash between them leaves a message the pushed
@@ -253,6 +276,22 @@ mod tests {
         ledger.read().expect("unlocked");
         ledger.read().expect("kept");
         assert_eq!(asked.load(std::sync::atomic::Ordering::SeqCst), 2);
+    }
+
+    #[test]
+    fn a_device_with_no_key_reads_as_unkeyed_where_a_reader_can_go_without_it() {
+        let dir = tempfile::tempdir().expect("a scratch dir");
+        let ledger = Ledger::sourced(
+            dir.path().join("state.json"),
+            dir.path().join("mail.json"),
+            || Ok(None),
+        );
+        assert_eq!(ledger.read_if_keyed(), Ok(None));
+        assert_eq!(ledger.read().expect_err("no key"), unkeyed());
+        std::fs::write(dir.path().join("state.json"), "not a state").expect("writes");
+        ledger
+            .read_if_keyed()
+            .expect_err("a broken document is still a refusal");
     }
 
     #[test]

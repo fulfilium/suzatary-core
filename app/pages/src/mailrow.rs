@@ -17,6 +17,7 @@ pub(crate) fn badge(d: &Disposed) -> Option<(&'static str, &'static str)> {
         Disposed::Todo { .. } => Some(("todo", "ok")),
         Disposed::Noise => Some(("noise", "")),
         Disposed::Skip => Some(("seen", "")),
+        Disposed::Unkeyed => Some(("no dedup key", "")),
     }
 }
 
@@ -64,7 +65,7 @@ pub(crate) fn decided<M>(row: &MailRow) -> Option<Node<M>> {
 pub(crate) fn todo<M>(row: &MailRow) -> Option<Node<M>> {
     match &row.disposition {
         Disposed::Todo { todo } => Some(view! { Code "cardid" [todo.as_str()] }),
-        Disposed::Undecided | Disposed::Noise | Disposed::Skip => None,
+        Disposed::Undecided | Disposed::Noise | Disposed::Skip | Disposed::Unkeyed => None,
     }
 }
 

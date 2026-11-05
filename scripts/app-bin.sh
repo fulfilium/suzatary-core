@@ -26,6 +26,9 @@ if [[ -n "${SUZATARY_APP_REV:-}" ]]; then
 fi
 before="$(readlink -f "$link" 2>/dev/null || true)"
 out="$(nix build "$flake#suzatary" -o "$link" --print-out-paths)"
+# Its dependency build, kept: no cache serves it, and the next binary built here reuses it.
+deps="$(nix eval --raw "$flake#suzatary-deps.outPath" 2>/dev/null)" || deps=""
+[[ -z "$deps" || ! -e "$deps" ]] || nix-store --add-root "$link-deps" --indirect -r "$deps" >/dev/null
 elapsed="$(awk -v s="$start" -v e="$(date +%s.%N)" 'BEGIN { printf "%.1f", e - s }')"
 if [[ "$before" == "$out" ]]; then status="resolved"; else status="built"; fi
 printf 'app-bin: %s in %ss\n' "$status" "$elapsed" >&2
