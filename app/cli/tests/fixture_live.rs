@@ -17,13 +17,6 @@ fn fixture(root: &Path) -> Command {
     command
 }
 
-fn free_port() -> u16 {
-    std::net::TcpListener::bind("127.0.0.1:0")
-        .and_then(|listener| listener.local_addr())
-        .expect("a loopback port")
-        .port()
-}
-
 #[test]
 fn a_copy_of_a_deployment_with_a_certificate_names_none_and_serves_its_viewer() {
     let scratch = tempfile::tempdir().expect("a scratch directory");
@@ -32,7 +25,11 @@ fn a_copy_of_a_deployment_with_a_certificate_names_none_and_serves_its_viewer() 
     let built = fixture(root)
         .args(["fixture-chain", "--root"])
         .arg(root.join("box"))
-        .args(["--port", &free_port().to_string(), "--repo"])
+        .args([
+            "--port",
+            &crate::ports::outside_ephemeral().to_string(),
+            "--repo",
+        ])
         .arg(root)
         .output()
         .expect("the fixture runs");
@@ -46,7 +43,7 @@ fn a_copy_of_a_deployment_with_a_certificate_names_none_and_serves_its_viewer() 
     for pem in ["cert.pem", "key.pem"] {
         std::fs::write(root.join("box/tls").join(pem), "a pem\n").expect("writes");
     }
-    let port = free_port();
+    let port = crate::ports::outside_ephemeral();
     let copied = fixture(root)
         .args(["fixture-live", "--from"])
         .arg(root.join("box/instance.toml"))

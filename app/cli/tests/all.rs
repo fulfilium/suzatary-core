@@ -88,6 +88,9 @@ mod overview_cost;
 mod paths;
 #[path = "perf_fold_chain.rs"]
 mod perf_fold_chain;
+#[cfg(feature = "fixture")]
+#[path = "ports.rs"]
+mod ports;
 #[path = "push.rs"]
 mod push;
 #[path = "ran.rs"]

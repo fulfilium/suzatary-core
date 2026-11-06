@@ -68,18 +68,10 @@ impl Drop for Serving {
     }
 }
 
-/// A port no one listens on now.
-fn free_port() -> u16 {
-    std::net::TcpListener::bind("127.0.0.1:0")
-        .and_then(|listener| listener.local_addr())
-        .expect("a loopback port")
-        .port()
-}
-
 /// The fixture's chain and stores at the test's shape, then its server, answering once its log
 /// says it listens.
 fn served(root: &Path) -> (Serving, String) {
-    let port = free_port();
+    let port = crate::ports::outside_ephemeral();
     std::fs::create_dir_all(root.join("state")).expect("a directory");
     let built = fixture(root)
         .args(["fixture-chain", "--root"])
@@ -116,21 +108,26 @@ fn served(root: &Path) -> (Serving, String) {
         .arg("--smtp-fixture")
         .arg(root.join("sent"))
         .stdout(Stdio::piped())
-        .stderr(Stdio::null())
+        .stderr(Stdio::piped())
         .spawn()
         .expect("the server starts");
     let said = child.stdout.take().expect("piped");
-    let serving = Serving(child);
-    // The server's log says when it listens; the rest of it is read and dropped, so the pipe
-    // never fills under the server.
+    let mut why = child.stderr.take().expect("piped");
+    let mut serving = Serving(child);
+    // The server says it serves once its port is bound; the rest of its log is read and dropped,
+    // so the pipe never fills under the server.
     let mut lines = std::io::BufRead::lines(std::io::BufReader::new(said));
-    assert!(
-        lines
-            .by_ref()
-            .map_while(Result::ok)
-            .any(|line| line.contains("serve: http")),
-        "the server ended before it listened"
-    );
+    let listened = lines
+        .by_ref()
+        .map_while(Result::ok)
+        .any(|line| line.contains("serve: http"));
+    if !listened {
+        let _ = serving.0.wait();
+        let mut said = String::new();
+        let _ = std::io::Read::read_to_string(&mut why, &mut said);
+        panic!("the server ended before it listened on {port}: {said}");
+    }
+    std::thread::spawn(move || std::io::copy(&mut why, &mut std::io::sink()));
     std::thread::spawn(move || lines.for_each(drop));
     (serving, format!("http://127.0.0.1:{port}"))
 }
@@ -232,8 +229,14 @@ fn round(base: &str, key: &prodrome_core::sign::Secret, round: usize) {
         .to_string();
     let nonce = format!("{round:032x}");
     let signed = suzatary_cli::commands::call::Signed::of("POST", &said, &body, key, &at, &nonce);
+    // A refusal is read, not raised, so its status and the box's words reach the failure.
+    let agent = ureq::Agent::config_builder()
+        .http_status_as_error(false)
+        .build()
+        .new_agent();
     let request = signed.headers.into_iter().fold(
-        ureq::post(&format!("{base}{said}"))
+        agent
+            .post(&format!("{base}{said}"))
             .header("x-suzatary-act", "1")
             .header(
                 suzatary_core::gate::CLIENT_HEADER,
@@ -243,9 +246,15 @@ fn round(base: &str, key: &prodrome_core::sign::Secret, round: usize) {
             .header("content-type", "application/json"),
         |request, (name, value)| request.header(name, value),
     );
-    request
+    let mut answer = request
         .send(&body[..])
         .unwrap_or_else(|failed| panic!("POST {said}: {failed}"));
+    let status = answer.status();
+    assert!(
+        status.is_success(),
+        "POST {said} at {at}: {status}: {}",
+        answer.body_mut().read_to_string().unwrap_or_default()
+    );
 }
 
 #[test]

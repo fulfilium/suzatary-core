@@ -72,7 +72,6 @@ pub struct Uploads {
     pub vault: Arc<dyn suzatary_core::vault::Vault>,
 }
 
-/// One shared [`Inner`].
 #[derive(Clone)]
 pub struct State(Arc<Inner>);
 
@@ -92,7 +91,6 @@ pub struct Settings {
     /// Declares `settables`.
     pub declares: Arc<dyn suzatary_core::settings::Declares + Send + Sync>,
     pub edits: Arc<dyn suzatary_core::settings::Edits + Send + Sync>,
-    /// The data repository.
     pub data: Arc<std::path::PathBuf>,
 }
 
@@ -107,10 +105,8 @@ pub struct Performers {
 pub struct Inner {
     /// Serves every bare `/api/…` path.
     pub first: Chained,
-    /// Every chain by name.
     pub chains: Arc<BTreeMap<String, Chained>>,
     pub deployment: Arc<Deployment>,
-    /// The app's own URL.
     pub door: Arc<suzatary_core::gate::Door>,
     /// Reached only with a `Tap`.
     pub postman: Arc<dyn suzatary_core::secretary::routes::Post + Send + Sync>,
@@ -149,7 +145,6 @@ pub struct Inner {
     /// `None` declares no plugin.
     pub plugins: Option<Arc<crate::instance::Plugins>>,
     pub repos: Arc<suzatary_core::repos::Declared>,
-    /// The data repository.
     pub data: Arc<std::path::PathBuf>,
     /// Only a chain whose heads moved is reread.
     pub read: Arc<std::sync::Mutex<suzatary_core::chain_set::Read>>,
@@ -162,7 +157,6 @@ pub struct Inner {
             >,
         >,
     >,
-    /// Memoised build line.
     pub built: Arc<
         std::sync::Mutex<
             prodrome_core::memo::Cache<
@@ -175,7 +169,6 @@ pub struct Inner {
     pub keys: Option<Arc<suzatary_core::signatures::BoxKeys>>,
     /// Signed requests and answers.
     pub requests: Option<Arc<suzatary_io::requests::Requests>>,
-    /// The last pairing code.
     pub pairings: Option<Arc<dyn suzatary_core::signatures::Pairings>>,
     /// So a request sent twice at once runs once.
     pub performing: asked::InFlight,
@@ -822,7 +815,6 @@ pub struct Serving {
     pub listening: listening::Listening,
     /// `app_url`'s host at the `listening` port.
     pub door: suzatary_core::gate::Door,
-    /// The frontend build.
     pub dist: PathBuf,
     pub live: live::Shared,
     /// Names a peer, loopback included.
@@ -1039,12 +1031,16 @@ async fn serve_on(
     service: axum::extract::connect_info::IntoMakeServiceWithConnectInfo<Router, SocketAddr>,
 ) -> anyhow::Result<()> {
     let address = listening.at();
+    // Bound before the line a caller waits on says so.
+    let listener =
+        std::net::TcpListener::bind(address).with_context(|| format!("binding {address}"))?;
+    listener.set_nonblocking(true)?;
     match listening {
         listening::Listening::Loopback(_) => {
             tracing::info!(
                 "serve: http://{address} (reads GET, writes POST /api/act/*, gated by whois)"
             );
-            axum_server::bind(address)
+            axum_server::from_tcp(listener)?
                 .acceptor(axum_server::accept::NoDelayAcceptor::new())
                 .serve(service)
                 .await
@@ -1059,7 +1055,7 @@ async fn serve_on(
                 "serve: https://{address} (reads GET, writes POST /api/act/*, gated by whois)"
             );
             // TCP_NODELAY, or the h2 preface waits on Nagle and a delayed ACK (~45 ms).
-            axum_server::bind_rustls(address, config)
+            axum_server::tls_rustls::from_tcp_rustls(listener, config)?
                 .map(|tls| tls.acceptor(axum_server::accept::NoDelayAcceptor::new()))
                 .serve(service)
                 .await
@@ -1690,7 +1686,6 @@ async fn erase_at_startup(chain: &Chained) {
     }
 }
 
-/// `suzatary serve`.
 pub fn run(path: &Path, args: Args) -> anyhow::Result<()> {
     let instance = Instance::open(path)?;
     tracing_subscriber::fmt()
