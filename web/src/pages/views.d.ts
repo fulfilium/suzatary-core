@@ -2,7 +2,7 @@
 // `import("./views.js")` while esbuild keeps it external.
 
 /** Once per tab. */
-export default function init(init: { module_or_path: Response | BufferSource }): Promise<unknown>;
+export default function init(init: { module_or_path: Response | BufferSource | WebAssembly.Module }): Promise<unknown>;
 
 /** A page as `viewtree::export!` makes it. */
 declare class Page {
@@ -18,6 +18,8 @@ declare class Page {
   /** A JSON array, since last asked. */
   effects(): string;
   free(): void;
+  /** Runs the page's rehearsal (`Hosted::rehearsal`) and drops it; throws when a step of it fails. */
+  static rehearse(): void;
 }
 
 export class MailPage extends Page {}

@@ -1,0 +1,16 @@
+# The brotli bytes a first visit downloads for each wasm module the web app ships, at most, by the
+# Nix system that builds it: each module is `packages.${system}`'s, and an aarch64 build of the
+# same revision is not byte for byte an x86_64 one (typst-wasm: 6,276,915 bytes brotli on
+# aarch64-linux, 6,271,632 on x86_64-linux, each reproduced by `nix build --rebuild`). Each line is
+# its system's figure, as `nix build` and build-web.sh's `brotli -q 11` make it, rounded up to a
+# thousand bytes so a change that moves a module by less need not move its line.
+# scripts/build-web.sh refuses a module over its system's line, or one with no line. A line only
+# moves down: app/cli/tests/guards/wasm_budget.rs refuses one raised against the merge base.
+#
+# <module> <system> <bytes>
+views_bg.wasm x86_64-linux 494000
+prodrome_bg.wasm x86_64-linux 1113000
+typst_bg.wasm x86_64-linux 6272000
+views_bg.wasm aarch64-linux 495000
+prodrome_bg.wasm aarch64-linux 1124000
+typst_bg.wasm aarch64-linux 6277000

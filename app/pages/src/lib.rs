@@ -32,13 +32,18 @@ pub mod thread;
 pub mod waiting;
 pub mod zone;
 
+/// Each page's `Hosted`, with the rehearsal file under `tests/rehearsal/` its first readings' code runs
+/// through, where it has one.
 macro_rules! hosted {
-    ($($page:ident :: $program:ident),*) => {$(
+    ($($page:ident :: $program:ident $(= $rehearsal:literal)?),*) => {$(
         impl viewtree::host::Hosted for $page::$program {
             type Input = runtime::Input<$page::Hold, $page::Ask>;
             fn input(input: Self::Input) -> $page::Msg {
                 $page::Msg::Host(Box::new(input))
             }
+            $(fn rehearsal() -> Option<&'static str> {
+                Some(include_str!(concat!("../tests/rehearsal/", $rehearsal)))
+            })?
         }
     )*};
 }
@@ -47,17 +52,20 @@ hosted!(
     mail::Mail,
     memory::Memory,
     about::About,
-    settings::Settings,
-    inbox::Inbox,
-    secretary::Secretary,
+    settings::Settings = "settings.json",
+    inbox::Inbox = "inbox.json",
+    secretary::Secretary = "secretary.json",
     draft::Draft,
-    needsyou::NeedsYou
+    needsyou::NeedsYou = "needsyou.json"
 );
 
 impl viewtree::host::Hosted for conversation::Conversation {
     type Input = conversation::Input;
     fn input(input: conversation::Input) -> conversation::Msg {
         conversation::Msg::Host(Box::new(input))
+    }
+    fn rehearsal() -> Option<&'static str> {
+        Some(include_str!("../tests/rehearsal/conversation.json"))
     }
 }
 

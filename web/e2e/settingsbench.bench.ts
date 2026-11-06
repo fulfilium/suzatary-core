@@ -25,7 +25,8 @@ const LINES = `new MutationObserver((_, o) => { if (document.querySelector(".set
 const drawn = `(performance.getEntriesByName("settings:lines")[0]?.startTime ?? null)`;
 
 // Where the time went: when the program started (`page:draw` of `SettingsPage`: the module loaded, its chrome
-// painted), the module's load (`views:load`: the glue and the wasm fetched, compiled and instantiated) and the first paint.
+// painted), the module's load (`views:load`: the glue and the wasm fetched, compiled, instantiated and rehearsed) and the
+// first paint.
 type Parts = { readonly frame: number; readonly load: number; readonly paint: number };
 const parts = `(() => {
   const at = (name, f) => performance.getEntriesByName(name).find(f);

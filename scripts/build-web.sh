@@ -88,6 +88,16 @@ esbuild web/src/prodrome/worker.ts \
   --external:./prodrome.js \
   --outfile=web/dist/prodromework.js
 
+# The pages' rehearsal: runs each page's first readings' code once on the page's own compiled
+# module, so the browser compiles it off the page's thread.
+esbuild web/src/pages/rehearse.ts \
+  --bundle \
+  --minify \
+  --format=esm \
+  --target=es2022 \
+  --external:./views.js \
+  --outfile=web/dist/pagework.js
+
 # The service worker, beside app.js so its scope is the app's. An IIFE: a worker registered
 # without `type: "module"` runs a classic script.
 esbuild web/src/sw.ts \
@@ -147,6 +157,27 @@ done
 for f in typst_bg.wasm prodrome_bg.wasm app.js; do
   echo "    $f: $(stat -c %s "web/dist/$f") bytes raw, $(stat -c %s "web/dist/$f.br") bytes brotli"
 done
+
+# What a phone downloads on a deploy's first load: each shipped wasm module's brotli bytes against
+# its line of web/wasm-budget for the system that built it (stdenv's `system`, set in a derivation
+# and in `nix develop` alike), which only moves down.
+echo "==> every wasm module within its brotli budget (web/wasm-budget, ${system:?build-web.sh: no Nix system})"
+over=0
+for wasm in web/dist/*.wasm; do
+  name=$(basename "$wasm")
+  budget=$(grep -v '^#' web/wasm-budget | awk -v n="$name" -v s="$system" '$1 == n && $2 == s { print $3 }')
+  size=$(stat -c %s "$wasm.br")
+  if [[ -z "$budget" ]]; then
+    echo "build-web.sh: $name has no line for $system in web/wasm-budget" >&2
+    over=1
+  elif ((size > budget)); then
+    echo "build-web.sh: $name is $size bytes brotli, over its $system budget of $budget (web/wasm-budget)" >&2
+    over=1
+  else
+    echo "    $name: $size of $budget bytes brotli"
+  fi
+done
+((over == 0)) || exit 1
 
 echo "built: $(du -sh web/dist | cut -f1) in web/dist/"
 ls -1 web/dist

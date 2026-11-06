@@ -32,11 +32,26 @@ export namespace program {
   // Once per tab; the load is a User Timing measure the bench reads.
   export const module = once.of(async () => {
     const t0 = performance.now()
-    const [glue, response] = await Promise.all([import("./views.js"), fetch(new URL("./views_bg.wasm", import.meta.url).href)])
-    await glue.default({ module_or_path: response })
+    const [glue, compiled] = await Promise.all([
+      import("./views.js"),
+      WebAssembly.compileStreaming(fetch(new URL("./views_bg.wasm", import.meta.url).href)),
+    ])
+    // V8 compiles a function of the module on its first call, and keeps the code with the module: the rehearsal worker
+    // makes those first calls (`rehearse.ts`), and the module is the page's once it has, so a page's first input finds
+    // its code compiled. The readings a page asks for come from the core worker, whose restore runs meanwhile.
+    await Promise.all([glue.default({ module_or_path: compiled }), rehearsed(compiled)])
     performance.measure("views:load", { start: t0, end: performance.now() })
     return glue
   }).get
+
+  // Settled when the worker says it is done, or fails: a rehearsal that cannot run costs the page only its warmth.
+  const rehearsed = (compiled: WebAssembly.Module): Promise<void> =>
+    new Promise(done => {
+      const worker = new Worker(new URL("./pagework.js", import.meta.url), { type: "module" })
+      worker.addEventListener("message", () => done())
+      worker.addEventListener("error", () => done())
+      worker.postMessage(compiled)
+    })
 
   // Once per zone, ten years back to a day ahead: an instant from older mail is read at the oldest offset.
   const offsets = new Map<string, readonly time.Offset[]>()

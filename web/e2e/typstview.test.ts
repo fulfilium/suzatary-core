@@ -256,18 +256,20 @@ app.scene("a one-row change computes and places exactly that row's spine, and ke
 
 app.scene("the core, typst-wasm and the pages compile while they stream, as application/wasm, never from bytes read whole", async () => {
   const stop = await app.page.beforeEveryDocument(`(() => {
-    const w = WebAssembly, streaming = w.instantiateStreaming, whole = w.instantiate;
+    const w = WebAssembly, streaming = w.instantiateStreaming, compiling = w.compileStreaming, whole = w.instantiate;
     window.__wasm = { streamed: [], whole: 0 };
-    w.instantiateStreaming = (r, imports) => Promise.resolve(r).then((res) => {
-      window.__wasm.streamed.push(new URL(res.url).pathname + " " + res.headers.get("content-type"));
-      return streaming.call(w, res, imports);
-    });
-    w.instantiate = (...args) => { window.__wasm.whole++; return whole.apply(w, args); };
+    const heard = (res) => window.__wasm.streamed.push(new URL(res.url).pathname + " " + res.headers.get("content-type"));
+    w.instantiateStreaming = (r, imports) => Promise.resolve(r).then((res) => (heard(res), streaming.call(w, res, imports)));
+    w.compileStreaming = (r) => Promise.resolve(r).then((res) => (heard(res), compiling.call(w, res)));
+    // A module compiled while it streamed and then instantiated is not bytes read whole.
+    w.instantiate = (...args) => { if (!(args[0] instanceof WebAssembly.Module)) window.__wasm.whole++; return whole.apply(w, args); };
   })()`);
   try {
     await app.page.cold(true);
     await app.page.navigate("about:blank");
     await typst();
+    // The popup loads the pages' module once the screen is drawn and the tab idle, which may be after the Typst view.
+    await app.page.waitFor(`window.__wasm.streamed.some((s) => s.startsWith("/b/dev/views_bg.wasm"))`);
     const got = await app.page.evaluate<{ streamed: string[]; whole: number }>(`window.__wasm`);
     assert.deepEqual([...got.streamed].sort(), ["/b/dev/prodrome_bg.wasm application/wasm", "/b/dev/typst_bg.wasm application/wasm", "/b/dev/views_bg.wasm application/wasm"], "each under its build's name: the pages too, since the popup of what newly waits is one on every screen");
     assert.equal(got.whole, 0, "a module was instantiated from bytes read whole");

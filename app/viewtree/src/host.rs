@@ -10,6 +10,15 @@ use crate::program::{Frame, Program, Runtime};
 pub trait Hosted: Program<Flags: DeserializeOwned, Effect: Serialize> {
     type Input: DeserializeOwned;
     fn input(input: Self::Input) -> Self::Msg;
+
+    /// A JSON document `{"flags": …, "inputs": […]}`, flags and inputs as the host sends them,
+    /// that takes the program through the code its first real readings run. The host runs it in
+    /// a worker on the same compiled module, so the browser compiles that code there, before a
+    /// page's first input would compile it on the page's thread.
+    #[must_use]
+    fn rehearsal() -> Option<&'static str> {
+        None
+    }
 }
 
 pub struct Host<P: Hosted> {
@@ -50,14 +59,38 @@ impl<P: Hosted> Host<P> {
             .map_err(|e| format!("effects: {e}"))
     }
 
+    /// The program's rehearsal run as a page would run it, and dropped: nothing for a program
+    /// with none.
+    pub fn rehearse() -> Result<(), String> {
+        let Some(text) = P::rehearsal() else {
+            return Ok(());
+        };
+        let Rehearsal { flags, inputs } =
+            serde_json::from_str(text).map_err(|e| format!("rehearsal: {e}"))?;
+        let (mut host, _) = Self::start(&flags.to_string())?;
+        for input in inputs {
+            host.input(&input.to_string())?;
+        }
+        drop(host.fresh());
+        host.effects().map(drop)
+    }
+
     fn took(&mut self, frame: Frame<P::Effect>) -> Vec<u8> {
         self.effects.extend(frame.effects);
         frame.patches
     }
 }
 
+/// A program's rehearsal: the flags it starts with and the inputs a first visit hands it.
+#[derive(serde::Deserialize)]
+struct Rehearsal {
+    flags: serde_json::Value,
+    inputs: Vec<serde_json::Value>,
+}
+
 /// A wasm-bindgen class `$class` over `$program`: `new(flags)`, `first()` (the first paint),
-/// `input(json)`, `event(id, on, words)`, `fresh()`, `effects()`. Needs `wasm-bindgen`.
+/// `input(json)`, `event(id, on, words)`, `fresh()`, `effects()`, and the static `rehearse()`.
+/// Needs `wasm-bindgen`.
 #[macro_export]
 macro_rules! export {
     ($class:ident = $program:ty) => {
@@ -97,6 +130,11 @@ macro_rules! export {
             pub fn effects(&mut self) -> Result<String, wasm_bindgen::JsError> {
                 self.host
                     .effects()
+                    .map_err(|e| wasm_bindgen::JsError::new(&e))
+            }
+
+            pub fn rehearse() -> Result<(), wasm_bindgen::JsError> {
+                $crate::host::Host::<$program>::rehearse()
                     .map_err(|e| wasm_bindgen::JsError::new(&e))
             }
         }

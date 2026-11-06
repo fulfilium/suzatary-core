@@ -59,6 +59,8 @@ mod train;
 mod triage_auth;
 #[path = "guards/vault.rs"]
 mod vault;
+#[path = "guards/wasm_budget.rs"]
+mod wasm_budget;
 
 /// The repository root, two levels above `CARGO_MANIFEST_DIR`.
 fn repo() -> PathBuf {

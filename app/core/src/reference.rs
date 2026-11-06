@@ -10,10 +10,8 @@
 
 use std::fmt;
 use std::str::FromStr;
-use std::sync::LazyLock;
 
 use prodrome_core::event::TodoId;
-use regex::Regex;
 use serde::{Deserialize, Serialize};
 
 use crate::chains::ChainName;
@@ -461,34 +459,140 @@ impl From<Reference> for String {
     }
 }
 
-/// The eight spellings as one scan, mirrored by `tokenise` in `web/src/chat/refs.ts`.
-///
-/// Group 1 is the boundary, so `notodo:x` is a word and not a link (a group, since `regex` has
-/// no lookbehind). Group 2 only finds candidates; `FromStr` still decides what is real.
-static MENTION: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(concat!(
-        r"(^|[^A-Za-z0-9_-])(",
-        r"todo:[a-z][a-z0-9-]*/[a-z0-9_-]+",
-        r"|mail:[0-9a-f]{6,64}",
-        r"|thread:[A-Za-z0-9_-](?:[A-Za-z0-9._-]{0,126}[A-Za-z0-9_-])?",
-        r"|briefing:\d{4}-\d{2}-\d{2}",
-        r"|proposal:[a-z0-9][a-z0-9-]*/\d+",
-        r"|batch:[a-z][a-z0-9-]*/[0-9a-f]{8,64}",
-        r"|(?:round|note):[a-z0-9][a-z0-9-]*/[0-9]+",
-        r")",
-    ))
-    .expect("a literal pattern")
-});
-
 /// Every reference named in a turn's prose, in order. A candidate [`FromStr`] refuses is
 /// dropped: erring toward "not a link" is the safe direction.
+///
+/// The eight spellings are found by one hand-written scan, mirrored by `tokenise` in
+/// `web/src/chat/refs.ts`, so the browser's module links no regex engine: a candidate starts
+/// after a character that is not `[A-Za-z0-9_-]` (or at the start) and not inside an earlier
+/// candidate, and each spelling takes the longest run its shape allows.
 #[must_use]
 pub fn mentions(text: &str) -> Vec<Reference> {
-    MENTION
-        .captures_iter(text)
-        .filter_map(|caps| caps.get(2))
-        .filter_map(|found| found.as_str().parse::<Reference>().ok())
-        .collect()
+    let bytes = text.as_bytes();
+    let mut found = Vec::new();
+    let mut at = 0;
+    while at < bytes.len() {
+        let bounded = at == 0 || !word(bytes[at - 1]);
+        match bounded.then(|| candidate(&bytes[at..])).flatten() {
+            Some(len) => {
+                // A candidate is ASCII, so its ends are on character boundaries.
+                if let Ok(reference) = text[at..at + len].parse::<Reference>() {
+                    found.push(reference);
+                }
+                // The next candidate needs a boundary this one did not take.
+                at += len + 1;
+            }
+            None => at += 1,
+        }
+    }
+    found
+}
+
+fn word(b: u8) -> bool {
+    b.is_ascii_alphanumeric() || b == b'_' || b == b'-'
+}
+
+/// How long the run of `class` at the start of `s` is, at most `most`.
+fn run(s: &[u8], class: fn(u8) -> bool, most: usize) -> usize {
+    s.iter().take(most).take_while(|b| class(**b)).count()
+}
+
+fn lower(b: u8) -> bool {
+    b.is_ascii_lowercase()
+}
+fn slug(b: u8) -> bool {
+    b.is_ascii_lowercase() || b.is_ascii_digit() || b == b'-'
+}
+fn id(b: u8) -> bool {
+    slug(b) || b == b'_'
+}
+fn hex(b: u8) -> bool {
+    b.is_ascii_digit() || (b'a'..=b'f').contains(&b)
+}
+fn digit(b: u8) -> bool {
+    b.is_ascii_digit()
+}
+fn thread_end(b: u8) -> bool {
+    word(b)
+}
+fn thread_inner(b: u8) -> bool {
+    word(b) || b == b'.'
+}
+
+/// `head` then `rest` then `/` then at least `least` of `tail`, as long as `tail` allows.
+fn slashed(
+    s: &[u8],
+    head: fn(u8) -> bool,
+    rest: fn(u8) -> bool,
+    tail: fn(u8) -> bool,
+    (least, most): (usize, usize),
+) -> Option<usize> {
+    if !s.first().copied().is_some_and(head) {
+        return None;
+    }
+    let name = 1 + run(&s[1..], rest, usize::MAX);
+    if s.get(name) != Some(&b'/') {
+        return None;
+    }
+    let after = run(&s[name + 1..], tail, most);
+    (after >= least).then_some(name + 1 + after)
+}
+
+/// The length of the candidate spelled at the start of `s`, if one is.
+fn candidate(s: &[u8]) -> Option<usize> {
+    let spelled = |scheme: &str| s.strip_prefix(scheme.as_bytes());
+    let with = |scheme: &str, len: Option<usize>| len.map(|l| scheme.len() + l);
+    if let Some(r) = spelled("todo:") {
+        return with("todo:", slashed(r, lower, slug, id, (1, usize::MAX)));
+    }
+    if let Some(r) = spelled("mail:") {
+        let n = run(r, hex, 64);
+        return with("mail:", (n >= 6).then_some(n));
+    }
+    if let Some(r) = spelled("thread:") {
+        if !r.first().copied().is_some_and(thread_end) {
+            return None;
+        }
+        let inner = run(&r[1..], thread_inner, 127);
+        let tail = (1..=inner).rev().find(|k| thread_end(r[*k])).unwrap_or(0);
+        return with("thread:", Some(1 + tail));
+    }
+    if let Some(r) = spelled("briefing:") {
+        let shape = [4, 2, 2];
+        let mut at = 0;
+        for (n, len) in shape.iter().enumerate() {
+            if n > 0 {
+                if r.get(at) != Some(&b'-') {
+                    return None;
+                }
+                at += 1;
+            }
+            if run(&r[at.min(r.len())..], digit, *len) != *len {
+                return None;
+            }
+            at += len;
+        }
+        return with("briefing:", Some(at));
+    }
+    if let Some(r) = spelled("proposal:") {
+        return with(
+            "proposal:",
+            slashed(r, slug_head, slug, digit, (1, usize::MAX)),
+        );
+    }
+    if let Some(r) = spelled("batch:") {
+        return with("batch:", slashed(r, lower, slug, hex, (8, 64)));
+    }
+    for scheme in ["round:", "note:"] {
+        if let Some(r) = spelled(scheme) {
+            return with(scheme, slashed(r, slug_head, slug, digit, (1, usize::MAX)));
+        }
+    }
+    None
+}
+
+fn slug_head(b: u8) -> bool {
+    b.is_ascii_lowercase() || b.is_ascii_digit()
 }
 
 #[cfg(test)]
@@ -496,6 +600,68 @@ mod tests {
     use proptest::prelude::*;
 
     use super::*;
+
+    /// The pattern the scan replaced, with `\d` read as `[0-9]`.
+    fn by_regex(text: &str) -> Vec<Reference> {
+        let pattern = regex::Regex::new(concat!(
+            r"(^|[^A-Za-z0-9_-])(",
+            r"todo:[a-z][a-z0-9-]*/[a-z0-9_-]+",
+            r"|mail:[0-9a-f]{6,64}",
+            r"|thread:[A-Za-z0-9_-](?:[A-Za-z0-9._-]{0,126}[A-Za-z0-9_-])?",
+            r"|briefing:[0-9]{4}-[0-9]{2}-[0-9]{2}",
+            r"|proposal:[a-z0-9][a-z0-9-]*/[0-9]+",
+            r"|batch:[a-z][a-z0-9-]*/[0-9a-f]{8,64}",
+            r"|(?:round|note):[a-z0-9][a-z0-9-]*/[0-9]+",
+            r")",
+        ))
+        .expect("a literal pattern");
+        pattern
+            .captures_iter(text)
+            .filter_map(|caps| caps.get(2))
+            .filter_map(|found| found.as_str().parse::<Reference>().ok())
+            .collect()
+    }
+
+    /// Text built of the spellings' pieces, so most of it nearly spells a reference.
+    fn prose() -> impl Strategy<Value = String> {
+        let piece = prop::sample::select(vec![
+            "todo:",
+            "mail:",
+            "thread:",
+            "briefing:",
+            "proposal:",
+            "batch:",
+            "round:",
+            "note:",
+            "life",
+            "a",
+            "Z",
+            "-",
+            "_",
+            ".",
+            "/",
+            " ",
+            ",",
+            ":",
+            "0",
+            "7",
+            "2026-11-05",
+            "abc",
+            "deadbeef",
+            "é",
+            "x/1",
+            "/42",
+        ]);
+        proptest::collection::vec(piece, 0..24).prop_map(|parts| parts.concat())
+    }
+
+    proptest! {
+        /// The scan finds what the regular expression found, in the same order.
+        #[test]
+        fn the_scan_finds_what_the_pattern_found(text in prose()) {
+            prop_assert_eq!(mentions(&text), by_regex(&text));
+        }
+    }
 
     fn chain() -> impl Strategy<Value = ChainName> {
         "[a-z][a-z0-9-]{0,31}".prop_map(|text| ChainName::new(text).expect("a slug"))
