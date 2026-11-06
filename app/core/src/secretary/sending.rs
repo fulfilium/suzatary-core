@@ -43,6 +43,7 @@ impl Sending {
                 // A new event names no attendee, so the calendar invites nobody by mail.
                 | Act::CalendarEvent { .. }
                 | Act::Erase { .. }
+                | Act::Retract { .. }
                 | Act::Afresh { .. } => Sending::SendsNothing,
             },
         }

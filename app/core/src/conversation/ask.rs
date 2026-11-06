@@ -209,14 +209,19 @@ fn sessioned(
     waiting: &queue::Pending<'_>,
     sink: &Sink<'_>,
 ) -> Result<Asked, ModelError> {
-    let surface = surface_of(system, tools);
+    // A retraction the store will not say records no surface, so the next turn opens afresh.
+    let surface = memories
+        .digests
+        .reads()
+        .retractions()
+        .map(|retracted| surface_of(system, tools, &retracted));
     let open = |tag: &str| {
         let fresh = SessionId::minted(&format!("{}/{}{tag}", id.as_str(), stored.turns.len()));
         let (whole, seen, from) = opening(system, memories, topics, stored);
         model
             .open(&fresh, &whole, tools, sink.halt)
             .map(|mut sessioned| {
-                sessioned.session.surface = Some(surface.clone());
+                sessioned.session.surface = surface.clone().ok();
                 Asked {
                     reply: sessioned.reply,
                     // What this open sent is a fact now; a turn appended before the session's
@@ -251,7 +256,13 @@ fn sessioned(
         asked => asked,
     };
     let session = match &stored.session {
-        Some(kept) if kept.session.surface.as_deref() == Some(surface.as_str()) => &kept.session,
+        Some(kept)
+            if surface
+                .as_ref()
+                .is_ok_and(|surface| kept.session.surface.as_ref() == Some(surface)) =>
+        {
+            &kept.session
+        }
         Some(_) => return opened("/surface"),
         None => return opened(""),
     };
@@ -269,14 +280,24 @@ fn sessioned(
     }
 }
 
-/// The digest of what a session is told only when it opens: the manual and the verb list.
+/// The digest of what a session holds from its opening that no later turn corrects: the manual,
+/// the verb list, and which summaries the owner had retracted, since the record it was told may
+/// hold one he has retracted since. No retraction adds nothing.
 #[must_use]
-pub fn surface_of(system: &str, tools: &Value) -> String {
+pub fn surface_of(
+    system: &str,
+    tools: &Value,
+    retracted: &std::collections::BTreeSet<prodrome_core::event::Hash>,
+) -> String {
     use sha2::{Digest, Sha256};
     let mut hasher = Sha256::new();
     hasher.update(system.as_bytes());
     hasher.update([0]);
     hasher.update(tools.to_string().as_bytes());
+    for retraction in retracted {
+        hasher.update([0]);
+        hasher.update(retraction.as_str().as_bytes());
+    }
     hex::encode(hasher.finalize())
 }
 

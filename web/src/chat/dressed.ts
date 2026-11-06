@@ -60,7 +60,7 @@ export namespace dressed {
   export const asked = (): Promise<MemoryPayload | null> => getMemory().catch(() => null)
 
   const memory = (w: ConversationPayload): Promise<MemoryPayload | null> =>
-    w.turns.some(t => t.who === "verb" && t.outcome.is === "remembered") || w.proposals.some(p => p.act.kind === "remember")
+    w.turns.some(t => t.who === "verb" && t.outcome.is === "remembered") || w.proposals.some(p => p.act.kind === "remember" || p.act.kind === "consolidate")
       ? asked()
       : Promise.resolve(null)
 

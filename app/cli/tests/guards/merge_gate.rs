@@ -423,6 +423,7 @@ const NAMED_AS_DATA: &[(&str, &str)] = &[
     ("app/cli/tests/signatures.rs", "memory"),
     ("app/cli/tests/stores.rs", "memory"),
     ("app/cli/tests/writes.rs", "memory"),
+    ("app/core/src/secretary/card.rs", "memory"),
     ("app/io/src/objects.rs", "memory"),
     ("app/pages/src/places.rs", "memory"),
     ("app/pages/tests/laws.rs", "memory"),

@@ -1,6 +1,7 @@
 //! One act the secretary wants performed and will not perform itself.
 
 use super::Draft;
+use crate::secretary::memory::Replaces;
 use serde::{Deserialize, Serialize};
 
 /// One act the secretary wants performed and will not perform itself, whole.
@@ -24,7 +25,8 @@ pub enum Proposal {
     /// An act for the box to perform, on the same tap.
     Act(crate::secretary::acts::Act),
     /// A fact to remember, asked for in a round that had read something not the owner's own: a
-    /// memory written because an email said so is the attack, so his tap writes it instead.
+    /// memory written because an email said so is the attack, so his tap writes it instead. A
+    /// consolidation asked for in such a round is one too, replacing the facts it names.
     ///
     /// It names the fact's words and never holds them: they are kept in the memory's text store
     /// ([`crate::secretary::memories`]), so dismissing the card, or forgetting the fact it became,
@@ -34,6 +36,8 @@ pub enum Proposal {
         text: crate::secretary::salted_text::TextName,
         /// What it is about.
         kind: crate::secretary::memory::Kind,
+        /// The standing facts it replaces.
+        replaces: crate::secretary::memory::Replaces,
     },
     /// A decision to record, whole, as the owner's own once he taps it.
     Decide(crate::decisions::Draft),
@@ -97,6 +101,7 @@ impl Proposal {
                 // An event written twice is two events.
                 | Act::CalendarEvent { .. }
                 | Act::Erase { .. }
+                | Act::Retract { .. }
                 | Act::Afresh { .. } => false,
             },
         }
@@ -135,11 +140,21 @@ impl Proposal {
             ),
             // The act's own sentence, so a list and a card cannot print two words for one act.
             Proposal::Act(act) => act.sentence(),
-            Proposal::Remember { text, kind } => match words(text) {
-                Words::Kept(fact) => format!("remember ({}): {fact}", kind.as_str()),
-                Words::Gone => format!("remember ({}): its words are deleted", kind.as_str()),
-                Words::Unread => format!("remember ({})", kind.as_str()),
-            },
+            Proposal::Remember {
+                text,
+                kind,
+                replaces,
+            } => {
+                let verb = match replaces {
+                    Replaces::Nothing => "remember".to_owned(),
+                    Replaces::Facts(sources) => format!("merge {sources} into one"),
+                };
+                match words(text) {
+                    Words::Kept(fact) => format!("{verb} ({}): {fact}", kind.as_str()),
+                    Words::Gone => format!("{verb} ({}): its words are deleted", kind.as_str()),
+                    Words::Unread => format!("{verb} ({})", kind.as_str()),
+                }
+            }
             Proposal::Decide(draft) => crate::secretary::decide::sentence(draft),
         }
     }
@@ -147,8 +162,12 @@ impl Proposal {
 
 /// `Remember(text, kind)`.
 pub const REMEMBER: prodrome_core::literal::codec::Constructor = ("Remember", &["text", "kind"]);
+/// `Consolidate(text, kind, from)`: a remember card that replaces the facts `from`.
+pub const CONSOLIDATE: prodrome_core::literal::codec::Constructor =
+    ("Consolidate", &["text", "kind", "from"]);
 
-/// An act is its arm's own constructor: `Email`, `Forward`, `Changes`, `Remember`, `Decide`, or
+/// An act is its arm's own constructor: `Email`, `Forward`, `Changes`, `Remember`, `Consolidate`,
+/// `Decide`, or
 /// one of the acts the box performs.
 impl prodrome_core::literal::codec::Literal for Proposal {
     fn to_value(&self) -> prodrome_core::literal::Value {
@@ -158,9 +177,19 @@ impl prodrome_core::literal::codec::Literal for Proposal {
             Proposal::Forward(forward) => forward.to_value(),
             Proposal::Changes(changeset) => changeset.to_value(),
             Proposal::Act(act) => act.to_value(),
-            Proposal::Remember { text, kind } => {
-                record(REMEMBER, vec![text.to_value(), kind.to_value()])
-            }
+            Proposal::Remember {
+                text,
+                kind,
+                replaces: Replaces::Nothing,
+            } => record(REMEMBER, vec![text.to_value(), kind.to_value()]),
+            Proposal::Remember {
+                text,
+                kind,
+                replaces: Replaces::Facts(from),
+            } => record(
+                CONSOLIDATE,
+                vec![text.to_value(), kind.to_value(), from.to_value()],
+            ),
             Proposal::Decide(draft) => draft.to_value(),
         }
     }
@@ -180,6 +209,15 @@ impl prodrome_core::literal::codec::Literal for Proposal {
                 Proposal::Remember {
                     text: fields.get("text")?,
                     kind: fields.get("kind")?,
+                    replaces: Replaces::Nothing,
+                }
+            }
+            "Consolidate" => {
+                let fields = Fields::of(value, CONSOLIDATE)?;
+                Proposal::Remember {
+                    text: fields.get("text")?,
+                    kind: fields.get("kind")?,
+                    replaces: Replaces::Facts(fields.get("from")?),
                 }
             }
             "Decide" => Proposal::Decide(crate::decisions::Draft::from_value(value)?),

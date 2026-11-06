@@ -368,6 +368,7 @@ impl Bundle {
             Proposal::Remember {
                 text: kept.name().clone(),
                 kind: Kind::Person,
+                replaces: suzatary_core::secretary::memory::Replaces::Nothing,
             },
             Reasons::new(
                 "her signature says so",

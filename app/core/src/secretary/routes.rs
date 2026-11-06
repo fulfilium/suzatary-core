@@ -1,5 +1,4 @@
-//! The secretary's routes as functions: the binary pulls strings out of a request, calls one, and
-//! serialises the answer.
+//! The secretary's routes as functions: the binary parses a request, calls one, serialises.
 //!
 //! [`tap`] is the one route that ends in an irreversible act; it takes a [`Tap`] only the gate can
 //! mint and carries an index, never a body, so what is sent is what was stored and shown.
@@ -30,17 +29,13 @@ use crate::wire;
 /// Sending a proposed message, the one effect behind a tap; deliberately in no capability bundle,
 /// so no verb can send.
 pub trait Post {
-    /// Put this message on a wire, as `account`, with `body` in the draft's body's place and
-    /// `attachments`, and answer what happened: sent, or the transport's own words and whether
-    /// the far end may hold the message.
+    /// Send this message as `account`, with `body` filled in and `attachments`.
     fn send(&self, draft: &Draft, body: Filled, attachments: Checked) -> Performed;
 }
 
-/// Performs a proposed act; like [`Post`], in no bundle, and it takes the [`Consent`] only a tap
-/// can make.
+/// Performs a proposed act; like [`Post`], in no bundle, behind a tap's [`Consent`].
 pub trait Perform {
-    /// Begin the act, and answer the outcome to record now; a flow that runs on appends its own
-    /// turns and ends in the inbox.
+    /// Begin the act and answer the outcome to record now.
     fn begin(
         &self,
         id: &ConversationId,
@@ -52,41 +47,32 @@ pub trait Perform {
     ) -> Performed;
 }
 
-/// What a conversation payload needs besides its transcript: the chains a changeset is drawn
-/// against and the category vocabulary.
+/// What a conversation payload needs besides its transcript.
 #[derive(Clone, Copy)]
 pub struct Cards<'a> {
     /// The categories an act may name.
     pub deployment: &'a Deployment,
     /// Every chain this deployment serves.
     pub chains: &'a [Bound<'a>],
-    /// The plugins the instance file declares now, `None` when it does not read: what a
-    /// connection's card says its plugin may reach.
+    /// The plugins the instance file declares now, `None` when it does not read.
     pub plugins: Option<&'a [crate::plugin::Manifest]>,
-    /// How the person reaches the app at a terminal, which a step's command is spelled in.
+    /// How the person reaches the app at a terminal.
     pub reach: &'a crate::connect::Reach,
-    /// The names the deployment may set as it reads now, each with what declares it.
+    /// The names the deployment may set now.
     pub settables: &'a crate::settings::Settables,
 }
 
-/// Each named chain's events, folded once, reading only the chains a changeset names because the
-/// page polls this route.
+/// Each named chain's events, folded once; only the chains a changeset names, since the page polls.
 struct Drawn<'a> {
     nodes: std::collections::BTreeMap<String, (Preview, prodrome_core::policy::Untrusted)>,
-    /// What an act's markup is admitted through, as it would be on the tap.
     typeset: &'a dyn crate::capability::Typeset,
     now: crate::zone::Moment,
     categories: Vec<String>,
-    /// The routine `[coding]` declares.
     routine: Option<crate::coding::RoutineId>,
-    /// The name the deployment stores its model's credential under.
     model: Option<crate::settings::Settable>,
-    /// The plugins the instance file declares now.
     plugins: Vec<crate::plugin::Manifest>,
-    /// How the person reaches the app at a terminal.
     reach: crate::connect::Reach,
-    /// Each held value a standing email carries, by its message's notmuch id: that message in
-    /// the box's words.
+    /// Each held value's message, by its notmuch id.
     sources: std::collections::BTreeMap<String, String>,
 }
 
@@ -97,13 +83,11 @@ impl<'a> Drawn<'a> {
         at: crate::capability::Datetime,
         typeset: &'a dyn crate::capability::Typeset,
     ) -> Self {
-        // An unplaced line names no changeset, so it reads no chain.
         let wanted: std::collections::BTreeSet<&str> = lines
             .standings()
             .filter_map(|standing| match &standing.object.asked.proposal {
                 Proposal::Changes(changeset) => Some(changeset.chain()),
-                // Neither reads a chain: an email leaves the box and an act is performed by the
-                // box itself.
+                // Neither reads a chain.
                 Proposal::Email(_)
                 | Proposal::Forward(_)
                 | Proposal::Act(_)
@@ -266,8 +250,7 @@ impl Draw for Drawn<'_> {
     }
 }
 
-/// `POST /api/secretary/conversations`: open a topic, named for today; a blank `title` is left to
-/// the title job.
+/// `POST /api/secretary/conversations`: open a topic; a blank `title` is left to the title job.
 ///
 /// # Errors
 /// [`Refusal::bad_request`] for a title that is not one, and the store's own failures.
@@ -287,11 +270,9 @@ pub fn open(
     newest(caps, cards, &id)
 }
 
-/// `POST /api/secretary/setup/<template>`: a conversation of its own begun on `template`, titled
-/// for it, whose first line is the template's [opening](crate::connect::Template::opening),
-/// written by the box as its own note, which wakes no model. One conversation per connection: an
-/// earlier connection's verb answers would make a later round read more than the owner's words,
-/// and the secretary files a Connect card only in a round of the owner's words alone.
+/// `POST /api/secretary/setup/<template>`: a conversation of its own begun on `template`'s
+/// opening, as the box's note. One per connection, since the secretary files a Connect card only
+/// in a round of the owner's words alone.
 ///
 /// # Errors
 /// The conversation store's.
@@ -314,9 +295,8 @@ pub fn setup(
     newest(caps, cards, &id)
 }
 
-/// File the box's Secret card asking for a new value of the stored secret a page names by
-/// `handle`, in the setup conversation; while a card already asks for it, that card stands and
-/// nothing is filed. The value travels only in that card's tap.
+/// File the box's Secret card asking for a new value of the secret `handle` names, unless one
+/// already asks. The value travels only in that card's tap.
 ///
 /// # Errors
 /// [`Refusal::not_found`] for a handle no secret a Secret card asks for has; the stores' own.
@@ -345,8 +325,7 @@ pub fn replace(caps: &Server<'_>, cards: &Cards<'_>, handle: &str) -> Result<(),
     Ok(())
 }
 
-/// Open a topic now under an id minted for today, titled `title`, and write `first` as its
-/// first line when there is one. Every route that opens a conversation calls it.
+/// Open a topic under an id minted for today, with `first` as its first line.
 fn begun(
     caps: &Server<'_>,
     cards: &Cards<'_>,
@@ -396,8 +375,7 @@ pub fn rename(
     payload(&stored, caps, cards)
 }
 
-/// What the owner erases of one conversation: `POST …/erase`'s body, `{"turns": [<index>, …]}`
-/// or `{"whole": true}`.
+/// `POST …/erase`'s body: `{"turns": [<index>, …]}` or `{"whole": true}`.
 #[derive(Debug, Clone, PartialEq, Eq, serde::Deserialize, ts_rs::TS)]
 #[serde(rename_all = "lowercase")]
 pub enum Erasing {
@@ -407,8 +385,7 @@ pub enum Erasing {
     Whole(wire::Yes),
 }
 
-/// `POST …/<id>/erase`: the owner erases turns of a conversation, or all of it, behind the same
-/// [`Tap`] as a send: an erasure line naming their keys as his, then the sweep.
+/// `POST …/<id>/erase`: erase turns, or all of it, behind the same [`Tap`] as a send.
 ///
 /// # Errors
 /// [`Refusal::not_found`] for a turn there is none of, and [`transcript::erase`]'s.
@@ -458,8 +435,7 @@ pub fn erase(
     newest(caps, cards, id)
 }
 
-/// One conversation's newest window, dressed with the box's renderer, its memory and its chains:
-/// what a write answers once it is written.
+/// One conversation's newest window, dressed: what a write answers.
 ///
 /// # Errors
 /// A name nothing is stored under, or a file this program cannot fold.
@@ -471,9 +447,8 @@ pub fn newest(
     payload(&super::read(caps.secretary.conversations, id)?, caps, cards)
 }
 
-/// `GET …/<id>/drawn?indices=<n>,…`: proposals `indices` drawn against the todo chains, which a
-/// tab's replicas of the inbox and the conversations cannot: a standing changeset's rows. Each
-/// the whole row, so its card is the one function's; the conversation, the inbox and the memory are read once for all of them.
+/// `GET …/<id>/drawn?indices=<n>,…`: proposals drawn against the todo chains, which a tab's
+/// replicas cannot draw.
 ///
 /// # Errors
 /// [`Refusal::not_found`] for a conversation or a proposal there is none of, and the stores' own.
@@ -511,12 +486,9 @@ pub fn drawn(
 /// How many files one turn may carry.
 pub const MAX_ATTACHMENTS_PER_TURN: usize = 4;
 
-/// `POST …/<id>/say`: append the person's turn, stamped `by` (the gate's actor, as
-/// [`crate::secretary::stamp::pointing`] read what its references point at); the model runs in the
-/// binary's worker, not here.
+/// `POST …/<id>/say`: append the person's turn, stamped `by`; the model runs in the worker.
 ///
-/// A question names how many turns its asker saw (`after`), so the same question asked again
-/// once its line stands at or past that point is that line: asking twice is asking once.
+/// A question asked again once its line stands at or past `after` is that line.
 ///
 /// # Errors
 /// The store's own, an empty turn, too many files, or [`Refusal::bad_request`] when the queue is
@@ -536,7 +508,6 @@ pub fn say(
     after: Option<usize>,
 ) -> Answered<wire::SayPayload> {
     let turn = question(said, references, attachments)?;
-    // Read first, so an unknown name is a 404 before anything is written.
     let before = super::read(caps.secretary.conversations, id)?;
     if after.is_some_and(|after| asked(&before, after, &turn, &by)) {
         return Ok(wire::SayPayload {
@@ -550,7 +521,6 @@ pub fn say(
             "{pending} lines are already waiting for the secretary; say it after they are answered"
         )));
     }
-    // Disambiguated, because `C` carries both `Log::push` and `Prodrome::append`.
     transcript::push(
         caps.secretary.conversations,
         id,
@@ -566,7 +536,6 @@ pub fn say(
     })
 }
 
-/// Whether `turn`, said by `by`, already stands at or past turn `after`.
 fn asked(stored: &Stored, after: usize, turn: &Turn, by: &crate::secretary::stamp::Stamp) -> bool {
     stored.turns.iter().skip(after).any(|said| {
         &said.turn == turn
@@ -578,7 +547,6 @@ fn asked(stored: &Stored, after: usize, turn: &Turn, by: &crate::secretary::stam
     })
 }
 
-/// A person's turn, or why the words and files are not one.
 fn question(
     said: &str,
     references: &[Reference],
@@ -613,8 +581,7 @@ pub fn regenerate(
     payload(&stored, caps, cards)
 }
 
-/// `POST …/<id>/edit`: replace the last round's question, under `say`'s rules for a question and
-/// its stamp.
+/// `POST …/<id>/edit`: replace the last round's question, under `say`'s rules.
 ///
 /// # Errors
 /// `question`'s and [`super::edit`]'s.
@@ -649,8 +616,7 @@ pub fn edit(
 pub struct Effectors<'a> {
     /// Sends a tapped email.
     pub post: &'a dyn Post,
-    /// Reads a tapped email's held values, and a tapped forward's message, to put them on the
-    /// wire.
+    /// Reads a tapped email's held values and a forward's message.
     pub reveal: &'a dyn Reveal,
     /// Performs a tapped act (a sign-in, a web request).
     pub performer: &'a dyn Perform,
@@ -664,26 +630,22 @@ pub struct Effectors<'a> {
     pub signing: &'a dyn crate::secretary::sign_in::Sessions,
     /// Edits the instance file (an "Always allow" rule, a connection, a grant).
     pub edits: &'a dyn crate::settings::Edits,
-    /// Deletes what the box kept for a removed account: its sign-ins, and its mail on the
-    /// card's wider yes.
+    /// Deletes what the box kept for a removed account.
     pub forget: &'a dyn crate::mail::cache::Forget,
-    /// Registers a device's key on every chain, signed by the root; `None` for a deployment
-    /// that declares no root, which trusts no device.
+    /// Registers a device's key on every chain; `None` without a root.
     pub enrolling: Option<crate::signatures::Enrolling<'a>>,
     /// Opens a sign-in with Google, bound to the owner who tapped it.
     pub consents: &'a dyn crate::secretary::google_sign_in::Consents,
 }
 
-/// What a tap's body carries beside its note: nothing, or exactly one of these, read once where
-/// the request is parsed. Which one a card takes is the card's to say (`Prepared::of`).
+/// What a tap's body carries beside its note: nothing, or exactly one of these.
 #[derive(Debug)]
 pub enum TapAnswer {
     /// Nothing but the tap: the card performed as it stands.
     Plain,
     /// A secret's value, or the code a sign-in's page shows.
     Value(crate::capability::Secret),
-    /// The card's wider yes: "Always allow" for a web request with a rule or a document, and
-    /// deleting its mail too for a mail account's removal.
+    /// The card's wider yes ("Always allow", or deleting a removed account's mail).
     Always,
     /// The tapping device's signature of a device card's registration.
     Endorsed(crate::signatures::Endorsement),
@@ -704,7 +666,6 @@ enum Choice {
 }
 
 impl TapAnswer {
-    /// The answer of a card that takes nothing beside its note.
     fn plain(&self) -> Result<(), Refusal> {
         match self {
             TapAnswer::Plain => Ok(()),
@@ -714,7 +675,6 @@ impl TapAnswer {
         }
     }
 
-    /// The answer of a card that has a wider yes.
     fn choice(&self) -> Result<Choice, Refusal> {
         match self {
             TapAnswer::Plain => Ok(Choice::Once),
@@ -724,8 +684,7 @@ impl TapAnswer {
         }
     }
 
-    /// The value of a card that stores one; `missing` finishes the sentence refusing a tap
-    /// without it.
+    /// The value of a card that stores one.
     fn value(&self, missing: &str) -> Result<&crate::capability::Secret, Refusal> {
         match self {
             TapAnswer::Value(value) => Ok(value),
@@ -735,7 +694,6 @@ impl TapAnswer {
         }
     }
 
-    /// The endorsement a device card is tapped with.
     fn endorsement(&self) -> Result<&crate::signatures::Endorsement, Refusal> {
         match self {
             TapAnswer::Endorsed(endorsement) => Ok(endorsement),
@@ -748,8 +706,7 @@ impl TapAnswer {
     }
 }
 
-/// How far a tap that performs an act allows: this once, or also what "Always allow" writes
-/// into the instance before the act runs.
+/// How far a tap that performs an act allows.
 #[derive(Debug, Clone, Copy)]
 enum Allowing<'p> {
     /// This act alone.
@@ -769,55 +726,42 @@ enum KeptMail {
     Deleted,
 }
 
-/// A tapped card paired with what its tap brought, before anything is performed: each case holds
-/// exactly what performing that card needs, so a misplaced or missing answer is refused here
-/// and nowhere else.
+/// A tapped card paired with its answer: a misplaced or missing answer is refused here alone.
 enum Prepared<'p, 'c> {
-    /// Send this message.
     Email(&'p Draft),
-    /// Forward this stored message.
     Forward(&'p crate::secretary::store::Forward),
-    /// Append this changeset.
     Changes(&'p Changeset),
     /// Store `value` under a name minted against the names declared at the tap.
     Secret {
         name: crate::settings::Settable,
         value: &'p crate::capability::Secret,
     },
-    /// Finish the sign-in at `url` with `code`, keeping its token under `name`.
     Code {
         url: &'p crate::secretary::sign_in::SignInUrl,
         code: &'p crate::capability::Secret,
         name: crate::settings::Settable,
     },
-    /// Write a connection's table.
     Connect(&'p crate::connect::Connection),
-    /// Take a connection's table out, and its mail with it or not.
     Disconnect {
         connection: &'p crate::connect::Connection,
         mail: KeptMail,
     },
-    /// Let a plugin reach one more origin.
     Grant {
         plugin: &'p crate::plugin::PluginName,
         origin: &'p crate::plugin::Origin,
     },
-    /// Ask the secret store again.
     UnlockStore,
-    /// Erase these passages.
     Erase(&'p std::collections::BTreeSet<crate::secretary::locked_text::KeyName>),
     /// Open a topic holding turn `turn` of `conversation`, read again under the hold.
     Afresh {
         conversation: &'p ConversationId,
         turn: usize,
     },
-    /// Register a vouched device's key on every chain.
     Device {
         enrolling: crate::signatures::Enrolling<'c>,
         enrolment: &'p crate::signatures::Enrolment,
         endorsed: prodrome_core::sign::Signed,
     },
-    /// Begin an act the performer runs, once what it allows is written.
     Begin {
         act: &'p Act,
         allowing: Allowing<'p>,
@@ -827,6 +771,12 @@ enum Prepared<'p, 'c> {
         held: crate::secretary::memories::Held<'c>,
         text: &'p crate::secretary::salted_text::TextName,
         kind: crate::secretary::memory::Kind,
+        replaces: &'p crate::secretary::memory::Replaces,
+    },
+    /// Retract a summary under the memory's hold, whose sweep deletes its words.
+    Retract {
+        held: crate::secretary::memories::Held<'c>,
+        node: &'p prodrome_core::event::Hash,
     },
     /// Record a decision.
     Decide(&'p crate::decisions::Draft),
@@ -840,23 +790,17 @@ enum Prepared<'p, 'c> {
         account: &'p crate::mail::address::EmailAddress,
         scopes: &'p crate::google::Scopes,
     },
-    /// Write one event into `account`'s calendar, once the instance file still declares it a
-    /// Google account.
+    /// Write one event into `account`'s calendar, if still declared a Google account.
     CalendarEvent {
         act: &'p Act,
         account: &'p crate::mail::address::EmailAddress,
     },
 }
 
-/// What preparing a tap reads besides the card and its answer.
 struct Preparing<'r, 'c> {
-    /// The names declared now, which a secret's name is minted against.
     settables: &'r crate::settings::Settables,
-    /// The device registry, `None` for a deployment that declares no root.
     enrolling: Option<crate::signatures::Enrolling<'c>>,
-    /// Who tapped.
     tap: &'r Tap,
-    /// Takes the memory's hold.
     hold: &'r dyn Fn() -> Result<crate::secretary::memories::Held<'c>, Refusal>,
 }
 
@@ -882,12 +826,17 @@ impl<'p, 'c> Prepared<'p, 'c> {
             }
             Proposal::Act(act) => Self::of_act(act, answer, reach)?,
             // His tap is who said it, since the round that asked had read something not his own.
-            Proposal::Remember { text, kind } => {
+            Proposal::Remember {
+                text,
+                kind,
+                replaces,
+            } => {
                 answer.plain()?;
                 Prepared::Remember {
                     held: (reach.hold)()?,
                     text,
                     kind: *kind,
+                    replaces,
                 }
             }
             Proposal::Decide(draft) => {
@@ -897,7 +846,6 @@ impl<'p, 'c> Prepared<'p, 'c> {
         })
     }
 
-    /// An act's card paired with its answer.
     #[expect(clippy::too_many_lines, reason = "one arm per kind of act")]
     fn of_act(
         act: &'p Act,
@@ -978,6 +926,13 @@ impl<'p, 'c> Prepared<'p, 'c> {
                 answer.plain()?;
                 Prepared::Erase(keys)
             }
+            Act::Retract { node } => {
+                answer.plain()?;
+                Prepared::Retract {
+                    held: (reach.hold)()?,
+                    node,
+                }
+            }
             Act::Afresh { conversation, turn } => {
                 answer.plain()?;
                 Prepared::Afresh {
@@ -1012,8 +967,7 @@ impl<'p, 'c> Prepared<'p, 'c> {
     }
 }
 
-/// `name` minted against the names declared now: a card asking for a name its deployment has
-/// since stopped declaring stores nothing.
+/// `name` minted against the names declared now; a name no longer declared stores nothing.
 fn minted(
     settables: &crate::settings::Settables,
     name: &str,
@@ -1028,13 +982,10 @@ fn minted(
 
 /// `POST …/proposals/<n>/tap`: submits one proposal, at most once under the inbox's hold.
 ///
-/// A failure that may have happened completes the proposal; one that did not is a note, so tapping
-/// again runs the same stored act.
+/// A failure that may have happened completes the proposal; one that did not is a note.
 ///
 /// # Errors
-/// [`Refusal::not_found`] for an unknown index; [`Refusal::bad_request`] for an answer the card
-/// does not take, or none where it needs one; [`Refusal::conflict`] for a secret no longer
-/// declared; a rejected allow rule, and the stores' own failures.
+/// Not found, a wrong or missing answer, a secret no longer declared, a rejected rule, the stores'.
 #[allow(clippy::too_many_arguments)]
 pub fn tap(
     caps: &Server<'_>,
@@ -1109,12 +1060,10 @@ pub fn tap(
 pub struct AfterTap {
     /// The card's conversation, as it stands after the tap.
     pub conversation: wire::ConversationPayload,
-    /// The conversation the tap opened, in which the caller wakes a model: a card that asks the
-    /// owner's request again opens one.
+    /// The conversation the tap opened, in which the caller wakes a model.
     pub opened: Option<ConversationId>,
 }
 
-/// What performing a prepared card reaches.
 struct Performing<'r, 'a> {
     caps: &'r Server<'a>,
     effectors: &'r Effectors<'a>,
@@ -1122,7 +1071,6 @@ struct Performing<'r, 'a> {
     tap: &'r Tap,
 }
 
-/// Perform a prepared card under the inbox's hold.
 fn performed(
     reach: &Performing<'_, '_>,
     prepared: Prepared<'_, '_>,
@@ -1176,8 +1124,7 @@ fn performed(
             // Written before the act: allowing a site is a decision about the site, not this
             // page.
             allowed(effectors.edits, allowing)?;
-            // The tap is the consent, made from what the gate minted, never from a request
-            // field.
+            // The tap is the consent, minted by the gate, never from a request field.
             effectors.performer.begin(
                 id,
                 index,
@@ -1187,8 +1134,27 @@ fn performed(
                 Consent::given_by_tap(tap),
             )
         }
-        Prepared::Remember { held, text, kind } => {
-            remembered(&held, caps.secretary.clock, id, index, text, kind)
+        Prepared::Remember {
+            held,
+            text,
+            kind,
+            replaces,
+        } => remembered(
+            &held,
+            caps.secretary.clock,
+            id,
+            index,
+            (text, kind, replaces),
+        ),
+        Prepared::Retract { held, node } => {
+            match held.retract(node, caps.secretary.clock.now(), tap) {
+                Ok(_) => Performed::Done(Done::Acted {
+                    what: "retracted the summary; it is written again from your lines".to_owned(),
+                }),
+                Err(refusal) => Performed::Tried(Tried::NotSent {
+                    reason: refusal.message().to_owned(),
+                }),
+            }
         }
         Prepared::Decide(draft) => decide::performed(caps, draft, tap.who()),
         Prepared::GoogleClient { redirect, file } => {
@@ -1217,17 +1183,14 @@ fn performed(
     })
 }
 
-/// After an erase card's tap, the memory's sweep: a summary that read the erased words is a copy
-/// of them. Under the memory's own hold, taken only once the inbox's is let go, as every other
-/// writer orders the two.
+/// After an erase card's tap, the memory's sweep, under its own hold taken after the inbox's.
 fn summaries_after(caps: &Server<'_>, proposal: &Proposal) {
     if matches!(proposal, Proposal::Act(Act::Erase { .. })) {
         caps.secretary.memories.sweep_after_write();
     }
 }
 
-/// What a tap leaves for once its card's response is recorded, outside that card's hold, since
-/// each is its own proposal.
+/// What a tap leaves for after its card's response is recorded, each its own proposal.
 enum Then {
     /// The sign-in card a code card finished, ended as its outcome says.
     End(ProposalId, Performed),
@@ -1239,13 +1202,11 @@ enum Then {
     Retire(crate::connect::Connection),
     /// A plugin whose link was stored, synced once so the link is checked now.
     Check(crate::plugin::PluginName),
-    /// What the box kept for a removed account, deleted outside the inbox's hold, since it
-    /// waits on the sync's: its sign-in, its mail on the card's wider yes, or both.
+    /// What the box kept for a removed account, deleted outside the inbox's hold.
     Forget(
         crate::mail::account::MailAccount,
         crate::mail::removal::Removal,
     ),
-    /// The conversation the tap opened, whose first line a model now owes an answer.
     Opened(ConversationId),
 }
 
@@ -1296,32 +1257,26 @@ fn afterwards(
     done.map(|()| None)
 }
 
-/// What a secret's tap does with its value: store it, or, for a plugin's link, refuse a value
-/// that is no link it can fetch and ask first for an origin its manifest does not allow.
+/// What a secret's tap does with its value.
 enum Link {
     /// Not a plugin's link.
     Stored,
     /// A link its plugin may fetch, which is checked once it is stored.
     Fetched(crate::plugin::PluginName),
-    /// A plugin's link that is no http(s) URL, or one in the clear; the words never quote the
-    /// value.
+    /// Not an http(s) URL, or one in the clear; the words never quote the value.
     Refused(String),
     /// A link served from an origin its plugin may not reach.
     Outside {
         plugin: crate::plugin::PluginName,
         origin: crate::plugin::Origin,
     },
-    /// A Google account's own calendar, which the deployment does not hold: the account's
-    /// connection is asked for in its place.
+    /// A Google account's own calendar: the account's connection is asked for instead.
     Connect(crate::connect::Connection),
-    /// A calendar of a Google account the deployment holds signed in with Google, pasted as this
-    /// link: the link's removal is asked for in its place.
+    /// A calendar of an account signed in with Google: the link's removal is asked for instead.
     Retire(crate::connect::Connection),
 }
 
-/// Where `value` stands as `name`'s link, read against the manifests the file declares now; a
-/// plugin's credential is refused while the file does not read, since whether it is a link,
-/// and which origins it may reach, are the file's to say.
+/// Where `value` stands as `name`'s link; refused while the instance file does not read.
 fn linked(
     (edits, settables): (&dyn crate::settings::Edits, &crate::settings::Settables),
     name: &crate::settings::Settable,
@@ -1370,11 +1325,8 @@ fn linked(
     }
 }
 
-/// A link to a Google calendar, pasted into the card for `name`: never stored, since a Google
-/// account's calendars are read through its sign-in with Google. An account's own calendar asks
-/// for that account's connection, and an account lieer reads is asked to move onto that sign-in;
-/// for an account signed in with Google already, the link `name` asks for is not needed, so its
-/// removal is asked for instead.
+/// A Google calendar's link, never stored: the calendar is read through the sign-in with Google,
+/// so the account's connection, or the link's removal, is asked for instead.
 fn google_calendar(
     declared: &crate::connect::Declared,
     name: &str,
@@ -1405,9 +1357,7 @@ fn google_calendar(
     }
 }
 
-/// A secret's tap: stored, or for a plugin's link, refused, or held for the origin it is
-/// served from, whose card `then` asks for once this one's response is recorded; a link stored
-/// leaves its plugin's sync for `then`, so it is checked at once.
+/// A secret's tap: stored, refused, or held for the origin its link is served from.
 fn secret(
     writer: &dyn crate::settings::Writes,
     verify: &dyn crate::settings::Verify,
@@ -1501,8 +1451,8 @@ fn connected(
     }
 }
 
-/// Take a connection's table out, clear every secret of it no connection left reads, and, on
-/// a mail account's wider yes, delete the mail kept for it.
+/// Take a connection's table out and clear its secrets no connection reads; delete its mail on
+/// the wider yes.
 fn disconnected(
     removing: &Effectors<'_>,
     cards: &Cards<'_>,
@@ -1516,8 +1466,6 @@ fn disconnected(
             reason: "nothing was removed: the instance file does not read".to_owned(),
         });
     };
-    // Read before the table goes: the account names where its mail is kept, and a secret is
-    // minted against the names the instance declares while it still declares them.
     let account = before
         .accounts
         .iter()
@@ -1608,8 +1556,7 @@ fn granted(
     }
 }
 
-/// Write what `allowing` allows into the instance: nothing for this act alone, else the web
-/// request's rule or the document's folder.
+/// Write what `allowing` allows into the instance.
 fn allowed(edits: &dyn crate::settings::Edits, allowing: Allowing<'_>) -> Result<(), Refusal> {
     match allowing {
         Allowing::Once => Ok(()),
@@ -1628,9 +1575,8 @@ fn allowed(edits: &dyn crate::settings::Edits, allowing: Allowing<'_>) -> Result
 /// How many device cards may wait at once.
 pub const WAITING_DEVICES: usize = 3;
 
-/// `POST /api/act/key`: a device asks to be trusted to write as `actor`, the gate's actor for
-/// its login (never a field of the request). Files one card in the default conversation for a
-/// trusted device to tap; asking again answers the card already there.
+/// `POST /api/act/key`: a device asks to be trusted as the gate's `actor`; files one card, and
+/// asking again answers the card already there.
 ///
 /// # Errors
 /// [`WAITING_DEVICES`] cards already waiting for other keys, and the stores' own failures.
@@ -1646,8 +1592,7 @@ pub fn ask_trust(
         &super::store::DEFAULT,
         caps.secretary.clock.now(),
     )?;
-    // A key nobody trusts can ask, so asking is bounded: past a few waiting device cards the
-    // owner answers those first, and a stray key cannot flood the Inbox.
+    // Bounded, since a key nobody trusts can ask: a stray key cannot flood the Inbox.
     // An unplaced line holds no act this box can read, so it is no device this box could trust.
     let lines = stored.lines(&inbox::fold(caps.secretary.inbox)?);
     let waiting: Vec<&crate::signatures::Enrolment> = lines
@@ -1670,6 +1615,7 @@ pub fn ask_trust(
                 | Act::Disconnect { .. }
                 | Act::Grant { .. }
                 | Act::Erase { .. }
+                | Act::Retract { .. }
                 | Act::Afresh { .. }
                 | Act::GoogleClient { .. }
                 | Act::GoogleSignIn { .. }
@@ -1717,9 +1663,7 @@ pub fn ask_trust(
 pub const ALREADY_TRUSTED: &str =
     "this device's key is trusted now: it was trusted at the box or with a pairing code";
 
-/// Close, as done another way, every waiting device card whose key `history` already trusts for
-/// its actor under `root`: a key trusted at the terminal or with a pairing code leaves no request
-/// behind it. Answers the cards closed; run again, it closes nothing.
+/// Close, as done another way, every waiting device card whose key `history` already trusts.
 ///
 /// # Errors
 /// The stores' own.
@@ -1744,9 +1688,8 @@ pub fn withdraw_trusted(
     Ok(swept.closed)
 }
 
-/// A device card's endorsement checked before anything runs, and refused on any other card: a
-/// device is trusted only by the person it writes as, from a device the chain already trusts
-/// for them (SPEC law 42), so a new phone on the same login cannot tap its own card.
+/// A device card's endorsement checked first: only a device the chain already trusts for the
+/// same person vouches (SPEC law 42), so a new phone cannot tap its own card.
 fn vouched(
     enrolling: crate::signatures::Enrolling<'_>,
     tap: &Tap,
@@ -1765,8 +1708,7 @@ fn vouched(
         .map_err(|why| Refusal::forbidden(format!("this device cannot vouch: {}", why.said())))
 }
 
-/// Register a vouched device's key on every chain: a write that fails is an outcome, and
-/// tapping again writes the same objects.
+/// Register a vouched device's key on every chain; tapping again writes the same objects.
 fn trusted(
     enrolling: crate::signatures::Enrolling<'_>,
     enrolment: &crate::signatures::Enrolment,
@@ -1782,9 +1724,7 @@ fn trusted(
     }
 }
 
-/// Send a draft with its held values read again and checked against the card, each from a
-/// message or file the proposal's conversation read, and its attachments fetched again and
-/// checked, or nothing.
+/// Send a draft with its held values and attachments read again and checked, or nothing.
 fn mailed(
     caps: &Server<'_>,
     effectors: &Effectors<'_>,
@@ -1827,8 +1767,7 @@ fn mailed(
     }
 }
 
-/// One attachment's bytes as its source holds them now, a repository's file as the box kept it
-/// when proposed, by its digest.
+/// One attachment's bytes as its source holds them now, by its digest.
 fn fetch(
     caps: &Server<'_>,
     read: &ReadHolders,
@@ -1848,9 +1787,7 @@ fn fetch(
         .map_err(|refused| refused.message().to_owned())
 }
 
-/// Forward a stored message as its card showed it, or nothing: only one the proposal's
-/// conversation read, its file read once and sent, or its text and attachments read from it,
-/// only while its digest holds.
+/// Forward a stored message as its card showed it, only while its digest holds, or nothing.
 fn forwarded(
     caps: &Server<'_>,
     effectors: &Effectors<'_>,
@@ -1907,8 +1844,7 @@ fn forwarded(
     }
 }
 
-/// Whether the instance file declares `account` as a Google account now, whose sign-in with
-/// Google may write its calendar; an account read through lieer alone gave no such grant.
+/// Whether `account` is declared a Google account now; lieer alone gave no calendar grant.
 fn google_account(
     edits: &dyn crate::settings::Edits,
     account: &crate::mail::address::EmailAddress,
@@ -1928,9 +1864,8 @@ fn google_account(
     }
 }
 
-/// Keep the Google client pasted into its card: the downloaded file whole, kept only when it is
-/// a web client listing `redirect`, its id and secret stored and the file's other words dropped.
-/// A refusal stores nothing and says what to do, never quoting the secret.
+/// Keep the pasted Google client only when it is a web client listing `redirect`; a refusal
+/// never quotes the secret.
 fn google_client(
     writer: &dyn crate::settings::Writes,
     settables: &crate::settings::Settables,
@@ -2003,9 +1938,7 @@ fn erased(
     .into())
 }
 
-/// A topic opened for turn `turn` of `conversation`, whose one line is that turn as the owner
-/// said it, read again here so a turn erased or changed since the card was filed is refused.
-/// Nothing else of `conversation` is copied.
+/// A topic opened for turn `turn`, read again so a turn erased or changed since is refused.
 fn afresh(
     caps: &Server<'_>,
     cards: &Cards<'_>,
@@ -2026,8 +1959,7 @@ fn afresh(
     Ok((opened, Done::Acted { what }.into()))
 }
 
-/// The store asked again for every declared name: the unlock card is done once it answers for
-/// them all, and may be tried again while it does not.
+/// Ask the store again for every declared name; the card may be tried again while one fails.
 fn store_answers(
     secrets: &dyn crate::capability::Secrets,
     settables: &crate::settings::Settables,
@@ -2045,8 +1977,7 @@ fn store_answers(
     }
 }
 
-/// Keep `value` under `name` once a model that reads it answers a test call; a value that does
-/// not answer is not kept, and the card may be tried again.
+/// Keep `value` under `name` once a model answers a test call with it.
 fn verified(
     writer: &dyn crate::settings::Writes,
     verify: &dyn crate::settings::Verify,
@@ -2072,15 +2003,13 @@ fn verified(
     }
 }
 
-/// What finishing a sign-in reaches: the open sessions, the test call and the store.
 struct SignedIn<'a> {
     signing: &'a dyn crate::secretary::sign_in::Sessions,
     verify: &'a dyn crate::settings::Verify,
     writer: &'a dyn crate::settings::Writes,
 }
 
-/// A code card's tap: the sign-in it waits for, finished, whose own card `then` ends once this
-/// one's response is recorded.
+/// A code card's tap: finish the sign-in it waits for.
 fn coded(
     effectors: &Effectors<'_>,
     url: &crate::secretary::sign_in::SignInUrl,
@@ -2102,9 +2031,8 @@ fn coded(
     outcome
 }
 
-/// Type the tapped code into the sign-in at `url` and keep the token it gives under `name`, the
-/// subscription's: the code card's outcome, and the sign-in card's to end it with. The token goes
-/// from the session to the test call and the store and nowhere else.
+/// Type the code into the sign-in at `url` and keep its token under `name`; the token goes to the
+/// test call and the store alone.
 fn signed_in(
     reach: &SignedIn<'_>,
     url: &crate::secretary::sign_in::SignInUrl,
@@ -2140,23 +2068,32 @@ fn signed_in(
     }
 }
 
-/// Remember a tapped card's words on its authority, the fact naming the card's own text; a
-/// refusal is an outcome, like a failed send.
+/// Remember a tapped card's words on its authority; a refusal is an outcome.
 fn remembered(
     held: &crate::secretary::memories::Held<'_>,
     clock: &dyn Clock,
     id: &ConversationId,
     index: usize,
-    text: &crate::secretary::salted_text::TextName,
-    kind: crate::secretary::memory::Kind,
+    (text, kind, replaces): (
+        &crate::secretary::salted_text::TextName,
+        crate::secretary::memory::Kind,
+        &crate::secretary::memory::Replaces,
+    ),
 ) -> Performed {
     let origin = crate::secretary::memory::Origin::Tapped {
         conversation: id.clone(),
         proposal: index,
     };
-    match held.remember_kept(text, kind, &origin, clock.now()) {
+    match held.write_kept(text, kind, replaces, &origin, clock.now()) {
         Ok(remembered) => Performed::Done(Done::Acted {
-            what: format!("remembered as fact {}", remembered.id),
+            what: match replaces {
+                crate::secretary::memory::Replaces::Nothing => {
+                    format!("remembered as fact {}", remembered.id)
+                }
+                crate::secretary::memory::Replaces::Facts(sources) => {
+                    format!("merged {sources} into fact {}", remembered.id)
+                }
+            },
         }),
         Err(refusal) => Performed::Tried(Tried::NotSent {
             reason: refusal.message().to_owned(),
@@ -2247,12 +2184,10 @@ pub fn acknowledge(
     payload(&after, caps, cards)
 }
 
-/// `POST …/todo/<id>/build`: file the coding-session card that builds `todo`, serving it, in
-/// the box's `build` conversation; the owner's tap on that card is what fires a session.
+/// `POST …/todo/<id>/build`: file the card whose tap fires a coding session for `todo`.
 ///
 /// # Errors
-/// As [`Deployment::builder`], [`super::build::record`], [`super::build::admitted`] and
-/// [`super::build::task`]; the stores' own.
+/// The builder's, the build module's and the stores'.
 pub fn build(
     caps: &Server<'_>,
     by: &Tap,
@@ -2267,8 +2202,7 @@ pub fn build(
             .map_err(|failed| Refusal::internal(failed.to_string()))?;
     let record = super::build::record(&believed, todo)?;
     let (conversations, inbox) = (caps.secretary.conversations, caps.secretary.inbox);
-    // The attempt read and the card filed under one hold, so two builds asked at once are not
-    // the same attempt.
+    // One hold, so two builds asked at once are not the same attempt.
     let _held = inbox.locked()?;
     let task = super::build::task(
         todo,
@@ -2322,8 +2256,7 @@ pub fn drop_session(
     payload(&super::read(caps.secretary.conversations, id)?, caps, cards)
 }
 
-/// The newest window, full-size, which always holds the round that just happened, dressed with
-/// the box's renderer, its memory and its chains.
+/// The newest window, full-size, dressed.
 fn payload(
     stored: &Stored,
     caps: &Server<'_>,
@@ -2350,8 +2283,7 @@ fn payload(
     ))
 }
 
-/// `GET /api/secretary/memory`: every standing fact, oldest first, and the words the text store
-/// keeps for the inbox's remember cards, by the name each card gives them.
+/// `GET /api/secretary/memory`: every standing fact and the remember cards' kept words.
 ///
 /// # Errors
 /// The stores' own.
@@ -2362,7 +2294,6 @@ pub fn memory(memories: crate::secretary::memories::Memories<'_>) -> Answered<wi
     })
 }
 
-/// Every remember card's words the text store still keeps, once per name.
 fn card_words(
     memories: crate::secretary::memories::Memories<'_>,
 ) -> Result<Vec<wire::CardWords>, Refusal> {
@@ -2419,8 +2350,8 @@ pub fn record(digests: &crate::secretary::digests::Digests<'_>) -> Answered<wire
     })
 }
 
-/// `POST /api/secretary/record/<node>/retract`: the owner's tap says the summary `node` shows is
-/// wrong. Its node is asked again, and so is every summary above it.
+/// `POST /api/secretary/record/<node>/retract`: the summary is wrong; it and every summary above
+/// it are asked again.
 ///
 /// # Errors
 /// [`Refusal::not_found`] for a node that shows no summary, and the stores' own.
@@ -2472,7 +2403,6 @@ fn memory_payload(memory: &crate::secretary::memory::Memory) -> wire::MemoryPayl
     }
 }
 
-/// Where `origin` was said, as the page links it.
 fn said_on(origin: &crate::secretary::memory::Origin) -> wire::SaidOn {
     let number = |n: usize| u32::try_from(n).unwrap_or(u32::MAX);
     match origin {

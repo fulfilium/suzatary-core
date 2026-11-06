@@ -1,22 +1,14 @@
 //! The rule over the connections: what each one's standing owes, filed by the box with no model
-//! asked, as the same cards the setup agent will file.
+//! asked.
 //!
-//! A connection's first unmet step is owed its card where the box performs it on a tap: an
-//! account's device-code sign-in to read, and once it reads, its consent to send; the box's
-//! Google client, and a Google account's sign-in with Google once that client is stored. A
-//! secret step is the secrets rule's (`fixes`), which reads every declared name, the
-//! connections' among them; the subscription's sign-in is the models rule's (`bootstrap`); a
-//! terminal step has no card, since only the person can take it. A card a tap asked the box for
-//! is owed while what it asks is unmet, so it is withdrawn once that is met however it was, and
-//! stands while it is not: a grant while its plugin may not reach the origin, and a Google
-//! account's connection, asked for when a link to one of its calendars was pasted, while the
-//! deployment does not hold the account.
+//! A connection's first unmet step is owed its card where the box performs it on a tap: a sign-in
+//! to read, then a consent to send; the Google client, then a sign-in with Google. A secret step
+//! is `fixes`'s, the subscription's sign-in `bootstrap`'s, and a terminal step has no card. A card
+//! a tap asked for is owed while what it asks is unmet, however it was met.
 //!
-//! A link a Google account's calendar was pasted as is that account's: once the account reads its
-//! calendars through its sign-in with Google, the link is not needed, so its removal is owed
-//! while it is declared, and the box asks for no link it asks to remove ([`Owed::retiring`]).
-//! The Connect card the paste filed is what says whose the link is: its sources name the link's
-//! card.
+//! A pasted link to a Google account's calendar is that account's: once the account reads its
+//! calendars through its sign-in with Google, the link's removal is owed ([`Owed::retiring`]).
+//! The Connect card the paste filed names the link's card in its sources.
 
 use crate::capability::Datetime;
 use crate::capability::{SecretState, Secrets, Server};
@@ -39,15 +31,12 @@ use crate::secretary::store::{Proposal, Reasons};
 pub struct Google<'a> {
     /// Whether the box's Google Cloud client is stored, its id and its secret both.
     pub client: SecretState,
-    /// The box's callback, `None` when the app's URL names no origin Google can send the owner
-    /// back to, which asks for no client card, since no client could list it.
+    /// The box's callback, `None` when the app's URL names no origin Google can send back to.
     pub redirect: Option<&'a crate::google::RedirectUri>,
 }
 
-/// The cards the connections owe: each account's sign-in while it holds none to read its mail
-/// (a Google account's once the box's Google client is stored, and that client's card before
-/// it), its consent to send once it reads and while it holds none to send, and each grant the
-/// box asked for while its plugin still may not reach the origin.
+/// The cards the connections owe: each account's sign-in, its consent to send once it reads, and
+/// each grant asked for while its plugin still may not reach the origin.
 #[must_use]
 pub fn owed(
     declared: &Declared,
@@ -65,8 +54,7 @@ pub fn owed(
             .iter()
             .find(|account| account.email.as_str() == email.as_str())
             .is_some_and(|account| match account.sync {
-                // A lieer account asks for no sign-in of its own: only its move onto the sign-in
-                // with Google asks, and that one is met by the grant.
+                // A lieer account asks only for its move onto the sign-in with Google.
                 Sync::Google | Sync::Gmail => {
                     matches!(secrets.google_grant(email), Held::Signed(_))
                 }
@@ -92,8 +80,7 @@ pub fn owed(
                 checked: Checked::Never,
                 reach: &crate::connect::PLAIN,
             });
-            // Sending is asked for once the account reads, one sign-in card at a time; a sign-in
-            // with Google needs the client first, so it is asked for once that is stored.
+            // One sign-in card at a time; a sign-in with Google needs the client first.
             let reads = !unmet
                 .iter()
                 .any(|step| matches!(step, Step::DeviceCode { .. }));
@@ -127,9 +114,7 @@ pub fn owed(
         .fold(Owed::default(), Owed::join)
 }
 
-/// A card of the box's that a tap asked for, owed while what it asks is unmet: a grant while its
-/// plugin may not reach the origin, a connection while the deployment does not hold it, and a
-/// pasted link's removal while the link is declared.
+/// A card of the box's that a tap asked for, owed while what it asks is unmet.
 fn unmet(
     declared: &Declared,
     inbox: &inbox::Fold,
@@ -163,6 +148,7 @@ fn unmet(
             | Act::SignInCode { .. }
             | Act::UnlockStore { .. }
             | Act::Erase { .. }
+            | Act::Retract { .. }
             | Act::Afresh { .. }
             | Act::GoogleClient { .. }
             | Act::GoogleSignIn { .. }
@@ -176,10 +162,8 @@ fn unmet(
     }
 }
 
-/// Each account lieer reads whose Connect card for a sign-in with Google was tapped: that
-/// connection's steps are owed (the box's client, then the sign-in), while the instance still
-/// declares the account as lieer's. The tap wrote nothing, so lieer reads its mail until the
-/// sign-in's callback has read the mail through the grant and moved the account.
+/// Each lieer account whose Connect card for a sign-in with Google was tapped: its steps are
+/// owed while the instance still declares it lieer's, which the sign-in's callback changes.
 fn moving<'a>(
     declared: &'a Declared,
     inbox: &'a inbox::Fold,
@@ -206,8 +190,7 @@ fn moving<'a>(
     asked.into_iter()
 }
 
-/// The removal of every link a Google account's calendar was pasted as, once that account reads
-/// its calendars through its sign-in with Google.
+/// The removal of every pasted link of an account that reads its calendars with Google.
 fn read_through<'a>(
     declared: &'a Declared,
     secrets: &'a dyn Secrets,
@@ -240,8 +223,7 @@ fn reads_calendars(declared: &Declared, secrets: &dyn Secrets, account: &EmailAd
         )
 }
 
-/// The declared link a card of the box's rests on, and that link's card: a card its sources
-/// name that asks for the link's secret.
+/// The declared link a card of the box's rests on, and the card its sources name for it.
 fn pasted(
     declared: &Declared,
     inbox: &inbox::Fold,
@@ -284,8 +266,7 @@ fn capitalised(words: &str) -> String {
     })
 }
 
-/// The box's card for a connection's unmet `step`, where the box performs it on a tap; `None`
-/// for a step another rule asks for, or one only the person can take.
+/// The box's card for a connection's unmet `step`; `None` for another rule's or a terminal step.
 fn card(step: Step, google: Google<'_>, inbox: &inbox::Fold) -> Option<Owed> {
     match step {
         Step::DeviceCode { account } => Some(signing_in(
@@ -329,9 +310,8 @@ fn card(step: Step, google: Google<'_>, inbox: &inbox::Fold) -> Option<Owed> {
     }
 }
 
-/// Each Google account signed in with a grant that lacks a part its connection reads (one the
-/// owner left unticked on Google's page): a sign-in card asking for those parts alone, which
-/// Google adds to the grant the account holds (`include_granted_scopes`).
+/// Each Google account whose grant lacks a part its connection reads: a sign-in card asking for
+/// those parts alone (`include_granted_scopes`).
 fn lacking<'a>(
     declared: &'a Declared,
     secrets: &'a dyn Secrets,
@@ -368,8 +348,7 @@ fn lacking<'a>(
         })
 }
 
-/// An account's sign-in card, its episode beginning when the account was last connected from a
-/// card, so one dismissed before is asked again.
+/// An account's sign-in card, its episode beginning when the account was last connected.
 fn signing_in(inbox: &inbox::Fold, act: Act, account: &EmailAddress, why: String) -> Owed {
     let owed = Owed::one(Proposal::Act(act), why);
     match connected(inbox, account) {
@@ -378,8 +357,8 @@ fn signing_in(inbox: &inbox::Fold, act: Act, account: &EmailAddress, why: String
     }
 }
 
-/// When `account` was last connected from a card: its sign-in's episode begins there, so a
-/// sign-in card dismissed before is asked again; `None` for an account written by hand.
+/// When `account` was last connected from a card, so a sign-in card dismissed before is asked
+/// again; `None` for an account written by hand.
 fn connected(inbox: &inbox::Fold, account: &EmailAddress) -> Option<Datetime> {
     inbox
         .objects()
@@ -424,8 +403,7 @@ fn connecting(connection: &crate::connect::Connection) -> String {
     )
 }
 
-/// File the box's card asking to let `plugin` reach `origin`, when a secret card was tapped with
-/// a link served from it.
+/// File the box's card asking to let `plugin` reach `origin`.
 ///
 /// # Errors
 /// The stores' own failures.
@@ -442,9 +420,8 @@ pub fn grant(caps: &Server<'_>, plugin: &PluginName, origin: &Origin) -> Result<
     )
 }
 
-/// File the box's card asking to connect `connection`, a Google account, when the secret card
-/// `pasted` was tapped with a link to one of its calendars; its sources name that card, which
-/// makes the link the account's.
+/// File the box's card asking to connect `connection`, a Google account whose calendar's link
+/// the card `pasted` was tapped with.
 ///
 /// # Errors
 /// The stores' own failures.
@@ -460,8 +437,7 @@ pub fn connect(
     )
 }
 
-/// File the box's card asking to remove `link`, when its secret card `pasted` was tapped with a
-/// link to a calendar of a Google account the deployment holds signed in with Google.
+/// File the box's card asking to remove `link`, pasted for an account signed in with Google.
 ///
 /// # Errors
 /// The stores' own failures.
@@ -469,8 +445,7 @@ pub fn retire(caps: &Server<'_>, link: Connection, pasted: &ProposalRef) -> Resu
     tapped(caps, retiring(link, pasted.clone()))
 }
 
-/// File `owed`, a card a tap asked for. It withdraws nothing: the next filing holds it while
-/// [`unmet`] owes it.
+/// File `owed`, a card a tap asked for; the next filing holds it while [`unmet`] owes it.
 fn tapped(caps: &Server<'_>, owed: Owed) -> Result<(), Refusal> {
     let now = caps.secretary.clock.now();
     // Each paste is the owner asking again, so a grant once dismissed is asked for anew; a

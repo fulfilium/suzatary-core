@@ -1,6 +1,5 @@
-//! The web's payloads; their TypeScript and decoders are generated into `web/src/wire/generated/`
-//! ([`shape`]). A field name here is the name on the wire, so renaming one is a contract change.
-//! Request bodies are declared as the server accepts them, defaults included.
+//! The web's payloads; their TypeScript and decoders are generated ([`shape`]). A field name is
+//! the name on the wire, so renaming one is a contract change.
 
 pub mod shape;
 
@@ -91,8 +90,8 @@ pub struct SubTodo {
     pub done: bool,
 }
 
-/// Typst's HTML for the prose fields; `null` when absent, not compiled, refused, or not a trusted
-/// actor's, and the page shows the source, which always travels beside it.
+/// Typst's HTML for the prose fields; `null` when absent, not rendered, or untrusted, and the page
+/// shows the source beside it.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
 pub struct Rich {
     pub body: Option<String>,
@@ -100,12 +99,11 @@ pub struct Rich {
     pub rationale: Option<String>,
     /// From string source.
     pub waiting_on: Option<String>,
-    /// Each present field's HTML key, rendered or not; `null` for an absent or untrusted one.
+    /// Each present field's HTML key; `null` for an absent or untrusted one.
     pub keys: RichKeys,
 }
 
-/// Each field's key in the rendered-HTML tabulation ([`crate::template::Template::key`]): the core
-/// names it for the box and the tab alike.
+/// Each field's key in the rendered-HTML tabulation ([`crate::template::Template::key`]).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
 pub struct RichKeys {
     pub body: Option<String>,
@@ -115,8 +113,7 @@ pub struct RichKeys {
     pub waiting_on: Option<String>,
 }
 
-/// Read once from the constructor's name: a decision is a choice awaiting the owner's tap, never a
-/// todo on a list.
+/// A decision is a choice awaiting the owner's tap, never a todo on a list.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[serde(tag = "kind", rename_all = "lowercase")]
 pub enum Block {
@@ -156,8 +153,7 @@ pub struct Authored {
     pub created: String,
     /// Typst markup.
     pub body: String,
-    /// [`crate::escape::markup_text`] of the markup, never rendered, so a row shows an unconfirmed
-    /// line as text.
+    /// [`crate::escape::markup_text`] of the markup, never rendered.
     pub text: String,
     /// Typst markup.
     pub detail: String,
@@ -176,8 +172,7 @@ pub struct Authored {
     pub subtodos: Vec<SubTodo>,
 }
 
-/// The `From` matches `Outcome` with no wildcard, so a new binding fails the build instead of
-/// reading as open.
+/// The `From` matches `Outcome` with no wildcard, so a new binding fails the build.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "lowercase")]
 pub enum EntryState {
@@ -196,8 +191,7 @@ impl From<Option<prodrome_core::fpl::Outcome>> for EntryState {
     }
 }
 
-/// What an untrusted actor's event would bind where the confirmed fold disagrees. Agreement is
-/// `""`, which the stored pins print.
+/// What an untrusted actor's event would bind where the confirmed fold disagrees; `""` agrees.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
 pub enum ClaimedState {
     #[serde(rename = "")]
@@ -218,8 +212,7 @@ impl From<Option<prodrome_core::fpl::Outcome>> for ClaimedState {
     }
 }
 
-/// A number in [0, 1] (low is urgent), or `"absent"` for `∅`: a todo nothing prices is not a todo
-/// worth nothing. Where the term may fail to link it is `Option<Fulfillment>`, `null`.
+/// A number in [0, 1] (low is urgent), or `"absent"` for `∅`; `null` where it does not link.
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize, TS)]
 #[serde(untagged)]
 pub enum Fulfillment {
@@ -272,12 +265,10 @@ pub struct Entry {
     pub recurring: bool,
     /// Provisional content, or a claim the trusted fold refuses.
     pub unconfirmed: bool,
-    /// Registers with more than one live write, by hash; the next write settles it. `Record`, since
-    /// a `BTreeMap` never serialises an absent value.
+    /// Registers with more than one live write, by hash.
     #[ts(type = "Record<string, string[]>")]
     pub conflicts: BTreeMap<String, Vec<String>>,
-    /// `null` for a todo mentioned and never authored; under a content conflict, the first of
-    /// `candidates`.
+    /// `null` for a todo never authored; under a conflict, the first of `candidates`.
     pub authored: Option<Authored>,
     /// By object name, where the content is in conflict; else empty.
     pub candidates: Vec<Authored>,
@@ -308,7 +299,7 @@ pub struct ChainPayload {
     pub heads: Vec<String>,
     /// This deployment's trust policy, so an offline fold folds the same chain.
     pub untrusted: Vec<String>,
-    /// The root a device key counts under: whose word each object is, read in the browser.
+    /// The root a device key counts under.
     pub root: String,
     pub verify: Vec<String>,
     pub links: Vec<Link>,
@@ -325,13 +316,11 @@ pub struct FoldPayload {
     pub entries: Vec<Entry>,
     /// What refers into one reads `∅` until it reads.
     pub failed: Vec<FailedChain>,
-    /// When a whole percent, or what the fold believes, next moves after `at`; `null` for never. A
-    /// page redraws then, not on a ticking clock.
+    /// When a whole percent or the belief next moves after `at`; `null` for never.
     pub next: Option<NextChange>,
 }
 
-/// An instant in the reading's own zone, as `at` is; `exact` when something moves there, else a
-/// bound that may come before anything does.
+/// An instant in the reading's zone; `exact` when something moves there, else a bound.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
 pub struct NextChange {
     /// ISO 8601.
@@ -378,8 +367,7 @@ pub struct TodoPayload {
     #[ts(type = "Record<string, FieldChange[]>")]
     pub diffs: BTreeMap<String, Vec<FieldChange>>,
     pub links: TodoLinks,
-    /// The routine "Build it" fires; `null` on a chain whose todos no pull request's `Completes:`
-    /// closes.
+    /// The routine "Build it" fires; `null` on a chain no `Completes:` closes.
     pub builder: Option<String>,
 }
 
@@ -562,15 +550,14 @@ pub struct MailPage {
     pub todos: Vec<Entry>,
 }
 
-/// `GET /api/mail/inbox`: by date; the roster rides along so the filter chips are every account.
+/// `GET /api/mail/inbox`: by date, with the roster for the filter chips.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
 pub struct InboxPayload {
     pub accounts: Vec<String>,
     pub messages: Vec<crate::mail::MailRow>,
 }
 
-/// `GET /api/mail/watches`, and what a cancel answers: every watch that waits, soonest to expire
-/// first.
+/// `GET /api/mail/watches`, and what a cancel answers: soonest to expire first.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
 pub struct WatchesPayload {
     pub watches: Vec<MailWatch>,
@@ -610,8 +597,7 @@ pub struct ThreadPayload {
     pub messages: Vec<MailPage>,
 }
 
-/// By its one key, so a body naming two or none is refused at the parse. A person's line travels
-/// inside the two arms that write it.
+/// By its one key, so a body naming two or none is refused at the parse.
 #[derive(Debug, Clone, PartialEq, Deserialize, TS)]
 #[serde(rename_all = "lowercase")]
 pub enum Authoring {
@@ -622,8 +608,7 @@ pub enum Authoring {
     Redo(String),
 }
 
-/// `POST /api/author` `{"add": …}`. No actor (the gate names it) and no instant (the box stamps
-/// it).
+/// `POST /api/author` `{"add": …}`: the gate names the actor and the box stamps the instant.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
 #[serde(deny_unknown_fields)]
 pub struct NewTodo {
@@ -682,8 +667,7 @@ pub struct StoredObject {
     pub literal: String,
 }
 
-/// The digest the box recorded its heads under, which the replica names back as `since`, and how
-/// many objects lie under it.
+/// The digest the box recorded its heads under, named back as `since`, and its object count.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
 pub struct Frontier {
     /// 64 hex digits.
@@ -704,13 +688,11 @@ pub struct ObjectsPayload {
     /// Sorted.
     pub heads: Vec<String>,
     pub untrusted: Vec<String>,
-    /// The root key whose signatures make a device key count on a chain's objects; `null` for a
-    /// store the box alone writes.
+    /// The root key a device key's signatures count under; `null` for a store the box alone writes.
     pub root: Option<String>,
-    /// Sorted: a replica drops what it holds of any other, a store the box migrated away from.
+    /// Sorted: a replica drops any other store it holds.
     pub geneses: Vec<String>,
-    /// Bumped whenever `geneses` changes and by nothing else (`suzatary_core::epoch`), so a
-    /// replica takes the word of the latest epoch, a drop or a rollback included.
+    /// Bumped whenever `geneses` changes and by nothing else (`suzatary_core::epoch`).
     #[ts(type = "number")]
     pub epoch: u64,
     /// Parents first.
@@ -726,8 +708,7 @@ pub struct StorePayload {
     #[serde(flatten)]
     #[ts(flatten)]
     pub objects: ObjectsPayload,
-    /// The key of every slot the objects sent name, bytes in hex; never a key an erasure of the
-    /// same conversation names, so no erased word opens. Empty for a store that locks no words.
+    /// Every sent slot's key, hex; never one an erasure names, so no erased word opens.
     #[ts(type = "Record<string, string>")]
     pub keys: BTreeMap<String, String>,
     /// None when the answer holds all it lacked; else the replica asks again from its heads.
@@ -736,21 +717,18 @@ pub struct StorePayload {
     pub size: usize,
     /// So `size` less this is what is left.
     pub weight: usize,
-    /// Sorted: a replica forgets these keys' rendered blocks and drops the keys on taking any
-    /// piece, before the one holding the erasure arrives. Empty for a store that locks no words.
+    /// Sorted: keys a replica forgets the blocks of before the erasure arrives.
     pub erased: Vec<String>,
 }
 
-/// `GET /api/stores/<store>/content?hashes=<hashes>` and a chain's `…/content?hashes=`. A
-/// literal is what its name is the hash of, so the box sends it `Cache-Control: immutable`.
+/// `GET /api/stores/<store>/content?hashes=<hashes>`: literals, sent `Cache-Control: immutable`.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]
 pub struct ContentPayload {
     /// One per hash asked, in the order asked.
     pub objects: Vec<StoredObject>,
 }
 
-/// What a fold reads of an object without its literal. A tab hands its nodes to its core as the box
-/// sent them, so a node also reads back.
+/// What a fold reads of an object without its literal.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
 pub struct SkeletonNode {
     pub hash: String,
@@ -789,8 +767,7 @@ pub enum Heads {
     },
 }
 
-/// `GET /api/stores/lines/skeleton?since=<heads>`: the lines without literals, cut like a piece of
-/// the objects' pull. It names no erased or replaced key: each node's step says what it retires.
+/// `GET /api/stores/lines/skeleton?since=<heads>`: the lines without literals; no erased key.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
 pub struct SkeletonPayload {
     pub heads: Heads,
@@ -806,7 +783,7 @@ pub struct SkeletonPayload {
     #[ts(type = "Record<string, string>")]
     pub keys: BTreeMap<String, String>,
     pub rest: usize,
-    /// The bytes of the nodes lacked when it asked, these and the rest, by a piece's weight.
+    /// The bytes of the nodes lacked, by a piece's weight.
     pub size: usize,
     /// By the same weight, so `size` less this is what is left.
     pub weight: usize,
@@ -860,8 +837,7 @@ pub struct PickedFile {
     pub name: String,
 }
 
-/// `POST /api/secretary/attachments`: base64 in JSON so it passes the same content-type rule as
-/// every write.
+/// `POST /api/secretary/attachments`: base64 in JSON, under the same content-type rule.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[serde(deny_unknown_fields)]
 pub struct Uploading {
@@ -876,8 +852,7 @@ pub struct Uploading {
     pub private: bool,
 }
 
-/// `POST …/proposals/<n>/tap`: carries an index in its path, never a body that could change what
-/// is performed.
+/// `POST …/proposals/<n>/tap`: an index in its path, never a body that could change the act.
 #[derive(Debug, Clone, Deserialize, TS)]
 #[serde(deny_unknown_fields)]
 pub struct Tapping {
@@ -994,8 +969,7 @@ impl std::fmt::Debug for RevealPayload {
     }
 }
 
-/// `POST /api/act/device`: sent by the page with its device's signature, since the Android
-/// portal's native code holds no key.
+/// `POST /api/act/device`, signed by the page, since the Android portal holds no key.
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize, TS)]
 #[serde(deny_unknown_fields)]
 pub struct Registering {
@@ -1033,14 +1007,13 @@ pub struct RefusedObject {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "lowercase")]
 pub enum RefusalKind {
-    /// Never taken as it is: held and named, and everything resting on it with it.
+    /// Held and named, and everything resting on it with it.
     Final,
-    /// Taken once its device is trusted and it is signed: kept, and posted again then.
+    /// Taken once its device is trusted and it is signed.
     Trust,
 }
 
-/// `POST /api/objects`. The lists are always present: a key that appears conditionally is read as
-/// absent when it means none.
+/// `POST /api/objects`. The lists are always present.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
 pub struct ReceiptPayload {
     /// Sorted.
@@ -1052,7 +1025,7 @@ pub struct ReceiptPayload {
     /// In arrival order.
     pub refused: Vec<RefusedObject>,
     pub since: SinceRead,
-    /// What it held at `since` and everything adopted or already held, with all they rest on.
+    /// What it held at `since` and everything adopted, with all they rest on.
     pub frontier: Frontier,
 }
 
@@ -1095,8 +1068,7 @@ pub struct AboutPayload {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
 pub struct Shipped {
     pub todo: String,
-    /// `null` where the box does not serve the chain or the chain does not hold the todo: a release
-    /// file names ids alone.
+    /// `null` where the chain is not served or does not hold the todo.
     pub held: Option<HeldTodo>,
 }
 
@@ -1104,8 +1076,7 @@ pub struct Shipped {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
 pub struct ReleasesPayload {
     pub chain: String,
-    /// The `major.minor` it reads now (the last completed release's), which the next train starts
-    /// from.
+    /// The `major.minor` it reads now, which the next train starts from.
     pub reads: String,
     /// In the order they ship; none where the chain is not served.
     pub releases: Vec<ReleaseRow>,
@@ -1150,13 +1121,11 @@ pub struct MePayload {
     pub chains: Vec<String>,
     /// In the deployment's order, so no page spells the vocabulary itself.
     pub categories: Vec<String>,
-    /// The owner's zone (`America/New_York`): where a day is read and a time printed, never the
-    /// device's.
+    /// The owner's zone: where a day is read and a time printed.
     pub zone: String,
 }
 
-/// `POST /api/author`: the authoring without the append, the one thing a replica cannot do for
-/// itself; it seals the event on its own head.
+/// `POST /api/author`: the authoring without the append; the replica seals the event itself.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
 pub struct AuthoredPayload {
     pub todo: String,
@@ -1340,8 +1309,7 @@ pub enum Speaker {
         #[ts(type = "Array<string>")]
         references: Vec<Reference>,
     },
-    /// A note of the box's own state (a card filed, a restart, a grant stored) or another's words
-    /// it relays (a sign-in's link and code); never the owner's.
+    /// A note of the box's own state, or another's words it relays; never the owner's.
     Box {
         #[ts(type = "Array<string>")]
         references: Vec<Reference>,
@@ -1372,8 +1340,7 @@ pub enum Uploaded {
     Kept {
         file: AttachmentRow,
     },
-    /// Its text names an identity number, so it goes to the owner's Drive or nowhere, and only on
-    /// his say.
+    /// Names an identity number: the owner's Drive or nowhere, on his say.
     Sensitive {
         why: String,
         folder: String,
@@ -1395,8 +1362,7 @@ impl From<&crate::attachment::Attachment> for AttachmentRow {
     }
 }
 
-/// Tagged by speaker, so a row holds only its speaker's fields. `text` is the least trusted string
-/// served and is drawn as text.
+/// Tagged by speaker. `text` is the least trusted string served and is drawn as text.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
 pub struct TurnRow {
     /// Absolute; an `?about=` window has gaps.
@@ -1405,8 +1371,7 @@ pub struct TurnRow {
     pub at: String,
     /// `index` still names an earlier attempt's turn.
     pub attempt: Attempt,
-    /// When set, `text` is the box's sentence for it, drawn in their place and never as anybody's
-    /// words.
+    /// When set, `text` is the box's sentence for it, never anybody's words.
     pub gone: Option<TurnGone>,
     #[serde(flatten)]
     #[ts(flatten)]
@@ -1465,8 +1430,7 @@ pub enum VerbOutcome {
     Remembered { receipt: Receipt },
 }
 
-/// Its words are read from the memory by its number, never from the verb's answer, so a forgotten
-/// fact's receipt has none.
+/// Its words are read from the memory by number, so a forgotten fact's receipt has none.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[serde(tag = "state", rename_all = "lowercase")]
 pub enum Receipt {
@@ -1511,8 +1475,7 @@ pub struct CardWords {
     pub fact: String,
 }
 
-/// `GET /api/secretary/record`: the summaries a session opening is told in place of the owner's
-/// own lines, each of which he can retract.
+/// `GET /api/secretary/record`: the summaries a session opening is told, each retractable.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
 pub struct RecordPayload {
     /// Oldest first.
@@ -1578,8 +1541,7 @@ pub enum ProposalState {
     Failed,
     /// A tap was refused for a cause a tap again meets, and nothing happened: Dismiss.
     Refused,
-    /// A tap did part of the act and stopped; the card links where it stands: Try again, which
-    /// finishes it, or Dismiss.
+    /// A tap did part of the act and stopped: Try again finishes it, or Dismiss.
     Unfinished,
     /// A tap failed and it may have happened: never performed again until checked.
     Unknown,
@@ -1590,8 +1552,7 @@ pub enum ProposalState {
     Superseded,
     /// The box or the secretary took it back; `outcome` says why. Not the owner's no.
     Withdrawn,
-    /// The box took it back because what it asks for was done another way; `outcome` says what
-    /// the box saw.
+    /// Taken back because it was done another way; `outcome` says what the box saw.
     DoneElsewhere,
     /// A changeset's acts are on the chain; nothing left the box.
     Applied,
@@ -1610,8 +1571,7 @@ pub enum Cached {
     Mail,
 }
 
-/// A tagged union: the acts share nothing but their reasons. Each act's `sentence` is
-/// `Act::sentence`, printed once by the box.
+/// A tagged union; each act's `sentence` is `Act::sentence`.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[serde(tag = "kind", rename_all = "lowercase")]
 pub enum ProposedAct {
@@ -1722,18 +1682,19 @@ pub enum ProposedAct {
     Erase {
         sentence: String,
     },
+    Retract {
+        sentence: String,
+    },
     Afresh {
         sentence: String,
     },
-    /// The code an open sign-in waits for. No code field: the card's own password field sends it
-    /// in the tap's body.
+    /// The code an open sign-in waits for; the password field sends it in the tap's body.
     #[serde(rename = "sign_in_code")]
     SignInCode {
         url: String,
         sentence: String,
     },
-    /// The box's Google Cloud client, asked for whole; the password field takes the client's
-    /// downloaded file.
+    /// The box's Google Cloud client: the password field takes its downloaded file.
     #[serde(rename = "google_client")]
     GoogleClient {
         /// The client must list it as an authorized redirect URI.
@@ -1786,6 +1747,14 @@ pub enum ProposedAct {
         /// The imperative, or what became of the words.
         sentence: String,
     },
+    /// A fact to write in place of the standing facts it `replaces`, from such a round.
+    Consolidate {
+        words: RememberWords,
+        about: crate::secretary::memory::Kind,
+        /// At least one.
+        replaces: Vec<ReplacedFact>,
+        sentence: String,
+    },
     /// The tap records exactly these fields as the owner's.
     Decision {
         id: String,
@@ -1798,8 +1767,7 @@ pub enum ProposedAct {
     },
 }
 
-/// The card names them and the memory's text store keeps them, so a card dismissed, or whose fact
-/// was forgotten, has none.
+/// The card names them and the memory's text store keeps them.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[serde(tag = "state", rename_all = "lowercase")]
 pub enum RememberWords {
@@ -1812,6 +1780,14 @@ pub enum RememberWords {
     Unread {},
 }
 
+/// A fact a consolidation card replaces, with its words while it stands.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+pub struct ReplacedFact {
+    pub id: crate::secretary::memory::FactId,
+    /// `Gone` once the fact no longer stands: forgotten, or replaced by this card's tap.
+    pub words: RememberWords,
+}
+
 /// The page tags a card by it and folds the setup cards into one Setup row.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[serde(tag = "kind", rename_all = "lowercase")]
@@ -1822,14 +1798,12 @@ pub enum Asker {
     Plugin {
         name: String,
     },
-    /// The box, with no model asked: a declared secret nothing stores, asked for in the setup
-    /// conversation.
+    /// The box, with no model asked: a declared secret nothing stores.
     Setup {},
     Box {},
 }
 
-/// Decided by the box, so the page knows no kinds. Nothing is clamped: the card is the
-/// confirmation.
+/// Decided by the box, so the page knows no kinds. The card is the confirmation.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
 pub struct Card {
     pub title: String,
@@ -1851,8 +1825,7 @@ pub struct Card {
     /// What a tap that did nothing is called before its reason: "Not sent" for mail.
     pub failed: String,
     pub readonly: String,
-    /// `null` for none: only a template's own https link, a path on the box or a template's setup,
-    /// so no model's words are drawn as a button.
+    /// `null` for none; never a model's words drawn as a button.
     pub link: Option<CardLink>,
 }
 
@@ -1986,8 +1959,7 @@ pub struct ProposalRow {
     /// Turns standing before it; drawn after turn `turn - 1`, never renumbered.
     pub turn: usize,
     pub coding: Option<CodingSession>,
-    /// While its act runs, what the box said it waits for (a sign-in's link and code); `None` once
-    /// it ends, or for an act that says nothing.
+    /// While its act runs, what the box said it waits for; `None` otherwise.
     pub announced: Option<String>,
     /// In the same conversation; `None` for a first asking.
     pub revises: Option<Revises>,
@@ -1996,8 +1968,7 @@ pub struct ProposalRow {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
 pub struct Revises {
     pub card: usize,
-    /// Changeset rows, from the first, the replaced card already asked for. `0` where either card
-    /// is not a changeset.
+    /// Changeset rows the replaced card already asked for; `0` unless both are changesets.
     pub carried: usize,
 }
 
@@ -2084,8 +2055,7 @@ pub struct CodingFile {
     pub removed: Option<u32>,
 }
 
-/// One SSE frame of `GET …/stream`. A delta and a working verb are never written down; `Turn`
-/// says the transcript grew, refetch it.
+/// One SSE frame of `GET …/stream`; `Turn` says the transcript grew, refetch it.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[serde(tag = "kind", rename_all = "lowercase")]
 pub enum Frame {
@@ -2101,8 +2071,7 @@ pub enum Frame {
     Working {
         verb: String,
     },
-    /// The page asks for its render by `sha`, never by text, so it cannot make the box render
-    /// other words.
+    /// Rendered by `sha`, never by text, so the page cannot make the box render other words.
     Block {
         /// From 0.
         n: usize,
@@ -2121,8 +2090,7 @@ pub struct BlockRender {
     pub key: String,
 }
 
-/// `GET /api/secretary/conversations/<id>`, windowed by `?before=&limit=` and filtered to rounds
-/// touching `?about=`. Every index is absolute.
+/// `GET /api/secretary/conversations/<id>`, windowed and filtered; every index is absolute.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
 pub struct ConversationPayload {
     pub id: String,
@@ -2204,8 +2172,7 @@ pub struct RoundTopic {
 #[serde(tag = "by", rename_all = "lowercase")]
 pub enum RoundAsked {
     Person {},
-    /// One of the box's own rounds: the page draws `title` in its place and keeps the question
-    /// behind a disclosure.
+    /// One of the box's own rounds: `title` in its place, the question behind a disclosure.
     Box {
         title: String,
     },
@@ -2294,8 +2261,7 @@ pub struct CalendarPayload {
     pub rich: Option<String>,
 }
 
-/// `Todos.verify_history` in the browser's module: SPEC §3's verify of a tab's objects, with what
-/// predates signatures read as history rather than as a finding.
+/// `Todos.verify_history` in the browser's module: SPEC §3's verify of a tab's objects.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]
 pub struct VerifiedPayload {
     pub tips: Vec<String>,
@@ -2447,8 +2413,7 @@ pub fn typescript() -> String {
     out
 }
 
-/// The body of a generated TypeScript module, this one's and the pages'
-/// (`app/pages/tests/boundary.rs`).
+/// The body of a generated TypeScript module, this one's and the pages'.
 pub fn exported(out: &mut String, declarations: impl IntoIterator<Item = String>) {
     for decl in declarations {
         out.push_str("\nexport ");
@@ -2503,8 +2468,7 @@ fn declared() -> Vec<String> {
     declared.out
 }
 
-/// What a route answers, a stream sends or the browser's module reads out: the roots of the
-/// browser's decoders.
+/// The roots of the browser's decoders: what a route answers, a stream sends or the module reads.
 fn answers(visit: &mut impl TypeVisitor) {
     visit.visit::<VerifiedPayload>();
     visit.visit::<ProvenanceRow>();

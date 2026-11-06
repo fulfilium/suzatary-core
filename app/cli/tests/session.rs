@@ -72,6 +72,7 @@ fn current_surface() -> String {
     suzatary_core::conversation::ask::surface_of(
         "you are the secretary",
         &suzatary_core::secretary::tools(),
+        &std::collections::BTreeSet::new(),
     )
 }
 
@@ -186,6 +187,91 @@ fn a_stored_session_resumes_with_exactly_the_delta() {
     assert_eq!(
         answered.stored.session.expect("still a session").session.id,
         existing
+    );
+}
+
+/// A session told the record before the owner retracted a summary is opened afresh rather than
+/// resumed: the record it holds may carry the summary he said is wrong, which no model is shown
+/// again.
+#[test]
+fn a_retraction_reopens_a_stored_session() {
+    let mut caps =
+        Fakes::new("session-retracted").model(FakeModel::saying(["{\"say\": \"afresh\"}"]));
+    let ada = prodrome_core::event::Actor::new("ada").expect("an actor");
+    caps.owners = [ada.clone()].into();
+    caps.digests = suzatary_io::objects::Objects::digests(
+        caps.root.join("digests-owned"),
+        caps.owners.clone(),
+    );
+    opened_with_a_person_turn(&caps);
+    suzatary_core::secretary::transcript::push(
+        caps.conversations.conversations(),
+        &id(),
+        &Entry::Kept {
+            at: suzatary_core::capability::Datetime::new(2026, 9, 14, 8, 59, 0, 0)
+                .expect("an instant"),
+            session: a_session_id("1"),
+            model: "claude-cli/haiku".to_owned(),
+            cwd: "/repo".to_owned(),
+            surface: Some(current_surface()),
+            from: 0,
+        },
+    )
+    .expect("the session line appends");
+    let tap = suzatary_core::secretary::tap::Tap::of(
+        &suzatary_core::signatures::scene("ada"),
+        &suzatary_core::gate::ActHeaders {
+            act: Some("1"),
+            content_type: Some("application/json"),
+            site: Some("same-origin"),
+            client: Some(suzatary_core::gate::CLIENT),
+        },
+        suzatary_core::seat::Seat::Device,
+    )
+    .expect("the owner's tap");
+    let node = prodrome_core::event::Hash::new("ab".repeat(32)).expect("a name");
+    suzatary_core::store::Prodrome::append(
+        &caps.digests,
+        suzatary_core::secretary::digest_event::retracted(
+            node,
+            suzatary_core::capability::Datetime::new(2026, 9, 14, 9, 0, 0, 0).expect("an instant"),
+            &tap,
+        )
+        .expect("a retraction"),
+    )
+    .expect("the owner's retraction is stored");
+
+    let deployment = deployment();
+    let policy = common::chain();
+    let chains = [Bound {
+        name: "life",
+        caps: caps.secretary(),
+        policy: &policy,
+    }];
+    let answered = answer(
+        &caps.secretary(),
+        || Pick::Held(&caps.model),
+        &deployment,
+        &suzatary_core::settings::Settables::default(),
+        &chains,
+        &id(),
+        "you are the secretary",
+        &suzatary_core::secretary::surface::Subset::ALL,
+        &Sink {
+            on_delta: &|_| {},
+            on_working: &|_| {},
+            halt: &Halt::new(),
+        },
+    )
+    .expect("the exchange runs")
+    .expect("a round ran");
+
+    assert!(caps.model.resumed_with().is_empty(), "no resume");
+    assert_eq!(caps.model.opened().len(), 1, "one open");
+    assert_ne!(
+        answered.stored.session.expect("a session").session.surface,
+        Some(current_surface()),
+        "the new session records the retraction"
     );
 }
 

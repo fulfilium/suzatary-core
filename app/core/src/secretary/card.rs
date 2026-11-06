@@ -9,8 +9,11 @@ use crate::secretary::store::Style;
 use crate::web::WebKind;
 use crate::wire::{
     Asker, Asks, Cached, Card, CardAnswer, CardField, CardFile, CardLink, HeldIn, ProposedAct,
-    RememberWords,
+    RememberWords, ReplacedFact,
 };
+
+/// The Memory page, where every summary a conversation is told stands with its Wrong.
+pub const MEMORY_PAGE: &str = "#/secretary/memory";
 
 /// The card for a proposal.
 #[must_use]
@@ -105,6 +108,12 @@ pub fn of(act: &ProposedAct) -> Card {
             about,
             sentence,
         } => remember(words, *about, sentence),
+        ProposedAct::Consolidate {
+            words,
+            about,
+            replaces,
+            sentence,
+        } => consolidate(words, *about, replaces, sentence),
         ProposedAct::CodingSession { task, sentence } => coding_session(task, sentence),
         ProposedAct::Device {
             actor,
@@ -142,6 +151,7 @@ pub fn of(act: &ProposedAct) -> Card {
             sentence,
         } => grant(plugin, origin, sentence),
         ProposedAct::Erase { sentence } => erase(sentence),
+        ProposedAct::Retract { sentence } => retract(sentence),
         ProposedAct::Afresh { sentence } => afresh(sentence),
         ProposedAct::GoogleClient {
             redirect, steps, ..
@@ -520,7 +530,12 @@ fn decision(
 
 /// Without its words (deleted or unread) the card has no answer: there is nothing to remember.
 fn remember(words: &RememberWords, about: crate::secretary::memory::Kind, sentence: &str) -> Card {
-    let about = about.as_str();
+    let base = card(
+        "Remember this?",
+        sentence,
+        vec![field("Kind", about.as_str()), field("Fact", shown(words))],
+        "remember",
+    );
     match words {
         RememberWords::Kept { fact } => Card {
             answers: vec![CardAnswer {
@@ -533,25 +548,61 @@ fn remember(words: &RememberWords, about: crate::secretary::memory::Kind, senten
                 },
                 ..answer("remember", "Remember")
             }],
-            ..card(
-                "Remember this?",
-                sentence,
-                vec![field("Kind", about), field("Fact", fact)],
-                "remember",
-            )
+            ..base
         },
-        RememberWords::Gone {} => card(
-            "Proposed remembering",
-            sentence,
-            vec![field("Kind", about), field("Fact", "deleted")],
-            "remember",
-        ),
-        RememberWords::Unread {} => card(
-            "Proposed remembering",
-            sentence,
-            vec![field("Kind", about), field("Fact", "not read here")],
-            "remember",
-        ),
+        RememberWords::Gone {} | RememberWords::Unread {} => Card {
+            title: "Proposed remembering".to_owned(),
+            ..base
+        },
+    }
+}
+
+/// Each fact it replaces beside the one it writes, so the owner reads both before he taps;
+/// without its words the card has no answer, as [`remember`].
+fn consolidate(
+    words: &RememberWords,
+    about: crate::secretary::memory::Kind,
+    replaces: &[ReplacedFact],
+    sentence: &str,
+) -> Card {
+    let fields = std::iter::once(field("Kind", about.as_str()))
+        .chain(replaces.iter().map(|source| {
+            field(
+                &format!("Replaces fact {}", source.id),
+                shown(&source.words),
+            )
+        }))
+        .chain(std::iter::once(field("Into", shown(words))))
+        .collect();
+    let base = card("Merge these facts?", sentence, fields, "remember");
+    match words {
+        RememberWords::Kept { fact } => Card {
+            answers: vec![CardAnswer {
+                done: "merged".to_owned(),
+                asks: Asks::Confirm {
+                    question: format!(
+                        "Merge them? The facts it replaces leave the memory and their words are \
+                         deleted; every conversation from now on reads instead: {fact}"
+                    ),
+                    yes: "Yes, merge them".to_owned(),
+                },
+                ..answer("remember", "Merge")
+            }],
+            ..base
+        },
+        RememberWords::Gone {} | RememberWords::Unread {} => Card {
+            title: "Proposed merging".to_owned(),
+            ..base
+        },
+    }
+}
+
+/// A fact's words as a card field shows them.
+fn shown(words: &RememberWords) -> &str {
+    match words {
+        RememberWords::Kept { fact } => fact,
+        RememberWords::Gone {} => "deleted",
+        RememberWords::Unread {} => "not read here",
     }
 }
 
@@ -930,6 +981,30 @@ fn erase(sentence: &str) -> Card {
             sentence,
             Vec::new(),
             "erase",
+        )
+    }
+}
+
+/// The summary's words are on the Memory page, where its Wrong answers the same.
+fn retract(sentence: &str) -> Card {
+    Card {
+        answers: vec![CardAnswer {
+            done: "retracted".to_owned(),
+            asks: Asks::Confirm {
+                question: question(sentence),
+                yes: "Yes, it is wrong".to_owned(),
+            },
+            ..answer("retract", "Wrong")
+        }],
+        link: Some(CardLink::Page {
+            label: "Read it on the Memory page".to_owned(),
+            href: MEMORY_PAGE.to_owned(),
+        }),
+        ..card(
+            "A summary that misstates you",
+            sentence,
+            Vec::new(),
+            "retract",
         )
     }
 }

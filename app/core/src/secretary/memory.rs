@@ -1,18 +1,13 @@
 //! The secretary's memory: facts about the owner kept between conversations, one memory for all.
 //!
-//! Not the chain and not a conversation, so a store of its own in two halves
-//! ([`crate::secretary::memories::Memories`]): a HISTORY, a prodrome at the
-//! [`crate::secretary::memory_event::MemoryEvent`] schema saying which facts were remembered and
-//! which forgotten, by id, immutable and pushed; and the TEXTS, each fact's words in a salted
-//! file named in its remembering, box-local, which forgetting deletes. So the history stays
-//! verifiable (fact N existed and was forgotten on a date, by someone) while its words are gone.
-//! [`Memory`] is the two read together.
+//! A store of its own in two halves ([`crate::secretary::memories::Memories`]): a HISTORY, a
+//! prodrome at the [`crate::secretary::memory_event::MemoryEvent`] schema saying which facts were
+//! remembered and forgotten, by id, pushed; and the TEXTS, each fact's words in a salted
+//! box-local file, which forgetting deletes. So the history stays verifiable while the words go.
 //!
-//! A memory written because an email said so persists into every later session, so
-//! [`Fact::new`] is the only door, for a text read back as for one written, and refuses a URL or
-//! a line break; the memory is capped at [`MAX_LIVE`] so it is read whole; and a forgotten fact
-//! never stands again (the history's register only climbs). Who may write, and when, is
-//! `secretary::taint`'s.
+//! A memory an email caused persists into every later session, so [`Fact::new`] is the only
+//! door and refuses a URL or a line break; it is capped at [`MAX_LIVE`] so it is read whole; and
+//! a forgotten fact never stands again. Who may write, and when, is `secretary::taint`'s.
 
 use serde::{Deserialize, Serialize};
 
@@ -26,12 +21,12 @@ use prodrome_core::literal::codec::{Constructor, Fields, Literal, record};
 /// The longest fact, in characters: a sentence, never a document.
 pub const MAX_FACT_CHARS: usize = 280;
 
-/// How many facts may stand at once; past it `remember` refuses naming the cap, so the secretary
-/// merges facts rather than growing a memory nobody reads whole.
+/// How many facts may stand at once, so the secretary merges rather than grows a memory nobody
+/// reads whole.
 pub const MAX_LIVE: usize = 200;
 
-/// One fact: one line of prose, at most [`MAX_FACT_CHARS`], holding no URL. `serde` goes through
-/// the same constructor, so a hand-edited line cannot put a link into every later session.
+/// One fact: one line of prose, at most [`MAX_FACT_CHARS`], holding no URL; `serde` goes through
+/// the same constructor.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 #[serde(try_from = "String", into = "String")]
 pub struct Fact(String);
@@ -45,11 +40,10 @@ pub enum NotAFact {
     /// Longer than [`MAX_FACT_CHARS`].
     #[error("a fact is at most {MAX_FACT_CHARS} characters; this one is {0}")]
     TooLong(usize),
-    /// It holds a link: a memory is read into every later session, and a link there is the
-    /// exfiltration half of the attack.
+    /// It holds a link: a link in every later session is the exfiltration half of the attack.
     #[error("a fact holds no URL: say what the page said instead")]
     Url,
-    /// It holds a line break or another control character: one fact is one line.
+    /// It holds a line break or another control character.
     #[error("a fact is one line: no line break or control character")]
     LineBreak,
 }
@@ -159,8 +153,7 @@ impl Kind {
     }
 }
 
-/// A fact's number, and the memory's version when it was written: ids and versions are one
-/// counter, so "what changed since version 7" is "every event numbered above 7".
+/// A fact's number, and the memory's version when it was written: one counter.
 #[derive(
     Debug,
     Clone,
@@ -180,6 +173,58 @@ pub struct FactId(
     #[ts(type = "number")] pub u64,
 );
 
+/// The standing facts one new fact replaces, at least one.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(
+    try_from = "std::collections::BTreeSet<FactId>",
+    into = "std::collections::BTreeSet<FactId>"
+)]
+pub struct Sources(std::collections::BTreeSet<FactId>);
+
+impl Sources {
+    /// `ids`, unless there are none.
+    #[must_use]
+    pub fn new(ids: std::collections::BTreeSet<FactId>) -> Option<Self> {
+        (!ids.is_empty()).then_some(Self(ids))
+    }
+
+    /// The ids, least first.
+    #[must_use]
+    pub fn ids(&self) -> &std::collections::BTreeSet<FactId> {
+        &self.0
+    }
+}
+
+impl TryFrom<std::collections::BTreeSet<FactId>> for Sources {
+    type Error = &'static str;
+    fn try_from(ids: std::collections::BTreeSet<FactId>) -> Result<Self, Self::Error> {
+        Self::new(ids).ok_or("a consolidation replaces at least one fact")
+    }
+}
+
+impl From<Sources> for std::collections::BTreeSet<FactId> {
+    fn from(sources: Sources) -> Self {
+        sources.0
+    }
+}
+
+impl std::fmt::Display for Sources {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let ids: Vec<String> = self.0.iter().map(|id| format!("fact {id}")).collect();
+        f.write_str(&ids.join(", "))
+    }
+}
+
+/// What a fact written on the owner's tap replaces: nothing, or [`Sources`].
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum Replaces {
+    /// A fact remembered beside the others.
+    Nothing,
+    /// A fact that says what these said, in their place.
+    Facts(Sources),
+}
+
 impl std::str::FromStr for FactId {
     type Err = std::num::ParseIntError;
 
@@ -195,21 +240,18 @@ impl std::fmt::Display for FactId {
     }
 }
 
-/// Who said it: the round's opening turn, or the proposal the owner tapped. Never a parameter a
-/// model passes; the verb reads it off the transcript (`secretary::taint::opener`).
+/// Who said it, read off the transcript (`secretary::taint::opener`), never a model's parameter.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 #[serde(tag = "from", rename_all = "lowercase")]
 pub enum Origin {
     /// The owner's own words: the round's opening turn.
     Turn {
-        /// The conversation.
         conversation: ConversationId,
         /// The turn's absolute index in it.
         turn: usize,
     },
     /// The owner's tap on a `Proposal::Remember`.
     Tapped {
-        /// The conversation.
         conversation: ConversationId,
         /// The proposal's index in it.
         proposal: usize,
@@ -267,11 +309,8 @@ impl Origin {
 pub struct Remembered {
     /// Its number, which was the memory's version when it was written.
     pub id: FactId,
-    /// When.
     pub at: Datetime,
-    /// What.
     pub fact: Fact,
-    /// About whom or what.
     pub kind: Kind,
     /// Where it comes from.
     pub said: crate::secretary::provenance::Provenance,
@@ -291,7 +330,6 @@ pub struct Merge {
 pub struct Forgotten {
     /// Which fact.
     pub id: FactId,
-    /// When.
     pub at: Datetime,
     /// Who: the gate's actor, or `assistant` for the verb.
     pub by: String,
@@ -313,9 +351,8 @@ pub struct Memory {
 }
 
 impl Memory {
-    /// The memory a history reads as, each standing fact's words found by `words`: a fact whose
-    /// words are not found, forgotten or lost, is absent, while its number still counts in the
-    /// version.
+    /// The memory a history reads as: a fact whose words are not found is absent, while its
+    /// number still counts in the version.
     #[must_use]
     pub fn from_history(
         history: &crate::secretary::two_phase::TwoPhase,
@@ -371,9 +408,8 @@ impl Memory {
     }
 }
 
-/// What one conversation is told of the memory next: everything to a session told nothing,
-/// otherwise the facts added and forgotten since the version it was told. Delivered as a turn
-/// heading the batch, never in the prompt, since a session snapshots its prompt.
+/// What one conversation is told of the memory next: everything, or what moved since the version
+/// it was told. A turn heading the batch, never the prompt, since a session snapshots its prompt.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Change {
     /// The whole memory, to a session told nothing yet.
@@ -503,8 +539,7 @@ pub fn change(memory: &Memory, seen: Option<u64>) -> Change {
     }
 }
 
-/// The standing fact that replaced `fact`, through every consolidation between them; `None` when
-/// none of those stands, so what `fact` said stands nowhere.
+/// The standing fact that replaced `fact`, through every consolidation; `None` when none stands.
 fn standing_for(memory: &Memory, fact: FactId) -> Option<FactId> {
     let mut pending = vec![fact];
     let mut seen = std::collections::BTreeSet::new();
@@ -551,6 +586,18 @@ impl Literal for FactId {
 
     fn from_value(value: &Value) -> Result<Self, ProdromeError> {
         u64::from_value(value).map(FactId)
+    }
+}
+
+/// Sources print as their set; an empty set does not read.
+impl Literal for Sources {
+    fn to_value(&self) -> Value {
+        self.0.to_value()
+    }
+
+    fn from_value(value: &Value) -> Result<Self, ProdromeError> {
+        Self::try_from(std::collections::BTreeSet::from_value(value)?)
+            .map_err(ProdromeError::invalid)
     }
 }
 

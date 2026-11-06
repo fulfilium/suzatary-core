@@ -40,6 +40,7 @@ impl Proposal {
                 | Act::Disconnect { .. }
                 | Act::Grant { .. }
                 | Act::Erase { .. }
+                | Act::Retract { .. }
                 | Act::Afresh { .. }
                 | Act::GoogleClient { .. }
                 | Act::CalendarEvent { .. },

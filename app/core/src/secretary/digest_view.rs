@@ -150,6 +150,25 @@ pub fn shown_as(
 }
 
 /// The lines a handle names: `first+lines`.
+/// The node whose summary `handle` names: the one node spanning those lines, or the first of a
+/// chain of single children beneath it, that shows a summary ([`Digest::summary`]). `None` for a
+/// handle naming no such node, so nothing a reader is not shown can be named.
+#[must_use]
+pub fn summarized(digest: &Digest, handle: &str) -> Option<Hash> {
+    let &[mut node] = digest.tree()?.cover(span_of(handle)?)?.as_slice() else {
+        return None;
+    };
+    loop {
+        if digest.summary(node.name()).is_some() {
+            return Some(node.name().clone());
+        }
+        let [only] = node.children() else {
+            return None;
+        };
+        node = only;
+    }
+}
+
 fn span_of(handle: &str) -> Option<std::ops::Range<usize>> {
     let (first, lines) = handle.trim().split_once('+')?;
     let first: usize = first.parse().ok()?;

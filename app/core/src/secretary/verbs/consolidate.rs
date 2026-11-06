@@ -5,13 +5,13 @@ use serde::Deserialize;
 use serde_json::json;
 
 use crate::refusal::Refusal;
-use crate::secretary::memory::{self, Fact, FactId};
+use crate::secretary::memory::{self, Fact, FactId, Replaces, Sources};
 use crate::secretary::verb_answer::VerbAnswer;
-use crate::secretary::verbs::clean_round;
+use crate::secretary::verbs::{Gate, NO_OPENER, gate, memory_card};
 use crate::secretary::{Call, SecretarySurface};
-use crate::verb::Verb;
+use crate::verb::{Caught, Verb};
 
-/// Replace standing facts with one, only where forget would write.
+/// Replace standing facts with one, where remember would write, or as a card the owner taps.
 pub struct Consolidate;
 
 #[derive(Deserialize, JsonSchema)]
@@ -19,6 +19,10 @@ pub struct ConsolidateArgs {
     from: Vec<u64>,
     fact: String,
     kind: String,
+    #[serde(default)]
+    why: Caught<Option<String>>,
+    #[serde(default)]
+    sources: Caught<Option<String>>,
 }
 
 impl Verb for Consolidate {
@@ -31,30 +35,62 @@ impl Verb for Consolidate {
         form. One line, at most 280 characters, no URL; `kind` as for `remember`. The facts it \
         replaces leave the memory and their words are deleted; the new fact stands on where \
         each of them was said. Use it when two facts say one thing, or one corrects another, \
-        or the memory is at its cap. Only in a round the owner opened that has read nothing \
-        but the manual, the forecast and the memory; anywhere else it refuses.";
+        or the memory is at its cap. Where `remember` would write, this writes; in a round that \
+        has read anything but the owner's own words it stores a card showing the old facts \
+        beside the new one, which the owner taps, and then `why` (what makes them one) and \
+        `sources` are required as for any proposal. A round the box opened refuses.";
 
     fn run(call: &Call<'_>, args: ConsolidateArgs) -> Result<VerbAnswer, Refusal> {
-        let from: BTreeSet<FactId> = args.from.into_iter().map(FactId).collect();
-        if from.is_empty() {
-            return Err(Refusal::bad_request(
-                "from: name at least one standing fact by its number",
-            ));
-        }
+        let from = Sources::new(
+            args.from
+                .iter()
+                .copied()
+                .map(FactId)
+                .collect::<BTreeSet<_>>(),
+        )
+        .ok_or_else(|| {
+            Refusal::bad_request("from: name at least one standing fact by its number")
+        })?;
         let fact = Fact::new(&args.fact)
             .map_err(|failed| Refusal::bad_request(format!("fact: {failed}")))?;
         let kind = memory::kind_of(&args.kind)?;
-        let round = clean_round(call, "ask for it again in a round they open")?;
-        let merged =
-            call.caps
-                .memories
-                .consolidate(&from, &fact, kind, &round, call.caps.clock.now())?;
+        let replaced: Vec<u64> = from.ids().iter().map(|id| id.0).collect();
+        let round = match gate(&crate::secretary::read(
+            call.caps.conversations,
+            call.conversation,
+        )?) {
+            Gate::Closed => return Err(Refusal::forbidden(NO_OPENER)),
+            Gate::Write(round) => round,
+            Gate::Card => {
+                let index = memory_card(
+                    call.caps,
+                    call.conversation,
+                    (args.why.read()?.as_deref(), args.sources.read()?.as_deref()),
+                    (&fact, kind, Replaces::Facts(from)),
+                )?;
+                return Ok(VerbAnswer::from(json!({
+                    "proposed": index,
+                    "replaces": replaced,
+                    "kind": kind.as_str(),
+                    "next": "This round read something that is not the owner's own words, so the \
+                             merge is a card they tap; the facts stand until then. Say so in one \
+                             clause.",
+                })));
+            }
+        };
+        let merged = call.caps.memories.hold()?.write(
+            &fact,
+            kind,
+            &Replaces::Facts(from),
+            &round,
+            call.caps.clock.now(),
+        )?;
         // The ids, never the words, as `remember` answers: the receipt reads them by the id.
         Ok(VerbAnswer {
             remembered: Some(merged.id),
             ..VerbAnswer::from(json!({
                 "remembered": merged.id.0,
-                "replaced": from.iter().map(|id| id.0).collect::<Vec<_>>(),
+                "replaced": replaced,
                 "kind": kind.as_str(),
                 "next": "The owner sees the new fact under this answer with a Forget beside it.",
             }))

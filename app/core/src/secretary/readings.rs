@@ -715,6 +715,66 @@ fn disconnect_on_wire(
     }
 }
 
+/// A remember card on the wire: its words and, for a consolidation, each fact it replaces with
+/// that fact's words while it stands.
+fn remember_on_wire(
+    words: &Words,
+    about: crate::secretary::memory::Kind,
+    replaces: &crate::secretary::memory::Replaces,
+    memory: Option<&wire::MemoryPayload>,
+) -> wire::ProposedAct {
+    use crate::secretary::memory::Replaces;
+    let into = match replaces {
+        Replaces::Nothing => String::new(),
+        Replaces::Facts(sources) => format!(" in place of {sources}"),
+    };
+    let (words, sentence) = match words {
+        Words::Kept(fact) => (
+            wire::RememberWords::Kept {
+                fact: fact.as_str().to_owned(),
+            },
+            format!("Remember{into}, in every conversation from now on: {fact}"),
+        ),
+        Words::Gone => (
+            wire::RememberWords::Gone {},
+            "Proposed remembering something since forgotten or dismissed; its words are deleted."
+                .to_owned(),
+        ),
+        Words::Unread => (
+            wire::RememberWords::Unread {},
+            "Proposed remembering something; its words are not read here.".to_owned(),
+        ),
+    };
+    match replaces {
+        Replaces::Nothing => wire::ProposedAct::Remember {
+            words,
+            about,
+            sentence,
+        },
+        Replaces::Facts(sources) => wire::ProposedAct::Consolidate {
+            words,
+            about,
+            replaces: sources
+                .ids()
+                .iter()
+                .map(|&id| wire::ReplacedFact {
+                    id,
+                    words: match memory {
+                        None => wire::RememberWords::Unread {},
+                        Some(memory) => memory.facts.iter().find(|row| row.id == id).map_or(
+                            wire::RememberWords::Gone {},
+                            |row| wire::RememberWords::Kept {
+                                fact: row.fact.clone(),
+                            },
+                        ),
+                    },
+                })
+                .collect(),
+            sentence,
+        },
+    }
+}
+
 /// `consent` is the box's path to the consent a running sign-in opened.
 #[expect(clippy::too_many_lines, reason = "one arm per kind of act")]
 fn act_on_wire(
@@ -827,6 +887,9 @@ fn act_on_wire(
             }
         }
         crate::secretary::acts::Act::Erase { .. } => wire::ProposedAct::Erase {
+            sentence: act.sentence(),
+        },
+        crate::secretary::acts::Act::Retract { .. } => wire::ProposedAct::Retract {
             sentence: act.sentence(),
         },
         crate::secretary::acts::Act::Afresh { .. } => wire::ProposedAct::Afresh {
@@ -1016,31 +1079,11 @@ pub(crate) fn proposal(
                 .then(|| format!("{}{}", crate::google::CONSENT, standing.object.id.as_str())),
             draws,
         ),
-        Proposal::Remember { text, kind } => {
-            let (words, sentence) = match words(text, memory) {
-                Words::Kept(fact) => (
-                    wire::RememberWords::Kept {
-                        fact: fact.as_str().to_owned(),
-                    },
-                    format!("Remember, in every conversation from now on: {fact}"),
-                ),
-                Words::Gone => (
-                    wire::RememberWords::Gone {},
-                    "Proposed remembering something since forgotten or dismissed; its words \
-                     are deleted."
-                        .to_owned(),
-                ),
-                Words::Unread => (
-                    wire::RememberWords::Unread {},
-                    "Proposed remembering something; its words are not read here.".to_owned(),
-                ),
-            };
-            wire::ProposedAct::Remember {
-                words,
-                about: *kind,
-                sentence,
-            }
-        }
+        Proposal::Remember {
+            text,
+            kind,
+            replaces,
+        } => remember_on_wire(&words(text, memory), *kind, replaces, memory),
         Proposal::Decide(draft) => crate::secretary::decide::on_wire(draft),
     };
     let reading = &standing.object.reading;

@@ -398,7 +398,13 @@ logged, "zoom before you act, guess or ask", and the stability-first view.
    summaries, and a summary written over a retracted one, at any depth, reads
    `Standing::OverRetracted`, shown to no reader until it is redone
    (`digest.rs`'s `a_retraction_redoes_the_spine_above_it`, over mixed
-   speakers).
+   speakers). COMPLETED (2026-11-06): a `consolidate` in a round that read
+   outside the owner's words files a remember card that `Replaces` its
+   sources (`Consolidate(text, kind, from)`), shown beside the new fact, in
+   place of a refusal; the secretary proposes a retraction as
+   `Act::Retract { node }` by the handle it was shown; and the retractions are
+   part of a session's surface, so a session told the record before one is
+   opened afresh rather than resumed.
 7. **(Owner-gated) A fresh call per turn**: `Ask::Digest` replaces
    `Ask::Session` for conversations; a migration verb drops `MemorySeen` and
    `Session` lines, then deletes `memory::Change`, `queue::heading`,

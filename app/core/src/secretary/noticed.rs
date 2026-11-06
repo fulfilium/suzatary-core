@@ -255,6 +255,7 @@ pub(crate) fn owns(proposal: &Proposal) -> bool {
             | Act::CodingSession { .. }
             | Act::Device(_)
             | Act::Erase { .. }
+            | Act::Retract { .. }
             | Act::Afresh { .. }
             | Act::CalendarEvent { .. },
         )

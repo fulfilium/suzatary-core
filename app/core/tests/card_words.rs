@@ -14,7 +14,7 @@ use suzatary_core::capability::Entropy;
 use suzatary_core::secretary::inbox::{self, Fold, ProposalId};
 use suzatary_core::secretary::inbox_event::InboxEvent;
 use suzatary_core::secretary::memories::{Kept, Memories};
-use suzatary_core::secretary::memory::{Fact, FactId, Kind, Origin};
+use suzatary_core::secretary::memory::{Fact, FactId, Kind, Origin, Replaces, Sources};
 use suzatary_core::secretary::memory_event::MemoryEvent;
 use suzatary_core::secretary::responded::{Done, Performed, Responded, Tried};
 use suzatary_core::secretary::salted_text::{Text, TextName};
@@ -102,6 +102,12 @@ fn conversation() -> ConversationId {
 
 /// File a card about `fact`, as the `remember` verb does in a tainted round.
 fn ask(the: &Box, fact: &Fact, kind: Kind, index: usize) -> ProposalId {
+    asked(the, fact, (kind, Replaces::Nothing), index)
+}
+
+/// File a card writing `fact` in place of what it `replaces`, as `remember` and `consolidate` do
+/// in a tainted round.
+fn asked(the: &Box, fact: &Fact, (kind, replaces): (Kind, Replaces), index: usize) -> ProposalId {
     let held = the.memories().hold().expect("held");
     let kept = held.keep_card(fact).expect("kept");
     let asked = inbox::Asked {
@@ -109,6 +115,7 @@ fn ask(the: &Box, fact: &Fact, kind: Kind, index: usize) -> ProposalId {
         proposal: Proposal::Remember {
             text: kept.name().clone(),
             kind,
+            replaces,
         },
         reasons: Reasons::new(
             "a message said so",
@@ -131,21 +138,28 @@ fn ask(the: &Box, fact: &Fact, kind: Kind, index: usize) -> ProposalId {
 fn tap(the: &Box, id: &ProposalId, index: usize) {
     let held = the.memories().hold().expect("held");
     inbox::submit(&the.cards, id, &owner(), now(), |asked| {
-        let Proposal::Remember { text, kind } = &asked.proposal else {
+        let Proposal::Remember {
+            text,
+            kind,
+            replaces,
+        } = &asked.proposal
+        else {
             unreachable!("only cards are asked here")
         };
         let origin = Origin::Tapped {
             conversation: conversation(),
             proposal: index,
         };
-        Ok(match held.remember_kept(text, *kind, &origin, now()) {
-            Ok(remembered) => Performed::Done(Done::Acted {
-                what: format!("remembered as fact {}", remembered.id),
-            }),
-            Err(refusal) => Performed::Tried(Tried::NotSent {
-                reason: refusal.message().to_owned(),
-            }),
-        })
+        Ok(
+            match held.write_kept(text, *kind, replaces, &origin, now()) {
+                Ok(remembered) => Performed::Done(Done::Acted {
+                    what: format!("remembered as fact {}", remembered.id),
+                }),
+                Err(refusal) => Performed::Tried(Tried::NotSent {
+                    reason: refusal.message().to_owned(),
+                }),
+            },
+        )
     })
     .expect("tapped");
 }
@@ -184,6 +198,8 @@ fn prints<E: Schema>(store: &dyn Prodrome<E>) -> String {
 #[derive(Debug, Clone)]
 enum Step {
     Ask(usize, Kind),
+    /// A card merging two standing facts, picked by position, into one.
+    Merge(usize, usize, usize),
     Tap(usize),
     Dismiss(usize),
     Remember(usize),
@@ -198,6 +214,7 @@ fn steps() -> impl Strategy<Value = Vec<Step>> {
     proptest::collection::vec(
         prop_oneof![
             (0usize..4, kind()).prop_map(|(n, kind)| Step::Ask(n, kind)),
+            (0usize..8, 0usize..8, 0usize..4).prop_map(|(a, b, n)| Step::Merge(a, b, n)),
             (0usize..8).prop_map(Step::Tap),
             (0usize..8).prop_map(Step::Dismiss),
             (0usize..4).prop_map(Step::Remember),
@@ -218,6 +235,17 @@ proptest! {
             match step {
                 Step::Ask(n, kind) => {
                     ask(&the, &fact(n), kind, index);
+                }
+                Step::Merge(a, b, n) => {
+                    let standing: Vec<FactId> =
+                        the.memories().reads().read().expect("reads").facts.iter().map(|f| f.id).collect();
+                    let from: BTreeSet<FactId> = [a, b]
+                        .iter()
+                        .filter_map(|pick| standing.get(pick % standing.len().max(1)).copied())
+                        .collect();
+                    if let Some(from) = Sources::new(from) {
+                        asked(&the, &fact(n), (Kind::Owner, Replaces::Facts(from)), index);
+                    }
                 }
                 Step::Tap(pick) => {
                     let open = the.open();
@@ -316,4 +344,62 @@ fn a_tapped_cards_words_go_with_its_fact() {
         the.texts.keys().is_empty(),
         "forgetting the fact deletes the card's words"
     );
+}
+
+/// A tapped merge card replaces its sources with the card's words and stands on where each
+/// source was said, and its sources' words are deleted; a second merge of the same
+/// sources is refused, since they no longer stand.
+#[test]
+fn a_tapped_merge_card_replaces_its_sources() {
+    let the = Box::default();
+    let said = |turn| Origin::Turn {
+        conversation: conversation(),
+        turn,
+    };
+    let one = the
+        .memories()
+        .remember(&fact(0), Kind::Person, &said(1), now())
+        .expect("remembers");
+    let two = the
+        .memories()
+        .remember(&fact(1), Kind::Person, &said(2), now())
+        .expect("remembers");
+    let from = Sources::new([one.id, two.id].into()).expect("two sources");
+    let card = asked(
+        &the,
+        &fact(2),
+        (Kind::Person, Replaces::Facts(from.clone())),
+        3,
+    );
+    let again = asked(&the, &fact(3), (Kind::Person, Replaces::Facts(from)), 4);
+    tap(&the, &card, 3);
+    let read = the.memories().reads().read().expect("reads");
+    assert_eq!(
+        read.facts.iter().map(|f| &f.fact).collect::<Vec<_>>(),
+        [&fact(2)],
+        "the merged fact stands alone"
+    );
+    let history = the.memories().reads().history().expect("reads");
+    let provenance = history
+        .provenance(read.facts[0].id)
+        .expect("its provenance");
+    assert_eq!(
+        provenance.origins.iter().cloned().collect::<BTreeSet<_>>(),
+        [said(1), said(2)].into(),
+        "it stands on where each source was said"
+    );
+    tap(&the, &again, 4);
+    assert_eq!(
+        the.memories().reads().read().expect("reads").facts.len(),
+        1,
+        "a merge of facts no longer standing writes nothing"
+    );
+    for gone in [fact(0), fact(1)] {
+        assert!(
+            the.texts.keys().iter().all(
+                |name| the.memories().reads().words(name).expect("reads") != Some(gone.clone())
+            ),
+            "a source's words are deleted"
+        );
+    }
 }

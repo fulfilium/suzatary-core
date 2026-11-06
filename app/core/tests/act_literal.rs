@@ -82,11 +82,15 @@ fn every_act() -> Vec<String> {
         r#"{"act":"act","kind":"disconnect","connection":{"template":"lieer","params":["ada@example.test"]}}"#.to_owned(),
         r#"{"act":"act","kind":"grant","plugin":"ics","origin":"https://cal.example.test"}"#.to_owned(),
         r#"{"act":"act","kind":"afresh","conversation":"2026-11-01-2","turn":3}"#.to_owned(),
+        format!(r#"{{"act":"act","kind":"retract","node":"{SHA}"}}"#),
         r#"{"act":"decide","id":"literalacts","title":"Acts are literals","body":"The inbox stores *literals*.","rationale":"one walker","supersedes":["jsonacts"]}"#.to_owned(),
     ];
     for kind in ["owner", "person", "preference", "standing"] {
         acts.push(format!(
-            r#"{{"act":"remember","text":"{TEXT}","kind":"{kind}"}}"#
+            r#"{{"act":"remember","text":"{TEXT}","kind":"{kind}","replaces":"nothing"}}"#
+        ));
+        acts.push(format!(
+            r#"{{"act":"remember","text":"{TEXT}","kind":"{kind}","replaces":{{"facts":[3,7]}}}}"#
         ));
     }
     acts

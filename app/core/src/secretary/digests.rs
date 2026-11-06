@@ -136,6 +136,29 @@ impl ReadDigests<'_> {
         })
     }
 
+    /// Every retraction an owner wrote, by object name, without reading the lines: a session
+    /// told the record before one of them may hold a summary no reader is shown any more.
+    ///
+    /// # Errors
+    /// The history's store's own.
+    pub fn retractions(&self) -> Result<std::collections::BTreeSet<Hash>, Refusal> {
+        let policy = crate::secretary::digest_policy::Owners(self.owners);
+        Ok(self
+            .history
+            .nodes()?
+            .iter()
+            .filter_map(|object| {
+                let event = object.event()?;
+                (matches!(event.body(), digest_event::Said::Retracted)
+                    && matches!(
+                        prodrome_core::policy::Policy::standing(&policy, object.name(), event),
+                        prodrome_core::policy::Standing::Binds
+                    ))
+                .then(|| object.name().clone())
+            })
+            .collect())
+    }
+
     /// The texts the history names, each live or past ([`Digest::naming`]).
     ///
     /// # Errors

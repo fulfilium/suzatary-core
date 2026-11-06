@@ -50,7 +50,7 @@ pub use line::{Line, Unheld, Unplaced};
 pub use lines::Lines;
 pub use namer::Namer;
 pub use need::Need;
-pub use proposal::{Proposal, REMEMBER};
+pub use proposal::{CONSOLIDATE, Proposal, REMEMBER};
 pub use reasons::{NoReasons, Reasons};
 pub use review::Review;
 pub use review_failure::ReviewFailure;

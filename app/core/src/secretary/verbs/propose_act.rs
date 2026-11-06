@@ -33,6 +33,8 @@ pub struct ProposeActArgs {
     end: Caught<Option<String>>,
     #[serde(default)]
     place: Caught<Option<String>>,
+    #[serde(default)]
+    handle: Caught<Option<String>>,
     #[serde(flatten)]
     filing: FilingArgs,
 }
@@ -75,61 +77,67 @@ impl Verb for ProposeAct {
         both days `2026-10-20`, `end` the day after the last) and an optional \
         `place` asks the owner to add that event to the account's own calendar. \
         Nothing is written to any calendar unless the owner taps it.\n\n\
+        `act=\"retract\"` with `handle=<first+lines>` (a summary the record or `zoom` \
+        showed you) asks the owner to mark that summary wrong, when it misstates what was \
+        said: his tap deletes it, no model is shown it again, and it and every summary above \
+        it are written again from the lines. Say in `why` what it gets wrong.\n\n\
         ⚠️ `serves` and `revises` are the same two arguments `propose_email` \
         takes, and mean the same thing.";
 
     fn run(call: &Call<'_>, args: ProposeActArgs) -> Result<Value, Refusal> {
         let reasons = args.filing.reasons()?;
-        let act =
-            match args.act.as_str() {
-                "auth" => {
-                    let account_text = args.account.read()?.as_deref().ok_or_else(|| {
+        let act = match args.act.as_str() {
+            "auth" => {
+                let account_text =
+                    args.account.read()?.as_deref().ok_or_else(|| {
                         Refusal::bad_request("account is required for act=\"auth\"")
                     })?;
-                    let account = EmailAddress::new(account_text)
-                        .map_err(|_| Refusal::bad_request("account must be an email address"))?;
-                    let roster = call.caps.mail.accounts();
-                    if !roster.iter().any(|known| known == account.as_str()) {
-                        return Err(Refusal::bad_request(format!(
-                            "account must be one of this deployment's accounts ({}), got {}",
-                            roster.join(", "),
-                            shown(account.as_str())
-                        )));
-                    }
-                    Act::Auth { account }
-                }
-                "secret" => {
-                    // A name its own card asks for (the Google client, a sign-in with Google)
-                    // is no Secret card's.
-                    let settables = &call.settables.restricted(|by| !by.own_card());
-                    let name_text = args.name.read()?.as_deref().ok_or_else(|| {
-                        Refusal::bad_request("name is required for act=\"secret\"")
-                    })?;
-                    // A bad name's refusal gives the list's size, not its members, so a guess
-                    // learns nothing.
-                    let name = Settable::mint(settables, name_text).map_err(|_| {
-                        Refusal::bad_request(format!(
-                            "{} is not one of this deployment's {} declared secret name(s)",
-                            shown(name_text),
-                            settables.names().len()
-                        ))
-                    })?;
-                    Act::Secret {
-                        name: name.name().to_owned(),
-                        why: reasons.why().to_owned(),
-                    }
-                }
-                "connect" => Act::Connect {
-                    connection: connect(call, &args)?,
-                },
-                "calendar_event" => calendar_event(call, &args)?,
-                other => {
+                let account = EmailAddress::new(account_text)
+                    .map_err(|_| Refusal::bad_request("account must be an email address"))?;
+                let roster = call.caps.mail.accounts();
+                if !roster.iter().any(|known| known == account.as_str()) {
                     return Err(Refusal::bad_request(format!(
-                        "act must be one of: auth, secret, connect, calendar_event, got {}",
-                        shown(other)
+                        "account must be one of this deployment's accounts ({}), got {}",
+                        roster.join(", "),
+                        shown(account.as_str())
                     )));
                 }
-            };
+                Act::Auth { account }
+            }
+            "secret" => {
+                // A name its own card asks for (the Google client, a sign-in with Google)
+                // is no Secret card's.
+                let settables = &call.settables.restricted(|by| !by.own_card());
+                let name_text =
+                    args.name.read()?.as_deref().ok_or_else(|| {
+                        Refusal::bad_request("name is required for act=\"secret\"")
+                    })?;
+                // A bad name's refusal gives the list's size, not its members, so a guess
+                // learns nothing.
+                let name = Settable::mint(settables, name_text).map_err(|_| {
+                    Refusal::bad_request(format!(
+                        "{} is not one of this deployment's {} declared secret name(s)",
+                        shown(name_text),
+                        settables.names().len()
+                    ))
+                })?;
+                Act::Secret {
+                    name: name.name().to_owned(),
+                    why: reasons.why().to_owned(),
+                }
+            }
+            "connect" => Act::Connect {
+                connection: connect(call, &args)?,
+            },
+            "calendar_event" => calendar_event(call, &args)?,
+            "retract" => retract(call, &args)?,
+            other => {
+                return Err(Refusal::bad_request(format!(
+                    "act must be one of: auth, secret, connect, calendar_event, retract, got {}",
+                    shown(other)
+                )));
+            }
+        };
         let index = args
             .filing
             .file(call, Proposal::Act(act.clone()), &reasons)?;
@@ -152,6 +160,7 @@ impl Verb for ProposeAct {
             Act::Device(enrolment) => Some(("key", enrolment.key.as_str().to_owned())),
             Act::Connect { connection } => Some(("connection", connection.called())),
             Act::CalendarEvent { event, .. } => Some(("event", event.sentence())),
+            Act::Retract { node } => Some(("node", node.as_str().to_owned())),
             // The box's own, never this verb's.
             Act::AuthSend { .. }
             | Act::SignIn { .. }
@@ -207,6 +216,25 @@ fn calendar_event(call: &Call<'_>, args: &ProposeActArgs) -> Result<Act, Refusal
     )
     .map_err(Refusal::bad_request)?;
     Ok(Act::CalendarEvent { account, event })
+}
+
+/// The summary `handle` names, as the record and `zoom` print a handle.
+fn retract(call: &Call<'_>, args: &ProposeActArgs) -> Result<Act, Refusal> {
+    let handle = args
+        .handle
+        .read()?
+        .clone()
+        .ok_or_else(|| Refusal::bad_request("handle is required for act=\"retract\""))?;
+    let reading = crate::secretary::compaction::Reading::of(&call.caps.memories.digests.reads())?;
+    let node =
+        crate::secretary::digest_view::summarized(reading.digest(), &handle).ok_or_else(|| {
+            Refusal::not_found(format!(
+                "no summary is shown at {}: a handle is `first+lines`, as the record or zoom \
+                 printed it",
+                shown(&handle)
+            ))
+        })?;
+    Ok(Act::Retract { node })
 }
 
 /// What a round has read when a Connect card is refused in it.

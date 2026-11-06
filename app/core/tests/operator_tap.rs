@@ -25,7 +25,7 @@ fn every_kind() -> Vec<Proposal> {
             r#"{{"act":"forward","account":"her@example.test","to":["counsel@example.test"],"cc":[],"subject":"Fwd: Notice","note":"","message":{{"file":{{"id":"m1@example.test","size":4096,"sha256":"{SHA}","held":[],"parts":[]}},"style":"attached","from":"notices@example.test","subject":"Notice","date":null}}}}"#
         ),
         r#"{"act":"changes","chain":"life","acts":[{"act":"complete","todo":"lease","note":"signed"}]}"#.to_owned(),
-        format!(r#"{{"act":"remember","text":"{SHA}","kind":"person"}}"#),
+        format!(r#"{{"act":"remember","text":"{SHA}","kind":"person","replaces":"nothing"}}"#),
         r#"{"act":"decide","id":"operatortaps","title":"The operator taps","body":"Not sends.","rationale":"testing","supersedes":[]}"#.to_owned(),
         r#"{"act":"act","kind":"auth","account":"her@example.test"}"#.to_owned(),
         r#"{"act":"act","kind":"auth_send","account":"her@example.test"}"#.to_owned(),
@@ -48,6 +48,7 @@ fn every_kind() -> Vec<Proposal> {
         r#"{"act":"act","kind":"google_sign_in","account":"her@example.test","scopes":["mail"]}"#.to_owned(),
         r#"{"act":"act","kind":"erase","fact":3,"keys":[]}"#.to_owned(),
         r#"{"act":"act","kind":"afresh","conversation":"default","turn":0}"#.to_owned(),
+        format!(r#"{{"act":"act","kind":"retract","node":"{SHA}"}}"#),
     ]
     .iter()
     .map(|json| read(json))
@@ -82,6 +83,7 @@ fn sends(proposal: &Proposal) -> bool {
             | Act::Connect { .. }
             | Act::Disconnect { .. }
             | Act::Grant { .. }
+            | Act::Retract { .. }
             | Act::GoogleClient { .. }
             | Act::GoogleSignIn { .. }
             | Act::CalendarEvent { .. }

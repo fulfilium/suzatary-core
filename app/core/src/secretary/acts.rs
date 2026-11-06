@@ -1,9 +1,8 @@
 //! An act the box performs itself when the owner taps its proposal.
 //!
-//! `Auth` has no `scope` field on purpose: its tap mints the IMAP grant alone. Sending's
-//! consent is `AuthSend`, a card of its own that only the box files, for a Microsoft account
-//! that reads mail and holds no grant to send; no verb proposes it, and its grant is kept in
-//! the SMTP slot, apart from the IMAP one, so a leaked read token still cannot send.
+//! `Auth` has no `scope` field on purpose: its tap mints the IMAP grant alone. Sending's consent
+//! is `AuthSend`, a card only the box files, kept in the SMTP slot apart from the IMAP one, so a
+//! leaked read token still cannot send.
 
 use prodrome_core::literal::{ProdromeError, Value};
 use serde::{Deserialize, Serialize};
@@ -25,8 +24,7 @@ pub enum Act {
         /// The account to authorise.
         account: EmailAddress,
     },
-    /// Authorise a Microsoft account to send mail through the device-code flow, SMTP only:
-    /// filed by the box once the account reads mail and holds no grant to send.
+    /// Authorise a Microsoft account to send mail through the device-code flow, SMTP only.
     #[serde(rename = "auth_send")]
     AuthSend {
         /// The account to authorise.
@@ -36,38 +34,32 @@ pub enum Act {
     ///
     /// No `value` field on purpose: the value travels only in the tap's body, never stored.
     Secret {
-        /// The name of the secret it asks for, as it was declared when asked; the tap mints it
-        /// against the names declared then, so a card cannot outlive its declaration.
+        /// The secret's name as declared when asked; the tap mints it against the names
+        /// declared then, so a card cannot outlive its declaration.
         name: String,
-        /// Why the secretary is asking, carried here so `sentence()` needs no second lookup.
+        /// Why the secretary is asking.
         why: String,
     },
     /// Read the web once: a request no allow rule covers, sent only on a tap.
     Web {
-        /// What would go out.
         request: crate::web::WebRequest,
         /// The rule the secretary drafted for "Always allow", if any.
         #[serde(default, skip_serializing_if = "Option::is_none")]
         rule: Option<crate::web::AllowRule>,
     },
-    /// Propose exactly this diff against this commit with this message as a pull request; the
-    /// tap pushes it to a branch of its own and opens the request, and a person merges it.
+    /// Propose this diff against this commit as a pull request; a person merges it.
     Patch {
-        /// The repository.
         repo: crate::repos::RepoName,
         /// Who can read the branch once pushed, as the listing said when proposed.
         visibility: crate::repos::Visibility,
         /// The commit the diff was written against.
         base: crate::repos::CommitId,
-        /// The change.
         patch: crate::repos::Patch,
-        /// The commit message.
         message: String,
     },
     /// Read one of the owner's documents in a folder no `drive_allow` entry covers, redacted.
     #[serde(rename = "drive_read")]
     DriveRead {
-        /// The file.
         path: crate::drive::DrivePath,
         /// Its size in bytes as listed when asked, for the card.
         #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -79,11 +71,9 @@ pub enum Act {
         /// What the session is asked to do, as the fire sends it.
         task: crate::coding::Task,
     },
-    /// Trust a new device's key to write as its actor (SPEC law 42): filed by the box when the
-    /// device asks, performed only by a tap that a device already trusted endorses.
+    /// Trust a new device's key (SPEC law 42), on a tap a trusted device endorses.
     Device(crate::signatures::Enrolment),
-    /// Sign the model in: the tap runs the deployment's sign-in on the box and the box files the
-    /// card its code goes in. Filed by the box when no model answers.
+    /// Sign the model in: the tap runs the sign-in on the box, which files the code's card.
     #[serde(rename = "sign_in")]
     SignIn {
         /// The episode in the box's words, when a model last answered; `None` before any has.
@@ -92,86 +82,72 @@ pub enum Act {
     },
     /// The code an open sign-in waits for, typed on the page its link opens.
     ///
-    /// No `code` field on purpose: the code travels only in the tap's body, and the token it is
-    /// exchanged for only into the secret store.
+    /// No `code` field on purpose: the code travels only in the tap's body, and its token only
+    /// into the secret store.
     #[serde(rename = "sign_in_code")]
     SignInCode {
         /// The sign-in's link, as the box read it off the CLI.
         url: crate::secretary::sign_in::SignInUrl,
     },
-    /// Unlock the secret store, which could not answer for a declared name: filed by the box,
-    /// once for every such name, while it holds their cards as they stand. The tap asks the store
-    /// again; it unlocks nothing itself, since the passphrase is typed at the box.
+    /// Ask the secret store again, which could not answer for a declared name; the passphrase is
+    /// typed at the box.
     #[serde(rename = "unlock_store")]
     UnlockStore {
-        /// Where the box's unlock card that last ended without the owner's no was asked, once one
-        /// has, so a store that answers and locks again is a new card.
+        /// Where the last unlock card not answered no was asked, so a store that answers and
+        /// locks again is a new card.
         #[serde(default, skip_serializing_if = "Option::is_none")]
         after: Option<ProposalRef>,
     },
-    /// Write a connection's table into the instance file; the box then files a card for each
-    /// step its standing needs.
+    /// Write a connection's table into the instance file.
     Connect {
-        /// What is connected: a template and the parameters chosen for it.
         connection: crate::connect::Connection,
     },
-    /// Take a connection's table out of the instance file. Its todos, cards and conversations
-    /// stay; a mail account's cached mail goes only on the card's wider yes.
+    /// Take a connection's table out; a mail account's mail goes only on the card's wider yes.
     Disconnect {
-        /// What is removed.
         connection: crate::connect::Connection,
     },
-    /// Let a plugin reach one more origin: filed by the box when a link is served from an
-    /// origin its manifest does not allow, naming the origin and never the link.
+    /// Let a plugin reach one more origin, naming the origin and never the link.
     Grant {
-        /// The plugin.
         plugin: crate::plugin::PluginName,
-        /// The origin it would reach.
         origin: crate::plugin::Origin,
     },
-    /// Keep the box's Google Cloud client: filed by the box while a Google account is declared
-    /// and the client is not stored. The card says how to make one and shows `redirect`, which
-    /// the client must list; the tap's value is the client's downloaded file, which travels only
-    /// in the tap's body and is kept only when it lists `redirect`.
+    /// Keep the box's Google Cloud client: the tap's value is its downloaded file, which travels
+    /// only in the tap's body and is kept only when it lists `redirect`.
     #[serde(rename = "google_client")]
     GoogleClient {
         /// The box's callback, as the client must list it.
         redirect: crate::google::RedirectUri,
     },
-    /// Sign a Google account in with Google: the tap opens a consent bound to the tapping
-    /// owner, and Google sends the browser back to the box, which keeps the grant.
+    /// Sign a Google account in with Google, bound to the tapping owner.
     #[serde(rename = "google_sign_in")]
     GoogleSignIn {
-        /// The account.
         account: EmailAddress,
-        /// What the consent asks for.
         scopes: crate::google::Scopes,
     },
     /// Write one event into a Google account's own calendar, as the card shows it.
     #[serde(rename = "calendar_event")]
     CalendarEvent {
-        /// The account whose calendar it goes in.
         account: EmailAddress,
-        /// The event.
         event: crate::google::NewEvent,
     },
-    /// Erase these words of the conversation the card is drawn in: filed by the box when
-    /// forgetting a fact erased the copies its remembering provably made and left the turns
-    /// around them, which may restate it in other words.
+    /// Erase these words, which may restate a forgotten fact its erasure left in other words.
     Erase {
         /// The fact whose forgetting offers it.
         fact: crate::secretary::memory::FactId,
-        /// The words' keys.
         keys: std::collections::BTreeSet<crate::secretary::locked_text::KeyName>,
     },
-    /// Ask the owner's request again in a fresh conversation: filed by the box when a round that
-    /// read more than his words is refused a coding session. The tap opens a topic whose one
-    /// line is turn `turn` of `conversation`, copied only while that turn is his own clean words
-    /// ([`crate::secretary::afresh::Request::at_tap`]).
+    /// Retract the summary `node` shows, as the memory page's Wrong does.
+    Retract {
+        /// The node, by its content name.
+        #[serde(with = "node_text")]
+        node: prodrome_core::event::Hash,
+    },
+    /// Ask the owner's request again in a fresh topic, copying turn `turn` only while it is his
+    /// own clean words ([`crate::secretary::afresh::Request::at_tap`]).
     Afresh {
-        /// The conversation the request was said in, where the card is drawn.
+        /// Where the request was said and the card is drawn.
         conversation: ConversationId,
-        /// The request, by its index among that conversation's turns.
+        /// The request's index among that conversation's turns.
         turn: usize,
     },
 }
@@ -200,6 +176,7 @@ impl Act {
             Act::CalendarEvent { .. } => "calendar_event",
             Act::Erase { .. } => "erase",
             Act::Afresh { .. } => "afresh",
+            Act::Retract { .. } => "retract",
         }
     }
 
@@ -298,11 +275,21 @@ impl Act {
                 keys.len(),
                 if keys.len() == 1 { "" } else { "s" }
             ),
+            Act::Retract { node } => retracting(node),
             Act::Afresh { .. } => "start it in a fresh conversation: a new topic that holds only \
                                    your request, word for word, and nothing this one read"
                 .to_owned(),
         }
     }
+}
+
+/// A retraction's imperative, naming the summary by the start of its node's name.
+fn retracting(node: &prodrome_core::event::Hash) -> String {
+    format!(
+        "mark wrong the summary {}… on the Memory page: it is deleted, never shown to a model \
+         again, and written again from your lines, with every summary above it",
+        node.as_str().chars().take(12).collect::<String>()
+    )
 }
 
 /// The folder a document is in: the one "Always allow this folder" names.
@@ -315,9 +302,7 @@ pub fn folder_of(path: &crate::drive::DrivePath) -> crate::drive::DrivePath {
 const RESTARTED: &str = "the box restarted while this act was waiting; the device code is gone \
                           and was never written down — Try again asks for a fresh one";
 
-/// At serve startup, close every running act nobody owns, idempotently.
-///
-/// Each is ended with [`Tried::NotSent`] and its conversation gets a matching [`Turn::Act`](crate::capability::Turn::Act).
+/// At serve startup, end every running act nobody owns with [`Tried::NotSent`], idempotently.
 ///
 /// # Errors
 /// The stores' own failures.
@@ -352,9 +337,8 @@ pub fn reconcile(
     Ok(reconciled)
 }
 
-/// The sentence an act turn prints, one grammar for chain acts and dismissals alike. What it acted
-/// on travels only in the turn's `references`, never in this text: a todo's id can be chosen by
-/// mail the agent triaged, and an act line stamped by its actor reads clean.
+/// The sentence an act turn prints. What it acted on travels only in `references`, never here: a
+/// todo's id can be chosen by mail, and an act line stamped by its actor reads clean.
 #[must_use]
 pub fn describe_act(actor: &str, verb: &str, note: &str) -> String {
     format!("{actor} {verb} it: {note}")
@@ -372,9 +356,9 @@ pub fn named(actor: &str) -> String {
 /// One act turn, built: what [`note_act`] appends and [`heard_from_objects`] computes.
 #[derive(Debug, Clone)]
 pub struct ActLine {
-    /// The event's own instant, never the clock's, so an adopted act reads as when it happened.
+    /// The event's own instant, never the clock's.
     pub at: crate::capability::Datetime,
-    /// Who did it: the actor the gate admitted, which stamps the line and [`named`] prints.
+    /// The actor the gate admitted.
     pub actor: String,
     /// Past tense, such as "dismissed" or "completed".
     pub verb: &'static str,
@@ -384,9 +368,8 @@ pub struct ActLine {
     pub note: String,
 }
 
-/// Append an act's note to its conversation as a [`Turn::Act`](crate::capability::Turn::Act)
-/// stamped `by`, what its writer decided of the actor and what the act points at
-/// ([`super::stamp::pointing`]), or nothing when the note is empty.
+/// Append an act's note as a [`Turn::Act`](crate::capability::Turn::Act) stamped `by`, or
+/// nothing when the note is empty.
 ///
 /// # Errors
 /// The store's own failures.
@@ -414,9 +397,7 @@ pub fn note_act(
     )
 }
 
-/// The act lines sealed lifecycle events with a note carry, heard when the box adopts them.
-///
-/// Events not by `actor` are skipped even though adoption already refused them.
+/// The act lines that sealed lifecycle events with a note carry, heard on adoption; only `actor`'s.
 #[must_use]
 pub fn heard_from_objects(
     events: &[crate::record::TodoEvent],
@@ -483,6 +464,8 @@ pub const GRANT: Constructor = ("Grant", &["plugin", "origin"]);
 pub const ERASE: Constructor = ("Erase", &["fact", "keys"]);
 /// `Afresh(turn)`.
 pub const AFRESH: Constructor = ("Afresh", &["conversation", "turn"]);
+/// `Retract(node)`.
+pub const RETRACT: Constructor = ("Retract", &["node"]);
 /// `GoogleClient(redirect)`.
 pub const GOOGLE_CLIENT: Constructor = ("GoogleClient", &["redirect"]);
 /// `GoogleSignIn(account, scopes)`.
@@ -558,6 +541,7 @@ impl Literal for Act {
             Act::Afresh { conversation, turn } => {
                 record(AFRESH, vec![conversation.to_value(), turn.to_value()])
             }
+            Act::Retract { node } => record(RETRACT, vec![node.to_value()]),
         }
     }
 
@@ -654,8 +638,25 @@ impl Literal for Act {
                     turn: fields.get("turn")?,
                 }
             }
+            "Retract" => Act::Retract {
+                node: Fields::of(value, RETRACT)?.get("node")?,
+            },
             other => return Err(no_arm("an act the box performs", other)),
         })
+    }
+}
+
+/// A node's content name as its text, as serde spells it.
+mod node_text {
+    use prodrome_core::event::Hash;
+    use serde::{Deserialize, Deserializer, Serializer};
+
+    pub fn serialize<S: Serializer>(node: &Hash, to: S) -> Result<S::Ok, S::Error> {
+        to.serialize_str(node.as_str())
+    }
+
+    pub fn deserialize<'de, D: Deserializer<'de>>(from: D) -> Result<Hash, D::Error> {
+        Hash::new(&String::deserialize(from)?).map_err(serde::de::Error::custom)
     }
 }
 

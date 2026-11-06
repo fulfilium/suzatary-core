@@ -28,7 +28,6 @@ pub fn system_prompt(manuals: &dyn Manuals) -> String {
 
 /// What sends a tapped proposal.
 pub enum Postman {
-    /// Through `crate::commands::mail::deliver`.
     Real(Arc<Instance>),
     /// Records to a file; behind a feature so the deployed build lacks it.
     #[cfg(feature = "fixture")]
@@ -482,7 +481,6 @@ fn begin_real(
     use suzatary_core::mail::oauth::{Imap, Smtp};
     use suzatary_core::secretary::acts::Act;
 
-    // Unreachable in practice: the tap route handles these acts itself.
     let (account, sending) = match act {
         Act::Auth { account } => (account, false),
         Act::AuthSend { account } => (account, true),
@@ -498,6 +496,7 @@ fn begin_real(
         | Act::Connect { .. }
         | Act::Disconnect { .. }
         | Act::Grant { .. }
+        | Act::Retract { .. }
         | Act::GoogleClient { .. }
         | Act::GoogleSignIn { .. }
         | Act::CalendarEvent { .. }
@@ -547,7 +546,6 @@ fn begin_real(
     }
 }
 
-/// Where a begun device flow reports.
 struct Flow<'a> {
     conversations: ActingConversations,
     inbox: &'a ActingInbox,
@@ -722,8 +720,7 @@ fn web_turn(
     outcome
 }
 
-/// Keep a withheld document's record so a proposal can send it unread; the model learns
-/// neither its size nor its digest.
+/// Keep a withheld document's record so a proposal can send it unread.
 fn keep_tapped(
     kept: &suzatary_io::blobs::Blobs,
     path: &suzatary_core::drive::DrivePath,
@@ -884,8 +881,8 @@ fn maybe_append_triage_alarm(
     }
 }
 
-/// How a sign-in act ended, and its line: a note when the box wrote the sentence, unstamped
-/// when it carries the provider's error text. Logs use `named`, never the address.
+/// How a sign-in act ended: a note for the box's sentence, unstamped for the provider's text.
+/// Logs use `named`, never the address.
 fn completion<E: std::fmt::Display>(
     account: &impl std::fmt::Display,
     named: &str,
@@ -980,6 +977,7 @@ fn begin_recording(
         | Act::Connect { .. }
         | Act::Disconnect { .. }
         | Act::Grant { .. }
+        | Act::Retract { .. }
         | Act::GoogleClient { .. }
         | Act::GoogleSignIn { .. }
         | Act::CalendarEvent { .. }
@@ -1041,8 +1039,7 @@ fn post(instance: &Instance, draft: &Draft, body: Filled, attachments: Checked) 
     }
 }
 
-/// Append one JSON line per message: the draft plus its MIME. A first line of `<file>.failures`
-/// (`not_sent` or `unknown`) is consumed to fail this send instead.
+/// Append one JSON line per message; a first line of `<file>.failures` fails this send instead.
 #[cfg(feature = "fixture")]
 fn record(
     path: &Path,
@@ -1698,7 +1695,6 @@ pub fn dismiss(
     Ok(())
 }
 
-/// A remember card's words, from the memory's text store.
 fn words_of(
     instance: &Instance,
 ) -> impl Fn(
@@ -1723,7 +1719,6 @@ fn words_of(
 /// The secret store's audit reason.
 const DECLARED: &str = "the secretary: checking whether a declared secret resolves";
 
-/// The secretary's interpreters and every chain's stores.
 struct Wired {
     opened: crate::wiring::Opened,
     first: crate::wiring::Stores,
@@ -1757,7 +1752,6 @@ impl Wired {
         self.opened.secretary(&self.first, &self.brain)
     }
 
-    /// Each chain bound, the first first.
     fn bound(&self) -> Vec<suzatary_core::secretary::Bound<'_>> {
         std::iter::once(&self.first)
             .chain(&self.rest)
@@ -1852,7 +1846,6 @@ pub fn scripted_brief(
     run_brief(instance, &wired, title, true).map(|_| ())
 }
 
-/// What a brief files before its round; the box's own cards are the server's.
 fn unasked(
     instance: &Instance,
     chains: &[suzatary_core::secretary::Bound<'_>],
@@ -1935,7 +1928,6 @@ fn brief(
     Ok(())
 }
 
-/// The brief's conversation, and its answer if a round ran.
 fn run_brief(
     instance: &Instance,
     wired: &Wired,
@@ -1988,7 +1980,6 @@ fn run_brief(
     Ok((id, answered))
 }
 
-/// The brief's round; under `limited`, only a note saying why.
 fn ask_brief(
     instance: &Instance,
     wired: &Wired,
@@ -2151,8 +2142,7 @@ fn review(
     Ok(())
 }
 
-/// Exit status of a round paused by a model limit: success would stamp the day's sweep, failure
-/// would fail the pass.
+/// Exit status of a round paused by a model limit: neither a stamped sweep nor a failed pass.
 pub const PAUSED: i32 = 3;
 
 /// Say the round did not start, and exit [`PAUSED`].
@@ -2213,8 +2203,7 @@ fn sweep_dry_run(instance: &Instance, first: Option<&str>, json: bool) -> anyhow
     Ok(())
 }
 
-/// A sweep's refusal is printed and becomes the error, so the exit status says the day went
-/// unswept.
+/// A sweep's refusal, printed and returned, so the exit status says the day went unswept.
 pub fn swept_or_failed<T>(
     outcome: Result<T, suzatary_core::refusal::Refusal>,
     json: bool,

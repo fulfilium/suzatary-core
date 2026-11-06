@@ -83,6 +83,7 @@ impl Asking {
                         | Act::CodingSession { .. }
                         | Act::Device(_)
                         | Act::Erase { .. }
+                        | Act::Retract { .. }
                         | Act::Afresh { .. }
                         | Act::CalendarEvent { .. },
                     )

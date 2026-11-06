@@ -278,8 +278,49 @@ fn gate(stored: &super::store::Stored) -> Gate {
     }
 }
 
-/// The round's opening turn, for a memory write that has no card: a forgetting or a
-/// consolidation, which an email must not be able to make, writes only where `remember` would.
+/// A fact written as a card the owner taps, in a round that has read something not his own:
+/// its words kept under the memory's hold and named by the card, with the reasons only a card
+/// reads (`why` and `sources` as the verb was given them).
+///
+/// # Errors
+/// [`Refusal::bad_request`] for missing reasons; the stores' own.
+fn memory_card(
+    caps: &crate::capability::Secretary<'_>,
+    id: &ConversationId,
+    (why, sources): (Option<&str>, Option<&str>),
+    (fact, kind, replaces): (
+        &super::memory::Fact,
+        super::memory::Kind,
+        super::memory::Replaces,
+    ),
+) -> Result<usize, Refusal> {
+    let reasons = Reasons::new(
+        why.unwrap_or_default(),
+        references(sources.unwrap_or_default(), "sources")?,
+    )
+    .map_err(|failed| {
+        Refusal::bad_request(format!(
+            "this round has read something that is not the owner's own words, so the fact \
+             becomes a card they tap, and a card needs its reasons: {failed}"
+        ))
+    })?;
+    // Under the memory's hold, so no sweep decides about these words between keeping them and
+    // the card that names them being filed.
+    let held = caps.memories.hold()?;
+    let kept = held.keep_card(fact)?;
+    let proposal = Proposal::Remember {
+        text: kept.name().clone(),
+        kind,
+        replaces,
+    };
+    propose(caps, &[], id, proposal, &reasons, None, None).or_else(|refused| {
+        held.unkeep(&kept)?;
+        Err(refused)
+    })
+}
+
+/// The round's opening turn, for a memory write that has no card: a forgetting, which an email
+/// must not be able to make, writes only where `remember` would.
 ///
 /// # Errors
 /// [`Refusal::forbidden`] for a round the box opened, or one that has read something not the

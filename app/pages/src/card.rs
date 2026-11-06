@@ -576,6 +576,7 @@ fn yes(key: &Key, row: &ProposalRow, a: &CardAnswer, ui: &Ui) -> Wants {
             | ProposedAct::SignIn { .. }
             | ProposedAct::UnlockStore { .. }
             | ProposedAct::Erase { .. }
+            | ProposedAct::Retract { .. }
             | ProposedAct::SignInCode { .. }
             | ProposedAct::GoogleClient { .. }
             | ProposedAct::GoogleSignIn { .. }
@@ -584,6 +585,7 @@ fn yes(key: &Key, row: &ProposalRow, a: &CardAnswer, ui: &Ui) -> Wants {
             | ProposedAct::Disconnect { .. }
             | ProposedAct::Grant { .. }
             | ProposedAct::Remember { .. }
+            | ProposedAct::Consolidate { .. }
             // Only a device's registration is signed: the box asks no other card to be.
             | ProposedAct::Decision { .. } => Wants::Ui(ui.clone()),
         },

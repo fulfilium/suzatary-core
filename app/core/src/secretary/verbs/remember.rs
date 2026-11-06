@@ -1,14 +1,12 @@
 use schemars::JsonSchema;
 use serde::Deserialize;
-use serde_json::{Value, json};
+use serde_json::json;
 
-use crate::capability::Secretary;
 use crate::refusal::Refusal;
 use crate::secretary;
-use crate::secretary::memory::{self, Fact, Kind};
-use crate::secretary::store::{ConversationId, Proposal, Reasons};
+use crate::secretary::memory::{self, Fact, Replaces};
 use crate::secretary::verb_answer::VerbAnswer;
-use crate::secretary::verbs::{Gate, NO_OPENER, gate, propose, references};
+use crate::secretary::verbs::{Gate, NO_OPENER, gate, memory_card};
 use crate::secretary::{Call, SecretarySurface};
 use crate::verb::{Caught, Verb};
 
@@ -23,52 +21,6 @@ pub struct RememberArgs {
     why: Caught<Option<String>>,
     #[serde(default)]
     sources: Caught<Option<String>>,
-}
-
-/// `remember` in a tainted round: the fact as a card, with the reasons only a card reads.
-fn card(
-    caps: &Secretary<'_>,
-    id: &ConversationId,
-    args: &RememberArgs,
-    fact: &Fact,
-    kind: Kind,
-) -> Result<Value, Refusal> {
-    let reasons = Reasons::new(
-        args.why.read()?.as_deref().unwrap_or_default(),
-        references(
-            args.sources.read()?.as_deref().unwrap_or_default(),
-            "sources",
-        )?,
-    )
-    .map_err(|failed| {
-        Refusal::bad_request(format!(
-            "this round has read something that is not the owner's own words, so the fact \
-             becomes a card they tap, and a card needs its reasons: {failed}"
-        ))
-    })?;
-    // Under the memory's hold, so no sweep decides about these words between keeping them and
-    // the card that names them being filed.
-    let held = caps.memories.hold()?;
-    let kept = held.keep_card(fact)?;
-    let proposal = Proposal::Remember {
-        text: kept.name().clone(),
-        kind,
-    };
-    let index = match propose(caps, &[], id, proposal, &reasons, None, None) {
-        Ok(index) => index,
-        Err(refused) => {
-            held.unkeep(&kept)?;
-            return Err(refused);
-        }
-    };
-    // The card names the words and the memory's text store keeps them; the answer, a
-    // conversation line nothing erases, holds neither.
-    Ok(json!({
-        "proposed": index,
-        "kind": kind.as_str(),
-        "next": "This round read something that is not the owner's own words, so the fact is \
-                 a card they tap, not a memory yet. Say so in one clause.",
-    }))
 }
 
 impl Verb for Remember {
@@ -99,8 +51,20 @@ impl Verb for Remember {
             Gate::Closed => return Err(Refusal::forbidden(NO_OPENER)),
             Gate::Write(said) => said,
             Gate::Card => {
-                return card(call.caps, call.conversation, &args, &fact, kind)
-                    .map(VerbAnswer::from);
+                let index = memory_card(
+                    call.caps,
+                    call.conversation,
+                    (args.why.read()?.as_deref(), args.sources.read()?.as_deref()),
+                    (&fact, kind, Replaces::Nothing),
+                )?;
+                // The card names the words and the memory's text store keeps them; the answer, a
+                // conversation line nothing erases, holds neither.
+                return Ok(VerbAnswer::from(json!({
+                    "proposed": index,
+                    "kind": kind.as_str(),
+                    "next": "This round read something that is not the owner's own words, so the \
+                             fact is a card they tap, not a memory yet. Say so in one clause.",
+                })));
             }
         };
         let remembered = call

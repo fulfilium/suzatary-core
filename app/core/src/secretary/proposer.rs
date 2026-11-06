@@ -60,6 +60,7 @@ impl Proposer {
                     | Act::Disconnect { .. }
                     | Act::Grant { .. }
                     | Act::Erase { .. }
+                    | Act::Retract { .. }
                     | Act::Afresh { .. }
                     | Act::GoogleSignIn { .. }
                     | Act::CalendarEvent { .. },

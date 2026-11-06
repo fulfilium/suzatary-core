@@ -139,8 +139,7 @@ use surface::Subset;
 pub use surface::{Effect, Powers, SecretaryCall, SecretarySurface, SecretaryVerb, tools};
 use verb_answer::VerbAnswer;
 
-/// Who a chain write from this surface is by: the trusted assistant, never the owner or
-/// `triage`, fixed here so no call's arguments can change it.
+/// Who a chain write from this surface is by, fixed here so no call's arguments can change it.
 pub const WRITES_AS: crate::authoring::Writer = crate::authoring::Writer::Assistant;
 
 /// [`WRITES_AS`] as the actor an inbox event names.
@@ -162,8 +161,7 @@ pub struct Answered {
     pub ending: crate::conversation::round::Ending,
 }
 
-/// The push a finished round earns: `Some` only for an answer, naming the conversation and
-/// never its words.
+/// The push a finished round earns: only for an answer, never naming its words.
 #[must_use]
 pub fn answer_push(stored: &Stored, brief: bool) -> Option<crate::capability::Push> {
     let Some(Turn::Model { text, calls }) = stored.turns.last().map(|said| &said.turn) else {
@@ -175,8 +173,7 @@ pub fn answer_push(stored: &Stored, brief: bool) -> Option<crate::capability::Pu
     })
 }
 
-/// The first line of typst `text` that reads as prose: function-call lines are skipped and
-/// leading heading, list and whole-line emphasis marks stripped; not a typst parser.
+/// The first line of typst `text` that reads as prose; not a typst parser.
 pub(crate) fn typst_prose_line(text: &str) -> Option<&str> {
     for raw in text.lines() {
         let line = raw.trim();
@@ -202,11 +199,8 @@ pub(crate) fn typst_prose_line(text: &str) -> Option<&str> {
 /// A question as [`converse`] takes it: the words, what they point at, and who asks them.
 #[derive(Debug, Clone, Copy)]
 pub struct Saying<'a> {
-    /// The words.
     pub text: &'a str,
-    /// What they point at.
     pub references: &'a [Reference],
-    /// Who asks them.
     pub by: Asker<'a>,
 }
 
@@ -219,9 +213,8 @@ pub enum Asker<'a> {
     Box(own_round::OwnRound),
 }
 
-/// Whose own words a [`Saying`] is. A person's words make a round clean, so claiming them is the
-/// gate's; a direct caller of [`converse`] stands for no gate, and only the e2e fixture's
-/// scripted round, a build the box never runs, mints one.
+/// Whose own words a [`Saying`] is. Claiming a person's words makes a round clean, so it is the
+/// gate's; only the e2e fixture's scripted round mints one here.
 #[derive(Debug, Clone, Copy)]
 pub struct Speaker<'a>(&'a prodrome_core::event::Actor);
 
@@ -234,12 +227,12 @@ impl Speaker<'_> {
     }
 }
 
-/// One exchange: a person's turn in, the model's answer and every verb it ran out, appended as
-/// it happens so a polling page sees turns arrive and a crash leaves an honest transcript.
+/// One exchange, appended as it happens so a polling page sees turns arrive and a crash leaves
+/// an honest transcript.
 ///
 /// # Errors
-/// The store's failures and an unreadable conversation file; a model that fails ends the round
-/// with the box's words instead, in [`Answered::ending`].
+/// The store's and an unreadable file's; a model that fails ends the round in
+/// [`Answered::ending`].
 pub fn converse(
     caps: &Secretary<'_>,
     deployment: &Deployment,
@@ -281,14 +274,11 @@ pub fn converse(
     )
 }
 
-/// Answer what waits in the conversation with the model `pick` names for this round, resuming
-/// its session when it holds one; a stateless turn cannot be interrupted, so a pulled halt
-/// drops its reply when it returns. The pick is made only once something waits, so a round with
-/// nothing to answer reads no order and no key.
+/// Answer what waits with the model `pick` names, resuming its session when it holds one; a
+/// stateless turn's reply is dropped if halted. A round with nothing to answer reads no key.
 ///
 /// # Errors
-/// The store's failures and an unreadable conversation file; a model that fails ends the round
-/// with the box's words instead, in [`Answered::ending`].
+/// As [`converse`].
 #[expect(
     clippy::too_many_arguments,
     reason = "a round's model, its deployment and live names, its chains, its verbs and its sink"
@@ -311,8 +301,7 @@ pub fn answer<'p>(
     let load = || load_references(caps, deployment, settables, chains, id);
     let run =
         |request: Request<SecretaryCall>| self::run(deployment, settables, chains, id, request);
-    // A lost session that will not reopen is asked statelessly of the same model, never of a
-    // second pick.
+    // A lost session is asked statelessly of the same model, never of a second pick.
     let ask = match &pick {
         crate::capability::Pick::Held(model) => Ask::Session {
             model: *model,
@@ -341,13 +330,11 @@ pub fn answer<'p>(
     )
 }
 
-/// Stop what waits in the conversation before any round has started on it, as `by`: the
-/// [`Entry::Stopped`] line a stopped round writes, which closes everything queued, so the next
-/// round finds nothing to answer. The caller holds off every round from starting until it returns.
+/// Stop what waits before any round has started on it, as `by`, with the [`Entry::Stopped`] line
+/// that closes everything queued. The caller holds off every round until it returns.
 ///
 /// # Errors
-/// [`Refusal::conflict`] when nothing waits, so no stop is left for a later question; the store's
-/// failures.
+/// [`Refusal::conflict`] when nothing waits; the store's failures.
 pub fn stop_waiting(
     conversations: crate::secretary::conversations::Conversations<'_>,
     clock: &dyn Clock,
@@ -392,8 +379,8 @@ pub(crate) fn rounded(
         .transpose()
 }
 
-/// What the last turn pointed at, loaded into the round through the verbs the model could call
-/// itself, once, before the loop and spending no rounds.
+/// What the last turn pointed at, loaded through the model's own verbs before the loop, spending
+/// no rounds.
 fn load_references(
     caps: &Secretary<'_>,
     deployment: &Deployment,
@@ -483,7 +470,6 @@ fn load(
         }) => {
             let standing = read(caps.conversations, conversation)?
                 .standing(*index, &inbox::fold(caps.inbox)?)?;
-            // The act's own fields, whichever act it is.
             let act = match &standing.object.asked.proposal {
                 store::Proposal::Email(draft) => serde_json::json!({
                     "act": "email",
@@ -514,8 +500,12 @@ fn load(
                     "sentence": act.sentence(),
                 }),
                 // The words while the memory's text store keeps them, and never once deleted.
-                store::Proposal::Remember { text, kind } => {
-                    match caps.memories.reads().words(text)? {
+                store::Proposal::Remember {
+                    text,
+                    kind,
+                    replaces,
+                } => {
+                    let mut card = match caps.memories.reads().words(text)? {
                         Some(fact) => serde_json::json!({
                             "act": "remember",
                             "fact": fact.as_str(),
@@ -526,7 +516,12 @@ fn load(
                             "deleted": "its words are deleted: dismissed, or the fact forgotten",
                             "kind": kind.as_str(),
                         }),
+                    };
+                    if let memory::Replaces::Facts(from) = replaces {
+                        card["act"] = "consolidate".into();
+                        card["replaces"] = from.ids().iter().map(|id| id.0).collect();
                     }
+                    card
                 }
                 store::Proposal::Decide(draft) => serde_json::json!({
                     "act": "decide",
@@ -560,8 +555,7 @@ fn load(
     }
 }
 
-/// One chain the secretary may read and write: its store and its policy as one unit; the first
-/// is what an absent `chain` means.
+/// One chain the secretary may read and write; the first is what an absent `chain` means.
 #[derive(Clone, Copy)]
 pub struct Bound<'a> {
     /// The name a `chain` argument spells.
@@ -572,8 +566,7 @@ pub struct Bound<'a> {
     pub policy: &'a ChainPolicy,
 }
 
-/// The chains a call may read, each read once ([`crate::chain_set::Read`]): the set a proposal
-/// and every row are priced through, each chain under its own policy.
+/// The chains a call may read, each read once ([`crate::chain_set::Read`]).
 #[must_use]
 pub fn chains_read(chains: &[Bound<'_>]) -> crate::chain_set::Read {
     crate::chain_set::Read::of_stores(chains.iter().map(|bound| (bound.policy, bound.caps.chain)))
@@ -656,8 +649,8 @@ pub(crate) fn bound_named<'a>(chains: &'a [Bound<'a>], name: &str) -> Option<&'a
     chains.iter().find(|bound| bound.name == name)
 }
 
-/// Answer a proposal no, with a reason, recorded as a [`Turn::Act`] the secretary reads next; a
-/// remember card's words go with it, by the memory's sweep, unless a standing fact names them.
+/// Answer a proposal no, with a reason the secretary reads next; a remember card's words go with
+/// it by the sweep, unless a standing fact names them.
 ///
 /// # Errors
 /// An empty reason, an index nothing proposed, one performed or running, or the stores'.
@@ -715,9 +708,8 @@ pub fn acknowledge(
     read(conversations, &card.conversation)
 }
 
-/// Say in `card`'s conversation what `by` did to it (a verb and its words) as the
-/// [`Turn::Act`] the secretary reads next, when the inbox `answered` that it recorded it; answers
-/// whether it did.
+/// Say in `card`'s conversation what `by` did to it, when the inbox `answered` that it recorded
+/// it; answers whether it did.
 fn heard(
     conversations: crate::secretary::conversations::Conversations<'_>,
     clock: &dyn Clock,
@@ -759,8 +751,7 @@ pub fn regenerate(
     read(conversations, id)
 }
 
-/// Ask the last round again with `said` in place of its question, set aside by `by` and stamped
-/// `stamped` (the gate's actor, as [`stamp::pointing`] read what its references point at).
+/// Ask the last round again with `said` in place of its question, stamped `stamped`.
 ///
 /// # Errors
 /// [`Stored::rewind`]'s refusals, a last round no question opened, and the store's own.
@@ -837,8 +828,7 @@ pub fn read(
     Ok(transcript::read(conversations, id)?.into_stored())
 }
 
-/// [`read`], opening [`store::DEFAULT`] the first time anything asks for it; no other id is
-/// created on demand, and a default another caller opened first is read.
+/// [`read`], opening [`store::DEFAULT`] the first time anything asks for it, and no other id.
 ///
 /// # Errors
 /// [`read`]'s own, once the default exists or `id` is any other name, and the store's.

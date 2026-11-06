@@ -523,12 +523,14 @@ fn kind(row: &suzatary_core::wire::ProposalRow) -> Kind {
         | ProposedAct::Device { .. }
         | ProposedAct::UnlockStore { .. }
         | ProposedAct::Erase { .. }
+        | ProposedAct::Retract { .. }
         | ProposedAct::GoogleClient { .. }
         | ProposedAct::GoogleSignIn { .. }
         | ProposedAct::CalendarEvent { .. }
         | ProposedAct::Connect { .. }
         | ProposedAct::Disconnect { .. }
         | ProposedAct::Remember { .. }
+        | ProposedAct::Consolidate { .. }
         | ProposedAct::Decision { .. } => Kind::Other,
     }
 }

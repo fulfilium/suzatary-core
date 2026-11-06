@@ -1,14 +1,10 @@
-//! The memory's two stores as one value: its history, a prodrome at the
-//! [`MemoryEvent`] schema that names each fact's words, and its texts, the words themselves,
-//! which forgetting deletes. A remember card in the inbox names its words in the same text store,
-//! so the inbox is read here too.
+//! The memory's two stores as one value: its history, a prodrome at the [`MemoryEvent`] schema
+//! that names each fact's words, and its texts, which forgetting deletes. The inbox is read too,
+//! since a remember card names its words in the same text store.
 //!
-//! Every reading is a function of the history and takes no lock; a fact whose text is missing,
-//! forgotten or lost, reads as absent, never as an error. The questions that are not monotone,
-//! and so are asked under the history's hold ([`Held`]), are the writes' own: is there room under
-//! [`MAX_LIVE`], does a standing fact already say this, do these ids still stand, what is the next
-//! number, and which card already keeps these words. Whether the secretary may remember at all is
-//! `secretary::taint`'s, asked of a conversation's turns that the call already rests on.
+//! Every reading takes no lock; a fact whose text is missing reads as absent, never an error.
+//! The non-monotone questions (room under [`MAX_LIVE`], a duplicate, standing ids, the next
+//! number, a card keeping these words) are the writes', asked under the history's hold ([`Held`]).
 
 use prodrome_core::event::Actor;
 use prodrome_core::literal::Datetime;
@@ -18,7 +14,7 @@ use crate::refusal::Refusal;
 use crate::secretary::digests::{Digests, ReadDigests};
 use crate::secretary::inbox_event::InboxEvent;
 use crate::secretary::memory::{
-    Fact, FactId, Forgotten, Kind, MAX_LIVE, Memory, Origin, Remembered,
+    Fact, FactId, Forgotten, Kind, MAX_LIVE, Memory, Origin, Remembered, Replaces, Sources,
 };
 use crate::secretary::memory_event::{self, MemoryEvent};
 use crate::secretary::salted_text::{Text, TextName};
@@ -26,18 +22,15 @@ use crate::secretary::store::Proposal;
 use crate::secretary::two_phase::TwoPhase;
 use crate::store::{Doc, Gets, Prodrome, Reads, WriteLock};
 
-/// The memory: its history, its texts, the inbox whose remember cards name texts too, and the
-/// salt each new text is kept with.
+/// The memory: its history, its texts, the inbox, and the salt each new text is kept with.
 #[derive(Clone, Copy)]
 pub struct Memories<'a> {
     /// What was remembered and forgotten, by id; never a fact's words.
     pub history: &'a dyn Prodrome<MemoryEvent>,
-    /// The words of each standing fact and of each remember card, by the name the history or the
-    /// card gives them.
+    /// The words of each standing fact and remember card, by the name that gives them.
     pub texts: &'a dyn Doc<TextName, Text<Fact>>,
     /// The inbox, whose remember cards name their words in [`Memories::texts`].
     pub cards: &'a dyn Prodrome<InboxEvent>,
-    /// Where a new text's salt comes from.
     pub entropy: &'a dyn Entropy,
     /// The digest, whose summaries' words the same sweep deletes.
     pub digests: Digests<'a>,
@@ -68,8 +61,7 @@ impl Kept {
     }
 }
 
-/// The memory as a reader holds it: no field reaches a write of an event, a fact's words, a
-/// card or a summary.
+/// The memory as a reader holds it: no field reaches a write.
 #[derive(Clone, Copy)]
 pub struct ReadMemories<'a> {
     /// What was remembered and forgotten, by id.
@@ -92,8 +84,7 @@ impl ReadMemories<'_> {
     /// The memory as a reader gets it: every standing fact whose words read.
     ///
     /// # Errors
-    /// The history's store's own, and the texts': a text that will not read is a failure, never
-    /// an absent fact.
+    /// The stores' own: a text that will not read is a failure, never an absent fact.
     pub fn read(&self) -> Result<Memory, Refusal> {
         self.with_words(&self.history()?)
     }
@@ -106,7 +97,6 @@ impl ReadMemories<'_> {
         Ok(self.texts.get(name)?.map(|text| text.words().clone()))
     }
 
-    /// `history` with each standing fact's words.
     fn with_words(&self, history: &TwoPhase) -> Result<Memory, Refusal> {
         let mut kept = std::collections::BTreeMap::new();
         for (_, standing) in history.live() {
@@ -179,10 +169,8 @@ impl<'a> Memories<'a> {
         self.hold()?.forget(id, at, by)
     }
 
-    /// The sweep a write makes after it is written, under the history's hold: it never fails
-    /// the write, which stands either way. A refused sweep (a store unreadable, or a read that
-    /// left something out) is logged, and the next sweep deletes what this one did not, since
-    /// every sweep deletes everything dead.
+    /// The sweep after a write, under the hold: it never fails the write. A refused sweep is
+    /// logged, and the next sweep deletes what this one did not.
     pub fn sweep_after_write(&self) {
         match self.hold() {
             Ok(held) => held.sweep_after_write(),
@@ -200,12 +188,10 @@ impl<'a> Memories<'a> {
 }
 
 impl Held<'_> {
-    /// Remember a fact: its text kept first, then the event naming it, and the text removed again
-    /// if the event is refused.
+    /// Remember a fact, as [`Held::write`] with nothing replaced.
     ///
     /// # Errors
-    /// [`Refusal::conflict`] at [`MAX_LIVE`] (naming the cap) and for a fact already standing
-    /// word for word (naming its id); the salt's, the texts' and the history's own.
+    /// As [`Held::write`].
     pub fn remember(
         &self,
         fact: &Fact,
@@ -213,27 +199,13 @@ impl Held<'_> {
         said: &Origin,
         at: Datetime,
     ) -> Result<Remembered, Refusal> {
-        let memories = &self.memories;
-        let history = memories.reads().history()?;
-        let id = remembering(&history, &memories.reads().with_words(&history)?, fact)?;
-        let said = self.write(fact, |name| remembered(id, at, name, kind, said))?;
-        Ok(Remembered {
-            id,
-            at,
-            fact: fact.clone(),
-            kind,
-            said,
-        })
+        self.write(fact, kind, &Replaces::Nothing, said, at)
     }
 
-    /// Replace the standing facts `from` with one fact, `fact`, written in `round`: its words
-    /// kept first, then the event naming them and the sources, and the words removed again if
-    /// the event is refused; then the sweep after a write, which deletes the sources' words.
+    /// Replace the standing facts `from` with `fact`, written in `round`, as [`Held::write`].
     ///
     /// # Errors
-    /// [`Refusal::not_found`] for a source that does not stand; [`Refusal::conflict`] for words
-    /// another standing fact holds word for word; [`Refusal::internal`] for no source, which the
-    /// schema refuses; the salt's, the texts' and the history's own.
+    /// [`Refusal::bad_request`] for no source; otherwise as [`Held::write`].
     pub fn consolidate(
         &self,
         from: &std::collections::BTreeSet<FactId>,
@@ -242,27 +214,122 @@ impl Held<'_> {
         round: &Origin,
         at: Datetime,
     ) -> Result<Remembered, Refusal> {
-        let memories = &self.memories;
-        let history = memories.reads().history()?;
-        let id = consolidating(
-            &history,
-            &memories.reads().with_words(&history)?,
-            from,
-            fact,
-        )?;
-        let said = self.write(fact, |text| {
-            memory_event::consolidated(
-                id,
+        let from = Sources::new(from.clone())
+            .ok_or_else(|| Refusal::bad_request("a consolidation replaces at least one fact"))?;
+        self.write(fact, kind, &Replaces::Facts(from), round, at)
+    }
+
+    /// Write `fact` from `origin` in place of `replaces`: its words first, then the event, and
+    /// the words removed again if the event is refused.
+    ///
+    /// # Errors
+    /// As `Held::event`; the salt's, the texts' and the history's own.
+    pub fn write(
+        &self,
+        fact: &Fact,
+        kind: Kind,
+        replaces: &Replaces,
+        origin: &Origin,
+        at: Datetime,
+    ) -> Result<Remembered, Refusal> {
+        let text = Text::new(fact.clone(), self.salt()?);
+        let name = text.name();
+        self.memories.texts.set(&name, &text)?;
+        let appended = self
+            .event(fact, &name, (kind, replaces, origin, at))
+            .and_then(|event| {
+                let id = *prodrome_core::schema::Schema::key(&event);
+                self.memories.history.append(event)?;
+                Ok(id)
+            });
+        match appended {
+            Ok(id) => self.written(id, fact, kind, replaces, at),
+            Err(refused) => {
+                // Its words never stood, so they are not kept.
+                let _ = self.memories.texts.remove(&name);
+                Err(refused)
+            }
+        }
+    }
+
+    /// Write the words a tapped card keeps under `text`; the fact and the card share the text.
+    ///
+    /// # Errors
+    /// [`Refusal::not_found`] for words no longer kept; as `Held::event`; the history's own.
+    pub fn write_kept(
+        &self,
+        text: &TextName,
+        kind: Kind,
+        replaces: &Replaces,
+        origin: &Origin,
+        at: Datetime,
+    ) -> Result<Remembered, Refusal> {
+        let fact = self.memories.reads().words(text)?.ok_or_else(|| {
+            Refusal::not_found("the card's words are deleted, so there is nothing to remember")
+        })?;
+        let event = self.event(&fact, text, (kind, replaces, origin, at))?;
+        let id = *prodrome_core::schema::Schema::key(&event);
+        self.memories.history.append(event)?;
+        self.written(id, &fact, kind, replaces, at)
+    }
+
+    /// The event writing `fact` under the next number, its words kept under `text`.
+    ///
+    /// # Errors
+    /// [`Refusal::conflict`] at [`MAX_LIVE`] or for a duplicate standing fact;
+    /// [`Refusal::not_found`] for a source that does not stand; the history's own.
+    fn event(
+        &self,
+        fact: &Fact,
+        text: &TextName,
+        (kind, replaces, origin, at): (Kind, &Replaces, &Origin, Datetime),
+    ) -> Result<MemoryEvent, Refusal> {
+        let reads = self.memories.reads();
+        let history = reads.history()?;
+        let standing = reads.with_words(&history)?;
+        match replaces {
+            Replaces::Nothing => remembered(
+                remembering(&history, &standing, fact)?,
+                at,
+                text.clone(),
+                kind,
+                origin,
+            ),
+            Replaces::Facts(from) => memory_event::consolidated(
+                consolidating(&history, &standing, from.ids(), fact)?,
                 at,
                 crate::secretary::writes_as(),
-                from.clone(),
-                text,
+                from.ids().clone(),
+                text.clone(),
                 kind,
-                round.clone(),
+                origin.clone(),
             )
-            .map_err(|refused| Refusal::internal(refused.to_string()))
-        })?;
-        self.sweep_after_write();
+            .map_err(|refused| Refusal::internal(refused.to_string())),
+        }
+    }
+
+    /// Fact `id` just written; after a consolidation, the sweep deletes its sources' words.
+    fn written(
+        &self,
+        id: FactId,
+        fact: &Fact,
+        kind: Kind,
+        replaces: &Replaces,
+        at: Datetime,
+    ) -> Result<Remembered, Refusal> {
+        match replaces {
+            Replaces::Nothing => {}
+            Replaces::Facts(_) => self.sweep_after_write(),
+        }
+        let said = self
+            .memories
+            .reads()
+            .history()?
+            .provenance(id)
+            .cloned()
+            .ok_or_else(|| {
+                Refusal::internal(format!("fact {id} was written and does not read back"))
+            })?;
         Ok(Remembered {
             id,
             at,
@@ -272,66 +339,8 @@ impl Held<'_> {
         })
     }
 
-    /// Keep `fact`'s words, then append the event `event` makes naming them, removing the words
-    /// again if it is refused; the new fact's provenance as the history now reads it.
-    fn write(
-        &self,
-        fact: &Fact,
-        event: impl FnOnce(TextName) -> Result<MemoryEvent, Refusal>,
-    ) -> Result<crate::secretary::provenance::Provenance, Refusal> {
-        let memories = &self.memories;
-        let text = Text::new(fact.clone(), self.salt()?);
-        let name = text.name();
-        let event = event(name.clone())?;
-        let id = *prodrome_core::schema::Schema::key(&event);
-        memories.texts.set(&name, &text)?;
-        if let Err(refused) = memories.history.append(event) {
-            // Its words never stood, so they are not kept.
-            let _ = memories.texts.remove(&name);
-            return Err(refused.into());
-        }
-        memories
-            .reads()
-            .history()?
-            .provenance(id)
-            .cloned()
-            .ok_or_else(|| {
-                Refusal::internal(format!("fact {id} was written and does not read back"))
-            })
-    }
-
-    /// Remember the words a card keeps under `text`: the fact names the card's text, so the two
-    /// share it, and nothing is kept or removed here.
-    ///
-    /// # Errors
-    /// [`Refusal::not_found`] for words no longer kept; otherwise as [`Held::remember`].
-    pub fn remember_kept(
-        &self,
-        text: &TextName,
-        kind: Kind,
-        said: &Origin,
-        at: Datetime,
-    ) -> Result<Remembered, Refusal> {
-        let memories = &self.memories;
-        let fact = memories.reads().words(text)?.ok_or_else(|| {
-            Refusal::not_found("the card's words are deleted, so there is nothing to remember")
-        })?;
-        let history = memories.reads().history()?;
-        let id = remembering(&history, &memories.reads().with_words(&history)?, &fact)?;
-        memories
-            .history
-            .append(remembered(id, at, text.clone(), kind, said)?)?;
-        Ok(Remembered {
-            id,
-            at,
-            fact,
-            kind,
-            said: crate::secretary::provenance::Provenance::said(said.clone()),
-        })
-    }
-
-    /// The words a remember card about `fact` names: those a card already keeps word for word,
-    /// so the same fact asked again is the same card, or else the fact kept afresh.
+    /// The words a remember card about `fact` names: a card's already, word for word, so asking
+    /// again is the same card, or else kept afresh.
     ///
     /// # Errors
     /// The salt's and the stores' own.
@@ -362,8 +371,7 @@ impl Held<'_> {
         }
     }
 
-    /// Forget a standing fact: the event first, so the history says it is gone, and then the
-    /// sweep after a write ([`Held::sweep_after_write`]), which never fails the forgetting.
+    /// Forget a standing fact: the event first, then the sweep, which never fails the forgetting.
     ///
     /// # Errors
     /// [`Refusal::not_found`] for an id no standing fact carries; the stores' own.
@@ -386,17 +394,12 @@ impl Held<'_> {
         })
     }
 
-    /// Delete every text that something names and nothing live names: a forgotten fact's, a
-    /// dismissed card's, a tapped card's whose fact is forgotten, a summary superseded or of a
-    /// node the conversations' lines no longer name. Every naming is read before anything is
-    /// deleted. Deleting one already gone
-    /// succeeds, so a deletion an earlier sweep failed to make is made now. Answers how many
-    /// texts it deleted or found gone.
+    /// Delete every text that something names and nothing live names, reading every naming first;
+    /// deleting one already gone succeeds. Answers how many it deleted or found gone.
     ///
-    /// The one place words are deleted for what became of them, and asked under the hold, so a
-    /// card filed or a fact remembered cannot come to name a text between the reading and the
-    /// deletion. It reads every store whole or deletes nothing: an object a read left out may be
-    /// the very one that keeps a text live.
+    /// Asked under the hold, so nothing can come to name a text between the reading and the
+    /// deletion; it reads every store whole or deletes nothing, since an object left out may be
+    /// the one that keeps a text live.
     ///
     /// # Errors
     /// [`Refusal::conflict`] naming a store whose read left anything out; the stores' own.
@@ -420,13 +423,10 @@ impl Held<'_> {
         Ok(facts.len() + summaries.len())
     }
 
-    /// Erase from its conversation what every forgotten fact's writing provably copied, and
-    /// offer the owner what it cannot prove, a card in the same conversation: a function of the
-    /// memory's history and the lines, each erasure stamped with its forgetting's instant, so a
-    /// forgetting whose erasure failed is erased by the next, and one already erased owes
-    /// nothing. A forgetting takes what every fact it forgets with wrote too
-    /// ([`TwoPhase::forgotten_with`]): the remembering of each source of a consolidation, and
-    /// the consolidation's own call. Answers how many keys it erased.
+    /// Erase from its conversation what every forgotten fact's writing provably copied, and offer
+    /// what it cannot prove as a card. Each erasure is stamped with its forgetting's instant, so
+    /// a failed one is erased by the next. A forgetting takes what its facts' sources wrote too
+    /// ([`TwoPhase::forgotten_with`]). Answers how many keys it erased.
     ///
     /// # Errors
     /// The stores' own; a conversation that does not read owes nothing until it does.
@@ -459,8 +459,7 @@ impl Held<'_> {
         Ok(erased)
     }
 
-    /// The card offering `keys` of `conversation` for erasure, filed as the box's; the same
-    /// offer filed again is the card already there.
+    /// The card offering `keys` for erasure, filed as the box's; filed again, the same card.
     fn offer(
         &self,
         conversation: &crate::secretary::store::ConversationId,
@@ -506,7 +505,6 @@ impl Held<'_> {
         }
     }
 
-    /// The digest, whose writes are made under this hold.
     pub(crate) fn digests(&self) -> Digests<'_> {
         self.memories.digests
     }
@@ -528,8 +526,7 @@ fn refused_sweep(refused: &Refusal) {
     );
 }
 
-/// Refuse unless `store` read whole: a write that deletes, or decides over the reading, may not
-/// rest on a read that left an object out.
+/// Refuse unless `store` read whole: a deciding write may not rest on a partial read.
 ///
 /// # Errors
 /// [`Refusal::conflict`] naming the store and what its read left out.
@@ -577,8 +574,8 @@ fn remembered(
 /// Decide a remember: the new fact's number, one more than every id and version before it.
 ///
 /// # Errors
-/// [`Refusal::conflict`] for a fact standing word for word, naming its id, and at [`MAX_LIVE`]
-/// standing facts, counted in the history so a fact whose text was lost still counts.
+/// [`Refusal::conflict`] for a duplicate standing fact, and at [`MAX_LIVE`] counted in the
+/// history, so a fact whose text was lost still counts.
 pub fn remembering(history: &TwoPhase, memory: &Memory, fact: &Fact) -> Result<FactId, Refusal> {
     if let Some(same) = memory.facts.iter().find(|standing| &standing.fact == fact) {
         return Err(Refusal::conflict(format!(
@@ -594,13 +591,11 @@ pub fn remembering(history: &TwoPhase, memory: &Memory, fact: &Fact) -> Result<F
     Ok(FactId(history.version() + 1))
 }
 
-/// Decide a consolidation: the new fact's number, one more than every id and version before it.
-/// Its words may repeat one of its sources', never another standing fact's, and it needs no room,
-/// since it stands in the place of at least one.
+/// Decide a consolidation: the new fact's number. Its words may repeat a source's, never
+/// another standing fact's, and it needs no room.
 ///
 /// # Errors
-/// [`Refusal::not_found`] naming a source that does not stand, and [`Refusal::conflict`] for
-/// words another standing fact holds, naming its id.
+/// [`Refusal::not_found`] for a source that does not stand; [`Refusal::conflict`] for a duplicate.
 pub fn consolidating(
     history: &TwoPhase,
     memory: &Memory,
