@@ -226,6 +226,7 @@ impl Program for Draft {
             class: "conversation",
             title: "New topic".to_owned(),
             masthead: Masthead::Page,
+            width: crate::chrome::Width::Column,
             back: None,
             legend: None,
             now: Vec::new(),

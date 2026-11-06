@@ -2470,7 +2470,6 @@ impl Fakes {
             notify: &self.notify,
             answers: &self.answers,
             devices: &self.devices,
-            usage: &suzatary_core::capability::Nothing,
             sessions: &self.model,
         }
     }

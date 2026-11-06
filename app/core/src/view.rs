@@ -269,30 +269,6 @@ fn rich<R: Render + ?Sized>(render: &R, record: &Authored, untrusted: &Untrusted
     }
 }
 
-/// A record's body and detail for its reading page: rendered when trusted and compilable.
-pub fn content<R: Render + ?Sized>(
-    render: &R,
-    record: &Authored,
-    untrusted: &Untrusted,
-) -> crate::reading::Content {
-    let trusted = renders(record, untrusted);
-    let prose = |markup: &str| {
-        let escaped = Escaped::from_chain(markup.to_owned());
-        if trusted && render.html(&escaped).is_ok() {
-            crate::reading::Prose::Rendered { source: escaped }
-        } else {
-            crate::reading::Prose::Source {
-                text: markup.to_owned(),
-            }
-        }
-    };
-    let detail = record.payload.detail.as_str();
-    crate::reading::Content {
-        body: prose(record.payload.body.as_str()),
-        detail: (!detail.is_empty()).then(|| prose(detail)),
-    }
-}
-
 /// A content record on the wire.
 pub fn authored<R: Render + ?Sized>(
     render: &R,

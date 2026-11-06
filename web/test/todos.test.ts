@@ -15,15 +15,11 @@ import { readFileSync } from "node:fs";
 
 import type { Authored, Entry } from "../src/wire/generated/wire";
 import {
-  ANY,
   DEFAULT_FILTER,
   byUrgency,
-  is,
   isDecision,
   listing,
   matches,
-  parseFilter,
-  printFilter,
   signature,
   total,
 } from "../src/todo/todos";
@@ -97,34 +93,6 @@ test("unpriced todos are shown under their own heading, never hidden", () => {
 });
 
 // --- the remembered filter ---------------------------------------------------
-
-test("the filter round-trips through the string localStorage holds", () => {
-  const filter = {
-    state: "all",
-    category: is("work"),
-    kind: ANY,
-    query: "deed",
-    attention: true,
-    waiting: true,
-    dated: true,
-  } as const;
-  assert.deepEqual(parseFilter(printFilter(filter)), filter);
-  assert.deepEqual(parseFilter(printFilter(DEFAULT_FILTER)), DEFAULT_FILTER);
-});
-
-test("anything else in localStorage degrades to the default", () => {
-  for (const stored of [null, undefined, "", "{", "[]", '"open"', "3", '{"state":"sideways"}', "{}"]) {
-    assert.deepEqual(parseFilter(stored), DEFAULT_FILTER);
-  }
-});
-
-test("a partial stored filter keeps the fields it does carry", () => {
-  assert.deepEqual(parseFilter('{"state":"all","query":"work"}'), {
-    ...DEFAULT_FILTER,
-    state: "all",
-    query: "work",
-  });
-});
 
 // --- the card's signature -----------------------------------------------------
 

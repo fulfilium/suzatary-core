@@ -5,7 +5,7 @@ use std::net::IpAddr;
 use std::sync::Arc;
 
 use suzatary_core::capability::{
-    Compact, Conversation, Model, ModelError, Pick, Reply, SessionModel, Sessions, Usage, Weather,
+    Compact, Conversation, Model, ModelError, Pick, Reply, SessionModel, Sessions, Weather,
     WeatherError, Whois, WhoisError,
 };
 use suzatary_core::drive::WritePort as _;
@@ -308,31 +308,6 @@ impl suzatary_core::settings::Verify for Verifying {
     }
 }
 
-/// Where the usage page reads its transcripts from.
-///
-/// The fixture reads nowhere, because a cold walk of the box's own transcripts
-/// exceeds a browser scene's time budget.
-#[derive(Debug, Clone)]
-pub enum Ledger {
-    Box,
-    /// An empty root the fixture owns.
-    Nowhere(std::path::PathBuf),
-}
-
-impl Ledger {
-    /// A fresh empty directory under the system temp dir, this process's own.
-    #[must_use]
-    pub fn nowhere() -> Self {
-        let root = std::env::temp_dir().join(format!(
-            "suzatary-fixture-transcripts-{}",
-            std::process::id()
-        ));
-        // A directory that cannot be made reads as empty too.
-        let _ = std::fs::create_dir_all(&root);
-        Self::Nowhere(root)
-    }
-}
-
 /// Whether the subscription has room above the reserve.
 ///
 /// `RateLimited` and `Refused` are the endpoint refusing to answer, not the subscription being
@@ -429,14 +404,6 @@ impl DriveAccess {
             instance: instance.path.clone(),
         }
     }
-}
-
-pub(crate) fn transcripts(instance: &Instance) -> suzatary_io::usage::Transcripts {
-    suzatary_io::usage::Transcripts::new(
-        instance.paths.transcripts.clone(),
-        &instance.paths.home,
-        instance.code(),
-    )
 }
 
 /// The Drive CLI, downloading into the user's runtime directory (memory, private to the
@@ -673,7 +640,6 @@ impl CompactorModel {
             asked,
             name,
             allowance: suzatary_io::usage::Allowance::new(
-                transcripts(instance),
                 instance.secrets(),
                 "the compactor: whether the subscription has room above the reserve",
                 &instance.paths.usage_cache,

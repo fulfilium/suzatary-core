@@ -4220,6 +4220,7 @@ name = "suzatary-pages"
 version = "0.0.0"
 dependencies = [
  "chrono",
+ "prodrome-core",
  "proptest",
  "serde",
  "serde_json",

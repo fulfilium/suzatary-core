@@ -110,7 +110,7 @@ pub type Input = runtime::Input<Hold, Ask, Stream>;
 /// A round as the worker groups it, by turn and card indices.
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize, TS)]
 #[serde(rename_all = "camelCase")]
-pub struct Shape_ {
+pub(crate) struct Shape_ {
     /// The opening's index, else the first trace turn's.
     pub(crate) key: usize,
     pub(crate) start_index: usize,
@@ -130,10 +130,10 @@ pub struct Shape_ {
 /// `grouped.Window`.
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize, TS)]
 #[ts(rename = "GroupedWindow")]
-pub struct Grouped {
+pub(crate) struct Grouped {
     #[serde(flatten)]
-    pub payload: ConversationPayload,
-    pub rounds: Vec<Shape_>,
+    pub(crate) payload: ConversationPayload,
+    pub(crate) rounds: Vec<Shape_>,
 }
 
 /// `Local::Window`.
@@ -577,6 +577,7 @@ impl Program for Conversation {
                     class: "conversation",
                     title: title(m),
                     masthead: Masthead::Page,
+                    width: crate::chrome::Width::Column,
                     back: None,
                     legend: None,
                     now: vec![
@@ -1773,6 +1774,7 @@ mod tests {
             reach: Reach::Writes,
             offsets: Vec::new(),
             wide: false,
+            categories: vec!["home".to_owned(), "work".to_owned()],
         };
         let at = At::Page {
             id: "c".to_owned(),

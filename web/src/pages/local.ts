@@ -8,7 +8,9 @@ import app from "../app/app"
 import ui from "../app/ui"
 import registers from "../app/registers"
 import time from "../app/time"
-import { boxFolds, signingHere, watchOthers, watchReplica } from "../prodrome/sync"
+import { boxFolds, ensureFold, held as replicaHeld, signingHere, watchOthers, watchReplica } from "../prodrome/sync"
+import { awaitingTrust, losses, stranded, stuckBehind, unsentTodos } from "../prodrome/replica"
+import onscreen, { store } from "../app/store"
 import signer from "../prodrome/signer"
 import storesync from "../prodrome/storesync"
 import intentsync from "../prodrome/intentsync"
@@ -108,11 +110,52 @@ export namespace local {
 
   const route = reading.held(
     () => {
-      const r = app.route(app.now())
-      return { page: r.type, conversation: r.type === "conversation" ? r.id : "" }
+      const a = app.now()
+      const r = app.route(a)
+      const s = app.screen(a)
+      return {
+        page: r.type,
+        conversation: r.type === "conversation" ? r.id : "",
+        selected: s.type === "todos" ? s.selected : s.type === "typst" ? s.open : "",
+        shared: s.type === "todos" ? s.prefill : "",
+      }
     },
-    heard => app.hear(app.route, heard),
+    heard => app.hear(a => JSON.stringify([app.route(a), app.screen(a)]), heard),
   )
+
+  // The open chain's rows as the tab's fold shows them; a page watching them asks the box for a fold about now when
+  // the one shown is a copy kept from before.
+  const folded = reading.held(
+    (): unknown => {
+      const f = store.state()
+      return onscreen.loaded(f) ? { entries: onscreen.entries(f), at: onscreen.at(f) } : null
+    },
+    heard => {
+      void ensureFold().catch(() => {})
+      return store.subscribe(() => heard())
+    },
+  )
+
+  // What this tab wrote that the box has not taken, read again on every commit to the replica.
+  const unsent = reading.held((): unknown => {
+    const r = replicaHeld()
+    const { held: blocked, reasons } = stuckBehind(r)
+    return {
+      todos: Object.fromEntries(unsentTodos(r)),
+      refused: reasons.map(one => one.reason),
+      blocked,
+      stranded: stranded(r).length,
+      losses: losses(r).map(object => object.hash),
+      waiting: awaitingTrust(r),
+    }
+  }, watchReplica)
+
+  const waiting = reading.held((): unknown => app.now().waiting, heard => app.hear(a => a.waiting, heard))
+
+  const onDevice = (key: string): reading.Reading<unknown> => {
+    const c = ui.cell(registers.kept, key)
+    return reading.held(c.get, c.hear)
+  }
 
   const page = (key: string): reading.Reading<unknown> => {
     const c = ui.cell(registers.page, key)
@@ -149,6 +192,14 @@ export namespace local {
         return scroll.of(box)
       case "Route":
         return route
+      case "Fold":
+        return folded
+      case "Unsent":
+        return unsent
+      case "Waiting":
+        return waiting
+      case "Kept":
+        return onDevice(l.key)
     }
   }
 
@@ -165,6 +216,8 @@ export namespace local {
       }
       case "Ui":
         return ui.cell(registers.page, r.key).set(value)
+      case "Kept":
+        return ui.cell(registers.kept, r.key).set(value)
     }
   }
 }

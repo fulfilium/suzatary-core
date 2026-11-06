@@ -286,6 +286,7 @@ impl Program for Secretary {
             class: "chats secretarystream",
             title: "Secretary".to_owned(),
             masthead: Masthead::Destination,
+            width: crate::chrome::Width::Column,
             back: None,
             legend: None,
             now: vec![

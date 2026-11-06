@@ -188,7 +188,7 @@ scripts = []
 name = "pages"
 path = "app/pages"
 shape = "crate"
-depends = ["core", "viewtree"]
+depends = ["core", "prodrome-core", "viewtree"]
 scripts = ["scripts/wire.sh", "scripts/web-inputs.sh"]
 
 [[unit]]

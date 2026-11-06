@@ -71,6 +71,7 @@ const context = (r: Rng): Context => {
   const gate = r.pick(["writes", "reads", "views"] as const);
   return {
     wide: r.bool(),
+    categories: ["home", "work"],
     gate,
     reach: gate === "writes" ? { type: "Writes" } : { type: "Reads", said: "This device reads only.", settings: r.bool(), key: r.pick(["untrusted", "revoked", "not_the_key"] as const) },
     offsets: [{ from: 0, minutes: r.pick([0, 60, -300]) }],

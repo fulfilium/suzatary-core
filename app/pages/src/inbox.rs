@@ -36,7 +36,7 @@ pub enum Hold {
 
 pub type Ask = card::Asking;
 pub(crate) type Effect = runtime::Effect<Hold, Ask>;
-pub type Input = runtime::Input<Hold, Ask>;
+pub(crate) type Input = runtime::Input<Hold, Ask>;
 
 /// Reached unfolds its Setup row and scrolls to it once; it stays marked while the page reads.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -204,6 +204,7 @@ impl Program for Inbox {
             class: "inboxpage",
             title: "Inbox".to_owned(),
             masthead: Masthead::Destination,
+            width: crate::chrome::Width::Column,
             back: None,
             legend: Some(legend),
             now: Vec::new(),

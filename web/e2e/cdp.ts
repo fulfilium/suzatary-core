@@ -357,7 +357,7 @@ export class Page {
    * current one only in its hash is a same-document navigation the browser
    * process drives, and after one particular sequence — an act on the write
    * fixture, a full load elsewhere, then a fragment `Page.navigate` — every
-   * request the page issued afterwards (`/api/usage`, `/api/life/fold`) was
+   * request the page issued afterwards (`/api/about`, `/api/life/fold`) was
    * called and never resolved, while the identical `fetch` from the console
    * completed at once and the server answered the shell in under a
    * millisecond. Reproduced in isolation four times; setting `location.hash`

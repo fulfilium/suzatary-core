@@ -26,6 +26,8 @@ pub struct Context {
     pub offsets: Vec<Offset>,
     /// The tab is 62rem wide or more: a side column is drawn, and a bare Enter sends.
     pub wide: bool,
+    /// This deployment's categories, in its order.
+    pub categories: Vec<String>,
 }
 
 /// What a login that may not write is told where a box to write in would be.
@@ -37,7 +39,6 @@ pub enum Reach {
     Waits,
     Reads {
         said: String,
-        /// Whether Settings is where to fix it.
         settings: bool,
         key: Untrusted,
     },
@@ -46,7 +47,6 @@ pub enum Reach {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, TS)]
 #[serde(rename_all = "snake_case")]
 pub enum Untrusted {
-    /// No trusted device has trusted it yet.
     Untrusted,
     Revoked,
     NotTheKey,
@@ -55,7 +55,7 @@ pub enum Untrusted {
 /// `H` names the page's held questions, `A` its one-time asks and acts, `S` its streams, so an
 /// answer to a question of another kind does not typecheck. Holding, watching or listening under
 /// an `H` already held lets the earlier one go.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]
+#[derive(Debug, Clone, PartialEq, Serialize, TS)]
 #[serde(tag = "type")]
 pub enum Effect<H, A, S = Never> {
     /// Hold a GET of `path`, handed over now and again whenever it moves, as `Input::Held`. A
@@ -66,6 +66,12 @@ pub enum Effect<H, A, S = Never> {
     },
     Again {
         path: String,
+    },
+    /// HTML the box rendered, kept on this device under the key its source's block is placed by:
+    /// a block placed by key shows it from then on. The device's store refuses a key that does
+    /// not name its source.
+    Rendered {
+        pairs: Vec<(String, String)>,
     },
     Get {
         ask: A,
@@ -96,6 +102,12 @@ pub enum Effect<H, A, S = Never> {
     Listen {
         ask: S,
         path: String,
+    },
+    /// Take the shell's keys of `keys` while the page stands: each one pressed as [`Input::Heard`],
+    /// its frame a [`Keyed`]'s JSON. Asked again, the set replaces the last.
+    Keys {
+        ask: S,
+        keys: Vec<KeyKind>,
     },
     /// Pull every store now: what a page does when the box says something was written.
     Sync,
@@ -146,6 +158,25 @@ pub enum Effect<H, A, S = Never> {
     Toast {
         words: String,
     },
+    /// Say something briefly with one button beside it, whose press answers `ask` with `null`
+    /// as [`Input::Answered`] while the page stands (an Undo beside what was just done).
+    Offer {
+        words: String,
+        label: String,
+        ask: A,
+    },
+    /// Ask the core in the tab's worker about the chains the tab holds, answered once as
+    /// [`Input::Answered`] with the core's answer, or refused with why it could not answer.
+    Core {
+        ask: A,
+        question: Core,
+    },
+    /// Write the open chain's replica over from the box, dropping exactly the unsent objects
+    /// named, which the page showed as lost (`Local::Unsent`'s `losses`); a row holding another
+    /// unsent object by then refuses.
+    Reset {
+        losses: Vec<String>,
+    },
     /// A performance mark, after the layout of this step's patches; only the latest mark of a
     /// name is kept.
     Mark {
@@ -158,9 +189,184 @@ pub enum Effect<H, A, S = Never> {
     },
 }
 
+/// A question the core in the tab's worker answers (`web/src/prodrome/questions.ts`).
+#[derive(Debug, Clone, PartialEq, Serialize, TS)]
+#[serde(tag = "type")]
+pub(crate) enum Core {
+    /// A chain's reading at an instant, linked through every chain the tab holds: its name, its
+    /// specs and its functions, or `Unheld` while the tab holds none of its objects; answered with
+    /// the chains held beside it (`Read`).
+    Reading { chain: String, at: String },
+    /// The list's tree of `members`, grouped `by` (`category`, `urgency` or `flat`) and then by
+    /// ancestry, every node priced under `basis`: grown by the core in the worker, so this module
+    /// links no term and no trie.
+    Tree {
+        basis: Basis,
+        members: Vec<Placed>,
+        by: String,
+    },
+    /// A todo's thirty days at an instant (`Thirty`).
+    Thirty {
+        chain: String,
+        id: String,
+        #[ts(type = "number")]
+        ms: i64,
+    },
+}
+
+/// A todo the list places: its title, its category, its own worth and its candidate specs.
+#[derive(Debug, Clone, PartialEq, Serialize, TS)]
+pub(crate) struct Placed {
+    pub(crate) todo: String,
+    pub(crate) title: String,
+    pub(crate) category: String,
+    pub(crate) worth: PlacedWorth,
+    /// Its candidate specs, as the wire prints a term.
+    #[ts(type = "Array<unknown>")]
+    pub(crate) specs: Vec<serde_json::Value>,
+}
+
+/// A placed todo's own value: a number or `∅` (`None`), or a function that does not link.
+#[derive(Debug, Clone, PartialEq, Serialize, TS)]
+#[serde(tag = "type")]
+pub(crate) enum PlacedWorth {
+    Value { v: Option<f64> },
+    Unlinked,
+}
+
+/// What prices a term: a reading the worker keeps, or the box's rows, each todo's `Ref` its
+/// row's value at `at`.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]
 #[serde(tag = "type")]
-pub enum Scroll {
+pub(crate) enum Basis {
+    /// A reading, by the name the worker answered it under.
+    Fold {
+        #[ts(type = "unknown")]
+        reading: serde_json::Value,
+    },
+    /// The rows: each todo a flat term of its row's value, or `absent`.
+    Rows {
+        at: String,
+        #[ts(type = "Record<string, unknown>")]
+        functions: std::collections::BTreeMap<String, serde_json::Value>,
+    },
+}
+
+/// A key the shell's keyboard hands a page (`web/src/shell/keyboard.ts`'s `KeyTarget`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize, TS)]
+pub(crate) enum KeyKind {
+    Move,
+    /// `l`, Enter: what the cursor is on opened.
+    Open,
+    Close,
+    Act,
+    Undo,
+    Redo,
+    Search,
+    Add,
+    /// Escape, which the page takes only while it has something to close.
+    Escape,
+}
+
+/// A key pressed, as the shell names it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(tag = "type")]
+pub enum Keyed {
+    Move {
+        by: i32,
+    },
+    Open,
+    Close,
+    Act {
+        name: ActName,
+    },
+    /// Undo the last event of what the cursor is on.
+    Undo,
+    Redo,
+    Search,
+    Add,
+    Escape,
+}
+
+/// An act's key, as the shell's keyboard names it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "lowercase")]
+pub(crate) enum ActName {
+    Done,
+    Tend,
+    Cancel,
+    Reopen,
+    Confirm,
+}
+
+impl<H, A, S> Effect<H, A, S> {
+    /// The same effect asked by a page holding the page that asked it: its questions, asks and
+    /// streams named the holder's way.
+    pub(crate) fn map<H2, A2, S2>(
+        self,
+        h: impl Fn(H) -> H2,
+        a: impl Fn(A) -> A2,
+        s: impl Fn(S) -> S2,
+    ) -> Effect<H2, A2, S2> {
+        match self {
+            Effect::Hold { ask, path } => Effect::Hold { ask: h(ask), path },
+            Effect::Again { path } => Effect::Again { path },
+            Effect::Rendered { pairs } => Effect::Rendered { pairs },
+            Effect::Get { ask, path } => Effect::Get { ask: a(ask), path },
+            Effect::Post { ask, path, body } => Effect::Post {
+                ask: a(ask),
+                path,
+                body,
+            },
+            Effect::NewKey { ask } => Effect::NewKey { ask: a(ask) },
+            Effect::Watch { ask, local } => Effect::Watch { ask: h(ask), local },
+            Effect::Keep { register, value } => Effect::Keep { register, value },
+            Effect::Listen { ask, path } => Effect::Listen { ask: s(ask), path },
+            Effect::Keys { ask, keys } => Effect::Keys { ask: s(ask), keys },
+            Effect::Sync => Effect::Sync,
+            Effect::Act {
+                ask,
+                act,
+                secret,
+                told,
+            } => Effect::Act {
+                ask: a(ask),
+                act,
+                secret,
+                told,
+            },
+            Effect::Endorse { ask, actor, key } => Effect::Endorse {
+                ask: a(ask),
+                actor,
+                key,
+            },
+            Effect::Timer { ask, after } => Effect::Timer { ask: a(ask), after },
+            Effect::Focus { field } => Effect::Focus { field },
+            Effect::Scroll { to } => Effect::Scroll { to },
+            Effect::Copy { text } => Effect::Copy { text },
+            Effect::Go { href } => Effect::Go { href },
+            Effect::Replace { href } => Effect::Replace { href },
+            Effect::Back { fallback } => Effect::Back { fallback },
+            Effect::Toast { words } => Effect::Toast { words },
+            Effect::Offer { words, label, ask } => Effect::Offer {
+                words,
+                label,
+                ask: a(ask),
+            },
+            Effect::Core { ask, question } => Effect::Core {
+                ask: a(ask),
+                question,
+            },
+            Effect::Reset { losses } => Effect::Reset { losses },
+            Effect::Mark { name } => Effect::Mark { name },
+            Effect::Tell { said } => Effect::Tell { said },
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]
+#[serde(tag = "type")]
+pub(crate) enum Scroll {
     End,
     /// The element marked `data-field` at the top, below the sticky header.
     Top {
@@ -176,31 +382,32 @@ pub enum Scroll {
 
 /// When an act's answer reaches the page.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, TS)]
-pub enum Told {
+pub(crate) enum Told {
     Answered,
     /// Once the tab's reading holds it or says the box did not; a lost answer is read as done or
     /// not this way.
     Held,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Serialize)]
 #[serde(untagged)]
 pub enum Body {
     Empty {},
-    /// `POST /api/act/key`.
     Key(suzatary_core::wire::KeyAsked),
-    /// `POST /api/act/pair`.
     Pair(suzatary_core::wire::Pairing),
     /// `POST /api/secretary/conversations` and `…/title`.
     Titling(suzatary_core::wire::Titling),
-    /// `POST /api/secretary/attachments`.
     Upload(suzatary_core::wire::Uploading),
+    /// `POST /api/<chain>/author`: an event the box prints and appends nothing of.
+    Author(suzatary_core::wire::Authoring),
+    /// `POST /api/<chain>/todo/<id>/build`, which reads no field.
+    Build {},
 }
 
 /// A reading the tab keeps of its own, which no GET answers; each names the payload it carries.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]
 #[serde(tag = "type")]
-pub enum Local {
+pub(crate) enum Local {
     /// `null` when the browser answers nothing.
     Device,
     /// Priced through every chain the tab holds (`InboxRead`).
@@ -228,6 +435,17 @@ pub enum Local {
     Cards {
         conversation: String,
     },
+    /// The open chain's rows as the tab's fold holds them (`Folded`), or `null` before one is
+    /// read; watching it asks the box for a fold when the one held is not about now.
+    Fold,
+    /// What this tab holds of the open chain that the box has not taken (`Unsent`).
+    Unsent,
+    /// How many things wait on the owner, as the shell counts them.
+    Waiting,
+    /// A register of this device's by its key, any value, `null` before one is kept.
+    Kept {
+        key: String,
+    },
     /// What this tab asked and the replicas do not hold yet (`Intents`).
     Intents,
     Titles,
@@ -246,13 +464,17 @@ pub enum Local {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]
 #[serde(tag = "type")]
-pub enum Register {
+pub(crate) enum Register {
     /// Value `{"type": "Typed", "text"}` as typed, or `{"type": "Settled", "text"}` taking those
     /// words over a conflict.
     Draft {
         id: String,
     },
     Ui {
+        key: String,
+    },
+    /// A register of this device's by its key, which its other tabs hear.
+    Kept {
         key: String,
     },
 }
@@ -281,27 +503,27 @@ pub(crate) enum Place {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]
-pub struct Window {
+pub(crate) struct Window {
     /// At least the core's own window.
     #[serde(skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
-    pub limit: Option<u32>,
+    pub(crate) limit: Option<u32>,
     #[serde(skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
-    pub from: Option<u32>,
+    pub(crate) from: Option<u32>,
     #[serde(skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
-    pub before: Option<u32>,
+    pub(crate) before: Option<u32>,
     /// A reference every round it holds touches.
     #[serde(skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
-    pub about: Option<String>,
+    pub(crate) about: Option<String>,
 }
 
 /// An act as the tab's set of intents names it (`web/src/prodrome/asks.ts`).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[serde(tag = "type")]
-pub enum Act {
+pub(crate) enum Act {
     Answer {
         at: Asked,
         answer: Answering,
@@ -326,27 +548,48 @@ pub enum Act {
         conversation: String,
         turns: Vec<u32>,
     },
+    /// An event the box printed (`POST …/author`), sealed onto a chain's replica.
+    Seal {
+        chain: String,
+        event: String,
+    },
+    /// A todo's lifecycle event, spelled by the tab's core at the instant it is asked, as the
+    /// actor this device writes as, and sealed onto the chain's replica.
+    Lifecycle {
+        chain: String,
+        todo: String,
+        kind: Lifecycle,
+        note: String,
+    },
     /// Sealed into the tab's replica of the topic store.
     Topic {
         write: TopicWrite,
     },
 }
 
+/// A lifecycle event's kind, as the core spells it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
+pub(crate) enum Lifecycle {
+    Completed,
+    Tended,
+    Cancelled,
+    Reopened,
+}
+
 /// A proposal as its card saw it: `from` is its signature then, and any later climb of its
 /// machine holds the answer.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
-pub struct Asked {
+pub(crate) struct Asked {
     pub(crate) conversation: String,
     pub(crate) index: u32,
-    pub from: String,
+    pub(crate) from: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[serde(tag = "type")]
-pub enum Answering {
+pub(crate) enum Answering {
     Tap {
         note: String,
-        /// The wider yes.
         always: bool,
         #[serde(skip_serializing_if = "Option::is_none", default)]
         #[ts(optional)]
@@ -362,25 +605,25 @@ pub enum Answering {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
-pub struct Endorsement {
+pub(crate) struct Endorsement {
     pub(crate) key: String,
     pub(crate) signature: String,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
-pub enum Questioning {
+pub(crate) enum Questioning {
     Say,
     Edit,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
-pub enum Rounding {
+pub(crate) enum Rounding {
     Stop,
     Regenerate,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
-pub struct Question {
+pub(crate) struct Question {
     pub(crate) conversation: String,
     pub(crate) after: u32,
     pub(crate) text: String,
@@ -400,7 +643,7 @@ pub enum TopicWrite {
 /// The value a typed answer carries, which the page never holds.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]
 #[serde(tag = "type")]
-pub enum Secret {
+pub(crate) enum Secret {
     None,
     /// The field marked `data-field`, read at the act and kept by the tab under `keep` to be sent
     /// again.
@@ -425,7 +668,7 @@ pub enum Outcome {
 /// `intents.Answer`.
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize, TS)]
 #[serde(tag = "type")]
-pub enum Said {
+pub(crate) enum Said {
     Taken,
     Refused {
         e: String,

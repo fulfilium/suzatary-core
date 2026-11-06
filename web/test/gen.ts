@@ -172,11 +172,11 @@ export function route(r: Rng): Route {
     case 10:
       return r.bool() ? { type: "memory" } : { type: "newtopic" };
     case 11:
-      return { type: "chain", focus: r.bool() ? "" : r.string("0123456789abcdef", 8) };
+      return { type: "unknown", hash: `#/nosuchpage${r.string(SLUG, r.int(8))}` };
     case 12:
       return { type: "calendar", date: r.bool() ? "" : day(r) };
     case 13:
-      return { type: "usage" };
+      return { type: "todo", id: id() };
     case 14:
       return { type: "about" };
     case 15:

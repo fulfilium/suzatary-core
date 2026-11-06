@@ -15,9 +15,6 @@ export type Route =
   // By notmuch id or a todo's `source.hash`.
   | { readonly type: "message"; readonly id: string }
   | { readonly type: "thread"; readonly id: string }
-  // An object hash to scroll to, "" for none.
-  | { readonly type: "chain"; readonly focus: string }
-  | { readonly type: "usage" }
   | { readonly type: "about" }
   | { readonly type: "settings" }
   | { readonly type: "briefings" }
@@ -107,10 +104,6 @@ export function parseRoute(hash: string): Route {
       const id = decode(rest);
       return id === null || id === "" ? { type: "unknown", hash } : { type: "message", id };
     }
-    case "chain": {
-      const focus = decode(rest);
-      return { type: "chain", focus: focus ?? "" };
-    }
     case "secretary": {
       const refs = list(query["ref"] ?? "");
       // Absent rather than false, so a literal with no `focus` still equals what this parses.
@@ -124,8 +117,6 @@ export function parseRoute(hash: string): Route {
         ? { type: "unknown", hash }
         : { type: "conversation", id, refs, ...focus, ...at };
     }
-    case "usage":
-      return rest === "" ? { type: "usage" } : { type: "unknown", hash };
     case "about":
       return rest === "" ? { type: "about" } : { type: "unknown", hash };
     case "settings":
@@ -164,8 +155,6 @@ export function hrefOf(route: Route): string {
       return `#/mail/${encodeURIComponent(route.id)}`;
     case "thread":
       return `#/mail/thread/${encodeURIComponent(route.id)}`;
-    case "chain":
-      return route.focus === "" ? "#/chain" : `#/chain/${encodeURIComponent(route.focus)}`;
     case "secretary":
       return `#/secretary${search({ ref: route.refs.join(","), topics: route.topics.join(","), focus: route.focus === true ? "1" : "" })}`;
     case "memory":
@@ -178,8 +167,6 @@ export function hrefOf(route: Route): string {
         focus: route.focus === true ? "1" : "",
         at: route.at === undefined ? "" : String(route.at),
       })}`;
-    case "usage":
-      return "#/usage";
     case "about":
       return "#/about";
     case "settings":

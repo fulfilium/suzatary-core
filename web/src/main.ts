@@ -1,7 +1,7 @@
 // The shell: what the tab hears becomes an `app.Event`, and after each one the shell is drawn from `App` —
 // the chrome around the page, and the page `pages.table` mounts for its screen.
 
-import { forgetChain, me, reportPushToken, waitingCount, wasOurWrite } from "./wire/api";
+import { me, reportPushToken, waitingCount, wasOurWrite } from "./wire/api";
 import storesync from "./prodrome/storesync";
 import intentsync from "./prodrome/intentsync";
 import app from "./app/app";
@@ -51,7 +51,7 @@ import readings from "./prodrome/readings";
 import heads from "./prodrome/heads";
 import { hearTheme, restoreTheme, theme } from "./app/theme";
 import { store } from "./app/store";
-import { foldHeld, foldWhere, forgetChainReplica, held, keepObjects, refetchFold, resetRow, restoreFold, restoreReplica, shellAsksAfter, signingHere, sync, watchReplica } from "./prodrome/sync";
+import { ensureFold, foldHeld, foldWhere, forgetChainReplica, held, keepObjects, refetchFold, resetRow, restoreFold, restoreReplica, shellAsksAfter, signingHere, sync, watchReplica } from "./prodrome/sync";
 import signer from "./prodrome/signer";
 import http from "./wire/http";
 import clock from "./algebra/clock";
@@ -101,6 +101,9 @@ async function mount(a: app.App, fresh: boolean, heard: boolean, again: boolean,
   const view = byId("view");
   const screen = app.screen(a);
   if (!fresh && current.absorb?.(screen) === true) return;
+  // A page that draws the fold has the box's asked for beside its module, not after it: the box's fold carries what the
+  // box rendered, and a Rust page mounts only once its module loads (`ensureFold` asks the box once per tab).
+  if (pages.folds[screen.type] === "Shown") void ensureFold().catch(() => {});
   const draw = await pages.load(screen);
   if (turn !== latest) return;
   current.destroy();
@@ -168,7 +171,6 @@ function heardTip(data: string): void {
   if (was.length !== 0) void refreshWaiting();
   // Our own write is already in the store; announcing it back would tell the reader what they just did.
   if (was.length !== 0 && !wasOurWrite(now)) {
-    forgetChain();
     toast(`chain moved — heads ${heads.shown(now)}`);
     // A failed background refresh keeps what is on screen; the next tip move retries.
     void refetchFold().catch(() => {});
@@ -229,7 +231,6 @@ const refreshWaiting = once.shared(() =>
 
 // A switch of chain drops and re-asks everything chain-shaped, in startup order.
 function switched(): void {
-  forgetChain();
   forgetChainReplica();
   restoreFold();
   connect();

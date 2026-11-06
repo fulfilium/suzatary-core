@@ -110,7 +110,7 @@ const SHOTS: readonly Shot[] = [
     ready: `document.querySelectorAll(".tree .row").length > 0`,
     base: WRITE_BASE,
     act: async (page: Page): Promise<void> => {
-      await page.evaluate(`localStorage.removeItem("suzatary.ui.todos.category/")`);
+      await page.evaluate(`localStorage.removeItem("suzatary.ui.kept/todos.category")`);
       await page.click(".addsheet .pickerhandle");
       await page.waitFor(`document.querySelector(".addsheet.open") !== null`);
       await page.waitFor(`document.activeElement?.className.includes("draftbody") === true`);
@@ -229,7 +229,7 @@ const SHOTS: readonly Shot[] = [
         await page.click(".addbtn");
         await page.waitFor(`document.querySelector('.tree .row[data-todo="${id}"]') !== null`, { timeout: 8000 });
         // THE ROW IS THE REPLICA'S, drawn before the push: the todo page below
-        // asks the BOX, so it waits for the toast `addsheet.ts` raises once
+        // asks the BOX, so it waits for the toast the list raises once
         // the exchange is done, or it can open on a 404 that never redraws.
         await page.waitFor(`document.getElementById("toast")?.textContent === "added ${id}"`, { timeout: 8000 });
       }
@@ -267,11 +267,6 @@ const SHOTS: readonly Shot[] = [
     hash: "#/settings",
     ready: `document.querySelector(".settingsline") !== null && document.querySelector(".settingshere h2") !== null`,
     base: WRITE_BASE,
-  },
-  {
-    name: "usage",
-    hash: "#/usage",
-    ready: `document.querySelector(".usagebody .usagewindow, .usagebody .empty, .usagepage .problem") !== null`,
   },
   // The stream (`docs/TOPICS-PLAN-2026-10-21.md` §0) on the deployment that
   // holds conversations, and the default conversation itself.

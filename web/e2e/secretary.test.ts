@@ -31,7 +31,7 @@ import { join } from "node:path";
 import { DESKTOP, PHONE, PROPOSED_BASE, SIGNED_POST, suite, topicRounds, WRITE_BASE } from "./harness";
 import cast from "../test/cast";
 
-const { todos, owner, counsel } = cast.world;
+const { owner, counsel } = cast.world;
 
 const app = await suite("secretary");
 
@@ -487,12 +487,6 @@ app.scene("the brand, a history's hash links and an answer's Copy, Reply and its
     32,
     "the phone header keeps its own 32 px",
   );
-  await app.page.navigate(`${WRITE_BASE}/#/todo/${todos.urgent.id}`);
-  // The history is closed until asked for; its hash links are measured open.
-  await app.page.waitFor(`document.querySelector(".todoview .history") !== null`, { timeout: 15000 });
-  if (!(await app.page.evaluate<boolean>(`document.querySelector(".todoview .history").open`))) await app.page.click(".todoview .history > summary");
-  await app.page.waitFor(`document.querySelector(".todoview .history").open === true`);
-  await tall(".timeline .hashlink");
 });
 /**
  * STREAMING NEVER SCROLLS A DRIFTED-UP BOX (`docs/CHAT-PLAN-2026-09-25.md`

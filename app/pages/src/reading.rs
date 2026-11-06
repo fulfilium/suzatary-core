@@ -144,6 +144,7 @@ impl<V: View> Program for One<V> {
             class: V::CLASS,
             title: V::title(f, held),
             masthead: V::MASTHEAD,
+            width: crate::chrome::Width::Column,
             back: V::back(f).map(|(label, _)| (label, Msg::Back)),
             legend: V::legend(f, offsets, held),
             now: Vec::new(),

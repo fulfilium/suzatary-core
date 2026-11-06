@@ -10,7 +10,7 @@ use ts_rs::{Dependency, TS, TypeVisitor};
 
 use crate::reference::Reference;
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
 pub struct Link {
     /// `literal` rehashes to it.
     pub hash: String,
@@ -23,7 +23,7 @@ pub struct Link {
 }
 
 /// An envelope (a merge, a genesis, a signature) claims no todo, writer or instant.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[serde(tag = "holds", rename_all = "lowercase")]
 pub enum Holds {
     Envelope {
@@ -40,7 +40,7 @@ pub enum Holds {
     },
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[serde(tag = "kind", rename_all = "lowercase")]
 pub enum Reverses {
     Nothing,
@@ -284,7 +284,7 @@ pub struct Neighbour {
     pub unconfirmed: bool,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
 pub struct FieldChange {
     pub field: String,
     /// `""` for the first record.
@@ -345,7 +345,7 @@ pub struct FailedChain {
     pub why: String,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, TS)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
 pub struct TodoLinks {
     pub out: Vec<Neighbour>,
     #[serde(rename = "in")]
@@ -353,14 +353,14 @@ pub struct TodoLinks {
 }
 
 /// `GET /api/todo/{id}`: one todo in full.
-#[derive(Debug, Clone, PartialEq, Serialize, TS)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
 pub struct TodoPayload {
     pub todo: String,
     /// ISO 8601.
     pub at: String,
     pub entry: Entry,
-    /// `null` when typst did not render it.
-    pub reading: Option<String>,
+    /// Why its number is what it is, part by part.
+    pub why: crate::reading::Why,
     /// In causal order.
     pub stream: Vec<Link>,
     /// By that event's hash.
@@ -598,7 +598,7 @@ pub struct ThreadPayload {
 }
 
 /// By its one key, so a body naming two or none is refused at the parse.
-#[derive(Debug, Clone, PartialEq, Deserialize, TS)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "lowercase")]
 pub enum Authoring {
     Add(Box<NewTodo>),
@@ -627,7 +627,7 @@ pub struct NewTodo {
 }
 
 /// `POST /api/author` `{"update": …}`.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[serde(deny_unknown_fields)]
 pub struct UpdateTodo {
     pub todo: String,
@@ -642,7 +642,7 @@ pub struct UpdateTodo {
 }
 
 /// `POST /api/author` `{"confirm": …}`: a provisional record a trusted actor takes as its own.
-#[derive(Debug, Clone, PartialEq, Eq, Deserialize, TS)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[serde(deny_unknown_fields)]
 pub struct ConfirmTodo {
     pub todo: String,
@@ -2392,7 +2392,7 @@ pub struct SignedObject {
 }
 
 /// [`crate::term_json::to_json`]'s shape, open: nothing derives `TS` for a term.
-const SPEC_NODE: &str = "type SpecNode = { kind: string } & Record<string, unknown>;";
+pub const SPEC_NODE: &str = "type SpecNode = { kind: string } & Record<string, unknown>;";
 
 const HEADER: &str = "\
 // GENERATED FROM app/core/src/wire.rs BY `cargo test -p suzatary-core`.
@@ -2515,7 +2515,6 @@ fn answers(visit: &mut impl TypeVisitor) {
     visit.visit::<StreamPayload>();
     visit.visit::<TopicsPayload>();
     visit.visit::<SayPayload>();
-    visit.visit::<crate::usage::Report>();
     visit.visit::<Overview>();
     visit.visit::<ErrorPayload>();
     visit.visit::<crate::secretary::phase::Phase>();

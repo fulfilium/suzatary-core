@@ -37,8 +37,6 @@ const PAGES: readonly (readonly [string, Route])[] = [
   ["conversation", { type: "conversation", id: "default", refs: [] }],
   ["memory", { type: "memory" }],
   ["mail", { type: "mail", query: "", account: "" }],
-  ["chain", { type: "chain", focus: "" }],
-  ["usage", { type: "usage" }],
   ["about", { type: "about" }],
   ["settings", { type: "settings" }],
   ["briefings", { type: "briefings" }],

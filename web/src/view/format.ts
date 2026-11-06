@@ -2,7 +2,6 @@
 
 import type { Fulfillment } from "../wire/generated/wire";
 import { el } from "./dom";
-import { hrefOf } from "../shell/route";
 import time from "../app/time";
 
 /** `site::pct`, verbatim. */
@@ -31,11 +30,6 @@ export function chip(label: string, kind: ChipKind = ""): HTMLElement {
 /** A hash's prefix, with the whole name in the title for a copy-paste. */
 export function shortHash(hash: string): HTMLElement {
   return el("code", { class: "hash", title: hash }, hash.slice(0, 12));
-}
-
-/** The same, linking to the chain page focused on that object. */
-export function hashLink(hash: string): HTMLElement {
-  return el("a", { class: "hashlink", href: hrefOf({ type: "chain", focus: hash }), title: hash }, hash.slice(0, 12));
 }
 
 // --- an instant, a day and an age, as a person reads them -------------------

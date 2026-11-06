@@ -1,26 +1,18 @@
 // Every route the box answers, named once with its method and decoder.
 
 import app from "../app/app";
-import type { AboutPayload, AttachmentRow, Authoring, AuthoredPayload, BlockRender, BriefingPayload, BriefingsPayload, CalendarPayload, ChainPayload, ConversationPayload, DevicePayload, DrawnPayload, Erasing, FactId, FoldPayload, MailSearchPayload, MePayload, MemoryPayload, NewTodo, ObjectsPayload, Overview, PostedObjects, Reasoning, ReceiptPayload, RecordPayload, Registering, ReleasesPayload, Revealing, SayPayload, Saying, Tapping, Titling, TodoPayload, UpdateTodo, Uploaded, Uploading, UsagePayload, WaitingPayload } from "./generated/wire";
+import type { AboutPayload, AttachmentRow, Authoring, AuthoredPayload, BlockRender, BriefingPayload, BriefingsPayload, CalendarPayload, ConversationPayload, DevicePayload, DrawnPayload, Erasing, FactId, FoldPayload, MailSearchPayload, MePayload, MemoryPayload, NewTodo, ObjectsPayload, Overview, PostedObjects, Reasoning, ReceiptPayload, RecordPayload, Registering, ReleasesPayload, Revealing, SayPayload, Saying, Tapping, Titling, TodoPayload, UpdateTodo, Uploaded, Uploading, WaitingPayload } from "./generated/wire";
 import { print } from "../chat/refs";
 import type { Reference } from "../chat/refs";
 import heads from "../prodrome/heads";
 import http from "./http";
 import storereads from "./storereads";
-import once from "../algebra/once";
 import type heldvalue from "../view/heldvalue";
 import payload from "./generated/payload";
 
 // Every ordinary page asks about the chain it is on; the Inbox asks every chain, so it names one.
 const onChain = (route: string, chain?: string): string =>
   chain === undefined ? `${app.apiBase(app.now())}/${route}` : `/api/${encodeURIComponent(chain)}/${route}`;
-
-// The biggest answer, kept while the tip stands still; a rejected fetch is never kept.
-const chainKept = once.of((): Promise<ChainPayload> => http.get(onChain("chain"), payload.ChainPayload));
-
-export const chain = chainKept.get;
-
-export const forgetChain = chainKept.forget;
 
 export const fold = (chain?: string): Promise<FoldPayload> => http.get(onChain("fold", chain), payload.FoldPayload);
 
@@ -51,7 +43,6 @@ export const wasOurWrite = (h: heads.Heads): boolean => {
 
 export const ours = (h: heads.Heads): void => {
   ourHeads = heads.of(h);
-  forgetChain();
 };
 
 /** Literals only: the box rehashes each, since a name is what the bytes are, never what a client says. */
@@ -92,7 +83,6 @@ export const briefing = (date: string): Promise<BriefingPayload> =>
 export const calendar = (date: string): Promise<CalendarPayload> =>
   http.get(`/api/calendar/${encodeURIComponent(date)}`, payload.CalendarPayload);
 
-export const usage = (): Promise<UsagePayload> => http.get("/api/usage", payload.UsagePayload);
 
 export const getOverview = (): Promise<Overview> => http.get("/api/overview", payload.Overview);
 

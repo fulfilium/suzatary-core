@@ -18,6 +18,7 @@
 mod chains;
 mod counts;
 mod evaluator;
+mod grow;
 mod lifecycle;
 mod line_rows;
 mod memo;

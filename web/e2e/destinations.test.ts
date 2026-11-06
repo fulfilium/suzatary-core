@@ -56,12 +56,25 @@ app.scene("a page whose code arrives after the next tap is never drawn over it",
   await app.page.navigate(`${fresh}#/briefings`);
   await app.page.untilHeld();
   await app.page.navigate(`${fresh}#/project`);
-  await app.page.waitFor(`document.querySelector("#view .pagetitle")?.textContent === "Project"`);
+  // The list is a Rust page too, so both wait on the module: every title drawn from the tap on is recorded.
+  await app.page.evaluate(`(() => {
+    const titles = (window.__titles = []);
+    const view = document.getElementById("view");
+    // From each record's added nodes, since one callback can hear two draws.
+    new MutationObserver((records) => {
+      for (const r of records)
+        for (const n of r.addedNodes)
+          if (n instanceof Element) for (const t of [n, ...n.querySelectorAll(".pagetitle")]) if (t.matches(".pagetitle")) titles.push(t.textContent ?? "");
+    }).observe(view, { subtree: true, childList: true });
+  })()`);
   await release();
   await app.page.waitFor(`performance.getEntriesByName("views:load").length > 0`);
+  await app.page.waitFor(`document.querySelector("#view .pagetitle")?.textContent === "Project"`);
   // The page waiting on the module draws, or is dropped, in the microtasks after it loads: a task later, either is done.
   await app.page.evaluate(`new Promise((done) => setTimeout(done, 0))`);
   assert.equal(await app.page.evaluate<string>(`document.querySelector("#view .pagetitle")?.textContent ?? ""`), "Project");
+  const drawn = await app.page.evaluate<string[]>(`window.__titles`);
+  assert.ok(!drawn.includes("Briefings"), `the page tapped away from was never drawn: ${JSON.stringify(drawn)}`);
 });
 
 /** Open the More sheet on whatever hash the reader is standing on. */
@@ -85,7 +98,7 @@ app.scene("at 62rem the same words sit across the top, and More holds the rest",
   const rest = await app.page.evaluate<string[]>(
     `[...document.querySelectorAll(".moresheet .morelink .tablabel")].map((n) => n.textContent)`,
   );
-  assert.deepEqual(rest, ["Project", "Mail", "Calendar", "Settings", "About", "Chain", "Usage"]);
+  assert.deepEqual(rest, ["Project", "Mail", "Calendar", "Settings", "About"]);
   await app.page.evaluate(`document.body.click()`);
   await app.page.waitFor(`document.querySelector(".moresheet")?.hidden === true`);
   await app.resize(PHONE);

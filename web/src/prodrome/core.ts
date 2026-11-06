@@ -44,6 +44,7 @@ export interface Core {
   link: (term: string, specs: string) => string;
   series_knots: (term: string, from: string, to: string, history: string) => string;
   term_json: (literal: string) => string;
+  grow: (members: string, by: string) => string;
   lifecycle: (kind: string, todo: string, at: string, actor: string, note: string) => string;
   /** `unescape_markup`: the prose behind escaped markup, or `undefined` for markup a person wrote. */
   prose: (markup: string) => string | undefined;
@@ -290,6 +291,28 @@ function checked<T>(what: string, text: string, decoder: d.Decoder<T>): T {
   if (r.type === "Val") return r.v;
   throw new CoreError(`${what}: unexpected shape (${r.e})`);
 }
+
+/** A todo the list places, and where a node of its tree stands. */
+export type CorePlaced = {
+  readonly todo: string;
+  readonly title: string;
+  readonly category: string;
+  readonly worth: { readonly type: "Value"; readonly v: number | null } | { readonly type: "Unlinked" };
+  readonly specs: readonly SpecNode[];
+};
+export type CoreSpot =
+  | { readonly type: "All" }
+  | { readonly type: "Category"; readonly v: string }
+  | { readonly type: "Band"; readonly v: string }
+  | { readonly type: "Todo"; readonly v: string };
+export type CoreGrown = { readonly place: CoreSpot; readonly term: SpecNode; readonly children: readonly CoreGrown[] };
+
+const spot: d.Decoder<CoreSpot> = d.sum<CoreSpot, "type">("type", { All: {}, Category: { v: d.str }, Band: { v: d.str }, Todo: { v: d.str } });
+const grown: d.Decoder<CoreGrown> = d.lazy(() => d.obj({ place: spot, term: payload.SpecNode, children: d.arr(grown) }));
+
+/** The list's tree of `members` grouped `by`, as the core grows it (`app/wasm/src/grow.rs`). */
+export const grow = (core: Core, members: readonly CorePlaced[], by: string): CoreGrown =>
+  checked("grow", core.grow(JSON.stringify(members), by), grown);
 
 /** The environment is one shape with `fold`'s `env`, so a fold's answer goes to `fulfillment` unrewritten. */
 export interface Binding {

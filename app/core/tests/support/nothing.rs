@@ -5,8 +5,8 @@ use super::{
     CorpusError, Datetime, Delivered, Drive, DriveFailure, Html, Junk, JunkFailure, MailError,
     MailGrants, Mailbox, Manual, Manuals, Model, ModelError, Notify, NotifyError, Peer, Push,
     Query, Render, RenderError, Reply, RepoFailure, Repositories, Repository, RepositoryError,
-    Secrets, Sessions, Usage, UsageError, Weather, WeatherError, Web, WebAnswer, WebFailure,
-    WebRequest, Whois, WhoisError,
+    Secrets, Sessions, Weather, WeatherError, Web, WebAnswer, WebFailure, WebRequest, Whois,
+    WhoisError,
 };
 use super::{MailSync, Secretary, Server, SyncFailure, Synced};
 use crate::escape::Escaped;
@@ -122,7 +122,6 @@ impl Nothing {
             notify: &Nothing,
             answers: &Nothing,
             devices: &Nothing,
-            usage: &Nothing,
             sessions: &Nothing,
         }
     }
@@ -722,18 +721,6 @@ impl crate::store::Log<crate::mail::watch::WatchId, crate::mail::watch::Line> fo
         _decide: &mut crate::store::Decide<'_, crate::mail::watch::Line>,
     ) -> Result<crate::store::Edit<crate::mail::watch::Line>, Refusal> {
         Err(StoreError::unwritable("watch store", "nothing is watched").into())
-    }
-}
-
-impl Usage for Nothing {
-    fn requests(&self) -> Result<Vec<crate::usage::Request>, UsageError> {
-        Ok(Vec::new())
-    }
-    fn refusals(&self) -> Result<Vec<crate::usage::Refused>, UsageError> {
-        Ok(Vec::new())
-    }
-    fn allowance(&self) -> Vec<(crate::usage::Window, crate::usage::Allowance)> {
-        Vec::new()
     }
 }
 

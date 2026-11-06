@@ -132,6 +132,9 @@ export function fulfillment(term: string, now: string, env: string): number | un
 /** Every `ref` bound to the todo it names. */
 export function link(term: string, specs: string): string;
 
+/** The list's tree of `members`, grouped `by` and then by ancestry, each node with its term. */
+export function grow(members: string, by: string): string;
+
 /** A stored term's canonical print, as the JSON shape. */
 export function term_json(literal: string): string;
 

@@ -58,10 +58,8 @@ be right rather than to be visited. RETIRE means its reason has gone.
 | **Secretary** | DAILY | Conversations, the morning brief at the top of them, and Ask one tap away from anywhere. Proposals are made here and answered here or in the Inbox — same tap. | A chat that replaces todos. Every conversation should be trying to end in a proposal or a todo. |
 | **Project** | WEEKLY (his) / DAILY (the agents') | The second chain, same shape as Todos: the roadmap and the issues the system files about itself. | A different UI. It is Todos pointed at another store, and `#/project` calls `setChain`. |
 | **Mail** | REFERENCE | The corpus the agent read, reachable FROM a todo's source and a secretary's reference. Read-only by design. | A mail client. Search and threads stay; composing never arrives, because sending is a tap on a proposal. |
-| **Chain** | EVIDENCE | Every object rehashed in the tab, causal order, heads. The proof. | Anything but correct. |
 | **Briefings** | RETIRED (2026-09-13) | Saved daily files from the era when the assistant session wrote them. The mechanism retired 2026-09-11; the entry left the sheet on the 13th. | A destination. The files and `#/briefings` stay served, linked from About and from Secretary as the archive. |
 | **About** | RARE | What the app claims about itself — one evaluator, on two machines — verbatim from the footer that stood under every page; the theme control; the archive link. | A settings page. Theme is its only control and the rest is prose that had to live somewhere. |
-| **Usage** (not built) | WEEKLY | How much of the Claude allowance this box has spent, in the windows the limits are measured in, split by who spent it, and whether it has crossed into credits — because the quota is the constraint and the Claude app is bad at showing it. | A price. The subscription is flat up to the allowance and CREDITS are real money past it; the page separates those two and shows the billed quantity, but the price per credit is not on this box and a made-up one is worse than none. |
 
 Some rows are several pages (`message` and `thread` are Mail's,
 `conversation` is Secretary's, `briefing` is Briefings'). None of them is
@@ -209,12 +207,12 @@ below for exactly that reason.
    (`routes::author`'s `Authoring::Update`, built through `form::update` and
    `authoring::update_todo` exactly as `add` goes through `form::add` and
    `build_todo`) that builds and appends nothing, and the todo page
-   (`web/src/todo/editform.ts`'s `editPanel`) gains a form that sends only the
+   (`app/pages/src/todo.rs`'s `edit_panel`) gains a form that sends only the
    fields that changed. The tab seals what comes back through the same door
    `add` uses.
 
 3. **Tick a subtodo — ALREADY THERE** (built alongside item 2). Subtodos are
-   tappable checkboxes (`web/src/todo/editform.ts`'s `subtodoChecklist`, native
+   tappable checkboxes (`app/pages/src/todo.rs`'s `checklist`, native
    `<input type="checkbox">`, so keyboard- and screen-reader-operable for
    free) rather than a read-only list; ticking one sends the WHOLE checklist
    back through the same `update` arm — a register holds its frontier, not a
@@ -235,7 +233,7 @@ below for exactly that reason.
    a deadline is a REPRICE, and this says so rather than quietly moving it.
    Deferring an already-deferred todo REPLACES the outer deferral instead of
    nesting one `Piecewise` inside another's single piece. The web page's "Defer
-   to…" control (`web/src/todo/editform.ts`'s `deferControl`, beside the edit panel
+   to…" control (`app/pages/src/todo.rs`'s `edit_panel`, beside the edit form
    on an open todo) sends `{ todo, defer_to }` and the todo's thirty days then
    show the deferral as fulfilled until the day and as it was after — which is
    what a deferral IS.
@@ -319,19 +317,19 @@ below for exactly that reason.
    transcripts back would be the durable memory §Containment rejected. Not
    the secretary's: it has no reason to know what it costs, and a model
    reasoning about its own quota is a model with a reason to do less.
-   `#/usage` lives in the More sheet, graded WEEKLY: reached for when the box
-   is working hard, which is when the number matters.
+   The page was deleted on 2026-11-04 at the owner's word; the allowance is still read,
+   by the compactor, before it spends any of it.
 
 10. **Author a recurring price in the app — BUILT** (2026-09-26). Since
     0.16.0 `authoring::Price` is a closed choice of FOUR — `Flat`, `Deadline`,
     `Recur(Cycle)` and `Periodic(Cycle)` — and the CLI, the verbs and a
     changeset could already author the last two; only the add sheet
-    (`web/src/todo/addsheet.ts`) and the edit form (`web/src/todo/editform.ts`) still
+    (now `app/pages/src/todos.rs`) and the edit form (now `app/pages/src/todo.rs`) still
     offered a flat percentage or a deadline. The price control is now the
     same closed choice: "Flat", "Deadline", "After a pass" (`Recur` — the
     cycle restarts at the next `Tend`, "Did it") and "On the calendar"
     (`Periodic` — it restarts on schedule whatever is done), each of the last
-    two asking for days, a from-% and a to-% (`web/src/todo/price.ts`'s `Cycle`).
+    two asking for days, a from-% and a to-% (`app/pages/src/form.rs`'s `Pricing`).
     The form is a TAGGED SUM (`docs/TS-STYLE.md`) — `price.Form`, one variant
     per kind, no optional field and no boolean deciding which controls show —
     and switching kind keeps a cycle's own numbers when the other kind

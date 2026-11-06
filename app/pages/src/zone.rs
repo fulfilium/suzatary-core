@@ -87,6 +87,12 @@ pub(crate) fn day_ms(offsets: &[Offset], ms: i64) -> NaiveDate {
     wall(offsets, t).date()
 }
 
+/// The owner's day an instant falls on; `None` for one that does not parse.
+#[must_use]
+pub(crate) fn day(offsets: &[Offset], at: &str) -> Option<NaiveDate> {
+    parsed(at).map(|t| wall(offsets, t).date())
+}
+
 /// The first instant of the owner's next day, to the minute: when a list's "today" becomes
 /// "yesterday".
 #[must_use]

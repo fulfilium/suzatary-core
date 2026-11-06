@@ -38,23 +38,13 @@ app.scene("a read-only login gets no act controls at all", async () => {
     0,
     "a login that cannot seal is not offered a button that seals",
   );
-  // …and the todo view offers none either, where every verb normally lives.
-  //
-  // ⚠️ `.todoview` EXISTS TWICE: `todoview.ts`'s `skeleton()` (the "loading…"
-  // placeholder `run()` draws synchronously on the click, before the fetch)
-  // carries the same `column todoview` class as `draw()`'s real content, so
-  // waiting on `.todoview` alone is satisfied by the SKELETON and races the
-  // `/api/todo/water-plants` round trip that fills in `.actrow` — caught by
-  // looping this scene (intermittent, 1 failure in 15 runs: `0 !== 1` on
-  // `.actrow.readonly`, the skeleton has no actrow of either shape at all).
-  // `.actrow` is what `draw()` adds and `skeleton()` never does, so waiting
-  // on IT is waiting on the thing the assertions below are actually about,
-  // the way `list.test.ts` waits on `.todoview .todoid` for the same reason.
+  // …and the todo view offers none either, where every verb normally lives: no act, and no empty row of them under
+  // the header. `.todoid` is drawn from the todo's row, so the page stands when it is there.
   await openTodo(app.page, todos.high.id);
-  await app.page.waitFor(`document.querySelector(".todoview .actrow") !== null`, { timeout: 4000 });
-  assert.equal(await app.page.evaluate<number>(`document.querySelectorAll(".actrow .act").length`), 0);
+  await app.page.waitFor(`document.querySelector(".todoview .todoid") !== null`, { timeout: 4000 });
+  assert.equal(await app.page.evaluate<number>(`document.querySelectorAll(".todoview .act").length`), 0);
   assert.equal(
-    await app.page.evaluate<boolean>(`document.querySelector(".todoview .actrow").hidden`),
+    await app.page.evaluate<boolean>(`document.querySelector(".todoview .actrow") === null`),
     true,
     "a row with nothing in it is not drawn: no empty box under the header",
   );

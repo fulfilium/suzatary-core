@@ -29,6 +29,7 @@ export namespace run {
     handle: Handler<I, E>,
     gone: ((n: Node) => void) | undefined,
     box: () => Element,
+    refresh?: painter.Refresh,
   ): T<I> => {
     let live = true
     const step = (name: string, patches: () => Uint8Array | undefined): boolean => {
@@ -46,7 +47,7 @@ export namespace run {
       return true
     }
     const send = (input: I): void => void step("input", () => page.input(JSON.stringify(input)))
-    const dom = painter.create(root, foreign, blocks, (id, on, words) => step("event", () => page.event(id, on, words)), gone)
+    const dom = painter.create(root, foreign, blocks, (id, on, words) => step("event", () => page.event(id, on, words)), gone, refresh)
     step("first", () => page.first())
     return { send, destroy: () => ((live = false), dom.destroy(), page.free()) }
   }

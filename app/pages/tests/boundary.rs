@@ -48,9 +48,16 @@ fn generates_the_pages_boundary_types() {
     d.visit::<suzatary_pages::reading::Nothing>();
     d.visit::<suzatary_pages::calendar::At>();
     d.visit::<suzatary_pages::briefing::At>();
+    d.visit::<suzatary_pages::todo::Flags>();
+    d.visit::<suzatary_pages::todos::Flags>();
+    d.visit::<runtime::Keyed>();
+    d.visit::<suzatary_pages::typstlist::Flags>();
     let mut out = String::from(
         "// GENERATED FROM app/pages/src BY `cargo test -p suzatary-pages`. DO NOT EDIT.\n",
     );
+    out.push_str("\nexport ");
+    out.push_str(suzatary_core::wire::SPEC_NODE);
+    out.push('\n');
     exported(&mut out, d.out);
     if let Ok(dir) = std::env::var("TS_RS_EXPORT_DIR") {
         std::fs::create_dir_all(&dir).expect("the export directory is writable");
@@ -68,6 +75,7 @@ fn an_act_runs_once_until_it_is_answered() {
             reach: Reach::Writes,
             offsets: Vec::new(),
             wide: false,
+            categories: vec!["home".to_owned(), "work".to_owned()],
         },
     });
     let pair = || Act::Pair {

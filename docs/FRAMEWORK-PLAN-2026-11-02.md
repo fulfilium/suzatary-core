@@ -533,9 +533,11 @@ with the readings once it is in the service worker's cache and compiled. *Size:*
 6. **Conversation, secretary and the Inbox** (179, 238, 244, with `secretary.state.ts`,
    `inbox.state.ts`, `web/src/chat` and `web/src/inbox`): the foreign parts go with the Inbox's
    cards. *Size:* about −164,000 characters, −4,700 lines of TS. *Built (2026-11-03):* §7.2.
-7. **Usage and chain** (275, 283).
+7. **Usage and chain** (275, 283). *Decided (2026-11-04):* deleted, not rewritten, with
+   `GET /api/usage` and everything only they read (§7.3).
 8. **Todos and the todo page** (416 + 223, with `web/src/todo`), after ONEOWNER stage 6 puts the
    chains in the core. *Measure:* the list's first draw at the live shape, against today's.
+   *Built (2026-11-04), with stage 7:* §7.3.
 9. **The shell.** Navigation, the palette, the panel and the keyboard become one program; `frame`,
    `dom.ts`'s `el`, `act.ts`, `source.ts` and `reconcile.ts` go; what remains in TypeScript is the
    painter, the runtime's handlers, `rich.ts`, the service worker, the boot loader and the
@@ -609,6 +611,78 @@ second runtime.
   `refs.ts`, and the panel's placement (`aside.ts`, `inview.ts`).
 - **Next:** an `Effect::map` over held and asked names, as `Node::map` is over messages, would
   replace the hand lifts `card::effects`, `composer::effects` and `Searching::typed`.
+
+### 7.3 Stages 7 and 8, as built (on 2.1.77)
+
+- **The chain and usage pages are deleted**, on the owner's word (2026-11-04), rather than
+  rewritten: `chain.ts` (the raw events), `usage.ts`, `view/rows.ts` and their scenes, their
+  routes, their places in the bar and the More sheet, and the box's `GET /api/usage` with the
+  core's usage report, its capability and the reader of the transcripts it priced. `GET
+  …/chain` stays: the web vectors and the write scenes read it. *Size* (`scripts/size.sh`, that
+  commit against 2.1.76): Rust −17,165 characters (−751 lines), web −20,333
+  (−614): `usage.ts` 8,583, `chain.ts` 9,397, `rows.ts` 1,177, the rest the shared code that
+  named them.
+- **The pages.** The todo list (`todos.rs`), a todo on its page and in the list's pane
+  (`todo.rs`), and the Typst list (`typstlist.rs`) are programs; what every page says of a todo
+  (its acts and their words, its title, its chips, an act's two phases) is `todoparts.rs`, the
+  fields every form draws (a line, a day, chips, Typst markup in the editor part, the price
+  picker) are `form.rs`, and the one path of an edit (the box prints, the page seals) is
+  `authoring.rs`. The list hands its members and its grouping to the core in the tab's worker,
+  which grows the tree with `suzatary_core::tree` (`app/wasm/src/grow.rs`) and prices every node
+  (`Core::Tree`), so `grouping.ts` and `row.ts` went with no copy and the pages' module links no
+  term and no trie. `todos.ts`, `todos.state.ts`, `overview.ts` (the list's setup line, now
+  `connect::Standing::asks`) and `typstlist.ts` are deleted, and so are the modules of
+  `web/src/todo` only they read (the add sheet, the edit form, the filter bar, the grouping, the
+  row, the pane, the draft, the reading, the recurring form, the price) and the old list's pieces
+  of `todo/todos.ts`; what stays there is read by the shell, the palette, the Typst list's state
+  and the message's todo card. A todo's fields are Typst blocks placed by key, as
+  #317 asked: the page shows the source until the device holds the HTML, which the box's folds and
+  its page of the todo (`Effect::Rendered`) bring.
+- **The runtime,** each arm generic: `Effect::Core` (a question of the tab's core: a reading, a
+  price, the list's tree, thirty days), `Offer` (a toast with a button, answered as its ask), `Reset`, `Keys` (the
+  keys a page takes, heard as frames), `Rendered`; `Act::Seal` and `Act::Lifecycle` (an event the
+  tab's core spells at the tap); `Local` gained the fold, what is unsent, what waits and a kept
+  register; `Effect::map` lifts a part's effects, as `Node::map` lifts its messages. The view tree
+  gained `Ol`, the form attributes, an intent's click (`On::Intent`) and a foreign part brought to
+  new props in place. The painter waits for a block's HTML from a join that lands while it reads.
+- **The laws.** `todo_laws`, `list_laws` and `typst_laws` in `app/pages/tests/laws.rs`; beside the
+  code, that an answer to a replaced ask is not drawn and that every ask of the list reads back
+  as itself, two defects the scenes found, and that each refusal of the add sheet names the
+  field it is about (`addsheet.test.ts`'s law, which read the deleted TypeScript sheet).
+- **Size** (`scripts/size.sh` against 2.1.76): Rust +84,023 characters (+3,697 lines), web
+  −108,494 characters (−3,197 lines); without the deletions above, Rust +101,188 (+4,448) and web
+  −88,161 (−2,583). The pages' own Rust (`todo`, `todoparts`, `form`, `authoring`, `held`,
+  `todos`, `typstlist`) is 96,239 characters (4,194 lines) against the 96,496 (2,815) of
+  TypeScript they replace, and the core's `grow` is 2,300.
+- **The modules,** after `wasm-opt`, raw and with brotli as the box serves them. The views
+  module is 3,446,635 bytes (679,930) on 2.1.76 and 4,080,520 (792,209) here: the three pages'
+  code and the serde of the wire types they read, which replaces the TypeScript above. Growing
+  the list's tree in the core's module took 83,294 bytes (24,932) out of the views module; the
+  core's is 4,360,126 (1,106,115) on 2.1.76 and 4,421,820 (1,128,065) here. Both cost 134 kB more
+  over the wire than on 2.1.76.
+- **The cold stream** on `bigstore` (its longest task, three runs each, then three beside three
+  other scene files): 68, 0 and 0 ms on 2.1.76 and 65, 0 and 0 here; under that load 110, 51
+  and 52 on 2.1.76 and 0, 50 and 84 here. The task is the stream's first input into the views
+  module on both, and what varies is the main thread's own work around it, where V8 compiles a
+  wasm function at its first call: 11 to 69 ms of a 61 to 122 ms stretch on 2.1.76, 28 to 87 of
+  78 to 123 here, sampled. The limit of 100 ms has no room for it on either.
+- **A page draws for the newest navigation** (#351, 2.1.77). The list, a todo and the Typst
+  list are `program.mount`'s `Draw` like every Rust page: the views module is awaited, then the
+  page is drawn in one step only if its navigation is still the newest. Here the list waits on
+  the module too, so #351's scene reads each page title drawn after the tap, and fails naming
+  Briefings when `main.ts` draws a page whose navigation was overtaken.
+- **What it does not do yet.** The add sheet's focus is not held inside it while it is open, and a
+  todo's edit form keeps no draft across a remount (the list's sheet does). Stage 9 (the shell)
+  owns both.
+- **The crate's interface.** An item of `app/pages` is `pub` only where its tests or the wasm
+  boundary name it; the types reachable through one stay `pub(crate)`, unnameable outside, which
+  is what the crate root's `allow(private_interfaces)` says. The unit's use is 16.8k tokens
+  against its 25.0k (22.0k before), most of it the runtime's effects.
+- **A container's hang, not the branch's.** Three `shell` scenes that start a tab on a new build
+  fail in the cloud container this was built in, on this branch and on stage 6's head alike:
+  after a tab opens the Typst list on a build the box has left, `register()` and `update()` of
+  the next build's worker never settle and no version of it is made. On GitHub's runners (train
+  216, stage 6's head) the same scenes pass.
 
 ## 8. The plan read two ways
 

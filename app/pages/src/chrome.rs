@@ -20,7 +20,7 @@ pub(crate) fn mark<M>(name: &'static str) -> Node<M> {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Shape {
+pub(crate) enum Shape {
     Lines,
     Rows,
     Cards,
@@ -63,16 +63,24 @@ pub(crate) fn status<T, M>(
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Masthead {
+pub(crate) enum Masthead {
     Page,
     /// A destination of the bar's (the briefings), drawn larger.
     Destination,
+}
+
+/// How wide a page stands: in the reading column, or across the screen (a list with its pane).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum Width {
+    Column,
+    Wide,
 }
 
 #[derive(Debug)]
 pub(crate) struct Chrome<M> {
     /// Beside `column`.
     pub(crate) class: &'static str,
+    pub(crate) width: Width,
     pub(crate) title: String,
     pub(crate) masthead: Masthead,
     pub(crate) back: Option<(&'static str, M)>,
@@ -141,7 +149,11 @@ pub(crate) fn page_headed<M: Clone>(
         Status::Quiet => None,
     };
     let column = format!(
-        "column {}{}",
+        "{}{}{}",
+        match c.width {
+            Width::Column => "column ",
+            Width::Wide => "",
+        },
         c.class,
         if waiting { " pagewaiting" } else { "" }
     );
@@ -172,6 +184,18 @@ pub(crate) fn chip<M>(label: &str, kind: &str) -> Node<M> {
         format!("chip {kind}")
     };
     view! { Span {Class => class} [label] }
+}
+
+/// A fraction as its whole percent, `0.129` as `13%`.
+#[must_use]
+pub(crate) fn percent(share: f64) -> String {
+    format!("{}%", (share * 100.0).round())
+}
+
+/// A fraction to a tenth of a percent, `62.3%` (`site::pct`).
+#[must_use]
+pub(crate) fn pct(share: f64) -> String {
+    format!("{:.1}%", share * 100.0)
 }
 
 /// A fraction in [0, 1] on the fulfillment scale.

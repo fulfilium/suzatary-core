@@ -5388,7 +5388,6 @@
           "in": [],
           "out": []
         },
-        "reading": "{\"head\":{\"fulfil\":{\"type\":\"Priced\",\"shown\":\"66.0%\"},\"body\":{\"type\":\"Source\",\"text\":\"Email *Harrow* about the deed\"},\"id\":\"email-harrow\",\"chips\":[{\"label\":\"open\",\"kind\":\"plain\"},{\"label\":\"other\",\"kind\":\"cat\"},{\"label\":\"todo\",\"kind\":\"kind\"},{\"label\":\"unconfirmed\",\"kind\":\"prov\"}],\"note\":\"Shown the way it was written until you confirm it.\"},\"detail\":null,\"why\":{\"type\":\"Priced\",\"heading\":\"Why this number — 66.0%\",\"says\":\"66.0%, flat: the same whatever the date.\",\"passes\":[],\"parts\":[]}}",
         "stream": [
           {
             "actor": "ada",
@@ -5424,7 +5423,14 @@
             "todo": "email-harrow"
           }
         ],
-        "todo": "email-harrow"
+        "todo": "email-harrow",
+        "why": {
+          "heading": "Why this number — 66.0%",
+          "parts": [],
+          "passes": [],
+          "says": "66.0%, flat: the same whatever the date.",
+          "type": "Priced"
+        }
       },
       "maps": [
         [
@@ -5763,165 +5769,6 @@
         "folder": "Private",
         "kind": "sensitive",
         "why": "it names a tax number"
-      },
-      "maps": []
-    }
-  ],
-  "UsagePayload": [
-    {
-      "value": {
-        "at": "2026-09-02T12:00:00Z",
-        "five_hour": {
-          "allowance": {
-            "as_of": "2026-09-02T12:00:00Z",
-            "kind": "reported",
-            "resets_at": "2026-09-02T12:00:00Z",
-            "utilization": 0.4
-          },
-          "by_model": [],
-          "by_who": [],
-          "cache_hit": null,
-          "elsewhere": {
-            "cache_read": 0,
-            "cache_write": 0,
-            "fresh": 0,
-            "output": 0
-          },
-          "last_refusal": null,
-          "most_seen_before_refusal": null,
-          "on_credits": null,
-          "requests": 0,
-          "since": "2026-09-02T07:00:00Z",
-          "tokens": {
-            "cache_read": 0,
-            "cache_write": 0,
-            "fresh": 0,
-            "output": 0
-          },
-          "window": "five_hour"
-        },
-        "scope": {
-          "counted": [],
-          "not_counted": []
-        },
-        "seen": {
-          "cache_read": 0,
-          "cache_write": 0,
-          "fresh": 0,
-          "output": 0
-        },
-        "seen_requests": 0,
-        "seen_since": null,
-        "seven_day": {
-          "allowance": {
-            "kind": "rate_limited",
-            "last_reported": {
-              "as_of": "2026-09-02T12:00:00Z",
-              "resets_at": "2026-09-02T12:00:00Z",
-              "utilization": 0.4
-            },
-            "retry_after_seconds": 60,
-            "since": "2026-09-02T12:00:00Z"
-          },
-          "by_model": [],
-          "by_who": [],
-          "cache_hit": null,
-          "elsewhere": {
-            "cache_read": 0,
-            "cache_write": 0,
-            "fresh": 0,
-            "output": 0
-          },
-          "last_refusal": null,
-          "most_seen_before_refusal": null,
-          "on_credits": null,
-          "requests": 0,
-          "since": "2026-08-26T12:00:00Z",
-          "tokens": {
-            "cache_read": 0,
-            "cache_write": 0,
-            "fresh": 0,
-            "output": 0
-          },
-          "window": "seven_day"
-        }
-      },
-      "maps": []
-    },
-    {
-      "value": {
-        "at": "2026-09-02T12:00:00Z",
-        "five_hour": {
-          "allowance": {
-            "at": "2026-09-02T12:00:00Z",
-            "kind": "refused",
-            "status": 403,
-            "words": "no profile scope"
-          },
-          "by_model": [],
-          "by_who": [],
-          "cache_hit": null,
-          "elsewhere": {
-            "cache_read": 0,
-            "cache_write": 0,
-            "fresh": 0,
-            "output": 0
-          },
-          "last_refusal": null,
-          "most_seen_before_refusal": null,
-          "on_credits": null,
-          "requests": 0,
-          "since": "2026-09-02T07:00:00Z",
-          "tokens": {
-            "cache_read": 0,
-            "cache_write": 0,
-            "fresh": 0,
-            "output": 0
-          },
-          "window": "five_hour"
-        },
-        "scope": {
-          "counted": [
-            "this box"
-          ],
-          "not_counted": [
-            "claude.ai"
-          ]
-        },
-        "seen": {
-          "cache_read": 0,
-          "cache_write": 0,
-          "fresh": 0,
-          "output": 0
-        },
-        "seen_requests": 0,
-        "seen_since": null,
-        "seven_day": {
-          "allowance": {
-            "kind": "unknown"
-          },
-          "by_model": [],
-          "by_who": [],
-          "cache_hit": null,
-          "elsewhere": {
-            "cache_read": 0,
-            "cache_write": 0,
-            "fresh": 0,
-            "output": 0
-          },
-          "last_refusal": null,
-          "most_seen_before_refusal": null,
-          "on_credits": null,
-          "requests": 0,
-          "since": "2026-08-26T12:00:00Z",
-          "tokens": {
-            "cache_read": 0,
-            "cache_write": 0,
-            "fresh": 0,
-            "output": 0
-          },
-          "window": "seven_day"
-        }
       },
       "maps": []
     }

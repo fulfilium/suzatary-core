@@ -158,6 +158,7 @@ impl Program for Memory {
             class: "memorypage",
             title: "Memory".to_owned(),
             masthead: Masthead::Page,
+            width: crate::chrome::Width::Column,
             back: Some(("Secretary", Msg::Back)),
             legend,
             now: Vec::new(),

@@ -13,7 +13,8 @@ import type {
   TopicsPayload,
   TurnRow,
 } from "../wire/generated/wire"
-import type { Acted, Chains, Core, CoreEnv, CoreFold, Linker, Named, Standing, Todos, Window } from "./core"
+import type { Acted, Chains, Core, CoreEnv, CoreFold, Linker, Named, CorePlaced, CoreSpot, Standing, Todos, Window } from "./core"
+import { grow } from "./core"
 import {
   appendTo,
   barOf,
@@ -91,6 +92,10 @@ export namespace questions {
   // `null` is ∅.
   export type Priced = { readonly type: "Value"; readonly v: number | null } | { readonly type: "Refused"; readonly why: string }
 
+  // The list's tree of the todos it places: each node where it stands, its term and that term's price.
+  export type Placed = CorePlaced
+  export type Line = { readonly place: CoreSpot; readonly term: SpecNode; readonly priced: Priced; readonly children: readonly Line[] }
+
   export type Table = {
     Hold: { q: { readonly chains: readonly Holding[] }; a: null }
     // The box's `GET …/fold`.
@@ -99,6 +104,7 @@ export namespace questions {
     // Kept while the set and the instant stand.
     Reading: { q: { readonly chain: string; readonly at: string }; a: Read }
     Price: { q: { readonly basis: Basis; readonly terms: readonly SpecNode[] }; a: readonly Priced[] }
+    Tree: { q: { readonly basis: Basis; readonly members: readonly Placed[]; readonly by: string }; a: Line }
     Thirty: { q: { readonly chain: string; readonly id: string; readonly ms: number }; a: thirty.Thirty }
     Standing: { q: { readonly chain: string; readonly root: string | null; readonly actor: string; readonly key: string }; a: Standing }
     // Pulls every store now and after every word of the box's stream; true when every pull ended whole.
@@ -330,6 +336,12 @@ export namespace questions {
           return reading(q.chain, q.at)
         case "Price":
           return price(q.basis, q.terms)
+        case "Tree": {
+          // The core grows it, so the pages' module links no term and no trie; each term priced as `Price` prices it.
+          const grown = grow(core, q.members, q.by)
+          const prices = (g: ReturnType<typeof grow>): Line => ({ place: g.place, term: g.term, priced: price(q.basis, [g.term])[0] ?? { type: "Refused", why: "not priced" }, children: g.children.map(prices) })
+          return prices(grown)
+        }
         case "Thirty": {
           setNow()
           const c = chains.get(q.chain)

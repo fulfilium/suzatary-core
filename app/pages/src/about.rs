@@ -45,18 +45,14 @@ fn claims() -> Vec<Node<Msg>> {
     vec![
         view! { H2 ["One evaluator, on two machines"] },
         prose(vec![text(
-            "Everything on these pages is folded from the event chain by the server — and this browser runs the same core (prodrome, compiled to WebAssembly), so it can check that for itself: it verifies every chain object, it samples each todo's thirty days itself, and when the network is gone it folds the objects it is holding rather than showing you yesterday's numbers. One evaluator, on two machines.",
+            "Everything on these pages is folded from the event chain by the server — and this browser runs the same core (prodrome, compiled to WebAssembly), so it can check that for itself: it samples each todo's thirty days itself, and when the network is gone it folds the objects it is holding rather than showing you yesterday's numbers. One evaluator, on two machines.",
         )]),
         prose(vec![text(
             "The browser computes no fulfillment of its own: every number on screen is one the core produced, on the box or in this tab. Low means urgent, everywhere a number appears.",
         )]),
-        prose(vec![
-            text(
-                "Every number can be explained — a todo's page has \"Why this number\" — and every claim about the chain can be checked from the ",
-            ),
-            link("", Place::Chain, "chain page"),
-            text(", which rehashes every object in this tab."),
-        ]),
+        prose(vec![text(
+            "Every number can be explained: a todo's page has \"Why this number\".",
+        )]),
         view! { H2 ["Archive"] },
         prose(vec![
             text(
@@ -146,6 +142,7 @@ impl Program for About {
             class: "aboutpage",
             title: "About".to_owned(),
             masthead: Masthead::Page,
+            width: crate::chrome::Width::Column,
             back: None,
             legend: None,
             now: claims(),

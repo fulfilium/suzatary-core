@@ -122,6 +122,9 @@ app.scene("rendered means confirmed: the owner's markup renders, the agent's rea
   await app.page.waitFor(drawn, { timeout: 30000 });
   const title = (id: string): string => `${trow(id)}.querySelector(".ttitle")`;
   await app.page.waitFor(`${trow(OWNERS.id)} !== undefined && ${trow(AGENTS.id)} !== undefined`, { timeout: 8000 });
+  // The owner's markup reads as its source only for the moment before the box's fold, which carries what the box
+  // rendered, answers.
+  await app.page.waitFor(`${title(OWNERS.id)}.querySelector("strong") !== null`, { timeout: 10000 });
   assert.equal(await app.page.evaluate<string>(`${title(OWNERS.id)}.querySelector("strong")?.textContent ?? ""`), OWNERS.strong);
   assert.equal(await app.page.evaluate<string>(`${title(OWNERS.id)}.textContent`), OWNERS.body.replace(/\*/g, ""));
   assert.equal(await app.page.evaluate<string>(`${title(AGENTS.id)}.textContent`), AGENTS.body);

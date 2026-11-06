@@ -12,7 +12,7 @@ import type { Rng } from "./gen"
 
 const SCOPE = "https://box.example.invalid/"
 // A build's chunks, as its bundling names them.
-const CHUNKS = ["todoview-7QK2LS4A.js", "chunk-ZP3XUKDE.js"]
+const CHUNKS = ["toast-7QK2LS4A.js", "chunk-ZP3XUKDE.js"]
 const FILES = shell.files(CHUNKS)
 const build = (r: Rng) => r.string(SLUG, 1 + r.int(12))
 const path = (r: Rng) =>

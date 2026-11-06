@@ -1,5 +1,4 @@
-// Every screen's page by its tag; the router never switches on it. The Typst list, chain and usage are lazy chunks: big
-// and rarely landed on. The rest share most code with the shell, so splitting them gains little.
+// Every screen's page by its tag; the router never switches on it.
 
 import type { Draw } from "../view/page"
 import type { Screen } from "../shell/layout"
@@ -7,8 +6,6 @@ import { hrefOf } from "../shell/route"
 import { el } from "../view/dom"
 import frame from "../view/frame"
 import reading from "../algebra/reading"
-import todos from "./todos"
-import todoview from "../todo/todoview"
 import program from "./program"
 import time from "../app/time"
 import app from "../app/app"
@@ -26,15 +23,17 @@ export namespace pages {
   })
 
   export const table: Table = {
-    todos: s => root => todos.mount(root, s.selected, s.prefill),
+    // The list stays mounted for every list screen of its chain: a todo selected in its pane, a share into its sheet.
+    todos: s => {
+      const chain = s.chain === "" ? app.now().chain : s.chain
+      return program.mount("TodosPage", { chain }, { absorbs: next => next.type === "todos" && (next.chain === "" || next.chain === chain) })
+    },
     inbox: s => program.mount("InboxPage", { open: s.open ?? "" }),
-    todo: s => root => frame.open(root, todoview.page(s.id, true)),
-    typst: s => import("./typstlist").then(m => root => m.default.mount(root, s.open)),
+    todo: s => program.mount("TodoPage", { chain: app.now().chain, id: s.id, pushed: true }),
+    typst: () => program.mount("TypstPage", { chain: app.now().chain }, { absorbs: next => next.type === "typst" }),
     mail: s => program.mount("MailPage", { query: s.query, account: s.account }),
     message: s => program.mount("MessagePage", { id: s.id }),
     thread: s => program.mount("ThreadPage", { id: s.id }),
-    chain: s => import("./chain").then(m => root => m.mount(root, s.focus)),
-    usage: () => import("./usage").then(m => root => m.default.mount(root)),
     about: () => program.mount("AboutPage", {}),
     settings: () => program.mount("SettingsPage", {}),
     memory: () => program.mount("MemoryPage", {}),
@@ -59,8 +58,6 @@ export namespace pages {
     mail: "Unshown",
     message: "Shown",
     thread: "Unshown",
-    chain: "Unshown",
-    usage: "Unshown",
     about: "Unshown",
     settings: "Unshown",
     memory: "Unshown",

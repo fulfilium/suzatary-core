@@ -1090,7 +1090,9 @@ pub(crate) fn effects<H, A, S>(
                     | Act::Rename { .. }
                     | Act::Forget { .. }
                     | Act::Erase { .. }
-                    | Act::Topic { .. } => String::new(),
+                    | Act::Topic { .. }
+                    | Act::Seal { .. }
+                    | Act::Lifecycle { .. } => String::new(),
                 };
                 effects.push(Effect::Act {
                     ask: ask(Asking::Act { key, then, signed }),

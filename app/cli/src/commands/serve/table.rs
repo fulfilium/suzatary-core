@@ -37,7 +37,6 @@ pub fn table() -> Vec<Route> {
         Route::get("/api/portal", Scope::Box, the_box::portal),
         // A per-login budget, one log line, nothing stored.
         Route::post("/api/client-errors", Scope::Box, the_box::client_errors),
-        Route::get("/api/usage", Scope::Box, the_box::usage),
         Route::post("/api/act/device", Scope::Box, the_box::device),
         // Only the tap on its card, from a trusted device, trusts the asking device.
         Route::post("/api/act/key", Scope::Box, the_box::key),

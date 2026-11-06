@@ -1,6 +1,6 @@
 //! Settings: what is connected, by group, and this device.
 
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 
 use serde::{Deserialize, Serialize};
 use suzatary_core::connect::{Failure, Group, Standing};
@@ -153,6 +153,9 @@ pub struct Model {
     intents: Intents,
     pairing: Pairing,
     running: BTreeSet<Act>,
+    /// Each open grant's link, as a line drew the two together: kept until the grant's yes is
+    /// answered, since the overview the box answers once the grant is performed names it no more.
+    beside: BTreeMap<card::Key, card::Key>,
 }
 
 #[derive(Debug, Clone)]
@@ -184,6 +187,7 @@ impl Program for Settings {
             intents: Intents::default(),
             pairing: Pairing::Closed,
             running: BTreeSet::new(),
+            beside: BTreeMap::new(),
         };
         let watch = |ask, local| Effect::Watch { ask, local };
         let mut effects = vec![
@@ -217,6 +221,7 @@ impl Program for Settings {
                     match ask {
                         Hold::Overview => {
                             m.overview = Held::of(reading, behind);
+                            m.pair();
                             Vec::new()
                         }
                         Hold::Device => {
@@ -227,6 +232,7 @@ impl Program for Settings {
                         Hold::Rows(w) => {
                             let was = shown_cards(m);
                             let new = m.rows.held(w, reading);
+                            m.pair();
                             let mut effects: Vec<Effect> = new
                                 .into_iter()
                                 .map(|w| Effect::Watch {
@@ -306,6 +312,7 @@ impl Program for Settings {
             class: "settingspage",
             title: "Settings".to_owned(),
             masthead: Masthead::Page,
+            width: crate::chrome::Width::Column,
             back: None,
             legend: None,
             now: Vec::new(),
@@ -550,53 +557,57 @@ fn allowing<'a>(
     open(Kind::Link).zip(open(Kind::Grant))
 }
 
-/// Sends the link again, once, with the link the tab kept, whatever the grant's card reads since.
-fn grant_taken(m: &Model, asking: &card::Asking, a: &Answer) -> Vec<card::Out> {
+/// Sends the link again, once, with the link the tab kept, whatever the grant's card reads since:
+/// the link its line drew beside it, which an overview read after the grant no longer names.
+fn grant_taken(m: &mut Model, asking: &card::Asking, a: &Answer) -> Vec<card::Out> {
     let card::Asking::Act { key, then, .. } = asking else {
         return Vec::new();
     };
     if !then.yes || !card::taken(a) {
         return Vec::new();
     }
-    let Some(named) = m.overview_line(&key.reference()) else {
-        return Vec::new();
-    };
     // The grant may be settled by the time its answer is read; its card is read whatever its state.
     let granted = m.rows.card(key).is_some_and(|r| kind(r) == Kind::Grant);
-    let link = named
-        .iter()
-        .filter_map(|k| m.rows.card(k))
-        .find(|r| kind(r) == Kind::Link && card::answerable(r.state));
-    match link {
-        Some(asked) if granted => vec![Cards::resend(
-            &card::Key::of(&key.conversation, asked),
-            asked,
-        )],
+    let Some(link) = m.beside.remove(key) else {
+        return Vec::new();
+    };
+    match m.rows.card(&link) {
+        Some(asked) if granted && kind(asked) == Kind::Link && card::answerable(asked.state) => {
+            vec![Cards::resend(&link, asked)]
+        }
         Some(_) | None => Vec::new(),
     }
 }
 
 impl Model {
-    fn overview_line(&self, reference: &str) -> Option<Vec<card::Key>> {
+    /// Each line's open grant beside its open link, kept by the grant.
+    fn pair(&mut self) {
         let Reading::Val { v } = &self.overview.reading else {
-            return None;
+            return;
         };
         let rows = self.rows.rows();
         let open = open_cards(&rows);
-        v.groups
-            .iter()
-            .flat_map(|g| &g.lines)
-            .find(|l| l.cards.iter().any(|c| c == reference))
-            .map(|l| {
-                l.cards
-                    .iter()
-                    .filter_map(|c| {
-                        open.iter()
-                            .find(|(_, k)| k.reference() == *c)
-                            .map(|(_, k)| k.clone())
-                    })
-                    .collect()
-            })
+        for line in v.groups.iter().flat_map(|g| &g.lines) {
+            let keys: Vec<&card::Key> = line
+                .cards
+                .iter()
+                .filter_map(|c| {
+                    open.iter()
+                        .find(|(_, k)| k.reference() == *c)
+                        .map(|(_, k)| k)
+                })
+                .collect();
+            let of = |want: Kind| {
+                keys.iter().copied().find(|k| {
+                    self.rows
+                        .card(k)
+                        .is_some_and(|r| kind(r) == want && card::answerable(r.state))
+                })
+            };
+            if let (Some(grant), Some(link)) = (of(Kind::Grant), of(Kind::Link)) {
+                self.beside.insert(grant.clone(), link.clone());
+            }
+        }
     }
 }
 
@@ -680,20 +691,19 @@ fn health<'a>(
     s: &'a Standing,
     at: &dyn Fn(&str) -> String,
 ) -> Option<(bool, String, Option<&'a str>)> {
-    let (asks, words) = match s {
+    let words = match s {
         Standing::Kept => return None,
-        Standing::Synced { at: t } => (false, format!("Synced {}.", at(t))),
-        Standing::Answered { at: t } => (false, format!("Answered {}.", at(t))),
-        Standing::Unobserved => (false, "Nothing has checked it yet.".to_owned()),
-        Standing::Locked => (
-            true,
-            "The secret store is locked, so whether it is stored is not known.".to_owned(),
-        ),
-        Standing::StoreFailed => (true, "The secret store could not answer.".to_owned()),
-        Standing::Unreadable { words } => (true, format!("{}.", capital(words))),
+        Standing::Synced { at: t } => format!("Synced {}.", at(t)),
+        Standing::Answered { at: t } => format!("Answered {}.", at(t)),
+        Standing::Unobserved => "Nothing has checked it yet.".to_owned(),
+        Standing::Locked => {
+            "The secret store is locked, so whether it is stored is not known.".to_owned()
+        }
+        Standing::StoreFailed => "The secret store could not answer.".to_owned(),
+        Standing::Unreadable { words } => format!("{}.", capital(words)),
         Standing::ByHand { why, command, .. } => {
             return Some((
-                true,
+                s.asks(),
                 format!("Set up at a terminal on the box: {why}."),
                 Some(command),
             ));
@@ -710,14 +720,11 @@ fn health<'a>(
             } else {
                 format!(" (last tried {last})")
             };
-            (
-                true,
-                format!("Failing since {since}: {words}{tried}.{}", cause(*class)),
-            )
+            format!("Failing since {since}: {words}{tried}.{}", cause(*class))
         }
-        Standing::Missing { what } => (true, format!("Needs {}.", and(what))),
+        Standing::Missing { what } => format!("Needs {}.", and(what)),
     };
-    Some((asks, words, None))
+    Some((s.asks(), words, None))
 }
 
 /// `11:32 on 2026-09-04` on the owner's clock; one that does not parse is said as written, as

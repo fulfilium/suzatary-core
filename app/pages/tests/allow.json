@@ -1,0 +1,978 @@
+{
+ "answer": {
+  "answer": {
+   "body": {
+    "answer": {
+     "type": "Taken"
+    },
+    "held": true,
+    "type": "Answered"
+   },
+   "type": "Done"
+  },
+  "ask": {
+   "of": {
+    "key": {
+     "conversation": "setup",
+     "index": 3
+    },
+    "signed": "standing:0:",
+    "then": {
+     "done": "allowed",
+     "yes": true
+    },
+    "type": "Act"
+   },
+   "type": "Card"
+  },
+  "type": "Answered"
+ },
+ "before": [
+  {
+   "categories": [
+    "work",
+    "study",
+    "project",
+    "home",
+    "other"
+   ],
+   "gate": "writes",
+   "offsets": [
+    {
+     "from": 1478614251265,
+     "minutes": 0
+    }
+   ],
+   "reach": {
+    "type": "Writes"
+   },
+   "type": "Context",
+   "wide": false
+  },
+  {
+   "ask": {
+    "Card": {
+     "conversation": "setup",
+     "index": 2
+    }
+   },
+   "behind": null,
+   "reading": {
+    "type": "Val",
+    "v": {
+     "body": null,
+     "type": "Done"
+    }
+   },
+   "type": "Held"
+  },
+  {
+   "ask": {
+    "Card": {
+     "conversation": "setup",
+     "index": 1
+    }
+   },
+   "behind": null,
+   "reading": {
+    "type": "Val",
+    "v": {
+     "body": null,
+     "type": "Done"
+    }
+   },
+   "type": "Held"
+  },
+  {
+   "ask": {
+    "Card": {
+     "conversation": "setup",
+     "index": 0
+    }
+   },
+   "behind": null,
+   "reading": {
+    "type": "Val",
+    "v": {
+     "body": null,
+     "type": "Done"
+    }
+   },
+   "type": "Held"
+  },
+  {
+   "ask": {
+    "Rows": {
+     "type": "Proposals"
+    }
+   },
+   "behind": null,
+   "reading": {
+    "type": "Val",
+    "v": {
+     "body": {
+      "held": [
+       "life",
+       "suzatary"
+      ],
+      "payload": {
+       "at": "2026-11-06T14:10:52.029000",
+       "failed": [],
+       "proposals": [
+        {
+         "asked": "proposal:setup/1",
+         "at": "2026-11-06T14:08:55.008503",
+         "by": {
+          "kind": "box"
+         },
+         "headline": "authorise ada-work@example.test to send mail (SMTP)",
+         "id": "p395ca1736a9b4155db55fb63c12342a0",
+         "serves": null,
+         "state": {
+          "kind": "open"
+         },
+         "value": "absent",
+         "why": "Ada-work@example.test reads its mail and holds no sign-in to send it."
+        },
+        {
+         "asked": "proposal:setup/0",
+         "at": "2026-11-06T14:08:55.008503",
+         "by": {
+          "kind": "setup"
+         },
+         "headline": "store your Work calendar's secret link (the ics plugin's link reads it)",
+         "id": "p904be4fa69477f397292201b25a6870e",
+         "serves": null,
+         "state": {
+          "kind": "open"
+         },
+         "value": "absent",
+         "why": "Nothing is stored for it yet, so what needs it cannot work."
+        },
+        {
+         "asked": "proposal:setup/2",
+         "at": "2026-11-06T14:08:55.246647",
+         "by": {
+          "kind": "box"
+         },
+         "headline": "remove your Work calendar: one link for the calendar goes from the instance file, and its todos, cards and conversations stay",
+         "id": "p1e71e1724ae3c00a041bcd30378d961d",
+         "serves": null,
+         "state": {
+          "kind": "open"
+         },
+         "value": "absent",
+         "why": "Your Work calendar synced last at 2026-10-08 09:00 UTC and holds nothing within 90 days of today."
+        },
+        {
+         "asked": "proposal:setup/3",
+         "at": "2026-11-06T14:10:51.753276",
+         "by": {
+          "kind": "box"
+         },
+         "headline": "let the calendar reach https://cal.example.test",
+         "id": "p52b03b7805f2b73d707601585ba6e637",
+         "serves": null,
+         "state": {
+          "kind": "open"
+         },
+         "value": "absent",
+         "why": "The link is served from https://cal.example.test, which the calendar may not reach yet."
+        }
+       ]
+      }
+     },
+     "type": "Done"
+    }
+   },
+   "type": "Held"
+  },
+  {
+   "answer": {
+    "body": {
+     "answer": {
+      "type": "Taken"
+     },
+     "held": true,
+     "type": "Answered"
+    },
+    "type": "Done"
+   },
+   "ask": {
+    "of": {
+     "key": {
+      "conversation": "setup",
+      "index": 0
+     },
+     "signed": "standing:0:",
+     "then": {
+      "done": "stored your Work calendar's secret link",
+      "yes": true
+     },
+     "type": "Act"
+    },
+    "type": "Card"
+   },
+   "type": "Answered"
+  },
+  {
+   "ask": {
+    "Rows": {
+     "type": "Conversations"
+    }
+   },
+   "behind": null,
+   "reading": {
+    "type": "Val",
+    "v": {
+     "body": {
+      "conversations": [
+       {
+        "id": "setup",
+        "kind": "review",
+        "last": "",
+        "last_at": "2026-11-06T14:10:51.753276",
+        "opened": "2026-11-06T14:08:55.008503",
+        "standing": 4,
+        "title": "Setup",
+        "turns": 4,
+        "unplaced": []
+       },
+       {
+        "id": "default",
+        "kind": "default",
+        "last": "",
+        "last_at": "2026-11-06T14:08:54.983772",
+        "opened": "2026-11-06T14:08:54.983772",
+        "standing": 0,
+        "title": "Secretary",
+        "turns": 0,
+        "unplaced": []
+       }
+      ]
+     },
+     "type": "Done"
+    }
+   },
+   "type": "Held"
+  },
+  {
+   "ask": "Overview",
+   "behind": null,
+   "reading": {
+    "type": "Val",
+    "v": {
+     "body": {
+      "ask": "setup",
+      "groups": [
+       {
+        "group": "models",
+        "lines": [
+         {
+          "cards": [],
+          "detail": "They run scripted through the claude CLI.",
+          "key": "job:Chat, reviews and titles",
+          "label": "Chat, reviews and titles",
+          "replaces": [],
+          "standing": {
+           "at": "2026-11-06T14:08:54.851938",
+           "kind": "answered"
+          }
+         },
+         {
+          "cards": [],
+          "detail": "Off: the conversations are not summarised.",
+          "key": "job:Compactor",
+          "label": "Compactor",
+          "replaces": [],
+          "standing": {
+           "kind": "kept"
+          }
+         }
+        ]
+       },
+       {
+        "group": "mail",
+        "lines": [
+         {
+          "cards": [
+           "proposal:setup/1"
+          ],
+          "detail": "Microsoft: reading signed in, sending not signed in.",
+          "key": "account:ada-work@example.test",
+          "label": "ada-work@example.test",
+          "replaces": [],
+          "standing": {
+           "kind": "missing",
+           "what": [
+            "its sign-in to send mail"
+           ]
+          }
+         },
+         {
+          "cards": [],
+          "detail": "Gmail, through lieer's own grant.",
+          "key": "account:her@example.invalid",
+          "label": "her@example.invalid",
+          "replaces": [],
+          "standing": {
+           "command": "sh -c 'mkdir -p Mail/her-at-example-invalid && cd Mail/her-at-example-invalid && gmi init her@example.invalid'",
+           "kind": "by_hand",
+           "why": "lieer's sign-in, in a browser"
+          }
+         }
+        ]
+       },
+       {
+        "group": "calendar",
+        "lines": [
+         {
+          "cards": [
+           "proposal:setup/0",
+           "proposal:setup/2",
+           "proposal:setup/3"
+          ],
+          "detail": null,
+          "key": "credential:ics/work",
+          "label": "Work",
+          "replaces": [],
+          "standing": {
+           "kind": "missing",
+           "what": [
+            "your Work calendar's secret link"
+           ]
+          }
+         }
+        ]
+       },
+       {
+        "group": "drive",
+        "lines": []
+       },
+       {
+        "group": "storage",
+        "lines": [
+         {
+          "cards": [],
+          "detail": "Kept on this box and pushed nowhere; it holds the chains life and suzatary.",
+          "key": "repository",
+          "label": "Data repository",
+          "replaces": [],
+          "standing": {
+           "command": "git -C \"$(dirname \"$SUZATARY_INSTANCE\")\" remote add origin <the remote's URL>",
+           "kind": "by_hand",
+           "why": "the box pushes what it writes to the data repository's remote; with none, nothing leaves this box"
+          }
+         }
+        ]
+       },
+       {
+        "group": "notifications",
+        "lines": []
+       },
+       {
+        "group": "coding",
+        "lines": []
+       },
+       {
+        "group": "plugins",
+        "lines": []
+       },
+       {
+        "group": "box",
+        "lines": [
+         {
+          "cards": [],
+          "detail": "A development build outside the flake.",
+          "key": "build",
+          "label": "Suzatary dev",
+          "replaces": [],
+          "standing": {
+           "kind": "kept"
+          }
+         }
+        ]
+       }
+      ],
+      "offers": [
+       {
+        "group": "mail",
+        "template": "google",
+        "title": "a Google account (its mail and calendars)"
+       },
+       {
+        "group": "mail",
+        "template": "lieer",
+        "title": "a Gmail account"
+       },
+       {
+        "group": "mail",
+        "template": "imap-device-code",
+        "title": "a Microsoft 365 or Outlook account"
+       },
+       {
+        "group": "mail",
+        "template": "bridge",
+        "title": "a Proton Mail account"
+       },
+       {
+        "group": "calendar",
+        "template": "ics",
+        "title": "a calendar, by its secret iCal link"
+       },
+       {
+        "group": "drive",
+        "template": "drive-cli",
+        "title": "a Proton Drive folder the secretary may read"
+       },
+       {
+        "group": "notifications",
+        "template": "ntfy",
+        "title": "notifications through ntfy"
+       },
+       {
+        "group": "notifications",
+        "template": "fcm",
+        "title": "notifications through Firebase"
+       }
+      ]
+     },
+     "type": "Done"
+    }
+   },
+   "type": "Held"
+  },
+  {
+   "ask": {
+    "Rows": {
+     "of": "setup",
+     "type": "Cards"
+    }
+   },
+   "behind": null,
+   "reading": {
+    "type": "Val",
+    "v": {
+     "body": {
+      "again": null,
+      "first": 3,
+      "id": "setup",
+      "model": "the box",
+      "opened": "2026-11-06T14:08:55.008503",
+      "proposals": [
+       {
+        "act": {
+         "found": "In your calendar's settings, copy its secret address in iCal format (a link ending in .ics). A Google account's calendars need no link: connect the account itself, which reads them through Google's own API.",
+         "kind": "secret",
+         "label": "your Work calendar's secret link",
+         "link": null
+        },
+        "announced": null,
+        "at": "2026-11-06T14:08:55.008503",
+        "card": {
+         "answers": [
+          {
+           "asks": "value",
+           "done": "stored your Work calendar's secret link",
+           "input": "Your Work calendar's secret link",
+           "label": "Try again",
+           "verb": "store"
+          }
+         ],
+         "body": "",
+         "by": {
+          "kind": "setup"
+         },
+         "check": "I checked",
+         "failed": "Not done",
+         "fields": [],
+         "files": [],
+         "link": null,
+         "problem": "",
+         "readonly": "This device can read this but not store it. Use one of your own devices.",
+         "rows": [],
+         "sentence": "In your calendar's settings, copy its secret address in iCal format (a link ending in .ics). A Google account's calendars need no link: connect the account itself, which reads them through Google's own API.",
+         "title": "Store your Work calendar's secret link",
+         "uncertain": "It may have gone through; it is never done again."
+        },
+        "coding": null,
+        "index": 0,
+        "outcome": "first allow https://cal.example.test: the link is served from there, which the ics plugin may not reach yet, so nothing was stored",
+        "revises": null,
+        "sources": [
+         "proposal:setup/0"
+        ],
+        "state": "failed",
+        "tries": 1,
+        "turn": 1,
+        "why": "Nothing is stored for it yet, so what needs it cannot work."
+       },
+       {
+        "act": {
+         "account": "ada-work@example.test",
+         "kind": "auth_send",
+         "sentence": "authorise ada-work@example.test to send mail (SMTP)"
+        },
+        "announced": null,
+        "at": "2026-11-06T14:08:55.008503",
+        "card": {
+         "answers": [
+          {
+           "asks": "confirm",
+           "done": "running: authorising ada-work@example.test to send",
+           "label": "Sign in to send",
+           "question": "Sign ada-work@example.test in to send mail? The box shows a code to enter on Microsoft's page; reading is not touched.",
+           "verb": "run",
+           "yes": "Yes, sign in to send"
+          }
+         ],
+         "body": "",
+         "by": {
+          "kind": "box"
+         },
+         "check": "I checked",
+         "failed": "Not done",
+         "fields": [
+          {
+           "label": "Account",
+           "value": "ada-work@example.test"
+          }
+         ],
+         "files": [],
+         "link": null,
+         "problem": "",
+         "readonly": "This device can read this but not run it. Use one of your own devices.",
+         "rows": [],
+         "sentence": "Authorise ada-work@example.test to send mail (SMTP).",
+         "title": "Sign in to send",
+         "uncertain": "It may have gone through; it is never done again."
+        },
+        "coding": null,
+        "index": 1,
+        "outcome": "",
+        "revises": null,
+        "sources": [
+         "proposal:setup/1"
+        ],
+        "state": "standing",
+        "tries": 0,
+        "turn": 2,
+        "why": "Ada-work@example.test reads its mail and holds no sign-in to send it."
+       },
+       {
+        "act": {
+         "cached": "nothing",
+         "connection": "your Work calendar",
+         "forgets": [
+          "your Work calendar's secret link"
+         ],
+         "kind": "disconnect",
+         "sentence": "remove your Work calendar: one link for the calendar goes from the instance file, and its todos, cards and conversations stay",
+         "writes": "one link for the calendar"
+        },
+        "announced": null,
+        "at": "2026-11-06T14:08:55.246647",
+        "card": {
+         "answers": [
+          {
+           "asks": "confirm",
+           "done": "removed",
+           "label": "Remove",
+           "question": "Remove it from the instance file?",
+           "verb": "remove",
+           "yes": "Yes, remove it"
+          }
+         ],
+         "body": "",
+         "by": {
+          "kind": "box"
+         },
+         "check": "I checked",
+         "failed": "Not done",
+         "fields": [
+          {
+           "label": "Connection",
+           "value": "your Work calendar"
+          },
+          {
+           "label": "It removes",
+           "value": "one link for the calendar"
+          },
+          {
+           "label": "It forgets",
+           "value": "your Work calendar's secret link"
+          },
+          {
+           "label": "Stays",
+           "value": "Its todos, cards and conversations."
+          }
+         ],
+         "files": [],
+         "link": null,
+         "problem": "",
+         "readonly": "This device can read this but not remove it. Use one of your own devices.",
+         "rows": [],
+         "sentence": "Remove your Work calendar: one link for the calendar goes from the instance file, and its todos, cards and conversations stay.",
+         "title": "Remove your Work calendar",
+         "uncertain": "It may have gone through; it is never done again."
+        },
+        "coding": null,
+        "index": 2,
+        "outcome": "",
+        "revises": null,
+        "sources": [
+         "proposal:setup/2"
+        ],
+        "state": "standing",
+        "tries": 0,
+        "turn": 3,
+        "why": "Your Work calendar synced last at 2026-10-08 09:00 UTC and holds nothing within 90 days of today."
+       },
+       {
+        "act": {
+         "kind": "grant",
+         "origin": "https://cal.example.test",
+         "plugin": "ics",
+         "sentence": "let the calendar reach https://cal.example.test"
+        },
+        "announced": null,
+        "at": "2026-11-06T14:10:51.753276",
+        "card": {
+         "answers": [
+          {
+           "asks": "confirm",
+           "done": "allowed",
+           "label": "Allow",
+           "question": "Let the calendar fetch from https://cal.example.test?",
+           "verb": "allow",
+           "yes": "Yes, allow it"
+          }
+         ],
+         "body": "",
+         "by": {
+          "kind": "box"
+         },
+         "check": "I checked",
+         "failed": "Not done",
+         "fields": [
+          {
+           "label": "Plugin",
+           "value": "ics"
+          },
+          {
+           "label": "Address",
+           "value": "https://cal.example.test"
+          },
+          {
+           "label": "Then",
+           "value": "Set the link again in its card: nothing was stored while the address was not allowed."
+          }
+         ],
+         "files": [],
+         "link": null,
+         "problem": "",
+         "readonly": "This device can read this but not allow it. Use one of your own devices.",
+         "rows": [],
+         "sentence": "Let the calendar reach https://cal.example.test.",
+         "title": "Let the calendar reach a new address",
+         "uncertain": "It may have gone through; it is never done again."
+        },
+        "coding": null,
+        "index": 3,
+        "outcome": "",
+        "revises": null,
+        "sources": [
+         "proposal:setup/3"
+        ],
+        "state": "standing",
+        "tries": 0,
+        "turn": 4,
+        "why": "The link is served from https://cal.example.test, which the calendar may not reach yet."
+       }
+      ],
+      "state": "idle",
+      "title": "Setup",
+      "total": 4,
+      "turns": [
+       {
+        "at": "2026-11-06T14:10:51.753276",
+        "attempt": "current",
+        "gone": null,
+        "index": 3,
+        "references": [
+         "proposal:setup/3"
+        ],
+        "text": "The link is served from https://cal.example.test, which the calendar may not reach yet.",
+        "who": "box"
+       }
+      ],
+      "unplaced": []
+     },
+     "type": "Done"
+    }
+   },
+   "type": "Held"
+  },
+  {
+   "ask": {
+    "Card": {
+     "conversation": "setup",
+     "index": 3
+    }
+   },
+   "behind": null,
+   "reading": {
+    "type": "Val",
+    "v": {
+     "body": {
+      "details": true,
+      "step": {
+       "type": "Idle"
+      },
+      "text": ""
+     },
+     "type": "Done"
+    }
+   },
+   "type": "Held"
+  },
+  {
+   "ask": "Intents",
+   "behind": null,
+   "reading": {
+    "type": "Val",
+    "v": {
+     "body": {
+      "asked": [
+       {
+        "act": {
+         "answer": {
+          "always": false,
+          "note": "",
+          "type": "Tap"
+         },
+         "at": {
+          "conversation": "setup",
+          "from": "standing:0:",
+          "index": 0
+         },
+         "type": "Answer"
+        },
+        "answer": {
+         "type": "Taken"
+        },
+        "retracted": true
+       },
+       {
+        "act": {
+         "answer": {
+          "always": false,
+          "note": "",
+          "type": "Tap"
+         },
+         "at": {
+          "conversation": "setup",
+          "from": "standing:0:",
+          "index": 3
+         },
+         "type": "Answer"
+        },
+        "answer": {
+         "type": "Taken"
+        },
+        "retracted": true
+       }
+      ]
+     },
+     "type": "Done"
+    }
+   },
+   "type": "Held"
+  }
+ ],
+ "overview_after": {
+  "ask": "Overview",
+  "behind": null,
+  "reading": {
+   "type": "Val",
+   "v": {
+    "body": {
+     "ask": "setup",
+     "groups": [
+      {
+       "group": "models",
+       "lines": [
+        {
+         "cards": [],
+         "detail": "They run scripted through the claude CLI.",
+         "key": "job:Chat, reviews and titles",
+         "label": "Chat, reviews and titles",
+         "replaces": [],
+         "standing": {
+          "at": "2026-11-06T14:08:54.851938",
+          "kind": "answered"
+         }
+        },
+        {
+         "cards": [],
+         "detail": "Off: the conversations are not summarised.",
+         "key": "job:Compactor",
+         "label": "Compactor",
+         "replaces": [],
+         "standing": {
+          "kind": "kept"
+         }
+        }
+       ]
+      },
+      {
+       "group": "mail",
+       "lines": [
+        {
+         "cards": [
+          "proposal:setup/1"
+         ],
+         "detail": "Microsoft: reading signed in, sending not signed in.",
+         "key": "account:ada-work@example.test",
+         "label": "ada-work@example.test",
+         "replaces": [],
+         "standing": {
+          "kind": "missing",
+          "what": [
+           "its sign-in to send mail"
+          ]
+         }
+        },
+        {
+         "cards": [],
+         "detail": "Gmail, through lieer's own grant.",
+         "key": "account:her@example.invalid",
+         "label": "her@example.invalid",
+         "replaces": [],
+         "standing": {
+          "command": "sh -c 'mkdir -p Mail/her-at-example-invalid && cd Mail/her-at-example-invalid && gmi init her@example.invalid'",
+          "kind": "by_hand",
+          "why": "lieer's sign-in, in a browser"
+         }
+        }
+       ]
+      },
+      {
+       "group": "calendar",
+       "lines": [
+        {
+         "cards": [
+          "proposal:setup/0",
+          "proposal:setup/2"
+         ],
+         "detail": null,
+         "key": "credential:ics/work",
+         "label": "Work",
+         "replaces": [],
+         "standing": {
+          "kind": "missing",
+          "what": [
+           "your Work calendar's secret link"
+          ]
+         }
+        }
+       ]
+      },
+      {
+       "group": "drive",
+       "lines": []
+      },
+      {
+       "group": "storage",
+       "lines": [
+        {
+         "cards": [],
+         "detail": "Kept on this box and pushed nowhere; it holds the chains life and suzatary.",
+         "key": "repository",
+         "label": "Data repository",
+         "replaces": [],
+         "standing": {
+          "command": "git -C \"$(dirname \"$SUZATARY_INSTANCE\")\" remote add origin <the remote's URL>",
+          "kind": "by_hand",
+          "why": "the box pushes what it writes to the data repository's remote; with none, nothing leaves this box"
+         }
+        }
+       ]
+      },
+      {
+       "group": "notifications",
+       "lines": []
+      },
+      {
+       "group": "coding",
+       "lines": []
+      },
+      {
+       "group": "plugins",
+       "lines": []
+      },
+      {
+       "group": "box",
+       "lines": [
+        {
+         "cards": [],
+         "detail": "A development build outside the flake.",
+         "key": "build",
+         "label": "Suzatary dev",
+         "replaces": [],
+         "standing": {
+          "kind": "kept"
+         }
+        }
+       ]
+      }
+     ],
+     "offers": [
+      {
+       "group": "mail",
+       "template": "google",
+       "title": "a Google account (its mail and calendars)"
+      },
+      {
+       "group": "mail",
+       "template": "lieer",
+       "title": "a Gmail account"
+      },
+      {
+       "group": "mail",
+       "template": "imap-device-code",
+       "title": "a Microsoft 365 or Outlook account"
+      },
+      {
+       "group": "mail",
+       "template": "bridge",
+       "title": "a Proton Mail account"
+      },
+      {
+       "group": "calendar",
+       "template": "ics",
+       "title": "a calendar, by its secret iCal link"
+      },
+      {
+       "group": "drive",
+       "template": "drive-cli",
+       "title": "a Proton Drive folder the secretary may read"
+      },
+      {
+       "group": "notifications",
+       "template": "ntfy",
+       "title": "notifications through ntfy"
+      },
+      {
+       "group": "notifications",
+       "template": "fcm",
+       "title": "notifications through Firebase"
+      }
+     ]
+    },
+    "type": "Done"
+   }
+  },
+  "type": "Held"
+ }
+}

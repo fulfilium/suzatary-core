@@ -1,7 +1,7 @@
-use super::{Agent, Answers, Notify, Secretary, Sessions, Usage, Whois};
+use super::{Agent, Answers, Notify, Secretary, Sessions, Whois};
 
 /// What the serving process supplies: the secretary's effects, since it runs the
-/// secretary, plus peers, phones and usage. Nothing here sends mail; only a route holding
+/// secretary, plus peers and phones. Nothing here sends mail; only a route holding
 /// a `Tap` the gate mints reaches the transport, and that is not an effect a record holds.
 #[derive(Clone, Copy)]
 pub struct Server<'a> {
@@ -15,8 +15,6 @@ pub struct Server<'a> {
     pub answers: &'a dyn Answers,
     /// The phones that asked to be woken.
     pub devices: &'a dyn crate::store::Log<String, crate::devices::Device>,
-    /// What the box has spent.
-    pub usage: &'a dyn Usage,
     /// The session-holding model, when there is one.
     pub sessions: &'a dyn Sessions,
 }

@@ -6,6 +6,9 @@ import files from "./files"
 
 export namespace painter {
   export type Foreign = (kind: string, key: string, props: string) => Node
+  // A part told new props: true when the host brought it to them in place (its focus, scroll and DOM kept), false when
+  // the painter is to draw it anew.
+  export type Refresh = (node: Node, kind: string, key: string, props: string) => boolean
   // The HTML the host holds for a block's key, or null. It is placed only through `rich.ts`, the one door from a string
   // to markup, and the block shows its plain text until then.
   export type Blocks = (key: string) => Promise<string | null>
@@ -14,8 +17,8 @@ export namespace painter {
   export type T = { readonly apply: (patches: Uint8Array) => void; readonly destroy: () => void }
 
   // In the order of `Tag` and `On` (`app/viewtree/src/node.rs`), whose numbers index them.
-  const TAGS: readonly (keyof HTMLElementTagNameMap)[] = ["div", "section", "h2", "h3", "p", "a", "button", "input", "details", "summary", "code", "span", "h1", "ul", "li", "dl", "dt", "dd", "strong", "form", "pre", "textarea", "nav", "article", "img", "label", "aside"]
-  const EVENTS: readonly string[] = ["click", "input", "submit", "keydown", "toggle", "change"]
+  const TAGS: readonly (keyof HTMLElementTagNameMap)[] = ["div", "section", "h2", "h3", "p", "a", "button", "input", "details", "summary", "code", "span", "h1", "ul", "li", "dl", "dt", "dd", "strong", "form", "pre", "textarea", "nav", "article", "img", "label", "aside", "ol"]
+  const EVENTS: readonly string[] = ["click", "input", "submit", "keydown", "toggle", "change", "intent"]
 
   type Reader = { readonly bytes: Uint8Array; at: number }
 
@@ -59,10 +62,12 @@ export namespace painter {
       ? `${ev.ctrlKey ? 1 : 0}${ev.metaKey ? 1 : 0}${ev.shiftKey ? 1 : 0}${ev.key}\0${field(e) ? e.value : ""}`
       : name === "toggle" && e instanceof HTMLDetailsElement
         ? e.open ? "1" : ""
-        : field(e) ? e.value : ""
+        : field(e) ? e.value
+        : ev.target instanceof Element && field(ev.target) ? ev.target.value
+        : ""
 
   // `gone` hears each foreign part the painter takes out, so the host can stop what it started for it.
-  export const create = (root: HTMLElement, foreign: Foreign, blocks: Blocks, report: Report, gone: (n: Node) => void = () => {}): T => {
+  export const create = (root: HTMLElement, foreign: Foreign, blocks: Blocks, report: Report, gone: (n: Node) => void = () => {}, refresh: Refresh = () => false): T => {
     const nodes = new Map<number, Node>([[0, root]])
     const ids = new WeakMap<Node, number>()
     // Each foreign part's kind and key, so new props ask the host for the same part again.
@@ -116,6 +121,8 @@ export namespace painter {
     const set = (e: Element, name: string, value: string): void => {
       if (name === "value" && field(e)) {
         if (e.value !== value) e.value = value
+      } else if (name === "checked" && e instanceof HTMLInputElement) {
+        e.checked = true
       } else if (name === "src") {
         if (onTheBox(value)) e.setAttribute(name, value)
         else e.removeAttribute(name)
@@ -163,6 +170,7 @@ export namespace painter {
             const e = element(varint(r))
             const name = string(r)
             if (name === "value" && field(e)) e.value = ""
+            if (name === "checked" && e instanceof HTMLInputElement) e.checked = false
             if (name === "href") (e.removeAttribute("target"), e.removeAttribute("rel"))
             e.removeAttribute(name)
             break
@@ -177,6 +185,7 @@ export namespace painter {
             const props = string(r)
             const part = foreigns.get(id)
             if (part === undefined) throw new Error(`node ${id} is not a foreign part`)
+            if (refresh(node(id), part[0], part[1], props)) break
             gone(replaced(id, foreign(part[0], part[1], props)))
             break
           }
@@ -199,6 +208,12 @@ export namespace painter {
             const e = element(id)
             // A submit is reported, never performed: the page decides where it goes. Files are read whole first (`files.ts`).
             const listener: EventListener = (ev: Event) => {
+              if (name === "intent") {
+                // A click inside on an element carrying an intent reports that intent's words, as written; the view parses them.
+                const at = ev.target instanceof Element ? ev.target.closest("[data-intent]") : null
+                if (at !== null && e.contains(at)) report(id, on, at.getAttribute("data-intent") ?? "")
+                return
+              }
               if (name === "submit") ev.preventDefault()
               if (name === "change") {
                 if (e instanceof HTMLInputElement && e.type === "file") void files.read(e).then(words => void report(id, on, words))
@@ -207,7 +222,7 @@ export namespace painter {
               if (report(id, on, said(name, e, ev)) && name === "keydown") (ev.preventDefault(), ev.stopPropagation())
             }
             heard.set(`${id}:${name}`, listener)
-            e.addEventListener(name, listener)
+            e.addEventListener(name === "intent" ? "click" : name, listener)
             break
           }
           case 10: {
@@ -215,7 +230,7 @@ export namespace painter {
             const name = EVENTS[byte(r)]
             const listener = heard.get(`${id}:${name ?? ""}`)
             if (name === undefined || listener === undefined) throw new Error(`node ${id} does not hear that event`)
-            element(id).removeEventListener(name, listener)
+            element(id).removeEventListener(name === "intent" ? "click" : name, listener)
             heard.delete(`${id}:${name}`)
             break
           }

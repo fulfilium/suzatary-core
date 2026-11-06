@@ -25,14 +25,8 @@ const cacheNames = () => app.page.evaluate<string[]>(`caches.keys()`)
 const kept = (name: string) =>
   app.page.evaluate<string[]>(`caches.open(${JSON.stringify(name)}).then((c) => c.keys()).then((rs) => rs.map((r) => new URL(r.url).pathname))`)
 const logged = (fragment: string) => readFileSync(LOG, "utf8").includes(fragment)
-// This build's chunks, as its bundling named them: a page's own, `<page>-<hash>.js`, and what pages share.
+// This build's chunks, as its bundling named them: `<name>-<hash>.js`.
 const CHUNKS = readdirSync(DIST).filter(shell.chunk)
-const chunkOf = (page: string): string => {
-  const c = CHUNKS.find(f => f.startsWith(`${page}-`))
-  if (c === undefined) throw new Error(`no chunk of ${page} in ${CHUNKS.join(", ")}`)
-  return c
-}
-const loaded = () => app.page.evaluate<string[]>(`performance.getEntriesByType("resource").map((e) => new URL(e.name).pathname)`)
 
 app.scene("a stamped build keeps its whole shell in the cache named by it, and never the API", async () => {
   writeFileSync(BUILD, "e2e-1\n")
@@ -42,7 +36,7 @@ app.scene("a stamped build keeps its whole shell in the cache named by it, and n
   assert.deepEqual(await kept(shell.HEARD), ["/b/current"], "the box's build, as last heard")
   const paths = await kept("suzatary-shell-e2e-1")
   assert.ok(CHUNKS.length > 0, "the app is split into chunks")
-  for (const f of ["/index.html", "/boot.js", ...["app.js", "prodrome.js", "prodrome_bg.wasm", "style.css", "tokens.css", ...CHUNKS].map(f => `/b/e2e-1/${f}`)])
+  for (const f of ["/index.html", "/boot.js", ...["app.js", "prodrome.js", "prodrome_bg.wasm", "views.js", "views_bg.wasm", "style.css", "tokens.css", ...CHUNKS].map(f => `/b/e2e-1/${f}`)])
     assert.ok(paths.includes(f), `${f} is kept: ${paths.join(", ")}`)
   assert.ok(paths.some(p => p.startsWith("/b/e2e-1/fonts/")), "the fonts are kept under the build's name")
   // Every file the build ships is kept at install, kept on first use, or a path no build names: a page of an old build
@@ -54,7 +48,12 @@ app.scene("a stamped build keeps its whole shell in the cache named by it, and n
     .filter(f => !served.includes(f) && !shell.FILES.includes(f) && !shell.KEPT.includes(f) && !shell.chunk(f))
   assert.deepEqual(loose, [], "a file the build ships that no build's worker keeps")
   for (const f of ["views.js", "views_bg.wasm", "pagework.js"]) assert.ok(paths.includes(`/b/e2e-1/${f}`), `${f} is kept: ${paths.join(", ")}`)
-  for (const f of shell.SERIF) assert.ok(!paths.includes(`/b/e2e-1/fonts/${f}`), `${f} waits for a page to draw in it`)
+  // A serif face is kept on first use, never at install: one in the cache is one this page drew in (the list's muted
+  // italic lines draw in the italic), and so one the document loaded.
+  const loaded = await app.page.evaluate<string[]>(`[...document.fonts].filter((f) => f.status === "loaded" && f.family === "Source Serif 4").map((f) => f.style)`)
+  for (const f of shell.SERIF)
+    if (paths.includes(`/b/e2e-1/fonts/${f}`))
+      assert.ok(loaded.includes(f.includes("italic") ? "italic" : "normal"), `${f} is kept only once a page drew in it: loaded ${loaded.join(", ")}`)
   assert.deepEqual(paths.filter(p => !p.startsWith("/b/e2e-1/") && p !== "/index.html" && p !== "/boot.js"), [], "every build file under its build's name")
   assert.deepEqual(paths.filter(p => p.startsWith("/api/") || p === "/events"), [], "the API is never the worker's")
   assert.equal(await app.page.evaluate<boolean>(`document.getElementById("updated").hidden`), true, "a device's first build is not news")
@@ -325,25 +324,14 @@ const startOn = async (id: string): Promise<void> => {
   await land(id)
 }
 
-app.scene("a page first drawn loads its own chunk, under its build's name", async () => {
-  await startOn("e2e-6")
-  const usage = `/b/e2e-6/${chunkOf("usage")}`
-  assert.ok(!(await loaded()).includes(usage), "the list loads no other page's chunk")
-  await app.page.evaluate(`(location.hash = "#/usage", true)`)
-  await app.page.waitFor(`document.querySelector(".usagepage") !== null`, { timeout: 20000 })
-  assert.ok((await loaded()).includes(usage), `the usage page's chunk: ${(await loaded()).filter(p => p.endsWith(".js")).join(", ")}`)
-  await app.page.navigate(`${SHELL}/#/`)
-})
-
-app.scene("an old build's chunk is the box's 404 once it moved, and a tab on that build still draws the page from its cache", async () => {
+app.scene("an old build's files are the box's 404 once it moved, and a tab on that build still draws a page from its cache", async () => {
   await startOn("e2e-6")
   await app.page.evaluate(MARK)
   deploy("e2e-6b")
-  const chain = `/b/e2e-6/${chunkOf("chain")}`
-  assert.equal((await fetch(`${SHELL}${chain}`)).status, 404, "the box serves no file of a build it moved from")
-  await app.page.evaluate(`(location.hash = "#/chain", true)`)
-  await app.page.waitFor(`document.querySelector(".checker") !== null`, { timeout: 30000 })
-  assert.ok((await loaded()).includes(chain), "the old build's own chunk, from its cache")
+  for (const f of ["views.js", "views_bg.wasm"])
+    assert.equal((await fetch(`${SHELL}/b/e2e-6/${f}`)).status, 404, `the box serves no ${f} of a build it moved from`)
+  await app.page.evaluate(`(location.hash = "#/typst", true)`)
+  await app.page.waitFor(`document.querySelector(".typstpane") !== null`, { timeout: 30000 })
   assert.equal(await app.page.evaluate<boolean>(marked), true, "the tab was not reloaded")
   deploy("e2e-6")
 })
@@ -358,11 +346,9 @@ app.scene("a tab whose build's worker a newer tab's worker took over still draws
     // The new build's worker installs and claims every tab.
     await app.page.evaluate(`navigator.serviceWorker.register(${JSON.stringify(shell.script("e2e-8"))}).then(() => true)`)
     await app.page.waitFor(controlledBy("e2e-8"), { timeout: 30000 })
-    const usage = `/b/e2e-6/${chunkOf("usage")}`
-    assert.ok(!(await loaded()).includes(usage), "the tab had not opened the page")
-    await app.page.evaluate(`(location.hash = "#/usage", true)`)
-    await app.page.waitFor(`document.querySelector(".usagepage") !== null`, { timeout: 30000 })
-    assert.ok((await loaded()).includes(usage), "its own build's chunk")
+    assert.equal(await app.page.evaluate<boolean>(`document.querySelector(".typstpane") === null`), true, "the tab had not opened the page")
+    await app.page.evaluate(`(location.hash = "#/typst", true)`)
+    await app.page.waitFor(`document.querySelector(".typstpane") !== null`, { timeout: 30000 })
     assert.equal(await app.page.evaluate<boolean>(`${marked} && ${controlledBy("e2e-8")}`), true, "the same document, under the newer worker")
   } finally {
     deploy("e2e-6")

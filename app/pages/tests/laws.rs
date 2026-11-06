@@ -15,11 +15,12 @@ use suzatary_pages::reading::{Nothing, One, Opened};
 use suzatary_pages::runtime::{
     Answer, Behind, Body, Context, Effect, Gate, Input, Reach, Untrusted,
 };
+use suzatary_pages::todoparts::Verb;
 use suzatary_pages::waiting::Watched;
 use suzatary_pages::zone::Offset;
 use suzatary_pages::{
     about, briefing, briefings, calendar, card, chats, composer, conversation, draft, inbox, mail,
-    memory, message, needsyou, reading as one, secretary, settings, thread,
+    memory, message, needsyou, reading as one, secretary, settings, thread, todo, todos, typstlist,
 };
 use viewtree::Runtime;
 use viewtree::dom::page_laws;
@@ -48,6 +49,7 @@ fn context(writes: bool) -> Context {
             },
         ],
         wide: writes,
+        categories: vec!["home".to_owned(), "work".to_owned()],
     }
 }
 
@@ -483,6 +485,384 @@ fn releases_payload() -> impl Strategy<Value = Value> {
     })
 }
 
+fn todo_entry() -> impl Strategy<Value = Value> {
+    (
+        prop::sample::select(vec!["open", "completed"]),
+        any::<bool>(),
+        any::<bool>(),
+        prop::sample::select(vec![json!(0.3), json!("absent"), Value::Null]),
+        0usize..3,
+        any::<bool>(),
+        any::<bool>(),
+    )
+        .prop_map(|(state, unconfirmed, rendered, value, subs, waiting, conflicted)| {
+            let html = |v: &str| if rendered { json!(format!("<p>{v}</p>")) } else { Value::Null };
+            let key = |v: &str| if unconfirmed { Value::Null } else { json!(format!("k-{v}")) };
+            json!({
+                "todo": "renewcard", "state": state, "states": if conflicted { json!([state, "open"]) } else { json!([state]) },
+                "at": if state == "open" { "" } else { "2026-09-02T10:00:00" }, "claimed": "", "value": value,
+                "recurring": false, "unconfirmed": unconfirmed,
+                "conflicts": if conflicted { json!({"Authored": ["a1", "a2"]}) } else { json!({}) },
+                "authored": {
+                    "rich": {"body": html("Renew"), "detail": html("Soon"), "rationale": Value::Null, "waiting_on": Value::Null,
+                        "keys": {"body": key("body"), "detail": key("detail"), "rationale": Value::Null, "waiting_on": Value::Null}},
+                    "block": {"kind": "todo", "name": "todo"}, "created": "2026-08-01", "body": "*Renew* the card", "text": "Renew the card",
+                    "detail": "Soon", "category": "home", "waiting_on": if waiting { "the bank" } else { "" }, "rationale": ["it expires"],
+                    "spec": {"kind": "recur", "todo": "renewcard", "term": {"kind": "curve", "points": [
+                        {"at": "2026-09-01T00:00:00", "value": 0.7}, {"at": "2026-09-15T00:00:00", "value": 0.3}]}},
+                    "actor": "ada", "at": "2026-08-01T09:00:00", "source": Value::Null,
+                    "subtodos": (0..subs).map(|i| json!({"body": format!("step {i}"), "done": i == 0})).collect::<Vec<_>>(),
+                },
+                "candidates": [], "stream": ["a1"],
+            })
+        })
+}
+
+fn todo_payload() -> impl Strategy<Value = Value> {
+    (todo_entry(), any::<bool>(), any::<bool>()).prop_map(|(entry, priced, builder)| {
+        json!({
+            "todo": "renewcard", "at": "2026-09-04T12:00:00", "entry": entry,
+            "why": if priced {
+                json!({"type": "Priced", "heading": "Why this number — 30.0%", "says": "30.0%: a ramp.", "passes": ["Last pass: never."],
+                    "parts": [{"says": "a: 30.0%", "parts": []}]})
+            } else {
+                json!({"type": "Unpriced", "says": "The chain records no priority spec for this todo."})
+            },
+            "stream": [
+                {"hash": "a1", "parents": [], "literal": "Created(...)", "holds": "event", "kind": "Created", "todo": "renewcard",
+                    "actor": "ada", "at": "2026-08-01T09:00:00", "note": "", "reverses": {"kind": "nothing"}},
+                {"hash": "a2", "parents": ["a1"], "literal": "Completed(...)", "holds": "event", "kind": "Completed", "todo": "renewcard",
+                    "actor": "ada", "at": "2026-08-02T09:00:00", "note": "", "reverses": {"kind": "undo", "of": "a1"}},
+            ],
+            "diffs": {"a1": [{"field": "body", "before": "", "after": "'Renew'"}]},
+            "links": {"out": [{"todo": "other", "state": "open", "value": 0.5, "unconfirmed": false}], "in": []},
+            "builder": if builder { json!("build") } else { Value::Null },
+        })
+    })
+}
+
+fn todo_write() -> impl Strategy<Value = todo::Write> {
+    prop_oneof![
+        prop::sample::select(vec![Verb::Done, Verb::Cancel, Verb::Reopen, Verb::Confirm]).prop_map(
+            |verb| todo::Write::Act {
+                acting: suzatary_pages::todoparts::Acting::Verb(verb)
+            }
+        ),
+        Just(todo::Write::Act {
+            acting: suzatary_pages::todoparts::Acting::Undo
+        }),
+        Just(todo::Write::Save),
+        Just(todo::Write::Defer),
+        (0usize..3).prop_map(|line| todo::Write::Tick { line }),
+    ]
+}
+
+fn todo_answer() -> impl Strategy<Value = Input<todo::Hold, todo::Ask>> {
+    let printed = json!({"todo": "renewcard", "event": "Completed(...)", "revision": null});
+    let taken = json!({"type": "Answered", "answer": {"type": "Taken"}, "held": false});
+    let refused = Answer::Refused {
+        status: 409,
+        words: "refused".to_owned(),
+    };
+    (todo_write(), 0u8..4, any::<bool>()).prop_map(move |(write, which, ok)| {
+        let (ask, done) = match which {
+            0 => (todo::Ask::Printed { write }, printed.clone()),
+            1 => (todo::Ask::Sealed { write }, taken.clone()),
+            2 => (
+                todo::Ask::Thirty,
+                json!({"type": "Drawn", "span": {"type": "Unsampled"}}),
+            ),
+            _ => (todo::Ask::Undo, Value::Null),
+        };
+        Input::Answered {
+            ask,
+            answer: if ok {
+                Answer::Done { body: done }
+            } else {
+                refused.clone()
+            },
+        }
+    })
+}
+
+fn todo_msg() -> impl Strategy<Value = todo::Msg> {
+    use todo::{DeferMsg, EditMsg, Msg};
+    let fold = (todo_entry(), any::<bool>()).prop_map(|(e, held)| {
+        if held {
+            json!({"entries": [e], "at": "2026-09-04T12:00:00"})
+        } else {
+            Value::Null
+        }
+    });
+    let unsent = (0usize..3, 0u32..2).prop_map(|(refused, waiting)| {
+        json!({"todos": {}, "refused": (0..refused).map(|i| format!("no {i}")).collect::<Vec<_>>(), "blocked": refused,
+            "stranded": 0, "losses": ["h1"], "waiting": waiting})
+    });
+    prop_oneof![
+        held::<todo::Hold, todo::Ask, suzatary_pages::runtime::Never>(
+            todo::Hold::Page,
+            todo_payload()
+        )
+        .prop_map(|i| Msg::Host(Box::new(i))),
+        held::<todo::Hold, todo::Ask, suzatary_pages::runtime::Never>(todo::Hold::Fold, fold)
+            .prop_map(|i| Msg::Host(Box::new(i))),
+        held::<todo::Hold, todo::Ask, suzatary_pages::runtime::Never>(todo::Hold::Unsent, unsent)
+            .prop_map(|i| Msg::Host(Box::new(i))),
+        todo_answer().prop_map(|i| Msg::Host(Box::new(i))),
+        any::<bool>().prop_map(|w| Msg::Host(Box::new(Input::Context(context(w))))),
+        prop::sample::select(vec![Verb::Done, Verb::Cancel, Verb::Reopen, Verb::Confirm])
+            .prop_map(Msg::Run),
+        words().prop_map(Msg::Note),
+        any::<bool>().prop_map(|o| Msg::Edit(EditMsg::Toggle(o))),
+        words().prop_map(|w| Msg::Edit(EditMsg::Body(w))),
+        words().prop_map(|w| Msg::Edit(EditMsg::Waiting(w))),
+        Just(Msg::Edit(EditMsg::Reprice)),
+        Just(Msg::Edit(EditMsg::Price(
+            suzatary_pages::form::PriceMsg::Kind(suzatary_pages::form::Kind::Deadline)
+        ))),
+        Just(Msg::Edit(EditMsg::Save)),
+        Just(Msg::Edit(EditMsg::Cancel)),
+        any::<bool>().prop_map(|o| Msg::Defer(DeferMsg::Toggle(o))),
+        prop::sample::select(vec!["2026-10-01", "not a day"])
+            .prop_map(|d| Msg::Defer(DeferMsg::Day(d.to_owned()))),
+        Just(Msg::Defer(DeferMsg::Send)),
+        (0usize..3).prop_map(Msg::Tick),
+        any::<bool>().prop_map(Msg::Provenance),
+        any::<bool>().prop_map(Msg::History),
+        Just(Msg::Retry),
+        Just(Msg::Build),
+    ]
+}
+
+fn list_entry(id: &'static str, refs: &'static [&'static str]) -> impl Strategy<Value = Value> {
+    (
+        prop::sample::select(vec![json!(0.3), json!(0.6), json!(0.9), json!("absent"), Value::Null]),
+        prop::sample::select(vec!["home", "work", ""]),
+        any::<bool>(),
+        prop::sample::select(vec!["open", "completed"]),
+    )
+        .prop_map(move |(value, category, unconfirmed, state)| {
+            let spec = if refs.is_empty() {
+                json!({"kind": "flat", "value": 0.5})
+            } else {
+                json!({"kind": "conj", "p": -4.0, "terms": refs.iter().map(|r| json!({"kind": "ref", "todo": r})).collect::<Vec<_>>()})
+            };
+            json!({
+                "todo": id, "state": state, "states": [state], "at": "", "claimed": "", "value": value,
+                "recurring": false, "unconfirmed": unconfirmed, "conflicts": {},
+                "authored": {
+                    "rich": {"body": "<p>B</p>", "detail": Value::Null, "rationale": Value::Null, "waiting_on": Value::Null,
+                        "keys": {"body": format!("k-{id}"), "detail": Value::Null, "rationale": Value::Null, "waiting_on": Value::Null}},
+                    "block": {"kind": "todo", "name": "todo"}, "created": "2026-08-01", "body": format!("Do {id}"), "text": format!("Do {id}"),
+                    "detail": "", "category": category, "waiting_on": "", "rationale": [], "spec": spec,
+                    "actor": "ada", "at": "2026-08-01T09:00:00", "source": Value::Null, "subtodos": [],
+                },
+                "candidates": [], "stream": [],
+            })
+        })
+}
+
+fn list_fold() -> impl Strategy<Value = Value> {
+    (
+        list_entry("a", &[]),
+        list_entry("b", &["a"]),
+        list_entry("c", &[]),
+        0usize..4,
+        any::<bool>(),
+    )
+        .prop_map(|(a, b, c, n, held)| {
+            let entries: Vec<Value> = [a, b, c].into_iter().take(n).collect();
+            if held {
+                json!({"entries": entries, "at": "2026-09-04T12:00:00"})
+            } else {
+                Value::Null
+            }
+        })
+}
+
+/// The worker's prices, answering one of the page's first asks.
+/// The worker's tree, answering one of the page's first asks: the generated fold's todos under
+/// their categories, each node with one of the generated prices.
+fn list_prices() -> impl Strategy<Value = Input<todos::Hold, todos::Ask, todos::Listen>> {
+    (
+        proptest::collection::vec(
+            prop_oneof![
+                Just(json!({"type": "Value", "v": 0.4})),
+                Just(json!({"type": "Value", "v": null})),
+                Just(json!({"type": "Refused", "why": "no"}))
+            ],
+            6,
+        ),
+        1u32..4,
+    )
+        .prop_map(|(p, n)| {
+            let node = |place: Value, priced: &Value, children: Vec<Value>| {
+                json!({"place": place, "term": {"kind": "ref", "todo": "a"}, "priced": priced, "children": children})
+            };
+            let todo = |t: &str, i: usize| node(json!({"type": "Todo", "v": t}), &p[i], Vec::new());
+            let home = node(
+                json!({"type": "Category", "v": "home"}),
+                &p[1],
+                vec![todo("a", 2), node(json!({"type": "Todo", "v": "b"}), &p[3], vec![todo("a", 4)])],
+            );
+            let work = node(json!({"type": "Category", "v": "work"}), &p[5], vec![todo("c", 0)]);
+            Input::Answered {
+                ask: todos::Ask::Tree { n },
+                answer: Answer::Done {
+                    body: node(json!({"type": "All"}), &p[0], vec![home, work]),
+                },
+            }
+        })
+}
+
+fn list_host() -> impl Strategy<Value = todos::Msg> {
+    use suzatary_pages::todoparts::{Acting, Phase};
+    use todos::{Ask, Hold, Kept, Listen, Msg};
+    type In = Input<Hold, Ask, Listen>;
+    let host = |i: In| Msg::Host(Box::new(i));
+    let done = |ask: Ask, body: Value| Input::Answered {
+        ask,
+        answer: Answer::Done { body },
+    };
+    let route = (prop::sample::select(vec!["", "a", "b"]), prop::sample::select(vec!["", "Shared words"]))
+        .prop_map(|(selected, shared)| json!({"page": "todos", "conversation": "", "selected": selected, "shared": shared}));
+    let kept = prop_oneof![
+        Just((Kept::Filter, json!({"state": "all", "query": "do"}))),
+        Just((Kept::Filter, json!("{not json"))),
+        Just((Kept::By, json!("urgency"))),
+        Just((Kept::By, json!("flat"))),
+        Just((Kept::Folds, json!({"c:home": false, "t:b": true}))),
+        Just((Kept::Opened, json!("a"))),
+        Just((Kept::Sheet, json!(true))),
+        Just((Kept::Category, json!("work"))),
+    ];
+    let unsent = prop::sample::select(vec!["", "a"]).prop_map(|t| {
+        let todos = if t.is_empty() { json!({}) } else { json!({t: "Sending"}) };
+        json!({"todos": todos, "refused": [], "blocked": 0, "stranded": 0, "losses": [], "waiting": 0})
+    });
+    let read = prop_oneof![
+        Just(json!({"held": ["life"], "read": {"type": "Unheld"}})),
+        Just(
+            json!({"held": ["life"], "read": {"type": "Read", "reading": {"chain": "life", "set": "s", "at": "2026-09-04T12:00:00"},
+            "at": "2026-09-04T12:00:00", "specs": {"b": [{"kind": "ref", "todo": "a"}]}, "functions": {"a": {"kind": "flat", "value": 0.4}}}})
+        ),
+    ];
+
+    let keys = prop_oneof![
+        (-2i32..3).prop_map(|by| json!({"type": "Move", "by": by})),
+        Just(json!({"type": "Open"})),
+        Just(json!({"type": "Close"})),
+        Just(json!({"type": "Act", "name": "done"})),
+        Just(json!({"type": "Search"})),
+        Just(json!({"type": "Add"})),
+        Just(json!({"type": "Escape"})),
+    ];
+    prop_oneof![
+        held::<Hold, Ask, Listen>(Hold::Fold, list_fold()).prop_map(host),
+        held::<Hold, Ask, Listen>(Hold::Unsent, unsent).prop_map(host),
+        held::<Hold, Ask, Listen>(Hold::Route, route).prop_map(host),
+        kept.prop_map(move |(k, v)| host(Input::Held {
+            ask: Hold::Kept(k),
+            reading: Reading::Val {
+                v: Answer::Done { body: v }
+            },
+            behind: None
+        })),
+        read.prop_map(move |r| host(done(
+            Ask::Reading {
+                at: "2026-09-04T12:00:00".to_owned()
+            },
+            r
+        ))),
+        list_prices().prop_map(host),
+        Just(host(done(
+            Ask::Added,
+            json!({"todo": "x", "event": "Created(...)", "revision": null})
+        ))),
+        Just(host(done(
+            Ask::Sealed,
+            json!({"type": "Answered", "answer": {"type": "Taken"}, "held": false})
+        ))),
+        Just(host(done(
+            Ask::Line {
+                todo: "a".to_owned(),
+                acting: Acting::Verb(Verb::Done),
+                phase: Phase::Sealed
+            },
+            json!({"type": "Answered", "answer": {"type": "Taken"}, "held": false})
+        ))),
+        keys.prop_map(move |k| host(Input::Heard {
+            ask: Listen::Keys,
+            frame: k.to_string()
+        })),
+        any::<bool>().prop_map(move |w| host(Input::Context(context(w)))),
+    ]
+}
+
+fn list_person() -> impl Strategy<Value = todos::Msg> {
+    use todos::{Choice, Grouping, Msg, Narrow, SheetMsg, States};
+    prop_oneof![
+        (
+            prop::sample::select(vec!["c:home", "t:b", "all"]),
+            any::<bool>()
+        )
+            .prop_map(|(k, o)| Msg::Fold(k.to_owned(), o)),
+        prop::sample::select(vec!["a", "b"])
+            .prop_map(|t| Msg::Tap(t.to_owned(), format!("c:home/t:{t}"))),
+        Just(Msg::Find),
+        prop::sample::select(vec![Grouping::Category, Grouping::Urgency, Grouping::Flat])
+            .prop_map(Msg::By),
+        words().prop_map(|q| Msg::Narrow(Narrow::Query(q))),
+        prop::sample::select(vec![States::Open, States::Done, States::All])
+            .prop_map(|s| Msg::Narrow(Narrow::States(s))),
+        Just(Msg::Narrow(Narrow::Attention)),
+        Just(Msg::Narrow(Narrow::Category(Choice::Is("work".to_owned())))),
+        Just(Msg::Narrow(Narrow::Category(Choice::Any))),
+        Just(Msg::Act("a".to_owned(), Verb::Done)),
+        Just(Msg::Under("b".to_owned())),
+        Just(Msg::Sheet(SheetMsg::Handle)),
+        words().prop_map(|w| Msg::Sheet(SheetMsg::Body(w))),
+        Just(Msg::Sheet(SheetMsg::Category("home".to_owned()))),
+        Just(Msg::Sheet(SheetMsg::Add)),
+        Just(Msg::Pane(todo::Msg::Provenance(true))),
+        Just(Msg::Retry),
+    ]
+}
+
+fn list_msg() -> impl Strategy<Value = todos::Msg> {
+    prop_oneof![list_host(), list_person()]
+}
+
+fn typst_msg() -> impl Strategy<Value = typstlist::Msg> {
+    use typstlist::{Ask, Hold, Msg};
+    let host = |i: Input<Hold, Ask>| Msg::Host(Box::new(i));
+    let route = prop::sample::select(vec!["", "a"]).prop_map(
+        |selected| json!({"page": "typst", "conversation": "", "selected": selected, "shared": ""}),
+    );
+    prop_oneof![
+        held::<Hold, Ask, suzatary_pages::runtime::Never>(Hold::Fold, list_fold()).prop_map(host),
+        held::<Hold, Ask, suzatary_pages::runtime::Never>(Hold::Route, route).prop_map(host),
+        any::<bool>().prop_map(move |w| host(Input::Context(context(w)))),
+        prop::sample::select(vec![
+            "open todo:life/a",
+            "complete todo:life/a",
+            "complete todo:work/a",
+            "rm -rf"
+        ])
+        .prop_map(|w| Msg::Intent(w.to_owned())),
+        Just(host(Input::Answered {
+            ask: Ask::Act {
+                todo: "a".to_owned(),
+                acting: suzatary_pages::todoparts::Acting::Verb(Verb::Done),
+                phase: suzatary_pages::todoparts::Phase::Sealed
+            },
+            answer: Answer::Done {
+                body: json!({"type": "Answered", "answer": {"type": "Taken"}, "held": false})
+            },
+        })),
+    ]
+}
+
 fn about_payload() -> impl Strategy<Value = Value> {
     prop_oneof![Just("dev"), Just("abc1234")].prop_map(|build| {
         printed(&AboutPayload {
@@ -559,6 +939,31 @@ proptest! {
         Just(about::Msg::Retry),
     ], 0..8)) {
         page_laws::<about::About>(|| opened(true, Nothing {}), &msgs);
+    }
+
+    #[test]
+    fn todo_laws(writes: bool, pushed: bool, msgs in proptest::collection::vec(todo_msg(), 0..16)) {
+        page_laws::<todo::Todo>(|| todo::Flags {
+            context: context(writes),
+            chain: "life".to_owned(),
+            id: "renewcard".to_owned(),
+            pushed,
+            now: 1_788_000_000_000,
+        }, &msgs);
+    }
+
+    #[test]
+    fn list_laws(writes: bool, wide: bool, msgs in proptest::collection::vec(list_msg(), 0..24)) {
+        page_laws::<todos::Todos>(|| todos::Flags {
+            context: Context { wide, ..context(writes) },
+            chain: "life".to_owned(),
+            now: 1_788_000_000_000,
+        }, &msgs);
+    }
+
+    #[test]
+    fn typst_laws(writes: bool, msgs in proptest::collection::vec(typst_msg(), 0..12)) {
+        page_laws::<typstlist::Typst>(|| typstlist::Flags { context: context(writes), chain: "life".to_owned() }, &msgs);
     }
 
     #[test]
@@ -1207,6 +1612,49 @@ fn a_card_tap_answered_asks_the_overview_again() {
             .any(|e| matches!(e, Effect::Again { path } if path == "/api/overview")),
         "{effects:?}"
     );
+}
+
+/// THE LINK A GRANT'S YES SENDS IS THE ONE ITS LINE DREW BESIDE IT: a link's card refused for
+/// its origin files a grant on the same line, and the grant's yes taps the link's card again
+/// with the link the tab kept. Once the grant is performed the box's overview names it no more,
+/// so an overview read during the tap, landing before the tap's answer, must not lose the link.
+/// `allow.json` is what the links scene's Settings page held before the yes was answered, the
+/// overview read after it, and the answer (train 229 lost the resend in that order).
+#[test]
+fn a_grant_answered_after_its_line_moved_still_sends_its_link() {
+    type In = suzatary_pages::runtime::Input<settings::Hold, settings::Ask>;
+    let recorded: Value = serde_json::from_str(include_str!("allow.json")).expect("the recording");
+    let input = |v: &Value| -> settings::Msg {
+        let read: In = serde_json::from_value(v.clone()).expect("a Settings input");
+        settings::Msg::Host(Box::new(read))
+    };
+    let link = card::Key {
+        conversation: "setup".to_owned(),
+        index: 0,
+    };
+    let resends = |effects: &[Effect<settings::Hold, settings::Ask>]| {
+        effects.iter().any(|e| {
+            matches!(e, Effect::Act { ask: settings::Ask::Card(card::Asking::Act { key, .. }), .. } if *key == link)
+        })
+    };
+    for overview_first in [false, true] {
+        let (mut rt, _) = Runtime::<settings::Settings>::start(settings::Flags {
+            context: context(true),
+        });
+        for one in recorded["before"].as_array().expect("inputs") {
+            rt.step(input(one));
+        }
+        let effects = if overview_first {
+            rt.step(input(&recorded["overview_after"]));
+            rt.step(input(&recorded["answer"])).1
+        } else {
+            rt.step(input(&recorded["answer"])).1
+        };
+        assert!(
+            resends(&effects),
+            "the grant's yes sends its link again (the overview read after it landing first: {overview_first})"
+        );
+    }
 }
 
 /// Each page's rehearsal (`app/pages/tests/rehearsal/`) is flags and inputs its page takes, so the

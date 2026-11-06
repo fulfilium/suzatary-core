@@ -1,9 +1,8 @@
-//! What a page reads, as the typed values its templates draw (`rendering::TODO`,
-//! `rendering::CALENDAR`).
+//! What a page reads, as typed values: a todo's "Why this number", which the todo page draws,
+//! and the calendar's days, which `rendering::CALENDAR` draws.
 //!
-//! Every datum is a string in the value, read by the template as data, so it is text whatever it
-//! spells; the one exception is a trusted record's markup, evaluated in place (see [`Prose`]).
-//! The HTML carries classes and no colour, so one render serves both themes.
+//! Every datum is a string in the value, read as data, so it is text whatever it spells. The
+//! HTML carries classes and no colour, so one render serves both themes.
 
 use std::cmp::Ordering;
 use std::num::NonZeroU32;
@@ -14,10 +13,7 @@ use prodrome_core::fpl::{Delta, Explanation, Instant, Note, Scalar, total_second
 use prodrome_core::observe::{Observation, Rounding};
 use prodrome_core::term::{CurvePoint, TermF};
 use schemars::JsonSchema;
-use serde::Serialize;
-
-use crate::escape::Escaped;
-use crate::wire;
+use serde::{Deserialize, Serialize};
 
 /// What a page shows of a fulfillment: tenths of a percent, to the nearest. A page is printed from
 /// this observation of every price on it, so its bytes, and the memo that keys a page by them,
@@ -39,26 +35,6 @@ fn pct(value: f64) -> String {
 /// A node's reading: its number, or `∅` where it has none, never a number standing in.
 fn reads(value: Option<f64>) -> String {
     value.map_or_else(|| "∅".to_owned(), pct)
-}
-
-// --- Prose: a record's field, rendered or shown as its source ------------------
-
-/// One field of a record, as a page shows it.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, JsonSchema)]
-#[serde(tag = "type")]
-pub enum Prose {
-    /// A trusted actor's markup that compiles on its own: evaluated in place,
-    /// so it reads exactly as its own rendering does.
-    Rendered {
-        /// The markup.
-        source: Escaped,
-    },
-    /// Anything else, shown as its source text: an untrusted actor's (rendered means
-    /// confirmed), or markup Typst refused.
-    Source {
-        /// The source, as text.
-        text: String,
-    },
 }
 
 // --- Why this number -----------------------------------------------------------
@@ -421,7 +397,7 @@ fn referred(store: Option<&String>, entity: &str) -> String {
 }
 
 /// One part of a price and its own parts, each in one sentence.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, JsonSchema)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, ts_rs::TS)]
 pub struct Part {
     /// Its label and its sentence.
     pub says: String,
@@ -441,7 +417,7 @@ fn part(z: Zone, label: &str, node: &Explanation) -> Part {
 
 /// "Why this number": the price in one sentence, then its parts in words, or the sentence for
 /// a todo with none.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, JsonSchema)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, ts_rs::TS)]
 #[serde(tag = "type")]
 pub enum Why {
     /// The todo has no number, and the sentence says why.
@@ -462,7 +438,9 @@ pub enum Why {
     },
 }
 
-fn why(z: Zone, tree: Option<&Explained>) -> Why {
+/// "Why this number" for a todo whose price explains as `tree`, `None` where it does not link.
+#[must_use]
+pub fn why(z: Zone, tree: Option<&Explained>) -> Why {
     let Some(Explained(root)) = tree else {
         return Why::Unpriced {
             says: "This todo's price names a todo that cannot be read, so it has no number."
@@ -492,156 +470,6 @@ fn why(z: Zone, tree: Option<&Explained>) -> Why {
             .iter()
             .map(|(label, kid)| part(z, label, kid))
             .collect(),
-    }
-}
-
-// --- A todo's reading part -------------------------------------------------------
-
-/// What a todo's content record gives its page.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Content {
-    /// The action line: the page's title.
-    pub body: Prose,
-    /// The detail, `None` when absent.
-    pub detail: Option<Prose>,
-}
-
-/// Why the body reads as written, in one line under the header; a body typst drew needs no line.
-fn render_note(body: &Prose, unconfirmed: bool) -> Option<String> {
-    match (body, unconfirmed) {
-        (Prose::Rendered { .. }, _) => None,
-        (Prose::Source { .. }, true) => {
-            Some("Shown the way it was written until you confirm it.".to_owned())
-        }
-        (Prose::Source { .. }, false) => {
-            Some("Shown the way it was written: Typst could not draw it.".to_owned())
-        }
-    }
-}
-
-/// What a chip says of a todo, which its class names.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, JsonSchema)]
-#[serde(rename_all = "lowercase")]
-pub enum ChipKind {
-    /// Its state while open, or a count.
-    Plain,
-    /// Its state once closed.
-    Done,
-    /// Its category.
-    Cat,
-    /// Its record's kind.
-    Kind,
-    /// Its provenance.
-    Prov,
-}
-
-/// One chip of the header.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, JsonSchema)]
-pub struct Chip {
-    /// Its words.
-    pub label: String,
-    /// What it says.
-    pub kind: ChipKind,
-}
-
-fn chip(label: impl Into<String>, kind: ChipKind) -> Chip {
-    Chip {
-        label: label.into(),
-        kind,
-    }
-}
-
-/// The number at the head of a todo's page.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, JsonSchema)]
-#[serde(tag = "type")]
-pub enum Fulfil {
-    /// Its fulfillment, as [`SHOWN`] prints it.
-    Priced {
-        /// "62.3%".
-        shown: String,
-    },
-    /// Nothing prices it.
-    Unpriced,
-    /// Its price names a todo that cannot be read.
-    Unlinked,
-}
-
-/// The header: the number, the body as the title, the id, the chips.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, JsonSchema)]
-pub struct Head {
-    /// The number.
-    pub fulfil: Fulfil,
-    /// The body, where the page has the record.
-    pub body: Option<Prose>,
-    /// The todo's id.
-    pub id: String,
-    /// Its chips.
-    pub chips: Vec<Chip>,
-    /// Why the body reads as written, where it is not drawn.
-    pub note: Option<String>,
-}
-
-fn head(entry: &wire::Entry, content: Option<&Content>) -> Head {
-    let authored = entry.authored.as_ref();
-    let closed = |word: &str| {
-        let day = entry.at.get(..10).unwrap_or_default();
-        chip(format!("{word} {day}").trim_end(), ChipKind::Done)
-    };
-    let state = match entry.state {
-        wire::EntryState::Open => chip("open", ChipKind::Plain),
-        wire::EntryState::Completed => closed("completed"),
-        wire::EntryState::Cancelled => closed("cancelled"),
-    };
-    let subs = authored.map_or(0, |a| a.subtodos.len());
-    let done = authored.map_or(0, |a| a.subtodos.iter().filter(|s| s.done).count());
-    let category = authored.map_or("", |a| a.category.as_str());
-    let chips = std::iter::once(state)
-        .chain((!category.is_empty()).then(|| chip(category, ChipKind::Cat)))
-        .chain(authored.map(|a| chip(a.block.name(), ChipKind::Kind)))
-        .chain(
-            entry
-                .unconfirmed
-                .then(|| chip("unconfirmed", ChipKind::Prov)),
-        )
-        .chain((subs > 0).then(|| chip(format!("{done} of {subs} done"), ChipKind::Plain)))
-        .collect();
-    Head {
-        fulfil: match entry.value {
-            Some(wire::Fulfillment::Number(v)) => Fulfil::Priced { shown: pct(v) },
-            Some(wire::Fulfillment::Absent(_)) => Fulfil::Unpriced,
-            None => Fulfil::Unlinked,
-        },
-        body: content.map(|c| c.body.clone()),
-        id: entry.todo.clone(),
-        chips,
-        note: content.and_then(|c| render_note(&c.body, entry.unconfirmed)),
-    }
-}
-
-/// A todo's reading part, one page: the header first (the page puts its acts under it), then
-/// the detail and "Why this number".
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, JsonSchema)]
-pub struct TodoPage {
-    /// The header.
-    pub head: Head,
-    /// The detail, where it has one.
-    pub detail: Option<Prose>,
-    /// Why this number.
-    pub why: Why,
-}
-
-/// A todo's page.
-#[must_use]
-pub fn todo(
-    entry: &wire::Entry,
-    content: Option<&Content>,
-    explained: Option<&Explained>,
-    z: Zone,
-) -> TodoPage {
-    TodoPage {
-        head: head(entry, content),
-        detail: content.and_then(|c| c.detail.clone()),
-        why: why(z, explained),
     }
 }
 
@@ -761,11 +589,11 @@ mod tests {
     }
 
     proptest! {
-        /// Between an instant and its next change as [`SHOWN`] sees the price, a todo's page
-        /// is the same value whatever the clock says, so the memo keyed by it hits; at an exact
-        /// change it is another.
+        /// Between an instant and its next change as [`SHOWN`] sees the price, a todo's "Why
+        /// this number" is the same value whatever the clock says; at an exact change it is
+        /// another.
         #[test]
-        fn a_page_is_the_same_value_until_its_observed_value_moves(
+        fn why_is_the_same_value_until_its_observed_value_moves(
             start in 0.0f64..0.98,
             end in 0.0f64..0.9,
             days in 1i64..30,
@@ -776,19 +604,7 @@ mod tests {
                 .expect("a decay");
             let closed = prodrome_core::fpl::Closed::of(term).expect("closed");
             let env = Env::new();
-            let page = |t: Instant| {
-                let why = Explained::of(explained(&closed, t, &env));
-                let value = prodrome_core::fpl::fulfillment(&closed, t, &env);
-                todo(
-                    &wire::Entry {
-                        value: Some(wire::Fulfillment::of_value(value)),
-                        ..entry(wire::EntryState::Open, false)
-                    },
-                    None,
-                    Some(&why),
-                    Zone::UTC,
-                )
-            };
+            let page = |t: Instant| why(Zone::UTC, Some(&Explained::of(explained(&closed, t, &env))));
             let t0 = at("2026-09-01T00:00:00") + Duration::minutes(from);
             let next = prodrome_core::observe::next_change(&closed, t0, &env, SHOWN);
             let Some(changes) = next.at else {
@@ -801,23 +617,6 @@ mod tests {
             prop_assert_eq!(page(t), page(t0));
             prop_assert!(next.exact, "a decay is exact");
             prop_assert_ne!(page(changes), page(t0));
-        }
-    }
-
-    fn entry(state: wire::EntryState, unconfirmed: bool) -> wire::Entry {
-        wire::Entry {
-            todo: "file-permit".to_owned(),
-            state,
-            states: vec![state],
-            at: "2026-09-20T10:00:00".to_owned(),
-            claimed: wire::ClaimedState::Agrees,
-            value: Some(wire::Fulfillment::Number(0.623)),
-            recurring: false,
-            unconfirmed,
-            conflicts: std::collections::BTreeMap::new(),
-            authored: None,
-            candidates: Vec::new(),
-            stream: Vec::new(),
         }
     }
 }

@@ -188,19 +188,17 @@ pub fn todo(
             .unwrap_or_default()
     };
     let entry = view::entry(render, row, &by_hash, untrusted, at);
-    let content =
-        view::content_of(row, &by_hash).map(|record| view::content(render, record, untrusted));
-    let why = view::explain(row, at, &env).map(reading::Explained::of);
-    let reading = crate::rendering::TODO
-        .call(&reading::todo(&entry, content.as_ref(), why.as_ref(), zone))
-        .ok()
-        .and_then(|page| render.page(&page).ok())
-        .map(|html| html.as_str().to_owned());
+    let why = reading::why(
+        zone,
+        view::explain(row, at, &env)
+            .map(reading::Explained::of)
+            .as_ref(),
+    );
     Ok(wire::TodoPayload {
         todo: id.to_owned(),
         at: fpl::iso(fpl::instant_of(at)),
         entry,
-        reading,
+        why,
         stream: row
             .stream
             .iter()
@@ -1770,35 +1768,6 @@ fn todo_id(value: &str) -> Result<&str, Refusal> {
             shown(value)
         )))
     }
-}
-
-/// `GET /api/usage`: what this box has spent of its model subscription's allowance, over rolling windows on
-/// the wall clock.
-///
-/// # Errors
-/// The transcripts being unreadable.
-pub fn usage(
-    usage: &dyn crate::capability::Usage,
-    at: chrono::DateTime<chrono::Utc>,
-) -> Answered<crate::usage::Report> {
-    let requests = usage
-        .requests()
-        .map_err(|failed| Refusal::internal(failed.to_string()))?;
-    let refusals = usage
-        .refusals()
-        .map_err(|failed| Refusal::internal(failed.to_string()))?;
-    let allowances = usage.allowance();
-    let scope = usage
-        .scope()
-        .map_err(|failed| Refusal::internal(failed.to_string()))?;
-    Ok(crate::usage::report(
-        at,
-        &requests,
-        &refusals,
-        &allowances,
-        usage.horizon(),
-        scope,
-    ))
 }
 
 /// `GET /api/overview`: what is connected, by group, read from `declared`, what the secret

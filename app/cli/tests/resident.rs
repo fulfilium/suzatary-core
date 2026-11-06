@@ -200,7 +200,6 @@ fn round(base: &str, key: &prodrome_core::sign::Secret, round: usize) {
         "/api/secretary/record",
         "/api/secretary/memory",
         "/api/briefings",
-        "/api/usage",
     ] {
         get(base, path);
     }

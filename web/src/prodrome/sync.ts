@@ -622,6 +622,7 @@ export function refetchFold(): Promise<void> {
       store.dispatch({ type: "Box", payload, fetchedAt, ancestry: orderOf(source.state().replica) });
       // The box names the chains its fold was priced without; the tab's own readings say theirs through the set.
       readings.told(`box/${on}`, excluded.left(excluded.NONE, payload.failed));
+      boxRead = true;
       keep(payload, fetchedAt);
       void richkeep.keep(payload.entries);
       // A fetch that worked means the network is back, so whatever is still held goes now.
@@ -639,9 +640,15 @@ export function refetchFold(): Promise<void> {
     });
 }
 
-/** A restored cache still asks, because a cache is not an answer about now. */
+/** Whether this tab has read the box's fold: only it carries what the box rendered and is kept as the dated copy. */
+let boxRead = false;
+
+/**
+ * A restored cache still asks, because a cache is not an answer about now; and the box is asked once per tab even when
+ * the tab's own fold is fresh, since a page mounted once its module loads would otherwise never read it.
+ */
 export function ensureFold(): Promise<void> {
-  return onscreen.fresh(store.state()) ? Promise.resolve() : refetchFold();
+  return onscreen.fresh(store.state()) && boxRead ? Promise.resolve() : refetchFold();
 }
 
 /** Before the first route, so the first paint is not a spinner. */

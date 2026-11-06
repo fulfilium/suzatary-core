@@ -37,3 +37,9 @@ export class SecretaryPage extends Page {}
 export class ConversationPage extends Page {}
 export class DraftPage extends Page {}
 export class NeedsYouPage extends Page {}
+/** A todo's page (`app/pages/src/todo.rs`). */
+export class TodoPage extends Page {}
+/** The list (`app/pages/src/todos.rs`). */
+export class TodosPage extends Page {}
+/** The list drawn by Typst (`app/pages/src/typstlist.rs`). */
+export class TypstPage extends Page {}

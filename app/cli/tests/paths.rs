@@ -63,8 +63,6 @@ fn resolved(instance: &Instance) -> Vec<(&'static str, &Path)> {
         ("repos", &paths.repos),
         ("usage_cache", &paths.usage_cache),
         ("last_sync", &paths.last_sync),
-        ("transcripts", &paths.transcripts),
-        ("home", &paths.home),
         ("drive_cli", &paths.drive_cli),
         ("drive_scratch", &paths.drive_scratch),
         ("bridge_cert", &paths.bridge_cert),

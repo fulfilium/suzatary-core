@@ -204,6 +204,7 @@ impl Program for Mail {
             class: "mailpage",
             title: if searching { "Mail search" } else { "Mail" }.to_owned(),
             masthead: Masthead::Page,
+            width: crate::chrome::Width::Column,
             back: None,
             legend: None,
             now: vec![para("legend", legend), search],

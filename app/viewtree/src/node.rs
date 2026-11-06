@@ -36,10 +36,12 @@ pub enum Tag {
     Img,
     Label,
     Aside,
+    /// `ol`.
+    Ol,
 }
 
 impl Tag {
-    pub const ALL: [Tag; 27] = [
+    pub const ALL: [Tag; 28] = [
         Tag::Div,
         Tag::Section,
         Tag::H2,
@@ -67,6 +69,7 @@ impl Tag {
         Tag::Img,
         Tag::Label,
         Tag::Aside,
+        Tag::Ol,
     ];
 
     #[must_use]
@@ -109,6 +112,7 @@ impl Tag {
             Tag::Img => "img",
             Tag::Label => "label",
             Tag::Aside => "aside",
+            Tag::Ol => "ol",
         }
     }
 }
@@ -147,6 +151,17 @@ pub enum Attr {
     Alt,
     Loading,
     Maxlength,
+    Min,
+    Max,
+    Step,
+    Id,
+    AriaControls,
+    Tabindex,
+    /// A checkbox's `checked`: the painter sets the property, so a box a person ticked is drawn
+    /// as the view says.
+    Checked,
+    /// The field a label names by its `id`.
+    For,
     Data(&'static str),
 }
 
@@ -179,6 +194,14 @@ impl Attr {
             Attr::Alt => "alt".to_owned(),
             Attr::Loading => "loading".to_owned(),
             Attr::Maxlength => "maxlength".to_owned(),
+            Attr::Min => "min".to_owned(),
+            Attr::Max => "max".to_owned(),
+            Attr::Step => "step".to_owned(),
+            Attr::Checked => "checked".to_owned(),
+            Attr::Id => "id".to_owned(),
+            Attr::AriaControls => "aria-controls".to_owned(),
+            Attr::Tabindex => "tabindex".to_owned(),
+            Attr::For => "for".to_owned(),
             Attr::Data(suffix) => format!("data-{suffix}"),
         }
     }
@@ -198,6 +221,9 @@ pub enum On {
     Toggle,
     /// Reports `Picked::print`.
     Files,
+    /// A click on an element inside this one that carries `data-intent`; the painter reports the
+    /// nearest such element's intent, as written, and reports nothing for a click on none.
+    Intent,
 }
 
 impl On {
@@ -210,6 +236,7 @@ impl On {
             On::Keydown => 3,
             On::Toggle => 4,
             On::Files => 5,
+            On::Intent => 6,
         }
     }
 
@@ -222,6 +249,7 @@ impl On {
             3 => Some(On::Keydown),
             4 => Some(On::Toggle),
             5 => Some(On::Files),
+            6 => Some(On::Intent),
             _ => None,
         }
     }
@@ -237,6 +265,8 @@ pub enum Listener<M> {
     Keydown(Handler<Key, Option<M>>),
     Toggle(Handler<bool, M>),
     Files(Handler<Vec<Picked>, M>),
+    /// The intent a click inside it named makes this message.
+    Intent(Handler<String, M>),
 }
 
 pub struct Handler<A, B>(Rc<dyn Fn(A) -> B>);
@@ -282,6 +312,7 @@ impl<M: 'static> Listener<M> {
             }
             Listener::Toggle(h) => Listener::Toggle(h.then(g)),
             Listener::Files(h) => Listener::Files(h.then(g)),
+            Listener::Intent(h) => Listener::Intent(h.then(g)),
         }
     }
 }
@@ -427,6 +458,7 @@ impl<M> Listener<M> {
             Listener::Keydown(_) => On::Keydown,
             Listener::Toggle(_) => On::Toggle,
             Listener::Files(_) => On::Files,
+            Listener::Intent(_) => On::Intent,
         }
     }
 }
@@ -662,6 +694,12 @@ impl<M: 'static> El<M> {
     #[must_use]
     pub fn files(self, f: fn(Vec<Picked>) -> M) -> Self {
         self.on(Listener::Files(Handler::of(f)))
+    }
+
+    /// A click on an intent inside it sends `f` of the intent's words.
+    #[must_use]
+    pub fn intent(self, f: fn(String) -> M) -> Self {
+        self.on(Listener::Intent(Handler::of(f)))
     }
 }
 

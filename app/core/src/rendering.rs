@@ -78,19 +78,6 @@ pub fn kept() -> [&'static Hash; 2] {
     [MARKUP.function(), ANSWER.function()]
 }
 
-/// A todo's reading part.
-pub static TODO: Template<crate::reading::TodoPage> = Template::new(
-    "/todo.typ",
-    &[
-        ("/todo.typ", include_str!("rendering/todo.typ")),
-        ("/page.typ", include_str!("rendering/page.typ")),
-    ],
-    Library::Open,
-    Output::Body,
-    Kept::Process,
-    &[],
-);
-
 /// The calendar's days.
 pub static CALENDAR: Template<crate::reading::CalendarPage> = Template::new(
     "/calendar.typ",
@@ -117,8 +104,8 @@ pub static DECISIONS: Template<crate::decisions::DecisionsPage> = Template::new(
 
 /// Every template, for the build to compile against its type's examples.
 #[must_use]
-pub fn all() -> [&'static dyn Checked; 5] {
-    [&MARKUP, &ANSWER, &TODO, &CALENDAR, &DECISIONS]
+pub fn all() -> [&'static dyn Checked; 4] {
+    [&MARKUP, &ANSWER, &CALENDAR, &DECISIONS]
 }
 
 #[cfg(test)]

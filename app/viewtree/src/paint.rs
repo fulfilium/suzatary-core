@@ -51,7 +51,7 @@ impl<M: Clone> Painter<M> {
             .find(|l| l.on() == on)
             .map(|l| match l {
                 Listener::Click(m) | Listener::Submit(m) => Some(m.clone()),
-                Listener::Input(f) => Some(f.call(words)),
+                Listener::Input(f) | Listener::Intent(f) => Some(f.call(words)),
                 Listener::Keydown(f) => Key::read(&words).and_then(|k| f.call(k)),
                 Listener::Toggle(f) => Some(f.call(!words.is_empty())),
                 Listener::Files(f) => Some(f.call(Picked::read(&words))),

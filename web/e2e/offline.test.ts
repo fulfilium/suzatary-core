@@ -91,6 +91,24 @@ async function untilHeld(): Promise<number> {
   throw new Error("the objects were never cached");
 }
 
+// THE LIST ASKS THE BOX FOR ITS FOLD ONCE PER TAB, EVEN WHEN THE TAB'S OWN FOLD IS FRESH FIRST: only the box's fold
+// carries what the box rendered and is kept as the dated copy an offline reload draws, and a Rust page mounts once its
+// module loads, by when a warm tab's own fold is often fresh. The module is held until it is.
+app.scene("a warm tab whose own fold is fresh before the list mounts still keeps the box's fold", async () => {
+  await app.open(BASE);
+  await app.page.waitFor(`window.localStorage.getItem("suzatary.fold.life") !== null`);
+  await untilHeld();
+  await app.page.evaluate(`(window.localStorage.removeItem("suzatary.fold.life"), true)`);
+  const release = await app.page.holdRequests(["views_bg.wasm"]);
+  await app.page.reload();
+  await app.page.untilHeld();
+  // The replica restored and folded by the tab's own core, about now.
+  await sleep(4000);
+  await release();
+  await app.page.waitFor(`document.querySelectorAll(".tree .row").length > 0`, { timeout: 30000 });
+  await app.page.waitFor(`window.localStorage.getItem("suzatary.fold.life") !== null`, { timeout: 20000 });
+});
+
 app.scene("a reload with no backend draws the cached fold under a dated banner", async () => {
   await app.open(BASE);
   const before = await shownTodos(app.page);
@@ -222,7 +240,7 @@ app.scene("a todo page this tab fetched keeps its page; one it never fetched is 
   );
   assert.equal(await app.page.evaluate<boolean>(`document.querySelector(".todoview .whytree") === null`), true);
   assert.equal(
-    await app.page.evaluate<number>(`document.querySelectorAll(".todoview .todobody.rich").length`),
+    await app.page.evaluate<number>(`document.querySelectorAll(".todoview .todobody .rich").length`),
     0,
     "a page never fetched is plain text, not a rendering",
   );

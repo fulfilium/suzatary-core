@@ -5,7 +5,6 @@ import assert from "node:assert/strict"
 
 import type { SpecNode } from "../src/wire/generated/wire"
 import term from "../src/todo/term"
-import grouping from "../src/todo/grouping"
 import { forAll } from "./gen"
 import type { Rng } from "./gen"
 
@@ -49,12 +48,5 @@ test("law: find answers the first node, root first, that its function answers fo
     const t = genTerm(r)
     const f = (n: SpecNode): string | null => (n.kind === "ref" && typeof n["todo"] === "string" ? n["todo"] : null)
     assert.equal(term.find(f, t), term.nodes(t).map(f).find(x => x !== null) ?? null)
-  })
-})
-
-test("law: refs are exactly the references among the nodes, a piece's included", () => {
-  forAll(200, r => {
-    const t = genTerm(r)
-    assert.deepEqual(grouping.refs(t), term.nodes(t).flatMap(n => (n.kind === "ref" ? [String(n["todo"])] : [])))
   })
 })

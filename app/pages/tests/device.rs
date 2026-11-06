@@ -13,6 +13,7 @@ fn model(signing: &serde_json::Value) -> Model {
             reach: Reach::Writes,
             offsets: Vec::new(),
             wide: false,
+            categories: vec!["home".to_owned(), "work".to_owned()],
         },
     });
     let held = |ask, body: serde_json::Value| {

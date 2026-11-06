@@ -10,7 +10,7 @@ pub(crate) const PAGE: usize = 50;
 pub(crate) const THREAD: usize = 100;
 
 #[derive(Debug, Clone, Copy)]
-pub enum Place<'a> {
+pub(crate) enum Place<'a> {
     /// `""` for the inbox and for every account.
     Mail {
         query: &'a str,
@@ -28,6 +28,9 @@ pub enum Place<'a> {
     Inbox(&'a str),
     Settings,
     Todo(&'a str),
+    Todos,
+    /// A todo open, `""` for none.
+    Typst(&'a str),
     /// An uploaded file, served as itself by the box.
     Attachment(&'a str),
     /// A todo's route drops the chain; a proposal, round or note goes to its conversation, a
@@ -38,10 +41,8 @@ pub enum Place<'a> {
         /// `""` for none.
         reference: &'a str,
         focus: bool,
-        /// The turn its window ends at.
         at: Option<u32>,
     },
-    Chain,
     Briefings,
     Briefing(&'a str),
     Calendar(&'a str),
@@ -76,6 +77,9 @@ impl<'a> Place<'a> {
             Place::Inbox(open) => format!("#/inbox{}", search(&[("open", open)])),
             Place::Settings => "#/settings".to_owned(),
             Place::Todo(id) => format!("#/todo/{}", component(id)),
+            Place::Todos => "#/".to_owned(),
+            Place::Typst("") => "#/typst".to_owned(),
+            Place::Typst(open) => format!("#/typst/{}", component(open)),
             Place::Attachment(id) => format!("/api/secretary/attachments/{}", component(id)),
             Place::Reference(r) => {
                 use suzatary_core::reference::Reference;
@@ -113,7 +117,6 @@ impl<'a> Place<'a> {
                     search(&[("ref", reference), ("focus", focus), ("at", &at)])
                 )
             }
-            Place::Chain => "#/chain".to_owned(),
             Place::Briefings => "#/briefings".to_owned(),
             Place::Briefing(day) => format!("#/briefings/{}", component(day)),
             Place::Calendar(day) => format!("#/calendar/{}", component(day)),
@@ -161,6 +164,22 @@ pub(crate) enum Question<'a> {
     Calendar(&'a str),
     About,
     Releases,
+    /// One todo in full.
+    Todo {
+        /// The chain.
+        chain: &'a str,
+        /// The todo.
+        id: &'a str,
+    },
+    /// The coding session's card that builds a todo filed (a POST).
+    Build {
+        /// The chain.
+        chain: &'a str,
+        /// The todo.
+        id: &'a str,
+    },
+    /// An event the box prints for a chain and appends nothing of (a POST).
+    Author(&'a str),
 }
 
 impl Question<'_> {
@@ -199,6 +218,13 @@ impl Question<'_> {
             Question::Calendar(day) => format!("/api/calendar/{}", component(day)),
             Question::About => "/api/about".to_owned(),
             Question::Releases => "/api/releases".to_owned(),
+            Question::Todo { chain, id } => {
+                format!("/api/{}/todo/{}", component(chain), component(id))
+            }
+            Question::Build { chain, id } => {
+                format!("/api/{}/todo/{}/build", component(chain), component(id))
+            }
+            Question::Author(chain) => format!("/api/{}/author", component(chain)),
         }
     }
 }

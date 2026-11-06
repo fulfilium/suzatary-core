@@ -1,9 +1,13 @@
 //! Suzatary's pages as `viewtree::Program`s, run as wasm in the tab and painted by
 //! `web/src/painter` (docs/FRAMEWORK-PLAN-2026-11-02.md).
 #![forbid(unsafe_code)]
+// The crate's dependents are its own tests and the wasm boundary: an item is `pub` only where one
+// names it, and the types reachable through it stay unnameable outside.
+#![allow(private_interfaces)]
 
 pub mod about;
 pub mod answer;
+pub mod authoring;
 pub mod briefing;
 pub mod briefings;
 pub mod calendar;
@@ -14,6 +18,8 @@ pub mod composer;
 pub mod conversation;
 pub mod digest;
 pub mod draft;
+pub mod form;
+pub mod held;
 pub mod inbox;
 pub mod intents;
 pub mod mail;
@@ -29,6 +35,10 @@ pub mod secretary;
 pub mod settings;
 pub mod slices;
 pub mod thread;
+pub mod todo;
+pub mod todoparts;
+pub mod todos;
+pub mod typstlist;
 pub mod waiting;
 pub mod zone;
 
@@ -56,8 +66,17 @@ hosted!(
     inbox::Inbox = "inbox.json",
     secretary::Secretary = "secretary.json",
     draft::Draft,
-    needsyou::NeedsYou = "needsyou.json"
+    needsyou::NeedsYou = "needsyou.json",
+    todo::Todo,
+    typstlist::Typst
 );
+
+impl viewtree::host::Hosted for todos::Todos {
+    type Input = runtime::Input<todos::Hold, todos::Ask, todos::Listen>;
+    fn input(input: Self::Input) -> todos::Msg {
+        todos::Msg::Host(Box::new(input))
+    }
+}
 
 impl viewtree::host::Hosted for conversation::Conversation {
     type Input = conversation::Input;
@@ -96,6 +115,12 @@ viewtree::export!(BriefingsPage = reading::One<briefings::Briefings>);
 viewtree::export!(BriefingPage = reading::One<briefing::Briefing>);
 #[cfg(target_arch = "wasm32")]
 viewtree::export!(InboxPage = inbox::Inbox);
+#[cfg(target_arch = "wasm32")]
+viewtree::export!(TodoPage = todo::Todo);
+#[cfg(target_arch = "wasm32")]
+viewtree::export!(TodosPage = todos::Todos);
+#[cfg(target_arch = "wasm32")]
+viewtree::export!(TypstPage = typstlist::Typst);
 #[cfg(target_arch = "wasm32")]
 viewtree::export!(SecretaryPage = secretary::Secretary);
 #[cfg(target_arch = "wasm32")]

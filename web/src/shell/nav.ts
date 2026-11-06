@@ -35,8 +35,6 @@ export namespace nav {
     { route: { type: "calendar", date: "" }, label: "Calendar", part: "Places" },
     { route: { type: "settings" }, label: "Settings", part: "App" },
     { route: { type: "about" }, label: "About", part: "App" },
-    { route: { type: "chain", focus: "" }, label: "Chain", part: "App" },
-    { route: { type: "usage" }, label: "Usage", part: "App" },
   ];
 
   const inPart = (part: Part): readonly Tab[] => DESTINATIONS.filter((t) => t.part === part);

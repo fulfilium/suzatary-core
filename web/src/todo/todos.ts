@@ -3,7 +3,6 @@
 
 import type { Block, Entry, EntryState, SpecNode } from "../wire/generated/wire";
 import fulfillment from "./fulfillment";
-import d from "../wire/decoder";
 import term from "./term";
 import { describeConflicts } from "./conflicts";
 import time from "../app/time";
@@ -41,17 +40,6 @@ export const DEFAULT_FILTER: Filter = {
   waiting: false,
   dated: false,
 };
-
-/** What a filter narrows the list by, in words, and nothing for the default: what the list's title row says while the search is shut. */
-export const narrowing = (f: Filter): string[] => [
-  ...(f.state === "open" ? [] : [f.state === "done" ? "Done" : "Open and done"]),
-  ...(f.category.tag === "is" ? [f.category.value === "" ? "uncategorised" : f.category.value] : []),
-  ...(f.kind.tag === "is" ? [f.kind.value === "" ? "no kind" : f.kind.value] : []),
-  ...(f.attention ? ["needs a look"] : []),
-  ...(f.waiting ? ["waiting"] : []),
-  ...(f.dated ? ["dated"] : []),
-  ...(f.query.trim() === "" ? [] : [`“${f.query.trim()}”`]),
-];
 
 /** The same two facts the card's chips draw, so the filter cannot disagree with a row. */
 export function needsAttention(entry: Entry): boolean {
@@ -213,23 +201,6 @@ export function total(list: Listing): number {
   return list.priced.length + list.unpriced.length;
 }
 
-// --- the facets a filter bar offers ------------------------------------------
-
-/** Every value present, in `order` first then the rest alphabetically; the empty value is a value. */
-export function facet(entries: readonly Entry[], of: (entry: Entry) => string, order: readonly string[] = []): string[] {
-  const present = [...new Set(entries.map(of))];
-  const rank = (value: string): number => {
-    const at = order.indexOf(value);
-    return at === -1 ? order.length : at;
-  };
-  return present.sort((a, b) => rank(a) - rank(b) || a.localeCompare(b));
-}
-
-/** Every category present, in the deployment's order (`/api/me`'s `categories`). */
-export const categoriesOf = (entries: readonly Entry[], order: readonly string[]): string[] => facet(entries, categoryOf, order);
-
-export const kindsOf = (entries: readonly Entry[]): string[] => facet(entries, kindOf);
-
 // --- the preview -------------------------------------------------------------
 
 /** One line of typst source for a card's clamp: only whitespace collapsed, nothing interpreted. */
@@ -280,47 +251,4 @@ export function subtodoCount(entry: Entry): string {
   const subs = entry.authored?.subtodos ?? [];
   if (subs.length === 0) return "";
   return `${subs.filter((sub) => sub.done).length} of ${subs.length} done`;
-}
-
-// --- the remembered filter ---------------------------------------------------
-
-function toChoice(value: unknown): Choice {
-  return typeof value === "string" ? is(value) : ANY;
-}
-
-function fromChoice(choice: Choice): string | null {
-  return choice.tag === "any" ? null : choice.value;
-}
-
-function toState(value: unknown): StateFilter {
-  return value === "done" || value === "all" ? value : "open";
-}
-
-/** Parse, don't validate: whatever `localStorage` holds becomes a `Filter`, defaulting each field it cannot supply. */
-export function parseFilter(raw: unknown): Filter {
-  const read = d.json(d.rec(d.unknown))(raw);
-  if (read.type === "Error") return DEFAULT_FILTER;
-  const field = (key: string): unknown => read.v[key];
-  const query = field("query");
-  return {
-    state: toState(field("state")),
-    category: toChoice(field("category")),
-    kind: toChoice(field("kind")),
-    query: typeof query === "string" ? query : "",
-    attention: field("attention") === true,
-    waiting: field("waiting") === true,
-    dated: field("dated") === true,
-  };
-}
-
-export function printFilter(filter: Filter): string {
-  return JSON.stringify({
-    state: filter.state,
-    category: fromChoice(filter.category),
-    kind: fromChoice(filter.kind),
-    query: filter.query,
-    attention: filter.attention,
-    waiting: filter.waiting,
-    dated: filter.dated,
-  });
 }

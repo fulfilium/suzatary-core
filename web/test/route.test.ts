@@ -21,7 +21,7 @@ test("the empty hash, #/ and #/todos are all home", () => {
 
 test("#/ does not swallow the other pages", () => {
   assert.deepEqual(parseRoute("#/about"), { type: "about" });
-  assert.deepEqual(parseRoute("#/chain"), { type: "chain", focus: "" });
+  assert.deepEqual(parseRoute("#/inbox"), { type: "inbox" });
 });
 
 test("a todo id is decoded", () => {

@@ -63,7 +63,6 @@ GET /api/tip read -
 GET /api/todo/{id} read -
 POST /api/todo/{id}/build tap signed
 GET /api/tree read -
-GET /api/usage read -
 GET /api/waiting read -
 POST /api/{chain}/author act signed
 GET /api/{chain}/chain read -

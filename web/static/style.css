@@ -1776,66 +1776,6 @@ dl.facts dd {
   min-height: var(--tap);
 }
 
-.filterbox {
-  display: flex;
-  align-items: center;
-  gap: var(--s-2);
-  margin: 0.5rem 0;
-  font-size: var(--t-small);
-  color: var(--ink-muted);
-}
-
-.filterbox input {
-  flex: 1 1 auto;
-  min-height: var(--tap);
-}
-
-/* --- the chain table ------------------------------------------------------ */
-
-.verdict {
-  font-size: var(--t-body);
-  padding: 0.55rem 0.7rem;
-  border-radius: var(--r-card);
-  border: 2px solid var(--line);
-  background: var(--sheet);
-}
-
-.verdict.ok {
-  border-color: var(--primary-soft);
-  color: var(--primary-soft);
-}
-
-.verdict.bad {
-  border-color: var(--primary);
-  color: var(--primary);
-}
-
-/* WHO CHECKED. The verdict above is only as good as the thing that produced
-   it, so the checker's name sits directly under it rather than in a footnote:
-   the WebAssembly core, or the SubtleCrypto fallback that checks strictly
-   less. */
-.checker {
-  font-size: var(--t-small);
-  color: var(--ink-muted);
-  margin: 0.4rem 0;
-  line-height: 1.45;
-}
-
-.checker strong {
-  color: var(--ink);
-}
-
-/* Tables scroll inside their own box; the page body never scrolls sideways. */
-.scroller {
-  overflow-x: auto;
-  max-height: 70vh;
-  overflow-y: auto;
-  overscroll-behavior: contain;
-  border: 2px solid var(--line);
-  border-radius: var(--r-card);
-  background: var(--sheet);
-}
-
 table {
   border-collapse: collapse;
   width: 100%;
@@ -1871,16 +1811,6 @@ tr.focused > td {
   background: var(--tint);
 }
 
-/* The chain's rows are drawn a window at a time (pages/chain.ts), each one line
-   tall so one row's height measures them all; the spacers hold the rest's. */
-#chain td {
-  white-space: nowrap;
-}
-
-#chain tr.spacer > td {
-  padding: 0;
-  border: 0;
-}
 
 pre {
   background: var(--sheet);
@@ -4996,26 +4926,6 @@ h1[tabindex="-1"]:focus {
 }
 
 
-/* --- usage (docs/APP.md §4 item 9) ------------------------------------------ */
-.usagebody { display: flex; flex-direction: column; gap: 1rem; }
-.usagewindow { border: 2px solid var(--line); border-radius: 12px; padding: 1rem; background: var(--sheet); }
-.usagetitle { margin: 0 0 .5rem; font-size: var(--t-body); text-transform: uppercase; letter-spacing: .04em; opacity: .8; }
-.usagebig { display: flex; align-items: center; gap: .5rem; font-size: var(--t-head2); font-weight: 600; margin-bottom: .35rem; }
-.usagenote { margin: .35rem 0; opacity: .8; font-size: var(--t-body); }
-.usagefoot { padding: 0 .25rem; }
-.usagetokens { display: grid; grid-template-columns: auto 1fr auto 1fr; gap: .15rem .6rem; margin: .5rem 0; font-size: var(--t-body); }
-.usagetokens dt { opacity: .7; }
-.usagetokens dd { margin: 0; font-variant-numeric: tabular-nums; }
-.usageshares { width: 100%; border-collapse: collapse; margin: .5rem 0; font-size: var(--t-body); }
-.usageshares td { padding: .2rem .25rem; border-top: 1px solid var(--rule); }
-.usagelabel { font-family: var(--f-mono); }
-.usagenum { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
-.usagerefusal { margin: .5rem 0 .25rem; font-size: var(--t-body); }
-.usagecredits { border-radius: 10px; padding: .6rem .8rem; margin-top: .5rem; border: 1px dashed var(--line); font-size: var(--t-body); }
-.usagecredits p { margin: .25rem 0; }
-.usagecreditshead { font-weight: 600; }
-.usagecredits-on { border-style: solid; border-color: var(--primary); }
-
 /* The slug in the meta row: quiet, mono, never the loudest thing on the card. */
 .cardmeta .cardid { color: var(--ink-muted); }
 
@@ -5242,6 +5152,21 @@ h1[tabindex="-1"]:focus {
   font-size: inherit;
   -webkit-line-clamp: 1;
 }
+
+/* A line's depth in the tree, which the list names as data; no style is set from a page. */
+[data-depth="0"] { --depth: 0; }
+[data-depth="1"] { --depth: 1; }
+[data-depth="2"] { --depth: 2; }
+[data-depth="3"] { --depth: 3; }
+[data-depth="4"] { --depth: 4; }
+[data-depth="5"] { --depth: 5; }
+[data-depth="6"] { --depth: 6; }
+[data-depth="7"] { --depth: 7; }
+[data-depth="8"] { --depth: 8; }
+[data-depth="9"] { --depth: 9; }
+[data-depth="10"] { --depth: 10; }
+[data-depth="11"] { --depth: 11; }
+[data-depth="12"] { --depth: 12; }
 
 .row {
   display: flex;

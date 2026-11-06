@@ -2022,7 +2022,6 @@ fn mail_row() -> suzatary_core::mail::MailRow {
 )]
 fn the_answers_vector_holds_every_answer() {
     use suzatary_core::secretary::store::ConversationState;
-    use suzatary_core::usage::{self, Allowance, Window};
 
     let root = scratch("answers");
     let bundle = Bundle::over(six_todo_chain(&root), later(now(), 400));
@@ -2714,51 +2713,6 @@ fn the_answers_vector_holds_every_answer() {
             todos: Vec::new(),
         }],
     }]);
-
-    let utc = fpl::instant_of(at).and_utc();
-    let reported = usage::Reported {
-        utilization: 0.4,
-        resets_at: Some(utc),
-        as_of: utc,
-    };
-    samples.add([
-        usage::report(
-            utc,
-            &[],
-            &[],
-            &[
-                (Window::FiveHour, Allowance::Reported(reported.clone())),
-                (
-                    Window::SevenDay,
-                    Allowance::RateLimited {
-                        since: utc,
-                        retry_after_seconds: 60,
-                        last_reported: Some(reported),
-                    },
-                ),
-            ],
-            None,
-            usage::Scope::default(),
-        ),
-        usage::report(
-            utc,
-            &[],
-            &[],
-            &[(
-                Window::FiveHour,
-                Allowance::Refused {
-                    at: utc,
-                    status: 403,
-                    words: "no profile scope".to_owned(),
-                },
-            )],
-            None,
-            usage::Scope {
-                counted: vec!["this box".to_owned()],
-                not_counted: vec!["claude.ai".to_owned()],
-            },
-        ),
-    ]);
 
     {
         use suzatary_core::connect::{Group, Standing};

@@ -1,4 +1,4 @@
-//! The box's own routes, no chain's: briefings, the calendar, devices, usage, the build and its
+//! The box's own routes, no chain's: briefings, the calendar, devices, the build and its
 //! releases, who is looking, and a tab's failures.
 
 use axum::Json;
@@ -111,11 +111,6 @@ pub fn releases(call: &Call<Reader, (), ()>) -> Result<Json<wire::ReleasesPayloa
     let plan = Plan::declared().map_err(|e| Refusal::internal(e.to_string()))?;
     let now = call.chain.caps.secretary.clock.now();
     routes::releases(&plan, &call.state.chains_read().set(now)).map(Json)
-}
-
-/// `GET /api/usage`: the box's record, not a chain's.
-pub fn usage(call: &Call<Reader, (), ()>) -> Result<Json<suzatary_core::usage::Report>, Refusal> {
-    routes::usage(call.chain.caps.usage, chrono::Utc::now()).map(Json)
 }
 
 /// `POST /api/client-errors`: a tab's uncaught failure, logged as one `warn` line.

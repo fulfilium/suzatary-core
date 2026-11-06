@@ -14,26 +14,21 @@ test("law: a kept register's initial value reads back through its own parser", (
   for (const k of Object.values(registers)) if (k.tier !== "Tab") assert.deepEqual(k.value(JSON.parse(JSON.stringify(k.initial))), lo.val(k.initial), k.name)
 })
 
-test("stored junk is nothing written: a grouping, folds that are booleans, a theme", () => {
+test("stored junk is nothing written: a theme, and a page's register of any value", () => {
   const m = memoryStore()
   const tab = ui.over(kv.over(() => m), "tab")
-  m.setItem("suzatary.ui.todos.by/", "{not json")
-  assert.equal(tab.cell(registers.by).get(), "category")
-  m.setItem("suzatary.ui.todos.by/", JSON.stringify(register.write(register.EMPTY, "tab", "sideways")))
-  assert.equal(tab.cell(registers.by).get(), "category")
-  tab.cell(registers.by).set("urgency")
-  assert.equal(tab.cell(registers.by).get(), "urgency")
-  const folds = registers.folds.tier === "Tab" ? null : registers.folds.value
-  assert.deepEqual(folds?.({ "c:work": false, "t:x": true, bad: 3 }), lo.val({ "c:work": false, "t:x": true }))
-  assert.equal(folds?.([true]).type, "Error")
+  m.setItem("suzatary.ui.theme/", "{not json")
+  assert.equal(tab.cell(registers.theme).get(), "auto")
   m.setItem("suzatary.ui.theme/", JSON.stringify(register.write(register.EMPTY, "tab", "sepia")))
   assert.equal(tab.cell(registers.theme).get(), "auto")
+  m.setItem("suzatary.ui.kept/todos.filter", "{not json")
+  assert.equal(tab.cell(registers.kept, "todos.filter").get(), null)
 })
 
 test("a Tab register never reaches storage; a Device one does, under its own name", () => {
   const m = memoryStore()
   const tab = ui.over(kv.over(() => m), "tab")
-  tab.cell(registers.opened, "life").set("dentist")
+  tab.cell(registers.page, "todos.opened/life").set("dentist")
   assert.equal(m.size(), 0)
   tab.cell(registers.panel).set({ inbox: "open" })
   assert.equal(m.size(), 0, "the panel's presses are this tab's")
@@ -47,8 +42,8 @@ test("law: every register's name holds no slash, so a stored key names its regis
   const m = memoryStore()
   const [one, two] = [ui.over(kv.over(() => m), "one"), ui.over(kv.over(() => m), "two")]
   let heard = 0
-  two.cell(registers.filter).hear(() => (heard += 1))
-  one.cell(registers.filter).set("x")
-  two.heard("suzatary.ui.todos.filter/")
+  two.cell(registers.kept, "todos.filter").hear(() => (heard += 1))
+  one.cell(registers.kept, "todos.filter").set("x")
+  two.heard("suzatary.ui.kept/todos.filter")
   assert.equal(heard, 1)
 })

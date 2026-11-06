@@ -202,9 +202,8 @@ fn unprintable(failed: &Unprintable) -> RenderError {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use suzatary_core::reading::{CalendarPage, Content, Explained, Prose, todo};
-    use suzatary_core::rendering::{CALENDAR, TODO};
-    use suzatary_core::wire;
+    use suzatary_core::reading::CalendarPage;
+    use suzatary_core::rendering::CALENDAR;
 
     fn scratch_cache(name: &str) -> PathBuf {
         let root = std::env::temp_dir().join(format!(
@@ -221,23 +220,7 @@ mod tests {
         (Typst::new(&cache, crate::typeset::InProcess), cache)
     }
 
-    fn entry(value: f64) -> wire::Entry {
-        wire::Entry {
-            todo: "file-permit".to_owned(),
-            state: wire::EntryState::Open,
-            states: vec![wire::EntryState::Open],
-            at: String::new(),
-            claimed: wire::ClaimedState::Agrees,
-            value: Some(wire::Fulfillment::Number(value)),
-            recurring: false,
-            unconfirmed: false,
-            conflicts: std::collections::BTreeMap::new(),
-            authored: None,
-            candidates: Vec::new(),
-            stream: Vec::new(),
-        }
-    }
-
+    /// Counts its compiles, answering as the in-process compiler does.
     struct Counted(Arc<std::sync::atomic::AtomicUsize>);
     impl Compiler for Counted {
         fn compile(&self, job: &Job) -> Result<String, Rejected> {
@@ -304,71 +287,10 @@ mod tests {
         let _ = std::fs::remove_dir_all(&cache);
     }
 
-    /// Only a trusted body is evaluated as markup; every other datum is drawn as text.
+    /// A page's every datum is data: a stranger's title is drawn as text.
     #[test]
     fn a_page_is_classed_html_and_its_data_stays_text() {
-        use prodrome_core::fpl::Explanation;
-        use prodrome_core::term::TermF;
         let (typst, cache) = typst_at("todo-page");
-        let content = Content {
-            body: Prose::Rendered {
-                source: Escaped::from_chain("*File* the deed \\(signed\\)"),
-            },
-            detail: Some(Prose::Source {
-                text: "<script>alert(1)</script> #html".to_owned(),
-            }),
-        };
-        let node = |value, node| Explanation {
-            value,
-            notes: std::collections::BTreeMap::new(),
-            node: Box::new(node),
-        };
-        let hostile = node(
-            Some(0.5),
-            TermF::Ref {
-                store: None,
-                entity: "a\"]#html.elem(\"script\")[".to_owned(),
-            },
-        );
-        let why = Explained::of(node(
-            Some(0.25),
-            TermF::Conj {
-                terms: vec![hostile],
-                p: -4.0,
-            },
-        ));
-        let page = todo(
-            &entry(0.25),
-            Some(&content),
-            Some(&why),
-            suzatary_core::zone::Zone::UTC,
-        );
-        let html = typst
-            .page(&TODO.call(&page).expect("prints"))
-            .expect("the page compiles");
-        let html = html.as_str();
-        assert!(html.starts_with("<div class=\"todohead\">"), "{html}");
-        assert!(
-            html.contains(
-                "<div class=\"todobody rich\"><strong>File</strong> the deed (signed)</div>"
-            ),
-            "{html}"
-        );
-        assert!(
-            html.contains("&lt;script>alert(1)&lt;/script> #html"),
-            "{html}"
-        );
-        assert!(html.contains("<details class=\"why\" open>"), "{html}");
-        assert!(html.contains("<ul class=\"tree\">"), "{html}");
-        assert!(html.contains("Why this number — 25.0%"), "{html}");
-        assert!(
-            html.contains("<p class=\"says\">25.0%: 1 part taken together"),
-            "{html}"
-        );
-        assert!(html.contains("a\"]#html.elem(\"script\")["), "{html}");
-        assert!(!html.contains("<script"), "{html}");
-        assert!(!html.contains("style="), "{html}");
-
         let stranger = "Review\"] #eval(\"x\") [<script>";
         let calendar = CalendarPage {
             days: vec![suzatary_core::reading::CalendarDay {
@@ -400,27 +322,18 @@ mod tests {
 
     #[test]
     fn a_page_read_at_two_instants_writes_nothing_under_the_cache() {
-        use prodrome_core::fpl::Explanation;
-        use prodrome_core::term::TermF;
         let (typst, cache) = typst_at("pages-stay-in-memory");
-        let at = |value: f64| {
-            let why = Explained::of(Explanation {
-                value: Some(value),
-                notes: std::collections::BTreeMap::new(),
-                node: Box::new(TermF::Flat { value }),
-            });
-            todo(
-                &entry(value),
-                None,
-                Some(&why),
-                suzatary_core::zone::Zone::UTC,
-            )
+        let at = |heading: &str| CalendarPage {
+            days: vec![suzatary_core::reading::CalendarDay {
+                heading: heading.to_owned(),
+                entries: Vec::new(),
+            }],
         };
-        let (morning, evening) = (at(0.31), at(0.24));
-        assert_ne!(morning, evening, "two instants are two values");
+        let (morning, evening) = (at("Monday 5 October"), at("Tuesday 6 October"));
+        assert_ne!(morning, evening, "two days are two values");
         for page in [&morning, &evening, &morning] {
             typst
-                .page(&TODO.call(page).expect("prints"))
+                .page(&CALENDAR.call(page).expect("prints"))
                 .expect("the page compiles");
         }
         let files = |dir: &std::path::Path| std::fs::read_dir(dir).map_or(0, Iterator::count);

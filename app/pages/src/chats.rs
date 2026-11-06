@@ -187,7 +187,7 @@ pub(crate) fn hits<M>(
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Filter {
+pub(crate) enum Filter {
     Topics,
     Reviews,
 }
@@ -196,7 +196,7 @@ pub enum Filter {
 pub(crate) struct List {
     pub(crate) rows: Reading<Vec<ConversationRow>>,
     pub(crate) filter: Filter,
-    pub shown: usize,
+    pub(crate) shown: usize,
 }
 
 impl Default for List {
@@ -210,7 +210,7 @@ impl Default for List {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Ev {
+pub(crate) enum Ev {
     Filtered(Filter),
     More,
 }

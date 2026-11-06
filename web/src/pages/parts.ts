@@ -2,12 +2,13 @@
 // listening says how to stop, which the painter asks when it takes the part out.
 
 import { el } from "../view/dom"
-import { checkIcon, chevronIcon, clipIcon, crossIcon, docIcon, lockIcon, plusIcon, sendIcon } from "../view/icons"
+import { checkIcon, chevronIcon, clipIcon, crossIcon, docIcon, lockIcon, plusIcon, searchIcon, sendIcon } from "../view/icons"
 import marks from "../view/marks"
 import loadmark from "../view/loadmark"
 import heldvalue from "../view/heldvalue"
 import { revealHeld } from "../wire/api"
 import d from "../wire/decoder"
+import lo from "../algebra/lo"
 import payload from "../wire/generated/payload"
 import app from "../app/app"
 import time from "../app/time"
@@ -17,6 +18,12 @@ import { DEFAULT_FILTER, listing } from "../todo/todos"
 import pie from "../view/pie"
 import { richOrText } from "../rich"
 import { textWithReferences } from "../chat/refs"
+import editor from "../typst/editor"
+import curve from "../todo/curve"
+import placeholder from "../view/placeholder"
+import typstpage from "../typst/page"
+import viewstate from "../typst/state"
+import viewtree from "../typst/tree"
 
 export namespace parts {
   const stops = new WeakMap<Node, () => void>()
@@ -50,6 +57,8 @@ export namespace parts {
         return marks.rule()
       case "loadmark":
         return loadmark.view()
+      case "search":
+        return searchIcon()
       case "diamond":
         return marks.diamond()
       case "send":
@@ -97,6 +106,53 @@ export namespace parts {
     return r.v
   }
 
+  // A Typst field, opened on its words; what is typed reaches the page as the words of the field inside the part.
+  const editorOf = d.obj({ field: d.str, class: d.str, label: d.str, rows: d.num, text: d.str })
+  // The thirty days as the core sampled them (`thirty.Thirty`'s drawn arm).
+  const sample = d.obj({ t: d.num, v: d.num })
+  const samples = d.bind(d.arr(sample), (xs): lo.Settled<curve.Samples> => {
+    const [x, ...rest] = xs
+    return x === undefined ? lo.error("no sample from now on") : lo.val([x, ...rest])
+  })
+  const drawnOf = d.obj({
+    type: d.oneOf({ Drawn: null }),
+    span: d.sum<curve.Span, "type">("type", {
+      Unsampled: {},
+      Sampled: { drawn: d.obj({ window: d.obj({ from: d.num, now: d.num, to: d.num }), past: d.arr(sample), ahead: samples }) },
+    }),
+  })
+
+  // The open list as the Typst view draws it, from what the tab holds (`viewstate.Held`), kept and brought to new props in
+  // place, so its keyed DOM, focus and scroll survive a redraw. Its controls' intents reach the page around it.
+  const list = typstpage.view<viewstate.Held, viewtree.Part>({
+    page: "typst",
+    module: "list.typ",
+    tree: (v, t) => viewtree.of(viewstate.of(t.core, v), t.named),
+    part: viewtree.part,
+  })
+  const heldOf = d.obj({ entries: d.arr(payload.Entry), at: d.str, chain: d.str, open: d.str, writes: d.bool })
+  const islands = new WeakMap<Node, (v: viewstate.Held) => void>()
+  const typstview = (props: string): Node => {
+    const mounted = performance.now()
+    const drawn = typstpage.island(list, "typstframe")
+    const update = (v: viewstate.Held): void => {
+      drawn.update(v)
+      if (v.entries.length > 0 && performance.getEntriesByName("typst:first-view").length === 0) performance.measure("typst:first-view", { start: mounted, end: performance.now() })
+    }
+    update(read("typstview", heldOf, props))
+    islands.set(drawn.node, update)
+    stops.set(drawn.node, () => drawn.destroy?.())
+    return drawn.node
+  }
+
+  // A part brought to new props where it stands, when it can be: only the Typst view keeps what it drew.
+  export const refresh = (node: Node, kind: string, _key: string, props: string): boolean => {
+    const update = kind === "typstview" ? islands.get(node) : undefined
+    if (update === undefined) return false
+    update(read(kind, heldOf, props))
+    return true
+  }
+
   const tags = { div: null, p: null, pre: null, span: null }
   const speakers = { person: null, model: null, verb: null, act: null, box: null }
   const proseOf = d.obj({
@@ -127,6 +183,19 @@ export namespace parts {
         return todos(props)
       case "elapsed":
         return elapsed(key, props)
+      case "editor": {
+        const e = read(kind, editorOf, props)
+        const c = editor.control({ cls: e.class, label: e.label }, e.rows, () => {})
+        c.paint(e.text)
+        c.node.querySelector("textarea")?.setAttribute("data-field", e.field)
+        return c.node
+      }
+      case "typstview":
+        return typstview(props)
+      case "curve": {
+        const t = read(kind, drawnOf, props)
+        return curve.fold(t.span, { Unsampled: () => placeholder.view(placeholder.LINES), Sampled: drawn => curve.line(drawn, app.now().zone) })
+      }
       default:
         throw new Error(`no part ${kind}`)
     }

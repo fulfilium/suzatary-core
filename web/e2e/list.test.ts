@@ -123,9 +123,10 @@ app.scene("a fold is the viewer's and stays on this device", async () => {
 
 app.scene("a trusted body is rendered by typst", async () => {
   await app.page.navigate(`${BASE}/#/todo/${todos.urgent.id}`);
-  await app.page.waitFor(`document.querySelector(".todobody") !== null`);
+  // The body is its source until its block's HTML is held, then that HTML in its place.
+  await app.page.waitFor(`document.querySelector(".todobody .rich") !== null`);
   const strong = await app.page.evaluate<string | null>(
-    `document.querySelector(".todobody.rich strong")?.textContent ?? null`,
+    `document.querySelector(".todobody .rich strong")?.textContent ?? null`,
   );
   assert.equal(strong, cast.world.todos.urgent.strong, "the body should arrive as typst's HTML, through web/src/rich.ts");
 });
@@ -157,8 +158,8 @@ app.scene("the filter is remembered, and comes back parsed rather than trusted",
   assert.deepEqual(await shownTodos(app.page), [todos.agents.id]);
 
   // A hand-edited value degrades to the default rather than breaking the page
-  // (`register.stored`, then `todos.parseFilter`), which is the property the remembered filter rests on.
-  await app.page.evaluate(`localStorage.setItem("suzatary.ui.todos.filter/", "{not json")`);
+  // (`register.stored`, then the list's `Filter::of` in Rust), which is the property the remembered filter rests on.
+  await app.page.evaluate(`localStorage.setItem("suzatary.ui.kept/todos.filter", "{not json")`);
   await app.page.reload();
   await app.page.waitFor(`document.querySelectorAll(".tree .row").length > 1`);
   assert.equal(

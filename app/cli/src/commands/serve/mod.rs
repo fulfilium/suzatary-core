@@ -61,7 +61,7 @@ use tower_http::set_header::SetResponseHeaderLayer;
 
 use crate::instance::Instance;
 pub use conversation_worker::Workers;
-pub use interpreters::{Brain, Ledger, Peers};
+pub use interpreters::{Brain, Peers};
 pub use live::Live;
 pub use settings::pushed_at;
 pub use world::World;
@@ -827,7 +827,6 @@ pub struct Serving {
     pub acting: Performing,
     /// Shared with the performer for a tap's announcements.
     pub workers: Arc<Workers>,
-    pub ledger: interpreters::Ledger,
     pub stamp: Stamp,
     pub signing: Arc<sign_ins::SignIns>,
     pub verify: Arc<dyn suzatary_core::settings::Verify + Send + Sync>,
@@ -939,7 +938,6 @@ pub async fn listen(instance: &Instance, serving: Serving) -> anyhow::Result<()>
         signers,
         serving.peers,
         serving.brain,
-        serving.ledger,
     )));
     if let Err(failed) = world.begin_topics() {
         tracing::warn!("serve: the topic stores are not begun: {failed}");
@@ -1011,7 +1009,6 @@ pub async fn listen(instance: &Instance, serving: Serving) -> anyhow::Result<()>
     for chain in std::iter::once(&first).chain(&rest) {
         watch::warm_now(chain.caps, &chain.policy);
     }
-    warm_usage(&first);
     reconcile_orphaned_acts(&first).await;
     erase_at_startup(&first).await;
     open_default(&first).await;
@@ -1206,12 +1203,12 @@ fn serving(instance: &Instance, args: Args) -> anyhow::Result<Serving> {
         #[cfg(feature = "fixture")]
         (scripted, &google),
     );
-    // No transcripts (a cold walk times out) and no compactor.
+    // No compactor.
     #[cfg(feature = "fixture")]
     let fixture = any_fixture || scripted;
     #[cfg(not(feature = "fixture"))]
     let fixture = false;
-    let (ledger, compacting) = quiet(instance, fixture);
+    let compacting = quiet(instance, fixture);
 
     Ok(Serving {
         listening,
@@ -1225,7 +1222,6 @@ fn serving(instance: &Instance, args: Args) -> anyhow::Result<Serving> {
         postman,
         acting,
         workers: Arc::new(Workers::new()),
-        ledger,
         stamp,
         signing,
         verify,
@@ -1257,11 +1253,11 @@ fn listening_of(
     Ok((listening, door))
 }
 
-fn quiet(instance: &Instance, fixture: bool) -> (interpreters::Ledger, Compacting) {
+fn quiet(instance: &Instance, fixture: bool) -> Compacting {
     if fixture {
-        (interpreters::Ledger::nowhere(), Compacting::Off)
+        Compacting::Off
     } else {
-        (interpreters::Ledger::Box, instance.secretary.compacting())
+        instance.secretary.compacting()
     }
 }
 
@@ -1399,20 +1395,6 @@ fn recording_acting(
     Box::new(move |stores, workers| {
         crate::commands::secretary::Acting::recording(&instance, stores, workers, signing, &google)
     })
-}
-
-fn warm_usage(first: &Chained) {
-    let caps = first.caps;
-    tokio::task::spawn_blocking(move || {
-        let began = std::time::Instant::now();
-        match caps.usage.warm_transcripts() {
-            Ok(files) => tracing::info!(
-                "warmed {files} transcript(s) for the usage page in {:.2}s",
-                began.elapsed().as_secs_f64()
-            ),
-            Err(failed) => tracing::warn!("usage warm: {failed}"),
-        }
-    });
 }
 
 /// Open the default conversation; no read writes it.

@@ -10,7 +10,7 @@
  * app claims from the browser.
  *
  * The cursor is asserted through `document.activeElement`, because that is
- * what the app decided the cursor IS (`pages/todos.ts`: focus is the mark, so
+ * what the app decided the cursor IS (`app/pages/src/todos.rs`: focus is the mark, so
  * Tab and `j` cannot disagree). A test that read a private variable would pass
  * while the ring was somewhere else.
  */

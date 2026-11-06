@@ -1,8 +1,9 @@
 // A page that is a Rust program (`app/pages`): its patches painted, and every effect of the runtime's sum
 // (`app/pages/src/runtime.rs`) performed here, the same for each page. Nothing here knows a page.
 
-import type { Act, Answer, BriefingAt, CalendarAt, Context, ConversationFlags, DraftFlags, Effect, InboxFlags, Input, MailFlags, MessageAt, NeedsYouFlags, Nothing, Reading, Secret, SecretaryFlags, SettingsFlags, ThreadAt } from "../wire/generated/pages"
+import type { Act, ActName, Answer, Basis as CoreBasis, BriefingAt, CalendarAt, Context, ConversationFlags, Core, DraftFlags, Effect, InboxFlags, Input, MailFlags, MessageAt, NeedsYouFlags, Nothing, Reading, Secret, SecretaryFlags, SettingsFlags, ThreadAt, TodoFlags, TodosFlags, TypstFlags, Keyed } from "../wire/generated/pages"
 import type { Draw } from "../view/page"
+import type { Screen } from "../shell/layout"
 import http from "../wire/http"
 import d from "../wire/decoder"
 import asked from "../app/asked"
@@ -23,9 +24,15 @@ import signer from "../prodrome/signer"
 import intentsync from "../prodrome/intentsync"
 import type intents from "../prodrome/intents"
 import type asks from "../prodrome/asks"
+import type questions from "../prodrome/questions"
 import vouch from "../prodrome/vouch"
 import storesync from "../prodrome/storesync"
+import { askHeld, resetReplica } from "../prodrome/sync"
+import { lifecycleEvent, loadCore } from "../prodrome/core"
+import payload from "../wire/generated/payload"
 import parts from "./parts"
+import type { KeyTarget } from "../shell/keyboard"
+import { clearKeyTarget, setKeyTarget } from "../shell/keyboard"
 import local from "./local"
 
 export namespace program {
@@ -76,6 +83,7 @@ export namespace program {
       gate: w.reach.type === "Writes" ? "writes" : w.me !== null ? "reads" : "views",
       reach: w.reach.type === "Reads" ? { type: "Reads", said: w.reach.said, settings: w.reach.settings, key } : { type: w.reach.type },
       offsets: [...offsetsOf(a.zone)],
+      categories: [...a.categories],
     }
   }
 
@@ -122,7 +130,43 @@ export namespace program {
     }
   }
 
-  const ask = (a: Act): asks.Ask => (a.type === "Topic" ? { type: "Topic", write: a.write, at: time.moment() } : a)
+  // An act as the tab's set of intents names it: a topic with the instant it is asked at, and a lifecycle event spelled
+  // by the core at that instant as the actor this device writes as, to be sealed.
+  const ask = async (a: Act): Promise<asks.Ask> =>
+    a.type === "Topic" ? { type: "Topic", write: a.write, at: time.moment() }
+    : a.type === "Lifecycle" ? { type: "Seal", chain: a.chain, event: lifecycleEvent(await loadCore(), a.kind, a.todo, time.moment(), app.actor(app.now()) ?? "", a.note) }
+    : a
+
+  // A question for the core in the worker, its terms and reading read back into the questions' own types; a reading
+  // answers with the chains held beside it.
+  const name = d.obj({ chain: d.str, set: d.str, at: d.str })
+  const decoded_ = <A>(r: lo.Settled<A>): A => {
+    if (r.type === "Error") throw new Error(`a question a page asked does not read: ${r.e}`)
+    return r.v
+  }
+  const basisOf = (b: CoreBasis): questions.Basis =>
+    b.type === "Fold"
+      ? { type: "Fold", reading: decoded_(name(b.reading)) }
+      : { type: "Rows", at: b.at, functions: decoded_(d.rec(payload.SpecNode)(b.functions)) }
+  const placed: d.Decoder<questions.Placed> = d.obj({
+    todo: d.str,
+    title: d.str,
+    category: d.str,
+    worth: d.sum<questions.Placed["worth"], "type">("type", { Value: { v: d.nullable(d.num) }, Unlinked: {} }),
+    specs: d.arr(payload.SpecNode),
+  })
+  const core = (q: Core): Promise<unknown> => {
+    switch (q.type) {
+      case "Reading":
+        return askHeld(() => ({ type: "Reading", chain: q.chain, at: q.at }), "Page").then(({ held: h, answer: read }) => ({ held: h.held.map(c => c.name), read }))
+      case "Thirty":
+        return askHeld(() => ({ type: "Thirty", chain: q.chain, id: q.id, ms: q.ms }), "Page").then(r => r.answer)
+      case "Tree": {
+        const basis = basisOf(q.basis)
+        return askHeld(() => ({ type: "Tree", basis, members: decoded_(d.arr(placed)(q.members)), by: q.by }), "Page").then(r => r.answer)
+      }
+    }
+  }
 
   type Args = {
     readonly MailPage: Omit<MailFlags, "context">
@@ -139,13 +183,16 @@ export namespace program {
     readonly ConversationPage: Omit<ConversationFlags, "context" | "now">
     readonly DraftPage: Omit<DraftFlags, "context">
     readonly NeedsYouPage: Omit<NeedsYouFlags, "context">
+    readonly TodoPage: Omit<TodoFlags, "context" | "now">
+    readonly TodosPage: Omit<TodosFlags, "context" | "now">
+    readonly TypstPage: Omit<TypstFlags, "context">
   }
   export type Page = keyof Args
   type In = Input<unknown, unknown, unknown>
   type Out = Effect<unknown, unknown, unknown>
 
   // The scroll box is the document's, or one the page draws itself, found once drawn.
-  export type Around = { readonly box?: () => Element; readonly told?: (said: unknown) => void }
+  export type Around = { readonly box?: () => Element; readonly told?: (said: unknown) => void; readonly absorbs?: (screen: Screen) => boolean }
   const page_ = (): Element => document.scrollingElement ?? document.documentElement
 
   // Only the module is awaited: the page draws when the caller calls what this returns.
@@ -187,6 +234,23 @@ export namespace program {
           }
           case "Keep":
             return local.keep(e.register, e.value)
+          case "Keys": {
+            const press = (key: Keyed) => (): void => send({ type: "Heard", ask: e.ask, frame: JSON.stringify(key) })
+            const on = new Set(e.keys)
+            const target: KeyTarget = {
+              ...(on.has("Move") ? { move: (by: number) => press({ type: "Move", by })() } : {}),
+              ...(on.has("Open") ? { open: press({ type: "Open" }) } : {}),
+              ...(on.has("Close") ? { close: press({ type: "Close" }) } : {}),
+              ...(on.has("Act") ? { act: (name: ActName) => press({ type: "Act", name })() } : {}),
+              ...(on.has("Undo") ? { undo: press({ type: "Undo" }) } : {}),
+              ...(on.has("Redo") ? { redo: press({ type: "Redo" }) } : {}),
+              ...(on.has("Search") ? { focusSearch: press({ type: "Search" }) } : {}),
+              ...(on.has("Add") ? { add: press({ type: "Add" }) } : {}),
+              ...(on.has("Escape") ? { escape: () => (press({ type: "Escape" })(), true) } : {}),
+            }
+            setKeyTarget(target)
+            return hold(e.ask, () => clearKeyTarget(target))
+          }
           case "Sync":
             return void storesync.sync()
           case "Listen":
@@ -196,6 +260,8 @@ export namespace program {
             )
           case "Again":
             return held(e.path).again()
+          case "Rendered":
+            return void blocks.store.join(e.pairs).catch(() => [])
           case "Get":
             return void settled(http.get(e.path, d.unknown)).then(answered(e.ask))
           case "Post":
@@ -213,7 +279,7 @@ export namespace program {
               told = true
               answered(e.ask)({ type: "Done", body: { type: "Answered", answer: a, held: false } })
             }
-            return void settled(intentsync.ask(ask(e.act), secret.value, heard)).then(a => (told ? undefined : answered(e.ask)(a)))
+            return void settled(ask(e.act).then(a => intentsync.ask(a, secret.value, heard))).then(a => (told ? undefined : answered(e.ask)(a)))
           }
           case "Endorse":
             return void settled(vouch.endorsement(e.actor, e.key)).then(answered(e.ask))
@@ -224,10 +290,12 @@ export namespace program {
           case "Focus": {
             const field = root.querySelector(`[data-field="${CSS.escape(e.field)}"]`)
             const busy = document.activeElement
-            if (!(field instanceof HTMLInputElement || field instanceof HTMLTextAreaElement)) return
+            if (!(field instanceof HTMLElement)) return
             if (busy !== field && (busy instanceof HTMLInputElement || busy instanceof HTMLTextAreaElement)) return
             field.focus()
-            return field.setSelectionRange(field.value.length, field.value.length)
+            // A field takes the caret at the end of its words; anything else is brought into sight.
+            if (field instanceof HTMLInputElement || field instanceof HTMLTextAreaElement) return field.setSelectionRange(field.value.length, field.value.length)
+            return field.scrollIntoView({ block: "nearest" })
           }
           case "Scroll":
             return scroll.move(box(), root, e.to, stepped.fromEnd)
@@ -241,6 +309,12 @@ export namespace program {
             return address.back(parseRoute(e.fallback))
           case "Toast":
             return void toast(e.words)
+          case "Offer":
+            return void toast(e.words, { label: e.label, onClick: () => answered(e.ask)({ type: "Done", body: null }) })
+          case "Core":
+            return void settled(core(e.question)).then(answered(e.ask))
+          case "Reset":
+            return void resetReplica(new Set(e.losses))
           case "Tell":
             return around.told?.(e.said)
           case "Mark":
@@ -251,10 +325,11 @@ export namespace program {
       root.replaceChildren()
       const t0 = performance.now()
       const program = new glue[page](JSON.stringify({ ...args, context: context(), now: time.now() }))
-      const running = run.start<In, Out>(root, program, parts.draw, blocks.held, handle, parts.gone, box)
+      const running = run.start<In, Out>(root, program, parts.draw, blocks.held, handle, parts.gone, box, parts.refresh)
       performance.measure("page:draw", { start: t0, end: performance.now(), detail: { page, read: "Program" } })
       const unheard = app.hear(whoOf, () => running.send({ type: "Context", ...context() }), same)
       return {
+        ...(around.absorbs === undefined ? {} : { absorb: around.absorbs }),
         destroy: () => {
           unheard()
           held_.forEach(stop => stop())

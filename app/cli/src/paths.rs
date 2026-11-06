@@ -132,10 +132,6 @@ pub struct Paths {
     /// The compactor's CLI configuration, apart from the box user's, so no user-level
     /// `CLAUDE.md` or settings reach it.
     pub compactor_config: PathBuf,
-    /// Claude Code's transcripts.
-    pub transcripts: PathBuf,
-    /// The home directory the transcripts' project names are relative to.
-    pub home: PathBuf,
     /// The Proton Drive CLI.
     pub drive_cli: PathBuf,
     /// Where a Drive download lands for the length of one read.
@@ -170,8 +166,6 @@ impl Paths {
             last_sync: state.join("last-sync.json"),
             compactor: cache.join("compactor"),
             compactor_config: cache.join("compactor-config"),
-            transcripts: env.home.join(".claude").join("projects"),
-            home: env.home.clone(),
             drive_cli: drive_cli.map_or_else(|| env.home.join("bin/proton-drive"), Path::to_owned),
             drive_scratch: env.runtime.join("suzatary-drive"),
             bridge_cert: env.home.join(".config/protonmail/bridge-cert.pem"),

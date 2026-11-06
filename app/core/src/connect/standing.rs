@@ -71,6 +71,24 @@ pub enum Standing {
 }
 
 impl Standing {
+    /// Whether it asks something of the owner: a line in place, or one only waiting to be
+    /// checked, asks nothing.
+    #[must_use]
+    pub fn asks(&self) -> bool {
+        match self {
+            Standing::Kept
+            | Standing::Synced { .. }
+            | Standing::Answered { .. }
+            | Standing::Unobserved => false,
+            Standing::Locked
+            | Standing::StoreFailed
+            | Standing::Unreadable { .. }
+            | Standing::Failing { .. }
+            | Standing::ByHand { .. }
+            | Standing::Missing { .. } => true,
+        }
+    }
+
     /// The part that asks more of the owner, and two missing parts missing both: a
     /// join-semilattice whose identity is [`Standing::Kept`].
     #[must_use]

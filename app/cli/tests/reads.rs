@@ -272,10 +272,13 @@ fn the_stream_is_chronological_and_every_authored_carries_its_diff() {
     assert_eq!(common::status(&response), 200);
     let body = common::body_json(&mut response);
 
-    // The reading part arrives as the render of one page, "why" included.
-    let reading = body["reading"].as_str().expect("the reading, rendered");
-    assert!(reading.contains("\"head\""), "{reading}");
-    assert!(reading.contains("\"why\""), "{reading}");
+    // "Why this number" arrives as data the page draws, never as HTML.
+    let why = &body["why"];
+    assert!(
+        matches!(why["type"].as_str(), Some("Priced" | "Unpriced")),
+        "{why}"
+    );
+    assert!(body.get("reading").is_none(), "{body}");
 
     let stream = body["stream"].as_array().expect("a stream");
     assert_eq!(

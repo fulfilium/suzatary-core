@@ -51,7 +51,6 @@ mod secrets;
 mod server;
 mod typeset;
 mod upload_index;
-mod usage;
 mod weather;
 mod web;
 mod whois;
@@ -98,7 +97,6 @@ pub use secrets::{
 pub use server::Server;
 pub use typeset::{Diagnostic, Rejected, Typeset, parsed};
 pub use upload_index::{IndexError, UploadIndex};
-pub use usage::{Usage, UsageError};
 pub use weather::{Weather, WeatherError};
 pub use web::{AllowRule, Web, WebAnswer, WebFailure, WebRequest};
 pub use whois::{Peer, Whois, WhoisError};
@@ -318,7 +316,6 @@ mod tests {
             notify: _,
             answers: _,
             devices: _,
-            usage: _,
             sessions: _,
         } = Nothing::server();
     }
