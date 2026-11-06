@@ -182,6 +182,8 @@ mkdir -p "$1" && git archive "$2" | tar -x -C "$1" && rm -rf "$1/private"
 "#;
 
 const CHANGELOG: &str = "# Changelog\n\n## [Unreleased]\n\n## [0.1.0]\n\n- the first release\n";
+/// A lockfile cargo reads for a one-package workspace with no dependency.
+const LOCK: &str = "version = 4\n\n[[package]]\nname = \"fixture\"\nversion = \"0.0.0\"\n";
 
 impl Train {
     fn new(name: &str) -> Self {
@@ -535,38 +537,36 @@ fn write(dir: &Path, rel: &str, content: &str) {
     std::fs::write(&path, content).unwrap_or_else(|e| panic!("{rel}: {e}"));
 }
 
-fn changelog_with(entry: &str) -> String {
-    CHANGELOG.replace(
-        "## [Unreleased]\n\n",
-        &format!("## [Unreleased]\n\n- {entry}\n\n"),
-    )
-}
-
 fn text(out: &[u8]) -> String {
     String::from_utf8_lossy(out).into_owned()
 }
 
 #[test]
-fn train_build_merges_by_head_joins_the_changelog_and_skips_a_conflict() {
+fn train_build_merges_by_head_and_skips_a_conflict() {
     let t = Train::new("build");
     // Each conflicts with master, so it is skipped whatever order the PRs merge in.
     t.pr(3, "the third", &[("README.md", "three\n")]);
-    // An entry added and a released one rewritten: not a join of additions.
-    let rewritten = changelog_with("four").replace("the first release", "a rewrite");
+    // A released entry rewritten, as master rewrote it too.
+    let rewritten = CHANGELOG.replace("the first release", "a rewrite");
     t.pr(4, "the fourth", &[("CHANGELOG.md", &rewritten)]);
     let moved = CHANGELOG.replace("the first release", "master's rewrite");
     t.master_moves(&[("README.md", "master's\n"), ("CHANGELOG.md", &moved)]);
-    let entry = |line: &str| changelog_with(line).replace("the first release", "master's rewrite");
     let long = "a title long enough that the merge subject must be cut to fit seventy-two";
     t.pr(
         1,
         "the first",
-        &[("CHANGELOG.md", &entry("one")), ("a.txt", "a\n")],
+        &[
+            ("changelog.d/one.md", "### Added\n- one\n"),
+            ("a.txt", "a\n"),
+        ],
     );
     t.pr(
         2,
         long,
-        &[("CHANGELOG.md", &entry("two")), ("b.txt", "b\n")],
+        &[
+            ("changelog.d/two.md", "### Added\n- two\n"),
+            ("b.txt", "b\n"),
+        ],
     );
 
     let out = t.train(&["build", "3", "4", "2", "1"]);
@@ -599,22 +599,12 @@ fn train_build_merges_by_head_joins_the_changelog_and_skips_a_conflict() {
         body.contains(&format!("https://github.invalid/pull/{first}")),
         "the URL: {body}"
     );
-    let joined = stdout
-        .lines()
-        .find(|l| l.starts_with(&format!("#{second}")))
-        .unwrap_or_default();
-    assert!(
-        joined.contains("joined CHANGELOG.md"),
-        "the second merge joins: {stdout}"
+    // Two entries are two files, so their merges cannot conflict.
+    assert_eq!(
+        t.git(&["ls-tree", "--name-only", "train", "changelog.d/"]),
+        "changelog.d/one.md\nchangelog.d/two.md",
+        "both fragments merged"
     );
-
-    let changelog = t.git(&["show", "train:CHANGELOG.md"]);
-    let unreleased = &changelog[..changelog.find("## [0.1.0]").expect("the release")];
-    assert!(
-        unreleased.contains("- one") && unreleased.contains("- two"),
-        "both entries under Unreleased:\n{changelog}"
-    );
-    assert!(!changelog.contains("<<<<<<<"), "no markers:\n{changelog}");
 
     for (n, file) in [("#3", "README.md"), ("#4", "CHANGELOG.md")] {
         let row = stdout
@@ -771,66 +761,6 @@ fn train_build_orders_prs_by_their_heads_not_their_numbers() {
     assert!(
         merges[0].starts_with("Merge #2:") && merges[1].starts_with("Merge #1:"),
         "#2 holds the lesser head: {merges:?}"
-    );
-}
-
-/// A line a PR wrote under Unreleased, which git put under a release that landed after the PR
-/// branched, is moved back under Unreleased and the table says so; a line a PR wrote under a
-/// released heading stays where it wrote it.
-#[test]
-fn train_build_moves_a_line_written_under_unreleased_back_there() {
-    let t = Train::new("changelog-place");
-    let before = changelog_with("an entry master holds");
-    t.master_moves(&[("CHANGELOG.md", &before)]);
-    let mine = before.replace(
-        "- an entry master holds\n",
-        "- an entry master holds\n- mine\n",
-    );
-    t.pr(1, "mine", &[("CHANGELOG.md", &mine)]);
-    // A release lands after #1 branched, moving master's entry under its own heading.
-    let released = CHANGELOG.replace(
-        "## [Unreleased]\n\n",
-        "## [Unreleased]\n\n## [0.2.0]\n\n- an entry master holds\n\n",
-    );
-    t.master_moves(&[("CHANGELOG.md", &released)]);
-    let fixed = released.replace("- the first release", "- the first release, fixed");
-    t.pr(2, "a fix", &[("CHANGELOG.md", &fixed)]);
-
-    let out = t.train(&["build", "1", "2"]);
-    let stdout = text(&out.stdout);
-    assert!(out.status.success(), "build: {}{stdout}", text(&out.stderr));
-    let row = |n: &str| {
-        stdout
-            .lines()
-            .find(|l| l.starts_with(n))
-            .unwrap_or_default()
-            .to_owned()
-    };
-    assert!(
-        row("#1").contains("moved 1 CHANGELOG.md line under Unreleased"),
-        "{stdout}"
-    );
-    assert!(!row("#2").contains("moved"), "{stdout}");
-    let changelog = t.git(&["show", "train:CHANGELOG.md"]);
-    let released_at = changelog.find("## [0.2.0]").expect("the release");
-    let first_at = changelog.find("## [0.1.0]").expect("the first release");
-    assert!(
-        changelog[..released_at].contains("- mine"),
-        "under Unreleased:\n{changelog}"
-    );
-    assert!(
-        !changelog[released_at..].contains("- mine")
-            && changelog[released_at..first_at].contains("- an entry master holds"),
-        "the release keeps its own:\n{changelog}"
-    );
-    assert!(
-        changelog[first_at..].contains("- the first release, fixed"),
-        "a released line the PR rewrote stays:\n{changelog}"
-    );
-    assert_eq!(
-        t.git(&["status", "--porcelain"]),
-        "",
-        "the checkout is left clean"
     );
 }
 
@@ -2730,7 +2660,7 @@ fn train_releases_what_the_chain_reads_and_tags_it() {
     t.pr(
         1,
         "calendar links",
-        &[("CHANGELOG.md", &changelog_with("calendar links"))],
+        &[("changelog.d/links.md", "### Added\n- calendar links\n")],
     );
     std::fs::write(
         t.scratch.join("prs/1.body"),
@@ -2755,19 +2685,23 @@ fn train_releases_what_the_chain_reads_and_tags_it() {
     );
     assert_eq!(
         t.git(&["diff", "--name-only", "train^", "train"]),
-        "CHANGELOG.md\napp/release.toml",
-        "a release cut writes the changelog and the release file, which no crate compiles \
-         (a_release_cut_changes_no_file_a_crate_compiles)"
+        "CHANGELOG.md\napp/release.toml\nchangelog.d/links.md",
+        "a release cut writes the changelog and the release file and removes the fragments, which \
+         no crate compiles (a_release_cut_changes_no_file_a_crate_compiles)"
     );
     let changelog = t.git(&["show", "train:CHANGELOG.md"]);
     assert!(
         changelog.contains("## [Unreleased]\n\n## [1.2.0] - ")
-            && changelog.contains("- Completes `todo:suzatary/calendarlinks`: the calendarlinks item\n\n- calendar links"),
+            && changelog.contains("- Completes `todo:suzatary/calendarlinks`: the calendarlinks item\n\n### Added\n- calendar links\n"),
         "{changelog}"
     );
 
-    // PR 2 is branched now, before 1.2.0 lands, with an entry under this Unreleased.
-    t.pr(2, "a fix", &[("CHANGELOG.md", &changelog_with("a fix"))]);
+    // PR 2 is branched now, before 1.2.0 lands.
+    t.pr(
+        2,
+        "a fix",
+        &[("changelog.d/fix.md", "### Fixed\n- a fix\n")],
+    );
 
     // Land checks the chain reads 1.2, pushes master with its tag, then records it done. A
     // local tag of that name, a leftover of a refused land, does not stop it.
@@ -2804,8 +2738,7 @@ fn train_releases_what_the_chain_reads_and_tags_it() {
         text(&again.stdout)
     );
 
-    // A train that completes nothing is the next patch. PR 2's entry merges into the section
-    // 1.2.0 closed, and the cut moves it back, so it is 1.2.1's.
+    // A train that completes nothing is the next patch, and PR 2's fragment is 1.2.1's.
     let next = t.train_with(&["build", "2"], &env);
     assert!(next.status.success(), "build: {}", text(&next.stderr));
     assert_eq!(
@@ -3140,13 +3073,15 @@ fn train_build_keeps_completes_through_a_join_and_skips_only_an_unknown_todo() {
     let files: Vec<(&str, &str)> = files.iter().map(|(p, c)| (*p, c.as_str())).collect();
     t.master_moves(&files);
 
-    // #2 is written before master takes an entry of its own, so its merge is joined.
-    t.pr(
-        2,
-        "calendar links",
-        &[("CHANGELOG.md", &changelog_with("two"))],
-    );
-    t.master_moves(&[("CHANGELOG.md", &changelog_with("one"))]);
+    // #2 is written before master moves the lock, so its merge is joined, keeping the train's.
+    let lock = |said: &str| format!("{LOCK}# {said}\n");
+    t.master_moves(&[
+        ("app/Cargo.toml", "[package]\nname = \"fixture\"\nversion = \"0.0.0\"\nedition = \"2021\"\n\n[workspace]\n"),
+        ("app/src/lib.rs", ""),
+        ("app/Cargo.lock", &lock("base")),
+    ]);
+    t.pr(2, "calendar links", &[("app/Cargo.lock", &lock("two"))]);
+    t.master_moves(&[("app/Cargo.lock", &lock("one"))]);
     std::fs::write(
         t.scratch.join("prs/2.body"),
         "Links.\r\n\r\nCompletes: calendarlinks\r\n",

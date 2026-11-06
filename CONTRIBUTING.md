@@ -72,10 +72,11 @@ the wire, the page or the docs. Each commit must build and pass its tests on its
 - Name a tracked file in the commit message only if the commit changes it. Otherwise, list it
   in a `Mentions:` trailer. To check every commit on your branch, run
   `scripts/check-commits.sh origin/master..HEAD`.
-- If you change `app/`, add a line to the `## [Unreleased]` section of `CHANGELOG.md`.
+- If you change `app/` or `web/`, add your entry as a new file, `changelog.d/<branch>.md`: Keep a
+  Changelog `### <kind>` headings over `- ` lines. Never edit `CHANGELOG.md`.
 - If your change completes a todo on the project chain, write `Completes: <todo>` on its own
   line in the pull request. The train records the todo done and sets the version; never set
-  the version or close `## [Unreleased]` yourself.
+  the version yourself.
 - Do not keep backward compatibility. Rename and delete freely, and update every caller in the
   same series. If you change the format of stored data, write an explicit migration.
 - In the pull request, say what changed and why in two or three plain sentences. Then add one

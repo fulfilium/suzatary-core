@@ -402,9 +402,11 @@ const NAMED_AS_DATA: &[(&str, &str)] = &[
     ("app/cli/src/commands/fixture.rs", "docs"),
     ("app/cli/src/commands/init/onboarding.rs", "docs"),
     ("app/cli/src/commands/release.rs", "CHANGELOG.md"),
+    ("app/cli/src/commands/release.rs", "changelog.d"),
     ("app/cli/tests/coding.rs", "docs"),
     ("app/cli/tests/mcp.rs", "docs"),
     ("app/cli/tests/release.rs", "CHANGELOG.md"),
+    ("app/cli/tests/release.rs", "changelog.d"),
     ("app/core/src/coding.rs", "docs"),
     ("app/core/src/leak.rs", "docs"),
     ("app/core/src/repos.rs", "docs"),
@@ -2507,13 +2509,17 @@ fn merge_gate_every_crate_unit_reads_every_manifest() {
     }
 }
 
-/// A release commit changes `app/release.toml` and `CHANGELOG.md` alone, so it reruns only what
-/// reads them: the steps that read every file, and the one crate unit that declares the release
+/// A release commit changes `app/release.toml` and `CHANGELOG.md` and removes `changelog.d/` alone,
+/// so it reruns only what reads them: the steps that read every file, and the one crate unit that declares the release
 /// file (`suzatary`, whose guards hold the changelog's tests); no unit reads the changelog, and
 /// the web's units skip both by their base.
 #[test]
 fn merge_gate_a_release_reruns_only_what_reads_it() {
-    let release = ["app/release.toml", "CHANGELOG.md"];
+    let release = [
+        "app/release.toml",
+        "CHANGELOG.md",
+        "changelog.d/a-change.md",
+    ];
     let mut rerun: Vec<String> = steps()
         .iter()
         .filter(|s| !s.reads.contains('~') && release.iter().any(|p| s.reads_path(p)))
@@ -2594,10 +2600,11 @@ fn merge_gate_the_generated_wire_imports_only_the_wire() {
     }
 }
 
-/// The changelog step reads a train's entries on the commit before its release: the release
-/// closes `## [Unreleased]`, so on the release itself the section reads as never moved.
+/// The changelog step wants a fragment added beside an `app/` or `web/` change and refuses any
+/// other writer of `CHANGELOG.md`, read on the commit before a release, which folds the fragments
+/// and so would read as none added.
 #[test]
-fn the_changelog_step_reads_the_commit_before_a_release() {
+fn the_changelog_step_wants_a_fragment_read_before_a_release() {
     let scratch = Scratch::new("gate-changelog-release");
     let git = |args: &[&str]| {
         let out = Command::new("git")
@@ -2646,17 +2653,16 @@ fn the_changelog_step_reads_the_commit_before_a_release() {
     git(&["update-ref", "refs/remotes/origin/master", "HEAD"]);
 
     write("app/x", "2\n");
-    write(
-        "CHANGELOG.md",
-        "# C\n\n## [Unreleased]\n\n- new\n\n## [1.0.0] - 2026-10-01\n\n- old\n",
-    );
-    git(&["commit", "-q", "-am", "Merge #1: a change"]);
-    assert!(step(), "an entry rides the change");
+    write("changelog.d/one.md", "### Added\n- new\n");
+    git(&["add", "-A"]);
+    git(&["commit", "-q", "-m", "Merge #1: a change"]);
+    assert!(step(), "a fragment rides the change");
 
     write(
         "CHANGELOG.md",
         "# C\n\n## [Unreleased]\n\n## [1.1.0] - 2026-10-14\n\n- new\n\n## [1.0.0] - 2026-10-01\n\n- old\n",
     );
+    git(&["rm", "-q", "changelog.d/one.md"]);
     git(&[
         "commit",
         "-q",
@@ -2686,6 +2692,17 @@ fn the_changelog_step_reads_the_commit_before_a_release() {
         !step(),
         "a train with no entry fails even under its release"
     );
+
+    git(&["reset", "-q", "--hard", "origin/master"]);
+    write("app/x", "4\n");
+    write("changelog.d/four.md", "### Fixed\n- four\n");
+    write(
+        "CHANGELOG.md",
+        "# C\n\n## [Unreleased]\n\n- four\n\n## [1.0.0] - 2026-10-01\n\n- old\n",
+    );
+    git(&["add", "-A"]);
+    git(&["commit", "-q", "-m", "Merge #4: an entry in the changelog"]);
+    assert!(!step(), "only a release writes CHANGELOG.md");
 }
 
 /// Every script the gate, the train or a workflow runs by its path is executable in the index: a

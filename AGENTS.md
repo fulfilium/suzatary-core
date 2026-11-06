@@ -351,7 +351,7 @@ sentence. Write a comment for one of these:
 - an invariant that is not obvious.
 
 Do not put dates, plan references, chain references, quotes or history in a comment. Put them
-in `CHANGELOG.md` or `docs/`, or leave them out. Do not repeat the code in words. Give every
+in a changelog fragment or `docs/`, or leave them out. Do not repeat the code in words. Give every
 public Rust item a doc comment, because `missing_docs` warns. Use one line when one line is
 enough.
 
@@ -409,8 +409,13 @@ changes and one line on how you tested them.
 ## Releases and `Completes:`
 
 The version is read from the project chain, and `scripts/train.sh` writes it. Never change the
-version in `app/release.toml` or `app/Cargo.toml` (fixed at 0.0.0), and never close the
-`## [Unreleased]` section of `CHANGELOG.md`. A train writes both files in one release commit.
+version in `app/release.toml` or `app/Cargo.toml` (fixed at 0.0.0), and never edit `CHANGELOG.md`.
+A train writes both files in one release commit.
+
+Write your changelog entry as a new file, `changelog.d/<branch>.md` (the branch's `/` as `-`):
+Keep a Changelog `### <kind>` headings, each over `- ` entries. The gate's `changelog` step
+refuses an `app/` or `web/` change that adds none, and any other edit of `CHANGELOG.md`. The
+release folds the fragments into its section and deletes them.
 
 When your pull request finishes a todo on the project chain, say so on its own line of the
 description:

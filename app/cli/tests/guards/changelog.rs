@@ -1,6 +1,6 @@
 //! The changelog cannot silently rot: it parses, its versions are semver in strictly descending
-//! order, its dates never go forwards, and its newest release is `app/release.toml`'s, the file
-//! `flake.nix` also reads.
+//! order, its dates never go forwards, its newest release is `app/release.toml`'s, the file
+//! `flake.nix` also reads, and every fragment waiting in `changelog.d/` is one the cut can fold.
 
 use std::path::{Path, PathBuf};
 
@@ -58,7 +58,7 @@ fn it_has_an_unreleased_section() {
     };
     assert!(
         text.lines().any(|line| line == "## [Unreleased]"),
-        "no `## [Unreleased]` heading — the push gate has nothing to check"
+        "no `## [Unreleased]` heading — a release cut has nothing to close"
     );
 }
 
@@ -143,4 +143,25 @@ fn the_tree_s_release_reads_and_prints_as_itself() {
         text,
         "app/release.toml's data is the cut's print, under the header it holds"
     );
+}
+
+/// Every file of `changelog.d/` is a `<branch>.md` fragment that parses, so no train's cut
+/// refuses one; an absent directory is a tree with nothing waiting.
+#[test]
+fn every_fragment_is_one_the_cut_folds() {
+    let Ok(listed) = std::fs::read_dir(repo().join("changelog.d")) else {
+        return;
+    };
+    for entry in listed {
+        let path = entry.expect("a directory entry").path();
+        assert!(
+            path.extension().is_some_and(|e| e == "md") && path.is_file(),
+            "{} is not a fragment: changelog.d holds `<branch>.md` files alone",
+            path.display()
+        );
+        let text = std::fs::read_to_string(&path).expect("reads");
+        if let Err(refused) = suzatary_core::release::Fragment::parse(&text) {
+            panic!("{}: {refused}", path.display());
+        }
+    }
 }

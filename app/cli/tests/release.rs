@@ -152,9 +152,17 @@ fn a_checkout(root: &Path) -> PathBuf {
     std::fs::write(tree.join("app/release.toml"), "version = \"1.3.0\"\n").expect("a release");
     std::fs::write(
         tree.join("CHANGELOG.md"),
-        "# Changelog\n\n## [Unreleased]\n\n### Added\n- a calendar link\n\n## [1.3.0] - 2026-09-01\n\n### Added\n- the first\n",
+        "# Changelog\n\n## [Unreleased]\n\n## [1.3.0] - 2026-09-01\n\n### Added\n- the first\n",
     )
     .expect("a changelog");
+    // Two changes' entries, each its own file.
+    std::fs::create_dir_all(tree.join("changelog.d")).expect("the fragments");
+    std::fs::write(tree.join("changelog.d/b-fix.md"), "### Fixed\n- a fix\n").expect("a fragment");
+    std::fs::write(
+        tree.join("changelog.d/a-links.md"),
+        "### Added\n- a calendar link\n",
+    )
+    .expect("a fragment");
     std::fs::write(
         tree.join("app/core/releases.toml"),
         "chain = \"suzatary\"\nbase = 1\n\n[[release]]\ntodo = \"suzatarytwo\"\nmajor = 2\nminor = 0\n",
@@ -214,9 +222,16 @@ fn a_release_is_cut_from_the_chain_and_checked_against_it() {
         changelog.contains(
             "## [Unreleased]\n\n## [2.0.0] - 20"
         ) && changelog.contains(
-            "\n- Completes `todo:suzatary/calendarlinks`: the calendarlinks item\n\n### Added\n- a calendar link\n"
+            "\n- Completes `todo:suzatary/calendarlinks`: the calendarlinks item\n\n### Added\n- a calendar link\n\n### Fixed\n- a fix\n"
         ),
         "{changelog}"
+    );
+    assert!(
+        std::fs::read_dir(tree.join("changelog.d"))
+            .expect("the directory")
+            .next()
+            .is_none(),
+        "the cut removes what it folded"
     );
     let released =
         std::fs::read_to_string(tree.join("app/release.toml")).expect("the release file");

@@ -14,7 +14,7 @@ use suzatary_core::capability::Clock;
 use suzatary_core::escape::markup_text;
 use suzatary_core::record::Node;
 use suzatary_core::release::{
-    Completed, Completes, Cut, Plan, Reading, Released, Version, binding, reopened,
+    Completed, Completes, Cut, Fragment, Plan, Reading, Released, Version, binding,
 };
 use suzatary_core::store::Prodrome;
 use suzatary_io::clock::SystemClock;
@@ -68,7 +68,8 @@ pub enum Action {
         todos: Vec<String>,
     },
     /// Write the next release into a checkout: `app/release.toml` (its version and what it
-    /// completed) and the changelog's Unreleased section closed under it. The
+    /// completed) and the changelog's Unreleased section closed under it, with every fragment of
+    /// `changelog.d/` folded in and removed. The
     /// version is read as the chain will be once `--completes` are recorded done, which the
     /// train's land does; nothing is written to the chain here.
     Cut {
@@ -81,10 +82,6 @@ pub enum Action {
         /// The checkout to write.
         #[arg(long, default_value = ".")]
         tree: PathBuf,
-        /// The changelog the train started from (master's): an entry its merges added to a
-        /// section that one had already released is moved back under Unreleased first.
-        #[arg(long, value_name = "FILE")]
-        since: Option<PathBuf>,
         /// The last release (origin/master's newest `Release:` trailer); absent before the
         /// first, which is `major.minor.0` of what the chain reads. A version the checkout
         /// declares that is not the last release was never released: its section joins this
@@ -168,7 +165,6 @@ pub fn run(path: &Path, args: &Args) -> anyhow::Result<()> {
             completes,
             actor,
             tree,
-            since,
             last,
         } => cut(
             &plan,
@@ -177,7 +173,6 @@ pub fn run(path: &Path, args: &Args) -> anyhow::Result<()> {
                 completes,
                 actor,
                 tree,
-                since: since.as_deref(),
                 last: *last,
             },
         ),
@@ -406,10 +401,11 @@ fn known(plan: &Plan, chain: &Chain<'_>, todos: &[String]) -> anyhow::Result<Vec
     }
 }
 
-/// The two files a release writes under `tree`, and the plan it reads there.
+/// The two files a release writes under `tree`, the fragments it folds and the plan it reads.
 struct Files {
     plan: PathBuf,
     changelog: PathBuf,
+    fragments: PathBuf,
     released: PathBuf,
 }
 
@@ -418,6 +414,7 @@ impl Files {
         Files {
             plan: tree.join("app/core/releases.toml"),
             changelog: tree.join("CHANGELOG.md"),
+            fragments: tree.join("changelog.d"),
             released: tree.join("app/release.toml"),
         }
     }
@@ -426,6 +423,29 @@ impl Files {
 fn released(files: &Files) -> anyhow::Result<Released> {
     Released::parse(&readable(&files.released)?)
         .with_context(|| format!("reading {}", files.released.display()))
+}
+
+/// The fragments in `dir` (`changelog.d/`), folded in the order of their names, and their paths.
+fn fragments(dir: &Path) -> anyhow::Result<(Vec<PathBuf>, Fragment)> {
+    let mut paths: Vec<PathBuf> = match std::fs::read_dir(dir) {
+        Err(absent) if absent.kind() == std::io::ErrorKind::NotFound => Vec::new(),
+        listed => listed?
+            .map(|e| e.map(|e| e.path()))
+            .collect::<Result<_, _>>()?,
+    };
+    paths.sort();
+    let mut folded = Fragment::default();
+    for path in &paths {
+        anyhow::ensure!(
+            path.extension().is_some_and(|e| e == "md"),
+            "{} is no `.md` fragment",
+            path.display()
+        );
+        let fragment =
+            Fragment::parse(&readable(path)?).with_context(|| path.display().to_string())?;
+        folded = folded.append(fragment);
+    }
+    Ok((paths, folded))
 }
 
 fn readable(path: &Path) -> anyhow::Result<String> {
@@ -441,7 +461,6 @@ struct Asked<'a> {
     completes: &'a [String],
     actor: &'a str,
     tree: &'a Path,
-    since: Option<&'a Path>,
     last: Option<Version>,
 }
 
@@ -470,13 +489,12 @@ fn cut(plan: &Plan, chain: &Chain<'_>, asked: &Asked<'_>) -> anyhow::Result<()> 
     };
     let day = chrono::NaiveDate::from_ymd_opt(chain.now.year(), chain.now.month(), chain.now.day())
         .context("the clock's day")?;
-    let merged = readable(&files.changelog)?;
-    let merged = match asked.since {
-        Some(base) => reopened(&readable(base)?, &merged),
-        None => merged,
-    };
-    let changelog = release.changelog(&merged, day, plan.chain())?;
+    let (paths, folded) = fragments(&files.fragments)?;
+    let changelog = release.changelog(&readable(&files.changelog)?, &folded, day, plan.chain())?;
     write(&files.changelog, &changelog)?;
+    for path in &paths {
+        std::fs::remove_file(path).with_context(|| format!("removing {}", path.display()))?;
+    }
     write(&files.released, &release.released().print_over(&existing))?;
     println!("{}", printed(&release));
     Ok(())

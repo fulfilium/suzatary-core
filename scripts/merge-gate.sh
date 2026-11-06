@@ -313,7 +313,7 @@ fi
 
 # What the steps never read; app/cli/tests/guards/merge_gate.rs holds the sources to it.
 # `cli_only`: files every Rust and web unit skips unless crate_reads declares one for it.
-cli_only=CHANGELOG.md,CLAUDE.md,app/release.toml
+cli_only=CHANGELOG.md,changelog.d,CLAUDE.md,app/release.toml
 rust_base=web/src,web/test,web/e2e,web/typst,android,docs,memory
 rust=all-but:$rust_base,$cli_only
 web_app_skips=app/bench/src,app/cli/src,app/cli/tests,app/conformance,app/io/src,app/plugin/src,app/plugin/tests,app/plugin-fence/src,app/plugin-fence/wit,app/plugin-ics/src,app/plugin-ics/tests,app/wit
@@ -482,23 +482,27 @@ lane=history
 # Unkept: its answer is a function of origin/master, not of the tree; without it, it passes.
 # shellcheck disable=SC2329
 changelog_entry() {
-  local base head=HEAD unreleased='/^## \[Unreleased\]/,/^## \[[0-9]/p'
+  local base head=HEAD added
   base="$(git merge-base HEAD origin/master 2>/dev/null)" ||
     { echo "changelog: skipped: no origin/master to compare with"; return 0; }
-  # A release commit (`Release:` trailer) closes Unreleased, so read the commit before it.
+  # A release commit (`Release:` trailer) folds the fragments, so read the commit before it.
   if [[ -n "$(git log -1 --format='%(trailers:key=Release,valueonly)' HEAD | sed '/^$/d')" ]]; then
     head=HEAD^
+  fi
+  if ! git diff --quiet "$base" "$head" -- CHANGELOG.md; then
+    echo "changelog: only a release writes CHANGELOG.md; put the entry in changelog.d/<branch>.md" >&2
+    return 1
   fi
   if git diff --quiet "$base" "$head" -- app/ web/; then
     echo "changelog: no app/ or web/ change since $(git rev-parse --short "$base")"
     return 0
   fi
-  if [[ "$(git show "$base:CHANGELOG.md" | sed -n "$unreleased")" == "$(git show "$head:CHANGELOG.md" | sed -n "$unreleased")" ]]; then
-    echo "changelog: app/ or web/ changed since $(git rev-parse --short "$base") and CHANGELOG.md's" \
-      "## [Unreleased] section did not; add an entry" >&2
+  added="$(git diff --name-only --diff-filter=A "$base" "$head" -- ':(glob)changelog.d/*.md' | paste -sd' ' -)"
+  if [[ -z "$added" ]]; then
+    echo "changelog: app/ or web/ changed and no changelog.d/<branch>.md was added (AGENTS.md)" >&2
     return 1
   fi
-  echo "changelog: an ## [Unreleased] entry rides the change"
+  echo "changelog: $added rides the change"
 }
 step tree changelog       unkept  changelog_entry
 

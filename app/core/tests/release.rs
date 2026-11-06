@@ -13,7 +13,7 @@ use proptest::prelude::*;
 use std::collections::BTreeMap;
 use suzatary_core::record::TodoEvent;
 use suzatary_core::release::{
-    Completed, Completes, Counted, Lot, Plan, Reading, Release, Released, Version,
+    Completed, Completes, Counted, Fragment, Lot, Plan, Reading, Release, Released, Version,
 };
 
 const OWNER: &str = "owner";
@@ -357,45 +357,24 @@ fn a_release_prints_and_parses_as_itself() {
             "- Completes `todo:suzatary/portsuites`: ports as traits".to_owned(),
         ]
     );
-}
-
-/// An entry a PR branched before a release wrote under Unreleased is merged into the section
-/// that release closed, or into an older released section when the PR branched further back; the
-/// cut moves it back, under its heading, and leaves what each release itself held.
-#[test]
-fn entries_merged_into_a_released_section_are_unreleased_again() {
-    let base = "# Changelog\n\n## [Unreleased]\n\n## [1.11.0] - 2026-10-12\n\n- Completes `todo:suzatary/x`: x\n\n### Added\n- a\n\n## [1.10.0] - 2026-10-01\n\n- old\n";
-    let merged = "# Changelog\n\n## [Unreleased]\n\n## [1.11.0] - 2026-10-12\n\n- Completes `todo:suzatary/x`: x\n\n### Added\n- a\n- b\n  more of b\n\n### Fixed\n- c\n\n## [1.10.0] - 2026-10-01\n\n- old\n";
-    let two_back = "## [Unreleased]\n\n## [1.12.0] - 2026-10-13\n\n### Added\n- twelve\n\n## [1.11.0] - 2026-10-12\n\n### Fixed\n- eleven\n";
-    for (base, merged, reopened) in [
-        (
-            base,
-            merged,
-            "# Changelog\n\n## [Unreleased]\n\n### Added\n- b\n  more of b\n\n### Fixed\n- c\n\n## [1.11.0] - 2026-10-12\n\n- Completes `todo:suzatary/x`: x\n\n### Added\n- a\n\n## [1.10.0] - 2026-10-01\n\n- old\n",
-        ),
-        // A tree whose merges added nothing below Unreleased is left as it is.
-        (base, base, base),
-        (
-            two_back,
-            "## [Unreleased]\n\n## [1.12.0] - 2026-10-13\n\n### Added\n- twelve\n\n## [1.11.0] - 2026-10-12\n\n### Fixed\n- eleven\n- late\n",
-            "## [Unreleased]\n\n### Fixed\n- late\n\n## [1.12.0] - 2026-10-13\n\n### Added\n- twelve\n\n## [1.11.0] - 2026-10-12\n\n### Fixed\n- eleven\n",
-        ),
-    ] {
-        assert_eq!(
-            suzatary_core::release::reopened(base, merged),
-            reopened,
-            "{merged}"
-        );
-    }
-    // An entry already under Unreleased joins the one moved there, under one heading.
-    let fresh = merged.replace(
-        "## [Unreleased]\n\n",
-        "## [Unreleased]\n\n### Added\n- d\n\n",
-    );
-    let moved = suzatary_core::release::reopened(base, &fresh);
-    assert!(
-        moved.starts_with("# Changelog\n\n## [Unreleased]\n\n### Added\n- d\n- b\n  more of b\n\n### Fixed\n- c\n\n## [1.11.0]"),
-        "{moved}"
+    // The fragments fold under the version, after what it completed.
+    let fragments = Fragment::parse("### Fixed\n- b\n")
+        .expect("a fragment")
+        .append(Fragment::parse("### Added\n- a\n  more of a\n").expect("a fragment"));
+    let day = chrono::NaiveDate::from_ymd_opt(2026, 10, 14).expect("a day");
+    assert_eq!(
+        cut.changelog(
+            "# Changelog\n\n## [Unreleased]\n\n## [1.0.0] - 2026-10-01\n",
+            &fragments,
+            day,
+            "suzatary"
+        )
+        .expect("closes"),
+        format!(
+            "# Changelog\n\n## [Unreleased]\n\n## [{version}] - 2026-10-14\n\n{}\n{}\n\n### Added\n- a\n  more of a\n\n### Fixed\n- b\n\n## [1.0.0] - 2026-10-01\n",
+            "- Completes `todo:suzatary/calendarlinks`: calendar \"links\"",
+            "- Completes `todo:suzatary/portsuites`: ports as traits",
+        )
     );
 }
 
@@ -436,12 +415,14 @@ fn an_unreleased_version_folds_into_the_first_release() {
     let changelog = "## [Unreleased]\n\n## [1.10.0] - 2026-10-12\n\nWhy.\n\n### Added\n- a\n\n## [0.17.0] - 2026-09-29\n";
     let day = chrono::NaiveDate::from_ymd_opt(2026, 10, 14).expect("a day");
     assert_eq!(
-        cut.changelog(changelog, day, "suzatary").expect("closes"),
+        cut.changelog(changelog, &Fragment::default(), day, "suzatary")
+            .expect("closes"),
         "## [Unreleased]\n\n## [1.9.0] - 2026-10-14\n\nWhy.\n\n### Added\n- a\n\n## [0.17.0] - 2026-09-29\n"
     );
     let entries = "## [Unreleased]\n\n### Fixed\n- b\n\n## [1.10.0] - 2026-10-12\n\nWhy.\n";
     assert_eq!(
-        cut.changelog(entries, day, "suzatary").expect("closes"),
+        cut.changelog(entries, &Fragment::default(), day, "suzatary")
+            .expect("closes"),
         "## [Unreleased]\n\n## [1.9.0] - 2026-10-14\n\n### Fixed\n- b\n\nWhy.\n",
         "one blank line where the folded heading stood"
     );

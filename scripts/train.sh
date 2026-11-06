@@ -37,8 +37,8 @@
 #
 # A train's PRs are a set: the merge order is a function of their heads (a stacked PR merges
 # before its base, carrying its `Completes:`), so one set over one master builds one tree. A PR
-# is built from the head GitHub names. Changelog lines a merge put under a released section are
-# moved back under Unreleased.
+# is built from the head GitHub names. A PR writes its changelog entry as `changelog.d/<branch>.md`,
+# so no two PRs conflict on one; the release folds them.
 #
 # Every train ends with the release `suzatary release cut` writes, its version a reading of the
 # project chain with the train's `Completes:` todos done. Land checks the chain reads that
@@ -109,82 +109,11 @@ clean() {
     || die "the checkout has changes; the train builds and gates what is committed, so commit or stash them first:\n$(git status --short)"
 }
 
-# Two PRs that only added CHANGELOG lines join by union, ours then theirs; a removed or rewritten
-# line is a real conflict, left to its author.
-join_changelog() {
-  local f=CHANGELOG.md dir joined=1
-  dir="$(mktemp -d)"
-  if git show ":1:$f" >"$dir/base" 2>/dev/null && git show ":2:$f" >"$dir/ours" \
-    && git show ":3:$f" >"$dir/theirs" \
-    && only_adds "$dir/base" "$dir/ours" && only_adds "$dir/base" "$dir/theirs"; then
-    git merge-file --union "$dir/ours" "$dir/base" "$dir/theirs" \
-      && cp "$dir/ours" "$f" && git add -- "$f" && joined=0
-  fi
-  rm -rf "$dir"
-  return "$joined"
-}
-
-only_adds() {
-  local stat
-  stat="$(git diff --no-index --numstat -- "$1" "$2")" || true
-  [[ -z "$stat" || "$(cut -f2 <<<"$stat")" == 0 ]]
-}
-
 # Keep the train's lock (the versions its merges were tested with); cargo adds what the PR needs.
 relock() {
   git checkout --ours -- app/Cargo.lock \
     && cargo metadata --manifest-path app/Cargo.toml --format-version 1 >/dev/null \
     && git add -- app/Cargo.lock
-}
-
-# Lines HEAD's merge brought under a released section that the PR's <head> holds under Unreleased
-# (git placed them by context after a release moved their neighbours) are moved to the end of
-# Unreleased and the merge amended. Prints how many moved.
-place_changelog() {
-  local head="$1" f=CHANGELOG.md dir moved
-  [[ -f "$f" ]] && git cat-file -e "$head:$f" 2>/dev/null || { echo 0; return; }
-  dir="$(mktemp -d)"
-  git show "$head:$f" | awk '/^## /{ un = /^## \[Unreleased\]/; next } un && NF' >"$dir/wrote"
-  git diff -U0 HEAD^1 HEAD -- "$f" | awk '
-    /^@@/ { split($3, at, ","); line = substr(at[1], 2); next }
-    /^\+\+\+/ { next }
-    /^\+/ { print line++ }' >"$dir/brought"
-  awk -v count="$dir/moved" '
-    FILENAME == ARGV[1] { wrote[$0]; next }
-    FILENAME == ARGV[2] { brought[$0]; next }
-    { line[++n] = $0 }
-    END {
-      section = ""
-      for (i = 1; i <= n; i++) {
-        if (line[i] ~ /^## /) {
-          section = line[i] ~ /^## \[Unreleased\]/ ? "unreleased" : "released"
-          if (section == "unreleased") at = i
-        } else if (section == "released" && (i in brought) && (line[i] in wrote)) {
-          move[i]
-          moving[++m] = line[i]
-        }
-      }
-      if (!at) m = 0
-      last = at
-      for (i = at + 1; at && i <= n && line[i] !~ /^## /; i++) if (line[i] != "") last = i
-      for (i = 1; i <= n; i++) {
-        if (m && (i in move)) continue
-        print line[i]
-        if (m && i == last) {
-          if (last == at) print ""
-          for (k = 1; k <= m; k++) print moving[k]
-        }
-      }
-      print m + 0 >count
-    }' "$dir/wrote" "$dir/brought" "$f" >"$dir/placed"
-  moved="$(cat "$dir/moved")"
-  if ((moved)); then
-    cp "$dir/placed" "$f"
-    git add -- "$f"
-    git commit --quiet --amend --no-edit >/dev/null || { rm -rf "$dir"; return 1; }
-  fi
-  rm -rf "$dir"
-  echo "$moved"
 }
 
 # The todos on PR <n>'s `Completes:` lines, one per line (split on spaces and commas, never
@@ -283,25 +212,21 @@ record_origin() {
 # The train's last commit: the release the chain reads once the train's todos are done.
 cut_release() {
   [[ -f app/core/releases.toml ]] || return 0
-  local todos=() args=() todo out version since last
+  local todos=() args=() todo out version last
   mapfile -t todos < <(train_completes)
   for todo in "${todos[@]}"; do args+=(--completes "$todo"); done
   last="$(last_release)"
   [[ -z "$last" ]] || args+=(--last "$last")
-  # Master's changelog lets the cut move back entries written under an Unreleased since closed.
-  since="$(mktemp)"
-  git show origin/master:CHANGELOG.md >"$since" 2>/dev/null || : >"$since"
   resolve_app origin/master
-  out="$("$app_bin" release cut --tree "$root" --since "$since" "${args[@]}")" \
-    || { rm -f "$since"; die "the release could not be cut (above), so the train is not built; nothing is gated until it is."; }
-  rm -f "$since"
+  out="$("$app_bin" release cut --tree "$root" "${args[@]}")" \
+    || die "the release could not be cut (above), so the train is not built; nothing is gated until it is."
   version="$(sed -n 's/.*"version":"\([^"]*\)".*/\1/p' <<<"$out")"
   [[ -n "$version" ]] || die "suzatary release cut printed no version: $out"
   # Else the tag would be refused only at land, after the whole gate.
   ! git ls-remote --exit-code --tags origin "refs/tags/v$version" >/dev/null \
     || die "the chain reads $version, and origin has v$version already (a tag no release on master names): the train is not built. Move or delete that tag, or complete a todo so the chain reads past it."
-  # No crate compiles either file, so the release moves no gate key.
-  git add -- CHANGELOG.md app/release.toml
+  # No crate compiles any of them, so the release moves no gate key. The cut removed every fragment.
+  git add -- CHANGELOG.md app/release.toml && git rm -rq --cached --ignore-unmatch -- changelog.d
   git commit --quiet -m "release: $version" \
     -m "$(trailers Release "$version" Completes "${todos[*]}")" \
     || die "the release $version did not commit (a hook?)."
@@ -386,7 +311,7 @@ build() {
     done
     echo "$held ${head_of[$n]} $n"
   done | sort -k1,1nr -k2,2 -k3,3n | cut -d' ' -f3)
-  local subject trailer todos carried conflicts resolved file moved
+  local subject trailer todos carried conflicts resolved file
   for n in "${order[@]}"; do
     head="${head_of[$n]}"
     if git merge-base --is-ancestor "$head" HEAD; then
@@ -417,7 +342,6 @@ build() {
       resolved=()
       for file in "${conflicts[@]}"; do
         case "$file" in
-          CHANGELOG.md) join_changelog && resolved+=("$file") ;;
           app/Cargo.lock) relock && resolved+=("$file") ;;
         esac
       done
@@ -438,11 +362,6 @@ build() {
         continue
       fi
     fi
-    if ! moved="$(place_changelog "$head")"; then
-      git reset --quiet --hard HEAD
-      die "#$n's merge put CHANGELOG.md lines under a released section, and moving them under Unreleased did not commit (a hook?)."
-    fi
-    ((moved == 0)) || said+=" (moved $moved CHANGELOG.md line$( ((moved == 1)) || echo s) under Unreleased)"
     for m in "${carried[@]}"; do carrier_of[$m]="$n"; done
     rows+=("#$n|merged|$subject$said")
   done

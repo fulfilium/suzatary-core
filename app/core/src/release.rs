@@ -11,12 +11,14 @@
 //! compiles that file, so a release moves no compiled input.
 
 mod cut;
+mod fragment;
 mod plan;
 mod reading;
 mod released;
 mod version;
 
-pub use cut::{Cut, TreeError, reopened};
+pub use cut::{Cut, TreeError};
+pub use fragment::{Fragment, FragmentError, Kind};
 pub use plan::{Plan, PlanError, Release};
 pub use reading::{Item, Lot, Named, Place, Reading, ReleaseReading, binding};
 pub use released::{Completed, Completes, Released, ReleasedError};

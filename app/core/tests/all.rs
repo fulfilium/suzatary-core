@@ -22,6 +22,8 @@ mod decisions_schema;
 mod digest;
 #[path = "drive_port.rs"]
 mod drive_port;
+#[path = "fragment.rs"]
+mod fragment;
 #[path = "frontiers.rs"]
 mod frontiers;
 #[path = "held.rs"]
