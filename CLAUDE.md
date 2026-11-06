@@ -477,15 +477,17 @@ Threat model: an injected email can at worst mis-triage or write bad todo text
 - **THE VERSION IS A READING OF THE PROJECT CHAIN**: a release is a todo on the
   `suzatary` chain whose spec composes its items, declared in
   `app/core/releases.toml`; `scripts/train.sh` cuts it and tags it. Never set
-  the version or close `## [Unreleased]` by hand; how a PR names what it
+  the version by hand; how a PR names what it
   completes is AGENTS.md's "Releases and `Completes:`" (→ `versionreading`).
   The version is no compiled input: the binary reads `app/release.toml` at run
   time (→ `versionnotcompiled`). The contracts keep their own snapshots
   (`app/core/tests/mcp-surface.json`, the stored vocabulary under
   `app/core/tests/`), so widening one fails a test instead of drifting.
-- `CHANGELOG.md` — what changed, per release. The merge gate's `changelog`
-  step refuses an `app/` or `web/` change that moves no `## [Unreleased]`
-  entry since `origin/master`.
+- `CHANGELOG.md` — what changed, per release, written only by a release. A
+  pull request's entry is its own fragment, `changelog.d/<branch>.md`, which
+  the release cut folds and deletes; the merge gate's `changelog` step refuses
+  an `app/` or `web/` change that adds no fragment, and any edit to
+  `CHANGELOG.md` outside a release (→ `train`).
 - `ROADMAP.md` — recorded direction, NOT built, plus a Rejected section with
   reasons (a deleted idea gets re-proposed; a rejected one does not).
 - **A release is a `v<version>` tag**, made by `train.sh land` alone. CI's
