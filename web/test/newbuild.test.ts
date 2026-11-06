@@ -69,6 +69,26 @@ test("law: a running page never reloads without a tap, whatever it hears", async
   }
 })
 
+test("law: a page whose code is lost moves to the box's build only when the box serves another, and never on its own", async () => {
+  for (const [served, moves] of [["b2", true], ["b1", false], ["", false], ["dev", true]] as const) {
+    const b = box(served)
+    const m = newbuild.machine(stamped("b1"), b.fx)
+    const l = await m.lost()
+    await settle()
+    assert.equal(l.type, moves ? "Moved" : "Unloaded", served)
+    assert.equal(b.reloads(), moves ? 1 : 0, `${served}: it reloads exactly when it moves`)
+  }
+  // A box that does not answer moved nothing the page can know of: it stays, and says it could not load.
+  const down: newbuild.Effects = { ...box("b2").fx, about: () => Promise.reject(new Error("offline")), reload: () => assert.fail("no reload") }
+  assert.equal((await newbuild.machine(stamped("b1"), down).lost()).type, "Unloaded")
+  for (let seed = 1; seed <= 200; seed++) {
+    const r = rng(seed * 2654435761)
+    const own = r.pick(["b1", "b2"])
+    const served = r.pick(["", "b1", "b2", "b3"])
+    assert.equal(newbuild.lost(own, served).type === "Moved", served !== "" && served !== own, `seed ${seed}`)
+  }
+})
+
 test("a newer build is offered, and a dismissed one stays dismissed until a newer one is served", async () => {
   const b = box("b1", ["b1"])
   const m = newbuild.machine(stamped("b1"), b.fx)

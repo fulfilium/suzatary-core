@@ -92,9 +92,8 @@ const paint = chrome.painter({
   },
 });
 
-// A page that absorbs the change keeps its data, filter and scroll; a new chain is always a new page. A hash change is
-// silent to a screen reader, so a new page's heading is announced, except the first. A place read again (back or
-// forward) is restored as left, its focus over the heading's; any other page opens at the top.
+// A page that absorbs the change keeps its state; a new chain is a new page. A new page's heading is announced, except
+// the first; a place read again (back, forward) is restored as left, and any other opens at the top.
 // Only the newest navigation draws; a page loaded after a later one is dropped.
 let latest = 0;
 
@@ -113,13 +112,28 @@ async function mount(a: app.App, fresh: boolean, heard: boolean, again: boolean,
   if (again) kept.restore(routelog.here(a.log).kept, () => drawn !== null && drawn.log === a.log);
 }
 
+// A page whose code would not load is never drawn as the error (`newbuild.lost`); its Reload is a reload, as a browser
+// may keep a module's failed load for the document's life.
 function go(a: app.App, fresh: boolean, heard: boolean, again = false): void {
   const turn = ++latest;
   void mount(a, fresh, heard, again, turn).catch((error: unknown) => {
     if (turn !== latest) return;
-    const view = byId("view");
-    clear(view);
-    view.appendChild(el("p", { class: "problem" }, String(error)));
+    console.warn("the page did not load", error);
+    void builds.lost().then((l) => {
+      if (turn !== latest) return;
+      const view = byId("view");
+      clear(view);
+      view.appendChild(
+        l.type === "Moved"
+          ? el("p", { class: "problem" }, "Suzatary was updated: opening this page in the new version.")
+          : el(
+              "p",
+              { class: "problem" },
+              "This page could not be loaded. ",
+              el("button", { type: "button", class: "retry", onclick: builds.acts.reload }, "Reload"),
+            ),
+      );
+    });
   });
 }
 
@@ -184,8 +198,7 @@ function askAgain(): void {
   if (app.now().who.type === "Unmet") askWhoAndWhere();
 }
 
-// Read after `/api/me` and after every replica change, so an untrusted or revoked key, or a browser that cannot sign,
-// is said on the page rather than refused at the first write.
+// Read after `/api/me` and every replica change, so a key that cannot sign is said before the first write.
 function keyed(): void {
   if (app.now().who.type !== "Writes") return;
   void signingHere("Shell")
@@ -231,8 +244,7 @@ let drawn: app.App | null = null;
 
 // The first reading of the owner's zone loads its rules, a long task on a phone, so it waits for an idle thread.
 const idle = (f: () => void): void => void ("requestIdleCallback" in window ? requestIdleCallback(f, { timeout: 2000 }) : setTimeout(f, 1000));
-// The shell's own reads (the fold on a route that does not show it, "Needs you", whether this device signs) wait until a
-// page has drawn and the thread is idle.
+// The shell's own reads wait until a page has drawn and the thread is idle.
 shellAsksAfter(frame.firstDrawn.then(() => new Promise<void>((done) => idle(done))));
 foldWhere(() => (pages.folds[app.screen(app.now()).type] === "Shown" ? "Page" : "Shell"));
 
@@ -341,8 +353,7 @@ watchReplica(() => {
 });
 readings.watch(() => paint(chrome.of(app.now(), seen())));
 hearTheme(() => paint(chrome.of(app.now(), seen())));
-// The fold is read again when what it shows next moves (`due`), and at no other instant. A read that moved nothing is
-// paced, so a tab that cannot read waits longer each time and never stops.
+// The fold is read again when what it shows next moves (`due`); a read that moved nothing waits longer each time.
 const rearm = clock.pacer();
 const arm = (n: clock.Next): void =>
   rearm(n, () => {

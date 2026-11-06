@@ -1,12 +1,10 @@
-// The app shell: which files are one build, the names they are loaded by and the cache that holds them. A build's files
-// are named by it (`b/<build>/app.js`), so a page and every worker it starts load only their own build's files: no page
-// runs two builds' files, whichever worker serves it, and a page on an old build is safe to run for as long as it is open.
+// The app shell: which files are one build, their names (`b/<build>/app.js`) and the cache that holds them, so no page
+// runs two builds' files and a page of an old build runs for as long as it is open.
 
 export namespace shell {
   export type Build = { type: "Stamped"; id: string } | { type: "Dev" }
-  // A request to the worker: the page and its loader, which every build serves from its own cache; the name of the build
-  // the box serves, answered as last heard and asked again behind the answer; a file of one build, kept at install or on
-  // first use; or nothing of the shell's, the API least of all.
+  // A request to the worker: the page and its loader, from its own cache; the box's build, as last heard; a file of one
+  // build, kept at install or on first use; or nothing of the shell's, the API least of all.
   export type Route =
     | { type: "Root"; file: string }
     | { type: "Current" }
@@ -40,9 +38,8 @@ export namespace shell {
 
   export const PREFIX = "suzatary-shell-"
   export const cacheOf = (id: string) => `${PREFIX}${id}`
-  // The caches a worker of `id` may delete, by the build each open page answered it runs (`null`: no answer). A page
-  // still on an older build keeps loading that build's files, so its cache stays until no page runs it, and nothing
-  // goes while a page has not answered.
+  // The caches a worker of `id` may delete, by the build each open page answered it runs (`null`: none): a build's cache
+  // stays while a page runs it, and nothing goes while a page has not answered.
   export const unused = (names: readonly string[], id: string, pages: readonly (string | null)[]): string[] =>
     pages.includes(null) ? [] : names.filter(n => n.startsWith(PREFIX) && n !== cacheOf(id) && !pages.some(p => p !== null && n === cacheOf(p)))
 
@@ -66,21 +63,23 @@ export namespace shell {
   export const HEARD = "suzatary-current"
   // The page and its loader: build-free names, each worker's own copy.
   export const ROOT: readonly string[] = ["index.html", "boot.js"]
-  // The files every build has by these names. A build's pages and the code they share are chunks besides, named by their
-  // content when it is bundled (`scripts/build-web.sh`), so the worker is handed its build's list as it is built.
+  // The files every build has by these names; its chunks besides are named by content, handed to the worker at build.
   export const FILES: readonly string[] = [
     "app.js",
     "prodrome.js",
     "prodrome_bg.wasm",
     "prodromework.js",
+    // Loaded by a page of an old build after the box moved on.
+    "views.js",
+    "views_bg.wasm",
+    "pagework.js",
     "tokens.css",
     "style.css",
     ...FACES.map(f => `fonts/${f}`),
   ]
   // A build's shell: its fixed files and its chunks, all kept at install.
   export const files = (chunks: readonly string[]): readonly string[] => [...FILES, ...chunks]
-  // A chunk is named by its content (`<name>-<hash>.js`), so its shape says it is one of some build's: a worker serves
-  // an older build's tab that build's chunks from that build's cache, though they are not its own.
+  // A chunk's name (`<name>-<hash>.js`) says it is some build's: a worker serves an older build's tab its chunks.
   export const chunk = (file: string): boolean => /^[a-z][a-z0-9_]*-[A-Z0-9]{8}\.js$/.test(file)
 
   // Relative to the worker's scope; the scope itself is the page, which is index.html.
@@ -96,9 +95,8 @@ export namespace shell {
     return FILES.includes(file) || chunk(file) ? { type: "Shell", build: b, file } : KEPT.includes(file) ? { type: "Kept", build: b, file } : { type: "Pass" }
   }
 
-  // What the browser sends to the box without waking the worker (Chromium's static routes): the API, which the worker
-  // passes anyway. Woken for each of the page's calls, an older worker would get an event at the moment it gives way to
-  // a newer one, and Chromium then holds the newer one waiting.
+  // Sent to the box without waking the worker (Chromium's static routes): an older worker woken as it gives way to a
+  // newer one holds the newer one waiting.
   export const NETWORK: readonly string[] = ["api/*"]
 
   export const script = (id: string) => `./sw.js?build=${encodeURIComponent(id)}`

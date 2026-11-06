@@ -1,7 +1,6 @@
-// The page's half of the app shell. A running page never reloads by itself: a page on an old build loads only its own
-// build's files, so it is safe for as long as it is open, and a start (`boot.js`) is what loads the build last heard the
-// box serves. When the page hears of a newer one it offers it across the top, and once per build it says which it
-// started on.
+// The page's half of the app shell. A page of an old build loads its own build's files from its cache, so it reloads
+// by itself only when they are gone (`lost`); a newer build is offered across the top, and the one a page started on is
+// said once.
 
 import http from "../wire/http"
 import type d from "../wire/decoder"
@@ -42,8 +41,8 @@ export namespace newbuild {
 
   export const NONE: State = { type: "None" }
 
-  // `own` is the name this page's files were loaded under. A box that names no build has given no answer; a build
-  // offered and then taken back is no longer offered; a dismissed build stays dismissed, and a newer one is offered.
+  // `own` is this page's build. No build named is no answer; a build taken back is no longer offered; a dismissed one
+  // stays dismissed until a newer one.
   export const step = (own: string, s: State, e: Event): State => {
     switch (e.type) {
       case "Served": {
@@ -59,6 +58,11 @@ export namespace newbuild {
         return s.type === "Offered" ? { type: "Dismissed", to: s.to } : s.type === "Updated" ? NONE : s
     }
   }
+
+  // A page whose build's code would not load moves to the box's build, at its address, when the box serves another;
+  // otherwise it stays, so it never reloads in a loop.
+  export type Lost = { readonly type: "Moved" } | { readonly type: "Unloaded" }
+  export const lost = (own: string, served: string): Lost => (served !== "" && served !== own ? { type: "Moved" } : { type: "Unloaded" })
 
   export const line = (s: State): shell.Line =>
     s.type === "Updated" ? { type: "Updated", version: s.version, revision: s.revision }
@@ -87,9 +91,9 @@ export namespace newbuild {
     readonly reload: () => void
   }
 
-  // `check` whenever the page may have missed a deploy: it starts, reconnects or comes back, or the box refused this
-  // build's contract (426) or answered in a shape it does not know. And the line's two presses.
-  export type Builds = { readonly check: () => Promise<void>; readonly acts: Acts }
+  // `check` whenever the page may have missed a deploy (a start, a reconnect, a 426, an answer it cannot read); `lost`
+  // when a page's code would not load; and the line's two presses.
+  export type Builds = { readonly check: () => Promise<void>; readonly lost: () => Promise<Lost>; readonly acts: Acts }
 
   export const machine = (own: shell.Build, fx: Effects): Builds => {
     const name = shell.named(own)
@@ -116,11 +120,22 @@ export namespace newbuild {
         go({ type: "Served", about: a })
       }),
     )
+    const reload = (): void => void inflight.settled().then(fx.reload)
     return {
       check,
+      lost: () =>
+        fx.about().then(
+          a => {
+            go({ type: "Served", about: a })
+            const l = lost(name, a.build)
+            if (l.type === "Moved") reload()
+            return l
+          },
+          (): Lost => ({ type: "Unloaded" }),
+        ),
       acts: {
         // Writes on their way are kept or refused first; the loader then starts the build the box serves.
-        reload: () => void inflight.settled().then(fx.reload),
+        reload,
         dismiss: () => go({ type: "Dismiss" }),
       },
     }
@@ -134,8 +149,8 @@ export namespace newbuild {
     await Promise.all(names.filter(n => n.startsWith(shell.PREFIX)).map(n => caches.delete(n)))
   }
 
-  // The box's build as this page heard it, kept where the worker answers `b/current` from (`app/worker.ts`), so the next
-  // start runs it, a Reload's included, with nothing asked of the network first. A box that names no build is no answer.
+  // The box's build as heard, kept where the worker answers `b/current` (`app/worker.ts`), so the next start runs it
+  // with nothing asked of the network.
   const heard = async (a: About): Promise<About> => {
     if (a.build === "" || !("caches" in window)) return a
     await caches
@@ -169,10 +184,8 @@ export namespace newbuild {
     sw.addEventListener("message", e => {
       if (typeof e.data === "object" && e.data !== null && "type" in e.data && e.data.type === "which") e.ports[0]?.postMessage(shell.named(own))
     })
-    // A page on the box's build that no worker serves registers that build's, so the next cold start offline runs it
-    // too; a worker of another build serving this page meanwhile serves it this build's files by name. An install that
-    // failed (a deploy in the middle of it, a fetch lost) is tried again at the next check. The first asks the worker to
-    // let go of the caches no open page runs.
+    // A page on the box's build that no worker serves registers that build's, so a cold start offline runs it; an
+    // install that failed is tried again at the next check. The first asks the worker to sweep the caches no page runs.
     let swept = false
     const keep = (): Promise<void> => {
       const serving = sw.controller === null ? null : shell.named(shell.buildOf(sw.controller.scriptURL))

@@ -45,6 +45,15 @@ app.scene("a stamped build keeps its whole shell in the cache named by it, and n
   for (const f of ["/index.html", "/boot.js", ...["app.js", "prodrome.js", "prodrome_bg.wasm", "style.css", "tokens.css", ...CHUNKS].map(f => `/b/e2e-1/${f}`)])
     assert.ok(paths.includes(f), `${f} is kept: ${paths.join(", ")}`)
   assert.ok(paths.some(p => p.startsWith("/b/e2e-1/fonts/")), "the fonts are kept under the build's name")
+  // Every file the build ships is kept at install, kept on first use, or a path no build names: a page of an old build
+  // loads only its own build's files, and the box has none of them once it moved on.
+  const served = ["sw.js", "manifest.webmanifest", "icon.svg", "icon-192.png", "icon-512.png", "index.html", "boot.js"]
+  // The build's directories (its fonts, its Typst kit, `.well-known`) have no extension; a file of it has one.
+  const loose = readdirSync(DIST)
+    .filter(f => !f.startsWith(".") && f.includes(".") && !f.endsWith(".br") && !f.endsWith(".map"))
+    .filter(f => !served.includes(f) && !shell.FILES.includes(f) && !shell.KEPT.includes(f) && !shell.chunk(f))
+  assert.deepEqual(loose, [], "a file the build ships that no build's worker keeps")
+  for (const f of ["views.js", "views_bg.wasm", "pagework.js"]) assert.ok(paths.includes(`/b/e2e-1/${f}`), `${f} is kept: ${paths.join(", ")}`)
   for (const f of shell.SERIF) assert.ok(!paths.includes(`/b/e2e-1/fonts/${f}`), `${f} waits for a page to draw in it`)
   assert.deepEqual(paths.filter(p => !p.startsWith("/b/e2e-1/") && p !== "/index.html" && p !== "/boot.js"), [], "every build file under its build's name")
   assert.deepEqual(paths.filter(p => p.startsWith("/api/") || p === "/events"), [], "the API is never the worker's")
@@ -92,6 +101,51 @@ app.scene("a second visit takes the core and typst-wasm from the build's cache, 
   )
   await app.page.navigate(`${SHELL}/#/`)
   await app.page.waitFor(`document.querySelectorAll(".tree .row").length > 0`)
+})
+
+// AN OPEN TAB OF BUILD N, ONCE BUILD N+1 IS LIVE, STILL RUNS BUILD N: the box serves no file of a build it moved from,
+// so every file a page of N loads after the deploy (the Rust pages' module and its rehearsal worker among them) is
+// N's, from N's cache. A tab that lost one anyway (a cache the browser let go) moves to the box's build at the page it
+// asked for (`newbuild.lost`), and a page that cannot load is said in words, never drawn as the error.
+app.scene("a tab of an old build loads its Rust pages' module from its build's cache after a deploy, and draws them", async () => {
+  await app.page.waitFor(controlledBy("e2e-1"), { timeout: 20000 })
+  await app.page.evaluate(`(window.e2eMark = true)`)
+  writeFileSync(BUILD, "e2e-1b\n")
+  try {
+    assert.equal((await fetch(`${SHELL}/b/e2e-1/views.js`)).status, 404, "the box serves no file of a build it moved from")
+    for (const f of ["views.js", "views_bg.wasm", "pagework.js"])
+      assert.equal(await app.page.evaluate<number>(`fetch("/b/e2e-1/${f}").then((r) => r.status)`), 200, `${f}, from e2e-1's cache`)
+    await app.page.evaluate(`(location.hash = "#/secretary", true)`)
+    await app.page.waitFor(`document.querySelector("#view .secretarystream") !== null`, { timeout: 30000 })
+    assert.equal(await app.page.evaluate<boolean>(`window.e2eMark === true`), true, "the tab was not reloaded")
+    assert.equal(await app.page.evaluate<boolean>(`document.querySelector("#view .problem") === null`), true, "no problem is drawn")
+  } finally {
+    writeFileSync(BUILD, "e2e-1\n")
+  }
+  await app.page.navigate(`${SHELL}/#/`)
+  await app.page.waitFor(`${controlledBy("e2e-1")} && document.querySelectorAll(".tree .row").length > 0`, { timeout: 20000 })
+})
+
+app.scene("a page whose code will not load says so in words and offers to load it again, never the error", async () => {
+  // A page no worker serves, so its own requests are the ones failed: the Rust pages' module, and the worker that
+  // would otherwise take the page over and fetch the module itself.
+  await app.page.evaluate(`navigator.serviceWorker.getRegistrations().then((rs) => Promise.all(rs.map((r) => r.unregister())))`)
+  await app.page.navigate("about:blank")
+  await app.page.failRequests(["/views.js", "/views_bg.wasm", "/sw.js"])
+  try {
+    await app.page.navigate(`${SHELL}/#/secretary`)
+    await app.page.waitFor(`document.querySelector("#view .problem .retry") !== null`, { timeout: 30000 })
+    const said = await app.page.evaluate<string>(`document.getElementById("view").textContent`)
+    assert.match(said, /This page could not be loaded/, said)
+    assert.equal(/TypeError|import|views\.js/.test(said), false, said)
+  } finally {
+    await app.page.resumeRequests()
+  }
+  // Loaded again at the same address, the page draws, and its build's worker serves it once more.
+  await app.page.evaluate(`(document.querySelector("#view .problem .retry").click(), true)`)
+  await app.page.waitFor(`location.hash === "#/secretary" && document.querySelector("#view .secretarystream") !== null`, { timeout: 30000 })
+  await app.page.navigate(`${SHELL}/#/`)
+  await app.page.waitFor(`${controlledBy("e2e-1")} && document.querySelectorAll(".tree .row").length > 0`, { timeout: 30000 })
 })
 
 // A page that has not reloaded still holds this mark; a reload, of any kind, drops it.
