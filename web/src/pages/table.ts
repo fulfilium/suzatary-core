@@ -1,7 +1,7 @@
 // Every screen's page by its tag; the router never switches on it. The Typst list, chain and usage are lazy chunks: big
 // and rarely landed on. The rest share most code with the shell, so splitting them gains little.
 
-import type { Mounted } from "../view/page"
+import type { Draw } from "../view/page"
 import type { Screen } from "../shell/layout"
 import { hrefOf } from "../shell/route"
 import { el } from "../view/dom"
@@ -15,7 +15,7 @@ import app from "../app/app"
 
 export namespace pages {
   type Screens = { readonly [K in Screen["type"]]: Extract<Screen, { readonly type: K }> }
-  export type Table = { readonly [K in keyof Screens]: (root: HTMLElement, s: Screens[K]) => Promise<Mounted> }
+  export type Table = { readonly [K in keyof Screens]: (s: Screens[K]) => Draw | Promise<Draw> }
 
   const unknown = (hash: string): frame.Page<string> => ({
     className: "unknownpage",
@@ -26,27 +26,27 @@ export namespace pages {
   })
 
   export const table: Table = {
-    todos: (root, s) => todos.mount(root, s.selected, s.prefill),
-    inbox: (root, s) => program.mount(root, "InboxPage", { open: s.open ?? "" }),
-    todo: (root, s) => frame.mount(root, todoview.page(s.id, true)),
-    typst: (root, s) => import("./typstlist").then(m => m.default.mount(root, s.open)),
-    mail: (root, s) => program.mount(root, "MailPage", { query: s.query, account: s.account }),
-    message: (root, s) => program.mount(root, "MessagePage", { id: s.id }),
-    thread: (root, s) => program.mount(root, "ThreadPage", { id: s.id }),
-    chain: (root, s) => import("./chain").then(m => m.mount(root, s.focus)),
-    usage: root => import("./usage").then(m => m.default.mount(root)),
-    about: root => program.mount(root, "AboutPage", {}),
-    settings: root => program.mount(root, "SettingsPage", {}),
-    memory: root => program.mount(root, "MemoryPage", {}),
-    briefings: root => program.mount(root, "BriefingsPage", {}),
-    briefing: (root, s) => program.mount(root, "BriefingPage", { date: s.date }),
+    todos: s => root => todos.mount(root, s.selected, s.prefill),
+    inbox: s => program.mount("InboxPage", { open: s.open ?? "" }),
+    todo: s => root => frame.open(root, todoview.page(s.id, true)),
+    typst: s => import("./typstlist").then(m => root => m.default.mount(root, s.open)),
+    mail: s => program.mount("MailPage", { query: s.query, account: s.account }),
+    message: s => program.mount("MessagePage", { id: s.id }),
+    thread: s => program.mount("ThreadPage", { id: s.id }),
+    chain: s => import("./chain").then(m => root => m.mount(root, s.focus)),
+    usage: () => import("./usage").then(m => root => m.default.mount(root)),
+    about: () => program.mount("AboutPage", {}),
+    settings: () => program.mount("SettingsPage", {}),
+    memory: () => program.mount("MemoryPage", {}),
+    briefings: () => program.mount("BriefingsPage", {}),
+    briefing: s => program.mount("BriefingPage", { date: s.date }),
     // "" is today, on the owner's clock.
-    calendar: (root, s) => program.mount(root, "CalendarPage", { from: s.date === "" ? time.date(app.now().zone) : s.date }),
-    secretary: (root, s) => program.mount(root, "SecretaryPage", { topics: [...s.topics] }),
-    conversation: (root, s) =>
-      program.mount(root, "ConversationPage", { at: { type: "Page", id: s.id, refs: [...s.refs], focus: s.focus === true, at: s.at ?? null } }),
-    newtopic: root => program.mount(root, "DraftPage", {}),
-    unknown: (root, s) => frame.mount(root, unknown(s.hash)),
+    calendar: s => program.mount("CalendarPage", { from: s.date === "" ? time.date(app.now().zone) : s.date }),
+    secretary: s => program.mount("SecretaryPage", { topics: [...s.topics] }),
+    conversation: s =>
+      program.mount("ConversationPage", { at: { type: "Page", id: s.id, refs: [...s.refs], focus: s.focus === true, at: s.at ?? null } }),
+    newtopic: () => program.mount("DraftPage", {}),
+    unknown: s => root => frame.open(root, unknown(s.hash)),
   }
 
   // Whether a screen draws the shell's fold (`app/store`): its rows, or the titles of the todos it names.
@@ -73,7 +73,6 @@ export namespace pages {
     unknown: "Unshown",
   }
 
-  export const mount = <K extends Screen["type"]>(root: HTMLElement, s: Screens[K] & { readonly type: K }): Promise<Mounted> =>
-    table[s.type](root, s)
+  export const load = <K extends Screen["type"]>(s: Screens[K] & { readonly type: K }): Draw | Promise<Draw> => table[s.type](s)
 }
 export default pages

@@ -1,27 +1,4 @@
-/**
- * THE INFORMATION ARCHITECTURE, in a real browser (2026-09-10).
- *
- * The bar's slots and what lights up are data in `web/src/shell/nav.ts`. This
- * file checks that the data reaches a page: a bar built from the right list
- * and never rendered, a destination in `DESTINATIONS` with no arm in
- * `main.ts`'s switch, a chain pinned by a route that then mounts twice. Those
- * are the failures this file is for, and they are exactly the ones a reading
- * of the diff would pass.
- *
- * The claims, each one a way the naive implementation goes wrong:
- *
- *   1. Every slot of the bar opens something, and a hash with no arm lands
- *      on "No such page" quietly.
- *   2. `#/project` shows the OTHER chain — not the same list under a new title,
- *      which is what a switcher that changed a label and nothing else would do.
- *      The fixture's second chain is EMPTY, so this is checkable.
- *   3. At 62rem the bar's words sit across the top, and More holds the rest.
- *   4. The theme override, picked in the More sheet, wins over the machine's answer, in both directions.
- *   5. `#/add?text=…` is the list with the add sheet up and the text in it —
- *      the far end of the Android share target, whose Java half has no test
- *      harness at all. What the browser can prove is everything after the
- *      fragment is handed over, which is all of the behaviour.
- */
+// The bar's slots and the More sheet (`web/src/shell/nav.ts`) reaching the pages `main.ts` routes them to.
 
 import assert from "node:assert/strict";
 
@@ -29,8 +6,6 @@ import { BASE, DESKTOP, PHONE, shownTodos, suite } from "./harness";
 
 const app = await suite("destinations");
 
-/** The bar's labels, in order. The More button is a `<button>` and the rest are
- * links, so this reads the text rather than the tag. */
 const barLabels = async (): Promise<string[]> =>
   app.page.evaluate<string[]>(
     `[...document.querySelectorAll(".tabbar > .tab")].map((tab) => tab.querySelector(".tablabel")?.textContent ?? "")`,
@@ -64,21 +39,29 @@ app.scene("Project is the OTHER chain, not the same list under a new name", asyn
 
   await app.page.navigate(`${BASE}/#/project`);
   await app.page.waitFor(`document.querySelector("#view .pagetitle")?.textContent === "Project"`);
-  // ⚠️ WAIT FOR THE EMPTY NOTE, NOT FOR ZERO CARDS. "No cards" is also true of
-  // a list that has not drawn yet, so a scene waiting on the count would pass
-  // before the fold arrived and prove nothing about which chain it is. The note
-  // is drawn only by a list that HAS drawn and found nothing.
+  // The note, not a count of zero cards: a list that has not drawn yet also has none.
   await app.page.waitFor(`document.querySelector(".todospane .empty:not([hidden])") !== null`);
   assert.equal(await app.page.evaluate<number>(`document.querySelectorAll(".tree .row").length`), 0);
 
-  // AND IT SAYS THE RIGHT ONE OF THE THREE. The fixture's second chain is not
-  // empty — it holds one RESOLVED todo, deliberately (a replica cannot seal the
-  // first object of an empty chain), so the honest sentence here is "nothing is
-  // OPEN", not "nothing here yet" and certainly not "widen your filter", which
-  // is what a single empty string would have said for all three.
+  // The fixture's second chain holds one resolved todo, so nothing in it is open.
   const said = await app.page.evaluate<string>(`document.querySelector(".todospane .empty:not([hidden])").textContent`);
   assert.match(said, /Nothing is open/, `the empty note should name the reason this list is empty: ${said}`);
   assert.equal(said.includes("filter"), false, "nobody narrowed a filter; do not tell them to widen one");
+});
+
+app.scene("a page whose code arrives after the next tap is never drawn over it", async () => {
+  // A fresh document, so the Rust pages' module is fetched again, and held.
+  const release = await app.page.holdRequests(["views_bg.wasm"]);
+  const fresh = `${BASE}/?fresh=${Date.now()}`;
+  await app.page.navigate(`${fresh}#/briefings`);
+  await app.page.untilHeld();
+  await app.page.navigate(`${fresh}#/project`);
+  await app.page.waitFor(`document.querySelector("#view .pagetitle")?.textContent === "Project"`);
+  await release();
+  await app.page.waitFor(`performance.getEntriesByName("views:load").length > 0`);
+  // The page waiting on the module draws, or is dropped, in the microtasks after it loads: a task later, either is done.
+  await app.page.evaluate(`new Promise((done) => setTimeout(done, 0))`);
+  assert.equal(await app.page.evaluate<string>(`document.querySelector("#view .pagetitle")?.textContent ?? ""`), "Project");
 });
 
 /** Open the More sheet on whatever hash the reader is standing on. */
@@ -108,27 +91,10 @@ app.scene("at 62rem the same words sit across the top, and More holds the rest",
   await app.resize(PHONE);
 });
 
-/**
- * WHAT ANDROID'S SHARE SHEET OPENS (2026-09-10).
- *
- * `MainActivity.targetOf` maps an `ACTION_SEND` intent onto this exact URL and
- * hands it to the WebView whole; from there it is the web app's, and this is
- * the whole of what happens. Four claims, and the naive implementation misses
- * the last two: the sheet is UP (not merely the list), the body is the two
- * shared fields composed, the bar lights Todos rather than nothing, and the
- * hash has gone back to the list's — because a `#/add` left in the URL bar
- * re-opens over an already-added todo on reload, and makes sharing the same
- * link twice in a row do nothing the second time (no `hashchange`).
- */
+// The URL `MainActivity.targetOf` hands the WebView for a share. Its hash goes back to the list's, so sharing the same
+// link again is a hash change.
 app.scene("a shared link opens the list with the sheet prefilled, once", async () => {
-  // A BARE `#/add` IS THE LIST, with nothing to fill in and the sheet shut —
-  // and it is the one of these that can be reached with a real navigation. The
-  // share hashes below cannot: consuming a share rewrites `location.href`, and
-  // `navigate` waits for the href it asked for. Driving them as hash changes is
-  // also the shape of the real thing, because the app is normally already open
-  // when Android hands it a share and the intent lands on `onNewIntent`.
-  // `#/` first, so this scene starts on the ordinary list whatever the scenes
-  // above left selected — `#/add` names no chain, exactly like `#/todo/<id>`.
+  // The share hashes are hash changes, not navigations: consuming one rewrites the URL `navigate` waits for.
   await app.open(BASE);
   await app.page.navigate(`${BASE}/#/add`);
   assert.equal(
@@ -161,9 +127,6 @@ app.scene("a shared link opens the list with the sheet prefilled, once", async (
     "the share is consumed: the hash goes back to the list's",
   );
 
-  // AND THE SAME LINK AGAIN, which is what the consumption is for. Without it
-  // the second share would be a hash that did not change, no `hashchange`, and
-  // a sheet that never opened.
   await app.page.evaluate(`document.querySelector(".scrim").click()`);
   await app.page.waitFor(`document.querySelector(".addsheet.open") === null`);
   await share();
@@ -175,14 +138,6 @@ app.scene("a shared link opens the list with the sheet prefilled, once", async (
   await app.page.evaluate(`document.querySelector(".scrim").click()`);
 });
 
-/** Open the More sheet and press one of the three theme buttons, the way a
- * reader does. Through the sheet rather than by writing `localStorage`, because
- * what is under test is that the control is REACHABLE — a preference nobody can
- * get to is not a preference. */
-// The theme control is on the About page since 2026-09-13 (audit finding 6):
-// it was pinned at the bottom of the sheet and the rail, permanent space for a
-// setting touched about twice in a lifetime.
-// The theme is picked in the More sheet, which closes again with a press elsewhere.
 const pickTheme = async (label: string): Promise<void> => {
   await openMore();
   await app.page.clickText(".moresheet .themepick", label);
@@ -198,21 +153,15 @@ app.scene("the theme override wins over the machine, in both directions", async 
     app.page.evaluate<string>(`getComputedStyle(document.body).backgroundColor`);
   const onDarkMachine = await ground();
 
-  // Light, chosen, on a dark machine.
   await pickTheme("Light");
   await app.page.waitFor(`document.documentElement.getAttribute("data-theme") === "light"`);
   const forcedLight = await ground();
   assert.notEqual(forcedLight, onDarkMachine, "an override that changes nothing is not an override");
 
-  // And it SURVIVES A RELOAD, because it is remembered — the whole point of a
-  // preference over a media query.
   await app.page.reload();
   await app.page.waitFor(`document.documentElement.getAttribute("data-theme") === "light"`);
   assert.equal(await ground(), forcedLight);
 
-  // Back to System: the machine decides again, which is the state a two-state
-  // toggle cannot express — it would have had to guess an initial value and
-  // then it has silently stopped following the machine.
   await pickTheme("System");
   await app.page.waitFor(`document.documentElement.getAttribute("data-theme") === null`);
   assert.equal(await ground(), onDarkMachine);

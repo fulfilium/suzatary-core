@@ -308,6 +308,6 @@ export namespace usage {
     view,
   }
 
-  export const mount = (root: HTMLElement) => frame.mount(root, page)
+  export const mount = (root: HTMLElement) => frame.open(root, page)
 }
 export default usage

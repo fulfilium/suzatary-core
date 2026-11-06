@@ -5,7 +5,7 @@ import ui from "../app/ui"
 import registers from "../app/registers"
 import aside from "./aside"
 import { el } from "../view/dom"
-import type { Mounted } from "../view/page"
+import { inert, type Mounted } from "../view/page"
 import program from "../pages/program"
 import d from "../wire/decoder"
 
@@ -54,13 +54,16 @@ const mount = (c: Chrome, page: aside.Page): void => {
   const b: Beside = {
     page,
     talk: "Quiet",
-    mounted: program.mount(c.body, "ConversationPage", { at: { type: "Panel", about: page.type === "One" ? page.key : "" } }, {
-      box,
-      told: said => {
-        const t = told(said)
-        if (t.type === "Val" && cell.beside === b && b.talk !== t.v.talk) (b.talk = t.v.talk, apply(c, b))
-      },
-    }),
+    // A conversation swapped out while the module loads is never drawn.
+    mounted: program
+      .mount("ConversationPage", { at: { type: "Panel", about: page.type === "One" ? page.key : "" } }, {
+        box,
+        told: said => {
+          const t = told(said)
+          if (t.type === "Val" && cell.beside === b && b.talk !== t.v.talk) (b.talk = t.v.talk, apply(c, b))
+        },
+      })
+      .then(draw => (cell.beside === b ? draw(c.body) : inert)),
     unheard: presses.hear(() => (cell.beside === b ? apply(c, b) : undefined)),
   }
   c.toggle.onclick = () => presses.set(aside.pressed(b.page, presses.get(), b.talk))

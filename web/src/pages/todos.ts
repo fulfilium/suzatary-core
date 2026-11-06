@@ -459,6 +459,6 @@ export namespace todos {
     }
   }
 
-  export const mount = (root: HTMLElement, selected: string, prefill = ""): Promise<Mounted> => frame.mount(root, page(selected, prefill))
+  export const mount = (root: HTMLElement, selected: string, prefill = ""): Mounted => frame.open(root, page(selected, prefill))
 }
 export default todos

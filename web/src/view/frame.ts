@@ -231,9 +231,6 @@ export namespace frame {
       ...(f.absorb === undefined ? {} : { absorb: (screen: Screen) => f.absorb?.(screen, fx.dispatch) === true }),
     }
   }
-
-  export const mount = <S, E = never, K extends string = never>(root: HTMLElement, f: Page<S, E, K>): Promise<Mounted> =>
-    Promise.resolve(open(root, f))
 }
 export default frame
 

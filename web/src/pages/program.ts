@@ -2,7 +2,7 @@
 // (`app/pages/src/runtime.rs`) performed here, the same for each page. Nothing here knows a page.
 
 import type { Act, Answer, BriefingAt, CalendarAt, Context, ConversationFlags, DraftFlags, Effect, InboxFlags, Input, MailFlags, MessageAt, NeedsYouFlags, Nothing, Reading, Secret, SecretaryFlags, SettingsFlags, ThreadAt } from "../wire/generated/pages"
-import type { Mounted } from "../view/page"
+import type { Draw } from "../view/page"
 import http from "../wire/http"
 import d from "../wire/decoder"
 import asked from "../app/asked"
@@ -133,117 +133,120 @@ export namespace program {
   export type Around = { readonly box?: () => Element; readonly told?: (said: unknown) => void }
   const page_ = (): Element => document.scrollingElement ?? document.documentElement
 
-  export const mount = async <P extends Page>(root: HTMLElement, page: P, args: Args[P], around: Around = {}): Promise<Mounted> => {
+  // Only the module is awaited: the page draws when the caller calls what this returns.
+  export const mount = async <P extends Page>(page: P, args: Args[P], around: Around = {}): Promise<Draw> => {
     const box = around.box ?? page_
     const glue = await module()
-    // By name: a new one under a name lets the one before go.
-    const held_ = new Map<string, () => void>()
-    const timers = new Set<ReturnType<typeof setTimeout>>()
-    const hold = (name: unknown, stop: () => void): void => {
-      const k = JSON.stringify(name)
-      held_.get(k)?.()
-      held_.set(k, stop)
-    }
-    const drawn = (r: Reading<Answer>): void => (r.type === "Loading" ? undefined : frame.drawn())
-    const handle: run.Handler<In, Out> = (e, send, stepped) => {
-      const answered = (name: unknown) => (a: Answer): void => send({ type: "Answered", ask: name, answer: a })
-      switch (e.type) {
-        case "Hold": {
-          const q = held(e.path)
-          const tell = (): void => {
-            const r = q.now()
-            drawn(r)
-            send({ type: "Held", ask: e.ask, reading: r, behind: q.behind() })
-          }
-          hold(e.ask, q.hear(tell))
-          return tell()
-        }
-        case "Watch": {
-          const r = local.of(e.local, box())
-          const tell = (): void => {
-            const now = lo.map(r.now(), (body): Answer => ({ type: "Done", body }))
-            drawn(now)
-            send({ type: "Held", ask: e.ask, reading: now, behind: null })
-          }
-          hold(e.ask, r.hear(tell))
-          return tell()
-        }
-        case "Keep":
-          return local.keep(e.register, e.value)
-        case "Sync":
-          return void storesync.sync()
-        case "Listen":
-          return hold(
-            e.ask,
-            stream.open(stream.of(e.path), { opened: () => send({ type: "Opened", ask: e.ask }), frame: frame => send({ type: "Heard", ask: e.ask, frame }) }, stream.browser),
-          )
-        case "Again":
-          return held(e.path).again()
-        case "Get":
-          return void settled(http.get(e.path, d.unknown)).then(answered(e.ask))
-        case "Post":
-          return void settled(http.act(e.path, e.body, d.unknown)).then(answered(e.ask))
-        case "NewKey":
-          return void settled(signer.renew().then(() => null)).then(answered(e.ask))
-        case "Act": {
-          const secret = secretOf(root, e.secret)
-          if (secret === null) return answered(e.ask)({ type: "Done", body: { type: "Already" } })
-          // Told as answered, a taken answer is the page's at once while the read-back runs behind it; any other answer, or
-          // one told as held, waits for the read-back, which says whether the box did it.
-          let told = false
-          const heard = (a: intents.Answer): void => {
-            if (e.told !== "Answered" || a.type !== "Taken") return
-            told = true
-            answered(e.ask)({ type: "Done", body: { type: "Answered", answer: a, held: false } })
-          }
-          return void settled(intentsync.ask(ask(e.act), secret.value, heard)).then(a => (told ? undefined : answered(e.ask)(a)))
-        }
-        case "Endorse":
-          return void settled(vouch.endorsement(e.actor, e.key)).then(answered(e.ask))
-        case "Timer": {
-          const t = setTimeout(() => (timers.delete(t), answered(e.ask)({ type: "Done", body: time.now() })), e.after)
-          return void timers.add(t)
-        }
-        case "Focus": {
-          const field = root.querySelector(`[data-field="${CSS.escape(e.field)}"]`)
-          const busy = document.activeElement
-          if (!(field instanceof HTMLInputElement || field instanceof HTMLTextAreaElement)) return
-          if (busy !== field && (busy instanceof HTMLInputElement || busy instanceof HTMLTextAreaElement)) return
-          field.focus()
-          return field.setSelectionRange(field.value.length, field.value.length)
-        }
-        case "Scroll":
-          return scroll.move(box(), root, e.to, stepped.fromEnd)
-        case "Copy":
-          return void navigator.clipboard.writeText(e.text).then(() => toast("Copied"), (x: unknown) => toast(lo.reason(x)))
-        case "Go":
-          return address.go(parseRoute(e.href))
-        case "Replace":
-          return address.replace(parseRoute(e.href))
-        case "Back":
-          return address.back(parseRoute(e.fallback))
-        case "Toast":
-          return void toast(e.words)
-        case "Tell":
-          return around.told?.(e.said)
-        case "Mark":
-          return void requestAnimationFrame(() => (performance.clearMarks(e.name), performance.mark(e.name)))
+    return root => {
+      // By name: a new one under a name lets the one before go.
+      const held_ = new Map<string, () => void>()
+      const timers = new Set<ReturnType<typeof setTimeout>>()
+      const hold = (name: unknown, stop: () => void): void => {
+        const k = JSON.stringify(name)
+        held_.get(k)?.()
+        held_.set(k, stop)
       }
-    }
-    // The painter draws into an empty root; the page before left its own.
-    root.replaceChildren()
-    const t0 = performance.now()
-    const program = new glue[page](JSON.stringify({ ...args, context: context(), now: time.now() }))
-    const running = run.start<In, Out>(root, program, parts.draw, blocks.held, handle, parts.gone, box)
-    performance.measure("page:draw", { start: t0, end: performance.now(), detail: { page, read: "Program" } })
-    const unheard = app.hear(whoOf, () => running.send({ type: "Context", ...context() }), same)
-    return {
-      destroy: () => {
-        unheard()
-        held_.forEach(stop => stop())
-        timers.forEach(t => clearTimeout(t))
-        running.destroy()
-      },
+      const drawn = (r: Reading<Answer>): void => (r.type === "Loading" ? undefined : frame.drawn())
+      const handle: run.Handler<In, Out> = (e, send, stepped) => {
+        const answered = (name: unknown) => (a: Answer): void => send({ type: "Answered", ask: name, answer: a })
+        switch (e.type) {
+          case "Hold": {
+            const q = held(e.path)
+            const tell = (): void => {
+              const r = q.now()
+              drawn(r)
+              send({ type: "Held", ask: e.ask, reading: r, behind: q.behind() })
+            }
+            hold(e.ask, q.hear(tell))
+            return tell()
+          }
+          case "Watch": {
+            const r = local.of(e.local, box())
+            const tell = (): void => {
+              const now = lo.map(r.now(), (body): Answer => ({ type: "Done", body }))
+              drawn(now)
+              send({ type: "Held", ask: e.ask, reading: now, behind: null })
+            }
+            hold(e.ask, r.hear(tell))
+            return tell()
+          }
+          case "Keep":
+            return local.keep(e.register, e.value)
+          case "Sync":
+            return void storesync.sync()
+          case "Listen":
+            return hold(
+              e.ask,
+              stream.open(stream.of(e.path), { opened: () => send({ type: "Opened", ask: e.ask }), frame: frame => send({ type: "Heard", ask: e.ask, frame }) }, stream.browser),
+            )
+          case "Again":
+            return held(e.path).again()
+          case "Get":
+            return void settled(http.get(e.path, d.unknown)).then(answered(e.ask))
+          case "Post":
+            return void settled(http.act(e.path, e.body, d.unknown)).then(answered(e.ask))
+          case "NewKey":
+            return void settled(signer.renew().then(() => null)).then(answered(e.ask))
+          case "Act": {
+            const secret = secretOf(root, e.secret)
+            if (secret === null) return answered(e.ask)({ type: "Done", body: { type: "Already" } })
+            // Told as answered, a taken answer is the page's at once while the read-back runs behind it; any other answer, or
+            // one told as held, waits for the read-back, which says whether the box did it.
+            let told = false
+            const heard = (a: intents.Answer): void => {
+              if (e.told !== "Answered" || a.type !== "Taken") return
+              told = true
+              answered(e.ask)({ type: "Done", body: { type: "Answered", answer: a, held: false } })
+            }
+            return void settled(intentsync.ask(ask(e.act), secret.value, heard)).then(a => (told ? undefined : answered(e.ask)(a)))
+          }
+          case "Endorse":
+            return void settled(vouch.endorsement(e.actor, e.key)).then(answered(e.ask))
+          case "Timer": {
+            const t = setTimeout(() => (timers.delete(t), answered(e.ask)({ type: "Done", body: time.now() })), e.after)
+            return void timers.add(t)
+          }
+          case "Focus": {
+            const field = root.querySelector(`[data-field="${CSS.escape(e.field)}"]`)
+            const busy = document.activeElement
+            if (!(field instanceof HTMLInputElement || field instanceof HTMLTextAreaElement)) return
+            if (busy !== field && (busy instanceof HTMLInputElement || busy instanceof HTMLTextAreaElement)) return
+            field.focus()
+            return field.setSelectionRange(field.value.length, field.value.length)
+          }
+          case "Scroll":
+            return scroll.move(box(), root, e.to, stepped.fromEnd)
+          case "Copy":
+            return void navigator.clipboard.writeText(e.text).then(() => toast("Copied"), (x: unknown) => toast(lo.reason(x)))
+          case "Go":
+            return address.go(parseRoute(e.href))
+          case "Replace":
+            return address.replace(parseRoute(e.href))
+          case "Back":
+            return address.back(parseRoute(e.fallback))
+          case "Toast":
+            return void toast(e.words)
+          case "Tell":
+            return around.told?.(e.said)
+          case "Mark":
+            return void requestAnimationFrame(() => (performance.clearMarks(e.name), performance.mark(e.name)))
+        }
+      }
+      // The painter draws into an empty root; the page before left its own.
+      root.replaceChildren()
+      const t0 = performance.now()
+      const program = new glue[page](JSON.stringify({ ...args, context: context(), now: time.now() }))
+      const running = run.start<In, Out>(root, program, parts.draw, blocks.held, handle, parts.gone, box)
+      performance.measure("page:draw", { start: t0, end: performance.now(), detail: { page, read: "Program" } })
+      const unheard = app.hear(whoOf, () => running.send({ type: "Context", ...context() }), same)
+      return {
+        destroy: () => {
+          unheard()
+          held_.forEach(stop => stop())
+          timers.forEach(t => clearTimeout(t))
+          running.destroy()
+        },
+      }
     }
   }
 }

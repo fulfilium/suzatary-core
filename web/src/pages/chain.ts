@@ -183,11 +183,8 @@ function rowText(v: ObjectVerdict, wrote: Provenance | undefined): string {
 // Rows either side of those in sight, so a fling shows drawn rows before the next frame draws more.
 const MARGIN = 30;
 
-// The objects' table, drawn a window at a time (`view/rows.ts`): a chain of thousands of objects is a screen of rows and
-// two spacers in the document. Every row is one line tall (`#chain td` does not wrap), measured once drawn. The filter
-// narrows the rows drawn from, and the focused object is scrolled to by its place among them.
-// Where the objects' box stands, owned by the page's mount so a table drawn again for a moved chain opens where the
-// reader left the last: at the focused object until the reader scrolls, then where they scrolled to.
+// The objects' table, drawn a window at a time (`view/rows.ts`); every row is one line tall (`#chain td` does not wrap).
+// Where the box stands outlives a table drawn again: at the focused object until the reader scrolls.
 type Place = { readonly type: "Focus" } | { readonly type: "Scrolled"; readonly top: number };
 
 function objectTable(
@@ -232,8 +229,7 @@ function objectTable(
   // The rows in the document, by their place in the whole table: a row still in the window stays the same element, so
   // the keyboard's focus and a selection in it survive the scroll that Tab itself makes.
   const kept = new Map<number, HTMLElement>();
-  // One row drawn first to measure the rest by; a table with no rows has nothing to measure. Scroll events come at most
-  // once a frame, and a window that did not move draws nothing.
+  // One row drawn first to measure the rest by.
   const measured = (): number => {
     if (drawn.type === "Measured") return drawn.px;
     const first = all[0];
@@ -285,9 +281,8 @@ function objectTable(
     box.scrollTop = 0;
     draw();
   });
-  // Drawn once the frame has put the box on the page, where it has a height. A table drawn again carries the query
-  // typed into the last one into its field without a word (`view/typed.ts`), so the rows are read from the field here,
-  // and the box goes back to where the reader had it, or the focused row to its middle.
+  // Once the box is on the page, where it has a height. A table drawn again keeps the last query in its field
+  // (`view/typed.ts`), so the rows are read from the field.
   queueMicrotask(() => {
     shown = filtered();
     draw();
@@ -305,10 +300,10 @@ function objectTable(
 // The same chain checked is the same check: a chain is named by its heads.
 const checkedChain = asked.question(loaded, (x, y) => x.payload.heads.join(" ") === y.payload.heads.join(" ") && x.payload.links.length === y.payload.links.length);
 
-export function mount(root: HTMLElement, focus: string): Promise<Mounted> {
+export function mount(root: HTMLElement, focus: string): Mounted {
   let place: Place = { type: "Focus" };
   const held = { read: () => place, keep: (p: Place) => void (place = p) };
-  return frame.mount<Loaded>(root, {
+  return frame.open<Loaded>(root, {
     className: "chainpage",
     wide: true,
     title: "The chain",

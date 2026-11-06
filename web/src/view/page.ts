@@ -15,6 +15,9 @@ export interface Mounted {
 
 export const inert: Mounted = { destroy: () => {} }
 
+// A page with its code loaded, drawn in one synchronous step.
+export type Draw = (root: HTMLElement) => Mounted
+
 /** Back, or the fallback route when the tab has nothing to go back to (a deep link opened cold). */
 export const backButton = (label: string, fallback: Route): HTMLElement =>
   el("button", {

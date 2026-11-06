@@ -95,21 +95,28 @@ const paint = chrome.painter({
 // A page that absorbs the change keeps its data, filter and scroll; a new chain is always a new page. A hash change is
 // silent to a screen reader, so a new page's heading is announced, except the first. A place read again (back or
 // forward) is restored as left, its focus over the heading's; any other page opens at the top.
-async function mount(a: app.App, fresh: boolean, heard: boolean, again: boolean): Promise<void> {
+// Only the newest navigation draws; a page loaded after a later one is dropped.
+let latest = 0;
+
+async function mount(a: app.App, fresh: boolean, heard: boolean, again: boolean, turn: number): Promise<void> {
   const view = byId("view");
   const screen = app.screen(a);
   if (!fresh && current.absorb?.(screen) === true) return;
+  const draw = await pages.load(screen);
+  if (turn !== latest) return;
   current.destroy();
   current = inert;
   if (!again) window.scrollTo(0, 0);
-  current = await pages.mount(view, screen);
+  current = draw(view);
   // In its own task, since focusing the heading lays the page out; a page that took the focus keeps it.
   if (heard) setTimeout(() => (view.contains(document.activeElement) ? undefined : announce(view)), 0);
   if (again) kept.restore(routelog.here(a.log).kept, () => drawn !== null && drawn.log === a.log);
 }
 
 function go(a: app.App, fresh: boolean, heard: boolean, again = false): void {
-  void mount(a, fresh, heard, again).catch((error: unknown) => {
+  const turn = ++latest;
+  void mount(a, fresh, heard, again, turn).catch((error: unknown) => {
+    if (turn !== latest) return;
     const view = byId("view");
     clear(view);
     view.appendChild(el("p", { class: "problem" }, String(error)));
@@ -309,7 +316,7 @@ storesync.hearWorker({
 });
 void device.persist().catch(() => {});
 // Started once the screen has drawn and the tab is idle, so its first draw (and compiling its module) is not the screen's.
-void frame.firstDrawn.then(() => idle(() => void program.mount(byId("needsyou"), "NeedsYouPage", {}, { box: () => byId("needsyou") })));
+void frame.firstDrawn.then(() => idle(() => void program.mount("NeedsYouPage", {}, { box: () => byId("needsyou") }).then(draw => draw(byId("needsyou")))));
 app.tab.subscribe(draw);
 // These move without App, so each redraws the chrome.
 store.subscribe(() => paint(chrome.of(app.now(), seen())));

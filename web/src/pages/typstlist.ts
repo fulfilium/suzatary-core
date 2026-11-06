@@ -95,6 +95,6 @@ export namespace typstlist {
     }
   }
 
-  export const mount = (root: HTMLElement, open: string): Promise<Mounted> => frame.mount(root, page(open, performance.now()))
+  export const mount = (root: HTMLElement, open: string): Mounted => frame.open(root, page(open, performance.now()))
 }
 export default typstlist
