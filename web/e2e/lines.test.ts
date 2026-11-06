@@ -24,6 +24,13 @@ import { LANDED_ROW, PHONE, REPLICA_ROWS, SIGNED_POST, WORKER_MARKS, WORKER_QUES
 
 const app = await suite("lines")
 
+// The app opens its database as it starts, and a scene may be ready to write before it has: the write waits for the
+// store, then writes, each within the wait budget.
+const write = async (name: string, store: string, w: string): Promise<void> => {
+  await app.page.waitFor(made(name, store))
+  await app.page.evaluate(put(name, store, w))
+}
+
 /** Every row of every store of the database `name` but those `but` names, as one string: what the device holds of it. */
 const held = (name: string, but: readonly string[] = []): string => `new Promise((ok, no) => {
   const r = indexedDB.open(${JSON.stringify(name)})
@@ -50,17 +57,35 @@ const held = (name: string, but: readonly string[] = []): string => `new Promise
 const boxLines = `fetch("/api/stores/lines/skeleton").then((r) => r.json()).then((a) => ({ names: a.nodes.map((n) => n.hash), keys: a.keys }))`
 type BoxLines = { readonly names: readonly string[]; readonly keys: Readonly<Record<string, string>> }
 
-/** `write(store)` run in one read-write transaction of the store `store` of the database `name`. */
+/** `write(store)` run in one read-write transaction of the store `store` of the database `name`. It settles either way:
+ * a database not made yet is never made here (the open's upgrade is aborted), and a missing store, a blocked open or a
+ * throw fails it with what happened, so a scene never waits on a promise that cannot settle. */
 const put = (name: string, store: string, write: string): string => `new Promise((done, fail) => {
   const r = indexedDB.open(${JSON.stringify(name)})
+  r.onupgradeneeded = () => (r.transaction.abort(), fail("the database ${name} is not made yet"))
+  r.onblocked = () => fail("opening the database ${name} is blocked")
   r.onerror = () => fail(String(r.error))
   r.onsuccess = () => {
-    const tx = r.result.transaction(${JSON.stringify(store)}, "readwrite")
-    ;(${write})(tx.objectStore(${JSON.stringify(store)}))
-    tx.oncomplete = () => (r.result.close(), done(true))
-    tx.onerror = () => fail(String(tx.error))
+    try {
+      const tx = r.result.transaction(${JSON.stringify(store)}, "readwrite")
+      tx.oncomplete = () => (r.result.close(), done(true))
+      tx.onerror = () => fail(String(tx.error))
+      tx.onabort = () => (r.result.close(), fail(String(tx.error)))
+      ;(${write})(tx.objectStore(${JSON.stringify(store)}))
+    } catch (e) {
+      r.result.close()
+      fail(String(e))
+    }
   }
 })`
+
+/** Whether the app has made the store `store` of its database `name`: asked without making either. */
+const made = (name: string, store: string): string =>
+  `indexedDB.databases().then((all) => all.some((d) => d.name === ${JSON.stringify(name)}) && new Promise((ok) => {
+    const r = indexedDB.open(${JSON.stringify(name)})
+    r.onsuccess = () => { const has = r.result.objectStoreNames.contains(${JSON.stringify(store)}); r.result.close(); ok(has) }
+    r.onerror = () => ok(false)
+  }))`
 
 /** The rows of the database `name`'s store `store`, as `[key, value]` pairs. */
 const rowsOf = (name: string, store: string): string =>
@@ -158,7 +183,7 @@ app.scene("a warm load answers the stream from the core's snapshot and the frame
     assert.equal(warm.marks["lines rows read"], undefined, "no row of the lines is read")
     assert.equal(await app.page.evaluate<boolean>(`${held("suzatary")}.then((all) => "lines" in JSON.parse(all) || "snapshots" in JSON.parse(all))`), false, "the device keeps no rows of the lines")
     // A snapshot of a form this build does not read: the log is dropped and the lines are taken again from the box.
-    await app.page.evaluate(put("suzatary", "replica", `(s) => s.put({ through: 0, bytes: new Uint8Array([9, 0, 0, 0]) }, "lines/snapshot")`))
+    await write("suzatary", "replica", `(s) => s.put({ through: 0, bytes: new Uint8Array([9, 0, 0, 0]) }, "lines/snapshot")`)
     await load("other-form")
     await app.page.waitFor(`${REPLICA_ROWS}.then((rows) => !rows.some(([k, v]) => k === "lines/snapshot" && v === "09000000"))`, { timeout: 15000 })
   } finally {
@@ -270,13 +295,9 @@ app.scene("a key a closed tab left on the device is forgotten with the blocks it
   // The closed tab's late write lands: its frames after the log, the key among them, its blocks in the cache, each also
   // under the name an older build gave it, which no purge of this build computes.
   assert.ok(frames.length > 0, "the closed tab had frames")
-  await app.page.evaluate(
-    put("suzatary", "replica", `(s) => ${JSON.stringify(frames)}.forEach(([, hex], i) => s.put(new Uint8Array(hex.match(/../g).map((b) => parseInt(b, 16))), "lines/log/" + String(900000000000 + i)))`),
-  )
+  await write("suzatary", "replica", `(s) => ${JSON.stringify(frames)}.forEach(([, hex], i) => s.put(new Uint8Array(hex.match(/../g).map((b) => parseInt(b, 16))), "lines/log/" + String(900000000000 + i)))`)
   assert.ok((await app.page.evaluate<Holds>(replicaHolds(keyBytes(keys, erased)))).holds.length > 0, "the key is back on the device")
-  await app.page.evaluate(
-    put("suzatary", "blocks", `(s) => ${JSON.stringify(blocks)}.forEach(([, v]) => (s.put(v), s.put({ ...v, key: "older-answer " + v.key.split(" ")[1] })))`),
-  )
+  await write("suzatary", "blocks", `(s) => ${JSON.stringify(blocks)}.forEach(([, v]) => (s.put(v), s.put({ ...v, key: "older-answer " + v.key.split(" ")[1] })))`)
   assert.ok((await app.page.evaluate<string>(held("suzatary"))).includes("compiled to HTML"), "the blocks are back on the device")
   await app.page.navigate(`${WRITE_BASE}/?closed=1#/secretary/default`)
   await app.page.waitFor(`document.querySelector(".pagetitle") !== null`, { timeout: 15000 })
@@ -293,11 +314,9 @@ app.scene("the list draws and the badge is counted with no request for the lines
   // With no lines kept, so the pull this scene counts is a whole pull of the store: a row an earlier scene left
   // would make it a 304 with no body, whatever order the files run in.
   await app.open(WRITE_BASE)
-  await app.page.evaluate(
-    put("suzatary", "replica", `(s) => s.clear()`),
-  )
+  await write("suzatary", "replica", `(s) => s.clear()`)
   // Nor any content an earlier scene's page kept, so what the secretary reads is fetched by name.
-  await app.page.evaluate(put("suzatary", "content", `(s) => s.clear()`))
+  await write("suzatary", "content", `(s) => s.clear()`)
   // And with no HTTP cache, so no earlier scene's answer comes back as a 304 the capture cannot read.
   await app.page.cold(true)
   // From a blank page, so no request the last scene's page left in flight is counted.
@@ -334,7 +353,7 @@ app.scene("a conversation the device prefetched reads with no network, and one i
   await app.page.waitFor(`document.querySelector(".turns .turn-person") !== null`, { timeout: 15000 })
   // No content on the device, and a new load that opens the second conversation alone: the first's lines come by
   // prefetch or not at all.
-  await app.page.evaluate(put("suzatary", "content", `(s) => s.clear()`))
+  await write("suzatary", "content", `(s) => s.clear()`)
   await app.page.navigate(`${WRITE_BASE}/?prefetch=1#/secretary/${lacked}`)
   await app.page.waitFor(`document.querySelector(".turns .turn-person") !== null`, { timeout: 15000 })
   // Every line of both conversations on the device: the content store holds each node the skeleton names for them.
@@ -347,7 +366,7 @@ app.scene("a conversation the device prefetched reads with no network, and one i
   )
   // A device that did not prefetch the second: its lines' content gone, its skeleton kept.
   const dropped = await app.page.evaluate<string[]>(linesOf([lacked]))
-  await app.page.evaluate(put("suzatary", "content", `(s) => ${JSON.stringify(dropped)}.forEach((h) => s.delete(h))`))
+  await write("suzatary", "content", `(s) => ${JSON.stringify(dropped)}.forEach((h) => s.delete(h))`)
   await app.page.failRequests(["/api/", "/events"])
   try {
     await app.page.navigate(`${WRITE_BASE}/?offline=1#/secretary/${kept}`)
@@ -369,10 +388,8 @@ app.scene("a conversation the device prefetched reads with no network, and one i
 // words. The lines' content is held at the box, so the line stands while it is read.
 app.scene("a store's sync is drawn as a neutral pie, named in words", async () => {
   await app.open(WRITE_BASE)
-  await app.page.evaluate(
-    put("suzatary", "replica", `(s) => s.clear()`),
-  )
-  await app.page.evaluate(put("suzatary", "content", `(s) => s.clear()`))
+  await write("suzatary", "replica", `(s) => s.clear()`)
+  await write("suzatary", "content", `(s) => s.clear()`)
   await app.page.cold(true)
   await app.page.navigate("about:blank")
   const release = await app.page.holdRequests(["/api/stores/lines/content"])

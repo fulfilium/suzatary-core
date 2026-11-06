@@ -417,17 +417,23 @@ export class Page {
   }
 
   /** A JavaScript expression, evaluated in the page, returned by value. A
-   * promise is awaited; a thrown error becomes a thrown error here. */
-  async evaluate<T>(expression: string): Promise<T> {
-    return this.evaluateIn<T>(this.session, expression);
+   * promise is awaited; a thrown error becomes a thrown error here, and so does
+   * a promise not settled within `timeout` (four wait budgets), naming the
+   * expression: a page promise that never settles fails the scene with what it
+   * waited for instead of holding it until the test's own timeout. */
+  async evaluate<T>(expression: string, timeout = 4 * WAIT_MS * STRETCH): Promise<T> {
+    return this.evaluateIn<T>(this.session, expression, timeout);
   }
 
-  private async evaluateIn<T>(session: string, expression: string): Promise<T> {
-    const result = await this.connection.send(
-      "Runtime.evaluate",
-      { expression, returnByValue: true, awaitPromise: true, userGesture: true },
-      session,
-    );
+  private async evaluateIn<T>(session: string, expression: string, timeout = 4 * WAIT_MS * STRETCH): Promise<T> {
+    let stop: ReturnType<typeof setTimeout> | undefined;
+    const late = new Promise<never>((_, no) => {
+      stop = setTimeout(() => no(new Error(`evaluate waited ${Math.round(timeout)} ms for a promise that did not settle\n  expression: ${expression}`)), timeout);
+    });
+    const result = await Promise.race([
+      this.connection.send("Runtime.evaluate", { expression, returnByValue: true, awaitPromise: true, userGesture: true }, session),
+      late,
+    ]).finally(() => clearTimeout(stop));
     const failure = result["exceptionDetails"] as { exception?: { description?: string }; text?: string } | undefined;
     if (failure !== undefined) {
       const said = failure.exception?.description ?? failure.text ?? "unknown";
