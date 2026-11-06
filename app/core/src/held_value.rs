@@ -4,10 +4,8 @@
 //!
 //! Every text a model reads goes through [`mask`], with the [`Holder`] it came from, or through
 //! [`withheld`] when no holder is known. A placeholder names the value's kind and a hint, never
-//! the value: a number's last digits, or a file's name and size. A [`Handle`] in a placeholder
-//! names the holder and the value's place in it, or the file itself. The owner's trusted device
-//! asks the box for that one value on a tap, and a proposed email that carries the placeholder in
-//! its body has the value written in by [`fill`], or the file attached, when the owner taps Send.
+//! the value: a number's last digits, or a file's name and size. A [`Handle`] names the holder and
+//! the value's place in it, or the file itself, for a tap to reveal or [`fill`] to send.
 
 use std::sync::LazyLock;
 
@@ -510,7 +508,10 @@ impl Values {
         for text in texts {
             for found in identity_numbers(text) {
                 let value = &text[found.start..found.end];
-                if !values.iter().any(|(_, held)| same(held, value)) {
+                if !values
+                    .iter()
+                    .any(|(kind, held)| spelled(*kind, held) == spelled(found.kind, value))
+                {
                     values.push((found.kind, value.to_owned()));
                 }
             }
@@ -529,8 +530,11 @@ impl Values {
     /// The placeholder of `value`, revealable by its place among them in `holder`, of the kind it
     /// was first found as, so every place it is written prints alike.
     #[must_use]
-    pub fn placeholder(&self, holder: &Holder, value: &str) -> Option<Placeholder> {
-        let at = self.0.iter().position(|(_, held)| same(held, value))?;
+    pub fn placeholder(&self, holder: &Holder, kind: Kind, value: &str) -> Option<Placeholder> {
+        let at = self
+            .0
+            .iter()
+            .position(|(held_kind, held)| spelled(*held_kind, held) == spelled(kind, value))?;
         if !holder.named() {
             return None;
         }
@@ -613,15 +617,27 @@ impl prodrome_core::literal::codec::Literal for Held {
     }
 }
 
-/// Two spellings of one number: `000-12-3456` and `000 12 3456` are the same value.
-fn same(a: &str, b: &str) -> bool {
-    let kept = |text: &str| {
-        text.chars()
-            .filter(char::is_ascii_alphanumeric)
-            .map(|c| c.to_ascii_uppercase())
-            .collect::<String>()
-    };
-    kept(a) == kept(b)
+/// One spelling of each number: `000 12 3456` spells as `000-12-3456`, and an A-number as its
+/// nine digits, with or without its `A` and its leading zeros.
+fn spelled(kind: Kind, value: &str) -> String {
+    let kept: String = value
+        .chars()
+        .filter(char::is_ascii_alphanumeric)
+        .map(|c| c.to_ascii_uppercase())
+        .collect();
+    match kind {
+        Kind::ANumber => format!("{:0>9}", kept.strip_prefix('A').unwrap_or(&kept)),
+        Kind::Ssn
+        | Kind::Itin
+        | Kind::Tin
+        | Kind::Ein
+        | Kind::Code
+        | Kind::Card
+        | Kind::Account
+        | Kind::Routing
+        | Kind::Iban
+        | Kind::Passport => kept,
+    }
 }
 
 /// `text` with each held number replaced by its placeholder, revealable when `values`, the
@@ -630,7 +646,7 @@ fn same(a: &str, b: &str) -> bool {
 pub fn mask(text: &str, holder: &Holder, values: &Values) -> String {
     replaced(&foreign_withheld(text, holder), |kind, value| {
         values
-            .placeholder(holder, value)
+            .placeholder(holder, kind, value)
             .unwrap_or_else(|| Placeholder::of(kind, value, Reach::Withheld))
             .print()
     })
@@ -1045,7 +1061,7 @@ mod tests {
     use super::*;
     use proptest::prelude::*;
 
-    /// Synthetic numbers no person holds: SSN area 000, ITIN area 912, an EIN of zeros.
+    /// Synthetic numbers no person holds: SSN area 000, ITIN area 912.
     const SSN: &str = "000-12-3456";
     const ITIN: &str = "912-70-1234";
 
@@ -1087,6 +1103,24 @@ mod tests {
     }
 
     #[test]
+    fn every_spelling_of_one_a_number_is_one_value() {
+        let text = format!(
+            "A-Number A012345678. A-No. 012345678. Alien number A12345678. SSN {SSN}. A-number: \
+             A-098-765-432."
+        );
+        let values = Values::of([text.as_str()]);
+        assert_eq!(values.get(0), Some((Kind::ANumber, "A012345678")));
+        assert_eq!(values.get(1), Some((Kind::Ssn, SSN)));
+        assert_eq!(values.get(2), Some((Kind::ANumber, "A-098-765-432")));
+        assert_eq!(values.get(3), None);
+        let masked = mask(&text, &message("form-1@example.test"), &values);
+        let first = Handle::new("form-1@example.test", 0)
+            .expect("a handle")
+            .print();
+        assert_eq!(masked.matches(&first).count(), 3, "{masked}");
+    }
+
+    #[test]
     fn a_number_the_holder_does_not_hold_is_withheld() {
         let masked = mask(
             &format!("SSN {SSN}"),
@@ -1110,8 +1144,6 @@ mod tests {
         assert_eq!(withheld(text), text);
     }
 
-    /// A placeholder reads as no number, so masking twice changes nothing, for every kind and for
-    /// a file whose name and size name numbers.
     #[test]
     fn a_masked_text_masks_to_itself() {
         let text = format!(
@@ -1201,7 +1233,6 @@ mod tests {
         );
     }
 
-    /// The value, a body that holds it and a file's bytes print as none of them in a `{:?}`.
     #[test]
     fn a_read_value_and_a_filled_body_never_print() {
         struct Holds;
@@ -1348,7 +1379,6 @@ mod tests {
     }
 
     proptest! {
-        /// A placeholder's text form is read back as the same placeholder, whatever its kind.
         #[test]
         fn a_placeholder_round_trips(
             at in 0..=Kind::ALL.len(),

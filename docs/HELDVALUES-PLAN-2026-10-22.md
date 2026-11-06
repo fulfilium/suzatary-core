@@ -118,17 +118,7 @@ number, and the box finds the message.
   the dots in that one node and nowhere else: not in a page state, a cache, a
   replica or a stored line.
 
-**What stage 1 did not cover:**
-
-- **Attachments.** A text attachment's numbers still arrive as `[redacted]`
-  (`file_read`), and a PDF naming one is still withheld. Both guards are kept; stage 3 makes them placeholders.
-- **Patterns.** The patterns detect SSNs and ITINs written out, and SSN, TIN,
-  ITIN and EIN numbers of nine digits beside their label. They miss
-  verification and two-factor codes, bank and card account numbers, routing
-  numbers, passport numbers and A-numbers. This stage does not widen them. The
-  link pass (`redact::unlink`), which removes a `code=`, `token=` or similar
-  parameter and any JWT, runs only on stored conversation lines and does not
-  reach a model's answer.
+Stages 2 and 3 widened the patterns and made attachments held values.
 
 ## Stage 2 (built): the wider patterns and SEND
 
@@ -388,6 +378,10 @@ records the rules it was scrubbed under. A line stored under the old rules is
 scrubbed again when it is opened; `suzatary secretary migrate-scrub` is the
 standing step after a deploy that changes them (→ `migratescrub`).
 
+**Stage 5: one A-number, one value.** `Values` counts a number once by its
+spelling (`spelled`): `A012345678`, `012345678` and `A12345678` are one value
+with one handle.
+
 **What stays open:**
 
 - A passport number written in lowercase, or split by spaces, is not found;
@@ -399,7 +393,7 @@ standing step after a deploy that changes them (→ `migratescrub`).
 - An A-number labelled only by an agency's own label (the field a permanent
   resident card prints it under) is not held: that label is a term the
   public tree may not hold, so no pattern names it.
-- One A-number written with and without its `A` (`A012345678`,
-  `012345678`) counts as two values of one message.
 - The older-mail search (`search_older`) answers rows only for what the
   backfill brought into the index, as before.
+- A link's `code=` or `token=` parameter is removed (`redact::unlink`) only
+  from stored lines and excerpts, not from what a model reads.
