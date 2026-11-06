@@ -34,44 +34,22 @@ The box offers three uses of a held value, each on the owner's tap:
 ## The finding that started this
 
 The brief said that sent mail naming an identity number never reached the
-notmuch corpus. Nothing in this repository drops, skips or leaves unindexed a
-message because it names a number:
+notmuch corpus. Nothing in this repository drops or skips a message because it
+names a number (the syncs, `notmuch new`, the readers, the queue, the sends);
+a `[new] ignore=` rule in the data repository's notmuch config is the one place
+left to look, on the box. The code had the opposite gap: `show`, `thread` and a
+search row gave the number to the secretary and the triage agent.
 
-- the sync, the IMAP pulls, lieer and mbsync, and `notmuch new`;
-- the older-mail search;
-- the reader's `search`, `show` and `thread`, and the triage queue;
-- the send paths, which write no copy (sent mail arrives through the next
-  sync).
+## Stage 1 (built): the handle, the placeholder for mail text, and reveal
 
-The places that look for a number act on a PDF (`file_read`), an upload
-(`attachments`, `vault`), a Drive read, or a stored conversation line
-(`Scrubbed`), never on a message. The real notmuch config and `mbsyncrc` are
-in the data repository, so a `[new] ignore=` rule there is the one place left
-to look, on the box.
+**The detection** is `redact::identity_numbers`: each match's range and its
+`Kind`, from the closest label or, with none, the number's shape.
 
-The code had the opposite gap. The index is the box's own and may hold the
-numbers. But `show`, `thread` and a search row gave the number to the
-secretary and the triage agent.
-
-## Stage 1 (this change): the handle, the placeholder for mail text, and reveal
-
-**The detection** is `suzatary_core::redact`, unchanged in what it finds.
-`redact::identity_numbers` returns each match's range and its `Kind`. The kind
-comes from the closest label within 20 characters, or from the shape of the
-number when there is no label (a written-out number in area 9xx is an ITIN,
-any other is an SSN). `redact` is that function with each match replaced by
-`[redacted]`, as before.
-
-**The handle's spelling** is `held:<Message-ID in base64url, no padding>.<n>`:
-
-- The Message-ID is the one notmuch indexes the message under.
-- `n` is the value's place among the message's values (`held_value::Values`).
-  The values are counted in one fixed order: every header value and text part
-  of the message file as `mail-parser` decodes it, forwarded messages
-  included; then the header values by name and the body as the notmuch reader
-  shows them. Two spellings of one number (`000-12-3456`, `000 12 3456`) are
-  one value.
-- `Handle::print` and `Handle::parse` round-trip, and a proptest pins it.
+**The handle's spelling** is `held:<Message-ID in base64url, no padding>.<n>`,
+`n` the value's place among the message's `held_value::Values`, counted in one
+fixed order over the texts `mail-parser` and the notmuch reader decode of it.
+Two spellings of one number are one value: `000-12-3456` and `000 12 3456`,
+and (stage 5) an A-number with or without its `A` and leading zeros.
 
 **The placeholder** a model reads is
 `[SSN ending 3456 · tap to show · held:…]`. It is
@@ -98,56 +76,21 @@ passes one of them:
 The maildir and the notmuch index are untouched. The owner may search by the
 number, and the box finds the message.
 
-**Reveal.**
-
-- The route is `POST /api/held/reveal` with `{"handle": "held:…"}`.
-- It is behind the tap guard: a trusted device key of an actor that a tailnet
-  login in `web.act_as` maps to, plus the CSRF triple. An untrusted device, a
-  viewer and loopback are refused.
-- The `Reveal` capability is held by the server's state and by no record, so
-  no verb of the secretary or the agent can call it.
-- The route reads the value again from the message file, through the same
-  reader the mask used, and answers `Shown { value }` or `Gone`.
-- The box keeps the request's record, as it does for every signed request
-  (who asked, when, and the status, never the body). In the answer's place it
-  keeps only `{"type":"NotKept"}` (`reply::Keeps::Instead`), so a replay of
-  the request is answered with that.
-- `held_value::Shown` and `wire::RevealPayload` print no value in a `{:?}`.
-- The page draws a placeholder as a chip (`SSN ••••3456` and Show), in the
-  chat's turns and answers and in a mail body. On a tap, the value replaces
-  the dots in that one node and nowhere else: not in a page state, a cache, a
-  replica or a stored line.
-
-Stages 2 and 3 widened the patterns and made attachments held values.
+**Reveal.** `POST /api/held/reveal` sits behind the tap guard (a trusted
+device of a mapped tailnet login and the CSRF triple); the `Reveal` capability
+is in the server's state and in no record. It reads the value again through
+the mask's reader, answers `Shown` or `Gone`, and keeps only
+`{"type":"NotKept"}` for a replay. `Shown` and `RevealPayload` print no value in
+a `{:?}`. The page's chip puts the value in its one node and nowhere else.
 
 ## Stage 2 (built): the wider patterns and SEND
 
-**The patterns.** `redact::identity_numbers` also finds these kinds. Each
-format is chosen so that dates, prices and phone numbers do not match:
-
-- a verification or two-factor code: four to eight digits, or `ddd ddd`,
-  after a label that names the code with its noun (verification code,
-  security code, one-time password, and the words for a verification code in
-  Portuguese, Spanish, French, German and Arabic) within 60 characters on its
-  line, or within 20 characters of such a label or of verification, verify,
-  passcode, OTP, 2FA or MFA; four or five digits right after `code` or
-  `code:`; six to eight digits within 20 characters of code, codes or PIN,
-  unless the word before makes it a postal, zip, promo, error or dialling code.
-  A label claims only the first number beside it; a closer order, invoice,
-  reference, flight, room, fee or total label claims the number instead; a
-  year and a `yyyymmdd` date are not codes; and no label is read inside a
-  placeholder;
-- a card number anywhere: a stretch of digit groups of 13 to 19 digits with a
-  Visa, Mir, Mastercard, American Express, Discover, UnionPay, RuPay, Maestro
-  (16 to 19 digits only), JCB or Diners prefix at one of that issuer's lengths,
-  and a valid Luhn check digit, never after a `+`;
-- a bank account number: six to seventeen digits, in a row or in groups,
-  within 20 characters of account, acct, a/c, checking or savings, unless an
-  order, invoice, tracking, booking, telephone or help label is closer, and not
-  grouped as a phone number (`ddd-ddd-dddd`) or a date;
-- a routing number: nine digits within 20 characters of routing, ABA, RTN or
-  transit, whose ABA checksum holds;
-- an IBAN anywhere, in either case, whose mod-97 check holds.
+**The patterns.** `redact::identity_numbers` also finds a verification or
+two-factor code beside its label (in six languages), a card number by issuer
+prefix, length and Luhn digit, a bank account or routing number beside its
+label (a routing number's ABA checksum holding), and an IBAN whose mod-97
+check holds. Each format is chosen so that dates, prices and phone numbers do
+not match; `redact.rs` documents each pattern and its tests pin them.
 
 A labelled code, account or routing number must stand alone: no `+` or
 currency beside it, no digit beside it across a hyphen, dot, comma or slash,
@@ -227,14 +170,9 @@ name one. One function reads a file from any source the box names,
 `secretary::opening::open`. A proposal's record, the tap's attachment send and
 the reveal all call it.
 
-**The handle** keeps its shape, `held:<holder>.<place>`:
-
-- `held:<Message-ID in base64url>.<n>` names the `n`th value of a message, as
-  before;
-- `held:file:<the file's source, printed, in base64url>.<n>` names the `n`th
-  value of a file's text (a PDF's text layer or a text file's words);
-- `held:file:<…>.file` names the file itself.
-
+**The handle** keeps its shape, `held:<holder>.<place>`; a file's holder is
+`file:` and its source in base64url, and its place is `file` for the file
+itself (`Handle::parse`).
 A colon is no base64url character, so no message's handle reads as a file's.
 A number's placeholder carries a value's handle (`Place`) and a file's
 placeholder carries a `HeldFile`, so a placeholder that crosses them is
@@ -315,15 +253,12 @@ this stage keeps its `[redacted]` text, which reads as text with no handles.
 **FIND.** A mail search row says which kinds of held value its message names,
 and nothing else about them: no value, no last digits, no count.
 
-- The kinds come from the values the mask already counts. The reader that
-  builds a row (`suzatary_io::mailbox::Notmuch::load_messages`) reads the
-  message file once for its `held_value::Values`, which mask the sender and
-  subject; `Values::kinds` turns them into a `held_value::Kinds`.
-- `Kinds` is a set of `redact::Kind`, the generic `finite::Set` of a type with
-  finitely many values (one bit a kind). Its serde form is a list of the
-  kinds' words, `["ssn", "passport"]`, and the wire names the word type
-  `HeldKind`. It is never text: a row carries no phrase a model or a page
-  could misread as a value.
+- The kinds are those the mask counts in the message file (`Values::kinds`),
+  joined (stage 6) with those each PDF attachment's text layer names
+  (`mailbox::attached`: read once per PDF and kept by its SHA-256 in a private
+  store that holds no digit; a layer `pdftotext` refuses names none).
+- `Kinds` is a `finite::Set` of `redact::Kind`; its serde form is the kinds'
+  words, `["ssn", "passport"]`, never text a model could misread as a value.
 - Both rows carry it as `held`: the app's `mail::MailRow` (the mail list, a
   mail search, a thread and a message page) and the agent's and secretary's
   `mail::verbs::Summary` (`search`, `new`, the secretary's `search`, and the
@@ -348,21 +283,10 @@ instead (`redact::labelled`, which the account, passport and A-number matches
 share). Each must stand alone, as the other labelled kinds do: no `+` or
 currency beside it, no digit beside it across a hyphen, dot, comma or slash.
 
-- **A passport number**: six to nine capital letters and digits
-  (`\b[A-Z0-9]{6,9}\b`) within 20 characters of passport, passeport,
-  passaporte, pasaporte, Reisepass or جواز السفر, with at least six digits and
-  at most three letters, eight or nine digits when it has no letter, and no
-  `yyyymmdd` date. That takes a US passport (nine digits, or a letter and
-  eight), most others (a few letters and six to eight digits) and Germany's
-  letters among digits, and refuses a fee, a short reference, a photo's file
-  name, a flight number and an expiry date.
-- **An A-number**: seven to nine digits, in a row or as `ddd-ddd-ddd` or
-  `ddd ddd ddd`, after an optional capital `A` and one hyphen or space, within
-  20 characters of `A-number`, `A-No`, `A#` or `A-#` (the `A` a capital, so "a
-  number" is no label), alien number or alien registration number, and no
-  `yyyymmdd` date. An `A` and nine digits with no label is not held: a part or
-  model number has that shape. An immigration case's receipt number (three
-  letters and ten digits) never matches.
+- **A passport number**: six to nine capital letters and digits, at least six
+  of them digits, beside a passport label in one of six languages.
+- **An A-number**: seven to nine digits after an optional capital `A`, beside
+  an A-number or alien-number label; an `A` and nine digits alone is not held.
 
 The tests are `passports_and_a_numbers_are_found_beside_their_labels` and
 `look_alikes_of_passports_and_a_numbers_are_not_held` (`redact.rs`), and the
@@ -378,21 +302,16 @@ records the rules it was scrubbed under. A line stored under the old rules is
 scrubbed again when it is opened; `suzatary secretary migrate-scrub` is the
 standing step after a deploy that changes them (→ `migratescrub`).
 
-**Stage 5: one A-number, one value.** `Values` counts a number once by its
-spelling (`spelled`): `A012345678`, `012345678` and `A12345678` are one value
-with one handle.
-
 **What stays open:**
 
 - A passport number written in lowercase, or split by spaces, is not found;
   nor is an A-number labelled `A number` (with a space), since that is also
   ordinary English.
-- A search row's kinds come from the message file, not from its attachments:
-  a PDF that names a number is withheld when it is read (stage 3), but the row
-  of its message does not say so.
 - An A-number labelled only by an agency's own label (the field a permanent
   resident card prints it under) is not held: that label is a term the
   public tree may not hold, so no pattern names it.
+- A scan, or a PDF with no text layer, names no kind in a row, and it reaches
+  a model as itself (→ `filesasthemselves`), so a model may see a number in it.
 - The older-mail search (`search_older`) answers rows only for what the
   backfill brought into the index, as before.
 - A link's `code=` or `token=` parameter is removed (`redact::unlink`) only

@@ -12,7 +12,7 @@ use suzatary_core::capability::MailError;
 use suzatary_core::mail::hash_prefix::{HashPrefix, Resolved};
 use suzatary_core::store::{Doc as _, Gets as _};
 
-use crate::docs::{DocCodec, Docs};
+use crate::docs::{DocCodec, Docs, shard};
 use crate::present::Present as _;
 
 /// The locators under one directory.
@@ -27,16 +27,15 @@ impl Located {
     #[must_use]
     pub fn open(dir: impl Into<PathBuf>) -> Self {
         let dir = dir.into();
-        let under = dir.clone();
         Self {
-            docs: Docs::new(
-                "mail locators",
-                move |hash: &String| under.join(shard(hash)).join(hash),
-                &CODEC,
-            )
-            .private(),
+            docs: Docs::sharded("mail locators", dir.clone(), &CODEC),
             dir,
         }
+    }
+
+    #[must_use]
+    pub(crate) fn dir(&self) -> &std::path::Path {
+        &self.dir
     }
 
     /// Record that the message whose canonical hash is `hash` was listed as `native`; a hash
@@ -93,10 +92,6 @@ impl Located {
             },
         })
     }
-}
-
-fn shard(hash: &str) -> String {
-    hash.chars().take(2).collect()
 }
 
 fn unreachable(failed: &suzatary_core::store::StoreError) -> MailError {

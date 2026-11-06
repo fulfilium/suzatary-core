@@ -3,6 +3,7 @@
 //! Every list asks the index for the newest ids first and only loads those: loading hashes
 //! every file a query matches, and notmuch has no LIMIT.
 
+mod attached;
 pub mod attachments;
 pub mod dedup;
 pub mod forwarded;
@@ -52,6 +53,7 @@ pub struct Notmuch {
     ledger: crate::state::Ledger,
     /// Where each listed hash lives: every listing writes it, every lookup by hash reads it.
     located: located::Located,
+    attached: attached::Attached,
     accounts: Roster,
     /// Never inherited, so a fixture cannot read the box's own index.
     config: Option<PathBuf>,
@@ -82,6 +84,7 @@ impl Notmuch {
             binary: PathBuf::from("notmuch"),
             mail_root: mail_root.into(),
             ledger,
+            attached: attached::Attached::open(located.dir().join("attached")),
             located,
             accounts,
             config: None,
@@ -149,6 +152,24 @@ impl Notmuch {
     /// Every message `query` matches, folded by content hash, each hash recorded in
     /// [`located::Located`] before it is answered so every printed hash resolves. It reads and
     /// hashes each file, so page reads bound `query` through [`Self::newest_ids`] first.
+    /// The kinds of held value the text layers of `message`'s PDF attachments name.
+    fn attached_kinds(
+        &self,
+        message: Option<&mail_parser::Message<'_>>,
+    ) -> Result<held_value::Kinds, MailError> {
+        message
+            .into_iter()
+            .flat_map(mail_parser::Message::attachments)
+            .try_fold(held_value::Kinds::empty(), |kinds, part| {
+                Ok(match Enclosure::sniff(part.contents()) {
+                    Some(Enclosure::Pdf) => {
+                        kinds.join(&self.attached.kinds(part.contents(), &self.pdftotext)?)
+                    }
+                    Some(Enclosure::Image(_)) | None => kinds,
+                })
+            })
+    }
+
     fn load_messages(&self, query: &str) -> Result<BTreeMap<String, CanonicalMessage>, MailError> {
         let raw = self.run(&["show", "--format=json", "--body=false", query])?;
         let mut messages: BTreeMap<String, CanonicalMessage> = BTreeMap::new();
@@ -184,7 +205,7 @@ impl Notmuch {
                 held_value::mask(&sender, &holder, &values),
                 held_value::mask(&title, &holder, &values),
             );
-            let held = values.kinds();
+            let held = values.kinds().join(&self.attached_kinds(parsed.as_ref())?);
             let source = Source {
                 account: self.account_for(&msg.file),
                 container: container_of(&msg.tags),
@@ -504,7 +525,7 @@ struct CanonicalMessage {
     sender: String,
     title: String,
     timestamp: Option<dedup::ParsedDate>,
-    /// The kinds of held value the mask counted in its file.
+    /// The kinds of held value its text and its PDF attachments name.
     held: held_value::Kinds,
     primary: Source,
     also: Vec<Source>,
@@ -982,6 +1003,7 @@ mod tests {
                 ("ada/Sent/cur/1:2,S", sent),
                 ("ada/Inbox/cur/2:2,S", inbound),
                 ("ada/Inbox/cur/3:2,S", clean.to_owned()),
+                ("ada/Inbox/cur/4:2,S", scanned()),
             ],
         )
         .0
@@ -1110,6 +1132,22 @@ mod tests {
         assert_eq!(shown.id, "cited-1@example.test");
     }
 
+    /// A message whose words name no number and whose PDF attachment names an ITIN.
+    fn scanned() -> String {
+        use base64::Engine as _;
+        let pdf = crate::pdftotext::minimal_pdf(&format!("ITIN {ITIN}"));
+        format!(
+            "From: counsel@example.test\nTo: ada@example.test\nSubject: the okapi scan\n\
+         Message-ID: <pdf-1@example.test>\nDate: Thu, 09 Mar 2023 10:00:00 +0000\n\
+         MIME-Version: 1.0\nContent-Type: multipart/mixed; boundary=XX\n\n--XX\n\
+         Content-Type: text/plain\n\nThe okapi scan is attached.\n--XX\n\
+         Content-Type: application/pdf; name=scan.pdf\n\
+         Content-Disposition: attachment; filename=scan.pdf\n\
+         Content-Transfer-Encoding: base64\n\n{}\n--XX--\n",
+            base64::engine::general_purpose::STANDARD.encode(pdf)
+        )
+    }
+
     /// A search row and the agent's row name the kinds of held value and hold none of them.
     #[test]
     fn a_search_row_names_the_kinds_its_message_holds_and_no_value() {
@@ -1152,6 +1190,17 @@ mod tests {
             serde_json::to_string(&rows).expect("JSON"),
             serde_json::to_string(&summaries).expect("JSON")
         );
+        let scan = mailbox
+            .search(&Query::new("okapi").expect("a query"), None, 10, None)
+            .expect("rows");
+        assert_eq!(
+            scan.iter()
+                .map(|row| row.held.iter().collect())
+                .collect::<Vec<Vec<Kind>>>(),
+            vec![vec![Kind::Itin]],
+            "a PDF attachment's kinds are its row's"
+        );
+        assert!(!serde_json::to_string(&scan).expect("JSON").contains(ITIN));
         for number in [SSN, ITIN, EIN, PASSPORT, A_NUMBER, "012345678"] {
             assert!(!printed.contains(number), "{number} in {printed}");
         }

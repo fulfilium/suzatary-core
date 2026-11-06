@@ -31,23 +31,40 @@ impl Pdftotext {
     /// # Errors
     /// A sentence when `pdftotext` cannot run, times out or refuses the bytes.
     pub fn text(&self, bytes: &[u8]) -> Result<String, String> {
+        self.layer(bytes).map_err(|failed| match failed {
+            Unlayered::File(why) | Unlayered::Box(why) => why,
+        })
+    }
+
+    /// A PDF's text, or whether the file or the box is why there is none.
+    pub(crate) fn layer(&self, bytes: &[u8]) -> Result<String, Unlayered> {
         let cmd = crate::tool::tool(&self.repo, "pdftotext")
             .args(["-layout", "-", "-"])
             .stdin(bytes)
             .timeout(self.timeout);
         match succeed(&cmd) {
             Ok(ran) => Ok(ran.out()),
-            Err(RunError::Exited { stderr, .. }) => Err(stderr.to_string()),
-            Err(RunError::Spawn { source, .. }) => {
-                Err(format!("pdftotext could not be run: {source}"))
-            }
-            Err(RunError::TimedOut { .. }) => Err(format!(
+            Err(RunError::Exited { stderr, .. }) => Err(Unlayered::File(stderr.to_string())),
+            Err(RunError::TimedOut { .. }) => Err(Unlayered::File(format!(
                 "pdftotext did not finish within {:?}",
                 self.timeout
-            )),
-            Err(failed) => Err(failed.to_string()),
+            ))),
+            Err(RunError::Spawn { source, .. }) => Err(Unlayered::Box(format!(
+                "pdftotext could not be run: {source}"
+            ))),
+            Err(failed @ (RunError::Halted { .. } | RunError::Wait { .. })) => {
+                Err(Unlayered::Box(failed.to_string()))
+            }
         }
     }
+}
+
+/// Why a PDF has no text layer: the file, which `pdftotext` refused or did not finish in time, so
+/// a second read finds the same; or the box, whose `pdftotext` did not run.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum Unlayered {
+    File(String),
+    Box(String),
 }
 
 impl suzatary_core::capability::PdfText for Pdftotext {
