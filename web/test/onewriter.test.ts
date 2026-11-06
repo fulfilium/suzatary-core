@@ -12,6 +12,8 @@ import { createRequire } from "node:module"
 import { readFileSync } from "node:fs"
 
 import { fakeIndexedDB } from "./fakeidb"
+import idb from "../src/app/idb"
+import { BLOCKS } from "../src/prodrome/objects"
 import type { Core, Named } from "../src/prodrome/core"
 import questions from "../src/prodrome/questions"
 import rendered from "../src/app/rendered"
@@ -106,24 +108,19 @@ Object.assign(globalThis, {
   },
 })
 
-// A worker over the device, every message it sends kept printed, and the page's blocks over it, applying what it says.
+// A worker over the device, every message it sends kept printed, and the page's blocks over it.
 const worker = () => {
   const posted: string[] = []
-  let page: rendered.Store | null = null
-  const serve = questions.serve(core, said => {
-    posted.push(JSON.stringify(said))
-    if (said.type === "Forgot") void page?.forget(said.blocks)
-  })
+  const serve = questions.serve(core, said => void posted.push(JSON.stringify(said)))
   const ask = async <K extends questions.Kind>(q: questions.Of<K>): Promise<questions.Answer<K>> => {
     const a = (await serve(q, () => Promise.resolve())) as questions.Answer<K>
     posted.push(JSON.stringify(a, (_, v: unknown) => (v instanceof Set ? [...v] : v)))
     return a
   }
-  page = rendered.viaWorker({
+  const page = rendered.viaWorker({
     get: keys => ask({ type: "Blocks", keys }),
     join: pairs => ask({ type: "KeepBlocks", pairs }),
     usage: () => ask({ type: "BlocksUsage" }),
-    own: () => ask({ type: "BlocksOwn" }),
   })
   return { ask, posted, page }
 }
@@ -143,10 +140,9 @@ test("law: once the box erases words, no row, message or page holds them or thei
   queued.push(firstPiece(before, KEY), "Down")
   assert.equal(await first.ask({ type: "Pull" }), false, "the pull was cut")
   assert.ok(device.printed().some(r => r.includes(BYTES)), "the device holds the key")
-  // The page had rendered the words, and its blocks are kept on the device by the worker.
-  await first.page.join(FED.map((k): rendered.Pair => [k, `<p>${WORDS}</p>`]))
+  // The blocks a page rendered of the words while it read them, as the device kept them then.
+  await idb.within(BLOCKS, "readwrite", s => Promise.all(FED.map(key => idb.done(s.put({ key, html: `<p>${WORDS}</p>`, bytes: 1, used: 1 })))))
   assert.ok(device.printed().some(r => r.includes(WORDS)), "the device holds the rendered words")
-  assert.deepEqual(await first.page.get(FED), FED.map(() => `<p>${WORDS}</p>`))
 
   const holds = (text: string): boolean => text.includes(WORDS) || text.includes(BYTES) || SEALED.some(c => text.includes(c))
   const holders = (posted: readonly string[]): string[] => [

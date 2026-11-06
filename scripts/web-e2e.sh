@@ -319,6 +319,10 @@ cat > "$script" <<'SCRIPT'
     "reply": "{\"say\": \"It is still open. See todo:life/file-permit for the wording.\"}"
   },
   {
+    "when": "give me an answer to erase",
+    "reply": "{\"say\": \"= An answer to erase\\n\\nThese words are *said once*, then erased.\"}"
+  },
+  {
     "when": "give me a rendered answer",
     "reply": "{\"say\": \"= A rendered answer\\n\\nThis turn is *typst*, compiled to HTML.\\n\\n#panel[docs/APP.md, typstanswers.]\"}"
   },

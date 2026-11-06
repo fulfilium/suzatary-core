@@ -6,7 +6,7 @@
 import idb from "../app/idb"
 import lo from "../algebra/lo"
 import d from "../wire/decoder"
-import { REPLICA } from "./objects"
+import { BLOCKS, REPLICA } from "./objects"
 
 export namespace replicalog {
   // One frame, by the place it was appended at.
@@ -27,9 +27,13 @@ export namespace replicalog {
     readonly since: (after: number) => Promise<lo.Settled<Kept>>
     // `bytes` appended after the last frame; the place it was appended at.
     readonly append: (bytes: Uint8Array) => Promise<lo.Settled<number>>
-    // In one transaction: the frames after `after` handed to `take`, `print`'s snapshot kept, every frame up to it and
-    // each print `husked` names deleted; or `Behind`, where another tab's snapshot folded frames this tab did not take.
-    readonly compact: (after: number, take: (frames: readonly Frame[]) => void, print: () => Uint8Array, husked: () => readonly string[]) => Promise<lo.Settled<Compacted>>
+    // In one transaction: the frames after `after` handed to `take`, `print`'s snapshot kept, every frame up to it, each
+    // print `husked` names and each block `swept` names of those kept deleted; or `Behind`, where another tab's snapshot
+    // folded frames this tab did not take.
+    readonly compact: (after: number, take: (frames: readonly Frame[]) => void, print: () => Uint8Array, husked: () => readonly string[], swept?: (blocks: readonly string[]) => readonly string[]) => Promise<lo.Settled<Compacted>>
+    // Whether, in `s`, the replica's store in a transaction of the caller's, another tab wrote what a tab that took every
+    // frame up to `after` and appended `mine` has not taken.
+    readonly behind: (s: IDBObjectStore, after: number, mine: ReadonlySet<number>) => Promise<boolean>
     // The snapshot and every frame deleted: the store is taken again from the box.
     readonly drop: () => Promise<lo.Settled<null>>
     // `wake` run each time another tab appends to the log.
@@ -98,22 +102,30 @@ export namespace replicalog {
           if (at.type === "Val") channel?.postMessage(at.v)
           return at
         }),
+      behind: async (s, after, mine) => {
+        const snapshot = await snapshotIn(s)
+        if (snapshot !== null && snapshot.through > after) return true
+        return (await idb.done(s.getAllKeys(log(after)))).some(k => !mine.has(atOf(k)))
+      },
       heard: wake => {
         if (channel !== null) channel.onmessage = () => wake()
       },
-      compact: (after, take, print, husked) =>
+      compact: (after, take, print, husked, swept = () => []) =>
         alone(() =>
           settled(
-            idb.withBeside(REPLICA, prints, "readwrite", async (s, content): Promise<Compacted> => {
+            idb.withBeside(REPLICA, [prints, BLOCKS], "readwrite", async (s, [content, blocks]): Promise<Compacted> => {
+              if (content === undefined || blocks === undefined) throw new Error("a compaction spans the replica, its prints and the blocks")
               const snapshot = await snapshotIn(s)
               if (snapshot !== null && snapshot.through > after) return { type: "Behind" }
               const missed = await frames(s, after)
               take(missed)
               const through = missed.at(-1)?.at ?? after
+              const kept = (await idb.done(blocks.getAllKeys())).filter((k): k is string => typeof k === "string")
               await Promise.all([
                 idb.done(s.put({ through, bytes: print() }, SNAPSHOT)),
                 idb.done(s.delete(IDBKeyRange.bound(`${LOG}`, `${LOG}${placed(through)}`))),
                 ...husked().map(name => idb.done(content.delete(name))),
+                ...swept(kept).map(key => idb.done(blocks.delete(key))),
               ])
               return { type: "Through", at: through }
             }),

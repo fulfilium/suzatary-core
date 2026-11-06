@@ -206,7 +206,7 @@ app.scene("measured: a first load, a landing and an eviction over about 6,000 li
   // The core's worker pulls, fetches and evicts the lines, so it is cold as the page is (its CPU is the browser's, `SUZATARY_E2E_BROWSER_CPU`).
   await app.page.attachWorkers();
   await app.open(BULK);
-  await app.page.evaluate(`Promise.all(["suzatary", "suzatary-rendered"].map((n) => new Promise((ok) => { const r = indexedDB.deleteDatabase(n); r.onsuccess = r.onerror = r.onblocked = () => ok(true) })))`);
+  await app.page.evaluate(`Promise.all(["suzatary"].map((n) => new Promise((ok) => { const r = indexedDB.deleteDatabase(n); r.onsuccess = r.onerror = r.onblocked = () => ok(true) })))`);
   await app.page.navigate("about:blank");
   await app.page.cold(true);
   await app.page.throttle(RATE);

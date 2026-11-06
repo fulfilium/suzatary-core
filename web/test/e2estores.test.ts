@@ -10,14 +10,13 @@ import { readFileSync, readdirSync } from "node:fs"
 
 import { REPLICA } from "../src/prodrome/objects"
 import signer from "../src/prodrome/signer"
-import rendered from "../src/app/rendered"
 
 // The stores the app's database creates from nothing, as its own upgrade creates them.
 const created = (): Set<string> => {
   const stores = new Set<string>()
   const db = {
     objectStoreNames: { contains: (n: string) => stores.has(n) },
-    createObjectStore: (n: string) => void stores.add(n),
+    createObjectStore: (n: string) => (stores.add(n), { createIndex: () => {} }),
     deleteObjectStore: (n: string) => void stores.delete(n),
   }
   REPLICA.upgrade(db as unknown as IDBDatabase, {} as IDBTransaction, 0)
@@ -32,7 +31,7 @@ const namesIn = (source: string): string[] => [...source.matchAll(NAMING)].flatM
 const MODES = new Set(["readonly", "readwrite"])
 
 test("law: every IndexedDB store a browser scene names is one the app's databases hold", () => {
-  const held = new Set([...created(), signer.STORE, rendered.ROWS])
+  const held = new Set([...created(), signer.STORE])
   const scenes = readdirSync(DIR).filter(f => f.endsWith(".ts"))
   const read = scenes.map(f => [f, readFileSync(`${DIR}/${f}`, "utf8")] as const).filter(([, s]) => !OLDER.test(s))
   const named = read.flatMap(([f, s]) => namesIn(s).filter(n => !MODES.has(n)).map(n => `${f}: ${n}`))

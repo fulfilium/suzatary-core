@@ -857,6 +857,26 @@ three warm loads after the snapshot is written; the target is under 2.5 s).
    `suzatary-rendered` is deleted at the worker's start. *Law:* an erasure
    leaves no block of its words, with an answer asked before it landing after
    it. *Measure:* lines removed; the stream's draw without P6, no slower.
+
+   *As built.* The blocks are the `suzatary` database's `blocks` store
+   (version 13; a device at 12 adds the store and keeps the rest). The core
+   answers which answer keys the words its held keys open feed
+   (`HeldLines::fed`), and `Lines.admits` keeps of a set of keys every key of
+   another template and each fed answer key. A join runs in one transaction
+   with the replicas: where another tab wrote frames this tab has not taken, it
+   takes them and asks again; else it writes what the core admits. Every
+   compaction sweeps, in its transaction, the blocks the core no longer admits
+   and those of another build, so the erasure's own compaction deletes its
+   blocks, and one that failed is healed by the next; no list of owed blocks is
+   kept. R2's marks, P6, the `Forgot` and `BlocksOwn` messages and the separate
+   database go (deleted at the worker's start). A block is kept while any held
+   key opens the words it renders, so the same words said in two conversations
+   keep their block until both are erased. Laws: the core's `held_lines` "the
+   blocks fed are those a held key's words render"; `onewriter.test.ts` (no
+   block of erased words after the erasure, and no join after it writes one);
+   `rendered.test.ts` (a join writes what the core admits, takes the log first
+   where it is behind, and a sweep takes the rest). The warm first draw,
+   uncapped: 988 ms, median of three loads, against 1,011 ms in 3a.
 6. **The chains into the core.** The chains become replicas of the generic kind
    in the worker; the page's `source` becomes a view; `remote.hold` and P3, P1,
    P2 and W1 go; writes seal through the core (with or after LOCALWRITES stage

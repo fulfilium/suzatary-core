@@ -2,7 +2,7 @@
 // and keeps each move it answers on the device as its frame (`replicalog`), holding no node, key or head of its own.
 
 import type { Lines } from "./core"
-import { framed, heldOf, holdAdmitted, husksOf, lackingIn, lackingOf, lacksIn, movedOf, owedOf, planOf } from "./core"
+import { admitsOf, framed, heldOf, holdAdmitted, husksOf, lackingIn, lackingOf, lacksIn, movedOf, owedOf, planOf } from "./core"
 import content from "./content"
 import replicasync from "./replicasync"
 import excluded from "./excluded"
@@ -28,12 +28,11 @@ export namespace linesync {
   // Which conversations a move touched, or all of them after a reset or a later epoch.
   export type Moved = "All" | readonly string[]
 
-  // Who hears the lines: a reading's leavings by reader, a pull's progress, a move, and the rendered blocks forgotten.
+  // Who hears the lines: a reading's leavings by reader, a pull's progress, and a move.
   export type Effects = {
     readonly told: (reader: string, left: excluded.Left) => void
     readonly bars: (e: progress.Event) => void
     readonly moved: (conversations: Moved) => void
-    readonly forgot: (blocks: readonly string[]) => void
     readonly replaced: () => void
   }
 
@@ -48,6 +47,8 @@ export namespace linesync {
     readonly shown: (on: boolean) => Promise<void>
     // How many lines `scope` reads that the skeleton names and the device does not hold.
     readonly lacking: (scope: lines.Scope) => number
+    // Which blocks the device may keep, decided against every frame on it (`rendered.Admit`).
+    readonly admit: rendered.Admit
   }
 
   const NAME = "lines"
@@ -66,13 +67,10 @@ export namespace linesync {
     return { once, done }
   }
 
-  export const of = (held: Lines, fx: Effects, blocks: rendered.Store): T => {
+  export const of = (held: Lines, fx: Effects, blocks: rendered.Device): T => {
     const log = replicalog.of(NAME, CONTENT)
     const told = (why: string | null): void => fx.told(`row/${KEPT}`, replicasync.unread(NAME, why))
     const moved = (said: string): void => fx.moved(movedOf(said))
-
-    // A block forgotten is gone from the device and marked there before the page hears of it, so no tab writes it back.
-    const forget = (gone: readonly string[]): Promise<lo.Settled<null>> => blocks.forget(gone).then(done => (fx.forgot(gone), done))
 
     // Whether a page is shown; none is until one says so.
     let shown = false
@@ -170,7 +168,7 @@ export namespace linesync {
       quiet = undefined
       if (!idb.available()) return
       for (let tries = 0; tries < 2; tries += 1) {
-        const done = await log.compact(after, take, () => held.snapshot(), () => husksOf(held))
+        const done = await log.compact(after, take, () => held.snapshot(), () => husksOf(held), kept => blocks.swept(kept, admitsOf(held, kept)))
         if (done.type === "Error") return
         if (done.v.type === "Through") {
           after = done.v.at
@@ -213,8 +211,8 @@ export namespace linesync {
         excluded.left(excluded.NONE, [], failed === null ? [] : [{ chain: KEPT, why: `the blocks some erased words were rendered to are still on this device (${failed}); it tries again at the next sync`, cure: "None" }]),
       )
     }
-    // Every dead key let go: its lines' content fetched so the blocks its words fed are found, those blocks forgotten,
-    // then the key; the compaction leaves no frame holding it and deletes the husked lines' prints.
+    // Every dead key let go: its lines' content fetched, so each line it leaves erased is husked; the compaction then
+    // leaves no frame holding the key and deletes the husked lines' prints and every block the core no longer admits.
     const purge = serial.of(async (): Promise<void> => {
       const owed = owedOf(held, [])
       const names = Object.keys(owed)
@@ -225,8 +223,6 @@ export namespace linesync {
         return owing(lo.reason(e))
       }
       const found = owedOf(held, [])
-      const forgot = await forget(Object.values(found).flat())
-      if (forgot.type === "Error") return owing(forgot.e)
       // ⚠️ Kept as a frame first: a tab that compacts without it would write the keys back.
       await stepped(held.forget(JSON.stringify(Object.keys(found))))
       if (pulling) compactOwed = true
@@ -387,6 +383,10 @@ export namespace linesync {
         return Promise.resolve()
       },
       lacking: scope => lacksIn(held, scope).lines,
+      admit: {
+        admits: async (ks, s) => ((await log.behind(s, after, mine)) ? "Behind" : admitsOf(held, ks)),
+        behind: () => inTurn(caughtUp),
+      },
     }
   }
 }

@@ -24,13 +24,13 @@ import { LANDED_ROW, PHONE, REPLICA_ROWS, SIGNED_POST, WORKER_MARKS, WORKER_QUES
 
 const app = await suite("lines")
 
-/** Every row of every store of the database `name`, as one string: what the device holds of it. */
-const held = (name: string): string => `new Promise((ok, no) => {
+/** Every row of every store of the database `name` but those `but` names, as one string: what the device holds of it. */
+const held = (name: string, but: readonly string[] = []): string => `new Promise((ok, no) => {
   const r = indexedDB.open(${JSON.stringify(name)})
   r.onerror = () => no(String(r.error))
   r.onsuccess = () => {
     const db = r.result
-    const stores = [...db.objectStoreNames]
+    const stores = [...db.objectStoreNames].filter((s) => !${JSON.stringify(but)}.includes(s))
     if (stores.length === 0) return (db.close(), ok("{}"))
     const tx = db.transaction(stores, "readonly")
     const out = {}
@@ -101,8 +101,9 @@ app.scene("a conversation is read from the lines, its keys held beside its objec
   // The content the page read is kept by name beside the skeleton, each literal its words sealed.
   const kept = await app.page.evaluate<[string, string][]>(rowsOf("suzatary", "content"))
   assert.ok(kept.length > 0 && kept.every(([name]) => lines.names.includes(name)), "the content of nodes the skeleton names")
-  const device = await app.page.evaluate<string>(held("suzatary"))
-  assert.ok(!device.includes("compiled to HTML"), "nothing the device keeps holds the words in the clear")
+  // Rendered blocks are the words by design; every other store holds them sealed.
+  const device = await app.page.evaluate<string>(held("suzatary", ["blocks"]))
+  assert.ok(!device.includes("compiled to HTML"), "nothing the device keeps but the rendered blocks holds the words in the clear")
   assert.ok(!device.includes("give me a rendered answer"))
   assert.equal(await app.page.evaluate<string>(held("suzatary")).then((all) => all.includes("objects:store/conversations")), false, "no row of the old store")
 })
@@ -110,9 +111,10 @@ app.scene("a conversation is read from the lines, its keys held beside its objec
 app.scene("Erase draws a turn by its shape and the device forgets the blocks its words rendered", async () => {
   await app.resize(PHONE)
   await app.open(WRITE_BASE)
-  await converse("give me a rendered answer")
+  // Words said nowhere else: a block is kept while any held key opens the words it renders.
+  await converse("give me an answer to erase")
   await app.page.waitFor(`document.querySelector(".turn-model .answerblock") !== null`, { timeout: 20000 })
-  await app.page.waitFor(`${held("suzatary-rendered")}.then((all) => all.includes("compiled to HTML"))`, { timeout: 15000 })
+  await app.page.waitFor(`${held("suzatary")}.then((all) => all.includes("then erased"))`, { timeout: 15000 })
   // The core's frames hold the answer's key.
   const keys = (await app.page.evaluate<BoxLines>(boxLines)).keys
   await app.page.waitFor(`${replicaHolds(keyBytes(keys, Object.keys(keys)))}.then((s) => s.holds.length > 0)`, { timeout: 15000 })
@@ -125,9 +127,9 @@ app.scene("Erase draws a turn by its shape and the device forgets the blocks its
   await app.page.waitFor(`document.querySelector(".turn-model.gone .turngone") !== null`, { timeout: 20000 })
   assert.match(await app.page.evaluate<string>(`document.querySelector(".turn-model.gone .turngone").textContent`), /^\[.+ erased these words\]$/)
   assert.equal(await app.page.evaluate<boolean>(`document.querySelector(".turn-model.gone .answerblock, .turn-model.gone .turnreply, .turn-model.gone .act-erase") === null`), true, "no words, no Reply, no Erase")
-  assert.ok(!(await app.page.evaluate<string>(said("model"))).includes("compiled to HTML"))
-  await app.page.waitFor(`${held("suzatary-rendered")}.then((all) => !all.includes("compiled to HTML"))`, { timeout: 15000 })
-  assert.ok(!(await app.page.evaluate<string>(held("suzatary"))).includes("compiled to HTML"), "nothing the device holds says it")
+  assert.ok(!(await app.page.evaluate<string>(said("model"))).includes("then erased"))
+  await app.page.waitFor(`${held("suzatary")}.then((all) => !all.includes("then erased"))`, { timeout: 15000 })
+  assert.ok(!(await app.page.evaluate<string>(held("suzatary"))).includes("then erased"), "nothing the device holds says it")
   const now = (await app.page.evaluate<BoxLines>(boxLines)).keys
   const erased = Object.keys(keys).filter((k) => !(k in now))
   assert.ok(erased.length > 0, "the erased answer's key went")
@@ -249,21 +251,18 @@ app.scene("forgetting a fact erases what it caused, and the tab's tap erases wha
 app.scene("a key a closed tab left on the device is forgotten with the blocks it fed, by the next tab that reads the row", async () => {
   await app.resize(PHONE)
   await app.open(WRITE_BASE)
-  // With no marks an earlier scene's erasure left: the scripted answer is the same words, whose blocks a mark keeps off
-  // the device for good.
-  await app.page.evaluate(put("suzatary-rendered", "rows", `(s) => s.clear()`))
   await converse("give me a rendered answer")
-  await app.page.waitFor(`${held("suzatary-rendered")}.then((all) => all.includes("compiled to HTML"))`, { timeout: 20000 })
+  await app.page.waitFor(`${held("suzatary")}.then((all) => all.includes("compiled to HTML"))`, { timeout: 20000 })
   // What a tab that is then closed keeps: its frames, the answer's key among them, and the blocks it rendered.
   const keys = (await app.page.evaluate<BoxLines>(boxLines)).keys
   await app.page.waitFor(`${replicaHolds(keyBytes(keys, Object.keys(keys)))}.then((s) => s.holds.length > 0)`, { timeout: 15000 })
   const frames = await app.page.evaluate<[string, string][]>(`${REPLICA_ROWS}.then((rows) => rows.filter(([k]) => k.startsWith("lines/log/")))`)
-  const blocks = await app.page.evaluate<[string, unknown][]>(`${rowsOf("suzatary-rendered", "rows")}.then((rows) => rows.filter(([, v]) => v.html.includes("compiled to HTML")))`)
+  const blocks = await app.page.evaluate<[string, unknown][]>(`${rowsOf("suzatary", "blocks")}.then((rows) => rows.filter(([, v]) => v.html.includes("compiled to HTML")))`)
   await app.page.click(".turn-model .turnmorebutton")
   await app.page.click(".turn-model .turnerase .act-erase")
   await app.page.click(".turn-model .turnerase .act-erase.confirming")
   await app.page.waitFor(`document.querySelector(".turn-model.gone .turngone") !== null`, { timeout: 20000 })
-  await app.page.waitFor(`${held("suzatary-rendered")}.then((all) => !all.includes("compiled to HTML"))`, { timeout: 15000 })
+  await app.page.waitFor(`${held("suzatary")}.then((all) => !all.includes("compiled to HTML"))`, { timeout: 15000 })
   const now = (await app.page.evaluate<BoxLines>(boxLines)).keys
   const erased = Object.keys(keys).filter((k) => !(k in now))
   assert.ok(erased.length > 0, "the erased answer's key went")
@@ -276,12 +275,12 @@ app.scene("a key a closed tab left on the device is forgotten with the blocks it
   )
   assert.ok((await app.page.evaluate<Holds>(replicaHolds(keyBytes(keys, erased)))).holds.length > 0, "the key is back on the device")
   await app.page.evaluate(
-    put("suzatary-rendered", "rows", `(s) => ${JSON.stringify(blocks)}.forEach(([, v]) => (s.put(v), s.put({ ...v, key: "older-answer " + v.key.split(" ")[1] })))`),
+    put("suzatary", "blocks", `(s) => ${JSON.stringify(blocks)}.forEach(([, v]) => (s.put(v), s.put({ ...v, key: "older-answer " + v.key.split(" ")[1] })))`),
   )
-  assert.ok((await app.page.evaluate<string>(held("suzatary-rendered"))).includes("compiled to HTML"), "the blocks are back on the device")
+  assert.ok((await app.page.evaluate<string>(held("suzatary"))).includes("compiled to HTML"), "the blocks are back on the device")
   await app.page.navigate(`${WRITE_BASE}/?closed=1#/secretary/default`)
   await app.page.waitFor(`document.querySelector(".pagetitle") !== null`, { timeout: 15000 })
-  await app.page.waitFor(`${held("suzatary-rendered")}.then((all) => !all.includes("compiled to HTML"))`, { timeout: 20000 })
+  await app.page.waitFor(`${held("suzatary")}.then((all) => !all.includes("compiled to HTML"))`, { timeout: 20000 })
   await app.page.waitFor(`${replicaHolds(keyBytes(keys, erased))}.then((s) => s.holds.length === 0)`, { timeout: 20000 })
 })
 

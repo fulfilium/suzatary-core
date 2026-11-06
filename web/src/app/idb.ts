@@ -107,12 +107,13 @@ export namespace idb {
     return over(d, [], mode, s => work(s))
   }
 
-  // `within` over `d`'s store and `beside`'s, which is a store of the same database: one transaction over both, so a
-  // write to one commits with the write to the other or neither does.
-  export const withBeside = async <T>(d: Db, beside: Db, mode: IDBTransactionMode, work: (s: IDBObjectStore, beside: IDBObjectStore) => Promise<T>): Promise<T> => {
+  // `within` over `d`'s store and each of `beside`, stores of the same database: one transaction over all, so a write to
+  // one commits with the writes to the others or none does.
+  export const withBeside = async <T>(d: Db, beside: readonly Db[], mode: IDBTransactionMode, work: (s: IDBObjectStore, beside: readonly IDBObjectStore[]) => Promise<T>): Promise<T> => {
     if (!available()) throw new Error("this browser keeps nothing (no IndexedDB)")
-    if (beside.name !== d.name) throw new Error(`a transaction spans one database, not ${d.name} and ${beside.name}`)
-    return over(d, [beside.store], mode, (s, tx) => work(s, tx.objectStore(beside.store)))
+    const other = beside.find(b => b.name !== d.name)
+    if (other !== undefined) throw new Error(`a transaction spans one database, not ${d.name} and ${other.name}`)
+    return over(d, beside.map(b => b.store), mode, (s, tx) => work(s, beside.map(b => tx.objectStore(b.store))))
   }
 
   const held = <A>(l: lo.Settled<A>): Row<A> => (l.type === "Val" ? { type: "Held", v: l.v } : { type: "Unreadable", why: l.e })

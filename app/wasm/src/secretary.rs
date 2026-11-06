@@ -252,6 +252,22 @@ impl Lines {
         json(&readings::search(&self.stored()?, q).map_err(|r| said(&r))?)
     }
 
+    /// Of the block keys `keys` (`[<key>, …]`), those a device may keep: every key of another
+    /// template, and an answer key only while words a held key opens feed it. A block of words
+    /// an erasure let go is kept nowhere, whenever its answer lands.
+    pub fn admits(&mut self, keys: &str) -> Result<String, JsError> {
+        let keys: Vec<String> =
+            serde_json::from_str(keys).map_err(|e| refused(format!("keys: {e}")))?;
+        let answer = format!("{} ", suzatary_core::rendering::ANSWER.function().as_str());
+        let fed = self.0.lines.fed();
+        json(
+            &keys
+                .iter()
+                .filter(|key| !key.starts_with(&answer) || fed.contains(*key))
+                .collect::<Vec<_>>(),
+        )
+    }
+
     /// Every key an erasure of its own conversation names, and every key named in `told` (JSON
     /// `[<name>, …]`, the names the box's pull says an erasure anywhere in the store names, which
     /// may be in a piece not yet held), each with the answer keys of the blocks its words were

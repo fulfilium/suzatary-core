@@ -91,6 +91,8 @@ pub struct HeldLines {
     /// The lines held as their husks, which no drop lets go: a husk stands where its print stood,
     /// so a reading never lacks it.
     husks: BTreeSet<Hash>,
+    /// [`HeldLines::fed`] as last computed, let go at each change of a print or a key.
+    fed: Option<BTreeSet<String>>,
 }
 
 /// A round as last read: the objects it read and its node, whose entries a later reading of the
@@ -435,6 +437,7 @@ impl HeldLines {
             rounds: BTreeMap::new(),
             moves: 0,
             husks: BTreeSet::new(),
+            fed: None,
         }
     }
 
@@ -578,6 +581,7 @@ impl HeldLines {
 
     /// `drop` let go, then `add` held.
     fn swapped(&mut self, add: Vec<(Hash, Print)>, drop: &[Hash]) {
+        self.fed = None;
         let dropped: BTreeSet<&Hash> = drop
             .iter()
             .filter(|name| self.prints.remove(*name).is_some())
@@ -631,6 +635,9 @@ impl HeldLines {
     /// Each conversation a line of which names a key of `moved` read again, and what was opened
     /// with a key no longer held forgotten.
     fn rekeyed(&mut self, moved: &BTreeSet<KeyName>) {
+        if !moved.is_empty() {
+            self.fed = None;
+        }
         let lost: BTreeSet<&KeyName> = moved.iter().filter(|name| !self.keys.holds(name)).collect();
         let ids: BTreeSet<ConversationId> = moved
             .iter()
@@ -888,6 +895,33 @@ impl HeldLines {
                 Some(Print::Line { line, .. }) => Some((name, &**line)),
                 Some(Print::Structure { .. } | Print::Unread(_)) | None => None,
             })
+    }
+
+    /// The key of every answer block the words the held keys open feed, as the box prints it: a
+    /// device keeps a block of the answer template only while one of these feeds it, so an
+    /// answer asked before an erasure and landing after it is kept nowhere.
+    pub fn fed(&mut self) -> &BTreeSet<String> {
+        let keys = &self.keys;
+        self.fed.get_or_insert_with(|| {
+            self.prints
+                .values()
+                .filter_map(|print| match print {
+                    Print::Line { line, .. } => Some(line),
+                    Print::Structure { .. } | Print::Unread(_) => None,
+                })
+                .flat_map(|line| {
+                    line.keys()
+                        .enumerate()
+                        .filter_map(|(slot, name)| match keys.key(name) {
+                            Words::Kept { kept } => Some(transcript::fed(line, slot, &kept)),
+                            Words::Gone { .. } => None,
+                        })
+                        .flatten()
+                        .collect::<Vec<_>>()
+                })
+                .filter_map(|block| crate::rendering::ANSWER.key(&block).ok())
+                .collect()
+        })
     }
 
     /// The edges of the print `name`, and what it makes lacking or no longer lacking.

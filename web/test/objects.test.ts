@@ -34,7 +34,7 @@ const fakeIndexedDB = (at = 0, rows: Readonly<Record<string, unknown>> = {}) => 
   let version = at
   const db = {
     objectStoreNames: { contains: (n: string) => stores.has(n), [Symbol.iterator]: () => [...stores.keys()][Symbol.iterator]() },
-    createObjectStore: (n: string) => void stores.set(n, new Map()),
+    createObjectStore: (n: string) => (stores.set(n, new Map()), { createIndex: () => {} }),
     deleteObjectStore: (n: string) => void stores.delete(n),
     close: () => {},
     transaction: (n: string) => {

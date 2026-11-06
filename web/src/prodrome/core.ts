@@ -195,6 +195,8 @@ export interface Lines {
   forget: (gone: string) => LineStep;
   /** `[<name>, …]`: every line held as its husk, whose print the device deletes. */
   husks: () => string;
+  /** Of the block keys `[<key>, …]`, those a device may keep: an answer key only while the held keys' words feed it. */
+  admits: (keys: string) => string;
   /** Whether a line the rows read is held with words each key of which is gone: one a purge husks. */
   husking: () => boolean;
   /** Another tab's frame taken: the conversations moved, `"All"` or `[<id>, …]`. */
@@ -712,6 +714,9 @@ export const erasedOf = (lines: Lines, keys: Readonly<Record<string, string>>, t
   checked("erased", lines.erased(JSON.stringify(keys), JSON.stringify(told)), Erased);
 
 export const heldOf = (lines: Lines): readonly string[] => checked("held", lines.held(), arr(str));
+
+/** Of the block keys `keys`, those the core lets a device keep. */
+export const admitsOf = (lines: Lines, keys: readonly string[]): readonly string[] => checked("admits", lines.admits(JSON.stringify(keys)), arr(str));
 
 /** Every line the core holds as its husk, whose print the device deletes. */
 export const husksOf = (lines: Lines): readonly string[] => checked("husks", lines.husks(), arr(str));

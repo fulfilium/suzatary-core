@@ -16,6 +16,7 @@ export const DB_NAME = "suzatary";
 const STORE_NAME = "chain";
 const CONTENT_NAME = "content";
 const REPLICA_NAME = "replica";
+const BLOCKS_NAME = "blocks";
 
 /**
  * One row per chain, which only climbs: every tab of this origin joins into it, so none erases what another sealed.
@@ -62,19 +63,23 @@ export const parseReplica = (raw: unknown): lo.Settled<Replica> => lo.map(Stored
  * is taken again from the box. The one thing a device holds that the box does not is what this tab wrote and the box
  * has not taken, in a chain's row, so the rows' store of version 8 or later, which is this build's, is kept; its rows
  * that are no chain's, which a build before this one kept, are deleted, and every other store goes and is made anew. A
- * device before version 8 keeps nothing. Version 11 keeps the lines as the core's own form (`replicalog`), and version
- * 12 the inbox and the topic stores as well.
+ * device before version 8 keeps nothing. Version 11 keeps the lines as the core's own form (`replicalog`), version 12
+ * the inbox and the topic stores as well, and version 13 adds the rendered blocks beside them, so an erasure deletes
+ * a block in the transaction that lets its key go; it changes no other store, so a device at 12 keeps them all.
  */
 const DB: idb.Db = {
   name: DB_NAME,
-  version: 12,
+  version: 13,
   store: STORE_NAME,
   upgrade: (db, tx, from) => {
+    const blocks = (): void => void db.createObjectStore(BLOCKS_NAME, { keyPath: "key" }).createIndex("used", "used");
+    if (from === 12) return blocks();
     const kept = from >= 8 && db.objectStoreNames.contains(STORE_NAME);
     for (const name of Array.from(db.objectStoreNames)) if (!(kept && name === STORE_NAME)) db.deleteObjectStore(name);
     if (kept) for (const prefix of OTHERS) tx.objectStore(STORE_NAME).delete(under(prefix));
     else db.createObjectStore(STORE_NAME);
     for (const name of [CONTENT_NAME, REPLICA_NAME]) db.createObjectStore(name);
+    blocks();
   },
 };
 
@@ -86,6 +91,9 @@ export const CONTENT: idb.Db = { ...DB, store: CONTENT_NAME };
 
 /** The replicas the core keeps in its own form, a snapshot and the frames after it, by the store's name (`replicalog`). */
 export const REPLICA: idb.Db = { ...DB, store: REPLICA_NAME };
+
+/** Typst's HTML by the key the box names it under, beside the replicas (`rendered.device`). */
+export const BLOCKS: idb.Db = { ...DB, store: BLOCKS_NAME };
 
 /**
  * What a chain's row holds and how it reads, joins and starts over: its replica, which is what a reset is checked

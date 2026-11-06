@@ -20,8 +20,6 @@ import stores from "./stores"
 import type topics from "./topics"
 import type time from "../app/time"
 import type grouped from "../chat/grouped"
-import type rendered from "../app/rendered"
-import pageBlocks from "../app/blocks"
 import app from "../app/app"
 import inflight from "../app/inflight"
 import once from "../algebra/once"
@@ -128,8 +126,7 @@ export namespace storesync {
   export const reset = async (name: stores.Name, said: (why: string) => void): Promise<void> =>
     void (await remote.ask({ type: "Reset", store: name }, "Page")).forEach(said)
 
-  // What the worker says of the stores: a reading's leavings, a pull's progress, the rendered blocks it forgot, a
-  // refused topic, and what moved, heard once a frame however many landings it says it of, so a page asks for its
+  // What the worker says of the stores: a reading's leavings, a pull's progress, a refused topic, and what moved, heard once a frame however many landings it says it of, so a page asks for its
   // reading again once; a hidden tab, whose frames do not run, hears it within a tenth of a second all the same.
   let moving: linesync.Moved | null = null
   const MOVES_MS = 100
@@ -139,14 +136,12 @@ export namespace storesync {
     moving = null
     moves.dispatch(moved)
   }
-  export const heardWorker = (s: storeset.Said, blocks: rendered.Store = pageBlocks.store): void => {
+  export const heardWorker = (s: storeset.Said): void => {
     switch (s.type) {
       case "Told":
         return readings.told(s.reader, s.left)
       case "Bars":
         return bars.dispatch(s.e)
-      case "Forgot":
-        return void blocks.forget(s.blocks)
       case "Refused":
         return handover.told(s.why)
       case "Moved": {
@@ -164,7 +159,7 @@ export namespace storesync {
 
   // Everything the worker says unasked, each to what hears it: the box's answer to a revoked key and to an older build,
   // a core that did not load, and what it says of the stores.
-  const heardFromWorker = (s: questions.Said, fx: Heard, blocks: rendered.Store = pageBlocks.store): void => {
+  const heardFromWorker = (s: questions.Said, fx: Heard): void => {
     switch (s.type) {
       case "Gone":
         return fx.gone()
@@ -173,14 +168,12 @@ export namespace storesync {
       case "Unloaded":
         return fx.unloaded(s.why)
       default:
-        return heardWorker(s, blocks)
+        return heardWorker(s)
     }
   }
 
-  // The page hears the worker: what it says unasked, routed as `heardFromWorker` routes it, the page's own table of
-  // rendered blocks `blocks`.
-  export const hearWorker = (fx: Heard, blocks: rendered.Store = pageBlocks.store): void =>
-    remote.hear(said => heardFromWorker(said, fx, blocks))
+  // The page hears the worker: what it says unasked, routed as `heardFromWorker` routes it.
+  export const hearWorker = (fx: Heard): void => remote.hear(said => heardFromWorker(said, fx))
 
   // Wakes on every move of what the worker holds; returns its own removal.
   export const watch = (listener: () => void): (() => void) => moves.subscribe(() => listener())

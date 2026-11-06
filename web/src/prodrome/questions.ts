@@ -45,6 +45,7 @@ import phases from "./phases"
 import storeset from "./storeset"
 import type stores from "./stores"
 import lo from "../algebra/lo"
+import idb from "../app/idb"
 import last from "../algebra/last"
 import thirty from "../todo/thirty"
 import grouped from "../chat/grouped"
@@ -120,7 +121,6 @@ export namespace questions {
     Blocks: { q: { readonly keys: readonly string[] }; a: (string | null)[] }
     KeepBlocks: { q: { readonly pairs: readonly (readonly [string, string])[] }; a: string[] }
     BlocksUsage: { q: Record<never, never>; a: rendered.Usage }
-    BlocksOwn: { q: Record<never, never>; a: ReadonlySet<string> }
     // Answered once the lines of the conversations the rounds are in are held.
     Stream: { q: { readonly chosen: readonly string[]; readonly pages: number }; a: Whole<{ readonly stream: StreamPayload; readonly bar: TopicsPayload; readonly keys: Keyed }> }
     // A refusal fails in the box's words.
@@ -208,10 +208,17 @@ export namespace questions {
     const sorted = (xs: readonly string[]): string => JSON.stringify([...xs].sort())
 
     const held = new core.Lines()
-    const own = functionsOf(core)
-    const blocks = rendered.device(own)
+    // The rendered blocks the device keeps, read and written here alone, of the functions this build keeps blocks of, as
+    // the lines admit them. The database a build before them kept blocks in goes.
+    if (idb.available()) indexedDB.deleteDatabase(rendered.DB)
+    let admit: rendered.Admit | null = null
+    const blocks = rendered.device(functionsOf(core), {
+      admits: (ks, s) => (admit === null ? Promise.resolve("Behind") : admit.admits(ks, s)),
+      behind: () => admit?.behind() ?? Promise.resolve(),
+    })
     const stores = storeset.of(core, held, say, blocks)
     const sync = stores.lines
+    admit = sync.admit
     const proposals = stores.proposals
     // A reading that failed while some of its lines are not on this device failed for want of them.
     const notHere = (scope: lines.Scope, e: unknown): NotHere => {
@@ -376,8 +383,6 @@ export namespace questions {
           return blocks.join(q.pairs)
         case "BlocksUsage":
           return blocks.usage()
-        case "BlocksOwn":
-          return own
         // The core's skeleton chooses the rounds; only the lines whose words they read are read.
         case "Stream":
           phases.mark("stream asked")

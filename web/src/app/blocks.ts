@@ -10,7 +10,6 @@ export namespace blocks {
     get: keys => remote.ask({ type: "Blocks", keys }, "Page"),
     join: pairs => remote.ask({ type: "KeepBlocks", pairs }, "Page"),
     usage: () => remote.ask({ type: "BlocksUsage" }, "Page"),
-    own: () => remote.ask({ type: "BlocksOwn" }, "Page"),
   })
 
   export const held = (key: table.Key): Promise<string | null> => store.get([key]).then(r => r[0] ?? null)

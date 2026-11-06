@@ -3,7 +3,6 @@
 import { test } from "node:test"
 import assert from "node:assert/strict"
 
-import idb from "../src/app/idb"
 import rendered from "../src/app/rendered"
 import { fakeIndexedDB } from "./fakeidb"
 import table from "../src/algebra/table"
@@ -85,34 +84,38 @@ test("through answers what a box of another build renders, and keeps it under ne
   assert.deepEqual(await store.get([mine, theirs]), [null, null])
 })
 
-test("law: the device holds blocks of its own functions alone, and a forget leaves none of another's", () =>
+test("law: a join keeps blocks of the build's own functions alone", () =>
   forAllAsync(100, async r => {
     const fns = ["markup", "answer", "older-markup", "older-answer"]
     const own = new Set(fns.filter(() => r.bool(0.5)))
     const rows = table.of<string>(table.keep())
-    const before = rendered.memory(new Set(fns), rows)
-    const pairs = keys(r, 12).map((arg, i): rendered.Pair => [table.key(fns[r.int(fns.length)]!, arg), `<p>${i}</p>`])
-    await before.join(pairs)
     const store = rendered.memory(own, rows)
-    await store.join(keys(r, 6).map((arg): rendered.Pair => [table.key(fns[r.int(fns.length)]!, arg), "<p>new</p>"]))
-    assert.ok(rows.pairs().every(([k]) => own.has(table.fnOf(k)) || pairs.some(([p]) => p === k)), "a join takes no stranger")
-    const named = pairs.filter(() => r.bool(0.3)).map(([k]) => k)
-    await store.forget(named)
-    assert.ok(rows.pairs().every(([k]) => own.has(table.fnOf(k)) && !named.includes(k)), "a forget leaves no stranger and nothing named")
+    await store.join(keys(r, 12).map((arg, i): rendered.Pair => [table.key(fns[r.int(fns.length)]!, arg), `<p>${i}</p>`]))
+    assert.ok(rows.pairs().every(([k]) => own.has(table.fnOf(k))), "a join takes no stranger")
   }))
 
-test("a block under a key the device forgot, back on the device another way, goes at the next forget", async () => {
-  const device = fakeIndexedDB()
-  const store = rendered.device(new Set(["answer"]))
-  const [erased, kept] = [table.key("answer", "erased"), table.key("answer", "kept")]
-  await store.join([[erased, "<p>erased words</p>"], [kept, "<p>other words</p>"]])
-  await store.forget([erased])
-  // A copy written past the worker, as a tab closed mid-write leaves one: the words of a husked line no longer name it.
-  await idb.within({ name: rendered.DB, version: 4, store: rendered.ROWS, upgrade: () => {} }, "readwrite", s =>
-    idb.done(s.put({ key: erased, html: "<p>erased words</p>", bytes: 1, used: 1 })),
-  )
-  assert.ok(device.printed().some(r => r.includes("erased words")), "the block is back")
-  await store.forget([])
-  assert.ok(!device.printed().some(r => r.includes("erased words")), "and goes at the next forget")
-  assert.ok(device.printed().some(r => r.includes("other words")), "with nothing else")
+// A worker's device over the fake IndexedDB, its core's admission `admits`, and how often it was behind.
+const device = (admits: (ks: readonly string[]) => readonly string[], behind: () => boolean = () => false) => {
+  const seen = { behind: 0 }
+  const store = rendered.device(new Set(["answer"]), {
+    admits: ks => Promise.resolve(behind() ? "Behind" : admits(ks)),
+    behind: () => Promise.resolve(void (seen.behind += 1)),
+  })
+  return { store, seen }
+}
+
+test("a join writes only the blocks the core admits, takes the log first where another tab wrote to it, and a sweep takes the rest", async () => {
+  const fake = fakeIndexedDB()
+  const [erased, kept, stranger] = [table.key("answer", "erased"), table.key("answer", "kept"), table.key("older-answer", "x")]
+  const { store } = device(ks => ks.filter(k => k !== erased))
+  await store.join([[erased, "<p>erased words</p>"], [kept, "<p>other words</p>"], [stranger, "<p>old</p>"]])
+  assert.ok(!fake.printed().some(r => r.includes("erased words")), "an answer whose words no held key opens is written nowhere")
+  assert.deepEqual(await store.get([erased, kept]), [null, "<p>other words</p>"])
+  // The tab is behind once: it takes the log, and the join is decided again.
+  let once = true
+  const late = device(ks => ks, () => ((once = !once), !once))
+  await late.store.join([[erased, "<p>erased words</p>"]])
+  assert.equal(late.seen.behind, 1, "a tab behind takes the log before it joins")
+  assert.ok(fake.printed().some(r => r.includes("erased words")), "and joins what its core then admits")
+  assert.deepEqual(store.swept([erased, kept, stranger], [kept]), [erased, stranger], "a sweep takes what the core does not admit and every stranger")
 })

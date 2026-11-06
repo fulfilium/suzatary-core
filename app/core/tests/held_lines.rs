@@ -15,6 +15,7 @@ use prodrome_core::memo::Counts;
 use std::sync::atomic::{AtomicU64, Ordering};
 
 use suzatary_core::capability::{Entropy, Turn};
+use suzatary_core::rendering::ANSWER;
 use suzatary_core::secretary::conversations::{Conversations, InMemory};
 use suzatary_core::secretary::erasure::Erasure;
 use suzatary_core::secretary::held_lines::{Admitted, HeldLines, decodes, hashes};
@@ -449,6 +450,52 @@ proptest! {
         };
         let back: LineReplica = from_snapshot(&snapshot(&kept).expect("prints")).expect("reads back");
         prop_assert_eq!(back, kept);
+    }
+}
+
+proptest! {
+    #![proptest_config(ProptestConfig { cases: 32, ..ProptestConfig::default() })]
+
+    /// THE BLOCKS LAW: with some keys let go, the answer blocks the held lines feed are exactly
+    /// those the words of a held key render: every block of a held key's words, and of a key let
+    /// go only a block a held key's words render too.
+    #[test]
+    fn the_blocks_fed_are_those_a_held_keys_words_render(
+        script in proptest::collection::vec(step(), 1..24),
+        gone in proptest::collection::vec(any::<prop::sample::Index>(), 0..6),
+    ) {
+        let held = written(&script);
+        let every: BTreeMap<KeyName, String> = keys(&held).into_iter().collect();
+        let all = KeyRing::of(&every);
+        let mut given = every.clone();
+        for which in &gone {
+            if given.is_empty() {
+                break;
+            }
+            let name = given.keys().nth(which.index(given.len())).cloned().expect("given");
+            given.remove(&name);
+        }
+        let mut lines = HeldLines::new();
+        lines.keys(&every, &[]);
+        lines.hold(prints(&held), &[]);
+        let names: BTreeSet<KeyName> = every.keys().cloned().collect();
+        let rendered: BTreeMap<KeyName, BTreeSet<String>> = lines
+            .erased(&all, &names)
+            .into_iter()
+            .map(|(name, blocks)| {
+                let keys = blocks.iter().map(|b| ANSWER.key(b).expect("prints")).collect();
+                (name, keys)
+            })
+            .collect();
+        let gone: Vec<KeyName> = every.keys().filter(|k| !given.contains_key(*k)).cloned().collect();
+        lines.keys(&BTreeMap::new(), &gone);
+        let fed = lines.fed().clone();
+        let by_held: BTreeSet<&String> = rendered
+            .iter()
+            .filter(|(name, _)| given.contains_key(*name))
+            .flat_map(|(_, keys)| keys)
+            .collect();
+        prop_assert_eq!(fed.iter().collect::<BTreeSet<_>>(), by_held);
     }
 }
 
