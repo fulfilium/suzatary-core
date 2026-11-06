@@ -13,8 +13,11 @@ name: Gate passes
 # only a push to a `gate/**` branch runs, and only someone with write access to core can push one.
 #
 # WHO REACHES WHAT. Only a completed Gate run starts this, in the public repository alone; no pull
-# request runs it. It names no secret and pushes nothing. Its token reads the run's artifacts and may
-# delete this repository's Actions caches (`actions: write`), which the purge needs.
+# request runs it. A `workflow_run` job holds this repository's token whoever started the run it
+# follows, so the job runs only after a Gate run that a push to a `gate/` branch of this same
+# repository started; a run from a fork, or from any other event, leaves the passes as they are.
+# It names no secret and pushes nothing. Its token reads the run's artifacts and may delete this
+# repository's Actions caches (`actions: write`), which the purge needs.
 on:
   workflow_run:
     workflows: [Gate]
@@ -28,7 +31,11 @@ concurrency:
 
 jobs:
   passes:
-    if: ${{ !github.event.repository.private }}
+    if: >-
+      ${{ !github.event.repository.private
+      && github.event.workflow_run.event == 'push'
+      && github.event.workflow_run.head_repository.full_name == github.repository
+      && startsWith(github.event.workflow_run.head_branch, 'gate/') }}
     runs-on: ubuntu-24.04-arm
     timeout-minutes: 20
     permissions:

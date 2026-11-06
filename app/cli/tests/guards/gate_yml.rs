@@ -328,7 +328,6 @@ fn gate_passes_yml_hands_each_gate_the_passes_of_the_last() {
         "the run it follows is gate.yml's"
     );
     assert!(!passes.contains("pull_request"));
-    assert!(passes.contains("if: ${{ !github.event.repository.private }}"));
     assert!(!passes.contains("secrets."), "no secret");
     assert_pinned(&passes);
     assert!(passes.contains("      contents: read\n      actions: write\n"));
@@ -362,6 +361,63 @@ fn gate_passes_yml_hands_each_gate_the_passes_of_the_last() {
     assert!(at("mv passes .git/gate") < at("scripts/merge-gate.sh --no-live"));
     assert!(at("name: passes-${{ matrix.lane }}") < at("- name: red"));
     assert!(gate.contains("path: .git/gate\n          include-hidden-files: true"));
+}
+
+/// The `if:` of `job` in `body`, folded or not, as the set of its conjuncts; `None` where it is
+/// not one `${{ }}` expression or a conjunct holds an `||`, so the set is the whole condition.
+fn conjuncts(body: &str, job: &str) -> Option<BTreeSet<String>> {
+    let mut lines = body
+        .lines()
+        .skip_while(|l| l.trim_end() != format!("  {job}:"))
+        .skip(1);
+    let first = lines.find_map(|l| l.strip_prefix("    if: "))?;
+    let text = if first == ">-" {
+        let folded: Vec<&str> = lines
+            .take_while(|l| l.starts_with("      "))
+            .map(str::trim)
+            .collect();
+        folded.join(" ")
+    } else {
+        first.to_owned()
+    };
+    let inner = text.strip_prefix("${{")?.strip_suffix("}}")?;
+    inner
+        .split("&&")
+        .map(|c| (!c.contains("||")).then(|| c.trim().to_owned()))
+        .collect()
+}
+
+/// The passes gate-passes.yml saves are the word of a gate job, so it acts only after a Gate run a
+/// push to a `gate/` branch of this same repository started: a `workflow_run` job holds the
+/// repository's token whatever started the run it follows, a fork's or a pull request's too.
+#[test]
+fn gate_passes_yml_takes_passes_from_this_repositorys_gate_pushes_alone() {
+    let passes = code(".github/workflows/gate-passes.yml");
+    assert_eq!(
+        conjuncts(&passes, "passes"),
+        Some(
+            [
+                "!github.event.repository.private",
+                "github.event.workflow_run.event == 'push'",
+                "github.event.workflow_run.head_repository.full_name == github.repository",
+                "startsWith(github.event.workflow_run.head_branch, 'gate/')",
+            ]
+            .map(str::to_owned)
+            .into()
+        ),
+        "public, after a push, from this repository, on a gate branch, and nothing looser"
+    );
+    assert_eq!(
+        passes.matches("    if: ").count(),
+        1,
+        "the job's one condition"
+    );
+    let loose = "jobs:\n  passes:\n    if: ${{ a && b || c }}\n";
+    assert_eq!(
+        conjuncts(loose, "passes"),
+        None,
+        "a disjunction is no set of conjuncts"
+    );
 }
 
 /// actionlint passes the workflows the gate and the caches rest on: their syntax, their
