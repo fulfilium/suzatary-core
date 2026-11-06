@@ -2,7 +2,7 @@
 // listening says how to stop, which the painter asks when it takes the part out.
 
 import { el } from "../view/dom"
-import { chevronIcon, clipIcon, crossIcon, docIcon, lockIcon, plusIcon, sendIcon } from "../view/icons"
+import { checkIcon, chevronIcon, clipIcon, crossIcon, docIcon, lockIcon, plusIcon, sendIcon } from "../view/icons"
 import marks from "../view/marks"
 import loadmark from "../view/loadmark"
 import heldvalue from "../view/heldvalue"
@@ -56,6 +56,8 @@ export namespace parts {
         return sendIcon()
       case "clip":
         return clipIcon()
+      case "check":
+        return checkIcon()
       case "cross":
         return crossIcon()
       case "plus":

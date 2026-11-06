@@ -131,9 +131,9 @@ fn mail_can_choose_a_topic_in_use_and_never_make_one() {
     let fakes = Fakes::new("add-topics");
     say(&fakes, vec![asked("which bulbs go in this autumn?")]);
     let made = call(&fakes, json!({"topics": ["garden"]})).expect("a clean round makes a topic");
-    assert_eq!(made["on"], "round:default/0");
+    assert_eq!(made["target"], "round:default/0");
     assert_eq!(made["new"], json!(["garden"]));
-    assert_eq!(made["existing"], "none yet");
+    assert_eq!(made["existing"], "garden (1)");
     assert_eq!(topics_on(&fakes, "round:default/0"), ["garden"]);
 
     say(&fakes, vec![answered("Tulips."), asked("and the hedge?")]);
@@ -142,7 +142,7 @@ fn mail_can_choose_a_topic_in_use_and_never_make_one() {
         assert!(twin.message().contains("near twin"), "{}", twin.message());
     }
     let three = call(&fakes, json!({"topics": ["garden", "hedge", "trip"]})).expect("three fit");
-    assert_eq!(three["on"], "round:default/2");
+    assert_eq!(three["target"], "round:default/2");
     let fourth =
         call(&fakes, json!({"topics": ["invoices"]})).expect_err("a fourth topic is refused");
     assert!(
@@ -181,11 +181,11 @@ fn mail_can_choose_a_topic_in_use_and_never_make_one() {
     assert!(topics_on(&fakes, answering).is_empty());
     let again = call(&fakes, json!({"topics": ["garden"]})).expect("one in use is put on");
     assert_eq!(
-        again["on"], answering,
+        again["target"], answering,
         "the round being answered, not the later message"
     );
     assert_eq!(again["new"], json!([]));
-    assert_eq!(again["existing"], "garden (2), hedge (1), trip (1)");
+    assert_eq!(again["existing"], "garden (3), hedge (1), trip (1)");
     assert_eq!(topics_on(&fakes, answering), ["garden"]);
     assert!(topics_on(&fakes, "round:default/8").is_empty());
 }
@@ -227,4 +227,67 @@ fn a_card_asked_in_a_topic_cites_the_topics_round() {
             "mail:a1b2c3d4e5f6"
         ]
     );
+}
+
+/// The owner's topics are settled and the secretary's are suggestions: `revise_topics` drops and
+/// renames its own, and is refused in words on a topic the owner set or took off.
+#[test]
+fn the_secretary_revises_its_suggestions_and_never_the_owners_topics() {
+    let fakes = Fakes::new("revise-topics");
+    say(&fakes, vec![asked("which bulbs go in this autumn?")]);
+    call(&fakes, json!({"topics": ["garden", "bulbs"]})).expect("suggested");
+    let round: Target = "round:default/0".parse().expect("a target");
+    let topics = fakes.secretary().topics;
+    let owner = suzatary_core::secretary::topics::provenance::Owner::new(
+        prodrome_core::event::Actor::new("ada").expect("an actor"),
+    )
+    .expect("the owner");
+    let now = prodrome_core::literal::Datetime::new(2026, 10, 24, 10, 0, 0, 0).expect("an instant");
+    let owners = |write: &dyn Fn(&suzatary_core::secretary::topics::reading::Reading) -> Vec<_>| {
+        for event in write(&topics.reading().expect("reads")) {
+            topics.memberships.append(event).expect("appended");
+        }
+    };
+    owners(&|r| {
+        r.add(&round, &Topic::new("roses").expect("a topic"), now, &owner)
+            .into_iter()
+            .collect()
+    });
+    owners(&|r| r.remove(&round, &Topic::new("bulbs").expect("a topic"), now, &owner));
+
+    let revise = |args: Value| call_in(&fakes, &DEFAULT, "revise_topics", args);
+    for (args, said) in [
+        (
+            json!({"drop": ["roses"]}),
+            "the owner set roses on round:default/0",
+        ),
+        (
+            json!({"rename": [{"from": "roses", "to": "flowers"}]}),
+            "the owner set roses",
+        ),
+        (
+            json!({"rename": [{"from": "garden", "to": "bulbs"}]}),
+            "the owner took bulbs off",
+        ),
+        (
+            json!({"drop": ["hedge"]}),
+            "holds no topic hedge; its topics are garden (yours), roses (the owner's)",
+        ),
+    ] {
+        let refused = revise(args).expect_err("refused");
+        assert!(refused.message().contains(said), "{}", refused.message());
+    }
+    let again = call(&fakes, json!({"topics": ["bulbs"]})).expect_err("a declined topic stays off");
+    assert!(
+        again.message().contains("the owner took bulbs off"),
+        "{}",
+        again.message()
+    );
+
+    let renamed = revise(json!({"rename": [{"from": "garden", "to": "yard"}]})).expect("its own");
+    assert_eq!(renamed["owner"], json!(["roses"]));
+    assert_eq!(renamed["suggested"], json!(["yard"]));
+    let dropped = revise(json!({"on": "round:default/0", "drop": ["yard"]})).expect("its own");
+    assert_eq!(dropped["suggested"], json!([]));
+    assert_eq!(topics_on(&fakes, "round:default/0"), ["roses"]);
 }

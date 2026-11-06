@@ -358,8 +358,8 @@ impl MailSync for Fixed {
 fn valid(verb: &str, name: &str) -> Value {
     match (verb, name) {
         ("record", "kind") => json!("completed"),
-        ("add_topics", "topics") => json!(["garden"]),
-        ("add_topics", "on") => json!("round"),
+        ("add_topics", "topics") | ("revise_topics", "drop") => json!(["garden"]),
+        ("add_topics" | "revise_topics", "on") => json!("round"),
         ("todo_add", "todo_id") => json!("beta"),
         ("remember" | "consolidate", "kind") => json!("person"),
         ("consolidate", "from") => json!([1, 2]),

@@ -192,7 +192,6 @@ impl Plan {
         if !stale.is_empty() {
             return Err(Stale(stale));
         }
-        let actor = crate::secretary::writes_as();
         Ok(self
             .0
             .iter()
@@ -201,7 +200,7 @@ impl Plan {
                     planned
                         .topics
                         .iter()
-                        .filter_map(|topic| reading.add(target, topic, at, &actor))
+                        .filter_map(|topic| reading.suggestion(target, topic, at))
                 })
             })
             .collect())

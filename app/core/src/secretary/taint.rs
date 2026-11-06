@@ -313,7 +313,7 @@ mod tests {
     }
 
     #[test]
-    fn only_six_verbs_are_clean() {
+    fn only_seven_verbs_are_clean() {
         let clean: Vec<&str> = crate::secretary::SecretaryVerb::ALL
             .iter()
             .filter(|verb| verb.class().taint == Taint::Clean)
@@ -327,7 +327,8 @@ mod tests {
                 "forget",
                 "consolidate",
                 "weather",
-                "add_topics"
+                "add_topics",
+                "revise_topics"
             ]
         );
     }

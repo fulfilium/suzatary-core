@@ -21,9 +21,11 @@ use prodrome_core::store::{MemoryStore, Replica, sync};
 use proptest::prelude::*;
 
 use suzatary_core::secretary::store::ConversationId;
+use suzatary_core::secretary::topics::provenance::Owner;
 use suzatary_core::secretary::topics::reading::{
     AliasEvent, AliasVocabulary, MembershipEvent, MembershipVocabulary, Reading, Topics,
 };
+use suzatary_core::secretary::topics::standing::Standing;
 use suzatary_core::secretary::topics::target::Target;
 use suzatary_core::secretary::topics::topic::Topic;
 
@@ -78,7 +80,7 @@ fn names<E: Schema>(store: &MemoryStore<E>) -> BTreeSet<String> {
 struct Device {
     memberships: MemoryStore<MembershipEvent>,
     aliases: MemoryStore<AliasEvent>,
-    actor: Actor,
+    actor: Owner,
     clock: u32,
 }
 
@@ -87,7 +89,8 @@ impl Device {
         Self {
             memberships: begun(),
             aliases: begun(),
-            actor: Actor::new(format!("device{n}")).expect("an actor"),
+            actor: Owner::new(Actor::new(format!("device{n}")).expect("an actor"))
+                .expect("not the secretary"),
             clock: 0,
         }
     }
@@ -151,7 +154,33 @@ impl Device {
                 }
                 written
             }
+            Op::Suggest(n, name) => self.write_memberships(
+                reading
+                    .suggestion(&target(*n), &topic(NAMES[*name]), at)
+                    .into_iter()
+                    .collect(),
+            ),
+            Op::Drop(n, name) => match reading.standing(&target(*n), &topic(NAMES[*name])) {
+                Standing::Suggested(suggestion) => self.write_memberships(suggestion.drop(at)),
+                Standing::Kept | Standing::Declined | Standing::Open(_) => 0,
+            },
         }
+    }
+
+    /// Where each name stands on each target, as a word.
+    fn standings(&self) -> Vec<&'static str> {
+        let reading = self.read();
+        (0..4)
+            .flat_map(|n| NAMES.map(|name| (n, name)))
+            .map(
+                |(n, name)| match reading.standing(&target(n), &topic(name)) {
+                    Standing::Kept => "kept",
+                    Standing::Suggested(_) => "suggested",
+                    Standing::Declined => "declined",
+                    Standing::Open(_) => "open",
+                },
+            )
+            .collect()
     }
 
     fn write_memberships(&self, events: Vec<MembershipEvent>) -> usize {
@@ -168,6 +197,26 @@ enum Op {
     Add(usize, usize),
     Remove(usize, usize),
     Rename(usize, usize),
+    /// The secretary's suggestion, where the topic is open.
+    Suggest(usize, usize),
+    /// The secretary's drop of its own suggestion.
+    Drop(usize, usize),
+}
+
+impl Op {
+    fn secretarys(&self) -> bool {
+        matches!(self, Op::Suggest(..) | Op::Drop(..))
+    }
+}
+
+/// The owner's ops and the secretary's: the box's door takes only the poster's own changes, so
+/// the door's laws run over [`op`] alone.
+fn any_op() -> impl Strategy<Value = Op> {
+    prop_oneof![
+        3 => op(),
+        2 => (0usize..4, 0usize..4).prop_map(|(n, name)| Op::Suggest(n, name)),
+        1 => (0usize..4, 0usize..4).prop_map(|(n, name)| Op::Drop(n, name)),
+    ]
 }
 
 fn op() -> impl Strategy<Value = Op> {
@@ -230,6 +279,37 @@ fn topics_of(reading: &Reading, n: usize) -> BTreeSet<Topic> {
 
 proptest! {
     #![proptest_config(ProptestConfig::with_cases(64))]
+
+    /// Devices write apart and sync. No write of the secretary changes where a topic stands that
+    /// the owner set or took off on that device, and the owner's add of a suggestion keeps it.
+    #[test]
+    fn the_secretary_never_undoes_the_owners_choice(script in proptest::collection::vec((0usize..3, any_op(), 0usize..3), 0..30)) {
+        let mut all = devices(3);
+        for (device, op, from) in &script {
+            let before = all[*device].standings();
+            let suggested = if let Op::Add(n, name) = op {
+                matches!(all[*device].read().standing(&target(*n), &topic(NAMES[*name])), Standing::Suggested(_))
+            } else {
+                false
+            };
+            all[*device].apply(op);
+            let after = all[*device].standings();
+            if op.secretarys() {
+                for (was, is) in before.iter().zip(&after) {
+                    if matches!(*was, "kept" | "declined") {
+                        prop_assert_eq!(was, is, "{:?}", op);
+                    }
+                }
+            }
+            if let (true, Op::Add(n, name)) = (suggested, op) {
+                let reading = all[*device].read();
+                prop_assert!(matches!(reading.standing(&target(*n), &topic(NAMES[*name])), Standing::Kept));
+            }
+            if from != device {
+                all[*device].take(&all[*from]);
+            }
+        }
+    }
 
     /// Adding twice writes once, and removing twice writes once.
     #[test]
@@ -349,8 +429,11 @@ proptest! {
 /// What the box takes when `device` posts every object it holds of its own actor's, in each
 /// store: how many objects it took.
 fn post(device: &Device, the_box: &Device) -> usize {
-    posted(&device.memberships, &the_box.memberships, &device.actor)
-        + posted(&device.aliases, &the_box.aliases, &device.actor)
+    posted(
+        &device.memberships,
+        &the_box.memberships,
+        device.actor.actor(),
+    ) + posted(&device.aliases, &the_box.aliases, device.actor.actor())
 }
 
 fn posted<E: Schema<Vocabulary: Default>>(

@@ -2190,8 +2190,14 @@ pub struct StreamRound {
     /// Its last model turn with words; absent while it is going or when it said nothing.
     pub answer: Option<TurnRow>,
     /// Each in its current spelling, sorted.
-    pub topics: Vec<String>,
+    pub topics: Vec<RoundTopic>,
     pub room: usize,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+pub struct RoundTopic {
+    pub topic: String,
+    pub by: crate::secretary::topics::provenance::Provenance,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]

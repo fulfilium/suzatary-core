@@ -261,7 +261,7 @@ impl Told {
                 out.push_str(
                     "TOPICS IN USE, each with how many rounds it is on; give each round you \
                      answer 1 to 3 of these with add_topics, and make a new one only for a \
-                     subject that will come back:",
+                     subject that will come back; yours stay suggestions the owner may keep:",
                 );
                 for (topic, rounds) in in_use {
                     let _ = write!(out, " {topic} ({rounds}),");

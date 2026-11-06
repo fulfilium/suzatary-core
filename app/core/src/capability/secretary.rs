@@ -64,7 +64,7 @@ pub struct Secretary<'a> {
     pub memories: crate::secretary::memories::Memories<'a>,
     /// The recorded decisions: a verb reads them; only the owner's tap on a proposal writes.
     pub decisions: crate::decisions::Decisions<'a>,
-    /// The topics on its rounds and notes, box-local: `add_topics` writes the round it answers.
+    /// The topics on its rounds and notes, box-local: the topic verbs write its suggestions.
     pub topics: crate::secretary::topics::stores::TopicStores<'a>,
     /// The saved briefings.
     pub briefings: &'a dyn Briefings,

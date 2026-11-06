@@ -5,11 +5,11 @@
 {"line":"said","at":"2026-09-02T12:00:00.000005","turn":{"who":"model","text":"Proposing.","calls":[{"verb":"propose_changes","args":{"acts":[{"act":"complete","note":"in","todo":"flightcheckin"}],"sources":"mail:dddddddddddd","why":"The airline confirmation says he is checked in."}},{"verb":"todo_add","args":{"body":"no","todo_id":"x"}}]}}
 {"line":"proposed","at":"2026-09-02T12:00:00.000008","object":"pa23516260fe817183ac61e782efdc198"}
 {"line":"said","at":"2026-09-02T12:00:00.000006","turn":{"who":"tool","verb":"propose_changes","answer":"{\n  \"acts\": 1,\n  \"chain\": \"life\",\n  \"next\": \"The owner sees this as a DIFF — every row with its before and after — and confirms it, denies it with a reason, or replies. Nothing is on the chain until they confirm. Do not propose the same changeset twice; if they deny one, read the reason and propose the corrected one or ask.\",\n  \"proposed\": 0,\n  \"why\": \"The airline confirmation says he is checked in.\"\n}","outcome":{"is":"answered"}}}
-{"line":"said","at":"2026-09-02T12:00:00.000009","turn":{"who":"tool","verb":"todo_add","answer":"the sweep may not call 'todo_add' — its verbs are context, recall, zoom, list_open_todos, todo_show, history, search, show, attachments, upload_read, briefing_delta, briefing, git_diff_summary, propose_changes, weather, calendar, decisions, drive_list, junk_digest, junk_show, repos_list, repo_tree, repo_read, repo_grep, triage_cards, add_topics","outcome":{"is":"refused"}}}
+{"line":"said","at":"2026-09-02T12:00:00.000009","turn":{"who":"tool","verb":"todo_add","answer":"the sweep may not call 'todo_add' — its verbs are context, recall, zoom, list_open_todos, todo_show, history, search, show, attachments, upload_read, briefing_delta, briefing, git_diff_summary, propose_changes, weather, calendar, decisions, drive_list, junk_digest, junk_show, repos_list, repo_tree, repo_read, repo_grep, triage_cards, add_topics, revise_topics","outcome":{"is":"refused"}}}
 {"line":"said","at":"2026-09-02T12:00:00.000010","turn":{"who":"model","text":"Done.","calls":[]}}
 # shown
-context recall zoom list_open_todos todo_show history search show attachments upload_read briefing_delta briefing git_diff_summary propose_changes weather calendar decisions drive_list junk_digest junk_show repos_list repo_tree repo_read repo_grep triage_cards add_topics
-context recall zoom list_open_todos todo_show history search show attachments upload_read briefing_delta briefing git_diff_summary propose_changes weather calendar decisions drive_list junk_digest junk_show repos_list repo_tree repo_read repo_grep triage_cards add_topics
+context recall zoom list_open_todos todo_show history search show attachments upload_read briefing_delta briefing git_diff_summary propose_changes weather calendar decisions drive_list junk_digest junk_show repos_list repo_tree repo_read repo_grep triage_cards add_topics revise_topics
+context recall zoom list_open_todos todo_show history search show attachments upload_read briefing_delta briefing git_diff_summary propose_changes weather calendar decisions drive_list junk_digest junk_show repos_list repo_tree repo_read repo_grep triage_cards add_topics revise_topics
 # asked
 [
     Conversation {
@@ -64,7 +64,7 @@ context recall zoom list_open_todos todo_show history search show attachments up
             },
             Tool {
                 verb: "todo_add",
-                answer: "the sweep may not call 'todo_add' — its verbs are context, recall, zoom, list_open_todos, todo_show, history, search, show, attachments, upload_read, briefing_delta, briefing, git_diff_summary, propose_changes, weather, calendar, decisions, drive_list, junk_digest, junk_show, repos_list, repo_tree, repo_read, repo_grep, triage_cards, add_topics",
+                answer: "the sweep may not call 'todo_add' — its verbs are context, recall, zoom, list_open_todos, todo_show, history, search, show, attachments, upload_read, briefing_delta, briefing, git_diff_summary, propose_changes, weather, calendar, decisions, drive_list, junk_digest, junk_show, repos_list, repo_tree, repo_read, repo_grep, triage_cards, add_topics, revise_topics",
                 outcome: Refused,
                 files: [],
             },

@@ -1039,7 +1039,7 @@ app.scene("a topic write the box refuses is said in words and leaves no chip", a
 });
 
 /**
- * THE TOPIC BAR (docs/TOPICS-PLAN-2026-10-21.md §6): two chips tapped show the rounds that carry both, the filter is
+ * THE TOPIC BAR (docs/TOPICS-PLAN-2026-10-21.md §0): two chips tapped show the rounds that carry both, the filter is
  * the address, so Back moves it, and a topic added to a round by tap is checked by the type before it is written and
  * reaches the box's topic store.
  */

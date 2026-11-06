@@ -94,7 +94,13 @@ impl Device {
         let topic = Topic::new(["travel", "work"][n % 2]).expect("a topic");
         if let Some(event) = suzatary_core::secretary::topics::reading::of(&nodes, &[])
             .expect("one genesis")
-            .add(&target, &topic, at(self.clock), &self.actor)
+            .add(
+                &target,
+                &topic,
+                at(self.clock),
+                &suzatary_core::secretary::topics::provenance::Owner::new(self.actor.clone())
+                    .expect("a device"),
+            )
         {
             self.store.append(event).expect("appended");
         }

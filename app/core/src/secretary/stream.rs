@@ -1,5 +1,5 @@
 //! Every conversation's live rounds as one stream, ordered by the instant of the turn that opened
-//! each, filtered by topics: what the secretary page draws (`docs/TOPICS-PLAN-2026-10-21.md` §6).
+//! each, filtered by topics: what the secretary page draws (`docs/TOPICS-PLAN-2026-10-21.md` §0).
 //!
 //! The rounds are chosen from the conversations' outlines and only then read: [`choose`] needs no
 //! word, and [`stream`] reads only the lines the outline names for each drawn round: its title,
@@ -240,7 +240,7 @@ pub fn row(
         )
     };
     let target = round.target();
-    let on = topics.tags(&target);
+    let on = topics.on(&target);
     wire::StreamRound {
         target: target.to_string(),
         conversation: round.conversation.as_str().to_owned(),
@@ -254,7 +254,13 @@ pub fn row(
             .find(|(_, said)| matches!(&said.turn, Turn::Model { text, .. } if !text.is_empty()))
             .map(drawn),
         room: MAX_TOPICS.saturating_sub(on.len()),
-        topics: on.into_iter().map(String::from).collect(),
+        topics: on
+            .into_iter()
+            .map(|(topic, by)| wire::RoundTopic {
+                topic: topic.into(),
+                by,
+            })
+            .collect(),
     }
 }
 

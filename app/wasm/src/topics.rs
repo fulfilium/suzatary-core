@@ -10,6 +10,7 @@ use prodrome_core::event::{Actor, canonical};
 use prodrome_core::fpl::datetime_of;
 use prodrome_core::literal::Datetime;
 use prodrome_wasm_exports::wire::parse_instant;
+use suzatary_core::secretary::topics::provenance::Owner;
 use suzatary_core::secretary::topics::reading::AliasEvent;
 use suzatary_core::secretary::topics::reading::MembershipEvent;
 use suzatary_core::secretary::topics::reading::Reading;
@@ -43,7 +44,8 @@ impl TopicReading {
         json(&suzatary_core::secretary::topics::reading::bar(&self.0))
     }
 
-    /// The `Added` event that puts `topic` on `target`, printed, or `undefined` where it is on.
+    /// The owner's `Added` event that puts `topic` on `target` or keeps the secretary's
+    /// suggestion of it, printed, or `undefined` where the owner set it already.
     pub fn add(
         &self,
         target: &str,
@@ -55,7 +57,7 @@ impl TopicReading {
             target_of(target)?,
             topic_of(topic)?,
             at_of(at)?,
-            actor_of(actor)?,
+            owner_of(actor)?,
         );
         Ok(self
             .0
@@ -75,7 +77,7 @@ impl TopicReading {
             target_of(target)?,
             topic_of(topic)?,
             at_of(at)?,
-            actor_of(actor)?,
+            owner_of(actor)?,
         );
         json(
             &self
@@ -89,7 +91,7 @@ impl TopicReading {
 
     /// The alias events that rename `from` to `to`, printed, as a JSON array.
     pub fn rename(&self, from: &str, to: &str, at: &str, actor: &str) -> Result<String, JsError> {
-        let (from, to, at, actor) = (topic_of(from)?, topic_of(to)?, at_of(at)?, actor_of(actor)?);
+        let (from, to, at, actor) = (topic_of(from)?, topic_of(to)?, at_of(at)?, owner_of(actor)?);
         json(
             &self
                 .0
@@ -129,6 +131,7 @@ fn at_of(text: &str) -> Result<Datetime, JsError> {
     datetime_of(at).map_err(|e| refused(format!("at: {e}")))
 }
 
-fn actor_of(text: &str) -> Result<Actor, JsError> {
-    Actor::new(text).map_err(|e| refused(format!("actor: {e}")))
+fn owner_of(text: &str) -> Result<Owner, JsError> {
+    let actor = Actor::new(text).map_err(|e| refused(format!("actor: {e}")))?;
+    Owner::new(actor).map_err(|e| refused(e.to_string()))
 }

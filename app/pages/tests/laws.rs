@@ -885,7 +885,7 @@ fn turn_row(index: usize) -> impl Strategy<Value = Value> {
 }
 
 fn stream_read() -> impl Strategy<Value = Value> {
-    proptest::collection::vec((turn_row(0), prop::sample::select(vec![json!([]), json!(["garden"]), json!(["garden", "trip"])]), any::<bool>()), 0..4).prop_map(|rs| {
+    proptest::collection::vec((turn_row(0), prop::sample::select(vec![json!([]), json!([{"topic": "garden", "by": "Owner"}]), json!([{"topic": "garden", "by": "Owner"}, {"topic": "trip", "by": "Inferred"}])]), any::<bool>()), 0..4).prop_map(|rs| {
         let rounds: Vec<Value> = rs
             .into_iter()
             .enumerate()
@@ -930,7 +930,8 @@ fn secretary_msg() -> impl Strategy<Value = secretary::Msg> {
         Just(secretary::Msg::Earlier),
         prop::sample::select(vec!["garden", "trip"]).prop_map(|t| secretary::Msg::Rename(t.to_owned())),
         Just(secretary::Msg::Add("round:c0/0".to_owned())),
-        Just(secretary::Msg::Remove("round:c0/0".to_owned(), "garden".to_owned())),
+        Just(secretary::Msg::Chip(suzatary_pages::runtime::TopicWrite::Remove { target: "round:c0/0".to_owned(), topic: "garden".to_owned() })),
+        Just(secretary::Msg::Chip(suzatary_pages::runtime::TopicWrite::Add { target: "round:c0/0".to_owned(), topic: "trip".to_owned() })),
         prop::sample::select(vec!["", "Trip", "trip", "garden"]).prop_map(|t| secretary::Msg::Typed(t.to_owned())),
         Just(secretary::Msg::Write("trip".to_owned())),
         Just(secretary::Msg::Submit),

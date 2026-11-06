@@ -1,13 +1,17 @@
 //! The topic stores as the Prodrome's tag sets (`prodrome_core::tags`, SPEC law 48): a
-//! [`Target`] carries [`Topic`]s. This module names the instantiation, reads the two stores, and
-//! reads what the secretary draws from them.
+//! [`Target`] carries [`Topic`]s. This module names the instantiation, reads the two stores with
+//! who set each topic, and reads what the secretary draws from them.
 
 use std::collections::{BTreeMap, BTreeSet};
 
+use prodrome_core::literal::Datetime;
 use prodrome_core::registers::{Node, Prodrome, fold};
 use prodrome_core::schema::Schema;
+use prodrome_core::tags::membership::{Pair, Presence};
 use prodrome_core::tags::{Tagging, alias, membership, set};
 
+use crate::secretary::topics::provenance::{Owner, Provenance};
+use crate::secretary::topics::standing::{Opening, Standing, Suggestion};
 use crate::secretary::topics::target::Target;
 use crate::secretary::topics::topic::Topic;
 
@@ -35,8 +39,155 @@ pub type AliasVocabulary = alias::AliasVocabulary<Topics>;
 pub type Alias = alias::Alias<Topics>;
 /// A place where concurrent renames disagree.
 pub type Dispute = set::Disagreement<Topics>;
-/// The topics on each target, read through their aliases.
-pub type Reading = set::TagSet<Topics>;
+
+/// The topics on each target, read through their aliases, with who set each.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct Reading {
+    pub(super) set: set::TagSet<Topics>,
+    /// Each membership's frontier: its presence, and the join of its writers of that presence.
+    sides: BTreeMap<Pair<Topics>, (Presence, Provenance)>,
+}
+
+impl Reading {
+    fn of(memberships: &Prodrome<MembershipEvent>, aliases: &Prodrome<AliasEvent>) -> Self {
+        let sides = super::frontier::writers(memberships)
+            .into_iter()
+            .filter_map(|(pair, (presence, actors))| {
+                let by = actors.iter().map(Provenance::of).max()?;
+                Some((pair, (presence, by)))
+            })
+            .collect();
+        Self {
+            set: set::TagSet::of(memberships, aliases),
+            sides,
+        }
+    }
+
+    /// Where `topic` stands on `target`, in the topic's current spelling.
+    #[must_use]
+    pub fn standing(&self, target: &Target, topic: &Topic) -> Standing<'_> {
+        let topic = self.set.spelling(topic);
+        let joined = self
+            .set
+            .names(&topic)
+            .into_iter()
+            .filter_map(|tag| {
+                self.sides.get(&Pair {
+                    target: target.clone(),
+                    tag,
+                })
+            })
+            .max();
+        let target = target.clone();
+        match joined {
+            Some((Presence::On, Provenance::Owner)) => Standing::Kept,
+            Some((Presence::On, Provenance::Inferred)) => Standing::Suggested(Suggestion {
+                reading: self,
+                target,
+                topic,
+            }),
+            Some((Presence::Off, Provenance::Owner)) => Standing::Declined,
+            Some((Presence::Off, Provenance::Inferred)) | None => Standing::Open(Opening {
+                target,
+                topic,
+                of: std::marker::PhantomData,
+            }),
+        }
+    }
+
+    /// The topics on `target`, each in its current spelling with who set it.
+    #[must_use]
+    pub fn on(&self, target: &Target) -> BTreeMap<Topic, Provenance> {
+        let mut on: BTreeMap<Topic, Provenance> = BTreeMap::new();
+        for (pair, (presence, by)) in &self.sides {
+            if pair.target == *target && *presence == Presence::On {
+                let held = on.entry(self.set.spelling(&pair.tag)).or_insert(*by);
+                *held = (*held).max(*by);
+            }
+        }
+        on
+    }
+
+    #[must_use]
+    pub fn spelling(&self, name: &Topic) -> Topic {
+        self.set.spelling(name)
+    }
+
+    #[must_use]
+    pub fn names(&self, name: &Topic) -> BTreeSet<Topic> {
+        self.set.names(name)
+    }
+
+    #[must_use]
+    pub fn tags(&self, target: &Target) -> BTreeSet<Topic> {
+        self.set.tags(target)
+    }
+
+    #[must_use]
+    pub fn memberships(&self) -> BTreeMap<Target, BTreeSet<Topic>> {
+        self.set.memberships()
+    }
+
+    #[must_use]
+    pub fn shows(&self, chosen: &BTreeSet<Topic>, target: &Target) -> bool {
+        self.set.shows(chosen, target)
+    }
+
+    #[must_use]
+    pub fn disagreements(&self) -> Vec<Dispute> {
+        self.set.disagreements()
+    }
+
+    /// The secretary's `Added` of `topic` on `target`, where the topic is [`Standing::Open`] there.
+    #[must_use]
+    pub fn suggestion(
+        &self,
+        target: &Target,
+        topic: &Topic,
+        at: Datetime,
+    ) -> Option<MembershipEvent> {
+        match self.standing(target, topic) {
+            Standing::Open(opening) => Some(opening.suggest(at)),
+            Standing::Kept | Standing::Suggested(_) | Standing::Declined => None,
+        }
+    }
+
+    /// The owner's `Added` of `topic` on `target`, or `None` where the owner set it already. On a
+    /// suggestion it is the keep: the owner's write makes the topic the owner's.
+    #[must_use]
+    pub fn add(
+        &self,
+        target: &Target,
+        topic: &Topic,
+        at: Datetime,
+        by: &Owner,
+    ) -> Option<MembershipEvent> {
+        match self.standing(target, topic) {
+            Standing::Kept => None,
+            Standing::Suggested(_) | Standing::Declined | Standing::Open(_) => Some(
+                membership::added(target.clone(), self.spelling(topic), at, by.actor().clone()),
+            ),
+        }
+    }
+
+    /// The owner's `Removed` of every name of `topic` on `target`.
+    #[must_use]
+    pub fn remove(
+        &self,
+        target: &Target,
+        topic: &Topic,
+        at: Datetime,
+        by: &Owner,
+    ) -> Vec<MembershipEvent> {
+        self.set.remove(target, topic, at, by.actor())
+    }
+
+    /// The owner's alias events that rename `from` to `to` on every target.
+    #[must_use]
+    pub fn rename(&self, from: &Topic, to: &Topic, at: Datetime, by: &Owner) -> Vec<AliasEvent> {
+        self.set.rename(from, to, at, by.actor())
+    }
+}
 
 /// A topic store that holds more than one prodrome. Each is begun by one genesis, and a reading
 /// of two would join writes that never saw each other's registers.

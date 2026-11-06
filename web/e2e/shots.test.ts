@@ -273,7 +273,7 @@ const SHOTS: readonly Shot[] = [
     hash: "#/usage",
     ready: `document.querySelector(".usagebody .usagewindow, .usagebody .empty, .usagepage .problem") !== null`,
   },
-  // The stream (`docs/TOPICS-PLAN-2026-10-21.md` §6) on the deployment that
+  // The stream (`docs/TOPICS-PLAN-2026-10-21.md` §0) on the deployment that
   // holds conversations, and the default conversation itself.
   {
     name: "secretary",

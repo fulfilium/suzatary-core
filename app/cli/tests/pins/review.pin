@@ -10,8 +10,8 @@
 {"line":"reviewed","at":"2026-09-02T12:00:00.000014","chain":"life","batch":"proposal:triage/2","decision":"held","why":"I withdrew the duplicate and left the rest for your tap."}
 {"line":"reviewed","at":"2026-09-02T12:00:00.000014","chain":"life","batch":"proposal:triage/0","decision":"held","why":"I withdrew the duplicate and left the rest for your tap."}
 # shown
-context recall zoom list_open_todos todo_show history search show attachments upload_read briefing_delta briefing git_diff_summary weather calendar decisions drive_list junk_digest junk_show repos_list repo_tree repo_read repo_grep triage_cards triage_withdraw add_topics
-context recall zoom list_open_todos todo_show history search show attachments upload_read briefing_delta briefing git_diff_summary weather calendar decisions drive_list junk_digest junk_show repos_list repo_tree repo_read repo_grep triage_cards triage_withdraw add_topics
+context recall zoom list_open_todos todo_show history search show attachments upload_read briefing_delta briefing git_diff_summary weather calendar decisions drive_list junk_digest junk_show repos_list repo_tree repo_read repo_grep triage_cards triage_withdraw add_topics revise_topics
+context recall zoom list_open_todos todo_show history search show attachments upload_read briefing_delta briefing git_diff_summary weather calendar decisions drive_list junk_digest junk_show repos_list repo_tree repo_read repo_grep triage_cards triage_withdraw add_topics revise_topics
 # asked
 [
     Conversation {

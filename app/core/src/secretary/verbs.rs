@@ -38,6 +38,7 @@ mod repo_grep;
 mod repo_read;
 mod repo_tree;
 mod repos_list;
+mod revise_topics;
 mod search;
 mod search_older;
 mod sync_mail;
@@ -51,6 +52,7 @@ mod withdraw_proposal;
 
 pub use add_topics::AddTopics;
 pub use attachments::Attachments;
+pub use revise_topics::ReviseTopics;
 
 /// The verbs the triage agent holds too, over the agent's part of the secretary's record.
 pub type GitDiffSummary = verbs::GitDiffSummary<SecretarySurface>;
@@ -515,7 +517,7 @@ mod tests {
                 let read_something = lines.iter().any(|entry| matches!(
                     entry,
                     Entry::Said { turn: Turn::Tool { verb, .. }, .. }
-                        if !matches!(verb.as_str(), "context" | "weather" | "remember" | "forget" | "consolidate" | "add_topics")
+                        if !matches!(verb.as_str(), "context" | "weather" | "remember" | "forget" | "consolidate" | "add_topics" | "revise_topics")
                 ));
                 if read_something {
                     prop_assert!(!matches!(gate(&round), Gate::Write(_)));

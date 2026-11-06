@@ -5840,6 +5840,7 @@ body:has(> .secretarypanel) .askrow {
 .topicrename,
 .act-earlier,
 .roundtopicoff,
+.roundtopickeep,
 .roundtopicadd {
   border: 0;
   background: none;
@@ -5953,7 +5954,15 @@ body:has(> .secretarypanel) .askrow {
   padding-right: 0.5rem;
 }
 
+/* The secretary's guess: an outline, not a fill, until the owner keeps it. */
+.roundtopic.suggested {
+  background: none;
+  box-shadow: inset 0 0 0 1px var(--rule);
+  font-style: italic;
+}
+
 .roundtopicoff,
+.roundtopickeep,
 .roundtopicadd {
   display: inline-flex;
   align-items: center;
@@ -5964,6 +5973,7 @@ body:has(> .secretarypanel) .askrow {
 }
 
 .roundtopicoff svg,
+.roundtopickeep svg,
 .roundtopicadd svg {
   width: 0.75rem;
   height: 0.75rem;

@@ -1300,4 +1300,16 @@ secretary add_topics [topics null] refused 400: topics: invalid type: null, expe
 secretary add_topics [topics mistyped] refused 400: topics: invalid type: string "x", expected a sequence
 secretary add_topics [chain unknown] refused 404: no chain named 'nowhere' — this deployment serves life
 secretary add_topics [chain mistyped] refused 400: chain must be a string or null
-secretary send [no such verb] refused 404: no verb named 'send' — the secretary's verbs are context, remember, forget, consolidate, recall, zoom, list_open_todos, todo_show, history, search, show, attachments, upload_read, sync_mail, search_older, watch_mail, briefing_delta, briefing, git_diff_summary, todo_add, todo_update, record, propose_email, propose_forward, propose_act, propose_changes, withdraw_proposal, weather, calendar, decisions, web, drive_list, drive_read, junk_digest, junk_show, repos_list, repo_tree, repo_read, repo_grep, propose_patch, propose_coding_session, propose_decision, draft_note, triage_cards, triage_withdraw, add_topics
+secretary revise_topics [valid] refused 400: name a topic to drop or to rename
+secretary revise_topics [drop given] refused 409: no question is being answered here
+secretary revise_topics [drop null] refused 400: name a topic to drop or to rename
+secretary revise_topics [drop mistyped] refused 400: drop: invalid type: string "x", expected a sequence
+secretary revise_topics [on given] refused 400: name a topic to drop or to rename
+secretary revise_topics [on null] refused 400: name a topic to drop or to rename
+secretary revise_topics [on mistyped] refused 400: name a topic to drop or to rename
+secretary revise_topics [rename given] refused 400: rename: invalid type: string "x", expected a sequence
+secretary revise_topics [rename null] refused 400: name a topic to drop or to rename
+secretary revise_topics [rename mistyped] refused 400: rename: invalid type: string "x", expected a sequence
+secretary revise_topics [chain unknown] refused 404: no chain named 'nowhere' — this deployment serves life
+secretary revise_topics [chain mistyped] refused 400: chain must be a string or null
+secretary send [no such verb] refused 404: no verb named 'send' — the secretary's verbs are context, remember, forget, consolidate, recall, zoom, list_open_todos, todo_show, history, search, show, attachments, upload_read, sync_mail, search_older, watch_mail, briefing_delta, briefing, git_diff_summary, todo_add, todo_update, record, propose_email, propose_forward, propose_act, propose_changes, withdraw_proposal, weather, calendar, decisions, web, drive_list, drive_read, junk_digest, junk_show, repos_list, repo_tree, repo_read, repo_grep, propose_patch, propose_coding_session, propose_decision, draft_note, triage_cards, triage_withdraw, add_topics, revise_topics

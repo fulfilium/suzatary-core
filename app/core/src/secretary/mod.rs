@@ -550,16 +550,10 @@ fn load(
             head.as_str()
         ))),
         // A round or a note is shown by its topics; its words are the conversation's.
-        Reference::Target(target) => {
-            let topics: Vec<String> = caps
-                .topics
-                .reading()?
-                .tags(target)
-                .iter()
-                .map(ToString::to_string)
-                .collect();
-            Ok(serde_json::json!({"target": target.to_string(), "topics": topics}))
-        }
+        Reference::Target(target) => Ok(crate::secretary::topics::revision::held(
+            &caps.topics.reading()?,
+            target,
+        )),
         Reference::Todo(_) | Reference::Mail { .. } | Reference::Thread { .. } => Err(
             Refusal::internal("a reference with a verb reached the store"),
         ),

@@ -14,8 +14,8 @@ use super::verbs::{
     DraftNote, DriveList, DriveRead, Forget, GitDiffSummary, History, JunkDigest, JunkShow,
     ListOpenTodos, ProposeAct, ProposeChanges, ProposeCodingSession, ProposeDecision, ProposeEmail,
     ProposeForward, ProposePatch, Recall, Record, Remember, RepoGrep, RepoRead, RepoTree,
-    ReposList, Search, SearchOlder, Show, SyncMail, TodoAdd, TodoShow, TodoUpdate, TriageCards,
-    TriageWithdraw, UploadRead, WatchMail, Weather, Web, WithdrawProposal, Zoom,
+    ReposList, ReviseTopics, Search, SearchOlder, Show, SyncMail, TodoAdd, TodoShow, TodoUpdate,
+    TriageCards, TriageWithdraw, UploadRead, WatchMail, Weather, Web, WithdrawProposal, Zoom,
 };
 use crate::agent::{Direct, Holds, Says};
 use crate::authoring::Writer;
@@ -249,9 +249,10 @@ verbs! {
     DraftNote: powers(Proposes, Tainted),
     TriageCards: powers(Reads, Tainted),
     TriageWithdraw: powers(Settles, Tainted),
-    // Writes the box-local topic store, no chain and no proposal; a topic it may create was
-    // written in a round with no words but the owner's, so its answer carries none but his.
+    // Write the box-local topic store, no chain and no proposal; a topic they may create was
+    // written in a round with no words but the owner's, so their answers carry none but his.
     AddTopics: powers(Reads, Clean),
+    ReviseTopics: powers(Reads, Clean),
 }
 
 /// Some of the verbs: the ones a round's model is shown and may call, and the refusal a call of

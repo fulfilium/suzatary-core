@@ -178,7 +178,6 @@ pub struct Carry {
 /// it reads on plans nothing, so running it again plans nothing.
 #[must_use]
 pub fn plan(conversations: &[Stored], map: &Map, reading: &Reading, at: Datetime) -> Carry {
-    let actor = crate::secretary::writes_as();
     let mut events = Vec::new();
     let carried = conversations
         .iter()
@@ -194,7 +193,7 @@ pub fn plan(conversations: &[Stored], map: &Map, reading: &Reading, at: Datetime
                 .flat_map(|target| {
                     chosen
                         .topics()
-                        .filter_map(|topic| reading.add(target, topic, at, &actor))
+                        .filter_map(|topic| reading.suggestion(target, topic, at))
                 })
                 .collect();
             let writes = planned.len();

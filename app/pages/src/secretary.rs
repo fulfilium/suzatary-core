@@ -3,9 +3,10 @@
 
 use chrono::NaiveDate;
 use serde::{Deserialize, Serialize};
+use suzatary_core::secretary::topics::provenance::Provenance;
 use suzatary_core::secretary::topics::topic::Topic;
 use suzatary_core::wire::{
-    RoundAsked, StreamPayload, StreamRound, TopicInUse, TopicsPayload, TurnRow,
+    RoundAsked, RoundTopic, StreamPayload, StreamRound, TopicInUse, TopicsPayload, TurnRow,
 };
 use ts_rs::TS;
 use viewtree::Attr::{
@@ -126,7 +127,8 @@ pub enum Msg {
     Earlier,
     Rename(String),
     Add(String),
-    Remove(String, String),
+    /// A chip's tap: a topic taken off, or a suggestion kept, which makes it the owner's.
+    Chip(TopicWrite),
     Typed(String),
     /// A topic the sheet offers, or the one typed.
     Write(String),
@@ -251,8 +253,8 @@ impl Program for Secretary {
                     field: "topic".to_owned(),
                 }]
             }
-            Msg::Remove(target, topic) => wrote(
-                TopicWrite::Remove { target, topic },
+            Msg::Chip(write) => wrote(
+                write,
                 Wrote {
                     renamed: None,
                     closes: false,
@@ -501,7 +503,7 @@ fn on(m: &Model) -> Vec<String> {
             .rounds
             .iter()
             .find(|r| r.target == *target)
-            .map(|r| r.topics.clone())
+            .map(|r| r.topics.iter().map(|t| t.topic.clone()).collect())
             .unwrap_or_default(),
         (Sheet::Adding { .. } | Sheet::Renaming { .. } | Sheet::Closed, _) => Vec::new(),
     }
@@ -663,14 +665,27 @@ fn round(m: &Model, r: &StreamRound, today: NaiveDate) -> Node<Msg> {
     let writes = writes(m);
     let topics = (!r.topics.is_empty() || writes).then(|| {
         view! { Div "roundtopics" [
-            r.topics.iter().map(|t| view! { Span "roundtopic" [
-                t.as_str(),
-                writes.then(|| view! { Button "roundtopicoff" {Type => "button", AriaLabel => format!("Take {t} off this round")} @click(Msg::Remove(r.target.clone(), t.clone())) [mark("cross")] }),
-            ] }).collect::<Vec<_>>(),
+            r.topics.iter().map(|t| topic_chip(&r.target, t, writes)).collect::<Vec<_>>(),
             (writes && r.room > 0).then(|| view! { Button "roundtopicadd" {Type => "button", AriaLabel => "Add a topic to this round"} @click(Msg::Add(r.target.clone())) [mark("plus"), r.topics.is_empty().then_some("Topic")] }),
         ] }
     });
     view! { Article "streamround" {Data("target") => &r.target} [head, answer, prompt, topics] }
+}
+
+/// The owner's topic is settled; the secretary's reads as a suggestion, kept with one tap.
+fn topic_chip(target: &str, t: &RoundTopic, writes: bool) -> Node<Msg> {
+    let name = &t.topic;
+    let off = || view! { Button "roundtopicoff" {Type => "button", AriaLabel => format!("Take {name} off this round")} @click(Msg::Chip(TopicWrite::Remove { target: target.to_owned(), topic: name.clone() })) [mark("cross")] };
+    match t.by {
+        Provenance::Owner => view! { Span "roundtopic" [name.as_str(), writes.then(off)] },
+        Provenance::Inferred => {
+            view! { Span "roundtopic suggested" {Title => "Suggested by the secretary"} [
+                name.as_str(),
+                writes.then(|| view! { Button "roundtopickeep" {Type => "button", AriaLabel => format!("Keep {name} on this round")} @click(Msg::Chip(TopicWrite::Add { target: target.to_owned(), topic: name.clone() })) [mark("check")] }),
+                writes.then(off),
+            ] }
+        }
+    }
 }
 
 fn sheet(m: &Model, bar: &[TopicInUse]) -> Option<Node<Msg>> {

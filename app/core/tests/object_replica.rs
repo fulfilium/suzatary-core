@@ -6,7 +6,7 @@
 
 use std::collections::BTreeSet;
 
-use prodrome_core::event::{Actor, Envelope, Hash, canonical_envelope, seal_hash};
+use prodrome_core::event::{Envelope, Hash, canonical_envelope, seal_hash};
 use prodrome_core::genesis::mk_genesis;
 use prodrome_core::literal::Datetime;
 use prodrome_core::store::{MemoryStore, Replica as _};
@@ -30,7 +30,6 @@ fn universe(n: u32) -> Vec<Object> {
     let aliases: MemoryStore<AliasEvent> = MemoryStore::default();
     begin(&memberships);
     begin(&aliases);
-    let actor = Actor::new("assistant").expect("an actor");
     for i in 0..n {
         let reading = read(&memberships, &aliases);
         let at = Datetime::new(2026, 11, 3, 9, i % 60, 0, 0).expect("an instant");
@@ -39,7 +38,7 @@ fn universe(n: u32) -> Vec<Object> {
             turn: usize::try_from(i).expect("small"),
         };
         let topic = Topic::new("travel").expect("a topic");
-        if let Some(event) = reading.add(&target, &topic, at, &actor) {
+        if let Some(event) = reading.suggestion(&target, &topic, at) {
             memberships.append(event).expect("appended");
         }
     }
