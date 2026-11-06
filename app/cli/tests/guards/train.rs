@@ -677,6 +677,45 @@ fn merge_trailer(t: &Train, n: u32, key: &str) -> String {
     ])
 }
 
+/// A PR's `Wasm-growth:` lines ride on its merge commit as trailers, each as written, where the
+/// wasm budget's guard reads them; a PR declaring none carries none.
+#[test]
+fn train_build_carries_a_pr_s_declared_wasm_growth_on_its_merge() {
+    let t = Train::new("wasm-growth");
+    t.pr(3, "grows the pages", &[("a.txt", "a\n")]);
+    std::fs::write(
+        t.scratch.join("prs/3.body"),
+        "The topic bar.\n\nWasm-growth: views_bg.wasm +19000: the topic bar's sheet\nWasm-growth: prodrome_bg.wasm +5000: held values\n",
+    )
+    .expect("a body");
+    t.pr(4, "beside", &[("c.txt", "c\n")]);
+    let out = t.train(&["build", "3", "4"]);
+    assert!(out.status.success(), "build: {}", text(&out.stderr));
+    let merge = |n: u32| {
+        t.git(&[
+            "log",
+            "--first-parent",
+            "--format=%B%x00",
+            "origin/master..train",
+        ])
+        .split('\0')
+        .find(|m| m.contains(&format!("Merge #{n}:")))
+        .unwrap_or_else(|| panic!("no merge of #{n}"))
+        .to_owned()
+    };
+    let grown = merge(3);
+    assert!(
+        grown.contains("Wasm-growth: views_bg.wasm +19000: the topic bar's sheet")
+            && grown.contains("Wasm-growth: prodrome_bg.wasm +5000: held values"),
+        "both lines, as written: {grown}"
+    );
+    assert!(
+        !merge(4).contains("Wasm-growth"),
+        "none declared: {}",
+        merge(4)
+    );
+}
+
 /// A stacked PR merges before the PR it carries, whatever their numbers: its merge brings the
 /// base's commits, the base is `in`, and the todos both complete ride on that merge, each once.
 /// The stack numbered upward and downward builds one tree, and so does a second build.

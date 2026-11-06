@@ -429,3 +429,8 @@ against the chain and skips a pull request that names a todo the chain does not 
 train lands, it marks each todo done and lists it first in the release's changelog section.
 Name only a todo that your change finishes. A pull request that only moves a todo forward has no
 `Completes:` line.
+
+A pull request that grows a shipped wasm module by more than 4,000 bytes brotli raises its line
+of `web/wasm-budget` (measured on the merged tree, for each Nix system) and says why on its own
+line of the description, which the train copies into the merge commit for the guard to read:
+`Wasm-growth: views_bg.wasm +19000: the topic sheet`.

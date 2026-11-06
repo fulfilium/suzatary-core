@@ -133,6 +133,21 @@ completes_of() {
   done <<<"$body"
 }
 
+# The `Wasm-growth:` lines of PR <n>'s description, their text after the key, one per line. The
+# merge carries them as trailers, where app/cli/tests/guards/wasm_budget.rs reads them.
+growth_of() {
+  local body line
+  body="$("$gh" pr view "$1" --json body --jq .body)" || return 1
+  while IFS= read -r line; do
+    line="${line%$'\r'}"
+    [[ "$line" =~ ^[[:space:]]*Wasm-growth:[[:space:]]*(.+)$ ]] || continue
+    echo "${BASH_REMATCH[1]}"
+  done <<<"$body"
+}
+
+# `Wasm-growth: <line>` for each of PR <n>'s lines, ready to follow its other trailers.
+grown() { sed '/^$/d; s/^/Wasm-growth: /' <<<"${growth_lines[$1]}"; }
+
 # Sets `app_bin`: SUZATARY_TRAIN_BIN, else the build of the named commit, never the checkout as
 # it happens to be, since this binary writes the chain. Each commit is built once per command.
 app_bin=""
@@ -245,7 +260,7 @@ build() {
   : >"$state/skipped"
   local rows=() prs meta title url head current said code unknown ids=() checker=""
   local ready=()
-  local -A head_of=() title_of=() url_of=() todos_of=() carrier_of=()
+  local -A head_of=() title_of=() url_of=() todos_of=() growth_lines=() carrier_of=()
   # `Completes:` todos are checked against the chain by master's binary.
   if git cat-file -e origin/master:app/core/releases.toml 2>/dev/null; then
     resolve_app origin/master
@@ -284,6 +299,11 @@ build() {
         ;;
     esac
     todos_of[$n]="$(paste -sd' ' <<<"$said")"
+    if ! growth_lines[$n]="$(growth_of "$n")"; then
+      rows+=("#$n|skipped|gh could not read its description")
+      echo "#$n gh could not read its description" >>"$state/skipped"
+      continue
+    fi
     read -r -a ids <<<"${todos_of[$n]}"
     if ((${#ids[@]})) && [[ -n "$checker" ]]; then
       code=0
@@ -334,7 +354,7 @@ build() {
     subject="${subject:0:72}"
     subject="${subject%"${subject##*[![:space:]]}"}"
     trailer=()
-    said="$(trailers Completes "$todos" Carries "${carried[*]}")"
+    said="$( (trailers Completes "$todos" Carries "${carried[*]}"; grown "$n") | sed '/^$/d')"
     [[ -z "$said" ]] || trailer=(-m "$said")
     said=""
     if ! git merge --quiet --no-ff -m "$subject" -m "${url_of[$n]}" "${trailer[@]}" "$head" >/dev/null 2>&1; then
@@ -347,7 +367,7 @@ build() {
       done
       if ((${#conflicts[@]})) && ((${#resolved[@]} == ${#conflicts[@]})) \
         && git commit --quiet -m "$subject" -m "${url_of[$n]}" \
-          -m "$(trailers Completes "$todos" Carries "${carried[*]}" Joined "${resolved[*]}" Mentions "${resolved[*]}")" \
+          -m "$( (trailers Completes "$todos" Carries "${carried[*]}" Joined "${resolved[*]}" Mentions "${resolved[*]}"; grown "$n") | sed '/^$/d')" \
           >/dev/null; then
         said=" (joined ${resolved[*]})"
       else
