@@ -1,0 +1,1 @@
+Change(genesis='66602cd0dec37d58d03eec9518ca805a7ac38ea912d2b0c366a0b67b4b9f50b6', deps=('25352463e21c8e3b6eedb975a4e92a6c538e773259e14b092a3ded48ebadd3d6',), event=Withdrawn(decision='staticsite', at=datetime(2026, 11, 4, 0, 0, 0), actor='owner', reason='The static site was deleted on 2026-11-04 with the chain and usage pages; the attestable history is read in the app.'))
