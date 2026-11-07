@@ -43,6 +43,7 @@ fn generates_the_pages_boundary_types() {
     d.visit::<suzatary_pages::needsyou::Hold>();
     d.visit::<suzatary_pages::needsyou::Route>();
     d.visit::<runtime::Scrolled>();
+    d.visit::<runtime::LocalAnswers>();
     d.visit::<message::At>();
     d.visit::<thread::At>();
     d.visit::<suzatary_pages::reading::Nothing>();

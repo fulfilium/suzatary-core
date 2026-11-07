@@ -558,6 +558,10 @@ fn todo_write() -> impl Strategy<Value = todo::Write> {
 }
 
 fn todo_answer() -> impl Strategy<Value = Input<todo::Hold, todo::Ask>> {
+    todo_asked().prop_map(|(ask, answer)| Input::Answered { ask, answer })
+}
+
+fn todo_asked() -> impl Strategy<Value = (todo::Ask, Answer)> {
     let printed = json!({"todo": "renewcard", "event": "Completed(...)", "revision": null});
     let taken = json!({"type": "Answered", "answer": {"type": "Taken"}, "held": false});
     let refused = Answer::Refused {
@@ -574,14 +578,12 @@ fn todo_answer() -> impl Strategy<Value = Input<todo::Hold, todo::Ask>> {
             ),
             _ => (todo::Ask::Undo, Value::Null),
         };
-        Input::Answered {
-            ask,
-            answer: if ok {
-                Answer::Done { body: done }
-            } else {
-                refused.clone()
-            },
-        }
+        let answer = if ok {
+            Answer::Done { body: done }
+        } else {
+            refused.clone()
+        };
+        (ask, answer)
     })
 }
 
@@ -795,6 +797,15 @@ fn list_host() -> impl Strategy<Value = todos::Msg> {
             ask: Listen::Keys,
             frame: k.to_string()
         })),
+        (prop::sample::select(vec!["a", "b"]), todo_asked()).prop_map(
+            move |(todo, (ask, answer))| host(Input::Answered {
+                ask: Ask::Pane {
+                    todo: todo.to_owned(),
+                    ask
+                },
+                answer
+            })
+        ),
         any::<bool>().prop_map(move |w| host(Input::Context(context(w)))),
     ]
 }
@@ -959,6 +970,29 @@ proptest! {
             chain: "life".to_owned(),
             now: 1_788_000_000_000,
         }, &msgs);
+    }
+
+    #[test]
+    fn a_pane_answer_never_acts_on_the_todo_shown_now(asked in proptest::collection::vec(todo_asked(), 1..6)) {
+        let route = |selected: &str| todos::Msg::Host(Box::new(Input::Held {
+            ask: todos::Hold::Route,
+            reading: Reading::Val { v: Answer::Done { body: json!({"page": "todos", "conversation": "", "selected": selected, "shared": ""}) } },
+            behind: None,
+        }));
+        let (mut page, _) = Runtime::<todos::Todos>::start(todos::Flags {
+            context: Context { wide: true, ..context(true) },
+            chain: "life".to_owned(),
+            now: 1_788_000_000_000,
+        });
+        page.send(route("shownnow"));
+        for (ask, answer) in asked {
+            let said = page.send(todos::Msg::Host(Box::new(Input::Answered {
+                ask: todos::Ask::Pane { todo: "askedfirst".to_owned(), ask },
+                answer,
+            })));
+            let effects = format!("{:?}", said.effects);
+            prop_assert!(!effects.contains("shownnow"), "{effects}");
+        }
     }
 
     #[test]
