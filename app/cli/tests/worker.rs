@@ -66,18 +66,6 @@ fn queued(answer: &mut ureq::http::Response<ureq::Body>, text: &str) -> bool {
         .any(|turn| turn["who"] == "person" && turn["text"] == text && turn["queued"] == true)
 }
 
-/// The conversation once the box says nobody is answering.
-fn settled(base: &str, id: &str) -> serde_json::Value {
-    for _ in 0..400 {
-        let payload = common::reading(base, id, &[]);
-        if payload["state"] == "idle" {
-            return payload;
-        }
-        std::thread::sleep(std::time::Duration::from_millis(25));
-    }
-    panic!("the exchange never finished");
-}
-
 /// Two `say`s during one turn produce one exchange, and both person lines are delivered.
 ///
 /// `wait_until_entered` blocks until the fake has registered the call, since a 202 says nothing
@@ -111,7 +99,7 @@ fn two_says_in_one_turn_are_one_exchange() {
     );
     gate.release();
 
-    let payload = settled(&base, &id);
+    let payload = common::settled(&base, &id);
     let turns = payload["turns"].as_array().expect("turns");
     assert_eq!(
         turns.len(),
@@ -170,7 +158,7 @@ fn a_say_past_max_pending_is_refused_before_it_is_appended() {
     );
 
     gate.release();
-    let payload = settled(&base, &id);
+    let payload = common::settled(&base, &id);
     let turns = payload["turns"].as_array().expect("turns");
     let persons = turns.iter().filter(|turn| turn["who"] == "person").count();
     assert_eq!(
@@ -195,7 +183,7 @@ fn an_idle_worker_drops_out_of_the_table() {
 
     let response = say(&base, &id, "hello");
     assert_eq!(common::status(&response), 202);
-    settled(&base, &id);
+    common::settled(&base, &id);
 
     let id = suzatary_core::secretary::store::ConversationId::new(id).expect("a slug");
     let mut gone = false;
@@ -229,7 +217,7 @@ fn a_restarted_box_refires_nothing_already_answered() {
         .base;
     let id = open(&base);
     assert_eq!(common::status(&say(&base, &id, "hello")), 202);
-    settled(&base, &id);
+    common::settled(&base, &id);
     assert_eq!(asks(&first.model), 1);
 
     let second = Arc::new(
@@ -247,7 +235,7 @@ fn a_restarted_box_refires_nothing_already_answered() {
     );
     assert_eq!(common::status(&renamed), 200);
     assert_eq!(common::status(&say(&base, &id, "and now?")), 202);
-    let payload = settled(&base, &id);
+    let payload = common::settled(&base, &id);
     assert_eq!(
         asks(&second.model),
         1,

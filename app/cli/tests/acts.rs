@@ -30,17 +30,12 @@ fn deployment() -> suzatary_core::deployment::Deployment {
 
 /// The conversation once the round the act started has answered.
 fn heard_the_model(base: &str) -> serde_json::Value {
-    for _ in 0..400 {
-        let payload = common::reading(base, "default", &[]);
-        let last = payload["turns"]
+    common::poll_conversation(base, "default", |payload| {
+        payload["turns"]
             .as_array()
-            .and_then(|turns| turns.last().cloned());
-        if last.is_some_and(|turn| turn["who"] == "model") {
-            return payload;
-        }
-        std::thread::sleep(std::time::Duration::from_millis(25));
-    }
-    panic!("the note never started a round the model answered");
+            .and_then(|turns| turns.last())
+            .is_some_and(|turn| turn["who"] == "model")
+    })
 }
 
 /// A note on an update lands on the event and wakes the secretary.
@@ -218,18 +213,12 @@ fn a_sealed_completed_event_with_no_note_appends_nothing() {
 
 /// The conversation once the model's last answer is `last`.
 fn answered(base: &str, last: &str) -> serde_json::Value {
-    for _ in 0..400 {
-        let payload = common::reading(base, "default", &[]);
-        if payload["turns"]
+    common::poll_conversation(base, "default", |payload| {
+        payload["turns"]
             .as_array()
             .and_then(|turns| turns.last())
             .is_some_and(|turn| turn["who"] == "model" && turn["text"] == last)
-        {
-            return payload;
-        }
-        std::thread::sleep(std::time::Duration::from_millis(25));
-    }
-    panic!("the round never ended with {last:?}");
+    })
 }
 
 /// What `remember` answered in the round an owner's note on `todo` started, the act line's stamp
@@ -399,18 +388,13 @@ fn an_edit_pointing_at_an_unconfirmed_agent_todo_is_stamped_so() {
         &serde_json::json!({"say": "this one"}),
     );
     assert_eq!(common::status(&say), 202);
-    for _ in 0..400 {
-        let payload = common::reading(&base, &id, &[]);
-        if payload["state"] == "idle"
+    common::poll_conversation(&base, &id, |payload| {
+        payload["state"] == "idle"
             && payload["turns"]
                 .as_array()
                 .and_then(|turns| turns.last())
                 .is_some_and(|turn| turn["who"] == "model")
-        {
-            break;
-        }
-        std::thread::sleep(std::time::Duration::from_millis(25));
-    }
+    });
     let edited = common::act(
         &format!("{base}/api/secretary/conversations/{id}/edit"),
         &serde_json::json!({

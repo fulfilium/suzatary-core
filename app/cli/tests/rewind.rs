@@ -4,7 +4,6 @@
 mod common;
 
 use std::sync::Arc;
-use std::time::Duration;
 
 use common::{FakeModel, Fakes};
 
@@ -39,17 +38,6 @@ fn post(base: &str, id: &str, verb: &str, body: &serde_json::Value) -> u16 {
         &format!("{base}/api/secretary/conversations/{id}/{verb}"),
         body,
     ))
-}
-
-fn settled(base: &str, id: &str) -> serde_json::Value {
-    for _ in 0..400 {
-        let payload = common::reading(base, id, &[]);
-        if payload["state"] == "idle" {
-            return payload;
-        }
-        std::thread::sleep(Duration::from_millis(25));
-    }
-    panic!("the exchange never finished");
 }
 
 /// Each turn as (who, text, set aside).
@@ -95,13 +83,13 @@ fn a_regenerate_and_an_edit_ask_again_over_the_live_path() {
         202
     );
     assert_eq!(
-        settled(&base, &id)["again"],
+        common::settled(&base, &id)["again"],
         0,
         "the box offers the question it would ask again"
     );
 
     assert_eq!(post(&base, &id, "regenerate", &serde_json::json!({})), 202);
-    let regenerated = settled(&base, &id);
+    let regenerated = common::settled(&base, &id);
     assert_eq!(
         shape(&regenerated),
         vec![
@@ -134,7 +122,7 @@ fn a_regenerate_and_an_edit_ask_again_over_the_live_path() {
         ),
         202
     );
-    let edited = settled(&base, &id);
+    let edited = common::settled(&base, &id);
     assert_eq!(
         shape(&edited),
         vec![
@@ -170,7 +158,7 @@ fn a_round_that_remembered_is_refused() {
         ),
         202
     );
-    settled(&base, &id);
+    common::settled(&base, &id);
     let mut refused = common::act(
         &format!("{base}/api/secretary/conversations/{id}/regenerate"),
         &serde_json::json!({}),
@@ -192,7 +180,7 @@ fn a_round_that_remembered_is_refused() {
         ),
         409
     );
-    let after = settled(&base, &id);
+    let after = common::settled(&base, &id);
     assert!(
         shape(&after).iter().all(|(_, _, aside)| !aside),
         "nothing was set aside"

@@ -42,18 +42,6 @@ fn say(base: &str, id: &str, text: &str) -> ureq::http::Response<ureq::Body> {
     )
 }
 
-/// The conversation once the box says nobody is answering.
-fn settled(base: &str, id: &str) -> serde_json::Value {
-    for _ in 0..400 {
-        let payload = common::reading(base, id, &[]);
-        if payload["state"] == "idle" {
-            return payload;
-        }
-        std::thread::sleep(std::time::Duration::from_millis(25));
-    }
-    panic!("the exchange never finished");
-}
-
 /// Poll for the push, not just for idle: the worker writes the final turn and only then pushes,
 /// so `idle` says nothing about the push having been sent. Bounded, so a round that never
 /// pushes fails rather than hangs.
@@ -79,7 +67,7 @@ fn no_subscriber_earns_one_push_naming_the_conversation() {
     let id = open(&base);
 
     assert_eq!(common::status(&say(&base, &id, "What changed?")), 202);
-    settled(&base, &id);
+    common::settled(&base, &id);
 
     let pushed = pushed(&fakes);
     assert_eq!(
@@ -121,7 +109,7 @@ fn a_connected_subscriber_gets_no_push_at_all() {
     let _held = response;
 
     assert_eq!(common::status(&say(&base, &id, "What changed?")), 202);
-    settled(&base, &id);
+    common::settled(&base, &id);
 
     assert_eq!(
         fakes.notify.pushed(),

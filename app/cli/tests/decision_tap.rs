@@ -12,17 +12,6 @@ fn ada() -> suzatary_core::capability::Login {
     common::login("ada@example.com")
 }
 
-fn settled(base: &str, id: &str) -> serde_json::Value {
-    for _ in 0..200 {
-        let payload = common::reading(base, id, &[]);
-        if payload["state"] == "idle" {
-            return payload;
-        }
-        std::thread::sleep(std::time::Duration::from_millis(25));
-    }
-    panic!("the round never finished");
-}
-
 #[test]
 fn a_proposed_decision_is_recorded_by_his_tap_alone() {
     let whois = common::FakeWhois::new().naming(common::v4(), ada());
@@ -54,12 +43,7 @@ fn a_proposed_decision_is_recorded_by_his_tap_alone() {
         .as_str()
         .expect("an id")
         .to_owned();
-    let say = common::act(
-        &format!("{base}/api/secretary/conversations/{id}/say"),
-        &serde_json::json!({"say": "record the plugins decision"}),
-    );
-    assert_eq!(common::status(&say), 202);
-    let payload = settled(&base, &id);
+    let payload = common::said(&base, &id, "record the plugins decision");
     let card = &payload["proposals"][0];
     assert_eq!(card["act"]["kind"], "decision", "{payload}");
     assert_eq!(card["act"]["body"], "A plugin is a *component*.");
@@ -74,7 +58,7 @@ fn a_proposed_decision_is_recorded_by_his_tap_alone() {
         &serde_json::json!({}),
     );
     assert_eq!(common::status(&tapped), 200);
-    let after = settled(&base, &id);
+    let after = common::settled(&base, &id);
     assert_eq!(after["proposals"][0]["state"], "acted", "{after}");
     let ledger = decisions.ledger().expect("reads");
     let recorded = ledger.get(&plugins).expect("recorded");

@@ -32,24 +32,8 @@ fn one_round(tag: &str, words: &str) -> (Arc<Fakes>, String, String) {
         .as_str()
         .expect("an id")
         .to_owned();
-    let say = common::act(
-        &format!("{base}/api/secretary/conversations/{id}/say"),
-        &serde_json::json!({"say": words}),
-    );
-    assert_eq!(common::status(&say), 202);
-    settled(&base, &id);
+    common::said(&base, &id, words);
     (fakes, base, id)
-}
-
-fn settled(base: &str, id: &str) -> serde_json::Value {
-    for _ in 0..200 {
-        let payload = common::reading(base, id, &[]);
-        if payload["state"] == "idle" {
-            return payload;
-        }
-        std::thread::sleep(std::time::Duration::from_millis(25));
-    }
-    panic!("the round never finished");
 }
 
 /// Whether any file under `root` holds `words`.

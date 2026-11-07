@@ -466,23 +466,6 @@ fn asked_of(served: &Box, act: Act) {
     asked(&served.fakes, act);
 }
 
-/// `text` said in the conversation `id`, read back once the secretary's round is over.
-fn said(base: &str, id: &str, text: &str) -> serde_json::Value {
-    let answer = common::act(
-        &format!("{base}/api/secretary/conversations/{id}/say"),
-        &serde_json::json!({ "say": text }),
-    );
-    assert_eq!(common::status(&answer), 202);
-    for _ in 0..200 {
-        let payload = common::reading(base, id, &[]);
-        if payload["state"] == "idle" {
-            return payload;
-        }
-        std::thread::sleep(std::time::Duration::from_millis(25));
-    }
-    panic!("the round never finished");
-}
-
 /// The secretary proposes against the names the instance declares now: a calendar's link is
 /// refused before its Connect is tapped and proposed once it is, with no restart between.
 #[test]
@@ -517,7 +500,7 @@ fn a_connect_tap_lets_the_secretary_ask_for_the_new_calendar_link() {
         .expect("an id")
         .to_owned();
 
-    let before = said(base, &id, "ask for the Work calendar's link");
+    let before = common::said(base, &id, "ask for the Work calendar's link");
     assert!(
         before["proposals"]
             .as_array()
@@ -530,7 +513,7 @@ fn a_connect_tap_lets_the_secretary_ask_for_the_new_calendar_link() {
     assert_eq!(status, 200, "{after}");
     assert_eq!(after["proposals"][0]["state"], "acted", "{after}");
 
-    let after = said(base, &id, "ask again");
+    let after = common::said(base, &id, "ask again");
     let proposals = after["proposals"].as_array().expect("proposals");
     assert_eq!(proposals.len(), 1, "{after}");
     assert_eq!(proposals[0]["act"]["kind"], "secret", "{after}");
@@ -1092,12 +1075,9 @@ fn a_new_microsoft_account_is_asked_for_its_sign_in() {
     // who tapped it in Settings reads them there.
     let card = &signing["proposals"][0]["announced"];
     assert_eq!(card.as_str(), Some(announced), "{signing}");
-    let granted = common::poll_conversation(
-        &served.base,
-        CONVERSATION.as_str(),
-        std::time::Duration::from_secs(10),
-        |body| body["proposals"][0]["state"] != "started",
-    );
+    let granted = common::poll_conversation(&served.base, CONVERSATION.as_str(), |body| {
+        body["proposals"][0]["state"] != "started"
+    });
     assert_eq!(
         granted["proposals"][0]["announced"],
         serde_json::Value::Null,
@@ -1193,7 +1173,7 @@ fn the_secretary_files_a_connect_card_and_the_tap_adds_the_calendar() {
         |server, _| server,
     );
     let id = topic(&served);
-    let payload = said(&served.base, &id, "add my Work calendar");
+    let payload = common::said(&served.base, &id, "add my Work calendar");
     let card = &payload["proposals"][0];
     assert_eq!(card["act"]["kind"], "connect", "{payload}");
     assert!(
@@ -1219,7 +1199,7 @@ fn the_secretary_files_a_connect_card_and_the_tap_adds_the_calendar() {
     );
 
     // A round of its own, since a round holding an earlier proposal's answer proposes none.
-    let again = said(&served.base, &topic(&served), "add my Work calendar again");
+    let again = common::said(&served.base, &topic(&served), "add my Work calendar again");
     let refused = proposing(&again);
     assert_eq!(refused["outcome"]["is"], "refused", "{refused}");
     assert!(
@@ -1252,7 +1232,7 @@ fn a_round_that_read_mail_proposes_no_connect_card() {
         |server, _| server,
     );
     let id = topic(&served);
-    let payload = said(&served.base, &id, "what did the calendar mail say?");
+    let payload = common::said(&served.base, &id, "what did the calendar mail say?");
     assert!(
         payload["proposals"]
             .as_array()

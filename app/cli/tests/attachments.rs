@@ -55,27 +55,7 @@ fn deployment() -> suzatary_core::deployment::Deployment {
 }
 
 fn exchange(base: &str, said: &str) -> serde_json::Value {
-    let mut opened = common::act(
-        &format!("{base}/api/secretary/conversations"),
-        &serde_json::json!({"title": "The offer letter"}),
-    );
-    let id = common::body_json(&mut opened)["id"]
-        .as_str()
-        .expect("an id")
-        .to_owned();
-    let said = common::act(
-        &format!("{base}/api/secretary/conversations/{id}/say"),
-        &serde_json::json!({ "say": said }),
-    );
-    assert_eq!(common::status(&said), 202);
-    for _ in 0..200 {
-        let payload = common::reading(base, &id, &[]);
-        if payload["state"] == "idle" {
-            return payload;
-        }
-        std::thread::sleep(std::time::Duration::from_millis(25));
-    }
-    panic!("the exchange never finished");
+    common::exchange(base, "The offer letter", said).1
 }
 
 /// Every `verb`-turn answer, in the order appended; two calls share a name, so the caller

@@ -2091,29 +2091,92 @@ impl suzatary_io::http::Http for ScriptedOauth {
     }
 }
 
-/// Poll conversation `id` until `until` holds of it.
+/// How long a test waits for the box to answer in a conversation: the longest the suite gave one
+/// exchange, for every wait on a round.
+pub const ROUND_WAIT: std::time::Duration = std::time::Duration::from_secs(10);
+
+/// Poll conversation `id` until `until` holds of it, for at most [`ROUND_WAIT`].
 ///
 /// An act's outcome and its turn are two writes, so `until` must cover
 /// everything the assertions read.
 ///
 /// # Panics
-/// If `until` does not hold within `timeout`.
-#[must_use]
+/// If `until` does not hold in time, naming the last reading's state, its last turn, and how
+/// long that reading held still, which tells a stalled round from a slow one.
 pub fn poll_conversation(
     base: &str,
     id: &str,
-    timeout: std::time::Duration,
     until: impl Fn(&serde_json::Value) -> bool,
 ) -> serde_json::Value {
-    let deadline = std::time::Instant::now() + timeout;
-    while std::time::Instant::now() < deadline {
+    let started = std::time::Instant::now();
+    let mut last = (serde_json::Value::Null, started);
+    while started.elapsed() < ROUND_WAIT {
         let body = reading(base, id, &[]);
         if until(&body) {
             return body;
         }
+        let moved = |read: &serde_json::Value| (read["state"].clone(), read["turns"].clone());
+        if moved(&body) != moved(&last.0) {
+            last = (body, std::time::Instant::now());
+        }
         std::thread::sleep(std::time::Duration::from_millis(20));
     }
-    panic!("conversation {id} never reached what the test waits for within {timeout:?}");
+    let (body, since) = last;
+    panic!(
+        "conversation {id} did not reach what the test waits for in {ROUND_WAIT:?}: it read \
+         state {} with {} turns, unchanged for the last {:?}, the last turn {}",
+        body["state"],
+        body["turns"].as_array().map_or(0, Vec::len),
+        since.elapsed(),
+        body["turns"]
+            .as_array()
+            .and_then(|turns| turns.last())
+            .unwrap_or(&serde_json::Value::Null),
+    );
+}
+
+/// Conversation `id` once its round has ended and it reads `idle`.
+pub fn settled(base: &str, id: &str) -> serde_json::Value {
+    poll_conversation(base, id, |read| read["state"] == "idle")
+}
+
+/// A new conversation, by its id.
+///
+/// # Panics
+/// If the box does not open it.
+#[must_use]
+pub fn opened(base: &str, title: &str) -> String {
+    let mut opened = act(
+        &format!("{base}/api/secretary/conversations"),
+        &serde_json::json!({ "title": title }),
+    );
+    assert_eq!(status(&opened), 200);
+    body_json(&mut opened)["id"]
+        .as_str()
+        .expect("an id")
+        .to_owned()
+}
+
+/// `text` said in conversation `id`, read once its round has ended.
+///
+/// # Panics
+/// If the box does not take the turn with 202, or the round does not end in time.
+pub fn said(base: &str, id: &str, text: &str) -> serde_json::Value {
+    let answer = act(
+        &format!("{base}/api/secretary/conversations/{id}/say"),
+        &serde_json::json!({ "say": text }),
+    );
+    assert_eq!(status(&answer), 202);
+    settled(base, id)
+}
+
+/// A conversation opened as `title` with `text` said in it, by its id and its reading once the
+/// round has ended.
+#[must_use]
+pub fn exchange(base: &str, title: &str, text: &str) -> (String, serde_json::Value) {
+    let id = opened(base, title);
+    let payload = said(base, &id, text);
+    (id, payload)
 }
 
 /// A 200 answer over JSON, for a `ScriptedOauth` script.

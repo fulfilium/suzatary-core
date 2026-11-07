@@ -44,18 +44,6 @@ fn say(base: &str, id: &str, text: &str) -> ureq::http::Response<ureq::Body> {
     )
 }
 
-/// The conversation once the box says nobody is answering.
-fn settled(base: &str, id: &str) -> serde_json::Value {
-    for _ in 0..400 {
-        let payload = common::reading(base, id, &[]);
-        if payload["state"] == "idle" {
-            return payload;
-        }
-        std::thread::sleep(Duration::from_millis(25));
-    }
-    panic!("the exchange never finished");
-}
-
 /// Subscribe synchronously: `.call()` returns once the headers arrive, which for
 /// `Sse::into_response()` is after `Workers::subscribe` ran, so a later `say` cannot race the
 /// subscription. The body is read on a background thread, over a channel.
@@ -148,7 +136,7 @@ fn a_connected_subscriber_sees_the_round_frame_by_frame() {
     );
 
     // And the folded payload agrees: `state` reads `idle` and neither person turn is `queued`.
-    let payload = settled(&base, &id);
+    let payload = common::settled(&base, &id);
     assert_eq!(payload["state"], "idle");
     let turns = payload["turns"].as_array().expect("turns");
     assert!(
@@ -174,7 +162,7 @@ fn a_late_subscriber_receives_the_accumulated_partial_first() {
     let id = open(&base);
 
     assert_eq!(common::status(&say(&base, &id, "first")), 202);
-    settled(&base, &id);
+    common::settled(&base, &id);
 
     assert_eq!(common::status(&say(&base, &id, "second")), 202);
     // The mid-stream gate holds after "Hel" is sent, so the partial is "Hel" and the round is
@@ -258,7 +246,7 @@ fn a_working_frame_broadcasts_before_a_verbs_own_turn() {
     );
 
     // And the folded payload agrees: the verb ran, and its answer is on the transcript.
-    let payload = settled(&base, &id);
+    let payload = common::settled(&base, &id);
     let turns = payload["turns"].as_array().expect("turns");
     assert!(
         turns
@@ -336,7 +324,7 @@ fn a_streaming_block_renders_by_its_sha() {
     );
     let id = open(&base);
     assert_eq!(common::status(&say(&base, &id, "first")), 202);
-    settled(&base, &id);
+    common::settled(&base, &id);
     assert_eq!(common::status(&say(&base, &id, "second")), 202);
     mid.wait_until_entered();
 
@@ -361,5 +349,5 @@ fn a_streaming_block_renders_by_its_sha() {
         404
     );
     mid.release();
-    settled(&base, &id);
+    common::settled(&base, &id);
 }

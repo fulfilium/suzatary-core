@@ -125,12 +125,7 @@ fn serving_as(tag: &str, model: Option<common::FakeModel>, sync: Sync) -> Servin
 
 /// The box's own conversation as it reads now.
 fn setup(base: &str) -> serde_json::Value {
-    common::poll_conversation(
-        base,
-        CONVERSATION.as_str(),
-        std::time::Duration::from_secs(5),
-        |_| true,
-    )
+    common::poll_conversation(base, CONVERSATION.as_str(), |_| true)
 }
 
 /// The index of the first card of `kind` in `conversation` that is `state`.
@@ -434,12 +429,9 @@ fn a_part_left_unticked_is_asked_for_alone() {
     };
     assert_eq!(kept(0).as_deref(), Some("mail 1//fake-refresh-1"));
 
-    let read = common::poll_conversation(
-        &serving.base,
-        CONVERSATION.as_str(),
-        std::time::Duration::from_secs(5),
-        |read| card(read, "google_sign_in", "standing").is_some(),
-    );
+    let read = common::poll_conversation(&serving.base, CONVERSATION.as_str(), |read| {
+        card(read, "google_sign_in", "standing").is_some()
+    });
     let first = card(&read, "google_sign_in", "acted").expect("the first sign-in ended");
     let outcome = read["proposals"][first]["outcome"]
         .as_str()
@@ -471,12 +463,9 @@ fn a_part_left_unticked_is_asked_for_alone() {
         Some("mail,calendar 1//fake-refresh-2"),
         "Google added the calendars to the grant the account holds"
     );
-    let read = common::poll_conversation(
-        &serving.base,
-        CONVERSATION.as_str(),
-        std::time::Duration::from_secs(5),
-        |read| card(read, "google_sign_in", "standing").is_none(),
-    );
+    let read = common::poll_conversation(&serving.base, CONVERSATION.as_str(), |read| {
+        card(read, "google_sign_in", "standing").is_none()
+    });
     assert_eq!(card(&read, "google_sign_in", "standing"), None, "{read}");
 }
 
@@ -807,16 +796,11 @@ fn an_event_is_written_only_by_its_tapped_card() {
         202,
         "the round goes on after the answer"
     );
-    let proposed = common::poll_conversation(
-        &serving.base,
-        &id,
-        std::time::Duration::from_secs(10),
-        |body| {
-            body["proposals"]
-                .as_array()
-                .is_some_and(|rows| !rows.is_empty())
-        },
-    );
+    let proposed = common::poll_conversation(&serving.base, &id, |body| {
+        body["proposals"]
+            .as_array()
+            .is_some_and(|rows| !rows.is_empty())
+    });
     assert_eq!(
         proposed["proposals"][0]["act"]["kind"], "calendar_event",
         "{proposed}"

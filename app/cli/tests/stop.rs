@@ -5,7 +5,6 @@
 mod common;
 
 use std::sync::Arc;
-use std::time::Duration;
 
 use common::{FakeModel, Fakes, Gate};
 
@@ -32,17 +31,6 @@ fn stop(base: &str, id: &str) -> ureq::http::Response<ureq::Body> {
     )
 }
 
-fn settled(base: &str, id: &str) -> serde_json::Value {
-    for _ in 0..400 {
-        let payload = common::reading(base, id, &[]);
-        if payload["state"] == "idle" {
-            return payload;
-        }
-        std::thread::sleep(Duration::from_millis(25));
-    }
-    panic!("the exchange never finished");
-}
-
 /// Nothing running is nothing to stop: a 409, and no halt left standing to
 /// stop the next question instead.
 #[test]
@@ -58,12 +46,7 @@ fn a_stop_with_no_round_running_is_refused_and_stops_nothing_later() {
     let id = open(&base);
     assert_eq!(common::status(&stop(&base, &id)), 409);
 
-    let said = common::act(
-        &format!("{base}/api/secretary/conversations/{id}/say"),
-        &serde_json::json!({"say": "still there?"}),
-    );
-    assert_eq!(common::status(&said), 202);
-    let payload = settled(&base, &id);
+    let payload = common::said(&base, &id, "still there?");
     let last = payload["turns"]
         .as_array()
         .and_then(|turns| turns.last())
@@ -137,7 +120,7 @@ fn a_stop_mid_round_ends_it_in_the_act() {
     assert_eq!(shape(&stopped), expected, "the stop's answer: {stopped}");
     assert_eq!(stopped["state"], "idle", "{stopped}");
 
-    let payload = settled(&base, &id);
+    let payload = common::settled(&base, &id);
     assert_eq!(shape(&payload), expected, "read again: {payload}");
     assert_eq!(
         common::status(&stop(&base, &id)),
@@ -201,12 +184,7 @@ fn a_stop_before_any_round_takes_the_question_closes_it() {
         "what was stopped is not stopped twice"
     );
 
-    let said = common::act(
-        &format!("{base}/api/secretary/conversations/{id}/say"),
-        &serde_json::json!({"say": "still there?"}),
-    );
-    assert_eq!(common::status(&said), 202);
-    let payload = settled(&base, &id);
+    let payload = common::said(&base, &id, "still there?");
     assert_eq!(
         payload["turns"]
             .as_array()

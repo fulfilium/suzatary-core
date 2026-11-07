@@ -30,32 +30,7 @@ fn read_call(path: &str) -> String {
 
 /// Open a conversation, say something, and wait until nobody is answering.
 fn exchange(base: &str, said: &str) -> (String, serde_json::Value) {
-    let mut opened = common::act(
-        &format!("{base}/api/secretary/conversations"),
-        &serde_json::json!({"title": "A document"}),
-    );
-    let id = common::body_json(&mut opened)["id"]
-        .as_str()
-        .expect("an id")
-        .to_owned();
-    let said = common::act(
-        &format!("{base}/api/secretary/conversations/{id}/say"),
-        &serde_json::json!({ "say": said }),
-    );
-    assert_eq!(common::status(&said), 202);
-    let payload = settled(base, &id);
-    (id, payload)
-}
-
-fn settled(base: &str, id: &str) -> serde_json::Value {
-    for _ in 0..200 {
-        let payload = common::reading(base, id, &[]);
-        if payload["state"] == "idle" {
-            return payload;
-        }
-        std::thread::sleep(std::time::Duration::from_millis(25));
-    }
-    panic!("the exchange never finished");
+    common::exchange(base, "A document", said)
 }
 
 /// Every answer of `verb`, with whether it was refused.
@@ -413,7 +388,7 @@ fn tapped(tag: &str, tap: &serde_json::Value) -> Tapped {
         tap,
     );
     let status = common::status(&response);
-    let payload = settled(&base, &id);
+    let payload = common::settled(&base, &id);
     Tapped {
         drive,
         edits,
@@ -545,7 +520,7 @@ fn a_tapped_document_s_number_reveals_and_sends_from_its_conversation() {
         &serde_json::json!({}),
     );
     assert_eq!(common::status(&tapped), 200);
-    settled(base, &id);
+    common::settled(base, &id);
 
     let mut revealed = common::act_signed(
         &format!("{base}/api/held/reveal"),
@@ -558,12 +533,7 @@ fn a_tapped_document_s_number_reveals_and_sends_from_its_conversation() {
         serde_json::json!({ "type": "Shown", "value": "123-45-6789" })
     );
 
-    let said = common::act(
-        &format!("{base}/api/secretary/conversations/{id}/say"),
-        &serde_json::json!({ "say": "send counsel my SSN" }),
-    );
-    assert_eq!(common::status(&said), 202);
-    let payload = settled(base, &id);
+    let payload = common::said(base, &id, "send counsel my SSN");
     let email = payload["proposals"]
         .as_array()
         .and_then(|rows| rows.iter().position(|row| row["act"]["kind"] == "email"))
@@ -633,7 +603,7 @@ fn a_tapped_private_file_is_proposed_without_a_read_and_sent_on_the_tap() {
         &serde_json::json!({}),
     );
     assert_eq!(common::status(&tapped), 200);
-    settled(base, &id);
+    common::settled(base, &id);
     let downloads = || {
         drive
             .calls()
@@ -644,12 +614,7 @@ fn a_tapped_private_file_is_proposed_without_a_read_and_sent_on_the_tap() {
     let read_on_tap = downloads();
     assert_eq!(read_on_tap, 1, "{:?}", drive.calls());
 
-    let said = common::act(
-        &format!("{base}/api/secretary/conversations/{id}/say"),
-        &serde_json::json!({ "say": "send counsel my W-2" }),
-    );
-    assert_eq!(common::status(&said), 202);
-    let payload = settled(base, &id);
+    let payload = common::said(base, &id, "send counsel my W-2");
     assert_eq!(
         downloads(),
         read_on_tap,

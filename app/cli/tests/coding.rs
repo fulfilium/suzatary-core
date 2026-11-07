@@ -144,19 +144,8 @@ fn proposed_in(base: &str, opening: &serde_json::Value) -> (String, serde_json::
         .as_str()
         .expect("an id")
         .to_owned();
-    let said = common::act(
-        &format!("{base}/api/secretary/conversations/{id}/say"),
-        &serde_json::json!({ "say": "retitle my cv properly" }),
-    );
-    assert_eq!(common::status(&said), 202);
-    for _ in 0..200 {
-        let payload = conversation(base, &id);
-        if payload["state"] == "idle" {
-            return (id, payload);
-        }
-        std::thread::sleep(std::time::Duration::from_millis(25));
-    }
-    panic!("the exchange never finished");
+    let payload = common::said(base, &id, "retitle my cv properly");
+    (id, payload)
 }
 
 fn conversation(base: &str, id: &str) -> serde_json::Value {

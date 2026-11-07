@@ -81,7 +81,7 @@ fn exchange(base: &str, said: &str) -> serde_json::Value {
     );
     assert_eq!(common::status(&said), 202, "a model turn answers 202");
 
-    let payload = settled(base, &id);
+    let payload = common::settled(base, &id);
     assert!(
         !payload["proposals"]
             .as_array()
@@ -90,18 +90,6 @@ fn exchange(base: &str, said: &str) -> serde_json::Value {
         "the exchange proposed nothing: {payload:?}"
     );
     payload
-}
-
-/// The conversation once the box says nobody is answering, polled on the derived `state`.
-fn settled(base: &str, id: &str) -> serde_json::Value {
-    for _ in 0..200 {
-        let payload = common::reading(base, id, &[]);
-        if payload["state"] == "idle" {
-            return payload;
-        }
-        std::thread::sleep(std::time::Duration::from_millis(25));
-    }
-    panic!("the exchange never finished");
 }
 
 /// A question names the turns its asker saw, so asking it again after its answer was lost is the
@@ -133,7 +121,7 @@ fn a_question_asked_twice_is_asked_once() {
             &serde_json::json!({"say": "yes", "after": after}),
         );
         assert_eq!(common::status(&response), 202);
-        settled(&base, &id)
+        common::settled(&base, &id)
     };
     assert_eq!(say(0)["total"], 2, "the question and its answer");
     assert_eq!(
@@ -233,13 +221,7 @@ fn a_proposal_without_a_why_or_a_source_is_refused_to_the_model() {
     );
     let opened = common::body_json(&mut opened);
     let id = opened["id"].as_str().expect("an id").to_owned();
-    let said = common::act(
-        &format!("{base}/api/secretary/conversations/{id}/say"),
-        &serde_json::json!({"say": "propose the harrow reply"}),
-    );
-    assert_eq!(common::status(&said), 202);
-
-    let payload = settled(&base, &id);
+    let payload = common::said(&base, &id, "propose the harrow reply");
     assert!(
         payload["proposals"]
             .as_array()
@@ -446,13 +428,7 @@ fn an_undeclared_secret_name_is_refused_and_nothing_is_stored() {
     );
     let opened = common::body_json(&mut opened);
     let id = opened["id"].as_str().expect("an id").to_owned();
-    let said = common::act(
-        &format!("{base}/api/secretary/conversations/{id}/say"),
-        &serde_json::json!({"say": "set GITHUB_PAT"}),
-    );
-    assert_eq!(common::status(&said), 202);
-
-    let payload = settled(&base, &id);
+    let payload = common::said(&base, &id, "set GITHUB_PAT");
     assert!(
         payload["proposals"]
             .as_array()
@@ -637,7 +613,7 @@ fn a_tap_with_no_note_asks_the_model_nothing() {
         panic!("the worker never went idle");
     };
     idle();
-    let before = settled(&base, &id)["turns"]
+    let before = common::settled(&base, &id)["turns"]
         .as_array()
         .expect("turns")
         .len();
@@ -646,19 +622,14 @@ fn a_tap_with_no_note_asks_the_model_nothing() {
     assert_eq!(common::status(&tapped), 200);
     assert_eq!(sent.sent().len(), 1);
     idle();
-    let quiet = settled(&base, &id);
+    let quiet = common::settled(&base, &id);
     assert_eq!(
         quiet["turns"].as_array().expect("turns").len(),
         before,
         "no round ran: {quiet:?}"
     );
 
-    let said = common::act(
-        &format!("{base}/api/secretary/conversations/{id}/say"),
-        &serde_json::json!({"say": "send it to Mira too"}),
-    );
-    assert_eq!(common::status(&said), 202);
-    let after = settled(&base, &id);
+    let after = common::said(&base, &id, "send it to Mira too");
     let turns = after["turns"].as_array().expect("turns");
     assert_eq!(
         turns.len(),
@@ -821,13 +792,7 @@ fn a_changeset_with_one_bad_act_stores_and_appends_nothing() {
     );
     let opened = common::body_json(&mut opened);
     let id = opened["id"].as_str().expect("an id").to_owned();
-    let said = common::act(
-        &format!("{base}/api/secretary/conversations/{id}/say"),
-        &serde_json::json!({"say": "add secretarychangetest2, twice"}),
-    );
-    assert_eq!(common::status(&said), 202);
-
-    let payload = settled(&base, &id);
+    let payload = common::said(&base, &id, "add secretarychangetest2, twice");
     assert!(
         payload["proposals"]
             .as_array()
@@ -937,7 +902,7 @@ fn a_turn_carries_what_it_points_at_and_the_box_loads_it() {
         }),
     );
     assert_eq!(common::status(&said), 202);
-    let payload = settled(&base, &id);
+    let payload = common::settled(&base, &id);
 
     let turns = payload["turns"].as_array().expect("turns");
     assert_eq!(turns[0]["who"], "person");
@@ -1050,12 +1015,7 @@ fn a_broken_answer_is_its_source_block_by_block() {
         .as_str()
         .expect("an id")
         .to_owned();
-    let said = common::act(
-        &format!("{base}/api/secretary/conversations/{id}/say"),
-        &serde_json::json!({"say": "say something broken"}),
-    );
-    assert_eq!(common::status(&said), 202);
-    let payload = settled(&base, &id);
+    let payload = common::said(&base, &id, "say something broken");
     let turns = payload["turns"].as_array().expect("turns");
     let model_turn = turns
         .iter()
@@ -1301,7 +1261,7 @@ fn a_tap_on_a_real_act_announces_the_code_and_then_the_grant() {
     );
 
     let before = act_turns(turns);
-    let acted = common::poll_conversation(&base, &id, std::time::Duration::from_secs(5), |body| {
+    let acted = common::poll_conversation(&base, &id, |body| {
         body["proposals"][0]["state"] == "acted"
             && body["turns"]
                 .as_array()
@@ -1421,12 +1381,7 @@ fn revises_leaves_exactly_one_waiting() {
         .expect("an id")
         .to_owned();
 
-    let first = common::act(
-        &format!("{base}/api/secretary/conversations/{id}/say"),
-        &serde_json::json!({"say": "propose the harrow reply"}),
-    );
-    assert_eq!(common::status(&first), 202);
-    let after_first = settled(&base, &id);
+    let after_first = common::said(&base, &id, "propose the harrow reply");
     assert_eq!(
         after_first["proposals"]
             .as_array()
@@ -1435,12 +1390,7 @@ fn revises_leaves_exactly_one_waiting() {
         1
     );
 
-    let second = common::act(
-        &format!("{base}/api/secretary/conversations/{id}/say"),
-        &serde_json::json!({"say": "fix the subject and resend"}),
-    );
-    assert_eq!(common::status(&second), 202);
-    let after_second = settled(&base, &id);
+    let after_second = common::said(&base, &id, "fix the subject and resend");
     let proposals = after_second["proposals"].as_array().expect("proposals");
     assert_eq!(proposals.len(), 2, "{proposals:?}");
     assert_eq!(
@@ -1487,12 +1437,7 @@ fn withdraw_leaves_none_waiting() {
     let payload = exchange(&base, "propose the harrow reply");
     let id = payload["id"].as_str().expect("an id").to_owned();
 
-    let said = common::act(
-        &format!("{base}/api/secretary/conversations/{id}/say"),
-        &serde_json::json!({"say": "he called counsel himself, withdraw the draft"}),
-    );
-    assert_eq!(common::status(&said), 202);
-    let after = settled(&base, &id);
+    let after = common::said(&base, &id, "he called counsel himself, withdraw the draft");
     let proposals = after["proposals"].as_array().expect("proposals");
     assert_eq!(
         proposals.len(),
@@ -1964,7 +1909,7 @@ fn sending(base: &str, id: &str, say: &str, files: &[(&str, &str)]) -> serde_jso
         }),
     );
     assert_eq!(common::status(&said), 202);
-    settled(base, id)
+    common::settled(base, id)
 }
 
 /// A new conversation's id.

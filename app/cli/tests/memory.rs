@@ -42,18 +42,7 @@ fn said(base: &str, words: &str) -> (String, serde_json::Value) {
         &serde_json::json!({"say": words}),
     );
     assert_eq!(common::status(&say), 202);
-    (id.clone(), settled(base, &id))
-}
-
-fn settled(base: &str, id: &str) -> serde_json::Value {
-    for _ in 0..200 {
-        let payload = common::reading(base, id, &[]);
-        if payload["state"] == "idle" {
-            return payload;
-        }
-        std::thread::sleep(std::time::Duration::from_millis(25));
-    }
-    panic!("the round never finished");
+    (id.clone(), common::settled(base, &id))
 }
 
 fn verb_turn<'a>(payload: &'a serde_json::Value, verb: &str) -> &'a serde_json::Value {
@@ -135,7 +124,7 @@ fn his_clean_round_remembers_at_once() {
         400,
         "a fact is named by its number, parsed at the route"
     );
-    let after = settled(&base, &id);
+    let after = common::settled(&base, &id);
     assert_eq!(
         verb_turn(&after, "remember")["outcome"]["receipt"],
         serde_json::json!({"state": "forgotten", "fact": 1}),
@@ -296,7 +285,7 @@ fn a_forgotten_facts_words_are_left_nowhere() {
     assert_eq!(common::status(&forgot), 200);
 
     erased_by_forgetting(&fakes, &id, words);
-    let drawn = settled(&base, &id);
+    let drawn = common::settled(&base, &id);
     assert_eq!(
         verb_turn(&drawn, "remember")["outcome"]["receipt"],
         serde_json::json!({"state": "forgotten", "fact": 1}),
@@ -321,7 +310,7 @@ fn a_forgotten_facts_words_are_left_nowhere() {
         &serde_json::json!({}),
     );
     assert_eq!(common::status(&tapped), 200);
-    let after = settled(&base, &id);
+    let after = common::settled(&base, &id);
     assert_eq!(
         after["turns"][0]["text"], "[Ada erased these words]",
         "{after}"
@@ -383,7 +372,7 @@ fn forgetting_a_consolidation_leaves_its_sources_words_nowhere() {
     );
     assert_eq!(said["round"]["conversation"], third.as_str());
     assert_eq!(
-        verb_turn(&settled(&base, &first), "remember")["outcome"]["receipt"],
+        verb_turn(&common::settled(&base, &first), "remember")["outcome"]["receipt"],
         serde_json::json!({"state": "merged", "fact": 1, "into": 3}),
     );
     for words in [one, two] {
@@ -445,7 +434,7 @@ fn a_round_that_read_mail_stores_a_card_his_tap_writes() {
         &serde_json::json!({}),
     );
     assert_eq!(common::status(&tapped), 200);
-    let after = settled(&base, &id);
+    let after = common::settled(&base, &id);
     assert_eq!(after["proposals"][0]["state"], "acted", "{after}");
     assert_eq!(after["proposals"][0]["outcome"], "remembered as fact 1");
     let texts: Vec<String> = holding(&fakes.root, "Mira is her accountant")
@@ -574,7 +563,7 @@ fn a_cards_words_are_left_only_in_the_models_call_once_dismissed_or_forgotten() 
     );
     assert_eq!(common::status(&dismissed), 200);
     only_the_call(&fakes, &id, words);
-    gone(&settled(&base, &id));
+    gone(&common::settled(&base, &id));
     let listed = serde_json::Value::from(common::inbox_listing(&base, "2026-10-03T12:00:00"));
     assert!(
         listed
@@ -597,5 +586,5 @@ fn a_cards_words_are_left_only_in_the_models_call_once_dismissed_or_forgotten() 
     );
     assert_eq!(common::status(&forgot), 200);
     erased_by_forgetting(&fakes, &id, words);
-    gone(&settled(&base, &id));
+    gone(&common::settled(&base, &id));
 }

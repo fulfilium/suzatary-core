@@ -92,31 +92,19 @@ fn proposed(instance: &Instance) -> ConversationId {
     let base = common::Server::new(Arc::new(fakes), deployment, Vec::new())
         .start()
         .base;
-    let mut opened = common::act(
-        &format!("{base}/api/secretary/conversations"),
-        &serde_json::json!({"title": "Morning"}),
-    );
-    let id = common::body_json(&mut opened)["id"]
-        .as_str()
-        .expect("an id")
-        .to_owned();
+    let id = common::opened(&base, "Morning");
     let said = common::act(
         &format!("{base}/api/secretary/conversations/{id}/say"),
         &serde_json::json!({"say": "draft the reply to counsel"}),
     );
     assert_eq!(common::status(&said), 202);
-    for _ in 0..200 {
-        let payload = common::reading(&base, &id, &[]);
-        if payload["state"] == "idle"
+    common::poll_conversation(&base, &id, |payload| {
+        payload["state"] == "idle"
             && payload["proposals"]
                 .as_array()
                 .is_some_and(|p| !p.is_empty())
-        {
-            return ConversationId::new(id).expect("the id the box minted");
-        }
-        std::thread::sleep(std::time::Duration::from_millis(25));
-    }
-    panic!("the round never proposed");
+    });
+    ConversationId::new(id).expect("the id the box minted")
 }
 
 /// The CLI's own `dismiss` answers the proposal in the Inbox, as the route

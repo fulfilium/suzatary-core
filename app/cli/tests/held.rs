@@ -175,18 +175,6 @@ fn proposing() -> FakeModel {
     ])
 }
 
-/// The conversation once nobody is answering.
-fn settled(base: &str, id: &str) -> serde_json::Value {
-    for _ in 0..200 {
-        let payload = common::reading(base, id, &[]);
-        if payload["state"] == "idle" {
-            return payload;
-        }
-        std::thread::sleep(std::time::Duration::from_millis(50));
-    }
-    panic!("the conversation never settled");
-}
-
 #[test]
 fn a_held_value_reaches_only_the_wire_and_only_on_the_owners_tap() {
     let login = common::login("ada@example.com");
@@ -217,12 +205,7 @@ fn a_held_value_reaches_only_the_wire_and_only_on_the_owners_tap() {
         .as_str()
         .expect("an id")
         .to_owned();
-    let said = common::act(
-        &format!("{base}/api/secretary/conversations/{id}/say"),
-        &serde_json::json!({"say": "draft the filing reply"}),
-    );
-    assert_eq!(common::status(&said), 202);
-    let proposed = settled(base, &id);
+    let proposed = common::said(base, &id, "draft the filing reply");
     let proposals = proposed["proposals"].as_array().expect("proposals");
     assert_eq!(
         proposals.len(),
@@ -280,7 +263,7 @@ fn a_held_value_reaches_only_the_wire_and_only_on_the_owners_tap() {
     ] {
         assert!(!holds(&dir, SSN), "{} holds the value", dir.display());
     }
-    assert!(!settled(base, &id).to_string().contains(SSN));
+    assert!(!common::settled(base, &id).to_string().contains(SSN));
 }
 
 /// A PDF that names the SSN in its text layer, which the box therefore holds back; the marker
@@ -408,12 +391,7 @@ fn conversation(base: &str, said: &str) -> String {
         .as_str()
         .expect("an id")
         .to_owned();
-    let answered = common::act(
-        &format!("{base}/api/secretary/conversations/{id}/say"),
-        &serde_json::json!({ "say": said }),
-    );
-    assert_eq!(common::status(&answered), 202);
-    settled(base, &id);
+    common::said(base, &id, said);
     id
 }
 
@@ -555,7 +533,7 @@ fn a_held_file_reaches_only_the_wire_and_only_on_the_owners_tap() {
     let (fakes, running) = serving_files("held-file-send", proposing_the_file());
     let base = &running.base;
     let id = conversation(base, "send counsel my W-2");
-    let proposed = settled(base, &id);
+    let proposed = common::settled(base, &id);
     let proposals = proposed["proposals"].as_array().expect("proposals");
     assert_eq!(
         proposals.len(),
@@ -599,7 +577,7 @@ fn a_held_file_reaches_only_the_wire_and_only_on_the_owners_tap() {
             assert!(!holds(&dir, kept), "{} holds {kept}", dir.display());
         }
     }
-    let reading = settled(base, &id).to_string();
+    let reading = common::settled(base, &id).to_string();
     assert!(
         !reading.contains(SSN) && !reading.contains(W2_BYTES),
         "{reading}"

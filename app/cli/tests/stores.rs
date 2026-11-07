@@ -35,26 +35,7 @@ fn writing(tag: &str) -> String {
 
 /// A conversation with one round answered and one proposal standing.
 fn answered(base: &str) -> String {
-    let mut opened = common::act(
-        &format!("{base}/api/secretary/conversations"),
-        &serde_json::json!({"title": "The deed"}),
-    );
-    let id = common::body_json(&mut opened)["id"]
-        .as_str()
-        .expect("an id")
-        .to_owned();
-    let said = common::act(
-        &format!("{base}/api/secretary/conversations/{id}/say"),
-        &serde_json::json!({"say": "write to counsel"}),
-    );
-    assert_eq!(common::status(&said), 202);
-    for _ in 0..200 {
-        if common::reading(base, &id, &[])["state"] == "idle" {
-            return id;
-        }
-        std::thread::sleep(std::time::Duration::from_millis(25));
-    }
-    panic!("the round never finished");
+    common::exchange(base, "The deed", "write to counsel").0
 }
 
 fn objects(base: &str, store: &str, since: &str) -> serde_json::Value {

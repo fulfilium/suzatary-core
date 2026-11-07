@@ -29,32 +29,7 @@ fn web_call(url: &str) -> String {
 
 /// Open a conversation, say something, and wait until nobody is answering.
 fn exchange(base: &str, said: &str) -> (String, serde_json::Value) {
-    let mut opened = common::act(
-        &format!("{base}/api/secretary/conversations"),
-        &serde_json::json!({"title": "The web"}),
-    );
-    let id = common::body_json(&mut opened)["id"]
-        .as_str()
-        .expect("an id")
-        .to_owned();
-    let said = common::act(
-        &format!("{base}/api/secretary/conversations/{id}/say"),
-        &serde_json::json!({ "say": said }),
-    );
-    assert_eq!(common::status(&said), 202);
-    let payload = settled(base, &id);
-    (id, payload)
-}
-
-fn settled(base: &str, id: &str) -> serde_json::Value {
-    for _ in 0..200 {
-        let payload = common::reading(base, id, &[]);
-        if payload["state"] == "idle" {
-            return payload;
-        }
-        std::thread::sleep(std::time::Duration::from_millis(25));
-    }
-    panic!("the exchange never finished");
+    common::exchange(base, "The web", said)
 }
 
 fn web_answers(payload: &serde_json::Value) -> Vec<String> {
@@ -225,7 +200,7 @@ fn a_tapped_request_puts_the_page_in_the_conversation() {
         &serde_json::json!({}),
     );
     assert_eq!(common::status(&tapped), 200);
-    let payload = settled(&base, &id);
+    let payload = common::settled(&base, &id);
     let answers = web_answers(&payload);
     assert!(
         answers
@@ -272,7 +247,7 @@ fn always_allow_writes_the_drafted_rule_and_reads_the_page() {
         ["*.example.com"],
         "the rule the card offered, and only it"
     );
-    let payload = settled(&base, &id);
+    let payload = common::settled(&base, &id);
     assert!(
         web_answers(&payload)
             .iter()
@@ -314,7 +289,7 @@ fn always_is_refused_where_no_rule_was_offered() {
     assert!(edits.allowed().is_empty());
     // The verb's own "asked" answer is a `web` turn too; what must be absent is a page.
     assert!(
-        !web_answers(&settled(&base, &id))
+        !web_answers(&common::settled(&base, &id))
             .iter()
             .any(|text| text.contains("the fixture's page for")),
         "no page was read"

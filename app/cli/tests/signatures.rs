@@ -743,14 +743,7 @@ impl Replaying {
     }
 
     fn settled(&self, id: &str) -> serde_json::Value {
-        for _ in 0..400 {
-            let payload = common::reading(&self.running.base, id, &[]);
-            if payload["state"] == "idle" {
-                return payload;
-            }
-            std::thread::sleep(std::time::Duration::from_millis(25));
-        }
-        panic!("the round never finished");
+        common::settled(&self.running.base, id)
     }
 }
 
