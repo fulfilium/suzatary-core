@@ -41,7 +41,6 @@ export namespace linesync {
     readonly engine: replicasync.Store
     // `read` once every line `scope` reads is held; the scope is asked again after each fetch.
     readonly over: <A>(scope: () => lines.Scope, read: () => A) => Promise<A>
-    // Whether the lines hold any line of `id`.
     readonly holds: (id: string) => boolean
     // Whether a page is shown: a prefetch waits while none is, and a page hidden may be closed, so the log is compacted.
     readonly shown: (on: boolean) => Promise<void>
@@ -72,9 +71,7 @@ export namespace linesync {
     const told = (why: string | null): void => fx.told(`row/${KEPT}`, replicasync.unread(NAME, why))
     const moved = (said: string): void => fx.moved(movedOf(said))
 
-    // Whether a page is shown; none is until one says so.
     let shown = false
-    // The content, fetched by name and held by the core as it comes.
     const fetcher = content.fetcher({
       ask: hashes => storereads.content("lines", hashes),
       asked: bytes => fx.bars({ type: "Asked", name: "lines", bytes }),
@@ -185,7 +182,6 @@ export namespace linesync {
       clearTimeout(quiet)
       quiet = setTimeout(() => void compact(), QUIET_MS)
     }
-    // A move the core answered, kept on the device as its frame.
     const append = async (bytes: Uint8Array): Promise<void> => {
       if (!idb.available()) return
       const at = await log.append(bytes)
@@ -344,6 +340,7 @@ export namespace linesync {
       try {
         for (;;) {
           const need = lackingIn(held, scope())
+          phases.mark(`lines ${lane} scoped`)
           if (need.length === 0) {
             const answer = read()
             purgeSoon()

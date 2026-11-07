@@ -6,6 +6,7 @@ import type { ContentPayload, SkeletonNode } from "../wire/generated/wire"
 import idb from "../app/idb"
 import lo from "../algebra/lo"
 import { CONTENT } from "./objects"
+import phases from "./phases"
 import { sha256Hex } from "./verify"
 
 export namespace content {
@@ -211,7 +212,9 @@ export namespace content {
       const names = nodes.map(n => n.hash)
       try {
         const found = await stored(lane, names)
+        phases.mark(`content ${lane} read`)
         await take(fx, found.rows)
+        phases.mark(`content ${lane} held`)
         settle(found.present, { type: "Came" })
       } catch (e: unknown) {
         settle(names, { type: "Failed", e })

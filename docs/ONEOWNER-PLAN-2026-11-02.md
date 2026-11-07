@@ -816,6 +816,39 @@ three warm loads after the snapshot is written; the target is under 2.5 s).
    with each such line read from its node as erased. *Measure:* the capped warm first draw (target under 2.5
    s), the stream's answer time, the snapshot's size with 32-byte names, and
    lines removed (most of `noderows.ts` for the lines, `linesync.telling`).
+
+   *Measured at 2.1.83* (`bigstore`, `SUZATARY_E2E_BROWSER_CPU=0.67`, the
+   wasm without `wasm-opt`, three warm loads a run). A warm load reads no node
+   row (version 11 dropped them; `linesync`'s restore reads the snapshot and
+   the log) and the tab keeps no copy of the skeleton's rows. The two timings
+   are missed:
+
+   | | first draw | the stream answered, from asked |
+   |---|---|---|
+   | alone | 3.30, 3.46, 4.10 s | 1.59, 1.89, 2.19 s |
+   | in a four-shard run | 3.46, 3.56, 4.00 s | 1.80, 1.99, 2.10 s |
+   | 2.1.81, alone | 3.49, 3.51, 4.09 s | 1.89, 1.89, 1.98 s |
+
+   2.1.81 (before the Rust pages) reads the same, so the gap with 3a's 1.98 s
+   is this machine and build, not a regression. Marks inside the worker, from
+   the stream asked: the four stores' log reads end by 0.11 to 0.20 s; the
+   lines' `Lines.load` takes 0.63 to 0.80 s more (the topics wait behind it and
+   take 10 ms); reading the stream's prints takes 0.55 to 0.66 s; reading the
+   stream, 0.03 to 0.09 s. The page then draws 1.0 to 1.4 s after the answer.
+
+   The prints' 0.55 to 0.66 s, split by the worker's marks at 2.1.84 (`lines
+   First scoped`, `content First read`, `content First held`; 21 loads in seven runs): the core's
+   scope of the stream, 0.18 to 0.28 s after the stores are restored (three
+   loads); then the content's one transaction, 0.09 to 0.50 s; the core's
+   open of what it read, 3 to 7 ms. Inside the transaction its first request
+   (`getAllKeys` over the range the names span, nearly the whole store) took
+   0.18 to 0.40 s, and a `count` in its place 0.23 to 0.30 s; the reads by
+   name after it 13 to 90 ms. The wait is not IndexedDB's: a zero-delay timer
+   set as the transaction begins fires 0.29 s late, within 2 ms of the
+   worker answering the inbox's `Proposals`, which the page asks after its
+   stream and the worker answers while the stream waits on the read, holding
+   the worker 0.21 to 0.29 s. So the core dominates: its scope of the
+   stream and the inbox's reading answered in the stream's wait.
 4. **The inbox and the topics into the same form.** Their replicas become
    instances of the generic replica in the core; `objectsync.ts` and the rest of
    `noderows.ts` go, with `storeset.readOf`'s rebuilds (C5 becomes a reading).
