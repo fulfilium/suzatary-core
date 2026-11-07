@@ -9,13 +9,11 @@
 //! ([`Admitted`]). So the matcher decodes nothing. A file it cannot read as words ([`Opaque`]) is
 //! a hit until it is admitted, and what an admitted file encodes is the admitting person's to see.
 //!
-//! Text is read as words ([`Words`]): compatibility-decomposed, lowercased, its accents and
-//! Unicode's format characters dropped, and every run of whitespace one space, a line break and
-//! the comment marker opening the next line included. A term of the data repository's lists, or
-//! a name of this deployment, leaks where it stands as a whole word of that text, at the line it
-//! starts on. Outside [`Scope::Lists`], so does a line holding a path of the private history
-//! beside a docs reference, a home path other than the cast's, a `.ts.net` name that is no
-//! placeholder, an email address outside the reserved example domains, a tailnet node's address
+//! Text is read as words ([`Words`], over [`fold`]), every run of whitespace one space. A term of
+//! the lists, or a name of this deployment, leaks where it stands as a whole word, at the line it
+//! starts on. Outside [`Scope::Lists`], so does a line, as written or `spelled`, holding a path
+//! of the private history beside a docs reference, a home path other than the cast's, a `.ts.net`
+//! name that is no placeholder, an address outside the reserved domains, a tailnet node's address
 //! or a telephone number.
 
 use std::collections::{BTreeMap, BTreeSet};
@@ -116,7 +114,11 @@ impl Matcher {
         }
         if self.scope == Scope::Whole {
             for (at, line) in text.lines().enumerate() {
-                if let Some(layer) = self.says(line) {
+                if let Some(layer) = [self.says(line), self.says(&spelled(line))]
+                    .into_iter()
+                    .flatten()
+                    .min()
+                {
                     hit(at + 1, layer);
                 }
             }
@@ -205,12 +207,15 @@ impl Words {
 /// Arabic's tatweel, a stretch of the line between letters that is no letter itself.
 const TATWEEL: char = '\u{0640}';
 
-/// One character as the matcher reads it: compatibility-decomposed (so `ﬁ` is `fi` and a
-/// full-width letter its ASCII one), lowercased, with every combining mark (so `Zoë` is `zoe`)
-/// and every format character, Unicode's `Cf` (a zero-width space, a soft hyphen, a joiner,
-/// shown as nothing) and the tatweel, dropped. A term and a text are folded alike.
+/// `spelled`, lowercased: a term and a text are folded alike.
 #[must_use]
 pub fn fold(text: &str) -> String {
+    spelled(text).to_lowercase()
+}
+
+/// Text with its spelling undone, case kept: compatibility-decomposed (a full-width letter is its
+/// ASCII one), with every combining mark, format character (`Cf`) and the tatweel dropped.
+fn spelled(text: &str) -> String {
     use unicode_general_category::{GeneralCategory, get_general_category};
     use unicode_normalization::UnicodeNormalization as _;
     use unicode_normalization::char::is_combining_mark;
@@ -220,8 +225,7 @@ pub fn fold(text: &str) -> String {
                 && get_general_category(*c) != GeneralCategory::Format
                 && *c != TATWEEL
         })
-        .collect::<String>()
-        .to_lowercase()
+        .collect()
 }
 
 /// Why the matcher cannot vouch for a file by reading it, judged over the WHOLE file, so no way
@@ -841,7 +845,7 @@ mod tests {
     }
 
     /// Each hit names its layer, the least where a line breaks two rules, and never what it
-    /// matched.
+    /// matched, however the line is spelled.
     #[test]
     fn a_hit_names_its_layer() {
         let all = matcher(Scope::Whole);
@@ -858,6 +862,15 @@ mod tests {
                 concat!("zzperson at zz@realm", ".example-mail.com"),
                 Layer::Term,
             ),
+            (concat!("/ho\u{200B}", "me/zzother/x"), Layer::Home),
+            (concat!("/\u{FF35}sers/", "zzother/x"), Layer::Home),
+            (concat!("peer.zznet\u{200B}", ".ts.net"), Layer::Tailnet),
+            (
+                concat!("zz\u{FF20}realm", ".example-mail.com"),
+                Layer::Address,
+            ),
+            (concat!("100.101\u{AD}", ".102.103"), Layer::Node),
+            (concat!("(\u{FF14}15) 867", "-5309"), Layer::Phone),
         ] {
             assert_eq!(all.hits(text), BTreeMap::from([(1, layer)]), "{text}");
         }
