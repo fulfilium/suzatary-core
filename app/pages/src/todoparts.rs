@@ -1,6 +1,4 @@
-//! What every page says of a todo, the same in the list, the todo's page and its pane: the acts a
-//! todo offers and their words, its title as words, its number as a pie or words, and the chips a
-//! header or a line draws.
+//! What every page says of a todo: its acts, its title, its number and its chips.
 
 use serde::{Deserialize, Serialize};
 use suzatary_core::wire::{Authored, Block, Entry, EntryState, Fulfillment};
@@ -104,8 +102,7 @@ pub(crate) fn finish(e: &Entry) -> Verb {
     if e.recurring { Verb::Tend } else { Verb::Done }
 }
 
-/// Which acts apply, in the order offered. Confirm rides along whenever the box says unconfirmed,
-/// since the roster lives there; the one over-offer is answered by the box.
+/// Which acts apply, in the order offered.
 #[must_use]
 pub(crate) fn applicable(e: &Entry) -> Vec<Verb> {
     let mut acts = if is_open(e) {
@@ -218,9 +215,7 @@ pub(crate) fn chips<M>(e: &Entry) -> Node<M> {
     ] }
 }
 
-/// Markup a trusted actor wrote, placed as the Typst block the box renders under `key` (its
-/// source shown until the HTML is held); a field with no key, as an untrusted one is given, is
-/// its source, set as text.
+/// A trusted actor's markup as the box's block under `key`; with no key, its source as text.
 #[must_use]
 pub(crate) fn markup<M>(class: &str, key: Option<&str>, source: &str) -> Node<M> {
     match key {
@@ -243,7 +238,14 @@ pub enum Acting {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize, TS)]
 pub enum Phase {
     Printed,
-    Sealed,
+    Sealed(Seal),
+}
+
+/// A printed act's own event, or the parent's revision a subtodo carries after it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize, TS)]
+pub enum Seal {
+    Event,
+    Parent,
 }
 
 /// What an answer to an act comes to.
@@ -272,7 +274,7 @@ pub(crate) fn begin<H, A, S>(
     match acting {
         Acting::Verb(verb) => match verb.spelled() {
             Spelled::Here(kind) => Effect::Act {
-                ask: ask(Phase::Sealed),
+                ask: ask(Phase::Sealed(Seal::Event)),
                 act: crate::runtime::Act::Lifecycle {
                     chain: chain.to_owned(),
                     todo: todo.to_owned(),
@@ -294,9 +296,7 @@ pub(crate) fn begin<H, A, S>(
     }
 }
 
-/// What an answer in `phase` comes to: what the box printed is sealed, each seal answered as
-/// `ask` names the sealed phase.
-pub(crate) fn came<H, A: Clone, S>(
+pub(crate) fn came<H, A, S>(
     chain: &str,
     phase: Phase,
     answer: crate::runtime::Answer,
@@ -304,12 +304,18 @@ pub(crate) fn came<H, A: Clone, S>(
 ) -> Came<H, A, S> {
     use crate::runtime::{Outcome, Said, answered};
     match phase {
-        Phase::Printed => match crate::authoring::sealed(&ask(Phase::Sealed), chain, answer) {
-            Ok((_, seals)) => Came::Seals(seals),
-            Err(words) => Came::Refused(words),
-        },
-        Phase::Sealed => match answered::<Outcome>(answer) {
+        Phase::Printed => {
+            match crate::authoring::sealed(chain, answer, |_, seal| ask(Phase::Sealed(seal))) {
+                Ok((_, seals)) => Came::Seals(seals),
+                Err(words) => Came::Refused(words),
+            }
+        }
+        Phase::Sealed(seal) => match answered::<Outcome>(answer) {
             Ok(Outcome::Already) => Came::Already,
+            Ok(Outcome::Answered {
+                answer: Said::Taken,
+                ..
+            }) if seal == Seal::Parent => Came::Already,
             Ok(Outcome::Answered {
                 answer: Said::Taken,
                 ..
@@ -323,8 +329,7 @@ pub(crate) fn came<H, A: Clone, S>(
     }
 }
 
-/// What a page says once an act is taken: an act that can be undone offers its Undo, answered
-/// as `undo`; any other says what was done; an undo or a redo says nothing.
+/// An act that can be undone offers its Undo as `undo`; an undo or a redo says nothing.
 pub(crate) fn said<H, A, S>(acting: Acting, undo: A) -> Vec<Effect<H, A, S>> {
     match acting {
         Acting::Verb(v) if v.undoable() => vec![Effect::Offer {

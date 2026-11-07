@@ -39,8 +39,13 @@ pub enum Hold {
 #[serde(tag = "type")]
 #[ts(rename = "MailAsk")]
 pub enum Ask {
-    More,
-    Cancel { id: String },
+    /// After the row `after` keys, which must still be the last when the answer lands.
+    More {
+        after: String,
+    },
+    Cancel {
+        id: String,
+    },
 }
 
 /// `Ended`: the last page came back short.
@@ -102,7 +107,15 @@ fn question<'a>(f: &'a Flags, before: &'a str) -> Question<'a> {
     }
 }
 
+fn key(r: &MailRow) -> String {
+    format!("{}/{}", r.id, r.container)
+}
+
 impl Model {
+    fn last(&self) -> String {
+        self.shown().last().map(key).unwrap_or_default()
+    }
+
     fn shown(&self) -> impl Iterator<Item = &MailRow> {
         let first = match &self.first.reading {
             Reading::Val { v } => v.messages.as_slice(),
@@ -166,7 +179,7 @@ impl Program for Mail {
                         d.map_or_else(String::new, suzatary_core::capability::Datetime::isoformat)
                     });
                 vec![Effect::Get {
-                    ask: Ask::More,
+                    ask: Ask::More { after: m.last() },
                     path: question(&m.flags, &before).path(),
                 }]
             }
@@ -257,7 +270,11 @@ fn answer(m: &mut Model, input: Input<Hold, Ask>) -> Vec<Effect<Hold, Ask>> {
         }
         Input::Heard { ask, .. } | Input::Opened { ask } => match ask {},
         Input::Answered {
-            ask: Ask::More,
+            ask: Ask::More { after },
+            ..
+        } if after != m.last() => {}
+        Input::Answered {
+            ask: Ask::More { .. },
             answer,
         } => match answered::<InboxPayload>(answer) {
             Ok(page) => {
@@ -316,8 +333,7 @@ fn row(m: &Model, r: &MailRow) -> Node<Msg> {
     ] }
 }
 
-// From the box's roster, not the rows received: a filter offering only what is shown cannot find
-// what is not.
+// From the box's roster, so a filter can find what is not shown.
 fn accounts(m: &Model, accounts: &[String]) -> Node<Msg> {
     let link = |value: &str, label: &str| {
         let on = value == m.flags.account;
@@ -357,7 +373,7 @@ fn listing(m: &Model, first: &InboxPayload, watches: &[MailWatch]) -> Vec<Node<M
             "No message in the local corpus matches that query."
         })] }
     } else {
-        view! { Div "maillist" => shown.iter().map(|r| (format!("{}/{}", r.id, r.container), row(m, r))) }
+        view! { Div "maillist" => shown.iter().map(|r| (key(r), row(m, r))) }
     };
     let failed = match &m.more {
         More::Failed(e) => Some(para("problem", e.as_str())),

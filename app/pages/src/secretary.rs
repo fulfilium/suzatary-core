@@ -1,5 +1,4 @@
-//! The secretary: every conversation's rounds as one stream, filtered to the rounds carrying
-//! every topic the address holds. A topic is checked by the core's rule as it is typed.
+//! The secretary: every conversation's rounds as one stream, filtered by the address's topics.
 
 use chrono::NaiveDate;
 use serde::{Deserialize, Serialize};
@@ -57,13 +56,31 @@ pub enum Ask {
     Slice,
 }
 
-/// A rename of a topic the filter held follows it to its new name.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize, TS)]
 pub struct Wrote {
-    /// The filter's topic renamed, and its new name, where it was one.
     pub renamed: Option<(String, String)>,
-    /// Whether the sheet closes when the box takes it.
-    pub closes: bool,
+    pub closes: Closes,
+}
+
+/// The sheet a write came from, closed when it is taken only if it still stands.
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize, TS)]
+#[serde(tag = "type")]
+pub enum Closes {
+    Nothing,
+    Renaming { topic: String },
+    Adding { target: String },
+}
+
+impl Closes {
+    fn stands(&self, sheet: &Sheet) -> bool {
+        match (self, sheet) {
+            (Closes::Renaming { topic: a }, Sheet::Renaming { topic: b, .. })
+            | (Closes::Adding { target: a }, Sheet::Adding { target: b, .. }) => a == b,
+            (Closes::Nothing, Sheet::Closed | Sheet::Renaming { .. } | Sheet::Adding { .. })
+            | (Closes::Renaming { .. }, Sheet::Closed | Sheet::Adding { .. })
+            | (Closes::Adding { .. }, Sheet::Closed | Sheet::Renaming { .. }) => false,
+        }
+    }
 }
 
 pub(crate) type Effect = runtime::Effect<Hold, Ask>;
@@ -257,7 +274,7 @@ impl Program for Secretary {
                 write,
                 Wrote {
                     renamed: None,
-                    closes: false,
+                    closes: Closes::Nothing,
                 },
             ),
             Msg::Typed(words) => {
@@ -324,18 +341,24 @@ fn update_write(m: &mut Model, topic: String) -> Vec<Effect> {
                 .contains(&from)
                 .then(|| (from.clone(), topic.clone()));
             wrote(
-                TopicWrite::Rename { from, to: topic },
+                TopicWrite::Rename {
+                    from: from.clone(),
+                    to: topic,
+                },
                 Wrote {
                     renamed,
-                    closes: true,
+                    closes: Closes::Renaming { topic: from },
                 },
             )
         }
         Sheet::Adding { target, .. } => wrote(
-            TopicWrite::Add { target, topic },
+            TopicWrite::Add {
+                target: target.clone(),
+                topic,
+            },
             Wrote {
                 renamed: None,
-                closes: true,
+                closes: Closes::Adding { target },
             },
         ),
     }
@@ -357,8 +380,6 @@ fn host(m: &mut Model, input: Input) -> Vec<Effect> {
             let Reading::Val { .. } = m.stream else {
                 return Vec::new();
             };
-            // A new filter opens at its newest round, Earlier keeps the reader's place, and a
-            // reader at the end stays there.
             let now = (m.chosen.clone(), m.pages);
             let to = match &m.drawn {
                 None => Some(Scroll::End),
@@ -367,8 +388,6 @@ fn host(m: &mut Model, input: Input) -> Vec<Effect> {
                 Some((_, pages)) if *pages < m.pages => Some(Scroll::Keep),
                 Some(_) => None,
             };
-            // A new filter's rounds are drawn a slice at a time, newest first, and the box moved
-            // once they all are; a page Earlier adds is drawn with it.
             let first = m
                 .drawn
                 .as_ref()
@@ -456,7 +475,7 @@ fn topic_answered(m: &mut Model, w: &Wrote, a: Answer) -> Vec<Effect> {
             answer: Said::Taken,
             ..
         }) => {
-            if w.closes {
+            if w.closes.stands(&m.sheet) {
                 m.sheet = Sheet::Closed;
             }
             match &w.renamed {

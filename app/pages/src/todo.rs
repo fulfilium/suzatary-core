@@ -1,8 +1,4 @@
-//! One todo as a page: the pushed screen on a phone, and the pane beside the list on a wide one.
-//! What it says (its head, its detail, why its number), what can be done about it (its acts, its
-//! edit, a deferral, its checklist), what else it says (who wrote it, concurrent writes, what the
-//! box refused of this tab, what is proposed), its thirty days, and its history. Every write is an
-//! event the box prints or the tab's core spells, sealed onto the chain's replica.
+//! One todo as a page: pushed on a phone, a pane beside the list on a wide screen.
 
 use std::collections::BTreeSet;
 
@@ -32,7 +28,7 @@ use crate::runtime::{
     Answer, Body, Context, Core, Effect, Gate, Held, Input, Local, answered, read,
 };
 use crate::todoparts::{
-    Acting, Came, Phase, Verb, applicable, begin, came, chips, conflicts, is_open,
+    Acting, Came, Phase, Seal, Verb, applicable, begin, came, chips, conflicts, is_open,
     mark as value_mark, markup, said, worded,
 };
 use crate::waiting::InboxRead;
@@ -81,7 +77,7 @@ impl Ask {
     fn of(phase: Phase, write: Write) -> Ask {
         match phase {
             Phase::Printed => Ask::Printed { write },
-            Phase::Sealed => Ask::Sealed { write },
+            Phase::Sealed(seal) => Ask::Sealed { write, seal },
         }
     }
 }
@@ -92,7 +88,7 @@ impl Ask {
 #[ts(rename = "TodoAsk")]
 pub enum Ask {
     Printed { write: Write },
-    Sealed { write: Write },
+    Sealed { write: Write, seal: Seal },
     Undo,
     Built,
     Thirty,
@@ -113,8 +109,7 @@ impl Fold {
     }
 }
 
-/// Whether the priority is part of the edit: a price needs a rationale to move, so its controls
-/// stay closed until asked for.
+/// A price needs a rationale to move, so its controls stay closed until asked for.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Reprice {
     Kept,
@@ -295,9 +290,7 @@ impl Model {
         self.context.gate == Gate::Writes
     }
 
-    /// The todo's row: the box's page of it, else the fold's.
-    /// Its row as the tab's fold reads it, which moves with every write the replica takes; the
-    /// box's page's row before the fold holds one.
+    /// The fold's row, else the box's page's.
     fn entry(&self) -> Option<&Entry> {
         let folded = match &self.fold {
             Reading::Val { v: Some(f) } => f.entry(&self.id),
@@ -643,7 +636,7 @@ impl Model {
             },
             Ask::Undo => self.run(Acting::Undo),
             Ask::Printed { write } => self.came(Phase::Printed, write, answer),
-            Ask::Sealed { write } => self.came(Phase::Sealed, write, answer),
+            Ask::Sealed { write, seal } => self.came(Phase::Sealed(seal), write, answer),
         }
     }
 
@@ -667,9 +660,6 @@ impl Model {
         vec![Effect::Toast { words }]
     }
 
-    /// The HTML the box's page carries for a confirmed record, kept on this device, so its blocks
-    /// show it wherever they are placed by key; a todo's page is the box's answer about an edit
-    /// this tab made, which no fold of the box has carried yet.
     /// Whether this tab holds a write of it the box has not taken.
     fn unsent_here(&self) -> bool {
         match &self.unsent {
@@ -777,8 +767,7 @@ impl Model {
         self.payload().is_some()
     }
 
-    /// Whether its markup is drawn as Typst: a confirmed record, on a page the box answered (a
-    /// page never fetched is drawn as plain text, and says so).
+    /// Typst for a confirmed record on a page the box answered; plain text otherwise.
     fn trusted(&self, e: &Entry) -> bool {
         self.fetched() && !e.unconfirmed
     }
@@ -1163,8 +1152,7 @@ fn short(hash: &str) -> Node<Msg> {
     view! { Code "hash" {Title => hash.to_owned()} [hash.get(..12).unwrap_or(hash)] }
 }
 
-/// Concurrent writes to one register, until a later write descends from all of them: every
-/// candidate is drawn, and no version is the page's pick.
+/// Every candidate of a conflict is drawn; no version is the page's pick.
 fn conflicts_block(e: &Entry) -> Option<Node<Msg>> {
     let cs = conflicts(e);
     if cs.is_empty() {
@@ -1325,8 +1313,7 @@ fn event(
 }
 
 impl Edit {
-    /// The edit opened on a record: a title stored as escaped prose opens in that prose, so
-    /// editing it never shows the escape's backslashes; markup a writer wrote opens unchanged.
+    /// A title stored as escaped prose opens as that prose, without the escape's backslashes.
     fn of(a: Authored, categories: &[String]) -> Edit {
         let opened = |stored: &str| match unescape_markup(&Escaped::from_chain(stored.to_owned())) {
             Ok(p) if p != stored => (p, true),
@@ -1376,8 +1363,7 @@ impl Edit {
         }
     }
 
-    /// What moved, as the box's patch: a field left as it opened is kept, so a page that sent
-    /// everything would not overwrite what moved on the chain meanwhile.
+    /// Only what moved, so the patch never overwrites what moved on the chain meanwhile.
     fn read(&self) -> Result<TodoPatch, String> {
         let a = &self.of;
         let (body, detail, waiting) = (
@@ -1451,8 +1437,7 @@ impl Edit {
     }
 }
 
-/// The cycle a `Recur` or `Periodic` term carries, read back off the term the box authored: its
-/// ramp's two points, their days apart and their values.
+/// A `Recur` or `Periodic` term's cycle: its ramp's two points, their days apart and values.
 fn cycle_of(spec: &serde_json::Value) -> Option<(Kind, Cycle)> {
     let own = |t: &serde_json::Value| -> Option<(Kind, Cycle)> {
         let kind = match t.get("kind")?.as_str()? {

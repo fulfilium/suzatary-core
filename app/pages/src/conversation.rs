@@ -79,7 +79,10 @@ pub enum Hold {
 pub enum Ask {
     Said(Box<Spoken>),
     Round,
-    Rename,
+    /// By the title it sent.
+    Rename {
+        title: String,
+    },
     Forget(u64),
     Erase,
     Card(card::Asking),
@@ -170,8 +173,7 @@ impl Landing {
         }
     }
 
-    /// A block closes only the prefix of the tail it names, in order; anything else is a frame
-    /// from another reading and changes nothing.
+    /// A block closes only the prefix of the tail it names; any other frame changes nothing.
     fn step(self, f: Frame) -> Landing {
         match (f, self) {
             (Frame::State { state }, a) => a.settle(state),
@@ -295,8 +297,7 @@ fn window(m: &Model) -> Effect {
     }
 }
 
-/// The newest window holding every turn the page holds, from its first on; or `older` turns
-/// further back too. A window about a reference is asked by how many turns it holds.
+/// The newest window holding every turn the page holds, or `older` turns further back too.
 fn asking(m: &Model, older: u32) -> Window {
     let about = if m.fallback {
         None
@@ -613,7 +614,9 @@ fn composed(m: &mut Model, outs: Vec<composer::Out>) -> Vec<Effect> {
 fn rename(m: &mut Model, title: String) -> Effect {
     m.renaming = Some(title.clone());
     Effect::Act {
-        ask: Ask::Rename,
+        ask: Ask::Rename {
+            title: title.clone(),
+        },
         act: Act::Rename {
             conversation: m.id.clone(),
             title,
@@ -810,8 +813,7 @@ fn heard(m: &mut Model, frame: &str) -> Vec<Effect> {
     match serde_json::from_str::<serde_json::Value>(frame).and_then(serde_json::from_value::<Frame>)
     {
         Ok(f) => {
-            // A written turn is the replicas' to bring: they are pulled, and the window read again
-            // once they move.
+            // A written turn comes with the replicas, pulled now.
             let turned = matches!(f, Frame::Turn);
             let landing = std::mem::replace(&mut m.landing, Landing::Done).step(f);
             let mut effects: Vec<Effect> = match &landing {
@@ -913,11 +915,8 @@ fn windowed(m: &mut Model, reading: Reading<Answer>) -> Vec<Effect> {
                 grouped: payload,
                 problem: None,
             };
-            // A first window draws its newest rounds and the rest a slice at a time, so no one task
-            // draws a long conversation whole.
             m.shown.read(fresh, before, now);
-            // Held from its first turn on, so a turn the box adds grows the window rather than
-            // sliding its oldest out.
+            // From its first turn on, so a new turn grows the window instead of sliding it.
             let pinned = asking(m, 0);
             if pinned.from != m.asked.from {
                 m.asked = pinned;
@@ -966,8 +965,7 @@ fn rounds_held(m: &Model) -> usize {
     }
 }
 
-/// Asks the next slice while rounds are left; after the last, moves the box and marks the
-/// timeline.
+/// Asks the next slice while rounds are left; after the last, moves the box.
 fn drawn(m: &mut Model) -> Vec<Effect> {
     if !m.shown.whole(rounds_held(m)) {
         return if m.shown.ask(rounds_held(m)) {
@@ -1100,11 +1098,13 @@ fn asked(m: &mut Model, ask: Ask, a: Answer) -> Vec<Effect> {
             .map(|words| Effect::Toast { words })
             .into_iter()
             .collect(),
-        Ask::Rename => {
+        Ask::Rename { title } => {
             if let Some(words) = refused {
                 vec![Effect::Toast { words }]
             } else {
-                m.renaming = None;
+                if m.renaming.as_ref() == Some(&title) {
+                    m.renaming = None;
+                }
                 Vec::new()
             }
         }
@@ -1446,8 +1446,7 @@ fn receipt(m: &Model, r: &Receipt) -> Node<Msg> {
     view! { P "receipt" {Data("fact") => fact.to_string(), Data("state") => state} [link("", Place::Memory, "Remembered"), ": ", words, tail] }
 }
 
-/// A round's parts, each kept by its own key, so an answer's HTML arriving leaves the cards
-/// beneath it the very nodes they were.
+/// Each part by its own key, so an answer's HTML arriving keeps the cards beneath it.
 fn round_parts(m: &Model, p: &ConversationPayload, s: &Shape_) -> Vec<(String, Node<Msg>)> {
     let at = |i: usize| p.turns.iter().find(|t| t.index == i);
     let reply = writes(m);
@@ -1684,8 +1683,6 @@ mod tests {
     }
 
     proptest! {
-        /// Whatever frames come, the closed blocks and the open tail are the words said since the
-        /// answer began.
         #[test]
         fn the_streamed_blocks_and_tail_are_the_words_said(frames in proptest::collection::vec(frame(), 0..24)) {
             let mut landing = Landing::Done;
@@ -1805,8 +1802,6 @@ mod tests {
         assert_eq!(from(&rt.step(window(4)).1), None, "asked once");
     }
 
-    /// A reader at the end follows new turns; a reader who scrolled up is never moved and is
-    /// offered the pill until they scroll back down.
     #[test]
     fn a_new_answer_never_moves_a_reader_who_scrolled_up() {
         let mut rt = page();

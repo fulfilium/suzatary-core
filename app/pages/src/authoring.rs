@@ -5,6 +5,7 @@ use suzatary_core::wire::{AuthoredPayload, Authoring};
 
 use crate::places::Question;
 use crate::runtime::{Act, Answer, Body, Effect, Secret, Told, answered};
+use crate::todoparts::Seal;
 
 /// Ask the box to print `body` for `chain`, answered once as `ask`.
 #[must_use]
@@ -20,20 +21,21 @@ pub(crate) fn author<H, A, S>(ask: A, chain: &str, body: Authoring) -> Effect<H,
 pub(crate) type Sealed<H, A, S> = (String, Vec<Effect<H, A, S>>);
 
 /// What the box printed, sealed onto `chain`'s replica in its order (a subtodo's parent revision
-/// after the subtodo), each answered as `ask`; the todo it is about beside them.
+/// after the subtodo), each answered as `ask` names it and its todo; the todo beside them.
 ///
 /// # Errors
 /// The box refused, in its words.
-pub(crate) fn sealed<H, A: Clone, S>(
-    ask: &A,
+pub(crate) fn sealed<H, A, S>(
     chain: &str,
     answer: Answer,
+    ask: impl Fn(&str, Seal) -> A,
 ) -> Result<Sealed<H, A, S>, String> {
     let printed: AuthoredPayload = answered(answer)?;
-    let seals = std::iter::once(printed.event)
-        .chain(printed.revision)
-        .map(|event| Effect::Act {
-            ask: ask.clone(),
+    let todo = printed.todo;
+    let seals = std::iter::once((Seal::Event, printed.event))
+        .chain(printed.revision.map(|r| (Seal::Parent, r)))
+        .map(|(seal, event)| Effect::Act {
+            ask: ask(&todo, seal),
             act: Act::Seal {
                 chain: chain.to_owned(),
                 event,
@@ -42,5 +44,5 @@ pub(crate) fn sealed<H, A: Clone, S>(
             told: Told::Answered,
         })
         .collect();
-    Ok((printed.todo, seals))
+    Ok((todo, seals))
 }

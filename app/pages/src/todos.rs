@@ -29,8 +29,8 @@ use crate::runtime::{
 };
 use crate::todo;
 use crate::todoparts::{
-    Acting, Came, Phase, Verb, applicable, begin, came, conflicts, finish, headline, is_open, kind,
-    said,
+    Acting, Came, Phase, Seal, Verb, applicable, begin, came, conflicts, finish, headline, is_open,
+    kind, said,
 };
 use crate::zone::{day_ms, ms as ms_of};
 
@@ -106,7 +106,11 @@ pub enum Ask {
         n: u32,
     },
     Added,
-    Sealed,
+    /// A seal of the todo the sheet added, by its id.
+    Sealed {
+        todo: String,
+        seal: Seal,
+    },
     /// An act on a line, or an undo or redo, at its phase.
     Line {
         todo: String,
@@ -566,7 +570,7 @@ struct Sheet {
 enum Adding {
     Typing,
     Printing,
-    Sealing(String),
+    Sealing { todo: String, said: String },
 }
 
 impl Sheet {
@@ -1451,7 +1455,10 @@ impl Model {
         match ask {
             Ask::Reading { at } => self.read_at(&at, answer),
             Ask::Tree { n } => self.tree(n, answer),
-            Ask::Added => match sealed(&Ask::Sealed, &self.chain, answer) {
+            Ask::Added => match sealed(&self.chain, answer, |todo, seal| Ask::Sealed {
+                todo: todo.to_owned(),
+                seal,
+            }) {
                 Ok((todo, seals)) => {
                     let mut out = self.printed(&todo);
                     out.extend(seals);
@@ -1463,7 +1470,7 @@ impl Model {
                     vec![Effect::Toast { words }]
                 }
             },
-            Ask::Sealed => self.taken(answer),
+            Ask::Sealed { todo, seal } => self.taken(&todo, seal, answer),
             Ask::Line {
                 todo,
                 acting,
@@ -1488,17 +1495,18 @@ impl Model {
             } => return self.lined(todo, acting, Phase::Printed, answer),
             todo::Ask::Sealed {
                 write: todo::Write::Act { acting },
-            } => return self.lined(todo, acting, Phase::Sealed, answer),
+                seal,
+            } => return self.lined(todo, acting, Phase::Sealed(seal), answer),
             todo::Ask::Undo => return self.act(&todo, Acting::Undo),
             todo::Ask::Built | todo::Ask::Thirty => return Vec::new(),
             todo::Ask::Printed { write } => (Phase::Printed, write),
-            todo::Ask::Sealed { write } => (Phase::Sealed, write),
+            todo::Ask::Sealed { write, seal } => (Phase::Sealed(seal), write),
         };
         let named = |phase| Ask::Pane {
             todo: todo.clone(),
             ask: match phase {
                 Phase::Printed => todo::Ask::Printed { write },
-                Phase::Sealed => todo::Ask::Sealed { write },
+                Phase::Sealed(seal) => todo::Ask::Sealed { write, seal },
             },
         };
         match came(&self.chain, phase, answer, named) {
@@ -1510,10 +1518,13 @@ impl Model {
 
     /// The sheet goes down now, not once the seals are taken: the page may be left before then.
     fn printed(&mut self, todo: &str) -> Vec<Fx> {
-        self.adding = Adding::Sealing(match &self.sheet.parent {
-            Some(p) => format!("added {todo} under {}", p.todo),
-            None => format!("added {todo}"),
-        });
+        self.adding = Adding::Sealing {
+            todo: todo.to_owned(),
+            said: match &self.sheet.parent {
+                Some(p) => format!("added {todo} under {}", p.todo),
+                None => format!("added {todo}"),
+            },
+        };
         let category = self.sheet.category.clone();
         self.sheet.open_on(String::new());
         self.last.clone_from(&category);
@@ -1525,27 +1536,35 @@ impl Model {
         out
     }
 
-    /// The sheet's todo taken by the replica, or refused, said once: a subtodo is two seals, the
-    /// parent's revision after it, and the first says it.
-    fn taken(&mut self, answer: Answer) -> Vec<Fx> {
-        let Adding::Sealing(added) = std::mem::replace(&mut self.adding, Adding::Typing) else {
-            return Vec::new();
-        };
-        let words = match answered::<Outcome>(answer) {
+    /// A seal of an added todo, said once: its event's answer ends the sheet's add when it is
+    /// still that todo's, and any refusal is said, a parent's revision's too.
+    fn taken(&mut self, todo: &str, seal: Seal, answer: Answer) -> Vec<Fx> {
+        let refused = match answered::<Outcome>(answer) {
             Ok(
                 Outcome::Answered {
                     answer: Said::Taken,
                     ..
                 }
                 | Outcome::Already,
-            ) => added,
+            ) => None,
             Ok(Outcome::Answered {
                 answer: Said::Refused { e } | Said::Lost { e },
                 ..
             })
-            | Err(e) => e,
+            | Err(e) => Some(e),
         };
-        vec![Effect::Toast { words }]
+        let said = match std::mem::replace(&mut self.adding, Adding::Typing) {
+            Adding::Sealing { todo: t, said } if seal == Seal::Event && t == todo => Some(said),
+            other => {
+                self.adding = other;
+                None
+            }
+        };
+        refused
+            .or(said)
+            .map(|words| Effect::Toast { words })
+            .into_iter()
+            .collect()
     }
 
     fn lined(&mut self, todo: String, acting: Acting, phase: Phase, answer: Answer) -> Vec<Fx> {
@@ -2319,6 +2338,10 @@ mod tests {
         let write = todo::Write::Defer;
         for ask in [
             Ask::Tree { n: 3 },
+            Ask::Sealed {
+                todo: "renewcard".to_owned(),
+                seal: Seal::Parent,
+            },
             Ask::Reading {
                 at: "2026-09-04T12:00:00".to_owned(),
             },
@@ -2328,7 +2351,10 @@ mod tests {
             },
             Ask::Pane {
                 todo: "renewcard".to_owned(),
-                ask: todo::Ask::Sealed { write },
+                ask: todo::Ask::Sealed {
+                    write,
+                    seal: Seal::Event,
+                },
             },
             Ask::Pane {
                 todo: "renewcard".to_owned(),

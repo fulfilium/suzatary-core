@@ -15,7 +15,7 @@ use suzatary_pages::reading::{Nothing, One, Opened};
 use suzatary_pages::runtime::{
     Answer, Behind, Body, Context, Effect, Gate, Input, Reach, Untrusted,
 };
-use suzatary_pages::todoparts::Verb;
+use suzatary_pages::todoparts::{Seal, Verb};
 use suzatary_pages::waiting::Watched;
 use suzatary_pages::zone::Offset;
 use suzatary_pages::{
@@ -157,16 +157,22 @@ fn mail_msg() -> impl Strategy<Value = mail::Msg> {
             reading,
             behind
         })),
-        reading(listing()).prop_map(move |r| host(Input::Answered {
-            ask: mail::Ask::More,
-            answer: match r {
-                Reading::Val { v } => v,
-                Reading::Loading | Reading::Error { .. } => Answer::Refused {
-                    status: 0,
-                    words: "offline".to_owned()
+        (
+            prop::sample::select(vec!["", "i0/inbox", "i3/archive"]),
+            reading(listing())
+        )
+            .prop_map(move |(after, r)| host(Input::Answered {
+                ask: mail::Ask::More {
+                    after: after.to_owned()
                 },
-            }
-        })),
+                answer: match r {
+                    Reading::Val { v } => v,
+                    Reading::Loading | Reading::Error { .. } => Answer::Refused {
+                        status: 0,
+                        words: "offline".to_owned()
+                    },
+                }
+            })),
         (0u8..3, reading(watches())).prop_map(move |(n, r)| host(Input::Answered {
             ask: mail::Ask::Cancel {
                 id: format!("w{n}")
@@ -568,11 +574,24 @@ fn todo_asked() -> impl Strategy<Value = (todo::Ask, Answer)> {
         status: 409,
         words: "refused".to_owned(),
     };
-    (todo_write(), 0u8..4, any::<bool>()).prop_map(move |(write, which, ok)| {
+    (todo_write(), 0u8..5, any::<bool>()).prop_map(move |(write, which, ok)| {
         let (ask, done) = match which {
             0 => (todo::Ask::Printed { write }, printed.clone()),
-            1 => (todo::Ask::Sealed { write }, taken.clone()),
+            1 => (
+                todo::Ask::Sealed {
+                    write,
+                    seal: Seal::Event,
+                },
+                taken.clone(),
+            ),
             2 => (
+                todo::Ask::Sealed {
+                    write,
+                    seal: Seal::Parent,
+                },
+                taken.clone(),
+            ),
+            3 => (
                 todo::Ask::Thirty,
                 json!({"type": "Drawn", "span": {"type": "Unsampled"}}),
             ),
@@ -777,19 +796,25 @@ fn list_host() -> impl Strategy<Value = todos::Msg> {
             r
         ))),
         list_prices().prop_map(host),
-        Just(host(done(
+        prop::sample::select(vec![Value::Null, json!("Revised(...)")]).prop_map(move |revision| host(done(
             Ask::Added,
-            json!({"todo": "x", "event": "Created(...)", "revision": null})
+            json!({"todo": "x", "event": "Created(...)", "revision": revision})
         ))),
-        Just(host(done(
-            Ask::Sealed,
-            json!({"type": "Answered", "answer": {"type": "Taken"}, "held": false})
-        ))),
+        (prop::sample::select(vec!["x", "y"]), prop::sample::select(vec![Seal::Event, Seal::Parent]), any::<bool>()).prop_map(
+            move |(todo, seal, taken)| host(done(
+                Ask::Sealed { todo: todo.to_owned(), seal },
+                if taken {
+                    json!({"type": "Answered", "answer": {"type": "Taken"}, "held": false})
+                } else {
+                    json!({"type": "Answered", "answer": {"type": "Refused", "e": "no"}, "held": false})
+                }
+            ))
+        ),
         Just(host(done(
             Ask::Line {
                 todo: "a".to_owned(),
                 acting: Acting::Verb(Verb::Done),
-                phase: Phase::Sealed
+                phase: Phase::Sealed(Seal::Event)
             },
             json!({"type": "Answered", "answer": {"type": "Taken"}, "held": false})
         ))),
@@ -865,7 +890,7 @@ fn typst_msg() -> impl Strategy<Value = typstlist::Msg> {
             ask: Ask::Act {
                 todo: "a".to_owned(),
                 acting: suzatary_pages::todoparts::Acting::Verb(Verb::Done),
-                phase: suzatary_pages::todoparts::Phase::Sealed
+                phase: suzatary_pages::todoparts::Phase::Sealed(Seal::Event)
             },
             answer: Answer::Done {
                 body: json!({"type": "Answered", "answer": {"type": "Taken"}, "held": false})
@@ -1377,7 +1402,11 @@ fn secretary_msg() -> impl Strategy<Value = secretary::Msg> {
         Just(secretary::Msg::Close),
         prop::sample::select(vec!["", "zephyr", " zephyr "]).prop_map(|t| secretary::Msg::Searched(t.to_owned())),
         (0u32..4).prop_map(move |n| host(Input::Answered { ask: secretary::Ask::Search(chats::Asking::Rested(n)), answer: Answer::Done { body: json!(1_790_000_000_000_i64) } })),
-        outcome().prop_map(move |answer| host(Input::Answered { ask: secretary::Ask::Topic(secretary::Wrote { renamed: Some(("garden".to_owned(), "yard".to_owned())), closes: true }), answer })),
+        (prop::sample::select(vec![
+            secretary::Closes::Nothing,
+            secretary::Closes::Renaming { topic: "garden".to_owned() },
+            secretary::Closes::Adding { target: "round:talk/1".to_owned() },
+        ]), outcome()).prop_map(move |(closes, answer)| host(Input::Answered { ask: secretary::Ask::Topic(secretary::Wrote { renamed: Some(("garden".to_owned(), "yard".to_owned())), closes }), answer })),
         any::<bool>().prop_map(move |w| host(Input::Context(context(w)))),
     ]
 }
@@ -1483,7 +1512,7 @@ fn conversation_msg() -> impl Strategy<Value = conversation::Msg> {
         prop::option::of(Just("A name".to_owned())).prop_map(Msg::Named),
         prop::sample::select(vec!["", "zephyr"]).prop_map(|t| Msg::Searched(t.to_owned())),
         outcome().prop_map(move |answer| host(Input::Answered { ask: Ask::Said(Box::new(conversation::Spoken { text: "hello".to_owned(), references: Vec::new(), files: Vec::new(), edit: false })), answer })),
-        outcome().prop_map(move |answer| host(Input::Answered { ask: Ask::Rename, answer })),
+        (prop::sample::select(vec!["A name", "Another"]), outcome()).prop_map(move |(title, answer)| host(Input::Answered { ask: Ask::Rename { title: title.to_owned() }, answer })),
         (1u32..3, uploaded()).prop_map(move |(n, answer)| host(Input::Answered { ask: Ask::Composer(composer::Asking::Upload(n)), answer })),
         (1u32..3, uploaded()).prop_map(move |(n, answer)| host(Input::Answered { ask: Ask::Composer(composer::Asking::Keep(n)), answer })),
         Just(host(Input::Answered { ask: Ask::Slice, answer: Answer::Done { body: json!(1_790_000_005_000_i64) } })),
