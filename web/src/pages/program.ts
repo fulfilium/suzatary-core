@@ -242,7 +242,7 @@ export namespace program {
           }
           case "Watch": {
             const unwatch = local.watching(e.local, lane)
-            const r = local.of(e.local, box())
+            const r = local.of(e.local.type, e.local, box())
             const tell = (): void => {
               const now = lo.map(r.now(), (body): Answer => ({ type: "Done", body }))
               drawn(now)

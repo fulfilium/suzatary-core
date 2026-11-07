@@ -52,14 +52,11 @@ pub enum Untrusted {
     NotTheKey,
 }
 
-/// `H` names the page's held questions, `A` its one-time asks and acts, `S` its streams, so an
-/// answer to a question of another kind does not typecheck. Holding, watching or listening under
-/// an `H` already held lets the earlier one go.
+/// `H` names held questions, `A` one-time asks, `S` streams; holding an `H` again lets the earlier go.
 #[derive(Debug, Clone, PartialEq, Serialize, TS)]
 #[serde(tag = "type")]
 pub enum Effect<H, A, S = Never> {
-    /// Hold a GET of `path`, handed over now and again whenever it moves, as `Input::Held`. A
-    /// 4xx is the box's answer and stands; a network failure or 5xx keeps the answer that stood.
+    /// A GET of `path`, handed over as `Input::Held` whenever it moves; a 5xx keeps what stood.
     Hold {
         ask: H,
         path: String,
@@ -67,9 +64,7 @@ pub enum Effect<H, A, S = Never> {
     Again {
         path: String,
     },
-    /// HTML the box rendered, kept on this device under the key its source's block is placed by:
-    /// a block placed by key shows it from then on. The device's store refuses a key that does
-    /// not name its source.
+    /// HTML the box rendered, kept under its block's key; the store refuses a key not naming its source.
     Rendered {
         pairs: Vec<(String, String)>,
     },
@@ -97,22 +92,19 @@ pub enum Effect<H, A, S = Never> {
         #[ts(type = "unknown")]
         value: serde_json::Value,
     },
-    /// Each frame as `Input::Heard`, and each opening of the stream, the first included, as
-    /// `Input::Opened`.
+    /// Each frame as `Input::Heard`, and each opening as `Input::Opened`.
     Listen {
         ask: S,
         path: String,
     },
-    /// Take the shell's keys of `keys` while the page stands: each one pressed as [`Input::Heard`],
-    /// its frame a [`Keyed`]'s JSON. Asked again, the set replaces the last.
+    /// Each key pressed as [`Input::Heard`] with a [`Keyed`]; asked again, the set replaces the last.
     Keys {
         ask: S,
         keys: Vec<KeyKind>,
     },
     /// Pull every store now: what a page does when the box says something was written.
     Sync,
-    /// An intent (`web/src/prodrome/intentsync.ts`): held in the tab's set until a reading of the
-    /// replicas holds it, answered once with an `Outcome`.
+    /// An intent, held until a reading of the replicas holds it, answered once with an `Outcome`.
     Act {
         ask: A,
         act: Act,
@@ -120,8 +112,7 @@ pub enum Effect<H, A, S = Never> {
         secret: Secret,
         told: Told,
     },
-    /// This device's signature of the registration of `key` for `actor` (a card's endorse), read
-    /// off the tab's replica of the first chain.
+    /// This device's signature of the registration of `key` for `actor`.
     Endorse {
         ask: A,
         actor: String,
@@ -133,10 +124,8 @@ pub enum Effect<H, A, S = Never> {
         ask: A,
         after: u32,
     },
-    /// Answered at the browser's next animation frame, once it has drawn what came before: the
-    /// pace of work drawn a slice at a time, one slice to a frame, so a frame never holds two
-    /// slices and a slice's step starts with the page already laid out. A hidden tab draws no
-    /// frame, so its slices wait until it is shown.
+    /// Answered at the next animation frame, so work drawn a slice at a time puts one slice in
+    /// each frame; a hidden tab's slices wait until it is shown.
     Frame {
         ask: A,
     },
@@ -165,27 +154,22 @@ pub enum Effect<H, A, S = Never> {
     Toast {
         words: String,
     },
-    /// Say something briefly with one button beside it, whose press answers `ask` with `null`
-    /// as [`Input::Answered`] while the page stands (an Undo beside what was just done).
+    /// A toast with one button, whose press answers `ask` with `null` while the page stands.
     Offer {
         words: String,
         label: String,
         ask: A,
     },
-    /// Ask the core in the tab's worker about the chains the tab holds, answered once as
-    /// [`Input::Answered`] with the core's answer, or refused with why it could not answer.
+    /// A question for the core in the tab's worker, answered once as [`Input::Answered`].
     Core {
         ask: A,
         question: Core,
     },
-    /// Write the open chain's replica over from the box, dropping exactly the unsent objects
-    /// named, which the page showed as lost (`Local::Unsent`'s `losses`); a row holding another
-    /// unsent object by then refuses.
+    /// Write the open chain's replica over from the box, dropping exactly the unsent objects named.
     Reset {
         losses: Vec<String>,
     },
-    /// A performance mark, after the layout of this step's patches; only the latest mark of a
-    /// name is kept.
+    /// A performance mark, after the layout of this step's patches.
     Mark {
         name: String,
     },
@@ -200,13 +184,10 @@ pub enum Effect<H, A, S = Never> {
 #[derive(Debug, Clone, PartialEq, Serialize, TS)]
 #[serde(tag = "type")]
 pub(crate) enum Core {
-    /// A chain's reading at an instant, linked through every chain the tab holds: its name, its
-    /// specs and its functions, or `Unheld` while the tab holds none of its objects; answered with
-    /// the chains held beside it (`Read`).
+    /// A chain's reading at an instant, linked through every chain the tab holds (`Read`).
     Reading { chain: String, at: String },
-    /// The list's tree of `members`, grouped `by` (`category`, `urgency` or `flat`) and then by
-    /// ancestry, every node priced under `basis`: grown by the core in the worker, so this module
-    /// links no term and no trie.
+    /// The list's tree of `members`, grouped `by` (`category`, `urgency` or `flat`), priced
+    /// under `basis` by the core in the worker.
     Tree {
         basis: Basis,
         members: Vec<Placed>,
@@ -468,6 +449,34 @@ pub(crate) enum Local {
     },
     Scroll,
     Route,
+}
+
+/// What each `Local` reading answers, by its case's name: the host's readings are typed by it,
+/// and a case it leaves out fails the web's type check.
+#[derive(TS)]
+#[ts(rename_all = "PascalCase")]
+#[allow(dead_code)]
+pub struct LocalAnswers {
+    device: Option<crate::settings::Device>,
+    proposals: crate::waiting::InboxRead,
+    decisions: suzatary_core::wire::FoldPayload,
+    conversations: suzatary_core::wire::ConversationsPayload,
+    search: suzatary_core::wire::SearchPayload,
+    stream: crate::secretary::StreamRead,
+    window: crate::conversation::Windowed,
+    cards: suzatary_core::wire::ConversationPayload,
+    fold: Option<crate::held::Folded>,
+    unsent: crate::held::Unsents,
+    waiting: u32,
+    #[ts(type = "unknown")]
+    kept: serde_json::Value,
+    intents: crate::intents::Intents,
+    titles: crate::card::Titles,
+    draft: crate::composer::Read,
+    #[ts(type = "unknown")]
+    ui: serde_json::Value,
+    scroll: Scrolled,
+    route: crate::needsyou::Route,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]

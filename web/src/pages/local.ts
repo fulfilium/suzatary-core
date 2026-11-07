@@ -1,7 +1,7 @@
 // What the tab keeps of its own that a page watches (`Local` in `app/pages/src/runtime.rs`), each a reading read again
 // whenever what it reads moves. Nothing here knows a page.
 
-import type { Local, Register } from "../wire/generated/pages"
+import type { Local, LocalAnswers, Register } from "../wire/generated/pages"
 import device from "../app/device"
 import asked from "../app/asked"
 import app from "../app/app"
@@ -27,6 +27,11 @@ import d from "../wire/decoder"
 import lanes from "../prodrome/lanes"
 
 export namespace local {
+  type Kind = Local["type"]
+  // The generated answer, read-only all the way down as the tab's own values are.
+  type Frozen<T> = T extends readonly (infer U)[] ? readonly Frozen<U>[] : T extends object ? { readonly [P in keyof T]: Frozen<T[P]> } : T
+  type Answer<K extends Kind> = Frozen<LocalAnswers[K]>
+
   // Keyed by the `Local` as decoded.
   const watchers = lanes.watchers()
   const laneOf = (l: Local): lanes.Lane => watchers.laneOf(JSON.stringify(l))
@@ -82,7 +87,7 @@ export namespace local {
   const cards = asked.family((c: Cards) => c.conversation, (c: Cards) => dressed.asked().then(m => dressed.cards(c.conversation, m, laneOf(c))))
 
   // A seal and a summary are no page's; a topic is named without its instant.
-  const held = (): unknown => {
+  const held = (): Answer<"Intents"> => {
     const t = intentsync.held()
     return {
       asked: [...t.asked].flatMap(([key, v]) =>
@@ -106,9 +111,9 @@ export namespace local {
     boxes.set(id, made)
     return made
   }
-  const draftOf = (id: string): reading.Reading<unknown> => {
+  const draftOf = (id: string): reading.Reading<Answer<"Draft">> => {
     const b = boxOf(id)
-    const now = (): unknown => {
+    const now = (): Answer<"Draft"> => {
       const g = b.draft.read()
       return { text: b.box.text, others: g.type === "Conflict" ? g.vs.filter(v => v !== b.box.text) : [] }
     }
@@ -132,9 +137,9 @@ export namespace local {
 
   // The open chain's rows as the tab's fold shows them; a kept copy asks the box for a fold about now.
   const folded = reading.held(
-    (): unknown => {
+    (): Answer<"Fold"> => {
       const f = store.state()
-      return onscreen.loaded(f) ? { entries: onscreen.entries(f), at: onscreen.at(f) } : null
+      return onscreen.loaded(f) ? { entries: f.entries, at: f.at } : null
     },
     heard => {
       void ensureFold().catch(() => {})
@@ -143,7 +148,7 @@ export namespace local {
   )
 
   // What this tab wrote that the box has not taken, read again on every commit to the replica.
-  const unsent = reading.held((): unknown => {
+  const unsent = reading.held((): Answer<"Unsent"> => {
     const r = replicaHeld()
     const { held: blocked, reasons } = stuckBehind(r)
     return {
@@ -156,7 +161,7 @@ export namespace local {
     }
   }, watchReplica)
 
-  const waiting = reading.held((): unknown => app.now().waiting, heard => app.hear(a => a.waiting, heard))
+  const waiting = reading.held((): number => app.now().waiting, heard => app.hear(a => a.waiting, heard))
 
   const onDevice = (key: string): reading.Reading<unknown> => {
     const c = ui.cell(registers.kept, key)
@@ -168,46 +173,31 @@ export namespace local {
     return reading.held(c.get, c.hear)
   }
 
-  export const of = (l: Local, box: Element): reading.Reading<unknown> => {
-    switch (l.type) {
-      case "Device":
-        return here
-      case "Proposals":
-        return proposals
-      case "Decisions":
-        return reading.againOn(decisions(l.chain), watchOthers)
-      case "Conversations":
-        return listed
-      case "Search":
-        return searches(l)
-      case "Stream":
-        return reading.againOn(streams(l), storesync.watch)
-      case "Window":
-        return reading.againOn(windows(l), heard => storesync.watchConversation(l.id, heard))
-      case "Cards":
-        return reading.againOn(reading.againOn(cards(l), storesync.watch), watchOthers)
-      case "Intents":
-        return asking
-      case "Titles":
-        return titles
-      case "Draft":
-        return draftOf(l.id)
-      case "Ui":
-        return page(l.key)
-      case "Scroll":
-        return scroll.of(box)
-      case "Route":
-        return route
-      case "Fold":
-        return folded
-      case "Unsent":
-        return unsent
-      case "Waiting":
-        return waiting
-      case "Kept":
-        return onDevice(l.key)
-    }
+  type Of = { readonly [K in Kind]: Extract<Local, { readonly type: K }> }
+  type Readers = { readonly [K in Kind]: (l: Of[K], box: Element) => reading.Reading<Answer<K>> }
+
+  const readers: Readers = {
+    Device: () => here,
+    Proposals: () => proposals,
+    Decisions: l => reading.againOn(decisions(l.chain), watchOthers),
+    Conversations: () => listed,
+    Search: l => searches(l),
+    Stream: l => reading.againOn(streams(l), storesync.watch),
+    Window: l => reading.againOn(windows(l), heard => storesync.watchConversation(l.id, heard)),
+    Cards: l => reading.againOn(reading.againOn(cards(l), storesync.watch), watchOthers),
+    Intents: () => asking,
+    Titles: () => titles,
+    Draft: l => draftOf(l.id),
+    Ui: l => page(l.key),
+    Scroll: (_, box) => scroll.of(box),
+    Route: () => route,
+    Fold: () => folded,
+    Unsent: () => unsent,
+    Waiting: () => waiting,
+    Kept: l => onDevice(l.key),
   }
+
+  export const of = <K extends Kind>(kind: K, l: Of[K], box: Element): reading.Reading<Answer<K>> => readers[kind](l, box)
 
   const drafted = d.obj({ type: d.oneOf({ Typed: null, Settled: null }), text: d.str })
 

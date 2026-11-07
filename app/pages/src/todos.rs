@@ -1334,10 +1334,10 @@ impl Model {
                 Vec::new()
             }
             Hold::Waiting => {
-                self.waiting = value(reading)
-                    .and_then(|v| v.as_u64())
-                    .and_then(|n| u32::try_from(n).ok())
-                    .unwrap_or_default();
+                self.waiting = match read::<u32>(reading) {
+                    Reading::Val { v } => v,
+                    Reading::Loading | Reading::Error { .. } => 0,
+                };
                 Vec::new()
             }
             Hold::Route => {
