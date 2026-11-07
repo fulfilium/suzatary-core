@@ -1,5 +1,4 @@
-// The parts a Rust page names and this tab draws (`Foreign` in the view), each from its props alone. A part that keeps
-// listening says how to stop, which the painter asks when it takes the part out.
+// The parts a Rust page names (`part::Part`) and this tab draws; one that keeps listening says how to stop.
 
 import { el } from "../view/dom"
 import { checkIcon, chevronIcon, clipIcon, crossIcon, docIcon, lockIcon, plusIcon, searchIcon, sendIcon } from "../view/icons"
@@ -7,9 +6,8 @@ import marks from "../view/marks"
 import loadmark from "../view/loadmark"
 import heldvalue from "../view/heldvalue"
 import { revealHeld } from "../wire/api"
-import d from "../wire/decoder"
-import lo from "../algebra/lo"
-import payload from "../wire/generated/payload"
+import type { Mark, Part, Span } from "../wire/generated/pages"
+import type { Entry } from "../wire/generated/wire"
 import app from "../app/app"
 import time from "../app/time"
 import onscreen, { store } from "../app/store"
@@ -45,12 +43,10 @@ export namespace parts {
     return node
   }
 
-  const mark = (name: string, props: string): Node => {
-    switch (name) {
+  const mark = (m: Mark): Node => {
+    switch (m) {
       case "outline":
         return marks.outline()
-      case "pie":
-        return pie.fulfilled(Number(props))
       case "chevron":
         return chevronIcon()
       case "rule":
@@ -75,16 +71,11 @@ export namespace parts {
         return docIcon()
       case "lock":
         return lockIcon()
-      default:
-        throw new Error(`no mark ${name}`)
     }
   }
 
   // "all", not "open": hiding the done ones would make a source look like it produced nothing.
-  const todos = (json: string): Node => {
-    const read = d.json(d.arr(payload.Entry))(json)
-    if (read.type === "Error") throw new Error(`the todos a page named do not read: ${read.e}`)
-    const entries = read.v
+  const todos = (entries: readonly Entry[]): Node => {
     const cards = cardList({ acted: () => draw() }, "This message produced no todos.")
     const draw = (): void => {
       const shown = listing(
@@ -99,105 +90,74 @@ export namespace parts {
     return cards.node
   }
 
-  // Props that do not read are the module's mistake, thrown as one.
-  const read = <A>(kind: string, decoder: d.Decoder<A>, props: string): A => {
-    const r = d.json(decoder)(props)
-    if (r.type === "Error") throw new Error(`the ${kind} a page named does not read: ${r.e}`)
-    return r.v
+  // The core's samples, with at least one from now on, or nothing to draw.
+  const spanOf = (s: Span): curve.Span => {
+    if (s.type === "Unsampled") return curve.unsampled
+    const [x, ...rest] = s.drawn.ahead
+    return x === undefined ? curve.unsampled : curve.sampled({ window: s.drawn.window, past: s.drawn.past, ahead: [x, ...rest] })
   }
 
-  // A Typst field, opened on its words; what is typed reaches the page as the words of the field inside the part.
-  const editorOf = d.obj({ field: d.str, class: d.str, label: d.str, rows: d.num, text: d.str })
-  // The thirty days as the core sampled them (`thirty.Thirty`'s drawn arm).
-  const sample = d.obj({ t: d.num, v: d.num })
-  const samples = d.bind(d.arr(sample), (xs): lo.Settled<curve.Samples> => {
-    const [x, ...rest] = xs
-    return x === undefined ? lo.error("no sample from now on") : lo.val([x, ...rest])
-  })
-  const drawnOf = d.obj({
-    type: d.oneOf({ Drawn: null }),
-    span: d.sum<curve.Span, "type">("type", {
-      Unsampled: {},
-      Sampled: { drawn: d.obj({ window: d.obj({ from: d.num, now: d.num, to: d.num }), past: d.arr(sample), ahead: samples }) },
-    }),
-  })
-
-  // The open list as the Typst view draws it, from what the tab holds (`viewstate.Held`), kept and brought to new props in
-  // place, so its keyed DOM, focus and scroll survive a redraw. Its controls' intents reach the page around it.
+  // Brought to new props in place, so its keyed DOM, focus and scroll survive a redraw.
   const list = typstpage.view<viewstate.Held, viewtree.Part>({
     page: "typst",
     module: "list.typ",
     tree: (v, t) => viewtree.of(viewstate.of(t.core, v), t.named),
     part: viewtree.part,
   })
-  const heldOf = d.obj({ entries: d.arr(payload.Entry), at: d.str, chain: d.str, open: d.str, writes: d.bool })
   const islands = new WeakMap<Node, (v: viewstate.Held) => void>()
-  const typstview = (props: string): Node => {
+  const typstview = (v: viewstate.Held): Node => {
     const mounted = performance.now()
     const drawn = typstpage.island(list, "typstframe")
     const update = (v: viewstate.Held): void => {
       drawn.update(v)
       if (v.entries.length > 0 && performance.getEntriesByName("typst:first-view").length === 0) performance.measure("typst:first-view", { start: mounted, end: performance.now() })
     }
-    update(read("typstview", heldOf, props))
+    update(v)
     islands.set(drawn.node, update)
     stops.set(drawn.node, () => drawn.destroy?.())
     return drawn.node
   }
 
-  // A part brought to new props where it stands, when it can be: only the Typst view keeps what it drew.
-  export const refresh = (node: Node, kind: string, _key: string, props: string): boolean => {
-    const update = kind === "typstview" ? islands.get(node) : undefined
-    if (update === undefined) return false
-    update(read(kind, heldOf, props))
+  // Printed by the module from the generated `Part`, as the effects are (`run.ts`).
+  const parsed = (props: string): Part => JSON.parse(props)
+
+  // Only the Typst view keeps what it drew.
+  export const refresh = (node: Node, _kind: string, _key: string, props: string): boolean => {
+    const p = parsed(props)
+    const update = p.type === "TypstView" ? islands.get(node) : undefined
+    if (update === undefined || p.type !== "TypstView") return false
+    update(p)
     return true
   }
 
-  const tags = { div: null, p: null, pre: null, span: null }
-  const speakers = { person: null, model: null, verb: null, act: null, box: null }
-  const proseOf = d.obj({
-    tag: d.oneOf(tags),
-    class: d.str,
-    text: d.str,
-    who: d.nullable(d.oneOf(speakers)),
-    held: d.bool,
-    conversation: d.nullable(d.str),
-  })
-  const richOf = d.obj({ html: d.nullable(d.str), text: d.str, class: d.str, kind: d.nullable(d.str) })
-
-  export const draw = (kind: string, key: string, props: string): Node => {
-    switch (kind) {
-      case "mark":
-        return mark(key, props)
-      case "rich": {
-        const r = read(kind, richOf, props)
-        return richOrText(r.html, r.text, r.kind === null ? { class: r.class } : { class: r.class, "data-kind": r.kind })
-      }
+  export const draw = (_kind: string, key: string, props: string): Node => {
+    const p = parsed(props)
+    switch (p.type) {
+      case "Mark":
+        return mark(p.mark)
+      case "Pie":
+        return pie.fulfilled(p.share)
+      case "Rich":
+        return richOrText(p.html, p.text, p.kind === null ? { class: p.class } : { class: p.class, "data-kind": p.kind })
       // A stranger's or a model's words: text nodes and built links only; a held value's placeholder becomes its chip.
-      case "prose": {
-        const p = read(kind, proseOf, props)
+      case "Prose": {
         const node = el(p.tag, { class: p.class }, ...(p.who === null ? [p.text] : textWithReferences(p.text, p.who)))
         return p.held ? heldvalue.within(node, revealHeld(p.conversation)) : node
       }
-      case "todos":
-        return todos(props)
-      case "elapsed":
-        return elapsed(key, props)
-      case "editor": {
-        const e = read(kind, editorOf, props)
-        const c = editor.control({ cls: e.class, label: e.label }, e.rows, () => {})
-        c.paint(e.text)
-        c.node.querySelector("textarea")?.setAttribute("data-field", e.field)
+      case "Todos":
+        return todos(p.entries)
+      case "Elapsed":
+        return elapsed(key, p.lead)
+      case "Editor": {
+        const c = editor.control({ cls: p.class, label: p.label }, p.rows, () => {})
+        c.paint(p.text)
+        c.node.querySelector("textarea")?.setAttribute("data-field", p.field)
         return c.node
       }
-      case "typstview":
-        return typstview(props)
-      case "curve": {
-        const t = read(kind, drawnOf, props)
-        return curve.fold(t.span, { Unsampled: () => placeholder.view(placeholder.LINES), Sampled: drawn => curve.line(drawn, app.now().zone) })
-      }
-      default:
-        throw new Error(`no part ${kind}`)
+      case "TypstView":
+        return typstview(p)
+      case "Curve":
+        return curve.fold(spanOf(p.span), { Unsampled: () => placeholder.view(placeholder.LINES), Sampled: drawn => curve.line(drawn, app.now().zone) })
     }
   }
 

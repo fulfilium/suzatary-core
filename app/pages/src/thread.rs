@@ -87,7 +87,7 @@ fn block(offsets: &[Offset], p: &MailPage, open: bool) -> Node<Msg> {
         view! { Summary [
             view! { Span "threadwho" [sender(row)] },
             view! { Span "meta" [arrived(offsets, row)] },
-            mark("chevron"),
+            mark(crate::part::Mark::Chevron),
         ] },
         view! { Div "mailchips" [
             account(row),

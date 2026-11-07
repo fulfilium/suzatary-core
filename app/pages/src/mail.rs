@@ -380,7 +380,7 @@ fn listing(m: &Model, first: &InboxPayload, watches: &[MailWatch]) -> Vec<Node<M
         More::Open | More::Asking | More::Ended => None,
     };
     let foot = view! { Div "mailfoot" {Hidden => shown.is_empty() || m.more == More::Ended} [
-        view! { Button "morebtn" {Type => "button", Disabled => m.more == More::Asking} @click(Msg::More) ["Load more", mark("chevron")] },
+        view! { Button "morebtn" {Type => "button", Disabled => m.more == More::Asking} @click(Msg::More) ["Load more", mark(crate::part::Mark::Chevron)] },
         failed,
     ] };
     let watches = (!watches.is_empty()).then(|| {

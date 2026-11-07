@@ -14,7 +14,7 @@ use viewtree::Attr::{Autocomplete, Class, Data, Disabled, Href, Open, Placeholde
 use viewtree::kit::para;
 use viewtree::{Node, view};
 
-use crate::chrome::{Chips, Words, link, prose};
+use crate::chrome::{Chips, link, prose};
 use crate::digest;
 use crate::intents::{Intents, Shown};
 use crate::places::Place;
@@ -940,7 +940,7 @@ fn details(d: Drawn<'_>, ui: &Ui, carried: usize) -> Node<Ev> {
             view! { Span "proposallabel" [f.label.as_str()] },
             view! { Span "proposalvalue" [f.value.as_str()] },
         ] }).collect::<Vec<_>>(),
-        (!card.body.is_empty()).then(|| prose("pre", "proposalbody", &card.body, Words::Plain, Chips::Conversation(d.conversation))),
+        (!card.body.is_empty()).then(|| prose(crate::part::Tag::Pre, "proposalbody", &card.body, None, Chips::Conversation(d.conversation))),
         (!card.files.is_empty()).then(|| view! { Ul "proposalfiles" [card.files.iter().map(file_row).collect::<Vec<_>>()] }),
         (!card.rows.is_empty()).then(|| view! { Div "proposedchangeset" [card.rows.iter().map(|o| object_row(o, row.revises.is_some() && o.position > carried)).collect::<Vec<_>>()] }),
     ] }
@@ -1020,7 +1020,7 @@ fn view(d: Drawn<'_>, ui: &Ui, key: &Key) -> (Vec<(viewtree::Attr, String)>, Vec
         revises,
         row.announced
             .as_deref()
-            .map(|a| prose("p", "proposalannounced", a, Words::Said("box"), Chips::None)),
+            .map(|a| prose(crate::part::Tag::P, "proposalannounced", a, Some(crate::part::Who::Box), Chips::None)),
         (!card.sentence.is_empty()).then(|| para("proposalbody", card.sentence.as_str())),
         overview,
         card.link.as_ref().and_then(|l| match l {

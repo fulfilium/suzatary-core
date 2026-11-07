@@ -1,12 +1,10 @@
-//! One message: its body as text (mail is never markup here), its links, headers and todos. The
-//! todos are the host's part `todos` until the todo pages are programs (plan §7 stage 8).
+//! One message: its body as text (mail is never markup here), its links, headers and todos.
 
 use serde::Deserialize;
 use suzatary_core::wire::MailPage;
 use ts_rs::TS;
 use viewtree::Attr::{Class, Href, Title};
 use viewtree::kit::para;
-use viewtree::node::foreign;
 use viewtree::{Node, view};
 
 use crate::chrome::{Shape, ask, mark};
@@ -118,8 +116,7 @@ fn found(_: &[Offset], p: &MailPage) -> Vec<Node<Msg>> {
             "Whole conversation",
         )
     });
-    // Every URL is shown beside its label, which is the sender's claim. CSS clamps the URL; cutting
-    // it would be this app deciding what a link says.
+    // Every URL is shown beside its label, which is the sender's claim.
     let links = (!message.links.is_empty()).then(|| {
         let items: Vec<_> = message
             .links
@@ -138,7 +135,6 @@ fn found(_: &[Offset], p: &MailPage) -> Vec<Node<Msg>> {
         "Every todo whose latest record names this message. The numbers are today's."
     };
     // A print of entries, whose maps are keyed by strings, does not fail.
-    let todos = serde_json::to_string(&p.todos).unwrap_or_default();
     let cut = message.truncated.then(|| {
         para(
             "legend",
@@ -153,7 +149,12 @@ fn found(_: &[Offset], p: &MailPage) -> Vec<Node<Msg>> {
         links,
         Some(view! { H2 [format!("Todos from this mail ({n})")] }),
         Some(para("legend", said)),
-        Some(foreign("todos", &row.hash, todos)),
+        Some(crate::part::part(
+            &row.hash,
+            &crate::part::Part::Todos {
+                entries: p.todos.clone(),
+            },
+        )),
         Some(headers(p)),
     ]
     .into_iter()
@@ -190,7 +191,7 @@ fn headers(p: &MailPage) -> Node<Msg> {
     ));
     facts.extend(fact("id", view! { Code "mailid" [row.id.as_str()] }));
     view! { Details "why" [
-        view! { Summary ["Headers", mark("chevron")] },
+        view! { Summary ["Headers", mark(crate::part::Mark::Chevron)] },
         view! { Dl {Class => "facts mailfacts"} [facts] },
     ] }
 }

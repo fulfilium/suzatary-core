@@ -425,7 +425,7 @@ const fn focus() -> Out {
 /// A photo as itself, a PDF by its name, a private file by its name and where it is kept.
 #[must_use]
 pub(crate) fn attachment<M>(f: &AttachmentRow) -> Node<M> {
-    let chip = |icon: &'static str, name: &str, title: String| {
+    let chip = |icon: crate::part::Mark, name: &str, title: String| {
         view! { Span "filechip" {Title => title} [mark(icon), view! { Span "filename" [name] }] }
     };
     if !f.private.is_empty() {
@@ -435,13 +435,13 @@ pub(crate) fn attachment<M>(f: &AttachmentRow) -> Node<M> {
             &f.name
         };
         chip(
-            "lock",
+            crate::part::Mark::Lock,
             name,
             format!("Kept private in your Drive at {}", f.private),
         )
     } else if f.media_type == "application/pdf" {
         let name = if f.name.is_empty() { "PDF" } else { &f.name };
-        chip("doc", name, name.to_owned())
+        chip(crate::part::Mark::Doc, name, name.to_owned())
     } else {
         view! { Img "turnphoto" {viewtree::Attr::Src => Place::Attachment(&f.id).href(), viewtree::Attr::Alt => "photo", viewtree::Attr::Loading => "lazy"} }
     }
@@ -540,11 +540,11 @@ pub(crate) fn view(c: &Composer, reach: &Reach, wide: bool) -> Node<Ev> {
         view! { Div "composethumbs" [held, thumbs, (!c.uploading.is_empty()).then(|| view! { Span "composethumb pending" ["…"] })] },
         view! { Div {Class => if quiet { "composefield unsaid" } else { "composefield" }} [
             view! { Label "composeattach" {Title => "Attach a photo or PDF", AriaLabel => "Attach a photo or PDF"} [
-                mark("clip"),
+                mark(crate::part::Mark::Clip),
                 view! { Input {Type => "file", Accept => "image/*,application/pdf", Multiple => true, Hidden => true} @files(Ev::Picked) },
             ] },
             textbox,
-            view! { Button "composesend" {Type => "button", Title => "Send", AriaLabel => "Send"} @click(Ev::Send) [mark("send")] },
+            view! { Button "composesend" {Type => "button", Title => "Send", AriaLabel => "Send"} @click(Ev::Send) [mark(crate::part::Mark::Send)] },
         ] },
     ] }
 }

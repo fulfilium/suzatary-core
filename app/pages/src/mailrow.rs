@@ -78,17 +78,17 @@ pub(crate) fn body<M>(body: &str) -> Node<M> {
         body
     };
     crate::chrome::prose(
-        "div",
+        crate::part::Tag::Div,
         "mailbody",
         text,
-        crate::chrome::Words::Plain,
+        None,
         crate::chrome::Chips::Mail,
     )
 }
 
 #[must_use]
 pub(crate) fn onward<M>(class: &str, place: Place<'_>, words: &str) -> Node<M> {
-    view! { A {Class => class, Href => place.href()} [words, mark("chevron")] }
+    view! { A {Class => class, Href => place.href()} [words, mark(crate::part::Mark::Chevron)] }
 }
 
 /// One phrase per kind of held value a message names, never a value.

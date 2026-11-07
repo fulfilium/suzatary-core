@@ -18,9 +18,10 @@ use viewtree::{Key, Node, Program, view};
 use crate::answer;
 use crate::card::{self, Cards, Drawn, Placed, Titles};
 use crate::chats::{self, Searching};
-use crate::chrome::{self, Chips, Chrome, Masthead, Shape, Status, Words, link, mark, prose};
+use crate::chrome::{self, Chips, Chrome, Masthead, Shape, Status, link, mark, prose};
 use crate::composer::{self, Composer};
 use crate::intents::{Intents, Shown};
+use crate::part::Who;
 use crate::places::Place;
 use crate::runtime::{
     self, Act, Answer, Context, Local, Outcome, Question, Questioning, Reach, Rounding, Said,
@@ -1217,16 +1218,6 @@ fn speaker(t: &TurnRow) -> String {
     }
 }
 
-fn who(t: &TurnRow) -> &'static str {
-    match &t.who {
-        Speaker::Person { .. } => "person",
-        Speaker::Model { .. } => "model",
-        Speaker::Verb { .. } => "verb",
-        Speaker::Act { .. } => "act",
-        Speaker::Box { .. } => "box",
-    }
-}
-
 fn gone_why(g: &TurnGone) -> &'static str {
     match g {
         TurnGone::Asked { .. } => "asked",
@@ -1279,7 +1270,7 @@ fn erase(m: &Model, t: &TurnRow) -> Node<Msg> {
 fn turn(m: &Model, t: &TurnRow, reply: bool, tucked: Option<Node<Msg>>) -> Node<Msg> {
     let class = format!(
         "turn turn-{}{}{}",
-        who(t),
+        Who::of(&t.who).name(),
         if refused(t) { " refused" } else { "" },
         if t.gone.is_some() { " gone" } else { "" }
     );
@@ -1300,10 +1291,10 @@ fn turn(m: &Model, t: &TurnRow, reply: bool, tucked: Option<Node<Msg>>) -> Node<
         }
         (None, Some(blocks)) => answer::blocks(&t.text, blocks, Msg::Copy),
         (None, None) => prose(
-            "div",
+            crate::part::Tag::Div,
             "turntext",
             &t.text,
-            Words::Said(who(t)),
+            Some(crate::part::Who::of(&t.who)),
             Chips::Conversation(&m.id),
         ),
     };
@@ -1350,7 +1341,7 @@ fn turn(m: &Model, t: &TurnRow, reply: bool, tucked: Option<Node<Msg>>) -> Node<
     let menu = answer::more(items, !at_rest);
     let controls =
         (reply.is_some() || menu.is_some()).then(|| view! { Div "turncontrols" [reply, menu] });
-    view! { Div {Class => class, Data("who") => who(t)} [
+    view! { Div {Class => class, Data("who") => Who::of(&t.who).name()} [
         view! { Div "turnwho" [speaker(t)] },
         body,
         photos,
@@ -1430,15 +1421,15 @@ fn receipt(m: &Model, r: &Receipt) -> Node<Msg> {
     };
     let tail = match r {
         Receipt::Forgotten { .. } => Some(vec![
-            mark("diamond"),
+            mark(crate::part::Mark::Diamond),
             view! { Span "receiptstate" ["forgotten"] },
         ]),
         Receipt::Merged { into, .. } => Some(vec![
-            mark("diamond"),
+            mark(crate::part::Mark::Diamond),
             view! { Span "receiptstate" [format!("merged into fact {}", into.0)] },
         ]),
         Receipt::Standing { .. } | Receipt::Unread { .. } if writes(m) => Some(vec![
-            mark("diamond"),
+            mark(crate::part::Mark::Diamond),
             view! { Button "act forget" {Type => "button"} @click(Msg::Forget(fact)) ["Forget"] },
         ]),
         Receipt::Standing { .. } | Receipt::Unread { .. } => None,

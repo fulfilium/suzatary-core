@@ -16,7 +16,7 @@ use viewtree::Attr::{
     AriaLabel, Checked, Class, Data, Disabled, For, Href, Id, Open, Role, Title, Type,
 };
 use viewtree::kit::{Reading, para};
-use viewtree::node::{foreign, text};
+use viewtree::node::text;
 use viewtree::{Node, Program, view};
 
 use crate::authoring::author;
@@ -154,7 +154,7 @@ enum Thirty {
     Sampling,
     Unheld,
     Unpriced,
-    Drawn(serde_json::Value),
+    Drawn(crate::part::Span),
     Failed(String),
 }
 
@@ -617,14 +617,12 @@ impl Model {
     fn answered(&mut self, ask: Ask, answer: Answer) -> Vec<Fx> {
         match ask {
             Ask::Thirty => {
-                self.thirty = match answered::<serde_json::Value>(answer) {
+                self.thirty = match answered::<crate::part::Thirty>(answer) {
                     Err(e) => Thirty::Failed(e),
-                    Ok(v) => match v.get("type").and_then(serde_json::Value::as_str) {
-                        Some("Unheld") => Thirty::Unheld,
-                        Some("Unpriced") => Thirty::Unpriced,
-                        Some("Drawn") => Thirty::Drawn(v),
-                        Some(_) | None => Thirty::Sampling,
-                    },
+                    Ok(crate::part::Thirty::Sampling) => Thirty::Sampling,
+                    Ok(crate::part::Thirty::Unheld) => Thirty::Unheld,
+                    Ok(crate::part::Thirty::Unpriced) => Thirty::Unpriced,
+                    Ok(crate::part::Thirty::Drawn { span }) => Thirty::Drawn(span),
                 };
                 Vec::new()
             }
@@ -860,7 +858,7 @@ impl Model {
         };
         let open = matches!(self.edit, Editing::Open(_));
         let editbox = view! { Details "why editbox" {Open => open} @toggle(|o| Msg::Edit(EditMsg::Toggle(o))) [
-            view! { Summary ["Edit", mark("chevron")] },
+            view! { Summary ["Edit", mark(crate::part::Mark::Chevron)] },
             edit,
         ] };
         let defer = is_open(e).then(|| {
@@ -877,7 +875,7 @@ impl Model {
                 form::refusal(said),
             ];
             view! { Details "why editbox deferbox" {Open => open} @toggle(|o| Msg::Defer(DeferMsg::Toggle(o))) [
-                view! { Summary ["Defer to…", mark("chevron")] },
+                view! { Summary ["Defer to…", mark(crate::part::Mark::Chevron)] },
                 view! { Div "pickerhead draftform" [inner] },
             ] }
         });
@@ -892,7 +890,7 @@ impl Model {
             .map(|a| {
                 let key = a.rich.keys.detail.as_deref().filter(|_| self.trusted(e));
                 view! { Details "why" {Open => true} [
-                    view! { Summary ["Detail", mark("chevron")] },
+                    view! { Summary ["Detail", mark(crate::part::Mark::Chevron)] },
                     markup("todobody", key, &a.detail),
                 ] }
             });
@@ -972,7 +970,7 @@ impl Model {
         };
         Some(
             view! { Details {Class => class, Open => self.provenance == Fold::Open} @toggle(Msg::Provenance) [
-                view! { Summary [format!("Written by {who}{on}"), mark("chevron")] },
+                view! { Summary [format!("Written by {who}{on}"), mark(crate::part::Mark::Chevron)] },
                 view! { P [if e.unconfirmed {
                     "Not confirmed yet, so the number above does not use it. Confirm it to make it count."
                 } else {
@@ -1046,7 +1044,7 @@ impl Model {
         let say = |s: &str| para("legend", s);
         let inside = match &self.thirty {
             Thirty::Sampling => {
-                view! { Div "placeholder ph-lines" {Role => "status", AriaLabel => "Loading"} [mark("loadmark")] }
+                view! { Div "placeholder ph-lines" {Role => "status", AriaLabel => "Loading"} [mark(crate::part::Mark::Loadmark)] }
             }
             Thirty::Unheld => say(
                 "No curve yet: this browser does not hold this todo's events. It draws once they sync.",
@@ -1055,7 +1053,9 @@ impl Model {
                 "No curve: nothing recorded by now gives this todo a spec or a checklist, so it has no function to draw.",
             ),
             Thirty::Failed(e) => para("problem", format!("No curve: {e}")),
-            Thirty::Drawn(v) => foreign("curve", &self.id, v.to_string()),
+            Thirty::Drawn(span) => {
+                crate::part::part(&self.id, &crate::part::Part::Curve { span: span.clone() })
+            }
         };
         view! { Section "pricebox" [
             view! { H2 "priceheading" ["Fulfillment, 30 days"] },
@@ -1068,7 +1068,7 @@ impl Model {
         view! { Div "historyparts" [
             links(p),
             view! { Details "history" {Open => self.history == Fold::Open} @toggle(Msg::History) [
-                view! { Summary [view! { H2 [format!("History ({n} {})", if n == 1 { "event" } else { "events" })] }, mark("chevron")] },
+                view! { Summary [view! { H2 [format!("History ({n} {})", if n == 1 { "event" } else { "events" })] }, mark(crate::part::Mark::Chevron)] },
                 para("legend", "Oldest first."),
                 view! { Ol "timeline" [p.stream.iter().map(|l| event(&self.context.offsets, l, p.diffs.get(&l.hash), &p.stream)).collect::<Vec<_>>()] },
             ] },
@@ -1129,7 +1129,7 @@ fn source_block(s: &AuthoredSource) -> Node<Msg> {
             view! { Span "sourcewho" [s.sender.as_str()] },
             view! { Span "sourcesubject" [if s.subject.is_empty() { "(no subject)" } else { s.subject.as_str() }] },
             view! { Span "meta" [s.date.as_str()] },
-            mark("chevron"),
+            mark(crate::part::Mark::Chevron),
         ] },
         facts,
     ] }
@@ -1208,7 +1208,7 @@ fn neighbour(n: &Neighbour) -> Node<Msg> {
         view! { Code "linkid" [n.todo.as_str()] },
         chip(&serde_json::to_value(n.state).ok().and_then(|v| v.as_str().map(str::to_owned)).unwrap_or_default(), if n.state == suzatary_core::wire::EntryState::Open { "" } else { "done" }),
         n.unconfirmed.then(|| chip("unconfirmed", "prov")),
-        mark("chevron"),
+        mark(crate::part::Mark::Chevron),
     ] }
 }
 

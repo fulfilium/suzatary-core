@@ -1,14 +1,11 @@
-//! The open list drawn by a Typst view compiled in the tab, beside the list: what the tab's fold
-//! holds is handed to the host's view (`typstview`), and its controls answer as intents from a
-//! closed vocabulary, parsed here.
+//! The open list drawn by a Typst view compiled in the tab; its controls answer as intents
+//! from a closed vocabulary, parsed here.
 
 use std::str::FromStr;
 
 use serde::{Deserialize, Serialize};
-use serde_json::json;
 use suzatary_core::reference::Reference;
 use ts_rs::TS;
-use viewtree::node::foreign;
 use viewtree::{Node, Program, view};
 
 use crate::chrome::{self, Chrome, Masthead, Shape, Width};
@@ -201,12 +198,15 @@ impl Program for Typst {
             Some(_) => chrome::Status::Quiet,
             None => chrome::Status::Waiting,
         };
-        let state = m.fold.as_ref().map(|f| {
-            json!({"entries": f.entries, "at": f.at, "chain": m.chain, "open": m.open,
-                "writes": m.context.gate == Gate::Writes})
+        let state = m.fold.as_ref().map(|f| crate::part::Part::TypstView {
+            entries: f.entries.clone(),
+            at: f.at.clone(),
+            chain: m.chain.clone(),
+            open: m.open.clone(),
+            writes: m.context.gate == Gate::Writes,
         });
         let body = state
-            .map(|s| view! { Div "typstview" @intent(Msg::Intent) [foreign("typstview", &m.chain, s.to_string())] })
+            .map(|s| view! { Div "typstview" @intent(Msg::Intent) [crate::part::part(&m.chain, &s)] })
             .into_iter()
             .collect();
         chrome::page(c, status, body)

@@ -1,13 +1,10 @@
-//! The fields a todo's forms are made of, each a value with the message that moves it and the
-//! part that draws it: a line, a day, a choice of chips, the Typst field, and the price picker.
-//! What is typed is read into the box's request at the form's edge, once, or refused in words.
+//! The fields a todo's forms are made of; what is typed is read at the form's edge, once.
 
 use chrono::{Duration, NaiveDate};
 use suzatary_core::todo::{Cycle, Deadline, Price};
 use viewtree::Attr::{
     AriaLabel, AriaPressed, Class, Hidden, Max, Min, Placeholder, Role, Step, Type, Value,
 };
-use viewtree::node::foreign;
 use viewtree::{Node, view};
 
 use crate::chrome::{pct, pie};
@@ -33,8 +30,7 @@ pub(crate) fn day<M: 'static>(
     view! { Input {Type => "date", Class => "draftfield", AriaLabel => label.to_owned(), Min => min.map(|d| d.to_string()), Value => v.to_owned()} @input(typed) }
 }
 
-/// A choice among chips: tapping the lit one clears it, and while none is lit the row says what
-/// it asks for.
+/// A choice among chips: tapping the lit one clears it.
 pub(crate) fn chips<M: Clone>(
     prompt: &str,
     options: &[String],
@@ -57,9 +53,7 @@ pub(crate) fn chips<M: Clone>(
     ] }
 }
 
-/// A field of Typst source, drawn by the host's editor (its highlighting, completion and live
-/// preview), which reports each edit as the words of a field within it. The editor holds what
-/// is typed from the words it opened with; a new opening is a new editor.
+/// A field of Typst source, drawn by the host's editor; a new opening is a new editor.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct Markup {
     /// What is typed.
@@ -95,13 +89,18 @@ impl Markup {
         rows: u32,
         typed: fn(String) -> M,
     ) -> Node<M> {
-        let props = serde_json::json!({ "field": name, "class": class, "label": label, "rows": rows, "text": self.opening });
-        view! { Div "markupfield" @input(typed) [foreign("editor", format!("{name}/{}", self.openings), props.to_string())] }
+        let p = crate::part::Part::Editor {
+            field: name.to_owned(),
+            class: class.to_owned(),
+            label: label.to_owned(),
+            rows,
+            text: self.opening.clone(),
+        };
+        view! { Div "markupfield" @input(typed) [crate::part::part(format!("{name}/{}", self.openings), &p)] }
     }
 }
 
-/// How a todo is priced: a sum carrying only its own kind's fields. Numbers are what was typed,
-/// read when the form is sent.
+/// How a todo is priced: only its own kind's fields, as typed, read when the form is sent.
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) enum Pricing {
     /// A fulfillment that does not move, as a ratio.
@@ -194,8 +193,7 @@ impl Default for Pricing {
 }
 
 impl Pricing {
-    /// The picker opened on a price the box authored: a recurring one with its cycle, any other
-    /// at the middle of the scale.
+    /// A recurring price opens with its cycle, any other at the middle of the scale.
     #[must_use]
     pub(crate) fn of(cycle: Option<(Kind, Cycle)>) -> Pricing {
         let typed = |c: Cycle| Cycling {
@@ -240,8 +238,7 @@ impl Pricing {
         };
         let next = match (m, &*self) {
             (PriceMsg::Kind(k), p) if k == p.kind() => return,
-            // The two cycling kinds share a cycle, so one typed under either survives a tap
-            // onto the other; the rest start afresh.
+            // The two cycling kinds share a cycle; the rest start afresh.
             (PriceMsg::Kind(Kind::Flat), _) => Pricing::default(),
             (PriceMsg::Kind(Kind::Deadline), _) => Pricing::Deadline {
                 day: String::new(),
@@ -328,8 +325,7 @@ impl Pricing {
         }
     }
 
-    /// The picker: how it is priced, then only the rows that kind has. `today` is the earliest
-    /// day a deadline's field offers, since a day already past prices as a deadline missed.
+    /// `today` is the earliest day a deadline's field offers.
     #[must_use]
     pub(crate) fn view(&self, today: NaiveDate) -> Node<PriceMsg> {
         let kind = self.kind();

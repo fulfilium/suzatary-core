@@ -1,22 +1,18 @@
-//! What stands around every page (Back, title, legend, status, body), drawn as
-//! `web/src/view/frame.ts` draws it for the pages still in TypeScript, so both read the same.
+//! What stands around every page: Back, title, legend, status and body.
 
-use serde::Serialize;
 use viewtree::Attr::{AriaLabel, Class, Href, Role, Type};
 use viewtree::kit::Reading;
 use viewtree::node::Child;
-use viewtree::node::foreign;
 use viewtree::{Node, view};
 
+use crate::part::{Mark, Part, Tag, Who, part};
 use crate::places::Place;
 use crate::runtime::Behind;
 use crate::zone::{Offset, when_ms};
 
-/// A mark the host draws in SVG (`web/src/pages/parts.ts`): `rule`, `chevron`, `outline`,
-/// `loadmark`, `diamond`, or an icon (`send`, `clip`, `cross`, `plus`, `doc`, `lock`).
 #[must_use]
-pub(crate) fn mark<M>(name: &'static str) -> Node<M> {
-    foreign("mark", name, "")
+pub(crate) fn mark<M>(mark: Mark) -> Node<M> {
+    part(format!("{mark:?}"), &Part::Mark { mark })
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -109,7 +105,7 @@ pub(crate) fn placeholder<M>(shape: Shape) -> Node<M> {
         Shape::Cards => ("placeholder ph-cards", each(3, "phcard", 3)),
         Shape::Turns => ("placeholder ph-turns", each(4, "phturn", 2)),
     };
-    view! { Div {Class => class, Role => "status", AriaLabel => "Loading"} [mark("loadmark"), parts] }
+    view! { Div {Class => class, Role => "status", AriaLabel => "Loading"} [mark(crate::part::Mark::Loadmark), parts] }
 }
 
 #[must_use]
@@ -158,7 +154,7 @@ pub(crate) fn page_headed<M: Clone>(
         if waiting { " pagewaiting" } else { "" }
     );
     let back = c.back.map(
-        |(label, m)| view! { Button "back" {Type => "button"} @click(m) [mark("chevron"), label] },
+        |(label, m)| view! { Button "back" {Type => "button"} @click(m) [mark(crate::part::Mark::Chevron), label] },
     );
     let legend = c
         .legend
@@ -166,7 +162,10 @@ pub(crate) fn page_headed<M: Clone>(
     // Keyed, so the status line coming and going moves the body and never draws it again.
     let parts = [
         back.map(|n| ("back", n)),
-        Some(("head", view! { Div "pagehead" [head, mark("rule")] })),
+        Some((
+            "head",
+            view! { Div "pagehead" [head, mark(crate::part::Mark::Rule)] },
+        )),
         legend.map(|n| ("legend", n)),
         Some(("now", view! { Div "pagenow" [c.now] })),
         said.map(|n| ("status", n)),
@@ -201,29 +200,18 @@ pub(crate) fn pct(share: f64) -> String {
 /// A fraction in [0, 1] on the fulfillment scale.
 #[must_use]
 pub(crate) fn pie<M>(share: f64) -> Node<M> {
-    foreign("mark", "pie", share.to_string())
+    part("pie", &Part::Pie { share })
 }
 
-#[derive(Serialize)]
-struct Rich<'a> {
-    html: Option<&'a str>,
-    text: &'a str,
-    class: &'a str,
-    kind: Option<suzatary_core::secretary::answer::Kind>,
-}
-
-/// Typst's HTML placed through the tripwire (`web/src/rich.ts`), or its source as text where
-/// nothing rendered it.
 #[must_use]
 pub(crate) fn rich<M>(html: Option<&str>, text: &str, class: &'static str) -> Node<M> {
-    let props = serde_json::to_string(&Rich {
-        html,
-        text,
-        class,
+    let p = Part::Rich {
+        html: html.map(str::to_owned),
+        text: text.to_owned(),
+        class: class.to_owned(),
         kind: None,
-    })
-    .expect("strings print as JSON");
-    foreign("rich", class, props)
+    };
+    part(class, &p)
 }
 
 /// One block of an answer, as `rich` draws it, marked with its kind.
@@ -233,14 +221,13 @@ pub(crate) fn rich_block<M>(
     text: &str,
     kind: suzatary_core::secretary::answer::Kind,
 ) -> Node<M> {
-    let props = serde_json::to_string(&Rich {
-        html,
-        text,
-        class: "answerblock",
+    let p = Part::Rich {
+        html: html.map(str::to_owned),
+        text: text.to_owned(),
+        class: "answerblock".to_owned(),
         kind: Some(kind),
-    })
-    .expect("strings print as JSON");
-    foreign("rich", "answerblock", props)
+    };
+    part("answerblock", &p)
 }
 
 #[must_use]
@@ -261,7 +248,7 @@ pub(crate) fn empty<M>(said: &str) -> Node<M> {
 
 #[must_use]
 pub(crate) fn callout<M>(title: &str, body: impl Child<M>) -> Node<M> {
-    view! { Section "callout" [mark("outline"), view! { H2 "callouttitle" [title] }, body] }
+    view! { Section "callout" [mark(crate::part::Mark::Outline), view! { H2 "callouttitle" [title] }, body] }
 }
 
 #[must_use]
@@ -273,20 +260,10 @@ pub(crate) fn counted(n: usize, one: &str, many: &str) -> String {
     }
 }
 
-/// The mark alone beside a control waiting on the box, shown at once: the person pressed it, so
-/// the wait is theirs.
+/// The mark beside a control waiting on the box, shown at once, since the person pressed it.
 #[must_use]
 pub(crate) fn inline_wait<M>() -> Node<M> {
-    view! { Span "placeholder phinline" {Role => "status", AriaLabel => "Waiting"} [mark("loadmark")] }
-}
-
-/// Whose words a text is decides what is linked: references in anyone's, URLs only in the box's
-/// own and an act's (`web/src/chat/refs.ts`'s `textWithReferences`).
-#[derive(Debug, Clone, Copy)]
-pub(crate) enum Words<'a> {
-    Plain,
-    /// Said by `who` (a turn's speaker).
-    Said(&'a str),
+    view! { Span "placeholder phinline" {Role => "status", AriaLabel => "Waiting"} [mark(crate::part::Mark::Loadmark)] }
 }
 
 /// Whether a held value's placeholder in a text becomes the chip a tap reveals, and where from.
@@ -297,50 +274,37 @@ pub(crate) enum Chips<'a> {
     Conversation(&'a str),
 }
 
-#[derive(Serialize)]
-struct Prose<'a> {
-    tag: &'a str,
-    class: &'a str,
-    text: &'a str,
-    who: Option<&'a str>,
-    held: bool,
-    conversation: Option<&'a str>,
-}
-
-/// A stranger's or a model's text, drawn by the host as text nodes and built links only, never
-/// parsed as markup (`web/src/pages/parts.ts`'s `prose`).
 #[must_use]
 pub(crate) fn prose<M>(
-    tag: &str,
+    tag: Tag,
     class: &str,
     text: &str,
-    words: Words<'_>,
+    who: Option<Who>,
     chips: Chips<'_>,
 ) -> Node<M> {
     let (held, conversation) = match chips {
         Chips::None => (false, None),
         Chips::Mail => (true, None),
-        Chips::Conversation(c) => (true, Some(c)),
+        Chips::Conversation(c) => (true, Some(c.to_owned())),
     };
-    let who = match words {
-        Words::Plain => None,
-        Words::Said(who) => Some(who),
-    };
-    let props = serde_json::to_string(&Prose {
+    let p = Part::Prose {
         tag,
-        class,
-        text,
+        class: class.to_owned(),
+        text: text.to_owned(),
         who,
         held,
         conversation,
-    })
-    .expect("strings print as JSON");
-    foreign("prose", class.to_owned(), props)
+    };
+    part(class, &p)
 }
 
-/// `lead` and the whole seconds since the clock of `key` first stood, counted by the host
-/// (`web/src/pages/parts.ts`'s `elapsed`), so a clock asks no step of the page.
+/// Counted by the host, so a clock asks no step of the page.
 #[must_use]
 pub(crate) fn clock<M>(key: &str, lead: &str) -> Node<M> {
-    foreign("elapsed", key.to_owned(), lead.to_owned())
+    part(
+        key,
+        &Part::Elapsed {
+            lead: lead.to_owned(),
+        },
+    )
 }

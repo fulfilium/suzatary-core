@@ -92,7 +92,7 @@ impl View for Briefing {
                     },
                 ),
                 // The source stays reachable even when the rendering came through.
-                view! { Details "why" [view! { Summary ["Source", mark("chevron")] }, view! { Pre "briefingsource" [source.as_str()] }] },
+                view! { Details "why" [view! { Summary ["Source", mark(crate::part::Mark::Chevron)] }, view! { Pre "briefingsource" [source.as_str()] }] },
             ],
         }
     }

@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 use suzatary_core::secretary::topics::provenance::Provenance;
 use suzatary_core::secretary::topics::topic::Topic;
 use suzatary_core::wire::{
-    RoundAsked, RoundTopic, StreamPayload, StreamRound, TopicInUse, TopicsPayload, TurnRow,
+    RoundAsked, RoundTopic, StreamPayload, StreamRound, TopicInUse, TopicsPayload,
 };
 use ts_rs::TS;
 use viewtree::Attr::{
@@ -17,7 +17,8 @@ use viewtree::{Key, Node, Program, view};
 
 use crate::answer;
 use crate::chats::{self, Search, Searching};
-use crate::chrome::{self, Chips, Chrome, Masthead, Shape, Status, Words, link, mark, pie, prose};
+use crate::chrome::{self, Chips, Chrome, Masthead, Shape, Status, link, mark, pie, prose};
+use crate::part::Who;
 use crate::places::Place;
 use crate::runtime::{
     self, Act, Answer, Context, Local, Outcome, Reach, Said, Scroll, Secret, TopicWrite, answered,
@@ -627,16 +628,6 @@ fn said(s: &StreamPayload, chosen: &[String]) -> Option<Node<Msg>> {
     ] })
 }
 
-fn who(t: &TurnRow) -> &'static str {
-    match &t.who {
-        suzatary_core::wire::Speaker::Person { .. } => "person",
-        suzatary_core::wire::Speaker::Model { .. } => "model",
-        suzatary_core::wire::Speaker::Verb { .. } => "verb",
-        suzatary_core::wire::Speaker::Act { .. } => "act",
-        suzatary_core::wire::Speaker::Box { .. } => "box",
-    }
-}
-
 fn round(m: &Model, r: &StreamRound, today: NaiveDate) -> Node<Msg> {
     let when = recent(&m.context.offsets, &r.opening.at, today);
     let meta = |class: &'static str, name: &str| {
@@ -647,10 +638,10 @@ fn round(m: &Model, r: &StreamRound, today: NaiveDate) -> Node<Msg> {
     };
     let asked = |class: &'static str| {
         prose(
-            "div",
+            crate::part::Tag::Div,
             class,
             &r.opening.text,
-            Words::Said(who(&r.opening)),
+            Some(crate::part::Who::of(&r.opening.who)),
             Chips::None,
         )
     };
@@ -658,7 +649,7 @@ fn round(m: &Model, r: &StreamRound, today: NaiveDate) -> Node<Msg> {
         RoundAsked::Person {} => (
             vec![
                 meta("streammeta", chats::named(&r.title)),
-                asked(if who(&r.opening) == "person" {
+                asked(if Who::of(&r.opening.who) == Who::Person {
                     "turntext streamasked streamasked-person"
                 } else {
                     "turntext streamasked streamasked-other"
@@ -669,7 +660,7 @@ fn round(m: &Model, r: &StreamRound, today: NaiveDate) -> Node<Msg> {
         RoundAsked::Box { title } => (
             vec![meta("streammeta streamtitle", title)],
             Some(
-                view! { Details "streamprompt" [view! { Summary ["What the box asked"] }, prose("div", "turntext", &r.opening.text, Words::Said(who(&r.opening)), Chips::None)] },
+                view! { Details "streamprompt" [view! { Summary ["What the box asked"] }, prose(crate::part::Tag::Div, "turntext", &r.opening.text, Some(crate::part::Who::of(&r.opening.who)), Chips::None)] },
             ),
         ),
     };
@@ -687,7 +678,7 @@ fn round(m: &Model, r: &StreamRound, today: NaiveDate) -> Node<Msg> {
     let topics = (!r.topics.is_empty() || writes).then(|| {
         view! { Div "roundtopics" [
             r.topics.iter().map(|t| topic_chip(&r.target, t, writes)).collect::<Vec<_>>(),
-            (writes && r.room > 0).then(|| view! { Button "roundtopicadd" {Type => "button", AriaLabel => "Add a topic to this round"} @click(Msg::Add(r.target.clone())) [mark("plus"), r.topics.is_empty().then_some("Topic")] }),
+            (writes && r.room > 0).then(|| view! { Button "roundtopicadd" {Type => "button", AriaLabel => "Add a topic to this round"} @click(Msg::Add(r.target.clone())) [mark(crate::part::Mark::Plus), r.topics.is_empty().then_some("Topic")] }),
         ] }
     });
     view! { Article "streamround" {Data("target") => &r.target} [head, answer, prompt, topics] }
@@ -696,13 +687,13 @@ fn round(m: &Model, r: &StreamRound, today: NaiveDate) -> Node<Msg> {
 /// The owner's topic is settled; the secretary's reads as a suggestion, kept with one tap.
 fn topic_chip(target: &str, t: &RoundTopic, writes: bool) -> Node<Msg> {
     let name = &t.topic;
-    let off = || view! { Button "roundtopicoff" {Type => "button", AriaLabel => format!("Take {name} off this round")} @click(Msg::Chip(TopicWrite::Remove { target: target.to_owned(), topic: name.clone() })) [mark("cross")] };
+    let off = || view! { Button "roundtopicoff" {Type => "button", AriaLabel => format!("Take {name} off this round")} @click(Msg::Chip(TopicWrite::Remove { target: target.to_owned(), topic: name.clone() })) [mark(crate::part::Mark::Cross)] };
     match t.by {
         Provenance::Owner => view! { Span "roundtopic" [name.as_str(), writes.then(off)] },
         Provenance::Inferred => {
             view! { Span "roundtopic suggested" {Title => "Suggested by the secretary"} [
                 name.as_str(),
-                writes.then(|| view! { Button "roundtopickeep" {Type => "button", AriaLabel => format!("Keep {name} on this round")} @click(Msg::Chip(TopicWrite::Add { target: target.to_owned(), topic: name.clone() })) [mark("check")] }),
+                writes.then(|| view! { Button "roundtopickeep" {Type => "button", AriaLabel => format!("Keep {name} on this round")} @click(Msg::Chip(TopicWrite::Add { target: target.to_owned(), topic: name.clone() })) [mark(crate::part::Mark::Check)] }),
                 writes.then(off),
             ] }
         }

@@ -1966,7 +1966,7 @@ impl Model {
         .join(" ");
         let fold = if l.below {
             let todo = fk.clone();
-            view! { Button "rowfold" {Type => "button", AriaExpanded => if open { "true" } else { "false" }, AriaLabel => format!("{} {id}", if open { "fold" } else { "unfold" })} @click(Msg::Fold(todo, !open)) [mark("chevron")] }
+            view! { Button "rowfold" {Type => "button", AriaExpanded => if open { "true" } else { "false" }, AriaLabel => format!("{} {id}", if open { "fold" } else { "unfold" })} @click(Msg::Fold(todo, !open)) [mark(crate::part::Mark::Chevron)] }
         } else {
             view! { Span "rowgap" }
         };
@@ -2022,7 +2022,7 @@ impl Model {
         let n = &c.tree.node;
         let count = todos_in(c.tree).len();
         let head = view! { Button "grouphead" {Type => "button", Data("key") => c.key.clone(), Data("field") => c.key.clone(), AriaExpanded => if c.open { "true" } else { "false" }} @click(Msg::Fold(c.key.clone(), !c.open)) [
-            mark("chevron"),
+            mark(crate::part::Mark::Chevron),
             view! { Span "grouplabel" [label(&n.place)] },
             worth_mark(&n.worth),
             view! { Span "groupcount" [format!("{count} open")] },
@@ -2040,7 +2040,7 @@ impl Model {
         };
         view! { Section {Class => if c.open { "group open" } else { "group" }, Data("group") => c.key.clone(), Data("worth") => n.worth.number().map_or_else(|| "null".to_owned(), |v| v.to_string())} [
             view! { Div "grouptop" [head] },
-            mark("rule"),
+            mark(crate::part::Mark::Rule),
             view! { Div "grouprows" => rows },
         ] }
     }
@@ -2152,7 +2152,7 @@ impl Model {
                 } else {
                     format!("{n} {} attention", if n == 1 { "needs" } else { "need" })
                 }),
-                mark("diamond"),
+                mark(crate::part::Mark::Diamond),
                 view! { A "inboxlink" {Href => To::Inbox("").href()} [if m == 0 { "nothing waits on you".to_owned() } else { format!("{m} {} on you", if m == 1 { "waits" } else { "wait" }) }] },
             ]
         });
@@ -2160,7 +2160,7 @@ impl Model {
             view! { Div "titlerow" [
                 view! { H1 {Class => if self.chain == PROJECT { "pagetitle" } else { "pagetitle destination" }} [title] },
                 view! { Button "findbtn" {Type => "button", AriaControls => "finder", AriaExpanded => if self.find == Find::Open { "true" } else { "false" }, AriaLabel => if said.is_empty() { "search, filter and group".to_owned() } else { format!("search, filter and group: {said}") }} @click(Msg::Find) [
-                    mark("search"),
+                    mark(crate::part::Mark::Search),
                     view! { Span "findsaid" [said.clone()] },
                 ] },
             ] },
@@ -2193,14 +2193,14 @@ impl Model {
             form::refusal(by(About::Price)),
             form::line("draftfield", "why this priority", "why this number (optional)", &s.rationale, |r| Msg::Sheet(SheetMsg::Rationale(r))),
             form::refusal(by(About::Whole)),
-            view! { Button "addbtn" {Type => "button", Disabled => self.adding != Adding::Typing} @click(Msg::Sheet(SheetMsg::Add)) [mark("plus"), "Add todo"] },
+            view! { Button "addbtn" {Type => "button", Disabled => self.adding != Adding::Typing} @click(Msg::Sheet(SheetMsg::Add)) [mark(crate::part::Mark::Plus), "Add todo"] },
         ] };
         vec![
             view! { Div {Class => if self.up { "picker addsheet open" } else { "picker addsheet" }, Id => "addsheet"} [
                 view! { Button "pickerhandle" {Type => "button", AriaControls => "addsheet", AriaExpanded => if self.up { "true" } else { "false" }} @click(Msg::Sheet(SheetMsg::Handle)) [
-                    view! { Span "addicon" [mark("plus")] },
+                    view! { Span "addicon" [mark(crate::part::Mark::Plus)] },
                     view! { Strong ["Add a todo"] },
-                    mark("chevron"),
+                    mark(crate::part::Mark::Chevron),
                 ] },
                 view! { Div "pickerbody" [head] },
             ] },
@@ -2243,11 +2243,11 @@ impl Model {
         let tree = view! { Div "tree" {Data("at") => match &self.grown { Drawn::Tree(_, PricedBy::Read(at), _) => at.clone(), Drawn::Tree(_, PricedBy::Rows, _) | Drawn::Unpriced => String::new() }} => cards.iter().map(|c| (c.key.clone(), self.card(c))) };
         let body = vec![
             match &self.setup {
-                Setup::Unfinished { done, of } => Some(view! { P "setupunfinished" [view! { A {Href => To::Settings.href()} [format!("Finish setting up · {done} of {of} done"), mark("chevron")] }] }),
+                Setup::Unfinished { done, of } => Some(view! { P "setupunfinished" [view! { A {Href => To::Settings.href()} [format!("Finish setting up · {done} of {of} done"), mark(crate::part::Mark::Chevron)] }] }),
                 Setup::Unknown | Setup::Finished => None,
             },
             match &self.today {
-                Today::Briefed(day) => Some(view! { P "todaybriefing" [view! { A {Href => To::Briefing(day).href()} ["Today's briefing", mark("chevron")] }] }),
+                Today::Briefed(day) => Some(view! { P "todaybriefing" [view! { A {Href => To::Briefing(day).href()} ["Today's briefing", mark(crate::part::Mark::Chevron)] }] }),
                 Today::Unknown | Today::None => None,
             },
             self.problem.as_ref().filter(|_| !waiting).map(|p| para("problem", p.as_str())),

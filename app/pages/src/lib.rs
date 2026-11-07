@@ -27,6 +27,7 @@ pub mod mailrow;
 pub mod memory;
 pub mod message;
 pub mod needsyou;
+pub mod part;
 pub mod places;
 pub mod reading;
 pub mod releases;
