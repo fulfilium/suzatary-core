@@ -1,4 +1,4 @@
-//! What the painter is told to do, and the bytes `web/src/painter/patches.ts` reads: each patch is
+//! What the painter is told to do, and the bytes `web/src/painter/painter.ts` reads: each patch is
 //! an opcode byte and its fields; an id is a LEB128 `u32` (`0` is the root); `before` is the id
 //! plus one, `0` for the end; a string is its UTF-8 length as LEB128, then its bytes.
 
@@ -91,6 +91,44 @@ const LISTEN: u8 = 9;
 const UNLISTEN: u8 = 10;
 const BLOCK: u8 = 11;
 const REKEY: u8 = 12;
+
+const OPS: [(&str, u8); 13] = [
+    ("Element", ELEMENT),
+    ("Text", TEXT),
+    ("Foreign", FOREIGN),
+    ("Set", SET),
+    ("Unset", UNSET),
+    ("Retext", RETEXT),
+    ("Reprop", REPROP),
+    ("Move", MOVE),
+    ("Remove", REMOVE),
+    ("Listen", LISTEN),
+    ("Unlisten", UNLISTEN),
+    ("Block", BLOCK),
+    ("Rekey", REKEY),
+];
+
+/// The painter's tables, as TypeScript: tags and events by code, and the opcodes.
+#[must_use]
+pub fn typescript() -> String {
+    let quoted = |names: Vec<&str>| {
+        names
+            .iter()
+            .map(|n| format!("\"{n}\""))
+            .collect::<Vec<_>>()
+            .join(", ")
+    };
+    let ops = OPS
+        .iter()
+        .map(|(name, code)| format!("{name}: {code}"))
+        .collect::<Vec<_>>()
+        .join(", ");
+    format!(
+        "export const TAGS = [{}] as const\nexport const EVENTS = [{}] as const\nexport const OP = {{ {ops} }} as const\n",
+        quoted(Tag::ALL.iter().map(|t| t.name()).collect()),
+        quoted(On::ALL.iter().map(|o| o.dom()).collect()),
+    )
+}
 
 fn varint(out: &mut Vec<u8>, mut n: u32) {
     while n >= 0x80 {

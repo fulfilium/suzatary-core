@@ -216,3 +216,14 @@ fn an_unchanged_lazy_part_is_not_drawn_again() {
     assert!(painter.paint(page(1)).is_empty());
     assert_eq!(DRAWS.with(Cell::get), 1);
 }
+
+/// A painter reads a tag or an event by its code as an index into `patch::typescript`'s tables.
+#[test]
+fn each_tag_and_event_stands_at_its_code() {
+    for (i, t) in Tag::ALL.iter().enumerate() {
+        assert_eq!(usize::from(t.code()), i, "{}", t.name());
+    }
+    for (i, o) in On::ALL.iter().enumerate() {
+        assert_eq!(usize::from(o.code()), i, "{}", o.dom());
+    }
+}

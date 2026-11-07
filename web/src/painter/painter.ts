@@ -1,13 +1,12 @@
-// The DOM painter: applies the patches a Rust program answers (format: `app/viewtree/src/patch.rs`) and reports events
-// by element id. It decides nothing; its only state is which node each id is.
+// The DOM painter: applies a program's patches (`app/viewtree/src/patch.rs`) and reports events by element id.
 
 import { richOrText } from "../rich"
+import { EVENTS, OP, TAGS } from "../wire/generated/pages"
 import files from "./files"
 
 export namespace painter {
   export type Foreign = (kind: string, key: string, props: string) => Node
-  // A part told new props: true when the host brought it to them in place (its focus, scroll and DOM kept), false when
-  // the painter is to draw it anew.
+  // True when the host brought a part to new props in place; false when the painter is to draw it anew.
   export type Refresh = (node: Node, kind: string, key: string, props: string) => boolean
   // The HTML the host holds for a block's key, or null. It is placed only through `rich.ts`, the one door from a string
   // to markup, and the block shows its plain text until then.
@@ -15,10 +14,6 @@ export namespace painter {
   // Answers whether the view took it: an event no handler takes (a key left to the browser) keeps its own effect.
   export type Report = (id: number, on: number, words: string) => boolean
   export type T = { readonly apply: (patches: Uint8Array) => void; readonly destroy: () => void }
-
-  // In the order of `Tag` and `On` (`app/viewtree/src/node.rs`), whose numbers index them.
-  const TAGS: readonly (keyof HTMLElementTagNameMap)[] = ["div", "section", "h2", "h3", "p", "a", "button", "input", "details", "summary", "code", "span", "h1", "ul", "li", "dl", "dt", "dd", "strong", "form", "pre", "textarea", "nav", "article", "img", "label", "aside", "ol"]
-  const EVENTS: readonly string[] = ["click", "input", "submit", "keydown", "toggle", "change", "intent"]
 
   type Reader = { readonly bytes: Uint8Array; at: number }
 
@@ -141,32 +136,32 @@ export namespace painter {
       while (r.at < patches.length) {
         const op = byte(r)
         switch (op) {
-          case 0: {
+          case OP.Element: {
             const [id, parent, before] = [varint(r), varint(r), varint(r)]
             const tag = TAGS[byte(r)]
             if (tag === undefined) throw new Error(`no tag at byte ${r.at - 1}`)
             placed(id, document.createElement(tag), parent, before)
             break
           }
-          case 1: {
+          case OP.Text: {
             const [id, parent, before] = [varint(r), varint(r), varint(r)]
             placed(id, document.createTextNode(string(r)), parent, before)
             break
           }
-          case 2: {
+          case OP.Foreign: {
             const [id, parent, before] = [varint(r), varint(r), varint(r)]
             const [kind, key, props] = [string(r), string(r), string(r)]
             foreigns.set(id, [kind, key])
             placed(id, foreign(kind, key, props), parent, before)
             break
           }
-          case 3: {
+          case OP.Set: {
             const id = varint(r)
             const [name, value] = [string(r), string(r)]
             set(element(id), name, value)
             break
           }
-          case 4: {
+          case OP.Unset: {
             const e = element(varint(r))
             const name = string(r)
             if (name === "value" && field(e)) e.value = ""
@@ -175,12 +170,12 @@ export namespace painter {
             e.removeAttribute(name)
             break
           }
-          case 5: {
+          case OP.Retext: {
             const id = varint(r)
             node(id).textContent = string(r)
             break
           }
-          case 6: {
+          case OP.Reprop: {
             const id = varint(r)
             const props = string(r)
             const part = foreigns.get(id)
@@ -189,18 +184,18 @@ export namespace painter {
             gone(replaced(id, foreign(part[0], part[1], props)))
             break
           }
-          case 7: {
+          case OP.Move: {
             const [id, parent, before] = [varint(r), varint(r), varint(r)]
             node(parent).insertBefore(node(id), before === 0 ? null : node(before - 1))
             break
           }
-          case 8: {
+          case OP.Remove: {
             const n = node(varint(r))
             n.parentNode?.removeChild(n)
             forget(n)
             break
           }
-          case 9: {
+          case OP.Listen: {
             const id = varint(r)
             const on = byte(r)
             const name = EVENTS[on]
@@ -225,7 +220,7 @@ export namespace painter {
             e.addEventListener(name === "intent" ? "click" : name, listener)
             break
           }
-          case 10: {
+          case OP.Unlisten: {
             const id = varint(r)
             const name = EVENTS[byte(r)]
             const listener = heard.get(`${id}:${name ?? ""}`)
@@ -234,13 +229,13 @@ export namespace painter {
             heard.delete(`${id}:${name}`)
             break
           }
-          case 11: {
+          case OP.Block: {
             const [id, parent, before] = [varint(r), varint(r), varint(r)]
             const [key, fallback] = [string(r), string(r)]
             placed(id, block(id, key, fallback), parent, before)
             break
           }
-          case 12: {
+          case OP.Rekey: {
             const id = varint(r)
             const [key, fallback] = [string(r), string(r)]
             if (!keys.has(id)) throw new Error(`node ${id} is not a block`)

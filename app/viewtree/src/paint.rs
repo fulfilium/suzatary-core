@@ -41,8 +41,7 @@ impl<M: Clone> Painter<M> {
         out
     }
 
-    /// `None` when the element is gone or does not listen for `on` (an event the DOM queued before
-    /// a patch removed its handler), or its handler answers none (a key left to the browser).
+    /// `None` when the element is gone, does not listen for `on`, or its handler answers none.
     #[must_use]
     pub fn message(&self, id: u32, on: On, words: String) -> Option<M> {
         self.handlers

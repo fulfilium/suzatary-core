@@ -60,6 +60,7 @@ fn generates_the_pages_boundary_types() {
     out.push_str(suzatary_core::wire::SPEC_NODE);
     out.push('\n');
     exported(&mut out, d.out);
+    out.push_str(&viewtree::patch::typescript());
     if let Ok(dir) = std::env::var("TS_RS_EXPORT_DIR") {
         std::fs::create_dir_all(&dir).expect("the export directory is writable");
         std::fs::write(std::path::Path::new(&dir).join("pages.ts"), out)

@@ -1,5 +1,4 @@
-//! A program and the runtime that steps it: one model, one pure `update`, the view a function of
-//! the model, and the effects `update` answers handed to whoever performs them.
+//! A program (one model, one pure `update`, a view of the model) and the runtime that steps it.
 
 use crate::node::{Node, On};
 use crate::paint::Painter;
@@ -12,8 +11,7 @@ pub trait Program {
     type Flags;
 
     fn init(flags: Self::Flags) -> (Self::Model, Vec<Self::Effect>);
-    /// `&mut` is the same function as one answering the next model: nothing else holds the model,
-    /// so nobody sees the old one change, and no step copies it.
+    /// `&mut` is a pure step here: nothing else holds the model.
     fn update(model: &mut Self::Model, msg: Self::Msg) -> Vec<Self::Effect>;
     fn view(model: &Self::Model) -> Node<Self::Msg>;
 }
@@ -52,8 +50,7 @@ impl<P: Program> Runtime<P> {
         (self.painter.paint(P::view(&self.model)), effects)
     }
 
-    /// The view drawn from nothing: what a painted DOM must equal, whatever patches brought it
-    /// there.
+    /// The view drawn from nothing, which a painted DOM must equal.
     #[must_use]
     pub fn fresh(&self) -> Vec<u8> {
         patch::encode(&Painter::start(P::view(&self.model)).1)

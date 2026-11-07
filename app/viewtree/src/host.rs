@@ -11,10 +11,8 @@ pub trait Hosted: Program<Flags: DeserializeOwned, Effect: Serialize> {
     type Input: DeserializeOwned;
     fn input(input: Self::Input) -> Self::Msg;
 
-    /// A JSON document `{"flags": …, "inputs": […]}`, flags and inputs as the host sends them,
-    /// that takes the program through the code its first real readings run. The host runs it in
-    /// a worker on the same compiled module, so the browser compiles that code there, before a
-    /// page's first input would compile it on the page's thread.
+    /// `{"flags": …, "inputs": […]}` that a worker runs on the same module, so the code a
+    /// page's first readings run is compiled before the page needs it.
     #[must_use]
     fn rehearsal() -> Option<&'static str> {
         None
@@ -44,8 +42,7 @@ impl<P: Hosted> Host<P> {
         Ok(self.took(frame))
     }
 
-    /// `None` when no handler took it (an event code the painter does not send is taken by none),
-    /// so the painter leaves it to the browser.
+    /// `None` when no handler took it, so the painter leaves it to the browser.
     pub fn event(&mut self, id: u32, on: u8, words: String) -> Option<Vec<u8>> {
         let frame = self.runtime.event(id, On::of(on)?, words)?;
         Some(self.took(frame))
@@ -56,15 +53,13 @@ impl<P: Hosted> Host<P> {
         self.runtime.fresh()
     }
 
-    /// A JSON array of the effects since the host last took them; fails on an effect that does
-    /// not print as JSON (a map keyed by something other than a string).
+    /// The effects since the host last took them, as a JSON array.
     pub fn effects(&mut self) -> Result<String, String> {
         serde_json::to_string(&std::mem::take(&mut self.effects))
             .map_err(|e| format!("effects: {e}"))
     }
 
-    /// The program's rehearsal run as a page would run it, and dropped: nothing for a program
-    /// with none.
+    /// The program's rehearsal, run and dropped.
     pub fn rehearse() -> Result<(), String> {
         let Some(text) = P::rehearsal() else {
             return Ok(());

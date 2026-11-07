@@ -128,8 +128,7 @@ pub enum Attr {
     Role,
     AriaCurrent,
     EnterKeyHint,
-    /// A person opening a `details` changes the DOM and not the view, so the painter sets it
-    /// only when the view's own value moves.
+    /// Set only when the view's own value moves, since a person opening a `details` does not.
     Open,
     Hidden,
     Type,
@@ -157,8 +156,7 @@ pub enum Attr {
     Id,
     AriaControls,
     Tabindex,
-    /// A checkbox's `checked`: the painter sets the property, so a box a person ticked is drawn
-    /// as the view says.
+    /// Set as the property, so a box a person ticked is drawn as the view says.
     Checked,
     /// The field a label names by its `id`.
     For,
@@ -214,19 +212,41 @@ pub enum On {
     Input,
     /// Performs nothing and reports no words.
     Submit,
-    /// Reports `Key::print`; the key's own effect is kept only when the handler answers no
-    /// message.
+    /// Reports `Key::print`; the key's own effect is kept when the handler answers none.
     Keydown,
     /// Reports `"1"` for open, `""` for closed.
     Toggle,
     /// Reports `Picked::print`.
     Files,
-    /// A click on an element inside this one that carries `data-intent`; the painter reports the
-    /// nearest such element's intent, as written, and reports nothing for a click on none.
+    /// A click inside on an element carrying `data-intent`, reported as that intent's words.
     Intent,
 }
 
 impl On {
+    /// In the order of their codes.
+    pub const ALL: [On; 7] = [
+        On::Click,
+        On::Input,
+        On::Submit,
+        On::Keydown,
+        On::Toggle,
+        On::Files,
+        On::Intent,
+    ];
+
+    #[must_use]
+    pub const fn dom(self) -> &'static str {
+        match self {
+            On::Click => "click",
+            On::Input => "input",
+            On::Submit => "submit",
+            On::Keydown => "keydown",
+            On::Toggle => "toggle",
+            On::Files => "change",
+            On::Intent => "intent",
+        }
+    }
+
     #[must_use]
     pub const fn code(self) -> u8 {
         match self {
@@ -318,8 +338,7 @@ impl<M: 'static> Listener<M> {
 }
 
 impl<M: 'static> Node<M> {
-    /// Lifts a part's messages into its page's (Elm's `Html.map`). A lazy part inside is drawn
-    /// now, since its hash does not name `f`.
+    /// Elm's `Html.map`; a lazy part inside is drawn now, since its hash does not name `f`.
     #[must_use]
     pub fn map<N: 'static>(self, f: impl Fn(M) -> N + 'static) -> Node<N> {
         self.mapped(&(Rc::new(f) as Rc<dyn Fn(M) -> N>))
@@ -463,8 +482,7 @@ impl<M> Listener<M> {
     }
 }
 
-/// A part another painter draws; `props` is all it is told, and a change of `props` is the
-/// only change it is told about.
+/// A part another painter draws from `props` alone.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Foreign {
     pub kind: &'static str,
@@ -481,8 +499,7 @@ pub struct Block {
     pub fallback: String,
 }
 
-/// Redrawn only when `hash` (of the function and its value) differs from the part drawn at
-/// the same place (Elm's `Html.Lazy`).
+/// Redrawn only when `hash` differs from the part drawn at its place (Elm's `Html.Lazy`).
 pub struct Lazy<M> {
     pub hash: u64,
     draw: Rc<dyn Fn() -> Node<M>>,
@@ -677,8 +694,7 @@ impl<M: 'static> El<M> {
         self.on(Listener::Keydown(Handler::of(f)))
     }
 
-    /// `data` carries what the view was drawn from (whether the field holds words), as a click
-    /// carries its message.
+    /// `data` carries what the view was drawn from, as a click carries its message.
     #[must_use]
     pub fn keydown_of<C: Clone + 'static>(self, data: C, f: fn(C, Key) -> Option<M>) -> Self {
         self.on(Listener::Keydown(Handler(Rc::new(move |k| {

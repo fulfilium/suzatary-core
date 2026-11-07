@@ -1,5 +1,4 @@
 //! A page's view as data, the keyed diff that paints it, and the patches a painter applies.
-//! Handlers are messages, never closures over state; the view is a function of the model alone.
 #![forbid(unsafe_code)]
 
 pub mod dom;
