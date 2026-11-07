@@ -1,10 +1,6 @@
-//! Home: the open chain's todos as one tree of terms, grouped, the one place a todo is born, and
-//! on a wide screen the todo it has selected in a pane beside it.
-//!
-//! The tree is the core's (`suzatary_core::tree`), grown and priced by the core in the tab's
-//! worker: the rows the tab's fold holds are its members and their specs its ancestry, priced
-//! under the box's rows at once and under the reading of the objects the tab holds once that
-//! lands. The last tree drawn stays while the next is asked.
+//! Home: the open chain's todos as one tree, grown and priced by the core in the tab's worker,
+//! and on a wide screen the selected todo in a pane. The last tree drawn stays while the next is
+//! asked.
 
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -52,8 +48,7 @@ pub struct Flags {
     pub now: i64,
 }
 
-/// The page's held questions: the tab's readings, its registers, the box's answers, and its
-/// pane's.
+/// The page's held questions.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[serde(tag = "type", content = "of")]
 #[ts(rename = "TodosHold")]
@@ -106,9 +101,7 @@ pub enum Ask {
     Reading {
         at: String,
     },
-    /// The tree, grown and priced: the answer to the page's ask of this number. A number, not
-    /// the question, since a term's JSON does not come back from the host as it went (`-4.0` is
-    /// read back as `-4`).
+    /// By number, since a term's JSON does not come back as it went (`-4.0` reads as `-4`).
     Tree {
         n: u32,
     },
@@ -123,8 +116,9 @@ pub enum Ask {
     Undo {
         todo: String,
     },
-    /// The pane's todo page's, under a name of its own: the two asks are tagged by one key.
+    /// Named by the todo whose pane asked, so the answer reaches that pane alone.
     Pane {
+        todo: String,
         ask: todo::Ask,
     },
 }
@@ -469,8 +463,7 @@ impl Priced {
     }
 }
 
-/// The reading of the objects the tab holds: its name, each todo's candidate specs, each
-/// todo's function, and the chains held beside it.
+/// The reading of the objects the tab holds.
 #[derive(Debug, Clone, PartialEq)]
 struct Read {
     /// The instant the replica was read at.
@@ -725,8 +718,23 @@ pub enum Todos {}
 
 type Fx = Effect<Hold, Ask, Listen>;
 
-fn pane_fx(e: Effect<todo::Hold, todo::Ask>) -> Fx {
-    e.map(Hold::Pane, |ask| Ask::Pane { ask }, |n| match n {})
+fn pane_fx(todo: &str, e: Effect<todo::Hold, todo::Ask>) -> Fx {
+    e.map(
+        Hold::Pane,
+        |ask| Ask::Pane {
+            todo: todo.to_owned(),
+            ask,
+        },
+        |n| match n {},
+    )
+}
+
+fn stepped(p: &mut todo::Model, msg: todo::Msg) -> Vec<Fx> {
+    let todo = p.id().to_owned();
+    p.update(msg)
+        .into_iter()
+        .map(|e| pane_fx(&todo, e))
+        .collect()
 }
 
 impl Model {
@@ -837,9 +845,7 @@ impl Model {
         }
     }
 
-    /// The members the tree places: the rows with content that are not decisions, that pass the
-    /// filter or whose act this tab holds unsent, so its line can say where the act stands. The
-    /// worker finds the parents in their specs.
+    /// The rows with content that are not decisions and pass the filter or hold an unsent act.
     fn members(&self) -> Vec<Placed> {
         let now = self.at_ms();
         self.entries()
@@ -900,8 +906,7 @@ impl Model {
         }
     }
 
-    /// The tree asked of the worker when what it answers moved; the last tree drawn stays
-    /// while the next is grown.
+    /// The tree asked of the worker when what it answers moved.
     fn regrow(&mut self) -> Vec<Fx> {
         if self.fold.is_none() {
             return Vec::new();
@@ -1095,7 +1100,7 @@ impl Model {
             Msg::Sheet(m) => self.sheeted(m),
             Msg::Retry => self.reread(),
             Msg::Pane(m) => match &mut self.pane {
-                Pane::Todo(p) => p.update(m).into_iter().map(pane_fx).collect(),
+                Pane::Todo(p) => stepped(p, m),
                 Pane::Hint => Vec::new(),
             },
         }
@@ -1232,11 +1237,7 @@ impl Model {
             Input::Context(c) => {
                 let mut out = Vec::new();
                 if let Pane::Todo(p) = &mut self.pane {
-                    out = p
-                        .update(todo::Msg::Host(Box::new(Input::Context(c.clone()))))
-                        .into_iter()
-                        .map(pane_fx)
-                        .collect();
+                    out = stepped(p, todo::Msg::Host(Box::new(Input::Context(c.clone()))));
                 }
                 self.context = c;
                 out
@@ -1260,12 +1261,8 @@ impl Model {
         }
     }
 
-    /// A kept register read back: a value it cannot parse reads as its default.
-    ///
-    /// A register this tab keeps is read back once, when the page opens: it holds what the page
-    /// wrote itself, so a later reading is an echo of a write the model already made, and one
-    /// heard late would undo a newer one. A register this device keeps is heard always, as
-    /// another tab may write it.
+    /// A value that does not parse reads as its default. A tab's register is read once, at open:
+    /// a later reading echoes the page's own write and could undo a newer one.
     fn kept_read(&mut self, k: Kept, v: Value) {
         if let (_, false) = self.kept(k)
             && !self.restored.insert(k)
@@ -1380,15 +1377,14 @@ impl Model {
                 Vec::new()
             }
             Hold::Pane(h) => match &mut self.pane {
-                Pane::Todo(p) => p
-                    .update(todo::Msg::Host(Box::new(Input::Held {
+                Pane::Todo(p) => stepped(
+                    p,
+                    todo::Msg::Host(Box::new(Input::Held {
                         ask: h,
                         reading,
                         behind,
-                    })))
-                    .into_iter()
-                    .map(pane_fx)
-                    .collect(),
+                    })),
+                ),
                 Pane::Hint => Vec::new(),
             },
         }
@@ -1429,12 +1425,10 @@ impl Model {
                     now: self.now,
                 });
                 self.pane = Pane::Todo(Box::new(p));
-                out.extend(effects.into_iter().map(pane_fx));
+                out.extend(effects.into_iter().map(|e| pane_fx(&r.selected, e)));
             }
         }
-        // A share is consumed, not a place: its words go into the sheet and the address back to
-        // the list's, with no history entry; the address gone back, the same link shared again
-        // is a new share.
+        // A share is consumed: its words go into the sheet, and the address back to the list's.
         if r.shared.is_empty() {
             self.shared.clear();
         } else if r.shared != self.shared {
@@ -1476,23 +1470,45 @@ impl Model {
                 phase,
             } => self.lined(todo, acting, phase, answer),
             Ask::Undo { todo } => self.act(&todo, Acting::Undo),
-            Ask::Pane { ask: a } => match &mut self.pane {
-                Pane::Todo(p) => p
-                    .update(todo::Msg::Host(Box::new(Input::Answered {
-                        ask: a,
-                        answer,
-                    })))
-                    .into_iter()
-                    .map(pane_fx)
-                    .collect(),
-                Pane::Hint => Vec::new(),
+            Ask::Pane { todo, ask } => match &mut self.pane {
+                Pane::Todo(p) if p.id() == todo => stepped(
+                    p,
+                    todo::Msg::Host(Box::new(Input::Answered { ask, answer })),
+                ),
+                Pane::Todo(_) | Pane::Hint => self.unshown(todo, ask, answer),
             },
         }
     }
 
-    /// The box printed the sheet's todo: the sheet goes down, emptied, its category kept, and its
-    /// seals go to the replica. It goes down now, not once they are taken, as the page may be
-    /// left before they are, and its registers would then open the next one on this one.
+    /// For a pane that no longer shows `todo`: its write still lands, said as a line's is.
+    fn unshown(&mut self, todo: String, ask: todo::Ask, answer: Answer) -> Vec<Fx> {
+        let (phase, write) = match ask {
+            todo::Ask::Printed {
+                write: todo::Write::Act { acting },
+            } => return self.lined(todo, acting, Phase::Printed, answer),
+            todo::Ask::Sealed {
+                write: todo::Write::Act { acting },
+            } => return self.lined(todo, acting, Phase::Sealed, answer),
+            todo::Ask::Undo => return self.act(&todo, Acting::Undo),
+            todo::Ask::Built | todo::Ask::Thirty => return Vec::new(),
+            todo::Ask::Printed { write } => (Phase::Printed, write),
+            todo::Ask::Sealed { write } => (Phase::Sealed, write),
+        };
+        let named = |phase| Ask::Pane {
+            todo: todo.clone(),
+            ask: match phase {
+                Phase::Printed => todo::Ask::Printed { write },
+                Phase::Sealed => todo::Ask::Sealed { write },
+            },
+        };
+        match came(&self.chain, phase, answer, named) {
+            Came::Seals(seals) => seals,
+            Came::Taken | Came::Already => Vec::new(),
+            Came::Refused(words) => vec![Effect::Toast { words }],
+        }
+    }
+
+    /// The sheet goes down now, not once the seals are taken: the page may be left before then.
     fn printed(&mut self, todo: &str) -> Vec<Fx> {
         self.adding = Adding::Sealing(match &self.sheet.parent {
             Some(p) => format!("added {todo} under {}", p.todo),
@@ -1882,9 +1898,7 @@ fn worth_mark(w: &Worth) -> Node<Msg> {
 impl Model {
     fn title(e: Option<&Entry>, id: &str) -> Node<Msg> {
         match e.and_then(|e| e.authored.as_ref().map(|a| (e, a))) {
-            // A title is a block once its row carries the HTML (a fold fills it from this
-            // device's kept blocks): placed by key alone, it would draw its source and then its
-            // HTML whenever a join landed, so the same readings would draw two lists.
+            // A block only once the row carries the HTML, so one reading draws one list.
             Some((e, a)) if !e.unconfirmed && a.rich.body.is_some() => {
                 view! { Span "rowtitle" [a.rich.keys.body.as_deref().map(|k| viewtree::node::block(k, headline(e)))] }
             }
@@ -2309,12 +2323,15 @@ mod tests {
                 at: "2026-09-04T12:00:00".to_owned(),
             },
             Ask::Pane {
+                todo: "renewcard".to_owned(),
                 ask: todo::Ask::Printed { write },
             },
             Ask::Pane {
+                todo: "renewcard".to_owned(),
                 ask: todo::Ask::Sealed { write },
             },
             Ask::Pane {
+                todo: "renewcard".to_owned(),
                 ask: todo::Ask::Thirty,
             },
         ] {
