@@ -29,7 +29,7 @@ import { writeFileSync } from "node:fs"
 import marks from "../src/chat/marks"
 import wait from "../src/wire/wait"
 import type { Recorded } from "./harness"
-import { PHONE, REPLICA_ROWS, SIGNED_POST, WORKER_MARKS, WORKER_QUESTIONS, snapshotKept, suite, trustThisDevice } from "./harness"
+import { PHONE, REPLICA_ROWS, SIGNED_POST, STEP_MS, WORKER_MARKS, WORKER_QUESTIONS, snapshotKept, suite, trustThisDevice } from "./harness"
 
 type Shape = { readonly lines: number; readonly conversations: number; readonly reseals: number; readonly proposals: number; readonly topics: number; readonly todos: number }
 // The stores' shape as `scripts/web-e2e.sh` hands it to the fixture.
@@ -75,7 +75,7 @@ type Phase = { readonly ms: number; readonly longest: number; readonly tasks: nu
 
 // The long tasks from `from` (now, when absent; the document's start is 0) until `until` holds and the page is quiet,
 // and how long until `until` held.
-const phase = async (until: string, from?: number, timeout = 600000): Promise<Phase> => {
+const phase = async (until: string, from?: number, timeout = STEP_MS): Promise<Phase> => {
   const since = from ?? (await app.page.evaluate<number>(`performance.now()`))
   await app.page.waitFor(until, { timeout })
   const drawn = await app.page.evaluate<number>(`performance.now()`)
@@ -168,10 +168,10 @@ app.scene("a warm load of the conversations draws them from the device, with eve
   await trustThisDevice(app.page, LINES_BASE, LINES_INSTANCE)
   const unobserve = await app.page.beforeEveryDocument(OBSERVE)
   await app.page.navigate(`${LINES_BASE}/#/secretary`)
-  await app.page.waitFor(BULK, { timeout: 600000 })
+  await app.page.waitFor(BULK, { timeout: STEP_MS })
   // The cold load done: the device holds the lines, and nothing it asked for is still coming.
   const journal = await app.page.journal()
-  const deadline = Date.now() + 600000
+  const deadline = Date.now() + STEP_MS
   while (reads(journal.inFlight()).length > 0 && Date.now() < deadline) await new Promise((done) => setTimeout(done, 200))
   assert.deepEqual(reads(journal.inFlight()), [], "the cold load ended")
   // As a page left open does: the lines are quiet, so the core's snapshot of them is kept.
@@ -217,9 +217,9 @@ app.scene("a warm load of the conversations answers the page's first stream befo
   await trustThisDevice(app.page, LINES_BASE, LINES_INSTANCE)
   const unobserve = await app.page.beforeEveryDocument(OBSERVE)
   await app.page.navigate(`${LINES_BASE}/#/secretary`)
-  await app.page.waitFor(BULK, { timeout: 600000 })
+  await app.page.waitFor(BULK, { timeout: STEP_MS })
   const journal = await app.page.journal()
-  const deadline = Date.now() + 600000
+  const deadline = Date.now() + STEP_MS
   while (reads(journal.inFlight()).length > 0 && Date.now() < deadline) await new Promise((done) => setTimeout(done, 200))
   assert.deepEqual(reads(journal.inFlight()), [], "the cold load ended")
   // As a page left open does: the lines are quiet, so the core's snapshot of them is kept.

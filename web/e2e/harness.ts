@@ -251,13 +251,28 @@ export async function topicRounds(page: Page): Promise<void> {
   }
 }
 
-/** A verb of a deployment (the writer's, by default) run at the box's terminal, as the owner would run it. */
+/** How long node gives one scene (`scripts/web-e2e.sh` passes the same default to `--test-timeout`). */
+export const SCENE_MS = Number(process.env["SUZATARY_E2E_SCENE_MS"] ?? "300000");
+
+/** The longest one step of a scene may take, so a step that does not end fails naming itself before the scene's own
+ * timeout ends the scene with no word of what it waited for. */
+export const STEP_MS = SCENE_MS / 4;
+
+/** A verb of a deployment (the writer's, by default) run at the box's terminal, as the owner would run it. It blocks
+ * the suite's process while it runs, so no timer of the scene's fires: it is killed after `STEP_MS` instead. */
 export function atTheTerminal(args: readonly string[], instance = process.env["E2E_TRIAGE_INSTANCE"], env: Readonly<Record<string, string>> = {}): string {
   const bin = process.env["E2E_TRIAGE_BIN"];
   if (bin === undefined || instance === undefined) {
     throw new Error("E2E_TRIAGE_BIN/E2E_TRIAGE_INSTANCE are unset — scripts/web-e2e.sh sets them");
   }
-  return execFileSync(bin, ["--instance", instance, ...args], { encoding: "utf8", env: { ...process.env, ...env } });
+  const started = Date.now();
+  try {
+    return execFileSync(bin, ["--instance", instance, ...args], { encoding: "utf8", env: { ...process.env, ...env }, timeout: STEP_MS });
+  } catch (error: unknown) {
+    if (!(error instanceof Error && "code" in error && error.code === "ETIMEDOUT")) throw error;
+    const printed = ["stdout", "stderr"].map((stream) => (stream in error ? String(Reflect.get(error, stream) ?? "") : "")).join("");
+    throw new Error(`\`suzatary ${args.join(" ")}\` did not end in ${Date.now() - started} ms (bound ${STEP_MS}) and was killed\n  it printed: ${printed}`);
+  }
 }
 
 /**

@@ -52,7 +52,7 @@ declare module "node:child_process" {
   export function execFileSync(
     command: string,
     args: readonly string[],
-    options: { readonly encoding: "utf8"; readonly env?: Record<string, string | undefined> },
+    options: { readonly encoding: "utf8"; readonly env?: Record<string, string | undefined>; readonly timeout?: number },
   ): string;
 }
 

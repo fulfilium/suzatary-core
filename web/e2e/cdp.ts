@@ -41,6 +41,18 @@ const sleep = (ms: number): Promise<void> => new Promise((done) => setTimeout(do
 export { WAIT_MS };
 const STRETCH = WAIT_MS / BASELINE_MS;
 
+/** How long the harness waits for one answer it cannot see coming: four wait budgets. */
+export const ANSWER_MS = 4 * WAIT_MS * STRETCH;
+
+/** `promise`, or a failure naming `what` once `ms` pass without it settling. */
+async function within<T>(promise: Promise<T>, ms: number, what: string): Promise<T> {
+  let stop: ReturnType<typeof setTimeout> | undefined;
+  const late = new Promise<never>((_, no) => {
+    stop = setTimeout(() => no(new Error(`waited ${Math.round(ms)} ms for ${what}, which did not settle`)), ms);
+  });
+  return Promise.race([promise, late]).finally(() => clearTimeout(stop));
+}
+
 /**
  * The binary. `chromium` on PATH is the answer inside `nix develop .#triage`
  * and in CI, which is where this is meant to run; `SUZATARY_CHROMIUM` is for
@@ -321,7 +333,7 @@ export class Page {
   ) {}
 
   private async command(method: string, params: Record<string, unknown> = {}): Promise<Record<string, unknown>> {
-    return this.connection.send(method, params, this.session);
+    return within(this.connection.send(method, params, this.session), ANSWER_MS, `the DevTools command ${method}`);
   }
 
   /** Close this tab. */
@@ -421,19 +433,16 @@ export class Page {
    * a promise not settled within `timeout` (four wait budgets), naming the
    * expression: a page promise that never settles fails the scene with what it
    * waited for instead of holding it until the test's own timeout. */
-  async evaluate<T>(expression: string, timeout = 4 * WAIT_MS * STRETCH): Promise<T> {
+  async evaluate<T>(expression: string, timeout = ANSWER_MS): Promise<T> {
     return this.evaluateIn<T>(this.session, expression, timeout);
   }
 
-  private async evaluateIn<T>(session: string, expression: string, timeout = 4 * WAIT_MS * STRETCH): Promise<T> {
-    let stop: ReturnType<typeof setTimeout> | undefined;
-    const late = new Promise<never>((_, no) => {
-      stop = setTimeout(() => no(new Error(`evaluate waited ${Math.round(timeout)} ms for a promise that did not settle\n  expression: ${expression}`)), timeout);
-    });
-    const result = await Promise.race([
+  private async evaluateIn<T>(session: string, expression: string, timeout = ANSWER_MS): Promise<T> {
+    const result = await within(
       this.connection.send("Runtime.evaluate", { expression, returnByValue: true, awaitPromise: true, userGesture: true }, session),
-      late,
-    ]).finally(() => clearTimeout(stop));
+      timeout,
+      `a promise evaluated in the page\n  expression: ${expression}`,
+    );
     const failure = result["exceptionDetails"] as { exception?: { description?: string }; text?: string } | undefined;
     if (failure !== undefined) {
       const said = failure.exception?.description ?? failure.text ?? "unknown";

@@ -22,7 +22,7 @@ import assert from "node:assert/strict"
 import { readdirSync, writeFileSync } from "node:fs"
 import { dirname, join } from "node:path"
 
-import { LANDED_ROW, PHONE, REPLICA_ROWS, atTheTerminal, suite, trustThisDevice, withCore } from "./harness"
+import { LANDED_ROW, PHONE, REPLICA_ROWS, STEP_MS, atTheTerminal, suite, trustThisDevice, withCore } from "./harness"
 
 const required = (name: string): string => {
   const v = process.env[name]
@@ -84,7 +84,7 @@ const app = await suite("rescrub", PHONE)
 // The stream drawn, timed from the document's start until its first round is drawn, and what the core's worker
 // scrubbed until then.
 const drawn = async (): Promise<{ readonly ms: number; readonly scrubs: number }> => {
-  await app.page.waitFor(BULK, { timeout: 600000 })
+  await app.page.waitFor(BULK, { timeout: STEP_MS })
   const ms = Math.round(await app.page.evaluate<number>(`performance.now()`))
   return { ms, scrubs: await app.page.inWorker<number>("prodromework", SCRUBS) }
 }
@@ -98,7 +98,7 @@ app.scene("after migrate-scrub the device holds the box's keys and a warm load s
   await app.page.throttle(RATE)
   try {
     await app.page.navigate(`${BASE}/#/secretary`)
-    await app.page.waitFor(BULK, { timeout: 600000 })
+    await app.page.waitFor(BULK, { timeout: STEP_MS })
     const stale = await load()
     const held = new Map(Object.entries(await app.page.evaluate<Record<string, string>>(BOX_KEYS)))
     // The tab is closed while the box runs the migration, so it hears of the reseals in one pull when it opens again.
@@ -112,7 +112,7 @@ app.scene("after migrate-scrub the device holds the box's keys and a warm load s
     const resealed = await drawn()
     // The device's sweep runs once the content naming the reseals is held, after the reading it waited for.
     const swept = Date.now()
-    const deadline = swept + 600000
+    const deadline = swept + STEP_MS
     let device = await app.page.evaluate<string[]>(DEVICE_KEYS)
     while (JSON.stringify(device) !== JSON.stringify(after) && Date.now() < deadline) {
       await new Promise((done) => setTimeout(done, 500))
@@ -125,8 +125,8 @@ app.scene("after migrate-scrub the device holds the box's keys and a warm load s
     assert.ok(replaced !== undefined, "a key the device held was replaced")
     await app.page.evaluate(plant(replaced, held.get(replaced)!))
     await app.page.reload()
-    await app.page.waitFor(BULK, { timeout: 600000 })
-    const again = Date.now() + 600000
+    await app.page.waitFor(BULK, { timeout: STEP_MS })
+    const again = Date.now() + STEP_MS
     device = await app.page.evaluate<string[]>(DEVICE_KEYS)
     while (JSON.stringify(device) !== JSON.stringify(after) && Date.now() < again) {
       await new Promise((done) => setTimeout(done, 500))
