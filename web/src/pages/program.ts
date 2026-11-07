@@ -195,6 +195,15 @@ export namespace program {
   export type Around = { readonly box?: () => Element; readonly told?: (said: unknown) => void; readonly absorbs?: (screen: Screen) => boolean }
   const page_ = (): Element => document.scrollingElement ?? document.documentElement
 
+  // A task of its own for `f`, after every task already queued: a message to this tab's own channel, which a hidden tab
+  // does not hold back as it holds back a timer.
+  const soon = (() => {
+    const queued: (() => void)[] = []
+    const channel = new MessageChannel()
+    channel.port1.onmessage = () => queued.shift()?.()
+    return (f: () => void): void => (queued.push(f), channel.port2.postMessage(null))
+  })()
+
   // Only the module is awaited: the page draws when the caller calls what this returns.
   export const mount = async <P extends Page>(page: P, args: Args[P], around: Around = {}): Promise<Draw> => {
     const box = around.box ?? page_
@@ -203,12 +212,28 @@ export namespace program {
       // By name: a new one under a name lets the one before go.
       const held_ = new Map<string, () => void>()
       const timers = new Set<ReturnType<typeof setTimeout>>()
+      const frames = new Set<number>()
       const hold = (name: unknown, stop: () => void): void => {
         const k = JSON.stringify(name)
         held_.get(k)?.()
         held_.set(k, stop)
       }
       const drawn = (r: Reading<Answer>): void => (r.type === "Loading" ? undefined : frame.drawn())
+      // A reading heard to move is told the page in a task of its own, and once however often it moved meanwhile, as
+      // it then stands: the task that brought it (the core worker's answer, dressed) and the page's step over it are
+      // two tasks, so neither holds the thread for both, and a burst of moves is one step.
+      // Each subscription owes at most one telling, and one let go (the page gone, or the ask held anew) tells nothing
+      // more, so a telling still queued never lands after the reading that replaced it.
+      const heard = (tell: () => void, listen: (f: () => void) => () => void): (() => void) => {
+        let owed = false
+        let gone = false
+        const unheard = listen(() => {
+          if (owed) return
+          owed = true
+          soon(() => ((owed = false), gone ? undefined : tell()))
+        })
+        return () => ((gone = true), unheard())
+      }
       const handle: run.Handler<In, Out> = (e, send, stepped) => {
         const answered = (name: unknown) => (a: Answer): void => send({ type: "Answered", ask: name, answer: a })
         switch (e.type) {
@@ -219,7 +244,7 @@ export namespace program {
               drawn(r)
               send({ type: "Held", ask: e.ask, reading: r, behind: q.behind() })
             }
-            hold(e.ask, q.hear(tell))
+            hold(e.ask, heard(tell, f => q.hear(f)))
             return tell()
           }
           case "Watch": {
@@ -229,7 +254,7 @@ export namespace program {
               drawn(now)
               send({ type: "Held", ask: e.ask, reading: now, behind: null })
             }
-            hold(e.ask, r.hear(tell))
+            hold(e.ask, heard(tell, f => r.hear(f)))
             return tell()
           }
           case "Keep":
@@ -287,6 +312,10 @@ export namespace program {
             const t = setTimeout(() => (timers.delete(t), answered(e.ask)({ type: "Done", body: time.now() })), e.after)
             return void timers.add(t)
           }
+          case "Frame": {
+            const f = requestAnimationFrame(() => (frames.delete(f), answered(e.ask)({ type: "Done", body: null })))
+            return void frames.add(f)
+          }
           case "Focus": {
             const field = root.querySelector(`[data-field="${CSS.escape(e.field)}"]`)
             const busy = document.activeElement
@@ -334,6 +363,7 @@ export namespace program {
           unheard()
           held_.forEach(stop => stop())
           timers.forEach(t => clearTimeout(t))
+          frames.forEach(f => cancelAnimationFrame(f))
           running.destroy()
         },
       }

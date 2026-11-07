@@ -39,12 +39,16 @@ export namespace scroll {
 
   // A window's height while a page reserves it; otherwise only as much as the reader still sees, so letting it go never
   // leaves the box shorter than the view and never pulls the reader down.
+  // A room not held only shrinks, so one already gone stays gone without reading the layout: a step's patches are then
+  // laid out once, by the browser's frame, and never forced by the step that made them.
   const fit = (b: Box): void => {
     const room = roomOf(b.box)
     if (room === null) return void (b.room = 0)
+    const held = room.dataset["room"] === "held"
+    if (!held && b.room === 0) return void ((room.style.height = "0px"), (room.hidden = true))
     const height = b.box.clientHeight
     const shown = room.hidden ? 0 : offsetOf(b.box, room)
-    const next = room.dataset["room"] === "held" ? height : Math.min(b.room, Math.max(0, b.box.scrollTop + height - shown))
+    const next = held ? height : Math.min(b.room, Math.max(0, b.box.scrollTop + height - shown))
     b.room = next
     room.style.height = `${next}px`
     room.hidden = next === 0

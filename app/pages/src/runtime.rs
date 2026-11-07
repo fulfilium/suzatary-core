@@ -133,6 +133,13 @@ pub enum Effect<H, A, S = Never> {
         ask: A,
         after: u32,
     },
+    /// Answered at the browser's next animation frame, once it has drawn what came before: the
+    /// pace of work drawn a slice at a time, one slice to a frame, so a frame never holds two
+    /// slices and a slice's step starts with the page already laid out. A hidden tab draws no
+    /// frame, so its slices wait until it is shown.
+    Frame {
+        ask: A,
+    },
     /// Focus the field marked `data-field` after this step's patches, caret at the end; nothing
     /// when none stands or the keyboard is in another field.
     Focus {
@@ -341,6 +348,7 @@ impl<H, A, S> Effect<H, A, S> {
                 key,
             },
             Effect::Timer { ask, after } => Effect::Timer { ask: a(ask), after },
+            Effect::Frame { ask } => Effect::Frame { ask: a(ask) },
             Effect::Focus { field } => Effect::Focus { field },
             Effect::Scroll { to } => Effect::Scroll { to },
             Effect::Copy { text } => Effect::Copy { text },

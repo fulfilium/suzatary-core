@@ -313,9 +313,26 @@ const NAMED_GENESIS = /^Change\(genesis='([0-9a-f]{64})', /;
  */
 export function prodromeOf(object: Obj): string | null {
   if (!("literal" in object)) return object.header.node === "structure" && object.header.kind === "Genesis" ? object.hash : null;
-  if (object.literal.startsWith("Genesis(")) return object.hash;
-  return NAMED_GENESIS.exec(object.literal)?.[1] ?? null;
+  return once(prodromes, object, (literal) => (literal.startsWith("Genesis(") ? object.hash : (NAMED_GENESIS.exec(literal)?.[1] ?? null)));
 }
+
+/**
+ * What a stored object's print says, read once per print for as long as the tab runs, so a replica read again (every
+ * sync writes the whole row and reads it back) scans no print twice. It is kept under the object's name and taken only
+ * for the same print: comparing two strings costs far less than the scans, and a name another print claims is read
+ * afresh.
+ */
+type Read<A> = { readonly literal: string; readonly said: A };
+const once = <A>(known: Map<string, Read<A>>, object: StoredObject, read: (literal: string) => A): A => {
+  const had = known.get(object.hash);
+  if (had !== undefined && had.literal === object.literal) return had.said;
+  const said = read(object.literal);
+  known.set(object.hash, { literal: object.literal, said });
+  return said;
+};
+const prodromes = new Map<string, Read<string | null>>();
+const parents = new Map<string, Read<string[]>>();
+const rests = new Map<string, Read<readonly string[]>>();
 
 /** The objects of a gone prodrome, and every object resting on one, by one pass over a parents-first order. */
 export function forgotten(objects: readonly Obj[], gone: readonly string[]): Set<string> {
@@ -371,8 +388,10 @@ export function ancestry(objects: readonly Obj[]): (a: readonly string[], b: rea
 /** What an object rests on: its parents, and the genesis of the prodrome a change is in. */
 export function restsOn(object: Obj): readonly string[] {
   if (!("literal" in object)) return object.parents;
-  const genesis = object.literal.startsWith("Genesis(") ? null : prodromeOf(object);
-  return genesis === null ? parentsOf(object) : [...parentsOf(object), genesis];
+  return once(rests, object, (literal) => {
+    const genesis = literal.startsWith("Genesis(") ? null : prodromeOf(object);
+    return genesis === null ? parentsOf(object) : [...parentsOf(object), genesis];
+  });
 }
 
 /**
@@ -386,9 +405,13 @@ const GENESIS = /^[A-Za-z]+\(genesis='[0-9a-f]{64}', /;
 const NO_PARENT = /(key|signature)='[0-9a-f]+'/g;
 
 export function parentsOf(object: StoredObject): string[] {
-  const cut = object.literal.indexOf("event=");
-  const envelope = (cut === -1 ? object.literal : object.literal.slice(0, cut)).replace(GENESIS, "").replace(NO_PARENT, "");
-  return [...envelope.matchAll(NAME)].map((found) => found[0]);
+  return [
+    ...once(parents, object, (literal) => {
+      const cut = literal.indexOf("event=");
+      const envelope = (cut === -1 ? literal : literal.slice(0, cut)).replace(GENESIS, "").replace(NO_PARENT, "");
+      return [...envelope.matchAll(NAME)].map((found) => found[0]);
+    }),
+  ];
 }
 
 // --- The two decisions -------------------------------------------------------

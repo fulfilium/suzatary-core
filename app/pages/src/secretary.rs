@@ -437,10 +437,11 @@ fn rounds(m: &Model) -> usize {
 /// Asks the next slice while rounds are left; after the last, moves the box.
 fn drawn(m: &mut Model) -> Vec<Effect> {
     if !m.shown.whole(rounds(m)) {
-        return vec![Effect::Timer {
-            ask: Ask::Slice,
-            after: 0,
-        }];
+        return if m.shown.ask(rounds(m)) {
+            vec![Effect::Frame { ask: Ask::Slice }]
+        } else {
+            Vec::new()
+        };
     }
     m.placing
         .take()

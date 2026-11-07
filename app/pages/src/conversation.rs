@@ -969,10 +969,11 @@ fn rounds_held(m: &Model) -> usize {
 /// timeline.
 fn drawn(m: &mut Model) -> Vec<Effect> {
     if !m.shown.whole(rounds_held(m)) {
-        return vec![Effect::Timer {
-            ask: Ask::Slice,
-            after: 0,
-        }];
+        return if m.shown.ask(rounds_held(m)) {
+            vec![Effect::Frame { ask: Ask::Slice }]
+        } else {
+            Vec::new()
+        };
     }
     let to = m.placing.take();
     let mut effects = moved(m, to);
@@ -1740,15 +1741,7 @@ mod tests {
 
     /// `msg` stepped, and every slice it asks for answered: what the page asks once it is drawn.
     fn stepped(rt: &mut Runtime<Conversation>, msg: Msg) -> Vec<Effect> {
-        let slicing = |e: &Effect| {
-            matches!(
-                e,
-                Effect::Timer {
-                    ask: Ask::Slice,
-                    ..
-                }
-            )
-        };
+        let slicing = |e: &Effect| matches!(e, Effect::Frame { ask: Ask::Slice });
         let mut out = Vec::new();
         let mut next = rt.step(msg).1;
         loop {
