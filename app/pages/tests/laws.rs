@@ -998,6 +998,24 @@ proptest! {
     }
 
     #[test]
+    fn a_row_whose_act_is_taken_stays_until_the_fold_holds_it(entry in list_entry("a", &[])) {
+        let mut done = entry;
+        done["state"] = json!("completed");
+        done["states"] = json!(["completed"]);
+        let held = |ask: todos::Hold, v: Value| todos::Msg::Host(Box::new(Input::Held {
+            ask,
+            reading: Reading::Val { v: Answer::Done { body: v } },
+            behind: None,
+        }));
+        let unsent = |todos: Value| held(todos::Hold::Unsent, json!({"todos": todos, "refused": [], "blocked": 0, "stranded": 0, "losses": [], "waiting": 0}));
+        let (mut page, _) = Runtime::<todos::Todos>::start(todos::Flags { context: context(true), chain: "life".to_owned(), now: 1_788_000_000_000 });
+        page.send(held(todos::Hold::Fold, json!({"entries": [done], "at": "2026-09-04T12:00:00"})));
+        page.send(unsent(json!({"a": "Sending"})));
+        let taken = format!("{:?}", page.send(unsent(json!({}))).effects);
+        prop_assert!(!taken.contains("Tree {") || taken.contains("todo: \"a\""), "{taken}");
+    }
+
+    #[test]
     fn a_pane_answer_never_acts_on_the_todo_shown_now(asked in proptest::collection::vec(todo_asked(), 1..6)) {
         let route = |selected: &str| todos::Msg::Host(Box::new(Input::Held {
             ask: todos::Hold::Route,

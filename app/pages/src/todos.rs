@@ -189,7 +189,7 @@ pub(crate) struct Filter {
 }
 
 impl Filter {
-    /// Whatever the register holds becomes a filter: each field it cannot supply is the default.
+    /// A field the register cannot supply is the default.
     fn of(v: &Value) -> Filter {
         let choice = |k: &str| {
             v.get(k)
@@ -288,7 +288,7 @@ fn dated(spec: &Value, now: i64) -> bool {
     own || children(spec).any(|c| dated(c, now))
 }
 
-/// Every term a term's fields hold, read structurally so a new constructor's child is never missed.
+/// Every term a term's fields hold, read structurally.
 fn children(t: &Value) -> Box<dyn Iterator<Item = &Value> + '_> {
     match t {
         Value::Object(o) => Box::new(
@@ -313,8 +313,7 @@ fn within(v: &Value) -> Box<dyn Iterator<Item = &Value> + '_> {
     }
 }
 
-/// A node's worth: a number, `∅`, `∅` only while it refers into a chain the tab does not hold
-/// yet, or why its term does not link.
+/// A node's worth: a number, `∅`, `∅` until a referred chain is held, or why it does not link.
 #[derive(Debug, Clone, PartialEq)]
 enum Worth {
     Value(f64),
@@ -324,8 +323,7 @@ enum Worth {
 }
 
 impl Worth {
-    /// A term that does not link is a problem to fix and sorts first; `∅` has no number and
-    /// sorts after every value, and one not yet priced after that.
+    /// Unlinked sorts first; `∅` after every value, and one not yet priced after that.
     fn urgency(&self) -> f64 {
         match self {
             Worth::Value(v) => *v,
@@ -585,7 +583,7 @@ impl Sheet {
         }
     }
 
-    /// Its price, or the refusal and the field it is about, so the sheet says it on that line.
+    /// Its price, or the refusal and the field it is about.
     fn read(&self) -> Result<Price, (About, String)> {
         if self.body.text.trim().is_empty() {
             Err((About::Body, "Say what the todo is.".to_owned()))
@@ -596,8 +594,7 @@ impl Sheet {
         }
     }
 
-    /// Emptied, its field opened again on `body`: a field opened on what it last opened on would
-    /// keep what was typed into it since.
+    /// Emptied, its field opened again on `body`.
     fn open_on(&mut self, body: String) {
         let mut field = std::mem::replace(&mut self.body, Markup::of(String::new()));
         field.reset(body);
@@ -623,6 +620,8 @@ pub struct Model {
     now: i64,
     fold: Option<Folded>,
     unsent: Unsents,
+    /// Todos whose act left `unsent` since the fold last moved, kept until it holds the act.
+    held_over: BTreeSet<String>,
     waiting: u32,
     route: Route,
     shared: String,
@@ -749,6 +748,7 @@ impl Model {
             now: f.now,
             fold: None,
             unsent: Unsents::default(),
+            held_over: BTreeSet::new(),
             waiting: 0,
             route: Route::default(),
             shared: String::new(),
@@ -854,7 +854,11 @@ impl Model {
         let now = self.at_ms();
         self.entries()
             .iter()
-            .filter(|e| self.filter.takes(e, now) || self.unsent.todos.contains_key(&e.todo))
+            .filter(|e| {
+                self.filter.takes(e, now)
+                    || self.unsent.todos.contains_key(&e.todo)
+                    || self.held_over.contains(&e.todo)
+            })
             .filter_map(|e| {
                 let a = e.authored.as_ref().filter(|a| kind(a) != "decision")?;
                 let specs = match &self.basis {
@@ -962,8 +966,7 @@ impl Model {
         }
     }
 
-    /// The folds the list draws: a card holding a line whose act is on its way stays open so
-    /// the line can say so, unless the viewer set it.
+    /// A card holding a line whose act is on its way stays open, unless the viewer set it.
     fn shown_folds(&self) -> BTreeMap<String, bool> {
         let mut out = BTreeMap::new();
         if let Drawn::Tree(t, ..) = &self.grown {
@@ -1110,8 +1113,7 @@ impl Model {
         }
     }
 
-    /// The sheet up, its category the list's narrowing or the last one used, the keyboard in
-    /// its body.
+    /// The sheet up, its category the list's narrowing or the last one used.
     fn raise(&mut self) -> Vec<Fx> {
         self.up = true;
         if self.sheet.category.is_empty() {
@@ -1322,6 +1324,7 @@ impl Model {
                         self.fold = v;
                         self.problem = None;
                         if moved {
+                            self.held_over.clear();
                             return self.reread();
                         }
                     }
@@ -1332,6 +1335,12 @@ impl Model {
             }
             Hold::Unsent => {
                 if let Reading::Val { v } = read::<Unsents>(reading) {
+                    let left = self
+                        .unsent
+                        .todos
+                        .keys()
+                        .filter(|t| !v.todos.contains_key(*t));
+                    self.held_over.extend(left.cloned());
                     self.unsent = v;
                     return self.reread();
                 }
@@ -1394,8 +1403,7 @@ impl Model {
         }
     }
 
-    /// The reading of the objects the tab holds asked again at the fold's instant: another
-    /// commit, another chain moving or the fold moving reprices what refers into them.
+    /// The reading of the objects the tab holds, asked again at the fold's instant.
     fn reread(&self) -> Vec<Fx> {
         self.fold
             .as_ref()
@@ -1614,8 +1622,7 @@ impl Model {
         Vec::new()
     }
 
-    /// The worker's tree asked as `n`, drawn while its basis stands; an answer to an ask since
-    /// replaced is dropped, as the newer one is on its way, and a failed one keeps the last tree.
+    /// The tree asked as `n`; an answer to a replaced ask is dropped, a failed one keeps the last.
     fn tree(&mut self, n: u32, answer: Answer) -> Vec<Fx> {
         let Wants::Asking(asked, q) = std::mem::replace(&mut self.wants, Wants::Nothing) else {
             return Vec::new();
