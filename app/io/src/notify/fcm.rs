@@ -1,14 +1,13 @@
-//! FCM v1: a service-account key signs an RS256 assertion that buys a bearer, and one POST per
-//! device carries a DATA message with no `notification` block, so Google never draws a picture
-//! this app did not compose.
+//! FCM v1: a service-account key buys a bearer, and one POST per device carries a DATA message
+//! with no `notification` block, so Google draws nothing this app did not compose.
 
 use serde::{Deserialize, Serialize};
 use suzatary_core::capability::{Printed, Secret};
 
-use super::truncate;
 use crate::http::{Http, Req};
 use crate::secrets::{Resolves, SecretError};
 use crate::tokens::{Bearer, Fresh, Grant};
+use suzatary_core::mail::shorten as truncate;
 
 const FCM_SCOPE: &str = "https://www.googleapis.com/auth/firebase.messaging";
 
@@ -130,10 +129,12 @@ fn message(token: &str, push: &Printed) -> serde_json::Value {
     })
 }
 
-/// Whether FCM says this device token is gone for good.
-#[must_use]
-pub fn dead(status: u16, detail: &str) -> bool {
-    status == 404 && detail.contains("UNREGISTERED")
+/// What one device's send came to.
+pub(super) enum Sent {
+    Accepted,
+    /// FCM says the device token is gone for good.
+    Gone,
+    Failed(String),
 }
 
 impl Grant for ServiceAccount {
@@ -175,18 +176,11 @@ impl Sender {
         Self(Bearer::new(account))
     }
 
-    /// One device's `(status, detail)`, status `0` when it could not even be
-    /// asked: one device's failure is data for the fan-out, never an error.
-    pub(super) fn send(
-        &self,
-        http: &dyn Http,
-        now: u64,
-        token: &str,
-        push: &Printed,
-    ) -> (u16, String) {
+    /// One device's send: one device's failure is data for the fan-out.
+    pub(super) fn send(&self, http: &dyn Http, now: u64, token: &str, push: &Printed) -> Sent {
         let bearer = match self.0.token(http, now) {
             Ok(bearer) => bearer,
-            Err(error) => return (0, truncate(&error, 300)),
+            Err(error) => return Sent::Failed(format!("FCM sign-in: {}", truncate(&error, 300))),
         };
         let url = format!(
             "{API}/v1/projects/{}/messages:send",
@@ -196,8 +190,14 @@ impl Sender {
             Req::json(url, &message(token, push))
                 .header("Authorization", format!("Bearer {}", bearer.expose())),
         ) {
-            Ok(resp) => (resp.status, truncate(&resp.text(), 300)),
-            Err(error) => (0, truncate(&error.to_string(), 300)),
+            Ok(resp) if resp.status == 200 => Sent::Accepted,
+            Ok(resp) if resp.status == 404 && resp.text().contains("UNREGISTERED") => Sent::Gone,
+            Ok(resp) => Sent::Failed(format!(
+                "FCM answered {}: {}",
+                resp.status,
+                truncate(&resp.text(), 300)
+            )),
+            Err(error) => Sent::Failed(format!("FCM: {}", truncate(&error.to_string(), 300))),
         }
     }
 }

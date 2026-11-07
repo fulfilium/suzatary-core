@@ -86,15 +86,6 @@ impl Lieer {
     }
 }
 
-/// Cut `text` to at most `max` characters, on a `char` boundary.
-#[must_use]
-pub fn truncate(text: &str, max: usize) -> String {
-    match text.char_indices().nth(max) {
-        Some((cut, _)) => text[..cut].to_owned(),
-        None => text.to_owned(),
-    }
-}
-
 #[derive(Deserialize)]
 struct TokenAnswer {
     access_token: String,
@@ -129,7 +120,7 @@ impl Grant for Lieer {
             return Err(GrantError::Auth(format!(
                 "HTTP {}: {}",
                 resp.status,
-                truncate(&resp.text(), ERROR_CAP)
+                suzatary_core::mail::shorten(&resp.text(), ERROR_CAP)
             )));
         }
         let answer: TokenAnswer = serde_json::from_slice(&resp.body)
@@ -141,8 +132,7 @@ impl Grant for Lieer {
     }
 }
 
-/// A Gmail message id as the API answers it: lowercase hex, which is also lieer's file name for
-/// the message, so it is safe in a path.
+/// A Gmail message id: lowercase hex, lieer's file name for the message, so safe in a path.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct MessageId(String);
 
@@ -200,13 +190,12 @@ fn get(http: &dyn Http, token: &Secret, url: &str, limit: u64) -> Result<Option<
         404 => Ok(None),
         status => Err(format!(
             "HTTP {status}: {}",
-            truncate(&resp.text(), ERROR_CAP)
+            suzatary_core::mail::shorten(&resp.text(), ERROR_CAP)
         )),
     }
 }
 
-/// The ids `q` matches, newest first, one page of at most [`PAGE`]; spam and trash excluded,
-/// as the API does by default.
+/// The ids `q` matches, newest first, one page of at most [`PAGE`], spam and trash excluded.
 pub fn list(http: &dyn Http, token: &Secret, q: &str) -> Result<Listed, String> {
     let url = format!(
         "{MESSAGES_URL}?maxResults={PAGE}&q={}",
@@ -241,8 +230,8 @@ struct Raw {
     raw: String,
 }
 
-/// One message as it was received, or `None` when it is gone or larger than `cap` bytes, which
-/// is asked first so a large message is never downloaded.
+/// One message as it was received, or `None` when it is gone or larger than `cap` bytes, asked
+/// first.
 pub fn message(
     http: &dyn Http,
     token: &Secret,
@@ -258,7 +247,6 @@ pub fn message(
     if minimal.size > cap as u64 {
         return Ok(Fetched::TooLarge);
     }
-    // Base64 and the JSON around it: a third more than the message, and room for the envelope.
     let limit = (cap as u64) * 4 / 3 + 64 * 1024;
     let Some(body) = get(http, token, &format!("{url}?format=raw"), limit)? else {
         return Ok(Fetched::Gone);

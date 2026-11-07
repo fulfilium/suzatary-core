@@ -12,19 +12,11 @@ use suzatary_core::capability::{Delivered, Notify, NotifyError, Printed, Push};
 use suzatary_core::devices::Device;
 use suzatary_core::store::Log;
 
-pub use fcm::{API as FCM, ServiceAccount, credentials, dead};
+pub use fcm::{API as FCM, ServiceAccount, credentials};
 pub use ntfy::DEFAULT_BASE as NTFY;
 
 use crate::http::{Http, Ureq};
 use crate::secrets::{Resolves, SecretError};
-
-/// Cut `text` to at most `max` characters.
-fn truncate(text: &str, max: usize) -> String {
-    match text.char_indices().nth(max) {
-        Some((cut, _)) => text[..cut].to_owned(),
-        None => text.to_owned(),
-    }
-}
 
 /// One deployment's channels: FCM to every registered phone, and ntfy when a topic is configured.
 pub struct Channels<D: Log<String, Device>> {
@@ -81,8 +73,7 @@ impl<D: Log<String, Device>> Channels<D> {
     }
 }
 
-/// Whether this deployment notifies at all; [`Configured::Absent`] is built
-/// without asking any secret store.
+/// Whether this deployment notifies at all.
 pub enum Configured<D: Log<String, Device>> {
     /// At least one channel is named.
     Push(Box<Channels<D>>),
@@ -102,9 +93,8 @@ impl<D: Log<String, Device> + Clone + Send + Sync> Notify for Configured<D> {
     }
 }
 
-/// Channels whose secrets the store has not yet answered for: every push asks it again, holding
-/// no lock while it waits, and keeps the first answer. A push it cannot make is an error naming
-/// the store, never a silent zero.
+/// Channels whose secrets the store has not yet answered for: every push asks it again and keeps
+/// the first answer.
 pub struct Waiting<D: Log<String, Device>> {
     secrets: Box<dyn Resolves + Send + Sync>,
     reason: String,
@@ -154,29 +144,39 @@ impl<D: Log<String, Device>> Notify for Channels<D> {
         let message: &Printed = &message.printed(&self.app);
         let now = (self.clock)();
         let mut accepted = 0usize;
+        let mut failed = std::collections::BTreeSet::new();
 
         if let Some(sender) = &self.fcm {
             let everyone = suzatary_core::devices::everyone(&self.devices)
                 .map_err(|error| NotifyError::Unreachable(error.to_string()))?;
             for (actor, phones) in &everyone {
                 for device in &phones.0 {
-                    let (status, detail) =
-                        sender.send(self.http.as_ref(), now, &device.token, message);
-                    if status == 200 {
-                        accepted += 1;
-                    } else if dead(status, &detail) {
-                        let _ = suzatary_core::devices::forget(&self.devices, actor, &device.token);
-                    }
+                    let sent = match sender.send(self.http.as_ref(), now, &device.token, message) {
+                        fcm::Sent::Accepted => {
+                            accepted += 1;
+                            Ok(())
+                        }
+                        fcm::Sent::Gone => {
+                            suzatary_core::devices::forget(&self.devices, actor, &device.token)
+                                .map_err(|error| format!("forgetting a gone device: {error}"))
+                        }
+                        fcm::Sent::Failed(why) => Err(why),
+                    };
+                    failed.extend(sent.err());
                 }
             }
         }
 
-        if let Some((base, topic)) = &self.ntfy
-            && ntfy::send(self.http.as_ref(), base, topic, message)
-        {
-            accepted += 1;
+        if let Some((base, topic)) = &self.ntfy {
+            let sent = ntfy::send(self.http.as_ref(), base, topic, message).map(|()| accepted += 1);
+            failed.extend(sent.err());
         }
 
+        if accepted == 0 && !failed.is_empty() {
+            return Err(NotifyError::Unreachable(
+                failed.into_iter().collect::<Vec<_>>().join("; "),
+            ));
+        }
         Ok(Delivered::to_devices(accepted))
     }
 }
