@@ -1,14 +1,13 @@
-// The core's worker serves one thread, and this is the order it serves it in: the page on screen first, the shell
-// around it after. A question of a lane starts only while every earlier lane has nothing waiting and nothing being
-// answered, and within a lane in the order it came. One that waited on a store or the network goes on under the same
-// rule, so an answer of the shell that waited never runs while the page's is owed; it waits on no question of its own
-// lane, which it does not overtake.
+// The order the core's worker serves its one thread in: the page on screen first, the shell around it after. A question
+// starts, or goes on after waiting on a store or the network, only while no earlier lane has one waiting or being
+// answered, and within its lane in the order it came.
 
 export namespace lanes {
   // The order they are served in.
   export type Lane = "Page" | "Shell"
   export const FIRST: Lane = "Page"
-  export const ORDER: readonly Lane[] = [FIRST, "Shell"]
+  export const LAST: Lane = "Shell"
+  export const ORDER: readonly Lane[] = [FIRST, LAST]
 
   type Each<V> = { readonly [L in Lane]: V }
 
@@ -33,6 +32,20 @@ export namespace lanes {
 
   // What to serve now, its lane, and the queue without it; or nothing, while what waits waits on an earlier lane.
   export type Next<A> = { readonly type: "Serve"; readonly a: A; readonly lane: Lane; readonly q: Queue<A> } | { readonly type: "Wait" }
+
+  // A reading is asked in the earliest lane of the programs watching it now (the page on screen's, then a program's
+  // behind it, as the Inbox's badge), the last while none does.
+  export const watchers = () => {
+    const now = new Map<string, Set<{ readonly lane: Lane }>>()
+    return {
+      watch: (key: string, lane: Lane): (() => void) => {
+        const one = { lane }
+        now.set(key, (now.get(key) ?? new Set()).add(one))
+        return () => void now.get(key)?.delete(one)
+      },
+      laneOf: (key: string): Lane => ORDER.find(l => [...(now.get(key) ?? [])].some(w => w.lane === l)) ?? LAST,
+    }
+  }
 
   export const next = <A>(q: Queue<A>): Next<A> => {
     for (const lane of ORDER) {

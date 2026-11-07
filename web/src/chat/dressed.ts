@@ -18,6 +18,7 @@ import time from "../app/time"
 import grouped from "./grouped"
 import pageBlocks from "../app/blocks"
 import type questions from "../prodrome/questions"
+import type lanes from "../prodrome/lanes"
 
 export namespace dressed {
   // A block the box will not render stays its source, which the view draws.
@@ -64,25 +65,24 @@ export namespace dressed {
       ? asked()
       : Promise.resolve(null)
 
-  // Nothing waits on the network: the set is made inside the reading with no wait before the pricing, so `held` is what
-  // was priced.
+  // Nothing waits on the network before the pricing, so `held` is what was priced.
   export type Inbox = storesync.Proposals
-  export const inbox = (at: string, memory: MemoryPayload | null): Promise<Inbox> => storesync.proposals(at, memory, "Page")
+  export const inbox = (at: string, memory: MemoryPayload | null, lane: lanes.Lane): Promise<Inbox> => storesync.proposals(at, memory, lane)
 
   type Held = { readonly type: "Read"; readonly payload: ConversationPayload } | questions.NotHere | questions.Unheard
-  const held = (id: string, w: Window, memory: MemoryPayload | null): Promise<Held> =>
-    storesync.conversation(id, w, memory).then((one): Held => (one.type === "Absent" ? storesync.absent(id) : one.type === "Held" ? { type: "Read", payload: one.payload } : one))
+  const held = (id: string, w: Window, memory: MemoryPayload | null, lane: lanes.Lane): Promise<Held> =>
+    storesync.conversation(id, w, memory, lane).then((one): Held => (one.type === "Absent" ? storesync.absent(id) : one.type === "Held" ? { type: "Read", payload: one.payload } : one))
 
   // What a proposal's card needs and nothing more: every proposal, drawn, beside the newest turn.
-  export const cards = async (id: string, memory: MemoryPayload | null): Promise<ConversationPayload> => {
-    const one = await held(id, { limit: 1 }, memory)
+  export const cards = async (id: string, memory: MemoryPayload | null, lane: lanes.Lane): Promise<ConversationPayload> => {
+    const one = await held(id, { limit: 1 }, memory, lane)
     if (one.type === "NotHere") throw new Error(storesync.notHere(one.lines, "this conversation", one.why))
     if (one.type === "Unheard") throw new Error(storesync.unheard)
     return { ...one.payload, proposals: await proposalsOf(id, one.payload.proposals) }
   }
 
-  export const stream = async (chosen: readonly string[], pages: number): Promise<storesync.Streamed> => {
-    const read = await storesync.streamed(chosen, pages)
+  export const stream = async (chosen: readonly string[], pages: number, lane: lanes.Lane): Promise<storesync.Streamed> => {
+    const read = await storesync.streamed(chosen, pages, lane)
     const answers = read.stream.rounds.flatMap(r => (r.answer === null ? [] : [{ id: r.conversation, turn: r.answer }]))
     const dressed = await turnsOf(answers, read.keys)
     let next = 0
@@ -92,10 +92,10 @@ export namespace dressed {
 
   export type Windowed = { readonly type: "Read"; readonly payload: grouped.Window } | questions.NotHere | questions.Unheard
 
-  export const window = async (id: string, w: grouped.Asked, zone: time.Zone): Promise<Windowed> => {
+  export const window = async (id: string, w: grouped.Asked, zone: time.Zone, lane: lanes.Lane): Promise<Windowed> => {
     type At = { readonly type: "Held"; readonly payload: grouped.Window; readonly keys: questions.Keyed } | questions.NotHere | questions.Unheard
     const at = (m: MemoryPayload | null): Promise<At> =>
-      storesync.window(id, w, m, zone).then((one): At => (one.type === "Absent" ? storesync.absent(id) : one))
+      storesync.window(id, w, m, zone, lane).then((one): At => (one.type === "Absent" ? storesync.absent(id) : one))
     const bare = await at(null)
     if (bare.type !== "Held") return bare
     const m = await memory(bare.payload)

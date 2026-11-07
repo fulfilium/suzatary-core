@@ -24,8 +24,14 @@ import draftbox from "../chat/draftbox"
 import onScreen from "../inbox/onscreen"
 import scroll from "../painter/scroll"
 import d from "../wire/decoder"
+import lanes from "../prodrome/lanes"
 
 export namespace local {
+  // Keyed by the `Local` as decoded.
+  const watchers = lanes.watchers()
+  const laneOf = (l: Local): lanes.Lane => watchers.laneOf(JSON.stringify(l))
+  export const watching = (l: Local, lane: lanes.Lane): (() => void) => watchers.watch(JSON.stringify(l), lane)
+
   const kept = reading.againOn(
     asked.question(() => device.kept().catch(() => null)),
     storesync.watch,
@@ -39,40 +45,41 @@ export namespace local {
 
   const here = reading.map(reading.both(kept, signing), ([k, s]) => (k === null ? null : { ...k, signing: s }))
 
-  // From the inbox alone; what it was priced without goes to the shell's line of what the device left out.
+  // What it was priced without goes to the shell's line of what the device left out.
   const proposals = reading.againOn(
     asked.question(async () => {
-      const read = await dressed.inbox(time.moment(), await dressed.asked())
+      const read = await dressed.inbox(time.moment(), await dressed.asked(), laneOf({ type: "Proposals" }))
       readings.told("inbox", excluded.left(excluded.NONE, read.payload.failed))
       return read
     }),
     storesync.watch,
   )
 
-  // Kept while the chain's heads stand.
-  // Decision entries alone, so a page waiting on them does not decode every todo when the chain moves.
+  // Decision entries alone, kept while the chain's heads stand, so a move decodes no other todo.
   const decisions = asked.family(
     (chain: string) => chain,
     (chain: string) => boxFolds.of(chain).then(f => ({ ...f, entries: f.entries.filter(e => e.authored?.block.kind === "decision") })),
   )
 
-  const listed = reading.againOn(asked.question(() => storesync.list()), storesync.watch)
+  const listed = reading.againOn(asked.question(() => storesync.list(laneOf({ type: "Conversations" }))), storesync.watch)
 
-  const searches = asked.family((q: string) => q, (q: string) => storesync.search(q))
+  type Search = Extract<Local, { type: "Search" }>
+  const searches = asked.family((s: Search) => s.q, (s: Search) => storesync.search(s.q, laneOf(s)))
 
   type Stream = Extract<Local, { type: "Stream" }>
   const streams = asked.family(
     (s: Stream) => JSON.stringify([s.chosen, s.pages]),
-    (s: Stream) => dressed.stream(s.chosen, s.pages).then(r => ({ stream: r.stream, bar: r.bar })),
+    (s: Stream) => dressed.stream(s.chosen, s.pages, laneOf(s)).then(r => ({ stream: r.stream, bar: r.bar })),
   )
 
   type Window = Extract<Local, { type: "Window" }>
   const windows = asked.family(
     (w: Window) => JSON.stringify([w.id, w.window]),
-    (w: Window) => dressed.window(w.id, w.window, app.now().zone),
+    (w: Window) => dressed.window(w.id, w.window, app.now().zone, laneOf(w)),
   )
 
-  const cards = asked.family((id: string) => id, (id: string) => dressed.asked().then(m => dressed.cards(id, m)))
+  type Cards = Extract<Local, { type: "Cards" }>
+  const cards = asked.family((c: Cards) => c.conversation, (c: Cards) => dressed.asked().then(m => dressed.cards(c.conversation, m, laneOf(c))))
 
   // A seal and a summary are no page's; a topic is named without its instant.
   const held = (): unknown => {
@@ -123,8 +130,7 @@ export namespace local {
     heard => app.hear(a => JSON.stringify([app.route(a), app.screen(a)]), heard),
   )
 
-  // The open chain's rows as the tab's fold shows them; a page watching them asks the box for a fold about now when
-  // the one shown is a copy kept from before.
+  // The open chain's rows as the tab's fold shows them; a kept copy asks the box for a fold about now.
   const folded = reading.held(
     (): unknown => {
       const f = store.state()
@@ -173,13 +179,13 @@ export namespace local {
       case "Conversations":
         return listed
       case "Search":
-        return searches(l.q)
+        return searches(l)
       case "Stream":
         return reading.againOn(streams(l), storesync.watch)
       case "Window":
         return reading.againOn(windows(l), heard => storesync.watchConversation(l.id, heard))
       case "Cards":
-        return reading.againOn(reading.againOn(cards(l.conversation), storesync.watch), watchOthers)
+        return reading.againOn(reading.againOn(cards(l), storesync.watch), watchOthers)
       case "Intents":
         return asking
       case "Titles":

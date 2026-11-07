@@ -28,6 +28,7 @@ import type questions from "../prodrome/questions"
 import vouch from "../prodrome/vouch"
 import storesync from "../prodrome/storesync"
 import { askHeld, resetReplica } from "../prodrome/sync"
+import lanes from "../prodrome/lanes"
 import { lifecycleEvent, loadCore } from "../prodrome/core"
 import payload from "../wire/generated/payload"
 import parts from "./parts"
@@ -43,9 +44,8 @@ export namespace program {
       import("./views.js"),
       WebAssembly.compileStreaming(fetch(new URL("./views_bg.wasm", import.meta.url).href)),
     ])
-    // V8 compiles a function of the module on its first call, and keeps the code with the module: the rehearsal worker
-    // makes those first calls (`rehearse.ts`), and the module is the page's once it has, so a page's first input finds
-    // its code compiled. The readings a page asks for come from the core worker, whose restore runs meanwhile.
+    // The rehearsal worker makes the module's first calls (`rehearse.ts`), so V8 compiled them before the page's first
+    // input; the core worker's restore runs meanwhile.
     await Promise.all([glue.default({ module_or_path: compiled }), rehearsed(compiled)])
     performance.measure("views:load", { start: t0, end: performance.now() })
     return glue
@@ -130,15 +130,13 @@ export namespace program {
     }
   }
 
-  // An act as the tab's set of intents names it: a topic with the instant it is asked at, and a lifecycle event spelled
-  // by the core at that instant as the actor this device writes as, to be sealed.
+  // An act as the tab's intents name it: a topic at the instant asked, or a lifecycle event the core spells, to be sealed.
   const ask = async (a: Act): Promise<asks.Ask> =>
     a.type === "Topic" ? { type: "Topic", write: a.write, at: time.moment() }
     : a.type === "Lifecycle" ? { type: "Seal", chain: a.chain, event: lifecycleEvent(await loadCore(), a.kind, a.todo, time.moment(), app.actor(app.now()) ?? "", a.note) }
     : a
 
-  // A question for the core in the worker, its terms and reading read back into the questions' own types; a reading
-  // answers with the chains held beside it.
+  // A question for the core in the worker, read back into the questions' types; a reading answers with the chains held.
   const name = d.obj({ chain: d.str, set: d.str, at: d.str })
   const decoded_ = <A>(r: lo.Settled<A>): A => {
     if (r.type === "Error") throw new Error(`a question a page asked does not read: ${r.e}`)
@@ -155,15 +153,15 @@ export namespace program {
     worth: d.sum<questions.Placed["worth"], "type">("type", { Value: { v: d.nullable(d.num) }, Unlinked: {} }),
     specs: d.arr(payload.SpecNode),
   })
-  const core = (q: Core): Promise<unknown> => {
+  const core = (q: Core, lane: lanes.Lane): Promise<unknown> => {
     switch (q.type) {
       case "Reading":
-        return askHeld(() => ({ type: "Reading", chain: q.chain, at: q.at }), "Page").then(({ held: h, answer: read }) => ({ held: h.held.map(c => c.name), read }))
+        return askHeld(() => ({ type: "Reading", chain: q.chain, at: q.at }), lane).then(({ held: h, answer: read }) => ({ held: h.held.map(c => c.name), read }))
       case "Thirty":
-        return askHeld(() => ({ type: "Thirty", chain: q.chain, id: q.id, ms: q.ms }), "Page").then(r => r.answer)
+        return askHeld(() => ({ type: "Thirty", chain: q.chain, id: q.id, ms: q.ms }), lane).then(r => r.answer)
       case "Tree": {
         const basis = basisOf(q.basis)
-        return askHeld(() => ({ type: "Tree", basis, members: decoded_(d.arr(placed)(q.members)), by: q.by }), "Page").then(r => r.answer)
+        return askHeld(() => ({ type: "Tree", basis, members: decoded_(d.arr(placed)(q.members)), by: q.by }), lane).then(r => r.answer)
       }
     }
   }
@@ -191,8 +189,8 @@ export namespace program {
   type In = Input<unknown, unknown, unknown>
   type Out = Effect<unknown, unknown, unknown>
 
-  // The scroll box is the document's, or one the page draws itself, found once drawn.
-  export type Around = { readonly box?: () => Element; readonly told?: (said: unknown) => void; readonly absorbs?: (screen: Screen) => boolean }
+  // The scroll box is the document's, or one the page draws itself, found once drawn; `lane` is the shell's behind the page.
+  export type Around = { readonly box?: () => Element; readonly lane?: lanes.Lane; readonly told?: (said: unknown) => void; readonly absorbs?: (screen: Screen) => boolean }
   const page_ = (): Element => document.scrollingElement ?? document.documentElement
 
   // A task of its own for `f`, after every task already queued: a message to this tab's own channel, which a hidden tab
@@ -207,6 +205,7 @@ export namespace program {
   // Only the module is awaited: the page draws when the caller calls what this returns.
   export const mount = async <P extends Page>(page: P, args: Args[P], around: Around = {}): Promise<Draw> => {
     const box = around.box ?? page_
+    const lane = around.lane ?? lanes.FIRST
     const glue = await module()
     return root => {
       // By name: a new one under a name lets the one before go.
@@ -248,13 +247,15 @@ export namespace program {
             return tell()
           }
           case "Watch": {
+            const unwatch = local.watching(e.local, lane)
             const r = local.of(e.local, box())
             const tell = (): void => {
               const now = lo.map(r.now(), (body): Answer => ({ type: "Done", body }))
               drawn(now)
               send({ type: "Held", ask: e.ask, reading: now, behind: null })
             }
-            hold(e.ask, heard(tell, f => r.hear(f)))
+            const unhear = heard(tell, f => r.hear(f))
+            hold(e.ask, () => (unhear(), unwatch()))
             return tell()
           }
           case "Keep":
@@ -341,7 +342,7 @@ export namespace program {
           case "Offer":
             return void toast(e.words, { label: e.label, onClick: () => answered(e.ask)({ type: "Done", body: null }) })
           case "Core":
-            return void settled(core(e.question)).then(answered(e.ask))
+            return void settled(core(e.question, lane)).then(answered(e.ask))
           case "Reset":
             return void resetReplica(new Set(e.losses))
           case "Tell":

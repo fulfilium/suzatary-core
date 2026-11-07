@@ -101,8 +101,7 @@ async function mount(a: app.App, fresh: boolean, heard: boolean, again: boolean,
   const view = byId("view");
   const screen = app.screen(a);
   if (!fresh && current.absorb?.(screen) === true) return;
-  // A page that draws the fold has the box's asked for beside its module, not after it: the box's fold carries what the
-  // box rendered, and a Rust page mounts only once its module loads (`ensureFold` asks the box once per tab).
+  // The box's fold, which carries what it rendered, is asked for beside a page's module, not after it (once per tab).
   if (pages.folds[screen.type] === "Shown") void ensureFold().catch(() => {});
   const draw = await pages.load(screen);
   if (turn !== latest) return;
@@ -221,8 +220,7 @@ const keyOf = (s: device.Signing): app.Key => {
   }
 };
 
-// Asked here because a badge is for pages the reader is not on; counted on the box, so the tab holds no conversation
-// for it. No badge beats a wrong one.
+// Counted on the box, so the tab holds no conversation for a badge. No badge beats a wrong one.
 const refreshWaiting = once.shared(() =>
   waitingCount()
     .then((w) => app.dispatch({ type: "Waiting", count: w.count }))
@@ -329,7 +327,7 @@ storesync.hearWorker({
 });
 void device.persist().catch(() => {});
 // Started once the screen has drawn and the tab is idle, so its first draw (and compiling its module) is not the screen's.
-void frame.firstDrawn.then(() => idle(() => void program.mount("NeedsYouPage", {}, { box: () => byId("needsyou") }).then(draw => draw(byId("needsyou")))));
+void frame.firstDrawn.then(() => idle(() => void program.mount("NeedsYouPage", {}, { box: () => byId("needsyou"), lane: "Shell" }).then(draw => draw(byId("needsyou")))));
 app.tab.subscribe(draw);
 // These move without App, so each redraws the chrome.
 store.subscribe(() => paint(chrome.of(app.now(), seen())));
