@@ -150,12 +150,26 @@ test("law: content is taken only where its bytes hash to the name asked for, in 
   })
 })
 
+// The next answer a fetcher sends: each ask settles the wait for it, so a test moves when an answer goes out and never on
+// a timer. An answer that goes out after one came waits on `admit`, whose hashing settles on a later task. A wait that
+// sees no answer go out in `HANG_MS` fails, naming how many had, rather than holding the suite.
+const HANG_MS = 10_000
+const asking = (asked: readonly unknown[]): { readonly sent: () => void; readonly next: () => Promise<void> } => {
+  let sent = (): void => {}
+  return {
+    sent: () => sent(),
+    next: () =>
+      new Promise((done, fail) => {
+        const stop = setTimeout(() => fail(new Error(`no answer went out in ${HANG_MS} ms after the ${asked.length} that had`)), HANG_MS)
+        sent = () => (clearTimeout(stop), done())
+      }),
+  }
+}
+
 test("an opened conversation's names go out before the whole store's batches still queued, and each name is asked once", async () => {
   const asked: string[][] = []
   const answers: (() => void)[] = []
-  // Each ask settles the wait for it, so the test moves when an answer goes out and never on a timer.
-  let sent = (): void => {}
-  const next = (): Promise<void> => new Promise(done => (sent = done))
+  const { sent, next } = asking(asked)
   const { fetch } = content.fetcher({
     ask: hashes => {
       asked.push([...hashes])
@@ -255,15 +269,21 @@ test("a prefetch goes out one answer at a time, only when no other is out, and s
   const one = [...own.keys()].map(hash => ({ ...template, hash, parents: [], size: content.MOST_BYTES }))
   const asked: string[][] = []
   const answers: ((ok: boolean) => void)[] = []
+  const { sent, next } = asking(asked)
+  // How many page answers had come when each answer went out.
+  let came = 0
+  const cameBefore: number[] = []
   const { fetch } = content.fetcher({
     ask: hashes => {
       asked.push([...hashes])
+      cameBefore.push(came)
+      sent()
       return new Promise((done, fail) =>
         answers.push(ok => (ok ? done({ objects: hashes.map(h => ({ hash: h, literal: own.get(h)! })) }) : fail(new Error("offline")))),
       )
     },
     asked: () => {},
-    came: () => {},
+    came: () => void (came += 1),
     lost: () => {},
     atOnce: () => 4,
     ...readerOf(),
@@ -276,10 +296,12 @@ test("a prefetch goes out one answer at a time, only when no other is out, and s
   const first = fetch("First", one.slice(6, 9))
   await tick()
   assert.equal(asked.length, 4, "a page's names go out beside it, up to the bound")
+  const goesOn = next()
   for (let i = 0; i < 4; i += 1) answers.shift()!(true)
   await first
-  await tick()
-  assert.equal(asked.length, 5, "the prefetch goes on once nothing else is out")
+  await goesOn
+  assert.equal(asked.length, 5, "the prefetch goes on")
+  assert.equal(cameBefore[4], 3, "only once every page answer came")
   answers.shift()!(false)
   await assert.rejects(ahead)
   await tick()
