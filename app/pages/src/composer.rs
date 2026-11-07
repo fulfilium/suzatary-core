@@ -1,6 +1,8 @@
 //! The composer. Its words are the tab's draft for the conversation (`Local::Draft`); the box
 //! empties when the draft leaves.
 
+use std::collections::BTreeMap;
+
 use serde::{Deserialize, Serialize};
 use suzatary_core::reference::Reference;
 use suzatary_core::wire::{AttachmentRow, TurnRow, Uploaded, Uploading};
@@ -66,9 +68,8 @@ pub(crate) struct Sent {
 #[serde(tag = "type", content = "of")]
 #[ts(rename = "ComposerAsk")]
 pub enum Asking {
-    /// By the number it was picked with.
+    /// Each by the number its file was picked with.
     Upload(u32),
-    /// By its place among the held-back files.
     Keep(u32),
 }
 
@@ -78,8 +79,9 @@ pub enum Ev {
     Picked(Vec<Picked>),
     Detached(String),
     Unfiled(String),
-    KeepPrivate(usize),
-    Drop(usize),
+    /// By the number the file was picked with.
+    KeepPrivate(u32),
+    Drop(u32),
     KeepMine,
     Take(String),
     Cancel,
@@ -144,7 +146,8 @@ pub(crate) struct Composer {
     mode: Mode,
     picks: u32,
     uploading: Vec<(u32, Picked)>,
-    held: Vec<Held>,
+    /// By the number each was picked with, so an answer reaches only its own file.
+    held: BTreeMap<u32, Held>,
     others: Vec<String>,
 }
 
@@ -172,7 +175,7 @@ impl Composer {
                 mode: Mode::Asking,
                 picks: 0,
                 uploading: Vec::new(),
-                held: Vec::new(),
+                held: BTreeMap::new(),
                 others: Vec::new(),
             },
             Local::Draft {
@@ -293,25 +296,24 @@ impl Composer {
                 self.files.retain(|f| f.id != id);
                 Vec::new()
             }
-            Ev::KeepPrivate(n) => match self.held.get(n).cloned() {
-                Some(Held::Asking(w)) => {
+            Ev::KeepPrivate(id) => match self.held.get_mut(&id) {
+                Some(h @ Held::Asking(_)) => {
+                    let w = h.w().clone();
                     let out = Out::Upload(
-                        Asking::Keep(u32::try_from(n).unwrap_or(u32::MAX)),
+                        Asking::Keep(id),
                         Uploading {
                             file: w.base64.clone(),
                             name: w.name.clone(),
                             private: true,
                         },
                     );
-                    self.held[n] = Held::Keeping(w);
+                    *h = Held::Keeping(w);
                     vec![out]
                 }
                 Some(Held::Keeping(_)) | None => Vec::new(),
             },
-            Ev::Drop(n) => {
-                if n < self.held.len() {
-                    self.held.remove(n);
-                }
+            Ev::Drop(id) => {
+                self.held.remove(&id);
                 Vec::new()
             }
             Ev::KeepMine => {
@@ -331,10 +333,11 @@ impl Composer {
         }
     }
 
-    /// The chips go with the question, not the box, and so do the files held back.
+    /// The chips go with the question, not the box, and so do the files held back or on their way.
     fn emptied(&mut self) -> Vec<Out> {
         self.references.clear();
         self.files.clear();
+        self.uploading.clear();
         self.held.clear();
         self.mode = Mode::Asking;
         self.typed(String::new())
@@ -369,48 +372,41 @@ impl Composer {
                     .iter()
                     .position(|(u, _)| *u == id)
                     .map(|at| self.uploading.remove(at).1);
-                match (answered::<Uploaded>(a), picked) {
+                // A pick no longer on its way went with a cancelled question: nothing of it stays.
+                let Some(picked) = picked else {
+                    return Vec::new();
+                };
+                match answered::<Uploaded>(a) {
                     // The box keeps a file's bytes, not its name: the turn names it as it was picked.
-                    (Ok(Uploaded::Kept { file }), picked) => self.filed(AttachmentRow {
-                        name: picked.map_or(file.name.clone(), |f| f.name),
+                    Ok(Uploaded::Kept { file }) => self.filed(AttachmentRow {
+                        name: picked.name,
                         ..file
                     }),
-                    (Ok(Uploaded::Sensitive { why, folder }), Some(f)) => {
-                        self.held.push(Held::Asking(Withheld {
-                            base64: f.base64,
-                            name: f.name,
-                            why,
-                            folder,
-                        }));
+                    Ok(Uploaded::Sensitive { why, folder }) => {
+                        self.held.insert(
+                            id,
+                            Held::Asking(Withheld {
+                                base64: picked.base64,
+                                name: picked.name,
+                                why,
+                                folder,
+                            }),
+                        );
                         Vec::new()
                     }
-                    (Ok(Uploaded::Sensitive { .. }), None) => Vec::new(),
-                    (Err(e), _) => vec![Out::Toast(e)],
+                    Err(e) => vec![Out::Toast(e)],
                 }
             }
-            Asking::Keep(n) => {
-                let n = n as usize;
-                match answered::<Uploaded>(a) {
-                    Ok(Uploaded::Kept { file }) => {
-                        if n < self.held.len() {
-                            self.held.remove(n);
-                        }
-                        self.filed(file)
-                    }
-                    Ok(Uploaded::Sensitive { .. }) => {
-                        if n < self.held.len() {
-                            self.held.remove(n);
-                        }
-                        Vec::new()
-                    }
-                    Err(e) => {
-                        if let Some(Held::Keeping(w)) = self.held.get(n).cloned() {
-                            self.held[n] = Held::Asking(w);
-                        }
-                        vec![Out::Toast(e)]
-                    }
+            // A file the owner dropped, or one whose question was cancelled, is no longer held:
+            // its answer attaches nothing.
+            Asking::Keep(id) => match (self.held.remove(&id), answered::<Uploaded>(a)) {
+                (Some(_), Ok(Uploaded::Kept { file })) => self.filed(file),
+                (None, _) | (Some(_), Ok(Uploaded::Sensitive { .. })) => Vec::new(),
+                (Some(Held::Asking(w) | Held::Keeping(w)), Err(e)) => {
+                    self.held.insert(id, Held::Asking(w));
+                    vec![Out::Toast(e)]
                 }
-            }
+            },
         }
     }
 
@@ -488,8 +484,7 @@ pub(crate) fn view(c: &Composer, reach: &Reach, wide: bool) -> Node<Ev> {
     let held: Vec<Node<Ev>> = c
         .held
         .iter()
-        .enumerate()
-        .map(|(n, h)| {
+        .map(|(&n, h)| {
             let w = h.w();
             let name = if w.name.is_empty() { "This photo".to_owned() } else { w.name.clone() };
             view! { Div "composeheld" [
