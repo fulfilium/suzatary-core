@@ -203,7 +203,6 @@ Use a callable argument only when the set is open:
   in tests.
 - The `run` field of an `act.T` button (`web/src/view/act.ts`) is a function, because every
   page adds its own acts.
-- `tree.cata` (`web/src/algebra/tree.ts`) takes the fold's algebra as a function.
 
 ### 6. Keep a pure core, with effects at the edge
 

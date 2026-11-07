@@ -165,10 +165,6 @@ export function askHref(reference: Reference): string {
   return routeHref({ type: "secretary", refs: [print(reference)], topics: [] });
 }
 
-export function askLink(reference: Reference): HTMLElement {
-  return el("a", { class: "asksecretary", href: askHref(reference) }, "Ask the secretary");
-}
-
 export type Token = { readonly text: string } | { readonly reference: Reference };
 
 export type UrlToken = { readonly text: string } | { readonly url: string };

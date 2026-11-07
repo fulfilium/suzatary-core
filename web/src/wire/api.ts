@@ -1,7 +1,7 @@
 // Every route the box answers, named once with its method and decoder.
 
 import app from "../app/app";
-import type { AboutPayload, AttachmentRow, Authoring, AuthoredPayload, BlockRender, BriefingPayload, BriefingsPayload, CalendarPayload, ConversationPayload, DevicePayload, DrawnPayload, Erasing, FactId, FoldPayload, MailSearchPayload, MePayload, MemoryPayload, NewTodo, ObjectsPayload, Overview, PostedObjects, Reasoning, ReceiptPayload, RecordPayload, Registering, ReleasesPayload, Revealing, SayPayload, Saying, Tapping, Titling, TodoPayload, UpdateTodo, Uploaded, Uploading, WaitingPayload } from "./generated/wire";
+import type { AboutPayload, AttachmentRow, Authoring, AuthoredPayload, BlockRender, BriefingPayload, BriefingsPayload, CalendarPayload, ConversationPayload, DevicePayload, DrawnPayload, Erasing, FactId, FoldPayload, MailSearchPayload, MePayload, MemoryPayload, ObjectsPayload, PostedObjects, Reasoning, ReceiptPayload, RecordPayload, Registering, Revealing, SayPayload, Saying, Tapping, Titling, TodoPayload, UpdateTodo, Uploaded, Uploading, WaitingPayload } from "./generated/wire";
 import { print } from "../chat/refs";
 import type { Reference } from "../chat/refs";
 import heads from "../prodrome/heads";
@@ -19,15 +19,11 @@ export const fold = (chain?: string): Promise<FoldPayload> => http.get(onChain("
 export const todo = (id: string): Promise<TodoPayload> =>
   http.get(onChain(`todo/${encodeURIComponent(id)}`), payload.TodoPayload);
 
-/** Files the coding-session card; only a tap on that card starts a session. */
-export const buildTodo = (id: string): Promise<ConversationPayload> =>
-  http.act(onChain(`todo/${encodeURIComponent(id)}/build`), {}, payload.ConversationPayload);
 
 /** `actor: null` is a viewer, who gets no act buttons. */
 export const me = (): Promise<MePayload> => http.get(onChain("me"), payload.MePayload);
 
 export const about = (): Promise<AboutPayload> => http.get("/api/about", payload.AboutPayload);
-export const getReleases = (): Promise<ReleasesPayload> => http.get("/api/releases", payload.ReleasesPayload);
 
 /** The objects the frontier `since` does not reach; none asks for all. */
 export const objectsSince = (since: string, chain?: string): Promise<ObjectsPayload> => http.get(onChain(storereads.sinceIn("objects", since), chain), payload.ObjectsPayload);
@@ -58,7 +54,6 @@ export const postObjects = (objects: readonly string[], since: string): Promise<
 // Appends nothing: the replica seals the answer. No body names an actor; the box takes it from the gate's peer.
 const author = (body: Authoring): Promise<AuthoredPayload> => http.act(onChain("author"), body, payload.AuthoredPayload);
 
-export const authorTodo = (todo: NewTodo): Promise<AuthoredPayload> => author({ add: todo });
 export const authorConfirm = (todo: string, note = ""): Promise<AuthoredPayload> => author({ confirm: { todo, note } });
 /** Only the fields the caller sets travel; the rest stay as the box reads them. */
 export const authorUpdate = (edit: UpdateTodo, note = ""): Promise<AuthoredPayload> => author({ update: { ...edit, note } });
@@ -84,7 +79,6 @@ export const calendar = (date: string): Promise<CalendarPayload> =>
   http.get(`/api/calendar/${encodeURIComponent(date)}`, payload.CalendarPayload);
 
 
-export const getOverview = (): Promise<Overview> => http.get("/api/overview", payload.Overview);
 
 // Not under `app.apiBase`: a conversation reads every chain and the mail, so it is no chain's.
 
@@ -213,8 +207,6 @@ export const reportPushToken = (token: string): Promise<DevicePayload> =>
 
 export const forgetFact = (id: FactId): Promise<MemoryPayload> =>
   http.act(`/api/secretary/memory/${id}/forget`, {}, payload.MemoryPayload);
-
-export const getRecord = (): Promise<RecordPayload> => http.get("/api/secretary/record", payload.RecordPayload);
 
 export const retractSummary = (node: string): Promise<RecordPayload> =>
   http.act(`/api/secretary/record/${node}/retract`, {}, payload.RecordPayload);

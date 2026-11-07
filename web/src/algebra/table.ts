@@ -15,8 +15,6 @@ export namespace table {
   export const key = (fn: string, arg: string): Key => `${fn} ${arg}`
   // The function a key names, `key`'s first argument.
   export const fnOf = (k: Key): string => k.slice(0, Math.max(0, k.indexOf(" ")))
-  // The argument a key names, `key`'s second.
-  export const argOf = (k: Key): string => k.slice(k.indexOf(" ") + 1)
 
   export const fold = <V, R>(l: Lookup<V>, on: { readonly miss: () => R; readonly hit: (v: V) => R; readonly finding: (vs: readonly V[]) => R }): R =>
     l.type === "Hit" ? on.hit(l.v) : l.type === "Finding" ? on.finding(l.vs) : on.miss()

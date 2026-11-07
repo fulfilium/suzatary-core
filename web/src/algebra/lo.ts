@@ -44,7 +44,6 @@ export namespace lo {
 
   export const withDefault = <A, D = A>(l: T<A>, d: D): A | D => (l.type === "Val" ? l.v : d)
   export const isVal = <A>(l: T<A>): boolean => l.type === "Val"
-  export const isError = <A>(l: T<A>): boolean => l.type === "Error"
 
   // A failure in the words a person reads: an error's message, anything else as it prints.
   export const reason = (e: unknown): string => (e instanceof Error ? e.message : String(e))

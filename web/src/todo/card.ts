@@ -171,12 +171,6 @@ export function neighbourRow(neighbour: Neighbour): HTMLElement {
   );
 }
 
-/** A list of them, or nothing, so an empty half is not a heading over a blank. */
-export function neighbourList(neighbours: readonly Neighbour[]): HTMLElement | null {
-  if (neighbours.length === 0) return null;
-  return el("div", { class: "linklist" }, neighbours.map(neighbourRow));
-}
-
 /**
  * The reserved key of the "not priced" divider; a todo id is a word, so it cannot collide.
  * Written as an escape, never the byte: a literal NUL makes this a binary file to the one-door gate's `grep`.

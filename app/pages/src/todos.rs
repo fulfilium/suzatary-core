@@ -1250,7 +1250,9 @@ impl Model {
             Input::Heard {
                 ask: Listen::Keys,
                 frame,
-            } => match serde_json::from_str::<Keyed>(&frame) {
+            } => match serde_json::from_str::<serde_json::Value>(&frame)
+                .and_then(serde_json::from_value::<Keyed>)
+            {
                 Ok(k) => self.key(k),
                 Err(_) => Vec::new(),
             },

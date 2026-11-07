@@ -63,9 +63,6 @@ function blank(link: Link, computed: string, condition: Condition): ObjectVerdic
 
 const UNREACHED: Walk = { type: "Unreached" };
 
-/** The event a verdict read, or null for an envelope, which claims no todo, writer or instant. */
-export const eventOf = (v: ObjectVerdict): Extract<ObjectVerdict, { holds: "event" }> | null => (v.holds === "event" ? v : null);
-
 // Read off the object's own constructor: a change that supersedes nothing names no parents and begins nothing.
 const isRoot = (link: Link): boolean => /^(Genesis\(|Sealed\(prev='',)/.test(link.literal);
 

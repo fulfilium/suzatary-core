@@ -27,11 +27,6 @@ export function chip(label: string, kind: ChipKind = ""): HTMLElement {
   return el("span", { class: kind === "" ? "chip" : `chip ${kind}` }, label);
 }
 
-/** A hash's prefix, with the whole name in the title for a copy-paste. */
-export function shortHash(hash: string): HTMLElement {
-  return el("code", { class: "hash", title: hash }, hash.slice(0, 12));
-}
-
 // --- an instant, a day and an age, as a person reads them -------------------
 // Not `time.ts`, whose shapes are the wire's and a date input's contract.
 
@@ -49,25 +44,6 @@ export function day(value: string): string {
 export function dayOf(at: string, zone: time.Zone): string {
   const t = time.ms(at);
   return t === null ? at : time.date(zone, t);
-}
-
-/** The owner's day an instant falls on, in the locale's short day: `23 Sep`, with the year when it is not this one; "" for "". */
-export function shortDay(at: string, zone: time.Zone, nowMs: number): string {
-  const t = time.ms(at);
-  if (t === null) return at;
-  const day = time.date(zone, t);
-  const year: Intl.DateTimeFormatOptions = day.slice(0, 4) === time.date(zone, nowMs).slice(0, 4) ? {} : { year: "numeric" };
-  return new Intl.DateTimeFormat(undefined, { month: "short", day: "numeric", ...year, timeZone: "UTC" }).format(new Date(`${day}T12:00:00Z`));
-}
-
-/**
- * A wire instant to the minute, on the owner's clock: `2026-09-04T01:33:20+00:00` → `2026-09-04 01:33` in UTC.
- * "" for "" (an unparsable Date header); any other value that will not parse is handed back as the header said it.
- */
-export function whenOf(date: string, zone: time.Zone): string {
-  if (date === "") return "";
-  const at = time.ms(date);
-  return at === null ? date : time.minute(zone, at);
 }
 
 /**

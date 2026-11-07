@@ -863,19 +863,6 @@ a.chipbtn,
   padding: 0 0.85rem 0.7rem;
 }
 
-.cardopen {
-  display: flex;
-  flex: 1 1 auto;
-  min-width: 0;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--s-2);
-  min-height: var(--tap);
-  padding: 0 0.85rem;
-  color: var(--ink-muted);
-  text-decoration: none;
-}
-
 /* The one control on a card that is not an act: it swaps the clamped line for
    the typst source the chain stores. Quiet, because it is not what the card is
    for — the card is for opening the todo. */
@@ -891,12 +878,6 @@ a.chipbtn,
 .srcbtn[aria-expanded="true"] {
   color: var(--primary);
   background: var(--tint);
-}
-
-.cardopen svg {
-  width: 1rem;
-  height: 1rem;
-  flex: none;
 }
 
 .cardid {
@@ -3009,61 +2990,6 @@ h1[tabindex="-1"]:focus {
   color: var(--ink);
 }
 
-/* THE SECRETARY: a list of conversations, one
-   conversation, and the proposal cards.
-
-   The list borrows the briefings' row shape for the same reason that one
-   borrowed the mail rows' — "one thing, in a list" is one visual idea — and
-   keeps its own class names, because what is in each field is not the same
-   field. */
-.conversationlist {
-  display: flex;
-  flex-direction: column;
-  gap: var(--s-2);
-}
-
-.conversationrow {
-  display: block;
-  background: var(--sheet);
-  border: 2px solid var(--line);
-  border-radius: var(--r-card);
-  padding: 0.55rem 0.75rem;
-  color: inherit;
-  text-decoration: none;
-  min-height: 3.25rem;
-}
-
-@media (hover: hover) {
-  .conversationrow:hover {
-    border-color: var(--primary);
-  }
-}
-
-.conversationrow:active {
-  background: var(--tint);
-}
-
-.conversationmeta {
-  display: flex;
-  justify-content: space-between;
-  align-items: baseline;
-  gap: var(--s-3);
-  font-size: var(--t-small);
-  color: var(--ink-muted);
-}
-
-.conversationdate {
-  font-weight: 600;
-  color: var(--ink);
-  font-variant-numeric: tabular-nums;
-}
-
-.conversationtitle {
-  margin: 0.15rem 0 0;
-  font-size: var(--t-body);
-  line-height: 1.35;
-}
-
 /* The one number on the list that means DO SOMETHING: a proposal nobody has
    tapped is a thing waiting on the owner. It takes the WARNING colour and not the
    accent, so it matches the Inbox tab's badge — the same fact in two places
@@ -3077,20 +3003,6 @@ h1[tabindex="-1"]:focus {
   font-size: var(--t-tiny);
   font-weight: 600;
   color: var(--primary);
-}
-
-.startconversation {
-  align-self: flex-start;
-  margin-bottom: 0.5rem;
-  min-height: var(--tap);
-  padding: 0 0.9rem;
-  border: 2px solid var(--line);
-  border-radius: var(--r-pill);
-  background: transparent;
-  color: var(--primary);
-  font: inherit;
-  font-weight: 600;
-  cursor: pointer;
 }
 
 /* --- one conversation --- */
@@ -4674,32 +4586,6 @@ h1[tabindex="-1"]:focus {
   padding: 0.6rem 0.75rem 0.7rem;
 }
 
-.batchhead {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  gap: 0.6rem;
-  font-size: var(--t-small);
-  color: var(--ink-muted);
-  padding-bottom: 0.45rem;
-  border-bottom: 1px solid var(--rule);
-}
-
-/* WHY THIS BATCH REACHED HIM AT ALL (§10.6, 2026-09-11). The secretary settles
-   the ordinary ones; a batch standing here was HELD on purpose, and the reason
-   goes above the diff for the same reason a proposal's `why` goes above its
-   body — the thing means nothing until you know what it is answering. */
-.batchheld {
-  margin: 0 0 0.5rem;
-  font-size: var(--t-small);
-  line-height: 1.4;
-}
-
-.batchheldlabel {
-  font-weight: 600;
-  color: var(--primary);
-}
-
 /* --- WHAT THE SECRETARY SETTLED TODAY --------------------------------------
    Collapsed, and below the queue: he asked to SEE the edits, not to answer
    them. Those batches are gone from both stores by now, so each row is the
@@ -4742,33 +4628,11 @@ h1[tabindex="-1"]:focus {
   letter-spacing: 0.02em;
 }
 
-.settledhash {
-  margin-left: auto;
-  font-size: var(--t-small);
-}
-
 .settledwhy {
   margin: 0.2rem 0 0;
   font-size: var(--t-small);
   line-height: 1.4;
   color: var(--ink);
-}
-
-.settledlink {
-  display: inline-block;
-  margin-top: 0.2rem;
-  font-size: var(--t-small);
-}
-
-.batchwhen {
-  font-weight: 600;
-  color: var(--ink);
-  font-variant-numeric: tabular-nums;
-}
-
-.batchhash {
-  margin-left: auto;
-  font-size: var(--t-small);
 }
 
 .proposedobject {
@@ -4787,20 +4651,8 @@ h1[tabindex="-1"]:focus {
   min-height: 2rem;
 }
 
-.proposedpick {
-  width: 1.1rem;
-  height: 1.1rem;
-  flex: none;
-}
-
 .proposedact {
   font-weight: 600;
-}
-
-.proposedhash {
-  margin-left: auto;
-  font-size: var(--t-small);
-  color: var(--ink-muted);
 }
 
 .proposedbody,
@@ -4888,7 +4740,6 @@ h1[tabindex="-1"]:focus {
 }
 
 .diffflag,
-.diffpicked,
 .diffoverview .proposalproblem {
   margin: 0.2rem 0 0;
   font-size: var(--t-small);
@@ -4898,11 +4749,6 @@ h1[tabindex="-1"]:focus {
 /* What a hold rests on, said in the overview, so it is never only behind the toggle. */
 .diffflag {
   color: var(--primary);
-}
-
-.diffpicked {
-  color: var(--ink-muted);
-  font-variant-numeric: tabular-nums;
 }
 
 .diffbtn {
@@ -4918,13 +4764,6 @@ h1[tabindex="-1"]:focus {
   background: var(--tint);
 }
 
-.batchacts {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.5rem;
-  padding-top: 0.6rem;
-}
-
 
 /* The slug in the meta row: quiet, mono, never the loudest thing on the card. */
 .cardmeta .cardid { color: var(--ink-muted); }
@@ -4932,7 +4771,6 @@ h1[tabindex="-1"]:focus {
 /* --- about (docs/AUDIT-UX-2026-09-12.md findings 3 and 6) ------------------- */
 .aboutpage h2 { margin: 1.4rem 0 .4rem; font-size: var(--t-body); }
 .aboutprose { font-size: var(--t-body); line-height: 1.55; margin: .4rem 0; }
-.archivelink { margin-top: .4rem; }
 
 /* --- the Todos list: one tree of terms (docs/REDESIGN-PLAN-2026-09-25.md) --- */
 /* A group is a glass card, a todo one line: pie and number, title, the count below a
@@ -5245,10 +5083,6 @@ h1[tabindex="-1"]:focus {
 }
 
 /* The held reason runs on from its label: typst's paragraph, held inline. */
-.batchheldwhy > p {
-  display: inline;
-  margin: 0;
-}
 
 .row.parent .rowtitle {
   font-weight: 600;
@@ -5823,13 +5657,6 @@ body:has(> .secretarypanel) .askrow {
   margin: 0 0 var(--s-2);
   font-weight: 600;
   white-space: pre-wrap;
-}
-
-.streamasked-act,
-.streamasked-box {
-  font-weight: 400;
-  font-style: italic;
-  color: var(--ink-muted);
 }
 
 /* A round the box asked is headed by its title, on the line that names the
@@ -6631,14 +6458,6 @@ body:has(> .secretarypanel) .askrow {
 }
 
 /* Where a held batch is and who wrote it, inside its diff. */
-.batchmeta {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.6rem;
-  margin: 0.4rem 0 0;
-  font-size: var(--t-small);
-  color: var(--ink-muted);
-}
 
 /* THE ONE GRID'S WIDTHS (above, "ONE GRID FOR EVERY PAGE"), last in the file so
    no base rule set after them wins: everything under the header starts at the

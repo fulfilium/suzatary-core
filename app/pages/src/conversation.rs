@@ -807,7 +807,8 @@ fn host(m: &mut Model, input: Input) -> Vec<Effect> {
 }
 
 fn heard(m: &mut Model, frame: &str) -> Vec<Effect> {
-    match serde_json::from_str::<Frame>(frame) {
+    match serde_json::from_str::<serde_json::Value>(frame).and_then(serde_json::from_value::<Frame>)
+    {
         Ok(f) => {
             // A written turn is the replicas' to bring: they are pulled, and the window read again
             // once they move.

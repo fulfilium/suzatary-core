@@ -28,14 +28,18 @@ pub struct Host<P: Hosted> {
 
 impl<P: Hosted> Host<P> {
     pub fn start(flags: &str) -> Result<(Self, Vec<u8>), String> {
-        let flags = serde_json::from_str(flags).map_err(|e| format!("flags: {e}"))?;
+        let flags = serde_json::from_str::<serde_json::Value>(flags)
+            .and_then(serde_json::from_value)
+            .map_err(|e| format!("flags: {e}"))?;
         let (runtime, Frame { patches, effects }) = Runtime::start(flags);
         Ok((Self { runtime, effects }, patches))
     }
 
     /// A bad input steps nothing.
     pub fn input(&mut self, input: &str) -> Result<Vec<u8>, String> {
-        let input = serde_json::from_str(input).map_err(|e| format!("input: {e}"))?;
+        let input = serde_json::from_str::<serde_json::Value>(input)
+            .and_then(serde_json::from_value)
+            .map_err(|e| format!("input: {e}"))?;
         let frame = self.runtime.send(P::input(input));
         Ok(self.took(frame))
     }
@@ -65,8 +69,9 @@ impl<P: Hosted> Host<P> {
         let Some(text) = P::rehearsal() else {
             return Ok(());
         };
-        let Rehearsal { flags, inputs } =
-            serde_json::from_str(text).map_err(|e| format!("rehearsal: {e}"))?;
+        let Rehearsal { flags, inputs } = serde_json::from_str::<serde_json::Value>(text)
+            .and_then(serde_json::from_value)
+            .map_err(|e| format!("rehearsal: {e}"))?;
         let (mut host, _) = Self::start(&flags.to_string())?;
         for input in inputs {
             host.input(&input.to_string())?;
