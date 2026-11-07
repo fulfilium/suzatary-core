@@ -566,7 +566,7 @@ second runtime.
   and `device.ts`'s view are gone. The Inbox's cards are parts in `parts.ts` until stage 6. When
   the watched cards change, the program asks the overview again, since a card the box files changes
   which line asks for what. Nothing in `web/src/painter` names a page.
-- **The laws.** `settings_laws` in `app/pages/tests/laws.rs`, and in a browser
+- **The laws.** `settings_laws` in `app/pages/tests/laws/`, and in a browser
   `web/e2e/painter.test.ts` (WEB-SPEC §3.22) over Settings' program through `Runtime::fresh`; with
   the painter's move made a no-op the browser scene fails at its first seed.
 - **Behaviour.** With no flag, `overview` (7), `pairing` (2), `google`, `tapsecret`, `connections`
@@ -604,7 +604,7 @@ second runtime.
   `Context`. The host is `program.ts`, `local.ts`, `painter/scroll.ts` and `painter/files.ts`.
 - **The view tree** gained the tags, the keydown, toggle and file events, an untaken event left
   to the browser, `Node::map` and `keydown_of`.
-- **The laws** are in `app/pages/tests/laws.rs` for every page, with the vectors' open
+- **The laws** are in `app/pages/tests/laws/` for every page, with the vectors' open
   proposals in `app/pages/tests/vectors.rs`.
 - **Stays in TypeScript** until stages 2 and 9: the readings' adapters (`dressed.ts`,
   `drafts.ts`, `draftbox.ts`), the worker's grouping (`grouped.ts`, `rounds.ts`, `days.ts`),
@@ -645,7 +645,7 @@ second runtime.
   register; `Effect::map` lifts a part's effects, as `Node::map` lifts its messages. The view tree
   gained `Ol`, the form attributes, an intent's click (`On::Intent`) and a foreign part brought to
   new props in place. The painter waits for a block's HTML from a join that lands while it reads.
-- **The laws.** `todo_laws`, `list_laws` and `typst_laws` in `app/pages/tests/laws.rs`; beside the
+- **The laws.** `todo_laws`, `list_laws` and `typst_laws` in `app/pages/tests/laws/`; beside the
   code, that an answer to a replaced ask is not drawn and that every ask of the list reads back
   as itself, two defects the scenes found, and that each refusal of the add sheet names the
   field it is about (`addsheet.test.ts`'s law, which read the deleted TypeScript sheet).

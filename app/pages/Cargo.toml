@@ -38,7 +38,7 @@ path = "tests/device.rs"
 
 [[test]]
 name = "laws"
-path = "tests/laws.rs"
+path = "tests/laws/main.rs"
 
 [[test]]
 name = "vectors"

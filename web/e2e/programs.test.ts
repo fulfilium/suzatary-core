@@ -3,7 +3,7 @@
  * real browser. Mail, a message and a thread are `mail.test.ts`'s.
  *
  * The laws of each page (the view a pure function of its model, a patch applied equal to a fresh
- * draw) are `app/pages/tests/laws.rs`. What only a browser and a box can show is here: the module
+ * draw) are `app/pages/tests/laws/`. What only a browser and a box can show is here: the module
  * loads, every runtime effect a page asks for is performed by `web/src/pages/program.ts`, the
  * painter draws what the program answers, and a click on a node the program drew comes back to
  * it as its message.
