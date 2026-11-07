@@ -120,8 +120,8 @@ pub(crate) enum Out {
     Watch(Key, Local),
     Keep(Register, serde_json::Value),
     Act(Key, Act, Secret, Then),
-    /// Sign the registration of a key, then tap the card with the note.
-    Endorse(Key, String, String, Then, String),
+    /// Sign the registration of a key, then tap the card.
+    Endorse(Key, String, String, Then, String, String),
     Reply(Key),
     Focus(String),
     Toast(String),
@@ -304,8 +304,7 @@ impl Cards {
         self.uis.get(key).cloned().unwrap_or_default()
     }
 
-    /// Each watched once; each whose tap's answer was lost is said once its row shows what the box
-    /// did.
+    /// Each watched once; a tap whose answer was lost is said once its row moves.
     pub(crate) fn seen<'a>(
         &mut self,
         rows: impl IntoIterator<Item = (&'a str, &'a ProposalRow)>,
@@ -401,7 +400,7 @@ impl Cards {
     #[must_use]
     pub(crate) fn endorsed(
         key: &Key,
-        row: &ProposalRow,
+        signed: String,
         note: String,
         then: Then,
         a: Answer,
@@ -413,7 +412,7 @@ impl Cards {
                     at: Asked {
                         conversation: key.conversation.clone(),
                         index: key.index,
-                        from: signature(row),
+                        from: signed,
                     },
                     answer: Answering::Tap {
                         note,
@@ -452,8 +451,7 @@ impl Cards {
         }
     }
 
-    /// `within` stands inside it, after its own parts (a grant inside the link's card it was asked
-    /// for).
+    /// `within` stands inside it, after its own parts.
     #[must_use]
     pub(crate) fn view<M: 'static>(
         &self,
@@ -561,6 +559,7 @@ fn yes(key: &Key, row: &ProposalRow, a: &CardAnswer, ui: &Ui) -> Wants {
                 device.clone(),
                 Then { done, yes: true },
                 note,
+                signature(row),
             )),
             ProposedAct::Email { .. }
             | ProposedAct::Forward { .. }
@@ -1059,10 +1058,12 @@ pub enum Asking {
         then: Then,
         signed: String,
     },
+    /// `signed`: the row's signature at the tap.
     Endorse {
         key: Key,
         then: Then,
         note: String,
+        signed: String,
     },
     Setup,
 }
@@ -1101,8 +1102,13 @@ pub(crate) fn effects<H, A, S>(
                     told: crate::runtime::Told::Held,
                 });
             }
-            Out::Endorse(key, actor, device, then, note) => effects.push(Effect::Endorse {
-                ask: ask(Asking::Endorse { key, then, note }),
+            Out::Endorse(key, actor, device, then, note, signed) => effects.push(Effect::Endorse {
+                ask: ask(Asking::Endorse {
+                    key,
+                    then,
+                    note,
+                    signed,
+                }),
                 actor,
                 key: device,
             }),
@@ -1124,7 +1130,7 @@ pub(crate) fn effects<H, A, S>(
 }
 
 impl Cards {
-    /// A lost answer whose row already moved is said at once; a signature's tap is asked of its row.
+    /// A lost answer whose row already moved is said at once.
     pub(crate) fn asked<'a>(
         &mut self,
         asking: Asking,
@@ -1137,10 +1143,12 @@ impl Cards {
                 out.extend(self.settled(row));
                 out
             }
-            Asking::Endorse { key, then, note } => match row(&key) {
-                Some(r) => Cards::endorsed(&key, r, note, then, a),
-                None => Vec::new(),
-            },
+            Asking::Endorse {
+                key,
+                then,
+                note,
+                signed,
+            } => Cards::endorsed(&key, signed, note, then, a),
             Asking::Setup => vec![match answered::<Begun>(a) {
                 Ok(Begun { id }) => Out::Go(Place::conversation(&id).href()),
                 Err(words) => Out::Toast(words),
@@ -1148,8 +1156,7 @@ impl Cards {
         }
     }
 
-    /// Taps the link's card again, once, with the link it was last tapped with: what follows the
-    /// yes of the grant its origin needed.
+    /// Taps the link's card again with the link it was last tapped with.
     #[must_use]
     pub(crate) fn resend(link: &Key, row: &ProposalRow) -> Out {
         let done = row
