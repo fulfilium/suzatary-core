@@ -150,8 +150,7 @@ impl Notmuch {
     }
 
     /// Every message `query` matches, folded by content hash, each hash recorded in
-    /// [`located::Located`] before it is answered so every printed hash resolves. It reads and
-    /// hashes each file, so page reads bound `query` through [`Self::newest_ids`] first.
+    /// [`located::Located`] before it is answered so every printed hash resolves.
     /// The kinds of held value the text layers of `message`'s PDF attachments name.
     fn attached_kinds(
         &self,
@@ -235,7 +234,7 @@ impl Notmuch {
     /// `--include-html` is required: without it an html-only message arrives empty.
     fn show_query(&self, query: &str) -> Result<Vec<Shown>, MailError> {
         let raw = self.run(&["show", "--format=json", "--include-html", query])?;
-        Ok(message::matched(&raw)?.into_iter().map(shown_of).collect())
+        message::matched(&raw)?.into_iter().map(shown_of).collect()
     }
 
     /// Unquoted because the id is notmuch's own.
@@ -375,8 +374,7 @@ impl Notmuch {
         ordered.iter().map(Self::summary_of).collect()
     }
 
-    /// Any notmuch query as the agent's summaries, newest first. Unlike [`Mailbox::search`] it
-    /// loads every match and then truncates.
+    /// Any notmuch query as the agent's summaries, newest first.
     pub fn summaries(
         &self,
         query: &str,
@@ -635,11 +633,11 @@ struct Shown {
 }
 
 /// A shown message as a model may read it: every identity number a placeholder (`held_value`).
-fn shown_of(msg: NotmuchMessage) -> Shown {
-    let (shown, values) = unmasked(msg);
+fn shown_of(msg: NotmuchMessage) -> Result<Shown, MailError> {
+    let (shown, values) = unmasked(msg)?;
     let holder = held_value::Holder::Message(shown.id.clone());
     let mask = |text: &str| held_value::mask(text, &holder, &values);
-    Shown {
+    Ok(Shown {
         headers: shown
             .headers
             .iter()
@@ -656,14 +654,18 @@ fn shown_of(msg: NotmuchMessage) -> Shown {
             .collect(),
         id: shown.id,
         tags: shown.tags,
-    }
+    })
 }
 
 /// A shown message as notmuch shows it, and its held values: its file's, then the header values
-/// by name and the body, so a reveal counts them as the mask did. A file that cannot be read
-/// gives the shown texts' values alone, which a reveal then finds gone.
-fn unmasked(msg: NotmuchMessage) -> (Shown, held_value::Values) {
-    let raw = std::fs::read(&msg.file).unwrap_or_default();
+/// by name and the body, as the mask counts them. A file gone gives the shown texts' alone.
+fn unmasked(msg: NotmuchMessage) -> Result<(Shown, held_value::Values), MailError> {
+    let raw = std::fs::read(&msg.file)
+        .present()
+        .map_err(|failed| {
+            MailError::Unreachable(format!("reading {}: {failed}", msg.file.display()))
+        })?
+        .unwrap_or_default();
     let body = msg.body.unwrap_or_default();
     let shown = Shown {
         id: msg.id,
@@ -680,7 +682,7 @@ fn unmasked(msg: NotmuchMessage) -> (Shown, held_value::Values) {
         .chain(std::iter::once(shown.body.as_str()))
         .collect();
     let values = held::values(&raw, &texts);
-    (shown, values)
+    Ok((shown, values))
 }
 
 /// A notmuch query naming exactly these ids; an id with a quote or whitespace is dropped rather
@@ -731,7 +733,7 @@ impl Reveal for Notmuch {
         let Some(msg) = message::matched(&raw)?.into_iter().next() else {
             return Ok(None);
         };
-        let (_, values) = unmasked(msg);
+        let (_, values) = unmasked(msg)?;
         Ok(values
             .get(ordinal)
             .map(|(kind, value)| held_value::Shown::new(kind, value)))

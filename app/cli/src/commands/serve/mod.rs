@@ -755,7 +755,11 @@ impl State {
         ) -> Result<T, Refusal>,
     ) -> Result<T, Refusal> {
         let chains = self.every_chain();
-        let declared = self.edits.declared().ok();
+        let declared = self
+            .edits
+            .declared()
+            .inspect_err(|failed| tracing::warn!("cards: the instance file: {failed}"))
+            .ok();
         let settables = self.settables();
         let cards = suzatary_core::secretary::routes::Cards {
             deployment: &self.deployment,

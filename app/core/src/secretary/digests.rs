@@ -51,8 +51,7 @@ pub struct Digests<'a> {
     pub compacting: &'a crate::secretary::compacting::Compacting,
 }
 
-/// The digest as a reader holds it: no field reaches a write of an event, a summary's words or
-/// a line.
+/// The digest as a reader holds it: no field reaches a write.
 #[derive(Clone, Copy)]
 pub struct ReadDigests<'a> {
     /// What was said of each node, by the node's name.
@@ -92,8 +91,7 @@ impl ReadDigests<'_> {
         self.read_over(&lines, &self.opened(&lines))
     }
 
-    /// The conversations' lines as the store's graph, which every reader at the same heads
-    /// shares: walk it with [`crate::store::Graph::objects`], in the store's order.
+    /// The conversations' lines as the store's graph, shared by every reader at the same heads.
     ///
     /// # Errors
     /// The store's own.
@@ -114,8 +112,7 @@ impl ReadDigests<'_> {
         })
     }
 
-    /// The reading over `lines`, the conversations' objects as already read, and `opened`, each
-    /// of them read.
+    /// The reading over `lines` and `opened`, each of them read.
     ///
     /// # Errors
     /// As [`ReadDigests::read`].
@@ -125,12 +122,19 @@ impl ReadDigests<'_> {
         opened: &std::collections::BTreeMap<Hash, crate::secretary::store::Entry>,
     ) -> Result<Digest, Refusal> {
         let history = timed(Phase::History, || self.history.nodes())?;
-        timed(Phase::Fold, || {
+        let unread = std::cell::RefCell::new(None);
+        let read = timed(Phase::Fold, || {
             digest::digest(lines, opened, &history, self.owners, |name| {
-                self.words(name)
+                self.words(name).unwrap_or_else(|failed| {
+                    unread.borrow_mut().get_or_insert(failed);
+                    None
+                })
             })
-        })
-        .map_err(|cycle| {
+        });
+        if let Some(failed) = unread.into_inner() {
+            return Err(failed);
+        }
+        read.map_err(|cycle| {
             Refusal::internal(format!(
                 "the conversations' lines rest on {} in a cycle",
                 cycle.0.as_str()
@@ -138,8 +142,7 @@ impl ReadDigests<'_> {
         })
     }
 
-    /// Every retraction an owner wrote, by object name, without reading the lines: a session
-    /// told the record before one of them may hold a summary no reader is shown any more.
+    /// Every retraction an owner wrote, by object name, without reading the lines.
     ///
     /// # Errors
     /// The history's store's own.
@@ -169,8 +172,7 @@ impl ReadDigests<'_> {
         Ok(self.read()?.naming())
     }
 
-    /// Refuse unless the history and the lines both read whole, as every write that decides over
-    /// the reading must.
+    /// Refuse unless the history and the lines both read whole.
     ///
     /// # Errors
     /// As [`crate::secretary::memories`]'s sweep: naming the store and what it left out.
@@ -181,14 +183,12 @@ impl ReadDigests<'_> {
         })
     }
 
-    /// The words kept under `name`; `None` once deleted or lost.
-    #[must_use]
-    pub fn words(&self, name: &TextName) -> Option<Line> {
-        self.texts
-            .get(name)
-            .ok()
-            .flatten()
-            .map(|text| text.words().clone())
+    /// The words kept under `name`; `None` once deleted.
+    ///
+    /// # Errors
+    /// The text store unreadable.
+    pub fn words(&self, name: &TextName) -> Result<Option<Line>, Refusal> {
+        Ok(self.texts.get(name)?.map(|text| text.words().clone()))
     }
 }
 

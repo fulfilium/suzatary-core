@@ -1,13 +1,9 @@
 //! The health of what the box reads from and calls: a register of results keyed by any source
-//! (each source of [`crate::source_key::SourceKey`], and the model each job runs), which the
-//! settings page, the box's cards, the briefing and the inbox read.
+//! ([`crate::source_key::SourceKey`], and the model each job runs).
 //!
-//! What is read of a source's results is three things: the latest success, the latest
-//! failure with its words, and the first result recorded. Each is a semilattice (a maximum, a
-//! maximum by instant, a minimum), so their product [`Health`] is one, and so is [`Healths`],
-//! the pointwise join over accounts. The reading is therefore a function of the SET of results,
-//! whatever order they arrive in and however often, and the store holds the join rather than
-//! every result: joining one more result into it is adding that result to the set.
+//! [`Health`] is a product of semilattices (the latest success, the latest failure, the first
+//! result), and [`Healths`] their pointwise join, so a reading is a function of the SET of
+//! results, and the store holds the join.
 
 use std::borrow::Borrow;
 use std::collections::BTreeMap;
@@ -45,14 +41,11 @@ pub struct Failed {
     pub words: String,
 }
 
-/// One account's sync results, as the three semilattices they are read through.
+/// One account's sync results.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
+#[serde(try_from = "Stored", into = "Stored")]
 pub struct Health {
-    /// The latest success.
-    ok: Option<Instant>,
-    /// The latest failure.
-    failed: Option<Failed>,
+    results: Results,
     /// The latest failure of a class a tap mends: what a fix answers while an outage or a
     /// timeout comes between two sightings of it.
     classified: Option<Failed>,
@@ -60,27 +53,88 @@ pub struct Health {
     first: Instant,
 }
 
-impl Health {
-    /// The health of one result at `at`; `words` is what it said, kept for a failure.
-    #[must_use]
-    pub fn of(at: Instant, outcome: Outcome, words: &str) -> Self {
-        let (ok, failed) = match outcome {
-            Outcome::Succeeded => (Some(at), None),
-            Outcome::Failed(class) => (
-                None,
-                Some(Failed {
-                    at,
-                    class,
-                    words: words.to_owned(),
-                }),
-            ),
+/// The latest success and failure, at least one.
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum Results {
+    Succeeded(Instant, Option<Failed>),
+    Failed(Failed),
+}
+
+impl Results {
+    fn join(&self, other: &Self) -> Self {
+        match (self, other) {
+            (Self::Failed(one), Self::Failed(two)) => Self::Failed(one.max(two).clone()),
+            (Self::Succeeded(ok, failed), Self::Failed(other))
+            | (Self::Failed(other), Self::Succeeded(ok, failed)) => {
+                Self::Succeeded(*ok, failed.clone().max(Some(other.clone())))
+            }
+            (Self::Succeeded(one, failed), Self::Succeeded(two, other)) => {
+                Self::Succeeded(*one.max(two), failed.clone().max(other.clone()))
+            }
+        }
+    }
+}
+
+#[derive(Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct Stored {
+    ok: Option<Instant>,
+    failed: Option<Failed>,
+    classified: Option<Failed>,
+    first: Instant,
+}
+
+impl TryFrom<Stored> for Health {
+    type Error = &'static str;
+
+    fn try_from(stored: Stored) -> Result<Self, Self::Error> {
+        let results = match (stored.ok, stored.failed) {
+            (Some(ok), failed) => Results::Succeeded(ok, failed),
+            (None, Some(failed)) => Results::Failed(failed),
+            (None, None) => return Err("a health holds neither a success nor a failure"),
         };
-        let classified = failed
-            .clone()
-            .filter(|failed| failed.class.remedy() != crate::connect::Remedy::Retry);
+        Ok(Self {
+            results,
+            classified: stored.classified,
+            first: stored.first,
+        })
+    }
+}
+
+impl From<Health> for Stored {
+    fn from(health: Health) -> Self {
+        let (ok, failed) = match health.results {
+            Results::Succeeded(ok, failed) => (Some(ok), failed),
+            Results::Failed(failed) => (None, Some(failed)),
+        };
         Self {
             ok,
             failed,
+            classified: health.classified,
+            first: health.first,
+        }
+    }
+}
+
+impl Health {
+    /// One result at `at`; `words` is what it said.
+    #[must_use]
+    pub fn of(at: Instant, outcome: Outcome, words: &str) -> Self {
+        let results = match outcome {
+            Outcome::Succeeded => Results::Succeeded(at, None),
+            Outcome::Failed(class) => Results::Failed(Failed {
+                at,
+                class,
+                words: words.to_owned(),
+            }),
+        };
+        let classified = match &results {
+            Results::Failed(failed) => Some(failed.clone()),
+            Results::Succeeded(..) => None,
+        }
+        .filter(|failed| failed.class.remedy() != crate::connect::Remedy::Retry);
+        Self {
+            results,
             classified,
             first: at,
         }
@@ -90,8 +144,7 @@ impl Health {
     #[must_use]
     pub fn join(&self, other: &Self) -> Self {
         Self {
-            ok: self.ok.max(other.ok),
-            failed: self.failed.clone().max(other.failed.clone()),
+            results: self.results.join(&other.results),
             classified: self.classified.clone().max(other.classified.clone()),
             first: self.first.min(other.first),
         }
@@ -100,12 +153,14 @@ impl Health {
     /// Its latest success, `None` while none is recorded.
     #[must_use]
     pub const fn succeeded(&self) -> Option<Instant> {
-        self.ok
+        match self.results {
+            Results::Succeeded(ok, _) => Some(ok),
+            Results::Failed(_) => None,
+        }
     }
 
     /// While failing, the class a fix answers and since when: the latest failure since the last
-    /// success whose class a tap mends, else the latest failure's. So a revoked link stays
-    /// revoked through a timeout between two of its 403s, and its card stays the same card.
+    /// success whose class a tap mends, else the latest failure's.
     #[must_use]
     pub fn remedial(&self) -> Option<(Failure, Instant)> {
         match self.reading() {
@@ -113,7 +168,7 @@ impl Health {
             Reading::Failing { class, since, .. } => Some((
                 self.classified
                     .as_ref()
-                    .filter(|classified| self.ok.is_none_or(|ok| classified.at > ok))
+                    .filter(|classified| self.succeeded().is_none_or(|ok| classified.at > ok))
                     .map_or(class, |classified| classified.class),
                 since,
             )),
@@ -123,17 +178,16 @@ impl Health {
     /// What the account's results say now. A success at the instant of a failure clears it.
     #[must_use]
     pub fn reading(&self) -> Reading {
-        match (&self.failed, self.ok) {
-            (Some(failed), ok) if ok.is_none_or(|ok| failed.at > ok) => Reading::Failing {
-                at: failed.at,
-                class: failed.class,
-                words: failed.words.clone(),
-                since: ok.unwrap_or(self.first),
-            },
-            (_, Some(at)) => Reading::Ok { at },
-            // Reached only by a stored health holding neither, which no join writes: read as
-            // having said nothing against the account.
-            (_, None) => Reading::Ok { at: self.first },
+        let failing = |failed: &Failed, since: Instant| Reading::Failing {
+            at: failed.at,
+            class: failed.class,
+            words: failed.words.clone(),
+            since,
+        };
+        match &self.results {
+            Results::Failed(failed) => failing(failed, self.first),
+            Results::Succeeded(ok, Some(failed)) if failed.at > *ok => failing(failed, *ok),
+            Results::Succeeded(ok, _) => Reading::Ok { at: *ok },
         }
     }
 }
@@ -188,8 +242,7 @@ impl<K: Ord> Default for Healths<K> {
 }
 
 impl<K: Ord + Clone> Healths<K> {
-    /// One source's one result, at `at`, `words` what it said: the generator every register is
-    /// a join of, whatever the source (a mail account, the model a job runs, a plugin's link).
+    /// One source's one result: the generator every register is a join of.
     #[must_use]
     pub fn one(source: impl Into<K>, at: Instant, outcome: Outcome, words: &str) -> Self {
         Self(BTreeMap::from([(
@@ -312,8 +365,8 @@ mod tests {
             .fold(Healths::default(), |sum, one| sum.join(&one))
     }
 
-    /// The meaning, written out plainly: the latest result decides, a success at a failure's
-    /// instant winning, and a failure has held since the latest success or the first result.
+    /// The meaning: the latest result decides, a success winning a tie, and a failure has held
+    /// since the latest success or the first result.
     fn meaning(results: &[(usize, i64, Said)], account: usize) -> Option<Reading> {
         let mine: Vec<(Instant, &Said)> = results
             .iter()

@@ -21,8 +21,7 @@ use crate::tree::{self, Classifier, Member, Members, Place, Segment, Tree, Trie}
 use crate::wire;
 
 /// Whether a row's content is still its untrusted writer's: authored by an actor the policy does
-/// not confirm and never re-authored by one it does. A claim alone (an untrusted completion of a
-/// todo the owner wrote) leaves the content his.
+/// not confirm and never re-authored by one it does.
 #[must_use]
 pub fn provisional_content(entry: &Entry) -> bool {
     matches!(
@@ -90,9 +89,7 @@ pub fn events_of(nodes: &[Node]) -> Vec<TodoEvent> {
 }
 
 /// One todo's own events beside their hashes, as undo and redo read them: causal, and among
-/// writes nothing orders (two writers' concurrent writes, or a change written before its deps
-/// were its todo's heads, which rests only on its own registers' frontiers) by the instant
-/// stamped, then the name.
+/// writes nothing orders by the instant stamped, then the name.
 ///
 /// # Panics
 /// Never: ancestry is acyclic, so some write always waits on nothing.
@@ -153,8 +150,8 @@ pub fn renders(record: &Authored, untrusted: &Untrusted) -> bool {
     !untrusted.actors().contains(&record.actor)
 }
 
-/// One field's text as the typst markup it renders, `None` when it is empty: the body and the detail are markup
-/// as stored; the waiting-on (string source) and the rationale (its lines rejoined) are data, escaped.
+/// One field's text as the typst markup it renders, `None` when it is empty: the body and the
+/// detail as stored, the waiting-on and the rationale escaped as data.
 #[must_use]
 pub(crate) fn rich_source(field: &str, text: &str) -> Option<Escaped> {
     if text.is_empty() {
@@ -424,14 +421,15 @@ static TODO_LINK: std::sync::LazyLock<Regex> = std::sync::LazyLock::new(|| {
 /// Ids shorter than this are not matched as mentions; they are words.
 const MIN_MENTION: usize = 8;
 
-/// Which todos each todo refers to, by `#link("todo:<id>")` or by spelling another's id.
+/// Which todos each todo refers to, by `#link("todo:<id>")` or by spelling another's id: one
+/// alternation, longest first, scanned once per record.
 ///
-/// One alternation, longest first, scanned once per record, since a pattern per id was slow.
-#[must_use]
+/// # Errors
+/// The alternation past the regex engine's size limit.
 pub fn references(
     entries: &[Entry],
     by_hash: &BTreeMap<Hash, &Envelope>,
-) -> BTreeMap<String, Vec<String>> {
+) -> Result<BTreeMap<String, Vec<String>>, regex::Error> {
     let ids: BTreeSet<&str> = entries.iter().map(|e| e.key.as_str()).collect();
     let mut long: Vec<&str> = ids
         .iter()
@@ -447,10 +445,9 @@ pub fn references(
             .map(|id| regex::escape(id))
             .collect::<Vec<_>>()
             .join("|");
-        Regex::new(&format!(
-            r"(?:^|[^A-Za-z0-9_])(?:{alternation})(?:$|[^A-Za-z0-9_])"
-        ))
-        .ok()
+        Some(Regex::new(&format!(
+            r"(?:^|[^A-Za-z0-9_])({alternation})(?:$|[^A-Za-z0-9_])"
+        ))?)
     };
     let mut out: BTreeMap<String, Vec<String>> = BTreeMap::new();
     for entry in entries {
@@ -478,31 +475,22 @@ pub fn references(
         if let Some(pattern) = mention.as_ref() {
             // No lookaround, so the scan resumes just past each id to catch shared separators.
             let mut from = 0usize;
-            while let Some(caught) = pattern.find_at(&text, from) {
-                let window = &text[caught.start()..caught.end()];
-                let other = long
-                    .iter()
-                    .find(|id| window.contains(**id))
-                    .copied()
-                    .unwrap_or_default();
-                if other.is_empty() {
-                    break;
-                }
+            while let Some(id) = pattern
+                .captures_at(&text, from)
+                .and_then(|caught| caught.get(1))
+            {
+                let other = id.as_str();
                 if other != mine && !found.iter().any(|f| f == other) {
                     found.push(other.to_owned());
                 }
-                let at = caught.start() + window.find(other).unwrap_or(0);
-                from = next_boundary(&text, at + other.len());
-                if from <= caught.start() {
-                    break;
-                }
+                from = next_boundary(&text, id.end());
             }
         }
         if !found.is_empty() {
             out.insert(mine.to_owned(), found);
         }
     }
-    out
+    Ok(out)
 }
 
 /// The next character boundary at or after `at`, so slicing never panics.
@@ -610,8 +598,7 @@ pub fn explain(entry: &Entry, now: Datetime, env: &Env) -> Option<fpl::Explanati
     Some(fpl::explained(spec, fpl::instant_of(now), env))
 }
 
-/// One node of the list's tree: where it sits, the term the trie built for
-/// it, and the core's value of that term, or why it does not link.
+/// One node of the list's tree: where it sits, its term, and the core's value of it.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Row {
     /// The group or todo.

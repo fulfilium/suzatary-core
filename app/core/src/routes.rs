@@ -174,7 +174,7 @@ pub fn todo(
     let env = Believed::of(nodes, at, untrusted)
         .map_err(|e| Refusal::internal(e.to_string()))?
         .env;
-    let refs = view::references(&rows, &by_hash);
+    let refs = view::references(&rows, &by_hash).map_err(|e| Refusal::internal(e.to_string()))?;
     let back = view::backlinks(&refs);
     let neighbours = |named: Option<&Vec<String>>| -> Vec<wire::Neighbour> {
         named
@@ -877,11 +877,8 @@ fn frontier_of(recorded: &prodrome_core::store::frontier::Recorded) -> wire::Fro
 }
 
 /// `GET /api/stores/lines/objects?since=<heads>`: [`store_objects_since`] for the conversations'
-/// lines, carrying the key of every slot the objects sent name, except a key an erasure of its
-/// own conversation names or a reseal supersedes, which is never sent: so a replica joining the
-/// answer can open what it was sent and nothing erased. The erasures are read over the whole
-/// store, so a piece that holds a line and not the later line erasing its words carries no key
-/// for them either, and every erased key is named beside them.
+/// lines, carrying the key of every slot the objects sent name, except a key an erasure or a
+/// reseal retires, read over the whole store; every erased key is named beside them.
 ///
 /// # Errors
 /// The stores' own.
@@ -895,7 +892,7 @@ pub fn lines_since(
     let (payload, sent, graph) = store_answer(conversations.lines, since, books, now, cut)?;
     let retired = retired(&graph);
     Ok(wire::StorePayload {
-        keys: keys_of(conversations, &graph, &retired, &sent),
+        keys: keys_of(conversations, &graph, &retired, &sent)?,
         erased: retired
             .erased
             .keys()
@@ -906,11 +903,8 @@ pub fn lines_since(
 }
 
 /// `GET /api/stores/lines/skeleton?since=<heads>`: what [`lines_since`] answers, each object as
-/// its [`wire::SkeletonNode`] instead of its literal, cut by the nodes' own weight: the same
-/// heads, prodromes and epoch, read under the same lock, and the same keys. It names no erased
-/// key beside them: each node's step says what its line retires, so a replica that takes the pieces of
-/// the skeleton and the literal of each node by hash ([`content`]) holds what the pieces of the
-/// objects' pull would have brought it, and a replica that lacks nothing is sent nothing.
+/// its [`wire::SkeletonNode`] instead of its literal, cut by the nodes' own weight. It names no
+/// erased key: each node's step says what its line retires.
 ///
 /// # Errors
 /// The stores' own.
@@ -939,7 +933,7 @@ pub fn lines_skeleton(
     let keys = if sent.is_empty() {
         BTreeMap::new()
     } else {
-        keys_of(conversations, &graph, &retired(&graph), &sent)
+        keys_of(conversations, &graph, &retired(&graph), &sent)?
     };
     // A replica that lacks nothing holds the store's heads already: they are the heads of what it
     // holds, which a recorded frontier names exactly.
@@ -1001,22 +995,25 @@ fn keys_of(
     graph: &crate::store::Graph<crate::secretary::line_event::LineEvent>,
     retired: &crate::secretary::transcript::Retired,
     sent: &[prodrome_core::event::Hash],
-) -> BTreeMap<String, String> {
+) -> Answered<BTreeMap<String, String>> {
     let slots = conversations.reads().slots();
     let line = |name: &prodrome_core::event::Hash| graph.dag().get(name)?.event();
-    sent.iter()
+    let mut keys = BTreeMap::new();
+    for name in sent
+        .iter()
         .filter_map(line)
         .flat_map(|sent| sent.keys().map(move |key| (sent.conversation(), key)))
         .filter(|(id, name)| !retired.retires(id, name, line, &slots))
         .map(|(_, name)| name)
-        .filter_map(|name| {
-            let key = conversations.keys.get(name).ok()??;
-            Some((
+    {
+        if let Some(key) = conversations.keys.get(name)? {
+            keys.insert(
                 name.as_str().to_owned(),
                 crate::secretary::key_ring::spelled(&key),
-            ))
-        })
-        .collect()
+            );
+        }
+    }
+    Ok(keys)
 }
 
 /// One line's node: its name, what it rests on, its literal's size, and its header.
