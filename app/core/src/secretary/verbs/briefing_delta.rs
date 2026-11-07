@@ -66,7 +66,39 @@ const NOTE: &str = "This is what MOVED. The priced list is the app's job — say
                      line of cannot_be_read once, as a problem with the inbox's store that \
                      `suzatary verify` reports and no tap can settle. When \
                      compactor_held is not null, say in one clause what holds the digest's \
-                     summaries back and how many wait.";
+                     summaries back and how many wait. Name every sender in senders_silenced: \
+                     its mail no longer reaches triage.";
+
+/// Each sender a tapped noise card left out of triage on a day from `since` on, with its card.
+fn silenced(call: &Call<'_>, since: chrono::NaiveDate) -> Value {
+    use crate::secretary::acts::Act;
+    use crate::secretary::responded::Responded;
+    use crate::secretary::store::Proposal;
+    match crate::secretary::inbox::fold(call.caps.inbox) {
+        Ok(fold) => Value::from(
+            fold.objects()
+                .filter_map(|object| {
+                    let Proposal::Act(Act::Noise { sender, .. }) = &object.asked.proposal else {
+                        return None;
+                    };
+                    let answer = object.reading.shown()?;
+                    let day = call
+                        .deployment
+                        .zone
+                        .day(prodrome_core::fpl::instant_of(answer.at));
+                    (matches!(answer.response, Responded::Done(_)) && day >= since).then(|| {
+                        json!({
+                            "sender": sender,
+                            "card": object.asked.asked.to_string(),
+                            "at": stamp(answer.at),
+                        })
+                    })
+                })
+                .collect::<Vec<_>>(),
+        ),
+        Err(refused) => json!({ "unreadable": refused.message() }),
+    }
+}
 
 /// What holds the digest's summaries back now, in a sentence; null when nothing does.
 fn compactor_held(call: &Call<'_>, at: crate::capability::Datetime) -> Value {
@@ -193,6 +225,7 @@ impl Verb for BriefingDelta {
             "mail_failing": failing,
             "proposals_waiting": waiting(call, at),
             "compactor_held": compactor_held(call, at),
+            "senders_silenced": silenced(call, since),
             "note": NOTE,
         }))
     }

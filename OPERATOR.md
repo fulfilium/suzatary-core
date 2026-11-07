@@ -85,7 +85,7 @@ both derive from it.
   so; pass `part` (`show(id, part=2)`, ...) for the rest. Never mark a
   message from a part-1 note alone — ask for every part before you decide.
 - `suzatary mark <hash> todo|noise|skip [--note ..] [--todo-id ..]` — record a decision.
-- `suzatary noise add <sender>` — add a sender to the wholesale-ignore list.
+- `noise_add <hash> --why ..` — propose leaving the sender of the queued message `<hash>` out of triage; the owner's tap decides.
 
 `new`/`search` items are `{hash, id, sender, title, timestamp, container, sources}`.
 Use `hash` for `mark`; use `id` for `show`. `sources` is HOW MANY PLACES that
@@ -110,7 +110,7 @@ every card that sends mail.
 ## Dispositions
 - **todo** — actionable. `todo_add(...)`, then `mark <hash> todo --todo-id <id>`.
 - **noise** — automated/marketing/bot you never want again. `mark <hash> noise`,
-  and usually `noise add <sender>`.
+  and usually `noise_add <hash>`.
 - **skip** — seen, not actionable, but not noise (a one-off notice / FYI).
 
 ## Authoring a todo (you call a verb; you never write typst)
@@ -282,7 +282,7 @@ another card.
 2. `suzatary new` → the queue.
 3. Skim by sender/title; `show <id>` only the ones whose body you need.
 4. Decide each: author todos for actionable items; `mark` everything so it never
-   resurfaces; `noise add` recurring junk senders.
+   resurfaces; `noise_add` a recurring junk sender's message.
 5. `list_open_todos` before you author, so you `todo_update` an existing todo
    (e.g. a reply that resolves a `waiting_on`) instead of duplicating it. It is
    the chain's own fold — not a scan of the typst — so it is complete by

@@ -249,7 +249,24 @@ pub struct NoiseArgs {
 /// `suzatary noise add`: a sender to ignore wholesale.
 pub fn noise(path: &Path, args: &NoiseArgs) -> anyhow::Result<()> {
     let NoiseAction::Add { sender } = &args.action;
-    emit(&operator(&Instance::open(path)?).noise_add(sender)?)
+    emit(&silence(&ledger(&Instance::open(path)?), sender)?)
+}
+
+/// Leave `sender` out of triage; the agent's record holds no way here.
+pub(crate) fn silence(
+    ledger: &suzatary_io::state::Ledger,
+    sender: &str,
+) -> anyhow::Result<suzatary_core::mail::verbs::NoiseAdded> {
+    let known = ledger.read().map_err(anyhow::Error::msg)?;
+    ledger
+        .write(&suzatary_core::mail::known::Known {
+            local: known.local.add_noise(sender),
+            ..known
+        })
+        .map_err(anyhow::Error::msg)?;
+    Ok(suzatary_core::mail::verbs::NoiseAdded {
+        noise_added: sender.to_lowercase(),
+    })
 }
 
 /// What `suzatary backfill` was told.

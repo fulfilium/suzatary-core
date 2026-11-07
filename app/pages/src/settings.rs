@@ -527,6 +527,7 @@ fn kind(row: &suzatary_core::wire::ProposalRow) -> Kind {
         | ProposedAct::Drive { .. }
         | ProposedAct::CodingSession { .. }
         | ProposedAct::Afresh { .. }
+        | ProposedAct::Noise { .. }
         | ProposedAct::Device { .. }
         | ProposedAct::UnlockStore { .. }
         | ProposedAct::Erase { .. }

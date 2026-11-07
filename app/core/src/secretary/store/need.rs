@@ -43,7 +43,8 @@ impl Proposal {
                 | Act::Retract { .. }
                 | Act::Afresh { .. }
                 | Act::GoogleClient { .. }
-                | Act::CalendarEvent { .. },
+                | Act::CalendarEvent { .. }
+                | Act::Noise { .. },
             )
             | Proposal::Email(_)
             | Proposal::Forward(_)

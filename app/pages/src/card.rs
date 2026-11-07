@@ -572,6 +572,7 @@ fn yes(key: &Key, row: &ProposalRow, a: &CardAnswer, ui: &Ui) -> Wants {
             | ProposedAct::Drive { .. }
             | ProposedAct::CodingSession { .. }
             | ProposedAct::Afresh { .. }
+            | ProposedAct::Noise { .. }
             | ProposedAct::SignIn { .. }
             | ProposedAct::UnlockStore { .. }
             | ProposedAct::Erase { .. }

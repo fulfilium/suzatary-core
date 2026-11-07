@@ -85,7 +85,8 @@ impl Asking {
                         | Act::Erase { .. }
                         | Act::Retract { .. }
                         | Act::Afresh { .. }
-                        | Act::CalendarEvent { .. },
+                        | Act::CalendarEvent { .. }
+                        | Act::Noise { .. },
                     )
                     | Proposal::Email(_)
                     | Proposal::Forward(_)

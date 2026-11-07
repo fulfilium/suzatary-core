@@ -956,7 +956,8 @@ impl<'p, 'c> Prepared<'p, 'c> {
             | Act::AuthSend { .. }
             | Act::Patch { .. }
             | Act::CodingSession { .. }
-            | Act::SignIn { .. } => {
+            | Act::SignIn { .. }
+            | Act::Noise { .. } => {
                 answer.plain()?;
                 Prepared::Begin {
                     act,
@@ -1619,7 +1620,8 @@ pub fn ask_trust(
                 | Act::Afresh { .. }
                 | Act::GoogleClient { .. }
                 | Act::GoogleSignIn { .. }
-                | Act::CalendarEvent { .. },
+                | Act::CalendarEvent { .. }
+                | Act::Noise { .. },
             )
             | Proposal::Email(_)
             | Proposal::Forward(_)

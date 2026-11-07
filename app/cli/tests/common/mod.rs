@@ -31,7 +31,7 @@ use suzatary_core::deployment::Deployment;
 use suzatary_core::escape::Escaped;
 use suzatary_core::file_read::FileRead;
 use suzatary_core::mail::state::Decision;
-use suzatary_core::mail::verbs::{Marked, Message, NoiseAdded, Show, Summary, SyncReport};
+use suzatary_core::mail::verbs::{Marked, Message, Show, Summary, SyncReport};
 use suzatary_core::mail::{AttachmentMeta, MailMessage, MailRow};
 use suzatary_core::record::{EventStore, SubTodo, mk_authored, mk_source, mk_subtodo};
 use suzatary_io::briefings::BriefingFiles;
@@ -1419,11 +1419,6 @@ impl Corpus for FakeCorpus {
         Ok(Marked {
             marked: hash.to_owned(),
             disposition: decision.disposition(),
-        })
-    }
-    fn noise_add(&self, sender: &str) -> Result<NoiseAdded, CorpusError> {
-        Ok(NoiseAdded {
-            noise_added: sender.to_lowercase(),
         })
     }
     fn last_sync(&self) -> Option<SyncReport> {
@@ -3368,6 +3363,7 @@ fn performer(
                 kept: kept_store(&caps.root),
                 signing,
                 google,
+                ledger: Arc::new(test_ledger(&caps.root)),
             })
         }
         Performer::Real {
@@ -3418,9 +3414,24 @@ fn performer(
                 google,
                 // A test server runs no filing task to ring.
                 ended: Arc::new(|| {}),
+                ledger: Arc::new(test_ledger(&caps.root)),
             })
         }
     }
+}
+
+/// A mail ledger under `root`, keyed by a fixed key: the one a tapped noise card writes.
+fn test_ledger(root: &Path) -> suzatary_io::state::Ledger {
+    suzatary_io::state::Ledger::new(
+        root.join("state.json"),
+        root.join("local/mail.json"),
+        || {
+            suzatary_core::mail::dedup_key::DedupKey::of(&suzatary_core::capability::Secret::new(
+                "12".repeat(32),
+            ))
+            .map_err(|failed| failed.to_string())
+        },
+    )
 }
 
 /// The shared client, keeping 4xx/5xx bodies that `ureq` discards by default.

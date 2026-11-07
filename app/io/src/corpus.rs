@@ -230,17 +230,6 @@ impl Corpus for Operator {
         })
     }
 
-    fn noise_add(&self, sender: &str) -> Result<verbs::NoiseAdded, CorpusError> {
-        let known = self.state()?;
-        self.write(&Known {
-            local: known.local.add_noise(sender),
-            ..known
-        })?;
-        Ok(verbs::NoiseAdded {
-            noise_added: sender.to_lowercase(),
-        })
-    }
-
     fn last_sync(&self) -> Option<verbs::SyncReport> {
         crate::mail_sync::read_report(&self.sync_status)
             .ok()
@@ -445,27 +434,6 @@ mod tests {
         for private in ["abc123", "why", "msg-1"] {
             assert!(!pushed.contains(private), "{private} was pushed");
         }
-        let _ = std::fs::remove_dir_all(&root);
-    }
-
-    #[test]
-    fn adding_a_noise_sender_answers_the_stored_spelling() {
-        let root = scratch("noise");
-        let operator = operator(&root);
-        assert_eq!(
-            operator.noise_add("Alerts@Example.TEST").expect("adds"),
-            verbs::NoiseAdded {
-                noise_added: "alerts@example.test".to_owned()
-            }
-        );
-        assert!(
-            ledger(&root)
-                .read()
-                .expect("reads")
-                .is_noise("alerts@example.test")
-        );
-        let pushed = std::fs::read_to_string(root.join("state.json")).expect("reads");
-        assert!(!pushed.contains("alerts"), "a sender is box-local");
         let _ = std::fs::remove_dir_all(&root);
     }
 }

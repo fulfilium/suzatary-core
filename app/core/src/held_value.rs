@@ -1,4 +1,4 @@
-//! A held value (`docs/HELDVALUES-PLAN-2026-10-22.md`): a number in mail or in a file that
+//! A held value: a number in mail or in a file that
 //! [`crate::redact`] recognises, or a file the box holds back, which the box keeps where it is
 //! and a model reads only as a [`Placeholder`].
 //!

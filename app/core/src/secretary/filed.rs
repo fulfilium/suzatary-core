@@ -157,8 +157,8 @@ pub fn triage_conversation() -> ConversationId {
     ConversationId::new("triage").expect("triage is a slug")
 }
 
-/// The triage agent's one door into the Inbox: it files a changeset as the agent's card and
-/// does nothing else, so a verb holding it can ask the owner and never answer for him.
+/// The triage agent's one door into the Inbox: it files a changeset or a box act as the agent's
+/// card and does nothing else, so a verb holding it can ask the owner and never answer for him.
 #[derive(Clone, Copy)]
 pub struct TriageCards<'a> {
     conversations: crate::secretary::conversations::Conversations<'a>,
@@ -199,6 +199,45 @@ impl<'a> TriageCards<'a> {
             conversations,
             inbox,
         }
+    }
+
+    /// File the box act `act` as the triage agent's card, at `at`; the same act asked again
+    /// answers the card already here.
+    ///
+    /// # Errors
+    /// The stores' failures.
+    pub fn file_act(
+        &self,
+        at: Datetime,
+        act: crate::secretary::acts::Act,
+        reasons: Reasons,
+    ) -> Result<ProposalRef, Refusal> {
+        let conversation = triage_conversation();
+        opened(
+            self.conversations,
+            &conversation,
+            "Proposed by the triage agent",
+            &Proposer::Triage,
+            at,
+        )?;
+        let (filed, _) = file(
+            self.conversations,
+            self.inbox,
+            &[],
+            at,
+            Filing {
+                conversation: &conversation,
+                proposer: Proposer::Triage,
+                proposal: Proposal::Act(act),
+                reasons,
+                serves: None,
+                revises: None,
+            },
+        )?;
+        Ok(ProposalRef {
+            conversation,
+            index: filed.index(),
+        })
     }
 
     /// File `act` as the triage agent's, at `at`. A card is known by its acts' requests

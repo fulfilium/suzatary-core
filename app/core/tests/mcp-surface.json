@@ -110,15 +110,19 @@
     "name": "mark"
   },
   {
-    "description": "Add a sender (bare email address) to the wholesale-ignore list.",
+    "description": "Propose leaving every later message from one sender out of triage. `hash` is the canonical hash of a message `new` lists now; its sender is the one proposed, never an address you name. Nothing changes until the owner taps the card this files. `why` is REQUIRED: one sentence the owner reads first.",
     "inputSchema": {
       "properties": {
-        "sender": {
+        "hash": {
+          "type": "string"
+        },
+        "why": {
           "type": "string"
         }
       },
       "required": [
-        "sender"
+        "hash",
+        "why"
       ],
       "type": "object"
     },

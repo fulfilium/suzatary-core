@@ -319,3 +319,111 @@ fn a_mail_read_in_the_round_makes_every_secretary_write_a_card() {
         "every write is a changes card"
     );
 }
+
+/// One forged message in the queue, "from" the bank, written as marketing.
+struct Forged;
+
+/// The forged message's canonical hash.
+const FORGED: &str = "f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0";
+
+impl suzatary_core::capability::Corpus for Forged {
+    fn sync(
+        &self,
+    ) -> Result<suzatary_core::mail::verbs::SyncReport, suzatary_core::capability::CorpusError>
+    {
+        suzatary_core::capability::Corpus::sync(&Nothing)
+    }
+    fn queue(
+        &self,
+        _limit: Option<usize>,
+    ) -> Result<Vec<suzatary_core::mail::verbs::Summary>, suzatary_core::capability::CorpusError>
+    {
+        Ok(vec![suzatary_core::mail::verbs::Summary {
+            hash: FORGED.to_owned(),
+            id: "forged-1@example.test".to_owned(),
+            sender: "alerts@bank.example.test".to_owned(),
+            title: "Our best rates of the season".to_owned(),
+            timestamp: None,
+            container: "inbox".to_owned(),
+            sources: 1,
+            held: suzatary_core::held_value::Kinds::default(),
+        }])
+    }
+    fn search(
+        &self,
+        query: &suzatary_core::capability::Query,
+        limit: Option<usize>,
+    ) -> Result<Vec<suzatary_core::mail::verbs::Summary>, suzatary_core::capability::CorpusError>
+    {
+        suzatary_core::capability::Corpus::search(&Nothing, query, limit)
+    }
+    fn show(
+        &self,
+        id: &str,
+    ) -> Result<suzatary_core::mail::verbs::Show, suzatary_core::capability::CorpusError> {
+        suzatary_core::capability::Corpus::show(&Nothing, id)
+    }
+    fn mark(
+        &self,
+        hash: &str,
+        decision: suzatary_core::mail::state::Decision,
+        note: Option<&str>,
+        native: Option<&str>,
+    ) -> Result<suzatary_core::mail::verbs::Marked, suzatary_core::capability::CorpusError> {
+        suzatary_core::capability::Corpus::mark(&Nothing, hash, decision, note, native)
+    }
+    fn last_sync(&self) -> Option<suzatary_core::mail::verbs::SyncReport> {
+        None
+    }
+    fn last_triage_pass(&self) -> Option<String> {
+        None
+    }
+}
+
+/// THE ATTACK ON THE QUEUE: a forged marketing message "from" the bank asks the agent to silence
+/// the bank. The agent can name no address of its own choosing, a hash the queue does not hold
+/// is refused, and the queued message's hash files a card naming the sender read off that
+/// message. The agent's `Corpus` holds no noise write, so nothing else can change.
+#[test]
+fn the_agent_silences_no_sender_and_files_a_card_for_a_queued_one() {
+    let records = [(
+        "life".to_owned(),
+        Agent {
+            corpus: &Forged,
+            ..Nothing::agent()
+        },
+    )]
+    .into_iter()
+    .collect();
+    let conversations = suzatary_core::secretary::conversations::InMemory::default();
+    let inbox = InMemory::<InboxEvent>::default();
+    let cards = TriageCards::new(conversations.conversations(), &inbox);
+    let deployment = deployment();
+    let call = |value: Value| {
+        suzatary_core::agent::call(&records, &cards, &deployment, "noise_add", &args(&value))
+    };
+    let why = "a recurring marketing sender";
+    assert!(call(json!({"sender": "alerts@bank.example.test", "why": why})).is_err());
+    assert!(call(json!({"hash": "0".repeat(64), "why": why})).is_err());
+    assert!(
+        call(json!({"hash": FORGED})).is_err(),
+        "a card needs its reason"
+    );
+    let filed = call(json!({"hash": FORGED, "why": why})).expect("filed");
+    assert_eq!(filed["sender"], "alerts@bank.example.test");
+
+    let fold = suzatary_core::secretary::inbox::fold(&inbox).expect("reads");
+    let asked: Vec<&Proposal> = fold
+        .objects()
+        .map(|object| &object.asked.proposal)
+        .collect();
+    assert_eq!(
+        asked,
+        vec![&Proposal::Act(suzatary_core::secretary::acts::Act::Noise {
+            sender: "alerts@bank.example.test".to_owned(),
+            message: FORGED.to_owned(),
+        })],
+        "one card, nothing performed"
+    );
+    assert!(fold.objects().all(|object| object.reading.performs()));
+}

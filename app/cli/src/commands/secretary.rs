@@ -67,8 +67,9 @@ pub enum Acting {
         google: Arc<suzatary_io::google::Grants>,
         /// Rung when a device flow ends, so the box files again.
         ended: Arc<dyn Fn() + Send + Sync>,
+        ledger: Arc<suzatary_io::state::Ledger>,
     },
-    /// The fixture's performer: no network and no thread, so browser scenes are deterministic.
+    /// The fixture's performer: no network and no thread.
     #[cfg(feature = "fixture")]
     Recording {
         conversations: ActingConversations,
@@ -79,6 +80,7 @@ pub enum Acting {
         coder: Arc<crate::commands::coding::Coder>,
         signing: Arc<crate::commands::serve::sign_ins::SignIns>,
         google: Arc<suzatary_io::google::Grants>,
+        ledger: Arc<suzatary_io::state::Ledger>,
     },
 }
 
@@ -230,6 +232,7 @@ impl Acting {
             signing,
             google: Arc::new(crate::commands::mail::google_grants(instance)),
             ended,
+            ledger: Arc::new(crate::commands::mail::ledger(instance)),
         }
     }
 
@@ -266,6 +269,29 @@ impl Acting {
                 suzatary_io::google::Google::new(google.clone()),
                 Arc::new(instance.secrets()),
             )),
+            ledger: Arc::new(crate::commands::mail::ledger(instance)),
+        }
+    }
+
+    /// A tapped noise card: its sender leaves the triage queue.
+    fn silenced(&self, sender: &str, act: &suzatary_core::secretary::acts::Act) -> Performed {
+        let ledger = match self {
+            Acting::NotYet => {
+                return Performed::Tried(Tried::NotSent {
+                    reason: format!("senders are not silenced by this build: {}", act.sentence()),
+                });
+            }
+            Acting::Real { ledger, .. } => ledger,
+            #[cfg(feature = "fixture")]
+            Acting::Recording { ledger, .. } => ledger,
+        };
+        match crate::commands::mail::silence(ledger, sender) {
+            Ok(added) => Performed::Done(Done::Acted {
+                what: format!("{} is left out of triage", added.noise_added),
+            }),
+            Err(failed) => Performed::Tried(Tried::NotSent {
+                reason: failed.to_string(),
+            }),
         }
     }
 
@@ -390,6 +416,9 @@ impl suzatary_core::secretary::routes::Perform for Acting {
                 }
             };
         }
+        if let suzatary_core::secretary::acts::Act::Noise { sender, .. } = act {
+            return self.silenced(sender, act);
+        }
         if let suzatary_core::secretary::acts::Act::CalendarEvent { account, event } = act {
             return self.calendar_event(account, event);
         }
@@ -501,7 +530,8 @@ fn begin_real(
         | Act::GoogleSignIn { .. }
         | Act::CalendarEvent { .. }
         | Act::Erase { .. }
-        | Act::Afresh { .. } => {
+        | Act::Afresh { .. }
+        | Act::Noise { .. } => {
             return Performed::Tried(Tried::NotSent {
                 reason: "a secret act is not a device flow".to_owned(),
             });
@@ -984,7 +1014,8 @@ fn begin_recording(
         | Act::GoogleSignIn { .. }
         | Act::CalendarEvent { .. }
         | Act::Erase { .. }
-        | Act::Afresh { .. } => {
+        | Act::Afresh { .. }
+        | Act::Noise { .. } => {
             return Performed::Tried(Tried::NotSent {
                 reason: "a secret act is not a device flow".to_owned(),
             });

@@ -10,5 +10,5 @@
 set -uo pipefail
 
 cat >/dev/null
-echo "edit-guard: the triage agent writes no file; todos go through todo_add/todo_update, state.json through mark/noise_add." >&2
+echo "edit-guard: the triage agent writes no file; todos go through todo_add/todo_update, state.json through mark." >&2
 exit 2

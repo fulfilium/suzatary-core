@@ -289,7 +289,7 @@ pub fn candidates(
 mod tests {
     use super::*;
     use crate::mail::state::Decision;
-    use crate::mail::verbs::{Marked, NoiseAdded, Show, Summary, SyncReport};
+    use crate::mail::verbs::{Marked, Show, Summary, SyncReport};
 
     fn dt(y: i32, m: u32, d: u32) -> Datetime {
         Datetime::new(y, m, d, 0, 0, 0, 0).expect("a real date")
@@ -373,11 +373,6 @@ mod tests {
             _native: Option<&str>,
         ) -> Result<Marked, CorpusError> {
             Err(CorpusError::Refused("the sweep never marks".to_owned()))
-        }
-        fn noise_add(&self, _sender: &str) -> Result<NoiseAdded, CorpusError> {
-            Err(CorpusError::Refused(
-                "the sweep never adds noise".to_owned(),
-            ))
         }
         fn last_sync(&self) -> Option<SyncReport> {
             None

@@ -49,6 +49,7 @@ fn every_kind() -> Vec<Proposal> {
         r#"{"act":"act","kind":"erase","fact":3,"keys":[]}"#.to_owned(),
         r#"{"act":"act","kind":"afresh","conversation":"default","turn":0}"#.to_owned(),
         format!(r#"{{"act":"act","kind":"retract","node":"{SHA}"}}"#),
+        format!(r#"{{"act":"act","kind":"noise","sender":"alerts@example.test","message":"{SHA}"}}"#),
     ]
     .iter()
     .map(|json| read(json))
@@ -88,7 +89,8 @@ fn sends(proposal: &Proposal) -> bool {
             | Act::GoogleSignIn { .. }
             | Act::CalendarEvent { .. }
             | Act::Erase { .. }
-            | Act::Afresh { .. },
+            | Act::Afresh { .. }
+            | Act::Noise { .. },
         ) => false,
     }
 }

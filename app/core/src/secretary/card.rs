@@ -153,6 +153,11 @@ pub fn of(act: &ProposedAct) -> Card {
         ProposedAct::Erase { sentence } => erase(sentence),
         ProposedAct::Retract { sentence } => retract(sentence),
         ProposedAct::Afresh { sentence } => afresh(sentence),
+        ProposedAct::Noise {
+            sender,
+            message,
+            sentence,
+        } => noise(sender, message, sentence),
         ProposedAct::GoogleClient {
             redirect, steps, ..
         } => google_client(redirect, steps),
@@ -1010,6 +1015,29 @@ fn retract(sentence: &str) -> Card {
 }
 
 /// No second step: the tap only copies the owner's own words into a new topic.
+fn noise(sender: &str, message: &str, sentence: &str) -> Card {
+    Card {
+        answers: vec![CardAnswer {
+            done: "ignored".to_owned(),
+            asks: Asks::Confirm {
+                question: question(sentence),
+                yes: format!("Yes, ignore {sender}"),
+            },
+            ..answer("ignore", "Ignore this sender")
+        }],
+        link: Some(CardLink::Page {
+            label: "Read the message it was asked on".to_owned(),
+            href: format!("#/mail/{message}"),
+        }),
+        ..card(
+            "Leave this sender out of triage?",
+            sentence,
+            vec![field("Sender", sender)],
+            "ignore",
+        )
+    }
+}
+
 fn afresh(sentence: &str) -> Card {
     Card {
         answers: vec![CardAnswer {

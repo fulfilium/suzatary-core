@@ -3,7 +3,7 @@
 
 use super::Query;
 use crate::mail::state::Decision;
-use crate::mail::verbs::{Marked, NoiseAdded, Show, Summary, SyncReport};
+use crate::mail::verbs::{Marked, Show, Summary, SyncReport};
 use crate::secretary::heartbeat::PassOutcome;
 
 /// A corpus operation ran and refused; one variant, because every failure is text to read.
@@ -36,9 +36,6 @@ pub trait Corpus: Sync {
         note: Option<&str>,
         native: Option<&str>,
     ) -> Result<Marked, CorpusError>;
-
-    /// Add a sender to the wholesale-ignore list.
-    fn noise_add(&self, sender: &str) -> Result<NoiseAdded, CorpusError>;
 
     /// The most recent sync's report, `None` when nothing readable has been recorded yet.
     fn last_sync(&self) -> Option<SyncReport>;

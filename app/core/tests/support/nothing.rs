@@ -11,7 +11,7 @@ use super::{
 use super::{MailSync, Secretary, Server, SyncFailure, Synced};
 use crate::escape::Escaped;
 use crate::mail::state::Decision;
-use crate::mail::verbs::{Marked, NoiseAdded, Show, Summary, SyncReport};
+use crate::mail::verbs::{Marked, Show, Summary, SyncReport};
 use crate::mail::{AttachmentMeta, MailMessage, MailRow};
 use crate::record::{Envelope, TodoEvent};
 use crate::refusal::Refusal;
@@ -195,9 +195,6 @@ impl Corpus for Nothing {
         _note: Option<&str>,
         _native: Option<&str>,
     ) -> Result<Marked, CorpusError> {
-        Err(CorpusError::Refused("nothing is marked".into()))
-    }
-    fn noise_add(&self, _sender: &str) -> Result<NoiseAdded, CorpusError> {
         Err(CorpusError::Refused("nothing is marked".into()))
     }
     fn last_sync(&self) -> Option<SyncReport> {

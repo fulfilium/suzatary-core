@@ -152,7 +152,8 @@ fn unmet(
             | Act::Afresh { .. }
             | Act::GoogleClient { .. }
             | Act::GoogleSignIn { .. }
-            | Act::CalendarEvent { .. },
+            | Act::CalendarEvent { .. }
+            | Act::Noise { .. },
         )
         | Proposal::Email(_)
         | Proposal::Forward(_)

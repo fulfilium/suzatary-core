@@ -846,6 +846,11 @@ fn act_on_wire(
             url: url.as_str().to_owned(),
             sentence: act.sentence(),
         },
+        crate::secretary::acts::Act::Noise { sender, message } => wire::ProposedAct::Noise {
+            sender: sender.clone(),
+            message: message.clone(),
+            sentence: act.sentence(),
+        },
         crate::secretary::acts::Act::UnlockStore { .. } => wire::ProposedAct::UnlockStore {
             sentence: act.sentence(),
         },

@@ -169,8 +169,8 @@ THEN:
 1. Call the `new` tool — this is your queue (mail was already synced before
    you started).
 2. For each message, decide disposition per OPERATOR.md:
-   - "noise": automated/marketing/recurring bot senders -> `mark` + usually
-     `noise_add`.
+   - "noise": automated/marketing/recurring bot senders -> `mark`, and
+     `noise_add` with its hash to propose silencing the sender.
    - "skip": seen, not actionable, not recurring junk (e.g. a colleague-driven
      thread where the owner is only CC'd, a resolved FYI) -> `mark ... skip`.
    - "todo": genuinely actionable. Call `todo_add` with the fields — id, body,

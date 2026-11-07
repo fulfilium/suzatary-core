@@ -419,6 +419,7 @@ is above you. Answer in this order:
    **Always say when the automated triage last ran**, from `triage_last_pass`, even when nothing
    else changed: a quiet chain and a stopped triage look the same in the delta. One clause is
    enough ("triage last ran 8 minutes ago"); if it has been unusually long, say so plainly.
+   Name each sender in `senders_silenced`: a tapped card left its mail out of triage.
 4. **Good news from the mail**, if any is worth a sentence.
 5. **Your review summary**: what you withdrew and left since the last brief, and why, in your
    own words.

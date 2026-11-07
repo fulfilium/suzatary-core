@@ -531,7 +531,7 @@ mod tests {
     use super::*;
     use crate::capability::{CorpusError, Nothing};
     use crate::mail::state::Decision;
-    use crate::mail::verbs::{Marked, NoiseAdded, Show, Summary, SyncReport};
+    use crate::mail::verbs::{Marked, Show, Summary, SyncReport};
     use crate::store::InMemoryLog;
 
     /// A corpus whose every search answers the messages that have arrived, newest first.
@@ -558,9 +558,6 @@ mod tests {
             native: Option<&str>,
         ) -> Result<Marked, CorpusError> {
             Nothing.mark(hash, decision, note, native)
-        }
-        fn noise_add(&self, sender: &str) -> Result<NoiseAdded, CorpusError> {
-            Nothing.noise_add(sender)
         }
         fn last_sync(&self) -> Option<SyncReport> {
             None

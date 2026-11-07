@@ -1688,6 +1688,12 @@ pub enum ProposedAct {
     Afresh {
         sentence: String,
     },
+    /// Leave a sender out of triage: `sender` was read off the queued `message`, a hash.
+    Noise {
+        sender: String,
+        message: String,
+        sentence: String,
+    },
     /// The code an open sign-in waits for; the password field sends it in the tap's body.
     #[serde(rename = "sign_in_code")]
     SignInCode {

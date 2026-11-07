@@ -150,6 +150,13 @@ pub enum Act {
         /// The request's index among that conversation's turns.
         turn: usize,
     },
+    /// Leave every later message from `sender` out of the triage queue, as asked on `message`.
+    Noise {
+        /// The address, as the queue lists the message's sender.
+        sender: String,
+        /// The queued message the sender was read off, by its canonical hash.
+        message: String,
+    },
 }
 
 impl Act {
@@ -177,6 +184,7 @@ impl Act {
             Act::Erase { .. } => "erase",
             Act::Afresh { .. } => "afresh",
             Act::Retract { .. } => "retract",
+            Act::Noise { .. } => "noise",
         }
     }
 
@@ -279,8 +287,18 @@ impl Act {
             Act::Afresh { .. } => "start it in a fresh conversation: a new topic that holds only \
                                    your request, word for word, and nothing this one read"
                 .to_owned(),
+            Act::Noise { sender, message } => silencing(sender, message),
         }
     }
+}
+
+/// A noise card's imperative, naming the message it was asked on by the start of its hash.
+fn silencing(sender: &str, message: &str) -> String {
+    format!(
+        "leave every later message from {sender} out of triage, as the triage agent asked on \
+         mail:{}",
+        message.chars().take(12).collect::<String>()
+    )
 }
 
 /// A retraction's imperative, naming the summary by the start of its node's name.
@@ -466,6 +484,8 @@ pub const ERASE: Constructor = ("Erase", &["fact", "keys"]);
 pub const AFRESH: Constructor = ("Afresh", &["conversation", "turn"]);
 /// `Retract(node)`.
 pub const RETRACT: Constructor = ("Retract", &["node"]);
+/// `Noise(sender, message)`.
+pub const NOISE: Constructor = ("Noise", &["sender", "message"]);
 /// `GoogleClient(redirect)`.
 pub const GOOGLE_CLIENT: Constructor = ("GoogleClient", &["redirect"]);
 /// `GoogleSignIn(account, scopes)`.
@@ -542,6 +562,9 @@ impl Literal for Act {
                 record(AFRESH, vec![conversation.to_value(), turn.to_value()])
             }
             Act::Retract { node } => record(RETRACT, vec![node.to_value()]),
+            Act::Noise { sender, message } => {
+                record(NOISE, vec![sender.to_value(), message.to_value()])
+            }
         }
     }
 
@@ -638,12 +661,22 @@ impl Literal for Act {
                     turn: fields.get("turn")?,
                 }
             }
+            "Noise" => noise(value)?,
             "Retract" => Act::Retract {
                 node: Fields::of(value, RETRACT)?.get("node")?,
             },
             other => return Err(no_arm("an act the box performs", other)),
         })
     }
+}
+
+/// `Noise(sender, message)`, read.
+fn noise(value: &Value) -> Result<Act, ProdromeError> {
+    let fields = Fields::of(value, NOISE)?;
+    Ok(Act::Noise {
+        sender: fields.get("sender")?,
+        message: fields.get("message")?,
+    })
 }
 
 /// A node's content name as its text, as serde spells it.

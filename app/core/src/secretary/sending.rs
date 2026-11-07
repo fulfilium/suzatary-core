@@ -44,7 +44,8 @@ impl Sending {
                 | Act::CalendarEvent { .. }
                 | Act::Erase { .. }
                 | Act::Retract { .. }
-                | Act::Afresh { .. } => Sending::SendsNothing,
+                | Act::Afresh { .. }
+                | Act::Noise { .. } => Sending::SendsNothing,
             },
         }
     }

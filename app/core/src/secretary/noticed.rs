@@ -257,7 +257,8 @@ pub(crate) fn owns(proposal: &Proposal) -> bool {
             | Act::Erase { .. }
             | Act::Retract { .. }
             | Act::Afresh { .. }
-            | Act::CalendarEvent { .. },
+            | Act::CalendarEvent { .. }
+            | Act::Noise { .. },
         )
         | Proposal::Email(_)
         | Proposal::Forward(_)

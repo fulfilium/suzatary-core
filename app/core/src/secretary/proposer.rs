@@ -63,7 +63,8 @@ impl Proposer {
                     | Act::Retract { .. }
                     | Act::Afresh { .. }
                     | Act::GoogleSignIn { .. }
-                    | Act::CalendarEvent { .. },
+                    | Act::CalendarEvent { .. }
+                    | Act::Noise { .. },
                 )
                 | Proposal::Email(_)
                 | Proposal::Forward(_)
