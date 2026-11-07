@@ -38,8 +38,9 @@ const app = await suite("harden");
  * Read off the LIVE DOM rather than off the payload: `harden` runs on nodes
  * after parsing, so the payload's HTML is what it was handed and not what it
  * produced. */
-const anchorBy = async (text: string): Promise<{ href: string; rel: string; target: string; cls: string } | null> =>
-  app.page.evaluate<{ href: string; rel: string; target: string; cls: string } | null>(`(() => {
+type Anchor = { href: string; rel: string; target: string; cls: string; text: string; beside: string };
+const anchorBy = async (text: string): Promise<Anchor | null> =>
+  app.page.evaluate<Anchor | null>(`(() => {
     const anchor = [...document.querySelectorAll(".todoview .rich a")].find(
       (candidate) => candidate.textContent?.includes(${JSON.stringify(text)}),
     );
@@ -49,6 +50,8 @@ const anchorBy = async (text: string): Promise<{ href: string; rel: string; targ
       rel: anchor.getAttribute("rel") ?? "",
       target: anchor.getAttribute("target") ?? "",
       cls: anchor.getAttribute("class") ?? "",
+      text: anchor.textContent ?? "",
+      beside: anchor.nextSibling?.nodeType === 3 ? anchor.nextSibling.textContent ?? "" : "",
     };
   })()`);
 
@@ -71,9 +74,12 @@ app.scene("a todo: link becomes a hash into this app, and an outbound one leaves
   assert.equal(inward.target, "", "an in-app link must not open a new tab");
   assert.ok(inward.cls.split(/\s+/).includes("todolink"), "the rewritten anchor is marked, so the stylesheet can say so");
 
-  const outward = await anchorBy("airline");
+  const outward = await anchorBy("example.invalid");
   assert.ok(outward !== null, "the rendered detail should carry the outbound anchor");
   assert.equal(outward.href, "https://example.invalid/baggage", "an outbound href is left exactly as typst wrote it");
+  assert.equal(outward.text, "example.invalid", "an outbound anchor reads as the host it leads to");
+  // typst sets the label's apostrophe as a typographic one.
+  assert.equal(outward.beside, " — the airline\u2019s page", "the writer's label stands beside it, as plain text");
   // `noopener` is the one that matters: without it the opened page holds a
   // `window.opener` handle onto this one and can navigate it. `noreferrer`
   // rides along because every string on this page came out of mail.

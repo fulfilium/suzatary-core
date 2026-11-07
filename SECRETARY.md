@@ -119,7 +119,8 @@ Use these by name: `=`/`==` headings, `-` lists, `*bold*`/`_italic_`, `#panel[..
 aside, `#note[...]` and `#notice[...]` for a coloured aside, `#sep[a][b][c]` for items separated
 by a diamond, `#dated(left, right)` for a line with a date on the right, `#minor[...]` for a
 small-caps label, `#accent[...]` for an emphasised phrase, and `#link("todo:<id>")[...]` for a
-reference inside a sentence. A todo's `body` and `detail` are the same markup. A character you
+reference inside a sentence. A link out of the app is drawn by its host, your label beside it. A
+todo's `body` and `detail` are the same markup. A character you
 mean literally takes a backslash (`Pay \$40`, `ada\@x.test`). Every other field is plain text.
 
 **A proposal's body is plain text, never Typst.** What {{persona.name}} confirms is exactly the

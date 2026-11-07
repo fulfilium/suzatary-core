@@ -56,7 +56,8 @@ the mechanism that holds it. *Irreversibles* covers what is human-only.
   plugin, no file, no package and no clock, under a time and memory budget.
   A tripwire refuses scripts, inline handlers and executable URLs (read as
   a browser reads them) before the browser parses anything, and the page
-  keeps a link only of a scheme that navigates.
+  keeps a link only of a scheme that navigates. The page draws a link
+  out of the app by the host it leads to, its label beside it as text.
 - **Secrets are write-only from the app.** A page may set a declared secret
   by name and learn only whether it resolves. A value never comes back.
 - **Plugins hold only their imports.** A WebAssembly plugin reaches the world

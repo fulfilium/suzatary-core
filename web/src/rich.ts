@@ -1,25 +1,18 @@
 /**
- * The one door from a string to markup; `web-static.sh` refuses any other markup-parsing assignment.
- *
- * Safe because it only ever parses server-rendered typst:
- * 1. The agent cannot author markup: `escape_markup` backslashes every structural typst character, `#` included.
- * 2. Only a trusted actor's content is rendered; an untrusted record arrives as source (rendered means confirmed).
- * 3. typst HTML-escapes text, so the only elements are its own markup's.
- * 4. `render::suspicious` refuses a script element, an inline handler or an executable URL, and `harden` keeps an
- *    href only of a scheme that navigates, as the browser parses it.
- * A secretary's answer replaces 1 and 2 with `renderable`, which refuses the `html` module and `eval`;
- * a page the box printed holds every datum as a string literal. Never hand it a string a page assembled.
- * A page the tab compiles (`checked`) holds every datum in a JSON string read by a kit that evaluates only
- * markup the box itself rendered for a trusted actor (2 above), and passes the box's own tripwire
- * (`suzatary_core::tripwire`, through the core) before it is parsed.
+ * The one door from a string to markup; `web-static.sh` refuses any other markup-parsing assignment. It parses only
+ * typst's HTML: the agent's text arrives escaped or as source, typst escapes every text it emits, and the box's
+ * tripwire (`suzatary_core::tripwire`, run here through the core) refuses a script, a handler or an executable URL
+ * before anything is parsed. A secretary's answer refuses `html` and `eval` instead of
+ * escaping. Never hand it a string a page assembled.
  */
 
 import { el } from "./view/dom";
 import href from "./view/href";
 import { hrefOf } from "./shell/route";
 
-/** `#link("todo:<id>")` becomes the app's own route; an outbound anchor keeps only a scheme that navigates, opens away
- * from the app and cannot reach back through `window.opener`; any other loses its href. Done on nodes, never the string. */
+/** `#link("todo:<id>")` becomes the app's own route; an outbound anchor keeps only a scheme that navigates, reads as the
+ * host it leads to with its label beside it, opens away from the app and cannot reach back through `window.opener`; any
+ * other loses its href. Done on nodes, never the string. */
 function harden(root: DocumentFragment | HTMLElement): void {
   for (const anchor of root.querySelectorAll("a[href]")) {
     href.fold(href.of(anchor.getAttribute("href") ?? "", location.href), {
@@ -27,7 +20,10 @@ function harden(root: DocumentFragment | HTMLElement): void {
         anchor.setAttribute("href", hrefOf({ type: "todo", id }));
         anchor.classList.add("todolink");
       },
-      Outbound: () => {
+      Outbound: (out) => {
+        const label = href.beside(out, anchor.textContent ?? "");
+        anchor.textContent = out.shown;
+        if (label !== "") anchor.after(document.createTextNode(` — ${label}`));
         anchor.setAttribute("rel", "noopener noreferrer");
         anchor.setAttribute("target", "_blank");
       },

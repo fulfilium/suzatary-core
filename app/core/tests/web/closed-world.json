@@ -8,6 +8,38 @@
     "admitted": true
   },
   {
+    "text": "Call _Ada_ about the deed at #link(\"https://example.test/deed\")",
+    "admitted": true
+  },
+  {
+    "text": "See https://example.test/deed?id=4",
+    "admitted": true
+  },
+  {
+    "text": "Write to #link(\"mailto:ada@example.test\")",
+    "admitted": true
+  },
+  {
+    "text": "Pay it, see #link(\"todo:life/rent\")[the rent todo]",
+    "admitted": true
+  },
+  {
+    "text": "#link(\"https://x.example.test/?q=the+balance\")[mail:ab12]",
+    "admitted": true
+  },
+  {
+    "text": "#link(\"mailto:counsel@example.test?body=the+lease\")[counsel]",
+    "admitted": true
+  },
+  {
+    "text": "#link(\"https://bank.example.test@x.example.test/\")[https://bank.example.test]",
+    "admitted": true
+  },
+  {
+    "text": "#std.link(\"//x.example.test/a\")[#strong[the deed]]",
+    "admitted": true
+  },
+  {
     "text": "- one\n- two",
     "admitted": true
   },
