@@ -17,14 +17,17 @@ use super::verbs::{
     ReposList, ReviseTopics, Search, SearchOlder, Show, SyncMail, TodoAdd, TodoShow, TodoUpdate,
     TriageCards, TriageWithdraw, UploadRead, WatchMail, Weather, Web, WithdrawProposal, Zoom,
 };
-use crate::agent::{Direct, Holds, Says};
+use super::verbs::{IfCarded, check, propose};
+use crate::agent::{Holds, Says};
 use crate::authoring::Writer;
 use crate::capability::Agent;
 use crate::chains::ChainPolicy;
 use crate::refusal::{Refusal, shown};
 use crate::secretary::changes::{self, Act, Changeset, Unapplied};
 use crate::secretary::compaction::Reading;
+use crate::secretary::gate::Gate;
 use crate::secretary::shown_record::{Everything, ShownRecord};
+use crate::secretary::store::Proposal;
 use crate::verb::{Surface, verbs};
 
 /// The secretary's verbs: each runs against a [`Call`], and answers JSON and the files it hands
@@ -59,12 +62,13 @@ impl Holds for SecretarySurface {
         record: "Close, cancel, reopen or tend a todo: kind is 'completed', \
         'cancelled', 'reopened' or 'tended'. 'tended' is a pass at a RECURRING \
         todo (its price holds a Recur): done again, still open, its price \
-        restarting from now — never 'completed' for one of those. Recorded as \
-        `assistant`, so it BINDS — a completion here is the todo being done, \
-        not a claim awaiting confirmation. Only when the owner has said so.",
-        todo_add: "AUTHOR A TODO, as the trusted actor `assistant` — so it binds the fold \
-        and renders with no `(unconfirmed)` marker. That is affordable because the owner \
-        is reading this conversation, so author what they asked for and propose the rest.\n\n\
+        restarting from now — never 'completed' for one of those. Only when the owner \
+        has said so. It binds as `assistant` in a round holding the owner's words alone; \
+        anywhere else it files a card they tap, and `why` and `sources` are required.",
+        todo_add: "AUTHOR A TODO, as the trusted actor `assistant`. In a round holding the \
+        owner's words alone it binds at once; after you read anything else (mail, a todo, a \
+        document, the web, an old answer) it files a card they tap, and `why` and `sources` \
+        are required. Author what they asked for and propose the rest.\n\n\
         `body`: the action line, one sentence, as Typst MARKUP: `*bold*` is bold, and \
         a `$`, `@`, `#`, `*`, `_`, `<` or `[` you mean literally takes a backslash \
         (`Pay \\$40`). It is compiled before it is stored, without `html` or any \
@@ -92,8 +96,8 @@ impl Holds for SecretarySurface {
         `parent` makes it a SUBTODO: the parent's price gains a reference to \
         it in the same write, so the parent's value composes this one's; \
         without `category` it takes the parent's.",
-        todo_update: "Change fields on a todo that exists, as the trusted actor `assistant`. Only what \
-        you name changes.\n\nChanging `priority` (or a deadline, or a cycle — the same price fields `todo_add` \
+        todo_update: "Change fields on a todo that exists, as the trusted actor `assistant`, \
+        binding or carded exactly as `todo_add` is. Only what you name changes.\n\nChanging `priority` (or a deadline, or a cycle — the same price fields `todo_add` \
         takes, one of them) REQUIRES `rationale`: the comment above that number is the only \
         record of why it is what it is. Passing `rationale` alone rewrites just the reason.\n\n\
         `clear_waiting_on` sets it back to `none` — use it the moment there is an email we \
@@ -111,7 +115,7 @@ impl Holds for SecretarySurface {
         and a `remember` after it becomes a card. Zoom before you act on what a summary says, \
         guess, or ask.",
     };
-    type Filing = Direct;
+    type Filing = IfCarded;
     type Shows = Everything;
 
     fn agent<'a>(call: &Self::Call<'a>) -> Agent<'a> {
@@ -126,34 +130,63 @@ impl Holds for SecretarySurface {
         call.chain
     }
 
-    fn write(call: &Call<'_>, act: Act, Direct {}: Direct) -> Result<Value, Refusal> {
+    fn write(call: &Call<'_>, act: Act, carded: IfCarded) -> Result<Value, Refusal> {
         let changeset = Changeset::new(call.chain.name.as_str(), vec![act])
             .map_err(|failed| Refusal::internal(failed.to_string()))?;
-        let categories: Vec<&str> = call
-            .deployment
-            .categories
-            .keys()
-            .map(String::as_str)
-            .collect();
-        match changes::apply(
-            call.caps,
-            call.chain,
-            &categories,
-            call.deployment.zone,
-            &changeset,
-            super::WRITES_AS,
-        ) {
-            Ok(names) => Ok(serde_json::json!({
-                "ok": true,
-                "chain": changeset.chain(),
-                "todo": changeset.acts().first().map(Act::todo),
-                "appended": names
-                    .iter()
-                    .map(prodrome_core::event::Hash::as_str)
-                    .collect::<Vec<_>>(),
-            })),
-            Err(Unapplied::Refused(refusal) | Unapplied::Appending(refusal)) => Err(refusal),
+        let round = super::read(call.caps.conversations, call.conversation)?;
+        match Gate::of(Binding::Writes, &round) {
+            Gate::Binds(_) => applied(call, &changeset),
+            Gate::Card => {
+                let reasons = carded.reasons("the write")?;
+                check(call, &changeset)?;
+                let index = propose(
+                    call.caps,
+                    call.chains,
+                    call.conversation,
+                    Proposal::Changes(changeset),
+                    &reasons,
+                    None,
+                    None,
+                )?;
+                Ok(serde_json::json!({
+                    "proposed": index,
+                    "chain": call.chain.name.as_str(),
+                    "next": "This round holds words that are not the owner's own, so the write \
+                             is a card they tap and nothing is on the chain until then. Say so \
+                             in one clause.",
+                }))
+            }
+            Gate::Refused(why) => Err(Refusal::forbidden(why)),
         }
+    }
+}
+
+/// Append `changeset` as the trusted actor, which only a round [`Gate::Binds`] reaches.
+fn applied(call: &Call<'_>, changeset: &Changeset) -> Result<Value, Refusal> {
+    let categories: Vec<&str> = call
+        .deployment
+        .categories
+        .keys()
+        .map(String::as_str)
+        .collect();
+    match changes::apply(
+        call.caps,
+        call.chain,
+        &categories,
+        call.deployment.zone,
+        changeset,
+        super::WRITES_AS,
+    ) {
+        Ok(names) => Ok(serde_json::json!({
+            "ok": true,
+            "chain": changeset.chain(),
+            "todo": changeset.acts().first().map(Act::todo),
+            "appended": names
+                .iter()
+                .map(prodrome_core::event::Hash::as_str)
+                .collect::<Vec<_>>(),
+        })),
+        Err(Unapplied::Refused(refusal) | Unapplied::Appending(refusal)) => Err(refusal),
     }
 }
 
@@ -173,8 +206,8 @@ pub enum Effect {
     Reads,
     /// Stores something the owner taps, binding nothing until he does.
     Proposes,
-    /// Appends to a chain as the trusted actor, binding at once.
-    Writes,
+    /// Binds at once in a round holding the owner's words alone, and files a card elsewhere.
+    Binds(Binding),
     /// Withdraws one of the triage agent's cards; performing one is the owner's tap alone.
     Settles,
     /// Starts the timer's own mail sync early: nothing the timer does not reach, and nothing a
@@ -183,17 +216,25 @@ pub enum Effect {
     /// Searches a mail server for mail older than the routine sync's window and keeps what
     /// matched on the box, read-only on the server and nothing a rewind could take back.
     Pulls,
-    /// Writes the secretary's own memory, or in a tainted round stores a card that would.
-    Remembers,
     /// Sets a watch on mail the owner expects, whose only act is a push to the owner's phone.
     Watches,
+}
+
+/// An effect that binds at once, so a round's taint decides whether it runs.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Binding {
+    /// Appends to a chain as the trusted actor.
+    Writes,
+    /// Writes the secretary's own memory.
+    Remembers,
 }
 
 const fn powers(effect: Effect, taint: Taint) -> Powers {
     Powers { effect, taint }
 }
 
-use Effect::{Proposes, Pulls, Reads, Remembers, Settles, Syncs, Watches, Writes};
+use Binding::{Remembers, Writes};
+use Effect::{Binds, Proposes, Pulls, Reads, Settles, Syncs, Watches};
 use Taint::{Clean, Tainted};
 
 verbs! {
@@ -204,9 +245,9 @@ verbs! {
     pub enum SecretaryCall;
     on SecretarySurface;
     Context: powers(Reads, Clean),
-    Remember: powers(Remembers, Clean),
-    Forget: powers(Remembers, Clean),
-    Consolidate: powers(Remembers, Clean),
+    Remember: powers(Binds(Remembers), Clean),
+    Forget: powers(Binds(Remembers), Clean),
+    Consolidate: powers(Binds(Remembers), Clean),
     Recall: powers(Reads, Tainted),
     // Its answer carries the node's own taint, which `taint::turn` reads; a refusal stays here.
     Zoom: powers(Reads, Tainted),
@@ -223,9 +264,9 @@ verbs! {
     BriefingDelta: powers(Reads, Tainted),
     Briefing: powers(Reads, Tainted),
     GitDiffSummary: powers(Reads, Tainted),
-    TodoAdd: powers(Writes, Tainted),
-    TodoUpdate: powers(Writes, Tainted),
-    Record: powers(Writes, Tainted),
+    TodoAdd: powers(Binds(Writes), Tainted),
+    TodoUpdate: powers(Binds(Writes), Tainted),
+    Record: powers(Binds(Writes), Tainted),
     ProposeEmail: powers(Proposes, Tainted),
     ProposeForward: powers(Proposes, Tainted),
     ProposeAct: powers(Proposes, Tainted),

@@ -1,10 +1,6 @@
 # The app — what it is for, and what it should become
 
-The owner, 2026-09-12: "It's worth speccing the app fully, what's useful for day to
-day, what's not, what nice features should exist, how things connect. It's nice
-to have good high level design for all of this."
-
-This is that document. `docs/ARCHITECTURE.md` says how the system is built and
+`docs/ARCHITECTURE.md` says how the system is built and
 `docs/AUDIT-UX-2026-09-12.md` says what is rough about the screens as they are;
 this says what the app is FOR, grades every destination by how often a person
 actually needs it, states the flows between them in one place, and names what
@@ -31,8 +27,7 @@ has to know which one wrote a thing beyond the `(unconfirmed)` marker.
 secretary conversation that opens with the weather, says what moved, summarises
 what it settled for him overnight, lists what is waiting on his tap, and offers
 two or three moves as proposals he can confirm from the phone. Through the day,
-pushes arrive as todos land — from mail the agent read, from things he shared
-into the app, from the secretary writing directly. He opens a todo from a push,
+pushes arrive as todos land. He opens a todo from a push,
 reads it, does the thing, completes it. When the Inbox badge shows a number,
 something is waiting on him and only him: a batch the secretary held because it
 touched a legal matter or his money, an email the secretary wants to send, a
@@ -66,10 +61,6 @@ Some rows are several pages (`message` and `thread` are Mail's,
 wrong; what the grades say is where attention should go. Three rows are DAILY
 and one is RETIRE, and that is the shape of the next few weeks.
 
-The Graph, History and Links pages were removed on 2026-09-26 (the owner: "The
-fulfillment graph and links pages I never use, history for everything I never
-use as well"). A todo's own links and history stay on its page.
-
 ## 3. How things connect
 
 Stated once, so the next feature is judged against the flows rather than
@@ -98,8 +89,8 @@ actor. An act the box refuses stays local and is NAMED; it is never retried and
 never silently dropped.
 
 **The secretary proposes and he taps.** A conversation is where the secretary
-reads, writes directly for routine evidenced work, and PROPOSES for anything it
-is unsure of — an email, or a changeset of chain acts. A proposal is stored
+reads, writes directly only in a round that holds no words but his, and PROPOSES
+everywhere else and for anything it is unsure of — an email, or a changeset of chain acts. A proposal is stored
 whole and shown whole, in the conversation and in the Inbox. The tap carries an
 index and never a body, needs the gate's witness that it was him on his own
 device, and is the ONE path from this app to an outward act. The answer no is
@@ -112,14 +103,7 @@ proposal in the brief is an ordinary proposal; every reference in it is an
 ordinary reference. There is no briefing format any more — there is a
 conversation that happens to arrive at 07:03.
 
-**There is ONE conversation, and it remembers** (the owner, 2026-09-13: "I like
-the format of conversation that we have here with continuous memory, I want
-the chat in the suzatary to be similar … by far most of the time I want to have
-1 default chat where the agent knows everything"). BUILT 2026-09-14 (chain
-item `onechat`, `docs/ONECHAT-PLAN-2026-09-13.md`); until then a conversation was a transcript re-sent whole to a
-stateless `claude -p` on every turn, the page disabled Send while a turn ran,
-and each conversation started knowing only what its system prompt carried.
-The design, as built:
+**There is ONE conversation, and it remembers** (chain item `onechat`):
 
 - *The default conversation.* Secretary opens into it; the brief lands in it
   (the morning is its top, not a separate page); `start` still makes another
@@ -190,33 +174,6 @@ Ordered by how often the absence is felt. Each one is stated with the semantic
 it maps onto, because a feature that needed a new stored kind would be a
 feature the chain does not have — and two of the tempting ones are refused
 below for exactly that reason.
-
-1. **Complete from the list — ALREADY THERE, and this item was wrong**
-   (corrected 2026-09-13). The card's footer carries a Done button for a
-   login that may act (`card.ts::foot`, `actButton("done", …)` behind
-   `mayAct()`); the gallery this section was written from ran as a VIEWER,
-   which draws no act controls, so the picture showed a footer with only the
-   slug. The keyboard's `c` and the card's Done are the same seal. What
-   remains true is the audit's finding 2: the footer row costs every card a
-   line even when it holds nothing but the slug and a chevron, and that is the
-   fold item below, not a missing act. Kept here rather than deleted so the
-   next reader of a viewer's gallery does not file it again.
-
-2. **Edit a todo in the app — ALREADY THERE** (built, project chain
-   `editandtick`). `POST /api/author` gains an `update` arm
-   (`routes::author`'s `Authoring::Update`, built through `form::update` and
-   `authoring::update_todo` exactly as `add` goes through `form::add` and
-   `build_todo`) that builds and appends nothing, and the todo page
-   (`app/pages/src/todo.rs`'s `edit_panel`) gains a form that sends only the
-   fields that changed. The tab seals what comes back through the same door
-   `add` uses.
-
-3. **Tick a subtodo — ALREADY THERE** (built alongside item 2). Subtodos are
-   tappable checkboxes (`app/pages/src/todo.rs`'s `checklist`, native
-   `<input type="checkbox">`, so keyboard- and screen-reader-operable for
-   free) rather than a read-only list; ticking one sends the WHOLE checklist
-   back through the same `update` arm — a register holds its frontier, not a
-   diff — and the "1 of 2 done" chip moves.
 
 4. **Defer, as a curve and never as a flag — BUILT** (project chain
    `deferascurve`). "Not before Friday" is a real need and a snooze field is

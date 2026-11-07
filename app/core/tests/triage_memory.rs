@@ -39,7 +39,7 @@ use suzatary_core::secretary::outcome::Outcome;
 use suzatary_core::secretary::recollection::Recollection;
 use suzatary_core::secretary::salted_text::{Text, TextName};
 use suzatary_core::secretary::store::{ConversationId, Entry};
-use suzatary_core::secretary::surface::{Effect, SecretaryVerb};
+use suzatary_core::secretary::surface::{Binding, Effect, SecretaryVerb};
 use suzatary_core::store::{Doc as _, InMemory, InMemoryDoc, Only, Prodrome, Reads as _};
 
 /// Each salt the next number.
@@ -408,7 +408,7 @@ fn the_triage_surface_reads_the_memory_and_names_no_verb_that_writes_it() {
     );
     let remembers: Vec<&str> = SecretaryVerb::ALL
         .iter()
-        .filter(|verb| verb.class().effect == Effect::Remembers)
+        .filter(|verb| verb.class().effect == Effect::Binds(Binding::Remembers))
         .map(|verb| verb.name())
         .collect();
     assert!(

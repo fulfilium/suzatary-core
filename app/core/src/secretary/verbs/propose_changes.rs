@@ -35,8 +35,7 @@ impl Verb for ProposeChanges {
     const DESCRIPTION: &'static str = "PROPOSE A CHANGESET — chain acts you want made and are NOT SURE OF. \
         Nothing is appended: the owner sees the acts as a DIFF, row by row with \
         before and after, and confirms, denies with a reason, or replies.\n\n\
-        WRITE DIRECTLY (todo_add / todo_update / record) for routine, evidenced \
-        work. PROPOSE A CHANGESET for anything that changes a real commitment of \
+        PROPOSE A CHANGESET for anything that changes a real commitment of \
         theirs — a new todo at or under 45, any change to a todo THEY wrote, anything \
         about identity documents, money, legal or medical, a cancellation, a \
         repricing across rows. When in doubt, propose. SECRETARY.md has the \
@@ -68,29 +67,7 @@ impl Verb for ProposeChanges {
         )
         .map_err(|failed| Refusal::bad_request(failed.to_string()))?;
 
-        // Built against the chain only as a check, so one the chain would refuse is refused
-        // while it is fixable; the tap is the act.
-        let known: Vec<&str> = call
-            .deployment
-            .categories
-            .keys()
-            .map(String::as_str)
-            .collect();
-        changes::checked(
-            &changeset,
-            call.caps.chain,
-            &changes::Building {
-                now: crate::zone::Moment {
-                    at: call.caps.clock.now(),
-                    zone: call.deployment.zone,
-                },
-                by: crate::secretary::WRITES_AS,
-                categories: &known,
-                untrusted: &call.chain.untrusted,
-                typeset: call.caps.render,
-            },
-        )?;
-
+        check(call, &changeset)?;
         let index = args
             .filing
             .file(call, Proposal::Changes(changeset.clone()), &reasons)?;
@@ -105,4 +82,32 @@ impl Verb for ProposeChanges {
                      one, read the reason and propose the corrected one or ask.",
         }))
     }
+}
+
+/// Build `changeset` against the chain as the tap will build it, appending nothing, so a card
+/// the chain would refuse is refused while it is fixable.
+///
+/// # Errors
+/// The builders' refusal of an act, and the chain's failure to read.
+pub(crate) fn check(call: &Call<'_>, changeset: &Changeset) -> Result<(), Refusal> {
+    let known: Vec<&str> = call
+        .deployment
+        .categories
+        .keys()
+        .map(String::as_str)
+        .collect();
+    changes::checked(
+        changeset,
+        call.caps.chain,
+        &changes::Building {
+            now: crate::zone::Moment {
+                at: call.caps.clock.now(),
+                zone: call.deployment.zone,
+            },
+            by: crate::secretary::WRITES_AS,
+            categories: &known,
+            untrusted: &call.chain.untrusted,
+            typeset: call.caps.render,
+        },
+    )
 }

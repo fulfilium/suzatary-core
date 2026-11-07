@@ -37,6 +37,8 @@ the mechanism that holds it. *Irreversibles* covers what is human-only.
   own closed, snapshotted verb list.
 - **Provisional writes.** The agent's writes are cards in the owner's Inbox,
   performed only by the owner's tap; its record holds the chain read-only, with no write reachable from it.
+  The secretary's writes and memory bind only in a round the owner opened that holds no
+  other words, and are cards everywhere else (`secretary::gate::Gate::of`).
 - **The tap.** Sending mail, starting a sign-in or setting a secret takes a
   request from a named tailnet login, with the anti-forgery headers, against
   a stored proposal. Loopback, and so the box's own shell and the agent,

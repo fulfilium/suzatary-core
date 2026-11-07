@@ -47,6 +47,7 @@ pub mod file_search;
 pub mod filed;
 pub mod fixes;
 pub mod found;
+mod gate;
 pub mod google_sign_in;
 pub mod heartbeat;
 pub mod held_lines;
@@ -137,7 +138,7 @@ use store::{ConversationId, Entry, Stored};
 pub use store::{ConversationState, state};
 pub(crate) use surface::SecretarySurface;
 use surface::Subset;
-pub use surface::{Effect, SecretaryCall, SecretaryVerb, tools};
+pub use surface::{Binding, Effect, SecretaryCall, SecretaryVerb, tools};
 use verb_answer::VerbAnswer;
 
 /// Who a chain write from this surface is by, fixed here so no call's arguments can change it.

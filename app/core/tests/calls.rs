@@ -417,11 +417,13 @@ fn valid(verb: &str, name: &str) -> Value {
     }
 }
 
-/// What else a call needs to be valid beyond its required arguments.
+/// What else a call needs to be valid beyond its required arguments; a secretary's write here is
+/// in a round the box opened, so it is a card and needs its reasons.
 fn companions(verb: &str) -> &'static [&'static str] {
     match verb {
-        "todo_add" => &["priority"],
-        "todo_update" => &["priority", "rationale"],
+        "todo_add" => &["priority", "why", "sources"],
+        "todo_update" => &["priority", "rationale", "why", "sources"],
+        "record" => &["why", "sources"],
         "propose_act" => &["account"],
         "web" => &["search"],
         _ => &[],

@@ -20,7 +20,6 @@ use std::collections::BTreeMap;
 use serde_json::{Map, Value};
 
 pub use call::Call;
-pub(crate) use holds::Direct;
 pub use holds::Holds;
 pub use says::Says;
 pub(crate) use surface::TriageSurface;

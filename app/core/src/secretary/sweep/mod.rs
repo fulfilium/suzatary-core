@@ -471,9 +471,8 @@ mod tests {
             let expected = match verb.class().effect {
                 Effect::Reads => true,
                 Effect::Proposes => verb.name() == "propose_changes",
-                Effect::Writes
+                Effect::Binds(_)
                 | Effect::Settles
-                | Effect::Remembers
                 | Effect::Syncs
                 | Effect::Pulls
                 | Effect::Watches => false,

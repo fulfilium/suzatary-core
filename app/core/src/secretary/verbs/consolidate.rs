@@ -5,11 +5,13 @@ use serde::Deserialize;
 use serde_json::json;
 
 use crate::refusal::Refusal;
+use crate::secretary::gate::Gate;
 use crate::secretary::memory::{self, Fact, FactId, Replaces, Sources};
+use crate::secretary::surface::Binding;
 use crate::secretary::verb_answer::VerbAnswer;
-use crate::secretary::verbs::{Gate, NO_OPENER, gate, memory_card};
+use crate::secretary::verbs::{IfCarded, memory_card};
 use crate::secretary::{Call, SecretarySurface};
-use crate::verb::{Caught, Verb};
+use crate::verb::Verb;
 
 /// Replace standing facts with one, where remember would write, or as a card the owner taps.
 pub struct Consolidate;
@@ -19,10 +21,8 @@ pub struct ConsolidateArgs {
     from: Vec<u64>,
     fact: String,
     kind: String,
-    #[serde(default)]
-    why: Caught<Option<String>>,
-    #[serde(default)]
-    sources: Caught<Option<String>>,
+    #[serde(flatten)]
+    carded: IfCarded,
 }
 
 impl Verb for Consolidate {
@@ -55,17 +55,17 @@ impl Verb for Consolidate {
             .map_err(|failed| Refusal::bad_request(format!("fact: {failed}")))?;
         let kind = memory::kind_of(&args.kind)?;
         let replaced: Vec<u64> = from.ids().iter().map(|id| id.0).collect();
-        let round = match gate(&crate::secretary::read(
-            call.caps.conversations,
-            call.conversation,
-        )?) {
-            Gate::Closed => return Err(Refusal::forbidden(NO_OPENER)),
-            Gate::Write(round) => round,
+        let round = match Gate::of(
+            Binding::Remembers,
+            &crate::secretary::read(call.caps.conversations, call.conversation)?,
+        ) {
+            Gate::Refused(why) => return Err(Refusal::forbidden(why)),
+            Gate::Binds(round) => round,
             Gate::Card => {
                 let index = memory_card(
                     call.caps,
                     call.conversation,
-                    (args.why.read()?.as_deref(), args.sources.read()?.as_deref()),
+                    &args.carded,
                     (&fact, kind, Replaces::Facts(from)),
                 )?;
                 return Ok(VerbAnswer::from(json!({

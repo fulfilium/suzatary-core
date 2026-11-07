@@ -4,11 +4,13 @@ use serde_json::json;
 
 use crate::refusal::Refusal;
 use crate::secretary;
+use crate::secretary::gate::Gate;
 use crate::secretary::memory::{self, Fact, Replaces};
+use crate::secretary::surface::Binding;
 use crate::secretary::verb_answer::VerbAnswer;
-use crate::secretary::verbs::{Gate, NO_OPENER, gate, memory_card};
+use crate::secretary::verbs::{IfCarded, memory_card};
 use crate::secretary::{Call, SecretarySurface};
-use crate::verb::{Caught, Verb};
+use crate::verb::Verb;
 
 /// Remember a fact for every later conversation.
 pub struct Remember;
@@ -17,10 +19,8 @@ pub struct Remember;
 pub struct RememberArgs {
     fact: String,
     kind: String,
-    #[serde(default)]
-    why: Caught<Option<String>>,
-    #[serde(default)]
-    sources: Caught<Option<String>>,
+    #[serde(flatten)]
+    carded: IfCarded,
 }
 
 impl Verb for Remember {
@@ -44,17 +44,17 @@ impl Verb for Remember {
         let fact = Fact::new(&args.fact)
             .map_err(|failed| Refusal::bad_request(format!("fact: {failed}")))?;
         let kind = memory::kind_of(&args.kind)?;
-        let said = match gate(&secretary::read(
-            call.caps.conversations,
-            call.conversation,
-        )?) {
-            Gate::Closed => return Err(Refusal::forbidden(NO_OPENER)),
-            Gate::Write(said) => said,
+        let said = match Gate::of(
+            Binding::Remembers,
+            &secretary::read(call.caps.conversations, call.conversation)?,
+        ) {
+            Gate::Refused(why) => return Err(Refusal::forbidden(why)),
+            Gate::Binds(said) => said,
             Gate::Card => {
                 let index = memory_card(
                     call.caps,
                     call.conversation,
-                    (args.why.read()?.as_deref(), args.sources.read()?.as_deref()),
+                    &args.carded,
                     (&fact, kind, Replaces::Nothing),
                 )?;
                 // The card names the words and the memory's text store keeps them; the answer, a

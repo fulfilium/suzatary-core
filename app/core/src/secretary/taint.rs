@@ -1,9 +1,7 @@
-//! What a round has read and who opened it: the two facts that decide whether `remember` writes
-//! the memory or stores a card, since the attack a memory invites is an email saying "remember".
+//! What a round has read and who opened it, the two facts the binding gate reads.
 //!
-//! Deny by default both ways: a verb is [`Taint::Clean`] only where `SecretaryVerb` says so (an
-//! entry cannot be written without a class), and a turn is clean only when it is the model's own,
-//! a clean verb's answer, or words the gate stamped as the owner's (`Said::by`).
+//! Deny by default: a verb is [`Taint::Clean`] only where `SecretaryVerb` says so, and a turn is
+//! clean only when it is the model's own, a clean verb's answer, or stamped as the owner's.
 
 use crate::capability::Turn;
 use crate::secretary::memory::Origin;
@@ -54,9 +52,8 @@ impl Taint {
 // A taint's literal is its name.
 prodrome_core::word_literal!(Taint: Taint::ALL => |taint| taint.as_str());
 
-/// One turn's class. A verb answer under a name the surface lacks (a loaded
-/// reference, a tapped document) is tainted; so are a person's photos and PDFs. A `zoom` answer
-/// is the class of the node it opened.
+/// One turn's class. A verb answer under a name the surface lacks is tainted, and so are a
+/// person's photos and PDFs.
 #[must_use]
 pub fn turn(said: &Said) -> Taint {
     of_turn(&said.turn, said.by.as_ref())
@@ -121,11 +118,9 @@ pub fn line(entry: &Entry) -> Taint {
     }
 }
 
-/// Each line's taint as it stands in its conversation `id`. A person's or an act's turn opens a
-/// round and keeps its own class. A model's answer is what its model holds when it answers
-/// ([`held`], over the conversation folded so far, as its asks recorded they send it). Any other
-/// line joins its round so far. `lines` is one conversation, in order; the answer is one taint per
-/// line, in the same order.
+/// Each line's taint in its conversation `id`, in order: a person's or an act's turn keeps its
+/// own class, a model's answer is what its model holds ([`held`]), and any other line joins its
+/// round so far.
 #[must_use]
 pub fn rounds<'e>(id: &ConversationId, lines: impl IntoIterator<Item = &'e Entry>) -> Vec<Taint> {
     // What a model holds is the turns and the scope, never the conversation's kind.
@@ -171,16 +166,14 @@ fn opens(entry: &Entry) -> bool {
     )
 }
 
-/// Whether anything the model writing a `remember` now holds is tainted ([`held`]): a round
-/// the owner opened after a mail read still in what the model is sent remembers by card.
+/// Whether anything the model now holds is tainted ([`held`]).
 #[must_use]
 pub fn tainted(stored: &Stored) -> bool {
     held(stored) == Taint::Tainted
 }
 
 /// Who opened this round, if the owner did: the person or act turns before the model first spoke,
-/// provided every one carries the gate's stamp. A round the box opened (a brief, a review, a
-/// sweep) has no opener and remembers nothing.
+/// provided every one carries the gate's stamp.
 #[must_use]
 pub fn opener(stored: &Stored) -> Option<Origin> {
     let opening: Vec<(usize, &Said)> = queue::delta(stored)

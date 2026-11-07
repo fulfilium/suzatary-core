@@ -593,240 +593,264 @@ secretary briefing [chain mistyped] refused 400: chain must be a string or null
 secretary git_diff_summary [valid] answered ""
 secretary git_diff_summary [chain unknown] refused 404: no chain named 'nowhere' — this deployment serves life
 secretary git_diff_summary [chain mistyped] refused 400: chain must be a string or null
-secretary todo_add [valid] refused 500: event 1 of this changeset could not be appended (the chain could not be appended to: nothing is written) — 0 event(s) before it are on the chain
+secretary todo_add [valid] answered {"chain":"life","next":"This round holds words that are not the owner's own, so the write is a card they tap and nothing is on the chain until then. Say so in one clause.","proposed":0}
 secretary todo_add [body missing] refused 400: body is required
 secretary todo_add [body null] refused 400: invalid type: unit value, expected a string
 secretary todo_add [body mistyped] refused 400: invalid type: integer `7`, expected a string
-secretary todo_add [body garbled] refused 500: event 1 of this changeset could not be appended (the chain could not be appended to: nothing is written) — 0 event(s) before it are on the chain
-secretary todo_add [category given] refused 500: event 1 of this changeset could not be appended (the chain could not be appended to: nothing is written) — 0 event(s) before it are on the chain
-secretary todo_add [category null] refused 500: event 1 of this changeset could not be appended (the chain could not be appended to: nothing is written) — 0 event(s) before it are on the chain
+secretary todo_add [body garbled] answered {"chain":"life","next":"This round holds words that are not the owner's own, so the write is a card they tap and nothing is on the chain until then. Say so in one clause.","proposed":0}
+secretary todo_add [category given] answered {"chain":"life","next":"This round holds words that are not the owner's own, so the write is a card they tap and nothing is on the chain until then. Say so in one clause.","proposed":0}
+secretary todo_add [category null] answered {"chain":"life","next":"This round holds words that are not the owner's own, so the write is a card they tap and nothing is on the chain until then. Say so in one clause.","proposed":0}
 secretary todo_add [category mistyped] refused 400: invalid type: integer `7`, expected a string
 secretary todo_add [category garbled] refused 400: act 1 (add beta) was refused, so nothing was appended: category must be one of ["home", "other"], got '?'
-secretary todo_add [chain given] refused 500: event 1 of this changeset could not be appended (the chain could not be appended to: nothing is written) — 0 event(s) before it are on the chain
-secretary todo_add [chain null] refused 500: event 1 of this changeset could not be appended (the chain could not be appended to: nothing is written) — 0 event(s) before it are on the chain
+secretary todo_add [chain given] answered {"chain":"life","next":"This round holds words that are not the owner's own, so the write is a card they tap and nothing is on the chain until then. Say so in one clause.","proposed":0}
+secretary todo_add [chain null] answered {"chain":"life","next":"This round holds words that are not the owner's own, so the write is a card they tap and nothing is on the chain until then. Say so in one clause.","proposed":0}
 secretary todo_add [chain mistyped] refused 400: chain must be a string or null
 secretary todo_add [chain garbled] refused 404: no chain named '?' — this deployment serves life
 secretary todo_add [cycle_from_priority given] refused 400: `cycle_from_priority` and `cycle_to_priority` shape a cycle: give `recur_every_days` or `periodic_every_days` with them
-secretary todo_add [cycle_from_priority null] refused 500: event 1 of this changeset could not be appended (the chain could not be appended to: nothing is written) — 0 event(s) before it are on the chain
+secretary todo_add [cycle_from_priority null] answered {"chain":"life","next":"This round holds words that are not the owner's own, so the write is a card they tap and nothing is on the chain until then. Say so in one clause.","proposed":0}
 secretary todo_add [cycle_from_priority mistyped] refused 400: invalid type: integer `7`, expected a string
 secretary todo_add [cycle_from_priority garbled] refused 400: `cycle_from_priority` and `cycle_to_priority` shape a cycle: give `recur_every_days` or `periodic_every_days` with them
 secretary todo_add [cycle_to_priority given] refused 400: `cycle_from_priority` and `cycle_to_priority` shape a cycle: give `recur_every_days` or `periodic_every_days` with them
-secretary todo_add [cycle_to_priority null] refused 500: event 1 of this changeset could not be appended (the chain could not be appended to: nothing is written) — 0 event(s) before it are on the chain
+secretary todo_add [cycle_to_priority null] answered {"chain":"life","next":"This round holds words that are not the owner's own, so the write is a card they tap and nothing is on the chain until then. Say so in one clause.","proposed":0}
 secretary todo_add [cycle_to_priority mistyped] refused 400: invalid type: integer `7`, expected a string
 secretary todo_add [cycle_to_priority garbled] refused 400: `cycle_from_priority` and `cycle_to_priority` shape a cycle: give `recur_every_days` or `periodic_every_days` with them
-secretary todo_add [date given] refused 500: event 1 of this changeset could not be appended (the chain could not be appended to: nothing is written) — 0 event(s) before it are on the chain
-secretary todo_add [date null] refused 500: event 1 of this changeset could not be appended (the chain could not be appended to: nothing is written) — 0 event(s) before it are on the chain
+secretary todo_add [date given] answered {"chain":"life","next":"This round holds words that are not the owner's own, so the write is a card they tap and nothing is on the chain until then. Say so in one clause.","proposed":0}
+secretary todo_add [date null] answered {"chain":"life","next":"This round holds words that are not the owner's own, so the write is a card they tap and nothing is on the chain until then. Say so in one clause.","proposed":0}
 secretary todo_add [date mistyped] refused 400: invalid type: integer `7`, expected a string
 secretary todo_add [date garbled] refused 400: date must be YYYY-MM-DD, got '?'
 secretary todo_add [deadline_end_date given] refused 400: a price is ONE of `priority`, `deadline_end_date`, `recur_every_days` or `periodic_every_days`: they are different prices and a todo holds one
-secretary todo_add [deadline_end_date null] refused 500: event 1 of this changeset could not be appended (the chain could not be appended to: nothing is written) — 0 event(s) before it are on the chain
+secretary todo_add [deadline_end_date null] answered {"chain":"life","next":"This round holds words that are not the owner's own, so the write is a card they tap and nothing is on the chain until then. Say so in one clause.","proposed":0}
 secretary todo_add [deadline_end_date mistyped] refused 400: invalid type: integer `7`, expected a string
 secretary todo_add [deadline_end_date garbled] refused 400: end_date must be YYYY-MM-DD, got '?'
-secretary todo_add [deadline_end_priority given] refused 500: event 1 of this changeset could not be appended (the chain could not be appended to: nothing is written) — 0 event(s) before it are on the chain
-secretary todo_add [deadline_end_priority null] refused 500: event 1 of this changeset could not be appended (the chain could not be appended to: nothing is written) — 0 event(s) before it are on the chain
-secretary todo_add [deadline_end_priority mistyped] refused 500: event 1 of this changeset could not be appended (the chain could not be appended to: nothing is written) — 0 event(s) before it are on the chain
-secretary todo_add [deadline_end_priority garbled] refused 500: event 1 of this changeset could not be appended (the chain could not be appended to: nothing is written) — 0 event(s) before it are on the chain
-secretary todo_add [deadline_lead_up_weeks given] refused 500: event 1 of this changeset could not be appended (the chain could not be appended to: nothing is written) — 0 event(s) before it are on the chain
-secretary todo_add [deadline_lead_up_weeks null] refused 500: event 1 of this changeset could not be appended (the chain could not be appended to: nothing is written) — 0 event(s) before it are on the chain
-secretary todo_add [deadline_lead_up_weeks mistyped] refused 500: event 1 of this changeset could not be appended (the chain could not be appended to: nothing is written) — 0 event(s) before it are on the chain
-secretary todo_add [deadline_lead_up_weeks negative] refused 500: event 1 of this changeset could not be appended (the chain could not be appended to: nothing is written) — 0 event(s) before it are on the chain
-secretary todo_add [deadline_lead_up_weeks fractional] refused 500: event 1 of this changeset could not be appended (the chain could not be appended to: nothing is written) — 0 event(s) before it are on the chain
-secretary todo_add [deadline_start_date given] refused 500: event 1 of this changeset could not be appended (the chain could not be appended to: nothing is written) — 0 event(s) before it are on the chain
-secretary todo_add [deadline_start_date null] refused 500: event 1 of this changeset could not be appended (the chain could not be appended to: nothing is written) — 0 event(s) before it are on the chain
-secretary todo_add [deadline_start_date mistyped] refused 500: event 1 of this changeset could not be appended (the chain could not be appended to: nothing is written) — 0 event(s) before it are on the chain
-secretary todo_add [deadline_start_date garbled] refused 500: event 1 of this changeset could not be appended (the chain could not be appended to: nothing is written) — 0 event(s) before it are on the chain
-secretary todo_add [deadline_start_priority given] refused 500: event 1 of this changeset could not be appended (the chain could not be appended to: nothing is written) — 0 event(s) before it are on the chain
-secretary todo_add [deadline_start_priority null] refused 500: event 1 of this changeset could not be appended (the chain could not be appended to: nothing is written) — 0 event(s) before it are on the chain
-secretary todo_add [deadline_start_priority mistyped] refused 500: event 1 of this changeset could not be appended (the chain could not be appended to: nothing is written) — 0 event(s) before it are on the chain
-secretary todo_add [deadline_start_priority garbled] refused 500: event 1 of this changeset could not be appended (the chain could not be appended to: nothing is written) — 0 event(s) before it are on the chain
-secretary todo_add [detail given] refused 500: event 1 of this changeset could not be appended (the chain could not be appended to: nothing is written) — 0 event(s) before it are on the chain
-secretary todo_add [detail null] refused 500: event 1 of this changeset could not be appended (the chain could not be appended to: nothing is written) — 0 event(s) before it are on the chain
+secretary todo_add [deadline_end_priority given] answered {"chain":"life","next":"This round holds words that are not the owner's own, so the write is a card they tap and nothing is on the chain until then. Say so in one clause.","proposed":0}
+secretary todo_add [deadline_end_priority null] answered {"chain":"life","next":"This round holds words that are not the owner's own, so the write is a card they tap and nothing is on the chain until then. Say so in one clause.","proposed":0}
+secretary todo_add [deadline_end_priority mistyped] answered {"chain":"life","next":"This round holds words that are not the owner's own, so the write is a card they tap and nothing is on the chain until then. Say so in one clause.","proposed":0}
+secretary todo_add [deadline_end_priority garbled] answered {"chain":"life","next":"This round holds words that are not the owner's own, so the write is a card they tap and nothing is on the chain until then. Say so in one clause.","proposed":0}
+secretary todo_add [deadline_lead_up_weeks given] answered {"chain":"life","next":"This round holds words that are not the owner's own, so the write is a card they tap and nothing is on the chain until then. Say so in one clause.","proposed":0}
+secretary todo_add [deadline_lead_up_weeks null] answered {"chain":"life","next":"This round holds words that are not the owner's own, so the write is a card they tap and nothing is on the chain until then. Say so in one clause.","proposed":0}
+secretary todo_add [deadline_lead_up_weeks mistyped] answered {"chain":"life","next":"This round holds words that are not the owner's own, so the write is a card they tap and nothing is on the chain until then. Say so in one clause.","proposed":0}
+secretary todo_add [deadline_lead_up_weeks negative] answered {"chain":"life","next":"This round holds words that are not the owner's own, so the write is a card they tap and nothing is on the chain until then. Say so in one clause.","proposed":0}
+secretary todo_add [deadline_lead_up_weeks fractional] answered {"chain":"life","next":"This round holds words that are not the owner's own, so the write is a card they tap and nothing is on the chain until then. Say so in one clause.","proposed":0}
+secretary todo_add [deadline_start_date given] answered {"chain":"life","next":"This round holds words that are not the owner's own, so the write is a card they tap and nothing is on the chain until then. Say so in one clause.","proposed":0}
+secretary todo_add [deadline_start_date null] answered {"chain":"life","next":"This round holds words that are not the owner's own, so the write is a card they tap and nothing is on the chain until then. Say so in one clause.","proposed":0}
+secretary todo_add [deadline_start_date mistyped] answered {"chain":"life","next":"This round holds words that are not the owner's own, so the write is a card they tap and nothing is on the chain until then. Say so in one clause.","proposed":0}
+secretary todo_add [deadline_start_date garbled] answered {"chain":"life","next":"This round holds words that are not the owner's own, so the write is a card they tap and nothing is on the chain until then. Say so in one clause.","proposed":0}
+secretary todo_add [deadline_start_priority given] answered {"chain":"life","next":"This round holds words that are not the owner's own, so the write is a card they tap and nothing is on the chain until then. Say so in one clause.","proposed":0}
+secretary todo_add [deadline_start_priority null] answered {"chain":"life","next":"This round holds words that are not the owner's own, so the write is a card they tap and nothing is on the chain until then. Say so in one clause.","proposed":0}
+secretary todo_add [deadline_start_priority mistyped] answered {"chain":"life","next":"This round holds words that are not the owner's own, so the write is a card they tap and nothing is on the chain until then. Say so in one clause.","proposed":0}
+secretary todo_add [deadline_start_priority garbled] answered {"chain":"life","next":"This round holds words that are not the owner's own, so the write is a card they tap and nothing is on the chain until then. Say so in one clause.","proposed":0}
+secretary todo_add [detail given] answered {"chain":"life","next":"This round holds words that are not the owner's own, so the write is a card they tap and nothing is on the chain until then. Say so in one clause.","proposed":0}
+secretary todo_add [detail null] answered {"chain":"life","next":"This round holds words that are not the owner's own, so the write is a card they tap and nothing is on the chain until then. Say so in one clause.","proposed":0}
 secretary todo_add [detail mistyped] refused 400: invalid type: integer `7`, expected a string
-secretary todo_add [detail garbled] refused 500: event 1 of this changeset could not be appended (the chain could not be appended to: nothing is written) — 0 event(s) before it are on the chain
-secretary todo_add [kind given] refused 500: event 1 of this changeset could not be appended (the chain could not be appended to: nothing is written) — 0 event(s) before it are on the chain
-secretary todo_add [kind null] refused 500: event 1 of this changeset could not be appended (the chain could not be appended to: nothing is written) — 0 event(s) before it are on the chain
+secretary todo_add [detail garbled] answered {"chain":"life","next":"This round holds words that are not the owner's own, so the write is a card they tap and nothing is on the chain until then. Say so in one clause.","proposed":0}
+secretary todo_add [kind given] answered {"chain":"life","next":"This round holds words that are not the owner's own, so the write is a card they tap and nothing is on the chain until then. Say so in one clause.","proposed":0}
+secretary todo_add [kind null] answered {"chain":"life","next":"This round holds words that are not the owner's own, so the write is a card they tap and nothing is on the chain until then. Say so in one clause.","proposed":0}
 secretary todo_add [kind mistyped] refused 400: invalid type: integer `7`, expected a string
 secretary todo_add [kind garbled] refused 400: act 1 (add beta) was refused, so nothing was appended: kind must be one of ["decision", "ekaTodo", "suzateryTodo", "todo"], got '?'
-secretary todo_add [parent given] refused 500: event 1 of this changeset could not be appended (the chain could not be appended to: nothing is written) — 0 event(s) before it are on the chain
-secretary todo_add [parent null] refused 500: event 1 of this changeset could not be appended (the chain could not be appended to: nothing is written) — 0 event(s) before it are on the chain
+secretary todo_add [parent given] answered {"chain":"life","next":"This round holds words that are not the owner's own, so the write is a card they tap and nothing is on the chain until then. Say so in one clause.","proposed":0}
+secretary todo_add [parent null] answered {"chain":"life","next":"This round holds words that are not the owner's own, so the write is a card they tap and nothing is on the chain until then. Say so in one clause.","proposed":0}
 secretary todo_add [parent mistyped] refused 400: invalid type: integer `7`, expected a string
 secretary todo_add [parent garbled] refused 404: act 1 (add beta) was refused, so nothing was appended: no todo with id '?' on the chain
 secretary todo_add [periodic_every_days given] refused 400: `periodic_every_days` needs both ends of its cycle: `cycle_from_priority` and `cycle_to_priority`
-secretary todo_add [periodic_every_days null] refused 500: event 1 of this changeset could not be appended (the chain could not be appended to: nothing is written) — 0 event(s) before it are on the chain
+secretary todo_add [periodic_every_days null] answered {"chain":"life","next":"This round holds words that are not the owner's own, so the write is a card they tap and nothing is on the chain until then. Say so in one clause.","proposed":0}
 secretary todo_add [periodic_every_days mistyped] refused 400: invalid type: string "7", expected usize
 secretary todo_add [periodic_every_days negative] refused 400: invalid value: integer `-1`, expected usize
 secretary todo_add [periodic_every_days fractional] refused 400: invalid type: floating point `1.5`, expected usize
-secretary todo_add [priority given] refused 500: event 1 of this changeset could not be appended (the chain could not be appended to: nothing is written) — 0 event(s) before it are on the chain
+secretary todo_add [priority given] answered {"chain":"life","next":"This round holds words that are not the owner's own, so the write is a card they tap and nothing is on the chain until then. Say so in one clause.","proposed":0}
 secretary todo_add [priority null] refused 400: a price is ONE of `priority`, `deadline_end_date`, `recur_every_days` or `periodic_every_days`: they are different prices and a todo holds one
 secretary todo_add [priority mistyped] refused 400: invalid type: integer `7`, expected a string
 secretary todo_add [priority garbled] refused 400: priority must be a whole-number percentage like '65%', got '?'. It is a FULFILLMENT, so LOW means urgent.
 secretary todo_add [rationale missing] refused 400: rationale is required
 secretary todo_add [rationale null] refused 400: invalid type: unit value, expected a string
 secretary todo_add [rationale mistyped] refused 400: invalid type: integer `7`, expected a string
-secretary todo_add [rationale garbled] refused 500: event 1 of this changeset could not be appended (the chain could not be appended to: nothing is written) — 0 event(s) before it are on the chain
+secretary todo_add [rationale garbled] answered {"chain":"life","next":"This round holds words that are not the owner's own, so the write is a card they tap and nothing is on the chain until then. Say so in one clause.","proposed":0}
 secretary todo_add [recur_every_days given] refused 400: `recur_every_days` needs both ends of its cycle: `cycle_from_priority` and `cycle_to_priority`
-secretary todo_add [recur_every_days null] refused 500: event 1 of this changeset could not be appended (the chain could not be appended to: nothing is written) — 0 event(s) before it are on the chain
+secretary todo_add [recur_every_days null] answered {"chain":"life","next":"This round holds words that are not the owner's own, so the write is a card they tap and nothing is on the chain until then. Say so in one clause.","proposed":0}
 secretary todo_add [recur_every_days mistyped] refused 400: invalid type: string "7", expected usize
 secretary todo_add [recur_every_days negative] refused 400: invalid value: integer `-1`, expected usize
 secretary todo_add [recur_every_days fractional] refused 400: invalid type: floating point `1.5`, expected usize
 secretary todo_add [source_date given] refused 400: source is all four fields or none: source_sender, source_subject, source_date (YYYY-MM-DD) and source_hash
-secretary todo_add [source_date null] refused 500: event 1 of this changeset could not be appended (the chain could not be appended to: nothing is written) — 0 event(s) before it are on the chain
+secretary todo_add [source_date null] answered {"chain":"life","next":"This round holds words that are not the owner's own, so the write is a card they tap and nothing is on the chain until then. Say so in one clause.","proposed":0}
 secretary todo_add [source_date mistyped] refused 400: invalid type: integer `7`, expected a string
 secretary todo_add [source_date garbled] refused 400: source is all four fields or none: source_sender, source_subject, source_date (YYYY-MM-DD) and source_hash
 secretary todo_add [source_hash given] refused 400: source is all four fields or none: source_sender, source_subject, source_date (YYYY-MM-DD) and source_hash
-secretary todo_add [source_hash null] refused 500: event 1 of this changeset could not be appended (the chain could not be appended to: nothing is written) — 0 event(s) before it are on the chain
+secretary todo_add [source_hash null] answered {"chain":"life","next":"This round holds words that are not the owner's own, so the write is a card they tap and nothing is on the chain until then. Say so in one clause.","proposed":0}
 secretary todo_add [source_hash mistyped] refused 400: invalid type: integer `7`, expected a string
 secretary todo_add [source_hash garbled] refused 400: source is all four fields or none: source_sender, source_subject, source_date (YYYY-MM-DD) and source_hash
 secretary todo_add [source_sender given] refused 400: source is all four fields or none: source_sender, source_subject, source_date (YYYY-MM-DD) and source_hash
-secretary todo_add [source_sender null] refused 500: event 1 of this changeset could not be appended (the chain could not be appended to: nothing is written) — 0 event(s) before it are on the chain
+secretary todo_add [source_sender null] answered {"chain":"life","next":"This round holds words that are not the owner's own, so the write is a card they tap and nothing is on the chain until then. Say so in one clause.","proposed":0}
 secretary todo_add [source_sender mistyped] refused 400: invalid type: integer `7`, expected a string
 secretary todo_add [source_sender garbled] refused 400: source is all four fields or none: source_sender, source_subject, source_date (YYYY-MM-DD) and source_hash
 secretary todo_add [source_subject given] refused 400: source is all four fields or none: source_sender, source_subject, source_date (YYYY-MM-DD) and source_hash
-secretary todo_add [source_subject null] refused 500: event 1 of this changeset could not be appended (the chain could not be appended to: nothing is written) — 0 event(s) before it are on the chain
+secretary todo_add [source_subject null] answered {"chain":"life","next":"This round holds words that are not the owner's own, so the write is a card they tap and nothing is on the chain until then. Say so in one clause.","proposed":0}
 secretary todo_add [source_subject mistyped] refused 400: invalid type: integer `7`, expected a string
 secretary todo_add [source_subject garbled] refused 400: source is all four fields or none: source_sender, source_subject, source_date (YYYY-MM-DD) and source_hash
+secretary todo_add [sources given] answered {"chain":"life","next":"This round holds words that are not the owner's own, so the write is a card they tap and nothing is on the chain until then. Say so in one clause.","proposed":0}
+secretary todo_add [sources null] refused 400: this round has read something that is not the owner's own words, so the write becomes a card they tap, and a card needs its reasons: sources must name at least one thing this rests on — a mail message, a thread, a todo, a briefing or an earlier proposal
+secretary todo_add [sources mistyped] refused 400: invalid type: integer `7`, expected a string
+secretary todo_add [sources garbled] refused 400: sources: a reference is todo:<chain>/<id>, mail:<hash>, thread:<id>, briefing:<YYYY-MM-DD>, proposal:<conversation>/<n>, batch:<chain>/<head>, round:<conversation>/<turn> or note:<conversation>/<turn>, got "?"
 secretary todo_add [todo_id missing] refused 400: todo_id is required
 secretary todo_add [todo_id null] refused 400: invalid type: unit value, expected a string
 secretary todo_add [todo_id mistyped] refused 400: invalid type: integer `7`, expected a string
 secretary todo_add [todo_id garbled] refused 400: act 1 (add ?) was refused, so nothing was appended: todo_id must be 3-64 lowercase letters/digits starting with a letter, got '?' — ids are referenced by mark and record, so no punctuation, spaces or capitals
-secretary todo_add [waiting_on given] refused 500: event 1 of this changeset could not be appended (the chain could not be appended to: nothing is written) — 0 event(s) before it are on the chain
-secretary todo_add [waiting_on null] refused 500: event 1 of this changeset could not be appended (the chain could not be appended to: nothing is written) — 0 event(s) before it are on the chain
+secretary todo_add [waiting_on given] answered {"chain":"life","next":"This round holds words that are not the owner's own, so the write is a card they tap and nothing is on the chain until then. Say so in one clause.","proposed":0}
+secretary todo_add [waiting_on null] answered {"chain":"life","next":"This round holds words that are not the owner's own, so the write is a card they tap and nothing is on the chain until then. Say so in one clause.","proposed":0}
 secretary todo_add [waiting_on mistyped] refused 400: invalid type: integer `7`, expected a string
-secretary todo_add [waiting_on garbled] refused 500: event 1 of this changeset could not be appended (the chain could not be appended to: nothing is written) — 0 event(s) before it are on the chain
+secretary todo_add [waiting_on garbled] answered {"chain":"life","next":"This round holds words that are not the owner's own, so the write is a card they tap and nothing is on the chain until then. Say so in one clause.","proposed":0}
+secretary todo_add [why given] answered {"chain":"life","next":"This round holds words that are not the owner's own, so the write is a card they tap and nothing is on the chain until then. Say so in one clause.","proposed":0}
+secretary todo_add [why null] refused 400: this round has read something that is not the owner's own words, so the write becomes a card they tap, and a card needs its reasons: why must say, in a sentence or two, what this is for and what led to it
+secretary todo_add [why mistyped] refused 400: invalid type: integer `7`, expected a string
+secretary todo_add [why garbled] answered {"chain":"life","next":"This round holds words that are not the owner's own, so the write is a card they tap and nothing is on the chain until then. Say so in one clause.","proposed":0}
 secretary todo_add [chain unknown] refused 404: no chain named 'nowhere' — this deployment serves life
 secretary todo_add [chain mistyped] refused 400: chain must be a string or null
 secretary todo_add [no price] refused 400: a price is ONE of `priority`, `deadline_end_date`, `recur_every_days` or `periodic_every_days`: they are different prices and a todo holds one
 secretary todo_add [two prices] refused 400: a price is ONE of `priority`, `deadline_end_date`, `recur_every_days` or `periodic_every_days`: they are different prices and a todo holds one
-secretary todo_add [deadline] refused 500: event 1 of this changeset could not be appended (the chain could not be appended to: nothing is written) — 0 event(s) before it are on the chain
-secretary todo_add [deadline whole] refused 500: event 1 of this changeset could not be appended (the chain could not be appended to: nothing is written) — 0 event(s) before it are on the chain
+secretary todo_add [deadline] refused 400: this round has read something that is not the owner's own words, so the write becomes a card they tap, and a card needs its reasons: why must say, in a sentence or two, what this is for and what led to it
+secretary todo_add [deadline whole] refused 400: this round has read something that is not the owner's own words, so the write becomes a card they tap, and a card needs its reasons: why must say, in a sentence or two, what this is for and what led to it
 secretary todo_add [deadline start mistyped] refused 400: invalid type: integer `7`, expected a string
 secretary todo_add [deadline end garbled] refused 400: end_priority must be a whole-number percentage like '65%', got '5'. It is a FULFILLMENT, so LOW means urgent.
 secretary todo_add [deadline start date garbled] refused 400: start_date must be YYYY-MM-DD, got 'soon'
 secretary todo_add [deadline weeks mistyped] refused 400: invalid type: string "3", expected usize
 secretary todo_add [deadline weeks negative] refused 400: invalid value: integer `-3`, expected usize
-secretary todo_add [recur whole] refused 500: event 1 of this changeset could not be appended (the chain could not be appended to: nothing is written) — 0 event(s) before it are on the chain
+secretary todo_add [recur whole] refused 400: this round has read something that is not the owner's own words, so the write becomes a card they tap, and a card needs its reasons: why must say, in a sentence or two, what this is for and what led to it
 secretary todo_add [recur from mistyped] refused 400: invalid type: integer `9`, expected a string
 secretary todo_add [recur to missing] refused 400: `recur_every_days` needs both ends of its cycle: `cycle_from_priority` and `cycle_to_priority`
-secretary todo_add [periodic whole] refused 500: event 1 of this changeset could not be appended (the chain could not be appended to: nothing is written) — 0 event(s) before it are on the chain
+secretary todo_add [periodic whole] refused 400: this round has read something that is not the owner's own words, so the write becomes a card they tap, and a card needs its reasons: why must say, in a sentence or two, what this is for and what led to it
 secretary todo_add [cycle ends alone] refused 400: `cycle_from_priority` and `cycle_to_priority` shape a cycle: give `recur_every_days` or `periodic_every_days` with them
 secretary todo_add [cycle end mistyped alone] refused 400: invalid type: integer `3`, expected a string
-secretary todo_add [source whole] refused 500: event 1 of this changeset could not be appended (the chain could not be appended to: nothing is written) — 0 event(s) before it are on the chain
+secretary todo_add [source whole] refused 400: this round has read something that is not the owner's own words, so the write becomes a card they tap, and a card needs its reasons: why must say, in a sentence or two, what this is for and what led to it
 secretary todo_add [source date garbled] refused 400: source_date must be YYYY-MM-DD, got 'soon'
 secretary todo_add [rationale alone] refused 400: a price is ONE of `priority`, `deadline_end_date`, `recur_every_days` or `periodic_every_days`: they are different prices and a todo holds one
-secretary todo_add [detail both] refused 500: event 1 of this changeset could not be appended (the chain could not be appended to: nothing is written) — 0 event(s) before it are on the chain
-secretary todo_update [valid] refused 500: event 1 of this changeset could not be appended (the chain could not be appended to: nothing is written) — 0 event(s) before it are on the chain
-secretary todo_update [body given] refused 500: event 1 of this changeset could not be appended (the chain could not be appended to: nothing is written) — 0 event(s) before it are on the chain
-secretary todo_update [body null] refused 500: event 1 of this changeset could not be appended (the chain could not be appended to: nothing is written) — 0 event(s) before it are on the chain
+secretary todo_add [detail both] refused 400: this round has read something that is not the owner's own words, so the write becomes a card they tap, and a card needs its reasons: why must say, in a sentence or two, what this is for and what led to it
+secretary todo_update [valid] answered {"chain":"life","next":"This round holds words that are not the owner's own, so the write is a card they tap and nothing is on the chain until then. Say so in one clause.","proposed":0}
+secretary todo_update [body given] answered {"chain":"life","next":"This round holds words that are not the owner's own, so the write is a card they tap and nothing is on the chain until then. Say so in one clause.","proposed":0}
+secretary todo_update [body null] answered {"chain":"life","next":"This round holds words that are not the owner's own, so the write is a card they tap and nothing is on the chain until then. Say so in one clause.","proposed":0}
 secretary todo_update [body mistyped] refused 400: invalid type: integer `7`, expected a string
-secretary todo_update [body garbled] refused 500: event 1 of this changeset could not be appended (the chain could not be appended to: nothing is written) — 0 event(s) before it are on the chain
-secretary todo_update [chain given] refused 500: event 1 of this changeset could not be appended (the chain could not be appended to: nothing is written) — 0 event(s) before it are on the chain
-secretary todo_update [chain null] refused 500: event 1 of this changeset could not be appended (the chain could not be appended to: nothing is written) — 0 event(s) before it are on the chain
+secretary todo_update [body garbled] answered {"chain":"life","next":"This round holds words that are not the owner's own, so the write is a card they tap and nothing is on the chain until then. Say so in one clause.","proposed":0}
+secretary todo_update [chain given] answered {"chain":"life","next":"This round holds words that are not the owner's own, so the write is a card they tap and nothing is on the chain until then. Say so in one clause.","proposed":0}
+secretary todo_update [chain null] answered {"chain":"life","next":"This round holds words that are not the owner's own, so the write is a card they tap and nothing is on the chain until then. Say so in one clause.","proposed":0}
 secretary todo_update [chain mistyped] refused 400: chain must be a string or null
 secretary todo_update [chain garbled] refused 404: no chain named '?' — this deployment serves life
-secretary todo_update [clear_waiting_on given] refused 500: event 1 of this changeset could not be appended (the chain could not be appended to: nothing is written) — 0 event(s) before it are on the chain
-secretary todo_update [clear_waiting_on null] refused 500: event 1 of this changeset could not be appended (the chain could not be appended to: nothing is written) — 0 event(s) before it are on the chain
+secretary todo_update [clear_waiting_on given] answered {"chain":"life","next":"This round holds words that are not the owner's own, so the write is a card they tap and nothing is on the chain until then. Say so in one clause.","proposed":0}
+secretary todo_update [clear_waiting_on null] answered {"chain":"life","next":"This round holds words that are not the owner's own, so the write is a card they tap and nothing is on the chain until then. Say so in one clause.","proposed":0}
 secretary todo_update [clear_waiting_on mistyped] refused 400: invalid type: string "yes", expected a boolean
 secretary todo_update [cycle_from_priority given] refused 400: `cycle_from_priority` and `cycle_to_priority` shape a cycle: give `recur_every_days` or `periodic_every_days` with them
-secretary todo_update [cycle_from_priority null] refused 500: event 1 of this changeset could not be appended (the chain could not be appended to: nothing is written) — 0 event(s) before it are on the chain
+secretary todo_update [cycle_from_priority null] answered {"chain":"life","next":"This round holds words that are not the owner's own, so the write is a card they tap and nothing is on the chain until then. Say so in one clause.","proposed":0}
 secretary todo_update [cycle_from_priority mistyped] refused 400: invalid type: integer `7`, expected a string
 secretary todo_update [cycle_from_priority garbled] refused 400: `cycle_from_priority` and `cycle_to_priority` shape a cycle: give `recur_every_days` or `periodic_every_days` with them
 secretary todo_update [cycle_to_priority given] refused 400: `cycle_from_priority` and `cycle_to_priority` shape a cycle: give `recur_every_days` or `periodic_every_days` with them
-secretary todo_update [cycle_to_priority null] refused 500: event 1 of this changeset could not be appended (the chain could not be appended to: nothing is written) — 0 event(s) before it are on the chain
+secretary todo_update [cycle_to_priority null] answered {"chain":"life","next":"This round holds words that are not the owner's own, so the write is a card they tap and nothing is on the chain until then. Say so in one clause.","proposed":0}
 secretary todo_update [cycle_to_priority mistyped] refused 400: invalid type: integer `7`, expected a string
 secretary todo_update [cycle_to_priority garbled] refused 400: `cycle_from_priority` and `cycle_to_priority` shape a cycle: give `recur_every_days` or `periodic_every_days` with them
 secretary todo_update [deadline_end_date given] refused 400: a price is ONE of `priority`, `deadline_end_date`, `recur_every_days` or `periodic_every_days`: they are different prices and a todo holds one
-secretary todo_update [deadline_end_date null] refused 500: event 1 of this changeset could not be appended (the chain could not be appended to: nothing is written) — 0 event(s) before it are on the chain
+secretary todo_update [deadline_end_date null] answered {"chain":"life","next":"This round holds words that are not the owner's own, so the write is a card they tap and nothing is on the chain until then. Say so in one clause.","proposed":0}
 secretary todo_update [deadline_end_date mistyped] refused 400: invalid type: integer `7`, expected a string
 secretary todo_update [deadline_end_date garbled] refused 400: end_date must be YYYY-MM-DD, got '?'
-secretary todo_update [deadline_end_priority given] refused 500: event 1 of this changeset could not be appended (the chain could not be appended to: nothing is written) — 0 event(s) before it are on the chain
-secretary todo_update [deadline_end_priority null] refused 500: event 1 of this changeset could not be appended (the chain could not be appended to: nothing is written) — 0 event(s) before it are on the chain
-secretary todo_update [deadline_end_priority mistyped] refused 500: event 1 of this changeset could not be appended (the chain could not be appended to: nothing is written) — 0 event(s) before it are on the chain
-secretary todo_update [deadline_end_priority garbled] refused 500: event 1 of this changeset could not be appended (the chain could not be appended to: nothing is written) — 0 event(s) before it are on the chain
-secretary todo_update [deadline_lead_up_weeks given] refused 500: event 1 of this changeset could not be appended (the chain could not be appended to: nothing is written) — 0 event(s) before it are on the chain
-secretary todo_update [deadline_lead_up_weeks null] refused 500: event 1 of this changeset could not be appended (the chain could not be appended to: nothing is written) — 0 event(s) before it are on the chain
-secretary todo_update [deadline_lead_up_weeks mistyped] refused 500: event 1 of this changeset could not be appended (the chain could not be appended to: nothing is written) — 0 event(s) before it are on the chain
-secretary todo_update [deadline_lead_up_weeks negative] refused 500: event 1 of this changeset could not be appended (the chain could not be appended to: nothing is written) — 0 event(s) before it are on the chain
-secretary todo_update [deadline_lead_up_weeks fractional] refused 500: event 1 of this changeset could not be appended (the chain could not be appended to: nothing is written) — 0 event(s) before it are on the chain
-secretary todo_update [deadline_start_date given] refused 500: event 1 of this changeset could not be appended (the chain could not be appended to: nothing is written) — 0 event(s) before it are on the chain
-secretary todo_update [deadline_start_date null] refused 500: event 1 of this changeset could not be appended (the chain could not be appended to: nothing is written) — 0 event(s) before it are on the chain
-secretary todo_update [deadline_start_date mistyped] refused 500: event 1 of this changeset could not be appended (the chain could not be appended to: nothing is written) — 0 event(s) before it are on the chain
-secretary todo_update [deadline_start_date garbled] refused 500: event 1 of this changeset could not be appended (the chain could not be appended to: nothing is written) — 0 event(s) before it are on the chain
-secretary todo_update [deadline_start_priority given] refused 500: event 1 of this changeset could not be appended (the chain could not be appended to: nothing is written) — 0 event(s) before it are on the chain
-secretary todo_update [deadline_start_priority null] refused 500: event 1 of this changeset could not be appended (the chain could not be appended to: nothing is written) — 0 event(s) before it are on the chain
-secretary todo_update [deadline_start_priority mistyped] refused 500: event 1 of this changeset could not be appended (the chain could not be appended to: nothing is written) — 0 event(s) before it are on the chain
-secretary todo_update [deadline_start_priority garbled] refused 500: event 1 of this changeset could not be appended (the chain could not be appended to: nothing is written) — 0 event(s) before it are on the chain
-secretary todo_update [detail given] refused 500: event 1 of this changeset could not be appended (the chain could not be appended to: nothing is written) — 0 event(s) before it are on the chain
-secretary todo_update [detail null] refused 500: event 1 of this changeset could not be appended (the chain could not be appended to: nothing is written) — 0 event(s) before it are on the chain
+secretary todo_update [deadline_end_priority given] answered {"chain":"life","next":"This round holds words that are not the owner's own, so the write is a card they tap and nothing is on the chain until then. Say so in one clause.","proposed":0}
+secretary todo_update [deadline_end_priority null] answered {"chain":"life","next":"This round holds words that are not the owner's own, so the write is a card they tap and nothing is on the chain until then. Say so in one clause.","proposed":0}
+secretary todo_update [deadline_end_priority mistyped] answered {"chain":"life","next":"This round holds words that are not the owner's own, so the write is a card they tap and nothing is on the chain until then. Say so in one clause.","proposed":0}
+secretary todo_update [deadline_end_priority garbled] answered {"chain":"life","next":"This round holds words that are not the owner's own, so the write is a card they tap and nothing is on the chain until then. Say so in one clause.","proposed":0}
+secretary todo_update [deadline_lead_up_weeks given] answered {"chain":"life","next":"This round holds words that are not the owner's own, so the write is a card they tap and nothing is on the chain until then. Say so in one clause.","proposed":0}
+secretary todo_update [deadline_lead_up_weeks null] answered {"chain":"life","next":"This round holds words that are not the owner's own, so the write is a card they tap and nothing is on the chain until then. Say so in one clause.","proposed":0}
+secretary todo_update [deadline_lead_up_weeks mistyped] answered {"chain":"life","next":"This round holds words that are not the owner's own, so the write is a card they tap and nothing is on the chain until then. Say so in one clause.","proposed":0}
+secretary todo_update [deadline_lead_up_weeks negative] answered {"chain":"life","next":"This round holds words that are not the owner's own, so the write is a card they tap and nothing is on the chain until then. Say so in one clause.","proposed":0}
+secretary todo_update [deadline_lead_up_weeks fractional] answered {"chain":"life","next":"This round holds words that are not the owner's own, so the write is a card they tap and nothing is on the chain until then. Say so in one clause.","proposed":0}
+secretary todo_update [deadline_start_date given] answered {"chain":"life","next":"This round holds words that are not the owner's own, so the write is a card they tap and nothing is on the chain until then. Say so in one clause.","proposed":0}
+secretary todo_update [deadline_start_date null] answered {"chain":"life","next":"This round holds words that are not the owner's own, so the write is a card they tap and nothing is on the chain until then. Say so in one clause.","proposed":0}
+secretary todo_update [deadline_start_date mistyped] answered {"chain":"life","next":"This round holds words that are not the owner's own, so the write is a card they tap and nothing is on the chain until then. Say so in one clause.","proposed":0}
+secretary todo_update [deadline_start_date garbled] answered {"chain":"life","next":"This round holds words that are not the owner's own, so the write is a card they tap and nothing is on the chain until then. Say so in one clause.","proposed":0}
+secretary todo_update [deadline_start_priority given] answered {"chain":"life","next":"This round holds words that are not the owner's own, so the write is a card they tap and nothing is on the chain until then. Say so in one clause.","proposed":0}
+secretary todo_update [deadline_start_priority null] answered {"chain":"life","next":"This round holds words that are not the owner's own, so the write is a card they tap and nothing is on the chain until then. Say so in one clause.","proposed":0}
+secretary todo_update [deadline_start_priority mistyped] answered {"chain":"life","next":"This round holds words that are not the owner's own, so the write is a card they tap and nothing is on the chain until then. Say so in one clause.","proposed":0}
+secretary todo_update [deadline_start_priority garbled] answered {"chain":"life","next":"This round holds words that are not the owner's own, so the write is a card they tap and nothing is on the chain until then. Say so in one clause.","proposed":0}
+secretary todo_update [detail given] answered {"chain":"life","next":"This round holds words that are not the owner's own, so the write is a card they tap and nothing is on the chain until then. Say so in one clause.","proposed":0}
+secretary todo_update [detail null] answered {"chain":"life","next":"This round holds words that are not the owner's own, so the write is a card they tap and nothing is on the chain until then. Say so in one clause.","proposed":0}
 secretary todo_update [detail mistyped] refused 400: invalid type: integer `7`, expected a string
-secretary todo_update [detail garbled] refused 500: event 1 of this changeset could not be appended (the chain could not be appended to: nothing is written) — 0 event(s) before it are on the chain
-secretary todo_update [detail_append given] refused 500: event 1 of this changeset could not be appended (the chain could not be appended to: nothing is written) — 0 event(s) before it are on the chain
-secretary todo_update [detail_append null] refused 500: event 1 of this changeset could not be appended (the chain could not be appended to: nothing is written) — 0 event(s) before it are on the chain
+secretary todo_update [detail garbled] answered {"chain":"life","next":"This round holds words that are not the owner's own, so the write is a card they tap and nothing is on the chain until then. Say so in one clause.","proposed":0}
+secretary todo_update [detail_append given] answered {"chain":"life","next":"This round holds words that are not the owner's own, so the write is a card they tap and nothing is on the chain until then. Say so in one clause.","proposed":0}
+secretary todo_update [detail_append null] answered {"chain":"life","next":"This round holds words that are not the owner's own, so the write is a card they tap and nothing is on the chain until then. Say so in one clause.","proposed":0}
 secretary todo_update [detail_append mistyped] refused 400: invalid type: integer `7`, expected a string
-secretary todo_update [detail_append garbled] refused 500: event 1 of this changeset could not be appended (the chain could not be appended to: nothing is written) — 0 event(s) before it are on the chain
+secretary todo_update [detail_append garbled] answered {"chain":"life","next":"This round holds words that are not the owner's own, so the write is a card they tap and nothing is on the chain until then. Say so in one clause.","proposed":0}
 secretary todo_update [periodic_every_days given] refused 400: `periodic_every_days` needs both ends of its cycle: `cycle_from_priority` and `cycle_to_priority`
-secretary todo_update [periodic_every_days null] refused 500: event 1 of this changeset could not be appended (the chain could not be appended to: nothing is written) — 0 event(s) before it are on the chain
+secretary todo_update [periodic_every_days null] answered {"chain":"life","next":"This round holds words that are not the owner's own, so the write is a card they tap and nothing is on the chain until then. Say so in one clause.","proposed":0}
 secretary todo_update [periodic_every_days mistyped] refused 400: invalid type: string "7", expected usize
 secretary todo_update [periodic_every_days negative] refused 400: invalid value: integer `-1`, expected usize
 secretary todo_update [periodic_every_days fractional] refused 400: invalid type: floating point `1.5`, expected usize
-secretary todo_update [priority given] refused 500: event 1 of this changeset could not be appended (the chain could not be appended to: nothing is written) — 0 event(s) before it are on the chain
-secretary todo_update [priority null] refused 500: event 1 of this changeset could not be appended (the chain could not be appended to: nothing is written) — 0 event(s) before it are on the chain
+secretary todo_update [priority given] answered {"chain":"life","next":"This round holds words that are not the owner's own, so the write is a card they tap and nothing is on the chain until then. Say so in one clause.","proposed":0}
+secretary todo_update [priority null] answered {"chain":"life","next":"This round holds words that are not the owner's own, so the write is a card they tap and nothing is on the chain until then. Say so in one clause.","proposed":0}
 secretary todo_update [priority mistyped] refused 400: invalid type: integer `7`, expected a string
 secretary todo_update [priority garbled] refused 400: priority must be a whole-number percentage like '65%', got '?'. It is a FULFILLMENT, so LOW means urgent.
-secretary todo_update [rationale given] refused 500: event 1 of this changeset could not be appended (the chain could not be appended to: nothing is written) — 0 event(s) before it are on the chain
+secretary todo_update [rationale given] answered {"chain":"life","next":"This round holds words that are not the owner's own, so the write is a card they tap and nothing is on the chain until then. Say so in one clause.","proposed":0}
 secretary todo_update [rationale null] refused 400: act 1 (update alpha) was refused, so nothing was appended: changing priority requires a rationale: the comment above the number is the only record of why, and leaving the old one in place beside a new number misrepresents it as reviewed
 secretary todo_update [rationale mistyped] refused 400: invalid type: integer `7`, expected a string
-secretary todo_update [rationale garbled] refused 500: event 1 of this changeset could not be appended (the chain could not be appended to: nothing is written) — 0 event(s) before it are on the chain
+secretary todo_update [rationale garbled] answered {"chain":"life","next":"This round holds words that are not the owner's own, so the write is a card they tap and nothing is on the chain until then. Say so in one clause.","proposed":0}
 secretary todo_update [recur_every_days given] refused 400: `recur_every_days` needs both ends of its cycle: `cycle_from_priority` and `cycle_to_priority`
-secretary todo_update [recur_every_days null] refused 500: event 1 of this changeset could not be appended (the chain could not be appended to: nothing is written) — 0 event(s) before it are on the chain
+secretary todo_update [recur_every_days null] answered {"chain":"life","next":"This round holds words that are not the owner's own, so the write is a card they tap and nothing is on the chain until then. Say so in one clause.","proposed":0}
 secretary todo_update [recur_every_days mistyped] refused 400: invalid type: string "7", expected usize
 secretary todo_update [recur_every_days negative] refused 400: invalid value: integer `-1`, expected usize
 secretary todo_update [recur_every_days fractional] refused 400: invalid type: floating point `1.5`, expected usize
+secretary todo_update [sources given] answered {"chain":"life","next":"This round holds words that are not the owner's own, so the write is a card they tap and nothing is on the chain until then. Say so in one clause.","proposed":0}
+secretary todo_update [sources null] refused 400: this round has read something that is not the owner's own words, so the write becomes a card they tap, and a card needs its reasons: sources must name at least one thing this rests on — a mail message, a thread, a todo, a briefing or an earlier proposal
+secretary todo_update [sources mistyped] refused 400: invalid type: integer `7`, expected a string
+secretary todo_update [sources garbled] refused 400: sources: a reference is todo:<chain>/<id>, mail:<hash>, thread:<id>, briefing:<YYYY-MM-DD>, proposal:<conversation>/<n>, batch:<chain>/<head>, round:<conversation>/<turn> or note:<conversation>/<turn>, got "?"
 secretary todo_update [todo_id missing] refused 400: todo_id is required
 secretary todo_update [todo_id null] refused 400: invalid type: unit value, expected a string
 secretary todo_update [todo_id mistyped] refused 400: invalid type: integer `7`, expected a string
 secretary todo_update [todo_id garbled] refused 404: act 1 (update ?) was refused, so nothing was appended: no todo with id '?' on the chain
-secretary todo_update [waiting_on given] refused 500: event 1 of this changeset could not be appended (the chain could not be appended to: nothing is written) — 0 event(s) before it are on the chain
-secretary todo_update [waiting_on null] refused 500: event 1 of this changeset could not be appended (the chain could not be appended to: nothing is written) — 0 event(s) before it are on the chain
+secretary todo_update [waiting_on given] answered {"chain":"life","next":"This round holds words that are not the owner's own, so the write is a card they tap and nothing is on the chain until then. Say so in one clause.","proposed":0}
+secretary todo_update [waiting_on null] answered {"chain":"life","next":"This round holds words that are not the owner's own, so the write is a card they tap and nothing is on the chain until then. Say so in one clause.","proposed":0}
 secretary todo_update [waiting_on mistyped] refused 400: invalid type: integer `7`, expected a string
-secretary todo_update [waiting_on garbled] refused 500: event 1 of this changeset could not be appended (the chain could not be appended to: nothing is written) — 0 event(s) before it are on the chain
+secretary todo_update [waiting_on garbled] answered {"chain":"life","next":"This round holds words that are not the owner's own, so the write is a card they tap and nothing is on the chain until then. Say so in one clause.","proposed":0}
+secretary todo_update [why given] answered {"chain":"life","next":"This round holds words that are not the owner's own, so the write is a card they tap and nothing is on the chain until then. Say so in one clause.","proposed":0}
+secretary todo_update [why null] refused 400: this round has read something that is not the owner's own words, so the write becomes a card they tap, and a card needs its reasons: why must say, in a sentence or two, what this is for and what led to it
+secretary todo_update [why mistyped] refused 400: invalid type: integer `7`, expected a string
+secretary todo_update [why garbled] answered {"chain":"life","next":"This round holds words that are not the owner's own, so the write is a card they tap and nothing is on the chain until then. Say so in one clause.","proposed":0}
 secretary todo_update [chain unknown] refused 404: no chain named 'nowhere' — this deployment serves life
 secretary todo_update [chain mistyped] refused 400: chain must be a string or null
-secretary todo_update [no price] refused 500: event 1 of this changeset could not be appended (the chain could not be appended to: nothing is written) — 0 event(s) before it are on the chain
+secretary todo_update [no price] refused 400: this round has read something that is not the owner's own words, so the write becomes a card they tap, and a card needs its reasons: why must say, in a sentence or two, what this is for and what led to it
 secretary todo_update [two prices] refused 400: a price is ONE of `priority`, `deadline_end_date`, `recur_every_days` or `periodic_every_days`: they are different prices and a todo holds one
-secretary todo_update [deadline] refused 500: event 1 of this changeset could not be appended (the chain could not be appended to: nothing is written) — 0 event(s) before it are on the chain
-secretary todo_update [deadline whole] refused 500: event 1 of this changeset could not be appended (the chain could not be appended to: nothing is written) — 0 event(s) before it are on the chain
+secretary todo_update [deadline] refused 400: this round has read something that is not the owner's own words, so the write becomes a card they tap, and a card needs its reasons: why must say, in a sentence or two, what this is for and what led to it
+secretary todo_update [deadline whole] refused 400: this round has read something that is not the owner's own words, so the write becomes a card they tap, and a card needs its reasons: why must say, in a sentence or two, what this is for and what led to it
 secretary todo_update [deadline start mistyped] refused 400: invalid type: integer `7`, expected a string
 secretary todo_update [deadline end garbled] refused 400: end_priority must be a whole-number percentage like '65%', got '5'. It is a FULFILLMENT, so LOW means urgent.
 secretary todo_update [deadline start date garbled] refused 400: start_date must be YYYY-MM-DD, got 'soon'
 secretary todo_update [deadline weeks mistyped] refused 400: invalid type: string "3", expected usize
 secretary todo_update [deadline weeks negative] refused 400: invalid value: integer `-3`, expected usize
-secretary todo_update [recur whole] refused 500: event 1 of this changeset could not be appended (the chain could not be appended to: nothing is written) — 0 event(s) before it are on the chain
+secretary todo_update [recur whole] refused 400: this round has read something that is not the owner's own words, so the write becomes a card they tap, and a card needs its reasons: why must say, in a sentence or two, what this is for and what led to it
 secretary todo_update [recur from mistyped] refused 400: invalid type: integer `9`, expected a string
 secretary todo_update [recur to missing] refused 400: `recur_every_days` needs both ends of its cycle: `cycle_from_priority` and `cycle_to_priority`
-secretary todo_update [periodic whole] refused 500: event 1 of this changeset could not be appended (the chain could not be appended to: nothing is written) — 0 event(s) before it are on the chain
+secretary todo_update [periodic whole] refused 400: this round has read something that is not the owner's own words, so the write becomes a card they tap, and a card needs its reasons: why must say, in a sentence or two, what this is for and what led to it
 secretary todo_update [cycle ends alone] refused 400: `cycle_from_priority` and `cycle_to_priority` shape a cycle: give `recur_every_days` or `periodic_every_days` with them
 secretary todo_update [cycle end mistyped alone] refused 400: invalid type: integer `3`, expected a string
-secretary todo_update [source whole] refused 500: event 1 of this changeset could not be appended (the chain could not be appended to: nothing is written) — 0 event(s) before it are on the chain
-secretary todo_update [source date garbled] refused 500: event 1 of this changeset could not be appended (the chain could not be appended to: nothing is written) — 0 event(s) before it are on the chain
-secretary todo_update [rationale alone] refused 500: event 1 of this changeset could not be appended (the chain could not be appended to: nothing is written) — 0 event(s) before it are on the chain
-secretary todo_update [detail both] refused 400: act 1 (update alpha) was refused, so nothing was appended: give at most one of detail or detail_append — a replace and an append cannot both land on one edit
-secretary record [valid] refused 500: event 1 of this changeset could not be appended (the chain could not be appended to: nothing is written) — 0 event(s) before it are on the chain
-secretary record [chain given] refused 500: event 1 of this changeset could not be appended (the chain could not be appended to: nothing is written) — 0 event(s) before it are on the chain
-secretary record [chain null] refused 500: event 1 of this changeset could not be appended (the chain could not be appended to: nothing is written) — 0 event(s) before it are on the chain
+secretary todo_update [source whole] refused 400: this round has read something that is not the owner's own words, so the write becomes a card they tap, and a card needs its reasons: why must say, in a sentence or two, what this is for and what led to it
+secretary todo_update [source date garbled] refused 400: this round has read something that is not the owner's own words, so the write becomes a card they tap, and a card needs its reasons: why must say, in a sentence or two, what this is for and what led to it
+secretary todo_update [rationale alone] refused 400: this round has read something that is not the owner's own words, so the write becomes a card they tap, and a card needs its reasons: why must say, in a sentence or two, what this is for and what led to it
+secretary todo_update [detail both] refused 400: this round has read something that is not the owner's own words, so the write becomes a card they tap, and a card needs its reasons: why must say, in a sentence or two, what this is for and what led to it
+secretary record [valid] answered {"chain":"life","next":"This round holds words that are not the owner's own, so the write is a card they tap and nothing is on the chain until then. Say so in one clause.","proposed":0}
+secretary record [chain given] answered {"chain":"life","next":"This round holds words that are not the owner's own, so the write is a card they tap and nothing is on the chain until then. Say so in one clause.","proposed":0}
+secretary record [chain null] answered {"chain":"life","next":"This round holds words that are not the owner's own, so the write is a card they tap and nothing is on the chain until then. Say so in one clause.","proposed":0}
 secretary record [chain mistyped] refused 400: chain must be a string or null
 secretary record [chain garbled] refused 404: no chain named '?' — this deployment serves life
 secretary record [kind missing] refused 400: kind is required
 secretary record [kind null] refused 400: invalid type: unit value, expected a string
 secretary record [kind mistyped] refused 400: invalid type: integer `7`, expected a string
 secretary record [kind garbled] refused 400: kind must be one of completed, cancelled, reopened or tended, got '?'
-secretary record [note given] refused 500: event 1 of this changeset could not be appended (the chain could not be appended to: nothing is written) — 0 event(s) before it are on the chain
-secretary record [note null] refused 500: event 1 of this changeset could not be appended (the chain could not be appended to: nothing is written) — 0 event(s) before it are on the chain
+secretary record [note given] answered {"chain":"life","next":"This round holds words that are not the owner's own, so the write is a card they tap and nothing is on the chain until then. Say so in one clause.","proposed":0}
+secretary record [note null] answered {"chain":"life","next":"This round holds words that are not the owner's own, so the write is a card they tap and nothing is on the chain until then. Say so in one clause.","proposed":0}
 secretary record [note mistyped] refused 400: invalid type: integer `7`, expected a string
-secretary record [note garbled] refused 500: event 1 of this changeset could not be appended (the chain could not be appended to: nothing is written) — 0 event(s) before it are on the chain
+secretary record [note garbled] answered {"chain":"life","next":"This round holds words that are not the owner's own, so the write is a card they tap and nothing is on the chain until then. Say so in one clause.","proposed":0}
+secretary record [sources given] answered {"chain":"life","next":"This round holds words that are not the owner's own, so the write is a card they tap and nothing is on the chain until then. Say so in one clause.","proposed":0}
+secretary record [sources null] refused 400: this round has read something that is not the owner's own words, so the write becomes a card they tap, and a card needs its reasons: sources must name at least one thing this rests on — a mail message, a thread, a todo, a briefing or an earlier proposal
+secretary record [sources mistyped] refused 400: invalid type: integer `7`, expected a string
+secretary record [sources garbled] refused 400: sources: a reference is todo:<chain>/<id>, mail:<hash>, thread:<id>, briefing:<YYYY-MM-DD>, proposal:<conversation>/<n>, batch:<chain>/<head>, round:<conversation>/<turn> or note:<conversation>/<turn>, got "?"
 secretary record [todo missing] refused 400: todo is required
 secretary record [todo null] refused 400: invalid type: unit value, expected a string
 secretary record [todo mistyped] refused 400: invalid type: integer `7`, expected a string
 secretary record [todo garbled] refused 404: act 1 (complete ?) was refused, so nothing was appended: unknown todo id '?' — no event on the chain mentions it
+secretary record [why given] answered {"chain":"life","next":"This round holds words that are not the owner's own, so the write is a card they tap and nothing is on the chain until then. Say so in one clause.","proposed":0}
+secretary record [why null] refused 400: this round has read something that is not the owner's own words, so the write becomes a card they tap, and a card needs its reasons: why must say, in a sentence or two, what this is for and what led to it
+secretary record [why mistyped] refused 400: invalid type: integer `7`, expected a string
+secretary record [why garbled] answered {"chain":"life","next":"This round holds words that are not the owner's own, so the write is a card they tap and nothing is on the chain until then. Say so in one clause.","proposed":0}
 secretary record [chain unknown] refused 404: no chain named 'nowhere' — this deployment serves life
 secretary record [chain mistyped] refused 400: chain must be a string or null
 secretary propose_email [valid] answered {"attachments":[],"cc":[],"held":[],"next":"The owner sees this with its exact text, its reason and its sources as links, and taps it, dismisses it with a reason, or leaves it. You cannot send it and there is no verb that can; do not offer to.","proposed":0,"sources":["todo:life/alpha"],"subject":"Hello","to":["c@d.test"],"why":"Because it matters."}
