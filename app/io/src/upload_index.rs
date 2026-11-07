@@ -7,7 +7,6 @@ use std::path::PathBuf;
 use serde::{Deserialize, Serialize};
 use suzatary_core::attachment::AttachmentId;
 use suzatary_core::capability::{IndexError, UploadIndex};
-use suzatary_core::enclosed::Enclosure;
 use suzatary_core::file_read::{FileRead, Withheld};
 use suzatary_core::held_value::HeldFile;
 use suzatary_core::held_value::{Masked, Placeholder};
@@ -125,19 +124,13 @@ impl UploadIndex for UploadIndexFiles {
         let source = HeldFile::Upload { id: id.clone() };
         Ok(match self.store.attachment(id)? {
             None => None,
-            Some(Stored::Here { attachment, bytes }) => {
-                let layer = match attachment.media_type {
-                    Enclosure::Pdf => Some(self.store.layer(&bytes).map_err(unread)?),
-                    Enclosure::Image(_) => None,
-                };
-                Some(FileRead::of(
-                    &source,
-                    &attachment.called(),
-                    attachment.media_type.as_str(),
-                    bytes,
-                    layer.as_deref(),
-                ))
-            }
+            Some(Stored::Here { attachment, bytes }) => Some(FileRead::of(
+                &source,
+                &attachment.called(),
+                attachment.media_type.as_str(),
+                bytes,
+                |pdf| self.store.layer(pdf).map_err(unread),
+            )?),
             // The owner kept it private because its text names a held number.
             Some(Stored::Private { attachment, copy }) => Some(FileRead::Withheld {
                 held: Placeholder::file(&source, &attachment.called(), copy.size),

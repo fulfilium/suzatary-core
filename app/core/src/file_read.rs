@@ -103,18 +103,23 @@ impl Readable {
 
 impl FileRead {
     /// Read `bytes`, the file `file` names and calls `name`, which its source calls `mime`.
-    /// `layer` is a PDF's text layer as `pdftotext` read it, a form feed ending each page; `None`
-    /// for anything else.
-    #[must_use]
-    pub fn of(
+    /// `layer` reads a PDF's text layer as `pdftotext` does, a form feed ending each page; it is
+    /// asked for every PDF and for nothing else, so no PDF skips the held-number check.
+    ///
+    /// # Errors
+    /// `layer`'s.
+    pub fn of<E>(
         file: &HeldFile,
         name: &str,
         mime: &str,
         bytes: Vec<u8>,
-        layer: Option<&str>,
-    ) -> Self {
-        match Enclosure::sniff(&bytes) {
-            Some(Enclosure::Pdf) => pdf(file, name, bytes, layer.unwrap_or_default()),
+        layer: impl FnOnce(&[u8]) -> Result<String, E>,
+    ) -> Result<Self, E> {
+        Ok(match Enclosure::sniff(&bytes) {
+            Some(Enclosure::Pdf) => {
+                let layer = layer(&bytes)?;
+                pdf(file, name, bytes, &layer)
+            }
             Some(Enclosure::Image(media)) if bytes.len() > crate::attachment::MAX_BYTES => {
                 FileRead::Unsupported {
                     what: format!(
@@ -130,7 +135,8 @@ impl FileRead {
                 text: redact(""),
             }),
             None if mime.starts_with("text/") => {
-                let (text, truncated) = Masked::of(file, &words(&bytes, None)).clipped(MAX_CHARS);
+                let (text, truncated) =
+                    Masked::of(file, &String::from_utf8_lossy(&bytes)).clipped(MAX_CHARS);
                 FileRead::Text { text, truncated }
             }
             None => FileRead::Unsupported {
@@ -140,25 +146,35 @@ impl FileRead {
                     mime.to_owned()
                 },
             },
-        }
+        })
     }
 }
 
 /// A file's whole words, which a read masks before it cuts them, so a number across the cut is
 /// found: a PDF's text layer, nothing of an image, and anything else's bytes as text.
-fn words(bytes: &[u8], layer: Option<&str>) -> String {
-    match Enclosure::sniff(bytes) {
-        Some(Enclosure::Pdf) => layer.unwrap_or_default().to_owned(),
+fn words<E>(bytes: &[u8], layer: impl FnOnce(&[u8]) -> Result<String, E>) -> Result<String, E> {
+    Ok(match Enclosure::sniff(bytes) {
+        Some(Enclosure::Pdf) => layer(bytes)?,
         Some(Enclosure::Image(_)) => String::new(),
         None => String::from_utf8_lossy(bytes).into_owned(),
-    }
+    })
 }
 
 /// The held numbers of a file's words as [`FileRead::of`] masked them, in the order a
 /// placeholder's handle counts them.
-#[must_use]
-pub fn values(bytes: &[u8], layer: Option<&str>) -> Values {
-    Values::of([words(bytes, layer).as_str()])
+///
+/// # Errors
+/// `layer`'s.
+pub fn values<E>(
+    bytes: &[u8],
+    layer: impl FnOnce(&[u8]) -> Result<String, E>,
+) -> Result<Values, E> {
+    Ok(Values::of([words(bytes, layer)?.as_str()]))
+}
+
+/// A text layer already read, for a fixture.
+pub fn read(text: &str) -> impl FnOnce(&[u8]) -> Result<String, std::convert::Infallible> + '_ {
+    move |_| Ok(text.to_owned())
 }
 
 fn pdf(file: &HeldFile, name: &str, bytes: Vec<u8>, layer: &str) -> FileRead {
@@ -204,6 +220,11 @@ mod tests {
 
     const PDF: &[u8] = b"%PDF-1.7\n%%EOF\n";
 
+    fn of(file: &HeldFile, name: &str, mime: &str, bytes: Vec<u8>, layer: &str) -> FileRead {
+        let Ok(opened) = FileRead::of(file, name, mime, bytes, read(layer));
+        opened
+    }
+
     fn notice() -> HeldFile {
         HeldFile::Mail {
             message: "m1@example.test".to_owned(),
@@ -216,13 +237,7 @@ mod tests {
         let layer = "Employee SSN: 123-45-6789. Wages: 70,000.\u{c}";
         let FileRead::Withheld {
             held, text, why, ..
-        } = FileRead::of(
-            &notice(),
-            "w2.pdf",
-            "application/pdf",
-            PDF.to_vec(),
-            Some(layer),
-        )
+        } = of(&notice(), "w2.pdf", "application/pdf", PDF.to_vec(), layer)
         else {
             panic!("withheld");
         };
@@ -240,7 +255,9 @@ mod tests {
         );
         assert_eq!(why, Withheld::HeldNumber);
         assert_eq!(
-            values(PDF, Some(layer)).get(0),
+            values(PDF, read(layer))
+                .unwrap_or_else(|never| match never {})
+                .get(0),
             Some((crate::redact::Kind::Ssn, "123-45-6789"))
         );
     }
@@ -258,13 +275,7 @@ mod tests {
             truncated,
             why,
             ..
-        } = FileRead::of(
-            &notice(),
-            "w2.pdf",
-            "application/pdf",
-            PDF.to_vec(),
-            Some(&layer),
-        )
+        } = of(&notice(), "w2.pdf", "application/pdf", PDF.to_vec(), &layer)
         else {
             panic!("withheld");
         };
@@ -279,19 +290,13 @@ mod tests {
     fn a_number_across_the_cut_is_masked_whole() {
         let words = format!("{}SSN 123-45-6789 ok", "x".repeat(MAX_CHARS - 9));
         for read in [
-            FileRead::of(
-                &notice(),
-                "w2.pdf",
-                "application/pdf",
-                PDF.to_vec(),
-                Some(&words),
-            ),
-            FileRead::of(
+            of(&notice(), "w2.pdf", "application/pdf", PDF.to_vec(), &words),
+            of(
                 &notice(),
                 "w2.txt",
                 "text/plain",
                 words.clone().into_bytes(),
-                None,
+                "",
             ),
         ] {
             let (FileRead::Withheld { text, .. } | FileRead::Text { text, .. }) = read else {
@@ -301,7 +306,9 @@ mod tests {
             assert!(!tail.contains("123") && !tail.contains("45-"), "{tail}");
         }
         assert_eq!(
-            values(PDF, Some(&words)).get(0),
+            values(PDF, read(&words))
+                .unwrap_or_else(|never| match never {})
+                .get(0),
             Some((crate::redact::Kind::Ssn, "123-45-6789"))
         );
     }
@@ -309,16 +316,16 @@ mod tests {
     #[test]
     fn text_is_text_and_anything_else_is_named() {
         assert!(matches!(
-            FileRead::of(&notice(), "a.txt", "text/plain", b"SSN: 123-45-6789".to_vec(), None),
+            of(&notice(), "a.txt", "text/plain", b"SSN: 123-45-6789".to_vec(), ""),
             FileRead::Text { text, .. } if text.as_str().starts_with("SSN: [SSN ending 6789 · tap to show · held:file:")
         ));
         assert_eq!(
-            FileRead::of(
+            of(
                 &notice(),
                 "a.zip",
                 "application/zip",
                 b"PK\x03\x04".to_vec(),
-                None
+                ""
             ),
             FileRead::Unsupported {
                 what: "application/zip".to_owned()
@@ -326,12 +333,12 @@ mod tests {
         );
         assert!(
             matches!(
-                FileRead::of(
+                of(
                     &notice(),
                     "a.pdf",
                     "application/pdf",
                     b"<html>".to_vec(),
-                    None
+                    ""
                 ),
                 FileRead::Unsupported { .. }
             ),

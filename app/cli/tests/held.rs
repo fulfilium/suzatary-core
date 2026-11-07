@@ -329,12 +329,12 @@ fn w2_mailbox() -> common::FakeMailbox {
             .with_attachment_read(
                 id,
                 "w2.pdf",
-                suzatary_core::file_read::FileRead::of(
+                common::file_read(
                     &attached(id),
                     "w2.pdf",
                     "application/pdf",
                     W2.to_vec(),
-                    Some(&w2_layer()),
+                    &w2_layer(),
                 ),
             )
             .with_attachment_file(

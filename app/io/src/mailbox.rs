@@ -885,11 +885,7 @@ pub(crate) fn read_of(
     content: Vec<u8>,
     pdftotext: &crate::pdftotext::Pdftotext,
 ) -> Result<FileRead, String> {
-    let layer = match Enclosure::sniff(&content) {
-        Some(Enclosure::Pdf) => Some(pdftotext.text(&content)?),
-        Some(Enclosure::Image(_)) | None => None,
-    };
-    Ok(FileRead::of(file, name, mime, content, layer.as_deref()))
+    FileRead::of(file, name, mime, content, |pdf| pdftotext.text(pdf))
 }
 
 /// A maildir indexed by the real notmuch, for the tests of this module and of the corpus.

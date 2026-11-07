@@ -97,19 +97,18 @@ impl AttachmentStore {
     /// to a model as itself.
     pub fn put(&self, bytes: &[u8]) -> Result<Attachment, UploadError> {
         let attachment = Attachment::accept(bytes)?;
-        if attachment.media_type == Enclosure::Pdf {
-            let layer = self.pdftotext.text(bytes).map_err(UploadError::Unread)?;
-            if let FileRead::Withheld { why, .. } = FileRead::of(
+        if attachment.media_type == Enclosure::Pdf
+            && let FileRead::Withheld { why, .. } = FileRead::of(
                 &HeldFile::Upload {
                     id: attachment.id.clone(),
                 },
                 &attachment.called(),
                 Enclosure::Pdf.as_str(),
                 bytes.to_vec(),
-                Some(&layer),
-            ) {
-                return Err(UploadError::Withheld(why));
-            }
+                |pdf| self.pdftotext.text(pdf).map_err(UploadError::Unread),
+            )?
+        {
+            return Err(UploadError::Withheld(why));
         }
         self.files.put(bytes)?;
         Ok(attachment)
@@ -126,7 +125,6 @@ impl AttachmentStore {
         let attachment = Attachment::accept(bytes)?.named(name)?;
         let text = match attachment.media_type {
             Enclosure::Pdf => {
-                let layer = self.pdftotext.text(bytes).map_err(UploadError::Unread)?;
                 match FileRead::of(
                     &HeldFile::Upload {
                         id: attachment.id.clone(),
@@ -134,8 +132,8 @@ impl AttachmentStore {
                     &attachment.called(),
                     Enclosure::Pdf.as_str(),
                     bytes.to_vec(),
-                    Some(&layer),
-                ) {
+                    |pdf| self.pdftotext.text(pdf).map_err(UploadError::Unread),
+                )? {
                     FileRead::File(readable) => readable.text().as_str().to_owned(),
                     FileRead::Text { text, .. } | FileRead::Withheld { text, .. } => {
                         text.into_string()

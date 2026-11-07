@@ -41,15 +41,14 @@ impl UploadStanding {
                 media: Enclosure::Pdf,
                 bytes,
             }) => {
-                let layer = layer(&bytes)?;
                 Ok(
                     match FileRead::of(
                         &crate::held_value::HeldFile::Upload { id: id.clone() },
                         "file.pdf",
                         Enclosure::Pdf.as_str(),
                         bytes,
-                        Some(&layer),
-                    ) {
+                        layer,
+                    )? {
                         FileRead::File(readable) => {
                             Self::Indexed(readable.text().as_str().to_owned())
                         }

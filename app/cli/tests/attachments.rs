@@ -8,7 +8,6 @@ use std::sync::Arc;
 use common::{FakeMailbox, FakeModel, Fakes};
 use suzatary_core::capability::Turn;
 use suzatary_core::enclosed::Enclosure;
-use suzatary_core::file_read::FileRead;
 use suzatary_core::mail::AttachmentMeta;
 
 const PDF: &[u8] = b"%PDF-1.7\n1 0 obj << /Type /Catalog >> endobj\n%%EOF\n";
@@ -115,12 +114,12 @@ fn attachments_lists_then_reads_a_named_one() {
         .with_attachment_read(
             "offer-msg",
             "offer.pdf",
-            FileRead::of(
+            common::file_read(
                 &mail("offer-msg", "offer.pdf"),
                 "offer.pdf",
                 "application/pdf",
                 PDF.to_vec(),
-                Some("Base salary: USD 70,000 per year.\u{c}"),
+                "Base salary: USD 70,000 per year.\u{c}",
             ),
         );
     let fakes = Fakes::new("attachments-read")
@@ -206,23 +205,23 @@ fn an_image_is_handed_over_and_an_unsupported_attachment_is_refused_naming_the_t
         .with_attachment_read(
             "photo-msg",
             "scan.jpg",
-            FileRead::of(
+            common::file_read(
                 &mail("photo-msg", "scan.jpg"),
                 "scan.jpg",
                 "image/jpeg",
                 jpeg.clone(),
-                None,
+                "",
             ),
         )
         .with_attachment_read(
             "photo-msg",
             "form.docx",
-            FileRead::of(
+            common::file_read(
                 &mail("photo-msg", "form.docx"),
                 "form.docx",
                 "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
                 b"PK\x03\x04".to_vec(),
-                None,
+                "",
             ),
         );
     let fakes = Fakes::new("attachments-unsupported")
@@ -276,12 +275,12 @@ fn an_ssn_in_an_attachment_arrives_as_placeholders_naming_the_file() {
         .with_attachment_read(
             "w2-msg",
             "w2.pdf",
-            FileRead::of(
+            common::file_read(
                 &mail("w2-msg", "w2.pdf"),
                 "w2.pdf",
                 "application/pdf",
                 PDF.to_vec(),
-                Some("Employee SSN: 123-45-6789. Wages: 70,000. Receipt IOE0912345678.\u{c}"),
+                "Employee SSN: 123-45-6789. Wages: 70,000. Receipt IOE0912345678.\u{c}",
             ),
         );
     let fakes = Fakes::new("attachments-redacted")

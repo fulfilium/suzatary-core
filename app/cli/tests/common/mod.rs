@@ -4334,3 +4334,21 @@ pub fn asked(fakes: &Fakes, conversation: &str, act: suzatary_core::secretary::a
     )
     .expect("filed");
 }
+
+/// A file read for the model, a PDF with `layer` as its text.
+pub fn file_read(
+    file: &suzatary_core::held_value::HeldFile,
+    name: &str,
+    mime: &str,
+    bytes: Vec<u8>,
+    layer: &str,
+) -> suzatary_core::file_read::FileRead {
+    let Ok(read) = suzatary_core::file_read::FileRead::of(
+        file,
+        name,
+        mime,
+        bytes,
+        suzatary_core::file_read::read(layer),
+    );
+    read
+}

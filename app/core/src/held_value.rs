@@ -13,7 +13,6 @@ use base64::Engine as _;
 use regex::Regex;
 use serde_json::Value;
 
-use crate::enclosed::Enclosure;
 pub use crate::held_file::HeldFile;
 use crate::redact::{Kind, identity_numbers};
 
@@ -883,13 +882,11 @@ impl Holders<'_> {
                 let Some(Opened { bytes, .. }) = self.files.open(file).map_err(Unreadable)? else {
                     return Ok(None);
                 };
-                let layer = match Enclosure::sniff(&bytes) {
-                    Some(Enclosure::Pdf) => Some(self.files.layer(&bytes).map_err(Unreadable)?),
-                    Some(Enclosure::Image(_)) | None => None,
-                };
-                Ok(crate::file_read::values(&bytes, layer.as_deref())
-                    .get(place.ordinal())
-                    .map(|(kind, value)| Shown::new(kind, value)))
+                Ok(crate::file_read::values(&bytes, |pdf| {
+                    self.files.layer(pdf).map_err(Unreadable)
+                })?
+                .get(place.ordinal())
+                .map(|(kind, value)| Shown::new(kind, value)))
             }
         }
     }
