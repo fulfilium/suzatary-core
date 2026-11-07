@@ -82,11 +82,8 @@ pub fn operator(instance: &Instance) -> Operator {
     crate::wiring::Ground::of(instance).operator(instance.code(), instance.persona.zone)
 }
 
-/// `suzatary sync`: pull every account, reindex, re-tag (which rings each open watch the corpus
-/// now holds a match for), then push each ring not yet delivered.
-///
-/// The sync keeps its report in the state directory (`Paths::last_sync`) and prints it to stdout,
-/// progress to stderr.
+/// `suzatary sync`: pull every account, reindex, re-tag (which rings each matched watch), then
+/// push each ring not yet delivered. The report goes to `Paths::last_sync` and stdout.
 pub fn sync(path: &Path) -> anyhow::Result<()> {
     let instance = Instance::open(path)?;
     let synced = operator(&instance).sync();
@@ -356,13 +353,18 @@ fn authorise(instance: &Instance, email: &str, scope: &str) -> anyhow::Result<()
     emit(&serde_json::json!({
         "authorised": account.email,
         "scope": scope,
-        "granted": store.granted(account),
+        "granted": store.granted(account)?,
     }))
 }
 
 /// Which accounts can sync and which can send, read off the token store for `doctor`.
 #[must_use]
-pub fn grants(instance: &Instance) -> Vec<(String, Vec<&'static str>)> {
+pub fn grants(
+    instance: &Instance,
+) -> Vec<(
+    String,
+    Result<Vec<&'static str>, suzatary_core::mail::oauth::OauthError>,
+)> {
     let store = tokens(instance);
     instance
         .mail
@@ -652,9 +654,8 @@ fn log(scope: &str, message: &str) {
 /// `suzatary mail idle`: one read-only IMAP session per Microsoft account, blocking on
 /// `IDLE`, and the debounce they wake.
 ///
-/// Every thread runs forever, so the first to end, a panic included, ends the process with an
-/// error and systemd restarts the whole watch: a watch missing one account is a failure, never
-/// a quieter success.
+/// Every thread runs forever, so the first to end ends the process with an error, and systemd
+/// restarts the whole watch.
 fn idle_run(instance: &Instance) -> anyhow::Result<()> {
     let roster = &instance.mail.accounts;
     let accounts: Vec<(AccountName, MailAccount)> = roster
@@ -705,9 +706,8 @@ fn idle_run(instance: &Instance) -> anyhow::Result<()> {
 
 type Job = Box<dyn FnOnce() + Send>;
 
-/// Run each named job on its own thread and answer the name of the first to end, by returning
-/// or by a panic's unwind; `None` when there are none. The rest keep running until the process
-/// ends.
+/// Run each named job on its own thread and answer the name of the first to end, a panic
+/// included; `None` when there are none.
 fn first_to_end(jobs: Vec<(String, Job)>) -> Option<String> {
     /// Sends its job's name when dropped, which the unwind of a panic does too.
     struct Ends(mpsc::Sender<String>, String);

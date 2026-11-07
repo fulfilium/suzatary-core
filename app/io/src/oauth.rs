@@ -30,8 +30,7 @@ const REQUEST_TIMEOUT: Duration = Duration::from_secs(30);
 /// Bumped only if the file's shape changes; never read back as a decision.
 const STORE_VERSION: u32 = 1;
 
-/// A 4xx is an answer, not an error: the device flow answers 400 `authorization_pending`
-/// for most of a normal flow, and the state machine decides what that means.
+/// A 4xx is an answer, not an error: the state machine reads 400 `authorization_pending`.
 pub(crate) fn post(http: &dyn Http, request: &FormPost) -> Result<Answered, OauthError> {
     let unreadable = |why: String| OauthError::Unreadable { step: "http", why };
     let fields: Vec<(&str, &str)> = request
@@ -163,8 +162,17 @@ impl TokenStore {
         self.dir.join(format!("{}.json", account.slug()))
     }
 
-    /// `None` when never written; a file that will not parse is an error rather than "no
-    /// grant", so a bug here is not mistaken for a missing sign-in.
+    /// Held across every rewrite of the account's file.
+    fn hold(&self, account: &MailAccount) -> Result<crate::durable::Held, OauthError> {
+        crate::durable::hold(&self.dir.join(format!("{}.lock", account.slug()))).map_err(|error| {
+            OauthError::Unreadable {
+                step: "stored grant",
+                why: error.to_string(),
+            }
+        })
+    }
+
+    /// `None` when never written; a file that will not parse is an error, never "no grant".
     fn read_grants(&self, account: &MailAccount) -> Result<Option<StoredFile>, OauthError> {
         let unreadable = |why: String| OauthError::Unreadable {
             step: "stored grant",
@@ -187,6 +195,7 @@ impl TokenStore {
         refresh: &Secret,
         writing: Writing,
     ) -> Result<(), OauthError> {
+        let _held = self.hold(account)?;
         let held = self.read_grants(account)?;
         if held.is_none() && writing == Writing::Rotated {
             return Err(OauthError::Unreadable {
@@ -255,8 +264,7 @@ impl TokenStore {
         }
     }
 
-    /// Request a device code; `Pending::finish` is the blocking rest, so a caller can record the
-    /// code's expiry before the poll loop starts.
+    /// Request a device code; `Pending::finish` is the blocking rest.
     ///
     /// # Errors
     /// [`OauthError::NotMicrosoft`] for an account with no Microsoft
@@ -287,8 +295,7 @@ impl TokenStore {
         ))
     }
 
-    /// Run the device-code flow for this protocol and store the grant. `announce` receives the
-    /// code once; `wait` sleeps between polls.
+    /// Run the device-code flow for this protocol and store the grant.
     ///
     /// # Errors
     /// Any error of `begin_device_flow` or `Pending::finish`.
@@ -304,8 +311,7 @@ impl TokenStore {
         pending.finish(wait)
     }
 
-    /// Delete every grant this account holds, reading and sending alike, since one file holds
-    /// both.
+    /// Delete every grant this account holds, reading and sending alike.
     ///
     /// # Errors
     /// [`OauthError::Unreadable`] when the file is there and could not be deleted.
@@ -314,15 +320,17 @@ impl TokenStore {
             step: "stored grant",
             why: error.to_string(),
         };
+        let _held = self.hold(account)?;
         crate::durable::remove(&self.path(account)).map_err(unreadable)
     }
 
-    /// Which protocols this account holds a grant for, sorted; offline, so it says nothing
-    /// about whether a grant still refreshes.
-    #[must_use]
-    pub fn granted(&self, account: &MailAccount) -> Vec<&'static str> {
-        let Ok(Some(stored)) = self.read_grants(account) else {
-            return Vec::new();
+    /// Which protocols this account holds a grant for, sorted, read offline.
+    ///
+    /// # Errors
+    /// [`OauthError::Unreadable`] for a grant file that will not read.
+    pub fn granted(&self, account: &MailAccount) -> Result<Vec<&'static str>, OauthError> {
+        let Some(stored) = self.read_grants(account)? else {
+            return Ok(Vec::new());
         };
         let mut slots = Vec::new();
         if stored.grants.contains_key(Imap::SLOT) {
@@ -332,12 +340,11 @@ impl TokenStore {
             slots.push(Smtp::SLOT);
         }
         slots.sort_unstable();
-        slots
+        Ok(slots)
     }
 }
 
-/// A device flow whose code has been issued, waiting to be polled to completion; it owns its
-/// store and account so the poll can run on a thread the caller spawns.
+/// A device flow whose code has been issued, waiting to be polled to completion.
 #[derive(Debug)]
 pub struct Pending<P: Protocol> {
     store: TokenStore,
@@ -472,7 +479,7 @@ mod tests {
             )
             .expect("writes");
         assert_eq!(store.revoke(&account).ok(), Some(true));
-        assert!(store.granted(&account).is_empty());
+        assert!(store.granted(&account).expect("reads").is_empty());
         assert!(
             store
                 .write_grant::<Imap>(
@@ -492,7 +499,7 @@ mod tests {
                 Writing::Granted,
             )
             .expect("a new sign-in writes");
-        assert_eq!(store.granted(&account), ["imap"]);
+        assert_eq!(store.granted(&account).expect("reads"), ["imap"]);
     }
 
     #[test]

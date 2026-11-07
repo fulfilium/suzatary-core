@@ -129,7 +129,11 @@ impl suzatary_core::capability::Secrets for Declared {
                 smtp: false,
             },
             Sync::MsImap(_) | Sync::Gmail | Sync::Proton(_) => {
-                let held = self.tokens.granted(account);
+                let held = self
+                    .tokens
+                    .granted(account)
+                    .inspect_err(|failed| tracing::warn!("grants of {}: {failed}", account.email))
+                    .unwrap_or_default();
                 suzatary_core::capability::MailGrants {
                     imap: held.contains(&"imap"),
                     smtp: held.contains(&"smtp"),
@@ -156,8 +160,8 @@ impl suzatary_core::capability::Secrets for Declared {
     }
 }
 
-/// One test call before the model's token is kept, with the value given and never the stored
-/// one, its result joined into the model health.
+/// One test call before the model's token is kept, with the value given, its result joined into
+/// the model health.
 pub enum Verifying {
     Real {
         instance: Arc<Instance>,
@@ -183,10 +187,9 @@ fn probe(cli: &suzatary_io::model::ClaudeCli) -> Result<(), ModelError> {
     cli.turn(&asked, &serde_json::json!([])).map(|_| ())
 }
 
-/// Join one call of `model` into `answered`. Only a refused credential and a limit are joined
-/// as failures (a limit under the shared [`suzatary_core::capability::SUBSCRIPTION`]): a
-/// timeout, overload, outage, halt or lost session says nothing of whether the model answers
-/// this box. A register that cannot be written is only logged.
+/// Join one call of `model` into `answered`. Only a refused credential and a limit (under the
+/// shared [`suzatary_core::capability::SUBSCRIPTION`]) are joined as failures; a register that
+/// cannot be written is only logged.
 pub fn answered_by(
     answered: &suzatary_io::model_health::Answered,
     model: &str,
@@ -308,10 +311,8 @@ impl suzatary_core::settings::Verify for Verifying {
     }
 }
 
-/// Whether the subscription has room above the reserve.
-///
-/// `RateLimited` and `Refused` are the endpoint refusing to answer, not the subscription being
-/// full: the first is judged by its remembered reading, and either with none counts as room.
+/// Whether the subscription has room above the reserve. `RateLimited` and `Refused` are the
+/// endpoint refusing, not the subscription full: either with no remembered reading is room.
 fn subscription_has_room(allowance: &suzatary_core::usage::Allowance, reserve: Reserve) -> bool {
     let reserve = reserve.get();
     match allowance {
@@ -351,10 +352,8 @@ pub fn cli_of(
         .with_files(file_store(instance))
 }
 
-/// The web as the secretary may read it.
-///
-/// Allow rules are reread from the instance file on every ask; a file that no longer reads
-/// allows nothing.
+/// The web as the secretary may read it, by allow rules reread on every ask (none while the
+/// instance file does not read).
 #[derive(Debug, Clone)]
 pub struct WebAccess {
     fetcher: suzatary_io::web::Fetcher,
@@ -386,10 +385,8 @@ impl suzatary_core::capability::Web for WebAccess {
     }
 }
 
-/// The owner's Drive as the secretary may read it.
-///
-/// `[secretary] drive_allow` is reread on every ask; a file that no longer reads allows
-/// nothing.
+/// The owner's Drive as the secretary may read it, by `[secretary] drive_allow` reread on every
+/// ask (none while the instance file does not read).
 #[derive(Debug, Clone)]
 pub struct DriveAccess {
     drive: suzatary_io::drive::ReadOnly,

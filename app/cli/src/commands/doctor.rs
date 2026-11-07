@@ -203,10 +203,12 @@ fn deployment(path: &Path) {
             println!("  last sync {}", read.paths.last_sync.display());
             println!("  grants    {}", read.paths.oauth.display());
             for (email, held) in super::mail::grants(&read) {
-                let says = if held.is_empty() {
-                    "none — run `suzatary auth <email>` at a terminal".to_owned()
-                } else {
-                    held.join(", ")
+                let says = match held {
+                    Ok(held) if held.is_empty() => {
+                        "none — run `suzatary auth <email>` at a terminal".to_owned()
+                    }
+                    Ok(held) => held.join(", "),
+                    Err(failed) => format!("unreadable: {failed}"),
                 };
                 println!("    {email:<28} {says}");
             }
