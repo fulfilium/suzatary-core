@@ -1363,6 +1363,7 @@ impl suzatary_core::capability::SessionModel for Simulated {
 
     fn resume(
         &self,
+        _: &str,
         session: &suzatary_core::capability::Session,
         delta: &suzatary_core::capability::Delta,
         _: &serde_json::Value,

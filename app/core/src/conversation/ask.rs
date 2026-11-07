@@ -269,7 +269,7 @@ fn sessioned(
     // A session resumed is told only what moved in the memory since it last was.
     let told = heading(memories, Telling::Resumed(stored.memory_seen));
     let delta = waiting.delta(told.turn);
-    match model.resume(session, &delta, tools, sink.on_delta, sink.halt) {
+    match model.resume(system, session, &delta, tools, sink.on_delta, sink.halt) {
         Ok(sessioned) => Ok(Asked {
             reply: sessioned.reply,
             answered: Answered::Resumed(delta),

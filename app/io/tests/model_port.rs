@@ -55,9 +55,9 @@ impl Rig for Scripts {
             &at,
             "claude",
             &format!(
-                "#!/bin/sh\ncat > {}\ncat {}\n",
-                heard.display(),
-                answer.display()
+                "#!/bin/sh\nprintf '%s\\n' \"$@\" > {heard}\ncat >> {heard}\ncat {}\n",
+                answer.display(),
+                heard = heard.display()
             ),
         );
         made.1 = Some(heard);
@@ -68,7 +68,7 @@ impl Rig for Scripts {
         ClaudeCli::new("a-model", Self::fence()).with_binary("/nonexistent/claude")
     }
 
-    /// Everything that went down stdin: what the far end read.
+    /// Its arguments, the system prompt among them, then everything that went down stdin.
     fn heard(&self, _model: &ClaudeCli) -> String {
         let heard = self
             .made

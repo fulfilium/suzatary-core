@@ -426,6 +426,7 @@ pub trait SessionModel: Model {
     /// [`ModelError::Lost`] when the CLI no longer knows the session, else as for `open`.
     fn resume(
         &self,
+        system: &str,
         session: &Session,
         delta: &Delta,
         tools: &serde_json::Value,

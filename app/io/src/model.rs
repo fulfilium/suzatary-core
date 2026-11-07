@@ -1,10 +1,8 @@
 //! The `claude` CLI as a [`Model`] and a [`SessionModel`].
 //!
-//! It is given no tools: the secretary's verbs are dispatched on this side of
-//! the trait, so `--tools ""`, `--strict-mcp-config` with no config and a
-//! `--settings` [`Fence`] that denies every tool keep the account's own servers
-//! (a mail sender among them) and the box's files out of reach of a prompt that
-//! carries other people's mail. None of the three is optional.
+//! It is given no tools: `--tools ""`, `--strict-mcp-config` with no config and a deny-all
+//! `--settings` [`Fence`] keep the account's own servers (a mail sender among them) and the
+//! box's files out of reach of a prompt that carries other people's mail. All three are needed.
 
 pub mod failure;
 pub mod stream;
@@ -47,10 +45,8 @@ const CACHE_TTL_VAR: &str = "CLAUDE_CODE_PROMPT_CACHE_TTL";
 /// Where the CLI reads its user configuration: settings, a user-level `CLAUDE.md`, credentials.
 const CONFIG_DIR_VAR: &str = "CLAUDE_CONFIG_DIR";
 
-/// The settings file every call is fenced by: a deny-all the code root ships
-/// (`.claude/secretary-settings.json`), named by the instance. There is no
-/// `ClaudeCli` without one, and a call whose file is gone is refused rather
-/// than run under the box user's own `~/.claude` rules.
+/// The deny-all settings every call is fenced by (`.claude/secretary-settings.json`); a call
+/// whose file is gone is refused, never run under the box user's own rules.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Fence(PathBuf);
 
@@ -149,18 +145,16 @@ impl ClaudeCli {
         self
     }
 
-    /// Read the CLI's user configuration from `config` rather than the box user's: kept empty,
-    /// no user-level `CLAUDE.md` or settings reach the call, and the token is its only
-    /// credential.
+    /// Read the CLI's user configuration from the empty `config`, so no user-level `CLAUDE.md`
+    /// or setting reaches the call.
     #[must_use]
     pub fn with_config_dir(mut self, config: PathBuf) -> Self {
         self.config = Some(config);
         self
     }
 
-    /// The setup token, as `token` answers before each call: the box's own credentials when
-    /// the store holds none, and the call refused, saying why, when the store could not
-    /// answer, so a locked store never runs the model under credentials nobody chose.
+    /// The setup token `token` answers before each call; a store that cannot answer refuses
+    /// the call, so a locked store never runs the model under credentials nobody chose.
     #[must_use]
     pub fn with_token(mut self, token: TokenSource) -> Self {
         self.token = token;
@@ -290,20 +284,23 @@ impl Model for ClaudeCli {
         conversation: &Conversation,
         tools: &serde_json::Value,
     ) -> Result<Reply, ModelError> {
-        let (stdin, token) = self.feed(
-            prompt_of(conversation, tools, crate::prompt::Reads::Files).joined(),
-            &conversation.turns,
-        )?;
-        let ended = self.ended(&self.command(Mode::Stateless, stdin, token.as_ref()))?;
+        let prompt = prompt_of(conversation, tools, crate::prompt::Reads::Files);
+        let (stdin, token) = self.feed(prompt.user, &conversation.turns)?;
+        let ended = self.ended(&self.command(
+            Mode::Stateless {
+                system: &prompt.system,
+            },
+            stdin,
+            token.as_ref(),
+        ))?;
         let usage = ended.usage.map(TokenUsage::from);
         Ok(Reply::parse(&reply_of(ended)?).with_usage(usage))
     }
 }
 
 impl ClaudeCli {
-    /// `text` down stdin as it stands, under `system` as the whole system prompt, with no
-    /// tools, no session and none of the secretary's framing; the answer's text as said. Run it
-    /// from an empty directory under an empty configuration, so no `CLAUDE.md` is found.
+    /// `text` down stdin under `system`, with no session and none of the secretary's framing;
+    /// run it from an empty directory and configuration, so no `CLAUDE.md` is found.
     ///
     /// # Errors
     /// [`ModelError`] when the CLI could not be run, failed, printed no result or one this box
@@ -372,18 +369,24 @@ impl SessionModel for ClaudeCli {
         tools: &serde_json::Value,
         halt: &Halt,
     ) -> Result<Sessioned, ModelError> {
-        let (stdin, token) = self.feed(
-            prompt_of(conversation, tools, crate::prompt::Reads::Files).joined(),
-            &conversation.turns,
-        )?;
+        let prompt = prompt_of(conversation, tools, crate::prompt::Reads::Files);
+        let (stdin, token) = self.feed(prompt.user, &conversation.turns)?;
         let created = stamp(SystemClock.now());
-        let cmd = self.command(Mode::Open { session_id: id }, stdin, token.as_ref());
+        let cmd = self.command(
+            Mode::Open {
+                session_id: id,
+                system: &prompt.system,
+            },
+            stdin,
+            token.as_ref(),
+        );
         self.exchange(id, &cmd, &|_| {}, halt, created)
     }
 
     /// No tool list: the session opened with one and remembers it.
     fn resume(
         &self,
+        system: &str,
         session: &Session,
         delta: &Delta,
         _tools: &serde_json::Value,
@@ -394,9 +397,11 @@ impl SessionModel for ClaudeCli {
             delta_prompt(delta, crate::prompt::Reads::Files),
             delta.turns(),
         )?;
+        let system = ForModel::of(system);
         let cmd = self.command(
             Mode::Resume {
                 session_id: &session.id,
+                system: &system,
             },
             stdin,
             token.as_ref(),
@@ -409,9 +414,8 @@ impl ClaudeCli {
     /// One sessioned exchange, streamed line by line into `on_delta`.
     ///
     /// # Errors
-    /// [`ModelError::Lost`] only when a non-zero exit's stderr names the
-    /// session or says "No conversation found": a bad flag or a network
-    /// failure also exits non-zero and does not mean the session is gone.
+    /// [`ModelError::Lost`] only when a failed run's stderr names the session or says "No
+    /// conversation found"; a bad flag or a network failure also fails.
     fn exchange(
         &self,
         id: &SessionId,
@@ -484,8 +488,7 @@ impl ClaudeCli {
 }
 
 /// What every `claude` this box starts is told, so it reaches the model and nothing else: no
-/// telemetry, error reports, feature-flag fetches, feedback prompts or update checks. Each is a
-/// switch the pinned CLI reads; the first alone implies most, and the rest say so by name.
+/// telemetry, error reports, feature flags, feedback prompts or update checks.
 pub const QUIET: &[(&str, &str)] = &[
     ("CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC", "1"),
     ("DISABLE_TELEMETRY", "1"),
@@ -498,26 +501,38 @@ pub const QUIET: &[(&str, &str)] = &[
     ("DO_NOT_TRACK", "1"),
 ];
 
-/// Which invocation a call to `claude` is.
+/// Which invocation a call to `claude` is, each with its manual as the system prompt.
 #[derive(Debug, Clone, Copy)]
 pub enum Mode<'a> {
     /// [`Model::turn`]: the whole conversation, no session.
-    Stateless,
+    Stateless { system: &'a ForModel },
     /// [`SessionModel::open`]: start a session under an id the box minted.
     Open {
         /// The id `--session-id` names.
         session_id: &'a SessionId,
+        system: &'a ForModel,
     },
     /// [`SessionModel::resume`]: continue one.
     Resume {
         /// The id `--resume` names.
         session_id: &'a SessionId,
-    },
-    /// [`ClaudeCli::plain`]: `system` as the whole system prompt, no tools, no session.
-    Plain {
-        /// The system prompt, in place of the CLI's own.
         system: &'a ForModel,
     },
+    /// [`ClaudeCli::plain`]: no tools, no session, none of the secretary's framing.
+    Plain { system: &'a ForModel },
+}
+
+impl Mode<'_> {
+    /// The system prompt it carries.
+    #[must_use]
+    pub fn system(&self) -> &ForModel {
+        match self {
+            Mode::Stateless { system }
+            | Mode::Open { system, .. }
+            | Mode::Resume { system, .. }
+            | Mode::Plain { system } => system,
+        }
+    }
 }
 
 /// The exact argv for `mode`. Every mode carries the fence (no tools, no MCP
@@ -537,32 +552,23 @@ pub fn argv(model: &str, fence: &Fence, mode: Mode<'_>) -> Vec<String> {
         ]
         .map(str::to_owned)
     };
+    // Stream-json out in every mode: a request that carries a file goes in as stream-json,
+    // and the CLI takes that only with stream-json out.
+    let unsessioned = ["--output-format", "stream-json", "--verbose"].map(str::to_owned);
     match mode {
-        // Stream-json out in every mode: a request that carries a file goes in as
-        // stream-json, and the CLI takes that only with stream-json out.
-        Mode::Stateless => built.extend(
-            [
-                "--output-format",
-                "stream-json",
-                "--verbose",
-                "--no-session-persistence",
-            ]
-            .map(str::to_owned),
-        ),
-        Mode::Open { session_id } => built.extend(streamed("--session-id", session_id)),
-        Mode::Resume { session_id } => built.extend(streamed("--resume", session_id)),
-        Mode::Plain { system } => built.extend(
-            [
-                "--output-format",
-                "stream-json",
-                "--verbose",
-                "--system-prompt",
-                system.as_str(),
-                "--no-session-persistence",
-                "--disable-slash-commands",
-            ]
-            .map(str::to_owned),
-        ),
+        Mode::Stateless { .. } | Mode::Plain { .. } => built.extend(unsessioned),
+        Mode::Open { session_id, .. } => built.extend(streamed("--session-id", session_id)),
+        Mode::Resume { session_id, .. } => built.extend(streamed("--resume", session_id)),
+    }
+    built.extend([
+        "--system-prompt".to_owned(),
+        mode.system().as_str().to_owned(),
+    ]);
+    match mode {
+        Mode::Stateless { .. } => built.push("--no-session-persistence".to_owned()),
+        Mode::Plain { .. } => built
+            .extend(["--no-session-persistence", "--disable-slash-commands"].map(str::to_owned)),
+        Mode::Open { .. } | Mode::Resume { .. } => {}
     }
     // The per-machine sections move out of the system prompt so its cached
     // prefix is the same from round to round; a plain call names its own.
@@ -790,14 +796,22 @@ mod tests {
         ))
     }
 
+    /// Every mode carries the fence, and its manual as the system prompt, never in the
+    /// transcript a page's text could reach.
     #[test]
     fn every_mode_carries_the_whole_fence() {
         let id = a_session_id();
         let system = ForModel::of("s");
         for mode in [
-            Mode::Stateless,
-            Mode::Open { session_id: &id },
-            Mode::Resume { session_id: &id },
+            Mode::Stateless { system: &system },
+            Mode::Open {
+                session_id: &id,
+                system: &system,
+            },
+            Mode::Resume {
+                session_id: &id,
+                system: &system,
+            },
             Mode::Plain { system: &system },
         ] {
             let built = argv("m", &shipped(), mode);
@@ -814,6 +828,7 @@ mod tests {
                 "{built:?}"
             );
             assert!(built.contains(&"--strict-mcp-config".to_owned()));
+            assert_eq!(after("--system-prompt").as_deref(), Some("s"), "{built:?}");
         }
         assert!(shipped().stands(), "the repository ships its deny-all");
     }
@@ -846,7 +861,10 @@ mod tests {
     #[test]
     fn a_call_with_no_session_persists_none() {
         let system = ForModel::of("s");
-        for mode in [Mode::Stateless, Mode::Plain { system: &system }] {
+        for mode in [
+            Mode::Stateless { system: &system },
+            Mode::Plain { system: &system },
+        ] {
             let built = argv("claude-haiku-4-5", &shipped(), mode);
             assert!(!built.iter().any(|arg| arg == "--session-id"));
             assert!(!built.iter().any(|arg| arg == "--resume"));
@@ -1016,10 +1034,17 @@ mod tests {
     #[test]
     fn every_mode_excludes_the_dynamic_system_prompt_sections() {
         let id = a_session_id();
+        let system = ForModel::of("s");
         for mode in [
-            Mode::Stateless,
-            Mode::Open { session_id: &id },
-            Mode::Resume { session_id: &id },
+            Mode::Stateless { system: &system },
+            Mode::Open {
+                session_id: &id,
+                system: &system,
+            },
+            Mode::Resume {
+                session_id: &id,
+                system: &system,
+            },
         ] {
             let built = argv("claude-haiku-4-5", &shipped(), mode);
             assert!(
@@ -1032,11 +1057,18 @@ mod tests {
     #[test]
     fn every_mode_pins_the_cache_ttl_on_the_built_command() {
         let id = a_session_id();
+        let system = ForModel::of("s");
         let cli = ClaudeCli::new("claude-haiku-4-5", shipped());
         for mode in [
-            Mode::Stateless,
-            Mode::Open { session_id: &id },
-            Mode::Resume { session_id: &id },
+            Mode::Stateless { system: &system },
+            Mode::Open {
+                session_id: &id,
+                system: &system,
+            },
+            Mode::Resume {
+                session_id: &id,
+                system: &system,
+            },
         ] {
             let cmd = cli.command(mode, stdin_of(ForModel::of(""), Blocks::default()), None);
             let ttl = cmd
@@ -1123,9 +1155,16 @@ mod tests {
     fn open_and_resume_carry_the_fence_and_nothing_that_widens_it() {
         let settings = Path::new("/repo/.claude/secretary-settings.json");
         let id = a_session_id();
+        let system = ForModel::of("s");
         for mode in [
-            Mode::Open { session_id: &id },
-            Mode::Resume { session_id: &id },
+            Mode::Open {
+                session_id: &id,
+                system: &system,
+            },
+            Mode::Resume {
+                session_id: &id,
+                system: &system,
+            },
         ] {
             let built = argv("claude-haiku-4-5", &Fence::at(settings), mode);
             assert!(
@@ -1152,14 +1191,20 @@ mod tests {
         let open = argv(
             "claude-haiku-4-5",
             &shipped(),
-            Mode::Open { session_id: &id },
+            Mode::Open {
+                session_id: &id,
+                system: &system,
+            },
         );
         assert!(open.contains(&"--session-id".to_owned()));
         assert!(!open.contains(&"--resume".to_owned()));
         let resume = argv(
             "claude-haiku-4-5",
             &shipped(),
-            Mode::Resume { session_id: &id },
+            Mode::Resume {
+                session_id: &id,
+                system: &system,
+            },
         );
         assert!(resume.contains(&"--resume".to_owned()));
         assert!(!resume.contains(&"--session-id".to_owned()));

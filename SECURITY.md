@@ -48,6 +48,8 @@ the mechanism that holds it. *Irreversibles* covers what is human-only.
   through a proxy or is addressed to another name is refused. The app
   serves https, or plain http on loopback only, with a Content-Security-
   Policy on every answer and `no-store` on every API answer.
+- **The transcript.** A verb answer reaches the model as one line of JSON,
+  so a page's text cannot start a line that reads as the owner's.
 - **The closed Typst world.** Every authored text compiles with no HTML, no
   plugin, no file, no package and no clock, under a time and memory budget.
   A tripwire refuses scripts, inline handlers and executable URLs (read as
@@ -94,37 +96,27 @@ checks read, or in a file listed by its path and SHA-256 in
   project adds (`scripts/secret-rules.toml`). It runs offline and never sends a
   finding anywhere. It decodes base64, hex and percent-encoding itself. It
   reads a copy in which every file is named by a number, so its own default
-  path allowlist (pictures' text, lock files, `node_modules/`, its config)
-  passes over nothing. A test's throwaway key is admitted by its finding's
+  path allowlist passes over nothing. A test's throwaway key is admitted by its finding's
   fingerprint in `.gitleaksignore`, and its bytes by the manifest, since a
   fingerprint names a path and a line, never the bytes.
 - **The term matcher** (`suzatary_core::leak`) finds the owner's private
   terms and this deployment's names as whole words, folded (accents,
   invisible characters and line breaks hide nothing), and addresses, home
   paths, tailnet names and telephone numbers. It decodes nothing.
-- **The admitted files.** A file the guard recognises as encoded fails the
-  guard until the manifest lists it. That is judged over the whole file, so
-  wrapping, quoting or escaping the line breaks of an encoding does not
-  hide it: a binary; base64 (160 characters, in all, of tokens that mix
-  case and digits as base64 does, an integrity hash's random bytes not
-  counted); hex whose bytes read as text (a token of 32 digits or more, from
-  either digit) or sixteen separated hex pairs; or text spelled with escapes
-  (sixteen `%XX`, `&#…;`, `\uXXXX` or `\xXX` escapes of letters, digits or
-  non-ASCII bytes, one escape of a letter inside a word, or a
-  quoted-printable body).
+- **The admitted files.** A file the guard recognises as encoded (a binary,
+  base64, hex that reads as text, or text spelled with escapes, at the
+  thresholds `suzatary_core::leak` states) fails the guard until the manifest
+  lists it. The guard judges the whole file, so wrapping, quoting or escaping
+  the line breaks of an encoding does not hide it.
 - **Admissions are held.** The train publishes a new manifest line, a new
   `.gitleaksignore` fingerprint or any change to the secret rules only once
   `scripts/train.sh publish --admit <path>` names it, and the Prodrome's scan
   reads every commit of a range and takes `--admit` the same way.
 
-**What "at a terminal" stops, said plainly.** `--admit` refuses a standard
-input that is not a terminal (`[[ -t 0 ]]`). That stops cron, CI and an
-unattended `train.sh land`. It does **not** stop anything that holds a shell
-on the box: an agent with a shell can open a pseudo-terminal (`script -qec
-… </dev/null` passes the check). Admission is a deliberate act of the
-operator, not a mechanism an agent cannot reach; the agents that run here
-hold no shell (CLAUDE.md, Containment). Admissions signed by the owner's key
-are recorded for 2.1, not built.
+**What "at a terminal" stops.** `--admit` refuses a standard input that is not
+a terminal (`[[ -t 0 ]]`), which stops cron, CI and an unattended `train.sh
+land`, but not a shell on the box, which can open a pseudo-terminal. The agents
+that run here hold no shell (CLAUDE.md, Containment).
 
 What each layer does **not** catch, by design:
 
@@ -134,24 +126,11 @@ What each layer does **not** catch, by design:
   describes passes it, and the matcher does not look for secrets.
 - The matcher finds only the terms on the lists and the shapes it states.
   A private fact nobody listed, written in plain words, passes it.
-- The thresholds are thresholds. These pass the matcher as text, by design:
-  an escape at a word's edge (`%74eapot`), percent-encoded UTF-8 of an
-  accented name (`Jo%C3%A3o`), ten to fifteen escapes in a file, a few short
-  base64 tokens, hex under 32 digits to a line, byte arrays (`[0x74, …]`),
-  UTF-16 text, encodings the guard does not recognise (base32, among
-  others), the bytes inside an integrity hash of exactly its length, a
-  sealed slot's ciphertext (a `Locked(key='…', box='…')` box of whole
-  256-byte buckets and its tag: random bytes under a key that is destroyed
-  or never leaves the box, so it hides no word, and its shape is all the
-  guard can check; the secret scanner reads its line with the slot replaced
-  by a placeholder, so everything else on the line is still scanned; neither
-  check reads inside a recognised box, so words someone places in one in a
-  form that does not read as text (compressed, or UTF-16) pass, while plain
-  words in a box are no slot, and a real sealing mistake cannot take that
-  shape, since
-  words left unsealed are whole buckets of 256·k bytes, never 256·k + 16), and a
-  payload cut across several files each under the per-file thresholds.
-  Chasing every encoding is the arms race this guard stopped running.
+- The thresholds are thresholds. Below them, encoded text passes the
+  matcher as text by design: a few escapes or short tokens, byte arrays,
+  UTF-16, encodings the guard does not recognise, a sealed slot's ciphertext
+  (neither check reads inside a `Locked(key='…', box='…')` box of 256·k + 16
+  bytes), and a payload cut across files that are each under the thresholds.
 
 The guarantees are the plain-text checks (gitleaks and the matcher), the
 admission of opaque bytes by a person, and the review of every pull request

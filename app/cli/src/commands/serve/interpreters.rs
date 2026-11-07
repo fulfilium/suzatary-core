@@ -585,14 +585,17 @@ impl SessionModel for Recorded {
 
     fn resume(
         &self,
+        system: &str,
         session: &suzatary_core::capability::Session,
         delta: &suzatary_core::capability::Delta,
         tools: &serde_json::Value,
         on_delta: &dyn Fn(&str),
         halt: &suzatary_core::capability::Halt,
     ) -> Result<suzatary_core::capability::Sessioned, ModelError> {
-        self.door
-            .ask(|| self.cli.resume(session, delta, tools, on_delta, halt))
+        self.door.ask(|| {
+            self.cli
+                .resume(system, session, delta, tools, on_delta, halt)
+        })
     }
 }
 

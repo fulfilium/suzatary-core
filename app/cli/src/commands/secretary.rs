@@ -684,8 +684,10 @@ fn web_turn(
     use suzatary_core::secretary::store::Entry;
 
     let (answer, said, outcome) = match answered {
+        // The shape the `web` verb answers an allowed read in.
         Ok(page) => (
-            format!("{} (HTTP {})\n\n{}", page.url, page.status, page.text),
+            serde_json::json!({ "url": page.url, "status": page.status, "text": page.text })
+                .to_string(),
             Outcome::Answered,
             Performed::Done(Done::Acted {
                 what: request.sentence(),

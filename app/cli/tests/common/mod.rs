@@ -1242,6 +1242,7 @@ impl SessionModel for FakeModel {
 
     fn resume(
         &self,
+        _system: &str,
         session: &Session,
         delta: &suzatary_core::capability::Delta,
         tools: &serde_json::Value,
