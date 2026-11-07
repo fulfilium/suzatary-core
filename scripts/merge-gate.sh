@@ -77,7 +77,6 @@ if ((!list)); then
   exec 8>>"$lock"
   flock -n 8 || { echo "merge-gate.sh: another gate runs in this checkout: $(cat "$lock")" >&2; exit 75; }
   echo "pid $$, started $(date -u +%FT%TZ)" >"$lock"
-  # Shared by every worktree of the repository.
   heavy_lock="$(git rev-parse --path-format=absolute --git-common-dir)/merge-gate-heavy.lock"
 fi
 
@@ -92,7 +91,7 @@ chosen() { selected "${s_half[$1]}" && { [[ -z "$only" ]] || [[ ",$only," == *",
 kept_dir="$(git rev-parse --path-format=absolute --git-common-dir)/gate"
 [[ -z "${SUZATARY_GATE_RUN:-}" ]] || kept_dir+="/other-$(git hash-object "$SUZATARY_GATE_RUN")"
 
-# Prints why not when it fails. Needs a Nix shell, whose PATH names the tools the keys cover.
+# Needs a Nix shell, whose PATH names the tools the keys cover.
 keeping() {
   [[ -n "${IN_NIX_SHELL:-}${SUZATARY_GATE_RUN:-}" ]] || { echo "outside a nix shell"; return 1; }
   git rev-parse --verify --quiet HEAD >/dev/null || { echo "no HEAD"; return 1; }
@@ -110,7 +109,6 @@ ignored_inputs() {
     LC_ALL=C sort -z | xargs -0 -r sha256sum
 }
 
-# Read once, before any step runs.
 snapshot() {
   git ls-tree -r --full-tree HEAD >"$logs/tree" && { environment && ignored_inputs; } >"$logs/env"
 }
@@ -165,7 +163,7 @@ step() {
   reads="$(reads_of "${3//,/ }")" || exit 64
   shift 3
   if ((list)); then
-    # A unit step's reads, then `~` and its reads as one unit (a format the tests parse).
+    # `<reads>~<fallback>`, a format the tests parse.
     local shown="$reads"
     [[ -z "${unit_fallback[$reads]:-}" ]] || shown+="~${unit_fallback[$reads]}"
     printf '%-5s %-6s %-16s %-50s %s\n' "$half" "$lane" "$name" "${shown// /,}" "$*"
@@ -358,7 +356,7 @@ clippy_all() {
     cargo_app clippy -q --workspace "${live_pins[@]}" --test guards --test fence --test plugin "$@" -- -D warnings
 }
 
-# Two Rust lanes keep cargo's lock busy: the tests' runs leave it to the checks.
+# Two Rust lanes keep cargo's lock busy.
 lane=check
 step tree fmt             $rust   cargo fmt --manifest-path app/Cargo.toml --all --check
 step tree clippy          $rust   clippy_all
@@ -367,8 +365,7 @@ step tree doc             $rust   env RUSTDOCFLAGS="-D warnings" cargo doc --man
 lane=tests
 # Every debug executable the tree half runs, built in one step. `--workspace` everywhere: cargo
 # resolves features over the packages a command selects, and a `-p` rebuilds wasmtime and the
-# wit crates. Later steps are still the cargo commands that build what they run, so a kept build
-# changes nothing.
+# wit crates.
 # The cli's tests that need `fixture`, in the feature set app-build.sh --fixture uses.
 fixture_tests=(--test all --features suzatary/fixture --features suzatary-core/nothing)
 # shellcheck disable=SC2329
@@ -387,7 +384,6 @@ suzatary_fence() {
     export SUZATARY_FENCE_PLUGINS SUZATARY_PLUGINS
 }
 step tree fence-plugin    unkept  suzatary_fence
-# The runner skips members SUZATARY_GATE_UNITS does not name.
 # shellcheck disable=SC2329
 units_test() {
   local host
@@ -423,7 +419,7 @@ web_inputs() {
     nix_out suzatary-wasm-deps >/dev/null && nix_out suzatary-views-wasm-deps >/dev/null && nix_out suzatary-core-deps >/dev/null &&
     . scripts/web-inputs.sh
 }
-# The web steps' flake outputs, exported; publication.yml pushes them for the live half.
+# publication.yml pushes these outputs for the live half.
 # shellcheck disable=SC2329
 web_outputs() {
   local o v
@@ -449,8 +445,7 @@ together web-inputs web-test build-web e2e
 lane=nix
 # HEAD's public tree, built as the roots run builds it, so a file it needs from the private
 # history is red here. It reads all but the paths `.gitattributes` marks export-ignore, keeping
-# the changelog and the attributes (merge_gate.rs pins the list). First in its lane: it is the
-# longest single build.
+# the changelog and the attributes (merge_gate.rs pins the list).
 private="$(sed -n 's#^/\(.*\) export-ignore$#\1#p' .gitattributes 2>/dev/null | sed 's#/\*\*$##' |
   grep -vxF -e CHANGELOG.md -e .gitattributes | paste -sd, -)"
 public_reads="all-but:${private:+$private,}docs,memory,android"
@@ -485,6 +480,12 @@ changelog_entry() {
   local base head=HEAD added
   base="$(git merge-base HEAD origin/master 2>/dev/null)" ||
     { echo "changelog: skipped: no origin/master to compare with"; return 0; }
+  # On master (the nightly), the range is the train since the release before HEAD.
+  if [[ "$base" == "$(git rev-parse HEAD)" ]]; then
+    base="$(git log --first-parent --skip=1 --format='%H %(trailers:key=Release,valueonly,separator=)' HEAD |
+      awk 'NF > 1 && !found { print $1; found = 1 }')"
+    [[ -n "$base" ]] || { echo "changelog: skipped: HEAD is origin/master, and no release is before it"; return 0; }
+  fi
   # A release commit (`Release:` trailer) folds the fragments, so read the commit before it.
   if [[ -n "$(git log -1 --format='%(trailers:key=Release,valueonly)' HEAD | sed '/^$/d')" ]]; then
     head=HEAD^

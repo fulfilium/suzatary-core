@@ -2601,16 +2601,30 @@ fn merge_gate_the_generated_wire_imports_only_the_wire() {
     }
 }
 
-/// The changelog step wants a fragment added beside an `app/` or `web/` change and refuses any
-/// other writer of `CHANGELOG.md`, read on the commit before a release, which folds the fragments
-/// and so would read as none added.
-#[test]
-fn the_changelog_step_wants_a_fragment_read_before_a_release() {
-    let scratch = Scratch::new("gate-changelog-release");
-    let git = |args: &[&str]| {
+/// A scratch repository for the changelog step: `master` at a base commit holding `app/x` and a
+/// changelog, with `origin/master` there.
+struct ChangelogRepo(Scratch);
+
+const OLD_CHANGELOG: &str = "# C\n\n## [Unreleased]\n\n## [1.0.0] - 2026-10-01\n\n- old\n";
+const NEW_CHANGELOG: &str = "# C\n\n## [Unreleased]\n\n## [1.1.0] - 2026-10-14\n\n- new\n\n## [1.0.0] - 2026-10-01\n\n- old\n";
+
+impl ChangelogRepo {
+    fn new(tag: &str) -> Self {
+        let repo = Self(Scratch::new(tag));
+        repo.git(&["init", "-q", "-b", "master"]);
+        repo.commit(
+            "base",
+            &[("CHANGELOG.md", OLD_CHANGELOG), ("app/x", "0\n")],
+            &[],
+        );
+        repo.publish();
+        repo
+    }
+
+    fn git(&self, args: &[&str]) {
         let out = Command::new("git")
             .args(args)
-            .current_dir(&*scratch)
+            .current_dir(&*self.0)
             .env("GIT_CONFIG_GLOBAL", "/dev/null")
             .env("GIT_CONFIG_NOSYSTEM", "1")
             .env("GIT_AUTHOR_NAME", "t")
@@ -2624,86 +2638,130 @@ fn the_changelog_step_wants_a_fragment_read_before_a_release() {
             "git {args:?}: {}",
             String::from_utf8_lossy(&out.stderr)
         );
-    };
-    let write = |path: &str, text: &str| {
-        let path = scratch.join(path);
-        std::fs::create_dir_all(path.parent().expect("a parent")).expect("dirs");
-        std::fs::write(path, text).expect("writes");
-    };
-    let step = || {
+    }
+
+    /// A commit writing `writes` and removing `removes`; `message` holds its trailers.
+    fn commit(&self, message: &str, writes: &[(&str, &str)], removes: &[&str]) {
+        for (path, text) in writes {
+            let path = self.0.join(path);
+            std::fs::create_dir_all(path.parent().expect("a parent")).expect("dirs");
+            std::fs::write(path, text).expect("writes");
+        }
+        for path in removes {
+            self.git(&["rm", "-q", path]);
+        }
+        self.git(&["add", "-A"]);
+        self.git(&["commit", "-q", "--allow-empty", "-m", message]);
+    }
+
+    /// A release commit: it writes `changelog` and folds `fragments`.
+    fn release(&self, version: &str, changelog: &str, fragments: &[&str]) {
+        self.commit(
+            &format!("release: {version}\n\nRelease: {version}"),
+            &[("CHANGELOG.md", changelog)],
+            fragments,
+        );
+    }
+
+    /// `origin/master` moved to HEAD, as the nightly sees it.
+    fn publish(&self) {
+        self.git(&["update-ref", "refs/remotes/origin/master", "HEAD"]);
+    }
+
+    fn step(&self) -> bool {
         Command::new("bash")
             .arg("-c")
             .arg(format!(
                 "set -euo pipefail; source <(sed -n '/^changelog_entry()/,/^}}/p' {}); changelog_entry",
                 repo().join("scripts/merge-gate.sh").display()
             ))
-            .current_dir(&*scratch)
+            .current_dir(&*self.0)
             .output()
             .expect("bash runs")
             .status
             .success()
-    };
-    git(&["init", "-q", "-b", "master"]);
-    write(
-        "CHANGELOG.md",
-        "# C\n\n## [Unreleased]\n\n## [1.0.0] - 2026-10-01\n\n- old\n",
-    );
-    write("app/x", "1\n");
-    git(&["add", "-A"]);
-    git(&["commit", "-q", "-m", "base"]);
-    git(&["update-ref", "refs/remotes/origin/master", "HEAD"]);
+    }
+}
 
-    write("app/x", "2\n");
-    write("changelog.d/one.md", "### Added\n- new\n");
-    git(&["add", "-A"]);
-    git(&["commit", "-q", "-m", "Merge #1: a change"]);
-    assert!(step(), "a fragment rides the change");
-
-    write(
-        "CHANGELOG.md",
-        "# C\n\n## [Unreleased]\n\n## [1.1.0] - 2026-10-14\n\n- new\n\n## [1.0.0] - 2026-10-01\n\n- old\n",
+/// An `app/` or `web/` change needs a fragment, read on the commit before a release, which folds
+/// the fragments and so would read as none added.
+#[test]
+fn the_changelog_step_wants_a_fragment_beside_a_change() {
+    let repo = ChangelogRepo::new("gate-changelog-fragment");
+    repo.commit(
+        "Merge #1: a change",
+        &[
+            ("app/x", "1\n"),
+            ("changelog.d/one.md", "### Added\n- new\n"),
+        ],
+        &[],
     );
-    git(&["rm", "-q", "changelog.d/one.md"]);
-    git(&[
-        "commit",
-        "-q",
-        "-am",
-        "release: 1.1.0",
-        "-m",
-        "Release: 1.1.0",
-    ]);
-    assert!(step(), "the release is read on the commit before it");
-
-    git(&["reset", "-q", "--hard", "origin/master"]);
-    write("app/x", "3\n");
-    git(&["commit", "-q", "-am", "Merge #2: no entry"]);
-    write(
-        "CHANGELOG.md",
-        "# C\n\n## [Unreleased]\n\n## [1.1.0] - 2026-10-14\n\n## [1.0.0] - 2026-10-01\n\n- old\n",
-    );
-    git(&[
-        "commit",
-        "-q",
-        "-am",
-        "release: 1.1.0",
-        "-m",
-        "Release: 1.1.0",
-    ]);
+    assert!(repo.step(), "a fragment rides the change");
+    let bare = ChangelogRepo::new("gate-changelog-no-fragment");
+    bare.commit("Merge #2: no entry", &[("app/x", "2\n")], &[]);
+    bare.release("1.1.0", NEW_CHANGELOG, &[]);
     assert!(
-        !step(),
+        !bare.step(),
         "a train with no entry fails even under its release"
     );
+}
 
-    git(&["reset", "-q", "--hard", "origin/master"]);
-    write("app/x", "4\n");
-    write("changelog.d/four.md", "### Fixed\n- four\n");
-    write(
-        "CHANGELOG.md",
-        "# C\n\n## [Unreleased]\n\n- four\n\n## [1.0.0] - 2026-10-01\n\n- old\n",
+/// A release commit at the tip of a train writes `CHANGELOG.md`, and the step passes it.
+#[test]
+fn the_changelog_step_passes_a_release_commit() {
+    let repo = ChangelogRepo::new("gate-changelog-release");
+    repo.commit(
+        "Merge #1: a change",
+        &[
+            ("app/x", "1\n"),
+            ("changelog.d/one.md", "### Added\n- new\n"),
+        ],
+        &[],
     );
-    git(&["add", "-A"]);
-    git(&["commit", "-q", "-m", "Merge #4: an entry in the changelog"]);
-    assert!(!step(), "only a release writes CHANGELOG.md");
+    repo.release("1.1.0", NEW_CHANGELOG, &["changelog.d/one.md"]);
+    assert!(repo.step());
+}
+
+/// Any commit but a release that writes `CHANGELOG.md` fails the step.
+#[test]
+fn the_changelog_step_refuses_a_non_release_edit_of_the_changelog() {
+    let repo = ChangelogRepo::new("gate-changelog-edit");
+    repo.commit(
+        "Merge #4: an entry in the changelog",
+        &[
+            ("app/x", "4\n"),
+            ("changelog.d/four.md", "### Fixed\n- four\n"),
+            ("CHANGELOG.md", "# C\n\n## [Unreleased]\n\n- four\n"),
+        ],
+        &[],
+    );
+    assert!(!repo.step());
+}
+
+/// On master itself (the nightly), HEAD is origin/master, and the step reads the train since the
+/// release before HEAD: master's newest release passes, and a hand edit after it fails.
+#[test]
+fn the_changelog_step_on_master_reads_the_train_since_the_last_release() {
+    let repo = ChangelogRepo::new("gate-changelog-master");
+    repo.release("1.0.0", OLD_CHANGELOG, &[]);
+    repo.commit(
+        "Merge #5: a change",
+        &[
+            ("app/x", "5\n"),
+            ("changelog.d/five.md", "### Fixed\n- five\n"),
+        ],
+        &[],
+    );
+    repo.release("1.1.0", NEW_CHANGELOG, &["changelog.d/five.md"]);
+    repo.publish();
+    assert!(repo.step(), "master's newest release writes CHANGELOG.md");
+    repo.commit(
+        "an entry in the changelog",
+        &[("CHANGELOG.md", "# C\n\n## [Unreleased]\n\n- by hand\n")],
+        &[],
+    );
+    repo.publish();
+    assert!(!repo.step(), "only a release writes CHANGELOG.md on master");
 }
 
 /// Every script the gate, the train or a workflow runs by its path is executable in the index: a
