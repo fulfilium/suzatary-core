@@ -44,7 +44,7 @@ the mechanism that holds it. *Irreversibles* covers what is human-only.
 - **The tap.** Sending mail, starting a sign-in or setting a secret takes a
   request from a named tailnet login, with the anti-forgery headers, against
   a stored proposal. Loopback, and so the box's own shell and the agent,
-  can never tap.
+  can never tap. A send's question names every recipient, in plain ASCII.
 - **The door.** An address is not an identity: every request, loopback
   included, is admitted by tailscaled's whois alone, and one that came
   through a proxy or is addressed to another name is refused. The app

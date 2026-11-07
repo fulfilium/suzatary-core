@@ -30,7 +30,14 @@ pub fn of(act: &ProposedAct) -> Card {
             held,
         } => Card {
             files: attachments.clone(),
-            ..email(account, (to, cc), subject, body, attachments.len(), held)
+            ..email(
+                account,
+                &Envelope { to, cc },
+                subject,
+                body,
+                attachments.len(),
+                held,
+            )
         },
         ProposedAct::Forward {
             account,
@@ -45,13 +52,13 @@ pub fn of(act: &ProposedAct) -> Card {
         } => forward(
             email(
                 account,
-                (to, cc),
+                &Envelope { to, cc },
                 subject,
                 note,
                 attachments.len(),
                 &HeldIn::Read { values: Vec::new() },
             ),
-            &to.join(", "),
+            &Envelope { to, cc },
             original,
             *style,
             held,
@@ -744,20 +751,42 @@ fn web(request: WebKind, target: &str, host: &str, always: &str, sentence: &str)
     }
 }
 
-/// Every field whole, the body verbatim, and Send naming who it goes to.
+/// Every address a send reaches, so the question the tap confirms leaves none out.
+struct Envelope<'a> {
+    to: &'a [String],
+    cc: &'a [String],
+}
+
+impl Envelope<'_> {
+    /// Every recipient, as the question asks it.
+    fn named(&self) -> String {
+        match self.cc {
+            [] => self.to.join(", "),
+            cc => format!("{}, and Cc {}", self.to.join(", "), cc.join(", ")),
+        }
+    }
+}
+
+/// Every field whole, the body verbatim, and Send naming everyone it goes to.
 fn email(
     account: &str,
-    (to, cc): (&[String], &[String]),
+    envelope: &Envelope<'_>,
     subject: &str,
     body: &str,
     files: usize,
     held: &HeldIn,
 ) -> Card {
-    let everyone = to.iter().chain(cc).cloned().collect::<Vec<_>>().join(", ");
-    let to = to.join(", ");
-    let mut fields = vec![field("From", account), field("To", &to)];
-    if !cc.is_empty() {
-        fields.push(field("Cc", &cc.join(", ")));
+    let everyone = envelope
+        .to
+        .iter()
+        .chain(envelope.cc)
+        .cloned()
+        .collect::<Vec<_>>()
+        .join(", ");
+    let to = envelope.to.join(", ");
+    let mut fields = vec![field("From", account), field("To", &envelope.to.join(", "))];
+    if !envelope.cc.is_empty() {
+        fields.push(field("Cc", &envelope.cc.join(", ")));
     }
     fields.push(field("Subject", subject));
     let named: Vec<String> = match held {
@@ -798,7 +827,7 @@ fn email(
         answers: vec![CardAnswer {
             done: format!("sent to {to}"),
             asks: Asks::Confirm {
-                question: format!("Send to {to}{carrying}?"),
+                question: format!("Send to {}{carrying}?", envelope.named()),
                 yes: "Yes, send it".to_owned(),
             },
             ..answer("send", "Send")
@@ -814,7 +843,7 @@ fn email(
 /// The question names the original and every held value the tap sends.
 fn forward(
     email: Card,
-    to: &str,
+    envelope: &Envelope<'_>,
     original: &str,
     style: Style,
     held: &[String],
@@ -836,9 +865,9 @@ fn forward(
         title: "Proposed forward".to_owned(),
         files: files.to_vec(),
         answers: vec![CardAnswer {
-            done: format!("forwarded to {to}"),
+            done: format!("forwarded to {}", envelope.to.join(", ")),
             asks: Asks::Confirm {
-                question: format!("Forward {original} to {to}?{holding}"),
+                question: format!("Forward {original} to {}?{holding}", envelope.named()),
                 yes: "Yes, forward it".to_owned(),
             },
             ..answer("send", "Forward")
@@ -1157,6 +1186,42 @@ mod tests {
         assert_eq!(
             asked(&card.answers[0]),
             "Send to a@example.test, b@example.test?"
+        );
+    }
+
+    /// THE ATTACK ON THE TAP: a right To beside an attacker's Cc, under a reason that names only
+    /// the To. The question the tap confirms names every recipient, on an email and a forward.
+    #[test]
+    fn the_question_names_every_recipient() {
+        let (to, cc) = (
+            vec!["counsel@lawfirm.example".to_owned()],
+            vec!["paralegal@evil.example".to_owned()],
+        );
+        let wanted = "counsel@lawfirm.example, and Cc paralegal@evil.example";
+        let email = of(&ProposedAct::Email {
+            account: "me@example.test".to_owned(),
+            to: to.clone(),
+            cc: cc.clone(),
+            subject: "The lease".to_owned(),
+            body: "Signed, attached.".to_owned(),
+            attachments: Vec::new(),
+            held: HeldIn::Read { values: Vec::new() },
+        });
+        assert_eq!(asked(&email.answers[0]), format!("Send to {wanted}?"));
+        let forward = of(&ProposedAct::Forward {
+            account: "me@example.test".to_owned(),
+            to,
+            cc,
+            subject: "Fwd: The lease".to_owned(),
+            note: String::new(),
+            attachments: Vec::new(),
+            original: "The lease".to_owned(),
+            style: Style::Attached,
+            held: Vec::new(),
+        });
+        assert_eq!(
+            asked(&forward.answers[0]),
+            format!("Forward The lease to {wanted}?")
         );
     }
 

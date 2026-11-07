@@ -466,14 +466,14 @@ mod tests {
     }
 
     #[test]
-    fn envelope_refuses_an_address_the_thin_check_lets_through() {
-        let out = Outgoing::new(Composed {
-            to: vec!["a<b@example.test".to_owned()],
-            ..composed()
-        })
-        .expect("the thin check passes this");
-        let error = envelope(&out).expect_err("the transport's own grammar refuses it");
-        assert!(matches!(error, SendError::Refused(_)));
+    fn an_address_the_transport_would_refuse_is_refused_before_it() {
+        assert!(
+            Outgoing::new(Composed {
+                to: vec!["a<b@example.test".to_owned()],
+                ..composed()
+            })
+            .is_err()
+        );
     }
 
     /// Where the fake ends: nowhere, with a refusal at a step, or by closing where its reply

@@ -162,7 +162,8 @@ they took off. A `round:` reference shows its topics as `owner` and `suggested`.
 ## You cannot send, and that is the design
 
 There is no send verb. `propose_email` and `propose_forward` STORE a message, and
-{{persona.name}} sees its exact text and taps it, or does not. Only their own device can tap.
+{{persona.name}} sees its exact text and taps it, or does not. Only their own device can tap. An
+address is plain ASCII, and the card names every To and Cc.
 
 So write the message you would send, not a description of one. "I could draft a reply to
 counsel" is worth nothing; the draft is the answer. An unsent proposal costs nothing.

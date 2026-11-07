@@ -92,7 +92,7 @@ mod tests {
     use super::*;
 
     fn key() -> impl Strategy<Value = SourceKey> {
-        let email = "[a-z0-9.]{1,8}@[a-z]{1,6}\\.(test|example)"
+        let email = "[a-z0-9]{1,8}(\\.[a-z0-9]{1,3})?@[a-z]{1,6}\\.(test|example)"
             .prop_map(|text| AccountEmail::new(&text).expect("a lower-case address"));
         let plugin =
             "[a-z][a-z0-9]{0,8}".prop_map(|name| PluginName::parse(&name).expect("a name"));
