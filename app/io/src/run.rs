@@ -114,6 +114,9 @@ pub struct Ran {
     pub stderr: Vec<u8>,
 }
 
+/// The stderr bytes kept, from the end, since a check a model proposed may write without end.
+pub const STDERR_KEPT: usize = 64 << 10;
+
 /// Why a child did not run to an exit status.
 #[derive(Debug, thiserror::Error)]
 pub enum RunError {
@@ -310,8 +313,7 @@ pub fn run(cmd: &Cmd) -> Result<Ran, RunError> {
     drive(cmd, None, &|| false)
 }
 
-/// Run `cmd`, handing each stdout line to `on_line` as it arrives and killing the child as soon
-/// as `halted` answers true.
+/// Run `cmd`, handing each stdout line to `on_line` and killing the child once `halted` is true.
 pub fn watch(
     cmd: &Cmd,
     on_line: &mut dyn FnMut(&str),
@@ -352,11 +354,9 @@ fn exited(child: &Child) -> std::io::Result<bool> {
     .is_some())
 }
 
-/// Kill `child`'s group and return once no process in it runs (each gone or a zombie). `kill`
-/// only queues a signal, so `/proc` is polled until the group is dead. The child must lead the
-/// group (`process_group(0)`) and must not be reaped before this returns, so its id names this
-/// group alone. A member that cannot be signalled (set-user-ID) or is in uninterruptible sleep
-/// blocks this until the kernel lets it end.
+/// Kill `child`'s group and return once no process in it runs (each gone or a zombie), polling
+/// `/proc`. The child must lead the group and must not be reaped before this returns, so its id
+/// names this group alone.
 pub(crate) fn end_group(child: &Child) -> std::io::Result<()> {
     let group = rustix::process::Pid::from_child(child);
     // Killed again before each look: a fork racing the kill would otherwise survive.
@@ -387,8 +387,7 @@ fn runs_in(group: rustix::process::Pid) -> std::io::Result<bool> {
     Ok(false)
 }
 
-/// Whether a thread of `process` (a `/proc/<pid>` directory) is neither a zombie nor dead. The
-/// main thread can be a zombie while other threads run.
+/// Whether a thread of `process` (a `/proc/<pid>` directory) is neither a zombie nor dead.
 fn any_thread_runs(process: &Path) -> std::io::Result<bool> {
     let threads = match std::fs::read_dir(process.join("task")) {
         Err(failed) if gone(&failed) => return Ok(false),
@@ -515,7 +514,11 @@ fn drive(
                     }
                 }
             }
-            Ok(Said::Err(chunk)) => stderr.extend_from_slice(&chunk),
+            Ok(Said::Err(chunk)) => {
+                stderr.extend_from_slice(&chunk);
+                let over = stderr.len().saturating_sub(STDERR_KEPT);
+                stderr.drain(..over);
+            }
             Err(RecvTimeoutError::Timeout) => {}
             Err(RecvTimeoutError::Disconnected) => closed = true,
         }
