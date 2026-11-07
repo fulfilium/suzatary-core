@@ -44,14 +44,13 @@ export namespace program {
       import("./views.js"),
       WebAssembly.compileStreaming(fetch(new URL("./views_bg.wasm", import.meta.url).href)),
     ])
-    // The rehearsal worker makes the module's first calls (`rehearse.ts`), so V8 compiled them before the page's first
-    // input; the core worker's restore runs meanwhile.
+    // The rehearsal worker makes each function's first call, so V8 has compiled it before a page's first input.
     await Promise.all([glue.default({ module_or_path: compiled }), rehearsed(compiled)])
     performance.measure("views:load", { start: t0, end: performance.now() })
     return glue
   }).get
 
-  // Settled when the worker says it is done, or fails: a rehearsal that cannot run costs the page only its warmth.
+  // A rehearsal that fails costs the page only its warmth.
   const rehearsed = (compiled: WebAssembly.Module): Promise<void> =>
     new Promise(done => {
       const worker = new Worker(new URL("./pagework.js", import.meta.url), { type: "module" })
@@ -130,13 +129,12 @@ export namespace program {
     }
   }
 
-  // An act as the tab's intents name it: a topic at the instant asked, or a lifecycle event the core spells, to be sealed.
+  // A lifecycle event is spelled by the core at the instant it is asked, as this device's actor.
   const ask = async (a: Act): Promise<asks.Ask> =>
     a.type === "Topic" ? { type: "Topic", write: a.write, at: time.moment() }
     : a.type === "Lifecycle" ? { type: "Seal", chain: a.chain, event: lifecycleEvent(await loadCore(), a.kind, a.todo, time.moment(), app.actor(app.now()) ?? "", a.note) }
     : a
 
-  // A question for the core in the worker, read back into the questions' types; a reading answers with the chains held.
   const name = d.obj({ chain: d.str, set: d.str, at: d.str })
   const decoded_ = <A>(r: lo.Settled<A>): A => {
     if (r.type === "Error") throw new Error(`a question a page asked does not read: ${r.e}`)
@@ -218,11 +216,7 @@ export namespace program {
         held_.set(k, stop)
       }
       const drawn = (r: Reading<Answer>): void => (r.type === "Loading" ? undefined : frame.drawn())
-      // A reading heard to move is told the page in a task of its own, and once however often it moved meanwhile, as
-      // it then stands: the task that brought it (the core worker's answer, dressed) and the page's step over it are
-      // two tasks, so neither holds the thread for both, and a burst of moves is one step.
-      // Each subscription owes at most one telling, and one let go (the page gone, or the ask held anew) tells nothing
-      // more, so a telling still queued never lands after the reading that replaced it.
+      // A move is told in a task of its own, once per burst; a subscription let go tells nothing more.
       const heard = (tell: () => void, listen: (f: () => void) => () => void): (() => void) => {
         let owed = false
         let gone = false
@@ -297,8 +291,7 @@ export namespace program {
           case "Act": {
             const secret = secretOf(root, e.secret)
             if (secret === null) return answered(e.ask)({ type: "Done", body: { type: "Already" } })
-            // Told as answered, a taken answer is the page's at once while the read-back runs behind it; any other answer, or
-            // one told as held, waits for the read-back, which says whether the box did it.
+            // Told as answered, a taken answer reaches the page before the read-back; anything else waits for it.
             let told = false
             const heard = (a: intents.Answer): void => {
               if (e.told !== "Answered" || a.type !== "Taken") return

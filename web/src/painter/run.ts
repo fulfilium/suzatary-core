@@ -1,6 +1,6 @@
-// A Rust program running in the tab: its module steps the model and answers patches and effects, the painter applies
-// the patches, and the host's handler performs each effect and answers it with an input. Nothing here knows the page.
+// A Rust program in the tab: its patches painted, each effect handed to the host, one input at a time.
 
+import mailbox from "./mailbox"
 import painter from "./painter"
 import scroll from "./scroll"
 
@@ -32,21 +32,23 @@ export namespace run {
     refresh?: painter.Refresh,
   ): T<I> => {
     let live = true
-    const step = (name: string, patches: () => Uint8Array | undefined): boolean => {
-      if (!live) return false
-      const t0 = performance.now()
-      const b = box()
-      const fromEnd = b.scrollHeight - b.scrollTop
-      const bytes = patches()
-      if (bytes === undefined) return false
-      dom.apply(bytes)
-      scroll.settle(box())
-      const effects = parse<E>(page.effects())
-      performance.measure("painter:step", { start: t0, end: performance.now(), detail: { step: name, bytes: bytes.length, effects: effects.length } })
-      for (const e of effects) handle(e, send, { fromEnd })
-      return true
-    }
-    const send = (input: I): void => void step("input", () => page.input(JSON.stringify(input)))
+    const inputs = mailbox.of<I>(input => void step("input", () => page.input(JSON.stringify(input))))
+    const step = (name: string, patches: () => Uint8Array | undefined): boolean =>
+      inputs.turn(() => {
+        if (!live) return false
+        const t0 = performance.now()
+        const b = box()
+        const fromEnd = b.scrollHeight - b.scrollTop
+        const bytes = patches()
+        if (bytes === undefined) return false
+        dom.apply(bytes)
+        scroll.settle(box())
+        const effects = parse<E>(page.effects())
+        performance.measure("painter:step", { start: t0, end: performance.now(), detail: { step: name, bytes: bytes.length, effects: effects.length } })
+        for (const e of effects) handle(e, send, { fromEnd })
+        return true
+      })
+    const send = inputs.send
     const dom = painter.create(root, foreign, blocks, (id, on, words) => step("event", () => page.event(id, on, words)), gone, refresh)
     step("first", () => page.first())
     return { send, destroy: () => ((live = false), dom.destroy(), page.free()) }
