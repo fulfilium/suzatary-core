@@ -137,7 +137,7 @@ async fn read_by_a_kept_key(
     };
     let chains = trusting.to_vec();
     let root = root.clone();
-    blocking(move || match asking.revoked(&chains, &root) {
+    blocking(move || match asking.revoked(&chains, &root)? {
         Some(why) => Err(refused(&why)),
         None => Ok(()),
     })
@@ -150,9 +150,7 @@ async fn read_by_a_kept_key(
 /// # Errors
 /// The record store unreadable.
 pub async fn answered(state: &State, asking: &Performing) -> Result<Option<Response>, Refusal> {
-    let Some(requests) = state.requests.clone() else {
-        return Ok(None);
-    };
+    let requests = Arc::clone(&state.requests);
     let name = asking.name.clone();
     let (answer, performed) = blocking(move || {
         Ok(match requests.answer(&name)? {
@@ -166,24 +164,24 @@ pub async fn answered(state: &State, asking: &Performing) -> Result<Option<Respo
             "this request was performed already, and its answer is no longer kept",
         ));
     }
-    Ok(answer.map(|answer| {
-        let mut response = (
-            StatusCode::from_u16(answer.status).unwrap_or(StatusCode::OK),
-            answer.body,
-        )
-            .into_response();
-        let headers = response.headers_mut();
-        headers.insert(
-            header::CONTENT_TYPE,
-            HeaderValue::from_static("application/json"),
-        );
-        headers.insert(REPLAYED_HEADER, HeaderValue::from_static("1"));
-        response
-    }))
+    let Some(answer) = answer else {
+        return Ok(None);
+    };
+    let status = StatusCode::from_u16(answer.status).map_err(|_| {
+        Refusal::internal(format!("a kept answer holds no status: {}", answer.status))
+    })?;
+    let mut response = (status, answer.body).into_response();
+    let headers = response.headers_mut();
+    headers.insert(
+        header::CONTENT_TYPE,
+        HeaderValue::from_static("application/json"),
+    );
+    headers.insert(REPLAYED_HEADER, HeaderValue::from_static("1"));
+    Ok(Some(response))
 }
 
 /// A request being performed: held while its route runs, so the same request arriving meanwhile
-/// is refused rather than performed twice, and released when dropped.
+/// is refused.
 pub struct Performing {
     record: Requested,
     name: Hash,
@@ -228,9 +226,7 @@ impl Performing {
         wrote: Vec<Hash>,
         keeps: super::reply::Keeps,
     ) -> Result<Response, Refusal> {
-        let Some(requests) = self.state.requests.clone() else {
-            return Ok(response);
-        };
+        let requests = Arc::clone(&self.state.requests);
         let (parts, body) = response.into_parts();
         let bytes = axum::body::to_bytes(body, ANSWER_CAP)
             .await

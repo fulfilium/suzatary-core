@@ -4,7 +4,7 @@ use prodrome_core::sign::{PublicKey, Registrar, Signature, Signed};
 use super::{Requested, Trust, Unproven, WINDOW_SECONDS, body_digest, is_nonce, request_name};
 use crate::record::TodoEvent;
 use crate::refusal::Refusal;
-use crate::store::Prodrome;
+use crate::store::{Prodrome, StoreError};
 
 /// A DEVICE'S REQUEST AT THE DOOR, as its headers carry it: the parts its name is the hash of,
 /// the body read whole, and the key and signature it names, absent where it was not signed.
@@ -27,9 +27,8 @@ pub struct Request<'a> {
 }
 
 /// A request named by its content, signed by the key it names, stamped within the window of the
-/// box's clock, and written as the gate's actor: what the door holds before it asks whether the
-/// signature proves anything. Proving is consuming it: [`Asking::possessed`] or
-/// [`Asking::trusted`].
+/// box's clock, and written as the gate's actor. [`Asking::possessed`] or [`Asking::trusted`]
+/// consumes it.
 #[derive(Debug)]
 pub struct Asking {
     record: Requested,
@@ -141,8 +140,7 @@ impl Asking {
     }
 
     /// The request, its key trusted for its actor on every one of `chains`, each read under
-    /// `root`, in the prodrome a device's enrolment registers it in. A chain's reading is kept
-    /// by its heads, so an unmoved chain is not read again.
+    /// `root`.
     ///
     /// # Errors
     /// Why not, from the first chain that does not trust it; no chains at all trust nothing.
@@ -165,27 +163,29 @@ impl Asking {
         Ok(Trusted(self.proven()))
     }
 
-    /// The refusal a history gives the key that signed this request for its actor, on any of
-    /// `chains` read under `root`, when it is [`Unproven::Revoked`]; asked only where the
-    /// signature verifies, so a request naming a revoked key it does not hold proves nothing about
-    /// any device.
-    #[must_use]
+    /// [`Unproven::Revoked`] where any of `chains` revoked the key for its actor; asked only where
+    /// the signature verifies, since a request naming a key it does not hold proves nothing.
+    ///
+    /// # Errors
+    /// A chain unreadable.
     pub fn revoked(
         &self,
         chains: &[&dyn Prodrome<TodoEvent>],
         root: &PublicKey,
-    ) -> Option<Unproven> {
+    ) -> Result<Option<Unproven>, StoreError> {
         if !self.signed.verifies() {
-            return None;
+            return Ok(None);
         }
         let roots = Registrar::Roots([root.clone()].into_iter().collect());
-        chains.iter().find_map(|chain| {
-            let trust = Trust::held(*chain, &roots).ok()?;
+        for chain in chains {
+            let trust = Trust::held(*chain, &roots)?;
             match trust.admits(trust.home(), &self.actor, &self.signed) {
-                Err(why @ Unproven::Revoked { .. }) => Some(why),
-                _ => None,
+                Err(why @ Unproven::Revoked { .. }) => return Ok(Some(why)),
+                Ok(())
+                | Err(Unproven::Unsigned | Unproven::Forged | Unproven::Untrusted { .. }) => {}
             }
-        })
+        }
+        Ok(None)
     }
 
     fn proven(self) -> Proven {

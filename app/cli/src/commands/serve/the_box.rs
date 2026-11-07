@@ -180,7 +180,8 @@ pub fn pair(call: &Call<Asker, (), PairingCode>) -> Result<Json<serde_json::Valu
     use suzatary_core::signatures::Presented;
     let state = &call.state;
     let Asker(actor, device) = &call.guard;
-    let (Some(keys), Some(pairings)) = (state.keys.as_deref(), state.pairings.as_deref()) else {
+    let pairings = &*state.pairings;
+    let Some(keys) = state.keys.as_deref() else {
         return Err(Refusal::forbidden(
             "this box trusts no device by a code: it holds no root key to register one with",
         ));

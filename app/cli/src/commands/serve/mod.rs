@@ -100,6 +100,12 @@ pub struct Performers {
     pub acting: Arc<dyn suzatary_core::secretary::routes::Perform + Send + Sync>,
 }
 
+/// The signed requests kept, and the codes that pair a device.
+pub struct Signed {
+    pub requests: Arc<suzatary_io::requests::Requests>,
+    pub pairings: Arc<dyn suzatary_core::signatures::Pairings>,
+}
+
 /// Everything a handler reads.
 #[derive(Clone)]
 pub struct Inner {
@@ -168,8 +174,8 @@ pub struct Inner {
     /// Reached only by a tapped device card.
     pub keys: Option<Arc<suzatary_core::signatures::BoxKeys>>,
     /// Signed requests and answers.
-    pub requests: Option<Arc<suzatary_io::requests::Requests>>,
-    pub pairings: Option<Arc<dyn suzatary_core::signatures::Pairings>>,
+    pub requests: Arc<suzatary_io::requests::Requests>,
+    pub pairings: Arc<dyn suzatary_core::signatures::Pairings>,
     /// So a request sent twice at once runs once.
     pub performing: asked::InFlight,
     /// Now, in UTC, since devices stamp UTC.
@@ -309,11 +315,13 @@ pub struct Chained {
 
 impl State {
     #[must_use]
+    #[allow(clippy::too_many_arguments)]
     pub fn over(
         first: Chained,
         rest: impl IntoIterator<Item = Chained>,
         deployment: Arc<Deployment>,
         door: suzatary_core::gate::Door,
+        Signed { requests, pairings }: Signed,
         Performers { postman, acting }: Performers,
         workers: Arc<Workers>,
         Settings {
@@ -378,8 +386,8 @@ impl State {
                 prodrome_core::memo::Lru::new(4),
             ))),
             keys: None,
-            requests: None,
-            pairings: None,
+            requests,
+            pairings,
             performing: Arc::default(),
             wall: chrono::Utc::now,
             answered: Arc::new(answered),
@@ -465,18 +473,6 @@ impl State {
     #[must_use]
     pub fn with_wall(mut self, wall: fn() -> chrono::DateTime<chrono::Utc>) -> Self {
         self.building().wall = wall;
-        self
-    }
-
-    #[must_use]
-    pub fn with_requests(mut self, requests: suzatary_io::requests::Requests) -> Self {
-        self.building().requests = Some(Arc::new(requests));
-        self
-    }
-
-    #[must_use]
-    pub fn with_pairings(mut self, pairings: Arc<dyn suzatary_core::signatures::Pairings>) -> Self {
-        self.building().pairings = Some(pairings);
         self
     }
 
@@ -955,6 +951,15 @@ pub async fn listen(instance: &Instance, serving: Serving) -> anyhow::Result<()>
         rest.clone(),
         Arc::new(instance.deployment.clone()),
         serving.door,
+        Signed {
+            requests: Arc::new(suzatary_io::requests::Requests::open(
+                instance.requests(),
+                instance.paths.answers.clone(),
+            )),
+            pairings: Arc::new(suzatary_io::pairing::Pairings::at(
+                instance.paths.pairing.clone(),
+            )),
+        },
         Performers {
             postman: Arc::new(serving.postman),
             acting: Arc::new((serving.acting)(stores, Arc::clone(&workers))),
@@ -978,13 +983,6 @@ pub async fn listen(instance: &Instance, serving: Serving) -> anyhow::Result<()>
     .with_titler(Arc::new(serving.titler))
     .with_stamp(serving.stamp)
     .with_keys(world.signers.held().cloned())
-    .with_requests(suzatary_io::requests::Requests::open(
-        instance.requests(),
-        instance.paths.answers.clone(),
-    ))
-    .with_pairings(Arc::new(suzatary_io::pairing::Pairings::at(
-        instance.paths.pairing.clone(),
-    )))
     .with_plugins(instance.plugins.clone())
     .with_reach(instance.reach())
     .with_repos(instance.repos.clone())

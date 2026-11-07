@@ -3208,13 +3208,15 @@ impl Server {
             Vec::new(),
             deploying,
             door,
+            serve::Signed {
+                requests: Arc::new(requests.clone()),
+                pairings: pairings.clone(),
+            },
             serve::Performers { postman, acting },
             Arc::clone(&workers),
             self.settings.over(Arc::new(held.root.clone())),
         )
         .with_keys(self.keys)
-        .with_pairings(pairings.clone())
-        .with_requests(requests.clone())
         .with_wall(stamped)
         // The store the fakes' upload index reads, under their scratch root.
         .with_uploads(upload_store(&held.root), vault.clone());
