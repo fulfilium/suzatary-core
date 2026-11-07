@@ -18,7 +18,7 @@ use serde::{Deserialize, Serialize};
 use crate::mail::dedup_key::{DedupKey, Keyed};
 
 /// The version this program reads and writes.
-pub const SCHEMA_VERSION: u64 = 4;
+pub(crate) const SCHEMA_VERSION: u64 = 4;
 
 /// The word a decision is stored and answered under; a closed set, so a fourth spelling is a
 /// parse failure rather than a badge nobody renders.

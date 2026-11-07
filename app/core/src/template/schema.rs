@@ -21,11 +21,11 @@ pub fn path(name: &str) -> String {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Schema {
     /// Each named type's module of accessors, by its [`path`].
-    pub modules: BTreeMap<String, String>,
+    pub(crate) modules: BTreeMap<String, String>,
     /// Values of `T` as serde prints them ([`super::example`]), which together take every arm
     /// of every sum and leave every option empty once. Typst asks for a name only on the branch
     /// it takes, so a template is checked against them all.
-    pub examples: Vec<Value>,
+    pub(crate) examples: Vec<Value>,
 }
 
 /// `T`'s schema.

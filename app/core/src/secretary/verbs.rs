@@ -50,9 +50,9 @@ mod weather;
 mod web;
 mod withdraw_proposal;
 
-pub use add_topics::AddTopics;
-pub use attachments::Attachments;
-pub use revise_topics::ReviseTopics;
+pub(crate) use add_topics::AddTopics;
+pub(crate) use attachments::Attachments;
+pub(crate) use revise_topics::ReviseTopics;
 
 /// The verbs the triage agent holds too, over the agent's part of the secretary's record.
 pub type GitDiffSummary = verbs::GitDiffSummary<SecretarySurface>;
@@ -73,41 +73,41 @@ pub type TodoShow = verbs::TodoShow<SecretarySurface>;
 /// A part of the record opened, every part read in words.
 pub type Zoom = verbs::Zoom<SecretarySurface>;
 pub use briefing::Briefing;
-pub use briefing_delta::BriefingDelta;
+pub(crate) use briefing_delta::BriefingDelta;
 pub use calendar::Calendar;
 pub use consolidate::Consolidate;
 pub use context::Context;
 pub use decisions::Decisions;
 pub use draft_note::DraftNote;
-pub use drive_list::DriveList;
+pub(crate) use drive_list::DriveList;
 pub use drive_read::DriveRead;
-pub use filing::{FilingArgs, Reasoned};
+pub(crate) use filing::{FilingArgs, Reasoned};
 pub use forget::Forget;
 pub use junk_digest::JunkDigest;
-pub use junk_show::JunkShow;
-pub use propose_act::ProposeAct;
-pub use propose_changes::ProposeChanges;
-pub use propose_coding_session::ProposeCodingSession;
-pub use propose_decision::ProposeDecision;
-pub use propose_email::ProposeEmail;
-pub use propose_forward::ProposeForward;
-pub use propose_patch::ProposePatch;
-pub use recall::Recall;
+pub(crate) use junk_show::JunkShow;
+pub(crate) use propose_act::ProposeAct;
+pub(crate) use propose_changes::ProposeChanges;
+pub(crate) use propose_coding_session::ProposeCodingSession;
+pub(crate) use propose_decision::ProposeDecision;
+pub(crate) use propose_email::ProposeEmail;
+pub(crate) use propose_forward::ProposeForward;
+pub(crate) use propose_patch::ProposePatch;
+pub(crate) use recall::Recall;
 pub use remember::Remember;
-pub use repo_grep::RepoGrep;
-pub use repo_read::RepoRead;
-pub use repo_tree::RepoTree;
-pub use repos_list::ReposList;
+pub(crate) use repo_grep::RepoGrep;
+pub(crate) use repo_read::RepoRead;
+pub(crate) use repo_tree::RepoTree;
+pub(crate) use repos_list::ReposList;
 pub use search::Search;
-pub use search_older::SearchOlder;
-pub use sync_mail::SyncMail;
+pub(crate) use search_older::SearchOlder;
+pub(crate) use sync_mail::SyncMail;
 pub use triage_cards::{TriageCards, answered, listed, standing};
-pub use triage_withdraw::TriageWithdraw;
-pub use upload_read::UploadRead;
-pub use watch_mail::WatchMail;
+pub(crate) use triage_withdraw::TriageWithdraw;
+pub(crate) use upload_read::UploadRead;
+pub(crate) use watch_mail::WatchMail;
 pub use weather::Weather;
 pub use web::Web;
-pub use withdraw_proposal::WithdrawProposal;
+pub(crate) use withdraw_proposal::WithdrawProposal;
 
 // --- attachments -------------------------------------------------------------
 

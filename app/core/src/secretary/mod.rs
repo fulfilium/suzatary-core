@@ -42,7 +42,7 @@ pub mod done_elsewhere;
 pub mod erasure;
 pub mod fact_life;
 pub mod failing;
-pub mod file_query;
+pub(crate) mod file_query;
 pub mod file_search;
 pub mod filed;
 pub mod fixes;
@@ -135,8 +135,9 @@ use crate::verb::Request;
 pub use call::Call;
 use store::{ConversationId, Entry, Stored};
 pub use store::{ConversationState, state};
+pub(crate) use surface::SecretarySurface;
 use surface::Subset;
-pub use surface::{Effect, Powers, SecretaryCall, SecretarySurface, SecretaryVerb, tools};
+pub use surface::{Effect, SecretaryCall, SecretaryVerb, tools};
 use verb_answer::VerbAnswer;
 
 /// Who a chain write from this surface is by, fixed here so no call's arguments can change it.
@@ -568,7 +569,7 @@ pub struct Bound<'a> {
 
 /// The chains a call may read, each read once ([`crate::chain_set::Read`]).
 #[must_use]
-pub fn chains_read(chains: &[Bound<'_>]) -> crate::chain_set::Read {
+pub(crate) fn chains_read(chains: &[Bound<'_>]) -> crate::chain_set::Read {
     crate::chain_set::Read::of_stores(chains.iter().map(|bound| (bound.policy, bound.caps.chain)))
 }
 

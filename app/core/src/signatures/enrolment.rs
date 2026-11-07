@@ -88,7 +88,7 @@ impl Endorsement {
 ///
 /// # Errors
 /// Why not, as a post's refusal says it.
-pub fn endorses(
+pub(crate) fn endorses(
     history: &Dag<TodoEvent>,
     root: &PublicKey,
     tapper: &Actor,

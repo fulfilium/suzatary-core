@@ -99,7 +99,7 @@ impl Owed {
     /// Drops the secret of any link whose removal rests on that link's card, so the box never
     /// asks to set a link it retires.
     #[must_use]
-    pub fn retiring(mut self) -> Self {
+    pub(crate) fn retiring(mut self) -> Self {
         use crate::secretary::acts::Act;
         let removed: Vec<String> = self
             .owed

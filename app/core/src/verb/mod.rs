@@ -12,7 +12,8 @@ use crate::refusal::Refusal;
 
 pub use arguments::parse;
 pub use caught::Caught;
-pub use chained::{Chained, Own, Request, chain_named};
+pub(crate) use chained::chain_named;
+pub use chained::{Chained, Own, Request};
 pub use sum::tool;
 pub(crate) use sum::verbs;
 

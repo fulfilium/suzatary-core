@@ -13,7 +13,7 @@ use crate::enclosed::Enclosure;
 
 /// The largest image accepted: the model API's own per-image ceiling. A PDF's is
 /// [`crate::file_read::MAX_PDF`].
-pub const MAX_BYTES: usize = 5 * 1024 * 1024;
+pub(crate) const MAX_BYTES: usize = 5 * 1024 * 1024;
 
 /// A file's name in the store: the SHA-256 of its bytes, as 64 lowercase hex digits.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
@@ -136,7 +136,7 @@ pub const MAX_NAME: usize = 200;
 
 impl Attachment {
     /// Accept these bytes as a file: a PDF within [`crate::file_read::MAX_PDF`] or an image
-    /// within [`MAX_BYTES`], named by their hash.
+    /// within `MAX_BYTES`, named by their hash.
     ///
     /// # Errors
     /// Empty, too large, or neither a PDF nor one of the four image types.

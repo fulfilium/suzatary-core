@@ -20,9 +20,11 @@ use std::collections::BTreeMap;
 use serde_json::{Map, Value};
 
 pub use call::Call;
-pub use holds::{Direct, Holds};
+pub(crate) use holds::Direct;
+pub use holds::Holds;
 pub use says::Says;
-pub use surface::{TriageCall, TriageSurface, TriageVerb, tools};
+pub(crate) use surface::TriageSurface;
+pub use surface::{TriageCall, TriageVerb, tools};
 // Public so `app/cli/tests/live.rs` can weigh the answers on the live manuals.
 pub use reads::{CONTEXT_CAP, CONTEXT_HEADROOM, context, manual};
 

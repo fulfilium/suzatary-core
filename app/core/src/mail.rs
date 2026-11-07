@@ -266,7 +266,7 @@ pub const SHOWN_HEADERS: &[&str] = &["From", "To", "Cc", "Subject", "Date", "Rep
 pub const LINK_SCHEMES: &[&str] = &["http://", "https://", "mailto:"];
 
 /// A source hash prefix shorter than this names todos by accident, so it is not evidence.
-pub const MIN_SOURCE_PREFIX: usize = 6;
+pub(crate) const MIN_SOURCE_PREFIX: usize = 6;
 
 /// `text` cut to at most `chars` characters, on a char boundary, never panicking.
 #[must_use]

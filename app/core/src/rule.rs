@@ -6,7 +6,7 @@
 //! interpreter's, and what it records is an object of the store it writes, so the outcome moves
 //! the reading and DISCHARGES the rule (the law each rule's tests state). A firing is memoised by
 //! the content name of the reading it fired on ([`ReadingName`]), so a second notice of one
-//! reading is the first ([`Memo`]); the memo that survives a restart is the store itself, since a
+//! reading is the first (`Memo`); the memo that survives a restart is the store itself, since a
 //! recorded outcome leaves no reading on which P holds.
 //!
 //! Two ways a rule runs, the line CALM draws. The box's own rules write monotone records (a
@@ -23,7 +23,7 @@ mod reading_name;
 
 pub use engine::Engine;
 pub use firing::Firing;
-pub use memo::Memo;
+pub(crate) use memo::Memo;
 pub use reading_name::{Named, ReadingName};
 
 /// P over a reading of one key: whether the box owes that reading its effect.

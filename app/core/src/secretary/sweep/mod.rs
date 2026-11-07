@@ -21,17 +21,17 @@ use crate::verb::{Chained, Request, Verb};
 use candidates::{Candidate, Match, OpenTodo};
 
 /// At most this many candidates per todo, in [`Match`] rank order then newest first.
-pub const PER_TODO: usize = 6;
+pub(crate) const PER_TODO: usize = 6;
 
 /// At most this many todos per round, freshest evidence first; the rest wait a day.
-pub const PER_ROUND: usize = 15;
+pub(crate) const PER_ROUND: usize = 15;
 
 /// The most characters of one message the round pre-loads; the model can still call `show`.
-pub const CLIP_CHARS: usize = 4000;
+pub(crate) const CLIP_CHARS: usize = 4000;
 
 /// The verbs this round may call: every `Reads` verb plus `propose_changes`, derived from
 /// each verb's declared [`Effect`] so a new write cannot join.
-pub const SURFACE: Subset = Subset {
+pub(crate) const SURFACE: Subset = Subset {
     allows: |verb| verb.class().effect == Effect::Reads || verb == SecretaryVerb::ProposeChanges,
     refuses: |called, listed| {
         Refusal::not_found(format!(
@@ -55,7 +55,7 @@ const ASK_HEADER: &str = "Below is every open todo with later mail that might be
 
 /// The gathered open list after the bounds, so an unbounded turn cannot be built.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Bounded {
+pub(crate) struct Bounded {
     /// The todos laid before the model, freshest evidence first.
     pub todos: Vec<(OpenTodo, Vec<Candidate>)>,
     /// How many open todos had any candidate before [`PER_ROUND`] applied.
@@ -205,7 +205,7 @@ pub fn sweep(
 pub struct DryRun {
     /// Each todo in the round, in order, with its candidate count.
     pub todos: Vec<(prodrome_core::event::TodoId, usize)>,
-    /// How many open todos had any candidate before [`PER_ROUND`] applied.
+    /// How many open todos had any candidate before `PER_ROUND` applied.
     pub considered: usize,
     /// How many todos are in the round.
     pub in_round: usize,

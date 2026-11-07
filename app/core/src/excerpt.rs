@@ -13,10 +13,10 @@ use regex::Regex;
 
 /// The most characters an excerpt keeps when its caller names no bound: enough for a failure's
 /// last sentence, never a body.
-pub const CHARS: usize = 500;
+pub(crate) const CHARS: usize = 500;
 
 /// What an address becomes.
-pub const ADDRESS: &str = "[address]";
+pub(crate) const ADDRESS: &str = "[address]";
 
 /// Bounded, scrubbed words of a failure. [`fmt::Display`] prints them as one line, control
 /// characters escaped; [`Excerpt::as_str`] keeps their line breaks for a reader that is not a
@@ -50,7 +50,7 @@ fn is_ip(candidate: &str) -> bool {
 }
 
 impl Excerpt {
-    /// The last [`CHARS`] characters of `text`, trimmed and scrubbed: where a failure says why.
+    /// The last `CHARS` characters of `text`, trimmed and scrubbed: where a failure says why.
     #[must_use]
     pub fn of(text: &str) -> Self {
         Self::tail(text, CHARS)

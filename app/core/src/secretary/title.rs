@@ -14,7 +14,7 @@ use crate::secretary::transcript;
 pub const ASK: &str = "Title this conversation";
 
 /// The job's rules.
-pub const SYSTEM: &str = "You name conversations for a list. Answer with the title alone: \
+pub(crate) const SYSTEM: &str = "You name conversations for a list. Answer with the title alone: \
                           at most six words, no quotes, no punctuation at the end, no markup.";
 
 /// How much of the question and of the answer the job reads.
@@ -64,7 +64,7 @@ pub fn question(stored: &Stored) -> Option<Conversation> {
 ///
 /// # Errors
 /// [`crate::secretary::store::NotATitle`] when nothing is left.
-pub fn from_answer(say: &str) -> Result<Title, crate::secretary::store::NotATitle> {
+pub(crate) fn from_answer(say: &str) -> Result<Title, crate::secretary::store::NotATitle> {
     let line = crate::secretary::typst_prose_line(say).unwrap_or("");
     let bare = line
         .trim_matches(|c: char| matches!(c, '"' | '\'' | '“' | '”' | '‘' | '’' | '`'))

@@ -7,7 +7,7 @@
 //! a tap asked for is owed while what it asks is unmet, however it was met.
 //!
 //! A pasted link to a Google account's calendar is that account's: once the account reads its
-//! calendars through its sign-in with Google, the link's removal is owed ([`Owed::retiring`]).
+//! calendars through its sign-in with Google, the link's removal is owed (`Owed::retiring`).
 //! The Connect card the paste filed names the link's card in its sources.
 
 use crate::capability::Datetime;

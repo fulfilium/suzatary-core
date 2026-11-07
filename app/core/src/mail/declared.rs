@@ -1,6 +1,6 @@
 //! The folders a Microsoft account declares, as its sync pulls them: each leaf of its
 //! `inbox_folders` as a window of recent mail that lands unread and is triage input, then its sent
-//! folder whole, read-only, landing read in the [`SENT_LEAF`]. Each is checked against the folders
+//! folder whole, read-only, landing read in the `SENT_LEAF`. Each is checked against the folders
 //! the server lists, and the account's line names every folder with what its pull came to, so a
 //! folder that does not sync fails the account by name and the rest still sync.
 
@@ -9,7 +9,7 @@ use crate::mail::imap::{INBOX, ImapError, Pull, Pulled};
 use crate::mail::puller::Unpulled;
 
 /// The maildir leaf the sent folder lands in.
-pub const SENT_LEAF: &str = "Sent";
+pub(crate) const SENT_LEAF: &str = "Sent";
 
 /// One declared folder: the maildir leaf it lands in and the pull that fills it.
 #[derive(Debug, Clone, PartialEq, Eq)]

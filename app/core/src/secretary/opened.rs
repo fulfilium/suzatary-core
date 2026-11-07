@@ -5,7 +5,7 @@
 //! uncached. It is one of the copies an erasure clears: the sweep forgets a name before and
 //! after it destroys the key, and an erasure's reading answers before the cache is asked.
 //!
-//! It is bounded by the bytes of the words it keeps ([`Opened::BOUND`]); past it, the oldest
+//! It is bounded by the bytes of the words it keeps (`Opened::BOUND`); past it, the oldest
 //! entries go first, and a read past the bound opens again.
 
 use std::collections::{HashMap, VecDeque};
@@ -22,7 +22,7 @@ use crate::store::Gets;
 /// bytes.
 type Slot = (KeyName, [u8; 32]);
 
-/// Opened words, oldest first, within [`Opened::BOUND`] bytes.
+/// Opened words, oldest first, within `Opened::BOUND` bytes.
 #[derive(Debug, Default)]
 pub struct Opened(Mutex<Kept>);
 
@@ -35,7 +35,7 @@ struct Kept {
 
 impl Opened {
     /// The most bytes of words kept at once.
-    pub const BOUND: usize = 32 << 20;
+    pub(crate) const BOUND: usize = 32 << 20;
 
     fn kept(&self) -> std::sync::MutexGuard<'_, Kept> {
         self.0.lock().unwrap_or_else(PoisonError::into_inner)

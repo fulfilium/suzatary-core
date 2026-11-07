@@ -41,7 +41,7 @@ impl EmailAddress {
     /// The same address in lower case; lowering a character adds no `@`, `.` or whitespace, so
     /// the result keeps the shape [`EmailAddress::new`] checked.
     #[must_use]
-    pub fn lowercased(&self) -> Self {
+    pub(crate) fn lowercased(&self) -> Self {
         Self(self.0.to_lowercase())
     }
 }

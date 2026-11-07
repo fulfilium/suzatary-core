@@ -43,7 +43,7 @@ impl Arg {
 
     /// A positional argument — what makes a `Group` an array.
     #[must_use]
-    pub fn positional(value: Value) -> Arg {
+    pub(crate) fn positional(value: Value) -> Arg {
         Arg {
             value,
             name: None,
@@ -80,21 +80,21 @@ pub enum Value {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Call {
     /// The function's name.
-    pub callee: String,
+    pub(crate) callee: String,
     /// Its arguments.
     pub args: Vec<Arg>,
     /// `#fn(...)[body][more]` — content blocks attached to the call.
     pub trailing: Vec<String>,
     /// Whether the source wrote `#fn(...)`: required in markup, forbidden in code.
-    pub hashed: bool,
+    pub(crate) hashed: bool,
     /// Comments after the last argument — see [`Value::Group`]'s `tail`.
     pub tail: Vec<String>,
 }
 
 /// One level of indentation.
-pub const INDENT: &str = "  ";
+pub(crate) const INDENT: &str = "  ";
 /// The column an argument list is allowed to reach before it breaks.
-pub const WIDTH: usize = 88;
+pub(crate) const WIDTH: usize = 88;
 
 impl Value {
     /// The source this value renders to at `indent`.
@@ -176,7 +176,7 @@ fn render_arg(arg: &Arg, indent: usize) -> String {
 
 /// A top-level todo block with the comment run above it.
 #[must_use]
-pub fn render_block(call: &Call, leading: &[String]) -> String {
+pub(crate) fn render_block(call: &Call, leading: &[String]) -> String {
     let mut out = String::new();
     for line in comment_lines(leading, "") {
         let _ = writeln!(out, "{line}");

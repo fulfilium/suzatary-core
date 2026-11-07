@@ -48,7 +48,7 @@ impl Shows for OwnersWords {
 }
 
 /// Every clean part: what the compactor is shown beside a node not of the owner's words alone.
-pub enum CleanWords {}
+pub(crate) enum CleanWords {}
 
 impl Shows for CleanWords {
     fn shows(label: &Label) -> bool {

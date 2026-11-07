@@ -12,7 +12,7 @@ use prodrome_core::event::Hash;
 
 /// `tree`, and the path of child positions from its root to each node it names.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct IndexedTree<M> {
+pub(crate) struct IndexedTree<M> {
     tree: Tree<M>,
     paths: BTreeMap<Hash, Vec<usize>>,
 }

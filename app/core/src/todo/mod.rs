@@ -5,7 +5,7 @@ pub mod deadline;
 pub mod fields;
 pub mod patch;
 pub mod price;
-pub mod todo_patch;
+pub(crate) mod todo_patch;
 
 pub use cycle::Cycle;
 pub use deadline::Deadline;

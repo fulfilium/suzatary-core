@@ -226,12 +226,6 @@ impl ChurnList {
         &self.keep
     }
 
-    /// Whether a seed was folded in, and how large.
-    #[must_use]
-    pub fn seed_status(&self) -> Seed {
-        self.seed
-    }
-
     /// Where mail from `sender` is churn, if it is: the covering entry's
     /// origin (the more deliberate one, when both cover it), or `None` when
     /// `keep` covers it or nothing does. An unaddressed sender is never
@@ -319,10 +313,10 @@ pub struct Uid(pub u32);
 pub const HEADER_CHARS: usize = 200;
 
 /// The most headers a digest lists in full per account, newest first.
-pub const MAX_LISTED: usize = 50;
+pub(crate) const MAX_LISTED: usize = 50;
 
 /// The most sender domains a digest counts by name per account, most first.
-pub const MAX_DOMAINS: usize = 50;
+pub(crate) const MAX_DOMAINS: usize = 50;
 
 /// One Junk message's headers, and the handle to open it by.
 ///
@@ -430,11 +424,11 @@ pub struct JunkDigest {
     pub total: usize,
     /// The [`MAX_DOMAINS`] commonest sender domains, each with its count and where `churn`
     /// covers it from (`None` when nothing does), most first (ties by name).
-    pub by_domain: Vec<(Sender, usize, Option<Origin>)>,
+    pub(crate) by_domain: Vec<(Sender, usize, Option<Origin>)>,
     /// How many sender domains are not in `by_domain`.
     pub domains_left_out: usize,
     /// The [`MAX_LISTED`] newest headers not from a churn domain, newest UID first.
-    pub outside_churn: Vec<JunkHeader>,
+    pub(crate) outside_churn: Vec<JunkHeader>,
     /// How many headers outside churn are not in `outside_churn`.
     pub listed_left_out: usize,
 }

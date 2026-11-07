@@ -64,7 +64,7 @@ impl<A> Own<A> for Chained<A> {
 ///
 /// # Errors
 /// A `chain` that is not a string.
-pub fn chain_named(args: &Map<String, Value>) -> Result<Option<String>, Refusal> {
+pub(crate) fn chain_named(args: &Map<String, Value>) -> Result<Option<String>, Refusal> {
     #[derive(Deserialize, JsonSchema)]
     struct On {
         chain: Option<String>,

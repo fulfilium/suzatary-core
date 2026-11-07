@@ -15,7 +15,7 @@ use super::value::{Arg, Call, Value};
 
 /// A todo block read back: the call, and the `//` run above it.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Located {
+pub(crate) struct Located {
     /// The `#kind(...)[body]` call.
     pub call: Call,
     /// The comment lines immediately above it, which belong to the block.
@@ -27,7 +27,7 @@ pub struct Located {
 /// The read half of [`super::render_verified`]: anything outside the call is
 /// the escape being looked for, and a typst diagnostic is a
 /// refusal, since the parser's recovery is not the text that was written.
-pub fn only_block(text: &str, kind: &str) -> Result<Located, DecorationError> {
+pub(crate) fn only_block(text: &str, kind: &str) -> Result<Located, DecorationError> {
     let root = typst_syntax::parse(text);
     let (errors, _) = root.errors_and_warnings();
     if let Some(first) = errors.first() {

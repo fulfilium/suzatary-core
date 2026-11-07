@@ -21,7 +21,7 @@ pub const MAX_TEXT: usize = 100;
 /// The longest a watch stands, in days.
 pub const MAX_DAYS: u16 = 60;
 /// How long after a ring its push is still owed, whatever the watch's expiry.
-pub const GRACE: chrono::TimeDelta = chrono::TimeDelta::days(1);
+pub(crate) const GRACE: chrono::TimeDelta = chrono::TimeDelta::days(1);
 
 /// A watch's name: the first 16 hex digits of the hash of its [`Set`] line.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -288,7 +288,7 @@ impl Watch {
         }
     }
 
-    /// The push still owed for its ring, until it is delivered or [`GRACE`] after the ring.
+    /// The push still owed for its ring, until it is delivered or `GRACE` after the ring.
     #[must_use]
     pub fn owed(&self, now: Instant) -> Option<&MailHash> {
         match &self.life {

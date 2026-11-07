@@ -234,7 +234,7 @@ pub enum Opaque {
     /// alternate as base64's do, [`ENCODED`] characters of them in all (a token that is exactly
     /// an integrity hash, `sha256-…` or Go's `h1:…`, not counted while its bytes are no text, nor
     /// a sealed slot's box of ciphertext); a hex
-    /// token of [`HEX`] or more digits whose bytes, read from either digit, are [`textual`]; or
+    /// token of [`HEX`] or more digits whose bytes, read from either digit, are `textual`; or
     /// [`PAIRS`] hex pairs in a row, separated by `:`, `-` or a space.
     Encoded,
     /// Text that spells with escapes: [`ESCAPES`] or more of a letter, a digit or a byte past
@@ -381,7 +381,7 @@ pub fn placeheld(text: &str) -> String {
 /// letters, and four different bytes or more. Random bytes (a digest, a hash) are not printable,
 /// a placeholder of digits is not letters, and one of a repeated byte (`0707…`) spells nothing.
 #[must_use]
-pub fn textual(bytes: &[u8]) -> bool {
+pub(crate) fn textual(bytes: &[u8]) -> bool {
     let printable = bytes
         .iter()
         .filter(|b| b.is_ascii_graphic() || b.is_ascii_whitespace())

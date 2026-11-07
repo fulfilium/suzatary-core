@@ -36,9 +36,9 @@ pub type AliasEvent = alias::AliasEvent<Topics>;
 /// The alias store's schema.
 pub type AliasVocabulary = alias::AliasVocabulary<Topics>;
 /// What a topic's name stands for.
-pub type Alias = alias::Alias<Topics>;
+pub(crate) type Alias = alias::Alias<Topics>;
 /// A place where concurrent renames disagree.
-pub type Dispute = set::Disagreement<Topics>;
+pub(crate) type Dispute = set::Disagreement<Topics>;
 
 /// The topics on each target, read through their aliases, with who set each.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
@@ -134,7 +134,7 @@ impl Reading {
     }
 
     #[must_use]
-    pub fn disagreements(&self) -> Vec<Dispute> {
+    pub(crate) fn disagreements(&self) -> Vec<Dispute> {
         self.set.disagreements()
     }
 

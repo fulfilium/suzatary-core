@@ -1199,7 +1199,7 @@ pub fn waiting(
 }
 
 /// The most objects one post may carry; more is a refusal, never a silent truncation.
-pub const MAX_POSTED: usize = 512;
+pub(crate) const MAX_POSTED: usize = 512;
 
 /// `POST /api/objects`: the one write path, deciding under the write lock and then taking in
 /// what the outcome names.
@@ -1288,7 +1288,7 @@ pub struct Posted<'a> {
 /// store's own verify-on-receive.
 ///
 /// # Errors
-/// More than [`MAX_POSTED`] objects, or the store not read or not written.
+/// More than `MAX_POSTED` objects, or the store not read or not written.
 pub fn receive_changes<E: crate::store::Store>(
     store: &dyn Prodrome<E>,
     posted: &Posted<'_>,
@@ -1705,17 +1705,17 @@ fn add(
 
 /// Why this priority when the app's optional line is blank: where the number came from, which
 /// is honest where an invented reason would not be.
-pub const APP_RATIONALE: &str = "Set by hand in the app.";
+pub(crate) const APP_RATIONALE: &str = "Set by hand in the app.";
 /// An action line, not a document.
 pub const MAX_BODY_CHARS: usize = 2000;
 /// A sentence.
-pub const MAX_RATIONALE_CHARS: usize = 500;
+pub(crate) const MAX_RATIONALE_CHARS: usize = 500;
 /// A screen and a half, generously.
-pub const MAX_DETAIL_CHARS: usize = 8000;
+pub(crate) const MAX_DETAIL_CHARS: usize = 8000;
 /// A sentence.
-pub const MAX_WAITING_ON_CHARS: usize = 500;
+pub(crate) const MAX_WAITING_ON_CHARS: usize = 500;
 /// A checklist that long is a mistake, not a todo.
-pub const MAX_SUBTODOS: usize = 200;
+pub(crate) const MAX_SUBTODOS: usize = 200;
 
 /// A change's prose within the caps a new todo's has.
 fn capped_patch(patch: &crate::todo::TodoPatch) -> Result<(), Refusal> {

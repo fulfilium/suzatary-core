@@ -324,7 +324,7 @@ pub fn mk_source(
 }
 
 /// One comment run. Refuses an unknown site and an empty run.
-pub fn mk_note(on: &str, lines: Vec<String>) -> Result<Note, ProdromeError> {
+pub(crate) fn mk_note(on: &str, lines: Vec<String>) -> Result<Note, ProdromeError> {
     if lines.is_empty() {
         return Err(ProdromeError::invalid(
             "Note.lines must be nonempty — an empty note is not a note",
@@ -351,7 +351,7 @@ pub fn mk_subtodo(body: &str, done: bool) -> Result<SubTodo, ProdromeError> {
 /// Every field of this payload, in declared order. Long on purpose: the field set is frozen,
 /// and a builder that let one be forgotten could print a different object under the same name.
 #[allow(clippy::too_many_arguments)]
-pub fn mk_record(
+pub(crate) fn mk_record(
     kind: &str,
     created: Datetime,
     body: MarkupSource,

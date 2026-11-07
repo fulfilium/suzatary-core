@@ -46,7 +46,7 @@ impl Window {
 pub const DEFAULT_TURN_WINDOW: usize = 60;
 
 /// How many hits one search answers.
-pub const SEARCH_LIMIT: usize = 50;
+pub(crate) const SEARCH_LIMIT: usize = 50;
 
 /// What a reading takes from beyond the two stores.
 #[derive(Clone, Copy)]

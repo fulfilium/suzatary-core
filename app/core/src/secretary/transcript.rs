@@ -226,7 +226,7 @@ impl Transcript {
 
     /// Whether the turn the line named `line` says is still owed an answer.
     #[must_use]
-    pub fn owes(&self, line: &Hash) -> bool {
+    pub(crate) fn owes(&self, line: &Hash) -> bool {
         self.owed()
             .iter()
             .any(|(turn, _)| self.lines[self.turns[*turn]].name == *line)
@@ -263,10 +263,10 @@ pub fn push_answering(
 }
 
 /// How long before a restart a question it left unanswered is still answered after it.
-pub const RESUMED: chrono::Duration = chrono::Duration::hours(1);
+pub(crate) const RESUMED: chrono::Duration = chrono::Duration::hours(1);
 
 /// Every conversation a restart at `now` left unanswered ([`Transcript::interrupted`]) within
-/// [`RESUMED`], to be answered now; none while the model's last observed call, `model`, failed,
+/// `RESUMED`, to be answered now; none while the model's last observed call, `model`, failed,
 /// since a round would only close each question with "did not finish", and the owner's next write
 /// asks again.
 ///
@@ -329,7 +329,7 @@ pub fn erasures<'l>(
 /// [`erasures`], each beside the name of the erasure line that says why. A slot erased is
 /// erased in every seal of it: the key of each reseal of a slot an erasure names is named too.
 #[must_use]
-pub fn erasers<'l>(
+pub(crate) fn erasers<'l>(
     lines: impl IntoIterator<Item = (&'l Hash, &'l LineEvent)>,
 ) -> BTreeMap<KeyName, (&'l Hash, &'l Erasure)> {
     let lines: Vec<(&Hash, &LineEvent)> = lines.into_iter().collect();
@@ -1013,7 +1013,7 @@ pub fn sweep(conversations: Conversations<'_>) -> Result<usize, StoreError> {
 /// # Errors
 /// The stores' own, and [`StoreError::Unwritable`] naming every key kept because a block
 /// rendered from its words may still be on disk.
-pub fn destroy<'l>(
+pub(crate) fn destroy<'l>(
     conversations: Conversations<'_>,
     slots: impl IntoIterator<Item = (&'l LineEvent, usize, &'l KeyName)>,
 ) -> Result<usize, StoreError> {

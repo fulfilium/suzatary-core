@@ -36,20 +36,19 @@ mod unproven;
 pub use asking::scene;
 pub use asking::{Asking, Possessed, Proven, Request, Trusted, refused};
 pub use custody::Custody;
-pub use enrolment::{Endorsement, Enrolling, Enrolment, endorses};
+pub use enrolment::{Endorsement, Enrolling, Enrolment};
 pub use epoch::since_epoch;
 pub use key_standing::KeyStanding;
 pub use keys::{AGENT_KEY, BOX_KEY, BoxKeys, NotTheKeys, agent_key};
 #[cfg(any(test, feature = "nothing"))]
 pub use pairing::InMemoryPairings;
 pub use pairing::{
-    ALPHABET, Code, LETTERS, MINUTES, NotACode, Pairing, Pairings, Presented, RUN, Refused, Salt,
-    TRIES, present,
+    ALPHABET, Code, MINUTES, Pairing, Pairings, Presented, Refused, Salt, TRIES, present,
 };
 pub use provenance::Provenance;
 pub use registry::{
-    AdoptError, Adoption, Epoch, UnsignedWrite, adopt, complete_revocations, epoch, revoke,
-    revoke_misplaced, revoked_for, sign_unsigned, trust, trusted_for, unsigned_writes,
+    Adoption, UnsignedWrite, adopt, complete_revocations, epoch, revoke, revoke_misplaced,
+    revoked_for, sign_unsigned, trust, trusted_for, unsigned_writes,
 };
 pub use request::{WINDOW_SECONDS, body_digest, is_nonce, request_name};
 pub use requested::{Answer, Requested};

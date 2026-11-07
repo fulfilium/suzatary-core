@@ -17,9 +17,9 @@ mod reading;
 mod released;
 mod version;
 
-pub use cut::{Cut, TreeError};
+pub use cut::Cut;
 pub use fragment::{Fragment, FragmentError, Kind};
-pub use plan::{Plan, PlanError, Release};
-pub use reading::{Item, Lot, Named, Place, Reading, ReleaseReading, binding};
+pub use plan::{Plan, Release};
+pub use reading::{Item, Lot, Named, Place, Reading, binding};
 pub use released::{Completed, Completes, Released, ReleasedError};
 pub use version::{Behind, Counted, NotAVersion, Version};

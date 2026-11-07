@@ -2,7 +2,7 @@
 //!
 //! - [`Debounce`] folds a burst of wakes into one trigger at the end of a fixed
 //!   window.
-//! - [`backoff`] is the reconnect schedule after a dropped connection. It is not
+//! - `backoff` is the reconnect schedule after a dropped connection. It is not
 //!   RFC 2177's 29-minute IDLE renewal ([`Wake::TimedOut`]); confusing the two
 //!   would hammer a server or be slow to notice a disconnect.
 //! - [`after`] is the state machine: a change triggers, a timeout re-issues
@@ -35,7 +35,7 @@ pub enum Step {
 /// Decide the next [`Step`] from one watch attempt's outcome.
 ///
 /// `attempt` is the caller's reconnect counter, reset to 0 by any successful
-/// watch, so a recovered connection starts [`backoff`]'s schedule over.
+/// watch, so a recovered connection starts `backoff`'s schedule over.
 #[must_use]
 pub fn after(outcome: Result<Wake, ()>, attempt: u32) -> (Step, u32) {
     match outcome {
@@ -58,7 +58,7 @@ pub fn after_failure(attempt: u32) -> (Duration, u32) {
 ///
 /// The shift is capped at 6 (already past the ceiling) so it cannot overflow.
 #[must_use]
-pub fn backoff(attempt: u32) -> Duration {
+pub(crate) fn backoff(attempt: u32) -> Duration {
     let seconds = 5u64.saturating_mul(1u64 << attempt.min(6));
     Duration::from_secs(seconds.min(300))
 }

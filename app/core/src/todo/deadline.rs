@@ -30,7 +30,7 @@ pub struct Deadline {
 /// days where a span is not whole weeks, omitted otherwise so no stored byte moves.
 #[derive(Serialize, Deserialize, TS)]
 #[ts(rename = "Deadline")]
-pub struct StoredDeadline {
+pub(crate) struct StoredDeadline {
     /// `YYYY-MM-DD`.
     #[ts(type = "string")]
     pub end_date: NaiveDate,
@@ -39,11 +39,11 @@ pub struct StoredDeadline {
     /// The fulfillment at the deadline.
     pub end_percent: u32,
     /// The lead-up in whole weeks.
-    pub lead_up_weeks: Option<u32>,
+    pub(crate) lead_up_weeks: Option<u32>,
     /// The lead-up in days, where it is not whole weeks.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
-    pub lead_up_days: Option<u32>,
+    pub(crate) lead_up_days: Option<u32>,
     /// `YYYY-MM-DD`, the earliest the decay may begin.
     #[ts(type = "string | null")]
     pub start_date: Option<NaiveDate>,

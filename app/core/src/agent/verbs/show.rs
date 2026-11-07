@@ -16,14 +16,14 @@ pub struct Show<S, A>(PhantomData<(S, A)>);
 
 /// The most one part of a paged `show` may answer; a longer body spills to a file the agent
 /// cannot open.
-pub const SHOW_CAP: usize = 24 * 1024;
+pub(crate) const SHOW_CAP: usize = 24 * 1024;
 
 /// Which of a message's body a `show` answers.
 #[derive(Clone, Copy)]
 pub enum Part {
     /// All of it.
     Whole,
-    /// Its `n`th part of [`SHOW_CAP`] characters, from 1, each naming the next.
+    /// Its `n`th part of `SHOW_CAP` characters, from 1, each naming the next.
     Page(usize),
 }
 

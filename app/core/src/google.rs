@@ -29,11 +29,11 @@ mod pkce;
 mod scope;
 
 pub use calendar::{
-    ACTOR, CALENDARS, Calendars, EVENTS, EventTitle, Listed, MAX_ANSWER, NewEvent, SCHEMA, Unread,
+    ACTOR, CALENDARS, Calendars, EVENTS, Listed, MAX_ANSWER, NewEvent, SCHEMA, Unread,
     calendar_name, events_url, insert_body, insert_url, list_url, read_calendars, read_events,
     window,
 };
-pub use client::{CLIENT_ID, CLIENT_SECRET, Client, ClientId, ClientRefused, ClientSecret};
+pub use client::{CLIENT_ID, CLIENT_SECRET, Client, ClientId, ClientSecret};
 pub use flow::{
     AccessToken, Callback, Code, Endpoints, Exchanged, Held, KeptGrant, RefreshToken, authorize,
     exchange, grant_name, read_exchange, read_refresh, refresh,

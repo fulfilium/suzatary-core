@@ -334,7 +334,7 @@ impl LineEvent {
     /// Slot `slot`'s words as `slots` reads them by its key's name, opened with this line's
     /// binding for that slot; missing for a slot the line does not hold.
     #[must_use]
-    pub fn slot_words(&self, slot: usize, slots: &impl Slots) -> Words<LineWords> {
+    pub(crate) fn slot_words(&self, slot: usize, slots: &impl Slots) -> Words<LineWords> {
         let Some(sealed) = self.words.get(slot) else {
             return Gone::Missing.into();
         };

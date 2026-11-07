@@ -19,7 +19,8 @@ mod occurrence;
 mod reading;
 mod when;
 
-pub use content::{Content, MAX_ATTENDEES, MAX_NAME, MAX_TEXT, NotAnOccurrence, Status};
+pub use content::{Content, MAX_NAME, MAX_TEXT, Status};
+pub(crate) use content::{MAX_ATTENDEES, NotAnOccurrence};
 pub use name::{CalendarName, OccurrenceId};
 pub use occurrence::Occurrence;
 pub use reading::{Calendar, Day, Entry};

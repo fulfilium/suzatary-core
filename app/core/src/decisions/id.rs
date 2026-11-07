@@ -11,7 +11,7 @@ impl DecisionId {
     /// Check and build one.
     ///
     /// # Errors
-    /// [`NotADecision::Id`] for anything else.
+    /// `NotADecision::Id` for anything else.
     pub fn new(text: impl Into<String>) -> Result<Self, NotADecision> {
         let text = text.into();
         let shaped = (3..=64).contains(&text.len())

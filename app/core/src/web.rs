@@ -9,9 +9,9 @@ use std::str::FromStr;
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
-pub const MAX_URL: usize = 2048;
+pub(crate) const MAX_URL: usize = 2048;
 
-pub const MAX_QUERY: usize = 300;
+pub(crate) const MAX_QUERY: usize = 300;
 
 /// Allowing this host lets searches run untapped.
 pub const SEARCH_HOST: &str = "html.duckduckgo.com";
@@ -355,7 +355,7 @@ impl WebRequest {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum HostScope {
+pub(crate) enum HostScope {
     Exact(String),
     /// This domain and every name under it.
     Domain(String),

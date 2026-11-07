@@ -16,14 +16,14 @@ pub struct Statement {
 
 impl Statement {
     /// The longest title, in characters.
-    pub const TITLE: usize = 120;
+    pub(crate) const TITLE: usize = 120;
 
     /// Check and build one, the title and rationale with no space around them: one spelling,
     /// so what is stored reprints as itself.
     ///
     /// # Errors
-    /// [`NotADecision::Title`] for a title that is not one trimmed line of 1-120 characters, and
-    /// [`NotADecision::Empty`] for an empty body or an empty or untrimmed rationale.
+    /// `NotADecision::Title` for a title that is not one trimmed line of 1-120 characters, and
+    /// `NotADecision::Empty` for an empty body or an empty or untrimmed rationale.
     pub fn new(title: &str, body: MarkupSource, rationale: &str) -> Result<Self, NotADecision> {
         if title.is_empty()
             || title != title.trim()

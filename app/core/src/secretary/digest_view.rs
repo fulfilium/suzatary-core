@@ -137,7 +137,7 @@ pub fn opened(
 /// What stands for a part labelled `label` to a reader that `reads`: its words, as `words`
 /// gives them, when the reader reads the label, and otherwise its kinds alone. `None` when its
 /// words do not read. The one rule every rendering of the digest shows a part by.
-pub fn shown_as(
+pub(crate) fn shown_as(
     label: Label,
     reads: fn(&Label) -> bool,
     words: impl FnOnce() -> Option<Body>,

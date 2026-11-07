@@ -213,7 +213,7 @@ pub(super) const fn of(id: TemplateId) -> &'static Template {
 
 /// The words for the secret named `name`, from the template whose step asks for it.
 #[must_use]
-pub fn secret_words(name: &str) -> Option<Words> {
+pub(crate) fn secret_words(name: &str) -> Option<Words> {
     CATALOG.iter().find_map(|template| {
         template.steps.iter().find_map(|step| match *step {
             StepShape::Secret {

@@ -547,7 +547,7 @@ impl Digest {
         self.said.get(node).map_or(&[], Vec::as_slice)
     }
 
-    /// Whether `model` found no line for `node` at today's [`NODE_BYTES`] or above.
+    /// Whether `model` found no line for `node` at today's `NODE_BYTES` or above.
     #[must_use]
     pub fn found_unfit(&self, node: &Hash, model: &ModelName) -> bool {
         self.unfit

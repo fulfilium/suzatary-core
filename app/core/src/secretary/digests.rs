@@ -24,9 +24,9 @@ use crate::store::{Doc, Gets, Prodrome, Reads};
 use crate::timings::{Phase, timed};
 
 /// Who every attempt is written as: the compactor, whose word binds about summaries alone.
-pub const COMPACTOR: &str = "compactor";
+pub(crate) const COMPACTOR: &str = "compactor";
 
-/// [`COMPACTOR`] as an actor.
+/// `COMPACTOR` as an actor.
 ///
 /// # Panics
 /// Never: the constant is an actor's name.
@@ -97,7 +97,9 @@ impl ReadDigests<'_> {
     ///
     /// # Errors
     /// The store's own.
-    pub fn line_graph(&self) -> Result<std::sync::Arc<crate::store::Graph<LineEvent>>, Refusal> {
+    pub(crate) fn line_graph(
+        &self,
+    ) -> Result<std::sync::Arc<crate::store::Graph<LineEvent>>, Refusal> {
         Ok(timed(Phase::Lines, || self.lines.lines.graph())?)
     }
 
@@ -117,7 +119,7 @@ impl ReadDigests<'_> {
     ///
     /// # Errors
     /// As [`ReadDigests::read`].
-    pub fn read_over(
+    pub(crate) fn read_over(
         &self,
         lines: &[(&Hash, &prodrome_core::event::Envelope<LineEvent>)],
         opened: &std::collections::BTreeMap<Hash, crate::secretary::store::Entry>,

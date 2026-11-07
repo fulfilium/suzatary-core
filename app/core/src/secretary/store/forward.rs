@@ -75,7 +75,7 @@ pub struct Forwarded {
 pub const EML: &str = "forwarded.eml";
 
 /// The line an inline forward's original begins with.
-pub const SEPARATOR: &str = "---------- Forwarded message ----------";
+pub(crate) const SEPARATOR: &str = "---------- Forwarded message ----------";
 
 /// The headers an inline forward repeats, in this order.
 const REPEATED: &[&str] = &["From", "Date", "Subject", "To", "Cc"];
@@ -132,12 +132,13 @@ impl Forward {
 }
 
 /// `Forward(account, to, cc, subject, note, message)`.
-pub const FORWARD: Constructor = (
+pub(crate) const FORWARD: Constructor = (
     "Forward",
     &["account", "to", "cc", "subject", "note", "message"],
 );
 /// `Forwarded(file, style, from, subject, date)`.
-pub const FORWARDED: Constructor = ("Forwarded", &["file", "style", "from", "subject", "date"]);
+pub(crate) const FORWARDED: Constructor =
+    ("Forwarded", &["file", "style", "from", "subject", "date"]);
 
 impl Literal for Forward {
     fn to_value(&self) -> Value {

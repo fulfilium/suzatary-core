@@ -34,7 +34,7 @@ impl Draft {
     /// Parse one: the id and each link checked, the title, body and rationale trimmed.
     ///
     /// # Errors
-    /// [`NotADecision::Id`] for an id or link of the wrong shape, and [`NotADecision::Itself`]
+    /// `NotADecision::Id` for an id or link of the wrong shape, and `NotADecision::Itself`
     /// for a decision naming itself.
     pub fn new<'s>(
         id: &str,

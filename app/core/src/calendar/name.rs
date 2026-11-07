@@ -16,7 +16,7 @@ impl CalendarName {
     /// Parse one.
     ///
     /// # Errors
-    /// [`NotAnOccurrence::Calendar`] for anything not shaped like a plugin's credential name.
+    /// `NotAnOccurrence::Calendar` for anything not shaped like a plugin's credential name.
     pub fn parse(text: &str) -> Result<Self, NotAnOccurrence> {
         let shaped = text.len() <= 96
             && text
@@ -45,7 +45,7 @@ impl CalendarName {
     /// Whether it is in the namespace of the plugin named `plugin`, `PLUGIN_<PLUGIN>_`: the only
     /// calendars that plugin reads, and so the only ones it may report.
     #[must_use]
-    pub fn of_plugin(&self, plugin: &str) -> bool {
+    pub(crate) fn of_plugin(&self, plugin: &str) -> bool {
         self.0
             .strip_prefix("PLUGIN_")
             .and_then(|rest| rest.split_once('_'))
@@ -118,7 +118,7 @@ impl OccurrenceId {
     /// is still read whole.
     ///
     /// # Errors
-    /// As [`OccurrenceId::new`], and [`NotAnOccurrence::Key`] for a text of fewer parts.
+    /// As [`OccurrenceId::new`], and `NotAnOccurrence::Key` for a text of fewer parts.
     pub fn parse(key: &str) -> Result<Self, NotAnOccurrence> {
         let mut parts = key.splitn(3, ' ');
         match (parts.next(), parts.next(), parts.next()) {

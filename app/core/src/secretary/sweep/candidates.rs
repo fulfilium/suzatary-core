@@ -14,7 +14,7 @@ use crate::record::{MarkupSource, Source};
 use crate::reference::MailHash;
 
 /// A message's canonical hash, the same type a `mail:<hash>` reference validates.
-pub type MessageHash = MailHash;
+pub(crate) type MessageHash = MailHash;
 
 /// One open todo, as [`candidates`] needs it to search; the caller looks up its content, so this
 /// module never reads the chain.

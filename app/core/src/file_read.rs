@@ -18,10 +18,10 @@ use crate::redact::{Redacted, identity_numbers, redact};
 pub const MAX_PDF: usize = 20 * 1024 * 1024;
 
 /// The most pages of a PDF handed to a model, as its API takes them.
-pub const MAX_PAGES: usize = 100;
+pub(crate) const MAX_PAGES: usize = 100;
 
 /// The most characters of text a read answers, with the cut declared.
-pub const MAX_CHARS: usize = crate::mail::MAX_ATTACHMENT_CHARS;
+pub(crate) const MAX_CHARS: usize = crate::mail::MAX_ATTACHMENT_CHARS;
 
 /// What a read answers.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -32,7 +32,7 @@ pub enum FileRead {
     Text {
         /// The words, masked.
         text: Masked,
-        /// Whether they were cut at [`MAX_CHARS`].
+        /// Whether they were cut at `MAX_CHARS`.
         truncated: bool,
     },
     /// A PDF the box holds back, answered by its placeholder and its text.
@@ -41,7 +41,7 @@ pub enum FileRead {
         held: Placeholder,
         /// Its text layer, masked.
         text: Masked,
-        /// Whether the text was cut at [`MAX_CHARS`].
+        /// Whether the text was cut at `MAX_CHARS`.
         truncated: bool,
         /// Why the file itself is not handed over.
         why: Withheld,
@@ -68,7 +68,7 @@ pub enum Withheld {
     /// Over [`MAX_PDF`], in bytes.
     #[error("it is {}, over the 20 MB a model reads", megabytes(*.0))]
     TooLarge(usize),
-    /// Over [`MAX_PAGES`].
+    /// Over `MAX_PAGES`.
     #[error("it has {0} pages, over the {MAX_PAGES} a model reads")]
     TooManyPages(usize),
 }

@@ -148,33 +148,33 @@ impl CheckFields for () {
 }
 
 /// Stored after an event's head.
-pub const NOT_SENT: Constructor = ("NotSent", &["attempt", "reason"]);
+pub(crate) const NOT_SENT: Constructor = ("NotSent", &["attempt", "reason"]);
 /// Stored.
-pub const LACKS: Constructor = ("Lacks", &["attempt", "lacking"]);
+pub(crate) const LACKS: Constructor = ("Lacks", &["attempt", "lacking"]);
 /// Stored.
-pub const REFUSED: Constructor = ("Refused", &["attempt", "reason"]);
+pub(crate) const REFUSED: Constructor = ("Refused", &["attempt", "reason"]);
 /// Stored.
-pub const UNFINISHED: Constructor = ("Unfinished", &["attempt", "reason", "link"]);
+pub(crate) const UNFINISHED: Constructor = ("Unfinished", &["attempt", "reason", "link"]);
 /// Stored for [`Tried::Running`].
-pub const STARTED: Constructor = ("Started", &["attempt", "began", "expires_at"]);
+pub(crate) const STARTED: Constructor = ("Started", &["attempt", "began", "expires_at"]);
 /// Stored.
 pub const SENT: Constructor = ("Sent", &["recipients", "message_id"]);
 /// Stored.
-pub const APPLIED: Constructor = ("Applied", &["objects", "chain"]);
+pub(crate) const APPLIED: Constructor = ("Applied", &["objects", "chain"]);
 /// Stored.
-pub const ACTED: Constructor = ("Acted", &["what"]);
+pub(crate) const ACTED: Constructor = ("Acted", &["what"]);
 /// Stored.
-pub const MAY_HAVE_GONE: Constructor = ("MayHaveGone", &["reason"]);
+pub(crate) const MAY_HAVE_GONE: Constructor = ("MayHaveGone", &["reason"]);
 /// Stored, as written.
-pub const CHECKED: Constructor = ("Checked", &[]);
+pub(crate) const CHECKED: Constructor = ("Checked", &[]);
 /// Stored.
-pub const DISMISSED: Constructor = ("Dismissed", &["reason"]);
+pub(crate) const DISMISSED: Constructor = ("Dismissed", &["reason"]);
 /// Stored.
-pub const SUPERSEDED: Constructor = ("Superseded", &[]);
+pub(crate) const SUPERSEDED: Constructor = ("Superseded", &[]);
 /// Stored.
-pub const NO_LONGER_NEEDED: Constructor = ("NoLongerNeeded", &["why"]);
+pub(crate) const NO_LONGER_NEEDED: Constructor = ("NoLongerNeeded", &["why"]);
 /// Stored.
-pub const DONE_ELSEWHERE: Constructor = ("DoneElsewhere", &["what"]);
+pub(crate) const DONE_ELSEWHERE: Constructor = ("DoneElsewhere", &["what"]);
 
 /// One response. A check holds `C`: nothing as written, and the send it checks once a reading
 /// finds it ([`crate::secretary::inbox::Check`]), so a check of nothing has no reading.

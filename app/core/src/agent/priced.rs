@@ -13,13 +13,13 @@ use crate::verb::Caught;
 #[serde(default)]
 pub(crate) struct Priced {
     pub priority: Caught<Option<String>>,
-    pub deadline_end_date: Caught<Option<String>>,
+    pub(crate) deadline_end_date: Caught<Option<String>>,
     /// Absent is 60%.
-    pub deadline_start_priority: Caught<Option<String>>,
+    pub(crate) deadline_start_priority: Caught<Option<String>>,
     /// Absent is 5%.
-    pub deadline_end_priority: Caught<Option<String>>,
-    pub deadline_start_date: Caught<Option<String>>,
-    pub deadline_lead_up_weeks: Caught<Option<usize>>,
+    pub(crate) deadline_end_priority: Caught<Option<String>>,
+    pub(crate) deadline_start_date: Caught<Option<String>>,
+    pub(crate) deadline_lead_up_weeks: Caught<Option<usize>>,
     pub recur_every_days: Caught<Option<usize>>,
     pub periodic_every_days: Caught<Option<usize>>,
     pub cycle_from_priority: Caught<Option<String>>,

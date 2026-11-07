@@ -1,4 +1,4 @@
-//! A summary's words: one line of at most [`NODE_BYTES`], through the redaction door.
+//! A summary's words: one line of at most `NODE_BYTES`, through the redaction door.
 //!
 //! [`Line::new`] is the only door, for words read back from the text store as for words a model
 //! wrote, so a summary can hold no line break, no identity number and no link's credential: what
@@ -8,9 +8,9 @@ use crate::redact::Scrubbed;
 use crate::secretary::salted_text::Words;
 
 /// The most bytes a summary may hold: a node of the digest costs at most this in a view.
-pub const NODE_BYTES: usize = 512;
+pub(crate) const NODE_BYTES: usize = 512;
 
-/// One summary line, scrubbed, trimmed, nonempty, at most [`NODE_BYTES`].
+/// One summary line, scrubbed, trimmed, nonempty, at most `NODE_BYTES`.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Line(String);
 
@@ -23,7 +23,7 @@ pub enum NotALine {
     /// A line break or another control character.
     #[error("a summary is one line")]
     LineBreak,
-    /// Longer than [`NODE_BYTES`] once scrubbed.
+    /// Longer than `NODE_BYTES` once scrubbed.
     #[error("a summary is at most {NODE_BYTES} bytes, got {0}")]
     TooLong(usize),
     /// The redaction door refused it.

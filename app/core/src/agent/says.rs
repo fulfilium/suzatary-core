@@ -6,7 +6,7 @@ pub struct Says {
     /// `list_open_todos`.
     pub list_open_todos: &'static str,
     /// `git_diff_summary`.
-    pub git_diff_summary: &'static str,
+    pub(crate) git_diff_summary: &'static str,
     /// `history`.
     pub history: &'static str,
     /// `todo_show`.

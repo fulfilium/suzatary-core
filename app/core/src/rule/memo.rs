@@ -9,7 +9,7 @@ use crate::rule::{Firing, Named, Rule};
 /// It lives in memory and is lost with the process. That is enough because the store is the
 /// memo that lasts: a rule's recorded outcome moves its reading to one where P no longer holds.
 #[derive(Debug, Clone, Default)]
-pub struct Memo(BTreeSet<Firing>);
+pub(crate) struct Memo(BTreeSet<Firing>);
 
 impl Memo {
     /// The firing `rule` owes `reading` of `key`, marked as made: `Some` exactly when P holds

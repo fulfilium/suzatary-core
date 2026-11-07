@@ -114,7 +114,7 @@ impl Reading {
 
     /// The try its next tap would be: one more than the try it shows, the first while none.
     #[must_use]
-    pub fn next_attempt(&self) -> u32 {
+    pub(crate) fn next_attempt(&self) -> u32 {
         match self.phase() {
             Some(Phase::Trying { attempt, .. }) => attempt + 1,
             _ => 1,

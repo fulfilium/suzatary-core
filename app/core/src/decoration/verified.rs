@@ -13,7 +13,7 @@ use super::{DecorationError, read};
 use crate::refusal::Refusal;
 
 /// Render a block and prove it reads back to itself, through
-/// [`read::only_block`] so nothing after the closing paren is tolerated.
+/// `read::only_block` so nothing after the closing paren is tolerated.
 ///
 /// # Errors
 ///

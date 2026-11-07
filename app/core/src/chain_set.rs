@@ -399,7 +399,7 @@ impl<'a> ChainSet<'a> {
 /// The earlier of two answers, and at one instant exact where either is: a meet-semilattice
 /// whose top, never and exact, is its identity.
 #[must_use]
-pub fn sooner(a: NextChange, b: NextChange) -> NextChange {
+pub(crate) fn sooner(a: NextChange, b: NextChange) -> NextChange {
     match (a.at, b.at) {
         (Some(x), Some(y)) if x < y => a,
         (Some(x), Some(y)) if y < x => b,

@@ -19,18 +19,18 @@ use crate::template::{Checked, Kept, Library, Output, Template, named};
 /// revision `app/Cargo.lock` links, and the typst it links. A test,
 /// `the_typesetter_is_the_one_cargo_lock_links`, fails when the lock moves without this, and
 /// prints what it must say.
-pub const LINKED: &str =
+pub(crate) const LINKED: &str =
     "prodrome-typst-wasm a0e99598eb61866c447f386dcb75557b0520dad4, typst 0.15.1";
 
 /// [`LINKED`]'s name, which every template's function and the closed world's answers carry.
-pub static TYPESETTER: LazyLock<Hash> = LazyLock::new(|| named(LINKED));
+pub(crate) static TYPESETTER: LazyLock<Hash> = LazyLock::new(|| named(LINKED));
 
 /// The tripwire's code: what a document must pass to be kept or written.
-pub static TRIPWIRE: LazyLock<Hash> = LazyLock::new(|| named(include_str!("tripwire.rs")));
+pub(crate) static TRIPWIRE: LazyLock<Hash> = LazyLock::new(|| named(include_str!("tripwire.rs")));
 
 /// How a compiled document becomes the body that is kept ([`crate::narrowing`]): named by its
 /// code and the tripwire's, so an edit to either is a new function.
-pub static NARROWING: LazyLock<Hash> = LazyLock::new(|| {
+pub(crate) static NARROWING: LazyLock<Hash> = LazyLock::new(|| {
     memo::name(
         b"suzatary: narrowing",
         [&named(include_str!("narrowing.rs")), &*TRIPWIRE],

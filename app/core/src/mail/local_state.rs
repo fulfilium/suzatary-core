@@ -11,7 +11,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use serde::{Deserialize, Serialize};
 
 /// The version this program reads and writes.
-pub const SCHEMA_VERSION: u64 = 1;
+pub(crate) const SCHEMA_VERSION: u64 = 1;
 
 /// What the box keeps of one decided message; field order is the stored key order.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -41,7 +41,7 @@ pub enum LocalError {
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct LocalState {
     /// Senders whose mail is ignored wholesale, lower-cased.
-    pub noise_senders: BTreeSet<String>,
+    pub(crate) noise_senders: BTreeSet<String>,
     /// What is kept of each decided message, by its canonical hash.
     pub messages: BTreeMap<String, Kept>,
 }

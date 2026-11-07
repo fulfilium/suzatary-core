@@ -484,7 +484,7 @@ pub fn drawn(
 }
 
 /// How many files one turn may carry.
-pub const MAX_ATTACHMENTS_PER_TURN: usize = 4;
+pub(crate) const MAX_ATTACHMENTS_PER_TURN: usize = 4;
 
 /// `POST …/<id>/say`: append the person's turn, stamped `by`; the model runs in the worker.
 ///

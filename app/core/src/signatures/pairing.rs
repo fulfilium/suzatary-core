@@ -12,7 +12,7 @@ pub const ALPHABET: [u8; 20] = *b"BCDFGHJKLMNPQRSTVWXZ";
 
 /// How many letters a code has: 20^8 is about 2^34.6 codes, and with [`TRIES`] wrong tries
 /// before a code dies, one guess run succeeds about once in 5 billion.
-pub const LETTERS: usize = 8;
+pub(crate) const LETTERS: usize = 8;
 
 /// How long a code works after the box prints it, in minutes.
 pub const MINUTES: i64 = 10;
@@ -21,9 +21,9 @@ pub const MINUTES: i64 = 10;
 pub const TRIES: u8 = 5;
 
 /// What the box tells a person to run for a new code.
-pub const RUN: &str = "`suzatary device pair`";
+pub(crate) const RUN: &str = "`suzatary device pair`";
 
-/// A PAIRING CODE: [`LETTERS`] letters of [`ALPHABET`]. It has no `Display`, and its `Debug`
+/// A PAIRING CODE: `LETTERS` letters of [`ALPHABET`]. It has no `Display`, and its `Debug`
 /// prints no letter, so no log line or error can carry one; [`Code::shown`] is the one way out,
 /// and only the terminal that minted it calls it.
 #[derive(Clone, PartialEq, Eq)]
@@ -64,7 +64,7 @@ impl Code {
     /// The code a person typed: letters in either case, a dash or spaces anywhere.
     ///
     /// # Errors
-    /// [`NotACode`] for anything else.
+    /// `NotACode` for anything else.
     pub fn typed(text: &str) -> Result<Code, NotACode> {
         let letters: Vec<u8> = text
             .bytes()
@@ -223,7 +223,7 @@ impl Pairing {
     /// trust after it costs a new code, never a second use. The hash is compared in constant time (`Mac::verify_slice`), and
     /// an expired, used or spent code is refused before it is compared.
     #[must_use]
-    pub fn presented(
+    pub(crate) fn presented(
         held: Option<&Pairing>,
         code: &Code,
         actor: &Actor,

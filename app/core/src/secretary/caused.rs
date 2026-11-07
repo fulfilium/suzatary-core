@@ -23,7 +23,7 @@ use crate::secretary::turn_shape::TurnShape;
 
 /// The keys a forgetting erases, and those it offers.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
-pub struct Caused {
+pub(crate) struct Caused {
     /// The remember call's arguments and its answer.
     pub erased: BTreeSet<KeyName>,
     /// The turn that said the fact and the model's prose of the round.

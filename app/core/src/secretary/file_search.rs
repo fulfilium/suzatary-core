@@ -31,20 +31,20 @@ pub struct FileHit {
     pub turn: usize,
     /// When it was sent.
     pub at: String,
-    /// What the owner said on that turn, cut to [`SAID_CHARS`].
+    /// What the owner said on that turn, cut to `SAID_CHARS`.
     pub said: String,
-    /// The match in its name or text, with [`FILE_CONTEXT`] characters either side.
+    /// The match in its name or text, with `FILE_CONTEXT` characters either side.
     pub excerpt: String,
 }
 
 /// How much of a file's words a hit keeps either side of the match, in characters.
-pub const FILE_CONTEXT: usize = 120;
+pub(crate) const FILE_CONTEXT: usize = 120;
 
 /// How much of the owner's words on the turn a hit keeps, in characters.
-pub const SAID_CHARS: usize = 280;
+pub(crate) const SAID_CHARS: usize = 280;
 
 /// The most hits one search answers, so the answer stays well within what a line stores.
-pub const MAX_FILE_HITS: usize = 25;
+pub(crate) const MAX_FILE_HITS: usize = 25;
 
 /// Every upload a live turn names: the uploads the index holds an entry for.
 #[must_use]
@@ -77,7 +77,7 @@ pub fn reindex(
 }
 
 /// Every upload on a live person turn whose name and indexed words hold `query`, newest first,
-/// at most `limit` (itself at most [`MAX_FILE_HITS`]); an upload held back or erased is never
+/// at most `limit` (itself at most `MAX_FILE_HITS`); an upload held back or erased is never
 /// found, whatever it says.
 #[must_use]
 pub fn find(

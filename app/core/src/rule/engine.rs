@@ -2,7 +2,7 @@
 
 use crate::rule::{Firing, Memo, Rule};
 
-/// Rules over one kind of key and reading, tried in the order declared, sharing one [`Memo`].
+/// Rules over one kind of key and reading, tried in the order declared, sharing one `Memo`.
 ///
 /// It holds only rules whose witness is `()`: an outward act needs the owner's `Tap`, which the
 /// box cannot mint, so no rule it fires by itself can perform one.

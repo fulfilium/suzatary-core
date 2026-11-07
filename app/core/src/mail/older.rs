@@ -24,10 +24,10 @@ pub const MAX_MATCHES: usize = 25;
 pub const MAX_MESSAGE_BYTES: usize = 5 * 1024 * 1024;
 
 /// The longest [`Term`], in characters.
-pub const MAX_TERM_CHARS: usize = 100;
+pub(crate) const MAX_TERM_CHARS: usize = 100;
 
 /// The most [`Term`]s one query holds.
-pub const MAX_TERMS: usize = 12;
+pub(crate) const MAX_TERMS: usize = 12;
 
 /// The server folder an older search reads on an IMAP account. Sent is not searched: the
 /// routine sync already keeps the whole of it on the box.
@@ -74,7 +74,7 @@ pub enum QueryError {
 /// Why a text is not a [`Term`].
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 pub enum TermError {
-    /// Longer than [`MAX_TERM_CHARS`].
+    /// Longer than `MAX_TERM_CHARS`.
     #[error("a word or phrase is at most {MAX_TERM_CHARS} characters, got {0}")]
     TooLong(usize),
     /// A quote, a backslash or a control character, none of which a server reads as text.
@@ -82,7 +82,7 @@ pub enum TermError {
     Forbidden(String),
 }
 
-/// A word or phrase to look for: non-empty, at most [`MAX_TERM_CHARS`] characters, and free of
+/// A word or phrase to look for: non-empty, at most `MAX_TERM_CHARS` characters, and free of
 /// `"`, `\` and control characters, so quoting it for any server keeps it one string.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Serialize)]
 pub struct Term(String);

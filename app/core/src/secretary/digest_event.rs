@@ -49,7 +49,7 @@ pub enum Said {
         over: Vec<Hash>,
         /// The model that wrote it.
         model: ModelName,
-        /// Its words' length in bytes, at most [`NODE_BYTES`]: what it costs in a view.
+        /// Its words' length in bytes, at most `NODE_BYTES`: what it costs in a view.
         bytes: u32,
         /// The node's taint when it was written: the join of the lines it spans, so tainted
         /// whenever any of them is.
@@ -59,11 +59,11 @@ pub enum Said {
     },
     /// No answer of an attempt was a line of at most `limit` bytes, so the node has no summary
     /// from `model`: it stays unsummarized, and this says why. Keyed by both, so another model,
-    /// or a larger [`NODE_BYTES`], is owed the node again.
+    /// or a larger `NODE_BYTES`, is owed the node again.
     Unfit {
         /// The model asked.
         model: ModelName,
-        /// The most bytes a line could hold when it was asked: [`NODE_BYTES`] then.
+        /// The most bytes a line could hold when it was asked: `NODE_BYTES` then.
         limit: u32,
         /// The shortest answer's length in bytes, once its spaces were joined.
         shortest: u32,
@@ -139,7 +139,7 @@ pub fn summarized(
 }
 
 /// Node `node` left unsummarized by `actor`'s attempt with `model`, whose shortest answer was
-/// `shortest` bytes, under today's [`NODE_BYTES`].
+/// `shortest` bytes, under today's `NODE_BYTES`.
 ///
 /// # Errors
 /// None in practice: the schema refuses only a summary. The type is the schema's one door,
@@ -248,7 +248,7 @@ impl Body for Said {
         matches!(self, Said::Retracted)
     }
 
-    /// A summary is written from something, and its length is within [`NODE_BYTES`].
+    /// A summary is written from something, and its length is within `NODE_BYTES`.
     fn admits(_: &Hash, said: &Said) -> Result<(), NotADigestEvent> {
         match said {
             Said::Summarized { over, .. } if over.is_empty() => Err(NotADigestEvent::FromNothing),

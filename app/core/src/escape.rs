@@ -14,11 +14,12 @@ use std::fmt;
 ///
 /// `]` matters for containment (it closes a content block); the rest are escaped so prose reads
 /// as prose.
-pub const MARKUP_SPECIALS: &[char] = &['\\', '[', ']', '#', '$', '@', '*', '_', '<', '>', '`'];
+pub(crate) const MARKUP_SPECIALS: &[char] =
+    &['\\', '[', ']', '#', '$', '@', '*', '_', '<', '>', '`'];
 
 /// The characters a typst string would otherwise read as structure: deliberately not the
 /// markup set.
-pub const STRING_SPECIALS: &[char] = &['\\', '"'];
+pub(crate) const STRING_SPECIALS: &[char] = &['\\', '"'];
 
 /// Typst markup that prose went through [`escape_markup`] to become: the one prose → markup
 /// door, and the type [`crate::capability::Render`] takes.

@@ -9,7 +9,7 @@ pub const MAX_TEXT: usize = 500;
 pub const MAX_NAME: usize = 200;
 
 /// The most attendees.
-pub const MAX_ATTENDEES: usize = 50;
+pub(crate) const MAX_ATTENDEES: usize = 50;
 
 /// Whether it is happening, as its feed says.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -36,7 +36,7 @@ impl Status {
     /// Read that spelling.
     ///
     /// # Errors
-    /// [`NotAnOccurrence::Status`] for any other.
+    /// `NotAnOccurrence::Status` for any other.
     pub fn parse(text: &str) -> Result<Self, NotAnOccurrence> {
         match text {
             "confirmed" => Ok(Status::Confirmed),
@@ -91,7 +91,7 @@ impl Content {
     /// Check and build one; empty text means absent.
     ///
     /// # Errors
-    /// [`NotAnOccurrence::TooLong`] past a limit the plugin is held to as well.
+    /// `NotAnOccurrence::TooLong` past a limit the plugin is held to as well.
     pub fn new(
         title: String,
         when: When,

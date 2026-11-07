@@ -44,7 +44,7 @@ impl Pushed {
 
     /// Whether the push token is needed: for GitHub, or when unread.
     #[must_use]
-    pub fn needs_push_token(&self) -> bool {
+    pub(crate) fn needs_push_token(&self) -> bool {
         match self {
             Pushed::To(remote) => remote.host().eq_ignore_ascii_case("github.com"),
             Pushed::Unread(_) => true,

@@ -119,7 +119,7 @@ impl Client {
     /// redirect byte for byte, so a client that does not list it could never finish a sign-in.
     ///
     /// # Errors
-    /// [`ClientRefused`], in words that never quote the secret.
+    /// `ClientRefused`, in words that never quote the secret.
     pub fn of_download(pasted: &Secret, redirect: &RedirectUri) -> Result<Self, ClientRefused> {
         let download: Download =
             serde_json::from_str(pasted.expose().trim()).map_err(|_| ClientRefused::NotTheFile)?;

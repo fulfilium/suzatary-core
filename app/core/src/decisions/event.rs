@@ -40,7 +40,7 @@ pub enum Said {
 /// Decision `decision` decided by `actor`.
 ///
 /// # Errors
-/// [`NotADecision::Itself`] where it names itself among what it supersedes.
+/// `NotADecision::Itself` where it names itself among what it supersedes.
 pub fn decided(
     decision: DecisionId,
     at: Datetime,
@@ -62,7 +62,7 @@ pub fn decided(
 /// Decision `decision` restated by `actor`.
 ///
 /// # Errors
-/// [`NotADecision::Itself`] where it names itself among what it supersedes.
+/// `NotADecision::Itself` where it names itself among what it supersedes.
 pub fn revised(
     decision: DecisionId,
     at: Datetime,
@@ -84,7 +84,7 @@ pub fn revised(
 /// Decision `decision` withdrawn by `actor`, for `reason`.
 ///
 /// # Errors
-/// [`NotADecision::Empty`] for an empty or untrimmed reason.
+/// `NotADecision::Empty` for an empty or untrimmed reason.
 pub fn withdrawn(
     decision: DecisionId,
     at: Datetime,

@@ -49,7 +49,7 @@ impl Proposal {
     /// again, a plugin's grant, asked again whenever a link is pasted from the origin, and a
     /// secret, asked again once a value stored from its card is lost.
     #[must_use]
-    pub fn episodic(&self) -> bool {
+    pub(crate) fn episodic(&self) -> bool {
         matches!(
             self,
             Proposal::Act(

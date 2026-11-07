@@ -1,6 +1,7 @@
 //! Reading the owner's repositories; publishing is a tap's outward act and lives elsewhere.
 
-pub use crate::repos::{CommitId, Patch, RepoName, RepoPath, RepoRow, Rev, Visibility};
+pub(crate) use crate::repos::RepoRow;
+pub use crate::repos::{CommitId, Patch, RepoName, RepoPath, Rev, Visibility};
 
 /// What one email may carry, in bytes.
 pub const MAX_FILE_BYTES: u64 = crate::secretary::attached::MAX_TOTAL;

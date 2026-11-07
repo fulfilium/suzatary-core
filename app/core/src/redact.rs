@@ -6,7 +6,7 @@
 //! link pass, and [`Scrubbed::of`] is its only constructor. [`Rules`] names the patterns a scrub
 //! applies, so a stored line can record which rules its words passed.
 //!
-//! These shapes are held numbers, replaced with [`REDACTED`]:
+//! These shapes are held numbers, replaced with `REDACTED`:
 //!
 //! - an SSN or ITIN written out, `ddd-dd-dddd` or `ddd dd dddd`, anywhere;
 //! - nine digits in a row (single hyphens or spaces between them allowed, so
@@ -17,7 +17,7 @@
 //! - an IBAN anywhere, in either case, whose mod-97 check holds;
 //! - a verification code: four to eight digits, or `ddd ddd`, after a label that names the code
 //!   with its noun (verification code, security code, one-time password, and the words for a
-//!   verification code in Portuguese, Spanish, French, German and Arabic) within [`STRONG_NEAR`]
+//!   verification code in Portuguese, Spanish, French, German and Arabic) within `STRONG_NEAR`
 //!   characters on its line, or within [`NEAR`] of such a label or of verification, verify,
 //!   passcode, OTP, 2FA or MFA; four or five digits right after `code` or `code:`; six to eight
 //!   digits within [`NEAR`] of code, codes or PIN, unless the word before makes it a postal, zip,
@@ -46,7 +46,7 @@
 //! The link pass replaces, anywhere in the text:
 //!
 //! - the value of a query or fragment parameter whose name ends in one of
-//!   [`CREDENTIAL_PARAMETERS`], percent-encoded separators included, since a
+//!   `CREDENTIAL_PARAMETERS`, percent-encoded separators included, since a
 //!   sign-in link is often wrapped inside a tracking link's own parameter;
 //! - any JWT, three or more base64url segments the first of which opens `eyJ`;
 //! - the password of a `scheme://user:password@host` link.
@@ -69,7 +69,7 @@ use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 
 /// What a redacted number becomes.
-pub const REDACTED: &str = "[redacted]";
+pub(crate) const REDACTED: &str = "[redacted]";
 
 /// How close, in characters, a nine-digit run must be to a label.
 pub const NEAR: usize = 20;
@@ -77,7 +77,7 @@ pub const NEAR: usize = 20;
 /// How far, in characters and on the same line, a label that names a code with its noun
 /// ("verification code") reaches forward to the code: a message often names the service between
 /// the two.
-pub const STRONG_NEAR: usize = 60;
+pub(crate) const STRONG_NEAR: usize = 60;
 
 /// Text with every identity number this module recognises replaced.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -115,7 +115,7 @@ static LABEL: LazyLock<Regex> = LazyLock::new(|| {
 
 /// The endings, compared without case, of a parameter name that carries a credential: `token`
 /// covers `access_token`, `id_token` and `X-Amz-Security-Token`, `code` an OAuth or reset code.
-pub const CREDENTIAL_PARAMETERS: &[&str] = &[
+pub(crate) const CREDENTIAL_PARAMETERS: &[&str] = &[
     "token",
     "code",
     "key",
@@ -713,7 +713,7 @@ fn codes(
 /// matched by the digit patterns over its `ascii` copy, and its labels are read only when a
 /// pattern found something they could claim.
 #[must_use]
-pub fn identity_numbers(text: &str) -> Vec<Found> {
+pub(crate) fn identity_numbers(text: &str) -> Vec<Found> {
     if !text.bytes().any(|byte| byte.is_ascii_digit()) {
         return Vec::new();
     }

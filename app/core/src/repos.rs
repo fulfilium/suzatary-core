@@ -234,7 +234,7 @@ impl From<CommitId> for Rev {
 }
 
 /// The most a patch may be: what a person reads on a phone before tapping.
-pub const MAX_PATCH_BYTES: usize = 64 * 1024;
+pub(crate) const MAX_PATCH_BYTES: usize = 64 * 1024;
 
 /// A unified diff of text files, bounded.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

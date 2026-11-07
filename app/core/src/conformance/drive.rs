@@ -141,7 +141,7 @@ pub fn laws<P: WritePort>(port: &P, case: &Case) -> Result<(), Broken<Law>> {
     )
 }
 
-/// The fence's laws over one case, on `port` watched by a [`Spy`].
+/// The fence's laws over one case, on `port` watched by a `Spy`.
 ///
 /// # Errors
 /// The first [`Broken`] law.
@@ -212,7 +212,7 @@ pub fn fence<P: WritePort>(port: &P, case: &Case) -> Result<(), Broken<Law>> {
 
 /// A Drive, read, that counts what reaches it, so a law can say a refusal never did.
 #[derive(Debug)]
-pub struct Spy<P> {
+pub(crate) struct Spy<P> {
     port: P,
     calls: AtomicUsize,
 }

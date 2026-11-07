@@ -97,7 +97,7 @@ pub fn owed(
 }
 
 /// The act's words for a secret the owner asked to replace.
-pub const REPLACING: &str = "you asked to replace it";
+pub(crate) const REPLACING: &str = "you asked to replace it";
 
 const REPLACE: &str = "You asked to replace it from Settings; what reads it keeps the stored \
                        value until a new one is stored here.";

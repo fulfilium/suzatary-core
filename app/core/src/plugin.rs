@@ -17,14 +17,14 @@ mod run;
 mod said;
 mod url;
 
-pub use bundle_path::BundlePath;
+pub(crate) use bundle_path::BundlePath;
 pub use credential::CredentialName;
 pub use fetch::{MAX_FETCHES, MAX_RESPONSE, Outgoing, Target};
-pub use item::{ItemRefusal, MAX_ITEM, admit};
+pub use item::admit;
 pub use manifest::{Manifest, ManifestError};
 pub use name::PluginName;
 pub use origin::{Origin, Scheme};
 pub use refusal::Refusal;
 pub use run::{Answer, Came, LastRun};
 pub use said::{MAX_SAID, Said};
-pub use url::{MAX_URL, PluginUrl};
+pub use url::PluginUrl;

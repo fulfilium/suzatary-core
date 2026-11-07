@@ -319,7 +319,7 @@ pub fn tools() -> Value {
 
 /// The same JSON over some of the verbs, for a round scoped to fewer.
 #[must_use]
-pub fn tools_of(verbs: impl Iterator<Item = SecretaryVerb>) -> Value {
+pub(crate) fn tools_of(verbs: impl Iterator<Item = SecretaryVerb>) -> Value {
     Value::Array(verbs.map(SecretaryVerb::tool).collect())
 }
 

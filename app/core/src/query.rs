@@ -11,13 +11,13 @@ use crate::reference::Reference;
 use crate::refusal::{Refusal, shown};
 
 /// A phone screenful of mail and a bit.
-pub const MAIL_LIMIT: usize = 50;
+pub(crate) const MAIL_LIMIT: usize = 50;
 /// The most messages one request will read and hash.
-pub const MAX_MAIL: usize = 200;
+pub(crate) const MAX_MAIL: usize = 200;
 /// A notmuch query is a query and not a document.
 pub const MAX_QUERY_CHARS: usize = 500;
 /// Every day the assistant has saved a briefing for, capped.
-pub const MAX_BRIEFINGS: usize = 400;
+pub(crate) const MAX_BRIEFINGS: usize = 400;
 /// The most rows a limited `/api/fold` will answer with.
 pub const MAX_FOLD_ROWS: usize = 200;
 
@@ -151,7 +151,7 @@ pub fn tree_by(raw: Option<&str>) -> Result<crate::wire::TreeBy, Refusal> {
 }
 
 /// The widest window of turns one conversation request will draw.
-pub const MAX_TURN_WINDOW: usize = 200;
+pub(crate) const MAX_TURN_WINDOW: usize = 200;
 
 /// A conversation page's paging cursor: an absolute turn index, or `None` for the newest
 /// window.

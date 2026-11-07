@@ -1,4 +1,4 @@
-//! A record as the agent reads it: [`render_todo`] and [`render_current`] give the block that
+//! A record as the agent reads it: `render_todo` and [`render_current`] give the block that
 //! shows it, through the one block renderer, and [`open_todos`] is the dedup reference.
 //!
 //! Absence is openness: "open" is the todos with an open world, so there is no open record to
@@ -27,7 +27,7 @@ fn refusal_of(DecorationError(message): &DecorationError) -> Refusal {
 }
 
 /// One record as verified block text, through [`shown_of`] and [`block::raise_block`].
-pub fn render_todo(
+pub(crate) fn render_todo(
     a: &Authored,
     state: Option<Outcome>,
     price: Option<f64>,

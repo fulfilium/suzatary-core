@@ -56,7 +56,7 @@ impl Opening<'_> {
     }
 
     #[must_use]
-    pub fn suggest(&self, at: Datetime) -> MembershipEvent {
+    pub(crate) fn suggest(&self, at: Datetime) -> MembershipEvent {
         membership::added(
             self.target.clone(),
             self.topic.clone(),

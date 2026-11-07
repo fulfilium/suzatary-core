@@ -208,7 +208,7 @@ pub enum Unfit {
     Long {
         /// Its bytes.
         bytes: usize,
-        /// Its first [`NODE_BYTES`] bytes, at a character's edge.
+        /// Its first `NODE_BYTES` bytes, at a character's edge.
         cut: String,
     },
     /// No line of words: nothing, or what the redaction door refuses.

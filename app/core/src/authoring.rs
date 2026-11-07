@@ -63,7 +63,7 @@ static ID: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r"\A[a-z][a-z0-9]{2,63}\z").expect("a literal pattern"));
 
 /// How long a derived id may be.
-pub const ID_CHARS: usize = 24;
+pub(crate) const ID_CHARS: usize = 24;
 
 /// A todo id from its action line: its words, lowercased, run together and cut, since the body is
 /// the only handle a person can reproduce from what they see.
@@ -165,7 +165,7 @@ pub struct NewTodo {
 
 /// The rationale as comment lines of about 72 columns. Required: it is the only record of why
 /// a number is what it is.
-pub fn wrap(rationale: &str) -> Result<Vec<String>, Refusal> {
+pub(crate) fn wrap(rationale: &str) -> Result<Vec<String>, Refusal> {
     if rationale.trim().is_empty() {
         return Err(Refusal::bad_request(
             "rationale is required: say WHY this priority, in one sentence. It is \
@@ -299,8 +299,6 @@ pub fn build_todo(
     .map_err(|e| Refusal::bad_request(e.to_string()))
 }
 
-// --- build_decision -----------------------------------------------------------
-
 /// What a held batch supplies to author the decision it asks for.
 #[derive(Debug, Clone)]
 pub struct NewDecision {
@@ -328,7 +326,7 @@ pub struct NewDecision {
 ///
 /// # Errors
 /// [`Refusal::bad_request`] for an empty `body` or `detail`, an empty `why`
-/// (wrapped through [`wrap`], which is `rationale`'s own refusal), a category
+/// (wrapped through `wrap`, which is `rationale`'s own refusal), a category
 /// this deployment does not know, an out-of-range `priority`, or an id this
 /// chain has already mentioned ninety-nine times over.
 pub fn build_decision(
@@ -390,23 +388,6 @@ pub fn build_decision(
 #[must_use]
 pub fn decision_reference(record: &Record) -> Option<Reference> {
     record.detail.as_str().lines().next()?.parse().ok()
-}
-
-/// The decision record about `wanted`, the reverse of [`decision_reference`]: a held batch
-/// carries no decision id, so every decision is asked which one names it. `kind` never
-/// changes once authored, so the newest match answers.
-#[must_use]
-pub fn decision_for(
-    events: &[TodoEvent],
-    wanted: &Reference,
-) -> Option<prodrome_core::event::TodoId> {
-    events.iter().rev().find_map(|event| match event {
-        TodoEvent::Authored(record) if record.payload.is_decision() => {
-            (decision_reference(&record.payload) == Some(wanted.clone()))
-                .then(|| record.todo.clone())
-        }
-        _ => None,
-    })
 }
 
 /// The day a todo is created on, the owner's, stored as that day's midnight: `created` is a day.
@@ -638,8 +619,6 @@ pub fn update_todo(
     .map_err(|e| Refusal::bad_request(e.to_string()))
 }
 
-// --- subtodos: a reference in the parent's spec -------------------------------
-
 /// A spec as a parent reads it: `Conj[own, Ref(c1), …, Ref(cn)]` at p = −4, `own` FPL's
 /// `Absent` for a parent that is only its subtodos and left out of the conjunction then; any
 /// other shape is all `own`. An edit reprices `own`; the subtodo act adds to `children`.
@@ -743,7 +722,7 @@ pub fn build_subtodo(
 
 /// The parent's half of [`build_subtodo`]: the same record with `Ref(child)`
 /// added to its spec, refused when `child` already reaches it.
-pub fn add_subtodo(
+pub(crate) fn add_subtodo(
     parent: &Authored,
     child: &str,
     functions: &BTreeMap<String, Term>,
@@ -983,7 +962,7 @@ fn not_an_undo(todo: &str) -> Refusal {
 
 /// What an undo or a redo reverses: the object it names, which its note spells as
 /// `undo of <hash>` or `redo of <hash>`. Printed by [`Reversal::note`] alone and read back by
-/// [`Reversal::of_note`] alone, so the note has one spelling.
+/// `Reversal::of_note` alone, so the note has one spelling.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Reversal {
     /// The inverse of the object named.
@@ -1013,7 +992,7 @@ impl Reversal {
 
     /// The reversal a note names, or `None` for an ordinary event's note.
     #[must_use]
-    pub fn of_note(note: &str) -> Option<Self> {
+    pub(crate) fn of_note(note: &str) -> Option<Self> {
         if let Some(of) = note.strip_prefix(Self::UNDO) {
             return Hash::new(of).ok().map(|of| Self::Undo { of });
         }
@@ -1074,7 +1053,7 @@ fn authored_before(prefix: &[(Hash, TodoEvent)]) -> Option<Authored> {
 /// Two content records say the same thing: every field but `note`, which is the write's own
 /// reason and never part of what it means.
 #[must_use]
-pub fn same_content(a: &Record, b: &Record) -> bool {
+pub(crate) fn same_content(a: &Record, b: &Record) -> bool {
     a.kind == b.kind
         && a.created == b.created
         && a.body == b.body

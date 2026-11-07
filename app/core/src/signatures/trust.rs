@@ -13,7 +13,7 @@ use crate::store::{Prodrome, StoreError};
 use crate::table::Table;
 
 /// How many readings a process keeps by their heads: a few chains, each under its registrar.
-pub const KEPT_READINGS: usize = 8;
+pub(crate) const KEPT_READINGS: usize = 8;
 
 static READINGS: LazyLock<Table<Arc<Trust>>> = LazyLock::new(|| Table::new(KEPT_READINGS));
 

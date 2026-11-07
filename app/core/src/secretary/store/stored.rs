@@ -437,14 +437,6 @@ impl Stored {
                 .collect(),
         )
     }
-
-    /// The index of the proposal naming `object`, if this conversation made one.
-    #[must_use]
-    pub fn index_of(&self, object: &crate::secretary::inbox::ProposalId) -> Option<usize> {
-        self.proposals
-            .iter()
-            .position(|asking| &asking.object == object)
-    }
 }
 
 fn joined(

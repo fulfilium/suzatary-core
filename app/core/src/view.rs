@@ -147,9 +147,6 @@ pub fn stream_of(nodes: &[Node], todo: &str) -> Vec<(Hash, TodoEvent)> {
     out
 }
 
-/// The four fields a reader reads as prose.
-pub const RICH_FIELDS: [&str; 4] = ["body", "detail", "rationale", "waiting_on"];
-
 /// Rendered means confirmed: an untrusted actor's content is served as source.
 #[must_use]
 pub fn renders(record: &Authored, untrusted: &Untrusted) -> bool {
@@ -159,7 +156,7 @@ pub fn renders(record: &Authored, untrusted: &Untrusted) -> bool {
 /// One field's text as the typst markup it renders, `None` when it is empty: the body and the detail are markup
 /// as stored; the waiting-on (string source) and the rationale (its lines rejoined) are data, escaped.
 #[must_use]
-pub fn rich_source(field: &str, text: &str) -> Option<Escaped> {
+pub(crate) fn rich_source(field: &str, text: &str) -> Option<Escaped> {
     if text.is_empty() {
         return None;
     }
@@ -171,7 +168,7 @@ pub fn rich_source(field: &str, text: &str) -> Option<Escaped> {
     }
 }
 
-/// Each present field as the typst markup it stands for ([`rich_source`]).
+/// Each present field as the typst markup it stands for (`rich_source`).
 #[must_use]
 pub fn rich_sources(record: &Authored) -> Vec<(&'static str, Escaped)> {
     let rationale = record.payload.rationale.join(" ");
@@ -394,7 +391,7 @@ pub fn content_of<'a>(
 
 /// Every candidate content record an entry names, by name.
 #[must_use]
-pub fn candidates_of<'a>(
+pub(crate) fn candidates_of<'a>(
     entry: &Entry,
     by_hash: &'a BTreeMap<Hash, &'a Envelope>,
 ) -> Vec<&'a Authored> {
@@ -559,7 +556,10 @@ pub fn prints(record: &Authored) -> Vec<(String, String)> {
 
 /// What one `Authored` changed against the one before; a first hides the fields it left absent.
 #[must_use]
-pub fn authored_diff(previous: Option<&Authored>, current: &Authored) -> Vec<wire::FieldChange> {
+pub(crate) fn authored_diff(
+    previous: Option<&Authored>,
+    current: &Authored,
+) -> Vec<wire::FieldChange> {
     let before: BTreeMap<String, String> = previous
         .map(|p| prints(p).into_iter().collect())
         .unwrap_or_default();

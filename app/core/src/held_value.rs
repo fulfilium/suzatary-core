@@ -18,7 +18,7 @@ pub use crate::held_file::HeldFile;
 use crate::redact::{Kind, identity_numbers};
 
 /// The text form's prefix.
-pub const PREFIX: &str = "held:";
+pub(crate) const PREFIX: &str = "held:";
 
 /// The prefix of a file's part of a handle; a colon is no base64url character, so no message's
 /// part starts with it.
@@ -28,10 +28,10 @@ const FILE: &str = "file:";
 const WHOLE: &str = "file";
 
 /// How many of a number's last digits a placeholder shows, for a kind that shows any.
-pub const HINT_DIGITS: usize = 4;
+pub(crate) const HINT_DIGITS: usize = 4;
 
 /// The longest Message-ID a handle names: RFC 5322's line limit.
-pub const MAX_MESSAGE: usize = 998;
+pub(crate) const MAX_MESSAGE: usize = 998;
 
 /// The longest handle text read, in bytes.
 const MAX_HANDLE: usize = 4096;
@@ -208,7 +208,7 @@ pub enum Placeholder {
     Number {
         /// What kind of number it is.
         kind: Kind,
-        /// Its last [`HINT_DIGITS`] digits, `""` for a value too short to show any.
+        /// Its last `HINT_DIGITS` digits, `""` for a value too short to show any.
         digits: String,
         /// How a tap reaches it.
         reach: Reach<Place>,
@@ -217,7 +217,7 @@ pub enum Placeholder {
     File {
         /// Its name, as [`Placeholder::file`] shows it.
         name: String,
-        /// Its size, as [`file_size`] words it.
+        /// Its size, as `file_size` words it.
         size: String,
         /// How a tap reaches it.
         reach: Reach<HeldFile>,
@@ -226,7 +226,7 @@ pub enum Placeholder {
 
 /// How many digits a value needs before its placeholder shows its last [`HINT_DIGITS`]: a shorter
 /// value, such as a code or a short account number, would show most of itself.
-pub const MIN_HINTED: usize = 9;
+pub(crate) const MIN_HINTED: usize = 9;
 
 /// A placeholder as written: a number's kind and hint, or a file's name and size, and whatever
 /// stands where a handle goes. A written placeholder whose handle does not decode is refused,
@@ -256,7 +256,7 @@ fn last_digits(value: &str) -> String {
 /// A file's size as its placeholder words it: under 1 KB, or in tenths of a KB or MB, so its
 /// digits always stand beside a dot and never read as a number.
 #[must_use]
-pub fn file_size(size: u64) -> String {
+pub(crate) fn file_size(size: u64) -> String {
     if size < 1024 {
         "under 1 KB".to_owned()
     } else {
@@ -578,7 +578,7 @@ impl Values {
 pub struct Held {
     /// What kind of number it is.
     pub kind: Kind,
-    /// Its last [`HINT_DIGITS`] digits, `""` for a value too short to show any.
+    /// Its last `HINT_DIGITS` digits, `""` for a value too short to show any.
     pub hint: String,
 }
 

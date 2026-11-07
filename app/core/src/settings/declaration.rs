@@ -27,7 +27,7 @@ pub enum Declaration {
 impl Declaration {
     /// Whether a table declares it; no table declares the model's credential.
     #[must_use]
-    pub const fn by_a_table(&self) -> bool {
+    pub(crate) const fn by_a_table(&self) -> bool {
         !matches!(self, Self::Model)
     }
 

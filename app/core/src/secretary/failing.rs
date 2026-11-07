@@ -11,7 +11,7 @@
 //!
 //! What goes unused is offered for removal, each a card the owner may dismiss: a calendar whose
 //! link syncs and holds nothing within [`QUIET`] of today, and a mail account failing for
-//! [`ABANDONED`]. A connection whose failure a card already mends is offered no removal beside
+//! `ABANDONED`. A connection whose failure a card already mends is offered no removal beside
 //! that card.
 
 use std::collections::BTreeSet;
@@ -40,12 +40,12 @@ pub const QUIET: u32 = 90;
 
 /// How long a mail account may fail before it is offered for removal.
 #[must_use]
-pub fn abandoned() -> Duration {
+pub(crate) fn abandoned() -> Duration {
     Duration::days(ABANDONED)
 }
 
 /// [`abandoned`], in days.
-pub const ABANDONED: i64 = 7;
+pub(crate) const ABANDONED: i64 = 7;
 
 /// What the rule reads.
 #[derive(Clone, Copy)]

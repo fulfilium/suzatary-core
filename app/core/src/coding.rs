@@ -15,10 +15,10 @@ use crate::repos::{CommitId, RepoName, RepoPath};
 pub const ROUTINE_TOKEN: &str = "SUZATARY_ROUTINE_TOKEN";
 
 /// The most a task may be, in bytes.
-pub const MAX_TASK_BYTES: usize = 4096;
+pub(crate) const MAX_TASK_BYTES: usize = 4096;
 
 /// The most of a report a card carries, in bytes; the rest is cut and says so.
-pub const MAX_REPORT_BYTES: usize = 64 * 1024;
+pub(crate) const MAX_REPORT_BYTES: usize = 64 * 1024;
 
 /// The prefix every branch a routine may push carries.
 pub const BRANCH_PREFIX: &str = "claude/";
@@ -32,7 +32,7 @@ pub enum CodingError {
     /// Empty once trimmed.
     #[error("a task says what to do, in plain text; this one is empty")]
     EmptyTask,
-    /// Over [`MAX_TASK_BYTES`].
+    /// Over `MAX_TASK_BYTES`.
     #[error("a task is at most {MAX_TASK_BYTES} bytes; this one is {0}")]
     LongTask(usize),
     /// A control character other than a newline or a tab.
@@ -55,7 +55,7 @@ pub enum CodingError {
 }
 
 /// What a session is asked to do: plain text, trimmed, at most
-/// [`MAX_TASK_BYTES`], with no control character but `\n` and `\t`.
+/// `MAX_TASK_BYTES`, with no control character but `\n` and `\t`.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(try_from = "String", into = "String")]
 pub struct Task(String);
@@ -361,7 +361,7 @@ pub struct FileStat {
 }
 
 /// A session's report, as the branch carries it: the file, its text (cut at
-/// [`MAX_REPORT_BYTES`], and saying so), and the branch's diff stat.
+/// `MAX_REPORT_BYTES`, and saying so), and the branch's diff stat.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Report {
     /// `docs/reports/<slug>.md`.
@@ -373,7 +373,7 @@ pub struct Report {
 }
 
 impl Report {
-    /// A report, its text cut to [`MAX_REPORT_BYTES`] at a character
+    /// A report, its text cut to `MAX_REPORT_BYTES` at a character
     /// boundary with a line saying where.
     #[must_use]
     pub fn new(path: RepoPath, text: &str, stat: Vec<FileStat>) -> Self {
@@ -564,7 +564,7 @@ impl ReportFile {
 
     /// Whether the text names session `id`, in either spelling.
     #[must_use]
-    pub fn speaks_for(&self, id: &SessionId) -> bool {
+    pub(crate) fn speaks_for(&self, id: &SessionId) -> bool {
         self.names.iter().any(|named| named.is(id))
     }
 

@@ -1,13 +1,13 @@
-//! A topic's name, in one spelling: one to [`MAX_WORDS`] words of lowercase letters and digits in
-//! any script, joined by single hyphens, at most [`MAX_CHARACTERS`] characters, in NFC. So
+//! A topic's name, in one spelling: one to `MAX_WORDS` words of lowercase letters and digits in
+//! any script, joined by single hyphens, at most `MAX_CHARACTERS` characters, in NFC. So
 //! `Travel`, `travel ` and `travel` cannot be three topics, and a long name cannot be one.
 
 use std::collections::BTreeSet;
 
 use serde::{Deserialize, Serialize};
 
-pub const MAX_WORDS: usize = 3;
-pub const MAX_CHARACTERS: usize = 24;
+pub(crate) const MAX_WORDS: usize = 3;
+pub(crate) const MAX_CHARACTERS: usize = 24;
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 #[serde(try_from = "String", into = "String")]
@@ -57,7 +57,7 @@ impl Topic {
     /// plural `-s`, `-es` or `-ies` dropped: `trip-plan` and `plans-trip`, `tax` and `taxes`,
     /// `city` and `cities` are twins.
     #[must_use]
-    pub fn twins(&self, other: &Topic) -> bool {
+    pub(crate) fn twins(&self, other: &Topic) -> bool {
         let one: Vec<&str> = self.0.split('-').collect();
         let two: Vec<&str> = other.0.split('-').collect();
         self != other && one.len() == two.len() && matched(&one, &two)

@@ -259,9 +259,9 @@ pub enum Origin {
 }
 
 /// `Turn(conversation, turn)`: the owner's own words, the round's opening turn.
-pub const TURN: Constructor = ("Turn", &["conversation", "turn"]);
+pub(crate) const TURN: Constructor = ("Turn", &["conversation", "turn"]);
 /// `Tapped(conversation, proposal)`: the owner's tap on a remember card.
-pub const TAPPED: Constructor = ("Tapped", &["conversation", "proposal"]);
+pub(crate) const TAPPED: Constructor = ("Tapped", &["conversation", "proposal"]);
 
 /// An origin is its arm's own constructor.
 impl Literal for Origin {

@@ -5,7 +5,7 @@ use std::fmt;
 use super::Origin;
 
 /// The longest URL accepted.
-pub const MAX_URL: usize = 8192;
+pub(crate) const MAX_URL: usize = 8192;
 
 /// An allowed-grammar `http(s)` URL: an [`Origin`], then a path and a query.
 ///

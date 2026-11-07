@@ -19,7 +19,7 @@ use crate::secretary::inbox::Fold;
 use crate::secretary::store::{ConversationId, Proposal};
 
 /// How many todos may be in progress at once.
-pub const AT_ONCE: usize = 2;
+pub(crate) const AT_ONCE: usize = 2;
 
 /// The conversation build cards are drawn in.
 pub static CONVERSATION: LazyLock<ConversationId> =
@@ -89,7 +89,7 @@ fn serving(fold: &Fold) -> impl Iterator<Item = (&TodoRef, &crate::secretary::in
 /// Every open todo in progress, each with the card that serves it; `sessions` are the ones fired
 /// or reported ([`crate::secretary::coding::waiting`]).
 #[must_use]
-pub fn in_progress(
+pub(crate) fn in_progress(
     fold: &Fold,
     sessions: &[Advanced],
     open: &dyn Fn(&TodoRef) -> bool,
@@ -123,7 +123,7 @@ fn open(chains: &[Bound<'_>], todo: &TodoRef, at: Datetime) -> Result<bool, Refu
 }
 
 /// A coding session serving `todo` may be filed: refused while it is in progress, or while
-/// [`AT_ONCE`] others are, each read open in `chains` (none read: every one counts). Asked by
+/// `AT_ONCE` others are, each read open in `chains` (none read: every one counts). Asked by
 /// the filing door under the inbox's hold, so every filer is held to it at once.
 ///
 /// # Errors

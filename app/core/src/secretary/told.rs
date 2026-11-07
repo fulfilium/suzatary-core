@@ -101,7 +101,11 @@ pub fn context_of(
 /// The view of `reading` within `budget` bytes, less what `asking` sends as turns, one line per
 /// part as [`Told::text`] prints them, oldest first: the record before it is fitted to a budget.
 #[must_use]
-pub fn record_lines(reading: &Reading, budget: usize, asking: Option<Asking<'_>>) -> Vec<String> {
+pub(crate) fn record_lines(
+    reading: &Reading,
+    budget: usize,
+    asking: Option<Asking<'_>>,
+) -> Vec<String> {
     let entries = reading.entries();
     let sent = asking.map_or_else(BTreeSet::new, |asking| sent(reading, asking));
     let shown: Vec<Shown> =

@@ -441,15 +441,6 @@ impl HeldLines {
         }
     }
 
-    /// Nothing held but the keys `keys`.
-    #[must_use]
-    pub fn of_keys(keys: KeyRing) -> Self {
-        Self {
-            keys,
-            ..Self::new()
-        }
-    }
-
     /// Whether the print named `name` is held, read or not.
     #[must_use]
     pub fn holds(&self, name: &Hash) -> bool {
@@ -531,7 +522,7 @@ impl HeldLines {
     }
 
     /// `husks` held, each in place of its line's print where one is held.
-    pub fn hold_husks(&mut self, husks: Vec<(Hash, Vec<Hash>, Husk)>) {
+    pub(crate) fn hold_husks(&mut self, husks: Vec<(Hash, Vec<Hash>, Husk)>) {
         if husks.is_empty() {
             return;
         }
@@ -626,7 +617,7 @@ impl HeldLines {
 
     /// The keys replaced by `ring`, read as [`HeldLines::keys`] reads a change; the prints stay.
     /// The names held before or after and not both.
-    pub fn rekey(&mut self, ring: KeyRing) -> BTreeSet<KeyName> {
+    pub(crate) fn rekey(&mut self, ring: KeyRing) -> BTreeSet<KeyName> {
         let moved = self.keys.replace(ring);
         self.rekeyed(&moved);
         moved

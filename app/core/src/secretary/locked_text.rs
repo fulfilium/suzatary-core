@@ -11,7 +11,7 @@
 //! The associated data is the store's [`Shape::DOMAIN`] and the canonical print of the slot's
 //! [`Shape`], so a ciphertext moved to another slot or another store does not open. Before
 //! locking, the words are padded (ISO/IEC 7816-4: `0x80`, then zeros) to a multiple of
-//! [`BUCKET`] bytes, so the ciphertext tells their length only to the bucket.
+//! `BUCKET` bytes, so the ciphertext tells their length only to the bucket.
 
 use std::marker::PhantomData;
 
@@ -26,7 +26,7 @@ use crate::secretary::salted_text::Words;
 pub const KEY_BYTES: usize = 32;
 
 /// The padded words are a multiple of this many bytes: all a ciphertext tells of their length.
-pub const BUCKET: usize = 256;
+pub(crate) const BUCKET: usize = 256;
 
 /// The SHA-256 of a key: 64 lowercase hex, the key file's name and what a locked text names.
 ///

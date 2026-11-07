@@ -44,7 +44,7 @@ pub struct Job {
 }
 
 /// The key a lone text is compiled under.
-pub const TEXT: &str = "/main.typ";
+pub(crate) const TEXT: &str = "/main.typ";
 
 impl Job {
     /// One text alone in the closed world: what the markup door compiles.
@@ -268,7 +268,7 @@ pub trait Checked: Sync {
     /// The key of its main file.
     fn main(&self) -> &'static str;
 
-    /// It called with each example of its type ([`schema::Schema::examples`]).
+    /// It called with each example of its type (`schema::Schema::examples`).
     fn examples(&self) -> Vec<Job>;
 }
 

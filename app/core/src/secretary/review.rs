@@ -52,7 +52,7 @@ const UNSPOKEN: &str = "The secretary left this standing and did not say why.";
 /// What a review round may call: the reads, and `triage_withdraw`. Its turn holds the cards'
 /// words, which came out of mail anyone can send, so it holds no verb that writes to a chain,
 /// files, remembers or sends: whatever a card says, the round can withdraw it and nothing more.
-pub const SURFACE: Subset = Subset {
+pub(crate) const SURFACE: Subset = Subset {
     allows: |verb| verb.class().effect == Effect::Reads || verb == SecretaryVerb::TriageWithdraw,
     refuses: |called, listed| {
         Refusal::not_found(format!(

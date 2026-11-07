@@ -100,10 +100,10 @@ impl Keys for NoKeys {
 }
 
 /// The rows of a store of objects.
-pub type ObjectRows = Pulling<Object, NoKeys>;
+pub(crate) type ObjectRows = Pulling<Object, NoKeys>;
 
 /// One move of those rows.
-pub type ObjectDelta = Delta<Object, NoKeys>;
+pub(crate) type ObjectDelta = Delta<Object, NoKeys>;
 
 /// Why the box refused an object: for good, or until the device that signed it is trusted.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]

@@ -33,7 +33,7 @@ impl When {
     /// A timed span.
     ///
     /// # Errors
-    /// [`NotAnOccurrence::Span`] for an end before its start.
+    /// `NotAnOccurrence::Span` for an end before its start.
     pub fn timed(start: NaiveDateTime, end: NaiveDateTime) -> Result<Self, NotAnOccurrence> {
         if end < start {
             return Err(NotAnOccurrence::Span);
@@ -44,7 +44,7 @@ impl When {
     /// A span of whole days.
     ///
     /// # Errors
-    /// [`NotAnOccurrence::Span`] for an end not after its start.
+    /// `NotAnOccurrence::Span` for an end not after its start.
     pub fn all_day(start: NaiveDate, end: NaiveDate) -> Result<Self, NotAnOccurrence> {
         if end <= start {
             return Err(NotAnOccurrence::Span);
@@ -56,7 +56,7 @@ impl When {
     /// (`2026-10-05T13:00:00Z/2026-10-05T13:30:00Z`) or of two days (`2026-10-09/2026-10-11`).
     ///
     /// # Errors
-    /// [`NotAnOccurrence::Span`] for anything else, a mixed pair or an inverted span.
+    /// `NotAnOccurrence::Span` for anything else, a mixed pair or an inverted span.
     pub fn parse(interval: &str) -> Result<Self, NotAnOccurrence> {
         let (start, end) = interval.split_once('/').ok_or(NotAnOccurrence::Span)?;
         let instant = |text| NaiveDateTime::parse_from_str(text, INSTANT);

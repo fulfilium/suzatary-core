@@ -1,4 +1,4 @@
-//! The size loop: ask, and while the answer is no line of at most [`NODE_BYTES`], show the
+//! The size loop: ask, and while the answer is no line of at most `NODE_BYTES`, show the
 //! compactor its answer cut at the limit and ask again, at most [`TRIES`] times.
 //!
 //! The first answer that fits is kept, the shortest that fits since each retry asks for less. If

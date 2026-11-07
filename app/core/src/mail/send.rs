@@ -334,7 +334,7 @@ pub fn angle(message_id: &str) -> String {
 
 /// `In-Reply-To` / `References` for a reply, empty for a message that replies to nothing.
 #[must_use]
-pub fn thread_headers(out: &Outgoing) -> Vec<(String, String)> {
+pub(crate) fn thread_headers(out: &Outgoing) -> Vec<(String, String)> {
     let Some(parent) = &out.in_reply_to else {
         return Vec::new();
     };

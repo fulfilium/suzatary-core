@@ -3,7 +3,7 @@
 //! A briefing asks whether an umbrella is needed today, a question about the hours still ahead,
 //! so [`verdict`] reads the forecast slots rather than the current observation `wttr.in`'s
 //! simple format returns. The hour is an argument, resolved in the owner's zone by the caller,
-//! because the feed's slots are city-local and the box runs on UTC. [`suspect`] holds two
+//! because the feed's slots are city-local and the box runs on UTC. `suspect` holds two
 //! deliberately loose plausibility thresholds: it catches a broken feed, never a real cold front.
 
 /// One forecast slot.
@@ -14,22 +14,22 @@ pub struct Hour {
     /// 0..=23, local to the place being forecast.
     pub hour: u32,
     /// Degrees Celsius.
-    pub temp_c: i32,
+    pub(crate) temp_c: i32,
     /// Chance of rain, 0..=100.
-    pub rain_pct: u32,
+    pub(crate) rain_pct: u32,
     /// Millimetres.
-    pub precip_mm: f64,
+    pub(crate) precip_mm: f64,
     /// The feed's own words for the sky.
-    pub desc: String,
+    pub(crate) desc: String,
 }
 
 /// The day's verdict.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Verdict {
     /// The day's low.
-    pub low_c: i32,
+    pub(crate) low_c: i32,
     /// The day's high.
-    pub high_c: i32,
+    pub(crate) high_c: i32,
     /// Whether to carry one.
     pub umbrella: bool,
     /// The sentence the briefing prints.
@@ -129,7 +129,7 @@ pub fn verdict(hours: &[Hour], now_hour: u32, low_c: i32, high_c: i32) -> Option
 /// A reason rather than a refusal, so the briefing still has a line; it judges the data, so the
 /// warning covers the whole line, rain included.
 #[must_use]
-pub fn suspect(hours: &[Hour], low_c: i32, high_c: i32) -> Option<String> {
+pub(crate) fn suspect(hours: &[Hour], low_c: i32, high_c: i32) -> Option<String> {
     if high_c - low_c > MAX_DAILY_SPREAD_C {
         return Some(format!(
             "daily range {low_c}-{high_c}°C spans {}°C",

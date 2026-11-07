@@ -75,7 +75,7 @@ impl ReadHolders {
 
     /// Whether a file reader answered `file` in this conversation.
     #[must_use]
-    pub fn reads_file(&self, file: &HeldFile) -> bool {
+    pub(crate) fn reads_file(&self, file: &HeldFile) -> bool {
         self.files.contains(file)
     }
 

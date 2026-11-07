@@ -27,8 +27,10 @@ pub use event::{DecisionEvent, DecisionVocabulary, Said, decided, revised, withd
 pub use id::DecisionId;
 pub use ledger::{Decision, Held, Ledger, Withdrawal};
 pub use life::Life;
-pub use refused::NotADecision;
-pub use registers::{ContentRegister, DecisionRegister, DecisionRegisters, LifeRegister};
+pub(crate) use refused::NotADecision;
+pub(crate) use registers::DecisionRegisters;
+pub use registers::{ContentRegister, LifeRegister};
 pub use statement::Statement;
 pub use store::Decisions;
-pub use view::{DecisionsPage, Shown, Standing, document};
+pub(crate) use view::DecisionsPage;
+pub use view::{Shown, Standing, document};

@@ -193,7 +193,7 @@ impl PassOutcome {
 /// The instant text both files hold: naive and UTC, as `SystemClock` reads.
 const FORMAT: &str = "%Y-%m-%dT%H:%M:%S";
 
-/// `now` as both files spell an instant, which [`hours_since`] reads back.
+/// `now` as both files spell an instant, which `hours_since` reads back.
 #[must_use]
 pub fn stamp(now: chrono::NaiveDateTime) -> String {
     now.format(FORMAT).to_string()
@@ -204,7 +204,7 @@ pub fn stamp(now: chrono::NaiveDateTime) -> String {
 /// A gap between two instants on this box is far inside the range where the `f64` cast rounds.
 #[allow(clippy::cast_precision_loss)]
 #[must_use]
-pub fn hours_since(now: chrono::NaiveDateTime, recorded: &str) -> Option<f64> {
+pub(crate) fn hours_since(now: chrono::NaiveDateTime, recorded: &str) -> Option<f64> {
     let at = chrono::NaiveDateTime::parse_from_str(recorded, FORMAT).ok()?;
     Some((now - at).num_minutes() as f64 / 60.0)
 }
@@ -212,7 +212,7 @@ pub fn hours_since(now: chrono::NaiveDateTime, recorded: &str) -> Option<f64> {
 /// How long ago the wrapper last reached its push step, as the JSON a model reads: never run, an
 /// age, or unparseable. Built on [`hours_since`] so it and [`alarm`] never disagree on an age.
 #[must_use]
-pub fn freshness(now: chrono::NaiveDateTime, recorded: Option<&str>) -> Value {
+pub(crate) fn freshness(now: chrono::NaiveDateTime, recorded: Option<&str>) -> Value {
     let Some(text) = recorded else {
         return json!({
             "at": Value::Null,

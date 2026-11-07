@@ -20,7 +20,7 @@ pub use port::{Port, WritePort};
 pub use probe::probe;
 
 /// The longest path accepted, in bytes.
-pub const MAX_PATH: usize = 1024;
+pub(crate) const MAX_PATH: usize = 1024;
 
 /// The largest file read, in bytes: a scanned lease is a few megabytes, and a download is
 /// bounded before it starts.
@@ -55,7 +55,7 @@ impl DrivePath {
 
     /// Whether this is `/`.
     #[must_use]
-    pub fn is_root(&self) -> bool {
+    pub(crate) fn is_root(&self) -> bool {
         self.segments.is_empty()
     }
 
@@ -79,7 +79,7 @@ impl DrivePath {
     ///
     /// # Errors
     /// [`DrivePathError`] for a name holding `/`, `.`, `..` or a control
-    /// character, or one that would pass [`MAX_PATH`].
+    /// character, or one that would pass `MAX_PATH`.
     pub fn join(&self, name: &str) -> Result<Self, DrivePathError> {
         let mut text = self.to_string();
         if !self.is_root() {

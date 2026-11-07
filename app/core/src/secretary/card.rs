@@ -13,7 +13,7 @@ use crate::wire::{
 };
 
 /// The Memory page, where every summary a conversation is told stands with its Wrong.
-pub const MEMORY_PAGE: &str = "#/secretary/memory";
+pub(crate) const MEMORY_PAGE: &str = "#/secretary/memory";
 
 /// The card for a proposal.
 #[must_use]

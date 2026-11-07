@@ -106,7 +106,7 @@ pub trait Maildir {
     fn write(&self, name: &str, unread: bool, raw: &[u8]) -> Result<(), ImapError>;
 
     /// Every file name under `new/` and `cur/`, in any order; filtering is
-    /// [`locally_seen_uids`]'s, so "read" is one rule.
+    /// `locally_seen_uids`'s, so "read" is one rule.
     fn file_names(&self) -> Result<Vec<String>, ImapError>;
 }
 
@@ -145,10 +145,8 @@ pub fn reconcile(state: SyncState, current: &str) -> SyncState {
     }
 }
 
-// --- Dates -------------------------------------------------------------------
-
 /// How far back the routine INBOX pull reaches, in days: the corpus limit.
-pub const SYNC_WINDOW_DAYS: u64 = 7;
+pub(crate) const SYNC_WINDOW_DAYS: u64 = 7;
 
 /// Spelled out, not taken from a locale: an IMAP server parses English only.
 const MONTHS: [&str; 12] = [
@@ -171,8 +169,6 @@ pub fn window_start(today: chrono::NaiveDate) -> chrono::NaiveDate {
         .unwrap_or(chrono::NaiveDate::MIN)
 }
 
-// --- Maildir names ----------------------------------------------------------
-
 /// The file name a fetched message lands under.
 ///
 /// A content digest, so a refetch rewrites the same file, carrying the UID so a
@@ -189,7 +185,7 @@ pub fn maildir_name(raw: &[u8], uid: u32, unread: bool) -> String {
 /// Files written by another syncer (lieer, mbsync) have none, which is not a
 /// failure.
 #[must_use]
-pub fn uid_of_maildir_name(name: &str) -> Option<u32> {
+pub(crate) fn uid_of_maildir_name(name: &str) -> Option<u32> {
     // `.u<digits>.ms`, anywhere in the name — the flags suffix may follow it.
     let after = name.split(".u").nth(1)?;
     let digits: String = after.chars().take_while(char::is_ascii_digit).collect();
@@ -204,7 +200,7 @@ pub fn uid_of_maildir_name(name: &str) -> Option<u32> {
 /// The maildir `S` flag, which notmuch (`synchronize_flags=true`) writes when a
 /// message's `unread` tag is removed.
 #[must_use]
-pub fn is_seen_name(name: &str) -> bool {
+pub(crate) fn is_seen_name(name: &str) -> bool {
     match name.split_once(":2,") {
         Some((_, flags)) => flags.contains('S'),
         None => false,
@@ -213,15 +209,13 @@ pub fn is_seen_name(name: &str) -> bool {
 
 /// The UIDs of messages read locally, out of a maildir listing.
 #[must_use]
-pub fn locally_seen_uids<S: AsRef<str>>(names: &[S]) -> BTreeSet<u32> {
+pub(crate) fn locally_seen_uids<S: AsRef<str>>(names: &[S]) -> BTreeSet<u32> {
     names
         .iter()
         .filter(|name| is_seen_name(name.as_ref()))
         .filter_map(|name| uid_of_maildir_name(name.as_ref()))
         .collect()
 }
-
-// --- The pull ---------------------------------------------------------------
 
 /// One pull, of one of the two kinds the syncer runs; every setting a pull has is a function
 /// of its kind.
@@ -301,7 +295,7 @@ pub struct Pulled {
     /// How many messages the search found and the fetch did not return: expunged since the
     /// search, or held back by the server. None is recorded as fetched, so the next pull asks
     /// again, and the count is in the sync's line, never dropped.
-    pub unreturned: usize,
+    pub(crate) unreturned: usize,
     /// How many read-flags were pushed upstream.
     pub pushed: usize,
     /// The state to persist. The caller writes it; this module decides it.

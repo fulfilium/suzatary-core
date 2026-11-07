@@ -11,7 +11,7 @@ use prodrome_core::schema::Schema;
 /// Every entity's registers read: each register's maximal values under its declared order, as
 /// the order compares them. A function of the object set, as every reading is.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
-pub struct Knowledge(BTreeMap<Key, BTreeMap<Slot, BTreeSet<Datum>>>);
+pub(crate) struct Knowledge(BTreeMap<Key, BTreeMap<Slot, BTreeSet<Datum>>>);
 
 /// The value `event` writes to `slot`, as that register's order compares it.
 fn value(event: &Declared, slot: Slot) -> Option<Datum> {

@@ -20,7 +20,7 @@ pub fn lasts() -> chrono::Duration {
 }
 
 /// [`lasts`], in minutes.
-pub const LASTS_MINUTES: i64 = 10;
+pub(crate) const LASTS_MINUTES: i64 = 10;
 
 /// One open consent. Its `Debug` redacts the link, which carries the state in the clear.
 #[derive(Clone, PartialEq, Eq)]

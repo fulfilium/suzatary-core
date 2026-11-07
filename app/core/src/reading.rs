@@ -18,7 +18,7 @@ use serde::{Deserialize, Serialize};
 /// What a page shows of a fulfillment: tenths of a percent, to the nearest. A page is printed from
 /// this observation of every price on it, so its bytes, and the memo that keys a page by them,
 /// move only where the observed value does, whatever the clock says between.
-pub const SHOWN: Observation = Observation::new(
+pub(crate) const SHOWN: Observation = Observation::new(
     match NonZeroU32::new(1000) {
         Some(levels) => levels,
         None => unreachable!(),

@@ -27,7 +27,7 @@ impl Reasoned {
 
 /// The arguments every `propose_*` verb takes beside its act.
 #[derive(Deserialize, JsonSchema)]
-pub struct FilingArgs {
+pub(crate) struct FilingArgs {
     #[serde(flatten)]
     reasoned: Reasoned,
     serves: Option<String>,

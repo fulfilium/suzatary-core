@@ -124,7 +124,7 @@ impl Price {
 
 impl Asked {
     /// Whether asking it again later is a new request: a recurring act, unless the box asked it
-    /// and the act has no episodes ([`Proposal::episodic`]).
+    /// and the act has no episodes (`Proposal::episodic`).
     #[must_use]
     pub fn recurs(&self) -> bool {
         self.proposal.recurs() && (self.proposer != Proposer::Box || self.proposal.episodic())
@@ -186,24 +186,24 @@ pub const ASKED: Constructor = (
     &["act", "why", "sources", "asked", "serves", "spec"],
 );
 /// The box's own asking.
-pub const NOTICED: Constructor = (
+pub(crate) const NOTICED: Constructor = (
     "Noticed",
     &["act", "why", "sources", "asked", "serves", "spec"],
 );
 /// The triage agent's asking.
-pub const TRIAGED: Constructor = (
+pub(crate) const TRIAGED: Constructor = (
     "Triaged",
     &["act", "why", "sources", "asked", "serves", "spec"],
 );
 /// A plugin's asking, naming it.
-pub const OFFERED: Constructor = (
+pub(crate) const OFFERED: Constructor = (
     "Offered",
     &["plugin", "act", "why", "sources", "asked", "serves", "spec"],
 );
 
 /// What a proposal's name hashes: its act, with the instant when the act recurs. Never stored.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum Identity {
+pub(crate) enum Identity {
     /// The same request whenever asked: the act's own literal.
     Once(Proposal),
     /// A recurring act, asked at `at`.
@@ -256,7 +256,7 @@ impl Literal for Identity {
     }
 }
 
-/// A proposal's name: `p` and the first 32 hex digits of its [`Identity`]'s [`ContentId`]. It
+/// A proposal's name: `p` and the first 32 hex digits of its `Identity`'s [`ContentId`]. It
 /// names, it does not identify: an older print keeps its name, so look one up by content with
 /// [`Fold::holding`].
 #[derive(
@@ -660,7 +660,7 @@ pub enum Step {
 /// The one transition of one proposal: under the inbox's lock, read it, let `step` decide, and
 /// record what it says before the lock is let go. Every negation a write asks of the history is
 /// a `step`, so each is asked under the lock; only [`submit`]'s step performs.
-pub fn transition<C: Prodrome<InboxEvent> + ?Sized>(
+pub(crate) fn transition<C: Prodrome<InboxEvent> + ?Sized>(
     caps: &C,
     id: &ProposalId,
     by: &Actor,
@@ -672,7 +672,7 @@ pub fn transition<C: Prodrome<InboxEvent> + ?Sized>(
 }
 
 /// [`transition`], under the inbox's lock, which the caller has taken.
-pub fn transition_held<C: Prodrome<InboxEvent> + ?Sized>(
+pub(crate) fn transition_held<C: Prodrome<InboxEvent> + ?Sized>(
     caps: &C,
     id: &ProposalId,
     by: &Actor,

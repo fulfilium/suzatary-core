@@ -23,7 +23,7 @@ use crate::secretary::topics::topic::Topic;
 pub const RECURS: usize = 3;
 
 /// The most bytes of the owner's words one batch shows the model.
-pub const BATCH_BYTES: usize = 24_000;
+pub(crate) const BATCH_BYTES: usize = 24_000;
 
 /// What the model is told, as its whole system prompt.
 pub const PROMPT: &str = "You sort the owner's past questions to their secretary by subject, so \
@@ -67,7 +67,7 @@ pub struct Backfill {
 /// The rounds of `conversations` that no topic is on in `reading`, and how many of them hold none
 /// of the owner's words.
 #[must_use]
-pub fn untopiced(conversations: &[Stored], reading: &Reading) -> (Vec<Untopiced>, usize) {
+pub(crate) fn untopiced(conversations: &[Stored], reading: &Reading) -> (Vec<Untopiced>, usize) {
     let mut found = Vec::new();
     let mut unsent = 0;
     for stored in conversations {
@@ -102,7 +102,7 @@ pub fn untopiced(conversations: &[Stored], reading: &Reading) -> (Vec<Untopiced>
     (found, unsent)
 }
 
-/// The rounds in batches of at most [`BATCH_BYTES`] of words each, a longer round alone.
+/// The rounds in batches of at most `BATCH_BYTES` of words each, a longer round alone.
 #[must_use]
 pub fn batches(rounds: &[Untopiced]) -> Vec<&[Untopiced]> {
     let mut batches = Vec::new();

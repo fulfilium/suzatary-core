@@ -20,7 +20,7 @@ pub enum Scheme {
 impl Scheme {
     /// The port a URL means when it names none.
     #[must_use]
-    pub const fn default_port(self) -> u16 {
+    pub(crate) const fn default_port(self) -> u16 {
         match self {
             Scheme::Http => 80,
             Scheme::Https => 443,

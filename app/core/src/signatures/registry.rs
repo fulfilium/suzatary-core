@@ -171,7 +171,7 @@ pub fn complete_revocations<E: Schema>(
 /// refused, naming the repair.
 ///
 /// # Errors
-/// [`AdoptError`].
+/// `AdoptError`.
 pub fn epoch<E: Schema>(
     store: &(impl Prodrome<E> + ?Sized),
     root: &Secret,
@@ -353,7 +353,7 @@ fn dag_of<E: Schema>(store: &(impl Prodrome<E> + ?Sized)) -> Result<Dag<E>, Stor
 /// epoch, taken now or before.
 ///
 /// # Errors
-/// [`AdoptError`].
+/// `AdoptError`.
 pub fn adopt<E: Schema>(
     store: &(impl Prodrome<E> + ?Sized),
     keys: &super::BoxKeys,

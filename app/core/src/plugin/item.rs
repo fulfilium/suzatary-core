@@ -8,7 +8,7 @@ use prodrome_core::schema::Schema;
 use super::{PluginName, Said};
 
 /// The most bytes one item may be.
-pub const MAX_ITEM: usize = 64 * 1024;
+pub(crate) const MAX_ITEM: usize = 64 * 1024;
 
 /// Why an item a plugin emitted was not admitted. It names a schema, an actor or what the parse
 /// refused, as [`Said`], never more of the item than that.
@@ -33,7 +33,7 @@ pub enum ItemRefusal {
 /// it is.
 ///
 /// # Errors
-/// Every [`ItemRefusal`]: the size, the parse, the reprint, and the actor.
+/// Every `ItemRefusal`: the size, the parse, the reprint, and the actor.
 pub fn admit(
     schema: &Declaration,
     plugin: &PluginName,
