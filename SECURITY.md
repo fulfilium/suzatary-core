@@ -16,8 +16,7 @@ deployment and its made-up cast (`suzatary_core::cast`). The maintainer aims
 to answer within a week. When a fix lands, the advisory is published and you
 are credited, unless you ask not to be.
 
-Only the latest commit on `master` is supported. There are no maintained
-release branches.
+Only the latest commit on `master` is supported.
 
 ## The threat model
 
@@ -89,7 +88,7 @@ box's user account. Those are the trusted base this design assumes.
 The repository every deployment runs is published from a private one, and
 the Prodrome is public too. Both publication paths pass one guard
 (`scripts/public-tree.sh --check`, and `scripts/public-scan.sh` over a
-Prodrome range), and it holds one invariant:
+Prodrome range, authors and committers too), and it holds one invariant:
 
 **Every byte that reaches a public tree is either plain text that both
 checks read, or in a file listed by its path and SHA-256 in

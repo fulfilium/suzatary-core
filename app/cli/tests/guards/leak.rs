@@ -1128,6 +1128,82 @@ fn public_scan_reads_every_commit_of_the_range() {
     );
 }
 
+/// A push publishes each commit's author and committer beside its message, so the scan reads
+/// both names and both addresses as git stores them: a term in any of them is a hit at its line
+/// of the commit's `identity` (1 the author, 2 the committer), even where the repository's
+/// `.mailmap`, published before the range, would show a clean name in its place.
+#[test]
+fn public_scan_reads_each_commit_s_author_and_committer() {
+    let scratch = Scratch::new("public-scan-identity");
+    let instance = throwaway_deployment(&scratch);
+    let scanned = scratch.join("repo");
+    std::fs::create_dir_all(&scanned).expect("repo dir");
+    let git = |args: &[&str], author: &str, committer: &str| {
+        let person = |who: &str| -> (String, String) {
+            let (name, email) = who.split_once(" <").expect("a name and an address");
+            (name.to_owned(), email.trim_end_matches('>').to_owned())
+        };
+        let ((an, ae), (cn, ce)) = (person(author), person(committer));
+        let out = Command::new("git")
+            .arg("-C")
+            .arg(&scanned)
+            .args(args)
+            .env("GIT_AUTHOR_NAME", an)
+            .env("GIT_AUTHOR_EMAIL", ae)
+            .env("GIT_COMMITTER_NAME", cn)
+            .env("GIT_COMMITTER_EMAIL", ce)
+            .output()
+            .expect("git runs");
+        assert!(out.status.success(), "git {args:?}: {}", stderr(&out));
+        String::from_utf8_lossy(&out.stdout).trim().to_owned()
+    };
+    let clean = "T <t@example.invalid>";
+    git(&["init", "-q", "-b", "main"], clean, clean);
+    std::fs::write(
+        scanned.join(".mailmap"),
+        "Clean <clean@example.invalid> <who@zzcontext.example>\n",
+    )
+    .expect("a mailmap");
+    std::fs::write(scanned.join("note.md"), "nothing\n").expect("a file");
+    git(&["add", "."], clean, clean);
+    git(&["commit", "-q", "-m", "start"], clean, clean);
+    git(&["tag", "base"], clean, clean);
+    let mut expected = Vec::new();
+    for (n, author, committer, line) in [
+        (1, "Ada Zzperson <ada@example.invalid>", clean, Some(1)),
+        (2, clean, "T <who@zzcontext.example>", Some(2)),
+        (3, "Ada <who@zzcontext.example>", clean, Some(1)),
+        (4, clean, clean, None),
+    ] {
+        std::fs::write(scanned.join("note.md"), format!("nothing, {n}\n")).expect("a file");
+        git(
+            &["commit", "-q", "-am", "a quiet message"],
+            author,
+            committer,
+        );
+        let sha = git(&["rev-parse", "HEAD"], clean, clean);
+        expected.push((format!("{n}-{}: identity", &sha[..12]), line));
+    }
+    let out = Command::new(repo().join("scripts/public-scan.sh"))
+        .arg(&scanned)
+        .arg("base..main")
+        .env(suzatary_cli::instance::ENV, &instance)
+        .env("SUZATARY_BIN", binary::path())
+        .output()
+        .expect("public-scan.sh runs");
+    assert_eq!(out.status.code(), Some(1), "{}", stderr(&out));
+    for (tree, line) in expected {
+        match line {
+            Some(line) => assert!(
+                stderr(&out).contains(&format!("{tree}:{line}")),
+                "{tree}:{line}: {}",
+                stderr(&out)
+            ),
+            None => assert!(!stderr(&out).contains(&tree), "{tree}: {}", stderr(&out)),
+        }
+    }
+}
+
 /// A commit message is words a person wrote, never admitted: an opaque one is a hit, and
 /// `--admit message` names no file of the range, even at a terminal.
 #[test]

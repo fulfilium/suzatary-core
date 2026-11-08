@@ -4,12 +4,11 @@
 # what it holds.
 #
 #   scripts/public-scan.sh [--admit <path>]... <repo> <range> [<pr>]
-#   scripts/public-scan.sh ~/Documents/prodrome origin/main..land/p12 12
 #
 # An opaque file, or one with a finding `.gitleaksignore` admits, is a hit until `--admit
 # <path>`, taken only at a terminal, admits every version of it the range holds by digest.
 set -Eeuo pipefail
-# 2 when the scan could not run, 1 only for a hit: a caller must never read a failure as a hit.
+# 2 when the scan could not run, 1 only for a hit.
 trap 'exit 2' ERR
 
 usage() {
@@ -42,15 +41,16 @@ trap 'rm -rf "$scan"' EXIT
 mkdir -p "$scan/tree"
 
 # One tree per commit (a push publishes every commit, so a term added then removed still
-# leaks): the files it changes and its `.gitleaksignore`. Messages and the PR text are trees of
-# their own. A file that cannot be read is a scan that did not run (2), never a file skipped.
+# leaks): the files it changes and its `.gitleaksignore`. Messages, authors and committers
+# (`%an`, not the mailmap's `%aN`) and the PR text are trees of their own. An unreadable file is
+# a scan that did not run (2), never a file skipped.
 empty="$(git -C "$repo" hash-object -t tree /dev/null)"
 git -C "$repo" rev-list --reverse "$range" >"$scan/commits"
 n=0
 while IFS= read -r commit; do
   n=$((n + 1))
-  tree="$scan/files/$n-${commit:0:12}"
-  mkdir -p "$tree" "$scan/text/$n-${commit:0:12}"
+  tree="$scan/files/$n-${commit:0:12}" said="$scan/text/$n-${commit:0:12}"
+  mkdir -p "$tree" "$said"
   parent="$(git -C "$repo" rev-parse --verify --quiet "$commit^")" || parent="$empty"
   git -C "$repo" -c core.quotePath=false diff -z --name-only --diff-filter=d "$parent" "$commit" >"$scan/paths" || {
     echo "public-scan: could not list what ${commit:0:12} changes" >&2
@@ -66,7 +66,8 @@ while IFS= read -r commit; do
       exit 2
     }
   done <"$scan/paths"
-  git -C "$repo" log -1 --format=%B "$commit" >"$scan/text/$n-${commit:0:12}/message"
+  git -C "$repo" log -1 --format=%B "$commit" >"$said/message"
+  git -C "$repo" log -1 --format='%an <%ae>%n%cn <%ce>' "$commit" >"$said/identity"
 done <"$scan/commits"
 
 if [ -n "$pr" ]; then
