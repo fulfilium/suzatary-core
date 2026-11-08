@@ -432,7 +432,7 @@ fn todo_of(p: &Place) -> Option<&str> {
 struct Grown {
     place: Place,
     term: Value,
-    priced: Value,
+    priced: Priced,
     children: Vec<Grown>,
 }
 
@@ -444,25 +444,30 @@ struct Asked {
     by: Grouping,
 }
 
-/// A term's price: its value (`None` for `∅`), or why it does not link.
-#[derive(Debug, Clone, PartialEq)]
+/// A term's price: its value (`None` for `∅`), or why it does not link (`questions.Priced`).
+#[derive(Debug, Clone, PartialEq, Deserialize)]
+#[serde(tag = "type")]
 enum Priced {
-    Value(Option<f64>),
-    Refused(String),
+    Value { v: Option<f64> },
+    Refused { why: String },
 }
 
-impl Priced {
-    fn of(v: &Value) -> Priced {
-        match v.get("type").and_then(Value::as_str) {
-            Some("Value") => Priced::Value(v.get("v").and_then(Value::as_f64)),
-            Some(_) | None => Priced::Refused(
-                v.get("why")
-                    .and_then(Value::as_str)
-                    .unwrap_or("not priced")
-                    .to_owned(),
-            ),
-        }
-    }
+/// What a reading answers (`questions.Read`, beside the chains held).
+#[derive(Debug, Deserialize)]
+struct ReadAnswered {
+    held: BTreeSet<String>,
+    read: ReadAnswer,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(tag = "type")]
+enum ReadAnswer {
+    Read {
+        reading: Value,
+        specs: BTreeMap<String, Vec<Value>>,
+        functions: BTreeMap<String, Value>,
+    },
+    Unheld,
 }
 
 /// The reading of the objects the tab holds.
@@ -890,19 +895,19 @@ impl Model {
 
     fn worth(&self, priced: Priced, term: &Value) -> Worth {
         match priced {
-            Priced::Value(Some(v)) => Worth::Value(whole(v)),
-            Priced::Value(None) => match &self.basis {
+            Priced::Value { v: Some(v) } => Worth::Value(whole(v)),
+            Priced::Value { v: None } => match &self.basis {
                 Basis::Read(r) => unheld(term, &r.functions, &r.held, &mut BTreeSet::new())
                     .map_or(Worth::Absent, Worth::NotYet),
                 Basis::Rows => Worth::Absent,
             },
-            Priced::Refused(why) => Worth::Unlinked(why),
+            Priced::Refused { why } => Worth::Unlinked(why),
         }
     }
 
     /// The worker's tree as the list draws it: each node's worth, children ascending.
     fn lines(&self, g: Grown) -> Tree<Line> {
-        let worth = self.worth(Priced::of(&g.priced), &g.term);
+        let worth = self.worth(g.priced, &g.term);
         let mut children: Vec<Tree<Line>> = g.children.into_iter().map(|c| self.lines(c)).collect();
         children.sort_by(|a, b| a.node.worth.urgency().total_cmp(&b.node.worth.urgency()));
         Tree {
@@ -1602,22 +1607,30 @@ impl Model {
         if self.fold.as_ref().map(|f| f.at.as_str()) != Some(at) {
             return Vec::new();
         }
-        match answered::<Value>(answer) {
+        match answered::<ReadAnswered>(answer) {
             Err(e) => self.problem = Some(e),
-            Ok(v) => {
-                let read = &v["read"];
-                if read.get("type").and_then(Value::as_str) == Some("Read") {
-                    self.basis = Basis::Read(Box::new(Read {
-                        at: at.to_owned(),
-                        name: read["reading"].clone(),
-                        specs: serde_json::from_value(read["specs"].clone()).unwrap_or_default(),
-                        functions: serde_json::from_value(read["functions"].clone())
-                            .unwrap_or_default(),
-                        held: serde_json::from_value(v["held"].clone()).unwrap_or_default(),
-                    }));
-                    self.problem = None;
-                }
+            Ok(ReadAnswered {
+                held,
+                read:
+                    ReadAnswer::Read {
+                        reading,
+                        specs,
+                        functions,
+                    },
+            }) => {
+                self.basis = Basis::Read(Box::new(Read {
+                    at: at.to_owned(),
+                    name: reading,
+                    specs,
+                    functions,
+                    held,
+                }));
+                self.problem = None;
             }
+            Ok(ReadAnswered {
+                read: ReadAnswer::Unheld,
+                ..
+            }) => {}
         }
         Vec::new()
     }
