@@ -1,9 +1,9 @@
-//! The operator's tap at the box's terminal performs every card but the ones that send mail,
-//! over one proposal of every kind; the device's tap performs them all.
+//! The operator's tap at the box's terminal performs every card but the ones that send mail or
+//! grant a way to, over one proposal of every kind; the device's tap performs them all.
 
 use suzatary_core::calendar::When;
 use suzatary_core::gate::ActHeaders;
-use suzatary_core::google::NewEvent;
+use suzatary_core::google::{NewEvent, Scope};
 use suzatary_core::mail::address::EmailAddress;
 use suzatary_core::seat::Seat;
 use suzatary_core::secretary::acts::Act;
@@ -67,6 +67,8 @@ fn every_kind() -> Vec<Proposal> {
 fn sends(proposal: &Proposal) -> bool {
     match proposal {
         Proposal::Email(_) | Proposal::Forward(_) | Proposal::Act(Act::AuthSend { .. }) => true,
+        // Gmail's grant to read is `gmail.modify`, which sends too.
+        Proposal::Act(Act::GoogleSignIn { scopes, .. }) => scopes.contains(Scope::Mail),
         Proposal::Changes(_)
         | Proposal::Remember { .. }
         | Proposal::Decide(_)
@@ -86,7 +88,6 @@ fn sends(proposal: &Proposal) -> bool {
             | Act::Grant { .. }
             | Act::Retract { .. }
             | Act::GoogleClient { .. }
-            | Act::GoogleSignIn { .. }
             | Act::CalendarEvent { .. }
             | Act::Erase { .. }
             | Act::Afresh { .. }
@@ -143,5 +144,5 @@ fn the_operators_tap_performs_every_card_but_the_ones_that_send() {
             }
         }
     }
-    assert_eq!(every.iter().filter(|p| sends(p)).count(), 3);
+    assert_eq!(every.iter().filter(|p| sends(p)).count(), 4);
 }

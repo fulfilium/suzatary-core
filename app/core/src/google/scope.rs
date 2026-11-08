@@ -9,7 +9,7 @@ use prodrome_core::literal::codec::Literal;
 /// One part of a Google account the box reads, each the set of Google scopes it needs.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum Scope {
-    /// The mail: what lieer's sync of Gmail asks for, which the box's sync hands it.
+    /// The mail, as lieer's sync of Gmail asks for it.
     Mail,
     /// The calendars, read, and the events of the calendars the account owns, written.
     Calendar,
@@ -26,16 +26,13 @@ impl Scope {
     #[must_use]
     pub const fn urls(self) -> &'static [&'static str] {
         match self {
-            // lieer's own three (`lieer/remote.py`'s `Remote.SCOPES`), so the grant the box
-            // writes for it is the grant lieer asks for. gmail.modify also sends, as lieer's own
-            // sign-in always has: the Gmail transport borrows lieer's grant.
+            // lieer's own three (`Remote.SCOPES`); gmail.modify also sends (`Sending::granting`).
             Scope::Mail => &[
                 "https://www.googleapis.com/auth/gmail.readonly",
                 "https://www.googleapis.com/auth/gmail.labels",
                 "https://www.googleapis.com/auth/gmail.modify",
             ],
-            // Every calendar read; an event written only into a calendar the account owns, which
-            // its primary calendar, the one the box writes to, is.
+            // Every calendar read; events written only into a calendar the account owns.
             Scope::Calendar => &[
                 "https://www.googleapis.com/auth/calendar.readonly",
                 "https://www.googleapis.com/auth/calendar.events.owned",
@@ -56,7 +53,7 @@ impl Scope {
     #[must_use]
     pub const fn sentence(self) -> &'static str {
         match self {
-            Scope::Mail => "its mail",
+            Scope::Mail => "its mail (read and send)",
             Scope::Calendar => "its calendars (view and edit)",
         }
     }
@@ -86,9 +83,8 @@ impl Scopes {
         (!parts.is_empty()).then_some(Self(parts))
     }
 
-    /// The parts a grant holds, read from the space-separated `scope` Google answered with: a
-    /// part is held when every scope it needs is there. Google lets a person untick a part on
-    /// its consent page, so this can hold less than was asked.
+    /// The parts a grant holds, read from Google's space-separated `scope`: a part is held when
+    /// every scope it needs is, so a part unticked on the consent page is not.
     #[must_use]
     pub fn granted(scope: &str) -> BTreeSet<Scope> {
         let held: BTreeSet<&str> = scope.split_ascii_whitespace().collect();
@@ -98,8 +94,7 @@ impl Scopes {
             .collect()
     }
 
-    /// The `scope` parameter that asks for these parts: the account's identity, then each part's
-    /// scopes.
+    /// The `scope` parameter: the account's identity, then each part's scopes.
     #[must_use]
     pub fn requested(&self) -> String {
         IDENTITY
@@ -126,7 +121,7 @@ impl Scopes {
         self.0.iter().copied()
     }
 
-    /// What it reaches, as a card says it: "its mail and its calendars (view and edit)".
+    /// What it reaches, as a card says it.
     #[must_use]
     pub fn sentence(&self) -> String {
         let parts: Vec<&str> = self.iter().map(Scope::sentence).collect();
@@ -349,7 +344,10 @@ mod tests {
     fn scopes_round_trip_and_read_in_words() {
         let all = Scopes::all();
         assert_eq!(Scopes::from_value(&all.to_value()), Ok(all.clone()));
-        assert_eq!(all.sentence(), "its mail and its calendars (view and edit)");
+        assert_eq!(
+            all.sentence(),
+            "its mail (read and send) and its calendars (view and edit)"
+        );
         assert!(Scopes::from_value(&Vec::<String>::new().to_value()).is_err());
         assert!(Scopes::from_value(&vec!["photos".to_owned()].to_value()).is_err());
     }

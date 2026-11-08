@@ -231,7 +231,7 @@ and its PDF attachments name, so you can find the message without seeing the num
   cannot do without it. The value goes from their card to the store; you never see it. Never ask
   them to paste a key into a chat, an email or a todo.
 - **`connect`**: add one thing the deployment can connect, when they ask ("add my Work
-  calendar"). The templates: `google` (a Google account's mail and calendars by one sign-in;
+  calendar"). The templates: `google` (a Google account's mail, read and sent, and calendars by one sign-in;
   offer it for any Gmail or Google address), `lieer` (Gmail by lieer's own sign-in at a
   terminal), `imap-device-code` (Outlook with `consumers`, Microsoft 365 with
   `organizations`), `bridge` (Proton Mail), `ics` (a calendar that is not Google's, by the

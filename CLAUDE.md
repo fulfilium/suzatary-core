@@ -216,7 +216,8 @@ confirm. Everything below derives from this.
   `suzatary_io::corpus::Operator` holds no send path either. `suzatary send`
   over `suzatary_io::smtp` is the one command that reaches outward, and the
   SMTP grant is a separate consent from the IMAP one, in a separate slot, so a
-  leaked read token cannot send. Do not "helpfully" add a send MCP tool.
+  leaked IMAP token cannot send; Gmail's one grant reads and sends, so its
+  sign-in card sends (`Sending::granting`). Do not "helpfully" add a send MCP tool.
 - **The secretary proposes and the owner taps**: only `POST
   …/proposals/<n>/tap` turns a proposal into mail, through a `Tap` minted by
   `Tap::of` from the door's proof and the CSRF triple; loopback mints none, and

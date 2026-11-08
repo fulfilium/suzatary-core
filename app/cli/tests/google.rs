@@ -309,7 +309,7 @@ fn the_sign_in_keeps_the_grant_once_and_a_replayed_callback_is_refused() {
         .as_str()
         .unwrap_or_default();
     assert!(
-        outcome.contains("its mail and its calendars (view and edit)"),
+        outcome.contains("its mail (read and send) and its calendars (view and edit)"),
         "{outcome}"
     );
 

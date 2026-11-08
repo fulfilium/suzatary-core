@@ -30,8 +30,7 @@ pub enum StepShape {
     SendingConsent,
     /// The box's one Google Cloud client, made by the owner and pasted into its card.
     GoogleClient,
-    /// The account's sign-in with Google: an authorization code the consent sends back to the
-    /// box.
+    /// The account's sign-in with Google, by an authorization code.
     AuthCode,
     /// The model's sign-in, which the deployment runs.
     SignIn,
@@ -54,21 +53,19 @@ pub enum Step {
         /// The template's words for it.
         help: Words,
     },
-    /// Tap the account's sign-in, which the box runs as the device-code flow, IMAP only.
+    /// Tap the account's sign-in, by the device-code flow, IMAP only.
     DeviceCode {
         /// The account.
         account: EmailAddress,
     },
-    /// Tap the account's consent to send, which the box runs as the device-code flow, SMTP
-    /// only.
+    /// Tap the account's consent to send, by the device-code flow, SMTP only.
     SendingConsent {
         /// The account.
         account: EmailAddress,
     },
     /// Make the box's Google Cloud client and paste its downloaded file into the card's field.
     GoogleClient,
-    /// Tap the account's sign-in with Google: the box opens Google's consent page, and Google
-    /// sends the owner back to the box with a code it trades for the grant.
+    /// Tap the account's sign-in with Google, which reads and sends its mail.
     AuthCode {
         /// The account.
         account: EmailAddress,
@@ -85,8 +82,7 @@ pub enum Step {
 }
 
 impl StepShape {
-    /// What the person does, before any parameter is chosen: the words the setup conversation
-    /// begins with.
+    /// What the person does, before any parameter is chosen.
     #[must_use]
     pub fn sentence(&self) -> String {
         match self {
@@ -110,8 +106,8 @@ impl StepShape {
                     .to_owned()
             }
             StepShape::AuthCode => {
-                "tap the account's Sign in with Google card: Google asks you to allow its mail and \
-                 calendars, then sends you back here"
+                "tap the account's Sign in with Google card: Google asks you to let the box \
+                 read and send its mail and edit its calendars, then sends you back here"
                     .to_owned()
             }
             StepShape::SignIn => "tap the model's sign-in card".to_owned(),
