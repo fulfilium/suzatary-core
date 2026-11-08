@@ -34,6 +34,7 @@ mod mail_sync;
 mod mailbox;
 mod manuals;
 mod model;
+mod model_sessions;
 // Test support, never production.
 #[cfg(any(test, feature = "nothing"))]
 #[path = "../../tests/support/nothing.rs"]
@@ -75,6 +76,7 @@ pub use model::{
     Conversation, Delta, Halt, Model, ModelError, NotAUuid, Reply, Session, SessionId,
     SessionModel, Sessioned, TokenUsage, ToolCall, Turn,
 };
+pub use model_sessions::ModelSessions;
 #[cfg(any(test, feature = "nothing"))]
 pub use nothing::{Nothing, Parses};
 pub use notify::{Delivered, Notify, NotifyError, Printed, Push};

@@ -18,10 +18,11 @@ use prodrome_core::event::{Actor, Envelope, Hash};
 use prodrome_core::literal::Datetime;
 use prodrome_core::registers::Node;
 
-use crate::capability::Turn;
+use crate::capability::{SessionId, Turn};
 use crate::conversation_id::ConversationId;
 use crate::secretary::conversations::Conversations;
 use crate::secretary::erasure::Erasure;
+use crate::secretary::holder::Holder;
 use crate::secretary::line_event::LineEvent;
 use crate::secretary::line_shape::LineShape;
 use crate::secretary::line_words::LineWords;
@@ -983,32 +984,46 @@ pub fn keys(conversations: Conversations<'_>) -> Result<Vec<ConversationId>, Sto
     Ok(writes(&nodes).into_keys().cloned().collect())
 }
 
-/// Destroy every key an erasure line names that the key store still holds, each once the blocks
-/// its words were rendered to are forgotten, and say how many. A key an erasure names stays named
-/// as lines are added, so the sweep is monotone: it takes no hold, and running it twice, or on two
-/// replicas, destroys what running it once does.
+/// Destroy every key an erasure line names that the key store still holds, each once every
+/// holder of its words is emptied ([`Holder::ALL`]), and say how many. The sweep is monotone: it
+/// takes no hold, and running it twice, or on two replicas, destroys what running it once does.
 ///
 /// # Errors
-/// The stores' own, and [`StoreError::Unwritable`] naming every key kept because a block
-/// rendered from its words may still be on disk; the next sweep tries again.
+/// The stores' own, and [`StoreError::Unwritable`] naming every key kept because a copy of its
+/// words may still be on disk; the next sweep tries again.
 pub fn sweep(conversations: Conversations<'_>) -> Result<usize, StoreError> {
     let objects = conversations.lines.objects()?;
     destroy(
         conversations,
+        &sessions(lines_of(&objects)),
         dead(lines_of(&objects), &|name: &KeyName| {
             conversations.reads().key(name)
         }),
     )
 }
 
-/// Destroy the key of each of `slots` that the key store still holds, each once the blocks its
-/// words were rendered to are forgotten, and say how many.
-///
-/// # Errors
-/// The stores' own, and [`StoreError::Unwritable`] naming every key kept because a block
-/// rendered from its words may still be on disk.
-pub(crate) fn destroy<'l>(
+/// Each conversation's model sessions, with the directory each was opened in.
+fn sessions<'l>(
+    lines: impl IntoIterator<Item = (&'l Hash, &'l LineEvent)>,
+) -> BTreeMap<&'l ConversationId, BTreeSet<(&'l SessionId, &'l str)>> {
+    let mut sessions: BTreeMap<_, BTreeSet<_>> = BTreeMap::new();
+    for (_, line) in lines {
+        if let LineShape::Session { session, cwd, .. } | LineShape::Kept { session, cwd, .. } =
+            line.shape()
+        {
+            sessions
+                .entry(line.conversation())
+                .or_default()
+                .insert((session, cwd.as_str()));
+        }
+    }
+    sessions
+}
+
+/// [`sweep`] of `slots`.
+fn destroy<'l>(
     conversations: Conversations<'_>,
+    sessions: &BTreeMap<&ConversationId, BTreeSet<(&SessionId, &str)>>,
     slots: impl IntoIterator<Item = (&'l LineEvent, usize, &'l KeyName)>,
 ) -> Result<usize, StoreError> {
     let mut destroyed = 0;
@@ -1018,27 +1033,43 @@ pub(crate) fn destroy<'l>(
         let Some(key) = conversations.keys.get(name)? else {
             continue;
         };
-        // A copy that may still be on disk keeps the key, so the next sweep can find the blocks
-        // again and forget them; destroying it first would lose them for good.
-        if let Err(failed) = fed(line, slot, &key)
-            .iter()
-            .try_for_each(|block| conversations.renders.forget(block))
-        {
-            kept.push(format!("{name}: {failed}"));
-            continue;
+        // A copy left on disk keeps the key, so the next sweep can find the copy again.
+        let emptied = Holder::ALL.into_iter().try_for_each(|holder| match holder {
+            Holder::Opened => {
+                conversations.opened.forget(name);
+                Ok(())
+            }
+            Holder::Renders => fed(line, slot, &key)
+                .iter()
+                .try_for_each(|block| conversations.renders.forget(block)),
+            Holder::ModelSessions => sessions
+                .get(line.conversation())
+                .into_iter()
+                .flatten()
+                .try_for_each(|(id, cwd)| conversations.sessions.forget(id, cwd)),
+            Holder::Keys => conversations
+                .keys
+                .remove(name)
+                .map_err(|failed| failed.to_string()),
+            // Out of the box's reach: the erase question names them.
+            Holder::Vault | Holder::DataHistory => Ok(()),
+        });
+        match emptied {
+            Ok(()) => {
+                // A read between the first forgetting and the removal may have kept the words again.
+                conversations.opened.forget(name);
+                destroyed += 1;
+            }
+            Err(failed) => kept.push(format!("{name}: {failed}")),
         }
-        conversations.keys.remove(name)?;
-        // A read between the first forgetting and the removal may have kept the words again.
-        conversations.opened.forget(name);
-        destroyed += 1;
     }
     if kept.is_empty() {
         Ok(destroyed)
     } else {
         Err(StoreError::unwritable(
-            "render cache",
+            "a copy of the words",
             format!(
-                "kept {} key(s) whose rendered blocks may still be on disk: {}",
+                "kept {} key(s) whose words may still be on disk: {}",
                 kept.len(),
                 kept.join("; ")
             ),
@@ -1467,6 +1498,7 @@ mod tests {
         push(held.conversations(), &morning, &model(1, "An answer.")).expect("answered");
         let stuck = Conversations {
             renders: &Stuck,
+            sessions: &crate::capability::Nothing,
             ..held.conversations()
         };
         let keys: std::collections::BTreeSet<KeyName> =

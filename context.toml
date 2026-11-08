@@ -22,14 +22,14 @@ allowance = 2000
 [ratchet]
 # The repository's reading set in tokens. Only `scripts/context.sh record` writes it, and only
 # downward.
-reading = 2934755
+reading = 2930730
 
 # The USE of each unit over `budget.use` today. Only `scripts/context.sh record` writes it, and
 # only downward; a unit back within budget leaves the table.
 [ratchet.use]
-cli = 82121
-core = 480104
-io = 52383
+cli = 81630
+core = 466226
+io = 52061
 
 # Characters per token for each kind of file, measured with Claude's tokenizer by
 # `scripts/context.sh calibrate` over the files of `tokens.sample`.

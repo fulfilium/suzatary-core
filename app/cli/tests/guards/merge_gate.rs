@@ -2302,14 +2302,40 @@ fn merge_gate_web_inputs_are_built_from_the_core_library_alone() {
     ];
     let mut sources = Vec::new();
     files_under(&repo().join("app/core/src"), &mut sources);
+    // A `#[path]` is resolved from the directory of the file that declares it, as rustc does.
     let supports: BTreeSet<String> = sources
         .iter()
-        .filter_map(|file| std::fs::read_to_string(file).ok())
-        .flat_map(|text| {
-            text.lines()
-                .filter_map(|l| l.trim().strip_prefix("#[path = \"../../tests/"))
-                .filter_map(|l| l.strip_suffix("\"]"))
-                .map(|rest| format!("app/core/tests/{rest}"))
+        .flat_map(|file| {
+            let dir = file
+                .parent()
+                .expect("a source file has a directory")
+                .to_owned();
+            std::fs::read_to_string(file)
+                .unwrap_or_default()
+                .lines()
+                .filter_map(|l| l.trim().strip_prefix("#[path = \"")?.strip_suffix("\"]"))
+                .map(|rel| {
+                    dir.join(rel)
+                        .components()
+                        .fold(PathBuf::new(), |mut at, part| {
+                            match part {
+                                std::path::Component::ParentDir => {
+                                    at.pop();
+                                }
+                                other => at.push(other),
+                            }
+                            at
+                        })
+                })
+                .filter_map(|path| {
+                    Some(
+                        path.strip_prefix(repo())
+                            .ok()?
+                            .to_string_lossy()
+                            .into_owned(),
+                    )
+                })
+                .filter(|rel| rel.starts_with("app/core/tests/"))
                 .collect::<Vec<_>>()
         })
         .collect();

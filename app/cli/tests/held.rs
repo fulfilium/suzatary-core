@@ -78,26 +78,28 @@ fn holds(dir: &std::path::Path, text: &str) -> bool {
         })
 }
 
+/// What a replay of a request first answered `first` is given: the digest, never the value.
+fn not_kept(first: &str) -> String {
+    suzatary_core::signatures::Answer::of(200, first.as_bytes()).body
+}
+
 #[test]
 fn a_trusted_device_reveals_the_value_once_and_the_box_keeps_none_of_it() {
     let running = serving("held-trusted", "ada@example.com", true);
     let url = format!("{}/api/held/reveal", running.base);
     let body = serde_json::json!({ "handle": handle(MESSAGE, 0) });
 
-    let (status, text) = answered(common::act_signed(&url, &body, &common::phone()));
-    assert_eq!(status, 200, "{text}");
-    let shown: serde_json::Value = serde_json::from_str(&text).expect("JSON");
+    let (status, first) = answered(common::act_signed(&url, &body, &common::phone()));
+    assert_eq!(status, 200, "{first}");
+    let shown: serde_json::Value = serde_json::from_str(&first).expect("JSON");
     assert_eq!(shown, serde_json::json!({ "type": "Shown", "value": SSN }));
 
     // The same request again is a replay: the box answers what it kept, which is not the value.
     let (status, text) = answered(common::act_signed(&url, &body, &common::phone()));
-    assert_eq!((status, text.as_str()), (200, r#"{"type":"NotKept"}"#));
+    assert_eq!((status, text), (200, not_kept(&first)));
 
     let port = running.port();
-    for dir in [
-        common::requests_dir(port),
-        std::env::temp_dir().join(format!("suzatary-test-answers-{port}")),
-    ] {
+    for dir in [common::requests_dir(port), common::answers_dir(port)] {
         assert!(!holds(&dir, SSN), "{} holds the value", dir.display());
         assert!(!holds(&dir, "3456"), "{} holds its digits", dir.display());
     }
@@ -259,7 +261,7 @@ fn a_held_value_reaches_only_the_wire_and_only_on_the_owners_tap() {
     for dir in [
         fakes.root.clone(),
         common::requests_dir(port),
-        std::env::temp_dir().join(format!("suzatary-test-answers-{port}")),
+        common::answers_dir(port),
     ] {
         assert!(!holds(&dir, SSN), "{} holds the value", dir.display());
     }
@@ -423,16 +425,16 @@ fn a_trusted_device_opens_a_held_file_its_conversation_read_and_the_box_keeps_no
     assert_eq!(status, 403, "{text}");
     assert!(!text.contains(&encoded), "{text}");
 
-    let (status, text) = answered(common::act_signed(&url, &file, &common::phone()));
-    assert_eq!(status, 200, "{text}");
+    let (status, first) = answered(common::act_signed(&url, &file, &common::phone()));
+    assert_eq!(status, 200, "{first}");
     assert_eq!(
-        serde_json::from_str::<serde_json::Value>(&text).expect("JSON"),
+        serde_json::from_str::<serde_json::Value>(&first).expect("JSON"),
         serde_json::json!({
             "type": "File", "name": "w2.pdf", "media": "application/pdf", "bytes": encoded,
         })
     );
     let (status, text) = answered(common::act_signed(&url, &file, &common::phone()));
-    assert_eq!((status, text.as_str()), (200, r#"{"type":"NotKept"}"#));
+    assert_eq!((status, text), (200, not_kept(&first)));
 
     let in_layer =
         Handle::Value(Place::new(Holder::File(attached(W2_MESSAGE)), 0).expect("a place"));
@@ -477,10 +479,7 @@ fn a_trusted_device_opens_a_held_file_its_conversation_read_and_the_box_keeps_no
     }
 
     let port = running.port();
-    for dir in [
-        common::requests_dir(port),
-        std::env::temp_dir().join(format!("suzatary-test-answers-{port}")),
-    ] {
+    for dir in [common::requests_dir(port), common::answers_dir(port)] {
         for kept in [W2_BYTES, encoded.as_str(), SSN] {
             assert!(!holds(&dir, kept), "{} holds {kept}", dir.display());
         }
@@ -571,7 +570,7 @@ fn a_held_file_reaches_only_the_wire_and_only_on_the_owners_tap() {
     for dir in [
         fakes.root.clone(),
         common::requests_dir(port),
-        std::env::temp_dir().join(format!("suzatary-test-answers-{port}")),
+        common::answers_dir(port),
     ] {
         for kept in [W2_BYTES, SSN] {
             assert!(!holds(&dir, kept), "{} holds {kept}", dir.display());

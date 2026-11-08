@@ -979,7 +979,7 @@ fn erase(sentence: &str) -> Card {
                 question: format!(
                     "{} {}",
                     question(sentence),
-                    crate::secretary::erasure::Erasure::FOR_GOOD
+                    crate::secretary::erasure::Erasure::for_good()
                 ),
                 yes: "Yes, erase them".to_owned(),
             },

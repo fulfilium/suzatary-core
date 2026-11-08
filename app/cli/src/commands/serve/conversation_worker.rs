@@ -268,11 +268,30 @@ impl Workers {
         by: prodrome_core::event::Actor,
     ) -> Result<(), Refusal> {
         let halts = super::locks::held(&self.halts);
-        let Some(halt) = halts.get(id) else {
-            secretary::stop_waiting(caps.secretary.conversations, caps.secretary.clock, id, &by)?;
-            drop(halts);
-            self.announce(id);
+        if halts.contains_key(id) {
+            self.wait_out(halts, id, by);
             return Ok(());
+        }
+        secretary::stop_waiting(caps.secretary.conversations, caps.secretary.clock, id, &by)?;
+        drop(halts);
+        self.announce(id);
+        Ok(())
+    }
+
+    /// [`Workers::stop`] of a running round alone, so its CLI writes no more to a session an
+    /// erasure then deletes.
+    pub(crate) fn halt_round(&self, id: &ConversationId, by: prodrome_core::event::Actor) {
+        self.wait_out(super::locks::held(&self.halts), id, by);
+    }
+
+    fn wait_out(
+        &self,
+        halts: std::sync::MutexGuard<'_, HashMap<ConversationId, Halt>>,
+        id: &ConversationId,
+        by: prodrome_core::event::Actor,
+    ) {
+        let Some(halt) = halts.get(id) else {
+            return;
         };
         halt.stop(by);
         // A round started since has a fresh halt nobody pulled, so it is not waited for.
@@ -285,7 +304,6 @@ impl Workers {
         if waited.timed_out() {
             tracing::warn!("secretary: {id}'s stopped round is still running a verb");
         }
-        Ok(())
     }
 
     fn halt(&self, id: &ConversationId) -> Halt {

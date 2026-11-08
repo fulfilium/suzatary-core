@@ -1,6 +1,6 @@
 //! The requests devices made and the box performed, in two stores: the records (one JSON
-//! provenance record per request) are pushed with the data; the answers a replay is given stay on
-//! the box, outside git, and are pruned once the request is past its window.
+//! provenance record per request) are pushed; a replay's answers (a status and a digest) stay
+//! on the box until the request is past its window.
 
 use std::path::{Path, PathBuf};
 use std::time::{Duration, SystemTime};

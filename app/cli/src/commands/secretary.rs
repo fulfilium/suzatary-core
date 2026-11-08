@@ -2531,6 +2531,7 @@ mod sign_in_completion {
             dir.path().join("lines"),
             dir.path().join("lines-keys"),
             std::sync::Arc::new(suzatary_core::capability::Nothing),
+            std::sync::Arc::new(suzatary_core::capability::Nothing),
         );
         let inbox: super::ActingInbox = Box::leak(Box::new(InMemory::default()));
         let at =

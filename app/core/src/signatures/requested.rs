@@ -11,9 +11,8 @@ use serde::{Deserialize, Serialize};
 /// said either way: no body, no answer, no body's digest and not the request's nonce, since an
 /// answer can carry a memory's words and anything that recomputes the name from a guessed body
 /// is a check against a secret the body carried. So the name cannot be recomputed from the
-/// record and a guess; it is what the device signed ([`Requested::verifies`]). What a replay is answered with is
-/// [`Answer`], kept on the box alone. Not on a chain: a chain holds what a todo became, and a
-/// request is what a person asked of the box.
+/// record and a guess; it is what the device signed ([`Requested::verifies`]). A replay is
+/// answered with an [`Answer`].
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Requested {
@@ -37,14 +36,30 @@ pub struct Requested {
     pub wrote: Vec<String>,
 }
 
-/// An answer as the box gave it, its status and its JSON body: what a replay of the request is
-/// answered with, kept on the box only and only while the request could still be replayed.
+/// What a replay is answered with, kept on the box while the request could be replayed: the
+/// status and the body's digest, never its words.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Answer {
     /// The HTTP status.
     pub status: u16,
-    /// The body, as sent.
+    /// `{"type":"NotKept","sha256":…}`.
     pub body: String,
+}
+
+impl Answer {
+    /// For an answer of `status` whose body was `sent`.
+    #[must_use]
+    pub fn of(status: u16, sent: &[u8]) -> Self {
+        use sha2::Digest as _;
+        Self {
+            status,
+            body: serde_json::json!({
+                "type": "NotKept",
+                "sha256": hex::encode(sha2::Sha256::digest(sent)),
+            })
+            .to_string(),
+        }
+    }
 }
 
 impl Requested {

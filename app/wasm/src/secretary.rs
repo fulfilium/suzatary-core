@@ -408,7 +408,7 @@ fn unread(name: &Hash, why: &Unread) -> String {
 #[wasm_bindgen]
 #[must_use]
 pub fn erase_warning() -> String {
-    suzatary_core::secretary::erasure::Erasure::FOR_GOOD.to_owned()
+    suzatary_core::secretary::erasure::Erasure::for_good()
 }
 
 /// The keys a pull gave, parsed once.

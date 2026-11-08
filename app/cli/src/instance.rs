@@ -146,11 +146,13 @@ impl Instance {
         self.plugins.stores().into_iter().chain(google).collect()
     }
 
-    /// The conversations, an erasure emptying the answer blocks' cache on disk.
+    /// The conversations; an erasure empties the answers' cache and the CLI's sessions.
     #[must_use]
     pub fn conversation_stores(&self) -> suzatary_io::conversations::ConversationStores {
-        self.secretary
-            .conversation_stores(std::sync::Arc::new(self.answers()))
+        self.secretary.conversation_stores(
+            std::sync::Arc::new(self.answers()),
+            std::sync::Arc::new(crate::serve::interpreters::spawner(self, "").sessions()),
+        )
     }
 
     /// How the person reaches the app from a terminal: the script [`crate::paths::RUN_ENV`]

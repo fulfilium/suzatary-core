@@ -70,6 +70,7 @@ impl Nothing {
             keys: &Nothing,
             entropy: &Nothing,
             renders: &Nothing,
+            sessions: &Nothing,
             opened: &OPENED,
         }
     }
@@ -404,6 +405,13 @@ impl crate::capability::Calendar for Nothing {
 /// Nothing is rendered, so nothing is kept to forget.
 impl crate::capability::RenderCache for Nothing {
     fn forget(&self, _: &crate::answer::Renderable) -> Result<(), String> {
+        Ok(())
+    }
+}
+
+/// No session is kept, so none is forgotten.
+impl crate::capability::ModelSessions for Nothing {
+    fn forget(&self, _: &crate::capability::SessionId, _: &str) -> Result<(), String> {
         Ok(())
     }
 }

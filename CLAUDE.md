@@ -59,7 +59,11 @@ confirm. Everything below derives from this.
   `digests`, `compactasking`), the conversations (→ `conversationsstore`),
   their words sealed per slot (→ `lockedwords`; after a change to the
   redaction rules, run `suzatary secretary migrate-scrub`, → `migratescrub`),
-  and the recorded decisions (→ `recordeddecisions`).
+  and the recorded decisions (→ `recordeddecisions`). An erasure and a
+  migrate-scrub empty every holder in `secretary::holder::Holder`, the model
+  CLI's session files of that conversation among them, before the sweep
+  destroys a key; the erase card names each holder out of the box's reach
+  and how long its copy stays, and a replay keeps only a status and a digest.
 - **A change lands as a series, not a monolith**: one logical change per
   commit — the primitive, the operation, the route, the wire, the page, the
   docs — each buildable and tested on its own, because a commit of thousands

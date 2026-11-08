@@ -215,29 +215,18 @@ impl Performing {
         })
     }
 
-    /// Keep the route's answer (as `keeps` says) and the request's record under its name, and
-    /// hand the answer on unchanged.
+    /// Keep the [`Answer`] and the request's record under its name, and hand the answer on
+    /// unchanged.
     ///
     /// # Errors
     /// An answer too large to keep, or the record store refusing it.
-    pub async fn kept(
-        mut self,
-        response: Response,
-        wrote: Vec<Hash>,
-        keeps: super::reply::Keeps,
-    ) -> Result<Response, Refusal> {
+    pub async fn kept(mut self, response: Response, wrote: Vec<Hash>) -> Result<Response, Refusal> {
         let requests = Arc::clone(&self.state.requests);
         let (parts, body) = response.into_parts();
         let bytes = axum::body::to_bytes(body, ANSWER_CAP)
             .await
             .map_err(|_| Refusal::internal("an answer too large to keep"))?;
-        let answer = Answer {
-            status: parts.status.as_u16(),
-            body: match keeps {
-                super::reply::Keeps::Answer => String::from_utf8_lossy(&bytes).into_owned(),
-                super::reply::Keeps::Instead(body) => body.to_owned(),
-            },
-        };
+        let answer = Answer::of(parts.status.as_u16(), &bytes);
         self.record.status = answer.status;
         self.record.wrote = wrote.iter().map(|name| name.as_str().to_owned()).collect();
         let record = self.record.clone();

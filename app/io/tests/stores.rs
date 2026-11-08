@@ -330,6 +330,7 @@ fn conversations(root: &Path, asked: &inbox::ProposalId) {
         keys: &keys,
         entropy: &entropy,
         renders: &suzatary_core::capability::Nothing,
+        sessions: &suzatary_core::capability::Nothing,
         opened: Box::leak(Box::default()),
     };
     let opened = |title: &str| Entry::Opened {
@@ -405,6 +406,7 @@ fn memories(root: &Path) {
                 keys: &keys,
                 entropy: &Pinned,
                 renders: &suzatary_core::capability::Nothing,
+                sessions: &suzatary_core::capability::Nothing,
                 opened: Box::leak(Box::default()),
             },
             owners: &std::collections::BTreeSet::new(),
@@ -698,6 +700,7 @@ fn conversations_of<'a>(
         keys: database.line_keys,
         entropy: &Pinned,
         renders: &suzatary_core::capability::Nothing,
+        sessions: &suzatary_core::capability::Nothing,
         opened: Box::leak(Box::default()),
     }
 }
@@ -902,6 +905,7 @@ fn lines_at_scale() {
             keys: &keys,
             entropy: &entropy,
             renders: &suzatary_core::capability::Nothing,
+            sessions: &suzatary_core::capability::Nothing,
             opened,
         }
     };
@@ -994,6 +998,7 @@ fn lines_for_a_tab() {
         keys: &keys,
         entropy: &entropy,
         renders: &suzatary_core::capability::Nothing,
+        sessions: &suzatary_core::capability::Nothing,
         opened,
     };
     let second = |k: usize| {
@@ -1102,6 +1107,7 @@ fn lines_written_before_kinds_were_stored_read_whole() {
         keys: &keys,
         entropy: &Pinned,
         renders: &suzatary_core::capability::Nothing,
+        sessions: &suzatary_core::capability::Nothing,
         opened: Box::leak(Box::default()),
     };
     let names = transcript::keys(store).expect("lists");

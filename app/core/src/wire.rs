@@ -912,7 +912,7 @@ pub struct Revealing {
     pub conversation: Option<String>,
 }
 
-/// The box keeps [`RevealPayload::NotKept`] for a replay of the request, never the value.
+/// A replay of the request is answered [`RevealPayload::NotKept`], never the value.
 #[derive(Clone, PartialEq, Eq, Serialize, TS)]
 #[serde(tag = "type")]
 pub enum RevealPayload {

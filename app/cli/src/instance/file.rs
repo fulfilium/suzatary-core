@@ -226,8 +226,7 @@ impl Default for Triage {
 pub struct Secretary {
     /// The secretary's directory: the memory and the files a conversation holds.
     pub conversations: PathBuf,
-    /// The cache of rendered answer blocks, a sibling of `conversations`, whose transcript is
-    /// append-only bytes nothing else may touch.
+    /// The cache of rendered answer blocks, beside `conversations`, never inside it.
     pub renders: PathBuf,
     /// The inbox's store: every proposal and what became of it.
     pub inbox: PathBuf,
@@ -239,8 +238,7 @@ pub struct Secretary {
     pub topics: Topics,
     /// The model for the conversation, reviews and titles, pinned so it cannot drift.
     pub model: ModelName,
-    /// Whether the compactor runs; `false` is its kill switch. The five keys after it are read
-    /// only when it runs ([`Secretary::compacting`]).
+    /// Whether the compactor runs; the five keys after it are read only when it does.
     pub compact: bool,
     /// The compactor's models, in the order a span is owed to them: a span one model cannot say
     /// in a line goes to the next.
@@ -329,16 +327,18 @@ impl Secretary {
         self.beside("-lines-keys")
     }
 
-    /// The conversations, their lines and keys; an erasure also empties `renders`.
+    /// The conversations; an erasure also empties `renders` and `sessions`.
     #[must_use]
     pub fn conversation_stores(
         &self,
         renders: std::sync::Arc<dyn suzatary_core::capability::RenderCache + Send + Sync>,
+        sessions: std::sync::Arc<dyn suzatary_core::capability::ModelSessions + Send + Sync>,
     ) -> suzatary_io::conversations::ConversationStores {
         suzatary_io::conversations::ConversationStores::open(
             self.line_store(),
             self.line_keys(),
             renders,
+            sessions,
         )
     }
 

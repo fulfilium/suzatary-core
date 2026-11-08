@@ -56,7 +56,7 @@ export interface Core {
   answer_key: (source: string) => string;
   /** `[<name>, …]`: the functions a device keeps blocks of (`rendering::kept`). */
   kept_functions: () => string;
-  /** What an erasure does, the box's card's own sentence (`Erasure::FOR_GOOD`). */
+  /** What an erasure does, the box's card's own sentence (`Erasure::for_good`). */
   erase_warning: () => string;
   /** `{hash, text}`: the `Signed` of `object` by `key`, refused unless `signature` verifies. */
   signed: (object: string, key: string, signature: string) => string;

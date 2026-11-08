@@ -345,11 +345,17 @@ pub fn cli_of(
     model: &str,
     secrets: &suzatary_io::secrets::Secretspec,
 ) -> suzatary_io::model::ClaudeCli {
-    suzatary_io::model::ClaudeCli::new(model.to_owned(), fence(instance))
-        .in_directory(instance.code().to_path_buf())
+    spawner(instance, model)
         .with_token(suzatary_io::model::TokenSource::from_store(secrets.clone()))
         .with_uploads(upload_store(instance))
         .with_files(file_store(instance))
+}
+
+/// The CLI as the secretary runs it, before its token: where its sessions are.
+#[must_use]
+pub(crate) fn spawner(instance: &Instance, model: &str) -> suzatary_io::model::ClaudeCli {
+    suzatary_io::model::ClaudeCli::new(model.to_owned(), fence(instance))
+        .in_directory(instance.code().to_path_buf())
 }
 
 /// The web as the secretary may read it, by allow rules reread on every ask (none while the

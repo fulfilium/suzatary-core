@@ -321,10 +321,13 @@ pub fn rename(
         .map(Json)
 }
 
-/// `POST …/<id>/erase`, by tap.
+/// `POST …/<id>/erase`, by tap, after any running round stops.
 pub fn erase(
     call: &Call<suzatary_core::secretary::tap::Tap, ConversationId, secretary_routes::Erasing>,
 ) -> Result<Json<wire::ConversationPayload>, Refusal> {
+    call.state
+        .workers
+        .halt_round(&call.params, call.guard.who().clone());
     call.state
         .with_cards(|caps, cards| {
             secretary_routes::erase(caps, cards, &call.guard, &call.params, &call.body)

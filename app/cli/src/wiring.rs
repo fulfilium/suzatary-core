@@ -226,7 +226,10 @@ impl Remembering {
     #[must_use]
     pub fn of(instance: &Instance, renders: Arc<dyn RenderCache + Send + Sync>) -> Self {
         Self {
-            conversations: instance.secretary.conversation_stores(renders),
+            conversations: instance.secretary.conversation_stores(
+                renders,
+                Arc::new(crate::serve::interpreters::spawner(instance, "").sessions()),
+            ),
             memory: instance.memory_store(),
             memory_texts: Texts::open(instance.secretary.memory_texts()),
             digests: instance.digest_store(),

@@ -532,6 +532,7 @@ fn secretary(
                 keys: &*KEYS,
                 entropy: &*ENTROPY,
                 renders: &suzatary_core::capability::Nothing,
+                sessions: &suzatary_core::capability::Nothing,
                 opened: &OPENED,
             },
             junk: fixed,

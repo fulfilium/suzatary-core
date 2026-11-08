@@ -815,6 +815,7 @@ mod tests {
             root,
             keys,
             std::sync::Arc::new(suzatary_core::capability::Nothing),
+            std::sync::Arc::new(suzatary_core::capability::Nothing),
         )
     }
 

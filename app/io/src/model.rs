@@ -5,6 +5,7 @@
 //! box's files out of reach of a prompt that carries other people's mail. All three are needed.
 
 pub mod failure;
+pub mod sessions;
 pub mod stream;
 pub mod stream_event;
 pub mod summary;
@@ -151,6 +152,12 @@ impl ClaudeCli {
     pub fn with_config_dir(mut self, config: PathBuf) -> Self {
         self.config = Some(config);
         self
+    }
+
+    /// Where its runs keep sessions.
+    #[must_use]
+    pub fn sessions(&self) -> sessions::CliSessions {
+        sessions::CliSessions::new(self.config.clone())
     }
 
     /// The setup token `token` answers before each call; a store that cannot answer refuses

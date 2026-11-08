@@ -3,6 +3,7 @@
 use prodrome_core::event::Actor;
 use serde::{Deserialize, Serialize};
 
+use crate::secretary::holder::{Fate, Holder};
 use crate::secretary::memory::FactId;
 
 /// Why words were erased, as the history records it, so a page and a model are told which in the
@@ -23,8 +24,23 @@ pub enum Erasure {
 }
 
 impl Erasure {
-    /// What an erasure does, as every page that offers one says it before the owner confirms.
-    pub const FOR_GOOD: &'static str = "The box and every device forget the words for good; who said them, when, and what they referred to stay.";
+    /// What an erasure does, as a page says it before the owner confirms: [`Holder::ALL`] read.
+    #[must_use]
+    pub fn for_good() -> String {
+        let (mut deleted, mut remains) = (Vec::new(), Vec::new());
+        for holder in Holder::ALL {
+            match holder.fate() {
+                Fate::Deleted => deleted.push(holder.name().to_owned()),
+                Fate::Remains(until) => remains.push(format!("{}, {until}", holder.name())),
+            }
+        }
+        format!(
+            "Now the box deletes {}; every device forgets its copy when it next syncs. These \
+             remain: {}. Who said them, when, and what they referred to stay.",
+            deleted.join(", "),
+            remains.join("; ")
+        )
+    }
 
     /// The sentence a reader is told in the words' place.
     #[must_use]

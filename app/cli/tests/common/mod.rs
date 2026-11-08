@@ -2344,6 +2344,7 @@ impl Fakes {
                 root.join("secretary-lines"),
                 root.join("secretary-lines-keys"),
                 Arc::clone(&forgot) as _,
+                Arc::clone(&forgot) as _,
             ),
             forgot,
             memory: suzatary_io::objects::Objects::open(root.join("memory")),
@@ -3276,7 +3277,7 @@ fn publishing(
 /// port is reused across runs, and a record is the run's own.
 fn recorded_requests(port: u16) -> suzatary_io::requests::Requests {
     let dir = requests_dir(port);
-    let answered = std::env::temp_dir().join(format!("suzatary-test-answers-{port}"));
+    let answered = answers_dir(port);
     for scratch in [&dir, &answered] {
         let _ = std::fs::remove_dir_all(scratch);
     }
@@ -3287,6 +3288,12 @@ fn recorded_requests(port: u16) -> suzatary_io::requests::Requests {
 #[must_use]
 pub fn requests_dir(port: u16) -> PathBuf {
     std::env::temp_dir().join(format!("suzatary-test-requests-{port}"))
+}
+
+/// The box-local directory a server on `port` keeps its replay answers in.
+#[must_use]
+pub fn answers_dir(port: u16) -> PathBuf {
+    std::env::temp_dir().join(format!("suzatary-test-answers-{port}"))
 }
 
 /// The box's clock in UTC as a request's window reads it: [`STAMPED`].

@@ -879,6 +879,7 @@ mod tests {
                     keys: &crate::store::InMemoryKeys::default(),
                     entropy: &entropy,
                     renders: &crate::capability::Nothing,
+                    sessions: &crate::capability::Nothing,
                     opened: &crate::secretary::opened::Opened::default(),
                 },
                 owners: &std::collections::BTreeSet::new(),

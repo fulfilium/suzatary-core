@@ -47,6 +47,7 @@ impl Disk {
                 root.join("lines"),
                 root.join("keys"),
                 Arc::new(suzatary_core::capability::Nothing),
+                Arc::new(suzatary_core::capability::Nothing),
             ),
             digests: Objects::digests(root.join("digests"), owners.clone()),
             summaries: Texts::open(root.join("digest-texts")),

@@ -1,10 +1,10 @@
 //! The conversations on disk as one value: the lines, their keys (box-local, never pushed), the
-//! render cache, and the generator for new keys.
+//! render cache, the model's sessions, and the generator for new keys.
 
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use suzatary_core::capability::RenderCache;
+use suzatary_core::capability::{ModelSessions, RenderCache};
 use suzatary_core::secretary::conversations::Conversations;
 use suzatary_core::secretary::line_event::LineEvent;
 use suzatary_core::secretary::opened::Opened;
@@ -22,6 +22,7 @@ pub struct ConversationStores {
     keys_at: PathBuf,
     /// The rendered answer blocks the server draws through, so an erasure empties it.
     renders: Arc<dyn RenderCache + Send + Sync>,
+    sessions: Arc<dyn ModelSessions + Send + Sync>,
     /// One cache per keys directory in the process, so a sweep by any holder forgets the words
     /// for every holder.
     opened: Arc<Opened>,
@@ -33,6 +34,7 @@ impl ConversationStores {
         lines: impl Into<PathBuf>,
         keys: PathBuf,
         renders: Arc<dyn RenderCache + Send + Sync>,
+        sessions: Arc<dyn ModelSessions + Send + Sync>,
     ) -> Self {
         Self {
             lines: objects::Objects::open(lines),
@@ -40,6 +42,7 @@ impl ConversationStores {
             opened: opened_at(&keys),
             keys_at: keys,
             renders,
+            sessions,
         }
     }
 
@@ -50,6 +53,7 @@ impl ConversationStores {
             self.lines.inner().root().to_path_buf(),
             self.keys_at.clone(),
             Arc::clone(&self.renders),
+            Arc::clone(&self.sessions),
         )
     }
 
@@ -61,6 +65,7 @@ impl ConversationStores {
             keys: &self.keys,
             entropy: &SystemEntropy,
             renders: &*self.renders,
+            sessions: &*self.sessions,
             opened: &self.opened,
         }
     }
@@ -98,6 +103,7 @@ mod tests {
                 dir.path().join("lines"),
                 dir.path().join(keys),
                 Arc::clone(&renders),
+                Arc::new(suzatary_core::capability::Nothing),
             )
         };
         let (one, two, other) = (open("keys"), open("keys"), open("other-keys"));

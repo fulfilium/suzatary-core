@@ -106,6 +106,38 @@ fn the_owner_erases_a_whole_conversation_and_no_file_keeps_it() {
     );
 }
 
+/// Law: erasing one turn over the tap route deletes the conversation's model session, which
+/// holds every round's words in the clear.
+#[test]
+fn an_erasure_deletes_the_conversation_s_model_session() {
+    let (fakes, base, id) = one_round("erase-session", "the spare key is in the blue folder");
+    assert!(
+        !fakes
+            .forgot
+            .sources()
+            .iter()
+            .any(|forgot| forgot.starts_with("session "))
+    );
+    let erased = common::act(
+        &format!("{base}/api/secretary/conversations/{id}/erase"),
+        &serde_json::json!({"turns": [0]}),
+    );
+    assert_eq!(common::status(&erased), 200);
+    let opened = fakes.model.opened();
+    assert!(!opened.is_empty(), "the round held a session");
+    for session in opened {
+        assert!(
+            fakes
+                .forgot
+                .sources()
+                .iter()
+                .any(|forgot| forgot.starts_with(&format!("session {session} in "))),
+            "{:?}",
+            fakes.forgot.sources()
+        );
+    }
+}
+
 /// A summary that read erased words is a copy of them: the erasure's route runs the memory's
 /// sweep after the lines', so no digest text the box keeps holds them.
 #[test]

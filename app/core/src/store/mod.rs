@@ -10,12 +10,16 @@ mod error;
 mod graph;
 mod hold;
 #[cfg(any(test, feature = "nothing"))]
+#[path = "../../tests/support/in_memory.rs"]
 mod in_memory;
 #[cfg(any(test, feature = "nothing"))]
+#[path = "../../tests/support/in_memory_doc.rs"]
 mod in_memory_doc;
 #[cfg(any(test, feature = "nothing"))]
+#[path = "../../tests/support/in_memory_keys.rs"]
 mod in_memory_keys;
 #[cfg(any(test, feature = "nothing"))]
+#[path = "../../tests/support/in_memory_log.rs"]
 mod in_memory_log;
 mod kind;
 mod knowledge;

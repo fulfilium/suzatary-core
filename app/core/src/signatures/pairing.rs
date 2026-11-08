@@ -299,28 +299,6 @@ pub fn present(
     Ok(presented)
 }
 
-/// A pairing held in memory, for tests.
-#[cfg(any(test, feature = "nothing"))]
-#[derive(Debug, Default)]
-pub struct InMemoryPairings(std::sync::Mutex<Option<Pairing>>);
-
-#[cfg(any(test, feature = "nothing"))]
-impl Pairings for InMemoryPairings {
-    fn rewrite(
-        &self,
-        step: &mut dyn FnMut(Option<&Pairing>) -> Option<Pairing>,
-    ) -> Result<(), StoreError> {
-        let mut held = self
-            .0
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
-        if let Some(kept) = step(held.as_ref()) {
-            *held = Some(kept);
-        }
-        Ok(())
-    }
-}
-
 /// A pairing as text, its one serde shape: the bytes in hex.
 #[derive(Serialize, Deserialize)]
 #[serde(tag = "state", rename_all = "snake_case")]
@@ -397,6 +375,7 @@ impl<'de> Deserialize<'de> for Pairing {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::signatures::InMemoryPairings;
 
     fn at(minute: u32) -> DateTime<Utc> {
         chrono::NaiveDate::from_ymd_opt(2026, 10, 17)

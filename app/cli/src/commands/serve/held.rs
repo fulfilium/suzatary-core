@@ -5,7 +5,6 @@
 //! replay of the request, and nothing logs, stores or pushes the value.
 
 use axum::Json;
-use axum::response::{IntoResponse as _, Response};
 use suzatary_core::conversation_id::ConversationId;
 use suzatary_core::held_value::{Handle, Holder, Holders, Place};
 use suzatary_core::refusal::Refusal;
@@ -17,10 +16,6 @@ use suzatary_core::wire::{self, RevealPayload};
 use super::State;
 use super::body::{Body, MAX_ACT_BYTES};
 use super::call::Call;
-use super::reply::{Keeps, Outcome};
-
-/// What the box keeps for a replay of a reveal, in the value's place.
-pub const NOT_KEPT: &str = r#"{"type":"NotKept"}"#;
 
 /// What a reveal names.
 pub enum Revealing {
@@ -59,20 +54,9 @@ impl Body for Revealing {
     }
 }
 
-/// A reveal's answer, which the box never keeps.
-pub struct Revealed(Result<RevealPayload, Refusal>);
-
-impl Outcome for Revealed {
-    const KEEPS: Keeps = Keeps::Instead(NOT_KEPT);
-
-    fn outcome(self) -> Result<Response, Refusal> {
-        self.0.map(|payload| Json(payload).into_response())
-    }
-}
-
 /// `POST /api/held/reveal`: the value or file a handle names, read again from what holds it.
-pub fn reveal(call: &Call<Tap, (), Revealing>) -> Revealed {
-    Revealed(revealed(call))
+pub fn reveal(call: &Call<Tap, (), Revealing>) -> Result<Json<RevealPayload>, Refusal> {
+    revealed(call).map(Json)
 }
 
 fn revealed(call: &Call<Tap, (), Revealing>) -> Result<RevealPayload, Refusal> {

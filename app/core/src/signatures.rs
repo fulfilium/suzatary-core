@@ -24,27 +24,32 @@ mod epoch;
 mod key_standing;
 mod keys;
 mod pairing;
+// Test support, never production.
+#[cfg(any(test, feature = "nothing"))]
+#[path = "../tests/support/pairings.rs"]
+mod pairings;
 mod provenance;
 mod registry;
 mod request;
 mod requested;
+#[cfg(any(test, feature = "nothing"))]
+#[path = "../tests/support/scene.rs"]
+mod scene;
 mod signers;
 mod trust;
 mod unproven;
 
-#[cfg(any(test, feature = "nothing"))]
-pub use asking::scene;
 pub use asking::{Asking, Possessed, Proven, Request, Trusted, refused};
 pub use custody::Custody;
 pub use enrolment::{Endorsement, Enrolling, Enrolment};
 pub use epoch::since_epoch;
 pub use key_standing::KeyStanding;
 pub use keys::{AGENT_KEY, BOX_KEY, BoxKeys, NotTheKeys, agent_key};
-#[cfg(any(test, feature = "nothing"))]
-pub use pairing::InMemoryPairings;
 pub use pairing::{
     ALPHABET, Code, MINUTES, Pairing, Pairings, Presented, Refused, Salt, TRIES, present,
 };
+#[cfg(any(test, feature = "nothing"))]
+pub use pairings::InMemoryPairings;
 pub use provenance::Provenance;
 pub use registry::{
     Adoption, UnsignedWrite, adopt, complete_revocations, epoch, revoke, revoke_misplaced,
@@ -52,6 +57,8 @@ pub use registry::{
 };
 pub use request::{WINDOW_SECONDS, body_digest, is_nonce, request_name};
 pub use requested::{Answer, Requested};
+#[cfg(any(test, feature = "nothing"))]
+pub use scene::scene;
 pub use signers::Signers;
 pub use trust::{KEPT_CHECKS, Trust};
 pub use unproven::Unproven;

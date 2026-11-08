@@ -698,16 +698,25 @@ impl Replaying {
 
     /// `body` posted to `path` by the phone, as a fresh request.
     fn ask(&self, path: &str, body: &serde_json::Value) -> (u16, serde_json::Value) {
+        let (status, text) = self.fresh(path, body);
+        (status, serde_json::from_str(&text).expect("a JSON body"))
+    }
+
+    /// [`Replaying::ask`], its body as the box sent it.
+    fn fresh(&self, path: &str, body: &serde_json::Value) -> (u16, String) {
         let mut answer = common::act_signed(&self.url(path), body, &self.phone);
         assert!(
             answer.headers().get("x-suzatary-replayed").is_none(),
             "{path}: a fresh request is performed"
         );
-        (common::status(&answer), common::body_json(&mut answer))
+        let text = answer.body_mut().read_to_string().expect("a body");
+        (common::status(&answer), text)
     }
 
-    /// The same request sent again, which must be answered from its record as `first` was.
-    fn replayed(&self, path: &str, body: &serde_json::Value, first: &(u16, serde_json::Value)) {
+    /// The same request sent again, which must be answered from its record: `first`'s status,
+    /// and in place of its body only that body's digest.
+    fn replayed(&self, path: &str, body: &serde_json::Value, first: &(u16, String)) {
+        use sha2::Digest as _;
         let mut again = common::act_signed(&self.url(path), body, &self.phone);
         assert_eq!(
             again
@@ -719,17 +728,23 @@ impl Replaying {
         );
         assert_eq!(
             (common::status(&again), common::body_json(&mut again)),
-            first.clone(),
-            "{path}: the same answer"
+            (
+                first.0,
+                serde_json::json!({
+                    "type": "NotKept",
+                    "sha256": hex::encode(sha2::Sha256::digest(first.1.as_bytes())),
+                })
+            ),
+            "{path}: the same status, and the first answer's digest"
         );
     }
 
     /// `body` posted to `path` and then replayed: the first answers `ok`, the replay the same.
     fn twice(&self, path: &str, body: &serde_json::Value, ok: u16) -> serde_json::Value {
-        let first = self.ask(path, body);
+        let first = self.fresh(path, body);
         assert_eq!(first.0, ok, "{path}: {}", first.1);
         self.replayed(path, body, &first);
-        first.1
+        serde_json::from_str(&first.1).expect("a JSON body")
     }
 
     /// Open a conversation titled `title`, its id.
@@ -749,7 +764,7 @@ impl Replaying {
 
 /// A REQUEST IS PERFORMED ONCE: each route the box performs for a device, sent again with the
 /// same name (a capture replayed), is answered from its record, marked as a replay, with the same
-/// status and body, and its effect is not repeated. Every first call here succeeds, so each
+/// status and the first body's digest in place of the body, and its effect is not repeated. Every first call here succeeds, so each
 /// replay shows a performed effect not done twice: here the secretary's routes, the secret a
 /// card's tap sets, the turn, the round asked again and the edit each once.
 #[test]
@@ -1156,8 +1171,9 @@ fn id_in(route: &str) -> &'static str {
     }
 }
 
-/// No pushed record holds a byte of anything sent or answered, and no store the box keeps holds
-/// the value: every route was sent it wherever it takes one, the secret card's tap included.
+/// No pushed record holds a byte of anything sent or answered, no store the box keeps holds
+/// the value, and no answer kept for a replay holds a word any answer carried (law: a replay
+/// answer is a status and a digest): every route was sent the value wherever it takes one.
 fn nothing_kept(r: &Replaying, sent: &Sent) {
     provenance_only(
         &common::requests_dir(r.running.port()),
@@ -1165,6 +1181,9 @@ fn nothing_kept(r: &Replaying, sent: &Sent) {
         &sent.digests,
     );
     common::never_stored(&r.fakes.root, SECRET);
+    for words in [SECRET, KEPT, MARKER] {
+        common::never_stored(&common::answers_dir(r.running.port()), words);
+    }
 }
 
 /// A request is stamped by its device, and one stamped far from the box's clock is refused, so a

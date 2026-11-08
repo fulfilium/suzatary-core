@@ -9,21 +9,9 @@ use suzatary_core::refusal::{Refusal, Status};
 
 /// What a route's work returns.
 pub trait Outcome: Send + 'static {
-    /// What the box keeps of a signed request's answer, for a replay of it.
-    const KEEPS: Keeps = Keeps::Answer;
-
     /// # Errors
     /// The work's own [`Refusal`].
     fn outcome(self) -> Result<Response, Refusal>;
-}
-
-/// What the box keeps of an answer for a replay of its request.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Keeps {
-    Answer,
-    /// This JSON body in its place, with the answer's status: for an answer that must not be
-    /// kept anywhere, as a held value's.
-    Instead(&'static str),
 }
 
 impl<O: IntoResponse + Send + 'static> Outcome for Result<O, Refusal> {
