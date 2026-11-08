@@ -363,14 +363,7 @@ impl<M: 'static> Node<M> {
                     tag,
                     attrs,
                     on: on.into_iter().map(|l| l.map(f)).collect(),
-                    kids: match kids {
-                        Kids::Plain(ns) => {
-                            Kids::Plain(ns.into_iter().map(|n| n.mapped(f)).collect())
-                        }
-                        Kids::Keyed(ns) => {
-                            Kids::Keyed(ns.into_iter().map(|(k, n)| (k, n.mapped(f))).collect())
-                        }
-                    },
+                    kids: kids.map(|n| n.mapped(f)),
                 }))
             }
         }
@@ -557,8 +550,51 @@ pub struct Element<M, I = (), L = Lazy<M>> {
 #[derive(Debug, Clone)]
 pub enum Kids<M, I = (), L = Lazy<M>> {
     Plain(Vec<Node<M, I, L>>),
-    /// Every key once.
-    Keyed(Vec<(String, Node<M, I, L>)>),
+    Keyed(Rows<Node<M, I, L>>),
+}
+
+impl<M, I, L> Kids<M, I, L> {
+    /// Each node mapped, every row keeping its key.
+    pub fn map<N, J, K>(self, f: impl FnMut(Node<M, I, L>) -> Node<N, J, K>) -> Kids<N, J, K> {
+        match self {
+            Kids::Plain(xs) => Kids::Plain(xs.into_iter().map(f).collect()),
+            Kids::Keyed(rows) => Kids::Keyed(rows.map(f)),
+        }
+    }
+
+    /// Every node, in order.
+    pub fn nodes(&self) -> impl Iterator<Item = &Node<M, I, L>> {
+        let (plain, keyed) = match self {
+            Kids::Plain(xs) => (xs.as_slice(), None),
+            Kids::Keyed(rows) => (&[][..], Some(rows)),
+        };
+        plain.iter().chain(
+            keyed
+                .into_iter()
+                .flat_map(|rows| rows.0.iter().map(|(_, n)| n)),
+        )
+    }
+}
+
+/// A keyed list's rows, each key once ([`Rows::new`] keeps the first), as the painter's diff
+/// matches rows by key.
+#[derive(Debug, Clone)]
+pub struct Rows<N>(pub(crate) Vec<(String, N)>);
+
+impl<N> Rows<N> {
+    pub fn new(rows: impl IntoIterator<Item = (String, N)>) -> Self {
+        let mut seen = BTreeSet::new();
+        Rows(
+            rows.into_iter()
+                .filter(|(k, _)| seen.insert(k.clone()))
+                .collect(),
+        )
+    }
+
+    #[must_use]
+    pub fn map<O>(self, mut f: impl FnMut(N) -> O) -> Rows<O> {
+        Rows(self.0.into_iter().map(|(k, n)| (k, f(n))).collect())
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -760,12 +796,7 @@ impl<M> El<M> {
     /// A key given twice keeps its first node.
     #[must_use]
     pub fn keyed(mut self, xs: impl IntoIterator<Item = (String, Node<M>)>) -> Self {
-        let mut seen = BTreeSet::new();
-        self.0.kids = Kids::Keyed(
-            xs.into_iter()
-                .filter(|(k, _)| seen.insert(k.clone()))
-                .collect(),
-        );
+        self.0.kids = Kids::Keyed(Rows::new(xs));
         self
     }
 

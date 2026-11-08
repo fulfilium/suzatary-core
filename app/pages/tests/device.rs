@@ -47,11 +47,8 @@ fn words<M>(n: &Node<M>) -> String {
     }
 }
 
-fn kids<M>(k: &Kids<M>) -> Box<dyn Iterator<Item = &Node<M>> + '_> {
-    match k {
-        Kids::Plain(xs) => Box::new(xs.iter()),
-        Kids::Keyed(xs) => Box::new(xs.iter().map(|(_, n)| n)),
-    }
+fn kids<M>(k: &Kids<M>) -> impl Iterator<Item = &Node<M>> {
+    k.nodes()
 }
 
 fn offered(signing: &serde_json::Value, act: &str) -> Vec<String> {

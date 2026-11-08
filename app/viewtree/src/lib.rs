@@ -10,7 +10,7 @@ pub mod paint;
 pub mod patch;
 pub mod program;
 
-pub use node::{Attr, Key, Kids, Listener, Node, On, Picked, Tag};
+pub use node::{Attr, Key, Kids, Listener, Node, On, Picked, Rows, Tag};
 pub use paint::Painter;
 pub use patch::Patch;
 pub use program::{Frame, Program, Runtime};

@@ -4,7 +4,7 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use crate::node::{Element, Key, Kids, Lazy, Listener, Never, Node, On, Picked};
+use crate::node::{Element, Key, Kids, Lazy, Listener, Never, Node, On, Picked, Rows};
 use crate::patch::{Patch, ROOT};
 
 type Painted<M> = Node<M, u32, Never>;
@@ -137,18 +137,7 @@ impl<M: Clone> Painter<M> {
                 if !on.is_empty() {
                     self.handlers.insert(id, on.clone());
                 }
-                let kids = match kids {
-                    Kids::Plain(xs) => Kids::Plain(
-                        xs.into_iter()
-                            .map(|x| self.create(x, id, None, out))
-                            .collect(),
-                    ),
-                    Kids::Keyed(xs) => Kids::Keyed(
-                        xs.into_iter()
-                            .map(|(k, x)| (k, self.create(x, id, None, out)))
-                            .collect(),
-                    ),
-                };
+                let kids = kids.map(|x| self.create(x, id, None, out));
                 Node::Element(Box::new(Element {
                     id,
                     tag,
@@ -169,10 +158,7 @@ impl<M: Clone> Painter<M> {
         self.lazies.remove(&id_of(old));
         if let Node::Element(e) = old {
             self.handlers.remove(&e.id);
-            match &e.kids {
-                Kids::Plain(xs) => xs.iter().for_each(|x| self.forget(x)),
-                Kids::Keyed(xs) => xs.iter().for_each(|(_, x)| self.forget(x)),
-            }
+            e.kids.nodes().for_each(|x| self.forget(x));
         }
     }
 
@@ -278,24 +264,12 @@ impl<M: Clone> Painter<M> {
         }
         let kids = match (was.kids, e.kids) {
             (Kids::Plain(olds), Kids::Plain(news)) => Kids::Plain(self.plain(olds, news, id, out)),
-            (Kids::Keyed(olds), Kids::Keyed(news)) => Kids::Keyed(self.keyed(olds, news, id, out)),
+            (Kids::Keyed(olds), Kids::Keyed(news)) => {
+                Kids::Keyed(Rows(self.keyed(olds.0, news.0, id, out)))
+            }
             (olds, news) => {
-                match &olds {
-                    Kids::Plain(xs) => xs.iter().for_each(|x| self.remove(x, out)),
-                    Kids::Keyed(xs) => xs.iter().for_each(|(_, x)| self.remove(x, out)),
-                }
-                match news {
-                    Kids::Plain(xs) => Kids::Plain(
-                        xs.into_iter()
-                            .map(|x| self.create(x, id, None, out))
-                            .collect(),
-                    ),
-                    Kids::Keyed(xs) => Kids::Keyed(
-                        xs.into_iter()
-                            .map(|(k, x)| (k, self.create(x, id, None, out)))
-                            .collect(),
-                    ),
-                }
+                olds.nodes().for_each(|x| self.remove(x, out));
+                news.map(|x| self.create(x, id, None, out))
             }
         };
         Node::Element(Box::new(Element {
