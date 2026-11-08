@@ -64,7 +64,8 @@ impl Proposer {
                     | Act::Afresh { .. }
                     | Act::GoogleSignIn { .. }
                     | Act::CalendarEvent { .. }
-                    | Act::Noise { .. },
+                    | Act::Noise { .. }
+                    | Act::Restore { .. },
                 )
                 | Proposal::Email(_)
                 | Proposal::Forward(_)

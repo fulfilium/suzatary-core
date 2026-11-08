@@ -118,6 +118,7 @@ pub mod topics;
 pub mod transcript;
 pub mod turn_shape;
 pub mod two_phase;
+pub mod undo;
 pub mod upload_standing;
 pub mod verb_answer;
 pub mod verbs;

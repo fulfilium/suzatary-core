@@ -29,8 +29,9 @@ impl Verb for TriageWithdraw {
         the owner's Inbox unperformed. `card` is its reference as `triage_cards` prints it \
         (`proposal:triage/<n>`); `why` is REQUIRED and recorded.\n\n\
         Withdraw a DUPLICATE (a card that restates a todo already open, or another card), \
-        noise, and a reprice with no new fact. A withdrawal is final for that request: the agent \
-        cannot file it again at another price on the same sources, so when in doubt, leave it. A card the owner has \
+        noise, and a reprice with no new fact. The agent cannot file a withdrawn request again at \
+        another price on the same sources, and the next brief offers the owner each withdrawal \
+        back as a card that applies it after all; when in doubt, leave it. A card the owner has \
         tapped, even one whose tap failed, is his and cannot be withdrawn. You cannot perform a \
         card; only the owner's tap does.";
 

@@ -52,7 +52,8 @@ impl Sending {
                 | Act::Erase { .. }
                 | Act::Retract { .. }
                 | Act::Afresh { .. }
-                | Act::Noise { .. } => Sending::SendsNothing,
+                | Act::Noise { .. }
+| Act::Restore { .. } => Sending::SendsNothing,
             },
         }
     }

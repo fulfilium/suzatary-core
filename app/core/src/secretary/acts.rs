@@ -158,6 +158,8 @@ pub enum Act {
         /// The queued message the sender was read off, by its canonical hash.
         message: String,
     },
+    /// Apply the changes of the triage card `card` the secretary withdrew.
+    Restore { card: crate::reference::ProposalRef },
 }
 
 impl Act {
@@ -186,6 +188,7 @@ impl Act {
             Act::Afresh { .. } => "afresh",
             Act::Retract { .. } => "retract",
             Act::Noise { .. } => "noise",
+            Act::Restore { .. } => "restore",
         }
     }
 
@@ -289,6 +292,7 @@ impl Act {
                                    your request, word for word, and nothing this one read"
                 .to_owned(),
             Act::Noise { sender, message } => silencing(sender, message),
+            Act::Restore { card } => format!("Apply the changes of {card} after all"),
         }
     }
 }
@@ -504,6 +508,8 @@ pub const AFRESH: Constructor = ("Afresh", &["conversation", "turn"]);
 pub const RETRACT: Constructor = ("Retract", &["node"]);
 /// `Noise(sender, message)`.
 pub const NOISE: Constructor = ("Noise", &["sender", "message"]);
+/// `Restore(card)`.
+pub const RESTORE: Constructor = ("Restore", &["card"]);
 /// `GoogleClient(redirect)`.
 pub const GOOGLE_CLIENT: Constructor = ("GoogleClient", &["redirect"]);
 /// `GoogleSignIn(account, scopes)`.
@@ -583,6 +589,7 @@ impl Literal for Act {
             Act::Noise { sender, message } => {
                 record(NOISE, vec![sender.to_value(), message.to_value()])
             }
+            Act::Restore { card } => record(RESTORE, vec![card.to_string().to_value()]),
         }
     }
 
@@ -680,12 +687,23 @@ impl Literal for Act {
                 }
             }
             "Noise" => noise(value)?,
+            "Restore" => restore(value)?,
             "Retract" => Act::Retract {
                 node: Fields::of(value, RETRACT)?.get("node")?,
             },
             other => return Err(no_arm("an act the box performs", other)),
         })
     }
+}
+
+/// `Restore(card)`, read.
+fn restore(value: &Value) -> Result<Act, ProdromeError> {
+    Ok(Act::Restore {
+        card: Fields::of(value, RESTORE)?
+            .get::<String>("card")?
+            .parse()
+            .map_err(|failed| ProdromeError::invalid(format!("card: {failed}")))?,
+    })
 }
 
 /// `Noise(sender, message)`, read.

@@ -44,7 +44,8 @@ impl Proposal {
                 | Act::Afresh { .. }
                 | Act::GoogleClient { .. }
                 | Act::CalendarEvent { .. }
-                | Act::Noise { .. },
+                | Act::Noise { .. }
+                | Act::Restore { .. },
             )
             | Proposal::Email(_)
             | Proposal::Forward(_)

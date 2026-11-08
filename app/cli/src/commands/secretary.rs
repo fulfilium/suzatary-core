@@ -534,7 +534,8 @@ fn begin_real(
         | Act::CalendarEvent { .. }
         | Act::Erase { .. }
         | Act::Afresh { .. }
-        | Act::Noise { .. } => {
+        | Act::Noise { .. }
+        | Act::Restore { .. } => {
             return Performed::Tried(Tried::NotSent {
                 reason: "a secret act is not a device flow".to_owned(),
             });
@@ -1018,7 +1019,8 @@ fn begin_recording(
         | Act::CalendarEvent { .. }
         | Act::Erase { .. }
         | Act::Afresh { .. }
-        | Act::Noise { .. } => {
+        | Act::Noise { .. }
+        | Act::Restore { .. } => {
             return Performed::Tried(Tried::NotSent {
                 reason: "a secret act is not a device flow".to_owned(),
             });
@@ -2011,6 +2013,20 @@ fn run_brief(
     );
 
     unasked(instance, &chains, &id);
+
+    // The day's withdrawals of triage cards, each offered back for the owner to undo.
+    if let Err(failed) = suzatary_core::secretary::undo::offer_withdrawn(
+        caps.conversations,
+        caps.inbox,
+        &chains,
+        &id,
+        caps.clock.now(),
+    ) {
+        eprintln!(
+            "secretary: the day's withdrawals were not offered back: {}",
+            failed.message()
+        );
+    }
 
     let answered = ask_brief(instance, wired, &chains, &id, caps.model.limited())?;
     Ok((id, answered))

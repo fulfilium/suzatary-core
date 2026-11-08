@@ -900,6 +900,10 @@ fn act_on_wire(
         crate::secretary::acts::Act::Afresh { .. } => wire::ProposedAct::Afresh {
             sentence: act.sentence(),
         },
+        crate::secretary::acts::Act::Restore { card } => wire::ProposedAct::Restore {
+            card: card.to_string(),
+            sentence: act.sentence(),
+        },
     }
 }
 

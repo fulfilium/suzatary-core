@@ -261,8 +261,9 @@ Threat model: an injected email can at worst mis-triage or write bad todo text
   card, one per todo, and only the owner's tap performs it. Its chain is a
   READ replica (→ `triagecards`).
 - **The secretary reviews the triage cards**: it withdraws duplicates and noise
-  with a REQUIRED `why`, leaves the rest for the owner, and never performs one
-  (SECRETARY.md; → `secretaryreviews`).
+  with a REQUIRED `why`, leaves the rest for the owner, and never performs one;
+  the next brief offers each withdrawal back as a card the owner's tap applies
+  (`secretary::undo`; SECRETARY.md; → `secretaryreviews`).
 - ⚠️ **A request from this box is local wherever it dials**: the gate answers
   this box's own node as `Local`, which reads and never writes; a failed lookup
   refuses (→ `localnode`).

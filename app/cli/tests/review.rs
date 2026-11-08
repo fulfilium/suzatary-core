@@ -159,6 +159,75 @@ fn a_review_withdraws_a_card_holds_the_rest_and_performs_none() {
     assert_eq!(held[0].why.get().map(String::as_str), Some(SAID));
 }
 
+/// Law: the brief offers back each card the secretary withdrew that day, once, as a restore card
+/// whose tap applies the withdrawn card's changes; a withdrawal older than a day is not offered,
+/// and the withdrawn card itself never stands again.
+#[test]
+fn the_brief_offers_the_day_s_withdrawals_back_once() {
+    use suzatary_core::secretary::acts::Act as BoxAct;
+    use suzatary_core::secretary::proposer::Proposer;
+    use suzatary_core::secretary::store::Proposal;
+    let caps = Fakes::new("review-undo");
+    let [_, duplicate, _] = three_cards(&caps);
+    let policy = common::chain();
+    let caps = caps.model(script(&duplicate));
+    let chains = [Bound {
+        name: "life",
+        caps: caps.secretary(),
+        policy: &policy,
+    }];
+    review(
+        &caps.secretary(),
+        &deployment(),
+        &suzatary_core::settings::Settables::default(),
+        &chains,
+        "a brief",
+    )
+    .expect("the review runs");
+    let secretary = caps.secretary();
+    let brief = suzatary_core::conversation_id::DEFAULT.clone();
+    suzatary_core::secretary::read_or_open_default(
+        secretary.conversations,
+        secretary.model,
+        &brief,
+        caps.clock.now(),
+    )
+    .expect("the brief's conversation opens");
+    let offer = |at| {
+        suzatary_core::secretary::undo::offer_withdrawn(
+            secretary.conversations,
+            &caps.inbox,
+            &chains,
+            &brief,
+            at,
+        )
+        .expect("offers")
+    };
+    let later = prodrome_core::fpl::datetime_of(
+        prodrome_core::fpl::instant_of(caps.clock.now()) + chrono::Duration::days(2),
+    )
+    .expect("an instant");
+    assert_eq!(offer(later), 0, "a withdrawal two days old is not offered");
+    assert_eq!(offer(caps.clock.now()), 1);
+    assert_eq!(offer(caps.clock.now()), 0, "offered once");
+    let fold = suzatary_core::secretary::inbox::fold(&caps.inbox).expect("the inbox reads");
+    let back = fold
+        .objects()
+        .find(|object| object.asked.proposer == Proposer::Secretary)
+        .expect("the card offered back");
+    assert_eq!(
+        back.asked.proposal,
+        Proposal::Act(BoxAct::Restore {
+            card: duplicate.clone()
+        })
+    );
+    assert!(back.reading.performs(), "the owner can tap it");
+    assert!(
+        !open(&caps, &duplicate),
+        "the withdrawn card stays withdrawn"
+    );
+}
+
 /// THE TRUST BOUNDARY: a review round's turn holds the cards' words, which came out of mail, so
 /// it is shown no verb that writes, and a write it calls anyway is refused and writes nothing.
 #[test]

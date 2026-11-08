@@ -732,7 +732,7 @@ enum KeptMail {
 enum Prepared<'p, 'c> {
     Email(&'p Draft),
     Forward(&'p crate::secretary::store::Forward),
-    Changes(&'p Changeset),
+    Changes(std::borrow::Cow<'p, Changeset>),
     /// Store `value` under a name minted against the names declared at the tap.
     Secret {
         name: crate::settings::Settable,
@@ -804,6 +804,8 @@ struct Preparing<'r, 'c> {
     enrolling: Option<crate::signatures::Enrolling<'c>>,
     tap: &'r Tap,
     hold: &'r dyn Fn() -> Result<crate::secretary::memories::Held<'c>, Refusal>,
+    /// The changes of the triage card a [`Act::Restore`] names, read from the inbox at the tap.
+    withdrawn: &'r dyn Fn(&ProposalRef) -> Result<Changeset, Refusal>,
 }
 
 impl<'p, 'c> Prepared<'p, 'c> {
@@ -824,7 +826,7 @@ impl<'p, 'c> Prepared<'p, 'c> {
             }
             Proposal::Changes(changeset) => {
                 answer.plain()?;
-                Prepared::Changes(changeset)
+                Prepared::Changes(std::borrow::Cow::Borrowed(changeset))
             }
             Proposal::Act(act) => Self::of_act(act, answer, reach)?,
             // His tap is who said it, since the round that asked had read something not his own.
@@ -856,6 +858,10 @@ impl<'p, 'c> Prepared<'p, 'c> {
     ) -> Result<Self, Refusal> {
         use crate::connect::Table;
         Ok(match act {
+            Act::Restore { card } => {
+                answer.plain()?;
+                Prepared::Changes(std::borrow::Cow::Owned((reach.withdrawn)(card)?))
+            }
             Act::Secret { name, .. } => Prepared::Secret {
                 value: answer.value(&format!(" to store {name}"))?,
                 name: minted(reach.settables, name)?,
@@ -1004,6 +1010,8 @@ pub fn tap(
     let standing = stored.standing(index, &inbox::fold(caps.secretary.inbox)?)?;
     crate::secretary::sending::performs(tap, &standing.object.asked.proposal)?;
     let hold = || caps.secretary.memories.hold();
+    let withdrawn =
+        |card: &ProposalRef| crate::secretary::undo::withdrawn(caps.secretary.inbox, card);
     let prepared = Prepared::of(
         &standing.object.asked.proposal,
         answer,
@@ -1012,6 +1020,7 @@ pub fn tap(
             enrolling: effectors.enrolling,
             tap,
             hold: &hold,
+            withdrawn: &withdrawn,
         },
     )?;
     let mut then = None;
@@ -1089,7 +1098,7 @@ fn performed(
     Ok(match prepared {
         Prepared::Email(draft) => mailed(caps, effectors, id, draft),
         Prepared::Forward(forward) => forwarded(caps, effectors, id, forward),
-        Prepared::Changes(changeset) => apply(cards, changeset),
+        Prepared::Changes(changeset) => apply(cards, &changeset),
         Prepared::Secret { name, value } => secret(
             effectors.secrets,
             effectors.verify,
@@ -1616,7 +1625,8 @@ pub fn ask_trust(
                 | Act::GoogleClient { .. }
                 | Act::GoogleSignIn { .. }
                 | Act::CalendarEvent { .. }
-                | Act::Noise { .. },
+                | Act::Noise { .. }
+                | Act::Restore { .. },
             )
             | Proposal::Email(_)
             | Proposal::Forward(_)
@@ -2854,6 +2864,7 @@ mod tests {
     ) -> Result<Prepared<'p, 'static>, Refusal> {
         let tap = tapped();
         let hold = || Err(Refusal::internal("no memory in this test"));
+        let withdrawn = |_: &ProposalRef| Err(Refusal::internal("no inbox in this test"));
         Prepared::of(
             proposal,
             answer,
@@ -2862,6 +2873,7 @@ mod tests {
                 enrolling: None,
                 tap: &tap,
                 hold: &hold,
+                withdrawn: &withdrawn,
             },
         )
     }

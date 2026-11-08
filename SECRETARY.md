@@ -309,7 +309,8 @@ part is to keep the Inbox readable.** `triage_cards` shows every open triage car
 
 **WITHDRAW with `triage_withdraw`, with a reason, what should not reach them**: a DUPLICATE (a
 card that restates a todo already open, or another open card), noise, and a repricing with no
-new fact behind it. A withdrawal is final for that request.
+new fact behind it. The agent cannot file a withdrawn request again, and the next brief offers
+{{persona.name}} each withdrawal back as a card whose tap applies it after all.
 
 **LEAVE everything else for {{persona.name}}**, and say why for anything that changes a real
 commitment of theirs:

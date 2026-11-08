@@ -92,7 +92,8 @@ fn sends(proposal: &Proposal) -> bool {
             | Act::CalendarEvent { .. }
             | Act::Erase { .. }
             | Act::Afresh { .. }
-            | Act::Noise { .. },
+            | Act::Noise { .. }
+            | Act::Restore { .. },
         ) => false,
     }
 }

@@ -148,7 +148,8 @@ fn unmet(
             | Act::GoogleClient { .. }
             | Act::GoogleSignIn { .. }
             | Act::CalendarEvent { .. }
-            | Act::Noise { .. },
+            | Act::Noise { .. }
+            | Act::Restore { .. },
         )
         | Proposal::Email(_)
         | Proposal::Forward(_)

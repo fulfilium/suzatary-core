@@ -1694,6 +1694,10 @@ pub enum ProposedAct {
         message: String,
         sentence: String,
     },
+    Restore {
+        card: String,
+        sentence: String,
+    },
     /// The code an open sign-in waits for; the password field sends it in the tap's body.
     #[serde(rename = "sign_in_code")]
     SignInCode {

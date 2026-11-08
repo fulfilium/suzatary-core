@@ -172,7 +172,8 @@ impl Verb for ProposeAct {
             | Act::GoogleSignIn { .. }
             | Act::Erase { .. }
             | Act::Afresh { .. }
-            | Act::Noise { .. } => None,
+            | Act::Noise { .. }
+            | Act::Restore { .. } => None,
         };
         if let Some((name, value)) = field {
             object.insert(name.to_owned(), json!(value));

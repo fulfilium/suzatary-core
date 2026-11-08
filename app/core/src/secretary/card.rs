@@ -165,6 +165,7 @@ pub fn of(act: &ProposedAct) -> Card {
             message,
             sentence,
         } => noise(sender, message, sentence),
+        ProposedAct::Restore { card, sentence } => restore(card, sentence),
         ProposedAct::GoogleClient {
             redirect, steps, ..
         } => google_client(redirect, steps),
@@ -1038,6 +1039,25 @@ fn noise(sender: &str, message: &str, sentence: &str) -> Card {
             sentence,
             vec![field("Sender", sender)],
             "ignore",
+        )
+    }
+}
+
+fn restore(withdrawn: &str, sentence: &str) -> Card {
+    Card {
+        answers: vec![CardAnswer {
+            done: "applied".to_owned(),
+            asks: Asks::Confirm {
+                question: question(sentence),
+                yes: "Yes, apply them".to_owned(),
+            },
+            ..answer("apply", "Apply its changes")
+        }],
+        ..card(
+            "Undo a withdrawal",
+            sentence,
+            vec![field("Withdrawn card", withdrawn)],
+            "apply",
         )
     }
 }

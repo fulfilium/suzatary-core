@@ -98,6 +98,7 @@ impl Proposal {
                 | Act::CodingSession { .. }
                 | Act::Device(_)
                 | Act::Noise { .. }
+| Act::Restore { .. }
                 | Act::SignInCode { .. }
                 // An event written twice is two events.
                 | Act::CalendarEvent { .. }
