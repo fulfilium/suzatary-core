@@ -7,9 +7,12 @@ pub mod context;
 pub mod decision;
 pub mod device;
 pub mod doctor;
+// The browser suite's fixtures: test support, compiled only under the `fixture` feature.
 #[cfg(feature = "fixture")]
+#[path = "../../tests/support/fixture.rs"]
 pub mod fixture;
 #[cfg(feature = "fixture")]
+#[path = "../../tests/support/fixture_live.rs"]
 pub mod fixture_live;
 pub mod google;
 pub mod guide;

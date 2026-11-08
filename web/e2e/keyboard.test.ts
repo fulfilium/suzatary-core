@@ -98,7 +98,7 @@ app.scene("Ctrl-K opens the palette and typing filters it", async () => {
  * the palette's mail source, in a real browser.
  *
  * SINCE `fixturemailisolation` THE FIXTURE HAS ITS OWN MAIL. `suzatary-dev
- * fixture-chain` (`app/cli/src/commands/fixture.rs::mail_fixture`) builds a
+ * fixture-chain` (`app/cli/tests/support/fixture.rs::mail_fixture`) builds a
  * notmuch database in the fixture's own temp directory and seeds it with two
  * synthetic messages, so `/api/mail/search` here answers from THAT database
  * and never this box's — the content is known ahead of time, so this scene

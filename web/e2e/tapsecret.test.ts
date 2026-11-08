@@ -1,6 +1,6 @@
 /**
  * A SECRET, ASKED FOR IN THE INBOX: a card whose act is `kind: "secret"` — the standing proposal
- * `app/cli/src/commands/fixture.rs::a_secret_ask` seeds directly through the
+ * `app/cli/tests/support/fixture.rs::a_secret_ask` seeds directly through the
  * real conversation store rather than driving the scripted model — over
  * the SAME isolated `secretspec` store every `--settings` server shares
  * (`scripts/web-e2e.sh`'s `secrets_home`/`secrets_store`).

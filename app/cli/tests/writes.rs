@@ -438,8 +438,14 @@ fn the_connection_edits_and_the_mail_delete_are_called_from_the_tap_alone() {
     let mut editing: Vec<String> = Vec::new();
     let mut forgetting: Vec<String> = Vec::new();
     let mut revoking: Vec<String> = Vec::new();
-    for crate_dir in ["core", "io", "cli", "plugin", "wasm"] {
-        let mut walk = vec![app.join(crate_dir).join("src")];
+    // The cli's test support holds the fixture, compiled into the dev binary.
+    for crate_dir in ["core", "io", "cli", "plugin", "wasm", "cli/tests/support"] {
+        let root = app.join(crate_dir);
+        let mut walk = vec![if crate_dir.contains("tests") {
+            root
+        } else {
+            root.join("src")
+        }];
         while let Some(dir) = walk.pop() {
             let Ok(entries) = std::fs::read_dir(&dir) else {
                 continue;
@@ -479,9 +485,9 @@ fn the_connection_edits_and_the_mail_delete_are_called_from_the_tap_alone() {
     assert_eq!(
         editing,
         [
-            "cli/src/commands/fixture.rs",
             "cli/src/commands/serve/google.rs",
             "cli/src/commands/serve/proposals.rs",
+            "cli/tests/support/fixture.rs",
             "core/src/secretary/routes.rs",
         ],
         "callers of the connection edits"
@@ -490,8 +496,8 @@ fn the_connection_edits_and_the_mail_delete_are_called_from_the_tap_alone() {
     assert_eq!(
         forgetting,
         [
-            "cli/src/commands/fixture.rs",
             "cli/src/commands/serve/mail_cache.rs",
+            "cli/tests/support/fixture.rs",
             "core/src/secretary/routes.rs",
         ],
         "callers of the mail delete"
@@ -538,7 +544,8 @@ fn production_callers(needle: &str) -> Vec<String> {
         .expect("app/cli has a parent")
         .to_path_buf();
     let mut callers = Vec::new();
-    let mut walk = vec![app.clone()];
+    // The cli's test support holds the fixture, compiled into the dev binary.
+    let mut walk = vec![app.clone(), app.join("cli/tests/support")];
     while let Some(dir) = walk.pop() {
         let Ok(entries) = std::fs::read_dir(&dir) else {
             continue;
@@ -591,7 +598,7 @@ fn stored_markup_is_minted_only_where_it_is_read() {
     assert_eq!(
         production_callers(&needle),
         vec![
-            "cli/src/commands/fixture.rs",
+            "cli/tests/support/fixture.rs",
             "core/src/decisions/event.rs",
             "core/src/record.rs",
         ]

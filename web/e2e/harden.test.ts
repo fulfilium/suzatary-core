@@ -17,7 +17,7 @@
  * exception.
  *
  * It is asserted on ONE rendered body carrying BOTH kinds of anchor
- * (`pack-bags`' detail, `app/cli/src/commands/fixture.rs`), because the claim
+ * (`pack-bags`' detail, `app/cli/tests/support/fixture.rs`), because the claim
  * is not "links are rewritten" but that the two kinds are told apart — and a
  * fixture with only one kind can only pin half of that.
  *

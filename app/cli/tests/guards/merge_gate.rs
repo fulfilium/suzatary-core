@@ -399,7 +399,7 @@ fn code(source: &str) -> String {
 /// read by a person, so a new source naming one fails until it is read too.
 const NAMED_AS_DATA: &[(&str, &str)] = &[
     ("app/cli/src/commands/doctor.rs", "docs"),
-    ("app/cli/src/commands/fixture.rs", "docs"),
+    ("app/cli/tests/support/fixture.rs", "docs"),
     ("app/cli/src/commands/init/onboarding.rs", "docs"),
     ("app/cli/src/commands/release.rs", "CHANGELOG.md"),
     ("app/cli/src/commands/release.rs", "changelog.d"),
@@ -414,7 +414,7 @@ const NAMED_AS_DATA: &[(&str, &str)] = &[
     ("app/core/tests/web_vectors.rs", "docs"),
     ("app/io/src/repos.rs", "docs"),
     // `memory` is also the data tree's store of the secretary's memory and its route's segment.
-    ("app/cli/src/commands/fixture.rs", "memory"),
+    ("app/cli/tests/support/fixture.rs", "memory"),
     ("app/cli/src/commands/serve/table.rs", "memory"),
     ("app/cli/src/wiring.rs", "memory"),
     ("app/cli/tests/common/mod.rs", "memory"),

@@ -1,6 +1,6 @@
 /**
  * A CODING SESSION'S CARD (`docs/CODINGSESSION-PLAN-2026-09-27.md` §2 rules
- * 3 to 5), over the conversation `app/cli/src/commands/fixture.rs`'s
+ * 3 to 5), over the conversation `app/cli/tests/support/fixture.rs`'s
  * `a_coding_session` seeds on the WRITE server: a tapped coding proposal whose
  * session was fired and then reported. Nothing is fired here; the fixture's
  * routine is unreachable by construction.
