@@ -1,8 +1,8 @@
 /**
  * The one door from a string to markup; `web-static.sh` refuses any other markup-parsing assignment. It parses only
  * typst's HTML: the agent's text arrives escaped or as source, typst escapes every text it emits, and the box's
- * tripwire (`suzatary_core::tripwire`, run here through the core) refuses a script, a handler or an executable URL
- * before anything is parsed. A secretary's answer refuses `html` and `eval` instead of
+ * tripwire (`suzatary_core::tripwire`, run here through the core) refuses any element, attribute or URL typst never
+ * writes before anything is parsed. A secretary's answer refuses `html` and `eval` instead of
  * escaping. Never hand it a string a page assembled.
  */
 

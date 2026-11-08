@@ -260,6 +260,45 @@ mod tests {
         let _ = std::fs::remove_dir_all(&cache);
     }
 
+    /// A detail with a link into the app (`todo:<id>`, as `rich.ts` routes it) and one out of it
+    /// renders, past the tripwire: the fixture's checklist detail, which a refusal served as source.
+    #[test]
+    fn a_todo_link_and_an_outbound_link_render() {
+        let (typst, cache) = typst_at("links");
+        let html = typst
+            .html(&Escaped::from_chain(
+                "After #link(\"todo:book-flight\")[the flight] is booked. Weights: \
+                 #link(\"https://example.invalid/baggage\")[the airline's page].",
+            ))
+            .expect("renders");
+        assert!(
+            html.as_str().contains("href=\"todo:book-flight\""),
+            "{}",
+            html.as_str()
+        );
+        assert!(
+            html.as_str()
+                .contains("href=\"https://example.invalid/baggage\"")
+        );
+        let _ = std::fs::remove_dir_all(&cache);
+    }
+
+    /// Every fixture todo's markup renders past the tripwire, as the fixture server warms it.
+    #[test]
+    fn every_cast_todo_renders() {
+        let (typst, cache) = typst_at("cast");
+        for todo in suzatary_core::cast::CAST.todos.all() {
+            for text in [todo.body, todo.detail]
+                .into_iter()
+                .chain(todo.rationale.iter().copied())
+            {
+                let rendered = typst.html(&Escaped::from_chain(text));
+                assert!(rendered.is_ok(), "{}: {text:?}: {rendered:?}", todo.id);
+            }
+        }
+        let _ = std::fs::remove_dir_all(&cache);
+    }
+
     #[test]
     fn an_answer_block_is_html_with_mathml_in_the_closed_world() {
         let (typst, cache) = typst_at("answer-blocks");

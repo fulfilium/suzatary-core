@@ -30,8 +30,8 @@ pub enum RenderError {
     /// Typst is not available, or the compile failed; the frontend shows the source.
     #[error("typst did not render the fragment: {0}")]
     Refused(String),
-    /// The fragment carries a script element, an inline handler or a `javascript:`/`data:`
-    /// href; refused, never edited.
+    /// The fragment carries an element, an attribute or a URL typst never writes; refused,
+    /// never edited.
     #[error("the rendered fragment is suspicious and was refused: {0}")]
     Suspicious(String),
 }

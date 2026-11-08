@@ -5,8 +5,8 @@
 use crate::capability::RenderError;
 use crate::tripwire::suspicious;
 
-/// The inside of `document`'s `<body>`, refused whole when the tripwire finds a script, a
-/// handler or a `javascript:`/`data:` link.
+/// The inside of `document`'s `<body>`, refused whole when the tripwire finds anything typst never
+/// writes.
 ///
 /// # Errors
 ///

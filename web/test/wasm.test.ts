@@ -270,10 +270,10 @@ test("the core refuses to append what its own constructors would refuse to build
 
 // The tab's door refuses what the box refuses because it asks the box's own check, built into this module.
 test("the module's tripwire is the box's: it names the box's reasons and passes typst's escaped text", () => {
-  assert.equal(core.suspicious("<ScRiPt>alert(1)</script>"), "a script element");
-  assert.equal(core.suspicious(`<img ONCLICK = "x()">`), "an inline event handler");
-  assert.equal(core.suspicious(`<a href = 'data:text/html,x'>go</a>`), "an executable URL");
-  assert.equal(core.suspicious(`<a href="java	script:x">go</a>`), "an executable URL");
+  assert.equal(core.suspicious("<ScRiPt>alert(1)</script>"), "an element typst never writes");
+  assert.equal(core.suspicious(`<img ONCLICK = "x()">`), "an attribute typst never writes");
+  assert.equal(core.suspicious(`<a href = 'data:text/html,x'>go</a>`), "a URL that does not navigate");
+  assert.equal(core.suspicious(`<a href="java	script:x">go</a>`), "a URL that does not navigate");
   assert.equal(core.suspicious("<p>&lt;script>alert(1)&lt;/script> #strong[x] ]</p>"), undefined);
 });
 

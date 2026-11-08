@@ -1303,7 +1303,7 @@ mod tests {
         );
         let scripted = adding("Renew it", "ada", &Scripted).expect_err("a script");
         assert!(
-            scripted.message().contains("a script element"),
+            scripted.message().contains("an element typst never writes"),
             "{}",
             scripted.message()
         );

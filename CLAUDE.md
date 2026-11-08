@@ -412,8 +412,8 @@ Threat model: an injected email can at worst mis-triage or write bad todo text
     core as `suzatary-wasm` (→ `onebrowserevaluator`).
   - **Escaping is the DOM** (`web/src/view/dom.ts`) with ONE exception:
     **typst's HTML is the one string the browser parses, through
-    `web/src/rich.ts`**, refused by the tripwire if it carries a script, a
-    handler or a dangerous URL; `scripts/web-static.sh` fails on any other
+    `web/src/rich.ts`**, refused by the tripwire if it holds an element, an
+    attribute or a URL typst never writes; `scripts/web-static.sh` fails on any other
     `innerHTML`. Mail bodies are `textContent` (→ `typstfirst`).
   - **The phone is a replica**: an act is sealed in the tab; a REFUSED object
     stays local and NAMED, never retried (→ `phonereplica`).

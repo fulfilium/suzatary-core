@@ -55,9 +55,9 @@ the mechanism that holds it. *Irreversibles* covers what is human-only.
   so a page's text cannot start a line that reads as the owner's.
 - **The closed Typst world.** Every authored text compiles with no HTML, no
   plugin, no file, no package and no clock, under a time and memory budget.
-  A tripwire refuses scripts, inline handlers and executable URLs (read as
-  a browser reads them) before the browser parses anything, and the page
-  keeps a link only of a scheme that navigates. The page draws a link
+  A tripwire admits only the elements and attributes typst writes, and a URL
+  only of a scheme that navigates (read as a browser reads it), before the
+  browser parses anything. The page draws a link
   out of the app by the host it leads to, its label beside it as text.
 - **Secrets are write-only from the app.** A page may set a declared secret
   by name and learn only whether it resolves. A value never comes back.
