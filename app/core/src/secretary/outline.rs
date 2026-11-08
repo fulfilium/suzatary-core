@@ -9,10 +9,11 @@ use std::collections::{BTreeMap, BTreeSet};
 use prodrome_core::event::Hash;
 use prodrome_core::literal::Datetime;
 
+use crate::conversation_id::ConversationId;
 use crate::secretary::locked_text::KeyName;
 use crate::secretary::step::Step;
-use crate::secretary::store::{ConversationId, NotAConversation, Stored};
-use crate::secretary::topics::targets::rounds;
+use crate::secretary::store::{NotAConversation, Stored};
+use crate::secretary::targets::rounds;
 use crate::secretary::transcript;
 
 /// Each live round, oldest first, or why the lines are no conversation.

@@ -15,6 +15,7 @@ use prodrome_core::memo::Counts;
 use std::sync::atomic::{AtomicU64, Ordering};
 
 use suzatary_core::capability::{Entropy, Turn};
+use suzatary_core::conversation_id::ConversationId;
 use suzatary_core::rendering::ANSWER;
 use suzatary_core::secretary::conversations::{Conversations, InMemory};
 use suzatary_core::secretary::erasure::Erasure;
@@ -30,12 +31,10 @@ use suzatary_core::secretary::outlines::{Outlines, Parsed};
 use suzatary_core::secretary::readings::Dress;
 use suzatary_core::secretary::rescrub;
 use suzatary_core::secretary::scrubbed_under::ScrubbedUnder;
-use suzatary_core::secretary::store::{
-    ConversationId, Entry, Kind, Namer, NotAConversation, Stored, Title,
-};
+use suzatary_core::secretary::store::{Entry, Kind, Namer, NotAConversation, Stored, Title};
 use suzatary_core::secretary::stream;
+use suzatary_core::secretary::targets::rounds;
 use suzatary_core::secretary::topics::reading::Reading;
-use suzatary_core::secretary::topics::targets::rounds;
 use suzatary_core::secretary::transcript::{self, Transcript};
 use suzatary_core::secretary::words::Words;
 use suzatary_core::snapshot::{from_snapshot, snapshot};

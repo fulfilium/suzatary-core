@@ -5,6 +5,7 @@
 
 use crate::believed::Preview;
 use crate::capability::{Clock, Server, Turn};
+use crate::conversation_id::ConversationId;
 use crate::deployment::Deployment;
 use crate::held_value::{self, Filled, Reveal};
 use crate::mail::oauth::Consent;
@@ -21,7 +22,7 @@ use crate::secretary::opening::Opening;
 use crate::secretary::read_holders::ReadHolders;
 use crate::secretary::readings::{self, Draw, Dress, Window};
 use crate::secretary::responded::{Done, Performed, Tried};
-use crate::secretary::store::{ConversationId, Draft, Entry, Kind, Proposal, Stored, Title};
+use crate::secretary::store::{Draft, Entry, Kind, Proposal, Stored, Title};
 use crate::secretary::tap::Tap;
 use crate::secretary::transcript;
 use crate::wire;
@@ -714,7 +715,7 @@ enum Allowing<'p> {
     /// A web request's drafted rule.
     Rule(&'p crate::web::AllowRule),
     /// A document, whose folder is allowed.
-    Document(&'p crate::drive::DrivePath),
+    Document(&'p crate::drive_path::DrivePath),
 }
 
 /// What an account's removal does with the mail the box kept for it.
@@ -1590,7 +1591,7 @@ pub fn ask_trust(
     let stored = super::read_or_open_default(
         caps.secretary.conversations,
         caps.secretary.model,
-        &super::store::DEFAULT,
+        &crate::conversation_id::DEFAULT,
         caps.secretary.clock.now(),
     )?;
     // Bounded, since a key nobody trusts can ask: a stray key cannot flood the Inbox.
@@ -2556,7 +2557,7 @@ mod tests {
     impl Answers for NeverAsked {
         fn block(
             &self,
-            _block: &crate::secretary::answer::Renderable,
+            _block: &crate::answer::Renderable,
         ) -> Result<crate::capability::Html, crate::capability::AnswerError> {
             panic!("a turn that is not the model's was rendered");
         }
@@ -2734,7 +2735,7 @@ mod tests {
     impl Answers for AlwaysRenders {
         fn block(
             &self,
-            block: &crate::secretary::answer::Renderable,
+            block: &crate::answer::Renderable,
         ) -> Result<crate::capability::Html, crate::capability::AnswerError> {
             Ok(crate::capability::Html::from_render(format!(
                 "<p>{}</p>",
@@ -2747,7 +2748,7 @@ mod tests {
     impl Answers for NeverRenders {
         fn block(
             &self,
-            _block: &crate::secretary::answer::Renderable,
+            _block: &crate::answer::Renderable,
         ) -> Result<crate::capability::Html, crate::capability::AnswerError> {
             Err(crate::capability::AnswerError("typst refused".to_owned()))
         }
@@ -2774,7 +2775,7 @@ mod tests {
         assert_eq!(rendered.len(), 2);
         assert_eq!(rendered[0].html.as_deref(), Some("<p>= Hello</p>"));
         assert_eq!(rendered[0].plain, "Hello");
-        assert_eq!(rendered[0].kind, crate::secretary::answer::Kind::Heading);
+        assert_eq!(rendered[0].kind, crate::answer::Kind::Heading);
         assert_eq!(
             rendered[1].html.as_deref(),
             Some("<p>#html.elem(\"b\")[x]</p>"),

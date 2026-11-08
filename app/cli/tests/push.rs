@@ -78,7 +78,7 @@ fn no_subscriber_earns_one_push_naming_the_conversation() {
     assert_eq!(
         pushed[0],
         suzatary_core::capability::Push::Answered {
-            conversation: suzatary_core::secretary::store::ConversationId::new(id.as_str())
+            conversation: suzatary_core::conversation_id::ConversationId::new(id.as_str())
                 .expect("a slug"),
             brief: false,
         }

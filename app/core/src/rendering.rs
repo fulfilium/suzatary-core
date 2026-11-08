@@ -12,7 +12,7 @@ use prodrome_core::memo;
 use schemars::JsonSchema;
 use serde::Serialize;
 
-use crate::secretary::answer::Renderable;
+use crate::answer::Renderable;
 use crate::template::{Checked, Kept, Library, Output, Template, named};
 
 /// The typesetter every template compiles with: the Prodrome's `prodrome-typst-wasm` at the
@@ -67,7 +67,7 @@ pub static ANSWER: Template<Renderable> = Template::new(
     Library::Closed,
     Output::Body,
     Kept::Disk,
-    &[include_str!("secretary/answer.rs")],
+    &[include_str!("answer.rs")],
 );
 
 /// The functions whose values are kept beyond a process, on the box's disk and on a device. A

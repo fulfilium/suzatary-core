@@ -17,6 +17,7 @@ use prodrome_core::store::EventStore;
 
 use suzatary_core::capability::{SessionId, ToolCall, Turn};
 use suzatary_core::cast::CAST;
+use suzatary_core::conversation_id::ConversationId;
 use suzatary_core::secretary::conversations::Counting;
 use suzatary_core::secretary::inbox::{self, ProposalId};
 use suzatary_core::secretary::inbox_event::{InboxEvent, Said};
@@ -26,8 +27,7 @@ use suzatary_core::secretary::locked_text::KeyName;
 use suzatary_core::secretary::queue;
 use suzatary_core::secretary::responded::{Done, Responded, Tried};
 use suzatary_core::secretary::store::{
-    ConversationId, Decision, Draft, Entry, Line, Namer, Proposal, Reasons, Rewind, Stored, Title,
-    Unheld, stamp,
+    Decision, Draft, Entry, Line, Namer, Proposal, Reasons, Rewind, Stored, Title, Unheld, stamp,
 };
 use suzatary_core::secretary::transcript::{self, Transcript};
 use suzatary_core::secretary::words::Words;

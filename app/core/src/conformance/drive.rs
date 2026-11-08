@@ -5,7 +5,8 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 
 use super::{Broken, hold};
 use crate::capability::DriveFailure;
-use crate::drive::{DriveEntry, DrivePath, EntryKind, Fenced, Port, WritePort};
+use crate::drive::{DriveEntry, EntryKind, Fenced, Port, WritePort};
+use crate::drive_path::DrivePath;
 
 /// A law of a Drive, in the order the suite asks them.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]

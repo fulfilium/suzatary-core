@@ -12,6 +12,7 @@ use prodrome_core::event::{Actor, Hash, canonical_envelope};
 use prodrome_core::literal::Datetime;
 use proptest::prelude::*;
 use suzatary_core::capability::{Entropy, Turn};
+use suzatary_core::conversation_id::ConversationId;
 use suzatary_core::model_name::ModelName;
 use suzatary_core::secretary::digest::Digest;
 use suzatary_core::secretary::digest_event::{self, DigestEvent};
@@ -22,7 +23,7 @@ use suzatary_core::secretary::memories::Memories;
 use suzatary_core::secretary::memory::Fact;
 use suzatary_core::secretary::memory_event::MemoryEvent;
 use suzatary_core::secretary::salted_text::{Text, TextName};
-use suzatary_core::secretary::store::{ConversationId, Entry};
+use suzatary_core::secretary::store::Entry;
 use suzatary_core::store::Reads as _;
 use suzatary_core::store::{Doc, Gets as _, InMemory, InMemoryDoc, Prodrome};
 

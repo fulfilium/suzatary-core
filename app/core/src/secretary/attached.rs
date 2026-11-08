@@ -8,7 +8,7 @@ use prodrome_core::literal::{ProdromeError, Value};
 use serde::{Deserialize, Serialize};
 
 use crate::attachment::AttachmentId;
-use crate::mail::send::Attachment;
+use crate::message_part::Attachment;
 use crate::secretary::attachment_source::AttachmentSource;
 use prodrome_core::literal::codec::{Constructor, Fields, Literal, record};
 

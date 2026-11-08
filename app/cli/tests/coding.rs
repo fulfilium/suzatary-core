@@ -346,7 +346,7 @@ fn a_session_is_reported_then_merged() {
 
     let root = common::scratch("coding-life-repos");
     let mirrors = common::local_repos(&root);
-    let repo: suzatary_core::repos::RepoName = "bmabsout/cv".parse().expect("a name");
+    let repo: suzatary_core::repo_ids::RepoName = "bmabsout/cv".parse().expect("a name");
     let poll = |mirrors: &suzatary_io::repos::Mirrors| {
         suzatary_cli::commands::coding::poll(&fakes.conversations, mirrors, &repo).expect("polls")
     };
@@ -424,7 +424,7 @@ fn a_poll_that_fails_leaves_the_server_answering() {
     let conversations: &'static _ = Box::leak(Box::new(fakes.conversations.reopened()));
     let workers = suzatary_cli::commands::serve::Workers::new();
     let tick = |mirrors: suzatary_io::repos::Mirrors, repo: &str| {
-        let repo: suzatary_core::repos::RepoName = repo.parse().expect("a name");
+        let repo: suzatary_core::repo_ids::RepoName = repo.parse().expect("a name");
         runtime.block_on(suzatary_cli::commands::coding::poll_once(
             conversations,
             &Arc::new(mirrors),
@@ -541,7 +541,7 @@ fn a_new_conversations_session_is_reported_by_one_branch_among_many() {
     }
 
     let mirrors = common::local_mirrors(&root);
-    let repo: suzatary_core::repos::RepoName = "bmabsout/cv".parse().expect("a name");
+    let repo: suzatary_core::repo_ids::RepoName = "bmabsout/cv".parse().expect("a name");
     let explained = suzatary_cli::commands::coding::explain(&fakes.conversations, &mirrors, &repo)
         .expect("explains");
     let said = explained.join("\n");

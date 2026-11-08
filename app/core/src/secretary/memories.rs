@@ -462,7 +462,7 @@ impl Held<'_> {
     /// The card offering `keys` for erasure, filed as the box's; filed again, the same card.
     fn offer(
         &self,
-        conversation: &crate::secretary::store::ConversationId,
+        conversation: &crate::conversation_id::ConversationId,
         fact: FactId,
         keys: std::collections::BTreeSet<crate::secretary::locked_text::KeyName>,
         at: Datetime,
@@ -509,7 +509,7 @@ impl Held<'_> {
         self.memories.digests
     }
 
-    pub(crate) fn salt(&self) -> Result<[u8; crate::secretary::salted_text::SALT_BYTES], Refusal> {
+    pub(crate) fn salt(&self) -> Result<[u8; crate::capability::SALT_BYTES], Refusal> {
         self.memories
             .entropy
             .salt()
@@ -639,8 +639,8 @@ mod tests {
     use std::sync::atomic::{AtomicU8, Ordering};
 
     use super::*;
+    use crate::conversation_id::ConversationId;
     use crate::secretary::inbox_event::InboxEvent;
-    use crate::secretary::store::ConversationId;
     use crate::store::{InMemory, InMemoryDoc, Reads};
 
     /// Each salt one more than the last.

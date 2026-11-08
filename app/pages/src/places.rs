@@ -93,13 +93,8 @@ impl<'a> Place<'a> {
                     Reference::Proposal(p) => Place::conversation(p.conversation.as_str()).href(),
                     Reference::Batch { .. } => Place::Inbox("").href(),
                     Reference::Target(
-                        suzatary_core::secretary::topics::target::Target::Round {
-                            conversation,
-                            ..
-                        }
-                        | suzatary_core::secretary::topics::target::Target::Note {
-                            conversation, ..
-                        },
+                        suzatary_core::topic_target::Target::Round { conversation, .. }
+                        | suzatary_core::topic_target::Target::Note { conversation, .. },
                     ) => Place::conversation(conversation.as_str()).href(),
                 }
             }

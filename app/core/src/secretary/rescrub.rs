@@ -29,12 +29,12 @@ use std::collections::BTreeMap;
 use prodrome_core::event::Hash;
 use prodrome_core::literal::Datetime;
 
+use crate::conversation_id::ConversationId;
 use crate::secretary::conversations::Conversations;
 use crate::secretary::line_event::LineEvent;
 use crate::secretary::line_shape::LineShape;
 use crate::secretary::line_words::LineWords;
 use crate::secretary::locked_text::KeyName;
-use crate::secretary::store::ConversationId;
 use crate::secretary::transcript;
 use crate::secretary::words::Words;
 use crate::store::StoreError;

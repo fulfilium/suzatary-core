@@ -304,8 +304,9 @@ fn holding_the_same_card_again_is_not_a_second_line() {
 /// the review of the readable rest goes on.
 #[test]
 fn an_unreadable_conversation_is_named_and_paged_once() {
+    use suzatary_core::conversation_id::ConversationId;
     use suzatary_core::secretary::review::note_unreadable;
-    use suzatary_core::secretary::store::{ConversationId, Entry, Kind};
+    use suzatary_core::secretary::store::{Entry, Kind};
     use suzatary_core::secretary::transcript;
     let caps = Fakes::new("review-unreadable");
     let zone = suzatary_core::zone::Zone::UTC;
@@ -539,9 +540,9 @@ fn the_reviews_round_is_pinned() {
 }
 
 /// Day `day`'s review conversation.
-fn today_of(day: chrono::NaiveDate) -> suzatary_core::secretary::store::ConversationId {
-    suzatary_core::secretary::store::ConversationId::daily(
-        suzatary_core::secretary::daily::Daily::Review,
+fn today_of(day: chrono::NaiveDate) -> suzatary_core::conversation_id::ConversationId {
+    suzatary_core::conversation_id::ConversationId::daily(
+        suzatary_core::conversation_id::Daily::Review,
         day,
     )
 }

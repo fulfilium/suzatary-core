@@ -14,8 +14,8 @@ use suzatary_core::secretary::topics::provenance::Owner;
 use suzatary_core::secretary::topics::reading::AliasEvent;
 use suzatary_core::secretary::topics::reading::MembershipEvent;
 use suzatary_core::secretary::topics::reading::Reading;
-use suzatary_core::secretary::topics::target::Target;
 use suzatary_core::secretary::topics::topic::Topic;
+use suzatary_core::topic_target::Target;
 use wasm_bindgen::prelude::*;
 
 use crate::{json, refused};
@@ -119,7 +119,7 @@ pub(crate) fn topics_of(text: &str) -> Result<std::collections::BTreeSet<Topic>,
 
 fn target_of(text: &str) -> Result<Target, JsError> {
     text.parse()
-        .map_err(|e: suzatary_core::secretary::topics::target::NotATarget| refused(e.to_string()))
+        .map_err(|e: suzatary_core::topic_target::NotATarget| refused(e.to_string()))
 }
 
 fn topic_of(text: &str) -> Result<Topic, JsError> {

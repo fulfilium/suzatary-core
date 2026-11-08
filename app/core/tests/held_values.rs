@@ -149,7 +149,7 @@ fn secretary(verb: &str, call: Value) -> String {
         &deployment(),
         &suzatary_core::settings::Settables::default(),
         &chains,
-        &suzatary_core::secretary::store::DEFAULT.clone(),
+        &suzatary_core::conversation_id::DEFAULT.clone(),
         verb,
         &args(call),
     )

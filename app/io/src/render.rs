@@ -10,13 +10,13 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 use prodrome_core::memo::Finding;
+use suzatary_core::answer::Renderable;
 use suzatary_core::capability::{
     AnswerError, Answers, Html, Rejected, Render, RenderError, Typeset,
 };
 use suzatary_core::escape::Escaped;
 use suzatary_core::narrowing::narrowed;
 use suzatary_core::rendering::{self, ANSWER, CLOSED, MARKUP, Markup};
-use suzatary_core::secretary::answer::Renderable;
 use suzatary_core::table::Table;
 use suzatary_core::template::{Called, Job, Kept, Output, Unprintable, named};
 use suzatary_core::tripwire::suspicious;

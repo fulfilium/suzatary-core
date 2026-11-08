@@ -6,8 +6,9 @@
 use prodrome_core::event::Actor;
 
 use crate::capability::{Clock, Conversation, Model, Turn};
+use crate::conversation_id::ConversationId;
 use crate::refusal::Refusal;
-use crate::secretary::store::{ConversationId, Entry, Kind, Namer, Stored, Title};
+use crate::secretary::store::{Entry, Kind, Namer, Stored, Title};
 use crate::secretary::transcript;
 
 /// The opening words of the job's one question, which a scripted fixture keys on.

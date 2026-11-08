@@ -15,7 +15,8 @@ use crate::mail::verbs::{Marked, Show, Summary, SyncReport};
 use crate::mail::{AttachmentMeta, MailMessage, MailRow};
 use crate::record::{Envelope, TodoEvent};
 use crate::refusal::Refusal;
-use crate::repos::{CommitId, Patch, RepoName, RepoPath, RepoRow, Rev, Visibility};
+use crate::repo_ids::{CommitId, RepoName, RepoPath, Rev};
+use crate::repos::{Patch, RepoRow, Visibility};
 use crate::store::{Prodrome, Reads, StoreError, WriteLock};
 
 /// Every effect, inert: reads find nothing, writes are refused, no peer has a login.
@@ -401,7 +402,7 @@ impl crate::capability::Calendar for Nothing {
 
 /// Nothing is rendered, so nothing is kept to forget.
 impl crate::capability::RenderCache for Nothing {
-    fn forget(&self, _: &crate::secretary::answer::Renderable) -> Result<(), String> {
+    fn forget(&self, _: &crate::answer::Renderable) -> Result<(), String> {
         Ok(())
     }
 }
@@ -506,7 +507,7 @@ impl Repositories for Nothing {
 }
 
 impl Drive for Nothing {
-    fn allowed_folders(&self) -> Vec<crate::drive::DrivePath> {
+    fn allowed_folders(&self) -> Vec<crate::drive_path::DrivePath> {
         Vec::new()
     }
     fn port(&self) -> &dyn crate::drive::Port {
@@ -514,7 +515,7 @@ impl Drive for Nothing {
     }
     fn read(
         &self,
-        file: &crate::drive::DrivePath,
+        file: &crate::drive_path::DrivePath,
     ) -> Result<crate::file_read::FileRead, DriveFailure> {
         Err(DriveFailure::Missing(file.to_string()))
     }
@@ -524,11 +525,11 @@ impl Drive for Nothing {
 impl crate::drive::Port for Nothing {
     fn list(
         &self,
-        folder: &crate::drive::DrivePath,
+        folder: &crate::drive_path::DrivePath,
     ) -> Result<Vec<crate::drive::DriveEntry>, DriveFailure> {
         Err(DriveFailure::Missing(folder.to_string()))
     }
-    fn download(&self, file: &crate::drive::DrivePath) -> Result<Vec<u8>, DriveFailure> {
+    fn download(&self, file: &crate::drive_path::DrivePath) -> Result<Vec<u8>, DriveFailure> {
         Err(DriveFailure::Missing(file.to_string()))
     }
 }
@@ -653,7 +654,7 @@ impl Notify for Nothing {
 }
 
 impl Answers for Nothing {
-    fn block(&self, block: &crate::secretary::answer::Renderable) -> Result<Html, AnswerError> {
+    fn block(&self, block: &crate::answer::Renderable) -> Result<Html, AnswerError> {
         Err(AnswerError(format!("nothing renders {block:?}")))
     }
 }

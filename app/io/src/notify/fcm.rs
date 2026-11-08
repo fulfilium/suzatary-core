@@ -7,7 +7,7 @@ use suzatary_core::capability::{Printed, Secret};
 use crate::http::{Http, Req};
 use crate::secrets::{Resolves, SecretError};
 use crate::tokens::{Bearer, Fresh, Grant};
-use suzatary_core::mail::shorten as truncate;
+use suzatary_core::spelling::shorten as truncate;
 
 const FCM_SCOPE: &str = "https://www.googleapis.com/auth/firebase.messaging";
 

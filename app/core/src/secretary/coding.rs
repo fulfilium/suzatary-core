@@ -3,9 +3,10 @@
 
 use crate::capability::{Datetime, Turn};
 use crate::coding::{Fired, Seen, Session, Step};
+use crate::conversation_id::ConversationId;
 use crate::reference::{ProposalRef, Reference};
 use crate::refusal::Refusal;
-use crate::secretary::store::{ConversationId, Entry, stamp};
+use crate::secretary::store::{Entry, stamp};
 
 /// One session a poll moved.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -192,7 +193,7 @@ pub fn dropped(
         at,
         format!(
             "{} dropped the coding session of proposal {index}: {reason}",
-            crate::secretary::acts::named(by.as_str())
+            crate::spelling::capitalised(by.as_str())
         ),
     )?;
     Ok(session)

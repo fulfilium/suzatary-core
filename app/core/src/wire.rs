@@ -1417,7 +1417,7 @@ pub struct BlockRow {
     /// Its typst with the blank line that ends it.
     pub source: String,
     pub plain: String,
-    pub kind: crate::secretary::answer::Kind,
+    pub kind: crate::answer::Kind,
     /// Computed on read; `null` when it names `html`, fails, or trips the wire.
     pub html: Option<String>,
 }

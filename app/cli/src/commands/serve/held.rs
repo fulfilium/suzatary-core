@@ -6,11 +6,11 @@
 
 use axum::Json;
 use axum::response::{IntoResponse as _, Response};
+use suzatary_core::conversation_id::ConversationId;
 use suzatary_core::held_value::{Handle, Holder, Holders, Place};
 use suzatary_core::refusal::Refusal;
 use suzatary_core::secretary::opening::Opening;
 use suzatary_core::secretary::read_holders::ReadHolders;
-use suzatary_core::secretary::store::ConversationId;
 use suzatary_core::secretary::tap::Tap;
 use suzatary_core::wire::{self, RevealPayload};
 

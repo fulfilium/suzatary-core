@@ -10,14 +10,14 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use prodrome_core::event::Hash;
 
+use crate::answer::Renderable;
+use crate::conversation_id::ConversationId;
 use crate::replica::held::Said;
-use crate::secretary::answer::Renderable;
 use crate::secretary::held_lines::HeldLines;
 use crate::secretary::key_ring::KeyRing;
 use crate::secretary::line_form::{Husked, LineDelta, LineFrame, LinePulling, LineReplica};
 use crate::secretary::locked_text::KeyName;
 use crate::secretary::outlines::{NotANode, Outlines, Parsed, Scope};
-use crate::secretary::store::ConversationId;
 use crate::wire::{Heads, SkeletonNode, SkeletonPayload};
 
 /// The lines held: the rows, and the readings of the landed one.

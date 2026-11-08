@@ -5,8 +5,8 @@
 //! past the one it fired on and discharges the rule there. Order is declaration order, so an
 //! answer comes before the title that names it.
 
+use crate::conversation_id::ConversationId;
 use crate::rule::Rule;
-use crate::secretary::store::ConversationId;
 use crate::secretary::transcript::Transcript;
 
 /// One of the box's own rules over a conversation.

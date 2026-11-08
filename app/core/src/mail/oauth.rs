@@ -224,8 +224,6 @@ pub fn scope<P: Protocol>() -> String {
     format!("{} {OFFLINE_ACCESS}", P::SCOPE)
 }
 
-// --- The device-code flow ----------------------------------------------------
-
 /// Step one: ask for a device code, which requires a [`Consent`].
 #[must_use]
 pub fn device_request<P: Protocol>(_consent: &Consent, authority: Authority) -> FormPost {
@@ -365,8 +363,6 @@ pub fn read_poll<P: Protocol>(
     }
     Ok(Polled::Granted(read_grant::<P>(answered)?))
 }
-
-// --- The refresh grant -------------------------------------------------------
 
 /// Ask for a fresh access token for this protocol, from this protocol's grant.
 #[must_use]

@@ -682,9 +682,9 @@ fn the_sweeps_round_is_pinned() {
 }
 
 /// Day `day`'s sweep conversation.
-fn today_of(day: chrono::NaiveDate) -> suzatary_core::secretary::store::ConversationId {
-    suzatary_core::secretary::store::ConversationId::daily(
-        suzatary_core::secretary::daily::Daily::Sweep,
+fn today_of(day: chrono::NaiveDate) -> suzatary_core::conversation_id::ConversationId {
+    suzatary_core::conversation_id::ConversationId::daily(
+        suzatary_core::conversation_id::Daily::Sweep,
         day,
     )
 }

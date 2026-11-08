@@ -9,6 +9,7 @@ use prodrome_core::event::Actor;
 use prodrome_core::literal::Datetime;
 
 use crate::capability::{Entropy as _, Turn};
+use crate::conversation_id::ConversationId;
 use crate::model_name::ModelName;
 use crate::secretary::compact_ask::Beside;
 use crate::secretary::compacting::Compacting;
@@ -22,7 +23,7 @@ use crate::secretary::memory::Fact;
 use crate::secretary::memory_event::MemoryEvent;
 use crate::secretary::recollection::Recollection;
 use crate::secretary::salted_text::{Text, TextName};
-use crate::secretary::store::{ConversationId, Entry, Kind};
+use crate::secretary::store::{Entry, Kind};
 use crate::secretary::words::Words;
 use crate::store::{Doc as _, InMemory, InMemoryDoc, Prodrome as _};
 

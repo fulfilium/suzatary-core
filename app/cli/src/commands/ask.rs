@@ -8,11 +8,12 @@ use std::time::{Duration, Instant};
 
 use anyhow::{Context, bail};
 use suzatary_core::capability::Turn;
+use suzatary_core::conversation_id::ConversationId;
 use suzatary_core::secretary::key_ring::KeyRing;
 use suzatary_core::secretary::line_event::LineVocabulary;
 use suzatary_core::secretary::locked_text::KeyName;
 use suzatary_core::secretary::stamp::Stamp;
-use suzatary_core::secretary::store::{ConversationId, ConversationState};
+use suzatary_core::secretary::store::ConversationState;
 use suzatary_core::secretary::transcript;
 use suzatary_core::wire;
 

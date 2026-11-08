@@ -11,7 +11,7 @@ use serde::{Deserialize, Serialize};
 use suzatary_core::capability::Login;
 use suzatary_core::chains::ChainName;
 use suzatary_core::coding::Coding;
-use suzatary_core::drive::DrivePath;
+use suzatary_core::drive_path::DrivePath;
 use suzatary_core::mail::account::Roster;
 use suzatary_core::mail::junk::ChurnList;
 use suzatary_core::model_name::ModelName;
@@ -590,7 +590,8 @@ fn is_none_declared(repos: &Declared) -> bool {
 mod repos {
     use serde::de::Error as _;
     use serde::{Deserialize, Deserializer, Serialize, Serializer};
-    use suzatary_core::repos::{Declared, RepoName, RepoTarget};
+    use suzatary_core::repo_ids::RepoName;
+    use suzatary_core::repos::{Declared, RepoTarget};
 
     #[derive(Deserialize, Serialize)]
     struct Entry {

@@ -1,8 +1,8 @@
 //! The owner's Drive for the secretary: the port, the fence a round reads it through, and one
 //! file read for the model.
 
-pub use crate::drive::DrivePath;
 use crate::drive::{Fenced, Port};
+pub use crate::drive_path::DrivePath;
 
 /// Why a read produced nothing.
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]

@@ -218,7 +218,7 @@ pub fn end(
     card: &ProposalId,
     at: crate::capability::Datetime,
     performed: Performed,
-) -> Result<Option<crate::secretary::store::ConversationId>, crate::refusal::Refusal> {
+) -> Result<Option<crate::conversation_id::ConversationId>, crate::refusal::Refusal> {
     let said = match &performed {
         Performed::Done(Done::Acted { what }) => format!("Signed in: {what}."),
         Performed::Tried(Tried::NotSent { reason } | Tried::Refused { reason }) => {

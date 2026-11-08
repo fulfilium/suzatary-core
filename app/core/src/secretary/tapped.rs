@@ -87,9 +87,10 @@ impl Tapped {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::conversation_id::ConversationId;
     use crate::gate::ActHeaders;
     use crate::reference::ProposalRef;
-    use crate::secretary::store::{ConversationId, Draft, Proposal, Reasons};
+    use crate::secretary::store::{Draft, Proposal, Reasons};
 
     fn tap() -> Tap {
         Tap::of(

@@ -986,7 +986,7 @@ sent_folder = "Sent Items"
     fn allow_drive_adds_a_folder_once_and_the_file_still_reads() {
         let before = commented_instance();
         let path = write(&before, "edits-allow-drive");
-        let folder: suzatary_core::drive::DrivePath =
+        let folder: suzatary_core::drive_path::DrivePath =
             "/shared-with-me/Ada Documents".parse().expect("a folder");
         let edits = InstanceEdits::new(path.clone());
         edits.allow_drive(&folder).expect("allowed");
@@ -1042,7 +1042,7 @@ sent_folder = "Sent Items"
             secretary.drive_allow,
             vec![
                 "/my-files/Docs"
-                    .parse::<suzatary_core::drive::DrivePath>()
+                    .parse::<suzatary_core::drive_path::DrivePath>()
                     .expect("a folder")
             ]
         );

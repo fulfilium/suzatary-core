@@ -17,11 +17,10 @@ use suzatary_core::mail::account::{AccountName, MailAccount, Sender};
 use suzatary_core::mail::idle;
 use suzatary_core::mail::imap::Session as _;
 use suzatary_core::mail::oauth::{Consent, DeviceCode, Imap, Smtp};
-use suzatary_core::mail::send::{
-    Attachment, Composed, Outgoing, SendError, Step, build_mime, guess_mime_type,
-};
+use suzatary_core::mail::send::{Composed, Outgoing, SendError, Step, build_mime, guess_mime_type};
 use suzatary_core::mail::state::Decision;
 use suzatary_core::mail::transport::Transport as _;
+use suzatary_core::message_part::Attachment;
 use suzatary_io::corpus::Operator;
 use suzatary_io::imap::{IMAP_HOST, IMAP_PORT, Outlook};
 use suzatary_io::mail_sync::{TRIAGE_UNIT, Timer};

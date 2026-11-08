@@ -10,12 +10,10 @@ use std::time::{Duration, Instant};
 
 use base64::Engine as _;
 use suzatary_core::capability::{InBranch, MAX_FILE_BYTES, RepoFailure, Repositories, Secret};
-use suzatary_core::coding::{
-    BRANCH_PREFIX, Branch, FileStat, Lines, REPORTS_DIR, ReportFile, Seen,
-};
-use suzatary_core::repos::{
-    CommitId, Declared, Patch, RepoName, RepoPath, RepoRow, RepoTarget, Rev, TOKEN, Visibility,
-};
+use suzatary_core::coding::{BRANCH_PREFIX, Branch, REPORTS_DIR, ReportFile, Seen};
+use suzatary_core::coding_report::{FileStat, Lines};
+use suzatary_core::repo_ids::{CommitId, RepoName, RepoPath, Rev};
+use suzatary_core::repos::{Declared, Patch, RepoRow, RepoTarget, TOKEN, Visibility};
 
 use crate::http::{Http, Req, Ureq};
 use crate::run::{Cmd, Ran, RunError, run, succeed};

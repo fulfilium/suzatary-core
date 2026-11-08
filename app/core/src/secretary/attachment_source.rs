@@ -8,8 +8,8 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
 use crate::attachment::AttachmentId;
-use crate::drive::DrivePath;
-use crate::repos::{RepoName, RepoPath, Rev};
+use crate::drive_path::DrivePath;
+use crate::repo_ids::{RepoName, RepoPath, Rev};
 use prodrome_core::literal::codec::{Constructor, Fields, Literal, arm, no_arm, record};
 
 /// One source, by name.
@@ -92,7 +92,7 @@ impl AttachmentSource {
             if keys.len() != 2 + usize::from(at.is_some()) {
                 return Err(NotASource(format!("{entry} names no single source")));
             }
-            let bad = |failed: crate::repos::RepoNameError| NotASource(failed.to_string());
+            let bad = |failed: crate::repo_ids::RepoNameError| NotASource(failed.to_string());
             return Ok(Self::Repo {
                 repo: repo.parse().map_err(bad)?,
                 path: RepoPath::try_from(path).map_err(bad)?,
@@ -118,7 +118,7 @@ impl AttachmentSource {
             (None, Some(path), None, None) if keys.len() == 1 => Ok(Self::Drive {
                 path: path
                     .parse()
-                    .map_err(|failed: crate::drive::DrivePathError| {
+                    .map_err(|failed: crate::drive_path::DrivePathError| {
                         NotASource(failed.to_string())
                     })?,
             }),

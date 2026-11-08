@@ -20,14 +20,14 @@ use prodrome_core::schema::Schema;
 use prodrome_core::store::{MemoryStore, Replica, sync};
 use proptest::prelude::*;
 
-use suzatary_core::secretary::store::ConversationId;
+use suzatary_core::conversation_id::ConversationId;
 use suzatary_core::secretary::topics::provenance::Owner;
 use suzatary_core::secretary::topics::reading::{
     AliasEvent, AliasVocabulary, MembershipEvent, MembershipVocabulary, Reading, Topics,
 };
 use suzatary_core::secretary::topics::standing::Standing;
-use suzatary_core::secretary::topics::target::Target;
 use suzatary_core::secretary::topics::topic::Topic;
+use suzatary_core::topic_target::Target;
 
 const NAMES: [&str; 4] = ["travel", "trips", "work", "job"];
 

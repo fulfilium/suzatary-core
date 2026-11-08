@@ -602,7 +602,7 @@ fn a_tap_with_no_note_asks_the_model_nothing() {
     let payload = exchange(&base, "propose the harrow reply");
     let id = payload["id"].as_str().expect("an id").to_owned();
     let conversation =
-        suzatary_core::secretary::store::ConversationId::new(id.clone()).expect("a slug");
+        suzatary_core::conversation_id::ConversationId::new(id.clone()).expect("a slug");
     let idle = || {
         for _ in 0..200 {
             if !workers.is_running(&conversation) {
@@ -1033,7 +1033,7 @@ fn a_broken_answer_is_its_source_block_by_block() {
 
 /// `secretary brief` without `--new` says into [`DEFAULT`]; with it, into a fresh dated id.
 mod default_conversation {
-    use suzatary_core::secretary::store::{ConversationId, DEFAULT};
+    use suzatary_core::conversation_id::{ConversationId, DEFAULT};
     use suzatary_core::secretary::{converse, read_or_open_default, start};
 
     use super::{ada, common};

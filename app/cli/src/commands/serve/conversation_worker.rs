@@ -12,10 +12,11 @@ use std::time::Duration;
 
 use suzatary_core::capability::{Halt, Sessions, Turn};
 use suzatary_core::conversation::round::Ending;
+use suzatary_core::conversation_id::ConversationId;
 use suzatary_core::refusal::Refusal;
 use suzatary_core::rule::{Engine, Firing};
 use suzatary_core::secretary::rules::{Conversational, RULES};
-use suzatary_core::secretary::store::{ConversationId, ConversationState};
+use suzatary_core::secretary::store::ConversationState;
 use suzatary_core::secretary::{self, transcript};
 use suzatary_core::wire;
 use tokio::sync::{broadcast, mpsc};
@@ -65,13 +66,13 @@ impl Partial {
     fn push(&mut self, fragment: &str) -> Vec<wire::Frame> {
         self.text.push_str(fragment);
         let start: usize = self.closed.iter().map(|block| block.source.len()).sum();
-        let cut = suzatary_core::secretary::answer::blocks(&self.text[start..]);
+        let cut = suzatary_core::answer::blocks(&self.text[start..]);
         let now = cut.len().saturating_sub(1);
         cut.into_iter()
             .take(now)
             .map(|block| {
                 let closed = Closed {
-                    sha: suzatary_core::secretary::answer::sha(&block.source),
+                    sha: suzatary_core::answer::sha(&block.source),
                     source: block.source,
                 };
                 let frame = closed.frame(self.closed.len());
@@ -590,7 +591,7 @@ mod tests {
             for pair in at.windows(2) {
                 partial.push(&answer[pair[0]..pair[1]]);
             }
-            let whole: Vec<String> = suzatary_core::secretary::answer::blocks(&answer)
+            let whole: Vec<String> = suzatary_core::answer::blocks(&answer)
                 .into_iter()
                 .map(|block| block.source)
                 .collect();

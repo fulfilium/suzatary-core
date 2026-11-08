@@ -354,12 +354,12 @@ impl JunkHeader {
         };
         Self {
             uid,
-            from: super::shorten(&from, HEADER_CHARS).to_owned(),
+            from: crate::spelling::shorten(&from, HEADER_CHARS).to_owned(),
             sender: address
                 .and_then(Domain::of_address)
                 .map_or(Sender::Unaddressed, Sender::Domain),
-            subject: super::shorten(subject.trim(), HEADER_CHARS).to_owned(),
-            date: super::shorten(date.trim(), HEADER_CHARS).to_owned(),
+            subject: crate::spelling::shorten(subject.trim(), HEADER_CHARS).to_owned(),
+            date: crate::spelling::shorten(date.trim(), HEADER_CHARS).to_owned(),
         }
     }
 

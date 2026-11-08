@@ -7,12 +7,13 @@
 use prodrome_core::literal::{ProdromeError, Value};
 use serde::{Deserialize, Serialize};
 
+use crate::conversation_id::ConversationId;
 use crate::mail::address::EmailAddress;
 use crate::reference::{ProposalRef, Reference, TodoRef};
 use crate::refusal::Refusal;
 use crate::secretary::responded::{Performed, Tried};
 use crate::secretary::stamp::Stamp;
-use crate::secretary::store::{ConversationId, Entry};
+use crate::secretary::store::Entry;
 use prodrome_core::literal::codec::{Constructor, Fields, Literal, arm, no_arm, record};
 
 /// One act, from a closed set.
@@ -49,18 +50,18 @@ pub enum Act {
     },
     /// Propose this diff against this commit as a pull request; a person merges it.
     Patch {
-        repo: crate::repos::RepoName,
+        repo: crate::repo_ids::RepoName,
         /// Who can read the branch once pushed, as the listing said when proposed.
         visibility: crate::repos::Visibility,
         /// The commit the diff was written against.
-        base: crate::repos::CommitId,
+        base: crate::repo_ids::CommitId,
         patch: crate::repos::Patch,
         message: String,
     },
     /// Read one of the owner's documents in a folder no `drive_allow` entry covers, redacted.
     #[serde(rename = "drive_read")]
     DriveRead {
-        path: crate::drive::DrivePath,
+        path: crate::drive_path::DrivePath,
         /// Its size in bytes as listed when asked, for the card.
         #[serde(default, skip_serializing_if = "Option::is_none")]
         size: Option<u64>,
@@ -312,8 +313,9 @@ fn retracting(node: &prodrome_core::event::Hash) -> String {
 
 /// The folder a document is in: the one "Always allow this folder" names.
 #[must_use]
-pub fn folder_of(path: &crate::drive::DrivePath) -> crate::drive::DrivePath {
-    path.parent().unwrap_or_else(crate::drive::DrivePath::root)
+pub fn folder_of(path: &crate::drive_path::DrivePath) -> crate::drive_path::DrivePath {
+    path.parent()
+        .unwrap_or_else(crate::drive_path::DrivePath::root)
 }
 
 /// The words a restart leaves behind, since the device code is never persisted.
@@ -362,15 +364,6 @@ pub fn describe_act(actor: &str, verb: &str, note: &str) -> String {
     format!("{actor} {verb} it: {note}")
 }
 
-/// An actor as an act's sentence names them: their roster name, capitalised.
-#[must_use]
-pub fn named(actor: &str) -> String {
-    let mut chars = actor.chars();
-    chars.next().map_or_else(String::new, |first| {
-        first.to_uppercase().chain(chars).collect()
-    })
-}
-
 /// One act turn, built: what [`note_act`] appends and [`heard_from_objects`] computes.
 #[derive(Debug, Clone)]
 pub struct ActLine {
@@ -407,7 +400,7 @@ pub fn note_act(
         &Entry::Said {
             at: line.at,
             turn: crate::capability::Turn::Act {
-                text: describe_act(&named(&line.actor), line.verb, note),
+                text: describe_act(&crate::spelling::capitalised(&line.actor), line.verb, note),
                 references: vec![line.reference.clone()],
             },
             by: Some(by),
@@ -728,8 +721,9 @@ fn google(value: &Value, arm: &str) -> Result<Act, ProdromeError> {
 mod tests {
     use super::*;
     use crate::capability::{Datetime, Turn};
+    use crate::conversation_id::ConversationId;
     use crate::secretary::responded::{Done, Responded};
-    use crate::secretary::store::{ConversationId, Entry, Proposal, Reasons};
+    use crate::secretary::store::{Entry, Proposal, Reasons};
 
     use crate::store::Reads as _;
 
@@ -971,8 +965,7 @@ mod tests {
     fn an_unlock_card_names_the_card_it_follows_by_reference() {
         let act = Act::UnlockStore {
             after: Some(ProposalRef {
-                conversation: crate::secretary::store::ConversationId::new("setup")
-                    .expect("a slug"),
+                conversation: crate::conversation_id::ConversationId::new("setup").expect("a slug"),
                 index: 3,
             }),
         };
@@ -1077,7 +1070,7 @@ mod tests {
     #[test]
     fn a_noted_act_in_the_default_conversation_leaves_his_round_clean() {
         use crate::capability::ToolCall;
-        use crate::secretary::store::DEFAULT;
+        use crate::conversation_id::DEFAULT;
         let said = |turn: Turn, by: Option<&str>| Entry::Said {
             at: now(),
             turn,

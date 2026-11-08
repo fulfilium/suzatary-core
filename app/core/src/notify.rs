@@ -214,7 +214,7 @@ mod tests {
                 .enumerate()
                 .map(|(n, why)| asked(&format!("p{n:032x}"), why))
                 .collect();
-            let conversation = crate::secretary::store::ConversationId::new("2026-09-15-1")
+            let conversation = crate::conversation_id::ConversationId::new("2026-09-15-1")
                 .expect("a slug");
             let round = crate::secretary::store::Stored::of(
                 &conversation,

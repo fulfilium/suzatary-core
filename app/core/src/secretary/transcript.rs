@@ -22,6 +22,7 @@ use prodrome_core::literal::Datetime;
 use prodrome_core::registers::Node;
 
 use crate::capability::Turn;
+use crate::conversation_id::ConversationId;
 use crate::secretary::conversations::Conversations;
 use crate::secretary::erasure::Erasure;
 use crate::secretary::line_event::LineEvent;
@@ -29,7 +30,7 @@ use crate::secretary::line_shape::LineShape;
 use crate::secretary::line_words::LineWords;
 use crate::secretary::locked_text::{KeyName, TextKey};
 use crate::secretary::slots::Slots;
-use crate::secretary::store::{ConversationId, Entry, NotAConversation, Said, Stored};
+use crate::secretary::store::{Entry, NotAConversation, Said, Stored};
 use crate::secretary::words::{Gone, Words};
 use crate::store::{Prodrome, StoreError};
 
@@ -684,15 +685,11 @@ pub fn dead<'l>(
 /// The answer blocks slot `slot`'s words were rendered to, opened by `key`: what a replica
 /// forgets before it destroys the key, since nothing finds them once the words are gone.
 #[must_use]
-pub fn fed(
-    line: &LineEvent,
-    slot: usize,
-    key: &TextKey,
-) -> Vec<crate::secretary::answer::Renderable> {
+pub fn fed(line: &LineEvent, slot: usize, key: &TextKey) -> Vec<crate::answer::Renderable> {
     match line.open(slot, key) {
-        Some(LineWords::Model { text }) => crate::secretary::answer::blocks(&text)
+        Some(LineWords::Model { text }) => crate::answer::blocks(&text)
             .iter()
-            .map(|block| crate::secretary::answer::Renderable::of(&block.source))
+            .map(|block| crate::answer::Renderable::of(&block.source))
             .collect(),
         _ => Vec::new(),
     }
@@ -1101,7 +1098,7 @@ pub fn erase(
 
 /// The box writes every line; who said one is the line's own `by`.
 pub(crate) fn writer() -> Actor {
-    Actor::new(crate::secretary::WRITES_AS.actor()).expect("the secretary's actor is a name")
+    Actor::new(crate::writer::Writer::Assistant.actor()).expect("the secretary's actor is a name")
 }
 
 /// Open conversation `id` with its first line.
@@ -1459,7 +1456,7 @@ mod tests {
     struct Stuck;
 
     impl crate::capability::RenderCache for Stuck {
-        fn forget(&self, _: &crate::secretary::answer::Renderable) -> Result<(), String> {
+        fn forget(&self, _: &crate::answer::Renderable) -> Result<(), String> {
             Err("the disk said no".to_owned())
         }
     }

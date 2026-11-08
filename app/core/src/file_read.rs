@@ -21,7 +21,7 @@ pub const MAX_PDF: usize = 20 * 1024 * 1024;
 pub(crate) const MAX_PAGES: usize = 100;
 
 /// The most characters of text a read answers, with the cut declared.
-pub(crate) const MAX_CHARS: usize = crate::mail::MAX_ATTACHMENT_CHARS;
+pub(crate) const MAX_CHARS: usize = crate::message_part::MAX_ATTACHMENT_CHARS;
 
 /// What a read answers.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -202,7 +202,7 @@ fn pdf(file: &HeldFile, name: &str, bytes: Vec<u8>, layer: &str) -> FileRead {
         }
         None => FileRead::File(Readable {
             media: Enclosure::Pdf,
-            text: redact(&crate::mail::clip(layer, MAX_CHARS).0),
+            text: redact(&crate::spelling::clip(layer, MAX_CHARS).0),
             bytes,
         }),
     }
@@ -210,7 +210,7 @@ fn pdf(file: &HeldFile, name: &str, bytes: Vec<u8>, layer: &str) -> FileRead {
 
 /// A size as a sentence names it.
 fn megabytes(size: usize) -> String {
-    crate::secretary::card::bytes(size as u64)
+    crate::spelling::bytes(size as u64)
 }
 
 #[cfg(test)]

@@ -270,9 +270,9 @@ fn recorded(
 /// digest, so the tap sends these bytes whatever the branch does next.
 fn repo_file(
     caps: &Secretary<'_>,
-    repo: crate::repos::RepoName,
-    path: crate::repos::RepoPath,
-    at: &crate::repos::Rev,
+    repo: crate::repo_ids::RepoName,
+    path: crate::repo_ids::RepoPath,
+    at: &crate::repo_ids::Rev,
 ) -> Result<Attached, Refusal> {
     let commit = caps
         .repositories

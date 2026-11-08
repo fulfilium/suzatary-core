@@ -102,9 +102,9 @@ mod tests {
     use super::*;
     use crate::capability::{Nothing, OlderMail, Secretary};
     use crate::chains::{ChainName, ChainPolicy, Chains};
+    use crate::conversation_id::ConversationId;
     use crate::deployment::Deployment;
     use crate::mail::older::{AccountOlder, Found, Matched, Outcome};
-    use crate::secretary::store::ConversationId;
 
     /// A server that records what it was asked and finds one message per account.
     #[derive(Default)]

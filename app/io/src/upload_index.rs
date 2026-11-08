@@ -159,7 +159,7 @@ mod tests {
             &self,
             name: &str,
             _bytes: &[u8],
-        ) -> Result<suzatary_core::drive::DrivePath, DriveFailure> {
+        ) -> Result<suzatary_core::drive_path::DrivePath, DriveFailure> {
             suzatary_core::vault::folder()
                 .join(name)
                 .map_err(|failed| DriveFailure::Refused(failed.to_string()))

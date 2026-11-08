@@ -323,7 +323,7 @@ mod tests {
             &self,
             name: &str,
             bytes: &[u8],
-        ) -> Result<suzatary_core::drive::DrivePath, DriveFailure> {
+        ) -> Result<suzatary_core::drive_path::DrivePath, DriveFailure> {
             self.0
                 .lock()
                 .expect("unpoisoned")

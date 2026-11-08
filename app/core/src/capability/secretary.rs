@@ -21,19 +21,19 @@ use crate::store::Prodrome;
 ///
 /// ```compile_fail,E0599
 /// use suzatary_core::drive::WritePort as _;
-/// fn upload(secretary: suzatary_core::capability::Secretary<'_>, at: &suzatary_core::drive::DrivePath) {
+/// fn upload(secretary: suzatary_core::capability::Secretary<'_>, at: &suzatary_core::drive_path::DrivePath) {
 ///     let _ = secretary.drive.port().upload(at, "x", b"x");
 /// }
 /// ```
 /// ```compile_fail,E0599
 /// use suzatary_core::drive::WritePort as _;
-/// fn keep(secretary: suzatary_core::capability::Secretary<'_>, at: &suzatary_core::drive::DrivePath) {
+/// fn keep(secretary: suzatary_core::capability::Secretary<'_>, at: &suzatary_core::drive_path::DrivePath) {
 ///     let _ = secretary.drive.port().keep(at, "x", b"x");
 /// }
 /// ```
 /// ```compile_fail,E0599
 /// use suzatary_core::drive::WritePort as _;
-/// fn behind(secretary: suzatary_core::capability::Secretary<'_>, at: &suzatary_core::drive::DrivePath) {
+/// fn behind(secretary: suzatary_core::capability::Secretary<'_>, at: &suzatary_core::drive_path::DrivePath) {
 ///     let _ = secretary.drive.fenced().create_folder(at, "x");
 /// }
 /// ```

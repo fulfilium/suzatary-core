@@ -2,39 +2,12 @@
 //! and opened only on a day that has work for it.
 
 use crate::capability::Secretary;
+use crate::conversation_id::ConversationId;
+use crate::conversation_id::Daily;
 use crate::refusal::{Refusal, Status};
-use crate::secretary::store::{ConversationId, Kind, Stored};
+use crate::secretary::store::{Kind, Stored};
 use crate::secretary::words::Words;
 use crate::zone::Zone;
-
-/// A round the box opens for itself, once a day.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Daily {
-    /// The review of the triage agent's open cards.
-    Review,
-    /// The sweep of the open list.
-    Sweep,
-}
-
-impl Daily {
-    /// What its conversation's id ends with, after the day.
-    #[must_use]
-    pub fn word(self) -> &'static str {
-        match self {
-            Daily::Review => "review",
-            Daily::Sweep => "sweep",
-        }
-    }
-
-    /// What its conversation is called in a list.
-    #[must_use]
-    pub fn title(self) -> &'static str {
-        match self {
-            Daily::Review => "Review",
-            Daily::Sweep => "Sweep",
-        }
-    }
-}
 
 /// Today's round of one kind: its conversation, and that conversation as it stands when it was
 /// opened.

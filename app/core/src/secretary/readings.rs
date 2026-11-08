@@ -3,10 +3,10 @@
 
 use crate::chain_set::ChainSet;
 
+use crate::answer::Renderable;
 use crate::capability::{AnswerError, Answers, Datetime, Html, Turn};
 use crate::reference::{ProposalRef, Reference};
 use crate::refusal::{Answered, Refusal};
-use crate::secretary::answer::Renderable;
 use crate::secretary::attached;
 use crate::secretary::attachment_source::AttachmentSource;
 use crate::secretary::changes::Changeset;
@@ -161,9 +161,9 @@ pub fn block_named(stored: &Stored, sha: &str) -> Option<String> {
             },
             Turn::Person { .. } | Turn::Tool { .. } | Turn::Act { .. } => return None,
         };
-        crate::secretary::answer::blocks(text)
+        crate::answer::blocks(text)
             .into_iter()
-            .find(|block| crate::secretary::answer::sha(&block.source) == sha)
+            .find(|block| crate::answer::sha(&block.source) == sha)
             .map(|block| block.source)
     })
 }
@@ -618,11 +618,11 @@ fn erased(
 
 /// A block the closed world refuses stays its text.
 pub(crate) fn blocks_of<A: Answers + ?Sized>(answers: &A, text: &str) -> Vec<wire::BlockRow> {
-    crate::secretary::answer::blocks(text)
+    crate::answer::blocks(text)
         .into_iter()
         .map(|block| wire::BlockRow {
             html: answers
-                .block(&crate::secretary::answer::Renderable::of(&block.source))
+                .block(&crate::answer::Renderable::of(&block.source))
                 .ok()
                 .map(|html| html.as_str().to_owned()),
             source: block.source,
@@ -827,7 +827,7 @@ fn act_on_wire(
             path: path.to_string(),
             name: path.name().unwrap_or("/").to_owned(),
             folder: crate::secretary::acts::folder_of(path).to_string(),
-            size: size.map(crate::secretary::card::bytes).unwrap_or_default(),
+            size: size.map(crate::spelling::bytes).unwrap_or_default(),
             sentence: act.sentence(),
         },
         crate::secretary::acts::Act::CodingSession { task } => wire::ProposedAct::CodingSession {
@@ -907,7 +907,7 @@ fn card_file(attached: &attached::Attached) -> wire::CardFile {
     wire::CardFile {
         name: attached.name.clone(),
         media: attached.media.clone(),
-        size: crate::secretary::card::bytes(attached.size),
+        size: crate::spelling::bytes(attached.size),
         sha256: attached.sha256.to_string(),
         from: match &attached.source {
             AttachmentSource::Mail { message, .. } => wire::FileFrom::Mail {
@@ -1005,7 +1005,7 @@ fn forward_on_wire(forward: &Forward) -> wire::ProposedAct {
             .map(|part| wire::CardFile {
                 name: part.name.clone(),
                 media: part.media.clone(),
-                size: crate::secretary::card::bytes(part.size),
+                size: crate::spelling::bytes(part.size),
                 sha256: part.sha256.to_string(),
                 from: opening(),
             })
@@ -1013,7 +1013,7 @@ fn forward_on_wire(forward: &Forward) -> wire::ProposedAct {
         Style::Attached => vec![wire::CardFile {
             name: crate::secretary::store::EML.to_owned(),
             media: "message/rfc822".to_owned(),
-            size: crate::secretary::card::bytes(file.size),
+            size: crate::spelling::bytes(file.size),
             sha256: file.sha256.to_string(),
             from: opening(),
         }],
@@ -1121,7 +1121,8 @@ pub(crate) fn proposal(
 }
 
 fn session_on_wire(session: &crate::coding::Session) -> wire::CodingSession {
-    use crate::coding::{Lines, Session};
+    use crate::coding::Session;
+    use crate::coding_report::Lines;
     match session {
         Session::Fired { id, url, at } => wire::CodingSession::Fired {
             id: id.to_string(),

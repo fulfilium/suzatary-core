@@ -4,8 +4,9 @@
 use mail_parser::{Address, HeaderValue, Message, MessageParser, MimeHeaders as _};
 use suzatary_core::attachment::AttachmentId;
 use suzatary_core::held_value::Original;
-use suzatary_core::mail::send::Attachment;
-use suzatary_core::mail::{MailHeader, StoredMessage, StoredPart};
+use suzatary_core::mail::{StoredMessage, StoredPart};
+use suzatary_core::message_part::Attachment;
+use suzatary_core::message_part::MailHeader;
 
 /// `raw`, the file of the message `id`, as a forward records it: its digest, the held values in
 /// its text and its attachments.

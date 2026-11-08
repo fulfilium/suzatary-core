@@ -7,6 +7,7 @@
 //! holding the objects, and the salt is deleted with the words. Which words go is
 //! [`crate::secretary::texts`]'s.
 
+use crate::capability::SALT_BYTES;
 use sha2::{Digest, Sha256};
 
 /// The SHA-256 of a [`Text`]'s bytes: 64 lowercase hex, the file's name.
@@ -60,9 +61,6 @@ impl std::fmt::Display for TextName {
         f.write_str(&self.0)
     }
 }
-
-/// How many random bytes salt a text.
-pub const SALT_BYTES: usize = 16;
 
 /// Words a text store can keep: one print, and the door that reads it back.
 ///

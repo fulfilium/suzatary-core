@@ -154,7 +154,7 @@ pub fn key(call: &Call<Asker, (), DeviceKey>) -> Result<Json<serde_json::Value>,
     }
     let caps = call.state.first.caps;
     let index = suzatary_core::secretary::routes::ask_trust(caps, &call.guard.0, &call.body.0)?;
-    call.state.heard(&suzatary_core::secretary::store::DEFAULT);
+    call.state.heard(&suzatary_core::conversation_id::DEFAULT);
     Ok(Json(serde_json::json!({ "proposed": index })))
 }
 
@@ -215,7 +215,7 @@ pub fn pair(call: &Call<Asker, (), PairingCode>) -> Result<Json<serde_json::Valu
                 caps.secretary.clock.now(),
             ) {
                 Ok(withdrawn) if !withdrawn.is_empty() => {
-                    state.heard(&suzatary_core::secretary::store::DEFAULT);
+                    state.heard(&suzatary_core::conversation_id::DEFAULT);
                 }
                 Ok(_) => {}
                 Err(failed) => tracing::warn!("paired: its card: {}", failed.message()),

@@ -1,5 +1,6 @@
 use super::*;
 use crate::capability::{Datetime, SessionId, Turn};
+use crate::conversation_id::ConversationId;
 use crate::reference::Reference;
 use crate::secretary::responded::{Done, Responded, Tried, Withdrawal};
 
@@ -141,29 +142,6 @@ fn a_coding_line_folds_last_wins_by_index_and_refuses_a_phantom() {
         Stored::of(&id(), &[opened(), coding(0, fired("session_1"))]),
         Err(NotAConversation::Phantom { id: id(), index: 0 })
     );
-}
-
-/// A name is a path segment and a file stem.
-#[test]
-fn a_conversation_id_is_a_slug() {
-    for good in ["2026-09-09-1", "brief", "a", "9", &"a".repeat(64)] {
-        assert!(ConversationId::new(good).is_ok(), "{good}");
-    }
-    for bad in [
-        "",
-        "..",
-        "-lead",
-        "Brief",
-        "has space",
-        "has/slash",
-        "has_underscore",
-        "%2e%2e",
-        "memory",
-        "new",
-        &"a".repeat(65),
-    ] {
-        assert!(ConversationId::new(bad).is_err(), "{bad:?}");
-    }
 }
 
 /// A file without an opening line was not written by this program.
@@ -720,19 +698,6 @@ proptest::proptest! {
             );
         }
     }
-}
-
-/// An id is parsed on the way in, wherever it comes from, including a stored line somebody
-/// could have edited.
-#[test]
-fn an_id_is_parsed_when_it_is_deserialised() {
-    assert!(serde_json::from_str::<ConversationId>(r#""../etc""#).is_err());
-    assert_eq!(
-        serde_json::from_str::<ConversationId>(r#""brief-1""#)
-            .expect("a slug")
-            .as_str(),
-        "brief-1"
-    );
 }
 
 /// The last name wins, so a rename is an append; an unnamed topic heads its row "New topic".

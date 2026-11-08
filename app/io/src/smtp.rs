@@ -300,7 +300,7 @@ fn gmail_send_raw(http: &dyn Http, token: &Secret, raw: &str) -> Result<(), Send
         let why = format!(
             "HTTP {}: {}",
             resp.status,
-            suzatary_core::mail::shorten(&resp.text(), crate::gmail::ERROR_CAP)
+            suzatary_core::spelling::shorten(&resp.text(), crate::gmail::ERROR_CAP)
         );
         return Err(if resp.status < 500 {
             SendError::Transport {

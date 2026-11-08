@@ -35,8 +35,7 @@ mod mail_sync;
 mod mailbox;
 mod manuals;
 mod model;
-// Test support, never production: compiled into this crate (its own unit tests fill records from
-// it, and a crate of its own would implement a second copy of these traits), kept out of `src/`.
+// Test support, never production.
 #[cfg(any(test, feature = "nothing"))]
 #[path = "../../tests/support/nothing.rs"]
 mod nothing;
@@ -64,7 +63,7 @@ pub use clock::Clock;
 pub use compact::Compact;
 pub use corpus::{Corpus, CorpusError};
 pub use drive::{Drive, DriveFailure};
-pub use entropy::Entropy;
+pub use entropy::{Entropy, SALT_BYTES};
 #[cfg(any(test, feature = "nothing"))]
 pub use joining::Joining;
 pub use junk::{Junk, JunkFailure};

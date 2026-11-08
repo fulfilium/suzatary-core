@@ -35,7 +35,7 @@ use crate::store::Reads;
 
 /// Who this surface is: a constant, never an argument. Its writes are cards, which the owner's
 /// tap performs.
-pub const WRITES_AS: crate::authoring::Writer = crate::authoring::Writer::Triage;
+pub const WRITES_AS: crate::writer::Writer = crate::writer::Writer::Triage;
 
 /// One call as the agent sent it: read whole once, then run against the record of the chain it
 /// names, absent meaning the first.
@@ -105,6 +105,6 @@ mod tests {
     #[test]
     fn the_only_actor_this_surface_can_write_as_is_triage() {
         assert_eq!(WRITES_AS.actor(), "triage");
-        assert_ne!(WRITES_AS, crate::authoring::Writer::Assistant);
+        assert_ne!(WRITES_AS, crate::writer::Writer::Assistant);
     }
 }

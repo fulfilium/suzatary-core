@@ -68,7 +68,7 @@ pub enum LineWords {
     /// A coding session's report: its file, its text and the branch's diff stat.
     Report {
         /// The report.
-        report: crate::coding::Report,
+        report: crate::coding_report::Report,
     },
     /// Why the owner let a coding session go.
     Dropped {

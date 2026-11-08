@@ -641,7 +641,7 @@ impl State {
     }
 
     /// Nudge this conversation's task and the compactor.
-    pub fn heard(&self, id: &suzatary_core::secretary::store::ConversationId) {
+    pub fn heard(&self, id: &suzatary_core::conversation_id::ConversationId) {
         self.workers.nudge(id, Arc::new(self.clone()));
         if let Some(compactor) = &self.compactor {
             compactor.nudge();
@@ -724,7 +724,7 @@ impl State {
                         withdrawn = withdrawn.len(),
                         "noticed: trusted devices' cards"
                     );
-                    self.heard(&suzatary_core::secretary::store::DEFAULT);
+                    self.heard(&suzatary_core::conversation_id::DEFAULT);
                 }
                 Ok(_) => {}
                 Err(failed) => {
@@ -1407,7 +1407,7 @@ async fn open_default(chain: &Chained) {
         suzatary_core::secretary::read_or_open_default(
             caps.secretary.conversations,
             caps.secretary.model,
-            &suzatary_core::secretary::store::DEFAULT,
+            &suzatary_core::conversation_id::DEFAULT,
             now,
         )
     })

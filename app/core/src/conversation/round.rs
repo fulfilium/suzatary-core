@@ -6,10 +6,11 @@ use serde_json::{Map, Value};
 
 use crate::capability::{Clock, Halt, ModelError, ToolCall, Turn};
 use crate::conversation::ask::{Answered, Ask, Asked, Sent};
+use crate::conversation_id::ConversationId;
 use crate::escape::escape_markup;
 use crate::refusal::Refusal;
 use crate::secretary::queue;
-use crate::secretary::store::{ConversationId, Entry, Scope, Stored};
+use crate::secretary::store::{Entry, Scope, Stored};
 use crate::secretary::surface::{SecretaryCall, Subset};
 use crate::secretary::tool_name::ToolName;
 use crate::secretary::transcript;

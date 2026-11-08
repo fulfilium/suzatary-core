@@ -13,11 +13,11 @@ use crate::capability::{ModelError, Turn};
 use crate::for_model::ForModel;
 use crate::secretary::store::Stored;
 use crate::secretary::taint::{self, Taint};
+use crate::secretary::targets::{MAX_TOPICS, rounds};
 use crate::secretary::topics::plan::{NotAPlan, Plan, Planned};
 use crate::secretary::topics::reading::Reading;
-use crate::secretary::topics::target::Target;
-use crate::secretary::topics::targets::{MAX_TOPICS, rounds};
 use crate::secretary::topics::topic::Topic;
+use crate::topic_target::Target;
 
 /// The fewest rounds a new topic must be on to be made.
 pub const RECURS: usize = 3;

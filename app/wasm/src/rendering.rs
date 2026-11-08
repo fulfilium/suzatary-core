@@ -1,7 +1,7 @@
 //! The keys the box keeps rendered blocks under, named by the same core the box runs.
 
+use suzatary_core::answer::Renderable;
 use suzatary_core::rendering::ANSWER;
-use suzatary_core::secretary::answer::Renderable;
 use wasm_bindgen::prelude::*;
 
 /// The answer template's key at `source`, as the box prints it beside the block's HTML.

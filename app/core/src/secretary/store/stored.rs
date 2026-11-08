@@ -1,9 +1,10 @@
 //! A whole conversation as a reader gets one: the fold of its lines.
 
 use super::{
-    Aside, Asking, ConversationId, Entry, Kept, Kind, Line, Lines, Proposal, Review, ReviewFailure,
-    Rewind, Said, Scope, Standing, Unheld, Unplaced,
+    Aside, Asking, Entry, Kept, Kind, Line, Lines, Proposal, Review, ReviewFailure, Rewind, Said,
+    Scope, Standing, Unheld, Unplaced,
 };
+use crate::conversation_id::ConversationId;
 
 use crate::capability::{Datetime, Turn};
 use crate::secretary::turn_shape::TurnShape;
@@ -66,7 +67,7 @@ pub fn heading(title: &Words<String>) -> std::borrow::Cow<'_, str> {
 /// is told who did what.
 #[must_use]
 pub fn stopped_by(by: &str) -> String {
-    format!("{} stopped the answer", crate::secretary::acts::named(by))
+    format!("{} stopped the answer", crate::spelling::capitalised(by))
 }
 
 /// A conversation's file said something this program does not understand.

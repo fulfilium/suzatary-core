@@ -24,14 +24,14 @@ use prodrome_core::store::{MemoryStore, Replica as _};
 use proptest::prelude::*;
 
 use prodrome_core::store::frontier::{Frontiers, Reached, Since, Token};
+use suzatary_core::conversation_id::ConversationId;
 use suzatary_core::epoch::Epochs;
 use suzatary_core::routes::{self, Books, Cut, Posted};
-use suzatary_core::secretary::store::ConversationId;
 use suzatary_core::secretary::topics::reading::MembershipEvent;
-use suzatary_core::secretary::topics::target::Target;
 use suzatary_core::secretary::topics::topic::Topic;
 use suzatary_core::store::Reads as _;
 use suzatary_core::store::{InMemory, Prodrome as _};
+use suzatary_core::topic_target::Target;
 use suzatary_core::wire::{Frontier, SinceRead};
 
 const KEY: &str = "store/topics";

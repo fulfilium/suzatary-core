@@ -701,24 +701,6 @@ fn document(name: &str, folder: &str, size: &str, sentence: &str) -> Card {
     }
 }
 
-/// A size in bytes, in words: "812 B", "48.2 KB", "3.1 MB".
-#[must_use]
-pub(crate) fn bytes(size: u64) -> String {
-    const KB: u64 = 1024;
-    // Integer tenths; a document's size is never near u64's limit.
-    let tenths = |unit: u64| {
-        let scaled = size.saturating_mul(10) / unit;
-        format!("{}.{}", scaled / 10, scaled % 10)
-    };
-    if size < KB {
-        format!("{size} B")
-    } else if size < KB * KB {
-        format!("{} KB", tenths(KB))
-    } else {
-        format!("{} MB", tenths(KB * KB))
-    }
-}
-
 /// Always allow only when a rule was drafted.
 fn web(request: WebKind, target: &str, host: &str, always: &str, sentence: &str) -> Card {
     let mut answers = vec![CardAnswer {
@@ -906,7 +888,7 @@ fn secret(label: &str, found: Option<&str>, link: Option<&str>) -> Card {
         answers: vec![CardAnswer {
             done: format!("stored {label}"),
             asks: Asks::Value {
-                input: capitalised(label),
+                input: crate::spelling::capitalised(label),
             },
             ..answer("store", "Store")
         }],
@@ -939,15 +921,6 @@ pub fn secret_act(name: &str, routine: Option<&RoutineId>, model: Option<&str>) 
         found: help.as_ref().map(|help| help.text.to_owned()),
         link: help.and_then(|help| help.link),
     }
-}
-
-/// `words` with its first letter in capitals, for a label that opens a line.
-pub(crate) fn capitalised(words: &str) -> String {
-    let mut chars = words.chars();
-    chars
-        .next()
-        .map(|first| first.to_uppercase().chain(chars).collect())
-        .unwrap_or_default()
 }
 
 fn sign_in(sentence: &str) -> Card {
@@ -1297,7 +1270,7 @@ mod tests {
             path: "/my-files/Docs/w2.pdf".to_owned(),
             name: "w2.pdf".to_owned(),
             folder: "/my-files/Docs".to_owned(),
-            size: bytes(49_356),
+            size: crate::spelling::bytes(49_356),
             sentence: "read the text of w2.pdf in /my-files/Docs".to_owned(),
         });
         assert_eq!(card.title, "Document request");
@@ -1321,8 +1294,8 @@ mod tests {
         assert!(widens(always));
         assert_eq!(always.label, "Always allow this folder");
         assert_eq!(always.done, "allowed: /my-files/Docs");
-        assert_eq!(bytes(812), "812 B");
-        assert_eq!(bytes(3 * 1024 * 1024 + 200_000), "3.1 MB");
+        assert_eq!(crate::spelling::bytes(812), "812 B");
+        assert_eq!(crate::spelling::bytes(3 * 1024 * 1024 + 200_000), "3.1 MB");
     }
 
     /// An email's files are all on its card, and its question counts them.

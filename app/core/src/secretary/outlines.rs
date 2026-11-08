@@ -10,10 +10,10 @@ use prodrome_core::event::Hash;
 use prodrome_core::fpl;
 use prodrome_core::literal::Datetime;
 
+use crate::conversation_id::ConversationId;
 use crate::secretary::locked_text::KeyName;
 use crate::secretary::outline::{self, Outline};
 use crate::secretary::step::Step;
-use crate::secretary::store::ConversationId;
 use crate::wire;
 
 /// The skeleton's lines held, by conversation, and every node it holds as it was given.

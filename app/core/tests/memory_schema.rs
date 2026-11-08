@@ -19,13 +19,13 @@ use prodrome_core::registers::Node;
 use prodrome_core::store::EventStore;
 use proptest::prelude::*;
 
+use suzatary_core::conversation_id::ConversationId;
 use suzatary_core::secretary::fact_life::Life;
 use suzatary_core::secretary::memory::{FactId, Kind, Origin};
 use suzatary_core::secretary::memory_event::Said;
 use suzatary_core::secretary::memory_event::{self, MemoryEvent, MemoryVocabulary};
 use suzatary_core::secretary::provenance::Wrote;
 use suzatary_core::secretary::salted_text::TextName;
-use suzatary_core::secretary::store::ConversationId;
 use suzatary_core::secretary::two_phase::TwoPhase;
 use suzatary_core::store::linearised;
 

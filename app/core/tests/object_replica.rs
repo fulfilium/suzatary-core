@@ -12,16 +12,16 @@ use prodrome_core::literal::Datetime;
 use prodrome_core::store::{MemoryStore, Replica as _};
 use proptest::prelude::*;
 
+use suzatary_core::conversation_id::ConversationId;
 use suzatary_core::replica::frontier::Frontier;
 use suzatary_core::replica::held::{Node, Said};
 use suzatary_core::replica::objects::{Answer, Move, Object, Objects, Refusal, frame, unframe};
-use suzatary_core::secretary::store::ConversationId;
 use suzatary_core::secretary::topics::reading::{
     AliasEvent, MembershipEvent, MembershipVocabulary,
 };
-use suzatary_core::secretary::topics::target::Target;
 use suzatary_core::secretary::topics::topic::Topic;
 use suzatary_core::snapshot::{from_snapshot, snapshot};
+use suzatary_core::topic_target::Target;
 use suzatary_core::wire::SinceRead;
 
 /// The box's store: one genesis, then `n` memberships, each written over the one before.

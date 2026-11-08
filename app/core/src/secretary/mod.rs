@@ -5,7 +5,6 @@ pub mod about;
 pub mod act_vocabulary;
 pub mod acts;
 pub mod afresh;
-pub mod answer;
 pub mod attached;
 pub mod attachment_source;
 pub mod bootstrap;
@@ -109,6 +108,7 @@ pub mod sweep;
 pub mod taint;
 pub mod tap;
 pub mod tapped;
+pub mod targets;
 pub mod texts;
 pub mod title;
 pub mod token_expiry;
@@ -129,20 +129,21 @@ use crate::capability::{Clock, Datetime, Halt, Model, Secretary, Turn};
 use crate::chains::ChainPolicy;
 use crate::conversation::ask::Ask;
 use crate::conversation::round::{Round, Rules, Sink, Transcript};
+use crate::conversation_id::ConversationId;
 use crate::deployment::Deployment;
 use crate::reference::{ProposalRef, Reference, TodoRef};
 use crate::refusal::{Refusal, Status, shown};
 use crate::verb::Request;
 pub use call::Call;
-use store::{ConversationId, Entry, Stored};
 pub use store::{ConversationState, state};
+use store::{Entry, Stored};
 pub(crate) use surface::SecretarySurface;
 use surface::Subset;
 pub use surface::{Binding, Effect, SecretaryCall, SecretaryVerb, tools};
 use verb_answer::VerbAnswer;
 
 /// Who a chain write from this surface is by, fixed here so no call's arguments can change it.
-pub const WRITES_AS: crate::authoring::Writer = crate::authoring::Writer::Assistant;
+pub const WRITES_AS: crate::writer::Writer = crate::writer::Writer::Assistant;
 
 /// [`WRITES_AS`] as the actor an inbox event names.
 pub(crate) fn writes_as() -> prodrome_core::event::Actor {
@@ -729,7 +730,7 @@ fn heard(
         &Entry::Said {
             at: clock.now(),
             turn: Turn::Act {
-                text: acts::describe_act(&acts::named(by.as_str()), verb, words),
+                text: acts::describe_act(&crate::spelling::capitalised(by.as_str()), verb, words),
                 references: vec![card.clone().into()],
             },
             by: Some(by.as_str().into()),
@@ -830,7 +831,8 @@ pub fn read(
     Ok(transcript::read(conversations, id)?.into_stored())
 }
 
-/// [`read`], opening [`store::DEFAULT`] the first time anything asks for it, and no other id.
+/// [`read`], opening [`DEFAULT`](crate::conversation_id::DEFAULT) the first time anything asks
+/// for it, and no other id.
 ///
 /// # Errors
 /// [`read`]'s own, once the default exists or `id` is any other name, and the store's.
@@ -840,7 +842,7 @@ pub fn read_or_open_default(
     id: &ConversationId,
     at: Datetime,
 ) -> Result<Stored, Refusal> {
-    if id.as_str() != store::DEFAULT.as_str() {
+    if id.as_str() != crate::conversation_id::DEFAULT.as_str() {
         return read(conversations, id);
     }
     match read(conversations, id) {

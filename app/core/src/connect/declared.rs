@@ -3,7 +3,7 @@
 use std::collections::BTreeMap;
 
 use super::{AccountKind, Channel, Connection, Key, Label, Params, Refused, Table, TemplateId};
-use crate::drive::DrivePath;
+use crate::drive_path::DrivePath;
 use crate::mail::account::{MailAccount, Roster, Sync};
 use crate::plugin::{Manifest, Origin, PluginName};
 

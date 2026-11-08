@@ -7,9 +7,10 @@ use serde::Serialize;
 
 use crate::attachment::AttachmentId;
 use crate::capability::Turn;
+use crate::conversation_id::ConversationId;
 use crate::secretary::file_query::FileQuery;
 use crate::secretary::search::around;
-use crate::secretary::store::{ConversationId, Stored};
+use crate::secretary::store::Stored;
 use crate::secretary::upload_standing::UploadStanding;
 
 /// One file that matched, on the turn it came in on.

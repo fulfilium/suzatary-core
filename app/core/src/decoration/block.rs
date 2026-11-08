@@ -68,8 +68,6 @@ const SOURCE_KEYS: &[(&str, &str)] = &[
     ("hash", "hash"),
 ];
 
-// --- the record → the block ---------------------------------------------------
-
 /// A date as typst spells one: its day, month and year, never a time of day.
 fn date_value(date: Datetime) -> Value {
     Value::Call(Box::new(Call {

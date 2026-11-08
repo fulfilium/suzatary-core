@@ -4,7 +4,8 @@ use std::sync::LazyLock;
 
 use regex::Regex;
 use serde_json::Value;
-use suzatary_core::mail::{MailLink, shorten};
+use suzatary_core::mail::MailLink;
+use suzatary_core::spelling::shorten;
 
 /// Every leaf whose `content-type` starts with `mimetype`. A multipart container is recursed
 /// into whatever its own type, since a `multipart/mixed` part holds `text/plain` leaves.

@@ -6,8 +6,8 @@ pub mod candidates;
 use serde_json::{Map, Value};
 
 use super::changes::Act;
-use super::daily::{Daily, Run, begin};
-use super::store::{ConversationId, Entry, Proposal, Stored};
+use super::daily::{Run, begin};
+use super::store::{Entry, Proposal, Stored};
 use super::surface::{Effect, SecretaryCall, SecretaryVerb, Subset};
 use super::verbs::Show;
 use super::{Bound, MAX_ROUNDS};
@@ -15,6 +15,7 @@ use crate::believed::one_outcome;
 use crate::capability::{Halt, Secretary};
 use crate::conversation::ask::Ask;
 use crate::conversation::round::{Rules, Sink};
+use crate::conversation_id::{ConversationId, Daily};
 use crate::deployment::Deployment;
 use crate::refusal::{Refusal, shown as quoted};
 use crate::verb::{Chained, Request, Verb};

@@ -168,7 +168,8 @@ pub fn pending(stored: &Stored) -> usize {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::secretary::store::{ConversationId, Entry};
+    use crate::conversation_id::ConversationId;
+    use crate::secretary::store::Entry;
 
     fn id() -> ConversationId {
         ConversationId::new("2026-09-13-1").expect("a slug")

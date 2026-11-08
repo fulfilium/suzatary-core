@@ -10,7 +10,7 @@ use serde::{Deserialize, Serialize};
 #[serde(rename_all = "lowercase")]
 #[ts(rename = "ConversationKind")]
 pub enum Kind {
-    /// [`DEFAULT`](super::DEFAULT), the one `#/secretary` always has.
+    /// [`DEFAULT`](crate::conversation_id::DEFAULT), the one `#/secretary` always has.
     Default,
     /// One the owner opened, about one thing.
     Topic,

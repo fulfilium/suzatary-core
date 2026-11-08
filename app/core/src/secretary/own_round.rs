@@ -1,7 +1,7 @@
 //! The rounds the box asks for itself: which one a question of the box's opens, recorded on the
 //! question's line when it is written ([`crate::secretary::stamp::Stamp::Asking`]).
 
-use crate::secretary::daily::Daily;
+use crate::conversation_id::Daily;
 
 /// A round whose question the box writes.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

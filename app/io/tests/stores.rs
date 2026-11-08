@@ -14,7 +14,8 @@ use prodrome_core::fpl::mk_flat;
 use prodrome_core::policy::Untrusted;
 use suzatary_core::capability::{Datetime, DriveFailure, Turn};
 use suzatary_core::cast::CAST;
-use suzatary_core::drive::DrivePath;
+use suzatary_core::conversation_id::ConversationId;
+use suzatary_core::drive_path::DrivePath;
 use suzatary_core::mail::dedup_key::DedupKey;
 use suzatary_core::mail::known::Known;
 use suzatary_core::mail::local_state::Kept;
@@ -26,7 +27,7 @@ use suzatary_core::secretary::inbox;
 use suzatary_core::secretary::line_event::LineEvent;
 use suzatary_core::secretary::memories::Memories;
 use suzatary_core::secretary::memory::{Fact, Kind, Origin};
-use suzatary_core::secretary::store::{ConversationId, Draft, Entry, Proposal, Reasons};
+use suzatary_core::secretary::store::{Draft, Entry, Proposal, Reasons};
 use suzatary_core::secretary::transcript;
 use suzatary_core::store::Prodrome;
 use suzatary_core::store::Reads as _;
@@ -890,7 +891,8 @@ fn ics() -> PluginName {
 #[test]
 #[ignore = "a measurement, run by name"]
 fn lines_at_scale() {
-    use suzatary_core::secretary::store::{ConversationId, Entry};
+    use suzatary_core::conversation_id::ConversationId;
+    use suzatary_core::secretary::store::Entry;
     let dir = tempfile::tempdir().expect("a scratch dir");
     let (lines, keys) = lines_at(dir.path());
     let entropy = suzatary_io::texts::SystemEntropy;
@@ -979,7 +981,8 @@ fn lines_at_scale() {
 #[test]
 #[ignore = "a fixture for a measurement, run by name"]
 fn lines_for_a_tab() {
-    use suzatary_core::secretary::store::{ConversationId, Entry};
+    use suzatary_core::conversation_id::ConversationId;
+    use suzatary_core::secretary::store::Entry;
     let out =
         std::env::var("SUZATARY_LINES_FIXTURE").expect("SUZATARY_LINES_FIXTURE names the file");
     let dir = tempfile::tempdir().expect("a scratch dir");

@@ -2,7 +2,7 @@
 //! named with why, so one unreadable conversation costs only itself and is never a conversation
 //! of nothing.
 
-use crate::secretary::store::ConversationId;
+use crate::conversation_id::ConversationId;
 
 /// A conversation the store holds that does not read.
 #[derive(Debug, Clone, PartialEq, Eq)]

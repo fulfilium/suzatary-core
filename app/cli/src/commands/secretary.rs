@@ -6,13 +6,14 @@ use std::sync::Arc;
 use anyhow::Context as _;
 use suzatary_core::capability::{Manual, Manuals, Secretary};
 use suzatary_core::conversation::round::Ending;
+use suzatary_core::conversation_id::{ConversationId, DEFAULT};
 use suzatary_core::excerpt::Excerpt;
 use suzatary_core::held_value::Filled;
 use suzatary_core::mail::send::{Composed, Outgoing};
 use suzatary_core::secretary::attached::Checked;
 use suzatary_core::secretary::responded::{Done, Performed, Tried};
 use suzatary_core::secretary::routes::Post;
-use suzatary_core::secretary::store::{ConversationId, DEFAULT, Draft};
+use suzatary_core::secretary::store::Draft;
 
 use crate::instance::Instance;
 
@@ -137,7 +138,7 @@ pub struct Publishing {
 impl Publishing {
     fn publish(
         &self,
-        id: &suzatary_core::secretary::store::ConversationId,
+        id: &suzatary_core::conversation_id::ConversationId,
         index: usize,
         proposer: &suzatary_core::secretary::proposer::Proposer,
         act: &suzatary_core::secretary::acts::Act,
@@ -352,8 +353,8 @@ impl Acting {
 
     fn read_document(
         &self,
-        id: &suzatary_core::secretary::store::ConversationId,
-        path: &suzatary_core::drive::DrivePath,
+        id: &suzatary_core::conversation_id::ConversationId,
+        path: &suzatary_core::drive_path::DrivePath,
         act: &suzatary_core::secretary::acts::Act,
     ) -> Performed {
         match self {
@@ -380,7 +381,7 @@ impl Acting {
 impl suzatary_core::secretary::routes::Perform for Acting {
     fn begin(
         &self,
-        id: &suzatary_core::secretary::store::ConversationId,
+        id: &suzatary_core::conversation_id::ConversationId,
         index: usize,
         object: &suzatary_core::secretary::inbox::ProposalId,
         proposer: &suzatary_core::secretary::proposer::Proposer,
@@ -502,7 +503,7 @@ fn begin_real(
         &Arc<crate::commands::serve::Workers>,
         &Arc<dyn Fn() + Send + Sync>,
     ),
-    (id, index): (&suzatary_core::secretary::store::ConversationId, usize),
+    (id, index): (&suzatary_core::conversation_id::ConversationId, usize),
     object: &suzatary_core::secretary::inbox::ProposalId,
     act: &suzatary_core::secretary::acts::Act,
     consent: suzatary_core::mail::oauth::Consent,
@@ -581,7 +582,7 @@ struct Flow<'a> {
     inbox: &'a ActingInbox,
     workers: &'a Arc<crate::commands::serve::Workers>,
     ended: &'a Arc<dyn Fn() + Send + Sync>,
-    at: (&'a suzatary_core::secretary::store::ConversationId, usize),
+    at: (&'a suzatary_core::conversation_id::ConversationId, usize),
     object: &'a suzatary_core::secretary::inbox::ProposalId,
 }
 
@@ -684,7 +685,7 @@ fn finish_act<P: suzatary_core::mail::oauth::Protocol + Send + 'static>(
     named: &str,
     conversations: &suzatary_io::conversations::ConversationStores,
     inbox: &ActingInbox,
-    id: &suzatary_core::secretary::store::ConversationId,
+    id: &suzatary_core::conversation_id::ConversationId,
     workers: &Arc<crate::commands::serve::Workers>,
 ) {
     use suzatary_core::capability::Clock as _;
@@ -705,7 +706,7 @@ fn finish_act<P: suzatary_core::mail::oauth::Protocol + Send + 'static>(
 
 fn web_turn(
     conversations: &suzatary_io::conversations::ConversationStores,
-    id: &suzatary_core::secretary::store::ConversationId,
+    id: &suzatary_core::conversation_id::ConversationId,
     request: &suzatary_core::web::WebRequest,
     answered: Result<suzatary_core::capability::WebAnswer, suzatary_core::capability::WebFailure>,
 ) -> Performed {
@@ -755,7 +756,7 @@ fn web_turn(
 /// Keep a withheld document's record so a proposal can send it unread.
 fn keep_tapped(
     kept: &suzatary_io::blobs::Blobs,
-    path: &suzatary_core::drive::DrivePath,
+    path: &suzatary_core::drive_path::DrivePath,
     size: u64,
     digest: &suzatary_core::attachment::AttachmentId,
 ) {
@@ -782,8 +783,8 @@ fn keep_tapped(
 fn drive_turn(
     conversations: &suzatary_io::conversations::ConversationStores,
     kept: &suzatary_io::blobs::Blobs,
-    id: &suzatary_core::secretary::store::ConversationId,
-    path: &suzatary_core::drive::DrivePath,
+    id: &suzatary_core::conversation_id::ConversationId,
+    path: &suzatary_core::drive_path::DrivePath,
     read: Result<suzatary_core::file_read::FileRead, suzatary_core::capability::DriveFailure>,
 ) -> Performed {
     use suzatary_core::capability::Clock as _;
@@ -848,7 +849,7 @@ fn drive_turn(
 /// Append an act line relaying outside words, unstamped so taint reads them as foreign.
 fn append_act_turn(
     conversations: &suzatary_io::conversations::ConversationStores,
-    (id, index): (&suzatary_core::secretary::store::ConversationId, usize),
+    (id, index): (&suzatary_core::conversation_id::ConversationId, usize),
     at: suzatary_core::capability::Datetime,
     text: String,
 ) {
@@ -879,7 +880,7 @@ fn append_act_turn(
 /// Append the box's own line, which taint reads clean.
 fn append_note(
     conversations: &suzatary_io::conversations::ConversationStores,
-    id: &suzatary_core::secretary::store::ConversationId,
+    id: &suzatary_core::conversation_id::ConversationId,
     at: suzatary_core::capability::Datetime,
     text: String,
 ) {
@@ -899,7 +900,7 @@ fn maybe_append_triage_alarm(
     corpus: &dyn suzatary_core::capability::Corpus,
     clock: &dyn suzatary_core::capability::Clock,
     conversations: &suzatary_io::conversations::ConversationStores,
-    id: &suzatary_core::secretary::store::ConversationId,
+    id: &suzatary_core::conversation_id::ConversationId,
 ) {
     let now = clock.now();
     let outcome = corpus.last_triage_outcome();
@@ -963,7 +964,7 @@ fn completion<E: std::fmt::Display>(
 fn append_completion(
     conversations: &suzatary_io::conversations::ConversationStores,
     inbox: &ActingInbox,
-    id: &suzatary_core::secretary::store::ConversationId,
+    id: &suzatary_core::conversation_id::ConversationId,
     object: &suzatary_core::secretary::inbox::ProposalId,
     at: suzatary_core::capability::Datetime,
     performed: Performed,
@@ -989,7 +990,7 @@ fn append_completion(
 fn begin_recording(
     conversations: &suzatary_io::conversations::ConversationStores,
     workers: &Arc<crate::commands::serve::Workers>,
-    (id, index): (&suzatary_core::secretary::store::ConversationId, usize),
+    (id, index): (&suzatary_core::conversation_id::ConversationId, usize),
     act: &suzatary_core::secretary::acts::Act,
 ) -> Performed {
     use suzatary_core::secretary::acts::Act;
@@ -2512,8 +2513,9 @@ fn pointed(references: &[suzatary_core::reference::Reference]) -> String {
 #[cfg(test)]
 mod sign_in_completion {
     use suzatary_core::capability::{ToolCall, Turn};
+    use suzatary_core::conversation_id::DEFAULT;
     use suzatary_core::secretary::inbox::ProposalId;
-    use suzatary_core::secretary::store::{DEFAULT, Entry, Stored};
+    use suzatary_core::secretary::store::{Entry, Stored};
     use suzatary_core::secretary::{taint, transcript};
     use suzatary_core::store::InMemory;
 

@@ -107,9 +107,9 @@ fn upload(caps: &Secretary<'_>, id: &crate::attachment::AttachmentId) -> Result<
 /// A file of a declared repository at the commit `at` resolves to.
 fn repository(
     caps: &Secretary<'_>,
-    repo: &crate::repos::RepoName,
-    path: &crate::repos::RepoPath,
-    at: &crate::repos::Rev,
+    repo: &crate::repo_ids::RepoName,
+    path: &crate::repo_ids::RepoPath,
+    at: &crate::repo_ids::Rev,
 ) -> Result<Opened, Refusal> {
     let commit = caps
         .repositories

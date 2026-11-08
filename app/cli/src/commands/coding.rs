@@ -9,9 +9,9 @@ use std::time::Duration;
 
 use suzatary_core::capability::Clock as _;
 use suzatary_core::coding::{Fired, RoutineId, Task};
+use suzatary_core::conversation_id::ConversationId;
 use suzatary_core::secretary::coding::Advanced;
 use suzatary_core::secretary::responded::{Done, Performed, Tried};
-use suzatary_core::secretary::store::ConversationId;
 use suzatary_io::conversations::ConversationStores;
 use suzatary_io::routine::{Endpoint, FireError};
 use suzatary_io::secrets::Resolves;
@@ -152,7 +152,7 @@ impl Coder {
 pub fn poll(
     conversations: &ConversationStores,
     mirrors: &suzatary_io::repos::Mirrors,
-    repo: &suzatary_core::repos::RepoName,
+    repo: &suzatary_core::repo_ids::RepoName,
 ) -> anyhow::Result<Vec<Advanced>> {
     let waiting = waiting(conversations)?;
     if waiting.is_empty() {
@@ -180,7 +180,7 @@ fn waiting(conversations: &ConversationStores) -> anyhow::Result<Vec<Advanced>> 
 /// Every `claude/` branch of `repo`, as the mirror holds it after a fetch.
 fn seen(
     mirrors: &suzatary_io::repos::Mirrors,
-    repo: &suzatary_core::repos::RepoName,
+    repo: &suzatary_core::repo_ids::RepoName,
 ) -> anyhow::Result<Vec<suzatary_core::coding::Seen>> {
     mirrors
         .seen(repo)
@@ -195,7 +195,7 @@ fn seen(
 pub fn explain(
     conversations: &ConversationStores,
     mirrors: &suzatary_io::repos::Mirrors,
-    repo: &suzatary_core::repos::RepoName,
+    repo: &suzatary_core::repo_ids::RepoName,
 ) -> anyhow::Result<Vec<String>> {
     Ok(suzatary_core::secretary::coding::explained(
         &waiting(conversations)?,
@@ -207,7 +207,7 @@ pub fn explain(
 pub async fn polling(
     conversations: crate::commands::secretary::ActingConversations,
     mirrors: Arc<suzatary_io::repos::Mirrors>,
-    repo: suzatary_core::repos::RepoName,
+    repo: suzatary_core::repo_ids::RepoName,
     workers: Arc<crate::commands::serve::Workers>,
 ) {
     let mut every = tokio::time::interval(EVERY);
@@ -223,7 +223,7 @@ pub async fn polling(
 pub async fn poll_once(
     conversations: crate::commands::secretary::ActingConversations,
     mirrors: &Arc<suzatary_io::repos::Mirrors>,
-    repo: &suzatary_core::repos::RepoName,
+    repo: &suzatary_core::repo_ids::RepoName,
     workers: &crate::commands::serve::Workers,
 ) -> usize {
     let (mirrors, repo) = (Arc::clone(mirrors), repo.clone());

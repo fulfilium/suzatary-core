@@ -10,7 +10,6 @@ use super::verbs::{
     Context, Evaluate, HistoryArgs, Mark, New, NoiseAdd, Recall, ShowArgs, Sync, VerifyChain,
 };
 use super::{Call, Holds, Says};
-use crate::authoring::Writer;
 use crate::capability::Agent;
 use crate::chains::ChainPolicy;
 use crate::reference::TodoRef;
@@ -20,6 +19,7 @@ use crate::secretary::filed::Carding;
 use crate::secretary::shown_record::{OwnersRecord, OwnersWords};
 use crate::secretary::verbs::Reasoned;
 use crate::verb::{Chained, Surface, verbs};
+use crate::writer::Writer;
 use crate::zone::Moment;
 use prodrome_core::event::TodoId;
 use serde_json::json;

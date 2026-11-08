@@ -50,8 +50,8 @@ impl Entropy for SystemEntropy {
 
 #[cfg(test)]
 mod tests {
+    use suzatary_core::capability::SALT_BYTES;
     use suzatary_core::secretary::memory::Fact;
-    use suzatary_core::secretary::salted_text::SALT_BYTES;
     use suzatary_core::store::{Doc as _, Gets as _};
 
     use super::*;

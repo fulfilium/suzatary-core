@@ -5,6 +5,7 @@ use axum::http::header;
 use axum::response::{IntoResponse, Response};
 use prodrome_core::event::Actor;
 use suzatary_core::attachment::{Attachment, AttachmentId};
+use suzatary_core::conversation_id::ConversationId;
 use suzatary_core::file_read::Withheld;
 use suzatary_core::reference::Reference;
 use suzatary_core::refusal::{Refusal, shown};
@@ -12,7 +13,6 @@ use suzatary_core::seat::Seat;
 use suzatary_core::secretary::readings;
 use suzatary_core::secretary::routes as secretary_routes;
 use suzatary_core::secretary::stamp::{self, Speaker, Stamp};
-use suzatary_core::secretary::store::ConversationId;
 use suzatary_core::wire;
 use suzatary_io::attachments::{Stored, UploadError};
 
@@ -360,7 +360,7 @@ pub fn block(call: &Call<Reader, Block, ()>) -> Result<Json<wire::BlockRender>, 
             shown(sha)
         )));
     };
-    let block = suzatary_core::secretary::answer::Renderable::of(&source);
+    let block = suzatary_core::answer::Renderable::of(&source);
     let key = suzatary_core::rendering::ANSWER
         .key(&block)
         .map_err(|e| Refusal::internal(e.to_string()))?;

@@ -4,7 +4,8 @@
 use std::borrow::Borrow;
 
 use crate::capability::Turn;
-use crate::secretary::store::{ConversationId, Kind, Stored};
+use crate::conversation_id::ConversationId;
+use crate::secretary::store::{Kind, Stored};
 
 /// Trimmed, never empty, at most [`Needle::MAX`] characters, kept case-folded.
 #[derive(Debug, Clone, PartialEq, Eq)]

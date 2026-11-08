@@ -1,10 +1,10 @@
 //! Proposals: the inbox of everything proposed, and the owner's answers to one proposal.
 
 use axum::Json;
+use suzatary_core::conversation_id::ConversationId;
 use suzatary_core::reference::ProposalRef;
 use suzatary_core::refusal::Refusal;
 use suzatary_core::secretary::routes::{self as secretary_routes, Effectors, TapAnswer};
-use suzatary_core::secretary::store::ConversationId;
 use suzatary_core::secretary::tap::Tap;
 use suzatary_core::settings::EditError;
 use suzatary_core::wire;
@@ -219,7 +219,7 @@ impl suzatary_core::settings::Edits for Noting<'_> {
         self.noted(self.edits.allow_web(rule))
     }
 
-    fn allow_drive(&self, folder: &suzatary_core::drive::DrivePath) -> Result<(), EditError> {
+    fn allow_drive(&self, folder: &suzatary_core::drive_path::DrivePath) -> Result<(), EditError> {
         self.noted(self.edits.allow_drive(folder))
     }
 

@@ -12,8 +12,8 @@ use prodrome_core::tags::{Tagging, alias, membership, set};
 
 use crate::secretary::topics::provenance::{Owner, Provenance};
 use crate::secretary::topics::standing::{Opening, Standing, Suggestion};
-use crate::secretary::topics::target::Target;
 use crate::secretary::topics::topic::Topic;
+use crate::topic_target::Target;
 
 /// The topic stores' tag sets: `Added(target, topic, at, actor)`, `Removed(…)`,
 /// `Aliased(topic, at, actor, to)` and `Unaliased(topic, at, actor)`.

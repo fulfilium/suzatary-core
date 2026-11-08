@@ -11,6 +11,7 @@ use prodrome_core::literal::Datetime;
 use prodrome_core::schema::Schema;
 use proptest::prelude::*;
 use suzatary_core::capability::Entropy;
+use suzatary_core::conversation_id::ConversationId;
 use suzatary_core::secretary::inbox::{self, Fold, ProposalId};
 use suzatary_core::secretary::inbox_event::InboxEvent;
 use suzatary_core::secretary::memories::{Kept, Memories};
@@ -18,7 +19,7 @@ use suzatary_core::secretary::memory::{Fact, FactId, Kind, Origin, Replaces, Sou
 use suzatary_core::secretary::memory_event::MemoryEvent;
 use suzatary_core::secretary::responded::{Done, Performed, Responded, Tried};
 use suzatary_core::secretary::salted_text::{Text, TextName};
-use suzatary_core::secretary::store::{ConversationId, Proposal, Reasons};
+use suzatary_core::secretary::store::{Proposal, Reasons};
 use suzatary_core::secretary::texts;
 use suzatary_core::store::{InMemory, InMemoryDoc, Prodrome};
 

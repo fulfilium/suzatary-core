@@ -1,4 +1,4 @@
-//! A conversation's name, and the default every `#/secretary` lands on.
+//! A conversation's name, and the box's daily rounds that name one a day.
 
 use serde::{Deserialize, Serialize};
 use std::sync::LazyLock;
@@ -25,9 +25,7 @@ impl ConversationId {
     /// lowercase letters, digits and hyphens.
     pub fn new(text: impl Into<String>) -> Result<Self, NotAnId> {
         let text = text.into();
-        // `memory` is taken: `memory.jsonl`, the secretary's memory, shared the directory the
-        // conversations' files were kept in. `new` is the page's address of a topic not yet
-        // opened (`#/secretary/new`), so no conversation can be named by it.
+        // `new` is the page's address of a topic not yet opened (`#/secretary/new`).
         let ok = text != "memory"
             && text != "new"
             && matches!(text.len(), 1..=64)
@@ -43,31 +41,29 @@ impl ConversationId {
     }
 
     /// Mint one for today: the day plus the smallest free suffix, so a listing sorts by when.
-    ///
-    /// The shape it builds always parses, so the `expect` is about this function's own output.
     #[must_use]
     pub fn minted(day: chrono::NaiveDate, taken: &[Self]) -> Self {
         let stem = day.format("%Y-%m-%d").to_string();
-        for n in 1u32.. {
+        let mut n = 1u64;
+        loop {
             let candidate = Self(format!("{stem}-{n}"));
             if !taken.contains(&candidate) {
                 return candidate;
             }
+            n += 1;
         }
-        unreachable!("a u32 of conversations in one day")
     }
 
     /// Day `day`'s conversation of the box's round `daily`: `<day>-review` or `<day>-sweep`.
     #[must_use]
-    pub fn daily(daily: crate::secretary::daily::Daily, day: chrono::NaiveDate) -> Self {
+    pub fn daily(daily: Daily, day: chrono::NaiveDate) -> Self {
         Self(format!("{}-{}", day.format("%Y-%m-%d"), daily.word()))
     }
 
     /// Which daily round this is the conversation of, read back from [`ConversationId::daily`]'s
     /// spelling; `None` for any other id.
     #[must_use]
-    pub fn daily_round(&self) -> Option<crate::secretary::daily::Daily> {
-        use crate::secretary::daily::Daily;
+    pub fn daily_round(&self) -> Option<Daily> {
         let (day, word) = self.0.split_at_checked(10)?;
         chrono::NaiveDate::parse_from_str(day, "%Y-%m-%d").ok()?;
         [Daily::Review, Daily::Sweep]
@@ -82,11 +78,37 @@ impl ConversationId {
     }
 }
 
-/// The default conversation `#/secretary` always lands on, opened lazily by
-/// [`crate::secretary::read_or_open_default`]. One fixed slug, not "the newest" (a side topic
-/// would silently become tomorrow's default) and not a setting.
-///
-/// Lazy because [`ConversationId`]'s only constructor validates; the literal is this module's.
+/// A round the box opens for itself, once a day.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Daily {
+    /// The review of the triage agent's open cards.
+    Review,
+    /// The sweep of the open list.
+    Sweep,
+}
+
+impl Daily {
+    /// What its conversation's id ends with, after the day.
+    #[must_use]
+    pub fn word(self) -> &'static str {
+        match self {
+            Daily::Review => "review",
+            Daily::Sweep => "sweep",
+        }
+    }
+
+    /// What its conversation is called in a list.
+    #[must_use]
+    pub fn title(self) -> &'static str {
+        match self {
+            Daily::Review => "Review",
+            Daily::Sweep => "Sweep",
+        }
+    }
+}
+
+/// The default conversation `#/secretary` lands on, opened lazily by
+/// [`crate::secretary::read_or_open_default`].
 pub static DEFAULT: LazyLock<ConversationId> = LazyLock::new(|| {
     ConversationId::new("default").expect("\"default\" is a valid conversation id")
 });
@@ -120,3 +142,44 @@ impl AsRef<str> for ConversationId {
 prodrome_core::text_literal!(
     ConversationId => |id| id.as_str().to_owned(),
 );
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// A name is a path segment and a file stem.
+    #[test]
+    fn a_conversation_id_is_a_slug() {
+        for good in ["2026-09-09-1", "brief", "a", "9", &"a".repeat(64)] {
+            assert!(ConversationId::new(good).is_ok(), "{good}");
+        }
+        for bad in [
+            "",
+            "..",
+            "-lead",
+            "Brief",
+            "has space",
+            "has/slash",
+            "has_underscore",
+            "%2e%2e",
+            "memory",
+            "new",
+            &"a".repeat(65),
+        ] {
+            assert!(ConversationId::new(bad).is_err(), "{bad:?}");
+        }
+    }
+
+    /// An id is parsed on the way in, wherever it comes from, including a stored line somebody
+    /// could have edited.
+    #[test]
+    fn an_id_is_parsed_when_it_is_deserialised() {
+        assert!(serde_json::from_str::<ConversationId>(r#""../etc""#).is_err());
+        assert_eq!(
+            serde_json::from_str::<ConversationId>(r#""brief-1""#)
+                .expect("a slug")
+                .as_str(),
+            "brief-1"
+        );
+    }
+}

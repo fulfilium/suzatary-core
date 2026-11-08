@@ -542,7 +542,8 @@ mod tests {
     #[test]
     fn a_conversation_is_written_as_changes_through_the_door() {
         use suzatary_core::capability::Turn;
-        use suzatary_core::secretary::store::{ConversationId, Entry};
+        use suzatary_core::conversation_id::ConversationId;
+        use suzatary_core::secretary::store::Entry;
         use suzatary_core::secretary::transcript;
 
         let dir = tempfile::tempdir().expect("a scratch dir");
@@ -613,9 +614,9 @@ mod tests {
     /// are a failure of the memory's reading, never a fact quietly gone from it.
     #[test]
     fn words_that_cannot_be_read_fail_the_reading() {
+        use suzatary_core::conversation_id::ConversationId;
         use suzatary_core::secretary::memories::Memories;
         use suzatary_core::secretary::memory::{Fact, Kind, Origin};
-        use suzatary_core::secretary::store::ConversationId;
 
         let dir = tempfile::tempdir().expect("a scratch dir");
         let history = Objects::open(dir.path().join("memory"));
@@ -715,9 +716,9 @@ mod tests {
     /// locks.
     #[test]
     fn the_memory_keeps_its_words_apart_and_forgetting_deletes_them() {
+        use suzatary_core::conversation_id::ConversationId;
         use suzatary_core::secretary::memories::Memories;
         use suzatary_core::secretary::memory::{Fact, Kind, Origin};
-        use suzatary_core::secretary::store::ConversationId;
 
         let dir = tempfile::tempdir().expect("a scratch dir");
         let history = Objects::open(dir.path().join("memory"));
@@ -820,7 +821,8 @@ mod tests {
     /// A conversation of 48 lines on disk under `dir`, enough to settle a node of the digest.
     fn spoken(dir: &std::path::Path) -> crate::conversations::ConversationStores {
         use suzatary_core::capability::Turn;
-        use suzatary_core::secretary::store::{ConversationId, Entry};
+        use suzatary_core::conversation_id::ConversationId;
+        use suzatary_core::secretary::store::Entry;
         use suzatary_core::secretary::transcript;
 
         let lines = lines_at(dir.join("conversations"));
@@ -864,8 +866,8 @@ mod tests {
     /// summary is refused; read whole again, the sweep deletes what is dead.
     #[test]
     fn nothing_is_deleted_or_summarised_over_a_damaged_line() {
+        use suzatary_core::conversation_id::ConversationId;
         use suzatary_core::secretary::memory::{Fact, Kind, Origin};
-        use suzatary_core::secretary::store::ConversationId;
         use suzatary_core::secretary::{digest_line::Line, digests::Digests, memories::Memories};
 
         let dir = tempfile::tempdir().expect("a scratch dir");

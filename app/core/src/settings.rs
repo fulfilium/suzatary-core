@@ -265,7 +265,7 @@ pub trait Edits: Configuration {
     fn allow_web(&self, rule: &crate::web::AllowRule) -> Result<(), EditError>;
 
     /// Lets the secretary read files under `folder`; idempotent.
-    fn allow_drive(&self, folder: &crate::drive::DrivePath) -> Result<(), EditError>;
+    fn allow_drive(&self, folder: &crate::drive_path::DrivePath) -> Result<(), EditError>;
 
     /// Writes `connection`'s table, keeping every other byte, so a remove undoes it.
     fn add_connection(&self, connection: &crate::connect::Connection) -> Result<(), EditError>;

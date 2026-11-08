@@ -11,16 +11,18 @@ use std::collections::{BTreeMap, BTreeSet};
 use prodrome_core::event::Hash;
 
 use crate::capability::Turn;
+use crate::conversation_id::ConversationId;
+use crate::secretary::held_lines::Held;
 use crate::secretary::outline::{Outline, Round, Rounds, Voices};
 use crate::secretary::own_round::OwnRound;
 use crate::secretary::readings::{Dress, Place, turn};
 use crate::secretary::stamp::Stamp;
-use crate::secretary::store::{ConversationId, Entry, NotAConversation, Said, heading};
+use crate::secretary::store::{Entry, NotAConversation, Said, heading};
+use crate::secretary::targets::{self, MAX_TOPICS};
 use crate::secretary::topics::reading::Reading;
-use crate::secretary::topics::target::Target;
-use crate::secretary::topics::targets::{self, MAX_TOPICS};
 use crate::secretary::topics::topic::Topic;
 use crate::secretary::words::Words;
+use crate::topic_target::Target;
 use crate::wire;
 
 /// How many rounds one page of the stream holds.
@@ -61,17 +63,6 @@ impl Choice<'_> {
     pub fn objects(&self) -> BTreeSet<Hash> {
         self.drawn.iter().flat_map(Drawn::objects).collect()
     }
-}
-
-/// What a reader holds of the lines a round reads.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum Held<L> {
-    /// Every line, each opened as its conversation opens it, by name.
-    Opened(L),
-    /// A print that is no line of the round's conversation: the round is not drawn.
-    Unread,
-    /// The first line, by name, the reader does not hold.
-    Lacking(Hash),
 }
 
 /// Why the stream does not read.

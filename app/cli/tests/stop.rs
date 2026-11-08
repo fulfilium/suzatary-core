@@ -147,7 +147,7 @@ fn a_stop_before_any_round_takes_the_question_closes_it() {
     let id = open(&base);
     // Written with no nudge, as a `say` stands between its write and the worker's round.
     let conversation =
-        suzatary_core::secretary::store::ConversationId::new(&id).expect("a conversation id");
+        suzatary_core::conversation_id::ConversationId::new(&id).expect("a conversation id");
     suzatary_core::secretary::transcript::push(
         fakes.conversations.conversations(),
         &conversation,

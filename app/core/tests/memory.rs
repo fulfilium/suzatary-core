@@ -10,12 +10,12 @@ use prodrome_core::event::Actor;
 use prodrome_core::literal::Datetime;
 use proptest::prelude::*;
 use suzatary_core::capability::Entropy;
+use suzatary_core::conversation_id::ConversationId;
 use suzatary_core::secretary::inbox_event::InboxEvent;
 use suzatary_core::secretary::memories::Memories;
 use suzatary_core::secretary::memory::{self, Fact, FactId, Kind, MAX_LIVE, Origin};
 use suzatary_core::secretary::memory_event::MemoryEvent;
 use suzatary_core::secretary::salted_text::{Text, TextName};
-use suzatary_core::secretary::store::ConversationId;
 use suzatary_core::store::Reads as _;
 use suzatary_core::store::{Gets as _, InMemory, InMemoryDoc};
 

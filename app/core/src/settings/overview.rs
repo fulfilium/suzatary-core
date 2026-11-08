@@ -176,7 +176,7 @@ pub struct Declared<'a> {
     /// `[[plugins]]`.
     pub plugins: &'a [Manifest],
     /// `[secretary] drive_allow`.
-    pub drive: &'a [crate::drive::DrivePath],
+    pub drive: &'a [crate::drive_path::DrivePath],
     /// Where the data is kept.
     pub storage: &'a Storage,
     /// The program this box runs.
@@ -592,7 +592,7 @@ impl Overview {
                     Slot::Secret(name.handle()),
                     needing(
                         line(
-                            crate::secretary::card::capitalised(&Help::label(name.name())),
+                            crate::spelling::capitalised(&Help::label(name.name())),
                             None,
                             observed.secret(name.name()),
                         ),
@@ -1018,7 +1018,7 @@ pub(crate) mod tests {
         accounts: Vec<MailAccount>,
         plugins: Vec<Manifest>,
         coding: bool,
-        drive: Vec<crate::drive::DrivePath>,
+        drive: Vec<crate::drive_path::DrivePath>,
         secrets: BTreeMap<String, SecretState>,
         grants: BTreeMap<String, MailGrants>,
         failing: Vec<(String, String)>,
@@ -1503,7 +1503,8 @@ pub(crate) mod tests {
         #[test]
         fn a_waiting_draft_never_hides_the_accounts_sign_in(draft_first in any::<bool>(), kind in 0u8..4) {
             use crate::secretary::inbox;
-            use crate::secretary::store::{ConversationId, Draft, Reasons};
+            use crate::conversation_id::ConversationId;
+            use crate::secretary::store::{Draft, Reasons};
             let email = "ada@example.test";
             let store = crate::store::InMemory::<crate::secretary::inbox_event::InboxEvent>::default();
             let ask = |index: usize, proposal: Proposal, minute: u32| {

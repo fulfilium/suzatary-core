@@ -295,7 +295,7 @@ mod tests {
                 TextName::new("a".repeat(64)).expect("a name"),
                 Kind::Owner,
                 Origin::Turn {
-                    conversation: crate::secretary::store::ConversationId::new("default")
+                    conversation: crate::conversation_id::ConversationId::new("default")
                         .expect("an id"),
                     turn: usize::MAX,
                 },
@@ -310,7 +310,7 @@ mod tests {
                 TextName::new("b".repeat(64)).expect("a name"),
                 Kind::Standing,
                 Origin::Tapped {
-                    conversation: crate::secretary::store::ConversationId::new("default")
+                    conversation: crate::conversation_id::ConversationId::new("default")
                         .expect("an id"),
                     proposal: usize::MAX,
                 },
@@ -341,7 +341,7 @@ mod tests {
                 TextName::new("a".repeat(64)).expect("a name"),
                 Kind::Owner,
                 Origin::Turn {
-                    conversation: crate::secretary::store::ConversationId::new("default")
+                    conversation: crate::conversation_id::ConversationId::new("default")
                         .expect("an id"),
                     turn: 0,
                 },

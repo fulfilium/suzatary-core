@@ -32,7 +32,7 @@ impl Erasure {
         match self {
             Erasure::Asked { by } => format!(
                 "{} erased these words",
-                crate::secretary::acts::named(by.as_str())
+                crate::spelling::capitalised(by.as_str())
             ),
             Erasure::Forgot { fact } => {
                 format!("these words were erased when fact {fact} was forgotten")

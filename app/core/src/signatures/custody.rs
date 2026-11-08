@@ -1,8 +1,10 @@
 use prodrome_core::event::Actor;
 use prodrome_core::policy::Untrusted;
 
+use crate::writer::Writer;
+
 /// WHOSE KEY SIGNS AN ACTOR'S WRITES, and so the one key of the box's two registered for it:
-/// the agent's for the actor the agent writes as ([`crate::agent::WRITES_AS`]) and for any actor
+/// the agent's for the actor the agent writes as ([`Writer::Triage`]) and for any actor
 /// a chain does not trust, the box's for every other.
 ///
 /// A fact about who writes, never about a chain's fold: the agent signs with its own key whatever
@@ -22,7 +24,7 @@ impl Custody {
     /// `untrusted`.
     #[must_use]
     pub fn of(actor: &Actor, untrusted: &Untrusted) -> Custody {
-        if actor.as_str() == crate::agent::WRITES_AS.actor() || untrusted.actors().contains(actor) {
+        if actor.as_str() == Writer::Triage.actor() || untrusted.actors().contains(actor) {
             Custody::Agent
         } else {
             Custody::Box

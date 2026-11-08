@@ -7,12 +7,12 @@ use serde_json::{Value, json};
 
 use crate::refusal::{Refusal, shown};
 use crate::secretary::taint::Taint;
+use crate::secretary::targets::MAX_TOPICS;
 use crate::secretary::topics::provenance::Provenance;
 use crate::secretary::topics::reading::{MembershipEvent, Reading, in_use};
 use crate::secretary::topics::standing::Standing;
-use crate::secretary::topics::target::Target;
-use crate::secretary::topics::targets::MAX_TOPICS;
 use crate::secretary::topics::topic::Topic;
+use crate::topic_target::Target;
 
 /// Topics to suggest, suggestions to drop, and suggestions to rename, each `from` to its `to`.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]

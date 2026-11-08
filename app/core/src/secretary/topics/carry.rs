@@ -7,14 +7,15 @@ use std::collections::{BTreeMap, BTreeSet};
 use prodrome_core::literal::Datetime;
 use serde::Deserialize;
 
-use crate::secretary::store::{ConversationId, Stored};
+use crate::conversation_id::ConversationId;
+use crate::secretary::store::Stored;
 use crate::secretary::topics::reading::MembershipEvent;
 use crate::secretary::topics::reading::Reading;
-use crate::secretary::topics::target::Target;
 use crate::secretary::topics::topic::{NotATopic, Topic};
 use crate::secretary::words::Words;
+use crate::topic_target::Target;
 
-use super::targets::MAX_TOPICS;
+use crate::secretary::targets::MAX_TOPICS;
 
 /// The topics of each conversation it names, parsed whole by [`Map::parse`]: a TOML file with
 /// one table per conversation id, each `topics = [..]` naming 1 to [`MAX_TOPICS`] topics.
@@ -215,13 +216,16 @@ pub fn plan(conversations: &[Stored], map: &Map, reading: &Reading, at: Datetime
 
 /// The live rounds and the live notes.
 fn targets(stored: &Stored) -> (Vec<Target>, Vec<Target>) {
-    let rounds = super::targets::rounds(stored);
+    let rounds = crate::secretary::targets::rounds(stored);
     let notes = rounds
         .iter()
-        .flat_map(super::targets::Round::notes)
+        .flat_map(crate::secretary::targets::Round::notes)
         .collect();
     (
-        rounds.iter().map(super::targets::Round::target).collect(),
+        rounds
+            .iter()
+            .map(crate::secretary::targets::Round::target)
+            .collect(),
         notes,
     )
 }

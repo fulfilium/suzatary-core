@@ -17,6 +17,7 @@ use prodrome_core::policy::Untrusted;
 use suzatary_core::agent::{CONTEXT_CAP, CONTEXT_HEADROOM, context, manual};
 use suzatary_core::capability::Turn;
 use suzatary_core::chains::{ChainName, ChainPolicy, Chains};
+use suzatary_core::conversation_id::ConversationId;
 use suzatary_core::deployment::Deployment;
 use suzatary_core::persona::Persona;
 use suzatary_core::secretary::compaction::Reading;
@@ -29,7 +30,7 @@ use suzatary_core::secretary::memory::{
     Fact, FactId, Kind, MAX_FACT_CHARS, MAX_LIVE, Memory, Origin, Remembered,
 };
 use suzatary_core::secretary::shown_record::OwnersRecord;
-use suzatary_core::secretary::store::{ConversationId, Entry};
+use suzatary_core::secretary::store::Entry;
 use suzatary_core::store::{Doc as _, InMemory, InMemoryDoc, Prodrome as _};
 
 fn repo_root() -> PathBuf {

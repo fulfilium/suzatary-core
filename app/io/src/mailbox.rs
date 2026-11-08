@@ -41,9 +41,10 @@ use suzatary_core::mail::hash_prefix::{Ambiguous, HashPrefix, Resolved};
 use suzatary_core::mail::known::Known;
 use suzatary_core::mail::verbs;
 use suzatary_core::mail::{
-    AttachmentFile, AttachmentMeta, MAX_BODY_CHARS, MailLink, MailMessage, MailRow, Stored, clip,
+    AttachmentFile, AttachmentMeta, MAX_BODY_CHARS, MailLink, MailMessage, MailRow, Stored,
     headers_of, web_links,
 };
+use suzatary_core::spelling::clip;
 
 /// notmuch as a subprocess, and the maildir it names, as [`Mailbox`].
 pub struct Notmuch {

@@ -21,6 +21,7 @@ use serde_json::{Map, Value, json};
 use suzatary_core::agent::TriageVerb;
 use suzatary_core::capability::{Agent, Entropy, Nothing, Turn};
 use suzatary_core::chains::{ChainName, ChainPolicy, Chains};
+use suzatary_core::conversation_id::ConversationId;
 use suzatary_core::deployment::Deployment;
 use suzatary_core::model_name::ModelName;
 use suzatary_core::secretary::compaction::Reading;
@@ -38,7 +39,7 @@ use suzatary_core::secretary::memory_event::MemoryEvent;
 use suzatary_core::secretary::outcome::Outcome;
 use suzatary_core::secretary::recollection::Recollection;
 use suzatary_core::secretary::salted_text::{Text, TextName};
-use suzatary_core::secretary::store::{ConversationId, Entry};
+use suzatary_core::secretary::store::Entry;
 use suzatary_core::secretary::surface::{Binding, Effect, SecretaryVerb};
 use suzatary_core::store::{Doc as _, InMemory, InMemoryDoc, Only, Prodrome, Reads as _};
 

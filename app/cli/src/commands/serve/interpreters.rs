@@ -415,7 +415,7 @@ pub fn proton_drive(instance: &Instance) -> suzatary_io::drive::ProtonDrive {
 }
 
 impl suzatary_core::capability::Drive for DriveAccess {
-    fn allowed_folders(&self) -> Vec<suzatary_core::drive::DrivePath> {
+    fn allowed_folders(&self) -> Vec<suzatary_core::drive_path::DrivePath> {
         crate::instance::File::read(&self.instance)
             .map(|file| file.secretary.drive_allow)
             .unwrap_or_default()
@@ -427,7 +427,7 @@ impl suzatary_core::capability::Drive for DriveAccess {
 
     fn read(
         &self,
-        file: &suzatary_core::drive::DrivePath,
+        file: &suzatary_core::drive_path::DrivePath,
     ) -> Result<suzatary_core::file_read::FileRead, suzatary_core::capability::DriveFailure> {
         self.drive.read(file)
     }
@@ -441,7 +441,7 @@ impl suzatary_core::vault::Vault for DriveVault {
         &self,
         name: &str,
         bytes: &[u8],
-    ) -> Result<suzatary_core::drive::DrivePath, suzatary_core::capability::DriveFailure> {
+    ) -> Result<suzatary_core::drive_path::DrivePath, suzatary_core::capability::DriveFailure> {
         self.0.keep(&suzatary_core::vault::folder(), name, bytes)
     }
 }

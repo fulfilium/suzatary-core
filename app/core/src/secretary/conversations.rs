@@ -119,7 +119,7 @@ impl Forgot {
 
 #[cfg(any(test, feature = "nothing"))]
 impl RenderCache for Forgot {
-    fn forget(&self, block: &crate::secretary::answer::Renderable) -> Result<(), String> {
+    fn forget(&self, block: &crate::answer::Renderable) -> Result<(), String> {
         self.0
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner)

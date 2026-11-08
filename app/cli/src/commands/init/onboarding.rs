@@ -8,13 +8,13 @@ use std::path::{Path, PathBuf};
 
 use anyhow::bail;
 use prodrome_core::event::Actor;
-use suzatary_core::authoring::Writer;
 use suzatary_core::capability::Login;
 use suzatary_core::chains::ChainName;
 use suzatary_core::connect::{AccountKind, Connection, Params, Reach, Refused};
 use suzatary_core::mail::account::{Authority, MailAccount, Roster};
 use suzatary_core::mail::address::EmailAddress;
 use suzatary_core::persona::Persona;
+use suzatary_core::writer::Writer;
 
 use crate::instance::{Chain, File, Mail, Secretary, Serving, Web};
 

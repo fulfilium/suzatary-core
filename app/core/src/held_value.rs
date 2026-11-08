@@ -259,7 +259,7 @@ pub(crate) fn file_size(size: u64) -> String {
     if size < 1024 {
         "under 1 KB".to_owned()
     } else {
-        crate::secretary::card::bytes(size)
+        crate::spelling::bytes(size)
     }
 }
 
@@ -687,7 +687,7 @@ impl Masked {
     /// across the cut was found whole.
     #[must_use]
     pub fn clipped(self, cap: usize) -> (Self, bool) {
-        let (text, truncated) = crate::mail::clip(&self.0, cap);
+        let (text, truncated) = crate::spelling::clip(&self.0, cap);
         (Self(text), truncated)
     }
 
@@ -910,11 +910,11 @@ pub struct Original {
     /// The message file's bytes, which an attached forward carries whole.
     pub raw: Vec<u8>,
     /// The headers a page shows.
-    pub headers: Vec<crate::mail::MailHeader>,
+    pub headers: Vec<crate::message_part::MailHeader>,
     /// The body as text.
     pub body: String,
     /// Every attachment, in the file's order.
-    pub parts: Vec<crate::mail::send::Attachment>,
+    pub parts: Vec<crate::message_part::Attachment>,
 }
 
 impl std::fmt::Debug for Original {

@@ -5,10 +5,11 @@ use super::filed::{Filed, Filing};
 use super::gate::Gate;
 use super::proposer::Proposer;
 use super::responded::Withdrawal;
-use super::store::{ConversationId, Proposal, Reasons};
+use super::store::{Proposal, Reasons};
 use super::surface::Binding;
 use crate::agent::verbs;
 use crate::capability::{MailError, Secretary};
+use crate::conversation_id::ConversationId;
 use crate::reference::{Reference, TodoRef};
 use crate::refusal::{Refusal, shown};
 
@@ -216,9 +217,11 @@ fn withdrawable(
 // --- drive -------------------------------------------------------------------
 
 /// A `path` argument, parsed.
-fn drive_path(path: &str) -> Result<crate::drive::DrivePath, Refusal> {
+fn drive_path(path: &str) -> Result<crate::drive_path::DrivePath, Refusal> {
     path.parse()
-        .map_err(|failed: crate::drive::DrivePathError| Refusal::bad_request(failed.to_string()))
+        .map_err(|failed: crate::drive_path::DrivePathError| {
+            Refusal::bad_request(failed.to_string())
+        })
 }
 
 /// A missing file is a 404, a refused one a 400; anything else is the box's.
@@ -331,13 +334,13 @@ fn located(
     caps: &Secretary<'_>,
     repo: &str,
     at: Option<&str>,
-) -> Result<(crate::repos::RepoName, crate::repos::CommitId), Refusal> {
-    let bad = |failed: crate::repos::RepoNameError| Refusal::bad_request(failed.to_string());
-    let repo: crate::repos::RepoName = repo.parse().map_err(bad)?;
+) -> Result<(crate::repo_ids::RepoName, crate::repo_ids::CommitId), Refusal> {
+    let bad = |failed: crate::repo_ids::RepoNameError| Refusal::bad_request(failed.to_string());
+    let repo: crate::repo_ids::RepoName = repo.parse().map_err(bad)?;
     let at = at
         .map(str::trim)
         .filter(|at| !at.is_empty())
-        .map(|at| crate::repos::Rev::try_from(at.to_owned()).map_err(bad))
+        .map(|at| crate::repo_ids::Rev::try_from(at.to_owned()).map_err(bad))
         .transpose()?;
     let commit = caps
         .repositories
@@ -347,7 +350,7 @@ fn located(
 }
 
 /// A repository path; absent is the top.
-fn path_of(path: Option<String>) -> Result<crate::repos::RepoPath, Refusal> {
-    crate::repos::RepoPath::try_from(path.unwrap_or_default())
+fn path_of(path: Option<String>) -> Result<crate::repo_ids::RepoPath, Refusal> {
+    crate::repo_ids::RepoPath::try_from(path.unwrap_or_default())
         .map_err(|failed| Refusal::bad_request(failed.to_string()))
 }

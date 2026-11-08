@@ -3,9 +3,10 @@
 //! line that crosses from a conversation that read more into the fresh one.
 
 use crate::capability::{Datetime, Turn};
+use crate::conversation_id::ConversationId;
 use crate::refusal::Refusal;
 use crate::secretary::queue;
-use crate::secretary::store::{ConversationId, Entry, Said, Stored};
+use crate::secretary::store::{Entry, Said, Stored};
 use crate::secretary::taint::{self, Taint};
 
 /// One turn of the owner's own words, and where it was said.

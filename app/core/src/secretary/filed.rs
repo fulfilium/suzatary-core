@@ -3,6 +3,7 @@
 //! by the same route.
 
 use crate::capability::Datetime;
+use crate::conversation_id::ConversationId;
 use crate::reference::ProposalRef;
 use crate::refusal::Refusal;
 use crate::secretary::acts::Act;
@@ -11,7 +12,7 @@ use crate::secretary::inbox::{self, ProposalId};
 use crate::secretary::inbox_event::InboxEvent;
 use crate::secretary::inbox_reading::Reading;
 use crate::secretary::proposer::Proposer;
-use crate::secretary::store::{ConversationId, Entry, Kind, Proposal, Reasons};
+use crate::secretary::store::{Entry, Kind, Proposal, Reasons};
 use crate::secretary::transcript;
 use crate::store::{Prodrome, StoreError};
 

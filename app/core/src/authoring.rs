@@ -31,32 +31,6 @@ use crate::todo::price::ratio;
 use crate::todo::{Patch, TodoFields, TodoPatch};
 use crate::zone::Moment;
 
-/// Who a verb surface writes as.
-///
-/// Never a parameter of a call: each surface holds a constant of this type, so "the agent
-/// cannot forge a trusted origin" is a fact about which values exist where. The owner's actor
-/// is deliberately absent, so no verb surface can make an agent's guess read as his word.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Writer {
-    /// The unattended triage agent: untrusted, so what it writes is provisional until the
-    /// owner confirms it.
-    Triage,
-    /// The main assistant, in a conversation somebody is reading: trusted, since the
-    /// conversation is the review.
-    Assistant,
-}
-
-impl Writer {
-    /// The name that lands in the event's `actor` field.
-    #[must_use]
-    pub fn actor(self) -> &'static str {
-        match self {
-            Writer::Triage => "triage",
-            Writer::Assistant => "assistant",
-        }
-    }
-}
-
 /// A todo id, as authoring spells one: narrower than the chain's `[a-z0-9_-]+`, because ids
 /// are referenced by hand forever.
 static ID: LazyLock<Regex> =
@@ -917,7 +891,7 @@ fn respecified(
     .map_err(|e| Refusal::bad_request(e.to_string()))
 }
 
-// --- undo and redo: the chain never rewrites, so both are appends ----------
+// Undo and redo: the chain never rewrites, so both are appends.
 //
 // Undoing the last event on a todo appends its inverse; the folds are functions of the event
 // set, and an undo is one more member of it. Undo is an involution over a todo's own stream,
@@ -1969,7 +1943,7 @@ mod tests {
 
     fn performs() -> Reference {
         Reference::Proposal(crate::reference::ProposalRef {
-            conversation: crate::secretary::store::ConversationId::new("2026-09-17-1")
+            conversation: crate::conversation_id::ConversationId::new("2026-09-17-1")
                 .expect("a slug"),
             index: 3,
         })

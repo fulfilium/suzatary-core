@@ -271,12 +271,10 @@ pub(crate) fn spoken(r: &Reference, titles: &Titles) -> String {
         Reference::Briefing { date } => format!("the briefing of {}", date.format("%Y-%m-%d")),
         Reference::Proposal(_) => "an earlier card".to_owned(),
         Reference::Batch { .. } => "a held batch".to_owned(),
-        Reference::Target(suzatary_core::secretary::topics::target::Target::Round { .. }) => {
+        Reference::Target(suzatary_core::topic_target::Target::Round { .. }) => {
             "a round".to_owned()
         }
-        Reference::Target(suzatary_core::secretary::topics::target::Target::Note { .. }) => {
-            "a note".to_owned()
-        }
+        Reference::Target(suzatary_core::topic_target::Target::Note { .. }) => "a note".to_owned(),
     }
 }
 

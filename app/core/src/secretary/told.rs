@@ -28,13 +28,14 @@ use prodrome_core::event::Hash;
 
 use serde_json::{Value, json};
 
+use crate::conversation_id::ConversationId;
 use crate::refusal::Refusal;
 use crate::secretary::compaction::Reading;
 use crate::secretary::digest_label::Label;
 use crate::secretary::digest_view::{self, Body, Keep, Shown};
 use crate::secretary::memory::{Change, Kind, Memory, Remembered};
 use crate::secretary::shown_record::{OwnersWords, Shows as _};
-use crate::secretary::store::{ConversationId, Entry};
+use crate::secretary::store::Entry;
 use crate::secretary::topics::reading::Reading as Topics;
 use crate::secretary::topics::topic::Topic;
 

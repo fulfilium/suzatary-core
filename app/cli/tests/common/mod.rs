@@ -201,7 +201,7 @@ pub fn pinned(name: &str, got: &str) {
 /// A scene's record: the conversation's lines, one JSON object each, then what the model was
 /// shown and sent.
 #[must_use]
-pub fn scene(caps: &Fakes, id: &suzatary_core::secretary::store::ConversationId) -> String {
+pub fn scene(caps: &Fakes, id: &suzatary_core::conversation_id::ConversationId) -> String {
     let lines: String =
         suzatary_core::secretary::transcript::lines(caps.conversations.conversations(), id)
             .unwrap_or_default()
@@ -658,10 +658,7 @@ impl FakeAnswers {
 }
 
 impl Answers for FakeAnswers {
-    fn block(
-        &self,
-        block: &suzatary_core::secretary::answer::Renderable,
-    ) -> Result<Html, AnswerError> {
+    fn block(&self, block: &suzatary_core::answer::Renderable) -> Result<Html, AnswerError> {
         if block.as_str().contains(BREAKS_THE_COMPILE) {
             return Err(AnswerError("the fake typst refused this block".to_owned()));
         }
@@ -1460,7 +1457,7 @@ impl Manuals for FakeManuals {
 #[derive(Default)]
 pub struct Recorder {
     sent: Mutex<Vec<suzatary_core::secretary::store::Draft>>,
-    parts: Mutex<Vec<Vec<suzatary_core::mail::send::Attachment>>>,
+    parts: Mutex<Vec<Vec<suzatary_core::message_part::Attachment>>>,
 }
 
 impl Recorder {
@@ -1478,7 +1475,7 @@ impl Recorder {
 
     /// The attachments each send carried, checked, in the same order.
     #[must_use]
-    pub fn parts(&self) -> Vec<Vec<suzatary_core::mail::send::Attachment>> {
+    pub fn parts(&self) -> Vec<Vec<suzatary_core::message_part::Attachment>> {
         self.parts.lock().expect("not poisoned").clone()
     }
 }
@@ -1506,7 +1503,7 @@ impl ActRecorder {
 impl suzatary_core::secretary::routes::Perform for ActRecorder {
     fn begin(
         &self,
-        id: &suzatary_core::secretary::store::ConversationId,
+        id: &suzatary_core::conversation_id::ConversationId,
         index: usize,
         _object: &suzatary_core::secretary::inbox::ProposalId,
         _proposer: &suzatary_core::secretary::proposer::Proposer,
@@ -1535,7 +1532,7 @@ pub struct SignsIn {
 impl suzatary_core::secretary::routes::Perform for SignsIn {
     fn begin(
         &self,
-        id: &suzatary_core::secretary::store::ConversationId,
+        id: &suzatary_core::conversation_id::ConversationId,
         index: usize,
         object: &suzatary_core::secretary::inbox::ProposalId,
         proposer: &suzatary_core::secretary::proposer::Proposer,
@@ -1811,7 +1808,7 @@ impl suzatary_core::settings::Writes for SecretsAlwaysFail {
 pub struct EditsRecorder {
     declared: std::sync::Mutex<suzatary_core::connect::Declared>,
     allowed: std::sync::Mutex<Vec<suzatary_core::web::AllowRule>>,
-    folders: std::sync::Mutex<Vec<suzatary_core::drive::DrivePath>>,
+    folders: std::sync::Mutex<Vec<suzatary_core::drive_path::DrivePath>>,
 }
 
 impl EditsRecorder {
@@ -1838,7 +1835,7 @@ impl EditsRecorder {
 
     /// Every Drive folder "Always allow this folder" wrote, oldest first.
     #[must_use]
-    pub fn folders(&self) -> Vec<suzatary_core::drive::DrivePath> {
+    pub fn folders(&self) -> Vec<suzatary_core::drive_path::DrivePath> {
         self.folders.lock().expect("not poisoned").clone()
     }
 }
@@ -1857,7 +1854,7 @@ impl suzatary_core::settings::Edits for EditsRecorder {
 
     fn allow_drive(
         &self,
-        folder: &suzatary_core::drive::DrivePath,
+        folder: &suzatary_core::drive_path::DrivePath,
     ) -> Result<(), suzatary_core::settings::EditError> {
         self.folders
             .lock()
@@ -2579,13 +2576,13 @@ impl suzatary_core::capability::Web for FakeWeb {
 #[derive(Default)]
 pub struct FakeDriveAccess {
     /// Drive folders read without asking.
-    pub allow: Vec<suzatary_core::drive::DrivePath>,
+    pub allow: Vec<suzatary_core::drive_path::DrivePath>,
     /// The Drive, when a scene gives one.
     pub drive: Option<suzatary_io::drive::ProtonDrive>,
 }
 
 impl suzatary_core::capability::Drive for FakeDriveAccess {
-    fn allowed_folders(&self) -> Vec<suzatary_core::drive::DrivePath> {
+    fn allowed_folders(&self) -> Vec<suzatary_core::drive_path::DrivePath> {
         self.allow.clone()
     }
 
@@ -2598,7 +2595,7 @@ impl suzatary_core::capability::Drive for FakeDriveAccess {
 
     fn read(
         &self,
-        file: &suzatary_core::drive::DrivePath,
+        file: &suzatary_core::drive_path::DrivePath,
     ) -> Result<FileRead, suzatary_core::capability::DriveFailure> {
         self.drive
             .as_ref()
@@ -2613,14 +2610,14 @@ struct NoDrive;
 impl suzatary_core::drive::Port for NoDrive {
     fn list(
         &self,
-        _: &suzatary_core::drive::DrivePath,
+        _: &suzatary_core::drive_path::DrivePath,
     ) -> Result<Vec<suzatary_core::drive::DriveEntry>, suzatary_core::capability::DriveFailure>
     {
         Err(no_drive())
     }
     fn download(
         &self,
-        _: &suzatary_core::drive::DrivePath,
+        _: &suzatary_core::drive_path::DrivePath,
     ) -> Result<Vec<u8>, suzatary_core::capability::DriveFailure> {
         Err(no_drive())
     }
@@ -2902,7 +2899,7 @@ impl suzatary_core::vault::Vault for FakeVault {
         &self,
         name: &str,
         bytes: &[u8],
-    ) -> Result<suzatary_core::drive::DrivePath, suzatary_core::capability::DriveFailure> {
+    ) -> Result<suzatary_core::drive_path::DrivePath, suzatary_core::capability::DriveFailure> {
         self.0
             .lock()
             .expect("unpoisoned")
@@ -4096,8 +4093,7 @@ pub fn reading(base: &str, id: &str, query: &[(&str, &str)]) -> serde_json::Valu
             continue;
         };
         for block in blocks {
-            let sha =
-                suzatary_core::secretary::answer::sha(block["source"].as_str().expect("a source"));
+            let sha = suzatary_core::answer::sha(block["source"].as_str().expect("a source"));
             let mut rendered = get(&format!(
                 "{base}/api/secretary/conversations/{id}/blocks/{sha}"
             ));
@@ -4302,7 +4298,8 @@ pub fn pdf_saying(text: &str) -> Vec<u8> {
 /// `act` filed as the secretary's in `conversation`, as the setup agent files it: the box files only what a
 /// reading owes, and withdraws any other card of its own.
 pub fn asked(fakes: &Fakes, conversation: &str, act: suzatary_core::secretary::acts::Act) {
-    use suzatary_core::secretary::store::{ConversationId, Entry, Kind, Reasons};
+    use suzatary_core::conversation_id::ConversationId;
+    use suzatary_core::secretary::store::{Entry, Kind, Reasons};
     let id = ConversationId::new(conversation).expect("a slug");
     let opened = Entry::Opened {
         at: suzatary_core::capability::Datetime::new(2026, 9, 2, 11, 0, 0, 0).expect("an instant"),

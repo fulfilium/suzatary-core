@@ -7,9 +7,10 @@
 
 use chrono::NaiveDate;
 
-use super::store::{ConversationId, Said, Stored};
+use super::store::{Said, Stored};
 use super::surface::Effect;
 use crate::capability::Turn;
+use crate::conversation_id::ConversationId;
 
 /// The question the morning brief asks: a person turn, not a system instruction, since the
 /// secretary answers questions somebody asked.
@@ -58,7 +59,7 @@ pub fn briefs(stored: &Stored) -> Vec<Brief> {
             .iter()
             .filter_map(|(index, later)| match &later.turn {
                 Turn::Model { text, calls } if !text.trim().is_empty() => {
-                    let status = !calls.is_empty() && super::answer::blocks(text).len() == 1;
+                    let status = !calls.is_empty() && crate::answer::blocks(text).len() == 1;
                     Some((*index, text.trim(), status))
                 }
                 _ => None,
@@ -100,7 +101,7 @@ fn reads(turn: &Turn) -> bool {
 /// them, so a link reads as its label and never as `#link(…)[…]`.
 #[must_use]
 pub fn headline(text: &str) -> String {
-    super::answer::blocks(text)
+    crate::answer::blocks(text)
         .iter()
         .flat_map(|block| block.plain.lines())
         .map(|line| line.trim_start_matches(['•', ' ']).trim())
@@ -112,7 +113,7 @@ pub fn headline(text: &str) -> String {
 /// How many words a brief holds, as Typst parses them.
 #[must_use]
 pub fn words(text: &str) -> usize {
-    super::answer::blocks(text)
+    crate::answer::blocks(text)
         .iter()
         .map(|block| block.plain.split_whitespace().count())
         .sum()

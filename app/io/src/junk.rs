@@ -10,11 +10,12 @@ use std::path::PathBuf;
 use chrono::NaiveDate;
 use mail_parser::{HeaderName, Message, MessageParser, PartType};
 use suzatary_core::capability::{Junk, JunkFailure};
+use suzatary_core::mail::MAX_BODY_CHARS;
 use suzatary_core::mail::account::{MailAccount, Roster};
 use suzatary_core::mail::imap::imap_date;
 use suzatary_core::mail::junk::{ChurnList, JunkHeader, JunkMessage, Listed, Uid, junk_folder};
 use suzatary_core::mail::oauth::{Imap, Silent};
-use suzatary_core::mail::{MAX_BODY_CHARS, clip};
+use suzatary_core::spelling::clip;
 
 use crate::imap::{IMAP_HOST, IMAP_PORT, TlsStream, authenticated};
 use crate::oauth::TokenStore;

@@ -409,7 +409,7 @@ const NAMED_AS_DATA: &[(&str, &str)] = &[
     ("app/cli/tests/release.rs", "changelog.d"),
     ("app/core/src/coding.rs", "docs"),
     ("app/core/src/leak.rs", "docs"),
-    ("app/core/src/repos.rs", "docs"),
+    ("app/core/src/repo_ids.rs", "docs"),
     ("app/core/tests/act_literal.rs", "docs"),
     ("app/core/tests/web_vectors.rs", "docs"),
     ("app/io/src/repos.rs", "docs"),

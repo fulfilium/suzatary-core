@@ -7,7 +7,7 @@ use serde::{Deserialize, Serialize};
 use super::Draft;
 use crate::held_value::Original;
 use crate::mail::StoredMessage;
-use crate::mail::send::Attachment;
+use crate::message_part::Attachment;
 use prodrome_core::literal::codec::{Constructor, Fields, Literal, record};
 
 /// A forward as proposed: the message around the original, and the original by its record.

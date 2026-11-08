@@ -4,10 +4,11 @@
 //! clean only when it is the model's own, a clean verb's answer, or stamped as the owner's.
 
 use crate::capability::Turn;
+use crate::conversation_id::ConversationId;
 use crate::secretary::memory::Origin;
 use crate::secretary::queue;
 use crate::secretary::stamp::Stamp;
-use crate::secretary::store::{ConversationId, Entry, Said, Stored};
+use crate::secretary::store::{Entry, Said, Stored};
 use crate::secretary::surface::SecretaryVerb;
 use crate::secretary::turn_shape::{TurnShape, shape};
 
@@ -205,7 +206,8 @@ pub fn opener(stored: &Stored) -> Option<Origin> {
 mod tests {
     use super::*;
     use crate::capability::ToolCall;
-    use crate::secretary::store::{ConversationId, Entry};
+    use crate::conversation_id::ConversationId;
+    use crate::secretary::store::Entry;
 
     fn said(turn: Turn, by: Option<&str>) -> Entry {
         Entry::Said {

@@ -21,7 +21,8 @@ use prodrome_core::event::{Envelope, Hash, parents_of, parse_envelope};
 use prodrome_core::literal::Datetime;
 use prodrome_core::memo::{self, Algebra, Cache, Report, Tree};
 
-use crate::secretary::answer::Renderable;
+use crate::answer::Renderable;
+use crate::conversation_id::ConversationId;
 use crate::secretary::erasure::Erasure;
 use crate::secretary::key_ring::KeyRing;
 use crate::secretary::line_event::{Husk, LineEvent, LineVocabulary};
@@ -29,8 +30,7 @@ use crate::secretary::line_shape::LineShape;
 use crate::secretary::line_words::LineWords;
 use crate::secretary::locked_text::{KeyName, TextKey};
 use crate::secretary::slots::Slots;
-use crate::secretary::store::{ConversationId, Entry, NotAConversation, Stored};
-use crate::secretary::stream::Held;
+use crate::secretary::store::{Entry, NotAConversation, Stored};
 use crate::secretary::transcript;
 use crate::secretary::words::{Gone, Words};
 
@@ -65,6 +65,17 @@ impl Admitted {
     pub fn vouched(name: Hash, bytes: Vec<u8>) -> Self {
         Self { name, bytes }
     }
+}
+
+/// What a reader holds of the lines a round reads.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Held<L> {
+    /// Every line, each opened as its conversation opens it, by name.
+    Opened(L),
+    /// A print that is no line of the round's conversation: the round is not drawn.
+    Unread,
+    /// The first line, by name, the reader does not hold.
+    Lacking(Hash),
 }
 
 /// The lines held: every print decoded once, the history, and the fold's cache over it.

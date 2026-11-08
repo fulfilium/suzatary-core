@@ -15,8 +15,8 @@ use prodrome_core::event::TodoId;
 use serde::{Deserialize, Serialize};
 
 use crate::chains::ChainName;
-use crate::secretary::store::ConversationId;
-use crate::secretary::topics::target::Target;
+use crate::conversation_id::ConversationId;
+use crate::topic_target::Target;
 
 /// A string that is not a reference, and which part of it is wrong; one type for the whole
 /// grammar, since a caller only shows the sentence.

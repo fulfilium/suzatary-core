@@ -1,7 +1,7 @@
 //! What the box keeps of the HTML a conversation's words were rendered to: a cache of a pure
 //! function, emptied of a text whose words are erased.
 
-use crate::secretary::answer::Renderable;
+use crate::answer::Renderable;
 
 /// The cache of rendered answer blocks, as an erasure reaches it: a block's HTML is a function of
 /// its source, so it is a copy of the words, and it goes before the key that opens them.

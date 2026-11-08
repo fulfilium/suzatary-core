@@ -6,7 +6,8 @@
 mod common;
 
 use common::Fakes;
-use suzatary_core::mail::{MailHeader, MailLink, MailMessage, MailRow};
+use suzatary_core::mail::{MailLink, MailMessage, MailRow};
+use suzatary_core::message_part::MailHeader;
 
 fn a_row(hash: &str, account: &str) -> MailRow {
     MailRow {

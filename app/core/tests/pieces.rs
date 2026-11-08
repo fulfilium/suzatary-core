@@ -14,11 +14,12 @@ use proptest::prelude::*;
 
 use prodrome_core::store::frontier::{Frontiers, Since, Token};
 use suzatary_core::capability::Turn;
+use suzatary_core::conversation_id::ConversationId;
 use suzatary_core::routes::{self, Books, Cut};
 use suzatary_core::secretary::conversations::InMemory;
 use suzatary_core::secretary::erasure::Erasure;
 use suzatary_core::secretary::line_event::LineEvent;
-use suzatary_core::secretary::store::{ConversationId, Entry, Kind};
+use suzatary_core::secretary::store::{Entry, Kind};
 use suzatary_core::secretary::transcript;
 use suzatary_core::secretary::words::Words;
 use suzatary_core::store::Reads as _;

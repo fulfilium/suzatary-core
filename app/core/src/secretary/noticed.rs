@@ -6,6 +6,7 @@
 use std::sync::LazyLock;
 
 use crate::capability::Datetime;
+use crate::conversation_id::ConversationId;
 use crate::reference::{ProposalRef, Reference};
 use crate::refusal::Refusal;
 use crate::secretary::filed::{self, Filing};
@@ -13,7 +14,7 @@ use crate::secretary::inbox::{self, ProposalId};
 use crate::secretary::inbox_event::InboxEvent;
 use crate::secretary::proposer::Proposer;
 use crate::secretary::responded::Withdrawal;
-use crate::secretary::store::{ConversationId, Entry, Proposal, Reasons};
+use crate::secretary::store::{Entry, Proposal, Reasons};
 use crate::store::Prodrome;
 
 /// The box's own conversation.

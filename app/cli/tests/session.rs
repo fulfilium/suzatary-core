@@ -6,7 +6,8 @@ mod common;
 use common::{FakeModel, Fakes};
 use suzatary_core::capability::{Halt, Pick, SessionId, Turn};
 use suzatary_core::conversation::round::Sink;
-use suzatary_core::secretary::store::{ConversationId, Entry};
+use suzatary_core::conversation_id::ConversationId;
+use suzatary_core::secretary::store::Entry;
 use suzatary_core::secretary::{Bound, answer, queue};
 
 fn id() -> ConversationId {

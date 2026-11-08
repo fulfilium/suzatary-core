@@ -63,7 +63,7 @@ fn call(fakes: &Fakes, verb: &str, args: Value) -> Result<Value, suzatary_core::
         &deployment,
         &suzatary_core::settings::Settables::default(),
         &chains,
-        &suzatary_core::secretary::store::DEFAULT.clone(),
+        &suzatary_core::conversation_id::DEFAULT.clone(),
         verb,
         &args,
     )

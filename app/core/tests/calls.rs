@@ -24,7 +24,8 @@ use suzatary_core::mail::verbs::{AccountSync, SyncReport};
 use suzatary_core::mail::{AttachmentFile, AttachmentMeta, MailMessage, MailRow};
 use suzatary_core::record::{Envelope, EventStore, TodoEvent};
 use suzatary_core::refusal::Refusal;
-use suzatary_core::repos::{CommitId, Patch, RepoName, RepoPath, RepoRow, Rev, Visibility};
+use suzatary_core::repo_ids::{CommitId, RepoName, RepoPath, Rev};
+use suzatary_core::repos::{Patch, RepoRow, Visibility};
 use suzatary_core::secretary::Bound;
 use suzatary_core::secretary::line_event::LineEvent;
 use suzatary_core::secretary::store::Entry;
@@ -156,7 +157,7 @@ impl Reads<LineEvent> for Fixed {
         &self,
     ) -> Result<Vec<(Hash, prodrome_core::event::Envelope<LineEvent>)>, StoreError> {
         let (opened, _) = LineEvent::write(
-            suzatary_core::secretary::store::DEFAULT.clone(),
+            suzatary_core::conversation_id::DEFAULT.clone(),
             Actor::new("assistant").expect("an actor"),
             0,
             &Entry::Opened {
@@ -546,7 +547,7 @@ fn secretary(
         deployment,
         &suzatary_core::settings::Settables::default(),
         &chains,
-        &suzatary_core::secretary::store::DEFAULT.clone(),
+        &suzatary_core::conversation_id::DEFAULT.clone(),
         verb,
         args,
     )

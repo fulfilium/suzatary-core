@@ -7,12 +7,13 @@
 //! the same object, which the inbox already holds however it was answered; a new failure after a
 //! success is a new act.
 
+use crate::conversation_id::ConversationId;
 use crate::escape::escape_markup;
 use crate::health::{Instant, Reading};
 use crate::reference::Reference;
 use crate::refusal::Refusal;
 use crate::secretary::changes::{self, Act, Changeset};
-use crate::secretary::store::{ConversationId, Proposal, Reasons};
+use crate::secretary::store::{Proposal, Reasons};
 use crate::secretary::{Bound, WRITES_AS};
 use crate::source_key::SourceKey;
 use crate::todo::{Price, TodoFields};

@@ -5,12 +5,13 @@
 //! every card open.
 
 use super::Bound;
-use super::daily::{Daily, Run, begin, daily_round};
+use super::daily::{Run, begin, daily_round};
 use super::found::{Found, Unreadable};
-use super::store::{ConversationId, Decision, Entry, Outcome, Review, Stored};
+use super::store::{Decision, Entry, Outcome, Review, Stored};
 use super::surface::{Effect, SecretaryVerb, Subset};
 use super::verbs::{answered, listed, standing};
 use crate::capability::{Secretary, Turn};
+use crate::conversation_id::{ConversationId, Daily};
 use crate::deployment::Deployment;
 use crate::refusal::{Refusal, shown};
 use crate::secretary::transcript;
@@ -288,7 +289,7 @@ fn said(stored: &Stored) -> String {
         .rev()
         .find_map(|said| match &said.turn {
             Turn::Model { text, .. } => {
-                Some(super::answer::prose(text)).filter(|words| !words.is_empty())
+                Some(crate::answer::prose(text)).filter(|words| !words.is_empty())
             }
             _ => None,
         })

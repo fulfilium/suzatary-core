@@ -3,20 +3,10 @@
 //! No transport lives here, and there is no Bcc, so the envelope names exactly the
 //! people the headers do.
 
+use crate::message_part::Attachment;
 use mail_builder::MessageBuilder;
 
 use super::address::EmailAddress;
-
-/// A file to attach.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Attachment {
-    /// What the recipient sees it called.
-    pub filename: String,
-    /// Its bytes.
-    pub content: Vec<u8>,
-    /// Its full `type/subtype`.
-    pub mime_type: String,
-}
 
 /// One message to send, plain text only. [`Outgoing::new`] is its one constructor, so every
 /// value has at least one recipient, a subject and something to say, and each address on it

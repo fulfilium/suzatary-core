@@ -37,8 +37,6 @@ fn reads(value: Option<f64>) -> String {
     value.map_or_else(|| "∅".to_owned(), pct)
 }
 
-// --- Why this number -----------------------------------------------------------
-
 /// The core's explanation of one price, read by its closed shape, so a kind the core gains
 /// fails a match here rather than printing its fields.
 #[derive(Debug, Clone, PartialEq)]
@@ -472,8 +470,6 @@ pub fn why(z: Zone, tree: Option<&Explained>) -> Why {
             .collect(),
     }
 }
-
-// --- The calendar ----------------------------------------------------------------
 
 /// The days of the calendar, one section each. Every title, place and name is data, so a
 /// stranger's invite is text whatever it spells.

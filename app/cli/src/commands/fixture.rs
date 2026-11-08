@@ -281,7 +281,8 @@ fn write_seed_message(cur: &Path, mail: &cast::Mail) -> anyhow::Result<()> {
 
 /// The notice: its text and its PDF, built by the same MIME builder a send uses.
 fn write_notice(cur: &Path, notice: &cast::Notice) -> anyhow::Result<()> {
-    use suzatary_core::mail::send::{Attachment, Composed, Outgoing, build_mime};
+    use suzatary_core::mail::send::{Composed, Outgoing, build_mime};
+    use suzatary_core::message_part::Attachment;
     let cast::Notice { mail, file } = notice;
     let out = Outgoing::new(Composed {
         sender: mail.from.email.to_owned(),
@@ -332,7 +333,7 @@ fn sweep_prompt() -> anyhow::Result<String> {
 /// scripted model, so their questions are stamped; the sweep is written unstamped in the older
 /// shape, so the scene reads both stamped and older lines.
 fn a_review(root: &Path) -> anyhow::Result<()> {
-    use suzatary_core::secretary::daily::Daily;
+    use suzatary_core::conversation_id::Daily;
     use suzatary_core::secretary::store::Entry;
 
     let read = crate::instance::Instance::open(&root.join("instance.toml"))?;
@@ -345,7 +346,7 @@ fn a_review(root: &Path) -> anyhow::Result<()> {
     let at = SystemClock.now();
     let day = read.persona.zone.day(fpl::instant_of(at));
     let store = read.conversation_stores();
-    let id = suzatary_core::secretary::store::ConversationId::daily(Daily::Sweep, day);
+    let id = suzatary_core::conversation_id::ConversationId::daily(Daily::Sweep, day);
     suzatary_core::secretary::transcript::start(
         store.conversations(),
         &id,
@@ -429,7 +430,7 @@ fn a_secret_ask(root: &Path) -> anyhow::Result<()> {
     });
     crate::commands::secretary::scripted_round(
         &read,
-        &suzatary_core::secretary::store::ConversationId::new(SECRET_ASK_CONVERSATION)?,
+        &suzatary_core::conversation_id::ConversationId::new(SECRET_ASK_CONVERSATION)?,
         "Secret ask",
         "ask for the coding routine's token",
         Scripted::answering(&[
@@ -467,7 +468,8 @@ pub const CONNECT_CONVERSATION: &str = "connect";
 /// A calendar connected through the instance file's own editor, its link not yet set, and its
 /// removal standing as a card.
 fn a_connected_calendar(root: &Path) -> anyhow::Result<()> {
-    use suzatary_core::secretary::store::{ConversationId, Entry, Kind, Proposal, Reasons};
+    use suzatary_core::conversation_id::ConversationId;
+    use suzatary_core::secretary::store::{Entry, Kind, Proposal, Reasons};
     use suzatary_core::settings::Edits as _;
 
     let calendar = suzatary_core::connect::Connection::parse("ics", &[CONNECTED.to_owned()])?;
@@ -637,8 +639,8 @@ pub const CODING_CONVERSATION: &str = "codingsession";
 /// nothing actually fired.
 fn a_coding_session(root: &Path) -> anyhow::Result<()> {
     use suzatary_core::coding::Fired;
+    use suzatary_core::conversation_id::ConversationId;
     use suzatary_core::secretary::responded::{Done, Performed};
-    use suzatary_core::secretary::store::ConversationId;
 
     let read = crate::instance::Instance::open(&root.join("instance.toml"))?;
     let store = read.conversation_stores();
@@ -696,11 +698,12 @@ fn a_coding_session(root: &Path) -> anyhow::Result<()> {
 /// The `claude/` branch [`a_coding_session`]'s poll sees: its report names
 /// `url`, and it is not merged.
 fn the_branch_back(url: &str) -> anyhow::Result<suzatary_core::coding::Seen> {
-    use suzatary_core::coding::{FileStat, Lines, ReportFile, Seen};
-    let path = |text: &str| suzatary_core::repos::RepoPath::try_from(text.to_owned());
+    use suzatary_core::coding::{ReportFile, Seen};
+    use suzatary_core::coding_report::{FileStat, Lines};
+    let path = |text: &str| suzatary_core::repo_ids::RepoPath::try_from(text.to_owned());
     Ok(Seen {
         branch: "claude/retitle".parse()?,
-        tip: suzatary_core::repos::CommitId::try_from("c0de".repeat(10))?,
+        tip: suzatary_core::repo_ids::CommitId::try_from("c0de".repeat(10))?,
         merged: false,
         reports: vec![ReportFile::read(
             path("docs/reports/retitle.md")?,
@@ -1293,9 +1296,9 @@ fn bulk_lines(
     reseals: usize,
 ) -> anyhow::Result<()> {
     use prodrome_core::event::Actor;
+    use suzatary_core::conversation_id::ConversationId;
     use suzatary_core::secretary::line_event::LineEvent;
     use suzatary_core::secretary::line_words::LineWords;
-    use suzatary_core::secretary::store::ConversationId;
 
     let count: usize = sizes.iter().map(|(_, size)| size).sum();
     if count == 0 {
@@ -1526,7 +1529,8 @@ fn bulk_proposals(
     todos: usize,
 ) -> anyhow::Result<()> {
     use prodrome_core::event::Actor;
-    use suzatary_core::secretary::store::{ConversationId, Draft, Entry, Kind, Proposal, Reasons};
+    use suzatary_core::conversation_id::ConversationId;
+    use suzatary_core::secretary::store::{Draft, Entry, Kind, Proposal, Reasons};
     if count == 0 {
         return Ok(());
     }
@@ -1588,7 +1592,7 @@ fn bulk_proposals(
 /// names in turn, as a store whose rounds were filed under topics carries them.
 fn bulk_topics(read: &crate::instance::Instance, count: usize) -> anyhow::Result<()> {
     use prodrome_core::event::Actor;
-    use suzatary_core::secretary::topics::targets::rounds;
+    use suzatary_core::secretary::targets::rounds;
     use suzatary_core::secretary::topics::topic::Topic;
     const NAMES: [&str; 8] = [
         "permits", "travel", "taxes", "garden", "health", "family", "school", "car",
@@ -1643,7 +1647,7 @@ impl Sealed {
     /// Line `entry` of `id`, written as `writer` holding `held` lines, its slots sealed so.
     fn write(
         self,
-        id: suzatary_core::secretary::store::ConversationId,
+        id: suzatary_core::conversation_id::ConversationId,
         writer: prodrome_core::event::Actor,
         held: u32,
         entry: &suzatary_core::secretary::store::Entry,

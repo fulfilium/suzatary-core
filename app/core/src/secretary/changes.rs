@@ -10,13 +10,14 @@ use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 
 use crate::agent::priced::{PRICE_SPELLINGS, Priced};
-use crate::authoring::{self, NewTodo, Writer};
+use crate::authoring::{self, NewTodo};
 use crate::believed::{Believed, Preview};
 use crate::capability::{Datetime, Typeset};
 use crate::chains::ChainPolicy;
 use crate::record::{Node, Source, TodoEvent};
 use crate::refusal::{Refusal, shown as quoted};
 use crate::todo::{Patch, Price, TodoFields, TodoPatch};
+use crate::writer::Writer;
 use crate::zone::Moment;
 use prodrome_core::literal::codec::{Constructor, Fields, Literal, arm, no_arm, record};
 

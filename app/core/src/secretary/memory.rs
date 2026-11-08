@@ -14,8 +14,8 @@ use serde::{Deserialize, Serialize};
 use prodrome_core::literal::{ProdromeError, Value};
 
 use crate::capability::Datetime;
+use crate::conversation_id::ConversationId;
 use crate::refusal::{Refusal, shown};
-use crate::secretary::store::ConversationId;
 use prodrome_core::literal::codec::{Constructor, Fields, Literal, record};
 
 /// The longest fact, in characters: a sentence, never a document.

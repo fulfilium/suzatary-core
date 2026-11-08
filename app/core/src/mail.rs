@@ -30,6 +30,7 @@ pub mod triage;
 pub mod verbs;
 pub mod watch;
 
+use crate::message_part::MailHeader;
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
@@ -42,15 +43,6 @@ pub struct MailLink {
     pub url: String,
     /// The text it stood behind, "" for a bare URL.
     pub label: String,
-}
-
-/// One header of a message.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
-pub struct MailHeader {
-    /// The header's name.
-    pub name: String,
-    /// Its value.
-    pub value: String,
 }
 
 /// One row of the app's mail list.
@@ -256,9 +248,6 @@ impl prodrome_core::literal::codec::Literal for StoredPart {
     }
 }
 
-/// The cap on an attachment's extracted characters, read for one fact rather than whole.
-pub const MAX_ATTACHMENT_CHARS: usize = 100_000;
-
 /// The headers a message page prints, in reading order; a whitelist.
 pub const SHOWN_HEADERS: &[&str] = &["From", "To", "Cc", "Subject", "Date", "Reply-To"];
 
@@ -268,28 +257,11 @@ pub const LINK_SCHEMES: &[&str] = &["http://", "https://", "mailto:"];
 /// A source hash prefix shorter than this names todos by accident, so it is not evidence.
 pub(crate) const MIN_SOURCE_PREFIX: usize = 6;
 
-/// `text` cut to at most `chars` characters, on a char boundary, never panicking.
-#[must_use]
-pub fn shorten(text: &str, chars: usize) -> &str {
-    match text.char_indices().nth(chars) {
-        Some((at, _)) => &text[..at],
-        None => text,
-    }
-}
-
-/// `text` cut to `cap` characters, and whether it was cut.
-#[must_use]
-pub fn clip(text: &str, cap: usize) -> (String, bool) {
-    let short = shorten(text, cap);
-    let truncated = short.len() != text.len();
-    (short.to_owned(), truncated)
-}
-
 /// At most `len` characters of `text` starting at character `start`: one page of a longer text.
 #[must_use]
 pub fn page(text: &str, start: usize, len: usize) -> &str {
-    let from = shorten(text, start).len();
-    shorten(&text[from..], len)
+    let from = crate::spelling::shorten(text, start).len();
+    crate::spelling::shorten(&text[from..], len)
 }
 
 /// Only the links a page may carry.
@@ -475,23 +447,6 @@ mod tests {
     use proptest::prelude::*;
 
     proptest! {
-        /// `shorten` never panics, never splits a `char` over arbitrary text, and answers at
-        /// most `chars` characters.
-        #[test]
-        fn shorten_never_panics_and_never_splits_a_char(text: String, chars in 0usize..200) {
-            let short = shorten(&text, chars);
-            prop_assert!(text.is_char_boundary(short.len()));
-            prop_assert!(short.chars().count() <= chars);
-        }
-
-        /// `clip`'s flag is exactly whether `shorten` cut anything.
-        #[test]
-        fn clip_flags_truncation_exactly_when_shorten_cuts(text: String, cap in 0usize..200) {
-            let (clipped, truncated) = clip(&text, cap);
-            prop_assert_eq!(truncated, clipped != text);
-            prop_assert_eq!(clipped.as_str(), shorten(&text, cap));
-        }
-
         /// `page` never panics, including a `start` past the end.
         #[test]
         fn page_never_panics_and_never_splits_a_char(

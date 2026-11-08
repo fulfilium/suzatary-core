@@ -5,8 +5,8 @@ use std::fmt::Write as _;
 use std::num::NonZeroUsize;
 
 use suzatary_core::capability::Push;
+use suzatary_core::conversation_id::ConversationId;
 use suzatary_core::mail::dedup_key::DEDUP_KEY;
-use suzatary_core::secretary::store::ConversationId;
 
 use crate::instance::Local;
 

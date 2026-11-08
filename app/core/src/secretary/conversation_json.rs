@@ -36,8 +36,9 @@ mod tests {
 
     use super::*;
     use crate::capability::Turn;
+    use crate::conversation_id::ConversationId;
     use crate::secretary::conversations::Counting;
-    use crate::secretary::store::{ConversationId, Entry};
+    use crate::secretary::store::Entry;
 
     fn said(text: &str, minute: u32) -> LineEvent {
         let at = prodrome_core::literal::Datetime::new(2026, 10, 1, 12, minute, 0, 0)

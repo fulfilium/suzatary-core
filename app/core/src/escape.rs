@@ -168,8 +168,6 @@ pub fn no_unescaped_special(image: &str, specials: &[char]) -> bool {
     backslashes.is_multiple_of(2)
 }
 
-// --- source → readable text ------------------------------------------------
-
 /// Typst markup source → readable one-line plain text, for the open list and
 /// the briefing, never for rendering.
 ///

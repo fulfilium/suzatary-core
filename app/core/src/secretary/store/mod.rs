@@ -14,7 +14,6 @@
 
 mod aside;
 mod asking;
-mod conversation_id;
 mod decision;
 mod draft;
 mod entry;
@@ -39,7 +38,6 @@ mod title;
 
 pub use aside::Aside;
 pub use asking::Asking;
-pub use conversation_id::{ConversationId, DEFAULT, NotAnId};
 pub use decision::{Decision, Outcome, Settle};
 pub use draft::{Draft, EMAIL};
 pub use entry::{Entry, stamp};

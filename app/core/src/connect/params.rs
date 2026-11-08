@@ -1,7 +1,7 @@
 //! What a person chooses for one connection.
 
 use super::{Label, Refused};
-use crate::drive::DrivePath;
+use crate::drive_path::DrivePath;
 use crate::mail::account::Authority;
 use crate::mail::address::EmailAddress;
 
@@ -134,7 +134,7 @@ impl Params {
                 })?,
             },
             (Shape::Folder, [folder]) => Params::Folder(folder.parse().map_err(
-                |refused: crate::drive::DrivePathError| Refused::Param {
+                |refused: crate::drive_path::DrivePathError| Refused::Param {
                     param: "folder",
                     said: refused.to_string(),
                 },

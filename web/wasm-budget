@@ -11,9 +11,9 @@
 # Stages 7 and 8 (#341) raise views_bg and prodrome_bg: the todo list, a todo and the Typst list in
 # the pages' module, and the list's tree grown in the core's. x86_64 is measured; aarch64 is x86_64
 # plus the gap master's lines kept, until an aarch64 build of the merge measures it.
-views_bg.wasm x86_64-linux 603000
+views_bg.wasm x86_64-linux 604000
 prodrome_bg.wasm x86_64-linux 1127000
 typst_bg.wasm x86_64-linux 6272000
-views_bg.wasm aarch64-linux 610000
+views_bg.wasm aarch64-linux 611000
 prodrome_bg.wasm aarch64-linux 1138000
 typst_bg.wasm aarch64-linux 6277000

@@ -23,6 +23,7 @@ use serde::Serialize;
 use serde::de::DeserializeOwned;
 
 use crate::capability::Entropy;
+use crate::conversation_id::ConversationId;
 use crate::redact::Rules;
 use crate::secretary::carried::Carried;
 use crate::secretary::erasure::Erasure;
@@ -31,7 +32,7 @@ use crate::secretary::line_words::LineWords;
 use crate::secretary::locked_text::{FreshKey, KeyName, Locked, Shape, TextKey};
 use crate::secretary::scrubbed_under::ScrubbedUnder;
 use crate::secretary::slots::Slots;
-use crate::secretary::store::{ConversationId, Entry};
+use crate::secretary::store::Entry;
 use crate::secretary::words::{Gone, Words};
 use prodrome_core::fold::sole::{One, Only, Whole};
 use prodrome_core::literal::codec::{Constructor, Fields, Literal, no_arm, record};

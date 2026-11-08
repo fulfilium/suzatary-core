@@ -9,6 +9,4 @@ pub mod reading;
 pub mod revision;
 pub mod standing;
 pub mod stores;
-pub mod target;
-pub mod targets;
 pub mod topic;

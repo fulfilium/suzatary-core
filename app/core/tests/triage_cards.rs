@@ -173,7 +173,8 @@ fn the_agents_writes_are_cards_and_reach_no_chain() {
 /// for a write.
 fn a_round_that_read_mail(lines: &suzatary_core::secretary::conversations::InMemory) {
     use suzatary_core::capability::{ToolCall, Turn};
-    use suzatary_core::secretary::store::{DEFAULT, Entry};
+    use suzatary_core::conversation_id::DEFAULT;
+    use suzatary_core::secretary::store::Entry;
     use suzatary_core::secretary::transcript;
 
     let at = prodrome_core::literal::Datetime::new(2026, 9, 2, 9, 0, 0, 0).expect("an instant");
@@ -233,7 +234,7 @@ fn a_round_that_read_mail(lines: &suzatary_core::secretary::conversations::InMem
 /// chain as `assistant` files a card instead; the chain holds exactly what it held.
 #[test]
 fn a_mail_read_in_the_round_makes_every_secretary_write_a_card() {
-    use suzatary_core::secretary::store::DEFAULT;
+    use suzatary_core::conversation_id::DEFAULT;
     use suzatary_core::secretary::{Binding, Effect, SecretaryVerb};
 
     let chain = the_owners_chain();

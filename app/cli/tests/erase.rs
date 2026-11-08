@@ -120,7 +120,7 @@ fn an_erasure_takes_the_summaries_that_read_it() {
     // is a function of the lines' names, and every key is fresh.
     let text = suzatary_core::secretary::salted_text::Text::new(
         suzatary_core::secretary::digest_line::Line::new(&summary).expect("a line"),
-        [7; suzatary_core::secretary::salted_text::SALT_BYTES],
+        [7; suzatary_core::capability::SALT_BYTES],
     );
     memories
         .digests

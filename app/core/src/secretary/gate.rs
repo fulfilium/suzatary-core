@@ -39,7 +39,8 @@ impl Gate {
 mod tests {
     use super::*;
     use crate::capability::{ToolCall, Turn};
-    use crate::secretary::store::{ConversationId, Entry, Stored};
+    use crate::conversation_id::ConversationId;
+    use crate::secretary::store::{Entry, Stored};
     use proptest::prelude::*;
 
     fn line(turn: Turn, by: Option<&str>) -> Entry {

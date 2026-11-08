@@ -25,6 +25,7 @@ use suzatary_core::capability::{
 use suzatary_core::cast::{self, CAST};
 use suzatary_core::chain_set::Read;
 use suzatary_core::chains::{ChainName, ChainPolicy};
+use suzatary_core::conversation_id::ConversationId;
 use suzatary_core::deployment::Deployment;
 use suzatary_core::escape::Escaped;
 use suzatary_core::record::TodoEvent;
@@ -40,7 +41,7 @@ use suzatary_core::secretary::responded::{Done, Performed, Tried};
 use suzatary_core::secretary::routes::{self as secretary_routes, Cards};
 use suzatary_core::secretary::salted_text::{Text, TextName};
 use suzatary_core::secretary::store::{
-    ConversationId, Draft, Entry as ConversationEntry, Proposal, Reasons, Stored, stamp,
+    Draft, Entry as ConversationEntry, Proposal, Reasons, Stored, stamp,
 };
 use suzatary_core::secretary::transcript;
 use suzatary_core::store::{
@@ -527,7 +528,7 @@ impl Model for Bundle {
 impl Answers for Bundle {
     fn block(
         &self,
-        _block: &suzatary_core::secretary::answer::Renderable,
+        _block: &suzatary_core::answer::Renderable,
     ) -> Result<suzatary_core::capability::Html, AnswerError> {
         Err(AnswerError(
             "the vectors fixture renders nothing; every block is its source".to_owned(),
@@ -946,7 +947,7 @@ fn the_blocks_vector_is_what_the_splitter_computes() {
     #[derive(Serialize)]
     struct Named {
         #[serde(flatten)]
-        block: suzatary_core::secretary::answer::Block,
+        block: suzatary_core::answer::Block,
         sha: String,
     }
     let answers = [
@@ -961,10 +962,10 @@ fn the_blocks_vector_is_what_the_splitter_computes() {
         .into_iter()
         .map(|answer| Cut {
             answer,
-            blocks: suzatary_core::secretary::answer::blocks(answer)
+            blocks: suzatary_core::answer::blocks(answer)
                 .into_iter()
                 .map(|block| Named {
-                    sha: suzatary_core::secretary::answer::sha(&block.source),
+                    sha: suzatary_core::answer::sha(&block.source),
                     block,
                 })
                 .collect(),
@@ -1234,7 +1235,7 @@ fn a_proposal_line_the_inbox_does_not_hold_is_reported_not_skipped() {
     use suzatary_core::secretary::store::{Line, Unheld};
 
     let bundle = Bundle::over(six_todo_chain(&scratch("unplaced")), now());
-    let id = suzatary_core::secretary::store::DEFAULT.clone();
+    let id = suzatary_core::conversation_id::DEFAULT.clone();
     with_unplaced_lines(&bundle, &id);
 
     let fold = inbox::fold(&bundle.inbox).expect("the inbox reads");
@@ -1338,7 +1339,7 @@ fn a_proposal_line_the_inbox_does_not_hold_is_reported_not_skipped() {
 fn a_conversation_with_an_unreadable_proposal_renders_and_the_rest_stay_tappable() {
     let root = scratch("unreadable");
     let bundle = Bundle::over(six_todo_chain(&root), now());
-    let id = suzatary_core::secretary::store::DEFAULT.clone();
+    let id = suzatary_core::conversation_id::DEFAULT.clone();
     let (bad_id, good_id) = with_an_unreadable_proposal(&bundle, &id);
     let deployment = deployment();
     let cards: Cards<'_> = Cards {
@@ -2596,7 +2597,7 @@ fn the_answers_vector_holds_every_answer() {
     samples.add([wire::BlockRender {
         html: "<h2>Plan</h2>".to_owned(),
         key: suzatary_core::rendering::ANSWER
-            .key(&suzatary_core::secretary::answer::Renderable::of("= Plan"))
+            .key(&suzatary_core::answer::Renderable::of("= Plan"))
             .expect("a block prints"),
     }]);
     samples.add([row(1)]);
@@ -2618,7 +2619,7 @@ fn the_answers_vector_holds_every_answer() {
     let block = wire::BlockRow {
         source: "= Plan".to_owned(),
         plain: "Plan".to_owned(),
-        kind: suzatary_core::secretary::answer::Kind::Heading,
+        kind: suzatary_core::answer::Kind::Heading,
         html: Some("<h2>Plan</h2>".to_owned()),
     };
     samples.add([wire::BriefingsPayload {
@@ -2699,7 +2700,7 @@ fn the_answers_vector_holds_every_answer() {
             message: suzatary_core::mail::MailMessage {
                 row: mail_row(),
                 thread: "000000000000c3fb".to_owned(),
-                headers: vec![suzatary_core::mail::MailHeader {
+                headers: vec![suzatary_core::message_part::MailHeader {
                     name: "From".to_owned(),
                     value: CAST.counsel.email.to_owned(),
                 }],

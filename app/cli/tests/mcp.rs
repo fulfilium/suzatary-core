@@ -517,7 +517,7 @@ fn the_agents_reads_of_the_memory_write_no_file() {
                 .expect("a fact"),
             suzatary_core::secretary::memory::Kind::Owner,
             &suzatary_core::secretary::memory::Origin::Turn {
-                conversation: suzatary_core::secretary::store::ConversationId::new("a")
+                conversation: suzatary_core::conversation_id::ConversationId::new("a")
                     .expect("a slug"),
                 turn: 0,
             },
@@ -526,7 +526,7 @@ fn the_agents_reads_of_the_memory_write_no_file() {
         .expect("the box remembers");
     let remembering = suzatary_cli::wiring::Remembering::reader(&read);
     let lines = remembering.memories().digests.lines;
-    let id = suzatary_core::secretary::store::ConversationId::new("permits").expect("a slug");
+    let id = suzatary_core::conversation_id::ConversationId::new("permits").expect("a slug");
     let at = suzatary_core::capability::Clock::now(&suzatary_io::clock::SystemClock);
     for (held, entry) in [
         suzatary_core::secretary::store::Entry::Opened {

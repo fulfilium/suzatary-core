@@ -109,7 +109,7 @@ pub(crate) fn remove(
             }
         }
         Table::Folder => pull_top(&mut doc, "secretary", "drive_allow", |held| {
-            held.parse::<suzatary_core::drive::DrivePath>()
+            held.parse::<suzatary_core::drive_path::DrivePath>()
                 .is_ok_and(|folder| folder.to_string() == key.name)
         })?,
         Table::Channel(channel) => {

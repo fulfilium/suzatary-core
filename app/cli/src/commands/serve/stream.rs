@@ -6,8 +6,9 @@ use axum::extract::{RawPathParams, State as AxumState};
 use axum::response::sse::{Event, KeepAlive, Sse};
 use axum::response::{IntoResponse, Response};
 use suzatary_core::capability::Server;
+use suzatary_core::conversation_id::ConversationId;
 use suzatary_core::refusal::Refusal;
-use suzatary_core::secretary::store::{ConversationId, ConversationState};
+use suzatary_core::secretary::store::ConversationState;
 use suzatary_core::store::StoreError;
 use suzatary_core::wire;
 

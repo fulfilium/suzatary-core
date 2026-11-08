@@ -9,8 +9,9 @@ mod common;
 use common::{FakeModel, Fakes};
 use suzatary_core::capability::{Halt, ModelError, Turn};
 use suzatary_core::conversation::round::{Ending, Sink, Why};
+use suzatary_core::conversation_id::ConversationId;
 use suzatary_core::secretary::Bound;
-use suzatary_core::secretary::store::{ConversationId, Kind};
+use suzatary_core::secretary::store::Kind;
 
 fn id() -> ConversationId {
     ConversationId::new("2026-09-02-1").expect("a slug")
