@@ -12,6 +12,9 @@ use crate::repo_ids::{CommitId, RepoName, RepoNameError, RepoPath, Rev};
 /// The most a patch may be: what a person reads on a phone before tapping.
 pub(crate) const MAX_PATCH_BYTES: usize = 64 * 1024;
 
+/// The most a public patch and its message may be after words not the owner's: a screenful.
+pub(crate) const MAX_SHOWN_BYTES: usize = 4 * 1024;
+
 /// A unified diff of text files, bounded.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(try_from = "String", into = "String")]
@@ -81,8 +84,8 @@ impl From<Patch> for String {
     }
 }
 
-/// The token the secretary reaches `[[secretary.repos]]` with: their reads, a tapped patch's
-/// push and its pull request. Scoped to those repositories alone, never the data repository's.
+/// The token for `[[secretary.repos]]` alone: their reads, and a tapped patch's push and pull
+/// request.
 pub const TOKEN: &str = "SUZATARY_REPOS_TOKEN";
 
 /// Who can read a repository once something is pushed to it.
@@ -145,15 +148,12 @@ pub struct RepoTarget {
     /// a nonzero exit refuses the push with its output. `None` runs nothing.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub check: Option<String>,
-    /// That a patch may be pushed here though the repository is public, said in so many words:
-    /// a pushed branch is readable by anyone, and what the secretary writes into one it wrote
-    /// after reading mail. Absent, a public repository takes no patch.
+    /// That a patch may be pushed here though the repository is public; absent, it takes none.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub public: bool,
 }
 
-/// The repositories this deployment lets the secretary reach: a closed list from the instance
-/// file, all in one account. Anything else is refused by name before `git` or GitHub is asked.
+/// The repositories the secretary may reach, all of one account; any other is refused by name.
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct Declared(BTreeMap<RepoName, RepoTarget>);
 
@@ -201,12 +201,10 @@ impl Declared {
         self.0.get(repo)
     }
 
-    /// Whether a patch may be pushed to `repo`, read as `visibility`: a private one that is
-    /// declared, or a public one whose entry says `public = true`.
+    /// Whether a patch may be pushed to `repo`: declared, and if public, `public = true`.
     ///
     /// # Errors
-    /// [`RepoFailure::Unknown`] for one not declared, [`RepoFailure::Public`] for a public one
-    /// whose entry does not say it may be pushed to.
+    /// [`RepoFailure::Unknown`] or [`RepoFailure::Public`].
     pub fn pushable(&self, repo: &RepoName, visibility: Visibility) -> Result<(), RepoFailure> {
         let target = self
             .target(repo)

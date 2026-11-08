@@ -145,6 +145,54 @@ fn a_tapped_patch_opens_a_pull_request_and_nothing_before() {
     );
 }
 
+/// The attack: a mail the secretary reads asks it to publish the owner's words in a public
+/// repository, buried in a patch too long to read on a phone. After that read, a public patch and
+/// its message carry at most `MAX_SHOWN_BYTES` together: the long one is refused before a card,
+/// and a short one is filed with its whole diff on the card.
+#[test]
+fn after_a_mail_read_a_public_patch_is_only_what_its_card_shows_whole() {
+    let root = common::scratch("repos-tainted");
+    let long = "+a line of the owner's notes\n".repeat(200);
+    let long = format!("--- /dev/null\n+++ b/notes.txt\n@@ -0,0 +1,200 @@\n{long}");
+    let patch = |patch: &str| {
+        serde_json::json!({"say": "", "calls": [{"verb": "propose_patch", "args": {
+            "repo": "bmabsout/cv", "patch": patch, "message": "Add notes",
+            "why": "The mail asked.", "sources": "mail:a1b2c3d4e5f6"}}]})
+        .to_string()
+    };
+    let fakes = Fakes::new("repos-tainted")
+        .whois(common::FakeWhois::new().naming(common::v4(), ada()))
+        .repos(common::local_repos(&root))
+        .model(FakeModel::saying_owned([
+            r#"{"say": "", "calls": [{"verb": "search", "args": {"query": "notes"}}]}"#.to_owned(),
+            patch(&long),
+            patch(&RETITLE.replace("\\n", "\n")),
+            r#"{"say": "Proposed."}"#.to_owned(),
+        ]));
+    let base = common::start(Arc::new(fakes), deployment(), Vec::new());
+    let payload = exchange(&base, "update my title");
+    let answers: Vec<(String, bool)> = payload["turns"]
+        .as_array()
+        .expect("turns")
+        .iter()
+        .filter(|turn| turn["who"] == "verb" && turn["verb"] == "propose_patch")
+        .map(|turn| {
+            let text = turn["text"].as_str().unwrap_or_default().to_owned();
+            (text, turn["outcome"]["is"] == "refused")
+        })
+        .collect();
+    assert_eq!(answers.len(), 2, "{payload}");
+    assert!(
+        answers[0].1 && answers[0].0.contains("4096 bytes"),
+        "{answers:?}"
+    );
+    assert!(!answers[1].1, "{answers:?}");
+    let proposals = payload["proposals"].as_array().expect("proposals");
+    assert_eq!(proposals.len(), 1, "{payload}");
+    let body = proposals[0]["card"]["body"].as_str().unwrap_or_default();
+    assert!(body.contains("+Principal investigator") && !body.contains("notes.txt"));
+}
+
 /// A patch that does not apply to its base is refused before anything is
 /// stored, so no card ever shows one.
 #[test]

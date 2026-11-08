@@ -1206,15 +1206,15 @@ secretary repo_grep [text mistyped] refused 400: text must be a string
 secretary repo_grep [text garbled] answered {"at":"0000000000000000000000000000000000000000","lines":[],"repo":"owner/name"}
 secretary repo_grep [chain unknown] refused 404: no chain named 'nowhere' — this deployment serves life
 secretary repo_grep [chain mistyped] refused 400: chain must be a string or null
-secretary propose_patch [valid] answered {"base":"0000000000000000000000000000000000000000","files":["x"],"next":"The owner sees the whole diff and the commit message on a card. Their tap opens exactly this as a pull request on a branch of its own; nothing reaches the default branch until they merge it.","proposed":0,"repo":"owner/name","visibility":"private"}
-secretary propose_patch [base given] answered {"base":"0123456789abcdef0123456789abcdef01234567","files":["x"],"next":"The owner sees the whole diff and the commit message on a card. Their tap opens exactly this as a pull request on a branch of its own; nothing reaches the default branch until they merge it.","proposed":0,"repo":"owner/name","visibility":"private"}
-secretary propose_patch [base null] answered {"base":"0000000000000000000000000000000000000000","files":["x"],"next":"The owner sees the whole diff and the commit message on a card. Their tap opens exactly this as a pull request on a branch of its own; nothing reaches the default branch until they merge it.","proposed":0,"repo":"owner/name","visibility":"private"}
+secretary propose_patch [valid] answered {"base":"0000000000000000000000000000000000000000","files":["x"],"proposed":0,"repo":"owner/name","visibility":"private"}
+secretary propose_patch [base given] answered {"base":"0123456789abcdef0123456789abcdef01234567","files":["x"],"proposed":0,"repo":"owner/name","visibility":"private"}
+secretary propose_patch [base null] answered {"base":"0000000000000000000000000000000000000000","files":["x"],"proposed":0,"repo":"owner/name","visibility":"private"}
 secretary propose_patch [base mistyped] refused 400: base must be a string or null
 secretary propose_patch [base garbled] refused 400: a revision is a branch, a tag or a commit: letters, digits, '-', '_', '.' and '/', got "?"
 secretary propose_patch [message missing] refused 400: message is required
 secretary propose_patch [message null] refused 400: message is required
 secretary propose_patch [message mistyped] refused 400: message must be a string
-secretary propose_patch [message garbled] answered {"base":"0000000000000000000000000000000000000000","files":["x"],"next":"The owner sees the whole diff and the commit message on a card. Their tap opens exactly this as a pull request on a branch of its own; nothing reaches the default branch until they merge it.","proposed":0,"repo":"owner/name","visibility":"private"}
+secretary propose_patch [message garbled] answered {"base":"0000000000000000000000000000000000000000","files":["x"],"proposed":0,"repo":"owner/name","visibility":"private"}
 secretary propose_patch [patch missing] refused 400: patch is required
 secretary propose_patch [patch null] refused 400: patch is required
 secretary propose_patch [patch mistyped] refused 400: patch must be a string
@@ -1224,12 +1224,12 @@ secretary propose_patch [repo null] refused 400: repo is required
 secretary propose_patch [repo mistyped] refused 400: repo must be a string
 secretary propose_patch [repo garbled] refused 400: a repository is owner/name, letters, digits, '-', '_' and '.', got "?"
 secretary propose_patch [revises given] refused 404: conversation default has no proposal 3 (it has 0)
-secretary propose_patch [revises null] answered {"base":"0000000000000000000000000000000000000000","files":["x"],"next":"The owner sees the whole diff and the commit message on a card. Their tap opens exactly this as a pull request on a branch of its own; nothing reaches the default branch until they merge it.","proposed":0,"repo":"owner/name","visibility":"private"}
+secretary propose_patch [revises null] answered {"base":"0000000000000000000000000000000000000000","files":["x"],"proposed":0,"repo":"owner/name","visibility":"private"}
 secretary propose_patch [revises mistyped] refused 400: invalid type: string "7", expected usize
 secretary propose_patch [revises negative] refused 400: invalid value: integer `-1`, expected usize
 secretary propose_patch [revises fractional] refused 400: invalid type: floating point `1.5`, expected usize
-secretary propose_patch [serves given] answered {"base":"0000000000000000000000000000000000000000","files":["x"],"next":"The owner sees the whole diff and the commit message on a card. Their tap opens exactly this as a pull request on a branch of its own; nothing reaches the default branch until they merge it.","proposed":0,"repo":"owner/name","visibility":"private"}
-secretary propose_patch [serves null] answered {"base":"0000000000000000000000000000000000000000","files":["x"],"next":"The owner sees the whole diff and the commit message on a card. Their tap opens exactly this as a pull request on a branch of its own; nothing reaches the default branch until they merge it.","proposed":0,"repo":"owner/name","visibility":"private"}
+secretary propose_patch [serves given] answered {"base":"0000000000000000000000000000000000000000","files":["x"],"proposed":0,"repo":"owner/name","visibility":"private"}
+secretary propose_patch [serves null] answered {"base":"0000000000000000000000000000000000000000","files":["x"],"proposed":0,"repo":"owner/name","visibility":"private"}
 secretary propose_patch [serves mistyped] refused 400: invalid type: integer `7`, expected a string
 secretary propose_patch [serves garbled] refused 400: serves: a reference is todo:<chain>/<id>, mail:<hash>, thread:<id>, briefing:<YYYY-MM-DD>, proposal:<conversation>/<n>, batch:<chain>/<head>, round:<conversation>/<turn> or note:<conversation>/<turn>, got "?"
 secretary propose_patch [sources missing] refused 400: sources is required
@@ -1239,7 +1239,7 @@ secretary propose_patch [sources garbled] refused 400: sources: a reference is t
 secretary propose_patch [why missing] refused 400: why is required
 secretary propose_patch [why null] refused 400: invalid type: unit value, expected a string
 secretary propose_patch [why mistyped] refused 400: invalid type: integer `7`, expected a string
-secretary propose_patch [why garbled] answered {"base":"0000000000000000000000000000000000000000","files":["x"],"next":"The owner sees the whole diff and the commit message on a card. Their tap opens exactly this as a pull request on a branch of its own; nothing reaches the default branch until they merge it.","proposed":0,"repo":"owner/name","visibility":"private"}
+secretary propose_patch [why garbled] answered {"base":"0000000000000000000000000000000000000000","files":["x"],"proposed":0,"repo":"owner/name","visibility":"private"}
 secretary propose_patch [chain unknown] refused 404: no chain named 'nowhere' — this deployment serves life
 secretary propose_patch [chain mistyped] refused 400: chain must be a string or null
 secretary propose_coding_session [valid] answered {"next":"The owner reads the whole task on a card. Their tap starts the session; its branch and report come back to this conversation as a card of their own. You cannot start one and there is no verb that can.","proposed":0,"sentence":"start a coding session: Hello"}

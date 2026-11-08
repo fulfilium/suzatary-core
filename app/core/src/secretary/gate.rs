@@ -1,17 +1,16 @@
-//! What an effect that binds at once may do in a round: the one decision every such verb takes.
+//! What an effect that binds may do in a round: the one decision every such verb takes.
 
 use crate::secretary::memory::Origin;
 use crate::secretary::store::Stored;
 use crate::secretary::surface::Binding;
 use crate::secretary::taint;
 
-/// What a [`Binding`] does in a round, as a function of the transcript alone.
+/// What an [`Asked`] effect does in a round, as a function of the transcript alone.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum Gate {
-    /// The owner opened the round and the model holds none of anybody else's words: the effect
-    /// binds, as said at this turn.
+    /// The owner opened the round and the model holds nobody else's words: it binds.
     Binds(Origin),
-    /// Anything else the effect may do files a card the owner taps, with its reasons.
+    /// It files a card the owner taps, with its reasons.
     Card,
     /// The effect does nothing in this round, for this reason.
     Refused(&'static str),
@@ -22,15 +21,28 @@ pub(crate) const NO_OPENER: &str = "this round was not opened by the owner's own
                              a review, a sweep, or a question the box asked), so nothing is \
                              remembered from it; ask them in a round they open";
 
+/// What the gate is asked about.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum Asked {
+    Binds(Binding),
+    /// A public pull request: [`Gate::Card`] carries only what its card shows whole.
+    Publishes,
+}
+
+impl From<Binding> for Asked {
+    fn from(binding: Binding) -> Self {
+        Asked::Binds(binding)
+    }
+}
+
 impl Gate {
-    /// The gate of `binding` in the round `stored` records. An email that reaches the model can
-    /// ask for any effect, so only a round with the owner's words and nobody else's binds.
+    /// The gate of `asked` in `stored`: only a round with the owner's words alone binds.
     #[must_use]
-    pub(crate) fn of(binding: Binding, stored: &Stored) -> Self {
-        match (taint::opener(stored), binding) {
+    pub(crate) fn of(asked: impl Into<Asked>, stored: &Stored) -> Self {
+        match (taint::opener(stored), asked.into()) {
             (Some(said), _) if !taint::tainted(stored) => Gate::Binds(said),
-            (Some(_), _) | (None, Binding::Writes) => Gate::Card,
-            (None, Binding::Remembers) => Gate::Refused(NO_OPENER),
+            (Some(_), _) | (None, Asked::Binds(Binding::Writes) | Asked::Publishes) => Gate::Card,
+            (None, Asked::Binds(Binding::Remembers)) => Gate::Refused(NO_OPENER),
         }
     }
 }
@@ -210,8 +222,8 @@ mod tests {
     }
 
     proptest! {
-        /// No binding effect binds after an answer that can carry somebody else's words, and a
-        /// write is never refused, only carded.
+        /// Nothing the gate is asked binds after an answer that can carry somebody else's words,
+        /// and a write or a publication is never refused, only carded.
         #[test]
         fn a_tainted_answer_never_lets_an_effect_bind(lines in proptest::collection::vec(any_line(), 0..12)) {
             let round = stored(lines.clone());
@@ -220,12 +232,12 @@ mod tests {
                 Entry::Said { turn: Turn::Tool { verb, .. }, .. }
                     if !matches!(verb.as_str(), "context" | "weather" | "remember" | "forget" | "consolidate" | "add_topics" | "revise_topics")
             ));
-            for binding in [Binding::Writes, Binding::Remembers] {
-                let gate = Gate::of(binding, &round);
+            for asked in [Binding::Writes.into(), Binding::Remembers.into(), Asked::Publishes] {
+                let gate = Gate::of(asked, &round);
                 if read_something {
-                    prop_assert!(!matches!(gate, Gate::Binds(_)), "{binding:?}");
+                    prop_assert!(!matches!(gate, Gate::Binds(_)), "{asked:?}");
                 }
-                if binding == Binding::Writes {
+                if asked != Asked::Binds(Binding::Remembers) {
                     prop_assert!(!matches!(gate, Gate::Refused(_)));
                 }
             }
