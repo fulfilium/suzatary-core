@@ -249,7 +249,10 @@ impl Operator {
             .map(|(header, value)| (header.to_owned(), value))
             .chain([
                 (OPERATOR_HEADER.to_owned(), self.actor.as_str().to_owned()),
-                (suzatary_core::gate::ACT_HEADER.to_owned(), "1".to_owned()),
+                (
+                    suzatary_core::signatures::ACT_HEADER.to_owned(),
+                    "1".to_owned(),
+                ),
                 ("content-type".to_owned(), "application/json".to_owned()),
             ])
             .collect();

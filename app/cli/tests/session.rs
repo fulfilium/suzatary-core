@@ -219,15 +219,15 @@ fn a_retraction_reopens_a_stored_session() {
         },
     )
     .expect("the session line appends");
-    let tap = suzatary_core::secretary::tap::Tap::of(
+    let tap = suzatary_core::signatures::Tap::of(
         &suzatary_core::signatures::scene("ada"),
-        &suzatary_core::gate::ActHeaders {
+        &suzatary_core::signatures::ActHeaders {
             act: Some("1"),
             content_type: Some("application/json"),
             site: Some("same-origin"),
-            client: Some(suzatary_core::gate::CLIENT),
+            client: Some(suzatary_core::signatures::CLIENT),
         },
-        suzatary_core::seat::Seat::Device,
+        suzatary_core::signatures::Seat::Device,
     )
     .expect("the owner's tap");
     let node = prodrome_core::event::Hash::new("ab".repeat(32)).expect("a name");

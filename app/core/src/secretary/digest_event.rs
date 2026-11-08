@@ -31,7 +31,7 @@ use crate::secretary::compact_ask::{Asking, Beside};
 use crate::secretary::digest_line::{Line, NODE_BYTES};
 use crate::secretary::salted_text::{Text, TextName};
 use crate::secretary::taint::Taint;
-use crate::secretary::tap::Tap;
+use crate::signatures::Tap;
 
 /// One event about one node: which, when, who wrote it, and what it says.
 pub type DigestEvent = Event<Said>;

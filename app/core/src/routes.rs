@@ -1509,7 +1509,7 @@ pub fn releases(
 pub fn me(
     deployment: &Deployment,
     chain: &ChainPolicy,
-    admitted: &crate::gate::Admitted,
+    admitted: &crate::signatures::Admitted,
 ) -> wire::MePayload {
     let login = admitted.login();
     wire::MePayload {

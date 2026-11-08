@@ -5,8 +5,8 @@ use suzatary_core::conversation_id::ConversationId;
 use suzatary_core::reference::ProposalRef;
 use suzatary_core::refusal::Refusal;
 use suzatary_core::secretary::routes::{self as secretary_routes, Effectors, TapAnswer};
-use suzatary_core::secretary::tap::Tap;
 use suzatary_core::settings::EditError;
+use suzatary_core::signatures::Tap;
 use suzatary_core::wire;
 
 use super::body::{Body, MAX_ACT_BYTES};

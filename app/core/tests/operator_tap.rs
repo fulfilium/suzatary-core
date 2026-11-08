@@ -2,13 +2,14 @@
 //! grant a way to, over one proposal of every kind; the device's tap performs them all.
 
 use suzatary_core::calendar::When;
-use suzatary_core::gate::ActHeaders;
 use suzatary_core::google::{NewEvent, Scope};
 use suzatary_core::mail::address::EmailAddress;
-use suzatary_core::seat::Seat;
 use suzatary_core::secretary::acts::Act;
+use suzatary_core::secretary::sending::performs;
 use suzatary_core::secretary::store::Proposal;
-use suzatary_core::secretary::tap::Tap;
+use suzatary_core::signatures::ActHeaders;
+use suzatary_core::signatures::Seat;
+use suzatary_core::signatures::Tap;
 
 const SHA: &str = "9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08";
 
@@ -131,8 +132,8 @@ fn the_operators_tap_performs_every_card_but_the_ones_that_send() {
     );
     let (device, operator) = (tap(Seat::Device), tap(Seat::Operator));
     for proposal in &every {
-        assert!(device.performs(proposal).is_ok(), "{proposal:?}");
-        match operator.performs(proposal) {
+        assert!(performs(&device, proposal).is_ok(), "{proposal:?}");
+        match performs(&operator, proposal) {
             Ok(()) => assert!(!sends(proposal), "the operator sends: {proposal:?}"),
             Err(refused) => {
                 assert!(

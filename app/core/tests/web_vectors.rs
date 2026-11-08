@@ -795,7 +795,7 @@ fn conversation_answer(stored: &Stored) -> ConversationAnswer {
 #[test]
 fn the_client_vector_holds_the_box_s_minimum() {
     write_or_check(
-        &serde_json::json!({ "min": suzatary_core::gate::CLIENT_MIN }),
+        &serde_json::json!({ "min": suzatary_core::signatures::CLIENT_MIN }),
         "client.json",
     );
 }

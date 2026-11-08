@@ -107,7 +107,7 @@ fi
 
 echo "==> the address has one writer"
 
-# A spec that spells the write headers goes stale when `gate::CLIENT_MIN` rises (426), so every
+# A spec that spells the write headers goes stale when `signatures::CLIENT_MIN` rises (426), so every
 # spec uses the harness's `WRITE_HEADERS`.
 spelled=$(grep -rniE --binary-files=text --include='*.ts' 'x-suzatary-(act|client)' web/e2e | grep -v '^web/e2e/harness.ts:' || true)
 if [[ -n "$spelled" ]]; then

@@ -4,10 +4,12 @@ use axum::http::HeaderMap;
 use prodrome_core::event::Actor;
 use prodrome_core::sign::PublicKey;
 use suzatary_core::capability::Login;
-use suzatary_core::gate::{ActHeaders, Admitted, actor_of, check_csrf, writer_of};
+use suzatary_core::gate::{actor_of, writer_of};
 use suzatary_core::record::TodoEvent;
 use suzatary_core::refusal::Refusal;
-use suzatary_core::secretary::tap::Tap;
+use suzatary_core::signatures::Admitted;
+use suzatary_core::signatures::Tap;
+use suzatary_core::signatures::{ActHeaders, check_csrf};
 use suzatary_core::signatures::{Asking, Possessed, Proven, Trusted, Unproven};
 use suzatary_core::store::Prodrome;
 
@@ -227,7 +229,11 @@ impl Guarded for Tap {
         headers: &ActHeaders<'_>,
         proof: &Trusted,
     ) -> Result<Self, Refusal> {
-        Tap::of(proof, headers, suzatary_core::seat::Seat::of(admitted))
+        Tap::of(
+            proof,
+            headers,
+            suzatary_core::signatures::Seat::of(admitted),
+        )
     }
 }
 
@@ -303,7 +309,7 @@ pub fn act_headers(headers: &HeaderMap) -> ActHeaders<'_> {
     let read = |name: &str| headers.get(name).and_then(|value| value.to_str().ok());
     ActHeaders {
         act: read("x-suzatary-act"),
-        client: read(suzatary_core::gate::CLIENT_HEADER),
+        client: read(suzatary_core::signatures::CLIENT_HEADER),
         content_type: read("content-type"),
         site: read("sec-fetch-site"),
     }

@@ -393,11 +393,10 @@ fn the_device_flow_consent_is_claimed_in_exactly_the_named_places() {
          (offset {cfg_test_offset}), so the only NON-TEST caller stays suzatary auth alone: \
          {oauth_offsets:?}"
     );
-    assert!(
-        by_tap.iter().all(
-            |p| p == "app/core/src/secretary/tap.rs" || p == "app/core/src/secretary/routes.rs"
-        ),
-        "given_by_tap callers: {by_tap:?}"
+    assert_eq!(
+        by_tap,
+        vec!["app/core/src/secretary/routes.rs".to_owned()],
+        "given_by_tap callers"
     );
 }
 

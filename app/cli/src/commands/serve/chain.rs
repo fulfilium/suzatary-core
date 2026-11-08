@@ -7,9 +7,9 @@ use suzatary_core::conversation_id::DEFAULT;
 use suzatary_core::reference::TodoRef;
 use suzatary_core::refusal::{Refusal, Status};
 use suzatary_core::routes;
-use suzatary_core::seat::Seat;
 use suzatary_core::secretary::acts::{self, ActLine};
-use suzatary_core::secretary::tap::Tap;
+use suzatary_core::signatures::Seat;
+use suzatary_core::signatures::Tap;
 use suzatary_core::{query, wire};
 
 use super::body::{Body, MAX_ACT_BYTES};

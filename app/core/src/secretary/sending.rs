@@ -1,8 +1,10 @@
 //! Whether performing a proposal sends mail, by a match the compiler holds complete.
 
 use crate::google::Scope;
+use crate::refusal::Refusal;
 use crate::secretary::acts::Act;
 use crate::secretary::store::Proposal;
+use crate::signatures::{Seat, Tap};
 
 /// Whether a tap on a proposal puts mail on a wire, or gives the box the consent to.
 /// The greater of two sends when either does.
@@ -62,5 +64,21 @@ impl Sending {
             Scope::Mail => Sending::Sends,
             Scope::Calendar => Sending::SendsNothing,
         }
+    }
+}
+
+/// Whether `tap` may perform `proposal`: the operator's tap performs no card that sends,
+/// because sending stays the owner's tap on his own device.
+///
+/// # Errors
+/// [`Refusal::forbidden`] for the operator's tap on a card that sends.
+pub fn performs(tap: &Tap, proposal: &Proposal) -> Result<(), Refusal> {
+    match (tap.seat(), Sending::of(proposal)) {
+        (Seat::Operator, Sending::Sends) => Err(Refusal::forbidden(
+            "this card sends mail, and sending stays the owner's tap on his own device: \
+             the operator at the box's terminal may not perform it",
+        )),
+        (Seat::Device, Sending::Sends | Sending::SendsNothing)
+        | (Seat::Operator, Sending::SendsNothing) => Ok(()),
     }
 }

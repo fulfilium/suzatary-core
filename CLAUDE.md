@@ -151,7 +151,7 @@ confirm. Everything below derives from this.
   `[persona] zone`. A wrong clock produces a future-dated object, which
   `verify` reports and nothing rewrites; a fold reads events with `at <= t`.
   Equal-instant contradictions resolve deterministically but arbitrarily, by
-  canonical print. `gate::CLIENT_MIN` refuses an older bundle with 426 (→
+  canonical print. `signatures::CLIENT_MIN` refuses an older bundle with 426 (→
   `instantsutc`).
 - **Sampling.** `Within` is evaluated at 65 evenly spaced points; a composite
   term's curve (Conj, Offset, Gate, Shift, Within, Importance, After) is drawn

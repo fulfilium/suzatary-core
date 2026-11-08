@@ -9,8 +9,8 @@ use std::sync::Arc;
 use common::{FakeModel, Fakes};
 use suzatary_cli::commands::{ask, tap};
 use suzatary_core::cast::CAST;
-use suzatary_core::seat::Seat;
 use suzatary_core::secretary::stamp::{Speaker, Stamp};
+use suzatary_core::signatures::Seat;
 
 fn owner() -> suzatary_core::capability::Login {
     common::login("ada@example.com")

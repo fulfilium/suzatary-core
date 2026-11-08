@@ -238,8 +238,8 @@ fn round(base: &str, key: &prodrome_core::sign::Secret, round: usize) {
             .post(&format!("{base}{said}"))
             .header("x-suzatary-act", "1")
             .header(
-                suzatary_core::gate::CLIENT_HEADER,
-                suzatary_core::gate::CLIENT_MIN.to_string(),
+                suzatary_core::signatures::CLIENT_HEADER,
+                suzatary_core::signatures::CLIENT_MIN.to_string(),
             )
             .header("sec-fetch-site", "same-origin")
             .header("content-type", "application/json"),

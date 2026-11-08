@@ -107,7 +107,6 @@ pub mod stream;
 pub mod surface;
 pub mod sweep;
 pub mod taint;
-pub mod tap;
 pub mod tapped;
 pub mod targets;
 pub mod texts;

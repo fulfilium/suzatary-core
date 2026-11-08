@@ -10,7 +10,7 @@ use suzatary_core::held_value::{Handle, Holder, Holders, Place};
 use suzatary_core::refusal::Refusal;
 use suzatary_core::secretary::opening::Opening;
 use suzatary_core::secretary::read_holders::ReadHolders;
-use suzatary_core::secretary::tap::Tap;
+use suzatary_core::signatures::Tap;
 use suzatary_core::wire::{self, RevealPayload};
 
 use super::State;

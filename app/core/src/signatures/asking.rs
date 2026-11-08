@@ -43,7 +43,7 @@ pub struct Possessed(Proven);
 
 /// A request signed by a key the history trusts for its actor on every chain the route can
 /// write: the only proof a route that acts for the owner may hold, and the one a
-/// [`crate::secretary::tap::Tap`] is minted from.
+/// [`crate::signatures::Tap`] is minted from.
 ///
 /// It has no constructor but [`Asking::trusted`], which reads the trust, so holding one is the
 /// proof that reading passed.

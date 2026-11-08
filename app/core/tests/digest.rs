@@ -291,17 +291,17 @@ fn accept_lines(
 }
 
 /// A tap as the door mints one for the owner's trusted phone.
-fn tap() -> suzatary_core::secretary::tap::Tap {
-    use suzatary_core::gate::ActHeaders;
-    suzatary_core::secretary::tap::Tap::of(
+fn tap() -> suzatary_core::signatures::Tap {
+    use suzatary_core::signatures::ActHeaders;
+    suzatary_core::signatures::Tap::of(
         &suzatary_core::signatures::scene("ada"),
         &ActHeaders {
             act: Some("1"),
             content_type: Some("application/json"),
             site: Some("same-origin"),
-            client: Some(suzatary_core::gate::CLIENT),
+            client: Some(suzatary_core::signatures::CLIENT),
         },
-        suzatary_core::seat::Seat::Device,
+        suzatary_core::signatures::Seat::Device,
     )
     .expect("the owner's tap")
 }

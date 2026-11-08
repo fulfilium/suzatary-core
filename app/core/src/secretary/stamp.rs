@@ -9,8 +9,8 @@ use serde::{Deserialize, Serialize};
 
 use crate::chain_set::ChainSet;
 use crate::reference::{Reference, TodoRef};
-use crate::seat::Seat;
 use crate::secretary::own_round::OwnRound;
+use crate::signatures::Seat;
 
 /// A said line's stamp.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

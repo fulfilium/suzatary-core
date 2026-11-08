@@ -346,7 +346,7 @@ list is so a reader knows where.
   fetch, and a page that cannot confirm it says so with a date. (`cache.ts`,
   `stale.ts`.)
 - **The tap carries an index, never a body.** What is performed is what was
-  stored and shown. (`secretary::tap`; `app/cli/tests/writes.rs`.)
+  stored and shown. (`signatures::Tap`; `app/cli/tests/writes.rs`.)
 - **`dom.ts` never parses markup; `rich.ts` is the one door**, and the build
   refuses a second. (`scripts/build-web.sh`.)
 - **Five slots on the bar**, and which four is the rule "what a phone opens the

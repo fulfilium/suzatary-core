@@ -17,7 +17,9 @@
 //!
 //! [`Proof`]: prodrome_core::sign::Proof
 
+mod admitted;
 mod asking;
+mod csrf;
 mod custody;
 mod enrolment;
 mod epoch;
@@ -36,10 +38,13 @@ mod requested;
 #[path = "../tests/support/scene.rs"]
 mod scene;
 mod signers;
+mod tap;
 mod trust;
 mod unproven;
 
+pub use admitted::{Admitted, Seat};
 pub use asking::{Asking, Possessed, Proven, Request, Trusted, refused};
+pub use csrf::{ACT_HEADER, ActHeaders, CLIENT, CLIENT_HEADER, CLIENT_MIN, check_csrf};
 pub use custody::Custody;
 pub use enrolment::{Endorsement, Enrolling, Enrolment};
 pub use epoch::since_epoch;
@@ -60,6 +65,7 @@ pub use requested::{Answer, Requested};
 #[cfg(any(test, feature = "nothing"))]
 pub use scene::scene;
 pub use signers::Signers;
+pub use tap::Tap;
 pub use trust::{KEPT_CHECKS, Trust};
 pub use unproven::Unproven;
 

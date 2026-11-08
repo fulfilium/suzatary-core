@@ -3495,8 +3495,8 @@ pub fn act_unsigned(url: &str, body: &serde_json::Value) -> ureq::http::Response
         .post(url)
         .header("x-suzatary-act", "1")
         .header(
-            suzatary_core::gate::CLIENT_HEADER,
-            suzatary_core::gate::CLIENT_MIN.to_string(),
+            suzatary_core::signatures::CLIENT_HEADER,
+            suzatary_core::signatures::CLIENT_MIN.to_string(),
         )
         .header("sec-fetch-site", "same-origin")
         .send_json(body)
@@ -3635,8 +3635,8 @@ fn sent_bytes_signed(
                 .post(url)
                 .header("x-suzatary-act", "1")
                 .header(
-                    suzatary_core::gate::CLIENT_HEADER,
-                    suzatary_core::gate::CLIENT_MIN.to_string(),
+                    suzatary_core::signatures::CLIENT_HEADER,
+                    suzatary_core::signatures::CLIENT_MIN.to_string(),
                 )
                 .header("sec-fetch-site", "same-origin")
                 .header("content-type", "application/json"),

@@ -24,8 +24,8 @@ use crate::secretary::read_holders::ReadHolders;
 use crate::secretary::readings::{self, Draw, Dress, Window};
 use crate::secretary::responded::{Done, Performed, Tried};
 use crate::secretary::store::{Draft, Entry, Kind, Proposal, Stored, Title};
-use crate::secretary::tap::Tap;
 use crate::secretary::transcript;
+use crate::signatures::Tap;
 use crate::wire;
 
 /// Sending a proposed message, the one effect behind a tap; deliberately in no capability bundle,
@@ -1002,7 +1002,7 @@ pub fn tap(
     let (id, index) = (&card.conversation, card.index);
     let stored = super::read(caps.secretary.conversations, id)?;
     let standing = stored.standing(index, &inbox::fold(caps.secretary.inbox)?)?;
-    tap.performs(&standing.object.asked.proposal)?;
+    crate::secretary::sending::performs(tap, &standing.object.asked.proposal)?;
     let hold = || caps.secretary.memories.hold();
     let prepared = Prepared::of(
         &standing.object.asked.proposal,
@@ -2355,7 +2355,7 @@ pub fn record(digests: &crate::secretary::digests::Digests<'_>) -> Answered<wire
 pub fn retract(
     memories: crate::secretary::memories::Memories<'_>,
     clock: &dyn Clock,
-    tap: &crate::secretary::tap::Tap,
+    tap: &crate::signatures::Tap,
     node: &prodrome_core::event::Hash,
 ) -> Answered<wire::RecordPayload> {
     memories.hold()?.retract(node, clock.now(), tap)?;
@@ -2813,13 +2813,13 @@ mod tests {
     fn tapped() -> Tap {
         Tap::of(
             &crate::signatures::scene("ada"),
-            &crate::gate::ActHeaders {
+            &crate::signatures::ActHeaders {
                 act: Some("1"),
-                client: Some(crate::gate::CLIENT),
+                client: Some(crate::signatures::CLIENT),
                 content_type: Some("application/json"),
                 site: Some("same-origin"),
             },
-            crate::seat::Seat::Device,
+            crate::signatures::Seat::Device,
         )
         .expect("a tap")
     }

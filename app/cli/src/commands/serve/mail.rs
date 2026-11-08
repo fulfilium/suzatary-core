@@ -6,7 +6,7 @@ use suzatary_core::refusal::Refusal;
 use suzatary_core::{query, routes, wire};
 
 use suzatary_core::mail::watch::{self, WatchId};
-use suzatary_core::secretary::tap::Tap;
+use suzatary_core::signatures::Tap;
 
 use super::Chained;
 use super::call::Call;

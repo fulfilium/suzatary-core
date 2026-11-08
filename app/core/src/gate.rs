@@ -6,34 +6,10 @@ use std::net::IpAddr;
 
 use prodrome_core::event::Actor;
 
-use crate::capability::{Login, Peer, Whois, WhoisError};
+use crate::capability::{Peer, Whois, WhoisError};
 use crate::deployment::Deployment;
 use crate::refusal::{Refusal, shown};
-
-/// Who got through the door; the box's own arm carries no login, so it can never write.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum Admitted {
-    /// A named tailnet peer, in this deployment's viewer roster.
-    Peer(Login),
-    /// This box's own node, as whois names it by its stable identity, and therefore nameless.
-    Local,
-    /// This box's own node on a request that names the deployment's root key and an actor some
-    /// login writes as: the box's operator at its terminal. The gate does not prove the claim;
-    /// the door proves the root's signature before any write ([`writer_of`]), and [`actor_of`]
-    /// refuses it, so a read route never takes an actor from it.
-    Operator(Actor),
-}
-
-impl Admitted {
-    /// The login, for a log line; `None` for the local shell.
-    #[must_use]
-    pub fn login(&self) -> Option<&Login> {
-        match self {
-            Admitted::Peer(login) => Some(login),
-            Admitted::Local | Admitted::Operator(_) => None,
-        }
-    }
-}
+use crate::signatures::Admitted;
 
 /// The headers a proxy writes. A request carrying one came through something that is not its
 /// peer, so the socket's address names the proxy and whois would answer for the wrong party.
@@ -195,94 +171,6 @@ pub fn actor_of(deployment: &Deployment, admitted: &Admitted) -> Result<Actor, R
         .ok_or_else(|| Refusal::forbidden(format!("{login} may read this app but not write to it")))
 }
 
-/// The app's own header, which forces a CORS preflight this server never answers.
-pub const ACT_HEADER: &str = "x-suzatary-act";
-
-/// What a request carries that the CSRF triple reads.
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
-pub struct ActHeaders<'a> {
-    /// `X-Suzatary-Act`, absent as `None`.
-    pub act: Option<&'a str>,
-    /// `X-Suzatary-Client`, the write contract the page's build keeps, absent as `None`.
-    pub client: Option<&'a str>,
-    /// `Content-Type`, absent as `None`.
-    pub content_type: Option<&'a str>,
-    /// `Sec-Fetch-Site`, absent as `None`, which passes because non-browsers do not send it.
-    pub site: Option<&'a str>,
-}
-
-/// The CSRF triple: did code this app served make this request.
-pub fn check_csrf(headers: &ActHeaders<'_>) -> Result<(), Refusal> {
-    if headers.act != Some("1") {
-        return Err(Refusal::forbidden(format!(
-            "a write must carry {ACT_HEADER}: 1"
-        )));
-    }
-    // Parameters such as `charset` do not change the content type.
-    let kind = headers
-        .content_type
-        .unwrap_or_default()
-        .split(';')
-        .next()
-        .unwrap_or_default()
-        .trim()
-        .to_ascii_lowercase();
-    if kind != "application/json" {
-        return Err(Refusal::forbidden(
-            "a write must be Content-Type: application/json",
-        ));
-    }
-    match headers.site {
-        None => Ok(()),
-        Some("same-origin") => current(headers.client),
-        Some(labelled) => Err(Refusal::forbidden(format!(
-            "a write must be same-origin; the browser called this {}",
-            shown(labelled)
-        ))),
-    }
-}
-
-/// The header a page's build names its write contract in.
-pub const CLIENT_HEADER: &str = "x-suzatary-client";
-
-/// The oldest write contract the box takes from a page: 2 is the first whose instants are UTC,
-/// 3 the first that signs every write with its device key (SPEC law 42), 4 the first that reads
-/// the conversations from the lines with their keys and forgets what an erasure names, 5 the
-/// first that reads a turn, a card's answer, a proposed object, a review and a stored object as
-/// the tagged sums the box answers with, 6 the first that keeps the lines as a skeleton and
-/// their content by hash, in a version of the device's database an older page cannot open, 7
-/// the first that names what a replica holds by the frontier the box's last answer named, again
-/// in a version of the database an older page cannot open, 8 the first that keeps the lines'
-/// skeleton one node per row, in a later version of that database, 9 the first that reads the steps
-/// naming the lines each round reads, which a page of 8 cannot decode, 10 the first that reads its
-/// dead keys from the skeleton's steps and a pull that names no heads, which a page of 9 cannot
-/// decode, 11 the first that decodes the step of the box's own note, which a page of 10 cannot
-/// decode. A page
-/// older than this writes what the box cannot take (a stamp in the device's zone, a write no
-/// device key proves) or acts on words it holds in the clear and never hears erased,
-/// so it is refused before it writes and loads the box's shell instead, never told it is unsigned. Raise it in the
-/// same series as a change to what a page writes; a client that is not a page (no
-/// `Sec-Fetch-Site`) carries no bundle and is not asked.
-pub const CLIENT_MIN: u32 = 11;
-
-/// The contract this build's own page writes by, as its header says it: what a test writes as,
-/// so raising [`CLIENT_MIN`] never leaves a test writing as a page the box refuses.
-pub const CLIENT: &str = "11";
-
-/// A page keeps [`CLIENT_MIN`] or later.
-fn current(client: Option<&str>) -> Result<(), Refusal> {
-    match client.and_then(|said| said.trim().parse::<u32>().ok()) {
-        Some(contract) if contract >= CLIENT_MIN => Ok(()),
-        said => Err(Refusal::new(
-            crate::refusal::Status::UpgradeRequired,
-            format!(
-                "this page writes by contract {}, and the box takes {CLIENT_MIN} or later, so this act was not sent: the page says Suzatary <version> is ready with Reload, and it can be sent again after Reload",
-                said.map_or_else(|| "none".to_owned(), |n| n.to_string())
-            ),
-        )),
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use std::collections::{BTreeMap, BTreeSet};
@@ -290,13 +178,7 @@ mod tests {
     use prodrome_core::policy::Untrusted;
 
     use super::*;
-
-    /// The build's own page writes by a contract its box takes.
-    #[test]
-    fn this_builds_page_keeps_the_contract_its_box_takes() {
-        assert_eq!(current(Some(CLIENT)), Ok(()));
-        assert_eq!(CLIENT.parse::<u32>().ok(), Some(CLIENT_MIN));
-    }
+    use crate::capability::Login;
 
     /// A whois that names one address, plus an address it cannot reach.
     struct Daemon;
@@ -556,101 +438,6 @@ mod tests {
             .unwrap_err()
             .message(),
             "reader@example.test may read this app but not write to it"
-        );
-    }
-
-    #[test]
-    fn the_csrf_triple_refuses_each_of_its_three_ways() {
-        let good = ActHeaders {
-            act: Some("1"),
-            client: Some(CLIENT),
-            content_type: Some("application/json"),
-            site: Some("same-origin"),
-        };
-        assert_eq!(check_csrf(&good), Ok(()));
-
-        let no_header = ActHeaders {
-            act: None,
-            ..good.clone()
-        };
-        assert_eq!(
-            check_csrf(&no_header).unwrap_err().message(),
-            "a write must carry x-suzatary-act: 1"
-        );
-
-        let wrong_type = ActHeaders {
-            content_type: Some("text/plain"),
-            ..good.clone()
-        };
-        assert_eq!(
-            check_csrf(&wrong_type).unwrap_err().message(),
-            "a write must be Content-Type: application/json"
-        );
-
-        let cross = ActHeaders {
-            site: Some("cross-site"),
-            ..good.clone()
-        };
-        assert_eq!(
-            check_csrf(&cross).unwrap_err().message(),
-            "a write must be same-origin; the browser called this 'cross-site'"
-        );
-    }
-
-    /// Content-type parameters are ignored and a missing `Sec-Fetch-Site` passes.
-    #[test]
-    fn a_charset_is_still_json_and_an_absent_site_label_passes() {
-        assert_eq!(
-            check_csrf(&ActHeaders {
-                act: Some("1"),
-                client: None,
-                content_type: Some("Application/JSON; charset=utf-8"),
-                site: None,
-            }),
-            Ok(())
-        );
-    }
-
-    /// A page older than the box's minimum is told to upgrade, never forbidden; a client that
-    /// is not a page is not asked for a contract.
-    #[test]
-    fn a_page_writing_by_an_older_contract_is_told_to_load_the_new_one() {
-        let page = |client| ActHeaders {
-            act: Some("1"),
-            client,
-            content_type: Some("application/json"),
-            site: Some("same-origin"),
-        };
-        for stale in [
-            None,
-            Some("1"),
-            Some("2"),
-            Some("3"),
-            Some("4"),
-            Some("5"),
-            Some("6"),
-            Some("7"),
-            Some("8"),
-            Some("9"),
-            Some("10"),
-            Some("not a number"),
-        ] {
-            let refused = check_csrf(&page(stale)).unwrap_err();
-            assert_eq!(refused.status().code(), 426, "{stale:?}");
-        }
-        assert_eq!(
-            check_csrf(&page(None)).unwrap_err().message(),
-            "this page writes by contract none, and the box takes 11 or later, so this act was not sent: the page says Suzatary <version> is ready with Reload, and it can be sent again after Reload"
-        );
-        assert_eq!(check_csrf(&page(Some("11"))), Ok(()));
-        assert_eq!(check_csrf(&page(Some("12"))), Ok(()));
-        assert_eq!(
-            check_csrf(&ActHeaders {
-                site: None,
-                ..page(None)
-            }),
-            Ok(()),
-            "the Android shell's own registration carries no bundle"
         );
     }
 }

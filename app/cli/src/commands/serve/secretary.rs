@@ -9,10 +9,10 @@ use suzatary_core::conversation_id::ConversationId;
 use suzatary_core::file_read::Withheld;
 use suzatary_core::reference::Reference;
 use suzatary_core::refusal::{Refusal, shown};
-use suzatary_core::seat::Seat;
 use suzatary_core::secretary::readings;
 use suzatary_core::secretary::routes as secretary_routes;
 use suzatary_core::secretary::stamp::{self, Speaker, Stamp};
+use suzatary_core::signatures::Seat;
 use suzatary_core::wire;
 use suzatary_io::attachments::{Stored, UploadError};
 
@@ -261,7 +261,7 @@ pub fn record(call: &Call<Reader, (), ()>) -> Result<Json<wire::RecordPayload>, 
 
 /// `POST …/record/<node>/retract`, by tap.
 pub fn retract(
-    call: &Call<suzatary_core::secretary::tap::Tap, prodrome_core::event::Hash, ()>,
+    call: &Call<suzatary_core::signatures::Tap, prodrome_core::event::Hash, ()>,
 ) -> Result<Json<wire::RecordPayload>, Refusal> {
     let caps = call.chain.caps;
     secretary_routes::retract(
@@ -323,7 +323,7 @@ pub fn rename(
 
 /// `POST …/<id>/erase`, by tap, after any running round stops.
 pub fn erase(
-    call: &Call<suzatary_core::secretary::tap::Tap, ConversationId, secretary_routes::Erasing>,
+    call: &Call<suzatary_core::signatures::Tap, ConversationId, secretary_routes::Erasing>,
 ) -> Result<Json<wire::ConversationPayload>, Refusal> {
     call.state
         .workers

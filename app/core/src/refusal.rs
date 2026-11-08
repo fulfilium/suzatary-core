@@ -29,7 +29,7 @@ pub enum Status {
     UnprocessableEntity,
     /// Past a per-login budget (a browser's error reports, `crate::clienterror`).
     TooManyRequests,
-    /// A page whose build writes by a contract older than the box takes (`crate::gate::CLIENT_MIN`):
+    /// A page whose build writes by a contract older than the box takes (`crate::signatures::CLIENT_MIN`):
     /// nothing is performed, and the page offers the box's build, to be sent again after Reload.
     UpgradeRequired,
     /// A request signed by a device key its history revoked: the device deletes what it holds

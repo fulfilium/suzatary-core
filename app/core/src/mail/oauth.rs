@@ -82,9 +82,9 @@ impl Consent {
 
     /// Claim that the owner tapped a proposal, witnessed by the gate-minted [`Tap`].
     ///
-    /// [`Tap`]: crate::secretary::tap::Tap
+    /// [`Tap`]: crate::signatures::Tap
     #[must_use]
-    pub fn given_by_tap(_tap: &crate::secretary::tap::Tap) -> Self {
+    pub fn given_by_tap(_tap: &crate::signatures::Tap) -> Self {
         Self(())
     }
 }
@@ -466,6 +466,34 @@ fn refusal(answered: &Answered) -> Option<OauthError> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// A minted tap builds the device flow's `Consent`, whose request names the IMAP scope.
+    #[test]
+    fn a_minted_tap_is_a_consent_for_the_device_flow() {
+        let tap = crate::signatures::Tap::of(
+            &crate::signatures::scene("ada"),
+            &crate::signatures::ActHeaders {
+                act: Some("1"),
+                client: Some(crate::signatures::CLIENT),
+                content_type: Some("application/json"),
+                site: Some("same-origin"),
+            },
+            crate::signatures::Seat::Device,
+        )
+        .expect("a tap");
+        let consent = Consent::given_by_tap(&tap);
+        let request =
+            device_request::<Imap>(&consent, crate::mail::account::Authority::Organizations);
+        assert!(request.url.contains("devicecode"), "{}", request.url);
+        assert!(
+            request
+                .form
+                .iter()
+                .any(|(key, value)| key == "scope" && value.contains("IMAP")),
+            "{:?}",
+            request.form
+        );
+    }
 
     fn answered(status: u16, body: serde_json::Value) -> Answered {
         Answered { status, body }

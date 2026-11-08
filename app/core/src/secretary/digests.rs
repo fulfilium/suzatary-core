@@ -268,7 +268,7 @@ impl Held<'_> {
         &self,
         node: &Hash,
         at: Datetime,
-        tap: &crate::secretary::tap::Tap,
+        tap: &crate::signatures::Tap,
     ) -> Result<Hash, Refusal> {
         let digests = self.digests();
         let reads = digests.reads();

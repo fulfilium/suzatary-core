@@ -16,9 +16,10 @@ use axum::http::{HeaderValue, StatusCode, header};
 use axum::response::{IntoResponse, Response};
 use prodrome_core::event::Hash;
 use prodrome_core::sign::PublicKey;
-use suzatary_core::gate::{Admitted, actor_of, writer_of};
+use suzatary_core::gate::{actor_of, writer_of};
 use suzatary_core::record::TodoEvent;
 use suzatary_core::refusal::Refusal;
+use suzatary_core::signatures::Admitted;
 use suzatary_core::signatures::{Answer, Asking, Proven, Request, Requested, refused};
 use suzatary_core::store::Prodrome;
 
