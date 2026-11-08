@@ -50,8 +50,9 @@ impl Versioned for Asking {
     const WHAT: &'static str = "the compactor's asking";
 
     /// Raise it when the code that builds a question changes in a way the probe does not show
-    /// (which children a span holds, or which parts a log keeps).
-    const REVISION: u32 = 2;
+    /// (which children a span holds, or which parts a log keeps), or when the redaction rules'
+    /// name, which every line's handle carries, moves the pinned questions.
+    const REVISION: u32 = 3;
 
     fn parts(beside: Beside) -> Vec<String> {
         // What the rule does on a fixed probe, not a list of what it reads: the question's text

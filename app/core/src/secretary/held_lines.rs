@@ -1485,4 +1485,60 @@ mod tests {
         lines.keys(&BTreeMap::new(), &gone);
         assert!(!says(&lines), "nothing cached still says it");
     }
+
+    /// A measurement, run by hand with `--ignored --nocapture`: reading 1,200 rounds of mail-like
+    /// words (30 conversations of 40), once sealed under the current rules and once under none,
+    /// which every reader then scrubs as it opens.
+    #[test]
+    #[ignore = "a measurement, run by hand"]
+    fn bench_reading_1200_rounds() {
+        use crate::secretary::line_event::LineEvent;
+        use crate::secretary::scrubbed_under::ScrubbedUnder;
+        let words = "Your order #48213 shipped on 2026-10-25 and arrives by 10/28/2026. Call us at \
+                     617-555-1234 between 9:00 and 17:30. Total due: $1,532.40 (tax 212.18). \
+                     Le rendez-vous est confirmé pour le 12/11 à 14h30. Savings      2024      1500.\n"
+            .repeat(12);
+        let at = |n: u32| Datetime::new(2026, 10, 25, 9, n / 60, n % 60, 0).expect("an instant");
+        for under in [
+            ScrubbedUnder::Version(crate::redact::Rules::current(()).clone()),
+            ScrubbedUnder::Unversioned,
+        ] {
+            let held = InMemory::default();
+            let ids: Vec<ConversationId> = (0..30)
+                .map(|n| ConversationId::new(format!("2026-10-25-{n}")).expect("a slug"))
+                .collect();
+            for id in &ids {
+                let mut entries = vec![opened("Notes")];
+                entries.extend((1..=40).map(|n| Entry::Said {
+                    at: at(n),
+                    turn: crate::capability::Turn::Person {
+                        text: words.clone(),
+                        references: Vec::new(),
+                        attachments: Vec::new(),
+                    },
+                    by: Some("ada".into()),
+                }));
+                for (count, entry) in entries.iter().enumerate() {
+                    let (line, keys) = LineEvent::written_under(
+                        &under,
+                        id.clone(),
+                        transcript::writer(),
+                        u32::try_from(count).expect("a count"),
+                        entry,
+                        &held.entropy,
+                    )
+                    .expect("a line");
+                    for key in &keys {
+                        held.keys.set(&key.name(), key).expect("kept");
+                    }
+                    held.lines.append(line).expect("appended");
+                }
+            }
+            let start = std::time::Instant::now();
+            for id in &ids {
+                transcript::read(held.conversations(), id).expect("reads");
+            }
+            eprintln!("read 1200 rounds sealed {under:?}: {:?}", start.elapsed());
+        }
+    }
 }

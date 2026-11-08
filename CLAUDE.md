@@ -282,10 +282,12 @@ Threat model: an injected email can at worst mis-triage or write bad todo text
 - **Proton Drive is the secretary's by permission**: a closed enum of two reads
   and two writes, `[secretary] drive_allow`, and every SSN/ITIN/TIN/EIN
   redacted before a model sees it; the triage agent gets no Drive (→
-  `protondrive`). A PDF or an image reaches the model as itself unless its text
-  names such a number (→ `filesasthemselves`). A file the owner sends that
-  names one is kept private in the vault folder, on his say (→ `vault`). A
-  revealed held file leaves the app only by the owner's tap on its save link.
+  `protondrive`), matched over one normalised copy of the text, whatever its
+  digits, dashes or spaces. A PDF or an image reaches the model as itself
+  unless its text names such a number or the PDF holds a form (→
+  `filesasthemselves`). A file the owner sends that names one is kept private
+  in the vault folder, on his say (→ `vault`). A revealed held file leaves the
+  app only by the owner's tap on its save link.
 - Secrets never in git, URLs, logs or transcripts: static → secretspec/pass
   (audited), rotating caches → owner-managed, vaulted. SSN/TIN never in this
   repo; resume_typst/thesis are PUBLIC.

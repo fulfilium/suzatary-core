@@ -2979,7 +2979,7 @@ fn a_stored_slot_is_under_the_rules_this_build_names() {
     }
     assert_eq!(
         Rules::current(()).as_str(),
-        "403bab20bab53d90453e6715e6b70348a37d9a8bbc1f98e3b3add04ebb1e09c7"
+        "67d7f8df2fd4d019fd90b6d59f17f44b046e102ea2d8ad4da122d6e7517c4f4a"
     );
 }
 

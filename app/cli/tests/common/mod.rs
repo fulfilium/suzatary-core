@@ -4258,9 +4258,12 @@ pub fn never_stored(root: &std::path::Path, value: &str) {
 pub struct FakePdf(Option<String>);
 
 impl suzatary_core::capability::PdfText for FakePdf {
-    fn text(&self, _: &[u8]) -> Result<String, String> {
+    fn layer(&self, _: &[u8]) -> Result<suzatary_core::file_read::Layer, String> {
         self.0
             .clone()
+            .map(|text| {
+                suzatary_core::file_read::Layer::read(text, suzatary_core::file_read::Form::Absent)
+            })
             .ok_or_else(|| "this fake reads no PDF".to_owned())
     }
 }

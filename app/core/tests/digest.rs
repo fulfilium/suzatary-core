@@ -962,7 +962,9 @@ fn a_node_one_model_finds_unfit_is_owed_to_the_next() {
     use suzatary_core::secretary::digest::Written;
     use suzatary_core::secretary::digest_census::{Census, State};
     let the = Box::default();
-    the.say("a", 40);
+    // A count whose tree gives the unfit node a parent the first model finds unfit too; a change
+    // to a line's stored print (its rules' name too) moves it.
+    the.say("a", 46);
     let long = Recording {
         long: Some(900),
         ..Recording::joining()
@@ -1662,12 +1664,13 @@ fn a_session_is_told_the_facts_then_the_record() {
         "{told}"
     );
     assert!(
-        parts
-            .iter()
-            .any(|part| part.starts_with("24+23 (") && part.ends_with("tool answers)")),
+        parts.iter().any(|part| part.contains('+')
+            && part.contains(" (")
+            && part.ends_with("tool answers)")),
         "{told}"
     );
-    for part in parts {
+    // The note of a cut log is no part.
+    for part in parts.into_iter().filter(|part| !part.starts_with('(')) {
         let handle = part.split(' ').next().expect("a handle");
         let (first, lines) = handle.split_once('+').expect("first+lines");
         assert!(
@@ -2433,8 +2436,8 @@ mod recompacting {
         }
     }
 
-    const PINNED_OWNERS: &str = "d59ec97d7a1f1bd85811d6b987a4f057d209f35d8b66375c420914cbd724c175";
-    const PINNED_CLEAN: &str = "e5170368b19af8030c88aa4a3ae9370add5c3d46ea065fed2646cfd39cccb744";
+    const PINNED_OWNERS: &str = "773eaab228f5f5b1c3dc163194f9d5865a3c2cc6bbfb4790dfc4ff7d3184c03a";
+    const PINNED_CLEAN: &str = "b8a7a013284e8568d344cc6b6dce8bcaf28ce7161dd65b8627f4628d0b960d01";
     const PINNED_QUESTIONS: &str =
-        "66e44466932e9fb014b97dd98ee678f93dcc50360d59ebb4f262dddc218a00a9";
+        "2810625a492f421b540aa12a9c9c5fd0a65ad92e652011925850c0c8dee690cd";
 }

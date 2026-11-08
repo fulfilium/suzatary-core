@@ -159,7 +159,7 @@ impl Files for Opening<'_, '_> {
         }
     }
 
-    fn layer(&self, pdf: &[u8]) -> Result<String, String> {
-        self.caps.pdf.text(pdf)
+    fn layer(&self, pdf: &[u8]) -> Result<crate::file_read::Layer, String> {
+        self.caps.pdf.layer(pdf)
     }
 }

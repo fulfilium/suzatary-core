@@ -888,7 +888,7 @@ pub(crate) fn read_of(
     content: Vec<u8>,
     pdftotext: &crate::pdftotext::Pdftotext,
 ) -> Result<FileRead, String> {
-    FileRead::of(file, name, mime, content, |pdf| pdftotext.text(pdf))
+    FileRead::of(file, name, mime, content, |pdf| pdftotext.read(pdf))
 }
 
 /// A maildir indexed by the real notmuch, for the tests of this module and of the corpus.

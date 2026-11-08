@@ -373,12 +373,12 @@
       "value": {
         "objects": [
           {
-            "hash": "7b818ef0fdd17acb5a6c38b43fa0281f189cc0854dab58dcff68c681ce13ad38",
-            "literal": "Genesis(label='memory', nonce='00000000000000000000000000000000')"
+            "hash": "4796fd9d3a6dde57e02eedc74443b923027996e3f7dc245a7498db5b05c62027",
+            "literal": "Change(genesis='7b818ef0fdd17acb5a6c38b43fa0281f189cc0854dab58dcff68c681ce13ad38', deps=(), event=Opened(conversation='pulled', at=datetime(2026, 9, 2, 12, 0, 0), actor='assistant', held=0, carried=None, model='vectors-fixture', kind='topic', words=(Scrubbed(key='630dcd2966c4336691125448bbb25b4ff412a49c732db2c8abc1b8581bd710dd', box='Y5oxXcKShOsxFTUVwyZsC9rFmoGNyHlmzqiJfkZQEX4PiAht0e48XZ2BWCRkDgA8m6D2Xt5dWc4NKkp/MZVazULyLdynSpLVbKeK7ymOcjtgI382R+q+t/PgnDDOgOPihKgCG4pcCySUzTyNWxNQfsfnoHhN9KPi6oFi0mHFnSPnqxHA9zw7frCYOVCz4sSgj4Q9qV+3/LPxNFaBa1G3gk3y+b1WE9S07ZUv2FjNG5hKy/j/H9GnyAbYHKjkrjss/9uhGCdYjEOPVDTqyVa+j5WgQ60Ezf0Kl9f6SdQNCZ7iLVMurXcAQPrjVFZbSgPyHfqUGj1PdvT5niCR5aBVZUq2f8766qY42cV0HyqO+9Y=', rules='67d7f8df2fd4d019fd90b6d59f17f44b046e102ea2d8ad4da122d6e7517c4f4a'),)))"
           },
           {
-            "hash": "f35822d3bf510a9ceb9255f0ebc16bc03ef84e476dbc330e48c54fbe44beb037",
-            "literal": "Change(genesis='7b818ef0fdd17acb5a6c38b43fa0281f189cc0854dab58dcff68c681ce13ad38', deps=(), event=Opened(conversation='pulled', at=datetime(2026, 9, 2, 12, 0, 0), actor='assistant', held=0, carried=None, model='vectors-fixture', kind='topic', words=(Scrubbed(key='630dcd2966c4336691125448bbb25b4ff412a49c732db2c8abc1b8581bd710dd', box='Y5oxXcKShOsxFTUVwyZsC9rFmoGNyHlmzqiJfkZQEX4PiAht0e48XZ2BWCRkDgA8m6D2Xt5dWc4NKkp/MZVazULyLdynSpLVbKeK7ymOcjtgI382R+q+t/PgnDDOgOPihKgCG4pcCySUzTyNWxNQfsfnoHhN9KPi6oFi0mHFnSPnqxHA9zw7frCYOVCz4sSgj4Q9qV+3/LPxNFaBa1G3gk3y+b1WE9S07ZUv2FjNG5hKy/j/H9GnyAbYHKjkrjss/9uhGCdYjEOPVDTqyVa+j5WgQ60Ezf0Kl9f6SdQNCZ7iLVMurXcAQPrjVFZbSgPyHfqUGj1PdvT5niCR5aBVZf/bfw1fKcqHYbVSpQzfZ8o=', rules='403bab20bab53d90453e6715e6b70348a37d9a8bbc1f98e3b3add04ebb1e09c7'),)))"
+            "hash": "7b818ef0fdd17acb5a6c38b43fa0281f189cc0854dab58dcff68c681ce13ad38",
+            "literal": "Genesis(label='memory', nonce='00000000000000000000000000000000')"
           }
         ]
       },
@@ -4635,7 +4635,7 @@
         "epoch": 1788350400,
         "frontier": {
           "count": 2,
-          "digest": "042fbd033dd86417b2abf12c4813cf2d34094298f2b814080ece8141c0ecc124"
+          "digest": "0ed9b8c6c2e7bb638d0ee6b5432a0a3deb9a2749b7039c3a4a09d4d7460b7d2d"
         },
         "geneses": [
           "7b818ef0fdd17acb5a6c38b43fa0281f189cc0854dab58dcff68c681ce13ad38"
@@ -4643,7 +4643,7 @@
         "heads": {
           "are": "these",
           "heads": [
-            "f35822d3bf510a9ceb9255f0ebc16bc03ef84e476dbc330e48c54fbe44beb037"
+            "4796fd9d3a6dde57e02eedc74443b923027996e3f7dc245a7498db5b05c62027"
           ]
         },
         "keys": {
@@ -4660,7 +4660,7 @@
             "size": 65
           },
           {
-            "hash": "f35822d3bf510a9ceb9255f0ebc16bc03ef84e476dbc330e48c54fbe44beb037",
+            "hash": "4796fd9d3a6dde57e02eedc74443b923027996e3f7dc245a7498db5b05c62027",
             "header": {
               "at": "2026-09-02T12:00:00",
               "conversation": "pulled",
@@ -4716,13 +4716,13 @@
         "erased": [],
         "frontier": {
           "count": 2,
-          "digest": "042fbd033dd86417b2abf12c4813cf2d34094298f2b814080ece8141c0ecc124"
+          "digest": "0ed9b8c6c2e7bb638d0ee6b5432a0a3deb9a2749b7039c3a4a09d4d7460b7d2d"
         },
         "geneses": [
           "7b818ef0fdd17acb5a6c38b43fa0281f189cc0854dab58dcff68c681ce13ad38"
         ],
         "heads": [
-          "f35822d3bf510a9ceb9255f0ebc16bc03ef84e476dbc330e48c54fbe44beb037"
+          "4796fd9d3a6dde57e02eedc74443b923027996e3f7dc245a7498db5b05c62027"
         ],
         "keys": {
           "630dcd2966c4336691125448bbb25b4ff412a49c732db2c8abc1b8581bd710dd": "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f"
@@ -4733,8 +4733,8 @@
             "literal": "Genesis(label='memory', nonce='00000000000000000000000000000000')"
           },
           {
-            "hash": "f35822d3bf510a9ceb9255f0ebc16bc03ef84e476dbc330e48c54fbe44beb037",
-            "literal": "Change(genesis='7b818ef0fdd17acb5a6c38b43fa0281f189cc0854dab58dcff68c681ce13ad38', deps=(), event=Opened(conversation='pulled', at=datetime(2026, 9, 2, 12, 0, 0), actor='assistant', held=0, carried=None, model='vectors-fixture', kind='topic', words=(Scrubbed(key='630dcd2966c4336691125448bbb25b4ff412a49c732db2c8abc1b8581bd710dd', box='Y5oxXcKShOsxFTUVwyZsC9rFmoGNyHlmzqiJfkZQEX4PiAht0e48XZ2BWCRkDgA8m6D2Xt5dWc4NKkp/MZVazULyLdynSpLVbKeK7ymOcjtgI382R+q+t/PgnDDOgOPihKgCG4pcCySUzTyNWxNQfsfnoHhN9KPi6oFi0mHFnSPnqxHA9zw7frCYOVCz4sSgj4Q9qV+3/LPxNFaBa1G3gk3y+b1WE9S07ZUv2FjNG5hKy/j/H9GnyAbYHKjkrjss/9uhGCdYjEOPVDTqyVa+j5WgQ60Ezf0Kl9f6SdQNCZ7iLVMurXcAQPrjVFZbSgPyHfqUGj1PdvT5niCR5aBVZf/bfw1fKcqHYbVSpQzfZ8o=', rules='403bab20bab53d90453e6715e6b70348a37d9a8bbc1f98e3b3add04ebb1e09c7'),)))"
+            "hash": "4796fd9d3a6dde57e02eedc74443b923027996e3f7dc245a7498db5b05c62027",
+            "literal": "Change(genesis='7b818ef0fdd17acb5a6c38b43fa0281f189cc0854dab58dcff68c681ce13ad38', deps=(), event=Opened(conversation='pulled', at=datetime(2026, 9, 2, 12, 0, 0), actor='assistant', held=0, carried=None, model='vectors-fixture', kind='topic', words=(Scrubbed(key='630dcd2966c4336691125448bbb25b4ff412a49c732db2c8abc1b8581bd710dd', box='Y5oxXcKShOsxFTUVwyZsC9rFmoGNyHlmzqiJfkZQEX4PiAht0e48XZ2BWCRkDgA8m6D2Xt5dWc4NKkp/MZVazULyLdynSpLVbKeK7ymOcjtgI382R+q+t/PgnDDOgOPihKgCG4pcCySUzTyNWxNQfsfnoHhN9KPi6oFi0mHFnSPnqxHA9zw7frCYOVCz4sSgj4Q9qV+3/LPxNFaBa1G3gk3y+b1WE9S07ZUv2FjNG5hKy/j/H9GnyAbYHKjkrjss/9uhGCdYjEOPVDTqyVa+j5WgQ60Ezf0Kl9f6SdQNCZ7iLVMurXcAQPrjVFZbSgPyHfqUGj1PdvT5niCR5aBVZUq2f8766qY42cV0HyqO+9Y=', rules='67d7f8df2fd4d019fd90b6d59f17f44b046e102ea2d8ad4da122d6e7517c4f4a'),)))"
           }
         ],
         "rest": 0,

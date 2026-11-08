@@ -34,7 +34,7 @@ impl Attached {
             Kinds::empty()
         } else {
             match pdftotext.layer(pdf) {
-                Ok(text) => Values::of([text.as_str()]).kinds(),
+                Ok(layer) => Values::of([layer.text()]).kinds(),
                 Err(Unlayered::File(_)) => Kinds::empty(),
                 Err(Unlayered::Box(why)) => return Err(MailError::Unreachable(why)),
             }

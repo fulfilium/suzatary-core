@@ -105,7 +105,7 @@ impl AttachmentStore {
                 &attachment.called(),
                 Enclosure::Pdf.as_str(),
                 bytes.to_vec(),
-                |pdf| self.pdftotext.text(pdf).map_err(UploadError::Unread),
+                |pdf| self.pdftotext.read(pdf).map_err(UploadError::Unread),
             )?
         {
             return Err(UploadError::Withheld(why));
@@ -132,7 +132,7 @@ impl AttachmentStore {
                     &attachment.called(),
                     Enclosure::Pdf.as_str(),
                     bytes.to_vec(),
-                    |pdf| self.pdftotext.text(pdf).map_err(UploadError::Unread),
+                    |pdf| self.pdftotext.read(pdf).map_err(UploadError::Unread),
                 )? {
                     FileRead::File(readable) => readable.text().as_str().to_owned(),
                     FileRead::Text { text, .. } | FileRead::Withheld { text, .. } => {
@@ -198,9 +198,9 @@ impl AttachmentStore {
         }
     }
 
-    /// A PDF's text layer, read as the store read it when it kept the PDF.
-    pub fn layer(&self, pdf: &[u8]) -> Result<String, String> {
-        self.pdftotext.text(pdf)
+    /// A PDF's text layer and form, read as the store read them when it kept the PDF.
+    pub fn layer(&self, pdf: &[u8]) -> Result<suzatary_core::file_read::Layer, String> {
+        self.pdftotext.read(pdf)
     }
 
     /// The file's size, before its bytes are read.
@@ -286,6 +286,33 @@ mod tests {
         assert!(matches!(
             store.bytes(&absent),
             Err(StoreError::Absent { .. })
+        ));
+    }
+
+    /// The attack: a filled W-9 whose SSN sits in a form field with no appearance stream, which
+    /// `pdftotext` never prints, so its text names no number (a field drawn by its appearance
+    /// stream is printed, and the text check finds it). The PDF is withheld for its form, never
+    /// kept as a file a model is handed whole.
+    #[test]
+    fn a_pdf_holding_a_filled_form_is_withheld() {
+        if !crate::tool::on_path("pdftotext") || !crate::tool::on_path("pdfinfo") {
+            eprintln!("skipping: pdftotext or pdfinfo is not on PATH");
+            return;
+        }
+        let dir = tempfile::tempdir().expect("a scratch dir");
+        let store = AttachmentStore::new(
+            dir.path().to_path_buf(),
+            crate::pdftotext::Pdftotext::new("."),
+        );
+        let w9 = crate::pdftotext::filled_form_pdf("Form W-9", "123-45-6789");
+        let layer = store.layer(&w9).expect("poppler reads it");
+        assert!(
+            !layer.text().contains("6789"),
+            "the value is in no text layer"
+        );
+        assert!(matches!(
+            store.put(&w9),
+            Err(UploadError::Withheld(Withheld::Form))
         ));
     }
 

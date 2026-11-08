@@ -831,7 +831,7 @@ pub trait Files {
     ///
     /// # Errors
     /// The reader's sentence.
-    fn layer(&self, pdf: &[u8]) -> Result<String, String>;
+    fn layer(&self, pdf: &[u8]) -> Result<crate::file_read::Layer, String>;
 }
 
 /// Why a held value could not be read back: its holder's reader failed.
@@ -1254,8 +1254,11 @@ mod tests {
                     bytes: format!("%PDF-1.7 SSN {SSN}").into_bytes(),
                 }))
             }
-            fn layer(&self, _: &[u8]) -> Result<String, String> {
-                Ok(format!("SSN {SSN}"))
+            fn layer(&self, _: &[u8]) -> Result<crate::file_read::Layer, String> {
+                Ok(crate::file_read::Layer::read(
+                    format!("SSN {SSN}"),
+                    crate::file_read::Form::Absent,
+                ))
             }
         }
         let holders = Holders {

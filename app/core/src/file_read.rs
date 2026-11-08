@@ -7,7 +7,8 @@
 //! [`Readable`], so a file that skipped the check does not typecheck.
 //!
 //! A scan's pixels cannot be redacted: a PDF with no text layer, and an image, are handed over
-//! as they are, by the owner's choice.
+//! as they are, by the owner's choice. A filled form field is in no text layer, so a PDF that holds
+//! a form is withheld whatever its text says.
 
 use crate::enclosed::Enclosure;
 use crate::held_file::HeldFile;
@@ -71,6 +72,40 @@ pub enum Withheld {
     /// Over `MAX_PAGES`.
     #[error("it has {0} pages, over the {MAX_PAGES} a model reads")]
     TooManyPages(usize),
+    /// It holds a form, whose filled values its text layer does not carry.
+    #[error("it holds a form, and the values filled into a form are not checked")]
+    Form,
+}
+
+/// A PDF as its reader saw it: the text layer, laid out as on the page with a form feed ending
+/// each page, and whether it holds a form.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Layer {
+    text: String,
+    form: Form,
+}
+
+/// Whether a PDF holds an interactive form (`AcroForm` or XFA).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Form {
+    /// None.
+    Absent,
+    /// One, filled or not, a signature's or not: no reader here prints a field's type or value.
+    Present,
+}
+
+impl Layer {
+    /// What a PDF reader read.
+    #[must_use]
+    pub fn read(text: String, form: Form) -> Self {
+        Self { text, form }
+    }
+
+    /// The text layer.
+    #[must_use]
+    pub fn text(&self) -> &str {
+        &self.text
+    }
 }
 
 /// A file a model may read, checked.
@@ -103,8 +138,8 @@ impl Readable {
 
 impl FileRead {
     /// Read `bytes`, the file `file` names and calls `name`, which its source calls `mime`.
-    /// `layer` reads a PDF's text layer as `pdftotext` does, a form feed ending each page; it is
-    /// asked for every PDF and for nothing else, so no PDF skips the held-number check.
+    /// `layer` reads a PDF; it is asked for every PDF and for nothing else, so no PDF skips the
+    /// held-number check.
     ///
     /// # Errors
     /// `layer`'s.
@@ -113,7 +148,7 @@ impl FileRead {
         name: &str,
         mime: &str,
         bytes: Vec<u8>,
-        layer: impl FnOnce(&[u8]) -> Result<String, E>,
+        layer: impl FnOnce(&[u8]) -> Result<Layer, E>,
     ) -> Result<Self, E> {
         Ok(match Enclosure::sniff(&bytes) {
             Some(Enclosure::Pdf) => {
@@ -152,9 +187,9 @@ impl FileRead {
 
 /// A file's whole words, which a read masks before it cuts them, so a number across the cut is
 /// found: a PDF's text layer, nothing of an image, and anything else's bytes as text.
-fn words<E>(bytes: &[u8], layer: impl FnOnce(&[u8]) -> Result<String, E>) -> Result<String, E> {
+fn words<E>(bytes: &[u8], layer: impl FnOnce(&[u8]) -> Result<Layer, E>) -> Result<String, E> {
     Ok(match Enclosure::sniff(bytes) {
-        Some(Enclosure::Pdf) => layer(bytes)?,
+        Some(Enclosure::Pdf) => layer(bytes)?.text,
         Some(Enclosure::Image(_)) => String::new(),
         None => String::from_utf8_lossy(bytes).into_owned(),
     })
@@ -165,22 +200,22 @@ fn words<E>(bytes: &[u8], layer: impl FnOnce(&[u8]) -> Result<String, E>) -> Res
 ///
 /// # Errors
 /// `layer`'s.
-pub fn values<E>(
-    bytes: &[u8],
-    layer: impl FnOnce(&[u8]) -> Result<String, E>,
-) -> Result<Values, E> {
+pub fn values<E>(bytes: &[u8], layer: impl FnOnce(&[u8]) -> Result<Layer, E>) -> Result<Values, E> {
     Ok(Values::of([words(bytes, layer)?.as_str()]))
 }
 
-/// A text layer already read, for a fixture.
-pub fn read(text: &str) -> impl FnOnce(&[u8]) -> Result<String, std::convert::Infallible> + '_ {
-    move |_| Ok(text.to_owned())
+/// A text layer of a PDF with no form, already read, for a fixture.
+pub fn read(text: &str) -> impl FnOnce(&[u8]) -> Result<Layer, std::convert::Infallible> + '_ {
+    move |_| Ok(Layer::read(text.to_owned(), Form::Absent))
 }
 
-fn pdf(file: &HeldFile, name: &str, bytes: Vec<u8>, layer: &str) -> FileRead {
+fn pdf(file: &HeldFile, name: &str, bytes: Vec<u8>, read: &Layer) -> FileRead {
+    let layer = read.text();
     let pages = layer.matches('\u{c}').count();
     let why = if !identity_numbers(layer).is_empty() {
         Some(Withheld::HeldNumber)
+    } else if read.form == Form::Present {
+        Some(Withheld::Form)
     } else if bytes.len() > MAX_PDF {
         Some(Withheld::TooLarge(bytes.len()))
     } else if pages > MAX_PAGES {

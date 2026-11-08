@@ -75,8 +75,8 @@ Anything that breaks one of those promises. For example:
   proposal, or for the tap to perform something other than what was shown;
 - markup that runs script, or escapes the closed world, in the browser or on
   the box;
-- a secret's value, or a redacted identity number, reaching a page, a log, a
-  transcript or a model;
+- a secret's value, or a redacted identity number in any spelling,
+  reaching a page, a log, a transcript or a model;
 - a plugin reaching a host, a file or a credential its manifest does not
   grant;
 - a stored object the box adopts that verification should have refused.

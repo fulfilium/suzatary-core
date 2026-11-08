@@ -97,16 +97,18 @@ impl Redacted {
     }
 }
 
-/// `ddd-dd-dddd` or `ddd dd dddd`, one separator kind throughout, not part
-/// of a longer run of digits.
+/// `ddd-dd-dddd`, with a hyphen, a space, a dot or a slash, one kind throughout, not part of a
+/// longer run of digits.
 static WRITTEN_OUT: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(r"\b[0-9]{3}(?:-[0-9]{2}-|\x20[0-9]{2}\x20)[0-9]{4}\b").expect("a valid pattern")
+    Regex::new(r"\b[0-9]{3}(?:-[0-9]{2}-|\x20[0-9]{2}\x20|\.[0-9]{2}\.|/[0-9]{2}/)[0-9]{4}\b")
+        .expect("a valid pattern")
 });
 
-/// Nine digits, single hyphens or spaces allowed between them, not part of
-/// a longer run.
-static NINE_DIGITS: LazyLock<Regex> =
-    LazyLock::new(|| Regex::new(r"\b[0-9](?:[- ]?[0-9]){8}\b").expect("a valid pattern"));
+/// Nine digits, a space, or a hyphen, dot or slash with a space either side or none, allowed
+/// between them, not part of a longer run.
+static NINE_DIGITS: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r"\b[0-9](?:(?: ?[-./] ?| )?[0-9]){8}\b").expect("a valid pattern")
+});
 
 /// The labels that make a nearby nine-digit run an identity number.
 static LABEL: LazyLock<Regex> = LazyLock::new(|| {
@@ -213,7 +215,7 @@ impl Versioned for Scrub {
     /// The revision of the code the patterns' matches pass through (the checksums, the dates,
     /// the standing-alone test and the overlap rule). Raise it when that code changes what is
     /// redacted, since no pattern's text shows such a change.
-    const REVISION: u32 = 1;
+    const REVISION: u32 = 2;
 
     fn parts((): ()) -> Vec<String> {
         let patterns: [&Regex; 24] = [
@@ -698,7 +700,8 @@ fn codes(
             .into_iter()
             .flatten()
             .min()?;
-            let other = closest(text, not_codes, start, end).map_or(usize::MAX, |(_, other)| other);
+            let other = closest(text, not_codes, start, end, Reach::Line)
+                .map_or(usize::MAX, |(_, other)| other);
             (gap < other && alone(text, start, end) && !dated(&digits))
                 .then(|| candidate(start, end, Kind::Code, Strength::Code))
         })
@@ -709,23 +712,169 @@ fn codes(
 /// matches that overlap are one, from the first one's start to the later end, of the kind of
 /// the strongest: a code, then a kind whose checksum held, then the closest label.
 ///
-/// Every kind holds an ASCII digit, so a text with none holds no number; a text with some is
-/// matched by the digit patterns over its `ascii` copy, and its labels are read only when a
-/// pattern found something they could claim.
+/// The patterns read one [`Normal`] copy of `text`, and the matches are mapped back onto `text`.
 #[must_use]
 pub(crate) fn identity_numbers(text: &str) -> Vec<Found> {
-    if !text.bytes().any(|byte| byte.is_ascii_digit()) {
+    if !text.chars().any(char::is_numeric) {
         return Vec::new();
     }
-    numbers(text, &ascii(text))
+    if plain(text) {
+        return numbers(text, text);
+    }
+    let normal = Normal::of(text);
+    normal.back(numbers(&normal.text, &ascii(&normal.text)))
+}
+
+/// Whether `text` is its own [`Normal`] copy: ASCII, whose only whitespace is a lone space, line
+/// break or tab.
+fn plain(text: &str) -> bool {
+    let blank = |b: &u8| b.is_ascii_whitespace() || *b == 0x0b;
+    text.is_ascii()
+        && text
+            .bytes()
+            .all(|b| !blank(&b) || matches!(b, b' ' | b'\n' | b'\t'))
+        && !text
+            .as_bytes()
+            .windows(2)
+            .any(|pair| blank(&pair[0]) && blank(&pair[1]))
+}
+
+/// A text as the patterns read it: NFKC, every decimal digit ASCII, every dash `-`, every
+/// default-ignorable character gone, and each whitespace run a line break if it holds one, a
+/// space if it is one space, else a tab, which no digit pattern joins across, so columns stay
+/// apart. `from` holds, for each byte, where its source character starts.
+struct Normal {
+    text: String,
+    from: Vec<u32>,
+    len: usize,
+}
+
+#[derive(Clone, Copy)]
+enum Run {
+    None,
+    Space(u32),
+    Gap(u32),
+    Break(u32),
+}
+
+impl Normal {
+    fn of(source: &str) -> Self {
+        use unicode_general_category::{GeneralCategory, get_general_category};
+        use unicode_normalization::UnicodeNormalization as _;
+        let mut normal = Normal {
+            text: String::with_capacity(source.len()),
+            from: Vec::with_capacity(source.len()),
+            len: source.len(),
+        };
+        let mut run = Run::None;
+        for (at, read) in source.char_indices() {
+            let at = u32::try_from(at).unwrap_or(u32::MAX);
+            if read.is_ascii() {
+                run = normal.step(run, read, at);
+                continue;
+            }
+            for c in std::iter::once(read).nfkc() {
+                let category = get_general_category(c);
+                if category == GeneralCategory::Format || ignorable(c) {
+                    continue;
+                }
+                let c = match category {
+                    GeneralCategory::DashPunctuation => '-',
+                    GeneralCategory::DecimalNumber => digit(c),
+                    _ if c == '\u{2212}' => '-',
+                    _ => c,
+                };
+                run = normal.step(run, c, at);
+            }
+        }
+        normal.end(run);
+        normal
+    }
+
+    /// `c`, read from `at`: a whitespace character extends the run, anything else ends it.
+    fn step(&mut self, run: Run, c: char, at: u32) -> Run {
+        if !c.is_whitespace() {
+            self.end(run);
+            self.push(c, at);
+            return Run::None;
+        }
+        match (run, c) {
+            (Run::None, '\n') => Run::Break(at),
+            (Run::None, '\t') => Run::Gap(at),
+            (Run::None, _) => Run::Space(at),
+            (Run::Space(start) | Run::Gap(start), '\n') | (Run::Break(start), _) => {
+                Run::Break(start)
+            }
+            (Run::Space(start) | Run::Gap(start), _) => Run::Gap(start),
+        }
+    }
+
+    fn push(&mut self, c: char, at: u32) {
+        self.text.push(c);
+        self.from.extend(std::iter::repeat_n(at, c.len_utf8()));
+    }
+
+    fn end(&mut self, run: Run) {
+        match run {
+            Run::None => {}
+            Run::Space(at) => self.push(' ', at),
+            Run::Gap(at) => self.push('\t', at),
+            Run::Break(at) => self.push('\n', at),
+        }
+    }
+
+    /// `found`, in order over `text`, over the source instead, merged again where NFKC's
+    /// expansions (`½` as `1⁄2`) made two matches overlap there.
+    fn back(&self, found: Vec<Found>) -> Vec<Found> {
+        let mut merged: Vec<Found> = Vec::new();
+        for one in found {
+            let last = self.from[one.end - 1];
+            let after = self.from[one.end..].iter().find(|&&next| next != last);
+            let start = self.from[one.start] as usize;
+            let end = after.map_or(self.len, |&next| next as usize);
+            match merged.last_mut() {
+                Some(previous) if start < previous.end => previous.end = previous.end.max(end),
+                Some(_) | None => merged.push(Found {
+                    start,
+                    end,
+                    kind: one.kind,
+                }),
+            }
+        }
+        merged
+    }
+}
+
+/// A decimal digit's ASCII digit: its distance from the start of its run, which Unicode lays out
+/// as tens from zero.
+fn digit(c: char) -> char {
+    use unicode_general_category::{GeneralCategory, get_general_category};
+    let decimal = |code: u32| {
+        char::from_u32(code)
+            .is_some_and(|c| get_general_category(c) == GeneralCategory::DecimalNumber)
+    };
+    let mut zero = u32::from(c);
+    while zero > 0 && decimal(zero - 1) {
+        zero -= 1;
+    }
+    char::from_digit((u32::from(c) - zero) % 10, 10).unwrap_or(c)
+}
+
+/// Whether `c` is a default-ignorable code point outside the format characters.
+fn ignorable(c: char) -> bool {
+    matches!(
+        u32::from(c),
+        0x034F | 0x115F..=0x1160 | 0x17B4..=0x17B5 | 0x180B..=0x180F | 0x3164 | 0xFE00..=0xFE0F
+            | 0xFFA0 | 0xFFF0..=0xFFF8 | 0xE0000..=0xE0FFF
+    )
 }
 
 /// `text` as the digit patterns read it: each character outside ASCII replaced, byte for byte,
 /// by `_` where Unicode counts it part of a word and by `#` where it does not.
 ///
 /// No digit pattern matches either byte, and `\b` falls where it falls in `text`, so every match
-/// is the same, at the same byte range; the IBAN pattern, whose letters `(?i)` folds onto two
-/// characters outside ASCII, reads the copy only of a text holding neither. The copy is ASCII,
+/// is the same, at the same byte range; the IBAN pattern's `(?i)` folds `S` and `K` onto `ſ` and
+/// the Kelvin sign, which the [`Normal`] copy has already made `s` and `K`. The copy is ASCII,
 /// which lets the regex crate's fast engine run: that engine gives up at the first non-ASCII byte
 /// under a Unicode `\b`.
 fn ascii(text: &str) -> Cow<'_, str> {
@@ -756,23 +905,30 @@ fn numbers(text: &str, digits: &str) -> Vec<Found> {
         .find_iter(digits)
         .map(|found| {
             let identity = &labels.identity;
-            let (kind, strength) = closest(text, identity, found.start(), found.end()).map_or(
-                (
-                    if found.as_str().starts_with('9') {
-                        Kind::Itin
-                    } else {
-                        Kind::Ssn
-                    },
-                    Strength::Shaped,
-                ),
-                |(kind, gap)| (kind, Strength::Labelled(gap)),
-            );
+            let (kind, strength) =
+                closest(text, identity, found.start(), found.end(), Reach::Above).map_or(
+                    (
+                        if found.as_str().starts_with('9') {
+                            Kind::Itin
+                        } else {
+                            Kind::Ssn
+                        },
+                        Strength::Shaped,
+                    ),
+                    |(kind, gap)| (kind, Strength::Labelled(gap)),
+                );
             candidate(found.start(), found.end(), kind, strength)
         })
         .collect();
     spans.extend(NINE_DIGITS.find_iter(digits).filter_map(|found| {
-        closest(text, &labels.identity, found.start(), found.end())
-            .map(|(kind, gap)| candidate(found.start(), found.end(), kind, Strength::Labelled(gap)))
+        closest(
+            text,
+            &labels.identity,
+            found.start(),
+            found.end(),
+            Reach::Above,
+        )
+        .map(|(kind, gap)| candidate(found.start(), found.end(), kind, Strength::Labelled(gap)))
     }));
     spans.extend(codes(text, digits, &labels));
     let not_accounts = &labels.not_accounts;
@@ -791,19 +947,12 @@ fn numbers(text: &str, digits: &str) -> Vec<Found> {
         let (start, end) = (found.start(), found.end());
         (aba(found.as_str())
             && alone(text, start, end)
-            && closest(text, &labels.routings, start, end).is_some())
+            && closest(text, &labels.routings, start, end, Reach::Line).is_some())
         .then(|| candidate(start, end, Kind::Routing, Strength::Checked))
     }));
     spans.extend(cards(text, digits));
-    // Under `(?i)`, `ſ` matches `S` and the Kelvin sign `K`, each a letter the copy has no
-    // spelling of, so a text holding either is matched as written.
-    let letters = if text.contains(['\u{17f}', '\u{212a}']) {
-        text
-    } else {
-        digits
-    };
     spans.extend(
-        IBAN.find_iter(letters)
+        IBAN.find_iter(digits)
             .filter(|found| iban(found.as_str()))
             .map(|found| candidate(found.start(), found.end(), Kind::Iban, Strength::Checked)),
     );
@@ -858,14 +1007,22 @@ fn labelled(
     if !check(found.as_str()) || !alone(text, start, end) {
         return None;
     }
-    let other = closest(text, others, start, end).map_or(usize::MAX, |(_, gap)| gap);
-    closest(text, labels, start, end)
+    let other = closest(text, others, start, end, Reach::Line).map_or(usize::MAX, |(_, gap)| gap);
+    closest(text, labels, start, end, Reach::Line)
         .filter(|&(_, gap)| gap < other)
         .map(|(kind, gap)| candidate(start, end, kind, Strength::Labelled(gap)))
 }
 
 /// A label's byte range and the kind it makes a number beside it.
 type Label = (usize, usize, Kind);
+
+/// Where a label may stand: on its number's line, or also on the line above (an identity number
+/// under its label on a form).
+#[derive(Clone, Copy)]
+enum Reach {
+    Line,
+    Above,
+}
 
 /// How far the closest of `labels` that claims a code at `start..end` is: within `reach`
 /// characters, on its line, with no digit between, so a label claims the first number beside it;
@@ -894,9 +1051,15 @@ fn claims(
         .min()
 }
 
-/// The kind of the closest of `labels` within [`NEAR`] characters of `start..end` on its line,
-/// and how far.
-fn closest(text: &str, labels: &[Label], start: usize, end: usize) -> Option<(Kind, usize)> {
+/// The kind of the closest of `labels` within [`NEAR`] characters of `start..end`, on its line or
+/// where `reach` lets it stand, and how far.
+fn closest(
+    text: &str,
+    labels: &[Label],
+    start: usize,
+    end: usize,
+    reach: Reach,
+) -> Option<(Kind, usize)> {
     labels
         .iter()
         .filter_map(|&(label_start, label_end, kind)| {
@@ -907,8 +1070,17 @@ fn closest(text: &str, labels: &[Label], start: usize, end: usize) -> Option<(Ki
             } else {
                 ""
             };
-            (!gap.contains('\n') && gap.chars().count() <= NEAR)
-                .then(|| (kind, gap.chars().count()))
+            // Bounded by bytes first, so a label far away costs nothing to rule out.
+            if gap.len() > 4 * NEAR {
+                return None;
+            }
+            let reaches = match (gap.matches('\n').count(), reach) {
+                (0, Reach::Line | Reach::Above) => true,
+                (1, Reach::Above) => label_end <= start,
+                (_, Reach::Line | Reach::Above) => false,
+            };
+            let chars = gap.chars().count();
+            (reaches && chars <= NEAR).then_some((kind, chars))
         })
         .min_by_key(|&(_, gap)| gap)
 }
@@ -1214,10 +1386,14 @@ mod tests {
 
     #[test]
     fn a_nine_digit_run_far_from_any_label_stays() {
-        let far = format!("SSN{}123456789", " ".repeat(NEAR + 1));
+        // A run of spaces reads as one, so the distance is in words.
+        let far = format!("SSN{}123456789", " x".repeat(NEAR / 2 + 1));
         assert_eq!(shown(&far), far);
-        let near = format!("SSN{}123456789", " ".repeat(NEAR));
-        assert_eq!(shown(&near), format!("SSN{}[redacted]", " ".repeat(NEAR)));
+        let near = format!("SSN{} 123456789", " x".repeat(NEAR / 2 - 1));
+        assert_eq!(
+            shown(&near),
+            format!("SSN{} [redacted]", " x".repeat(NEAR / 2 - 1))
+        );
         assert_eq!(shown("Order 123456789 shipped"), "Order 123456789 shipped");
     }
 
@@ -1644,8 +1820,8 @@ mod tests {
                 .into_iter()
                 .flatten()
                 .min()?;
-                let other =
-                    closest(text, not_codes, start, end).map_or(usize::MAX, |(_, other)| other);
+                let other = closest(text, not_codes, start, end, Reach::Line)
+                    .map_or(usize::MAX, |(_, other)| other);
                 (gap < other && alone(text, start, end) && !dated(&digits))
                     .then(|| candidate(start, end, Kind::Code, Strength::Code))
             })
@@ -1655,7 +1831,13 @@ mod tests {
     /// Every held number this module recognises in `text`, in order and never overlapping: two
     /// matches that overlap are one, from the first one's start to the later end, of the kind of
     /// the strongest: a code, then a kind whose checksum held, then the closest label.
+    /// The patterns read straight over the [`Normal`] copy, with no ASCII copy and no lazy labels.
     fn identity_numbers_before(text: &str) -> Vec<Found> {
+        let normal = Normal::of(text);
+        normal.back(numbers_before(&normal.text))
+    }
+
+    fn numbers_before(text: &str) -> Vec<Found> {
         let labels = Labels::of(text);
         let Labels {
             identity,
@@ -1669,22 +1851,23 @@ mod tests {
         let mut spans: Vec<Candidate> = WRITTEN_OUT
             .find_iter(text)
             .map(|found| {
-                let (kind, strength) = closest(text, identity, found.start(), found.end()).map_or(
-                    (
-                        if found.as_str().starts_with('9') {
-                            Kind::Itin
-                        } else {
-                            Kind::Ssn
-                        },
-                        Strength::Shaped,
-                    ),
-                    |(kind, gap)| (kind, Strength::Labelled(gap)),
-                );
+                let (kind, strength) =
+                    closest(text, identity, found.start(), found.end(), Reach::Above).map_or(
+                        (
+                            if found.as_str().starts_with('9') {
+                                Kind::Itin
+                            } else {
+                                Kind::Ssn
+                            },
+                            Strength::Shaped,
+                        ),
+                        |(kind, gap)| (kind, Strength::Labelled(gap)),
+                    );
                 candidate(found.start(), found.end(), kind, strength)
             })
             .collect();
         spans.extend(NINE_DIGITS.find_iter(text).filter_map(|found| {
-            closest(text, identity, found.start(), found.end()).map(|(kind, gap)| {
+            closest(text, identity, found.start(), found.end(), Reach::Above).map(|(kind, gap)| {
                 candidate(found.start(), found.end(), kind, Strength::Labelled(gap))
             })
         }));
@@ -1704,7 +1887,7 @@ mod tests {
             let (start, end) = (found.start(), found.end());
             (aba(found.as_str())
                 && alone(text, start, end)
-                && closest(text, routings, start, end).is_some())
+                && closest(text, routings, start, end, Reach::Line).is_some())
             .then(|| candidate(start, end, Kind::Routing, Strength::Checked))
         }));
         spans.extend(cards_before(text));
@@ -1863,6 +2046,141 @@ mod tests {
         proptest::collection::vec(piece, 0..24).prop_map(|pieces| pieces.concat())
     }
 
+    /// Every spelling of a separator the patterns read as `-`, ` `, `.` or `/`, with or without a
+    /// space either side of a dash.
+    const SEPARATORS: [&str; 18] = [
+        "-",
+        "\u{2010}",
+        "\u{2011}",
+        "\u{2012}",
+        "\u{2013}",
+        "\u{2014}",
+        "\u{2212}",
+        "\u{fe63}",
+        "\u{ff0d}",
+        " ",
+        "\u{a0}",
+        "\u{2009}",
+        "\u{202f}",
+        "\u{3000}",
+        ".",
+        "/",
+        " - ",
+        " \u{2013} ",
+    ];
+
+    /// Characters no reader sees: format characters and other default ignorables.
+    const HIDDEN: [&str; 9] = [
+        "\u{200b}", "\u{200c}", "\u{200d}", "\u{2060}", "\u{feff}", "\u{ad}", "\u{fe0f}",
+        "\u{34f}", "\u{3164}",
+    ];
+
+    /// Where a label stands: none, beside it, on the line above, and across a `pdftotext -layout`
+    /// column.
+    const LABELS: [&str; 5] = [
+        "",
+        "SSN: ",
+        "SSN:\n",
+        "Taxpayer ID (TIN)\n    ",
+        "EIN                                           ",
+    ];
+
+    /// The first code point of a run of ten digits from zero: ASCII, full-width, Arabic-Indic,
+    /// Persian, and mathematical bold.
+    const ZEROS: [u32; 5] = [0x30, 0xff10, 0x660, 0x6f0, 0x1d7ce];
+
+    proptest::proptest! {
+        /// The attack: a mail writes an identity number the way Word, a phone or a PDF does, in
+        /// any script's digits, with any dash or space between its groups (3-2-4, or an EIN's
+        /// 2-7), with invisible characters inside it, under its label or a column away from it.
+        /// No digit of it reaches the model.
+        #[test]
+        fn an_identity_number_in_any_spelling_is_redacted(
+            digits in proptest::collection::vec(0u32..10, 9),
+            zero in prop::sample::select(&ZEROS[..]),
+            ein in any::<bool>(),
+            separator in prop::sample::select(&SEPARATORS[..]),
+            hidden in proptest::collection::vec((0usize..14, prop::sample::select(&HIDDEN[..])), 0..4),
+            label in prop::sample::select(&LABELS[..]),
+        ) {
+            let mut pieces: Vec<String> = digits
+                .iter()
+                .map(|d| char::from_u32(zero + d).expect("a digit").to_string())
+                .collect();
+            if ein {
+                pieces.insert(2, separator.to_owned());
+            } else {
+                pieces.insert(5, separator.to_owned());
+                pieces.insert(3, separator.to_owned());
+            }
+            for (at, invisible) in hidden {
+                let at = at % (pieces.len() + 1);
+                pieces.insert(at, invisible.to_owned());
+            }
+            // Only a label makes nine digits in another grouping, or around a spaced dash, held.
+            let spaced = separator.len() > 1 && separator.starts_with(' ');
+            let label = if label.is_empty() && (ein || spaced) {
+                "SSN: "
+            } else {
+                label
+            };
+            let text = format!("Hello,\n{label}{} is on the form.", pieces.concat());
+            let shown = redact(&text).into_string();
+            prop_assert!(!shown.chars().any(char::is_numeric), "{:?} -> {:?}", text, shown);
+        }
+
+        /// No text panics the scrub, and what it finds is in order and never overlaps, though
+        /// NFKC writes one character as several (`½` as `1⁄2`) and two matches there can be one
+        /// here.
+        #[test]
+        fn any_text_is_found_in_order_and_disjoint(text in "[0-9 \\-½¼⅓⅒①²٣/.\u{200b}\nSSN:]{0,40}") {
+            let found = identity_numbers(&text);
+            prop_assert!(found.windows(2).all(|pair| pair[0].end <= pair[1].start), "{:?}", found);
+            prop_assert!(found.iter().all(|one| one.start < one.end && one.end <= text.len()));
+            let _ = redact(&text);
+        }
+
+        /// Ordinary text that holds numbers (dates, phone numbers, amounts, order and tracking
+        /// numbers, columns of figures) reads the same after the scrub.
+        #[test]
+        fn ordinary_numbers_stay(pieces in proptest::collection::vec(prop::sample::select(&[
+            "Meeting on 2026-10-25 at 14:30.",
+            "Due 10/25/2026.",
+            "Call 617-555-1234 or (617) 555-1234.",
+            "Order #4821-77 shipped.",
+            "Tracking 1Z999AA10123456784.",
+            "Total $1,500.00 and 300.25 EUR.",
+            "Savings      2024      1500      300",
+            "Checking     2025      2100      450",
+            "Bring your passport\n12345678 is your reservation.",
+        ][..]), 1..5), joiner in prop::sample::select(&[" ", "\n", "      "][..])) {
+            let text = pieces.join(joiner);
+            prop_assert_eq!(redact(&text).into_string(), text);
+        }
+    }
+
+    proptest::proptest! {
+        /// The plain path matches the text itself; it answers exactly what the normal copy does.
+        #[test]
+        fn the_plain_path_is_the_normal_path(pieces in proptest::collection::vec(prop::sample::select(&[
+            "SSN", "SSN:", "EIN", "code", "Account", "123-45-6789", "12-3456789", "482913",
+            "617-555-1234", "2026-10-25", "x", "7", " ", "  ", "\t", "\n", "\r\n", "\x0b", "\x0c",
+        ][..]), 0..24)) {
+            let text = pieces.concat();
+            let normal = Normal::of(&text);
+            prop_assert_eq!(
+                identity_numbers(&text),
+                normal.back(numbers(&normal.text, &ascii(&normal.text)))
+            );
+        }
+    }
+
+    /// The input that once mapped two matches back onto overlapping ranges.
+    #[test]
+    fn a_fraction_between_two_numbers_is_one_held_range() {
+        assert_eq!(shown("123-45-678\u{bd}34-56-7890"), "[redacted]");
+    }
+
     proptest::proptest! {
         #![proptest_config(proptest::prelude::ProptestConfig::with_cases(2048))]
         /// The fast path changes no result: the ASCII copy, the prefilters and the labels read
@@ -1893,6 +2211,8 @@ mod tests {
             "https://ada:pw@example.test/r?token=a1&code=b2 eyJa.eyJb.c and 2026-10-25",
             "Call 617-555-1234; code expires 2026-10-23; promo code 123456",
             "Passport No. X12345678, A-Number A123456789, passport photo IMG_20261023",
+            "SSN:\n１２３\u{2013}45\u{2013}67\u{200b}89, EIN                         12.3456789",
+            "SSN \u{661}\u{662}\u{663} \u{2013} 45 \u{2013} 6\u{fe0f}789; Savings      2024      1500",
         ];
         let scrubbed = corpus.map(|text| unlink(redact(text).as_str()));
         if let Err(moved) = Scrub::pinned((), scrubbed, PINNED_RULES, PINNED_CORPUS) {
@@ -1900,8 +2220,8 @@ mod tests {
         }
     }
 
-    const PINNED_RULES: &str = "403bab20bab53d90453e6715e6b70348a37d9a8bbc1f98e3b3add04ebb1e09c7";
-    const PINNED_CORPUS: &str = "471b61d5fa2f2229c93d19537d7bea384e386cab3608b5026767a2c83b873a62";
+    const PINNED_RULES: &str = "67d7f8df2fd4d019fd90b6d59f17f44b046e102ea2d8ad4da122d6e7517c4f4a";
+    const PINNED_CORPUS: &str = "9d34245a178fa4c00e21460a15ed512df6c37b32df26310f724325556d1c5125";
 
     #[test]
     fn rules_print_and_read_back() {
@@ -1970,5 +2290,55 @@ mod tests {
         }
         assert!(Scrubbed::of(&Plain("https://example.test/?token=t".to_owned())).is_err());
         assert!(Scrubbed::of(&Plain("nothing here".to_owned())).is_ok());
+    }
+}
+
+#[cfg(test)]
+mod bench {
+    /// Thousands of mail-like lines: dates, amounts, phone numbers, ids, a few non-ASCII words.
+    pub(super) fn corpus() -> Vec<String> {
+        let shapes = [
+            "Your order #48213 shipped on 2026-10-25 and arrives by 10/28/2026.",
+            "Call us at 617-555-1234 or +1 (617) 555-1234 between 9:00 and 17:30.",
+            "Total due: $1,532.40 (tax 212.18), invoice INV-2026-00{n} paid.",
+            "Le rendez-vous est confirmé pour le 12/11 à 14h30, salle 3.",
+            "Meeting moved to Thursday 3pm; dial-in 646 555 0199, code 482 913.",
+            "Tracking number 1Z999AA1012345678{n}, weight 2.4 kg, 3 parcels.",
+            "Thanks — see you at 7, the table for 4 is booked under Ada.",
+            "مرحبا، موعدك يوم 12 الساعة 3",
+            "Savings      2024      1500      300",
+            "Reply above this line. Sent from my phone at 08:41.",
+        ];
+        (0..6000)
+            .map(|n| shapes[n % shapes.len()].replace("{n}", &(n % 97).to_string()))
+            .collect()
+    }
+
+    /// A measurement, run by hand with `--ignored --nocapture`: the scrub over thousands of
+    /// mail-like lines, one at a time and as one growing body.
+    #[test]
+    #[ignore = "a measurement, run by hand"]
+    fn bench_redact_over_a_mail_corpus() {
+        let corpus = corpus();
+        let start = std::time::Instant::now();
+        let found: usize = corpus
+            .iter()
+            .map(|line| super::identity_numbers(line).len())
+            .sum();
+        eprintln!(
+            "per-line: {} lines in {:?}, {found} found",
+            corpus.len(),
+            start.elapsed()
+        );
+        for n in [100usize, 200, 400, 800] {
+            let body = corpus[..n].join("\n");
+            let start = std::time::Instant::now();
+            let found = super::identity_numbers(&body).len();
+            eprintln!(
+                "one body of {n} lines ({} bytes): {:?}, {found} found",
+                body.len(),
+                start.elapsed()
+            );
+        }
     }
 }

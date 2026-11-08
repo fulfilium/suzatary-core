@@ -19,7 +19,7 @@ pub enum UploadStanding {
 
 impl UploadStanding {
     /// The standing of what the store answers for an upload a live turn names; `layer` reads a
-    /// PDF's text layer and is asked only for a PDF on the box.
+    /// PDF and is asked only for a PDF on the box.
     ///
     /// # Errors
     /// `layer`'s sentence: without the text the box cannot tell whether a PDF names an identity
@@ -27,7 +27,7 @@ impl UploadStanding {
     pub fn of(
         id: &crate::attachment::AttachmentId,
         upload: Option<Upload>,
-        layer: impl FnOnce(&[u8]) -> Result<String, String>,
+        layer: impl FnOnce(&[u8]) -> Result<crate::file_read::Layer, String>,
     ) -> Result<Self, String> {
         match upload {
             None => Ok(Self::Erased),
@@ -53,7 +53,7 @@ impl UploadStanding {
                             Self::Indexed(readable.text().as_str().to_owned())
                         }
                         FileRead::Withheld {
-                            why: Withheld::HeldNumber,
+                            why: Withheld::HeldNumber | Withheld::Form,
                             ..
                         } => Self::Held,
                         // Too large or too long for a model, and naming no held number.
@@ -92,7 +92,10 @@ mod tests {
             UploadStanding::of(
                 &crate::attachment::AttachmentId::of(PDF),
                 Some(here_pdf()),
-                |_| Ok("SSN 123-45-6789 wages\u{c}".to_owned())
+                |_| Ok(crate::file_read::Layer::read(
+                    "SSN 123-45-6789 wages\u{c}".to_owned(),
+                    crate::file_read::Form::Absent
+                ))
             ),
             Ok(UploadStanding::Held)
         );

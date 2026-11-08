@@ -750,7 +750,7 @@ impl crate::secretary::google_sign_in::Consents for Nothing {
 }
 
 impl crate::capability::PdfText for Nothing {
-    fn text(&self, _: &[u8]) -> Result<String, String> {
+    fn layer(&self, _: &[u8]) -> Result<crate::file_read::Layer, String> {
         Err("this test reads no PDF".to_owned())
     }
 }
