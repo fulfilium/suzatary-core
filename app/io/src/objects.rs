@@ -17,7 +17,7 @@ use prodrome_core::store::{EventStore, Replica};
 use suzatary_core::record::Record;
 use suzatary_core::secretary::digest_event::DigestEvent;
 use suzatary_core::store::{
-    Hold, Kind, Prodrome, Reads, Reentrant, Store, StoreError, WriteLock, append_to,
+    Hold, Kind, Prodrome, Reads, Reentrant, Store, StoreError, WriteLock, append_to, begun,
 };
 
 use crate::durable;
@@ -283,6 +283,26 @@ impl<E: Store> Prodrome<E> for Objects<E> {
         let name = append_to(&self.events, E::LABEL, event).map_err(|e| Self::not_appended(e))?;
         Self::wrote(std::slice::from_ref(&name));
         Ok(name)
+    }
+
+    /// One decision, which stats every file in `objects/`, for the whole run, not one per event.
+    fn append_each(
+        &self,
+        next: &mut dyn FnMut() -> Result<Option<E>, StoreError>,
+    ) -> Result<Vec<Hash>, StoreError> {
+        begun(&self.events, E::LABEL).map_err(|e| Self::not_appended(e))?;
+        let mut decision = self.events.decide().map_err(|e| Self::not_appended(e))?;
+        let mut names = Vec::new();
+        let written = std::iter::from_fn(|| next().transpose()).try_for_each(|event| {
+            let event = event?;
+            if let Some(door) = &self.door {
+                door(&event).map_err(|refused| Self::not_appended(refused))?;
+            }
+            names.push(decision.append(event).map_err(|e| Self::not_appended(e))?);
+            Ok(())
+        });
+        Self::wrote(&names);
+        written.map(|()| names)
     }
 
     /// Where the store has a door, every object's event goes through it first, so a refusal

@@ -6,7 +6,8 @@
 //!   reads as absent;
 //! - a fresh store takes a store's prints whole, and taking them again takes nothing;
 //! - its fsck finds nothing in what it wrote or took;
-//! - its hold is the one its row declares.
+//! - its hold is the one its row declares;
+//! - `append_each` writes what one `append` per event writes, twins included.
 
 use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
@@ -105,6 +106,8 @@ fn laws<E: Store>(pinned: &str, open: impl Fn(PathBuf) -> Objects<E>) -> Kind {
     }
     drop(held);
 
+    appends_each_as_one_by_one(pinned, &open, &objects, &prints, dir.path());
+
     let fresh = open(dir.path().join("fresh"));
     fresh.begin().expect("begins");
     let begun = fresh.objects().expect("reads");
@@ -114,6 +117,60 @@ fn laws<E: Store>(pinned: &str, open: impl Fn(PathBuf) -> Objects<E>) -> Kind {
         E::LABEL
     );
     E::KIND
+}
+
+/// `append_each` over the pinned events, replayed twice so the second pass is all twins, answers
+/// and writes to disk what one `append` per event does, over the same genesis.
+fn appends_each_as_one_by_one<E: Store>(
+    pinned: &str,
+    open: impl Fn(PathBuf) -> Objects<E>,
+    objects: &[(Hash, Envelope<E>)],
+    prints: &[(Hash, String)],
+    dir: &Path,
+) {
+    let genesis: Vec<(Hash, String)> = prints
+        .iter()
+        .filter(|(name, _)| {
+            matches!(
+                objects.iter().find(|(n, _)| n == name),
+                Some((_, Envelope::Genesis(_)))
+            )
+        })
+        .cloned()
+        .collect();
+    let events: Vec<E> = objects
+        .iter()
+        .filter_map(|(_, o)| o.event().cloned())
+        .collect();
+    let (each, single) = (open(dir.join("each")), open(dir.join("single")));
+    each.accept(&genesis).expect("takes the genesis");
+    single.accept(&genesis).expect("takes the genesis");
+    let one_by_one: Vec<Hash> = events
+        .iter()
+        .chain(&events)
+        .map(|event| single.append(event.clone()).expect("appends"))
+        .collect();
+    let mut twice = events.iter().chain(&events).cloned();
+    let together = each.append_each(&mut || Ok(twice.next())).expect("appends");
+    assert_eq!(
+        together, one_by_one,
+        "{pinned}: append_each answers what append answers"
+    );
+    let on_disk = |at: &str| {
+        let reopened = open(dir.join(at));
+        let objects: Vec<(Hash, String)> = reopened
+            .objects()
+            .expect("reads")
+            .iter()
+            .map(|(name, object)| (name.clone(), canonical_envelope(object)))
+            .collect();
+        (objects, reopened.tips().expect("reads"))
+    };
+    assert_eq!(
+        on_disk("each"),
+        on_disk("single"),
+        "{pinned}: append_each writes to disk what append writes"
+    );
 }
 
 fn untrusted() -> Untrusted {

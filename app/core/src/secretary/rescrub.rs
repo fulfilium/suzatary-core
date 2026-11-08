@@ -234,9 +234,8 @@ pub fn census(conversations: Conversations<'_>) -> Result<Census, StoreError> {
 }
 
 /// Seal every stale slot again under the current rules at `at`, one reseal line per seal it
-/// supersedes, holding
-/// the lines' write lock; answers how many it appended. Each reseal's key is kept before its line
-/// is appended, as every write does. The keys it supersedes stand until [`run`]'s sweep.
+/// supersedes, each key kept before its line; answers how many. The keys it supersedes stand
+/// until [`run`]'s sweep.
 ///
 /// # Errors
 /// The stores' own, and a reseal the door refuses.
@@ -247,31 +246,37 @@ pub fn reseal(conversations: Conversations<'_>, at: Datetime) -> Result<usize, S
     for line in conversations.lines.events()? {
         *held.entry(line.conversation().clone()).or_default() += 1;
     }
-    let mut resealed = 0;
-    for (place, stands) in slots(conversations)? {
-        let Stands::Stale { from, words } = stands else {
-            continue;
+    let mut stale = slots(conversations)?
+        .into_iter()
+        .filter_map(|(place, stands)| match stands {
+            Stands::Stale { from, words } => Some((place, from, words)),
+            Stands::Current | Stands::Erased | Stands::Withheld | Stands::Unopened => None,
+        })
+        .flat_map(|(place, from, words)| {
+            from.into_iter()
+                .map(move |from| (place.clone(), from, words.clone()))
+        });
+    let resealed = conversations.lines.append_each(&mut || {
+        let Some((place, from, words)) = stale.next() else {
+            return Ok(None);
         };
         let count = held.entry(place.conversation.clone()).or_default();
-        for from in from {
-            let (line, key) = LineEvent::reseal(
-                place.conversation.clone(),
-                at,
-                transcript::writer(),
-                *count,
-                place.key.clone(),
-                from,
-                &words,
-                conversations.entropy,
-            )
-            .map_err(|why| refused(&why))?;
-            conversations.keys.set(&key.name(), &key)?;
-            conversations.lines.append(line)?;
-            *count += 1;
-            resealed += 1;
-        }
-    }
-    Ok(resealed)
+        let (line, key) = LineEvent::reseal(
+            place.conversation,
+            at,
+            transcript::writer(),
+            *count,
+            place.key,
+            from,
+            &words,
+            conversations.entropy,
+        )
+        .map_err(|why| refused(&why))?;
+        conversations.keys.set(&key.name(), &key)?;
+        *count += 1;
+        Ok(Some(line))
+    })?;
+    Ok(resealed.len())
 }
 
 /// Seal every stale slot again ([`reseal`]), then sweep, destroying each key a reseal

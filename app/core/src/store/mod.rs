@@ -51,7 +51,7 @@ pub use learnt::{Learnt, learn};
 pub use log::{Decide, Edit, Log};
 pub use memoised::memoised;
 pub use only::Only;
-pub use prodrome::{Prodrome, Reads, WriteLock, append_to, left_out, linearised};
+pub use prodrome::{Prodrome, Reads, WriteLock, append_to, begun, left_out, linearised};
 pub use recording::{recording, wrote};
 pub use reentrant::Reentrant;
 pub use signing::{Signer, Signing, sign};

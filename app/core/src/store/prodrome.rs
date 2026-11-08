@@ -23,13 +23,25 @@ pub fn append_to<E: Schema, Pol: Policy<E>>(
     label: &str,
     event: E,
 ) -> Result<Hash, ProdromeError> {
+    begun(store, label)?;
+    store.append(event)
+}
+
+/// The store's prodrome begun with a `Genesis` labelled `label` when it holds none ([`append_to`]).
+///
+/// # Errors
+/// The core's refusal.
+pub fn begun<E: Schema, Pol: Policy<E>>(
+    store: &EventStore<E, Pol>,
+    label: &str,
+) -> Result<(), ProdromeError> {
     if store.tips()?.is_empty()
         && let Err(refused) = store.init(label)
         && store.tips()?.is_empty()
     {
         return Err(refused);
     }
-    store.append(event)
+    Ok(())
 }
 
 /// Every name a DAG leaves out of its history, and every object resting on one.
@@ -165,6 +177,23 @@ pub trait Prodrome<E: Schema>: Reads<E> {
     /// # Errors
     /// [`StoreError::Unwritable`], leaving the store unchanged.
     fn append(&self, event: E) -> Result<Hash, StoreError>;
+
+    /// [`Prodrome::append`] for each event `next` yields, which runs between the writes. `next` must
+    /// not read or write this store: a store on disk holds its lock and memory across the run, so
+    /// such a `next` would wait on itself forever.
+    ///
+    /// # Errors
+    /// `next`'s, or [`StoreError::Unwritable`]; what was written before stays.
+    fn append_each(
+        &self,
+        next: &mut dyn FnMut() -> Result<Option<E>, StoreError>,
+    ) -> Result<Vec<Hash>, StoreError> {
+        let mut names = Vec::new();
+        while let Some(event) = next()? {
+            names.push(self.append(event)?);
+        }
+        Ok(names)
+    }
 
     /// The restricted join, the Prodrome's `store::accept`: take in exactly these objects, each
     /// its name and canonical print, verified on receipt, renaming nothing; answers what was
