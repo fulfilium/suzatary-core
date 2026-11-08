@@ -18,6 +18,8 @@ use super::State;
 pub enum Guard {
     /// Any viewer.
     Read,
+    /// A peer mapped to an actor, with no triple.
+    Actor,
     /// A peer mapped to an actor, with the CSRF triple.
     Write,
     /// The same check, the actor handed to the work.
@@ -31,15 +33,15 @@ impl Guard {
     pub fn name(self) -> &'static str {
         match self {
             Guard::Read => "read",
+            Guard::Actor => "actor",
             Guard::Write => "write",
             Guard::Act => "act",
             Guard::Tap => "tap",
         }
     }
 
-    /// Checks the gate's answers before the request is read: every guard but `Read` needs a
-    /// peer mapped to an actor (or the operator) and the CSRF triple. A guard whose witness asks
-    /// no proof refuses the operator in its own check.
+    /// Checks the gate's answers before the request is read. A guard whose witness asks no
+    /// proof refuses the operator in its own check.
     ///
     /// # Errors
     /// The refusal of whichever check failed.
@@ -49,11 +51,14 @@ impl Guard {
         admitted: &Admitted,
         headers: &ActHeaders<'_>,
     ) -> Result<(), Refusal> {
-        if self == Guard::Read {
-            return Ok(());
+        match self {
+            Guard::Read => Ok(()),
+            Guard::Actor => actor_of(&state.deployment, admitted).map(|_| ()),
+            Guard::Write | Guard::Act | Guard::Tap => {
+                writer_of(&state.deployment, admitted)?;
+                check_csrf(headers)
+            }
         }
-        writer_of(&state.deployment, admitted)?;
-        check_csrf(headers)
     }
 }
 
@@ -171,6 +176,18 @@ impl Guarded for Reader {
 
     fn check(_: &State, _: &Admitted, _: &ActHeaders<'_>, (): &()) -> Result<Self, Refusal> {
         Ok(Reader)
+    }
+}
+
+/// A peer mapped to an actor, asked no triple.
+pub struct Mapped;
+
+impl Guarded for Mapped {
+    const GUARD: Guard = Guard::Actor;
+    type Proof = ();
+
+    fn check(_: &State, _: &Admitted, _: &ActHeaders<'_>, (): &()) -> Result<Self, Refusal> {
+        Ok(Mapped)
     }
 }
 

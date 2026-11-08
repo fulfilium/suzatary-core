@@ -1,5 +1,4 @@
-//! The box's own routes, no chain's: briefings, the calendar, devices, the build and its
-//! releases, who is looking, and a tab's failures.
+//! The box's own routes, no chain's.
 
 use axum::Json;
 use axum::extract::Request;
@@ -13,7 +12,7 @@ use suzatary_core::{devices, routes, wire};
 
 use super::body::{Body, MAX_ACT_BYTES};
 use super::call::Call;
-use super::guard::{Asker, Reader, Reporter};
+use super::guard::{Asker, Mapped, Reader, Reporter};
 use super::params::{Asked, Params};
 use super::reply::refused;
 use super::{Chained, State};
@@ -85,8 +84,8 @@ pub fn calendar(call: &Call<Reader, Day, ()>) -> Result<Json<wire::CalendarPaylo
     .map(Json)
 }
 
-/// `GET /api/presence`: a shown page's ping; it decides whether a decision rings the phone.
-pub fn presence(call: &Call<Reader, (), ()>) -> StatusCode {
+/// `GET /api/presence`: a writer's open page quiets the phone.
+pub fn presence(call: &Call<Mapped, (), ()>) -> StatusCode {
     call.state.presence.seen();
     StatusCode::NO_CONTENT
 }
@@ -105,8 +104,7 @@ pub fn portal(call: &Call<Reader, (), ()>) -> Json<wire::PortalPayload> {
     Json(wire::PortalPayload::from(call.state.portal.as_ref()))
 }
 
-/// `GET /api/releases`: the releases this build's plan declares, as the project chain reads
-/// them now.
+/// `GET /api/releases`: the releases this build's plan declares.
 pub fn releases(call: &Call<Reader, (), ()>) -> Result<Json<wire::ReleasesPayload>, Refusal> {
     let plan = Plan::declared().map_err(|e| Refusal::internal(e.to_string()))?;
     let now = call.chain.caps.secretary.clock.now();
@@ -225,7 +223,7 @@ pub fn pair(call: &Call<Asker, (), PairingCode>) -> Result<Json<serde_json::Valu
     }
 }
 
-/// A GET anywhere under `/api/act/` is 405, or the frontend's index would answer it.
+/// A GET under `/api/act/` is 405, or the frontend's index would answer it.
 pub async fn act_read(request: Request) -> Response {
     refused(&Refusal::method_not_allowed(format!(
         "{} is POST-only; a read is one of /api/chain, /api/fold, /api/todo/<id>",

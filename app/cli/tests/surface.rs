@@ -157,7 +157,7 @@ fn the_golden_list_is_sorted_and_every_write_is_guarded() {
             line.path
         );
         assert!(
-            ["read", "write", "act", "tap"].contains(&line.guard),
+            ["read", "actor", "write", "act", "tap"].contains(&line.guard),
             "{} {} names no guard",
             line.method,
             line.path
@@ -199,6 +199,16 @@ fn every_listed_route_answers_behind_its_guard() {
                 let answer = ask(line.method, &format!("{base}{path}"), false);
                 assert_ne!(answer.status, 403, "{shown} is a read and refused a viewer");
             }
+        } else if line.guard == "actor" {
+            for (who, base) in [
+                ("the local shell", &servers.local),
+                ("a viewer who may not write", &servers.reader),
+            ] {
+                let answer = ask(line.method, &format!("{base}{path}"), false);
+                assert_eq!(answer.status, 403, "{shown} let {who} through");
+            }
+            let bare = ask(line.method, &format!("{}{path}", servers.writer), false);
+            assert_ne!(bare.status, 403, "{shown} asks a writer for the triple");
         } else {
             for (who, base, triple) in [
                 ("the local shell", &servers.local, true),

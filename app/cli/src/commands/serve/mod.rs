@@ -45,7 +45,8 @@ pub mod world;
 use std::collections::BTreeMap;
 use std::net::SocketAddr;
 use std::path::{Path, PathBuf};
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
+use std::time::{Duration, Instant};
 
 use anyhow::Context;
 use axum::Router;
@@ -53,6 +54,7 @@ use axum::http::{HeaderValue, header};
 
 use suzatary_core::capability::Server;
 use suzatary_core::deployment::Deployment;
+use suzatary_core::google::Endpoints;
 use suzatary_core::refusal::{Refusal, shown};
 use suzatary_core::secretary::compacting::Compacting;
 use tower_http::compression::{CompressionLayer, CompressionLevel};
@@ -119,7 +121,7 @@ pub struct Inner {
     /// Reached only with a `Tap`.
     pub acting: Arc<dyn suzatary_core::secretary::routes::Perform + Send + Sync>,
     /// Whois answers, per server.
-    pub known: Arc<std::sync::Mutex<gate::Remembering>>,
+    pub known: Arc<Mutex<gate::Remembering>>,
     pub workers: Arc<Workers>,
     /// Only [`State::reconnected`] writes it.
     pub live: live::Shared,
@@ -146,17 +148,17 @@ pub struct Inner {
     pub compactor: Option<Arc<compaction::Compactor>>,
     pub presence: Presence,
     /// Error-report budgets per login.
-    pub reports: Arc<std::sync::Mutex<suzatary_core::clienterror::Limiter>>,
+    pub reports: Arc<Mutex<suzatary_core::clienterror::Limiter>>,
     pub stamp: Stamp,
     /// `None` declares no plugin.
     pub plugins: Option<Arc<crate::instance::Plugins>>,
     pub repos: Arc<suzatary_core::repos::Declared>,
     pub data: Arc<std::path::PathBuf>,
     /// Only a chain whose heads moved is reread.
-    pub read: Arc<std::sync::Mutex<suzatary_core::chain_set::Read>>,
+    pub read: Arc<Mutex<suzatary_core::chain_set::Read>>,
     /// Open connection cards, memoised.
     pub asking: Arc<
-        std::sync::Mutex<
+        Mutex<
             prodrome_core::memo::Cache<
                 Vec<suzatary_core::settings::overview::Asking>,
                 prodrome_core::memo::Lru,
@@ -164,7 +166,7 @@ pub struct Inner {
         >,
     >,
     pub built: Arc<
-        std::sync::Mutex<
+        Mutex<
             prodrome_core::memo::Cache<
                 suzatary_core::settings::overview::Build,
                 prodrome_core::memo::Lru,
@@ -189,9 +191,9 @@ pub struct Inner {
     /// Begun only with a `Tap`, finished only by its callback.
     pub consenting: Arc<google::Consenting>,
     /// Held across a filing, so none files a card twice.
-    pub noticing: Arc<std::sync::Mutex<Option<Heard>>>,
+    pub noticing: Arc<Mutex<Option<Heard>>>,
     /// Secret store answers since the last filing.
-    pub secrets_answered: Arc<std::sync::Mutex<suzatary_core::capability::SecretAnswers>>,
+    pub secrets_answered: Arc<Mutex<suzatary_core::capability::SecretAnswers>>,
     pub epochs: Arc<suzatary_core::epoch::Epochs>,
     pub frontiers: Arc<prodrome_core::store::frontier::Frontiers>,
     /// What `GET /api/portal` answers.
@@ -274,9 +276,8 @@ impl Stamp {
     pub fn about(
         &self,
         set: &suzatary_core::chain_set::ChainSet<'_>,
-    ) -> Result<suzatary_core::wire::AboutPayload, suzatary_core::refusal::Refusal> {
-        let internal =
-            |e: &dyn std::fmt::Display| suzatary_core::refusal::Refusal::internal(e.to_string());
+    ) -> Result<suzatary_core::wire::AboutPayload, Refusal> {
+        let internal = |e: &dyn std::fmt::Display| Refusal::internal(e.to_string());
         let released = match crate::stamp::release().map_err(|e| internal(&e))? {
             crate::stamp::Release::Released(released) => Some(released),
             crate::stamp::Release::Dev => None,
@@ -286,22 +287,21 @@ impl Stamp {
     }
 }
 
-/// Whether a ping came within [`PRESENT_SECONDS`].
+/// Whether a writer's page pinged within [`PRESENT_SECONDS`].
 #[derive(Debug, Clone, Default)]
-pub struct Presence(Arc<std::sync::Mutex<Option<std::time::Instant>>>);
+pub struct Presence(Arc<Mutex<Option<Instant>>>);
 
 /// Two missed pings and a margin.
 pub const PRESENT_SECONDS: u64 = 70;
 
 impl Presence {
     pub fn seen(&self) {
-        *locks::held(&self.0) = Some(std::time::Instant::now());
+        *locks::held(&self.0) = Some(Instant::now());
     }
 
     #[must_use]
     pub fn anyone(&self) -> bool {
-        locks::held(&self.0)
-            .is_some_and(|at| at.elapsed() < std::time::Duration::from_secs(PRESENT_SECONDS))
+        locks::held(&self.0).is_some_and(|at| at.elapsed() < Duration::from_secs(PRESENT_SECONDS))
     }
 }
 
@@ -333,14 +333,14 @@ impl State {
             data,
         }: Settings,
     ) -> Self {
-        let answered = std::sync::Mutex::new(suzatary_core::health::Healths::one(
+        let answered = Mutex::new(suzatary_core::health::Healths::one(
             models.recorded(),
             chrono::DateTime::UNIX_EPOCH.naive_utc(),
             suzatary_core::health::Outcome::Succeeded,
             "",
         ));
         let consenting = Arc::new(google::Consenting::new(
-            suzatary_io::google::Google::new(suzatary_core::google::Endpoints::google()),
+            suzatary_io::google::Google::new(Endpoints::google()),
             Arc::new(Unresolved),
             Arc::clone(&edits),
             &deployment.app_url,
@@ -371,18 +371,18 @@ impl State {
             titler: None,
             compactor: None,
             presence: Presence::default(),
-            reports: Arc::new(std::sync::Mutex::new(
-                suzatary_core::clienterror::Limiter::new(suzatary_core::clienterror::BUDGET),
-            )),
+            reports: Arc::new(Mutex::new(suzatary_core::clienterror::Limiter::new(
+                suzatary_core::clienterror::BUDGET,
+            ))),
             stamp: Stamp::Compiled,
             plugins: None,
             repos: Arc::new(suzatary_core::repos::Declared::default()),
             data,
             read: Arc::default(),
-            asking: Arc::new(std::sync::Mutex::new(prodrome_core::memo::Cache::new(
+            asking: Arc::new(Mutex::new(prodrome_core::memo::Cache::new(
                 prodrome_core::memo::Lru::new(4),
             ))),
-            built: Arc::new(std::sync::Mutex::new(prodrome_core::memo::Cache::new(
+            built: Arc::new(Mutex::new(prodrome_core::memo::Cache::new(
                 prodrome_core::memo::Lru::new(4),
             ))),
             keys: None,
@@ -835,7 +835,7 @@ pub struct Serving {
     /// Rung when a model starts or stops answering.
     pub moved: Arc<tokio::sync::Notify>,
     /// Google's endpoints, or a fake.
-    pub google: suzatary_core::google::Endpoints,
+    pub google: Endpoints,
 }
 
 const NOT_BUILT: &str = "suzatary serve — the API is up, the frontend is not built.
@@ -1150,15 +1150,15 @@ fn serving(instance: &Instance, args: Args) -> anyhow::Result<Serving> {
     let stamp = Stamp::Compiled;
     #[cfg(feature = "fixture")]
     let google = match google_fixture {
-        None => suzatary_core::google::Endpoints::google(),
+        None => Endpoints::google(),
         // A fixture behind a real certificate is reachable.
         Some(_) if secure => {
             anyhow::bail!("--google-fixture is test-only and refuses to run with a certificate")
         }
-        Some(base) => suzatary_core::google::Endpoints::at(&base),
+        Some(base) => Endpoints::at(&base),
     };
     #[cfg(not(feature = "fixture"))]
-    let google = suzatary_core::google::Endpoints::google();
+    let google = Endpoints::google();
     let live = live::Live::of(instance).shared();
     let moved = Arc::new(tokio::sync::Notify::new());
     let answered = suzatary_io::model_health::beside(&instance.mail.heartbeat).ringing({
@@ -1307,7 +1307,7 @@ fn performers(
     instance: &Instance,
     answered: &suzatary_io::model_health::Answered,
     moved: &Arc<tokio::sync::Notify>,
-    #[cfg(feature = "fixture")] (scripted, google): (bool, &suzatary_core::google::Endpoints),
+    #[cfg(feature = "fixture")] (scripted, google): (bool, &Endpoints),
 ) -> (
     Performing,
     Arc<sign_ins::SignIns>,
@@ -1391,7 +1391,7 @@ fn real_acting(
 fn recording_acting(
     instance: &Instance,
     signing: &Arc<sign_ins::SignIns>,
-    google: &suzatary_core::google::Endpoints,
+    google: &Endpoints,
 ) -> Performing {
     let (instance, signing, google) = (instance.clone(), Arc::clone(signing), google.clone());
     Box::new(move |stores, workers| {
@@ -1497,7 +1497,7 @@ async fn notice_from_now_on(state: State, moved: Arc<tokio::sync::Notify>) {
     });
     tokio::spawn(async move {
         // The first tick is at once.
-        let mut every = tokio::time::interval(std::time::Duration::from_hours(1));
+        let mut every = tokio::time::interval(Duration::from_hours(1));
         loop {
             every.tick().await;
             let noticing = state.clone();
@@ -1513,7 +1513,7 @@ async fn notice_from_now_on(state: State, moved: Arc<tokio::sync::Notify>) {
     });
 }
 
-const INSTANCE_POLL: std::time::Duration = std::time::Duration::from_secs(1);
+const INSTANCE_POLL: Duration = Duration::from_secs(1);
 
 /// Reconnect and file when the instance file's bytes move; an unreadable one retries next tick.
 pub async fn instance_watched(state: State, path: PathBuf) {
@@ -1635,7 +1635,7 @@ async fn erase_at_startup(chain: &Chained) {
             .hold()
             .and_then(|held| held.erase_forgotten());
         let lines = suzatary_core::secretary::transcript::sweep(caps.secretary.conversations)
-            .map_err(suzatary_core::refusal::Refusal::from);
+            .map_err(Refusal::from);
         let texts = caps.secretary.memories.sweep();
         let indexed = suzatary_core::secretary::file_search::reindex(
             caps.secretary.conversations,

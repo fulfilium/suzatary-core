@@ -197,3 +197,41 @@ fn a_request_addressed_elsewhere_is_refused() {
         }
     }
 }
+
+/// Law: no page but a writer's quiets the phone. A viewer's ping and the box's own ping to
+/// `GET /api/presence` are refused, so neither can keep a decision from ringing the owner.
+#[test]
+fn only_a_writer_s_page_quiets_the_phone() {
+    let viewer = common::deployment([peer()], []);
+    let writer = common::deployment([peer()], [(peer(), common::actor("ada"))]);
+    let the_box = common::FakeWhois::new()
+        .naming(common::v4(), peer())
+        .this_box_at(common::v4());
+    let cases = [
+        (
+            "a viewer",
+            Fakes::new("presence-viewer")
+                .whois(common::FakeWhois::new().naming(common::v4(), peer())),
+            viewer,
+            403,
+        ),
+        (
+            "this box",
+            Fakes::new("presence-box").whois(the_box),
+            writer.clone(),
+            403,
+        ),
+        (
+            "a writer",
+            Fakes::new("presence-writer")
+                .whois(common::FakeWhois::new().naming(common::v4(), peer())),
+            writer,
+            204,
+        ),
+    ];
+    for (who, fakes, deployment, status) in cases {
+        let base = common::start(std::sync::Arc::new(fakes), deployment, vec![]);
+        let response = common::get(&format!("{base}/api/presence"));
+        assert_eq!(common::status(&response), status, "{who}");
+    }
+}

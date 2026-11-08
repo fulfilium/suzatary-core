@@ -30,7 +30,7 @@ GET /api/objects read -
 POST /api/objects act -
 GET /api/overview read -
 GET /api/portal read -
-GET /api/presence read -
+GET /api/presence actor -
 GET /api/releases read -
 POST /api/secretary/attachments write signed
 GET /api/secretary/attachments/{id} read -

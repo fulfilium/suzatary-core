@@ -24,7 +24,7 @@ use super::reply::refused;
 const TTL: Duration = Duration::from_mins(1);
 
 /// What the daemon said about an address, and until when: its owner and whether it is this
-/// box's own node, so a node that changes its address is known again within a minute.
+/// box's own node.
 ///
 /// One per server in [`State`], never a static, so two servers in one process
 /// cannot answer each other's whois.
