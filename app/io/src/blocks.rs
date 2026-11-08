@@ -1,10 +1,10 @@
-//! What one request carries beside its text: the photos and PDFs the owner sent and the files a
-//! verb handed over, as the image and document blocks the `claude` CLI's stream-json takes.
+//! The photos and PDFs one request carries, as the `claude` CLI's stream-json blocks.
 
 use serde_json::{Value, json};
 use suzatary_core::attachment::{Attachment, AttachmentId};
 use suzatary_core::capability::{ModelError, Turn};
 use suzatary_core::enclosed::{Enclosed, Enclosure};
+use suzatary_core::for_model::ForModel;
 
 use crate::attachments::AttachmentStore;
 use crate::blobs::Blobs;
@@ -52,9 +52,8 @@ impl Named<'_> {
 }
 
 impl Blocks {
-    /// The blocks for `turns`: the latest photos and files, newest first until a count or the
-    /// byte budget is reached, then put back in the order they were said.
-    /// A turn naming something no store holds fails rather than sending the request without it.
+    /// The blocks for `turns`: the latest photos and files within the counts and the byte
+    /// budget, in the order they were said. A turn naming something no store holds fails.
     pub fn of(stores: &Stores, turns: &[Turn]) -> Result<Self, ModelError> {
         let (mut photos, mut files, mut bytes) = (0, 0, 0u64);
         let mut named: Vec<Named<'_>> = Vec::new();
@@ -136,7 +135,7 @@ fn block(stores: &Stores, named: &Named<'_>) -> Result<Value, ModelError> {
         Enclosure::Pdf => json!({
             "type": "document",
             "source": { "type": "base64", "media_type": "application/pdf", "data": data },
-            "title": title,
+            "title": ForModel::file_name(title).as_str(),
         }),
         Enclosure::Image(image) => json!({
             "type": "image",
@@ -280,6 +279,16 @@ mod tests {
             titles,
             ["lease 2.pdf", "lease 3.pdf", "lease 4.pdf", "lease 5.pdf"]
         );
+    }
+
+    /// Law: no document title carries an identity number from a file's name.
+    #[test]
+    fn a_number_in_a_file_s_name_never_reaches_the_model() {
+        let dir = tempfile::tempdir().expect("scratch");
+        let stores = stores(dir.path());
+        let turns = [handed(&stores, "W-2 SSN 000-12-3456.pdf", PDF)];
+        let content = Blocks::of(&stores, &turns).expect("read").content("x");
+        assert_eq!(content[0]["title"], "W-2 SSN ….pdf");
     }
 
     #[test]

@@ -1,6 +1,5 @@
-//! Text on its way to a model. Every model client takes [`ForModel`] and nothing else, and
-//! [`ForModel::of`], which writes every held number as a placeholder (`held_value::withheld`), is
-//! its one constructor, so no path can send a model text the masker did not read.
+//! Text on its way to a model. Every model client takes [`ForModel`] alone, and each of its
+//! constructors masks, so no path sends a model text the masker did not read.
 
 use crate::held_value::withheld;
 
@@ -13,6 +12,12 @@ impl ForModel {
     #[must_use]
     pub fn of(text: &str) -> Self {
         Self(withheld(text))
+    }
+
+    /// A file's name, masked as a placeholder shows it.
+    #[must_use]
+    pub fn file_name(name: &str) -> Self {
+        Self(crate::held_value::file_name(name))
     }
 
     /// The text.

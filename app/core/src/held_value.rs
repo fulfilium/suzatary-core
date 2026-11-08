@@ -265,7 +265,7 @@ pub(crate) fn file_size(size: u64) -> String {
 
 /// A file's name as a placeholder shows it: no bracket, middle dot or control character, and no
 /// number [`crate::redact`] finds, each removed until none is left.
-fn file_name(name: &str) -> String {
+pub(crate) fn file_name(name: &str) -> String {
     let mut shown: String = name
         .chars()
         .map(|c| {
