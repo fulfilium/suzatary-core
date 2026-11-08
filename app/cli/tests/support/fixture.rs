@@ -469,7 +469,8 @@ pub const CONNECT_CONVERSATION: &str = "connect";
 /// removal standing as a card.
 fn a_connected_calendar(root: &Path) -> anyhow::Result<()> {
     use suzatary_core::conversation_id::ConversationId;
-    use suzatary_core::secretary::store::{Entry, Kind, Proposal, Reasons};
+    use suzatary_core::secretary::proposal::{Proposal, Reasons};
+    use suzatary_core::secretary::store::{Entry, Kind};
     use suzatary_core::settings::Edits as _;
 
     let calendar = suzatary_core::connect::Connection::parse("ics", &[CONNECTED.to_owned()])?;
@@ -1531,7 +1532,8 @@ fn bulk_proposals(
 ) -> anyhow::Result<()> {
     use prodrome_core::event::Actor;
     use suzatary_core::conversation_id::ConversationId;
-    use suzatary_core::secretary::store::{Draft, Entry, Kind, Proposal, Reasons};
+    use suzatary_core::secretary::proposal::{Draft, Proposal, Reasons};
+    use suzatary_core::secretary::store::{Entry, Kind};
     if count == 0 {
         return Ok(());
     }

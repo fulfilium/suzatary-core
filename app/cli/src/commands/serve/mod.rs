@@ -1587,7 +1587,7 @@ async fn reconcile_orphaned_acts(chain: &Chained) {
     let caps = chain.caps;
     let now = caps.secretary.clock.now();
     match tokio::task::spawn_blocking(move || {
-        suzatary_core::secretary::acts::reconcile(
+        suzatary_core::secretary::act_lines::reconcile(
             caps.secretary.conversations,
             caps.secretary.inbox,
             now,

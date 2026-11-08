@@ -109,7 +109,7 @@ pub fn find(
                 conversation: stored.id.clone(),
                 title: stored.heading().into_owned(),
                 turn: index,
-                at: crate::secretary::store::stamp(said.at),
+                at: crate::secretary::stamp::stamp(said.at),
                 said: match &said.turn {
                     Turn::Person { text, .. } => cut(text),
                     Turn::Model { .. }

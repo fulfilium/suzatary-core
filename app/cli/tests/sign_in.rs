@@ -78,7 +78,7 @@ const CODE_CARD: usize = 1;
 
 /// Tap the box's card `index` in its `setup` conversation, with `body`.
 fn tap(base: &str, index: usize, body: &serde_json::Value) -> serde_json::Value {
-    let setup = suzatary_core::secretary::noticed::CONVERSATION.as_str();
+    let setup = suzatary_core::conversation_id::SETUP.as_str();
     let mut tapped = common::act(
         &format!("{base}/api/secretary/conversations/{setup}/proposals/{index}/tap"),
         body,
@@ -179,7 +179,7 @@ fn a_token_whose_test_call_fails_is_not_kept() {
 fn filings_at_once_file_each_card_once() {
     let secrets = Arc::new(SecretRecorder::new());
     let base = unanswered("signin-concurrent", &secrets, VerifyRecorder::default());
-    let setup = suzatary_core::secretary::noticed::CONVERSATION.as_str();
+    let setup = suzatary_core::conversation_id::SETUP.as_str();
     let reading = common::reading(&base, setup, &[]);
     let kinds: Vec<&str> = reading["proposals"]
         .as_array()

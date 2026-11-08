@@ -12,7 +12,7 @@ use crate::health::{Instant, Reading};
 use crate::reference::Reference;
 use crate::refusal::Refusal;
 use crate::secretary::changes::{self, Act, Changeset};
-use crate::secretary::store::{Proposal, Reasons};
+use crate::secretary::proposal::{Proposal, Reasons};
 use crate::secretary::{Bound, WRITES_AS};
 use crate::todo::{Price, TodoFields};
 

@@ -11,8 +11,8 @@
 use crate::health::{Healths, Instant, Reading};
 use crate::secretary::acts::Act;
 use crate::secretary::noticed::Owed;
+use crate::secretary::proposal::Proposal;
 use crate::secretary::sign_in::SignInUrl;
-use crate::secretary::store::Proposal;
 use crate::settings::{Settable, Settables};
 
 /// What the box knows of its model.

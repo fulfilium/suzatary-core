@@ -141,10 +141,10 @@ mod tests {
     fn asked(proposal: &str, why: &str) -> InboxEvent {
         let asked = crate::secretary::inbox::Asked {
             proposer: crate::secretary::proposer::Proposer::Secretary,
-            proposal: crate::secretary::store::Proposal::Email(
-                crate::secretary::store::Draft::default(),
+            proposal: crate::secretary::proposal::Proposal::Email(
+                crate::secretary::proposal::Draft::default(),
             ),
-            reasons: crate::secretary::store::Reasons::new(
+            reasons: crate::secretary::proposal::Reasons::new(
                 why,
                 vec!["mail:abcdef012345".parse().expect("a reference")],
             )

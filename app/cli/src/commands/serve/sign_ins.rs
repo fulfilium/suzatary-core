@@ -10,7 +10,7 @@ use suzatary_core::capability::{Datetime, Secret};
 use suzatary_core::secretary::inbox::ProposalId;
 use suzatary_core::secretary::responded::{Performed, Tried};
 use suzatary_core::secretary::sign_in::{Sessions, SignInUrl};
-use suzatary_core::secretary::store::stamp;
+use suzatary_core::secretary::stamp::stamp;
 use suzatary_io::setup_token::SignIn;
 
 /// How long a sign-in stays open: its Connect card's expiry, after which it may be tapped again.

@@ -3,9 +3,9 @@
 use super::SecretarySurface;
 use super::filed::{Filed, Filing};
 use super::gate::Gate;
+use super::proposal::{Proposal, Reasons};
 use super::proposer::Proposer;
 use super::responded::Withdrawal;
-use super::store::{Proposal, Reasons};
 use super::surface::Binding;
 use crate::agent::verbs;
 use crate::capability::{MailError, Secretary};

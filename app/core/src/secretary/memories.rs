@@ -17,8 +17,8 @@ use crate::secretary::memory::{
     Fact, FactId, Forgotten, Kind, MAX_LIVE, Memory, Origin, Remembered, Replaces, Sources,
 };
 use crate::secretary::memory_event::{self, MemoryEvent};
+use crate::secretary::proposal::Proposal;
 use crate::secretary::salted_text::{Text, TextName};
-use crate::secretary::store::Proposal;
 use crate::secretary::two_phase::TwoPhase;
 use crate::store::{Doc, Gets, Prodrome, Reads, WriteLock};
 
@@ -473,7 +473,7 @@ impl Held<'_> {
             conversation: conversation.clone(),
             index: crate::secretary::read(lines, conversation)?.proposals.len(),
         });
-        let reasons = crate::secretary::store::Reasons::new(
+        let reasons = crate::secretary::proposal::Reasons::new(
             format!(
                 "forgetting fact {fact} erased the call that wrote it down; what was said around \
                  it may say it in other words, and only you can tell"

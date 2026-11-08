@@ -7,7 +7,7 @@ use suzatary_core::conversation_id::DEFAULT;
 use suzatary_core::reference::TodoRef;
 use suzatary_core::refusal::{Refusal, Status};
 use suzatary_core::routes;
-use suzatary_core::secretary::acts::{self, ActLine};
+use suzatary_core::secretary::act_lines::{self, ActLine};
 use suzatary_core::signatures::Seat;
 use suzatary_core::signatures::Tap;
 use suzatary_core::{query, wire};
@@ -301,7 +301,7 @@ fn noted(
                 std::slice::from_ref(&line.reference),
                 &set,
             );
-            acts::note_act(first.secretary.conversations, &DEFAULT, line, by)
+            act_lines::note_act(first.secretary.conversations, &DEFAULT, line, by)
         })
     });
     if let Err(failed) = noting {

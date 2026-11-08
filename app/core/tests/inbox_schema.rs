@@ -19,9 +19,9 @@ use suzatary_core::health::plugin::PluginName;
 use suzatary_core::secretary::inbox::{self, Asked, ProposalId};
 use suzatary_core::secretary::inbox_event::{InboxEvent, InboxVocabulary, Said};
 use suzatary_core::secretary::phase::Phase;
+use suzatary_core::secretary::proposal::{Draft, Proposal, Reasons};
 use suzatary_core::secretary::proposer::Proposer;
 use suzatary_core::secretary::responded::{Done, Responded, Tried, Withdrawal};
-use suzatary_core::secretary::store::{Draft, Proposal, Reasons};
 
 type Store = EventStore<InboxEvent, Everything>;
 

@@ -89,7 +89,7 @@ mod tests {
     use super::*;
     use crate::conversation_id::ConversationId;
     use crate::reference::ProposalRef;
-    use crate::secretary::store::{Draft, Proposal, Reasons};
+    use crate::secretary::proposal::{Draft, Proposal, Reasons};
     use crate::signatures::ActHeaders;
 
     fn tap() -> Tap {

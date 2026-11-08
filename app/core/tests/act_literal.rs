@@ -7,7 +7,7 @@ use prodrome_core::literal::codec::Literal;
 use prodrome_core::literal::{Table, Vocabulary as _, parse_literal, print_literal};
 use suzatary_core::secretary::act_vocabulary::SIGNATURES;
 use suzatary_core::secretary::inbox_event::{InboxEvent, InboxVocabulary};
-use suzatary_core::secretary::store::Proposal;
+use suzatary_core::secretary::proposal::Proposal;
 
 const DIFF: &str = "--- a/README.md\n+++ b/README.md\n@@ -1 +1 @@\n-old\n+new\n";
 const SHA: &str = "9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08";

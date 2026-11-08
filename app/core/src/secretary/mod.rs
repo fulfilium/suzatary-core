@@ -2,6 +2,7 @@
 //! as itself and proposes, but cannot send, anything outward.
 
 pub mod about;
+pub mod act_lines;
 pub mod act_vocabulary;
 pub mod acts;
 pub mod afresh;
@@ -81,6 +82,7 @@ pub mod outline;
 pub mod outlines;
 pub mod own_round;
 pub mod phase;
+pub mod proposal;
 pub mod proposer;
 pub mod provenance;
 pub mod queue;
@@ -475,7 +477,7 @@ fn load(
             let standing = read(caps.conversations, conversation)?
                 .standing(*index, &inbox::fold(caps.inbox)?)?;
             let act = match &standing.object.asked.proposal {
-                store::Proposal::Email(draft) => serde_json::json!({
+                crate::secretary::proposal::Proposal::Email(draft) => serde_json::json!({
                     "act": "email",
                     "account": draft.account,
                     "to": draft.to,
@@ -483,7 +485,7 @@ fn load(
                     "subject": draft.subject,
                     "body": draft.body,
                 }),
-                store::Proposal::Forward(forward) => serde_json::json!({
+                crate::secretary::proposal::Proposal::Forward(forward) => serde_json::json!({
                     "act": "forward",
                     "account": forward.account,
                     "to": forward.to,
@@ -493,18 +495,18 @@ fn load(
                     "message": forward.message.file.id,
                     "as": forward.message.style.as_str(),
                 }),
-                store::Proposal::Changes(changeset) => serde_json::json!({
+                crate::secretary::proposal::Proposal::Changes(changeset) => serde_json::json!({
                     "act": "changes",
                     "chain": changeset.chain(),
                     "acts": changeset.acts(),
                 }),
                 // The act's own sentence, rather than its fields decoded a second way.
-                store::Proposal::Act(act) => serde_json::json!({
+                crate::secretary::proposal::Proposal::Act(act) => serde_json::json!({
                     "act": "act",
                     "sentence": act.sentence(),
                 }),
                 // The words while the memory's text store keeps them, and never once deleted.
-                store::Proposal::Remember {
+                crate::secretary::proposal::Proposal::Remember {
                     text,
                     kind,
                     replaces,
@@ -527,7 +529,7 @@ fn load(
                     }
                     card
                 }
-                store::Proposal::Decide(draft) => serde_json::json!({
+                crate::secretary::proposal::Proposal::Decide(draft) => serde_json::json!({
                     "act": "decide",
                     "sentence": crate::secretary::decide::sentence(draft),
                 }),
@@ -731,7 +733,11 @@ fn heard(
         &Entry::Said {
             at: clock.now(),
             turn: Turn::Act {
-                text: acts::describe_act(&crate::spelling::capitalised(by.as_str()), verb, words),
+                text: crate::secretary::act_lines::describe_act(
+                    &crate::spelling::capitalised(by.as_str()),
+                    verb,
+                    words,
+                ),
                 references: vec![card.clone().into()],
             },
             by: Some(by.as_str().into()),

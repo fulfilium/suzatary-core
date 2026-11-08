@@ -1597,7 +1597,7 @@ pub enum ProposedAct {
         /// The original's attachments inline, or its `.eml`.
         attachments: Vec<CardFile>,
         original: String,
-        style: crate::secretary::store::Style,
+        style: crate::secretary::proposal::Style,
         /// As "SSN ending 3456".
         held: Vec<String>,
     },

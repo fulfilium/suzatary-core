@@ -17,9 +17,9 @@ use crate::refusal::Refusal;
 use crate::secretary::acts::Act;
 use crate::secretary::inbox;
 use crate::secretary::noticed::Owed;
+use crate::secretary::proposal::{Proposal, Reasons};
 use crate::secretary::proposer::Proposer;
 use crate::secretary::responded::{Done, Responded};
-use crate::secretary::store::{Proposal, Reasons};
 
 /// What the rule reads of a deployment's Google accounts.
 #[derive(Debug, Clone, Copy)]

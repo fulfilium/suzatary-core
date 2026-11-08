@@ -7,9 +7,10 @@ use crate::capability::Datetime;
 use crate::secretary::acts::Act;
 use crate::secretary::inbox;
 use crate::secretary::noticed::Owed;
+use crate::secretary::proposal::Proposal;
 use crate::secretary::proposer::Proposer;
 use crate::secretary::responded::{Done, Responded};
-use crate::secretary::store::{Need, Proposal};
+use crate::secretary::store::Need;
 use crate::settings::{Declaration, Settable, Settables};
 
 const MISSING: &str = "Nothing is stored for it yet, so what needs it cannot work.";

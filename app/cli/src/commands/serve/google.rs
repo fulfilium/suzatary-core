@@ -16,7 +16,7 @@ use suzatary_core::refusal::Refusal;
 use suzatary_core::secretary::google_sign_in::{self, Begun, Open, Taken};
 use suzatary_core::secretary::inbox::ProposalId;
 use suzatary_core::secretary::responded::{Done, Performed, Tried};
-use suzatary_core::secretary::store::stamp;
+use suzatary_core::secretary::stamp::stamp;
 use suzatary_io::google::Google;
 use suzatary_io::secrets::Resolves;
 

@@ -13,17 +13,19 @@ use crate::mail::oauth::Consent;
 use crate::reference::{ProposalRef, Reference, TodoRef};
 use crate::refusal::{Answered, Refusal};
 use crate::secretary::Bound;
-use crate::secretary::acts::{Act, ActLine};
+use crate::secretary::act_lines::ActLine;
+use crate::secretary::acts::Act;
 use crate::secretary::attached::{self, Checked};
 use crate::secretary::attachment_source::AttachmentSource;
 use crate::secretary::changes::{self, Changeset};
 use crate::secretary::decide;
 use crate::secretary::inbox::{self, ProposalId, Response};
 use crate::secretary::opening::Opening;
+use crate::secretary::proposal::{Draft, Proposal};
 use crate::secretary::read_holders::ReadHolders;
 use crate::secretary::readings::{self, Draw, Dress, Window};
 use crate::secretary::responded::{Done, Performed, Tried};
-use crate::secretary::store::{Draft, Entry, Kind, Proposal, Stored, Title};
+use crate::secretary::store::{Entry, Kind, Stored, Title};
 use crate::secretary::transcript;
 use crate::signatures::Tap;
 use crate::wire;
@@ -731,7 +733,7 @@ enum KeptMail {
 /// A tapped card paired with its answer: a misplaced or missing answer is refused here alone.
 enum Prepared<'p, 'c> {
     Email(&'p Draft),
-    Forward(&'p crate::secretary::store::Forward),
+    Forward(&'p crate::secretary::proposal::Forward),
     Changes(std::borrow::Cow<'p, Changeset>),
     /// Store `value` under a name minted against the names declared at the tap.
     Secret {
@@ -1044,7 +1046,7 @@ pub fn tap(
     let opened = afterwards(caps, effectors, then, card)?;
     summaries_after(caps, &standing.object.asked.proposal);
     if matches!(response, Response::Ran(_)) {
-        crate::secretary::acts::note_act(
+        crate::secretary::act_lines::note_act(
             caps.secretary.conversations,
             id,
             &ActLine {
@@ -1647,7 +1649,7 @@ pub fn ask_trust(
         conversation: stored.id.clone(),
         index: stored.proposals.len(),
     });
-    let reasons = super::store::Reasons::new(
+    let reasons = crate::secretary::proposal::Reasons::new(
         format!("a device asked to be trusted to write as {actor}"),
         vec![asked],
     )
@@ -1799,10 +1801,10 @@ fn forwarded(
     caps: &Server<'_>,
     effectors: &Effectors<'_>,
     id: &ConversationId,
-    forward: &crate::secretary::store::Forward,
+    forward: &crate::secretary::proposal::Forward,
 ) -> Performed {
     use crate::held_value::Reopened;
-    use crate::secretary::store::Style;
+    use crate::secretary::proposal::Style;
     let not_sent = |reason: String| Performed::Tried(Tried::NotSent { reason });
     let file = &forward.message.file;
     let read = match super::read(caps.secretary.conversations, id) {
@@ -2228,7 +2230,7 @@ pub fn build(
             conversation,
             proposer,
             proposal: Proposal::Act(Act::CodingSession { task }),
-            reasons: crate::secretary::store::Reasons::new(
+            reasons: crate::secretary::proposal::Reasons::new(
                 format!("{} asked for {todo} to be built.", by.who().as_str()),
                 vec![Reference::Todo(todo.clone())],
             )
@@ -2381,7 +2383,7 @@ fn memory_payload(memory: &crate::secretary::memory::Memory) -> wire::MemoryPayl
             .iter()
             .map(|remembered| wire::FactRow {
                 id: remembered.id,
-                at: crate::secretary::store::stamp(remembered.at),
+                at: crate::secretary::stamp::stamp(remembered.at),
                 fact: remembered.fact.as_str().to_owned(),
                 kind: remembered.kind,
                 said: match &remembered.said.wrote {
@@ -2431,10 +2433,10 @@ fn said_on(origin: &crate::secretary::memory::Origin) -> wire::SaidOn {
 mod tests {
     use super::*;
     use crate::capability::Answers;
+    use crate::secretary::proposal::Reasons;
     use crate::secretary::readings::{Place, proposal, turn};
     use crate::secretary::responded::Responded;
     use crate::secretary::store::Asking;
-    use crate::secretary::store::Reasons;
     use crate::secretary::store::Said;
     use crate::secretary::store::Standing;
 

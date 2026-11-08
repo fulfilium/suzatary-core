@@ -5,7 +5,7 @@ use serde_json::{Value, json};
 use crate::mail::address::EmailAddress;
 use crate::refusal::{Refusal, shown};
 use crate::secretary::acts::Act;
-use crate::secretary::store::Proposal;
+use crate::secretary::proposal::Proposal;
 use crate::secretary::verbs::FilingArgs;
 use crate::secretary::{Call, SecretarySurface};
 use crate::settings::Settable;

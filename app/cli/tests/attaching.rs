@@ -10,7 +10,7 @@ use std::sync::Arc;
 use common::{FakeMailbox, FakeModel, Fakes};
 use suzatary_core::mail::{AttachmentFile, MailMessage, MailRow};
 use suzatary_core::secretary::attachment_source::AttachmentSource;
-use suzatary_core::secretary::store::Proposal;
+use suzatary_core::secretary::proposal::Proposal;
 
 const NOTICE: &[u8] = b"%PDF-1.7\n1 0 obj << /Type /Catalog >> endobj\n%%EOF\n";
 
@@ -90,7 +90,7 @@ fn proposal_answers(payload: &serde_json::Value) -> Vec<(String, bool)> {
         .collect()
 }
 
-fn drafts(fakes: &Fakes) -> Vec<suzatary_core::secretary::store::Draft> {
+fn drafts(fakes: &Fakes) -> Vec<suzatary_core::secretary::proposal::Draft> {
     suzatary_core::secretary::inbox::fold(&fakes.inbox)
         .expect("the inbox reads")
         .objects()

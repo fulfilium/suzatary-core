@@ -14,7 +14,7 @@ use crate::health::{Health, Healths};
 use crate::mail::account::MailAccount;
 use crate::plugin::Manifest;
 use crate::secretary::acts::Act;
-use crate::secretary::store::Proposal;
+use crate::secretary::proposal::Proposal;
 use crate::settings::Help;
 use crate::settings::remote::Pushed;
 use crate::wire;
@@ -1512,7 +1512,7 @@ pub(crate) mod tests {
         fn a_waiting_draft_never_hides_the_accounts_sign_in(draft_first in any::<bool>(), kind in 0u8..4) {
             use crate::secretary::inbox;
             use crate::conversation_id::ConversationId;
-            use crate::secretary::store::{Draft, Reasons};
+            use crate::secretary::proposal::{Draft, Reasons};
             let email = "ada@example.test";
             let store = crate::store::InMemory::<crate::secretary::inbox_event::InboxEvent>::default();
             let ask = |index: usize, proposal: Proposal, minute: u32| {

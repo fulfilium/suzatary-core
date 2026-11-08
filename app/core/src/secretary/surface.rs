@@ -25,8 +25,8 @@ use crate::refusal::{Refusal, shown};
 use crate::secretary::changes::{self, Act, Changeset, Unapplied};
 use crate::secretary::compaction::Reading;
 use crate::secretary::gate::Gate;
+use crate::secretary::proposal::Proposal;
 use crate::secretary::shown_record::{Everything, ShownRecord};
-use crate::secretary::store::Proposal;
 use crate::verb::{Surface, verbs};
 use crate::writer::Writer;
 

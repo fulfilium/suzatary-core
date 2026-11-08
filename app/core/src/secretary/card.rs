@@ -4,8 +4,8 @@
 use crate::coding::RoutineId;
 use crate::repos::Visibility;
 use crate::secretary::inbox_reading::Reading;
+use crate::secretary::proposal::Style;
 use crate::secretary::responded::{Responded, Tried};
-use crate::secretary::store::Style;
 use crate::web::WebKind;
 use crate::wire::{
     Asker, Asks, Cached, Card, CardAnswer, CardField, CardFile, CardLink, HeldIn, ProposedAct,
@@ -868,7 +868,7 @@ fn card(title: &str, sentence: &str, fields: Vec<CardField>, verb: &str) -> Card
         title: title.to_owned(),
         by: Asker::Secretary {},
         // An act's sentence is written to follow a name; on a card it stands alone.
-        sentence: crate::secretary::noticed::said(sentence),
+        sentence: crate::spelling::said(sentence),
         fields,
         body: String::new(),
         rows: Vec::new(),

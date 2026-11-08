@@ -113,6 +113,10 @@ pub static DEFAULT: LazyLock<ConversationId> = LazyLock::new(|| {
     ConversationId::new("default").expect("\"default\" is a valid conversation id")
 });
 
+/// The box's own conversation, where it files the cards it raises itself.
+pub static SETUP: LazyLock<ConversationId> =
+    LazyLock::new(|| ConversationId::new("setup").expect("\"setup\" is a conversation id"));
+
 impl TryFrom<String> for ConversationId {
     type Error = NotAnId;
     fn try_from(text: String) -> Result<Self, NotAnId> {

@@ -5,7 +5,7 @@ use crate::refusal::Refusal;
 use crate::secretary::acts::Act;
 use crate::secretary::done_elsewhere::{self, Seen, Swept};
 use crate::secretary::inbox_event::InboxEvent;
-use crate::secretary::store::Proposal;
+use crate::secretary::proposal::Proposal;
 use crate::store::Prodrome;
 
 /// Close every waiting repository card whose patch `repos` finds merged.

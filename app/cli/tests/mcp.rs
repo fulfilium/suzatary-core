@@ -348,7 +348,7 @@ fn the_agent_speaks_to_a_real_server_and_its_writes_are_cards() {
                 suzatary_core::secretary::proposer::Proposer::Triage
             );
             match &object.asked.proposal {
-                suzatary_core::secretary::store::Proposal::Changes(changeset) => (
+                suzatary_core::secretary::proposal::Proposal::Changes(changeset) => (
                     object.asked.asked.to_string(),
                     changeset.chain().to_owned(),
                     changeset

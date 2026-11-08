@@ -1,9 +1,9 @@
 //! What a proposal asks the owner for, which two cards asking for the same thing share: one need
 //! has one card, whichever rule asks for it and in whatever words.
 
-use super::Proposal;
 use crate::mail::address::EmailAddress;
 use crate::secretary::acts::Act;
+use crate::secretary::proposal::Proposal;
 
 /// What a proposal asks the owner for.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

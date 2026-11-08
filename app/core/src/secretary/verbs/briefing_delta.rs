@@ -6,7 +6,7 @@ use crate::health::Reading;
 use crate::health::SourceKey;
 use crate::record::TodoEvent;
 use crate::refusal::{Refusal, shown};
-use crate::secretary::store::stamp;
+use crate::secretary::stamp::stamp;
 use crate::secretary::{Call, SecretarySurface, heartbeat};
 use crate::verb::{Chained, Verb};
 
@@ -72,8 +72,8 @@ const NOTE: &str = "This is what MOVED. The priced list is the app's job — say
 /// Each sender a tapped noise card left out of triage on a day from `since` on, with its card.
 fn silenced(call: &Call<'_>, since: chrono::NaiveDate) -> Value {
     use crate::secretary::acts::Act;
+    use crate::secretary::proposal::Proposal;
     use crate::secretary::responded::Responded;
-    use crate::secretary::store::Proposal;
     match crate::secretary::inbox::fold(call.caps.inbox) {
         Ok(fold) => Value::from(
             fold.objects()

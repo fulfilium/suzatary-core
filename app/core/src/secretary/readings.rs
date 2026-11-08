@@ -13,9 +13,11 @@ use crate::secretary::changes::Changeset;
 use crate::secretary::inbox;
 use crate::secretary::inbox_reading::{Reading, Words};
 use crate::secretary::memory::Fact;
+use crate::secretary::proposal::{Forward, Proposal, Style};
 use crate::secretary::responded::{Done, Responded, Tried, Withdrawal};
 use crate::secretary::salted_text::TextName;
-use crate::secretary::store::{Forward, Proposal, Said, Standing, Stored, Style, stamp};
+use crate::secretary::stamp::stamp;
+use crate::secretary::store::{Said, Standing, Stored};
 use crate::secretary::turn_shape::TurnShape;
 use crate::wire;
 
@@ -327,7 +329,7 @@ pub fn conversation(
         id: stored.id.as_str().to_owned(),
         title: stored.heading().into_owned(),
         model: stored.model.clone(),
-        opened: crate::secretary::store::stamp(stored.opened),
+        opened: crate::secretary::stamp::stamp(stored.opened),
         turns: selected
             .iter()
             .map(|&index| {
@@ -391,9 +393,9 @@ fn row(stored: &Stored, fold: &inbox::Fold) -> wire::ConversationRow {
         id: stored.id.as_str().to_owned(),
         title: stored.heading().into_owned(),
         kind: stored.kind,
-        opened: crate::secretary::store::stamp(stored.opened),
+        opened: crate::secretary::stamp::stamp(stored.opened),
         last: last_line(stored),
-        last_at: crate::secretary::store::stamp(
+        last_at: crate::secretary::stamp::stamp(
             stored.turns.last().map_or(stored.opened, |said| said.at),
         ),
         turns: u32::try_from(stored.turns.len()).unwrap_or(u32::MAX),
@@ -521,7 +523,7 @@ pub(crate) fn turn<A: Answers + ?Sized>(
     let row = |text: &str, who: wire::Speaker| wire::TurnRow {
         index,
         text: text.to_owned(),
-        at: crate::secretary::store::stamp(said.at),
+        at: crate::secretary::stamp::stamp(said.at),
         attempt,
         gone: None,
         who,
@@ -1015,7 +1017,7 @@ fn forward_on_wire(forward: &Forward) -> wire::ProposedAct {
             })
             .collect(),
         Style::Attached => vec![wire::CardFile {
-            name: crate::secretary::store::EML.to_owned(),
+            name: crate::secretary::proposal::EML.to_owned(),
             media: "message/rfc822".to_owned(),
             size: crate::spelling::bytes(file.size),
             sha256: file.sha256.to_string(),
@@ -1110,7 +1112,7 @@ pub(crate) fn proposal(
         act,
         why: standing.object.asked.reasons.why().to_owned(),
         sources: standing.object.asked.reasons.sources().to_vec(),
-        at: crate::secretary::store::stamp(standing.asking.at),
+        at: crate::secretary::stamp::stamp(standing.asking.at),
         state,
         outcome,
         tries: u32::try_from(standing.object.tries()).unwrap_or(u32::MAX),

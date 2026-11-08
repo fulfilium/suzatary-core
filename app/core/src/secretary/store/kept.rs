@@ -22,7 +22,7 @@ impl Kept {
         surface: Option<String>,
         from: usize,
     ) -> Self {
-        let at = super::stamp(at);
+        let at = crate::secretary::stamp::stamp(at);
         Self {
             session: Session {
                 id: id.clone(),

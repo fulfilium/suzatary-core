@@ -26,9 +26,9 @@ use crate::refusal::Refusal;
 use crate::secretary::inbox_event::{InboxEvent, Said};
 use crate::secretary::inbox_reading::{Answer, Conflict, Reading};
 use crate::secretary::inbox_registers::{ContentRegister, StateRegister};
+use crate::secretary::proposal::{Proposal, Reasons};
 use crate::secretary::proposer::Proposer;
 use crate::secretary::responded::{CheckFields, Done, Performed, Responded, Tried, Withdrawal};
-use crate::secretary::store::{Proposal, Reasons};
 use crate::secretary::tapped::Tapped;
 use crate::store::Prodrome;
 use prodrome_core::literal::codec::{Constructor, Fields, Literal};
@@ -916,7 +916,7 @@ mod tests {
     use prodrome_core::event::Actor;
 
     use super::*;
-    use crate::secretary::store::Draft;
+    use crate::secretary::proposal::Draft;
     use crate::store::Reads as _;
 
     fn draft(subject: &str) -> Proposal {

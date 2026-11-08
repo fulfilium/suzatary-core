@@ -176,6 +176,13 @@ pub fn pointing(speaker: Speaker, references: &[Reference], set: &ChainSet<'_>) 
     }
 }
 
+/// The `at` every stored line carries, the wire's spelling of an instant, so a transcript and a
+/// payload date a thing the same way.
+#[must_use]
+pub fn stamp(at: crate::capability::Datetime) -> String {
+    prodrome_core::fpl::iso(prodrome_core::fpl::instant_of(at))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

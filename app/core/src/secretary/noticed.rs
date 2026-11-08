@@ -3,23 +3,17 @@
 //! Filing is idempotent: an open card for the same need holds it. A waiting card of a kind the
 //! set `owns` that it no longer holds is withdrawn, unless the set is [holding](Owed::holding).
 
-use std::sync::LazyLock;
-
 use crate::capability::Datetime;
-use crate::conversation_id::ConversationId;
 use crate::reference::{ProposalRef, Reference};
 use crate::refusal::Refusal;
 use crate::secretary::filed::{self, Filing};
 use crate::secretary::inbox::{self, ProposalId};
 use crate::secretary::inbox_event::InboxEvent;
+use crate::secretary::proposal::{Proposal, Reasons};
 use crate::secretary::proposer::Proposer;
 use crate::secretary::responded::Withdrawal;
-use crate::secretary::store::{Entry, Proposal, Reasons};
+use crate::secretary::store::Entry;
 use crate::store::Prodrome;
-
-/// The box's own conversation.
-pub static CONVERSATION: LazyLock<ConversationId> =
-    LazyLock::new(|| ConversationId::new("setup").expect("\"setup\" is a conversation id"));
 
 /// Why a stale card is withdrawn.
 pub const WITHDRAWN: &str = "the box no longer asks for this: what it was needed for is in \
@@ -153,14 +147,15 @@ impl Owed {
         self.owed.iter()
     }
 
-    /// File every owed proposal in [`CONVERSATION`] and withdraw the stale ones.
+    /// File every owed proposal in [`SETUP`](crate::conversation_id::SETUP) and withdraw the
+    /// stale ones.
     pub fn file(
         &self,
         conversations: crate::secretary::conversations::Conversations<'_>,
         inbox: &dyn Prodrome<InboxEvent>,
         at: Datetime,
     ) -> Result<Filed, Refusal> {
-        let conversation = &*CONVERSATION;
+        let conversation = &*crate::conversation_id::SETUP;
         let mut done = Filed::default();
         // Read once: this filing adds only other proposals, so it changes no answer here.
         let before = inbox::fold(inbox)?;
@@ -178,7 +173,7 @@ impl Owed {
                 conversation: conversation.clone(),
                 index: super::read(conversations, conversation)?.proposals.len(),
             });
-            let why = said(&noticed.why);
+            let why = crate::spelling::said(&noticed.why);
             super::append(
                 conversations,
                 conversation,
@@ -268,16 +263,6 @@ pub(crate) fn owns(proposal: &Proposal) -> bool {
         | Proposal::Remember { .. }
         | Proposal::Decide(_) => false,
     }
-}
-
-/// A rule's why as one sentence, capitalised and ended with one full stop.
-#[must_use]
-pub fn said(why: &str) -> String {
-    let trimmed = why.trim().trim_end_matches('.');
-    let mut chars = trimmed.chars();
-    chars.next().map_or_else(String::new, |first| {
-        format!("{}.", first.to_uppercase().chain(chars).collect::<String>())
-    })
 }
 
 /// Each rule's input, one record.
@@ -401,6 +386,7 @@ impl FromIterator<Noticed> for Owed {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::conversation_id::ConversationId;
     use crate::secretary::acts::Act;
     use crate::store::InMemory;
     use crate::store::Reads as _;
@@ -622,8 +608,11 @@ mod tests {
 
     /// The Setup conversation's turns, none before it is opened.
     fn said(conversations: &crate::secretary::conversations::InMemory) -> usize {
-        super::super::read(conversations.conversations(), &CONVERSATION)
-            .map_or(0, |stored| stored.live().len())
+        super::super::read(
+            conversations.conversations(),
+            &crate::conversation_id::SETUP,
+        )
+        .map_or(0, |stored| stored.live().len())
     }
 
     /// While the secretary's sign-in card waits, the box's owed sign-in is that card: filing the

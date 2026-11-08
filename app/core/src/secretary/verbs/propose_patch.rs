@@ -7,7 +7,7 @@ use crate::refusal::Refusal;
 use crate::repos::{MAX_SHOWN_BYTES, Patch, Visibility};
 use crate::secretary::acts::Act;
 use crate::secretary::gate::{Asked, Gate};
-use crate::secretary::store::Proposal;
+use crate::secretary::proposal::Proposal;
 use crate::secretary::verbs::{FilingArgs, located, refused_by};
 use crate::secretary::{Call, SecretarySurface};
 use crate::verb::Verb;

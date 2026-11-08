@@ -9,8 +9,8 @@ use std::sync::Arc;
 
 use common::{DeclaredStore, Fakes, SecretRecorder, SettingsFixture};
 use suzatary_core::connect::Connection;
+use suzatary_core::conversation_id::SETUP;
 use suzatary_core::secretary::acts::Act;
-use suzatary_core::secretary::noticed::CONVERSATION;
 
 /// The scratch instance: every required table, one account and nothing connected beside it.
 const INSTANCE: &str = r#"# Ada's box, a scratch copy.
@@ -220,7 +220,7 @@ fn a_calendar_is_connected_granted_and_removed_by_its_cards() {
             connection: calendar(),
         },
     );
-    let (base, setup) = (&served.base, CONVERSATION.as_str());
+    let (base, setup) = (&served.base, SETUP.as_str());
 
     let (status, after) = tap(base, CONNECT, 0, &serde_json::json!({}));
     assert_eq!(status, 200, "{after}");
@@ -326,7 +326,7 @@ fn a_calendar_s_link_is_declared_before_its_card_and_cleared_before_it_is_droppe
             })
         },
     );
-    let (base, setup) = (&served.base, CONVERSATION.as_str());
+    let (base, setup) = (&served.base, SETUP.as_str());
     assert!(!store.declares("PLUGIN_ICS_WORK"));
 
     let (status, after) = tap(base, CONNECT, 0, &serde_json::json!({}));
@@ -379,7 +379,7 @@ fn a_stored_link_is_checked_at_its_tap() {
         },
         move |server, _| server.checks(recorder),
     );
-    let (base, setup) = (&served.base, CONVERSATION.as_str());
+    let (base, setup) = (&served.base, SETUP.as_str());
     let (status, after) = tap(base, CONNECT, 0, &serde_json::json!({}));
     assert_eq!(status, 200, "{after}");
 
@@ -415,7 +415,7 @@ fn a_calendar_added_by_hand_is_seen_without_a_restart() {
         },
         |server, _| server.watching(scratch("byhand")),
     );
-    let (base, setup) = (&served.base, CONVERSATION.as_str());
+    let (base, setup) = (&served.base, SETUP.as_str());
     let line = || {
         let mut page = common::get(&format!("{base}/api/overview"));
         common::body_json(&mut page)["groups"]
@@ -654,7 +654,7 @@ fn a_dismissed_grant_is_asked_again_when_the_link_is_pasted_again() {
             connection: calendar(),
         },
     );
-    let (base, setup) = (&served.base, CONVERSATION.as_str());
+    let (base, setup) = (&served.base, SETUP.as_str());
     let (status, after) = tap(base, CONNECT, 0, &serde_json::json!({}));
     assert_eq!(status, 200, "{after}");
     let (status, after) = tap(base, setup, 0, &serde_json::json!({ "value": LINK }));
@@ -695,7 +695,7 @@ fn an_account_connected_again_is_asked_for_its_sign_in_again() {
             connection: account(),
         },
     );
-    let (base, setup) = (&served.base, CONVERSATION.as_str());
+    let (base, setup) = (&served.base, SETUP.as_str());
     let (status, after) = tap(base, CONNECT, 0, &serde_json::json!({}));
     assert_eq!(status, 200, "{after}");
     let mut dismissed = common::act(
@@ -741,7 +741,7 @@ fn a_link_in_the_clear_is_refused_before_any_grant() {
             connection: calendar(),
         },
     );
-    let (base, setup) = (&served.base, CONVERSATION.as_str());
+    let (base, setup) = (&served.base, SETUP.as_str());
     let (status, after) = tap(base, CONNECT, 0, &serde_json::json!({}));
     assert_eq!(status, 200, "{after}");
     let (status, after) = tap(
@@ -774,7 +774,7 @@ fn a_google_calendar_s_link_asks_for_its_google_account() {
             connection: calendar(),
         },
     );
-    let (base, setup) = (&served.base, CONVERSATION.as_str());
+    let (base, setup) = (&served.base, SETUP.as_str());
     let (status, after) = tap(base, CONNECT, 0, &serde_json::json!({}));
     assert_eq!(status, 200, "{after}");
     let google = |id: &str| {
@@ -924,7 +924,7 @@ fn a_link_is_refused_while_the_instance_file_does_not_read() {
             connection: calendar(),
         },
     );
-    let (base, setup) = (&served.base, CONVERSATION.as_str());
+    let (base, setup) = (&served.base, SETUP.as_str());
     let (status, after) = tap(base, CONNECT, 0, &serde_json::json!({}));
     assert_eq!(status, 200, "{after}");
     std::fs::write(&served.path, "this is not an instance file").expect("broken");
@@ -968,7 +968,7 @@ fn serving_pushing(tag: &str, origin: Option<&'static str>) -> Box {
 /// The setup conversation's card asking for the data repository's push token, if one stands.
 fn push_token_card(served: &Box) -> Option<serde_json::Value> {
     let label = suzatary_core::settings::Help::label(suzatary_core::settings::DATA_PUSH_TOKEN);
-    common::reading(&served.base, CONVERSATION.as_str(), &[])["proposals"]
+    common::reading(&served.base, SETUP.as_str(), &[])["proposals"]
         .as_array()
         .expect("proposals")
         .iter()
@@ -1051,17 +1051,12 @@ fn a_new_microsoft_account_is_asked_for_its_sign_in() {
         "{}",
         file(&served)
     );
-    let asked = common::reading(&served.base, CONVERSATION.as_str(), &[]);
+    let asked = common::reading(&served.base, SETUP.as_str(), &[]);
     let card = &asked["proposals"][0]["act"];
     assert_eq!(card["kind"], "auth", "{asked}");
     assert_eq!(card["account"], "bo@example.test");
 
-    let (status, signing) = tap(
-        &served.base,
-        CONVERSATION.as_str(),
-        0,
-        &serde_json::json!({}),
-    );
+    let (status, signing) = tap(&served.base, SETUP.as_str(), 0, &serde_json::json!({}));
     assert_eq!(status, 200, "{signing}");
     assert_eq!(signing["proposals"][0]["state"], "started", "{signing}");
     let announced = signing["turns"]
@@ -1075,7 +1070,7 @@ fn a_new_microsoft_account_is_asked_for_its_sign_in() {
     // who tapped it in Settings reads them there.
     let card = &signing["proposals"][0]["announced"];
     assert_eq!(card.as_str(), Some(announced), "{signing}");
-    let granted = common::poll_conversation(&served.base, CONVERSATION.as_str(), |body| {
+    let granted = common::poll_conversation(&served.base, SETUP.as_str(), |body| {
         body["proposals"][0]["state"] != "started"
     });
     assert_eq!(
@@ -1185,7 +1180,7 @@ fn the_secretary_files_a_connect_card_and_the_tap_adds_the_calendar() {
     assert_eq!(status, 200, "{after}");
     assert_eq!(after["proposals"][0]["state"], "acted", "{after}");
     assert!(file(&served).contains("credentials = [\"PLUGIN_ICS_WORK\"]"));
-    let setup = common::reading(&served.base, CONVERSATION.as_str(), &[]);
+    let setup = common::reading(&served.base, SETUP.as_str(), &[]);
     assert!(
         setup["proposals"]
             .as_array()

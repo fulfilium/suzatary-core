@@ -5,9 +5,10 @@ use serde_json::{Value, json};
 use crate::reference::ProposalRef;
 use crate::refusal::{Refusal, shown};
 use crate::secretary::inbox;
+use crate::secretary::proposal::Proposal;
 use crate::secretary::proposer::Proposer;
 use crate::secretary::responded::Withdrawal;
-use crate::secretary::store::{Decision, Entry, Proposal, Settle};
+use crate::secretary::store::{Decision, Entry, Settle};
 use crate::secretary::{Call, SecretarySurface, transcript, writes_as};
 use crate::verb::Verb;
 

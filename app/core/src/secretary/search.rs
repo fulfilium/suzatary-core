@@ -134,7 +134,7 @@ pub fn search<S: Borrow<Stored>>(
                         title: stored.heading().into_owned(),
                         kind: stored.kind,
                         turn: index,
-                        at: crate::secretary::store::stamp(said.at),
+                        at: crate::secretary::stamp::stamp(said.at),
                         side,
                         excerpt,
                     })

@@ -1207,7 +1207,10 @@ pub fn receive_objects(
     posted: &Posted<'_>,
     frontiers: &prodrome_core::store::frontier::Frontiers,
     actor: &prodrome_core::event::Actor,
-) -> Answered<(wire::ReceiptPayload, Vec<crate::secretary::acts::ActLine>)> {
+) -> Answered<(
+    wire::ReceiptPayload,
+    Vec<crate::secretary::act_lines::ActLine>,
+)> {
     let Posted {
         objects: posted,
         since,
@@ -1244,9 +1247,10 @@ pub fn receive_objects(
     } else {
         std::sync::Arc::default()
     };
-    let heard = crate::secretary::acts::heard_from_objects(&taken, actor, &chain.name, &|posted| {
-        crate::todos::current(&shown, posted.at, posted.todo.as_str())
-    });
+    let heard =
+        crate::secretary::act_lines::heard_from_objects(&taken, actor, &chain.name, &|posted| {
+            crate::todos::current(&shown, posted.at, posted.todo.as_str())
+        });
     store.accept(&outcome.taken)?;
     // Render what landed before answering; `renders` keeps untrusted records uncompiled.
     let fresh: Vec<crate::escape::Escaped> = taken
@@ -1778,7 +1782,7 @@ pub fn overview(
     crate::settings::overview::overview(declared, &asked.observed(registers)).wire(
         &declared.settables.names(),
         asking,
-        crate::secretary::noticed::CONVERSATION.as_str().to_owned(),
+        crate::conversation_id::SETUP.as_str().to_owned(),
         crate::connect::offered(declared.channels)
             .into_iter()
             .map(|template| wire::Offer {

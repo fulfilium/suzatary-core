@@ -1457,7 +1457,7 @@ impl Manuals for FakeManuals {
 /// transport.
 #[derive(Default)]
 pub struct Recorder {
-    sent: Mutex<Vec<suzatary_core::secretary::store::Draft>>,
+    sent: Mutex<Vec<suzatary_core::secretary::proposal::Draft>>,
     parts: Mutex<Vec<Vec<suzatary_core::message_part::Attachment>>>,
 }
 
@@ -1470,7 +1470,7 @@ impl Recorder {
 
     /// Everything a tap handed it, in order.
     #[must_use]
-    pub fn sent(&self) -> Vec<suzatary_core::secretary::store::Draft> {
+    pub fn sent(&self) -> Vec<suzatary_core::secretary::proposal::Draft> {
         self.sent.lock().expect("not poisoned").clone()
     }
 
@@ -1981,7 +1981,7 @@ impl SettingsFixture {
 impl suzatary_core::secretary::routes::Post for Recorder {
     fn send(
         &self,
-        draft: &suzatary_core::secretary::store::Draft,
+        draft: &suzatary_core::secretary::proposal::Draft,
         body: suzatary_core::held_value::Filled,
         attachments: suzatary_core::secretary::attached::Checked,
     ) -> suzatary_core::secretary::responded::Performed {
@@ -1989,7 +1989,7 @@ impl suzatary_core::secretary::routes::Post for Recorder {
         self.sent
             .lock()
             .expect("not poisoned")
-            .push(suzatary_core::secretary::store::Draft {
+            .push(suzatary_core::secretary::proposal::Draft {
                 body: body.into_string(),
                 ..draft.clone()
             });
@@ -2015,7 +2015,7 @@ pub struct FailsFirst {
 impl suzatary_core::secretary::routes::Post for FailsFirst {
     fn send(
         &self,
-        draft: &suzatary_core::secretary::store::Draft,
+        draft: &suzatary_core::secretary::proposal::Draft,
         body: suzatary_core::held_value::Filled,
         attachments: suzatary_core::secretary::attached::Checked,
     ) -> suzatary_core::secretary::responded::Performed {
@@ -4307,7 +4307,8 @@ pub fn pdf_saying(text: &str) -> Vec<u8> {
 /// reading owes, and withdraws any other card of its own.
 pub fn asked(fakes: &Fakes, conversation: &str, act: suzatary_core::secretary::acts::Act) {
     use suzatary_core::conversation_id::ConversationId;
-    use suzatary_core::secretary::store::{Entry, Kind, Reasons};
+    use suzatary_core::secretary::proposal::Reasons;
+    use suzatary_core::secretary::store::{Entry, Kind};
     let id = ConversationId::new(conversation).expect("a slug");
     let opened = Entry::Opened {
         at: suzatary_core::capability::Datetime::new(2026, 9, 2, 11, 0, 0, 0).expect("an instant"),
@@ -4329,7 +4330,7 @@ pub fn asked(fakes: &Fakes, conversation: &str, act: suzatary_core::secretary::a
         suzatary_core::secretary::filed::Filing {
             conversation: &id,
             proposer: suzatary_core::secretary::proposer::Proposer::Secretary,
-            proposal: suzatary_core::secretary::store::Proposal::Act(act),
+            proposal: suzatary_core::secretary::proposal::Proposal::Act(act),
             reasons: Reasons::new(
                 "the test asks",
                 vec!["briefing:2026-09-02".parse().expect("a reference")],

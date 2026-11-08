@@ -5,7 +5,7 @@ use super::{propose, references};
 use crate::reference::TodoRef;
 use crate::refusal::Refusal;
 use crate::secretary::Call;
-use crate::secretary::store::{Proposal, Reasons};
+use crate::secretary::proposal::{Proposal, Reasons};
 use crate::verb::Caught;
 
 /// The reasons every proposal carries: why, and what it rests on.

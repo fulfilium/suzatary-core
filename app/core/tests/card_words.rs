@@ -17,9 +17,9 @@ use suzatary_core::secretary::inbox_event::InboxEvent;
 use suzatary_core::secretary::memories::{Kept, Memories};
 use suzatary_core::secretary::memory::{Fact, FactId, Kind, Origin, Replaces, Sources};
 use suzatary_core::secretary::memory_event::MemoryEvent;
+use suzatary_core::secretary::proposal::{Proposal, Reasons};
 use suzatary_core::secretary::responded::{Done, Performed, Responded, Tried};
 use suzatary_core::secretary::salted_text::{Text, TextName};
-use suzatary_core::secretary::store::{Proposal, Reasons};
 use suzatary_core::secretary::texts;
 use suzatary_core::store::{InMemory, InMemoryDoc, Prodrome};
 

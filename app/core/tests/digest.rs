@@ -1845,7 +1845,7 @@ fn the_record_leaves_out_what_the_window_sends() {
 /// stays a reference, so a clean line cannot carry it into a memory.
 #[test]
 fn an_acts_note_keeps_a_todo_id_out_of_the_record() {
-    use suzatary_core::secretary::acts::{ActLine, note_act};
+    use suzatary_core::secretary::act_lines::{ActLine, note_act};
     let the = Box::default();
     let id = ConversationId::new("default").expect("a slug");
     suzatary_core::secretary::transcript::start(

@@ -1,11 +1,11 @@
 //! Who asked for a proposal: a field of what the inbox stores, never read off the actor who wrote
 //! it, since the box writes every proposal and a plugin is no actor of any store.
 
+use crate::conversation_id::SETUP;
 use crate::health::plugin::PluginName;
 use crate::reference::ProposalRef;
 use crate::secretary::acts::Act;
-use crate::secretary::noticed::CONVERSATION;
-use crate::secretary::store::Proposal;
+use crate::secretary::proposal::Proposal;
 
 /// Who proposed an act the owner may tap.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -37,7 +37,7 @@ impl Proposer {
             },
             Proposer::Box => match proposal {
                 Proposal::Act(Act::Secret { .. } | Act::GoogleClient { .. }) => {
-                    if asked.conversation == *CONVERSATION {
+                    if asked.conversation == *SETUP {
                         crate::wire::Asker::Setup {}
                     } else {
                         crate::wire::Asker::Box {}

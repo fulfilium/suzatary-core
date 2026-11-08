@@ -36,13 +36,13 @@ use suzatary_core::secretary::about;
 use suzatary_core::secretary::inbox::{self, ProposalId};
 use suzatary_core::secretary::memories::Memories;
 use suzatary_core::secretary::memory::{Fact, Kind};
+use suzatary_core::secretary::proposal::{Draft, Proposal, Reasons};
 use suzatary_core::secretary::readings;
 use suzatary_core::secretary::responded::{Done, Performed, Tried};
 use suzatary_core::secretary::routes::{self as secretary_routes, Cards};
 use suzatary_core::secretary::salted_text::{Text, TextName};
-use suzatary_core::secretary::store::{
-    Draft, Entry as ConversationEntry, Proposal, Reasons, Stored, stamp,
-};
+use suzatary_core::secretary::stamp::stamp;
+use suzatary_core::secretary::store::{Entry as ConversationEntry, Stored};
 use suzatary_core::secretary::transcript;
 use suzatary_core::store::{
     InMemory, InMemoryDoc, Prodrome, Reads, StoreError, WriteLock, append_to, linearised,

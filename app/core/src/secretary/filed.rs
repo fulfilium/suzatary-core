@@ -11,8 +11,9 @@ use crate::secretary::changes::Changeset;
 use crate::secretary::inbox::{self, ProposalId};
 use crate::secretary::inbox_event::InboxEvent;
 use crate::secretary::inbox_reading::Reading;
+use crate::secretary::proposal::{Proposal, Reasons};
 use crate::secretary::proposer::Proposer;
-use crate::secretary::store::{Entry, Kind, Proposal, Reasons};
+use crate::secretary::store::{Entry, Kind};
 use crate::secretary::transcript;
 use crate::store::{Prodrome, StoreError};
 

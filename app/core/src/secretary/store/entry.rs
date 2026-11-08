@@ -309,16 +309,9 @@ impl Entry {
     }
 }
 
-/// The `at` every stored line carries, the wire's spelling of an instant, so a transcript and a
-/// payload date a thing the same way.
-#[must_use]
-pub fn stamp(at: Datetime) -> String {
-    prodrome_core::fpl::iso(prodrome_core::fpl::instant_of(at))
-}
-
 /// An instant as [`stamp`] prints it, for [`Entry`]'s print.
 fn stamped<S: serde::Serializer>(at: &Datetime, to: S) -> Result<S::Ok, S::Error> {
-    to.serialize_str(&stamp(*at))
+    to.serialize_str(&crate::secretary::stamp::stamp(*at))
 }
 
 /// A naming's title, as the conversation holds it.

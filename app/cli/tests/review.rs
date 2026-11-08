@@ -11,8 +11,9 @@ use suzatary_core::secretary::Bound;
 use suzatary_core::secretary::changes::{Act, Changeset, Provenance};
 use suzatary_core::secretary::daily::Run;
 use suzatary_core::secretary::filed::TriageCards;
+use suzatary_core::secretary::proposal::Reasons;
 use suzatary_core::secretary::review::{Reviewed, reviews};
-use suzatary_core::secretary::store::{Outcome, Reasons, Settle};
+use suzatary_core::secretary::store::{Outcome, Settle};
 use suzatary_core::store::Reads as _;
 
 /// The review run to its end; a scripted model is under no limit, so it always starts.
@@ -165,8 +166,8 @@ fn a_review_withdraws_a_card_holds_the_rest_and_performs_none() {
 #[test]
 fn the_brief_offers_the_day_s_withdrawals_back_once() {
     use suzatary_core::secretary::acts::Act as BoxAct;
+    use suzatary_core::secretary::proposal::Proposal;
     use suzatary_core::secretary::proposer::Proposer;
-    use suzatary_core::secretary::store::Proposal;
     let caps = Fakes::new("review-undo");
     let [_, duplicate, _] = three_cards(&caps);
     let policy = common::chain();

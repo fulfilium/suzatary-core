@@ -20,7 +20,7 @@ use crate::health::{Health, Healths, Instant, Reading};
 use crate::secretary::acts::Act;
 use crate::secretary::bootstrap::Answering;
 use crate::secretary::noticed::Owed;
-use crate::secretary::store::Proposal;
+use crate::secretary::proposal::Proposal;
 use crate::settings::{Settable, Settables};
 
 /// How long a calendar may hold nothing, before today and after it, before it is offered for

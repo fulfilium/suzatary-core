@@ -1,10 +1,11 @@
 //! A whole conversation as a reader gets one: the fold of its lines.
 
 use super::{
-    Aside, Asking, Entry, Kept, Kind, Line, Lines, Proposal, Review, ReviewFailure, Rewind, Said,
-    Scope, Standing, Unheld, Unplaced,
+    Aside, Asking, Entry, Kept, Kind, Line, Lines, Review, ReviewFailure, Rewind, Said, Scope,
+    Standing, Unheld, Unplaced,
 };
 use crate::conversation_id::ConversationId;
+use crate::secretary::proposal::Proposal;
 
 use crate::capability::{Datetime, Turn};
 use crate::secretary::turn_shape::TurnShape;

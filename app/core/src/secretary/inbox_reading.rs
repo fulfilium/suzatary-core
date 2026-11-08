@@ -11,7 +11,7 @@ use crate::secretary::inbox::{Check, Unchecked};
 use crate::secretary::memory::Fact;
 use crate::secretary::phase::Phase;
 use crate::secretary::responded::Responded;
-use crate::secretary::store::stamp;
+use crate::secretary::stamp::stamp;
 
 /// One proposal's state register, read.
 #[derive(Debug, Clone, PartialEq, Eq)]

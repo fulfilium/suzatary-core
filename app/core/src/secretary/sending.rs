@@ -3,7 +3,7 @@
 use crate::google::Scope;
 use crate::refusal::Refusal;
 use crate::secretary::acts::Act;
-use crate::secretary::store::Proposal;
+use crate::secretary::proposal::Proposal;
 use crate::signatures::{Seat, Tap};
 
 /// Whether a tap on a proposal puts mail on a wire, or gives the box the consent to.

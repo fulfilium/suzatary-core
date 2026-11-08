@@ -6,7 +6,8 @@ use crate::coding::{Fired, Seen, Session, Step};
 use crate::conversation_id::ConversationId;
 use crate::reference::{ProposalRef, Reference};
 use crate::refusal::Refusal;
-use crate::secretary::store::{Entry, stamp};
+use crate::secretary::stamp::stamp;
+use crate::secretary::store::Entry;
 
 /// One session a poll moved.
 #[derive(Debug, Clone, PartialEq, Eq)]

@@ -19,7 +19,7 @@ use suzatary_core::capability::{
     SessionModel, Sessioned, TokenUsage, Turn,
 };
 use suzatary_core::for_model::ForModel;
-use suzatary_core::secretary::store::stamp;
+use suzatary_core::secretary::stamp::stamp;
 
 use crate::attachments::AttachmentStore;
 use crate::blobs::Blobs;

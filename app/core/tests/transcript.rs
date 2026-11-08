@@ -24,10 +24,12 @@ use suzatary_core::secretary::inbox_event::{InboxEvent, Said};
 use suzatary_core::secretary::line_event::{LineEvent, LineVocabulary};
 use suzatary_core::secretary::line_shape;
 use suzatary_core::secretary::locked_text::KeyName;
+use suzatary_core::secretary::proposal::{Draft, Proposal, Reasons};
 use suzatary_core::secretary::queue;
 use suzatary_core::secretary::responded::{Done, Responded, Tried};
+use suzatary_core::secretary::stamp::stamp;
 use suzatary_core::secretary::store::{
-    Decision, Draft, Entry, Line, Namer, Proposal, Reasons, Rewind, Stored, Title, Unheld, stamp,
+    Decision, Entry, Line, Namer, Rewind, Stored, Title, Unheld,
 };
 use suzatary_core::secretary::transcript::{self, Transcript};
 use suzatary_core::secretary::words::Words;

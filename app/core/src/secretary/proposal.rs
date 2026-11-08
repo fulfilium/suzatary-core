@@ -1,6 +1,14 @@
-//! One act the secretary wants performed and will not perform itself.
+//! One act the secretary wants performed and will not perform itself, with its reasons.
 
-use super::Draft;
+mod draft;
+mod forward;
+mod reasons;
+
+pub use draft::{Draft, EMAIL};
+pub use forward::{EML, Forward, Forwarded, Style};
+pub(crate) use forward::{FORWARD, FORWARDED};
+pub use reasons::{NoReasons, Reasons};
+
 use crate::secretary::memory::Replaces;
 use serde::{Deserialize, Serialize};
 
@@ -16,7 +24,7 @@ pub enum Proposal {
     Email(Draft),
     /// A stored message to forward, around a note: the card names the original, and the tap
     /// reads it again unmasked.
-    Forward(super::Forward),
+    Forward(Forward),
     /// Chain acts to append as the trusted actor, against one chain.
     ///
     /// The acts are stored and the events are not, since an `Authored` built at proposal time would
@@ -202,7 +210,7 @@ impl prodrome_core::literal::codec::Literal for Proposal {
         use prodrome_core::literal::codec::{Fields, arm};
         Ok(match arm(value)? {
             "Email" => Proposal::Email(Draft::from_value(value)?),
-            "Forward" => Proposal::Forward(super::Forward::from_value(value)?),
+            "Forward" => Proposal::Forward(Forward::from_value(value)?),
             "Changes" => {
                 Proposal::Changes(crate::secretary::changes::Changeset::from_value(value)?)
             }

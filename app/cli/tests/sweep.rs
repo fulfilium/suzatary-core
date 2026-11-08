@@ -17,7 +17,7 @@ use suzatary_core::record::{EventStore, TodoEvent, mk_source};
 use suzatary_core::secretary::Bound;
 use suzatary_core::secretary::changes::Act;
 use suzatary_core::secretary::daily::Run;
-use suzatary_core::secretary::store::Proposal;
+use suzatary_core::secretary::proposal::Proposal;
 use suzatary_core::secretary::sweep::{Swept, dry_run};
 use suzatary_core::store::Reads as _;
 

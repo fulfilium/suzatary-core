@@ -11,9 +11,9 @@ use suzatary_core::excerpt::Excerpt;
 use suzatary_core::held_value::Filled;
 use suzatary_core::mail::send::{Composed, Outgoing};
 use suzatary_core::secretary::attached::Checked;
+use suzatary_core::secretary::proposal::Draft;
 use suzatary_core::secretary::responded::{Done, Performed, Tried};
 use suzatary_core::secretary::routes::Post;
-use suzatary_core::secretary::store::Draft;
 
 use crate::instance::Instance;
 
@@ -604,7 +604,7 @@ impl Flow<'_> {
         suzatary_io::oauth::Pending<P>: Send,
     {
         use suzatary_core::capability::Clock as _;
-        use suzatary_core::secretary::store::stamp;
+        use suzatary_core::secretary::stamp::stamp;
         let Flow {
             conversations,
             inbox,
@@ -2371,7 +2371,7 @@ fn reviews(instance: &Instance, since: Option<&str>) -> anyhow::Result<()> {
                 review.at,
                 format!(
                     "{}  {conversation}  {review}",
-                    suzatary_core::secretary::store::stamp(review.at)
+                    suzatary_core::secretary::stamp::stamp(review.at)
                 ),
             )
         })
@@ -2380,7 +2380,7 @@ fn reviews(instance: &Instance, since: Option<&str>) -> anyhow::Result<()> {
                 failure.at,
                 format!(
                     "{}  {conversation}  {failure}",
-                    suzatary_core::secretary::store::stamp(failure.at)
+                    suzatary_core::secretary::stamp::stamp(failure.at)
                 ),
             )
         }))
@@ -2393,8 +2393,8 @@ fn reviews(instance: &Instance, since: Option<&str>) -> anyhow::Result<()> {
         println!(
             "secretary: {} review(s) could not run between {} and {} — {} batch(es) stood unanswered at the last one",
             failed.len(),
-            suzatary_core::secretary::store::stamp(first.1.at),
-            suzatary_core::secretary::store::stamp(last.1.at),
+            suzatary_core::secretary::stamp::stamp(first.1.at),
+            suzatary_core::secretary::stamp::stamp(last.1.at),
             last.1.standing
         );
     }

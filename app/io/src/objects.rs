@@ -348,8 +348,8 @@ mod tests {
 
     use super::*;
     use suzatary_core::secretary::inbox::{self, Response};
+    use suzatary_core::secretary::proposal::{Draft, Proposal, Reasons};
     use suzatary_core::secretary::responded::{Done, Performed};
-    use suzatary_core::secretary::store::{Draft, Proposal, Reasons};
 
     /// The deployment's writers in these tests: ada, who taps.
     fn owners() -> std::collections::BTreeSet<prodrome_core::event::Actor> {

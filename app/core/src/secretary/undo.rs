@@ -10,9 +10,9 @@ use crate::secretary::changes::Changeset;
 use crate::secretary::filed::{self, Filing};
 use crate::secretary::inbox::{self, Object, Price};
 use crate::secretary::inbox_event::InboxEvent;
+use crate::secretary::proposal::{Proposal, Reasons};
 use crate::secretary::proposer::Proposer;
 use crate::secretary::responded::{Responded, Withdrawal};
-use crate::secretary::store::{Proposal, Reasons};
 use crate::store::Prodrome;
 
 /// How far back a brief looks for withdrawals: one day, the brief's own cadence.

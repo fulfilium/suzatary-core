@@ -4,7 +4,7 @@ use serde_json::{Value, json};
 
 use crate::refusal::Refusal;
 use crate::secretary::changes::{self, Changeset};
-use crate::secretary::store::Proposal;
+use crate::secretary::proposal::Proposal;
 use crate::secretary::verbs::FilingArgs;
 use crate::secretary::{Call, SecretarySurface};
 use crate::verb::{Chained, Verb};

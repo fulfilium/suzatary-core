@@ -1,7 +1,7 @@
 use super::*;
 use crate::capability::{Datetime, SessionId, Turn};
 use crate::conversation_id::ConversationId;
-use crate::reference::Reference;
+use crate::secretary::proposal::{Draft, Proposal, Reasons};
 use crate::secretary::responded::{Done, Responded, Tried, Withdrawal};
 
 fn id() -> ConversationId {
@@ -230,36 +230,6 @@ fn an_act_proposal_round_trips_and_names_itself() {
     );
     let read: Proposal = serde_json::from_str(&printed).expect("and reads back");
     assert_eq!(read, proposal);
-}
-
-/// A proposal cannot be built without its reasons and sources.
-#[test]
-fn a_proposal_with_no_why_or_no_sources_is_not_a_proposal() {
-    let source: Reference = "mail:a1b2c3d4e5f6".parse().expect("a reference");
-    assert_eq!(
-        Reasons::new("  ", vec![source.clone()]).unwrap_err(),
-        NoReasons::Silent
-    );
-    assert_eq!(
-        Reasons::new("because", Vec::new()).unwrap_err(),
-        NoReasons::Groundless
-    );
-    assert!(Reasons::new("because", vec![source]).is_ok());
-}
-
-/// A hand-edited line goes through the same constructor: `serde` parses into [`Reasons`] rather
-/// than filling its fields.
-#[test]
-fn reasons_are_parsed_when_they_are_deserialised() {
-    assert!(serde_json::from_str::<Reasons>(r#"{"why":"x","sources":[]}"#).is_err());
-    assert!(
-        serde_json::from_str::<Reasons>(r#"{"why":"","sources":["mail:a1b2c3d4e5f6"]}"#).is_err()
-    );
-    assert!(serde_json::from_str::<Reasons>(r#"{"why":"x","sources":["nowhere:1"]}"#).is_err());
-    let read: Reasons =
-        serde_json::from_str(r#"{"why":"x","sources":["mail:a1b2c3d4e5f6"]}"#).expect("reasons");
-    assert_eq!(read.why(), "x");
-    assert_eq!(read.sources().len(), 1);
 }
 
 /// An unheard turn ends the session it names and no other: a session opened after it heard

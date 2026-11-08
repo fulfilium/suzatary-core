@@ -45,6 +45,16 @@ pub fn clip(text: &str, cap: usize) -> (String, bool) {
     (short.to_owned(), truncated)
 }
 
+/// A rule's why as one sentence, capitalised and ended with one full stop.
+#[must_use]
+pub fn said(why: &str) -> String {
+    let trimmed = why.trim().trim_end_matches('.');
+    let mut chars = trimmed.chars();
+    chars.next().map_or_else(String::new, |first| {
+        format!("{}.", first.to_uppercase().chain(chars).collect::<String>())
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -4,8 +4,8 @@ use crate::capability::Datetime;
 use crate::refusal::Refusal;
 use crate::secretary::inbox::{self, ProposalId};
 use crate::secretary::inbox_event::InboxEvent;
+use crate::secretary::proposal::Proposal;
 use crate::secretary::responded::Withdrawal;
-use crate::secretary::store::Proposal;
 use crate::store::Prodrome;
 
 /// What a rule sees of one waiting card.

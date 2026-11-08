@@ -17,7 +17,7 @@ use crate::secretary::Bound;
 use crate::secretary::acts::Act;
 use crate::secretary::coding::Advanced;
 use crate::secretary::inbox::Fold;
-use crate::secretary::store::Proposal;
+use crate::secretary::proposal::Proposal;
 
 /// How many todos may be in progress at once.
 pub(crate) const AT_ONCE: usize = 2;

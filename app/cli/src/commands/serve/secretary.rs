@@ -304,8 +304,7 @@ impl Params for Handle {
 pub fn replace(call: &Call<Writer, Handle, ()>) -> Result<Json<serde_json::Value>, Refusal> {
     call.state
         .with_cards(|caps, cards| secretary_routes::replace(caps, cards, &call.params.0))?;
-    call.state
-        .heard(&suzatary_core::secretary::noticed::CONVERSATION);
+    call.state.heard(&suzatary_core::conversation_id::SETUP);
     Ok(Json(serde_json::json!({})))
 }
 

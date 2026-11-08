@@ -7,7 +7,8 @@ use serde_json::{Map, Value};
 
 use super::changes::Act;
 use super::daily::{Run, begin};
-use super::store::{Entry, Proposal, Stored};
+use super::proposal::Proposal;
+use super::store::{Entry, Stored};
 use super::surface::{Effect, SecretaryCall, SecretaryVerb, Subset};
 use super::verbs::Show;
 use super::{Bound, MAX_ROUNDS};
