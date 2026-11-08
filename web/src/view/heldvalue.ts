@@ -8,7 +8,7 @@ export namespace heldvalue {
     | { type: "Text"; text: string }
     | { type: "Held"; kind: string; hint: string; handle: string | null; spelled: string }
 
-  // What a tap read back: a number, a file's bytes in base64, or nothing when the box no longer holds it or answered a replay.
+  // What a tap read back; `Gone` when the box no longer holds it or answered a replay.
   export type Opened = { type: "Shown"; value: string } | { type: "File"; name: string; media: string; bytes: string } | { type: "Gone" }
 
   export type Reveal = (handle: string) => Promise<Opened>
@@ -30,13 +30,13 @@ export namespace heldvalue {
 
   const escaped = (s: string): string => s.replace(/[.*+?^${}()|[\]\\-]/g, "\\$&")
 
-  // A number's kind and last digits, or `file` and the file's name and size; the handle names a message's value, a file's value, or a file.
+  // A number's kind and last digits, or `file` and its name and size, then the handle.
   const PATTERN = new RegExp(
     `\\[(?:(${Object.values(NAMES).map(escaped).join("|")})(?: ending (\\d{1,4}))?|(file) ([^[\\]·\\r\\n]+?, (?:under 1 KB|\\d+\\.\\d [KM]B))) · (?:tap to show · (held:(?:file:)?[A-Za-z0-9_-]+\\.(?:\\d+|file))|withheld)\\]`,
     "g",
   )
 
-  // What a search row says of a message that names held values: one phrase per kind, never a value or its digits.
+  // A search row's phrase per kind, never a value or its digits.
   export const named = (kinds: readonly HeldKind[]): string[] => kinds.map((k) => `names a held ${NAMES[k]}`)
 
   export const text = (t: string): Token => ({ type: "Text", text: t })
@@ -63,19 +63,23 @@ export namespace heldvalue {
 
   const isFile = (kind: string): boolean => kind === "file"
 
-  // As the box's card names it: `SSN ending 3456`, a code, whose digits it never shows, or `file w2.pdf, 48.2 KB`.
+  // As the box's card names it: `SSN ending 3456`, a code, or `file w2.pdf, 48.2 KB`.
   const described = (kind: string, hint: string): string => (hint === "" ? kind : isFile(kind) ? `${kind} ${hint}` : `${kind} ending ${hint}`)
 
   const dotted = (kind: string, hint: string): string => (isFile(kind) ? `${kind} ${hint}` : `${kind} ${hint === "" ? "••••••" : `••••${hint}`}`)
 
-  // The file as a link on this device, named as the box read it, never as a model wrote it; its object URL lives in this node
-  // until the link is used once, then it is revoked.
+  // The file as a link named as the box read it, its object URL revoked once used; saving is the owner's act, and the
+  // portal, which handles no download, saves nothing.
   const fileLink = (name: string, media: string, bytes: string): HTMLElement => {
     const raw = atob(bytes)
     const data = new Uint8Array(raw.length)
     for (let i = 0; i < raw.length; i++) data[i] = raw.charCodeAt(i)
     const url = URL.createObjectURL(new Blob([data], { type: media }))
-    const link = el("a", { href: url, download: name, class: "heldfile" }, `Save ${name}`)
+    const link = el(
+      "a",
+      { href: url, download: name, class: "heldfile", title: "The copy leaves the app: a wipe of this device does not delete it." },
+      `Save ${name} to this device`,
+    )
     link.addEventListener("click", () => {
       setTimeout(() => {
         URL.revokeObjectURL(url)
@@ -91,7 +95,7 @@ export namespace heldvalue {
     return digits.length >= 9 ? digits.slice(-4) : ""
   }
 
-  // Dots and the last digits, or the file's name; on a tap the value or the file's link replaces them in place, kept nowhere but this node.
+  // Dots and the last digits, or the file's name, replaced in place on a tap and kept nowhere but this node.
   export const chip = (kind: string, hint: string, handle: string | null, reveal: Reveal): HTMLElement => {
     const label = el("span", { class: "heldlabel" }, dotted(kind, hint))
     const box = el("span", { class: "heldvalue", title: handle === null ? `${described(kind, hint)}, withheld` : described(kind, hint) }, label)
