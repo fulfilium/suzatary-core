@@ -18,7 +18,8 @@ pub enum Method {
     Post,
 }
 
-/// One request. Its `Debug` never prints header values, which carry bearer tokens.
+/// One request. Its `Debug` prints its origin alone: a path, a query or a header can be a
+/// credential, as an ntfy topic or a bearer token is.
 #[derive(Clone)]
 pub struct Req {
     pub method: Method,
@@ -65,12 +66,6 @@ pub trait Http: Send + Sync {
 }
 
 impl<T: Http + ?Sized> Http for Arc<T> {
-    fn send(&self, req: Req) -> Result<Resp, HttpError> {
-        (**self).send(req)
-    }
-}
-
-impl<T: Http + ?Sized> Http for Box<T> {
     fn send(&self, req: Req) -> Result<Resp, HttpError> {
         (**self).send(req)
     }
@@ -133,32 +128,25 @@ impl Req {
         self.limit = bytes;
         self
     }
+}
 
-    /// The value of the first header named `name`, ignoring case.
-    #[must_use]
-    pub fn header_value(&self, name: &str) -> Option<&str> {
-        self.headers
-            .iter()
-            .find(|(key, _)| key.eq_ignore_ascii_case(name))
-            .map(|(_, value)| value.as_str())
-    }
+/// The value of the first of `headers` named `name`, ignoring case.
+pub(crate) fn header<'a>(headers: &'a [(String, String)], name: &str) -> Option<&'a str> {
+    headers
+        .iter()
+        .find(|(key, _)| key.eq_ignore_ascii_case(name))
+        .map(|(_, value)| value.as_str())
 }
 
 impl std::fmt::Debug for Req {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let origin = suzatary_core::plugin::PluginUrl::parse(&self.url).map_or_else(
+            || "an unreadable URL".to_owned(),
+            |url| url.origin().to_string(),
+        );
         f.debug_struct("Req")
             .field("method", &self.method)
-            .field("url", &self.url)
-            .field(
-                "headers",
-                &self
-                    .headers
-                    .iter()
-                    .map(|(name, _)| name)
-                    .collect::<Vec<_>>(),
-            )
-            .field("body", &self.body.len())
-            .field("timeout", &self.timeout)
+            .field("origin", &origin)
             .finish_non_exhaustive()
     }
 }
@@ -179,13 +167,9 @@ impl Resp {
         self
     }
 
-    /// The value of the first header named `name`, ignoring case.
     #[must_use]
     pub fn header(&self, name: &str) -> Option<&str> {
-        self.headers
-            .iter()
-            .find(|(key, _)| key.eq_ignore_ascii_case(name))
-            .map(|(_, value)| value.as_str())
+        header(&self.headers, name)
     }
 
     /// The body, decoded lossily.
@@ -315,13 +299,15 @@ fn failure(error: &ureq::Error) -> HttpError {
     }
     let said = error.to_string();
     match error {
+        // These quote the whole URL.
+        ureq::Error::BadUri(_) | ureq::Error::RequireHttpsOnly(_) => {
+            HttpError::NotSent("the URL is malformed, or not https".to_owned())
+        }
         ureq::Error::HostNotFound
         | ureq::Error::ConnectionFailed
-        | ureq::Error::BadUri(_)
         | ureq::Error::Tls(_)
         | ureq::Error::Rustls(_)
         | ureq::Error::TlsRequired
-        | ureq::Error::RequireHttpsOnly(_)
         | ureq::Error::InvalidProxyUrl
         | ureq::Error::ConnectProxyFailed(_)
         | ureq::Error::Timeout(ureq::Timeout::Resolve | ureq::Timeout::Connect) => {
@@ -424,12 +410,26 @@ impl Http for Scripted {
 mod tests {
     use super::*;
 
+    /// The attack: a log line that prints a request. Its path, its query and its headers can each
+    /// be the credential (an ntfy topic is the whole access control), so none is printed.
     #[test]
-    fn a_request_never_prints_a_header_value() {
-        let req = Req::get("https://example.test").header("Authorization", "Bearer hunter2");
+    fn a_request_prints_its_origin_alone() {
+        let req = Req::get("https://ntfy.example.test:8443/topic-hunter1?auth=hunter2")
+            .header("Authorization", "Bearer hunter3");
         let shown = format!("{req:?}");
-        assert!(shown.contains("Authorization"), "{shown}");
-        assert!(!shown.contains("hunter2"), "{shown}");
+        assert!(shown.contains("https://ntfy.example.test:8443"), "{shown}");
+        for secret in ["hunter1", "hunter2", "hunter3"] {
+            assert!(!shown.contains(secret), "{shown}");
+        }
+    }
+
+    /// The same attack through the transport's own error: a URL it cannot send is not quoted.
+    #[test]
+    fn a_url_the_transport_refuses_is_not_quoted_in_its_error() {
+        let failed = Ureq::new()
+            .send(Req::get("/topic-hunter1").timeout(Duration::from_secs(5)))
+            .expect_err("not sent");
+        assert!(!failed.to_string().contains("hunter1"), "{failed}");
     }
 
     #[test]

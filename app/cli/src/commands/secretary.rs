@@ -779,7 +779,11 @@ fn keep_tapped(
             .map_err(|failed| failed.to_string())
     });
     if let Err(failed) = kept_it {
-        tracing::warn!("secretary: could not keep what the tap read of {path}: {failed}");
+        tracing::warn!(
+            "secretary: could not keep what the tap read of {}: {}",
+            suzatary_core::for_model::ForModel::file_name(&path.to_string()).as_str(),
+            Excerpt::of(&failed)
+        );
     }
 }
 

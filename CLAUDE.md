@@ -286,7 +286,7 @@ Threat model: an injected email can at worst mis-triage or write bad todo text
   names such a number (→ `filesasthemselves`). A file the owner sends that
   names one is kept private in the vault folder, on his say (→ `vault`). A
   revealed held file leaves the app only by the owner's tap on its save link.
-- Secrets never in git, URLs or transcripts: static → secretspec/pass
+- Secrets never in git, URLs, logs or transcripts: static → secretspec/pass
   (audited), rotating caches → owner-managed, vaulted. SSN/TIN never in this
   repo; resume_typst/thesis are PUBLIC.
 - ⚠️ **A plugin is one function and its grant**: a WebAssembly component of

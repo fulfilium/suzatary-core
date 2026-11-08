@@ -226,7 +226,7 @@ mod tests {
                     body: Vec::new(),
                 })
             };
-            match req.header_value("Authorization") {
+            match crate::http::header(&req.headers, "Authorization") {
                 Some("Bearer repos-value") => answer(
                     200,
                     vec![(

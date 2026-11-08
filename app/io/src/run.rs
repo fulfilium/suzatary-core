@@ -86,7 +86,12 @@ fn passes<'a>(key: &OsStr, pass: impl Iterator<Item = &'a str>) -> bool {
         })
 }
 
-#[derive(Debug, Clone)]
+/// Not `Debug`: its env, stdin and args can hold secrets.
+///
+/// ```compile_fail
+/// let printed = format!("{:?}", suzatary_io::run::Cmd::new("git"));
+/// ```
+#[derive(Clone)]
 pub struct Cmd {
     /// The executable, looked up on `PATH` when it has no slash.
     pub program: OsString,

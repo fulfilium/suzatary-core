@@ -1,10 +1,9 @@
 //! What a log line may quote of a failure it did not write: a child's stderr, a provider's
 //! error body, a browser's message.
 //!
-//! An [`Excerpt`] is bounded, holds no email address, IP address, link credential or JWT, and
-//! prints as one line, so whatever a child or a provider says, the journal holds a few hundred
-//! characters of it with nothing in them that names a person, a host or a key. Its constructors
-//! are the only way to one, so a log site that quotes an `Excerpt` cannot quote the raw text.
+//! An [`Excerpt`] is bounded, holds no identity number, address, link credential or JWT, and
+//! prints as one line. Its constructors are the only way to one, so a log site that quotes an
+//! `Excerpt` cannot quote the raw text.
 
 use std::fmt;
 use std::sync::LazyLock;
@@ -60,36 +59,35 @@ impl Excerpt {
     #[must_use]
     pub fn tail(text: &str, most: usize) -> Self {
         let text = scrubbed(text.trim());
-        let total = text.chars().count();
-        if total <= most {
-            return Excerpt(text);
-        }
-        Excerpt(
-            std::iter::once('…')
-                .chain(text.chars().skip(total - most))
-                .collect(),
-        )
+        let cut = text.chars().count().saturating_sub(most);
+        Excerpt(if cut == 0 {
+            text
+        } else {
+            std::iter::once('…').chain(text.chars().skip(cut)).collect()
+        })
     }
 
     /// The first `most` characters of `text`, scrubbed, `…` last when cut.
     #[must_use]
     pub fn head(text: &str, most: usize) -> Self {
         let text = scrubbed(text);
-        if text.chars().count() <= most {
-            return Excerpt(text);
+        let mut kept: String = text.chars().take(most).collect();
+        if kept.len() < text.len() {
+            kept.push('…');
         }
-        Excerpt(
-            text.chars()
-                .take(most)
-                .chain(std::iter::once('…'))
-                .collect(),
-        )
+        Excerpt(kept)
     }
 
     /// The words, line breaks kept.
     #[must_use]
     pub fn as_str(&self) -> &str {
         &self.0
+    }
+
+    /// Whether it quotes `text`, as written or as scrubbed.
+    #[must_use]
+    pub fn quotes(&self, text: &str) -> bool {
+        self.0.contains(Excerpt::of(text).as_str())
     }
 
     /// Is there nothing to quote?
@@ -114,7 +112,8 @@ impl fmt::Display for Excerpt {
 
 /// Scrubbed before it is cut, so a cut never leaves half an address to slip past the pattern.
 fn scrubbed(text: &str) -> String {
-    let text = crate::redact::unlink(text);
+    let text = crate::redact::redact(text);
+    let text = crate::redact::unlink(text.as_str());
     let text = EMAIL.replace_all(&text, ADDRESS);
     IP.replace_all(&text, |found: &regex::Captures<'_>| {
         // A dotted quad after a `/` is a product's version (`Chrome/154.0.0.0`), not a host.
@@ -133,15 +132,17 @@ mod tests {
     use super::*;
     use proptest::prelude::*;
 
+    /// The attack: a subprocess's stderr or a client's error report, logged as an excerpt, quotes
+    /// a mail's identity number or a key; the log line carries neither.
     #[test]
     fn an_excerpt_names_no_address_host_or_key() {
         let said = Excerpt::of(concat!(
             "send to owner@example.invalid failed: connect 100.64.0.103:993 refused; ",
             "fe80::1:2:3 unreachable; retry https://x.example/cb?access_token=abc123 ",
-            "with eyJhbGciOi.eyJzdWIi.c2ln at 12:30"
+            "with eyJhbGciOi.eyJzdWIi.c2ln at 12:30; form SSN 123-45-6789 rejected"
         ));
         let shown = said.to_string();
-        for gone in ["owner@", "100.64", "fe80", "abc123", "eyJhbGciOi"] {
+        for gone in ["owner@", "100.64", "fe80", "abc123", "eyJhbGciOi", "6789"] {
             assert!(!shown.contains(gone), "{gone} in {shown}");
         }
         assert!(
@@ -182,6 +183,20 @@ mod tests {
         let head = Excerpt::head(&format!("the start{}", "y".repeat(10_000)), 20);
         assert_eq!(head.as_str(), "the startyyyyyyyyyyy…");
         assert_eq!(Excerpt::of("  short\n").as_str(), "short");
+    }
+
+    proptest! {
+        #![proptest_config(ProptestConfig::with_cases(20_000))]
+        /// The model client knows a lost session by its id in the CLI's stderr, read through an
+        /// excerpt, whose scrub redacts an id of digits alone: the excerpt still quotes it.
+        #[test]
+        fn a_session_id_survives_the_scrub(id in prop_oneof![
+            "[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}",
+            "[0-9]{8}-[0-9]{4}-4[0-9]{3}-[89][0-9]{3}-[0-9]{12}",
+        ]) {
+            let said = Excerpt::of(&format!("Error: No conversation found with session ID: {id}"));
+            prop_assert!(said.quotes(&id), "{}", said.as_str());
+        }
     }
 
     proptest! {

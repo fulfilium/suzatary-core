@@ -50,14 +50,14 @@ pub(crate) fn post(http: &dyn Http, request: &FormPost) -> Result<Answered, Oaut
 }
 
 /// One protocol's refresh grant; `granted` is for a human reading the file, never a decision.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, PartialEq, Eq, Serialize, Deserialize)]
 struct StoredGrant {
     refresh_token: String,
     granted: String,
 }
 
 /// One account's `<slug>.json`, its grants keyed by `Protocol::SLOT` and nothing else.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, PartialEq, Eq, Serialize, Deserialize)]
 struct StoredFile {
     version: u32,
     email: String,

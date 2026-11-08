@@ -451,7 +451,7 @@ impl ClaudeCli {
         .and_then(|ran| zero(cmd, ran))
         .map_err(|failed| match failed {
             RunError::Exited { stderr, .. }
-                if stderr.as_str().contains(id.as_str())
+                if stderr.quotes(id.as_str())
                     || stderr
                         .as_str()
                         .to_lowercase()
@@ -1084,7 +1084,7 @@ mod tests {
                 .iter()
                 .find(|(name, _)| name == CACHE_TTL_VAR)
                 .and_then(|(_, value)| value.clone());
-            assert_eq!(ttl.as_deref(), Some("1h".as_ref()), "{cmd:?}");
+            assert_eq!(ttl.as_deref(), Some("1h".as_ref()), "{:?}", cmd.args);
         }
     }
 

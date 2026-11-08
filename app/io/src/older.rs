@@ -1062,7 +1062,8 @@ mod tests {
         );
         assert!(
             sent.iter()
-                .all(|req| req.header_value("Authorization") == Some("Bearer box-minted")),
+                .all(|req| crate::http::header(&req.headers, "Authorization")
+                    == Some("Bearer box-minted")),
             "{sent:?}"
         );
         let _ = std::fs::remove_dir_all(&root);

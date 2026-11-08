@@ -1289,9 +1289,9 @@ mod tests {
             roster(vec![]),
         )
         .with_binary("/definitely/not/a/real/notmuch/binary");
-        let err = nm
-            .command(&["search"])
-            .expect_err("no config named means no command built");
+        let Err(err) = nm.command(&["search"]) else {
+            panic!("no config named means no command built");
+        };
         assert_eq!(
             err.to_string(),
             "the mail index could not be read: this deployment has no mail index"

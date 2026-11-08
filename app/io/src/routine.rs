@@ -199,11 +199,17 @@ mod tests {
             "https://api.anthropic.com/v1/claude_code/routines/trig_01fake/fire"
         );
         assert_eq!(
-            req.header_value("authorization"),
+            crate::http::header(&req.headers, "authorization"),
             Some(format!("Bearer {TOKEN}").as_str())
         );
-        assert_eq!(req.header_value("anthropic-beta"), Some(BETA));
-        assert_eq!(req.header_value("anthropic-version"), Some(VERSION));
+        assert_eq!(
+            crate::http::header(&req.headers, "anthropic-beta"),
+            Some(BETA)
+        );
+        assert_eq!(
+            crate::http::header(&req.headers, "anthropic-version"),
+            Some(VERSION)
+        );
         let body: Value = serde_json::from_slice(&req.body).expect("json");
         assert_eq!(body, json!({ "text": task().as_str() }));
     }

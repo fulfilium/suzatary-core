@@ -316,7 +316,10 @@ mod tests {
                 .url
                 .ends_with("?maxResults=500&q=subject%3A%22a%20b%22%20after%3A2023%2F01%2F01")
         );
-        assert_eq!(sent[0].header_value("Authorization"), Some("Bearer tok"));
+        assert_eq!(
+            crate::http::header(&sent[0].headers, "Authorization"),
+            Some("Bearer tok")
+        );
     }
 
     #[test]

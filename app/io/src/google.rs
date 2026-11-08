@@ -497,7 +497,10 @@ mod tests {
         assert_eq!(sent.len(), 3);
         for req in &sent[1..] {
             assert_eq!(req.limit, suzatary_core::google::MAX_ANSWER as u64);
-            assert_eq!(req.header_value("authorization"), Some("Bearer ya29.a"));
+            assert_eq!(
+                crate::http::header(&req.headers, "authorization"),
+                Some("Bearer ya29.a")
+            );
             assert!(!req.url.contains("ya29"), "{}", req.url);
         }
         assert!(sent[2].url.contains("maxResults=250"), "{}", sent[2].url);
