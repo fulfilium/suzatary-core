@@ -2012,7 +2012,7 @@ mod tests {
                 reach: &crate::connect::PLAIN,
             };
             let calendar = BTreeMap::from([(
-                crate::plugin::PluginName::parse("ics").expect("a name"),
+                crate::health::plugin::PluginName::parse("ics").expect("a name"),
                 crate::settings::overview::Store::Calendar,
             )]);
             overview(

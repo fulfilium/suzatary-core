@@ -869,7 +869,8 @@ fn the_vectors_match_what_the_pure_ts_modules_compute() {
 /// function of its standing alone, and `web/test/overview.test.ts` reads every one of these.
 #[test]
 fn the_standings_vector_is_every_standing_a_line_can_take() {
-    use suzatary_core::connect::{Failure, Group, Standing};
+    use suzatary_core::connect::{Group, Standing};
+    use suzatary_core::health::Failure;
     use suzatary_core::health::Outcome;
     type Healths = suzatary_core::health::Healths<String>;
     let at = fpl::instant_of(now());
@@ -2733,7 +2734,7 @@ fn the_answers_vector_holds_every_answer() {
                 CAST.owner.email,
                 Standing::Failing {
                     since: stamp(at),
-                    class: suzatary_core::connect::Failure::NeedsLogin,
+                    class: suzatary_core::health::Failure::NeedsLogin,
                     words: "token expired".to_owned(),
                     at: stamp(at),
                 },

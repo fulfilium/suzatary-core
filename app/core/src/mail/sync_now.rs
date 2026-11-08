@@ -6,7 +6,7 @@
 
 use serde::Serialize;
 
-use super::verbs::{AccountSync, SyncReport};
+use super::sync_report::{AccountSync, SyncReport};
 use crate::capability::{Datetime, Synced};
 
 /// How recent a sync must be to answer a request for one without starting another.

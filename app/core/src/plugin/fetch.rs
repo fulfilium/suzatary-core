@@ -3,13 +3,11 @@
 
 use crate::capability::Secret;
 
-use super::{CredentialName, Manifest, PluginUrl, Refusal, Said};
+use super::{Manifest, PluginUrl};
+use crate::health::plugin::{CredentialName, Refusal, Said};
 
 /// The most bytes of an answer's body the host reads.
 pub const MAX_RESPONSE: u64 = 8 * 1024 * 1024;
-
-/// The most fetches one call may make; past it each is refused unsent.
-pub const MAX_FETCHES: usize = 64;
 
 /// Where a plugin asked a request to go: untrusted, unparsed, and only ever turned into an
 /// [`Outgoing`] by [`Target::admit`].
@@ -104,7 +102,7 @@ mod tests {
     use proptest::prelude::*;
 
     use super::*;
-    use crate::plugin::Origin;
+    use crate::health::plugin::Origin;
 
     fn manifest() -> Manifest {
         toml::from_str(

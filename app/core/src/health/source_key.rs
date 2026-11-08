@@ -5,8 +5,8 @@ use std::fmt;
 
 use serde::{Deserialize, Serialize};
 
+use crate::health::plugin::{CredentialName, PluginName};
 use crate::mail::account_email::AccountEmail;
-use crate::plugin::{CredentialName, PluginName};
 
 /// A source the box reads from. Its print is its name in the health register and parses back to
 /// it: `mail:ada@example.test`, `plugin:ics`, `link:ics/PLUGIN_ICS_WORK`,

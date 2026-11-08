@@ -1,32 +1,27 @@
 //! The rule over the connections' health: what a failing connection is owed, by its failure's
 //! class, and what an unused one is offered, filed by the box with no model asked.
 //!
-//! This generalises `mail_health`'s identity rule to every connection: a fix is a function of
-//! the connection and the instant its failure began (its last success, or its first result), so
-//! seeing the same failure again asks for the same card, which stays as it was answered, and a
-//! failure after a success is a new episode with a new card. A class has one remedy
-//! ([`Failure::remedy`]); the card is that remedy's step of the connection's own template,
-//! except that a failing link is always owed its Secret card, worded by its class, since
-//! setting a link again is a valid move whatever went wrong.
+//! A fix is a function of the connection and the instant its failure began, so the same failure
+//! asks for the same card and a failure after a success is a new card. The card is the step of
+//! [`Failure::remedy`] in the connection's template; a failing link is always owed its Secret card.
 //!
-//! What goes unused is offered for removal, each a card the owner may dismiss: a calendar whose
-//! link syncs and holds nothing within [`QUIET`] of today, and a mail account failing for
-//! `ABANDONED`. A connection whose failure a card already mends is offered no removal beside
-//! that card.
+//! What goes unused is offered for removal: a calendar link holding nothing within [`QUIET`] of
+//! today, and a mail account failing for `ABANDONED`, unless a card already mends it.
 
 use std::collections::BTreeSet;
 
 use chrono::Duration;
 
 use crate::calendar::CalendarName;
-use crate::connect::{Connection, Declared, Failure, Key, Remedy, Step, Table};
+use crate::connect::{Connection, Declared, Key, Step, Table};
+use crate::health::SourceKey;
+use crate::health::{Failure, Remedy};
 use crate::health::{Health, Healths, Instant, Reading};
 use crate::secretary::acts::Act;
 use crate::secretary::bootstrap::Answering;
 use crate::secretary::noticed::Owed;
 use crate::secretary::store::Proposal;
 use crate::settings::{Settable, Settables};
-use crate::source_key::SourceKey;
 
 /// How long a calendar may hold nothing, before today and after it, before it is offered for
 /// removal.

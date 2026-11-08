@@ -2,9 +2,8 @@
 //! and rung once, by a push, when a matching message has synced.
 //!
 //! A watch's log is one [`Line::Set`], then at most one [`Line::Rang`] or [`Line::Cancelled`],
-//! then, after a ring, at most one [`Line::Delivered`]; each is decided under the log's lock.
-//! An expiry writes nothing: a reader at an instant past `until` reads the watch as
-//! [`Standing::Expired`], so a watch that expires closes without a push.
+//! then at most one [`Line::Delivered`]. An expiry writes nothing: past `until` it reads as
+//! [`Standing::Expired`].
 
 use prodrome_core::fpl::Instant;
 use serde::{Deserialize, Serialize};
@@ -531,7 +530,8 @@ mod tests {
     use super::*;
     use crate::capability::{CorpusError, Nothing};
     use crate::mail::state::Decision;
-    use crate::mail::verbs::{Marked, Show, Summary, SyncReport};
+    use crate::mail::sync_report::SyncReport;
+    use crate::mail::verbs::{Marked, Show, Summary};
     use crate::store::InMemoryLog;
 
     /// A corpus whose every search answers the messages that have arrived, newest first.

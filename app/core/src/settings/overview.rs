@@ -8,14 +8,15 @@ use std::collections::{BTreeMap, BTreeSet};
 use crate::capability::{MailCredential, MailGrants, SecretState};
 use crate::connect::{self, Checked, Connection, Group, Key, Standing};
 use crate::deployment::Deployment;
+use crate::health::SourceKey;
+use crate::health::plugin::PluginName;
 use crate::health::{Health, Healths};
 use crate::mail::account::MailAccount;
-use crate::plugin::{Manifest, PluginName};
+use crate::plugin::Manifest;
 use crate::secretary::acts::Act;
 use crate::secretary::store::Proposal;
 use crate::settings::Help;
 use crate::settings::remote::Pushed;
-use crate::source_key::SourceKey;
 use crate::wire;
 
 /// What an open card asks.
@@ -794,7 +795,7 @@ fn plugins(declared: &Declared<'_>, observed: &Observed<'_>) -> Overview {
                         Slot::Credential(name.clone(), credential.label().to_lowercase()),
                         needing(
                             line(
-                                connect::Label::of_suffix(credential.label()).map_or_else(
+                                crate::health::Label::of_suffix(credential.label()).map_or_else(
                                     |_| credential.label().to_owned(),
                                     |label| label.shown(),
                                 ),
@@ -810,7 +811,7 @@ fn plugins(declared: &Declared<'_>, observed: &Observed<'_>) -> Overview {
                                     .then(|| Need::Grant(name.clone())),
                                 )
                                 .chain(
-                                    connect::Label::of_suffix(credential.label())
+                                    crate::health::Label::of_suffix(credential.label())
                                         .map(|label| removal(Group::Calendar, label.as_str())),
                                 ),
                         ),
@@ -849,8 +850,8 @@ fn drive(declared: &Declared<'_>, observed: &Observed<'_>, connected: &Connected
     let steps = match &reading {
         None | Some(crate::health::Reading::Ok { .. }) => Some(Checked::of(probed)),
         Some(crate::health::Reading::Failing { class, .. }) => match class.remedy() {
-            connect::Remedy::Auth => Some(Checked::Never),
-            connect::Remedy::Secret | connect::Remedy::Retry => None,
+            crate::health::Remedy::Auth => Some(Checked::Never),
+            crate::health::Remedy::Secret | crate::health::Remedy::Retry => None,
         },
     };
     let as_probed = Standing::of_health(reading);
@@ -887,7 +888,7 @@ fn models(declared: &Declared<'_>, observed: &Observed<'_>) -> Overview {
             let (standing, needs) = match &job.calls {
                 // Calls outrank the key: the model may hold its own sign-in.
                 Calls::Recorded { key, credential } => (
-                    match crate::capability::reading_of(observed.registers.answered, key) {
+                    match crate::health::reading_of(observed.registers.answered, key) {
                         Some(reading) => Standing::of_calls(Some(reading)),
                         None => observed.secret(credential).join(Standing::Unobserved),
                     },
@@ -989,7 +990,7 @@ pub(crate) mod tests {
 
     use super::*;
     use crate::mail::account::{MailAccount, MsImap, Proton, Sync};
-    use crate::mail::verbs::{AccountSync, SyncReport};
+    use crate::mail::sync_report::{AccountSync, SyncReport};
 
     /// A calendar of two links, `PLUGIN_ICS_HOME` and `PLUGIN_ICS_WORK`.
     pub(crate) fn calendar() -> Manifest {
@@ -1086,7 +1087,7 @@ pub(crate) mod tests {
         }
 
         fn mail(&self) -> Healths<SourceKey> {
-            SyncReport {
+            let report = SyncReport {
                 unheld: None,
                 synced: self
                     .failing
@@ -1094,13 +1095,16 @@ pub(crate) mod tests {
                     .map(|(account, tail)| AccountSync {
                         account: crate::mail::account_email::AccountEmail::new(account)
                             .expect("a generated address"),
-                        outcome: crate::health::Outcome::Failed(connect::Failure::Unclassified),
+                        outcome: crate::outcome::Outcome::Failed(
+                            crate::mail::fault::Fault::Unclassified,
+                        ),
                         tail: tail.clone(),
                     })
                     .collect(),
                 notmuch: String::new(),
-            }
-            .healths(
+            };
+            Healths::of_sync(
+                &report,
                 chrono::NaiveDate::from_ymd_opt(2026, 10, 1)
                     .and_then(|day| day.and_hms_opt(9, 0, 0))
                     .expect("an instant"),
@@ -1339,9 +1343,12 @@ pub(crate) mod tests {
                 None => continue,
                 Some(0) => crate::plugin::Answer::Status(200),
                 Some(1) => crate::plugin::Answer::Status(401),
-                Some(2) => crate::plugin::Answer::Refused(crate::plugin::Refusal::CredentialUnset(
-                    crate::plugin::CredentialName::parse(&plugin, &credential).expect("a name"),
-                )),
+                Some(2) => {
+                    crate::plugin::Answer::Refused(crate::health::plugin::Refusal::CredentialUnset(
+                        crate::health::plugin::CredentialName::parse(&plugin, &credential)
+                            .expect("a name"),
+                    ))
+                }
                 Some(_) => break,
             };
             let tried = chrono::NaiveDate::from_ymd_opt(2026, 10, 5)
@@ -1352,7 +1359,7 @@ pub(crate) mod tests {
                 came: crate::plugin::Came::Learnt,
             };
             let credential =
-                crate::plugin::CredentialName::parse(&plugin, &credential).expect("a name");
+                crate::health::plugin::CredentialName::parse(&plugin, &credential).expect("a name");
             fetched = fetched.join(&run.health(&manifest(name, links), &[(credential, answer)]));
         }
         let store = match store {
@@ -1377,7 +1384,7 @@ pub(crate) mod tests {
                 .prop_map(|(step, command, why)| { Standing::ByHand { step, command, why } }),
             (
                 "2026-10-0[1-3]",
-                proptest::sample::select(connect::Failure::ALL.to_vec()),
+                proptest::sample::select(crate::health::Failure::ALL.to_vec()),
                 "[a-c]{1,3}"
             )
                 .prop_map(|(since, class, words)| Standing::Failing {

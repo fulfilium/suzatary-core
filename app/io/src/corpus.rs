@@ -133,15 +133,17 @@ impl Operator {
 impl Corpus for Operator {
     /// Every sync records each account's health and fails when it cannot; its report is kept
     /// private for the gate, the briefing and `last_sync`.
-    fn sync(&self) -> Result<verbs::SyncReport, CorpusError> {
+    fn sync(&self) -> Result<suzatary_core::mail::sync_report::SyncReport, CorpusError> {
         let report = self.syncer.sync(self.today());
         self.ring();
         let at = prodrome_core::fpl::instant_of(self.clock.now());
-        self.health.join(&report.healths(at)).map_err(|failed| {
-            CorpusError::Refused(format!(
-                "the sync ran, and its accounts' health was not recorded: {failed}"
-            ))
-        })?;
+        self.health
+            .join(&suzatary_core::health::Healths::of_sync(&report, at))
+            .map_err(|failed| {
+                CorpusError::Refused(format!(
+                    "the sync ran, and its accounts' health was not recorded: {failed}"
+                ))
+            })?;
         let answer = serde_json::to_string(&report).map_err(|failed| {
             CorpusError::Refused(format!("the sync report did not serialise: {failed}"))
         })?;
@@ -230,7 +232,7 @@ impl Corpus for Operator {
         })
     }
 
-    fn last_sync(&self) -> Option<verbs::SyncReport> {
+    fn last_sync(&self) -> Option<suzatary_core::mail::sync_report::SyncReport> {
         crate::mail_sync::read_report(&self.sync_status)
             .ok()
             .flatten()

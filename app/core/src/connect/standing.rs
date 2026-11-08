@@ -44,7 +44,7 @@ pub enum Standing {
         /// It has not succeeded since this instant, ISO 8601, UTC.
         since: String,
         /// Its class, which names its one fix.
-        class: super::Failure,
+        class: crate::health::Failure,
         /// What the failure said, in words.
         words: String,
         /// When it last tried, ISO 8601, UTC.

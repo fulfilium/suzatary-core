@@ -1,12 +1,9 @@
 //! Mail-in as a port: one account's mail pulled from its server into its maildir.
 
-use crate::connect::Failure;
+use super::fault::Fault;
 
-/// What pulls one account's mail into its maildir: Microsoft's IMAP, mbsync from the Proton
-/// Bridge, lieer from Gmail (on lieer's own grant or on the box's Google grant), or
-/// [`super::mailroom::Mailroom`] in memory. Every message lands once, as the server holds it, in
-/// a leaf's `new/` or `cur/` under the account's maildir, where `notmuch new` indexes it;
-/// `conformance::puller` holds any implementation to that.
+/// What pulls one account's mail into its maildir. Every message lands once, as the server holds
+/// it, in a leaf's `new/` or `cur/`; `conformance::puller` holds each implementation to that.
 pub trait Puller {
     /// Pull the account's mail, its INBOX from `since` where the kind searches by date.
     ///
@@ -20,7 +17,7 @@ pub trait Puller {
 #[error("{said}")]
 pub struct Unpulled {
     /// The class, which names the fix card.
-    pub class: Failure,
+    pub class: Fault,
     /// What the report shows.
     pub said: String,
 }

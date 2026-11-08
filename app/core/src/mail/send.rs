@@ -227,7 +227,7 @@ pub enum SendError {
     RecipientsRefused(Vec<String>),
     /// The account holds no grant to send, so nothing left the box.
     #[error("{}", .0.sentence())]
-    Ungranted(crate::connect::Lacking),
+    Ungranted(crate::mail::lacking::Lacking),
     /// The MIME could not be written, which is a bug rather than a refusal.
     #[error("the message could not be built: {0}")]
     Unbuildable(String),

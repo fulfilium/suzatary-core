@@ -68,7 +68,7 @@ impl Model for Brain {
         }
     }
 
-    fn limited(&self) -> Option<suzatary_core::capability::Limited> {
+    fn limited(&self) -> Option<suzatary_core::health::Limited> {
         match self {
             Brain::Cli(cli) => cli.limited(),
             #[cfg(feature = "fixture")]
@@ -188,7 +188,7 @@ fn probe(cli: &suzatary_io::model::ClaudeCli) -> Result<(), ModelError> {
 }
 
 /// Join one call of `model` into `answered`. Only a refused credential and a limit (under the
-/// shared [`suzatary_core::capability::SUBSCRIPTION`]) are joined as failures; a register that
+/// shared [`suzatary_core::health::SUBSCRIPTION`]) are joined as failures; a register that
 /// cannot be written is only logged.
 pub fn answered_by(
     answered: &suzatary_io::model_health::Answered,
@@ -201,11 +201,11 @@ pub fn answered_by(
         None => (model, Outcome::Succeeded),
         Some(ModelError::Refused(_)) => (
             model,
-            Outcome::Failed(suzatary_core::connect::Failure::KeyRefused),
+            Outcome::Failed(suzatary_core::health::Failure::KeyRefused),
         ),
         Some(ModelError::Limited(limited)) => (
-            suzatary_core::capability::SUBSCRIPTION,
-            Outcome::Failed(suzatary_core::connect::Failure::Limited(*limited)),
+            suzatary_core::health::SUBSCRIPTION,
+            Outcome::Failed(suzatary_core::health::Failure::Limited(*limited)),
         ),
         Some(
             ModelError::Unreachable(_)
@@ -226,14 +226,14 @@ pub fn answered_by(
 
 /// The limit standing now in `instance`'s model health, for callers outside a [`Door`].
 #[must_use]
-pub fn limited_now(instance: &Instance) -> Option<suzatary_core::capability::Limited> {
+pub fn limited_now(instance: &Instance) -> Option<suzatary_core::health::Limited> {
     limited_in(&suzatary_io::model_health::beside(&instance.mail.heartbeat))
 }
 
 /// `None` also when the register does not read.
 fn limited_in(
     answered: &suzatary_io::model_health::Answered,
-) -> Option<suzatary_core::capability::Limited> {
+) -> Option<suzatary_core::health::Limited> {
     use suzatary_core::capability::Clock as _;
     use suzatary_core::health::Register as _;
     let now = prodrome_core::fpl::instant_of(suzatary_io::clock::SystemClock.now());
@@ -241,11 +241,11 @@ fn limited_in(
         .healths()
         .inspect_err(|failed| tracing::warn!("model health: {failed}"))
         .ok()
-        .and_then(|calls| suzatary_core::capability::Limited::standing(&calls, now))
+        .and_then(|calls| suzatary_core::health::Limited::standing(&calls, now))
 }
 
 /// The one way the box asks a model it records: nothing while a limit stands in the model health
-/// ([`suzatary_core::capability::Limited::standing`]), and each call joined into it under `entry`.
+/// ([`suzatary_core::health::Limited::standing`]), and each call joined into it under `entry`.
 #[derive(Clone)]
 pub struct Door {
     answered: suzatary_io::model_health::Answered,
@@ -259,7 +259,7 @@ impl Door {
     }
 
     #[must_use]
-    pub fn limited(&self) -> Option<suzatary_core::capability::Limited> {
+    pub fn limited(&self) -> Option<suzatary_core::health::Limited> {
         limited_in(&self.answered)
     }
 
@@ -563,7 +563,7 @@ impl Model for Recorded {
         self.door.ask(|| self.cli.turn(conversation, tools))
     }
 
-    fn limited(&self) -> Option<suzatary_core::capability::Limited> {
+    fn limited(&self) -> Option<suzatary_core::health::Limited> {
         self.door.limited()
     }
 }

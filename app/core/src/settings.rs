@@ -256,7 +256,7 @@ pub trait Verify {
 /// Reads a source once, when an act makes it readable; held in no capability record.
 pub trait Checks {
     /// Read `source` once and join the result into its health.
-    fn check(&self, source: &crate::source_key::SourceKey);
+    fn check(&self, source: &crate::health::SourceKey);
 }
 
 /// Edits the instance file; held in no capability bundle.
@@ -276,8 +276,8 @@ pub trait Edits: Configuration {
     /// Lets `plugin` reach `origin`; idempotent.
     fn add_origin(
         &self,
-        plugin: &crate::plugin::PluginName,
-        origin: &crate::plugin::Origin,
+        plugin: &crate::health::plugin::PluginName,
+        origin: &crate::health::plugin::Origin,
     ) -> Result<(), EditError>;
 }
 
@@ -298,7 +298,7 @@ pub enum EditError {
     Malformed(String),
     /// The connection algebra refused the edit, which touched nothing.
     #[error(transparent)]
-    Connection(#[from] crate::connect::Refused),
+    Connection(#[from] crate::health::Refused),
 }
 
 #[cfg(test)]

@@ -301,11 +301,11 @@ impl NotReady {
     pub fn lacking(
         self,
         account: &EmailAddress,
-        grant: suzatary_core::connect::Grant,
-    ) -> Result<suzatary_core::connect::Lacking, String> {
+        grant: suzatary_core::mail::lacking::Grant,
+    ) -> Result<suzatary_core::mail::lacking::Lacking, String> {
         match self {
-            NotReady::NoClient => Ok(suzatary_core::connect::Lacking::GoogleClient),
-            NotReady::NeedsLogin(_) => Ok(suzatary_core::connect::Lacking::Grant {
+            NotReady::NoClient => Ok(suzatary_core::mail::lacking::Lacking::GoogleClient),
+            NotReady::NeedsLogin(_) => Ok(suzatary_core::mail::lacking::Lacking::Grant {
                 account: account.clone(),
                 grant,
             }),
@@ -315,11 +315,11 @@ impl NotReady {
 
     /// Its failure's class, which names its fix card.
     #[must_use]
-    pub fn class(&self) -> suzatary_core::connect::Failure {
+    pub fn class(&self) -> suzatary_core::mail::fault::Fault {
         match self {
-            NotReady::NoClient => suzatary_core::connect::Failure::Unresolved,
-            NotReady::NeedsLogin(_) => suzatary_core::connect::Failure::NeedsLogin,
-            NotReady::Failed(_) => suzatary_core::connect::Failure::Unclassified,
+            NotReady::NoClient => suzatary_core::mail::fault::Fault::Unresolved,
+            NotReady::NeedsLogin(_) => suzatary_core::mail::fault::Fault::NeedsLogin,
+            NotReady::Failed(_) => suzatary_core::mail::fault::Fault::Unclassified,
         }
     }
 }

@@ -11,7 +11,8 @@ use super::{
 use super::{MailSync, Secretary, Server, SyncFailure, Synced};
 use crate::escape::Escaped;
 use crate::mail::state::Decision;
-use crate::mail::verbs::{Marked, Show, Summary, SyncReport};
+use crate::mail::sync_report::SyncReport;
+use crate::mail::verbs::{Marked, Show, Summary};
 use crate::mail::{AttachmentMeta, MailMessage, MailRow};
 use crate::record::{Envelope, TodoEvent};
 use crate::refusal::Refusal;
@@ -623,11 +624,10 @@ impl crate::capability::UploadIndex for Nothing {
     }
 }
 
-impl crate::health::Register<crate::source_key::SourceKey> for Nothing {
+impl crate::health::Register<crate::health::SourceKey> for Nothing {
     fn healths(
         &self,
-    ) -> Result<crate::health::Healths<crate::source_key::SourceKey>, crate::store::StoreError>
-    {
+    ) -> Result<crate::health::Healths<crate::health::SourceKey>, crate::store::StoreError> {
         Ok(crate::health::Healths::default())
     }
 }

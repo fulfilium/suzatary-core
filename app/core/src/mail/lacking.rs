@@ -1,12 +1,10 @@
-//! A grant a card's effect needs and the box does not hold: why a tap wrote or sent nothing, and
-//! the template whose setup in Settings gives the box that grant. Stored on the try it answers,
-//! as one text literal: `<grant>:<account>`, or `google-client`.
+//! A grant a card's effect needs and the box does not hold: why a tap wrote or sent nothing.
+//! Stored on the try it answers, as one text literal: `<grant>:<account>`, or `google-client`.
 
 use std::fmt;
 use std::str::FromStr;
 
-use super::TemplateId;
-use crate::mail::address::EmailAddress;
+use super::address::EmailAddress;
 
 /// What the box lacks to perform a card's effect.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -65,22 +63,6 @@ impl Grant {
 const GOOGLE_CLIENT: &str = "google-client";
 
 impl Lacking {
-    /// The template whose setup in Settings gives the box what it lacks.
-    #[must_use]
-    pub const fn fix(&self) -> TemplateId {
-        match self {
-            Lacking::Grant {
-                grant: Grant::GoogleCalendar | Grant::GoogleSend,
-                ..
-            }
-            | Lacking::GoogleClient => TemplateId::Google,
-            Lacking::Grant {
-                grant: Grant::MicrosoftSend,
-                ..
-            } => TemplateId::MsImap,
-        }
-    }
-
     /// What the card says: that nothing happened, what to connect and where, and that a tap
     /// tries again once it is connected.
     #[must_use]
@@ -141,10 +123,7 @@ impl FromStr for Lacking {
         }
         let refused = || NotALack(text.to_owned());
         let (word, account) = text.split_once(':').ok_or_else(refused)?;
-        let grant = Grant::ALL
-            .into_iter()
-            .find(|grant| grant.as_str() == word)
-            .ok_or_else(refused)?;
+        let grant = crate::words::of_word(Grant::ALL, Grant::as_str, word).ok_or_else(refused)?;
         let account = EmailAddress::new(account).map_err(|_| refused())?;
         Ok(Lacking::Grant { account, grant })
     }

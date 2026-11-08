@@ -5,9 +5,9 @@ use std::cell::RefCell;
 use std::collections::BTreeMap;
 use std::rc::Rc;
 
+use super::fault::Fault;
 use super::imap::{INBOX, ImapError, Maildir, Pull, Selected, Session, SyncState, pull};
 use super::puller::{Puller, Unpulled};
-use crate::connect::Failure;
 
 /// One account's server and maildir. Its pull is the core's IMAP [`pull`], so its meaning is
 /// that pull's; clones share the maildir, so a mailroom whose server changed pulls into the
@@ -64,7 +64,7 @@ impl Puller for Mailroom {
             Server::Holding(messages) => messages,
             Server::Unreachable => {
                 return Err(Unpulled {
-                    class: Failure::Unreachable,
+                    class: Fault::Unreachable,
                     said: "the server cannot be reached".to_owned(),
                 });
             }

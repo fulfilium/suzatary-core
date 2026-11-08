@@ -438,7 +438,9 @@ pub fn at(card: Card, reading: &Reading) -> Card {
                 .or_else(|| {
                     answer.response.lacking().map(|lacking| CardLink::Setup {
                         label: lacking.label(),
-                        template: lacking.fix().as_str().to_owned(),
+                        template: crate::connect::TemplateId::fixing(lacking)
+                            .as_str()
+                            .to_owned(),
                     })
                 })
                 .or(card.link),
@@ -1396,10 +1398,10 @@ mod tests {
             email.clone(),
             &one(Responded::Tried {
                 attempt: 1,
-                tried: Tried::Lacks(crate::connect::Lacking::Grant {
+                tried: Tried::Lacks(crate::mail::lacking::Lacking::Grant {
                     account: crate::mail::address::EmailAddress::new("me@example.test")
                         .expect("an address"),
-                    grant: crate::connect::Grant::GoogleCalendar,
+                    grant: crate::mail::lacking::Grant::GoogleCalendar,
                 }),
             }),
         );

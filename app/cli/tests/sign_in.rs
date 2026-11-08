@@ -62,7 +62,7 @@ fn unanswered_over(
                 chrono::NaiveDate::from_ymd_opt(2026, 10, 7)
                     .and_then(|day| day.and_hms_opt(9, 0, 0))
                     .expect("an instant"),
-                suzatary_core::health::Outcome::Failed(suzatary_core::connect::Failure::KeyRefused),
+                suzatary_core::health::Outcome::Failed(suzatary_core::health::Failure::KeyRefused),
                 "401: the token expired",
             )),
             verify: Arc::new(verify),

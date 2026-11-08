@@ -4,8 +4,9 @@ use std::collections::BTreeSet;
 
 use serde::Deserialize;
 
-use super::{BundlePath, CredentialName, Origin, PluginName};
-use crate::source_key::SourceKey;
+use super::BundlePath;
+use crate::health::SourceKey;
+use crate::health::plugin::{CredentialName, ManifestError, Origin, PluginName};
 
 /// One `[[plugins]]` table, parsed: the origins it may reach and the credentials it may name.
 ///
@@ -32,38 +33,6 @@ struct Raw {
     origins: Vec<String>,
     #[serde(default)]
     credentials: Vec<String>,
-}
-
-/// Why a `[[plugins]]` table was refused; it names the offending text, and a manifest holds no
-/// secret to leak.
-#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
-pub enum ManifestError {
-    /// Not `[a-z][a-z0-9]{0,31}`.
-    #[error("{0:?} is not a plugin name (a lowercase letter, then lowercase letters or digits)")]
-    BadName(String),
-    /// Not a relative `.wasm` path of plain segments.
-    #[error("{0:?} is not a component path (relative, plain segments, ending in .wasm)")]
-    BadComponent(String),
-    /// Not a relative `.schema` path of plain segments.
-    #[error("{0:?} is not a schema path (relative, plain segments, ending in .schema)")]
-    BadSchema(String),
-    /// Not `http(s)://host[:port]`.
-    #[error("{0:?} is not an origin (http(s)://host[:port], nothing after it)")]
-    BadOrigin(String),
-    /// An origin named twice.
-    #[error("{0} is allowed twice")]
-    DuplicateOrigin(String),
-    /// A credential outside `PLUGIN_<NAME>_`.
-    #[error("{name:?} is not a credential this plugin may name: it must start with {prefix}")]
-    CredentialOutsideNamespace {
-        /// The name the manifest gave.
-        name: String,
-        /// The namespace it had to be in.
-        prefix: String,
-    },
-    /// A credential declared twice.
-    #[error("{0} is declared twice")]
-    DuplicateCredential(String),
 }
 
 impl TryFrom<Raw> for Manifest {

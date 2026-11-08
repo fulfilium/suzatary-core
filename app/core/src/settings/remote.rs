@@ -1,6 +1,6 @@
 //! Where the data repository is pushed, and whether it was.
 
-use crate::connect::Failure;
+use crate::health::Failure;
 use crate::health::{Health, Instant, Outcome};
 
 /// Where the data repository is pushed; a failed read is `Unread`, never `Nowhere`.

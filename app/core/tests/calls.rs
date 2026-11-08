@@ -20,7 +20,7 @@ use suzatary_core::capability::{
 use suzatary_core::chains::{ChainName, ChainPolicy, Chains};
 use suzatary_core::deployment::Deployment;
 use suzatary_core::mail::junk::{ChurnList, JunkHeader, JunkMessage, Uid};
-use suzatary_core::mail::verbs::{AccountSync, SyncReport};
+use suzatary_core::mail::sync_report::{AccountSync, SyncReport};
 use suzatary_core::mail::{AttachmentFile, AttachmentMeta, MailMessage, MailRow};
 use suzatary_core::record::{Envelope, EventStore, TodoEvent};
 use suzatary_core::refusal::Refusal;
@@ -341,7 +341,7 @@ impl MailSync for Fixed {
                 synced: vec![AccountSync {
                     account: suzatary_core::mail::account_email::AccountEmail::new(ACCOUNT)
                         .expect("an address"),
-                    outcome: suzatary_core::health::Outcome::Succeeded,
+                    outcome: suzatary_core::outcome::Outcome::Succeeded,
                     tail: "Sent: 1 new".to_owned(),
                 }],
                 notmuch: "Added 1 new message.".to_owned(),

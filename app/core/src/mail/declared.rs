@@ -1,8 +1,6 @@
-//! The folders a Microsoft account declares, as its sync pulls them: each leaf of its
-//! `inbox_folders` as a window of recent mail that lands unread and is triage input, then its sent
-//! folder whole, read-only, landing read in the `SENT_LEAF`. Each is checked against the folders
-//! the server lists, and the account's line names every folder with what its pull came to, so a
-//! folder that does not sync fails the account by name and the rest still sync.
+//! The folders a Microsoft account declares, as its sync pulls them: each `inbox_folders` leaf as
+//! recent unread triage input, then its sent folder whole and read. A folder the server does not
+//! list fails the account by name, and the rest still sync.
 
 use crate::mail::account::MsImap;
 use crate::mail::imap::{INBOX, ImapError, Pull, Pulled};
@@ -109,7 +107,7 @@ pub fn line(landed: &[(Declared, Landed)]) -> Result<String, Unpulled> {
         .join("; ");
     let class = landed.iter().find_map(|(_, landed)| match landed {
         Landed::Pulled(_) => None,
-        Landed::Unlisted => Some(crate::connect::Failure::Unclassified),
+        Landed::Unlisted => Some(super::fault::Fault::Unclassified),
         Landed::Failed(failed) => Some(failed.class()),
     });
     match class {

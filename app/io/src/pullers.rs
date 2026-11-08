@@ -4,10 +4,10 @@
 use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
 
-use suzatary_core::connect::Failure;
 use suzatary_core::mail::account::{MailAccount, MsImap};
 use suzatary_core::mail::address::EmailAddress;
 use suzatary_core::mail::declared::{Declared, Landed, declared, line};
+use suzatary_core::mail::fault::Fault;
 use suzatary_core::mail::imap::{INBOX, ImapError, Pull, Pulled, Session, pull};
 use suzatary_core::mail::puller::{Puller, Unpulled};
 
@@ -196,7 +196,7 @@ fn ran(cmd: &Cmd) -> Result<String, Unpulled> {
     said(cmd)
         .map(|output| tail(&output))
         .map_err(|failed| Unpulled {
-            class: Failure::Unclassified,
+            class: Fault::Unclassified,
             said: tail(&failed),
         })
 }

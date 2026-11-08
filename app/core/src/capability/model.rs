@@ -190,7 +190,7 @@ pub enum ModelError {
     TimedOut(std::time::Duration),
     /// The account it runs under is limited, so it answers nothing until the limit ends.
     #[error("{0}")]
-    Limited(super::Limited),
+    Limited(crate::health::Limited),
     /// Its service is overloaded, in the interpreter's own words: no pause, since it is
     /// over in minutes.
     #[error("the model's service is overloaded: {0}")]
@@ -451,9 +451,9 @@ pub trait Model: Sync {
     ) -> Result<Reply, ModelError>;
 
     /// The limit its account is under now, on its own clock, which every call refuses with while
-    /// it stands ([`super::Limited::standing`]); none for a model whose calls the box records
+    /// it stands ([`crate::health::Limited::standing`]); none for a model whose calls the box records
     /// nowhere.
-    fn limited(&self) -> Option<super::Limited> {
+    fn limited(&self) -> Option<crate::health::Limited> {
         None
     }
 }
@@ -464,7 +464,7 @@ impl<M: Model + ?Sized> Model for &M {
         (**self).name()
     }
 
-    fn limited(&self) -> Option<super::Limited> {
+    fn limited(&self) -> Option<crate::health::Limited> {
         (**self).limited()
     }
 

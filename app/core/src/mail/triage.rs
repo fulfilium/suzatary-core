@@ -5,7 +5,8 @@
 //! that recorded nothing leaves the same reading, owed again by the next pass. A failed account
 //! is not the model's work: the health register shows it.
 
-use crate::mail::verbs::{Summary, SyncReport};
+use crate::mail::sync_report::SyncReport;
+use crate::mail::verbs::Summary;
 use crate::rule::{Named, ReadingName, Rule};
 
 /// What triage reads: the queued messages' canonical hashes, and the last sync's report as read.
@@ -81,7 +82,7 @@ impl Rule for Triage {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::mail::verbs::AccountSync;
+    use crate::mail::sync_report::AccountSync;
     use crate::rule::Engine;
 
     fn report(oks: &[bool]) -> SyncReport {
@@ -93,9 +94,9 @@ mod tests {
                     account: crate::mail::account_email::AccountEmail::new("a@example.com")
                         .expect("an address"),
                     outcome: if *ok {
-                        crate::health::Outcome::Succeeded
+                        crate::outcome::Outcome::Succeeded
                     } else {
-                        crate::health::Outcome::Failed(crate::connect::Failure::Unclassified)
+                        crate::outcome::Outcome::Failed(crate::mail::fault::Fault::Unclassified)
                     },
                     tail: String::new(),
                 })

@@ -330,7 +330,7 @@ const FORGED: &str = "f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0
 impl suzatary_core::capability::Corpus for Forged {
     fn sync(
         &self,
-    ) -> Result<suzatary_core::mail::verbs::SyncReport, suzatary_core::capability::CorpusError>
+    ) -> Result<suzatary_core::mail::sync_report::SyncReport, suzatary_core::capability::CorpusError>
     {
         suzatary_core::capability::Corpus::sync(&Nothing)
     }
@@ -373,7 +373,7 @@ impl suzatary_core::capability::Corpus for Forged {
     ) -> Result<suzatary_core::mail::verbs::Marked, suzatary_core::capability::CorpusError> {
         suzatary_core::capability::Corpus::mark(&Nothing, hash, decision, note, native)
     }
-    fn last_sync(&self) -> Option<suzatary_core::mail::verbs::SyncReport> {
+    fn last_sync(&self) -> Option<suzatary_core::mail::sync_report::SyncReport> {
         None
     }
     fn last_triage_pass(&self) -> Option<String> {

@@ -6,7 +6,7 @@ use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant, SystemTime};
 
 use suzatary_core::capability::{Datetime, MailSync, SyncFailure, Synced};
-use suzatary_core::mail::verbs::SyncReport;
+use suzatary_core::mail::sync_report::SyncReport;
 
 use crate::present::Present as _;
 use crate::run::{Cmd, Ran, RunError, run};
@@ -114,7 +114,7 @@ fn instant(at: SystemTime) -> Option<Datetime> {
 #[cfg(test)]
 mod tests {
     use suzatary_core::capability::Clock as _;
-    use suzatary_core::mail::verbs::AccountSync;
+    use suzatary_core::mail::sync_report::AccountSync;
 
     use super::*;
 
@@ -132,7 +132,7 @@ mod tests {
             synced: vec![AccountSync {
                 account: suzatary_core::mail::account_email::AccountEmail::new("ada@example.test")
                     .expect("an address"),
-                outcome: suzatary_core::health::Outcome::Succeeded,
+                outcome: suzatary_core::outcome::Outcome::Succeeded,
                 tail: tail.to_owned(),
             }],
             notmuch: "No new mail.".to_owned(),

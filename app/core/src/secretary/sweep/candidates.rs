@@ -289,7 +289,8 @@ pub fn candidates(
 mod tests {
     use super::*;
     use crate::mail::state::Decision;
-    use crate::mail::verbs::{Marked, Show, Summary, SyncReport};
+    use crate::mail::sync_report::SyncReport;
+    use crate::mail::verbs::{Marked, Show, Summary};
 
     fn dt(y: i32, m: u32, d: u32) -> Datetime {
         Datetime::new(y, m, d, 0, 0, 0, 0).expect("a real date")

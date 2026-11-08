@@ -4,7 +4,8 @@
 use std::sync::Arc;
 use std::time::Instant;
 
-use suzatary_core::plugin::{MAX_FETCHES, MAX_RESPONSE, Manifest, Refusal, Target};
+use suzatary_core::health::plugin::{MAX_FETCHES, Refusal};
+use suzatary_core::plugin::{MAX_RESPONSE, Manifest, Target};
 use suzatary_io::http::{HttpError, Req};
 use wasmtime::component::{HasData, HasSelf, Linker, ResourceTable};
 use wasmtime_wasi::p2::bindings::{cli, clocks, random, sync::io};

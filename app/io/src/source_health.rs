@@ -5,7 +5,7 @@
 
 use std::path::Path;
 
-use suzatary_core::source_key::SourceKey;
+use suzatary_core::health::SourceKey;
 
 use crate::docs::{DocCodec, Docs};
 use crate::health_file::HealthFile;
@@ -27,10 +27,11 @@ pub fn beside(heartbeat: &Path) -> Health {
 
 #[cfg(test)]
 mod tests {
-    use suzatary_core::connect::Failure;
+    use suzatary_core::health::Failure;
     use suzatary_core::health::{Healths, Outcome, Reading, Register as _};
     use suzatary_core::mail::account_email::AccountEmail;
-    use suzatary_core::mail::verbs::{AccountSync, SyncReport};
+    use suzatary_core::mail::fault::Fault;
+    use suzatary_core::mail::sync_report::{AccountSync, SyncReport};
 
     use super::*;
 
@@ -50,9 +51,9 @@ mod tests {
             synced: vec![AccountSync {
                 account: email("ada"),
                 outcome: if ok {
-                    Outcome::Succeeded
+                    suzatary_core::outcome::Outcome::Succeeded
                 } else {
-                    Outcome::Failed(Failure::NeedsLogin)
+                    suzatary_core::outcome::Outcome::Failed(Fault::NeedsLogin)
                 },
                 tail: if ok { "done" } else { "IMAP: not connected" }.to_owned(),
             }],
@@ -65,7 +66,9 @@ mod tests {
         let dir = tempfile::tempdir().expect("a temp dir");
         let store = beside(&dir.path().join("triage-heartbeat"));
         for (ok, hour) in [(true, 1), (false, 2)] {
-            store.join(&report(ok).healths(at(hour))).expect("recorded");
+            store
+                .join(&Healths::of_sync(&report(ok), at(hour)))
+                .expect("recorded");
         }
         store
             .join(&Healths::one(

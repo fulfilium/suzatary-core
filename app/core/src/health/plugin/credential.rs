@@ -45,7 +45,7 @@ impl CredentialName {
     /// label's suffix is upper-case letters, digits and `_`, at most 32 of them, so the name
     /// has this type's shape whatever the label.
     #[must_use]
-    pub fn link(plugin: &PluginName, label: &crate::connect::Label) -> Self {
+    pub fn link(plugin: &PluginName, label: &crate::health::Label) -> Self {
         let prefix = plugin.credential_prefix();
         Self {
             name: format!("{prefix}{}", label.as_str()),

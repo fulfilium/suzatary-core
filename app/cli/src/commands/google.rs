@@ -3,10 +3,10 @@
 //! account's result joins the sources' health under its calendars' key.
 
 use suzatary_core::capability::Clock as _;
-use suzatary_core::connect::Failure;
+use suzatary_core::health::Failure;
+use suzatary_core::health::SourceKey;
 use suzatary_core::health::{Healths, Outcome};
 use suzatary_core::mail::account::Sync;
-use suzatary_core::source_key::SourceKey;
 use suzatary_io::google::ReadError;
 
 use crate::instance::Instance;
@@ -30,7 +30,7 @@ pub fn sync_calendars(
             continue;
         }
         let said = (grants.live(account.email.address()))
-            .map_err(|failed| (failed.class(), failed.to_string()))
+            .map_err(|failed| (failed.class().into(), failed.to_string()))
             .and_then(|grant| {
                 if !grant.parts.contains(suzatary_core::google::Scope::Calendar) {
                     return Err((

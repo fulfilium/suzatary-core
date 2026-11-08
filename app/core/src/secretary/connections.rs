@@ -1,22 +1,17 @@
 //! The rule over the connections: what each one's standing owes, filed by the box with no model
 //! asked.
 //!
-//! A connection's first unmet step is owed its card where the box performs it on a tap: a sign-in
-//! to read, then a consent to send; the Google client, then a sign-in with Google. A secret step
-//! is `fixes`'s, the subscription's sign-in `bootstrap`'s, and a terminal step has no card. A card
-//! a tap asked for is owed while what it asks is unmet, however it was met.
-//!
-//! A pasted link to a Google account's calendar is that account's: once the account reads its
-//! calendars through its sign-in with Google, the link's removal is owed (`Owed::retiring`).
-//! The Connect card the paste filed names the link's card in its sources.
+//! A connection's first unmet step that the box performs on a tap is owed its card, while what it
+//! asks is unmet. A pasted Google calendar link is owed its removal once that account reads its
+//! calendars through its sign-in with Google (`Owed::retiring`).
 
 use crate::capability::Datetime;
 use crate::capability::{SecretState, Secrets, Server};
 use crate::connect::{Checked, Connection, Declared, Group, Params, Seen, Step, Table};
 use crate::google::{Held, Scope, Scopes};
+use crate::health::plugin::{Origin, PluginName};
 use crate::mail::account::Sync;
 use crate::mail::address::EmailAddress;
-use crate::plugin::{Origin, PluginName};
 use crate::reference::{ProposalRef, Reference};
 use crate::refusal::Refusal;
 use crate::secretary::acts::Act;

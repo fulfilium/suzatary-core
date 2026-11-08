@@ -1,7 +1,7 @@
 //! Who asked for a proposal: a field of what the inbox stores, never read off the actor who wrote
 //! it, since the box writes every proposal and a plugin is no actor of any store.
 
-use crate::plugin::PluginName;
+use crate::health::plugin::PluginName;
 use crate::reference::ProposalRef;
 use crate::secretary::acts::Act;
 use crate::secretary::noticed::CONVERSATION;

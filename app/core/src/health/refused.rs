@@ -1,6 +1,6 @@
 //! Why a connection was not made, read or removed.
 
-use crate::plugin::ManifestError;
+use crate::health::plugin::ManifestError;
 
 /// Each refusal names what was wrong; none holds a secret, since no connection does.
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]

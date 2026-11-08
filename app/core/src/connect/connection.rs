@@ -5,12 +5,11 @@ use std::fmt;
 use prodrome_core::literal::{ProdromeError, Value};
 use serde::{Deserialize, Serialize};
 
-use super::{
-    AccountKind, Group, Params, Refused, Seen, Standing, Step, Table, Template, TemplateId,
-};
+use super::{AccountKind, Group, Params, Seen, Standing, Step, Table, Template, TemplateId};
+use crate::health::Refused;
+use crate::health::SourceKey;
+use crate::health::plugin::CredentialName;
 use crate::mail::account_email::AccountEmail;
-use crate::plugin::CredentialName;
-use crate::source_key::SourceKey;
 use prodrome_core::literal::codec::{Constructor, Fields, Literal, record};
 
 /// The model connection's key name: a deployment has one model.

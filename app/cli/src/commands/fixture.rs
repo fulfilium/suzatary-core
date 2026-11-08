@@ -392,7 +392,7 @@ fn answers(read: &crate::instance::Instance, no_model: bool) -> anyhow::Result<(
     let at = prodrome_core::fpl::instant_of(SystemClock.now());
     let (outcome, words) = if no_model {
         (
-            suzatary_core::health::Outcome::Failed(suzatary_core::connect::Failure::KeyRefused),
+            suzatary_core::health::Outcome::Failed(suzatary_core::health::Failure::KeyRefused),
             "the fixture's model is not connected",
         )
     } else {
@@ -553,7 +553,8 @@ pub mod fake_google;
 /// begun at the reference plugin's schema, so the calendar reads it, and its last run and its
 /// link's fetch a success, so storing the link again makes its line healthy without a sync.
 fn a_calendar(read: &crate::instance::Instance, repo: &Path) -> anyhow::Result<()> {
-    use suzatary_core::plugin::{Answer, Came, CredentialName, LastRun, PluginName};
+    use suzatary_core::health::plugin::{CredentialName, PluginName};
+    use suzatary_core::plugin::{Answer, Came, LastRun};
     let name = PluginName::parse("ics")?;
     let text = std::fs::read_to_string(repo.join("app/plugin-ics/ics.schema"))
         .context("reading the calendar plugin's schema")?;

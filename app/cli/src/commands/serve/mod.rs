@@ -1557,7 +1557,7 @@ async fn resume_waiting(state: &State) {
     match tokio::task::spawn_blocking(move || {
         suzatary_core::secretary::transcript::waiting(
             caps.secretary.conversations,
-            suzatary_core::capability::reading_of(&answered, model.as_str()).as_ref(),
+            suzatary_core::health::reading_of(&answered, model.as_str()).as_ref(),
             caps.secretary.clock.now(),
         )
     })

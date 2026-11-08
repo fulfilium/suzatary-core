@@ -5,7 +5,8 @@ use std::thread;
 use std::time::Instant;
 
 use prodrome_core::declared::{Declaration, Refusal};
-use suzatary_core::plugin::{Manifest, Said};
+use suzatary_core::health::plugin::Said;
+use suzatary_core::plugin::Manifest;
 use wasmtime::component::{Component, HasSelf, Linker, ResourceTable};
 use wasmtime::{Config, Engine, Store, Trap};
 use wasmtime_wasi::WasiCtxBuilder;

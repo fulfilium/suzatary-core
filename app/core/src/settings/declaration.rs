@@ -1,6 +1,6 @@
 //! Which instance table declares a secret.
 
-use crate::plugin::PluginName;
+use crate::health::plugin::PluginName;
 use crate::settings::remote::Pushed;
 
 /// One table naming a secret; a name two tables declare is declared by both.

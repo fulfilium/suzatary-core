@@ -4,7 +4,7 @@
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
-use crate::connect::Failure;
+use crate::health::Failure;
 use crate::health::{Health, Healths, Instant, Reading};
 
 /// The model health's entry for the subscription every model the box runs shares: a limit is the

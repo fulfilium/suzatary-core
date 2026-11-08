@@ -761,7 +761,7 @@ fn every_response() -> Vec<Responded> {
         }),
         Responded::Tried {
             attempt: 1,
-            tried: Tried::Lacks(crate::connect::Lacking::GoogleClient),
+            tried: Tried::Lacks(crate::mail::lacking::Lacking::GoogleClient),
         },
         Responded::Dismissed {
             reason: "wrong person".to_owned(),

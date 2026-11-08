@@ -4,11 +4,8 @@
 //! line is read with its words opened by the key store; a slot whose key an erasure line of the
 //! same conversation names reads as erased, and one whose key is not held reads as missing.
 //!
-//! [`Transcript`] is one conversation's lines in that order, ties between lines nothing orders
-//! broken by the instant stamped and then the name, as undo's stream breaks them. The plan's
-//! three registers are reads of it: the transcript itself ([`Transcript::stored`], the fold the
-//! page draws), [`Transcript::owed`] (what a round still answers) and the proposal lines
-//! against the inbox ([`Stored::lines`], each placed or named as unplaced).
+//! [`Transcript`] is one conversation's lines in that order, ties broken by the instant and then
+//! the name. [`Transcript::stored`], [`Transcript::owed`] and [`Stored::lines`] are reads of it.
 //!
 //! Every line is written through [`push`] or [`start`], which take its words through the
 //! redaction door and lock each slot under a fresh key before the store sees it: nothing enters
@@ -1253,7 +1250,7 @@ mod tests {
         let failing = crate::health::Healths::<String>::one(
             "a-cli/large".to_owned(),
             prodrome_core::fpl::instant_of(at(20)),
-            crate::health::Outcome::Failed(crate::connect::Failure::Unclassified),
+            crate::health::Outcome::Failed(crate::health::Failure::Unclassified),
             "it failed",
         );
         assert!(

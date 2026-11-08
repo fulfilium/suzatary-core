@@ -109,8 +109,8 @@ pub enum Act {
     },
     /// Let a plugin reach one more origin, naming the origin and never the link.
     Grant {
-        plugin: crate::plugin::PluginName,
-        origin: crate::plugin::Origin,
+        plugin: crate::health::plugin::PluginName,
+        origin: crate::health::plugin::Origin,
     },
     /// Keep the box's Google Cloud client: the tap's value is its downloaded file, which travels
     /// only in the tap's body and is kept only when it lists `redirect`.

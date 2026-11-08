@@ -2,7 +2,7 @@
 
 use std::sync::Arc;
 
-use suzatary_core::plugin::{CredentialName, Refusal, Said};
+use suzatary_core::health::plugin::{CredentialName, Refusal, Said};
 use suzatary_io::http::Http;
 use suzatary_io::secrets::Resolves;
 

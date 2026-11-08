@@ -1,7 +1,7 @@
 //! What a person chooses for one connection.
 
-use super::{Label, Refused};
 use crate::drive_path::DrivePath;
+use crate::health::{Label, Refused};
 use crate::mail::account::Authority;
 use crate::mail::address::EmailAddress;
 

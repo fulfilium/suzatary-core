@@ -19,7 +19,7 @@ pub struct Plugins {
 impl Plugins {
     /// Where `name`'s store lives, at its declared schema, beside its cursor.
     #[must_use]
-    pub fn store(&self, name: &suzatary_core::plugin::PluginName) -> PathBuf {
+    pub fn store(&self, name: &suzatary_core::health::plugin::PluginName) -> PathBuf {
         self.beside(name).join("store")
     }
 
@@ -34,7 +34,7 @@ impl Plugins {
 
     /// Where `name`'s cursor and store live.
     #[must_use]
-    pub fn beside(&self, name: &suzatary_core::plugin::PluginName) -> PathBuf {
+    pub fn beside(&self, name: &suzatary_core::health::plugin::PluginName) -> PathBuf {
         self.cache.join("plugins").join(name.as_str())
     }
 

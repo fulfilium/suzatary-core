@@ -239,8 +239,8 @@ impl suzatary_core::settings::Edits for Noting<'_> {
 
     fn add_origin(
         &self,
-        plugin: &suzatary_core::plugin::PluginName,
-        origin: &suzatary_core::plugin::Origin,
+        plugin: &suzatary_core::health::plugin::PluginName,
+        origin: &suzatary_core::health::plugin::Origin,
     ) -> Result<(), EditError> {
         self.noted(self.edits.add_origin(plugin, origin))
     }

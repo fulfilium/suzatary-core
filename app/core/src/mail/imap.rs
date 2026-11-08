@@ -8,8 +8,7 @@
 //!   fixed and a refetch rewrites one file.
 //! - Read-flag pushback covers only UIDs this state fetched, and each once.
 //!
-//! UID commands throughout, never sequence numbers: they coincide only in a
-//! mailbox that never expunged, so mixing them flags the wrong message read.
+//! UID commands throughout, never sequence numbers.
 
 use std::collections::BTreeSet;
 
@@ -56,14 +55,14 @@ pub enum ImapError {
 impl ImapError {
     /// Its class: a sign-in only a person gives, or anything else.
     #[must_use]
-    pub const fn class(&self) -> crate::connect::Failure {
+    pub const fn class(&self) -> crate::mail::fault::Fault {
         match self {
-            ImapError::NeedsLogin(_) => crate::connect::Failure::NeedsLogin,
+            ImapError::NeedsLogin(_) => crate::mail::fault::Fault::NeedsLogin,
             ImapError::Server { .. }
             | ImapError::NoUidValidity(_)
             | ImapError::Maildir { .. }
             | ImapError::State { .. }
-            | ImapError::Unauthorised(_) => crate::connect::Failure::Unclassified,
+            | ImapError::Unauthorised(_) => crate::mail::fault::Fault::Unclassified,
         }
     }
 }

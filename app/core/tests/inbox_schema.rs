@@ -15,7 +15,7 @@ use prodrome_core::policy::Everything;
 use prodrome_core::store::EventStore;
 use proptest::prelude::*;
 
-use suzatary_core::plugin::PluginName;
+use suzatary_core::health::plugin::PluginName;
 use suzatary_core::secretary::inbox::{self, Asked, ProposalId};
 use suzatary_core::secretary::inbox_event::{InboxEvent, InboxVocabulary, Said};
 use suzatary_core::secretary::phase::Phase;
@@ -118,7 +118,7 @@ fn a_response() -> impl Strategy<Value = Responded> {
         }),
         (1..4_u32).prop_map(|attempt| Responded::Tried {
             attempt,
-            tried: Tried::Lacks(suzatary_core::connect::Lacking::GoogleClient),
+            tried: Tried::Lacks(suzatary_core::mail::lacking::Lacking::GoogleClient),
         }),
         (1..4_u32).prop_map(|attempt| Responded::Tried {
             attempt,

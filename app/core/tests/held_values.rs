@@ -10,7 +10,8 @@ use suzatary_core::chains::{ChainName, ChainPolicy, Chains};
 use suzatary_core::deployment::Deployment;
 use suzatary_core::mail::junk::{ChurnList, JunkHeader, JunkMessage, Uid};
 use suzatary_core::mail::state::Decision;
-use suzatary_core::mail::verbs::{Marked, Message, Show, Summary, SyncReport};
+use suzatary_core::mail::sync_report::SyncReport;
+use suzatary_core::mail::verbs::{Marked, Message, Show, Summary};
 use suzatary_core::secretary::Bound;
 
 /// Synthetic numbers no person holds: SSN area 000, ITIN area 912.

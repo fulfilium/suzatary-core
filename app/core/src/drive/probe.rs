@@ -3,9 +3,9 @@
 
 use super::{DrivePath, Port};
 use crate::capability::DriveFailure;
-use crate::connect::Failure;
+use crate::health::Failure;
+use crate::health::SourceKey;
 use crate::health::{Healths, Instant, Outcome};
-use crate::source_key::SourceKey;
 
 /// What listing each of `folders` through `port` at `at` says: a success when every one lists,
 /// else a failure naming the first that did not, in the Drive's words. No folder to read is

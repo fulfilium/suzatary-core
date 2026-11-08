@@ -2,7 +2,7 @@
 
 use proptest::prelude::*;
 use suzatary_core::conformance::puller::{Rig, check};
-use suzatary_core::connect::Failure;
+use suzatary_core::mail::fault::Fault;
 use suzatary_core::mail::mailroom::{Mailroom, Server};
 
 struct Memory(Mailroom);
@@ -10,7 +10,7 @@ struct Memory(Mailroom);
 impl Rig for Memory {
     type Puller = Mailroom;
 
-    const UNREACHABLE: Failure = Failure::Unreachable;
+    const UNREACHABLE: Fault = Fault::Unreachable;
 
     fn holding(&self, messages: &[Vec<u8>]) -> Mailroom {
         self.0.serving(Server::Holding(messages.to_vec()))

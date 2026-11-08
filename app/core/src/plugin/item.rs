@@ -5,7 +5,7 @@ use prodrome_core::declared::{Declaration, Declared};
 use prodrome_core::event::{canonical, parse_event};
 use prodrome_core::schema::Schema;
 
-use super::{PluginName, Said};
+use crate::health::plugin::{PluginName, Said};
 
 /// The most bytes one item may be.
 pub(crate) const MAX_ITEM: usize = 64 * 1024;

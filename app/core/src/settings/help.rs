@@ -55,7 +55,7 @@ impl Help {
         match (Words::of(name), credential) {
             (Some(words), Some((_, suffix))) => words.label.replace(
                 "{label}",
-                &crate::connect::Label::of_suffix(suffix)
+                &crate::health::Label::of_suffix(suffix)
                     .map_or_else(|_| suffix.to_owned(), |label| label.shown()),
             ),
             (Some(words), None) => words.label.to_owned(),

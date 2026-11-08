@@ -48,6 +48,7 @@ pub mod model_name;
 pub mod narrowing;
 pub mod nonempty;
 pub mod notify;
+pub mod outcome;
 #[cfg(test)]
 mod own;
 pub mod persona;
@@ -72,7 +73,6 @@ pub mod secretary;
 pub mod settings;
 pub mod signatures;
 pub mod snapshot;
-pub mod source_key;
 pub mod spelling;
 pub mod store;
 pub mod sync;

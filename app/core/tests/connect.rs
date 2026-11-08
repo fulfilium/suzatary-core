@@ -7,9 +7,9 @@ use prodrome_core::literal::codec::Literal as _;
 use proptest::prelude::*;
 use suzatary_core::capability::SecretState;
 use suzatary_core::connect::{
-    CATALOG, Checked, Connection, Declared, PLAIN, Params, Refused, Seen, StepShape, Table,
-    TemplateId,
+    CATALOG, Checked, Connection, Declared, PLAIN, Params, Seen, StepShape, Table, TemplateId,
 };
+use suzatary_core::health::Refused;
 use suzatary_core::health::{Health, Outcome};
 use suzatary_core::mail::account::Authority;
 use suzatary_core::mail::address::EmailAddress;
@@ -30,7 +30,7 @@ fn connection() -> impl Strategy<Value = Connection> {
         )),
         "[A-Za-z]{1,6}( [a-z]{1,3})?".prop_map(move |label| made(
             TemplateId::Ics,
-            Params::Label(suzatary_core::connect::Label::parse(&label).expect("a label"))
+            Params::Label(suzatary_core::health::Label::parse(&label).expect("a label"))
         )),
         email().prop_map(move |email| made(TemplateId::Gmail, Params::Address(email))),
         email().prop_map(move |email| made(TemplateId::Google, Params::Address(email))),
@@ -117,7 +117,7 @@ fn health(results: &[(u32, bool)]) -> Option<Health> {
                 if *ok {
                     Outcome::Succeeded
                 } else {
-                    Outcome::Failed(suzatary_core::connect::Failure::Unclassified)
+                    Outcome::Failed(suzatary_core::health::Failure::Unclassified)
                 },
                 "the sync said no",
             )

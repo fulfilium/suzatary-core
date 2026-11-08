@@ -1,10 +1,13 @@
 //! A template: how one kind of connection is made, as data.
 
-use super::{Check, Group, Params, Refused, Shape, StepShape};
+use super::{Check, Group, Params, Shape, StepShape};
+use crate::health::Refused;
+use crate::health::plugin::{ManifestError, PluginName};
 use crate::mail::account::{Authority, MailAccount, MsImap, Proton, Sync, slug_of};
 use crate::mail::account_email::AccountEmail;
 use crate::mail::folders::Folders;
-use crate::plugin::{Manifest, ManifestError, PluginName};
+use crate::mail::lacking::{Grant, Lacking};
+use crate::plugin::Manifest;
 
 /// A template: its group, the table it writes, the steps a person takes and the check that
 /// proves it. Every value that grants anything (an origin, a secret's name, a help link, a
@@ -349,6 +352,22 @@ impl TemplateId {
             .into_iter()
             .find(|id| id.as_str() == text)
             .ok_or_else(|| Refused::Template(text.to_owned()))
+    }
+
+    /// The template whose setup in Settings gives the box what `lacking` names.
+    #[must_use]
+    pub const fn fixing(lacking: &Lacking) -> Self {
+        match lacking {
+            Lacking::Grant {
+                grant: Grant::GoogleCalendar | Grant::GoogleSend,
+                ..
+            }
+            | Lacking::GoogleClient => TemplateId::Google,
+            Lacking::Grant {
+                grant: Grant::MicrosoftSend,
+                ..
+            } => TemplateId::MsImap,
+        }
     }
 
     /// Its data.

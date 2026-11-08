@@ -455,9 +455,9 @@ pub fn deliver(
                 .map_err(|failed| auth(failed.to_string()))?
                 .required()
                 .map_err(|_| {
-                    SendError::Ungranted(suzatary_core::connect::Lacking::Grant {
+                    SendError::Ungranted(suzatary_core::mail::lacking::Lacking::Grant {
                         account: account.email.address().clone(),
-                        grant: suzatary_core::connect::Grant::MicrosoftSend,
+                        grant: suzatary_core::mail::lacking::Grant::MicrosoftSend,
                     })
                 })?;
             suzatary_io::smtp::Microsoft {
@@ -486,7 +486,8 @@ pub fn deliver(
                 .map_err(|refused| auth(refused.message().to_owned()))?;
             let token =
                 google_grants(instance).token(&account).map_err(|refused| {
-                    match refused.lacking(&account, suzatary_core::connect::Grant::GoogleSend) {
+                    match refused.lacking(&account, suzatary_core::mail::lacking::Grant::GoogleSend)
+                    {
                         Ok(lacking) => SendError::Ungranted(lacking),
                         Err(words) => auth(words),
                     }

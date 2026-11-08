@@ -1,7 +1,7 @@
 //! The mail sync the timer runs, as an effect a verb may start early.
 
 use super::Datetime;
-use crate::mail::verbs::SyncReport;
+use crate::mail::sync_report::SyncReport;
 
 /// A sync's report and when it was written.
 #[derive(Debug, Clone, PartialEq, Eq)]

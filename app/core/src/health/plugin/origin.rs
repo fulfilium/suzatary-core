@@ -64,7 +64,8 @@ impl Origin {
 
     /// Split a URL into its origin and everything after the authority, or `None` when the text
     /// is not `http(s)://` and an authority this grammar reads.
-    pub(super) fn split(text: &str) -> Option<(Self, &str)> {
+    #[must_use]
+    pub fn split(text: &str) -> Option<(Self, &str)> {
         let (scheme, rest) = if let Some(rest) = text.strip_prefix("https://") {
             (Scheme::Https, rest)
         } else {

@@ -30,7 +30,6 @@ mod render_cache;
 #[path = "../../tests/support/joining.rs"]
 mod joining;
 mod junk;
-mod limited;
 mod mail_sync;
 mod mailbox;
 mod manuals;
@@ -67,7 +66,6 @@ pub use entropy::{Entropy, SALT_BYTES};
 #[cfg(any(test, feature = "nothing"))]
 pub use joining::Joining;
 pub use junk::{Junk, JunkFailure};
-pub use limited::{Limit, Limited, RATE_WAIT, SUBSCRIPTION, UNTOLD, reading_of};
 pub use mail_sync::{MailSync, SyncFailure, Synced};
 pub use mailbox::{MAX_QUERY_CHARS, MailError, Mailbox, Query};
 pub use manuals::{Manual, Manuals};

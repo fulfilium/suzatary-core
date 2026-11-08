@@ -31,7 +31,8 @@ use suzatary_core::deployment::Deployment;
 use suzatary_core::escape::Escaped;
 use suzatary_core::file_read::FileRead;
 use suzatary_core::mail::state::Decision;
-use suzatary_core::mail::verbs::{Marked, Message, Show, Summary, SyncReport};
+use suzatary_core::mail::sync_report::SyncReport;
+use suzatary_core::mail::verbs::{Marked, Message, Show, Summary};
 use suzatary_core::mail::{AttachmentMeta, MailMessage, MailRow};
 use suzatary_core::record::{EventStore, SubTodo, mk_authored, mk_source, mk_subtodo};
 use suzatary_io::briefings::BriefingFiles;
@@ -999,7 +1000,7 @@ pub struct FakeModel {
     /// The verb names each ask was shown, in order.
     shown: Mutex<Vec<Vec<String>>>,
     /// The limit its account is under, as a door reads it.
-    limited: Option<suzatary_core::capability::Limited>,
+    limited: Option<suzatary_core::health::Limited>,
 }
 
 impl FakeModel {
@@ -1149,7 +1150,7 @@ impl FakeModel {
 
     /// The same model, its account under `limited`.
     #[must_use]
-    pub fn limited(self, limited: suzatary_core::capability::Limited) -> Self {
+    pub fn limited(self, limited: suzatary_core::health::Limited) -> Self {
         Self {
             limited: Some(limited),
             ..self
@@ -1190,7 +1191,7 @@ impl Model for FakeModel {
         }
     }
 
-    fn limited(&self) -> Option<suzatary_core::capability::Limited> {
+    fn limited(&self) -> Option<suzatary_core::health::Limited> {
         self.limited
     }
 }
@@ -1561,13 +1562,13 @@ impl CheckRecorder {
 }
 
 impl suzatary_core::settings::Checks for CheckRecorder {
-    fn check(&self, source: &suzatary_core::source_key::SourceKey) {
+    fn check(&self, source: &suzatary_core::health::SourceKey) {
         self.0.lock().expect("not poisoned").push(match source {
-            suzatary_core::source_key::SourceKey::Plugin(plugin) => plugin.as_str().to_owned(),
-            suzatary_core::source_key::SourceKey::Mail(_)
-            | suzatary_core::source_key::SourceKey::Link { .. }
-            | suzatary_core::source_key::SourceKey::GoogleCalendar(_)
-            | suzatary_core::source_key::SourceKey::Drive => source.to_string(),
+            suzatary_core::health::SourceKey::Plugin(plugin) => plugin.as_str().to_owned(),
+            suzatary_core::health::SourceKey::Mail(_)
+            | suzatary_core::health::SourceKey::Link { .. }
+            | suzatary_core::health::SourceKey::GoogleCalendar(_)
+            | suzatary_core::health::SourceKey::Drive => source.to_string(),
         });
     }
 }
@@ -1883,8 +1884,8 @@ impl suzatary_core::settings::Edits for EditsRecorder {
 
     fn add_origin(
         &self,
-        plugin: &suzatary_core::plugin::PluginName,
-        origin: &suzatary_core::plugin::Origin,
+        plugin: &suzatary_core::health::plugin::PluginName,
+        origin: &suzatary_core::health::plugin::Origin,
     ) -> Result<(), suzatary_core::settings::EditError> {
         let mut declared = self.declared.lock().expect("not poisoned");
         *declared = declared.with_origin(plugin, origin)?;

@@ -11,10 +11,10 @@ use std::sync::Arc;
 
 use suzatary_core::capability::Secret;
 use suzatary_core::conformance::puller::{Rig, check};
-use suzatary_core::connect::Failure;
 use suzatary_core::mail::account::{Authority, MailAccount, MsImap, Sync};
 use suzatary_core::mail::account_email::AccountEmail;
 use suzatary_core::mail::address::EmailAddress;
+use suzatary_core::mail::fault::Fault;
 use suzatary_core::mail::folders::Folders;
 use suzatary_core::mail::imap::ImapError;
 use suzatary_core::mail::mailroom::Server;
@@ -137,7 +137,7 @@ impl Bridge {
 impl Rig for Bridge {
     type Puller = Mbsync;
 
-    const UNREACHABLE: Failure = Failure::Unclassified;
+    const UNREACHABLE: Fault = Fault::Unclassified;
 
     fn holding(&self, messages: &[Vec<u8>]) -> Mbsync {
         serve(
@@ -200,7 +200,7 @@ impl Gmail {
 impl Rig for Gmail {
     type Puller = Lieer;
 
-    const UNREACHABLE: Failure = Failure::Unclassified;
+    const UNREACHABLE: Fault = Fault::Unclassified;
 
     fn holding(&self, messages: &[Vec<u8>]) -> Lieer {
         serve(
@@ -286,7 +286,7 @@ impl Signed {
 impl Rig for Signed {
     type Puller = Google;
 
-    const UNREACHABLE: Failure = Failure::Unclassified;
+    const UNREACHABLE: Fault = Fault::Unclassified;
 
     fn holding(&self, messages: &[Vec<u8>]) -> Google {
         serve(
@@ -486,7 +486,7 @@ struct Outlook365(tempfile::TempDir);
 impl Rig for Outlook365 {
     type Puller = Microsoft<Dial>;
 
-    const UNREACHABLE: Failure = Failure::Unclassified;
+    const UNREACHABLE: Fault = Fault::Unclassified;
 
     fn holding(&self, messages: &[Vec<u8>]) -> Microsoft<Dial> {
         microsoft(
@@ -554,7 +554,7 @@ fn every_declared_folder_syncs_and_one_the_server_does_not_list_fails_by_name() 
         ("Sent Items", &[sent.clone(), replied.clone()]),
     ])
     .expect_err("a declared folder the server does not list fails the account");
-    assert_eq!(failed.class, Failure::Unclassified);
+    assert_eq!(failed.class, Fault::Unclassified);
     assert_eq!(
         failed.said,
         "INBOX: 1 new; Junk Email: the server lists no folder of this name; Sent Items: 1 new"

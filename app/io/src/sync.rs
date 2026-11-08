@@ -5,11 +5,12 @@
 
 use std::path::{Path, PathBuf};
 
-use suzatary_core::health::Outcome;
 use suzatary_core::mail::account::{MailAccount, Roster, Sync, folder_slug};
 use suzatary_core::mail::imap::{ImapError, Pull, SyncState, window_start};
 use suzatary_core::mail::puller::{Puller, Unpulled};
-use suzatary_core::mail::verbs::{AccountSync, Backfilled, SyncReport};
+use suzatary_core::mail::sync_report::{AccountSync, SyncReport};
+use suzatary_core::mail::verbs::Backfilled;
+use suzatary_core::outcome::Outcome;
 
 use crate::oauth::TokenStore;
 use crate::present::Present as _;

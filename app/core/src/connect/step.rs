@@ -1,8 +1,8 @@
 //! One thing a person does for a connection.
 
 use super::{Checked, Params, Reach, Run, Seen, Standing};
+use crate::health::plugin::{CredentialName, PluginName};
 use crate::mail::address::EmailAddress;
-use crate::plugin::{CredentialName, PluginName};
 use crate::settings::{Help, Words};
 
 /// Which secret a step asks for.

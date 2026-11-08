@@ -1,17 +1,13 @@
-//! What one plugin run came to, and what it says of the plugin and of each link it fetched.
-//!
-//! Every result is the host's own observation or the binary's own summary, never a plugin's
-//! say-so about itself, so the Settings page's "last synced" means the host saw a 200 and the
-//! store took what came of it. Each joins the sources' health register under its [`SourceKey`],
-//! so how long a link or a plugin has failed, and of what class, is a function of the set of its
-//! runs.
+//! What one plugin run came to, as the host saw it and never as the plugin says, joined into the
+//! health register under each [`SourceKey`].
 
 use prodrome_core::fpl::Instant;
 
-use super::{CredentialName, Manifest, Refusal};
-use crate::connect::Failure;
+use super::Manifest;
+use crate::health::Failure;
+use crate::health::SourceKey;
+use crate::health::plugin::{CredentialName, Refusal};
 use crate::health::{Healths, Outcome};
-use crate::source_key::SourceKey;
 
 /// One run, summarised.
 #[derive(Debug, Clone, PartialEq, Eq)]

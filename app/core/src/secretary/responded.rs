@@ -14,7 +14,7 @@ pub enum Tried {
         reason: String,
     },
     /// The box lacks a grant the act needs.
-    Lacks(crate::connect::Lacking),
+    Lacks(crate::mail::lacking::Lacking),
     /// A tap again would meet the same refusal, so none is offered.
     Refused {
         /// Why.
@@ -232,7 +232,7 @@ impl<C> Responded<C> {
 
     /// The grant a try lacked.
     #[must_use]
-    pub fn lacking(&self) -> Option<&crate::connect::Lacking> {
+    pub fn lacking(&self) -> Option<&crate::mail::lacking::Lacking> {
         match self {
             Responded::Tried {
                 tried: Tried::Lacks(lacking),

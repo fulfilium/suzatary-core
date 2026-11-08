@@ -8,7 +8,7 @@
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
-use crate::plugin::Refusal;
+use crate::health::plugin::Refusal;
 
 /// What a failed check came to, as the box classifies it.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize, TS)]
@@ -27,7 +27,7 @@ pub enum Failure {
     /// The model refused its key or token.
     KeyRefused,
     /// The model's account is under a limit, which ends by itself.
-    Limited(crate::capability::Limited),
+    Limited(crate::health::Limited),
     /// The value stored for its link is not one the box sends: not a URL it reads, or one in
     /// the clear. Nothing was sent, so no service answered.
     Unusable,
@@ -73,6 +73,18 @@ pub enum Remedy {
     /// proposes its todo (`secretary::mail_health`), and one failing for a week is offered for
     /// removal.
     Retry,
+}
+
+impl From<crate::mail::fault::Fault> for Failure {
+    fn from(fault: crate::mail::fault::Fault) -> Self {
+        use crate::mail::fault::Fault;
+        match fault {
+            Fault::NeedsLogin => Failure::NeedsLogin,
+            Fault::Unresolved => Failure::Unresolved,
+            Fault::Unreachable => Failure::Unreachable,
+            Fault::Unclassified => Failure::Unclassified,
+        }
+    }
 }
 
 impl Failure {
@@ -136,8 +148,8 @@ impl Failure {
         Failure::NeedsLogin,
         Failure::Unresolved,
         Failure::KeyRefused,
-        Failure::Limited(crate::capability::Limited {
-            limit: crate::capability::Limit::Usage,
+        Failure::Limited(crate::health::Limited {
+            limit: crate::health::Limit::Usage,
             until: chrono::DateTime::UNIX_EPOCH.naive_utc(),
         }),
         Failure::Unusable,

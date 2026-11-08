@@ -20,7 +20,7 @@ use prodrome_core::term::{Term, TermF};
 
 use crate::chain_set::ChainSet;
 use crate::content_id::ContentId;
-use crate::plugin::PluginName;
+use crate::health::plugin::PluginName;
 use crate::reference::{ProposalRef, TodoRef};
 use crate::refusal::Refusal;
 use crate::secretary::inbox_event::{InboxEvent, Said};

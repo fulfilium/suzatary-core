@@ -131,14 +131,14 @@ fn files(dir: &Path) -> Vec<String> {
 
 /// When `plugin`'s `link` last synced, as the sources' health holds it.
 fn synced(
-    healths: &suzatary_core::health::Healths<suzatary_core::source_key::SourceKey>,
-    plugin: &suzatary_core::plugin::PluginName,
+    healths: &suzatary_core::health::Healths<suzatary_core::health::SourceKey>,
+    plugin: &suzatary_core::health::plugin::PluginName,
     link: &str,
 ) -> Option<suzatary_core::health::Instant> {
     let credential =
-        suzatary_core::plugin::CredentialName::parse(plugin, link).expect("a credential");
+        suzatary_core::health::plugin::CredentialName::parse(plugin, link).expect("a credential");
     healths
-        .health(&suzatary_core::source_key::SourceKey::Link {
+        .health(&suzatary_core::health::SourceKey::Link {
             plugin: plugin.clone(),
             credential,
         })
@@ -240,7 +240,7 @@ fn a_sync_learns_once_keeps_its_health_and_reads_a_cancellation() {
         unread.line
     );
     let ran = health.healths().expect("the health reads");
-    let plugin = suzatary_core::source_key::SourceKey::Plugin(manifest.name().clone());
+    let plugin = suzatary_core::health::SourceKey::Plugin(manifest.name().clone());
     assert!(
         matches!(ran.reading(&plugin), Some(Reading::Failing { words, .. })
             if words.contains("its cursor could not be read")),

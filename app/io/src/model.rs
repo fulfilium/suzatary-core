@@ -271,7 +271,7 @@ fn now() -> suzatary_core::health::Instant {
 /// The name the CLI at `model` answers as, and its calls are recorded under.
 #[must_use]
 pub fn name_of(model: &str) -> String {
-    format!("{}/{model}", suzatary_core::capability::SUBSCRIPTION)
+    format!("{}/{model}", suzatary_core::health::SUBSCRIPTION)
 }
 
 impl Model for ClaudeCli {
@@ -628,7 +628,8 @@ mod tests {
     /// alike, and never as "exited 1" with no reason.
     #[test]
     fn a_failed_run_names_its_failure_from_what_the_cli_printed() {
-        use suzatary_core::capability::{Halt, Limit, Limited};
+        use suzatary_core::capability::Halt;
+        use suzatary_core::health::{Limit, Limited};
         let dir = tempfile::tempdir().expect("scratch");
         let result = |text: &str| {
             format!(

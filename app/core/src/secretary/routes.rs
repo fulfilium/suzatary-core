@@ -7,6 +7,7 @@ use crate::believed::Preview;
 use crate::capability::{Clock, Server, Turn};
 use crate::conversation_id::ConversationId;
 use crate::deployment::Deployment;
+use crate::health::plugin::{Origin, PluginName};
 use crate::held_value::{self, Filled, Reveal};
 use crate::mail::oauth::Consent;
 use crate::reference::{ProposalRef, Reference, TodoRef};
@@ -748,8 +749,8 @@ enum Prepared<'p, 'c> {
         mail: KeptMail,
     },
     Grant {
-        plugin: &'p crate::plugin::PluginName,
-        origin: &'p crate::plugin::Origin,
+        plugin: &'p PluginName,
+        origin: &'p Origin,
     },
     UnlockStore,
     Erase(&'p std::collections::BTreeSet<crate::secretary::locked_text::KeyName>),
@@ -1197,13 +1198,13 @@ enum Then {
     /// The sign-in card a code card finished, ended as its outcome says.
     End(ProposalId, Performed),
     /// The origin a link was served from, which its plugin may not reach: its card is asked for.
-    Grant(crate::plugin::PluginName, crate::plugin::Origin),
+    Grant(PluginName, Origin),
     /// The Google account whose calendar's link was pasted: its connection's card is asked for.
     Connect(crate::connect::Connection),
     /// The link a signed-in Google account's calendar was pasted as: its removal is asked for.
     Retire(crate::connect::Connection),
     /// A plugin whose link was stored, synced once so the link is checked now.
-    Check(crate::plugin::PluginName),
+    Check(PluginName),
     /// What the box kept for a removed account, deleted outside the inbox's hold.
     Forget(
         crate::mail::account::MailAccount,
@@ -1240,7 +1241,7 @@ fn afterwards(
         Some(Then::Check(plugin)) => {
             effectors
                 .checks
-                .check(&crate::source_key::SourceKey::Plugin(plugin));
+                .check(&crate::health::SourceKey::Plugin(plugin));
             Ok(())
         }
         Some(Then::Forget(account, removal)) => {
@@ -1264,14 +1265,11 @@ enum Link {
     /// Not a plugin's link.
     Stored,
     /// A link its plugin may fetch, which is checked once it is stored.
-    Fetched(crate::plugin::PluginName),
+    Fetched(PluginName),
     /// Not an http(s) URL, or one in the clear; the words never quote the value.
     Refused(String),
     /// A link served from an origin its plugin may not reach.
-    Outside {
-        plugin: crate::plugin::PluginName,
-        origin: crate::plugin::Origin,
-    },
+    Outside { plugin: PluginName, origin: Origin },
     /// A Google account's own calendar: the account's connection is asked for instead.
     Connect(crate::connect::Connection),
     /// A calendar of an account signed in with Google: the link's removal is asked for instead.
@@ -1543,11 +1541,7 @@ fn disconnected(
 }
 
 /// Let a plugin reach one more origin.
-fn granted(
-    edits: &dyn crate::settings::Edits,
-    plugin: &crate::plugin::PluginName,
-    origin: &crate::plugin::Origin,
-) -> Performed {
+fn granted(edits: &dyn crate::settings::Edits, plugin: &PluginName, origin: &Origin) -> Performed {
     match edits.add_origin(plugin, origin) {
         Ok(()) => Performed::Done(Done::Acted {
             what: format!("the {plugin} plugin may reach {origin}"),
@@ -1860,9 +1854,9 @@ fn google_account(
     }) {
         Ok(())
     } else {
-        Err(Tried::Lacks(crate::connect::Lacking::Grant {
+        Err(Tried::Lacks(crate::mail::lacking::Lacking::Grant {
             account: account.clone(),
-            grant: crate::connect::Grant::GoogleCalendar,
+            grant: crate::mail::lacking::Grant::GoogleCalendar,
         }))
     }
 }

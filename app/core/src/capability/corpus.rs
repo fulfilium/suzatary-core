@@ -3,7 +3,8 @@
 
 use super::Query;
 use crate::mail::state::Decision;
-use crate::mail::verbs::{Marked, Show, Summary, SyncReport};
+use crate::mail::sync_report::SyncReport;
+use crate::mail::verbs::{Marked, Show, Summary};
 use crate::secretary::heartbeat::PassOutcome;
 
 /// A corpus operation ran and refused; one variant, because every failure is text to read.

@@ -30,6 +30,15 @@ macro_rules! words {
 }
 pub(crate) use words;
 
+/// The value of `all` that `print` spells as `text`.
+pub fn of_word<T: Copy, const N: usize>(
+    all: [T; N],
+    print: impl Fn(T) -> &'static str,
+    text: &str,
+) -> Option<T> {
+    all.into_iter().find(|value| print(*value) == text)
+}
+
 /// A type whose serde form a derive spells (its `rename_all`, which a generated wire type reads)
 /// prints every value of `all` as its literal's word, and reads each word back.
 #[cfg(test)]

@@ -238,7 +238,7 @@ pub fn callback(call: &Call<Reader, Callback, ()>) -> Result<Redirect, Refusal> 
         },
     };
     let kept = if let (Taken::Yours(begun), Performed::Done(_)) = (&taken, &performed) {
-        Some(suzatary_core::source_key::SourceKey::GoogleCalendar(
+        Some(suzatary_core::health::SourceKey::GoogleCalendar(
             suzatary_core::mail::account_email::AccountEmail::folded(&begun.account),
         ))
     } else {

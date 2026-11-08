@@ -1,9 +1,22 @@
 //! The health of what the box reads from and calls: a register of results keyed by any source
-//! ([`crate::source_key::SourceKey`], and the model each job runs).
+//! ([`crate::health::SourceKey`], and the model each job runs).
 //!
 //! [`Health`] is a product of semilattices (the latest success, the latest failure, the first
 //! result), and [`Healths`] their pointwise join, so a reading is a function of the SET of
 //! results, and the store holds the join.
+
+mod failure;
+mod label;
+mod limited;
+pub mod plugin;
+mod refused;
+mod source_key;
+
+pub use failure::{Failure, Remedy, Revocation};
+pub use label::Label;
+pub use limited::{Limit, Limited, RATE_WAIT, SUBSCRIPTION, UNTOLD, reading_of};
+pub use refused::Refused;
+pub use source_key::{NotASource, SourceKey};
 
 use std::borrow::Borrow;
 use std::collections::BTreeMap;
@@ -12,22 +25,13 @@ use chrono::{Duration, NaiveDateTime};
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
-use crate::connect::Failure;
 use crate::store::StoreError;
 
 /// An instant on the box's clock, naive and UTC, as every `at` is.
 pub type Instant = NaiveDateTime;
 
-/// What one result came to: a success, or a failure of a class the box parsed where it was
-/// observed.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub enum Outcome {
-    /// It succeeded.
-    Succeeded,
-    /// It failed, of this class.
-    Failed(Failure),
-}
+/// What one result came to, in the classes every source's health is kept in.
+pub type Outcome = crate::outcome::Outcome<Failure>;
 
 /// One failure: when, its class, and the last line the account's sync said.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
@@ -132,7 +136,7 @@ impl Health {
             Results::Failed(failed) => Some(failed.clone()),
             Results::Succeeded(..) => None,
         }
-        .filter(|failed| failed.class.remedy() != crate::connect::Remedy::Retry);
+        .filter(|failed| failed.class.remedy() != crate::health::Remedy::Retry);
         Self {
             results,
             classified,
@@ -306,6 +310,22 @@ pub trait Register<K: Ord>: Sync {
 }
 
 /// A register held in memory, as a test's server holds one.
+impl Healths<SourceKey> {
+    /// What one mail sync says of each account's health, every account at `at`.
+    #[must_use]
+    pub fn of_sync(report: &crate::mail::sync_report::SyncReport, at: Instant) -> Self {
+        report
+            .synced
+            .iter()
+            .map(|account| {
+                let key = SourceKey::Mail(account.account.clone());
+                let outcome = account.outcome.map(Failure::from);
+                Self::one(key, at, outcome, &account.tail)
+            })
+            .fold(Self::default(), |sum, one| sum.join(&one))
+    }
+}
+
 impl<K: Ord + Clone + Send> Register<K> for std::sync::Mutex<Healths<K>> {
     fn healths(&self) -> Result<Healths<K>, StoreError> {
         Ok(self

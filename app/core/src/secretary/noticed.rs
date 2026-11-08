@@ -295,7 +295,7 @@ pub struct Seen<'a> {
     /// The connection tables now; `None` (unreadable) holds every card.
     pub declared: Option<&'a crate::connect::Declared>,
     /// Every source's results; `None` (unreadable) holds every card.
-    pub health: Option<&'a crate::health::Healths<crate::source_key::SourceKey>>,
+    pub health: Option<&'a crate::health::Healths<crate::health::SourceKey>>,
     /// The calendars with an occurrence within [`super::failing::quiet`] of now.
     pub heard: Option<&'a std::collections::BTreeSet<crate::calendar::CalendarName>>,
     /// Where the data repository pushes: its token is asked for only on GitHub.
@@ -915,7 +915,7 @@ mod tests {
         let health = crate::health::Healths::one(
             work.sources().into_iter().next().expect("a link's source"),
             prodrome_core::fpl::instant_of(at(0)),
-            crate::health::Outcome::Failed(crate::connect::Failure::of_status(401)),
+            crate::health::Outcome::Failed(crate::health::Failure::of_status(401)),
             "it answered 401",
         );
         let conversations = crate::secretary::conversations::InMemory::default();

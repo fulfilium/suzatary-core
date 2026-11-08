@@ -3,7 +3,7 @@
 use std::fmt;
 
 use super::{Broken, hold};
-use crate::connect::Failure;
+use crate::mail::fault::Fault;
 use crate::mail::puller::{Puller, Unpulled};
 
 /// A law of a puller, in the order the suite asks them.
@@ -35,7 +35,7 @@ pub trait Rig {
     type Puller: Puller;
 
     /// The class of the failure a pull from an unreachable server gives.
-    const UNREACHABLE: Failure;
+    const UNREACHABLE: Fault;
 
     /// The puller, its server holding `messages` in its INBOX, oldest first.
     fn holding(&self, messages: &[Vec<u8>]) -> Self::Puller;

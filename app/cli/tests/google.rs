@@ -641,7 +641,10 @@ fn a_revoked_grant_needs_the_sign_in_and_a_missing_client_the_client() {
         Arc::clone(&secrets) as _,
     );
     let refused = grants.live(&ada()).expect_err("no client is kept");
-    assert_eq!(refused.class(), suzatary_core::connect::Failure::Unresolved);
+    assert_eq!(
+        refused.class(),
+        suzatary_core::mail::fault::Fault::Unresolved
+    );
 
     let settables = suzatary_core::settings::Settables::google(&[account(Sync::Google)]);
     let write = |name: &str, value: &str| {
@@ -661,12 +664,15 @@ fn a_revoked_grant_needs_the_sign_in_and_a_missing_client_the_client() {
     let unsigned = grants.live(&ada()).expect_err("never signed in");
     assert_eq!(
         unsigned.class(),
-        suzatary_core::connect::Failure::NeedsLogin
+        suzatary_core::mail::fault::Fault::NeedsLogin
     );
 
     write(GRANT, "mail,calendar 1//not-one-google-issued");
     let lapsed = grants.live(&ada()).expect_err("Google refuses it");
-    assert_eq!(lapsed.class(), suzatary_core::connect::Failure::NeedsLogin);
+    assert_eq!(
+        lapsed.class(),
+        suzatary_core::mail::fault::Fault::NeedsLogin
+    );
     assert!(lapsed.to_string().contains("7 days"), "{lapsed}");
 }
 

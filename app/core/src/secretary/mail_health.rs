@@ -2,20 +2,18 @@
 //! todo on the project's chain, through the path every proposed changeset takes, and a tap
 //! performs it.
 //!
-//! "Once" is identity, not a flag. The act is a function of the account and the instant it last
-//! synced, never of the failure's words or of the day it is asked, so asking again is asking for
-//! the same object, which the inbox already holds however it was answered; a new failure after a
-//! success is a new act.
+//! The act is a function of the account and the instant it last synced, so asking again asks for
+//! the same object; a new failure after a success is a new act.
 
 use crate::conversation_id::ConversationId;
 use crate::escape::escape_markup;
+use crate::health::SourceKey;
 use crate::health::{Instant, Reading};
 use crate::reference::Reference;
 use crate::refusal::Refusal;
 use crate::secretary::changes::{self, Act, Changeset};
 use crate::secretary::store::{Proposal, Reasons};
 use crate::secretary::{Bound, WRITES_AS};
-use crate::source_key::SourceKey;
 use crate::todo::{Price, TodoFields};
 
 /// What the proposed todo is priced: an account that does not sync hides its mail from triage,
@@ -164,9 +162,9 @@ mod tests {
         fn healths(&self) -> Result<crate::health::Healths<SourceKey>, crate::store::StoreError> {
             use crate::capability::Clock as _;
             let now = prodrome_core::fpl::instant_of(crate::capability::Nothing.now());
-            let row = |ok| crate::mail::verbs::SyncReport {
+            let row = |ok| crate::mail::sync_report::SyncReport {
                 unheld: None,
-                synced: vec![crate::mail::verbs::AccountSync {
+                synced: vec![crate::mail::sync_report::AccountSync {
                     account: crate::mail::account_email::AccountEmail::new("ada@hotmail.test")
                         .expect("an address"),
                     outcome: ok,
@@ -175,10 +173,12 @@ mod tests {
                 notmuch: String::new(),
             };
             let at = |hours| now - chrono::Duration::hours(hours);
-            let failed = crate::health::Outcome::Failed(crate::connect::Failure::Unclassified);
-            Ok(row(crate::health::Outcome::Succeeded)
-                .healths(at(self.0))
-                .join(&row(failed).healths(at(1))))
+            let failed = crate::outcome::Outcome::Failed(crate::mail::fault::Fault::Unclassified);
+            let healths = crate::health::Healths::of_sync;
+            Ok(
+                healths(&row(crate::outcome::Outcome::Succeeded), at(self.0))
+                    .join(&healths(&row(failed), at(1))),
+            )
         }
     }
 

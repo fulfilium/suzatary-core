@@ -319,7 +319,9 @@ impl Acting {
             Ok(grant) => grant,
             Err(failed) => {
                 return Performed::Tried(
-                    match failed.lacking(account, suzatary_core::connect::Grant::GoogleCalendar) {
+                    match failed
+                        .lacking(account, suzatary_core::mail::lacking::Grant::GoogleCalendar)
+                    {
                         Ok(lacking) => Tried::Lacks(lacking),
                         Err(reason) => Tried::NotSent { reason },
                     },
@@ -2019,7 +2021,7 @@ fn ask_brief(
     wired: &Wired,
     chains: &[suzatary_core::secretary::Bound<'_>],
     id: &ConversationId,
-    limited: Option<suzatary_core::capability::Limited>,
+    limited: Option<suzatary_core::health::Limited>,
 ) -> anyhow::Result<Option<suzatary_core::secretary::Answered>> {
     let caps = &wired.secretary();
     let Some(limited) = limited else {
@@ -2182,7 +2184,7 @@ pub const PAUSED: i32 = 3;
 /// Say the round did not start, and exit [`PAUSED`].
 fn paused(
     what: &str,
-    limited: &suzatary_core::capability::Limited,
+    limited: &suzatary_core::health::Limited,
     json: bool,
     mut counts: serde_json::Value,
 ) -> ! {
