@@ -1,5 +1,5 @@
 //! An act's note lands on the event and, when non-empty, appends one `Turn::Act` and wakes the
-//! secretary, through both `/api/author` and a sealed `POST /api/objects`.
+//! secretary once the box adopts it through `POST /api/objects`; `/api/author` appends nothing.
 
 mod common;
 
@@ -38,46 +38,76 @@ fn heard_the_model(base: &str) -> serde_json::Value {
     })
 }
 
-/// A note on an update lands on the event and wakes the secretary.
-#[test]
-fn a_note_on_update_lands_on_the_event_and_wakes_the_secretary() {
-    let (base, _fakes) = writing(
-        "acts-update-note",
-        [r#"{"say": "Understood, I'll leave it as is otherwise."}"#],
-    );
-
+/// What `/api/author` built for `update`: its print and the note it carries.
+fn authored_update(base: &str, update: &serde_json::Value) -> (String, String) {
     let mut authored = common::act(
         &format!("{base}/api/author"),
-        &serde_json::json!({
-            "update": {
-                "todo": "file-permit",
-                "body": "File the *permit* renewal, revised",
-                "note": "the meeting moved to October",
-            }
-        }),
+        &serde_json::json!({ "update": update }),
     );
-    assert_eq!(
-        common::status(&authored),
-        200,
-        "{:?}",
-        common::body_json(&mut authored)
-    );
+    assert_eq!(common::status(&authored), 200);
     let print = common::body_json(&mut authored)["event"]
         .as_str()
         .expect("an event print")
         .to_owned();
-    let event: suzatary_core::record::TodoEvent = prodrome_core::event::parse_event(
+    match prodrome_core::event::parse_event(
         &suzatary_core::record::TodoVocabulary::default(),
         &print,
     )
-    .expect("the core printed it");
-    match event {
+    .expect("the core printed it")
+    {
         suzatary_core::record::TodoEvent::Authored(record) => {
-            assert_eq!(record.payload.note, "the meeting moved to October");
+            let note = record.payload.note.clone();
+            (print, note)
         }
         other => panic!("update builds an Authored event, got {other:?}"),
     }
+}
 
+/// Hand `print` to the box as a tab does: sealed and signed.
+fn post_authored(base: &str, fakes: &Fakes, print: &str) {
+    let event =
+        prodrome_core::event::parse_event(&suzatary_core::record::TodoVocabulary::default(), print)
+            .expect("the core printed it");
+    let object = common::written(&fakes.chain, event);
+    let posted = common::act(
+        &format!("{base}/api/objects"),
+        &serde_json::json!({"objects": common::signed_prints(&object)}),
+    );
+    assert_eq!(common::status(&posted), 200);
+}
+
+/// No conversation is open a moment after the act; reading the list never opens one.
+fn none_opened(base: &str, why: &str) {
+    std::thread::sleep(std::time::Duration::from_millis(200));
+    let payload = common::listing(base);
+    assert_eq!(
+        payload["conversations"].as_array().expect("a list").len(),
+        0,
+        "{why}: {payload:?}"
+    );
+}
+
+/// A note on an update lands on the event; authoring it notes nothing, and the box's adoption of
+/// the posted event notes it and wakes the secretary.
+#[test]
+fn a_note_on_update_lands_on_the_event_and_wakes_the_secretary() {
+    let (base, fakes) = writing(
+        "acts-update-note",
+        [r#"{"say": "Understood, I'll leave it as is otherwise."}"#],
+    );
+
+    let (print, note) = authored_update(
+        &base,
+        &serde_json::json!({
+            "todo": "file-permit",
+            "body": "File the *permit* renewal, revised",
+            "note": "the meeting moved to October",
+        }),
+    );
+    assert_eq!(note, "the meeting moved to October");
+    none_opened(&base, "an event built and never posted is noted nowhere");
+
+    post_authored(&base, &fakes, &print);
     let heard = heard_the_model(&base);
     let turns = heard["turns"].as_array().expect("turns");
     let act_at = turns
@@ -104,37 +134,12 @@ fn a_note_on_update_lands_on_the_event_and_wakes_the_secretary() {
 fn an_update_with_no_note_appends_nothing_to_the_conversation() {
     let (base, _fakes) = writing("acts-update-blank", Vec::new());
 
-    let mut authored = common::act(
-        &format!("{base}/api/author"),
-        &serde_json::json!({
-            "update": {"todo": "file-permit", "body": "File the *permit* renewal, revised"}
-        }),
+    let (_, note) = authored_update(
+        &base,
+        &serde_json::json!({"todo": "file-permit", "body": "File the *permit* renewal, revised"}),
     );
-    assert_eq!(common::status(&authored), 200);
-    let print = common::body_json(&mut authored)["event"]
-        .as_str()
-        .expect("an event print")
-        .to_owned();
-    let event: suzatary_core::record::TodoEvent = prodrome_core::event::parse_event(
-        &suzatary_core::record::TodoVocabulary::default(),
-        &print,
-    )
-    .expect("the core printed it");
-    match event {
-        suzatary_core::record::TodoEvent::Authored(record) => {
-            assert_eq!(record.payload.note, "", "empty note is today's behaviour");
-        }
-        other => panic!("update builds an Authored event, got {other:?}"),
-    }
-
-    // Reading the conversations never opens one.
-    std::thread::sleep(std::time::Duration::from_millis(200));
-    let payload = common::listing(&base);
-    assert_eq!(
-        payload["conversations"].as_array().expect("a list").len(),
-        0,
-        "no note, so nothing opened the default conversation: {payload:?}"
-    );
+    assert_eq!(note, "");
+    none_opened(&base, "no note, so nothing opened the default conversation");
 }
 
 /// A sealed `Completed` with a note is heard when the box adopts it.
@@ -202,13 +207,7 @@ fn a_sealed_completed_event_with_no_note_appends_nothing() {
     );
     assert_eq!(common::status(&posted), 200);
 
-    std::thread::sleep(std::time::Duration::from_millis(200));
-    let payload = common::listing(&base);
-    assert_eq!(
-        payload["conversations"].as_array().expect("a list").len(),
-        0,
-        "no note, so adoption opened no conversation: {payload:?}"
-    );
+    none_opened(&base, "no note, so adoption opened no conversation");
 }
 
 /// The conversation once the model's last answer is `last`.
@@ -222,7 +221,7 @@ fn answered(base: &str, last: &str) -> serde_json::Value {
 }
 
 /// What `remember` answered in the round an owner's note on `todo` started, the act line's stamp
-/// as stored, and that line's own taint: the note goes through `/api/author`, and the model it
+/// as stored, and that line's own taint: the note is authored, then posted, and the model it
 /// wakes calls `remember`.
 fn remember_after_a_note_on(
     tag: &str,
@@ -243,13 +242,11 @@ fn remember_after_a_note_on(
         ],
     );
     prepare(&fakes);
-    let authored = common::act(
-        &format!("{base}/api/author"),
-        &serde_json::json!({
-            "update": {"todo": todo, "body": "Revised by the owner", "note": "paid at the counter"}
-        }),
+    let (print, _) = authored_update(
+        &base,
+        &serde_json::json!({"todo": todo, "body": "Revised by the owner", "note": "paid at the counter"}),
     );
-    assert_eq!(common::status(&authored), 200);
+    post_authored(&base, &fakes, &print);
     let heard = answered(&base, "Noted.");
     let turns = heard["turns"].as_array().expect("turns");
     let act = turns

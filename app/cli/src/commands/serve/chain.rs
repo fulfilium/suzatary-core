@@ -238,6 +238,8 @@ pub fn take_objects(
     call: &Call<Poster, (), Literals>,
 ) -> Result<Json<wire::ReceiptPayload>, Refusal> {
     let caps = call.chain.caps;
+    // A note's line is stamped by the todos it names as they stood before the post.
+    let before = call.state.chains_read();
     let (receipt, heard) = routes::receive_objects(
         caps.secretary.chain,
         caps.secretary.render,
@@ -246,10 +248,10 @@ pub fn take_objects(
         &call.state.frontiers,
         &call.guard.0,
     )?;
-    // Adoption is the one moment a sealed lifecycle event's note is known here.
     if !heard.is_empty() {
         noted(
             &call.state,
+            &before,
             &heard,
             call.state.first.caps.secretary.clock.now(),
             Seat::of(&call.admitted),
@@ -263,46 +265,27 @@ pub fn take_objects(
 pub fn author(
     call: &Call<Actor, (), wire::Authoring>,
 ) -> Result<Json<wire::AuthoredPayload>, Refusal> {
-    let asked = &call.body;
-    let built = routes::author(
+    routes::author(
         call.chain.caps,
         &call.state.deployment,
         &call.chain.policy,
-        asked,
+        &call.body,
         &call.guard,
-    )?;
-    let noted_as = match asked {
-        wire::Authoring::Update(update) => Some(("updated", &update.note)),
-        wire::Authoring::Confirm(confirm) => Some(("confirmed", &confirm.note)),
-        wire::Authoring::Add(_) | wire::Authoring::Undo(_) | wire::Authoring::Redo(_) => None,
-    };
-    // The one moment a person's line for `update` or `confirm` is known server-side.
-    if let Some((verb, note)) = noted_as
-        && !note.trim().is_empty()
-        && let Ok(id) = TodoId::new(built.todo.clone())
-    {
-        let reference =
-            suzatary_core::reference::Reference::Todo(suzatary_core::reference::TodoRef {
-                chain: call.chain.policy.name.clone(),
-                id,
-            });
-        let now = call.state.first.caps.secretary.clock.now();
-        let line = ActLine {
-            at: now,
-            actor: call.guard.as_str().to_owned(),
-            verb,
-            reference,
-            note: note.clone(),
-        };
-        noted(&call.state, &[line], now, Seat::of(&call.admitted));
-    }
-    Ok(Json(built))
+    )
+    .map(Json)
 }
 
-/// Append acts, written from `from`, to the default conversation, opening it if needed.
+/// Append acts, written from `from`, to the default conversation, opening it if needed, each
+/// stamped by what `read` holds of the todo it names.
 ///
 /// A failure to note is not the write's failure, so it is a log line, not the answer's.
-fn noted(state: &State, lines: &[ActLine], now: Datetime, from: Seat) {
+fn noted(
+    state: &State,
+    read: &suzatary_core::chain_set::Read,
+    lines: &[ActLine],
+    now: Datetime,
+    from: Seat,
+) {
     let first = state.first.caps;
     let noting = suzatary_core::secretary::read_or_open_default(
         first.secretary.conversations,
@@ -311,7 +294,6 @@ fn noted(state: &State, lines: &[ActLine], now: Datetime, from: Seat) {
         now,
     )
     .and_then(|_| {
-        let read = state.chains_read();
         let set = read.set(now);
         lines.iter().try_for_each(|line| {
             let by = suzatary_core::secretary::stamp::pointing(

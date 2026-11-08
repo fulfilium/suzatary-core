@@ -1226,17 +1226,33 @@ pub fn receive_objects(
         actor,
         &chain.root,
     );
-    store.accept(&outcome.taken)?;
-    // Render what landed before answering; `renders` keeps untrusted records uncompiled.
-    let fresh: Vec<crate::escape::Escaped> = outcome
+    let taken: Vec<TodoEvent> = outcome
         .taken
         .iter()
         .filter_map(|(_, literal)| {
             prodrome_core::event::parse_envelope(&crate::record::TodoVocabulary::default(), literal)
                 .ok()
         })
-        .filter_map(|envelope| match envelope.event() {
-            Some(TodoEvent::Authored(record)) => Some(record.clone()),
+        .filter_map(|envelope| envelope.event().cloned())
+        .collect();
+    // A sealed act's note is known here only on adoption; a record's verb reads the record before.
+    let shown = if taken
+        .iter()
+        .any(|event| matches!(event, TodoEvent::Authored(_)))
+    {
+        store.nodes()?
+    } else {
+        std::sync::Arc::default()
+    };
+    let heard = crate::secretary::acts::heard_from_objects(&taken, actor, &chain.name, &|posted| {
+        crate::todos::current(&shown, posted.at, posted.todo.as_str())
+    });
+    store.accept(&outcome.taken)?;
+    // Render what landed before answering; `renders` keeps untrusted records uncompiled.
+    let fresh: Vec<crate::escape::Escaped> = taken
+        .iter()
+        .filter_map(|event| match event {
+            TodoEvent::Authored(record) => Some(record.clone()),
             _ => None,
         })
         .filter(|record| view::renders(record, &chain.untrusted))
@@ -1250,23 +1266,6 @@ pub fn receive_objects(
     if !fresh.is_empty() {
         render.warm(&fresh);
     }
-    // Adoption is the only moment a sealed lifecycle act's note is knowable server-side.
-    let heard = crate::secretary::acts::heard_from_objects(
-        &outcome
-            .taken
-            .iter()
-            .filter_map(|(_, literal)| {
-                prodrome_core::event::parse_envelope(
-                    &crate::record::TodoVocabulary::default(),
-                    literal,
-                )
-                .ok()
-            })
-            .filter_map(|envelope| envelope.event().cloned())
-            .collect::<Vec<TodoEvent>>(),
-        actor,
-        &chain.name,
-    );
     let key = format!("chain/{}", chain.name.as_str());
     Ok((receipt(store, &outcome, (&key, since, frontiers))?, heard))
 }

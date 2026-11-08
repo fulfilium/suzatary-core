@@ -408,37 +408,62 @@ pub fn note_act(
     )
 }
 
-/// The act lines that sealed lifecycle events with a note carry, heard on adoption; only `actor`'s.
+/// The act lines that adopted events with a note carry; only `actor`'s. `before` answers the
+/// record the store showed where a posted one now stands: the same content confirms it, other
+/// content updates it, and a creation or an undo or redo is not noted.
 #[must_use]
 pub fn heard_from_objects(
     events: &[crate::record::TodoEvent],
     actor: &prodrome_core::event::Actor,
     chain: &crate::chains::ChainName,
+    before: &dyn Fn(&crate::record::Authored) -> Option<crate::record::Authored>,
 ) -> Vec<ActLine> {
+    use crate::record::TodoEvent;
+    let line = |todo: &prodrome_core::event::TodoId,
+                at,
+                by: &prodrome_core::event::Actor,
+                note: &str,
+                verb| {
+        (by == actor && !note.trim().is_empty()).then(|| ActLine {
+            at,
+            actor: by.as_str().to_owned(),
+            verb,
+            reference: Reference::Todo(TodoRef {
+                chain: chain.clone(),
+                id: todo.clone(),
+            }),
+            note: note.to_owned(),
+        })
+    };
+    let moved =
+        |l: &prodrome_core::event::Lifecycle, verb| line(&l.todo, l.at, &l.actor, &l.note, verb);
     events
         .iter()
-        .filter_map(|event| {
-            let (lifecycle, verb) = match event {
-                crate::record::TodoEvent::Completed(lifecycle) => (lifecycle, "completed"),
-                crate::record::TodoEvent::Cancelled(lifecycle) => (lifecycle, "cancelled"),
-                crate::record::TodoEvent::Reopened(lifecycle) => (lifecycle, "reopened"),
-                crate::record::TodoEvent::Tended(lifecycle) => (lifecycle, "tended"),
-                _ => return None,
-            };
-            if lifecycle.actor != *actor || lifecycle.note.trim().is_empty() {
-                return None;
+        .filter_map(|event| match event {
+            TodoEvent::Completed(l) => moved(l, "completed"),
+            TodoEvent::Cancelled(l) => moved(l, "cancelled"),
+            TodoEvent::Reopened(l) => moved(l, "reopened"),
+            TodoEvent::Tended(l) => moved(l, "tended"),
+            TodoEvent::Created(_) | TodoEvent::SpecRevised(_) => None,
+            TodoEvent::Authored(r)
+                if crate::authoring::Reversal::of_note(&r.payload.note).is_some() =>
+            {
+                None
             }
-            let reference = Reference::Todo(TodoRef {
-                chain: chain.clone(),
-                id: lifecycle.todo.clone(),
-            });
-            Some(ActLine {
-                at: lifecycle.at,
-                actor: lifecycle.actor.as_str().to_owned(),
-                verb,
-                reference,
-                note: lifecycle.note.clone(),
-            })
+            TodoEvent::Authored(r) => {
+                let shown = before(r)?;
+                let same = crate::record::Record {
+                    note: shown.payload.note.clone(),
+                    ..r.payload.clone()
+                } == shown.payload;
+                line(
+                    &r.todo,
+                    r.at,
+                    &r.actor,
+                    &r.payload.note,
+                    if same { "confirmed" } else { "updated" },
+                )
+            }
         })
         .collect()
 }
@@ -1180,9 +1205,58 @@ mod tests {
             .expect("a created event"),
         ] {
             assert!(
-                heard_from_objects(std::slice::from_ref(&event), &actor, &chain).is_empty(),
+                heard_from_objects(std::slice::from_ref(&event), &actor, &chain, &|_| None)
+                    .is_empty(),
                 "{event:?}"
             );
         }
+    }
+
+    /// An adopted record with the poster's note confirms the record shown before it when its
+    /// content is the same, and updates it otherwise; a creation and an undo are not noted.
+    #[test]
+    fn an_adopted_record_is_noted_by_what_it_replaces() {
+        let actor = prodrome_core::event::Actor::new("ada").expect("an actor");
+        let chain = crate::chains::ChainName::new("life").expect("a slug");
+        let body = |text: &str| crate::record::MarkupSource::from_chain(text);
+        let Ok(crate::record::TodoEvent::Authored(shown)) = crate::record::mk_authored(
+            "x",
+            now(),
+            "triage",
+            "todo",
+            now(),
+            body("File it"),
+            prodrome_core::fpl::mk_flat(0.5).expect("a term"),
+            vec!["why".to_owned()],
+            "",
+            "",
+            crate::record::MarkupSource::empty(),
+            None,
+            Vec::new(),
+            Vec::new(),
+            "",
+        ) else {
+            unreachable!("mk_authored answers an Authored")
+        };
+        let posted = |text: &str, note: &str| {
+            let mut record = (*shown).clone();
+            record.actor = actor.clone();
+            record.payload.body = body(text);
+            record.payload.note = note.to_owned();
+            crate::record::TodoEvent::Authored(Box::new(record))
+        };
+        let verbs = |event, known: bool| {
+            let before = |_: &crate::record::Authored| known.then(|| (*shown).clone());
+            heard_from_objects(&[event], &actor, &chain, &before)
+                .into_iter()
+                .map(|line| line.verb)
+                .collect::<Vec<_>>()
+        };
+        assert_eq!(verbs(posted("File it", "seen"), true), ["confirmed"]);
+        assert_eq!(verbs(posted("File it now", "seen"), true), ["updated"]);
+        assert!(verbs(posted("File it", "seen"), false).is_empty());
+        let of = prodrome_core::event::Hash::new("a".repeat(64)).expect("a hash");
+        let undo = crate::authoring::Reversal::Undo { of }.note();
+        assert!(verbs(posted("File it now", &undo), true).is_empty());
     }
 }
