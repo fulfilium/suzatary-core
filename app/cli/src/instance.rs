@@ -556,27 +556,11 @@ impl Instance {
     }
 }
 
-/// A writer the gate would refuse (not a viewer), or whose actor is missing
-/// from a chain's roster (a write goes to one store), stops startup.
+/// A line of `[web.act_as]` the gate, a chain's roster or its trust would refuse stops startup.
 fn writers_checked(path: &Path, deployment: &Deployment) -> anyhow::Result<()> {
-    let dead = deployment.dead_writers();
-    if !dead.is_empty() {
-        let names: Vec<&str> = dead.iter().map(|login| login.as_str()).collect();
-        bail!(
-            "{}: {names:?} may write but is not a viewer — a writer the gate refuses is dead config",
-            path.display()
-        );
-    }
-    let unrostered = deployment.unrostered_writers();
-    if !unrostered.is_empty() {
-        let named: Vec<String> = unrostered
-            .iter()
-            .map(|(chain, actor)| format!("{}/{chain}", actor.as_str()))
-            .collect();
-        bail!(
-            "{}: {named:?} is named as a writer's actor and is not on that chain's roster",
-            path.display()
-        );
+    let refused = deployment.refused_writers();
+    if !refused.is_empty() {
+        bail!("{}: [web.act_as]: {}", path.display(), refused.join("; "));
     }
     Ok(())
 }
@@ -833,7 +817,7 @@ sent_folder = "Sent Items"
                     r#""her@example.test" = "ada""#,
                     "\"her@example.test\" = \"ada\"\n\"ghost@example.test\" = \"assistant\"",
                 ),
-                &["dead config"][..],
+                &["is not a viewer"][..],
             ),
             (
                 "unrostered",

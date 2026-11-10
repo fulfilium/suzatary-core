@@ -323,6 +323,11 @@ const REFUSALS: &[(&str, &str, &str)] = &[
         "\"phone@example.test\" = \"nobody\"",
     ),
     (
+        "a writer who writes as an untrusted actor",
+        "\"phone@example.test\" = \"assistant\"",
+        "\"phone@example.test\" = \"triage\"",
+    ),
+    (
         "a writer's actor that is not one",
         "\"phone@example.test\" = \"assistant\"",
         "\"phone@example.test\" = \"No Body\"",

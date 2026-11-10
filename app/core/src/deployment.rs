@@ -67,28 +67,33 @@ impl Deployment {
         self.viewers.contains(login)
     }
 
-    /// Writers whose login the gate would refuse: dead config, checked at startup against the
-    /// actual file rather than asserted in a test.
+    /// Every line of `[web.act_as]` that stops startup, as the sentence that says why: a login
+    /// that is no viewer, or an actor off a chain's roster or one the chain does not trust (a
+    /// person would write and tap as, say, the triage agent).
     #[must_use]
-    pub fn dead_writers(&self) -> Vec<&Login> {
-        self.actors
+    pub fn refused_writers(&self) -> Vec<String> {
+        let unseen = self
+            .actors
             .keys()
-            .filter(|login| !self.viewers.contains(*login))
-            .collect()
-    }
-
-    /// Writers some chain's roster does not know, per chain, since a write goes to one store.
-    #[must_use]
-    pub fn unrostered_writers(&self) -> Vec<(&str, &Actor)> {
-        self.chains
-            .iter()
-            .flat_map(|chain| {
-                self.actors
-                    .values()
-                    .filter(|actor| !chain.roster.contains(*actor))
-                    .map(|actor| (chain.name.as_str(), actor))
+            .filter(|login| !self.viewers.contains(*login));
+        let unseen =
+            unseen.map(|login| format!("{:?} may write but is not a viewer", login.as_str()));
+        let per_chain = self.chains.iter().flat_map(|policy| {
+            self.actors.iter().filter_map(move |(login, actor)| {
+                let whom = if !policy.roster.contains(actor) {
+                    "'s roster does not name"
+                } else if policy.untrusted.actors().contains(actor) {
+                    " does not trust"
+                } else {
+                    return None;
+                };
+                let (login, actor, chain) = (login.as_str(), actor.as_str(), policy.name.as_str());
+                Some(format!(
+                    "{login:?} writes as {actor:?}, whom chain {chain:?}{whom}"
+                ))
             })
-            .collect()
+        });
+        unseen.chain(per_chain).collect()
     }
 
     /// The chain a request or a verb named, or the first when it named none; `None` is a name

@@ -130,10 +130,13 @@ missing field `owner`
 <file>: chain "life" calls "stranger" untrusted and its roster does not name it
 
 ## a writer who is not a viewer
-<file>: ["ghost@example.test"] may write but is not a viewer — a writer the gate refuses is dead config
+<file>: [web.act_as]: "ghost@example.test" may write but is not a viewer
 
 ## a writer's actor off the roster
-<file>: ["nobody/life", "nobody/suzatary"] is named as a writer's actor and is not on that chain's roster
+<file>: [web.act_as]: "phone@example.test" writes as "nobody", whom chain "life"'s roster does not name; "phone@example.test" writes as "nobody", whom chain "suzatary"'s roster does not name
+
+## a writer who writes as an untrusted actor
+<file>: [web.act_as]: "phone@example.test" writes as "triage", whom chain "life" does not trust
 
 ## a writer's actor that is not one
 parsing the instance file <file>: TOML parse error at line 26, column 1
