@@ -429,7 +429,7 @@ pub(crate) enum Local {
     Fold,
     /// What this tab holds of the open chain that the box has not taken (`Unsent`).
     Unsent,
-    /// How many things wait on the owner, as the shell counts them.
+    /// The box's `WaitingPayload`, `null` before the shell heard it.
     Waiting,
     /// A register of this device's by its key, any value, `null` before one is kept.
     Kept {
@@ -464,10 +464,10 @@ pub struct LocalAnswers {
     search: suzatary_core::wire::SearchPayload,
     stream: crate::secretary::StreamRead,
     window: crate::conversation::Windowed,
-    cards: suzatary_core::wire::ConversationPayload,
+    cards: suzatary_core::wire::DrawnPayload,
     fold: Option<crate::held::Folded>,
     unsent: crate::held::Unsents,
-    waiting: u32,
+    waiting: Option<suzatary_core::wire::WaitingPayload>,
     #[ts(type = "unknown")]
     kept: serde_json::Value,
     intents: crate::intents::Intents,

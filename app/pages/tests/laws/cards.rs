@@ -48,10 +48,7 @@ pub(crate) fn proposal(index: usize) -> impl Strategy<Value = Value> {
 pub(crate) fn conversation_cards(id: &'static str) -> impl Strategy<Value = Value> {
     proptest::collection::vec(any::<bool>(), 0..3).prop_flat_map(move |shown| {
         let rows: Vec<_> = (0..shown.len()).map(proposal).collect();
-        rows.prop_map(move |proposals| {
-            json!({"id": id, "title": "Setup", "model": "", "opened": "", "turns": [], "proposals": proposals,
-                "unplaced": [], "state": "idle", "first": 0, "total": 0, "again": null})
-        })
+        rows.prop_map(move |proposals| json!({"title": id, "proposals": proposals}))
     })
 }
 
@@ -84,7 +81,11 @@ pub(crate) fn watched() -> impl Strategy<Value = (Watched, Value)> {
         inbox_read().prop_map(|v| (Watched::Proposals, v)),
         conversation_cards("setup").prop_map(|v| (Watched::Cards("setup".to_owned()), v)),
         conversation_cards("talk").prop_map(|v| (Watched::Cards("talk".to_owned()), v)),
-        Just((Watched::Conversations, json!({"conversations": []}))),
+        Just((Watched::Waiting, json!(null))),
+        Just((
+            Watched::Waiting,
+            json!({"count": 1, "unplaced": {"talk": [{"index": 2, "why": "notHeld"}]}})
+        )),
     ]
 }
 

@@ -377,7 +377,8 @@ pub fn conversation(
     }
 }
 
-fn unplaced(lines: &crate::secretary::store::Lines) -> Vec<wire::UnplacedProposal> {
+#[must_use]
+pub fn unplaced(lines: &crate::secretary::store::Lines) -> Vec<wire::UnplacedProposal> {
     lines
         .unplaced()
         .map(|unplaced| wire::UnplacedProposal {

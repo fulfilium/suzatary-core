@@ -24,6 +24,7 @@ import draftbox from "../chat/draftbox"
 import onScreen from "../inbox/onscreen"
 import scroll from "../painter/scroll"
 import d from "../wire/decoder"
+import { everyProposal } from "../wire/api"
 import lanes from "../prodrome/lanes"
 
 export namespace local {
@@ -84,7 +85,7 @@ export namespace local {
   )
 
   type Cards = Extract<Local, { type: "Cards" }>
-  const cards = asked.family((c: Cards) => c.conversation, (c: Cards) => dressed.asked().then(m => dressed.cards(c.conversation, m, laneOf(c))))
+  const cards = asked.family((c: Cards) => c.conversation, (c: Cards) => everyProposal(c.conversation))
 
   // A seal and a summary are no page's; a topic is named without its instant.
   const held = (): Answer<"Intents"> => {
@@ -161,7 +162,7 @@ export namespace local {
     }
   }, watchReplica)
 
-  const waiting = reading.held((): number => app.now().waiting, heard => app.hear(a => a.waiting, heard))
+  const waiting = reading.held((): Answer<"Waiting"> => app.now().waiting, heard => app.hear(a => a.waiting, heard))
 
   const onDevice = (key: string): reading.Reading<unknown> => {
     const c = ui.cell(registers.kept, key)

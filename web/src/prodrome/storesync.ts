@@ -106,9 +106,6 @@ export namespace storesync {
   export const window = (id: string, window: grouped.Asked, memory: MemoryPayload | null, zone: time.Zone, lane: lanes.Lane): Promise<questions.Grouped> =>
     over({ type: "Window", id, window, memory, zone }, false, lane)
 
-  // A conversation the device holds no line of, while the box has not said whether it holds one.
-  export const unheard = "This conversation is not on this device yet, and the box has not answered for it."
-
   // A conversation read where the box holds none of it, in the words the core refuses one with.
   export const absent = (id: string): never => {
     throw new CoreError(`no conversation named ${id}`)

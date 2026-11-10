@@ -102,7 +102,6 @@ impl Program for NeedsYou {
         let (readings, watched) = Readings::of(&CHAINS);
         let mut effects: Vec<Effect> = watched
             .into_iter()
-            .filter(|w| *w != Watched::Conversations)
             .map(|w| Effect::Watch {
                 local: w.local(),
                 ask: Hold::Rows(w),

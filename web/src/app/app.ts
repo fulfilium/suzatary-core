@@ -8,6 +8,7 @@ import { HOME, type Route } from "../shell/route"
 import routelog from "../shell/routelog"
 import { type Screen, forwarded, screenFor } from "../shell/layout"
 import time from "./time"
+import type { WaitingPayload } from "../wire/generated/wire"
 import ownerzone from "./ownerzone"
 import login from "./login"
 
@@ -23,7 +24,7 @@ export namespace app {
     served: readonly string[]
     categories: readonly string[]
     zone: time.Zone
-    waiting: number
+    waiting: WaitingPayload | null
     more: boolean
     stream: Stream
     build: shell.Line
@@ -57,7 +58,7 @@ export namespace app {
     | { type: "Met"; me: login.Met; served: readonly string[]; categories: readonly string[]; zone: time.Zone }
     | { type: "Unmet" }
     | { type: "Keyed"; key: Key }
-    | { type: "Waiting"; count: number }
+    | { type: "Waiting"; waiting: WaitingPayload }
     | { type: "More"; open: boolean }
     | { type: "Opened" }
     | { type: "Heard"; heads: heads.Heads }
@@ -78,7 +79,7 @@ export namespace app {
     served: [],
     categories: [],
     zone,
-    waiting: 0,
+    waiting: null,
     more: false,
     stream: QUIET,
     build: NO_LINE,
@@ -169,8 +170,8 @@ export namespace app {
       case "Keyed":
         return a.who.type !== "Writes" || sameKey(e.key, a.who.key) ? a : { ...a, who: { ...a.who, key: e.key } }
       case "Waiting": {
-        const n = counted(e.count)
-        return n === a.waiting ? a : { ...a, waiting: n }
+        const w = { ...e.waiting, count: counted(e.waiting.count) }
+        return a.waiting !== null && JSON.stringify(a.waiting) === JSON.stringify(w) ? a : { ...a, waiting: w }
       }
       case "More":
         return e.open === a.more ? a : { ...a, more: e.open }

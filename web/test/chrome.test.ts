@@ -17,7 +17,7 @@ const event = (r: Rng): app.Event =>
     () => ({ type: "Went", route: route(r) }),
     () => ({ type: "Pinned", chain: r.pick(["life", "suzatary"]) }),
     () => ({ type: "Met", me: r.pick<login.Met>([{ type: "Box" }, { type: "Reads", login: "reader@example.invalid" }, { type: "Writes", login: "ada@example.invalid", actor: "ada" }]), served: r.pick([[], ["life"], ["life", "suzatary"]]), categories: [], zone: time.UTC }),
-    () => ({ type: "Waiting", count: r.int(5) }),
+    () => ({ type: "Waiting", waiting: { count: r.int(5), unplaced: {} } }),
     () => ({ type: "More", open: r.bool() }),
     () => ({ type: "Opened" }),
     () => ({ type: "Heard", heads: r.pick([["a1"], ["a1", "b2"]]) }),
@@ -64,7 +64,7 @@ test("a part is painted only when its value moved", () => {
   const fold = { fold: onscreen.UNLOADED, excluded: excluded.NOTHING, theme: "auto" as const }
   const loaded: onscreen.Fold = { type: "Shown", entries: [], at: "t", by: { type: "Cached", fetchedAt: 0 } }
   paint(chrome.of(a, fold))
-  paint(chrome.of(app.step(a, { type: "Waiting", count: 0 }), fold))
+  paint(chrome.of(app.step(a, { type: "Waiting", waiting: { count: 0, unplaced: {} } }), fold))
   paint(chrome.of(app.step(a, { type: "Went", route: { type: "conversation", id: "default", refs: [] } }), fold))
   paint(chrome.of(a, { fold: loaded, excluded: excluded.NOTHING, theme: "auto" }))
   paint(chrome.of(a, { fold: loaded, excluded: excluded.left([{ name: "a1", why: "not held", resting: [] }]), theme: "auto" }))

@@ -770,6 +770,31 @@ proptest! {
         }
     }
 
+    /// What waits (`GET /api/waiting`) reads the lines by shape, every key missing, and names
+    /// the same unplaced lines as a reading that opens every word, so the Inbox draws them
+    /// without holding a line.
+    #[test]
+    fn the_unplaced_lines_read_by_shape_are_those_read_whole(
+        script in steps(),
+        answers in proptest::collection::vec(any::<u8>(), 0..60),
+        dropped in proptest::collection::vec(any::<bool>(), 0..60),
+    ) {
+        let lines = conversation(&script);
+        let (memory, read) = written(&lines);
+        let whole = read.stored();
+        let inbox = inbox_of(whole.proposals.len(), &answers, &dropped);
+        let missing = |_: &KeyName| -> Words<suzatary_core::secretary::locked_text::TextKey> {
+            suzatary_core::secretary::words::Gone::Missing.into()
+        };
+        let shaped = transcript::transcripts(&memory.lines.nodes().expect("nodes"), &missing)
+            .expect("reads by shape");
+        let by_shape = shaped.get(&id()).expect("the conversation").stored();
+        prop_assert_eq!(
+            suzatary_core::secretary::readings::unplaced(&by_shape.lines(&inbox)),
+            suzatary_core::secretary::readings::unplaced(&whole.lines(&inbox))
+        );
+    }
+
     /// Nothing read depends on the order the objects are handed over in.
     #[test]
     fn the_reading_ignores_the_order_objects_arrive_in(script in steps(), seed in any::<u64>()) {

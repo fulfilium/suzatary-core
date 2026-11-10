@@ -21,7 +21,7 @@ test("who writes is heard once per change of actor, and not on a repeat or on an
   const stop = app.hear(app.actor, () => (heard += 1))
   app.dispatch({ type: "Met", me: { type: "Writes", login: "ada@example.invalid", actor: "ada" }, served: [], categories: [], zone: time.UTC })
   app.dispatch({ type: "Met", me: { type: "Writes", login: "ada@example.invalid", actor: "ada" }, served: ["life"], categories: [], zone: time.UTC })
-  app.dispatch({ type: "Waiting", count: 4 })
+  app.dispatch({ type: "Waiting", waiting: { count: 4, unplaced: {} } })
   app.dispatch({ type: "Unmet" })
   stop()
   app.dispatch({ type: "Met", me: { type: "Writes", login: "ada@example.invalid", actor: "ada" }, served: [], categories: [], zone: time.UTC })

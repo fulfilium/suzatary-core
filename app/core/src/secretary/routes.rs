@@ -451,8 +451,15 @@ pub fn newest(
     payload(&super::read(caps.secretary.conversations, id)?, caps, cards)
 }
 
-/// `GET …/<id>/drawn?indices=<n>,…`: proposals drawn against the todo chains, which a tab's
-/// replicas cannot draw.
+/// What `GET …/<id>/drawn` draws: every proposal, or those `?indices=` names, in that order.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Proposals {
+    Every,
+    These(Vec<usize>),
+}
+
+/// `GET …/<id>/drawn`: proposals drawn against the todo chains, which a tab's replicas cannot
+/// draw.
 ///
 /// # Errors
 /// [`Refusal::not_found`] for a conversation or a proposal there is none of, and the stores' own.
@@ -460,31 +467,38 @@ pub fn drawn(
     caps: &Server<'_>,
     cards: &Cards<'_>,
     id: &ConversationId,
-    indices: &[usize],
+    asked: &Proposals,
 ) -> Answered<wire::DrawnPayload> {
     let stored = super::read(caps.secretary.conversations, id)?;
     let fold = inbox::fold(caps.secretary.inbox)?;
+    let lines = stored.lines(&fold);
     let drawn = Drawn::of(
-        &stored.lines(&fold),
+        &lines,
         cards,
         caps.secretary.clock.now(),
         caps.secretary.render,
     );
     let memory = memory(caps.secretary.memories).ok();
-    let proposals = indices
-        .iter()
-        .map(|&index| {
-            let standing = stored.standing(index, &fold)?;
-            Ok(readings::drawn(
-                &stored,
-                index,
-                &standing,
-                &drawn,
-                memory.as_ref(),
-            ))
-        })
-        .collect::<Result<_, Refusal>>()?;
-    Ok(wire::DrawnPayload { proposals })
+    let row = |standing: &crate::secretary::store::Standing| {
+        readings::drawn(
+            &stored,
+            standing.asking.index,
+            standing,
+            &drawn,
+            memory.as_ref(),
+        )
+    };
+    let proposals = match asked {
+        Proposals::Every => lines.standings().map(row).collect(),
+        Proposals::These(indices) => indices
+            .iter()
+            .map(|&index| Ok(row(&stored.standing(index, &fold)?)))
+            .collect::<Result<_, Refusal>>()?,
+    };
+    Ok(wire::DrawnPayload {
+        title: stored.heading().into_owned(),
+        proposals,
+    })
 }
 
 /// How many files one turn may carry.

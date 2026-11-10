@@ -2,6 +2,7 @@
 //! this app cannot resolve is plain text with no control.
 
 use serde::{Deserialize, Serialize};
+use suzatary_core::wire::UnplacedProposal;
 use ts_rs::TS;
 use viewtree::Attr::{Class, Data, Open};
 use viewtree::kit::{Reading, para};
@@ -242,7 +243,7 @@ impl Program for Inbox {
 
 fn row_of<'a>(rows: &[Row<'a>], key: &card::Key) -> Option<&'a suzatary_core::wire::ProposalRow> {
     rows.iter().find_map(|r| match r {
-        Row::Card(_, c, row) if card::Key::of(&c.id, row) == *key => Some(*row),
+        Row::Card(_, c, row) if card::Key::of(c.id, row) == *key => Some(*row),
         Row::Card(..) | Row::Unresolved(_) => None,
     })
 }
@@ -250,7 +251,7 @@ fn row_of<'a>(rows: &[Row<'a>], key: &card::Key) -> Option<&'a suzatary_core::wi
 fn seen(m: &mut Model) -> Vec<Effect> {
     let rows = m.readings.rows();
     let outs = m.cards.seen(rows.iter().filter_map(|r| match r {
-        Row::Card(_, c, row) => Some((c.id.as_str(), *row)),
+        Row::Card(_, c, row) => Some((c.id, *row)),
         Row::Unresolved(_) => None,
     }));
     let readings = &m.readings;
@@ -279,7 +280,7 @@ fn seen(m: &mut Model) -> Vec<Effect> {
 
 fn field(r: Row<'_>) -> String {
     match r {
-        Row::Card(_, c, row) => format!("card/{}", card::Key::of(&c.id, row).print()),
+        Row::Card(_, c, row) => format!("card/{}", card::Key::of(c.id, row).print()),
         Row::Unresolved(w) => format!("decision/{}", w.key()),
     }
 }
@@ -327,10 +328,10 @@ fn row(m: &Model, shown: Row<'_>) -> Node<Msg> {
             let placed = if card::is_setup(&proposal.card.by) {
                 Placed::Setup
             } else {
-                Placed::Inbox(&conversation.title)
+                Placed::Inbox(conversation.title)
             };
             let drawn = Drawn {
-                conversation: &conversation.id,
+                conversation: conversation.id,
                 row: proposal,
                 placed,
                 reach: &m.context.reach,
@@ -393,13 +394,13 @@ fn setup_row(m: &Model, rows: &[Row<'_>]) -> Option<Node<Msg>> {
     })
 }
 
-fn unplaced_section(lines: &[crate::waiting::Unplaced]) -> Option<Node<Msg>> {
+fn unplaced_section(lines: &[(&str, &UnplacedProposal)]) -> Option<Node<Msg>> {
     (!lines.is_empty()).then(|| {
-        view! { Div "unplaced" [lines.iter().map(|u| {
-            let line = format!("proposal:{}/{}", u.conversation, u.index);
+        view! { Div "unplaced" [lines.iter().map(|(conversation, u)| {
+            let line = format!("proposal:{conversation}/{}", u.index);
             view! { Div "problem" {Data("unplaced") => &line} [
                 para("", format!("No card for {line}: {}.", unheld(u.why))),
-                link("", Place::Conversation { id: &u.conversation, reference: &line, focus: false, at: None }, "Open its conversation"),
+                link("", Place::Conversation { id: conversation, reference: &line, focus: false, at: None }, "Open its conversation"),
             ] }
         }).collect::<Vec<_>>()] }
     })

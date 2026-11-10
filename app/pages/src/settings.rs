@@ -458,7 +458,7 @@ fn title(g: Group) -> &'static str {
 fn open_cards(rows: &[Row<'_>]) -> Vec<(String, card::Key)> {
     rows.iter()
         .filter_map(|r| match r {
-            Row::Card(_, c, row) => Some((c.id.clone(), card::Key::of(&c.id, row))),
+            Row::Card(_, c, row) => Some((c.id.to_owned(), card::Key::of(c.id, row))),
             Row::Unresolved(_) => None,
         })
         .collect()
@@ -466,14 +466,13 @@ fn open_cards(rows: &[Row<'_>]) -> Vec<(String, card::Key)> {
 
 fn row_of<'a>(rows: &[Row<'a>], key: &card::Key) -> Option<&'a suzatary_core::wire::ProposalRow> {
     rows.iter().find_map(|r| match r {
-        Row::Card(_, c, row) if card::Key::of(&c.id, row) == *key => Some(*row),
+        Row::Card(_, c, row) if card::Key::of(c.id, row) == *key => Some(*row),
         Row::Card(..) | Row::Unresolved(_) => None,
     })
 }
 
-/// Every card the page reads, waiting or settled, each whole: any change to one (the outcome a
-/// check writes after the tap, say) can change what its line says, so the overview is asked
-/// again.
+/// Every card the page reads, each whole: a change to one can change its line, so the overview
+/// is asked again.
 fn shown_cards(m: &Model) -> Vec<(String, suzatary_core::wire::ProposalRow)> {
     m.rows
         .cards
@@ -492,7 +491,7 @@ fn shown_cards(m: &Model) -> Vec<(String, suzatary_core::wire::ProposalRow)> {
 fn seen(m: &mut Model) -> Vec<Effect> {
     let rows = m.rows.rows();
     let outs = m.cards.seen(rows.iter().filter_map(|r| match r {
-        Row::Card(_, c, row) => Some((c.id.as_str(), *row)),
+        Row::Card(_, c, row) => Some((c.id, *row)),
         Row::Unresolved(_) => None,
     }));
     let readings = &m.rows;
@@ -560,8 +559,8 @@ fn allowing<'a>(
     open(Kind::Link).zip(open(Kind::Grant))
 }
 
-/// Sends the link again, once, with the link the tab kept, whatever the grant's card reads since:
-/// the link its line drew beside it, which an overview read after the grant no longer names.
+/// Sends the link again, once, with the link the tab kept, which an overview read after the grant
+/// no longer names.
 fn grant_taken(m: &mut Model, asking: &card::Asking, a: &Answer) -> Vec<card::Out> {
     let card::Asking::Act { key, then, .. } = asking else {
         return Vec::new();
@@ -624,8 +623,8 @@ fn line_cards(m: &Model, l: &OverviewLine) -> Vec<(String, Node<Msg>)> {
         .iter()
         .filter_map(|c| {
             rows.iter().find_map(|r| match r {
-                Row::Card(_, conv, row) if card::Key::of(&conv.id, row).reference() == *c => {
-                    Some((conv.id.as_str(), *row))
+                Row::Card(_, conv, row) if card::Key::of(conv.id, row).reference() == *c => {
+                    Some((conv.id, *row))
                 }
                 Row::Card(..) | Row::Unresolved(_) => None,
             })
@@ -799,7 +798,7 @@ fn group(m: &Model, g: &OverviewGroup) -> Node<Msg> {
             .any(|l| {
                 let rows = m.rows.rows();
                 l.cards.iter().any(|c| {
-                    rows.iter().any(|r| matches!(r, Row::Card(_, conv, row) if card::Key::of(&conv.id, row).reference() == *c && kind(row) == Kind::SignIn))
+                    rows.iter().any(|r| matches!(r, Row::Card(_, conv, row) if card::Key::of(conv.id, row).reference() == *c && kind(row) == Kind::SignIn))
                 })
             });
     let unanswered = view! { P "settingshealth settingshealth-failing settingsunanswered" ["No model answers on this box yet. Connect one:"] };

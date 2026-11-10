@@ -21,7 +21,7 @@ const arms: { [K in app.Event["type"]]: (r: Rng) => Extract<app.Event, { type: K
   Met: r => ({ type: "Met", me: login.of({ login: r.pick(["", "ada@example.invalid", "grace@example.invalid"]), actor: r.pick([null, "ada", "grace"]) }), served: r.array(r.int(3), () => r.pick(["life", "suzatary"])), categories: r.array(r.int(3), () => r.pick(["work", "home"])), zone: { name: r.pick(["UTC", "America/New_York", "Europe/London", "Europe/Berlin", "Pacific/Chatham"]) } }),
   Unmet: () => ({ type: "Unmet" }),
   Keyed: r => ({ type: "Keyed", key: r.pick<app.Key>([{ type: "Unchecked" }, { type: "Trusted" }, { type: "Untrusted" }, { type: "Revoked" }, { type: "Unsupported", e: "no Ed25519" }]) }),
-  Waiting: r => ({ type: "Waiting", count: r.int(9) - 3 + r.pick([0, 0.5]) }),
+  Waiting: r => ({ type: "Waiting", waiting: { count: r.int(9) - 3 + r.pick([0, 0.5]), unplaced: {} } }),
   More: r => ({ type: "More", open: r.bool() }),
   Opened: () => ({ type: "Opened" }),
   Heard: r => ({ type: "Heard", heads: r.pick([["a1"], ["b2"], ["a1", "c3"]]) }),
@@ -63,7 +63,7 @@ test("law: every event the shell hears is one of the sum's arms, and step is tot
   forAll(200, r => {
     for (const tag of TAGS) {
       const a = app.step(walk(r), arms[tag](r))
-      assert.ok(Number.isInteger(a.waiting) && a.waiting >= 0, `${tag}: a count is whole and never negative`)
+      assert.ok(a.waiting === null || (Number.isInteger(a.waiting.count) && a.waiting.count >= 0), `${tag}: a count is whole and never negative`)
       assert.match(a.chain, /^[a-z][a-z0-9-]{0,31}$/, `${tag}: the chain is always a slug`)
     }
   })

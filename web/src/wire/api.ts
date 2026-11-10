@@ -135,6 +135,7 @@ export const regenerate = (id: string): Promise<ConversationPayload> =>
 /** Drawn by the box, since no replica in the tab holds the todo chains whole. */
 export const drawnProposals = (id: string, indices: readonly number[]): Promise<DrawnPayload> =>
   http.get(conversationPath(id, `/drawn?indices=${indices.join(",")}`), payload.DrawnPayload);
+export const everyProposal = (id: string): Promise<DrawnPayload> => http.get(conversationPath(id, "/drawn"), payload.DrawnPayload);
 
 /** Named by its sha, never by its text, so the box renders only what the model wrote. */
 export const block = (id: string, sha: string): Promise<BlockRender> =>

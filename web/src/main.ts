@@ -223,7 +223,7 @@ const keyOf = (s: device.Signing): app.Key => {
 // Counted on the box, so the tab holds no conversation for a badge. No badge beats a wrong one.
 const refreshWaiting = once.shared(() =>
   waitingCount()
-    .then((w) => app.dispatch({ type: "Waiting", count: w.count }))
+    .then((w) => app.dispatch({ type: "Waiting", waiting: w }))
     .catch(() => {}),
 );
 
@@ -299,7 +299,7 @@ restoreTheme();
 restoreFold();
 void restoreReplica().then(() => sync());
 askWhoAndWhere();
-const heardStore = (name: stores.Name): void => void (name === "inbox" && refreshWaiting());
+const heardStore = (name: stores.Name): void => void ((name === "inbox" || name === "lines") && refreshWaiting());
 let closeStores = storesync.listen(heardStore);
 storesync.watchProgress(syncing.install(byId("syncing")));
 intentsync.listen();

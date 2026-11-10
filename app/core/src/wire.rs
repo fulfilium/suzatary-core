@@ -1943,10 +1943,10 @@ pub enum Asks {
     },
 }
 
-/// In the order their indices were asked.
+/// In the order asked.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
 pub struct DrawnPayload {
-    /// One per index asked.
+    pub title: String,
     pub proposals: Vec<ProposalRow>,
 }
 
@@ -2018,6 +2018,9 @@ pub enum InboxState {
 pub struct WaitingPayload {
     /// Open proposals, open decisions (one per batch they name), and lines no record places.
     pub count: usize,
+    /// By conversation; a conversation with none is absent.
+    #[ts(type = "Record<string, UnplacedProposal[]>")]
+    pub unplaced: BTreeMap<String, Vec<UnplacedProposal>>,
 }
 
 /// `GET /api/inbox`.

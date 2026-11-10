@@ -2137,7 +2137,16 @@ fn the_answers_vector_holds_every_answer() {
         suzatary_core::query::Hashes::parse(Some(&names.join(","))).expect("the lines' names");
     samples.add([routes::content(&lines.lines, &hashes).expect("the lines' content")]);
     samples.add([skeleton]);
-    samples.add([wire::WaitingPayload { count: 2 }]);
+    samples.add([wire::WaitingPayload {
+        count: 2,
+        unplaced: std::collections::BTreeMap::from([(
+            "2026-11-10-a".to_owned(),
+            vec![wire::UnplacedProposal {
+                index: 1,
+                why: suzatary_core::secretary::store::Unheld::NotHeld,
+            }],
+        )]),
+    }]);
     samples.add([wire::ReceiptPayload {
         heads: heads.clone(),
         adopted: heads.clone(),
@@ -2358,6 +2367,7 @@ fn the_answers_vector_holds_every_answer() {
     let rows: Vec<wire::ProposedObject> = std::iter::once(object).chain(others).collect();
     // A triage card's changeset, every row kind drawn, so the tab decodes each.
     samples.add([wire::DrawnPayload {
+        title: "Setup".to_owned(),
         proposals: vec![wire::ProposalRow {
             index: 0,
             act: wire::ProposedAct::Changes {
@@ -2463,9 +2473,16 @@ fn the_answers_vector_holds_every_answer() {
     let server = server_of(&bundle);
     let conversations = [&deed, &stages]
         .map(|id| secretary_routes::newest(&server, &cards, id).expect("a conversation"));
-    // A conversation's proposals drawn in one read, as the route answers them.
+    // A conversation's proposals drawn in one read, as the route answers them: every one, and
+    // those named.
     let indices: Vec<usize> = conversations[1].proposals.iter().map(|p| p.index).collect();
-    samples.add([secretary_routes::drawn(&server, &cards, &stages, &indices).expect("drawn")]);
+    samples.add(
+        [
+            secretary_routes::Proposals::Every,
+            secretary_routes::Proposals::These(indices),
+        ]
+        .map(|asked| secretary_routes::drawn(&server, &cards, &stages, &asked).expect("drawn")),
+    );
     // A message attaching a file from every place one comes from, the repository's with its hash.
     let mut attaching = conversations[1].clone();
     let files: Vec<wire::CardFile> = [

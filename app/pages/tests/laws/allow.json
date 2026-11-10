@@ -218,7 +218,7 @@
   {
    "ask": {
     "Rows": {
-     "type": "Conversations"
+     "type": "Waiting"
     }
    },
    "behind": null,
@@ -226,30 +226,8 @@
     "type": "Val",
     "v": {
      "body": {
-      "conversations": [
-       {
-        "id": "setup",
-        "kind": "review",
-        "last": "",
-        "last_at": "2026-11-06T14:10:51.753276",
-        "opened": "2026-11-06T14:08:55.008503",
-        "standing": 4,
-        "title": "Setup",
-        "turns": 4,
-        "unplaced": []
-       },
-       {
-        "id": "default",
-        "kind": "default",
-        "last": "",
-        "last_at": "2026-11-06T14:08:54.983772",
-        "opened": "2026-11-06T14:08:54.983772",
-        "standing": 0,
-        "title": "Secretary",
-        "turns": 0,
-        "unplaced": []
-       }
-      ]
+      "count": 0,
+      "unplaced": {}
      },
      "type": "Done"
     }
@@ -454,11 +432,6 @@
     "type": "Val",
     "v": {
      "body": {
-      "again": null,
-      "first": 3,
-      "id": "setup",
-      "model": "the box",
-      "opened": "2026-11-06T14:08:55.008503",
       "proposals": [
        {
         "act": {
@@ -690,23 +663,7 @@
         "why": "The link is served from https://cal.example.test, which the calendar may not reach yet."
        }
       ],
-      "state": "idle",
-      "title": "Setup",
-      "total": 4,
-      "turns": [
-       {
-        "at": "2026-11-06T14:10:51.753276",
-        "attempt": "current",
-        "gone": null,
-        "index": 3,
-        "references": [
-         "proposal:setup/3"
-        ],
-        "text": "The link is served from https://cal.example.test, which the calendar may not reach yet.",
-        "who": "box"
-       }
-      ],
-      "unplaced": []
+      "title": "Setup"
      },
      "type": "Done"
     }

@@ -627,7 +627,7 @@ pub struct Model {
     unsent: Unsents,
     /// Todos whose act left `unsent` since the fold last moved, kept until it holds the act.
     held_over: BTreeSet<String>,
-    waiting: u32,
+    waiting: usize,
     route: Route,
     shared: String,
     filter: Filter,
@@ -1352,9 +1352,9 @@ impl Model {
                 Vec::new()
             }
             Hold::Waiting => {
-                self.waiting = match read::<u32>(reading) {
-                    Reading::Val { v } => v,
-                    Reading::Loading | Reading::Error { .. } => 0,
+                self.waiting = match read::<Option<suzatary_core::wire::WaitingPayload>>(reading) {
+                    Reading::Val { v: Some(v) } => v.count,
+                    Reading::Val { v: None } | Reading::Loading | Reading::Error { .. } => 0,
                 };
                 Vec::new()
             }

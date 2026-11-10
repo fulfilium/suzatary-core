@@ -1153,11 +1153,9 @@ pub fn content<E: prodrome_core::schema::Schema>(
     Ok(wire::ContentPayload { objects: sent })
 }
 
-/// `GET /api/waiting`: how many cards the Inbox draws, as the page resolves its rows
-/// (`web/src/inbox/inbox.ts`, `rowOf`), the one count the badge shows on every page, the Inbox's
-/// included: one per open proposal, one per open decision on each of `chains`, and one per
-/// proposal line no inbox record places. A tab reads this number without holding the
-/// conversations: their lines are read by shape, never opened.
+/// `GET /api/waiting`: the badge's count of the Inbox's cards (open proposals, open decisions on
+/// `chains`, and the proposal lines no inbox record places, which it names by conversation),
+/// read from the lines' shapes, never their words.
 ///
 /// # Errors
 /// A store that does not read, a chain the set does not hold, and lines the fold refuses: no
@@ -1186,13 +1184,22 @@ pub fn waiting(
     let missing = |_: &crate::secretary::locked_text::KeyName| -> crate::secretary::words::Words<
         crate::secretary::locked_text::TextKey,
     > { crate::secretary::words::Gone::Missing.into() };
-    let unplaced: usize = crate::secretary::transcript::transcripts(&lines.nodes()?, &missing)
-        .map_err(|refused| Refusal::internal(refused.to_string()))?
-        .into_values()
-        .map(|read| read.into_stored().lines(inbox).unplaced().count())
-        .sum();
+    let unplaced: BTreeMap<String, Vec<wire::UnplacedProposal>> =
+        crate::secretary::transcript::transcripts(&lines.nodes()?, &missing)
+            .map_err(|refused| Refusal::internal(refused.to_string()))?
+            .into_iter()
+            .map(|(id, read)| {
+                let stored = read.into_stored();
+                (
+                    id.as_str().to_owned(),
+                    crate::secretary::readings::unplaced(&stored.lines(inbox)),
+                )
+            })
+            .filter(|(_, unplaced)| !unplaced.is_empty())
+            .collect();
     Ok(wire::WaitingPayload {
-        count: proposals + decisions + unplaced,
+        count: proposals + decisions + unplaced.values().map(Vec::len).sum::<usize>(),
+        unplaced,
     })
 }
 

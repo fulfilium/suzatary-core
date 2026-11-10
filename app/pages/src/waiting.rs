@@ -8,8 +8,8 @@ use serde::Deserialize;
 use suzatary_core::reference::Reference;
 use suzatary_core::secretary::store::Unheld;
 use suzatary_core::wire::{
-    Block, ConversationPayload, ConversationsPayload, Entry, EntryState, FoldPayload,
-    InboxProposal, InboxProposalsPayload, InboxState, ProposalRow,
+    Block, DrawnPayload, Entry, EntryState, FoldPayload, InboxProposal, InboxProposalsPayload,
+    InboxState, ProposalRow, UnplacedProposal, WaitingPayload,
 };
 use ts_rs::TS;
 use viewtree::kit::Reading;
@@ -232,10 +232,16 @@ pub(crate) fn settled_on<'a>(
     settled.into_iter().map(|(_, s)| s).collect()
 }
 
+#[derive(Debug, Clone, Copy)]
+pub(crate) struct Conversation<'a> {
+    pub(crate) id: &'a str,
+    pub(crate) title: &'a str,
+}
+
 /// An unresolved row must not offer to perform anything.
 #[derive(Debug, Clone, Copy)]
 pub(crate) enum Row<'a> {
-    Card(Waiting<'a>, &'a ConversationPayload, &'a ProposalRow),
+    Card(Waiting<'a>, Conversation<'a>, &'a ProposalRow),
     Unresolved(Waiting<'a>),
 }
 
@@ -256,13 +262,6 @@ impl<'a> Row<'a> {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub(crate) struct Unplaced {
-    pub(crate) conversation: String,
-    pub(crate) index: usize,
-    pub(crate) why: Unheld,
-}
-
 #[must_use]
 pub(crate) const fn unheld(why: Unheld) -> &'static str {
     match why {
@@ -275,8 +274,8 @@ pub(crate) const fn unheld(why: Unheld) -> &'static str {
 pub(crate) struct Readings {
     pub(crate) proposals: Reading<InboxRead>,
     pub(crate) decisions: BTreeMap<String, Reading<FoldPayload>>,
-    pub(crate) conversations: Reading<ConversationsPayload>,
-    pub(crate) cards: BTreeMap<String, Reading<ConversationPayload>>,
+    pub(crate) waiting: Reading<Option<WaitingPayload>>,
+    pub(crate) cards: BTreeMap<String, Reading<DrawnPayload>>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, serde::Serialize, Deserialize, TS)]
@@ -284,7 +283,7 @@ pub(crate) struct Readings {
 pub enum Watched {
     Proposals,
     Decisions(String),
-    Conversations,
+    Waiting,
     Cards(String),
 }
 
@@ -296,7 +295,7 @@ impl Watched {
             Watched::Decisions(chain) => Local::Decisions {
                 chain: chain.clone(),
             },
-            Watched::Conversations => Local::Conversations,
+            Watched::Waiting => Local::Waiting,
             Watched::Cards(conversation) => Local::Cards {
                 conversation: conversation.clone(),
             },
@@ -311,13 +310,13 @@ impl Readings {
             .iter()
             .map(|c| ((*c).to_owned(), Reading::Loading))
             .collect();
-        let mut watched = vec![Watched::Proposals, Watched::Conversations];
+        let mut watched = vec![Watched::Proposals, Watched::Waiting];
         watched.extend(decisions.keys().cloned().map(Watched::Decisions));
         (
             Readings {
                 proposals: Reading::Loading,
                 decisions,
-                conversations: Reading::Loading,
+                waiting: Reading::Loading,
                 cards: BTreeMap::new(),
             },
             watched,
@@ -331,7 +330,7 @@ impl Readings {
             Watched::Decisions(chain) => {
                 self.decisions.insert(chain, read(r));
             }
-            Watched::Conversations => self.conversations = read(r),
+            Watched::Waiting => self.waiting = read(r),
             Watched::Cards(conversation) => {
                 self.cards.insert(conversation, read(r));
             }
@@ -378,15 +377,22 @@ impl Readings {
             .into_iter()
             .filter_map(|w| match w.at() {
                 Where::Unresolved(_) | Where::Batch(..) => Some(Row::Unresolved(w)),
-                Where::Proposal(c, index) => match self.cards.get(&c) {
-                    Some(Reading::Val { v }) => Some(
+                Where::Proposal(c, index) => match self.cards.get_key_value(&c) {
+                    Some((id, Reading::Val { v })) => Some(
                         match v.proposals.iter().find(|p| p.index == index as usize) {
-                            Some(row) => Row::Card(w, v, row),
+                            Some(row) => Row::Card(
+                                w,
+                                Conversation {
+                                    id,
+                                    title: &v.title,
+                                },
+                                row,
+                            ),
                             None => Row::Unresolved(w),
                         },
                     ),
-                    Some(Reading::Error { .. }) => Some(Row::Unresolved(w)),
-                    Some(Reading::Loading) | None => None,
+                    Some((_, Reading::Error { .. })) => Some(Row::Unresolved(w)),
+                    Some((_, Reading::Loading)) | None => None,
                 },
             })
             .collect()
@@ -413,20 +419,14 @@ impl Readings {
     }
 
     #[must_use]
-    pub(crate) fn unplaced(&self) -> Vec<Unplaced> {
-        match &self.conversations {
-            Reading::Val { v } => v
-                .conversations
+    pub(crate) fn unplaced(&self) -> Vec<(&str, &UnplacedProposal)> {
+        match &self.waiting {
+            Reading::Val { v: Some(v) } => v
+                .unplaced
                 .iter()
-                .flat_map(|r| {
-                    r.unplaced.iter().map(|u| Unplaced {
-                        conversation: r.id.clone(),
-                        index: u.index,
-                        why: u.why,
-                    })
-                })
+                .flat_map(|(conversation, lines)| lines.iter().map(|u| (conversation.as_str(), u)))
                 .collect(),
-            Reading::Loading | Reading::Error { .. } => Vec::new(),
+            Reading::Val { v: None } | Reading::Loading | Reading::Error { .. } => Vec::new(),
         }
     }
 
@@ -436,8 +436,8 @@ impl Readings {
         if let Reading::Error { e } = &self.proposals {
             said.push(format!("The Inbox did not read: {e}"));
         }
-        if let Reading::Error { e } = &self.conversations {
-            said.push(format!("The conversations did not read: {e}"));
+        if let Reading::Error { e } = &self.waiting {
+            said.push(format!("What waits did not read: {e}"));
         }
         for (chain, f) in &self.decisions {
             if let Reading::Error { e } = f {

@@ -84,7 +84,7 @@ export namespace nav {
       label: tab.label,
       href: hrefOf(tab.route),
       active: tab.route.type === here,
-      count: tab.route.type === "inbox" ? a.waiting : 0,
+      count: tab.route.type === "inbox" ? (a.waiting?.count ?? 0) : 0,
     });
     const offered = (tabs: readonly Tab[]) => tabs.filter((t) => t.needsChain === undefined || a.served.includes(t.needsChain));
     // A destination that is about one chain hides the switcher: it would only disagree with the page.
