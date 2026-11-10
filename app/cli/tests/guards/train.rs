@@ -1776,55 +1776,74 @@ fn train_gate_github_whose_public_tree_leaks_pushes_nothing() {
 }
 
 /// A train killed while it waits on the cloud's run deletes its gate branch on the way out.
+/// Stopped by TERM or HUP, it also stops the wait and cancels its run, even when it was started
+/// with both signals ignored, which bash can neither trap nor reset.
 #[test]
 fn train_gate_github_killed_deletes_its_branch() {
-    let t = Train::new("github-killed");
-    t.on_github();
-    t.pr(1, "the first", &[("a.txt", "a\n")]);
-    assert!(t.train(&["build", "1"]).status.success());
-    let train = t.git(&["rev-parse", "train"]);
+    for signal in ["TERM", "HUP"] {
+        let t = Train::new(&format!("github-killed-{signal}"));
+        t.on_github();
+        t.pr(1, "the first", &[("a.txt", "a\n")]);
+        assert!(t.train(&["build", "1"]).status.success());
+        let train = t.git(&["rev-parse", "train"]);
 
-    let gating = t
-        .command(&["gate", "--remote", "github"], &[("GH_RUN", "running")])
-        .stdout(std::process::Stdio::null())
-        .stderr(std::process::Stdio::null())
-        .spawn()
-        .expect("train.sh starts");
-    let branch = format!("refs/heads/gate/{train}");
-    assert!(
-        within_twenty_seconds(|| {
-            t.core(&["for-each-ref", "--format=%(refname)", "refs/heads/gate/"]) == branch
-                && t.github_calls()
-                    .iter()
-                    .any(|call| call.contains("/actions/runs/") && !call.contains("head_sha"))
-        }),
-        "the train pushed its branch and waits on the run: {:?}",
-        t.github_calls()
-    );
-    run(
-        Command::new("kill").arg(gating.id().to_string()),
-        "kill the train",
-    );
-    let out = gating.wait_with_output().expect("the train ends");
-    assert!(!out.status.success(), "a killed train is not green");
-    assert_eq!(
-        t.core(&["for-each-ref", "refs/heads/gate/"]),
-        "",
-        "its gate branch went with it"
-    );
-    let pushed = t
-        .core_pushes()
-        .first()
-        .and_then(|line| line.split(' ').nth(1))
-        .expect("the gate commit")
-        .to_owned();
-    assert!(
-        t.github_calls()
-            .iter()
-            .any(|call| call.ends_with(&format!("/actions/runs/{pushed}/cancel"))),
-        "and its gate run was cancelled: {:?}",
-        t.github_calls()
-    );
+        let started = t.command(&["gate", "--remote", "github"], &[("GH_RUN", "running")]);
+        let mut ignoring = isolated(Command::new("bash"));
+        ignoring
+            .args(["-c", "trap '' HUP TERM; exec \"$@\"", "bash"])
+            .arg(started.get_program())
+            .args(started.get_args())
+            .current_dir(t.work())
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null());
+        for (key, value) in started.get_envs() {
+            match value {
+                Some(value) => ignoring.env(key, value),
+                None => ignoring.env_remove(key),
+            };
+        }
+        let gating = ignoring.spawn().expect("train.sh starts");
+        let branch = format!("refs/heads/gate/{train}");
+        assert!(
+            within_twenty_seconds(|| {
+                t.core(&["for-each-ref", "--format=%(refname)", "refs/heads/gate/"]) == branch
+                    && t.github_calls()
+                        .iter()
+                        .any(|call| call.contains("/actions/runs/") && !call.contains("head_sha"))
+            }),
+            "{signal}: the train pushed its branch and waits on the run: {:?}",
+            t.github_calls()
+        );
+        run(
+            Command::new("kill")
+                .args(["-s", signal])
+                .arg(gating.id().to_string()),
+            "stop the train",
+        );
+        let out = ends_within_twenty_seconds(gating);
+        assert!(
+            !out.status.success(),
+            "{signal}: a stopped train is not green"
+        );
+        assert_eq!(
+            t.core(&["for-each-ref", "refs/heads/gate/"]),
+            "",
+            "{signal}: its gate branch went with it"
+        );
+        let pushed = t
+            .core_pushes()
+            .first()
+            .and_then(|line| line.split(' ').nth(1))
+            .expect("the gate commit")
+            .to_owned();
+        assert!(
+            t.github_calls()
+                .iter()
+                .any(|call| call.ends_with(&format!("/actions/runs/{pushed}/cancel"))),
+            "{signal}: and its gate run was cancelled: {:?}",
+            t.github_calls()
+        );
+    }
 }
 
 /// A land publishes the landed commit's public tree to core's master as one commit naming its

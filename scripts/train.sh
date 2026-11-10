@@ -58,13 +58,15 @@
 # branch's workflow. The box waits for that run so Nix can substitute its builds. Only a gate's own
 # red makes a tree red (a cancelled or lost run is no verdict), and a red half stops the other.
 #
-# `nightly` gates origin/master in both halves with `merge-gate.sh --nightly`, waiting for a running
-# train and holding its lock; a red night files one todo per tree on the project chain.
+# `nightly` runs `merge-gate.sh --nightly`, after a running train, holding its lock.
 #
-# Test seams: SUZATARY_TRAIN_GATE (another gate script; its verdicts are keyed by its own bytes,
-# so a stub's green never lands a train), SUZATARY_TRAIN_GH, SUZATARY_TRAIN_POLL (seconds, 60),
-# SUZATARY_TRAIN_PUBLIC, SUZATARY_TRAIN_CACHE_TIMEOUT (seconds, 12000), SUZATARY_TRAIN_BIN.
+# Test seams: the SUZATARY_TRAIN_ names of `train_reads`; a stub gate's verdicts are keyed by its
+# own bytes, so a stub's green never lands a train.
 set -euo pipefail
+# Bash cannot trap or reset a signal ignored at its start, and `finish` must run on HUP or TERM.
+if ((0x$(awk '/^SigIgn:/ { print $2 }' /proc/$$/status) & 0x4001)); then
+  exec env --default-signal=HUP,TERM "${BASH_SOURCE[0]}" "$@"
+fi
 
 die() {
   printf 'train: %b\n' "$*" >&2
