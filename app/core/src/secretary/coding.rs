@@ -6,6 +6,7 @@ use crate::coding::{Fired, Seen, Session, Step};
 use crate::conversation_id::ConversationId;
 use crate::reference::{ProposalRef, Reference};
 use crate::refusal::Refusal;
+use crate::secretary::conversations;
 use crate::secretary::stamp::stamp;
 use crate::secretary::store::Entry;
 
@@ -27,7 +28,7 @@ pub struct Advanced {
 pub fn waiting(
     conversations: crate::secretary::conversations::Conversations<'_>,
 ) -> Result<Vec<Advanced>, Refusal> {
-    Ok(super::list(conversations)?
+    Ok(conversations::list(conversations)?
         .into_iter()
         .flat_map(|stored| {
             stored
@@ -209,7 +210,7 @@ pub fn started(
     id: &ConversationId,
     index: usize,
 ) -> Result<Session, Refusal> {
-    super::read(conversations, id)?
+    conversations::read(conversations, id)?
         .coding
         .remove(&index)
         .ok_or_else(|| {
@@ -228,7 +229,7 @@ fn written(
     at: Datetime,
     text: String,
 ) -> Result<(), Refusal> {
-    super::append(
+    conversations::append(
         conversations,
         id,
         &Entry::Coding {
@@ -237,7 +238,7 @@ fn written(
             session: session.clone(),
         },
     )?;
-    super::append(
+    conversations::append(
         conversations,
         id,
         &Entry::Said {

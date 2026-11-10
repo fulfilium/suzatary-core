@@ -54,6 +54,7 @@ mod own;
 pub mod persona;
 pub mod plugin;
 pub mod portal;
+pub mod priced;
 pub mod query;
 pub mod reading;
 pub mod record;

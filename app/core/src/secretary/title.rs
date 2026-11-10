@@ -3,6 +3,7 @@
 //! The job holds no verb and no session, and an answer that is not a [`Title`] is
 //! refused, never repaired past the first line.
 
+use crate::secretary::conversations;
 use prodrome_core::event::Actor;
 
 use crate::capability::{Clock, Conversation, Model, Turn};
@@ -92,7 +93,7 @@ pub fn run(
     model: &dyn Model,
     id: &ConversationId,
 ) -> Result<Option<Stored>, Refusal> {
-    let stored = super::read(conversations, id)?;
+    let stored = conversations::read(conversations, id)?;
     let Some(asked) = question(&stored).filter(|_| owed(&stored)) else {
         return Ok(None);
     };
@@ -102,7 +103,7 @@ pub fn run(
     let title = from_answer(&reply.say).map_err(|refused| {
         Refusal::unprocessable(format!("the title job answered no title: {refused}"))
     })?;
-    if !owed(&super::read(conversations, id)?) {
+    if !owed(&conversations::read(conversations, id)?) {
         return Ok(None);
     }
     titled(
@@ -129,7 +130,7 @@ pub fn rename(
     text: &str,
 ) -> Result<Stored, Refusal> {
     let title = Title::new(text).map_err(|refused| Refusal::bad_request(refused.to_string()))?;
-    super::read(conversations, id)?;
+    conversations::read(conversations, id)?;
     titled(
         conversations,
         clock,
@@ -157,7 +158,7 @@ fn titled(
             by,
         },
     )?;
-    super::read(conversations, id)
+    conversations::read(conversations, id)
 }
 
 #[cfg(test)]

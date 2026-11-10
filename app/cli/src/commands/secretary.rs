@@ -1450,7 +1450,8 @@ pub fn backfill_plan(
     let refused =
         |refusal: suzatary_core::refusal::Refusal| anyhow::anyhow!("{}", refusal.message());
     let conversations =
-        suzatary_core::secretary::list(conversations(instance).conversations()).map_err(refused)?;
+        suzatary_core::secretary::conversations::list(conversations(instance).conversations())
+            .map_err(refused)?;
     let topics = instance.secretary.topics.open();
     let planned = backfill::plan(&conversations, &topics.stores().reading()?, model)?;
     for (target, given) in &planned.rounds {
@@ -1522,7 +1523,8 @@ pub fn backfill_apply(
     let plan =
         Plan::parse(&text).with_context(|| format!("the plan {} does not read", file.display()))?;
     let conversations =
-        suzatary_core::secretary::list(conversations(instance).conversations()).map_err(refused)?;
+        suzatary_core::secretary::conversations::list(conversations(instance).conversations())
+            .map_err(refused)?;
     let topics = instance.secretary.topics.open();
     topics.begin()?;
     let _held = topics.memberships.locked()?;
@@ -1551,7 +1553,8 @@ pub fn carry(
     let refused =
         |refusal: suzatary_core::refusal::Refusal| anyhow::anyhow!("{}", refusal.message());
     let conversations =
-        suzatary_core::secretary::list(conversations(instance).conversations()).map_err(refused)?;
+        suzatary_core::secretary::conversations::list(conversations(instance).conversations())
+            .map_err(refused)?;
     let (path, write) = match run {
         CarryRun::List => {
             for listed in carry::listing(&conversations) {
@@ -1819,8 +1822,8 @@ pub fn scripted_round(
     wired.brain = crate::commands::serve::Brain::Scripted(script);
     let chains = wired.bound();
     let caps = &wired.secretary();
-    if suzatary_core::secretary::read(caps.conversations, id).is_err() {
-        suzatary_core::secretary::start(
+    if suzatary_core::secretary::conversations::read(caps.conversations, id).is_err() {
+        suzatary_core::secretary::conversations::start(
             caps.conversations,
             caps.model,
             id,
@@ -1986,7 +1989,7 @@ fn run_brief(
             .zone
             .day(prodrome_core::fpl::instant_of(caps.clock.now()));
         let id = ConversationId::minted(today, &taken);
-        suzatary_core::secretary::start(
+        suzatary_core::secretary::conversations::start(
             caps.conversations,
             caps.model,
             &id,
@@ -1998,7 +2001,7 @@ fn run_brief(
         id
     } else {
         let id = DEFAULT.clone();
-        suzatary_core::secretary::read_or_open_default(
+        suzatary_core::secretary::conversations::read_or_open_default(
             caps.conversations,
             caps.model,
             &id,
@@ -2403,7 +2406,7 @@ fn reviews(instance: &Instance, since: Option<&str>) -> anyhow::Result<()> {
 
 fn list(instance: &Instance) -> anyhow::Result<()> {
     let store = conversations(instance);
-    let conversations = suzatary_core::secretary::list(store.conversations())
+    let conversations = suzatary_core::secretary::conversations::list(store.conversations())
         .map_err(|refusal| anyhow::anyhow!("{}", refusal.message()))?;
     if conversations.is_empty() {
         println!("secretary: no conversations yet");
@@ -2433,7 +2436,7 @@ fn list(instance: &Instance) -> anyhow::Result<()> {
 fn show(instance: &Instance, id: &str) -> anyhow::Result<()> {
     let store = conversations(instance);
     let id = ConversationId::new(id).map_err(|failed| anyhow::anyhow!("{failed}"))?;
-    let stored = suzatary_core::secretary::read(store.conversations(), &id)
+    let stored = suzatary_core::secretary::conversations::read(store.conversations(), &id)
         .map_err(|refusal| anyhow::anyhow!("{}", refusal.message()))?;
     println!("{}  {}  ({})", stored.id, stored.title, stored.model);
     transcript(&stored, &lines_of(instance, &stored)?, &words_of(instance));
@@ -2608,7 +2611,8 @@ mod sign_in_completion {
         ] {
             transcript::push(conversations.conversations(), &DEFAULT, &line).expect("said");
         }
-        suzatary_core::secretary::read(conversations.conversations(), &DEFAULT).expect("reads")
+        suzatary_core::secretary::conversations::read(conversations.conversations(), &DEFAULT)
+            .expect("reads")
     }
 
     /// A provider's error text is relayed unstamped, so the round after it remembers by card; a

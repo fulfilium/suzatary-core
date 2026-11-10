@@ -67,7 +67,7 @@ fn revealed(call: &Call<Tap, (), Revealing>) -> Result<RevealPayload, Refusal> {
             handle,
             conversation,
         } => {
-            let read = ReadHolders::of(&suzatary_core::secretary::read(
+            let read = ReadHolders::of(&suzatary_core::secretary::conversations::read(
                 caps.conversations,
                 conversation,
             )?);

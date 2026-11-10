@@ -12,6 +12,7 @@ use crate::capability::{MailError, Secretary};
 use crate::conversation_id::ConversationId;
 use crate::reference::{Reference, TodoRef};
 use crate::refusal::{Refusal, shown};
+use crate::secretary::{conversations, transcript};
 
 mod add_topics;
 mod attachments;
@@ -152,7 +153,7 @@ pub(crate) fn propose(
     serves: Option<TodoRef>,
     revises: Option<usize>,
 ) -> Result<usize, Refusal> {
-    let stored = super::read(caps.conversations, id)?;
+    let stored = conversations::read(caps.conversations, id)?;
     if let Some(old) = revises {
         withdrawable(caps, &stored, old)?;
     }
@@ -180,12 +181,12 @@ pub(crate) fn propose(
         return Ok(filed.index());
     };
     if let Some(old) = revises {
-        let stored = super::read(caps.conversations, id)?;
+        let stored = conversations::read(caps.conversations, id)?;
         let standing = withdrawable(caps, &stored, old)?;
         super::inbox::withdraw(
             caps.inbox,
             &standing.object.id,
-            &super::writes_as(),
+            &transcript::writer(),
             caps.clock.now(),
             Withdrawal::Superseded,
         )?;
@@ -300,7 +301,7 @@ fn memory_card(
 fn clean_round(call: &super::Call<'_>, instead: &str) -> Result<super::memory::Origin, Refusal> {
     match Gate::of(
         Binding::Remembers,
-        &super::read(call.caps.conversations, call.conversation)?,
+        &conversations::read(call.caps.conversations, call.conversation)?,
     ) {
         Gate::Refused(why) => Err(Refusal::forbidden(why)),
         Gate::Card => Err(Refusal::forbidden(format!(

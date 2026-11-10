@@ -1034,7 +1034,8 @@ fn a_broken_answer_is_its_source_block_by_block() {
 /// `secretary brief` without `--new` says into [`DEFAULT`]; with it, into a fresh dated id.
 mod default_conversation {
     use suzatary_core::conversation_id::{ConversationId, DEFAULT};
-    use suzatary_core::secretary::{converse, read_or_open_default, start};
+    use suzatary_core::secretary::conversations::{read_or_open_default, start};
+    use suzatary_core::secretary::converse;
 
     use super::{ada, common};
 

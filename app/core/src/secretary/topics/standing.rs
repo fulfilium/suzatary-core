@@ -2,6 +2,7 @@
 //! writes of its names there (`docs/TOPICS-PLAN-2026-10-21.md` §3). Only the cases the secretary
 //! may change carry a token its planners take.
 
+use crate::secretary::transcript;
 use prodrome_core::literal::Datetime;
 use prodrome_core::tags::membership;
 
@@ -40,12 +41,9 @@ impl Suggestion<'_> {
     /// The secretary's `Removed` for every name of the topic on the target.
     #[must_use]
     pub fn drop(&self, at: Datetime) -> Vec<MembershipEvent> {
-        self.reading.set.remove(
-            &self.target,
-            &self.topic,
-            at,
-            &crate::secretary::writes_as(),
-        )
+        self.reading
+            .set
+            .remove(&self.target, &self.topic, at, &transcript::writer())
     }
 }
 
@@ -61,7 +59,7 @@ impl Opening<'_> {
             self.target.clone(),
             self.topic.clone(),
             at,
-            crate::secretary::writes_as(),
+            transcript::writer(),
         )
     }
 }

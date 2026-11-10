@@ -287,7 +287,7 @@ fn noted(
     from: Seat,
 ) {
     let first = state.first.caps;
-    let noting = suzatary_core::secretary::read_or_open_default(
+    let noting = suzatary_core::secretary::conversations::read_or_open_default(
         first.secretary.conversations,
         first.secretary.model,
         &DEFAULT,

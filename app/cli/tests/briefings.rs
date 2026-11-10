@@ -40,7 +40,8 @@ fn a_good_date_returns_its_source() {
 fn a_day_the_secretary_briefed_is_its_brief_block_by_block() {
     use suzatary_core::conversation_id::DEFAULT;
     use suzatary_core::secretary::briefs::BRIEF;
-    use suzatary_core::secretary::{converse, read_or_open_default};
+    use suzatary_core::secretary::conversations::read_or_open_default;
+    use suzatary_core::secretary::converse;
 
     let fakes = Fakes::new("briefings-brief").model(common::FakeModel::saying([
         "{\"say\": \"Nothing urgent.\\n\\nThe permit filing moved.\"}",

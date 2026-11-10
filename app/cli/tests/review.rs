@@ -187,7 +187,7 @@ fn the_brief_offers_the_day_s_withdrawals_back_once() {
     .expect("the review runs");
     let secretary = caps.secretary();
     let brief = suzatary_core::conversation_id::DEFAULT.clone();
-    suzatary_core::secretary::read_or_open_default(
+    suzatary_core::secretary::conversations::read_or_open_default(
         secretary.conversations,
         secretary.model,
         &brief,
@@ -424,7 +424,8 @@ fn an_unreadable_conversation_is_named_and_paged_once() {
         "the same set pages once"
     );
     let today = prodrome_core::fpl::instant_of(caps.clock.now()).date();
-    let round = suzatary_core::secretary::read(lines, &today_of(today)).expect("reads");
+    let round =
+        suzatary_core::secretary::conversations::read(lines, &today_of(today)).expect("reads");
     let named = round
         .turns
         .iter()
@@ -508,9 +509,11 @@ fn a_review_that_cannot_reach_its_model_writes_the_outage_down() {
 
     // The record names what nobody answered for.
     let today = prodrome_core::fpl::instant_of(caps.clock.now()).date();
-    let stored =
-        suzatary_core::secretary::read(caps.conversations.conversations(), &today_of(today))
-            .expect("the conversation was opened before the model was asked");
+    let stored = suzatary_core::secretary::conversations::read(
+        caps.conversations.conversations(),
+        &today_of(today),
+    )
+    .expect("the conversation was opened before the model was asked");
     assert_eq!(
         stored.failures.len(),
         1,

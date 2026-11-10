@@ -14,6 +14,7 @@ use crate::capability::{Secretary, Turn};
 use crate::conversation_id::{ConversationId, Daily};
 use crate::deployment::Deployment;
 use crate::refusal::{Refusal, shown};
+use crate::secretary::conversations;
 use crate::secretary::transcript;
 
 /// What one review did.
@@ -175,11 +176,11 @@ pub fn review(
     // No round ran only when nothing waited, so every card is held.
     let (after, rounds) = match answered {
         Some(answered) => (answered.stored, answered.rounds),
-        None => (super::read(caps.conversations, &id)?, 0),
+        None => (conversations::read(caps.conversations, &id)?, 0),
     };
     let standing = hold_the_rest(caps, &id, &after)?;
 
-    let stored = super::read(caps.conversations, &id)?;
+    let stored = conversations::read(caps.conversations, &id)?;
     Ok(Run::Done(Reviewed {
         decided: stored.reviews[already.min(stored.reviews.len())..].to_vec(),
         rounds,

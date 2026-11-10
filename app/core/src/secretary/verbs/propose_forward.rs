@@ -73,7 +73,7 @@ impl Verb for ProposeForward {
         let shown = mail
             .message(&args.message)
             .map_err(|failed| mail_refusal(&failed))?;
-        if !ReadHolders::of(&crate::secretary::read(
+        if !ReadHolders::of(&crate::secretary::conversations::read(
             call.caps.conversations,
             call.conversation,
         )?)

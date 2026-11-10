@@ -18,6 +18,7 @@ use crate::secretary::acts::Act;
 use crate::secretary::attached::{self, Checked};
 use crate::secretary::attachment_source::AttachmentSource;
 use crate::secretary::changes::{self, Changeset};
+use crate::secretary::conversations;
 use crate::secretary::decide;
 use crate::secretary::inbox::{self, ProposalId, Response};
 use crate::secretary::opening::Opening;
@@ -344,7 +345,7 @@ fn begun(
         .zone
         .day(prodrome_core::fpl::instant_of(at));
     let id = ConversationId::minted(today, &taken);
-    super::start(
+    conversations::start(
         caps.secretary.conversations,
         caps.secretary.model,
         &id,
@@ -353,7 +354,7 @@ fn begun(
         at,
     )?;
     if let Some(first) = first {
-        super::append(caps.secretary.conversations, &id, first)?;
+        conversations::append(caps.secretary.conversations, &id, first)?;
     }
     Ok(id)
 }
@@ -448,7 +449,11 @@ pub fn newest(
     cards: &Cards<'_>,
     id: &ConversationId,
 ) -> Answered<wire::ConversationPayload> {
-    payload(&super::read(caps.secretary.conversations, id)?, caps, cards)
+    payload(
+        &conversations::read(caps.secretary.conversations, id)?,
+        caps,
+        cards,
+    )
 }
 
 /// What `GET …/<id>/drawn` draws: every proposal, or those `?indices=` names, in that order.
@@ -469,7 +474,7 @@ pub fn drawn(
     id: &ConversationId,
     asked: &Proposals,
 ) -> Answered<wire::DrawnPayload> {
-    let stored = super::read(caps.secretary.conversations, id)?;
+    let stored = conversations::read(caps.secretary.conversations, id)?;
     let fold = inbox::fold(caps.secretary.inbox)?;
     let lines = stored.lines(&fold);
     let drawn = Drawn::of(
@@ -526,7 +531,7 @@ pub fn say(
     after: Option<usize>,
 ) -> Answered<wire::SayPayload> {
     let turn = question(said, references, attachments)?;
-    let before = super::read(caps.secretary.conversations, id)?;
+    let before = conversations::read(caps.secretary.conversations, id)?;
     if after.is_some_and(|after| asked(&before, after, &turn, &by)) {
         return Ok(wire::SayPayload {
             conversation: payload(&before, caps, cards)?,
@@ -548,7 +553,7 @@ pub fn say(
             by: Some(by),
         },
     )?;
-    let stored = super::read(caps.secretary.conversations, id)?;
+    let stored = conversations::read(caps.secretary.conversations, id)?;
     Ok(wire::SayPayload {
         conversation: payload(&stored, caps, cards)?,
     })
@@ -1022,7 +1027,7 @@ pub fn tap(
     answer: &TapAnswer,
 ) -> Answered<AfterTap> {
     let (id, index) = (&card.conversation, card.index);
-    let stored = super::read(caps.secretary.conversations, id)?;
+    let stored = conversations::read(caps.secretary.conversations, id)?;
     let standing = stored.standing(index, &inbox::fold(caps.secretary.inbox)?)?;
     crate::secretary::sending::performs(tap, &standing.object.asked.proposal)?;
     let hold = || caps.secretary.memories.hold();
@@ -1078,7 +1083,11 @@ pub fn tap(
         )?;
     }
     Ok(AfterTap {
-        conversation: payload(&super::read(caps.secretary.conversations, id)?, caps, cards)?,
+        conversation: payload(
+            &conversations::read(caps.secretary.conversations, id)?,
+            caps,
+            cards,
+        )?,
         opened,
     })
 }
@@ -1251,7 +1260,7 @@ fn afterwards(
         Some(Then::End(began, ended)) => inbox::end(
             caps.secretary.inbox,
             &began,
-            &super::writes_as(),
+            &transcript::writer(),
             caps.secretary.clock.now(),
             ended,
         )
@@ -1271,7 +1280,7 @@ fn afterwards(
         }
         Some(Then::Forget(account, removal)) => {
             let said = effectors.forget.forget(&account, removal).sentence();
-            super::append(
+            conversations::append(
                 caps.secretary.conversations,
                 &card.conversation,
                 &Entry::noted(
@@ -1607,7 +1616,7 @@ pub fn ask_trust(
     key: &prodrome_core::sign::PublicKey,
 ) -> Answered<usize> {
     let secretary = caps.secretary;
-    let stored = super::read_or_open_default(
+    let stored = conversations::read_or_open_default(
         caps.secretary.conversations,
         caps.secretary.model,
         &crate::conversation_id::DEFAULT,
@@ -1759,7 +1768,7 @@ fn mailed(
         Ok(written) => written,
         Err(malformed) => return not_sent(malformed.to_string()),
     };
-    let read = match super::read(caps.secretary.conversations, id) {
+    let read = match conversations::read(caps.secretary.conversations, id) {
         Ok(stored) => ReadHolders::of(&stored),
         Err(refused) => return not_sent(refused.message().to_owned()),
     };
@@ -1821,7 +1830,7 @@ fn forwarded(
     use crate::secretary::proposal::Style;
     let not_sent = |reason: String| Performed::Tried(Tried::NotSent { reason });
     let file = &forward.message.file;
-    let read = match super::read(caps.secretary.conversations, id) {
+    let read = match conversations::read(caps.secretary.conversations, id) {
         Ok(stored) => ReadHolders::of(&stored),
         Err(refused) => return not_sent(refused.message().to_owned()),
     };
@@ -1969,7 +1978,7 @@ fn afresh(
     turn: usize,
 ) -> Result<(ConversationId, Performed), Refusal> {
     let request = crate::secretary::afresh::Request::at_tap(
-        &super::read(caps.secretary.conversations, conversation)?,
+        &conversations::read(caps.secretary.conversations, conversation)?,
         turn,
     )?;
     let opened = begun(
@@ -2253,7 +2262,11 @@ pub fn build(
             revises: None,
         },
     )?;
-    payload(&super::read(conversations, conversation)?, caps, cards)
+    payload(
+        &conversations::read(conversations, conversation)?,
+        caps,
+        cards,
+    )
 }
 
 /// `POST …/proposals/<n>/drop`: let a session go, with a reason.
@@ -2276,7 +2289,11 @@ pub fn drop_session(
         reason,
         caps.secretary.clock.now(),
     )?;
-    payload(&super::read(caps.secretary.conversations, id)?, caps, cards)
+    payload(
+        &conversations::read(caps.secretary.conversations, id)?,
+        caps,
+        cards,
+    )
 }
 
 /// The newest window, full-size, dressed.

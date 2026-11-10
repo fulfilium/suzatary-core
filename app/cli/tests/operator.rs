@@ -47,9 +47,11 @@ fn an_operators_question_is_the_owners_words_stamped_as_the_operators() {
     )
     .expect("the operator asks");
     assert!(asked.answer.contains("Nothing is due"), "{}", asked.answer);
-    let stored =
-        suzatary_core::secretary::read(fakes.conversations.conversations(), &asked.conversation)
-            .expect("reads");
+    let stored = suzatary_core::secretary::conversations::read(
+        fakes.conversations.conversations(),
+        &asked.conversation,
+    )
+    .expect("reads");
     let said = stored
         .turns
         .iter()

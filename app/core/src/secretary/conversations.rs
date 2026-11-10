@@ -6,11 +6,15 @@
 //! written through [`crate::secretary::transcript::push`] alone, which keeps each key before the
 //! line that names it is appended, and never takes it back: an orphan key opens nothing.
 
-use crate::capability::{Entropy, ModelSessions, RenderCache};
+use crate::capability::{Datetime, Entropy, Model, ModelSessions, RenderCache};
+use crate::conversation_id::ConversationId;
+use crate::refusal::{Refusal, Status};
 use crate::secretary::held_lines::{HeldLines, TheBox};
 use crate::secretary::line_event::LineEvent;
 use crate::secretary::locked_text::{KeyName, TextKey};
 use crate::secretary::opened::Opened;
+use crate::secretary::store::{self, Entry, Stored};
+use crate::secretary::transcript;
 use crate::secretary::words::{Gone, Words};
 use crate::store::{Doc, Gets, Prodrome, Reads, StoreError};
 use crate::timings::{Phase, timed};
@@ -84,3 +88,88 @@ impl ReadConversations<'_> {
 mod in_memory;
 #[cfg(any(test, feature = "nothing"))]
 pub use in_memory::{Counting, Forgot, InMemory};
+
+/// Open a conversation with its first line; an empty `title` leaves it for [`crate::secretary::title::owed`].
+///
+/// # Errors
+/// The store's, and a name already taken.
+pub fn start(
+    conversations: Conversations<'_>,
+    model: &dyn Model,
+    id: &ConversationId,
+    title: &str,
+    kind: store::Kind,
+    at: Datetime,
+) -> Result<Stored, Refusal> {
+    let opened = Entry::Opened {
+        at,
+        title: crate::secretary::words::Words::kept(title.to_owned()),
+        model: model.name(),
+        kind,
+    };
+    transcript::start(conversations, id, &opened)?;
+    read(conversations, id)
+}
+
+/// One conversation, folded.
+///
+/// # Errors
+/// [`Refusal::not_found`] for an unknown name, [`Refusal::internal`] for an unreadable file.
+pub fn read(conversations: Conversations<'_>, id: &ConversationId) -> Result<Stored, Refusal> {
+    Ok(transcript::read(conversations, id)?.stored().clone())
+}
+
+/// [`read`], opening [`DEFAULT`](crate::conversation_id::DEFAULT) the first time anything asks
+/// for it, and no other id.
+///
+/// # Errors
+/// [`read`]'s own, once the default exists or `id` is any other name, and the store's.
+pub fn read_or_open_default(
+    conversations: Conversations<'_>,
+    model: &dyn Model,
+    id: &ConversationId,
+    at: Datetime,
+) -> Result<Stored, Refusal> {
+    if id.as_str() != crate::conversation_id::DEFAULT.as_str() {
+        return read(conversations, id);
+    }
+    match read(conversations, id) {
+        Err(refusal) if refusal.status() == Status::NotFound => {
+            match start(
+                conversations,
+                model,
+                id,
+                "Secretary",
+                store::Kind::Default,
+                at,
+            ) {
+                Err(taken) if taken.status() == Status::Conflict => read(conversations, id),
+                opened => opened,
+            }
+        }
+        other => other,
+    }
+}
+
+/// Every conversation, newest first, each folded to its heading fields.
+///
+/// # Errors
+/// The store's own.
+pub fn list(conversations: Conversations<'_>) -> Result<Vec<Stored>, Refusal> {
+    transcript::each(conversations)?
+        .into_iter()
+        .map(|(_, read)| {
+            read.map(|read| read.stored().clone())
+                .map_err(|failed| Refusal::internal(failed.to_string()))
+        })
+        .collect()
+}
+
+pub fn append(
+    conversations: Conversations<'_>,
+    id: &ConversationId,
+    entry: &Entry,
+) -> Result<(), Refusal> {
+    transcript::push(conversations, id, entry)
+        .map_err(|failed| Refusal::internal(failed.to_string()))
+}

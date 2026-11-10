@@ -2,6 +2,7 @@
 //! tapped it. A consent lives in memory alone, so a restart closes every one and no verifier is
 //! ever written down. [`Open`] is pure; the server holds it behind a lock and does the exchange.
 
+use crate::secretary::{conversations, transcript};
 use std::collections::BTreeMap;
 
 use chrono::NaiveDateTime;
@@ -229,7 +230,7 @@ pub fn end(
             String::new()
         }
     };
-    crate::secretary::inbox::end(inbox, card, &super::writes_as(), at, performed)?;
+    crate::secretary::inbox::end(inbox, card, &transcript::writer(), at, performed)?;
     let fold = crate::secretary::inbox::fold(inbox)?;
     let Some(asked) = fold
         .objects()
@@ -239,7 +240,7 @@ pub fn end(
         return Ok(None);
     };
     if !said.is_empty() {
-        super::append(
+        conversations::append(
             conversations,
             &asked.conversation,
             &crate::secretary::store::Entry::noted(at, said, vec![asked.clone().into()]),

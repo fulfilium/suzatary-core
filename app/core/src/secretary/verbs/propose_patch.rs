@@ -65,7 +65,8 @@ impl Verb for ProposePatch {
             ));
         }
         let shown = patch.as_str().len() + message.len();
-        let round = crate::secretary::read(call.caps.conversations, call.conversation)?;
+        let round =
+            crate::secretary::conversations::read(call.caps.conversations, call.conversation)?;
         match (visibility, Gate::of(Asked::Publishes, &round)) {
             (Visibility::Public, Gate::Card) if shown > MAX_SHOWN_BYTES => {
                 return Err(Refusal::bad_request(format!(

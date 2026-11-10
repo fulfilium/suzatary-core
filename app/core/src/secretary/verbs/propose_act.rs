@@ -249,7 +249,7 @@ const CONNECT_OUTSIDE: &str = "an account, a calendar or a folder is one the own
 
 /// The refusal in a round that read outside the owner's words, or nothing in a clean one.
 fn owners_words_only(call: &Call<'_>, why: &str) -> Result<(), Refusal> {
-    if crate::secretary::taint::tainted(&crate::secretary::read(
+    if crate::secretary::taint::tainted(&crate::secretary::conversations::read(
         call.caps.conversations,
         call.conversation,
     )?) {

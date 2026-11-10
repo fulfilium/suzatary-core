@@ -5,6 +5,7 @@ use crate::capability::Secretary;
 use crate::conversation_id::ConversationId;
 use crate::conversation_id::Daily;
 use crate::refusal::{Refusal, Status};
+use crate::secretary::conversations;
 use crate::secretary::store::{Kind, Stored};
 use crate::secretary::words::Words;
 use crate::zone::Zone;
@@ -48,7 +49,7 @@ pub fn begin(caps: &Secretary<'_>, zone: Zone, daily: Daily) -> Result<Run<Round
 pub fn daily_round(caps: &Secretary<'_>, zone: Zone, daily: Daily) -> Result<Round, Refusal> {
     let today = zone.day(prodrome_core::fpl::instant_of(caps.clock.now()));
     let id = ConversationId::daily(daily, today);
-    let held = match super::read(caps.conversations, &id) {
+    let held = match conversations::read(caps.conversations, &id) {
         Ok(stored) => Some(stored),
         Err(refusal) if refusal.status() == Status::NotFound => None,
         Err(refusal) => return Err(refusal),
@@ -76,7 +77,7 @@ impl Round {
     pub fn open(self, caps: &Secretary<'_>) -> Result<Stored, Refusal> {
         match self.held {
             Some(stored) => Ok(stored),
-            None => super::start(
+            None => conversations::start(
                 caps.conversations,
                 caps.model,
                 &self.id,

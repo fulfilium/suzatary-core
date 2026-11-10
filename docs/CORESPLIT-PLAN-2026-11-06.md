@@ -35,15 +35,23 @@ and each fix is a named move:
 | C1 | `store/kind` and `store/database` name every store's event type (secretary, mail, decisions, devices, plugin, upload) | 33 | Invert: `store` is generic over `prodrome_core::schema::Schema`. Each schema crate implements it. The closed sum `store::Kind` (pinned by `guards/lists.rs`, `safe-push.sh` and `vault-backup.sh`) moves to `api`, where every schema is in scope. |
 | C2 | `wire.rs` holds every route's types, and low modules use them (`FailedChain`, `SinceRead`, `DevicePayload`, `ErrorPayload`, `MailWatch`, `Card*`) | 50 | Split by concept: each wire type moves to the lowest crate that names it (table below). The ts-rs generator test moves to `api`. |
 | C3 | `capability/*` defines every port and record over every domain's types (`mail` 27, `secretary` 22) | 49 | Each port file moves beside its domain (`corpus`, `mailbox`, `mail_sync`, `junk`, `older_mail` to mail and triage; `model`, `agent`, `secretary` to `secretary`; `server` to `api`). `capability/mod` keeps `Secret`, `Datetime`, `Login` and the tokens in `base`. |
-| C4 | `connect::Failure` ↔ `capability::Limited` ↔ `health`, used by mail, plugin and drive | 27 | A crate `health` holds `Failure`, `Remedy`, `Label`, `Lacking`, `Refused`, `Limited`, `health`, `plugin::{Refusal, Origin, Said, PluginName, CredentialName, ManifestError}` and `SourceKey`. mail's imap, send, puller, mailroom and declared return `mail::Fault`, and `health` implements `From<mail::Fault> for Failure`. The `Healths` builders in `mail/verbs` move up to triage. |
-| C5 | `secretary/tap::Tap` is used by `mail/oauth` (`Consent::given_by_tap`) and by digest | 3 | `Tap`, `Tap::of`, `ActHeaders`, `check_csrf`, `Seat` and `Admitted` move to `signatures`, beside `Trusted`. `Tap::performs` becomes `inbox::sending::performs(&Tap, &Proposal)`. |
-| C6 | `secretary/store` (`Entry`, `Proposal`) ↔ `acts`/`inbox`/`changes`/`responded` | 36 | `Proposal`, `Reasons` and `Style` (`store/proposal.rs`, `store/reasons.rs`) move to `inbox`. The writers of an `Entry` in `acts.rs` (`:348`, `:406`) move to `conversations`. `Daily`/`OwnRound`/`Stamp`, `store::stamp` and `act_vocabulary::SIGNATURES` move to `inbox`. |
-| C7 | `secretary/mod.rs` is both the store's operations (`read`, `append`, `list`, `Bound`, `start`, `state`, `WRITES_AS`, `Effect`) and the turn | 22 | Split it: the store operations go to `conversations` and `mod.rs` keeps the turn. `SecretaryVerb`, `shown_record::*`, `compaction::{Reading, Compaction, Rung}` and `memories::{ReadMemories, Held, whole}` move down to the crate of their lowest user. |
-| C8 | Ids defined high and named low: `ConversationId`, `ProposalId`, `topics::{target, targets}`, `Renderable`, `WRITES_AS`, `SALT_BYTES`, `card::{bytes, capitalised}`, `DrivePath(Error)`, `RepoName`/`RepoPath`/`Rev`, `coding::Report`, `words::Words`, `Erasure` | 28 | Each moves to `base`, so `reference` can parse every id it prints. `stream::Held` moves to `lines`. `acts::named` moves to `erasure`. |
+| C4 | `connect::Failure` ↔ `capability::Limited` ↔ `health`, used by mail, plugin and drive | 27 | Done in #405: the `health` module; mail fails with `mail::fault::Fault`; `Lacking` is mail's. |
+| C5 | `secretary/tap::Tap` is used by `mail/oauth` (`Consent::given_by_tap`) and by digest | 3 | Done in #421: `Tap`, `Seat`, `Admitted` and the CSRF triple are `signatures`'; `performs` is `inbox::sending`'s. |
+| C6 | `secretary/store` (`Entry`, `Proposal`) ↔ `acts`/`inbox`/`changes`/`responded` | 36 | Done in #430. `Proposal`, `Reasons`, `Draft` and `Forward` (with `Style`) move to `inbox` as `secretary/proposal`. The writers of an `Entry` in `acts.rs` move to `secretary/act_lines.rs`, in `lines` with the store's `append` (C7). `store::stamp` moves beside `Stamp`; `act_vocabulary.rs` (only `SIGNATURES`) is `inbox`'s; `Daily` moved to `base` in C8. `diff.rs` (`changes` names `diff::shown`) is `inbox`'s, and `agent/priced.rs` (`changes` names `Priced`) is the top module `priced`, in `todo`. |
+| C7 | `secretary/mod.rs` is both the store's operations (`read`, `append`, `list`, `start`) and the turn; and `conversations` ↔ `lines` (the store names `LineEvent`, the lines name `Entry`, `Stored` and `Conversations`) | 22 | Corrected on #430 (option b). `conversations` is an entry and its fold (`store/*`, `turn_shape`, `outcome`, `queue`, `taint`, `tool_name`, and nothing that names `LineEvent`). `lines` holds the store: `conversations.rs` with the operations (`read`, `start`, `list`, `append`, `read_or_open_default`), `conversation_json.rs`, `transcript`, `line_*`, `held_*`, `daily.rs` and `act_lines.rs`; every edge points from `lines` down. `writes_as()` was `transcript::writer()`. `SecretaryVerb` stays in `secretary` (`verbs!` builds it from the verb structs); its low users (`tool_name`, `taint`, `targets`, `caused`, and `store/stored.rs` through `Effect`) need each verb's powers, not only its name, which the C7 pull request's comment proposes to settle. `Bound` and the cards' `propose` are the cards ↔ secretary cycle below. |
+| C8 | Ids defined high and named low | 28 | Done in #388: each moved to the lowest crate that names it (`conversation_id`, `topic_target`, `writer`, `spelling`, `drive_path`, `repo_ids`, `coding_report`, `answer`). |
 | C9 | `deployment` and `settings` name `coding::{Coding, RoutineId, ROUTINE_TOKEN}`, and `coding` names the secretary's words | 4 | Those three move to `connect`. The rest of `coding` (the Task card) goes to `inbox`. |
-| C10 | `held_value`/`file_read` ↔ `mail` (`MailHeader`, `clip`, `MAX_ATTACHMENT_CHARS`, `send::Attachment`) | 6 | These four move to `held`, the parts of a message that a held value points at. |
+| C10 | `held_value`/`file_read` ↔ `mail` | 6 | Done in #388: `message_part`. |
 
-With these moves applied, the graph over the cut below has **no edge that points up**.
+With these moves applied, the graph over the cut below has **no edge that points up**, except
+these, found while doing C6 and C7, each named with its proposed move in the C7 pull request:
+
+- **cards ↔ secretary.** `secretary` names `filed.rs` (`Filing`, `file`, `TriageCards`, `Carding`,
+  `triage_card`) and `afresh::Request`; `cards` names `secretary`'s `Bound`, `WRITES_AS` and
+  `verbs::propose`, and `digest`'s `memories.rs` names `filed.rs`.
+- **Re-exports hide edges.** `capability/mod.rs` re-exports every port, so a path such as
+  `crate::capability::Turn` reads as `base` while `Turn` is `capability/model.rs`'s; low
+  modules name `Turn` and `ModelSessions` this way. C3 must move what the low modules use.
 
 ## The crates, bottom up
 
@@ -66,14 +74,16 @@ dependencies. Every figure is in thousands of tokens.
 | 12 | `google` | Google's sign-in and calendar as a source. | 32 | 12.9 | 4 | 213 / 287 | 2 |
 | 13 | `connect` | The deployment's declared connections and settings, their secrets and their checks. | 48 | 17.7 | 8 | 246 / 363 | 7 |
 | 14 | `inbox` | The machine that only climbs: proposals, acts, taps and phases. | 80 | 28.3 | 11 | 299 / 460 | 10 |
-| 15 | `conversations` | The conversation store: entries, ids, queues, searches and taint. | 56 | 26.7 | 10 | 271 / 427 | 10 |
-| 16 | `lines` | A conversation's lines as stored and replicated: events, shapes, transcripts and held replicas. | 81 | 22.4 | 9 | 299 / 425 | 10 |
+| 15 | `conversations` | A conversation's entries and their fold: ids, queues, searches and taint. | 56 | 19.8† | 10 | 271 / 427 | 10 |
+| 16 | `lines` | The conversation store: its operations, its lines as stored and replicated, shapes, transcripts and held replicas. | 81 | 28.0† | 9 | 299 / 425 | 10 |
 | 17 | `topics` | The readings of a conversation that the browser shares: topics, readings and the stream. | 39 | 11.0 | 12 | 265 / 447 | 6 |
 | 18 | `digest` | A conversation compacted into a digest within its budget, and the memories it recalls. | 68 | 22.9 | 9 | 294 / 412 | 5 |
 | 19 | `cards` | The cards that the box files on its own: setup, failures, coding sessions and notifications. | 65 | 18.0 | 13 | 319 / 489 | 14 |
 | 20 | `secretary` | One turn of the secretary or the triage agent: its verbs, surface, sweep and review, over the capability records. | 170 | 30.3 | 19 | 470 / **699** | 14 |
 | 21 | `api` | The routes, the gate and the wire that the browser and the server share. | 115 | 26.1 | 18 | 446 / **652** | 20 |
 | 22 | `server` | cli's `serve` (115k): the axum shell that answers the routes. | 115 | — | ~20 | ≥ 414 / — | — |
+
+† Measured after C7 (#430's decision) at `d2615b1`, every `pub` item of the cut counted (an upper bound of the measure above); the same count gives 21.9 and 25.0 for the two rows before the C7 moves.
 
 Churn is highest at the top (cards and secretary 14, api 20). Among crates 1–12, only todo (12)
 changes that often. record, signatures, held, memory, health, triage and google (2–3 commits each) are
@@ -90,7 +100,7 @@ crate names. PR 1 narrows the rest. The last column names the main exported type
 | record | decoration, record, todo | `TodoEvent`, `Record`, `MarkupSource` |
 | store | replica/\*, snapshot, store/\* | `Prodrome`, `Reads`, `Log`, `Doc`, `StoreError`, `Objects`, `Frontier` |
 | signatures | believed, chain_set, devices, epoch, signatures/\*, sync; `Tap` | `Trust`, `Enrolment`, `ChainSet`, `Tap` |
-| todo | authoring, capability/{render, render_cache}, decisions/\*, reading, release, rendering, template, todos, verb, view | `Authored`, `Fulfillment`, `Decisions`, `Released` |
+| todo | authoring, capability/{render, render_cache}, decisions/\*, priced, reading, release, rendering, template, todos, verb, view | `Authored`, `Fulfillment`, `Decisions`, `Released` |
 | held | attachment, capability/{pdf_text, upload_index}, enclosed, excerpt, file_read, for_model, held_file, held_value, leak, redact, s/{attached, attachment_source, upload_standing}, upload, vault | `HeldFile`, `AttachmentId`, `Redacted`, `Enclosure` |
 | memory | s/{carried, erasure, fact_life, key_ring, line_words, locked_text, memory, memory_event, opened, provenance, salted_text, scrubbed_under, slots, texts, two_phase, words} | `Words`, `Fact`, `KeyName`, `Erasure` |
 | mail | capability/{mail_sync, mailbox}, mail, mail/{account, account_email, address, cache, declared, dedup_key, folders, grants, hash_prefix, idle, imap, mailroom, oauth, outbox, puller, removal, send, sync_now, transport, verbs} | `MailMessage`, `MailAccount`, `EmailAddress`, `Consent`, `mail::Fault` |
@@ -99,12 +109,12 @@ crate names. PR 1 narrows the rest. The last column names the main exported type
 | services | capability/{drive, repositories, repository, usage, weather, web}, drive, plugin, plugin/{bundle_path, fetch, item, manifest, run, url}, repos, usage, weather, web | `DrivePath`, `RepoName`, `Manifest`, `Allowance` |
 | google | calendar/\*, capability/calendar, google/\* | `Occurrence`, `Scope`, `Held` |
 | connect | capability/secrets, conformance, connect and its other submodules, deployment, settings (but not overview) | `Connection`, `Standing`, `Secrets`, `Settable` |
-| inbox | coding, s/{acts, card, changes, decide, inbox, inbox_event, inbox_json, inbox_reading, inbox_registers, own_round, phase, proposer, responded, sending, sign_in, stamp, tap, tapped}; `Proposal`, `Reasons`, `Style` | `Act`, `Fold`, `ProposalId`, `InboxEvent`, `Proposal` |
-| conversations | s/{about, act_vocabulary, answer, conversation_json, conversations, daily, found, outcome, queue, search, store, taint, tool_name, turn_shape} | `Entry`, `Stored`, `Kind`, `ConversationState` |
-| lines | s/{held_lines, held_replica, line_event, line_form, line_shape, object_stores, outline, outlines, rescrub, step, transcript} | `LineEvent`, `HeldReplica`, `LineReplica` |
+| inbox | coding, s/{act_vocabulary, acts, card, diff, proposal, changes, decide, inbox, inbox_event, inbox_json, inbox_reading, inbox_registers, own_round, phase, proposer, responded, sending, sign_in, stamp, tap, tapped}; `Proposal`, `Reasons`, `Style` | `Act`, `Fold`, `ProposalId`, `InboxEvent`, `Proposal` |
+| conversations | s/{about, answer, found, outcome, queue, search, store, taint, tool_name, turn_shape} | `Entry`, `Stored`, `Kind`, `ConversationState` |
+| lines | s/{act_lines, conversation_json, conversations, daily, held_lines, held_replica, holder, line_event, line_form, line_shape, object_stores, outline, outlines, rescrub, step, targets, transcript} | `Conversations`, `LineEvent`, `HeldReplica`, `LineReplica` |
 | topics | s/{readings, rules, stream, title, topics} | `Topic`, `Target`, `Dress`, `Window` |
 | digest | s/{caused, compact_\*, compaction, digest\*, indexed_tree, memories, recollection, shown_record, told} | `Digest`, `DigestEvent`, `Memories` |
-| cards | capability/notify, notify, s/{afresh, bootstrap, build, coding, connections, diff, done_elsewhere, failing, filed, fixes, google_sign_in, mail_health, merged_patches, noticed, request, token_expiry}, settings/overview | `Filing`, `Noticed`, `Notify` |
+| cards | capability/notify, notify, s/{afresh, bootstrap, build, coding, connections, done_elsewhere, failing, filed, fixes, google_sign_in, mail_health, merged_patches, noticed, request, token_expiry, undo}, settings/overview | `Filing`, `Noticed`, `Notify` |
 | secretary | agent, capability/{agent, answering, answers, briefings, compact, model, secretary}, conversation, s/{briefs, call, file_query, file_search, heartbeat, live_shape, opening, read_holders, review, surface, sweep, verb_answer, verbs}, secretary (mod) | `Agent`, `Secretary`, `Model` (with their `compile_fail` tests) |
 | api | capability/server, clienterror, gate, portal, query, routes, s/routes, wire/\* | the route table, 75 wire types |
 
@@ -139,7 +149,7 @@ references that the PR rewrites, as measured.
 
 | PR | Change | Size |
 |---|---|---|
-| 1 | `pub` → `pub(crate)` on the 664 items that no file outside their future crate names (57k off core's USE: secretary 8.1k/121, topics+lines 6.4k/80, digest 5.3k/51, todo 5.2k/42, the rest 1–3k each). Check and delete the 6 items that nothing names (`view::RICH_FIELDS`, `authoring::decision_for`, `digest::summary_taint`, `held_lines::of_keys`, `stored::index_of`, `junk::seed_status`). Find the items by grepping each name in the files outside its crate's modules (the cut table), then let `cargo check --workspace --all-targets --features suzatary/fixture` confirm. Run `scripts/context.sh record`. | ~700 lines |
+| 1 | Narrow the `pub` surface. Done in #372. | ~700 lines |
 
 **Stage 2: break the cycles inside core.** One PR per row of the cycles table. Files and items
 move to their future crate's modules, and no crate exists yet.

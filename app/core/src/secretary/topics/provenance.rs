@@ -17,7 +17,7 @@ pub enum Provenance {
 impl Provenance {
     #[must_use]
     pub fn of(actor: &Actor) -> Self {
-        if *actor == crate::secretary::writes_as() {
+        if *actor == crate::secretary::transcript::writer() {
             Self::Inferred
         } else {
             Self::Owner

@@ -128,14 +128,15 @@ pub mod words;
 
 use serde_json::{Map, Value};
 
-use crate::capability::{Clock, Datetime, Halt, Model, Secretary, Turn};
+use crate::capability::{Clock, Halt, Secretary, Turn};
 use crate::chains::ChainPolicy;
 use crate::conversation::ask::Ask;
 use crate::conversation::round::{Round, Rules, Sink, Transcript};
 use crate::conversation_id::ConversationId;
 use crate::deployment::Deployment;
 use crate::reference::{ProposalRef, Reference, TodoRef};
-use crate::refusal::{Refusal, Status, shown};
+use crate::refusal::{Refusal, shown};
+use crate::secretary::conversations::{append, read};
 use crate::verb::Request;
 pub use call::Call;
 pub use store::{ConversationState, state};
@@ -147,11 +148,6 @@ use verb_answer::VerbAnswer;
 
 /// Who a chain write from this surface is by, fixed here so no call's arguments can change it.
 pub const WRITES_AS: crate::writer::Writer = crate::writer::Writer::Assistant;
-
-/// [`WRITES_AS`] as the actor an inbox event names.
-pub(crate) fn writes_as() -> prodrome_core::event::Actor {
-    prodrome_core::event::Actor::new(WRITES_AS.actor()).expect("assistant is an actor")
-}
 
 /// How many rounds one `say` may take; at the limit the transcript says the rounds ran out.
 pub const MAX_ROUNDS: usize = 8;
@@ -803,96 +799,6 @@ fn rewound(
             by: by.as_str().to_owned(),
         },
     )
-}
-
-/// Open a conversation with its first line; an empty `title` leaves it for [`title::owed`].
-///
-/// # Errors
-/// The store's, and a name already taken.
-pub fn start(
-    conversations: crate::secretary::conversations::Conversations<'_>,
-    model: &dyn Model,
-    id: &ConversationId,
-    title: &str,
-    kind: store::Kind,
-    at: Datetime,
-) -> Result<Stored, Refusal> {
-    let opened = Entry::Opened {
-        at,
-        title: crate::secretary::words::Words::kept(title.to_owned()),
-        model: model.name(),
-        kind,
-    };
-    transcript::start(conversations, id, &opened)?;
-    read(conversations, id)
-}
-
-/// One conversation, folded.
-///
-/// # Errors
-/// [`Refusal::not_found`] for an unknown name, [`Refusal::internal`] for an unreadable file.
-pub fn read(
-    conversations: crate::secretary::conversations::Conversations<'_>,
-    id: &ConversationId,
-) -> Result<Stored, Refusal> {
-    Ok(transcript::read(conversations, id)?.stored().clone())
-}
-
-/// [`read`], opening [`DEFAULT`](crate::conversation_id::DEFAULT) the first time anything asks
-/// for it, and no other id.
-///
-/// # Errors
-/// [`read`]'s own, once the default exists or `id` is any other name, and the store's.
-pub fn read_or_open_default(
-    conversations: crate::secretary::conversations::Conversations<'_>,
-    model: &dyn Model,
-    id: &ConversationId,
-    at: Datetime,
-) -> Result<Stored, Refusal> {
-    if id.as_str() != crate::conversation_id::DEFAULT.as_str() {
-        return read(conversations, id);
-    }
-    match read(conversations, id) {
-        Err(refusal) if refusal.status() == Status::NotFound => {
-            match start(
-                conversations,
-                model,
-                id,
-                "Secretary",
-                store::Kind::Default,
-                at,
-            ) {
-                Err(taken) if taken.status() == Status::Conflict => read(conversations, id),
-                opened => opened,
-            }
-        }
-        other => other,
-    }
-}
-
-/// Every conversation, newest first, each folded to its heading fields.
-///
-/// # Errors
-/// The store's own.
-pub fn list(
-    conversations: crate::secretary::conversations::Conversations<'_>,
-) -> Result<Vec<Stored>, Refusal> {
-    transcript::each(conversations)?
-        .into_iter()
-        .map(|(_, read)| {
-            read.map(|read| read.stored().clone())
-                .map_err(|failed| Refusal::internal(failed.to_string()))
-        })
-        .collect()
-}
-
-fn append(
-    conversations: crate::secretary::conversations::Conversations<'_>,
-    id: &ConversationId,
-    entry: &Entry,
-) -> Result<(), Refusal> {
-    transcript::push(conversations, id, entry)
-        .map_err(|failed| Refusal::internal(failed.to_string()))
 }
 
 #[cfg(test)]

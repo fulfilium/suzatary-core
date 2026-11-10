@@ -18,7 +18,7 @@ fn the_default_opens_once_and_a_replica_reads_it() {
     );
     let caps = fakes.server();
     let open = || {
-        suzatary_core::secretary::read_or_open_default(
+        suzatary_core::secretary::conversations::read_or_open_default(
             caps.secretary.conversations,
             caps.secretary.model,
             &suzatary_core::conversation_id::DEFAULT,

@@ -40,7 +40,7 @@ impl Verb for UploadRead {
             .trim()
             .parse()
             .map_err(|_| Refusal::bad_request("file is a `files` row's id: 64 hex digits"))?;
-        let conversations = crate::secretary::list(call.caps.conversations)?;
+        let conversations = crate::secretary::conversations::list(call.caps.conversations)?;
         let named = file_search::named(&conversations);
         if !named.contains(&id) {
             return Err(Refusal::not_found(format!(

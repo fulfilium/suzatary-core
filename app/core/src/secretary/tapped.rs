@@ -130,7 +130,13 @@ mod tests {
             },
             price: inbox::Price::unpriced(),
         };
-        let id = inbox::ask(&store, asked, &crate::secretary::writes_as(), now()).expect("filed");
+        let id = inbox::ask(
+            &store,
+            asked,
+            &crate::secretary::transcript::writer(),
+            now(),
+        )
+        .expect("filed");
         let rule = Tapped { now: now() };
         let standing = |store: &crate::store::InMemory<InboxEvent>| {
             inbox::fold(store)

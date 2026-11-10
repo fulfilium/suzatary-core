@@ -13,6 +13,7 @@ use crate::secretary::proposal::{Proposal, Reasons};
 use crate::secretary::proposer::Proposer;
 use crate::secretary::responded::Withdrawal;
 use crate::secretary::store::Entry;
+use crate::secretary::{conversations, transcript};
 use crate::store::Prodrome;
 
 /// Why a stale card is withdrawn.
@@ -171,10 +172,12 @@ impl Owed {
             filed::opened(conversations, conversation, "Setup", &Proposer::Box, at)?;
             let card = Reference::Proposal(ProposalRef {
                 conversation: conversation.clone(),
-                index: super::read(conversations, conversation)?.proposals.len(),
+                index: conversations::read(conversations, conversation)?
+                    .proposals
+                    .len(),
             });
             let why = crate::spelling::said(&noticed.why);
-            super::append(
+            conversations::append(
                 conversations,
                 conversation,
                 &Entry::noted(at, why.clone(), vec![card.clone()]),
@@ -215,7 +218,7 @@ impl Owed {
             inbox::withdraw(
                 inbox,
                 &id,
-                &super::writes_as(),
+                &transcript::writer(),
                 at,
                 Withdrawal::NoLongerNeeded {
                     why: WITHDRAWN.to_owned(),
@@ -517,8 +520,7 @@ mod tests {
             },
             price: inbox::Price::unpriced(),
         };
-        let theirs =
-            inbox::ask(&inbox_store, asked, &super::super::writes_as(), at(0)).expect("filed");
+        let theirs = inbox::ask(&inbox_store, asked, &transcript::writer(), at(0)).expect("filed");
         let filed = Owed::default()
             .file(conversations.conversations(), &inbox_store, at(1))
             .expect("filed");
@@ -548,7 +550,7 @@ mod tests {
                 },
                 price: inbox::Price::unpriced(),
             };
-            inbox::ask(&inbox_store, asked, &super::super::writes_as(), at(0)).expect("filed")
+            inbox::ask(&inbox_store, asked, &transcript::writer(), at(0)).expect("filed")
         };
         let build = boxs(
             "build",
@@ -603,12 +605,12 @@ mod tests {
             },
             price: inbox::Price::unpriced(),
         };
-        inbox::ask(inbox_store, asked, &super::super::writes_as(), at(minute)).expect("filed")
+        inbox::ask(inbox_store, asked, &transcript::writer(), at(minute)).expect("filed")
     }
 
     /// The Setup conversation's turns, none before it is opened.
     fn said(conversations: &crate::secretary::conversations::InMemory) -> usize {
-        super::super::read(
+        conversations::read(
             conversations.conversations(),
             &crate::conversation_id::SETUP,
         )
@@ -647,7 +649,7 @@ mod tests {
         inbox::dismiss(
             &inbox_store,
             &theirs,
-            &super::super::writes_as(),
+            &transcript::writer(),
             at(4),
             "not now",
         )

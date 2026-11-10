@@ -33,7 +33,7 @@ impl Verb for Recall {
         let needle =
             Needle::new(query).map_err(|refused| Refusal::bad_request(refused.to_string()))?;
         let limit = search::recall_limit(args.limit);
-        let others: Vec<_> = secretary::list(call.caps.conversations)?
+        let others: Vec<_> = secretary::conversations::list(call.caps.conversations)?
             .into_iter()
             .filter(|stored| &stored.id != call.conversation)
             .collect();

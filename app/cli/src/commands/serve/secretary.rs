@@ -352,7 +352,10 @@ pub fn block(call: &Call<Reader, Block, ()>) -> Result<Json<wire::BlockRender>, 
     let source = match call.state.workers.closed(id, sha) {
         Some(source) => Some(source),
         None => readings::block_named(
-            &suzatary_core::secretary::read(call.chain.caps.secretary.conversations, id)?,
+            &suzatary_core::secretary::conversations::read(
+                call.chain.caps.secretary.conversations,
+                id,
+            )?,
             sha,
         ),
     };

@@ -9,11 +9,11 @@ use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 
-use crate::agent::priced::{PRICE_SPELLINGS, Priced};
 use crate::authoring::{self, NewTodo};
 use crate::believed::{Believed, Preview};
 use crate::capability::{Datetime, Typeset};
 use crate::chains::ChainPolicy;
+use crate::priced::{PRICE_SPELLINGS, Priced};
 use crate::record::{Node, Source, TodoEvent};
 use crate::refusal::{Refusal, shown as quoted};
 use crate::todo::{Patch, Price, TodoFields, TodoPatch};

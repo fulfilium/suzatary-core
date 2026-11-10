@@ -55,7 +55,7 @@ fn say_in(fakes: &Fakes, id: &ConversationId, turns: Vec<Turn>) {
     let at = |minute: u32| {
         prodrome_core::literal::Datetime::new(2026, 10, 24, 9, minute, 0, 0).expect("an instant")
     };
-    if suzatary_core::secretary::read(conversations, id).is_err() {
+    if suzatary_core::secretary::conversations::read(conversations, id).is_err() {
         suzatary_core::secretary::transcript::start(
             conversations,
             id,
@@ -209,7 +209,8 @@ fn a_card_asked_in_a_topic_cites_the_topics_round() {
     .expect("filed");
     assert_eq!(filed["proposed"], 0, "{filed}");
     let caps = fakes.secretary();
-    let stored = suzatary_core::secretary::read(caps.conversations, &topic).expect("reads");
+    let stored =
+        suzatary_core::secretary::conversations::read(caps.conversations, &topic).expect("reads");
     let inbox = suzatary_core::secretary::inbox::fold(caps.inbox).expect("folds");
     let standing = stored.standing(0, &inbox).expect("standing");
     let sources: Vec<String> = standing

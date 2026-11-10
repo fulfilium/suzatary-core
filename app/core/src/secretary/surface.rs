@@ -133,7 +133,8 @@ impl Holds for SecretarySurface {
     fn write(call: &Call<'_>, act: Act, carded: IfCarded) -> Result<Value, Refusal> {
         let changeset = Changeset::new(call.chain.name.as_str(), vec![act])
             .map_err(|failed| Refusal::internal(failed.to_string()))?;
-        let round = super::read(call.caps.conversations, call.conversation)?;
+        let round =
+            crate::secretary::conversations::read(call.caps.conversations, call.conversation)?;
         match Gate::of(Binding::Writes, &round) {
             Gate::Binds(_) => applied(call, &changeset),
             Gate::Card => {

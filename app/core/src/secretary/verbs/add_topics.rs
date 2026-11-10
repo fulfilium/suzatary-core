@@ -72,7 +72,7 @@ pub(super) enum Aim {
 /// Plans `revision` on its target under the store's lock, writes it, and answers the target's
 /// topics after.
 pub(super) fn revise(call: &Call<'_>, aim: Aim, revision: &Revision) -> Result<Value, Refusal> {
-    let stored = crate::secretary::read(call.caps.conversations, call.conversation)?;
+    let stored = crate::secretary::conversations::read(call.caps.conversations, call.conversation)?;
     let target = match aim {
         Aim::Answering(on) => answering(&stored, on)?,
         Aim::At(text) => text

@@ -128,8 +128,8 @@ fn the_cli_dismiss_cancels_the_proposal_the_route_would() {
     };
 
     dismiss();
-    let stored =
-        suzatary_core::secretary::read(conversations.conversations(), &id).expect("it reads");
+    let stored = suzatary_core::secretary::conversations::read(conversations.conversations(), &id)
+        .expect("it reads");
     let fold = suzatary_core::secretary::inbox::fold(&inbox).expect("the inbox reads");
     let standing = stored.standing(0, &fold).expect("proposal 0");
     assert!(
@@ -142,8 +142,8 @@ fn the_cli_dismiss_cancels_the_proposal_the_route_would() {
     let turns = stored.turns.len();
 
     dismiss();
-    let again =
-        suzatary_core::secretary::read(conversations.conversations(), &id).expect("it reads");
+    let again = suzatary_core::secretary::conversations::read(conversations.conversations(), &id)
+        .expect("it reads");
     assert_eq!(
         again.turns.len(),
         turns,

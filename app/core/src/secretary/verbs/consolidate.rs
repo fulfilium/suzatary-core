@@ -57,7 +57,7 @@ impl Verb for Consolidate {
         let replaced: Vec<u64> = from.ids().iter().map(|id| id.0).collect();
         let round = match Gate::of(
             Binding::Remembers,
-            &crate::secretary::read(call.caps.conversations, call.conversation)?,
+            &crate::secretary::conversations::read(call.caps.conversations, call.conversation)?,
         ) {
             Gate::Refused(why) => return Err(Refusal::forbidden(why)),
             Gate::Binds(round) => round,

@@ -804,8 +804,8 @@ fn a_refused_session_starts_again_in_a_fresh_conversation() {
         now["state"] == "idle" && !now["proposals"].as_array().is_none_or(Vec::is_empty)
     });
     only_the_request_crossed(
-        &suzatary_core::secretary::read(conversations(), &old).expect("reads"),
-        &suzatary_core::secretary::read(conversations(), &fresh).expect("reads"),
+        &suzatary_core::secretary::conversations::read(conversations(), &old).expect("reads"),
+        &suzatary_core::secretary::conversations::read(conversations(), &fresh).expect("reads"),
     );
     let proposal = &conversation(base, fresh.as_str())["proposals"][0];
     assert_eq!(proposal["act"]["kind"], "coding_session", "{proposal}");

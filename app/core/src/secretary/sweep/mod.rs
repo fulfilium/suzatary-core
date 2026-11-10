@@ -3,6 +3,7 @@
 
 pub mod candidates;
 
+use crate::secretary::conversations;
 use serde_json::{Map, Value};
 
 use super::changes::Act;
@@ -146,7 +147,7 @@ pub fn sweep(
     let already = round.open(caps)?.proposals.len();
 
     let text = user_turn(deployment, settables, chains, &id, &gathered);
-    super::append(
+    conversations::append(
         caps.conversations,
         &id,
         &Entry::asked_by_the_box(caps.clock.now(), Daily::Sweep.into(), text, Vec::new()),
@@ -183,7 +184,7 @@ pub fn sweep(
         answered.ending.ran()?;
     }
 
-    let stored = super::read(caps.conversations, &id)?;
+    let stored = conversations::read(caps.conversations, &id)?;
     let proposed = stored
         .lines(&super::inbox::fold(caps.inbox)?)
         // The sweep files into this inbox before it reads, so every line it just filed is placed.

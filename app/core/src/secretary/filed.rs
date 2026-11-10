@@ -8,6 +8,7 @@ use crate::reference::ProposalRef;
 use crate::refusal::Refusal;
 use crate::secretary::acts::Act;
 use crate::secretary::changes::Changeset;
+use crate::secretary::conversations;
 use crate::secretary::inbox::{self, ProposalId};
 use crate::secretary::inbox_event::InboxEvent;
 use crate::secretary::inbox_reading::Reading;
@@ -57,10 +58,9 @@ pub struct Filing<'a> {
 /// File `filing` at `at`: the inbox asked first ([`inbox::ask`], which writes nothing for an act
 /// it holds), then a line naming the object, unless the conversation already draws it.
 ///
-/// Under the inbox's one hold, taken before the conversations' as the tap takes them, so the
-/// card's index is read and its line written with no other filing between, and a coding
-/// session serving a todo is held to [`crate::secretary::build::admitted`] with no other filing
-/// between, whoever files it, each todo read open in `chains`.
+/// Under the inbox's hold, taken before the conversations' as the tap takes them, so no other
+/// filing comes between the card's index and its line, or between a coding session and
+/// [`crate::secretary::build::admitted`].
 ///
 /// # Errors
 /// [`crate::secretary::build::admitted`]'s, a conversation that cannot be read, and the
@@ -104,7 +104,7 @@ pub fn file_held(
             todo,
         )?;
     }
-    let stored = super::read(conversations, conversation)?;
+    let stored = conversations::read(conversations, conversation)?;
     let index = stored.proposals.len();
     let asked = inbox::Asked {
         proposer,
@@ -116,7 +116,7 @@ pub fn file_held(
         },
         price: serves.map_or_else(inbox::Price::unpriced, inbox::Price::Serves),
     };
-    let object = inbox::ask_held(inbox, asked, &super::writes_as(), at)?;
+    let object = inbox::ask_held(inbox, asked, &transcript::writer(), at)?;
     if let Some(already) = stored
         .proposals
         .iter()
@@ -242,12 +242,9 @@ impl<'a> TriageCards<'a> {
         })
     }
 
-    /// File `act` as the triage agent's, at `at`. A card is known by its acts' requests
-    /// ([`crate::secretary::changes::Act::request`]), so a write the open card about its todo already asks for, whatever its
-    /// price now reads, files nothing; and when an open card asks for other acts on the same chain
-    /// and todo, the new card holds those acts and then this write's new ones and replaces it, so
-    /// the Inbox holds one card per todo. `check` builds the whole changeset against the chain
-    /// first, so a card the tap would refuse is refused now.
+    /// File `act` as the triage agent's, at `at`, keeping one card per todo: a write the open card
+    /// already asks for files nothing, and other acts on the same todo join it in a card that
+    /// replaces it. `check` refuses now a card the tap would refuse.
     ///
     /// # Errors
     /// [`Refusal::conflict`] for a write an answered card already asked for on the same sources,
@@ -318,7 +315,7 @@ impl<'a> TriageCards<'a> {
             inbox::withdraw_held(
                 self.inbox,
                 old,
-                &super::writes_as(),
+                &transcript::writer(),
                 at,
                 crate::secretary::responded::Withdrawal::Superseded,
             )?;
@@ -628,7 +625,7 @@ mod tests {
         inbox::withdraw(
             &inbox,
             &id,
-            &super::super::writes_as(),
+            &transcript::writer(),
             at(1),
             crate::secretary::responded::Withdrawal::NoLongerNeeded {
                 why: "a repricing with no new fact".to_owned(),

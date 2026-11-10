@@ -23,7 +23,7 @@ fn deployment() -> suzatary_core::deployment::Deployment {
 
 /// Open the conversation with one person turn already on it.
 fn opened_with_a_person_turn(caps: &Fakes) {
-    suzatary_core::secretary::start(
+    suzatary_core::secretary::conversations::start(
         caps.conversations.conversations(),
         &caps.model,
         &id(),
@@ -145,8 +145,9 @@ fn a_stored_session_resumes_with_exactly_the_delta() {
     )
     .expect("the session line appends");
 
-    let before = suzatary_core::secretary::read(caps.conversations.conversations(), &id())
-        .expect("the conversation reads");
+    let before =
+        suzatary_core::secretary::conversations::read(caps.conversations.conversations(), &id())
+            .expect("the conversation reads");
     let expected_delta: Vec<Turn> = queue::delta(&before)
         .iter()
         .map(|(_, said)| said.turn.clone())
@@ -844,7 +845,7 @@ impl suzatary_core::capability::Model for Named {
 #[test]
 fn a_round_picks_only_when_something_waits_and_by_the_order_then() {
     let caps = Fakes::new("pick-per-round").model(FakeModel::saying(["{\"say\": \"hi\"}"]));
-    suzatary_core::secretary::start(
+    suzatary_core::secretary::conversations::start(
         caps.conversations.conversations(),
         &caps.model,
         &id(),
@@ -993,7 +994,7 @@ fn answered_once(
 /// A conversation whose first round read a mail, then 27 rounds of chat and two turns waiting:
 /// sixty turns, the whole of the window an opening sends.
 fn a_full_window_that_read_a_mail(caps: &Fakes) {
-    suzatary_core::secretary::start(
+    suzatary_core::secretary::conversations::start(
         caps.conversations.conversations(),
         &caps.model,
         &id(),
@@ -1045,8 +1046,9 @@ fn a_turn_said_while_a_session_opens_moves_nothing_it_was_sent() {
         .gated(gate.clone()),
     );
     a_full_window_that_read_a_mail(&caps);
-    let before = suzatary_core::secretary::read(caps.conversations.conversations(), &id())
-        .expect("it reads");
+    let before =
+        suzatary_core::secretary::conversations::read(caps.conversations.conversations(), &id())
+            .expect("it reads");
     assert_eq!(before.turns.len(), queue::MODEL_WINDOW);
     let sent = queue::for_model(&before)
         .first()
@@ -1416,7 +1418,7 @@ proptest::proptest! {
     ) {
         let caps = Fakes::new("session-law");
         let held = Simulated::default();
-        suzatary_core::secretary::start(
+        suzatary_core::secretary::conversations::start(
             caps.conversations.conversations(),
             &held,
             &id(),
@@ -1432,7 +1434,7 @@ proptest::proptest! {
             caps: caps.secretary(),
             policy: &policy,
         }];
-        let read = || suzatary_core::secretary::read(caps.conversations.conversations(), &id()).expect("reads");
+        let read = || suzatary_core::secretary::conversations::read(caps.conversations.conversations(), &id()).expect("reads");
         // Whether the script leaves a session kept, read from the script, never from the fold: a
         // held round keeps one, as does a lost round with none to lose; a provider's round, a
         // lost session that will not reopen and a round the box ends leave none.
@@ -1514,7 +1516,7 @@ proptest::proptest! {
 fn a_round_whose_opens_keep_failing_is_answered_statelessly_to_its_end() {
     let caps = Fakes::new("session-refusing");
     let held = Simulated::default();
-    suzatary_core::secretary::start(
+    suzatary_core::secretary::conversations::start(
         caps.conversations.conversations(),
         &held,
         &id(),

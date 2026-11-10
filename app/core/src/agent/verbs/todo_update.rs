@@ -6,7 +6,7 @@ use serde_json::Value;
 
 use super::Written;
 use crate::agent::Holds;
-use crate::agent::priced::Priced;
+use crate::priced::Priced;
 use crate::refusal::Refusal;
 use crate::secretary::changes::Act;
 use crate::todo::TodoPatch;

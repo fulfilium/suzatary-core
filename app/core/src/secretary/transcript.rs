@@ -1,8 +1,6 @@
-//! The conversations as one prodrome at the [`LineEvent`] schema, keyed by conversation: each
-//! line a write to its conversation's transcript, resting on the lines its writer held, so the
-//! lines are causally ordered and two writers that did not see each other make two heads. Each
-//! line is read with its words opened by the key store; a slot whose key an erasure line of the
-//! same conversation names reads as erased, and one whose key is not held reads as missing.
+//! The conversations as one prodrome at the [`LineEvent`] schema, keyed by conversation, each line
+//! resting on the lines its writer held. A slot whose key an erasure names reads as erased, and one
+//! whose key is not held reads as missing.
 //!
 //! [`Transcript`] is one conversation's lines in that order, ties broken by the instant and then
 //! the name. [`Transcript::stored`], [`Transcript::owed`] and [`Stored::lines`] are reads of it.
@@ -190,10 +188,8 @@ impl Transcript {
     /// The owed register: every live turn that no live closing turn rests on or is, with its
     /// index; a turn [closes](Stored::closes) when it is an answer with no calls or a stop.
     ///
-    /// For one writer this is [`crate::secretary::queue::delta`]. Where two writers did not see
-    /// each other, a question the answer or the stop did not rest on stays owed, wherever the
-    /// order put it. Since it reads descent and not position, it is the same for every order a
-    /// replica received the lines in, and one write closes a question for good.
+    /// For one writer this is [`crate::secretary::queue::delta`]. It reads descent, not position,
+    /// so it is the same for every order a replica received the lines in.
     #[must_use]
     pub fn owed(&self) -> Vec<(usize, &Said)> {
         let mut settled = vec![false; self.lines.len()];
@@ -1055,7 +1051,8 @@ pub fn erase(
 }
 
 /// The box writes every line; who said one is the line's own `by`.
-pub(crate) fn writer() -> Actor {
+#[must_use]
+pub fn writer() -> Actor {
     Actor::new(crate::writer::Writer::Assistant.actor()).expect("the secretary's actor is a name")
 }
 

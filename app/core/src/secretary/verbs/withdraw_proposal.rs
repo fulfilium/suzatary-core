@@ -46,7 +46,7 @@ impl Verb for WithdrawProposal {
         inbox::withdraw(
             call.caps.inbox,
             &standing.object.id,
-            &secretary::writes_as(),
+            &crate::secretary::transcript::writer(),
             call.caps.clock.now(),
             Withdrawal::NoLongerNeeded { why: why.clone() },
         )?;

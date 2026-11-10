@@ -673,7 +673,7 @@ fn a_coding_session(root: &Path) -> anyhow::Result<()> {
             ),
         ]),
     )?;
-    let stored = suzatary_core::secretary::read(store.conversations(), &id)
+    let stored = suzatary_core::secretary::conversations::read(store.conversations(), &id)
         .map_err(|refusal| anyhow::anyhow!("{}", refusal.message()))?;
     let object = &stored
         .proposals
@@ -1600,8 +1600,9 @@ fn bulk_topics(read: &crate::instance::Instance, count: usize) -> anyhow::Result
     const NAMES: [&str; 8] = [
         "permits", "travel", "taxes", "garden", "health", "family", "school", "car",
     ];
-    let listed = suzatary_core::secretary::list(read.conversation_stores().conversations())
-        .map_err(|refusal| anyhow::anyhow!("{}", refusal.message()))?;
+    let listed =
+        suzatary_core::secretary::conversations::list(read.conversation_stores().conversations())
+            .map_err(|refusal| anyhow::anyhow!("{}", refusal.message()))?;
     if count == 0 {
         return Ok(());
     }

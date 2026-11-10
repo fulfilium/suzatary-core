@@ -129,7 +129,7 @@ async fn transcript_state(state: &State, id: ConversationId) -> ConversationStat
     let caps = state.first.caps;
     blocking(move || {
         Ok::<_, Refusal>(suzatary_core::secretary::state(
-            &suzatary_core::secretary::read(caps.secretary.conversations, &id)?,
+            &suzatary_core::secretary::conversations::read(caps.secretary.conversations, &id)?,
         ))
     })
     .await

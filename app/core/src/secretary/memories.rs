@@ -6,6 +6,7 @@
 //! The non-monotone questions (room under [`MAX_LIVE`], a duplicate, standing ids, the next
 //! number, a card keeping these words) are the writes', asked under the history's hold ([`Held`]).
 
+use crate::secretary::{conversations, transcript};
 use prodrome_core::event::Actor;
 use prodrome_core::literal::Datetime;
 
@@ -298,7 +299,7 @@ impl Held<'_> {
             Replaces::Facts(from) => memory_event::consolidated(
                 consolidating(&history, &standing, from.ids(), fact)?,
                 at,
-                crate::secretary::writes_as(),
+                transcript::writer(),
                 from.ids().clone(),
                 text.clone(),
                 kind,
@@ -471,7 +472,7 @@ impl Held<'_> {
         // The card is its own evidence: the reading it rests on is the box's.
         let card = crate::reference::Reference::Proposal(crate::reference::ProposalRef {
             conversation: conversation.clone(),
-            index: crate::secretary::read(lines, conversation)?.proposals.len(),
+            index: conversations::read(lines, conversation)?.proposals.len(),
         });
         let reasons = crate::secretary::proposal::Reasons::new(
             format!(
@@ -560,15 +561,8 @@ fn remembered(
     kind: Kind,
     said: &Origin,
 ) -> Result<MemoryEvent, Refusal> {
-    memory_event::remembered(
-        id,
-        at,
-        crate::secretary::writes_as(),
-        text,
-        kind,
-        said.clone(),
-    )
-    .map_err(|refused| Refusal::internal(refused.to_string()))
+    memory_event::remembered(id, at, transcript::writer(), text, kind, said.clone())
+        .map_err(|refused| Refusal::internal(refused.to_string()))
 }
 
 /// Decide a remember: the new fact's number, one more than every id and version before it.

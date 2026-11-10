@@ -9,7 +9,7 @@ use crate::secretary::proposal::Proposal;
 use crate::secretary::proposer::Proposer;
 use crate::secretary::responded::Withdrawal;
 use crate::secretary::store::{Decision, Entry, Settle};
-use crate::secretary::{Call, SecretarySurface, transcript, writes_as};
+use crate::secretary::{Call, SecretarySurface, transcript};
 use crate::verb::Verb;
 
 /// Withdraw one of the triage agent's cards, with the reason recorded.
@@ -78,7 +78,7 @@ impl Verb for TriageWithdraw {
         inbox::withdraw_unanswered(
             caps.inbox,
             &object.id,
-            &writes_as(),
+            &transcript::writer(),
             caps.clock.now(),
             Withdrawal::NoLongerNeeded { why: why.clone() },
         )?;

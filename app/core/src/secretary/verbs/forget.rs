@@ -5,7 +5,7 @@ use serde_json::{Value, json};
 use crate::refusal::Refusal;
 use crate::secretary::memory::FactId;
 use crate::secretary::verbs::clean_round;
-use crate::secretary::{self, Call, SecretarySurface};
+use crate::secretary::{Call, SecretarySurface};
 use crate::verb::Verb;
 
 /// Forget a fact, only where remember would write.
@@ -31,7 +31,7 @@ impl Verb for Forget {
         let forgotten = call.caps.memories.forget(
             FactId(u64::try_from(args.id).unwrap_or(u64::MAX)),
             call.caps.clock.now(),
-            &secretary::writes_as(),
+            &crate::secretary::transcript::writer(),
         )?;
         Ok(json!({ "forgotten": forgotten.id.0 }))
     }

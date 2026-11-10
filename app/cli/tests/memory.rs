@@ -457,7 +457,7 @@ fn a_round_the_box_opened_remembers_nothing() {
     ]));
     let deployment = common::deployment([ada()], [(ada(), common::actor("ada"))]);
     let id = suzatary_core::conversation_id::DEFAULT.clone();
-    suzatary_core::secretary::read_or_open_default(
+    suzatary_core::secretary::conversations::read_or_open_default(
         fakes.conversations.conversations(),
         &fakes.model,
         &id,

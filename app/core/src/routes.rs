@@ -3,6 +3,7 @@
 //!
 //! The bounds are the point: a route that cannot name a capability cannot use it.
 
+use crate::secretary::conversations;
 use std::collections::BTreeMap;
 
 use crate::believed::{Believed, records};
@@ -246,7 +247,7 @@ pub fn briefings(
     let saved = briefings
         .all()
         .map_err(|e| Refusal::internal(e.to_string()))?;
-    let mut briefs: Vec<crate::secretary::briefs::Brief> = crate::secretary::list(conversations)?
+    let mut briefs: Vec<crate::secretary::briefs::Brief> = conversations::list(conversations)?
         .iter()
         .flat_map(crate::secretary::briefs::briefs)
         .collect();
@@ -297,7 +298,7 @@ pub fn briefing(
     answers: &dyn Answers,
     day: NaiveDate,
 ) -> Answered<wire::BriefingPayload> {
-    let brief = crate::secretary::list(conversations)?
+    let brief = conversations::list(conversations)?
         .iter()
         .flat_map(crate::secretary::briefs::briefs)
         .filter(|brief| brief.date == day)
@@ -588,14 +589,9 @@ impl Cut {
     pub const PIECE: Cut = Cut::Bytes(1 << 20);
 }
 
-/// `GET /api/stores/<store>/objects?since=<frontier>`: what a replica of `store` lacks,
-/// cut as `cut` says: the objects the frontier `since` names does not reach, parents first,
-/// every head, and how many objects are left after these. No replica writes to the store and no
-/// policy reads it, so its untrusted set is empty, and it locks no words, so it carries no keys.
-///
-/// Every object comes after its parents, so a piece joined to what the caller holds holds the
-/// ancestors of everything in it, and the pieces asked for one after another, each from the
-/// frontier the last named, are together what one answer of the whole would send.
+/// `GET /api/stores/<store>/objects?since=<frontier>`: what a replica of `store` lacks, cut as
+/// `cut` says, parents first, with every head and how many objects are left. The pieces asked for
+/// one after another, each from the frontier the last named, are together one answer of the whole.
 ///
 /// # Errors
 /// The store's own, and the books'.
@@ -1107,10 +1103,8 @@ fn weight(node: &wire::SkeletonNode) -> usize {
 pub const MOST_CONTENT_BYTES: usize = 1 << 20;
 
 /// `GET /api/stores/<store>/content?hashes=` and a chain's `…/content?hashes=`: the literal of
-/// each object `hashes` names, in that order, read from `store` alone. A hash the store does not
-/// hold is refused, whether no store holds it or another store does, in the same words, and so
-/// is a set whose literals together pass [`MOST_CONTENT_BYTES`]: either refuses the whole
-/// question. An answer depends on nothing but the hashes, so it never changes.
+/// each object `hashes` names, in that order, from `store` alone. A hash the store does not hold,
+/// or literals past [`MOST_CONTENT_BYTES`], refuse the whole question in the same words.
 ///
 /// # Errors
 /// [`Refusal::not_found`] naming the hashes the store does not hold;

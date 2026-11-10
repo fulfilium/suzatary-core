@@ -546,7 +546,7 @@ async fn current_state(id: &ConversationId, state: &Arc<State>) -> ConversationS
     let caps = state.first.caps;
     let id = id.clone();
     tokio::task::spawn_blocking(move || {
-        secretary::read(caps.secretary.conversations, &id)
+        secretary::conversations::read(caps.secretary.conversations, &id)
             .map_or(ConversationState::Idle, |stored| secretary::state(&stored))
     })
     .await

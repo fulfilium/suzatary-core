@@ -1404,7 +1404,7 @@ async fn open_default(chain: &Chained) {
     let caps = chain.caps;
     let now = caps.secretary.clock.now();
     match tokio::task::spawn_blocking(move || {
-        suzatary_core::secretary::read_or_open_default(
+        suzatary_core::secretary::conversations::read_or_open_default(
             caps.secretary.conversations,
             caps.secretary.model,
             &suzatary_core::conversation_id::DEFAULT,

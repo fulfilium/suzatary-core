@@ -1527,7 +1527,7 @@ pub(crate) mod tests {
                     price: inbox::Price::unpriced(),
                 };
                 let at = crate::capability::Datetime::new(2026, 10, 7, 9, minute, 0, 0).expect("an instant");
-                inbox::ask(&store, asked, &crate::secretary::writes_as(), at).expect("filed");
+                inbox::ask(&store, asked, &crate::secretary::transcript::writer(), at).expect("filed");
             };
             let (draft, sign_in) = if draft_first { (0, 1) } else { (1, 0) };
             ask(0, Proposal::Email(Draft { account: email.to_owned(), ..Draft::default() }), draft);

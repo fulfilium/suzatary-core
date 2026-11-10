@@ -7,6 +7,7 @@ use crate::refusal::Refusal;
 use crate::secretary::responded::{Performed, Tried};
 use crate::secretary::stamp::Stamp;
 use crate::secretary::store::Entry;
+use crate::secretary::{conversations, transcript};
 
 /// The words a restart leaves behind, since the device code is never persisted.
 const RESTARTED: &str = "the box restarted while this act was waiting; the device code is gone \
@@ -33,11 +34,11 @@ pub fn reconcile(
         super::inbox::end(
             inbox,
             &object.id,
-            &super::writes_as(),
+            &transcript::writer(),
             now,
             restarted.clone(),
         )?;
-        super::append(
+        conversations::append(
             conversations,
             &object.asked.asked.conversation,
             &Entry::noted(now, RESTARTED.to_owned(), Vec::new()),
@@ -84,7 +85,7 @@ pub fn note_act(
     if note.is_empty() {
         return Ok(());
     }
-    super::append(
+    conversations::append(
         conversations,
         id,
         &Entry::Said {
@@ -224,13 +225,9 @@ mod tests {
             },
             price: crate::secretary::inbox::Price::unpriced(),
         };
-        let object = crate::secretary::inbox::ask(
-            &store.inbox,
-            asked,
-            &crate::secretary::writes_as(),
-            now(),
-        )
-        .expect("filed");
+        let object =
+            crate::secretary::inbox::ask(&store.inbox, asked, &transcript::writer(), now())
+                .expect("filed");
         crate::secretary::transcript::push(
             store.lines.conversations(),
             id,
@@ -268,7 +265,7 @@ mod tests {
         id: &ConversationId,
     ) -> Option<Responded<crate::secretary::inbox::Check>> {
         let fold = crate::secretary::inbox::fold(&store.inbox).expect("the inbox reads");
-        super::super::read(store.lines.conversations(), id)
+        conversations::read(store.lines.conversations(), id)
             .expect("reads")
             .standing(0, &fold)
             .expect("proposal 0")
@@ -298,7 +295,7 @@ mod tests {
             }
             other => panic!("expected a try that sent nothing, got {other:?}"),
         }
-        let stored = super::super::read(store.lines.conversations(), &id).expect("reads");
+        let stored = conversations::read(store.lines.conversations(), &id).expect("reads");
         let last = stored.turns.last().expect("a turn");
         match &last.turn {
             Turn::Act { text, .. } => assert!(text.contains("restarted"), "{text}"),
@@ -315,7 +312,7 @@ mod tests {
             reconcile(store.lines.conversations(), &store.inbox, now()).expect("reconciles"),
             1
         );
-        let after_first = super::super::read(store.lines.conversations(), &id)
+        let after_first = conversations::read(store.lines.conversations(), &id)
             .expect("reads")
             .turns
             .len();
@@ -324,7 +321,7 @@ mod tests {
             reconcile(store.lines.conversations(), &store.inbox, now()).expect("reconciles again"),
             0
         );
-        let after_second = super::super::read(store.lines.conversations(), &id)
+        let after_second = conversations::read(store.lines.conversations(), &id)
             .expect("reads again")
             .turns
             .len();
@@ -424,14 +421,14 @@ mod tests {
                 said(person("remember I moved"), Some("ada")),
                 said(calling("remember"), None),
             ] {
-                super::super::append(store.lines.conversations(), &DEFAULT, &line).expect("said");
+                conversations::append(store.lines.conversations(), &DEFAULT, &line).expect("said");
             }
         };
         let clean = InMemory::default();
         opened(&clean, &DEFAULT);
         note(&clean);
         ask(&clean);
-        let stored = super::super::read(clean.lines.conversations(), &DEFAULT).expect("reads");
+        let stored = conversations::read(clean.lines.conversations(), &DEFAULT).expect("reads");
         assert!(matches!(
             &stored.turns[0].by,
             Some(Stamp::Actor(speaker)) if speaker.actor == "ada"
@@ -441,13 +438,13 @@ mod tests {
 
         let read = InMemory::default();
         opened(&read, &DEFAULT);
-        super::super::append(
+        conversations::append(
             read.lines.conversations(),
             &DEFAULT,
             &said(calling("search"), None),
         )
         .expect("said");
-        super::super::append(
+        conversations::append(
             read.lines.conversations(),
             &DEFAULT,
             &said(
@@ -463,7 +460,7 @@ mod tests {
         .expect("said");
         note(&read);
         ask(&read);
-        let stored = super::super::read(read.lines.conversations(), &DEFAULT).expect("reads");
+        let stored = conversations::read(read.lines.conversations(), &DEFAULT).expect("reads");
         assert!(
             crate::secretary::taint::tainted(&stored),
             "a read in the window"

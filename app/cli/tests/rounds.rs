@@ -25,7 +25,7 @@ fn deployment() -> suzatary_core::deployment::Deployment {
 }
 
 fn opened(caps: &Fakes) {
-    suzatary_core::secretary::start(
+    suzatary_core::secretary::conversations::start(
         caps.conversations.conversations(),
         &caps.model,
         &id(),
@@ -328,10 +328,11 @@ fn a_round_appends_the_models_turns_and_the_verbs_answers_in_order() {
         r#"{"say": "Two."}"#,
     ]));
     said_first(&caps);
-    let before = suzatary_core::secretary::read(caps.conversations.conversations(), &id())
-        .expect("reads")
-        .turns
-        .len();
+    let before =
+        suzatary_core::secretary::conversations::read(caps.conversations.conversations(), &id())
+            .expect("reads")
+            .turns
+            .len();
     let ran = std::sync::Mutex::new(Vec::new());
     let round = round_of(&caps, 8, &ran)
         .expect("runs")
@@ -369,7 +370,8 @@ fn a_round_appends_the_models_turns_and_the_verbs_answers_in_order() {
         matches!(&turns[3], suzatary_core::capability::Turn::Model { text, calls } if text == "Two." && calls.is_empty())
     );
     let stored =
-        suzatary_core::secretary::read(caps.conversations.conversations(), &id()).expect("reads");
+        suzatary_core::secretary::conversations::read(caps.conversations.conversations(), &id())
+            .expect("reads");
     let gained: Vec<_> = stored.turns[before..]
         .iter()
         .map(|said| said.turn.clone())
@@ -409,7 +411,7 @@ fn a_refusal_is_an_answer_not_an_error() {
 
 /// The conversation's last live turn.
 fn last_turn(caps: &Fakes) -> Turn {
-    suzatary_core::secretary::read(caps.conversations.conversations(), &id())
+    suzatary_core::secretary::conversations::read(caps.conversations.conversations(), &id())
         .expect("reads")
         .live()
         .last()
@@ -599,7 +601,7 @@ proptest::proptest! {
             ),
         }
         // Nothing waits after any ending, so no model is asked again for this question.
-        let stored = suzatary_core::secretary::read(caps.conversations.conversations(), &id()).expect("reads");
+        let stored = suzatary_core::secretary::conversations::read(caps.conversations.conversations(), &id()).expect("reads");
         proptest::prop_assert!(suzatary_core::secretary::queue::Pending::of(&stored).is_none());
     }
 }

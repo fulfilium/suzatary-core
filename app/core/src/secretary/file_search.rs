@@ -66,7 +66,9 @@ pub fn reindex(
     index: &dyn crate::capability::UploadIndex,
 ) -> Result<usize, crate::refusal::Refusal> {
     let standings = index
-        .refresh(&named(&crate::secretary::list(conversations)?))
+        .refresh(&named(&crate::secretary::conversations::list(
+            conversations,
+        )?))
         .map_err(|failed| crate::refusal::Refusal::internal(failed.to_string()))?;
     Ok(standings
         .values()

@@ -7,7 +7,6 @@
 
 mod call;
 mod holds;
-pub(crate) mod priced;
 pub(crate) mod reads;
 mod remembered;
 mod says;

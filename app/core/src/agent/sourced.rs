@@ -2,7 +2,7 @@
 
 use prodrome_core::fpl;
 
-use super::priced::day_of;
+use crate::priced::day_of;
 use crate::record::Source;
 use crate::refusal::Refusal;
 use crate::verb::Caught;

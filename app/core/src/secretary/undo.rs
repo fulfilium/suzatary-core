@@ -156,7 +156,7 @@ mod tests {
         inbox::withdraw_unanswered(
             &inbox,
             &id,
-            &crate::secretary::writes_as(),
+            &crate::secretary::transcript::writer(),
             at,
             Withdrawal::NoLongerNeeded {
                 why: "a duplicate".to_owned(),

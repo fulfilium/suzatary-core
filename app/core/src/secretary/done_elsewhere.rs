@@ -45,7 +45,7 @@ pub(crate) fn sweep(
                 inbox::withdraw(
                     inbox,
                     &id,
-                    &super::writes_as(),
+                    &crate::secretary::transcript::writer(),
                     at,
                     Withdrawal::DoneElsewhere { what },
                 )?;

@@ -1139,7 +1139,7 @@ fn lines_written_before_kinds_were_stored_read_whole() {
     let names = transcript::keys(store).expect("lists");
     assert!(!names.is_empty());
     for name in &names {
-        let stored = suzatary_core::secretary::read(store, name).expect("reads");
+        let stored = suzatary_core::secretary::conversations::read(store, name).expect("reads");
         assert!(stored.title.get().is_some(), "{name}'s title opens");
         assert_eq!(
             stored.kind,

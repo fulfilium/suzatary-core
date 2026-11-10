@@ -263,7 +263,7 @@ fn remember_after_a_note_on(
         .expect("remember answered");
     let answer: serde_json::Value =
         serde_json::from_str(receipt["text"].as_str().expect("text")).expect("json");
-    let stored = suzatary_core::secretary::read(
+    let stored = suzatary_core::secretary::conversations::read(
         fakes.conversations.conversations(),
         &suzatary_core::conversation_id::DEFAULT,
     )
@@ -325,7 +325,7 @@ fn a_turn_pointing_at_an_unconfirmed_agent_todo_is_stamped_so() {
             &serde_json::json!({"say": "this one", "references": [format!("todo:life/{todo}")]}),
         );
         assert_eq!(common::status(&say), 202);
-        let stored = suzatary_core::secretary::read(
+        let stored = suzatary_core::secretary::conversations::read(
             fakes.conversations.conversations(),
             &suzatary_core::conversation_id::ConversationId::new(id.clone()).expect("a slug"),
         )
@@ -400,7 +400,7 @@ fn an_edit_pointing_at_an_unconfirmed_agent_todo_is_stamped_so() {
         }),
     );
     assert_eq!(common::status(&edited), 202);
-    let stored = suzatary_core::secretary::read(
+    let stored = suzatary_core::secretary::conversations::read(
         fakes.conversations.conversations(),
         &suzatary_core::conversation_id::ConversationId::new(id).expect("a slug"),
     )

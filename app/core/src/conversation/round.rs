@@ -484,7 +484,7 @@ impl Round {
 }
 
 fn read(at: &Transcript<'_>) -> Result<Stored, Refusal> {
-    crate::secretary::read(at.conversations, at.id)
+    crate::secretary::conversations::read(at.conversations, at.id)
 }
 
 /// `Err` once the halt is pulled, naming who pulled it.
