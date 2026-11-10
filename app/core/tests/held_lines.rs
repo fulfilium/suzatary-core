@@ -19,7 +19,7 @@ use suzatary_core::conversation_id::ConversationId;
 use suzatary_core::rendering::ANSWER;
 use suzatary_core::secretary::conversations::{Conversations, InMemory};
 use suzatary_core::secretary::erasure::Erasure;
-use suzatary_core::secretary::held_lines::{Admitted, HeldLines, decodes, hashes};
+use suzatary_core::secretary::held_lines::{Admitted, Folds, HeldLines, decodes, hashes};
 use suzatary_core::secretary::inbox::ProposalId;
 use suzatary_core::secretary::key_ring::{KeyRing, spelled};
 use suzatary_core::secretary::line_event::{Husk, LineEvent, LineVocabulary};
@@ -289,8 +289,8 @@ fn plain(
     (read, held)
 }
 
-fn memoised(
-    lines: &mut HeldLines,
+fn memoised<F: Folds>(
+    lines: &mut HeldLines<F>,
     stored: &BTreeSet<Hash>,
 ) -> (Result<Vec<Stored>, NotAConversation>, Vec<Excluded>) {
     let (read, _) = lines.read();
@@ -323,7 +323,9 @@ proptest! {
     /// as unread), of keys (one naming slots of two conversations), and of prints and keys let
     /// go, the memoised reading and what it leaves out are the plain reading's of what is held,
     /// less the names a skeleton holds that were not fetched. The skeleton lacks one object, a
-    /// hole that what rests on it reports while that object is not held.
+    /// hole that what rests on it reports while that object is not held. The box's fold, given
+    /// the same, reads the same, and its transcripts are every conversation the plain reading
+    /// reads, none left out.
     #[test]
     fn the_memoised_reading_is_the_plain_one(
         script in proptest::collection::vec(step(), 1..24),
@@ -348,11 +350,13 @@ proptest! {
         let mut ring = KeyRing::default();
         let mut given: BTreeMap<KeyName, String> = BTreeMap::new();
         let mut lines = HeldLines::new();
+        let mut boxed = HeldLines::for_the_box();
         for arrival in arrivals {
             match arrival {
                 Arrival::Prints(n) => {
                     let run: Vec<_> = prints_left.drain(..n.min(prints_left.len())).collect();
                     holding.extend(run.iter().cloned());
+                    boxed.hold(run.clone(), &[]);
                     lines.hold(run, &[]);
                 }
                 Arrival::Keys(n) => {
@@ -360,6 +364,7 @@ proptest! {
                         keys_left.drain(..n.min(keys_left.len())).collect();
                     ring.change(&run, &[]);
                     lines.keys(&run, &[]);
+                    boxed.keys(&run, &[]);
                     given.extend(run);
                 }
                 Arrival::DropKey(which) => {
@@ -370,7 +375,8 @@ proptest! {
                     let bytes = given.remove(&name).expect("given");
                     keys_left.push((name.clone(), bytes));
                     ring.change(&BTreeMap::new(), std::slice::from_ref(&name));
-                    lines.keys(&BTreeMap::new(), &[name]);
+                    lines.keys(&BTreeMap::new(), std::slice::from_ref(&name));
+                    boxed.keys(&BTreeMap::new(), &[name]);
                 }
                 Arrival::Drop(which) => {
                     if holding.is_empty() {
@@ -379,10 +385,23 @@ proptest! {
                     let name = holding.keys().nth(which.index(holding.len())).cloned().expect("held");
                     let bytes = holding.remove(&name).expect("held");
                     prints_left.push((name.clone(), bytes));
-                    lines.hold(Vec::new(), &[name]);
+                    lines.hold(Vec::new(), std::slice::from_ref(&name));
+                    boxed.hold(Vec::new(), &[name]);
                 }
             }
-            prop_assert_eq!(memoised(&mut lines, &skeleton), plain(&holding, &ring, &skeleton));
+            let plainly = plain(&holding, &ring, &skeleton);
+            prop_assert_eq!(&memoised(&mut lines, &skeleton), &plainly);
+            prop_assert_eq!(&memoised(&mut boxed, &skeleton), &plainly);
+            if let Ok(conversations) = &plainly.0 {
+                let mut each: Vec<Stored> = boxed
+                    .transcripts()
+                    .into_iter()
+                    .map(|(_, read)| read.map(|read| read.stored().clone()))
+                    .collect::<Result<_, _>>()
+                    .expect("the plain reading folds every conversation");
+                each.sort_by(|a, b| b.id.cmp(&a.id));
+                prop_assert_eq!(&each, conversations);
+            }
         }
     }
 }
@@ -724,7 +743,7 @@ proptest! {
 
         let skeleton = skeleton(&held);
         let objects = held.lines.objects().expect("objects");
-        let opened = transcript::opened(&objects, &held.conversations().reads().slots());
+        let opened = transcript::opened(&objects, &|name: &suzatary_core::secretary::locked_text::KeyName| held.conversations().reads().key(name));
         let eager = stream::stream(skeleton.outlines(), stream::every(&opened), &topics, &chosen, pages, &Dress::BARE)
             .expect("reads");
         prop_assert_eq!(&eager, &read_whole);
@@ -1017,7 +1036,10 @@ fn the_box_s_notes_are_left_out_and_the_owner_s_reason_is_drawn() {
         transcript::push(store, &setup, line).expect("written");
     }
     let objects = held.lines.objects().expect("objects");
-    let opened = transcript::opened(&objects, &store.reads().slots());
+    let opened = transcript::opened(
+        &objects,
+        &|name: &suzatary_core::secretary::locked_text::KeyName| store.reads().key(name),
+    );
     let drawn = stream::stream(
         skeleton(&held).outlines(),
         stream::every(&opened),

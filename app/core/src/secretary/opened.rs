@@ -1,144 +1,209 @@
-//! The words the box has opened, kept in memory by the name of the key that opened them and the
-//! digest of the slot's binding and sealed bytes, the very inputs opening reads: a cache of a
-//! pure function, so it never answers otherwise than opening would. A sealed slot moved to
-//! another line has another binding, so it is another entry and opens to nothing, as it does
-//! uncached. It is one of the copies an erasure clears: the sweep forgets a name before and
-//! after it destroys the key, and an erasure's reading answers before the cache is asked.
-//!
-//! It is bounded by the bytes of the words it keeps (`Opened::BOUND`); past it, the oldest
-//! entries go first, and a read past the bound opens again.
+//! The box's lines read through the fold a tab reads through ([`HeldLines`]), fed the store's
+//! graph as its heads move and each new line's keys. It is the holder an erasure empties
+//! ([`crate::secretary::holder::Holder::Opened`]): [`Opened::forget`] drops a key and what it
+//! opened at once, and a line that kills a key drops it at the next feed, in any process.
 
-use std::collections::{HashMap, VecDeque};
-use std::sync::{Mutex, PoisonError};
+use std::collections::{BTreeMap, BTreeSet};
+use std::sync::{Mutex, MutexGuard, PoisonError};
 
-use crate::secretary::line_words::LineWords;
+use prodrome_core::event::Hash;
+
+use crate::secretary::held_lines::{HeldLines, TheBox};
+use crate::secretary::key_ring::spelled;
+use crate::secretary::line_event::LineEvent;
 use crate::secretary::locked_text::{KeyName, TextKey};
-use crate::secretary::salted_text::Words as _;
-use crate::secretary::slots::Slots;
-use crate::secretary::words::{Gone, Words};
-use crate::store::Gets;
+use crate::store::{Gets, Graph, StoreError};
 
-/// One slot as the cache knows it: its key's name, and the digest of its binding and sealed
-/// bytes.
-type Slot = (KeyName, [u8; 32]);
+#[derive(Default)]
+pub struct Opened(Mutex<Fold>);
 
-/// Opened words, oldest first, within `Opened::BOUND` bytes.
-#[derive(Debug, Default)]
-pub struct Opened(Mutex<Kept>);
+struct Fold {
+    lines: HeldLines<TheBox>,
+    heads: BTreeSet<Hash>,
+}
 
-#[derive(Debug, Default)]
-struct Kept {
-    words: HashMap<Slot, (LineWords, usize)>,
-    order: VecDeque<Slot>,
-    bytes: usize,
+impl Default for Fold {
+    fn default() -> Self {
+        Self {
+            lines: HeldLines::for_the_box(),
+            heads: BTreeSet::new(),
+        }
+    }
+}
+
+impl std::fmt::Debug for Opened {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Opened")
+            .field("heads", &self.fold().heads)
+            .finish_non_exhaustive()
+    }
 }
 
 impl Opened {
-    /// The most bytes of words kept at once.
-    pub(crate) const BOUND: usize = 32 << 20;
-
-    fn kept(&self) -> std::sync::MutexGuard<'_, Kept> {
+    fn fold(&self) -> MutexGuard<'_, Fold> {
         self.0.lock().unwrap_or_else(PoisonError::into_inner)
     }
 
-    /// Forget the words `name` opened, if any are kept.
+    /// Forget the key `name` and every word it opened.
     pub fn forget(&self, name: &KeyName) {
-        let mut kept = self.kept();
-        let Kept {
-            words,
-            order,
-            bytes,
-        } = &mut *kept;
-        words.retain(|(kept, _), (_, size)| {
-            let stays = kept != name;
-            if !stays {
-                *bytes -= *size;
-            }
-            stays
-        });
-        order.retain(|(kept, _)| kept != name);
+        self.fold()
+            .lines
+            .keys(&BTreeMap::new(), std::slice::from_ref(name));
     }
 
-    /// Whether words `name` opened are kept.
+    /// Whether the key `name` is held.
     #[must_use]
     pub fn holds(&self, name: &KeyName) -> bool {
-        self.kept().words.keys().any(|(kept, _)| kept == name)
+        self.fold().lines.key_ring().holds(name)
     }
 
-    fn get(&self, slot: &Slot) -> Option<LineWords> {
-        self.kept().words.get(slot).map(|(words, _)| words.clone())
+    /// `read` of the fold once it holds `graph`'s objects.
+    ///
+    /// # Errors
+    /// The key store unreadable; nothing is fed then.
+    pub(crate) fn read<T>(
+        &self,
+        graph: &Graph<LineEvent>,
+        keys: &dyn Gets<KeyName, TextKey>,
+        read: impl FnOnce(&mut HeldLines<TheBox>) -> T,
+    ) -> Result<T, StoreError> {
+        let mut fold = self.fold();
+        if fold.heads != *graph.heads() {
+            fold.feed(graph, keys)?;
+        }
+        Ok(read(&mut fold.lines))
     }
+}
 
-    fn keep(&self, slot: Slot, words: &LineWords) {
-        let size = words.print().len();
-        if size > Self::BOUND {
-            return;
-        }
-        let mut kept = self.kept();
-        if kept.words.contains_key(&slot) {
-            return;
-        }
-        while kept.bytes + size > Self::BOUND {
-            let Some(oldest) = kept.order.pop_front() else {
-                break;
-            };
-            if let Some((_, gone)) = kept.words.remove(&oldest) {
-                kept.bytes -= gone;
+impl Fold {
+    /// What `graph` holds and the fold does not, with the keys it names; every key a line kills
+    /// dropped.
+    fn feed(
+        &mut self,
+        graph: &Graph<LineEvent>,
+        keys: &dyn Gets<KeyName, TextKey>,
+    ) -> Result<(), StoreError> {
+        let fresh: Vec<_> = graph
+            .objects()
+            .filter(|(name, _)| !self.lines.holds(name))
+            .map(|(name, object)| (name.clone(), object.clone()))
+            .collect();
+        let mut given = BTreeMap::new();
+        let named = fresh
+            .iter()
+            .filter_map(|(_, object)| object.event())
+            .flat_map(LineEvent::keys);
+        for name in named {
+            if !self.lines.key_ring().holds(name)
+                && !given.contains_key(name)
+                && let Some(key) = keys.get(name)?
+            {
+                given.insert(name.clone(), spelled(&key));
             }
         }
-        kept.bytes += size;
-        kept.order.push_back(slot.clone());
-        kept.words.insert(slot, (words.clone(), size));
+        let gone: Vec<Hash> = self
+            .lines
+            .names()
+            .filter(|name| graph.dag().get(name).is_none())
+            .cloned()
+            .collect();
+        self.lines.keys(&given, &[]);
+        self.lines.hold_objects(fresh, &gone);
+        let dead: Vec<KeyName> = self
+            .lines
+            .dead()
+            .into_iter()
+            .filter(|name| self.lines.key_ring().holds(name))
+            .collect();
+        self.lines.keys(&BTreeMap::new(), &dead);
+        self.heads.clone_from(graph.heads());
+        Ok(())
     }
 }
 
-/// The slots `keys` opens, read through `opened`: words kept are answered from memory, and words
-/// opened are kept; what is gone is never kept. Its fields are private and its slots are always
-/// opened by a key from `keys`, so the cache holds only words a key opened.
-pub struct Cached<'a> {
-    keys: &'a dyn Gets<KeyName, TextKey>,
-    opened: &'a Opened,
-}
+#[cfg(test)]
+mod tests {
+    use super::{HeldLines, Opened};
+    use crate::capability::Turn;
+    use crate::conversation_id::ConversationId;
+    use crate::secretary::conversations::{Conversations, InMemory};
+    use crate::secretary::erasure::Erasure;
+    use crate::secretary::store::{Entry, Kind};
+    use crate::secretary::transcript;
+    use crate::secretary::words::Words;
+    use prodrome_core::literal::Datetime;
 
-impl<'a> Cached<'a> {
-    /// The slots `keys` opens, cached in `opened`.
-    pub(crate) fn new(keys: &'a dyn Gets<KeyName, TextKey>, opened: &'a Opened) -> Self {
-        Self { keys, opened }
+    const SAID: &str = "a word only the owner says";
+
+    fn at(second: u32) -> Datetime {
+        Datetime::new(2026, 11, 9, 9, 0, second, 0).expect("an instant")
     }
 
-    /// The key named `name`, or why its words are not here: a key the store does not hold, or
-    /// cannot read, is missing.
-    #[must_use]
-    pub fn key(&self, name: &KeyName) -> Words<TextKey> {
-        match self.keys.get(name) {
-            Ok(Some(key)) => Words::kept(key),
-            Ok(None) | Err(_) => Gone::Missing.into(),
-        }
+    /// What every reader of the fold answers, printed.
+    fn read_by_all(conversations: Conversations<'_>, id: &ConversationId) -> String {
+        let reads = conversations.reads();
+        format!(
+            "{:?} {:?} {:?}",
+            reads.fold(HeldLines::entries).expect("reads"),
+            reads.fold(HeldLines::transcripts).expect("reads"),
+            reads.fold(|lines| lines.transcript(id)).expect("reads"),
+        )
     }
-}
 
-impl Slots for Cached<'_> {
-    fn words(
-        &self,
-        name: &KeyName,
-        binding: &[u8],
-        sealed: &[u8],
-        open: &dyn Fn(&TextKey) -> Option<Words<LineWords>>,
-    ) -> Words<LineWords> {
-        use sha2::Digest as _;
-        let digest = sha2::Sha256::new()
-            .chain_update((binding.len() as u64).to_be_bytes())
-            .chain_update(binding)
-            .chain_update(sealed)
-            .finalize();
-        let slot = (name.clone(), digest.into());
-        if let Some(words) = self.opened.get(&slot) {
-            return Words::kept(words);
+    /// Law (a privacy boundary): an erasure's sweep leaves its fold holding neither the key nor
+    /// the words, before any read, and no reader of the fold answers them after it. A fold the
+    /// sweep never told, as in another process, drops both at its next read.
+    #[test]
+    fn an_erasure_leaves_no_words_in_the_fold_or_its_readers() {
+        let id = ConversationId::new("2026-11-09-1").expect("a slug");
+        for told in [true, false] {
+            let held = InMemory::default();
+            let elsewhere = Opened::default();
+            let fold = if told { &held.opened } else { &elsewhere };
+            let reading = Conversations {
+                opened: fold,
+                ..held.conversations()
+            };
+            let opening = Entry::Opened {
+                at: at(0),
+                title: Words::kept("Notes".to_owned()),
+                model: "a-cli/small".to_owned(),
+                kind: Kind::Topic,
+            };
+            transcript::start(held.conversations(), &id, &opening).expect("started");
+            let said = Entry::Said {
+                at: at(1),
+                turn: Turn::Person {
+                    text: SAID.to_owned(),
+                    references: Vec::new(),
+                    attachments: Vec::new(),
+                },
+                by: Some("ada".into()),
+            };
+            transcript::push(held.conversations(), &id, &said).expect("said");
+            assert!(read_by_all(reading, &id).contains(SAID), "told: {told}");
+            assert!(crate::secretary::held_lines::says(
+                &fold.0.lock().expect("held").lines,
+                SAID
+            ));
+            let keys: std::collections::BTreeSet<_> =
+                transcript::read(reading, &id).expect("reads").lines()[1]
+                    .line
+                    .keys()
+                    .cloned()
+                    .collect();
+            let erasure = Erasure::Asked {
+                by: transcript::writer(),
+            };
+            transcript::erase(held.conversations(), &id, keys.clone(), erasure, at(2))
+                .expect("erased");
+            let holds = || {
+                keys.iter().any(|key| fold.holds(key))
+                    || crate::secretary::held_lines::says(&fold.0.lock().expect("held").lines, SAID)
+            };
+            assert_eq!(holds(), !told, "before a read, told: {told}");
+            assert!(!read_by_all(reading, &id).contains(SAID), "told: {told}");
+            assert!(!holds(), "after a read, told: {told}");
         }
-        let words = (|name: &KeyName| self.key(name)).words(name, binding, sealed, open);
-        if let Some(kept) = words.get() {
-            self.opened.keep(slot, kept);
-        }
-        words
     }
 }

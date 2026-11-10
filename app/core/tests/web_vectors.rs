@@ -2409,7 +2409,9 @@ fn the_answers_vector_holds_every_answer() {
         .expect("the lines read");
     let opened = suzatary_core::secretary::transcript::opened(
         &objects,
-        &bundle.conversations.conversations().reads().slots(),
+        &|name: &suzatary_core::secretary::locked_text::KeyName| {
+            bundle.conversations.conversations().reads().key(name)
+        },
     );
     let mut skeleton = suzatary_core::secretary::outlines::Outlines::default();
     skeleton.hold(

@@ -900,7 +900,8 @@ fn read_lines(instance: &Instance, id: &ConversationId) -> suzatary_core::secret
     let stores = instance.conversation_stores();
     suzatary_core::secretary::transcript::read(stores.conversations(), id)
         .expect("reads")
-        .into_stored()
+        .stored()
+        .clone()
 }
 
 /// Every object of the lines, by name and print.

@@ -87,7 +87,7 @@ mod tests {
         .expect("said");
     }
 
-    fn read(store: &crate::secretary::conversations::InMemory) -> Transcript {
+    fn read(store: &crate::secretary::conversations::InMemory) -> std::sync::Arc<Transcript> {
         transcript::read(store.conversations(), &id()).expect("reads")
     }
 

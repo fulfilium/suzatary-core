@@ -62,7 +62,7 @@ impl std::fmt::Display for TheDigest {
 pub struct Reading {
     digest: Digest,
     lines: std::sync::Arc<crate::store::Graph<LineEvent>>,
-    opened: std::collections::BTreeMap<Hash, Entry>,
+    opened: std::sync::Arc<std::collections::BTreeMap<Hash, Entry>>,
 }
 
 impl Reading {
@@ -74,7 +74,9 @@ impl Reading {
         digests.whole()?;
         let graph = digests.line_graph()?;
         let lines: Vec<_> = graph.objects().collect();
-        let opened = digests.opened(&lines);
+        let opened = digests
+            .lines
+            .fold(crate::secretary::held_lines::HeldLines::entries)?;
         Ok(Self {
             digest: digests.read_over(&lines, &opened)?,
             lines: graph,

@@ -483,7 +483,7 @@ fn through_the_door(lines: &[Entry]) -> Vec<Entry> {
 }
 
 /// The lines written into a fresh store, one push each, and read back.
-fn written(lines: &[Entry]) -> (Memory, Transcript) {
+fn written(lines: &[Entry]) -> (Memory, std::sync::Arc<Transcript>) {
     let memory = Memory::default();
     transcript::start(memory.conversations(), &id(), &lines[0]).expect("started");
     for line in &lines[1..] {
@@ -631,7 +631,7 @@ proptest! {
                 transcript::erase(memory.conversations(), &id(), keys, by, at(3598)).expect("erased");
             }
         }
-        let file = transcript::read(memory.conversations(), &id()).expect("read").into_stored();
+        let file = transcript::read(memory.conversations(), &id()).expect("read").stored().clone();
         let past = match broken {
             0 => None,
             1 => Some(Entry::Rewound { to: file.turns.len() + 1, at: at(3599), by: CAST.owner.actor.to_owned() }),
@@ -669,7 +669,7 @@ proptest! {
         let whole: Vec<_> = transcript::each(memory.conversations())
             .expect("reads")
             .into_iter()
-            .map(|(id, read)| (id, read.map(|read| outline::of_stored(&read.into_stored()))))
+            .map(|(id, read)| (id, read.map(|read| outline::of_stored(read.stored()))))
             .collect();
         prop_assert_eq!(read, whole);
     }
@@ -783,8 +783,8 @@ proptest! {
             state ^= state << 17;
             objects.swap(at, usize::try_from(state % (at as u64 + 1)).expect("an index"));
         }
-        let all = transcript::of_objects(objects, &memory.conversations().reads().slots()).expect("reads");
-        prop_assert_eq!(all.get(&id()), Some(&read));
+        let all = transcript::of_objects(objects, &|name: &suzatary_core::secretary::locked_text::KeyName| memory.conversations().reads().key(name)).expect("reads");
+        prop_assert_eq!(all.get(&id()), Some(&*read));
     }
 
     /// Every line prints and parses back to itself, so the store's bytes are its reading.

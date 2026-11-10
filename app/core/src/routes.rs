@@ -996,7 +996,8 @@ fn keys_of(
     retired: &crate::secretary::transcript::Retired,
     sent: &[prodrome_core::event::Hash],
 ) -> Answered<BTreeMap<String, String>> {
-    let slots = conversations.reads().slots();
+    let reads = conversations.reads();
+    let slots = |name: &crate::secretary::locked_text::KeyName| reads.key(name);
     let line = |name: &prodrome_core::event::Hash| graph.dag().get(name)?.event();
     let mut keys = BTreeMap::new();
     for name in sent

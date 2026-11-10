@@ -835,7 +835,7 @@ pub fn read(
     conversations: crate::secretary::conversations::Conversations<'_>,
     id: &ConversationId,
 ) -> Result<Stored, Refusal> {
-    Ok(transcript::read(conversations, id)?.into_stored())
+    Ok(transcript::read(conversations, id)?.stored().clone())
 }
 
 /// [`read`], opening [`DEFAULT`](crate::conversation_id::DEFAULT) the first time anything asks
@@ -880,7 +880,7 @@ pub fn list(
     transcript::each(conversations)?
         .into_iter()
         .map(|(_, read)| {
-            read.map(transcript::Transcript::into_stored)
+            read.map(|read| read.stored().clone())
                 .map_err(|failed| Refusal::internal(failed.to_string()))
         })
         .collect()

@@ -169,7 +169,7 @@ pub fn stream<'o, L: std::borrow::Borrow<BTreeMap<Hash, Entry>>>(
 }
 
 /// The reader that holds every line of a store, each opened as its conversation opens it
-/// ([`crate::secretary::transcript::opened`]): the eager stream, whose rows the lazy one must draw.
+/// (`transcript::opened`): the eager stream, whose rows the lazy one must draw.
 pub fn every(
     opened: &BTreeMap<Hash, Entry>,
 ) -> impl FnMut(&ConversationId, usize, &BTreeSet<Hash>) -> Held<BTreeMap<Hash, Entry>> + '_ {

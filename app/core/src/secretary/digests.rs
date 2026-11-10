@@ -16,6 +16,7 @@ use crate::secretary::conversations::{Conversations, ReadConversations};
 use crate::secretary::digest::{self, Digest};
 use crate::secretary::digest_event::{self, Attempt, DigestEvent};
 use crate::secretary::digest_line::Line;
+use crate::secretary::held_lines::HeldLines;
 use crate::secretary::line_event::LineEvent;
 use crate::secretary::memories::Held;
 use crate::secretary::salted_text::{Text, TextName};
@@ -88,7 +89,7 @@ impl ReadDigests<'_> {
     pub fn read(&self) -> Result<Digest, Refusal> {
         let graph = self.line_graph()?;
         let lines: Vec<_> = graph.objects().collect();
-        self.read_over(&lines, &self.opened(&lines))
+        self.read_over(&lines, &*self.lines.fold(HeldLines::entries)?)
     }
 
     /// The conversations' lines as the store's graph, shared by every reader at the same heads.
@@ -99,17 +100,6 @@ impl ReadDigests<'_> {
         &self,
     ) -> Result<std::sync::Arc<crate::store::Graph<LineEvent>>, Refusal> {
         Ok(timed(Phase::Lines, || self.lines.lines.graph())?)
-    }
-
-    /// Each of `lines` as read, by name: its words opened by the conversations' keys.
-    #[must_use]
-    pub fn opened(
-        &self,
-        lines: &[(&Hash, &prodrome_core::event::Envelope<LineEvent>)],
-    ) -> std::collections::BTreeMap<Hash, crate::secretary::store::Entry> {
-        timed(Phase::Opened, || {
-            crate::secretary::transcript::opened(lines, &self.lines.slots())
-        })
     }
 
     /// The reading over `lines` and `opened`, each of them read.

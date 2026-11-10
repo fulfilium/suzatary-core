@@ -888,94 +888,119 @@ fn ics() -> PluginName {
     PluginName::parse("ics").expect("a plugin name")
 }
 
-/// What reading costs at the size a long conversation reaches: 1,500 lines on disk, each read
-/// with an empty cache of opened words (every slot opened again, as before the cache) and with a
-/// warm one. Run by name, in release: `cargo test --release -p suzatary-io --test all -- --ignored
-/// lines_at_scale --nocapture`.
-#[test]
-#[ignore = "a measurement, run by name"]
-fn lines_at_scale() {
-    use suzatary_core::conversation_id::ConversationId;
-    use suzatary_core::secretary::store::Entry;
-    let dir = tempfile::tempdir().expect("a scratch dir");
-    let (lines, keys) = lines_at(dir.path());
-    let entropy = suzatary_io::texts::SystemEntropy;
-    let stores = |opened: &'static suzatary_core::secretary::opened::Opened| {
-        suzatary_core::secretary::conversations::Conversations {
-            lines: &lines,
-            keys: &keys,
-            entropy: &entropy,
-            renders: &suzatary_core::capability::Nothing,
-            sessions: &suzatary_core::capability::Nothing,
-            opened,
-        }
-    };
-    let warm: &'static suzatary_core::secretary::opened::Opened = Box::leak(Box::default());
-    let id = ConversationId::new("2026-10-09-1").expect("a slug");
-    let said = |k: usize| Entry::Said {
+/// Line `k` of a long conversation: a person's turn on odd lines, a long answer on even ones.
+fn said(k: usize) -> Entry {
+    Entry::Said {
         at: at(
-            9 + u32::try_from(k / 3600).expect("few"),
-            u32::try_from(k / 60 % 60).expect("few"),
+            9 + u32::try_from(k / 60).expect("few"),
+            u32::try_from(k % 60).expect("few"),
         ),
-        turn: suzatary_core::capability::Turn::Person {
-            text: format!("line {k}: {}", "a sentence of what was said ".repeat(6)),
-            references: Vec::new(),
-            attachments: Vec::new(),
+        turn: if k % 2 == 1 {
+            Turn::Person {
+                text: format!("line {k}: {}", "a sentence of what was said ".repeat(6)),
+                references: Vec::new(),
+                attachments: Vec::new(),
+            }
+        } else {
+            Turn::Model {
+                text: format!(
+                    "= Answer {k}\n\n{}",
+                    "A paragraph of the answer. ".repeat(300)
+                ),
+                calls: Vec::new(),
+            }
         },
         by: Some("ada".into()),
-    };
-    transcript::start(
-        stores(warm),
-        &id,
-        &Entry::Opened {
-            at: at(9, 0),
-            title: suzatary_core::secretary::words::Words::kept("Long".to_owned()),
-            model: "claude-cli/haiku".to_owned(),
-            kind: suzatary_core::secretary::store::Kind::Topic,
-        },
-    )
-    .expect("started");
-    for k in 1..1_500 {
-        transcript::push(stores(warm), &id, &said(k)).expect("said");
     }
+}
+
+/// What a digest read costs at the live store's size, about 10,000 slots over 20 conversations,
+/// each answer about 8 KB: cold, warm, and after one new line; the lines' fold alone and one
+/// conversation, warm. Run by name, in release:
+/// `cargo test --release -p suzatary-io --test all -- --ignored digest_at_scale --nocapture`.
+#[test]
+#[ignore = "a measurement, run by name"]
+fn digest_at_scale() {
+    use suzatary_core::secretary::opened::Opened;
+    let dir = tempfile::tempdir().expect("a scratch dir");
+    let (lines, keys) = lines_at(dir.path());
+    let (history, texts) = (
+        Objects::<suzatary_core::secretary::digest_event::DigestEvent>::open(
+            dir.path().join("digests"),
+        ),
+        suzatary_io::texts::Texts::open(dir.path().join("digest-texts")),
+    );
+    let entropy = suzatary_io::texts::SystemEntropy;
+    let stores = |opened: &'static Opened| suzatary_core::secretary::conversations::Conversations {
+        lines: &lines,
+        keys: &keys,
+        entropy: &entropy,
+        renders: &suzatary_core::capability::Nothing,
+        sessions: &suzatary_core::capability::Nothing,
+        opened,
+    };
+    let owners = std::collections::BTreeSet::new();
+    let digests = |opened| Digests {
+        history: &history,
+        texts: &texts,
+        lines: stores(opened),
+        owners: &owners,
+        compacting: &suzatary_core::secretary::compacting::Compacting::Off,
+    };
+    let ids: Vec<ConversationId> = (1..=20)
+        .map(|n| ConversationId::new(format!("2026-10-09-{n}")).expect("a slug"))
+        .collect();
+    let opening = Entry::Opened {
+        at: at(9, 0),
+        title: suzatary_core::secretary::words::Words::kept("Long".to_owned()),
+        model: "claude-cli/haiku".to_owned(),
+        kind: suzatary_core::secretary::store::Kind::Topic,
+    };
+    let writer = Actor::new(suzatary_core::writer::Writer::Assistant.actor()).expect("an actor");
+    let mut written = (0..ids.len() * 500).map(|n| (&ids[n / 500], n % 500));
+    let mut slots = 0;
+    lines
+        .append_each(&mut || {
+            let Some((id, k)) = written.next() else {
+                return Ok(None);
+            };
+            let entry = if k == 0 { opening.clone() } else { said(k) };
+            let held = u32::try_from(k).expect("few");
+            let (line, kept) = LineEvent::write(id.clone(), writer.clone(), held, &entry, &entropy)
+                .expect("a line");
+            for key in &kept {
+                suzatary_core::store::Doc::set(&keys, &key.name(), key)?;
+            }
+            slots += kept.len();
+            Ok(Some(line))
+        })
+        .expect("written");
+    println!("{slots} slots");
     let time = |what: &str, f: &dyn Fn()| {
         let started = std::time::Instant::now();
         f();
         println!("{what}: {:?}", started.elapsed());
     };
-    let cold =
-        || -> &'static suzatary_core::secretary::opened::Opened { Box::leak(Box::default()) };
-    time("read, cold", &|| {
-        transcript::read(stores(cold()), &id).expect("reads");
+    let warm: &'static Opened = Box::leak(Box::default());
+    time("digest, cold", &|| {
+        digests(warm).reads().read().expect("reads");
     });
-    time("read, warm", &|| {
-        transcript::read(stores(warm), &id).expect("reads");
+    time("digest, warm", &|| {
+        digests(warm).reads().read().expect("reads");
     });
-    time("push, cold", &|| {
-        transcript::push(stores(cold()), &id, &said(1_500)).expect("said");
+    transcript::push(stores(warm), &ids[0], &said(500)).expect("said");
+    time("digest, after one new line", &|| {
+        digests(warm).reads().read().expect("reads");
     });
-    time("push, warm", &|| {
-        transcript::push(stores(warm), &id, &said(1_501)).expect("said");
+    time("the lines' fold alone, warm", &|| {
+        stores(warm)
+            .reads()
+            .fold(suzatary_core::secretary::held_lines::HeldLines::entries)
+            .expect("reads");
     });
-    let objects = lines.objects().expect("objects");
-    let named: Vec<_> = objects
-        .iter()
-        .map(|(name, object)| (name, object))
-        .collect();
-    let digest = |opened| {
-        let read = stores(opened);
-        let entries = transcript::opened(&objects, &read.reads().slots());
-        suzatary_core::secretary::digest::digest(
-            &named,
-            &entries,
-            &[],
-            &std::collections::BTreeSet::new(),
-            |_| None,
-        )
-        .expect("no cycle");
-    };
-    time("digest, cold", &|| digest(cold()));
-    time("digest, warm", &|| digest(warm));
+    time("one conversation, warm", &|| {
+        transcript::read(stores(warm), &ids[1]).expect("reads");
+    });
 }
 
 /// The lines a phone holds at the live size, as a tab's pull hands them: 4,600 lines over four

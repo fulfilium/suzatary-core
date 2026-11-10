@@ -22,6 +22,7 @@ use crate::capability::{SessionId, Turn};
 use crate::conversation_id::ConversationId;
 use crate::secretary::conversations::Conversations;
 use crate::secretary::erasure::Erasure;
+use crate::secretary::held_lines::HeldLines;
 use crate::secretary::holder::Holder;
 use crate::secretary::line_event::LineEvent;
 use crate::secretary::line_shape::LineShape;
@@ -36,7 +37,7 @@ use crate::store::{Prodrome, StoreError};
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Transcript {
     lines: Vec<Written>,
-    stored: Stored,
+    stored: std::sync::Arc<Stored>,
     /// Each turn's line, by the turn's index in [`Stored::turns`].
     turns: Vec<usize>,
 }
@@ -77,48 +78,59 @@ impl Transcript {
         writes: &[Write<'_>],
         slots: &impl Slots,
     ) -> Result<Self, NotAConversation> {
-        let order = causal(
-            &writes
-                .iter()
-                .map(|write| (write.name, write.line.at(), write.parents))
-                .collect::<Vec<_>>(),
-        );
-        let ordered = || {
-            order
-                .iter()
-                .map(|(at, _)| (writes[*at].name, writes[*at].line))
-        };
-        let erased = erasures(ordered());
-        let superseded = superseded(ordered(), slots);
-        let reseals = reseals(ordered());
+        let lines = || writes.iter().map(|write| (write.name, write.line));
+        let erased = erasures(lines());
+        let superseded = superseded(lines(), slots);
+        let reseals = reseals(lines());
         let read = Through {
             erased: &erased,
             superseded: &superseded,
             reseals: &reseals,
             slots,
         };
+        let read: Vec<_> = writes
+            .iter()
+            .map(|write| (*write, write.line.entry(&read)))
+            .collect();
+        Self::read(id, &read)
+    }
+
+    /// One conversation's writes, in any order, each beside its entry as read, put in causal
+    /// order and folded.
+    ///
+    /// # Errors
+    /// [`NotAConversation`] for lines the fold refuses.
+    pub(crate) fn read(
+        id: &ConversationId,
+        writes: &[(Write<'_>, Entry)],
+    ) -> Result<Self, NotAConversation> {
+        let order = causal(
+            &writes
+                .iter()
+                .map(|(write, _)| (write.name, write.line.at(), write.parents))
+                .collect::<Vec<_>>(),
+        );
         let lines: Vec<Written> = order
             .into_iter()
             .map(|(at, rests_on)| Written {
-                name: writes[at].name.clone(),
-                line: writes[at].line.clone(),
-                entry: writes[at].line.entry(&read),
+                name: writes[at].0.name.clone(),
+                line: writes[at].0.line.clone(),
+                entry: writes[at].1.clone(),
                 rests_on,
             })
             .collect();
-        let entries: Vec<Entry> = lines.iter().map(|w| w.entry.clone()).collect();
-        let stored = Stored::of(id, &entries)?;
+        let stored = Stored::of_lines(id, lines.iter().map(|w| &w.entry))?;
         // The fold makes a turn of each said line and each stop, and of nothing else.
-        let turns = entries
+        let turns = lines
             .iter()
             .enumerate()
             .skip(1)
-            .filter(|(_, entry)| matches!(entry, Entry::Said { .. } | Entry::Stopped { .. }))
+            .filter(|(_, w)| matches!(w.entry, Entry::Said { .. } | Entry::Stopped { .. }))
             .map(|(at, _)| at)
             .collect();
         Ok(Self {
             lines,
-            stored,
+            stored: std::sync::Arc::new(stored),
             turns,
         })
     }
@@ -166,7 +178,13 @@ impl Transcript {
     /// The transcript register, owned.
     #[must_use]
     pub fn into_stored(self) -> Stored {
-        self.stored
+        std::sync::Arc::unwrap_or_clone(self.stored)
+    }
+
+    /// The transcript register, shared.
+    #[must_use]
+    pub(crate) fn shared(&self) -> &std::sync::Arc<Stored> {
+        &self.stored
     }
 
     /// The owed register: every live turn that no live closing turn rests on or is, with its
@@ -281,17 +299,13 @@ pub fn waiting(
         Some(crate::health::Reading::Ok { .. }) | None => {}
     }
     let since = prodrome_core::fpl::instant_of(now) - RESUMED;
-    let nodes = conversations.lines.nodes()?;
-    let slots = conversations.reads().slots();
-    Ok(writes(&nodes)
+    let mut waiting: Vec<ConversationId> = each(conversations)?
         .into_iter()
-        .filter_map(|(id, written)| {
-            Transcript::of(id, &written, &slots)
-                .ok()
-                .filter(|transcript| transcript.interrupted(since))
-                .map(|_| id.clone())
-        })
-        .collect())
+        .filter(|(_, read)| read.as_ref().is_ok_and(|read| read.interrupted(since)))
+        .map(|(id, _)| id)
+        .collect();
+    waiting.reverse();
+    Ok(waiting)
 }
 
 /// A conversation's reading is named by its heads, the lines no other line rests on: the down-set
@@ -718,33 +732,6 @@ fn erased_lines<'l>(
         .collect()
 }
 
-/// Every line the objects hold, by name, read: each slot opened by the key `key` answers, or
-/// erased where an erasure line of its own conversation names its key.
-#[must_use]
-pub fn opened<'l>(
-    objects: impl IntoIterator<Item = impl Named<'l>>,
-    slots: &impl Slots,
-) -> BTreeMap<Hash, Entry> {
-    by_conversation(lines_of(objects))
-        .into_values()
-        .flat_map(|lines| {
-            let erased = erasures(lines.iter().copied());
-            let superseded = superseded(lines.iter().copied(), slots);
-            let reseals = reseals(lines.iter().copied());
-            let read = Through {
-                erased: &erased,
-                superseded: &superseded,
-                reseals: &reseals,
-                slots,
-            };
-            lines
-                .into_iter()
-                .map(|(name, line)| (name.clone(), line.entry(&read)))
-                .collect::<Vec<_>>()
-        })
-        .collect()
-}
-
 /// Kahn's order over one conversation's writes, each `(name, at, parents)`, the least `(at, name)`
 /// among those ready first, each with the positions in the order of the writes it rests on.
 ///
@@ -829,51 +816,12 @@ pub fn transcripts(
         .collect()
 }
 
-/// Every conversation the objects hold, read, whatever order they are handed over in.
-///
-/// # Errors
-/// [`ReadFailed`]: objects that are no prodrome, or lines the fold refuses.
-pub fn of_objects(
-    objects: impl IntoIterator<Item = (Hash, Envelope<LineEvent>)>,
-    slots: &impl Slots,
-) -> Result<BTreeMap<ConversationId, Transcript>, ReadFailed> {
-    let nodes = prodrome_core::dag::Dag::from_iter(objects)
-        .nodes()
-        .map_err(|failed| ReadFailed::Unreadable(failed.to_string()))?;
-    Ok(transcripts(&nodes, slots)?)
-}
-
-/// A store whose conversations do not read.
-#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
-pub enum ReadFailed {
-    /// Its objects are no prodrome.
-    #[error("the conversations do not read: {0}")]
-    Unreadable(String),
-    /// A conversation's lines the fold refuses.
-    #[error(transparent)]
-    Unfolded(#[from] NotAConversation),
-}
-
 fn unreadable(failed: impl std::fmt::Display) -> StoreError {
     StoreError::unreadable("conversation store", failed)
 }
 
-/// Every conversation, read.
-///
-/// # Errors
-/// The store's own, and [`StoreError::Unreadable`] for lines the fold refuses.
-pub fn all(
-    conversations: Conversations<'_>,
-) -> Result<BTreeMap<ConversationId, Transcript>, StoreError> {
-    transcripts(
-        &conversations.lines.nodes()?,
-        &conversations.reads().slots(),
-    )
-    .map_err(unreadable)
-}
-
 /// One conversation's reading, or why its lines are none.
-pub type Read = Result<Transcript, NotAConversation>;
+pub type Read = Result<std::sync::Arc<Transcript>, NotAConversation>;
 
 /// Every conversation, newest id first, each read on its own, so one whose lines the fold refuses
 /// is that conversation's refusal and no other's: one fold of the store for all of them.
@@ -881,20 +829,7 @@ pub type Read = Result<Transcript, NotAConversation>;
 /// # Errors
 /// The store's own.
 pub fn each(conversations: Conversations<'_>) -> Result<Vec<(ConversationId, Read)>, StoreError> {
-    each_of(conversations.lines, &conversations.reads().slots())
-}
-
-fn each_of(
-    lines: &dyn Prodrome<LineEvent>,
-    slots: &impl Slots,
-) -> Result<Vec<(ConversationId, Read)>, StoreError> {
-    let nodes = lines.nodes()?;
-    let mut read: Vec<_> = writes(&nodes)
-        .into_iter()
-        .map(|(id, writes)| (id.clone(), Transcript::of(id, &writes, slots)))
-        .collect();
-    read.sort_by(|a, b| b.0.cmp(&a.0));
-    Ok(read)
+    conversations.reads().fold(HeldLines::transcripts)
 }
 
 /// What `verify` reports of the conversations, read against `inbox` and by their shapes alone,
@@ -910,17 +845,16 @@ pub fn findings(
 ) -> Vec<String> {
     let mut found = lines.verify();
     let inbox = crate::secretary::inbox::fold(inbox).ok();
-    let read = match each_of(lines, &|_: &KeyName| -> Words<TextKey> {
-        Gone::Missing.into()
-    }) {
-        Ok(read) => read,
+    let nodes = match lines.nodes() {
+        Ok(nodes) => nodes,
         Err(failed) => {
             found.push(failed.to_string());
             return found;
         }
     };
-    for (id, read) in read {
-        let stored = match read {
+    let keyless = |_: &KeyName| -> Words<TextKey> { Gone::Missing.into() };
+    for (id, writes) in writes(&nodes).into_iter().rev() {
+        let stored = match Transcript::of(id, &writes, &keyless) {
             Ok(transcript) => transcript.into_stored(),
             Err(why) => {
                 found.push(format!("conversation {id} does not read: {why}"));
@@ -949,19 +883,19 @@ pub fn findings(
 /// One conversation, read.
 ///
 /// # Errors
-/// [`StoreError::Absent`] for an id never started, and [`all`]'s.
+/// [`StoreError::Absent`] for an id never started, and [`each`]'s.
 pub fn read(
     conversations: Conversations<'_>,
     id: &ConversationId,
-) -> Result<Transcript, StoreError> {
-    let nodes = conversations.lines.nodes()?;
-    let writes = writes(&nodes)
-        .remove(id)
+) -> Result<std::sync::Arc<Transcript>, StoreError> {
+    conversations
+        .reads()
+        .fold(|lines| lines.transcript(id))?
         .ok_or_else(|| StoreError::Absent {
             what: "conversation",
             name: id.to_string(),
-        })?;
-    Transcript::of(id, &writes, &conversations.reads().slots()).map_err(unreadable)
+        })?
+        .map_err(unreadable)
 }
 
 /// One conversation's lines, in causal order.
@@ -1029,8 +963,8 @@ fn destroy<'l>(
     let mut destroyed = 0;
     let mut kept = Vec::new();
     for (line, slot, name) in slots {
-        conversations.opened.forget(name);
         let Some(key) = conversations.keys.get(name)? else {
+            conversations.opened.forget(name);
             continue;
         };
         // A copy left on disk keeps the key, so the next sweep can find the copy again.
@@ -1055,11 +989,7 @@ fn destroy<'l>(
             Holder::Vault | Holder::DataHistory => Ok(()),
         });
         match emptied {
-            Ok(()) => {
-                // A read between the first forgetting and the removal may have kept the words again.
-                conversations.opened.forget(name);
-                destroyed += 1;
-            }
+            Ok(()) => destroyed += 1,
             Err(failed) => kept.push(format!("{name}: {failed}")),
         }
     }
@@ -1185,6 +1115,13 @@ fn write(
     conversations.lines.append(line)?;
     Ok(())
 }
+
+// The plain readings the fold is tested against, never production.
+#[cfg(any(test, feature = "nothing"))]
+#[path = "../../tests/support/plain_reading.rs"]
+mod plain_reading;
+#[cfg(any(test, feature = "nothing"))]
+pub use plain_reading::{ReadFailed, of_objects, opened};
 
 #[cfg(test)]
 mod tests {

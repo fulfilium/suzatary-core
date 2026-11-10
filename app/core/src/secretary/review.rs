@@ -309,7 +309,7 @@ pub fn every(
     };
     for (id, read) in transcript::each(conversations)? {
         match read {
-            Ok(read) => found.items.push(read.into_stored()),
+            Ok(read) => found.items.push(read.stored().clone()),
             Err(failed) => found.unreadable.push(Unreadable {
                 id,
                 why: failed.to_string(),

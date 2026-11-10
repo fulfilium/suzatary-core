@@ -1200,30 +1200,6 @@ mod tests {
         assert!(opens(line.slot(0, under)), "its own");
     }
 
-    /// A slot moved into another conversation opens to nothing through the cache too, after
-    /// its own line was read and kept: the cache is keyed by the binding opening reads.
-    #[test]
-    fn a_moved_slot_reads_missing_after_the_original_was_read() {
-        let (line, keys) = written(&model());
-        let mut moved = line.clone();
-        moved.conversation = ConversationId::new("2026-10-09-elsewhere").expect("a slug");
-        let opened = crate::secretary::opened::Opened::default();
-        let held = crate::store::InMemoryKeys::default();
-        for key in &keys {
-            crate::store::Doc::set(&held, &key.name(), key).expect("kept");
-        }
-        let cached = crate::secretary::opened::Cached::new(&held, &opened);
-        assert_eq!(line.entry(&cached), model(), "the original reads whole");
-        let Entry::Said {
-            turn: Turn::Erased { words, .. },
-            ..
-        } = moved.entry(&cached)
-        else {
-            panic!("a moved slot does not open");
-        };
-        assert!(words.iter().all(|slot| slot.gone() == Some(&Gone::Missing)));
-    }
-
     /// Every count prints as itself and reads back, at the widest it holds.
     #[test]
     fn every_count_round_trips_at_its_widest() {

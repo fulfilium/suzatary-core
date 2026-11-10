@@ -18,7 +18,8 @@ pub enum Phase {
     Whole,
     /// Reading the conversations' line objects.
     Lines,
-    /// Opening every line: its words decrypted by its slot's key.
+    /// Reading the lines through their one fold: the words of each line new since the last read
+    /// decrypted by its slot's key.
     Opened,
     /// Reading the digest's history objects.
     History,

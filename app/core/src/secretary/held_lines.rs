@@ -1,6 +1,7 @@
-//! The lines a replica holds, read through the Prodrome's memoised fold, so a reading costs what
-//! changed since the last one and its value is the plain reading's: every print decoded at once,
-//! its largest down-set read by [`transcript::transcripts`] (`tests/held_lines.rs` states the law).
+//! The lines a replica or the box holds, read through the Prodrome's memoised fold, so a reading
+//! costs what changed since the last one and its value is the plain reading's: every print decoded
+//! at once, its largest down-set read by [`transcript::transcripts`] (`tests/held_lines.rs` states
+//! the law).
 //!
 //! Each print is decoded once, when it arrives. The history is the objects whose every ancestor
 //! is held, kept as prints arrive, as a store's down-set is. The tree the fold walks has three
@@ -10,7 +11,8 @@
 //! line renames its leaf, its conversation and the store, and every other node is one cache hit.
 //! Words are opened at the leaves, the expensive step, each sealed text at most once, and a slot a
 //! reseal that opens supersedes is read from that reseal and never from its own seal; a
-//! conversation orders its opened lines and folds them. A round read on its own is a node over the
+//! conversation folds its opened lines to its transcript, and the store keeps every line's entry
+//! by name. A round read on its own is a node over the
 //! leaves of the lines it reads, named by them, so a round read again is one cache hit.
 
 use std::collections::{BTreeMap, BTreeSet};
@@ -18,7 +20,6 @@ use std::sync::Arc;
 
 use prodrome_core::dag::{Excluded, Unread};
 use prodrome_core::event::{Envelope, Hash, parents_of, parse_envelope};
-use prodrome_core::literal::Datetime;
 use prodrome_core::memo::{self, Algebra, Cache, Report, Tree};
 
 use crate::answer::Renderable;
@@ -31,7 +32,7 @@ use crate::secretary::line_words::LineWords;
 use crate::secretary::locked_text::{KeyName, TextKey};
 use crate::secretary::slots::Slots;
 use crate::secretary::store::{Entry, NotAConversation, Stored};
-use crate::secretary::transcript;
+use crate::secretary::transcript::{self, Transcript, Write};
 use crate::secretary::words::{Gone, Words};
 
 thread_local! {
@@ -78,8 +79,9 @@ pub enum Held<L> {
     Lacking(Hash),
 }
 
-/// The lines held: every print decoded once, the history, and the fold's cache over it.
-pub struct HeldLines {
+/// The lines held: every print decoded once, the history, and the fold's cache over it, each
+/// conversation folded as `F` says.
+pub struct HeldLines<F: Folds = Replica> {
     prints: BTreeMap<Hash, Print>,
     /// Every name a held object rests on, with the objects resting on it directly.
     children: BTreeMap<Hash, BTreeSet<Hash>>,
@@ -91,7 +93,7 @@ pub struct HeldLines {
     /// The conversations whose lines name each key.
     owners: BTreeMap<KeyName, BTreeSet<ConversationId>>,
     keys: KeyRing,
-    cache: Cache<Read>,
+    cache: Cache<Read<F>>,
     algebra: Reader,
     /// The store's name at the last fold of it, whose entry the next one replaces.
     root: Option<Hash>,
@@ -268,24 +270,122 @@ impl<S: Slots> Slots for Once<S> {
 
 /// One line opened: what ordering and folding its conversation read of it.
 #[derive(Debug, PartialEq, Eq)]
-struct Opened {
+pub struct OpenedLine {
     object: Hash,
-    at: Datetime,
+    line: Arc<LineEvent>,
     parents: Vec<Hash>,
     entry: Entry,
 }
 
-/// What a node folds to: the lines opened beneath it that no conversation has closed yet, and the
-/// conversations closed. The join of the children's, and a conversation closes its open lines.
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
-struct Read {
-    open: Vec<Arc<Opened>>,
-    closed: BTreeMap<ConversationId, Result<Arc<Stored>, NotAConversation>>,
+/// What a conversation's node folds its opened lines to, and what the store's node gathers of
+/// them: a tab folds to [`Stored`] and gathers nothing ([`Replica`]); the box folds to a
+/// [`Transcript`] and gathers every line's entry ([`TheBox`]), which a tab never pays for.
+pub trait Folds: std::fmt::Debug + Clone + Eq {
+    /// A conversation's lines, closed.
+    type Closed: Clone + std::fmt::Debug + Eq;
+    /// What the store keeps beside its conversations.
+    type Gathered: Clone + std::fmt::Debug + Eq + Default;
+    /// The fold's name, in the algebra's.
+    const NAME: &'static str;
+    /// Conversation `id`'s opened lines, closed.
+    fn close(id: &ConversationId, lines: Vec<Arc<OpenedLine>>) -> Self::Closed;
+    /// What the store gathers of its conversations.
+    fn gather(closed: &BTreeMap<ConversationId, Self::Closed>) -> Self::Gathered;
+    /// The conversation's fold, or why its lines are none.
+    fn stored(closed: Self::Closed) -> Result<Arc<Stored>, NotAConversation>;
 }
 
-impl Read {
-    fn join(children: Vec<Read>) -> Read {
-        children.into_iter().fold(Read::default(), |mut all, one| {
+/// A tab's fold: each conversation to its [`Stored`].
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Replica {}
+
+impl Folds for Replica {
+    type Closed = Result<Arc<Stored>, NotAConversation>;
+    type Gathered = ();
+    const NAME: &'static str = "a conversation to its fold";
+
+    fn close(id: &ConversationId, lines: Vec<Arc<OpenedLine>>) -> Self::Closed {
+        let order = transcript::causal(
+            &lines
+                .iter()
+                .map(|line| (&line.object, line.line.at(), line.parents.as_slice()))
+                .collect::<Vec<_>>(),
+        );
+        Stored::of_lines(id, order.iter().map(|(at, _)| &lines[*at].entry)).map(Arc::new)
+    }
+
+    fn gather(_: &BTreeMap<ConversationId, Self::Closed>) {}
+
+    fn stored(closed: Self::Closed) -> Result<Arc<Stored>, NotAConversation> {
+        closed
+    }
+}
+
+/// The box's fold: each conversation to its [`Transcript`], and every line's entry by name.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum TheBox {}
+
+/// A conversation's lines opened, and their transcript or why they are none.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Closed {
+    lines: Vec<Arc<OpenedLine>>,
+    read: Result<Arc<Transcript>, NotAConversation>,
+}
+
+impl Folds for TheBox {
+    type Closed = Closed;
+    type Gathered = Arc<BTreeMap<Hash, Entry>>;
+    const NAME: &'static str = "a conversation to its transcript, the store to every line";
+
+    fn close(id: &ConversationId, lines: Vec<Arc<OpenedLine>>) -> Self::Closed {
+        let written: Vec<_> = lines
+            .iter()
+            .map(|line| {
+                let write = Write {
+                    name: &line.object,
+                    line: &line.line,
+                    parents: &line.parents,
+                };
+                (write, line.entry.clone())
+            })
+            .collect();
+        let read = Transcript::read(id, &written).map(Arc::new);
+        Closed { lines, read }
+    }
+
+    fn gather(closed: &BTreeMap<ConversationId, Self::Closed>) -> Self::Gathered {
+        Arc::new(
+            closed
+                .values()
+                .flat_map(|closed| &closed.lines)
+                .map(|line| (line.object.clone(), line.entry.clone()))
+                .collect(),
+        )
+    }
+
+    fn stored(closed: Self::Closed) -> Result<Arc<Stored>, NotAConversation> {
+        closed.read.map(|read| Arc::clone(read.shared()))
+    }
+}
+
+/// What a node folds to: the lines opened beneath it that no conversation has closed yet, the
+/// conversations closed, and at the store what it gathers. The join of the children's, and a
+/// conversation closes its open lines.
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct Read<F: Folds> {
+    open: Vec<Arc<OpenedLine>>,
+    closed: BTreeMap<ConversationId, F::Closed>,
+    gathered: F::Gathered,
+}
+
+impl<F: Folds> Read<F> {
+    fn join(children: Vec<Read<F>>) -> Read<F> {
+        let empty = Read {
+            open: Vec::new(),
+            closed: BTreeMap::new(),
+            gathered: F::Gathered::default(),
+        };
+        children.into_iter().fold(empty, |mut all, one| {
             all.open.extend(one.open);
             all.closed.extend(one.closed);
             all
@@ -324,37 +424,42 @@ struct Reader {
 impl Reader {
     /// The name changes with every change to how a leaf, a conversation or a round reads, since
     /// a cache kept beyond this process would answer from entries named by the old reading.
-    fn new() -> Self {
+    fn new(folds: &str) -> Self {
+        let own = format!(
+            "suzatary held lines 3: open at the leaves, each slot as its leaf's reseals and erasures say, a round to its lines, {folds}"
+        );
         Self {
-            name: memo::name(
-                b"suzatary held lines 2: open at the leaves, each slot as its leaf's reseals and erasures say, fold at a conversation or a round",
-                [],
-            ),
+            name: memo::name(own.as_bytes(), []),
         }
     }
 }
 
 /// The algebra with the ring it reads held keys from.
-struct Reading<'k> {
+struct Reading<'k, F> {
     reader: &'k Reader,
     keys: &'k KeyRing,
+    folds: std::marker::PhantomData<F>,
 }
 
-impl Algebra<Node> for Reading<'_> {
-    type Out = Read;
+impl<F: Folds> Algebra<Node> for Reading<'_, F> {
+    type Out = Read<F>;
 
     fn name(&self) -> &Hash {
         &self.reader.name
     }
 
-    fn apply(&self, node: &Node, children: Vec<Read>) -> Read {
+    fn apply(&self, node: &Node, children: Vec<Read<F>>) -> Read<F> {
         match node {
-            Node::Store { .. } | Node::Round { .. } => Read::join(children),
+            Node::Round { .. } => Read::join(children),
+            Node::Store { .. } => {
+                let mut read = Read::join(children);
+                read.gathered = F::gather(&read.closed);
+                read
+            }
             Node::Conversation { id, .. } => {
                 let mut read = Read::join(children);
                 let lines = std::mem::take(&mut read.open);
-                read.closed
-                    .insert(id.clone(), folded(id, &lines).map(Arc::new));
+                read.closed.insert(id.clone(), F::close(id, lines));
                 read
             }
             Node::Line { leaf, .. } => {
@@ -400,28 +505,18 @@ impl Algebra<Node> for Reading<'_> {
                     slots: &slots,
                 };
                 Read {
-                    open: vec![Arc::new(Opened {
+                    open: vec![Arc::new(OpenedLine {
                         object: leaf.object.clone(),
-                        at: leaf.line.at(),
+                        line: Arc::clone(&leaf.line),
                         parents: leaf.parents.clone(),
                         entry: leaf.line.entry(&read),
                     })],
                     closed: BTreeMap::new(),
+                    gathered: F::Gathered::default(),
                 }
             }
         }
     }
-}
-
-/// One conversation's opened lines, in causal order, folded.
-fn folded(id: &ConversationId, lines: &[Arc<Opened>]) -> Result<Stored, NotAConversation> {
-    let order = transcript::causal(
-        &lines
-            .iter()
-            .map(|line| (&line.object, line.at, line.parents.as_slice()))
-            .collect::<Vec<_>>(),
-    );
-    Stored::of_lines(id, order.iter().map(|(at, _)| &lines[*at].entry))
 }
 
 impl Default for HeldLines {
@@ -431,9 +526,15 @@ impl Default for HeldLines {
 }
 
 impl HeldLines {
-    /// Nothing held.
+    /// Nothing held, folded as a tab folds.
     #[must_use]
     pub fn new() -> Self {
+        Self::empty()
+    }
+}
+
+impl<F: Folds> HeldLines<F> {
+    fn empty() -> Self {
         Self {
             prints: BTreeMap::new(),
             children: BTreeMap::new(),
@@ -443,7 +544,7 @@ impl HeldLines {
             owners: BTreeMap::new(),
             keys: KeyRing::default(),
             cache: Cache::default(),
-            algebra: Reader::new(),
+            algebra: Reader::new(F::NAME),
             root: None,
             rounds: BTreeMap::new(),
             moves: 0,
@@ -491,6 +592,16 @@ impl HeldLines {
                     };
                 (name, print)
             })
+            .collect();
+        self.held(add, drop);
+    }
+
+    /// [`HeldLines::hold`] of objects a store has read.
+    pub(crate) fn hold_objects(&mut self, add: Vec<(Hash, Envelope<LineEvent>)>, drop: &[Hash]) {
+        let add = add
+            .into_iter()
+            .filter(|(name, _)| !self.prints.contains_key(name))
+            .map(|(name, envelope)| (name, Print::of(envelope)))
             .collect();
         self.held(add, drop);
     }
@@ -711,6 +822,7 @@ impl HeldLines {
             &Reading {
                 reader: &self.algebra,
                 keys: &self.keys,
+                folds: std::marker::PhantomData,
             },
             &*node,
             &mut self.cache,
@@ -759,27 +871,11 @@ impl HeldLines {
     /// # Errors
     /// The first conversation, by id, whose lines do not fold.
     pub fn read(&mut self) -> (Result<Vec<Arc<Stored>>, NotAConversation>, Report) {
-        let ids: Vec<ConversationId> = self.conversations.keys().cloned().collect();
-        let conversations: Vec<Arc<Node>> = ids.iter().filter_map(|id| self.built(id)).collect();
-        let name = memo::name(b"store", conversations.iter().map(|node| node.name()));
-        let store = Node::Store {
-            name: name.clone(),
-            conversations,
-        };
-        let (read, report) = memo::fold(
-            &Reading {
-                reader: &self.algebra,
-                keys: &self.keys,
-            },
-            &store,
-            &mut self.cache,
-        );
-        if let Some(was) = self.root.replace(name.clone()).filter(|was| *was != name) {
-            self.forget([was]);
-        }
+        let (read, report) = self.store();
         let stored = read
             .closed
             .into_values()
+            .map(F::stored)
             .collect::<Result<Vec<_>, _>>()
             .map(|mut stored| {
                 stored.reverse();
@@ -788,17 +884,47 @@ impl HeldLines {
         (stored, report)
     }
 
+    /// The store's node folded, its last fold's entry dropped.
+    fn store(&mut self) -> (Read<F>, Report) {
+        let ids: Vec<ConversationId> = self.conversations.keys().cloned().collect();
+        let conversations: Vec<Arc<Node>> = ids.iter().filter_map(|id| self.built(id)).collect();
+        let name = memo::name(b"store", conversations.iter().map(|node| node.name()));
+        let store = Node::Store {
+            name: name.clone(),
+            conversations,
+        };
+        let folded = memo::fold(
+            &Reading {
+                reader: &self.algebra,
+                keys: &self.keys,
+                folds: std::marker::PhantomData,
+            },
+            &store,
+            &mut self.cache,
+        );
+        if let Some(was) = self.root.replace(name.clone()).filter(|was| *was != name) {
+            self.forget([was]);
+        }
+        folded
+    }
+
     /// Conversation `id`'s fold, or why its lines are none; `None` where the history holds no line
     /// of it. Only its own node is folded.
     pub fn conversation(
         &mut self,
         id: &ConversationId,
     ) -> Option<Result<Arc<Stored>, NotAConversation>> {
+        self.closed(id).map(F::stored)
+    }
+
+    /// Conversation `id`'s node folded and closed.
+    fn closed(&mut self, id: &ConversationId) -> Option<F::Closed> {
         let node = self.built(id)?;
         let (mut read, _) = memo::fold(
             &Reading {
                 reader: &self.algebra,
                 keys: &self.keys,
+                folds: std::marker::PhantomData,
             },
             &*node,
             &mut self.cache,
@@ -1079,6 +1205,43 @@ impl HeldLines {
     }
 }
 
+impl HeldLines<TheBox> {
+    /// Nothing held, folded as the box folds.
+    #[must_use]
+    pub fn for_the_box() -> Self {
+        Self::empty()
+    }
+
+    /// Every conversation, newest id first, each its transcript or why its lines are none.
+    pub fn transcripts(
+        &mut self,
+    ) -> Vec<(ConversationId, Result<Arc<Transcript>, NotAConversation>)> {
+        let mut each: Vec<_> = self
+            .store()
+            .0
+            .closed
+            .into_iter()
+            .map(|(id, closed)| (id, closed.read))
+            .collect();
+        each.reverse();
+        each
+    }
+
+    /// Every line of the history, by name, opened as its conversation opens it.
+    pub fn entries(&mut self) -> Arc<BTreeMap<Hash, Entry>> {
+        self.store().0.gathered
+    }
+
+    /// Conversation `id`'s transcript, or why its lines are none; `None` where the history holds
+    /// no line of it.
+    pub fn transcript(
+        &mut self,
+        id: &ConversationId,
+    ) -> Option<Result<Arc<Transcript>, NotAConversation>> {
+        Some(self.closed(id)?.read)
+    }
+}
+
 /// The node of conversation `id` over its lines in the history, every key of them an erasure of
 /// its own names, and each line's leaf, the one it had wherever its slots read the same.
 fn build(
@@ -1242,6 +1405,15 @@ fn leaf(
     }
 }
 
+/// Whether anything `lines` keeps says `text`.
+#[cfg(test)]
+pub(crate) fn says<F: Folds>(lines: &HeldLines<F>, text: &str) -> bool {
+    lines
+        .cache
+        .pairs()
+        .any(|(_, read)| format!("{read:?}").contains(text))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1251,6 +1423,7 @@ mod tests {
     use crate::store::Reads as _;
     use crate::store::{Doc as _, Gets as _};
     use prodrome_core::event::canonical_envelope;
+    use prodrome_core::literal::Datetime;
 
     /// Every key `held` keeps, spelled as a replica is given it.
     fn given(held: &InMemory) -> BTreeMap<KeyName, String> {
@@ -1349,7 +1522,8 @@ mod tests {
         assert_eq!((done.resealed, done.destroyed), (2, 2));
         let boxed = transcript::read(held.conversations(), &id)
             .expect("reads")
-            .into_stored();
+            .stored()
+            .clone();
         let mut lines = HeldLines::new();
         lines.keys(&given(&held), &[]);
         lines.hold(prints(&held), &[]);
@@ -1409,7 +1583,7 @@ mod tests {
             transcript::each(held.conversations())
                 .expect("reads")
                 .into_iter()
-                .map(|(_, read)| read.expect("folds").into_stored())
+                .map(|(_, read)| read.expect("folds").stored().clone())
                 .collect()
         };
         let scrubs = crate::redact::scrubs();
@@ -1474,16 +1648,11 @@ mod tests {
             .collect();
         assert!(matches!(lines.round(&id, 0, &names), Held::Opened(_)));
         assert!(lines.read().0.is_ok());
-        let says = |lines: &HeldLines| {
-            lines
-                .cache
-                .pairs()
-                .any(|(_, read)| format!("{read:?}").contains("a title nobody else says"))
-        };
-        assert!(says(&lines), "the reading opened the title");
+        let says = "a title nobody else says";
+        assert!(super::says(&lines, says), "the reading opened the title");
         let gone: Vec<KeyName> = given.into_keys().collect();
         lines.keys(&BTreeMap::new(), &gone);
-        assert!(!says(&lines), "nothing cached still says it");
+        assert!(!super::says(&lines, says), "nothing cached still says it");
     }
 
     /// A measurement, run by hand with `--ignored --nocapture`: reading 1,200 rounds of mail-like
