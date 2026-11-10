@@ -55,7 +55,7 @@ fn fixture_root() -> prodrome_core::sign::PublicKey {
 
 /// The name of the secret the fixture's standing secret card asks for: the coding routine's
 /// token, which the writing server's `[coding]` declares.
-pub const SECRET_ASK_KEY: &str = suzatary_core::coding::ROUTINE_TOKEN;
+pub const SECRET_ASK_KEY: &str = suzatary_core::connect::ROUTINE_TOKEN;
 /// The one calendar link `--settings` declares, on the `ics` plugin, which nothing stores.
 pub const SETTINGS_CALENDAR_LINK: &str = "PLUGIN_ICS_WORK";
 /// The `[[plugins]]` table `--settings` appends, as an operator adds one by hand: `File` never
@@ -1139,7 +1139,7 @@ fn instance_file(
         // Absent, so push setup never reads this box's secret store.
         notify: None,
         // A routine nothing can fire, so a tapped session fails in words.
-        coding: (settings && propose).then(|| suzatary_core::coding::Coding {
+        coding: (settings && propose).then(|| suzatary_core::connect::Coding {
             routine: "trig01fixture".parse().expect("a routine id"),
             repo: "bmabsout/fixture".parse().expect("a repository"),
         }),

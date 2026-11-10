@@ -161,7 +161,7 @@ pub fn todo(
     zone: crate::zone::Zone,
     set: &ChainSet<'_>,
     id: &str,
-    builder: Option<&crate::coding::RoutineId>,
+    builder: Option<&crate::connect::RoutineId>,
 ) -> Answered<wire::TodoPayload> {
     let (at, untrusted) = (set.at(), &chain.untrusted);
     let id = todo_id(id)?;

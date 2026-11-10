@@ -11,6 +11,8 @@ use prodrome_core::event::Actor;
 
 use crate::capability::Login;
 use crate::chains::{ChainPolicy, Chains};
+use crate::connect::{Coding, RoutineId};
+use crate::refusal::Refusal;
 
 /// This deployment, as the application reads it.
 ///
@@ -32,7 +34,7 @@ pub struct Deployment {
     /// URL and the app's deep links are built from this.
     pub app_url: String,
     /// `[coding]`, when this deployment starts coding sessions; `None` refuses a tap on one.
-    pub coding: Option<crate::coding::Coding>,
+    pub coding: Option<Coding>,
     /// The owner's zone, `[persona]`'s: where every day the deployment reads is read.
     pub zone: crate::zone::Zone,
 }
@@ -110,22 +112,17 @@ impl Deployment {
     /// pull request's `Completes:` line closes.
     ///
     /// # Errors
-    /// [`crate::refusal::Refusal::conflict`] without `[coding]` or for any other chain.
-    pub fn builder(
-        &self,
-        chain: &crate::chains::ChainName,
-    ) -> Result<&crate::coding::RoutineId, crate::refusal::Refusal> {
+    /// [`Refusal::conflict`] without `[coding]` or for any other chain.
+    pub fn builder(&self, chain: &crate::chains::ChainName) -> Result<&RoutineId, Refusal> {
         let coding = self.coding.as_ref().ok_or_else(|| {
-            crate::refusal::Refusal::conflict(
-                "this deployment declares no [coding], so no todo is built",
-            )
+            Refusal::conflict("this deployment declares no [coding], so no todo is built")
         })?;
         let plan = crate::release::Plan::declared()
-            .map_err(|failed| crate::refusal::Refusal::internal(failed.to_string()))?;
+            .map_err(|failed| Refusal::internal(failed.to_string()))?;
         if chain.as_str() == plan.chain() {
             Ok(&coding.routine)
         } else {
-            Err(crate::refusal::Refusal::conflict(format!(
+            Err(Refusal::conflict(format!(
                 "only todos of {} are built: a pull request's Completes: line closes those",
                 plan.chain()
             )))

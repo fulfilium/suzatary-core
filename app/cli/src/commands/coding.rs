@@ -8,7 +8,8 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use suzatary_core::capability::Clock as _;
-use suzatary_core::coding::{Fired, RoutineId, Task};
+use suzatary_core::coding::{Fired, Task};
+use suzatary_core::connect::RoutineId;
 use suzatary_core::conversation_id::ConversationId;
 use suzatary_core::secretary::coding::Advanced;
 use suzatary_core::secretary::responded::{Done, Performed, Tried};

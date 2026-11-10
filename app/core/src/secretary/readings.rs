@@ -7,6 +7,7 @@ use crate::answer::Renderable;
 use crate::capability::{AnswerError, Answers, Datetime, Html, Turn};
 use crate::reference::{ProposalRef, Reference};
 use crate::refusal::{Answered, Refusal};
+use crate::secretary::acts::Act;
 use crate::secretary::attached;
 use crate::secretary::attachment_source::AttachmentSource;
 use crate::secretary::changes::Changeset;
@@ -75,7 +76,7 @@ pub trait Draw {
     /// The rows, and the box's own refusal when an act would no longer build.
     fn shown(&self, changeset: &Changeset) -> (Vec<wire::ProposedObject>, String);
     /// The routine `[coding]` declares, whose page its token's card opens.
-    fn routine(&self) -> Option<&crate::coding::RoutineId>;
+    fn routine(&self) -> Option<&crate::connect::RoutineId>;
     /// The secret name of the model's credential, which its card words as the model's sign-in.
     fn model(&self) -> Option<&str>;
     /// The origins `plugin` may fetch from now; `None` while no such plugin is declared.
@@ -101,7 +102,7 @@ impl Draw for Undrawn {
         (Vec::new(), String::new())
     }
 
-    fn routine(&self) -> Option<&crate::coding::RoutineId> {
+    fn routine(&self) -> Option<&crate::connect::RoutineId> {
         None
     }
 
@@ -329,7 +330,7 @@ pub fn conversation(
         id: stored.id.as_str().to_owned(),
         title: stored.heading().into_owned(),
         model: stored.model.clone(),
-        opened: crate::secretary::stamp::stamp(stored.opened),
+        opened: stamp(stored.opened),
         turns: selected
             .iter()
             .map(|&index| {
@@ -394,11 +395,9 @@ fn row(stored: &Stored, fold: &inbox::Fold) -> wire::ConversationRow {
         id: stored.id.as_str().to_owned(),
         title: stored.heading().into_owned(),
         kind: stored.kind,
-        opened: crate::secretary::stamp::stamp(stored.opened),
+        opened: stamp(stored.opened),
         last: last_line(stored),
-        last_at: crate::secretary::stamp::stamp(
-            stored.turns.last().map_or(stored.opened, |said| said.at),
-        ),
+        last_at: stamp(stored.turns.last().map_or(stored.opened, |said| said.at)),
         turns: u32::try_from(stored.turns.len()).unwrap_or(u32::MAX),
         standing: lines
             .standings()
@@ -524,14 +523,14 @@ pub(crate) fn turn<A: Answers + ?Sized>(
     let row = |text: &str, who: wire::Speaker| wire::TurnRow {
         index,
         text: text.to_owned(),
-        at: crate::secretary::stamp::stamp(said.at),
+        at: stamp(said.at),
         attempt,
         gone: None,
         who,
     };
     match &said.turn {
         // Only a person's words can be queued.
-        crate::capability::Turn::Person {
+        Turn::Person {
             text,
             references,
             attachments,
@@ -544,23 +543,21 @@ pub(crate) fn turn<A: Answers + ?Sized>(
             },
         ),
         // The box's own note is drawn as the box's, never as the owner's.
-        crate::capability::Turn::Act { text, references } => {
-            row(text, acted_by(said.by.as_ref(), references.clone()))
-        }
+        Turn::Act { text, references } => row(text, acted_by(said.by.as_ref(), references.clone())),
         // Each call gets its own verb turn.
-        crate::capability::Turn::Model { text, .. } => row(
+        Turn::Model { text, .. } => row(
             text,
             wire::Speaker::Model {
                 blocks: blocks_of(answers, text),
             },
         ),
-        crate::capability::Turn::Tool {
+        Turn::Tool {
             verb,
             answer,
             outcome,
             files: _,
         } => row(answer, verb_turn(verb, *outcome, memory)),
-        crate::capability::Turn::Erased { shape, words } => wire::TurnRow {
+        Turn::Erased { shape, words } => wire::TurnRow {
             text: crate::secretary::turn_shape::prose(words),
             gone: words
                 .first()
@@ -780,25 +777,21 @@ fn remember_on_wire(
 
 /// `consent` is the box's path to the consent a running sign-in opened.
 #[expect(clippy::too_many_lines, reason = "one arm per kind of act")]
-fn act_on_wire(
-    act: &crate::secretary::acts::Act,
-    consent: Option<String>,
-    draws: &dyn Draw,
-) -> wire::ProposedAct {
+fn act_on_wire(act: &Act, consent: Option<String>, draws: &dyn Draw) -> wire::ProposedAct {
     let routine = draws.routine();
     match act {
-        crate::secretary::acts::Act::Auth { account } => wire::ProposedAct::Auth {
+        Act::Auth { account } => wire::ProposedAct::Auth {
             account: account.as_str().to_owned(),
             sentence: act.sentence(),
         },
-        crate::secretary::acts::Act::AuthSend { account } => wire::ProposedAct::AuthSend {
+        Act::AuthSend { account } => wire::ProposedAct::AuthSend {
             account: account.as_str().to_owned(),
             sentence: act.sentence(),
         },
-        crate::secretary::acts::Act::Secret { name, .. } => {
+        Act::Secret { name, .. } => {
             crate::secretary::card::secret_act(name, routine, draws.model())
         }
-        crate::secretary::acts::Act::Web { request, rule } => wire::ProposedAct::Web {
+        Act::Web { request, rule } => wire::ProposedAct::Web {
             request: request.kind(),
             target: match request {
                 crate::web::WebRequest::Search { query } => query.as_str().to_owned(),
@@ -811,7 +804,7 @@ fn act_on_wire(
                 .unwrap_or_default(),
             sentence: act.sentence(),
         },
-        crate::secretary::acts::Act::Patch {
+        Act::Patch {
             repo,
             visibility,
             base,
@@ -826,49 +819,45 @@ fn act_on_wire(
             patch: patch.as_str().to_owned(),
             sentence: act.sentence(),
         },
-        crate::secretary::acts::Act::DriveRead { path, size } => wire::ProposedAct::Drive {
+        Act::DriveRead { path, size } => wire::ProposedAct::Drive {
             path: path.to_string(),
             name: path.name().unwrap_or("/").to_owned(),
             folder: crate::secretary::acts::folder_of(path).to_string(),
             size: size.map(crate::spelling::bytes).unwrap_or_default(),
             sentence: act.sentence(),
         },
-        crate::secretary::acts::Act::CodingSession { task } => wire::ProposedAct::CodingSession {
+        Act::CodingSession { task } => wire::ProposedAct::CodingSession {
             task: task.as_str().to_owned(),
             sentence: act.sentence(),
         },
-        crate::secretary::acts::Act::Device(enrolment) => wire::ProposedAct::Device {
+        Act::Device(enrolment) => wire::ProposedAct::Device {
             actor: enrolment.actor.as_str().to_owned(),
             key: enrolment.key.as_str().to_owned(),
             sentence: act.sentence(),
         },
-        crate::secretary::acts::Act::SignIn { .. } => wire::ProposedAct::SignIn {
+        Act::SignIn { .. } => wire::ProposedAct::SignIn {
             sentence: act.sentence(),
         },
-        crate::secretary::acts::Act::SignInCode { url } => wire::ProposedAct::SignInCode {
+        Act::SignInCode { url } => wire::ProposedAct::SignInCode {
             url: url.as_str().to_owned(),
             sentence: act.sentence(),
         },
-        crate::secretary::acts::Act::Noise { sender, message } => wire::ProposedAct::Noise {
+        Act::Noise { sender, message } => wire::ProposedAct::Noise {
             sender: sender.clone(),
             message: message.clone(),
             sentence: act.sentence(),
         },
-        crate::secretary::acts::Act::UnlockStore { .. } => wire::ProposedAct::UnlockStore {
+        Act::UnlockStore { .. } => wire::ProposedAct::UnlockStore {
             sentence: act.sentence(),
         },
-        crate::secretary::acts::Act::Connect { connection } => {
-            connect_on_wire(connection, draws, act.sentence())
-        }
-        crate::secretary::acts::Act::Disconnect { connection } => {
-            disconnect_on_wire(connection, act.sentence())
-        }
-        crate::secretary::acts::Act::Grant { plugin, origin } => wire::ProposedAct::Grant {
+        Act::Connect { connection } => connect_on_wire(connection, draws, act.sentence()),
+        Act::Disconnect { connection } => disconnect_on_wire(connection, act.sentence()),
+        Act::Grant { plugin, origin } => wire::ProposedAct::Grant {
             plugin: plugin.to_string(),
             origin: origin.to_string(),
             sentence: act.sentence(),
         },
-        crate::secretary::acts::Act::GoogleClient { redirect } => wire::ProposedAct::GoogleClient {
+        Act::GoogleClient { redirect } => wire::ProposedAct::GoogleClient {
             redirect: redirect.to_string(),
             steps: crate::google::CLIENT_STEPS
                 .iter()
@@ -876,34 +865,30 @@ fn act_on_wire(
                 .collect(),
             sentence: act.sentence(),
         },
-        crate::secretary::acts::Act::GoogleSignIn { account, scopes } => {
-            wire::ProposedAct::GoogleSignIn {
-                account: account.to_string(),
-                parts: scopes
-                    .iter()
-                    .map(|part| part.sentence().to_owned())
-                    .collect(),
-                consent,
-                sentence: act.sentence(),
-            }
-        }
-        crate::secretary::acts::Act::CalendarEvent { account, event } => {
-            wire::ProposedAct::CalendarEvent {
-                account: account.to_string(),
-                event: event.sentence(),
-                sentence: act.sentence(),
-            }
-        }
-        crate::secretary::acts::Act::Erase { .. } => wire::ProposedAct::Erase {
+        Act::GoogleSignIn { account, scopes } => wire::ProposedAct::GoogleSignIn {
+            account: account.to_string(),
+            parts: scopes
+                .iter()
+                .map(|part| part.sentence().to_owned())
+                .collect(),
+            consent,
             sentence: act.sentence(),
         },
-        crate::secretary::acts::Act::Retract { .. } => wire::ProposedAct::Retract {
+        Act::CalendarEvent { account, event } => wire::ProposedAct::CalendarEvent {
+            account: account.to_string(),
+            event: event.sentence(),
             sentence: act.sentence(),
         },
-        crate::secretary::acts::Act::Afresh { .. } => wire::ProposedAct::Afresh {
+        Act::Erase { .. } => wire::ProposedAct::Erase {
             sentence: act.sentence(),
         },
-        crate::secretary::acts::Act::Restore { card } => wire::ProposedAct::Restore {
+        Act::Retract { .. } => wire::ProposedAct::Retract {
+            sentence: act.sentence(),
+        },
+        Act::Afresh { .. } => wire::ProposedAct::Afresh {
+            sentence: act.sentence(),
+        },
+        Act::Restore { card } => wire::ProposedAct::Restore {
             card: card.to_string(),
             sentence: act.sentence(),
         },
@@ -1113,7 +1098,7 @@ pub(crate) fn proposal(
         act,
         why: standing.object.asked.reasons.why().to_owned(),
         sources: standing.object.asked.reasons.sources().to_vec(),
-        at: crate::secretary::stamp::stamp(standing.asking.at),
+        at: stamp(standing.asking.at),
         state,
         outcome,
         tries: u32::try_from(standing.object.tries()).unwrap_or(u32::MAX),

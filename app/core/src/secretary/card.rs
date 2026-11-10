@@ -1,7 +1,7 @@
 //! Every card's words and answers are decided here, so the web app draws any card with one
 //! function and never asks its kind.
 
-use crate::coding::RoutineId;
+use crate::connect::RoutineId;
 use crate::repos::Visibility;
 use crate::secretary::inbox_reading::Reading;
 use crate::secretary::proposal::Style;

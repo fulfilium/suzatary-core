@@ -10,7 +10,7 @@ use prodrome_core::sign::PublicKey;
 use serde::{Deserialize, Serialize};
 use suzatary_core::capability::Login;
 use suzatary_core::chains::ChainName;
-use suzatary_core::coding::Coding;
+use suzatary_core::connect::Coding;
 use suzatary_core::drive_path::DrivePath;
 use suzatary_core::mail::account::Roster;
 use suzatary_core::mail::junk::ChurnList;

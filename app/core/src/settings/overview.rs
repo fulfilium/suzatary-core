@@ -935,7 +935,7 @@ fn coding(declared: &Declared<'_>, observed: &Observed<'_>) -> Overview {
         .coding
         .as_ref()
         .map_or_else(Overview::default, |coding| {
-            let token = crate::coding::ROUTINE_TOKEN;
+            let token = crate::connect::ROUTINE_TOKEN;
             Overview::line(
                 Group::Coding,
                 Slot::Routine,
@@ -1071,8 +1071,8 @@ pub(crate) mod tests {
             }
         }
 
-        fn coding(&self) -> Option<crate::coding::Coding> {
-            self.coding.then(|| crate::coding::Coding {
+        fn coding(&self) -> Option<crate::connect::Coding> {
+            self.coding.then(|| crate::connect::Coding {
                 routine: "trig01fixture".parse().expect("a routine id"),
                 repo: "example/repo".parse().expect("a repository"),
             })

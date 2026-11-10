@@ -4,7 +4,7 @@
 //! mint and carries an index, never a body, so what is sent is what was stored and shown.
 
 use crate::believed::Preview;
-use crate::capability::{Clock, Server, Turn};
+use crate::capability::{Clock, Secret, Secrets, Server, Turn};
 use crate::conversation_id::ConversationId;
 use crate::deployment::Deployment;
 use crate::health::plugin::{Origin, PluginName};
@@ -28,6 +28,7 @@ use crate::secretary::readings::{self, Draw, Dress, Window};
 use crate::secretary::responded::{Done, Performed, Tried};
 use crate::secretary::store::{Entry, Kind, Stored, Title};
 use crate::secretary::transcript;
+use crate::settings::{Edits, Settable, Settables, Writes};
 use crate::signatures::Tap;
 use crate::wire;
 
@@ -64,7 +65,7 @@ pub struct Cards<'a> {
     /// How the person reaches the app at a terminal.
     pub reach: &'a crate::connect::Reach,
     /// The names the deployment may set now.
-    pub settables: &'a crate::settings::Settables,
+    pub settables: &'a Settables,
 }
 
 /// Each named chain's events, folded once; only the chains a changeset names, since the page polls.
@@ -73,8 +74,8 @@ struct Drawn<'a> {
     typeset: &'a dyn crate::capability::Typeset,
     now: crate::zone::Moment,
     categories: Vec<String>,
-    routine: Option<crate::coding::RoutineId>,
-    model: Option<crate::settings::Settable>,
+    routine: Option<crate::connect::RoutineId>,
+    model: Option<Settable>,
     plugins: Vec<crate::plugin::Manifest>,
     reach: crate::connect::Reach,
     /// Each held value's message, by its notmuch id.
@@ -195,12 +196,12 @@ fn sources(
 }
 
 impl Draw for Drawn<'_> {
-    fn routine(&self) -> Option<&crate::coding::RoutineId> {
+    fn routine(&self) -> Option<&crate::connect::RoutineId> {
         self.routine.as_ref()
     }
 
     fn model(&self) -> Option<&str> {
-        self.model.as_ref().map(crate::settings::Settable::name)
+        self.model.as_ref().map(Settable::name)
     }
 
     fn source(&self, handle: &held_value::Handle) -> String {
@@ -644,7 +645,7 @@ pub struct Effectors<'a> {
     /// Performs a tapped act (a sign-in, a web request).
     pub performer: &'a dyn Perform,
     /// Stores a tapped secret.
-    pub secrets: &'a dyn crate::settings::Writes,
+    pub secrets: &'a dyn Writes,
     /// Calls a model once with a credential before it is stored.
     pub verify: &'a dyn crate::settings::Verify,
     /// Syncs a plugin once its link is stored, so the link is checked at the tap.
@@ -652,7 +653,7 @@ pub struct Effectors<'a> {
     /// The sign-ins the box holds open, which a code card's tap finishes.
     pub signing: &'a dyn crate::secretary::sign_in::Sessions,
     /// Edits the instance file (an "Always allow" rule, a connection, a grant).
-    pub edits: &'a dyn crate::settings::Edits,
+    pub edits: &'a dyn Edits,
     /// Deletes what the box kept for a removed account.
     pub forget: &'a dyn crate::mail::cache::Forget,
     /// Registers a device's key on every chain; `None` without a root.
@@ -667,7 +668,7 @@ pub enum TapAnswer {
     /// Nothing but the tap: the card performed as it stands.
     Plain,
     /// A secret's value, or the code a sign-in's page shows.
-    Value(crate::capability::Secret),
+    Value(Secret),
     /// The card's wider yes ("Always allow", or deleting a removed account's mail).
     Always,
     /// The tapping device's signature of a device card's registration.
@@ -708,7 +709,7 @@ impl TapAnswer {
     }
 
     /// The value of a card that stores one.
-    fn value(&self, missing: &str) -> Result<&crate::capability::Secret, Refusal> {
+    fn value(&self, missing: &str) -> Result<&Secret, Refusal> {
         match self {
             TapAnswer::Value(value) => Ok(value),
             TapAnswer::Plain => Err(Refusal::bad_request(format!("value is required{missing}"))),
@@ -756,13 +757,13 @@ enum Prepared<'p, 'c> {
     Changes(std::borrow::Cow<'p, Changeset>),
     /// Store `value` under a name minted against the names declared at the tap.
     Secret {
-        name: crate::settings::Settable,
-        value: &'p crate::capability::Secret,
+        name: Settable,
+        value: &'p Secret,
     },
     Code {
         url: &'p crate::secretary::sign_in::SignInUrl,
-        code: &'p crate::capability::Secret,
-        name: crate::settings::Settable,
+        code: &'p Secret,
+        name: Settable,
     },
     Connect(&'p crate::connect::Connection),
     Disconnect {
@@ -806,7 +807,7 @@ enum Prepared<'p, 'c> {
     /// Keep the Google client in the file pasted into its card, when it lists `redirect`.
     GoogleClient {
         redirect: &'p crate::google::RedirectUri,
-        file: &'p crate::capability::Secret,
+        file: &'p Secret,
     },
     /// Open a sign-in with Google for `account`, asking `scopes`.
     GoogleSignIn {
@@ -821,7 +822,7 @@ enum Prepared<'p, 'c> {
 }
 
 struct Preparing<'r, 'c> {
-    settables: &'r crate::settings::Settables,
+    settables: &'r Settables,
     enrolling: Option<crate::signatures::Enrolling<'c>>,
     tap: &'r Tap,
     hold: &'r dyn Fn() -> Result<crate::secretary::memories::Held<'c>, Refusal>,
@@ -998,11 +999,8 @@ impl<'p, 'c> Prepared<'p, 'c> {
 }
 
 /// `name` minted against the names declared now; a name no longer declared stores nothing.
-fn minted(
-    settables: &crate::settings::Settables,
-    name: &str,
-) -> Result<crate::settings::Settable, Refusal> {
-    crate::settings::Settable::mint(settables, name).map_err(|_| {
+fn minted(settables: &Settables, name: &str) -> Result<Settable, Refusal> {
+    Settable::mint(settables, name).map_err(|_| {
         Refusal::conflict(format!(
             "nothing was stored: {} is no longer a secret this deployment declares",
             crate::settings::Help::label(name)
@@ -1311,11 +1309,7 @@ enum Link {
 }
 
 /// Where `value` stands as `name`'s link; refused while the instance file does not read.
-fn linked(
-    (edits, settables): (&dyn crate::settings::Edits, &crate::settings::Settables),
-    name: &crate::settings::Settable,
-    value: &crate::capability::Secret,
-) -> Link {
+fn linked((edits, settables): (&dyn Edits, &Settables), name: &Settable, value: &Secret) -> Link {
     let a_plugin_s = settables.declaration(name).is_some_and(|by| {
         by.iter()
             .any(|by| matches!(by, crate::settings::Declaration::Plugin(_)))
@@ -1393,11 +1387,11 @@ fn google_calendar(
 
 /// A secret's tap: stored, refused, or held for the origin its link is served from.
 fn secret(
-    writer: &dyn crate::settings::Writes,
+    writer: &dyn Writes,
     verify: &dyn crate::settings::Verify,
-    reading: (&dyn crate::settings::Edits, &crate::settings::Settables),
-    name: &crate::settings::Settable,
-    value: &crate::capability::Secret,
+    reading: (&dyn Edits, &Settables),
+    name: &Settable,
+    value: &Secret,
     then: &mut Option<Then>,
 ) -> Performed {
     if reading
@@ -1450,10 +1444,7 @@ fn secret(
 }
 
 /// Write a connection's table; a refusal wrote nothing, so tapping again is safe.
-fn connected(
-    edits: &dyn crate::settings::Edits,
-    connection: &crate::connect::Connection,
-) -> Performed {
+fn connected(edits: &dyn Edits, connection: &crate::connect::Connection) -> Performed {
     // A lieer account keeps reading its mail with lieer's own sign-in until its sign-in with
     // Google is kept and has read its mail: the Google callback moves it then, never this tap.
     let moves = edits.declared().is_ok_and(|declared| {
@@ -1509,7 +1500,7 @@ fn disconnected(
         .settables
         .model()
         .map(|model| {
-            crate::settings::Settables::derive(
+            Settables::derive(
                 model.name(),
                 before.channels.iter().copied(),
                 cards.deployment.coding.as_ref(),
@@ -1517,11 +1508,11 @@ fn disconnected(
             )
         })
         .unwrap_or_default()
-        .join(crate::settings::Settables::google(&before.accounts));
-    let owned: Vec<crate::settings::Settable> = connection
+        .join(Settables::google(&before.accounts));
+    let owned: Vec<Settable> = connection
         .kept()
         .iter()
-        .filter_map(|name| crate::settings::Settable::mint(&declared, name).ok())
+        .filter_map(|name| Settable::mint(&declared, name).ok())
         .collect();
     if let Err(failed) = removing.edits.remove_connection(connection) {
         return Performed::Tried(Tried::NotSent {
@@ -1575,7 +1566,7 @@ fn disconnected(
 }
 
 /// Let a plugin reach one more origin.
-fn granted(edits: &dyn crate::settings::Edits, plugin: &PluginName, origin: &Origin) -> Performed {
+fn granted(edits: &dyn Edits, plugin: &PluginName, origin: &Origin) -> Performed {
     match edits.add_origin(plugin, origin) {
         Ok(()) => Performed::Done(Done::Acted {
             what: format!("the {plugin} plugin may reach {origin}"),
@@ -1587,7 +1578,7 @@ fn granted(edits: &dyn crate::settings::Edits, plugin: &PluginName, origin: &Ori
 }
 
 /// Write what `allowing` allows into the instance.
-fn allowed(edits: &dyn crate::settings::Edits, allowing: Allowing<'_>) -> Result<(), Refusal> {
+fn allowed(edits: &dyn Edits, allowing: Allowing<'_>) -> Result<(), Refusal> {
     match allowing {
         Allowing::Once => Ok(()),
         Allowing::Rule(rule) => edits
@@ -1878,7 +1869,7 @@ fn forwarded(
 
 /// Whether `account` is declared a Google account now; lieer alone gave no calendar grant.
 fn google_account(
-    edits: &dyn crate::settings::Edits,
+    edits: &dyn Edits,
     account: &crate::mail::address::EmailAddress,
 ) -> Result<(), Tried> {
     let declared = edits.declared().map_err(|failed| Tried::NotSent {
@@ -1899,10 +1890,10 @@ fn google_account(
 /// Keep the pasted Google client only when it is a web client listing `redirect`; a refusal
 /// never quotes the secret.
 fn google_client(
-    writer: &dyn crate::settings::Writes,
-    settables: &crate::settings::Settables,
+    writer: &dyn Writes,
+    settables: &Settables,
     redirect: &crate::google::RedirectUri,
-    pasted: &crate::capability::Secret,
+    pasted: &Secret,
 ) -> Result<Performed, Refusal> {
     let client = match crate::google::Client::of_download(pasted, redirect) {
         Ok(client) => client,
@@ -1913,7 +1904,7 @@ fn google_client(
         }
     };
     let mint = |name: &str| {
-        crate::settings::Settable::mint(settables, name).map_err(|_| {
+        Settable::mint(settables, name).map_err(|_| {
             Refusal::conflict(
                 "no Google account is declared any more, so the box keeps no Google client",
             )
@@ -1924,13 +1915,8 @@ fn google_client(
         mint(crate::google::CLIENT_SECRET)?,
     );
     let written = writer
-        .write_secret(&id, &crate::capability::Secret::new(client.id.as_str()))
-        .and_then(|()| {
-            writer.write_secret(
-                &secret,
-                &crate::capability::Secret::new(client.secret.expose()),
-            )
-        });
+        .write_secret(&id, &Secret::new(client.id.as_str()))
+        .and_then(|()| writer.write_secret(&secret, &Secret::new(client.secret.expose())));
     Ok(match written {
         Ok(()) => Performed::Done(Done::Acted {
             what: format!(
@@ -1992,10 +1978,7 @@ fn afresh(
 }
 
 /// Ask the store again for every declared name; the card may be tried again while one fails.
-fn store_answers(
-    secrets: &dyn crate::capability::Secrets,
-    settables: &crate::settings::Settables,
-) -> Performed {
+fn store_answers(secrets: &dyn Secrets, settables: &Settables) -> Performed {
     match crate::capability::Snapshot::read(secrets, settables.iter()).answers() {
         Ok(_) => Done::Acted {
             what: "the secret store answers".to_owned(),
@@ -2011,10 +1994,10 @@ fn store_answers(
 
 /// Keep `value` under `name` once a model answers a test call with it.
 fn verified(
-    writer: &dyn crate::settings::Writes,
+    writer: &dyn Writes,
     verify: &dyn crate::settings::Verify,
-    name: &crate::settings::Settable,
-    value: &crate::capability::Secret,
+    name: &Settable,
+    value: &Secret,
 ) -> Performed {
     if let Err(why) = verify.verify(name, value) {
         return Performed::Tried(Tried::NotSent {
@@ -2038,15 +2021,15 @@ fn verified(
 struct SignedIn<'a> {
     signing: &'a dyn crate::secretary::sign_in::Sessions,
     verify: &'a dyn crate::settings::Verify,
-    writer: &'a dyn crate::settings::Writes,
+    writer: &'a dyn Writes,
 }
 
 /// A code card's tap: finish the sign-in it waits for.
 fn coded(
     effectors: &Effectors<'_>,
     url: &crate::secretary::sign_in::SignInUrl,
-    code: &crate::capability::Secret,
-    name: &crate::settings::Settable,
+    code: &Secret,
+    name: &Settable,
     then: &mut Option<Then>,
 ) -> Performed {
     let (outcome, began) = signed_in(
@@ -2068,8 +2051,8 @@ fn coded(
 fn signed_in(
     reach: &SignedIn<'_>,
     url: &crate::secretary::sign_in::SignInUrl,
-    code: &crate::capability::Secret,
-    name: &crate::settings::Settable,
+    code: &Secret,
+    name: &Settable,
 ) -> (Performed, Option<(ProposalId, Performed)>) {
     let again = |why: String| {
         Performed::Tried(Tried::NotSent {

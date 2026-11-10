@@ -7,7 +7,8 @@ use std::time::Duration;
 use serde::Deserialize;
 use serde_json::{Value, json};
 use suzatary_core::capability::Secret;
-use suzatary_core::coding::{Fired, ROUTINE_TOKEN, RoutineId, SessionId, SessionUrl, Task};
+use suzatary_core::coding::{Fired, SessionId, SessionUrl, Task};
+use suzatary_core::connect::{ROUTINE_TOKEN, RoutineId};
 
 use crate::http::{Http, Req, Ureq};
 use crate::secrets::Resolves;

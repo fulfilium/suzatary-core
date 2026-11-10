@@ -24,7 +24,7 @@ fn owner() -> suzatary_core::capability::Login {
 
 fn deployment() -> suzatary_core::deployment::Deployment {
     suzatary_core::deployment::Deployment {
-        coding: Some(suzatary_core::coding::Coding {
+        coding: Some(suzatary_core::connect::Coding {
             routine: "trig_01fake".parse().expect("a routine id"),
             repo: "bmabsout/cv".parse().expect("a repository"),
         }),
@@ -41,7 +41,7 @@ impl suzatary_io::secrets::Resolves for Holding {
         name: &str,
         _reason: &str,
     ) -> Result<Option<suzatary_core::capability::Secret>, suzatary_io::secrets::SecretError> {
-        Ok((name == suzatary_core::coding::ROUTINE_TOKEN)
+        Ok((name == suzatary_core::connect::ROUTINE_TOKEN)
             .then(|| suzatary_core::capability::Secret::new(TOKEN)))
     }
 }

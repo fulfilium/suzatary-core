@@ -8,6 +8,8 @@ pub mod remote;
 
 use std::collections::{BTreeMap, BTreeSet};
 
+use crate::connect;
+
 pub use declaration::Declaration;
 pub use help::{Help, Page, Words};
 
@@ -43,8 +45,8 @@ impl Settables {
     #[must_use]
     pub fn of_deployment(
         model: &str,
-        channels: impl IntoIterator<Item = crate::connect::Channel>,
-        coding: Option<&crate::coding::Coding>,
+        channels: impl IntoIterator<Item = connect::Channel>,
+        coding: Option<&connect::Coding>,
         (plugins, accounts): (
             &[crate::plugin::Manifest],
             &[crate::mail::account::MailAccount],
@@ -61,13 +63,12 @@ impl Settables {
     #[must_use]
     pub fn derive(
         model: &str,
-        channels: impl IntoIterator<Item = crate::connect::Channel>,
-        coding: Option<&crate::coding::Coding>,
+        channels: impl IntoIterator<Item = connect::Channel>,
+        coding: Option<&connect::Coding>,
         plugins: &[crate::plugin::Manifest],
     ) -> Self {
         let model = (model.to_owned(), Declaration::Model);
-        let routine =
-            coding.map(|_| (crate::coding::ROUTINE_TOKEN.to_owned(), Declaration::Coding));
+        let routine = coding.map(|_| (connect::ROUTINE_TOKEN.to_owned(), Declaration::Coding));
         let notified = channels.into_iter().flat_map(|channel| {
             crate::notify::channel_secrets(channel)
                 .into_iter()
@@ -268,10 +269,10 @@ pub trait Edits: Configuration {
     fn allow_drive(&self, folder: &crate::drive_path::DrivePath) -> Result<(), EditError>;
 
     /// Writes `connection`'s table, keeping every other byte, so a remove undoes it.
-    fn add_connection(&self, connection: &crate::connect::Connection) -> Result<(), EditError>;
+    fn add_connection(&self, connection: &connect::Connection) -> Result<(), EditError>;
 
     /// Takes `connection`'s table out, keeping every other byte.
-    fn remove_connection(&self, connection: &crate::connect::Connection) -> Result<(), EditError>;
+    fn remove_connection(&self, connection: &connect::Connection) -> Result<(), EditError>;
 
     /// Lets `plugin` reach `origin`; idempotent.
     fn add_origin(
@@ -284,7 +285,7 @@ pub trait Edits: Configuration {
 /// Reads the connection tables; a read alone, so a record that files cards may hold it.
 pub trait Configuration: Send + Sync {
     /// The tables as the file declares them now, not as read at start.
-    fn declared(&self) -> Result<crate::connect::Declared, EditError>;
+    fn declared(&self) -> Result<connect::Declared, EditError>;
 }
 
 /// Why an edit to the instance file did not happen.
@@ -306,7 +307,7 @@ mod tests {
     use super::*;
 
     fn declared() -> Settables {
-        Settables::derive(MODEL_TOKEN, crate::connect::Channel::ALL, None, &[])
+        Settables::derive(MODEL_TOKEN, connect::Channel::ALL, None, &[])
     }
 
     #[test]
@@ -376,14 +377,14 @@ mod tests {
 
     #[test]
     fn a_declared_routine_makes_its_token_settable() {
-        let coding = crate::coding::Coding {
+        let coding = connect::Coding {
             routine: "trig_01fake".parse().expect("a routine id"),
             repo: "bmabsout/Suzatary".parse().expect("a repository"),
         };
         let with = Settables::derive(MODEL_TOKEN, std::iter::empty(), Some(&coding), &[]);
-        assert!(Settable::mint(&with, crate::coding::ROUTINE_TOKEN).is_ok());
+        assert!(Settable::mint(&with, connect::ROUTINE_TOKEN).is_ok());
         let without = Settables::derive(MODEL_TOKEN, std::iter::empty(), None, &[]);
-        assert!(Settable::mint(&without, crate::coding::ROUTINE_TOKEN).is_err());
+        assert!(Settable::mint(&without, connect::ROUTINE_TOKEN).is_err());
     }
 
     /// A calendar's link is set by name like any other secret, and only the names its manifest
@@ -408,7 +409,7 @@ mod tests {
     /// A name says what declares it, and the model's credential its model.
     #[test]
     fn a_name_says_what_declares_it() {
-        let declared = Settables::derive(MODEL_TOKEN, [crate::connect::Channel::Ntfy], None, &[]);
+        let declared = Settables::derive(MODEL_TOKEN, [connect::Channel::Ntfy], None, &[]);
         let by = |name: &str| {
             declared
                 .declarations()
@@ -418,7 +419,7 @@ mod tests {
         assert_eq!(by(MODEL_TOKEN), Some(vec![Declaration::Model]));
         assert_eq!(
             by("NTFY_TOPIC"),
-            Some(vec![Declaration::Channel(crate::connect::Channel::Ntfy)])
+            Some(vec![Declaration::Channel(connect::Channel::Ntfy)])
         );
     }
 
@@ -427,8 +428,7 @@ mod tests {
         let declaration = prop_oneof![
             Just(Declaration::Coding),
             "[a-c]".prop_map(Declaration::GoogleGrant),
-            proptest::sample::select(crate::connect::Channel::ALL.to_vec())
-                .prop_map(Declaration::Channel),
+            proptest::sample::select(connect::Channel::ALL.to_vec()).prop_map(Declaration::Channel),
         ];
         proptest::collection::vec(("[A-C]", declaration), 0..6).prop_map(|pairs| {
             pairs
@@ -445,7 +445,7 @@ mod tests {
             a in generated(),
             b in generated(),
             keep in proptest::sample::subsequence(vec!["a", "b", "c"], 0..=3),
-            channels in proptest::sample::subsequence(crate::connect::Channel::ALL.to_vec(), 0..=2),
+            channels in proptest::sample::subsequence(connect::Channel::ALL.to_vec(), 0..=2),
         ) {
             let k = |by: &Declaration| match by {
                 Declaration::GoogleGrant(name) => keep.contains(&name.as_str()),
@@ -481,9 +481,9 @@ mod tests {
         #[test]
         fn deriving_is_a_homomorphism(
             left in proptest::collection::vec(
-                proptest::sample::select(crate::connect::Channel::ALL.to_vec()), 0..3),
+                proptest::sample::select(connect::Channel::ALL.to_vec()), 0..3),
             right in proptest::collection::vec(
-                proptest::sample::select(crate::connect::Channel::ALL.to_vec()), 0..3),
+                proptest::sample::select(connect::Channel::ALL.to_vec()), 0..3),
         ) {
             proptest::prop_assert_eq!(
                 Settables::derive(MODEL_TOKEN, left.iter().chain(&right).copied(), None, &[]),

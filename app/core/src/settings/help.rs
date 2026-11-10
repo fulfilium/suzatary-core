@@ -1,6 +1,6 @@
 //! What the owner is told when the box asks for a secret, keyed by its name.
 
-use crate::coding::RoutineId;
+use crate::connect::{ROUTINE_TOKEN, RoutineId};
 
 /// How to find one secret's value.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -72,7 +72,7 @@ impl Words {
     fn of(name: &str) -> Option<Self> {
         crate::connect::secret_words(name).or_else(|| {
             match name {
-                crate::coding::ROUTINE_TOKEN => Some(Self {
+                ROUTINE_TOKEN => Some(Self {
                     label: "the coding routine's token",
                     text: "On the routine's page, generate its API trigger's token.",
                     page: Page::Routine,
@@ -124,7 +124,7 @@ mod tests {
         let names = ["NTFY_TOPIC", "FCM_SERVICE_ACCOUNT_B64"]
             .into_iter()
             .chain([
-                crate::coding::ROUTINE_TOKEN,
+                ROUTINE_TOKEN,
                 crate::settings::DATA_PUSH_TOKEN,
                 crate::repos::TOKEN,
                 "PLUGIN_ICS_WORK",

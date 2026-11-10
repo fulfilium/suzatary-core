@@ -10,10 +10,8 @@ use std::fmt;
 use serde::{Deserialize, Serialize};
 
 use crate::coding_report::{FileStat, Report};
-use crate::repo_ids::{CommitId, RepoName, RepoPath};
-
-/// The secretspec name the routine's bearer token lives under; never read by this crate.
-pub const ROUTINE_TOKEN: &str = "SUZATARY_ROUTINE_TOKEN";
+use crate::connect::parsed;
+use crate::repo_ids::{CommitId, RepoPath};
 
 /// The most a task may be, in bytes.
 pub(crate) const MAX_TASK_BYTES: usize = 4096;
@@ -36,9 +34,6 @@ pub enum CodingError {
     /// A control character other than a newline or a tab.
     #[error("a task is plain text: no control characters but newlines and tabs")]
     ControlInTask,
-    /// Not a routine id.
-    #[error("a routine id is letters, digits, '_' and '-', got {0:?}")]
-    Routine(String),
     /// Not a session id.
     #[error(
         "a session id is cse_ or session_ then up to 256 letters, digits, '_' and '-', got {0:?}"
@@ -103,78 +98,6 @@ fn token(text: &str, max: usize) -> bool {
     !text.is_empty()
         && text.chars().count() <= max
         && !text.chars().any(|c| c.is_whitespace() || c.is_control())
-}
-
-/// Declares a newtype over `String` that parses through `$check`.
-macro_rules! parsed {
-    ($(#[$doc:meta])* $name:ident, $error:ident, $check:expr) => {
-        $(#[$doc])*
-        #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
-        #[serde(try_from = "String", into = "String")]
-        pub struct $name(String);
-
-        impl $name {
-            /// The text.
-            #[must_use]
-            pub fn as_str(&self) -> &str {
-                &self.0
-            }
-        }
-
-        impl TryFrom<String> for $name {
-            type Error = CodingError;
-            fn try_from(text: String) -> Result<Self, Self::Error> {
-                let check: fn(&str) -> bool = $check;
-                if check(&text) {
-                    Ok(Self(text))
-                } else {
-                    Err(CodingError::$error(text))
-                }
-            }
-        }
-
-        impl std::str::FromStr for $name {
-            type Err = CodingError;
-            fn from_str(text: &str) -> Result<Self, Self::Err> {
-                Self::try_from(text.to_owned())
-            }
-        }
-
-        impl From<$name> for String {
-            fn from(value: $name) -> Self {
-                value.0
-            }
-        }
-
-        impl fmt::Display for $name {
-            fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-                f.write_str(&self.0)
-            }
-        }
-    };
-}
-
-parsed!(
-    /// The routine's id, as `[coding] routine` names it: it goes into the
-    /// fire URL's path, so nothing but letters, digits, `_` and `-`.
-    RoutineId,
-    Routine,
-    |text| {
-        !text.is_empty()
-            && text.len() <= 128
-            && text
-                .chars()
-                .all(|c| c.is_ascii_alphanumeric() || matches!(c, '_' | '-'))
-    }
-);
-
-impl RoutineId {
-    /// The routine's own page, where its API trigger's token is generated; the id is letters,
-    /// digits, `_` and `-`, so it is a path segment as it stands.
-    #[must_use]
-    pub fn page(&self) -> String {
-        format!("https://claude.ai/code/routines/{}", self.0)
-    }
 }
 
 /// The two prefixes one session's id is spelled with: the routine API answers `cse_…`, and the
@@ -289,7 +212,8 @@ parsed!(
     /// `claude_code_session_url`: an https URL on claude.ai, one token, where the session can
     /// be watched.
     SessionUrl,
-    Url,
+    CodingError,
+    CodingError::Url,
     |text| text.starts_with("https://claude.ai/") && token(text, 512)
 );
 
@@ -297,7 +221,8 @@ parsed!(
     /// A branch a routine pushed: `claude/…`, a ref `git` reads as a name and
     /// never as an option or a range.
     Branch,
-    Branch,
+    CodingError,
+    CodingError::Branch,
     |text| {
         text.len() <= 200
             && text
@@ -312,17 +237,6 @@ parsed!(
                 .all(|c| c.is_ascii_alphanumeric() || matches!(c, '/' | '_' | '-' | '.'))
     }
 );
-
-/// `[coding]` in the instance file, parsed: which routine a tap fires and which repository its
-/// branches come back to.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
-pub struct Coding {
-    /// The routine created at claude.ai/code/routines.
-    pub routine: RoutineId,
-    /// The repository its saved prompt names; the poll reads its branches.
-    pub repo: RepoName,
-}
 
 /// What a fire answered.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -696,8 +610,6 @@ mod tests {
 
     #[test]
     fn names_refuse_what_git_or_a_url_path_could_misread() {
-        assert!("trig_01XyZ-2".parse::<RoutineId>().is_ok());
-        assert!("../fire".parse::<RoutineId>().is_err());
         assert!("a b".parse::<SessionId>().is_err());
         assert!("https://evil.test/code/x".parse::<SessionUrl>().is_err());
         assert!("claude/fix-typo.2".parse::<Branch>().is_ok());

@@ -40,7 +40,7 @@ and each fix is a named move:
 | C6 | `secretary/store` (`Entry`, `Proposal`) ↔ `acts`/`inbox`/`changes`/`responded` | 36 | Done in #430. `Proposal`, `Reasons`, `Draft` and `Forward` (with `Style`) move to `inbox` as `secretary/proposal`. The writers of an `Entry` in `acts.rs` move to `secretary/act_lines.rs`, in `lines` with the store's `append` (C7). `store::stamp` moves beside `Stamp`; `act_vocabulary.rs` (only `SIGNATURES`) is `inbox`'s; `Daily` moved to `base` in C8. `diff.rs` (`changes` names `diff::shown`) is `inbox`'s, and `agent/priced.rs` (`changes` names `Priced`) is the top module `priced`, in `todo`. |
 | C7 | `secretary/mod.rs` is both the store's operations (`read`, `append`, `list`, `start`) and the turn; and `conversations` ↔ `lines` (the store names `LineEvent`, the lines name `Entry`, `Stored` and `Conversations`) | 22 | Corrected on #430 (option b). `conversations` is an entry and its fold (`store/*`, `turn_shape`, `outcome`, `queue`, `taint`, `tool_name`, and nothing that names `LineEvent`). `lines` holds the store: `conversations.rs` with the operations (`read`, `start`, `list`, `append`, `read_or_open_default`), `conversation_json.rs`, `transcript`, `line_*`, `held_*`, `daily.rs` and `act_lines.rs`; every edge points from `lines` down. `writes_as()` was `transcript::writer()`. `SecretaryVerb` stays in `secretary` (`verbs!` builds it from the verb structs); its low users (`tool_name`, `taint`, `targets`, `caused`, and `store/stored.rs` through `Effect`) need each verb's powers, not only its name, which the C7 pull request's comment proposes to settle. `Bound` and the cards' `propose` are the cards ↔ secretary cycle below. |
 | C8 | Ids defined high and named low | 28 | Done in #388: each moved to the lowest crate that names it (`conversation_id`, `topic_target`, `writer`, `spelling`, `drive_path`, `repo_ids`, `coding_report`, `answer`). |
-| C9 | `deployment` and `settings` name `coding::{Coding, RoutineId, ROUTINE_TOKEN}`, and `coding` names the secretary's words | 4 | Those three move to `connect`. The rest of `coding` (the Task card) goes to `inbox`. |
+| C9 | `deployment` and `settings` name `coding::{Coding, RoutineId, ROUTINE_TOKEN}` | 4 | Done in #434: the three and `parsed!` are `connect/routine.rs`'s; `coding` (the Task card) is `inbox`'s. |
 | C10 | `held_value`/`file_read` ↔ `mail` | 6 | Done in #388: `message_part`. |
 
 With these moves applied, the graph over the cut below has **no edge that points up**, except
@@ -160,7 +160,7 @@ move to their future crate's modules, and no crate exists yet.
 | 3 | C4: the `health` cluster, `mail::Fault`, the `Healths` builders up | ~12 files, ~120 paths |
 | 4 | C5: `Tap` beside `Trusted`; `performs` to `inbox` | 3 files, ~40 paths |
 | 5 | C6 and C7: `Proposal`/`Reasons`/`Style` to `inbox`, the `Entry` writers up, `mod.rs` split | ~10 files, ~200 paths |
-| 6 | C9: the coding session's configuration to `connect` | ~20 paths |
+| 6 | C9: the coding session's configuration to `connect`. Done in #434. | ~20 paths |
 | 7 | C3: the `capability` ports beside their domains; `capability/mod.rs`'s 35 `pub use` lines shrink to `base`'s | ~30 files moved, ~400 paths |
 | 8 | C1: `store` generic over `Schema`; `Kind` to the top | `store/kind.rs` (162 lines), `store/database.rs` (99), each schema's impl |
 | 9 | C2: the wire split by the table above; generator unchanged | ~93 types out of `wire.rs` (2,795 lines) |
