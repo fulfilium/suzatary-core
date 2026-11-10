@@ -3,22 +3,15 @@
 # against real `suzatary serve` fixture servers over temp chains, asserting on the DOM.
 #
 # The main servers (others below serve one file each):
-#   E2E_BASE           a viewer login: every write is the real 403, so its chain cannot move;
-#                      nothing waits in its Inbox.
+#   E2E_BASE           a viewer login: every write is the real 403; nothing waits in its Inbox.
 #   E2E_BASE_PROPOSED  the same viewer, with a triage card waiting and held by the review.
 #   E2E_BASE_WRITE     the writer login, with a chain and a card of its own.
 #
 # They run a build with a whois fixture compiled in (`$SUZATARY_FIXTURE`, else
 # `scripts/app-build.sh --fixture`); the shipped `.#suzatary` does not contain that code.
 #
-#   scripts/web-e2e.sh            every file
-#   scripts/web-e2e.sh list       only web/e2e/list.test.ts
-#   scripts/web-e2e.sh bootbench  only web/e2e/bootbench.bench.ts, a measurement
-#   scripts/web-e2e.sh pagebench  only web/e2e/pagebench.bench.ts, every page measured
-#   scripts/web-e2e.sh typstmeasure  only web/e2e/typstmeasure.bench.ts, the Typst list's draw timed
-#   scripts/web-e2e.sh writewait  only web/e2e/writewait.bench.ts, the box's answer to each write route timed
-#   scripts/web-e2e.sh settingsbench  only web/e2e/settingsbench.bench.ts, Settings today against its Rust program
-#                                 no gate runs any of them (`*.bench.ts` is outside every glob)
+#   scripts/web-e2e.sh [<file>...]  those files of web/e2e/<file>.test.ts, or every file
+#   scripts/web-e2e.sh <bench>    only web/e2e/<bench>.bench.ts, a measurement no gate runs
 #   SUZATARY_E2E_LIVE=<instance> scripts/web-e2e.sh pages
 #                                 web/e2e/pages.test.ts against a copy of that deployment's data tree
 #
@@ -30,7 +23,7 @@ set -euo pipefail
 
 # $SUZATARY_E2E_SCENES, a pattern, runs only the scenes whose names match it.
 # $SUZATARY_E2E_PART=<k>/<n> runs only the k-th of n parts of the files (below); empty, every file.
-# $SUZATARY_E2E_TRACE_REQUESTS=1 logs every signed request, the tab's and each server's.
+# $SUZATARY_E2E_TRACE_REQUESTS=1 logs every signed request.
 if [[ "${SUZATARY_E2E_TRACE_REQUESTS:-}" == "1" ]]; then
   export RUST_LOG="${RUST_LOG:-info},suzatary::requests=debug"
 fi
@@ -39,8 +32,8 @@ root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$root"
 . "$root/scripts/nix-out.sh"
 
-# Each scene fails after $SUZATARY_E2E_SCENE_MS (default five minutes; the slowest takes about
-# two), so a wait that never ends cannot hold the gate.
+# Each scene fails after $SUZATARY_E2E_SCENE_MS (default five minutes), so a wait that never ends
+# cannot hold the gate.
 
 # Shards: default four, or one per core where fewer; a non-count is refused before any build.
 shards="${SUZATARY_E2E_SHARDS:-$(( $(nproc) < 4 ? $(nproc) : 4 ))}"
@@ -49,8 +42,7 @@ if [[ ! "$shards" =~ ^[1-9][0-9]*$ ]]; then
   exit 64
 fi
 
-# A part, so separate machines split the suite (scripts/e2e-part.sh). A part dealt no file runs
-# nothing.
+# A part, so separate machines split the suite (scripts/e2e-part.sh).
 if [[ -n "${SUZATARY_E2E_PART:-}" ]]; then
   part="$(scripts/e2e-part.sh "$SUZATARY_E2E_PART" "$@")" || exit $?
   echo "==> part $SUZATARY_E2E_PART: $(paste -sd' ' <<<"$part")"
@@ -72,7 +64,6 @@ if [[ ! -f web/dist/app.js ]]; then
   exit 1
 fi
 
-# This script does not build the bundle, so a stale one is refused rather than tested.
 stale="$(find web/src web/static -type f -newer web/dist/app.js 2>/dev/null | head -1)"
 if [[ -n "$stale" ]]; then
   echo "web-e2e.sh: web/dist/app.js is older than $stale — run scripts/build-web.sh first" >&2
@@ -99,15 +90,21 @@ names=("$@")
 if [[ $# -eq 0 ]]; then
   for file in web/e2e/*.test.ts; do names+=("$(basename "$file" .test.ts)"); done
 fi
-if ((shards > 1 && ${#names[@]} > 1)); then
-  ((shards <= ${#names[@]})) || shards=${#names[@]}
+# A file that observes the page's long tasks measures the page's thread, which another shard's
+# browser preempts, so it runs after the shards, alone.
+alone=() shared=()
+for name in "${names[@]}"; do
+  if grep -q '"longtask"' "web/e2e/$name.test.ts"; then alone+=("$name"); else shared+=("$name"); fi
+done
+if ((shards > 1 && ${#shared[@]} > 0 && ${#names[@]} > 1)); then
+  ((shards <= ${#shared[@]})) || shards=${#shared[@]}
   dealt="$(mktemp -d)"
   weights() {
     local name timed timeds=()
-    for name in "${names[@]}"; do
+    for name in "${shared[@]}"; do
       timed="$(awk -v n="$name" '$1 == n { print $2 }' "$durations" 2>/dev/null || true)"
       if [[ -z "$timed" ]]; then
-        for each in "${names[@]}"; do echo "$(wc -c <"web/e2e/$each.test.ts") $each"; done
+        for each in "${shared[@]}"; do echo "$(wc -c <"web/e2e/$each.test.ts") $each"; done
         return
       fi
       timeds+=("$timed $name")
@@ -123,7 +120,8 @@ if ((shards > 1 && ${#names[@]} > 1)); then
     echo "$name" >>"$dealt/$least.names"
   done < <(weights | sort -rn)
   # Every file dealt once, or nothing runs: a shard handed no file would run every file.
-  if [[ "$(sort "$dealt"/*.names | paste -sd' ')" != "$(printf '%s\n' "${names[@]}" | sort | paste -sd' ')" ]]; then
+  printf '%s\n' "${alone[@]}" >"$dealt/alone.names"
+  if [[ "$(sort "$dealt"/*.names | sed '/^$/d' | paste -sd' ')" != "$(printf '%s\n' "${names[@]}" | sort | paste -sd' ')" ]]; then
     echo "web-e2e.sh: the files were not dealt to the shards whole" >&2
     exit 1
   fi
@@ -144,6 +142,13 @@ if ((shards > 1 && ${#names[@]} > 1)); then
     cat "$dealt/$i.log"
     ((code == 0)) || failed=1
   done
+  if ((${#alone[@]})); then
+    code=0
+    SUZATARY_E2E_SHARDS=1 SUZATARY_E2E_PART="" SUZATARY_FIXTURE_BIN="$fixture_bin" "$0" "${alone[@]}" >"$dealt/alone.log" 2>&1 || code=$?
+    echo "==> alone, after the shards (${alone[*]}): exit $code"
+    cat "$dealt/alone.log"
+    ((code == 0)) || failed=1
+  fi
   # Each file's scenes, `✔ <file>: <scene> (<ms>ms)`, summed; older times kept for the others.
   mkdir -p "$(dirname "$durations")"
   { cat "$dealt"/*.log | sed -nE 's/^(✔|✖) ([a-z]+): .* \(([0-9]+)(\.[0-9]+)?ms\)$/\2 \3/p' | sort -u |
@@ -174,9 +179,6 @@ secrets_home="$work/secrets-home"
 mkdir -p "$secrets_home"
 secrets_store="$work/secrets-store.env"
 
-# `start` runs in a command substitution's subshell, so it writes each PID to a file and the main
-# shell collects them into `servers`.
-#
 # Each server runs under `setsid`, so its PID is its process group, and cleanup kills the whole
 # group (its typst subprocesses too). A SIGKILL runs no trap and orphans the servers: run this
 # detached (`setsid nohup scripts/web-e2e.sh & disown`) and stop it with SIGTERM.
@@ -408,7 +410,6 @@ printf '\r\nYour OAuth token (valid for 1 year):\r\n\r\nsk-ant-oat01-E2Efake-tok
 FAKECLAUDE
 chmod +x "$fake_bin/claude"
 
-# Start one fixture server and print its base URL; `ready` waits for it to serve.
 start() { # name [fixture-chain flags…] [-- serve flags…]
   local name="$1"; shift
   local serve_flags=()
@@ -579,7 +580,6 @@ echo "$!" >"$work/fake-google.pid"
 until [[ -s "$work/fake-google.json" ]]; do sleep 0.1; done
 google_fake="$(node -p "require('$work/fake-google.json').base")"
 google_base="$(start google --settings --connected google -- --google-fixture "$google_fake")"
-# web/e2e/epoch.test.ts.
 epoch_base="$(start epoch)"
 # web/e2e/bigstore.test.ts: stores of the live size (each count overridable; conversations 0
 # halves them instead).

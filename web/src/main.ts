@@ -59,6 +59,7 @@ import due from "./app/due";
 import ownerzone from "./app/ownerzone";
 import login from "./app/login";
 import page from "./shell/page";
+import soon from "./painter/soon";
 
 // Drawn before anything reads a host by its id.
 await page.draw(import.meta.url);
@@ -92,8 +93,6 @@ const paint = chrome.painter({
   },
 });
 
-// A page that absorbs the change keeps its state; a new chain is a new page. A new page's heading is announced, except
-// the first; a place read again (back, forward) is restored as left, and any other opens at the top.
 // Only the newest navigation draws; a page loaded after a later one is dropped.
 let latest = 0;
 
@@ -107,6 +106,9 @@ async function mount(a: app.App, fresh: boolean, heard: boolean, again: boolean,
   if (turn !== latest) return;
   current.destroy();
   current = inert;
+  // Freeing the page before is a long task of its own; the next page draws in the task after.
+  await new Promise<void>((done) => soon.run(done));
+  if (turn !== latest) return;
   if (!again) window.scrollTo(0, 0);
   current = draw(view);
   // In its own task, since focusing the heading lays the page out; a page that took the focus keeps it.

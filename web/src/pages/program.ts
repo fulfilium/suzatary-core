@@ -19,6 +19,7 @@ import address from "../shell/address"
 import { parseRoute } from "../shell/route"
 import run from "../painter/run"
 import scroll from "../painter/scroll"
+import soon from "../painter/soon"
 import blocks from "../app/blocks"
 import signer from "../prodrome/signer"
 import intentsync from "../prodrome/intentsync"
@@ -105,7 +106,6 @@ export namespace program {
     (path: string) => answer(http.get(path, d.unknown)),
   )
 
-  // For a TypeScript page that reads the same path.
   export const read = (path: string): reading.Reading<Answer> => held(path)
   export const decoded = <A>(a: Answer, decoder: d.Decoder<A>): lo.Settled<A> => (a.type === "Refused" ? lo.error(a.words) : decoder(a.body))
 
@@ -191,22 +191,12 @@ export namespace program {
   export type Around = { readonly box?: () => Element; readonly lane?: lanes.Lane; readonly told?: (said: unknown) => void; readonly absorbs?: (screen: Screen) => boolean }
   const page_ = (): Element => document.scrollingElement ?? document.documentElement
 
-  // A task of its own for `f`, after every task already queued: a message to this tab's own channel, which a hidden tab
-  // does not hold back as it holds back a timer.
-  const soon = (() => {
-    const queued: (() => void)[] = []
-    const channel = new MessageChannel()
-    channel.port1.onmessage = () => queued.shift()?.()
-    return (f: () => void): void => (queued.push(f), channel.port2.postMessage(null))
-  })()
-
   // Only the module is awaited: the page draws when the caller calls what this returns.
   export const mount = async <P extends Page>(page: P, args: Args[P], around: Around = {}): Promise<Draw> => {
     const box = around.box ?? page_
     const lane = around.lane ?? lanes.FIRST
     const glue = await module()
     return root => {
-      // By name: a new one under a name lets the one before go.
       const held_ = new Map<string, () => void>()
       const timers = new Set<ReturnType<typeof setTimeout>>()
       const frames = new Set<number>()
@@ -223,7 +213,7 @@ export namespace program {
         const unheard = listen(() => {
           if (owed) return
           owed = true
-          soon(() => ((owed = false), gone ? undefined : tell()))
+          soon.run(() => ((owed = false), gone ? undefined : tell()))
         })
         return () => ((gone = true), unheard())
       }
