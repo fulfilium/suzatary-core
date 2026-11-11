@@ -8,7 +8,7 @@ use std::path::{Path, PathBuf};
 
 use anyhow::bail;
 use suzatary_core::chains::ChainName;
-use suzatary_core::store::{Database, Kind};
+use suzatary_core::stores::{Database, Kind};
 
 use super::store_of;
 use crate::commands::serve::interpreters::{file_store, upload_store};

@@ -123,7 +123,7 @@ struct Filed {
     keys: BTreeSet<suzatary_core::secretary::locked_text::KeyName>,
 }
 
-fn prints<E: suzatary_core::store::Store>(store: &InMemory<E>) -> Vec<(Hash, String)> {
+fn prints<E: suzatary_core::stores::Store>(store: &InMemory<E>) -> Vec<(Hash, String)> {
     store
         .objects()
         .expect("objects")

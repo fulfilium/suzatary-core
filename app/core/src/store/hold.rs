@@ -1,7 +1,18 @@
 use std::sync::{Condvar, Mutex, PoisonError};
 use std::thread::ThreadId;
 
-use super::{Hold, Reentrant, StoreError, WriteLock};
+use super::{Reentrant, StoreError, WriteLock};
+
+/// What serialises a prodrome's writers above the database's own lock.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Hold {
+    /// This process's threads, reentrant, since a batch holds it while each write inside takes
+    /// its own.
+    Reentrant,
+    /// An `flock` on this file beside the objects, opened afresh for each hold, so threads wait
+    /// on each other as processes do; never taken twice by one thread.
+    File(&'static str),
+}
 
 /// A hold in this process that refuses a second take by the thread holding it, as the box's
 /// `flock` would hang on one, naming the store.

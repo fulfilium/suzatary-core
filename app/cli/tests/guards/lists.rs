@@ -5,7 +5,7 @@
 
 use super::{Scratch, assignments, repo, safe_push_script};
 use suzatary_cli::instance::Instance;
-use suzatary_core::store::{Files, Kind, Tier};
+use suzatary_core::stores::{Files, Kind, Tier};
 
 /// Every store of the sample deployment, by its row and its path under the data root.
 fn placed() -> Vec<(Kind, String)> {

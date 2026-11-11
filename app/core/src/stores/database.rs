@@ -2,7 +2,7 @@ use std::collections::BTreeMap;
 
 use prodrome_core::declared::Declared;
 
-use super::{Doc, Gets, Kind, Log, Prodrome, Store};
+use super::{Kind, Store};
 use crate::attachment::AttachmentId;
 use crate::chains::ChainName;
 use crate::decisions::DecisionEvent;
@@ -21,6 +21,7 @@ use crate::secretary::memory_event::MemoryEvent;
 use crate::secretary::salted_text::{Text, TextName};
 use crate::secretary::topics::reading::AliasEvent;
 use crate::secretary::topics::reading::MembershipEvent;
+use crate::store::{Doc, Gets, Log, Prodrome};
 use crate::upload::Upload;
 
 /// The whole store, as one value: every chain, and the box's own stores.

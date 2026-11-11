@@ -20,7 +20,7 @@ use suzatary_io::objects::Objects;
 use suzatary_io::texts::Texts;
 
 /// Every object of `from` handed to `to`, as a replica hands its objects over.
-fn handed<E: suzatary_core::store::Store>(from: &dyn Reads<E>, to: &dyn Prodrome<E>) {
+fn handed<E: suzatary_core::stores::Store>(from: &dyn Reads<E>, to: &dyn Prodrome<E>) {
     let prints: Vec<(Hash, String)> = from
         .objects()
         .expect("the objects read")

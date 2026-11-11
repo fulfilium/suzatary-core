@@ -3,7 +3,8 @@ use prodrome_core::genesis::mk_genesis;
 use prodrome_core::schema::Schema;
 use prodrome_core::store::{MemoryStore, Replica};
 
-use super::{InMemoryHold, Prodrome, Reads, Store, StoreError, WriteLock};
+use super::{InMemoryHold, Prodrome, Reads, StoreError, WriteLock};
+use crate::stores::Store;
 
 /// A prodrome held in memory, for tests: the Prodrome's own `MemoryStore`, so an append writes
 /// byte for byte what a store on disk holding the same objects writes, its heads are derived, and

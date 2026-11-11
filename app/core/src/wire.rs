@@ -469,8 +469,8 @@ impl StoreName {
     ];
 
     #[must_use]
-    pub const fn kind(self) -> crate::store::Kind {
-        use crate::store::Kind;
+    pub const fn kind(self) -> crate::stores::Kind {
+        use crate::stores::Kind;
         match self {
             StoreName::Inbox => Kind::Inbox,
             StoreName::Lines => Kind::Lines,

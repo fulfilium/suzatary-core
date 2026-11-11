@@ -1445,7 +1445,7 @@ struct Shipped {
     text: String,
 }
 
-fn shipped<E: suzatary_core::store::Store>(store: &InMemory<E>) -> Vec<Shipped> {
+fn shipped<E: suzatary_core::stores::Store>(store: &InMemory<E>) -> Vec<Shipped> {
     store
         .objects()
         .expect("an in-memory store reads")

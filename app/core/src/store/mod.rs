@@ -1,10 +1,8 @@
-//! The whole store, [`Database`], in three shapes: [`Prodrome`] (objects, appended), [`Log`]
-//! (lines, pushed) and [`Doc`] (one value, got and set), each keyed where a store holds several;
-//! [`Reads`] and [`Gets`] are the read halves of the first and the last.
-//! `suzatary-io` interprets them over files; what a store's contents mean is the module that owns
-//! its type.
+//! A store in one of three shapes: [`Prodrome`] (objects, appended), [`Log`] (lines, pushed) and
+//! [`Doc`] (one value, got and set), each keyed where a store holds several; [`Reads`] and
+//! [`Gets`] are the read halves of the first and the last. `suzatary-io` interprets them over
+//! files; what a store holds means what its schema says.
 
-mod database;
 mod doc;
 mod error;
 mod graph;
@@ -21,7 +19,6 @@ mod in_memory_keys;
 #[cfg(any(test, feature = "nothing"))]
 #[path = "../../tests/support/in_memory_log.rs"]
 mod in_memory_log;
-mod kind;
 mod knowledge;
 mod learnt;
 mod log;
@@ -32,11 +29,10 @@ mod recording;
 mod reentrant;
 mod signing;
 
-pub use database::Database;
 pub use doc::{Doc, Gets};
 pub use error::StoreError;
 pub use graph::Graph;
-pub use hold::{InMemoryHold, Once};
+pub use hold::{Hold, InMemoryHold, Once};
 #[cfg(any(test, feature = "nothing"))]
 pub use in_memory::InMemory;
 #[cfg(any(test, feature = "nothing"))]
@@ -45,7 +41,6 @@ pub use in_memory_doc::InMemoryDoc;
 pub use in_memory_keys::InMemoryKeys;
 #[cfg(any(test, feature = "nothing"))]
 pub use in_memory_log::InMemoryLog;
-pub use kind::{Files, Hold, Kind, Store, Tier};
 pub(crate) use knowledge::Knowledge;
 pub use learnt::{Learnt, learn};
 pub use log::{Decide, Edit, Log};

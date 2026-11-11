@@ -694,7 +694,7 @@ fn every_store_writes_the_pinned_bytes() {
 
 /// The database's conversations, keys drawn as the pins were.
 fn conversations_of<'a>(
-    database: &suzatary_core::store::Database<'a>,
+    database: &suzatary_core::stores::Database<'a>,
 ) -> suzatary_core::secretary::conversations::Conversations<'a> {
     suzatary_core::secretary::conversations::Conversations {
         lines: database.conversations,
@@ -731,7 +731,7 @@ fn copy_pins(root: &Path) -> PathBuf {
 fn reading_a_copy_of_every_store_writes_nothing() {
     use suzatary_core::attachment::AttachmentId;
     use suzatary_core::chains::ChainName;
-    use suzatary_core::store::Database;
+    use suzatary_core::stores::Database;
 
     let dir = tempfile::tempdir().expect("a scratch dir");
     let root = dir.path();
@@ -831,7 +831,7 @@ fn reading_a_copy_of_every_store_writes_nothing() {
 }
 
 /// Both decisions and the one topic still on its round read back.
-fn decisions_and_topics_read(database: &suzatary_core::store::Database<'_>) {
+fn decisions_and_topics_read(database: &suzatary_core::stores::Database<'_>) {
     let ledger = suzatary_core::decisions::Decisions {
         store: database.decisions,
     }
@@ -848,7 +848,7 @@ fn decisions_and_topics_read(database: &suzatary_core::store::Database<'_>) {
 }
 
 /// The triage's two documents read back through the key as one.
-fn triage_reads(database: &suzatary_core::store::Database<'_>) {
+fn triage_reads(database: &suzatary_core::stores::Database<'_>) {
     let known = Known {
         pushed: database
             .triage

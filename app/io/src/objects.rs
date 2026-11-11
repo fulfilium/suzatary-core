@@ -17,8 +17,9 @@ use prodrome_core::store::{EventStore, Replica};
 use suzatary_core::record::Record;
 use suzatary_core::secretary::digest_event::DigestEvent;
 use suzatary_core::store::{
-    Hold, Kind, Prodrome, Reads, Reentrant, Store, StoreError, WriteLock, append_to, begun,
+    Hold, Prodrome, Reads, Reentrant, StoreError, WriteLock, append_to, begun,
 };
+use suzatary_core::stores::{Kind, Store};
 
 use crate::durable;
 

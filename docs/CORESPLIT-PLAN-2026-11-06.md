@@ -32,7 +32,7 @@ and each fix is a named move:
 
 | # | Cycle | Edges | Break |
 |---|---|---|---|
-| C1 | `store/kind` and `store/database` name every store's event type (secretary, mail, decisions, devices, plugin, upload) | 33 | Invert: `store` is generic over `prodrome_core::schema::Schema`. Each schema crate implements it. The closed sum `store::Kind` (pinned by `guards/lists.rs`, `safe-push.sh` and `vault-backup.sh`) moves to `api`, where every schema is in scope. |
+| C1 | `store/kind` and `store/database` name every store's event type (secretary, mail, decisions, devices, plugin, upload) | 33 | Done in #436: `Kind`, `Tier`, `Files`, the `Store` trait, its rows and `Database` are the top module `stores`, in `api`; `Hold` stays in `store`, whose code was already generic over `Schema`. The impls stay in `api`'s one list: most schemas are aliases of the Prodrome's generics (`headed::Event<Said>`), which the orphan rule lets only the trait's crate implement. |
 | C2 | `wire.rs` holds every route's types, and low modules use them (`FailedChain`, `SinceRead`, `DevicePayload`, `ErrorPayload`, `MailWatch`, `Card*`) | 50 | Split by concept: each wire type moves to the lowest crate that names it (table below). The ts-rs generator test moves to `api`. |
 | C3 | `capability/*` defines every port and record over every domain's types (`mail` 27, `secretary` 22) | 49 | Each port file moves beside its domain (`corpus`, `mailbox`, `mail_sync`, `junk`, `older_mail` to mail and triage; `model`, `agent`, `secretary` to `secretary`; `server` to `api`). `capability/mod` keeps `Secret`, `Datetime`, `Login` and the tokens in `base`. |
 | C4 | `connect::Failure` ↔ `capability::Limited` ↔ `health`, used by mail, plugin and drive | 27 | Done in #405: the `health` module; mail fails with `mail::fault::Fault`; `Lacking` is mail's. |
@@ -52,6 +52,9 @@ these, found while doing C6 and C7, each named with its proposed move in the C7 
 - **Re-exports hide edges.** `capability/mod.rs` re-exports every port, so a path such as
   `crate::capability::Turn` reads as `base` while `Turn` is `capability/model.rs`'s; low
   modules name `Turn` and `ModelSessions` this way. C3 must move what the low modules use.
+- **The test stores name `stores::Store`.** `store`'s `InMemory` (`tests/support/in_memory.rs`,
+  compiled under `nothing`) takes its hold from `E::HOLD`; its crate PR moves it to `api`'s test
+  support or passes the hold in.
 
 ## The crates, bottom up
 
@@ -98,7 +101,7 @@ crate names. PR 1 narrows the rest. The last column names the main exported type
 |---|---|---|
 | base | capability (mod, clock, entropy, manuals, typeset, whois), cast, chains, content_id, escape, finite, model_name, narrowing, nonempty, persona, reference, refusal, rule_version, seat, table, term_json, timings, tree, tripwire, url, words, zone; the C8 ids | `Refusal`, `Reference`, `ChainName`, `Zone`, `Secret`, `Datetime`, `Clock`, `Entropy`, `Typeset` |
 | record | decoration, record, todo | `TodoEvent`, `Record`, `MarkupSource` |
-| store | replica/\*, snapshot, store/\* | `Prodrome`, `Reads`, `Log`, `Doc`, `StoreError`, `Objects`, `Frontier` |
+| store | replica/\*, snapshot, store/\* (with `Hold`) | `Prodrome`, `Reads`, `Log`, `Doc`, `StoreError`, `Objects`, `Frontier` |
 | signatures | believed, chain_set, devices, epoch, signatures/\*, sync; `Tap` | `Trust`, `Enrolment`, `ChainSet`, `Tap` |
 | todo | authoring, capability/{render, render_cache}, decisions/\*, priced, reading, release, rendering, template, todos, verb, view | `Authored`, `Fulfillment`, `Decisions`, `Released` |
 | held | attachment, capability/{pdf_text, upload_index}, enclosed, excerpt, file_read, for_model, held_file, held_value, leak, redact, s/{attached, attachment_source, upload_standing}, upload, vault | `HeldFile`, `AttachmentId`, `Redacted`, `Enclosure` |
@@ -116,7 +119,7 @@ crate names. PR 1 narrows the rest. The last column names the main exported type
 | digest | s/{caused, compact_\*, compaction, digest\*, indexed_tree, memories, recollection, shown_record, told} | `Digest`, `DigestEvent`, `Memories` |
 | cards | capability/notify, notify, s/{afresh, bootstrap, build, coding, connections, done_elsewhere, failing, filed, fixes, google_sign_in, mail_health, merged_patches, noticed, request, token_expiry, undo}, settings/overview | `Filing`, `Noticed`, `Notify` |
 | secretary | agent, capability/{agent, answering, answers, briefings, compact, model, secretary}, conversation, s/{briefs, call, file_query, file_search, heartbeat, live_shape, opening, read_holders, review, surface, sweep, verb_answer, verbs}, secretary (mod) | `Agent`, `Secretary`, `Model` (with their `compile_fail` tests) |
-| api | capability/server, clienterror, gate, portal, query, routes, s/routes, wire/\* | the route table, 75 wire types |
+| api | capability/server, clienterror, gate, portal, query, routes, s/routes, stores (`Kind`, `Store`, `Database`), wire/\* | the route table, 75 wire types |
 
 The wire split moves 26k of `wire.rs`: base 1.0k, record 1.1k, store 0.3k, signatures 0.9k,
 todo 2.3k, held 1.1k, memory 0.1k, triage 0.3k, inbox 4.4k, lines/topics 5.2k and cards 1.3k.
@@ -162,7 +165,7 @@ move to their future crate's modules, and no crate exists yet.
 | 5 | C6 and C7: `Proposal`/`Reasons`/`Style` to `inbox`, the `Entry` writers up, `mod.rs` split | ~10 files, ~200 paths |
 | 6 | C9: the coding session's configuration to `connect`. Done in #434. | ~20 paths |
 | 7 | C3: the `capability` ports beside their domains; `capability/mod.rs`'s 35 `pub use` lines shrink to `base`'s | ~30 files moved, ~400 paths |
-| 8 | C1: `store` generic over `Schema`; `Kind` to the top | `store/kind.rs` (162 lines), `store/database.rs` (99), each schema's impl |
+| 8 | C1: `store` generic over `Schema`; `Kind` to the top. Done in #436. | `store/kind.rs` (162 lines), `store/database.rs` (99) |
 | 9 | C2: the wire split by the table above; generator unchanged | ~93 types out of `wire.rs` (2,795 lines) |
 | 10 | Pin the layers until the crates exist: a guard reads the layer table from `context.toml` and refuses any `crate::` path that points up | one guard |
 

@@ -33,7 +33,7 @@ use suzatary_core::connect::Channel;
 use suzatary_core::deployment::Deployment;
 use suzatary_core::nonempty::NonEmpty;
 use suzatary_core::settings::Settables;
-use suzatary_core::store::Kind;
+use suzatary_core::stores::Kind;
 
 /// The environment variable that names an instance file.
 pub const ENV: &str = "SUZATARY_INSTANCE";

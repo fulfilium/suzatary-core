@@ -595,7 +595,7 @@ impl Cut {
 ///
 /// # Errors
 /// The store's own, and the books'.
-pub fn store_objects_since<E: crate::store::Store>(
+pub fn store_objects_since<E: crate::stores::Store>(
     store: &dyn Prodrome<E>,
     since: &prodrome_core::store::frontier::Since,
     books: Books<'_>,
@@ -607,7 +607,7 @@ pub fn store_objects_since<E: crate::store::Store>(
 
 /// [`store_objects_since`], with the names of the objects it sends and the graph it read them
 /// from.
-fn store_answer<E: crate::store::Store>(
+fn store_answer<E: crate::stores::Store>(
     store: &dyn Prodrome<E>,
     since: &prodrome_core::store::frontier::Since,
     books: Books<'_>,
@@ -1283,7 +1283,7 @@ pub struct Posted<'a> {
 ///
 /// # Errors
 /// More than `MAX_POSTED` objects, or the store not read or not written.
-pub fn receive_changes<E: crate::store::Store>(
+pub fn receive_changes<E: crate::stores::Store>(
     store: &dyn Prodrome<E>,
     posted: &Posted<'_>,
     frontiers: &prodrome_core::store::frontier::Frontiers,

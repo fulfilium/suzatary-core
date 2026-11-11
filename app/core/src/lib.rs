@@ -75,6 +75,7 @@ pub mod signatures;
 pub mod snapshot;
 pub mod spelling;
 pub mod store;
+pub mod stores;
 pub mod sync;
 pub mod table;
 pub mod template;

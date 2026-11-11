@@ -1,7 +1,9 @@
-//! Every store the data tree keeps, declared once in [`stores!`]: its name, its tier and what its
+//! Every store the data tree keeps, declared once in `stores!`: its name, its tier and what its
 //! directory holds, and for a prodrome its schema and its hold. The interpreters, the fsck and
 //! the routes read these rows, and a guard derives the data push's and the vault's lists from
 //! them, so a new store is one row and its schema.
+
+mod database;
 
 use prodrome_core::declared::Declared;
 use prodrome_core::schema::Schema;
@@ -14,6 +16,9 @@ use crate::secretary::line_event::LineEvent;
 use crate::secretary::memory_event::MemoryEvent;
 use crate::secretary::topics::reading::AliasEvent;
 use crate::secretary::topics::reading::MembershipEvent;
+use crate::store::Hold;
+
+pub use database::Database;
 
 /// Where a store's files go.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -39,17 +44,6 @@ pub enum Files {
     File,
     /// Files its store writes and deletes by rules of its own.
     Directory,
-}
-
-/// What serialises a prodrome's writers above the database's own lock.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Hold {
-    /// This process's threads, reentrant, since a batch holds it while each write inside takes
-    /// its own.
-    Reentrant,
-    /// An `flock` on this file beside the objects, opened afresh for each hold, so threads wait
-    /// on each other as processes do; never taken twice by one thread.
-    File(&'static str),
 }
 
 /// A schema kept as one of this application's prodromes: its row, its hold and its label.

@@ -1,5 +1,5 @@
 //! The laws every prodrome keeps whatever its schema, checked for every prodrome row of
-//! `suzatary_core::store::Kind` over the objects its pins hold (`tests/stores-changes/`):
+//! `suzatary_core::stores::Kind` over the objects its pins hold (`tests/stores-changes/`):
 //!
 //! - a store begun holds one `Genesis`, labelled as its row says;
 //! - each object reads back by its name as its canonical print, and a name it does not hold
@@ -25,7 +25,8 @@ use suzatary_core::secretary::memory_event::MemoryEvent;
 use suzatary_core::secretary::topics::reading::AliasEvent;
 use suzatary_core::secretary::topics::reading::MembershipEvent;
 use suzatary_core::store::Reads as _;
-use suzatary_core::store::{Files, Hold, Kind, Prodrome, Store};
+use suzatary_core::store::{Hold, Prodrome};
+use suzatary_core::stores::{Files, Kind, Store};
 use suzatary_io::objects::Objects;
 
 fn pins(store: &str) -> PathBuf {
