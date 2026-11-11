@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
 use crate::agent::{answered, refused};
-use crate::capability::Query;
+use crate::mail::mailbox::Query;
 use crate::refusal::Refusal;
 use crate::secretary::file_query::FileQuery;
 use crate::secretary::file_search::{self, FileHit, MAX_FILE_HITS};

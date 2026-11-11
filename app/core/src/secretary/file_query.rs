@@ -6,7 +6,7 @@
 //! different question. Notmuch also stems English words (`permits` finds `permit`); a file's
 //! words are matched whole, which a `word*` prefix makes up for.
 
-use crate::capability::Query;
+use crate::mail::mailbox::Query;
 use crate::secretary::search::fold;
 
 /// What a file must hold to match: every phrase, in any order.

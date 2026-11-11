@@ -1,15 +1,18 @@
 use prodrome_core::event::Hash;
 
 use super::{
-    Agent, AllowRule, AnswerError, Answers, BriefingError, Briefings, Clock, Conversation, Corpus,
-    CorpusError, Datetime, Delivered, Drive, DriveFailure, Html, Junk, JunkFailure, MailError,
-    MailGrants, Mailbox, Manual, Manuals, Model, ModelError, Notify, NotifyError, Peer, Push,
-    Query, Render, RenderError, Reply, RepoFailure, Repositories, Repository, RepositoryError,
-    Secrets, Sessions, Weather, WeatherError, Web, WebAnswer, WebFailure, WebRequest, Whois,
-    WhoisError,
+    Agent, AllowRule, AnswerError, Answers, BriefingError, Briefings, Clock, Conversation,
+    Datetime, Delivered, Drive, DriveFailure, Html, MailGrants, Manual, Manuals, Model, ModelError,
+    Notify, NotifyError, Peer, Push, Render, RenderError, Reply, RepoFailure, Repositories,
+    Repository, RepositoryError, Secrets, Sessions, Weather, WeatherError, Web, WebAnswer,
+    WebFailure, WebRequest, Whois, WhoisError,
 };
-use super::{MailSync, Secretary, Server, SyncFailure, Synced};
+use super::{Secretary, Server};
 use crate::escape::Escaped;
+use crate::mail::corpus::{Corpus, CorpusError};
+use crate::mail::junk_folder::{Junk, JunkFailure};
+use crate::mail::mail_sync::{MailSync, SyncFailure, Synced};
+use crate::mail::mailbox::{MailError, Mailbox, Query};
 use crate::mail::state::Decision;
 use crate::mail::sync_report::SyncReport;
 use crate::mail::verbs::{Marked, Show, Summary};
@@ -582,7 +585,7 @@ impl Junk for Nothing {
     }
 }
 
-impl crate::capability::OlderMail for Nothing {
+impl crate::mail::older_mail::OlderMail for Nothing {
     fn search_older(
         &self,
         accounts: &[String],

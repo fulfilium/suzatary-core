@@ -9,7 +9,8 @@ use prodrome_core::fpl::Instant;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest as _, Sha256};
 
-use crate::capability::{Corpus, Query};
+use crate::mail::corpus::Corpus;
+use crate::mail::mailbox::Query;
 use crate::reference::MailHash;
 use crate::refusal::Refusal;
 use crate::store::{Edit, Log};
@@ -528,7 +529,8 @@ mod tests {
     use proptest::prelude::*;
 
     use super::*;
-    use crate::capability::{CorpusError, Nothing};
+    use crate::capability::Nothing;
+    use crate::mail::corpus::CorpusError;
     use crate::mail::state::Decision;
     use crate::mail::sync_report::SyncReport;
     use crate::mail::verbs::{Marked, Show, Summary};

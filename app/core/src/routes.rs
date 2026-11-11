@@ -15,9 +15,10 @@ use prodrome_core::policy::Untrusted;
 
 use crate::chain_set::ChainSet;
 
-use crate::capability::{Answers, Briefings, Clock, Datetime, Mailbox, Query, Render};
+use crate::capability::{Answers, Briefings, Clock, Datetime, Render};
 use crate::chains::{ChainName, ChainPolicy};
 use crate::deployment::Deployment;
+use crate::mail::mailbox::{Mailbox, Query};
 use crate::refusal::{Answered, Refusal, shown};
 use crate::secretary::step::Step;
 use crate::store::Prodrome;
@@ -428,7 +429,7 @@ pub fn message(
     let id = check_mail_id(id)?;
     let found = match mail.message(id) {
         Ok(found) => found,
-        Err(crate::capability::MailError::Absent { .. }) => {
+        Err(crate::mail::mailbox::MailError::Absent { .. }) => {
             return Err(Refusal::not_found(gone(chain, set, id)?));
         }
         Err(other) => return Err(Refusal::internal(other.to_string())),
@@ -470,7 +471,7 @@ pub fn thread(
 ) -> Answered<wire::ThreadPayload> {
     let id = check_thread_id(id)?;
     let found = mail.thread(id, limit).map_err(|e| match e {
-        crate::capability::MailError::Absent { .. } => Refusal::not_found(format!(
+        crate::mail::mailbox::MailError::Absent { .. } => Refusal::not_found(format!(
             "{}: conversation {}",
             crate::mail::gone::SAID,
             shown(id)

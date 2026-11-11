@@ -5,7 +5,8 @@
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant, SystemTime};
 
-use suzatary_core::capability::{Datetime, MailSync, SyncFailure, Synced};
+use suzatary_core::capability::Datetime;
+use suzatary_core::mail::mail_sync::{MailSync, SyncFailure, Synced};
 use suzatary_core::mail::sync_report::SyncReport;
 
 use crate::present::Present as _;

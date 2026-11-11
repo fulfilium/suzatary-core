@@ -2,8 +2,8 @@ use schemars::JsonSchema;
 use serde::Deserialize;
 use serde_json::{Value, json};
 
-use crate::capability::JunkFailure;
 use crate::mail::junk::Uid;
+use crate::mail::junk_folder::JunkFailure;
 use crate::refusal::Refusal;
 use crate::secretary::verbs::not_a_junk_account;
 use crate::secretary::{Call, SecretarySurface};

@@ -14,6 +14,7 @@ use regex::Regex;
 use serde_json::Value;
 
 pub use crate::held_file::HeldFile;
+use crate::mail::mailbox::MailError;
 use crate::redact::{Kind, identity_numbers};
 
 /// The text form's prefix.
@@ -805,18 +806,14 @@ pub trait Reveal {
     ///
     /// # Errors
     /// The mail index's own failure.
-    fn value(
-        &self,
-        message: &str,
-        ordinal: u16,
-    ) -> Result<Option<Shown>, crate::capability::MailError>;
+    fn value(&self, message: &str, ordinal: u16) -> Result<Option<Shown>, MailError>;
 
     /// The message `message`, a notmuch id, unmasked, for the tap that forwards it, read only
     /// when its file is still `size` bytes long.
     ///
     /// # Errors
     /// The mail index's own failure.
-    fn original(&self, message: &str, size: u64) -> Result<Reopened, crate::capability::MailError>;
+    fn original(&self, message: &str, size: u64) -> Result<Reopened, MailError>;
 }
 
 /// The held files as a tap reads them: the file, and a PDF's text layer.
@@ -1044,11 +1041,11 @@ pub fn fill(
 pub struct Unread;
 
 impl Reveal for Unread {
-    fn value(&self, _: &str, _: u16) -> Result<Option<Shown>, crate::capability::MailError> {
+    fn value(&self, _: &str, _: u16) -> Result<Option<Shown>, MailError> {
         Ok(None)
     }
 
-    fn original(&self, _: &str, _: u64) -> Result<Reopened, crate::capability::MailError> {
+    fn original(&self, _: &str, _: u64) -> Result<Reopened, MailError> {
         Ok(Reopened::Gone)
     }
 }
@@ -1234,14 +1231,10 @@ mod tests {
     fn a_read_value_and_a_filled_body_never_print() {
         struct Holds;
         impl Reveal for Holds {
-            fn value(
-                &self,
-                _: &str,
-                _: u16,
-            ) -> Result<Option<Shown>, crate::capability::MailError> {
+            fn value(&self, _: &str, _: u16) -> Result<Option<Shown>, MailError> {
                 Ok(Some(Shown::new(Kind::Ssn, SSN)))
             }
-            fn original(&self, _: &str, _: u64) -> Result<Reopened, crate::capability::MailError> {
+            fn original(&self, _: &str, _: u64) -> Result<Reopened, MailError> {
                 Ok(Reopened::Gone)
             }
         }

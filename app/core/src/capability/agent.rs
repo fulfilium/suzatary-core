@@ -1,4 +1,6 @@
-use super::{Clock, Corpus, Mailbox, Manuals, Render, Repository};
+use super::{Clock, Manuals, Render, Repository};
+use crate::mail::corpus::Corpus;
+use crate::mail::mailbox::Mailbox;
 use crate::record::TodoEvent;
 use crate::secretary::recollection::Recollection;
 use crate::store::Reads;

@@ -7,6 +7,8 @@ use serde_json::{Map, Value, json};
 use suzatary_core::capability::{Agent, Nothing};
 use suzatary_core::chains::{ChainName, ChainPolicy, Chains};
 use suzatary_core::deployment::Deployment;
+use suzatary_core::mail::corpus::{Corpus, CorpusError};
+use suzatary_core::mail::mailbox::Query;
 use suzatary_core::record::TodoEvent;
 use suzatary_core::secretary::changes::Act;
 use suzatary_core::secretary::filed::TriageCards;
@@ -327,18 +329,14 @@ struct Forged;
 /// The forged message's canonical hash.
 const FORGED: &str = "f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0";
 
-impl suzatary_core::capability::Corpus for Forged {
-    fn sync(
-        &self,
-    ) -> Result<suzatary_core::mail::sync_report::SyncReport, suzatary_core::capability::CorpusError>
-    {
-        suzatary_core::capability::Corpus::sync(&Nothing)
+impl Corpus for Forged {
+    fn sync(&self) -> Result<suzatary_core::mail::sync_report::SyncReport, CorpusError> {
+        Corpus::sync(&Nothing)
     }
     fn queue(
         &self,
         _limit: Option<usize>,
-    ) -> Result<Vec<suzatary_core::mail::verbs::Summary>, suzatary_core::capability::CorpusError>
-    {
+    ) -> Result<Vec<suzatary_core::mail::verbs::Summary>, CorpusError> {
         Ok(vec![suzatary_core::mail::verbs::Summary {
             hash: FORGED.to_owned(),
             id: "forged-1@example.test".to_owned(),
@@ -352,17 +350,13 @@ impl suzatary_core::capability::Corpus for Forged {
     }
     fn search(
         &self,
-        query: &suzatary_core::capability::Query,
+        query: &Query,
         limit: Option<usize>,
-    ) -> Result<Vec<suzatary_core::mail::verbs::Summary>, suzatary_core::capability::CorpusError>
-    {
-        suzatary_core::capability::Corpus::search(&Nothing, query, limit)
+    ) -> Result<Vec<suzatary_core::mail::verbs::Summary>, CorpusError> {
+        Corpus::search(&Nothing, query, limit)
     }
-    fn show(
-        &self,
-        id: &str,
-    ) -> Result<suzatary_core::mail::verbs::Show, suzatary_core::capability::CorpusError> {
-        suzatary_core::capability::Corpus::show(&Nothing, id)
+    fn show(&self, id: &str) -> Result<suzatary_core::mail::verbs::Show, CorpusError> {
+        Corpus::show(&Nothing, id)
     }
     fn mark(
         &self,
@@ -370,8 +364,8 @@ impl suzatary_core::capability::Corpus for Forged {
         decision: suzatary_core::mail::state::Decision,
         note: Option<&str>,
         native: Option<&str>,
-    ) -> Result<suzatary_core::mail::verbs::Marked, suzatary_core::capability::CorpusError> {
-        suzatary_core::capability::Corpus::mark(&Nothing, hash, decision, note, native)
+    ) -> Result<suzatary_core::mail::verbs::Marked, CorpusError> {
+        Corpus::mark(&Nothing, hash, decision, note, native)
     }
     fn last_sync(&self) -> Option<suzatary_core::mail::sync_report::SyncReport> {
         None

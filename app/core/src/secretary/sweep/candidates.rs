@@ -9,7 +9,9 @@ use std::sync::LazyLock;
 use prodrome_core::event::TodoId;
 use regex::Regex;
 
-use crate::capability::{Corpus, CorpusError, Datetime, Query};
+use crate::capability::Datetime;
+use crate::mail::corpus::{Corpus, CorpusError};
+use crate::mail::mailbox::Query;
 use crate::record::{MarkupSource, Source};
 use crate::reference::MailHash;
 

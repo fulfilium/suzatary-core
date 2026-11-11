@@ -5,7 +5,7 @@
 
 use std::path::Path;
 
-use suzatary_core::secretary::heartbeat::{Pass, PassOutcome, Recorded, stamp};
+use suzatary_core::mail::heartbeat::{Pass, PassOutcome, Recorded, stamp};
 use suzatary_core::store::{Doc as _, Gets as _, StoreError};
 
 use crate::docs::{DocCodec, Docs};
@@ -94,7 +94,7 @@ const LINE: DocCodec<(), String> = DocCodec {
 mod tests {
     use std::num::NonZeroU32;
 
-    use suzatary_core::secretary::heartbeat::Stage;
+    use suzatary_core::mail::heartbeat::Stage;
 
     use super::*;
 

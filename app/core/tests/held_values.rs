@@ -5,10 +5,13 @@
 use prodrome_core::event::Actor;
 use prodrome_core::policy::Untrusted;
 use serde_json::{Map, Value, json};
-use suzatary_core::capability::{Corpus, CorpusError, Junk, JunkFailure, Nothing, Query};
+use suzatary_core::capability::Nothing;
 use suzatary_core::chains::{ChainName, ChainPolicy, Chains};
 use suzatary_core::deployment::Deployment;
+use suzatary_core::mail::corpus::{Corpus, CorpusError};
 use suzatary_core::mail::junk::{ChurnList, JunkHeader, JunkMessage, Uid};
+use suzatary_core::mail::junk_folder::{Junk, JunkFailure};
+use suzatary_core::mail::mailbox::Query;
 use suzatary_core::mail::state::Decision;
 use suzatary_core::mail::sync_report::SyncReport;
 use suzatary_core::mail::verbs::{Marked, Message, Show, Summary};

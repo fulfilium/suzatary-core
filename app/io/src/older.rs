@@ -1,5 +1,5 @@
 //! Searching each account's mail server for mail older than the routine sync's window: the
-//! interpreter of `suzatary_core::capability::OlderMail`.
+//! interpreter of `suzatary_core::mail::older_mail::OlderMail`.
 //!
 //! - A Microsoft account is `EXAMINE`d over IMAP and pulled into `<subdir>/older-inbox`, with a
 //!   state file of its own beside the routine pull's.
@@ -16,13 +16,14 @@ use std::cell::RefCell;
 use std::collections::BTreeSet;
 use std::path::PathBuf;
 
-use suzatary_core::capability::{JunkFailure, OlderMail};
 use suzatary_core::mail::account::{MailAccount, Roster, Sync};
 use suzatary_core::mail::imap::{ImapError, Maildir};
+use suzatary_core::mail::junk_folder::JunkFailure;
 use suzatary_core::mail::older::{
     self, AccountOlder, Found, IMAP_FOLDER, MAX_MATCHES, MAX_MESSAGE_BYTES, Matched, OlderQuery,
     Outcome, Plan, Range, Unsearched,
 };
+use suzatary_core::mail::older_mail::OlderMail;
 use suzatary_core::mail::verbs::Summary;
 
 use crate::gmail::{self, Fetched, Lieer, MessageId};

@@ -11,11 +11,12 @@ use std::time::{Duration, Instant};
 
 use anyhow::{Context as _, bail};
 use clap::Subcommand;
-use suzatary_core::capability::{Corpus as _, Query};
 use suzatary_core::excerpt::Excerpt;
 use suzatary_core::mail::account::{AccountName, MailAccount, Sender};
+use suzatary_core::mail::corpus::Corpus as _;
 use suzatary_core::mail::idle;
 use suzatary_core::mail::imap::Session as _;
+use suzatary_core::mail::mailbox::Query;
 use suzatary_core::mail::oauth::{Consent, DeviceCode, Imap, Smtp};
 use suzatary_core::mail::send::{Composed, Outgoing, SendError, Step, build_mime, guess_mime_type};
 use suzatary_core::mail::state::Decision;

@@ -49,7 +49,6 @@ pub mod fixes;
 pub mod found;
 mod gate;
 pub mod google_sign_in;
-pub mod heartbeat;
 pub mod held_lines;
 pub mod held_replica;
 pub mod holder;

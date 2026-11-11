@@ -31,7 +31,7 @@ pub fn indexed_by(cmd: Cmd, config: Option<&Path>) -> Cmd {
     }
 }
 use self::message::NotmuchMessage;
-use suzatary_core::capability::{Datetime, MailError, Mailbox, Query};
+use suzatary_core::capability::Datetime;
 use suzatary_core::enclosed::Enclosure;
 use suzatary_core::file_read::FileRead;
 use suzatary_core::held_value::HeldFile;
@@ -39,6 +39,7 @@ use suzatary_core::held_value::{self, Reopened, Reveal};
 use suzatary_core::mail::account::{MailAccount, Roster};
 use suzatary_core::mail::hash_prefix::{Ambiguous, HashPrefix, Resolved};
 use suzatary_core::mail::known::Known;
+use suzatary_core::mail::mailbox::{MailError, Mailbox, Query};
 use suzatary_core::mail::verbs;
 use suzatary_core::mail::{
     AttachmentFile, AttachmentMeta, MAX_BODY_CHARS, MailLink, MailMessage, MailRow, Stored,

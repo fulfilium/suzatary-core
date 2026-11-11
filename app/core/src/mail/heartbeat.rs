@@ -1,16 +1,12 @@
-//! The automated triage wrapper's own pulse: written by `suzatary heartbeat` at the end of each
-//! pass of `scripts/hourly-triage.sh`, and read here.
+//! The automated triage wrapper's pulse: `suzatary heartbeat` writes it at the end of each pass
+//! of `scripts/hourly-triage.sh`. It answers what a silent chain cannot: when a pass last
+//! succeeded, and where the last one failed. [`alarm`] is a decision the brief appends, not an
+//! instruction to the model, which may never have run.
 //!
-//! The chain is silent exactly when the wrapper cannot commit, so this answers what the chain
-//! cannot: when a pass last succeeded, and where the last one failed. [`alarm`] is the decision
-//! the brief appends itself, not an instruction to the model, since a model that never ran never
-//! reads one.
-//!
-//! A heartbeat alone cannot tell healthy from failing every run (only a pass reaching the push
-//! moves it), so each pass also records its verdict in `triage-outcome` ([`PassOutcome`]); only
-//! a fresh heartbeat with an `ok` or absent outcome is silent. The outcome after a run of passes
-//! is a fold of [`PassOutcome::then`], which always answers a [`Recorded`] line; that line is
-//! printed by [`Recorded::line`] and read by [`Recorded::parse`], one type for both sides.
+//! A heartbeat moves only when a pass reaches the push, so each pass also records its verdict
+//! ([`PassOutcome`], `triage-outcome`); only a fresh heartbeat with an `ok` or absent outcome is
+//! silent. The outcome after a run of passes folds [`PassOutcome::then`] into a [`Recorded`]
+//! line, which [`Recorded::line`] prints and [`Recorded::parse`] reads.
 
 use std::num::NonZeroU32;
 
@@ -199,9 +195,8 @@ pub fn stamp(now: chrono::NaiveDateTime) -> String {
     now.format(FORMAT).to_string()
 }
 
-/// Hours between `now` and a recorded heartbeat, or `None` when it will not parse.
-///
-/// A gap between two instants on this box is far inside the range where the `f64` cast rounds.
+/// Hours between `now` and a recorded heartbeat, or `None` when it will not parse; the gap is
+/// far inside the range where the `f64` cast rounds.
 #[allow(clippy::cast_precision_loss)]
 #[must_use]
 pub(crate) fn hours_since(now: chrono::NaiveDateTime, recorded: &str) -> Option<f64> {
@@ -235,15 +230,10 @@ pub(crate) fn freshness(now: chrono::NaiveDateTime, recorded: Option<&str>) -> V
     })
 }
 
-/// Whether the mechanical alarm speaks: `Some(line)` to append as a
-/// `Turn::Act`, `None` to append nothing.
-///
-/// A failed or unreadable pass outcome speaks however fresh the heartbeat
-/// is, because a pass dying at the same stage every five minutes never
-/// writes one. `Ok` and `Absent` defer to the heartbeat (`Absent` so a
-/// wrapper older than the outcome file reads as it did), and only a fresh
-/// heartbeat is silent: missing, unparseable and stale each say something,
-/// since the owner cannot tell "new" from "broken" unless told.
+/// Whether the mechanical alarm speaks: `Some(line)` to append as a `Turn::Act`, `None` to
+/// append nothing. A failed or unreadable outcome speaks however fresh the heartbeat is, since a
+/// pass dying at one stage every five minutes never writes one. `Ok` and `Absent` defer to the
+/// heartbeat, and only a fresh one is silent: missing, unparseable and stale each say so.
 #[must_use]
 pub fn alarm(
     now: chrono::NaiveDateTime,

@@ -21,15 +21,19 @@ use prodrome_core::fpl::{self, mk_decay, mk_flat};
 use prodrome_core::policy::Untrusted;
 use suzatary_cli::serve::{self, Chained, State};
 use suzatary_core::capability::{
-    AnswerError, Answers, Clock, Conversation, Corpus, CorpusError, Datetime, Delivered, Halt,
-    Html, Login, MailError, Mailbox, Manual, Manuals, Model, ModelError, Notify, NotifyError, Push,
-    Query, Render, RenderError, Reply, Repository, RepositoryError, Session, SessionId,
-    SessionModel, Sessioned, Sessions, Turn, Whois, WhoisError,
+    AnswerError, Answers, Clock, Conversation, Datetime, Delivered, Halt, Html, Login, Manual,
+    Manuals, Model, ModelError, Notify, NotifyError, Push, Render, RenderError, Reply, Repository,
+    RepositoryError, Session, SessionId, SessionModel, Sessioned, Sessions, Turn, Whois,
+    WhoisError,
 };
 pub use suzatary_core::cast::{self, CAST};
 use suzatary_core::deployment::Deployment;
 use suzatary_core::escape::Escaped;
 use suzatary_core::file_read::FileRead;
+use suzatary_core::mail::corpus::{Corpus, CorpusError};
+use suzatary_core::mail::junk;
+use suzatary_core::mail::junk_folder::{Junk, JunkFailure};
+use suzatary_core::mail::mailbox::{MailError, Mailbox, Query};
 use suzatary_core::mail::state::Decision;
 use suzatary_core::mail::sync_report::SyncReport;
 use suzatary_core::mail::verbs::{Marked, Message, Show, Summary};
@@ -3677,7 +3681,7 @@ pub fn status(response: &ureq::http::Response<ureq::Body>) -> u16 {
 #[derive(Default)]
 pub struct FakeJunk {
     /// The churn list.
-    pub churn: suzatary_core::mail::junk::ChurnList,
+    pub churn: junk::ChurnList,
     /// Each account's folder.
     pub folders: Vec<(String, JunkFolder)>,
     /// Every header read, as `(account, since)`.
@@ -3687,20 +3691,13 @@ pub struct FakeJunk {
 /// One account's Junk in a scene.
 pub enum JunkFolder {
     /// Messages by UID: headers and a body.
-    Holds(Vec<(suzatary_core::mail::junk::JunkHeader, &'static str)>),
+    Holds(Vec<(junk::JunkHeader, &'static str)>),
     /// The account's grant lapsed.
     NeedsLogin,
 }
 
 impl FakeJunk {
-    fn folder(
-        &self,
-        account: &str,
-    ) -> Result<
-        &[(suzatary_core::mail::junk::JunkHeader, &'static str)],
-        suzatary_core::capability::JunkFailure,
-    > {
-        use suzatary_core::capability::JunkFailure;
+    fn folder(&self, account: &str) -> Result<&[(junk::JunkHeader, &'static str)], JunkFailure> {
         match self.folders.iter().find(|(name, _)| name == account) {
             Some((_, JunkFolder::Holds(held))) => Ok(held),
             Some((_, JunkFolder::NeedsLogin)) => Err(JunkFailure::NeedsLogin(
@@ -3716,12 +3713,12 @@ impl FakeJunk {
     }
 }
 
-impl suzatary_core::capability::Junk for FakeJunk {
+impl Junk for FakeJunk {
     fn junk_accounts(&self) -> Vec<String> {
         self.folders.iter().map(|(name, _)| name.clone()).collect()
     }
 
-    fn churn(&self) -> suzatary_core::mail::junk::ChurnList {
+    fn churn(&self) -> junk::ChurnList {
         self.churn.clone()
     }
 
@@ -3729,8 +3726,7 @@ impl suzatary_core::capability::Junk for FakeJunk {
         &self,
         account: &str,
         since: chrono::NaiveDate,
-    ) -> Result<Vec<suzatary_core::mail::junk::JunkHeader>, suzatary_core::capability::JunkFailure>
-    {
+    ) -> Result<Vec<junk::JunkHeader>, JunkFailure> {
         self.asked
             .lock()
             .expect("the junk log lock")
@@ -3745,19 +3741,18 @@ impl suzatary_core::capability::Junk for FakeJunk {
     fn junk_message(
         &self,
         account: &str,
-        uid: suzatary_core::mail::junk::Uid,
-    ) -> Result<suzatary_core::mail::junk::JunkMessage, suzatary_core::capability::JunkFailure>
-    {
+        uid: junk::Uid,
+    ) -> Result<junk::JunkMessage, JunkFailure> {
         self.folder(account)?
             .iter()
             .find(|(header, _)| header.uid() == uid)
-            .map(|(header, body)| suzatary_core::mail::junk::JunkMessage {
+            .map(|(header, body)| junk::JunkMessage {
                 account: account.to_owned(),
                 header: header.clone(),
                 body: (*body).to_owned(),
                 truncated: false,
             })
-            .ok_or(suzatary_core::capability::JunkFailure::Missing {
+            .ok_or(JunkFailure::Missing {
                 account: account.to_owned(),
                 uid: uid.0,
             })

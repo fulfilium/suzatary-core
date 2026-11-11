@@ -904,14 +904,14 @@ fn append_note(
 
 /// Append the triage heartbeat's alarm, if any; no model is needed.
 fn maybe_append_triage_alarm(
-    corpus: &dyn suzatary_core::capability::Corpus,
+    corpus: &dyn suzatary_core::mail::corpus::Corpus,
     clock: &dyn suzatary_core::capability::Clock,
     conversations: &suzatary_io::conversations::ConversationStores,
     id: &suzatary_core::conversation_id::ConversationId,
 ) {
     let now = clock.now();
     let outcome = corpus.last_triage_outcome();
-    if let Some(line) = suzatary_core::secretary::heartbeat::alarm(
+    if let Some(line) = suzatary_core::mail::heartbeat::alarm(
         prodrome_core::fpl::instant_of(now),
         corpus.last_triage_pass().as_deref(),
         STALE_HOURS,

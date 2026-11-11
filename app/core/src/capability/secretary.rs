@@ -1,7 +1,12 @@
 use super::{
-    Agent, Briefings, Calendar, Clock, Corpus, Drive, Junk, MailSync, Mailbox, Manuals, Model,
-    OlderMail, Render, Repositories, Repository, Secrets, Weather, Web,
+    Agent, Briefings, Calendar, Clock, Drive, Manuals, Model, Render, Repositories, Repository,
+    Secrets, Weather, Web,
 };
+use crate::mail::corpus::Corpus;
+use crate::mail::junk_folder::Junk;
+use crate::mail::mail_sync::MailSync;
+use crate::mail::mailbox::Mailbox;
+use crate::mail::older_mail::OlderMail;
 use crate::record::TodoEvent;
 use crate::store::Prodrome;
 

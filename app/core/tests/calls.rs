@@ -13,13 +13,13 @@ use std::path::PathBuf;
 use prodrome_core::event::{Actor, Hash};
 use prodrome_core::policy::Untrusted;
 use serde_json::{Map, Value, json};
-use suzatary_core::capability::{
-    Datetime, Junk, JunkFailure, MailError, MailSync, Mailbox, Nothing, Query, RepoFailure,
-    Repositories, SyncFailure, Synced,
-};
+use suzatary_core::capability::{Datetime, Nothing, RepoFailure, Repositories};
 use suzatary_core::chains::{ChainName, ChainPolicy, Chains};
 use suzatary_core::deployment::Deployment;
 use suzatary_core::mail::junk::{ChurnList, JunkHeader, JunkMessage, Uid};
+use suzatary_core::mail::junk_folder::{Junk, JunkFailure};
+use suzatary_core::mail::mail_sync::{MailSync, SyncFailure, Synced};
+use suzatary_core::mail::mailbox::{MailError, Mailbox, Query};
 use suzatary_core::mail::sync_report::{AccountSync, SyncReport};
 use suzatary_core::mail::{AttachmentFile, AttachmentMeta, MailMessage, MailRow};
 use suzatary_core::record::{Envelope, EventStore, TodoEvent};

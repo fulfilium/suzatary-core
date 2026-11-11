@@ -1987,8 +1987,8 @@ mod tests {
     /// Deleting an account's mail tells the index before the tap answers.
     #[test]
     fn forgotten_mail_reads_as_no_longer_stored_at_once() {
-        use suzatary_core::capability::{MailError, Mailbox as _};
         use suzatary_core::mail::cache::Forget as _;
+        use suzatary_core::mail::mailbox::{MailError, Mailbox as _};
 
         let root = scratch("forgotten");
         let config = mail_fixture(&root, false)

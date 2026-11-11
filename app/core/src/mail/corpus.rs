@@ -1,11 +1,11 @@
 //! The mail corpus as the agent operates it; nothing here sends. Every answer is a typed
 //! record of [`crate::mail::verbs`], whose JSON is the versioned contract the verbs print.
 
-use super::Query;
+use super::mailbox::Query;
+use crate::mail::heartbeat::PassOutcome;
 use crate::mail::state::Decision;
 use crate::mail::sync_report::SyncReport;
 use crate::mail::verbs::{Marked, Show, Summary};
-use crate::secretary::heartbeat::PassOutcome;
 
 /// A corpus operation ran and refused; one variant, because every failure is text to read.
 #[derive(Debug, thiserror::Error)]

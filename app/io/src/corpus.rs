@@ -5,10 +5,12 @@
 
 use std::path::PathBuf;
 
-use suzatary_core::capability::{Clock, Corpus, CorpusError, Query};
+use suzatary_core::capability::Clock;
+use suzatary_core::mail::corpus::{Corpus, CorpusError};
 use suzatary_core::mail::hash_prefix::{HashPrefix, Resolved};
 use suzatary_core::mail::known::Known;
 use suzatary_core::mail::local_state::Kept;
+use suzatary_core::mail::mailbox::Query;
 use suzatary_core::mail::state::Decision;
 use suzatary_core::mail::verbs;
 
@@ -243,7 +245,7 @@ impl Corpus for Operator {
         self.pulse.last_pass()
     }
 
-    fn last_triage_outcome(&self) -> suzatary_core::secretary::heartbeat::PassOutcome {
+    fn last_triage_outcome(&self) -> suzatary_core::mail::heartbeat::PassOutcome {
         self.pulse.last_outcome()
     }
 }

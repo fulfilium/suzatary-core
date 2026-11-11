@@ -6,7 +6,7 @@ use serde::de::DeserializeOwned;
 use serde_json::Value;
 
 use crate::agent::{Holds, answered, refused};
-use crate::capability::Corpus;
+use crate::mail::corpus::Corpus;
 use crate::mail::verbs;
 use crate::refusal::{Refusal, shown};
 use crate::verb::{Own, Verb};

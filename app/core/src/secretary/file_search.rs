@@ -169,7 +169,7 @@ fn cut(text: &str) -> String {
 mod tests {
     use super::*;
     use crate::attachment::Attachment;
-    use crate::capability::Query;
+    use crate::mail::mailbox::Query;
     use crate::secretary::store::Entry;
 
     const PDF: &[u8] = b"%PDF-1.7\n%%EOF\n";

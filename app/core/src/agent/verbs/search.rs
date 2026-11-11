@@ -5,7 +5,7 @@ use serde::Deserialize;
 use serde_json::Value;
 
 use crate::agent::{Holds, answered, refused};
-use crate::capability::Query;
+use crate::mail::mailbox::Query;
 use crate::refusal::Refusal;
 use crate::verb::Verb;
 

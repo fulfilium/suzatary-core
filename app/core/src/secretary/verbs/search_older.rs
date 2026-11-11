@@ -100,11 +100,13 @@ mod tests {
     use serde_json::{Value, json};
 
     use super::*;
-    use crate::capability::{Nothing, OlderMail, Secretary};
+    use crate::capability::{Nothing, Secretary};
     use crate::chains::{ChainName, ChainPolicy, Chains};
     use crate::conversation_id::ConversationId;
     use crate::deployment::Deployment;
+    use crate::mail::mailbox::{MailError, Mailbox, Query};
     use crate::mail::older::{AccountOlder, Found, Matched, Outcome};
+    use crate::mail::older_mail::OlderMail;
 
     /// A server that records what it was asked and finds one message per account.
     #[derive(Default)]
@@ -142,7 +144,7 @@ mod tests {
 
     struct Roster;
 
-    impl crate::capability::Mailbox for Roster {
+    impl Mailbox for Roster {
         fn accounts(&self) -> Vec<String> {
             vec!["ada@example.test".to_owned(), "bo@example.test".to_owned()]
         }
@@ -151,56 +153,38 @@ mod tests {
             _: Option<&str>,
             _: usize,
             _: Option<crate::capability::Datetime>,
-        ) -> Result<Vec<crate::mail::MailRow>, crate::capability::MailError> {
+        ) -> Result<Vec<crate::mail::MailRow>, MailError> {
             Ok(Vec::new())
         }
         fn search(
             &self,
-            _: &crate::capability::Query,
+            _: &Query,
             _: Option<&str>,
             _: usize,
             _: Option<crate::capability::Datetime>,
-        ) -> Result<Vec<crate::mail::MailRow>, crate::capability::MailError> {
+        ) -> Result<Vec<crate::mail::MailRow>, MailError> {
             Ok(Vec::new())
         }
-        fn message(
-            &self,
-            id: &str,
-        ) -> Result<crate::mail::MailMessage, crate::capability::MailError> {
-            Err(crate::capability::MailError::Absent {
+        fn message(&self, id: &str) -> Result<crate::mail::MailMessage, MailError> {
+            Err(MailError::Absent {
                 kind: "message",
                 name: id.to_owned(),
             })
         }
-        fn thread(
-            &self,
-            _: &str,
-            _: usize,
-        ) -> Result<Vec<crate::mail::MailMessage>, crate::capability::MailError> {
+        fn thread(&self, _: &str, _: usize) -> Result<Vec<crate::mail::MailMessage>, MailError> {
             Ok(Vec::new())
         }
-        fn attachments(
-            &self,
-            _: &str,
-        ) -> Result<Vec<crate::mail::AttachmentMeta>, crate::capability::MailError> {
+        fn attachments(&self, _: &str) -> Result<Vec<crate::mail::AttachmentMeta>, MailError> {
             Ok(Vec::new())
         }
-        fn stored(
-            &self,
-            id: &str,
-            _: u64,
-        ) -> Result<crate::mail::Stored, crate::capability::MailError> {
-            Err(crate::capability::MailError::Absent {
+        fn stored(&self, id: &str, _: u64) -> Result<crate::mail::Stored, MailError> {
+            Err(MailError::Absent {
                 kind: "message",
                 name: id.to_owned(),
             })
         }
-        fn attachment(
-            &self,
-            id: &str,
-            _: &str,
-        ) -> Result<crate::mail::AttachmentFile, crate::capability::MailError> {
-            Err(crate::capability::MailError::Absent {
+        fn attachment(&self, id: &str, _: &str) -> Result<crate::mail::AttachmentFile, MailError> {
+            Err(MailError::Absent {
                 kind: "message",
                 name: id.to_owned(),
             })
@@ -209,8 +193,8 @@ mod tests {
             &self,
             id: &str,
             _: &str,
-        ) -> Result<crate::file_read::FileRead, crate::capability::MailError> {
-            Err(crate::capability::MailError::Absent {
+        ) -> Result<crate::file_read::FileRead, MailError> {
+            Err(MailError::Absent {
                 kind: "message",
                 name: id.to_owned(),
             })

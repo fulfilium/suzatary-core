@@ -1,6 +1,6 @@
-//! Every effect the application performs is a trait here, one per file, or a store in one of
-//! [`crate::store`]'s three shapes, and a role's effects are a record of them passed as a
-//! value: [`Agent`], [`Secretary`], [`Server`].
+//! Every effect the application performs is a trait, one per file, here or beside its domain
+//! (mail's in [`crate::mail`]), or a store in one of [`crate::store`]'s three shapes, and a
+//! role's effects are a record of them passed as a value: [`Agent`], [`Secretary`], [`Server`].
 //! `suzatary-io` implements the traits, the binary assembles the records, tests fill
 //! them from fakes; a rule then is a fact about which fields a record has.
 //!
@@ -21,7 +21,6 @@ mod briefings;
 mod calendar;
 mod clock;
 mod compact;
-mod corpus;
 mod drive;
 mod entropy;
 mod render_cache;
@@ -29,9 +28,6 @@ mod render_cache;
 #[cfg(any(test, feature = "nothing"))]
 #[path = "../../tests/support/joining.rs"]
 mod joining;
-mod junk;
-mod mail_sync;
-mod mailbox;
 mod manuals;
 mod model;
 mod model_sessions;
@@ -40,7 +36,6 @@ mod model_sessions;
 #[path = "../../tests/support/nothing.rs"]
 mod nothing;
 mod notify;
-mod older_mail;
 mod pdf_text;
 mod render;
 mod repositories;
@@ -61,14 +56,10 @@ pub use briefings::{BriefingError, Briefings};
 pub use calendar::Calendar;
 pub use clock::Clock;
 pub use compact::Compact;
-pub use corpus::{Corpus, CorpusError};
 pub use drive::{Drive, DriveFailure};
 pub use entropy::{Entropy, SALT_BYTES};
 #[cfg(any(test, feature = "nothing"))]
 pub use joining::Joining;
-pub use junk::{Junk, JunkFailure};
-pub use mail_sync::{MailSync, SyncFailure, Synced};
-pub use mailbox::{MAX_QUERY_CHARS, MailError, Mailbox, Query};
 pub use manuals::{Manual, Manuals};
 #[cfg(feature = "fixture")]
 pub use model::pulled;
@@ -80,7 +71,6 @@ pub use model_sessions::ModelSessions;
 #[cfg(any(test, feature = "nothing"))]
 pub use nothing::{Nothing, Parses};
 pub use notify::{Delivered, Notify, NotifyError, Printed, Push};
-pub use older_mail::OlderMail;
 pub use pdf_text::PdfText;
 pub use render::{Html, Render, RenderError};
 pub use render_cache::RenderCache;
