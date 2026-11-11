@@ -4,7 +4,7 @@ use std::collections::BTreeMap;
 use std::sync::{Mutex, PoisonError};
 
 use super::{DriveEntry, DrivePath, EntryKind, Port, WritePort};
-use crate::capability::DriveFailure;
+use crate::drive::DriveFailure;
 
 /// A Drive as a map from path to node, `/` always a folder. Its meaning is the map: a folder
 /// lists exactly the nodes one segment under it, and a file downloads as the bytes it holds.

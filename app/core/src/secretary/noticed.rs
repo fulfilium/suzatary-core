@@ -274,7 +274,7 @@ pub struct Seen<'a> {
     /// Every declared secret name.
     pub settables: &'a crate::settings::Settables,
     /// Where each stands.
-    pub secrets: &'a dyn crate::capability::Secrets,
+    pub secrets: &'a dyn crate::secrets::Secrets,
     /// The model's name, as [`crate::secretary::model::Model::name`] spells it.
     pub model: &'a str,
     /// The model's observed calls.
@@ -301,8 +301,8 @@ pub struct Seen<'a> {
 /// owes only the unlock card; it also holds while any name failed.
 #[must_use]
 pub fn due(seen: &Seen<'_>, inbox: &inbox::Fold) -> Owed {
-    use crate::capability::Answer;
-    let snapshot = crate::capability::Snapshot::read(seen.secrets, seen.settables.iter());
+    use crate::secrets::Answer;
+    let snapshot = crate::secrets::Snapshot::read(seen.secrets, seen.settables.iter());
     let Ok(answers) = snapshot.answers() else {
         return super::fixes::unlock(inbox).holding();
     };
@@ -325,14 +325,14 @@ pub fn due(seen: &Seen<'_>, inbox: &inbox::Fold) -> Owed {
                     declared,
                     seen.secrets,
                     super::connections::Google {
-                        client: crate::capability::SecretState::all(
+                        client: crate::secrets::SecretState::all(
                             [crate::google::CLIENT_ID, crate::google::CLIENT_SECRET].map(|name| {
                                 crate::settings::Settable::mint(seen.settables, name)
                                     .ok()
                                     .and_then(|name| answers.get(&name).copied())
                                     .map_or(
-                                        crate::capability::SecretState::Missing,
-                                        crate::capability::SecretState::from,
+                                        crate::secrets::SecretState::Missing,
+                                        crate::secrets::SecretState::from,
                                     )
                             }),
                         ),
@@ -679,28 +679,28 @@ mod tests {
         granted: Option<crate::google::Scopes>,
     }
 
-    impl crate::capability::Secrets for Store {
+    impl crate::secrets::Secrets for Store {
         fn secret_state(
             &self,
             settable: &crate::settings::Settable,
-        ) -> crate::capability::SecretState {
+        ) -> crate::secrets::SecretState {
             self.asked.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
             if self.locked.contains(&settable.name()) {
-                crate::capability::SecretState::Locked
+                crate::secrets::SecretState::Locked
             } else if self.failed.contains(&settable.name()) {
-                crate::capability::SecretState::Failed
+                crate::secrets::SecretState::Failed
             } else if self.set.iter().any(|name| name == settable.name()) {
-                crate::capability::SecretState::Set
+                crate::secrets::SecretState::Set
             } else {
-                crate::capability::SecretState::Missing
+                crate::secrets::SecretState::Missing
             }
         }
 
         fn mail_grants(
             &self,
             _account: &crate::mail::account::MailAccount,
-        ) -> crate::capability::MailGrants {
-            crate::capability::MailGrants::default()
+        ) -> crate::secrets::MailGrants {
+            crate::secrets::MailGrants::default()
         }
 
         fn google_grant(&self, _: &crate::mail::address::EmailAddress) -> crate::google::Held {

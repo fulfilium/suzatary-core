@@ -15,11 +15,12 @@ use prodrome_core::policy::Untrusted;
 
 use crate::chain_set::ChainSet;
 
-use crate::capability::{Clock, Datetime, Render};
+use crate::capability::{Clock, Datetime};
 use crate::chains::{ChainName, ChainPolicy};
 use crate::deployment::Deployment;
 use crate::mail::mailbox::{Mailbox, Query};
 use crate::refusal::{Answered, Refusal, shown};
+use crate::render::Render;
 use crate::secretary::answers::Answers;
 use crate::secretary::briefings::Briefings;
 use crate::secretary::step::Step;
@@ -1794,7 +1795,7 @@ pub fn overview(
 /// `GET /api/calendar/<date>`: a week of the owner's calendars from that day, as Typst's HTML
 /// and as plain text.
 pub fn calendar(
-    calendar: &dyn crate::capability::Calendar,
+    calendar: &dyn crate::calendar::effect::Calendar,
     render: &dyn Render,
     from: NaiveDate,
 ) -> Answered<wire::CalendarPayload> {
@@ -1817,7 +1818,7 @@ pub fn calendar(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::capability::SecretState;
+    use crate::secrets::SecretState;
 
     /// A value the fake's store reads as locked: it holds the name and cannot say what it is.
     const LOCKED: &str = "<the store is locked>";
@@ -1825,10 +1826,10 @@ mod tests {
     /// A fake `Secrets` holding real-shaped values, so a leak would show.
     struct FakeSecrets {
         values: BTreeMap<String, String>,
-        grants: BTreeMap<String, crate::capability::MailGrants>,
+        grants: BTreeMap<String, crate::secrets::MailGrants>,
     }
 
-    impl crate::capability::Secrets for FakeSecrets {
+    impl crate::secrets::Secrets for FakeSecrets {
         fn secret_state(&self, settable: &crate::settings::Settable) -> SecretState {
             match self.values.get(settable.name()).map(String::as_str) {
                 Some(LOCKED) => SecretState::Locked,
@@ -1840,7 +1841,7 @@ mod tests {
         fn mail_grants(
             &self,
             account: &crate::mail::account::MailAccount,
-        ) -> crate::capability::MailGrants {
+        ) -> crate::secrets::MailGrants {
             self.grants
                 .get(account.email.as_str())
                 .copied()
@@ -1883,11 +1884,11 @@ mod tests {
 
     /// A store that counts the lookups it gives no answer to, each a wait for the timeout.
     struct Counting<'a>(
-        &'a dyn crate::capability::Secrets,
+        &'a dyn crate::secrets::Secrets,
         std::sync::atomic::AtomicUsize,
     );
 
-    impl crate::capability::Secrets for Counting<'_> {
+    impl crate::secrets::Secrets for Counting<'_> {
         fn secret_state(&self, settable: &crate::settings::Settable) -> SecretState {
             let state = self.0.secret_state(settable);
             if matches!(state, SecretState::Locked | SecretState::Failed) {
@@ -1899,7 +1900,7 @@ mod tests {
         fn mail_grants(
             &self,
             account: &crate::mail::account::MailAccount,
-        ) -> crate::capability::MailGrants {
+        ) -> crate::secrets::MailGrants {
             self.0.mail_grants(account)
         }
 
@@ -1991,7 +1992,7 @@ mod tests {
             }
         }
 
-        fn overview(&self, secrets: &dyn crate::capability::Secrets) -> wire::Overview {
+        fn overview(&self, secrets: &dyn crate::secrets::Secrets) -> wire::Overview {
             let declared = crate::settings::overview::Declared {
                 deployment: &self.deployment,
                 settables: &self.settables,

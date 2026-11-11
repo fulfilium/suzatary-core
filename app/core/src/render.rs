@@ -2,7 +2,7 @@
 
 use prodrome_core::memo::Finding;
 
-use super::Typeset;
+use crate::capability::{RenderError, Typeset};
 use crate::escape::Escaped;
 use crate::template::Called;
 
@@ -22,18 +22,6 @@ impl Html {
     pub fn as_str(&self) -> &str {
         &self.0
     }
-}
-
-/// Typst would not render this fragment.
-#[derive(Debug, thiserror::Error)]
-pub enum RenderError {
-    /// Typst is not available, or the compile failed; the frontend shows the source.
-    #[error("typst did not render the fragment: {0}")]
-    Refused(String),
-    /// The fragment carries an element, an attribute or a URL typst never writes; refused,
-    /// never edited.
-    #[error("the rendered fragment is suspicious and was refused: {0}")]
-    Suspicious(String),
 }
 
 /// Turning markup into the HTML a browser is allowed to parse.

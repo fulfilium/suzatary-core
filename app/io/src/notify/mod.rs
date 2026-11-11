@@ -8,8 +8,8 @@ mod ntfy;
 
 use std::sync::OnceLock;
 
-use suzatary_core::capability::{Delivered, Notify, NotifyError, Printed, Push};
 use suzatary_core::devices::Device;
+use suzatary_core::notify::{Delivered, Notify, NotifyError, Printed, Push};
 use suzatary_core::store::Log;
 
 pub use fcm::{API as FCM, ServiceAccount, credentials};

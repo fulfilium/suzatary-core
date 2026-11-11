@@ -1417,7 +1417,7 @@ mod tests {
     /// A cache that cannot forget.
     struct Stuck;
 
-    impl crate::capability::RenderCache for Stuck {
+    impl crate::render_cache::RenderCache for Stuck {
         fn forget(&self, _: &crate::answer::Renderable) -> Result<(), String> {
             Err("the disk said no".to_owned())
         }

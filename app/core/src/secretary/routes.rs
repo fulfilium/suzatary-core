@@ -4,7 +4,7 @@
 //! mint and carries an index, never a body, so what is sent is what was stored and shown.
 
 use crate::believed::Preview;
-use crate::capability::{Clock, Secret, Secrets};
+use crate::capability::{Clock, Secret};
 use crate::conversation_id::ConversationId;
 use crate::deployment::Deployment;
 use crate::health::plugin::{Origin, PluginName};
@@ -29,6 +29,7 @@ use crate::secretary::readings::{self, Draw, Dress, Window};
 use crate::secretary::responded::{Done, Performed, Tried};
 use crate::secretary::store::{Entry, Kind, Stored, Title};
 use crate::secretary::transcript;
+use crate::secrets::Secrets;
 use crate::server::Server;
 use crate::settings::{Edits, Settable, Settables, Writes};
 use crate::signatures::Tap;
@@ -1970,7 +1971,7 @@ fn afresh(
 
 /// Ask the store again for every declared name; the card may be tried again while one fails.
 fn store_answers(secrets: &dyn Secrets, settables: &Settables) -> Performed {
-    match crate::capability::Snapshot::read(secrets, settables.iter()).answers() {
+    match crate::secrets::Snapshot::read(secrets, settables.iter()).answers() {
         Ok(_) => Done::Acted {
             what: "the secret store answers".to_owned(),
         }
@@ -2569,7 +2570,7 @@ mod tests {
         fn block(
             &self,
             _block: &crate::answer::Renderable,
-        ) -> Result<crate::capability::Html, crate::secretary::answers::AnswerError> {
+        ) -> Result<crate::render::Html, crate::secretary::answers::AnswerError> {
             panic!("a turn that is not the model's was rendered");
         }
     }
@@ -2750,8 +2751,8 @@ mod tests {
         fn block(
             &self,
             block: &crate::answer::Renderable,
-        ) -> Result<crate::capability::Html, crate::secretary::answers::AnswerError> {
-            Ok(crate::capability::Html::from_render(format!(
+        ) -> Result<crate::render::Html, crate::secretary::answers::AnswerError> {
+            Ok(crate::render::Html::from_render(format!(
                 "<p>{}</p>",
                 block.as_str().trim()
             )))
@@ -2763,7 +2764,7 @@ mod tests {
         fn block(
             &self,
             _block: &crate::answer::Renderable,
-        ) -> Result<crate::capability::Html, crate::secretary::answers::AnswerError> {
+        ) -> Result<crate::render::Html, crate::secretary::answers::AnswerError> {
             Err(crate::secretary::answers::AnswerError(
                 "typst refused".to_owned(),
             ))

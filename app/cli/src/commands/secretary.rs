@@ -448,7 +448,7 @@ impl suzatary_core::secretary::routes::Perform for Acting {
                     conversations,
                     id,
                     request,
-                    Ok(suzatary_core::capability::WebAnswer {
+                    Ok(suzatary_core::web::WebAnswer {
                         url: request.sentence(),
                         status: 200,
                         text: format!("the fixture's page for: {}", request.sentence()),
@@ -712,7 +712,7 @@ fn web_turn(
     conversations: &suzatary_io::conversations::ConversationStores,
     id: &suzatary_core::conversation_id::ConversationId,
     request: &suzatary_core::web::WebRequest,
-    answered: Result<suzatary_core::capability::WebAnswer, suzatary_core::capability::WebFailure>,
+    answered: Result<suzatary_core::web::WebAnswer, suzatary_core::web::WebFailure>,
 ) -> Performed {
     use suzatary_core::capability::Clock as _;
     use suzatary_core::secretary::model::Turn;
@@ -794,7 +794,7 @@ fn drive_turn(
     kept: &suzatary_io::blobs::Blobs,
     id: &suzatary_core::conversation_id::ConversationId,
     path: &suzatary_core::drive_path::DrivePath,
-    read: Result<suzatary_core::file_read::FileRead, suzatary_core::capability::DriveFailure>,
+    read: Result<suzatary_core::file_read::FileRead, suzatary_core::drive::DriveFailure>,
 ) -> Performed {
     use suzatary_core::capability::Clock as _;
     use suzatary_core::file_read::FileRead;

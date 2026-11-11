@@ -4,7 +4,7 @@ use std::fmt;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
 use super::{Broken, hold};
-use crate::capability::DriveFailure;
+use crate::drive::DriveFailure;
 use crate::drive::{DriveEntry, EntryKind, Fenced, Port, WritePort};
 use crate::drive_path::DrivePath;
 

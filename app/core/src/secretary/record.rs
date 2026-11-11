@@ -1,16 +1,22 @@
 use crate::agent::Agent;
-use crate::capability::{
-    Calendar, Clock, Drive, Manuals, Render, Repositories, Repository, Secrets, Weather, Web,
-};
+use crate::calendar::effect::Calendar;
+use crate::capability::{Clock, Manuals};
+use crate::drive::Drive;
 use crate::mail::corpus::Corpus;
 use crate::mail::junk_folder::Junk;
 use crate::mail::mail_sync::MailSync;
 use crate::mail::mailbox::Mailbox;
 use crate::mail::older_mail::OlderMail;
 use crate::record::TodoEvent;
+use crate::render::Render;
+use crate::repositories::Repositories;
+use crate::repository::Repository;
 use crate::secretary::briefings::Briefings;
 use crate::secretary::model::Model;
+use crate::secrets::Secrets;
 use crate::store::Prodrome;
+use crate::weather::Weather;
+use crate::web::Web;
 
 /// What the secretary may use: the agent's effects over the chain itself, plus a model,
 /// its conversations and memory, and the owner's world read-only. Nothing here sends: its
@@ -100,11 +106,11 @@ pub struct Secretary<'a> {
     /// The owner's uploaded photos and PDFs, read-only.
     pub uploads: &'a dyn crate::store::Gets<crate::attachment::AttachmentId, crate::upload::Upload>,
     /// The words of the uploads, for its search.
-    pub upload_index: &'a dyn crate::capability::UploadIndex,
+    pub upload_index: &'a dyn crate::upload_index::UploadIndex,
     /// The files a verb keeps for the model.
     pub kept: &'a dyn crate::store::Doc<crate::attachment::AttachmentId, Vec<u8>>,
     /// A PDF's text layer, which a held file's numbers are read back from.
-    pub pdf: &'a dyn crate::capability::PdfText,
+    pub pdf: &'a dyn crate::pdf_text::PdfText,
     /// The files the owner tapped Read on outside the allowed folders, as each tap read it.
     pub tapped: &'a dyn crate::store::Gets<crate::held_value::HeldFile, crate::secretary::attached::Attached>,
     /// The tables the instance file declares, read-only: what a Connect card is checked against.

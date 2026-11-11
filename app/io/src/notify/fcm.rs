@@ -2,7 +2,8 @@
 //! with no `notification` block, so Google draws nothing this app did not compose.
 
 use serde::{Deserialize, Serialize};
-use suzatary_core::capability::{Printed, Secret};
+use suzatary_core::capability::Secret;
+use suzatary_core::notify::Printed;
 
 use crate::http::{Http, Req};
 use crate::secrets::{Resolves, SecretError};
@@ -208,7 +209,7 @@ pub(super) mod tests {
 
     #[test]
     fn the_fcm_body_is_a_data_message_with_no_notification_block() {
-        let push = suzatary_core::capability::Push::Agent {
+        let push = suzatary_core::notify::Push::Agent {
             authored: 2,
             changes: 0,
         }

@@ -11,9 +11,11 @@ use std::sync::Arc;
 
 use prodrome_core::memo::Finding;
 use suzatary_core::answer::Renderable;
-use suzatary_core::capability::{Html, Rejected, Render, RenderError, Typeset};
+use suzatary_core::capability::RenderError;
+use suzatary_core::capability::{Rejected, Typeset};
 use suzatary_core::escape::Escaped;
 use suzatary_core::narrowing::narrowed;
+use suzatary_core::render::{Html, Render};
 use suzatary_core::rendering::{self, ANSWER, CLOSED, MARKUP, Markup};
 use suzatary_core::secretary::answers::{AnswerError, Answers};
 use suzatary_core::table::Table;
@@ -173,7 +175,7 @@ impl Render for Typst {
     }
 }
 
-impl suzatary_core::capability::RenderCache for Typst {
+impl suzatary_core::render_cache::RenderCache for Typst {
     fn forget(&self, block: &Renderable) -> Result<(), String> {
         let key = ANSWER.key_of(block).map_err(|e| e.to_string())?;
         self.fragments

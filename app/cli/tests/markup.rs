@@ -7,7 +7,7 @@
 mod common;
 
 use common::Fakes;
-use suzatary_core::capability::Render as _;
+use suzatary_core::render::Render as _;
 
 fn base() -> String {
     let fakes = Fakes::new("markup");

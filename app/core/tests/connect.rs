@@ -5,7 +5,6 @@
 
 use prodrome_core::literal::codec::Literal as _;
 use proptest::prelude::*;
-use suzatary_core::capability::SecretState;
 use suzatary_core::connect::{
     CATALOG, Checked, Connection, Declared, PLAIN, Params, Seen, StepShape, Table, TemplateId,
 };
@@ -14,6 +13,7 @@ use suzatary_core::health::{Health, Outcome};
 use suzatary_core::mail::account::Authority;
 use suzatary_core::mail::address::EmailAddress;
 use suzatary_core::plugin::Manifest;
+use suzatary_core::secrets::SecretState;
 use suzatary_core::settings::{Page, Settable, Settables};
 
 fn email() -> impl Strategy<Value = EmailAddress> {

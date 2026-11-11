@@ -1,9 +1,11 @@
 //! What the secretary may name in the owner's Drive, by [`DrivePath`].
 
+mod effect;
 mod fenced;
 mod memory;
 mod port;
 mod probe;
+pub use effect::{Drive, DriveFailure};
 
 use crate::drive_path::DrivePath;
 

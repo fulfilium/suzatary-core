@@ -238,12 +238,12 @@ fn signs(read: &instance::Instance) -> String {
 }
 
 /// A secret's state as `doctor` prints it: a locked store is never printed as missing.
-fn said(state: suzatary_core::capability::SecretState) -> &'static str {
+fn said(state: suzatary_core::secrets::SecretState) -> &'static str {
     match state {
-        suzatary_core::capability::SecretState::Set => "resolves",
-        suzatary_core::capability::SecretState::Missing => "MISSING",
-        suzatary_core::capability::SecretState::Locked => "LOCKED (the store could not answer)",
-        suzatary_core::capability::SecretState::Failed => "FAILED (the store could not be run)",
+        suzatary_core::secrets::SecretState::Set => "resolves",
+        suzatary_core::secrets::SecretState::Missing => "MISSING",
+        suzatary_core::secrets::SecretState::Locked => "LOCKED (the store could not answer)",
+        suzatary_core::secrets::SecretState::Failed => "FAILED (the store could not be run)",
     }
 }
 
@@ -273,7 +273,7 @@ fn print_models(read: &instance::Instance) {
         suzatary_io::model::TOKEN,
         "doctor: checking whether the model's token resolves",
     )) {
-        suzatary_core::capability::SecretState::Missing => println!(
+        suzatary_core::secrets::SecretState::Missing => println!(
             "  the model's token is not set: run {}, or connect the model from the app",
             read.reach().secret(suzatary_io::model::TOKEN)
         ),

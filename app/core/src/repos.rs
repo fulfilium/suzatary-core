@@ -6,8 +6,8 @@ use std::fmt;
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
-use crate::capability::RepoFailure;
 use crate::repo_ids::{CommitId, RepoName, RepoNameError, RepoPath, Rev};
+use crate::repositories::RepoFailure;
 
 /// The most a patch may be: what a person reads on a phone before tapping.
 pub(crate) const MAX_PATCH_BYTES: usize = 64 * 1024;

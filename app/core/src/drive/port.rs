@@ -2,7 +2,7 @@
 //! and what the app derives from them.
 
 use super::{DriveEntry, DrivePath, EntryKind, MAX_FILE};
-use crate::capability::DriveFailure;
+use crate::drive::DriveFailure;
 
 /// A Drive, read: folders of named files under sections (`/my-files`, …), as any implementation
 /// holds them. `list` and `download` are what one must provide; `entry` and `fetch` are derived,

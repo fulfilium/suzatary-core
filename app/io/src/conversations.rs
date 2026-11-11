@@ -4,7 +4,7 @@
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use suzatary_core::capability::RenderCache;
+use suzatary_core::render_cache::RenderCache;
 use suzatary_core::secretary::conversations::Conversations;
 use suzatary_core::secretary::line_event::LineEvent;
 use suzatary_core::secretary::model_sessions::ModelSessions;

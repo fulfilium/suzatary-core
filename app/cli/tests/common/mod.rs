@@ -20,10 +20,8 @@ use prodrome_core::event::{Actor, mk_completed, mk_created};
 use prodrome_core::fpl::{self, mk_decay, mk_flat};
 use prodrome_core::policy::Untrusted;
 use suzatary_cli::serve::{self, Chained, State};
-use suzatary_core::capability::{
-    Clock, Datetime, Delivered, Html, Login, Manual, Manuals, Notify, NotifyError, Push, Render,
-    RenderError, Repository, RepositoryError, Whois, WhoisError,
-};
+use suzatary_core::capability::RenderError;
+use suzatary_core::capability::{Clock, Datetime, Login, Manual, Manuals, Whois, WhoisError};
 pub use suzatary_core::cast::{self, CAST};
 use suzatary_core::deployment::Deployment;
 use suzatary_core::escape::Escaped;
@@ -37,7 +35,10 @@ use suzatary_core::mail::sync_report::SyncReport;
 use suzatary_core::mail::verbs::{Marked, Message, Show, Summary};
 use suzatary_core::mail::{AttachmentMeta, MailMessage, MailRow};
 use suzatary_core::mail_error::MailError;
+use suzatary_core::notify::{Delivered, Notify, NotifyError, Push};
 use suzatary_core::record::{EventStore, SubTodo, mk_authored, mk_source, mk_subtodo};
+use suzatary_core::render::{Html, Render};
+use suzatary_core::repository::{Repository, RepositoryError};
 use suzatary_core::secretary::answers::{AnswerError, Answers};
 use suzatary_core::secretary::model::{
     Conversation, Halt, Model, ModelError, Reply, Session, SessionId, SessionModel, Sessioned,
@@ -1632,22 +1633,22 @@ impl suzatary_io::secrets::Resolves for SecretRecorder {
 
 /// Where a name stands in a recorder: set while it holds a value; a Google account holds its
 /// reading grant while its sign-in with Google is held.
-impl suzatary_core::capability::Secrets for SecretRecorder {
+impl suzatary_core::secrets::Secrets for SecretRecorder {
     fn secret_state(
         &self,
         settable: &suzatary_core::settings::Settable,
-    ) -> suzatary_core::capability::SecretState {
+    ) -> suzatary_core::secrets::SecretState {
         use suzatary_io::secrets::Resolves as _;
         match self.get(settable.name(), "a scene") {
-            Ok(Some(_)) => suzatary_core::capability::SecretState::Set,
-            Ok(None) | Err(_) => suzatary_core::capability::SecretState::Missing,
+            Ok(Some(_)) => suzatary_core::secrets::SecretState::Set,
+            Ok(None) | Err(_) => suzatary_core::secrets::SecretState::Missing,
         }
     }
 
     fn mail_grants(
         &self,
         account: &suzatary_core::mail::account::MailAccount,
-    ) -> suzatary_core::capability::MailGrants {
+    ) -> suzatary_core::secrets::MailGrants {
         let held = suzatary_core::mail::address::EmailAddress::new(account.email.as_str())
             .ok()
             .filter(|_| matches!(account.sync, suzatary_core::mail::account::Sync::Google))
@@ -1657,7 +1658,7 @@ impl suzatary_core::capability::Secrets for SecretRecorder {
                     suzatary_core::google::Held::Signed(_)
                 )
             });
-        suzatary_core::capability::MailGrants {
+        suzatary_core::secrets::MailGrants {
             imap: held,
             smtp: false,
         }
@@ -2265,7 +2266,7 @@ pub struct Fakes {
     /// The tables a Connect card is checked against; none declared.
     pub configuration: Arc<dyn suzatary_core::settings::Configuration>,
     /// Where each declared secret stands: nothing set, unless a scene reads its own store.
-    pub secrets: Arc<dyn suzatary_core::capability::Secrets + Send + Sync>,
+    pub secrets: Arc<dyn suzatary_core::secrets::Secrets + Send + Sync>,
 }
 
 impl Fakes {
@@ -2397,7 +2398,7 @@ impl Fakes {
     #[must_use]
     pub fn secrets(
         mut self,
-        secrets: Arc<dyn suzatary_core::capability::Secrets + Send + Sync>,
+        secrets: Arc<dyn suzatary_core::secrets::Secrets + Send + Sync>,
     ) -> Self {
         self.secrets = secrets;
         self
@@ -2544,8 +2545,8 @@ impl Fakes {
 /// A fixed forecast, never a socket: no test here is about the weather.
 pub struct FakeWeather;
 
-impl suzatary_core::capability::Weather for FakeWeather {
-    fn today(&self) -> Result<String, suzatary_core::capability::WeatherError> {
+impl suzatary_core::weather::Weather for FakeWeather {
+    fn today(&self) -> Result<String, suzatary_core::weather::WeatherError> {
         Ok("62-71°F, clear, rain chance peaks at 5% — no umbrella needed.".to_owned())
     }
 }
@@ -2560,7 +2561,7 @@ pub struct FakeWeb {
     pub done: std::sync::Mutex<Vec<suzatary_core::web::WebRequest>>,
 }
 
-impl suzatary_core::capability::Web for FakeWeb {
+impl suzatary_core::web::Web for FakeWeb {
     fn allow_rules(&self) -> Vec<suzatary_core::web::AllowRule> {
         self.allow.clone()
     }
@@ -2568,12 +2569,12 @@ impl suzatary_core::capability::Web for FakeWeb {
     fn perform(
         &self,
         request: &suzatary_core::web::WebRequest,
-    ) -> Result<suzatary_core::capability::WebAnswer, suzatary_core::capability::WebFailure> {
+    ) -> Result<suzatary_core::web::WebAnswer, suzatary_core::web::WebFailure> {
         self.done
             .lock()
             .expect("the web log lock")
             .push(request.clone());
-        Ok(suzatary_core::capability::WebAnswer {
+        Ok(suzatary_core::web::WebAnswer {
             url: request.sentence(),
             status: 200,
             text: format!("the page for: {}", request.sentence()),
@@ -2591,7 +2592,7 @@ pub struct FakeDriveAccess {
     pub drive: Option<suzatary_io::drive::ProtonDrive>,
 }
 
-impl suzatary_core::capability::Drive for FakeDriveAccess {
+impl suzatary_core::drive::Drive for FakeDriveAccess {
     fn allowed_folders(&self) -> Vec<suzatary_core::drive_path::DrivePath> {
         self.allow.clone()
     }
@@ -2606,7 +2607,7 @@ impl suzatary_core::capability::Drive for FakeDriveAccess {
     fn read(
         &self,
         file: &suzatary_core::drive_path::DrivePath,
-    ) -> Result<FileRead, suzatary_core::capability::DriveFailure> {
+    ) -> Result<FileRead, suzatary_core::drive::DriveFailure> {
         self.drive
             .as_ref()
             .ok_or_else(no_drive)
@@ -2621,14 +2622,13 @@ impl suzatary_core::drive::Port for NoDrive {
     fn list(
         &self,
         _: &suzatary_core::drive_path::DrivePath,
-    ) -> Result<Vec<suzatary_core::drive::DriveEntry>, suzatary_core::capability::DriveFailure>
-    {
+    ) -> Result<Vec<suzatary_core::drive::DriveEntry>, suzatary_core::drive::DriveFailure> {
         Err(no_drive())
     }
     fn download(
         &self,
         _: &suzatary_core::drive_path::DrivePath,
-    ) -> Result<Vec<u8>, suzatary_core::capability::DriveFailure> {
+    ) -> Result<Vec<u8>, suzatary_core::drive::DriveFailure> {
         Err(no_drive())
     }
 }
@@ -2909,14 +2909,14 @@ impl suzatary_core::vault::Vault for FakeVault {
         &self,
         name: &str,
         bytes: &[u8],
-    ) -> Result<suzatary_core::drive_path::DrivePath, suzatary_core::capability::DriveFailure> {
+    ) -> Result<suzatary_core::drive_path::DrivePath, suzatary_core::drive::DriveFailure> {
         self.0
             .lock()
             .expect("unpoisoned")
             .push((name.to_owned(), bytes.to_vec()));
         suzatary_core::vault::folder()
             .join(name)
-            .map_err(|failed| suzatary_core::capability::DriveFailure::Refused(failed.to_string()))
+            .map_err(|failed| suzatary_core::drive::DriveFailure::Refused(failed.to_string()))
     }
 }
 
@@ -3763,8 +3763,8 @@ impl Junk for FakeJunk {
     }
 }
 
-fn no_drive() -> suzatary_core::capability::DriveFailure {
-    suzatary_core::capability::DriveFailure::Unreachable("no Drive in this scene".to_owned())
+fn no_drive() -> suzatary_core::drive::DriveFailure {
+    suzatary_core::drive::DriveFailure::Unreachable("no Drive in this scene".to_owned())
 }
 
 /// A fake Proton Drive CLI script that answers the two reads, logs every call
@@ -4256,7 +4256,7 @@ pub fn never_stored(root: &std::path::Path, value: &str) {
 #[derive(Default)]
 pub struct FakePdf(Option<String>);
 
-impl suzatary_core::capability::PdfText for FakePdf {
+impl suzatary_core::pdf_text::PdfText for FakePdf {
     fn layer(&self, _: &[u8]) -> Result<suzatary_core::file_read::Layer, String> {
         self.0
             .clone()

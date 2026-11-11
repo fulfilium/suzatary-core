@@ -80,7 +80,7 @@ pub(crate) enum Unlayered {
     Box(String),
 }
 
-impl suzatary_core::capability::PdfText for Pdftotext {
+impl suzatary_core::pdf_text::PdfText for Pdftotext {
     fn layer(&self, pdf: &[u8]) -> Result<Layer, String> {
         self.read(pdf)
     }

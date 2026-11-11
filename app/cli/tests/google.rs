@@ -11,7 +11,7 @@ use std::sync::Arc;
 
 use common::fake_google::{self, FakeGoogle};
 use common::{EditsRecorder, Fakes, SecretRecorder, SettingsFixture};
-use suzatary_core::capability::Calendar as _;
+use suzatary_core::calendar::effect::Calendar as _;
 use suzatary_core::conversation_id::SETUP;
 use suzatary_core::mail::account::{MailAccount, Sync};
 use suzatary_core::mail::address::EmailAddress;

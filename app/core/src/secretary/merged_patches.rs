@@ -1,7 +1,8 @@
 //! A repository card whose patch the default branch already holds is done another way.
 
-use crate::capability::{Datetime, Repositories};
+use crate::capability::Datetime;
 use crate::refusal::Refusal;
+use crate::repositories::Repositories;
 use crate::secretary::acts::Act;
 use crate::secretary::done_elsewhere::{self, Seen, Swept};
 use crate::secretary::inbox_event::InboxEvent;

@@ -13,7 +13,7 @@ use std::path::PathBuf;
 use prodrome_core::event::{Actor, Hash};
 use prodrome_core::policy::Untrusted;
 use serde_json::{Map, Value, json};
-use suzatary_core::capability::{Datetime, Nothing, RepoFailure, Repositories};
+use suzatary_core::capability::{Datetime, Nothing};
 use suzatary_core::chains::{ChainName, ChainPolicy, Chains};
 use suzatary_core::deployment::Deployment;
 use suzatary_core::mail::junk::{ChurnList, JunkHeader, JunkMessage, Uid};
@@ -27,6 +27,7 @@ use suzatary_core::record::{Envelope, EventStore, TodoEvent};
 use suzatary_core::refusal::Refusal;
 use suzatary_core::repo_ids::{CommitId, RepoName, RepoPath, Rev};
 use suzatary_core::repos::{Patch, RepoRow, Visibility};
+use suzatary_core::repositories::{RepoFailure, Repositories};
 use suzatary_core::secretary::Bound;
 use suzatary_core::secretary::line_event::LineEvent;
 use suzatary_core::secretary::store::Entry;
@@ -325,7 +326,7 @@ impl Repositories for Fixed {
         &self,
         _repo: &RepoName,
         _patch: &Patch,
-    ) -> Result<Option<suzatary_core::capability::InBranch>, RepoFailure> {
+    ) -> Result<Option<suzatary_core::repositories::InBranch>, RepoFailure> {
         Ok(None)
     }
     fn pushable(&self, _repo: &RepoName, _visibility: Visibility) -> Result<(), RepoFailure> {

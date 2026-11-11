@@ -4,9 +4,10 @@
 use crate::chain_set::ChainSet;
 
 use crate::answer::Renderable;
-use crate::capability::{Datetime, Html};
+use crate::capability::Datetime;
 use crate::reference::{ProposalRef, Reference};
 use crate::refusal::{Answered, Refusal};
+use crate::render::Html;
 use crate::secretary::acts::Act;
 use crate::secretary::answers::{AnswerError, Answers};
 use crate::secretary::attached;

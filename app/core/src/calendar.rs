@@ -14,6 +14,7 @@
 //! to a chain, and a reader marks every title as other people's words, as mail is.
 
 mod content;
+pub mod effect;
 mod name;
 mod occurrence;
 mod reading;

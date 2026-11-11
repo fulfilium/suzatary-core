@@ -48,7 +48,8 @@ impl Verb for UploadRead {
             )));
         }
         let index = call.caps.upload_index;
-        let failed = |failed: crate::capability::IndexError| Refusal::internal(failed.to_string());
+        let failed =
+            |failed: crate::upload_index::IndexError| Refusal::internal(failed.to_string());
         match index.refresh(&named).map_err(failed)?.get(&id) {
             Some(UploadStanding::Indexed(_)) => {}
             Some(UploadStanding::Held) => {

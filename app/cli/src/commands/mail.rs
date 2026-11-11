@@ -103,7 +103,7 @@ fn deliver_rings(instance: &Instance) {
         Err(failed) => return eprintln!("sync: the watches did not read: {}", failed.message()),
     };
     for (id, message) in owed {
-        let push = suzatary_core::capability::Push::Expected { message };
+        let push = suzatary_core::notify::Push::Expected { message };
         let recorded = super::notify::deliver(instance, &push)
             .map_err(|failed| failed.to_string())
             .and_then(|_| {

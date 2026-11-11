@@ -1,5 +1,5 @@
-//! Every effect the application performs is a trait, one per file, here or beside its domain
-//! (mail's in [`crate::mail`]), or a store in one of [`crate::store`]'s three shapes, and a
+//! Every effect the application performs is a trait, one per file, here when it is the base's
+//! and otherwise beside its domain (as [`crate::render`] or [`crate::mail::mailbox`]), or a store in one of [`crate::store`]'s three shapes, and a
 //! role's effects are a record of them passed as a value: [`crate::agent::Agent`],
 //! [`crate::secretary::Secretary`], [`crate::server::Server`].
 //! `suzatary-io` implements the traits, the binary assembles the records, tests fill
@@ -7,7 +7,7 @@
 //!
 //! - The triage agent cannot send, notify or name a peer: [`crate::agent::Agent`] has no such field.
 //! - Reading mail never yields a send token: [`ImapToken`] and [`SmtpToken`] are two types.
-//! - Rendered means confirmed: [`Render::html`] takes an [`Escaped`], which only
+//! - Rendered means confirmed: [`crate::render::Render::html`] takes an [`Escaped`], which only
 //!   [`Content::Confirmed`] yields.
 //! - Loopback never writes: an actor is a [`Login`], and only [`Whois`] mints one.
 
@@ -15,57 +15,30 @@ use std::fmt;
 
 use crate::escape::Escaped;
 
-mod calendar;
 mod clock;
-mod drive;
 mod entropy;
-mod render_cache;
 // The fake compactor, test support like `nothing` below.
 #[cfg(any(test, feature = "nothing"))]
 #[path = "../../tests/support/joining.rs"]
 mod joining;
 mod manuals;
+mod render_error;
 // Test support, never production.
 #[cfg(any(test, feature = "nothing"))]
 #[path = "../../tests/support/nothing.rs"]
 mod nothing;
-mod notify;
-mod pdf_text;
-mod render;
-mod repositories;
-mod repository;
-mod secrets;
 mod typeset;
-mod upload_index;
-mod weather;
-mod web;
 mod whois;
 
-pub use calendar::Calendar;
 pub use clock::Clock;
-pub use drive::{Drive, DriveFailure};
 pub use entropy::{Entropy, SALT_BYTES};
 #[cfg(any(test, feature = "nothing"))]
 pub use joining::Joining;
 pub use manuals::{Manual, Manuals};
 #[cfg(any(test, feature = "nothing"))]
 pub use nothing::{Nothing, Parses};
-pub use notify::{Delivered, Notify, NotifyError, Printed, Push};
-pub use pdf_text::PdfText;
-pub use render::{Html, Render, RenderError};
-pub use render_cache::RenderCache;
-pub use repositories::{
-    InBranch, MAX_FILE_BYTES, MAX_TEXT_BYTES, RepoFailure, Repositories, readable,
-};
-pub use repository::{Repository, RepositoryError};
-pub use secrets::{
-    Answer, Locked, MailCredential, MailGrants, Remembering, SecretAnswers, SecretState, Secrets,
-    Snapshot,
-};
+pub use render_error::RenderError;
 pub use typeset::{Diagnostic, Rejected, Typeset, parsed};
-pub use upload_index::{IndexError, UploadIndex};
-pub use weather::{Weather, WeatherError};
-pub use web::{AllowRule, Web, WebAnswer, WebFailure, WebRequest};
 pub use whois::{Peer, Whois, WhoisError};
 
 /// The instant a [`Clock`] hands back: the Prodrome's own literal, data and never an order.
@@ -171,7 +144,7 @@ impl SmtpToken {
 
 /// A todo's prose, tagged by whether a trusted actor wrote it.
 ///
-/// Only [`Content::Confirmed`] yields an [`Escaped`], which [`Render::html`] requires.
+/// Only [`Content::Confirmed`] yields an [`Escaped`], which [`crate::render::Render::html`] requires.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Content {
     /// A trusted actor's markup. Renders.
@@ -181,7 +154,7 @@ pub enum Content {
 }
 
 impl Content {
-    /// The markup a [`Render`] may take, `None` for the provisional arm.
+    /// The markup a [`crate::render::Render`] may take, `None` for the provisional arm.
     #[must_use]
     pub fn escaped(&self) -> Option<&Escaped> {
         match self {

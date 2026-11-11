@@ -126,7 +126,7 @@ fn sync_all(path: &Path, args: &SyncArgs) -> anyhow::Result<()> {
 /// List every Drive folder the secretary may read and join what came of it into `health`; a
 /// register that cannot be written is a journal line, since the next run probes again.
 fn probe_drive(instance: &Instance, health: &suzatary_io::source_health::Health) {
-    use suzatary_core::capability::Drive as _;
+    use suzatary_core::drive::Drive as _;
     let drive = super::serve::interpreters::DriveAccess::of(instance);
     let at = instant_of(SystemClock.now());
     let probed = suzatary_core::drive::probe(drive.port(), &drive.allowed_folders(), at);

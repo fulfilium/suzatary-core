@@ -2,8 +2,8 @@
 //! catching an implementation that breaks a law.
 
 use proptest::prelude::*;
-use suzatary_core::capability::DriveFailure;
 use suzatary_core::conformance::drive::{Case, Law, check};
+use suzatary_core::drive::DriveFailure;
 use suzatary_core::drive::{DriveEntry, Memory, Port, WritePort};
 use suzatary_core::drive_path::DrivePath;
 

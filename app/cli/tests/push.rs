@@ -45,7 +45,7 @@ fn say(base: &str, id: &str, text: &str) -> ureq::http::Response<ureq::Body> {
 /// Poll for the push, not just for idle: the worker writes the final turn and only then pushes,
 /// so `idle` says nothing about the push having been sent. Bounded, so a round that never
 /// pushes fails rather than hangs.
-fn pushed(fakes: &Fakes) -> Vec<suzatary_core::capability::Push> {
+fn pushed(fakes: &Fakes) -> Vec<suzatary_core::notify::Push> {
     for _ in 0..400 {
         let pushed = fakes.notify.pushed();
         if !pushed.is_empty() {
@@ -57,7 +57,7 @@ fn pushed(fakes: &Fakes) -> Vec<suzatary_core::capability::Push> {
 }
 
 /// A round that answers, with no subscriber, pushes exactly once: the conversation's
-/// [`suzatary_core::capability::Push::Answered`], none of the answer's words.
+/// [`suzatary_core::notify::Push::Answered`], none of the answer's words.
 #[test]
 fn no_subscriber_earns_one_push_naming_the_conversation() {
     let (base, fakes, _workers) = writer(
@@ -77,7 +77,7 @@ fn no_subscriber_earns_one_push_naming_the_conversation() {
     );
     assert_eq!(
         pushed[0],
-        suzatary_core::capability::Push::Answered {
+        suzatary_core::notify::Push::Answered {
             conversation: suzatary_core::conversation_id::ConversationId::new(id.as_str())
                 .expect("a slug"),
             brief: false,

@@ -2,6 +2,9 @@
 //! this box, its network or the tailnet is refused, so no request reaches the app's own routes.
 //! Rules match label by label: `wikipedia.org.evil.example` never matches `*.wikipedia.org`.
 
+mod effect;
+pub use effect::{Web, WebAnswer, WebFailure};
+
 use std::fmt;
 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
 use std::str::FromStr;

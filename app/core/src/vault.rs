@@ -4,7 +4,7 @@
 
 use serde::{Deserialize, Serialize};
 
-use crate::capability::DriveFailure;
+use crate::drive::DriveFailure;
 use crate::drive_path::DrivePath;
 
 /// Where a private file is kept, and what a model may read of it.

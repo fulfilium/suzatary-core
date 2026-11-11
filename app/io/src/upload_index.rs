@@ -6,12 +6,12 @@ use std::path::PathBuf;
 
 use serde::{Deserialize, Serialize};
 use suzatary_core::attachment::AttachmentId;
-use suzatary_core::capability::{IndexError, UploadIndex};
 use suzatary_core::file_read::{FileRead, Withheld};
 use suzatary_core::held_value::HeldFile;
 use suzatary_core::held_value::{Masked, Placeholder};
 use suzatary_core::secretary::upload_standing::UploadStanding;
 use suzatary_core::store::{Doc as _, Gets as _, StoreError};
+use suzatary_core::upload_index::{IndexError, UploadIndex};
 
 use crate::attachments::{AttachmentStore, Place, Stored};
 use crate::docs::{DocCodec, Docs};
@@ -148,7 +148,7 @@ impl UploadIndex for UploadIndexFiles {
 mod tests {
     use super::*;
     use crate::pdftotext::{Pdftotext, minimal_pdf};
-    use suzatary_core::capability::DriveFailure;
+    use suzatary_core::drive::DriveFailure;
     use suzatary_core::vault::Vault;
 
     /// A Drive that keeps nothing and answers where it would have.

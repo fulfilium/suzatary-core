@@ -15,8 +15,5 @@ pub trait Answers: Sync {
     /// Typst refused the block, could not run, or the tripwire fired.
     ///
     /// [`Renderable`]: crate::answer::Renderable
-    fn block(
-        &self,
-        block: &crate::answer::Renderable,
-    ) -> Result<crate::capability::Html, AnswerError>;
+    fn block(&self, block: &crate::answer::Renderable) -> Result<crate::render::Html, AnswerError>;
 }

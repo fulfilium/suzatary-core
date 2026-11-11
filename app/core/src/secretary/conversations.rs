@@ -6,9 +6,10 @@
 //! written through [`crate::secretary::transcript::push`] alone, which keeps each key before the
 //! line that names it is appended, and never takes it back: an orphan key opens nothing.
 
-use crate::capability::{Datetime, Entropy, RenderCache};
+use crate::capability::{Datetime, Entropy};
 use crate::conversation_id::ConversationId;
 use crate::refusal::{Refusal, Status};
+use crate::render_cache::RenderCache;
 use crate::secretary::held_lines::{HeldLines, TheBox};
 use crate::secretary::line_event::LineEvent;
 use crate::secretary::locked_text::{KeyName, TextKey};

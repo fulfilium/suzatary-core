@@ -86,23 +86,23 @@ impl Decrypting {
     }
 }
 
-impl suzatary_core::capability::Secrets for Decrypting {
+impl suzatary_core::secrets::Secrets for Decrypting {
     fn secret_state(
         &self,
         _: &suzatary_core::settings::Settable,
-    ) -> suzatary_core::capability::SecretState {
+    ) -> suzatary_core::secrets::SecretState {
         if self.decrypt() {
-            suzatary_core::capability::SecretState::Set
+            suzatary_core::secrets::SecretState::Set
         } else {
-            suzatary_core::capability::SecretState::Failed
+            suzatary_core::secrets::SecretState::Failed
         }
     }
 
     fn mail_grants(
         &self,
         _: &suzatary_core::mail::account::MailAccount,
-    ) -> suzatary_core::capability::MailGrants {
-        suzatary_core::capability::MailGrants {
+    ) -> suzatary_core::secrets::MailGrants {
+        suzatary_core::secrets::MailGrants {
             imap: self.decrypt(),
             smtp: false,
         }
@@ -253,21 +253,21 @@ fn calendar() -> suzatary_core::plugin::Manifest {
 #[derive(Default)]
 struct Counting(AtomicUsize);
 
-impl suzatary_core::capability::Secrets for Counting {
+impl suzatary_core::secrets::Secrets for Counting {
     fn secret_state(
         &self,
         _: &suzatary_core::settings::Settable,
-    ) -> suzatary_core::capability::SecretState {
+    ) -> suzatary_core::secrets::SecretState {
         self.0.fetch_add(1, Ordering::SeqCst);
-        suzatary_core::capability::SecretState::Set
+        suzatary_core::secrets::SecretState::Set
     }
 
     fn mail_grants(
         &self,
         _: &suzatary_core::mail::account::MailAccount,
-    ) -> suzatary_core::capability::MailGrants {
+    ) -> suzatary_core::secrets::MailGrants {
         self.0.fetch_add(1, Ordering::SeqCst);
-        suzatary_core::capability::MailGrants::default()
+        suzatary_core::secrets::MailGrants::default()
     }
 
     fn google_grant(

@@ -2,9 +2,9 @@ use schemars::JsonSchema;
 use serde::Deserialize;
 use serde_json::{Value, json};
 
-use crate::capability::RepoFailure;
 use crate::refusal::Refusal;
 use crate::repos::{MAX_SHOWN_BYTES, Patch, Visibility};
+use crate::repositories::RepoFailure;
 use crate::secretary::acts::Act;
 use crate::secretary::gate::{Asked, Gate};
 use crate::secretary::proposal::Proposal;

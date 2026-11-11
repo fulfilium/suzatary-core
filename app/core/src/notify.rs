@@ -4,10 +4,13 @@
 //! a fact about its type. Events by this deployment's own actors are skipped, so a person's own
 //! taps never page them.
 
+mod effect;
+pub use effect::{Delivered, Notify, NotifyError, Printed, Push};
+
 use std::collections::BTreeSet;
 use std::num::NonZeroUsize;
 
-use crate::capability::{Datetime, Push};
+use crate::capability::Datetime;
 use crate::record::TodoEvent;
 
 /// What to say about new chain objects, or `None` when nothing is worth a push.

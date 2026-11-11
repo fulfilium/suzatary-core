@@ -9,7 +9,8 @@ use std::path::{Path, PathBuf};
 use std::sync::{Arc, PoisonError, RwLock};
 use std::time::Duration;
 
-use suzatary_core::capability::{Secret, SecretState};
+use suzatary_core::capability::Secret;
+use suzatary_core::secrets::SecretState;
 use suzatary_core::settings::Settables;
 
 use crate::run::{Cmd, RunError, succeed};

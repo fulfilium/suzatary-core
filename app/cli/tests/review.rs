@@ -413,7 +413,7 @@ fn an_unreadable_conversation_is_named_and_paged_once() {
     assert!(
         matches!(
             page,
-            Some(suzatary_core::capability::Push::Unreadable { conversations, .. })
+            Some(suzatary_core::notify::Push::Unreadable { conversations, .. })
                 if conversations.get() == 1
         ),
         "{page:?}"

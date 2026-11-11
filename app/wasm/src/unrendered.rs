@@ -1,8 +1,10 @@
 //! The renderer a tab's fold holds: none. A row's fields carry their keys and no HTML, which the
 //! tab reads back from what this device kept of the box's renders.
 
-use suzatary_core::capability::{Html, Rejected, Render, RenderError, Typeset};
+use suzatary_core::capability::RenderError;
+use suzatary_core::capability::{Rejected, Typeset};
 use suzatary_core::escape::Escaped;
+use suzatary_core::render::{Html, Render};
 use suzatary_core::template::Called;
 
 /// Compiles nothing and holds nothing.

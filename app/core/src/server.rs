@@ -1,5 +1,6 @@
 use crate::agent::Agent;
-use crate::capability::{Notify, Whois};
+use crate::capability::Whois;
+use crate::notify::Notify;
 use crate::secretary::Secretary;
 use crate::secretary::answers::Answers;
 use crate::secretary::model::Sessions;

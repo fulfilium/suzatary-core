@@ -193,7 +193,7 @@ pub struct Inner {
     /// Held across a filing, so none files a card twice.
     pub noticing: Arc<Mutex<Option<Heard>>>,
     /// Secret store answers since the last filing.
-    pub secrets_answered: Arc<Mutex<suzatary_core::capability::SecretAnswers>>,
+    pub secrets_answered: Arc<Mutex<suzatary_core::secrets::SecretAnswers>>,
     pub epochs: Arc<suzatary_core::epoch::Epochs>,
     pub frontiers: Arc<prodrome_core::store::frontier::Frontiers>,
     /// What `GET /api/portal` answers.
@@ -602,8 +602,8 @@ impl State {
     pub fn secrets<'a>(
         &'a self,
         caps: &'a suzatary_core::server::Server<'_>,
-    ) -> suzatary_core::capability::Remembering<'a> {
-        suzatary_core::capability::Remembering {
+    ) -> suzatary_core::secrets::Remembering<'a> {
+        suzatary_core::secrets::Remembering {
             store: caps.secretary.secrets,
             answers: &self.secrets_answered,
         }
@@ -1461,7 +1461,7 @@ pub type Heard = std::collections::BTreeSet<suzatary_core::calendar::CalendarNam
 
 /// `None`, logged, on a failed read.
 fn heard(
-    calendar: &dyn suzatary_core::capability::Calendar,
+    calendar: &dyn suzatary_core::calendar::effect::Calendar,
     now: suzatary_core::health::Instant,
 ) -> Option<Heard> {
     use suzatary_core::secretary::failing::{QUIET, quiet};

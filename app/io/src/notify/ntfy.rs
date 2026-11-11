@@ -1,6 +1,6 @@
 //! ntfy: one POST, in the clear, so a push is a [`Printed`] the core composed.
 
-use suzatary_core::capability::Printed;
+use suzatary_core::notify::Printed;
 
 use crate::http::{Http, Req};
 

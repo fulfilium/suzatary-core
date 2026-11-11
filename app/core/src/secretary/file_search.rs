@@ -63,7 +63,7 @@ pub fn named(conversations: &[Stored]) -> BTreeSet<AttachmentId> {
 /// [`crate::refusal::Refusal::internal`] when the conversations or the index cannot be read.
 pub fn reindex(
     conversations: crate::secretary::conversations::Conversations<'_>,
-    index: &dyn crate::capability::UploadIndex,
+    index: &dyn crate::upload_index::UploadIndex,
 ) -> Result<usize, crate::refusal::Refusal> {
     let standings = index
         .refresh(&named(&crate::secretary::conversations::list(

@@ -1,7 +1,9 @@
-use crate::capability::{Clock, Manuals, Render, Repository};
+use crate::capability::{Clock, Manuals};
 use crate::mail::corpus::Corpus;
 use crate::mail::mailbox::Mailbox;
 use crate::record::TodoEvent;
+use crate::render::Render;
+use crate::repository::Repository;
 use crate::secretary::recollection::Recollection;
 use crate::store::Reads;
 
@@ -94,7 +96,7 @@ use crate::store::Reads;
 /// ```
 /// ```compile_fail,E0560
 /// use suzatary_core::agent::Agent;
-/// use suzatary_core::capability::Notify;
+/// use suzatary_core::notify::Notify;
 /// fn widen<'a>(agent: Agent<'a>, push: &'a dyn Notify) -> Agent<'a> {
 ///     Agent { notify: push, ..agent }
 /// }

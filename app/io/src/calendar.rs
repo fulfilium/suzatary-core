@@ -28,7 +28,7 @@ impl Clocked {
     }
 }
 
-impl suzatary_core::capability::Calendar for Clocked {
+impl suzatary_core::calendar::effect::Calendar for Clocked {
     fn days(&self, first: NaiveDate, count: u32) -> Result<Vec<Day>, StoreError> {
         let mut read = Reading::default();
         for place in &self.stores {

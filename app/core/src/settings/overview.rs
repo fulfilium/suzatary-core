@@ -5,7 +5,6 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use crate::capability::{MailCredential, MailGrants, SecretState};
 use crate::connect::{self, Checked, Connection, Group, Key, Standing};
 use crate::deployment::Deployment;
 use crate::health::SourceKey;
@@ -15,6 +14,7 @@ use crate::mail::account::MailAccount;
 use crate::plugin::Manifest;
 use crate::secretary::acts::Act;
 use crate::secretary::proposal::Proposal;
+use crate::secrets::{MailCredential, MailGrants, SecretState};
 use crate::settings::Help;
 use crate::settings::remote::Pushed;
 use crate::wire;
@@ -250,11 +250,11 @@ impl Asked {
     /// Asks the store once per name and grant; a locked one is waited on once.
     #[must_use]
     pub fn of(
-        secrets: &dyn crate::capability::Secrets,
+        secrets: &dyn crate::secrets::Secrets,
         settables: &crate::settings::Settables,
         accounts: &[MailAccount],
     ) -> Self {
-        let snapshot = crate::capability::Snapshot::read(secrets, settables.iter());
+        let snapshot = crate::secrets::Snapshot::read(secrets, settables.iter());
         Self {
             secrets: settables
                 .iter()

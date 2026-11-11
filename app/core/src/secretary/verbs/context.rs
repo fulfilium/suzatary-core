@@ -1,9 +1,9 @@
 use serde_json::Value;
 
 use crate::agent::reads;
-use crate::capability::{Answer, Snapshot};
 use crate::refusal::Refusal;
 use crate::secretary::{Call, SecretarySurface};
+use crate::secrets::{Answer, Snapshot};
 use crate::settings::Settables;
 use crate::verb::{NoArgs, Verb};
 
@@ -65,7 +65,7 @@ impl Verb for Context {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::capability::{SecretState, Secrets};
+    use crate::secrets::{SecretState, Secrets};
     use std::sync::atomic::{AtomicUsize, Ordering};
 
     /// A fake that answers `secret_state` from a fixed set; a name it does not hold is
@@ -108,8 +108,8 @@ mod tests {
         fn mail_grants(
             &self,
             _account: &crate::mail::account::MailAccount,
-        ) -> crate::capability::MailGrants {
-            crate::capability::MailGrants::default()
+        ) -> crate::secrets::MailGrants {
+            crate::secrets::MailGrants::default()
         }
 
         fn google_grant(&self, _: &crate::mail::address::EmailAddress) -> crate::google::Held {

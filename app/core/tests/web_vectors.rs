@@ -18,7 +18,8 @@ use prodrome_core::fpl::{self, mk_decay, mk_flat};
 use prodrome_core::policy::Untrusted;
 
 use suzatary_core::capability::Entropy;
-use suzatary_core::capability::{Clock, Datetime, Html, Nothing, Render, RenderError};
+use suzatary_core::capability::RenderError;
+use suzatary_core::capability::{Clock, Datetime, Nothing};
 use suzatary_core::cast::{self, CAST};
 use suzatary_core::chain_set::Read;
 use suzatary_core::chains::{ChainName, ChainPolicy};
@@ -28,6 +29,7 @@ use suzatary_core::escape::Escaped;
 use suzatary_core::record::TodoEvent;
 use suzatary_core::record::{Envelope, EventStore, SubTodo, mk_authored, mk_source, mk_subtodo};
 use suzatary_core::reference::{ProposalRef, Reference};
+use suzatary_core::render::{Html, Render};
 use suzatary_core::routes;
 use suzatary_core::secretary::about;
 use suzatary_core::secretary::answers::{AnswerError, Answers};
@@ -530,7 +532,7 @@ impl Answers for Bundle {
     fn block(
         &self,
         _block: &suzatary_core::answer::Renderable,
-    ) -> Result<suzatary_core::capability::Html, AnswerError> {
+    ) -> Result<suzatary_core::render::Html, AnswerError> {
         Err(AnswerError(
             "the vectors fixture renders nothing; every block is its source".to_owned(),
         ))

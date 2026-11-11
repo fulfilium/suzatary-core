@@ -4,12 +4,13 @@
 use std::net::IpAddr;
 use std::sync::Arc;
 
-use suzatary_core::capability::{Weather, WeatherError, Whois, WhoisError};
+use suzatary_core::capability::{Whois, WhoisError};
 use suzatary_core::drive::WritePort as _;
 use suzatary_core::secretary::compact::Compact;
 use suzatary_core::secretary::model::{
     Conversation, Model, ModelError, Pick, Reply, SessionModel, Sessions,
 };
+use suzatary_core::weather::{Weather, WeatherError};
 use suzatary_io::secrets::Secretspec;
 use suzatary_io::whois::Tailscaled;
 
@@ -106,23 +107,23 @@ pub struct Declared {
     pub asking: &'static str,
 }
 
-impl suzatary_core::capability::Secrets for Declared {
+impl suzatary_core::secrets::Secrets for Declared {
     // The value is discarded in the expression that reads it: only presence crosses.
     fn secret_state(
         &self,
         settable: &suzatary_core::settings::Settable,
-    ) -> suzatary_core::capability::SecretState {
+    ) -> suzatary_core::secrets::SecretState {
         suzatary_io::secrets::state(&self.secrets.get(settable.name(), self.asking))
     }
 
     fn mail_grants(
         &self,
         account: &suzatary_core::mail::account::MailAccount,
-    ) -> suzatary_core::capability::MailGrants {
+    ) -> suzatary_core::secrets::MailGrants {
         use suzatary_core::mail::account::Sync;
         match account.sync {
             // A Google account's reading grant is its sign-in with Google, in the secret store.
-            Sync::Google => suzatary_core::capability::MailGrants {
+            Sync::Google => suzatary_core::secrets::MailGrants {
                 imap: matches!(
                     self.google_grant(account.email.address()),
                     suzatary_core::google::Held::Signed(_)
@@ -135,7 +136,7 @@ impl suzatary_core::capability::Secrets for Declared {
                     .granted(account)
                     .inspect_err(|failed| tracing::warn!("grants of {}: {failed}", account.email))
                     .unwrap_or_default();
-                suzatary_core::capability::MailGrants {
+                suzatary_core::secrets::MailGrants {
                     imap: held.contains(&"imap"),
                     smtp: held.contains(&"smtp"),
                 }
@@ -377,7 +378,7 @@ impl WebAccess {
     }
 }
 
-impl suzatary_core::capability::Web for WebAccess {
+impl suzatary_core::web::Web for WebAccess {
     fn allow_rules(&self) -> Vec<suzatary_core::web::AllowRule> {
         crate::instance::File::read(&self.instance)
             .map(|file| file.secretary.web_allow)
@@ -387,7 +388,7 @@ impl suzatary_core::capability::Web for WebAccess {
     fn perform(
         &self,
         request: &suzatary_core::web::WebRequest,
-    ) -> Result<suzatary_core::capability::WebAnswer, suzatary_core::capability::WebFailure> {
+    ) -> Result<suzatary_core::web::WebAnswer, suzatary_core::web::WebFailure> {
         self.fetcher.perform(request)
     }
 }
@@ -421,7 +422,7 @@ pub fn proton_drive(instance: &Instance) -> suzatary_io::drive::ProtonDrive {
     )
 }
 
-impl suzatary_core::capability::Drive for DriveAccess {
+impl suzatary_core::drive::Drive for DriveAccess {
     fn allowed_folders(&self) -> Vec<suzatary_core::drive_path::DrivePath> {
         crate::instance::File::read(&self.instance)
             .map(|file| file.secretary.drive_allow)
@@ -435,7 +436,7 @@ impl suzatary_core::capability::Drive for DriveAccess {
     fn read(
         &self,
         file: &suzatary_core::drive_path::DrivePath,
-    ) -> Result<suzatary_core::file_read::FileRead, suzatary_core::capability::DriveFailure> {
+    ) -> Result<suzatary_core::file_read::FileRead, suzatary_core::drive::DriveFailure> {
         self.drive.read(file)
     }
 }
@@ -448,7 +449,7 @@ impl suzatary_core::vault::Vault for DriveVault {
         &self,
         name: &str,
         bytes: &[u8],
-    ) -> Result<suzatary_core::drive_path::DrivePath, suzatary_core::capability::DriveFailure> {
+    ) -> Result<suzatary_core::drive_path::DrivePath, suzatary_core::drive::DriveFailure> {
         self.0.keep(&suzatary_core::vault::folder(), name, bytes)
     }
 }

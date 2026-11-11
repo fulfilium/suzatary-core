@@ -2,7 +2,7 @@
 //! mail account's syncs are.
 
 use super::{DrivePath, Port};
-use crate::capability::DriveFailure;
+use crate::drive::DriveFailure;
 use crate::health::Failure;
 use crate::health::SourceKey;
 use crate::health::{Healths, Instant, Outcome};

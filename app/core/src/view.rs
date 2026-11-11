@@ -15,8 +15,9 @@ use prodrome_core::term::{Term, TermF};
 use regex::Regex;
 
 use crate::believed::one_outcome;
-use crate::capability::{Datetime, Render};
+use crate::capability::Datetime;
 use crate::escape::{Escaped, Quoted, escape_markup};
+use crate::render::Render;
 use crate::tree::{self, Classifier, Member, Members, Place, Segment, Tree, Trie};
 use crate::wire;
 
@@ -783,7 +784,8 @@ mod tests {
     use prodrome_core::literal::Datetime as Stamp;
 
     use super::*;
-    use crate::capability::{Html, RenderError};
+    use crate::capability::RenderError;
+    use crate::render::Html;
 
     /// A render that echoes the markup, so a test sees which fragment reached it.
     struct Echo;

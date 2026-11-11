@@ -174,11 +174,11 @@ pub struct Answered {
 
 /// The push a finished round earns: only for an answer, never naming its words.
 #[must_use]
-pub fn answer_push(stored: &Stored, brief: bool) -> Option<crate::capability::Push> {
+pub fn answer_push(stored: &Stored, brief: bool) -> Option<crate::notify::Push> {
     let Some(Turn::Model { text, calls }) = stored.turns.last().map(|said| &said.turn) else {
         return None;
     };
-    (calls.is_empty() && !text.trim().is_empty()).then(|| crate::capability::Push::Answered {
+    (calls.is_empty() && !text.trim().is_empty()).then(|| crate::notify::Push::Answered {
         conversation: stored.id.clone(),
         brief,
     })

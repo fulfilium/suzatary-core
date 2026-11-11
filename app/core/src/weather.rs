@@ -6,6 +6,9 @@
 //! because the feed's slots are city-local and the box runs on UTC. `suspect` holds two
 //! deliberately loose plausibility thresholds: it catches a broken feed, never a real cold front.
 
+mod effect;
+pub use effect::Weather;
+
 /// One forecast slot.
 ///
 /// `precip_mm` is a float because the feed reports tenths of a millimetre the line prints.

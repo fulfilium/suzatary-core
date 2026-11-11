@@ -5,11 +5,11 @@
 use std::path::Path;
 
 use anyhow::bail;
-use suzatary_core::capability::{Notify as _, Push};
 use suzatary_core::connect::Channel;
 use suzatary_core::conversation_id::ConversationId;
 use suzatary_core::devices::Device;
 use suzatary_core::nonempty::NonEmpty;
+use suzatary_core::notify::{Notify as _, Push};
 use suzatary_core::store::Log;
 use suzatary_io::devices::Devices;
 use suzatary_io::notify::{Channels, Configured, Waiting};

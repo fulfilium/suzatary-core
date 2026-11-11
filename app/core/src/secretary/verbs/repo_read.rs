@@ -2,8 +2,8 @@ use schemars::JsonSchema;
 use serde::Deserialize;
 use serde_json::{Value, json};
 
-use crate::capability::readable;
 use crate::refusal::Refusal;
+use crate::repositories::readable;
 use crate::secretary::verbs::{located, path_of, refused_by};
 use crate::secretary::{Call, SecretarySurface};
 use crate::verb::Verb;

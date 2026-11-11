@@ -146,28 +146,28 @@ fn scratch(tag: &str) -> std::path::PathBuf {
 /// A store holding the GitHub tokens and nothing else.
 struct GitHubHeld;
 
-impl suzatary_core::capability::Secrets for GitHubHeld {
+impl suzatary_core::secrets::Secrets for GitHubHeld {
     fn secret_state(
         &self,
         settable: &suzatary_core::settings::Settable,
-    ) -> suzatary_core::capability::SecretState {
+    ) -> suzatary_core::secrets::SecretState {
         if [
             suzatary_core::settings::DATA_PUSH_TOKEN,
             suzatary_core::repos::TOKEN,
         ]
         .contains(&settable.name())
         {
-            suzatary_core::capability::SecretState::Set
+            suzatary_core::secrets::SecretState::Set
         } else {
-            suzatary_core::capability::SecretState::Missing
+            suzatary_core::secrets::SecretState::Missing
         }
     }
 
     fn mail_grants(
         &self,
         _: &suzatary_core::mail::account::MailAccount,
-    ) -> suzatary_core::capability::MailGrants {
-        suzatary_core::capability::MailGrants::default()
+    ) -> suzatary_core::secrets::MailGrants {
+        suzatary_core::secrets::MailGrants::default()
     }
 
     fn google_grant(

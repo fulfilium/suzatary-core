@@ -259,7 +259,7 @@ impl Secrets for Remembering<'_> {
 
 #[cfg(test)]
 mod tests {
-    use super::SecretState::{self, Failed, Locked, Missing, Set};
+    use crate::secrets::SecretState::{self, Failed, Locked, Missing, Set};
 
     const ALL: [SecretState; 4] = [Missing, Failed, Locked, Set];
 

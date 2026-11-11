@@ -1,12 +1,9 @@
 use prodrome_core::event::Hash;
 
-use super::{
-    AllowRule, Clock, Datetime, Delivered, Drive, DriveFailure, Html, MailGrants, Manual, Manuals,
-    Notify, NotifyError, Peer, Push, Render, RenderError, RepoFailure, Repositories, Repository,
-    RepositoryError, Secrets, Weather, WeatherError, Web, WebAnswer, WebFailure, WebRequest, Whois,
-    WhoisError,
-};
 use crate::agent::Agent;
+use crate::capability::RenderError;
+use crate::capability::{Clock, Datetime, Manual, Manuals, Peer, Whois, WhoisError};
+use crate::drive::{Drive, DriveFailure};
 use crate::escape::Escaped;
 use crate::mail::corpus::{Corpus, CorpusError};
 use crate::mail::junk_folder::{Junk, JunkFailure};
@@ -17,16 +14,23 @@ use crate::mail::sync_report::SyncReport;
 use crate::mail::verbs::{Marked, Show, Summary};
 use crate::mail::{AttachmentMeta, MailMessage, MailRow};
 use crate::mail_error::MailError;
+use crate::notify::{Delivered, Notify, NotifyError, Push};
 use crate::record::{Envelope, TodoEvent};
 use crate::refusal::Refusal;
+use crate::render::{Html, Render};
 use crate::repo_ids::{CommitId, RepoName, RepoPath, Rev};
 use crate::repos::{Patch, RepoRow, Visibility};
+use crate::repositories::{RepoFailure, Repositories};
+use crate::repository::{Repository, RepositoryError};
 use crate::secretary::Secretary;
 use crate::secretary::answers::{AnswerError, Answers};
 use crate::secretary::briefings::{BriefingError, Briefings};
 use crate::secretary::model::{Conversation, Model, ModelError, Reply, Sessions};
+use crate::secrets::{MailGrants, Secrets};
 use crate::server::Server;
 use crate::store::{Prodrome, Reads, StoreError, WriteLock};
+use crate::weather::{Weather, WeatherError};
+use crate::web::{AllowRule, Web, WebAnswer, WebFailure, WebRequest};
 
 /// Every effect, inert: reads find nothing, writes are refused, no peer has a login.
 /// A test fills a record from it and swaps in the effects it is about.
@@ -393,7 +397,7 @@ static NO_OWNERS: std::collections::BTreeSet<prodrome_core::event::Actor> =
 kept_nowhere!(crate::decisions::DecisionEvent);
 
 /// No calendar: every day asked for is empty.
-impl crate::capability::Calendar for Nothing {
+impl crate::calendar::effect::Calendar for Nothing {
     fn days(
         &self,
         first: chrono::NaiveDate,
@@ -411,7 +415,7 @@ impl crate::capability::Calendar for Nothing {
 }
 
 /// Nothing is rendered, so nothing is kept to forget.
-impl crate::capability::RenderCache for Nothing {
+impl crate::render_cache::RenderCache for Nothing {
     fn forget(&self, _: &crate::answer::Renderable) -> Result<(), String> {
         Ok(())
     }
@@ -448,11 +452,8 @@ impl Weather for Nothing {
 }
 
 impl Secrets for Nothing {
-    fn secret_state(
-        &self,
-        _settable: &crate::settings::Settable,
-    ) -> crate::capability::SecretState {
-        crate::capability::SecretState::Missing
+    fn secret_state(&self, _settable: &crate::settings::Settable) -> crate::secrets::SecretState {
+        crate::secrets::SecretState::Missing
     }
     fn mail_grants(&self, _account: &crate::mail::account::MailAccount) -> MailGrants {
         MailGrants::default()
@@ -515,7 +516,7 @@ impl Repositories for Nothing {
         &self,
         repo: &RepoName,
         _patch: &Patch,
-    ) -> Result<Option<crate::capability::InBranch>, RepoFailure> {
+    ) -> Result<Option<crate::repositories::InBranch>, RepoFailure> {
         Err(RepoFailure::Unknown(repo.to_string()))
     }
     fn pushable(&self, repo: &RepoName, _visibility: Visibility) -> Result<(), RepoFailure> {
@@ -611,7 +612,7 @@ impl crate::mail::older_mail::OlderMail for Nothing {
     }
 }
 
-impl crate::capability::UploadIndex for Nothing {
+impl crate::upload_index::UploadIndex for Nothing {
     fn refresh(
         &self,
         named: &std::collections::BTreeSet<crate::attachment::AttachmentId>,
@@ -620,7 +621,7 @@ impl crate::capability::UploadIndex for Nothing {
             crate::attachment::AttachmentId,
             crate::secretary::upload_standing::UploadStanding,
         >,
-        crate::capability::IndexError,
+        crate::upload_index::IndexError,
     > {
         Ok(named
             .iter()
@@ -635,7 +636,7 @@ impl crate::capability::UploadIndex for Nothing {
     fn open(
         &self,
         _id: &crate::attachment::AttachmentId,
-    ) -> Result<Option<crate::file_read::FileRead>, crate::capability::IndexError> {
+    ) -> Result<Option<crate::file_read::FileRead>, crate::upload_index::IndexError> {
         Ok(None)
     }
 }
@@ -757,7 +758,7 @@ impl crate::secretary::google_sign_in::Consents for Nothing {
     }
 }
 
-impl crate::capability::PdfText for Nothing {
+impl crate::pdf_text::PdfText for Nothing {
     fn layer(&self, _: &[u8]) -> Result<crate::file_read::Layer, String> {
         Err("this test reads no PDF".to_owned())
     }

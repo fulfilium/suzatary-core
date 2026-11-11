@@ -114,7 +114,7 @@ fn read<T>(what: &str, answer: Result<T, suzatary_core::store::StoreError>) -> O
 }
 
 /// One push on the blocking pool; a failure is a log line, never fatal.
-fn send(caps: &'static Server<'static>, push: suzatary_core::capability::Push) {
+fn send(caps: &'static Server<'static>, push: suzatary_core::notify::Push) {
     tokio::task::spawn_blocking(move || match caps.notify.push(&push) {
         Ok(delivered) => tracing::info!("notify: {push:?} ({} device(s))", delivered.devices()),
         Err(error) => tracing::warn!("notify: nothing delivered: {error}"),

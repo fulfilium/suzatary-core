@@ -4,7 +4,7 @@
 use std::path::PathBuf;
 
 use suzatary_core::attachment::{Attachment, AttachmentError, AttachmentId};
-use suzatary_core::capability::DriveFailure;
+use suzatary_core::drive::DriveFailure;
 use suzatary_core::enclosed::Enclosure;
 use suzatary_core::file_read::{FileRead, Withheld};
 use suzatary_core::held_value::HeldFile;

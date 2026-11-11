@@ -203,7 +203,7 @@ pub fn review(
 pub fn note_unreadable(
     caps: &Secretary<'_>,
     zone: crate::zone::Zone,
-) -> Result<Option<crate::capability::Push>, Refusal> {
+) -> Result<Option<crate::notify::Push>, Refusal> {
     let unreadable = every(caps.conversations)?.unreadable;
     let Some(count) = std::num::NonZeroUsize::new(unreadable.len()) else {
         return Ok(None);
@@ -236,7 +236,7 @@ pub fn note_unreadable(
         &id,
         &Entry::noted(caps.clock.now(), text, Vec::new()),
     )?;
-    Ok(Some(crate::capability::Push::Unreadable {
+    Ok(Some(crate::notify::Push::Unreadable {
         conversations: count,
         round: id,
     }))
@@ -378,9 +378,9 @@ pub struct Outage {
 impl Outage {
     /// The push to send exactly when this outage reaches `after` passes, so one outage pages once.
     #[must_use]
-    pub fn page(self, after: usize) -> Option<crate::capability::Push> {
+    pub fn page(self, after: usize) -> Option<crate::notify::Push> {
         let passes = std::num::NonZeroUsize::new(after)?;
-        (self.consecutive == after).then_some(crate::capability::Push::ReviewDown {
+        (self.consecutive == after).then_some(crate::notify::Push::ReviewDown {
             standing: self.standing,
             passes,
         })

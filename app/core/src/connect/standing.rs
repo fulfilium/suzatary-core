@@ -3,8 +3,8 @@
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
-use crate::capability::SecretState;
 use crate::health::{Instant, Reading};
+use crate::secrets::SecretState;
 use crate::settings::Help;
 
 /// Where a line stands, ordered by how much it asks of the owner (the arms in that order), so

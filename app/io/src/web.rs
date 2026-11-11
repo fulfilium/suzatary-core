@@ -1,12 +1,12 @@
-//! The web fetcher behind `suzatary_core::capability::Web`: GET only, no cookies or
+//! The web fetcher behind `suzatary_core::web::Web`: GET only, no cookies or
 //! credentials, a timeout, a bounded body, no redirect followed, over [`Ureq::public_only`],
 //! which refuses any name resolving off the public internet.
 
 use std::time::Duration;
 
-use suzatary_core::capability::{WebAnswer, WebFailure};
 use suzatary_core::url::percent_encode;
 use suzatary_core::web::{SEARCH_HOST, WebRequest};
+use suzatary_core::web::{WebAnswer, WebFailure};
 
 use crate::http::{Http, HttpError, Req, Ureq};
 

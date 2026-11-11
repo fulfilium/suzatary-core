@@ -1,7 +1,7 @@
 //! The Drive as the model may reach it without a tap: any port, behind one fence.
 
 use super::{DriveEntry, DrivePath, Port, allowed};
-use crate::capability::DriveFailure;
+use crate::drive::DriveFailure;
 
 /// `port` as the secretary reaches it unasked: it downloads only inside `allowed` folders and
 /// never lists or shows the owner's private folder ([`crate::vault::FOLDER`]). It is a read port
