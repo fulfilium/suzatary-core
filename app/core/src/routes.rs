@@ -724,6 +724,8 @@ impl<T> Piece<T> {
 trait Sends<E: prodrome_core::schema::Schema> {
     /// One object as the answer carries it.
     type Item;
+    /// Under which the store's graph keeps every object's weight, read once per head set.
+    const WEIGHTS: &'static str;
     /// The object as sent, and its weight.
     fn emit(
         &self,
@@ -743,6 +745,7 @@ struct Literals;
 
 impl<E: prodrome_core::schema::Schema> Sends<E> for Literals {
     type Item = wire::StoredObject;
+    const WEIGHTS: &'static str = "weights of literals";
 
     fn emit(
         &self,
@@ -766,13 +769,15 @@ struct Nodes;
 
 impl Sends<crate::secretary::line_event::LineEvent> for Nodes {
     type Item = wire::SkeletonNode;
+    const WEIGHTS: &'static str = "weights of nodes";
 
     fn emit(
         &self,
         name: &prodrome_core::event::Hash,
         envelope: &prodrome_core::event::Envelope<crate::secretary::line_event::LineEvent>,
     ) -> (wire::SkeletonNode, usize) {
-        let node = skeleton_node(name, envelope);
+        // Sized by its file once cut ([`held_sizes`]), so its literal is not printed here.
+        let node = node_of(name, envelope, 0);
         let weight = weight(&node);
         (node, weight)
     }
@@ -782,7 +787,7 @@ impl Sends<crate::secretary::line_event::LineEvent> for Nodes {
         name: &prodrome_core::event::Hash,
         envelope: &prodrome_core::event::Envelope<crate::secretary::line_event::LineEvent>,
     ) -> usize {
-        weight(&skeleton_node(name, envelope))
+        weight(&node_of(name, envelope, 0))
     }
 }
 
@@ -817,10 +822,21 @@ where
         let read = since_read(lacking.reached());
         let mut piece = Piece::none();
         let mut full = false;
+        // Every piece of a pull weighs all it leaves out; read once per head set, a pull of many
+        // pieces weighs each object once rather than once a piece.
+        let weights = graph.reading(S::WEIGHTS, |graph| {
+            graph
+                .objects()
+                .map(|(name, envelope)| (name.clone(), sends.weigh(name, envelope)))
+                .collect::<std::collections::HashMap<_, _>>()
+        });
         for &(name, envelope) in lacking.lacking() {
             piece.rest += 1;
             if full {
-                piece.size += sends.weigh(name, envelope);
+                piece.size += weights
+                    .get(name)
+                    .copied()
+                    .unwrap_or_else(|| sends.weigh(name, envelope));
                 continue;
             }
             let (item, weight) = sends.emit(name, envelope);
@@ -953,14 +969,17 @@ fn held_sizes(
         return Ok(nodes);
     }
     let sizes = lines.sizes(names)?;
-    Ok(nodes
+    nodes
         .into_iter()
         .zip(sizes)
-        .map(|(node, size)| wire::SkeletonNode {
-            size: size.unwrap_or(node.size),
-            ..node
+        .map(|(node, size)| match size {
+            Some(size) => Ok(wire::SkeletonNode { size, ..node }),
+            None => Err(Refusal::internal(format!(
+                "the lines hold no print of {}",
+                node.hash
+            ))),
         })
-        .collect())
+        .collect()
 }
 
 /// What the lines of `graph` retire of their keys, kept in the graph.
@@ -1007,6 +1026,19 @@ pub fn skeleton_node(
     name: &prodrome_core::event::Hash,
     envelope: &prodrome_core::event::Envelope<crate::secretary::line_event::LineEvent>,
 ) -> wire::SkeletonNode {
+    node_of(
+        name,
+        envelope,
+        prodrome_core::event::canonical_envelope(envelope).len(),
+    )
+}
+
+/// One line's node, sized `size`.
+fn node_of(
+    name: &prodrome_core::event::Hash,
+    envelope: &prodrome_core::event::Envelope<crate::secretary::line_event::LineEvent>,
+    size: usize,
+) -> wire::SkeletonNode {
     let header = match envelope.event() {
         Some(line) => line_header(line),
         None => wire::NodeHeader::Structure {
@@ -1019,7 +1051,7 @@ pub fn skeleton_node(
             .iter()
             .map(|parent| parent.as_str().to_owned())
             .collect(),
-        size: prodrome_core::event::canonical_envelope(envelope).len(),
+        size,
         header,
     }
 }

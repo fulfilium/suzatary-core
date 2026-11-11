@@ -990,3 +990,57 @@ fn a_purge_takes_the_husks_of_the_lines_whose_keys_it_owes() {
         "the replica holds the box's keys and no other"
     );
 }
+
+/// What a pull says it brings is what it brings: the first piece's `size`, the weight of every
+/// object it lacks (each weighed once for the store's heads), is the sum of the weights the
+/// pieces then send, for the skeleton as for the objects' pull.
+#[test]
+fn a_pull_s_size_is_the_weight_its_pieces_send() {
+    let mut store = Writer::new();
+    for n in 0..40 {
+        store.apply(&Write::Said {
+            conversation: n % 3,
+            words: 40 + n,
+        });
+    }
+    store.apply(&Write::Erased { conversation: 1 });
+    let (epochs, frontiers) = (
+        suzatary_core::epoch::Epochs::remembered(),
+        Frontiers::remembered(prodrome_core::store::frontier::KEPT),
+    );
+    let books = Books {
+        epochs: &epochs,
+        frontiers: &frontiers,
+    };
+    let (mut since, mut sent, mut said) = (Since::Nothing, 0usize, None);
+    loop {
+        let piece = routes::lines_skeleton(
+            store.lines.conversations(),
+            &since,
+            books,
+            now(),
+            Cut::Bytes(2000),
+        )
+        .expect("a piece");
+        said.get_or_insert(piece.size);
+        sent += piece.weight;
+        if piece.rest == 0 {
+            break;
+        }
+        since = Since::Frontier(Token::parse(&piece.frontier.digest).expect("a digest"));
+    }
+    assert_eq!(said, Some(sent), "the skeleton");
+    let (mut since, mut sent, mut said) = (Since::Nothing, 0usize, None);
+    loop {
+        let piece =
+            routes::store_objects_since(&store.lines.lines, &since, books, now(), Cut::Bytes(2000))
+                .expect("a piece");
+        said.get_or_insert(piece.size);
+        sent += piece.weight;
+        if piece.rest == 0 {
+            break;
+        }
+        since = Since::Frontier(Token::parse(&piece.objects.frontier.digest).expect("a digest"));
+    }
+    assert_eq!(said, Some(sent), "the objects' pull");
+}
