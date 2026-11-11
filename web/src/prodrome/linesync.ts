@@ -80,6 +80,7 @@ export namespace linesync {
       atOnce: () => content.atOnce(http.protocol()),
       lacking: names => lackingOf(held, names),
       held: rows => Promise.resolve(holdAdmitted(held, rows)),
+      husked: husks => stepped(held.take_husks(JSON.stringify(husks))),
       shown: () => shown,
     })
     const fetching = fetcher.fetch

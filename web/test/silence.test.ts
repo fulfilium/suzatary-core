@@ -41,14 +41,14 @@ test("a slow answer that keeps arriving finishes, though it takes longer than th
   const pieces = ['{"n":[', ...Array.from({ length: 12 }, (_, i) => `${i},`), '12]}']
   box(pieces, MS / 4, false)
   const started = performance.now()
-  assert.deepEqual(await http.get("/api/stores/lines/objects", d.unknown, silent), { n: Array.from({ length: 13 }, (_, i) => i) })
+  assert.deepEqual(await http.get("/api/stores/lines/skeleton", d.unknown, silent), { n: Array.from({ length: 13 }, (_, i) => i) })
   assert.ok(performance.now() - started > 2 * MS, "the whole answer took longer than one bound")
 })
 
 test("an answer that stops is let go once nothing arrived for the bound", async () => {
   box(['{"n":', "[1,"], MS / 4, true)
   const started = performance.now()
-  const failed = await http.get("/api/stores/lines/objects", d.unknown, silent).then(
+  const failed = await http.get("/api/stores/lines/skeleton", d.unknown, silent).then(
     () => "",
     (e: unknown) => String(e),
   )

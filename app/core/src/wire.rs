@@ -722,10 +722,18 @@ pub struct StorePayload {
 }
 
 /// `GET /api/stores/<store>/content?hashes=<hashes>`: literals, sent `Cache-Control: immutable`.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
 pub struct ContentPayload {
     /// One per hash asked, in the order asked.
-    pub objects: Vec<StoredObject>,
+    pub objects: Vec<Content>,
+}
+
+/// An object's literal, or the husk of a line no key the box holds opens.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(tag = "held", rename_all = "lowercase")]
+pub enum Content {
+    Literal { hash: String, literal: String },
+    Husk { hash: String, husk: String },
 }
 
 /// What a fold reads of an object without its literal.

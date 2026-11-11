@@ -2106,8 +2106,8 @@ fn the_answers_vector_holds_every_answer() {
         },
     )
     .expect("opens");
-    samples.add([routes::lines_since(
-        lines.conversations(),
+    samples.add([routes::store_objects_since(
+        &lines.lines,
         &nothing,
         books,
         at,

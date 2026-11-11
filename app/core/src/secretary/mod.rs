@@ -90,6 +90,7 @@ pub mod phase;
 pub mod proposal;
 pub mod proposer;
 pub mod provenance;
+pub mod prune;
 pub mod queue;
 pub mod read_holders;
 pub mod readings;

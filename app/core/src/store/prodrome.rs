@@ -95,8 +95,8 @@ pub trait Reads<E: Schema>: Sync {
     }
 
     /// The print of each object `names` names as the store holds it, in that order, or `None`
-    /// for one this store does not hold. A store that can read one object by its name answers
-    /// without reading the rest.
+    /// for one it holds no print of, read by name: whether the history holds a name is the
+    /// caller's to ask of its [`Reads::graph`].
     ///
     /// # Errors
     /// [`StoreError::Unreadable`].

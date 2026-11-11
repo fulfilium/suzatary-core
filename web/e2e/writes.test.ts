@@ -25,7 +25,6 @@ import assert from "node:assert/strict";
 
 import { WRITE_BASE, doneFromList, everyTodo, fold, openInPlace, openTodo, row, suite, untilReplica, pickCategory } from "./harness";
 import cast from "../test/cast";
-import { NOTHING } from "../test/keyed";
 
 const { todos, owner } = cast.world;
 
@@ -34,19 +33,37 @@ const app = await suite("writes");
 const stateOf = async (todo: string): Promise<string | undefined> =>
   (await fold(app.page)).find((entry) => entry.todo === todo)?.state;
 
-/** The default conversation's newest window, read as the tab reads it: both stores' objects, and the lines' keys, through the module. */
+/** The default conversation's newest window, read as the tab reads it: the lines' skeleton piece by piece and their
+ * content by name (each literal held, each husk taken in its line's place), the inbox's objects, through the module. */
 const DEFAULT = `(async () => {
   const core = await import("/b/dev/prodrome.js");
   await core.default({ module_or_path: "/b/dev/prodrome_bg.wasm" });
-  const pulled = async (store) => (await fetch(\`/api/stores/\${store}/objects\`)).json();
-  const objects = (answer) => JSON.stringify(answer.objects.map((o) => ({ hash: o.hash, text: o.literal })));
-  const [kept, asked] = [await pulled("lines"), await pulled("inbox")];
+  const json = async (path) => (await fetch(path)).json();
   const lines = new core.Lines();
-  lines.hold(objects(kept), "[]");
-  lines.piece(${JSON.stringify(JSON.stringify(NOTHING))}, JSON.stringify(kept.keys), 0);
+  for (;;) {
+    const piece = await json("/api/stores/lines/skeleton?since=" + lines.since());
+    lines.piece(JSON.stringify(piece), JSON.stringify(piece.keys), 0);
+    if (piece.rest === 0) break;
+  }
   lines.land().free();
+  const lacking = JSON.parse(lines.lacking(JSON.stringify({ type: "Whole" }))).sort((a, b) => (a.hash < b.hash ? -1 : 1));
+  for (let at = 0; at < lacking.length; ) {
+    const ask = [];
+    let bytes = 0;
+    for (const node of lacking.slice(at)) {
+      if (ask.length > 0 && (ask.length === 64 || bytes + node.size > 1 << 20)) break;
+      ask.push(node.hash);
+      bytes += node.size;
+    }
+    at += ask.length;
+    const answer = await json("/api/stores/lines/content?hashes=" + ask.join(","));
+    const literals = answer.objects.filter((o) => o.held === "literal").map((o) => ({ hash: o.hash, text: o.literal }));
+    const husks = answer.objects.filter((o) => o.held === "husk").map((o) => ({ hash: o.hash, husk: o.husk }));
+    lines.hold(JSON.stringify(literals), "[]");
+    lines.take_husks(JSON.stringify(husks)).free();
+  }
   const inbox = new core.Proposals();
-  inbox.piece(JSON.stringify(asked), 0);
+  inbox.piece(JSON.stringify(await json("/api/stores/inbox/objects")), 0);
   inbox.land().free();
   try {
     return JSON.parse(lines.conversation("default", inbox));

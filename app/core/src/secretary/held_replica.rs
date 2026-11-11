@@ -55,9 +55,24 @@ pub enum NotAnAnswer {
     /// A name that is no object's.
     #[error("the answer names {0:?}, which is no object's name")]
     Name(String),
+    #[error("the answer names the key {0:?}, which is no key's name")]
+    Key(String),
     /// A node that does not read.
     #[error(transparent)]
     Node(#[from] NotANode),
+}
+
+/// A husk the box answered in place of a line's print that this replica does not take.
+#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
+pub enum NotItsHusk {
+    #[error("the box answered a husk for {0}, which names no line this replica reads")]
+    Unknown(String),
+    #[error("{0}: {1}")]
+    Unread(String, crate::secretary::line_event::NotAHusk),
+    #[error("the box's husk for {0} is not the line its node says")]
+    Header(String),
+    #[error("the box answered a husk for {0}, whose words a live key this replica holds opens")]
+    Opens(String),
 }
 
 impl HeldReplica {
@@ -171,6 +186,123 @@ impl HeldReplica {
             .into_iter()
             .filter(|name| self.outlines.holds(name) || pending.contains(name))
             .collect()
+    }
+
+    /// A whole pull of the skeleton landed, each piece `ask` answers from the frontier named
+    /// (`""` first).
+    pub fn pulled<E: From<NotAnAnswer>>(
+        mut ask: impl FnMut(&str) -> Result<SkeletonPayload, E>,
+    ) -> Result<Self, E> {
+        let mut replica = Self::default();
+        let mut since = String::new();
+        loop {
+            let piece = ask(&since)?;
+            let (rest, frontier) = (piece.rest, piece.frontier.digest.clone());
+            let keys = piece
+                .keys
+                .iter()
+                .map(|(name, key)| {
+                    Ok((
+                        KeyName::new(name.clone()).map_err(|_| NotAnAnswer::Key(name.clone()))?,
+                        key.clone(),
+                    ))
+                })
+                .collect::<Result<_, NotAnAnswer>>()?;
+            replica.piece(piece, KeyRing::of(&keys), 0)?;
+            if rest == 0 {
+                let _ = replica.land();
+                return Ok(replica);
+            }
+            since = frontier;
+        }
+    }
+
+    /// A content answer taken: each literal held, each husk taken in its place.
+    pub fn take(&mut self, content: Vec<crate::wire::Content>) -> Result<Took, NotItsHusk> {
+        let (mut prints, mut husks) = (Vec::new(), Vec::new());
+        for object in content {
+            match object {
+                crate::wire::Content::Literal { hash, literal } => {
+                    prints.push((
+                        Hash::new(hash.clone()).map_err(|_| NotItsHusk::Unknown(hash))?,
+                        literal.into_bytes(),
+                    ));
+                }
+                crate::wire::Content::Husk { hash, husk } => {
+                    husks.push((
+                        Hash::new(hash.clone()).map_err(|_| NotItsHusk::Unknown(hash))?,
+                        husk,
+                    ));
+                }
+            }
+        }
+        self.lines.hold(prints, &[]);
+        self.take_husks(husks)
+    }
+
+    /// The husks the box answered, each kept where it is its node's line and no live key held
+    /// opens it, where a purge would have husked the print; else none is kept.
+    pub fn take_husks(&mut self, given: Vec<(Hash, String)>) -> Result<Took, NotItsHusk> {
+        let pending = self.pending();
+        let ring = self.kept.rows.holding().keys().clone();
+        // A key still held may be dead already, retired by a line held or a reseal the rows
+        // read, and waiting on its purge, which fetches the lines naming it first.
+        let mut dead = self.lines.dead();
+        dead.extend(self.outlines.retired(&pending, &|key| ring.holds(key)));
+        let husked = given
+            .into_iter()
+            .map(|(name, text)| {
+                let shown = name.as_str().to_owned();
+                let node = self
+                    .outlines
+                    .node(&name)
+                    .or_else(|| {
+                        pending
+                            .iter()
+                            .map(Parsed::given)
+                            .find(|node| node.hash == shown)
+                    })
+                    .ok_or_else(|| NotItsHusk::Unknown(shown.clone()))?;
+                let husk = crate::secretary::line_event::Husk::read(&text)
+                    .map_err(|e| NotItsHusk::Unread(shown.clone(), e))?;
+                if crate::routes::line_header(husk.line()) != node.header {
+                    return Err(NotItsHusk::Header(shown));
+                }
+                if husk
+                    .line()
+                    .keys()
+                    .any(|key| ring.holds(key) && !dead.contains(key))
+                {
+                    return Err(NotItsHusk::Opens(shown));
+                }
+                let parents = node
+                    .parents
+                    .iter()
+                    .map(|parent| Hash::new(parent.clone()))
+                    .collect::<Result<_, _>>()
+                    .map_err(|_| NotItsHusk::Header(shown))?;
+                Ok(Husked {
+                    name,
+                    parents,
+                    husk,
+                })
+            })
+            .collect::<Result<Vec<_>, _>>()?;
+        self.husked(husked.iter().cloned());
+        let moved = Moved::These(
+            husked
+                .iter()
+                .map(|h| h.husk.line().conversation().clone())
+                .collect(),
+        );
+        // No row moves: the frame's delta forgets nothing, and its husks are the move.
+        Ok(Took {
+            frame: LineFrame {
+                delta: LineDelta::Forgot(BTreeSet::new()),
+                husked,
+            },
+            moved,
+        })
     }
 
     /// `frame` taken: another tab's, or one read back from the log.

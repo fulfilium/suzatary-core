@@ -8,13 +8,9 @@ use std::time::{Duration, Instant};
 
 use anyhow::{Context, bail};
 use suzatary_core::conversation_id::ConversationId;
-use suzatary_core::secretary::key_ring::KeyRing;
-use suzatary_core::secretary::line_event::LineVocabulary;
-use suzatary_core::secretary::locked_text::KeyName;
 use suzatary_core::secretary::model::Turn;
 use suzatary_core::secretary::stamp::Stamp;
 use suzatary_core::secretary::store::ConversationState;
-use suzatary_core::secretary::transcript;
 use suzatary_core::wire;
 
 use super::call::Operator;
@@ -120,31 +116,11 @@ pub fn ask(operator: &Operator, conversation: &Conversation, text: &str) -> anyh
 /// The secretary's words since the conversation's last line of the owner's, as a replica of the
 /// lines reads them: the first exchange of a session streams no delta, so the stream cannot say.
 fn answered(operator: &Operator, id: &ConversationId) -> anyhow::Result<String> {
-    let pulled = operator.pulled("lines")?;
-    let prints = pulled
-        .objects
-        .into_iter()
-        .map(|object| {
-            let name = prodrome_core::event::Hash::new(object.hash)
-                .map_err(|failed| anyhow::anyhow!("an object's name: {failed}"))?;
-            Ok((name, Ok(object.literal.into_bytes())))
-        })
-        .collect::<anyhow::Result<Vec<_>>>()?;
-    let nodes = prodrome_core::dag::Dag::from_prints(&LineVocabulary, prints)
-        .nodes()
-        .map_err(|failed| anyhow::anyhow!("the lines do not read: {failed}"))?;
-    let keys = KeyRing::of(
-        &pulled
-            .keys
-            .into_iter()
-            .map(|(name, hex)| Ok((KeyName::new(name)?, hex)))
-            .collect::<Result<_, suzatary_core::secretary::locked_text::NotAKeyName>>()?,
-    );
-    let mut transcripts = transcript::transcripts(&nodes, &|name: &KeyName| keys.key(name))?;
-    let Some(read) = transcripts.remove(id) else {
+    let mut replica = operator.lines(id)?;
+    let Some(read) = replica.lines.conversation(id) else {
         bail!("the lines hold no conversation {id}");
     };
-    let stored = read.into_stored();
+    let stored = read.map_err(|failed| anyhow::anyhow!("the lines do not read: {failed}"))?;
     let since = stored
         .turns
         .iter()

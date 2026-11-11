@@ -50,7 +50,13 @@ fn objects(base: &str, store: &str, since: &str) -> serde_json::Value {
 fn a_replica_pulls_what_it_lacks_by_frontier() {
     let base = writing("stores-pull");
     let _ = answered(&base);
-    for store in ["inbox", "lines"] {
+    assert_eq!(
+        common::status(&common::get(&format!("{base}/api/stores/lines/objects"))),
+        404,
+        "the lines are pulled by their skeleton, whose content never sends a dead seal"
+    );
+    {
+        let store = "inbox";
         let all = objects(&base, store, "");
         let heads: Vec<&str> = all["heads"]
             .as_array()
@@ -161,19 +167,51 @@ fn the_decorations_are_asked_by_content() {
 /// How the box marks an answer a browser keeps for good.
 const KEPT: &str = "private, max-age=31536000, immutable";
 
-/// Each object of a store by name, with its literal, from its whole pull.
+/// Each object of a store by name, with its literal: the inbox's from its whole pull, the lines'
+/// asked by the names their skeleton gives, each checked against its name.
 fn literals(base: &str, store: &str) -> std::collections::BTreeMap<String, String> {
-    objects(base, store, "")["objects"]
+    let objects = if store == "lines" {
+        let mut names: Vec<String> = skeleton(base)["nodes"]
+            .as_array()
+            .expect("nodes")
+            .iter()
+            .map(|node| node["hash"].as_str().expect("a name").to_owned())
+            .collect();
+        names.sort_unstable();
+        let (status, _, body) = content(&format!(
+            "{base}/api/stores/lines/content?hashes={}",
+            names.join(",")
+        ));
+        assert_eq!(status, 200, "{body}");
+        serde_json::from_str::<serde_json::Value>(&body).expect("JSON")["objects"].clone()
+    } else {
+        objects(base, store, "")["objects"].clone()
+    };
+    objects
         .as_array()
         .expect("objects")
         .iter()
         .map(|object| {
-            (
-                object["hash"].as_str().expect("a name").to_owned(),
-                object["literal"].as_str().expect("a literal").to_owned(),
-            )
+            let (hash, literal) = (
+                object["hash"].as_str().expect("a name"),
+                object["literal"].as_str().expect("a literal"),
+            );
+            assert_eq!(
+                hex::encode(<sha2::Sha256 as sha2::Digest>::digest(literal.as_bytes())),
+                hash
+            );
+            (hash.to_owned(), literal.to_owned())
         })
         .collect()
+}
+
+/// The lines' whole skeleton, in one piece.
+fn skeleton(base: &str) -> serde_json::Value {
+    let mut asked = common::get(&format!("{base}/api/stores/lines/skeleton"));
+    assert_eq!(common::status(&asked), 200);
+    let skeleton = common::body_json(&mut asked);
+    assert_eq!(skeleton["rest"], 0, "the fixture's skeleton fits one piece");
+    skeleton
 }
 
 /// A content answer, its status, its `Cache-Control` and its body as text.
@@ -191,7 +229,8 @@ fn content(url: &str) -> (u16, String, String) {
 }
 
 /// Every object of each store is asked for by its name and answered with its literal, kept for
-/// good; the same question asked after the store moved answers the same bytes.
+/// good but the lines', whose line becomes its husk once its last key retires; the same question
+/// asked after the store moved answers the same bytes.
 #[test]
 fn a_store_s_objects_are_asked_for_by_hash_and_kept_for_good() {
     let base = writing("stores-content");
@@ -205,7 +244,11 @@ fn a_store_s_objects_are_asked_for_by_hash_and_kept_for_good() {
         );
         let (status, cache, body) = content(&url);
         assert_eq!(status, 200, "{store}: {body}");
-        assert_eq!(cache, KEPT);
+        assert_eq!(
+            cache,
+            if store == "lines" { "no-store" } else { KEPT },
+            "{store}"
+        );
         let answered: serde_json::Value = serde_json::from_str(&body).expect("JSON");
         let got: std::collections::BTreeMap<String, String> = answered["objects"]
             .as_array()
@@ -230,7 +273,7 @@ fn a_store_s_objects_are_asked_for_by_hash_and_kept_for_good() {
     }
     // Every other answer stays `no-store`, a stream's included, whose own header says less.
     for path in [
-        "/api/stores/lines/objects",
+        "/api/stores/inbox/objects",
         "/api/stores/events",
         "/api/tip",
     ] {
@@ -396,24 +439,30 @@ fn a_chain_s_objects_are_asked_for_by_hash() {
     }
 }
 
-/// The lines' skeleton, and each node's literal asked for by hash, are the lines' whole pull:
-/// the same objects in the same order, the same heads, prodromes, epoch and keys; and a replica
-/// holding the heads lacks nothing, and is sent no node, no key and not the heads it holds.
+/// The lines' skeleton, and each node's content asked for by hash: each a literal that hashes to
+/// its name, sized as the skeleton says, until an erasure; then each line no key the skeleton
+/// sends opens a word of comes as its husk, sized as the skeleton says, and its words never
+/// leave the box. A replica holding the heads lacks nothing, and is sent no node, no key and not
+/// the heads it holds.
 #[test]
 fn the_lines_skeleton_and_their_content_are_the_whole_pull() {
     let base = writing("stores-skeleton");
-    let _ = answered(&base);
-    let whole = objects(&base, "lines", "");
-    let mut asked = common::get(&format!("{base}/api/stores/lines/skeleton"));
-    assert_eq!(common::status(&asked), 200);
-    let skeleton = common::body_json(&mut asked);
-    assert_eq!(skeleton["rest"], 0);
-    assert_eq!(skeleton["heads"]["are"], "these");
-    assert_eq!(skeleton["heads"]["heads"], whole["heads"]);
-    for field in ["geneses", "epoch", "keys"] {
-        assert_eq!(skeleton[field], whole[field], "{field}");
+    let id = answered(&base);
+    let whole = skeleton(&base);
+    assert_eq!(whole["heads"]["are"], "these");
+    let held = literals(&base, "lines");
+    for node in whole["nodes"].as_array().expect("nodes") {
+        let hash = node["hash"].as_str().expect("a name");
+        assert_eq!(node["size"], held[hash].len(), "{hash}");
     }
-    let nodes = skeleton["nodes"].as_array().expect("nodes");
+    let erased = common::act(
+        &format!("{base}/api/secretary/conversations/{id}/erase"),
+        &serde_json::json!({"turns": [0]}),
+    );
+    assert_eq!(common::status(&erased), 200);
+    let after = skeleton(&base);
+    let keys = after["keys"].as_object().expect("keys");
+    let nodes = after["nodes"].as_array().expect("nodes");
     let mut names: Vec<&str> = nodes
         .iter()
         .map(|node| node["hash"].as_str().expect("a name"))
@@ -424,29 +473,58 @@ fn the_lines_skeleton_and_their_content_are_the_whole_pull() {
         names.join(",")
     ));
     assert_eq!(status, 200, "{body}");
-    let fetched: serde_json::Value = serde_json::from_str(&body).expect("JSON");
-    let by_name: std::collections::BTreeMap<&str, &serde_json::Value> = fetched["objects"]
+    let answered: serde_json::Value = serde_json::from_str(&body).expect("JSON");
+    let by_name: std::collections::BTreeMap<&str, &serde_json::Value> = answered["objects"]
         .as_array()
         .expect("objects")
         .iter()
-        .map(|object| (object["hash"].as_str().expect("a name"), &object["literal"]))
+        .map(|object| (object["hash"].as_str().expect("a name"), object))
         .collect();
-    let rebuilt: Vec<serde_json::Value> = nodes
-        .iter()
-        .map(|node| {
-            let hash = node["hash"].as_str().expect("a name");
-            assert_eq!(
-                node["size"],
-                by_name[hash].as_str().expect("a literal").len(),
-                "{hash}"
-            );
-            serde_json::json!({"hash": hash, "literal": by_name[hash]})
-        })
-        .collect();
-    assert_eq!(serde_json::Value::Array(rebuilt), whole["objects"]);
+    let mut husks = 0;
+    for node in nodes {
+        let hash = node["hash"].as_str().expect("a name");
+        let line_keys: Vec<&str> = node["header"]["keys"]
+            .as_array()
+            .map(|keys| {
+                keys.iter()
+                    .map(|key| key.as_str().expect("a key"))
+                    .collect()
+            })
+            .unwrap_or_default();
+        let opens = line_keys.iter().any(|key| keys.contains_key(*key));
+        let object = by_name[hash];
+        match object["held"].as_str().expect("held") {
+            "husk" => {
+                husks += 1;
+                assert!(
+                    !line_keys.is_empty() && !opens,
+                    "{hash}: husked though a key opens it"
+                );
+                let husk = object["husk"].as_str().expect("a husk");
+                assert_eq!(node["size"], husk.len(), "{hash}");
+                assert!(
+                    husk.len() < held[hash].len(),
+                    "{hash}: the husk drops the words"
+                );
+            }
+            held_as => {
+                assert_eq!(held_as, "literal");
+                assert!(
+                    line_keys.is_empty() || opens,
+                    "{hash}: no key opens it, yet its words were sent"
+                );
+                let literal = object["literal"].as_str().expect("a literal");
+                assert_eq!(
+                    hex::encode(<sha2::Sha256 as sha2::Digest>::digest(literal.as_bytes())),
+                    hash
+                );
+            }
+        }
+    }
+    assert!(husks > 0, "the erased turn's line comes as its husk");
     let mut none = common::get(&format!(
         "{base}/api/stores/lines/skeleton?since={}",
-        skeleton["frontier"]["digest"].as_str().expect("a frontier")
+        after["frontier"]["digest"].as_str().expect("a frontier")
     ));
     let none = common::body_json(&mut none);
     assert_eq!(none["nodes"], serde_json::json!([]));
@@ -454,7 +532,6 @@ fn the_lines_skeleton_and_their_content_are_the_whole_pull() {
     assert_eq!(none["heads"], serde_json::json!({"are": "held"}));
 }
 
-/// The topic store's one prodrome, as the box began it, and its heads.
 fn topics_begun(base: &str) -> (prodrome_core::event::Hash, Vec<String>) {
     let all = objects(base, "topics", "");
     let objects = all["objects"].as_array().expect("objects");

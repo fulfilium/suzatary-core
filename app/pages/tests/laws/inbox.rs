@@ -79,3 +79,67 @@ fn a_card_is_asked_for_what_the_rows_name() {
         "grown, never shrunk"
     );
 }
+
+/// A failed ask of a grown set keeps every card the standing answer drew, and says the problem
+/// only on the rows it has no card for.
+#[test]
+fn a_failed_ask_keeps_the_cards_that_stood() {
+    use proptest::strategy::ValueTree as _;
+    use viewtree::Program;
+    let open = |rows: &[usize]| {
+        let proposals: Vec<Value> = rows.iter().map(|i| json!({"id": format!("p{i}"),
+            "asked": format!("proposal:a/{i}"), "serves": null, "headline": "", "by": {"kind": "secretary"},
+            "why": "", "state": {"kind": "open"}, "value": null, "at": "2026-11-10T04:00:00"})).collect();
+        let body = json!({"payload": {"at": "", "proposals": proposals, "failed": []}, "held": []});
+        inbox::Msg::Host(Box::new(Input::Held {
+            ask: inbox::Hold::Rows(Watched::Proposals),
+            reading: Reading::Val {
+                v: Answer::Done { body },
+            },
+            behind: None,
+        }))
+    };
+    let cards = |reading: Reading<Answer>| {
+        inbox::Msg::Host(Box::new(Input::Held {
+            ask: inbox::Hold::Rows(Watched::Cards("a".to_owned())),
+            reading,
+            behind: None,
+        }))
+    };
+    let row = proposal(2)
+        .new_tree(&mut proptest::test_runner::TestRunner::deterministic())
+        .expect("a row")
+        .current();
+    let (mut m, _) = inbox::Inbox::init(inbox::Flags {
+        context: context(true),
+        open: String::new(),
+        now: 1_790_000_000_000,
+    });
+    inbox::Inbox::update(&mut m, open(&[2]));
+    inbox::Inbox::update(
+        &mut m,
+        cards(Reading::Val {
+            v: Answer::Done {
+                body: json!({"title": "A", "proposals": [row]}),
+            },
+        }),
+    );
+    inbox::Inbox::update(&mut m, open(&[2, 7]));
+    inbox::Inbox::update(
+        &mut m,
+        cards(Reading::Error {
+            e: "the box did not answer".to_owned(),
+        }),
+    );
+    let drawn = format!("{:?}", viewtree::dom::fresh(&inbox::Inbox::view(&m)));
+    assert!(
+        drawn.contains("card/"),
+        "the card that stood is still drawn: {drawn}"
+    );
+    assert_eq!(
+        drawn.matches("decision-unresolved").count(),
+        1,
+        "one row says the problem"
+    );
+    assert!(drawn.contains("the box did not answer"));
+}

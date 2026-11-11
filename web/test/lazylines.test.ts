@@ -34,17 +34,23 @@ const box = JSON.parse(readFileSync("app/core/tests/web/replicas.json", "utf8"))
   skeleton: SkeletonPayload
   keys: Record<string, string>
 }
-const inbox: Named[] = box.inbox.map(o => ({ hash: o.hash, literal: o.text }))
+const inbox: Named[] = box.inbox.map(o => ({ held: "literal" as const, hash: o.hash, literal: o.text }))
 const literals = new Map(box.conversations.map(o => [o.hash, o.text]))
 const ids = [...new Set(box.skeleton.nodes.flatMap(n => (n.header.node === "line" ? [n.header.conversation] : [])))]
 
 // A fetcher's reader: the prints handed to it, and those of some names it lacks, as the core's `Lines` answers them.
-const readerOf = (): { readonly prints: ReadonlySet<string>; readonly lacking: content.Effects["lacking"]; readonly held: content.Effects["held"] } => {
+const readerOf = (): {
+  readonly prints: ReadonlySet<string>
+  readonly lacking: content.Effects["lacking"]
+  readonly held: content.Effects["held"]
+  readonly husked: content.Effects["husked"]
+} => {
   const prints = new Set<string>()
   return {
     prints,
     lacking: names => new Set(names.filter(n => !prints.has(n))),
     held: rows => Promise.resolve(void rows.forEach(r => prints.add(content.rowOf(r).hash))),
+    husked: husks => Promise.resolve(void husks.forEach(h => prints.add(h.hash))),
   }
 }
 
@@ -117,7 +123,7 @@ test("law: a reading of part-fetched lines is the whole pull's reading at the sa
     const has = (name: string): boolean => kept.has(name)
     const names = new Set(s.objects.map(n => n.hash))
     // What the box's whole pull at this skeleton would have sent: every node with its literal.
-    const whole = s.objects.map(n => ({ hash: n.hash, literal: literals.get(n.hash)! }))
+    const whole = s.objects.map(n => ({ held: "literal" as const, hash: n.hash, literal: literals.get(n.hash)! }))
     const asked = coreOf(s, kept)
     try {
       for (const scope of scopes) {
@@ -136,7 +142,7 @@ test("law: a reading of part-fetched lines is the whole pull's reading at the sa
 })
 
 test("law: content is taken only where its bytes hash to the name asked for, in the place asked", async () => {
-  const objects = box.conversations.map(o => ({ hash: o.hash, literal: o.text }))
+  const objects = box.conversations.map(o => ({ held: "literal" as const, hash: o.hash, literal: o.text }))
   await forAllAsync(20, async r => {
     const asked = objects.filter(() => r.bool(0.5)).slice(0, content.MOST_HASHES)
     if (asked.length === 0) return
@@ -147,6 +153,11 @@ test("law: content is taken only where its bytes hash to the name asked for, in 
     assert.equal((await content.admit(names, { objects: forged })).type, "Error", "a literal that is not its name's")
     if (asked.length > 1) assert.equal((await content.admit(names, { objects: [...asked].reverse() })).type, "Error", "answers out of place")
     assert.equal((await content.admit(names, { objects: asked.slice(1) })).type, "Error", "an answer short of the question")
+    // A husk is not its name's hash: it is taken for the reader to check against the line's node, in its place alone.
+    const husked = asked.map((o, j) => (j === i ? { held: "husk" as const, hash: o.hash, husk: "a husk" } : o))
+    const taken = await content.admit(names, { objects: husked })
+    assert.ok(taken.type === "Val" && taken.v.husks.length === 1 && taken.v.literals.length === asked.length - 1)
+    if (asked.length > 1) assert.equal((await content.admit(names, { objects: [...husked].reverse() })).type, "Error", "a husk out of place")
   })
 })
 
@@ -174,7 +185,7 @@ test("an opened conversation's names go out before the whole store's batches sti
     ask: hashes => {
       asked.push([...hashes])
       sent()
-      return new Promise(done => answers.push(() => done({ objects: hashes.map(h => ({ hash: h, literal: literals.get(h)! })) })))
+      return new Promise(done => answers.push(() => done({ objects: hashes.map(h => ({ held: "literal" as const, hash: h, literal: literals.get(h)! })) })))
     },
     asked: () => {},
     came: () => {},
@@ -279,7 +290,7 @@ test("a prefetch goes out one answer at a time, only when no other is out, and s
       cameBefore.push(came)
       sent()
       return new Promise((done, fail) =>
-        answers.push(ok => (ok ? done({ objects: hashes.map(h => ({ hash: h, literal: own.get(h)! })) }) : fail(new Error("offline")))),
+        answers.push(ok => (ok ? done({ objects: hashes.map(h => ({ held: "literal" as const, hash: h, literal: own.get(h)! })) }) : fail(new Error("offline")))),
       )
     },
     asked: () => {},
@@ -354,6 +365,7 @@ test("concurrent whole readings read each object the device keeps once, in one t
     atOnce: () => 4,
     lacking: reader.lacking,
     held: rows => reader.held(rows).then(() => void handed.push(...rows.map(r => content.rowOf(r).hash))),
+    husked: reader.husked,
     shown: () => true,
   })
   const before = [device.transactions(), device.read()] as const
@@ -367,4 +379,33 @@ test("concurrent whole readings read each object the device keeps once, in one t
   assert.ok(device.read() - read <= nodes.length, `${device.read() - read} values read for ${nodes.length} objects`)
   assert.deepEqual([...handed].sort(), nodes.map(n => n.hash).sort(), "each object handed to the reader once")
   assert.ok(nodes.every(n => reader.prints.has(n.hash)))
+})
+
+test("a prefetch's husks go to the device's store and not to the reader, which takes them from there when a reading asks", async () => {
+  fakeIndexedDB()
+  await content.keepOnly(new Set(), [], () => Promise.resolve())
+  const template = box.skeleton.nodes[0]!
+  const nodes = ["a", "b", "c"].map(c => ({ ...template, hash: c.repeat(64), parents: [], size: 300 }))
+  let asks = 0
+  const husked: string[] = []
+  const { fetch } = content.fetcher({
+    ask: hashes => {
+      asks += 1
+      return Promise.resolve({ objects: hashes.map(hash => ({ held: "husk" as const, hash, husk: `husk of ${hash}` })) })
+    },
+    asked: () => {},
+    came: () => {},
+    lost: () => {},
+    atOnce: () => 4,
+    lacking: names => new Set(names.filter(n => !husked.includes(n))),
+    held: () => Promise.resolve(),
+    husked: husks => Promise.resolve(void husked.push(...husks.map(h => h.hash))),
+    shown: () => true,
+  })
+  await fetch("Ahead", nodes)
+  assert.equal(asks, 1)
+  assert.deepEqual(husked, [], "a prefetch hands the reader no husk, as it hands it no literal")
+  await fetch("First", nodes)
+  assert.equal(asks, 1, "a reading takes the prefetched husks from the device and asks the box nothing")
+  assert.deepEqual(husked.sort(), nodes.map(n => n.hash).sort())
 })

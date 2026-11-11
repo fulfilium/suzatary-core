@@ -374,10 +374,12 @@
         "objects": [
           {
             "hash": "4796fd9d3a6dde57e02eedc74443b923027996e3f7dc245a7498db5b05c62027",
+            "held": "literal",
             "literal": "Change(genesis='7b818ef0fdd17acb5a6c38b43fa0281f189cc0854dab58dcff68c681ce13ad38', deps=(), event=Opened(conversation='pulled', at=datetime(2026, 9, 2, 12, 0, 0), actor='assistant', held=0, carried=None, model='vectors-fixture', kind='topic', words=(Scrubbed(key='630dcd2966c4336691125448bbb25b4ff412a49c732db2c8abc1b8581bd710dd', box='Y5oxXcKShOsxFTUVwyZsC9rFmoGNyHlmzqiJfkZQEX4PiAht0e48XZ2BWCRkDgA8m6D2Xt5dWc4NKkp/MZVazULyLdynSpLVbKeK7ymOcjtgI382R+q+t/PgnDDOgOPihKgCG4pcCySUzTyNWxNQfsfnoHhN9KPi6oFi0mHFnSPnqxHA9zw7frCYOVCz4sSgj4Q9qV+3/LPxNFaBa1G3gk3y+b1WE9S07ZUv2FjNG5hKy/j/H9GnyAbYHKjkrjss/9uhGCdYjEOPVDTqyVa+j5WgQ60Ezf0Kl9f6SdQNCZ7iLVMurXcAQPrjVFZbSgPyHfqUGj1PdvT5niCR5aBVZUq2f8766qY42cV0HyqO+9Y=', rules='67d7f8df2fd4d019fd90b6d59f17f44b046e102ea2d8ad4da122d6e7517c4f4a'),)))"
           },
           {
             "hash": "7b818ef0fdd17acb5a6c38b43fa0281f189cc0854dab58dcff68c681ce13ad38",
+            "held": "literal",
             "literal": "Genesis(label='memory', nonce='00000000000000000000000000000000')"
           }
         ]
@@ -4726,9 +4728,7 @@
         "heads": [
           "4796fd9d3a6dde57e02eedc74443b923027996e3f7dc245a7498db5b05c62027"
         ],
-        "keys": {
-          "630dcd2966c4336691125448bbb25b4ff412a49c732db2c8abc1b8581bd710dd": "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f"
-        },
+        "keys": {},
         "objects": [
           {
             "hash": "7b818ef0fdd17acb5a6c38b43fa0281f189cc0854dab58dcff68c681ce13ad38",

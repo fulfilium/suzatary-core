@@ -204,29 +204,40 @@ impl Operator {
         Ok(())
     }
 
-    /// The whole of the secretary's store `store`, pulled piece by piece as a tab pulls it, each
-    /// piece asked from the frontier the last one named.
+    /// The lines as a tab holds those of conversation `id`: the skeleton pulled piece by piece,
+    /// each asked from the frontier the last one named, and the content of that conversation's
+    /// nodes asked by hash, each literal held and each husk taken in its place.
     ///
     /// # Errors
     /// A route's refusal, or an answer that does not read.
-    pub fn pulled(&self, store: &str) -> anyhow::Result<Pulled> {
-        let mut pulled = Pulled::default();
-        let mut since = String::new();
-        loop {
-            let target = match since.as_str() {
-                "" => format!("/api/stores/{store}/objects"),
-                frontier => format!("/api/stores/{store}/objects?since={frontier}"),
-            };
-            let answer = self.request(route::Method::Get, &target, b"")?;
-            let piece: wire::StorePayload = serde_json::from_slice(&answer.body)
-                .with_context(|| format!("a piece of the {store} store"))?;
-            pulled.objects.extend(piece.objects.objects);
-            pulled.keys.extend(piece.keys);
-            if piece.rest == 0 {
-                return Ok(pulled);
-            }
-            since = piece.objects.frontier.digest;
+    pub fn lines(
+        &self,
+        id: &suzatary_core::conversation_id::ConversationId,
+    ) -> anyhow::Result<suzatary_core::secretary::held_replica::HeldReplica> {
+        let read = |target: &str| -> anyhow::Result<Vec<u8>> {
+            Ok(self.request(route::Method::Get, target, b"")?.body)
+        };
+        let mut replica = suzatary_core::secretary::held_replica::HeldReplica::pulled(|since| {
+            let piece: wire::SkeletonPayload = serde_json::from_slice(&read(&format!(
+                "/api/stores/lines/skeleton?since={since}"
+            ))?)
+            .context("a piece of the lines' skeleton")?;
+            anyhow::Ok(piece)
+        })?;
+        let lacking = replica.lacking(&suzatary_core::secretary::outlines::Scope::Conversations(
+            std::collections::BTreeSet::from([id.clone()]),
+        ));
+        for ask in
+            suzatary_core::routes::asks(lacking.iter().map(|node| (node.hash.as_str(), node.size)))
+        {
+            let content: wire::ContentPayload = serde_json::from_slice(&read(&format!(
+                "/api/stores/lines/content?hashes={}",
+                ask.join(",")
+            ))?)
+            .context("a content answer of the lines")?;
+            replica.take(content.objects)?;
         }
+        Ok(replica)
     }
 
     /// The request's name and its headers: a device's signed request's, the two of the CSRF
@@ -267,15 +278,6 @@ pub struct Answered {
     /// signature: the record names the root key, so it reads as the operator's.
     pub request: Hash,
     pub body: Vec<u8>,
-}
-
-/// A store as a replica holds it once pulled whole: its objects, parents first, and the key of
-/// every slot of words they name.
-#[derive(Debug, Default)]
-pub struct Pulled {
-    pub objects: Vec<wire::StoredObject>,
-    /// Each key's bytes in hex, by its name.
-    pub keys: std::collections::BTreeMap<String, String>,
 }
 
 /// A request as a device signs it: its name ([`request_name`]), under which the box keeps its

@@ -213,12 +213,11 @@ impl<E: Store> Reads<E> for Objects<E> {
             .collect()
     }
 
-    /// Each the bytes of its own file, checked against its name. A missing file, or one the
-    /// store's history leaves out, is not held; a file that cannot be read or does not hash to
-    /// its name makes the store unreadable.
+    /// Each the bytes of its own file, checked against its name, read by its name alone: a
+    /// missing file is not held, and one that cannot be read or does not hash to its name makes
+    /// the store unreadable.
     fn literals(&self, names: &[Hash]) -> Result<Vec<Option<String>>, StoreError> {
         use sha2::Digest as _;
-        let history = self.events.dag().map_err(|e| Self::unreadable(e))?;
         names
             .iter()
             .map(|name| {
@@ -237,9 +236,6 @@ impl<E: Store> Reads<E> for Objects<E> {
                         "{} does not hash to its name",
                         path.display()
                     )));
-                }
-                if history.get(name).is_none() {
-                    return Ok(None);
                 }
                 String::from_utf8(bytes)
                     .map(Some)
@@ -458,7 +454,7 @@ mod tests {
     /// one the history leaves out are not held, and a file that does not hash to its name is
     /// a failure, never an absence.
     #[test]
-    fn a_literal_is_its_files_bytes_of_the_history_alone() {
+    fn a_literal_is_its_files_bytes_read_by_its_name() {
         let (dir, store) = store("literals");
         let first = store
             .append(mk_created("alpha", at(1), "ada", "", "").expect("valid"))
@@ -490,8 +486,13 @@ mod tests {
             store
                 .literals(&[first.clone(), second.clone()])
                 .expect("reads"),
-            vec![None, None],
-            "a missing file, and one resting on it, are not held"
+            vec![None, Some(held.clone())],
+            "a missing file is not held; one resting on it is still its file's bytes, which the \
+             history no longer holds"
+        );
+        assert!(
+            store.graph().expect("reads").dag().get(&second).is_none(),
+            "the history, which a content question reads once, leaves it out"
         );
 
         std::fs::write(file(&first), &first_bytes).expect("restored");

@@ -835,7 +835,7 @@ fn a_viewer_may_read_the_conversations_and_tap_nothing() {
         .start()
         .base;
 
-    let listing = common::get(&format!("{base}/api/stores/lines/objects"));
+    let listing = common::get(&format!("{base}/api/stores/lines/skeleton"));
     assert_eq!(
         common::status(&listing),
         200,

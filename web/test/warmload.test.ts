@@ -33,7 +33,7 @@ const box = JSON.parse(readFileSync("app/core/tests/web/replicas.json", "utf8"))
   skeleton: SkeletonPayload
   keys: Record<string, string>
 }
-const inbox: Named[] = box.inbox.map(o => ({ hash: o.hash, literal: o.text }))
+const inbox: Named[] = box.inbox.map(o => ({ held: "literal" as const, hash: o.hash, literal: o.text }))
 const literals = new Map(box.conversations.map(o => [o.hash, o.text]))
 
 // The box's nodes parents first, so each prefix is a store the box held.
@@ -106,7 +106,7 @@ Object.assign(globalThis, {
     if (store !== undefined) return json(objectsAnswer(store === "inbox" ? inbox.slice(0, proposals) : topicStores[store], since))
     if (url.pathname === "/api/stores/lines/content") {
       const hashes = (url.searchParams.get("hashes") ?? "").split(",")
-      return json({ objects: hashes.flatMap(hash => (literals.has(hash) ? [{ hash, literal: literals.get(hash)! }] : [])) } satisfies ContentPayload)
+      return json({ objects: hashes.flatMap(hash => (literals.has(hash) ? [{ held: "literal" as const, hash, literal: literals.get(hash)! }] : [])) } satisfies ContentPayload)
     }
     return new Response("", { status: 404 })
   },
@@ -152,10 +152,10 @@ const cold = async (): Promise<string> => {
     held.land().free()
     const rows = await content.admit(
       order.slice(0, holds).map(n => n.hash),
-      { objects: order.slice(0, holds).map(n => ({ hash: n.hash, literal: literals.get(n.hash)! })) },
+      { objects: order.slice(0, holds).map(n => ({ held: "literal" as const, hash: n.hash, literal: literals.get(n.hash)! })) },
     )
     assert.equal(rows.type, "Val")
-    if (rows.type === "Val") holdAdmitted(held, rows.v)
+    if (rows.type === "Val") holdAdmitted(held, rows.v.literals)
     return JSON.stringify(listOfLines(held, proposals))
   } finally {
     proposals.free()
@@ -248,7 +248,7 @@ test("law: a fetch hands the core exactly the prints it lacks, and asks the box 
       content.fetcher({
         ask: hashes => {
           asked.push(...hashes)
-          return Promise.resolve({ objects: hashes.map(h => ({ hash: h, literal: literals.get(h)! })) })
+          return Promise.resolve({ objects: hashes.map(h => ({ held: "literal" as const, hash: h, literal: literals.get(h)! })) })
         },
         asked: () => {},
         came: () => {},
@@ -260,6 +260,7 @@ test("law: a fetch hands the core exactly the prints it lacks, and asks the box 
           holdAdmitted(reader, rows)
           return Promise.resolve()
         },
+        husked: husks => Promise.resolve(void reader.take_husks(JSON.stringify(husks)).free()),
         shown: () => true,
       })
     let fetcher = fetcherOf(held)

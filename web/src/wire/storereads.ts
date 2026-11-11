@@ -22,8 +22,8 @@ export namespace storereads {
   // It carries the keys of the lines' words, so it is never kept beside the reads (`http.Keeping`).
   export const skeleton = (since: string): Promise<SkeletonPayload> => http.get(sinceIn("/api/stores/lines/skeleton", since), payload.SkeletonPayload, BOUND, "Never")
 
-  // The literals of `hashes`, in ascending order with none twice, so one set has one URL the browser keeps for good. A
-  // name's literal never changes, so nothing is asked again by its tag, and the answer is never kept beside the reads: it
+  // The content of `hashes`, in ascending order with none twice, so one set has one URL. The lines' answer is not kept by
+  // the browser: a line is answered as its husk once its last key retires. The answer is never kept beside the reads: it
   // can hold the words of a line an erasure later lets go.
   export const content = (store: string, hashes: readonly string[]): Promise<ContentPayload> =>
     http.get(`/api/stores/${encodeURIComponent(store)}/content?hashes=${hashes.join(",")}`, payload.ContentPayload, BOUND, "Never")

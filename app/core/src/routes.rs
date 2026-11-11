@@ -876,35 +876,8 @@ fn frontier_of(recorded: &prodrome_core::store::frontier::Recorded) -> wire::Fro
     }
 }
 
-/// `GET /api/stores/lines/objects?since=<heads>`: [`store_objects_since`] for the conversations'
-/// lines, carrying the key of every slot the objects sent name, except a key an erasure or a
-/// reseal retires, read over the whole store; every erased key is named beside them.
-///
-/// # Errors
-/// The stores' own.
-pub fn lines_since(
-    conversations: crate::secretary::conversations::Conversations<'_>,
-    since: &prodrome_core::store::frontier::Since,
-    books: Books<'_>,
-    now: Datetime,
-    cut: Cut,
-) -> Answered<wire::StorePayload> {
-    let (payload, sent, graph) = store_answer(conversations.lines, since, books, now, cut)?;
-    let retired = retired(&graph);
-    Ok(wire::StorePayload {
-        keys: keys_of(conversations, &graph, &retired, &sent)?,
-        erased: retired
-            .erased
-            .keys()
-            .map(|name| name.as_str().to_owned())
-            .collect(),
-        ..payload
-    })
-}
-
-/// `GET /api/stores/lines/skeleton?since=<heads>`: what [`lines_since`] answers, each object as
-/// its [`wire::SkeletonNode`] instead of its literal, cut by the nodes' own weight. It names no
-/// erased key: each node's step says what its line retires.
+/// `GET /api/stores/lines/skeleton?since=<heads>`: the lines' pull, each object as its node,
+/// sized by what [`lines_content`] sends of it, with every key its nodes name but a retired one.
 ///
 /// # Errors
 /// The stores' own.
@@ -935,6 +908,7 @@ pub fn lines_skeleton(
     } else {
         keys_of(conversations, &graph, &retired(&graph), &sent)?
     };
+    let husked = husked(&graph, &keys, &sent);
     // A replica that lacks nothing holds the store's heads already: they are the heads of what it
     // holds, which a recorded frontier names exactly.
     let heads = match (&snapshot.since, sent.is_empty() && rest == 0) {
@@ -947,7 +921,17 @@ pub fn lines_skeleton(
         heads,
         geneses: snapshot.geneses,
         epoch: snapshot.epoch,
-        nodes: held_sizes(conversations.lines, &sent, nodes)?,
+        nodes: held_sizes(conversations.lines, &sent, nodes)?
+            .into_iter()
+            .zip(&sent)
+            .map(|(node, name)| match husked.get(name) {
+                Some(husk) => wire::SkeletonNode {
+                    size: husk.len(),
+                    ..node
+                },
+                None => node,
+            })
+            .collect(),
         since: snapshot.since,
         frontier: snapshot.frontier,
         keys,
@@ -1024,13 +1008,7 @@ pub fn skeleton_node(
     envelope: &prodrome_core::event::Envelope<crate::secretary::line_event::LineEvent>,
 ) -> wire::SkeletonNode {
     let header = match envelope.event() {
-        Some(line) => wire::NodeHeader::Line {
-            conversation: line.conversation().as_str().to_owned(),
-            at: fpl::iso(fpl::instant_of(line.at())),
-            kind: line.shape().name().to_owned(),
-            keys: line.keys().map(|key| key.as_str().to_owned()).collect(),
-            step: Step::of(line.shape()),
-        },
+        Some(line) => line_header(line),
         None => wire::NodeHeader::Structure {
             kind: constructor(envelope).to_owned(),
         },
@@ -1043,6 +1021,18 @@ pub fn skeleton_node(
             .collect(),
         size: prodrome_core::event::canonical_envelope(envelope).len(),
         header,
+    }
+}
+
+/// A line's header, what a fold reads of it without its words: its husk's is its own.
+#[must_use]
+pub fn line_header(line: &crate::secretary::line_event::LineEvent) -> wire::NodeHeader {
+    wire::NodeHeader::Line {
+        conversation: line.conversation().as_str().to_owned(),
+        at: fpl::iso(fpl::instant_of(line.at())),
+        kind: line.shape().name().to_owned(),
+        keys: line.keys().map(|key| key.as_str().to_owned()).collect(),
+        step: Step::of(line.shape()),
     }
 }
 
@@ -1106,6 +1096,29 @@ fn weight(node: &wire::SkeletonNode) -> usize {
 /// a stored answer was bounded can be larger.
 pub const MOST_CONTENT_BYTES: usize = 1 << 20;
 
+/// The content questions for `nodes` (`(name, size)`), ascending, each within the bounds an answer
+/// carries, an object past them asked alone.
+#[must_use]
+pub fn asks<'n>(nodes: impl IntoIterator<Item = (&'n str, usize)>) -> Vec<Vec<&'n str>> {
+    let mut nodes: Vec<(&str, usize)> = nodes.into_iter().collect();
+    nodes.sort_unstable();
+    let mut asks: Vec<Vec<&str>> = Vec::new();
+    let mut bytes = 0usize;
+    for (hash, size) in nodes {
+        match asks.last_mut() {
+            Some(ask) if ask.len() < query::MOST_HASHES && bytes + size <= MOST_CONTENT_BYTES => {
+                ask.push(hash);
+                bytes += size;
+            }
+            Some(_) | None => {
+                asks.push(vec![hash]);
+                bytes = size;
+            }
+        }
+    }
+    asks
+}
+
 /// `GET /api/stores/<store>/content?hashes=` and a chain's `…/content?hashes=`: the literal of
 /// each object `hashes` names, in that order, from `store` alone. A hash the store does not hold,
 /// or literals past [`MOST_CONTENT_BYTES`], refuse the whole question in the same words.
@@ -1117,13 +1130,81 @@ pub fn content<E: prodrome_core::schema::Schema>(
     store: &dyn Prodrome<E>,
     hashes: &query::Hashes,
 ) -> Answered<wire::ContentPayload> {
+    answer(store, &*store.graph()?, hashes, &BTreeMap::new())
+}
+
+/// [`content`] of the lines, each line every key of whose words the box retires as its husk. A
+/// line with one live slot and one dead slot is sent whole, so the dead slot's sealed bytes go
+/// with it: a husk of some slots alone could be checked against nothing.
+pub fn lines_content(
+    conversations: crate::secretary::conversations::Conversations<'_>,
+    hashes: &query::Hashes,
+) -> Answered<wire::ContentPayload> {
+    let graph = conversations.lines.graph()?;
     let names: Vec<prodrome_core::event::Hash> = hashes.iter().cloned().collect();
-    let literals = store.literals(&names)?;
-    let unheld: Vec<&str> = names
+    let printed = husks(conversations, &graph, &names)?;
+    answer(conversations.lines, &graph, hashes, &printed)
+}
+
+/// The printed husk of each line of `names` with words no key the box sends opens.
+pub fn husks(
+    conversations: crate::secretary::conversations::Conversations<'_>,
+    graph: &crate::store::Graph<crate::secretary::line_event::LineEvent>,
+    names: &[prodrome_core::event::Hash],
+) -> Answered<BTreeMap<prodrome_core::event::Hash, String>> {
+    let sent = keys_of(conversations, graph, &retired(graph), names)?;
+    Ok(husked(graph, &sent, names))
+}
+
+/// [`husks`] of `names`, given `sent`, the keys [`keys_of`] sends of them.
+fn husked(
+    graph: &crate::store::Graph<crate::secretary::line_event::LineEvent>,
+    sent: &BTreeMap<String, String>,
+    names: &[prodrome_core::event::Hash],
+) -> BTreeMap<prodrome_core::event::Hash, String> {
+    names
         .iter()
-        .zip(&literals)
-        .filter(|(_, literal)| literal.is_none())
-        .map(|(name, _)| name.as_str())
+        .filter_map(|name| {
+            let line = graph.dag().get(name)?.event()?;
+            if line.keys().any(|key| sent.contains_key(key.as_str())) {
+                return None;
+            }
+            Some((name.clone(), line.husk()?.print()))
+        })
+        .collect()
+}
+
+/// Each object `hashes` names that `graph`, the store's history read once for this question,
+/// holds: its husk where `husks` holds one, else its literal read by its name.
+fn answer<E: prodrome_core::schema::Schema>(
+    store: &dyn Prodrome<E>,
+    graph: &crate::store::Graph<E>,
+    hashes: &query::Hashes,
+    husks: &BTreeMap<prodrome_core::event::Hash, String>,
+) -> Answered<wire::ContentPayload> {
+    let read: Vec<prodrome_core::event::Hash> = hashes
+        .iter()
+        .filter(|name| !husks.contains_key(*name) && graph.dag().get(name).is_some())
+        .cloned()
+        .collect();
+    let mut literals: BTreeMap<_, _> = read.iter().zip(store.literals(&read)?).collect();
+    let mut unheld = Vec::new();
+    let sent: Vec<wire::Content> = hashes
+        .iter()
+        .filter_map(|name| {
+            let hash = name.as_str().to_owned();
+            match (husks.get(name), literals.remove(name).flatten()) {
+                (Some(husk), _) => Some(wire::Content::Husk {
+                    hash,
+                    husk: husk.clone(),
+                }),
+                (None, Some(literal)) => Some(wire::Content::Literal { hash, literal }),
+                (None, None) => {
+                    unheld.push(hash);
+                    None
+                }
+            }
+        })
         .collect();
     if !unheld.is_empty() {
         return Err(Refusal::not_found(format!(
@@ -1131,17 +1212,13 @@ pub fn content<E: prodrome_core::schema::Schema>(
             unheld.join(", ")
         )));
     }
-    let sent: Vec<wire::StoredObject> = names
+    let bytes: usize = sent
         .iter()
-        .zip(literals)
-        .filter_map(|(name, literal)| {
-            literal.map(|literal| wire::StoredObject {
-                hash: name.as_str().to_owned(),
-                literal,
-            })
+        .map(|object| match object {
+            wire::Content::Literal { literal: text, .. }
+            | wire::Content::Husk { husk: text, .. } => text.len(),
         })
-        .collect();
-    let bytes: usize = sent.iter().map(|object| object.literal.len()).sum();
+        .sum();
     if sent.len() > 1 && bytes > MOST_CONTENT_BYTES {
         return Err(Refusal::bad_request(format!(
             "these {} objects are {bytes} bytes, past the {MOST_CONTENT_BYTES} one answer carries: ask for fewer at a time, by the sizes the skeleton gives",

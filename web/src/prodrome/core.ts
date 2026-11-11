@@ -194,6 +194,8 @@ export interface Lines {
   start_over: () => LineStep;
   /** The keys `[<name>, …]` let go from every row, and each line every key of whose words is then gone kept as its husk. */
   forget: (gone: string) => LineStep;
+  /** `[{hash, husk}]`: the husks the box answered in place of prints, each kept where it is its node's line and no key held opens it. */
+  take_husks: (given: string) => LineStep;
   /** `[<name>, …]`: every line held as its husk, whose print the device deletes. */
   husks: () => string;
   /** Of the block keys `[<key>, …]`, those a device may keep: an answer key only while the held keys' words feed it. */

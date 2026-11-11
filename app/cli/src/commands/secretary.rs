@@ -1261,6 +1261,14 @@ enum Action {
         #[arg(long)]
         apply: bool,
     },
+    /// What a prune of the lines would let go, written nowhere: every line no key opens a word of
+    /// (a superseded seal, an erased slot), which the box sends as its husk, and the large objects
+    /// it keeps whole, by shape.
+    PruneLines {
+        /// The bytes past which a kept object is listed as large.
+        #[arg(long, default_value_t = 16 * 1024)]
+        large: usize,
+    },
     /// The memory's digest of the conversations.
     Digest {
         /// What to read of it.
@@ -1380,6 +1388,7 @@ pub fn run(path: &Path, args: &Args) -> anyhow::Result<()> {
         Action::Digest {
             action: DigestAction::Census,
         } => census(&instance, &mut std::io::stdout()),
+        Action::PruneLines { large } => prune_lines(&instance, *large, &mut std::io::stdout()),
         Action::MigrateScrub { apply } => {
             migrate_scrub(&instance, *apply, &mut std::io::stdout()).map(|_| ())
         }
@@ -1631,6 +1640,41 @@ pub fn carry(
     }
     writeln!(out, "wrote {count} membership(s) as assistant")?;
     Ok(count)
+}
+
+/// `prune-lines`: the census, in megabytes, and nothing written.
+pub fn prune_lines(
+    instance: &Instance,
+    large: usize,
+    out: &mut impl std::io::Write,
+) -> anyhow::Result<()> {
+    let census =
+        suzatary_core::secretary::prune::census(conversations(instance).conversations(), large)?;
+    let mb = |bytes: usize| format!("{}.{} MB", bytes / 1_000_000, bytes % 1_000_000 / 100_000);
+    writeln!(
+        out,
+        "{} object(s), {}",
+        census.all.objects,
+        mb(census.all.bytes)
+    )?;
+    writeln!(
+        out,
+        "{} no key opens a word of: {}, {} as husks",
+        census.dead.objects,
+        mb(census.dead.bytes),
+        mb(census.husks)
+    )?;
+    writeln!(out, "kept whole and over {large} bytes:")?;
+    for (kind, tally) in &census.large {
+        writeln!(
+            out,
+            "  {kind}: {} object(s), {}",
+            tally.objects,
+            mb(tally.bytes)
+        )?;
+    }
+    writeln!(out, "wrote nothing")?;
+    Ok(())
 }
 
 /// `migrate-scrub`; `None` for a dry run.

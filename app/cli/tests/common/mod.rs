@@ -4031,6 +4031,34 @@ pub fn pulled_with_keys<E: prodrome_core::schema::Schema<Vocabulary: Default>>(
     (nodes, keys)
 }
 
+/// The lines as a tab holds them: the skeleton pulled piece after piece and landed, then every
+/// node's content asked by hash, each literal held as its print and each husk taken in its place.
+pub fn held_lines(base: &str) -> suzatary_core::secretary::held_replica::HeldReplica {
+    use suzatary_core::secretary::held_replica::{HeldReplica, NotAnAnswer};
+    let mut replica = HeldReplica::pulled(|since| -> Result<_, NotAnAnswer> {
+        let mut answer = get(&format!("{base}/api/stores/lines/skeleton?since={since}"));
+        assert_eq!(status(&answer), 200, "the lines' skeleton answers");
+        Ok(serde_json::from_value(body_json(&mut answer)).expect("a skeleton"))
+    })
+    .expect("the skeleton reads");
+    let lacking = replica.lacking(&suzatary_core::secretary::outlines::Scope::Whole);
+    for ask in
+        suzatary_core::routes::asks(lacking.iter().map(|node| (node.hash.as_str(), node.size)))
+    {
+        let mut answer = get(&format!(
+            "{base}/api/stores/lines/content?hashes={}",
+            ask.join(",")
+        ));
+        assert_eq!(status(&answer), 200, "the lines' content answers");
+        let content: suzatary_core::wire::ContentPayload =
+            serde_json::from_value(body_json(&mut answer)).expect("a content answer");
+        replica
+            .take(content.objects)
+            .expect("the box's husks are its lines'");
+    }
+    replica
+}
+
 /// The inbox's fold and every conversation, as a tab's replicas of the two stores read them.
 pub fn replicas(
     base: &str,
@@ -4040,17 +4068,17 @@ pub fn replicas(
 ) {
     // The conversations first: the box files a proposal before the line that names it, so an inbox
     // pulled after them holds every proposal they name.
-    let (lines, keys) = pulled_with_keys(base, "lines");
+    let mut lines = held_lines(base);
     let inbox = suzatary_core::secretary::inbox::Fold::of(&pulled(base, "inbox"));
-    let conversations = suzatary_core::secretary::transcript::transcripts(
-        &lines,
-        &|name: &suzatary_core::secretary::locked_text::KeyName| keys.key(name),
-    )
-    .expect("the conversations read")
-    .into_values()
-    .rev()
-    .map(suzatary_core::secretary::transcript::Transcript::into_stored)
-    .collect();
+    let conversations = lines
+        .lines
+        .read()
+        .0
+        .expect("the conversations read")
+        .into_iter()
+        .rev()
+        .map(|stored| (*stored).clone())
+        .collect();
     (inbox, conversations)
 }
 

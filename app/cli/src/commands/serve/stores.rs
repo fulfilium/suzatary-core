@@ -3,6 +3,7 @@
 //! Literals are asked for by hash. The two topic stores are written by a tab too.
 
 use axum::Json;
+use axum::response::{IntoResponse as _, Response};
 use suzatary_core::refusal::Refusal;
 use suzatary_core::server::Server;
 use suzatary_core::store::StoreError;
@@ -54,16 +55,34 @@ pub fn heads(store: StoreName, caps: &Server<'_>) -> Result<Vec<String>, StoreEr
     Ok(heads)
 }
 
-/// A store, and the frontier a replica of it holds.
+/// A store a replica pulls whole, by its objects: every one but the lines, whose literals hold
+/// the words of slots no key opens, so a replica pulls their skeleton and their content instead.
+enum Pulled {
+    Inbox,
+    Topics,
+    TopicAliases,
+}
+
+/// A store pulled by its objects, and the frontier a replica of it holds.
 pub struct Since {
-    store: StoreName,
+    store: Pulled,
     since: prodrome_core::store::frontier::Since,
 }
 
 impl Params for Since {
     fn parse(asked: &Asked, _: &Chained) -> Result<Self, Refusal> {
+        let store = match named(asked.segment("store")?)? {
+            StoreName::Inbox => Pulled::Inbox,
+            StoreName::Topics => Pulled::Topics,
+            StoreName::TopicAliases => Pulled::TopicAliases,
+            StoreName::Lines => {
+                return Err(Refusal::not_found(
+                    "the lines are pulled by their skeleton: GET /api/stores/lines/skeleton",
+                ));
+            }
+        };
         Ok(Self {
-            store: named(asked.segment("store")?)?,
+            store,
             since: query::since(asked.query("since"))?,
         })
     }
@@ -77,16 +96,11 @@ pub fn objects(call: &Call<Reader, Since, ()>) -> Result<Json<wire::StorePayload
     let (books, now) = (call.state.books(), caps.secretary.clock.now());
     let cut = routes::Cut::PIECE;
     match store {
-        StoreName::Inbox => {
-            routes::store_objects_since(caps.secretary.inbox, since, books, now, cut)
-        }
-        StoreName::Lines => {
-            routes::lines_since(caps.secretary.conversations, since, books, now, cut)
-        }
-        StoreName::Topics => {
+        Pulled::Inbox => routes::store_objects_since(caps.secretary.inbox, since, books, now, cut),
+        Pulled::Topics => {
             routes::store_objects_since(caps.secretary.topics.memberships, since, books, now, cut)
         }
-        StoreName::TopicAliases => {
+        Pulled::TopicAliases => {
             routes::store_objects_since(caps.secretary.topics.aliases, since, books, now, cut)
         }
     }
@@ -164,19 +178,21 @@ impl Params for Wanted {
     }
 }
 
-/// `GET /api/stores/<store>/content?hashes=<hashes>`: those objects' literals, kept for good.
-pub fn content(
-    call: &Call<Reader, Wanted, ()>,
-) -> Result<Immutable<Json<wire::ContentPayload>>, Refusal> {
+/// `GET /api/stores/<store>/content?hashes=<hashes>`: those objects' literals, kept for good;
+/// the lines' answer is not kept, since a line is its literal until its last key retires and
+/// its husk after, and a kept literal would hold the dead words on the device for a year. The
+/// tab keeps what it takes in its own store.
+pub fn content(call: &Call<Reader, Wanted, ()>) -> Result<Response, Refusal> {
     let caps = call.state.first.caps;
     let Wanted { store, hashes } = &call.params;
+    let kept = |answer: wire::ContentPayload| Immutable(Json(answer)).into_response();
     match store {
-        StoreName::Inbox => routes::content(caps.secretary.inbox, hashes),
-        StoreName::Lines => routes::content(caps.secretary.conversations.lines, hashes),
-        StoreName::Topics => routes::content(caps.secretary.topics.memberships, hashes),
-        StoreName::TopicAliases => routes::content(caps.secretary.topics.aliases, hashes),
+        StoreName::Inbox => routes::content(caps.secretary.inbox, hashes).map(kept),
+        StoreName::Lines => routes::lines_content(caps.secretary.conversations, hashes)
+            .map(|answer| Json(answer).into_response()),
+        StoreName::Topics => routes::content(caps.secretary.topics.memberships, hashes).map(kept),
+        StoreName::TopicAliases => routes::content(caps.secretary.topics.aliases, hashes).map(kept),
     }
-    .map(|answer| Immutable(Json(answer)))
 }
 
 /// `GET /api/waiting`: the Inbox badge's count, so a tab shows it without pulling the

@@ -1,9 +1,9 @@
-//! A store's pull by pieces (`routes::store_objects_since`, `routes::lines_since`): asked again
-//! and again from what the last piece left, while the store moves between the asks, each piece
-//! joined to what the caller holds holds everything it rests on (its parents and the genesis of
-//! its prodrome), forks and the merges after them included; the pieces together are what one
-//! answer of the whole would send; no piece carries a key an erasure anywhere in the store names;
-//! and every piece names every such key.
+//! A store's pull by pieces (`routes::store_objects_since`, `routes::lines_skeleton`): asked
+//! again and again from what the last piece left, while the store moves between the asks, each
+//! piece joined to what the caller holds holds everything it rests on (its parents and the
+//! genesis of its prodrome), forks and the merges after them included; the pieces together are
+//! what one answer of the whole would send; and no piece of the lines carries a key an erasure
+//! anywhere in the store names.
 
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -24,6 +24,7 @@ use suzatary_core::secretary::transcript;
 use suzatary_core::secretary::words::Words;
 use suzatary_core::store::Reads as _;
 use suzatary_core::store::{Doc as _, Prodrome as _};
+use suzatary_core::wire::Content;
 
 fn at(n: u32) -> Datetime {
     Datetime::new(2026, 9, 30, 9, n / 60, n % 60, 0).expect("an instant")
@@ -219,10 +220,9 @@ proptest! {
     #![proptest_config(ProptestConfig::with_cases(64))]
 
     /// Pieces asked one after another from what the last left, the store moving between them:
-    /// each holds nothing already held, fits the budget unless it is one object, holds with what
-    /// came before everything it rests on, carries no key an erasure in the store names, and
-    /// names every such key; the pull ends holding the store as it is then, and, where nothing
-    /// moved, the pieces are the whole answer, keys included.
+    /// each holds nothing already held, fits the budget unless it is one object, and holds with
+    /// what came before everything it rests on; the pull ends holding the store as it is then,
+    /// and, where nothing moved, the pieces are the whole answer.
     #[test]
     fn law_the_pieces_union_is_the_whole_and_each_is_ancestor_closed(
         script in prop::collection::vec(write(), 1..24),
@@ -241,22 +241,19 @@ proptest! {
         let mut held: BTreeSet<Hash> =
             first.iter().take(held_first).map(|(name, _)| name.clone()).collect();
         let mut since = since_of(&frontiers, &first, &held);
-        let whole = routes::lines_since(store.lines.conversations(), &since, books, now(), Cut::Whole).expect("the whole");
+        let whole = routes::store_objects_since(&store.lines.lines, &since, books, now(), Cut::Whole).expect("the whole");
         prop_assert_eq!(whole.rest, 0);
         let mut sent = BTreeSet::new();
-        let mut keys = BTreeMap::new();
         let mut moved = false;
         for asked in 0usize.. {
             prop_assert!(asked <= first.len() + moves.len() * 4 + 1, "the pull ends");
             let objects = store.lines.lines.objects().expect("reads");
             let by_name: BTreeMap<&Hash, &Envelope<LineEvent>> = objects.iter().map(|(n, o)| (n, o)).collect();
-            let erased: Vec<String> = transcript::erased(&objects).keys().map(|k| k.as_str().to_owned()).collect();
-            let piece = routes::lines_since(store.lines.conversations(), &since, books, now(), Cut::Bytes(budget)).expect("a piece");
+            let piece = routes::store_objects_since(&store.lines.lines, &since, books, now(), Cut::Bytes(budget)).expect("a piece");
             prop_assert_eq!(piece.objects.since, suzatary_core::wire::SinceRead::Known);
             let lacked = objects.len() - held.len();
             prop_assert_eq!(piece.objects.objects.is_empty(), lacked == 0);
             prop_assert_eq!(piece.rest, lacked - piece.objects.objects.len());
-            prop_assert_eq!(&piece.erased, &erased);
             let bytes: usize = piece.objects.objects.iter().map(|o| o.literal.len()).sum();
             prop_assert!(bytes <= budget || piece.objects.objects.len() == 1, "{} bytes over {}", bytes, budget);
             for object in &piece.objects.objects {
@@ -270,12 +267,8 @@ proptest! {
                     prop_assert!(held.contains(&on), "{} came before {} it rests on", object.hash, on.as_str());
                 }
             }
-            for name in piece.keys.keys() {
-                prop_assert!(!erased.contains(name), "the erased key {} was sent", name);
-            }
             prop_assert_eq!(piece.objects.frontier.count, held.len(), "the frontier is what the replica holds");
             since = Since::Frontier(Token::parse(&piece.objects.frontier.digest).expect("a digest"));
-            keys.extend(piece.keys);
             if piece.rest == 0 {
                 break;
             }
@@ -288,7 +281,6 @@ proptest! {
         if !moved {
             let all: BTreeSet<String> = whole.objects.objects.iter().map(|o| o.hash.clone()).collect();
             prop_assert_eq!(sent, all);
-            prop_assert_eq!(keys, whole.keys);
         }
     }
 }
@@ -322,35 +314,22 @@ fn a_fork_then_a_line_is_a_merge() {
     assert_eq!(merges, 1);
 }
 
-/// The literals of `hashes`, asked of `lines` by hash as a tab would ask: in ascending order, in
+/// The content of `hashes`, asked of the lines by hash as a tab would ask: in ascending order, in
 /// answers of at most `query::MOST_HASHES` names and `routes::MOST_CONTENT_BYTES` bytes by the
 /// sizes the skeleton gave, an object larger than that asked for alone.
 fn fetched(
-    lines: &dyn suzatary_core::store::Prodrome<LineEvent>,
+    lines: suzatary_core::secretary::conversations::Conversations<'_>,
     nodes: &BTreeMap<String, usize>,
-) -> BTreeMap<String, String> {
-    let mut asks: Vec<Vec<&str>> = vec![Vec::new()];
-    let mut bytes = 0usize;
-    for (hash, size) in nodes {
-        let last = asks.last().map_or(0, Vec::len);
-        if last == suzatary_core::query::MOST_HASHES
-            || (last > 0 && bytes + size > routes::MOST_CONTENT_BYTES)
-        {
-            asks.push(Vec::new());
-            bytes = 0;
-        }
-        bytes += size;
-        if let Some(ask) = asks.last_mut() {
-            ask.push(hash);
-        }
-    }
-    asks.into_iter()
-        .filter(|ask| !ask.is_empty())
+) -> BTreeMap<String, Content> {
+    routes::asks(nodes.iter().map(|(hash, size)| (hash.as_str(), *size)))
+        .into_iter()
         .flat_map(|ask| {
             let hashes = suzatary_core::query::Hashes::parse(Some(&ask.join(","))).expect("a set");
-            routes::content(lines, &hashes).expect("held").objects
+            routes::lines_content(lines, &hashes).expect("held").objects
         })
-        .map(|object| (object.hash, object.literal))
+        .map(|object| match &object {
+            Content::Literal { hash, .. } | Content::Husk { hash, .. } => (hash.clone(), object),
+        })
         .collect()
 }
 
@@ -358,11 +337,12 @@ proptest! {
     #![proptest_config(ProptestConfig::with_cases(48))]
 
     /// The skeleton's pieces, asked one after another from what the last left while the store
-    /// moves, and then each node's literal asked for by hash, rebuild what the objects' pull
+    /// moves, and then each node's content asked for by hash, rebuild what the objects' pull
     /// sends: each piece holds with what came before everything it rests on, as its parents say,
-    /// and each node's parents and size are its literal's; the heads, prodromes and epoch are the
-    /// pull's; the keys are the pull's, no erased key among them. Where nothing
-    /// moved, the objects come in the pull's own order, literal for literal.
+    /// and each node's parents are its literal's; the heads, prodromes and epoch are the pull's;
+    /// the keys are the whole skeleton's, no erased key among them. A literal is sent only where
+    /// a key sent opens a word of it, and a husk only where none does, each sized as the node
+    /// says. Where nothing moved, the objects come in the pull's own order.
     #[test]
     fn law_the_skeleton_and_the_content_by_hash_are_the_whole_pull(
         script in prop::collection::vec(write(), 1..24),
@@ -413,7 +393,8 @@ proptest! {
             asked += 1;
             prop_assert!(asked <= first.len() + moves.len() * 4 + 1, "the pull ends");
         };
-        let whole = routes::lines_since(store.lines.conversations(), &since, books, now(), Cut::Whole).expect("the whole");
+        let whole = routes::store_objects_since(&store.lines.lines, &since, books, now(), Cut::Whole).expect("the whole");
+        let whole_keys = routes::lines_skeleton(store.lines.conversations(), &since, books, now(), Cut::Whole).expect("the whole skeleton").keys;
         match &last.heads {
             suzatary_core::wire::Heads::These { heads } => prop_assert_eq!(heads, &whole.objects.heads),
             suzatary_core::wire::Heads::Held => prop_assert!(last.nodes.is_empty(), "the heads go unsaid only to a replica that lacks nothing"),
@@ -421,14 +402,30 @@ proptest! {
         prop_assert_eq!(&last.geneses, &whole.objects.geneses);
         prop_assert_eq!(last.epoch, whole.objects.epoch);
         let sizes: BTreeMap<String, usize> = nodes.iter().map(|node| (node.hash.clone(), node.size)).collect();
-        let literals = fetched(&store.lines.lines, &sizes);
+        let shipped = fetched(store.lines.conversations(), &sizes);
         let objects = store.lines.lines.objects().expect("reads");
         let by_name: BTreeMap<&Hash, &Envelope<LineEvent>> = objects.iter().map(|(n, o)| (n, o)).collect();
+        let live: BTreeSet<&str> = whole_keys.keys().map(String::as_str).collect();
+        let mut literals = BTreeMap::new();
         for node in &nodes {
             let name = Hash::new(node.hash.clone()).expect("a name");
-            let literal = &literals[&node.hash];
-            prop_assert_eq!(node.size, literal.len());
-            prop_assert_eq!(literal, &prodrome_core::event::canonical_envelope(by_name[&name]));
+            let print = prodrome_core::event::canonical_envelope(by_name[&name]);
+            let line = by_name[&name].event();
+            let opens = line.is_none_or(|line| line.keys().next().is_none() || line.keys().any(|key| live.contains(key.as_str())));
+            match &shipped[&node.hash] {
+                Content::Literal { literal, .. } => {
+                    prop_assert!(opens, "{}: words no key the pull sends opens left the box", node.hash);
+                    prop_assert_eq!(node.size, literal.len());
+                    prop_assert_eq!(literal, &print);
+                }
+                Content::Husk { husk, .. } => {
+                    prop_assert!(!opens, "{}: husked though a key the pull sends opens it", node.hash);
+                    // A node sized before an erasure the store moved by is sized as its literal.
+                    prop_assert!(node.size == husk.len() || (moved && node.size == print.len()));
+                    prop_assert_eq!(Some(husk.clone()), line.and_then(LineEvent::husk).map(|h| h.print()));
+                }
+            }
+            literals.insert(node.hash.clone(), print);
             let mut parents: Vec<String> = rests_on(by_name[&name]).iter().map(|h| h.as_str().to_owned()).collect();
             parents.sort();
             parents.dedup();
@@ -442,12 +439,12 @@ proptest! {
             let sent: BTreeSet<&str> = rebuilt.iter().map(|o| o.hash.as_str()).collect();
             let all: BTreeSet<&str> = whole.objects.objects.iter().map(|o| o.hash.as_str()).collect();
             prop_assert_eq!(sent, all);
-            for (name, key) in &whole.keys {
+            for (name, key) in &whole_keys {
                 prop_assert_eq!(keys.get(name), Some(key));
             }
         } else {
             prop_assert_eq!(&rebuilt, &whole.objects.objects);
-            prop_assert_eq!(&keys, &whole.keys);
+            prop_assert_eq!(&keys, &whole_keys);
         }
     }
 }
@@ -696,8 +693,300 @@ fn a_node_is_sized_by_the_bytes_its_content_answer_sends() {
         "and that ask would pass the bound"
     );
     assert_eq!(
-        fetched(&padded, &sizes).len(),
+        fetched(conversations, &sizes).len(),
         names.len(),
         "every ask by the skeleton's sizes is answered"
+    );
+}
+
+/// What a replica holds of the lines' content as a tab takes it: the skeleton pulled whole and
+/// landed, then each node's content, a literal held as a print and a husk taken in its place;
+/// and where the content was every literal, a purge of every dead key, as a tab that fetched a
+/// line's words before its key died husks them.
+fn replica_of(
+    store: &Writer,
+    content: impl Fn(&BTreeMap<String, usize>) -> BTreeMap<String, Content>,
+    purge: bool,
+) -> suzatary_core::secretary::held_replica::HeldReplica {
+    let (epochs, frontiers) = (
+        suzatary_core::epoch::Epochs::remembered(),
+        Frontiers::remembered(prodrome_core::store::frontier::KEPT),
+    );
+    let books = Books {
+        epochs: &epochs,
+        frontiers: &frontiers,
+    };
+    let skeleton = routes::lines_skeleton(
+        store.lines.conversations(),
+        &Since::Nothing,
+        books,
+        now(),
+        Cut::Whole,
+    )
+    .expect("the skeleton");
+    let sizes = skeleton
+        .nodes
+        .iter()
+        .map(|n| (n.hash.clone(), n.size))
+        .collect();
+    let given: BTreeMap<_, _> = skeleton
+        .keys
+        .iter()
+        .map(|(name, key)| {
+            (
+                suzatary_core::secretary::locked_text::KeyName::new(name.clone())
+                    .expect("a key name"),
+                key.clone(),
+            )
+        })
+        .collect();
+    let mut replica = suzatary_core::secretary::held_replica::HeldReplica::default();
+    replica
+        .piece(
+            skeleton,
+            suzatary_core::secretary::key_ring::KeyRing::of(&given),
+            1,
+        )
+        .expect("a piece");
+    let _ = replica.land();
+    let (mut prints, mut husks) = (Vec::new(), Vec::new());
+    for (hash, object) in content(&sizes) {
+        let name = Hash::new(hash).expect("a name");
+        match object {
+            Content::Literal { literal, .. } => prints.push((name, literal.into_bytes())),
+            Content::Husk { husk, .. } => husks.push((name, husk)),
+        }
+    }
+    replica.lines.hold(prints, &[]);
+    replica
+        .take_husks(husks)
+        .expect("every husk is its node's line, opened by no key held");
+    if purge {
+        let owed = replica.owed(&BTreeSet::new()).into_keys().collect();
+        let _ = replica.forget(owed);
+    }
+    replica
+}
+
+proptest! {
+    #![proptest_config(ProptestConfig::with_cases(48))]
+
+    /// A DEVICE HOLDING HUSKS READS WHAT ONE HOLDING EVERY LITERAL READS: a replica that took
+    /// the husks the box answered for lines no key it sends opens reads every conversation as a
+    /// replica that took every literal and purged the dead keys, and holds as husks the same
+    /// lines; so a superseded or erased slot's words need never leave the box.
+    #[test]
+    fn law_a_replica_of_husks_reads_as_one_of_every_literal(
+        script in prop::collection::vec(write(), 1..24),
+    ) {
+        let mut store = Writer::new();
+        for write in &script {
+            store.apply(write);
+        }
+        let mut husked = replica_of(&store, |sizes| fetched(store.lines.conversations(), sizes), false);
+        let mut whole = replica_of(
+            &store,
+            |sizes| {
+                let names: Vec<Hash> = sizes.keys().map(|h| Hash::new(h.clone()).expect("a name")).collect();
+                names
+                    .iter()
+                    .zip(store.lines.lines.literals(&names).expect("reads"))
+                    .map(|(name, literal)| {
+                        let (hash, literal) = (name.as_str().to_owned(), literal.expect("held"));
+                        (hash.clone(), Content::Literal { hash, literal })
+                    })
+                    .collect()
+            },
+            true,
+        );
+        let read = |replica: &mut suzatary_core::secretary::held_replica::HeldReplica| {
+            format!("{:?}", replica.lines.read().0.expect("reads"))
+        };
+        prop_assert_eq!(read(&mut husked), read(&mut whole));
+        prop_assert_eq!(husked.bare(), whole.bare());
+        let husks = |replica: &suzatary_core::secretary::held_replica::HeldReplica| {
+            replica.kept().husks.keys().cloned().collect::<BTreeSet<_>>()
+        };
+        prop_assert_eq!(husks(&husked), husks(&whole));
+    }
+}
+
+/// An erased line's words are not in what the box answers for it: its content is its husk.
+#[test]
+fn an_erased_line_is_answered_as_its_husk() {
+    let mut store = Writer::new();
+    store.apply(&Write::Said {
+        conversation: 0,
+        words: 400,
+    });
+    store.apply(&Write::Erased { conversation: 0 });
+    let husked = replica_of(
+        &store,
+        |sizes| fetched(store.lines.conversations(), sizes),
+        false,
+    );
+    assert!(
+        !husked.kept().husks.is_empty(),
+        "the erased line came as its husk"
+    );
+}
+
+/// The prune's dry run counts the lines no key opens, which the box answers as husks, and writes
+/// nothing.
+#[test]
+fn the_prune_census_counts_what_is_husked_and_writes_nothing() {
+    let mut store = Writer::new();
+    store.apply(&Write::Said {
+        conversation: 0,
+        words: 400,
+    });
+    store.apply(&Write::Said {
+        conversation: 1,
+        words: 400,
+    });
+    store.apply(&Write::Erased { conversation: 0 });
+    let before = store.lines.lines.objects().expect("reads");
+    let census =
+        suzatary_core::secretary::prune::census(store.lines.conversations(), 0).expect("a census");
+    let graph = store.lines.lines.graph().expect("reads");
+    let names: Vec<Hash> = before.iter().map(|(name, _)| name.clone()).collect();
+    let husked = routes::husks(store.lines.conversations(), &graph, &names).expect("husks");
+    assert_eq!(census.all.objects, before.len());
+    assert_eq!(census.dead.objects, husked.len());
+    assert!(
+        census.dead.objects > 0 && census.husks < census.dead.bytes,
+        "{census:?}"
+    );
+    assert_eq!(
+        store.lines.lines.objects().expect("reads"),
+        before,
+        "a dry run writes nothing"
+    );
+}
+
+/// A replica's pull, piece by piece from its frontier, landed.
+fn pulled_again(
+    store: &Writer,
+    mut replica: suzatary_core::secretary::held_replica::HeldReplica,
+    books: Books<'_>,
+) -> suzatary_core::secretary::held_replica::HeldReplica {
+    loop {
+        let since = match replica.rows().holding().replica().frontier().digest() {
+            Some(digest) => Since::Frontier(Token::parse(digest.as_str()).expect("a digest")),
+            None => Since::Nothing,
+        };
+        let piece = routes::lines_skeleton(
+            store.lines.conversations(),
+            &since,
+            books,
+            now(),
+            Cut::Whole,
+        )
+        .expect("a piece");
+        let given = piece
+            .keys
+            .iter()
+            .map(|(name, key)| {
+                (
+                    suzatary_core::secretary::locked_text::KeyName::new(name.clone())
+                        .expect("a key name"),
+                    key.clone(),
+                )
+            })
+            .collect();
+        let rest = piece.rest;
+        replica
+            .piece(
+                piece,
+                suzatary_core::secretary::key_ring::KeyRing::of(&given),
+                1,
+            )
+            .expect("a piece");
+        if rest == 0 {
+            let _ = replica.land();
+            return replica;
+        }
+    }
+}
+
+/// A replica that held a key the box then retired, and none of the lines it opened, takes the
+/// husks of those lines when its purge asks for them before it forgets the key: a husk is
+/// refused only where a live key held opens it. The purge then forgets the key, and the replica
+/// holds the keys the box sends and no other (the browser scene `rescrub`'s law).
+#[test]
+fn a_purge_takes_the_husks_of_the_lines_whose_keys_it_owes() {
+    use suzatary_core::secretary::held_replica::{HeldReplica, NotAnAnswer};
+    use suzatary_core::secretary::outlines::Scope;
+    let mut store = Writer::new();
+    store.apply(&Write::Said {
+        conversation: 0,
+        words: 300,
+    });
+    store.apply(&Write::Said {
+        conversation: 1,
+        words: 300,
+    });
+    let (epochs, frontiers) = (
+        suzatary_core::epoch::Epochs::remembered(),
+        Frontiers::remembered(prodrome_core::store::frontier::KEPT),
+    );
+    let books = Books {
+        epochs: &epochs,
+        frontiers: &frontiers,
+    };
+    let replica = HeldReplica::pulled(|_| -> Result<_, NotAnAnswer> {
+        Ok(routes::lines_skeleton(
+            store.lines.conversations(),
+            &Since::Nothing,
+            books,
+            now(),
+            Cut::Whole,
+        )
+        .expect("the skeleton"))
+    })
+    .expect("pulled");
+    let held_before = replica.rows().holding().keys().iter().count();
+    assert!(
+        held_before > 0,
+        "the replica holds the keys of the lines it read"
+    );
+    store.apply(&Write::Erased { conversation: 0 });
+    let mut replica = pulled_again(&store, replica, books);
+    let owed: BTreeSet<_> = replica.owed(&BTreeSet::new()).into_keys().collect();
+    assert!(!owed.is_empty(), "the erasure leaves keys owed");
+    let sizes = replica
+        .lacking(&Scope::Naming(owed.clone()))
+        .into_iter()
+        .map(|node| (node.hash, node.size))
+        .collect();
+    let content = fetched(store.lines.conversations(), &sizes);
+    assert!(
+        content.values().any(|c| matches!(c, Content::Husk { .. })),
+        "the purge asks for husks"
+    );
+    replica
+        .take(content.into_values().collect())
+        .expect("a husk of a line whose only keys are owed is taken");
+    let _ = replica.forget(owed);
+    let sent = routes::lines_skeleton(
+        store.lines.conversations(),
+        &Since::Nothing,
+        books,
+        now(),
+        Cut::Whole,
+    )
+    .expect("the skeleton")
+    .keys;
+    let held: BTreeSet<String> = replica
+        .rows()
+        .holding()
+        .keys()
+        .iter()
+        .map(|(name, _)| name.as_str().to_owned())
+        .collect();
+    assert_eq!(
+        held,
+        sent.keys().cloned().collect::<BTreeSet<_>>(),
+        "the replica holds the box's keys and no other"
     );
 }

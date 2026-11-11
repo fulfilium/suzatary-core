@@ -311,7 +311,7 @@ app.scene("the list draws and the badge is counted with no request for the lines
   // The popup reads the proposals from the inbox, which the boot may pull; the lines wait for a page that reads them.
   await app.resize(PHONE)
   // The lines' pulls, never their stream, which a capture would wait on forever.
-  const LINES = ["/api/stores/lines/skeleton", "/api/stores/lines/content", "/api/stores/lines/objects"]
+  const LINES = ["/api/stores/lines/skeleton", "/api/stores/lines/content"]
   const ofLines = (url: string): boolean => LINES.some(l => url.includes(l))
   // With no lines kept, so the pull this scene counts is a whole pull of the store: a row an earlier scene left
   // would make it a 304 with no body, whatever order the files run in.

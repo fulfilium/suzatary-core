@@ -140,6 +140,32 @@ impl Lines {
         step(&self.0.forget(gone))
     }
 
+    /// `[{hash, husk}]`: the husks the box answered in place of prints, each kept where it is the
+    /// line its node says and no key held opens a word of it.
+    pub fn take_husks(&mut self, given: &str) -> Result<Step, JsError> {
+        #[derive(serde::Deserialize)]
+        struct Given {
+            hash: String,
+            husk: String,
+        }
+        let given: Vec<Given> =
+            serde_json::from_str(given).map_err(|e| refused(format!("husks: {e}")))?;
+        let given = given
+            .into_iter()
+            .map(|g| {
+                Hash::new(g.hash.clone())
+                    .map(|name| (name, g.husk))
+                    .map_err(|_| refused(format!("husks: {} is no name", g.hash)))
+            })
+            .collect::<Result<_, _>>()?;
+        step(
+            &self
+                .0
+                .take_husks(given)
+                .map_err(|e| refused(e.to_string()))?,
+        )
+    }
+
     /// Whether a line the rows read is held with words each key of which is gone: one a purge
     /// husks, though no key is owed, as on a device that took a line after its keys were erased.
     #[must_use]

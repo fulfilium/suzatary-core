@@ -35,7 +35,7 @@ const box = JSON.parse(readFileSync("app/core/tests/web/replicas.json", "utf8"))
   stale: Record<string, string>
   erased: Record<string, string[]>
 }
-const inbox: Named[] = box.inbox.map(o => ({ hash: o.hash, literal: o.text }))
+const inbox: Named[] = box.inbox.map(o => ({ held: "literal" as const, hash: o.hash, literal: o.text }))
 const literals = new Map(box.conversations.map(o => [o.hash, o.text]))
 const erasure = box.conversations.find(o => o.text.includes("event=Erased("))!
 const conversation = /conversation='([^']+)'/.exec(erasure.text)![1]!
@@ -102,7 +102,7 @@ Object.assign(globalThis, {
     if (store !== undefined) return json(objectsOf(store === "inbox" ? inbox : [], url.searchParams.get("since") ?? ""))
     if (url.pathname === "/api/stores/lines/content") {
       const hashes = (url.searchParams.get("hashes") ?? "").split(",")
-      return json({ objects: hashes.flatMap(hash => (literals.has(hash) ? [{ hash, literal: literals.get(hash)! }] : [])) } satisfies ContentPayload)
+      return json({ objects: hashes.flatMap(hash => (literals.has(hash) ? [{ held: "literal" as const, hash, literal: literals.get(hash)! }] : [])) } satisfies ContentPayload)
     }
     return new Response("", { status: 404 })
   },

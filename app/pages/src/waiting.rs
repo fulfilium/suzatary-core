@@ -277,6 +277,9 @@ pub(crate) struct Readings {
     pub(crate) cards: BTreeMap<String, Reading<DrawnPayload>>,
     /// Every proposal a row named while the page stood, so a tapped card is read once settled.
     asked: BTreeMap<String, BTreeSet<usize>>,
+    /// Why the latest ask of a conversation's cards failed where an earlier answer stands: the
+    /// rows it holds keep their cards, and the rows it lacks say this.
+    refused: BTreeMap<String, String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, serde::Serialize, Deserialize, TS)]
@@ -304,7 +307,10 @@ impl Readings {
             Watched::Waiting => Local::Waiting,
             Watched::Cards(conversation) => Local::Cards {
                 conversation: conversation.clone(),
-                indices: self.asked[conversation].iter().copied().collect(),
+                indices: self
+                    .asked
+                    .get(conversation)
+                    .map_or_else(Vec::new, |asked| asked.iter().copied().collect()),
             },
         };
         Watch { ask, local }
@@ -326,6 +332,7 @@ impl Readings {
             waiting: Reading::Loading,
             cards: BTreeMap::new(),
             asked: BTreeMap::new(),
+            refused: BTreeMap::new(),
         };
         let watches = asks.into_iter().map(|w| readings.watch(w)).collect();
         (readings, watches)
@@ -342,7 +349,11 @@ impl Readings {
             Watched::Waiting => self.waiting = read(r),
             Watched::Cards(conversation) => match (read(r), self.cards.get(&conversation)) {
                 (Reading::Loading, Some(Reading::Val { .. })) => {}
+                (Reading::Error { e }, Some(Reading::Val { .. })) => {
+                    self.refused.insert(conversation, e);
+                }
                 (read, _) => {
+                    self.refused.remove(&conversation);
                     self.cards.insert(conversation, read);
                 }
             },
@@ -408,7 +419,8 @@ impl Readings {
                                 },
                                 row,
                             )
-                        }),
+                        })
+                        .or_else(|| self.refused.contains_key(&c).then_some(Row::Unresolved(w))),
                     Some((_, Reading::Error { .. })) => Some(Row::Unresolved(w)),
                     Some((_, Reading::Loading)) | None => None,
                 },
@@ -421,9 +433,9 @@ impl Readings {
         match w.at() {
             Where::Unresolved(problem) => problem,
             Where::Batch(chain, head) => format!("batch {head} on {chain} is not a card yet"),
-            Where::Proposal(c, index) => match self.cards.get(&c) {
-                Some(Reading::Error { e }) => e.clone(),
-                Some(Reading::Val { .. } | Reading::Loading) | None => {
+            Where::Proposal(c, index) => match (self.cards.get(&c), self.refused.get(&c)) {
+                (Some(Reading::Error { e }), _) | (Some(Reading::Val { .. }), Some(e)) => e.clone(),
+                (Some(Reading::Val { .. } | Reading::Loading) | None, _) => {
                     format!("proposal {index} of conversation {c} could not be found")
                 }
             },
