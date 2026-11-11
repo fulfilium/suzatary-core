@@ -29,14 +29,20 @@ const app = await suite("keyboard");
 const cursor = (): Promise<string | null> =>
   app.page.evaluate<string | null>(`document.activeElement?.getAttribute("data-key") ?? null`);
 
+/** The cursor arrives at `key`. The page focuses it when it has drawn the move, so a move is waited for, never read
+ * at once: a key the page never heard ends the wait, and a move drawn a frame late does not. */
+const arrives = (key: string): Promise<void> =>
+  app.page.waitFor(`document.activeElement?.getAttribute("data-key") === ${JSON.stringify(key)}`);
+
 app.scene("j and k move the cursor down and up the list, group heads and lines alike", async () => {
   await app.open(BASE);
   await app.page.press("j");
-  assert.equal(await cursor(), "c:work", "j from nowhere should take the first group's head");
+  // From nowhere, the first group's head.
+  await arrives("c:work");
   await app.page.press("j");
-  assert.equal(await cursor(), `c:work/t:${todos.urgent.id}`);
+  await arrives(`c:work/t:${todos.urgent.id}`);
   await app.page.press("k");
-  assert.equal(await cursor(), "c:work");
+  await arrives("c:work");
   await app.page.press("k");
   assert.equal(await cursor(), "c:work", "k at the top stays at the top rather than wrapping");
 });
