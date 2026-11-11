@@ -5,7 +5,7 @@ use std::fmt;
 
 use serde::{Deserialize, Serialize};
 
-use crate::refusal::Refusal;
+use suzatary_base::refusal::Refusal;
 
 /// One address, shaped by its constructor.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]

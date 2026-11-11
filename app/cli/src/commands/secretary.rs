@@ -4,9 +4,9 @@ use std::path::Path;
 use std::sync::Arc;
 
 use anyhow::Context as _;
-use suzatary_core::capability::{Manual, Manuals};
+use suzatary_base::capability::{Manual, Manuals};
+use suzatary_base::conversation_id::{ConversationId, DEFAULT};
 use suzatary_core::conversation::round::Ending;
-use suzatary_core::conversation_id::{ConversationId, DEFAULT};
 use suzatary_core::excerpt::Excerpt;
 use suzatary_core::held_value::Filled;
 use suzatary_core::mail::send::{Composed, Outgoing};
@@ -124,7 +124,7 @@ impl suzatary_io::secrets::Resolves for NoToken {
         &self,
         _name: &str,
         _reason: &str,
-    ) -> Result<Option<suzatary_core::capability::Secret>, suzatary_io::secrets::SecretError> {
+    ) -> Result<Option<suzatary_base::capability::Secret>, suzatary_io::secrets::SecretError> {
         Ok(None)
     }
 }
@@ -139,7 +139,7 @@ pub struct Publishing {
 impl Publishing {
     fn publish(
         &self,
-        id: &suzatary_core::conversation_id::ConversationId,
+        id: &suzatary_base::conversation_id::ConversationId,
         index: usize,
         proposer: &suzatary_core::secretary::proposer::Proposer,
         act: &suzatary_core::secretary::acts::Act,
@@ -339,7 +339,7 @@ impl Acting {
     }
 
     fn sign_in(&self, object: &suzatary_core::secretary::inbox::ProposalId) -> Performed {
-        use suzatary_core::capability::Clock as _;
+        use suzatary_base::capability::Clock as _;
         let now = suzatary_io::clock::SystemClock.now();
         match self {
             Acting::NotYet => Performed::Tried(Tried::NotSent {
@@ -356,8 +356,8 @@ impl Acting {
 
     fn read_document(
         &self,
-        id: &suzatary_core::conversation_id::ConversationId,
-        path: &suzatary_core::drive_path::DrivePath,
+        id: &suzatary_base::conversation_id::ConversationId,
+        path: &suzatary_base::drive_path::DrivePath,
         act: &suzatary_core::secretary::acts::Act,
     ) -> Performed {
         match self {
@@ -384,7 +384,7 @@ impl Acting {
 impl suzatary_core::secretary::routes::Perform for Acting {
     fn begin(
         &self,
-        id: &suzatary_core::conversation_id::ConversationId,
+        id: &suzatary_base::conversation_id::ConversationId,
         index: usize,
         object: &suzatary_core::secretary::inbox::ProposalId,
         proposer: &suzatary_core::secretary::proposer::Proposer,
@@ -506,7 +506,7 @@ fn begin_real(
         &Arc<crate::commands::serve::Workers>,
         &Arc<dyn Fn() + Send + Sync>,
     ),
-    (id, index): (&suzatary_core::conversation_id::ConversationId, usize),
+    (id, index): (&suzatary_base::conversation_id::ConversationId, usize),
     object: &suzatary_core::secretary::inbox::ProposalId,
     act: &suzatary_core::secretary::acts::Act,
     consent: suzatary_core::mail::oauth::Consent,
@@ -586,7 +586,7 @@ struct Flow<'a> {
     inbox: &'a ActingInbox,
     workers: &'a Arc<crate::commands::serve::Workers>,
     ended: &'a Arc<dyn Fn() + Send + Sync>,
-    at: (&'a suzatary_core::conversation_id::ConversationId, usize),
+    at: (&'a suzatary_base::conversation_id::ConversationId, usize),
     object: &'a suzatary_core::secretary::inbox::ProposalId,
 }
 
@@ -604,7 +604,7 @@ impl Flow<'_> {
         P: suzatary_core::mail::oauth::Protocol + Send + 'static,
         suzatary_io::oauth::Pending<P>: Send,
     {
-        use suzatary_core::capability::Clock as _;
+        use suzatary_base::capability::Clock as _;
         use suzatary_core::secretary::stamp::stamp;
         let Flow {
             conversations,
@@ -689,10 +689,10 @@ fn finish_act<P: suzatary_core::mail::oauth::Protocol + Send + 'static>(
     named: &str,
     conversations: &suzatary_io::conversations::ConversationStores,
     inbox: &ActingInbox,
-    id: &suzatary_core::conversation_id::ConversationId,
+    id: &suzatary_base::conversation_id::ConversationId,
     workers: &Arc<crate::commands::serve::Workers>,
 ) {
-    use suzatary_core::capability::Clock as _;
+    use suzatary_base::capability::Clock as _;
 
     let (sent, received) = std::sync::mpsc::channel();
     std::thread::spawn(move || {
@@ -710,11 +710,11 @@ fn finish_act<P: suzatary_core::mail::oauth::Protocol + Send + 'static>(
 
 fn web_turn(
     conversations: &suzatary_io::conversations::ConversationStores,
-    id: &suzatary_core::conversation_id::ConversationId,
+    id: &suzatary_base::conversation_id::ConversationId,
     request: &suzatary_core::web::WebRequest,
     answered: Result<suzatary_core::web::WebAnswer, suzatary_core::web::WebFailure>,
 ) -> Performed {
-    use suzatary_core::capability::Clock as _;
+    use suzatary_base::capability::Clock as _;
     use suzatary_core::secretary::model::Turn;
     use suzatary_core::secretary::outcome::Outcome;
     use suzatary_core::secretary::store::Entry;
@@ -761,7 +761,7 @@ fn web_turn(
 /// Keep a withheld document's record so a proposal can send it unread.
 fn keep_tapped(
     kept: &suzatary_io::blobs::Blobs,
-    path: &suzatary_core::drive_path::DrivePath,
+    path: &suzatary_base::drive_path::DrivePath,
     size: u64,
     digest: &suzatary_core::attachment::AttachmentId,
 ) {
@@ -792,13 +792,13 @@ fn keep_tapped(
 fn drive_turn(
     conversations: &suzatary_io::conversations::ConversationStores,
     kept: &suzatary_io::blobs::Blobs,
-    id: &suzatary_core::conversation_id::ConversationId,
-    path: &suzatary_core::drive_path::DrivePath,
-    read: Result<suzatary_core::file_read::FileRead, suzatary_core::drive_path::DriveFailure>,
+    id: &suzatary_base::conversation_id::ConversationId,
+    path: &suzatary_base::drive_path::DrivePath,
+    read: Result<suzatary_core::file_read::FileRead, suzatary_base::drive_path::DriveFailure>,
 ) -> Performed {
-    use suzatary_core::capability::Clock as _;
+    use suzatary_base::capability::Clock as _;
+    use suzatary_base::refusal::Refusal;
     use suzatary_core::file_read::FileRead;
-    use suzatary_core::refusal::Refusal;
     use suzatary_core::secretary::store::Entry;
     use suzatary_core::secretary::verb_answer::VerbAnswer;
 
@@ -858,8 +858,8 @@ fn drive_turn(
 /// Append an act line relaying outside words, unstamped so taint reads them as foreign.
 fn append_act_turn(
     conversations: &suzatary_io::conversations::ConversationStores,
-    (id, index): (&suzatary_core::conversation_id::ConversationId, usize),
-    at: suzatary_core::capability::Datetime,
+    (id, index): (&suzatary_base::conversation_id::ConversationId, usize),
+    at: suzatary_base::capability::Datetime,
     text: String,
 ) {
     use suzatary_core::secretary::model::Turn;
@@ -872,8 +872,8 @@ fn append_act_turn(
             at,
             turn: Turn::Act {
                 text,
-                references: vec![suzatary_core::reference::Reference::Proposal(
-                    suzatary_core::reference::ProposalRef {
+                references: vec![suzatary_base::reference::Reference::Proposal(
+                    suzatary_base::reference::ProposalRef {
                         conversation: id.clone(),
                         index,
                     },
@@ -889,8 +889,8 @@ fn append_act_turn(
 /// Append the box's own line, which taint reads clean.
 fn append_note(
     conversations: &suzatary_io::conversations::ConversationStores,
-    id: &suzatary_core::conversation_id::ConversationId,
-    at: suzatary_core::capability::Datetime,
+    id: &suzatary_base::conversation_id::ConversationId,
+    at: suzatary_base::capability::Datetime,
     text: String,
 ) {
     use suzatary_core::secretary::store::Entry;
@@ -907,9 +907,9 @@ fn append_note(
 /// Append the triage heartbeat's alarm, if any; no model is needed.
 fn maybe_append_triage_alarm(
     corpus: &dyn suzatary_core::mail::corpus::Corpus,
-    clock: &dyn suzatary_core::capability::Clock,
+    clock: &dyn suzatary_base::capability::Clock,
     conversations: &suzatary_io::conversations::ConversationStores,
-    id: &suzatary_core::conversation_id::ConversationId,
+    id: &suzatary_base::conversation_id::ConversationId,
 ) {
     let now = clock.now();
     let outcome = corpus.last_triage_outcome();
@@ -930,7 +930,7 @@ fn completion<E: std::fmt::Display>(
     named: &str,
     slot: &str,
     finished: Result<Result<(), E>, ()>,
-    at: suzatary_core::capability::Datetime,
+    at: suzatary_base::capability::Datetime,
 ) -> (Performed, suzatary_core::secretary::store::Entry) {
     use suzatary_core::secretary::model::Turn;
     use suzatary_core::secretary::store::Entry;
@@ -973,9 +973,9 @@ fn completion<E: std::fmt::Display>(
 fn append_completion(
     conversations: &suzatary_io::conversations::ConversationStores,
     inbox: &ActingInbox,
-    id: &suzatary_core::conversation_id::ConversationId,
+    id: &suzatary_base::conversation_id::ConversationId,
     object: &suzatary_core::secretary::inbox::ProposalId,
-    at: suzatary_core::capability::Datetime,
+    at: suzatary_base::capability::Datetime,
     performed: Performed,
     line: &suzatary_core::secretary::store::Entry,
 ) {
@@ -999,7 +999,7 @@ fn append_completion(
 fn begin_recording(
     conversations: &suzatary_io::conversations::ConversationStores,
     workers: &Arc<crate::commands::serve::Workers>,
-    (id, index): (&suzatary_core::conversation_id::ConversationId, usize),
+    (id, index): (&suzatary_base::conversation_id::ConversationId, usize),
     act: &suzatary_core::secretary::acts::Act,
 ) -> Performed {
     use suzatary_core::secretary::acts::Act;
@@ -1459,7 +1459,7 @@ pub fn backfill_plan(
     use anyhow::Context as _;
     use suzatary_core::secretary::topics::backfill;
     let refused =
-        |refusal: suzatary_core::refusal::Refusal| anyhow::anyhow!("{}", refusal.message());
+        |refusal: suzatary_base::refusal::Refusal| anyhow::anyhow!("{}", refusal.message());
     let conversations =
         suzatary_core::secretary::conversations::list(conversations(instance).conversations())
             .map_err(refused)?;
@@ -1528,7 +1528,7 @@ pub fn backfill_apply(
     use suzatary_core::secretary::topics::plan::Plan;
     use suzatary_core::store::Prodrome as _;
     let refused =
-        |refusal: suzatary_core::refusal::Refusal| anyhow::anyhow!("{}", refusal.message());
+        |refusal: suzatary_base::refusal::Refusal| anyhow::anyhow!("{}", refusal.message());
     let text = std::fs::read_to_string(file)
         .with_context(|| format!("reading the plan {}", file.display()))?;
     let plan =
@@ -1542,7 +1542,7 @@ pub fn backfill_apply(
     let events = plan.apply(
         &conversations,
         &topics.stores().reading()?,
-        suzatary_core::capability::Clock::now(&suzatary_io::clock::SystemClock),
+        suzatary_base::capability::Clock::now(&suzatary_io::clock::SystemClock),
     )?;
     let count = events.len();
     for event in events {
@@ -1562,7 +1562,7 @@ pub fn carry(
     use suzatary_core::secretary::topics::carry::{self, Carrying, Map};
     use suzatary_core::store::Prodrome as _;
     let refused =
-        |refusal: suzatary_core::refusal::Refusal| anyhow::anyhow!("{}", refusal.message());
+        |refusal: suzatary_base::refusal::Refusal| anyhow::anyhow!("{}", refusal.message());
     let conversations =
         suzatary_core::secretary::conversations::list(conversations(instance).conversations())
             .map_err(refused)?;
@@ -1605,7 +1605,7 @@ pub fn carry(
         &conversations,
         &map,
         &topics.stores().reading()?,
-        suzatary_core::capability::Clock::now(&suzatary_io::clock::SystemClock),
+        suzatary_base::capability::Clock::now(&suzatary_io::clock::SystemClock),
     );
     for carrying in &planned.conversations {
         match carrying {
@@ -1729,7 +1729,7 @@ pub fn migrate_scrub(
     }
     let done = rescrub::run(
         stores.conversations(),
-        suzatary_core::capability::Clock::now(&suzatary_io::clock::SystemClock),
+        suzatary_base::capability::Clock::now(&suzatary_io::clock::SystemClock),
     )?;
     writeln!(
         out,
@@ -1774,7 +1774,7 @@ pub fn dismiss(
         opened.memories(),
         &suzatary_io::clock::SystemClock,
         &who,
-        &suzatary_core::reference::ProposalRef {
+        &suzatary_base::reference::ProposalRef {
             conversation: id.clone(),
             index,
         },
@@ -2312,7 +2312,7 @@ fn sweep_dry_run(instance: &Instance, first: Option<&str>, json: bool) -> anyhow
 
 /// A sweep's refusal, printed and returned, so the exit status says the day went unswept.
 pub fn swept_or_failed<T>(
-    outcome: Result<T, suzatary_core::refusal::Refusal>,
+    outcome: Result<T, suzatary_base::refusal::Refusal>,
     json: bool,
 ) -> anyhow::Result<T> {
     outcome.map_err(|refusal| {
@@ -2395,7 +2395,7 @@ fn sweep(instance: &Instance, first: Option<&str>, json: bool) -> anyhow::Result
 fn reviews(instance: &Instance, since: Option<&str>) -> anyhow::Result<()> {
     let day = match since {
         None => instance.persona.zone.day(prodrome_core::fpl::instant_of(
-            suzatary_core::capability::Clock::now(&suzatary_io::clock::SystemClock),
+            suzatary_base::capability::Clock::now(&suzatary_io::clock::SystemClock),
         )),
         Some(text) => chrono::NaiveDate::parse_from_str(text, "%Y-%m-%d")
             .map_err(|failed| anyhow::anyhow!("--since must be YYYY-MM-DD: {failed}"))?,
@@ -2415,7 +2415,7 @@ fn reviews(instance: &Instance, since: Option<&str>) -> anyhow::Result<()> {
         println!("secretary: no batches were reviewed on or after {day}");
         return Ok(());
     }
-    let mut lines: Vec<(suzatary_core::capability::Datetime, String)> = found
+    let mut lines: Vec<(suzatary_base::capability::Datetime, String)> = found
         .into_iter()
         .map(|(conversation, review)| {
             (
@@ -2567,7 +2567,7 @@ fn transcript(
     }
 }
 
-fn pointing(references: &[suzatary_core::reference::Reference]) -> String {
+fn pointing(references: &[suzatary_base::reference::Reference]) -> String {
     if references.is_empty() {
         String::new()
     } else {
@@ -2575,7 +2575,7 @@ fn pointing(references: &[suzatary_core::reference::Reference]) -> String {
     }
 }
 
-fn pointed(references: &[suzatary_core::reference::Reference]) -> String {
+fn pointed(references: &[suzatary_base::reference::Reference]) -> String {
     references
         .iter()
         .map(ToString::to_string)
@@ -2585,7 +2585,7 @@ fn pointed(references: &[suzatary_core::reference::Reference]) -> String {
 
 #[cfg(test)]
 mod sign_in_completion {
-    use suzatary_core::conversation_id::DEFAULT;
+    use suzatary_base::conversation_id::DEFAULT;
     use suzatary_core::secretary::inbox::ProposalId;
     use suzatary_core::secretary::model::{ToolCall, Turn};
     use suzatary_core::secretary::store::{Entry, Stored};
@@ -2601,8 +2601,8 @@ mod sign_in_completion {
         let conversations = suzatary_io::conversations::ConversationStores::open(
             dir.path().join("lines"),
             dir.path().join("lines-keys"),
-            std::sync::Arc::new(suzatary_core::capability::Nothing),
-            std::sync::Arc::new(suzatary_core::capability::Nothing),
+            std::sync::Arc::new(suzatary_base::capability::Nothing),
+            std::sync::Arc::new(suzatary_base::capability::Nothing),
         );
         let inbox: super::ActingInbox = Box::leak(Box::new(InMemory::default()));
         let at =

@@ -8,14 +8,14 @@ use std::path::{Path, PathBuf};
 
 use anyhow::bail;
 use prodrome_core::event::Actor;
-use suzatary_core::capability::Login;
-use suzatary_core::chains::ChainName;
+use suzatary_base::capability::Login;
+use suzatary_base::chains::ChainName;
+use suzatary_base::persona::Persona;
+use suzatary_base::writer::Writer;
 use suzatary_core::connect::{AccountKind, Connection, Params, Reach};
 use suzatary_core::health::Refused;
 use suzatary_core::mail::account::{Authority, MailAccount, Roster};
 use suzatary_core::mail::address::EmailAddress;
-use suzatary_core::persona::Persona;
-use suzatary_core::writer::Writer;
 
 use crate::instance::{Chain, File, Mail, Secretary, Serving, Web};
 
@@ -108,7 +108,7 @@ pub struct Person {
     /// The city `suzatary weather` forecasts; empty for none.
     pub city: String,
     /// Their time zone, by name.
-    pub zone: suzatary_core::zone::Zone,
+    pub zone: suzatary_base::zone::Zone,
 }
 
 /// A first account: an address and who serves it.
@@ -282,7 +282,7 @@ impl Onboarding {
                 name: self.person.name.clone(),
                 city: self.person.city.clone(),
                 zone: self.person.zone,
-                prose: suzatary_core::persona::Prose::default(),
+                prose: suzatary_base::persona::Prose::default(),
             },
             notify: None,
             coding: None,

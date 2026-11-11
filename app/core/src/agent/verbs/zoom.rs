@@ -5,8 +5,8 @@ use serde::Deserialize;
 use serde_json::Value;
 
 use crate::agent::Holds;
-use crate::refusal::Refusal;
 use crate::verb::Verb;
+use suzatary_base::refusal::Refusal;
 
 /// What lies beneath a part of the record, as the surface's model may read it.
 pub struct Zoom<S>(PhantomData<S>);

@@ -9,7 +9,7 @@ use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
-use suzatary_core::capability::Secret;
+use suzatary_base::capability::Secret;
 use suzatary_core::conformance::puller::{Rig, check};
 use suzatary_core::mail::account::{Authority, MailAccount, MsImap, Sync};
 use suzatary_core::mail::account_email::AccountEmail;

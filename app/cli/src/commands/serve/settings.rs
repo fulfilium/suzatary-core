@@ -7,9 +7,9 @@ use suzatary_io::present::Present as _;
 
 use axum::Json;
 use prodrome_core::store::Replica as _;
+use suzatary_base::refusal::Refusal;
 use suzatary_core::calendar::Occurrence;
 use suzatary_core::health::plugin::PluginName;
-use suzatary_core::refusal::Refusal;
 use suzatary_core::routes;
 use suzatary_core::settings::overview::{
     Asked, Asking, Build, Declared, Registers, Storage, Store,
@@ -101,7 +101,7 @@ fn drawn(call: &Call<Reader, (), ()>) -> Result<Json<wire::Overview>, Refusal> {
     })))
 }
 
-fn build(state: &State, now: suzatary_core::capability::Datetime) -> Result<Build, Refusal> {
+fn build(state: &State, now: suzatary_base::capability::Datetime) -> Result<Build, Refusal> {
     let about = || {
         state
             .stamp

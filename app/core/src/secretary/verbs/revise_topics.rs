@@ -5,11 +5,11 @@ use serde::Deserialize;
 use serde_json::Value;
 
 use super::add_topics::{Aim, On, parsed, revise};
-use crate::refusal::Refusal;
 use crate::secretary::topics::revision::Revision;
 use crate::secretary::topics::topic::Topic;
 use crate::secretary::{Call, SecretarySurface};
 use crate::verb::Verb;
+use suzatary_base::refusal::Refusal;
 
 /// Drop or rename topics the secretary suggested, on any round or note.
 pub struct ReviseTopics;

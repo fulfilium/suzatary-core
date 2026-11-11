@@ -18,7 +18,7 @@ const URL: &str = "https://claude.ai/code/cse_01fake";
 /// What the fake session writes in its report, in the `session_` spelling the live one writes.
 const WRITTEN: &str = "https://claude.ai/code/session_01fake";
 
-fn owner() -> suzatary_core::capability::Login {
+fn owner() -> suzatary_base::capability::Login {
     common::login("ada@example.com")
 }
 
@@ -40,9 +40,9 @@ impl suzatary_io::secrets::Resolves for Holding {
         &self,
         name: &str,
         _reason: &str,
-    ) -> Result<Option<suzatary_core::capability::Secret>, suzatary_io::secrets::SecretError> {
+    ) -> Result<Option<suzatary_base::capability::Secret>, suzatary_io::secrets::SecretError> {
         Ok((name == suzatary_core::connect::ROUTINE_TOKEN)
-            .then(|| suzatary_core::capability::Secret::new(TOKEN)))
+            .then(|| suzatary_base::capability::Secret::new(TOKEN)))
     }
 }
 
@@ -283,7 +283,7 @@ fn an_operators_tap_starts_a_session() {
     let proposal = &conversation(base, id.as_str())["proposals"][0];
     assert_eq!(proposal["act"]["kind"], "coding_session", "{proposal}");
 
-    let card = suzatary_core::reference::ProposalRef {
+    let card = suzatary_base::reference::ProposalRef {
         conversation: id,
         index: 0,
     };
@@ -346,7 +346,7 @@ fn a_session_is_reported_then_merged() {
 
     let root = common::scratch("coding-life-repos");
     let mirrors = common::local_repos(&root);
-    let repo: suzatary_core::repo_ids::RepoName = "bmabsout/cv".parse().expect("a name");
+    let repo: suzatary_base::repo_ids::RepoName = "bmabsout/cv".parse().expect("a name");
     let poll = |mirrors: &suzatary_io::repos::Mirrors| {
         suzatary_cli::commands::coding::poll(&fakes.conversations, mirrors, &repo).expect("polls")
     };
@@ -424,7 +424,7 @@ fn a_poll_that_fails_leaves_the_server_answering() {
     let conversations: &'static _ = Box::leak(Box::new(fakes.conversations.reopened()));
     let workers = suzatary_cli::commands::serve::Workers::new();
     let tick = |mirrors: suzatary_io::repos::Mirrors, repo: &str| {
-        let repo: suzatary_core::repo_ids::RepoName = repo.parse().expect("a name");
+        let repo: suzatary_base::repo_ids::RepoName = repo.parse().expect("a name");
         runtime.block_on(suzatary_cli::commands::coding::poll_once(
             conversations,
             &Arc::new(mirrors),
@@ -541,7 +541,7 @@ fn a_new_conversations_session_is_reported_by_one_branch_among_many() {
     }
 
     let mirrors = common::local_mirrors(&root);
-    let repo: suzatary_core::repo_ids::RepoName = "bmabsout/cv".parse().expect("a name");
+    let repo: suzatary_base::repo_ids::RepoName = "bmabsout/cv".parse().expect("a name");
     let explained = suzatary_cli::commands::coding::explain(&fakes.conversations, &mirrors, &repo)
         .expect("explains");
     let said = explained.join("\n");
@@ -603,8 +603,8 @@ fn a_fired_session_is_dropped_with_a_reason() {
 fn building() -> suzatary_core::deployment::Deployment {
     let plan = suzatary_core::release::Plan::declared().expect("the plan reads");
     suzatary_core::deployment::Deployment {
-        chains: suzatary_core::chains::Chains::of(vec![suzatary_core::chains::ChainPolicy {
-            name: suzatary_core::chains::ChainName::new(plan.chain()).expect("a chain"),
+        chains: suzatary_base::chains::Chains::of(vec![suzatary_base::chains::ChainPolicy {
+            name: suzatary_base::chains::ChainName::new(plan.chain()).expect("a chain"),
             ..common::chain()
         }])
         .expect("one chain"),
@@ -786,7 +786,7 @@ fn a_refused_session_starts_again_in_a_fresh_conversation() {
     // The old topic's title job reads the script too, so it runs before the tap.
     eventually(|| conversation(base, old.as_str())["title"] != "");
 
-    let card = |conversation| suzatary_core::reference::ProposalRef {
+    let card = |conversation| suzatary_base::reference::ProposalRef {
         conversation,
         index: 0,
     };

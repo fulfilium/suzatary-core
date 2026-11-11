@@ -398,7 +398,8 @@ mod tests {
             serde_json::json!("the owner's sister lives in London"),
         );
         let line = rendered(&Entry::Said {
-            at: crate::capability::Datetime::new(2026, 10, 6, 9, 0, 0, 0).expect("an instant"),
+            at: suzatary_base::capability::Datetime::new(2026, 10, 6, 9, 0, 0, 0)
+                .expect("an instant"),
             turn: Turn::Model {
                 text: "Noting it.".to_owned(),
                 calls: vec![ToolCall {

@@ -2,10 +2,6 @@
 //! conversation. Every proposer files through the one function here, so every proposal is tapped
 //! by the same route.
 
-use crate::capability::Datetime;
-use crate::conversation_id::ConversationId;
-use crate::reference::ProposalRef;
-use crate::refusal::Refusal;
 use crate::secretary::acts::Act;
 use crate::secretary::changes::Changeset;
 use crate::secretary::conversations;
@@ -17,6 +13,10 @@ use crate::secretary::proposer::Proposer;
 use crate::secretary::store::{Entry, Kind};
 use crate::secretary::transcript;
 use crate::store::{Prodrome, StoreError};
+use suzatary_base::capability::Datetime;
+use suzatary_base::conversation_id::ConversationId;
+use suzatary_base::reference::ProposalRef;
+use suzatary_base::refusal::Refusal;
 
 /// Where a proposal is drawn: its card's index in the conversation it was filed in.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -50,7 +50,7 @@ pub struct Filing<'a> {
     /// Why, and on what.
     pub reasons: Reasons,
     /// The todo it serves.
-    pub serves: Option<crate::reference::TodoRef>,
+    pub serves: Option<suzatary_base::reference::TodoRef>,
     /// The card it replaces, recorded on the line.
     pub revises: Option<usize>,
 }
@@ -254,7 +254,7 @@ impl<'a> TriageCards<'a> {
         at: Datetime,
         changeset: Changeset,
         reasons: Reasons,
-        serves: Option<crate::reference::TodoRef>,
+        serves: Option<suzatary_base::reference::TodoRef>,
         check: &dyn Fn(&Changeset) -> Result<(), Refusal>,
     ) -> Result<Carded, Refusal> {
         let conversation = triage_conversation();
@@ -481,7 +481,7 @@ mod tests {
 
     /// A coding session serving `todo`, filed in `conversation` by `proposer`.
     fn session<'a>(conversation: &'a ConversationId, proposer: Proposer, todo: &str) -> Filing<'a> {
-        let serves: crate::reference::TodoRef = format!("todo:suzatary/{todo}")
+        let serves: suzatary_base::reference::TodoRef = format!("todo:suzatary/{todo}")
             .parse()
             .expect("a todo reference");
         Filing {
@@ -492,7 +492,7 @@ mod tests {
             }),
             reasons: Reasons::new(
                 "asked",
-                vec![crate::reference::Reference::Todo(serves.clone())],
+                vec![suzatary_base::reference::Reference::Todo(serves.clone())],
             )
             .expect("reasons"),
             serves: Some(serves),

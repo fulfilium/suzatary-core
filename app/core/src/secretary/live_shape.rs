@@ -8,8 +8,6 @@ use std::collections::BTreeSet;
 use prodrome_core::event::Actor;
 use prodrome_core::literal::Datetime;
 
-use crate::capability::Entropy as _;
-use crate::conversation_id::ConversationId;
 use crate::model_name::ModelName;
 use crate::secretary::compact_ask::Beside;
 use crate::secretary::compacting::Compacting;
@@ -27,6 +25,8 @@ use crate::secretary::salted_text::{Text, TextName};
 use crate::secretary::store::{Entry, Kind};
 use crate::secretary::words::Words;
 use crate::store::{Doc as _, InMemory, InMemoryDoc, Prodrome as _};
+use suzatary_base::capability::Entropy as _;
+use suzatary_base::conversation_id::ConversationId;
 
 /// How large a memory to build.
 #[derive(Debug, Clone, Copy)]
@@ -220,8 +220,8 @@ impl Shape {
 /// A manual of one line.
 struct Library;
 
-impl crate::capability::Manuals for Library {
-    fn document(&self, _: crate::capability::Manual) -> Option<String> {
+impl suzatary_base::capability::Manuals for Library {
+    fn document(&self, _: suzatary_base::capability::Manual) -> Option<String> {
         Some("The operator's manual.".to_owned())
     }
 }
@@ -233,7 +233,7 @@ impl crate::capability::Manuals for Library {
 /// Never: the deployment's names are constants.
 #[must_use]
 pub fn context(memory: &Recollection<'_>) -> serde_json::Value {
-    use crate::chains::{ChainName, ChainPolicy, Chains};
+    use suzatary_base::chains::{ChainName, ChainPolicy, Chains};
     let deployment = crate::deployment::Deployment {
         viewers: BTreeSet::new(),
         actors: std::collections::BTreeMap::new(),
@@ -247,7 +247,7 @@ pub fn context(memory: &Recollection<'_>) -> serde_json::Value {
         categories: std::collections::BTreeMap::new(),
         app_url: "https://example.invalid".to_owned(),
         coding: None,
-        zone: crate::zone::Zone::UTC,
+        zone: suzatary_base::zone::Zone::UTC,
     };
     crate::agent::context(
         &Library,

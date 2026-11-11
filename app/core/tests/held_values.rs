@@ -5,8 +5,9 @@
 use prodrome_core::event::Actor;
 use prodrome_core::policy::Untrusted;
 use serde_json::{Map, Value, json};
-use suzatary_core::capability::Nothing;
-use suzatary_core::chains::{ChainName, ChainPolicy, Chains};
+use suzatary_base::capability::Nothing;
+use suzatary_base::chains::{ChainName, ChainPolicy, Chains};
+use suzatary_core::agent::Agent;
 use suzatary_core::deployment::Deployment;
 use suzatary_core::mail::corpus::{Corpus, CorpusError};
 use suzatary_core::mail::junk::{ChurnList, JunkHeader, JunkMessage, Uid};
@@ -15,7 +16,7 @@ use suzatary_core::mail::mailbox::Query;
 use suzatary_core::mail::state::Decision;
 use suzatary_core::mail::sync_report::SyncReport;
 use suzatary_core::mail::verbs::{Marked, Message, Show, Summary};
-use suzatary_core::secretary::Bound;
+use suzatary_core::secretary::{Bound, Secretary};
 
 /// Synthetic numbers no person holds: SSN area 000, ITIN area 912.
 const SSN: &str = "000-12-3456";
@@ -112,7 +113,7 @@ fn deployment() -> Deployment {
         categories: [("home".to_owned(), 1)].into_iter().collect(),
         app_url: "https://example.test".to_owned(),
         coding: None,
-        zone: suzatary_core::zone::Zone::UTC,
+        zone: suzatary_base::zone::Zone::UTC,
     }
 }
 
@@ -126,7 +127,7 @@ fn args(value: Value) -> Map<String, Value> {
 fn agent(verb: &str, call: Value) -> String {
     let caps = suzatary_core::agent::Agent {
         corpus: &Raw,
-        ..Nothing::agent()
+        ..Agent::nothing()
     };
     let records = [("life".to_owned(), caps)].into_iter().collect();
     let conversations = suzatary_core::secretary::conversations::InMemory::default();
@@ -145,7 +146,7 @@ fn secretary(verb: &str, call: Value) -> String {
         caps: suzatary_core::secretary::Secretary {
             corpus: &Raw,
             junk: &Raw,
-            ..Nothing::secretary()
+            ..Secretary::nothing()
         },
         policy: &policy,
     }];
@@ -153,7 +154,7 @@ fn secretary(verb: &str, call: Value) -> String {
         &deployment(),
         &suzatary_core::settings::Settables::default(),
         &chains,
-        &suzatary_core::conversation_id::DEFAULT.clone(),
+        &suzatary_base::conversation_id::DEFAULT.clone(),
         verb,
         &args(call),
     )

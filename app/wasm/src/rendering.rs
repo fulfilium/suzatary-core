@@ -1,6 +1,6 @@
 //! The keys the box keeps rendered blocks under, named by the same core the box runs.
 
-use suzatary_core::answer::Renderable;
+use suzatary_base::answer::Renderable;
 use suzatary_core::rendering::ANSWER;
 use wasm_bindgen::prelude::*;
 

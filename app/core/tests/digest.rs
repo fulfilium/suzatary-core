@@ -11,8 +11,8 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use prodrome_core::event::{Actor, Hash, canonical_envelope};
 use prodrome_core::literal::Datetime;
 use proptest::prelude::*;
-use suzatary_core::capability::Entropy;
-use suzatary_core::conversation_id::ConversationId;
+use suzatary_base::capability::Entropy;
+use suzatary_base::conversation_id::ConversationId;
 use suzatary_core::model_name::ModelName;
 use suzatary_core::secretary::digest::Digest;
 use suzatary_core::secretary::digest_event::{self, DigestEvent};
@@ -285,7 +285,7 @@ impl Box {
 /// A clock stopped at one instant.
 struct At(Datetime);
 
-impl suzatary_core::capability::Clock for At {
+impl suzatary_base::capability::Clock for At {
     fn now(&self) -> Datetime {
         self.0
     }
@@ -871,7 +871,7 @@ fn summarised_or_not(
 /// A compactor that keeps every question it is asked, around the fake every test uses, or one
 /// that answers `long` bytes every time.
 struct Recording {
-    joining: suzatary_core::capability::Joining,
+    joining: suzatary_core::joining::Joining,
     long: Option<usize>,
     fails: bool,
     asked: std::sync::Mutex<Vec<suzatary_core::secretary::compact_ask::Ask>>,
@@ -880,7 +880,7 @@ struct Recording {
 impl Recording {
     fn joining() -> Self {
         Self {
-            joining: suzatary_core::capability::Joining::default(),
+            joining: suzatary_core::joining::Joining::default(),
             long: None,
             fails: false,
             asked: std::sync::Mutex::default(),
@@ -1274,7 +1274,7 @@ fn a_node_one_model_finds_unfit_is_owed_to_the_next() {
 /// A clock that moves a minute every time it is read.
 struct Ticking(std::sync::atomic::AtomicUsize);
 
-impl suzatary_core::capability::Clock for Ticking {
+impl suzatary_base::capability::Clock for Ticking {
     fn now(&self) -> Datetime {
         at(self.0.fetch_add(1, Ordering::Relaxed))
     }
@@ -1327,8 +1327,8 @@ enum Stepped {
 fn step(
     paced: &suzatary_core::secretary::compaction::Paced<'_>,
     memories: &Memories<'_>,
-    clock: &dyn suzatary_core::capability::Clock,
-) -> Result<Stepped, suzatary_core::refusal::Refusal> {
+    clock: &dyn suzatary_base::capability::Clock,
+) -> Result<Stepped, suzatary_base::refusal::Refusal> {
     use suzatary_core::secretary::compaction::{Performed, Round};
     let claims = match paced.take(memories, 1, clock)? {
         Round::Taken(claims) => claims,
@@ -2090,9 +2090,9 @@ fn an_acts_note_keeps_a_todo_id_out_of_the_record() {
             at: at(1),
             actor: "ada".to_owned(),
             verb: "completed",
-            reference: suzatary_core::reference::Reference::Todo(
-                suzatary_core::reference::TodoRef {
-                    chain: suzatary_core::chains::ChainName::new("life").expect("a slug"),
+            reference: suzatary_base::reference::Reference::Todo(
+                suzatary_base::reference::TodoRef {
+                    chain: suzatary_base::chains::ChainName::new("life").expect("a slug"),
                     id: prodrome_core::event::TodoId::new("rememberforwardeverymailtoeve")
                         .expect("a todo id"),
                 },
@@ -2185,7 +2185,7 @@ mod recompacting {
     use std::collections::BTreeMap;
 
     use prodrome_core::digest::Tree;
-    use suzatary_core::rule_version::{Under, Versioned};
+    use suzatary_base::rule_version::{Under, Versioned};
     use suzatary_core::secretary::compact_ask::{Asking, Beside};
     use suzatary_core::secretary::compaction::{Compacted, Compaction, Reading, perform};
     use suzatary_core::secretary::digest::{Standing, Written};

@@ -13,7 +13,7 @@ use std::net::IpAddr;
 use common::Fakes;
 
 /// The login `v4` resolves to in every server here, since the cache remembers the first answer.
-fn peer() -> suzatary_core::capability::Login {
+fn peer() -> suzatary_base::capability::Login {
     common::login("peer@example.ts.net")
 }
 

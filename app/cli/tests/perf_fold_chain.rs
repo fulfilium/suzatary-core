@@ -21,7 +21,7 @@ use prodrome_core::event::Actor;
 use prodrome_core::policy::Untrusted;
 use prodrome_core::{fpl, view as folds};
 use sha2::{Digest, Sha256};
-use suzatary_core::capability::Datetime;
+use suzatary_base::capability::Datetime;
 use suzatary_core::record::EventStore;
 use suzatary_core::routes;
 use suzatary_core::secretary::Secretary;
@@ -131,8 +131,8 @@ fn fold_breakdown() {
         return;
     };
     let untrusted: Untrusted = Untrusted::of([Actor::new("triage").expect("valid")]);
-    let policy = suzatary_core::chains::ChainPolicy {
-        name: suzatary_core::chains::ChainName::new("life").expect("a slug"),
+    let policy = suzatary_base::chains::ChainPolicy {
+        name: suzatary_base::chains::ChainName::new("life").expect("a slug"),
         untrusted: untrusted.clone(),
         roster: std::collections::BTreeSet::new(),
         root: suzatary_core::cast::keys::root(),

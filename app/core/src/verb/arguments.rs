@@ -7,7 +7,7 @@ use schemars::JsonSchema;
 use serde::de::{self, DeserializeOwned, DeserializeSeed, IntoDeserializer, MapAccess, Visitor};
 use serde_json::{Map, Value};
 
-use crate::refusal::Refusal;
+use suzatary_base::refusal::Refusal;
 
 /// A call's arguments, as the model sent them.
 struct Arguments<'a> {

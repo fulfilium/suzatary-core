@@ -5,7 +5,7 @@
 use std::path::Path;
 
 use anyhow::Context;
-use suzatary_core::reference::ProposalRef;
+use suzatary_base::reference::ProposalRef;
 use suzatary_core::secretary::routes::TapAnswer;
 
 use super::call::Operator;
@@ -39,7 +39,7 @@ pub fn run(path: &Path, args: &Args) -> anyhow::Result<()> {
             let mut value = String::new();
             std::io::Read::read_to_string(&mut std::io::stdin(), &mut value)
                 .context("reading the value")?;
-            TapAnswer::Value(suzatary_core::capability::Secret::new(
+            TapAnswer::Value(suzatary_base::capability::Secret::new(
                 value.trim_end_matches(['\r', '\n']),
             ))
         }

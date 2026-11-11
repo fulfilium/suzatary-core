@@ -1,9 +1,9 @@
 //! Proposals: the inbox of everything proposed, and the owner's answers to one proposal.
 
 use axum::Json;
-use suzatary_core::conversation_id::ConversationId;
-use suzatary_core::reference::ProposalRef;
-use suzatary_core::refusal::Refusal;
+use suzatary_base::conversation_id::ConversationId;
+use suzatary_base::reference::ProposalRef;
+use suzatary_base::refusal::Refusal;
 use suzatary_core::secretary::routes::{self as secretary_routes, Effectors, TapAnswer};
 use suzatary_core::settings::EditError;
 use suzatary_core::signatures::Tap;
@@ -75,7 +75,7 @@ impl Params for Drawn {
 impl Body for Answer {
     const CAP: usize = MAX_ACT_BYTES;
 
-    /// The value is read once into a [`suzatary_core::capability::Secret`], and the body dropped
+    /// The value is read once into a [`suzatary_base::capability::Secret`], and the body dropped
     /// with this call; a body naming two of `value`, `always` and `endorsement` is refused.
     type Wire = suzatary_core::wire::Tapping;
 
@@ -221,7 +221,7 @@ impl suzatary_core::settings::Edits for Noting<'_> {
         self.noted(self.edits.allow_web(rule))
     }
 
-    fn allow_drive(&self, folder: &suzatary_core::drive_path::DrivePath) -> Result<(), EditError> {
+    fn allow_drive(&self, folder: &suzatary_base::drive_path::DrivePath) -> Result<(), EditError> {
         self.noted(self.edits.allow_drive(folder))
     }
 

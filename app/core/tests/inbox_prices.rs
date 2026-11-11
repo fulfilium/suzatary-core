@@ -18,8 +18,8 @@ use prodrome_core::policy::Untrusted;
 use prodrome_core::term::Term;
 use proptest::prelude::*;
 
+use suzatary_base::chains::ChainName;
 use suzatary_core::chain_set::{ChainSet, Read};
-use suzatary_core::chains::ChainName;
 use suzatary_core::record::TodoEvent;
 use suzatary_core::secretary::inbox::{self, ProposalId};
 use suzatary_core::secretary::inbox_event::InboxEvent;

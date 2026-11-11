@@ -103,8 +103,8 @@ fn the_template_begins_a_deployment_whose_every_file_is_shipped_staged_or_ignore
         use suzatary_core::cast::keys;
         Ok(suzatary_core::signatures::BoxKeys::of(
             &keys::root(),
-            &suzatary_core::capability::Secret::new(keys::ROOT),
-            &suzatary_core::capability::Secret::new(keys::AGENT),
+            &suzatary_base::capability::Secret::new(keys::ROOT),
+            &suzatary_base::capability::Secret::new(keys::AGENT),
         )?)
     })
     .expect("init writes the deployment");

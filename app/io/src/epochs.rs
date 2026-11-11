@@ -62,7 +62,7 @@ mod tests {
     fn an_epoch_outlives_the_process_that_kept_it() {
         let dir = std::env::temp_dir().join(format!("suzatary-epochs-{}", std::process::id()));
         let now =
-            suzatary_core::capability::Datetime::new(2026, 10, 7, 12, 0, 0, 0).expect("an instant");
+            suzatary_base::capability::Datetime::new(2026, 10, 7, 12, 0, 0, 0).expect("an instant");
         let one = |names: &[&str]| names.iter().map(|&n| n.to_owned()).collect::<BTreeSet<_>>();
         let seen = Seen {
             geneses: one(&["a"]),
@@ -104,7 +104,7 @@ mod tests {
         std::fs::create_dir_all(&dir).expect("a directory");
         std::fs::write(dir.join("chain-life"), "7\nabc123\n").expect("an old file");
         let now =
-            suzatary_core::capability::Datetime::new(2026, 10, 7, 12, 0, 0, 0).expect("an instant");
+            suzatary_base::capability::Datetime::new(2026, 10, 7, 12, 0, 0, 0).expect("an instant");
         assert!(
             open(dir.clone())
                 .served("chain/life", now, || Ok((Seen::default(), ())))

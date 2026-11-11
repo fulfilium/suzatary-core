@@ -15,7 +15,7 @@ use std::sync::mpsc::{Receiver, RecvTimeoutError, channel};
 use std::time::{Duration, Instant};
 
 use rustix::pty::OpenptFlags;
-use suzatary_core::capability::Secret;
+use suzatary_base::capability::Secret;
 use suzatary_core::secretary::sign_in::SignInUrl;
 
 pub use screen::Screen;

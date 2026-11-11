@@ -139,7 +139,6 @@ impl Fold {
 #[cfg(test)]
 mod tests {
     use super::{HeldLines, Opened};
-    use crate::conversation_id::ConversationId;
     use crate::secretary::conversations::{Conversations, InMemory};
     use crate::secretary::erasure::Erasure;
     use crate::secretary::model::Turn;
@@ -147,6 +146,7 @@ mod tests {
     use crate::secretary::transcript;
     use crate::secretary::words::Words;
     use prodrome_core::literal::Datetime;
+    use suzatary_base::conversation_id::ConversationId;
 
     const SAID: &str = "a word only the owner says";
 

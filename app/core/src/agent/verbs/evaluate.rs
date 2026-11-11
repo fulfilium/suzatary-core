@@ -3,8 +3,8 @@ use serde::Deserialize;
 use serde_json::Value;
 
 use crate::agent::{Call, TriageSurface, reads};
-use crate::refusal::Refusal;
 use crate::verb::{Chained, Verb};
+use suzatary_base::refusal::Refusal;
 
 /// A priority spec evaluated against confirmed history.
 pub struct Evaluate;

@@ -1,15 +1,15 @@
 //! A coding session's lines in its conversation: each change is an [`Entry::Coding`] line
 //! and a [`Turn::Act`], so the secretary reads what became of the session it proposed.
 
-use crate::capability::Datetime;
 use crate::coding::{Fired, Seen, Session, Step};
-use crate::conversation_id::ConversationId;
-use crate::reference::{ProposalRef, Reference};
-use crate::refusal::Refusal;
 use crate::secretary::conversations;
 use crate::secretary::model::Turn;
 use crate::secretary::stamp::stamp;
 use crate::secretary::store::Entry;
+use suzatary_base::capability::Datetime;
+use suzatary_base::conversation_id::ConversationId;
+use suzatary_base::reference::{ProposalRef, Reference};
+use suzatary_base::refusal::Refusal;
 
 /// One session a poll moved.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -196,7 +196,7 @@ pub fn dropped(
         at,
         format!(
             "{} dropped the coding session of proposal {index}: {reason}",
-            crate::spelling::capitalised(by.as_str())
+            suzatary_base::spelling::capitalised(by.as_str())
         ),
     )?;
     Ok(session)

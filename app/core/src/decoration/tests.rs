@@ -13,7 +13,7 @@ use prodrome_core::fpl::Outcome;
 use prodrome_core::literal::Datetime;
 
 use super::*;
-use crate::escape::{escape_markup, escape_string};
+use suzatary_base::escape::{escape_markup, escape_string};
 
 fn day(year: i32, month: u32, of: u32) -> Datetime {
     Datetime::new(year, month, of, 0, 0, 0, 0).expect("a real day")

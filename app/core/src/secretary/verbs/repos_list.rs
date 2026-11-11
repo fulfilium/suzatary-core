@@ -1,9 +1,9 @@
 use serde_json::{Value, json};
 
-use crate::refusal::Refusal;
 use crate::secretary::verbs::refused_by;
 use crate::secretary::{Call, SecretarySurface};
 use crate::verb::{NoArgs, Verb};
+use suzatary_base::refusal::Refusal;
 
 /// The owner's repositories.
 pub struct ReposList;

@@ -1,6 +1,6 @@
 //! The one Google Cloud OAuth client this box signs in with, as the owner made it.
 
-use crate::capability::Secret;
+use suzatary_base::capability::Secret;
 
 use super::RedirectUri;
 

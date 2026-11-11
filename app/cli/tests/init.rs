@@ -249,8 +249,8 @@ fn cast_keys() -> suzatary_core::signatures::BoxKeys {
     use suzatary_core::cast::keys;
     suzatary_core::signatures::BoxKeys::of(
         &keys::root(),
-        &suzatary_core::capability::Secret::new(keys::ROOT),
-        &suzatary_core::capability::Secret::new(keys::AGENT),
+        &suzatary_base::capability::Secret::new(keys::ROOT),
+        &suzatary_base::capability::Secret::new(keys::AGENT),
     )
     .expect("the cast's keys")
 }

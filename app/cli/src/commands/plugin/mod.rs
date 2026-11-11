@@ -11,7 +11,7 @@ use anyhow::{Context, bail};
 use clap::{Args as ClapArgs, Subcommand};
 use prodrome_core::declared::Declared;
 use prodrome_core::fpl::instant_of;
-use suzatary_core::capability::Clock as _;
+use suzatary_base::capability::Clock as _;
 use suzatary_core::health::plugin::CredentialName;
 use suzatary_core::plugin::{Answer, Came, LastRun, Manifest, admit};
 use suzatary_core::store::{Learnt, learn};

@@ -3,7 +3,7 @@
 use std::collections::BTreeMap;
 
 use serde::{Deserialize, Serialize};
-use suzatary_core::reference::Reference;
+use suzatary_base::reference::Reference;
 use suzatary_core::secretary::erasure::Erasure;
 use suzatary_core::secretary::store::ConversationState;
 use suzatary_core::wire::Frame;

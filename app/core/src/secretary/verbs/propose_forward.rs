@@ -4,7 +4,6 @@ use serde_json::{Value, json};
 
 use crate::held_value::Written;
 use crate::mail::Stored;
-use crate::refusal::Refusal;
 use crate::secretary::attached::MAX_TOTAL;
 use crate::secretary::proposal::{Forward, Forwarded, Proposal, Style};
 use crate::secretary::read_holders::ReadHolders;
@@ -12,6 +11,7 @@ use crate::secretary::verbs::propose_email::{address, addresses};
 use crate::secretary::verbs::{FilingArgs, mail_refusal};
 use crate::secretary::{Call, SecretarySurface};
 use crate::verb::Verb;
+use suzatary_base::refusal::Refusal;
 
 /// Propose forwarding a stored message, which only a tap sends.
 pub struct ProposeForward;
@@ -109,7 +109,10 @@ impl Verb for ProposeForward {
                 style: args.style,
                 from: shown.row.sender,
                 subject: shown.row.subject,
-                date: shown.row.date.map(crate::capability::Datetime::isoformat),
+                date: shown
+                    .row
+                    .date
+                    .map(suzatary_base::capability::Datetime::isoformat),
             },
         };
         let index = args

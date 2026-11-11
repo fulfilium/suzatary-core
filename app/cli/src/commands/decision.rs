@@ -10,7 +10,7 @@ use anyhow::{Context, bail};
 use clap::Subcommand;
 use prodrome_core::event::Actor;
 use prodrome_core::literal::Datetime;
-use suzatary_core::capability::Clock;
+use suzatary_base::capability::Clock;
 use suzatary_core::decisions::{Decision, DecisionId, Decisions, Draft, Ledger};
 use suzatary_io::clock::SystemClock;
 use suzatary_io::objects::Objects;
@@ -165,7 +165,7 @@ pub fn run(path: &Path, args: &Args) -> anyhow::Result<()> {
             let page = typeset.compile(called.job()).map_err(|rejected| {
                 anyhow::anyhow!("{}", rejected.said(called.job().main_text()))
             })?;
-            if let Some(reason) = suzatary_core::tripwire::suspicious(&page) {
+            if let Some(reason) = suzatary_base::tripwire::suspicious(&page) {
                 bail!("typst's HTML for the decisions carried {reason}; not written");
             }
             match html {

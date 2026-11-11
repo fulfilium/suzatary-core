@@ -266,7 +266,7 @@ mod tests {
 
     #[test]
     fn no_constructor_is_a_term_or_an_envelope() {
-        crate::own::assert_own(SIGNATURES);
+        suzatary_base::own::assert_own(SIGNATURES);
     }
 
     /// Every constructor the whitelist admits is the head and one body, so a print and its

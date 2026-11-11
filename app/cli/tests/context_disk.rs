@@ -46,8 +46,8 @@ impl Disk {
             lines: ConversationStores::open(
                 root.join("lines"),
                 root.join("keys"),
-                Arc::new(suzatary_core::capability::Nothing),
-                Arc::new(suzatary_core::capability::Nothing),
+                Arc::new(suzatary_base::capability::Nothing),
+                Arc::new(suzatary_base::capability::Nothing),
             ),
             digests: Objects::digests(root.join("digests"), owners.clone()),
             summaries: Texts::open(root.join("digest-texts")),

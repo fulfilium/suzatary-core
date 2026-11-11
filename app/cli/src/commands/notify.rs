@@ -5,8 +5,8 @@
 use std::path::Path;
 
 use anyhow::bail;
+use suzatary_base::conversation_id::ConversationId;
 use suzatary_core::connect::Channel;
-use suzatary_core::conversation_id::ConversationId;
 use suzatary_core::devices::Device;
 use suzatary_core::nonempty::NonEmpty;
 use suzatary_core::notify::{Notify as _, Push};
@@ -150,8 +150,8 @@ pub(crate) fn push<D: Log<String, Device> + Clone>(
 
 #[cfg(test)]
 mod tests {
-    use suzatary_core::capability::Secret;
-    use suzatary_core::refusal::Refusal;
+    use suzatary_base::capability::Secret;
+    use suzatary_base::refusal::Refusal;
     use suzatary_core::store::{Decide, Edit, StoreError};
 
     use super::*;

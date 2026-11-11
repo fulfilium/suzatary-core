@@ -8,8 +8,6 @@
 use std::collections::BTreeSet;
 
 use crate::coding::{Branch, Session, SessionUrl};
-use crate::conversation_id::{ConversationId, DEFAULT};
-use crate::repo_ids::CommitId;
 use crate::secretary::erasure::Erasure;
 use crate::secretary::inbox::ProposalId;
 use crate::secretary::line_words::LineWords;
@@ -19,6 +17,8 @@ use crate::secretary::stamp::Stamp;
 use crate::secretary::store::{Decision, Entry, Kind, Namer, Scope};
 use crate::secretary::turn_shape::{self, TurnShape};
 use crate::secretary::words::{Gone, Words};
+use suzatary_base::conversation_id::{ConversationId, DEFAULT};
+use suzatary_base::repo_ids::CommitId;
 
 /// One line's shape, by kind; the instant is the line's head.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -436,7 +436,7 @@ pub fn unkinded(id: &ConversationId) -> Kind {
 pub fn join(
     id: &ConversationId,
     shape: LineShape,
-    at: crate::capability::Datetime,
+    at: suzatary_base::capability::Datetime,
     mut words: Vec<Words<LineWords>>,
 ) -> Entry {
     words.resize_with(shape.slots(), || Gone::Missing.into());
@@ -589,7 +589,8 @@ mod tests {
             match join(
                 &id,
                 shape,
-                crate::capability::Datetime::new(2026, 10, 11, 9, 0, 0, 0).expect("an instant"),
+                suzatary_base::capability::Datetime::new(2026, 10, 11, 9, 0, 0, 0)
+                    .expect("an instant"),
                 vec![title],
             ) {
                 Entry::Opened { kind, .. } => kind,
@@ -601,7 +602,8 @@ mod tests {
         assert_eq!(opened("2026-10-11-sweep"), Kind::Review);
         assert_eq!(opened("2026-10-11-1"), Kind::Topic);
         let (shape, _) = split(&Entry::Opened {
-            at: crate::capability::Datetime::new(2026, 10, 11, 9, 0, 0, 0).expect("an instant"),
+            at: suzatary_base::capability::Datetime::new(2026, 10, 11, 9, 0, 0, 0)
+                .expect("an instant"),
             title: Words::kept("t".to_owned()),
             model: "m".to_owned(),
             kind: Kind::Topic,

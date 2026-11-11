@@ -5,7 +5,7 @@
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant, SystemTime};
 
-use suzatary_core::capability::Datetime;
+use suzatary_base::capability::Datetime;
 use suzatary_core::mail::mail_sync::{MailSync, SyncFailure, Synced};
 use suzatary_core::mail::sync_report::SyncReport;
 
@@ -114,7 +114,7 @@ fn instant(at: SystemTime) -> Option<Datetime> {
 
 #[cfg(test)]
 mod tests {
-    use suzatary_core::capability::Clock as _;
+    use suzatary_base::capability::Clock as _;
     use suzatary_core::mail::sync_report::AccountSync;
 
     use super::*;

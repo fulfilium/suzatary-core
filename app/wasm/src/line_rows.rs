@@ -10,7 +10,7 @@
 use std::collections::BTreeSet;
 
 use prodrome_core::event::Hash;
-use suzatary_core::conversation_id::ConversationId;
+use suzatary_base::conversation_id::ConversationId;
 use suzatary_core::replica::frontier::Frontier;
 use suzatary_core::replica::row::Row;
 use suzatary_core::secretary::held_replica::{Moved, Took};

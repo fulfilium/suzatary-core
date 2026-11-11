@@ -18,11 +18,11 @@ use prodrome_core::event::{Actor, Hash, canonical_envelope};
 use prodrome_core::literal::Datetime;
 use prodrome_core::policy::Untrusted;
 use serde_json::{Map, Value, json};
+use suzatary_base::capability::Entropy;
+use suzatary_base::chains::{ChainName, ChainPolicy, Chains};
+use suzatary_base::conversation_id::ConversationId;
 use suzatary_core::agent::Agent;
 use suzatary_core::agent::TriageVerb;
-use suzatary_core::capability::{Entropy, Nothing};
-use suzatary_core::chains::{ChainName, ChainPolicy, Chains};
-use suzatary_core::conversation_id::ConversationId;
 use suzatary_core::deployment::Deployment;
 use suzatary_core::model_name::ModelName;
 use suzatary_core::secretary::compaction::Reading;
@@ -104,7 +104,7 @@ impl Reader<'_> {
                 },
                 16 * 1024,
             ),
-            ..Nothing::agent()
+            ..Agent::nothing()
         }
     }
 }
@@ -235,7 +235,7 @@ fn deployment() -> Deployment {
         categories: std::collections::BTreeMap::new(),
         app_url: "https://example.invalid".to_owned(),
         coding: None,
-        zone: suzatary_core::zone::Zone::UTC,
+        zone: suzatary_base::zone::Zone::UTC,
     }
 }
 

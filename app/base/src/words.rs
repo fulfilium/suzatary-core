@@ -4,6 +4,7 @@
 /// `impl Literal`, `Serialize` and `Deserialize` for each type, printed by `$print` and read back
 /// as the value of `$all` that prints as the text: one list of words for the stored form and the
 /// wire.
+#[macro_export]
 macro_rules! words {
     ($($ty:ty: $all:expr => $print:expr),+ $(,)?) => {$(
         prodrome_core::word_literal!($ty: $all => $print);
@@ -28,7 +29,7 @@ macro_rules! words {
         }
     )+};
 }
-pub(crate) use words;
+pub use words;
 
 /// The value of `all` that `print` spells as `text`.
 pub fn of_word<T: Copy, const N: usize>(
@@ -41,8 +42,8 @@ pub fn of_word<T: Copy, const N: usize>(
 
 /// A type whose serde form a derive spells (its `rename_all`, which a generated wire type reads)
 /// prints every value of `all` as its literal's word, and reads each word back.
-#[cfg(test)]
-pub(crate) fn assert_serde_words<T>(all: &[T], print: fn(&T) -> &str)
+#[cfg(any(test, feature = "nothing"))]
+pub fn assert_serde_words<T>(all: &[T], print: fn(&T) -> &str)
 where
     T: serde::Serialize + serde::de::DeserializeOwned + PartialEq + std::fmt::Debug,
 {

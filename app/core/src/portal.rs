@@ -51,7 +51,7 @@ impl TryFrom<String> for Sender {
         } else {
             Err(format!(
                 "{} is no Firebase sender: a sender is the project's number, 1 to {} digits",
-                crate::refusal::shown(&text),
+                suzatary_base::refusal::shown(&text),
                 Self::MOST
             ))
         }

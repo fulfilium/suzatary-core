@@ -10,7 +10,6 @@ use prodrome_core::event::{Actor, Hash};
 use prodrome_core::literal::Datetime;
 
 use crate::model_name::ModelName;
-use crate::refusal::Refusal;
 use crate::secretary::compact_ask::Beside;
 use crate::secretary::conversations::{Conversations, ReadConversations};
 use crate::secretary::digest::{self, Digest};
@@ -23,6 +22,7 @@ use crate::secretary::salted_text::{Text, TextName};
 use crate::secretary::texts::Naming;
 use crate::store::{Doc, Gets, Prodrome, Reads};
 use crate::timings::{Phase, timed};
+use suzatary_base::refusal::Refusal;
 
 /// Who every attempt is written as: the compactor, whose word binds about summaries alone.
 pub(crate) const COMPACTOR: &str = "compactor";

@@ -3,7 +3,6 @@
 use serde_json::Value;
 
 use crate::conversation::round::Sink;
-use crate::conversation_id::ConversationId;
 use crate::secretary::compaction::Reading;
 use crate::secretary::digest_view::VIEW_BYTES;
 use crate::secretary::model::{
@@ -13,6 +12,7 @@ use crate::secretary::store::{Kept, Scope, Stored};
 use crate::secretary::told::{Asking, context_of};
 use crate::secretary::topics::stores::TopicStores;
 use crate::secretary::{memory, queue};
+use suzatary_base::conversation_id::ConversationId;
 
 /// How a round asks its model: the one difference between a model that remembers and one that
 /// does not.
@@ -341,7 +341,9 @@ fn heading(memories: crate::secretary::memories::Memories<'_>, telling: Telling<
     let told = match telling {
         Telling::Opening(topics, asking) => {
             let record = Reading::of(&memories.digests.reads());
-            let topics = topics.reading().map_err(crate::refusal::Refusal::from);
+            let topics = topics
+                .reading()
+                .map_err(suzatary_base::refusal::Refusal::from);
             let told = context_of(
                 &memory,
                 topics.as_ref(),

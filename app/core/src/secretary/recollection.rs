@@ -3,11 +3,11 @@
 //! the memory and has no store to write it through: every store here is a read half
 //! ([`ReadMemories`]), so no write can be expressed through it, even in this module.
 
-use crate::refusal::Refusal;
 use crate::secretary::compaction::Reading;
 use crate::secretary::memories::ReadMemories;
 use crate::secretary::memory::Memory;
 use crate::secretary::shown_record::OwnersRecord;
+use suzatary_base::refusal::Refusal;
 
 /// The memory, read-only, and how many bytes it may spend in an answer that carries it.
 #[derive(Clone, Copy)]

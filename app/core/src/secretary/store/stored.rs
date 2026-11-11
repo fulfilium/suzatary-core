@@ -4,13 +4,13 @@ use super::{
     Aside, Asking, Entry, Kept, Kind, Line, Lines, Review, ReviewFailure, Rewind, Said, Scope,
     Standing, Unheld, Unplaced,
 };
-use crate::conversation_id::ConversationId;
 use crate::secretary::proposal::Proposal;
+use suzatary_base::conversation_id::ConversationId;
 
-use crate::capability::Datetime;
 use crate::secretary::model::Turn;
 use crate::secretary::turn_shape::TurnShape;
 use crate::secretary::words::Words;
+use suzatary_base::capability::Datetime;
 
 /// A whole conversation as a reader gets one: the fold of its lines.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -69,7 +69,10 @@ pub fn heading(title: &Words<String>) -> std::borrow::Cow<'_, str> {
 /// is told who did what.
 #[must_use]
 pub fn stopped_by(by: &str) -> String {
-    format!("{} stopped the answer", crate::spelling::capitalised(by))
+    format!(
+        "{} stopped the answer",
+        suzatary_base::spelling::capitalised(by)
+    )
 }
 
 /// A conversation's file said something this program does not understand.
@@ -315,12 +318,12 @@ impl Stored {
     /// the round refuses the rewind.
     ///
     /// # Errors
-    /// [`Refusal::conflict`](crate::refusal::Refusal::conflict) naming which rule it broke.
+    /// [`Refusal::conflict`](suzatary_base::refusal::Refusal::conflict) naming which rule it broke.
     ///
     /// [`Effect`]: crate::secretary::verb_name::Effect
     /// [`Effect::Reads`]: crate::secretary::verb_name::Effect::Reads
-    pub fn rewind(&self, how: Rewind) -> Result<usize, crate::refusal::Refusal> {
-        let conflict = crate::refusal::Refusal::conflict;
+    pub fn rewind(&self, how: Rewind) -> Result<usize, suzatary_base::refusal::Refusal> {
+        let conflict = suzatary_base::refusal::Refusal::conflict;
         let live = self.live();
         let Some(&(last, _)) = live.last() else {
             return Err(conflict("nothing has been asked here yet"));
@@ -403,23 +406,23 @@ impl Stored {
     /// Proposal `index`, joined with its inbox object.
     ///
     /// # Errors
-    /// [`Refusal::not_found`](crate::refusal::Refusal::not_found) for an index
-    /// nothing proposed, and [`Refusal::conflict`](crate::refusal::Refusal::conflict)
+    /// [`Refusal::not_found`](suzatary_base::refusal::Refusal::not_found) for an index
+    /// nothing proposed, and [`Refusal::conflict`](suzatary_base::refusal::Refusal::conflict)
     /// naming why for a line naming an object the inbox does not read.
     pub fn standing(
         &self,
         index: usize,
         inbox: &crate::secretary::inbox::Fold,
-    ) -> Result<Standing, crate::refusal::Refusal> {
+    ) -> Result<Standing, suzatary_base::refusal::Refusal> {
         let asking = self.proposals.get(index).ok_or_else(|| {
-            crate::refusal::Refusal::not_found(format!(
+            suzatary_base::refusal::Refusal::not_found(format!(
                 "conversation {} has no proposal {index} (it has {})",
                 self.id,
                 self.proposals.len()
             ))
         })?;
         joined(self, asking, inbox).map_err(|unplaced| {
-            crate::refusal::Refusal::conflict(format!(
+            suzatary_base::refusal::Refusal::conflict(format!(
                 "conversation {} names proposal {}, which cannot be read: {}",
                 self.id, unplaced.asking.object, unplaced.why
             ))

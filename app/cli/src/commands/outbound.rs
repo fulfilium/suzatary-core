@@ -4,7 +4,7 @@
 use std::fmt::Write as _;
 use std::num::NonZeroUsize;
 
-use suzatary_core::conversation_id::ConversationId;
+use suzatary_base::conversation_id::ConversationId;
 use suzatary_core::mail::dedup_key::DEDUP_KEY;
 use suzatary_core::notify::Push;
 
@@ -50,7 +50,7 @@ fn pushes() -> Vec<String> {
             round: ConversationId::new("2026-01-02-review").expect("a slug"),
         },
         Push::Expected {
-            message: suzatary_core::reference::MailHash::new("0123456789abcdef")
+            message: suzatary_base::reference::MailHash::new("0123456789abcdef")
                 .expect("a literal hash"),
         },
         Push::ReviewDown {

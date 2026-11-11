@@ -7,7 +7,7 @@ use std::sync::mpsc;
 use std::time::{Duration, Instant};
 
 use anyhow::{Context, bail};
-use suzatary_core::conversation_id::ConversationId;
+use suzatary_base::conversation_id::ConversationId;
 use suzatary_core::secretary::model::Turn;
 use suzatary_core::secretary::stamp::Stamp;
 use suzatary_core::secretary::store::ConversationState;

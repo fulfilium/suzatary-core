@@ -2,10 +2,10 @@ use schemars::JsonSchema;
 use serde::Deserialize;
 use serde_json::{Value, json};
 
-use crate::refusal::{Refusal, shown};
 use crate::secretary::briefings::BriefingError;
 use crate::secretary::{Call, SecretarySurface};
 use crate::verb::Verb;
+use suzatary_base::refusal::{Refusal, shown};
 
 /// One saved briefing, as Typst source.
 pub struct Briefing;

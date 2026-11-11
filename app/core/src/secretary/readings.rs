@@ -3,10 +3,6 @@
 
 use crate::chain_set::ChainSet;
 
-use crate::answer::Renderable;
-use crate::capability::Datetime;
-use crate::reference::{ProposalRef, Reference};
-use crate::refusal::{Answered, Refusal};
 use crate::render::Html;
 use crate::secretary::acts::Act;
 use crate::secretary::answers::{AnswerError, Answers};
@@ -29,6 +25,10 @@ use crate::wire::inbox::{
 };
 use crate::wire::todo::Fulfillment;
 use crate::wire::topics as wire;
+use suzatary_base::answer::Renderable;
+use suzatary_base::capability::Datetime;
+use suzatary_base::reference::{ProposalRef, Reference};
+use suzatary_base::refusal::{Answered, Refusal};
 
 /// At most `limit` turns before `before` (newest when `None`), narrowed to rounds touching `about`.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -172,9 +172,9 @@ pub fn block_named(stored: &Stored, sha: &str) -> Option<String> {
             },
             Turn::Person { .. } | Turn::Tool { .. } | Turn::Act { .. } => return None,
         };
-        crate::answer::blocks(text)
+        suzatary_base::answer::blocks(text)
             .into_iter()
-            .find(|block| crate::answer::sha(&block.source) == sha)
+            .find(|block| suzatary_base::answer::sha(&block.source) == sha)
             .map(|block| block.source)
     })
 }
@@ -597,7 +597,7 @@ fn verb_turn(
 /// The owner's act only when the gate stamped it so; the box's otherwise.
 fn acted_by(
     by: Option<&crate::secretary::stamp::Stamp>,
-    references: Vec<crate::reference::Reference>,
+    references: Vec<suzatary_base::reference::Reference>,
 ) -> wire::Speaker {
     if crate::secretary::stamp::Stamp::owners(by) {
         wire::Speaker::Act { references }
@@ -626,11 +626,11 @@ fn erased(
 
 /// A block the closed world refuses stays its text.
 pub(crate) fn blocks_of<A: Answers + ?Sized>(answers: &A, text: &str) -> Vec<wire::BlockRow> {
-    crate::answer::blocks(text)
+    suzatary_base::answer::blocks(text)
         .into_iter()
         .map(|block| wire::BlockRow {
             html: answers
-                .block(&crate::answer::Renderable::of(&block.source))
+                .block(&suzatary_base::answer::Renderable::of(&block.source))
                 .ok()
                 .map(|html| html.as_str().to_owned()),
             source: block.source,
@@ -828,7 +828,7 @@ fn act_on_wire(act: &Act, consent: Option<String>, draws: &dyn Draw) -> Proposed
             path: path.to_string(),
             name: path.name().unwrap_or("/").to_owned(),
             folder: crate::secretary::acts::folder_of(path).to_string(),
-            size: size.map(crate::spelling::bytes).unwrap_or_default(),
+            size: size.map(suzatary_base::spelling::bytes).unwrap_or_default(),
             sentence: act.sentence(),
         },
         Act::CodingSession { task } => ProposedAct::CodingSession {
@@ -904,7 +904,7 @@ fn card_file(attached: &attached::Attached) -> CardFile {
     CardFile {
         name: attached.name.clone(),
         media: attached.media.clone(),
-        size: crate::spelling::bytes(attached.size),
+        size: suzatary_base::spelling::bytes(attached.size),
         sha256: attached.sha256.to_string(),
         from: match &attached.source {
             AttachmentSource::Mail { message, .. } => FileFrom::Mail {
@@ -1002,7 +1002,7 @@ fn forward_on_wire(forward: &Forward) -> ProposedAct {
             .map(|part| CardFile {
                 name: part.name.clone(),
                 media: part.media.clone(),
-                size: crate::spelling::bytes(part.size),
+                size: suzatary_base::spelling::bytes(part.size),
                 sha256: part.sha256.to_string(),
                 from: opening(),
             })
@@ -1010,7 +1010,7 @@ fn forward_on_wire(forward: &Forward) -> ProposedAct {
         Style::Attached => vec![CardFile {
             name: crate::secretary::proposal::EML.to_owned(),
             media: "message/rfc822".to_owned(),
-            size: crate::spelling::bytes(file.size),
+            size: suzatary_base::spelling::bytes(file.size),
             sha256: file.sha256.to_string(),
             from: opening(),
         }],

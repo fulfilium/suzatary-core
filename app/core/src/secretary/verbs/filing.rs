@@ -2,11 +2,11 @@ use schemars::JsonSchema;
 use serde::Deserialize;
 
 use super::{propose, references};
-use crate::reference::TodoRef;
-use crate::refusal::Refusal;
 use crate::secretary::Call;
 use crate::secretary::proposal::{Proposal, Reasons};
 use crate::verb::Caught;
+use suzatary_base::reference::TodoRef;
+use suzatary_base::refusal::Refusal;
 
 /// The reasons every proposal carries: why, and what it rests on.
 #[derive(Deserialize, JsonSchema)]

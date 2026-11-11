@@ -13,8 +13,11 @@ use std::path::PathBuf;
 use prodrome_core::event::{Actor, Hash};
 use prodrome_core::policy::Untrusted;
 use serde_json::{Map, Value, json};
-use suzatary_core::capability::{Datetime, Nothing};
-use suzatary_core::chains::{ChainName, ChainPolicy, Chains};
+use suzatary_base::capability::{Datetime, Nothing};
+use suzatary_base::chains::{ChainName, ChainPolicy, Chains};
+use suzatary_base::refusal::Refusal;
+use suzatary_base::repo_ids::{CommitId, RepoName, RepoPath, Rev};
+use suzatary_core::agent::Agent;
 use suzatary_core::deployment::Deployment;
 use suzatary_core::mail::junk::{ChurnList, JunkHeader, JunkMessage, Uid};
 use suzatary_core::mail::junk_folder::{Junk, JunkFailure};
@@ -24,13 +27,11 @@ use suzatary_core::mail::sync_report::{AccountSync, SyncReport};
 use suzatary_core::mail::{AttachmentFile, AttachmentMeta, MailMessage, MailRow};
 use suzatary_core::mail_error::MailError;
 use suzatary_core::record::{Envelope, EventStore, TodoEvent};
-use suzatary_core::refusal::Refusal;
-use suzatary_core::repo_ids::{CommitId, RepoName, RepoPath, Rev};
 use suzatary_core::repos::{Patch, RepoRow, Visibility};
 use suzatary_core::repositories::{RepoFailure, Repositories};
-use suzatary_core::secretary::Bound;
 use suzatary_core::secretary::line_event::LineEvent;
 use suzatary_core::secretary::store::Entry;
+use suzatary_core::secretary::{Bound, Secretary};
 use suzatary_core::store::{Prodrome, Reads, StoreError, WriteLock, append_to, linearised};
 
 fn chain() -> ChainPolicy {
@@ -53,7 +54,7 @@ fn deployment() -> Deployment {
             .collect(),
         app_url: "https://example.test".to_owned(),
         coding: None,
-        zone: suzatary_core::zone::Zone::UTC,
+        zone: suzatary_base::zone::Zone::UTC,
     }
 }
 
@@ -93,14 +94,14 @@ impl Fixed {
                 source: None,
                 subtodos: Vec::new(),
             },
-            suzatary_core::zone::Moment {
-                at: suzatary_core::capability::Datetime::new(2026, 9, 1, 0, 0, 0, 0)
+            suzatary_base::zone::Moment {
+                at: suzatary_base::capability::Datetime::new(2026, 9, 1, 0, 0, 0, 0)
                     .expect("a day"),
-                zone: suzatary_core::zone::Zone::UTC,
+                zone: suzatary_base::zone::Zone::UTC,
             },
             "owner",
             &["home", "other"],
-            &suzatary_core::capability::Parses,
+            &suzatary_base::capability::Parses,
         )
         .expect("a todo");
         append_to(&events, suzatary_core::record::GENESIS, alpha).expect("appends");
@@ -159,11 +160,11 @@ impl Reads<LineEvent> for Fixed {
         &self,
     ) -> Result<Vec<(Hash, prodrome_core::event::Envelope<LineEvent>)>, StoreError> {
         let (opened, _) = LineEvent::write(
-            suzatary_core::conversation_id::DEFAULT.clone(),
+            suzatary_base::conversation_id::DEFAULT.clone(),
             Actor::new("assistant").expect("an actor"),
             0,
             &Entry::Opened {
-                at: suzatary_core::capability::Datetime::new(2026, 9, 7, 0, 0, 0, 0)
+                at: suzatary_base::capability::Datetime::new(2026, 9, 7, 0, 0, 0, 0)
                     .expect("an instant"),
                 title: suzatary_core::secretary::words::Words::kept(String::new()),
                 model: "nothing".to_owned(),
@@ -508,7 +509,7 @@ fn agent(
 ) -> Result<Value, Refusal> {
     let caps = suzatary_core::agent::Agent {
         chain: fixed,
-        ..Nothing::agent()
+        ..Agent::nothing()
     };
     let records = [("life".to_owned(), caps)].into_iter().collect();
     let conversations = suzatary_core::secretary::conversations::InMemory::default();
@@ -533,8 +534,8 @@ fn secretary(
                 lines: fixed,
                 keys: &*KEYS,
                 entropy: &*ENTROPY,
-                renders: &suzatary_core::capability::Nothing,
-                sessions: &suzatary_core::capability::Nothing,
+                renders: &suzatary_base::capability::Nothing,
+                sessions: &suzatary_base::capability::Nothing,
                 opened: &OPENED,
             },
             junk: fixed,
@@ -542,7 +543,7 @@ fn secretary(
             sync: fixed,
             repositories: fixed,
             watches: &*WATCHES,
-            ..Nothing::secretary()
+            ..Secretary::nothing()
         },
         policy: &policy,
     }];
@@ -550,7 +551,7 @@ fn secretary(
         deployment,
         &suzatary_core::settings::Settables::default(),
         &chains,
-        &suzatary_core::conversation_id::DEFAULT.clone(),
+        &suzatary_base::conversation_id::DEFAULT.clone(),
         verb,
         args,
     )

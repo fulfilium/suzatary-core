@@ -2,12 +2,12 @@ use schemars::JsonSchema;
 use serde::Deserialize;
 use serde_json::{Value, json};
 
-use crate::refusal::Refusal;
 use crate::secretary::changes::{self, Changeset};
 use crate::secretary::proposal::Proposal;
 use crate::secretary::verbs::FilingArgs;
 use crate::secretary::{Call, SecretarySurface};
 use crate::verb::{Chained, Verb};
+use suzatary_base::refusal::Refusal;
 
 /// Propose chain acts, which only a tap applies.
 pub struct ProposeChanges;
@@ -100,7 +100,7 @@ pub(crate) fn check(call: &Call<'_>, changeset: &Changeset) -> Result<(), Refusa
         changeset,
         call.caps.chain,
         &changes::Building {
-            now: crate::zone::Moment {
+            now: suzatary_base::zone::Moment {
                 at: call.caps.clock.now(),
                 zone: call.deployment.zone,
             },

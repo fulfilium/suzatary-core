@@ -3,9 +3,9 @@
 //! alone (`shown_record::told`), as much of it as fits beside them. The answer always leaves it
 //! room for [`TOO_BIG`], so it never goes silent.
 
-use crate::refusal::Refusal;
 use crate::secretary::memory::Memory;
 use crate::secretary::shown_record::{OwnersRecord, told};
+use suzatary_base::refusal::Refusal;
 
 use super::reads::wire_len;
 

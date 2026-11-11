@@ -1,8 +1,8 @@
 //! A model sign-in in progress: the link the box read off the deployment's sign-in and the
 //! sessions the box holds open, which a code card's tap finishes.
 
-use crate::capability::Secret;
 use crate::secretary::inbox::ProposalId;
+use suzatary_base::capability::Secret;
 
 /// An `https://` link on a bare host, as a sign-in draws it. Which hosts a sign-in may name is
 /// the deployment's to check where it reads the link, before it makes one.

@@ -2,10 +2,10 @@
 //! mail account's syncs are.
 
 use super::{DrivePath, Port};
-use crate::drive_path::DriveFailure;
 use crate::health::Failure;
 use crate::health::SourceKey;
 use crate::health::{Healths, Instant, Outcome};
+use suzatary_base::drive_path::DriveFailure;
 
 /// What listing each of `folders` through `port` at `at` says: a success when every one lists,
 /// else a failure naming the first that did not, in the Drive's words. No folder to read is

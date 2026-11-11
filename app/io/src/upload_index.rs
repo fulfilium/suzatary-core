@@ -148,7 +148,7 @@ impl UploadIndex for UploadIndexFiles {
 mod tests {
     use super::*;
     use crate::pdftotext::{Pdftotext, minimal_pdf};
-    use suzatary_core::drive_path::DriveFailure;
+    use suzatary_base::drive_path::DriveFailure;
     use suzatary_core::vault::Vault;
 
     /// A Drive that keeps nothing and answers where it would have.
@@ -159,7 +159,7 @@ mod tests {
             &self,
             name: &str,
             _bytes: &[u8],
-        ) -> Result<suzatary_core::drive_path::DrivePath, DriveFailure> {
+        ) -> Result<suzatary_base::drive_path::DrivePath, DriveFailure> {
             suzatary_core::vault::folder()
                 .join(name)
                 .map_err(|failed| DriveFailure::Refused(failed.to_string()))

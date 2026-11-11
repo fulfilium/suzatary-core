@@ -212,7 +212,7 @@ impl Operator {
     /// A route's refusal, or an answer that does not read.
     pub fn lines(
         &self,
-        id: &suzatary_core::conversation_id::ConversationId,
+        id: &suzatary_base::conversation_id::ConversationId,
     ) -> anyhow::Result<suzatary_core::secretary::held_replica::HeldReplica> {
         let read = |target: &str| -> anyhow::Result<Vec<u8>> {
             Ok(self.request(route::Method::Get, target, b"")?.body)

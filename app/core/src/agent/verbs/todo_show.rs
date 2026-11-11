@@ -5,8 +5,8 @@ use serde::Deserialize;
 use serde_json::Value;
 
 use crate::agent::{Holds, reads};
-use crate::refusal::Refusal;
 use crate::verb::{Chained, Verb};
+use suzatary_base::refusal::Refusal;
 
 /// One todo as the chain holds it.
 pub struct TodoShow<S>(PhantomData<S>);

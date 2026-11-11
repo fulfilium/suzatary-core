@@ -13,7 +13,7 @@ use std::os::unix::net::UnixStream;
 use std::path::PathBuf;
 use std::time::Duration;
 
-use suzatary_core::capability::{Login, Peer, Whois, WhoisError};
+use suzatary_base::capability::{Login, Peer, Whois, WhoisError};
 
 /// Long enough for a slow netmap read, short enough that a wedged daemon does not hang a request.
 const TIMEOUT: Duration = Duration::from_secs(5);

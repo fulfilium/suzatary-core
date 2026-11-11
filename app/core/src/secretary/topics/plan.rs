@@ -12,7 +12,7 @@ use crate::secretary::targets::{MAX_TOPICS, rounds};
 use crate::secretary::topics::reading::MembershipEvent;
 use crate::secretary::topics::reading::Reading;
 use crate::secretary::topics::topic::Topic;
-use crate::topic_target::Target;
+use suzatary_base::topic_target::Target;
 
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct Plan(Vec<Planned>);

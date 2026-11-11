@@ -55,7 +55,7 @@ mod tests {
     use proptest::prelude::*;
 
     use super::*;
-    use crate::capability::Secret;
+    use suzatary_base::capability::Secret;
 
     fn known() -> Known {
         Known {

@@ -11,7 +11,7 @@ pub mod closed;
 pub use closed::Closed;
 use prodrome_typst_wasm::Project;
 use serde::Deserialize;
-use suzatary_core::capability::{Diagnostic, Rejected, Typeset};
+use suzatary_base::capability::{Diagnostic, Rejected, Typeset};
 use suzatary_core::template::{Job, Library};
 
 /// Compiling a job: a template called with a value, or a lone text.
@@ -184,7 +184,7 @@ mod tests {
                 .expect("the vectors parse");
         for v in vectors {
             let admitted = text(&v.text)
-                .is_ok_and(|html| suzatary_core::tripwire::suspicious(&html).is_none());
+                .is_ok_and(|html| suzatary_base::tripwire::suspicious(&html).is_none());
             assert_eq!(admitted, v.admitted, "{}", v.text);
         }
     }
@@ -192,7 +192,7 @@ mod tests {
     /// The forms of an escaped title compile to its prose, so every stored body still renders.
     #[test]
     fn escaped_prose_compiles_to_itself() {
-        let escaped = suzatary_core::escape::escape_markup("Pay $40 to ada@x.test [#1] *now*");
+        let escaped = suzatary_base::escape::escape_markup("Pay $40 to ada@x.test [#1] *now*");
         let html = text(escaped.as_str()).expect("escaped prose compiles");
         assert!(html.contains("Pay $40 to ada@x.test [#1] *now*"), "{html}");
     }

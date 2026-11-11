@@ -14,7 +14,7 @@ use suzatary_core::secretary::proposal::Proposal;
 
 const NOTICE: &[u8] = b"%PDF-1.7\n1 0 obj << /Type /Catalog >> endobj\n%%EOF\n";
 
-fn ada() -> suzatary_core::capability::Login {
+fn ada() -> suzatary_base::capability::Login {
     common::login("ada@example.com")
 }
 

@@ -13,6 +13,7 @@ path = "src/lib.rs"
 
 [dependencies]
 prodrome_core.workspace = true
+suzatary-base.workspace = true
 thiserror.workspace = true
 tracing.workspace = true
 serde.workspace = true
@@ -70,7 +71,7 @@ prodrome-wasm-exports = { workspace = true, optional = true }
 
 [features]
 # Inert effects a test fills a record from; never in the shipped build.
-nothing = []
+nothing = ["suzatary-base/nothing"]
 # The e2e fixture's scripted person (`secretary::Speaker::scripted`); `suzatary`'s `fixture` alone.
 fixture = []
 # The browser module's view of this crate's schemas; `app/wasm` alone enables it.

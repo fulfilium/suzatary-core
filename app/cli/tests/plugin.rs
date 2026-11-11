@@ -13,10 +13,10 @@ use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex, PoisonError};
 use std::thread;
 
+use suzatary_base::capability::Secret;
 use suzatary_cli::commands::plugin;
 use suzatary_cli::instance::Plugins;
 use suzatary_core::calendar::{Calendar, Status};
-use suzatary_core::capability::Secret;
 use suzatary_core::health::Reading;
 use suzatary_core::health::Register as _;
 use suzatary_core::plugin::Manifest;

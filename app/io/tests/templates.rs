@@ -3,9 +3,9 @@
 
 use std::collections::BTreeMap;
 
+use suzatary_base::tripwire::suspicious;
 use suzatary_core::rendering;
 use suzatary_core::template::{Checked, Job};
-use suzatary_core::tripwire::suspicious;
 use suzatary_io::typeset::compile;
 
 /// Whether every example of `template` compiles, with `world` in place of its own files.

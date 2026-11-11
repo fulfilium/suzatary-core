@@ -2,8 +2,8 @@
 //! file read for the model.
 
 use crate::drive::{Fenced, Port};
-use crate::drive_path::DriveFailure;
-pub use crate::drive_path::DrivePath;
+use suzatary_base::drive_path::DriveFailure;
+pub use suzatary_base::drive_path::DrivePath;
 
 /// The owner's Drive, as the secretary's rounds and the owner's taps reach it.
 pub trait Drive: Sync {

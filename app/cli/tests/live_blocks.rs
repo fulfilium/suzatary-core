@@ -4,7 +4,7 @@
 //! the law on generated rows; this asks it of the prose that exists. It skips with its reason
 //! printed where this checkout has no chain.
 
-use suzatary_core::capability::Clock;
+use suzatary_base::capability::Clock;
 use suzatary_core::record::EventStore;
 use suzatary_core::store::Reads as _;
 use suzatary_io::clock::SystemClock;

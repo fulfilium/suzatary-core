@@ -1,11 +1,11 @@
 use serde_json::Value;
 
 use crate::agent::reads;
-use crate::refusal::Refusal;
 use crate::secretary::{Call, SecretarySurface};
 use crate::secrets::{Answer, Snapshot};
 use crate::settings::Settables;
 use crate::verb::{NoArgs, Verb};
+use suzatary_base::refusal::Refusal;
 
 /// The manuals and the vocabularies, first.
 pub struct Context;

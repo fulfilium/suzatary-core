@@ -11,7 +11,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::coding_report::{FileStat, Report};
 use crate::connect::parsed;
-use crate::repo_ids::{CommitId, RepoPath};
+use suzatary_base::repo_ids::{CommitId, RepoPath};
 
 /// The most a task may be, in bytes.
 pub(crate) const MAX_TASK_BYTES: usize = 4096;

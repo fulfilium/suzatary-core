@@ -8,7 +8,7 @@ use std::sync::Arc;
 
 use common::{FakeModel, Fakes, Gate};
 
-fn ada() -> suzatary_core::capability::Login {
+fn ada() -> suzatary_base::capability::Login {
     common::login("ada@example.com")
 }
 
@@ -115,7 +115,7 @@ fn two_says_in_one_turn_are_one_exchange() {
 
     // And `queue::delta` is empty: the last turn is a finished model turn, which is what the
     // worker's idle check reads.
-    let id = suzatary_core::conversation_id::ConversationId::new(id).expect("a slug");
+    let id = suzatary_base::conversation_id::ConversationId::new(id).expect("a slug");
     assert!(
         workers.is_running(&id),
         "still in the map until it drops itself idle"
@@ -185,7 +185,7 @@ fn an_idle_worker_drops_out_of_the_table() {
     assert_eq!(common::status(&response), 202);
     common::settled(&base, &id);
 
-    let id = suzatary_core::conversation_id::ConversationId::new(id).expect("a slug");
+    let id = suzatary_base::conversation_id::ConversationId::new(id).expect("a slug");
     let mut gone = false;
     for _ in 0..100 {
         if !workers.is_running(&id) {

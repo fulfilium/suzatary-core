@@ -7,11 +7,11 @@ use crate::attachment::AttachmentId;
 use crate::enclosed::{Enclosed, Enclosure};
 use crate::file_read::FileRead;
 use crate::held_value::HeldFile;
-use crate::refusal::Refusal;
 use crate::secretary::memory::FactId;
 use crate::secretary::model::Turn;
 use crate::secretary::outcome::Outcome;
 use crate::secretary::tool_name::ToolName;
+use suzatary_base::refusal::Refusal;
 
 /// The field of a file reading that names the file's source.
 pub const SOURCE: &str = "source";

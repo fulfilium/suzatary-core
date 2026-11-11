@@ -2,11 +2,11 @@ use schemars::JsonSchema;
 use serde::Deserialize;
 use serde_json::{Value, json};
 
-use crate::refusal::Refusal;
 use crate::secretary::memory::FactId;
 use crate::secretary::verbs::clean_round;
 use crate::secretary::{Call, SecretarySurface};
 use crate::verb::Verb;
+use suzatary_base::refusal::Refusal;
 
 /// Forget a fact, only where remember would write.
 pub struct Forget;

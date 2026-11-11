@@ -5,8 +5,8 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use chrono::NaiveDateTime;
+use suzatary_base::capability::Secret;
 use suzatary_core::calendar::Occurrence;
-use suzatary_core::capability::Secret;
 use suzatary_core::google::{
     AccessToken, Client, ClientId, ClientSecret, Code, Endpoints, Exchanged, KeptGrant, NewEvent,
     RedirectUri, RefreshToken, Verifier,
@@ -376,7 +376,7 @@ impl Grants {
 pub fn learn(
     root: &std::path::Path,
     occurrences: &[Occurrence],
-    at: suzatary_core::capability::Datetime,
+    at: suzatary_base::capability::Datetime,
 ) -> Result<suzatary_core::store::Learnt, String> {
     use prodrome_core::store::Replica as _;
     let schema = prodrome_core::declared::Declaration::admit(suzatary_core::google::SCHEMA)

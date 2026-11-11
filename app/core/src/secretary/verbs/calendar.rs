@@ -4,9 +4,9 @@ use serde::Deserialize;
 use serde_json::{Value, json};
 
 use crate::calendar::Day;
-use crate::refusal::{Refusal, shown};
 use crate::secretary::{Call, SecretarySurface};
 use crate::verb::Verb;
+use suzatary_base::refusal::{Refusal, shown};
 
 /// The owner's calendars, day by day.
 pub struct Calendar;

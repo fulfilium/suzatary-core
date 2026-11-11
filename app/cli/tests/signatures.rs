@@ -19,7 +19,7 @@ use suzatary_core::signatures::{BoxKeys, Enrolment, KEPT_CHECKS, Trust};
 use suzatary_core::store::Prodrome as _;
 use suzatary_core::store::Reads as _;
 
-fn ada() -> suzatary_core::capability::Login {
+fn ada() -> suzatary_base::capability::Login {
     common::login("ada@example.com")
 }
 
@@ -30,8 +30,8 @@ fn seed(byte: char) -> Secret {
 fn keys() -> BoxKeys {
     BoxKeys::of(
         &seed('9').public(),
-        &suzatary_core::capability::Secret::new("9".repeat(64)),
-        &suzatary_core::capability::Secret::new("8".repeat(64)),
+        &suzatary_base::capability::Secret::new("9".repeat(64)),
+        &suzatary_base::capability::Secret::new("8".repeat(64)),
     )
     .expect("the deployment's keys")
 }
@@ -67,7 +67,7 @@ fn signing_over(
             .expect("trusted at the terminal");
     }
     deployment.chains =
-        suzatary_core::chains::Chains::of(vec![suzatary_core::chains::ChainPolicy {
+        suzatary_base::chains::Chains::of(vec![suzatary_base::chains::ChainPolicy {
             root: keys.root().public(),
             ..common::chain()
         }])
@@ -118,7 +118,7 @@ fn tap(base: &str, fakes: &Fakes, index: u64, key: &Secret, new: &Secret) -> (u1
     .added(&history)
     .expect("a prodrome");
     let signed = key.sign(&seal_hash(&added));
-    let default = suzatary_core::conversation_id::DEFAULT.as_str().to_owned();
+    let default = suzatary_base::conversation_id::DEFAULT.as_str().to_owned();
     let url = format!("{base}/api/secretary/conversations/{default}/proposals/{index}/tap");
     let body = serde_json::json!({
         "endorsement": {"key": signed.key.as_str(), "signature": signed.signature.as_str()}
@@ -834,7 +834,7 @@ fn a_replayed_request_is_answered_from_its_record_and_performs_nothing() {
     let index = common::body_json(&mut card)["proposed"]
         .as_u64()
         .expect("an index");
-    let default = suzatary_core::conversation_id::DEFAULT.as_str().to_owned();
+    let default = suzatary_base::conversation_id::DEFAULT.as_str().to_owned();
     r.twice(
         &format!("/api/secretary/conversations/{default}/proposals/{index}/dismiss"),
         &serde_json::json!({ "reason": "not mine" }),
@@ -958,7 +958,7 @@ fn performed_body(route: &str) -> (serde_json::Value, Secret) {
                 suzatary_core::secretary::topics::reading::Topics,
             >(
                 "round:default/0"
-                    .parse::<suzatary_core::topic_target::Target>()
+                    .parse::<suzatary_base::topic_target::Target>()
                     .expect("a target"),
                 suzatary_core::secretary::topics::topic::Topic::new(MARKER)
                     .expect("the marker is a topic"),
@@ -1101,7 +1101,7 @@ fn a_pushed_request_record_holds_nothing_said_either_way() {
     let device_card = serde_json::from_str::<serde_json::Value>(&card).expect("JSON")["proposed"]
         .as_u64()
         .expect("an index");
-    let default = suzatary_core::conversation_id::DEFAULT.as_str().to_owned();
+    let default = suzatary_base::conversation_id::DEFAULT.as_str().to_owned();
 
     // Every route the server lists that asks a signature, sent a body it performs.
     let mut listed = 0;

@@ -5,8 +5,8 @@ use axum::extract::Request;
 use axum::http::StatusCode;
 use axum::response::Response;
 use prodrome_core::event::Actor;
+use suzatary_base::refusal::Refusal;
 use suzatary_core::clienterror::{MAX_BODY_BYTES, Report, Sent};
-use suzatary_core::refusal::Refusal;
 use suzatary_core::release::Plan;
 use suzatary_core::{devices, routes, wire};
 
@@ -28,7 +28,7 @@ impl Params for Day {
             .map_err(|_| {
                 Refusal::bad_request(format!(
                     "a date is ISO (YYYY-MM-DD), got {}",
-                    suzatary_core::refusal::shown(raw)
+                    suzatary_base::refusal::shown(raw)
                 ))
             })
     }
@@ -152,7 +152,7 @@ pub fn key(call: &Call<Asker, (), DeviceKey>) -> Result<Json<serde_json::Value>,
     }
     let caps = call.state.first.caps;
     let index = suzatary_core::secretary::routes::ask_trust(caps, &call.guard.0, &call.body.0)?;
-    call.state.heard(&suzatary_core::conversation_id::DEFAULT);
+    call.state.heard(&suzatary_base::conversation_id::DEFAULT);
     Ok(Json(serde_json::json!({ "proposed": index })))
 }
 
@@ -213,7 +213,7 @@ pub fn pair(call: &Call<Asker, (), PairingCode>) -> Result<Json<serde_json::Valu
                 caps.secretary.clock.now(),
             ) {
                 Ok(withdrawn) if !withdrawn.is_empty() => {
-                    state.heard(&suzatary_core::conversation_id::DEFAULT);
+                    state.heard(&suzatary_base::conversation_id::DEFAULT);
                 }
                 Ok(_) => {}
                 Err(failed) => tracing::warn!("paired: its card: {}", failed.message()),

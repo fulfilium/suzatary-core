@@ -2,12 +2,12 @@ use schemars::JsonSchema;
 use serde::Deserialize;
 use serde_json::{Value, json};
 
-use crate::refusal::Refusal;
 use crate::secretary::model::Turn;
 use crate::secretary::store::Entry;
 use crate::secretary::transcript;
 use crate::secretary::{Call, SecretarySurface};
 use crate::verb::Verb;
+use suzatary_base::refusal::Refusal;
 
 /// Prose set aside for the owner to copy; nothing performs it.
 pub struct DraftNote;

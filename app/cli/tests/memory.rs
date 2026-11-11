@@ -7,7 +7,7 @@ use std::sync::Arc;
 
 use common::{FakeModel, Fakes};
 
-fn ada() -> suzatary_core::capability::Login {
+fn ada() -> suzatary_base::capability::Login {
     common::login("ada@example.com")
 }
 
@@ -169,7 +169,7 @@ fn only_the_call(fakes: &Fakes, id: &str, words: &str) {
     assert!(left.is_empty(), "no file holds the words: {left:?}");
     let read = suzatary_core::secretary::transcript::lines(
         fakes.conversations.conversations(),
-        &suzatary_core::conversation_id::ConversationId::new(id).expect("an id"),
+        &suzatary_base::conversation_id::ConversationId::new(id).expect("an id"),
     )
     .expect("reads");
     let holding_words: Vec<&suzatary_core::secretary::store::Entry> = read
@@ -203,7 +203,7 @@ fn erased_by_forgetting(fakes: &Fakes, id: &str, words: &str) {
 fn erased_call(fakes: &Fakes, id: &str, words: &str, verb: &str) {
     let left = holding(&fakes.root, words);
     assert!(left.is_empty(), "no file holds the words: {left:?}");
-    let conversation = suzatary_core::conversation_id::ConversationId::new(id).expect("an id");
+    let conversation = suzatary_base::conversation_id::ConversationId::new(id).expect("an id");
     let read = suzatary_core::secretary::transcript::lines(
         fakes.conversations.conversations(),
         &conversation,
@@ -456,7 +456,7 @@ fn a_round_the_box_opened_remembers_nothing() {
         r#"{"say": "Done."}"#,
     ]));
     let deployment = common::deployment([ada()], [(ada(), common::actor("ada"))]);
-    let id = suzatary_core::conversation_id::DEFAULT.clone();
+    let id = suzatary_base::conversation_id::DEFAULT.clone();
     suzatary_core::secretary::conversations::read_or_open_default(
         fakes.conversations.conversations(),
         &fakes.model,

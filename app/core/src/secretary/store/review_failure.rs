@@ -7,7 +7,7 @@ use crate::secretary::words::Words;
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ReviewFailure {
     /// When it was attempted.
-    pub at: crate::capability::Datetime,
+    pub at: suzatary_base::capability::Datetime,
     /// The box's own words for why.
     pub reason: Words<String>,
     /// How many cards stood unanswered at that moment.

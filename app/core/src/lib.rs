@@ -6,15 +6,12 @@
 #![forbid(unsafe_code)]
 
 pub mod agent;
-pub mod answer;
 pub mod attachment;
 pub mod authoring;
 pub mod believed;
 pub mod calendar;
-pub mod capability;
 pub mod cast;
 pub mod chain_set;
-pub mod chains;
 pub mod clienterror;
 pub mod coding;
 pub mod coding_report;
@@ -22,19 +19,15 @@ pub mod conformance;
 pub mod connect;
 pub mod content_id;
 pub mod conversation;
-pub mod conversation_id;
 pub mod decisions;
 pub mod decoration;
 pub mod deployment;
 pub mod devices;
 pub mod drive;
-pub mod drive_path;
 pub mod enclosed;
 pub mod epoch;
-pub mod escape;
 pub mod excerpt;
 pub mod file_read;
-pub mod finite;
 pub mod for_model;
 pub mod gate;
 pub mod google;
@@ -46,14 +39,10 @@ pub mod mail;
 pub mod mail_error;
 pub mod message_part;
 pub mod model_name;
-pub mod narrowing;
 pub mod nonempty;
 pub mod notify;
 pub mod outcome;
-#[cfg(test)]
-mod own;
 pub mod pdf_text;
-pub mod persona;
 pub mod plugin;
 pub mod portal;
 pub mod priced;
@@ -61,39 +50,29 @@ pub mod query;
 pub mod reading;
 pub mod record;
 pub mod redact;
-pub mod reference;
-pub mod refusal;
 pub mod release;
 pub mod render;
 pub mod render_cache;
 pub mod rendering;
 pub mod replica;
-pub mod repo_ids;
 pub mod repos;
 pub mod repositories;
 pub mod repository;
 pub mod routes;
 pub mod rule;
-pub mod rule_version;
 pub mod secretary;
 pub mod secrets;
 pub mod server;
 pub mod settings;
 pub mod signatures;
 pub mod snapshot;
-pub mod spelling;
 pub mod store;
 pub mod stores;
 pub mod sync;
-pub mod table;
 pub mod template;
-pub mod term_json;
 pub mod timings;
 pub mod todo;
 pub mod todos;
-pub mod topic_target;
-pub mod tree;
-pub mod tripwire;
 pub mod upload;
 pub mod upload_index;
 pub mod url;
@@ -104,6 +83,11 @@ pub mod view;
 pub mod weather;
 pub mod web;
 pub mod wire;
-mod words;
-pub mod writer;
-pub mod zone;
+
+// The inert double's impls of this crate's ports, and the fake compactor: test support.
+#[cfg(any(test, feature = "nothing"))]
+#[path = "../tests/support/joining.rs"]
+pub mod joining;
+#[cfg(any(test, feature = "nothing"))]
+#[path = "../tests/support/nothing.rs"]
+mod nothing;

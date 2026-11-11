@@ -29,7 +29,6 @@ use std::collections::BTreeMap;
 use prodrome_core::event::Hash;
 use prodrome_core::literal::Datetime;
 
-use crate::conversation_id::ConversationId;
 use crate::secretary::conversations::Conversations;
 use crate::secretary::line_event::LineEvent;
 use crate::secretary::line_shape::LineShape;
@@ -38,6 +37,7 @@ use crate::secretary::locked_text::KeyName;
 use crate::secretary::transcript;
 use crate::secretary::words::Words;
 use crate::store::StoreError;
+use suzatary_base::conversation_id::ConversationId;
 
 /// How the lines' slots stand against the current rules.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]

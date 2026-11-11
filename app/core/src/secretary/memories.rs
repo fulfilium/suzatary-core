@@ -10,8 +10,6 @@ use crate::secretary::{conversations, transcript};
 use prodrome_core::event::Actor;
 use prodrome_core::literal::Datetime;
 
-use crate::capability::Entropy;
-use crate::refusal::Refusal;
 use crate::secretary::digests::{Digests, ReadDigests};
 use crate::secretary::inbox_event::InboxEvent;
 use crate::secretary::memory::{
@@ -22,6 +20,8 @@ use crate::secretary::proposal::Proposal;
 use crate::secretary::salted_text::{Text, TextName};
 use crate::secretary::two_phase::TwoPhase;
 use crate::store::{Doc, Gets, Prodrome, Reads, WriteLock};
+use suzatary_base::capability::Entropy;
+use suzatary_base::refusal::Refusal;
 
 /// The memory: its history, its texts, the inbox, and the salt each new text is kept with.
 #[derive(Clone, Copy)]
@@ -463,17 +463,18 @@ impl Held<'_> {
     /// The card offering `keys` for erasure, filed as the box's; filed again, the same card.
     fn offer(
         &self,
-        conversation: &crate::conversation_id::ConversationId,
+        conversation: &suzatary_base::conversation_id::ConversationId,
         fact: FactId,
         keys: std::collections::BTreeSet<crate::secretary::locked_text::KeyName>,
         at: Datetime,
     ) -> Result<(), Refusal> {
         let lines = self.memories.digests.lines;
         // The card is its own evidence: the reading it rests on is the box's.
-        let card = crate::reference::Reference::Proposal(crate::reference::ProposalRef {
-            conversation: conversation.clone(),
-            index: conversations::read(lines, conversation)?.proposals.len(),
-        });
+        let card =
+            suzatary_base::reference::Reference::Proposal(suzatary_base::reference::ProposalRef {
+                conversation: conversation.clone(),
+                index: conversations::read(lines, conversation)?.proposals.len(),
+            });
         let reasons = crate::secretary::proposal::Reasons::new(
             format!(
                 "forgetting fact {fact} erased the call that wrote it down; what was said around \
@@ -510,7 +511,7 @@ impl Held<'_> {
         self.memories.digests
     }
 
-    pub(crate) fn salt(&self) -> Result<[u8; crate::capability::SALT_BYTES], Refusal> {
+    pub(crate) fn salt(&self) -> Result<[u8; suzatary_base::capability::SALT_BYTES], Refusal> {
         self.memories
             .entropy
             .salt()
@@ -633,9 +634,9 @@ mod tests {
     use std::sync::atomic::{AtomicU8, Ordering};
 
     use super::*;
-    use crate::conversation_id::ConversationId;
     use crate::secretary::inbox_event::InboxEvent;
     use crate::store::{InMemory, InMemoryDoc, Reads};
+    use suzatary_base::conversation_id::ConversationId;
 
     /// Each salt one more than the last.
     #[derive(Default)]
@@ -872,8 +873,8 @@ mod tests {
                     lines: &lines,
                     keys: &crate::store::InMemoryKeys::default(),
                     entropy: &entropy,
-                    renders: &crate::capability::Nothing,
-                    sessions: &crate::capability::Nothing,
+                    renders: &suzatary_base::capability::Nothing,
+                    sessions: &suzatary_base::capability::Nothing,
                     opened: &crate::secretary::opened::Opened::default(),
                 },
                 owners: &std::collections::BTreeSet::new(),

@@ -4,12 +4,12 @@
 use crate::drive::Port as _;
 use crate::enclosed::Enclosure;
 use crate::held_value::{Files, HeldFile, Opened};
-use crate::refusal::Refusal;
 use crate::secretary::Secretary;
 use crate::secretary::attachment_source::AttachmentSource;
 use crate::secretary::read_holders::ReadHolders;
 use crate::secretary::verbs::{drive_refusal, mail_refusal, refused_by};
 use crate::upload::Upload;
+use suzatary_base::refusal::Refusal;
 
 /// The file `file` names, as its source holds it now. A Drive file is read through the fence
 /// while its folder is allowed, and otherwise only when a file reader of this conversation
@@ -107,9 +107,9 @@ fn upload(caps: &Secretary<'_>, id: &crate::attachment::AttachmentId) -> Result<
 /// A file of a declared repository at the commit `at` resolves to.
 fn repository(
     caps: &Secretary<'_>,
-    repo: &crate::repo_ids::RepoName,
-    path: &crate::repo_ids::RepoPath,
-    at: &crate::repo_ids::Rev,
+    repo: &suzatary_base::repo_ids::RepoName,
+    path: &suzatary_base::repo_ids::RepoPath,
+    at: &suzatary_base::repo_ids::Rev,
 ) -> Result<Opened, Refusal> {
     let commit = caps
         .repositories
@@ -154,7 +154,9 @@ impl Files for Opening<'_, '_> {
     fn open(&self, file: &HeldFile) -> Result<Option<Opened>, String> {
         match open(self.caps, &file.source(), self.read) {
             Ok(opened) => Ok(Some(opened)),
-            Err(refused) if refused.status() == crate::refusal::Status::NotFound => Ok(None),
+            Err(refused) if refused.status() == suzatary_base::refusal::Status::NotFound => {
+                Ok(None)
+            }
             Err(refused) => Err(refused.message().to_owned()),
         }
     }

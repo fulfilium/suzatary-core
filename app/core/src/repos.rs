@@ -6,8 +6,8 @@ use std::fmt;
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
-use crate::repo_ids::{CommitId, RepoName, RepoNameError, RepoPath, Rev};
 use crate::repositories::RepoFailure;
+use suzatary_base::repo_ids::{RepoName, RepoNameError};
 
 /// The most a patch may be: what a person reads on a phone before tapping.
 pub(crate) const MAX_PATCH_BYTES: usize = 64 * 1024;
@@ -223,11 +223,7 @@ impl Declared {
 
 // The literal of each is its text, as an inbox act stores it.
 prodrome_core::text_literal!(
-    RepoName => |repo| String::from(repo.clone()),
-    CommitId => |commit| String::from(commit.clone()),
     Patch => |patch| String::from(patch.clone()),
-    RepoPath => |path| String::from(path.clone()),
-    Rev => |rev| String::from(rev.clone()),
 );
 prodrome_core::word_literal!(Visibility: Visibility::ALL => |visibility| visibility.as_str());
 
@@ -239,7 +235,9 @@ mod tests {
     /// `ALL`'s.
     #[test]
     fn a_visibilitys_serde_word_is_its_literals() {
-        crate::words::assert_serde_words(&Visibility::ALL, |visibility| visibility.as_str());
+        suzatary_base::words::assert_serde_words(&Visibility::ALL, |visibility| {
+            visibility.as_str()
+        });
     }
 
     fn named(text: &str) -> RepoName {

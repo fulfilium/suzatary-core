@@ -1,7 +1,6 @@
 //! The web's payloads; their TypeScript and decoders are generated ([`shape`]). A field name is
 //! the name on the wire, so renaming one is a contract change.
 
-pub mod base;
 pub mod cards;
 pub mod inbox;
 pub mod lines;
@@ -18,10 +17,10 @@ use std::collections::BTreeMap;
 use serde::{Deserialize, Serialize};
 use ts_rs::{Dependency, TS, TypeVisitor};
 
-use base::ErrorPayload;
 use cards::{AboutPayload, HeldTodo, Overview};
 use lines::{Content, ObjectsPayload, ReceiptPayload, SkeletonPayload};
 use signatures::{DevicePayload, FailedChain, Registering};
+use suzatary_base::wire::base::ErrorPayload;
 use todo::{Entry, FieldChange, Link, Neighbour, TreeNode};
 use topics::{
     AttachmentRow, BlockRow, ConversationPayload, ConversationsPayload, InboxProposalsPayload,
@@ -368,7 +367,7 @@ pub struct Saying {
     /// In its one text form (`todo:life/x`).
     #[serde(default)]
     #[ts(as = "Option<Vec<String>>", optional)]
-    pub references: Vec<crate::reference::Reference>,
+    pub references: Vec<suzatary_base::reference::Reference>,
     #[serde(default)]
     #[ts(as = "Option<Vec<PickedFile>>", optional)]
     pub attachments: Vec<PickedFile>,
@@ -415,7 +414,7 @@ pub struct Tapping {
     pub note: String,
     #[serde(default)]
     #[ts(as = "Option<String>", optional)]
-    pub value: Option<crate::capability::Secret>,
+    pub value: Option<suzatary_base::capability::Secret>,
     #[serde(default)]
     #[ts(as = "Option<bool>", optional)]
     pub always: bool,
@@ -487,7 +486,7 @@ pub enum RevealPayload {
 impl RevealPayload {
     /// # Errors
     /// A file over [`crate::held_value::MAX_OPENED`], which no answer carries.
-    pub fn of(read: crate::held_value::Revealed) -> Result<Self, crate::refusal::Refusal> {
+    pub fn of(read: crate::held_value::Revealed) -> Result<Self, suzatary_base::refusal::Refusal> {
         use base64::Engine as _;
         match read {
             crate::held_value::Revealed::Value(shown) => Ok(Self::Shown {
@@ -498,14 +497,16 @@ impl RevealPayload {
                 media: opened.media,
                 bytes: base64::engine::general_purpose::STANDARD.encode(opened.bytes),
             }),
-            crate::held_value::Revealed::TooLarge(size) => Err(crate::refusal::Refusal::new(
-                crate::refusal::Status::UnprocessableEntity,
-                format!(
-                    "the file is {size} bytes; a tap opens at most {} here, so open it where \
+            crate::held_value::Revealed::TooLarge(size) => {
+                Err(suzatary_base::refusal::Refusal::new(
+                    suzatary_base::refusal::Status::UnprocessableEntity,
+                    format!(
+                        "the file is {size} bytes; a tap opens at most {} here, so open it where \
                      it is kept",
-                    crate::held_value::MAX_OPENED
-                ),
-            )),
+                        crate::held_value::MAX_OPENED
+                    ),
+                ))
+            }
             crate::held_value::Revealed::Gone => Ok(Self::Gone),
         }
     }
@@ -882,7 +883,7 @@ pub struct SignedObject {
     pub text: String,
 }
 
-/// [`crate::term_json::to_json`]'s shape, open: nothing derives `TS` for a term.
+/// [`suzatary_base::term_json::to_json`]'s shape, open: nothing derives `TS` for a term.
 pub const SPEC_NODE: &str = "type SpecNode = { kind: string } & Record<string, unknown>;";
 
 const HEADER: &str = "\

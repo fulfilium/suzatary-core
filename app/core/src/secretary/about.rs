@@ -4,9 +4,9 @@
 //! A person's turn or an act opens a round, the same partition `web/src/chat/rounds.ts` draws;
 //! `app/core/tests/about-fixture.json` is read by both sides' tests so the two cannot drift.
 
-use crate::reference::{self, Reference};
 use crate::secretary::model::Turn;
 use crate::secretary::store::Said;
+use suzatary_base::reference::{self, Reference};
 
 /// Inclusive `[start, end]` turn-index spans partitioning the whole transcript with no gaps.
 ///
@@ -62,8 +62,8 @@ pub fn owning_span(spans: &[(usize, usize)], target: usize) -> usize {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::reference::Reference;
     use serde::Deserialize;
+    use suzatary_base::reference::Reference;
 
     /// One row of `app/core/tests/about-fixture.json`, the file `web/test/rounds.test.ts` also
     /// reads.

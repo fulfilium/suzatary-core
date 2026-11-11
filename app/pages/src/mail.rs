@@ -177,7 +177,7 @@ impl Program for Mail {
                     .last()
                     .map(|r| r.date)
                     .map_or_else(String::new, |d| {
-                        d.map_or_else(String::new, suzatary_core::capability::Datetime::isoformat)
+                        d.map_or_else(String::new, suzatary_base::capability::Datetime::isoformat)
                     });
                 vec![Effect::Get {
                     ask: Ask::More { after: m.last() },

@@ -16,8 +16,8 @@ use prodrome_core::policy::Untrusted;
 use prodrome_core::term::Term;
 
 use crate::decoration::{DecorationError, block, kind_category, render_verified, shown_of};
-use crate::escape::markup_text;
-use crate::refusal::Refusal;
+use suzatary_base::escape::markup_text;
+use suzatary_base::refusal::Refusal;
 
 // One record as a block.
 
@@ -204,8 +204,8 @@ mod tests {
     fn a_source_field_cannot_alter_the_block() {
         let mut record = a_record("triage");
         record.payload.source = Some(mk_source(
-            crate::escape::escape_string("evil\") name").as_str(),
-            crate::escape::escape_string("re: \\ hello").as_str(),
+            suzatary_base::escape::escape_string("evil\") name").as_str(),
+            suzatary_base::escape::escape_string("re: \\ hello").as_str(),
             midnight(6),
             "abc123",
             "",

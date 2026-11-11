@@ -141,7 +141,7 @@ pub struct Authored {
     pub created: String,
     /// Typst markup.
     pub body: String,
-    /// [`crate::escape::markup_text`] of the markup, never rendered.
+    /// [`suzatary_base::escape::markup_text`] of the markup, never rendered.
     pub text: String,
     /// Typst markup.
     pub detail: String,
@@ -150,7 +150,7 @@ pub struct Authored {
     pub waiting_on: String,
     /// The `//` comment above the priority, line by line.
     pub rationale: Vec<String>,
-    /// The authored FPL spec, printed by [`crate::term_json::to_json`].
+    /// The authored FPL spec, printed by [`suzatary_base::term_json::to_json`].
     #[ts(type = "SpecNode | null")]
     pub spec: Option<serde_json::Value>,
     pub actor: String,

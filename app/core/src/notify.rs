@@ -10,8 +10,8 @@ pub use effect::{Delivered, Notify, NotifyError, Printed, Push};
 use std::collections::BTreeSet;
 use std::num::NonZeroUsize;
 
-use crate::capability::Datetime;
 use crate::record::TodoEvent;
+use suzatary_base::capability::Datetime;
 
 /// What to say about new chain objects, or `None` when nothing is worth a push.
 ///
@@ -217,19 +217,19 @@ mod tests {
                 .enumerate()
                 .map(|(n, why)| asked(&format!("p{n:032x}"), why))
                 .collect();
-            let conversation = crate::conversation_id::ConversationId::new("2026-09-15-1")
+            let conversation = suzatary_base::conversation_id::ConversationId::new("2026-09-15-1")
                 .expect("a slug");
             let round = crate::secretary::store::Stored::of(
                 &conversation,
                 &[
                     crate::secretary::store::Entry::Opened {
-                        at: crate::capability::Datetime::new(2026, 9, 15, 9, 0, 0, 0).expect("an instant"),
+                        at: suzatary_base::capability::Datetime::new(2026, 9, 15, 9, 0, 0, 0).expect("an instant"),
                         title: crate::secretary::words::Words::kept("Morning".to_owned()),
                         model: "a-cli".to_owned(),
                         kind: crate::secretary::store::Kind::Topic,
                     },
                     crate::secretary::store::Entry::Said {
-                        at: crate::capability::Datetime::new(2026, 9, 15, 9, 2, 0, 0).expect("an instant"),
+                        at: suzatary_base::capability::Datetime::new(2026, 9, 15, 9, 2, 0, 0).expect("an instant"),
                         turn: crate::secretary::model::Turn::Model {
                             text: answer.clone(),
                             calls: Vec::new(),

@@ -4,11 +4,11 @@ use serde_json::Value;
 
 use crate::agent::{answered, refused};
 use crate::mail::mailbox::Query;
-use crate::refusal::Refusal;
 use crate::secretary::file_query::FileQuery;
 use crate::secretary::file_search::{self, FileHit, MAX_FILE_HITS};
 use crate::secretary::{Call, SecretarySurface};
 use crate::verb::Verb;
+use suzatary_base::refusal::Refusal;
 
 /// Search the mail and the files the owner sent in a chat, with one query.
 pub struct Search;

@@ -868,7 +868,7 @@ fn card(title: &str, sentence: &str, fields: Vec<CardField>, verb: &str) -> Card
         title: title.to_owned(),
         by: Asker::Secretary {},
         // An act's sentence is written to follow a name; on a card it stands alone.
-        sentence: crate::spelling::said(sentence),
+        sentence: suzatary_base::spelling::said(sentence),
         fields,
         body: String::new(),
         rows: Vec::new(),
@@ -891,7 +891,7 @@ fn secret(label: &str, found: Option<&str>, link: Option<&str>) -> Card {
         answers: vec![CardAnswer {
             done: format!("stored {label}"),
             asks: Asks::Value {
-                input: crate::spelling::capitalised(label),
+                input: suzatary_base::spelling::capitalised(label),
             },
             ..answer("store", "Store")
         }],
@@ -1292,7 +1292,7 @@ mod tests {
             path: "/my-files/Docs/w2.pdf".to_owned(),
             name: "w2.pdf".to_owned(),
             folder: "/my-files/Docs".to_owned(),
-            size: crate::spelling::bytes(49_356),
+            size: suzatary_base::spelling::bytes(49_356),
             sentence: "read the text of w2.pdf in /my-files/Docs".to_owned(),
         });
         assert_eq!(card.title, "Document request");
@@ -1316,8 +1316,11 @@ mod tests {
         assert!(widens(always));
         assert_eq!(always.label, "Always allow this folder");
         assert_eq!(always.done, "allowed: /my-files/Docs");
-        assert_eq!(crate::spelling::bytes(812), "812 B");
-        assert_eq!(crate::spelling::bytes(3 * 1024 * 1024 + 200_000), "3.1 MB");
+        assert_eq!(suzatary_base::spelling::bytes(812), "812 B");
+        assert_eq!(
+            suzatary_base::spelling::bytes(3 * 1024 * 1024 + 200_000),
+            "3.1 MB"
+        );
     }
 
     /// An email's files are all on its card, and its question counts them.

@@ -19,8 +19,8 @@ use chacha20poly1305::aead::{Aead, KeyInit, Payload};
 use chacha20poly1305::{ChaCha20Poly1305, Key, Nonce};
 use sha2::{Digest, Sha256};
 
-use crate::capability::Entropy;
 use crate::secretary::salted_text::Words;
+use suzatary_base::capability::Entropy;
 
 /// How many bytes a key is.
 pub const KEY_BYTES: usize = 32;

@@ -3,8 +3,8 @@ use std::marker::PhantomData;
 use serde_json::Value;
 
 use crate::agent::{Holds, refused};
-use crate::refusal::Refusal;
 use crate::verb::{NoArgs, Verb};
+use suzatary_base::refusal::Refusal;
 
 /// What is uncommitted.
 pub struct GitDiffSummary<S>(PhantomData<S>);

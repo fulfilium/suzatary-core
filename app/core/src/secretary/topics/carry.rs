@@ -7,13 +7,13 @@ use std::collections::{BTreeMap, BTreeSet};
 use prodrome_core::literal::Datetime;
 use serde::Deserialize;
 
-use crate::conversation_id::ConversationId;
 use crate::secretary::store::Stored;
 use crate::secretary::topics::reading::MembershipEvent;
 use crate::secretary::topics::reading::Reading;
 use crate::secretary::topics::topic::{NotATopic, Topic};
 use crate::secretary::words::Words;
-use crate::topic_target::Target;
+use suzatary_base::conversation_id::ConversationId;
+use suzatary_base::topic_target::Target;
 
 use crate::secretary::targets::MAX_TOPICS;
 

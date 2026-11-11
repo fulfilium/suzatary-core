@@ -96,7 +96,7 @@ macro_rules! verbs {
             pub fn parse(
                 self,
                 args: &serde_json::Map<String, serde_json::Value>,
-            ) -> Result<$Call, $crate::refusal::Refusal> {
+            ) -> Result<$Call, suzatary_base::refusal::Refusal> {
                 match self {
                     $(Self::$Name => $crate::verb::parse(args).map($Call::$Name),)+
                 }
@@ -109,7 +109,7 @@ macro_rules! verbs {
             pub fn request(
                 self,
                 args: &serde_json::Map<String, serde_json::Value>,
-            ) -> Result<$crate::verb::Request<$Call>, $crate::refusal::Refusal> {
+            ) -> Result<$crate::verb::Request<$Call>, suzatary_base::refusal::Refusal> {
                 Ok($crate::verb::Request {
                     chain: $crate::verb::chain_named(args)?,
                     call: self.parse(args)?,
@@ -147,7 +147,7 @@ macro_rules! verbs {
             pub fn run(
                 self,
                 on: &<$Surface as $crate::verb::Surface>::Call<'_>,
-            ) -> Result<<$Surface as $crate::verb::Surface>::Answer, $crate::refusal::Refusal> {
+            ) -> Result<<$Surface as $crate::verb::Surface>::Answer, suzatary_base::refusal::Refusal> {
                 match self {
                     $(Self::$Name(args) => <$Name as $crate::verb::Verb>::run(on, args).map(Into::into),)+
                 }

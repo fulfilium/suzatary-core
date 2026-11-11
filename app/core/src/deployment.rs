@@ -2,17 +2,17 @@
 //! hands a [`Deployment`] down, so no library code ever reads a configuration file.
 //!
 //! Only what is true of the box lives here (the tailnet door, the vocabulary, the URL); the
-//! trust policy and roster belong to each chain ([`crate::chains::ChainPolicy`]). The rules the
+//! trust policy and roster belong to each chain ([`suzatary_base::chains::ChainPolicy`]). The rules the
 //! fields carry are applied in [`crate::gate`].
 
 use std::collections::{BTreeMap, BTreeSet};
 
 use prodrome_core::event::Actor;
 
-use crate::capability::Login;
-use crate::chains::{ChainPolicy, Chains};
 use crate::connect::{Coding, RoutineId};
-use crate::refusal::Refusal;
+use suzatary_base::capability::Login;
+use suzatary_base::chains::{ChainPolicy, Chains};
+use suzatary_base::refusal::Refusal;
 
 /// This deployment, as the application reads it.
 ///
@@ -36,7 +36,7 @@ pub struct Deployment {
     /// `[coding]`, when this deployment starts coding sessions; `None` refuses a tap on one.
     pub coding: Option<Coding>,
     /// The owner's zone, `[persona]`'s: where every day the deployment reads is read.
-    pub zone: crate::zone::Zone,
+    pub zone: suzatary_base::zone::Zone,
 }
 
 impl Deployment {
@@ -113,7 +113,7 @@ impl Deployment {
     ///
     /// # Errors
     /// [`Refusal::conflict`] without `[coding]` or for any other chain.
-    pub fn builder(&self, chain: &crate::chains::ChainName) -> Result<&RoutineId, Refusal> {
+    pub fn builder(&self, chain: &suzatary_base::chains::ChainName) -> Result<&RoutineId, Refusal> {
         let coding = self.coding.as_ref().ok_or_else(|| {
             Refusal::conflict("this deployment declares no [coding], so no todo is built")
         })?;
@@ -145,9 +145,9 @@ mod tests {
         Actor::new(name).expect("a roster name")
     }
 
-    fn chain(name: &str) -> crate::chains::ChainPolicy {
-        crate::chains::ChainPolicy {
-            name: crate::chains::ChainName::new(name).expect("a slug"),
+    fn chain(name: &str) -> suzatary_base::chains::ChainPolicy {
+        suzatary_base::chains::ChainPolicy {
+            name: suzatary_base::chains::ChainName::new(name).expect("a slug"),
             untrusted: prodrome_core::policy::Untrusted::of([actor("triage")]),
             roster: [actor("ada"), actor("triage")].into_iter().collect(),
             root: crate::cast::keys::root(),
@@ -166,7 +166,7 @@ mod tests {
             categories: [("home".to_owned(), 3)].into_iter().collect(),
             app_url: "https://example.test".to_owned(),
             coding: None,
-            zone: crate::zone::Zone::UTC,
+            zone: suzatary_base::zone::Zone::UTC,
         }
     }
 

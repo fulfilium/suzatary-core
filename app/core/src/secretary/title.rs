@@ -6,12 +6,12 @@
 use crate::secretary::conversations;
 use prodrome_core::event::Actor;
 
-use crate::capability::Clock;
-use crate::conversation_id::ConversationId;
-use crate::refusal::Refusal;
 use crate::secretary::model::{Conversation, Model, Turn};
 use crate::secretary::store::{Entry, Kind, Namer, Stored, Title};
 use crate::secretary::transcript;
+use suzatary_base::capability::Clock;
+use suzatary_base::conversation_id::ConversationId;
+use suzatary_base::refusal::Refusal;
 
 /// The opening words of the job's one question, which a scripted fixture keys on.
 pub const ASK: &str = "Title this conversation";
@@ -169,15 +169,19 @@ mod tests {
 
     fn stored(kind: Kind, title: &str, turns: Vec<Turn>) -> Stored {
         let mut entries = vec![Entry::Opened {
-            at: crate::capability::Datetime::new(2026, 9, 25, 9, 0, 0, 0).expect("an instant"),
+            at: suzatary_base::capability::Datetime::new(2026, 9, 25, 9, 0, 0, 0)
+                .expect("an instant"),
             title: crate::secretary::words::Words::kept(title.to_owned()),
             model: "m".to_owned(),
             kind,
         }];
-        entries.extend(turns.into_iter().map(|turn| Entry::Said {
-            at: crate::capability::Datetime::new(2026, 9, 25, 9, 1, 0, 0).expect("an instant"),
-            turn,
-            by: None,
+        entries.extend(turns.into_iter().map(|turn| {
+            Entry::Said {
+                at: suzatary_base::capability::Datetime::new(2026, 9, 25, 9, 1, 0, 0)
+                    .expect("an instant"),
+                turn,
+                by: None,
+            }
         }));
         Stored::of(
             &ConversationId::new("2026-09-25-1").expect("a slug"),
@@ -232,8 +236,8 @@ mod tests {
     struct Lines(crate::secretary::conversations::InMemory);
 
     impl Clock for Lines {
-        fn now(&self) -> crate::capability::Datetime {
-            crate::capability::Datetime::new(2026, 9, 25, 9, 5, 0, 0).expect("an instant")
+        fn now(&self) -> suzatary_base::capability::Datetime {
+            suzatary_base::capability::Datetime::new(2026, 9, 25, 9, 5, 0, 0).expect("an instant")
         }
     }
 
@@ -310,7 +314,7 @@ mod tests {
             rename(caps.0.conversations(), &caps, &ada, &id, "two\nlines")
                 .expect_err("refused")
                 .status(),
-            crate::refusal::Status::BadRequest
+            suzatary_base::refusal::Status::BadRequest
         );
     }
 

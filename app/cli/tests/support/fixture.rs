@@ -12,14 +12,14 @@ use anyhow::Context as _;
 use chrono::{Duration, Timelike};
 use prodrome_core::event::{Actor, Hash, mk_completed, mk_created};
 use prodrome_core::fpl::{self, mk_decay, mk_flat};
-use suzatary_core::capability::Clock;
+use suzatary_base::capability::Clock;
 use suzatary_core::cast::{self, CAST};
 use suzatary_core::record::{EventStore, mk_authored, mk_source, mk_subtodo};
 use suzatary_core::store::{append_to, linearised};
 use suzatary_io::clock::SystemClock;
 
-use suzatary_core::capability::Login;
-use suzatary_core::chains::ChainName;
+use suzatary_base::capability::Login;
+use suzatary_base::chains::ChainName;
 use suzatary_core::mail::account::{MailAccount, Roster, Sync};
 use suzatary_core::mail::account_email::AccountEmail;
 use suzatary_core::model_name::ModelName;
@@ -123,8 +123,8 @@ pub fn build(args: &Args) -> anyhow::Result<()> {
     // box's key and the agent's, and its epoch makes what was built above history.
     let signers = suzatary_core::signatures::Signers::Held(suzatary_core::signatures::BoxKeys::of(
         &fixture_root(),
-        &suzatary_core::capability::Secret::new(BOX_SEED),
-        &suzatary_core::capability::Secret::new(AGENT_SEED),
+        &suzatary_base::capability::Secret::new(BOX_SEED),
+        &suzatary_base::capability::Secret::new(AGENT_SEED),
     )?);
     let read = crate::instance::Instance::open(&root.join("instance.toml"))?;
     answers(&read, no_model)?;
@@ -333,7 +333,7 @@ fn sweep_prompt() -> anyhow::Result<String> {
 /// scripted model, so their questions are stamped; the sweep is written unstamped in the older
 /// shape, so the scene reads both stamped and older lines.
 fn a_review(root: &Path) -> anyhow::Result<()> {
-    use suzatary_core::conversation_id::Daily;
+    use suzatary_base::conversation_id::Daily;
     use suzatary_core::secretary::store::Entry;
 
     let read = crate::instance::Instance::open(&root.join("instance.toml"))?;
@@ -346,7 +346,7 @@ fn a_review(root: &Path) -> anyhow::Result<()> {
     let at = SystemClock.now();
     let day = read.persona.zone.day(fpl::instant_of(at));
     let store = read.conversation_stores();
-    let id = suzatary_core::conversation_id::ConversationId::daily(Daily::Sweep, day);
+    let id = suzatary_base::conversation_id::ConversationId::daily(Daily::Sweep, day);
     suzatary_core::secretary::transcript::start(
         store.conversations(),
         &id,
@@ -388,7 +388,7 @@ fn a_review(root: &Path) -> anyhow::Result<()> {
 /// The fixture's model is scripted, so it answers, and the model health says so; under
 /// `no_model` its last call failed instead, so the box asks for a model itself.
 fn answers(read: &crate::instance::Instance, no_model: bool) -> anyhow::Result<()> {
-    use suzatary_core::capability::Clock as _;
+    use suzatary_base::capability::Clock as _;
     let at = prodrome_core::fpl::instant_of(SystemClock.now());
     let (outcome, words) = if no_model {
         (
@@ -430,7 +430,7 @@ fn a_secret_ask(root: &Path) -> anyhow::Result<()> {
     });
     crate::commands::secretary::scripted_round(
         &read,
-        &suzatary_core::conversation_id::ConversationId::new(SECRET_ASK_CONVERSATION)?,
+        &suzatary_base::conversation_id::ConversationId::new(SECRET_ASK_CONVERSATION)?,
         "Secret ask",
         "ask for the coding routine's token",
         Scripted::answering(&[
@@ -468,7 +468,7 @@ pub const CONNECT_CONVERSATION: &str = "connect";
 /// A calendar connected through the instance file's own editor, its link not yet set, and its
 /// removal standing as a card.
 fn a_connected_calendar(root: &Path) -> anyhow::Result<()> {
-    use suzatary_core::conversation_id::ConversationId;
+    use suzatary_base::conversation_id::ConversationId;
     use suzatary_core::secretary::proposal::{Proposal, Reasons};
     use suzatary_core::secretary::store::{Entry, Kind};
     use suzatary_core::settings::Edits as _;
@@ -640,8 +640,8 @@ pub const CODING_CONVERSATION: &str = "codingsession";
 /// One coding proposal taken through the real round, submit, `fired` and `advance`, with
 /// nothing actually fired.
 fn a_coding_session(root: &Path) -> anyhow::Result<()> {
+    use suzatary_base::conversation_id::ConversationId;
     use suzatary_core::coding::Fired;
-    use suzatary_core::conversation_id::ConversationId;
     use suzatary_core::secretary::responded::{Done, Performed};
 
     let read = crate::instance::Instance::open(&root.join("instance.toml"))?;
@@ -702,10 +702,10 @@ fn a_coding_session(root: &Path) -> anyhow::Result<()> {
 fn the_branch_back(url: &str) -> anyhow::Result<suzatary_core::coding::Seen> {
     use suzatary_core::coding::{ReportFile, Seen};
     use suzatary_core::coding_report::{FileStat, Lines};
-    let path = |text: &str| suzatary_core::repo_ids::RepoPath::try_from(text.to_owned());
+    let path = |text: &str| suzatary_base::repo_ids::RepoPath::try_from(text.to_owned());
     Ok(Seen {
         branch: "claude/retitle".parse()?,
-        tip: suzatary_core::repo_ids::CommitId::try_from("c0de".repeat(10))?,
+        tip: suzatary_base::repo_ids::CommitId::try_from("c0de".repeat(10))?,
         merged: false,
         reports: vec![ReportFile::read(
             path("docs/reports/retitle.md")?,
@@ -1135,7 +1135,7 @@ fn instance_file(
             ..Secretary::default()
         },
         agent: crate::instance::Triage::default(),
-        persona: suzatary_core::persona::Persona::default(),
+        persona: suzatary_base::persona::Persona::default(),
         // Absent, so push setup never reads this box's secret store.
         notify: None,
         // A routine nothing can fire, so a tapped session fails in words.
@@ -1298,7 +1298,7 @@ fn bulk_lines(
     reseals: usize,
 ) -> anyhow::Result<()> {
     use prodrome_core::event::Actor;
-    use suzatary_core::conversation_id::ConversationId;
+    use suzatary_base::conversation_id::ConversationId;
     use suzatary_core::secretary::line_event::LineEvent;
     use suzatary_core::secretary::line_words::LineWords;
 
@@ -1531,7 +1531,7 @@ fn bulk_proposals(
     todos: usize,
 ) -> anyhow::Result<()> {
     use prodrome_core::event::Actor;
-    use suzatary_core::conversation_id::ConversationId;
+    use suzatary_base::conversation_id::ConversationId;
     use suzatary_core::secretary::proposal::{Draft, Proposal, Reasons};
     use suzatary_core::secretary::store::{Entry, Kind};
     if count == 0 {
@@ -1651,11 +1651,11 @@ impl Sealed {
     /// Line `entry` of `id`, written as `writer` holding `held` lines, its slots sealed so.
     fn write(
         self,
-        id: suzatary_core::conversation_id::ConversationId,
+        id: suzatary_base::conversation_id::ConversationId,
         writer: prodrome_core::event::Actor,
         held: u32,
         entry: &suzatary_core::secretary::store::Entry,
-        entropy: &dyn suzatary_core::capability::Entropy,
+        entropy: &dyn suzatary_base::capability::Entropy,
     ) -> Result<
         (
             suzatary_core::secretary::line_event::LineEvent,
@@ -2014,7 +2014,7 @@ mod tests {
                 root.join("local.json"),
                 || {
                     suzatary_core::mail::dedup_key::DedupKey::of(
-                        &suzatary_core::capability::Secret::new("3c".repeat(32)),
+                        &suzatary_base::capability::Secret::new("3c".repeat(32)),
                     )
                     .map_err(|refused| refused.to_string())
                 },

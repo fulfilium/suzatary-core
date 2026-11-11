@@ -6,12 +6,12 @@ use std::collections::{BTreeMap, BTreeSet};
 use serde::Serialize;
 
 use crate::attachment::AttachmentId;
-use crate::conversation_id::ConversationId;
 use crate::secretary::file_query::FileQuery;
 use crate::secretary::model::Turn;
 use crate::secretary::search::around;
 use crate::secretary::store::Stored;
 use crate::secretary::upload_standing::UploadStanding;
+use suzatary_base::conversation_id::ConversationId;
 
 /// One file that matched, on the turn it came in on.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -60,16 +60,16 @@ pub fn named(conversations: &[Stored]) -> BTreeSet<AttachmentId> {
 /// after an erasure, so an erased upload's words leave the index at once.
 ///
 /// # Errors
-/// [`crate::refusal::Refusal::internal`] when the conversations or the index cannot be read.
+/// [`suzatary_base::refusal::Refusal::internal`] when the conversations or the index cannot be read.
 pub fn reindex(
     conversations: crate::secretary::conversations::Conversations<'_>,
     index: &dyn crate::upload_index::UploadIndex,
-) -> Result<usize, crate::refusal::Refusal> {
+) -> Result<usize, suzatary_base::refusal::Refusal> {
     let standings = index
         .refresh(&named(&crate::secretary::conversations::list(
             conversations,
         )?))
-        .map_err(|failed| crate::refusal::Refusal::internal(failed.to_string()))?;
+        .map_err(|failed| suzatary_base::refusal::Refusal::internal(failed.to_string()))?;
     Ok(standings
         .values()
         .filter(|standing| match standing {
@@ -183,7 +183,8 @@ mod tests {
 
     fn conversation(slug: &str, turns: &[(&str, Turn)]) -> Stored {
         let mut entries = vec![Entry::Opened {
-            at: crate::capability::Datetime::new(2026, 9, 25, 9, 0, 0, 0).expect("an instant"),
+            at: suzatary_base::capability::Datetime::new(2026, 9, 25, 9, 0, 0, 0)
+                .expect("an instant"),
             title: crate::secretary::words::Words::kept(format!("About {slug}")),
             model: "m".to_owned(),
             kind: crate::secretary::store::Kind::Topic,

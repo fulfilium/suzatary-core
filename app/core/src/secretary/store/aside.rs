@@ -8,7 +8,7 @@ pub struct Aside {
     /// One past the last: how many turns stood when it was written.
     pub until: usize,
     /// When.
-    pub at: crate::capability::Datetime,
+    pub at: suzatary_base::capability::Datetime,
     /// Who asked again.
     pub by: String,
 }

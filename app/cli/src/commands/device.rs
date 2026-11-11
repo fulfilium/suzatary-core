@@ -93,7 +93,7 @@ pub fn run(path: &Path, args: &Args) -> anyhow::Result<()> {
                 &instance.inbox_store(),
                 &store_of(instance.first()),
                 &keys.root().public(),
-                suzatary_core::capability::Clock::now(&suzatary_io::clock::SystemClock),
+                suzatary_base::capability::Clock::now(&suzatary_io::clock::SystemClock),
             )
             .map_err(|refusal| anyhow::anyhow!("{}", refusal.message()))?;
             if !withdrawn.is_empty() {
@@ -270,10 +270,10 @@ fn on_every_roster(instance: &Instance, actor: Option<&str>) -> anyhow::Result<A
 /// # Errors
 /// The store not answering or refusing a seed, or a seed that is not one.
 pub(crate) fn kept_or_minted(
-    get: impl Fn(&str) -> anyhow::Result<Option<suzatary_core::capability::Secret>>,
-    set: impl Fn(&str, &suzatary_core::capability::Secret) -> anyhow::Result<()>,
+    get: impl Fn(&str) -> anyhow::Result<Option<suzatary_base::capability::Secret>>,
+    set: impl Fn(&str, &suzatary_base::capability::Secret) -> anyhow::Result<()>,
 ) -> anyhow::Result<BoxKeys> {
-    let seed = |name: &str| -> anyhow::Result<suzatary_core::capability::Secret> {
+    let seed = |name: &str| -> anyhow::Result<suzatary_base::capability::Secret> {
         if let Some(held) =
             get(name).with_context(|| format!("reading {name}; nothing was minted"))?
         {

@@ -2,10 +2,10 @@ use schemars::JsonSchema;
 use serde::Deserialize;
 
 use crate::mail::sync_now::{self, Report, SyncNow};
-use crate::refusal::{Refusal, shown};
 use crate::secretary::verb_answer::VerbAnswer;
 use crate::secretary::{Call, SecretarySurface};
 use crate::verb::Verb;
+use suzatary_base::refusal::{Refusal, shown};
 
 /// Start the timer's mail sync now and answer its report.
 pub struct SyncMail;

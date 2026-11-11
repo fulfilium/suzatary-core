@@ -4,13 +4,14 @@
 use prodrome_core::event::Actor;
 use prodrome_core::policy::Untrusted;
 use serde_json::{Map, Value, json};
+use suzatary_base::capability::Nothing;
+use suzatary_base::chains::{ChainName, ChainPolicy, Chains};
 use suzatary_core::agent::Agent;
-use suzatary_core::capability::Nothing;
-use suzatary_core::chains::{ChainName, ChainPolicy, Chains};
 use suzatary_core::deployment::Deployment;
 use suzatary_core::mail::corpus::{Corpus, CorpusError};
 use suzatary_core::mail::mailbox::Query;
 use suzatary_core::record::TodoEvent;
+use suzatary_core::secretary::Secretary;
 use suzatary_core::secretary::changes::Act;
 use suzatary_core::secretary::filed::TriageCards;
 use suzatary_core::secretary::inbox_event::InboxEvent;
@@ -34,7 +35,7 @@ fn deployment() -> Deployment {
         categories: [("home".to_owned(), 1)].into_iter().collect(),
         app_url: "https://example.test".to_owned(),
         coding: None,
-        zone: suzatary_core::zone::Zone::UTC,
+        zone: suzatary_base::zone::Zone::UTC,
     }
 }
 
@@ -62,10 +63,10 @@ fn the_owners_chain() -> InMemory<TodoEvent> {
                     source: None,
                     subtodos: Vec::new(),
                 },
-                suzatary_core::zone::Moment {
+                suzatary_base::zone::Moment {
                     at: prodrome_core::literal::Datetime::new(2026, 9, 1, 9, 0, 0, 0)
                         .expect("an instant"),
-                    zone: suzatary_core::zone::Zone::UTC,
+                    zone: suzatary_base::zone::Zone::UTC,
                 },
                 "owner",
                 &["home"],
@@ -87,7 +88,7 @@ fn the_agents_writes_are_cards_and_reach_no_chain() {
         "life".to_owned(),
         Agent {
             chain: &chain,
-            ..Nothing::agent()
+            ..Agent::nothing()
         },
     )]
     .into_iter()
@@ -175,7 +176,7 @@ fn the_agents_writes_are_cards_and_reach_no_chain() {
 /// The owner's round in conversation `default`, in which the model has read a message that asks
 /// for a write.
 fn a_round_that_read_mail(lines: &suzatary_core::secretary::conversations::InMemory) {
-    use suzatary_core::conversation_id::DEFAULT;
+    use suzatary_base::conversation_id::DEFAULT;
     use suzatary_core::secretary::model::{ToolCall, Turn};
     use suzatary_core::secretary::store::Entry;
     use suzatary_core::secretary::transcript;
@@ -237,7 +238,7 @@ fn a_round_that_read_mail(lines: &suzatary_core::secretary::conversations::InMem
 /// chain as `assistant` files a card instead; the chain holds exactly what it held.
 #[test]
 fn a_mail_read_in_the_round_makes_every_secretary_write_a_card() {
-    use suzatary_core::conversation_id::DEFAULT;
+    use suzatary_base::conversation_id::DEFAULT;
     use suzatary_core::secretary::SecretaryVerb;
     use suzatary_core::secretary::verb_name::{Binding, Effect};
 
@@ -258,7 +259,7 @@ fn a_mail_read_in_the_round_makes_every_secretary_write_a_card() {
             chain: &chain,
             conversations: lines.conversations(),
             inbox: &inbox,
-            ..Nothing::secretary()
+            ..Secretary::nothing()
         },
         policy: &policy,
     }];
@@ -387,7 +388,7 @@ fn the_agent_silences_no_sender_and_files_a_card_for_a_queued_one() {
         "life".to_owned(),
         Agent {
             corpus: &Forged,
-            ..Nothing::agent()
+            ..Agent::nothing()
         },
     )]
     .into_iter()

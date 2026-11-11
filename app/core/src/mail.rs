@@ -43,7 +43,7 @@ use crate::message_part::MailHeader;
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
-use crate::capability::Datetime;
+use suzatary_base::capability::Datetime;
 
 /// A link as it appeared in the mail; the label is what tells lookalike links apart.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
@@ -269,8 +269,8 @@ pub(crate) const MIN_SOURCE_PREFIX: usize = 6;
 /// At most `len` characters of `text` starting at character `start`: one page of a longer text.
 #[must_use]
 pub fn page(text: &str, start: usize, len: usize) -> &str {
-    let from = crate::spelling::shorten(text, start).len();
-    crate::spelling::shorten(&text[from..], len)
+    let from = suzatary_base::spelling::shorten(text, start).len();
+    suzatary_base::spelling::shorten(&text[from..], len)
 }
 
 /// Only the links a page may carry.
@@ -308,7 +308,7 @@ mod date {
     use prodrome_core::fpl::{datetime_of, instant_of, iso, parse_iso};
     use serde::{Deserialize, Deserializer, Serializer};
 
-    use crate::capability::Datetime;
+    use suzatary_base::capability::Datetime;
 
     #[expect(clippy::ref_option, reason = "serde's `with` signature")]
     pub fn serialize<S: Serializer>(

@@ -1,7 +1,7 @@
 use prodrome_core::event::Actor;
 use prodrome_core::policy::Untrusted;
 
-use crate::writer::Writer;
+use suzatary_base::writer::Writer;
 
 /// WHOSE KEY SIGNS AN ACTOR'S WRITES, and so the one key of the box's two registered for it:
 /// the agent's for the actor the agent writes as ([`Writer::Triage`]) and for any actor

@@ -7,7 +7,6 @@
 
 use prodrome_core::literal::Datetime;
 
-use crate::refusal::Refusal;
 use crate::rule::{Named, ReadingName, Rule};
 use crate::secretary::inbox::{self, Object, ProposalId, Response};
 use crate::secretary::inbox_event::InboxEvent;
@@ -15,6 +14,7 @@ use crate::secretary::inbox_reading::Reading;
 use crate::secretary::responded::{Performed, Responded};
 use crate::signatures::Tap;
 use crate::store::Prodrome;
+use suzatary_base::refusal::Refusal;
 
 /// The tap's rule at the instant of the tap.
 #[derive(Debug, Clone, Copy)]
@@ -87,10 +87,10 @@ impl Tapped {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::conversation_id::ConversationId;
-    use crate::reference::ProposalRef;
     use crate::secretary::proposal::{Draft, Proposal, Reasons};
     use crate::signatures::ActHeaders;
+    use suzatary_base::conversation_id::ConversationId;
+    use suzatary_base::reference::ProposalRef;
 
     fn tap() -> Tap {
         Tap::of(

@@ -7,10 +7,10 @@ use serde_json::Value;
 use super::Written;
 use crate::agent::Holds;
 use crate::priced::Priced;
-use crate::refusal::Refusal;
 use crate::secretary::changes::Act;
 use crate::todo::TodoPatch;
 use crate::verb::{Chained, Verb};
+use suzatary_base::refusal::Refusal;
 
 /// Change fields on a todo, as the surface writes.
 pub struct TodoUpdate<S>(PhantomData<S>);

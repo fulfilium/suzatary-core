@@ -40,7 +40,7 @@ pub fn run() -> anyhow::Result<()> {
         .context("reading the job")?;
     let answer = serde_json::from_str::<suzatary_core::template::Job>(&job)
         .map_err(|e| {
-            suzatary_core::capability::Rejected::whole(format!("the job does not parse: {e}"))
+            suzatary_base::capability::Rejected::whole(format!("the job does not parse: {e}"))
         })
         .and_then(|job| suzatary_io::typeset::compile(&job));
     std::io::stdout()

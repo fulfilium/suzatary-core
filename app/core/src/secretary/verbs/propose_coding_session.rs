@@ -3,8 +3,6 @@ use serde::Deserialize;
 use serde_json::{Value, json};
 
 use crate::coding::Task;
-use crate::reference::{ProposalRef, Reference};
-use crate::refusal::Refusal;
 use crate::secretary::acts::Act;
 use crate::secretary::afresh::Request;
 use crate::secretary::filed::Filing;
@@ -14,6 +12,8 @@ use crate::secretary::store::Stored;
 use crate::secretary::verbs::FilingArgs;
 use crate::secretary::{self, Call, SecretarySurface, taint};
 use crate::verb::Verb;
+use suzatary_base::reference::{ProposalRef, Reference};
+use suzatary_base::refusal::Refusal;
 
 /// Why a coding session is refused in a round that read anything but the owner's own words.
 const READ_OUTSIDE: &str = "this round has read something that is not the owner's own words \

@@ -22,7 +22,7 @@ const ID: &str = "form-1@example.test";
 const FIRST: &[u8] = b"first";
 const SECOND: &[u8] = b"second";
 
-fn ada() -> suzatary_core::capability::Login {
+fn ada() -> suzatary_base::capability::Login {
     common::login("ada@example.com")
 }
 

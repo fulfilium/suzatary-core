@@ -4,7 +4,6 @@ use schemars::JsonSchema;
 use serde::Deserialize;
 use serde_json::{Value, json};
 
-use crate::refusal::Refusal;
 use crate::secretary::stamp::Stamp;
 use crate::secretary::store::{Said, Stored};
 use crate::secretary::targets::{MAX_TOPICS, notes_in};
@@ -12,8 +11,9 @@ use crate::secretary::topics::revision::{Revision, held, listing, plan};
 use crate::secretary::topics::topic::Topic;
 use crate::secretary::turn_shape::{TurnShape, shape};
 use crate::secretary::{Call, SecretarySurface, queue, taint};
-use crate::topic_target::Target;
 use crate::verb::Verb;
+use suzatary_base::refusal::Refusal;
+use suzatary_base::topic_target::Target;
 
 /// Put topics on the round being answered, or on the note it drafted last.
 pub struct AddTopics;

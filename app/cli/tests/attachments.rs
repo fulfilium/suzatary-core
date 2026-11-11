@@ -45,7 +45,7 @@ fn mail(id: &str, name: &str) -> suzatary_core::held_value::HeldFile {
     }
 }
 
-fn ada() -> suzatary_core::capability::Login {
+fn ada() -> suzatary_base::capability::Login {
     common::login("ada@example.com")
 }
 

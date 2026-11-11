@@ -3,9 +3,9 @@ use serde::Deserialize;
 use serde_json::{Value, json};
 
 use crate::agent::{Call, TriageSurface};
-use crate::refusal::Refusal;
 use crate::secretary::search::{self, Needle};
 use crate::verb::Verb;
+use suzatary_base::refusal::Refusal;
 
 /// The secretary's facts, and the owner's own lines, that hold some words.
 pub struct Recall;

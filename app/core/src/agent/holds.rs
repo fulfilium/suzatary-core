@@ -5,12 +5,12 @@ use serde::de::DeserializeOwned;
 use serde_json::Value;
 
 use crate::agent::Agent;
-use crate::chains::ChainPolicy;
-use crate::refusal::Refusal;
 use crate::secretary::changes::Act;
 use crate::secretary::shown_record::{ShownRecord, Shows};
 use crate::verb::Surface;
-use crate::writer::Writer;
+use suzatary_base::chains::ChainPolicy;
+use suzatary_base::refusal::Refusal;
+use suzatary_base::writer::Writer;
 
 use super::Says;
 

@@ -4,7 +4,7 @@
 
 use axum::Json;
 use axum::response::{IntoResponse as _, Response};
-use suzatary_core::refusal::Refusal;
+use suzatary_base::refusal::Refusal;
 use suzatary_core::server::Server;
 use suzatary_core::store::StoreError;
 use suzatary_core::wire::StoreName;
@@ -29,13 +29,13 @@ pub fn named(segment: &str) -> Result<StoreName, Refusal> {
     // An older page asks for the store the lines replaced.
     if segment == "conversations" {
         return Err(Refusal::new(
-            suzatary_core::refusal::Status::UpgradeRequired,
+            suzatary_base::refusal::Status::UpgradeRequired,
             "the conversations are read from the lines now: a new version of this page is ready, and Reload loads it",
         ));
     }
     Err(Refusal::not_found(format!(
         "a tab holds the inbox, the lines, the topics and the topic aliases, not {}",
-        suzatary_core::refusal::shown(segment)
+        suzatary_base::refusal::shown(segment)
     )))
 }
 

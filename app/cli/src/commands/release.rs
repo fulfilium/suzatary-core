@@ -10,8 +10,8 @@ use clap::Subcommand;
 use prodrome_core::event::{TodoEvent, TodoId};
 use prodrome_core::literal::Datetime;
 use prodrome_core::term::Term;
-use suzatary_core::capability::Clock;
-use suzatary_core::escape::markup_text;
+use suzatary_base::capability::Clock;
+use suzatary_base::escape::markup_text;
 use suzatary_core::record::Node;
 use suzatary_core::release::{
     Completed, Completes, Cut, Fragment, Plan, Reading, Released, Version, binding,

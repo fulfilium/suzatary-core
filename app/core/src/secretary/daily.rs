@@ -1,14 +1,14 @@
 //! The box's own daily rounds: one conversation a day for each, continued rather than reopened,
 //! and opened only on a day that has work for it.
 
-use crate::conversation_id::ConversationId;
-use crate::conversation_id::Daily;
-use crate::refusal::{Refusal, Status};
 use crate::secretary::Secretary;
 use crate::secretary::conversations;
 use crate::secretary::store::{Kind, Stored};
 use crate::secretary::words::Words;
-use crate::zone::Zone;
+use suzatary_base::conversation_id::ConversationId;
+use suzatary_base::conversation_id::Daily;
+use suzatary_base::refusal::{Refusal, Status};
+use suzatary_base::zone::Zone;
 
 /// Today's round of one kind: its conversation, and that conversation as it stands when it was
 /// opened.

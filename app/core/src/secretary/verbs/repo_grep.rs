@@ -2,10 +2,10 @@ use schemars::JsonSchema;
 use serde::Deserialize;
 use serde_json::{Value, json};
 
-use crate::refusal::Refusal;
 use crate::secretary::verbs::{located, refused_by};
 use crate::secretary::{Call, SecretarySurface};
 use crate::verb::Verb;
+use suzatary_base::refusal::Refusal;
 
 /// The lines of a repository containing some text.
 pub struct RepoGrep;

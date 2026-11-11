@@ -2,7 +2,7 @@
 
 use serde::{Deserialize, Serialize};
 
-use crate::repo_ids::RepoPath;
+use suzatary_base::repo_ids::RepoPath;
 
 /// The most of a report a card carries, in bytes; the rest is cut and says so.
 pub(crate) const MAX_REPORT_BYTES: usize = 64 * 1024;

@@ -8,8 +8,8 @@ mod common;
 use std::sync::Arc;
 
 use common::{DeclaredStore, Fakes, SecretRecorder, SettingsFixture};
+use suzatary_base::conversation_id::SETUP;
 use suzatary_core::connect::Connection;
-use suzatary_core::conversation_id::SETUP;
 use suzatary_core::secretary::acts::Act;
 
 /// The scratch instance: every required table, one account and nothing connected beside it.

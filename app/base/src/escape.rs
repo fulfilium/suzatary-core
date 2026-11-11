@@ -22,7 +22,7 @@ pub(crate) const MARKUP_SPECIALS: &[char] =
 pub(crate) const STRING_SPECIALS: &[char] = &['\\', '"'];
 
 /// Typst markup that prose went through [`escape_markup`] to become: the one prose → markup
-/// door, and the type [`crate::render::Render`] takes.
+/// door, and the type `suzatary_core::render::Render` takes.
 #[derive(
     Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, serde::Serialize, schemars::JsonSchema,
 )]

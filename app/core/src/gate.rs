@@ -6,10 +6,10 @@ use std::net::IpAddr;
 
 use prodrome_core::event::Actor;
 
-use crate::capability::{Peer, Whois, WhoisError};
 use crate::deployment::Deployment;
-use crate::refusal::{Refusal, shown};
 use crate::signatures::Admitted;
+use suzatary_base::capability::{Peer, Whois, WhoisError};
+use suzatary_base::refusal::{Refusal, shown};
 
 /// The headers a proxy writes. A request carrying one came through something that is not its
 /// peer, so the socket's address names the proxy and whois would answer for the wrong party.
@@ -178,7 +178,7 @@ mod tests {
     use prodrome_core::policy::Untrusted;
 
     use super::*;
-    use crate::capability::Login;
+    use suzatary_base::capability::Login;
 
     /// A whois that names one address, plus an address it cannot reach.
     struct Daemon;
@@ -220,8 +220,8 @@ mod tests {
             .into_iter()
             .collect(),
             actors: BTreeMap::from([(Login::from_whois(HERS), actor("ada"))]),
-            chains: crate::chains::Chains::of(vec![crate::chains::ChainPolicy {
-                name: crate::chains::ChainName::new("life").expect("a slug"),
+            chains: suzatary_base::chains::Chains::of(vec![suzatary_base::chains::ChainPolicy {
+                name: suzatary_base::chains::ChainName::new("life").expect("a slug"),
                 untrusted: Untrusted::of([actor("triage")]),
                 roster: BTreeSet::from([actor("ada"), actor("triage")]),
                 root: crate::cast::keys::root(),
@@ -230,7 +230,7 @@ mod tests {
             categories: BTreeMap::from([("home".to_owned(), 3)]),
             app_url: "https://example.test".to_owned(),
             coding: None,
-            zone: crate::zone::Zone::UTC,
+            zone: suzatary_base::zone::Zone::UTC,
         }
     }
 

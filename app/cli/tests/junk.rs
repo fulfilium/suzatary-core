@@ -48,7 +48,7 @@ fn fakes(tag: &str) -> Fakes {
     })
 }
 
-fn call(fakes: &Fakes, verb: &str, args: Value) -> Result<Value, suzatary_core::refusal::Refusal> {
+fn call(fakes: &Fakes, verb: &str, args: Value) -> Result<Value, suzatary_base::refusal::Refusal> {
     let deployment = common::deployment([], []);
     let policy = common::chain();
     let chains = [suzatary_core::secretary::Bound {
@@ -63,7 +63,7 @@ fn call(fakes: &Fakes, verb: &str, args: Value) -> Result<Value, suzatary_core::
         &deployment,
         &suzatary_core::settings::Settables::default(),
         &chains,
-        &suzatary_core::conversation_id::DEFAULT.clone(),
+        &suzatary_base::conversation_id::DEFAULT.clone(),
         verb,
         &args,
     )

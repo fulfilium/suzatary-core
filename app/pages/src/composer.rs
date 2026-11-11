@@ -4,7 +4,7 @@
 use std::collections::BTreeMap;
 
 use serde::{Deserialize, Serialize};
-use suzatary_core::reference::Reference;
+use suzatary_base::reference::Reference;
 use suzatary_core::wire::topics::{AttachmentRow, TurnRow};
 use suzatary_core::wire::{Uploaded, Uploading};
 use ts_rs::TS;

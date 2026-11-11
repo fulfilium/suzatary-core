@@ -4,11 +4,11 @@ use axum::Json;
 use axum::http::header;
 use axum::response::{IntoResponse, Response};
 use prodrome_core::event::Actor;
+use suzatary_base::conversation_id::ConversationId;
+use suzatary_base::reference::Reference;
+use suzatary_base::refusal::{Refusal, shown};
 use suzatary_core::attachment::{Attachment, AttachmentId};
-use suzatary_core::conversation_id::ConversationId;
 use suzatary_core::file_read::Withheld;
-use suzatary_core::reference::Reference;
-use suzatary_core::refusal::{Refusal, shown};
 use suzatary_core::secretary::readings;
 use suzatary_core::secretary::routes as secretary_routes;
 use suzatary_core::secretary::stamp::{self, Speaker, Stamp};
@@ -306,7 +306,7 @@ impl Params for Handle {
 pub fn replace(call: &Call<Writer, Handle, ()>) -> Result<Json<serde_json::Value>, Refusal> {
     call.state
         .with_cards(|caps, cards| secretary_routes::replace(caps, cards, &call.params.0))?;
-    call.state.heard(&suzatary_core::conversation_id::SETUP);
+    call.state.heard(&suzatary_base::conversation_id::SETUP);
     Ok(Json(serde_json::json!({})))
 }
 
@@ -369,7 +369,7 @@ pub fn block(
             shown(sha)
         )));
     };
-    let block = suzatary_core::answer::Renderable::of(&source);
+    let block = suzatary_base::answer::Renderable::of(&source);
     let key = suzatary_core::rendering::ANSWER
         .key(&block)
         .map_err(|e| Refusal::internal(e.to_string()))?;

@@ -9,8 +9,8 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use prodrome_core::event::Actor;
 use prodrome_core::literal::Datetime;
 use proptest::prelude::*;
-use suzatary_core::capability::Entropy;
-use suzatary_core::conversation_id::ConversationId;
+use suzatary_base::capability::Entropy;
+use suzatary_base::conversation_id::ConversationId;
 use suzatary_core::secretary::inbox_event::InboxEvent;
 use suzatary_core::secretary::memories::Memories;
 use suzatary_core::secretary::memory::{self, Fact, FactId, Kind, MAX_LIVE, Origin};
@@ -371,7 +371,7 @@ proptest! {
         let held = Held::default();
         let memories = held.memories();
         let opened = || vec![suzatary_core::secretary::store::Entry::Opened {
-            at: suzatary_core::capability::Datetime::new(2026, 10, 2, 9, 0, 0, 0).expect("an instant"),
+            at: suzatary_base::capability::Datetime::new(2026, 10, 2, 9, 0, 0, 0).expect("an instant"),
             title: suzatary_core::secretary::words::Words::kept("t".to_owned()),
             model: "m".to_owned(),
             kind: suzatary_core::secretary::store::Kind::Topic,
@@ -423,7 +423,7 @@ proptest! {
                     prop_assert_eq!(&knows[c], &expected);
                     if stored.memory_seen != Some(change.version()) {
                         files[c].push(suzatary_core::secretary::store::Entry::MemorySeen {
-                            at: suzatary_core::capability::Datetime::new(2026, 10, 2, 9, 0, 0, 0).expect("an instant"),
+                            at: suzatary_base::capability::Datetime::new(2026, 10, 2, 9, 0, 0, 0).expect("an instant"),
                             version: change.version(),
                         });
                     }

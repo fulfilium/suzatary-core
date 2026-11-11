@@ -20,7 +20,6 @@ use std::sync::LazyLock;
 use prodrome_core::digest::Measure as _;
 use prodrome_core::event::Hash;
 
-use crate::rule_version::{Version, Versioned};
 use crate::secretary::digest::Digest;
 use crate::secretary::digest_label::{Kind, Kinds, Label};
 use crate::secretary::digest_line::{Line, NODE_BYTES};
@@ -28,6 +27,7 @@ use crate::secretary::digest_view::{self, Body, Keep, LINE_BYTES, VIEW_BYTES, re
 use crate::secretary::shown_record::{CleanWords, OwnersWords, Shows as _};
 use crate::secretary::store::Entry;
 use crate::secretary::taint::Taint;
+use suzatary_base::rule_version::{Version, Versioned};
 
 /// The compactor's rules, the file the code sends: `app/core/src/secretary/compact.md`.
 pub const PROMPT: &str = include_str!("compact.md");
@@ -99,7 +99,8 @@ const PROBE_CUT: usize = 160;
 fn probe() -> Vec<(Label, Body)> {
     use crate::secretary::model::{ToolCall, Turn};
     use crate::secretary::outcome::Outcome;
-    let at = || crate::capability::Datetime::new(2026, 10, 25, 9, 0, 0, 0).expect("an instant");
+    let at =
+        || suzatary_base::capability::Datetime::new(2026, 10, 25, 9, 0, 0, 0).expect("an instant");
     let tool = |outcome| Turn::Tool {
         verb: "weather".into(),
         answer: "a verb's answer".to_owned(),

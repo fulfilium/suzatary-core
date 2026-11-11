@@ -12,7 +12,7 @@ use suzatary_core::cast::CAST;
 use suzatary_core::secretary::stamp::{Speaker, Stamp};
 use suzatary_core::signatures::Seat;
 
-fn owner() -> suzatary_core::capability::Login {
+fn owner() -> suzatary_base::capability::Login {
     common::login("ada@example.com")
 }
 
@@ -105,7 +105,7 @@ fn an_operators_tap_on_a_card_that_sends_is_refused() {
 
     let refused = tap::tap(
         &operator,
-        &suzatary_core::reference::ProposalRef {
+        &suzatary_base::reference::ProposalRef {
             conversation: asked.conversation.clone(),
             index: 0,
         },

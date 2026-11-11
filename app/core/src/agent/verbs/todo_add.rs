@@ -9,10 +9,10 @@ use super::Written;
 use crate::agent::Holds;
 use crate::agent::sourced::Sourced;
 use crate::priced::{PRICE_SPELLINGS, Priced, day_of};
-use crate::refusal::Refusal;
 use crate::secretary::changes::{Act, Provenance};
 use crate::todo::TodoFields;
 use crate::verb::{Caught, Chained, Verb};
+use suzatary_base::refusal::Refusal;
 
 /// Author a new todo, as the surface writes.
 pub struct TodoAdd<S>(PhantomData<S>);

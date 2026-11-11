@@ -3,7 +3,6 @@ use serde::Deserialize;
 use serde_json::{Value, json};
 
 use crate::held_value::HeldFile;
-use crate::refusal::Refusal;
 use crate::secretary;
 use crate::secretary::Secretary;
 use crate::secretary::attached::{self, Attached};
@@ -17,6 +16,7 @@ use crate::secretary::verbs::{FilingArgs, kept, mail_refusal, refused_by};
 use crate::secretary::{Call, SecretarySurface};
 use crate::upload::Upload;
 use crate::verb::Verb;
+use suzatary_base::refusal::Refusal;
 
 /// Propose a message, which only a tap sends.
 pub struct ProposeEmail;
@@ -272,9 +272,9 @@ fn recorded(
 /// digest, so the tap sends these bytes whatever the branch does next.
 fn repo_file(
     caps: &Secretary<'_>,
-    repo: crate::repo_ids::RepoName,
-    path: crate::repo_ids::RepoPath,
-    at: &crate::repo_ids::Rev,
+    repo: suzatary_base::repo_ids::RepoName,
+    path: suzatary_base::repo_ids::RepoPath,
+    at: &suzatary_base::repo_ids::Rev,
 ) -> Result<Attached, Refusal> {
     let commit = caps
         .repositories

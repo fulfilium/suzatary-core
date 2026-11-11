@@ -3,7 +3,7 @@
 //! Always UTC whatever the machine's zone, spelt naive because the Prodrome's literal has no
 //! zone. A wrong clock is reported elsewhere, never clamped here.
 
-use suzatary_core::capability::{Clock, Datetime};
+use suzatary_base::capability::{Clock, Datetime};
 
 /// The box's own wall clock.
 #[derive(Debug, Clone, Copy, Default)]

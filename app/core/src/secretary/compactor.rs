@@ -6,10 +6,10 @@
 //! short and stored as though it had been said. Each call is first handed to `before`, which
 //! records it durably and may refuse it, so a call that then fails was still counted.
 
-use crate::refusal::Refusal;
 use crate::secretary::compact::Compact;
 use crate::secretary::compact_ask::{Ask, Unfit};
 use crate::secretary::digest_line::{Line, NODE_BYTES, NotALine};
+use suzatary_base::refusal::Refusal;
 
 /// The most calls one attempt makes.
 pub const TRIES: u32 = 5;

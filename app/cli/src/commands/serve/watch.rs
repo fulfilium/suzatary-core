@@ -2,7 +2,7 @@
 
 use std::collections::BTreeSet;
 
-use suzatary_core::chains::ChainPolicy;
+use suzatary_base::chains::ChainPolicy;
 use suzatary_core::deployment::Deployment;
 use suzatary_core::server::Server;
 use suzatary_core::{notify, routes, view};

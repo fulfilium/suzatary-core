@@ -256,7 +256,7 @@ mod tests {
     use proptest::prelude::*;
 
     use super::*;
-    use crate::capability::Secret;
+    use suzatary_base::capability::Secret;
 
     fn key() -> DedupKey {
         DedupKey::of(&Secret::new("ab".repeat(32))).expect("a key")

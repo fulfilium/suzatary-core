@@ -85,7 +85,7 @@ impl suzatary_core::settings::Edits for InstanceEdits {
 
     fn allow_drive(
         &self,
-        folder: &suzatary_core::drive_path::DrivePath,
+        folder: &suzatary_base::drive_path::DrivePath,
     ) -> Result<(), suzatary_core::settings::EditError> {
         self.allow("drive_allow", folder.to_string())
     }

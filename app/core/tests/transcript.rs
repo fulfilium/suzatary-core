@@ -15,8 +15,8 @@ use prodrome_core::literal::Datetime;
 use prodrome_core::policy::Everything;
 use prodrome_core::store::EventStore;
 
+use suzatary_base::conversation_id::ConversationId;
 use suzatary_core::cast::CAST;
-use suzatary_core::conversation_id::ConversationId;
 use suzatary_core::secretary::conversations::Counting;
 use suzatary_core::secretary::inbox::{self, ProposalId};
 use suzatary_core::secretary::inbox_event::{InboxEvent, Said};

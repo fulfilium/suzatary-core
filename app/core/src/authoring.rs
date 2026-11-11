@@ -23,13 +23,13 @@ use prodrome_core::policy::{Policy, Untrusted};
 use prodrome_core::term::{Term, TermF};
 use regex::Regex;
 
-use crate::capability::{Datetime, Typeset};
-use crate::escape::escape_string;
-use crate::reference::Reference;
-use crate::refusal::{Refusal, shown};
 use crate::todo::price::ratio;
 use crate::todo::{Patch, TodoFields, TodoPatch};
-use crate::zone::Moment;
+use suzatary_base::capability::{Datetime, Typeset};
+use suzatary_base::escape::escape_string;
+use suzatary_base::reference::Reference;
+use suzatary_base::refusal::{Refusal, shown};
+use suzatary_base::zone::Moment;
 
 /// A todo id, as authoring spells one: narrower than the chain's `[a-z0-9_-]+`, because ids
 /// are referenced by hand forever.
@@ -811,11 +811,13 @@ fn reaching(
         return None;
     }
     let function = functions.get(from)?;
-    crate::tree::refs(function).into_iter().find_map(|next| {
-        let mut path = reaching(functions, next, to, seen)?;
-        path.insert(0, from.to_owned());
-        Some(path)
-    })
+    suzatary_base::tree::refs(function)
+        .into_iter()
+        .find_map(|next| {
+            let mut path = reaching(functions, next, to, seen)?;
+            path.insert(0, from.to_owned());
+            Some(path)
+        })
 }
 
 /// A confirmation: the latest provisional record re-appended, same content, by a trusted actor.
@@ -1189,11 +1191,11 @@ mod tests {
                 day.and_time(chrono::NaiveTime::from_hms_opt(12, 0, 0).expect("noon")),
             )
             .expect("an instant"),
-            zone: crate::zone::Zone::UTC,
+            zone: suzatary_base::zone::Zone::UTC,
         }
     }
-    use crate::capability::Parses;
     use prodrome_core::event::Actor;
+    use suzatary_base::capability::Parses;
 
     use super::*;
     use crate::todo::{Deadline, Price};
@@ -1242,9 +1244,9 @@ mod tests {
         let record = authored_of(
             build_todo(
                 &a_todo(),
-                crate::zone::Moment {
+                suzatary_base::zone::Moment {
                     at: at(7),
-                    zone: crate::zone::Zone::UTC,
+                    zone: suzatary_base::zone::Zone::UTC,
                 },
                 "ada",
                 &["work", "home"],
@@ -1263,7 +1265,7 @@ mod tests {
     /// A closed world whose every render carries a script: what the tripwire is for.
     struct Scripted;
     impl Typeset for Scripted {
-        fn closed(&self, _: &str) -> Result<String, crate::capability::Rejected> {
+        fn closed(&self, _: &str) -> Result<String, suzatary_base::capability::Rejected> {
             Ok("<body><script>x()</script></body>".to_owned())
         }
     }
@@ -1273,9 +1275,9 @@ mod tests {
         body.clone_into(&mut todo.fields.body);
         build_todo(
             &todo,
-            crate::zone::Moment {
+            suzatary_base::zone::Moment {
                 at: at(7),
-                zone: crate::zone::Zone::UTC,
+                zone: suzatary_base::zone::Zone::UTC,
             },
             actor,
             &["work"],
@@ -1335,9 +1337,9 @@ mod tests {
             update_todo(
                 &before,
                 &edit("First *note*"),
-                crate::zone::Moment {
+                suzatary_base::zone::Moment {
                     at: at(8),
-                    zone: crate::zone::Zone::UTC,
+                    zone: suzatary_base::zone::Zone::UTC,
                 },
                 "ada",
                 &[],
@@ -1350,9 +1352,9 @@ mod tests {
             update_todo(
                 &once,
                 &edit("Second"),
-                crate::zone::Moment {
+                suzatary_base::zone::Moment {
                     at: at(9),
-                    zone: crate::zone::Zone::UTC,
+                    zone: suzatary_base::zone::Zone::UTC,
                 },
                 "ada",
                 &[],
@@ -1366,9 +1368,9 @@ mod tests {
             update_todo(
                 &once,
                 &edit("x ]"),
-                crate::zone::Moment {
+                suzatary_base::zone::Moment {
                     at: at(9),
-                    zone: crate::zone::Zone::UTC
+                    zone: suzatary_base::zone::Zone::UTC
                 },
                 "ada",
                 &[],
@@ -1385,9 +1387,9 @@ mod tests {
         let theirs = authored_of(
             build_todo(
                 &a_todo(),
-                crate::zone::Moment {
+                suzatary_base::zone::Moment {
                     at: at(7),
-                    zone: crate::zone::Zone::UTC,
+                    zone: suzatary_base::zone::Zone::UTC,
                 },
                 "triage",
                 &["work"],
@@ -1414,9 +1416,9 @@ mod tests {
         let mine = authored_of(
             build_todo(
                 &a_todo(),
-                crate::zone::Moment {
+                suzatary_base::zone::Moment {
                     at: at(7),
-                    zone: crate::zone::Zone::UTC,
+                    zone: suzatary_base::zone::Zone::UTC,
                 },
                 "ada",
                 &["work"],
@@ -1433,9 +1435,9 @@ mod tests {
         let theirs = authored_of(
             build_todo(
                 &a_todo(),
-                crate::zone::Moment {
+                suzatary_base::zone::Moment {
                     at: at(7),
-                    zone: crate::zone::Zone::UTC,
+                    zone: suzatary_base::zone::Zone::UTC,
                 },
                 "triage",
                 &["work"],
@@ -1456,7 +1458,7 @@ mod tests {
     /// deadline on Friday is reached when Friday ends in New York.
     #[test]
     fn at_nine_in_the_evening_in_new_york_the_days_are_new_yorks() {
-        let new_york = crate::zone::Zone::named("America/New_York").expect("a zone");
+        let new_york = suzatary_base::zone::Zone::named("America/New_York").expect("a zone");
         let late = fpl::datetime_of(
             NaiveDate::from_ymd_opt(2026, 10, 7)
                 .and_then(|d| d.and_hms_opt(1, 0, 0))
@@ -1469,7 +1471,7 @@ mod tests {
         };
         let utc = Moment {
             at: late,
-            zone: crate::zone::Zone::UTC,
+            zone: suzatary_base::zone::Zone::UTC,
         };
         let day = |d| NaiveDate::from_ymd_opt(2026, 10, d).expect("a day");
         let flat = fpl::mk_flat(0.35).expect("valid");
@@ -1645,9 +1647,9 @@ mod tests {
                     detail_append: Patch::Set("Confirmed on 2026-09-11.".to_owned()),
                     ..TodoPatch::default()
                 },
-                crate::zone::Moment {
+                suzatary_base::zone::Moment {
                     at: at(2),
-                    zone: crate::zone::Zone::UTC,
+                    zone: suzatary_base::zone::Zone::UTC,
                 },
                 "ada",
                 &["work"],
@@ -1942,8 +1944,8 @@ mod tests {
     // --- build_decision ------------------------------------------------------
 
     fn performs() -> Reference {
-        Reference::Proposal(crate::reference::ProposalRef {
-            conversation: crate::conversation_id::ConversationId::new("2026-09-17-1")
+        Reference::Proposal(suzatary_base::reference::ProposalRef {
+            conversation: suzatary_base::conversation_id::ConversationId::new("2026-09-17-1")
                 .expect("a slug"),
             index: 3,
         })
@@ -1971,9 +1973,9 @@ mod tests {
         let record = record_of(
             build_decision(
                 &a_decision(),
-                crate::zone::Moment {
+                suzatary_base::zone::Moment {
                     at: at(17),
-                    zone: crate::zone::Zone::UTC,
+                    zone: suzatary_base::zone::Zone::UTC,
                 },
                 "assistant",
                 &[],
@@ -1992,9 +1994,9 @@ mod tests {
         let record = record_of(
             build_decision(
                 &structural,
-                crate::zone::Moment {
+                suzatary_base::zone::Moment {
                     at: at(17),
-                    zone: crate::zone::Zone::UTC,
+                    zone: suzatary_base::zone::Zone::UTC,
                 },
                 "assistant",
                 &[],
@@ -2024,9 +2026,9 @@ mod tests {
         let mut parent = authored_of(
             build_todo(
                 &a_todo(),
-                crate::zone::Moment {
+                suzatary_base::zone::Moment {
                     at: at(7),
-                    zone: crate::zone::Zone::UTC,
+                    zone: suzatary_base::zone::Zone::UTC,
                 },
                 "ada",
                 &["work"],
@@ -2039,9 +2041,9 @@ mod tests {
                 &child(id),
                 &parent,
                 &BTreeMap::new(),
-                crate::zone::Moment {
+                suzatary_base::zone::Moment {
                     at: at(8),
-                    zone: crate::zone::Zone::UTC,
+                    zone: suzatary_base::zone::Zone::UTC,
                 },
                 "ada",
                 &["work"],

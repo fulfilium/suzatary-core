@@ -67,7 +67,7 @@ fn shown_object(
             // The action line as of this object; "" when nothing has authored one.
             body: current
                 .get(&todo)
-                .map(|record| crate::escape::markup_text(record.payload.body.as_str()))
+                .map(|record| suzatary_base::escape::markup_text(record.payload.body.as_str()))
                 .unwrap_or_default(),
             at: iso(event.at()),
             actor: event.actor().as_str().to_owned(),
@@ -133,14 +133,14 @@ fn changed(before: Option<&Authored>, after: &Authored) -> Vec<wire::ProposedCha
     type Reader = (&'static str, fn(&Authored) -> String);
     let readers: [Reader; 6] = [
         ("body", |r| {
-            crate::escape::markup_text(r.payload.body.as_str())
+            suzatary_base::escape::markup_text(r.payload.body.as_str())
         }),
         ("detail", |r| {
-            crate::escape::markup_text(r.payload.detail.as_str())
+            suzatary_base::escape::markup_text(r.payload.detail.as_str())
         }),
         ("priority", price),
         ("rationale", |r| {
-            crate::escape::markup_text(&r.payload.rationale.join(" "))
+            suzatary_base::escape::markup_text(&r.payload.rationale.join(" "))
         }),
         ("waiting_on", |r| {
             crate::view::string_text(r.payload.waiting_on.as_str())

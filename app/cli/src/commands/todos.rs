@@ -6,9 +6,9 @@ use std::path::Path;
 
 use anyhow::Context;
 use clap::Subcommand;
+use suzatary_base::capability::Clock;
+use suzatary_base::escape::{markup_text, string_text};
 use suzatary_core::believed::one_outcome;
-use suzatary_core::capability::Clock;
-use suzatary_core::escape::{markup_text, string_text};
 use suzatary_core::record::Entry;
 use suzatary_io::clock::SystemClock;
 

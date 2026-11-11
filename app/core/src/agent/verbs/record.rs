@@ -6,9 +6,9 @@ use serde_json::Value;
 
 use super::Written;
 use crate::agent::Holds;
-use crate::refusal::{Refusal, shown};
 use crate::secretary::changes::Act;
 use crate::verb::{Chained, Verb};
+use suzatary_base::refusal::{Refusal, shown};
 
 /// A todo's lifecycle event, as the surface writes.
 pub struct Record<S>(PhantomData<S>);

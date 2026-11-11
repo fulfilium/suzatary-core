@@ -4,14 +4,10 @@
 //! mint and carries an index, never a body, so what is sent is what was stored and shown.
 
 use crate::believed::Preview;
-use crate::capability::{Clock, Secret};
-use crate::conversation_id::ConversationId;
 use crate::deployment::Deployment;
 use crate::health::plugin::{Origin, PluginName};
 use crate::held_value::{self, Filled, Reveal};
 use crate::mail::oauth::Consent;
-use crate::reference::{ProposalRef, Reference, TodoRef};
-use crate::refusal::{Answered, Refusal};
 use crate::secretary::Bound;
 use crate::secretary::act_lines::ActLine;
 use crate::secretary::acts::Act;
@@ -34,6 +30,10 @@ use crate::server::Server;
 use crate::settings::{Edits, Settable, Settables, Writes};
 use crate::signatures::Tap;
 use crate::wire::topics as wire;
+use suzatary_base::capability::{Clock, Secret};
+use suzatary_base::conversation_id::ConversationId;
+use suzatary_base::reference::{ProposalRef, Reference, TodoRef};
+use suzatary_base::refusal::{Answered, Refusal};
 
 /// Sending a proposed message, the one effect behind a tap; deliberately in no capability bundle,
 /// so no verb can send.
@@ -74,8 +74,8 @@ pub struct Cards<'a> {
 /// Each named chain's events, folded once; only the chains a changeset names, since the page polls.
 struct Drawn<'a> {
     nodes: std::collections::BTreeMap<String, (Preview, prodrome_core::policy::Untrusted)>,
-    typeset: &'a dyn crate::capability::Typeset,
-    now: crate::zone::Moment,
+    typeset: &'a dyn suzatary_base::capability::Typeset,
+    now: suzatary_base::zone::Moment,
     categories: Vec<String>,
     routine: Option<crate::connect::RoutineId>,
     model: Option<Settable>,
@@ -89,8 +89,8 @@ impl<'a> Drawn<'a> {
     fn of(
         lines: &crate::secretary::store::Lines,
         cards: &Cards<'_>,
-        at: crate::capability::Datetime,
-        typeset: &'a dyn crate::capability::Typeset,
+        at: suzatary_base::capability::Datetime,
+        typeset: &'a dyn suzatary_base::capability::Typeset,
     ) -> Self {
         let wanted: std::collections::BTreeSet<&str> = lines
             .standings()
@@ -126,7 +126,7 @@ impl<'a> Drawn<'a> {
         Self {
             nodes: read,
             typeset,
-            now: crate::zone::Moment {
+            now: suzatary_base::zone::Moment {
                 at,
                 zone: cards.deployment.zone,
             },
@@ -322,7 +322,7 @@ pub fn replace(caps: &Server<'_>, cards: &Cards<'_>, handle: &str) -> Result<(),
         .ok_or_else(|| {
             Refusal::not_found(format!(
                 "no secret this deployment stores is named {}",
-                crate::refusal::shown(handle)
+                suzatary_base::refusal::shown(handle)
             ))
         })?;
     let at = caps.secretary.clock.now();
@@ -730,7 +730,7 @@ enum Allowing<'p> {
     /// A web request's drafted rule.
     Rule(&'p crate::web::AllowRule),
     /// A document, whose folder is allowed.
-    Document(&'p crate::drive_path::DrivePath),
+    Document(&'p suzatary_base::drive_path::DrivePath),
 }
 
 /// What an account's removal does with the mail the box kept for it.
@@ -1604,7 +1604,7 @@ pub fn ask_trust(
     let stored = conversations::read_or_open_default(
         caps.secretary.conversations,
         caps.secretary.model,
-        &crate::conversation_id::DEFAULT,
+        &suzatary_base::conversation_id::DEFAULT,
         caps.secretary.clock.now(),
     )?;
     // Bounded, since a key nobody trusts can ask: a stray key cannot flood the Inbox.
@@ -1688,7 +1688,7 @@ pub fn withdraw_trusted(
     inbox: &dyn crate::store::Prodrome<crate::secretary::inbox_event::InboxEvent>,
     history: &dyn crate::store::Prodrome<crate::record::TodoEvent>,
     root: &prodrome_core::sign::PublicKey,
-    at: crate::capability::Datetime,
+    at: suzatary_base::capability::Datetime,
 ) -> Result<Vec<ProposalId>, Refusal> {
     let swept = crate::secretary::done_elsewhere::sweep(inbox, at, |proposal| {
         use crate::secretary::done_elsewhere::Seen;
@@ -2465,7 +2465,8 @@ mod tests {
             asked: "proposal:default/0".parse().expect("a reference"),
             price: inbox::Price::unpriced(),
         };
-        let at = crate::capability::Datetime::new(2026, 9, 11, 9, 0, 0, 0).expect("an instant");
+        let at =
+            suzatary_base::capability::Datetime::new(2026, 9, 11, 9, 0, 0, 0).expect("an instant");
         let id = ProposalId::of(&asked, at);
         let said = |said| InboxEvent {
             proposal: id.clone(),
@@ -2506,16 +2507,16 @@ mod tests {
     }
 
     /// An empty [`Drawn`], for a test that never proposes a changeset.
-    use crate::capability::Parses;
+    use suzatary_base::capability::Parses;
 
     fn no_chain() -> Drawn<'static> {
         Drawn {
             nodes: std::collections::BTreeMap::new(),
             typeset: &Parses,
-            now: crate::zone::Moment {
-                at: crate::capability::Datetime::new(2026, 9, 9, 9, 2, 0, 0)
+            now: suzatary_base::zone::Moment {
+                at: suzatary_base::capability::Datetime::new(2026, 9, 9, 9, 2, 0, 0)
                     .expect("a real instant"),
-                zone: crate::zone::Zone::UTC,
+                zone: suzatary_base::zone::Zone::UTC,
             },
             categories: Vec::new(),
             model: None,
@@ -2578,7 +2579,7 @@ mod tests {
     impl Answers for NeverAsked {
         fn block(
             &self,
-            _block: &crate::answer::Renderable,
+            _block: &suzatary_base::answer::Renderable,
         ) -> Result<crate::render::Html, crate::secretary::answers::AnswerError> {
             panic!("a turn that is not the model's was rendered");
         }
@@ -2591,7 +2592,8 @@ mod tests {
         let person = turn(
             &NeverAsked,
             &Said {
-                at: crate::capability::Datetime::new(2026, 9, 9, 9, 1, 0, 0).expect("an instant"),
+                at: suzatary_base::capability::Datetime::new(2026, 9, 9, 9, 1, 0, 0)
+                    .expect("an instant"),
                 turn: crate::secretary::model::Turn::Person {
                     text: "what changed".to_owned(),
                     references: Vec::new(),
@@ -2637,7 +2639,8 @@ mod tests {
         Memory {
             facts: vec![Remembered {
                 id: FactId(1),
-                at: crate::capability::Datetime::new(2026, 10, 2, 9, 0, 0, 0).expect("an instant"),
+                at: suzatary_base::capability::Datetime::new(2026, 10, 2, 9, 0, 0, 0)
+                    .expect("an instant"),
                 fact: Fact::new("He takes the 7:40 train").expect("a fact"),
                 kind: Kind::Owner,
                 said: crate::secretary::provenance::Provenance::said(Origin::Turn {
@@ -2651,7 +2654,8 @@ mod tests {
             }],
             forgotten: vec![Forgotten {
                 id: FactId(2),
-                at: crate::capability::Datetime::new(2026, 10, 2, 9, 2, 0, 0).expect("an instant"),
+                at: suzatary_base::capability::Datetime::new(2026, 10, 2, 9, 2, 0, 0)
+                    .expect("an instant"),
                 by: "ada".to_owned(),
                 version: 3,
             }],
@@ -2669,7 +2673,8 @@ mod tests {
         let row = |turn_said: crate::secretary::model::Turn, memory: Option<&Memory>| match turn(
             &NeverAsked,
             &Said {
-                at: crate::capability::Datetime::new(2026, 10, 2, 9, 0, 0, 0).expect("an instant"),
+                at: suzatary_base::capability::Datetime::new(2026, 10, 2, 9, 0, 0, 0)
+                    .expect("an instant"),
                 turn: turn_said,
                 by: None,
             },
@@ -2759,7 +2764,7 @@ mod tests {
     impl Answers for AlwaysRenders {
         fn block(
             &self,
-            block: &crate::answer::Renderable,
+            block: &suzatary_base::answer::Renderable,
         ) -> Result<crate::render::Html, crate::secretary::answers::AnswerError> {
             Ok(crate::render::Html::from_render(format!(
                 "<p>{}</p>",
@@ -2772,7 +2777,7 @@ mod tests {
     impl Answers for NeverRenders {
         fn block(
             &self,
-            _block: &crate::answer::Renderable,
+            _block: &suzatary_base::answer::Renderable,
         ) -> Result<crate::render::Html, crate::secretary::answers::AnswerError> {
             Err(crate::secretary::answers::AnswerError(
                 "typst refused".to_owned(),
@@ -2785,7 +2790,8 @@ mod tests {
     #[test]
     fn a_model_turns_blocks_each_ask_the_renderer() {
         let model_turn = Said {
-            at: crate::capability::Datetime::new(2026, 9, 9, 9, 2, 0, 0).expect("an instant"),
+            at: suzatary_base::capability::Datetime::new(2026, 9, 9, 9, 2, 0, 0)
+                .expect("an instant"),
             turn: crate::secretary::model::Turn::Model {
                 text: "= Hello\n\n#html.elem(\"b\")[x]".to_owned(),
                 calls: Vec::new(),
@@ -2801,7 +2807,7 @@ mod tests {
         assert_eq!(rendered.len(), 2);
         assert_eq!(rendered[0].html.as_deref(), Some("<p>= Hello</p>"));
         assert_eq!(rendered[0].plain, "Hello");
-        assert_eq!(rendered[0].kind, crate::answer::Kind::Heading);
+        assert_eq!(rendered[0].kind, suzatary_base::answer::Kind::Heading);
         assert_eq!(
             rendered[1].html.as_deref(),
             Some("<p>#html.elem(\"b\")[x]</p>"),
@@ -2815,7 +2821,8 @@ mod tests {
     #[test]
     fn only_a_model_turn_is_ever_rendered() {
         let person = Said {
-            at: crate::capability::Datetime::new(2026, 9, 9, 9, 1, 0, 0).expect("an instant"),
+            at: suzatary_base::capability::Datetime::new(2026, 9, 9, 9, 1, 0, 0)
+                .expect("an instant"),
             turn: crate::secretary::model::Turn::Person {
                 text: "what changed".to_owned(),
                 references: Vec::new(),
@@ -2828,7 +2835,8 @@ mod tests {
             wire::Speaker::Person { .. }
         ));
         let act = Said {
-            at: crate::capability::Datetime::new(2026, 9, 9, 9, 3, 0, 0).expect("an instant"),
+            at: suzatary_base::capability::Datetime::new(2026, 9, 9, 9, 3, 0, 0)
+                .expect("an instant"),
             turn: crate::secretary::model::Turn::Act {
                 text: "dismissed proposal 0".to_owned(),
                 references: Vec::new(),
@@ -2857,7 +2865,7 @@ mod tests {
     }
 
     fn value() -> TapAnswer {
-        TapAnswer::Value(crate::capability::Secret::new("a value"))
+        TapAnswer::Value(suzatary_base::capability::Secret::new("a value"))
     }
 
     fn endorsed() -> TapAnswer {
@@ -2922,7 +2930,7 @@ mod tests {
             (endorsed(), ENDORSEMENT_BELONGS),
         ] {
             let refusal = refused(prepared(&email, &answer, &with_ntfy()));
-            assert_eq!(refusal.status(), crate::refusal::Status::BadRequest);
+            assert_eq!(refusal.status(), suzatary_base::refusal::Status::BadRequest);
             assert_eq!(refusal.message(), words);
         }
     }
@@ -2948,7 +2956,7 @@ mod tests {
             &[],
         );
         let refusal = refused(prepared(&card, &answer, &undeclared));
-        assert_eq!(refusal.status(), crate::refusal::Status::Conflict);
+        assert_eq!(refusal.status(), suzatary_base::refusal::Status::Conflict);
         assert!(
             refusal
                 .message()
@@ -2981,7 +2989,7 @@ mod tests {
             &answer,
             &crate::settings::Settables::default(),
         ));
-        assert_eq!(refusal.status(), crate::refusal::Status::Conflict);
+        assert_eq!(refusal.status(), suzatary_base::refusal::Status::Conflict);
         let refusal = refused(prepared(&card, &TapAnswer::Plain, &with_ntfy()));
         assert_eq!(
             refusal.message(),
@@ -3059,10 +3067,10 @@ mod tests {
             key: crate::cast::keys::root(),
         }));
         let refusal = refused(prepared(&card, &TapAnswer::Plain, &with_ntfy()));
-        assert_eq!(refusal.status(), crate::refusal::Status::Forbidden);
+        assert_eq!(refusal.status(), suzatary_base::refusal::Status::Forbidden);
         let answer = endorsed();
         let refusal = refused(prepared(&card, &answer, &with_ntfy()));
-        assert_eq!(refusal.status(), crate::refusal::Status::BadRequest);
+        assert_eq!(refusal.status(), suzatary_base::refusal::Status::BadRequest);
         assert!(refusal.message().contains("declares no root"), "{refusal}");
         let refusal = refused(prepared(&card, &value(), &with_ntfy()));
         assert_eq!(refusal.message(), VALUE_BELONGS);

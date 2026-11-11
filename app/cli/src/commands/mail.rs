@@ -94,7 +94,7 @@ pub fn sync(path: &Path) -> anyhow::Result<()> {
 /// Push each ring still owed, and record each one the push service accepted, so a ring whose
 /// push failed is pushed again by the next sync.
 fn deliver_rings(instance: &Instance) {
-    use suzatary_core::capability::Clock as _;
+    use suzatary_base::capability::Clock as _;
     use suzatary_core::mail::watch;
     let watches = suzatary_io::watches::Watches::open(instance.local.watches());
     let now = || prodrome_core::fpl::instant_of(suzatary_io::clock::SystemClock.now());

@@ -6,8 +6,8 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
+use suzatary_base::tree::Tree;
 use suzatary_core::todo::{Price, TodoFields};
-use suzatary_core::tree::Tree;
 use suzatary_core::wire::cards::Overview;
 use suzatary_core::wire::todo::{Entry, Fulfillment};
 use suzatary_core::wire::{Authoring, BriefingsPayload, NewTodo};

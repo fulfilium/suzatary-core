@@ -2,8 +2,6 @@ use schemars::JsonSchema;
 use serde::Deserialize;
 use serde_json::{Value, json};
 
-use crate::reference::ProposalRef;
-use crate::refusal::{Refusal, shown};
 use crate::secretary::inbox;
 use crate::secretary::proposal::Proposal;
 use crate::secretary::proposer::Proposer;
@@ -11,6 +9,8 @@ use crate::secretary::responded::Withdrawal;
 use crate::secretary::store::{Decision, Entry, Settle};
 use crate::secretary::{Call, SecretarySurface, transcript};
 use crate::verb::Verb;
+use suzatary_base::reference::ProposalRef;
+use suzatary_base::refusal::{Refusal, shown};
 
 /// Withdraw one of the triage agent's cards, with the reason recorded.
 pub struct TriageWithdraw;

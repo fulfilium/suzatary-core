@@ -4,7 +4,7 @@
 use base64::Engine as _;
 use sha2::Digest as _;
 
-use crate::capability::{Entropy, Secret};
+use suzatary_base::capability::{Entropy, Secret};
 
 /// How many random bytes each value is drawn from: 256 bits, as RFC 7636 §7.1 recommends.
 const DRAWN: usize = 32;

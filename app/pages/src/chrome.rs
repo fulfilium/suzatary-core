@@ -219,7 +219,7 @@ pub(crate) fn rich<M>(html: Option<&str>, text: &str, class: &'static str) -> No
 pub(crate) fn rich_block<M>(
     html: Option<&str>,
     text: &str,
-    kind: suzatary_core::answer::Kind,
+    kind: suzatary_base::answer::Kind,
 ) -> Node<M> {
     let p = Part::Rich {
         html: html.map(str::to_owned),

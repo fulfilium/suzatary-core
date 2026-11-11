@@ -4,11 +4,7 @@
 use prodrome_core::event::Hash;
 use serde_json::{Map, Value};
 
-use crate::capability::Clock;
 use crate::conversation::ask::{Answered, Ask, Asked, Sent};
-use crate::conversation_id::ConversationId;
-use crate::escape::escape_markup;
-use crate::refusal::Refusal;
 use crate::secretary::model::{Halt, ModelError, ToolCall, Turn};
 use crate::secretary::queue;
 use crate::secretary::store::{Entry, Scope, Stored};
@@ -17,6 +13,10 @@ use crate::secretary::tool_name::ToolName;
 use crate::secretary::transcript;
 use crate::secretary::verb_answer::VerbAnswer;
 use crate::verb::Request;
+use suzatary_base::capability::Clock;
+use suzatary_base::conversation_id::ConversationId;
+use suzatary_base::escape::escape_markup;
+use suzatary_base::refusal::Refusal;
 
 /// Who says the turn that ends an exchange the model did not finish.
 const BOX: &str = "the box";

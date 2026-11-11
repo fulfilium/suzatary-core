@@ -4,8 +4,8 @@ use std::collections::BTreeSet;
 
 use chrono::NaiveDate;
 use serde::{Deserialize, Serialize};
-use suzatary_core::escape::{Escaped, unescape_markup};
-use suzatary_core::reference::TodoRef;
+use suzatary_base::escape::{Escaped, unescape_markup};
+use suzatary_base::reference::TodoRef;
 use suzatary_core::todo::{Cycle, Patch, TodoPatch};
 use suzatary_core::wire::record::SubTodo;
 use suzatary_core::wire::todo::{
@@ -317,7 +317,7 @@ impl Model {
     }
 
     fn reference(&self) -> String {
-        suzatary_core::chains::ChainName::new(self.chain.clone())
+        suzatary_base::chains::ChainName::new(self.chain.clone())
             .ok()
             .zip(prodrome_core::event::TodoId::new(self.id.clone()).ok())
             .map_or_else(

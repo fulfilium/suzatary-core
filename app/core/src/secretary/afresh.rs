@@ -2,13 +2,13 @@
 //! gate stamped as the owner's, with words and no file, so it is clean on its own. It is the only
 //! line that crosses from a conversation that read more into the fresh one.
 
-use crate::capability::Datetime;
-use crate::conversation_id::ConversationId;
-use crate::refusal::Refusal;
 use crate::secretary::model::Turn;
 use crate::secretary::queue;
 use crate::secretary::store::{Entry, Said, Stored};
 use crate::secretary::taint::{self, Taint};
+use suzatary_base::capability::Datetime;
+use suzatary_base::conversation_id::ConversationId;
+use suzatary_base::refusal::Refusal;
 
 /// One turn of the owner's own words, and where it was said.
 #[derive(Debug, Clone, PartialEq, Eq)]

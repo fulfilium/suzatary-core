@@ -21,7 +21,7 @@ use lettre::transport::smtp::extension::{ClientId, MailBodyParameter, MailParame
 use lettre::transport::smtp::response::{Category, Code, Detail, Severity};
 use rustls_pki_types::CertificateDer;
 use rustls_pki_types::pem::PemObject as _;
-use suzatary_core::capability::{Secret, SmtpToken};
+use suzatary_base::capability::{Secret, SmtpToken};
 use suzatary_core::mail::send::{Outgoing, SendError, Sent, Step, angle, build_mime};
 use suzatary_core::mail::transport::Transport;
 
@@ -300,7 +300,7 @@ fn gmail_send_raw(http: &dyn Http, token: &Secret, raw: &str) -> Result<(), Send
         let why = format!(
             "HTTP {}: {}",
             resp.status,
-            suzatary_core::spelling::shorten(&resp.text(), crate::gmail::ERROR_CAP)
+            suzatary_base::spelling::shorten(&resp.text(), crate::gmail::ERROR_CAP)
         );
         return Err(if resp.status < 500 {
             SendError::Transport {
@@ -389,7 +389,7 @@ fn envelope(out: &Outgoing) -> Result<Envelope, SendError> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use suzatary_core::capability::Secret;
+    use suzatary_base::capability::Secret;
     use suzatary_core::mail::send::Composed;
 
     fn composed() -> Composed {

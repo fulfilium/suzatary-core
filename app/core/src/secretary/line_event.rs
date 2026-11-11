@@ -22,8 +22,6 @@ use prodrome_core::schema::Schema;
 use serde::Serialize;
 use serde::de::DeserializeOwned;
 
-use crate::capability::Entropy;
-use crate::conversation_id::ConversationId;
 use crate::redact::Rules;
 use crate::secretary::carried::Carried;
 use crate::secretary::erasure::Erasure;
@@ -36,6 +34,8 @@ use crate::secretary::store::Entry;
 use crate::secretary::words::{Gone, Words};
 use prodrome_core::fold::sole::{One, Only, Whole};
 use prodrome_core::literal::codec::{Constructor, Fields, Literal, no_arm, record};
+use suzatary_base::capability::Entropy;
+use suzatary_base::conversation_id::ConversationId;
 
 /// One line: which conversation, when, who wrote it, how many lines its writer held, where it
 /// came from, its shape, and its words locked.
@@ -1336,7 +1336,7 @@ mod tests {
 
     #[test]
     fn no_constructor_is_a_term_or_an_envelope() {
-        crate::own::assert_own(LINES);
-        crate::own::assert_own(&[SCRUBBED, LOCKED]);
+        suzatary_base::own::assert_own(LINES);
+        suzatary_base::own::assert_own(&[SCRUBBED, LOCKED]);
     }
 }

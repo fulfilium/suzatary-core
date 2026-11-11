@@ -3,13 +3,13 @@
 
 use prodrome_core::event::Hash;
 
-use crate::capability::Datetime;
-use crate::chains::ChainPolicy;
 use crate::deployment::Deployment;
-use crate::refusal::Refusal;
 use crate::secretary::changes::{self, Act, Changeset, Provenance};
 use crate::settings::{Help, Settable};
 use crate::todo::{Deadline, Price, TodoFields};
+use suzatary_base::capability::Datetime;
+use suzatary_base::chains::ChainPolicy;
+use suzatary_base::refusal::Refusal;
 
 /// The todo id for `name` expiring on `day`.
 #[must_use]
@@ -126,8 +126,8 @@ pub fn write(
 mod tests {
     use super::*;
     use crate::believed::Preview;
-    use crate::capability::Parses;
     use crate::secretary::changes::Building;
+    use suzatary_base::capability::Parses;
 
     /// One todo per token and expiry: the same expiry read again writes nothing, and a later one
     /// completes the earlier day's todo and writes its own.
@@ -141,9 +141,9 @@ mod tests {
         let untrusted = prodrome_core::policy::Untrusted::none();
         let at = Datetime::new(2026, 11, 4, 12, 0, 0, 0).expect("an instant");
         let building = Building {
-            now: crate::zone::Moment {
+            now: suzatary_base::zone::Moment {
                 at,
-                zone: crate::zone::Zone::UTC,
+                zone: suzatary_base::zone::Zone::UTC,
             },
             by: crate::secretary::WRITES_AS,
             categories: &[],

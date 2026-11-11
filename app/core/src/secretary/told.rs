@@ -28,8 +28,6 @@ use prodrome_core::event::Hash;
 
 use serde_json::{Value, json};
 
-use crate::conversation_id::ConversationId;
-use crate::refusal::Refusal;
 use crate::secretary::compaction::Reading;
 use crate::secretary::digest_label::Label;
 use crate::secretary::digest_view::{self, Body, Keep, Shown};
@@ -38,6 +36,8 @@ use crate::secretary::shown_record::{OwnersWords, Shows as _};
 use crate::secretary::store::Entry;
 use crate::secretary::topics::reading::Reading as Topics;
 use crate::secretary::topics::topic::Topic;
+use suzatary_base::conversation_id::ConversationId;
+use suzatary_base::refusal::Refusal;
 
 /// What a session is told when it opens.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -315,7 +315,7 @@ pub fn zoom(reading: &Reading, handle: &str, shows: fn(&Label) -> bool) -> Resul
             Refusal::not_found(format!(
                 "no part of the record spans {}: a handle is `first+lines`, as the record shows \
                  it",
-                crate::refusal::shown(handle)
+                suzatary_base::refusal::shown(handle)
             ))
         })?;
     Ok(json!({

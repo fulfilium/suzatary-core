@@ -6,9 +6,9 @@ use std::collections::BTreeSet;
 use base64::Engine as _;
 
 use super::{Challenge, Client, ClientId, RedirectUri, Scope, Scopes, State, Verifier};
-use crate::capability::Secret;
 use crate::mail::address::EmailAddress;
 use crate::mail::oauth::{Answered, FormPost, NeedsLogin, OauthError, Silent};
+use suzatary_base::capability::Secret;
 
 /// Where the box asks Google: its consent page, its token endpoint and its Calendar API.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -469,7 +469,7 @@ mod tests {
     /// Bytes all of one value, so a draw is known.
     struct Fixed(u8);
 
-    impl crate::capability::Entropy for Fixed {
+    impl suzatary_base::capability::Entropy for Fixed {
         fn fill(&self, bytes: &mut [u8]) -> Result<(), String> {
             bytes.fill(self.0);
             Ok(())

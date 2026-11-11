@@ -1,5 +1,5 @@
 use super::StoreError;
-use crate::refusal::Refusal;
+use suzatary_base::refusal::Refusal;
 
 /// What an [`Log::edit`] does to a log.
 #[derive(Debug, Clone, PartialEq, Eq)]

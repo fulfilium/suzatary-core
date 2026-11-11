@@ -19,7 +19,7 @@ use prodrome_core::registers::Node;
 use prodrome_core::store::EventStore;
 use proptest::prelude::*;
 
-use suzatary_core::conversation_id::ConversationId;
+use suzatary_base::conversation_id::ConversationId;
 use suzatary_core::secretary::fact_life::Life;
 use suzatary_core::secretary::memory::{FactId, Kind, Origin};
 use suzatary_core::secretary::memory_event::Said;

@@ -4,7 +4,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use serde::{Deserialize, Serialize};
-use suzatary_core::reference::Reference;
+use suzatary_base::reference::Reference;
 use suzatary_core::wire::inbox::{
     Asker, Asks, CardAnswer, CardFile, CardLink, CodingFile, CodingSession, FileFrom, ProposedAct,
     ProposedObject,
@@ -272,10 +272,10 @@ pub(crate) fn spoken(r: &Reference, titles: &Titles) -> String {
         Reference::Briefing { date } => format!("the briefing of {}", date.format("%Y-%m-%d")),
         Reference::Proposal(_) => "an earlier card".to_owned(),
         Reference::Batch { .. } => "a held batch".to_owned(),
-        Reference::Target(suzatary_core::topic_target::Target::Round { .. }) => {
+        Reference::Target(suzatary_base::topic_target::Target::Round { .. }) => {
             "a round".to_owned()
         }
-        Reference::Target(suzatary_core::topic_target::Target::Note { .. }) => "a note".to_owned(),
+        Reference::Target(suzatary_base::topic_target::Target::Note { .. }) => "a note".to_owned(),
     }
 }
 

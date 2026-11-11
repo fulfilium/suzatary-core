@@ -9,7 +9,7 @@ use std::time::Duration;
 
 use base64::Engine as _;
 use serde::Deserialize;
-use suzatary_core::capability::Secret;
+use suzatary_base::capability::Secret;
 use suzatary_core::mail::older::Matched;
 
 use crate::http::{Http, Req};
@@ -120,7 +120,7 @@ impl Grant for Lieer {
             return Err(GrantError::Auth(format!(
                 "HTTP {}: {}",
                 resp.status,
-                suzatary_core::spelling::shorten(&resp.text(), ERROR_CAP)
+                suzatary_base::spelling::shorten(&resp.text(), ERROR_CAP)
             )));
         }
         let answer: TokenAnswer = serde_json::from_slice(&resp.body)
@@ -190,7 +190,7 @@ fn get(http: &dyn Http, token: &Secret, url: &str, limit: u64) -> Result<Option<
         404 => Ok(None),
         status => Err(format!(
             "HTTP {status}: {}",
-            suzatary_core::spelling::shorten(&resp.text(), ERROR_CAP)
+            suzatary_base::spelling::shorten(&resp.text(), ERROR_CAP)
         )),
     }
 }

@@ -1,6 +1,6 @@
 //! `[coding]` in the instance file: the routine a tap fires and the name its token lives under.
 
-use crate::repo_ids::RepoName;
+use suzatary_base::repo_ids::RepoName;
 
 /// The secretspec name the routine's bearer token lives under; never read by this crate.
 pub const ROUTINE_TOKEN: &str = "SUZATARY_ROUTINE_TOKEN";

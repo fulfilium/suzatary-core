@@ -10,7 +10,7 @@ use hmac::{Hmac, Mac as _};
 use serde::{Deserialize, Serialize};
 use sha2::Sha256;
 
-use crate::capability::Secret;
+use suzatary_base::capability::Secret;
 
 /// The secretspec name of the key, minted by `suzatary device init` beside the signing seeds.
 pub const DEDUP_KEY: &str = "SUZATARY_DEDUP_KEY";

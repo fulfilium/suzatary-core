@@ -4,10 +4,10 @@ use serde::Deserialize;
 
 use crate::mail::imap::window_start;
 use crate::mail::older::{Older, OlderQuery, Range};
-use crate::refusal::{Refusal, shown};
 use crate::secretary::verb_answer::VerbAnswer;
 use crate::secretary::{Call, SecretarySurface};
 use crate::verb::Verb;
+use suzatary_base::refusal::{Refusal, shown};
 
 /// Search the mail servers for mail older than the routine sync keeps, and pull what matched.
 pub struct SearchOlder;
@@ -100,15 +100,14 @@ mod tests {
     use serde_json::{Value, json};
 
     use super::*;
-    use crate::capability::Nothing;
-    use crate::chains::{ChainName, ChainPolicy, Chains};
-    use crate::conversation_id::ConversationId;
     use crate::deployment::Deployment;
     use crate::mail::mailbox::{Mailbox, Query};
     use crate::mail::older::{AccountOlder, Found, Matched, Outcome};
     use crate::mail::older_mail::OlderMail;
     use crate::mail_error::MailError;
     use crate::secretary::Secretary;
+    use suzatary_base::chains::{ChainName, ChainPolicy, Chains};
+    use suzatary_base::conversation_id::ConversationId;
 
     /// A server that records what it was asked and finds one message per account.
     #[derive(Default)]
@@ -154,7 +153,7 @@ mod tests {
             &self,
             _: Option<&str>,
             _: usize,
-            _: Option<crate::capability::Datetime>,
+            _: Option<suzatary_base::capability::Datetime>,
         ) -> Result<Vec<crate::mail::MailRow>, MailError> {
             Ok(Vec::new())
         }
@@ -163,7 +162,7 @@ mod tests {
             _: &Query,
             _: Option<&str>,
             _: usize,
-            _: Option<crate::capability::Datetime>,
+            _: Option<suzatary_base::capability::Datetime>,
         ) -> Result<Vec<crate::mail::MailRow>, MailError> {
             Ok(Vec::new())
         }
@@ -217,12 +216,12 @@ mod tests {
             categories: std::collections::BTreeMap::new(),
             app_url: "https://example.test".to_owned(),
             coding: None,
-            zone: crate::zone::Zone::UTC,
+            zone: suzatary_base::zone::Zone::UTC,
         };
         let caps = Secretary {
             older: asked,
             mail: &Roster,
-            ..Nothing::secretary()
+            ..Secretary::nothing()
         };
         SearchOlder::run(
             &Call {

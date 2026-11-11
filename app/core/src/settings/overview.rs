@@ -178,7 +178,7 @@ pub struct Declared<'a> {
     /// `[[plugins]]`.
     pub plugins: &'a [Manifest],
     /// `[secretary] drive_allow`.
-    pub drive: &'a [crate::drive_path::DrivePath],
+    pub drive: &'a [suzatary_base::drive_path::DrivePath],
     /// Where the data is kept.
     pub storage: &'a Storage,
     /// The program this box runs.
@@ -594,7 +594,7 @@ impl Overview {
                     Slot::Secret(name.handle()),
                     needing(
                         line(
-                            crate::spelling::capitalised(&Help::label(name.name())),
+                            suzatary_base::spelling::capitalised(&Help::label(name.name())),
                             None,
                             observed.secret(name.name()),
                         ),
@@ -1020,7 +1020,7 @@ pub(crate) mod tests {
         accounts: Vec<MailAccount>,
         plugins: Vec<Manifest>,
         coding: bool,
-        drive: Vec<crate::drive_path::DrivePath>,
+        drive: Vec<suzatary_base::drive_path::DrivePath>,
         secrets: BTreeMap<String, SecretState>,
         grants: BTreeMap<String, MailGrants>,
         failing: Vec<(String, String)>,
@@ -1054,8 +1054,8 @@ pub(crate) mod tests {
 
         fn deployment(&self) -> Deployment {
             let actor = |name: &str| prodrome_core::event::Actor::new(name).expect("an actor");
-            let chain = crate::chains::ChainPolicy {
-                name: crate::chains::ChainName::new("life").expect("a slug"),
+            let chain = suzatary_base::chains::ChainPolicy {
+                name: suzatary_base::chains::ChainName::new("life").expect("a slug"),
                 untrusted: prodrome_core::policy::Untrusted::of([actor("triage")]),
                 roster: [actor("ada"), actor("triage")].into_iter().collect(),
                 root: crate::cast::keys::root(),
@@ -1063,11 +1063,11 @@ pub(crate) mod tests {
             Deployment {
                 viewers: BTreeSet::new(),
                 actors: BTreeMap::new(),
-                chains: crate::chains::Chains::of(vec![chain]).expect("one chain"),
+                chains: suzatary_base::chains::Chains::of(vec![chain]).expect("one chain"),
                 categories: BTreeMap::new(),
                 app_url: "https://example.test".to_owned(),
                 coding: self.coding(),
-                zone: crate::zone::Zone::UTC,
+                zone: suzatary_base::zone::Zone::UTC,
             }
         }
 
@@ -1511,7 +1511,7 @@ pub(crate) mod tests {
         #[test]
         fn a_waiting_draft_never_hides_the_accounts_sign_in(draft_first in any::<bool>(), kind in 0u8..4) {
             use crate::secretary::inbox;
-            use crate::conversation_id::ConversationId;
+            use suzatary_base::conversation_id::ConversationId;
             use crate::secretary::proposal::{Draft, Reasons};
             let email = "ada@example.test";
             let store = crate::store::InMemory::<crate::secretary::inbox_event::InboxEvent>::default();
@@ -1520,13 +1520,13 @@ pub(crate) mod tests {
                     proposer: crate::secretary::proposer::Proposer::Secretary,
                     proposal,
                     reasons: Reasons::new("asked", vec!["briefing:2026-10-07".parse().expect("a reference")]).expect("reasons"),
-                    asked: crate::reference::ProposalRef {
+                    asked: suzatary_base::reference::ProposalRef {
                         conversation: ConversationId::new("setup").expect("a slug"),
                         index,
                     },
                     price: inbox::Price::unpriced(),
                 };
-                let at = crate::capability::Datetime::new(2026, 10, 7, 9, minute, 0, 0).expect("an instant");
+                let at = suzatary_base::capability::Datetime::new(2026, 10, 7, 9, minute, 0, 0).expect("an instant");
                 inbox::ask(&store, asked, &crate::secretary::transcript::writer(), at).expect("filed");
             };
             let (draft, sign_in) = if draft_first { (0, 1) } else { (1, 0) };

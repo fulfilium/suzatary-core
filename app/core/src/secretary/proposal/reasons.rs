@@ -1,7 +1,7 @@
 //! Why a proposal was made, and what it rests on.
 
-use crate::reference::Reference;
 use serde::{Deserialize, Serialize};
+use suzatary_base::reference::Reference;
 
 /// Why a proposal was made, and what it rests on; never on a wire.
 ///

@@ -7,7 +7,7 @@ mod port;
 mod probe;
 pub use effect::Drive;
 
-use crate::drive_path::DrivePath;
+use suzatary_base::drive_path::DrivePath;
 
 pub use fenced::Fenced;
 pub use memory::Memory;
@@ -90,11 +90,6 @@ pub fn extension_of(name: &str) -> String {
         .map(|(_, extension)| extension.to_ascii_lowercase())
         .unwrap_or_default()
 }
-
-// The literal of each is its text, as an inbox act stores it.
-prodrome_core::text_literal!(
-    DrivePath => |path| String::from(path.clone()),
-);
 
 #[cfg(test)]
 mod tests {

@@ -20,7 +20,7 @@ use std::sync::{Arc, Mutex, PoisonError};
 use std::thread;
 use std::time::{Duration, Instant};
 
-use suzatary_core::capability::Secret;
+use suzatary_base::capability::Secret;
 use suzatary_core::health::plugin::{CredentialName, MAX_FETCHES, MAX_SAID, Origin, Refusal, Said};
 use suzatary_core::plugin::{Manifest, admit};
 use suzatary_io::http::Ureq;

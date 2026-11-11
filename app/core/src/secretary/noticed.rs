@@ -3,9 +3,6 @@
 //! Filing is idempotent: an open card for the same need holds it. A waiting card of a kind the
 //! set `owns` that it no longer holds is withdrawn, unless the set is [holding](Owed::holding).
 
-use crate::capability::Datetime;
-use crate::reference::{ProposalRef, Reference};
-use crate::refusal::Refusal;
 use crate::secretary::filed::{self, Filing};
 use crate::secretary::inbox::{self, ProposalId};
 use crate::secretary::inbox_event::InboxEvent;
@@ -15,6 +12,9 @@ use crate::secretary::responded::Withdrawal;
 use crate::secretary::store::Entry;
 use crate::secretary::{conversations, transcript};
 use crate::store::Prodrome;
+use suzatary_base::capability::Datetime;
+use suzatary_base::reference::{ProposalRef, Reference};
+use suzatary_base::refusal::Refusal;
 
 /// Why a stale card is withdrawn.
 pub const WITHDRAWN: &str = "the box no longer asks for this: what it was needed for is in \
@@ -148,7 +148,7 @@ impl Owed {
         self.owed.iter()
     }
 
-    /// File every owed proposal in [`SETUP`](crate::conversation_id::SETUP) and withdraw the
+    /// File every owed proposal in [`SETUP`](suzatary_base::conversation_id::SETUP) and withdraw the
     /// stale ones.
     pub fn file(
         &self,
@@ -156,7 +156,7 @@ impl Owed {
         inbox: &dyn Prodrome<InboxEvent>,
         at: Datetime,
     ) -> Result<Filed, Refusal> {
-        let conversation = &*crate::conversation_id::SETUP;
+        let conversation = &*suzatary_base::conversation_id::SETUP;
         let mut done = Filed::default();
         // Read once: this filing adds only other proposals, so it changes no answer here.
         let before = inbox::fold(inbox)?;
@@ -176,7 +176,7 @@ impl Owed {
                     .proposals
                     .len(),
             });
-            let why = crate::spelling::said(&noticed.why);
+            let why = suzatary_base::spelling::said(&noticed.why);
             conversations::append(
                 conversations,
                 conversation,
@@ -389,10 +389,10 @@ impl FromIterator<Noticed> for Owed {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::conversation_id::ConversationId;
     use crate::secretary::acts::Act;
     use crate::store::InMemory;
     use crate::store::Reads as _;
+    use suzatary_base::conversation_id::ConversationId;
 
     fn at(minute: u32) -> Datetime {
         Datetime::new(2026, 10, 7, 9, minute, 0, 0).expect("an instant")
@@ -612,7 +612,7 @@ mod tests {
     fn said(conversations: &crate::secretary::conversations::InMemory) -> usize {
         conversations::read(
             conversations.conversations(),
-            &crate::conversation_id::SETUP,
+            &suzatary_base::conversation_id::SETUP,
         )
         .map_or(0, |stored| stored.live().len())
     }

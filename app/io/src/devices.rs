@@ -86,7 +86,7 @@ fn safe_actor(actor: &str) -> String {
 
 #[cfg(test)]
 mod tests {
-    use suzatary_core::capability::Datetime;
+    use suzatary_base::capability::Datetime;
     use suzatary_core::devices::{self, Phones};
     use suzatary_core::store::{Edit, Log as _};
 

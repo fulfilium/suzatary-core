@@ -57,7 +57,7 @@ mod tests;
 
 /// The instant a test names: an ISO stamp, or `t<n>` for second `n` of one morning (`t` is `t0`).
 #[cfg(test)]
-pub(crate) fn instant(at: &str) -> crate::capability::Datetime {
+pub(crate) fn instant(at: &str) -> suzatary_base::capability::Datetime {
     match at.strip_prefix('t').and_then(|n| {
         if n.is_empty() {
             Some(0)
@@ -65,9 +65,8 @@ pub(crate) fn instant(at: &str) -> crate::capability::Datetime {
             n.parse::<u32>().ok()
         }
     }) {
-        Some(n) => {
-            crate::capability::Datetime::new(2026, 9, 9, 9, n / 60, n % 60, 0).expect("an instant")
-        }
+        Some(n) => suzatary_base::capability::Datetime::new(2026, 9, 9, 9, n / 60, n % 60, 0)
+            .expect("an instant"),
         None => prodrome_core::fpl::datetime_of(
             prodrome_core::fpl::parse_iso(at).expect("an ISO stamp"),
         )

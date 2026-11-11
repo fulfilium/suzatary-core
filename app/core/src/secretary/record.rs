@@ -1,6 +1,5 @@
 use crate::agent::Agent;
 use crate::calendar::effect::Calendar;
-use crate::capability::{Clock, Manuals};
 use crate::drive::Drive;
 use crate::mail::corpus::Corpus;
 use crate::mail::junk_folder::Junk;
@@ -17,6 +16,7 @@ use crate::secrets::Secrets;
 use crate::store::Prodrome;
 use crate::weather::Weather;
 use crate::web::Web;
+use suzatary_base::capability::{Clock, Manuals};
 
 /// What the secretary may use: the agent's effects over the chain itself, plus a model,
 /// its conversations and memory, and the owner's world read-only. Nothing here sends: its
@@ -34,19 +34,19 @@ use crate::web::Web;
 ///
 /// ```compile_fail,E0599
 /// use suzatary_core::drive::WritePort as _;
-/// fn upload(secretary: suzatary_core::secretary::Secretary<'_>, at: &suzatary_core::drive_path::DrivePath) {
+/// fn upload(secretary: suzatary_core::secretary::Secretary<'_>, at: &suzatary_base::drive_path::DrivePath) {
 ///     let _ = secretary.drive.port().upload(at, "x", b"x");
 /// }
 /// ```
 /// ```compile_fail,E0599
 /// use suzatary_core::drive::WritePort as _;
-/// fn keep(secretary: suzatary_core::secretary::Secretary<'_>, at: &suzatary_core::drive_path::DrivePath) {
+/// fn keep(secretary: suzatary_core::secretary::Secretary<'_>, at: &suzatary_base::drive_path::DrivePath) {
 ///     let _ = secretary.drive.port().keep(at, "x", b"x");
 /// }
 /// ```
 /// ```compile_fail,E0599
 /// use suzatary_core::drive::WritePort as _;
-/// fn behind(secretary: suzatary_core::secretary::Secretary<'_>, at: &suzatary_core::drive_path::DrivePath) {
+/// fn behind(secretary: suzatary_core::secretary::Secretary<'_>, at: &suzatary_base::drive_path::DrivePath) {
 ///     let _ = secretary.drive.fenced().create_folder(at, "x");
 /// }
 /// ```

@@ -9,10 +9,10 @@ use super::{
     Named, Through, Transcript, by_conversation, erasures, lines_of, reseals, superseded,
     transcripts,
 };
-use crate::conversation_id::ConversationId;
 use crate::secretary::line_event::LineEvent;
 use crate::secretary::slots::Slots;
 use crate::secretary::store::{Entry, NotAConversation};
+use suzatary_base::conversation_id::ConversationId;
 
 /// Every line the objects hold, by name, read: each slot opened by the key `key` answers, or
 /// erased where an erasure line of its own conversation names its key.

@@ -237,7 +237,7 @@ fn pdf(file: &HeldFile, name: &str, bytes: Vec<u8>, read: &Layer) -> FileRead {
         }
         None => FileRead::File(Readable {
             media: Enclosure::Pdf,
-            text: redact(&crate::spelling::clip(layer, MAX_CHARS).0),
+            text: redact(&suzatary_base::spelling::clip(layer, MAX_CHARS).0),
             bytes,
         }),
     }
@@ -245,7 +245,7 @@ fn pdf(file: &HeldFile, name: &str, bytes: Vec<u8>, read: &Layer) -> FileRead {
 
 /// A size as a sentence names it.
 fn megabytes(size: usize) -> String {
-    crate::spelling::bytes(size as u64)
+    suzatary_base::spelling::bytes(size as u64)
 }
 
 #[cfg(test)]

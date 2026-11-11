@@ -5,8 +5,8 @@
 mod common;
 
 use common::{FakeModel, Fakes};
-use suzatary_core::capability::Clock as _;
-use suzatary_core::reference::ProposalRef;
+use suzatary_base::capability::Clock as _;
+use suzatary_base::reference::ProposalRef;
 use suzatary_core::secretary::Bound;
 use suzatary_core::secretary::changes::{Act, Changeset, Provenance};
 use suzatary_core::secretary::daily::Run;
@@ -23,7 +23,7 @@ fn review(
     settables: &suzatary_core::settings::Settables,
     chains: &[Bound<'_>],
     system: &str,
-) -> Result<Reviewed, suzatary_core::refusal::Refusal> {
+) -> Result<Reviewed, suzatary_base::refusal::Refusal> {
     suzatary_core::secretary::review::review(caps, deployment, settables, chains, system).map(
         |run| match run {
             Run::Done(reviewed) => reviewed,
@@ -186,7 +186,7 @@ fn the_brief_offers_the_day_s_withdrawals_back_once() {
     )
     .expect("the review runs");
     let secretary = caps.secretary();
-    let brief = suzatary_core::conversation_id::DEFAULT.clone();
+    let brief = suzatary_base::conversation_id::DEFAULT.clone();
     suzatary_core::secretary::conversations::read_or_open_default(
         secretary.conversations,
         secretary.model,
@@ -374,12 +374,12 @@ fn holding_the_same_card_again_is_not_a_second_line() {
 /// the review of the readable rest goes on.
 #[test]
 fn an_unreadable_conversation_is_named_and_paged_once() {
-    use suzatary_core::conversation_id::ConversationId;
+    use suzatary_base::conversation_id::ConversationId;
     use suzatary_core::secretary::review::note_unreadable;
     use suzatary_core::secretary::store::{Entry, Kind};
     use suzatary_core::secretary::transcript;
     let caps = Fakes::new("review-unreadable");
-    let zone = suzatary_core::zone::Zone::UTC;
+    let zone = suzatary_base::zone::Zone::UTC;
     assert_eq!(
         note_unreadable(&caps.secretary(), zone).map(|page| page.is_some()),
         Ok(false),
@@ -613,9 +613,9 @@ fn the_reviews_round_is_pinned() {
 }
 
 /// Day `day`'s review conversation.
-fn today_of(day: chrono::NaiveDate) -> suzatary_core::conversation_id::ConversationId {
-    suzatary_core::conversation_id::ConversationId::daily(
-        suzatary_core::conversation_id::Daily::Review,
+fn today_of(day: chrono::NaiveDate) -> suzatary_base::conversation_id::ConversationId {
+    suzatary_base::conversation_id::ConversationId::daily(
+        suzatary_base::conversation_id::Daily::Review,
         day,
     )
 }

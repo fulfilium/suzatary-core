@@ -13,10 +13,10 @@ use serde::{Deserialize, Serialize};
 
 use prodrome_core::literal::{ProdromeError, Value};
 
-use crate::capability::Datetime;
-use crate::conversation_id::ConversationId;
-use crate::refusal::{Refusal, shown};
 use prodrome_core::literal::codec::{Constructor, Fields, Literal, record};
+use suzatary_base::capability::Datetime;
+use suzatary_base::conversation_id::ConversationId;
+use suzatary_base::refusal::{Refusal, shown};
 
 /// The longest fact, in characters: a sentence, never a document.
 pub const MAX_FACT_CHARS: usize = 280;
@@ -608,7 +608,7 @@ mod tests {
     /// `rename_all` spells the generated `FactKind`, so serde's words are checked against `ALL`'s.
     #[test]
     fn a_kinds_serde_word_is_its_literals() {
-        crate::words::assert_serde_words(&Kind::ALL, |kind| kind.as_str());
+        suzatary_base::words::assert_serde_words(&Kind::ALL, |kind| kind.as_str());
     }
 
     #[test]

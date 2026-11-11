@@ -26,12 +26,12 @@ use prodrome_core::literal::codec::{Constructor, Fields, Literal as _};
 use prodrome_core::schema::headed::{Body, Constructors, Event};
 
 use crate::model_name::ModelName;
-use crate::rule_version::Under;
 use crate::secretary::compact_ask::{Asking, Beside};
 use crate::secretary::digest_line::{Line, NODE_BYTES};
 use crate::secretary::salted_text::{Text, TextName};
 use crate::secretary::taint::Taint;
 use crate::signatures::Tap;
+use suzatary_base::rule_version::Under;
 
 /// One event about one node: which, when, who wrote it, and what it says.
 pub type DigestEvent = Event<Said>;
@@ -372,7 +372,7 @@ mod tests {
 
     #[test]
     fn no_constructor_is_a_term_or_an_envelope() {
-        crate::own::assert_own(SIGNATURES);
+        suzatary_base::own::assert_own(SIGNATURES);
     }
 
     proptest! {

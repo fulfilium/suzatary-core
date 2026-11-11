@@ -168,8 +168,8 @@ pub fn pending(stored: &Stored) -> usize {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::conversation_id::ConversationId;
     use crate::secretary::store::Entry;
+    use suzatary_base::conversation_id::ConversationId;
 
     fn id() -> ConversationId {
         ConversationId::new("2026-09-13-1").expect("a slug")
@@ -177,7 +177,8 @@ mod tests {
 
     fn opened() -> Entry {
         Entry::Opened {
-            at: crate::capability::Datetime::new(2026, 9, 13, 9, 0, 0, 0).expect("an instant"),
+            at: suzatary_base::capability::Datetime::new(2026, 9, 13, 9, 0, 0, 0)
+                .expect("an instant"),
             title: crate::secretary::words::Words::kept("Morning".to_owned()),
             model: "a-cli/small".to_owned(),
             kind: crate::secretary::store::Kind::Topic,
@@ -254,7 +255,8 @@ mod tests {
         let pending = Pending::of(&waiting).expect("the owner's turn wakes");
         assert_eq!(pending.delta(None).turns().len(), 3, "the notes ride along");
         let dismissed = Entry::Said {
-            at: crate::capability::Datetime::new(2026, 9, 13, 9, 4, 0, 0).expect("an instant"),
+            at: suzatary_base::capability::Datetime::new(2026, 9, 13, 9, 4, 0, 0)
+                .expect("an instant"),
             turn: Turn::Act {
                 text: "Ada dismissed it: not now".to_owned(),
                 references: Vec::new(),

@@ -11,13 +11,13 @@ use super::store::{Decision, Entry, Outcome, Review, Stored};
 use super::surface::{SecretaryVerb, Subset};
 use super::verb_name::Effect;
 use super::verbs::{answered, listed, standing};
-use crate::conversation_id::{ConversationId, Daily};
 use crate::deployment::Deployment;
-use crate::refusal::{Refusal, shown};
 use crate::secretary::Secretary;
 use crate::secretary::conversations;
 use crate::secretary::model::Turn;
 use crate::secretary::transcript;
+use suzatary_base::conversation_id::{ConversationId, Daily};
+use suzatary_base::refusal::{Refusal, shown};
 
 /// What one review did.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -202,7 +202,7 @@ pub fn review(
 /// The store's own.
 pub fn note_unreadable(
     caps: &Secretary<'_>,
-    zone: crate::zone::Zone,
+    zone: suzatary_base::zone::Zone,
 ) -> Result<Option<crate::notify::Push>, Refusal> {
     let unreadable = every(caps.conversations)?.unreadable;
     let Some(count) = std::num::NonZeroUsize::new(unreadable.len()) else {
@@ -294,7 +294,7 @@ fn said(stored: &Stored) -> String {
         .rev()
         .find_map(|said| match &said.turn {
             Turn::Model { text, .. } => {
-                Some(crate::answer::prose(text)).filter(|words| !words.is_empty())
+                Some(suzatary_base::answer::prose(text)).filter(|words| !words.is_empty())
             }
             _ => None,
         })
@@ -409,7 +409,7 @@ pub fn outage(
 }
 
 /// Is this stored instant on or after that day? Parsed rather than sliced, to survive a hand edit.
-fn on_or_after(at: crate::capability::Datetime, since: chrono::NaiveDate) -> bool {
+fn on_or_after(at: suzatary_base::capability::Datetime, since: chrono::NaiveDate) -> bool {
     prodrome_core::fpl::instant_of(at).date() >= since
 }
 

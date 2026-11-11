@@ -8,7 +8,7 @@ mod sum;
 use schemars::JsonSchema;
 use serde::de::DeserializeOwned;
 
-use crate::refusal::Refusal;
+use suzatary_base::refusal::Refusal;
 
 pub use arguments::parse;
 pub use caught::Caught;

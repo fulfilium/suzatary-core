@@ -6,8 +6,8 @@
 
 use std::collections::BTreeMap;
 
-use crate::refusal::Refusal;
 use crate::secretary::conversations::Conversations;
+use suzatary_base::refusal::Refusal;
 
 /// Objects and their bytes on disk.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]

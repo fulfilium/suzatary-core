@@ -3,7 +3,7 @@
 use std::collections::HashMap;
 
 use axum::extract::RawPathParams;
-use suzatary_core::refusal::Refusal;
+use suzatary_base::refusal::Refusal;
 
 use super::Chained;
 

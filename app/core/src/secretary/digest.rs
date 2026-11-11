@@ -34,7 +34,6 @@ use prodrome_core::schema::Schema as _;
 use prodrome_core::topo;
 
 use crate::model_name::ModelName;
-use crate::rule_version::Under;
 use crate::secretary::compact_ask::{Asking, Beside};
 use crate::secretary::digest_event::{DigestEvent, Said};
 use crate::secretary::digest_label::Label;
@@ -48,6 +47,7 @@ use crate::secretary::store::Entry;
 use crate::secretary::taint::Taint;
 use crate::secretary::texts::{Liveness, Naming};
 use crate::secretary::transcript;
+use suzatary_base::rule_version::Under;
 
 thread_local! {
     static VIEWS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };

@@ -13,8 +13,8 @@ use std::path::{Path, PathBuf};
 use anyhow::{Context as _, bail};
 use clap::{Parser as _, ValueEnum as _};
 use prodrome_core::event::Actor;
-use suzatary_core::capability::Login;
-use suzatary_core::zone::Zone;
+use suzatary_base::capability::Login;
+use suzatary_base::zone::Zone;
 
 use crate::instance::Instance;
 

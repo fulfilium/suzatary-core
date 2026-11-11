@@ -7,13 +7,13 @@
 use std::cmp::Ordering;
 use std::num::NonZeroU32;
 
-use crate::zone::Zone;
 use chrono::{NaiveDateTime, NaiveTime};
 use prodrome_core::fpl::{Delta, Explanation, Instant, Note, Scalar, total_seconds};
 use prodrome_core::observe::{Observation, Rounding};
 use prodrome_core::term::{CurvePoint, TermF};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
+use suzatary_base::zone::Zone;
 
 /// What a page shows of a fulfillment: tenths of a percent, to the nearest. A page is printed from
 /// this observation of every price on it, so its bytes, and the memo that keys a page by them,

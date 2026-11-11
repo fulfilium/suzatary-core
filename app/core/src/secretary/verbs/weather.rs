@@ -1,8 +1,8 @@
 use serde_json::{Value, json};
 
-use crate::refusal::Refusal;
 use crate::secretary::{Call, SecretarySurface};
 use crate::verb::{NoArgs, Verb};
+use suzatary_base::refusal::Refusal;
 
 /// Today's forecast, one line.
 pub struct Weather;

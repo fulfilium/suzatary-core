@@ -3,8 +3,8 @@ use serde::Deserialize;
 use serde_json::Value;
 
 use crate::agent::{Call, TriageSurface, answered, refused};
-use crate::refusal::Refusal;
 use crate::verb::Verb;
+use suzatary_base::refusal::Refusal;
 
 /// The triage queue.
 pub struct New;

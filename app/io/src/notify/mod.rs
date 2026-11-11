@@ -183,8 +183,8 @@ impl<D: Log<String, Device>> Notify for Channels<D> {
 
 #[cfg(test)]
 mod tests {
-    use suzatary_core::capability::Datetime;
-    use suzatary_core::refusal::Refusal;
+    use suzatary_base::capability::Datetime;
+    use suzatary_base::refusal::Refusal;
     use suzatary_core::store::{Decide, Edit, StoreError};
 
     use super::fcm::tests::test_account;
@@ -277,7 +277,7 @@ mod tests {
             &self,
             name: &str,
             _: &str,
-        ) -> Result<Option<suzatary_core::capability::Secret>, SecretError> {
+        ) -> Result<Option<suzatary_base::capability::Secret>, SecretError> {
             self.asked.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
             if self.open.load(std::sync::atomic::Ordering::SeqCst) {
                 Ok(None)

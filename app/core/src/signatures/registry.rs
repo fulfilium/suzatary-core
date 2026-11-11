@@ -357,7 +357,7 @@ fn dag_of<E: Schema>(store: &(impl Prodrome<E> + ?Sized)) -> Result<Dag<E>, Stor
 pub fn adopt<E: Schema>(
     store: &(impl Prodrome<E> + ?Sized),
     keys: &super::BoxKeys,
-    chain: &crate::chains::ChainPolicy,
+    chain: &suzatary_base::chains::ChainPolicy,
 ) -> Result<Adoption, AdoptError> {
     let roots = Registrar::Roots([keys.root().public()].into_iter().collect());
     let reading = Trust::held(store, &roots)?;
@@ -401,7 +401,7 @@ pub struct Adoption {
 pub fn revoke_misplaced<E: Schema>(
     store: &(impl Prodrome<E> + ?Sized),
     keys: &super::BoxKeys,
-    chain: &crate::chains::ChainPolicy,
+    chain: &suzatary_base::chains::ChainPolicy,
 ) -> Result<Vec<(Actor, PublicKey)>, StoreError> {
     let mut revoked = Vec::new();
     for actor in &chain.roster {

@@ -9,7 +9,7 @@ use std::path::{Path, PathBuf};
 use std::sync::{Arc, PoisonError, RwLock};
 use std::time::Duration;
 
-use suzatary_core::capability::Secret;
+use suzatary_base::capability::Secret;
 use suzatary_core::secrets::SecretState;
 use suzatary_core::settings::Settables;
 
@@ -367,7 +367,7 @@ impl suzatary_core::settings::Writes for Secretspec {
     fn write_secret(
         &self,
         name: &suzatary_core::settings::Settable,
-        value: &suzatary_core::capability::Secret,
+        value: &suzatary_base::capability::Secret,
     ) -> Result<(), String> {
         self.set(
             name.name(),

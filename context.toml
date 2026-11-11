@@ -143,38 +143,45 @@ documents = "docs"
 # production source. `scripts` are the scripts an agent reads to build and test it.
 
 [[unit]]
+name = "base"
+path = "app/base"
+shape = "crate"
+depends = ["prodrome-core"]
+scripts = []
+
+[[unit]]
 name = "core"
 path = "app/core"
 shape = "crate"
-depends = ["prodrome-core", "prodrome-wasm-exports"]
+depends = ["base", "prodrome-core", "prodrome-wasm-exports"]
 scripts = ["scripts/wire.sh"]
 
 [[unit]]
 name = "io"
 path = "app/io"
 shape = "crate"
-depends = ["core", "prodrome-core", "prodrome-typst-wasm"]
+depends = ["base", "core", "prodrome-core", "prodrome-typst-wasm"]
 scripts = []
 
 [[unit]]
 name = "plugin"
 path = "app/plugin"
 shape = "crate"
-depends = ["core", "io", "prodrome-core"]
+depends = ["base", "core", "io", "prodrome-core"]
 scripts = ["scripts/plugin-sync.sh"]
 
 [[unit]]
 name = "cli"
 path = "app/cli"
 shape = "crate"
-depends = ["core", "io", "plugin", "prodrome-core"]
+depends = ["base", "core", "io", "plugin", "prodrome-core"]
 scripts = ["scripts/app-bin.sh", "scripts/app-build.sh", "scripts/merge-gate.sh"]
 
 [[unit]]
 name = "wasm"
 path = "app/wasm"
 shape = "crate"
-depends = ["core", "prodrome-core", "prodrome-wasm-exports"]
+depends = ["base", "core", "prodrome-core", "prodrome-wasm-exports"]
 scripts = ["scripts/web-inputs.sh"]
 
 [[unit]]
@@ -188,7 +195,7 @@ scripts = []
 name = "pages"
 path = "app/pages"
 shape = "crate"
-depends = ["core", "prodrome-core", "viewtree"]
+depends = ["base", "core", "prodrome-core", "viewtree"]
 scripts = ["scripts/wire.sh", "scripts/web-inputs.sh"]
 
 [[unit]]

@@ -5,7 +5,7 @@ use axum::http::{StatusCode, header};
 use axum::middleware::Next;
 use axum::response::{IntoResponse, Response};
 use serde::Serialize;
-use suzatary_core::refusal::{Refusal, Status};
+use suzatary_base::refusal::{Refusal, Status};
 
 /// What a route's work returns.
 pub trait Outcome: Send + 'static {

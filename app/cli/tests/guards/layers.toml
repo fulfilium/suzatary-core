@@ -1,9 +1,10 @@
 [layers]
 # The cuts of `app/core/src`, bottom first: a module may name its own cut's and lower cuts'
 # modules, never a higher one's. A file is in the cut of the longest module path below that
-# holds it. The guard layers.rs beside this file reads it; the core split's plan
-# (docs/CORESPLIT-PLAN-2026-11-06.md) says why each module is where it is.
-order = ["base", "record", "store", "signatures", "todo", "held", "memory", "mail", "health", "triage", "services", "google", "connect", "inbox", "conversations", "lines", "topics", "digest", "cards", "secretary", "api"]
+# holds it. A cut that is its own crate (`app/base`) is held by the compiler instead. The guard
+# layers.rs beside this file reads it; the core split's plan (docs/CORESPLIT-PLAN-2026-11-06.md)
+# says why each module is where it is.
+order = ["record", "store", "signatures", "todo", "held", "memory", "mail", "health", "triage", "services", "google", "connect", "inbox", "conversations", "lines", "topics", "digest", "cards", "secretary", "api"]
 # The edges that still point up, each named in the core split's plan; the list only shrinks. Each
 # entry is an inline table, so no two names stand in the `"a", "b"` shape the leak guard's
 # generic-api-key rule reads as a key and its value.
@@ -29,72 +30,69 @@ allowed = [
 # The sources `rendering.rs` hashes into every kept render's name, by SHA-256. A change to one
 # renames every kept render: say so in the pull request, then set its digest here.
 rendering = [
-  { file = "answer.rs", sha256 = "07abc4cd96b944c141c24b79af90a20d2bf453ea41568fc5a4307556b3ecfafb" },
-  { file = "narrowing.rs", sha256 = "1b99ffa5ec4339ebf355375cba493b6ace81105febc60dbbbdbc14f8cf5825d7" },
+  { file = "../../base/src/answer.rs", sha256 = "07abc4cd96b944c141c24b79af90a20d2bf453ea41568fc5a4307556b3ecfafb" },
+  # `app/base` allows `narrowing.rs` its broken doc link to `rendering`, a crate above it, so
+  # the file stays byte-identical. The allow goes when this key next changes for its own reason.
+  { file = "../../base/src/narrowing.rs", sha256 = "1b99ffa5ec4339ebf355375cba493b6ace81105febc60dbbbdbc14f8cf5825d7" },
   { file = "rendering/answer.typ", sha256 = "8dd0591f6360b6571210e9ca86627ce5e5b8dfe911165ab91c21ac8b5b4accee" },
   { file = "rendering/calendar.typ", sha256 = "dbb5a542d089d3e6a33c93aaaf9aee1e3328490e99c88beeb78855dc61ffc313" },
   { file = "rendering/decisions.typ", sha256 = "fc82d41babf85349bb8dbb31f8e8c9c57ac1256a0f6068ae65e409fad2a49294" },
   { file = "rendering/markup.typ", sha256 = "584e04ebd82a4de7e1f7fc480e981641be1f59fea67b63561188833b6a0f92e3" },
   { file = "rendering/page.typ", sha256 = "6026dca27037a3f4136ef1b98812994481255ff7e273174068ca50862f1fc62c" },
-  { file = "tripwire.rs", sha256 = "7dc746a1b9202ce6ec2551799a2745a263e04253b553571b830cc124c1c67f00" },
+  { file = "../../base/src/tripwire.rs", sha256 = "7dc746a1b9202ce6ec2551799a2745a263e04253b553571b830cc124c1c67f00" },
 ]
 
 [layers.modules]
-base = ["answer", "capability", "cast", "chains", "coding_report", "content_id",
-  "conversation_id", "drive_path", "escape", "finite", "model_name", "narrowing", "nonempty",
-  "outcome", "own", "persona", "reference", "refusal", "repo_ids", "rule_version", "spelling", "table",
-  "term_json", "timings", "topic_target", "tree", "tripwire", "url", "wire/base", "words",
-  "writer", "zone"]
 record = ["decoration", "record", "todo", "wire/record"]
 store = ["replica", "snapshot", "store", "wire/store"]
-signatures = ["believed", "chain_set", "devices", "epoch", "signatures", "sync", "wire/signatures"]
+signatures = ["cast", "believed", "chain_set", "devices", "epoch", "signatures", "sync",
+  "wire/signatures"]
 todo = ["authoring", "decisions", "priced", "reading", "release", "render", "render_cache",
   "rendering", "template", "todos", "verb", "view", "wire/todo"]
 held = ["attachment", "enclosed", "excerpt", "file_read", "for_model", "held_file", "held_value",
   "leak", "mail_error", "message_part", "pdf_text", "redact", "secretary/attached",
   "secretary/attachment_source", "secretary/upload_standing", "upload", "upload_index", "vault"]
-memory = ["secretary/carried", "secretary/erasure", "secretary/fact_life", "secretary/key_ring",
-  "secretary/line_words", "secretary/locked_text", "secretary/memory", "secretary/memory_event",
-  "secretary/opened", "secretary/provenance", "secretary/salted_text", "secretary/scrubbed_under",
-  "secretary/slots", "secretary/texts", "secretary/two_phase", "secretary/words"]
-mail = ["mail"]
+memory = ["coding_report", "secretary/carried", "secretary/erasure", "secretary/fact_life",
+  "secretary/key_ring", "secretary/line_words", "secretary/locked_text", "secretary/memory",
+  "secretary/memory_event", "secretary/opened", "secretary/provenance", "secretary/salted_text",
+  "secretary/scrubbed_under", "secretary/slots", "secretary/texts", "secretary/two_phase",
+  "secretary/words"]
+mail = ["mail", "outcome"]
 health = ["health"]
 triage = ["mail/corpus", "mail/gone", "mail/heartbeat", "mail/junk", "mail/junk_folder",
   "mail/known", "mail/local_state", "mail/older", "mail/older_mail", "mail/state", "mail/triage",
   "mail/verbs", "mail/watch", "rule", "wire/triage"]
 services = ["drive", "plugin", "repos", "repositories", "repository", "usage", "weather", "web"]
-google = ["calendar", "google"]
+google = ["calendar", "google", "url"]
 connect = ["conformance", "connect", "deployment", "secrets", "settings"]
-inbox = ["coding", "secretary/act_vocabulary", "secretary/acts", "secretary/card",
+inbox = ["coding", "content_id", "secretary/act_vocabulary", "secretary/acts", "secretary/card",
   "secretary/changes", "secretary/decide", "secretary/diff", "secretary/inbox",
   "secretary/inbox_event", "secretary/inbox_json", "secretary/inbox_reading",
   "secretary/inbox_registers", "secretary/own_round", "secretary/phase", "secretary/proposal",
   "secretary/proposer", "secretary/responded", "secretary/sending", "secretary/sign_in",
   "secretary/stamp", "secretary/tapped", "wire/inbox"]
-conversations = ["secretary/about", "secretary/found", "secretary/model",
+conversations = ["nonempty", "secretary/about", "secretary/found", "secretary/model",
   "secretary/model_sessions", "secretary/outcome", "secretary/queue", "secretary/search",
   "secretary/store", "secretary/taint", "secretary/tool_name", "secretary/turn_shape",
   "secretary/verb_name"]
-lines = ["secretary/act_lines", "secretary/conversation_json", "secretary/conversations",
+lines = ["timings", "secretary/act_lines", "secretary/conversation_json", "secretary/conversations",
   "secretary/held_lines", "secretary/held_replica", "secretary/holder", "secretary/line_event",
   "secretary/line_form", "secretary/line_shape", "secretary/object_stores", "secretary/outline",
   "secretary/outlines", "secretary/prune", "secretary/rescrub", "secretary/step",
   "secretary/targets", "secretary/transcript", "wire/lines"]
 topics = ["secretary/answers", "secretary/readings", "secretary/rules", "secretary/stream",
   "secretary/title", "secretary/topics", "wire/topics"]
-digest = ["secretary/caused", "secretary/compact", "secretary/compact_ask",
-  "secretary/compact_budget", "secretary/compacting", "secretary/compaction",
-  "secretary/compactor", "secretary/digest", "secretary/digest_census", "secretary/digest_event",
-  "secretary/digest_label", "secretary/digest_line", "secretary/digest_policy",
-  "secretary/digest_spent", "secretary/digest_view", "secretary/digests",
-  "secretary/indexed_tree", "secretary/memories", "secretary/recollection",
-  "secretary/shown_record", "secretary/told"]
-cards = ["notify", "secretary/afresh", "secretary/bootstrap", "secretary/build",
-  "secretary/coding", "secretary/connections", "secretary/done_elsewhere", "secretary/failing",
-  "secretary/filed", "secretary/fixes", "secretary/google_sign_in", "secretary/mail_health",
+digest = ["model_name", "secretary/caused", "secretary/compact", "secretary/compact_ask",
+  "secretary/compact_budget", "secretary/compacting", "secretary/compaction", "secretary/compactor",
+  "secretary/digest", "secretary/digest_census", "secretary/digest_event", "secretary/digest_label",
+  "secretary/digest_line", "secretary/digest_policy", "secretary/digest_spent",
+  "secretary/digest_view", "secretary/digests", "secretary/indexed_tree", "secretary/memories",
+  "secretary/recollection", "secretary/shown_record", "secretary/told"]
+cards = ["notify", "secretary/afresh", "secretary/bootstrap", "secretary/build", "secretary/coding",
+  "secretary/connections", "secretary/done_elsewhere", "secretary/failing", "secretary/filed",
+  "secretary/fixes", "secretary/google_sign_in", "secretary/mail_health",
   "secretary/merged_patches", "secretary/noticed", "secretary/request", "secretary/undo",
   "settings/overview", "wire/cards"]
 secretary = ["agent", "conversation", "secretary"]
 api = ["clienterror", "gate", "portal", "query", "routes", "secretary/routes", "server", "stores",
   "wire"]
-

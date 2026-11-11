@@ -6,7 +6,7 @@ use schemars::{JsonSchema, Schema, SchemaGenerator, json_schema};
 use serde::{Deserialize, Deserializer};
 use serde_json::{Map, Value};
 
-use crate::refusal::Refusal;
+use suzatary_base::refusal::Refusal;
 
 /// A verb's own arguments `A`, plus `chain`, which the surface resolves before the verb runs.
 #[derive(Debug)]

@@ -48,7 +48,7 @@ impl Erasure {
         match self {
             Erasure::Asked { by } => format!(
                 "{} erased these words",
-                crate::spelling::capitalised(by.as_str())
+                suzatary_base::spelling::capitalised(by.as_str())
             ),
             Erasure::Forgot { fact } => {
                 format!("these words were erased when fact {fact} was forgotten")

@@ -10,7 +10,7 @@ use serde::{Deserialize, Serialize};
 #[serde(rename_all = "lowercase")]
 #[ts(rename = "ConversationKind")]
 pub enum Kind {
-    /// [`DEFAULT`](crate::conversation_id::DEFAULT), the one `#/secretary` always has.
+    /// [`DEFAULT`](suzatary_base::conversation_id::DEFAULT), the one `#/secretary` always has.
     Default,
     /// One the owner opened, about one thing.
     Topic,
@@ -43,6 +43,6 @@ mod tests {
     /// `rename_all` spells the generated `ConversationKind`, so serde's words are checked against `ALL`'s.
     #[test]
     fn a_kinds_serde_word_is_its_literals() {
-        crate::words::assert_serde_words(&Kind::ALL, |kind| kind.as_str());
+        suzatary_base::words::assert_serde_words(&Kind::ALL, |kind| kind.as_str());
     }
 }

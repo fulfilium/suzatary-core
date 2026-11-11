@@ -10,12 +10,12 @@ use prodrome_core::event::{Actor, canonical};
 use prodrome_core::fpl::datetime_of;
 use prodrome_core::literal::Datetime;
 use prodrome_wasm_exports::wire::parse_instant;
+use suzatary_base::topic_target::Target;
 use suzatary_core::secretary::topics::provenance::Owner;
 use suzatary_core::secretary::topics::reading::AliasEvent;
 use suzatary_core::secretary::topics::reading::MembershipEvent;
 use suzatary_core::secretary::topics::reading::Reading;
 use suzatary_core::secretary::topics::topic::Topic;
-use suzatary_core::topic_target::Target;
 use wasm_bindgen::prelude::*;
 
 use crate::{json, refused};
@@ -119,7 +119,7 @@ pub(crate) fn topics_of(text: &str) -> Result<std::collections::BTreeSet<Topic>,
 
 fn target_of(text: &str) -> Result<Target, JsError> {
     text.parse()
-        .map_err(|e: suzatary_core::topic_target::NotATarget| refused(e.to_string()))
+        .map_err(|e: suzatary_base::topic_target::NotATarget| refused(e.to_string()))
 }
 
 fn topic_of(text: &str) -> Result<Topic, JsError> {

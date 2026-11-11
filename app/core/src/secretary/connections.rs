@@ -5,15 +5,11 @@
 //! asks is unmet. A pasted Google calendar link is owed its removal once that account reads its
 //! calendars through its sign-in with Google (`Owed::retiring`).
 
-use crate::capability::Clock;
-use crate::capability::Datetime;
 use crate::connect::{Checked, Connection, Declared, Group, Params, Seen, Step, Table};
 use crate::google::{Held, Scope, Scopes};
 use crate::health::plugin::{Origin, PluginName};
 use crate::mail::account::Sync;
 use crate::mail::address::EmailAddress;
-use crate::reference::{ProposalRef, Reference};
-use crate::refusal::Refusal;
 use crate::secretary::acts::Act;
 use crate::secretary::conversations::Conversations;
 use crate::secretary::inbox;
@@ -24,6 +20,10 @@ use crate::secretary::proposer::Proposer;
 use crate::secretary::responded::{Done, Responded};
 use crate::secrets::{SecretState, Secrets};
 use crate::store::Prodrome;
+use suzatary_base::capability::Clock;
+use suzatary_base::capability::Datetime;
+use suzatary_base::reference::{ProposalRef, Reference};
+use suzatary_base::refusal::Refusal;
 
 /// What the rule reads of a deployment's Google accounts.
 #[derive(Debug, Clone, Copy)]

@@ -10,7 +10,6 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use prodrome_core::event::Hash;
 
-use crate::conversation_id::ConversationId;
 use crate::secretary::held_lines::Held;
 use crate::secretary::model::Turn;
 use crate::secretary::outline::{Outline, Round, Rounds, Voices};
@@ -22,8 +21,9 @@ use crate::secretary::targets::{self, MAX_TOPICS};
 use crate::secretary::topics::reading::Reading;
 use crate::secretary::topics::topic::Topic;
 use crate::secretary::words::Words;
-use crate::topic_target::Target;
 use crate::wire::topics as wire;
+use suzatary_base::conversation_id::ConversationId;
+use suzatary_base::topic_target::Target;
 
 /// How many rounds one page of the stream holds.
 pub const PAGE: usize = 30;

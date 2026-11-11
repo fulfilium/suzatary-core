@@ -8,9 +8,9 @@ use std::collections::{BTreeMap, BTreeSet};
 use serde::{Deserialize, Serialize};
 
 use crate::chain_set::ChainSet;
-use crate::reference::{Reference, TodoRef};
 use crate::secretary::own_round::OwnRound;
 use crate::signatures::Seat;
+use suzatary_base::reference::{Reference, TodoRef};
 
 /// A said line's stamp.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -179,7 +179,7 @@ pub fn pointing(speaker: Speaker, references: &[Reference], set: &ChainSet<'_>) 
 /// The `at` every stored line carries, the wire's spelling of an instant, so a transcript and a
 /// payload date a thing the same way.
 #[must_use]
-pub fn stamp(at: crate::capability::Datetime) -> String {
+pub fn stamp(at: suzatary_base::capability::Datetime) -> String {
     prodrome_core::fpl::iso(prodrome_core::fpl::instant_of(at))
 }
 

@@ -3,7 +3,7 @@
 
 use std::time::Duration;
 
-use suzatary_core::persona::Persona;
+use suzatary_base::persona::Persona;
 use suzatary_core::weather::WeatherError;
 
 use crate::http::{Http, Req, Ureq};

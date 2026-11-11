@@ -6,13 +6,13 @@ mod common;
 
 use common::Fakes;
 use serde_json::{Value, json};
-use suzatary_core::conversation_id::{ConversationId, DEFAULT};
+use suzatary_base::conversation_id::{ConversationId, DEFAULT};
+use suzatary_base::topic_target::Target;
 use suzatary_core::secretary::model::{ToolCall, Turn};
 use suzatary_core::secretary::store::Entry;
 use suzatary_core::secretary::topics::topic::Topic;
-use suzatary_core::topic_target::Target;
 
-fn call(fakes: &Fakes, args: Value) -> Result<Value, suzatary_core::refusal::Refusal> {
+fn call(fakes: &Fakes, args: Value) -> Result<Value, suzatary_base::refusal::Refusal> {
     call_in(fakes, &DEFAULT, "add_topics", args)
 }
 
@@ -22,7 +22,7 @@ fn call_in(
     id: &ConversationId,
     verb: &str,
     args: Value,
-) -> Result<Value, suzatary_core::refusal::Refusal> {
+) -> Result<Value, suzatary_base::refusal::Refusal> {
     let deployment = common::deployment([], []);
     let policy = common::chain();
     let chains = [suzatary_core::secretary::Bound {

@@ -2,13 +2,13 @@
 //! with no `notification` block, so Google draws nothing this app did not compose.
 
 use serde::{Deserialize, Serialize};
-use suzatary_core::capability::Secret;
+use suzatary_base::capability::Secret;
 use suzatary_core::notify::Printed;
 
 use crate::http::{Http, Req};
 use crate::secrets::{Resolves, SecretError};
 use crate::tokens::{Bearer, Fresh, Grant};
-use suzatary_core::spelling::shorten as truncate;
+use suzatary_base::spelling::shorten as truncate;
 
 const FCM_SCOPE: &str = "https://www.googleapis.com/auth/firebase.messaging";
 

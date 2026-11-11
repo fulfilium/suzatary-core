@@ -7,9 +7,9 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::sync::{Arc, Mutex, PoisonError};
 
-use crate::capability::Datetime;
-use crate::refusal::Answered;
 use crate::store::{Doc, Gets, StoreError};
+use suzatary_base::capability::Datetime;
+use suzatary_base::refusal::Answered;
 
 /// What a store holds at one answer: the prodromes it serves, its heads, and every object it holds.
 #[derive(Debug, Clone, PartialEq, Eq, Default)]

@@ -16,7 +16,6 @@ use prodrome_core::event::{Actor, Envelope, Hash};
 use prodrome_core::literal::Datetime;
 use prodrome_core::registers::Node;
 
-use crate::conversation_id::ConversationId;
 use crate::secretary::conversations::Conversations;
 use crate::secretary::erasure::Erasure;
 use crate::secretary::held_lines::HeldLines;
@@ -30,6 +29,7 @@ use crate::secretary::slots::Slots;
 use crate::secretary::store::{Entry, NotAConversation, Said, Stored};
 use crate::secretary::words::{Gone, Words};
 use crate::store::{Prodrome, StoreError};
+use suzatary_base::conversation_id::ConversationId;
 
 /// One conversation's lines in causal order, and their fold.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -693,11 +693,11 @@ pub fn dead<'l>(
 /// The answer blocks slot `slot`'s words were rendered to, opened by `key`: what a replica
 /// forgets before it destroys the key, since nothing finds them once the words are gone.
 #[must_use]
-pub fn fed(line: &LineEvent, slot: usize, key: &TextKey) -> Vec<crate::answer::Renderable> {
+pub fn fed(line: &LineEvent, slot: usize, key: &TextKey) -> Vec<suzatary_base::answer::Renderable> {
     match line.open(slot, key) {
-        Some(LineWords::Model { text }) => crate::answer::blocks(&text)
+        Some(LineWords::Model { text }) => suzatary_base::answer::blocks(&text)
             .iter()
-            .map(|block| crate::answer::Renderable::of(&block.source))
+            .map(|block| suzatary_base::answer::Renderable::of(&block.source))
             .collect(),
         _ => Vec::new(),
     }
@@ -864,11 +864,12 @@ pub fn findings(
                 .unplaced()
                 .filter(|unplaced| unplaced.why == crate::secretary::store::Unheld::NotHeld)
                 .map(|unplaced| {
-                    let line =
-                        crate::reference::Reference::Proposal(crate::reference::ProposalRef {
+                    let line = suzatary_base::reference::Reference::Proposal(
+                        suzatary_base::reference::ProposalRef {
                             conversation: stored.id.clone(),
                             index: unplaced.asking.index,
-                        });
+                        },
+                    );
                     format!("{line} has no card: {}", unplaced.why)
                 }),
         );
@@ -1015,7 +1016,7 @@ pub fn erase(
     id: &ConversationId,
     keys: std::collections::BTreeSet<KeyName>,
     erasure: Erasure,
-    at: crate::capability::Datetime,
+    at: suzatary_base::capability::Datetime,
 ) -> Result<usize, StoreError> {
     {
         let _held = conversations.lines.locked()?;
@@ -1053,7 +1054,8 @@ pub fn erase(
 /// The box writes every line; who said one is the line's own `by`.
 #[must_use]
 pub fn writer() -> Actor {
-    Actor::new(crate::writer::Writer::Assistant.actor()).expect("the secretary's actor is a name")
+    Actor::new(suzatary_base::writer::Writer::Assistant.actor())
+        .expect("the secretary's actor is a name")
 }
 
 /// Open conversation `id` with its first line.
@@ -1418,7 +1420,7 @@ mod tests {
     struct Stuck;
 
     impl crate::render_cache::RenderCache for Stuck {
-        fn forget(&self, _: &crate::answer::Renderable) -> Result<(), String> {
+        fn forget(&self, _: &suzatary_base::answer::Renderable) -> Result<(), String> {
             Err("the disk said no".to_owned())
         }
     }
@@ -1432,7 +1434,7 @@ mod tests {
         push(held.conversations(), &morning, &model(1, "An answer.")).expect("answered");
         let stuck = Conversations {
             renders: &Stuck,
-            sessions: &crate::capability::Nothing,
+            sessions: &suzatary_base::capability::Nothing,
             ..held.conversations()
         };
         let keys: std::collections::BTreeSet<KeyName> =

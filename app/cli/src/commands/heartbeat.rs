@@ -4,7 +4,7 @@
 use std::path::Path;
 
 use clap::Subcommand;
-use suzatary_core::capability::Clock as _;
+use suzatary_base::capability::Clock as _;
 use suzatary_core::mail::heartbeat::{Pass, Stage};
 use suzatary_io::pulse::Pulse;
 

@@ -5,7 +5,7 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use chrono::NaiveDate;
 use serde::Deserialize;
-use suzatary_core::reference::Reference;
+use suzatary_base::reference::Reference;
 use suzatary_core::secretary::store::Unheld;
 use suzatary_core::wire::todo::{Block, Entry, EntryState};
 use suzatary_core::wire::topics::{
@@ -171,7 +171,7 @@ pub(crate) fn all<'a>(
     read: Option<&'a InboxRead>,
     folds: &'a BTreeMap<String, Reading<FoldPayload>>,
 ) -> Vec<Waiting<'a>> {
-    let unheld = |serves: Option<&'a suzatary_core::reference::TodoRef>| {
+    let unheld = |serves: Option<&'a suzatary_base::reference::TodoRef>| {
         let (read, serves) = (read?, serves?);
         let chain = serves.chain.as_str();
         (!read.held.iter().any(|h| h == chain)).then_some(chain)

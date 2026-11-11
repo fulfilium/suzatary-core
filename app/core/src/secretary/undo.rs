@@ -1,10 +1,6 @@
 //! The undo of the secretary's withdrawals: a withdrawn card never stands again, so the brief
 //! offers each back as an [`Act::Restore`] card.
 
-use crate::capability::Datetime;
-use crate::conversation_id::ConversationId;
-use crate::reference::{ProposalRef, Reference};
-use crate::refusal::Refusal;
 use crate::secretary::acts::Act;
 use crate::secretary::changes::Changeset;
 use crate::secretary::filed::{self, Filing};
@@ -14,6 +10,10 @@ use crate::secretary::proposal::{Proposal, Reasons};
 use crate::secretary::proposer::Proposer;
 use crate::secretary::responded::{Responded, Withdrawal};
 use crate::store::Prodrome;
+use suzatary_base::capability::Datetime;
+use suzatary_base::conversation_id::ConversationId;
+use suzatary_base::reference::{ProposalRef, Reference};
+use suzatary_base::refusal::Refusal;
 
 /// How far back a brief looks for withdrawals: one day, the brief's own cadence.
 const DAY_SECONDS: i64 = 24 * 60 * 60;

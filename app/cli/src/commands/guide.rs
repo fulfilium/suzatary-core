@@ -9,8 +9,8 @@
 use std::path::{Path, PathBuf};
 
 use anyhow::Context as _;
+use suzatary_base::escape::escape_string;
 use suzatary_core::cast::CAST;
-use suzatary_core::escape::escape_string;
 
 use super::init;
 
@@ -126,7 +126,7 @@ pub fn html(guide: &str) -> anyhow::Result<String> {
         guide,
     )?))
     .map_err(|rejected| anyhow::anyhow!("the guide does not compile: {rejected:?}"))?;
-    if let Some(reason) = suzatary_core::tripwire::suspicious(&html) {
+    if let Some(reason) = suzatary_base::tripwire::suspicious(&html) {
         anyhow::bail!("the tripwire refuses the guide: {reason}");
     }
     Ok(html)

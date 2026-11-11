@@ -3,7 +3,7 @@ use std::fmt::Debug;
 use std::sync::{Mutex, PoisonError};
 
 use super::{Decide, Edit, Log, StoreError};
-use crate::refusal::Refusal;
+use suzatary_base::refusal::Refusal;
 
 /// Logs held in memory, for tests; a refusal names what each holds and its key as `Debug`.
 #[derive(Debug)]

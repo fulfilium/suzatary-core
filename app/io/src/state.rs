@@ -195,7 +195,7 @@ impl Ledger {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use suzatary_core::capability::Secret;
+    use suzatary_base::capability::Secret;
     use suzatary_core::mail::local_state::Kept;
     use suzatary_core::mail::state::Decision;
     use suzatary_core::store::StoreError;

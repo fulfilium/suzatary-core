@@ -125,12 +125,12 @@ impl Kind {
     }
 }
 
-impl crate::finite::Finite for Kind {
+impl suzatary_base::finite::Finite for Kind {
     const ALL: &'static [Self] = &Kind::ALL;
 }
 
 /// A set of [`Kind`]s, joined by union.
-pub type Kinds = crate::finite::Set<Kind>;
+pub type Kinds = suzatary_base::finite::Set<Kind>;
 
 impl Label {
     /// The mark of a line whose words were erased, clean and of that kind alone.

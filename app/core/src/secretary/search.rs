@@ -3,9 +3,9 @@
 
 use std::borrow::Borrow;
 
-use crate::conversation_id::ConversationId;
 use crate::secretary::model::Turn;
 use crate::secretary::store::{Kind, Stored};
+use suzatary_base::conversation_id::ConversationId;
 
 /// Trimmed, never empty, at most [`Needle::MAX`] characters, kept case-folded.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -193,7 +193,8 @@ mod tests {
 
     fn conversation(slug: &str, title: &str, turns: &[(&str, Turn)]) -> Stored {
         let mut entries = vec![Entry::Opened {
-            at: crate::capability::Datetime::new(2026, 9, 25, 9, 0, 0, 0).expect("an instant"),
+            at: suzatary_base::capability::Datetime::new(2026, 9, 25, 9, 0, 0, 0)
+                .expect("an instant"),
             title: crate::secretary::words::Words::kept(title.to_owned()),
             model: "m".to_owned(),
             kind: if slug == "default" {

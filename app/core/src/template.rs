@@ -68,7 +68,7 @@ impl Job {
 /// What is kept of a compiled document.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Output {
-    /// Its body, past the tripwire ([`crate::narrowing`]).
+    /// Its body, past the tripwire ([`suzatary_base::narrowing`]).
     Body,
     /// The whole document, past the tripwire.
     Document,

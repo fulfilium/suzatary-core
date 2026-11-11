@@ -11,7 +11,7 @@
 use std::collections::BTreeSet;
 
 use proptest::prelude::*;
-use suzatary_core::conversation_id::ConversationId;
+use suzatary_base::conversation_id::ConversationId;
 use suzatary_core::secretary::model::{SessionId, ToolCall, Turn};
 use suzatary_core::secretary::queue;
 use suzatary_core::secretary::store::{Entry, Scope, Stored};
@@ -71,8 +71,8 @@ fn id() -> ConversationId {
     ConversationId::new("default").expect("a slug")
 }
 
-fn at() -> suzatary_core::capability::Datetime {
-    suzatary_core::capability::Datetime::new(2026, 10, 7, 9, 0, 0, 0).expect("an instant")
+fn at() -> suzatary_base::capability::Datetime {
+    suzatary_base::capability::Datetime::new(2026, 10, 7, 9, 0, 0, 0).expect("an instant")
 }
 
 fn said(turn: Turn) -> Entry {

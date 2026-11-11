@@ -11,18 +11,18 @@ use super::verbs::{
 };
 use super::{Call, Holds, Says};
 use crate::agent::Agent;
-use crate::chains::ChainPolicy;
-use crate::reference::TodoRef;
-use crate::refusal::Refusal;
 use crate::secretary::changes::{self, Act, Building, Changeset};
 use crate::secretary::filed::Carding;
 use crate::secretary::shown_record::{OwnersRecord, OwnersWords};
 use crate::secretary::verbs::Reasoned;
 use crate::verb::{Chained, Surface, verbs};
-use crate::writer::Writer;
-use crate::zone::Moment;
 use prodrome_core::event::TodoId;
 use serde_json::json;
+use suzatary_base::chains::ChainPolicy;
+use suzatary_base::reference::TodoRef;
+use suzatary_base::refusal::Refusal;
+use suzatary_base::writer::Writer;
+use suzatary_base::zone::Moment;
 
 /// The triage agent's verbs: each runs against a [`Call`] and answers JSON.
 pub enum TriageSurface {}

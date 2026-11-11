@@ -6,9 +6,9 @@
 
 use prodrome_core::fpl;
 
-use crate::capability::Datetime;
-use crate::reference::Reference;
-use crate::refusal::{Refusal, shown};
+use suzatary_base::capability::Datetime;
+use suzatary_base::reference::Reference;
+use suzatary_base::refusal::{Refusal, shown};
 
 /// A phone screenful of mail and a bit.
 pub(crate) const MAIL_LIMIT: usize = 50;

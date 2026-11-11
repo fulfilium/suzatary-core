@@ -1,7 +1,7 @@
 //! A route's request body, capped, read by serde as its wire type, and parsed once.
 
 use serde::de::DeserializeOwned;
-use suzatary_core::refusal::Refusal;
+use suzatary_base::refusal::Refusal;
 
 use super::State;
 
@@ -69,7 +69,7 @@ async fn object(body: axum::body::Body, cap: usize) -> Result<serde_json::Value,
     } else {
         Err(Refusal::bad_request(format!(
             "the body must be a JSON object, got {}",
-            suzatary_core::refusal::json_type(&value)
+            suzatary_base::refusal::json_type(&value)
         )))
     }
 }

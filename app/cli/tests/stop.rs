@@ -8,7 +8,7 @@ use std::sync::Arc;
 
 use common::{FakeModel, Fakes, Gate};
 
-fn ada() -> suzatary_core::capability::Login {
+fn ada() -> suzatary_base::capability::Login {
     common::login("ada@example.com")
 }
 
@@ -147,12 +147,12 @@ fn a_stop_before_any_round_takes_the_question_closes_it() {
     let id = open(&base);
     // Written with no nudge, as a `say` stands between its write and the worker's round.
     let conversation =
-        suzatary_core::conversation_id::ConversationId::new(&id).expect("a conversation id");
+        suzatary_base::conversation_id::ConversationId::new(&id).expect("a conversation id");
     suzatary_core::secretary::transcript::push(
         fakes.conversations.conversations(),
         &conversation,
         &suzatary_core::secretary::store::Entry::Said {
-            at: suzatary_core::capability::Datetime::new(2026, 9, 2, 12, 0, 0, 0)
+            at: suzatary_base::capability::Datetime::new(2026, 9, 2, 12, 0, 0, 0)
                 .expect("an instant"),
             turn: suzatary_core::secretary::model::Turn::Person {
                 text: "read every thread".to_owned(),

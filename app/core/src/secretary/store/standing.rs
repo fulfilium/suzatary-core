@@ -1,8 +1,8 @@
 //! A proposal joined with its inbox object, and why one may not be withdrawn.
 
 use super::Asking;
-use crate::capability::Datetime;
 use crate::secretary::responded::{Done, Responded, Tried, Withdrawal};
+use suzatary_base::capability::Datetime;
 
 /// A proposal's conversation line joined with its inbox object.
 #[derive(Debug, Clone, PartialEq)]
@@ -32,8 +32,8 @@ pub fn refused(
     index: usize,
     reading: &crate::secretary::inbox_reading::Reading,
     now: Datetime,
-) -> crate::refusal::Refusal {
-    let conflict = crate::refusal::Refusal::conflict;
+) -> suzatary_base::refusal::Refusal {
+    let conflict = suzatary_base::refusal::Refusal::conflict;
     if let crate::secretary::inbox_reading::Reading::Unreadable(why) = reading {
         return conflict(format!("proposal {index} cannot be read: {why}"));
     }

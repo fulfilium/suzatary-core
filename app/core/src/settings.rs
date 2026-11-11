@@ -232,7 +232,7 @@ pub trait Writes {
     fn write_secret(
         &self,
         name: &Settable,
-        value: &crate::capability::Secret,
+        value: &suzatary_base::capability::Secret,
     ) -> Result<(), String>;
 
     /// Deletes what is stored under `name`.
@@ -251,7 +251,11 @@ pub trait Verify {
     ///
     /// # Errors
     /// Never carries the value.
-    fn verify(&self, name: &Settable, value: &crate::capability::Secret) -> Result<(), String>;
+    fn verify(
+        &self,
+        name: &Settable,
+        value: &suzatary_base::capability::Secret,
+    ) -> Result<(), String>;
 }
 
 /// Reads a source once, when an act makes it readable; held in no capability record.
@@ -266,7 +270,7 @@ pub trait Edits: Configuration {
     fn allow_web(&self, rule: &crate::web::AllowRule) -> Result<(), EditError>;
 
     /// Lets the secretary read files under `folder`; idempotent.
-    fn allow_drive(&self, folder: &crate::drive_path::DrivePath) -> Result<(), EditError>;
+    fn allow_drive(&self, folder: &suzatary_base::drive_path::DrivePath) -> Result<(), EditError>;
 
     /// Writes `connection`'s table, keeping every other byte, so a remove undoes it.
     fn add_connection(&self, connection: &connect::Connection) -> Result<(), EditError>;

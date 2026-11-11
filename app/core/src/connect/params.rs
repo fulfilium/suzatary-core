@@ -1,9 +1,9 @@
 //! What a person chooses for one connection.
 
-use crate::drive_path::DrivePath;
 use crate::health::{Label, Refused};
 use crate::mail::account::Authority;
 use crate::mail::address::EmailAddress;
+use suzatary_base::drive_path::DrivePath;
 
 /// What a template reads, a function of the table it writes, so a template cannot read one
 /// shape and write another.
@@ -134,7 +134,7 @@ impl Params {
                 })?,
             },
             (Shape::Folder, [folder]) => Params::Folder(folder.parse().map_err(
-                |refused: crate::drive_path::DrivePathError| Refused::Param {
+                |refused: suzatary_base::drive_path::DrivePathError| Refused::Param {
                     param: "folder",
                     said: refused.to_string(),
                 },

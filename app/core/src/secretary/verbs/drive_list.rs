@@ -3,10 +3,10 @@ use serde::Deserialize;
 use serde_json::{Value, json};
 
 use crate::drive::Port as _;
-use crate::refusal::Refusal;
 use crate::secretary::verbs::{drive_path, drive_refusal};
 use crate::secretary::{Call, SecretarySurface};
 use crate::verb::Verb;
+use suzatary_base::refusal::Refusal;
 
 /// One folder of the owner's Drive.
 pub struct DriveList;

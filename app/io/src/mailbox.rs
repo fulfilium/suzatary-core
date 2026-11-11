@@ -31,7 +31,8 @@ pub fn indexed_by(cmd: Cmd, config: Option<&Path>) -> Cmd {
     }
 }
 use self::message::NotmuchMessage;
-use suzatary_core::capability::Datetime;
+use suzatary_base::capability::Datetime;
+use suzatary_base::spelling::clip;
 use suzatary_core::enclosed::Enclosure;
 use suzatary_core::file_read::FileRead;
 use suzatary_core::held_value::HeldFile;
@@ -46,7 +47,6 @@ use suzatary_core::mail::{
     headers_of, web_links,
 };
 use suzatary_core::mail_error::MailError;
-use suzatary_core::spelling::clip;
 
 /// notmuch as a subprocess, and the maildir it names, as [`Mailbox`].
 pub struct Notmuch {
@@ -943,7 +943,7 @@ pub(crate) mod fixture {
             root.join("local/mail.json"),
             || {
                 Ok(suzatary_core::mail::dedup_key::DedupKey::of(
-                    &suzatary_core::capability::Secret::new("12".repeat(32)),
+                    &suzatary_base::capability::Secret::new("12".repeat(32)),
                 )
                 .expect("a key"))
             },

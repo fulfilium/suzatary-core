@@ -255,7 +255,7 @@ mod tests {
 
     #[test]
     fn no_constructor_is_a_term_or_an_envelope() {
-        crate::own::assert_own(SIGNATURES);
+        suzatary_base::own::assert_own(SIGNATURES);
     }
 
     /// A set of links has one spelling: sorted, each once; any other print is not this event's.

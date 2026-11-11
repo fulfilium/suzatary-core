@@ -9,8 +9,8 @@ use anyhow::{Context, bail};
 use clap::Subcommand;
 use prodrome_core::event::{Actor, TodoId, mk_cancelled, mk_completed, mk_reopened, mk_tended};
 use prodrome_core::policy::Untrusted;
+use suzatary_base::capability::Clock;
 use suzatary_core::believed::Preview;
-use suzatary_core::capability::Clock;
 use suzatary_core::signatures::Signers;
 use suzatary_core::store::{Prodrome, Signing};
 use suzatary_core::{authoring, todo, view};
@@ -475,12 +475,12 @@ fn add(
         subtodos: Vec::new(),
     };
     let refused =
-        |refusal: suzatary_core::refusal::Refusal| anyhow::anyhow!("{}", refusal.message());
+        |refusal: suzatary_base::refusal::Refusal| anyhow::anyhow!("{}", refusal.message());
     let written = match &new.parent {
         None => vec![
             authoring::build_todo(
                 &todo,
-                suzatary_core::zone::Moment {
+                suzatary_base::zone::Moment {
                     at: now,
                     zone: instance.persona.zone,
                 },
@@ -504,7 +504,7 @@ fn add(
                 &todo,
                 &parent,
                 &believed.linkable(),
-                suzatary_core::zone::Moment {
+                suzatary_base::zone::Moment {
                     at: now,
                     zone: instance.persona.zone,
                 },
@@ -545,7 +545,7 @@ fn update(
     let event = authoring::update_todo(
         &before,
         edit,
-        suzatary_core::zone::Moment {
+        suzatary_base::zone::Moment {
             at: now,
             zone: instance.persona.zone,
         },
@@ -571,7 +571,7 @@ fn appended(
     untrusted: &Untrusted,
     preview: &mut Preview,
     written: Vec<suzatary_core::record::TodoEvent>,
-    now: suzatary_core::capability::Datetime,
+    now: suzatary_base::capability::Datetime,
 ) -> anyhow::Result<()> {
     for event in &written {
         preview.ahead(event.clone())?;

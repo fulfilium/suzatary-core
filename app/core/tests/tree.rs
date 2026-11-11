@@ -12,9 +12,9 @@ use prodrome_core::policy::Untrusted;
 use prodrome_core::term::Term;
 use suzatary_core::record::Entry;
 
+use suzatary_base::tree::{By, Classifier, Members, Monoid, Place, Segment, Tree};
 use suzatary_core::believed::Believed;
 use suzatary_core::record::{Envelope, TodoEvent, mk_authored};
-use suzatary_core::tree::{By, Classifier, Members, Monoid, Place, Segment, Tree};
 use suzatary_core::view::{self, Row};
 
 fn at(day: u32) -> Datetime {

@@ -180,7 +180,7 @@ fn expiration(value: &str) -> Option<NaiveDateTime> {
 mod tests {
     use std::sync::Arc;
 
-    use suzatary_core::capability::Secret;
+    use suzatary_base::capability::Secret;
     use suzatary_core::settings::{Declaration, Settables};
 
     use super::*;

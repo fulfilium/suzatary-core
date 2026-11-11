@@ -7,8 +7,8 @@ use prodrome_core::term::{CurvePoint, Term};
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
-use crate::refusal::Refusal;
 use crate::todo::price::ratio;
+use suzatary_base::refusal::Refusal;
 
 /// The ramp both recurrences repeat.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]

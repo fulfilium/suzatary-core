@@ -2,13 +2,13 @@ use schemars::JsonSchema;
 use serde::Deserialize;
 use serde_json::{Value, json};
 
-use crate::refusal::Refusal;
 use crate::secretary::acts::Act;
 use crate::secretary::proposal::Proposal;
 use crate::secretary::verbs::{Reasoned, propose};
 use crate::secretary::{self, Call, SecretarySurface, taint};
 use crate::verb::Verb;
 use crate::web::{self, AllowRule, SearchQuery, WebError, WebRequest};
+use suzatary_base::refusal::Refusal;
 
 /// Read the web: an allowed host at once, any other on a tap.
 pub struct Web;

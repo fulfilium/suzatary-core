@@ -38,7 +38,7 @@ async fn once(state: &State, mirrors: &Arc<suzatary_io::repos::Mirrors>) {
                     closed = swept.closed.len(),
                     "repository cards: done another way"
                 );
-                state.heard(&suzatary_core::conversation_id::DEFAULT);
+                state.heard(&suzatary_base::conversation_id::DEFAULT);
             }
         }
         Ok(Err(failed)) => tracing::warn!("repository cards: {}", failed.message()),

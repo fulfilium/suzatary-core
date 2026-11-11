@@ -11,9 +11,9 @@ use prodrome_core::policy::Untrusted;
 use prodrome_core::registers::Node;
 
 use super::{ChainSet, Held, Remembered};
-use crate::chains::{ChainName, ChainPolicy};
 use crate::record::TodoEvent;
 use crate::store::Prodrome;
+use suzatary_base::chains::{ChainName, ChainPolicy};
 
 /// Every chain's objects and their nodes, or why they did not read.
 #[derive(Debug, Clone, Default)]

@@ -1,9 +1,9 @@
 use serde_json::Value;
 
 use crate::agent::{Call, TriageSurface, reads};
-use crate::refusal::Refusal;
 use crate::timings::{Phase, timed};
 use crate::verb::{NoArgs, Verb};
+use suzatary_base::refusal::Refusal;
 
 /// The manuals and the vocabularies, first.
 pub struct Context;

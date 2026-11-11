@@ -17,7 +17,7 @@ use rustls::client::danger::{HandshakeSignatureValid, ServerCertVerified, Server
 use rustls::crypto::{WebPkiSupportedAlgorithms, verify_tls12_signature, verify_tls13_signature};
 use rustls::{CertificateError, DigitallySignedStruct, OtherError, SignatureScheme};
 use rustls_pki_types::{CertificateDer, ServerName, UnixTime};
-use suzatary_core::capability::Secret;
+use suzatary_base::capability::Secret;
 use suzatary_core::mail::send::{SendError, Step};
 
 /// The Bridge's address, its pinned certificate, and the per-read/write timeout.

@@ -1,0 +1,36 @@
+[package]
+name = "suzatary-base"
+description = "The names every Suzatary crate speaks (see ../../docs/CORESPLIT-PLAN-2026-11-06.md)"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[lib]
+name = "suzatary_base"
+path = "src/lib.rs"
+
+[dependencies]
+prodrome_core.workspace = true
+thiserror.workspace = true
+tracing.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+ts-rs.workspace = true
+schemars.workspace = true
+regex.workspace = true
+chrono.workspace = true
+chrono-tz.workspace = true
+typst-syntax.workspace = true
+sha2.workspace = true
+hex.workspace = true
+
+[features]
+nothing = []
+
+[dev-dependencies]
+suzatary-base = { path = ".", features = ["nothing"] }
+proptest.workspace = true
+
+[lints]
+workspace = true

@@ -277,7 +277,7 @@ mod tests {
 
     #[test]
     fn no_constructor_is_a_term_or_an_envelope() {
-        crate::own::assert_own(&[REMEMBERED, FORGOTTEN, CONSOLIDATED, TURN, TAPPED]);
+        suzatary_base::own::assert_own(&[REMEMBERED, FORGOTTEN, CONSOLIDATED, TURN, TAPPED]);
     }
 
     /// Every count prints as itself and reads back, at the widest it holds.
@@ -295,7 +295,7 @@ mod tests {
                 TextName::new("a".repeat(64)).expect("a name"),
                 Kind::Owner,
                 Origin::Turn {
-                    conversation: crate::conversation_id::ConversationId::new("default")
+                    conversation: suzatary_base::conversation_id::ConversationId::new("default")
                         .expect("an id"),
                     turn: usize::MAX,
                 },
@@ -310,7 +310,7 @@ mod tests {
                 TextName::new("b".repeat(64)).expect("a name"),
                 Kind::Standing,
                 Origin::Tapped {
-                    conversation: crate::conversation_id::ConversationId::new("default")
+                    conversation: suzatary_base::conversation_id::ConversationId::new("default")
                         .expect("an id"),
                     proposal: usize::MAX,
                 },
@@ -341,7 +341,7 @@ mod tests {
                 TextName::new("a".repeat(64)).expect("a name"),
                 Kind::Owner,
                 Origin::Turn {
-                    conversation: crate::conversation_id::ConversationId::new("default")
+                    conversation: suzatary_base::conversation_id::ConversationId::new("default")
                         .expect("an id"),
                     turn: 0,
                 },

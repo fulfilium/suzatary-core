@@ -8,8 +8,8 @@ use serde_json::Value;
 use crate::agent::{Holds, answered, refused};
 use crate::mail::corpus::Corpus;
 use crate::mail::verbs;
-use crate::refusal::{Refusal, shown};
 use crate::verb::{Own, Verb};
+use suzatary_base::refusal::{Refusal, shown};
 
 /// One message in full, its arguments spelled `A`: paged, or whole.
 pub struct Show<S, A>(PhantomData<(S, A)>);

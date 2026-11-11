@@ -4,8 +4,8 @@
 mod common;
 
 use common::{FakeModel, Fakes};
+use suzatary_base::conversation_id::ConversationId;
 use suzatary_core::conversation::round::Sink;
-use suzatary_core::conversation_id::ConversationId;
 use suzatary_core::secretary::model::{Halt, Pick, SessionId, Turn};
 use suzatary_core::secretary::store::Entry;
 use suzatary_core::secretary::{Bound, answer, queue};
@@ -36,7 +36,7 @@ fn opened_with_a_person_turn(caps: &Fakes) {
         caps.conversations.conversations(),
         &id(),
         &Entry::Said {
-            at: suzatary_core::capability::Datetime::new(2026, 9, 14, 9, 0, 0, 0)
+            at: suzatary_base::capability::Datetime::new(2026, 9, 14, 9, 0, 0, 0)
                 .expect("an instant"),
             turn: Turn::Person {
                 text: "what changed".to_owned(),
@@ -134,7 +134,7 @@ fn a_stored_session_resumes_with_exactly_the_delta() {
         caps.conversations.conversations(),
         &id(),
         &Entry::Kept {
-            at: suzatary_core::capability::Datetime::new(2026, 9, 14, 8, 59, 0, 0)
+            at: suzatary_base::capability::Datetime::new(2026, 9, 14, 8, 59, 0, 0)
                 .expect("an instant"),
             session: existing.clone(),
             model: "claude-cli/haiku".to_owned(),
@@ -210,7 +210,7 @@ fn a_retraction_reopens_a_stored_session() {
         caps.conversations.conversations(),
         &id(),
         &Entry::Kept {
-            at: suzatary_core::capability::Datetime::new(2026, 9, 14, 8, 59, 0, 0)
+            at: suzatary_base::capability::Datetime::new(2026, 9, 14, 8, 59, 0, 0)
                 .expect("an instant"),
             session: a_session_id("1"),
             model: "claude-cli/haiku".to_owned(),
@@ -236,7 +236,7 @@ fn a_retraction_reopens_a_stored_session() {
         &caps.digests,
         suzatary_core::secretary::digest_event::retracted(
             node,
-            suzatary_core::capability::Datetime::new(2026, 9, 14, 9, 0, 0, 0).expect("an instant"),
+            suzatary_base::capability::Datetime::new(2026, 9, 14, 9, 0, 0, 0).expect("an instant"),
             &tap,
         )
         .expect("a retraction"),
@@ -288,7 +288,7 @@ fn a_lost_resume_is_followed_by_exactly_one_open_over_the_whole_transcript() {
         caps.conversations.conversations(),
         &id(),
         &Entry::Kept {
-            at: suzatary_core::capability::Datetime::new(2026, 9, 14, 8, 59, 0, 0)
+            at: suzatary_base::capability::Datetime::new(2026, 9, 14, 8, 59, 0, 0)
                 .expect("an instant"),
             session: dead.clone(),
             model: "claude-cli/haiku".to_owned(),
@@ -370,7 +370,7 @@ fn a_session_opened_on_another_surface_is_reopened_once() {
         caps.conversations.conversations(),
         &id(),
         &Entry::Kept {
-            at: suzatary_core::capability::Datetime::new(2026, 9, 14, 8, 59, 0, 0)
+            at: suzatary_base::capability::Datetime::new(2026, 9, 14, 8, 59, 0, 0)
                 .expect("an instant"),
             session: a_session_id("old"),
             model: "claude-cli/haiku".to_owned(),
@@ -422,7 +422,7 @@ fn a_session_opened_on_another_surface_is_reopened_once() {
         caps.conversations.conversations(),
         &id(),
         &Entry::Said {
-            at: suzatary_core::capability::Datetime::new(2026, 9, 14, 9, 10, 0, 0)
+            at: suzatary_base::capability::Datetime::new(2026, 9, 14, 9, 10, 0, 0)
                 .expect("an instant"),
             turn: Turn::Person {
                 text: "and now".to_owned(),
@@ -458,7 +458,7 @@ fn a_session_opened_on_another_surface_is_reopened_once() {
 fn the_memory_heads_a_batch_once() {
     use suzatary_core::secretary::memory::{Fact, Kind, Origin};
     let at =
-        || suzatary_core::capability::Datetime::new(2026, 9, 14, 9, 0, 0, 0).expect("an instant");
+        || suzatary_base::capability::Datetime::new(2026, 9, 14, 9, 0, 0, 0).expect("an instant");
     let caps = Fakes::new("session-memory").model(FakeModel::saying([
         "{\"say\": \"one\"}",
         "{\"say\": \"two\"}",
@@ -516,7 +516,7 @@ fn the_memory_heads_a_batch_once() {
             caps.conversations.conversations(),
             &id(),
             &Entry::Said {
-                at: suzatary_core::capability::Datetime::new(2026, 9, 14, 9, 5, 0, 0)
+                at: suzatary_base::capability::Datetime::new(2026, 9, 14, 9, 5, 0, 0)
                     .expect("an instant"),
                 turn: Turn::Person {
                     text: text.to_owned(),
@@ -563,7 +563,7 @@ fn the_memory_heads_a_batch_once() {
 /// The owner's question, as the gate stamps it.
 fn asked(text: &str) -> Entry {
     Entry::Said {
-        at: suzatary_core::capability::Datetime::new(2026, 9, 14, 9, 10, 0, 0).expect("an instant"),
+        at: suzatary_base::capability::Datetime::new(2026, 9, 14, 9, 10, 0, 0).expect("an instant"),
         turn: Turn::Person {
             text: text.to_owned(),
             references: Vec::new(),
@@ -898,7 +898,7 @@ fn a_round_picks_only_when_something_waits_and_by_the_order_then() {
         caps.conversations.conversations(),
         &id(),
         &Entry::Said {
-            at: suzatary_core::capability::Datetime::new(2026, 9, 14, 9, 0, 0, 0)
+            at: suzatary_base::capability::Datetime::new(2026, 9, 14, 9, 0, 0, 0)
                 .expect("an instant"),
             turn: Turn::Person {
                 text: "what changed".to_owned(),
@@ -930,7 +930,7 @@ fn push_said(caps: &Fakes, turn: Turn) {
         caps.conversations.conversations(),
         &id(),
         &Entry::Said {
-            at: suzatary_core::capability::Datetime::new(2026, 9, 14, 9, 0, 0, 0)
+            at: suzatary_base::capability::Datetime::new(2026, 9, 14, 9, 0, 0, 0)
                 .expect("an instant"),
             turn,
             by,
@@ -966,7 +966,7 @@ fn chat(caps: &Fakes, n: usize) {
 fn answered_once(
     caps: &Fakes,
     deployment: &suzatary_core::deployment::Deployment,
-    policy: &suzatary_core::chains::ChainPolicy,
+    policy: &suzatary_base::chains::ChainPolicy,
 ) -> suzatary_core::secretary::Answered {
     let chains = [Bound {
         name: "life",

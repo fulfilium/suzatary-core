@@ -1,6 +1,6 @@
 //! Today's forecast as one line, the one authority that reaches the network.
 //!
-//! It is on the secretary's bundle only, never [`Agent`](crate::capability::Agent), and what comes back is
+//! It is on the secretary's bundle only, never [`Agent`](suzatary_base::capability::Agent), and what comes back is
 //! data, never instructions.
 
 pub use crate::weather::WeatherError;

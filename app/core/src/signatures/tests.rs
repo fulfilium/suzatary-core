@@ -24,8 +24,8 @@ fn root() -> Secret {
 fn box_keys() -> BoxKeys {
     BoxKeys::of(
         &root().public(),
-        &crate::capability::Secret::new("9".repeat(64)),
-        &crate::capability::Secret::new("8".repeat(64)),
+        &suzatary_base::capability::Secret::new("9".repeat(64)),
+        &suzatary_base::capability::Secret::new("8".repeat(64)),
     )
     .expect("the keys")
 }
@@ -369,12 +369,12 @@ fn adopting_signatures_makes_history_earlier_and_a_later_unsigned_write_a_findin
     let earlier = store.append(done("alpha", "ada")).expect("appends");
     let keys = BoxKeys::of(
         &root().public(),
-        &crate::capability::Secret::new("9".repeat(64)),
-        &crate::capability::Secret::new("8".repeat(64)),
+        &suzatary_base::capability::Secret::new("9".repeat(64)),
+        &suzatary_base::capability::Secret::new("8".repeat(64)),
     )
     .expect("the deployment's keys");
-    let chain = crate::chains::ChainPolicy {
-        name: crate::chains::ChainName::new("life").expect("a slug"),
+    let chain = suzatary_base::chains::ChainPolicy {
+        name: suzatary_base::chains::ChainName::new("life").expect("a slug"),
         untrusted: prodrome_core::policy::Untrusted::of([actor("triage")]),
         roster: [actor("ada"), actor("triage")].into_iter().collect(),
         root: root().public(),
@@ -407,9 +407,9 @@ fn adopting_signatures_makes_history_earlier_and_a_later_unsigned_write_a_findin
 
 /// A chain as the instance sample writes it, `untrusted` named or empty: the agent's actor is
 /// the agent key's either way.
-fn chain_trusting(untrusted: Untrusted) -> crate::chains::ChainPolicy {
-    crate::chains::ChainPolicy {
-        name: crate::chains::ChainName::new("life").expect("a slug"),
+fn chain_trusting(untrusted: Untrusted) -> suzatary_base::chains::ChainPolicy {
+    suzatary_base::chains::ChainPolicy {
+        name: suzatary_base::chains::ChainName::new("life").expect("a slug"),
         untrusted,
         roster: [actor("ada"), actor("assistant"), actor("triage")]
             .into_iter()

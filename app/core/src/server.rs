@@ -1,9 +1,9 @@
 use crate::agent::Agent;
-use crate::capability::Whois;
 use crate::notify::Notify;
 use crate::secretary::Secretary;
 use crate::secretary::answers::Answers;
 use crate::secretary::model::Sessions;
+use suzatary_base::capability::Whois;
 
 /// What the serving process supplies: the secretary's effects, since it runs the
 /// secretary, plus peers and phones. Nothing here sends mail; only a route holding
@@ -36,7 +36,6 @@ impl<'a> Server<'a> {
 mod tests {
     use super::Server;
     use crate::agent::Agent;
-    use crate::capability::Nothing;
     use crate::secretary::Secretary;
 
     /// Each record is exactly these effects, so widening a role's authority is an edit here too.
@@ -51,7 +50,7 @@ mod tests {
             render: _,
             clock: _,
             memory: _,
-        } = Nothing::agent();
+        } = Agent::nothing();
         let Secretary {
             chain: _,
             corpus: _,
@@ -84,7 +83,7 @@ mod tests {
             tapped: _,
             configuration: _,
             watches: _,
-        } = Nothing::secretary();
+        } = Secretary::nothing();
         let Server {
             secretary: _,
             whois: _,
@@ -92,6 +91,6 @@ mod tests {
             answers: _,
             devices: _,
             sessions: _,
-        } = Nothing::server();
+        } = Server::nothing();
     }
 }

@@ -6,9 +6,6 @@
 //! written through [`crate::secretary::transcript::push`] alone, which keeps each key before the
 //! line that names it is appended, and never takes it back: an orphan key opens nothing.
 
-use crate::capability::{Datetime, Entropy};
-use crate::conversation_id::ConversationId;
-use crate::refusal::{Refusal, Status};
 use crate::render_cache::RenderCache;
 use crate::secretary::held_lines::{HeldLines, TheBox};
 use crate::secretary::line_event::LineEvent;
@@ -21,6 +18,9 @@ use crate::secretary::transcript;
 use crate::secretary::words::{Gone, Words};
 use crate::store::{Doc, Gets, Prodrome, Reads, StoreError};
 use crate::timings::{Phase, timed};
+use suzatary_base::capability::{Datetime, Entropy};
+use suzatary_base::conversation_id::ConversationId;
+use suzatary_base::refusal::{Refusal, Status};
 
 /// The conversations: their lines, their keys, and the source of fresh keys.
 #[derive(Clone, Copy)]
@@ -122,7 +122,7 @@ pub fn read(conversations: Conversations<'_>, id: &ConversationId) -> Result<Sto
     Ok(transcript::read(conversations, id)?.stored().clone())
 }
 
-/// [`read`], opening [`DEFAULT`](crate::conversation_id::DEFAULT) the first time anything asks
+/// [`read`], opening [`DEFAULT`](suzatary_base::conversation_id::DEFAULT) the first time anything asks
 /// for it, and no other id.
 ///
 /// # Errors
@@ -133,7 +133,7 @@ pub fn read_or_open_default(
     id: &ConversationId,
     at: Datetime,
 ) -> Result<Stored, Refusal> {
-    if id.as_str() != crate::conversation_id::DEFAULT.as_str() {
+    if id.as_str() != suzatary_base::conversation_id::DEFAULT.as_str() {
         return read(conversations, id);
     }
     match read(conversations, id) {

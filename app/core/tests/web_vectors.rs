@@ -17,20 +17,21 @@ use prodrome_core::event::{Actor, Hash, mk_completed, mk_created};
 use prodrome_core::fpl::{self, mk_decay, mk_flat};
 use prodrome_core::policy::Untrusted;
 
-use suzatary_core::capability::Entropy;
-use suzatary_core::capability::RenderError;
-use suzatary_core::capability::{Clock, Datetime, Nothing};
+use suzatary_base::capability::Entropy;
+use suzatary_base::capability::RenderError;
+use suzatary_base::capability::{Clock, Datetime};
+use suzatary_base::chains::{ChainName, ChainPolicy};
+use suzatary_base::conversation_id::ConversationId;
+use suzatary_base::escape::Escaped;
+use suzatary_base::reference::{ProposalRef, Reference};
 use suzatary_core::cast::{self, CAST};
 use suzatary_core::chain_set::Read;
-use suzatary_core::chains::{ChainName, ChainPolicy};
-use suzatary_core::conversation_id::ConversationId;
 use suzatary_core::deployment::Deployment;
-use suzatary_core::escape::Escaped;
 use suzatary_core::record::TodoEvent;
 use suzatary_core::record::{Envelope, EventStore, SubTodo, mk_authored, mk_source, mk_subtodo};
-use suzatary_core::reference::{ProposalRef, Reference};
 use suzatary_core::render::{Html, Render};
 use suzatary_core::routes;
+use suzatary_core::secretary::Secretary;
 use suzatary_core::secretary::about;
 use suzatary_core::secretary::answers::{AnswerError, Answers};
 use suzatary_core::secretary::conversations;
@@ -273,7 +274,7 @@ fn deployment() -> Deployment {
     Deployment {
         viewers: std::collections::BTreeSet::new(),
         actors: BTreeMap::new(),
-        chains: suzatary_core::chains::Chains::of(vec![chain_policy()]).expect("one chain"),
+        chains: suzatary_base::chains::Chains::of(vec![chain_policy()]).expect("one chain"),
         categories: [
             ("work".to_owned(), 1),
             ("home".to_owned(), 2),
@@ -284,7 +285,7 @@ fn deployment() -> Deployment {
         .collect(),
         app_url: "https://example.test".to_owned(),
         coding: None,
-        zone: suzatary_core::zone::Zone::UTC,
+        zone: suzatary_base::zone::Zone::UTC,
     }
 }
 
@@ -391,7 +392,7 @@ impl Bundle {
         index: usize,
         proposal: Proposal,
         reasons: Reasons,
-        serves: Option<suzatary_core::reference::TodoRef>,
+        serves: Option<suzatary_base::reference::TodoRef>,
         at: Datetime,
     ) -> ConversationEntry {
         let asked = inbox::Asked {
@@ -431,10 +432,10 @@ fn server_of(bundle: &Bundle) -> Server<'_> {
             model: bundle,
             inbox: &bundle.inbox,
             conversations: bundle.conversations.conversations(),
-            ..Nothing::secretary()
+            ..Secretary::nothing()
         },
         answers: bundle,
-        ..Nothing::server()
+        ..Server::nothing()
     }
 }
 
@@ -481,9 +482,9 @@ impl Prodrome<TodoEvent> for Bundle {
     }
 }
 
-impl suzatary_core::capability::Typeset for Bundle {
-    fn closed(&self, source: &str) -> Result<String, suzatary_core::capability::Rejected> {
-        suzatary_core::capability::parsed(source)
+impl suzatary_base::capability::Typeset for Bundle {
+    fn closed(&self, source: &str) -> Result<String, suzatary_base::capability::Rejected> {
+        suzatary_base::capability::parsed(source)
             .map(|()| "<!DOCTYPE html><html><body></body></html>".to_owned())
     }
 }
@@ -531,7 +532,7 @@ impl Model for Bundle {
 impl Answers for Bundle {
     fn block(
         &self,
-        _block: &suzatary_core::answer::Renderable,
+        _block: &suzatary_base::answer::Renderable,
     ) -> Result<suzatary_core::render::Html, AnswerError> {
         Err(AnswerError(
             "the vectors fixture renders nothing; every block is its source".to_owned(),
@@ -650,7 +651,7 @@ fn scripted_conversation(bundle: &Bundle, id: &ConversationId) -> Vec<Conversati
     let followed_up = later(opened, 90);
     let closed = later(opened, 95);
 
-    let reference_todo: suzatary_core::reference::TodoRef =
+    let reference_todo: suzatary_base::reference::TodoRef =
         format!("todo:life/{}", CAST.todos.agents.id)
             .parse()
             .expect("a todo reference");
@@ -955,7 +956,7 @@ fn the_blocks_vector_is_what_the_splitter_computes() {
     #[derive(Serialize)]
     struct Named {
         #[serde(flatten)]
-        block: suzatary_core::answer::Block,
+        block: suzatary_base::answer::Block,
         sha: String,
     }
     let answers = [
@@ -970,10 +971,10 @@ fn the_blocks_vector_is_what_the_splitter_computes() {
         .into_iter()
         .map(|answer| Cut {
             answer,
-            blocks: suzatary_core::answer::blocks(answer)
+            blocks: suzatary_base::answer::blocks(answer)
                 .into_iter()
                 .map(|block| Named {
-                    sha: suzatary_core::answer::sha(&block.source),
+                    sha: suzatary_base::answer::sha(&block.source),
                     block,
                 })
                 .collect(),
@@ -1243,7 +1244,7 @@ fn a_proposal_line_the_inbox_does_not_hold_is_reported_not_skipped() {
     use suzatary_core::secretary::store::{Line, Unheld};
 
     let bundle = Bundle::over(six_todo_chain(&scratch("unplaced")), now());
-    let id = suzatary_core::conversation_id::DEFAULT.clone();
+    let id = suzatary_base::conversation_id::DEFAULT.clone();
     with_unplaced_lines(&bundle, &id);
 
     let fold = inbox::fold(&bundle.inbox).expect("the inbox reads");
@@ -1346,7 +1347,7 @@ fn a_proposal_line_the_inbox_does_not_hold_is_reported_not_skipped() {
 fn a_conversation_with_an_unreadable_proposal_renders_and_the_rest_stay_tappable() {
     let root = scratch("unreadable");
     let bundle = Bundle::over(six_todo_chain(&root), now());
-    let id = suzatary_core::conversation_id::DEFAULT.clone();
+    let id = suzatary_base::conversation_id::DEFAULT.clone();
     let (bad_id, good_id) = with_an_unreadable_proposal(&bundle, &id);
     let deployment = deployment();
     let cards: Cards<'_> = Cards {
@@ -2055,7 +2056,7 @@ fn the_answers_vector_holds_every_answer() {
     let todo = routes::todo(
         &bundle,
         &policy,
-        suzatary_core::zone::Zone::UTC,
+        suzatary_base::zone::Zone::UTC,
         &set,
         CAST.todos.agents.id,
         None,
@@ -2303,7 +2304,7 @@ fn the_answers_vector_holds_every_answer() {
             },
         },
     ]);
-    samples.add([suzatary_core::wire::base::ErrorPayload {
+    samples.add([suzatary_base::wire::base::ErrorPayload {
         error: "refused".to_owned(),
     }]);
 
@@ -2613,7 +2614,7 @@ fn the_answers_vector_holds_every_answer() {
     samples.add([suzatary_core::wire::BlockRender {
         html: "<h2>Plan</h2>".to_owned(),
         key: suzatary_core::rendering::ANSWER
-            .key(&suzatary_core::answer::Renderable::of("= Plan"))
+            .key(&suzatary_base::answer::Renderable::of("= Plan"))
             .expect("a block prints"),
     }]);
     samples.add([row(1)]);
@@ -2635,7 +2636,7 @@ fn the_answers_vector_holds_every_answer() {
     let block = wire::BlockRow {
         source: "= Plan".to_owned(),
         plain: "Plan".to_owned(),
-        kind: suzatary_core::answer::Kind::Heading,
+        kind: suzatary_base::answer::Kind::Heading,
         html: Some("<h2>Plan</h2>".to_owned()),
     };
     samples.add([suzatary_core::wire::BriefingsPayload {

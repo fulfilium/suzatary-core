@@ -15,11 +15,11 @@ use prodrome_core::term::{Term, TermF};
 use regex::Regex;
 
 use crate::believed::one_outcome;
-use crate::capability::Datetime;
-use crate::escape::{Escaped, Quoted, escape_markup};
 use crate::render::Render;
-use crate::tree::{self, Classifier, Member, Members, Place, Segment, Tree, Trie};
 use crate::wire::todo as wire;
+use suzatary_base::capability::Datetime;
+use suzatary_base::escape::{Escaped, Quoted, escape_markup};
+use suzatary_base::tree::{self, Classifier, Member, Members, Place, Segment, Tree, Trie};
 
 /// Whether a row's content is still its untrusted writer's: authored by an actor the policy does
 /// not confirm and never re-authored by one it does.
@@ -183,7 +183,7 @@ pub fn rich_sources(record: &Authored) -> Vec<(&'static str, Escaped)> {
 
 /// Typst string source as the prose it stands for, undoing only `\\` and `\"`.
 ///
-/// Lenient where [`crate::escape::unescape_string`] is strict, since stored records predate it.
+/// Lenient where [`suzatary_base::escape::unescape_string`] is strict, since stored records predate it.
 #[must_use]
 pub fn string_text(source: &str) -> String {
     let mut out = String::with_capacity(source.len());
@@ -275,7 +275,7 @@ pub fn authored<R: Render + ?Sized>(
         block: wire::Block::of(record.payload.kind.as_str()),
         created: fpl::instant_of(record.payload.created).date().to_string(),
         body: record.payload.body.as_str().to_owned(),
-        text: crate::escape::markup_text(record.payload.body.as_str()),
+        text: suzatary_base::escape::markup_text(record.payload.body.as_str()),
         detail: record.payload.detail.as_str().to_owned(),
         category: record
             .payload
@@ -284,7 +284,7 @@ pub fn authored<R: Render + ?Sized>(
             .map_or_else(String::new, |name| name.as_str().to_owned()),
         waiting_on: record.payload.waiting_on.as_str().to_owned(),
         rationale: record.payload.rationale.clone(),
-        spec: record.payload.spec().map(crate::term_json::to_json),
+        spec: record.payload.spec().map(suzatary_base::term_json::to_json),
         actor: record.actor.as_str().to_owned(),
         at: fpl::iso(fpl::instant_of(record.at)),
         source: record
@@ -628,7 +628,7 @@ pub fn members(entries: &[Entry], by_hash: &BTreeMap<Hash, &Envelope>) -> Member
         .into_iter()
         .map(|(entry, record)| {
             let member = Member {
-                title: crate::escape::markup_text(record.payload.body.as_str()),
+                title: suzatary_base::escape::markup_text(record.payload.body.as_str()),
                 category: record.payload.category.as_ref().map_or_else(
                     || crate::decoration::kind_category(record.payload.kind.as_str()).to_owned(),
                     |name| name.as_str().to_owned(),
@@ -784,14 +784,14 @@ mod tests {
     use prodrome_core::literal::Datetime as Stamp;
 
     use super::*;
-    use crate::capability::RenderError;
     use crate::render::Html;
+    use suzatary_base::capability::RenderError;
 
     /// A render that echoes the markup, so a test sees which fragment reached it.
     struct Echo;
-    impl crate::capability::Typeset for Echo {
-        fn closed(&self, source: &str) -> Result<String, crate::capability::Rejected> {
-            crate::capability::parsed(source)
+    impl suzatary_base::capability::Typeset for Echo {
+        fn closed(&self, source: &str) -> Result<String, suzatary_base::capability::Rejected> {
+            suzatary_base::capability::parsed(source)
                 .map(|()| "<!DOCTYPE html><html><body></body></html>".to_owned())
         }
     }

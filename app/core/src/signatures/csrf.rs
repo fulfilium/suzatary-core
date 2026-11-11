@@ -1,7 +1,7 @@
 //! The CSRF triple: whether code this app served made a write, and whether its page keeps a
 //! write contract the box takes.
 
-use crate::refusal::{Refusal, shown};
+use suzatary_base::refusal::{Refusal, shown};
 
 /// The app's own header, which forces a CORS preflight this server never answers.
 pub const ACT_HEADER: &str = "x-suzatary-act";
@@ -68,7 +68,7 @@ fn current(client: Option<&str>) -> Result<(), Refusal> {
     match client.and_then(|said| said.trim().parse::<u32>().ok()) {
         Some(contract) if contract >= CLIENT_MIN => Ok(()),
         said => Err(Refusal::new(
-            crate::refusal::Status::UpgradeRequired,
+            suzatary_base::refusal::Status::UpgradeRequired,
             format!(
                 "this page writes by contract {}, and the box takes {CLIENT_MIN} or later, so this act was not sent: the page says Suzatary <version> is ready with Reload, and it can be sent again after Reload",
                 said.map_or_else(|| "none".to_owned(), |n| n.to_string())

@@ -21,8 +21,6 @@ use prodrome_core::term::{Term, TermF};
 use crate::chain_set::ChainSet;
 use crate::content_id::ContentId;
 use crate::health::plugin::PluginName;
-use crate::reference::{ProposalRef, TodoRef};
-use crate::refusal::Refusal;
 use crate::secretary::inbox_event::{InboxEvent, Said};
 use crate::secretary::inbox_reading::{Answer, Conflict, Reading};
 use crate::secretary::inbox_registers::{ContentRegister, StateRegister};
@@ -32,6 +30,8 @@ use crate::secretary::responded::{CheckFields, Done, Performed, Responded, Tried
 use crate::secretary::tapped::Tapped;
 use crate::store::Prodrome;
 use prodrome_core::literal::codec::{Constructor, Fields, Literal};
+use suzatary_base::reference::{ProposalRef, TodoRef};
+use suzatary_base::refusal::Refusal;
 
 /// Its fulfillment at the set's instant, priced through `set`; `∅` for a todo the set does not
 /// hold, `None` where its spec does not link or price.

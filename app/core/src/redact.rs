@@ -63,10 +63,10 @@ use std::borrow::Cow;
 use std::cell::LazyCell;
 use std::sync::LazyLock;
 
-use crate::rule_version::{Version, Versioned};
 use regex::Regex;
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
+use suzatary_base::rule_version::{Version, Versioned};
 
 /// What a redacted number becomes.
 pub(crate) const REDACTED: &str = "[redacted]";
@@ -422,7 +422,7 @@ impl Kind {
 
 prodrome_core::word_literal!(Kind: Kind::ALL => |kind| kind.word());
 
-impl crate::finite::Finite for Kind {
+impl suzatary_base::finite::Finite for Kind {
     const ALL: &'static [Self] = &Kind::ALL;
 }
 
@@ -1591,7 +1591,7 @@ mod tests {
     /// The kind's serde word is its literal's, which the wire's `HeldKind` reads.
     #[test]
     fn a_kind_prints_as_its_word() {
-        crate::words::assert_serde_words(&Kind::ALL, |kind| kind.word());
+        suzatary_base::words::assert_serde_words(&Kind::ALL, |kind| kind.word());
     }
 
     /// The closest label decides between kinds that share a shape.

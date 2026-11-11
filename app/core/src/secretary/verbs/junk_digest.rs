@@ -4,10 +4,10 @@ use serde_json::{Value, json};
 
 use crate::mail::junk::{DEFAULT_DAYS, Window, digest};
 use crate::mail::junk_folder::JunkFailure;
-use crate::refusal::Refusal;
 use crate::secretary::verbs::not_a_junk_account;
 use crate::secretary::{Call, SecretarySurface};
 use crate::verb::Verb;
+use suzatary_base::refusal::Refusal;
 
 /// The Junk folders, swept.
 pub struct JunkDigest;

@@ -92,8 +92,8 @@ fn the_proton_drive_adapter_keeps_every_law_behind_a_fake_cli() {
 /// for it, and the CLI is never asked to list or download under any spelling of it.
 #[test]
 fn the_private_folder_is_fenced_whatever_its_case() {
+    use suzatary_base::drive_path::DrivePath;
     use suzatary_core::drive::{Fenced, Port as _};
-    use suzatary_core::drive_path::DrivePath;
 
     let dir = tempfile::tempdir().expect("a scratch dir");
     let drive = ProtonDrive::new(

@@ -3,7 +3,6 @@
 //! A card's identity is (name, declaration, episode); an episode begins when the box's card for
 //! the name ends without the owner's no.
 
-use crate::capability::Datetime;
 use crate::secretary::acts::Act;
 use crate::secretary::inbox;
 use crate::secretary::noticed::Owed;
@@ -12,6 +11,7 @@ use crate::secretary::proposer::Proposer;
 use crate::secretary::responded::{Done, Responded};
 use crate::secretary::store::Need;
 use crate::settings::{Declaration, Settable, Settables};
+use suzatary_base::capability::Datetime;
 
 const MISSING: &str = "Nothing is stored for it yet, so what needs it cannot work.";
 
@@ -175,11 +175,11 @@ mod tests {
     use std::collections::BTreeSet;
 
     use super::*;
-    use crate::capability::Datetime;
     use crate::secretary::inbox_event::InboxEvent;
     use crate::secretary::responded::Performed;
     use crate::store::InMemory;
     use crate::store::Reads as _;
+    use suzatary_base::capability::Datetime;
 
     fn at(minute: u32) -> Datetime {
         Datetime::new(2026, 10, 7, 9, minute, 0, 0).expect("an instant")

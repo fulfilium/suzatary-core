@@ -7,12 +7,12 @@
 
 use prodrome_core::event::Actor;
 
-use crate::capability::Clock;
 use crate::decisions::Decisions;
 use crate::decisions::{DecisionId, Draft};
 use crate::render::Render;
 use crate::secretary::responded::{Done, Performed, Tried};
 use crate::wire::inbox as wire;
+use suzatary_base::capability::Clock;
 
 /// The imperative a card and a list both print.
 #[must_use]

@@ -3,7 +3,7 @@ use std::sync::Arc;
 use prodrome_core::sign::{PublicKey, Secret};
 
 use super::Custody;
-use crate::capability;
+use suzatary_base::capability;
 
 /// The secretspec name of the box's own key, the deployment's ROOT: it signs every write the
 /// box makes and every key object, so a key counts where it signed one.

@@ -2,7 +2,7 @@
 //! roster.
 //!
 //! The policy is per chain and the door is not: who may open the app is the deployment's
-//! ([`crate::deployment::Deployment`]), while whose events bind is a store's, because one
+//! (`suzatary_core::deployment::Deployment`), while whose events bind is a store's, because one
 //! chain's untrusted agent is not the other's.
 //!
 //! Order is meaning here: the first chain is what the bare `/api/…` paths, the briefing, the

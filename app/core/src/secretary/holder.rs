@@ -71,7 +71,6 @@ impl Holder {
 mod tests {
     use prodrome_core::literal::Datetime;
 
-    use crate::conversation_id::ConversationId;
     use crate::secretary::conversations::InMemory;
     use crate::secretary::erasure::Erasure;
     use crate::secretary::line_event::LineEvent;
@@ -81,6 +80,7 @@ mod tests {
     use crate::secretary::transcript;
     use crate::secretary::words::Words;
     use crate::store::{Doc as _, Gets as _, Prodrome as _};
+    use suzatary_base::conversation_id::ConversationId;
 
     const SESSION: &str = "6f1c2b0e-8a4d-4c55-9f3e-2b7a1d9e0c41";
 

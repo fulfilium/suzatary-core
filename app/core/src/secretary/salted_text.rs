@@ -7,8 +7,8 @@
 //! holding the objects, and the salt is deleted with the words. Which words go is
 //! [`crate::secretary::texts`]'s.
 
-use crate::capability::SALT_BYTES;
 use sha2::{Digest, Sha256};
+use suzatary_base::capability::SALT_BYTES;
 
 /// The SHA-256 of a [`Text`]'s bytes: 64 lowercase hex, the file's name.
 #[derive(

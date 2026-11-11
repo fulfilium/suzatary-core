@@ -16,7 +16,7 @@ use prodrome_core::payload::{
 };
 use prodrome_core::term::{Term, TermF};
 
-use crate::capability::{Rejected, Typeset, parsed};
+use suzatary_base::capability::{Rejected, Typeset, parsed};
 
 // Not the Prodrome's `newtype_str!`: its generated methods carry no docs, and
 // `missing_docs` cannot be allowed from outside a `macro_rules!` item.
@@ -44,7 +44,7 @@ impl MarkupSource {
             return Err(Unadmitted::Unembeddable);
         }
         let document = typeset.closed(text).map_err(Unadmitted::Typst)?;
-        if let Some(reason) = crate::tripwire::suspicious(&document) {
+        if let Some(reason) = suzatary_base::tripwire::suspicious(&document) {
             return Err(Unadmitted::Suspicious(reason));
         }
         Ok(Self(text.to_owned()))
@@ -54,7 +54,11 @@ impl MarkupSource {
     /// composed): every structural character backslashed, so it reads as itself.
     #[must_use]
     pub fn escaped(prose: &str) -> Self {
-        Self(crate::escape::escape_markup(prose).as_str().to_owned())
+        Self(
+            suzatary_base::escape::escape_markup(prose)
+                .as_str()
+                .to_owned(),
+        )
     }
 
     /// Markup read back from where it is stored (an object's literal), admitted
@@ -140,7 +144,7 @@ fn embeds(text: &str) -> bool {
 pub struct StringSource(String);
 
 impl StringSource {
-    /// Text already in this language: from `crate::escape` or read back off the chain.
+    /// Text already in this language: from `suzatary_base::escape` or read back off the chain.
     #[must_use]
     pub fn new(text: impl Into<String>) -> StringSource {
         StringSource(text.into())

@@ -21,7 +21,7 @@ fn the_default_opens_once_and_a_replica_reads_it() {
         suzatary_core::secretary::conversations::read_or_open_default(
             caps.secretary.conversations,
             caps.secretary.model,
-            &suzatary_core::conversation_id::DEFAULT,
+            &suzatary_base::conversation_id::DEFAULT,
             caps.secretary.clock.now(),
         )
         .expect("the default opens")

@@ -41,7 +41,7 @@ impl DrivePath {
 
     /// Whether this is `/`.
     #[must_use]
-    pub(crate) fn is_root(&self) -> bool {
+    pub fn is_root(&self) -> bool {
         self.segments.is_empty()
     }
 

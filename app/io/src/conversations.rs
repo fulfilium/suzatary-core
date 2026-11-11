@@ -98,13 +98,13 @@ mod tests {
     fn one_cache_per_keys_directory() {
         let dir = tempfile::tempdir().expect("a scratch dir");
         let renders: Arc<dyn RenderCache + Send + Sync> =
-            Arc::new(suzatary_core::capability::Nothing);
+            Arc::new(suzatary_base::capability::Nothing);
         let open = |keys: &str| {
             ConversationStores::open(
                 dir.path().join("lines"),
                 dir.path().join(keys),
                 Arc::clone(&renders),
-                Arc::new(suzatary_core::capability::Nothing),
+                Arc::new(suzatary_base::capability::Nothing),
             )
         };
         let (one, two, other) = (open("keys"), open("keys"), open("other-keys"));

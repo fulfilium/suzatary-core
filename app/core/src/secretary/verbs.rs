@@ -8,12 +8,12 @@ use super::proposer::Proposer;
 use super::responded::Withdrawal;
 use super::verb_name::Binding;
 use crate::agent::verbs;
-use crate::conversation_id::ConversationId;
 use crate::mail_error::MailError;
-use crate::reference::{Reference, TodoRef};
-use crate::refusal::{Refusal, shown};
 use crate::secretary::Secretary;
 use crate::secretary::{conversations, transcript};
+use suzatary_base::conversation_id::ConversationId;
+use suzatary_base::reference::{Reference, TodoRef};
+use suzatary_base::refusal::{Refusal, shown};
 
 mod add_topics;
 mod attachments;
@@ -213,16 +213,16 @@ fn withdrawable(
 }
 
 /// A `path` argument, parsed.
-fn drive_path(path: &str) -> Result<crate::drive_path::DrivePath, Refusal> {
+fn drive_path(path: &str) -> Result<suzatary_base::drive_path::DrivePath, Refusal> {
     path.parse()
-        .map_err(|failed: crate::drive_path::DrivePathError| {
+        .map_err(|failed: suzatary_base::drive_path::DrivePathError| {
             Refusal::bad_request(failed.to_string())
         })
 }
 
 /// A missing file is a 404, a refused one a 400; anything else is the box's.
-pub(crate) fn drive_refusal(failed: &crate::drive_path::DriveFailure) -> Refusal {
-    use crate::drive_path::DriveFailure;
+pub(crate) fn drive_refusal(failed: &suzatary_base::drive_path::DriveFailure) -> Refusal {
+    use suzatary_base::drive_path::DriveFailure;
     match failed {
         DriveFailure::Missing(_) => Refusal::not_found(failed.to_string()),
         DriveFailure::Refused(_) => Refusal::bad_request(failed.to_string()),
@@ -324,13 +324,20 @@ fn located(
     caps: &Secretary<'_>,
     repo: &str,
     at: Option<&str>,
-) -> Result<(crate::repo_ids::RepoName, crate::repo_ids::CommitId), Refusal> {
-    let bad = |failed: crate::repo_ids::RepoNameError| Refusal::bad_request(failed.to_string());
-    let repo: crate::repo_ids::RepoName = repo.parse().map_err(bad)?;
+) -> Result<
+    (
+        suzatary_base::repo_ids::RepoName,
+        suzatary_base::repo_ids::CommitId,
+    ),
+    Refusal,
+> {
+    let bad =
+        |failed: suzatary_base::repo_ids::RepoNameError| Refusal::bad_request(failed.to_string());
+    let repo: suzatary_base::repo_ids::RepoName = repo.parse().map_err(bad)?;
     let at = at
         .map(str::trim)
         .filter(|at| !at.is_empty())
-        .map(|at| crate::repo_ids::Rev::try_from(at.to_owned()).map_err(bad))
+        .map(|at| suzatary_base::repo_ids::Rev::try_from(at.to_owned()).map_err(bad))
         .transpose()?;
     let commit = caps
         .repositories
@@ -340,7 +347,7 @@ fn located(
 }
 
 /// A repository path; absent is the top.
-fn path_of(path: Option<String>) -> Result<crate::repo_ids::RepoPath, Refusal> {
-    crate::repo_ids::RepoPath::try_from(path.unwrap_or_default())
+fn path_of(path: Option<String>) -> Result<suzatary_base::repo_ids::RepoPath, Refusal> {
+    suzatary_base::repo_ids::RepoPath::try_from(path.unwrap_or_default())
         .map_err(|failed| Refusal::bad_request(failed.to_string()))
 }

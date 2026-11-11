@@ -6,7 +6,7 @@ use std::collections::BTreeMap;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
-use suzatary_core::capability::{Datetime, Secret};
+use suzatary_base::capability::{Datetime, Secret};
 use suzatary_core::secretary::inbox::ProposalId;
 use suzatary_core::secretary::responded::{Performed, Tried};
 use suzatary_core::secretary::sign_in::{Sessions, SignInUrl};

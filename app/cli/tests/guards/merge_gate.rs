@@ -409,7 +409,7 @@ const NAMED_AS_DATA: &[(&str, &str)] = &[
     ("app/cli/tests/release.rs", "changelog.d"),
     ("app/core/src/coding.rs", "docs"),
     ("app/core/src/leak.rs", "docs"),
-    ("app/core/src/repo_ids.rs", "docs"),
+    ("app/base/src/repo_ids.rs", "docs"),
     ("app/core/tests/act_literal.rs", "docs"),
     ("app/core/tests/web_vectors.rs", "docs"),
     ("app/io/src/repos.rs", "docs"),
@@ -2281,11 +2281,22 @@ fn merge_gate_web_and_public_builds_read_no_skipped_path() {
     assert!(read.is_empty(), "{read:?}");
 }
 
+/// The crates the core's library is cut into; a new one joins with its `flake.nix` lines.
+const LIBRARY_CRATES: [&str; 2] = ["app/base", "app/core"];
+
+/// Whether `rel` is a test file of one of the library's crates.
+fn a_library_test(rel: &str) -> bool {
+    LIBRARY_CRATES
+        .iter()
+        .any(|krate| rel.starts_with(&format!("{krate}/tests/")))
+}
+
 /// The browser module, the wire and the vectors are built from the core's library alone, so a
 /// change to the CLI, the server's crates or a test file builds none of them again: their
-/// sources hold, beside the workspace's manifests, the core's library, examples and release plan,
-/// the browser module's crate, the calendar's schema, and of the core's tests only the supports
-/// its library includes, each of which they hold.
+/// sources hold, beside the workspace's manifests, the library of each crate the core is cut into
+/// ([`LIBRARY_CRATES`]), the core's examples and release plan, the browser module's crate, the
+/// calendar's schema, and of those crates' tests only the supports their libraries include, each
+/// of which they hold.
 #[test]
 fn merge_gate_web_inputs_are_built_from_the_core_library_alone() {
     if !on_path("nix") || std::env::var_os("IN_NIX_SHELL").is_none() {
@@ -2294,14 +2305,20 @@ fn merge_gate_web_inputs_are_built_from_the_core_library_alone() {
         );
         return;
     }
-    let library = ["app/core/src/", "app/core/examples/", "app/wasm/"];
+    let library: Vec<String> = LIBRARY_CRATES
+        .iter()
+        .map(|krate| format!("{krate}/src/"))
+        .chain(["app/core/examples/".to_owned(), "app/wasm/".to_owned()])
+        .collect();
     let files = [
         "app/Cargo.lock",
         "app/core/releases.toml",
         "app/plugin-ics/ics.schema",
     ];
     let mut sources = Vec::new();
-    files_under(&repo().join("app/core/src"), &mut sources);
+    for krate in LIBRARY_CRATES {
+        files_under(&repo().join(krate).join("src"), &mut sources);
+    }
     // A `#[path]` is resolved from the directory of the file that declares it, as rustc does.
     let supports: BTreeSet<String> = sources
         .iter()
@@ -2335,7 +2352,7 @@ fn merge_gate_web_inputs_are_built_from_the_core_library_alone() {
                             .into_owned(),
                     )
                 })
-                .filter(|rel| rel.starts_with("app/core/tests/"))
+                .filter(|rel| a_library_test(rel))
                 .collect::<Vec<_>>()
         })
         .collect();

@@ -201,6 +201,6 @@ mod tests {
     /// `rename_all` spells the generated `Style` and the verb's JSON schema, so serde's words are checked against `ALL`'s.
     #[test]
     fn a_styles_serde_word_is_its_literals() {
-        crate::words::assert_serde_words(&Style::ALL, |style| style.as_str());
+        suzatary_base::words::assert_serde_words(&Style::ALL, |style| style.as_str());
     }
 }

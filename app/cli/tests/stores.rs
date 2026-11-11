@@ -7,7 +7,7 @@ use std::sync::Arc;
 
 use common::{FakeModel, Fakes};
 
-fn ada() -> suzatary_core::capability::Login {
+fn ada() -> suzatary_base::capability::Login {
     common::login("ada@example.com")
 }
 
@@ -114,7 +114,7 @@ fn the_decorations_are_asked_by_content() {
         .flat_map(|turn| turn["blocks"].as_array().expect("a model's blocks").clone())
         .next()
         .expect("the answer has a block");
-    let sha = suzatary_core::answer::sha(block["source"].as_str().expect("a source"));
+    let sha = suzatary_base::answer::sha(block["source"].as_str().expect("a source"));
     let mut rendered = common::get(&format!(
         "{base}/api/secretary/conversations/{id}/blocks/{sha}"
     ));
@@ -553,7 +553,7 @@ fn added(genesis: &prodrome_core::event::Hash, actor: &str) -> String {
         suzatary_core::secretary::topics::reading::Topics,
     >(
         "round:default/0"
-            .parse::<suzatary_core::topic_target::Target>()
+            .parse::<suzatary_base::topic_target::Target>()
             .expect("a target"),
         suzatary_core::secretary::topics::topic::Topic::new("travel").expect("a topic"),
         prodrome_core::literal::Datetime::new(2026, 9, 2, 12, 0, 0, 0).expect("an instant"),

@@ -95,14 +95,14 @@ pub trait GoogleTokens {
     fn token(
         &self,
         account: &suzatary_core::mail::address::EmailAddress,
-    ) -> Result<suzatary_core::capability::Secret, Unsearched>;
+    ) -> Result<suzatary_base::capability::Secret, Unsearched>;
 }
 
 impl GoogleTokens for crate::google::Grants {
     fn token(
         &self,
         account: &suzatary_core::mail::address::EmailAddress,
-    ) -> Result<suzatary_core::capability::Secret, Unsearched> {
+    ) -> Result<suzatary_base::capability::Secret, Unsearched> {
         crate::google::Grants::token(self, account)
             .map(|minted| minted.token)
             .map_err(|refused| match refused {
@@ -302,7 +302,7 @@ impl<C: Connect, H: Http, I: Index> Servers<C, H, I> {
     fn gmail(
         &self,
         account: &MailAccount,
-        token: &suzatary_core::capability::Secret,
+        token: &suzatary_base::capability::Secret,
         query: &OlderQuery,
         range: Range,
     ) -> Result<Landed, Unsearched> {
@@ -449,8 +449,8 @@ mod tests {
         fn token(
             &self,
             _: &suzatary_core::mail::address::EmailAddress,
-        ) -> Result<suzatary_core::capability::Secret, Unsearched> {
-            Ok(suzatary_core::capability::Secret::new("box-minted"))
+        ) -> Result<suzatary_base::capability::Secret, Unsearched> {
+            Ok(suzatary_base::capability::Secret::new("box-minted"))
         }
     }
 
@@ -1098,7 +1098,7 @@ mod tests {
             root.join("local/mail.json"),
             || {
                 Ok(suzatary_core::mail::dedup_key::DedupKey::of(
-                    &suzatary_core::capability::Secret::new("12".repeat(32)),
+                    &suzatary_base::capability::Secret::new("12".repeat(32)),
                 )
                 .expect("a key"))
             },

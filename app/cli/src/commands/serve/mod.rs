@@ -52,9 +52,9 @@ use anyhow::Context;
 use axum::Router;
 use axum::http::{HeaderValue, header};
 
+use suzatary_base::refusal::{Refusal, shown};
 use suzatary_core::deployment::Deployment;
 use suzatary_core::google::Endpoints;
-use suzatary_core::refusal::{Refusal, shown};
 use suzatary_core::secretary::compacting::Compacting;
 use suzatary_core::server::Server;
 use tower_http::compression::{CompressionLayer, CompressionLevel};
@@ -208,7 +208,7 @@ impl suzatary_io::secrets::Resolves for Unresolved {
         &self,
         _: &str,
         _: &str,
-    ) -> Result<Option<suzatary_core::capability::Secret>, suzatary_io::secrets::SecretError> {
+    ) -> Result<Option<suzatary_base::capability::Secret>, suzatary_io::secrets::SecretError> {
         Ok(None)
     }
 }
@@ -224,10 +224,10 @@ impl suzatary_core::secretary::sign_in::Sessions for Closed {
     fn finish(
         &self,
         _: &suzatary_core::secretary::sign_in::SignInUrl,
-        _: &suzatary_core::capability::Secret,
+        _: &suzatary_base::capability::Secret,
     ) -> Option<(
         suzatary_core::secretary::inbox::ProposalId,
-        Result<suzatary_core::capability::Secret, String>,
+        Result<suzatary_base::capability::Secret, String>,
     )> {
         None
     }
@@ -240,7 +240,7 @@ impl suzatary_core::settings::Verify for Unverified {
     fn verify(
         &self,
         name: &suzatary_core::settings::Settable,
-        _: &suzatary_core::capability::Secret,
+        _: &suzatary_base::capability::Secret,
     ) -> Result<(), String> {
         Err(format!(
             "this server tests no credential, so {} is kept by no tap",
@@ -310,7 +310,7 @@ impl Presence {
 pub struct Chained {
     /// Effects whose `chain` is this chain's store.
     pub caps: &'static Server<'static>,
-    pub policy: Arc<suzatary_core::chains::ChainPolicy>,
+    pub policy: Arc<suzatary_base::chains::ChainPolicy>,
 }
 
 impl State {
@@ -641,7 +641,7 @@ impl State {
     }
 
     /// Nudge this conversation's task and the compactor.
-    pub fn heard(&self, id: &suzatary_core::conversation_id::ConversationId) {
+    pub fn heard(&self, id: &suzatary_base::conversation_id::ConversationId) {
         self.workers.nudge(id, Arc::new(self.clone()));
         if let Some(compactor) = &self.compactor {
             compactor.nudge();
@@ -724,7 +724,7 @@ impl State {
                         withdrawn = withdrawn.len(),
                         "noticed: trusted devices' cards"
                     );
-                    self.heard(&suzatary_core::conversation_id::DEFAULT);
+                    self.heard(&suzatary_base::conversation_id::DEFAULT);
                 }
                 Ok(_) => {}
                 Err(failed) => {
@@ -1177,7 +1177,7 @@ fn serving(instance: &Instance, args: Args) -> anyhow::Result<Serving> {
                 anyhow::bail!("--whois-fixture is test-only and refuses to run with a certificate");
             }
             tracing::warn!("serve: --whois-fixture {login} — every peer is this login");
-            Peers::Fixture(suzatary_core::capability::Login::from_whois(login))
+            Peers::Fixture(suzatary_base::capability::Login::from_whois(login))
         }
     };
     #[cfg(not(feature = "fixture"))]
@@ -1407,7 +1407,7 @@ async fn open_default(chain: &Chained) {
         suzatary_core::secretary::conversations::read_or_open_default(
             caps.secretary.conversations,
             caps.secretary.model,
-            &suzatary_core::conversation_id::DEFAULT,
+            &suzatary_base::conversation_id::DEFAULT,
             now,
         )
     })

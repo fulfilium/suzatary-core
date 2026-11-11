@@ -1,11 +1,7 @@
 use prodrome_core::event::Hash;
 
 use crate::agent::Agent;
-use crate::capability::RenderError;
-use crate::capability::{Clock, Datetime, Manual, Manuals, Peer, Whois, WhoisError};
 use crate::drive::Drive;
-use crate::drive_path::DriveFailure;
-use crate::escape::Escaped;
 use crate::mail::corpus::{Corpus, CorpusError};
 use crate::mail::junk_folder::{Junk, JunkFailure};
 use crate::mail::mail_sync::{MailSync, SyncFailure, Synced};
@@ -17,9 +13,7 @@ use crate::mail::{AttachmentMeta, MailMessage, MailRow};
 use crate::mail_error::MailError;
 use crate::notify::{Delivered, Notify, NotifyError, Push};
 use crate::record::{Envelope, TodoEvent};
-use crate::refusal::Refusal;
 use crate::render::{Html, Render};
-use crate::repo_ids::{CommitId, RepoName, RepoPath, Rev};
 use crate::repos::{Patch, RepoRow, Visibility};
 use crate::repositories::{RepoFailure, Repositories};
 use crate::repository::{Repository, RepositoryError};
@@ -32,16 +26,17 @@ use crate::server::Server;
 use crate::store::{Prodrome, Reads, StoreError, WriteLock};
 use crate::weather::{Weather, WeatherError};
 use crate::web::{AllowRule, Web, WebAnswer, WebFailure, WebRequest};
+use suzatary_base::capability::RenderError;
+use suzatary_base::capability::{Datetime, Nothing};
+use suzatary_base::drive_path::DriveFailure;
+use suzatary_base::escape::Escaped;
+use suzatary_base::refusal::Refusal;
+use suzatary_base::repo_ids::{CommitId, RepoName, RepoPath, Rev};
 
-/// Every effect, inert: reads find nothing, writes are refused, no peer has a login.
-/// A test fills a record from it and swaps in the effects it is about.
-#[derive(Debug, Clone, Copy, Default)]
-pub struct Nothing;
-
-impl Nothing {
+impl Agent<'static> {
     /// The agent's record, every field inert.
     #[must_use]
-    pub fn agent() -> Agent<'static> {
+    pub fn nothing() -> Self {
         Agent {
             chain: &Nothing,
             corpus: &Nothing,
@@ -51,15 +46,17 @@ impl Nothing {
             render: &Nothing,
             clock: &Nothing,
             memory: crate::secretary::recollection::Recollection::of(
-                Nothing::memories().reads(),
+                crate::secretary::memories::Memories::nothing().reads(),
                 0,
             ),
         }
     }
+}
 
+impl crate::secretary::memories::Memories<'static> {
     /// The memory and the digest, inert: no fact, no line and no summary.
     #[must_use]
-    pub fn memories() -> crate::secretary::memories::Memories<'static> {
+    pub fn nothing() -> Self {
         crate::secretary::memories::Memories {
             history: &Nothing,
             texts: &Nothing,
@@ -68,16 +65,18 @@ impl Nothing {
             digests: crate::secretary::digests::Digests {
                 history: &Nothing,
                 texts: &Nothing,
-                lines: Nothing::conversations(),
+                lines: crate::secretary::conversations::Conversations::nothing(),
                 owners: &NO_OWNERS,
                 compacting: &crate::secretary::compacting::Compacting::Off,
             },
         }
     }
+}
 
+impl crate::secretary::conversations::Conversations<'static> {
     /// The conversations, inert: no line and no key.
     #[must_use]
-    pub fn conversations() -> crate::secretary::conversations::Conversations<'static> {
+    pub fn nothing() -> Self {
         crate::secretary::conversations::Conversations {
             lines: &Nothing,
             keys: &Nothing,
@@ -87,10 +86,12 @@ impl Nothing {
             opened: &OPENED,
         }
     }
+}
 
+impl Secretary<'static> {
     /// The secretary's record, every field inert.
     #[must_use]
-    pub fn secretary() -> Secretary<'static> {
+    pub fn nothing() -> Self {
         Secretary {
             chain: &Nothing,
             corpus: &Nothing,
@@ -100,9 +101,9 @@ impl Nothing {
             render: &Nothing,
             clock: &Nothing,
             model: &Nothing,
-            conversations: Nothing::conversations(),
+            conversations: crate::secretary::conversations::Conversations::nothing(),
             inbox: &Nothing,
-            memories: Nothing::memories(),
+            memories: crate::secretary::memories::Memories::nothing(),
             decisions: crate::decisions::Decisions { store: &Nothing },
             topics: crate::secretary::topics::stores::TopicStores {
                 memberships: &Nothing,
@@ -128,12 +129,14 @@ impl Nothing {
             watches: &Nothing,
         }
     }
+}
 
+impl Server<'static> {
     /// The server's record, every field inert.
     #[must_use]
-    pub fn server() -> Server<'static> {
+    pub fn nothing() -> Self {
         Server {
-            secretary: Nothing::secretary(),
+            secretary: Secretary::nothing(),
             whois: &Nothing,
             notify: &Nothing,
             answers: &Nothing,
@@ -272,32 +275,6 @@ impl Repository for Nothing {
     }
 }
 
-impl Manuals for Nothing {
-    fn document(&self, _which: Manual) -> Option<String> {
-        None
-    }
-}
-
-/// A closed world that only parses: every text typst's parser accepts compiles to an empty
-/// document. The real one is `suzatary_io::typeset`; a door's refusals of what parses and still
-/// fails to compile are tested there and in `app/cli/tests`.
-#[derive(Debug, Clone, Copy, Default)]
-pub struct Parses;
-
-impl crate::capability::Typeset for Parses {
-    fn closed(&self, source: &str) -> Result<String, crate::capability::Rejected> {
-        crate::capability::parsed(source)
-            .map(|()| "<!DOCTYPE html><html><body></body></html>".to_owned())
-    }
-}
-
-impl crate::capability::Typeset for Nothing {
-    fn closed(&self, source: &str) -> Result<String, crate::capability::Rejected> {
-        crate::capability::parsed(source)
-            .map(|()| "<!DOCTYPE html><html><body></body></html>".to_owned())
-    }
-}
-
 impl Render for Nothing {
     fn html(&self, markup: &Escaped) -> Result<Html, RenderError> {
         Ok(Html::from_render(markup.as_str()))
@@ -310,12 +287,6 @@ impl Render for Nothing {
     }
     fn page(&self, page: &crate::template::Called) -> Result<Html, RenderError> {
         Ok(Html::from_render(page.job().state.clone()))
-    }
-}
-
-impl Clock for Nothing {
-    fn now(&self) -> Datetime {
-        Datetime::new(2026, 9, 7, 0, 0, 0, 0).expect("a real date")
     }
 }
 
@@ -417,7 +388,7 @@ impl crate::calendar::effect::Calendar for Nothing {
 
 /// Nothing is rendered, so nothing is kept to forget.
 impl crate::render_cache::RenderCache for Nothing {
-    fn forget(&self, _: &crate::answer::Renderable) -> Result<(), String> {
+    fn forget(&self, _: &suzatary_base::answer::Renderable) -> Result<(), String> {
         Ok(())
     }
 }
@@ -425,14 +396,6 @@ impl crate::render_cache::RenderCache for Nothing {
 /// No session is kept, so none is forgotten.
 impl crate::secretary::model_sessions::ModelSessions for Nothing {
     fn forget(&self, _: &crate::secretary::model::SessionId, _: &str) -> Result<(), String> {
-        Ok(())
-    }
-}
-
-/// Zeros: nothing a salt or a key guards is kept here.
-impl crate::capability::Entropy for Nothing {
-    fn fill(&self, bytes: &mut [u8]) -> Result<(), String> {
-        bytes.fill(0);
         Ok(())
     }
 }
@@ -526,7 +489,7 @@ impl Repositories for Nothing {
 }
 
 impl Drive for Nothing {
-    fn allowed_folders(&self) -> Vec<crate::drive_path::DrivePath> {
+    fn allowed_folders(&self) -> Vec<suzatary_base::drive_path::DrivePath> {
         Vec::new()
     }
     fn port(&self) -> &dyn crate::drive::Port {
@@ -534,7 +497,7 @@ impl Drive for Nothing {
     }
     fn read(
         &self,
-        file: &crate::drive_path::DrivePath,
+        file: &suzatary_base::drive_path::DrivePath,
     ) -> Result<crate::file_read::FileRead, DriveFailure> {
         Err(DriveFailure::Missing(file.to_string()))
     }
@@ -544,11 +507,14 @@ impl Drive for Nothing {
 impl crate::drive::Port for Nothing {
     fn list(
         &self,
-        folder: &crate::drive_path::DrivePath,
+        folder: &suzatary_base::drive_path::DrivePath,
     ) -> Result<Vec<crate::drive::DriveEntry>, DriveFailure> {
         Err(DriveFailure::Missing(folder.to_string()))
     }
-    fn download(&self, file: &crate::drive_path::DrivePath) -> Result<Vec<u8>, DriveFailure> {
+    fn download(
+        &self,
+        file: &suzatary_base::drive_path::DrivePath,
+    ) -> Result<Vec<u8>, DriveFailure> {
         Err(DriveFailure::Missing(file.to_string()))
     }
 }
@@ -659,12 +625,6 @@ impl MailSync for Nothing {
     }
 }
 
-impl Whois for Nothing {
-    fn peer(&self, _address: std::net::IpAddr) -> Result<Peer, WhoisError> {
-        Ok(Peer::Stranger)
-    }
-}
-
 impl Notify for Nothing {
     fn push(&self, _message: &Push) -> Result<Delivered, NotifyError> {
         Err(NotifyError::Unreachable("nothing is pushed".into()))
@@ -672,7 +632,7 @@ impl Notify for Nothing {
 }
 
 impl Answers for Nothing {
-    fn block(&self, block: &crate::answer::Renderable) -> Result<Html, AnswerError> {
+    fn block(&self, block: &suzatary_base::answer::Renderable) -> Result<Html, AnswerError> {
         Err(AnswerError(format!("nothing renders {block:?}")))
     }
 }
@@ -751,7 +711,7 @@ impl crate::secretary::google_sign_in::Consents for Nothing {
         _: &crate::mail::address::EmailAddress,
         _: &crate::google::Scopes,
         _: &prodrome_core::event::Actor,
-        _: crate::capability::Datetime,
+        _: suzatary_base::capability::Datetime,
     ) -> crate::secretary::responded::Performed {
         crate::secretary::responded::Performed::Tried(crate::secretary::responded::Tried::NotSent {
             reason: "nothing opens a sign-in with Google here".to_owned(),

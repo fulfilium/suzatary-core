@@ -7,7 +7,7 @@ use anyhow::bail;
 use prodrome_core::event::Actor;
 use prodrome_core::policy::Untrusted;
 use prodrome_core::sign::PublicKey;
-use suzatary_core::chains::ChainPolicy;
+use suzatary_base::chains::ChainPolicy;
 
 use super::file::Chain;
 use super::{DataRoot, RESERVED};

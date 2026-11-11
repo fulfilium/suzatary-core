@@ -1,11 +1,11 @@
 use serde_json::{Value, json};
 
-use crate::refusal::Refusal;
 use crate::secretary::changes::{self, Building, Changeset};
 use crate::secretary::filed::triage_card;
 use crate::secretary::inbox::{self, Object};
 use crate::secretary::{Bound, Call, SecretarySurface, bound_named};
 use crate::verb::{NoArgs, Verb};
+use suzatary_base::refusal::Refusal;
 
 /// Every card the triage agent filed that still waits for the owner.
 pub struct TriageCards;
@@ -40,7 +40,7 @@ fn open_card(object: &Object) -> Option<&Changeset> {
 /// The inbox does not read.
 pub fn standing(
     inbox: &dyn crate::store::Prodrome<crate::secretary::inbox_event::InboxEvent>,
-) -> Result<Vec<(crate::reference::ProposalRef, Changeset)>, Refusal> {
+) -> Result<Vec<(suzatary_base::reference::ProposalRef, Changeset)>, Refusal> {
     Ok(inbox::fold(inbox)?
         .objects()
         .filter_map(|object| {
@@ -63,7 +63,7 @@ pub fn listed(
     let caps = &first.caps;
     let fold = inbox::fold(caps.inbox)?;
     let categories: Vec<&str> = deployment.categories.keys().map(String::as_str).collect();
-    let now = crate::zone::Moment {
+    let now = suzatary_base::zone::Moment {
         at: caps.clock.now(),
         zone: deployment.zone,
     };

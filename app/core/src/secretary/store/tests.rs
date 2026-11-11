@@ -1,9 +1,9 @@
 use super::*;
-use crate::capability::Datetime;
-use crate::conversation_id::ConversationId;
 use crate::secretary::model::{SessionId, Turn};
 use crate::secretary::proposal::{Draft, Proposal, Reasons};
 use crate::secretary::responded::{Done, Responded, Tried, Withdrawal};
+use suzatary_base::capability::Datetime;
+use suzatary_base::conversation_id::ConversationId;
 
 fn id() -> ConversationId {
     ConversationId::new("2026-09-09-1").expect("a slug")
@@ -85,7 +85,7 @@ fn changeset() -> crate::secretary::changes::Changeset {
 
 fn opened() -> Entry {
     Entry::Opened {
-        at: crate::capability::Datetime::new(2026, 9, 9, 9, 0, 0, 0).expect("an instant"),
+        at: suzatary_base::capability::Datetime::new(2026, 9, 9, 9, 0, 0, 0).expect("an instant"),
         title: crate::secretary::words::Words::kept("Morning".to_owned()),
         model: "a-cli".to_owned(),
         kind: crate::secretary::store::Kind::Topic,
@@ -119,7 +119,7 @@ fn fired(id: &str) -> crate::coding::Session {
 #[test]
 fn a_coding_line_folds_last_wins_by_index_and_refuses_a_phantom() {
     let coding = |proposal, session| Entry::Coding {
-        at: crate::capability::Datetime::new(2026, 9, 9, 9, 6, 0, 0).expect("an instant"),
+        at: suzatary_base::capability::Datetime::new(2026, 9, 9, 9, 6, 0, 0).expect("an instant"),
         proposal,
         session,
     };
@@ -195,14 +195,14 @@ fn a_standing_joins_the_line_with_its_object() {
             .standing(1, &inbox_of(&[]))
             .expect_err("nothing proposed it")
             .status(),
-        crate::refusal::Status::NotFound
+        suzatary_base::refusal::Status::NotFound
     );
     assert_eq!(
         stored
             .standing(0, &crate::secretary::inbox::Fold::default())
             .expect_err("no object")
             .status(),
-        crate::refusal::Status::Conflict
+        suzatary_base::refusal::Status::Conflict
     );
 }
 
@@ -248,7 +248,7 @@ fn an_unheard_turn_ends_only_the_session_it_names() {
         from: 0,
     };
     let unheard = |id: &SessionId| Entry::Unheard {
-        at: crate::capability::Datetime::new(2026, 9, 13, 9, 3, 0, 0).expect("an instant"),
+        at: suzatary_base::capability::Datetime::new(2026, 9, 13, 9, 3, 0, 0).expect("an instant"),
         session: id.clone(),
         model: "openai-compatible/deepseek-v4-flash".to_owned(),
     };
@@ -283,14 +283,16 @@ fn the_last_session_line_wins() {
     let entries = vec![
         opened(),
         Entry::Session {
-            at: crate::capability::Datetime::new(2026, 9, 13, 9, 1, 0, 0).expect("an instant"),
+            at: suzatary_base::capability::Datetime::new(2026, 9, 13, 9, 1, 0, 0)
+                .expect("an instant"),
             session: first.clone(),
             model: "a-cli/small".to_owned(),
             cwd: "/home/ada/Documents/Suzatary".to_owned(),
             surface: None,
         },
         Entry::Session {
-            at: crate::capability::Datetime::new(2026, 9, 13, 9, 5, 0, 0).expect("an instant"),
+            at: suzatary_base::capability::Datetime::new(2026, 9, 13, 9, 5, 0, 0)
+                .expect("an instant"),
             session: second.clone(),
             model: "a-cli/small".to_owned(),
             cwd: "/home/ada/Documents/Suzatary".to_owned(),
@@ -311,14 +313,16 @@ fn a_stop_is_an_act_and_ends_the_session() {
     let entries = vec![
         opened(),
         Entry::Session {
-            at: crate::capability::Datetime::new(2026, 9, 25, 9, 0, 30, 0).expect("an instant"),
+            at: suzatary_base::capability::Datetime::new(2026, 9, 25, 9, 0, 30, 0)
+                .expect("an instant"),
             session: SessionId::new("96f709a3-43d7-4453-bf59-6fb5291b5a3c").expect("a uuid"),
             model: "a-cli/small".to_owned(),
             cwd: "/srv".to_owned(),
             surface: None,
         },
         Entry::Said {
-            at: crate::capability::Datetime::new(2026, 9, 25, 9, 1, 0, 0).expect("an instant"),
+            at: suzatary_base::capability::Datetime::new(2026, 9, 25, 9, 1, 0, 0)
+                .expect("an instant"),
             turn: Turn::Person {
                 text: "read everything".to_owned(),
                 references: Vec::new(),
@@ -327,7 +331,8 @@ fn a_stop_is_an_act_and_ends_the_session() {
             by: Some("ada".into()),
         },
         Entry::Stopped {
-            at: crate::capability::Datetime::new(2026, 9, 25, 9, 1, 30, 0).expect("an instant"),
+            at: suzatary_base::capability::Datetime::new(2026, 9, 25, 9, 1, 30, 0)
+                .expect("an instant"),
             by: "ada".to_owned(),
         },
     ];
@@ -394,7 +399,7 @@ fn answered_by(verb: &str, refused: bool) -> Turn {
 fn rewound(to: usize) -> Entry {
     Entry::Rewound {
         to,
-        at: crate::capability::Datetime::new(2026, 9, 25, 10, 0, 0, 0).expect("an instant"),
+        at: suzatary_base::capability::Datetime::new(2026, 9, 25, 10, 0, 0, 0).expect("an instant"),
         by: "ada".to_owned(),
     }
 }
@@ -675,13 +680,13 @@ proptest::proptest! {
 #[test]
 fn the_last_title_wins() {
     let untitled = Entry::Opened {
-        at: crate::capability::Datetime::new(2026, 9, 25, 9, 0, 0, 0).expect("an instant"),
+        at: suzatary_base::capability::Datetime::new(2026, 9, 25, 9, 0, 0, 0).expect("an instant"),
         title: crate::secretary::words::Words::kept(String::new()),
         model: "m".to_owned(),
         kind: Kind::Topic,
     };
     let titled = |title: &str, by: Namer| Entry::Titled {
-        at: crate::capability::Datetime::new(2026, 9, 25, 9, 5, 0, 0).expect("an instant"),
+        at: suzatary_base::capability::Datetime::new(2026, 9, 25, 9, 5, 0, 0).expect("an instant"),
         title: crate::secretary::words::Words::kept(Title::new(title).expect("a title")),
         by,
     };

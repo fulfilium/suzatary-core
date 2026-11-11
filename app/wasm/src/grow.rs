@@ -1,5 +1,5 @@
 //! The list's tree, grown here so the pages' module links no term and no trie: the members a
-//! page places, grouped as it asks, each node with its term (`suzatary_core::tree`), for the
+//! page places, grouped as it asks, each node with its term (`suzatary_base::tree`), for the
 //! worker to price beside the reading it keeps.
 
 use std::collections::{BTreeMap, BTreeSet};
@@ -8,8 +8,8 @@ use prodrome_core::event::TodoId;
 use prodrome_core::fpl::LinkError;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use suzatary_core::term_json;
-use suzatary_core::tree::{
+use suzatary_base::term_json;
+use suzatary_base::tree::{
     self, By, Classifier, Member, Members, Monoid, Place, Segment, Tree, Trie,
 };
 use wasm_bindgen::prelude::*;

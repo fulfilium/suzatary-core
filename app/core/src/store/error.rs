@@ -1,4 +1,4 @@
-use crate::refusal::Refusal;
+use suzatary_base::refusal::Refusal;
 
 /// A store could not do what was asked, naming the store in its own words.
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
@@ -80,12 +80,6 @@ impl From<prodrome_core::store::frontier::Unrecorded> for StoreError {
     }
 }
 
-impl From<prodrome_core::store::frontier::Unrecorded> for Refusal {
-    fn from(failed: prodrome_core::store::frontier::Unrecorded) -> Self {
-        StoreError::from(failed).into()
-    }
-}
-
 impl From<prodrome_core::store::frontier::Unanswered> for StoreError {
     fn from(failed: prodrome_core::store::frontier::Unanswered) -> Self {
         match failed {
@@ -94,12 +88,6 @@ impl From<prodrome_core::store::frontier::Unanswered> for StoreError {
                 Self::unreadable("the store's order", why)
             }
         }
-    }
-}
-
-impl From<prodrome_core::store::frontier::Unanswered> for Refusal {
-    fn from(failed: prodrome_core::store::frontier::Unanswered) -> Self {
-        StoreError::from(failed).into()
     }
 }
 

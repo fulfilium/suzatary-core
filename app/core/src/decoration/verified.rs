@@ -4,13 +4,13 @@
 //! field that altered the structure makes the two differ.
 //!
 //! It does not go through [`crate::render::Render`]: `Render::html` takes an
-//! [`crate::escape::Escaped`], which only confirmed content yields, and the
+//! [`suzatary_base::escape::Escaped`], which only confirmed content yields, and the
 //! agent's writes are provisional. The leading `//` run is verified too, so an
 //! update cannot silently drop a note about the whole block.
 
 use super::value::{Call, render_block};
 use super::{DecorationError, read};
-use crate::refusal::Refusal;
+use suzatary_base::refusal::Refusal;
 
 /// Render a block and prove it reads back to itself, through
 /// `read::only_block` so nothing after the closing paren is tolerated.
@@ -63,7 +63,7 @@ mod tests {
     fn an_escaped_body_survives_and_a_raw_one_would_not() {
         let mut call = a_call();
         call.trailing = vec![
-            crate::escape::escape_markup("close ] this #todo(x)[")
+            suzatary_base::escape::escape_markup("close ] this #todo(x)[")
                 .as_str()
                 .to_owned(),
         ];

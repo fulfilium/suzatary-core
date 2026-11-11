@@ -2,9 +2,9 @@
 
 use prodrome_core::memo::Finding;
 
-use crate::capability::{RenderError, Typeset};
-use crate::escape::Escaped;
 use crate::template::Called;
+use suzatary_base::capability::{RenderError, Typeset};
+use suzatary_base::escape::Escaped;
 
 /// Typst's own HTML for a fragment of markup; only a [`Render`] can make one.
 #[derive(Debug, Clone, PartialEq, Eq)]

@@ -6,8 +6,8 @@ use serde::de::DeserializeOwned;
 use serde_json::Value;
 
 use crate::agent::{Holds, reads};
-use crate::refusal::Refusal;
 use crate::verb::{Own, Verb};
+use suzatary_base::refusal::Refusal;
 
 /// A todo's events, oldest first, its arguments spelled `A`.
 pub struct History<S, A>(PhantomData<(S, A)>);

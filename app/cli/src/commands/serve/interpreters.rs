@@ -4,7 +4,7 @@
 use std::net::IpAddr;
 use std::sync::Arc;
 
-use suzatary_core::capability::{Whois, WhoisError};
+use suzatary_base::capability::{Whois, WhoisError};
 use suzatary_core::drive::WritePort as _;
 use suzatary_core::secretary::compact::Compact;
 use suzatary_core::secretary::model::{
@@ -24,16 +24,16 @@ pub enum Peers {
     Daemon(Tailscaled),
     /// Every address is this login; test only.
     #[cfg(feature = "fixture")]
-    Fixture(suzatary_core::capability::Login),
+    Fixture(suzatary_base::capability::Login),
 }
 
 impl Whois for Peers {
-    fn peer(&self, address: IpAddr) -> Result<suzatary_core::capability::Peer, WhoisError> {
+    fn peer(&self, address: IpAddr) -> Result<suzatary_base::capability::Peer, WhoisError> {
         match self {
             Peers::Daemon(daemon) => daemon.peer(address),
             // Every peer is the fixture's writer, so none is this box.
             #[cfg(feature = "fixture")]
-            Peers::Fixture(login) => Ok(suzatary_core::capability::Peer::Known(login.clone())),
+            Peers::Fixture(login) => Ok(suzatary_base::capability::Peer::Known(login.clone())),
         }
     }
 }
@@ -90,7 +90,7 @@ impl Sessions for Brain {
 }
 
 /// The day's forecast for `[persona]`'s city.
-pub struct Forecast(pub suzatary_core::persona::Persona);
+pub struct Forecast(pub suzatary_base::persona::Persona);
 
 impl Weather for Forecast {
     fn today(&self) -> Result<String, WeatherError> {
@@ -197,7 +197,7 @@ pub fn answered_by(
     model: &str,
     failed: Option<&ModelError>,
 ) {
-    use suzatary_core::capability::Clock as _;
+    use suzatary_base::capability::Clock as _;
     use suzatary_core::health::Outcome;
     let (entry, outcome) = match failed {
         None => (model, Outcome::Succeeded),
@@ -236,7 +236,7 @@ pub fn limited_now(instance: &Instance) -> Option<suzatary_core::health::Limited
 fn limited_in(
     answered: &suzatary_io::model_health::Answered,
 ) -> Option<suzatary_core::health::Limited> {
-    use suzatary_core::capability::Clock as _;
+    use suzatary_base::capability::Clock as _;
     use suzatary_core::health::Register as _;
     let now = prodrome_core::fpl::instant_of(suzatary_io::clock::SystemClock.now());
     answered
@@ -283,7 +283,7 @@ impl suzatary_core::settings::Verify for Verifying {
     fn verify(
         &self,
         name: &suzatary_core::settings::Settable,
-        value: &suzatary_core::capability::Secret,
+        value: &suzatary_base::capability::Secret,
     ) -> Result<(), String> {
         if name.name() != suzatary_io::model::TOKEN {
             return Ok(());
@@ -423,7 +423,7 @@ pub fn proton_drive(instance: &Instance) -> suzatary_io::drive::ProtonDrive {
 }
 
 impl suzatary_core::drive::Drive for DriveAccess {
-    fn allowed_folders(&self) -> Vec<suzatary_core::drive_path::DrivePath> {
+    fn allowed_folders(&self) -> Vec<suzatary_base::drive_path::DrivePath> {
         crate::instance::File::read(&self.instance)
             .map(|file| file.secretary.drive_allow)
             .unwrap_or_default()
@@ -435,8 +435,8 @@ impl suzatary_core::drive::Drive for DriveAccess {
 
     fn read(
         &self,
-        file: &suzatary_core::drive_path::DrivePath,
-    ) -> Result<suzatary_core::file_read::FileRead, suzatary_core::drive_path::DriveFailure> {
+        file: &suzatary_base::drive_path::DrivePath,
+    ) -> Result<suzatary_core::file_read::FileRead, suzatary_base::drive_path::DriveFailure> {
         self.drive.read(file)
     }
 }
@@ -449,7 +449,7 @@ impl suzatary_core::vault::Vault for DriveVault {
         &self,
         name: &str,
         bytes: &[u8],
-    ) -> Result<suzatary_core::drive_path::DrivePath, suzatary_core::drive_path::DriveFailure> {
+    ) -> Result<suzatary_base::drive_path::DrivePath, suzatary_base::drive_path::DriveFailure> {
         self.0.keep(&suzatary_core::vault::folder(), name, bytes)
     }
 }

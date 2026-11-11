@@ -3,7 +3,7 @@
 
 use prodrome_core::event::Actor;
 
-use crate::capability::Login;
+use suzatary_base::capability::Login;
 
 /// Who got through the door; the box's own arm carries no login, so it can never write.
 #[derive(Debug, Clone, PartialEq, Eq)]

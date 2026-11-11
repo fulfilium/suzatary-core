@@ -3,13 +3,13 @@ use serde::Deserialize;
 use serde_json::{Value, json};
 
 use crate::mail::address::EmailAddress;
-use crate::refusal::{Refusal, shown};
 use crate::secretary::acts::Act;
 use crate::secretary::proposal::Proposal;
 use crate::secretary::verbs::FilingArgs;
 use crate::secretary::{Call, SecretarySurface};
 use crate::settings::Settable;
 use crate::verb::{Caught, Verb};
+use suzatary_base::refusal::{Refusal, shown};
 
 /// Propose an act the box performs on a tap.
 pub struct ProposeAct;

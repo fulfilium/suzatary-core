@@ -3,9 +3,9 @@
 
 use std::collections::BTreeMap;
 
-use crate::capability::Datetime;
-use crate::refusal::Refusal;
 use crate::store::{Edit, Log, StoreError};
+use suzatary_base::capability::Datetime;
+use suzatary_base::refusal::Refusal;
 
 /// One registration of a phone.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -68,7 +68,7 @@ impl Platform {
 /// A token that is not one line, and the store's own.
 pub fn register_device(
     devices: &dyn Log<String, Device>,
-    clock: &dyn crate::capability::Clock,
+    clock: &dyn suzatary_base::capability::Clock,
     registering: &crate::wire::signatures::Registering,
     actor: &prodrome_core::event::Actor,
 ) -> Result<crate::wire::signatures::DevicePayload, Refusal> {

@@ -8,7 +8,7 @@ use prodrome_core::tags::membership;
 
 use crate::secretary::topics::reading::{MembershipEvent, Reading};
 use crate::secretary::topics::topic::Topic;
-use crate::topic_target::Target;
+use suzatary_base::topic_target::Target;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Standing<'r> {

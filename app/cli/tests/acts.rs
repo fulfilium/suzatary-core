@@ -7,7 +7,7 @@ use std::sync::Arc;
 
 use common::{FakeModel, Fakes};
 
-fn ada() -> suzatary_core::capability::Login {
+fn ada() -> suzatary_base::capability::Login {
     common::login("ada@example.com")
 }
 /// A writing server over the fixture's chain with a scripted model, and its `Fakes`.
@@ -265,7 +265,7 @@ fn remember_after_a_note_on(
         serde_json::from_str(receipt["text"].as_str().expect("text")).expect("json");
     let stored = suzatary_core::secretary::conversations::read(
         fakes.conversations.conversations(),
-        &suzatary_core::conversation_id::DEFAULT,
+        &suzatary_base::conversation_id::DEFAULT,
     )
     .expect("reads");
     let line = stored
@@ -327,7 +327,7 @@ fn a_turn_pointing_at_an_unconfirmed_agent_todo_is_stamped_so() {
         assert_eq!(common::status(&say), 202);
         let stored = suzatary_core::secretary::conversations::read(
             fakes.conversations.conversations(),
-            &suzatary_core::conversation_id::ConversationId::new(id.clone()).expect("a slug"),
+            &suzatary_base::conversation_id::ConversationId::new(id.clone()).expect("a slug"),
         )
         .expect("reads");
         stored
@@ -407,7 +407,7 @@ fn an_edit_pointing_at_an_unconfirmed_agent_todo_is_stamped_so() {
     assert_eq!(common::status(&edited), 202);
     let stored = suzatary_core::secretary::conversations::read(
         fakes.conversations.conversations(),
-        &suzatary_core::conversation_id::ConversationId::new(id).expect("a slug"),
+        &suzatary_base::conversation_id::ConversationId::new(id).expect("a slug"),
     )
     .expect("reads");
     let line = stored

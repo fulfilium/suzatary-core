@@ -9,8 +9,8 @@ use std::collections::BTreeMap;
 
 use serde::{Deserialize, Serialize};
 
-use crate::reference::Reference;
 use crate::secretary::tool_name::ToolName;
+use suzatary_base::reference::Reference;
 
 /// Who said a turn: a person, the model, a verb this side ran, or an act the person took.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

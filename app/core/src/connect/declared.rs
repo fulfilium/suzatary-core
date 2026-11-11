@@ -3,11 +3,11 @@
 use std::collections::BTreeMap;
 
 use super::{AccountKind, Channel, Connection, Key, Params, Table, TemplateId};
-use crate::drive_path::DrivePath;
 use crate::health::plugin::{Origin, PluginName};
 use crate::health::{Label, Refused};
 use crate::mail::account::{MailAccount, Roster, Sync};
 use crate::plugin::Manifest;
+use suzatary_base::drive_path::DrivePath;
 
 /// What the instance declares where a connection lives, each table parsed: the one value the
 /// connections are read from and the file's editor must agree with, so adding a connection is

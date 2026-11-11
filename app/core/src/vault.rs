@@ -4,8 +4,8 @@
 
 use serde::{Deserialize, Serialize};
 
-use crate::drive_path::DriveFailure;
-use crate::drive_path::DrivePath;
+use suzatary_base::drive_path::DriveFailure;
+use suzatary_base::drive_path::DrivePath;
 
 /// Where a private file is kept, and what a model may read of it.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

@@ -2611,7 +2611,7 @@ fn the_data_repository_tracks_nothing_of_the_box_local_tier() {
 }
 
 /// No source reads the machine's zone: an instant is UTC by definition and a day is the owner's
-/// (`suzatary_core::zone`), so chrono's local zone would be a third meaning, right only on a box
+/// (`suzatary_base::zone`), so chrono's local zone would be a third meaning, right only on a box
 /// that happens to run in UTC.
 #[test]
 fn no_source_reads_the_machines_zone() {

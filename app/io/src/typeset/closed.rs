@@ -8,7 +8,7 @@ use std::process::ExitStatus;
 use std::time::Duration;
 
 use rustix::process::Signal;
-use suzatary_core::capability::{Rejected, Typeset};
+use suzatary_base::capability::{Rejected, Typeset};
 use suzatary_core::template::Job;
 
 use super::Compiler;

@@ -11,8 +11,8 @@ use std::sync::Arc;
 use common::{FakeCorpus, FakeMessage, FakeModel, Fakes};
 use prodrome_core::event::mk_completed;
 use prodrome_core::policy::Untrusted;
+use suzatary_base::capability::Datetime;
 use suzatary_core::authoring::{NewTodo, build_todo};
-use suzatary_core::capability::Datetime;
 use suzatary_core::record::{EventStore, TodoEvent, mk_source};
 use suzatary_core::secretary::Bound;
 use suzatary_core::secretary::changes::Act;
@@ -28,7 +28,7 @@ fn sweep(
     settables: &suzatary_core::settings::Settables,
     chains: &[Bound<'_>],
     system: &str,
-) -> Result<Swept, suzatary_core::refusal::Refusal> {
+) -> Result<Swept, suzatary_base::refusal::Refusal> {
     suzatary_core::secretary::sweep::sweep(caps, deployment, settables, chains, system).map(|run| {
         match run {
             Run::Done(swept) => swept,
@@ -75,9 +75,9 @@ fn a_sourced_todo(events: &EventStore, id: &str, thread: &str, sender: &str) {
             source: Some(mk_source(sender, "Your trip", created(), "", thread, "")),
             subtodos: Vec::new(),
         },
-        suzatary_core::zone::Moment {
+        suzatary_base::zone::Moment {
             at: created(),
-            zone: suzatary_core::zone::Zone::UTC,
+            zone: suzatary_base::zone::Zone::UTC,
         },
         "ada",
         &["work", "home", "other", "study"],
@@ -105,9 +105,9 @@ fn a_plain_todo(events: &EventStore, id: &str, body: &str) {
             source: None,
             subtodos: Vec::new(),
         },
-        suzatary_core::zone::Moment {
+        suzatary_base::zone::Moment {
             at: created(),
-            zone: suzatary_core::zone::Zone::UTC,
+            zone: suzatary_base::zone::Zone::UTC,
         },
         "ada",
         &["work", "home", "other", "study"],
@@ -682,9 +682,9 @@ fn the_sweeps_round_is_pinned() {
 }
 
 /// Day `day`'s sweep conversation.
-fn today_of(day: chrono::NaiveDate) -> suzatary_core::conversation_id::ConversationId {
-    suzatary_core::conversation_id::ConversationId::daily(
-        suzatary_core::conversation_id::Daily::Sweep,
+fn today_of(day: chrono::NaiveDate) -> suzatary_base::conversation_id::ConversationId {
+    suzatary_base::conversation_id::ConversationId::daily(
+        suzatary_base::conversation_id::Daily::Sweep,
         day,
     )
 }

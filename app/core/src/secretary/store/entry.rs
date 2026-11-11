@@ -1,13 +1,13 @@
 //! One line of a conversation, and the instant every line carries.
 
 use super::{Decision, Kind, Namer, Scope, Title};
-use crate::capability::Datetime;
-use crate::reference::Reference;
 use crate::secretary::model::{SessionId, Turn};
 use crate::secretary::own_round::OwnRound;
 use crate::secretary::stamp::Stamp;
 use crate::secretary::words::Words;
 use serde::Serialize;
+use suzatary_base::capability::Datetime;
+use suzatary_base::reference::Reference;
 
 /// One line of a conversation as the box reads it from its store. It prints as JSON tagged on
 /// `line`, each instant as its stamp, for a test's record of a scene; nothing reads that print.

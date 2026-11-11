@@ -1,8 +1,8 @@
 //! The conversations held in memory, for tests: never a store anyone relies on.
 
 use super::{Conversations, LineEvent, Opened, RenderCache};
-use crate::capability::Entropy;
 use crate::secretary::model_sessions::ModelSessions;
+use suzatary_base::capability::Entropy;
 
 /// Each key drawn one count past the last, so no two are equal: for tests, never a source of
 /// keys anyone relies on.
@@ -51,7 +51,7 @@ impl Forgot {
 }
 
 impl RenderCache for Forgot {
-    fn forget(&self, block: &crate::answer::Renderable) -> Result<(), String> {
+    fn forget(&self, block: &suzatary_base::answer::Renderable) -> Result<(), String> {
         self.0
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner)

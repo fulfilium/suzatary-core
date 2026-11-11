@@ -8,9 +8,9 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
 use crate::attachment::AttachmentId;
-use crate::drive_path::DrivePath;
-use crate::repo_ids::{RepoName, RepoPath, Rev};
 use prodrome_core::literal::codec::{Constructor, Fields, Literal, arm, no_arm, record};
+use suzatary_base::drive_path::DrivePath;
+use suzatary_base::repo_ids::{RepoName, RepoPath, Rev};
 
 /// One source, by name.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -92,7 +92,8 @@ impl AttachmentSource {
             if keys.len() != 2 + usize::from(at.is_some()) {
                 return Err(NotASource(format!("{entry} names no single source")));
             }
-            let bad = |failed: crate::repo_ids::RepoNameError| NotASource(failed.to_string());
+            let bad =
+                |failed: suzatary_base::repo_ids::RepoNameError| NotASource(failed.to_string());
             return Ok(Self::Repo {
                 repo: repo.parse().map_err(bad)?,
                 path: RepoPath::try_from(path).map_err(bad)?,
@@ -116,11 +117,11 @@ impl AttachmentSource {
                 Ok(Self::Mail { message, name })
             }
             (None, Some(path), None, None) if keys.len() == 1 => Ok(Self::Drive {
-                path: path
-                    .parse()
-                    .map_err(|failed: crate::drive_path::DrivePathError| {
+                path: path.parse().map_err(
+                    |failed: suzatary_base::drive_path::DrivePathError| {
                         NotASource(failed.to_string())
-                    })?,
+                    },
+                )?,
             }),
             (None, None, Some(id), None) if keys.len() == 1 => Ok(Self::Upload { id: id_of(&id)? }),
             _ => Err(NotASource(format!("{entry} names no single source"))),

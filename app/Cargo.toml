@@ -1,295 +1,162 @@
-# THE APPLICATION'S WORKSPACE (docs/ARCHITECTURE.md).
+# THE APPLICATION'S WORKSPACE (docs/ARCHITECTURE.md), the only one in the repository. The
+# Prodrome is the database, a dependency by REVISION (→ `prodromedependency`).
 #
-# THIS IS THE ONLY WORKSPACE IN THE REPOSITORY (§8.8, 2026-09-09). The Prodrome
-# is the database and this is an application built on it, and nothing flows the
-# other way (§1) — so the database left, to
-# https://github.com/fulfilium/prodrome, and the seam between them is now a
-# REVISION rather than a relative path. What was a directory somebody could
-# edit in the same commit is a pin somebody has to publish first.
-#
-# Arrows point down only: cli → plugin → io → core → prodrome-core.
-# `wasm` is the browser's module: `core`'s schemas through the Prodrome's
-# generic exports, depended on by nothing. `plugin` is
-# the plugin host (docs/PLUGINS-PLAN-2026-10-02.md), a crate of its own
-# because wasmtime is the largest tree here and an interpreter only plugins
-# use; `cli` depends on it for `suzatary plugin sync`. `plugin-fence` is a
-# test fixture: a hostile plugin whose component the flake builds for wasm32
-# (`.#suzatary-plugin-fence`) and whose library the workspace merely lints.
-# `testkit` is a dev-dependency of `io` and `cli` alone: the programs their tests
-# make and run.
+# Arrows point down only: cli → plugin → io → core → base → prodrome-core. `wasm` is the
+# browser's module, depended on by nothing. `plugin` is the plugin host
+# (docs/PLUGINS-PLAN-2026-10-02.md), its own crate because wasmtime is the largest tree here.
+# `plugin-fence` is a hostile plugin the flake builds for wasm32 and the workspace only lints.
+# `testkit` is a dev-dependency of `io` and `cli`: the programs their tests run.
 [workspace]
 resolver = "3"
-members = ["core", "io", "cli", "wasm", "plugin", "plugin-fence", "plugin-ics", "testkit", "viewtree", "pages"]
+members = ["base", "core", "io", "cli", "wasm", "plugin", "plugin-fence", "plugin-ics", "testkit", "viewtree", "pages"]
 
 [workspace.package]
-# FIXED, AND NOT THE RELEASE (CLAUDE.md, "Versioning"): the version is a reading of
-# the project chain, and a release lives in its tag, CHANGELOG.md and `app/release.toml`,
-# which no crate compiles; the flake installs that file beside the
-# binary, which reads it at run time. A version here would move every crate's inputs on every train.
+# FIXED, AND NOT THE RELEASE (CLAUDE.md, "Versioning"): the binary reads `app/release.toml` at
+# run time, and a version here would move every crate's inputs on every train.
 version = "0.0.0"
-# Edition 2024, and `rust-version` pinned to the toolchain the flake ships
-# (`nix develop .#rust -c rustc --version` said 1.97.1 on 2026-09-07) rather
-# than to the oldest release that would happen to work: there is one toolchain
-# here, it comes from the same pinned nixpkgs as everything else, and an MSRV
-# claim nothing tests is a claim.
+# `rust-version` is the toolchain the flake ships, the only one there is.
 edition = "2024"
 rust-version = "1.97"
 license = "MIT OR Apache-2.0"
 
-# Declared once, used by member name. A version typed in three manifests is a
-# version to forget in two of them.
 [workspace.dependencies]
-# The package is `prodrome-core` and its `[lib] name` is `prodrome`, so without
-# this rename the application would spell the database `prodrome::…` and
-# ARCHITECTURE would spell it `prodrome_core::…`. One name.
+# The package is `prodrome-core`, its `[lib] name` `prodrome`; renamed so the code and
+# ARCHITECTURE spell it one way.
 #
-# ⚠️ BY REVISION, NEVER BY BRANCH. `rev` is a commit and a branch is a moving
-# target: pinning `main` would let an upstream push change what this repository
-# builds without a commit here saying so, which is the whole property the split
-# was for. Moving the pin is an edit to this line and the next crate's,
-# `app/Cargo.lock`, `flake.nix`'s `inputs.prodrome.url` and `flake.lock`
-# together — they must name ONE sha, because the crate the binary links and
-# the wasm the browser fetches have to be the same reading of SPEC.md. (Until 2026-09-13 there was a fifth,
-# `flake.nix`'s `outputHashes` entry; crane vendors the git dependency at the
-# lock's own rev and needs none.)
+# ⚠️ BY REVISION, NEVER BY BRANCH. Moving the pin edits the three `rev`s here,
+# `app/Cargo.lock`, `flake.nix`'s `inputs.prodrome.url` and `flake.lock` together: ONE sha,
+# because the crate the binary links and the wasm the browser fetches must read SPEC.md alike.
 #
-# ⚠️ `default-features = false` TURNS OFF THE REFERENCE PAYLOAD, and that is the
-# point. Since 0.2.0 the database is generic over
-# what a record SAYS, and ships one example payload behind that feature. This
-# application's record is `suzatary_core::record::Record` — so the example is
-# not compiled in, and "the app owns its record shape" is a fact about what
-# links rather than a claim in a comment.
+# ⚠️ `default-features = false` TURNS OFF THE REFERENCE PAYLOAD: this application's record is
+# `suzatary_core::record::Record`, so the example is not linked.
 prodrome_core = { package = "prodrome-core", git = "https://github.com/fulfilium/prodrome", rev = "a0e99598eb61866c447f386dcb75557b0520dad4", default-features = false }
-# The Prodrome's exports generic over a schema, which `wasm` instantiates at
-# this application's schemas; the same revision as `prodrome_core`, so one
-# crate of the core links into the module.
+# The Prodrome's exports generic over a schema, which `wasm` instantiates at this application's.
 prodrome-wasm-exports = { git = "https://github.com/fulfilium/prodrome", rev = "a0e99598eb61866c447f386dcb75557b0520dad4" }
+suzatary-base = { path = "base" }
 suzatary-core = { path = "core" }
 suzatary-io = { path = "io" }
-# The plugin host; `cli` depends on it for `suzatary plugin sync`.
 suzatary-plugin = { path = "plugin" }
-# The case types and the pure extraction fold (§6 commit 1). `cli` alone
-# depends on this, the same shape as `suzatary-io`.
-# The evaluator's time type is chrono's (`prodrome::fpl::Instant`), and a
-# `Clock` reads a local instant out of it. The same features prodrome-core
-# takes, plus "serde" (2026-09-11): a changeset act's `Priority::Deadline`
-# carries a `NaiveDate` and is stored as a conversation line
-# (`secretary::changes`), so the date needs to round-trip through JSON the same
-# way every other field on it does — one more feature on the one library,
-# never a second date type.
+# The evaluator's time type; "serde" because a changeset act's `Priority::Deadline` is stored
+# as JSON, and there is one date type.
 chrono = { version = "0.4", default-features = false, features = ["std", "clock", "serde"] }
-# The owner's zone by name (`suzatary_core::zone`), the same database the calendar plugin reads.
+# The owner's zone by name (`suzatary_base::zone`), the database the calendar plugin reads.
 chrono-tz = { version = "0.10", default-features = false, features = ["std"] }
 thiserror = "2"
 proptest = "1"
 serde = { version = "1", features = ["derive"] }
-# A term's JSON (`suzatary_core::term_json`) is a `serde_json::Value` read
-# and printed through the Prodrome's term schema.
 serde_json = "1"
 
-# --- THE SERVER (§8.2). Each one is here because a named piece of webapp.py
-# needs it, and the reason is on the line above it.
+# --- THE SERVER.
 #
-# ⚠️ rustls AND NEVER OpenSSL (§2). Everything below that touches TLS — the
-# listener, the FCM client, the ntfy client — resolves to ONE rustls with the
-# `ring` provider: `aws-lc-rs` wants cmake and a Go toolchain that the offline
-# Nix build has no business growing, and two crypto providers in one binary is
-# two things to keep patched.
-
-# The routes. `webapp.build_app`'s Starlette router, one layer out; axum
-# because it is tower over hyper and nothing else, which is what a server that
-# is mostly refusals wants.
+# ⚠️ rustls AND NEVER OpenSSL. Everything that touches TLS resolves to ONE rustls with the
+# `ring` provider: `aws-lc-rs` wants cmake and Go in the offline Nix build, and two crypto
+# providers in one binary are two things to keep patched.
 axum = { version = "0.8", default-features = false, features = ["http1", "json", "query", "tokio"] }
-# The runtime, HERE AND NOWHERE ELSE (§2): the threadpool, `select!`, timers and
-# the channels the workers wake by. The socket and the files are axum's and
-# tower-http's, which ask tokio for them.
+# The runtime, HERE AND NOWHERE ELSE.
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "time", "sync"] }
-# `StaticFiles(directory=dist, html=True)` and `GZipMiddleware`: web/dist is the
-# one directory served as files, and a 634 KB fold is ~90 KB on the wire.
+# web/dist served as files, compressed.
 tower-http = { version = "0.7", features = ["fs", "compression-br", "compression-gzip", "set-header"] }
-# The `--cert/--key` pair `scripts/serve-web.sh` resolves. `no-provider` so the
-# provider is chosen once, above, and not by a default feature.
+# `no-provider`, so the provider is chosen once, above.
 axum-server = { version = "0.8", default-features = false, features = ["tls-rustls-no-provider"] }
 rustls = { version = "0.23", default-features = false, features = ["ring", "std", "tls12", "logging"] }
-# `instance.py`, as a file the binary reads (§8.2). Only the binary parses it —
-# suzatary-core and suzatary-io never see a path.
+# The instance file; only the binary parses it.
 toml = "0.9"
-# THE ONE PLACE `instance.toml` IS EDITED RATHER THAN REWRITTEN: a document
-# model that preserves every comment and every other byte `toml`'s own
-# `Deserialize`/`Serialize` round trip does not promise to keep, so a tapped
-# card can add a table without disturbing the operator's own documentation of
-# the rest of the file.
+# THE ONE PLACE `instance.toml` IS EDITED RATHER THAN REWRITTEN: it keeps every comment, so a
+# tapped card adds a table without disturbing the rest of the file.
 toml_edit = "0.22"
-# The binary's edge may be lenient about its own errors in a way a library may
-# not (§2): a startup that cannot read its instance file has one thing to say.
+# The binary's edge only; a library returns typed errors.
 anyhow = "1"
-# `logging.basicConfig(level=INFO)` and `log.info("days %s..%s …")`. tower-http
-# and hyper emit tracing already, so the alternative was two logging stacks.
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
-# ONE BLOCKING HTTP CLIENT, for FCM and ntfy. `Notify::push` is sync (§3), so a
-# blocking client is the honest shape; ureq over rustls is a tenth of reqwest's
-# tree and brings no second runtime. `webpki-roots` rather than the platform's
-# store: a systemd unit's view of /etc/ssl is one more thing to be wrong about.
+# ONE BLOCKING HTTP CLIENT, for FCM and ntfy: `Notify::push` is sync, and ureq brings no second
+# runtime. `webpki-roots` rather than the platform's store.
 ureq = { version = "3", default-features = false, features = ["rustls", "json"] }
-# THE PLUGIN RUNTIME (`suzatary-plugin`). The component model, compiled by
-# cranelift, and nothing else of wasmtime's defaults: no WASI (the worlds import
-# none of it), no async, no cache directory, no wat parser, no threads or GC
-# proposals a plugin does not need.
+# THE PLUGIN RUNTIME (`suzatary-plugin`): the component model under cranelift, and none of
+# wasmtime's other defaults.
 wasmtime = { version = "49", default-features = false, features = ["runtime", "cranelift", "component-model", "std"] }
-# The WASI a plugin built for wasm32-wasip2 imports, preview 2 only: the host links its clocks,
-# random numbers, standard streams and environment, and never its filesystem or sockets.
+# Preview 2 only: the host links clocks, random numbers, streams and environment, never a
+# filesystem or a socket.
 wasmtime-wasi = { version = "49", default-features = false, features = ["p2"] }
-# The guest side of the same worlds, for `plugin-fence`: bindings generated
-# from app/wit, without the async runtime a plugin here does not use.
+# The guest side of the same worlds, for `plugin-fence`.
 wit-bindgen = { version = "0.62", default-features = false, features = ["macros", "realloc", "std"] }
 webpki-roots = "1"
-# `push.assertion`: the service-account JWT, RS256 over the service account's
-# PEM key, exchanged for a bearer token. `rust_crypto` rather than the default
-# `aws_lc_rs` for the reason stated above — the pure-Rust backend needs no cmake
-# and no Go in the offline build.
+# The push service account's RS256 JWT; `rust_crypto` for the reason above.
 jsonwebtoken = { version = "11", default-features = false, features = ["rust_crypto", "use_pem"] }
-# The maildir files `mail/store.py` reads with Python's `email`: RFC 2047
-# encoded-words, address lists and Date headers, which `canonical_hash` reduces
-# to the dedup identity. notmuch stays a SUBPROCESS; this parses what it names.
+# The maildir files: RFC 2047 words, address lists and dates. notmuch stays a SUBPROCESS.
 mail-parser = "0.11"
-# `canonical_hash` is a sha256 of a text blob, and `mail/dedup.py` spells the
-# blob. Same crate prodrome-core hashes objects with.
 sha2 = "0.10"
 hmac = "0.12"
 hex = "0.4"
-# The system's random generator, for keys, seeds and pairing codes. Already in the tree under
-# `rustls`, so this names a crate the lock holds rather than adding a second implementation.
+# The system's random generator, already in the tree under `rustls`.
 ring = "0.17"
-# `push.credentials` reads a base64 service-account key.
 base64 = "0.22"
-# THE ONE AEAD (`secretary::locked_text`): ChaCha20-Poly1305, RFC 8439, RustCrypto's. Pure
-# Rust and constant-time in software, so the box and the tab's wasm open with one function; no
-# `getrandom`, since a key is drawn through the `Entropy` capability.
+# THE ONE AEAD (`secretary::locked_text`): ChaCha20-Poly1305, pure Rust, so the box and the
+# tab's wasm open with one function; a key is drawn through `Entropy`.
 chacha20poly1305 = { version = "0.10", default-features = false, features = ["alloc"] }
-# A key's bytes are written over when it is dropped, so a freed page holds no key.
+# A dropped key's bytes are overwritten.
 zeroize = { version = "1", default-features = false }
-# A held replica's snapshot (`suzatary_core::snapshot`) in a binary form without field names.
-# Already in the tree under wasmtime, so this names a crate the lock holds.
+# A held replica's snapshot (`suzatary_core::snapshot`), binary and without field names.
 postcard = { version = "1", default-features = false, features = ["alloc"] }
-# `view.references`' one alternation over every long id, `markup.suspicious`'s
-# three tripwires, and the id/date/query classes webapp.py refuses at the door.
 regex = "1"
-# Whether Unicode counts a character as part of a word, the test `\b` makes, for the scrub's ASCII
-# copy of a text (`redact`); the version `regex` itself links.
+# Unicode's word characters for the scrub's ASCII copy (`redact`), the version `regex` links.
 regex-syntax = "0.8"
-# --- THE AGENT'S TOOLS (§8.4). The official Rust MCP SDK, PINNED, with the two
-# features `suzatary mcp` needs and nothing else: `server` for the handler and
-# `transport-io` for stdin/stdout. No `macros` — the verb table is DATA in
-# suzatary-core, not a set of annotated functions — and no HTTP transport, no
-# auth, no client. Pure Rust, and nothing it brings in opens a socket.
+# --- THE AGENT'S TOOLS. The official MCP SDK, PINNED, with `server` and `transport-io` only:
+# no macros (the verb table is data), no HTTP, no client.
 rmcp = { version = "=3.2.0", default-features = false, features = ["server", "transport-io"] }
-# A verb's input schema is DERIVED from its argument type rather than written
-# beside it; the same schemars rmcp already builds.
+# A verb's input schema is DERIVED from its argument type.
 schemars = { version = "1.2", default-features = false, features = ["derive", "std"] }
 
-# --- MAIL (§8.6). The transports the Python had from `imaplib`, `smtplib`,
-# `msal` and `urllib`, and the MIME builder it had from `email.message`.
+# --- MAIL.
 #
-# ⚠️ ONE rustls, STILL. `lettre` takes `rustls ^0.23` with the `ring`
-# provider (its `rustls-tls` feature), which is the SAME rustls the listener and
-# the two push clients resolve to — so the workspace has one TLS stack and one
-# crypto provider, exactly as the block above requires. That is also why the
-# IMAP client below takes NO tls feature of its own: `imap`'s `rustls-tls` goes
-# through `rustls-connector`, which is pinned to rustls 0.22, and two rustls
-# versions in one binary is two things to keep patched. `imap::Client::new`
-# takes any `Read + Write`, so `suzatary_io::imap` hands it a stream this
-# workspace's own rustls built.
-
-# The IMAP protocol, PARSED BY SOMEBODY WHO PARSES IMAP. `ms_imap_sync.py`
-# leaned on `imaplib`; the responses this needs (UIDVALIDITY, UID SEARCH's
-# number list, UID FETCH's literal) are a grammar, and a hand parser for
-# somebody else's grammar is the second reading §7 retired a typst parser over.
-# `default-features = false` drops native-tls; nothing else is enabled.
+# ⚠️ ONE rustls, STILL. `lettre`'s `rustls-tls` is the same rustls 0.23 with `ring`. `imap`
+# takes NO tls feature (its `rustls-tls` pins rustls 0.22): `suzatary_io::imap` hands it a stream
+# this workspace's own rustls built.
 imap = { version = "3.0.0-alpha.15", default-features = false }
-# SMTP, with XOAUTH2 and STARTTLS — Microsoft's send path (Gmail's API is HTTP
-# and not here). NOT Proton Bridge's: its self-signed certificate is marked a CA,
-# which webpki refuses as an end entity, and lettre takes only roots, never a
-# verifier, so `suzatary_io::smtp::submission` speaks that SMTP by hand over a
-# pinned-certificate verifier. No
-# `builder`: the MIME is `suzatary_core::mail::send`'s, because it is pure and
-# it is what a test pins.
+# SMTP with XOAUTH2 and STARTTLS, Microsoft's send path. Not Proton Bridge's: its self-signed
+# certificate is marked a CA, so `suzatary_io::smtp::submission` speaks to it over a pinned
+# certificate. No `builder`: the MIME is the core's, because it is pure.
 lettre = { version = "0.11", default-features = false, features = [
   "smtp-transport",
   "rustls-tls",
   "hostname",
 ] }
-# THE MIME ITSELF, in the pure core. `email.message.EmailMessage`'s job:
-# headers, a text body, attachments with their types. Zero dependencies with
-# `default-features = false`, and by the same authors as the `mail-parser` this
-# workspace already reads maildir files with — so what is written and what is
-# read back agree about MIME by construction.
+# THE MIME, in the pure core, by the authors of `mail-parser`, so what is written and what is
+# read agree.
 mail-builder = { version = "0.5", default-features = false }
 
-# THE TYPESCRIPT IS GENERATED FROM THE RUST (§2, last bullet). A hand-written
-# guard in web/src for a shape the server declares is a second declaration,
-# and a second declaration drifts.
+# THE TYPESCRIPT IS GENERATED FROM THE RUST: a second declaration drifts.
 ts-rs = "11"
 
-# --- THE DECORATION (§8.5).
-#
-# TYPST'S OWN PARSER, PINNED TO THE BINARY'S VERSION. `typst_ast.py` was a hand
-# parser for the subset a block uses, and a hand parser for somebody else's
-# language is a second reading of that language: the two agree until the day
-# they do not, and the day they do not is a todo that silently changes meaning
-# between what this program wrote and what typst compiled. This is the crate
-# typst itself parses with, so there is one reading. The version tracks the
-# `typst` binary the `.#triage` shell carries (`typst --version` said 0.15.1 on
-# 2026-09-07) — a parser one minor version away from the compiler is the same
-# second reading with extra steps.
+# TYPST'S OWN PARSER, PINNED TO THE `typst` THE `.#triage` SHELL CARRIES, so there is one
+# reading of the language.
 typst-syntax = "=0.15.1"
-# THE CLOSED WORLD authored markup compiles in: the Prodrome's typst-wasm, whose
-# `Project::restricted()` has typst's library with `html` and `plugin` removed. Linked here
-# as a Rust crate and fetched by the tab as WebAssembly from the same revision, so the box
-# and the tab admit a text by ONE implementation, not two copies of a list. The same
-# revision as `prodrome_core`, for the reason given there; no default features, so none of
-# the viewer's one-shot or editor exports are linked (the tab's module carries those).
+# THE CLOSED WORLD authored markup compiles in: the Prodrome's typst-wasm, without `html` and
+# `plugin`, the same crate the tab fetches as WebAssembly. The same revision as
+# `prodrome_core`; no default features.
 prodrome-typst-wasm = { git = "https://github.com/fulfilium/prodrome", rev = "a0e99598eb61866c447f386dcb75557b0520dad4", default-features = false }
 
-# CLIPPY PEDANTIC IS ON, AND THE ALLOW-LIST IS SHORT AND SAID OUT LOUD.
-# Clippy runs at `-D warnings` over `--all-targets`. An allow with
-# no reason beside it is a lint somebody turned off in a hurry.
+# CLIPPY PEDANTIC IS ON, AND EACH ALLOW SAYS WHY.
 [workspace.lints.clippy]
 pedantic = { level = "warn", priority = -1 }
-# Every fallible function here returns a typed error whose own `#[error(..)]`
-# string says what went wrong. An `# Errors` section per signature would
-# restate the error enum in prose, which is the second declaration this
-# architecture exists to avoid (§2, last bullet).
+# Each typed error's `#[error(..)]` says what went wrong; an `# Errors` section would restate it.
 missing_errors_doc = "allow"
 missing_panics_doc = "allow"
 
 [workspace.lints.rust]
 missing_docs = "allow"
 
-# THE TEST BUILD IS NOT A DEBUGGER SESSION. Full debuginfo plus incremental
-# caches made a `cargo test --workspace` tree of 9–16 GB, on a 45 GB box that
-# then ran one of those every triage pass — and the wrapper's
-# own 1 GB floor then silenced the triage rather than reporting a full disk
-# (memory/, decision checkdisk). Line tables keep the file and
-# line in a panic's backtrace, which is what a failing test needs; the rest of
-# the debuginfo nobody on this box ever opened. It is a manifest setting and
-# not an environment variable because an environment variable is something
-# somebody remembers to export.
+# THE TEST BUILD IS NOT A DEBUGGER SESSION: full debuginfo made a test tree of 9–16 GB (→
+# `checkdisk`). Line tables keep a panic's file and line.
 [profile.dev]
 debug = "line-tables-only"
 incremental = false
 
-# The dependencies are optimised, the workspace's own crates not: the tests spend their time in
-# the Prodrome's folds, proptest, wasmtime's compiler and the rest, all compiled once per lock.
-# On a four-core gate machine, 2026-10-11: the workspace's tests ran in 112 s against 173, the three
-# named suites in 80 against 161, and a rebuild after a core change took 180 s against 222 (the
-# proc macros run faster); the dependencies' own build, once per lock, took 1269 s cold.
+# Dependencies optimised, the workspace's own crates not: the tests spend their time in the
+# dependencies (on the 4-core gate machine, 2026-10-11, 112 s against 173).
 [profile.dev.package."*"]
 opt-level = 1
 
-# Every write's door verifies signatures, a few per object; unoptimised, one Ed25519 check costs
-# milliseconds, so a dev build (the e2e fixture, the tests) paid seconds per write as its chain
-# grew. These crates are optimised in every build.
+# Every write verifies signatures, and an unoptimised Ed25519 check costs milliseconds.
 [profile.dev.package.curve25519-dalek]
 opt-level = 3
 [profile.dev.package.ed25519-dalek]
@@ -297,34 +164,17 @@ opt-level = 3
 [profile.dev.package.sha2]
 opt-level = 3
 
-# THE DEPLOYED BINARY (`.#suzatary`), measured on 2026-10-04 (PR #72).
-# Nix's `strip -S` drops the debug info and keeps the symbol table, a quarter
-# of the file that nothing on the box reads: the units set no `RUST_BACKTRACE`,
-# so a panic in the journal is its message and its file and line, which live
-# in the data and survive this.
-#
-# `opt-level = "s"` keeps the binary small, for a typst compile about a quarter
-# slower (11 to 14 ms a body, which the box caches by content). Sixteen codegen
-# units let rustc compile one crate on every core. In the Nix build on a 4-core
-# x86_64 machine, a one-line change to the core took 252 s with sixteen units
-# against 340 s with one, and a change to the binary's crate 247 s against
-# 329 s, for a binary of 67.6 MB against 62.1 MB. Opt-level 2 with sixteen
-# units was slower (355 s) and larger (79.3 MB). LTO is off: thin grew the
-# binary, and fat cost six times the rebuild. `panic` stays `unwind`, so a
-# handler's panic ends its task and not the server.
+# THE DEPLOYED BINARY (`.#suzatary`), measured 2026-10-04 (PR #72). `opt-level = "s"` for a
+# small binary; sixteen codegen units (a core change rebuilt in 252 s against 340 with one); LTO
+# off (thin grew the binary, fat cost six times the rebuild); `panic` unwinds, so a handler's
+# panic ends its task and not the server.
 [profile.release]
 opt-level = "s"
 codegen-units = 16
 strip = "symbols"
 
-# THE BROWSER'S BUILD, AND NOTHING ELSE'S (`wasm/`, `nix build .#suzatary-wasm`).
-# The one artefact whose SIZE a reader pays before a page can say anything, so
-# it takes `release` and adds what the server cannot: whole-program LTO, which
-# a module built once per tree can afford, and `abort`, since a page has no
-# task to lose.
-#
-# Its size and optimisation are its own, so the server's build speed does not
-# move the module a page downloads.
+# THE BROWSER'S BUILD (`wasm/`): the one artefact whose size a reader pays, so whole-program LTO
+# and `abort`.
 [profile.wasm-release]
 inherits = "release"
 opt-level = "s"

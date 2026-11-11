@@ -1,13 +1,13 @@
 //! The lines an act writes into a conversation: a note of who acted and why, and the line that
 //! ends an act a restart left running.
 
-use crate::conversation_id::ConversationId;
-use crate::reference::{Reference, TodoRef};
-use crate::refusal::Refusal;
 use crate::secretary::responded::{Performed, Tried};
 use crate::secretary::stamp::Stamp;
 use crate::secretary::store::Entry;
 use crate::secretary::{conversations, transcript};
+use suzatary_base::conversation_id::ConversationId;
+use suzatary_base::reference::{Reference, TodoRef};
+use suzatary_base::refusal::Refusal;
 
 /// The words a restart leaves behind, since the device code is never persisted.
 const RESTARTED: &str = "the box restarted while this act was waiting; the device code is gone \
@@ -20,7 +20,7 @@ const RESTARTED: &str = "the box restarted while this act was waiting; the devic
 pub fn reconcile(
     conversations: crate::secretary::conversations::Conversations<'_>,
     inbox: &dyn crate::store::Prodrome<super::inbox_event::InboxEvent>,
-    now: crate::capability::Datetime,
+    now: suzatary_base::capability::Datetime,
 ) -> Result<usize, Refusal> {
     let restarted = Performed::Tried(Tried::NotSent {
         reason: RESTARTED.to_owned(),
@@ -59,7 +59,7 @@ pub fn describe_act(actor: &str, verb: &str, note: &str) -> String {
 #[derive(Debug, Clone)]
 pub struct ActLine {
     /// The event's own instant, never the clock's.
-    pub at: crate::capability::Datetime,
+    pub at: suzatary_base::capability::Datetime,
     /// The actor the gate admitted.
     pub actor: String,
     /// Past tense, such as "dismissed" or "completed".
@@ -91,7 +91,11 @@ pub fn note_act(
         &Entry::Said {
             at: line.at,
             turn: crate::secretary::model::Turn::Act {
-                text: describe_act(&crate::spelling::capitalised(&line.actor), line.verb, note),
+                text: describe_act(
+                    &suzatary_base::spelling::capitalised(&line.actor),
+                    line.verb,
+                    note,
+                ),
                 references: vec![line.reference.clone()],
             },
             by: Some(by),
@@ -106,7 +110,7 @@ pub fn note_act(
 pub fn heard_from_objects(
     events: &[crate::record::TodoEvent],
     actor: &prodrome_core::event::Actor,
-    chain: &crate::chains::ChainName,
+    chain: &suzatary_base::chains::ChainName,
     before: &dyn Fn(&crate::record::Authored) -> Option<crate::record::Authored>,
 ) -> Vec<ActLine> {
     use crate::record::TodoEvent;
@@ -162,15 +166,15 @@ pub fn heard_from_objects(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::capability::Datetime;
-    use crate::conversation_id::ConversationId;
     use crate::mail::address::EmailAddress;
-    use crate::reference::ProposalRef;
     use crate::secretary::acts::Act;
     use crate::secretary::model::Turn;
     use crate::secretary::proposal::{Proposal, Reasons};
     use crate::secretary::responded::{Done, Responded};
     use crate::secretary::store::Entry;
+    use suzatary_base::capability::Datetime;
+    use suzatary_base::conversation_id::ConversationId;
+    use suzatary_base::reference::ProposalRef;
 
     use crate::store::Reads as _;
 
@@ -181,7 +185,7 @@ mod tests {
         inbox: crate::store::InMemory<crate::secretary::inbox_event::InboxEvent>,
     }
 
-    impl crate::capability::Clock for InMemory {
+    impl suzatary_base::capability::Clock for InMemory {
         fn now(&self) -> Datetime {
             now()
         }
@@ -204,7 +208,8 @@ mod tests {
             store.lines.conversations(),
             id,
             &Entry::Opened {
-                at: crate::capability::Datetime::new(2026, 9, 14, 8, 0, 0, 0).expect("an instant"),
+                at: suzatary_base::capability::Datetime::new(2026, 9, 14, 8, 0, 0, 0)
+                    .expect("an instant"),
                 title: crate::secretary::words::Words::kept("A grant".to_owned()),
                 model: "a fake model".to_owned(),
                 kind: crate::secretary::store::Kind::Topic,
@@ -233,7 +238,8 @@ mod tests {
             store.lines.conversations(),
             id,
             &Entry::Proposed {
-                at: crate::capability::Datetime::new(2026, 9, 14, 8, 59, 0, 0).expect("an instant"),
+                at: suzatary_base::capability::Datetime::new(2026, 9, 14, 8, 59, 0, 0)
+                    .expect("an instant"),
                 object: object.clone(),
                 revises: None,
             },
@@ -359,7 +365,7 @@ mod tests {
 
     fn a_todo_reference() -> Reference {
         Reference::Todo(TodoRef {
-            chain: crate::chains::ChainName::new("life").expect("a slug"),
+            chain: suzatary_base::chains::ChainName::new("life").expect("a slug"),
             id: prodrome_core::event::TodoId::new("x").expect("a todo id"),
         })
     }
@@ -369,7 +375,8 @@ mod tests {
             store.lines.conversations(),
             id,
             &Entry::Opened {
-                at: crate::capability::Datetime::new(2026, 9, 15, 8, 0, 0, 0).expect("an instant"),
+                at: suzatary_base::capability::Datetime::new(2026, 9, 15, 8, 0, 0, 0)
+                    .expect("an instant"),
                 title: crate::secretary::words::Words::kept("A chain act".to_owned()),
                 model: "a fake model".to_owned(),
                 kind: crate::secretary::store::Kind::Topic,
@@ -383,8 +390,8 @@ mod tests {
     /// the window still makes it a card.
     #[test]
     fn a_noted_act_in_the_default_conversation_leaves_his_round_clean() {
-        use crate::conversation_id::DEFAULT;
         use crate::secretary::model::ToolCall;
+        use suzatary_base::conversation_id::DEFAULT;
         let said = |turn: Turn, by: Option<&str>| Entry::Said {
             at: now(),
             turn,
@@ -473,7 +480,7 @@ mod tests {
     #[test]
     fn heard_from_objects_skips_what_carries_no_note_of_the_posters() {
         let actor = prodrome_core::event::Actor::new("ada").expect("an actor");
-        let chain = crate::chains::ChainName::new("life").expect("a slug");
+        let chain = suzatary_base::chains::ChainName::new("life").expect("a slug");
         for event in [
             prodrome_core::event::mk_cancelled::<crate::record::Record>("x", now(), "ada", "")
                 .expect("a cancelled event"),
@@ -506,7 +513,7 @@ mod tests {
     #[test]
     fn an_adopted_record_is_noted_by_what_it_replaces() {
         let actor = prodrome_core::event::Actor::new("ada").expect("an actor");
-        let chain = crate::chains::ChainName::new("life").expect("a slug");
+        let chain = suzatary_base::chains::ChainName::new("life").expect("a slug");
         let body = |text: &str| crate::record::MarkupSource::from_chain(text);
         let Ok(crate::record::TodoEvent::Authored(shown)) = crate::record::mk_authored(
             "x",

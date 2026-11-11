@@ -15,7 +15,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use crate::present::Present as _;
-use suzatary_core::capability::ImapToken;
+use suzatary_base::capability::ImapToken;
 use suzatary_core::mail::idle::Wake;
 use suzatary_core::mail::imap::{ImapError, Maildir, Selected};
 

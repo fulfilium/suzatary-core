@@ -3,9 +3,9 @@
 
 use std::fmt::Write as _;
 
+use suzatary_base::reference::Reference;
 use suzatary_core::enclosed::{Enclosed, Enclosure};
 use suzatary_core::for_model::ForModel;
-use suzatary_core::reference::Reference;
 use suzatary_core::secretary::model::{Conversation, Delta, Turn};
 use suzatary_core::secretary::turn_shape::{self, TurnShape};
 

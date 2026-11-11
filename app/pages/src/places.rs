@@ -35,7 +35,7 @@ pub(crate) enum Place<'a> {
     Attachment(&'a str),
     /// A todo's route drops the chain; a proposal, round or note goes to its conversation, a
     /// batch to the Inbox.
-    Reference(&'a suzatary_core::reference::Reference),
+    Reference(&'a suzatary_base::reference::Reference),
     Conversation {
         id: &'a str,
         /// `""` for none.
@@ -82,7 +82,7 @@ impl<'a> Place<'a> {
             Place::Typst(open) => format!("#/typst/{}", component(open)),
             Place::Attachment(id) => format!("/api/secretary/attachments/{}", component(id)),
             Place::Reference(r) => {
-                use suzatary_core::reference::Reference;
+                use suzatary_base::reference::Reference;
                 match r {
                     Reference::Todo(t) => Place::Todo(t.id.as_str()).href(),
                     Reference::Mail { hash } => Place::Message(hash.as_str()).href(),
@@ -93,8 +93,8 @@ impl<'a> Place<'a> {
                     Reference::Proposal(p) => Place::conversation(p.conversation.as_str()).href(),
                     Reference::Batch { .. } => Place::Inbox("").href(),
                     Reference::Target(
-                        suzatary_core::topic_target::Target::Round { conversation, .. }
-                        | suzatary_core::topic_target::Target::Note { conversation, .. },
+                        suzatary_base::topic_target::Target::Round { conversation, .. }
+                        | suzatary_base::topic_target::Target::Note { conversation, .. },
                     ) => Place::conversation(conversation.as_str()).href(),
                 }
             }

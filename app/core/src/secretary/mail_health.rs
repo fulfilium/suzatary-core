@@ -5,16 +5,16 @@
 //! The act is a function of the account and the instant it last synced, so asking again asks for
 //! the same object; a new failure after a success is a new act.
 
-use crate::conversation_id::ConversationId;
-use crate::escape::escape_markup;
 use crate::health::SourceKey;
 use crate::health::{Instant, Reading};
-use crate::reference::Reference;
-use crate::refusal::Refusal;
 use crate::secretary::changes::{self, Act, Changeset};
 use crate::secretary::proposal::{Proposal, Reasons};
 use crate::secretary::{Bound, WRITES_AS};
 use crate::todo::{Price, TodoFields};
+use suzatary_base::conversation_id::ConversationId;
+use suzatary_base::escape::escape_markup;
+use suzatary_base::reference::Reference;
+use suzatary_base::refusal::Refusal;
 
 /// What the proposed todo is priced: an account that does not sync hides its mail from triage,
 /// a real consequence within weeks.
@@ -34,14 +34,14 @@ pub fn todo_of(account: &str, since: Instant) -> String {
 }
 
 /// An instant as the owner reads it, his zone named: `2026-10-01 05:00 America/New_York`.
-fn on_the_owners_clock(zone: crate::zone::Zone, at: Instant) -> String {
+fn on_the_owners_clock(zone: suzatary_base::zone::Zone, at: Instant) -> String {
     format!("{} {}", zone.wall(at).format("%Y-%m-%d %H:%M"), zone.name())
 }
 
 /// The act an account's failure since `since` proposes: its text is the box's own, the account
 /// escaped as data, and nothing in it is the sync's words.
 #[must_use]
-pub fn act_of(zone: crate::zone::Zone, account: &str, since: Instant) -> Act {
+pub fn act_of(zone: suzatary_base::zone::Zone, account: &str, since: Instant) -> Act {
     Act::Add {
         todo: todo_of(account, since),
         fields: TodoFields {
@@ -80,7 +80,7 @@ pub fn propose_persistent(
     chains: &[Bound<'_>],
     project: &str,
     categories: &[&str],
-    zone: crate::zone::Zone,
+    zone: suzatary_base::zone::Zone,
     conversation: &ConversationId,
 ) -> Result<Vec<usize>, Refusal> {
     let Some(bound) = chains.iter().find(|bound| bound.name == project) else {
@@ -118,7 +118,7 @@ pub fn propose_persistent(
             &changeset,
             &preview,
             &changes::Building {
-                now: crate::zone::Moment {
+                now: suzatary_base::zone::Moment {
                     at: caps.clock.now(),
                     zone,
                 },
@@ -160,8 +160,8 @@ mod tests {
 
     impl crate::health::Register<SourceKey> for FailingFor {
         fn healths(&self) -> Result<crate::health::Healths<SourceKey>, crate::store::StoreError> {
-            use crate::capability::Clock as _;
-            let now = prodrome_core::fpl::instant_of(crate::capability::Nothing.now());
+            use suzatary_base::capability::Clock as _;
+            let now = prodrome_core::fpl::instant_of(suzatary_base::capability::Nothing.now());
             let row = |ok| crate::mail::sync_report::SyncReport {
                 unheld: None,
                 synced: vec![crate::mail::sync_report::AccountSync {
@@ -183,8 +183,8 @@ mod tests {
     }
 
     fn proposed(health: &FailingFor, stores: &Stores) -> Vec<usize> {
-        let policy = crate::chains::ChainPolicy {
-            name: crate::chains::ChainName::new("suzatary").expect("a slug"),
+        let policy = suzatary_base::chains::ChainPolicy {
+            name: suzatary_base::chains::ChainName::new("suzatary").expect("a slug"),
             untrusted: prodrome_core::policy::Untrusted::of([]),
             roster: std::collections::BTreeSet::new(),
             root: crate::cast::keys::root(),
@@ -193,7 +193,7 @@ mod tests {
             health,
             conversations: stores.lines.conversations(),
             inbox: &stores.inbox,
-            ..crate::capability::Nothing::secretary()
+            ..crate::secretary::Secretary::nothing()
         };
         propose_persistent(
             &[Bound {
@@ -203,7 +203,7 @@ mod tests {
             }],
             "suzatary",
             &[],
-            crate::zone::Zone::UTC,
+            suzatary_base::zone::Zone::UTC,
             &stores.id,
         )
         .expect("an answer")
@@ -225,7 +225,8 @@ mod tests {
             stores.lines.conversations(),
             &stores.id,
             &crate::secretary::store::Entry::Opened {
-                at: crate::capability::Datetime::new(2026, 10, 1, 8, 0, 0, 0).expect("an instant"),
+                at: suzatary_base::capability::Datetime::new(2026, 10, 1, 8, 0, 0, 0)
+                    .expect("an instant"),
                 title: crate::secretary::words::Words::kept("Default".to_owned()),
                 model: "a fake model".to_owned(),
                 kind: crate::secretary::store::Kind::Topic,

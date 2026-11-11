@@ -4,7 +4,6 @@ use schemars::JsonSchema;
 use serde::Deserialize;
 use serde_json::json;
 
-use crate::refusal::Refusal;
 use crate::secretary::gate::Gate;
 use crate::secretary::memory::{self, Fact, FactId, Replaces, Sources};
 use crate::secretary::verb_answer::VerbAnswer;
@@ -12,6 +11,7 @@ use crate::secretary::verb_name::Binding;
 use crate::secretary::verbs::{IfCarded, memory_card};
 use crate::secretary::{Call, SecretarySurface};
 use crate::verb::Verb;
+use suzatary_base::refusal::Refusal;
 
 /// Replace standing facts with one, where remember would write, or as a card the owner taps.
 pub struct Consolidate;

@@ -6,10 +6,10 @@ use prodrome_core::term::{Term, TermF};
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
-use crate::refusal::Refusal;
 use crate::todo::{Cycle, Deadline};
-use crate::zone::Moment;
 use prodrome_core::literal::codec::{Constructor, Fields, Literal, arm, no_arm, record};
+use suzatary_base::refusal::Refusal;
+use suzatary_base::zone::Moment;
 
 /// One price, since a todo carrying two has no defined value. Percentages are whole; low is
 /// urgent. The serde form is a verb's argument, and the inbox's acts' before they were literals.

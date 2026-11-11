@@ -7,8 +7,8 @@
 use serde::Serialize;
 
 use super::sync_report::{AccountSync, SyncReport};
-use crate::capability::Datetime;
 use crate::mail::mail_sync::Synced;
+use suzatary_base::capability::Datetime;
 
 /// How recent a sync must be to answer a request for one without starting another.
 pub const WINDOW: chrono::TimeDelta = chrono::TimeDelta::seconds(60);

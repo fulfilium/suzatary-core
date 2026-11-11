@@ -7,17 +7,17 @@ use std::collections::BTreeMap;
 use std::sync::LazyLock;
 
 use crate::believed::Believed;
-use crate::capability::Datetime;
 use crate::coding::Task;
-use crate::conversation_id::ConversationId;
 use crate::record::Authored;
-use crate::reference::{ProposalRef, TodoRef};
-use crate::refusal::Refusal;
 use crate::secretary::Bound;
 use crate::secretary::acts::Act;
 use crate::secretary::coding::Advanced;
 use crate::secretary::inbox::Fold;
 use crate::secretary::proposal::Proposal;
+use suzatary_base::capability::Datetime;
+use suzatary_base::conversation_id::ConversationId;
+use suzatary_base::reference::{ProposalRef, TodoRef};
+use suzatary_base::refusal::Refusal;
 
 /// How many todos may be in progress at once.
 pub(crate) const AT_ONCE: usize = 2;

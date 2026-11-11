@@ -28,7 +28,7 @@ impl Local {
         &self.0
     }
 
-    /// The person's prose, [`suzatary_core::persona::Prose`], as TOML.
+    /// The person's prose, [`suzatary_base::persona::Prose`], as TOML.
     #[must_use]
     pub fn persona(&self) -> PathBuf {
         self.0.join(Self::FILES[0])
@@ -63,7 +63,7 @@ impl Local {
     ///
     /// # Errors
     /// A file that is there and does not read as prose.
-    pub fn prose(&self) -> anyhow::Result<suzatary_core::persona::Prose> {
+    pub fn prose(&self) -> anyhow::Result<suzatary_base::persona::Prose> {
         let path = self.persona();
         let reading = || format!("reading {}", path.display());
         match std::fs::read_to_string(&path)
@@ -71,7 +71,7 @@ impl Local {
             .with_context(reading)?
         {
             Some(text) => toml::from_str(&text).with_context(reading),
-            None => Ok(suzatary_core::persona::Prose::default()),
+            None => Ok(suzatary_base::persona::Prose::default()),
         }
     }
 }

@@ -17,7 +17,6 @@ use std::marker::PhantomData;
 use prodrome_core::digest::{Node, Part, Tree};
 use serde_json::{Value, json};
 
-use crate::refusal::Refusal;
 use crate::secretary::compaction::Reading;
 use crate::secretary::digest_label::Label;
 use crate::secretary::digest_view;
@@ -25,6 +24,7 @@ use crate::secretary::memory::Memory;
 use crate::secretary::search::{self, Needle};
 use crate::secretary::told::{self, Told};
 use crate::secretary::topics::reading::Reading as Topics;
+use suzatary_base::refusal::Refusal;
 
 /// The record, shown as `S` reads it.
 pub struct ShownRecord<S: Shows> {

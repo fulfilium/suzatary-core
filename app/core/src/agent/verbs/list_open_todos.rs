@@ -3,8 +3,8 @@ use std::marker::PhantomData;
 use serde_json::Value;
 
 use crate::agent::{Holds, reads};
-use crate::refusal::Refusal;
 use crate::verb::{Chained, NoArgs, Verb};
+use suzatary_base::refusal::Refusal;
 
 /// One chain's open todos.
 pub struct ListOpenTodos<S>(PhantomData<S>);

@@ -4,7 +4,7 @@
 use std::str::FromStr;
 
 use serde::{Deserialize, Serialize};
-use suzatary_core::reference::Reference;
+use suzatary_base::reference::Reference;
 use ts_rs::TS;
 use viewtree::{Node, Program, view};
 

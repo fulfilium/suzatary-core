@@ -34,4 +34,4 @@ impl Scope {
 }
 
 // Its literal and its serde form are its word, as a stored line prints it.
-crate::words::words!(Scope: Scope::ALL => |scope| scope.as_str());
+suzatary_base::words::words!(Scope: Scope::ALL => |scope| scope.as_str());

@@ -59,7 +59,7 @@ fn a_warmed_trusted_todo_comes_back_rendered() {
     let fakes = Fakes::new("markup-warm");
     // `Render::cached` only answers what was already compiled, so warm before the server starts.
     let escaped =
-        suzatary_core::escape::Escaped::from_chain("File the *permit* renewal".to_owned());
+        suzatary_base::escape::Escaped::from_chain("File the *permit* renewal".to_owned());
     fakes.render.warm(std::slice::from_ref(&escaped));
     let deployment = common::deployment([], []);
     let base = common::start(
@@ -80,7 +80,7 @@ fn an_untrusted_todo_is_source_until_it_is_confirmed() {
         .whois(common::FakeWhois::new().naming(common::v4(), ada.clone()));
     // Compiled on purpose: the route must refuse it even when the cache holds it.
     let escaped =
-        suzatary_core::escape::Escaped::from_chain("Email *Harrow* about the deed".to_owned());
+        suzatary_base::escape::Escaped::from_chain("Email *Harrow* about the deed".to_owned());
     fakes.render.warm(std::slice::from_ref(&escaped));
     let deployment = common::deployment([ada.clone()], [(ada, common::actor("ada"))]);
     let caps = std::sync::Arc::new(fakes);

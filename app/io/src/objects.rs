@@ -563,7 +563,7 @@ mod tests {
     /// words, a key per slot of them beside it, and the lines read back in the order written.
     #[test]
     fn a_conversation_is_written_as_changes_through_the_door() {
-        use suzatary_core::conversation_id::ConversationId;
+        use suzatary_base::conversation_id::ConversationId;
         use suzatary_core::secretary::model::Turn;
         use suzatary_core::secretary::store::Entry;
         use suzatary_core::secretary::transcript;
@@ -636,7 +636,7 @@ mod tests {
     /// are a failure of the memory's reading, never a fact quietly gone from it.
     #[test]
     fn words_that_cannot_be_read_fail_the_reading() {
-        use suzatary_core::conversation_id::ConversationId;
+        use suzatary_base::conversation_id::ConversationId;
         use suzatary_core::secretary::memories::Memories;
         use suzatary_core::secretary::memory::{Fact, Kind, Origin};
 
@@ -738,7 +738,7 @@ mod tests {
     /// locks.
     #[test]
     fn the_memory_keeps_its_words_apart_and_forgetting_deletes_them() {
-        use suzatary_core::conversation_id::ConversationId;
+        use suzatary_base::conversation_id::ConversationId;
         use suzatary_core::secretary::memories::Memories;
         use suzatary_core::secretary::memory::{Fact, Kind, Origin};
 
@@ -836,14 +836,14 @@ mod tests {
         crate::conversations::ConversationStores::open(
             root,
             keys,
-            std::sync::Arc::new(suzatary_core::capability::Nothing),
-            std::sync::Arc::new(suzatary_core::capability::Nothing),
+            std::sync::Arc::new(suzatary_base::capability::Nothing),
+            std::sync::Arc::new(suzatary_base::capability::Nothing),
         )
     }
 
     /// A conversation of 48 lines on disk under `dir`, enough to settle a node of the digest.
     fn spoken(dir: &std::path::Path) -> crate::conversations::ConversationStores {
-        use suzatary_core::conversation_id::ConversationId;
+        use suzatary_base::conversation_id::ConversationId;
         use suzatary_core::secretary::model::Turn;
         use suzatary_core::secretary::store::Entry;
         use suzatary_core::secretary::transcript;
@@ -889,7 +889,7 @@ mod tests {
     /// summary is refused; read whole again, the sweep deletes what is dead.
     #[test]
     fn nothing_is_deleted_or_summarised_over_a_damaged_line() {
-        use suzatary_core::conversation_id::ConversationId;
+        use suzatary_base::conversation_id::ConversationId;
         use suzatary_core::secretary::memory::{Fact, Kind, Origin};
         use suzatary_core::secretary::{digest_line::Line, digests::Digests, memories::Memories};
 

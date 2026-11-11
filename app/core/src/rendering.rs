@@ -12,8 +12,8 @@ use prodrome_core::memo;
 use schemars::JsonSchema;
 use serde::Serialize;
 
-use crate::answer::Renderable;
 use crate::template::{Checked, Kept, Library, Output, Template, named};
+use suzatary_base::answer::Renderable;
 
 /// The typesetter every template compiles with: the Prodrome's `prodrome-typst-wasm` at the
 /// revision `app/Cargo.lock` links, and the typst it links. A test,
@@ -26,14 +26,18 @@ pub(crate) const LINKED: &str =
 pub(crate) static TYPESETTER: LazyLock<Hash> = LazyLock::new(|| named(LINKED));
 
 /// The tripwire's code: what a document must pass to be kept or written.
-pub(crate) static TRIPWIRE: LazyLock<Hash> = LazyLock::new(|| named(include_str!("tripwire.rs")));
+pub(crate) static TRIPWIRE: LazyLock<Hash> =
+    LazyLock::new(|| named(include_str!("../../base/src/tripwire.rs")));
 
-/// How a compiled document becomes the body that is kept ([`crate::narrowing`]): named by its
+/// How a compiled document becomes the body that is kept ([`suzatary_base::narrowing`]): named by its
 /// code and the tripwire's, so an edit to either is a new function.
 pub(crate) static NARROWING: LazyLock<Hash> = LazyLock::new(|| {
     memo::name(
         b"suzatary: narrowing",
-        [&named(include_str!("narrowing.rs")), &*TRIPWIRE],
+        [
+            &named(include_str!("../../base/src/narrowing.rs")),
+            &*TRIPWIRE,
+        ],
     )
 });
 
@@ -45,7 +49,7 @@ pub static CLOSED: LazyLock<Hash> =
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, JsonSchema)]
 pub struct Markup {
     /// The markup, as the door admitted it.
-    pub source: crate::escape::Escaped,
+    pub source: suzatary_base::escape::Escaped,
 }
 
 /// A confirmed text's markup, compiled in the closed world.
@@ -67,7 +71,7 @@ pub static ANSWER: Template<Renderable> = Template::new(
     Library::Closed,
     Output::Body,
     Kept::Disk,
-    &[include_str!("answer.rs")],
+    &[include_str!("../../base/src/answer.rs")],
 );
 
 /// The functions whose values are kept beyond a process, on the box's disk and on a device. A

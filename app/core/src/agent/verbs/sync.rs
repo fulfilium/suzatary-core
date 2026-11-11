@@ -1,8 +1,8 @@
 use serde_json::Value;
 
 use crate::agent::{Call, TriageSurface, answered, refused};
-use crate::refusal::Refusal;
 use crate::verb::{NoArgs, Verb};
+use suzatary_base::refusal::Refusal;
 
 /// Sync every account and reindex.
 pub struct Sync;

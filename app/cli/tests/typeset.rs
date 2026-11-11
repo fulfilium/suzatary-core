@@ -3,7 +3,7 @@
 use std::process::{Child, Command, Stdio};
 use std::time::{Duration, Instant};
 
-use suzatary_core::capability::Typeset;
+use suzatary_base::capability::Typeset;
 use suzatary_io::typeset::Closed;
 use suzatary_io::typeset::closed::{BACKSTOP, CPU_SECONDS};
 

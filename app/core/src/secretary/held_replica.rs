@@ -10,8 +10,6 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use prodrome_core::event::Hash;
 
-use crate::answer::Renderable;
-use crate::conversation_id::ConversationId;
 use crate::replica::held::Said;
 use crate::secretary::held_lines::HeldLines;
 use crate::secretary::key_ring::KeyRing;
@@ -19,6 +17,8 @@ use crate::secretary::line_form::{Husked, LineDelta, LineFrame, LinePulling, Lin
 use crate::secretary::locked_text::KeyName;
 use crate::secretary::outlines::{NotANode, Outlines, Parsed, Scope};
 use crate::wire::lines::{Heads, SkeletonNode, SkeletonPayload};
+use suzatary_base::answer::Renderable;
+use suzatary_base::conversation_id::ConversationId;
 
 /// The lines held: the rows, and the readings of the landed one.
 #[derive(Default)]

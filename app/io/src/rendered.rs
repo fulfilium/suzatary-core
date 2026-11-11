@@ -4,8 +4,8 @@ use std::path::{Path, PathBuf};
 
 use prodrome_core::event::Hash;
 use prodrome_core::memo::{Finding, Key};
-use suzatary_core::table::Table;
-use suzatary_core::tripwire::suspicious;
+use suzatary_base::table::Table;
+use suzatary_base::tripwire::suspicious;
 
 use crate::present::Present as _;
 

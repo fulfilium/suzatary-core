@@ -8,7 +8,7 @@
 //! unversioned.
 
 use crate::redact::Scrub;
-use crate::rule_version::Under;
+use suzatary_base::rule_version::Under;
 
 /// The rules a slot's words passed.
 pub type ScrubbedUnder = Under<Scrub>;

@@ -1,7 +1,7 @@
 //! The render cache of a reader that draws no answer: it keeps none, so forgetting one succeeds,
 //! and opening it touches no directory.
 
-use suzatary_core::answer::Renderable;
+use suzatary_base::answer::Renderable;
 use suzatary_core::render_cache::RenderCache;
 
 /// Keeps nothing.

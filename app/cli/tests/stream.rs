@@ -12,7 +12,7 @@ use std::time::Duration;
 
 use common::{FakeModel, Fakes, Gate};
 
-fn ada() -> suzatary_core::capability::Login {
+fn ada() -> suzatary_base::capability::Login {
     common::login("ada@example.com")
 }
 
@@ -287,7 +287,7 @@ fn a_closed_block_streams_by_its_sha_and_renders_by_it_alone() {
         serde_json::json!({"kind": "delta", "text": "an\n\nFir"})
     );
     let block = next(&rx);
-    let sha = suzatary_core::answer::sha("= Plan\n\n");
+    let sha = suzatary_base::answer::sha("= Plan\n\n");
     assert_eq!(
         block,
         serde_json::json!({"kind": "block", "n": 0, "sha": sha, "source": "= Plan\n\n"}),
@@ -328,7 +328,7 @@ fn a_streaming_block_renders_by_its_sha() {
     assert_eq!(common::status(&say(&base, &id, "second")), 202);
     mid.wait_until_entered();
 
-    let sha = suzatary_core::answer::sha("*Due* Friday.\n\n");
+    let sha = suzatary_base::answer::sha("*Due* Friday.\n\n");
     let mut rendered = common::get(&format!(
         "{base}/api/secretary/conversations/{id}/blocks/{sha}"
     ));
@@ -337,11 +337,11 @@ fn a_streaming_block_renders_by_its_sha() {
         common::body_json(&mut rendered),
         serde_json::json!({
             "html": "<p>*Due* Friday.</p>",
-            "key": suzatary_core::rendering::ANSWER.key(&suzatary_core::answer::Renderable::of("*Due* Friday.\n\n")).expect("a block prints"),
+            "key": suzatary_core::rendering::ANSWER.key(&suzatary_base::answer::Renderable::of("*Due* Friday.\n\n")).expect("a block prints"),
         }),
         "the fake renderer's answer for exactly the block the model wrote"
     );
-    let unknown = suzatary_core::answer::sha("#html.elem(\"script\")[]");
+    let unknown = suzatary_base::answer::sha("#html.elem(\"script\")[]");
     assert_eq!(
         common::status(&common::get(&format!(
             "{base}/api/secretary/conversations/{id}/blocks/{unknown}"

@@ -1,8 +1,8 @@
 //! The mail's routes, read-only: the inbox, a search, one message and one thread.
 
 use axum::Json;
-use suzatary_core::capability::Datetime;
-use suzatary_core::refusal::Refusal;
+use suzatary_base::capability::Datetime;
+use suzatary_base::refusal::Refusal;
 use suzatary_core::{query, routes, wire};
 
 use suzatary_core::mail::watch::{self, WatchId};

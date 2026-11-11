@@ -20,15 +20,15 @@ use super::verbs::{
 use super::verbs::{IfCarded, check, propose};
 use crate::agent::Agent;
 use crate::agent::{Holds, Says};
-use crate::chains::ChainPolicy;
-use crate::refusal::{Refusal, shown};
 use crate::secretary::changes::{Act, Changeset, Unapplied};
 use crate::secretary::compaction::Reading;
 use crate::secretary::gate::Gate;
 use crate::secretary::proposal::Proposal;
 use crate::secretary::shown_record::{Everything, ShownRecord};
 use crate::verb::{Surface, verbs};
-use crate::writer::Writer;
+use suzatary_base::chains::ChainPolicy;
+use suzatary_base::refusal::{Refusal, shown};
+use suzatary_base::writer::Writer;
 
 /// The secretary's verbs: each runs against a [`Call`], and answers JSON and the files it hands
 /// the model.

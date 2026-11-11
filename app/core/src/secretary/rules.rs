@@ -5,9 +5,9 @@
 //! past the one it fired on and discharges the rule there. Order is declaration order, so an
 //! answer comes before the title that names it.
 
-use crate::conversation_id::ConversationId;
 use crate::rule::Rule;
 use crate::secretary::transcript::Transcript;
+use suzatary_base::conversation_id::ConversationId;
 
 /// One of the box's own rules over a conversation.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -64,7 +64,8 @@ mod tests {
             store.conversations(),
             &id(),
             &Entry::Opened {
-                at: crate::capability::Datetime::new(2026, 10, 5, 9, 0, 0, 0).expect("an instant"),
+                at: suzatary_base::capability::Datetime::new(2026, 10, 5, 9, 0, 0, 0)
+                    .expect("an instant"),
                 title: crate::secretary::words::Words::kept(String::new()),
                 model: "m".to_owned(),
                 kind: Kind::Topic,
@@ -79,7 +80,8 @@ mod tests {
             store.conversations(),
             &id(),
             &Entry::Said {
-                at: crate::capability::Datetime::new(2026, 10, 5, 9, 1, 0, 0).expect("an instant"),
+                at: suzatary_base::capability::Datetime::new(2026, 10, 5, 9, 1, 0, 0)
+                    .expect("an instant"),
                 turn,
                 by: None,
             },
@@ -133,7 +135,8 @@ mod tests {
             lines.conversations(),
             &id(),
             &Entry::Titled {
-                at: crate::capability::Datetime::new(2026, 10, 5, 9, 2, 0, 0).expect("an instant"),
+                at: suzatary_base::capability::Datetime::new(2026, 10, 5, 9, 2, 0, 0)
+                    .expect("an instant"),
                 title: crate::secretary::words::Words::kept(
                     Title::new("The permit").expect("a title"),
                 ),

@@ -28,10 +28,8 @@ use prodrome_core::event::{Envelope, Hash};
 use prodrome_core::fpl::instant_of;
 use prodrome_core::literal::Datetime;
 
-use crate::capability::Clock;
 use crate::model_name::ModelName;
 use crate::nonempty::NonEmpty;
-use crate::refusal::Refusal;
 use crate::rule::{Named, ReadingName, Rule};
 use crate::secretary::compact::Compact;
 use crate::secretary::compact_ask::Ask;
@@ -47,6 +45,8 @@ use crate::secretary::line_event::LineEvent;
 use crate::secretary::memories::Memories;
 use crate::secretary::store::Entry;
 use crate::store::Prodrome;
+use suzatary_base::capability::Clock;
+use suzatary_base::refusal::Refusal;
 
 /// The one digest the box keeps, as a rule's key.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

@@ -1,6 +1,6 @@
 pub(crate) use proptest::prelude::*;
 pub(crate) use serde_json::{Value, json};
-pub(crate) use suzatary_core::answer::Kind as BlockKind;
+pub(crate) use suzatary_base::answer::Kind as BlockKind;
 pub(crate) use suzatary_core::release::{Lot, Named, Place};
 pub(crate) use suzatary_core::secretary::memory::{FactId, Kind};
 pub(crate) use suzatary_core::wire::cards::{AboutPayload, HeldTodo};

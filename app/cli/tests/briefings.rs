@@ -38,7 +38,7 @@ fn a_good_date_returns_its_source() {
 /// A day the secretary briefed is its brief, block by block, whatever the saved files say.
 #[test]
 fn a_day_the_secretary_briefed_is_its_brief_block_by_block() {
-    use suzatary_core::conversation_id::DEFAULT;
+    use suzatary_base::conversation_id::DEFAULT;
     use suzatary_core::secretary::briefs::BRIEF;
     use suzatary_core::secretary::conversations::read_or_open_default;
     use suzatary_core::secretary::converse;

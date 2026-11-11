@@ -8,7 +8,7 @@ use std::sync::Arc;
 
 use common::{FakeModel, Fakes};
 
-fn ada() -> suzatary_core::capability::Login {
+fn ada() -> suzatary_base::capability::Login {
     common::login("ada@example.com")
 }
 
@@ -78,7 +78,7 @@ fn no_subscriber_earns_one_push_naming_the_conversation() {
     assert_eq!(
         pushed[0],
         suzatary_core::notify::Push::Answered {
-            conversation: suzatary_core::conversation_id::ConversationId::new(id.as_str())
+            conversation: suzatary_base::conversation_id::ConversationId::new(id.as_str())
                 .expect("a slug"),
             brief: false,
         }

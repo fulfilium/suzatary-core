@@ -136,14 +136,9 @@ pub mod words;
 
 use serde_json::{Map, Value};
 
-use crate::capability::Clock;
-use crate::chains::ChainPolicy;
 use crate::conversation::ask::Ask;
 use crate::conversation::round::{Round, Rules, Sink, Transcript};
-use crate::conversation_id::ConversationId;
 use crate::deployment::Deployment;
-use crate::reference::{ProposalRef, Reference, TodoRef};
-use crate::refusal::{Refusal, shown};
 use crate::secretary::conversations::{append, read};
 use crate::secretary::model::{Halt, Turn};
 use crate::verb::Request;
@@ -154,10 +149,15 @@ use store::{Entry, Stored};
 pub(crate) use surface::SecretarySurface;
 use surface::Subset;
 pub use surface::{SecretaryCall, SecretaryVerb, tools};
+use suzatary_base::capability::Clock;
+use suzatary_base::chains::ChainPolicy;
+use suzatary_base::conversation_id::ConversationId;
+use suzatary_base::reference::{ProposalRef, Reference, TodoRef};
+use suzatary_base::refusal::{Refusal, shown};
 use verb_answer::VerbAnswer;
 
 /// Who a chain write from this surface is by, fixed here so no call's arguments can change it.
-pub const WRITES_AS: crate::writer::Writer = crate::writer::Writer::Assistant;
+pub const WRITES_AS: suzatary_base::writer::Writer = suzatary_base::writer::Writer::Assistant;
 
 /// How many rounds one `say` may take; at the limit the transcript says the rounds ran out.
 pub const MAX_ROUNDS: usize = 8;
@@ -740,7 +740,7 @@ fn heard(
             at: clock.now(),
             turn: Turn::Act {
                 text: crate::secretary::act_lines::describe_act(
-                    &crate::spelling::capitalised(by.as_str()),
+                    &suzatary_base::spelling::capitalised(by.as_str()),
                     verb,
                     words,
                 ),

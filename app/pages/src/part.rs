@@ -1,7 +1,7 @@
 //! The parts a page names and the host draws (`web/src/pages/parts.ts`).
 
 use serde::{Deserialize, Serialize};
-use suzatary_core::answer::Kind;
+use suzatary_base::answer::Kind;
 use suzatary_core::wire::todo::Entry;
 use suzatary_core::wire::topics::Speaker;
 use ts_rs::TS;

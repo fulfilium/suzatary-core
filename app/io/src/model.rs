@@ -14,7 +14,7 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::Duration;
 
-use suzatary_core::capability::{Clock, Secret};
+use suzatary_base::capability::{Clock, Secret};
 use suzatary_core::for_model::ForModel;
 use suzatary_core::secretary::model::{
     Conversation, Delta, Halt, Model, ModelError, Reply, Session, SessionId, SessionModel,

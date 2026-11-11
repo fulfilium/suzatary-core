@@ -6,10 +6,10 @@ use crate::health::Reading;
 use crate::health::SourceKey;
 use crate::mail::heartbeat;
 use crate::record::TodoEvent;
-use crate::refusal::{Refusal, shown};
 use crate::secretary::stamp::stamp;
 use crate::secretary::{Call, SecretarySurface};
 use crate::verb::{Chained, Verb};
+use suzatary_base::refusal::{Refusal, shown};
 
 /// What moved since a day.
 pub struct BriefingDelta;
@@ -23,7 +23,7 @@ pub struct BriefingDeltaArgs {
 const DEFAULT_LOOKBACK_DAYS: i64 = 7;
 
 /// Whether `event` happened on an owner's day before `since`.
-fn before(zone: crate::zone::Zone, event: &TodoEvent, since: chrono::NaiveDate) -> bool {
+fn before(zone: suzatary_base::zone::Zone, event: &TodoEvent, since: chrono::NaiveDate) -> bool {
     zone.day(prodrome_core::fpl::instant_of(event.at())) < since
 }
 
@@ -38,7 +38,7 @@ fn life_row(todo: &str, life: &prodrome_core::event::Lifecycle) -> Value {
 
 /// The proposals waiting, in one tagged shape: the Inbox's list and every chain that prices
 /// nothing referring into it, or why the inbox did not read, while the rest of the delta stands.
-fn waiting(call: &Call<'_>, at: crate::capability::Datetime) -> Value {
+fn waiting(call: &Call<'_>, at: suzatary_base::capability::Datetime) -> Value {
     match crate::secretary::inbox::fold(call.caps.inbox) {
         Ok(fold) => {
             let read = crate::secretary::chains_read(call.chains);
@@ -102,7 +102,7 @@ fn silenced(call: &Call<'_>, since: chrono::NaiveDate) -> Value {
 }
 
 /// What holds the digest's summaries back now, in a sentence; null when nothing does.
-fn compactor_held(call: &Call<'_>, at: crate::capability::Datetime) -> Value {
+fn compactor_held(call: &Call<'_>, at: suzatary_base::capability::Datetime) -> Value {
     match crate::secretary::compaction::waiting(&call.caps.memories.digests, at) {
         Ok(held) => held.map_or(Value::Null, |held| json!(held.to_string())),
         Err(refused) => json!({ "unreadable": refused.message() }),

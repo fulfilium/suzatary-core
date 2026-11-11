@@ -14,11 +14,11 @@ use prodrome_core::event::Actor;
 use prodrome_core::literal::Datetime;
 
 use prodrome_core::policy::Untrusted;
+use suzatary_base::chains::{ChainName, ChainPolicy, Chains};
+use suzatary_base::conversation_id::ConversationId;
+use suzatary_base::persona::Persona;
 use suzatary_core::agent::{CONTEXT_CAP, CONTEXT_HEADROOM, context, manual};
-use suzatary_core::chains::{ChainName, ChainPolicy, Chains};
-use suzatary_core::conversation_id::ConversationId;
 use suzatary_core::deployment::Deployment;
-use suzatary_core::persona::Persona;
 use suzatary_core::secretary::compaction::Reading;
 use suzatary_core::secretary::conversations::InMemory as Lines;
 use suzatary_core::secretary::digest_event::DigestEvent;
@@ -42,8 +42,8 @@ fn stand_in() -> (Persona, Deployment) {
     let persona = Persona {
         name: "Ada".to_owned(),
         city: "London".to_owned(),
-        zone: suzatary_core::zone::Zone::UTC,
-        prose: suzatary_core::persona::Prose {
+        zone: suzatary_base::zone::Zone::UTC,
+        prose: suzatary_base::persona::Prose {
             news_filter: Vec::new(),
             email_voice: Vec::new(),
             anchors: [
@@ -74,7 +74,7 @@ fn stand_in() -> (Persona, Deployment) {
             .collect(),
         app_url: "https://example.invalid/".to_owned(),
         coding: None,
-        zone: suzatary_core::zone::Zone::UTC,
+        zone: suzatary_base::zone::Zone::UTC,
     };
     (persona, deployment)
 }

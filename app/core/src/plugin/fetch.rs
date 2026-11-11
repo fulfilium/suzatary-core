@@ -1,7 +1,7 @@
 //! The fence a plugin's request crosses: its target as the plugin wrote it, and the request the
 //! host may send for it.
 
-use crate::capability::Secret;
+use suzatary_base::capability::Secret;
 
 use super::{Manifest, PluginUrl};
 use crate::health::plugin::{CredentialName, Refusal, Said};

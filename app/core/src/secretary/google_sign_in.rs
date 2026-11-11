@@ -122,7 +122,7 @@ pub trait Consents: Sync {
         account: &EmailAddress,
         scopes: &Scopes,
         by: &Actor,
-        now: crate::capability::Datetime,
+        now: suzatary_base::capability::Datetime,
     ) -> Performed;
 }
 
@@ -217,9 +217,10 @@ pub fn end(
     conversations: crate::secretary::conversations::Conversations<'_>,
     inbox: &dyn crate::store::Prodrome<crate::secretary::inbox_event::InboxEvent>,
     card: &ProposalId,
-    at: crate::capability::Datetime,
+    at: suzatary_base::capability::Datetime,
     performed: Performed,
-) -> Result<Option<crate::conversation_id::ConversationId>, crate::refusal::Refusal> {
+) -> Result<Option<suzatary_base::conversation_id::ConversationId>, suzatary_base::refusal::Refusal>
+{
     let said = match &performed {
         Performed::Done(Done::Acted { what }) => format!("Signed in: {what}."),
         Performed::Tried(Tried::NotSent { reason } | Tried::Refused { reason }) => {
@@ -262,7 +263,7 @@ mod tests {
 
     struct Fixed(u8);
 
-    impl crate::capability::Entropy for Fixed {
+    impl suzatary_base::capability::Entropy for Fixed {
         fn fill(&self, bytes: &mut [u8]) -> Result<(), String> {
             bytes.fill(self.0);
             Ok(())

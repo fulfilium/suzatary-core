@@ -1,8 +1,8 @@
 //! A session a conversation keeps, and the first turn it holds.
 
 use super::Entry;
-use crate::capability::Datetime;
 use crate::secretary::model::{Session, SessionId};
+use suzatary_base::capability::Datetime;
 
 /// A session this conversation keeps, and the first turn it holds: its identity, and what it was
 /// sent when it opened.

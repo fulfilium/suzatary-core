@@ -188,6 +188,23 @@ record`. No `suzatary_core` re-export is left behind (AGENTS §10).
 | 20 | triage 16 / 93 | 31 | api 9 / 305; `suzatary-core` is deleted |
 | 21 | services 22 / 234 | 32 | server: `cli/src/commands/serve/` (38 files) |
 
+**PR 11 (base).** It moves 24 modules and `literals.rs`. Eight modules of the cut table's base stay
+in core, each under the cut of its lowest user in `guards/layers.toml`: `cast` (signatures),
+`coding_report` (memory), `outcome` (mail), `url` (google), `content_id` (inbox), `nonempty`
+(conversations), `timings` (lines) and `model_name` (digest). With them, base's USE was 28.9k, and
+a new unit joins no ratchet; without them it is 23.9k. Measured with `cargo check --workspace
+--all-targets` on four cores, base as a crate does not make an edit faster: one line in
+`secretary` took 46.0 and 43.6 s against 47.0 and 42.2 s. Core's library is still checked
+(about 17 s), then core's unit tests (about 21 s), then cli's (about 17 s).
+
+**The order after PR 11.** An edit is cheap only once its crate stops carrying what is under it,
+and bottom-up that comes last for the files edited most, `routes.rs` and `secretary/routes.rs`. So
+PR 12 is `api`, the top cut. It first removes the two edges into `routes` (`line_header` and
+`husks` move into the lines' cut, as row 26 planned), then measures the same three edit cases
+plus one line in `routes.rs`. If that case is not clearly faster, the order is bottom-up as in the
+table. If it is, the rest go bottom-up from `record`, and `secretary` comes off the top once 29a
+has removed the edges into it.
+
 After PR 31, rerun the table. Stage 4 is the remedies of the over-budget section, ordered by
 what that measurement shows. Stage 5 moves the stable crates to their own repositories, pinned
 by rev like the Prodrome (→ `prodromedependency`), which takes them out of every train's

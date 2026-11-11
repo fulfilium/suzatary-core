@@ -8,11 +8,11 @@
 use std::sync::{Arc, Mutex};
 
 use axum::response::Redirect;
-use suzatary_core::capability::Entropy;
+use suzatary_base::capability::Entropy;
+use suzatary_base::refusal::Refusal;
 use suzatary_core::google::{Callback, Endpoints, RedirectUri, Scopes, State as Drawn, Verifier};
 use suzatary_core::mail::account::Sync as Strategy;
 use suzatary_core::mail::address::EmailAddress;
-use suzatary_core::refusal::Refusal;
 use suzatary_core::secretary::google_sign_in::{self, Begun, Open, Taken};
 use suzatary_core::secretary::inbox::ProposalId;
 use suzatary_core::secretary::responded::{Done, Performed, Tried};
@@ -91,7 +91,7 @@ impl google_sign_in::Consents for Consenting {
         account: &EmailAddress,
         scopes: &Scopes,
         by: &prodrome_core::event::Actor,
-        now: suzatary_core::capability::Datetime,
+        now: suzatary_base::capability::Datetime,
     ) -> Performed {
         let not_sent = |reason: String| Performed::Tried(Tried::NotSent { reason });
         match self.declared(account) {
@@ -347,7 +347,7 @@ fn exchanged(
 fn ended(
     state: &State,
     card: &ProposalId,
-    now: suzatary_core::capability::Datetime,
+    now: suzatary_base::capability::Datetime,
     performed: Performed,
 ) -> Result<(), Refusal> {
     let caps = state.first.caps;

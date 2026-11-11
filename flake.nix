@@ -202,6 +202,7 @@
             ./app/Cargo.lock
             ./app/cli
             ./app/core
+            ./app/base
             ./app/io
             ./app/plugin
             ./app/plugin-fence
@@ -323,10 +324,13 @@
           ./app/pages/Cargo.toml
           ./app/wasm/Cargo.toml
           ./app/core/Cargo.toml
+          ./app/base/Cargo.toml
           ./app/core/src
+          ./app/base/src
           ./app/core/releases.toml
           ./app/core/examples
           ./app/core/tests/support
+          ./app/base/tests/support
         ];
         coreSrc = lib.fileset.toSource { root = ./.; fileset = coreFiles; };
         # In cargo's own profiles (`CARGO_PROFILE` empty: no `--release`), since
@@ -454,7 +458,9 @@
                 ./app/pages/Cargo.toml
                 ./app/wasm/Cargo.toml
                 ./app/core/Cargo.toml
+                ./app/base/Cargo.toml
                 ./app/core/src
+                ./app/base/src
                 # The release plan, which the core compiles in.
                 ./app/core/releases.toml
               ] ++ crates);
@@ -545,6 +551,7 @@
               ./app/cli/Cargo.toml
               ./app/io/Cargo.toml
               ./app/core/Cargo.toml
+              ./app/base/Cargo.toml
               ./app/plugin/Cargo.toml
               ./app/plugin-ics/Cargo.toml
               ./app/testkit/Cargo.toml
@@ -592,6 +599,7 @@
               ./app/cli/Cargo.toml
               ./app/io/Cargo.toml
               ./app/core/Cargo.toml
+              ./app/base/Cargo.toml
               ./app/plugin/Cargo.toml
               ./app/plugin-fence/Cargo.toml
               ./app/testkit/Cargo.toml

@@ -17,8 +17,8 @@ use prodrome_wasm_exports::wire::{
 use serde_json::{Map, Value, json};
 use wasm_bindgen::prelude::*;
 
+use suzatary_base::chains::ChainName;
 use suzatary_core::chain_set::Held;
-use suzatary_core::chains::ChainName;
 use suzatary_core::routes;
 
 use crate::unrendered::Unrendered;

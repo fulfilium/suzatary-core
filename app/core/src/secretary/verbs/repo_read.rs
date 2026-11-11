@@ -2,11 +2,11 @@ use schemars::JsonSchema;
 use serde::Deserialize;
 use serde_json::{Value, json};
 
-use crate::refusal::Refusal;
 use crate::repositories::readable;
 use crate::secretary::verbs::{located, path_of, refused_by};
 use crate::secretary::{Call, SecretarySurface};
 use crate::verb::Verb;
+use suzatary_base::refusal::Refusal;
 
 /// One text file of a repository.
 pub struct RepoRead;

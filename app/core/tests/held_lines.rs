@@ -14,8 +14,8 @@ use prodrome_core::memo::Counts;
 
 use std::sync::atomic::{AtomicU64, Ordering};
 
-use suzatary_core::capability::Entropy;
-use suzatary_core::conversation_id::ConversationId;
+use suzatary_base::capability::Entropy;
+use suzatary_base::conversation_id::ConversationId;
 use suzatary_core::rendering::ANSWER;
 use suzatary_core::secretary::conversations::{Conversations, InMemory};
 use suzatary_core::secretary::erasure::Erasure;

@@ -12,11 +12,11 @@ use std::path::{Path, PathBuf};
 use prodrome_core::event::{Actor, Hash, mk_completed, mk_created};
 use prodrome_core::fpl::mk_flat;
 use prodrome_core::policy::Untrusted;
-use suzatary_core::capability::Datetime;
+use suzatary_base::capability::Datetime;
+use suzatary_base::conversation_id::ConversationId;
+use suzatary_base::drive_path::DriveFailure;
+use suzatary_base::drive_path::DrivePath;
 use suzatary_core::cast::CAST;
-use suzatary_core::conversation_id::ConversationId;
-use suzatary_core::drive_path::DriveFailure;
-use suzatary_core::drive_path::DrivePath;
 use suzatary_core::health::plugin::PluginName;
 use suzatary_core::mail::dedup_key::DedupKey;
 use suzatary_core::mail::known::Known;
@@ -92,7 +92,7 @@ const MAIL_STATE: [&str; 2] = ["state.json", "local"];
 
 /// The dedup key every scripted write and read names messages by.
 fn dedup_key() -> DedupKey {
-    DedupKey::of(&suzatary_core::capability::Secret::new("5a".repeat(32))).expect("a key")
+    DedupKey::of(&suzatary_base::capability::Secret::new("5a".repeat(32))).expect("a key")
 }
 
 fn ledger(root: &Path) -> suzatary_io::state::Ledger {
@@ -107,7 +107,7 @@ fn ledger(root: &Path) -> suzatary_io::state::Ledger {
 /// system's.
 struct Pinned;
 
-impl suzatary_core::capability::Entropy for Pinned {
+impl suzatary_base::capability::Entropy for Pinned {
     fn fill(&self, bytes: &mut [u8]) -> Result<(), String> {
         bytes.fill(0);
         Ok(())
@@ -118,7 +118,7 @@ impl suzatary_core::capability::Entropy for Pinned {
 #[derive(Default)]
 struct Counted(std::sync::atomic::AtomicU8);
 
-impl suzatary_core::capability::Entropy for Counted {
+impl suzatary_base::capability::Entropy for Counted {
     fn fill(&self, bytes: &mut [u8]) -> Result<(), String> {
         bytes.fill(self.0.fetch_add(1, std::sync::atomic::Ordering::Relaxed));
         Ok(())
@@ -332,8 +332,8 @@ fn conversations(root: &Path, asked: &inbox::ProposalId) {
         lines: &lines,
         keys: &keys,
         entropy: &entropy,
-        renders: &suzatary_core::capability::Nothing,
-        sessions: &suzatary_core::capability::Nothing,
+        renders: &suzatary_base::capability::Nothing,
+        sessions: &suzatary_base::capability::Nothing,
         opened: Box::leak(Box::default()),
     };
     let opened = |title: &str| Entry::Opened {
@@ -408,8 +408,8 @@ fn memories(root: &Path) {
                 lines: &lines,
                 keys: &keys,
                 entropy: &Pinned,
-                renders: &suzatary_core::capability::Nothing,
-                sessions: &suzatary_core::capability::Nothing,
+                renders: &suzatary_base::capability::Nothing,
+                sessions: &suzatary_base::capability::Nothing,
                 opened: Box::leak(Box::default()),
             },
             owners: &std::collections::BTreeSet::new(),
@@ -511,7 +511,7 @@ fn calendar_schema() -> prodrome_core::declared::Declaration {
 /// Two actors' phones: registered, one re-registered, one forgotten.
 fn devices(root: &Path) {
     struct At(Datetime);
-    impl suzatary_core::capability::Clock for At {
+    impl suzatary_base::capability::Clock for At {
         fn now(&self) -> Datetime {
             self.0
         }
@@ -702,8 +702,8 @@ fn conversations_of<'a>(
         lines: database.conversations,
         keys: database.line_keys,
         entropy: &Pinned,
-        renders: &suzatary_core::capability::Nothing,
-        sessions: &suzatary_core::capability::Nothing,
+        renders: &suzatary_base::capability::Nothing,
+        sessions: &suzatary_base::capability::Nothing,
         opened: Box::leak(Box::default()),
     }
 }
@@ -731,8 +731,8 @@ fn copy_pins(root: &Path) -> PathBuf {
 
 #[test]
 fn reading_a_copy_of_every_store_writes_nothing() {
+    use suzatary_base::chains::ChainName;
     use suzatary_core::attachment::AttachmentId;
-    use suzatary_core::chains::ChainName;
     use suzatary_core::stores::Database;
 
     let dir = tempfile::tempdir().expect("a scratch dir");
@@ -934,7 +934,7 @@ fn conversations_at_scale(
         model: "claude-cli/haiku".to_owned(),
         kind: suzatary_core::secretary::store::Kind::Topic,
     };
-    let writer = Actor::new(suzatary_core::writer::Writer::Assistant.actor()).expect("an actor");
+    let writer = Actor::new(suzatary_base::writer::Writer::Assistant.actor()).expect("an actor");
     let mut written = (0..ids.len() * per).map(|n| (&ids[n / per], n % per));
     let mut slots = 0;
     lines
@@ -977,8 +977,8 @@ fn digest_at_scale() {
         lines: &lines,
         keys: &keys,
         entropy: &entropy,
-        renders: &suzatary_core::capability::Nothing,
-        sessions: &suzatary_core::capability::Nothing,
+        renders: &suzatary_base::capability::Nothing,
+        sessions: &suzatary_base::capability::Nothing,
         opened,
     };
     let owners = std::collections::BTreeSet::new();
@@ -1026,7 +1026,7 @@ fn digest_at_scale() {
 #[test]
 #[ignore = "a fixture for a measurement, run by name"]
 fn lines_for_a_tab() {
-    use suzatary_core::conversation_id::ConversationId;
+    use suzatary_base::conversation_id::ConversationId;
     use suzatary_core::secretary::store::Entry;
     let out =
         std::env::var("SUZATARY_LINES_FIXTURE").expect("SUZATARY_LINES_FIXTURE names the file");
@@ -1038,8 +1038,8 @@ fn lines_for_a_tab() {
         lines: &lines,
         keys: &keys,
         entropy: &entropy,
-        renders: &suzatary_core::capability::Nothing,
-        sessions: &suzatary_core::capability::Nothing,
+        renders: &suzatary_base::capability::Nothing,
+        sessions: &suzatary_base::capability::Nothing,
         opened,
     };
     let second = |k: usize| {
@@ -1147,8 +1147,8 @@ fn lines_written_before_kinds_were_stored_read_whole() {
         lines: &lines,
         keys: &keys,
         entropy: &Pinned,
-        renders: &suzatary_core::capability::Nothing,
-        sessions: &suzatary_core::capability::Nothing,
+        renders: &suzatary_base::capability::Nothing,
+        sessions: &suzatary_base::capability::Nothing,
         opened: Box::leak(Box::default()),
     };
     let names = transcript::keys(store).expect("lists");
@@ -1195,8 +1195,8 @@ fn digest_nodes_at_scale() {
             lines: &lines,
             keys: &keys,
             entropy: &entropy,
-            renders: &suzatary_core::capability::Nothing,
-            sessions: &suzatary_core::capability::Nothing,
+            renders: &suzatary_base::capability::Nothing,
+            sessions: &suzatary_base::capability::Nothing,
             opened,
         },
         owners: &owners,
@@ -1218,7 +1218,7 @@ fn digest_nodes_at_scale() {
                 let label = *reading.node(node).expect("in the tree").measure();
                 let text = Text::new(
                     Line::new(&format!("summary {count} of what was said")).expect("a line"),
-                    [7; suzatary_core::capability::SALT_BYTES],
+                    [7; suzatary_base::capability::SALT_BYTES],
                 );
                 suzatary_core::store::Doc::set(&texts, &text.name(), &text)?;
                 let attempt = Attempt {

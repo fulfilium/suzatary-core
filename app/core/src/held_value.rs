@@ -260,7 +260,7 @@ pub(crate) fn file_size(size: u64) -> String {
     if size < 1024 {
         "under 1 KB".to_owned()
     } else {
-        crate::spelling::bytes(size)
+        suzatary_base::spelling::bytes(size)
     }
 }
 
@@ -494,7 +494,7 @@ fn foreign_withheld(text: &str, holder: &Holder) -> String {
 }
 
 /// The kinds of value a holder holds.
-pub type Kinds = crate::finite::Set<Kind>;
+pub type Kinds = suzatary_base::finite::Set<Kind>;
 
 /// One holder's held numbers as written, each once with the kind it was first found as, in the
 /// order they first appear.
@@ -688,7 +688,7 @@ impl Masked {
     /// across the cut was found whole.
     #[must_use]
     pub fn clipped(self, cap: usize) -> (Self, bool) {
-        let (text, truncated) = crate::spelling::clip(&self.0, cap);
+        let (text, truncated) = suzatary_base::spelling::clip(&self.0, cap);
         (Self(text), truncated)
     }
 

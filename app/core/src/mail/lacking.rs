@@ -123,7 +123,8 @@ impl FromStr for Lacking {
         }
         let refused = || NotALack(text.to_owned());
         let (word, account) = text.split_once(':').ok_or_else(refused)?;
-        let grant = crate::words::of_word(Grant::ALL, Grant::as_str, word).ok_or_else(refused)?;
+        let grant =
+            suzatary_base::words::of_word(Grant::ALL, Grant::as_str, word).ok_or_else(refused)?;
         let account = EmailAddress::new(account).map_err(|_| refused())?;
         Ok(Lacking::Grant { account, grant })
     }

@@ -80,8 +80,8 @@ pub fn reading(held: Held<'_>, at: Datetime) -> Reading {
         .map_err(|failed| NotAMember::Unread(held.name.clone(), failed.to_string()))
 }
 
-use crate::chains::ChainName;
 use crate::record::{Entry, TodoEvent};
+use suzatary_base::chains::ChainName;
 
 /// The todo chains read as one set at one instant: each chain held as it was read, and each
 /// member's reading, a price or why it has none.
@@ -584,7 +584,7 @@ mod tests {
     /// readings kept, and the set reads at every instant as a fresh read of both stores does.
     #[test]
     fn a_write_to_one_chain_rereads_that_chain_alone() {
-        let policy = |chain: &str| crate::chains::ChainPolicy {
+        let policy = |chain: &str| suzatary_base::chains::ChainPolicy {
             name: name(chain),
             untrusted: Untrusted::none(),
             roster: std::collections::BTreeSet::new(),
@@ -649,7 +649,7 @@ mod tests {
             )
             .expect("appends");
         let triage = prodrome_core::event::Actor::new("triage").expect("an actor");
-        let policy = |untrusted: Untrusted| crate::chains::ChainPolicy {
+        let policy = |untrusted: Untrusted| suzatary_base::chains::ChainPolicy {
             name: name("life"),
             untrusted,
             roster: std::collections::BTreeSet::new(),

@@ -2,11 +2,11 @@ use schemars::JsonSchema;
 use serde::Deserialize;
 use serde_json::Value;
 
-use crate::refusal::Refusal;
 use crate::secretary;
 use crate::secretary::search::{self, Needle};
 use crate::secretary::{Call, SecretarySurface};
 use crate::verb::Verb;
+use suzatary_base::refusal::Refusal;
 
 /// What was said in other conversations.
 pub struct Recall;

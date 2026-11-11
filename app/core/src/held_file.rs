@@ -6,8 +6,8 @@ use prodrome_core::literal::codec::Literal as _;
 use prodrome_core::literal::{Table, parse_literal, print_literal};
 
 use crate::attachment::AttachmentId;
-use crate::drive_path::DrivePath;
 use crate::secretary::attachment_source::{AttachmentSource, FROM_DRIVE, FROM_MAIL, FROM_UPLOAD};
+use suzatary_base::drive_path::DrivePath;
 
 /// A held file, by where the box reads it again.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]

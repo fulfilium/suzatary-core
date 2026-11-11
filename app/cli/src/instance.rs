@@ -28,7 +28,7 @@ use std::path::{Path, PathBuf};
 use anyhow::{Context, bail};
 use prodrome_core::event::Actor;
 use prodrome_core::sign::PublicKey;
-use suzatary_core::chains::Chains;
+use suzatary_base::chains::Chains;
 use suzatary_core::connect::Channel;
 use suzatary_core::deployment::Deployment;
 use suzatary_core::nonempty::NonEmpty;
@@ -98,7 +98,7 @@ pub struct Instance {
     /// The user repository's script the environment named.
     run: Option<String>,
     pub mail: Mail,
-    pub persona: suzatary_core::persona::Persona,
+    pub persona: suzatary_base::persona::Persona,
     /// The box-local tier: never pushed, carried by the vault.
     pub local: Local,
     /// The channels `[notify]` names. `None` is no push, and no push secret is resolved.
@@ -477,7 +477,7 @@ impl Instance {
             None => secretary.repos.clone(),
         };
         let local = Local(data.under(Path::new(Local::DIR)));
-        let persona = suzatary_core::persona::Persona {
+        let persona = suzatary_base::persona::Persona {
             prose: local.prose()?,
             ..file.persona
         };
@@ -575,7 +575,7 @@ pub(crate) fn adoption_lock(events: &Path) -> anyhow::Result<suzatary_io::durabl
 mod tests {
     use super::*;
     use prodrome_core::event::Actor;
-    use suzatary_core::capability::Login;
+    use suzatary_base::capability::Login;
     use suzatary_core::settings::Edits as _;
 
     const GOOD: &str = r#"
@@ -972,7 +972,7 @@ sent_folder = "Sent Items"
     fn allow_drive_adds_a_folder_once_and_the_file_still_reads() {
         let before = commented_instance();
         let path = write(&before, "edits-allow-drive");
-        let folder: suzatary_core::drive_path::DrivePath =
+        let folder: suzatary_base::drive_path::DrivePath =
             "/shared-with-me/Ada Documents".parse().expect("a folder");
         let edits = InstanceEdits::new(path.clone());
         edits.allow_drive(&folder).expect("allowed");
@@ -1028,7 +1028,7 @@ sent_folder = "Sent Items"
             secretary.drive_allow,
             vec![
                 "/my-files/Docs"
-                    .parse::<suzatary_core::drive_path::DrivePath>()
+                    .parse::<suzatary_base::drive_path::DrivePath>()
                     .expect("a folder")
             ]
         );

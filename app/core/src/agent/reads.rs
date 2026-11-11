@@ -8,14 +8,14 @@ use serde_json::{Value, json};
 
 use super::events_of;
 use crate::agent::Agent;
-use crate::capability::{Manual, Manuals};
-use crate::chains::ChainPolicy;
 use crate::deployment::Deployment;
-use crate::refusal::{Refusal, shown};
 use crate::secretary::memory::Memory;
 use crate::secretary::shown_record::OwnersRecord;
 use crate::store::Reads;
 use crate::todos;
+use suzatary_base::capability::{Manual, Manuals};
+use suzatary_base::chains::ChainPolicy;
+use suzatary_base::refusal::{Refusal, shown};
 
 pub(crate) fn list_open_todos(caps: &Agent<'_>, chain: &ChainPolicy) -> Result<Value, Refusal> {
     let open = todos::open_todos(&caps.chain.nodes()?, caps.clock.now(), &chain.untrusted)?;
@@ -29,7 +29,7 @@ pub(crate) fn list_open_todos(caps: &Agent<'_>, chain: &ChainPolicy) -> Result<V
                     "priority": t.priority,
                     "body": t.body,
                     // In `evaluate`'s input grammar, so a row can be handed straight back.
-                    "spec": t.spec.as_ref().map_or(Value::Null, crate::term_json::to_json),
+                    "spec": t.spec.as_ref().map_or(Value::Null, suzatary_base::term_json::to_json),
                     "waiting_on": t.waiting_on,
                     "authored_by": t.authored_by,
                 })
@@ -218,7 +218,7 @@ pub(crate) fn todo_show(
             "body": found.payload.body.as_str(),
             "detail": Some(found.payload.detail.as_str()).filter(|d| !d.is_empty()),
             "waiting_on": Some(found.payload.waiting_on.as_str()).filter(|w| !w.is_empty()),
-            "spec": found.payload.spec().map_or(Value::Null, crate::term_json::to_json),
+            "spec": found.payload.spec().map_or(Value::Null, suzatary_base::term_json::to_json),
             "rationale": found.payload.rationale,
             "source": found.payload.source.as_ref().map_or(Value::Null, |s| json!({
                 "sender": s.sender.as_str(),
@@ -284,7 +284,7 @@ pub(crate) fn evaluate(
     let Some(spec) = spec else {
         return Ok(json!({"error": "could not parse spec or timestamp: spec_json is required"}));
     };
-    let term = match crate::term_json::from_json(spec) {
+    let term = match suzatary_base::term_json::from_json(spec) {
         Ok(term) => term,
         Err(failed) => {
             return Ok(json!({
@@ -316,7 +316,7 @@ pub(crate) fn evaluate(
     Ok(json!({
         "at": fpl::iso(now),
         "value": crate::wire::todo::Fulfillment::of_value(fpl::fulfillment(&term, now, env)),
-        "explain": crate::term_json::explain(&term, now, env),
+        "explain": suzatary_base::term_json::explain(&term, now, env),
     }))
 }
 
@@ -355,8 +355,8 @@ mod tests {
         Deployment {
             viewers: BTreeSet::new(),
             actors: BTreeMap::new(),
-            chains: crate::chains::Chains::of(vec![crate::chains::ChainPolicy {
-                name: crate::chains::ChainName::new("life").expect("a slug"),
+            chains: suzatary_base::chains::Chains::of(vec![suzatary_base::chains::ChainPolicy {
+                name: suzatary_base::chains::ChainName::new("life").expect("a slug"),
                 untrusted: Untrusted::of([]),
                 roster: BTreeSet::new(),
                 root: crate::cast::keys::root(),
@@ -367,7 +367,7 @@ mod tests {
                 .collect(),
             app_url: "https://example.invalid/".to_owned(),
             coding: None,
-            zone: crate::zone::Zone::UTC,
+            zone: suzatary_base::zone::Zone::UTC,
         }
     }
 

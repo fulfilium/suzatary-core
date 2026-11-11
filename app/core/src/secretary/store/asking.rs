@@ -9,7 +9,7 @@ pub struct Asking {
     /// names.
     pub index: usize,
     /// When it was made.
-    pub at: crate::capability::Datetime,
+    pub at: suzatary_base::capability::Datetime,
     /// The inbox object.
     pub object: crate::secretary::inbox::ProposalId,
     /// How many turns stood before this was proposed: the card is drawn after turn

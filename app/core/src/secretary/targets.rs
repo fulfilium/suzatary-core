@@ -1,12 +1,12 @@
 //! The rounds and notes of one conversation, as targets a topic is put on.
 
-use crate::conversation_id::ConversationId;
 use crate::secretary::outcome::Outcome;
 use crate::secretary::store::{Said, Stored};
 use crate::secretary::tool_name::ToolName;
 use crate::secretary::turn_shape::{TurnShape, shape};
 use crate::secretary::verb_name::VerbName;
-use crate::topic_target::Target;
+use suzatary_base::conversation_id::ConversationId;
+use suzatary_base::topic_target::Target;
 
 /// The most topics one round or note holds.
 pub const MAX_TOPICS: usize = 3;

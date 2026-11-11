@@ -13,11 +13,11 @@ use prodrome_core::event::{
 use suzatary_core::record::Envelope;
 use suzatary_core::store::Reads as _;
 
-fn ada() -> suzatary_core::capability::Login {
+fn ada() -> suzatary_base::capability::Login {
     common::login("ada@example.com")
 }
 
-fn guest() -> suzatary_core::capability::Login {
+fn guest() -> suzatary_base::capability::Login {
     common::login("guest@example.com")
 }
 

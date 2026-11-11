@@ -1,10 +1,10 @@
 //! Whether performing a proposal sends mail, by a match the compiler holds complete.
 
 use crate::google::Scope;
-use crate::refusal::Refusal;
 use crate::secretary::acts::Act;
 use crate::secretary::proposal::Proposal;
 use crate::signatures::{Seat, Tap};
+use suzatary_base::refusal::Refusal;
 
 /// Whether a tap on a proposal puts mail on a wire, or gives the box the consent to.
 /// The greater of two sends when either does.

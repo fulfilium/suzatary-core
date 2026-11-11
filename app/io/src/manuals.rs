@@ -1,10 +1,10 @@
-//! The manuals, as `suzatary_core::capability::Manuals`. No method takes a path, so the agent
+//! The manuals, as `suzatary_base::capability::Manuals`. No method takes a path, so the agent
 //! holds no file read. A missing file is `None`, never an error.
 
 use std::path::PathBuf;
 
-use suzatary_core::capability::{Manual, Manuals};
-use suzatary_core::persona::Persona;
+use suzatary_base::capability::{Manual, Manuals};
+use suzatary_base::persona::Persona;
 
 /// The repository's manuals.
 #[derive(Debug)]

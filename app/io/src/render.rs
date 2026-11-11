@@ -10,17 +10,17 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 use prodrome_core::memo::Finding;
-use suzatary_core::answer::Renderable;
-use suzatary_core::capability::RenderError;
-use suzatary_core::capability::{Rejected, Typeset};
-use suzatary_core::escape::Escaped;
-use suzatary_core::narrowing::narrowed;
+use suzatary_base::answer::Renderable;
+use suzatary_base::capability::RenderError;
+use suzatary_base::capability::{Rejected, Typeset};
+use suzatary_base::escape::Escaped;
+use suzatary_base::narrowing::narrowed;
+use suzatary_base::table::Table;
+use suzatary_base::tripwire::suspicious;
 use suzatary_core::render::{Html, Render};
 use suzatary_core::rendering::{self, ANSWER, CLOSED, MARKUP, Markup};
 use suzatary_core::secretary::answers::{AnswerError, Answers};
-use suzatary_core::table::Table;
 use suzatary_core::template::{Called, Job, Kept, Output, Unprintable, named};
-use suzatary_core::tripwire::suspicious;
 
 use crate::rendered::Rendered;
 use crate::typeset::Compiler;

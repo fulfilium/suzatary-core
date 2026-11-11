@@ -19,12 +19,12 @@ use chrono::Duration;
 use prodrome_core::event::{Actor, mk_completed, mk_created};
 use prodrome_core::fpl::{self, mk_decay, mk_flat};
 use prodrome_core::policy::Untrusted;
+use suzatary_base::capability::RenderError;
+use suzatary_base::capability::{Clock, Datetime, Login, Manual, Manuals, Whois, WhoisError};
+use suzatary_base::escape::Escaped;
 use suzatary_cli::serve::{self, Chained, State};
-use suzatary_core::capability::RenderError;
-use suzatary_core::capability::{Clock, Datetime, Login, Manual, Manuals, Whois, WhoisError};
 pub use suzatary_core::cast::{self, CAST};
 use suzatary_core::deployment::Deployment;
-use suzatary_core::escape::Escaped;
 use suzatary_core::file_read::FileRead;
 use suzatary_core::mail::corpus::{Corpus, CorpusError};
 use suzatary_core::mail::junk;
@@ -84,9 +84,9 @@ pub fn actor(name: &str) -> Actor {
 /// One, because the fakes hold one store and a second chain's policy would
 /// have none behind it.
 #[must_use]
-pub fn chain() -> suzatary_core::chains::ChainPolicy {
-    suzatary_core::chains::ChainPolicy {
-        name: suzatary_core::chains::ChainName::new("life").expect("a slug"),
+pub fn chain() -> suzatary_base::chains::ChainPolicy {
+    suzatary_base::chains::ChainPolicy {
+        name: suzatary_base::chains::ChainName::new("life").expect("a slug"),
         untrusted: Untrusted::of([actor("triage")]),
         roster: [actor(CAST.owner.actor), actor("triage")]
             .into_iter()
@@ -105,7 +105,7 @@ pub fn deployment(
     Deployment {
         viewers: viewers.into_iter().collect(),
         actors: actors.into_iter().collect(),
-        chains: suzatary_core::chains::Chains::of(vec![chain()]).expect("one chain"),
+        chains: suzatary_base::chains::Chains::of(vec![chain()]).expect("one chain"),
         categories: [
             ("work".to_owned(), 1),
             ("home".to_owned(), 2),
@@ -117,7 +117,7 @@ pub fn deployment(
         app_url: "https://example.test".to_owned(),
         // A scene needing a settable builds its own, so no other test gets one free.
         coding: None,
-        zone: suzatary_core::zone::Zone::UTC,
+        zone: suzatary_base::zone::Zone::UTC,
     }
 }
 
@@ -211,7 +211,7 @@ pub fn pinned(name: &str, got: &str) {
 /// A scene's record: the conversation's lines, one JSON object each, then what the model was
 /// shown and sent.
 #[must_use]
-pub fn scene(caps: &Fakes, id: &suzatary_core::conversation_id::ConversationId) -> String {
+pub fn scene(caps: &Fakes, id: &suzatary_base::conversation_id::ConversationId) -> String {
     let lines: String =
         suzatary_core::secretary::transcript::lines(caps.conversations.conversations(), id)
             .unwrap_or_default()
@@ -454,9 +454,9 @@ struct ThisBoxAt {
 }
 
 impl Whois for ThisBoxAt {
-    fn peer(&self, address: IpAddr) -> Result<suzatary_core::capability::Peer, WhoisError> {
+    fn peer(&self, address: IpAddr) -> Result<suzatary_base::capability::Peer, WhoisError> {
         if self.at.contains(&address) {
-            return Ok(suzatary_core::capability::Peer::ThisBox);
+            return Ok(suzatary_base::capability::Peer::ThisBox);
         }
         self.inner.peer(address)
     }
@@ -514,7 +514,7 @@ fn dialled(
 }
 
 impl Whois for FakeWhois {
-    fn peer(&self, address: IpAddr) -> Result<suzatary_core::capability::Peer, WhoisError> {
+    fn peer(&self, address: IpAddr) -> Result<suzatary_base::capability::Peer, WhoisError> {
         self.asked
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
@@ -526,11 +526,11 @@ impl Whois for FakeWhois {
             });
         }
         Ok(if self.this_box.contains(&address) {
-            suzatary_core::capability::Peer::ThisBox
+            suzatary_base::capability::Peer::ThisBox
         } else {
             self.named.get(&address).cloned().map_or(
-                suzatary_core::capability::Peer::Stranger,
-                suzatary_core::capability::Peer::Known,
+                suzatary_base::capability::Peer::Stranger,
+                suzatary_base::capability::Peer::Known,
             )
         })
     }
@@ -611,8 +611,8 @@ impl FakeRender {
 }
 
 /// The real closed world: a door a test drives is the door the box has.
-impl suzatary_core::capability::Typeset for FakeRender {
-    fn closed(&self, source: &str) -> Result<String, suzatary_core::capability::Rejected> {
+impl suzatary_base::capability::Typeset for FakeRender {
+    fn closed(&self, source: &str) -> Result<String, suzatary_base::capability::Rejected> {
         suzatary_io::typeset::compile(&suzatary_core::template::Job::text(source))
     }
 }
@@ -668,7 +668,7 @@ impl FakeAnswers {
 }
 
 impl Answers for FakeAnswers {
-    fn block(&self, block: &suzatary_core::answer::Renderable) -> Result<Html, AnswerError> {
+    fn block(&self, block: &suzatary_base::answer::Renderable) -> Result<Html, AnswerError> {
         if block.as_str().contains(BREAKS_THE_COMPILE) {
             return Err(AnswerError("the fake typst refused this block".to_owned()));
         }
@@ -1513,7 +1513,7 @@ impl ActRecorder {
 impl suzatary_core::secretary::routes::Perform for ActRecorder {
     fn begin(
         &self,
-        id: &suzatary_core::conversation_id::ConversationId,
+        id: &suzatary_base::conversation_id::ConversationId,
         index: usize,
         _object: &suzatary_core::secretary::inbox::ProposalId,
         _proposer: &suzatary_core::secretary::proposer::Proposer,
@@ -1542,7 +1542,7 @@ pub struct SignsIn {
 impl suzatary_core::secretary::routes::Perform for SignsIn {
     fn begin(
         &self,
-        id: &suzatary_core::conversation_id::ConversationId,
+        id: &suzatary_base::conversation_id::ConversationId,
         index: usize,
         object: &suzatary_core::secretary::inbox::ProposalId,
         proposer: &suzatary_core::secretary::proposer::Proposer,
@@ -1619,7 +1619,7 @@ impl suzatary_io::secrets::Resolves for SecretRecorder {
         &self,
         name: &str,
         _: &str,
-    ) -> Result<Option<suzatary_core::capability::Secret>, suzatary_io::secrets::SecretError> {
+    ) -> Result<Option<suzatary_base::capability::Secret>, suzatary_io::secrets::SecretError> {
         let cleared = self.cleared.lock().expect("not poisoned");
         let calls = self.calls.lock().expect("not poisoned");
         Ok(calls
@@ -1627,7 +1627,7 @@ impl suzatary_io::secrets::Resolves for SecretRecorder {
             .rev()
             .find(|(held, _)| held == name)
             .filter(|_| !cleared.iter().any(|gone| gone == name))
-            .map(|(_, value)| suzatary_core::capability::Secret::new(value.clone())))
+            .map(|(_, value)| suzatary_base::capability::Secret::new(value.clone())))
     }
 }
 
@@ -1683,7 +1683,7 @@ impl suzatary_core::settings::Writes for SecretRecorder {
     fn write_secret(
         &self,
         name: &suzatary_core::settings::Settable,
-        value: &suzatary_core::capability::Secret,
+        value: &suzatary_base::capability::Secret,
     ) -> Result<(), String> {
         self.calls
             .lock()
@@ -1773,7 +1773,7 @@ impl suzatary_core::settings::Writes for DeclaredStore {
     fn write_secret(
         &self,
         name: &suzatary_core::settings::Settable,
-        value: &suzatary_core::capability::Secret,
+        value: &suzatary_base::capability::Secret,
     ) -> Result<(), String> {
         self.refused(name)?;
         self.recorded.write_secret(name, value)
@@ -1802,7 +1802,7 @@ impl suzatary_core::settings::Writes for SecretsAlwaysFail {
     fn write_secret(
         &self,
         _name: &suzatary_core::settings::Settable,
-        _value: &suzatary_core::capability::Secret,
+        _value: &suzatary_base::capability::Secret,
     ) -> Result<(), String> {
         Err("the store refused (fake)".to_owned())
     }
@@ -1818,7 +1818,7 @@ impl suzatary_core::settings::Writes for SecretsAlwaysFail {
 pub struct EditsRecorder {
     declared: std::sync::Mutex<suzatary_core::connect::Declared>,
     allowed: std::sync::Mutex<Vec<suzatary_core::web::AllowRule>>,
-    folders: std::sync::Mutex<Vec<suzatary_core::drive_path::DrivePath>>,
+    folders: std::sync::Mutex<Vec<suzatary_base::drive_path::DrivePath>>,
 }
 
 impl EditsRecorder {
@@ -1845,7 +1845,7 @@ impl EditsRecorder {
 
     /// Every Drive folder "Always allow this folder" wrote, oldest first.
     #[must_use]
-    pub fn folders(&self) -> Vec<suzatary_core::drive_path::DrivePath> {
+    pub fn folders(&self) -> Vec<suzatary_base::drive_path::DrivePath> {
         self.folders.lock().expect("not poisoned").clone()
     }
 }
@@ -1864,7 +1864,7 @@ impl suzatary_core::settings::Edits for EditsRecorder {
 
     fn allow_drive(
         &self,
-        folder: &suzatary_core::drive_path::DrivePath,
+        folder: &suzatary_base::drive_path::DrivePath,
     ) -> Result<(), suzatary_core::settings::EditError> {
         self.folders
             .lock()
@@ -2365,10 +2365,10 @@ impl Fakes {
             ),
             digest_texts: suzatary_io::texts::Texts::open(root.join("secretary-digest-texts")),
             owners: std::collections::BTreeSet::new(),
-            secrets: Arc::new(suzatary_core::capability::Nothing),
+            secrets: Arc::new(suzatary_base::capability::Nothing),
             calendar: suzatary_io::calendar::Clocked::new(
                 [root.join("cache/plugins/ics/store")],
-                suzatary_core::zone::Zone::UTC,
+                suzatary_base::zone::Zone::UTC,
             ),
             configuration: Arc::new(EditsRecorder::new()),
             root,
@@ -2517,9 +2517,9 @@ impl Fakes {
             repositories: self.repos.as_ref(),
             drive: &self.drive,
             junk: &self.junk,
-            sync: &suzatary_core::capability::Nothing,
-            health: &suzatary_core::capability::Nothing,
-            older: &suzatary_core::capability::Nothing,
+            sync: &suzatary_base::capability::Nothing,
+            health: &suzatary_base::capability::Nothing,
+            older: &suzatary_base::capability::Nothing,
             uploads: &self.files,
             upload_index: &self.upload_index,
             kept: &self.files,
@@ -2587,13 +2587,13 @@ impl suzatary_core::web::Web for FakeWeb {
 #[derive(Default)]
 pub struct FakeDriveAccess {
     /// Drive folders read without asking.
-    pub allow: Vec<suzatary_core::drive_path::DrivePath>,
+    pub allow: Vec<suzatary_base::drive_path::DrivePath>,
     /// The Drive, when a scene gives one.
     pub drive: Option<suzatary_io::drive::ProtonDrive>,
 }
 
 impl suzatary_core::drive::Drive for FakeDriveAccess {
-    fn allowed_folders(&self) -> Vec<suzatary_core::drive_path::DrivePath> {
+    fn allowed_folders(&self) -> Vec<suzatary_base::drive_path::DrivePath> {
         self.allow.clone()
     }
 
@@ -2606,8 +2606,8 @@ impl suzatary_core::drive::Drive for FakeDriveAccess {
 
     fn read(
         &self,
-        file: &suzatary_core::drive_path::DrivePath,
-    ) -> Result<FileRead, suzatary_core::drive_path::DriveFailure> {
+        file: &suzatary_base::drive_path::DrivePath,
+    ) -> Result<FileRead, suzatary_base::drive_path::DriveFailure> {
         self.drive
             .as_ref()
             .ok_or_else(no_drive)
@@ -2621,15 +2621,15 @@ struct NoDrive;
 impl suzatary_core::drive::Port for NoDrive {
     fn list(
         &self,
-        _: &suzatary_core::drive_path::DrivePath,
-    ) -> Result<Vec<suzatary_core::drive::DriveEntry>, suzatary_core::drive_path::DriveFailure>
+        _: &suzatary_base::drive_path::DrivePath,
+    ) -> Result<Vec<suzatary_core::drive::DriveEntry>, suzatary_base::drive_path::DriveFailure>
     {
         Err(no_drive())
     }
     fn download(
         &self,
-        _: &suzatary_core::drive_path::DrivePath,
-    ) -> Result<Vec<u8>, suzatary_core::drive_path::DriveFailure> {
+        _: &suzatary_base::drive_path::DrivePath,
+    ) -> Result<Vec<u8>, suzatary_base::drive_path::DriveFailure> {
         Err(no_drive())
     }
 }
@@ -2850,7 +2850,7 @@ impl suzatary_core::settings::Verify for VerifyRecorder {
     fn verify(
         &self,
         name: &suzatary_core::settings::Settable,
-        _: &suzatary_core::capability::Secret,
+        _: &suzatary_base::capability::Secret,
     ) -> Result<(), String> {
         self.asked
             .lock()
@@ -2910,14 +2910,14 @@ impl suzatary_core::vault::Vault for FakeVault {
         &self,
         name: &str,
         bytes: &[u8],
-    ) -> Result<suzatary_core::drive_path::DrivePath, suzatary_core::drive_path::DriveFailure> {
+    ) -> Result<suzatary_base::drive_path::DrivePath, suzatary_base::drive_path::DriveFailure> {
         self.0
             .lock()
             .expect("unpoisoned")
             .push((name.to_owned(), bytes.to_vec()));
         suzatary_core::vault::folder()
             .join(name)
-            .map_err(|failed| suzatary_core::drive_path::DriveFailure::Refused(failed.to_string()))
+            .map_err(|failed| suzatary_base::drive_path::DriveFailure::Refused(failed.to_string()))
     }
 }
 
@@ -3442,7 +3442,7 @@ fn test_ledger(root: &Path) -> suzatary_io::state::Ledger {
         root.join("state.json"),
         root.join("local/mail.json"),
         || {
-            suzatary_core::mail::dedup_key::DedupKey::of(&suzatary_core::capability::Secret::new(
+            suzatary_core::mail::dedup_key::DedupKey::of(&suzatary_base::capability::Secret::new(
                 "12".repeat(32),
             ))
             .map_err(|failed| failed.to_string())
@@ -3518,8 +3518,8 @@ pub fn cast_keys() -> suzatary_core::signatures::BoxKeys {
     use suzatary_core::cast::keys;
     suzatary_core::signatures::BoxKeys::of(
         &keys::root(),
-        &suzatary_core::capability::Secret::new(keys::ROOT),
-        &suzatary_core::capability::Secret::new(keys::AGENT),
+        &suzatary_base::capability::Secret::new(keys::ROOT),
+        &suzatary_base::capability::Secret::new(keys::AGENT),
     )
     .expect("the cast's keys")
 }
@@ -3764,8 +3764,8 @@ impl Junk for FakeJunk {
     }
 }
 
-fn no_drive() -> suzatary_core::drive_path::DriveFailure {
-    suzatary_core::drive_path::DriveFailure::Unreachable("no Drive in this scene".to_owned())
+fn no_drive() -> suzatary_base::drive_path::DriveFailure {
+    suzatary_base::drive_path::DriveFailure::Unreachable("no Drive in this scene".to_owned())
 }
 
 /// A fake Proton Drive CLI script that answers the two reads, logs every call
@@ -3910,7 +3910,7 @@ impl suzatary_io::secrets::Resolves for NoSecrets {
         &self,
         _name: &str,
         _reason: &str,
-    ) -> Result<Option<suzatary_core::capability::Secret>, suzatary_io::secrets::SecretError> {
+    ) -> Result<Option<suzatary_base::capability::Secret>, suzatary_io::secrets::SecretError> {
         Ok(None)
     }
 }
@@ -4129,7 +4129,7 @@ pub fn reading(base: &str, id: &str, query: &[(&str, &str)]) -> serde_json::Valu
             continue;
         };
         for block in blocks {
-            let sha = suzatary_core::answer::sha(block["source"].as_str().expect("a source"));
+            let sha = suzatary_base::answer::sha(block["source"].as_str().expect("a source"));
             let mut rendered = get(&format!(
                 "{base}/api/secretary/conversations/{id}/blocks/{sha}"
             ));
@@ -4218,7 +4218,7 @@ pub fn chains_read(base: &str) -> suzatary_core::chain_set::Read {
                         }),
                 );
                 (
-                    suzatary_core::chains::ChainName::new(name).expect("a slug"),
+                    suzatary_base::chains::ChainName::new(name).expect("a slug"),
                     untrusted,
                     prodrome_core::dag::Dag::from_prints(
                         &suzatary_core::record::TodoVocabulary::default(),
@@ -4337,12 +4337,12 @@ pub fn pdf_saying(text: &str) -> Vec<u8> {
 /// `act` filed as the secretary's in `conversation`, as the setup agent files it: the box files only what a
 /// reading owes, and withdraws any other card of its own.
 pub fn asked(fakes: &Fakes, conversation: &str, act: suzatary_core::secretary::acts::Act) {
-    use suzatary_core::conversation_id::ConversationId;
+    use suzatary_base::conversation_id::ConversationId;
     use suzatary_core::secretary::proposal::Reasons;
     use suzatary_core::secretary::store::{Entry, Kind};
     let id = ConversationId::new(conversation).expect("a slug");
     let opened = Entry::Opened {
-        at: suzatary_core::capability::Datetime::new(2026, 9, 2, 11, 0, 0, 0).expect("an instant"),
+        at: suzatary_base::capability::Datetime::new(2026, 9, 2, 11, 0, 0, 0).expect("an instant"),
         title: suzatary_core::secretary::words::Words::kept("Connect".to_owned()),
         model: "a fake".to_owned(),
         kind: Kind::Topic,

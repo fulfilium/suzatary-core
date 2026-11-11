@@ -16,7 +16,7 @@ use crate::http::{Http, Req, Ureq};
 use crate::present::Present as _;
 use crate::tokens::{Bearer, Fresh, Grant, unix_now};
 use serde::{Deserialize, Serialize};
-use suzatary_core::capability::Secret;
+use suzatary_base::capability::Secret;
 use suzatary_core::mail::account::{Authority, MailAccount};
 use suzatary_core::mail::oauth::{
     Answered, Consent, DeviceCode, FormPost, Imap, NeedsLogin, OauthError, Polled, Protocol,

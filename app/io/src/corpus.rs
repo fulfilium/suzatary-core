@@ -5,7 +5,7 @@
 
 use std::path::PathBuf;
 
-use suzatary_core::capability::Clock;
+use suzatary_base::capability::Clock;
 use suzatary_core::mail::corpus::{Corpus, CorpusError};
 use suzatary_core::mail::hash_prefix::{HashPrefix, Resolved};
 use suzatary_core::mail::known::Known;
@@ -28,7 +28,7 @@ pub struct Operator {
     health: crate::source_health::Health,
     clock: crate::clock::SystemClock,
     /// The owner's zone, whose day the sync window counts back from.
-    zone: suzatary_core::zone::Zone,
+    zone: suzatary_base::zone::Zone,
     watches: crate::watches::Watches,
 }
 
@@ -48,7 +48,7 @@ impl Operator {
         syncer: Syncer,
         heartbeat: impl Into<PathBuf>,
         sync_status: impl Into<PathBuf>,
-        zone: suzatary_core::zone::Zone,
+        zone: suzatary_base::zone::Zone,
         watches: crate::watches::Watches,
     ) -> Self {
         let heartbeat = heartbeat.into();
@@ -300,7 +300,7 @@ mod tests {
             syncer,
             root.join("triage-heartbeat"),
             root.join("last-sync.json"),
-            suzatary_core::zone::Zone::UTC,
+            suzatary_base::zone::Zone::UTC,
             crate::watches::Watches::open(root.join("local/watches")),
         )
     }
@@ -311,7 +311,7 @@ mod tests {
             root.join("local/mail.json"),
             || {
                 Ok(suzatary_core::mail::dedup_key::DedupKey::of(
-                    &suzatary_core::capability::Secret::new("12".repeat(32)),
+                    &suzatary_base::capability::Secret::new("12".repeat(32)),
                 )
                 .expect("a key"))
             },

@@ -2,7 +2,7 @@
 //! cache tier: what `suzatary plugin sync` runs beside the plugins, on the same timer. Each
 //! account's result joins the sources' health under its calendars' key.
 
-use suzatary_core::capability::Clock as _;
+use suzatary_base::capability::Clock as _;
 use suzatary_core::health::Failure;
 use suzatary_core::health::SourceKey;
 use suzatary_core::health::{Healths, Outcome};

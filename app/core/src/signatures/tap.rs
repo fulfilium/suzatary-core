@@ -9,7 +9,7 @@
 use prodrome_core::event::Actor;
 
 use super::{ActHeaders, Seat, Trusted, check_csrf};
-use crate::refusal::Refusal;
+use suzatary_base::refusal::Refusal;
 
 /// A witness that the owner himself asked, from a device he trusts, not a permission for any
 /// particular act.

@@ -8,8 +8,8 @@
 //!
 //! The msal token cache is deliberately not read; the owner re-authorises once instead.
 
-use crate::capability::{ImapToken, Secret, SmtpToken};
 use crate::mail::account::Authority;
+use suzatary_base::capability::{ImapToken, Secret, SmtpToken};
 
 /// `FairEmail`'s public client id, kept because the existing consents were granted to it.
 pub const CLIENT_ID: &str = "3514cf2c-e7a3-45a2-80d4-6a3c3498eca0";

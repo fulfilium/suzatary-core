@@ -7,10 +7,10 @@
 use prodrome_core::literal::{ProdromeError, Value};
 use serde::{Deserialize, Serialize};
 
-use crate::conversation_id::ConversationId;
 use crate::mail::address::EmailAddress;
-use crate::reference::ProposalRef;
 use prodrome_core::literal::codec::{Constructor, Fields, Literal, arm, no_arm, record};
+use suzatary_base::conversation_id::ConversationId;
+use suzatary_base::reference::ProposalRef;
 
 /// One act, from a closed set.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -46,18 +46,18 @@ pub enum Act {
     },
     /// Propose this diff against this commit as a pull request; a person merges it.
     Patch {
-        repo: crate::repo_ids::RepoName,
+        repo: suzatary_base::repo_ids::RepoName,
         /// Who can read the branch once pushed, as the listing said when proposed.
         visibility: crate::repos::Visibility,
         /// The commit the diff was written against.
-        base: crate::repo_ids::CommitId,
+        base: suzatary_base::repo_ids::CommitId,
         patch: crate::repos::Patch,
         message: String,
     },
     /// Read one of the owner's documents in a folder no `drive_allow` entry covers, redacted.
     #[serde(rename = "drive_read")]
     DriveRead {
-        path: crate::drive_path::DrivePath,
+        path: suzatary_base::drive_path::DrivePath,
         /// Its size in bytes as listed when asked, for the card.
         #[serde(default, skip_serializing_if = "Option::is_none")]
         size: Option<u64>,
@@ -155,7 +155,9 @@ pub enum Act {
         message: String,
     },
     /// Apply the changes of the triage card `card` the secretary withdrew.
-    Restore { card: crate::reference::ProposalRef },
+    Restore {
+        card: suzatary_base::reference::ProposalRef,
+    },
 }
 
 impl Act {
@@ -313,9 +315,11 @@ fn retracting(node: &prodrome_core::event::Hash) -> String {
 
 /// The folder a document is in: the one "Always allow this folder" names.
 #[must_use]
-pub fn folder_of(path: &crate::drive_path::DrivePath) -> crate::drive_path::DrivePath {
+pub fn folder_of(
+    path: &suzatary_base::drive_path::DrivePath,
+) -> suzatary_base::drive_path::DrivePath {
     path.parent()
-        .unwrap_or_else(crate::drive_path::DrivePath::root)
+        .unwrap_or_else(suzatary_base::drive_path::DrivePath::root)
 }
 
 /// `Auth(account)`.
@@ -666,7 +670,8 @@ mod tests {
     fn an_unlock_card_names_the_card_it_follows_by_reference() {
         let act = Act::UnlockStore {
             after: Some(ProposalRef {
-                conversation: crate::conversation_id::ConversationId::new("setup").expect("a slug"),
+                conversation: suzatary_base::conversation_id::ConversationId::new("setup")
+                    .expect("a slug"),
                 index: 3,
             }),
         };

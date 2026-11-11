@@ -31,12 +31,12 @@ pub use reads::{CONTEXT_CAP, CONTEXT_HEADROOM, context, manual};
 
 use crate::deployment::Deployment;
 use crate::record::TodoEvent;
-use crate::refusal::{Refusal, shown};
 use crate::store::Reads;
+use suzatary_base::refusal::{Refusal, shown};
 
 /// Who this surface is: a constant, never an argument. Its writes are cards, which the owner's
 /// tap performs.
-pub const WRITES_AS: crate::writer::Writer = crate::writer::Writer::Triage;
+pub const WRITES_AS: suzatary_base::writer::Writer = suzatary_base::writer::Writer::Triage;
 
 /// One call as the agent sent it: read whole once, then run against the record of the chain it
 /// names, absent meaning the first.
@@ -106,6 +106,6 @@ mod tests {
     #[test]
     fn the_only_actor_this_surface_can_write_as_is_triage() {
         assert_eq!(WRITES_AS.actor(), "triage");
-        assert_ne!(WRITES_AS, crate::writer::Writer::Assistant);
+        assert_ne!(WRITES_AS, suzatary_base::writer::Writer::Assistant);
     }
 }

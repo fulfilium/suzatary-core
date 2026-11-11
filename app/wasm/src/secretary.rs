@@ -10,7 +10,7 @@ use prodrome_core::dag::Unread;
 use prodrome_core::event::Hash;
 use prodrome_core::fpl::datetime_of;
 use prodrome_wasm_exports::wire::parse_instant;
-use suzatary_core::conversation_id::ConversationId;
+use suzatary_base::conversation_id::ConversationId;
 use suzatary_core::query;
 use suzatary_core::secretary::held_lines::Admitted;
 use suzatary_core::secretary::held_replica::HeldReplica;
@@ -442,6 +442,6 @@ fn pages_of(pages: u32) -> Result<usize, JsError> {
     usize::try_from(pages).map_err(|e| refused(format!("pages: {e}")))
 }
 
-fn said(refusal: &suzatary_core::refusal::Refusal) -> JsError {
+fn said(refusal: &suzatary_base::refusal::Refusal) -> JsError {
     refused(refusal.message())
 }

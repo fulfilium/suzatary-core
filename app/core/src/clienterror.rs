@@ -9,9 +9,9 @@
 use std::collections::HashMap;
 use std::time::{Duration, Instant};
 
-use crate::capability::Login;
 use crate::excerpt::Excerpt;
-use crate::refusal::Refusal;
+use suzatary_base::capability::Login;
+use suzatary_base::refusal::Refusal;
 
 /// The most a report's body may carry, in bytes.
 pub const MAX_BODY_BYTES: usize = 16_384;

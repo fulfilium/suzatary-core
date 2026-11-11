@@ -516,7 +516,7 @@ fn no_capability_file_ever_names_the_settings_writer() {
     let capability_dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
         .parent()
         .expect("app/cli has a parent")
-        .join("core/src/capability");
+        .join("base/src/capability");
     let entries = std::fs::read_dir(&capability_dir)
         .unwrap_or_else(|e| panic!("reading {}: {e}", capability_dir.display()));
     for entry in entries.filter_map(Result::ok) {

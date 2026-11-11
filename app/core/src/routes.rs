@@ -15,17 +15,13 @@ use prodrome_core::policy::Untrusted;
 
 use crate::chain_set::ChainSet;
 
-use crate::capability::{Clock, Datetime};
-use crate::chains::{ChainName, ChainPolicy};
 use crate::deployment::Deployment;
 use crate::mail::mailbox::{Mailbox, Query};
-use crate::refusal::{Answered, Refusal, shown};
 use crate::render::Render;
 use crate::secretary::answers::Answers;
 use crate::secretary::briefings::Briefings;
 use crate::secretary::step::Step;
 use crate::store::Prodrome;
-use crate::tree::{By, Classifier, Monoid};
 use crate::wire::cards::{AboutPayload, HeldTodo, Offer, Overview, Shipped};
 use crate::wire::lines::{
     Content, Frontier, Heads, NodeHeader, ObjectsPayload, ReceiptPayload, RefusedObject,
@@ -35,6 +31,10 @@ use crate::wire::store::SinceRead;
 use crate::wire::todo::{Entry, EntryState, Fulfillment, Neighbour};
 use crate::{mail, query, reading};
 use crate::{view, wire};
+use suzatary_base::capability::{Clock, Datetime};
+use suzatary_base::chains::{ChainName, ChainPolicy};
+use suzatary_base::refusal::{Answered, Refusal, shown};
+use suzatary_base::tree::{By, Classifier, Monoid};
 
 /// Every head, sorted: what a replica compares against and asks `since=` by, with no one of
 /// them picked, since no writer needs a single head.
@@ -169,7 +169,7 @@ fn most_owed(entries: Vec<Entry>, n: usize) -> Vec<Entry> {
 pub fn todo(
     render: &dyn Render,
     chain: &ChainPolicy,
-    zone: crate::zone::Zone,
+    zone: suzatary_base::zone::Zone,
     set: &ChainSet<'_>,
     id: &str,
     builder: Option<&crate::connect::RoutineId>,
@@ -328,7 +328,7 @@ pub fn briefing(
     let source = briefings
         .read(day)
         .map_err(|_| Refusal::not_found(format!("no briefing for {day}")))?;
-    let markup = crate::escape::Escaped::from_chain(source.clone());
+    let markup = suzatary_base::escape::Escaped::from_chain(source.clone());
     Ok(wire::BriefingPayload {
         date: day.to_string(),
         day: wire::BriefingDay::Saved {
@@ -532,7 +532,7 @@ pub fn warmable(
     store: &dyn Prodrome<TodoEvent>,
     untrusted: &Untrusted,
     now: Datetime,
-) -> Answered<Vec<crate::escape::Escaped>> {
+) -> Answered<Vec<suzatary_base::escape::Escaped>> {
     let records = records(&store.nodes()?, now);
     Ok(view::renderable(records.values().flatten(), untrusted))
 }
@@ -825,7 +825,10 @@ where
             heads: names(graph.heads()).into_iter().collect(),
             held: std::sync::Arc::clone(graph.names()),
         };
-        let lacking = books.frontiers.answer(key, since, graph.dag())?;
+        let lacking = books
+            .frontiers
+            .answer(key, since, graph.dag())
+            .map_err(crate::store::StoreError::from)?;
         let read = since_read(lacking.reached());
         let mut piece = Piece::none();
         let mut full = false;
@@ -859,7 +862,11 @@ where
             piece.size += weight;
         }
         piece.rest -= piece.sent.len();
-        let frontier = frontier_of(&lacking.record(piece.sent.len())?);
+        let frontier = frontier_of(
+            &lacking
+                .record(piece.sent.len())
+                .map_err(crate::store::StoreError::from)?,
+        );
         Ok((seen, (read, frontier, piece, std::sync::Arc::clone(&graph))))
     })?;
     Ok(Pulled {
@@ -1363,7 +1370,7 @@ pub fn receive_objects(
         });
     store.accept(&outcome.taken)?;
     // Render what landed before answering; `renders` keeps untrusted records uncompiled.
-    let fresh: Vec<crate::escape::Escaped> = taken
+    let fresh: Vec<suzatary_base::escape::Escaped> = taken
         .iter()
         .filter_map(|event| match event {
             TodoEvent::Authored(record) => Some(record.clone()),
@@ -1440,7 +1447,9 @@ fn receipt<E: prodrome_core::schema::Schema>(
 ) -> Answered<ReceiptPayload> {
     let objects = store.objects()?;
     let dag: prodrome_core::dag::Dag<E> = objects.into_iter().collect();
-    let lacking = frontiers.answer(key, since, &dag)?;
+    let lacking = frontiers
+        .answer(key, since, &dag)
+        .map_err(crate::store::StoreError::from)?;
     let read = since_read(lacking.reached());
     let posted = outcome
         .taken
@@ -1448,7 +1457,11 @@ fn receipt<E: prodrome_core::schema::Schema>(
         .map(|(name, _)| name)
         .chain(&outcome.already)
         .cloned();
-    let frontier = frontier_of(&lacking.record_with(posted)?);
+    let frontier = frontier_of(
+        &lacking
+            .record_with(posted)
+            .map_err(crate::store::StoreError::from)?,
+    );
     Ok(ReceiptPayload {
         since: read,
         frontier,
@@ -1513,7 +1526,7 @@ fn held_todos(
     set: &ChainSet<'_>,
     todos: &[prodrome_core::event::TodoId],
 ) -> Answered<Option<std::collections::BTreeMap<String, HeldTodo>>> {
-    let name = crate::chains::ChainName::new(plan.chain())
+    let name = suzatary_base::chains::ChainName::new(plan.chain())
         .map_err(|e| Refusal::internal(e.to_string()))?;
     match set.held(&name) {
         Ok(_) => {}
@@ -1531,7 +1544,7 @@ fn held_todos(
             .map(|entry| {
                 let title = view::content_of(entry, &by_hash).map_or_else(
                     || entry.key.as_str().to_owned(),
-                    |record| crate::escape::markup_text(record.payload.body.as_str()),
+                    |record| suzatary_base::escape::markup_text(record.payload.body.as_str()),
                 );
                 (
                     entry.key.as_str().to_owned(),
@@ -1554,7 +1567,7 @@ pub fn releases(
     plan: &crate::release::Plan,
     set: &ChainSet<'_>,
 ) -> Answered<wire::ReleasesPayload> {
-    let name = crate::chains::ChainName::new(plan.chain())
+    let name = suzatary_base::chains::ChainName::new(plan.chain())
         .map_err(|e| Refusal::internal(e.to_string()))?;
     let held = match set.held(&name) {
         Ok(held) => held,
@@ -1678,7 +1691,7 @@ pub fn author(
             let event = crate::authoring::update_todo(
                 &before,
                 patch,
-                crate::zone::Moment {
+                suzatary_base::zone::Moment {
                     at,
                     zone: deployment.zone,
                 },
@@ -1738,7 +1751,7 @@ fn add(
     new: &wire::NewTodo,
     at: Datetime,
     actor: &prodrome_core::event::Actor,
-    typeset: &dyn crate::capability::Typeset,
+    typeset: &dyn suzatary_base::capability::Typeset,
 ) -> Result<(String, TodoEvent, Option<TodoEvent>), Refusal> {
     let mut fields = new.fields.clone();
     capped("body", &fields.body, MAX_BODY_CHARS)?;
@@ -1783,7 +1796,7 @@ fn add(
         subtodos: Vec::new(),
     };
     let Some(parent) = &new.parent else {
-        let now = crate::zone::Moment {
+        let now = suzatary_base::zone::Moment {
             at,
             zone: deployment.zone,
         };
@@ -1802,7 +1815,7 @@ fn add(
         &new_todo,
         &record,
         &believed.linkable(),
-        crate::zone::Moment {
+        suzatary_base::zone::Moment {
             at,
             zone: deployment.zone,
         },
@@ -1892,7 +1905,7 @@ pub fn overview(
     crate::settings::overview::overview(declared, &asked.observed(registers)).wire(
         &declared.settables.names(),
         asking,
-        crate::conversation_id::SETUP.as_str().to_owned(),
+        suzatary_base::conversation_id::SETUP.as_str().to_owned(),
         crate::connect::offered(declared.channels)
             .into_iter()
             .map(|template| Offer {
@@ -2055,7 +2068,7 @@ mod tests {
                 sent_folder: "Sent Items".to_owned(),
             });
             let chain = ChainPolicy {
-                name: crate::chains::ChainName::new("life").expect("a slug"),
+                name: suzatary_base::chains::ChainName::new("life").expect("a slug"),
                 untrusted: Untrusted::of([
                     prodrome_core::event::Actor::new("triage").expect("an actor")
                 ]),
@@ -2069,11 +2082,11 @@ mod tests {
                 deployment: Deployment {
                     viewers: std::collections::BTreeSet::new(),
                     actors: BTreeMap::new(),
-                    chains: crate::chains::Chains::of(vec![chain]).expect("one chain"),
+                    chains: suzatary_base::chains::Chains::of(vec![chain]).expect("one chain"),
                     categories: BTreeMap::new(),
                     app_url: "https://example.test".to_owned(),
                     coding: None,
-                    zone: crate::zone::Zone::UTC,
+                    zone: suzatary_base::zone::Zone::UTC,
                 },
                 settables: crate::settings::Settables::derive(
                     crate::settings::MODEL_TOKEN,

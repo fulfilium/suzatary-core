@@ -8,7 +8,7 @@ use crate::secretary::words::Words;
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Review {
     /// When it was decided.
-    pub at: crate::capability::Datetime,
+    pub at: suzatary_base::capability::Datetime,
     /// Which chain the card was against.
     pub chain: String,
     /// What was reviewed: a card's reference, or an older batch's head.

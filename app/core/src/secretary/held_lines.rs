@@ -23,8 +23,6 @@ use prodrome_core::digest::Cycle;
 use prodrome_core::event::{Envelope, Hash, parents_of, parse_envelope};
 use prodrome_core::memo::{self, Algebra, Cache, Report, Tree};
 
-use crate::answer::Renderable;
-use crate::conversation_id::ConversationId;
 use crate::secretary::digest::{Placed, Shape};
 use crate::secretary::erasure::Erasure;
 use crate::secretary::key_ring::KeyRing;
@@ -36,6 +34,8 @@ use crate::secretary::slots::Slots;
 use crate::secretary::store::{Entry, NotAConversation, Stored};
 use crate::secretary::transcript::{self, Transcript, Write};
 use crate::secretary::words::{Gone, Words};
+use suzatary_base::answer::Renderable;
+use suzatary_base::conversation_id::ConversationId;
 
 thread_local! {
     static DECODES: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };

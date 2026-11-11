@@ -164,7 +164,7 @@ fn printed(instance: &Instance) -> String {
             deployment
                 .viewers
                 .iter()
-                .map(suzatary_core::capability::Login::as_str)
+                .map(suzatary_base::capability::Login::as_str)
                 .collect::<Vec<_>>()
         ),
     );

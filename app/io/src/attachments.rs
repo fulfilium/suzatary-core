@@ -3,8 +3,8 @@
 
 use std::path::PathBuf;
 
+use suzatary_base::drive_path::DriveFailure;
 use suzatary_core::attachment::{Attachment, AttachmentError, AttachmentId};
-use suzatary_core::drive_path::DriveFailure;
 use suzatary_core::enclosed::Enclosure;
 use suzatary_core::file_read::{FileRead, Withheld};
 use suzatary_core::held_value::HeldFile;
@@ -350,7 +350,7 @@ mod tests {
             &self,
             name: &str,
             bytes: &[u8],
-        ) -> Result<suzatary_core::drive_path::DrivePath, DriveFailure> {
+        ) -> Result<suzatary_base::drive_path::DrivePath, DriveFailure> {
             self.0
                 .lock()
                 .expect("unpoisoned")

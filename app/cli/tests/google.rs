@@ -11,8 +11,8 @@ use std::sync::Arc;
 
 use common::fake_google::{self, FakeGoogle};
 use common::{EditsRecorder, Fakes, SecretRecorder, SettingsFixture};
+use suzatary_base::conversation_id::SETUP;
 use suzatary_core::calendar::effect::Calendar as _;
-use suzatary_core::conversation_id::SETUP;
 use suzatary_core::mail::account::{MailAccount, Sync};
 use suzatary_core::mail::address::EmailAddress;
 
@@ -567,7 +567,7 @@ fn a_code_google_already_redeemed_keeps_nothing() {
     let state =
         suzatary_core::google::State::draw(&suzatary_io::texts::SystemEntropy).expect("a state");
     let client = suzatary_core::google::Client::of_download(
-        &suzatary_core::capability::Secret::new(fake_google::client_file(REDIRECT)),
+        &suzatary_base::capability::Secret::new(fake_google::client_file(REDIRECT)),
         &redirect,
     )
     .expect("the fake's client");
@@ -652,7 +652,7 @@ fn a_revoked_grant_needs_the_sign_in_and_a_missing_client_the_client() {
         secrets
             .write_secret(
                 &suzatary_core::settings::Settable::mint(&settables, name).expect("declared"),
-                &suzatary_core::capability::Secret::new(value),
+                &suzatary_base::capability::Secret::new(value),
             )
             .expect("written");
     };
@@ -695,7 +695,7 @@ fn the_calendars_are_read_bounded_and_learned_once() {
         secrets
             .write_secret(
                 &suzatary_core::settings::Settable::mint(&settables, name).expect("declared"),
-                &suzatary_core::capability::Secret::new(value),
+                &suzatary_base::capability::Secret::new(value),
             )
             .expect("written");
     }
@@ -759,7 +759,7 @@ fn the_calendars_are_read_bounded_and_learned_once() {
         (0, read.len()),
         "learned once"
     );
-    let days = suzatary_io::calendar::Clocked::new([root], suzatary_core::zone::Zone::UTC)
+    let days = suzatary_io::calendar::Clocked::new([root], suzatary_base::zone::Zone::UTC)
         .days(
             chrono::NaiveDate::from_ymd_opt(2026, 10, 19).expect("a day"),
             1,

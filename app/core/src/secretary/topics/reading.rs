@@ -13,7 +13,7 @@ use prodrome_core::tags::{Tagging, alias, membership, set};
 use crate::secretary::topics::provenance::{Owner, Provenance};
 use crate::secretary::topics::standing::{Opening, Standing, Suggestion};
 use crate::secretary::topics::topic::Topic;
-use crate::topic_target::Target;
+use suzatary_base::topic_target::Target;
 
 /// The topic stores' tag sets: `Added(target, topic, at, actor)`, `Removed(…)`,
 /// `Aliased(topic, at, actor, to)` and `Unaliased(topic, at, actor)`.
@@ -295,7 +295,7 @@ mod tests {
 
     #[test]
     fn no_constructor_is_a_term_or_an_envelope() {
-        crate::own::assert_own(<membership::Membership<Topics>>::EVENTS);
-        crate::own::assert_own(<alias::Alias<Topics>>::EVENTS);
+        suzatary_base::own::assert_own(<membership::Membership<Topics>>::EVENTS);
+        suzatary_base::own::assert_own(<alias::Alias<Topics>>::EVENTS);
     }
 }

@@ -9,11 +9,11 @@ use std::sync::LazyLock;
 use prodrome_core::event::TodoId;
 use regex::Regex;
 
-use crate::capability::Datetime;
 use crate::mail::corpus::{Corpus, CorpusError};
 use crate::mail::mailbox::Query;
 use crate::record::{MarkupSource, Source};
-use crate::reference::MailHash;
+use suzatary_base::capability::Datetime;
+use suzatary_base::reference::MailHash;
 
 /// A message's canonical hash, the same type a `mail:<hash>` reference validates.
 pub(crate) type MessageHash = MailHash;

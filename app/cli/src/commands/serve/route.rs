@@ -4,7 +4,7 @@ use axum::Router;
 use axum::extract::{FromRequestParts, Query, RawPathParams, Request, State as AxumState};
 use axum::response::Response;
 use axum::routing::{MethodRouter, get, post};
-use suzatary_core::refusal::Refusal;
+use suzatary_base::refusal::Refusal;
 
 use super::State;
 use super::body::Body;

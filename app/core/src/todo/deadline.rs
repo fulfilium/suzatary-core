@@ -6,9 +6,9 @@ use prodrome_core::term::Term;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use ts_rs::TS;
 
-use crate::refusal::Refusal;
 use crate::todo::price::ratio;
-use crate::zone::Zone;
+use suzatary_base::refusal::Refusal;
+use suzatary_base::zone::Zone;
 
 /// The inputs to a decaying price. The lead-up is a span, whichever unit its writer spoke.
 #[derive(Debug, Clone, PartialEq, Eq, TS)]

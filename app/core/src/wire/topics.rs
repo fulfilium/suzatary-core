@@ -4,7 +4,7 @@ use ts_rs::TS;
 use super::inbox::{Asker, Card, CodingSession, ProposedAct};
 use super::signatures::FailedChain;
 use super::todo::Fulfillment;
-use crate::reference::Reference;
+use suzatary_base::reference::Reference;
 
 /// The route's match over `Turn` has no wildcard.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
@@ -89,7 +89,7 @@ pub struct BlockRow {
     /// Its typst with the blank line that ends it.
     pub source: String,
     pub plain: String,
-    pub kind: crate::answer::Kind,
+    pub kind: suzatary_base::answer::Kind,
     /// Computed on read; `null` when it names `html`, fails, or trips the wire.
     pub html: Option<String>,
 }
@@ -253,9 +253,9 @@ pub struct Revises {
 pub struct InboxProposal {
     pub id: String,
     #[ts(type = "string")]
-    pub asked: crate::reference::ProposalRef,
+    pub asked: suzatary_base::reference::ProposalRef,
     #[ts(type = "string | null")]
-    pub serves: Option<crate::reference::TodoRef>,
+    pub serves: Option<suzatary_base::reference::TodoRef>,
     pub headline: String,
     pub by: Asker,
     pub why: String,

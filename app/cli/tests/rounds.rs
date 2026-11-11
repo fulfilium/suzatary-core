@@ -7,8 +7,8 @@
 mod common;
 
 use common::{FakeModel, Fakes};
+use suzatary_base::conversation_id::ConversationId;
 use suzatary_core::conversation::round::{Ending, Sink, Why};
-use suzatary_core::conversation_id::ConversationId;
 use suzatary_core::secretary::Bound;
 use suzatary_core::secretary::model::{Halt, ModelError, Turn};
 use suzatary_core::secretary::store::Kind;
@@ -128,7 +128,7 @@ fn a_round_over_a_session() {
             caps.conversations.conversations(),
             &id(),
             &suzatary_core::secretary::store::Entry::Said {
-                at: suzatary_core::capability::Datetime::new(2026, 9, 2, 12, 0, 0, 0)
+                at: suzatary_base::capability::Datetime::new(2026, 9, 2, 12, 0, 0, 0)
                     .expect("an instant"),
                 turn: suzatary_core::secretary::model::Turn::Person {
                     text: said.to_owned(),
@@ -168,7 +168,7 @@ fn round_of(
     caps: &Fakes,
     bound: usize,
     ran: &std::sync::Mutex<Vec<String>>,
-) -> Result<Option<suzatary_core::conversation::round::Closed>, suzatary_core::refusal::Refusal> {
+) -> Result<Option<suzatary_core::conversation::round::Closed>, suzatary_base::refusal::Refusal> {
     round_under(
         caps,
         bound,
@@ -185,7 +185,7 @@ fn round_under(
     ran: &std::sync::Mutex<Vec<String>>,
     halt: &Halt,
     load: &suzatary_core::conversation::round::Load<'_>,
-) -> Result<Option<suzatary_core::conversation::round::Closed>, suzatary_core::refusal::Refusal> {
+) -> Result<Option<suzatary_core::conversation::round::Closed>, suzatary_base::refusal::Refusal> {
     use suzatary_core::conversation::ask::Ask;
     use suzatary_core::conversation::round::{Round, Rules, Transcript};
     use suzatary_core::secretary::surface::Subset;
@@ -194,14 +194,14 @@ fn round_under(
     const SOME: Subset = Subset {
         allows: |verb| verb.name() == "weather" || verb.name() == "todo_show",
         refuses: |called, listed| {
-            suzatary_core::refusal::Refusal::not_found(format!("not {called}, only {listed}"))
+            suzatary_base::refusal::Refusal::not_found(format!("not {called}, only {listed}"))
         },
     };
     let run = |request: suzatary_core::verb::Request<suzatary_core::secretary::SecretaryCall>| {
         let verb = request.call.verb().name();
         ran.lock().expect("not poisoned").push(verb.to_owned());
         if verb == "todo_show" {
-            Err(suzatary_core::refusal::Refusal::bad_request("no such todo"))
+            Err(suzatary_base::refusal::Refusal::bad_request("no such todo"))
         } else {
             Ok(VerbAnswer::from(serde_json::json!("sunny")))
         }
@@ -230,7 +230,7 @@ fn said_first(caps: &Fakes) {
         caps.conversations.conversations(),
         &id(),
         &suzatary_core::secretary::store::Entry::Said {
-            at: suzatary_core::capability::Datetime::new(2026, 9, 2, 12, 0, 0, 0)
+            at: suzatary_base::capability::Datetime::new(2026, 9, 2, 12, 0, 0, 0)
                 .expect("an instant"),
             turn: suzatary_core::secretary::model::Turn::Person {
                 text: "go".to_owned(),
@@ -428,7 +428,7 @@ fn ended_with(caps: &Fakes, why: &Why, words: &str) {
     assert_eq!(
         last_turn(caps),
         Turn::Model {
-            text: suzatary_core::escape::escape_markup(words)
+            text: suzatary_base::escape::escape_markup(words)
                 .as_str()
                 .to_owned(),
             calls: Vec::new(),
@@ -465,7 +465,7 @@ fn a_round_whose_load_is_refused_says_so_and_asks_no_model() {
     let caps = Fakes::new("round-end-load").model(FakeModel::saying([]));
     said_first(&caps);
     let refused = || {
-        Err(suzatary_core::refusal::Refusal::not_found(
+        Err(suzatary_base::refusal::Refusal::not_found(
             "no todo life/gone",
         ))
     };
@@ -473,7 +473,7 @@ fn a_round_whose_load_is_refused_says_so_and_asks_no_model() {
     let closed = round_under(&caps, 8, &ran, &Halt::new(), &refused)
         .expect("runs")
         .expect("a round ran");
-    let why = Why::Refused(suzatary_core::refusal::Refusal::not_found(
+    let why = Why::Refused(suzatary_base::refusal::Refusal::not_found(
         "no todo life/gone",
     ));
     assert_eq!(closed.ending, Ending::Ended { why: why.clone() });
@@ -595,7 +595,7 @@ proptest::proptest! {
             Ending::Ended { why } => proptest::prop_assert_eq!(
                 last,
                 Turn::Model {
-                    text: suzatary_core::escape::escape_markup(&why.said()).as_str().to_owned(),
+                    text: suzatary_base::escape::escape_markup(&why.said()).as_str().to_owned(),
                     calls: Vec::new(),
                 }
             ),

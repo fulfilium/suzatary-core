@@ -13,7 +13,7 @@ use prodrome_core::literal::Datetime;
 use proptest::prelude::*;
 
 use prodrome_core::store::frontier::{Frontiers, Since, Token};
-use suzatary_core::conversation_id::ConversationId;
+use suzatary_base::conversation_id::ConversationId;
 use suzatary_core::routes::{self, Books, Cut};
 use suzatary_core::secretary::conversations::InMemory;
 use suzatary_core::secretary::erasure::Erasure;
@@ -512,7 +512,7 @@ fn another_store_s_hash_is_refused_as_an_unknown_one_is() {
     assert_eq!(refused(&elsewhere), refused(&nowhere));
     assert_eq!(
         refused(&nowhere).0,
-        suzatary_core::refusal::Status::NotFound
+        suzatary_base::refusal::Status::NotFound
     );
 }
 
@@ -573,7 +573,7 @@ fn the_content_bound_holds() {
         routes::content(&store.lines.lines, &two)
             .expect_err("past the bound")
             .status(),
-        suzatary_core::refusal::Status::BadRequest
+        suzatary_base::refusal::Status::BadRequest
     );
 }
 

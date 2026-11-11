@@ -367,9 +367,9 @@ mod tests {
             &self,
             _name: &str,
             _reason: &str,
-        ) -> Result<Option<suzatary_core::capability::Secret>, crate::secrets::SecretError>
+        ) -> Result<Option<suzatary_base::capability::Secret>, crate::secrets::SecretError>
         {
-            Ok(Some(suzatary_core::capability::Secret::new("test-token")))
+            Ok(Some(suzatary_base::capability::Secret::new("test-token")))
         }
     }
 

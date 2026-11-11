@@ -5,7 +5,7 @@
 
 use std::path::Path;
 
-use suzatary_core::capability::Clock;
+use suzatary_base::capability::Clock;
 use suzatary_core::mail::account::Sync;
 use suzatary_io::clock::SystemClock;
 
@@ -98,7 +98,7 @@ fn capabilities() {
 }
 
 /// The person this deployment serves, printed so a silently defaulted name shows up.
-fn print_persona(persona: &suzatary_core::persona::Persona) {
+fn print_persona(persona: &suzatary_base::persona::Persona) {
     println!(
         "  persona   {} — {} ({})",
         persona.name,
@@ -164,7 +164,7 @@ fn deployment(path: &Path) {
                 read.deployment
                     .viewers
                     .iter()
-                    .map(suzatary_core::capability::Login::as_str)
+                    .map(suzatary_base::capability::Login::as_str)
                     .collect::<Vec<_>>()
                     .join(", ")
             );

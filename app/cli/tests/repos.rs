@@ -8,7 +8,7 @@ use std::sync::Arc;
 
 use common::{FakeModel, Fakes};
 
-fn ada() -> suzatary_core::capability::Login {
+fn ada() -> suzatary_base::capability::Login {
     common::login("ada@example.com")
 }
 

@@ -5,7 +5,7 @@ use std::borrow::Cow;
 use schemars::{JsonSchema, Schema, SchemaGenerator};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
-use crate::refusal::Refusal;
+use suzatary_base::refusal::Refusal;
 
 /// An argument parsed as `T`, or the refusal it earned, held until the verb reads it.
 ///
