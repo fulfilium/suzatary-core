@@ -6,9 +6,10 @@ use serde::{Deserialize, Serialize};
 use suzatary_core::reference::Reference;
 use suzatary_core::secretary::erasure::Erasure;
 use suzatary_core::secretary::store::ConversationState;
-use suzatary_core::wire::{
-    ConversationPayload, ConversationsPayload, Frame, ProposalRow, Receipt, Speaker, TurnGone,
-    TurnRow, VerbOutcome,
+use suzatary_core::wire::Frame;
+use suzatary_core::wire::topics::{
+    ConversationPayload, ConversationsPayload, ProposalRow, Receipt, Speaker, TurnGone, TurnRow,
+    VerbOutcome,
 };
 use ts_rs::TS;
 use viewtree::Attr::{AriaLabel, Class, Data, Hidden, Href, Maxlength, Title, Type, Value};
@@ -1298,15 +1299,16 @@ fn turn(m: &Model, t: &TurnRow, reply: bool, tucked: Option<Node<Msg>>) -> Node<
             Chips::Conversation(&m.id),
         ),
     };
-    let (files, references): (&[suzatary_core::wire::AttachmentRow], &[Reference]) = match &t.who {
-        Speaker::Person {
-            references,
-            attachments,
-            ..
-        } => (attachments, references),
-        Speaker::Act { references } | Speaker::Box { references } => (&[], references),
-        Speaker::Model { .. } | Speaker::Verb { .. } => (&[], &[]),
-    };
+    let (files, references): (&[suzatary_core::wire::topics::AttachmentRow], &[Reference]) =
+        match &t.who {
+            Speaker::Person {
+                references,
+                attachments,
+                ..
+            } => (attachments, references),
+            Speaker::Act { references } | Speaker::Box { references } => (&[], references),
+            Speaker::Model { .. } | Speaker::Verb { .. } => (&[], &[]),
+        };
     let photos = (!files.is_empty()).then(|| {
         view! { Div "turnphotos" [files.iter().map(|f| {
             let a = composer::attachment(f);

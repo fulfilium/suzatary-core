@@ -11,7 +11,8 @@ use prodrome_core::schema::Schema;
 use crate::replica::held::Said;
 use crate::replica::objects::{Answer, Object, Refusal};
 use crate::secretary::held_replica::NotAnAnswer;
-use crate::wire::{ObjectsPayload, ReceiptPayload, RefusalKind};
+use crate::wire::lines::{ObjectsPayload, ReceiptPayload};
+use crate::wire::signatures::RefusalKind;
 
 /// The piece `answer` the box served, its objects read at `schema`.
 ///

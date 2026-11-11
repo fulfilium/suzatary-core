@@ -5,7 +5,7 @@ fn held_todo() -> impl Strategy<Value = Option<HeldTodo>> {
         Just(None),
         (0u8..=10).prop_map(|n| Some(Fulfillment::Number(f64::from(n) / 10.0))),
         Just(Some(Fulfillment::Absent(
-            suzatary_core::wire::Absent::Absent
+            suzatary_core::wire::todo::Absent::Absent
         ))),
     ];
     proptest::option::of((value, words()).prop_map(|(value, title)| HeldTodo {

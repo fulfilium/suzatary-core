@@ -19,7 +19,7 @@ use crate::capability::Datetime;
 use crate::escape::{Escaped, Quoted, escape_markup};
 use crate::render::Render;
 use crate::tree::{self, Classifier, Member, Members, Place, Segment, Tree, Trie};
-use crate::wire;
+use crate::wire::todo as wire;
 
 /// Whether a row's content is still its untrusted writer's: authored by an actor the policy does
 /// not confirm and never re-authored by one it does.
@@ -303,7 +303,7 @@ pub fn authored<R: Render + ?Sized>(
             .payload
             .subtodos
             .iter()
-            .map(|sub| wire::SubTodo {
+            .map(|sub| crate::wire::record::SubTodo {
                 body: sub.body.as_str().to_owned(),
                 done: sub.done,
             })

@@ -426,7 +426,7 @@ Threat model: an injected email can at worst mis-triage or write bad todo text
     never a stored kind.
   - **Local-first, and staleness is DATED**: the service worker keeps the SHELL
     and nothing else (→ `shellworker`).
-  - Wire types AND their decoders are generated from `app/core/src/wire.rs`
+  - Wire types AND their decoders are generated from `app/core/src/wire.rs` and its `wire/`
     (`scripts/wire.sh`), and `api.ts` names each route once over `http.ts`.
   - **A todo's body and detail are edited as Typst**; the box is still the one
     that refuses (→ `typsteditor`).

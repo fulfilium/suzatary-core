@@ -274,9 +274,9 @@ impl<'a> ChainSet<'a> {
 
     /// Every chain whose reading failed, as a page shows it.
     #[must_use]
-    pub fn failed(&self) -> Vec<crate::wire::FailedChain> {
+    pub fn failed(&self) -> Vec<crate::wire::signatures::FailedChain> {
         self.failures()
-            .map(|failure| crate::wire::FailedChain {
+            .map(|failure| crate::wire::signatures::FailedChain {
                 chain: failure.chain().to_string(),
                 why: failure.to_string(),
             })

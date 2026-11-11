@@ -129,7 +129,7 @@ impl Params for Written {
 /// actor the request was proven for.
 pub fn take(
     call: &Call<prodrome_core::event::Actor, Written, Literals>,
-) -> Result<Json<wire::ReceiptPayload>, Refusal> {
+) -> Result<Json<wire::lines::ReceiptPayload>, Refusal> {
     let topics = call.state.first.caps.secretary.topics;
     let (posted, actor, frontiers) = (&call.body.posted(), &call.guard, &call.state.frontiers);
     match call.params {
@@ -151,7 +151,7 @@ impl Params for LinesSince {
 /// `GET /api/stores/lines/skeleton?since=<frontier>`: what the replica lacks, without literals.
 pub fn skeleton(
     call: &Call<Reader, LinesSince, ()>,
-) -> Result<Json<wire::SkeletonPayload>, Refusal> {
+) -> Result<Json<wire::lines::SkeletonPayload>, Refusal> {
     let caps = call.state.first.caps;
     routes::lines_skeleton(
         caps.secretary.conversations,

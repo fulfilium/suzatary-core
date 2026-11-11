@@ -14,7 +14,7 @@ use prodrome_core::payload::Payload as _;
 
 use crate::believed::records;
 use crate::record::{Authored, Node, TodoEvent};
-use crate::wire;
+use crate::wire::inbox as wire;
 
 /// Every row of one changeset, with the "before" column advancing through it.
 ///

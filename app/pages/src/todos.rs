@@ -8,7 +8,9 @@ use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use suzatary_core::todo::{Price, TodoFields};
 use suzatary_core::tree::Tree;
-use suzatary_core::wire::{Authoring, BriefingsPayload, Entry, Fulfillment, NewTodo, Overview};
+use suzatary_core::wire::cards::Overview;
+use suzatary_core::wire::todo::{Entry, Fulfillment};
+use suzatary_core::wire::{Authoring, BriefingsPayload, NewTodo};
 use ts_rs::TS;
 use viewtree::Attr::{
     AriaControls, AriaCurrent, AriaExpanded, AriaLabel, AriaPressed, Class, Data, Disabled,
@@ -1950,11 +1952,15 @@ impl Model {
         match (u, e.map(|e| e.state)) {
             (Unsent::Refused, _) => "refused: open it",
             (Unsent::AwaitingTrust, _) => "waits for this device to be trusted",
-            (Unsent::Sending, Some(suzatary_core::wire::EntryState::Completed)) => "done · sending",
-            (Unsent::Sending, Some(suzatary_core::wire::EntryState::Cancelled)) => {
+            (Unsent::Sending, Some(suzatary_core::wire::todo::EntryState::Completed)) => {
+                "done · sending"
+            }
+            (Unsent::Sending, Some(suzatary_core::wire::todo::EntryState::Cancelled)) => {
                 "cancelled · sending"
             }
-            (Unsent::Sending, Some(suzatary_core::wire::EntryState::Open) | None) => "sending",
+            (Unsent::Sending, Some(suzatary_core::wire::todo::EntryState::Open) | None) => {
+                "sending"
+            }
         }
     }
 

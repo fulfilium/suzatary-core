@@ -69,9 +69,9 @@ impl Platform {
 pub fn register_device(
     devices: &dyn Log<String, Device>,
     clock: &dyn crate::capability::Clock,
-    registering: &crate::wire::Registering,
+    registering: &crate::wire::signatures::Registering,
     actor: &prodrome_core::event::Actor,
-) -> Result<crate::wire::DevicePayload, Refusal> {
+) -> Result<crate::wire::signatures::DevicePayload, Refusal> {
     let token = registering.token.trim().to_owned();
     if token.is_empty() || token.len() > MAX_TOKEN || token.chars().any(char::is_whitespace) {
         return Err(Refusal::bad_request("token must be one non-empty line"));
@@ -84,7 +84,7 @@ pub fn register_device(
     };
     devices.edit(&actor, &mut |_| Ok(Edit::Push(line.clone())))?;
     let count = Phones::of(&devices.lines_if_any(&actor)?).0.len();
-    Ok(crate::wire::DevicePayload {
+    Ok(crate::wire::signatures::DevicePayload {
         ok: true,
         devices: u32::try_from(count).unwrap_or(u32::MAX),
     })

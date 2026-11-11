@@ -5,7 +5,8 @@ use std::collections::{BTreeMap, BTreeSet};
 use serde::{Deserialize, Serialize};
 use suzatary_core::connect::{Group, Standing};
 use suzatary_core::health::Failure;
-use suzatary_core::wire::{self, Offer, Overview, OverviewGroup, OverviewLine};
+use suzatary_core::wire;
+use suzatary_core::wire::cards::{Offer, Overview, OverviewGroup, OverviewLine};
 use ts_rs::TS;
 use viewtree::Attr::{
     AriaLabel, Autocapitalize, Autocomplete, Class, Data, Href, Placeholder, Spellcheck, Type,
@@ -464,7 +465,10 @@ fn open_cards(rows: &[Row<'_>]) -> Vec<(String, card::Key)> {
         .collect()
 }
 
-fn row_of<'a>(rows: &[Row<'a>], key: &card::Key) -> Option<&'a suzatary_core::wire::ProposalRow> {
+fn row_of<'a>(
+    rows: &[Row<'a>],
+    key: &card::Key,
+) -> Option<&'a suzatary_core::wire::topics::ProposalRow> {
     rows.iter().find_map(|r| match r {
         Row::Card(_, c, row) if card::Key::of(c.id, row) == *key => Some(*row),
         Row::Card(..) | Row::Unresolved(_) => None,
@@ -473,7 +477,7 @@ fn row_of<'a>(rows: &[Row<'a>], key: &card::Key) -> Option<&'a suzatary_core::wi
 
 /// Every card the page reads, each whole: a change to one can change its line, so the overview
 /// is asked again.
-fn shown_cards(m: &Model) -> Vec<(String, suzatary_core::wire::ProposalRow)> {
+fn shown_cards(m: &Model) -> Vec<(String, suzatary_core::wire::topics::ProposalRow)> {
     m.rows
         .cards
         .iter()
@@ -511,8 +515,8 @@ enum Kind {
     Other,
 }
 
-fn kind(row: &suzatary_core::wire::ProposalRow) -> Kind {
-    use suzatary_core::wire::ProposedAct;
+fn kind(row: &suzatary_core::wire::topics::ProposalRow) -> Kind {
+    use suzatary_core::wire::inbox::ProposedAct;
     match &row.act {
         ProposedAct::SignIn { .. } | ProposedAct::SignInCode { .. } => Kind::SignIn,
         ProposedAct::Secret { .. } => Kind::Link,
@@ -546,10 +550,10 @@ fn kind(row: &suzatary_core::wire::ProposalRow) -> Kind {
 
 /// The grant is drawn inside the link's card it was asked for, and its yes sends the link again.
 fn allowing<'a>(
-    rows: &[&'a suzatary_core::wire::ProposalRow],
+    rows: &[&'a suzatary_core::wire::topics::ProposalRow],
 ) -> Option<(
-    &'a suzatary_core::wire::ProposalRow,
-    &'a suzatary_core::wire::ProposalRow,
+    &'a suzatary_core::wire::topics::ProposalRow,
+    &'a suzatary_core::wire::topics::ProposalRow,
 )> {
     let open = |k| {
         rows.iter()
@@ -618,7 +622,7 @@ static NO_TITLES: card::Titles = card::Titles::new();
 /// A link's card and the grant its origin needs, when both stand, as one card holding the other.
 fn line_cards(m: &Model, l: &OverviewLine) -> Vec<(String, Node<Msg>)> {
     let rows = m.rows.rows();
-    let cards: Vec<(&str, &suzatary_core::wire::ProposalRow)> = l
+    let cards: Vec<(&str, &suzatary_core::wire::topics::ProposalRow)> = l
         .cards
         .iter()
         .filter_map(|c| {

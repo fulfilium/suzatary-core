@@ -508,18 +508,21 @@ pub fn delivered(watches: &Watches, id: &WatchId, now: Instant) -> Result<(), Re
 ///
 /// # Errors
 /// As [`all`].
-pub fn listed(watches: &Watches, now: Instant) -> Result<crate::wire::WatchesPayload, Refusal> {
-    let shown = |watch: Watch| crate::wire::MailWatch {
+pub fn listed(
+    watches: &Watches,
+    now: Instant,
+) -> Result<crate::wire::triage::WatchesPayload, Refusal> {
+    let shown = |watch: Watch| crate::wire::triage::MailWatch {
         on: match watch.set.on.part {
-            Part::Sender => crate::wire::WatchOn::Sender,
-            Part::Subject => crate::wire::WatchOn::Subject,
+            Part::Sender => crate::wire::triage::WatchOn::Sender,
+            Part::Subject => crate::wire::triage::WatchOn::Subject,
         },
         text: watch.set.on.text.as_str().to_owned(),
         set: prodrome_core::fpl::iso(watch.set.at),
         until: prodrome_core::fpl::iso(watch.set.until),
         id: watch.id.0,
     };
-    Ok(crate::wire::WatchesPayload {
+    Ok(crate::wire::triage::WatchesPayload {
         watches: open(watches, now)?.into_iter().map(shown).collect(),
     })
 }

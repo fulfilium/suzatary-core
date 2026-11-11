@@ -16,7 +16,8 @@ use suzatary_core::replica::held::Node as _;
 use suzatary_core::replica::objects::{self, Answer, Move, Object, Objects, Refusal};
 use suzatary_core::secretary::object_stores;
 use suzatary_core::snapshot;
-use suzatary_core::wire::{ReceiptPayload, StorePayload};
+use suzatary_core::wire::StorePayload;
+use suzatary_core::wire::lines::ReceiptPayload;
 use wasm_bindgen::JsError;
 
 use crate::line_rows::{Step, hashes, whole};

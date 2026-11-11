@@ -36,9 +36,9 @@ use prodrome_core::literal::codec::{Constructor, Fields, Literal};
 /// Its fulfillment at the set's instant, priced through `set`; `∅` for a todo the set does not
 /// hold, `None` where its spec does not link or price.
 #[must_use]
-pub fn value(object: &Object, set: &ChainSet<'_>) -> Option<crate::wire::Fulfillment> {
+pub fn value(object: &Object, set: &ChainSet<'_>) -> Option<crate::wire::todo::Fulfillment> {
     let price = object.price.as_ref().ok()?;
-    crate::wire::Fulfillment::of(
+    crate::wire::todo::Fulfillment::of(
         link_in(price, &BTreeMap::new(), set.stores())
             .map(|closed| prodrome_core::fpl::fulfillment(&closed, set.instant(), &Env::new())),
     )
@@ -1461,7 +1461,7 @@ mod tests {
         );
         assert_eq!(object.reading.shown(), Some(&conflict.first));
         assert!(!object.reading.performs(), "a conflict performs nothing");
-        let card = crate::secretary::card::of(&crate::wire::ProposedAct::Auth {
+        let card = crate::secretary::card::of(&crate::wire::inbox::ProposedAct::Auth {
             account: "ada@example.com".to_owned(),
             sentence: "Sign in".to_owned(),
         });

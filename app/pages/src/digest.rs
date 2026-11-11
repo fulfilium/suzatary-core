@@ -1,7 +1,7 @@
 //! A changeset in one line: its acts grouped in the order they first appear, a todo named when it
 //! is one and counted when several, and flags for what the owner must see to decide.
 
-use suzatary_core::wire::{ObjectAct, ProposedObject};
+use suzatary_core::wire::inbox::{ObjectAct, ProposedObject};
 
 /// SECRETARY.md's review holds a todo priced at or under this for the owner.
 pub(crate) const HOLD: u32 = 45;

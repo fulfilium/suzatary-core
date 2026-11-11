@@ -2,7 +2,7 @@
 //! the source as text, each with its Copy, and the references it names linked under it.
 
 use suzatary_core::reference::mentions;
-use suzatary_core::wire::BlockRow;
+use suzatary_core::wire::topics::BlockRow;
 use viewtree::Attr::{AriaLabel, Class, Href, Open, Title, Type};
 use viewtree::{Node, view};
 

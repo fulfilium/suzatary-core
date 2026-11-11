@@ -3,10 +3,12 @@ pub(crate) use serde_json::{Value, json};
 pub(crate) use suzatary_core::answer::Kind as BlockKind;
 pub(crate) use suzatary_core::release::{Lot, Named, Place};
 pub(crate) use suzatary_core::secretary::memory::{FactId, Kind};
+pub(crate) use suzatary_core::wire::cards::{AboutPayload, HeldTodo};
+pub(crate) use suzatary_core::wire::todo::{EntryState, Fulfillment, Neighbour};
+pub(crate) use suzatary_core::wire::topics::{BlockRow, FactRow, FactSaid, MemoryPayload, SaidOn};
 pub(crate) use suzatary_core::wire::{
-    AboutPayload, BlockRow, BriefRow, BriefingDay, BriefingPayload, BriefingRow, BriefingsPayload,
-    CalendarPayload, EntryState, FactRow, FactSaid, Fulfillment, HeldTodo, MemoryPayload,
-    Neighbour, RecordPayload, RecordSummary, ReleaseItem, ReleaseRow, ReleasesPayload, SaidOn,
+    BriefRow, BriefingDay, BriefingPayload, BriefingRow, BriefingsPayload, CalendarPayload,
+    RecordPayload, RecordSummary, ReleaseItem, ReleaseRow, ReleasesPayload,
 };
 pub(crate) use suzatary_pages::reading::{Nothing, One, Opened};
 pub(crate) use suzatary_pages::runtime::{

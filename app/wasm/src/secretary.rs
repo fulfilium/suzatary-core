@@ -21,7 +21,7 @@ use suzatary_core::secretary::outlines::Scope;
 use suzatary_core::secretary::readings::{self, DEFAULT_TURN_WINDOW, Dress, Window};
 use suzatary_core::secretary::store::Stored;
 use suzatary_core::secretary::stream;
-use suzatary_core::wire::MemoryPayload;
+use suzatary_core::wire::topics::MemoryPayload;
 use wasm_bindgen::prelude::*;
 
 use crate::{Chains, Proposals, json, refused};
@@ -107,7 +107,12 @@ impl Lines {
         let lacking = self.0.lacking(&scope_of(scope)?);
         let lines = lacking
             .iter()
-            .filter(|node| matches!(node.header, suzatary_core::wire::NodeHeader::Line { .. }))
+            .filter(|node| {
+                matches!(
+                    node.header,
+                    suzatary_core::wire::lines::NodeHeader::Line { .. }
+                )
+            })
             .count();
         json(&serde_json::json!({ "nodes": lacking.len(), "lines": lines }))
     }

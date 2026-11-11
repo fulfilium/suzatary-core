@@ -5,7 +5,7 @@ use suzatary_core::repos::Visibility;
 use suzatary_core::secretary::card::{at, of};
 use suzatary_core::secretary::inbox_reading::{Answer, Reading};
 use suzatary_core::secretary::responded::{Responded, Tried};
-use suzatary_core::wire::{CardLink, ProposedAct};
+use suzatary_core::wire::inbox::{CardLink, ProposedAct};
 
 #[test]
 fn a_repository_card_says_each_stage_in_its_own_words() {

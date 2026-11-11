@@ -236,7 +236,7 @@ fn a_pull_that_lacks_nothing_sends_nothing_and_reads_no_object() {
         routes::lines_skeleton(conversations, &since, books, now, Cut::PIECE).expect("the pull");
     let took = started.elapsed();
     let bytes = serde_json::to_vec(&known).expect("prints").len();
-    assert_eq!(known.since, suzatary_core::wire::SinceRead::Known);
+    assert_eq!(known.since, suzatary_core::wire::store::SinceRead::Known);
     assert!(known.nodes.is_empty() && known.keys.is_empty() && known.rest == 0);
     assert_eq!(
         known.frontier, whole.frontier,

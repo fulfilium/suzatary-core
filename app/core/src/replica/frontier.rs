@@ -2,7 +2,7 @@
 
 use prodrome_core::event::Hash;
 
-use crate::wire::SinceRead;
+use crate::wire::store::SinceRead;
 
 /// Nothing the box named yet, or the frontier an answer named, which the next pull names back as
 /// `since`. The era counts the answers that said the box no longer held the frontier asked from,

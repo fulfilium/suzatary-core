@@ -23,7 +23,9 @@ use suzatary_core::secretary::locked_text::KeyName;
 use suzatary_core::secretary::outlines::Parsed;
 use suzatary_core::secretary::step::Step;
 use suzatary_core::snapshot::{from_snapshot, snapshot};
-use suzatary_core::wire::{self, Heads, NodeHeader, SinceRead, SkeletonNode, SkeletonPayload};
+use suzatary_core::wire::lines as wire;
+use suzatary_core::wire::lines::{Heads, NodeHeader, SkeletonNode, SkeletonPayload};
+use suzatary_core::wire::store::SinceRead;
 
 type LineRow = Row<Parsed, KeyRing>;
 

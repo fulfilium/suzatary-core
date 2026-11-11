@@ -13,7 +13,7 @@ use prodrome_core::event::{Actor, Hash};
 use prodrome_core::sign::Secret;
 use suzatary_core::gate::OPERATOR_HEADER;
 use suzatary_core::signatures::{Signers, body_digest, request_name};
-use suzatary_core::wire;
+use suzatary_core::wire::lines as wire;
 use suzatary_io::http::{Http as _, Method, Req, Ureq};
 
 use super::serve::asked::{AT_HEADER, KEY_HEADER, NONCE_HEADER, SIGNATURE_HEADER};
@@ -230,10 +230,9 @@ impl Operator {
         for ask in
             suzatary_core::routes::asks(lacking.iter().map(|node| (node.hash.as_str(), node.size)))
         {
-            let content: wire::ContentPayload = serde_json::from_slice(&read(&format!(
-                "/api/stores/lines/content?hashes={}",
-                ask.join(",")
-            ))?)
+            let content: suzatary_core::wire::ContentPayload = serde_json::from_slice(&read(
+                &format!("/api/stores/lines/content?hashes={}", ask.join(",")),
+            )?)
             .context("a content answer of the lines")?;
             replica.take(content.objects)?;
         }

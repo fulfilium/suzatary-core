@@ -28,19 +28,19 @@ impl Proposer {
     /// Who asked, as a card and the Inbox's row carry it: the box's Secret card in the setup
     /// conversation is a setup card, its every other card the box's own.
     #[must_use]
-    pub fn on_wire(&self, proposal: &Proposal, asked: &ProposalRef) -> crate::wire::Asker {
+    pub fn on_wire(&self, proposal: &Proposal, asked: &ProposalRef) -> crate::wire::inbox::Asker {
         match self {
-            Proposer::Secretary => crate::wire::Asker::Secretary {},
-            Proposer::Triage => crate::wire::Asker::Triage {},
-            Proposer::Plugin(name) => crate::wire::Asker::Plugin {
+            Proposer::Secretary => crate::wire::inbox::Asker::Secretary {},
+            Proposer::Triage => crate::wire::inbox::Asker::Triage {},
+            Proposer::Plugin(name) => crate::wire::inbox::Asker::Plugin {
                 name: name.to_string(),
             },
             Proposer::Box => match proposal {
                 Proposal::Act(Act::Secret { .. } | Act::GoogleClient { .. }) => {
                     if asked.conversation == *SETUP {
-                        crate::wire::Asker::Setup {}
+                        crate::wire::inbox::Asker::Setup {}
                     } else {
-                        crate::wire::Asker::Box {}
+                        crate::wire::inbox::Asker::Box {}
                     }
                 }
                 // Every other act the box asks for is its own, and each is named here, so a new
@@ -71,7 +71,7 @@ impl Proposer {
                 | Proposal::Forward(_)
                 | Proposal::Changes(_)
                 | Proposal::Remember { .. }
-                | Proposal::Decide(_) => crate::wire::Asker::Box {},
+                | Proposal::Decide(_) => crate::wire::inbox::Asker::Box {},
             },
         }
     }

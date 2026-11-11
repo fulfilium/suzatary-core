@@ -7,7 +7,7 @@ use crate::secretary::inbox_reading::Reading;
 use crate::secretary::proposal::Style;
 use crate::secretary::responded::{Responded, Tried};
 use crate::web::WebKind;
-use crate::wire::{
+use crate::wire::inbox::{
     Asker, Asks, Cached, Card, CardAnswer, CardField, CardFile, CardLink, HeldIn, ProposedAct,
     RememberWords, ReplacedFact,
 };
@@ -949,7 +949,7 @@ fn unlock_store(sentence: &str) -> Card {
     }
 }
 
-fn changeset(changes: &[crate::wire::ProposedObject], problem: &str) -> Card {
+fn changeset(changes: &[crate::wire::inbox::ProposedObject], problem: &str) -> Card {
     let n = changes.len();
     Card {
         rows: changes.to_vec(),
@@ -1323,12 +1323,12 @@ mod tests {
     /// An email's files are all on its card, and its question counts them.
     #[test]
     fn an_email_card_lists_every_attachment_and_its_question_counts_them() {
-        let notice = crate::wire::CardFile {
+        let notice = crate::wire::inbox::CardFile {
             name: "notice.pdf".to_owned(),
             media: "application/pdf".to_owned(),
             size: "1.2 MB".to_owned(),
             sha256: "a".repeat(64),
-            from: crate::wire::FileFrom::Mail {
+            from: crate::wire::inbox::FileFrom::Mail {
                 message: "m1@example.test".to_owned(),
             },
         };

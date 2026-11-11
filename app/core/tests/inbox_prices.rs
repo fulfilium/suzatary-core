@@ -26,7 +26,7 @@ use suzatary_core::secretary::inbox_event::InboxEvent;
 use suzatary_core::secretary::proposal::{Draft, Proposal, Reasons};
 use suzatary_core::store::Reads as _;
 use suzatary_core::store::{InMemory, Prodrome};
-use suzatary_core::wire::Fulfillment;
+use suzatary_core::wire::todo::Fulfillment;
 
 fn at(hour: i64) -> Datetime {
     let base = Datetime::new(2026, 10, 4, 0, 0, 0, 0).expect("an instant");

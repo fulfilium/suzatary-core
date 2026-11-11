@@ -194,7 +194,9 @@ pub fn todo(call: &Call<Reader, TodoAt, ()>) -> Result<Json<wire::TodoPayload>, 
 
 /// `POST …/todo/<id>/build`: the owner asks for the todo to be built, and the box files the
 /// coding-session card that serves it; only his tap on that card fires a session.
-pub fn build(call: &Call<Tap, TodoRef, ()>) -> Result<Json<wire::ConversationPayload>, Refusal> {
+pub fn build(
+    call: &Call<Tap, TodoRef, ()>,
+) -> Result<Json<wire::topics::ConversationPayload>, Refusal> {
     call.state
         .with_cards(|caps, cards| {
             suzatary_core::secretary::routes::build(caps, &call.guard, cards, &call.params)
@@ -222,7 +224,9 @@ pub fn me(call: &Call<Reader, (), ()>) -> Json<wire::MePayload> {
 }
 
 /// `GET …/objects?since=<frontier>`: what this replica does not hold.
-pub fn objects(call: &Call<Reader, Since, ()>) -> Result<Json<wire::ObjectsPayload>, Refusal> {
+pub fn objects(
+    call: &Call<Reader, Since, ()>,
+) -> Result<Json<wire::lines::ObjectsPayload>, Refusal> {
     routes::objects_since(
         call.chain.caps.secretary.chain,
         &call.chain.policy,
@@ -236,7 +240,7 @@ pub fn objects(call: &Call<Reader, Since, ()>) -> Result<Json<wire::ObjectsPaylo
 /// `POST …/objects`: a replica handing its objects over, sealed as the gate's actor.
 pub fn take_objects(
     call: &Call<Poster, (), Literals>,
-) -> Result<Json<wire::ReceiptPayload>, Refusal> {
+) -> Result<Json<wire::lines::ReceiptPayload>, Refusal> {
     let caps = call.chain.caps;
     // A note's line is stamped by the todos it names as they stood before the post.
     let before = call.state.chains_read();

@@ -462,8 +462,8 @@ pub struct LocalAnswers {
     device: Option<crate::settings::Device>,
     proposals: crate::waiting::InboxRead,
     decisions: suzatary_core::wire::FoldPayload,
-    conversations: suzatary_core::wire::ConversationsPayload,
-    search: suzatary_core::wire::SearchPayload,
+    conversations: suzatary_core::wire::topics::ConversationsPayload,
+    search: suzatary_core::wire::topics::SearchPayload,
     stream: crate::secretary::StreamRead,
     window: crate::conversation::Windowed,
     cards: suzatary_core::wire::DrawnPayload,
@@ -648,7 +648,7 @@ pub(crate) struct Question {
     pub(crate) text: String,
     pub(crate) references: Vec<String>,
     /// Already kept on the box.
-    pub(crate) files: Vec<suzatary_core::wire::AttachmentRow>,
+    pub(crate) files: Vec<suzatary_core::wire::topics::AttachmentRow>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]

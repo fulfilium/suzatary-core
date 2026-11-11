@@ -17,7 +17,7 @@ use crate::secretary::locked_text::{KEY_BYTES, KeyName};
 use crate::secretary::outlines::Parsed;
 use crate::secretary::step::Step;
 use crate::snapshot::{self, NotASnapshot, Unprinted};
-use crate::wire::{NodeHeader, SkeletonNode};
+use crate::wire::lines::{NodeHeader, SkeletonNode};
 
 /// The lines' rows.
 pub type LinePulling = Pulling<Parsed, KeyRing>;

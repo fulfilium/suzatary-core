@@ -24,7 +24,7 @@ use suzatary_core::secretary::transcript;
 use suzatary_core::secretary::words::Words;
 use suzatary_core::store::Reads as _;
 use suzatary_core::store::{Doc as _, Prodrome as _};
-use suzatary_core::wire::Content;
+use suzatary_core::wire::lines::Content;
 
 fn at(n: u32) -> Datetime {
     Datetime::new(2026, 9, 30, 9, n / 60, n % 60, 0).expect("an instant")
@@ -250,7 +250,7 @@ proptest! {
             let objects = store.lines.lines.objects().expect("reads");
             let by_name: BTreeMap<&Hash, &Envelope<LineEvent>> = objects.iter().map(|(n, o)| (n, o)).collect();
             let piece = routes::store_objects_since(&store.lines.lines, &since, books, now(), Cut::Bytes(budget)).expect("a piece");
-            prop_assert_eq!(piece.objects.since, suzatary_core::wire::SinceRead::Known);
+            prop_assert_eq!(piece.objects.since, suzatary_core::wire::store::SinceRead::Known);
             let lacked = objects.len() - held.len();
             prop_assert_eq!(piece.objects.objects.is_empty(), lacked == 0);
             prop_assert_eq!(piece.rest, lacked - piece.objects.objects.len());
@@ -361,7 +361,7 @@ proptest! {
             first.iter().take(held_first).map(|(name, _)| name.clone()).collect();
         let since = since_of(&frontiers, &first, &held);
         let mut since_now = since.clone();
-        let mut nodes: Vec<suzatary_core::wire::SkeletonNode> = Vec::new();
+        let mut nodes: Vec<suzatary_core::wire::lines::SkeletonNode> = Vec::new();
         let mut keys = BTreeMap::new();
         let mut moved = false;
         let mut asked = 0usize;
@@ -396,8 +396,8 @@ proptest! {
         let whole = routes::store_objects_since(&store.lines.lines, &since, books, now(), Cut::Whole).expect("the whole");
         let whole_keys = routes::lines_skeleton(store.lines.conversations(), &since, books, now(), Cut::Whole).expect("the whole skeleton").keys;
         match &last.heads {
-            suzatary_core::wire::Heads::These { heads } => prop_assert_eq!(heads, &whole.objects.heads),
-            suzatary_core::wire::Heads::Held => prop_assert!(last.nodes.is_empty(), "the heads go unsaid only to a replica that lacks nothing"),
+            suzatary_core::wire::lines::Heads::These { heads } => prop_assert_eq!(heads, &whole.objects.heads),
+            suzatary_core::wire::lines::Heads::Held => prop_assert!(last.nodes.is_empty(), "the heads go unsaid only to a replica that lacks nothing"),
         }
         prop_assert_eq!(&last.geneses, &whole.objects.geneses);
         prop_assert_eq!(last.epoch, whole.objects.epoch);
@@ -431,9 +431,9 @@ proptest! {
             parents.dedup();
             prop_assert_eq!(&node.parents, &parents);
         }
-        let rebuilt: Vec<suzatary_core::wire::StoredObject> = nodes
+        let rebuilt: Vec<suzatary_core::wire::lines::StoredObject> = nodes
             .iter()
-            .map(|node| suzatary_core::wire::StoredObject { hash: node.hash.clone(), literal: literals[&node.hash].clone() })
+            .map(|node| suzatary_core::wire::lines::StoredObject { hash: node.hash.clone(), literal: literals[&node.hash].clone() })
             .collect();
         if moved {
             let sent: BTreeSet<&str> = rebuilt.iter().map(|o| o.hash.as_str()).collect();

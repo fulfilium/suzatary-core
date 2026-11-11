@@ -7,10 +7,12 @@ use serde::{Deserialize, Serialize};
 use suzatary_core::escape::{Escaped, unescape_markup};
 use suzatary_core::reference::TodoRef;
 use suzatary_core::todo::{Cycle, Patch, TodoPatch};
-use suzatary_core::wire::{
-    Authored, AuthoredSource, Authoring, ConversationPayload, Entry, FieldChange, Holds,
-    InboxState, Link, Neighbour, Reverses, SubTodo, TodoPayload, UpdateTodo,
+use suzatary_core::wire::record::SubTodo;
+use suzatary_core::wire::todo::{
+    Authored, AuthoredSource, Entry, FieldChange, Holds, Link, Neighbour, Reverses,
 };
+use suzatary_core::wire::topics::{ConversationPayload, InboxState};
+use suzatary_core::wire::{Authoring, TodoPayload, UpdateTodo};
 use ts_rs::TS;
 use viewtree::Attr::{
     AriaLabel, Checked, Class, Data, Disabled, For, Href, Id, Open, Role, Title, Type,
@@ -1136,7 +1138,7 @@ fn source_block(s: &AuthoredSource) -> Node<Msg> {
 }
 
 fn claim(e: &Entry) -> Option<Node<Msg>> {
-    use suzatary_core::wire::ClaimedState;
+    use suzatary_core::wire::todo::ClaimedState;
     let claimed = match e.claimed {
         ClaimedState::Agrees => return None,
         ClaimedState::Completed => "completed",
@@ -1206,7 +1208,7 @@ fn neighbour(n: &Neighbour) -> Node<Msg> {
     view! { A "linkrow" {Data("todo") => n.todo.clone(), Href => Place::Todo(&n.todo).href()} [
         value_mark(n.value),
         view! { Code "linkid" [n.todo.as_str()] },
-        chip(&serde_json::to_value(n.state).ok().and_then(|v| v.as_str().map(str::to_owned)).unwrap_or_default(), if n.state == suzatary_core::wire::EntryState::Open { "" } else { "done" }),
+        chip(&serde_json::to_value(n.state).ok().and_then(|v| v.as_str().map(str::to_owned)).unwrap_or_default(), if n.state == suzatary_core::wire::todo::EntryState::Open { "" } else { "done" }),
         n.unconfirmed.then(|| chip("unconfirmed", "prov")),
         mark(crate::part::Mark::Chevron),
     ] }

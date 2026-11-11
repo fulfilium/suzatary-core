@@ -15,7 +15,8 @@ use suzatary_core::secretary::locked_text::KeyName;
 use suzatary_core::secretary::outlines::Parsed;
 use suzatary_core::secretary::step::Step;
 use suzatary_core::snapshot::{NotASnapshot, from_snapshot, snapshot};
-use suzatary_core::wire::{NodeHeader, SinceRead, SkeletonNode};
+use suzatary_core::wire::lines::{NodeHeader, SkeletonNode};
+use suzatary_core::wire::store::SinceRead;
 
 fn name(seed: u8) -> String {
     hex::encode(Sha256::digest([seed]))

@@ -135,14 +135,16 @@ pub fn thread(call: &Call<Reader, Thread, ()>) -> Result<Json<wire::ThreadPayloa
 }
 
 /// `GET /api/mail/watches`: every watch on expected mail that waits.
-pub fn watches(call: &Call<Reader, (), ()>) -> Result<Json<wire::WatchesPayload>, Refusal> {
+pub fn watches(call: &Call<Reader, (), ()>) -> Result<Json<wire::triage::WatchesPayload>, Refusal> {
     let caps = call.chain.caps;
     let now = prodrome_core::fpl::instant_of(caps.secretary.clock.now());
     Ok(Json(watch::listed(caps.secretary.watches, now)?))
 }
 
 /// `POST /api/mail/watches/<id>/cancel`: the owner's tap closes a watch; answers the rest.
-pub fn cancel_watch(call: &Call<Tap, Watched, ()>) -> Result<Json<wire::WatchesPayload>, Refusal> {
+pub fn cancel_watch(
+    call: &Call<Tap, Watched, ()>,
+) -> Result<Json<wire::triage::WatchesPayload>, Refusal> {
     let caps = call.chain.caps;
     let now = prodrome_core::fpl::instant_of(caps.secretary.clock.now());
     watch::cancel(caps.secretary.watches, &call.params.0, now)?;

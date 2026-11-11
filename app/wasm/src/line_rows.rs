@@ -19,7 +19,7 @@ use suzatary_core::secretary::line_form::{self, LineFrame, LineReplica};
 use suzatary_core::secretary::locked_text::KeyName;
 use suzatary_core::secretary::outlines::Parsed;
 use suzatary_core::snapshot;
-use suzatary_core::wire::SkeletonPayload;
+use suzatary_core::wire::lines::SkeletonPayload;
 use wasm_bindgen::prelude::*;
 
 use crate::secretary::Lines;

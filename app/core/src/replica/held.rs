@@ -7,7 +7,7 @@ use prodrome_core::event::Hash;
 
 use crate::replica::frontier::Frontier;
 use crate::replica::word::Word;
-use crate::wire::SinceRead;
+use crate::wire::store::SinceRead;
 
 /// A node of a store, as a replica holds it: by its name, beside what it rests on.
 pub trait Node: Clone {

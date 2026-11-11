@@ -42,7 +42,7 @@ use suzatary_core::snapshot::{from_snapshot, snapshot};
 use suzatary_core::store::Prodrome as _;
 use suzatary_core::store::Reads as _;
 use suzatary_core::store::{Doc as _, Gets as _};
-use suzatary_core::wire;
+use suzatary_core::wire::topics as wire;
 
 /// One step of a script: a turn said in a conversation, an erasure of some of its lines, a
 /// rename, a stop, a rewind of the last `back` turns, or a proposal. A turn that `echoes` draws its

@@ -7,10 +7,11 @@ use chrono::NaiveDate;
 use serde::Deserialize;
 use suzatary_core::reference::Reference;
 use suzatary_core::secretary::store::Unheld;
-use suzatary_core::wire::{
-    Block, DrawnPayload, Entry, EntryState, FoldPayload, InboxProposal, InboxProposalsPayload,
-    InboxState, ProposalRow, UnplacedProposal, WaitingPayload,
+use suzatary_core::wire::todo::{Block, Entry, EntryState};
+use suzatary_core::wire::topics::{
+    InboxProposal, InboxProposalsPayload, InboxState, ProposalRow, UnplacedProposal,
 };
+use suzatary_core::wire::{DrawnPayload, FoldPayload, WaitingPayload};
 use ts_rs::TS;
 use viewtree::kit::Reading;
 
@@ -156,7 +157,7 @@ impl<'a> Waiting<'a> {
         };
         match (
             self.unpriced(),
-            value.and_then(suzatary_core::wire::Fulfillment::number),
+            value.and_then(suzatary_core::wire::todo::Fulfillment::number),
         ) {
             (Some(_), _) => (2, 0.0),
             (None, None) => (1, 0.0),

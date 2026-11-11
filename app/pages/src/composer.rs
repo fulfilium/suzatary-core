@@ -5,7 +5,8 @@ use std::collections::BTreeMap;
 
 use serde::{Deserialize, Serialize};
 use suzatary_core::reference::Reference;
-use suzatary_core::wire::{AttachmentRow, TurnRow, Uploaded, Uploading};
+use suzatary_core::wire::topics::{AttachmentRow, TurnRow};
+use suzatary_core::wire::{Uploaded, Uploading};
 use ts_rs::TS;
 use viewtree::Attr::{
     Accept, AriaLabel, Class, Data, Disabled, Hidden, Multiple, Placeholder, Rows, Title, Type,
@@ -243,7 +244,7 @@ impl Composer {
     }
 
     pub(crate) fn edit(&mut self, question: &TurnRow) -> Vec<Out> {
-        let suzatary_core::wire::Speaker::Person {
+        let suzatary_core::wire::topics::Speaker::Person {
             references,
             attachments,
             ..

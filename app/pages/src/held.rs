@@ -4,7 +4,7 @@
 use std::collections::BTreeMap;
 
 use serde::Deserialize;
-use suzatary_core::wire::Entry;
+use suzatary_core::wire::todo::Entry;
 use ts_rs::TS;
 
 /// The rows of the fold the tab shows, at the instant they were read.

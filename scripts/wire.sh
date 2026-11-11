@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Generates the browser's wire into web/src/wire/generated/ (git-ignored): wire.ts (the types of
-# app/core/src/wire.rs, via ts-rs), payload.ts (their decoders) and pages.ts (each page's host
-# contract). The wire is declared once, in Rust.
+# app/core/src/wire.rs and wire/, via ts-rs), payload.ts (their decoders) and pages.ts (each
+# page's host contract). The wire is declared once, in Rust.
 #
 # `$SUZATARY_WIRE_TS` names a directory holding them already (`nix build .#suzatary-web-ts`);
 # without it this runs the derivation's own `cargo test` into a scratch directory.

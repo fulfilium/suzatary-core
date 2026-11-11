@@ -17,7 +17,7 @@ use suzatary_core::settings::overview::{
 use suzatary_core::settings::remote::{self, Pushed, Tip};
 use suzatary_core::store::StoreError;
 use suzatary_core::timings::{Part, Phase, timed};
-use suzatary_core::wire;
+use suzatary_core::wire::cards as wire;
 use suzatary_io::plugin_store::PluginStore;
 
 use super::State;

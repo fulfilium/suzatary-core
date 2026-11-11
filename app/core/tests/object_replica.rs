@@ -22,7 +22,7 @@ use suzatary_core::secretary::topics::reading::{
 use suzatary_core::secretary::topics::topic::Topic;
 use suzatary_core::snapshot::{from_snapshot, snapshot};
 use suzatary_core::topic_target::Target;
-use suzatary_core::wire::SinceRead;
+use suzatary_core::wire::store::SinceRead;
 
 /// The box's store: one genesis, then `n` memberships, each written over the one before.
 fn universe(n: u32) -> Vec<Object> {

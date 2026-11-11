@@ -4107,7 +4107,7 @@ pub fn reading(base: &str, id: &str, query: &[(&str, &str)]) -> serde_json::Valu
         .find(|stored| stored.id.as_str() == id)
         .unwrap_or_else(|| panic!("no conversation named {id}"));
     let mut memory = get(&format!("{base}/api/secretary/memory"));
-    let memory: Option<suzatary_core::wire::MemoryPayload> =
+    let memory: Option<suzatary_core::wire::topics::MemoryPayload> =
         (status(&memory) == 200).then(|| memory.body_mut().read_json().expect("a memory"));
     let read = suzatary_core::secretary::readings::conversation(
         stored,
@@ -4244,7 +4244,7 @@ pub fn inbox_listing(base: &str, at: &str) -> Vec<serde_json::Value> {
     let set = read.set(at);
     // As the tab asks it: the memory by its route, for a remember card's words.
     let mut memory = get(&format!("{base}/api/secretary/memory"));
-    let memory: Option<suzatary_core::wire::MemoryPayload> =
+    let memory: Option<suzatary_core::wire::topics::MemoryPayload> =
         (status(&memory) == 200).then(|| memory.body_mut().read_json().expect("a memory"));
     serde_json::to_value(suzatary_core::secretary::readings::inbox(
         &inbox,

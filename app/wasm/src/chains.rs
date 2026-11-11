@@ -14,7 +14,7 @@ use prodrome_wasm_exports::wire::{parse_instant, parse_specs, parse_term, parse_
 use prodrome_wasm_exports::{Replica, json};
 use suzatary_core::chain_set::{self, ChainSet, Remembered};
 use suzatary_core::chains::ChainName;
-use suzatary_core::wire::FailedChain;
+use suzatary_core::wire::signatures::FailedChain;
 use wasm_bindgen::prelude::*;
 
 use crate::{Event, json, printed, refused};

@@ -1,12 +1,12 @@
 //! A request this application declines to do work for: a value every route returns, turned by
-//! the axum layer into the one body shape the frontend reads ([`crate::wire::ErrorPayload`]).
+//! the axum layer into the one body shape the frontend reads ([`crate::wire::base::ErrorPayload`]).
 //!
 //! The sentence is the contract: the frontend shows it verbatim and tests assert on it, so a
 //! refusal names which field was wrong rather than saying something friendlier.
 
 use std::fmt;
 
-use crate::wire::ErrorPayload;
+use crate::wire::base::ErrorPayload;
 
 /// The HTTP status a refusal carries: a closed set rather than a `u16`, so only a status
 /// somebody decided to answer with can be answered.

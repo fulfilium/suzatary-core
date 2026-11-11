@@ -4,7 +4,7 @@ use chrono::NaiveDate;
 use serde::{Deserialize, Serialize};
 use suzatary_core::secretary::topics::provenance::Provenance;
 use suzatary_core::secretary::topics::topic::Topic;
-use suzatary_core::wire::{
+use suzatary_core::wire::topics::{
     RoundAsked, RoundTopic, StreamPayload, StreamRound, TopicInUse, TopicsPayload,
 };
 use ts_rs::TS;
@@ -665,14 +665,16 @@ fn round(m: &Model, r: &StreamRound, today: NaiveDate) -> Node<Msg> {
         ),
     };
     let answer = r.answer.as_ref().map(|a| match &a.who {
-        suzatary_core::wire::Speaker::Model { blocks } if !blocks.is_empty() => {
+        suzatary_core::wire::topics::Speaker::Model { blocks } if !blocks.is_empty() => {
             answer::blocks(&a.text, blocks, Msg::Copy)
         }
-        suzatary_core::wire::Speaker::Model { .. }
-        | suzatary_core::wire::Speaker::Person { .. }
-        | suzatary_core::wire::Speaker::Verb { .. }
-        | suzatary_core::wire::Speaker::Act { .. }
-        | suzatary_core::wire::Speaker::Box { .. } => view! { Div "turntext" [a.text.as_str()] },
+        suzatary_core::wire::topics::Speaker::Model { .. }
+        | suzatary_core::wire::topics::Speaker::Person { .. }
+        | suzatary_core::wire::topics::Speaker::Verb { .. }
+        | suzatary_core::wire::topics::Speaker::Act { .. }
+        | suzatary_core::wire::topics::Speaker::Box { .. } => {
+            view! { Div "turntext" [a.text.as_str()] }
+        }
     });
     let writes = writes(m);
     let topics = (!r.topics.is_empty() || writes).then(|| {

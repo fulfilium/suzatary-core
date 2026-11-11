@@ -33,7 +33,7 @@ use crate::secrets::Secrets;
 use crate::server::Server;
 use crate::settings::{Edits, Settable, Settables, Writes};
 use crate::signatures::Tap;
-use crate::wire;
+use crate::wire::topics as wire;
 
 /// Sending a proposed message, the one effect behind a tap; deliberately in no capability bundle,
 /// so no verb can send.
@@ -234,7 +234,7 @@ impl Draw for Drawn<'_> {
             .map(|manifest| manifest.origins().map(ToString::to_string).collect())
     }
 
-    fn shown(&self, changeset: &Changeset) -> (Vec<wire::ProposedObject>, String) {
+    fn shown(&self, changeset: &Changeset) -> (Vec<crate::wire::inbox::ProposedObject>, String) {
         let Some((nodes, untrusted)) = self.nodes.get(changeset.chain()) else {
             return (
                 Vec::new(),
@@ -391,7 +391,7 @@ pub enum Erasing {
     /// These turns' words, by index.
     Turns(#[ts(as = "Vec<u32>")] crate::nonempty::NonEmpty<usize>),
     /// Every line's words, the conversation's name included.
-    Whole(wire::Yes),
+    Whole(crate::wire::Yes),
 }
 
 /// `POST …/<id>/erase`: erase turns, or all of it, behind the same [`Tap`] as a send.
@@ -407,7 +407,7 @@ pub fn erase(
 ) -> Answered<wire::ConversationPayload> {
     let read = transcript::read(caps.secretary.conversations, id)?;
     let lines: Vec<usize> = match erasing {
-        Erasing::Whole(wire::Yes) => (0..read.lines().len()).collect(),
+        Erasing::Whole(crate::wire::Yes) => (0..read.lines().len()).collect(),
         Erasing::Turns(turns) => turns
             .as_slice()
             .iter()
@@ -470,7 +470,7 @@ pub fn drawn(
     cards: &Cards<'_>,
     id: &ConversationId,
     indices: &[usize],
-) -> Answered<wire::DrawnPayload> {
+) -> Answered<crate::wire::DrawnPayload> {
     let stored = conversations::read(caps.secretary.conversations, id)?;
     let fold = inbox::fold(caps.secretary.inbox)?;
     let drawn = Drawn::of(
@@ -493,7 +493,7 @@ pub fn drawn(
             ))
         })
         .collect::<Result<_, Refusal>>()?;
-    Ok(wire::DrawnPayload {
+    Ok(crate::wire::DrawnPayload {
         title: stored.heading().into_owned(),
         proposals,
     })
@@ -522,11 +522,11 @@ pub fn say(
     attachments: &[crate::attachment::Attachment],
     by: crate::secretary::stamp::Stamp,
     after: Option<usize>,
-) -> Answered<wire::SayPayload> {
+) -> Answered<crate::wire::SayPayload> {
     let turn = question(said, references, attachments)?;
     let before = conversations::read(caps.secretary.conversations, id)?;
     if after.is_some_and(|after| asked(&before, after, &turn, &by)) {
-        return Ok(wire::SayPayload {
+        return Ok(crate::wire::SayPayload {
             conversation: payload(&before, caps, cards)?,
         });
     }
@@ -547,7 +547,7 @@ pub fn say(
         },
     )?;
     let stored = conversations::read(caps.secretary.conversations, id)?;
-    Ok(wire::SayPayload {
+    Ok(crate::wire::SayPayload {
         conversation: payload(&stored, caps, cards)?,
     })
 }
@@ -2352,15 +2352,17 @@ pub fn forget(
 ///
 /// # Errors
 /// The stores' own.
-pub fn record(digests: &crate::secretary::digests::Digests<'_>) -> Answered<wire::RecordPayload> {
+pub fn record(
+    digests: &crate::secretary::digests::Digests<'_>,
+) -> Answered<crate::wire::RecordPayload> {
     let record = crate::secretary::shown_record::OwnersRecord::of(
         crate::secretary::compaction::Reading::of(&digests.reads())?,
     );
-    Ok(wire::RecordPayload {
+    Ok(crate::wire::RecordPayload {
         summaries: record
             .summaries(crate::secretary::digest_view::VIEW_BYTES)
             .into_iter()
-            .map(|(part, line)| wire::RecordSummary {
+            .map(|(part, line)| crate::wire::RecordSummary {
                 node: part.node.as_str().to_owned(),
                 handle: part.handle(),
                 lines: u32::try_from(part.span.len()).unwrap_or(u32::MAX),
@@ -2380,7 +2382,7 @@ pub fn retract(
     clock: &dyn Clock,
     tap: &crate::signatures::Tap,
     node: &prodrome_core::event::Hash,
-) -> Answered<wire::RecordPayload> {
+) -> Answered<crate::wire::RecordPayload> {
     memories.hold()?.retract(node, clock.now(), tap)?;
     record(&memories.digests)
 }
@@ -2538,7 +2540,7 @@ mod tests {
         let row = proposal(2, &standing, &no_chain(), None);
         assert_eq!(row.index, 2);
         assert_eq!(row.turn, 3, "the position travels to the wire too");
-        let wire::ProposedAct::Email {
+        let crate::wire::inbox::ProposedAct::Email {
             account,
             to,
             cc,

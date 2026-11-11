@@ -5,7 +5,7 @@ use chrono::NaiveDate;
 use serde::{Deserialize, Serialize};
 use suzatary_core::secretary::search::{Hit, Side};
 use suzatary_core::secretary::store::Kind;
-use suzatary_core::wire::{ConversationRow, SearchPayload};
+use suzatary_core::wire::topics::{ConversationRow, SearchPayload};
 use ts_rs::TS;
 use viewtree::Attr::{
     AriaCurrent, AriaLabel, AriaPressed, Class, Href, Placeholder, Role, Title, Type, Value,

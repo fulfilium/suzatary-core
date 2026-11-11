@@ -2,7 +2,7 @@
 //! this app cannot resolve is plain text with no control.
 
 use serde::{Deserialize, Serialize};
-use suzatary_core::wire::UnplacedProposal;
+use suzatary_core::wire::topics::UnplacedProposal;
 use ts_rs::TS;
 use viewtree::Attr::{Class, Data, Open};
 use viewtree::kit::{Reading, para};
@@ -241,7 +241,10 @@ impl Program for Inbox {
     }
 }
 
-fn row_of<'a>(rows: &[Row<'a>], key: &card::Key) -> Option<&'a suzatary_core::wire::ProposalRow> {
+fn row_of<'a>(
+    rows: &[Row<'a>],
+    key: &card::Key,
+) -> Option<&'a suzatary_core::wire::topics::ProposalRow> {
     rows.iter().find_map(|r| match r {
         Row::Card(_, c, row) if card::Key::of(c.id, row) == *key => Some(*row),
         Row::Card(..) | Row::Unresolved(_) => None,

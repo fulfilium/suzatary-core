@@ -26,6 +26,13 @@ use crate::secretary::briefings::Briefings;
 use crate::secretary::step::Step;
 use crate::store::Prodrome;
 use crate::tree::{By, Classifier, Monoid};
+use crate::wire::cards::{AboutPayload, HeldTodo, Offer, Overview, Shipped};
+use crate::wire::lines::{
+    Content, Frontier, Heads, NodeHeader, ObjectsPayload, ReceiptPayload, RefusedObject,
+    SkeletonNode, SkeletonPayload, StoredObject,
+};
+use crate::wire::store::SinceRead;
+use crate::wire::todo::{Entry, EntryState, Fulfillment, Neighbour};
 use crate::{mail, query, reading};
 use crate::{view, wire};
 
@@ -92,7 +99,7 @@ pub fn fold(
     let next = set
         .next(name, &rows, Observation::PERCENT)
         .map_err(not_a_member)?;
-    let entries: Vec<wire::Entry> = rows
+    let entries: Vec<Entry> = rows
         .iter()
         .map(|row| view::entry(render, row, &by_hash, untrusted, at))
         .collect();
@@ -141,13 +148,13 @@ fn not_a_member(failure: crate::chain_set::NotAMember) -> Refusal {
 
 /// The `n` open todos most in need of attention, ascending in the fold's own `value`; ties
 /// keep the fold's order.
-fn most_owed(entries: Vec<wire::Entry>, n: usize) -> Vec<wire::Entry> {
-    let mut owed: Vec<(f64, wire::Entry)> = Vec::with_capacity(entries.len());
+fn most_owed(entries: Vec<Entry>, n: usize) -> Vec<Entry> {
+    let mut owed: Vec<(f64, Entry)> = Vec::with_capacity(entries.len());
     for entry in entries {
-        if entry.state != wire::EntryState::Open {
+        if entry.state != EntryState::Open {
             continue;
         }
-        if let Some(value) = entry.value.and_then(wire::Fulfillment::number) {
+        if let Some(value) = entry.value.and_then(Fulfillment::number) {
             owed.push((value, entry));
         }
     }
@@ -181,7 +188,7 @@ pub fn todo(
         .env;
     let refs = view::references(&rows, &by_hash).map_err(|e| Refusal::internal(e.to_string()))?;
     let back = view::backlinks(&refs);
-    let neighbours = |named: Option<&Vec<String>>| -> Vec<wire::Neighbour> {
+    let neighbours = |named: Option<&Vec<String>>| -> Vec<Neighbour> {
         named
             .map(|names| {
                 names
@@ -506,7 +513,7 @@ fn todos_from(
     chain: &ChainPolicy,
     set: &ChainSet<'_>,
     message_hash: &str,
-) -> Answered<Vec<wire::Entry>> {
+) -> Answered<Vec<Entry>> {
     let (at, untrusted) = (set.at(), &chain.untrusted);
     let (by_hash, _, rows) = rows(set, &chain.name)?;
     Ok(rows
@@ -555,7 +562,7 @@ pub fn objects_since(
     since: &prodrome_core::store::frontier::Since,
     books: Books<'_>,
     now: Datetime,
-) -> Answered<wire::ObjectsPayload> {
+) -> Answered<ObjectsPayload> {
     answered(
         store,
         &format!("chain/{}", chain.name.as_str()),
@@ -568,7 +575,7 @@ pub fn objects_since(
     .map(
         |Pulled {
              snapshot, piece, ..
-         }| wire::ObjectsPayload {
+         }| ObjectsPayload {
             untrusted: chain.untrusted_names(),
             root: Some(chain.root.as_str().to_owned()),
             ..snapshot.payload(piece.items())
@@ -655,11 +662,11 @@ fn store_answer<E: crate::stores::Store>(
 fn stored<E: prodrome_core::schema::Schema>(
     name: &prodrome_core::event::Hash,
     envelope: &prodrome_core::event::Envelope<E>,
-) -> (wire::StoredObject, usize) {
+) -> (StoredObject, usize) {
     let literal = prodrome_core::event::canonical_envelope(envelope);
     let bytes = literal.len();
     (
-        wire::StoredObject {
+        StoredObject {
             hash: name.as_str().to_owned(),
             literal,
         },
@@ -673,14 +680,14 @@ struct Snapshot {
     heads: Vec<String>,
     geneses: Vec<String>,
     epoch: u64,
-    since: wire::SinceRead,
-    frontier: wire::Frontier,
+    since: SinceRead,
+    frontier: Frontier,
 }
 
 impl Snapshot {
     /// An objects answer of these objects, read under no policy: the caller's.
-    fn payload(self, objects: Vec<wire::StoredObject>) -> wire::ObjectsPayload {
-        wire::ObjectsPayload {
+    fn payload(self, objects: Vec<StoredObject>) -> ObjectsPayload {
+        ObjectsPayload {
             heads: self.heads,
             untrusted: Vec::new(),
             root: None,
@@ -744,14 +751,14 @@ trait Sends<E: prodrome_core::schema::Schema> {
 struct Literals;
 
 impl<E: prodrome_core::schema::Schema> Sends<E> for Literals {
-    type Item = wire::StoredObject;
+    type Item = StoredObject;
     const WEIGHTS: &'static str = "weights of literals";
 
     fn emit(
         &self,
         name: &prodrome_core::event::Hash,
         envelope: &prodrome_core::event::Envelope<E>,
-    ) -> (wire::StoredObject, usize) {
+    ) -> (StoredObject, usize) {
         stored(name, envelope)
     }
 
@@ -768,14 +775,14 @@ impl<E: prodrome_core::schema::Schema> Sends<E> for Literals {
 struct Nodes;
 
 impl Sends<crate::secretary::line_event::LineEvent> for Nodes {
-    type Item = wire::SkeletonNode;
+    type Item = SkeletonNode;
     const WEIGHTS: &'static str = "weights of nodes";
 
     fn emit(
         &self,
         name: &prodrome_core::event::Hash,
         envelope: &prodrome_core::event::Envelope<crate::secretary::line_event::LineEvent>,
-    ) -> (wire::SkeletonNode, usize) {
+    ) -> (SkeletonNode, usize) {
         // Sized by its file once cut ([`held_sizes`]), so its literal is not printed here.
         let node = node_of(name, envelope, 0);
         let weight = weight(&node);
@@ -876,17 +883,17 @@ struct Pulled<E: prodrome_core::schema::Schema, T> {
 }
 
 /// Whether the store of record knew the frontier a pull named.
-fn since_read(reached: &prodrome_core::store::frontier::Reached) -> wire::SinceRead {
+fn since_read(reached: &prodrome_core::store::frontier::Reached) -> SinceRead {
     match reached {
         prodrome_core::store::frontier::Reached::Everything
-        | prodrome_core::store::frontier::Reached::Known(_) => wire::SinceRead::Known,
-        prodrome_core::store::frontier::Reached::Unknown => wire::SinceRead::Unknown,
+        | prodrome_core::store::frontier::Reached::Known(_) => SinceRead::Known,
+        prodrome_core::store::frontier::Reached::Unknown => SinceRead::Unknown,
     }
 }
 
 /// The frontier an answer recorded, as the wire names it.
-fn frontier_of(recorded: &prodrome_core::store::frontier::Recorded) -> wire::Frontier {
-    wire::Frontier {
+fn frontier_of(recorded: &prodrome_core::store::frontier::Recorded) -> Frontier {
+    Frontier {
         digest: recorded.token.as_str().to_owned(),
         count: recorded.count,
     }
@@ -903,7 +910,7 @@ pub fn lines_skeleton(
     books: Books<'_>,
     now: Datetime,
     cut: Cut,
-) -> Answered<wire::SkeletonPayload> {
+) -> Answered<SkeletonPayload> {
     let Pulled {
         snapshot,
         piece,
@@ -928,12 +935,12 @@ pub fn lines_skeleton(
     // A replica that lacks nothing holds the store's heads already: they are the heads of what it
     // holds, which a recorded frontier names exactly.
     let heads = match (&snapshot.since, sent.is_empty() && rest == 0) {
-        (wire::SinceRead::Known, true) => wire::Heads::Held,
-        (wire::SinceRead::Known | wire::SinceRead::Unknown, _) => wire::Heads::These {
+        (SinceRead::Known, true) => Heads::Held,
+        (SinceRead::Known | SinceRead::Unknown, _) => Heads::These {
             heads: snapshot.heads,
         },
     };
-    Ok(wire::SkeletonPayload {
+    Ok(SkeletonPayload {
         heads,
         geneses: snapshot.geneses,
         epoch: snapshot.epoch,
@@ -941,7 +948,7 @@ pub fn lines_skeleton(
             .into_iter()
             .zip(&sent)
             .map(|(node, name)| match husked.get(name) {
-                Some(husk) => wire::SkeletonNode {
+                Some(husk) => SkeletonNode {
                     size: husk.len(),
                     ..node
                 },
@@ -963,8 +970,8 @@ pub fn lines_skeleton(
 fn held_sizes(
     lines: &dyn Prodrome<crate::secretary::line_event::LineEvent>,
     names: &[prodrome_core::event::Hash],
-    nodes: Vec<wire::SkeletonNode>,
-) -> Answered<Vec<wire::SkeletonNode>> {
+    nodes: Vec<SkeletonNode>,
+) -> Answered<Vec<SkeletonNode>> {
     if names.is_empty() {
         return Ok(nodes);
     }
@@ -973,7 +980,7 @@ fn held_sizes(
         .into_iter()
         .zip(sizes)
         .map(|(node, size)| match size {
-            Some(size) => Ok(wire::SkeletonNode { size, ..node }),
+            Some(size) => Ok(SkeletonNode { size, ..node }),
             None => Err(Refusal::internal(format!(
                 "the lines hold no print of {}",
                 node.hash
@@ -1025,7 +1032,7 @@ fn keys_of(
 pub fn skeleton_node(
     name: &prodrome_core::event::Hash,
     envelope: &prodrome_core::event::Envelope<crate::secretary::line_event::LineEvent>,
-) -> wire::SkeletonNode {
+) -> SkeletonNode {
     node_of(
         name,
         envelope,
@@ -1038,14 +1045,14 @@ fn node_of(
     name: &prodrome_core::event::Hash,
     envelope: &prodrome_core::event::Envelope<crate::secretary::line_event::LineEvent>,
     size: usize,
-) -> wire::SkeletonNode {
+) -> SkeletonNode {
     let header = match envelope.event() {
         Some(line) => line_header(line),
-        None => wire::NodeHeader::Structure {
+        None => NodeHeader::Structure {
             kind: constructor(envelope).to_owned(),
         },
     };
-    wire::SkeletonNode {
+    SkeletonNode {
         hash: name.as_str().to_owned(),
         parents: prodrome_core::event::parents_of(envelope)
             .iter()
@@ -1058,8 +1065,8 @@ fn node_of(
 
 /// A line's header, what a fold reads of it without its words: its husk's is its own.
 #[must_use]
-pub fn line_header(line: &crate::secretary::line_event::LineEvent) -> wire::NodeHeader {
-    wire::NodeHeader::Line {
+pub fn line_header(line: &crate::secretary::line_event::LineEvent) -> NodeHeader {
+    NodeHeader::Line {
         conversation: line.conversation().as_str().to_owned(),
         at: fpl::iso(fpl::instant_of(line.at())),
         kind: line.shape().name().to_owned(),
@@ -1085,13 +1092,13 @@ fn constructor<E>(envelope: &prodrome_core::event::Envelope<E>) -> &'static str 
 
 /// About how many bytes a node is on the wire: its strings and a little for the JSON around
 /// them, which is what a skeleton's piece is cut by.
-fn weight(node: &wire::SkeletonNode) -> usize {
+fn weight(node: &SkeletonNode) -> usize {
     const AROUND: usize = 96;
     // A step's tag, and the count two of them carry; the keys two others name are counted apart.
     const STEP: usize = 32;
     let header = match &node.header {
-        wire::NodeHeader::Structure { kind } => kind.len(),
-        wire::NodeHeader::Line {
+        NodeHeader::Structure { kind } => kind.len(),
+        NodeHeader::Line {
             conversation,
             at,
             kind,
@@ -1221,16 +1228,16 @@ fn answer<E: prodrome_core::schema::Schema>(
         .collect();
     let mut literals: BTreeMap<_, _> = read.iter().zip(store.literals(&read)?).collect();
     let mut unheld = Vec::new();
-    let sent: Vec<wire::Content> = hashes
+    let sent: Vec<Content> = hashes
         .iter()
         .filter_map(|name| {
             let hash = name.as_str().to_owned();
             match (husks.get(name), literals.remove(name).flatten()) {
-                (Some(husk), _) => Some(wire::Content::Husk {
+                (Some(husk), _) => Some(Content::Husk {
                     hash,
                     husk: husk.clone(),
                 }),
-                (None, Some(literal)) => Some(wire::Content::Literal { hash, literal }),
+                (None, Some(literal)) => Some(Content::Literal { hash, literal }),
                 (None, None) => {
                     unheld.push(hash);
                     None
@@ -1247,8 +1254,7 @@ fn answer<E: prodrome_core::schema::Schema>(
     let bytes: usize = sent
         .iter()
         .map(|object| match object {
-            wire::Content::Literal { literal: text, .. }
-            | wire::Content::Husk { husk: text, .. } => text.len(),
+            Content::Literal { literal: text, .. } | Content::Husk { husk: text, .. } => text.len(),
         })
         .sum();
     if sent.len() > 1 && bytes > MOST_CONTENT_BYTES {
@@ -1282,8 +1288,8 @@ pub fn waiting(
             .filter(|row| {
                 view::content_of(row, &by_hash).is_some_and(|record| {
                     record.payload.is_decision()
-                        && wire::EntryState::from(crate::believed::one_outcome(row.outcome()))
-                            == wire::EntryState::Open
+                        && EntryState::from(crate::believed::one_outcome(row.outcome()))
+                            == EntryState::Open
                 })
             })
             .count();
@@ -1314,10 +1320,7 @@ pub fn receive_objects(
     posted: &Posted<'_>,
     frontiers: &prodrome_core::store::frontier::Frontiers,
     actor: &prodrome_core::event::Actor,
-) -> Answered<(
-    wire::ReceiptPayload,
-    Vec<crate::secretary::act_lines::ActLine>,
-)> {
+) -> Answered<(ReceiptPayload, Vec<crate::secretary::act_lines::ActLine>)> {
     let Posted {
         objects: posted,
         since,
@@ -1401,7 +1404,7 @@ pub fn receive_changes<E: crate::stores::Store>(
     posted: &Posted<'_>,
     frontiers: &prodrome_core::store::frontier::Frontiers,
     actor: &prodrome_core::event::Actor,
-) -> Answered<wire::ReceiptPayload>
+) -> Answered<ReceiptPayload>
 where
     E::Vocabulary: Default,
 {
@@ -1434,7 +1437,7 @@ fn receipt<E: prodrome_core::schema::Schema>(
         &prodrome_core::store::frontier::Since,
         &prodrome_core::store::frontier::Frontiers,
     ),
-) -> Answered<wire::ReceiptPayload> {
+) -> Answered<ReceiptPayload> {
     let objects = store.objects()?;
     let dag: prodrome_core::dag::Dag<E> = objects.into_iter().collect();
     let lacking = frontiers.answer(key, since, &dag)?;
@@ -1446,7 +1449,7 @@ fn receipt<E: prodrome_core::schema::Schema>(
         .chain(&outcome.already)
         .cloned();
     let frontier = frontier_of(&lacking.record_with(posted)?);
-    Ok(wire::ReceiptPayload {
+    Ok(ReceiptPayload {
         since: read,
         frontier,
         heads: head_set(store)?,
@@ -1463,7 +1466,7 @@ fn receipt<E: prodrome_core::schema::Schema>(
         refused: outcome
             .refused
             .iter()
-            .map(|refused| wire::RefusedObject {
+            .map(|refused| RefusedObject {
                 hash: refused
                     .name
                     .as_ref()
@@ -1486,15 +1489,15 @@ pub fn about(
     build: &str,
     plan: &crate::release::Plan,
     set: &ChainSet<'_>,
-) -> Answered<wire::AboutPayload> {
+) -> Answered<AboutPayload> {
     let completes = released.map_or(&[][..], |r| r.completes.as_slice());
     let mut held = held_todos(plan, set, completes)?.unwrap_or_default();
-    Ok(wire::AboutPayload {
+    Ok(AboutPayload {
         version: released.map_or_else(|| "dev".to_owned(), |r| r.version.to_string()),
         build: build.to_owned(),
         completes: completes
             .iter()
-            .map(|todo| wire::Shipped {
+            .map(|todo| Shipped {
                 todo: todo.as_str().to_owned(),
                 held: held.remove(todo.as_str()),
             })
@@ -1509,7 +1512,7 @@ fn held_todos(
     plan: &crate::release::Plan,
     set: &ChainSet<'_>,
     todos: &[prodrome_core::event::TodoId],
-) -> Answered<Option<std::collections::BTreeMap<String, wire::HeldTodo>>> {
+) -> Answered<Option<std::collections::BTreeMap<String, HeldTodo>>> {
     let name = crate::chains::ChainName::new(plan.chain())
         .map_err(|e| Refusal::internal(e.to_string()))?;
     match set.held(&name) {
@@ -1532,7 +1535,7 @@ fn held_todos(
                 );
                 (
                     entry.key.as_str().to_owned(),
-                    wire::HeldTodo {
+                    HeldTodo {
                         row: view::neighbour(entry),
                         title,
                     },
@@ -1885,14 +1888,14 @@ pub fn overview(
     asked: &crate::settings::overview::Asked,
     registers: crate::settings::overview::Registers<'_>,
     asking: &[crate::settings::overview::Asking],
-) -> wire::Overview {
+) -> Overview {
     crate::settings::overview::overview(declared, &asked.observed(registers)).wire(
         &declared.settables.names(),
         asking,
         crate::conversation_id::SETUP.as_str().to_owned(),
         crate::connect::offered(declared.channels)
             .into_iter()
-            .map(|template| wire::Offer {
+            .map(|template| Offer {
                 template: template.id.as_str().to_owned(),
                 group: template.group,
                 title: template.title.to_owned(),
@@ -2101,7 +2104,7 @@ mod tests {
             }
         }
 
-        fn overview(&self, secrets: &dyn crate::secrets::Secrets) -> wire::Overview {
+        fn overview(&self, secrets: &dyn crate::secrets::Secrets) -> Overview {
             let declared = crate::settings::overview::Declared {
                 deployment: &self.deployment,
                 settables: &self.settables,
@@ -2153,7 +2156,7 @@ mod tests {
         }
     }
 
-    fn group(page: &wire::Overview, which: crate::connect::Group) -> &[wire::OverviewLine] {
+    fn group(page: &Overview, which: crate::connect::Group) -> &[crate::wire::cards::OverviewLine] {
         &page
             .groups
             .iter()

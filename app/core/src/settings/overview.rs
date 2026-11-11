@@ -17,7 +17,7 @@ use crate::secretary::proposal::Proposal;
 use crate::secrets::{MailCredential, MailGrants, SecretState};
 use crate::settings::Help;
 use crate::settings::remote::Pushed;
-use crate::wire;
+use crate::wire::cards as wire;
 
 /// What an open card asks.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]

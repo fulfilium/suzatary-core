@@ -41,7 +41,7 @@ pub struct TodoPatch {
     pub category: Patch<String>,
     /// A new checklist, whole: ticking one line is the same list with one line flipped.
     #[serde(skip_serializing_if = "Patch::is_keep")]
-    #[ts(as = "Option<Vec<crate::wire::SubTodo>>", optional)]
+    #[ts(as = "Option<Vec<crate::wire::record::SubTodo>>", optional)]
     pub subtodos: Patch<Vec<SubTodo>>,
     /// Nothing owed before this date, then what it was. Exclusive with `price`.
     #[serde(skip_serializing_if = "Patch::is_keep")]

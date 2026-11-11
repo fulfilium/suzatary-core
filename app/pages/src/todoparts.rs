@@ -1,7 +1,7 @@
 //! What every page says of a todo: its acts, its title, its number and its chips.
 
 use serde::{Deserialize, Serialize};
-use suzatary_core::wire::{Authored, Block, Entry, EntryState, Fulfillment};
+use suzatary_core::wire::todo::{Authored, Block, Entry, EntryState, Fulfillment};
 use ts_rs::TS;
 use viewtree::Attr::{Class, Title};
 use viewtree::{Node, view};

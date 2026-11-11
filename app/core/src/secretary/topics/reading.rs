@@ -244,7 +244,7 @@ pub fn in_use(reading: &Reading) -> Vec<(Topic, usize)> {
 /// The topics in use as the topic bar draws them: [`in_use`]'s order, each with the names its
 /// disputes hold besides its own spelling.
 #[must_use]
-pub fn bar(reading: &Reading) -> crate::wire::TopicsPayload {
+pub fn bar(reading: &Reading) -> crate::wire::topics::TopicsPayload {
     let mut disputed: BTreeMap<Topic, BTreeSet<Topic>> = BTreeMap::new();
     for dispute in reading.disagreements() {
         let names: BTreeSet<Topic> = match dispute {
@@ -270,10 +270,10 @@ pub fn bar(reading: &Reading) -> crate::wire::TopicsPayload {
                 .extend(names.iter().filter(|other| **other != topic).cloned());
         }
     }
-    crate::wire::TopicsPayload {
+    crate::wire::topics::TopicsPayload {
         topics: in_use(reading)
             .into_iter()
-            .map(|(topic, rounds)| crate::wire::TopicInUse {
+            .map(|(topic, rounds)| crate::wire::topics::TopicInUse {
                 disputed: disputed
                     .remove(&topic)
                     .into_iter()

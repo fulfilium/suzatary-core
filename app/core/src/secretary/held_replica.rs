@@ -18,7 +18,7 @@ use crate::secretary::key_ring::KeyRing;
 use crate::secretary::line_form::{Husked, LineDelta, LineFrame, LinePulling, LineReplica};
 use crate::secretary::locked_text::KeyName;
 use crate::secretary::outlines::{NotANode, Outlines, Parsed, Scope};
-use crate::wire::{Heads, SkeletonNode, SkeletonPayload};
+use crate::wire::lines::{Heads, SkeletonNode, SkeletonPayload};
 
 /// The lines held: the rows, and the readings of the landed one.
 #[derive(Default)]
@@ -218,17 +218,17 @@ impl HeldReplica {
     }
 
     /// A content answer taken: each literal held, each husk taken in its place.
-    pub fn take(&mut self, content: Vec<crate::wire::Content>) -> Result<Took, NotItsHusk> {
+    pub fn take(&mut self, content: Vec<crate::wire::lines::Content>) -> Result<Took, NotItsHusk> {
         let (mut prints, mut husks) = (Vec::new(), Vec::new());
         for object in content {
             match object {
-                crate::wire::Content::Literal { hash, literal } => {
+                crate::wire::lines::Content::Literal { hash, literal } => {
                     prints.push((
                         Hash::new(hash.clone()).map_err(|_| NotItsHusk::Unknown(hash))?,
                         literal.into_bytes(),
                     ));
                 }
-                crate::wire::Content::Husk { hash, husk } => {
+                crate::wire::lines::Content::Husk { hash, husk } => {
                     husks.push((
                         Hash::new(hash.clone()).map_err(|_| NotItsHusk::Unknown(hash))?,
                         husk,

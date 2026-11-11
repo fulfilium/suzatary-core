@@ -14,7 +14,7 @@ use crate::conversation_id::ConversationId;
 use crate::secretary::locked_text::KeyName;
 use crate::secretary::outline::{self, Outline};
 use crate::secretary::step::Step;
-use crate::wire;
+use crate::wire::lines as wire;
 
 /// The skeleton's lines held, by conversation, and every node it holds as it was given.
 #[derive(Default)]

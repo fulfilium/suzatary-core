@@ -276,7 +276,7 @@ impl Stamp {
     pub fn about(
         &self,
         set: &suzatary_core::chain_set::ChainSet<'_>,
-    ) -> Result<suzatary_core::wire::AboutPayload, Refusal> {
+    ) -> Result<suzatary_core::wire::cards::AboutPayload, Refusal> {
         let internal = |e: &dyn std::fmt::Display| Refusal::internal(e.to_string());
         let released = match crate::stamp::release().map_err(|e| internal(&e))? {
             crate::stamp::Release::Released(released) => Some(released),

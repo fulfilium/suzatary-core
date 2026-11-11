@@ -34,7 +34,7 @@ impl Params for Day {
     }
 }
 
-impl Body for wire::Registering {
+impl Body for wire::signatures::Registering {
     const CAP: usize = MAX_ACT_BYTES;
 
     type Wire = Self;
@@ -91,7 +91,7 @@ pub fn presence(call: &Call<Mapped, (), ()>) -> StatusCode {
 }
 
 /// `GET /api/about`: the version and build this process is.
-pub fn about(call: &Call<Reader, (), ()>) -> Result<Json<wire::AboutPayload>, Refusal> {
+pub fn about(call: &Call<Reader, (), ()>) -> Result<Json<wire::cards::AboutPayload>, Refusal> {
     let now = call.chain.caps.secretary.clock.now();
     call.state
         .stamp
@@ -119,8 +119,8 @@ pub fn client_errors(call: &Call<Reporter, (), Report>) -> StatusCode {
 
 /// `POST /api/act/device`: the phone saying "wake me here"; nothing on the chain.
 pub fn device(
-    call: &Call<Actor, (), wire::Registering>,
-) -> Result<Json<wire::DevicePayload>, Refusal> {
+    call: &Call<Actor, (), wire::signatures::Registering>,
+) -> Result<Json<wire::signatures::DevicePayload>, Refusal> {
     let caps = call.chain.caps;
     devices::register_device(caps.devices, caps.secretary.clock, &call.body, &call.guard).map(Json)
 }

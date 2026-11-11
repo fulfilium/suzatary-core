@@ -23,7 +23,12 @@ use crate::secretary::salted_text::TextName;
 use crate::secretary::stamp::stamp;
 use crate::secretary::store::{Said, Standing, Stored};
 use crate::secretary::turn_shape::TurnShape;
-use crate::wire;
+use crate::wire::inbox::{
+    Cached, Card, CardFile, CodingFile, CodingSession, FileFrom, HeldFrom, HeldIn, ProposedAct,
+    ProposedObject, RememberWords, ReplacedFact,
+};
+use crate::wire::todo::Fulfillment;
+use crate::wire::topics as wire;
 
 /// At most `limit` turns before `before` (newest when `None`), narrowed to rounds touching `about`.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -77,7 +82,7 @@ impl Dress<'static> {
 /// Readings of the todo chains and the instance file, which only the box holds.
 pub trait Draw {
     /// The rows, and the box's own refusal when an act would no longer build.
-    fn shown(&self, changeset: &Changeset) -> (Vec<wire::ProposedObject>, String);
+    fn shown(&self, changeset: &Changeset) -> (Vec<ProposedObject>, String);
     /// The routine `[coding]` declares, whose page its token's card opens.
     fn routine(&self) -> Option<&crate::connect::RoutineId>;
     /// The secret name of the model's credential, which its card words as the model's sign-in.
@@ -101,7 +106,7 @@ impl Answers for Unrendered {
 struct Undrawn;
 
 impl Draw for Undrawn {
-    fn shown(&self, _: &Changeset) -> (Vec<wire::ProposedObject>, String) {
+    fn shown(&self, _: &Changeset) -> (Vec<ProposedObject>, String) {
         (Vec::new(), String::new())
     }
 
@@ -130,13 +135,13 @@ impl Draw for Undrawn {
 pub const UNREAD_SOURCE: &str = "from a message this reading does not look up";
 
 /// Parsed exactly as the tap parses it.
-fn held_in(body: &str, draws: &dyn Draw) -> wire::HeldIn {
+fn held_in(body: &str, draws: &dyn Draw) -> HeldIn {
     use crate::held_value::{Reach, Written};
     match Written::parse(body) {
-        Ok(written) => wire::HeldIn::Read {
+        Ok(written) => HeldIn::Read {
             values: written
                 .held()
-                .map(|placeholder| wire::HeldFrom {
+                .map(|placeholder| HeldFrom {
                     named: placeholder.described(),
                     from: match placeholder.reach() {
                         Reach::Revealable(handle) => draws.source(&handle),
@@ -147,7 +152,7 @@ fn held_in(body: &str, draws: &dyn Draw) -> wire::HeldIn {
                 })
                 .collect(),
         },
-        Err(malformed) => wire::HeldIn::Unreadable {
+        Err(malformed) => HeldIn::Unreadable {
             why: malformed.to_string(),
         },
     }
@@ -267,7 +272,7 @@ pub fn waiting(fold: &inbox::Fold, set: &ChainSet<'_>) -> Vec<wire::InboxProposa
         .collect();
     let urgency = |row: &wire::InboxProposal| {
         row.value
-            .and_then(wire::Fulfillment::number)
+            .and_then(Fulfillment::number)
             .unwrap_or(f64::INFINITY)
     };
     open.sort_by(|a, b| {
@@ -663,8 +668,8 @@ fn connect_on_wire(
     connection: &crate::connect::Connection,
     draws: &dyn Draw,
     sentence: String,
-) -> wire::ProposedAct {
-    wire::ProposedAct::Connect {
+) -> ProposedAct {
+    ProposedAct::Connect {
         connection: connection.called(),
         writes: connection.writes(),
         steps: connection
@@ -689,11 +694,8 @@ fn connect_on_wire(
     }
 }
 
-fn disconnect_on_wire(
-    connection: &crate::connect::Connection,
-    sentence: String,
-) -> wire::ProposedAct {
-    wire::ProposedAct::Disconnect {
+fn disconnect_on_wire(connection: &crate::connect::Connection, sentence: String) -> ProposedAct {
+    ProposedAct::Disconnect {
         connection: connection.called(),
         writes: connection.writes(),
         forgets: connection
@@ -711,8 +713,8 @@ fn disconnect_on_wire(
             })
             .collect(),
         cached: match connection.template().table {
-            crate::connect::Table::Account(_) => wire::Cached::Mail,
-            _ => wire::Cached::Nothing,
+            crate::connect::Table::Account(_) => Cached::Mail,
+            _ => Cached::Nothing,
         },
         sentence,
     }
@@ -725,7 +727,7 @@ fn remember_on_wire(
     about: crate::secretary::memory::Kind,
     replaces: &crate::secretary::memory::Replaces,
     memory: Option<&wire::MemoryPayload>,
-) -> wire::ProposedAct {
+) -> ProposedAct {
     use crate::secretary::memory::Replaces;
     let into = match replaces {
         Replaces::Nothing => String::new(),
@@ -733,40 +735,40 @@ fn remember_on_wire(
     };
     let (words, sentence) = match words {
         Words::Kept(fact) => (
-            wire::RememberWords::Kept {
+            RememberWords::Kept {
                 fact: fact.as_str().to_owned(),
             },
             format!("Remember{into}, in every conversation from now on: {fact}"),
         ),
         Words::Gone => (
-            wire::RememberWords::Gone {},
+            RememberWords::Gone {},
             "Proposed remembering something since forgotten or dismissed; its words are deleted."
                 .to_owned(),
         ),
         Words::Unread => (
-            wire::RememberWords::Unread {},
+            RememberWords::Unread {},
             "Proposed remembering something; its words are not read here.".to_owned(),
         ),
     };
     match replaces {
-        Replaces::Nothing => wire::ProposedAct::Remember {
+        Replaces::Nothing => ProposedAct::Remember {
             words,
             about,
             sentence,
         },
-        Replaces::Facts(sources) => wire::ProposedAct::Consolidate {
+        Replaces::Facts(sources) => ProposedAct::Consolidate {
             words,
             about,
             replaces: sources
                 .ids()
                 .iter()
-                .map(|&id| wire::ReplacedFact {
+                .map(|&id| ReplacedFact {
                     id,
                     words: match memory {
-                        None => wire::RememberWords::Unread {},
+                        None => RememberWords::Unread {},
                         Some(memory) => memory.facts.iter().find(|row| row.id == id).map_or(
-                            wire::RememberWords::Gone {},
-                            |row| wire::RememberWords::Kept {
+                            RememberWords::Gone {},
+                            |row| RememberWords::Kept {
                                 fact: row.fact.clone(),
                             },
                         ),
@@ -780,21 +782,21 @@ fn remember_on_wire(
 
 /// `consent` is the box's path to the consent a running sign-in opened.
 #[expect(clippy::too_many_lines, reason = "one arm per kind of act")]
-fn act_on_wire(act: &Act, consent: Option<String>, draws: &dyn Draw) -> wire::ProposedAct {
+fn act_on_wire(act: &Act, consent: Option<String>, draws: &dyn Draw) -> ProposedAct {
     let routine = draws.routine();
     match act {
-        Act::Auth { account } => wire::ProposedAct::Auth {
+        Act::Auth { account } => ProposedAct::Auth {
             account: account.as_str().to_owned(),
             sentence: act.sentence(),
         },
-        Act::AuthSend { account } => wire::ProposedAct::AuthSend {
+        Act::AuthSend { account } => ProposedAct::AuthSend {
             account: account.as_str().to_owned(),
             sentence: act.sentence(),
         },
         Act::Secret { name, .. } => {
             crate::secretary::card::secret_act(name, routine, draws.model())
         }
-        Act::Web { request, rule } => wire::ProposedAct::Web {
+        Act::Web { request, rule } => ProposedAct::Web {
             request: request.kind(),
             target: match request {
                 crate::web::WebRequest::Search { query } => query.as_str().to_owned(),
@@ -813,7 +815,7 @@ fn act_on_wire(act: &Act, consent: Option<String>, draws: &dyn Draw) -> wire::Pr
             base,
             patch,
             message,
-        } => wire::ProposedAct::Patch {
+        } => ProposedAct::Patch {
             repo: repo.to_string(),
             visibility: *visibility,
             base: base.as_str().to_owned(),
@@ -822,45 +824,45 @@ fn act_on_wire(act: &Act, consent: Option<String>, draws: &dyn Draw) -> wire::Pr
             patch: patch.as_str().to_owned(),
             sentence: act.sentence(),
         },
-        Act::DriveRead { path, size } => wire::ProposedAct::Drive {
+        Act::DriveRead { path, size } => ProposedAct::Drive {
             path: path.to_string(),
             name: path.name().unwrap_or("/").to_owned(),
             folder: crate::secretary::acts::folder_of(path).to_string(),
             size: size.map(crate::spelling::bytes).unwrap_or_default(),
             sentence: act.sentence(),
         },
-        Act::CodingSession { task } => wire::ProposedAct::CodingSession {
+        Act::CodingSession { task } => ProposedAct::CodingSession {
             task: task.as_str().to_owned(),
             sentence: act.sentence(),
         },
-        Act::Device(enrolment) => wire::ProposedAct::Device {
+        Act::Device(enrolment) => ProposedAct::Device {
             actor: enrolment.actor.as_str().to_owned(),
             key: enrolment.key.as_str().to_owned(),
             sentence: act.sentence(),
         },
-        Act::SignIn { .. } => wire::ProposedAct::SignIn {
+        Act::SignIn { .. } => ProposedAct::SignIn {
             sentence: act.sentence(),
         },
-        Act::SignInCode { url } => wire::ProposedAct::SignInCode {
+        Act::SignInCode { url } => ProposedAct::SignInCode {
             url: url.as_str().to_owned(),
             sentence: act.sentence(),
         },
-        Act::Noise { sender, message } => wire::ProposedAct::Noise {
+        Act::Noise { sender, message } => ProposedAct::Noise {
             sender: sender.clone(),
             message: message.clone(),
             sentence: act.sentence(),
         },
-        Act::UnlockStore { .. } => wire::ProposedAct::UnlockStore {
+        Act::UnlockStore { .. } => ProposedAct::UnlockStore {
             sentence: act.sentence(),
         },
         Act::Connect { connection } => connect_on_wire(connection, draws, act.sentence()),
         Act::Disconnect { connection } => disconnect_on_wire(connection, act.sentence()),
-        Act::Grant { plugin, origin } => wire::ProposedAct::Grant {
+        Act::Grant { plugin, origin } => ProposedAct::Grant {
             plugin: plugin.to_string(),
             origin: origin.to_string(),
             sentence: act.sentence(),
         },
-        Act::GoogleClient { redirect } => wire::ProposedAct::GoogleClient {
+        Act::GoogleClient { redirect } => ProposedAct::GoogleClient {
             redirect: redirect.to_string(),
             steps: crate::google::CLIENT_STEPS
                 .iter()
@@ -868,7 +870,7 @@ fn act_on_wire(act: &Act, consent: Option<String>, draws: &dyn Draw) -> wire::Pr
                 .collect(),
             sentence: act.sentence(),
         },
-        Act::GoogleSignIn { account, scopes } => wire::ProposedAct::GoogleSignIn {
+        Act::GoogleSignIn { account, scopes } => ProposedAct::GoogleSignIn {
             account: account.to_string(),
             parts: scopes
                 .iter()
@@ -877,43 +879,43 @@ fn act_on_wire(act: &Act, consent: Option<String>, draws: &dyn Draw) -> wire::Pr
             consent,
             sentence: act.sentence(),
         },
-        Act::CalendarEvent { account, event } => wire::ProposedAct::CalendarEvent {
+        Act::CalendarEvent { account, event } => ProposedAct::CalendarEvent {
             account: account.to_string(),
             event: event.sentence(),
             sentence: act.sentence(),
         },
-        Act::Erase { .. } => wire::ProposedAct::Erase {
+        Act::Erase { .. } => ProposedAct::Erase {
             sentence: act.sentence(),
         },
-        Act::Retract { .. } => wire::ProposedAct::Retract {
+        Act::Retract { .. } => ProposedAct::Retract {
             sentence: act.sentence(),
         },
-        Act::Afresh { .. } => wire::ProposedAct::Afresh {
+        Act::Afresh { .. } => ProposedAct::Afresh {
             sentence: act.sentence(),
         },
-        Act::Restore { card } => wire::ProposedAct::Restore {
+        Act::Restore { card } => ProposedAct::Restore {
             card: card.to_string(),
             sentence: act.sentence(),
         },
     }
 }
 
-fn card_file(attached: &attached::Attached) -> wire::CardFile {
-    wire::CardFile {
+fn card_file(attached: &attached::Attached) -> CardFile {
+    CardFile {
         name: attached.name.clone(),
         media: attached.media.clone(),
         size: crate::spelling::bytes(attached.size),
         sha256: attached.sha256.to_string(),
         from: match &attached.source {
-            AttachmentSource::Mail { message, .. } => wire::FileFrom::Mail {
+            AttachmentSource::Mail { message, .. } => FileFrom::Mail {
                 message: message.clone(),
             },
-            AttachmentSource::Drive { path } => wire::FileFrom::Drive {
+            AttachmentSource::Drive { path } => FileFrom::Drive {
                 path: path.to_string(),
             },
-            AttachmentSource::Upload { id } => wire::FileFrom::Upload { id: id.to_string() },
-            AttachmentSource::Kept { .. } => wire::FileFrom::Kept {},
-            AttachmentSource::Repo { repo, path, at } => wire::FileFrom::Repo {
+            AttachmentSource::Upload { id } => FileFrom::Upload { id: id.to_string() },
+            AttachmentSource::Kept { .. } => FileFrom::Kept {},
+            AttachmentSource::Repo { repo, path, at } => FileFrom::Repo {
                 repo: repo.to_string(),
                 path: path.as_str().to_owned(),
                 at: at.as_str().to_owned(),
@@ -987,17 +989,17 @@ pub fn state(reading: &Reading) -> (wire::ProposalState, String) {
 }
 
 /// The original is named in one line; each file it sends opens the original.
-fn forward_on_wire(forward: &Forward) -> wire::ProposedAct {
+fn forward_on_wire(forward: &Forward) -> ProposedAct {
     let original = &forward.message;
     let file = &original.file;
-    let opening = || wire::FileFrom::Mail {
+    let opening = || FileFrom::Mail {
         message: file.id.clone(),
     };
     let attachments = match original.style {
         Style::Inline => file
             .parts
             .iter()
-            .map(|part| wire::CardFile {
+            .map(|part| CardFile {
                 name: part.name.clone(),
                 media: part.media.clone(),
                 size: crate::spelling::bytes(part.size),
@@ -1005,7 +1007,7 @@ fn forward_on_wire(forward: &Forward) -> wire::ProposedAct {
                 from: opening(),
             })
             .collect(),
-        Style::Attached => vec![wire::CardFile {
+        Style::Attached => vec![CardFile {
             name: crate::secretary::proposal::EML.to_owned(),
             media: "message/rfc822".to_owned(),
             size: crate::spelling::bytes(file.size),
@@ -1013,7 +1015,7 @@ fn forward_on_wire(forward: &Forward) -> wire::ProposedAct {
             from: opening(),
         }],
     };
-    wire::ProposedAct::Forward {
+    ProposedAct::Forward {
         account: forward.account.clone(),
         to: forward.to.clone(),
         cc: forward.cc.clone(),
@@ -1046,7 +1048,7 @@ pub(crate) fn proposal(
     memory: Option<&wire::MemoryPayload>,
 ) -> wire::ProposalRow {
     let act = match &standing.object.asked.proposal {
-        Proposal::Email(draft) => wire::ProposedAct::Email {
+        Proposal::Email(draft) => ProposedAct::Email {
             account: draft.account.clone(),
             to: draft.to.clone(),
             cc: draft.cc.clone(),
@@ -1063,7 +1065,7 @@ pub(crate) fn proposal(
             } else {
                 (Vec::new(), String::new())
             };
-            wire::ProposedAct::Changes {
+            ProposedAct::Changes {
                 chain: changeset.chain().to_owned(),
                 changes,
                 problem,
@@ -1088,7 +1090,7 @@ pub(crate) fn proposal(
     };
     let reading = &standing.object.reading;
     let (state, outcome) = state(reading);
-    let card = wire::Card {
+    let card = Card {
         by: standing.object.asked.proposer.on_wire(
             &standing.object.asked.proposal,
             &standing.object.asked.asked,
@@ -1115,16 +1117,16 @@ pub(crate) fn proposal(
     }
 }
 
-fn session_on_wire(session: &crate::coding::Session) -> wire::CodingSession {
+fn session_on_wire(session: &crate::coding::Session) -> CodingSession {
     use crate::coding::Session;
     use crate::coding_report::Lines;
     match session {
-        Session::Fired { id, url, at } => wire::CodingSession::Fired {
+        Session::Fired { id, url, at } => CodingSession::Fired {
             id: id.to_string(),
             url: url.to_string(),
             at: at.clone(),
         },
-        Session::Reported { id, branch, report } => wire::CodingSession::Reported {
+        Session::Reported { id, branch, report } => CodingSession::Reported {
             id: id.to_string(),
             branch: branch.to_string(),
             path: report
@@ -1142,7 +1144,7 @@ fn session_on_wire(session: &crate::coding::Session) -> wire::CodingSession {
                         Lines::Text { added, removed } => (Some(added), Some(removed)),
                         Lines::Binary => (None, None),
                     };
-                    wire::CodingFile {
+                    CodingFile {
                         path: file.path.as_str().to_owned(),
                         added,
                         removed,
@@ -1150,11 +1152,11 @@ fn session_on_wire(session: &crate::coding::Session) -> wire::CodingSession {
                 })
                 .collect(),
         },
-        Session::Merged { id, sha } => wire::CodingSession::Merged {
+        Session::Merged { id, sha } => CodingSession::Merged {
             id: id.to_string(),
             sha: sha.as_str().to_owned(),
         },
-        Session::Dropped { id, reason } => wire::CodingSession::Dropped {
+        Session::Dropped { id, reason } => CodingSession::Dropped {
             id: id.to_string(),
             reason: reason.to_string(),
         },

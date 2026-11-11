@@ -154,10 +154,10 @@ impl Reason {
     /// device to be trusted (a tab caught at the switch, a phone before its card is tapped),
     /// and every other refusal is final.
     #[must_use]
-    pub fn kind(&self) -> crate::wire::RefusalKind {
+    pub fn kind(&self) -> crate::wire::signatures::RefusalKind {
         match self {
             Reason::Unproven(Unproven::Unsigned | Unproven::Untrusted { .. }) => {
-                crate::wire::RefusalKind::Trust
+                crate::wire::signatures::RefusalKind::Trust
             }
             Reason::NotAnObject(_)
             | Reason::MissingParent(_)
@@ -165,7 +165,7 @@ impl Reason {
             | Reason::SealedDecision
             | Reason::Unproven(Unproven::Forged | Unproven::Revoked { .. })
             | Reason::BoxOnly
-            | Reason::NotAChange(_) => crate::wire::RefusalKind::Final,
+            | Reason::NotAChange(_) => crate::wire::signatures::RefusalKind::Final,
         }
     }
 
@@ -1069,11 +1069,11 @@ mod tests {
         // An unsigned write waits for its device, where a forged one never goes.
         assert_eq!(
             Reason::Unproven(Unproven::Unsigned).kind(),
-            crate::wire::RefusalKind::Trust
+            crate::wire::signatures::RefusalKind::Trust
         );
         assert_eq!(
             Reason::Unproven(Unproven::Forged).kind(),
-            crate::wire::RefusalKind::Final
+            crate::wire::signatures::RefusalKind::Final
         );
         // Before signatures the same post is taken: the law begins with the root.
         assert!(

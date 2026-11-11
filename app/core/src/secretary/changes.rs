@@ -558,7 +558,7 @@ pub fn shown(
     changeset: &Changeset,
     chain: &Preview,
     building: &Building<'_>,
-) -> (Vec<crate::wire::ProposedObject>, String) {
+) -> (Vec<crate::wire::inbox::ProposedObject>, String) {
     match events_of(changeset, chain, building) {
         Ok(built) => (
             crate::secretary::diff::shown(chain.nodes(), &built),

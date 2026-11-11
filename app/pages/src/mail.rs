@@ -3,7 +3,8 @@
 
 use serde::{Deserialize, Serialize};
 use suzatary_core::mail::MailRow;
-use suzatary_core::wire::{InboxPayload, MailWatch, WatchOn, WatchesPayload};
+use suzatary_core::wire::InboxPayload;
+use suzatary_core::wire::triage::{MailWatch, WatchOn, WatchesPayload};
 use ts_rs::TS;
 use viewtree::Attr::{
     AriaCurrent, AriaLabel, Class, Data, Disabled, EnterKeyHint, Hidden, Href, Placeholder, Title,

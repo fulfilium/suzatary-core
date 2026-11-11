@@ -13,7 +13,7 @@ use suzatary_core::secretary::readings;
 use suzatary_core::secretary::routes as secretary_routes;
 use suzatary_core::secretary::stamp::{self, Speaker, Stamp};
 use suzatary_core::signatures::Seat;
-use suzatary_core::wire;
+use suzatary_core::wire::topics as wire;
 use suzatary_io::attachments::{Stored, UploadError};
 
 use super::body::{Body, MAX_ACT_BYTES};
@@ -118,7 +118,7 @@ impl Params for AttachmentId {
     }
 }
 
-impl Body for wire::Titling {
+impl Body for suzatary_core::wire::Titling {
     const CAP: usize = MAX_ACT_BYTES;
 
     type Wire = Self;
@@ -141,11 +141,11 @@ impl Body for secretary_routes::Erasing {
 impl Body for Said {
     const CAP: usize = MAX_SAY_BYTES;
 
-    type Wire = wire::Saying;
+    type Wire = suzatary_core::wire::Saying;
 
     /// Each photo's type is reread from the store.
-    fn parse(saying: wire::Saying, state: &State) -> Result<Self, Refusal> {
-        let wire::Saying {
+    fn parse(saying: suzatary_core::wire::Saying, state: &State) -> Result<Self, Refusal> {
+        let suzatary_core::wire::Saying {
             say,
             references,
             attachments,
@@ -187,9 +187,9 @@ impl Body for Said {
 impl Body for Upload {
     const CAP: usize = MAX_UPLOAD_BYTES;
 
-    type Wire = wire::Uploading;
+    type Wire = suzatary_core::wire::Uploading;
 
-    fn parse(uploading: wire::Uploading, _: &State) -> Result<Self, Refusal> {
+    fn parse(uploading: suzatary_core::wire::Uploading, _: &State) -> Result<Self, Refusal> {
         if uploading.file.is_empty() {
             return Err(Refusal::bad_request("file: base64 text is required"));
         }
@@ -255,14 +255,16 @@ pub fn forget(call: &Call<Actor, FactId, ()>) -> Result<Json<wire::MemoryPayload
 }
 
 /// `GET …/record`.
-pub fn record(call: &Call<Reader, (), ()>) -> Result<Json<wire::RecordPayload>, Refusal> {
+pub fn record(
+    call: &Call<Reader, (), ()>,
+) -> Result<Json<suzatary_core::wire::RecordPayload>, Refusal> {
     secretary_routes::record(&call.chain.caps.secretary.memories.digests).map(Json)
 }
 
 /// `POST …/record/<node>/retract`, by tap.
 pub fn retract(
     call: &Call<suzatary_core::signatures::Tap, prodrome_core::event::Hash, ()>,
-) -> Result<Json<wire::RecordPayload>, Refusal> {
+) -> Result<Json<suzatary_core::wire::RecordPayload>, Refusal> {
     let caps = call.chain.caps;
     secretary_routes::retract(
         caps.secretary.memories,
@@ -275,7 +277,7 @@ pub fn retract(
 
 /// `POST …/conversations`.
 pub fn open(
-    call: &Call<Writer, (), wire::Titling>,
+    call: &Call<Writer, (), suzatary_core::wire::Titling>,
 ) -> Result<Json<wire::ConversationPayload>, Refusal> {
     call.state
         .with_cards(|caps, cards| secretary_routes::open(caps, cards, &call.body.title))
@@ -310,7 +312,7 @@ pub fn replace(call: &Call<Writer, Handle, ()>) -> Result<Json<serde_json::Value
 
 /// `POST …/<id>/title`.
 pub fn rename(
-    call: &Call<Actor, ConversationId, wire::Titling>,
+    call: &Call<Actor, ConversationId, suzatary_core::wire::Titling>,
 ) -> Result<Json<wire::ConversationPayload>, Refusal> {
     call.state
         .with_cards(|caps, cards| {
@@ -347,7 +349,9 @@ pub fn erase(
 }
 
 /// `GET …/blocks/<sha>`: the box renders only blocks a model wrote.
-pub fn block(call: &Call<Reader, Block, ()>) -> Result<Json<wire::BlockRender>, Refusal> {
+pub fn block(
+    call: &Call<Reader, Block, ()>,
+) -> Result<Json<suzatary_core::wire::BlockRender>, Refusal> {
     let Block { id, sha } = &call.params;
     let source = match call.state.workers.closed(id, sha) {
         Some(source) => Some(source),
@@ -374,7 +378,7 @@ pub fn block(call: &Call<Reader, Block, ()>) -> Result<Json<wire::BlockRender>, 
         .answers
         .block(&block)
         .map(|html| {
-            Json(wire::BlockRender {
+            Json(suzatary_core::wire::BlockRender {
                 html: html.as_str().to_owned(),
                 key,
             })
@@ -402,7 +406,7 @@ fn stamped<P, B>(call: &Call<Actor, P, B>, references: &[Reference]) -> Stamp {
 /// `POST …/say`: 202, so a phone that gives up never retries into a second turn.
 pub fn say(
     call: &Call<Actor, ConversationId, Said>,
-) -> Result<Accepted<wire::SayPayload>, Refusal> {
+) -> Result<Accepted<suzatary_core::wire::SayPayload>, Refusal> {
     let Said {
         say,
         references,
@@ -473,7 +477,9 @@ pub fn stop(
 }
 
 /// `POST …/attachments`.
-pub fn upload(call: &Call<Writer, (), Upload>) -> Result<Json<wire::Uploaded>, Refusal> {
+pub fn upload(
+    call: &Call<Writer, (), Upload>,
+) -> Result<Json<suzatary_core::wire::Uploaded>, Refusal> {
     let uploads = uploads(&call.state)?;
     let Upload { bytes, name, keep } = &call.body;
     let kept = match keep {
@@ -483,12 +489,12 @@ pub fn upload(call: &Call<Writer, (), Upload>) -> Result<Json<wire::Uploaded>, R
         Keep::OnTheBox => uploads.store.put(bytes),
     };
     match kept {
-        Ok(file) => Ok(Json(wire::Uploaded::Kept {
+        Ok(file) => Ok(Json(suzatary_core::wire::Uploaded::Kept {
             file: wire::AttachmentRow::from(&file),
         })),
         // Held back; the owner may keep it in his Drive.
         Err(UploadError::Withheld(why @ (Withheld::HeldNumber | Withheld::Form))) => {
-            Ok(Json(wire::Uploaded::Sensitive {
+            Ok(Json(suzatary_core::wire::Uploaded::Sensitive {
                 why: why.to_string(),
                 folder: suzatary_core::vault::FOLDER.to_owned(),
             }))

@@ -7,7 +7,7 @@ use suzatary_core::refusal::Refusal;
 use suzatary_core::secretary::routes::{self as secretary_routes, Effectors, TapAnswer};
 use suzatary_core::settings::EditError;
 use suzatary_core::signatures::Tap;
-use suzatary_core::wire;
+use suzatary_core::wire::topics as wire;
 
 use super::body::{Body, MAX_ACT_BYTES};
 use super::call::Call;
@@ -23,7 +23,9 @@ pub struct Drawn {
 }
 
 /// `GET …/<id>/drawn?indices=<n>,…`: the proposals named, drawn in one read.
-pub fn drawn(call: &Call<Reader, Drawn, ()>) -> Result<Json<wire::DrawnPayload>, Refusal> {
+pub fn drawn(
+    call: &Call<Reader, Drawn, ()>,
+) -> Result<Json<suzatary_core::wire::DrawnPayload>, Refusal> {
     let Drawn { id, indices } = &call.params;
     call.state
         .with_cards(|caps, cards| secretary_routes::drawn(caps, cards, id, indices))
@@ -75,10 +77,10 @@ impl Body for Answer {
 
     /// The value is read once into a [`suzatary_core::capability::Secret`], and the body dropped
     /// with this call; a body naming two of `value`, `always` and `endorsement` is refused.
-    type Wire = wire::Tapping;
+    type Wire = suzatary_core::wire::Tapping;
 
-    fn parse(tapping: wire::Tapping, _: &State) -> Result<Self, Refusal> {
-        let wire::Tapping {
+    fn parse(tapping: suzatary_core::wire::Tapping, _: &State) -> Result<Self, Refusal> {
+        let suzatary_core::wire::Tapping {
             note,
             value,
             always,
@@ -101,7 +103,7 @@ impl Body for Answer {
 }
 
 fn endorsement_of(
-    endorsing: &wire::Endorsing,
+    endorsing: &suzatary_core::wire::Endorsing,
 ) -> Result<suzatary_core::signatures::Endorsement, Refusal> {
     Ok(suzatary_core::signatures::Endorsement {
         key: prodrome_core::sign::PublicKey::new(&endorsing.key)
@@ -111,7 +113,7 @@ fn endorsement_of(
     })
 }
 
-impl Body for wire::Reasoning {
+impl Body for suzatary_core::wire::Reasoning {
     const CAP: usize = MAX_ACT_BYTES;
 
     type Wire = Self;
@@ -254,7 +256,7 @@ impl suzatary_core::settings::Configuration for Noting<'_> {
 
 /// `POST …/proposals/<n>/dismiss`: say no, and say why.
 pub fn dismiss(
-    call: &Call<Tap, ProposalRef, wire::Reasoning>,
+    call: &Call<Tap, ProposalRef, suzatary_core::wire::Reasoning>,
 ) -> Result<Json<wire::ConversationPayload>, Refusal> {
     let card = &call.params;
     let id = &card.conversation;
@@ -279,7 +281,7 @@ pub fn acknowledge(
 
 /// `POST …/proposals/<n>/drop`: let a coding session go, with a required reason.
 pub fn drop_session(
-    call: &Call<Tap, ProposalRef, wire::Reasoning>,
+    call: &Call<Tap, ProposalRef, suzatary_core::wire::Reasoning>,
 ) -> Result<Json<wire::ConversationPayload>, Refusal> {
     let card = &call.params;
     let id = &card.conversation;
