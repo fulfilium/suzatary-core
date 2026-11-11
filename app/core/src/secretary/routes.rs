@@ -4,7 +4,7 @@
 //! mint and carries an index, never a body, so what is sent is what was stored and shown.
 
 use crate::believed::Preview;
-use crate::capability::{Clock, Secret, Secrets, Server};
+use crate::capability::{Clock, Secret, Secrets};
 use crate::conversation_id::ConversationId;
 use crate::deployment::Deployment;
 use crate::health::plugin::{Origin, PluginName};
@@ -29,6 +29,7 @@ use crate::secretary::readings::{self, Draw, Dress, Window};
 use crate::secretary::responded::{Done, Performed, Tried};
 use crate::secretary::store::{Entry, Kind, Stored, Title};
 use crate::secretary::transcript;
+use crate::server::Server;
 use crate::settings::{Edits, Settable, Settables, Writes};
 use crate::signatures::Tap;
 use crate::wire;

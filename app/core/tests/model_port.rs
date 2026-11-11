@@ -4,7 +4,7 @@
 use std::sync::{Arc, Mutex, PoisonError};
 
 use proptest::prelude::*;
-use suzatary_core::capability::Answering;
+use suzatary_core::secretary::answering::Answering;
 use suzatary_core::secretary::model::laws::{Case, Law, Rig, check};
 use suzatary_core::secretary::model::{Conversation, Model, ModelError, Reply, ToolCall, Turn};
 

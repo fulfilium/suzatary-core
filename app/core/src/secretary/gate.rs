@@ -3,10 +3,10 @@
 use prodrome_core::event::Hash;
 
 use crate::believed::Preview;
-use crate::capability::Secretary;
 use crate::chains::ChainPolicy;
 use crate::record::TodoEvent;
 use crate::refusal::{Refusal, shown as quoted};
+use crate::secretary::Secretary;
 use crate::secretary::changes::{Building, Changeset, Unapplied, events_of};
 use crate::secretary::memory::Origin;
 use crate::secretary::store::Stored;

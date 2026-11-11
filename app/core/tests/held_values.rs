@@ -124,7 +124,7 @@ fn args(value: Value) -> Map<String, Value> {
 }
 
 fn agent(verb: &str, call: Value) -> String {
-    let caps = suzatary_core::capability::Agent {
+    let caps = suzatary_core::agent::Agent {
         corpus: &Raw,
         ..Nothing::agent()
     };
@@ -142,7 +142,7 @@ fn secretary(verb: &str, call: Value) -> String {
     let policy = chain();
     let chains = [Bound {
         name: "life",
-        caps: suzatary_core::capability::Secretary {
+        caps: suzatary_core::secretary::Secretary {
             corpus: &Raw,
             junk: &Raw,
             ..Nothing::secretary()

@@ -71,6 +71,7 @@ pub mod routes;
 pub mod rule;
 pub mod rule_version;
 pub mod secretary;
+pub mod server;
 pub mod settings;
 pub mod signatures;
 pub mod snapshot;

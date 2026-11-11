@@ -100,7 +100,7 @@ mod tests {
     use serde_json::{Value, json};
 
     use super::*;
-    use crate::capability::{Nothing, Secretary};
+    use crate::capability::Nothing;
     use crate::chains::{ChainName, ChainPolicy, Chains};
     use crate::conversation_id::ConversationId;
     use crate::deployment::Deployment;
@@ -108,6 +108,7 @@ mod tests {
     use crate::mail::older::{AccountOlder, Found, Matched, Outcome};
     use crate::mail::older_mail::OlderMail;
     use crate::mail_error::MailError;
+    use crate::secretary::Secretary;
 
     /// A server that records what it was asked and finds one message per account.
     #[derive(Default)]

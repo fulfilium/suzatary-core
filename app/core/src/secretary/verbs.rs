@@ -8,11 +8,11 @@ use super::proposer::Proposer;
 use super::responded::Withdrawal;
 use super::verb_name::Binding;
 use crate::agent::verbs;
-use crate::capability::Secretary;
 use crate::conversation_id::ConversationId;
 use crate::mail_error::MailError;
 use crate::reference::{Reference, TodoRef};
 use crate::refusal::{Refusal, shown};
+use crate::secretary::Secretary;
 use crate::secretary::{conversations, transcript};
 
 mod add_topics;
@@ -132,7 +132,6 @@ pub(crate) fn mail_refusal(failed: &MailError) -> Refusal {
     }
 }
 
-//
 // Every `propose_*` verb files its act in the inbox as `assistant`; `serves` is kept as data.
 
 /// File `proposal` in the inbox, name it in the conversation, and supersede what it revises.
@@ -259,7 +258,7 @@ fn references(list: &str, field: &str) -> Result<Vec<Reference>, Refusal> {
 /// # Errors
 /// [`Refusal::bad_request`] for missing reasons; the stores' own.
 fn memory_card(
-    caps: &crate::capability::Secretary<'_>,
+    caps: &crate::secretary::Secretary<'_>,
     id: &ConversationId,
     carded: &IfCarded,
     (fact, kind, replaces): (

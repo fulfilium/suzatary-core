@@ -18,7 +18,7 @@ use suzatary_core::store::Reads as _;
 
 /// The review run to its end; a scripted model is under no limit, so it always starts.
 fn review(
-    caps: &suzatary_core::capability::Secretary<'_>,
+    caps: &suzatary_core::secretary::Secretary<'_>,
     deployment: &suzatary_core::deployment::Deployment,
     settables: &suzatary_core::settings::Settables,
     chains: &[Bound<'_>],

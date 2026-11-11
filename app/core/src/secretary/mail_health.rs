@@ -189,7 +189,7 @@ mod tests {
             roster: std::collections::BTreeSet::new(),
             root: crate::cast::keys::root(),
         };
-        let caps = crate::capability::Secretary {
+        let caps = crate::secretary::Secretary {
             health,
             conversations: stores.lines.conversations(),
             inbox: &stores.inbox,

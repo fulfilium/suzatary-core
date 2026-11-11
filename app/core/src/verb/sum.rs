@@ -10,7 +10,7 @@ use super::Verb;
 ///
 /// Every function over a surface is a `match` the compiler checks is whole, so a verb joins the
 /// sum with its class, its schema, its parser and its body, or does not compile. `classed by`
-/// makes each verb's class the variant of its own name in an enum of its surface's.
+/// classes each verb by its own name's variant, and `of` maps back.
 macro_rules! verbs {
     (
         $(#[$verb_doc:meta])* pub enum $Verb:ident;
@@ -23,6 +23,16 @@ macro_rules! verbs {
             $(#[$call_doc])* pub enum $Call;
             on $Surface;
             $($Name: $Class::$Name),+
+        }
+
+        impl $Verb {
+            /// The verb of `class`.
+            #[must_use]
+            pub const fn of(class: $Class) -> Self {
+                match class {
+                    $($Class::$Name => Self::$Name,)+
+                }
+            }
         }
     };
     (

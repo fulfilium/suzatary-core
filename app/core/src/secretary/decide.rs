@@ -7,9 +7,9 @@
 
 use prodrome_core::event::Actor;
 
-use crate::capability::Server;
 use crate::decisions::{DecisionId, Draft};
 use crate::secretary::responded::{Done, Performed, Tried};
+use crate::server::Server;
 use crate::wire;
 
 /// The imperative a card and a list both print.

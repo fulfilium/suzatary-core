@@ -6,7 +6,7 @@ crate builds on it, and the browser runs it through `app/wasm`.
 ## Use
 
 - Each effect is a trait in `capability` (`Clock`, `Render`, the chain, the model). A caller
-  passes a record of them, such as `capability::Agent`, which has no field that sends mail.
+  passes a record of them, such as `agent::Agent`, which has no field that sends mail.
 - `record` holds the todo record, its `mk_*` constructors and the two source languages,
   `MarkupSource` and `StringSource`.
 - `chain_set` reads every chain once; its entries are priced by the Prodrome's

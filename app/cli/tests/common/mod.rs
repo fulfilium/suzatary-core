@@ -2491,8 +2491,8 @@ impl Fakes {
 
     /// The secretary's record over these fakes.
     #[must_use]
-    pub fn secretary(&self) -> suzatary_core::capability::Secretary<'_> {
-        suzatary_core::capability::Secretary {
+    pub fn secretary(&self) -> suzatary_core::secretary::Secretary<'_> {
+        suzatary_core::secretary::Secretary {
             chain: &self.chain,
             corpus: &self.corpus,
             mail: &self.mailbox,
@@ -2529,8 +2529,8 @@ impl Fakes {
         }
     }
 
-    pub fn server(&self) -> suzatary_core::capability::Server<'_> {
-        suzatary_core::capability::Server {
+    pub fn server(&self) -> suzatary_core::server::Server<'_> {
+        suzatary_core::server::Server {
             secretary: self.secretary(),
             whois: &self.whois,
             notify: &self.notify,
@@ -2864,7 +2864,7 @@ impl suzatary_core::settings::Verify for VerifyRecorder {
 }
 
 /// The record a started server serves.
-type Effects = suzatary_core::capability::Server<'static>;
+type Effects = suzatary_core::server::Server<'static>;
 
 /// A change a scene makes to the fakes' record.
 type Swap = dyn FnOnce(Effects) -> Effects;

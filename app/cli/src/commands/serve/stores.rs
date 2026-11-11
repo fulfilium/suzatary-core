@@ -3,8 +3,8 @@
 //! Literals are asked for by hash. The two topic stores are written by a tab too.
 
 use axum::Json;
-use suzatary_core::capability::Server;
 use suzatary_core::refusal::Refusal;
+use suzatary_core::server::Server;
 use suzatary_core::store::StoreError;
 use suzatary_core::wire::StoreName;
 use suzatary_core::{query, routes, wire};

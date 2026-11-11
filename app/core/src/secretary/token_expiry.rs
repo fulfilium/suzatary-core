@@ -84,7 +84,7 @@ pub fn acts(
 /// # Errors
 /// As [`acts`], and `gate::apply`'s refusals.
 pub fn write(
-    caps: &crate::capability::Secretary<'_>,
+    caps: &crate::secretary::Secretary<'_>,
     policy: &ChainPolicy,
     deployment: &Deployment,
     expiring: &[(Settable, crate::health::Instant)],

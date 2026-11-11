@@ -204,8 +204,8 @@ fn measure_the_overview_over_the_disk_stores_at_the_live_size() {
     eprintln!("{PROPOSALS} proposals filed in {:?}", started.elapsed());
     let deployment = common::deployment([ada.clone()], [(ada, common::actor("ada"))]);
     let served = common::Server::new(Arc::clone(&fakes), deployment, Vec::new())
-        .effects(move |effects| suzatary_core::capability::Server {
-            secretary: suzatary_core::capability::Secretary {
+        .effects(move |effects| suzatary_core::server::Server {
+            secretary: suzatary_core::secretary::Secretary {
                 secrets: store,
                 ..effects.secretary
             },
@@ -305,8 +305,8 @@ fn an_overview_asks_the_secret_store_nothing_the_last_filing_answered() {
     );
     let deployment = common::deployment([ada.clone()], [(ada, common::actor("ada"))]);
     let served = common::Server::new(Arc::clone(&fakes), deployment, Vec::new())
-        .effects(move |effects| suzatary_core::capability::Server {
-            secretary: suzatary_core::capability::Secretary {
+        .effects(move |effects| suzatary_core::server::Server {
+            secretary: suzatary_core::secretary::Secretary {
                 secrets: store,
                 ..effects.secretary
             },

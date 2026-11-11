@@ -6,7 +6,7 @@
 //! calendars through its sign-in with Google (`Owed::retiring`).
 
 use crate::capability::Datetime;
-use crate::capability::{SecretState, Secrets, Server};
+use crate::capability::{SecretState, Secrets};
 use crate::connect::{Checked, Connection, Declared, Group, Params, Seen, Step, Table};
 use crate::google::{Held, Scope, Scopes};
 use crate::health::plugin::{Origin, PluginName};
@@ -20,6 +20,7 @@ use crate::secretary::noticed::Owed;
 use crate::secretary::proposal::{Proposal, Reasons};
 use crate::secretary::proposer::Proposer;
 use crate::secretary::responded::{Done, Responded};
+use crate::server::Server;
 
 /// What the rule reads of a deployment's Google accounts.
 #[derive(Debug, Clone, Copy)]

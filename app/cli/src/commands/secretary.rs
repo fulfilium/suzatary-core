@@ -4,12 +4,13 @@ use std::path::Path;
 use std::sync::Arc;
 
 use anyhow::Context as _;
-use suzatary_core::capability::{Manual, Manuals, Secretary};
+use suzatary_core::capability::{Manual, Manuals};
 use suzatary_core::conversation::round::Ending;
 use suzatary_core::conversation_id::{ConversationId, DEFAULT};
 use suzatary_core::excerpt::Excerpt;
 use suzatary_core::held_value::Filled;
 use suzatary_core::mail::send::{Composed, Outgoing};
+use suzatary_core::secretary::Secretary;
 use suzatary_core::secretary::attached::Checked;
 use suzatary_core::secretary::proposal::Draft;
 use suzatary_core::secretary::responded::{Done, Performed, Tried};

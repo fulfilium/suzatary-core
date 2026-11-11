@@ -15,12 +15,13 @@ use prodrome_core::policy::Untrusted;
 
 use crate::chain_set::ChainSet;
 
-use crate::capability::{Briefings, Clock, Datetime, Render};
+use crate::capability::{Clock, Datetime, Render};
 use crate::chains::{ChainName, ChainPolicy};
 use crate::deployment::Deployment;
 use crate::mail::mailbox::{Mailbox, Query};
 use crate::refusal::{Answered, Refusal, shown};
 use crate::secretary::answers::Answers;
+use crate::secretary::briefings::Briefings;
 use crate::secretary::step::Step;
 use crate::store::Prodrome;
 use crate::tree::{By, Classifier, Monoid};
@@ -1532,7 +1533,7 @@ pub fn me(
 /// `POST /api/author`: build an event and append nothing, so the replica seals what the core
 /// authored.
 pub fn author(
-    caps: &crate::capability::Server<'_>,
+    caps: &crate::server::Server<'_>,
     deployment: &Deployment,
     chain: &ChainPolicy,
     request: &wire::Authoring,

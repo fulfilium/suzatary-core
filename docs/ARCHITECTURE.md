@@ -176,7 +176,7 @@ change is wrong, not the mechanism.
 
 - The triage agent cannot send and cannot write a chain. Its verbs take an `Agent` record
   with no field that sends; its writes are cards. Held by the `compile_fail` doc tests in
-  `app/core/src/capability/`, the snapshot `app/core/tests/mcp-surface.json` and the fence
+  `app/core/src/agent/record.rs`, the snapshot `app/core/tests/mcp-surface.json` and the fence
   `scripts/tool-guard.sh`.
 - Only the owner's tap sends mail or performs a proposal: a `Tap` minted by `Tap::of` from the
   door's proof. Exactly one file names the transport. Held by `app/cli/tests/writes.rs`.

@@ -1,12 +1,12 @@
 use prodrome_core::event::Hash;
 
 use super::{
-    Agent, AllowRule, BriefingError, Briefings, Clock, Datetime, Delivered, Drive, DriveFailure,
-    Html, MailGrants, Manual, Manuals, Notify, NotifyError, Peer, Push, Render, RenderError,
-    RepoFailure, Repositories, Repository, RepositoryError, Secrets, Weather, WeatherError, Web,
-    WebAnswer, WebFailure, WebRequest, Whois, WhoisError,
+    AllowRule, Clock, Datetime, Delivered, Drive, DriveFailure, Html, MailGrants, Manual, Manuals,
+    Notify, NotifyError, Peer, Push, Render, RenderError, RepoFailure, Repositories, Repository,
+    RepositoryError, Secrets, Weather, WeatherError, Web, WebAnswer, WebFailure, WebRequest, Whois,
+    WhoisError,
 };
-use super::{Secretary, Server};
+use crate::agent::Agent;
 use crate::escape::Escaped;
 use crate::mail::corpus::{Corpus, CorpusError};
 use crate::mail::junk_folder::{Junk, JunkFailure};
@@ -21,8 +21,11 @@ use crate::record::{Envelope, TodoEvent};
 use crate::refusal::Refusal;
 use crate::repo_ids::{CommitId, RepoName, RepoPath, Rev};
 use crate::repos::{Patch, RepoRow, Visibility};
+use crate::secretary::Secretary;
 use crate::secretary::answers::{AnswerError, Answers};
+use crate::secretary::briefings::{BriefingError, Briefings};
 use crate::secretary::model::{Conversation, Model, ModelError, Reply, Sessions};
+use crate::server::Server;
 use crate::store::{Prodrome, Reads, StoreError, WriteLock};
 
 /// Every effect, inert: reads find nothing, writes are refused, no peer has a login.

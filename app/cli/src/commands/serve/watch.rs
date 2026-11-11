@@ -2,9 +2,9 @@
 
 use std::collections::BTreeSet;
 
-use suzatary_core::capability::Server;
 use suzatary_core::chains::ChainPolicy;
 use suzatary_core::deployment::Deployment;
+use suzatary_core::server::Server;
 use suzatary_core::{notify, routes, view};
 
 use super::watched::{Pace, Watched};

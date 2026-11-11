@@ -52,11 +52,11 @@ use anyhow::Context;
 use axum::Router;
 use axum::http::{HeaderValue, header};
 
-use suzatary_core::capability::Server;
 use suzatary_core::deployment::Deployment;
 use suzatary_core::google::Endpoints;
 use suzatary_core::refusal::{Refusal, shown};
 use suzatary_core::secretary::compacting::Compacting;
+use suzatary_core::server::Server;
 use tower_http::compression::{CompressionLayer, CompressionLevel};
 use tower_http::services::ServeDir;
 use tower_http::set_header::SetResponseHeaderLayer;
@@ -601,7 +601,7 @@ impl State {
     #[must_use]
     pub fn secrets<'a>(
         &'a self,
-        caps: &'a suzatary_core::capability::Server<'_>,
+        caps: &'a suzatary_core::server::Server<'_>,
     ) -> suzatary_core::capability::Remembering<'a> {
         suzatary_core::capability::Remembering {
             store: caps.secretary.secrets,

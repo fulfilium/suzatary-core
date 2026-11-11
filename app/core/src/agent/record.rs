@@ -1,4 +1,4 @@
-use super::{Clock, Manuals, Render, Repository};
+use crate::capability::{Clock, Manuals, Render, Repository};
 use crate::mail::corpus::Corpus;
 use crate::mail::mailbox::Mailbox;
 use crate::record::TodoEvent;
@@ -10,44 +10,44 @@ use crate::store::Reads;
 /// Its writes are cards, filed through the call's [`crate::secretary::filed::TriageCards`].
 ///
 /// ```
-/// fn write(agent: suzatary_core::capability::Agent<'_>) { let _ = agent.chain; }
+/// fn write(agent: suzatary_core::agent::Agent<'_>) { let _ = agent.chain; }
 /// ```
 ///
 /// No field reaches the owner's phone, a peer's login, the model, or the inbox a person
 /// taps:
 ///
 /// ```compile_fail,E0609
-/// fn push(agent: suzatary_core::capability::Agent<'_>) { let _ = agent.notify; }
+/// fn push(agent: suzatary_core::agent::Agent<'_>) { let _ = agent.notify; }
 /// ```
 /// ```compile_fail,E0609
-/// fn peer(agent: suzatary_core::capability::Agent<'_>) { let _ = agent.whois; }
+/// fn peer(agent: suzatary_core::agent::Agent<'_>) { let _ = agent.whois; }
 /// ```
 /// ```compile_fail,E0609
-/// fn file(agent: suzatary_core::capability::Agent<'_>) { let _ = agent.inbox; }
+/// fn file(agent: suzatary_core::agent::Agent<'_>) { let _ = agent.inbox; }
 /// ```
 /// ```compile_fail,E0609
-/// fn fetch(agent: suzatary_core::capability::Agent<'_>) { let _ = agent.web; }
+/// fn fetch(agent: suzatary_core::agent::Agent<'_>) { let _ = agent.web; }
 /// ```
 ///
 /// Its chain is read and never written: neither `append` nor `accept` is reachable from it.
 ///
 /// ```compile_fail,E0599
-/// fn write(agent: suzatary_core::capability::Agent<'_>, event: suzatary_core::record::TodoEvent) {
+/// fn write(agent: suzatary_core::agent::Agent<'_>, event: suzatary_core::record::TodoEvent) {
 ///     let _ = agent.chain.append(event);
 /// }
 /// ```
 /// ```compile_fail,E0599
-/// fn join(agent: suzatary_core::capability::Agent<'_>) { let _ = agent.chain.accept(&[]); }
+/// fn join(agent: suzatary_core::agent::Agent<'_>) { let _ = agent.chain.accept(&[]); }
 /// ```
 ///
 /// It reads the secretary's memory and has no way to write it: the memory is a
 /// [`Recollection`], whose stores are private and whose every method reads.
 ///
 /// ```compile_fail,E0616
-/// fn reach(agent: suzatary_core::capability::Agent<'_>) { let _ = agent.memory.memories; }
+/// fn reach(agent: suzatary_core::agent::Agent<'_>) { let _ = agent.memory.memories; }
 /// ```
 /// ```compile_fail,E0599
-/// fn remember(agent: suzatary_core::capability::Agent<'_>) { let _ = agent.memory.hold(); }
+/// fn remember(agent: suzatary_core::agent::Agent<'_>) { let _ = agent.memory.hold(); }
 /// ```
 ///
 /// Those stores are read halves ([`Reads`], [`crate::store::Gets`]), so not even code inside
@@ -75,24 +75,26 @@ use crate::store::Reads;
 /// verb's answer or the secretary's, is reachable from it.
 ///
 /// ```compile_fail,E0599
-/// fn lines(agent: suzatary_core::capability::Agent<'_>) {
+/// fn lines(agent: suzatary_core::agent::Agent<'_>) {
 ///     let _ = agent.memory.record().map(|record| record.entries().len());
 /// }
 /// ```
 /// ```compile_fail,E0599
-/// fn reading(agent: suzatary_core::capability::Agent<'_>) { let _ = agent.memory.reading(); }
+/// fn reading(agent: suzatary_core::agent::Agent<'_>) { let _ = agent.memory.reading(); }
 /// ```
 ///
 /// A caller may swap one of its effects, and may not add one:
 ///
 /// ```
-/// use suzatary_core::capability::{Agent, Clock};
+/// use suzatary_core::agent::Agent;
+/// use suzatary_core::capability::Clock;
 /// fn swap<'a>(agent: Agent<'a>, clock: &'a dyn Clock) -> Agent<'a> {
 ///     Agent { clock, ..agent }
 /// }
 /// ```
 /// ```compile_fail,E0560
-/// use suzatary_core::capability::{Agent, Notify};
+/// use suzatary_core::agent::Agent;
+/// use suzatary_core::capability::Notify;
 /// fn widen<'a>(agent: Agent<'a>, push: &'a dyn Notify) -> Agent<'a> {
 ///     Agent { notify: push, ..agent }
 /// }

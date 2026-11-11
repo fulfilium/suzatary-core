@@ -1,6 +1,6 @@
 //! The interpreters `suzatary serve` holds, and the one place they become records.
 
-use suzatary_core::capability::Server;
+use suzatary_core::server::Server;
 use suzatary_io::devices::Devices;
 use suzatary_io::notify::Configured;
 

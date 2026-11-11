@@ -6,12 +6,14 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use prodrome_core::event::Actor;
-use suzatary_core::capability::{Agent, RenderCache, Secretary};
+use suzatary_core::agent::Agent;
+use suzatary_core::capability::RenderCache;
 use suzatary_core::chains::ChainPolicy;
 use suzatary_core::decisions::{DecisionEvent, Decisions};
 use suzatary_core::mail::account::Roster;
 use suzatary_core::persona::Persona;
 use suzatary_core::record::TodoEvent;
+use suzatary_core::secretary::Secretary;
 use suzatary_core::secretary::compacting::Compacting;
 use suzatary_core::secretary::digest_event::DigestEvent;
 use suzatary_core::secretary::digest_line::Line;

@@ -7,7 +7,8 @@ use prodrome_core::payload::Payload as _;
 use serde_json::{Value, json};
 
 use super::events_of;
-use crate::capability::{Agent, Manual, Manuals};
+use crate::agent::Agent;
+use crate::capability::{Manual, Manuals};
 use crate::chains::ChainPolicy;
 use crate::deployment::Deployment;
 use crate::refusal::{Refusal, shown};

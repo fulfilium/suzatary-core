@@ -1,10 +1,10 @@
 //! What one of the secretary's verbs runs against.
 
 use super::Bound;
-use crate::capability::Secretary;
 use crate::chains::ChainPolicy;
 use crate::conversation_id::ConversationId;
 use crate::deployment::Deployment;
+use crate::secretary::Secretary;
 
 /// One call's world: the record over the chain the call named, every chain, and the conversation.
 #[derive(Clone, Copy)]

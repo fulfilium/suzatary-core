@@ -18,7 +18,7 @@ use prodrome_core::fpl::{self, mk_decay, mk_flat};
 use prodrome_core::policy::Untrusted;
 
 use suzatary_core::capability::Entropy;
-use suzatary_core::capability::{Clock, Datetime, Html, Nothing, Render, RenderError, Server};
+use suzatary_core::capability::{Clock, Datetime, Html, Nothing, Render, RenderError};
 use suzatary_core::cast::{self, CAST};
 use suzatary_core::chain_set::Read;
 use suzatary_core::chains::{ChainName, ChainPolicy};
@@ -44,6 +44,7 @@ use suzatary_core::secretary::salted_text::{Text, TextName};
 use suzatary_core::secretary::stamp::stamp;
 use suzatary_core::secretary::store::{Entry as ConversationEntry, Stored};
 use suzatary_core::secretary::transcript;
+use suzatary_core::server::Server;
 use suzatary_core::store::{
     InMemory, InMemoryDoc, Prodrome, Reads, StoreError, WriteLock, append_to, linearised,
 };
@@ -421,7 +422,7 @@ impl Bundle {
 /// The server's record, with this bundle behind every effect a route reads.
 fn server_of(bundle: &Bundle) -> Server<'_> {
     Server {
-        secretary: suzatary_core::capability::Secretary {
+        secretary: suzatary_core::secretary::Secretary {
             chain: bundle,
             render: bundle,
             clock: bundle,

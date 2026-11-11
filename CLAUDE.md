@@ -210,7 +210,7 @@ confirm. Everything below derives from this.
 - **Sending is structurally human-only, as a TYPE**: the agent's
   verbs take an `Agent` record, whose fields hold no `Notify`, no `Whois` and
   nothing that sends, so a send verb would not compile
-  (`app/core/src/capability/`, one file per effect and per record; its
+  (one file per effect and per record, as `app/core/src/agent/record.rs`; its
   `compile_fail` doc tests and the field-by-field destructuring are the pin;
   the verb list's snapshot is `app/core/tests/mcp-surface.json`).
   `suzatary_io::corpus::Operator` holds no send path either. `suzatary send`

@@ -4,7 +4,8 @@
 use prodrome_core::event::Actor;
 use prodrome_core::policy::Untrusted;
 use serde_json::{Map, Value, json};
-use suzatary_core::capability::{Agent, Nothing};
+use suzatary_core::agent::Agent;
+use suzatary_core::capability::Nothing;
 use suzatary_core::chains::{ChainName, ChainPolicy, Chains};
 use suzatary_core::deployment::Deployment;
 use suzatary_core::mail::corpus::{Corpus, CorpusError};
@@ -253,7 +254,7 @@ fn a_mail_read_in_the_round_makes_every_secretary_write_a_card() {
         .clone();
     let chains = [suzatary_core::secretary::Bound {
         name: "life",
-        caps: suzatary_core::capability::Secretary {
+        caps: suzatary_core::secretary::Secretary {
             chain: &chain,
             conversations: lines.conversations(),
             inbox: &inbox,

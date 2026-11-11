@@ -1,10 +1,10 @@
 //! The box's own daily rounds: one conversation a day for each, continued rather than reopened,
 //! and opened only on a day that has work for it.
 
-use crate::capability::Secretary;
 use crate::conversation_id::ConversationId;
 use crate::conversation_id::Daily;
 use crate::refusal::{Refusal, Status};
+use crate::secretary::Secretary;
 use crate::secretary::conversations;
 use crate::secretary::store::{Kind, Stored};
 use crate::secretary::words::Words;

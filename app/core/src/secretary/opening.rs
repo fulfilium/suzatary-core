@@ -1,11 +1,11 @@
 //! The one reading of a file the box names by its source: what a proposal records, what the tap
 //! sends and what a reveal answers all come from [`open`].
 
-use crate::capability::Secretary;
 use crate::drive::Port as _;
 use crate::enclosed::Enclosure;
 use crate::held_value::{Files, HeldFile, Opened};
 use crate::refusal::Refusal;
+use crate::secretary::Secretary;
 use crate::secretary::attachment_source::AttachmentSource;
 use crate::secretary::read_holders::ReadHolders;
 use crate::secretary::verbs::{drive_refusal, mail_refusal, refused_by};

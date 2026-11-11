@@ -1,6 +1,6 @@
 //! What one of the triage agent's verbs runs against.
 
-use crate::capability::Agent;
+use crate::agent::Agent;
 use crate::chains::ChainPolicy;
 use crate::deployment::Deployment;
 use crate::secretary::filed::TriageCards;

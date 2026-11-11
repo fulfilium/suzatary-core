@@ -263,7 +263,7 @@ impl Workers {
     /// round; the store's failures.
     pub fn stop(
         &self,
-        caps: &suzatary_core::capability::Server<'_>,
+        caps: &suzatary_core::server::Server<'_>,
         id: &ConversationId,
         by: prodrome_core::event::Actor,
     ) -> Result<(), Refusal> {

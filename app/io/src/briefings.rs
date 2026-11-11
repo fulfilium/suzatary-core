@@ -1,12 +1,12 @@
 //! The morning briefing saved as a file, `briefings/YYYY-MM-DD.typ`: typst markup with no
 //! actor and no chain event, trusted the way the CLI is because only a human-directed session
-//! writes one (see `suzatary_core::capability::Briefings`).
+//! writes one (see `suzatary_core::secretary::briefings::Briefings`).
 
 use std::path::PathBuf;
 
 use crate::present::Present as _;
 use chrono::NaiveDate;
-use suzatary_core::capability::{BriefingError, Briefings};
+use suzatary_core::secretary::briefings::{BriefingError, Briefings};
 
 /// A `NaiveDate` always prints as exactly this many characters, none of them `/`, which is what
 /// makes [`BriefingFiles::read`] safe against a traversal.

@@ -9,7 +9,6 @@
 use std::num::NonZeroUsize;
 use std::sync::Arc;
 
-use suzatary_core::capability::Server;
 use suzatary_core::nonempty::NonEmpty;
 use suzatary_core::secretary::compact::Compact;
 use suzatary_core::secretary::compact_budget::{Budget, Hold};
@@ -17,6 +16,7 @@ use suzatary_core::secretary::compacting::Compacting;
 use suzatary_core::secretary::compaction::{
     Claim, Compacted, Compaction, Paced, Performed, Round, short,
 };
+use suzatary_core::server::Server;
 use tokio::sync::mpsc;
 
 use super::State;

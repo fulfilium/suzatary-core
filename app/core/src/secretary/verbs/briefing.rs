@@ -2,8 +2,8 @@ use schemars::JsonSchema;
 use serde::Deserialize;
 use serde_json::{Value, json};
 
-use crate::capability::BriefingError;
 use crate::refusal::{Refusal, shown};
+use crate::secretary::briefings::BriefingError;
 use crate::secretary::{Call, SecretarySurface};
 use crate::verb::Verb;
 

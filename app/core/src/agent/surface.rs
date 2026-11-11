@@ -10,7 +10,7 @@ use super::verbs::{
     Context, Evaluate, HistoryArgs, Mark, New, NoiseAdd, Recall, ShowArgs, Sync, VerifyChain,
 };
 use super::{Call, Holds, Says};
-use crate::capability::Agent;
+use crate::agent::Agent;
 use crate::chains::ChainPolicy;
 use crate::reference::TodoRef;
 use crate::refusal::Refusal;

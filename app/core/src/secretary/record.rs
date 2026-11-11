@@ -1,6 +1,6 @@
-use super::{
-    Agent, Briefings, Calendar, Clock, Drive, Manuals, Render, Repositories, Repository, Secrets,
-    Weather, Web,
+use crate::agent::Agent;
+use crate::capability::{
+    Calendar, Clock, Drive, Manuals, Render, Repositories, Repository, Secrets, Weather, Web,
 };
 use crate::mail::corpus::Corpus;
 use crate::mail::junk_folder::Junk;
@@ -8,6 +8,7 @@ use crate::mail::mail_sync::MailSync;
 use crate::mail::mailbox::Mailbox;
 use crate::mail::older_mail::OlderMail;
 use crate::record::TodoEvent;
+use crate::secretary::briefings::Briefings;
 use crate::secretary::model::Model;
 use crate::store::Prodrome;
 
@@ -16,10 +17,10 @@ use crate::store::Prodrome;
 /// only outward act is filing a proposal in the inbox, which a person taps.
 ///
 /// ```compile_fail,E0609
-/// fn push(secretary: suzatary_core::capability::Secretary<'_>) { let _ = secretary.notify; }
+/// fn push(secretary: suzatary_core::secretary::Secretary<'_>) { let _ = secretary.notify; }
 /// ```
 /// ```compile_fail,E0609
-/// fn peer(secretary: suzatary_core::capability::Secretary<'_>) { let _ = secretary.whois; }
+/// fn peer(secretary: suzatary_core::secretary::Secretary<'_>) { let _ = secretary.whois; }
 /// ```
 ///
 /// Its Drive reads and never writes: the record's port is a read port, and writing is
@@ -27,19 +28,19 @@ use crate::store::Prodrome;
 ///
 /// ```compile_fail,E0599
 /// use suzatary_core::drive::WritePort as _;
-/// fn upload(secretary: suzatary_core::capability::Secretary<'_>, at: &suzatary_core::drive_path::DrivePath) {
+/// fn upload(secretary: suzatary_core::secretary::Secretary<'_>, at: &suzatary_core::drive_path::DrivePath) {
 ///     let _ = secretary.drive.port().upload(at, "x", b"x");
 /// }
 /// ```
 /// ```compile_fail,E0599
 /// use suzatary_core::drive::WritePort as _;
-/// fn keep(secretary: suzatary_core::capability::Secretary<'_>, at: &suzatary_core::drive_path::DrivePath) {
+/// fn keep(secretary: suzatary_core::secretary::Secretary<'_>, at: &suzatary_core::drive_path::DrivePath) {
 ///     let _ = secretary.drive.port().keep(at, "x", b"x");
 /// }
 /// ```
 /// ```compile_fail,E0599
 /// use suzatary_core::drive::WritePort as _;
-/// fn behind(secretary: suzatary_core::capability::Secretary<'_>, at: &suzatary_core::drive_path::DrivePath) {
+/// fn behind(secretary: suzatary_core::secretary::Secretary<'_>, at: &suzatary_core::drive_path::DrivePath) {
 ///     let _ = secretary.drive.fenced().create_folder(at, "x");
 /// }
 /// ```
@@ -99,11 +100,11 @@ pub struct Secretary<'a> {
     /// The owner's uploaded photos and PDFs, read-only.
     pub uploads: &'a dyn crate::store::Gets<crate::attachment::AttachmentId, crate::upload::Upload>,
     /// The words of the uploads, for its search.
-    pub upload_index: &'a dyn super::UploadIndex,
+    pub upload_index: &'a dyn crate::capability::UploadIndex,
     /// The files a verb keeps for the model.
     pub kept: &'a dyn crate::store::Doc<crate::attachment::AttachmentId, Vec<u8>>,
     /// A PDF's text layer, which a held file's numbers are read back from.
-    pub pdf: &'a dyn super::PdfText,
+    pub pdf: &'a dyn crate::capability::PdfText,
     /// The files the owner tapped Read on outside the allowed folders, as each tap read it.
     pub tapped: &'a dyn crate::store::Gets<crate::held_value::HeldFile, crate::secretary::attached::Attached>,
     /// The tables the instance file declares, read-only: what a Connect card is checked against.

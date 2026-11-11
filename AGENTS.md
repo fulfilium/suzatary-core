@@ -211,7 +211,7 @@ separate. The crate `suzatary-core` is pure and never sees a file path. `suzatar
 contains the implementations of the effects. The binary in `app/cli` connects the two.
 
 - **Effects are values.** A function receives the effects it may use as an argument. The
-  argument is a record with one trait object for each effect. `capability::Agent` has seven
+  argument is a record with one trait object for each effect. `agent::Agent` has seven
   fields, from `chain` to `clock`, and no field that can send mail. A test replaces one field
   with struct update syntax, for example `Agent { clock, ..agent }`.
 - **State between steps is an explicit value.** `coding::Session` is the state of a coding

@@ -8,10 +8,13 @@
 mod call;
 mod holds;
 pub(crate) mod reads;
+mod record;
 mod remembered;
 mod says;
 pub(crate) mod sourced;
 mod surface;
+
+pub use record::Agent;
 pub mod verbs;
 
 use std::collections::BTreeMap;
@@ -26,7 +29,6 @@ pub use surface::{TriageCall, TriageVerb, tools};
 // Public so `app/cli/tests/live.rs` can weigh the answers on the live manuals.
 pub use reads::{CONTEXT_CAP, CONTEXT_HEADROOM, context, manual};
 
-use crate::capability::Agent;
 use crate::deployment::Deployment;
 use crate::record::TodoEvent;
 use crate::refusal::{Refusal, shown};

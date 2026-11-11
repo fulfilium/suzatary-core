@@ -18,8 +18,8 @@ use super::verbs::{
     TriageCards, TriageWithdraw, UploadRead, WatchMail, Weather, Web, WithdrawProposal, Zoom,
 };
 use super::verbs::{IfCarded, check, propose};
+use crate::agent::Agent;
 use crate::agent::{Holds, Says};
-use crate::capability::Agent;
 use crate::chains::ChainPolicy;
 use crate::refusal::{Refusal, shown};
 use crate::secretary::changes::{Act, Changeset, Unapplied};
@@ -294,7 +294,7 @@ impl Subset {
     pub fn find(&self, called: &ToolName) -> Result<SecretaryVerb, Refusal> {
         called
             .verb()
-            .and_then(|name| SecretaryVerb::named(name.name()))
+            .map(SecretaryVerb::of)
             .filter(|verb| (self.allows)(*verb))
             .ok_or_else(|| {
                 (self.refuses)(

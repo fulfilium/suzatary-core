@@ -21,9 +21,11 @@ use prodrome_core::event::Actor;
 use prodrome_core::policy::Untrusted;
 use prodrome_core::{fpl, view as folds};
 use sha2::{Digest, Sha256};
-use suzatary_core::capability::{Datetime, Secretary, Server};
+use suzatary_core::capability::Datetime;
 use suzatary_core::record::EventStore;
 use suzatary_core::routes;
+use suzatary_core::secretary::Secretary;
+use suzatary_core::server::Server;
 use suzatary_core::store::Reads as _;
 use suzatary_io::render::Typst;
 

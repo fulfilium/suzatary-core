@@ -12,7 +12,7 @@ use rmcp::model::{
 use rmcp::service::RequestContext;
 use rmcp::{RoleServer, ServerHandler, ServiceExt};
 use suzatary_core::agent;
-use suzatary_core::capability::Agent;
+use suzatary_core::agent::Agent;
 use suzatary_core::deployment::Deployment;
 use suzatary_core::for_model::ForModel;
 use suzatary_core::secretary::filed::TriageCards;

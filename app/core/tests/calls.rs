@@ -505,7 +505,7 @@ fn agent(
     verb: &str,
     args: &Map<String, Value>,
 ) -> Result<Value, Refusal> {
-    let caps = suzatary_core::capability::Agent {
+    let caps = suzatary_core::agent::Agent {
         chain: fixed,
         ..Nothing::agent()
     };
@@ -526,7 +526,7 @@ fn secretary(
     let policy = chain();
     let chains = [Bound {
         name: "life",
-        caps: suzatary_core::capability::Secretary {
+        caps: suzatary_core::secretary::Secretary {
             chain: fixed,
             conversations: suzatary_core::secretary::conversations::Conversations {
                 lines: fixed,

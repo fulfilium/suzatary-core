@@ -1,10 +1,11 @@
 //! Every effect the application performs is a trait, one per file, here or beside its domain
 //! (mail's in [`crate::mail`]), or a store in one of [`crate::store`]'s three shapes, and a
-//! role's effects are a record of them passed as a value: [`Agent`], [`Secretary`], [`Server`].
+//! role's effects are a record of them passed as a value: [`crate::agent::Agent`],
+//! [`crate::secretary::Secretary`], [`crate::server::Server`].
 //! `suzatary-io` implements the traits, the binary assembles the records, tests fill
 //! them from fakes; a rule then is a fact about which fields a record has.
 //!
-//! - The triage agent cannot send, notify or name a peer: [`Agent`] has no such field.
+//! - The triage agent cannot send, notify or name a peer: [`crate::agent::Agent`] has no such field.
 //! - Reading mail never yields a send token: [`ImapToken`] and [`SmtpToken`] are two types.
 //! - Rendered means confirmed: [`Render::html`] takes an [`Escaped`], which only
 //!   [`Content::Confirmed`] yields.
@@ -14,9 +15,6 @@ use std::fmt;
 
 use crate::escape::Escaped;
 
-mod agent;
-mod answering;
-mod briefings;
 mod calendar;
 mod clock;
 mod drive;
@@ -36,18 +34,13 @@ mod pdf_text;
 mod render;
 mod repositories;
 mod repository;
-mod secretary;
 mod secrets;
-mod server;
 mod typeset;
 mod upload_index;
 mod weather;
 mod web;
 mod whois;
 
-pub use agent::Agent;
-pub use answering::Answering;
-pub use briefings::{BriefingError, Briefings};
 pub use calendar::Calendar;
 pub use clock::Clock;
 pub use drive::{Drive, DriveFailure};
@@ -65,12 +58,10 @@ pub use repositories::{
     InBranch, MAX_FILE_BYTES, MAX_TEXT_BYTES, RepoFailure, Repositories, readable,
 };
 pub use repository::{Repository, RepositoryError};
-pub use secretary::Secretary;
 pub use secrets::{
     Answer, Locked, MailCredential, MailGrants, Remembering, SecretAnswers, SecretState, Secrets,
     Snapshot,
 };
-pub use server::Server;
 pub use typeset::{Diagnostic, Rejected, Typeset, parsed};
 pub use upload_index::{IndexError, UploadIndex};
 pub use weather::{Weather, WeatherError};
@@ -212,62 +203,6 @@ impl Content {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    /// Each record is exactly these effects, so widening a role's authority is an edit here too.
-    #[test]
-    fn each_role_holds_exactly_its_effects() {
-        let Agent {
-            chain: _,
-            corpus: _,
-            mail: _,
-            repository: _,
-            manuals: _,
-            render: _,
-            clock: _,
-            memory: _,
-        } = Nothing::agent();
-        let Secretary {
-            chain: _,
-            corpus: _,
-            mail: _,
-            repository: _,
-            manuals: _,
-            render: _,
-            clock: _,
-            model: _,
-            conversations: _,
-            inbox: _,
-            memories: _,
-            decisions: _,
-            topics: _,
-            briefings: _,
-            weather: _,
-            calendar: _,
-            secrets: _,
-            web: _,
-            repositories: _,
-            drive: _,
-            junk: _,
-            sync: _,
-            health: _,
-            older: _,
-            uploads: _,
-            upload_index: _,
-            kept: _,
-            pdf: _,
-            tapped: _,
-            configuration: _,
-            watches: _,
-        } = Nothing::secretary();
-        let Server {
-            secretary: _,
-            whois: _,
-            notify: _,
-            answers: _,
-            devices: _,
-            sessions: _,
-        } = Nothing::server();
-    }
 
     #[test]
     fn a_secret_does_not_print_itself() {
