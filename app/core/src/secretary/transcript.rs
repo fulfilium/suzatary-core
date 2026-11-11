@@ -712,7 +712,7 @@ pub fn erased<'l>(objects: impl IntoIterator<Item = impl Named<'l>>) -> BTreeMap
 }
 
 /// [`erased`] of the lines themselves.
-fn erased_lines<'l>(
+pub(crate) fn erased_lines<'l>(
     lines: impl IntoIterator<Item = (&'l Hash, &'l LineEvent)>,
 ) -> BTreeMap<KeyName, Erasure> {
     by_conversation(lines)

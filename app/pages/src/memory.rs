@@ -141,16 +141,18 @@ impl Program for Memory {
         Vec::new()
     }
 
+    // The facts draw as soon as they answer; the record, a fold of every conversation, follows
+    // in its own section.
     fn view(m: &Model) -> Node<Msg> {
-        let reading = m.memory.reading.both(&m.record.reading);
-        let (legend, body) = match &reading {
-            Reading::Val { v: (p, r) } => (
+        let reading = &m.memory.reading;
+        let (legend, body) = match reading {
+            Reading::Val { v: p } => (
                 Some(format!(
                     "{} of {} facts, background for every conversation.",
                     p.facts.len(),
                     p.cap
                 )),
-                body(m, p, r),
+                body(m, p, &m.record.reading),
             ),
             Reading::Loading | Reading::Error { .. } => (None, Vec::new()),
         };
@@ -165,7 +167,7 @@ impl Program for Memory {
             shape: Shape::Rows,
         };
         let status = chrome::status(
-            &reading,
+            reading,
             m.memory.behind.as_ref(),
             &m.context.offsets,
             Msg::Retry,
@@ -181,7 +183,7 @@ const KINDS: [(Kind, &str, &str); 4] = [
     (Kind::Standing, "standing", "Standing instructions"),
 ];
 
-fn body(m: &Model, p: &MemoryPayload, r: &RecordPayload) -> Vec<Node<Msg>> {
+fn body(m: &Model, p: &MemoryPayload, r: &Reading<RecordPayload>) -> Vec<Node<Msg>> {
     let mut out: Vec<Node<Msg>> = KINDS
         .iter()
         .filter_map(|&(k, name, label)| {
@@ -205,19 +207,37 @@ fn body(m: &Model, p: &MemoryPayload, r: &RecordPayload) -> Vec<Node<Msg>> {
     if out.is_empty() {
         out.push(empty("Nothing remembered yet."));
     }
-    let summaries: Vec<Node<Msg>> = r.summaries.iter().map(|s| summary(m, s)).collect();
-    if !summaries.is_empty() {
-        let count = counted(summaries.len(), "summary", "summaries");
-        out.push(group(
-            None,
-            "memorygroup recordgroup",
-            "Summaries of what you said",
-            count,
+    let summaries = "Summaries of what you said";
+    match r {
+        Reading::Val { v: r } if r.summaries.is_empty() => {}
+        Reading::Val { v: r } => {
+            let rows: Vec<Node<Msg>> = r.summaries.iter().map(|s| summary(m, s)).collect();
+            let count = counted(rows.len(), "summary", "summaries");
+            out.push(group(
+                None,
+                "memorygroup recordgroup",
+                summaries,
+                count,
+                rows,
+            ));
+        }
+        Reading::Loading => out.push(record_note(summaries, "Reading the summaries…", None)),
+        Reading::Error { e } => out.push(record_note(
             summaries,
-        ));
+            &format!("The summaries did not read: {e}. "),
+            Some(chrome::retry(Msg::Retry)),
+        )),
     }
     out.push(callout("Forgetting erases", view! { P ["A forgotten fact leaves the memory's file, not only this list. A conversation that quoted it keeps its words. A summary marked Wrong is deleted and written again from your lines."] }));
     out
+}
+
+/// The record's section while it has no rows to show: why, in words.
+fn record_note(label: &str, note: &str, retry: Option<Node<Msg>>) -> Node<Msg> {
+    view! { Section "recordpending" [
+        view! { Div "memoryhead" [view! { Span "grouplabel" [label] }] },
+        view! { P "recordnote" [note, retry] },
+    ] }
 }
 
 fn group(

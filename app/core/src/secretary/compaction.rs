@@ -62,7 +62,7 @@ impl std::fmt::Display for TheDigest {
 pub struct Reading {
     digest: Digest,
     lines: std::sync::Arc<crate::store::Graph<LineEvent>>,
-    opened: std::sync::Arc<std::collections::BTreeMap<Hash, Entry>>,
+    gathered: std::sync::Arc<crate::secretary::held_lines::Gathered>,
 }
 
 impl Reading {
@@ -73,14 +73,13 @@ impl Reading {
     pub fn of(digests: &ReadDigests<'_>) -> Result<Self, Refusal> {
         digests.whole()?;
         let graph = digests.line_graph()?;
-        let lines: Vec<_> = graph.objects().collect();
-        let opened = digests
+        let gathered = digests
             .lines
-            .fold(crate::secretary::held_lines::HeldLines::entries)?;
+            .fold(crate::secretary::held_lines::HeldLines::gathered)?;
         Ok(Self {
-            digest: digests.read_over(&lines, &opened)?,
+            digest: digests.read_under(&gathered)?,
             lines: graph,
-            opened,
+            gathered,
         })
     }
 
@@ -98,7 +97,7 @@ impl Reading {
     /// Each line as read, by its name.
     #[must_use]
     pub fn entries(&self) -> std::collections::BTreeMap<&Hash, &Entry> {
-        self.opened.iter().collect()
+        self.gathered.entries().iter().collect()
     }
 
     /// The question for `node` and what its summary would be written from.

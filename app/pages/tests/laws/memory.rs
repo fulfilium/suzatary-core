@@ -113,3 +113,35 @@ proptest! {
         page_laws::<memory::Memory>(|| opened(writes, Nothing {}), &msgs);
     }
 }
+
+proptest! {
+    #![proptest_config(ProptestConfig::with_cases(64))]
+
+    /// Law: the facts draw as soon as they answer, whatever the record's reading, which is a fold
+    /// of every conversation and may take longer; while the record reads, its section says so.
+    #[test]
+    fn the_facts_draw_whatever_the_record(
+        facts in memory_payload(),
+        record in reading(record_payload()),
+    ) {
+        let (mut rt, _) = Runtime::<memory::Memory>::start(opened(true, Nothing {}));
+        let held = |ask, reading| {
+            memory::Msg::Host(Box::new(Input::Held { ask, reading, behind: None }))
+        };
+        let answered = Reading::Val { v: Answer::Done { body: facts.clone() } };
+        rt.step(held(memory::Hold::Memory, answered));
+        rt.step(held(memory::Hold::Record, record.clone()));
+        let drawn = format!(
+            "{:?}",
+            viewtree::dom::fresh(&<memory::Memory as viewtree::Program>::view(rt.model()))
+        );
+        let payload: MemoryPayload = serde_json::from_value(facts).expect("a memory payload");
+        for fact in &payload.facts {
+            let printed = format!("{:?}", fact.fact);
+            prop_assert!(drawn.contains(&printed[1..printed.len() - 1]), "{drawn}");
+        }
+        if matches!(record, Reading::Loading) {
+            prop_assert!(drawn.contains("Reading the summaries"), "{drawn}");
+        }
+    }
+}

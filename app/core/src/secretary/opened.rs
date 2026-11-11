@@ -144,7 +144,7 @@ mod tests {
         let reads = conversations.reads();
         format!(
             "{:?} {:?} {:?}",
-            reads.fold(HeldLines::entries).expect("reads"),
+            reads.fold(HeldLines::gathered).expect("reads"),
             reads.fold(HeldLines::transcripts).expect("reads"),
             reads.fold(|lines| lines.transcript(id)).expect("reads"),
         )

@@ -22,6 +22,7 @@
 //! the compactor summarises again from what is left.
 
 use std::collections::{BTreeMap, BTreeSet};
+use std::sync::Arc;
 
 use prodrome_core::digest::{self, Cycle, Leaf, Measure as _, Tree, View};
 use prodrome_core::event::{Actor, Envelope, Hash, parents_of};
@@ -61,7 +62,7 @@ pub fn views() -> usize {
 /// The conversations read through their summaries.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Digest {
-    tree: Option<IndexedTree<Label>>,
+    shape: Arc<Shape>,
     said: BTreeMap<Hash, Vec<Candidate>>,
     /// Every summary's words the history names: its object, its node and its text.
     named: Vec<(Hash, Hash, TextName)>,
@@ -70,8 +71,6 @@ pub struct Digest {
     /// The models each node's history records as finding no line at today's [`NODE_BYTES`] or
     /// above, from every outcome and not only the reading's, since a later outcome supersedes it.
     unfit: BTreeMap<Hash, BTreeSet<ModelName>>,
-    /// The line of every leaf renamed because words of it were erased.
-    renamed: BTreeMap<Hash, Hash>,
     /// Every summary object written over a retracted summary, at any depth: stale until its node
     /// is asked again.
     over_retracted: BTreeSet<Hash>,
@@ -140,9 +139,67 @@ pub struct Summary {
     pub asked: Under<Asking>,
 }
 
-/// The digest of `lines` (every conversation's objects, each read as `opened` reads it) under
-/// `history`, each summary's words read by `words`, a retraction believed only from one of
-/// `owners`.
+/// One line as the tree reads it: its object's name, the line, and the names it rests on.
+pub type Placed<'l> = (&'l Hash, &'l LineEvent, &'l [Hash]);
+
+/// The digest's lines: the tree over them, each leaf labelled, and the line of each leaf renamed
+/// because words of it were erased. A function of the lines and their entries alone, so a summary
+/// written moves none of it; the box keeps it in the lines' fold.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct Shape {
+    tree: Option<IndexedTree<Label>>,
+    renamed: BTreeMap<Hash, Hash>,
+}
+
+impl Shape {
+    /// The tree over `lines`, each conversation's in its causal order, read as `opened` reads
+    /// them.
+    ///
+    /// # Errors
+    /// [`Cycle`] for lines that rest on one another in a cycle, which no store of objects can hold.
+    pub fn of(lines: &[Placed<'_>], opened: &BTreeMap<Hash, Entry>) -> Result<Self, Cycle> {
+        let taints = taints(lines, opened);
+        let (carries, leaf_of) = leaves_of(lines);
+        let order = line_order(lines, &carries)?;
+        let leaves = order
+            .iter()
+            .enumerate()
+            .filter_map(|(at, name)| {
+                let line = opened.get(*name)?;
+                let (leaf, erased) = &leaf_of[name];
+                let measure = Label::of(line, taints[name]);
+                Some(Leaf {
+                    name: leaf.clone(),
+                    parents: at
+                        .checked_sub(1)
+                        .map(|before| leaf_of[&order[before]].0.clone())
+                        .into_iter()
+                        .collect(),
+                    // What showing the line costs is its words as the view prints them, never the
+                    // sealed print, so a store reads alike whether its words are locked or not.
+                    bytes: u32::try_from(crate::secretary::digest_view::rendered(line).len())
+                        .unwrap_or(u32::MAX),
+                    measure: if *erased {
+                        measure.join(&Label::erased())
+                    } else {
+                        measure
+                    },
+                })
+            })
+            .collect();
+        Ok(Self {
+            tree: digest::tree(leaves)?.map(IndexedTree::of),
+            renamed: leaf_of
+                .into_iter()
+                .filter(|(line, (leaf, _))| leaf != *line)
+                .map(|(line, (leaf, _))| (leaf, line.clone()))
+                .collect(),
+        })
+    }
+}
+
+/// The digest of `lines` (every conversation's objects, in the store's order, each read as
+/// `opened` reads it) under `history`: [`under`] of their [`Shape`].
 ///
 /// # Errors
 /// [`Cycle`] for lines that rest on one another in a cycle, which no store of objects can hold.
@@ -153,37 +210,25 @@ pub fn digest(
     owners: &BTreeSet<Actor>,
     words: impl Fn(&TextName) -> Option<Line>,
 ) -> Result<Digest, Cycle> {
-    let policy = Owners(owners);
-    let taints = taints(lines, opened);
-    let (carries, leaf_of) = leaves_of(lines);
-    let order = line_order(lines, &carries)?;
-    let leaves = order
+    let parents: Vec<Vec<Hash>> = lines.iter().map(|(_, object)| parents_of(object)).collect();
+    let placed: Vec<Placed<'_>> = lines
         .iter()
-        .enumerate()
-        .filter_map(|(at, name)| {
-            let line = opened.get(name)?;
-            let (leaf, erased) = &leaf_of[name];
-            let measure = Label::of(line, taints[name]);
-            Some(Leaf {
-                name: leaf.clone(),
-                parents: at
-                    .checked_sub(1)
-                    .map(|before| leaf_of[&order[before]].0.clone())
-                    .into_iter()
-                    .collect(),
-                // What showing the line costs is its words as the view prints them, never the
-                // sealed print, so a store reads alike whether its words are locked or not.
-                bytes: u32::try_from(crate::secretary::digest_view::rendered(line).len())
-                    .unwrap_or(u32::MAX),
-                measure: if *erased {
-                    measure.join(&Label::erased())
-                } else {
-                    measure
-                },
-            })
-        })
+        .zip(&parents)
+        .filter_map(|((name, object), parents)| Some((*name, object.event()?, parents.as_slice())))
         .collect();
-    let tree = digest::tree(leaves)?.map(IndexedTree::of);
+    let shape = Shape::of(&placed, opened)?;
+    Ok(under(Arc::new(shape), history, owners, words))
+}
+
+/// The digest of the lines `shape` holds under `history`, each summary's words read by `words`,
+/// a retraction believed only from one of `owners`.
+pub fn under(
+    shape: Arc<Shape>,
+    history: &[Node<DigestEvent>],
+    owners: &BTreeSet<Actor>,
+    words: impl Fn(&TextName) -> Option<Line>,
+) -> Digest {
+    let policy = Owners(owners);
     let mut said: BTreeMap<Hash, Vec<Candidate>> = BTreeMap::new();
     let mut retracted = BTreeSet::new();
     for (node, stream) in fold(history).entities() {
@@ -231,25 +276,20 @@ pub fn digest(
     let unfit = unfit(history);
     let attempts = attempts(history);
     let over_retracted = over_retracted(history, &retracted);
-    let standings = tree.as_ref().map_or_else(BTreeMap::new, |tree| {
+    let standings = shape.tree.as_ref().map_or_else(BTreeMap::new, |tree| {
         said.keys()
             .filter_map(|node| Some((node.clone(), standing(tree, &said, &over_retracted, node)?)))
             .collect()
     });
-    Ok(Digest {
-        tree,
+    Digest {
+        shape,
         said,
         named,
         attempts,
         unfit,
-        renamed: leaf_of
-            .into_iter()
-            .filter(|(line, (leaf, _))| leaf != *line)
-            .map(|(line, (leaf, _))| (leaf, line.clone()))
-            .collect(),
         over_retracted,
         standings,
-    })
+    }
 }
 
 /// The models each node's `history` records as finding no line at today's [`NODE_BYTES`] or
@@ -370,18 +410,17 @@ pub fn attempts(history: &[Node<DigestEvent>]) -> Vec<(Hash, Datetime, Spent)> {
     reason = "two maps over the same lines, read together"
 )]
 fn leaves_of<'l>(
-    lines: &[(&'l Hash, &'l Envelope<LineEvent>)],
+    lines: &[Placed<'l>],
 ) -> (
     BTreeMap<&'l Hash, &'l Hash>,
     BTreeMap<&'l Hash, (Hash, bool)>,
 ) {
-    let gone = crate::secretary::transcript::erased(lines);
+    let gone = crate::secretary::transcript::erased_lines(
+        lines.iter().map(|&(name, line, _)| (name, line)),
+    );
     let mut carries = BTreeMap::new();
     let mut leaves = BTreeMap::new();
-    for &(name, object) in lines {
-        let Some(line) = object.event() else {
-            continue;
-        };
+    for &(name, line, _) in lines {
         // A reseal holds another slot's words, read where that slot stands: it is no leaf.
         if resealing(line) {
             continue;
@@ -409,12 +448,12 @@ fn leaves_of<'l>(
 /// lines taken in the order given, which is the store's causal order. A line whose words are
 /// erased still counts: a mail read whose words went still taints the answer after it.
 fn taints<'l>(
-    lines: &'l [(&'l Hash, &'l Envelope<LineEvent>)],
+    lines: &[Placed<'l>],
     opened: &'l BTreeMap<Hash, Entry>,
 ) -> BTreeMap<&'l Hash, Taint> {
     let mut conversations: BTreeMap<_, Vec<(&Hash, &Entry)>> = BTreeMap::new();
-    for (name, object) in lines {
-        if let (Some(line), Some(entry)) = (object.event(), opened.get(name)) {
+    for &(name, line, _) in lines {
+        if let Some(entry) = opened.get(name) {
             conversations
                 .entry(line.conversation())
                 .or_default()
@@ -437,20 +476,20 @@ fn taints<'l>(
 /// # Errors
 /// [`Cycle`] for lines in a cycle, which no store of objects can hold.
 fn line_order<'l>(
-    lines: &'l [(&'l Hash, &'l Envelope<LineEvent>)],
+    lines: &[Placed<'l>],
     carries: &BTreeMap<&'l Hash, &'l Hash>,
 ) -> Result<Vec<&'l Hash>, Cycle> {
     // A reseal is no leaf, so a line resting on one rests on what the reseal rests on.
-    let reseals: BTreeMap<&Hash, Vec<Hash>> = lines
+    let reseals: BTreeMap<&Hash, &[Hash]> = lines
         .iter()
-        .filter(|(_, object)| object.event().is_some_and(resealing))
-        .map(|&(name, object)| (name, parents_of(object)))
+        .filter(|(_, line, _)| resealing(line))
+        .map(|&(name, _, parents)| (name, parents))
         .collect();
     let parents: BTreeMap<&Hash, Vec<&Hash>> = lines
         .iter()
-        .filter_map(|&(name, object)| Some((carries.get(name).copied()?, object)))
-        .map(|(carried, object)| {
-            let mut pending = parents_of(object);
+        .filter_map(|&(name, _, parents)| Some((carries.get(name).copied()?, parents)))
+        .map(|(carried, parents)| {
+            let mut pending = parents.to_vec();
             let mut seen = BTreeSet::new();
             let mut found = Vec::new();
             while let Some(parent) = pending.pop() {
@@ -525,19 +564,19 @@ impl Digest {
     /// or words of it were erased.
     #[must_use]
     pub fn line<'n>(&'n self, leaf: &'n Hash) -> &'n Hash {
-        self.renamed.get(leaf).unwrap_or(leaf)
+        self.shape.renamed.get(leaf).unwrap_or(leaf)
     }
 
     /// The tree, `None` while there are no lines.
     #[must_use]
     pub fn tree(&self) -> Option<&Tree<Label>> {
-        self.tree.as_ref().map(IndexedTree::tree)
+        self.shape.tree.as_ref().map(IndexedTree::tree)
     }
 
     /// The node of the tree named `name`, found in the tree's depth.
     #[must_use]
     pub fn node(&self, name: &Hash) -> Option<&prodrome_core::digest::Node<Label>> {
-        self.tree.as_ref()?.node(name)
+        self.shape.tree.as_ref()?.node(name)
     }
 
     /// Node `node`'s reading: one candidate, or a conflict's, by least object name first; empty
@@ -595,7 +634,7 @@ impl Digest {
     /// hold, or one with an inner child nothing was said of.
     #[must_use]
     pub fn over(&self, node: &Hash) -> Option<Vec<Hash>> {
-        written_over(self.tree.as_ref()?, &self.said, node)
+        written_over(self.shape.tree.as_ref()?, &self.said, node)
     }
 
     /// The taint of the summary [`Digest::summary`] shows: the taint its event records joined

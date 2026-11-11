@@ -16,7 +16,7 @@ use crate::secretary::conversations::{Conversations, ReadConversations};
 use crate::secretary::digest::{self, Digest};
 use crate::secretary::digest_event::{self, Attempt, DigestEvent};
 use crate::secretary::digest_line::Line;
-use crate::secretary::held_lines::HeldLines;
+use crate::secretary::held_lines::{Gathered, HeldLines};
 use crate::secretary::line_event::LineEvent;
 use crate::secretary::memories::Held;
 use crate::secretary::salted_text::{Text, TextName};
@@ -87,9 +87,7 @@ impl ReadDigests<'_> {
     /// # Errors
     /// The stores' own; [`Refusal::internal`] for lines in a cycle, which no store can hold.
     pub fn read(&self) -> Result<Digest, Refusal> {
-        let graph = self.line_graph()?;
-        let lines: Vec<_> = graph.objects().collect();
-        self.read_over(&lines, &*self.lines.fold(HeldLines::entries)?)
+        self.read_under(&*self.lines.fold(HeldLines::gathered)?)
     }
 
     /// The conversations' lines as the store's graph, shared by every reader at the same heads.
@@ -102,34 +100,36 @@ impl ReadDigests<'_> {
         Ok(timed(Phase::Lines, || self.lines.lines.graph())?)
     }
 
-    /// The reading over `lines` and `opened`, each of them read.
+    /// The reading of the history over the lines `gathered` holds.
     ///
     /// # Errors
     /// As [`ReadDigests::read`].
-    pub(crate) fn read_over(
-        &self,
-        lines: &[(&Hash, &prodrome_core::event::Envelope<LineEvent>)],
-        opened: &std::collections::BTreeMap<Hash, crate::secretary::store::Entry>,
-    ) -> Result<Digest, Refusal> {
-        let history = timed(Phase::History, || self.history.nodes())?;
-        let unread = std::cell::RefCell::new(None);
-        let read = timed(Phase::Fold, || {
-            digest::digest(lines, opened, &history, self.owners, |name| {
-                self.words(name).unwrap_or_else(|failed| {
-                    unread.borrow_mut().get_or_insert(failed);
-                    None
-                })
-            })
-        });
-        if let Some(failed) = unread.into_inner() {
-            return Err(failed);
-        }
-        read.map_err(|cycle| {
+    pub(crate) fn read_under(&self, gathered: &Gathered) -> Result<Digest, Refusal> {
+        let shape = gathered.shape().map_err(|cycle| {
             Refusal::internal(format!(
                 "the conversations' lines rest on {} in a cycle",
                 cycle.0.as_str()
             ))
-        })
+        })?;
+        let history = timed(Phase::History, || self.history.nodes())?;
+        let unread = std::cell::RefCell::new(None);
+        let read = timed(Phase::Fold, || {
+            digest::under(
+                std::sync::Arc::clone(shape),
+                &history,
+                self.owners,
+                |name| {
+                    self.words(name).unwrap_or_else(|failed| {
+                        unread.borrow_mut().get_or_insert(failed);
+                        None
+                    })
+                },
+            )
+        });
+        match unread.into_inner() {
+            Some(failed) => Err(failed),
+            None => Ok(read),
+        }
     }
 
     /// Every retraction an owner wrote, by object name, without reading the lines.

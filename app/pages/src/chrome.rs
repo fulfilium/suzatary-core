@@ -87,7 +87,7 @@ pub(crate) struct Chrome<M> {
     pub(crate) shape: Shape,
 }
 
-fn retry<M>(m: M) -> Node<M> {
+pub(crate) fn retry<M>(m: M) -> Node<M> {
     view! { Button "retry" {Type => "button"} @click(m) ["Retry"] }
 }
 

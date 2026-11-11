@@ -914,6 +914,46 @@ fn said(k: usize) -> Entry {
     }
 }
 
+/// `conversations` conversations of `per` lines each, from `said`, written into `lines` with
+/// their keys in `keys` in one run; answers the ids and how many slots they hold.
+fn conversations_at_scale(
+    lines: &Objects<LineEvent>,
+    keys: &suzatary_io::text_keys::TextKeys,
+    conversations: usize,
+    per: usize,
+) -> (Vec<ConversationId>, usize) {
+    let entropy = suzatary_io::texts::SystemEntropy;
+    let ids: Vec<ConversationId> = (1..=conversations)
+        .map(|n| ConversationId::new(format!("2026-10-09-{n}")).expect("a slug"))
+        .collect();
+    let opening = Entry::Opened {
+        at: at(9, 0),
+        title: suzatary_core::secretary::words::Words::kept("Long".to_owned()),
+        model: "claude-cli/haiku".to_owned(),
+        kind: suzatary_core::secretary::store::Kind::Topic,
+    };
+    let writer = Actor::new(suzatary_core::writer::Writer::Assistant.actor()).expect("an actor");
+    let mut written = (0..ids.len() * per).map(|n| (&ids[n / per], n % per));
+    let mut slots = 0;
+    lines
+        .append_each(&mut || {
+            let Some((id, k)) = written.next() else {
+                return Ok(None);
+            };
+            let entry = if k == 0 { opening.clone() } else { said(k) };
+            let held = u32::try_from(k).expect("few");
+            let (line, kept) = LineEvent::write(id.clone(), writer.clone(), held, &entry, &entropy)
+                .expect("a line");
+            for key in &kept {
+                suzatary_core::store::Doc::set(keys, &key.name(), key)?;
+            }
+            slots += kept.len();
+            Ok(Some(line))
+        })
+        .expect("written");
+    (ids, slots)
+}
+
 /// What a digest read costs at the live store's size, about 10,000 slots over 20 conversations,
 /// each answer about 8 KB: cold, warm, and after one new line; the lines' fold alone and one
 /// conversation, warm. Run by name, in release:
@@ -947,34 +987,7 @@ fn digest_at_scale() {
         owners: &owners,
         compacting: &suzatary_core::secretary::compacting::Compacting::Off,
     };
-    let ids: Vec<ConversationId> = (1..=20)
-        .map(|n| ConversationId::new(format!("2026-10-09-{n}")).expect("a slug"))
-        .collect();
-    let opening = Entry::Opened {
-        at: at(9, 0),
-        title: suzatary_core::secretary::words::Words::kept("Long".to_owned()),
-        model: "claude-cli/haiku".to_owned(),
-        kind: suzatary_core::secretary::store::Kind::Topic,
-    };
-    let writer = Actor::new(suzatary_core::writer::Writer::Assistant.actor()).expect("an actor");
-    let mut written = (0..ids.len() * 500).map(|n| (&ids[n / 500], n % 500));
-    let mut slots = 0;
-    lines
-        .append_each(&mut || {
-            let Some((id, k)) = written.next() else {
-                return Ok(None);
-            };
-            let entry = if k == 0 { opening.clone() } else { said(k) };
-            let held = u32::try_from(k).expect("few");
-            let (line, kept) = LineEvent::write(id.clone(), writer.clone(), held, &entry, &entropy)
-                .expect("a line");
-            for key in &kept {
-                suzatary_core::store::Doc::set(&keys, &key.name(), key)?;
-            }
-            slots += kept.len();
-            Ok(Some(line))
-        })
-        .expect("written");
+    let (ids, slots) = conversations_at_scale(&lines, &keys, 20, 500);
     println!("{slots} slots");
     let time = |what: &str, f: &dyn Fn()| {
         let started = std::time::Instant::now();
@@ -995,7 +1008,7 @@ fn digest_at_scale() {
     time("the lines' fold alone, warm", &|| {
         stores(warm)
             .reads()
-            .fold(suzatary_core::secretary::held_lines::HeldLines::entries)
+            .fold(suzatary_core::secretary::held_lines::HeldLines::gathered)
             .expect("reads");
     });
     time("one conversation, warm", &|| {
@@ -1147,4 +1160,148 @@ fn lines_written_before_kinds_were_stored_read_whole() {
             "{name}"
         );
     }
+}
+
+/// What a compacted node and a record call cost over a digest of about 2,000 nodes, about half of
+/// them stale, as the box's reseal left it: 6,000 lines over 20 conversations, every node
+/// summarised level by level, then low nodes summarised again until half the nodes read stale.
+/// Run by name, in release: `cargo test --release -p suzatary-io --test all -- --ignored
+/// digest_nodes_at_scale --nocapture`.
+#[test]
+#[ignore = "a measurement, run by name"]
+#[expect(clippy::too_many_lines, reason = "one measurement, read top to bottom")]
+fn digest_nodes_at_scale() {
+    use suzatary_core::secretary::compact_ask::Beside;
+    use suzatary_core::secretary::compaction::Reading;
+    use suzatary_core::secretary::digest::Standing;
+    use suzatary_core::secretary::digest_event::{Attempt, DigestEvent, summarized};
+    use suzatary_core::secretary::digest_line::Line;
+    use suzatary_core::secretary::opened::Opened;
+    use suzatary_core::secretary::salted_text::Text;
+    use suzatary_core::secretary::shown_record::OwnersRecord;
+    let dir = tempfile::tempdir().expect("a scratch dir");
+    let (lines, keys) = lines_at(dir.path());
+    let owners = std::collections::BTreeSet::new();
+    let history = Objects::<DigestEvent>::digests(dir.path().join("digests"), owners.clone());
+    let texts = suzatary_io::texts::Texts::open(dir.path().join("digest-texts"));
+    let entropy = suzatary_io::texts::SystemEntropy;
+    let opened: &'static Opened = Box::leak(Box::default());
+    let digests = Digests {
+        history: &history,
+        texts: &texts,
+        lines: suzatary_core::secretary::conversations::Conversations {
+            lines: &lines,
+            keys: &keys,
+            entropy: &entropy,
+            renders: &suzatary_core::capability::Nothing,
+            sessions: &suzatary_core::capability::Nothing,
+            opened,
+        },
+        owners: &owners,
+        compacting: &suzatary_core::secretary::compacting::Compacting::Off,
+    };
+    conversations_at_scale(&lines, &keys, 20, 300);
+    let model = suzatary_core::model_name::ModelName::parse("claude-cli/haiku").expect("a model");
+    let compactor = suzatary_core::secretary::digests::compactor();
+    let mut count = 0u32;
+    // Summarise `nodes` as `reading` reads them, each in a few words of its own.
+    let mut summarise = |nodes: &[Hash], reading: &suzatary_core::secretary::digest::Digest| {
+        let mut nodes = nodes.iter();
+        history
+            .append_each(&mut || {
+                let Some(node) = nodes.next() else {
+                    return Ok(None);
+                };
+                count += 1;
+                let label = *reading.node(node).expect("in the tree").measure();
+                let text = Text::new(
+                    Line::new(&format!("summary {count} of what was said")).expect("a line"),
+                    [7; suzatary_core::capability::SALT_BYTES],
+                );
+                suzatary_core::store::Doc::set(&texts, &text.name(), &text)?;
+                let attempt = Attempt {
+                    over: reading.over(node).expect("over"),
+                    model: model.clone(),
+                    taint: label.taint,
+                    beside: Beside::of(&label),
+                };
+                Ok(Some(
+                    summarized(node.clone(), at(23, 0), compactor.clone(), &text, attempt)
+                        .expect("an event"),
+                ))
+            })
+            .expect("summarised");
+    };
+    loop {
+        let reading = digests.reads().read().expect("reads");
+        let pending = reading.pending();
+        if pending.is_empty() {
+            break;
+        }
+        summarise(&pending, &reading);
+    }
+    let reading = digests.reads().read().expect("reads");
+    let low = inner(&reading, |node| {
+        node.children()
+            .iter()
+            .all(prodrome_core::digest::Node::is_leaf)
+    });
+    let again: Vec<Hash> = low.into_iter().step_by(3).collect();
+    summarise(&again, &reading);
+    let reading = digests.reads().read().expect("reads");
+    let stale = inner(&reading, |node| {
+        reading.standing(node.name()) != Some(Standing::Current)
+    });
+    println!(
+        "{} nodes, {} stale",
+        inner(&reading, |_| true).len(),
+        stale.len()
+    );
+    let time = |what: &str, f: &mut dyn FnMut()| {
+        let started = std::time::Instant::now();
+        f();
+        println!("{what}: {:?}", started.elapsed());
+    };
+    for round in ["cold", "warm"] {
+        time(&format!("record, {round}"), &mut || {
+            let _ = OwnersRecord::of(Reading::of(&digests.reads()).expect("reads"));
+        });
+    }
+    for n in 1..=3 {
+        let reading = digests.reads().read().expect("reads");
+        let next = reading.pending().into_iter().next().expect("a stale node");
+        time(
+            &format!("one compacted node ({n}): its write and two reads"),
+            &mut || {
+                summarise(std::slice::from_ref(&next), &reading);
+                Reading::of(&digests.reads()).expect("reads");
+                digests.reads().read().expect("reads");
+            },
+        );
+        time(&format!("record after it ({n})"), &mut || {
+            let _ = OwnersRecord::of(Reading::of(&digests.reads()).expect("reads"));
+        });
+    }
+}
+
+/// The name of every inner node of `reading`'s tree that `keep` keeps.
+fn inner(
+    reading: &suzatary_core::secretary::digest::Digest,
+    keep: impl Fn(&prodrome_core::digest::Node<suzatary_core::secretary::digest_label::Label>) -> bool,
+) -> Vec<Hash> {
+    let mut kept = Vec::new();
+    let mut stack: Vec<_> = reading
+        .tree()
+        .map(prodrome_core::digest::Tree::root)
+        .into_iter()
+        .collect();
+    while let Some(node) = stack.pop() {
+        if !node.is_leaf() {
+            if keep(node) {
+                kept.push(node.name().clone());
+            }
+            stack.extend(node.children());
+        }
+    }
+    kept
 }

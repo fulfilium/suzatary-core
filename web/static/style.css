@@ -5398,7 +5398,8 @@ body:has(> .secretarypanel) .askrow {
 /* --- the secretary's memory (docs/CHAT-PLAN-2026-09-25.md §3.6) -------------
    A glass card per kind, its name a label; a fact is serif, the round that
    said it an inline link under it, Forget a secondary capsule. */
-.memorygroup {
+.memorygroup,
+.recordpending {
   margin: 0 0 var(--s-3);
   border: 2px solid var(--line);
   border-radius: var(--r-card);
@@ -5412,6 +5413,11 @@ body:has(> .secretarypanel) .askrow {
   justify-content: space-between;
   gap: var(--s-3);
   padding: var(--s-3) 0.875rem var(--s-2);
+}
+
+.recordnote {
+  margin: 0;
+  padding: 0 0.875rem var(--s-3);
 }
 
 .memoryfacts {

@@ -160,6 +160,35 @@ impl Box {
     fn kept(&self) -> BTreeSet<TextName> {
         self.texts.keys().into_iter().collect()
     }
+
+    /// The reading [`Box::read`] must equal: the plain digest of every line, each opened by the
+    /// key store itself, under the whole history.
+    fn plain(&self) -> Digest {
+        let objects = self.lines.lines.objects().expect("objects");
+        let named: Vec<_> = objects
+            .iter()
+            .map(|(name, object)| (name, object))
+            .collect();
+        let reads = self.lines.conversations().reads();
+        let opened = suzatary_core::secretary::transcript::opened(
+            &objects,
+            &|name: &suzatary_core::secretary::locked_text::KeyName| reads.key(name),
+        );
+        let history = self.history.nodes().expect("the history");
+        suzatary_core::secretary::digest::digest(
+            &named,
+            &opened,
+            &history,
+            &self.owners.0,
+            |name| {
+                self.texts
+                    .get(name)
+                    .expect("reads")
+                    .map(|text| text.words().clone())
+            },
+        )
+        .expect("no cycle")
+    }
 }
 
 /// A clock stopped at one instant.
@@ -189,8 +218,71 @@ fn live(digest: &Digest) -> BTreeSet<TextName> {
     digest.naming().live()
 }
 
+/// What happens next to the box's stores.
+#[derive(Debug, Clone)]
+enum Act {
+    /// A new conversation of this many lines.
+    Say(usize),
+    /// Every pending node summarised.
+    Summarise,
+    /// The owner's words of the first conversation's first said line erased.
+    Erase,
+}
+
+fn act() -> impl Strategy<Value = Act> {
+    prop_oneof![
+        3 => (1usize..24).prop_map(Act::Say),
+        2 => Just(Act::Summarise),
+        1 => Just(Act::Erase),
+    ]
+}
+
 proptest! {
     #![proptest_config(ProptestConfig { cases: 12, ..ProptestConfig::default() })]
+
+    /// THE SHAPE LAW: the box reads the digest's lines from its fold, kept while no line moves,
+    /// and its reading is the plain digest after every act: lines said, summaries written (which
+    /// move no line, so the kept shape is read), and an erasure (which renames leaves).
+    #[test]
+    fn the_kept_shape_reads_as_the_plain_digest(acts in proptest::collection::vec(act(), 1..8)) {
+        let the = Box::default();
+        let mut said = 0;
+        for act in acts {
+            match act {
+                Act::Say(n) => {
+                    said += 1;
+                    the.say(&format!("2026-10-06-{said}"), n);
+                }
+                Act::Summarise => {
+                    the.summarise_all();
+                }
+                Act::Erase if said > 0 => {
+                    let id = ConversationId::new("2026-10-06-1").expect("a slug");
+                    let lines: Vec<_> = the
+                        .lines
+                        .lines
+                        .objects()
+                        .expect("objects")
+                        .into_iter()
+                        .filter_map(|(_, object)| object.into_event())
+                        .filter(|line| *line.conversation() == id)
+                        .collect();
+                    let keys = lines[0].keys().cloned().collect();
+                    let erasure = Entry::Erased {
+                        at: at(59),
+                        keys,
+                        erasure: suzatary_core::secretary::erasure::Erasure::Asked { by: ada() },
+                    };
+                    let held = u32::try_from(lines.len()).expect("few lines");
+                    write_line(&the.lines, id, held, &erasure);
+                    suzatary_core::secretary::transcript::sweep(the.lines.conversations())
+                        .expect("swept");
+                }
+                Act::Erase => {}
+            }
+            prop_assert_eq!(the.read(), the.plain());
+        }
+    }
 
     /// Law 8: no digest object holds a summary's words, and once a second conversation's lines
     /// arrive between the first's and rename spines, the sweep leaves exactly the words a live

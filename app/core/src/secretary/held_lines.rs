@@ -19,11 +19,13 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::sync::Arc;
 
 use prodrome_core::dag::{Excluded, Unread};
+use prodrome_core::digest::Cycle;
 use prodrome_core::event::{Envelope, Hash, parents_of, parse_envelope};
 use prodrome_core::memo::{self, Algebra, Cache, Report, Tree};
 
 use crate::answer::Renderable;
 use crate::conversation_id::ConversationId;
+use crate::secretary::digest::{Placed, Shape};
 use crate::secretary::erasure::Erasure;
 use crate::secretary::key_ring::KeyRing;
 use crate::secretary::line_event::{Husk, LineEvent, LineVocabulary};
@@ -321,7 +323,8 @@ impl Folds for Replica {
     }
 }
 
-/// The box's fold: each conversation to its [`Transcript`], and every line's entry by name.
+/// The box's fold: each conversation to its [`Transcript`], and at the store what the digest
+/// reads of the lines ([`Gathered`]).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum TheBox {}
 
@@ -332,10 +335,44 @@ pub struct Closed {
     read: Result<Arc<Transcript>, NotAConversation>,
 }
 
+/// What the box's store node gathers: every line's entry by name, and the digest's [`Shape`] over
+/// them, so a summary written, which moves no line, reads the shape from the cache.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Gathered {
+    entries: BTreeMap<Hash, Entry>,
+    shape: Result<Arc<Shape>, Cycle>,
+}
+
+impl Default for Gathered {
+    fn default() -> Self {
+        Self {
+            entries: BTreeMap::new(),
+            shape: Ok(Arc::new(Shape::default())),
+        }
+    }
+}
+
+impl Gathered {
+    /// Every line's entry, by name.
+    #[must_use]
+    pub fn entries(&self) -> &BTreeMap<Hash, Entry> {
+        &self.entries
+    }
+
+    /// The digest's shape over the lines.
+    ///
+    /// # Errors
+    /// [`Cycle`] for lines in a cycle, which no store of objects can hold.
+    pub fn shape(&self) -> Result<&Arc<Shape>, &Cycle> {
+        self.shape.as_ref()
+    }
+}
+
 impl Folds for TheBox {
     type Closed = Closed;
-    type Gathered = Arc<BTreeMap<Hash, Entry>>;
-    const NAME: &'static str = "a conversation to its transcript, the store to every line";
+    type Gathered = Arc<Gathered>;
+    const NAME: &'static str =
+        "a conversation to its transcript, the store to every line and the digest's shape";
 
     fn close(id: &ConversationId, lines: Vec<Arc<OpenedLine>>) -> Self::Closed {
         let written: Vec<_> = lines
@@ -354,13 +391,30 @@ impl Folds for TheBox {
     }
 
     fn gather(closed: &BTreeMap<ConversationId, Self::Closed>) -> Self::Gathered {
-        Arc::new(
-            closed
-                .values()
-                .flat_map(|closed| &closed.lines)
-                .map(|line| (line.object.clone(), line.entry.clone()))
-                .collect(),
-        )
+        let ordered: Vec<&OpenedLine> = closed
+            .values()
+            .flat_map(|closed| {
+                let lines = &closed.lines;
+                transcript::causal(
+                    &lines
+                        .iter()
+                        .map(|line| (&line.object, line.line.at(), line.parents.as_slice()))
+                        .collect::<Vec<_>>(),
+                )
+                .into_iter()
+                .map(|(at, _)| &*lines[at])
+            })
+            .collect();
+        let entries = ordered
+            .iter()
+            .map(|line| (line.object.clone(), line.entry.clone()))
+            .collect();
+        let placed: Vec<Placed<'_>> = ordered
+            .iter()
+            .map(|line| (&line.object, &*line.line, line.parents.as_slice()))
+            .collect();
+        let shape = Shape::of(&placed, &entries).map(Arc::new);
+        Arc::new(Gathered { entries, shape })
     }
 
     fn stored(closed: Self::Closed) -> Result<Arc<Stored>, NotAConversation> {
@@ -1227,8 +1281,9 @@ impl HeldLines<TheBox> {
         each
     }
 
-    /// Every line of the history, by name, opened as its conversation opens it.
-    pub fn entries(&mut self) -> Arc<BTreeMap<Hash, Entry>> {
+    /// Every line of the history, by name, opened as its conversation opens it, and the digest's
+    /// shape over them.
+    pub fn gathered(&mut self) -> Arc<Gathered> {
         self.store().0.gathered
     }
 
