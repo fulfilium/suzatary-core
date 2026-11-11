@@ -25,7 +25,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::sync::Arc;
 
 use prodrome_core::digest::{self, Cycle, Leaf, Measure as _, Tree, View};
-use prodrome_core::event::{Actor, Envelope, Hash, parents_of};
+use prodrome_core::event::{Actor, Hash};
 use prodrome_core::fold::Product as _;
 use prodrome_core::fold::sole::{One, Only, Whole};
 use prodrome_core::literal::Datetime;
@@ -47,6 +47,7 @@ use crate::secretary::salted_text::TextName;
 use crate::secretary::store::Entry;
 use crate::secretary::taint::Taint;
 use crate::secretary::texts::{Liveness, Naming};
+use crate::secretary::transcript;
 
 thread_local! {
     static VIEWS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
@@ -198,70 +199,108 @@ impl Shape {
     }
 }
 
-/// The digest of `lines` (every conversation's objects, in the store's order, each read as
-/// `opened` reads it) under `history`: [`under`] of their [`Shape`].
-///
-/// # Errors
-/// [`Cycle`] for lines that rest on one another in a cycle, which no store of objects can hold.
-pub fn digest(
-    lines: &[(&Hash, &Envelope<LineEvent>)],
-    opened: &BTreeMap<Hash, Entry>,
-    history: &[Node<DigestEvent>],
-    owners: &BTreeSet<Actor>,
-    words: impl Fn(&TextName) -> Option<Line>,
-) -> Result<Digest, Cycle> {
-    let parents: Vec<Vec<Hash>> = lines.iter().map(|(_, object)| parents_of(object)).collect();
-    let placed: Vec<Placed<'_>> = lines
-        .iter()
-        .zip(&parents)
-        .filter_map(|((name, object), parents)| Some((*name, object.event()?, parents.as_slice())))
-        .collect();
-    let shape = Shape::of(&placed, opened)?;
-    Ok(under(Arc::new(shape), history, owners, words))
+/// Each node's stream read, kept across readings: its candidates and the summaries retracted in
+/// it, named by the node, the stream's objects and whether the tree holds the node, whose words
+/// alone are read. An entry whose node leaves the history is dropped. One serves one deployment's
+/// owners.
+#[derive(Debug, Default)]
+pub struct Kept(BTreeMap<Hash, (Hash, Arc<NodeSaid>)>);
+
+impl Kept {
+    /// Nothing kept.
+    pub fn clear(&mut self) {
+        self.0.clear();
+    }
+}
+
+/// One node's stream, read.
+#[derive(Debug)]
+pub struct NodeSaid {
+    candidates: Vec<Candidate>,
+    retracted: Vec<Hash>,
 }
 
 /// The digest of the lines `shape` holds under `history`, each summary's words read by `words`,
-/// a retraction believed only from one of `owners`.
-pub fn under(
+/// a retraction believed only from one of `owners`, and each node's stream read through `kept`:
+/// read again only where its name moved.
+pub fn under_kept(
     shape: Arc<Shape>,
     history: &[Node<DigestEvent>],
     owners: &BTreeSet<Actor>,
     words: impl Fn(&TextName) -> Option<Line>,
+    kept: &mut Kept,
 ) -> Digest {
     let policy = Owners(owners);
     let mut said: BTreeMap<Hash, Vec<Candidate>> = BTreeMap::new();
     let mut retracted = BTreeSet::new();
+    let mut seen = BTreeSet::new();
     for (node, stream) in fold(history).entities() {
-        // A summary is retracted when a retraction the policy believes descends from it.
-        for retraction in stream.iter().filter(|stamp| {
-            matches!(stamp.event.body(), Said::Retracted)
-                && matches!(
-                    prodrome_core::policy::Policy::standing(&policy, &stamp.name, &stamp.event),
-                    prodrome_core::policy::Standing::Binds
-                )
-        }) {
-            retracted.extend(
-                stream
-                    .iter()
-                    .filter(|stamp| matches!(stamp.event.body(), Said::Summarized { .. }))
-                    .filter(|summary| retraction.descends(summary))
-                    .map(|summary| summary.name.clone()),
-            );
-        }
-        let registers: One<'_, Whole<DigestEvent>> =
-            prodrome_core::fold::read(stream, None, &policy);
-        said.entry(node.clone()).or_default().extend(
-            registers.reading(Only).into_iter().filter_map(|stamp| {
-                Some(Candidate {
-                    object: stamp.name.clone(),
-                    said: written(&stamp.event, &words)?,
-                })
-            }),
+        let held = shape
+            .tree
+            .as_ref()
+            .and_then(|tree| tree.node(node))
+            .is_some();
+        let name = prodrome_core::memo::name(
+            if held {
+                b"in the tree"
+            } else {
+                b"not in the tree"
+            },
+            std::iter::once(node).chain(stream.iter().map(|stamp| &stamp.name)),
         );
+        let read = match kept.0.get(node) {
+            Some((was, read)) if *was == name => Arc::clone(read),
+            Some(_) | None => {
+                // A summary is retracted when a retraction the policy believes descends from it.
+                let mut gone = Vec::new();
+                for retraction in stream.iter().filter(|stamp| {
+                    matches!(stamp.event.body(), Said::Retracted)
+                        && matches!(
+                            prodrome_core::policy::Policy::standing(
+                                &policy,
+                                &stamp.name,
+                                &stamp.event
+                            ),
+                            prodrome_core::policy::Standing::Binds
+                        )
+                }) {
+                    gone.extend(
+                        stream
+                            .iter()
+                            .filter(|stamp| matches!(stamp.event.body(), Said::Summarized { .. }))
+                            .filter(|summary| retraction.descends(summary))
+                            .map(|summary| summary.name.clone()),
+                    );
+                }
+                let registers: One<'_, Whole<DigestEvent>> =
+                    prodrome_core::fold::read(stream, None, &policy);
+                let words = |name: &TextName| if held { words(name) } else { None };
+                let mut candidates: Vec<Candidate> = registers
+                    .reading(Only)
+                    .into_iter()
+                    .filter_map(|stamp| {
+                        Some(Candidate {
+                            object: stamp.name.clone(),
+                            said: written(&stamp.event, words)?,
+                        })
+                    })
+                    .collect();
+                candidates.sort_by(|one, two| one.object.cmp(&two.object));
+                let read = Arc::new(NodeSaid {
+                    candidates,
+                    retracted: gone,
+                });
+                kept.0.insert(node.clone(), (name, Arc::clone(&read)));
+                read
+            }
+        };
+        retracted.extend(read.retracted.iter().cloned());
+        said.entry(node.clone())
+            .or_default()
+            .extend(read.candidates.iter().cloned());
+        seen.insert(node.clone());
     }
-    for candidates in said.values_mut() {
-        candidates.sort_by(|one, two| one.object.cmp(&two.object));
-    }
+    kept.0.retain(|node, _| seen.contains(node));
     let named = history
         .iter()
         .filter_map(|object| match object.event()?.body() {
@@ -445,26 +484,38 @@ fn leaves_of<'l>(
 }
 
 /// Every line's taint in its round ([`crate::secretary::taint::rounds`]), each conversation's
-/// lines taken in the order given, which is the store's causal order. A line whose words are
-/// erased still counts: a mail read whose words went still taints the answer after it.
+/// lines in its causal order, the order its transcript reads in ([`transcript::causal`]), so the
+/// taints are a function of the set of lines, whatever order they are given in. A line whose
+/// words are erased still counts: a mail read whose words went still taints the answer after it.
 fn taints<'l>(
     lines: &[Placed<'l>],
     opened: &'l BTreeMap<Hash, Entry>,
 ) -> BTreeMap<&'l Hash, Taint> {
-    let mut conversations: BTreeMap<_, Vec<(&Hash, &Entry)>> = BTreeMap::new();
-    for &(name, line, _) in lines {
-        if let Some(entry) = opened.get(name) {
+    let mut conversations: BTreeMap<_, Vec<(Placed<'l>, &Entry)>> = BTreeMap::new();
+    for &placed in lines {
+        if let Some(entry) = opened.get(placed.0) {
             conversations
-                .entry(line.conversation())
+                .entry(placed.1.conversation())
                 .or_default()
-                .push((name, entry));
+                .push((placed, entry));
         }
     }
     conversations
         .into_iter()
         .flat_map(|(id, said)| {
-            let taints = crate::secretary::taint::rounds(id, said.iter().map(|(_, entry)| *entry));
-            said.into_iter().map(|(name, _)| name).zip(taints)
+            let order = transcript::causal(
+                &said
+                    .iter()
+                    .map(|&((name, line, parents), _)| (name, line.at(), parents))
+                    .collect::<Vec<_>>(),
+            );
+            let taints =
+                crate::secretary::taint::rounds(id, order.iter().map(|(at, _)| said[*at].1));
+            order
+                .into_iter()
+                .map(|(at, _)| said[at].0.0)
+                .zip(taints)
+                .collect::<Vec<_>>()
         })
         .collect()
 }
@@ -735,3 +786,10 @@ impl Digest {
             .collect()
     }
 }
+
+// The plain reading the box's is tested against, never production.
+#[cfg(any(test, feature = "nothing"))]
+#[path = "../../tests/support/plain_digest.rs"]
+mod plain_digest;
+#[cfg(any(test, feature = "nothing"))]
+pub use plain_digest::{digest, under};

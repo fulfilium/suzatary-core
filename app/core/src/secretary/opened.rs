@@ -1,13 +1,16 @@
 //! The box's lines read through the fold a tab reads through ([`HeldLines`]), fed the store's
 //! graph as its heads move and each new line's keys. It is the holder an erasure empties
 //! ([`crate::secretary::holder::Holder::Opened`]): [`Opened::forget`] drops a key and what it
-//! opened at once, and a line that kills a key drops it at the next feed, in any process.
+//! opened at once, and a line that kills a key drops it at the next feed, in any process. Beside
+//! the lines it keeps the digest's history read per node ([`Kept`]), which holds summaries'
+//! words, so a forgetting drops it too.
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::sync::{Mutex, MutexGuard, PoisonError};
 
 use prodrome_core::event::Hash;
 
+use crate::secretary::digest::Kept;
 use crate::secretary::held_lines::{HeldLines, TheBox};
 use crate::secretary::key_ring::spelled;
 use crate::secretary::line_event::LineEvent;
@@ -15,7 +18,10 @@ use crate::secretary::locked_text::{KeyName, TextKey};
 use crate::store::{Gets, Graph, StoreError};
 
 #[derive(Default)]
-pub struct Opened(Mutex<Fold>);
+pub struct Opened {
+    lines: Mutex<Fold>,
+    said: Mutex<Kept>,
+}
 
 struct Fold {
     lines: HeldLines<TheBox>,
@@ -41,14 +47,23 @@ impl std::fmt::Debug for Opened {
 
 impl Opened {
     fn fold(&self) -> MutexGuard<'_, Fold> {
-        self.0.lock().unwrap_or_else(PoisonError::into_inner)
+        self.lines.lock().unwrap_or_else(PoisonError::into_inner)
     }
 
-    /// Forget the key `name` and every word it opened.
+    /// Forget the key `name` and every word it opened, and every summary's words kept.
     pub fn forget(&self, name: &KeyName) {
         self.fold()
             .lines
             .keys(&BTreeMap::new(), std::slice::from_ref(name));
+        self.said
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .clear();
+    }
+
+    /// `read` of the digest's history as kept per node.
+    pub(crate) fn said<T>(&self, read: impl FnOnce(&mut Kept) -> T) -> T {
+        read(&mut self.said.lock().unwrap_or_else(PoisonError::into_inner))
     }
 
     /// Whether the key `name` is held.
@@ -183,7 +198,7 @@ mod tests {
             transcript::push(held.conversations(), &id, &said).expect("said");
             assert!(read_by_all(reading, &id).contains(SAID), "told: {told}");
             assert!(crate::secretary::held_lines::says(
-                &fold.0.lock().expect("held").lines,
+                &fold.lines.lock().expect("held").lines,
                 SAID
             ));
             let keys: std::collections::BTreeSet<_> =
@@ -199,7 +214,10 @@ mod tests {
                 .expect("erased");
             let holds = || {
                 keys.iter().any(|key| fold.holds(key))
-                    || crate::secretary::held_lines::says(&fold.0.lock().expect("held").lines, SAID)
+                    || crate::secretary::held_lines::says(
+                        &fold.lines.lock().expect("held").lines,
+                        SAID,
+                    )
             };
             assert_eq!(holds(), !told, "before a read, told: {told}");
             assert!(!read_by_all(reading, &id).contains(SAID), "told: {told}");

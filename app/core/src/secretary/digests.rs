@@ -114,17 +114,25 @@ impl ReadDigests<'_> {
         let history = timed(Phase::History, || self.history.nodes())?;
         let unread = std::cell::RefCell::new(None);
         let read = timed(Phase::Fold, || {
-            digest::under(
-                std::sync::Arc::clone(shape),
-                &history,
-                self.owners,
-                |name| {
-                    self.words(name).unwrap_or_else(|failed| {
-                        unread.borrow_mut().get_or_insert(failed);
-                        None
-                    })
-                },
-            )
+            self.lines.opened.said(|kept| {
+                let read = digest::under_kept(
+                    std::sync::Arc::clone(shape),
+                    &history,
+                    self.owners,
+                    |name| {
+                        self.words(name).unwrap_or_else(|failed| {
+                            unread.borrow_mut().get_or_insert(failed);
+                            None
+                        })
+                    },
+                    kept,
+                );
+                // Words that did not read are kept by no entry.
+                if unread.borrow().is_some() {
+                    kept.clear();
+                }
+                read
+            })
         });
         match unread.into_inner() {
             Some(failed) => Err(failed),

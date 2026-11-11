@@ -335,20 +335,30 @@ pub struct Closed {
     read: Result<Arc<Transcript>, NotAConversation>,
 }
 
-/// What the box's store node gathers: every line's entry by name, and the digest's [`Shape`] over
-/// them, so a summary written, which moves no line, reads the shape from the cache.
-#[derive(Debug, Clone, PartialEq, Eq)]
+/// What the box's store node gathers: every line's entry by name, and the digest's [`Shape`],
+/// built on its first ask and kept with them, so a reader of transcripts alone never builds it.
+#[derive(Default)]
 pub struct Gathered {
     entries: BTreeMap<Hash, Entry>,
-    shape: Result<Arc<Shape>, Cycle>,
+    lines: Vec<Arc<OpenedLine>>,
+    shape: std::sync::OnceLock<Result<Arc<Shape>, Cycle>>,
 }
 
-impl Default for Gathered {
-    fn default() -> Self {
-        Self {
-            entries: BTreeMap::new(),
-            shape: Ok(Arc::new(Shape::default())),
-        }
+// The shape is a function of the lines and entries, so they alone say whether two are equal.
+impl PartialEq for Gathered {
+    fn eq(&self, other: &Self) -> bool {
+        (&self.entries, &self.lines) == (&other.entries, &other.lines)
+    }
+}
+
+impl Eq for Gathered {}
+
+impl std::fmt::Debug for Gathered {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Gathered")
+            .field("entries", &self.entries)
+            .field("lines", &self.lines)
+            .finish_non_exhaustive()
     }
 }
 
@@ -359,12 +369,21 @@ impl Gathered {
         &self.entries
     }
 
-    /// The digest's shape over the lines.
+    /// The digest's shape over the lines, built on the first ask.
     ///
     /// # Errors
     /// [`Cycle`] for lines in a cycle, which no store of objects can hold.
     pub fn shape(&self) -> Result<&Arc<Shape>, &Cycle> {
-        self.shape.as_ref()
+        self.shape
+            .get_or_init(|| {
+                let placed: Vec<Placed<'_>> = self
+                    .lines
+                    .iter()
+                    .map(|line| (&line.object, &*line.line, line.parents.as_slice()))
+                    .collect();
+                Shape::of(&placed, &self.entries).map(Arc::new)
+            })
+            .as_ref()
     }
 }
 
@@ -391,30 +410,19 @@ impl Folds for TheBox {
     }
 
     fn gather(closed: &BTreeMap<ConversationId, Self::Closed>) -> Self::Gathered {
-        let ordered: Vec<&OpenedLine> = closed
+        let lines: Vec<Arc<OpenedLine>> = closed
             .values()
-            .flat_map(|closed| {
-                let lines = &closed.lines;
-                transcript::causal(
-                    &lines
-                        .iter()
-                        .map(|line| (&line.object, line.line.at(), line.parents.as_slice()))
-                        .collect::<Vec<_>>(),
-                )
-                .into_iter()
-                .map(|(at, _)| &*lines[at])
-            })
+            .flat_map(|closed| closed.lines.iter().cloned())
             .collect();
-        let entries = ordered
+        let entries = lines
             .iter()
             .map(|line| (line.object.clone(), line.entry.clone()))
             .collect();
-        let placed: Vec<Placed<'_>> = ordered
-            .iter()
-            .map(|line| (&line.object, &*line.line, line.parents.as_slice()))
-            .collect();
-        let shape = Shape::of(&placed, &entries).map(Arc::new);
-        Arc::new(Gathered { entries, shape })
+        Arc::new(Gathered {
+            entries,
+            lines,
+            shape: std::sync::OnceLock::new(),
+        })
     }
 
     fn stored(closed: Self::Closed) -> Result<Arc<Stored>, NotAConversation> {

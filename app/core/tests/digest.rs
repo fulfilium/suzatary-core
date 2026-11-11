@@ -134,7 +134,7 @@ impl Box {
     /// the words written.
     fn summarise_all(&self) -> Vec<String> {
         let mut written = Vec::new();
-        loop {
+        for _ in 0..64 {
             let pending = self.read().pending();
             if pending.is_empty() {
                 return written;
@@ -154,6 +154,96 @@ impl Box {
                 .expect("summarised");
                 written.push(words);
             }
+        }
+        panic!("the pending nodes never settled: a summary written was not read back");
+    }
+
+    /// `act` done to the stores; `said` counts the conversations said so far.
+    fn act(&self, act: &Act, said: &mut usize) {
+        match *act {
+            Act::Say(n) => {
+                *said += 1;
+                self.say(&format!("2026-10-06-{said}"), n);
+            }
+            Act::Interleave(n) => {
+                let ids = [*said + 1, *said + 2]
+                    .map(|k| ConversationId::new(format!("2026-10-06-{k}")).expect("a slug"));
+                *said += 2;
+                for k in 0..n {
+                    for id in &ids {
+                        let text = format!("{id} line {k}");
+                        // An owner's turn, an unstamped one whose round reads tainted, and an
+                        // answer, which reads as the round before it.
+                        let (turn, by) = match k % 3 {
+                            0 => (
+                                Turn::Person {
+                                    text,
+                                    references: Vec::new(),
+                                    attachments: Vec::new(),
+                                },
+                                Some("ada".into()),
+                            ),
+                            1 => (
+                                Turn::Person {
+                                    text,
+                                    references: Vec::new(),
+                                    attachments: Vec::new(),
+                                },
+                                None,
+                            ),
+                            _ => (
+                                Turn::Model {
+                                    text,
+                                    calls: Vec::new(),
+                                },
+                                None,
+                            ),
+                        };
+                        let entry = Entry::Said {
+                            at: at(k / 2),
+                            turn,
+                            by,
+                        };
+                        let held = u32::try_from(k).expect("few lines");
+                        write_line(&self.lines, id.clone(), held, &entry);
+                    }
+                }
+            }
+            Act::Unfit => {
+                if let Some(node) = self.read().pending().first() {
+                    self.memories()
+                        .hold()
+                        .expect("held")
+                        .unfit(node, model(), 9, at(58))
+                        .expect("unfit");
+                }
+            }
+            Act::Summarise => {
+                self.summarise_all();
+            }
+            Act::Erase if *said > 0 => {
+                let id = ConversationId::new("2026-10-06-1").expect("a slug");
+                let lines: Vec<_> = self
+                    .lines
+                    .lines
+                    .objects()
+                    .expect("objects")
+                    .into_iter()
+                    .filter_map(|(_, object)| object.into_event())
+                    .filter(|line| *line.conversation() == id)
+                    .collect();
+                let keys = lines[0].keys().cloned().collect();
+                let erasure = Entry::Erased {
+                    at: at(59),
+                    keys,
+                    erasure: suzatary_core::secretary::erasure::Erasure::Asked { by: ada() },
+                };
+                let held = u32::try_from(lines.len()).expect("few lines");
+                write_line(&self.lines, id, held, &erasure);
+                suzatary_core::secretary::transcript::sweep(self.lines.conversations())
+                    .expect("swept");
+            }
+            Act::Erase => {}
         }
     }
 
@@ -218,13 +308,85 @@ fn live(digest: &Digest) -> BTreeSet<TextName> {
     digest.naming().live()
 }
 
+proptest! {
+    #![proptest_config(ProptestConfig { cases: 48, ..ProptestConfig::default() })]
+
+    /// THE SHAPE LAW: the box reads the digest's lines from its fold, kept while no line moves,
+    /// and its reading is the plain digest after every act: lines said, summaries written (which
+    /// move no line, so the kept shape and each node's kept reading are read), an erasure (which
+    /// renames leaves), and two conversations written alternately with lines at equal instants,
+    /// which the store orders otherwise than each conversation's causal order.
+    #[test]
+    fn the_kept_shape_reads_as_the_plain_digest(acts in proptest::collection::vec(act(), 1..10)) {
+        let the = Box::default();
+        let mut said = 0;
+        for act in acts {
+            the.act(&act, &mut said);
+            prop_assert_eq!(the.read(), the.plain());
+        }
+    }
+}
+
+proptest! {
+    #![proptest_config(ProptestConfig { cases: 24, ..ProptestConfig::default() })]
+
+    /// Law: a shape is a function of the set of lines, whatever order they are handed over in,
+    /// so the box's fold, which hands each conversation's lines over by name, and the store's
+    /// order build one tree with one taint per line.
+    #[test]
+    fn the_shape_is_a_function_of_the_set_of_lines(
+        acts in proptest::collection::vec(prop_oneof![
+            (1usize..16).prop_map(Act::Interleave),
+            (1usize..12).prop_map(Act::Say),
+        ], 1..4),
+        order in any::<u64>(),
+    ) {
+        let the = Box::default();
+        let mut said = 0;
+        for act in acts {
+            the.act(&act, &mut said);
+        }
+        let objects = the.lines.lines.objects().expect("objects");
+        let reads = the.lines.conversations().reads();
+        let opened = suzatary_core::secretary::transcript::opened(
+            &objects,
+            &|name: &suzatary_core::secretary::locked_text::KeyName| reads.key(name),
+        );
+        let parents: Vec<Vec<Hash>> = objects
+            .iter()
+            .map(|(_, object)| prodrome_core::event::parents_of(object))
+            .collect();
+        let mut placed: Vec<suzatary_core::secretary::digest::Placed<'_>> = objects
+            .iter()
+            .zip(&parents)
+            .filter_map(|((name, object), parents)| Some((name, object.event()?, parents.as_slice())))
+            .collect();
+        let shape = |placed: &[suzatary_core::secretary::digest::Placed<'_>]| {
+            suzatary_core::secretary::digest::Shape::of(placed, &opened).expect("no cycle")
+        };
+        let stored = shape(&placed);
+        let mut seed = order;
+        for at in (1..placed.len()).rev() {
+            seed = seed.wrapping_mul(6_364_136_223_846_793_005).wrapping_add(1);
+            placed.swap(at, usize::try_from(seed >> 33).expect("a word") % (at + 1));
+        }
+        prop_assert_eq!(shape(&placed), stored);
+    }
+}
+
 /// What happens next to the box's stores.
 #[derive(Debug, Clone)]
 enum Act {
     /// A new conversation of this many lines.
     Say(usize),
+    /// Two new conversations of this many lines each, written alternately, each pair of a
+    /// conversation's lines at one instant: an owner's turn, an unstamped one, an answer.
+    Interleave(usize),
     /// Every pending node summarised.
     Summarise,
+    /// The first pending node found unfit by the model, so its next summary is a second write
+    /// to its register.
+    Unfit,
     /// The owner's words of the first conversation's first said line erased.
     Erase,
 }
@@ -232,7 +394,9 @@ enum Act {
 fn act() -> impl Strategy<Value = Act> {
     prop_oneof![
         3 => (1usize..24).prop_map(Act::Say),
+        2 => (1usize..16).prop_map(Act::Interleave),
         2 => Just(Act::Summarise),
+        1 => Just(Act::Unfit),
         1 => Just(Act::Erase),
     ]
 }
@@ -240,49 +404,6 @@ fn act() -> impl Strategy<Value = Act> {
 proptest! {
     #![proptest_config(ProptestConfig { cases: 12, ..ProptestConfig::default() })]
 
-    /// THE SHAPE LAW: the box reads the digest's lines from its fold, kept while no line moves,
-    /// and its reading is the plain digest after every act: lines said, summaries written (which
-    /// move no line, so the kept shape is read), and an erasure (which renames leaves).
-    #[test]
-    fn the_kept_shape_reads_as_the_plain_digest(acts in proptest::collection::vec(act(), 1..8)) {
-        let the = Box::default();
-        let mut said = 0;
-        for act in acts {
-            match act {
-                Act::Say(n) => {
-                    said += 1;
-                    the.say(&format!("2026-10-06-{said}"), n);
-                }
-                Act::Summarise => {
-                    the.summarise_all();
-                }
-                Act::Erase if said > 0 => {
-                    let id = ConversationId::new("2026-10-06-1").expect("a slug");
-                    let lines: Vec<_> = the
-                        .lines
-                        .lines
-                        .objects()
-                        .expect("objects")
-                        .into_iter()
-                        .filter_map(|(_, object)| object.into_event())
-                        .filter(|line| *line.conversation() == id)
-                        .collect();
-                    let keys = lines[0].keys().cloned().collect();
-                    let erasure = Entry::Erased {
-                        at: at(59),
-                        keys,
-                        erasure: suzatary_core::secretary::erasure::Erasure::Asked { by: ada() },
-                    };
-                    let held = u32::try_from(lines.len()).expect("few lines");
-                    write_line(&the.lines, id, held, &erasure);
-                    suzatary_core::secretary::transcript::sweep(the.lines.conversations())
-                        .expect("swept");
-                }
-                Act::Erase => {}
-            }
-            prop_assert_eq!(the.read(), the.plain());
-        }
-    }
 
     /// Law 8: no digest object holds a summary's words, and once a second conversation's lines
     /// arrive between the first's and rename spines, the sweep leaves exactly the words a live
@@ -2532,4 +2653,87 @@ mod recompacting {
     const PINNED_CLEAN: &str = "b8a7a013284e8568d344cc6b6dce8bcaf28ce7161dd65b8627f4628d0b960d01";
     const PINNED_QUESTIONS: &str =
         "2810625a492f421b540aa12a9c9c5fd0a65ad92e652011925850c0c8dee690cd";
+}
+
+/// Law (a privacy boundary): the box's kept reading of the history holds a summary's words only
+/// while its node is in the tree. An erasure renames the nodes above the erased line; before the
+/// sweep deletes their texts, the next reading keeps none of their words.
+#[test]
+fn kept_words_leave_with_their_node() {
+    use suzatary_core::secretary::digest::{Kept, under_kept};
+    use suzatary_core::secretary::held_lines::HeldLines;
+    let the = Box::default();
+    the.say("2026-10-06-1", 40);
+    let written = the.summarise_all();
+    assert!(!written.is_empty(), "the lines settled a node");
+    let read = |kept: &mut Kept| {
+        let gathered = the
+            .lines
+            .conversations()
+            .reads()
+            .fold(HeldLines::gathered)
+            .expect("reads");
+        let shape = std::sync::Arc::clone(gathered.shape().expect("no cycle"));
+        under_kept(
+            shape,
+            &the.history.nodes().expect("the history"),
+            &the.owners.0,
+            |name| {
+                the.texts
+                    .get(name)
+                    .expect("reads")
+                    .map(|text| text.words().clone())
+            },
+            kept,
+        )
+    };
+    let mut kept = Kept::default();
+    read(&mut kept);
+    let held = format!("{kept:?}");
+    assert!(written.iter().all(|words| held.contains(words.as_str())));
+
+    let id = ConversationId::new("2026-10-06-1").expect("a slug");
+    let first = the
+        .lines
+        .lines
+        .objects()
+        .expect("objects")
+        .into_iter()
+        .find_map(|(_, object)| object.into_event())
+        .expect("a line");
+    let erasure = Entry::Erased {
+        at: at(59),
+        keys: first.keys().cloned().collect(),
+        erasure: suzatary_core::secretary::erasure::Erasure::Asked { by: ada() },
+    };
+    write_line(&the.lines, id, 40, &erasure);
+    let after = read(&mut kept);
+    let held = format!("{kept:?}");
+    let gone: Vec<&String> = written
+        .iter()
+        .filter(|words| {
+            let node = words.rsplit(' ').next().expect("a name");
+            !held_node(&after, node)
+        })
+        .collect();
+    assert!(!gone.is_empty(), "the erasure renamed a summarised node");
+    for words in gone {
+        assert!(!held.contains(words.as_str()), "{words} is kept: {held}");
+    }
+}
+
+/// Whether `reading`'s tree holds a node whose name starts with `prefix`.
+fn held_node(reading: &Digest, prefix: &str) -> bool {
+    let mut stack: Vec<_> = reading
+        .tree()
+        .map(prodrome_core::digest::Tree::root)
+        .into_iter()
+        .collect();
+    while let Some(node) = stack.pop() {
+        if node.name().as_str().starts_with(prefix) {
+            return true;
+        }
+        stack.extend(node.children());
+    }
+    false
 }

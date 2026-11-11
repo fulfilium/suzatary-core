@@ -1282,6 +1282,17 @@ fn digest_nodes_at_scale() {
             let _ = OwnersRecord::of(Reading::of(&digests.reads()).expect("reads"));
         });
     }
+    let first = ConversationId::new("2026-10-09-1").expect("a slug");
+    transcript::push(digests.lines, &first, &said(301)).expect("said");
+    time("waiting, right after one line", &mut || {
+        transcript::waiting(digests.lines, None, at(23, 59)).expect("reads");
+    });
+    time("the conversation list, after it", &mut || {
+        transcript::each(digests.lines).expect("reads");
+    });
+    time("record, after it", &mut || {
+        let _ = OwnersRecord::of(Reading::of(&digests.reads()).expect("reads"));
+    });
 }
 
 /// The name of every inner node of `reading`'s tree that `keep` keeps.
