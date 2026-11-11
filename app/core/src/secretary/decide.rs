@@ -7,9 +7,11 @@
 
 use prodrome_core::event::Actor;
 
+use crate::capability::Clock;
+use crate::decisions::Decisions;
 use crate::decisions::{DecisionId, Draft};
+use crate::render::Render;
 use crate::secretary::responded::{Done, Performed, Tried};
-use crate::server::Server;
 use crate::wire::inbox as wire;
 
 /// The imperative a card and a list both print.
@@ -38,13 +40,12 @@ pub fn on_wire(draft: &Draft) -> wire::ProposedAct {
 
 /// Record a tapped decision as `by`, the gate's actor and never a request field.
 #[must_use]
-pub fn performed(caps: &Server<'_>, draft: &Draft, by: &Actor) -> Performed {
-    match caps.secretary.decisions.decide(
-        draft,
-        caps.secretary.clock.now(),
-        by,
-        caps.secretary.render,
-    ) {
+pub fn performed(
+    (decisions, clock, render): (&Decisions<'_>, &dyn Clock, &dyn Render),
+    draft: &Draft,
+    by: &Actor,
+) -> Performed {
+    match decisions.decide(draft, clock.now(), by, render) {
         Ok(name) => Performed::Done(Done::Acted {
             what: format!("recorded the decision {} as {}", draft.id(), name.as_str()),
         }),

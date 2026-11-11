@@ -39,6 +39,8 @@ mod gate_yml;
 mod guide;
 #[path = "guards/includes.rs"]
 mod includes;
+#[path = "guards/layers.rs"]
+mod layers;
 #[path = "guards/leak.rs"]
 mod leak;
 #[path = "guards/lists.rs"]

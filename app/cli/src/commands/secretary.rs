@@ -794,7 +794,7 @@ fn drive_turn(
     kept: &suzatary_io::blobs::Blobs,
     id: &suzatary_core::conversation_id::ConversationId,
     path: &suzatary_core::drive_path::DrivePath,
-    read: Result<suzatary_core::file_read::FileRead, suzatary_core::drive::DriveFailure>,
+    read: Result<suzatary_core::file_read::FileRead, suzatary_core::drive_path::DriveFailure>,
 ) -> Performed {
     use suzatary_core::capability::Clock as _;
     use suzatary_core::file_read::FileRead;

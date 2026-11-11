@@ -5,6 +5,7 @@
 //! asks is unmet. A pasted Google calendar link is owed its removal once that account reads its
 //! calendars through its sign-in with Google (`Owed::retiring`).
 
+use crate::capability::Clock;
 use crate::capability::Datetime;
 use crate::connect::{Checked, Connection, Declared, Group, Params, Seen, Step, Table};
 use crate::google::{Held, Scope, Scopes};
@@ -14,13 +15,15 @@ use crate::mail::address::EmailAddress;
 use crate::reference::{ProposalRef, Reference};
 use crate::refusal::Refusal;
 use crate::secretary::acts::Act;
+use crate::secretary::conversations::Conversations;
 use crate::secretary::inbox;
+use crate::secretary::inbox_event::InboxEvent;
 use crate::secretary::noticed::Owed;
 use crate::secretary::proposal::{Proposal, Reasons};
 use crate::secretary::proposer::Proposer;
 use crate::secretary::responded::{Done, Responded};
 use crate::secrets::{SecretState, Secrets};
-use crate::server::Server;
+use crate::store::Prodrome;
 
 /// What the rule reads of a deployment's Google accounts.
 #[derive(Debug, Clone, Copy)]
@@ -401,13 +404,20 @@ fn connecting(connection: &crate::connect::Connection) -> String {
     )
 }
 
+/// What a tapped card is filed into: the conversations, the inbox, and the clock that dates it.
+pub type Filer<'a> = (
+    Conversations<'a>,
+    &'a dyn Prodrome<InboxEvent>,
+    &'a dyn Clock,
+);
+
 /// File the box's card asking to let `plugin` reach `origin`.
 ///
 /// # Errors
 /// The stores' own failures.
-pub fn grant(caps: &Server<'_>, plugin: &PluginName, origin: &Origin) -> Result<(), Refusal> {
+pub fn grant(to: Filer<'_>, plugin: &PluginName, origin: &Origin) -> Result<(), Refusal> {
     tapped(
-        caps,
+        to,
         Owed::one(
             Proposal::Act(Act::Grant {
                 plugin: plugin.clone(),
@@ -423,14 +433,10 @@ pub fn grant(caps: &Server<'_>, plugin: &PluginName, origin: &Origin) -> Result<
 ///
 /// # Errors
 /// The stores' own failures.
-pub fn connect(
-    caps: &Server<'_>,
-    connection: Connection,
-    pasted: &ProposalRef,
-) -> Result<(), Refusal> {
+pub fn connect(to: Filer<'_>, connection: Connection, pasted: &ProposalRef) -> Result<(), Refusal> {
     let why = connecting(&connection);
     tapped(
-        caps,
+        to,
         Owed::one(Proposal::Act(Act::Connect { connection }), why).about(&[pasted.clone().into()]),
     )
 }
@@ -439,17 +445,17 @@ pub fn connect(
 ///
 /// # Errors
 /// The stores' own failures.
-pub fn retire(caps: &Server<'_>, link: Connection, pasted: &ProposalRef) -> Result<(), Refusal> {
-    tapped(caps, retiring(link, pasted.clone()))
+pub fn retire(to: Filer<'_>, link: Connection, pasted: &ProposalRef) -> Result<(), Refusal> {
+    tapped(to, retiring(link, pasted.clone()))
 }
 
 /// File `owed`, a card a tap asked for; the next filing holds it while [`unmet`] owes it.
-fn tapped(caps: &Server<'_>, owed: Owed) -> Result<(), Refusal> {
-    let now = caps.secretary.clock.now();
+fn tapped((conversations, inbox, clock): Filer<'_>, owed: Owed) -> Result<(), Refusal> {
+    let now = clock.now();
     // Each paste is the owner asking again, so a grant once dismissed is asked for anew; a
     // connection is its content alone, so one dismissed stays dismissed.
     owed.since(now)
         .holding()
-        .file(caps.secretary.conversations, caps.secretary.inbox, now)
+        .file(conversations, inbox, now)
         .map(|_| ())
 }

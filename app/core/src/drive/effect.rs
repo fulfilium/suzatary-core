@@ -2,25 +2,8 @@
 //! file read for the model.
 
 use crate::drive::{Fenced, Port};
+use crate::drive_path::DriveFailure;
 pub use crate::drive_path::DrivePath;
-
-/// Why a read produced nothing.
-#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
-pub enum DriveFailure {
-    /// No such file or folder.
-    #[error("not found in Drive: {0}")]
-    Missing(String),
-    /// A folder where a file was wanted, or a file too large to read.
-    #[error("{0}")]
-    Refused(String),
-    /// The CLI could not be run, timed out, or failed, in its own words.
-    #[error("Drive did not answer: {0}")]
-    Unreachable(String),
-    /// The CLI answered that its session expired or was never begun: it needs its sign-in at a
-    /// terminal, in its own words.
-    #[error("the Drive needs its sign-in: {0}")]
-    SignedOut(String),
-}
 
 /// The owner's Drive, as the secretary's rounds and the owner's taps reach it.
 pub trait Drive: Sync {

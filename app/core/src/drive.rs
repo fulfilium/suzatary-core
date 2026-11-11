@@ -5,7 +5,7 @@ mod fenced;
 mod memory;
 mod port;
 mod probe;
-pub use effect::{Drive, DriveFailure};
+pub use effect::Drive;
 
 use crate::drive_path::DrivePath;
 

@@ -15,7 +15,7 @@ use prodrome_core::policy::Untrusted;
 use suzatary_core::capability::Datetime;
 use suzatary_core::cast::CAST;
 use suzatary_core::conversation_id::ConversationId;
-use suzatary_core::drive::DriveFailure;
+use suzatary_core::drive_path::DriveFailure;
 use suzatary_core::drive_path::DrivePath;
 use suzatary_core::health::plugin::PluginName;
 use suzatary_core::mail::dedup_key::DedupKey;

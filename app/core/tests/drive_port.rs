@@ -3,8 +3,8 @@
 
 use proptest::prelude::*;
 use suzatary_core::conformance::drive::{Case, Law, check};
-use suzatary_core::drive::DriveFailure;
 use suzatary_core::drive::{DriveEntry, Memory, Port, WritePort};
+use suzatary_core::drive_path::DriveFailure;
 use suzatary_core::drive_path::DrivePath;
 
 fn cases() -> impl Strategy<Value = Vec<Case>> {

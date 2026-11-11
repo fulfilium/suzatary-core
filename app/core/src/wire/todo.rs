@@ -1,5 +1,3 @@
-//! The todo cut's wire.
-
 use std::collections::BTreeMap;
 
 use serde::{Deserialize, Serialize};

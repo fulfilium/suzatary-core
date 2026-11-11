@@ -148,7 +148,7 @@ impl UploadIndex for UploadIndexFiles {
 mod tests {
     use super::*;
     use crate::pdftotext::{Pdftotext, minimal_pdf};
-    use suzatary_core::drive::DriveFailure;
+    use suzatary_core::drive_path::DriveFailure;
     use suzatary_core::vault::Vault;
 
     /// A Drive that keeps nothing and answers where it would have.

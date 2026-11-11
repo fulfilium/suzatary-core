@@ -221,8 +221,8 @@ fn drive_path(path: &str) -> Result<crate::drive_path::DrivePath, Refusal> {
 }
 
 /// A missing file is a 404, a refused one a 400; anything else is the box's.
-pub(crate) fn drive_refusal(failed: &crate::drive::DriveFailure) -> Refusal {
-    use crate::drive::DriveFailure;
+pub(crate) fn drive_refusal(failed: &crate::drive_path::DriveFailure) -> Refusal {
+    use crate::drive_path::DriveFailure;
     match failed {
         DriveFailure::Missing(_) => Refusal::not_found(failed.to_string()),
         DriveFailure::Refused(_) => Refusal::bad_request(failed.to_string()),

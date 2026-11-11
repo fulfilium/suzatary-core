@@ -1,5 +1,3 @@
-//! The conversation readings' wire.
-
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 

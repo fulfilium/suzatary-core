@@ -436,7 +436,7 @@ impl suzatary_core::drive::Drive for DriveAccess {
     fn read(
         &self,
         file: &suzatary_core::drive_path::DrivePath,
-    ) -> Result<suzatary_core::file_read::FileRead, suzatary_core::drive::DriveFailure> {
+    ) -> Result<suzatary_core::file_read::FileRead, suzatary_core::drive_path::DriveFailure> {
         self.drive.read(file)
     }
 }
@@ -449,7 +449,7 @@ impl suzatary_core::vault::Vault for DriveVault {
         &self,
         name: &str,
         bytes: &[u8],
-    ) -> Result<suzatary_core::drive_path::DrivePath, suzatary_core::drive::DriveFailure> {
+    ) -> Result<suzatary_core::drive_path::DrivePath, suzatary_core::drive_path::DriveFailure> {
         self.0.keep(&suzatary_core::vault::folder(), name, bytes)
     }
 }

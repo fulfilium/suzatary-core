@@ -138,3 +138,23 @@ impl<'a> Secretary<'a> {
         }
     }
 }
+
+impl<'a> Secretary<'a> {
+    /// What recording a tapped decision reads and writes: the decisions, the clock, the renderer.
+    #[must_use]
+    pub fn decides(
+        &self,
+    ) -> (
+        &crate::decisions::Decisions<'a>,
+        &'a dyn Clock,
+        &'a dyn Render,
+    ) {
+        (&self.decisions, self.clock, self.render)
+    }
+
+    /// Where a card a tap asks for is filed.
+    #[must_use]
+    pub fn files_into(&self) -> crate::secretary::connections::Filer<'a> {
+        (self.conversations, self.inbox, self.clock)
+    }
+}

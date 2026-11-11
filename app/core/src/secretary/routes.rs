@@ -1183,7 +1183,7 @@ fn performed(
                 }),
             }
         }
-        Prepared::Decide(draft) => decide::performed(caps, draft, tap.who()),
+        Prepared::Decide(draft) => decide::performed(caps.secretary.decides(), draft, tap.who()),
         Prepared::GoogleClient { redirect, file } => {
             google_client(effectors.secrets, cards.settables, redirect, file)?
         }
@@ -1256,12 +1256,14 @@ fn afterwards(
         )
         .map(|_| ()),
         Some(Then::Grant(plugin, origin)) => {
-            crate::secretary::connections::grant(caps, &plugin, &origin)
+            crate::secretary::connections::grant(caps.secretary.files_into(), &plugin, &origin)
         }
         Some(Then::Connect(connection)) => {
-            crate::secretary::connections::connect(caps, connection, card)
+            crate::secretary::connections::connect(caps.secretary.files_into(), connection, card)
         }
-        Some(Then::Retire(link)) => crate::secretary::connections::retire(caps, link, card),
+        Some(Then::Retire(link)) => {
+            crate::secretary::connections::retire(caps.secretary.files_into(), link, card)
+        }
         Some(Then::Check(plugin)) => {
             effectors
                 .checks

@@ -1,5 +1,3 @@
-//! The lines' wire.
-
 use std::collections::BTreeMap;
 
 use serde::{Deserialize, Serialize};

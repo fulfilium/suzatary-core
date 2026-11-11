@@ -8,10 +8,10 @@ use std::ffi::OsString;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
-use suzatary_core::drive::DriveFailure;
 use suzatary_core::drive::{
     DriveEntry, EntryKind, MAX_FILE, Port, WritePort, extension_of, mime_of,
 };
+use suzatary_core::drive_path::DriveFailure;
 use suzatary_core::drive_path::DrivePath;
 use suzatary_core::file_read::FileRead;
 

@@ -2607,7 +2607,7 @@ impl suzatary_core::drive::Drive for FakeDriveAccess {
     fn read(
         &self,
         file: &suzatary_core::drive_path::DrivePath,
-    ) -> Result<FileRead, suzatary_core::drive::DriveFailure> {
+    ) -> Result<FileRead, suzatary_core::drive_path::DriveFailure> {
         self.drive
             .as_ref()
             .ok_or_else(no_drive)
@@ -2622,13 +2622,14 @@ impl suzatary_core::drive::Port for NoDrive {
     fn list(
         &self,
         _: &suzatary_core::drive_path::DrivePath,
-    ) -> Result<Vec<suzatary_core::drive::DriveEntry>, suzatary_core::drive::DriveFailure> {
+    ) -> Result<Vec<suzatary_core::drive::DriveEntry>, suzatary_core::drive_path::DriveFailure>
+    {
         Err(no_drive())
     }
     fn download(
         &self,
         _: &suzatary_core::drive_path::DrivePath,
-    ) -> Result<Vec<u8>, suzatary_core::drive::DriveFailure> {
+    ) -> Result<Vec<u8>, suzatary_core::drive_path::DriveFailure> {
         Err(no_drive())
     }
 }
@@ -2909,14 +2910,14 @@ impl suzatary_core::vault::Vault for FakeVault {
         &self,
         name: &str,
         bytes: &[u8],
-    ) -> Result<suzatary_core::drive_path::DrivePath, suzatary_core::drive::DriveFailure> {
+    ) -> Result<suzatary_core::drive_path::DrivePath, suzatary_core::drive_path::DriveFailure> {
         self.0
             .lock()
             .expect("unpoisoned")
             .push((name.to_owned(), bytes.to_vec()));
         suzatary_core::vault::folder()
             .join(name)
-            .map_err(|failed| suzatary_core::drive::DriveFailure::Refused(failed.to_string()))
+            .map_err(|failed| suzatary_core::drive_path::DriveFailure::Refused(failed.to_string()))
     }
 }
 
@@ -3763,8 +3764,8 @@ impl Junk for FakeJunk {
     }
 }
 
-fn no_drive() -> suzatary_core::drive::DriveFailure {
-    suzatary_core::drive::DriveFailure::Unreachable("no Drive in this scene".to_owned())
+fn no_drive() -> suzatary_core::drive_path::DriveFailure {
+    suzatary_core::drive_path::DriveFailure::Unreachable("no Drive in this scene".to_owned())
 }
 
 /// A fake Proton Drive CLI script that answers the two reads, logs every call
