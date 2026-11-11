@@ -2261,7 +2261,10 @@ impl Model {
         };
         let cards = self.cards();
         let tree = view! { Div "tree" {Data("at") => match &self.grown { Drawn::Tree(_, PricedBy::Read(at), _) => at.clone(), Drawn::Tree(_, PricedBy::Rows, _) | Drawn::Unpriced => String::new() }} => cards.iter().map(|c| (c.key.clone(), self.card(c))) };
-        let body = vec![
+        // The notices stand in one node ahead of the list, so one answering late never moves the
+        // list's place among its siblings: a moved list would be drawn anew, and the focused
+        // cursor with it.
+        let notes: Vec<Node<Msg>> = [
             match &self.setup {
                 Setup::Unfinished { done, of } => Some(view! { P "setupunfinished" [view! { A {Href => To::Settings.href()} [format!("Finish setting up · {done} of {of} done"), mark(crate::part::Mark::Chevron)] }] }),
                 Setup::Unknown | Setup::Finished => None,
@@ -2271,6 +2274,12 @@ impl Model {
                 Today::Unknown | Today::None => None,
             },
             self.problem.as_ref().filter(|_| !waiting).map(|p| para("problem", p.as_str())),
+        ]
+        .into_iter()
+        .flatten()
+        .collect();
+        let body = vec![
+            Some(view! { Div "listnotes" [notes] }),
             Some(tree),
             (!waiting && cards.is_empty()).then(|| empty(self.nothing())),
             Some(view! { Div "sheetspacer" }),

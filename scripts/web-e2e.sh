@@ -173,12 +173,6 @@ shots="${SUZATARY_E2E_SHOTS:-$work/shots}"
 mkdir -p "$shots"
 servers=()
 
-# A tapped secret card really runs `secretspec set`, so a `--settings` server gets its own `$HOME`
-# and a dotenv store under `$work`, never this box's real `pass` store.
-secrets_home="$work/secrets-home"
-mkdir -p "$secrets_home"
-secrets_store="$work/secrets-store.env"
-
 # Each server runs under `setsid`, so its PID is its process group, and cleanup kills the whole
 # group (its typst subprocesses too). A SIGKILL runs no trap and orphans the servers: run this
 # detached (`setsid nohup scripts/web-e2e.sh & disown`) and stop it with SIGTERM.
@@ -428,20 +422,17 @@ start() { # name [fixture-chain flags…] [-- serve flags…]
   local login; login="$(node -p "require('$work/$name.json').login")"
   # Every server has its own state directory: writing into this box's would move the live epochs.
   local serve_env=(env "XDG_STATE_HOME=$work/$name/state")
-  # Isolated secretspec for a `--settings` server: its `$HOME` never sees this box's config.
+  # A tapped secret card really runs `secretspec set`, so a `--settings` server gets a `$HOME` and a
+  # dotenv store of its own under `$work`, never this box's real `pass` store and never another
+  # server's: secretspec rewrites a dotenv file in place, unlocked, so two servers writing one store
+  # can leave it unparseable, and every later `set` refused.
   if [[ " $* " == *" --settings "* ]]; then
-    local store="$secrets_store"
-    if [[ " $* " == *" --connections lapsed "* ]]; then
-      store="$work/$name/secrets-store.env"
-      : >"$store"
-    fi
-    if [[ " $* " == *" --connected google "* ]]; then
-      store="$work/$name/secrets-store.env"
-      : >"$store"
-    fi
+    local store="$work/$name/secrets-store.env" home="$work/$name/home"
+    : >"$store"
+    mkdir -p "$home"
     serve_env+=(
-      "HOME=$secrets_home"
-      "XDG_CONFIG_HOME=$secrets_home/.config"
+      "HOME=$home"
+      "XDG_CONFIG_HOME=$home/.config"
       "SECRETSPEC_PROVIDER=dotenv://$store"
     )
   fi
@@ -634,6 +625,7 @@ e2e_env=(
   "E2E_BOOTSTRAP_INSTANCE=$work/bootstrap/instance.toml"
   "E2E_BASE_CONNECT=$connect_base"
   "E2E_CONNECT_INSTANCE=$work/connect/instance.toml"
+  "E2E_CONNECT_STORE=$work/connect/secrets-store.env"
   "E2E_BASE_LINKS=$links_base"
   "E2E_LINKS_INSTANCE=$work/links/instance.toml"
   "E2E_LINKS_STORE=$work/links/secrets-store.env"
@@ -649,7 +641,6 @@ e2e_env=(
   "E2E_RESCRUB_INSTANCE=$work/rescrub/instance.toml"
   "E2E_BASE_WIDE=$wide_base"
   "E2E_WIDE_INSTANCE=$work/wide/instance.toml"
-  "E2E_SECRETS_STORE=$secrets_store"
   "E2E_WRITE_LOG=$work/write.log"
   "E2E_SHELL_BUILD=$shell_build"
   "E2E_SHELL_DIST=$shell_dist"

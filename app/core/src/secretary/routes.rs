@@ -2004,9 +2004,14 @@ fn verified(
             what: format!("stored {}", crate::settings::Help::label(name.name())),
         }),
         // A put, so a retry is safe whether or not this one landed.
-        Err(reason) => Performed::Tried(Tried::NotSent {
-            reason: format!("could not store {}: {reason}", name.name()),
-        }),
+        Err(reason) => {
+            // The store's reason names the secret, how its call ended and a class of why, never
+            // a value.
+            tracing::warn!(secret = name.name(), %reason, "a tapped secret was not stored");
+            Performed::Tried(Tried::NotSent {
+                reason: format!("could not store {}: {reason}", name.name()),
+            })
+        }
     }
 }
 

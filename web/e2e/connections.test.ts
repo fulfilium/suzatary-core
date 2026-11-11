@@ -22,7 +22,7 @@ const app = await suite("connections");
 
 const CONNECT = process.env["E2E_BASE_CONNECT"] ?? "";
 const INSTANCE = process.env["E2E_CONNECT_INSTANCE"] ?? "";
-const STORE = process.env["E2E_SECRETS_STORE"] ?? "";
+const STORE = process.env["E2E_CONNECT_STORE"] ?? "";
 
 const NAME = "PLUGIN_ICS_HOME";
 /** What the card calls the link: the card says a secret in the owner's words, never its name. */

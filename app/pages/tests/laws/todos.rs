@@ -221,3 +221,61 @@ proptest! {
         }
     }
 }
+
+proptest! {
+    /// Law: the cursor is focus, so no answer that only adds a line above the list may draw the
+    /// list again. A briefing for today, or setup's notice, answers after the list is drawn and a
+    /// key has moved the cursor; the step that draws it removes nothing and makes no row anew.
+    #[test]
+    fn a_notice_above_the_list_never_draws_the_list_again(entry in list_entry("c", &[])) {
+        let held = |ask: todos::Hold, v: Value| todos::Msg::Host(Box::new(Input::Held {
+            ask,
+            reading: Reading::Val { v: Answer::Done { body: v } },
+            behind: None,
+        }));
+        let (mut page, _) = Runtime::<todos::Todos>::start(todos::Flags {
+            context: context(true),
+            chain: "life".to_owned(),
+            now: 1_788_000_000_000,
+        });
+        let (_, asked) = page.step(held(todos::Hold::Fold, json!({"entries": [entry], "at": "2026-08-29T10:00:00"})));
+        let n = asked
+            .iter()
+            .find_map(|e| match e {
+                Effect::Core { ask: todos::Ask::Tree { n }, .. } => Some(*n),
+                _ => None,
+            })
+            .expect("the page asks for its tree");
+        let node = |place: Value, children: Vec<Value>| {
+            json!({"place": place, "term": {"kind": "ref", "todo": "c"}, "priced": {"type": "Value", "v": 0.4}, "children": children})
+        };
+        let tree = node(json!({"type": "All"}), vec![node(
+            json!({"type": "Category", "v": "work"}),
+            vec![node(json!({"type": "Todo", "v": "c"}), Vec::new())],
+        )]);
+        page.step(todos::Msg::Host(Box::new(Input::Answered {
+            ask: todos::Ask::Tree { n },
+            answer: Answer::Done { body: tree },
+        })));
+        let (_, moved) = page.step(todos::Msg::Host(Box::new(Input::Heard {
+            ask: todos::Listen::Keys,
+            frame: json!({"type": "Move", "by": 1}).to_string(),
+        })));
+        let field = moved
+            .iter()
+            .find_map(|e| match e {
+                Effect::Focus { field } => Some(field.clone()),
+                _ => None,
+            })
+            .expect("j moves the cursor");
+        let days: Vec<Value> = ["2026-08-28", "2026-08-29", "2026-08-30"]
+            .map(|date| json!({"date": date, "title": "Today", "words": 10}))
+            .into();
+        let briefed = json!({"briefings": days, "briefs": []});
+        let (patches, _) = page.step(held(todos::Hold::Briefings, briefed));
+        let drawn = format!("{patches:?}");
+        prop_assert!(drawn.contains("todaybriefing"), "the notice is drawn: {drawn}");
+        prop_assert!(!drawn.contains("Remove"), "nothing is removed: {drawn}");
+        prop_assert!(!drawn.contains(&format!("{field:?}")), "the cursor's row is not made anew: {drawn}");
+    }
+}

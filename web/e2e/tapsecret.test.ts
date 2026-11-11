@@ -2,8 +2,8 @@
  * A SECRET, ASKED FOR IN THE INBOX: a card whose act is `kind: "secret"` — the standing proposal
  * `app/cli/tests/support/fixture.rs::a_secret_ask` seeds directly through the
  * real conversation store rather than driving the scripted model — over
- * the SAME isolated `secretspec` store every `--settings` server shares
- * (`scripts/web-e2e.sh`'s `secrets_home`/`secrets_store`).
+ * the write server's own isolated `secretspec` store (`scripts/web-e2e.sh`
+ * gives each `--settings` server one).
  *
  * It asks for `SECRET_ASK_KEY`, the coding routine's token, which the write
  * server's `[coding]` declares and its Settings line reads, because the whole

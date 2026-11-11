@@ -196,9 +196,14 @@ pub enum SecretError {
     /// Killed at the timeout: a locked store waits for a passphrase nobody will type.
     #[error("the secret store did not answer for {name} in time (is it locked?)")]
     Timeout { name: String },
-    /// A non-zero exit other than "not found".
-    #[error("the secret store refused {name} (is it locked?)")]
-    Refused { name: String },
+    /// A non-zero exit other than "not found": how it ended, and what its stderr says went wrong
+    /// as one word ([`Refusal`]), never the stderr itself.
+    #[error("the secret store refused {name} ({exit}: {refusal})")]
+    Refused {
+        name: String,
+        exit: Exit,
+        refusal: Refusal,
+    },
     #[error("the secret store answered for {name} with bytes that are not text")]
     NotText { name: String },
     #[error("the secret store was started for {name} and could not be waited on")]
@@ -207,15 +212,102 @@ pub enum SecretError {
     Stopped { name: String },
 }
 
+/// How a refused call ended.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Exit {
+    Code(i32),
+    /// Stopped by a signal, with no code.
+    Signal(i32),
+}
+
+impl std::fmt::Display for Exit {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Code(code) => write!(f, "exit {code}"),
+            Self::Signal(signal) => write!(f, "signal {signal}"),
+        }
+    }
+}
+
+impl Exit {
+    // On Unix a status with no code was ended by a signal.
+    fn of(status: std::process::ExitStatus) -> Self {
+        use std::os::unix::process::ExitStatusExt as _;
+        status.code().map_or_else(
+            || Self::Signal(status.signal().unwrap_or_default()),
+            Self::Code,
+        )
+    }
+}
+
+/// What a refusal's stderr says went wrong, read as one of a few words so the stderr, which could
+/// echo a value, is never repeated.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Refusal {
+    /// The store's file did not parse, as a file another writer left half written reads.
+    Unparsed,
+    /// The store's file or its directory could not be read or written.
+    Denied,
+    /// A key or a passphrase was missing: the store is locked.
+    Locked,
+    /// Nothing the words above name.
+    Unsaid,
+}
+
+impl std::fmt::Display for Refusal {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(match self {
+            Self::Unparsed => "its file did not parse",
+            Self::Denied => "its file could not be read or written",
+            Self::Locked => "is it locked?",
+            Self::Unsaid => "it said nothing this box reads",
+        })
+    }
+}
+
+impl Refusal {
+    fn of(stderr: &str) -> Self {
+        let said = stderr.to_lowercase();
+        let any = |words: &[&str]| words.iter().any(|word| said.contains(word));
+        if any(&["permission denied", "read-only file system"]) {
+            Self::Denied
+        } else if any(&[
+            "parse",
+            "unterminated",
+            "unexpected character",
+            "invalid line",
+        ]) {
+            Self::Unparsed
+        } else if any(&[
+            "passphrase",
+            "pinentry",
+            "decryption failed",
+            "no secret key",
+            "locked",
+        ]) {
+            Self::Locked
+        } else {
+            Self::Unsaid
+        }
+    }
+}
+
 impl SecretError {
     /// Locked when an unlock may answer, failed when it cannot.
     #[must_use]
     pub fn state(&self) -> SecretState {
         match self {
-            Self::Timeout { .. } | Self::Refused { .. } | Self::Stopped { .. } => {
-                SecretState::Locked
+            Self::Timeout { .. }
+            | Self::Stopped { .. }
+            | Self::Refused {
+                refusal: Refusal::Locked | Refusal::Unsaid,
+                ..
+            } => SecretState::Locked,
+            Self::Refused {
+                refusal: Refusal::Unparsed | Refusal::Denied,
+                ..
             }
-            Self::Spawn { .. }
+            | Self::Spawn { .. }
             | Self::NoSpec { .. }
             | Self::Undeclared { .. }
             | Self::NotText { .. }
@@ -227,7 +319,19 @@ impl SecretError {
     #[must_use]
     pub fn remedy(&self) -> &'static str {
         match self {
-            Self::Timeout { .. } | Self::Refused { .. } => "unlock the secret store",
+            Self::Timeout { .. }
+            | Self::Refused {
+                refusal: Refusal::Locked | Refusal::Unsaid,
+                ..
+            } => "unlock the secret store",
+            Self::Refused {
+                refusal: Refusal::Unparsed,
+                ..
+            } => "repair the secret store (its file does not parse)",
+            Self::Refused {
+                refusal: Refusal::Denied,
+                ..
+            } => "repair the secret store (can this user read and write its file?)",
             Self::Stopped { .. } => "ask again",
             Self::Spawn { .. } => "repair the secret store (is secretspec on PATH?)",
             Self::NoSpec { .. } => "repair the secret store (is its spec file there?)",
@@ -247,7 +351,14 @@ impl SecretError {
             RunError::TimedOut { .. } => Self::Timeout { name },
             RunError::Halted { .. } => Self::Stopped { name },
             RunError::Wait { .. } => Self::Lost { name },
-            RunError::Exited { .. } => Self::Refused { name },
+            RunError::Exited { status, stderr, .. } => {
+                let (exit, refusal) = (Exit::of(*status), Refusal::of(stderr.as_str()));
+                Self::Refused {
+                    name,
+                    exit,
+                    refusal,
+                }
+            }
         }
     }
 }
@@ -622,7 +733,9 @@ mod tests {
         assert_eq!(
             spec.get(NOBODY, "test"),
             Err(SecretError::Refused {
-                name: NOBODY.to_owned()
+                name: NOBODY.to_owned(),
+                exit: Exit::Code(2),
+                refusal: Refusal::Locked,
             })
         );
     }
@@ -676,6 +789,60 @@ mod tests {
         assert!(matches!(failed, SecretError::Refused { .. }));
     }
 
+    /// A refusal says how the call ended and what kind of failure its stderr names, in a word of
+    /// this box's, and never repeats the stderr, which may echo the value: a store left half
+    /// written by another writer reads as a file that did not parse, to repair, not to unlock.
+    #[test]
+    fn a_refusal_says_its_exit_and_class_and_never_the_stderr() {
+        for (stderr, exit, refusal, state) in [
+            (
+                "Error: failed to parse .env at line 3: unterminated quote near hunter2",
+                1,
+                Refusal::Unparsed,
+                SecretState::Failed,
+            ),
+            (
+                "Error: Permission denied (os error 13) writing hunter2",
+                3,
+                Refusal::Denied,
+                SecretState::Failed,
+            ),
+            (
+                "gpg: decryption failed: No secret key hunter2",
+                2,
+                Refusal::Locked,
+                SecretState::Locked,
+            ),
+            (
+                "something else entirely: hunter2",
+                4,
+                Refusal::Unsaid,
+                SecretState::Locked,
+            ),
+        ] {
+            let (_dir, spec) = fake(
+                &format!("cat >/dev/null; echo '{stderr}' >&2; exit {exit}"),
+                Duration::from_secs(5),
+            );
+            let failed = spec
+                .set(NOBODY, &Secret::new("hunter2"), "test")
+                .expect_err("refused");
+            assert_eq!(
+                failed,
+                SecretError::Refused {
+                    name: NOBODY.to_owned(),
+                    exit: Exit::Code(exit),
+                    refusal
+                },
+                "{stderr}"
+            );
+            assert_eq!(failed.state(), state, "{stderr}");
+            let shown = failed.to_string();
+            assert!(shown.contains(&format!("exit {exit}")), "{shown}");
+            assert!(!shown.contains("hunter2"), "{shown}");
+        }
+    }
+
     #[test]
     fn set_hands_the_value_down_stdin() {
         let (dir, spec) = fake("cat > \"$(dirname \"$0\")/fed\"", Duration::from_secs(5));
@@ -697,7 +864,11 @@ mod tests {
             },
             SecretError::Spawn { name: name() },
             SecretError::Timeout { name: name() },
-            SecretError::Refused { name: name() },
+            SecretError::Refused {
+                name: name(),
+                exit: Exit::Code(1),
+                refusal: Refusal::Unparsed,
+            },
             SecretError::NotText { name: name() },
             SecretError::Lost { name: name() },
             SecretError::Stopped { name: name() },

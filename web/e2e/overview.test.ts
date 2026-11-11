@@ -4,10 +4,9 @@
  * The fixture is `--settings`: the model's token and one
  * calendar link on the `ics` plugin (`fixture.rs::SETTINGS_CALENDAR_LINK`),
  * a calendar that synced once and has since lost its link, each declared
- * over an ISOLATED `secretspec` store (`scripts/web-e2e.sh`'s
- * `secrets_home`/`secrets_store`, never this box's `pass`) that the
- * `--settings` servers share. Nothing stores either, so each server's box
- * files their cards by itself at start, with no model asked.
+ * over an ISOLATED `secretspec` store, one per `--settings` server
+ * (`scripts/web-e2e.sh`), never this box's `pass`. Nothing stores either, so
+ * each server's box files their cards by itself at start, with no model asked.
  *
  * THE PLAN'S SCENES 1, 8 AND 2, THEN TWO KEPT FROM THE PAGE BEFORE IT:
  *
