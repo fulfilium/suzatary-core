@@ -770,9 +770,9 @@ proptest! {
         }
     }
 
-    /// What waits (`GET /api/waiting`) reads the lines by shape, every key missing, and names
-    /// the same unplaced lines as a reading that opens every word, so the Inbox draws them
-    /// without holding a line.
+    /// Where a proposal line stands does not depend on its words: read with every key missing,
+    /// the lines name the unplaced ones a reading that opens every word names, so what waits
+    /// (`GET /api/waiting`) reads the same whatever keys an erasure destroyed.
     #[test]
     fn the_unplaced_lines_read_by_shape_are_those_read_whole(
         script in steps(),

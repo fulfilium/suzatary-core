@@ -103,8 +103,8 @@ impl Program for NeedsYou {
         let mut effects: Vec<Effect> = watched
             .into_iter()
             .map(|w| Effect::Watch {
-                local: w.local(),
-                ask: Hold::Rows(w),
+                local: w.local,
+                ask: Hold::Rows(w.ask),
             })
             .collect();
         effects.push(Effect::Watch {

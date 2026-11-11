@@ -1149,14 +1149,14 @@ pub fn content<E: prodrome_core::schema::Schema>(
 
 /// `GET /api/waiting`: the badge's count of the Inbox's cards (open proposals, open decisions on
 /// `chains`, and the proposal lines no inbox record places, which it names by conversation),
-/// read from the lines' shapes, never their words.
+/// the lines read through the box's one memoised fold, so a call costs what moved since the last.
 ///
 /// # Errors
 /// A store that does not read, a chain the set does not hold, and lines the fold refuses: no
 /// count is better than a wrong one.
 pub fn waiting(
     inbox: &crate::secretary::inbox::Fold,
-    lines: &dyn Prodrome<crate::secretary::line_event::LineEvent>,
+    conversations: crate::secretary::conversations::ReadConversations<'_>,
     set: &ChainSet<'_>,
     chains: &[ChainName],
 ) -> Answered<wire::WaitingPayload> {
@@ -1175,22 +1175,14 @@ pub fn waiting(
             })
             .count();
     }
-    let missing = |_: &crate::secretary::locked_text::KeyName| -> crate::secretary::words::Words<
-        crate::secretary::locked_text::TextKey,
-    > { crate::secretary::words::Gone::Missing.into() };
-    let unplaced: BTreeMap<String, Vec<wire::UnplacedProposal>> =
-        crate::secretary::transcript::transcripts(&lines.nodes()?, &missing)
-            .map_err(|refused| Refusal::internal(refused.to_string()))?
-            .into_iter()
-            .map(|(id, read)| {
-                let stored = read.into_stored();
-                (
-                    id.as_str().to_owned(),
-                    crate::secretary::readings::unplaced(&stored.lines(inbox)),
-                )
-            })
-            .filter(|(_, unplaced)| !unplaced.is_empty())
-            .collect();
+    let mut unplaced = BTreeMap::new();
+    for (id, read) in conversations.fold(crate::secretary::held_lines::HeldLines::transcripts)? {
+        let read = read.map_err(|refused| Refusal::internal(refused.to_string()))?;
+        let lines = crate::secretary::readings::unplaced(&read.stored().lines(inbox));
+        if !lines.is_empty() {
+            unplaced.insert(id.as_str().to_owned(), lines);
+        }
+    }
     Ok(wire::WaitingPayload {
         count: proposals + decisions + unplaced.values().map(Vec::len).sum::<usize>(),
         unplaced,

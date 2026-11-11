@@ -13,7 +13,7 @@ use crate::chrome::{self, Chrome, Masthead, Shape, Status, link};
 use crate::intents::Intents;
 use crate::places::Place;
 use crate::runtime::{self, Context, Local, read};
-use crate::waiting::{CHAINS, Readings, Row, Waiting, Watched, unheld};
+use crate::waiting::{CHAINS, Readings, Row, Waiting, Watch, Watched, unheld};
 use crate::zone;
 
 #[derive(Debug, Clone, Deserialize, TS)]
@@ -80,10 +80,10 @@ pub enum Msg {
 #[derive(Debug)]
 pub enum Inbox {}
 
-fn watch(w: Watched) -> Effect {
+fn watch(w: Watch) -> Effect {
     Effect::Watch {
-        local: w.local(),
-        ask: Hold::Rows(w),
+        local: w.local,
+        ask: Hold::Rows(w.ask),
     }
 }
 

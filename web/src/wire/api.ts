@@ -57,7 +57,7 @@ const author = (body: Authoring): Promise<AuthoredPayload> => http.act(onChain("
 export const authorConfirm = (todo: string, note = ""): Promise<AuthoredPayload> => author({ confirm: { todo, note } });
 /** Only the fields the caller sets travel; the rest stay as the box reads them. */
 export const authorUpdate = (edit: UpdateTodo, note = ""): Promise<AuthoredPayload> => author({ update: { ...edit, note } });
-// Undo asks the box even for a lifecycle event: undoing an edit needs the whole stream's folds, which the wasm lacks.
+// Undo asks the box: undoing an edit needs the whole stream's folds, which the wasm lacks.
 export const authorUndo = (todo: string): Promise<AuthoredPayload> => author({ undo: todo });
 export const authorRedo = (todo: string): Promise<AuthoredPayload> => author({ redo: todo });
 
@@ -135,7 +135,6 @@ export const regenerate = (id: string): Promise<ConversationPayload> =>
 /** Drawn by the box, since no replica in the tab holds the todo chains whole. */
 export const drawnProposals = (id: string, indices: readonly number[]): Promise<DrawnPayload> =>
   http.get(conversationPath(id, `/drawn?indices=${indices.join(",")}`), payload.DrawnPayload);
-export const everyProposal = (id: string): Promise<DrawnPayload> => http.get(conversationPath(id, "/drawn"), payload.DrawnPayload);
 
 /** Named by its sha, never by its text, so the box renders only what the model wrote. */
 export const block = (id: string, sha: string): Promise<BlockRender> =>

@@ -4,7 +4,7 @@ use axum::Json;
 use suzatary_core::conversation_id::ConversationId;
 use suzatary_core::reference::ProposalRef;
 use suzatary_core::refusal::Refusal;
-use suzatary_core::secretary::routes::{self as secretary_routes, Effectors, Proposals, TapAnswer};
+use suzatary_core::secretary::routes::{self as secretary_routes, Effectors, TapAnswer};
 use suzatary_core::settings::EditError;
 use suzatary_core::signatures::Tap;
 use suzatary_core::wire;
@@ -16,17 +16,17 @@ use super::params::{Asked, Params};
 use super::secretary::conversation_named;
 use super::{Chained, State};
 
-/// Proposals of one conversation: every one, or those named by their indices.
+/// Proposals of one conversation, named by their indices.
 pub struct Drawn {
     id: ConversationId,
-    asked: Proposals,
+    indices: Vec<usize>,
 }
 
-/// `GET …/<id>/drawn[?indices=<n>,…]`: the proposals asked, drawn in one read.
+/// `GET …/<id>/drawn?indices=<n>,…`: the proposals named, drawn in one read.
 pub fn drawn(call: &Call<Reader, Drawn, ()>) -> Result<Json<wire::DrawnPayload>, Refusal> {
-    let Drawn { id, asked } = &call.params;
+    let Drawn { id, indices } = &call.params;
     call.state
-        .with_cards(|caps, cards| secretary_routes::drawn(caps, cards, id, asked))
+        .with_cards(|caps, cards| secretary_routes::drawn(caps, cards, id, indices))
         .map(Json)
 }
 
@@ -54,19 +54,19 @@ impl Params for ProposalRef {
 impl Params for Drawn {
     fn parse(asked: &Asked, _: &Chained) -> Result<Self, Refusal> {
         let id = conversation_named(asked)?;
-        let asked = match asked.query("indices") {
-            None => Proposals::Every,
-            Some(text) => Proposals::These(
-                text.split(',')
-                    .map(|index| {
-                        index.parse().map_err(|_| {
-                            Refusal::bad_request(format!("proposal {index} is not an index"))
-                        })
-                    })
-                    .collect::<Result<_, _>>()?,
-            ),
+        let Some(asked) = asked.query("indices").filter(|text| !text.is_empty()) else {
+            return Err(Refusal::bad_request(
+                "name the proposals to draw: ?indices=<n>,…",
+            ));
         };
-        Ok(Self { id, asked })
+        let indices = asked
+            .split(',')
+            .map(|text| {
+                text.parse()
+                    .map_err(|_| Refusal::bad_request(format!("proposal {text} is not an index")))
+            })
+            .collect::<Result<_, _>>()?;
+        Ok(Self { id, indices })
     }
 }
 

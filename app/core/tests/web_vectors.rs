@@ -2467,16 +2467,9 @@ fn the_answers_vector_holds_every_answer() {
     let server = server_of(&bundle);
     let conversations = [&deed, &stages]
         .map(|id| secretary_routes::newest(&server, &cards, id).expect("a conversation"));
-    // A conversation's proposals drawn in one read, as the route answers them: every one, and
-    // those named.
+    // A conversation's proposals drawn in one read, as the route answers them.
     let indices: Vec<usize> = conversations[1].proposals.iter().map(|p| p.index).collect();
-    samples.add(
-        [
-            secretary_routes::Proposals::Every,
-            secretary_routes::Proposals::These(indices),
-        ]
-        .map(|asked| secretary_routes::drawn(&server, &cards, &stages, &asked).expect("drawn")),
-    );
+    samples.add([secretary_routes::drawn(&server, &cards, &stages, &indices).expect("drawn")]);
     // A message attaching a file from every place one comes from, the repository's with its hash.
     let mut attaching = conversations[1].clone();
     let files: Vec<wire::CardFile> = [

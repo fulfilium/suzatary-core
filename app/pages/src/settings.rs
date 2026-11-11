@@ -202,7 +202,7 @@ impl Program for Settings {
         effects.extend(
             watched
                 .into_iter()
-                .map(|w| watch(Hold::Rows(w.clone()), w.local())),
+                .map(|w| watch(Hold::Rows(w.ask), w.local)),
         );
         (model, effects)
     }
@@ -237,8 +237,8 @@ impl Program for Settings {
                             let mut effects: Vec<Effect> = new
                                 .into_iter()
                                 .map(|w| Effect::Watch {
-                                    local: w.local(),
-                                    ask: Hold::Rows(w),
+                                    local: w.local,
+                                    ask: Hold::Rows(w.ask),
                                 })
                                 .collect();
                             effects.extend(seen(m));

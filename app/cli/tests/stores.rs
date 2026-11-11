@@ -124,10 +124,15 @@ fn the_decorations_are_asked_by_content() {
         "{base}/api/secretary/conversations/{id}/drawn?indices=0,0"
     ));
     assert_eq!(common::status(&drawn), 200);
+    let drawn = common::body_json(&mut drawn);
     assert_eq!(
-        common::body_json(&mut drawn)["proposals"],
+        drawn["proposals"],
         serde_json::json!([reading["proposals"][0], reading["proposals"][0]]),
         "an email draws nothing against a chain, so its row is the replica's, once per index asked"
+    );
+    assert_eq!(
+        drawn["title"], reading["title"],
+        "with the conversation's title"
     );
     assert_eq!(
         common::status(&common::get(&format!(
@@ -142,15 +147,7 @@ fn the_decorations_are_asked_by_content() {
         ))),
         400
     );
-    let mut every = common::get(&format!("{base}/api/secretary/conversations/{id}/drawn"));
-    assert_eq!(common::status(&every), 200);
-    let every = common::body_json(&mut every);
-    assert_eq!(
-        (&every["title"], &every["proposals"]),
-        (&reading["title"], &reading["proposals"]),
-        "named by no index, every proposal is drawn, with the conversation's title"
-    );
-    for asked in ["?indices=", "?indices=0,,1"] {
+    for asked in ["", "?indices=", "?indices=0,,1"] {
         assert_eq!(
             common::status(&common::get(&format!(
                 "{base}/api/secretary/conversations/{id}/drawn{asked}"

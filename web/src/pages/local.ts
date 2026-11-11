@@ -1,5 +1,4 @@
-// What the tab keeps of its own that a page watches (`Local` in `app/pages/src/runtime.rs`), each a reading read again
-// whenever what it reads moves. Nothing here knows a page.
+// What a page watches of the tab's own (`Local` in `app/pages/src/runtime.rs`), each read again when what it reads moves.
 
 import type { Local, LocalAnswers, Register } from "../wire/generated/pages"
 import device from "../app/device"
@@ -24,7 +23,7 @@ import draftbox from "../chat/draftbox"
 import onScreen from "../inbox/onscreen"
 import scroll from "../painter/scroll"
 import d from "../wire/decoder"
-import { everyProposal } from "../wire/api"
+import { drawnProposals } from "../wire/api"
 import lanes from "../prodrome/lanes"
 
 export namespace local {
@@ -85,7 +84,7 @@ export namespace local {
   )
 
   type Cards = Extract<Local, { type: "Cards" }>
-  const cards = asked.family((c: Cards) => c.conversation, (c: Cards) => everyProposal(c.conversation))
+  const cards = asked.family((c: Cards) => JSON.stringify([c.conversation, c.indices]), (c: Cards) => drawnProposals(c.conversation, c.indices))
 
   // A seal and a summary are no page's; a topic is named without its instant.
   const held = (): Answer<"Intents"> => {
@@ -185,7 +184,8 @@ export namespace local {
     Search: l => searches(l),
     Stream: l => reading.againOn(streams(l), storesync.watch),
     Window: l => reading.againOn(windows(l), heard => storesync.watchConversation(l.id, heard)),
-    Cards: l => reading.againOn(reading.againOn(cards(l), storesync.watch), watchOthers),
+    // Asked again when the box moves, never when this tab's copies land.
+    Cards: l => reading.againOn(cards(l), storesync.watchBox),
     Intents: () => asking,
     Titles: () => titles,
     Draft: l => draftOf(l.id),

@@ -457,15 +457,8 @@ pub fn newest(
     )
 }
 
-/// What `GET …/<id>/drawn` draws: every proposal, or those `?indices=` names, in that order.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum Proposals {
-    Every,
-    These(Vec<usize>),
-}
-
-/// `GET …/<id>/drawn`: proposals drawn against the todo chains, which a tab's replicas cannot
-/// draw.
+/// `GET …/<id>/drawn?indices=<n>,…`: proposals drawn against the todo chains, which a tab's
+/// replicas cannot draw.
 ///
 /// # Errors
 /// [`Refusal::not_found`] for a conversation or a proposal there is none of, and the stores' own.
@@ -473,34 +466,30 @@ pub fn drawn(
     caps: &Server<'_>,
     cards: &Cards<'_>,
     id: &ConversationId,
-    asked: &Proposals,
+    indices: &[usize],
 ) -> Answered<wire::DrawnPayload> {
     let stored = conversations::read(caps.secretary.conversations, id)?;
     let fold = inbox::fold(caps.secretary.inbox)?;
-    let lines = stored.lines(&fold);
     let drawn = Drawn::of(
-        &lines,
+        &stored.lines(&fold),
         cards,
         caps.secretary.clock.now(),
         caps.secretary.render,
     );
     let memory = memory(caps.secretary.memories).ok();
-    let row = |standing: &crate::secretary::store::Standing| {
-        readings::drawn(
-            &stored,
-            standing.asking.index,
-            standing,
-            &drawn,
-            memory.as_ref(),
-        )
-    };
-    let proposals = match asked {
-        Proposals::Every => lines.standings().map(row).collect(),
-        Proposals::These(indices) => indices
-            .iter()
-            .map(|&index| Ok(row(&stored.standing(index, &fold)?)))
-            .collect::<Result<_, Refusal>>()?,
-    };
+    let proposals = indices
+        .iter()
+        .map(|&index| {
+            let standing = stored.standing(index, &fold)?;
+            Ok(readings::drawn(
+                &stored,
+                index,
+                &standing,
+                &drawn,
+                memory.as_ref(),
+            ))
+        })
+        .collect::<Result<_, Refusal>>()?;
     Ok(wire::DrawnPayload {
         title: stored.heading().into_owned(),
         proposals,

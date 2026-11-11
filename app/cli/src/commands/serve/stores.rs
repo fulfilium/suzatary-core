@@ -192,5 +192,5 @@ pub fn waiting(call: &Call<Reader, (), ()>) -> Result<Json<wire::WaitingPayload>
         .values()
         .map(|chained| chained.policy.name.clone())
         .collect();
-    routes::waiting(&inbox, caps.secretary.conversations.lines, &set, &chains).map(Json)
+    routes::waiting(&inbox, caps.secretary.conversations.reads(), &set, &chains).map(Json)
 }

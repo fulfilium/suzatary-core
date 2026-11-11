@@ -30,8 +30,7 @@ pub struct InboxRead {
 
 #[derive(Debug, Clone, Copy)]
 pub(crate) enum Waiting<'a> {
-    /// With the chain its price waits on where the reading did not hold the todo it serves: a price
-    /// not yet known, which is not `∅`.
+    /// With the chain its price waits on where the todo it serves is not held: not yet `∅`.
     Proposal(&'a InboxProposal, Option<&'a str>),
     Decision(&'a str, &'a Entry),
 }
@@ -276,6 +275,8 @@ pub(crate) struct Readings {
     pub(crate) decisions: BTreeMap<String, Reading<FoldPayload>>,
     pub(crate) waiting: Reading<Option<WaitingPayload>>,
     pub(crate) cards: BTreeMap<String, Reading<DrawnPayload>>,
+    /// Every proposal a row named while the page stood, so a tapped card is read once settled.
+    asked: BTreeMap<String, BTreeSet<usize>>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, serde::Serialize, Deserialize, TS)]
@@ -287,10 +288,15 @@ pub enum Watched {
     Cards(String),
 }
 
-impl Watched {
-    #[must_use]
-    pub(crate) fn local(&self) -> Local {
-        match self {
+#[derive(Debug, Clone)]
+pub(crate) struct Watch {
+    pub(crate) ask: Watched,
+    pub(crate) local: Local,
+}
+
+impl Readings {
+    fn watch(&self, ask: Watched) -> Watch {
+        let local = match &ask {
             Watched::Proposals => Local::Proposals,
             Watched::Decisions(chain) => Local::Decisions {
                 chain: chain.clone(),
@@ -298,58 +304,69 @@ impl Watched {
             Watched::Waiting => Local::Waiting,
             Watched::Cards(conversation) => Local::Cards {
                 conversation: conversation.clone(),
+                indices: self.asked[conversation].iter().copied().collect(),
             },
-        }
+        };
+        Watch { ask, local }
     }
-}
 
-impl Readings {
     #[must_use]
-    pub(crate) fn of(chains: &[&str]) -> (Readings, Vec<Watched>) {
+    pub(crate) fn of(chains: &[&str]) -> (Readings, Vec<Watch>) {
         let decisions: BTreeMap<String, Reading<FoldPayload>> = chains
             .iter()
             .map(|c| ((*c).to_owned(), Reading::Loading))
             .collect();
-        let mut watched = vec![Watched::Proposals, Watched::Waiting];
-        watched.extend(decisions.keys().cloned().map(Watched::Decisions));
-        (
-            Readings {
-                proposals: Reading::Loading,
-                decisions,
-                waiting: Reading::Loading,
-                cards: BTreeMap::new(),
-            },
-            watched,
-        )
+        let asks: Vec<Watched> = [Watched::Proposals, Watched::Waiting]
+            .into_iter()
+            .chain(decisions.keys().cloned().map(Watched::Decisions))
+            .collect();
+        let readings = Readings {
+            proposals: Reading::Loading,
+            decisions,
+            waiting: Reading::Loading,
+            cards: BTreeMap::new(),
+            asked: BTreeMap::new(),
+        };
+        let watches = asks.into_iter().map(|w| readings.watch(w)).collect();
+        (readings, watches)
     }
 
-    /// Returns the conversations' cards to watch that no row named before.
-    pub(crate) fn held(&mut self, w: Watched, r: Reading<Answer>) -> Vec<Watched> {
+    /// Returns the cards to watch again, for proposals a row names that were not asked; a card
+    /// read again keeps what it drew until the box answers.
+    pub(crate) fn held(&mut self, w: Watched, r: Reading<Answer>) -> Vec<Watch> {
         match w {
             Watched::Proposals => self.proposals = read(r),
             Watched::Decisions(chain) => {
                 self.decisions.insert(chain, read(r));
             }
             Watched::Waiting => self.waiting = read(r),
-            Watched::Cards(conversation) => {
-                self.cards.insert(conversation, read(r));
-            }
+            Watched::Cards(conversation) => match (read(r), self.cards.get(&conversation)) {
+                (Reading::Loading, Some(Reading::Val { .. })) => {}
+                (read, _) => {
+                    self.cards.insert(conversation, read);
+                }
+            },
         }
-        let named: BTreeSet<String> = open(&self.all())
+        let named: Vec<(String, usize)> = open(&self.all())
             .into_iter()
             .filter_map(|w| match w.at() {
-                Where::Proposal(c, _) => Some(c),
+                Where::Proposal(c, index) => Some((c, index as usize)),
                 Where::Batch(..) | Where::Unresolved(_) => None,
             })
             .collect();
-        let new: Vec<String> = named
-            .into_iter()
-            .filter(|c| !self.cards.contains_key(c))
-            .collect();
-        for c in &new {
-            self.cards.insert(c.clone(), Reading::Loading);
+        let mut moved = BTreeSet::new();
+        for (c, index) in named {
+            if self.asked.entry(c.clone()).or_default().insert(index) {
+                moved.insert(c);
+            }
         }
-        new.into_iter().map(Watched::Cards).collect()
+        moved
+            .into_iter()
+            .map(|c| {
+                self.cards.entry(c.clone()).or_insert(Reading::Loading);
+                self.watch(Watched::Cards(c))
+            })
+            .collect()
     }
 
     #[must_use]
@@ -378,19 +395,20 @@ impl Readings {
             .filter_map(|w| match w.at() {
                 Where::Unresolved(_) | Where::Batch(..) => Some(Row::Unresolved(w)),
                 Where::Proposal(c, index) => match self.cards.get_key_value(&c) {
-                    Some((id, Reading::Val { v })) => Some(
-                        match v.proposals.iter().find(|p| p.index == index as usize) {
-                            Some(row) => Row::Card(
+                    Some((id, Reading::Val { v })) => v
+                        .proposals
+                        .iter()
+                        .find(|p| p.index == index as usize)
+                        .map(|row| {
+                            Row::Card(
                                 w,
                                 Conversation {
                                     id,
                                     title: &v.title,
                                 },
                                 row,
-                            ),
-                            None => Row::Unresolved(w),
-                        },
-                    ),
+                            )
+                        }),
                     Some((_, Reading::Error { .. })) => Some(Row::Unresolved(w)),
                     Some((_, Reading::Loading)) | None => None,
                 },
@@ -412,10 +430,10 @@ impl Readings {
         }
     }
 
-    /// A row whose conversation is on its way is not yet unresolved.
+    /// No open row's card is on its way.
     #[must_use]
     pub(crate) fn resolved(&self) -> bool {
-        self.cards.values().all(|r| !matches!(r, Reading::Loading))
+        self.rows().len() == open(&self.all()).len()
     }
 
     #[must_use]
@@ -457,8 +475,7 @@ impl Readings {
                 .all(|f| !matches!(f, Reading::Loading))
     }
 
-    /// Until every reading the rows are drawn from has answered, an empty list, or one row fewer, is
-    /// no answer.
+    /// Every reading the rows are drawn from has answered.
     #[must_use]
     pub(crate) fn answered(&self) -> bool {
         self.read() && self.resolved()

@@ -1,6 +1,5 @@
-// The page's side of the stores, which the core's worker holds (`storeset`): every reading of them asked of the worker,
-// what the box's one stream says of each store's heads passed on, and what the worker says heard. The page holds no
-// store and does nothing that grows with one.
+// The page's side of the stores the core's worker holds (`storeset`): readings asked of the worker, the box's stream
+// passed on, and what the worker says heard. The page holds no store.
 
 import type { Window } from "./core"
 import { CoreError } from "./core"
@@ -31,14 +30,12 @@ import type { ConversationsPayload, InboxProposalsPayload, MemoryPayload, Search
 
 export namespace storesync {
   const bars = sources.create<progress.T, progress.Event>(progress.NONE, progress.step)
-  // What the worker last said moved, and how many times it said so: what a page reading the stores wakes on. A move of
-  // the lines names the conversations it touched; the worker says a move of any other store touches every one.
+  // What the worker last said moved, and how often: the conversations a move of the lines touched, else all.
   type Moves = { readonly n: number; readonly moved: linesync.Moved }
   const moves = sources.create<Moves, linesync.Moved>({ n: 0, moved: "All" }, (m, moved) => ({ n: m.n + 1, moved }))
   const both = (a: linesync.Moved, b: linesync.Moved): linesync.Moved => (a === "All" || b === "All" ? "All" : [...new Set([...a, ...b])])
 
-  // Whether this page is shown, told the worker at each change: a hidden page's prefetch sends nothing. What the tab
-  // tells the worker goes in the first lane, so it is taken when said: an opened stream taken late pulls every store.
+  // Whether this page is shown, told the worker in the first lane at each change: a hidden page's prefetch sends nothing.
   const shown = (): boolean => typeof document === "undefined" || document.visibilityState === "visible"
   const showing = once.of(async (): Promise<void> => {
     const say = (): void => void remote.ask({ type: "Shown", on: shown() }, lanes.FIRST)
@@ -84,8 +81,7 @@ export namespace storesync {
   export type Streamed = questions.Answer<"Stream"> extends questions.Whole<infer A> ? A : never
   export const streamed = (chosen: readonly string[], pages: number, lane: lanes.Lane): Promise<Streamed> => over({ type: "Stream", chosen, pages }, true, lane).then(held)
 
-  // `w` written by the worker into its store as the actor this tab writes as, kept on the device and handed to the box.
-  // Offline, it stays kept and goes with the next sync; a refusal is thrown in the box's words.
+  // `w` written by the worker as this tab's actor, kept, and handed to the box with the next sync; a refusal is thrown.
   export const write = async (w: topics.Write, at: string): Promise<void> => {
     const actor = app.actor(app.now())
     if (actor === null) throw new Error("this device only reads, so it writes no topic")
@@ -118,8 +114,7 @@ export namespace storesync {
   export const reset = async (name: stores.Name, said: (why: string) => void): Promise<void> =>
     void (await remote.ask({ type: "Reset", store: name }, "Page")).forEach(said)
 
-  // What the worker says of the stores; a move is heard once a frame however many it says, so a page reads again once,
-  // and a hidden tab, whose frames do not run, within a tenth of a second.
+  // A move is heard once a frame however many the worker says, and in a hidden tab within a tenth of a second.
   let moving: linesync.Moved | null = null
   const MOVES_MS = 100
   const flush = (): void => {
@@ -146,7 +141,7 @@ export namespace storesync {
     }
   }
 
-  // Who hears what the worker says of the box and of itself: a revoked key, an older build, a core that did not load.
+  // Who hears a revoked key, an older build, or a core that did not load.
   export type Heard = { readonly gone: () => void; readonly stale: () => void; readonly unloaded: (why: string) => void }
 
   // Everything the worker says unasked, each to what hears it.
@@ -180,8 +175,12 @@ export namespace storesync {
 
   const frame = d.json(payload.StoreFrame)
 
-  // One stream for every store, opened once by the shell. The worker pulls a store a reading wants when it lacks one of
-  // a frame's heads, so a cut pull is taken up again.
+  // Who hears the box say other heads of a store than it said before.
+  const said = new Map<stores.Name, string>()
+  const boxMoves = new Set<() => void>()
+  export const watchBox = (listener: () => void): (() => void) => (boxMoves.add(listener), () => void boxMoves.delete(listener))
+
+  // One stream for every store, opened once by the shell; the worker pulls a wanted store lacking a frame's heads.
   export const listen = (moved: (name: stores.Name) => void): (() => void) =>
     stream.open(stream.of("/api/stores/events"), {
       opened: () => void remote.ask({ type: "Opened" }, lanes.FIRST),
@@ -189,6 +188,9 @@ export namespace storesync {
         const f = frame(data)
         if (f.type !== "Val") return
         moved(f.v.store)
+        const [was, now] = [said.get(f.v.store), JSON.stringify(f.v.heads)]
+        said.set(f.v.store, now)
+        if (was !== undefined && was !== now) boxMoves.forEach(l => l())
         void remote.ask({ type: "Heard", store: f.v.store, heads: heads.of(f.v.heads) }, lanes.FIRST)
       },
     })

@@ -421,8 +421,10 @@ pub(crate) enum Local {
         id: String,
         window: Window,
     },
+    /// The box's drawing of these proposals of `conversation` (`DrawnPayload`).
     Cards {
         conversation: String,
+        indices: Vec<usize>,
     },
     /// The open chain's rows as the tab's fold holds them (`Folded`), or `null` before one is
     /// read; watching it asks the box for a fold when the one held is not about now.
