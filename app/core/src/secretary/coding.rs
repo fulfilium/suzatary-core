@@ -1,12 +1,13 @@
 //! A coding session's lines in its conversation: each change is an [`Entry::Coding`] line
 //! and a [`Turn::Act`], so the secretary reads what became of the session it proposed.
 
-use crate::capability::{Datetime, Turn};
+use crate::capability::Datetime;
 use crate::coding::{Fired, Seen, Session, Step};
 use crate::conversation_id::ConversationId;
 use crate::reference::{ProposalRef, Reference};
 use crate::refusal::Refusal;
 use crate::secretary::conversations;
+use crate::secretary::model::Turn;
 use crate::secretary::stamp::stamp;
 use crate::secretary::store::Entry;
 

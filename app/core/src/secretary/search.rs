@@ -3,8 +3,8 @@
 
 use std::borrow::Borrow;
 
-use crate::capability::Turn;
 use crate::conversation_id::ConversationId;
+use crate::secretary::model::Turn;
 use crate::secretary::store::{Kind, Stored};
 
 /// Trimmed, never empty, at most [`Needle::MAX`] characters, kept case-folded.
@@ -228,7 +228,7 @@ mod tests {
     fn calling(text: &str) -> Turn {
         Turn::Model {
             text: text.to_owned(),
-            calls: vec![crate::capability::ToolCall {
+            calls: vec![crate::secretary::model::ToolCall {
                 verb: "show".into(),
                 args: std::collections::BTreeMap::new(),
             }],

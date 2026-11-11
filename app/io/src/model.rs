@@ -14,11 +14,12 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::Duration;
 
-use suzatary_core::capability::{
-    Clock, Conversation, Delta, Halt, Model, ModelError, Reply, Secret, Session, SessionId,
-    SessionModel, Sessioned, TokenUsage, Turn,
-};
+use suzatary_core::capability::{Clock, Secret};
 use suzatary_core::for_model::ForModel;
+use suzatary_core::secretary::model::{
+    Conversation, Delta, Halt, Model, ModelError, Reply, Session, SessionId, SessionModel,
+    Sessioned, TokenUsage, Turn,
+};
 use suzatary_core::secretary::stamp::stamp;
 
 use crate::attachments::AttachmentStore;
@@ -635,8 +636,8 @@ mod tests {
     /// alike, and never as "exited 1" with no reason.
     #[test]
     fn a_failed_run_names_its_failure_from_what_the_cli_printed() {
-        use suzatary_core::capability::Halt;
         use suzatary_core::health::{Limit, Limited};
+        use suzatary_core::secretary::model::Halt;
         let dir = tempfile::tempdir().expect("scratch");
         let result = |text: &str| {
             format!(

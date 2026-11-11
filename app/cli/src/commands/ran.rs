@@ -85,7 +85,8 @@ fn limit_of(
     model: &str,
     text: &str,
 ) -> anyhow::Result<Option<suzatary_core::health::Limited>> {
-    use suzatary_core::capability::{Clock as _, ModelError};
+    use suzatary_core::capability::Clock as _;
+    use suzatary_core::secretary::model::ModelError;
     let now = prodrome_core::fpl::instant_of(suzatary_io::clock::SystemClock.now());
     let failed = suzatary_io::model::failure::Heard::of(text).failure(String::new(), now);
     let ModelError::Limited(limited) = failed else {

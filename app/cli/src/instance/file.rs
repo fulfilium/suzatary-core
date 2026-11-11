@@ -332,7 +332,9 @@ impl Secretary {
     pub fn conversation_stores(
         &self,
         renders: std::sync::Arc<dyn suzatary_core::capability::RenderCache + Send + Sync>,
-        sessions: std::sync::Arc<dyn suzatary_core::capability::ModelSessions + Send + Sync>,
+        sessions: std::sync::Arc<
+            dyn suzatary_core::secretary::model_sessions::ModelSessions + Send + Sync,
+        >,
     ) -> suzatary_io::conversations::ConversationStores {
         suzatary_io::conversations::ConversationStores::open(
             self.line_store(),

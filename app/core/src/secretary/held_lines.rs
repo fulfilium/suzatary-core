@@ -1529,7 +1529,7 @@ mod tests {
         for n in 0..40 {
             let said = Entry::Said {
                 at: Datetime::new(2026, 10, 1, 9, 1, n, 0).expect("an instant"),
-                turn: crate::capability::Turn::Person {
+                turn: crate::secretary::model::Turn::Person {
                     text: format!("Merci, voilà la réponse {n} — 確認"),
                     references: Vec::new(),
                     attachments: Vec::new(),
@@ -1559,7 +1559,7 @@ mod tests {
         let at = |second: u32| Datetime::new(2026, 10, 25, 9, 0, second, 0).expect("an instant");
         let said = Entry::Said {
             at: at(1),
-            turn: crate::capability::Turn::Person {
+            turn: crate::secretary::model::Turn::Person {
                 text: "reset at https://example.test/r?token=s3cret".to_owned(),
                 references: Vec::new(),
                 attachments: Vec::new(),
@@ -1614,7 +1614,7 @@ mod tests {
             let mut entries = vec![opened("Notes")];
             entries.extend((1..8).map(|n| Entry::Said {
                 at: at(n),
-                turn: crate::capability::Turn::Person {
+                turn: crate::secretary::model::Turn::Person {
                     text: format!("reset {n} at https://example.test/r?token=s3cret — 確認"),
                     references: Vec::new(),
                     attachments: Vec::new(),
@@ -1743,7 +1743,7 @@ mod tests {
                 let mut entries = vec![opened("Notes")];
                 entries.extend((1..=40).map(|n| Entry::Said {
                     at: at(n),
-                    turn: crate::capability::Turn::Person {
+                    turn: crate::secretary::model::Turn::Person {
                         text: words.clone(),
                         references: Vec::new(),
                         attachments: Vec::new(),

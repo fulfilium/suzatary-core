@@ -3,10 +3,10 @@
 
 use std::fmt::Write as _;
 
-use suzatary_core::capability::{Conversation, Delta, Turn};
 use suzatary_core::enclosed::{Enclosed, Enclosure};
 use suzatary_core::for_model::ForModel;
 use suzatary_core::reference::Reference;
+use suzatary_core::secretary::model::{Conversation, Delta, Turn};
 use suzatary_core::secretary::turn_shape::{self, TurnShape};
 
 /// The whole conversation as a system and a user piece.
@@ -258,7 +258,7 @@ fn pointing(references: &[Reference]) -> String {
     format!("\n  (pointing at: {named})")
 }
 
-fn called(calls: &[suzatary_core::capability::ToolCall]) -> String {
+fn called(calls: &[suzatary_core::secretary::model::ToolCall]) -> String {
     calls
         .iter()
         .map(|call| call.verb.as_str())

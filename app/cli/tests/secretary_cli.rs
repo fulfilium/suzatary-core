@@ -336,7 +336,7 @@ fn conversation(
     id: &str,
     title: &str,
     kind: suzatary_core::secretary::store::Kind,
-    turns: Vec<suzatary_core::capability::Turn>,
+    turns: Vec<suzatary_core::secretary::model::Turn>,
 ) {
     use suzatary_core::secretary::store::Entry;
     let stores = instance.conversation_stores();
@@ -354,8 +354,8 @@ fn conversation(
         .expect("opened");
     for (minute, turn) in (1..).zip(turns) {
         // A person's turn is the owner's, as the gate stamps it.
-        let by =
-            matches!(turn, suzatary_core::capability::Turn::Person { .. }).then(|| "owner".into());
+        let by = matches!(turn, suzatary_core::secretary::model::Turn::Person { .. })
+            .then(|| "owner".into());
         let said = Entry::Said {
             at: at(minute),
             turn,
@@ -366,25 +366,25 @@ fn conversation(
     }
 }
 
-fn asked(text: &str) -> suzatary_core::capability::Turn {
-    suzatary_core::capability::Turn::Person {
+fn asked(text: &str) -> suzatary_core::secretary::model::Turn {
+    suzatary_core::secretary::model::Turn::Person {
         text: text.to_owned(),
         references: Vec::new(),
         attachments: Vec::new(),
     }
 }
 
-fn answered(text: &str) -> suzatary_core::capability::Turn {
-    suzatary_core::capability::Turn::Model {
+fn answered(text: &str) -> suzatary_core::secretary::model::Turn {
+    suzatary_core::secretary::model::Turn::Model {
         text: text.to_owned(),
         calls: Vec::new(),
     }
 }
 
 /// A `draft_note` call as the store holds it: the model's call, the note, the verb's answer.
-fn drafted() -> [suzatary_core::capability::Turn; 3] {
-    use suzatary_core::capability::{ToolCall, Turn};
+fn drafted() -> [suzatary_core::secretary::model::Turn; 3] {
     use suzatary_core::secretary::SecretaryVerb;
+    use suzatary_core::secretary::model::{ToolCall, Turn};
     let tool = |answer: &str| Turn::Tool {
         verb: SecretaryVerb::DraftNote.into(),
         answer: answer.to_owned(),
@@ -598,8 +598,8 @@ fn the_carry_gives_the_conversations_a_map_names_their_topics_once() {
 }
 
 /// A search the model called, and its answer, which carries mail's words.
-fn searched(answer: &str) -> [suzatary_core::capability::Turn; 2] {
-    use suzatary_core::capability::{ToolCall, Turn};
+fn searched(answer: &str) -> [suzatary_core::secretary::model::Turn; 2] {
+    use suzatary_core::secretary::model::{ToolCall, Turn};
     [
         Turn::Model {
             text: String::new(),
@@ -622,7 +622,7 @@ fn searched(answer: &str) -> [suzatary_core::capability::Turn; 2] {
 fn planning(
     instance: &Instance,
     file: &std::path::Path,
-    answer: &dyn Fn() -> Result<String, suzatary_core::capability::ModelError>,
+    answer: &dyn Fn() -> Result<String, suzatary_core::secretary::model::ModelError>,
     sent: &mut Vec<String>,
 ) -> (usize, Vec<String>) {
     let mut said = Vec::new();
@@ -709,7 +709,7 @@ fn a_batch_the_model_does_not_answer_is_left_out_of_the_plan() {
         &instance,
         &file,
         &|| {
-            Err(suzatary_core::capability::ModelError::Unreachable(
+            Err(suzatary_core::secretary::model::ModelError::Unreachable(
                 "at the reserve".to_owned(),
             ))
         },

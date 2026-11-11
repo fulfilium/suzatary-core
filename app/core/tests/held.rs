@@ -11,8 +11,8 @@
 use std::collections::BTreeSet;
 
 use proptest::prelude::*;
-use suzatary_core::capability::{SessionId, ToolCall, Turn};
 use suzatary_core::conversation_id::ConversationId;
+use suzatary_core::secretary::model::{SessionId, ToolCall, Turn};
 use suzatary_core::secretary::queue;
 use suzatary_core::secretary::store::{Entry, Scope, Stored};
 use suzatary_core::secretary::taint::{self, Taint};

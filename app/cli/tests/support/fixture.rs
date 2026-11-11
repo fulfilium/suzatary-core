@@ -358,12 +358,12 @@ fn a_review(root: &Path) -> anyhow::Result<()> {
         },
     )?;
     for turn in [
-        suzatary_core::capability::Turn::Person {
+        suzatary_core::secretary::model::Turn::Person {
             text: sweep_prompt()?,
             references: Vec::new(),
             attachments: Vec::new(),
         },
-        suzatary_core::capability::Turn::Model {
+        suzatary_core::secretary::model::Turn::Model {
             text: SWEEP_ANSWER.to_owned(),
             calls: Vec::new(),
         },
@@ -1380,7 +1380,7 @@ fn bulk_entry(
     line: usize,
     at: prodrome_core::literal::Datetime,
 ) -> suzatary_core::secretary::store::Entry {
-    use suzatary_core::capability::Turn;
+    use suzatary_core::secretary::model::Turn;
     use suzatary_core::secretary::store::{Entry, Kind};
     use suzatary_core::secretary::words::Words;
     if line == 0 {
@@ -1801,15 +1801,15 @@ impl Scripted {
     ///
     /// A question with a reference attached ends on the `reference` verb's answer, since
     /// the box loads it first, so such a scene's script needs a line for that.
-    fn cue(conversation: &suzatary_core::capability::Conversation) -> String {
+    fn cue(conversation: &suzatary_core::secretary::model::Conversation) -> String {
         match conversation.turns.last() {
             Some(
-                suzatary_core::capability::Turn::Person { text, .. }
-                | suzatary_core::capability::Turn::Model { text, .. }
-                | suzatary_core::capability::Turn::Act { text, .. },
+                suzatary_core::secretary::model::Turn::Person { text, .. }
+                | suzatary_core::secretary::model::Turn::Model { text, .. }
+                | suzatary_core::secretary::model::Turn::Act { text, .. },
             ) => text.clone(),
-            Some(suzatary_core::capability::Turn::Tool { verb, .. }) => verb.to_string(),
-            Some(suzatary_core::capability::Turn::Erased { words, .. }) => {
+            Some(suzatary_core::secretary::model::Turn::Tool { verb, .. }) => verb.to_string(),
+            Some(suzatary_core::secretary::model::Turn::Erased { words, .. }) => {
                 suzatary_core::secretary::turn_shape::prose(words)
             }
             None => String::new(),
@@ -1817,16 +1817,17 @@ impl Scripted {
     }
 }
 
-impl suzatary_core::capability::Model for Scripted {
+impl suzatary_core::secretary::model::Model for Scripted {
     fn name(&self) -> String {
         self.name.clone()
     }
 
     fn turn(
         &self,
-        conversation: &suzatary_core::capability::Conversation,
+        conversation: &suzatary_core::secretary::model::Conversation,
         _tools: &serde_json::Value,
-    ) -> Result<suzatary_core::capability::Reply, suzatary_core::capability::ModelError> {
+    ) -> Result<suzatary_core::secretary::model::Reply, suzatary_core::secretary::model::ModelError>
+    {
         let cue = Self::cue(conversation);
         let line = self
             .lines
@@ -1834,19 +1835,19 @@ impl suzatary_core::capability::Model for Scripted {
             .find(|line| line.when.is_empty() || cue.contains(&line.when))
             .ok_or_else(|| {
                 // An uncovered cue is a test bug, refused rather than improvised.
-                suzatary_core::capability::ModelError::Failed(format!(
+                suzatary_core::secretary::model::ModelError::Failed(format!(
                     "the script has no line for {cue:?}"
                 ))
             })?;
         if let Some(release) = &line.release {
             // Until the scene lets it answer, or a Stop pulls the round's halt, whose reply the box drops.
-            while !suzatary_core::capability::pulled::halted()
+            while !suzatary_core::secretary::model::pulled::halted()
                 && std::fs::remove_file(release).is_err()
             {
                 std::thread::sleep(std::time::Duration::from_millis(50));
             }
         }
-        Ok(suzatary_core::capability::Reply::parse(&line.reply))
+        Ok(suzatary_core::secretary::model::Reply::parse(&line.reply))
     }
 }
 
@@ -1869,10 +1870,10 @@ mod tests {
     /// waiting is then released, so no test leaves it polling.
     fn line_answers(
         name: &str,
-        halt: &suzatary_core::capability::Halt,
+        halt: &suzatary_core::secretary::model::Halt,
         pull_after: Option<std::time::Duration>,
     ) -> bool {
-        use suzatary_core::capability::Model;
+        use suzatary_core::secretary::model::Model;
         let release = scratch(name).join("release");
         let script = Scripted {
             lines: vec![Line {
@@ -1885,8 +1886,8 @@ mod tests {
         let (answered, heard) = std::sync::mpsc::channel();
         let asking = halt.clone();
         std::thread::spawn(move || {
-            let _asking = suzatary_core::capability::pulled::Asking::of(&asking);
-            let asked = suzatary_core::capability::Conversation {
+            let _asking = suzatary_core::secretary::model::pulled::Asking::of(&asking);
+            let asked = suzatary_core::secretary::model::Conversation {
                 system: String::new(),
                 turns: Vec::new(),
             };
@@ -1907,7 +1908,7 @@ mod tests {
     #[test]
     fn a_waiting_script_line_ends_on_its_own_rounds_halt_whenever_it_is_pulled() {
         let ada = || prodrome_core::event::Actor::new("ada").expect("an actor");
-        let before = suzatary_core::capability::Halt::new();
+        let before = suzatary_core::secretary::model::Halt::new();
         before.stop(ada());
         assert!(
             line_answers("halt-before", &before, None),
@@ -1916,14 +1917,18 @@ mod tests {
         assert!(
             line_answers(
                 "halt-during",
-                &suzatary_core::capability::Halt::new(),
+                &suzatary_core::secretary::model::Halt::new(),
                 Some(std::time::Duration::from_millis(200))
             ),
             "pulled while it waits"
         );
-        suzatary_core::capability::Halt::new().stop(ada());
+        suzatary_core::secretary::model::Halt::new().stop(ada());
         assert!(
-            !line_answers("halt-other", &suzatary_core::capability::Halt::new(), None),
+            !line_answers(
+                "halt-other",
+                &suzatary_core::secretary::model::Halt::new(),
+                None
+            ),
             "another round's halt, pulled, does not end it"
         );
     }
@@ -1988,7 +1993,8 @@ mod tests {
     #[test]
     fn forgotten_mail_reads_as_no_longer_stored_at_once() {
         use suzatary_core::mail::cache::Forget as _;
-        use suzatary_core::mail::mailbox::{MailError, Mailbox as _};
+        use suzatary_core::mail::mailbox::Mailbox as _;
+        use suzatary_core::mail_error::MailError;
 
         let root = scratch("forgotten");
         let config = mail_fixture(&root, false)

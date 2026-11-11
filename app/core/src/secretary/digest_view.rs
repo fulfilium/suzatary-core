@@ -12,10 +12,10 @@ use std::collections::BTreeMap;
 use prodrome_core::digest::{Measure as _, Node, Part};
 use prodrome_core::event::Hash;
 
-use crate::capability::Turn;
 use crate::secretary::digest::Digest;
 use crate::secretary::digest_label::{Kind, Label};
 use crate::secretary::digest_line::Line;
+use crate::secretary::model::Turn;
 use crate::secretary::outcome::Outcome;
 use crate::secretary::stamp::Stamp;
 use crate::secretary::store::Entry;
@@ -387,7 +387,7 @@ mod tests {
     use std::collections::BTreeMap as Map;
 
     use super::*;
-    use crate::capability::ToolCall;
+    use crate::secretary::model::ToolCall;
 
     /// A call is its verb's name: a `remember` call's words are never shown.
     #[test]

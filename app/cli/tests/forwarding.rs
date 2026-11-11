@@ -8,8 +8,8 @@ use std::sync::Arc;
 
 use common::{FakeMailbox, FakeModel, Fakes};
 use suzatary_core::held_value::{Handle, Reopened, Reveal, Shown};
-use suzatary_core::mail::mailbox::MailError;
 use suzatary_core::mail::{MailMessage, MailRow};
+use suzatary_core::mail_error::MailError;
 use suzatary_core::secretary::proposal::Style;
 
 /// A synthetic SSN no person holds, as the form writes it and as its copy does.

@@ -259,7 +259,7 @@ pub(crate) mod tests {
             STORED_ANSWER_BYTES..4 * STORED_ANSWER_BYTES,
         ]) {
             let answer = answer_of(len);
-            let turn = crate::capability::Turn::Tool {
+            let turn = crate::secretary::model::Turn::Tool {
                 verb: crate::secretary::tool_name::ToolName::from("junk_digest"),
                 answer: answer.clone(),
                 outcome: crate::secretary::outcome::Outcome::Answered,

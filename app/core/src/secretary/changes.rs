@@ -12,7 +12,6 @@ use serde_json::{Map, Value};
 use crate::authoring::{self, NewTodo};
 use crate::believed::{Believed, Preview};
 use crate::capability::{Datetime, Typeset};
-use crate::chains::ChainPolicy;
 use crate::priced::{PRICE_SPELLINGS, Priced};
 use crate::record::{Node, Source, TodoEvent};
 use crate::refusal::{Refusal, shown as quoted};
@@ -551,80 +550,6 @@ pub fn checked(
     let preview =
         Preview::of(chain.objects()?).map_err(|failed| Refusal::internal(failed.to_string()))?;
     events_of(changeset, &preview, building).map(|_| ())
-}
-
-/// Applies a changeset under the write lock, building and verifying every act before any append.
-///
-/// Not a transaction: an append that fails leaves the earlier ones, and the refusal says how many.
-///
-/// # Errors
-/// [`Unapplied::Refused`] before the first append, [`Unapplied::Appending`] after it.
-pub fn apply(
-    caps: &crate::capability::Secretary<'_>,
-    policy: &ChainPolicy,
-    categories: &[&str],
-    zone: crate::zone::Zone,
-    changeset: &Changeset,
-    by: Writer,
-) -> Result<Vec<prodrome_core::event::Hash>, Unapplied> {
-    if changeset.chain() != policy.name.as_str() {
-        return Err(Unapplied::Refused(Refusal::internal(format!(
-            "this changeset is against {}, and this is {}",
-            quoted(changeset.chain()),
-            policy.name.as_str()
-        ))));
-    }
-    let _held = caps
-        .chain
-        .locked()
-        .map_err(|failed| Unapplied::Refused(Refusal::internal(failed.to_string())))?;
-    let at = caps.clock.now();
-    let chain = caps
-        .chain
-        .objects()
-        .map_err(|failed| Refusal::internal(failed.to_string()))
-        .and_then(|objects| {
-            Preview::of(objects).map_err(|failed| Refusal::internal(failed.to_string()))
-        })
-        .map_err(Unapplied::Refused)?;
-    let built = events_of(
-        changeset,
-        &chain,
-        &Building {
-            now: Moment { at, zone },
-            by,
-            categories,
-            untrusted: &policy.untrusted,
-            typeset: caps.render,
-        },
-    )
-    .map_err(Unapplied::Refused)?;
-
-    // Rendered and read back before anything lands.
-    let mut preview = chain;
-    for event in &built {
-        preview
-            .ahead(event.clone())
-            .map_err(|failed| Unapplied::Refused(Refusal::internal(failed.to_string())))?;
-        if let TodoEvent::Authored(record) = event {
-            crate::todos::render_current(preview.nodes(), at, &policy.untrusted, record)
-                .map_err(Unapplied::Refused)?;
-        }
-    }
-
-    let mut names = Vec::with_capacity(built.len());
-    for (index, event) in built.into_iter().enumerate() {
-        let name = caps.chain.append(event).map_err(|failed| {
-            Unapplied::Appending(Refusal::internal(format!(
-                "event {} of this changeset could not be appended ({failed}) — {} event(s) \
-                 before it are on the chain",
-                index + 1,
-                index
-            )))
-        })?;
-        names.push(name);
-    }
-    Ok(names)
 }
 
 /// The changeset drawn as rows of a diff, or the refusal of an act that no longer builds.

@@ -10,9 +10,9 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use prodrome_core::event::Hash;
 
-use crate::capability::Turn;
 use crate::conversation_id::ConversationId;
 use crate::secretary::held_lines::Held;
+use crate::secretary::model::Turn;
 use crate::secretary::outline::{Outline, Round, Rounds, Voices};
 use crate::secretary::own_round::OwnRound;
 use crate::secretary::readings::{Dress, Place, turn};

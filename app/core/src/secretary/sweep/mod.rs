@@ -10,16 +10,18 @@ use super::changes::Act;
 use super::daily::{Run, begin};
 use super::proposal::Proposal;
 use super::store::{Entry, Stored};
-use super::surface::{Effect, SecretaryCall, SecretaryVerb, Subset};
+use super::surface::{SecretaryCall, SecretaryVerb, Subset};
+use super::verb_name::Effect;
 use super::verbs::Show;
 use super::{Bound, MAX_ROUNDS};
 use crate::believed::one_outcome;
-use crate::capability::{Halt, Secretary};
+use crate::capability::Secretary;
 use crate::conversation::ask::Ask;
 use crate::conversation::round::{Rules, Sink};
 use crate::conversation_id::{ConversationId, Daily};
 use crate::deployment::Deployment;
 use crate::refusal::{Refusal, shown as quoted};
+use crate::secretary::model::Halt;
 use crate::verb::{Chained, Request, Verb};
 use candidates::{Candidate, Match, OpenTodo};
 
@@ -35,7 +37,9 @@ pub(crate) const CLIP_CHARS: usize = 4000;
 /// The verbs this round may call: every `Reads` verb plus `propose_changes`, derived from
 /// each verb's declared [`Effect`] so a new write cannot join.
 pub(crate) const SURFACE: Subset = Subset {
-    allows: |verb| verb.class().effect == Effect::Reads || verb == SecretaryVerb::ProposeChanges,
+    allows: |verb| {
+        verb.class().powers().effect == Effect::Reads || verb == SecretaryVerb::ProposeChanges
+    },
     refuses: |called, listed| {
         Refusal::not_found(format!(
             "the sweep may not call {} — its verbs are {listed}",
@@ -471,7 +475,7 @@ mod tests {
     #[test]
     fn the_sweep_allows_reads_and_propose_changes_and_nothing_else() {
         for &verb in SecretaryVerb::ALL {
-            let expected = match verb.class().effect {
+            let expected = match verb.class().powers().effect {
                 Effect::Reads => true,
                 Effect::Proposes => verb.name() == "propose_changes",
                 Effect::Binds(_)

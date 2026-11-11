@@ -97,7 +97,7 @@ const PROBE_CUT: usize = 160;
 /// Parts of every shape a log shows, each labelled as the digest labels it: a line of each kind
 /// of turn, clean and tainted, a summary, and a node not summarised yet.
 fn probe() -> Vec<(Label, Body)> {
-    use crate::capability::{ToolCall, Turn};
+    use crate::secretary::model::{ToolCall, Turn};
     use crate::secretary::outcome::Outcome;
     let at = || crate::capability::Datetime::new(2026, 10, 25, 9, 0, 0, 0).expect("an instant");
     let tool = |outcome| Turn::Tool {

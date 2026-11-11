@@ -1,6 +1,7 @@
 use super::*;
-use crate::capability::{Datetime, SessionId, Turn};
+use crate::capability::Datetime;
 use crate::conversation_id::ConversationId;
+use crate::secretary::model::{SessionId, Turn};
 use crate::secretary::proposal::{Draft, Proposal, Reasons};
 use crate::secretary::responded::{Done, Responded, Tried, Withdrawal};
 
@@ -370,7 +371,7 @@ fn answer(text: &str) -> Turn {
 fn calling(verb: &str) -> Turn {
     Turn::Model {
         text: String::new(),
-        calls: vec![crate::capability::ToolCall {
+        calls: vec![crate::secretary::model::ToolCall {
             verb: verb.into(),
             args: std::collections::BTreeMap::new(),
         }],

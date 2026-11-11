@@ -8,7 +8,7 @@
 
 use prodrome_core::digest::Measure;
 
-use crate::capability::Turn;
+use crate::secretary::model::Turn;
 use crate::secretary::stamp::Stamp;
 use crate::secretary::store::Entry;
 use crate::secretary::taint::Taint;

@@ -333,7 +333,7 @@ fn completing_an_already_resolved_todo_is_refused_and_proposes_nothing() {
     let refused = swept.stored.turns.iter().any(|said| {
         matches!(
             &said.turn,
-            suzatary_core::capability::Turn::Tool { verb, outcome, .. }
+            suzatary_core::secretary::model::Turn::Tool { verb, outcome, .. }
                 if verb.as_str() == "propose_changes" && outcome.refused()
         )
     });
@@ -383,7 +383,7 @@ fn a_todo_add_call_is_refused_by_the_verb_set() {
 
     assert!(swept.proposed.is_empty());
     let refusal = swept.stored.turns.iter().find_map(|said| match &said.turn {
-        suzatary_core::capability::Turn::Tool {
+        suzatary_core::secretary::model::Turn::Tool {
             verb,
             answer,
             outcome,
@@ -451,7 +451,7 @@ fn completing_an_open_todo_with_no_candidates_is_refused_and_proposes_nothing() 
         swept.stored.proposals
     );
     let refusal = swept.stored.turns.iter().find_map(|said| match &said.turn {
-        suzatary_core::capability::Turn::Tool {
+        suzatary_core::secretary::model::Turn::Tool {
             verb,
             answer,
             outcome,

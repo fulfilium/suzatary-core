@@ -6,6 +6,7 @@ pub mod act_lines;
 pub mod act_vocabulary;
 pub mod acts;
 pub mod afresh;
+pub mod answers;
 pub mod attached;
 pub mod attachment_source;
 pub mod bootstrap;
@@ -17,6 +18,7 @@ pub mod carried;
 pub mod caused;
 pub mod changes;
 pub mod coding;
+pub mod compact;
 pub mod compact_ask;
 pub mod compact_budget;
 pub mod compacting;
@@ -72,6 +74,8 @@ pub mod memories;
 pub mod memory;
 pub mod memory_event;
 pub mod merged_patches;
+pub mod model;
+pub mod model_sessions;
 pub mod noticed;
 pub mod object_stores;
 pub mod opened;
@@ -122,12 +126,13 @@ pub mod two_phase;
 pub mod undo;
 pub mod upload_standing;
 pub mod verb_answer;
+pub mod verb_name;
 pub mod verbs;
 pub mod words;
 
 use serde_json::{Map, Value};
 
-use crate::capability::{Clock, Halt, Secretary, Turn};
+use crate::capability::{Clock, Secretary};
 use crate::chains::ChainPolicy;
 use crate::conversation::ask::Ask;
 use crate::conversation::round::{Round, Rules, Sink, Transcript};
@@ -136,13 +141,14 @@ use crate::deployment::Deployment;
 use crate::reference::{ProposalRef, Reference, TodoRef};
 use crate::refusal::{Refusal, shown};
 use crate::secretary::conversations::{append, read};
+use crate::secretary::model::{Halt, Turn};
 use crate::verb::Request;
 pub use call::Call;
 pub use store::{ConversationState, state};
 use store::{Entry, Stored};
 pub(crate) use surface::SecretarySurface;
 use surface::Subset;
-pub use surface::{Binding, Effect, SecretaryCall, SecretaryVerb, tools};
+pub use surface::{SecretaryCall, SecretaryVerb, tools};
 use verb_answer::VerbAnswer;
 
 /// Who a chain write from this surface is by, fixed here so no call's arguments can change it.
@@ -264,7 +270,7 @@ pub fn converse(
     )?;
     answer(
         caps,
-        || crate::capability::Pick::Turn(Box::new(caps.model)),
+        || crate::secretary::model::Pick::Turn(Box::new(caps.model)),
         deployment,
         settables,
         chains,
@@ -286,7 +292,7 @@ pub fn converse(
 )]
 pub fn answer<'p>(
     caps: &Secretary<'_>,
-    pick: impl FnOnce() -> crate::capability::Pick<'p>,
+    pick: impl FnOnce() -> crate::secretary::model::Pick<'p>,
     deployment: &Deployment,
     settables: &crate::settings::Settables,
     chains: &[Bound<'_>],
@@ -304,13 +310,13 @@ pub fn answer<'p>(
         |request: Request<SecretaryCall>| self::run(deployment, settables, chains, id, request);
     // A lost session is asked statelessly of the same model, never of a second pick.
     let ask = match &pick {
-        crate::capability::Pick::Held(model) => Ask::Session {
+        crate::secretary::model::Pick::Held(model) => Ask::Session {
             model: *model,
             fallback: *model,
             memories: caps.memories,
             topics: caps.topics,
         },
-        crate::capability::Pick::Turn(model) => Ask::Window {
+        crate::secretary::model::Pick::Turn(model) => Ask::Window {
             model: model.as_ref(),
             memories: caps.memories,
             topics: caps.topics,

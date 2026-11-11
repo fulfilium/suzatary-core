@@ -6,7 +6,7 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use prodrome_core::event::Actor;
-use suzatary_core::capability::{Agent, Model, RenderCache, Secretary};
+use suzatary_core::capability::{Agent, RenderCache, Secretary};
 use suzatary_core::chains::ChainPolicy;
 use suzatary_core::decisions::{DecisionEvent, Decisions};
 use suzatary_core::mail::account::Roster;
@@ -20,6 +20,7 @@ use suzatary_core::secretary::inbox_event::InboxEvent;
 use suzatary_core::secretary::memories::{Memories, ReadMemories};
 use suzatary_core::secretary::memory::Fact;
 use suzatary_core::secretary::memory_event::MemoryEvent;
+use suzatary_core::secretary::model::Model;
 use suzatary_core::secretary::recollection::Recollection;
 use suzatary_core::signatures::Signers;
 use suzatary_core::store::{Only, Reads, Signing};

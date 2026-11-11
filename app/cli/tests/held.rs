@@ -9,7 +9,7 @@ use std::sync::Arc;
 
 use common::{FakeCorpus, FakeMessage, FakeModel, Fakes};
 use suzatary_core::held_value::{Handle, HeldFile, Reopened, Reveal, Shown};
-use suzatary_core::mail::mailbox::MailError;
+use suzatary_core::mail_error::MailError;
 use suzatary_core::redact::Kind;
 
 /// A synthetic SSN no person holds.

@@ -6,9 +6,9 @@ mod common;
 use std::sync::Arc;
 
 use common::{FakeMailbox, FakeModel, Fakes};
-use suzatary_core::capability::Turn;
 use suzatary_core::enclosed::Enclosure;
 use suzatary_core::mail::AttachmentMeta;
+use suzatary_core::secretary::model::Turn;
 
 const PDF: &[u8] = b"%PDF-1.7\n1 0 obj << /Type /Catalog >> endobj\n%%EOF\n";
 

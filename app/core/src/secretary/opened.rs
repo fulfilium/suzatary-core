@@ -139,10 +139,10 @@ impl Fold {
 #[cfg(test)]
 mod tests {
     use super::{HeldLines, Opened};
-    use crate::capability::Turn;
     use crate::conversation_id::ConversationId;
     use crate::secretary::conversations::{Conversations, InMemory};
     use crate::secretary::erasure::Erasure;
+    use crate::secretary::model::Turn;
     use crate::secretary::store::{Entry, Kind};
     use crate::secretary::transcript;
     use crate::secretary::words::Words;

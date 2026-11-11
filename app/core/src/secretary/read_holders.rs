@@ -5,12 +5,12 @@ use std::collections::BTreeSet;
 
 use serde_json::Value;
 
-use crate::capability::Turn;
 use crate::held_value::{Handle, HeldFile, Holder};
 use crate::secretary::attachment_source::AttachmentSource;
+use crate::secretary::model::Turn;
 use crate::secretary::store::Stored;
-use crate::secretary::surface::SecretaryVerb;
 use crate::secretary::tool_name::ToolName;
+use crate::secretary::verb_name::VerbName;
 
 /// The notmuch ids of every message a `show`, a `search` or a reference the person pointed at
 /// answered in a conversation, by the answers' `id` fields, and the source of every file a
@@ -38,12 +38,11 @@ impl ReadHolders {
                 continue;
             };
             match verb {
-                ToolName::Verb(SecretaryVerb::Show | SecretaryVerb::Search)
-                | ToolName::Reference => named(&value, &mut read.messages),
+                ToolName::Verb(VerbName::Show | VerbName::Search) | ToolName::Reference => {
+                    named(&value, &mut read.messages);
+                }
                 ToolName::Verb(
-                    SecretaryVerb::Attachments
-                    | SecretaryVerb::DriveRead
-                    | SecretaryVerb::UploadRead,
+                    VerbName::Attachments | VerbName::DriveRead | VerbName::UploadRead,
                 ) => {
                     if let Some(file) = value
                         .get(crate::secretary::verb_answer::SOURCE)

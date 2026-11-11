@@ -4,9 +4,10 @@
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use suzatary_core::capability::{ModelSessions, RenderCache};
+use suzatary_core::capability::RenderCache;
 use suzatary_core::secretary::conversations::Conversations;
 use suzatary_core::secretary::line_event::LineEvent;
+use suzatary_core::secretary::model_sessions::ModelSessions;
 use suzatary_core::secretary::opened::Opened;
 
 use crate::objects;

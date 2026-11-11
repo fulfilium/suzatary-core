@@ -271,7 +271,7 @@ fn remember_after_a_note_on(
     let line = stored
         .turns
         .iter()
-        .find(|said| matches!(said.turn, suzatary_core::capability::Turn::Act { .. }))
+        .find(|said| matches!(said.turn, suzatary_core::secretary::model::Turn::Act { .. }))
         .expect("the act's line");
     (
         answer,
@@ -334,7 +334,12 @@ fn a_turn_pointing_at_an_unconfirmed_agent_todo_is_stamped_so() {
             .turns
             .iter()
             .rev()
-            .find(|said| matches!(said.turn, suzatary_core::capability::Turn::Person { .. }))
+            .find(|said| {
+                matches!(
+                    said.turn,
+                    suzatary_core::secretary::model::Turn::Person { .. }
+                )
+            })
             .and_then(|said| said.by.clone())
             .map(String::from)
     };
@@ -409,7 +414,12 @@ fn an_edit_pointing_at_an_unconfirmed_agent_todo_is_stamped_so() {
         .turns
         .iter()
         .rev()
-        .find(|said| matches!(said.turn, suzatary_core::capability::Turn::Person { .. }))
+        .find(|said| {
+            matches!(
+                said.turn,
+                suzatary_core::secretary::model::Turn::Person { .. }
+            )
+        })
         .expect("the edited question");
     assert_eq!(
         line.by.clone().map(String::from).as_deref(),

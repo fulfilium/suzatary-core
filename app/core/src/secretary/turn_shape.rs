@@ -9,10 +9,10 @@
 use serde::{Deserialize, Serialize};
 
 use crate::attachment::{Attachment, AttachmentId};
-use crate::capability::{ToolCall, Turn};
 use crate::enclosed::{Enclosed, Enclosure};
 use crate::reference::Reference;
 use crate::secretary::line_words::{AttachmentWords, LineWords};
+use crate::secretary::model::{ToolCall, Turn};
 use crate::secretary::outcome::Outcome;
 use crate::secretary::tool_name::ToolName;
 use crate::secretary::words::{Gone, Words};

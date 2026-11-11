@@ -16,11 +16,9 @@ use crate::escape::Escaped;
 
 mod agent;
 mod answering;
-mod answers;
 mod briefings;
 mod calendar;
 mod clock;
-mod compact;
 mod drive;
 mod entropy;
 mod render_cache;
@@ -29,8 +27,6 @@ mod render_cache;
 #[path = "../../tests/support/joining.rs"]
 mod joining;
 mod manuals;
-mod model;
-mod model_sessions;
 // Test support, never production.
 #[cfg(any(test, feature = "nothing"))]
 #[path = "../../tests/support/nothing.rs"]
@@ -51,23 +47,14 @@ mod whois;
 
 pub use agent::Agent;
 pub use answering::Answering;
-pub use answers::{AnswerError, Answers};
 pub use briefings::{BriefingError, Briefings};
 pub use calendar::Calendar;
 pub use clock::Clock;
-pub use compact::Compact;
 pub use drive::{Drive, DriveFailure};
 pub use entropy::{Entropy, SALT_BYTES};
 #[cfg(any(test, feature = "nothing"))]
 pub use joining::Joining;
 pub use manuals::{Manual, Manuals};
-#[cfg(feature = "fixture")]
-pub use model::pulled;
-pub use model::{
-    Conversation, Delta, Halt, Model, ModelError, NotAUuid, Reply, Session, SessionId,
-    SessionModel, Sessioned, TokenUsage, ToolCall, Turn,
-};
-pub use model_sessions::ModelSessions;
 #[cfg(any(test, feature = "nothing"))]
 pub use nothing::{Nothing, Parses};
 pub use notify::{Delivered, Notify, NotifyError, Printed, Push};
@@ -220,33 +207,6 @@ impl Content {
             Content::Provisional(source) => source,
         }
     }
-}
-
-/// The model one round asks, picked once for that round and owned by it: nothing of one
-/// round's pick reaches another round or another conversation.
-pub enum Pick<'a> {
-    /// The model that holds sessions.
-    Held(&'a dyn SessionModel),
-    /// A model with no session, picked for this round alone.
-    Turn(Box<dyn Model + 'a>),
-}
-
-impl Pick<'_> {
-    /// The model picked, asked statelessly.
-    #[must_use]
-    pub fn model(&self) -> &dyn Model {
-        match self {
-            Pick::Held(model) => *model,
-            Pick::Turn(model) => model.as_ref(),
-        }
-    }
-}
-
-/// Which model a round asks, answered as a value rather than a `SessionModel` that always
-/// fails beside a bool.
-pub trait Sessions: Sync {
-    /// The model this round asks, read now.
-    fn pick(&self) -> Pick<'_>;
 }
 
 #[cfg(test)]

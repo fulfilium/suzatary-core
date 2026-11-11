@@ -1,10 +1,10 @@
-//! The model's laws ([`crate::capability::Model`], the brain `choose_brain` picks), read through
+//! The model's laws ([`crate::secretary::model::Model`], the brain `choose_brain` picks), read through
 //! a rig that scripts the far end.
 
 use std::fmt;
 
-use super::{Broken, hold};
-use crate::capability::{Conversation, Model, Reply, Turn};
+use crate::conformance::{Broken, hold};
+use crate::secretary::model::{Conversation, Model, Reply, Turn};
 
 /// A law of a model, in the order the suite asks them.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]

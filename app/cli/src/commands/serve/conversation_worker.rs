@@ -10,11 +10,11 @@ use std::collections::HashMap;
 use std::sync::{Arc, Condvar, Mutex, PoisonError};
 use std::time::Duration;
 
-use suzatary_core::capability::{Halt, Sessions, Turn};
 use suzatary_core::conversation::round::Ending;
 use suzatary_core::conversation_id::ConversationId;
 use suzatary_core::refusal::Refusal;
 use suzatary_core::rule::{Engine, Firing};
+use suzatary_core::secretary::model::{Halt, Sessions, Turn};
 use suzatary_core::secretary::rules::{Conversational, RULES};
 use suzatary_core::secretary::store::ConversationState;
 use suzatary_core::secretary::{self, transcript};

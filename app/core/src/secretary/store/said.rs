@@ -1,7 +1,8 @@
 //! One stored turn, with its instant.
 
 use super::{Entry, stopped_by};
-use crate::capability::{Datetime, Turn};
+use crate::capability::Datetime;
+use crate::secretary::model::Turn;
 use crate::secretary::stamp::Stamp;
 
 /// One stored turn, with the instant its `said` line carried, so it can be placed on a day or

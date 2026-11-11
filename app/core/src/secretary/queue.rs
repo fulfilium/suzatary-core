@@ -2,7 +2,7 @@
 //! it, so "a queued message is never sent twice" is a property of a derivation, not a lock. For
 //! one writer it is the owed register (`transcript::Transcript::owed`), which a law holds equal.
 
-use crate::capability::Turn;
+use crate::secretary::model::Turn;
 use crate::secretary::stamp::Stamp;
 use crate::secretary::store::{Said, Scope, Stored};
 use crate::secretary::tool_name::ToolName;
@@ -65,14 +65,14 @@ impl<'a> Pending<'a> {
     /// What a resumed session is sent: the memory's heading, if anything moved, then the waiting
     /// turns.
     #[must_use]
-    pub fn delta(&self, heading: Option<Turn>) -> crate::capability::Delta {
+    pub fn delta(&self, heading: Option<Turn>) -> crate::secretary::model::Delta {
         let first = self.first.turn.clone();
         let rest = self.rest.iter().map(|said| said.turn.clone());
         match heading {
             Some(heading) => {
-                crate::capability::Delta::new(heading, std::iter::once(first).chain(rest))
+                crate::secretary::model::Delta::new(heading, std::iter::once(first).chain(rest))
             }
-            None => crate::capability::Delta::new(first, rest),
+            None => crate::secretary::model::Delta::new(first, rest),
         }
     }
 }
@@ -210,7 +210,7 @@ mod tests {
     fn calling_model(text: &str, verb: &str) -> Turn {
         Turn::Model {
             text: text.to_owned(),
-            calls: vec![crate::capability::ToolCall {
+            calls: vec![crate::secretary::model::ToolCall {
                 verb: verb.into(),
                 args: std::collections::BTreeMap::new(),
             }],

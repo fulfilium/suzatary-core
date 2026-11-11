@@ -227,7 +227,7 @@ mod tests {
                     },
                     crate::secretary::store::Entry::Said {
                         at: crate::capability::Datetime::new(2026, 9, 15, 9, 2, 0, 0).expect("an instant"),
-                        turn: crate::capability::Turn::Model {
+                        turn: crate::secretary::model::Turn::Model {
                             text: answer.clone(),
                             calls: Vec::new(),
                         },

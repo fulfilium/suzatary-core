@@ -1,6 +1,6 @@
 //! What the model's CLI keeps of each sessioned round, as an erasure reaches it.
 
-use crate::capability::SessionId;
+use crate::secretary::model::SessionId;
 
 /// The model CLI's session files: every turn a session was sent and every answer, in the clear,
 /// so a session is a copy of its conversation's words and goes before the keys that open them.

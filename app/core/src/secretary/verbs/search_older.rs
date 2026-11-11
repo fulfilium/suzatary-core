@@ -104,9 +104,10 @@ mod tests {
     use crate::chains::{ChainName, ChainPolicy, Chains};
     use crate::conversation_id::ConversationId;
     use crate::deployment::Deployment;
-    use crate::mail::mailbox::{MailError, Mailbox, Query};
+    use crate::mail::mailbox::{Mailbox, Query};
     use crate::mail::older::{AccountOlder, Found, Matched, Outcome};
     use crate::mail::older_mail::OlderMail;
+    use crate::mail_error::MailError;
 
     /// A server that records what it was asked and finds one message per account.
     #[derive(Default)]

@@ -4,7 +4,7 @@ use std::fmt;
 
 use serde::{Deserialize, Serialize};
 
-use super::surface::SecretaryVerb;
+use super::verb_name::VerbName;
 
 /// A name a transcript holds beside a call or an answer. Stored and debugged as the bare name it
 /// prints, so every transcript and every pin of one reads as it did when the name was a string.
@@ -12,7 +12,7 @@ use super::surface::SecretaryVerb;
 #[serde(from = "String", into = "String")]
 pub enum ToolName {
     /// One of the secretary's verbs.
-    Verb(SecretaryVerb),
+    Verb(VerbName),
     /// The memory's heading, filed as a verb-shaped turn so a model reads it as data like any
     /// answer, never as the owner's words.
     Memory,
@@ -41,7 +41,7 @@ impl ToolName {
 
     /// The verb it names, if the surface lists it.
     #[must_use]
-    pub const fn verb(&self) -> Option<SecretaryVerb> {
+    pub const fn verb(&self) -> Option<VerbName> {
         match self {
             Self::Verb(verb) => Some(*verb),
             Self::Memory | Self::Reference | Self::Unlisted(_) => None,
@@ -54,7 +54,7 @@ impl From<&str> for ToolName {
         match name {
             "your_memory" => Self::Memory,
             "reference" => Self::Reference,
-            _ => SecretaryVerb::named(name)
+            _ => VerbName::named(name)
                 .map_or_else(|| Self::Unlisted(Unlisted(name.to_owned())), Self::Verb),
         }
     }
@@ -63,12 +63,6 @@ impl From<&str> for ToolName {
 impl From<String> for ToolName {
     fn from(name: String) -> Self {
         Self::from(name.as_str())
-    }
-}
-
-impl From<SecretaryVerb> for ToolName {
-    fn from(verb: SecretaryVerb) -> Self {
-        Self::Verb(verb)
     }
 }
 
@@ -106,7 +100,7 @@ mod tests {
     use super::*;
 
     fn every_listed() -> Vec<ToolName> {
-        SecretaryVerb::ALL
+        VerbName::ALL
             .iter()
             .copied()
             .map(ToolName::Verb)

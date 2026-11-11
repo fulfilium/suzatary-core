@@ -1,16 +1,16 @@
 //! What a round has read and who opened it, the two facts the binding gate reads.
 //!
-//! Deny by default: a verb is [`Taint::Clean`] only where `SecretaryVerb` says so, and a turn is
+//! Deny by default: a verb is [`Taint::Clean`] only where `VerbName` says so, and a turn is
 //! clean only when it is the model's own, a clean verb's answer, or stamped as the owner's.
 
-use crate::capability::Turn;
 use crate::conversation_id::ConversationId;
 use crate::secretary::memory::Origin;
+use crate::secretary::model::Turn;
 use crate::secretary::queue;
 use crate::secretary::stamp::Stamp;
 use crate::secretary::store::{Entry, Said, Stored};
-use crate::secretary::surface::SecretaryVerb;
 use crate::secretary::turn_shape::{TurnShape, shape};
+use crate::secretary::verb_name::VerbName;
 
 /// Whether an answer can carry somebody else's words. Ordered `Clean < Tainted`, a
 /// join-semilattice with `Clean` its unit: what a span of lines carries is the join of its lines'.
@@ -66,11 +66,11 @@ fn of_turn(turn: &Turn, stamp: Option<&Stamp>) -> Taint {
     match shape(turn) {
         TurnShape::Model { .. } => Taint::Clean,
         TurnShape::Tool { verb, outcome, .. } => match verb.verb() {
-            Some(SecretaryVerb::Zoom) if !outcome.refused() => match turn {
+            Some(VerbName::Zoom) if !outcome.refused() => match turn {
                 Turn::Tool { answer, .. } => zoomed(answer),
                 _ => Taint::Tainted,
             },
-            Some(verb) => verb.class().taint,
+            Some(verb) => verb.powers().taint,
             None => Taint::Tainted,
         },
         TurnShape::Person { attachments, .. }
@@ -205,8 +205,8 @@ pub fn opener(stored: &Stored) -> Option<Origin> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::capability::ToolCall;
     use crate::conversation_id::ConversationId;
+    use crate::secretary::model::ToolCall;
     use crate::secretary::store::Entry;
 
     fn said(turn: Turn, by: Option<&str>) -> Entry {
@@ -309,9 +309,9 @@ mod tests {
 
     #[test]
     fn only_seven_verbs_are_clean() {
-        let clean: Vec<&str> = crate::secretary::SecretaryVerb::ALL
+        let clean: Vec<&str> = VerbName::ALL
             .iter()
-            .filter(|verb| verb.class().taint == Taint::Clean)
+            .filter(|verb| verb.powers().taint == Taint::Clean)
             .map(|verb| verb.name())
             .collect();
         assert_eq!(
@@ -441,7 +441,7 @@ mod tests {
             .chain(chat(40))
             .chain([Entry::Session {
                 at: crate::capability::Datetime::new(2026, 9, 25, 9, 0, 0, 0).expect("an instant"),
-                session: crate::capability::SessionId::minted("default/4"),
+                session: crate::secretary::model::SessionId::minted("default/4"),
                 model: "m".to_owned(),
                 cwd: String::new(),
                 surface: None,
@@ -464,7 +464,7 @@ mod tests {
         // `from` is the first turn the opening sent, as the opening recorded it.
         let session_line = |from: usize| Entry::Kept {
             at: crate::capability::Datetime::new(2026, 9, 25, 9, 0, 0, 0).expect("an instant"),
-            session: crate::capability::SessionId::minted("default/4"),
+            session: crate::secretary::model::SessionId::minted("default/4"),
             model: "m".to_owned(),
             cwd: String::new(),
             surface: None,

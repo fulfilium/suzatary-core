@@ -230,7 +230,7 @@ pub struct ModelJob {
 pub enum Calls {
     /// Calls are recorded under `key`.
     Recorded {
-        /// The model's name, as [`crate::capability::Model::name`] spells it.
+        /// The model's name, as [`crate::secretary::model::Model::name`] spells it.
         key: String,
         /// The secret the model reads.
         credential: String,

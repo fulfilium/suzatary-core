@@ -4,11 +4,12 @@
 use prodrome_core::event::Hash;
 use serde_json::{Map, Value};
 
-use crate::capability::{Clock, Halt, ModelError, ToolCall, Turn};
+use crate::capability::Clock;
 use crate::conversation::ask::{Answered, Ask, Asked, Sent};
 use crate::conversation_id::ConversationId;
 use crate::escape::escape_markup;
 use crate::refusal::Refusal;
+use crate::secretary::model::{Halt, ModelError, ToolCall, Turn};
 use crate::secretary::queue;
 use crate::secretary::store::{Entry, Scope, Stored};
 use crate::secretary::surface::{SecretaryCall, Subset};
@@ -290,7 +291,7 @@ impl Round {
             self.steps += 1;
             let after = self.calls.last().map(|called| called.verb.clone());
             #[cfg(feature = "fixture")]
-            let _asking = crate::capability::pulled::Asking::of(rules.sink.halt);
+            let _asking = crate::secretary::model::pulled::Asking::of(rules.sink.halt);
             let reply = rules
                 .ask
                 .ask(at.id, rules.system, &tools, &stored, &waiting, rules.sink)

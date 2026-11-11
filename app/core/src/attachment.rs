@@ -279,7 +279,7 @@ mod tests {
 
     #[test]
     fn a_turn_without_photos_reads_and_writes_as_it_always_did() {
-        use crate::capability::Turn;
+        use crate::secretary::model::Turn;
         let old = r#"{"who":"person","text":"hi","references":[]}"#;
         let turn: Turn = serde_json::from_str(old).expect("a transcript from before photos");
         assert!(matches!(&turn, Turn::Person { attachments, .. } if attachments.is_empty()));
@@ -299,7 +299,7 @@ mod tests {
 
     #[test]
     fn a_stored_photo_turn_reads_and_writes_byte_for_byte() {
-        use crate::capability::Turn;
+        use crate::secretary::model::Turn;
         let id = AttachmentId::of(PNG);
         let stored = format!(
             r#"{{"who":"person","text":"look","references":[],"attachments":[{{"id":"{id}","media_type":"image/png"}}]}}"#

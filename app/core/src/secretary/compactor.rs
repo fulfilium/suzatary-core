@@ -6,8 +6,8 @@
 //! short and stored as though it had been said. Each call is first handed to `before`, which
 //! records it durably and may refuse it, so a call that then fails was still counted.
 
-use crate::capability::Compact;
 use crate::refusal::Refusal;
+use crate::secretary::compact::Compact;
 use crate::secretary::compact_ask::{Ask, Unfit};
 use crate::secretary::digest_line::{Line, NODE_BYTES, NotALine};
 
@@ -73,8 +73,8 @@ mod tests {
     use std::sync::Mutex;
 
     use super::*;
-    use crate::capability::ModelError;
     use crate::model_name::ModelName;
+    use crate::secretary::model::ModelError;
 
     /// Answers of the given lengths in turn, and keeps every question.
     struct Lengths {

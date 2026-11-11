@@ -4,8 +4,8 @@
 //! A person's turn or an act opens a round, the same partition `web/src/chat/rounds.ts` draws;
 //! `app/core/tests/about-fixture.json` is read by both sides' tests so the two cannot drift.
 
-use crate::capability::Turn;
 use crate::reference::{self, Reference};
+use crate::secretary::model::Turn;
 use crate::secretary::store::Said;
 
 /// Inclusive `[start, end]` turn-index spans partitioning the whole transcript with no gaps.

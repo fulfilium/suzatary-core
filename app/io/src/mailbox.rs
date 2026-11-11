@@ -39,12 +39,13 @@ use suzatary_core::held_value::{self, Reopened, Reveal};
 use suzatary_core::mail::account::{MailAccount, Roster};
 use suzatary_core::mail::hash_prefix::{Ambiguous, HashPrefix, Resolved};
 use suzatary_core::mail::known::Known;
-use suzatary_core::mail::mailbox::{MailError, Mailbox, Query};
+use suzatary_core::mail::mailbox::{Mailbox, Query};
 use suzatary_core::mail::verbs;
 use suzatary_core::mail::{
     AttachmentFile, AttachmentMeta, MAX_BODY_CHARS, MailLink, MailMessage, MailRow, Stored,
     headers_of, web_links,
 };
+use suzatary_core::mail_error::MailError;
 use suzatary_core::spelling::clip;
 
 /// notmuch as a subprocess, and the maildir it names, as [`Mailbox`].

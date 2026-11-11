@@ -1059,7 +1059,7 @@ mod tests {
     use proptest::prelude::Strategy as _;
 
     use super::*;
-    use crate::capability::{ToolCall, Turn};
+    use crate::secretary::model::{ToolCall, Turn};
     use crate::secretary::salted_text::Words as _;
     use crate::secretary::words::{Gone, Words};
 

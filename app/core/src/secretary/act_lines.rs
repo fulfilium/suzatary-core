@@ -70,7 +70,7 @@ pub struct ActLine {
     pub note: String,
 }
 
-/// Append an act's note as a [`Turn::Act`](crate::capability::Turn::Act) stamped `by`, or
+/// Append an act's note as a [`Turn::Act`](crate::secretary::model::Turn::Act) stamped `by`, or
 /// nothing when the note is empty.
 ///
 /// # Errors
@@ -90,7 +90,7 @@ pub fn note_act(
         id,
         &Entry::Said {
             at: line.at,
-            turn: crate::capability::Turn::Act {
+            turn: crate::secretary::model::Turn::Act {
                 text: describe_act(&crate::spelling::capitalised(&line.actor), line.verb, note),
                 references: vec![line.reference.clone()],
             },
@@ -162,11 +162,12 @@ pub fn heard_from_objects(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::capability::{Datetime, Turn};
+    use crate::capability::Datetime;
     use crate::conversation_id::ConversationId;
     use crate::mail::address::EmailAddress;
     use crate::reference::ProposalRef;
     use crate::secretary::acts::Act;
+    use crate::secretary::model::Turn;
     use crate::secretary::proposal::{Proposal, Reasons};
     use crate::secretary::responded::{Done, Responded};
     use crate::secretary::store::Entry;
@@ -382,8 +383,8 @@ mod tests {
     /// the window still makes it a card.
     #[test]
     fn a_noted_act_in_the_default_conversation_leaves_his_round_clean() {
-        use crate::capability::ToolCall;
         use crate::conversation_id::DEFAULT;
+        use crate::secretary::model::ToolCall;
         let said = |turn: Turn, by: Option<&str>| Entry::Said {
             at: now(),
             turn,

@@ -6,11 +6,11 @@ use super::gate::Gate;
 use super::proposal::{Proposal, Reasons};
 use super::proposer::Proposer;
 use super::responded::Withdrawal;
-use super::surface::Binding;
+use super::verb_name::Binding;
 use crate::agent::verbs;
 use crate::capability::Secretary;
 use crate::conversation_id::ConversationId;
-use crate::mail::mailbox::MailError;
+use crate::mail_error::MailError;
 use crate::reference::{Reference, TodoRef};
 use crate::refusal::{Refusal, shown};
 use crate::secretary::{conversations, transcript};
@@ -115,8 +115,6 @@ pub use weather::Weather;
 pub use web::Web;
 pub(crate) use withdraw_proposal::WithdrawProposal;
 
-// --- attachments -------------------------------------------------------------
-
 /// Keep a file for the model, in the box's words when it cannot be.
 fn kept(caps: &Secretary<'_>, bytes: &[u8]) -> Result<crate::attachment::AttachmentId, String> {
     let id = crate::attachment::AttachmentId::of(bytes);
@@ -134,7 +132,6 @@ pub(crate) fn mail_refusal(failed: &MailError) -> Refusal {
     }
 }
 
-// --- filing a proposal -------------------------------------------------------
 //
 // Every `propose_*` verb files its act in the inbox as `assistant`; `serves` is kept as data.
 
@@ -216,8 +213,6 @@ fn withdrawable(
     }
 }
 
-// --- drive -------------------------------------------------------------------
-
 /// A `path` argument, parsed.
 fn drive_path(path: &str) -> Result<crate::drive_path::DrivePath, Refusal> {
     path.parse()
@@ -238,8 +233,6 @@ pub(crate) fn drive_refusal(failed: &crate::capability::DriveFailure) -> Refusal
     }
 }
 
-// --- junk --------------------------------------------------------------------
-
 fn not_a_junk_account(account: &str, known: &[String]) -> Refusal {
     Refusal::bad_request(format!(
         "{} is not an account whose Junk this box reads; those are: {}",
@@ -259,8 +252,6 @@ fn references(list: &str, field: &str) -> Result<Vec<Reference>, Refusal> {
         })
         .collect()
 }
-
-// --- the memory --------------------------------------------------------------
 
 /// A fact written as a card the owner taps, in a round that has read something not his own:
 /// its words kept under the memory's hold and named by the card.
@@ -312,8 +303,6 @@ fn clean_round(call: &super::Call<'_>, instead: &str) -> Result<super::memory::O
         Gate::Binds(said) => Ok(said),
     }
 }
-
-// --- repositories ------------------------------------------------------------
 
 /// A read's failure, in the words the model can act on.
 pub(crate) fn refused_by(failure: &crate::capability::RepoFailure) -> Refusal {

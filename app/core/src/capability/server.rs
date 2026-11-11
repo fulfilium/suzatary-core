@@ -1,4 +1,6 @@
-use super::{Agent, Answers, Notify, Secretary, Sessions, Whois};
+use super::{Agent, Notify, Secretary, Whois};
+use crate::secretary::answers::Answers;
+use crate::secretary::model::Sessions;
 
 /// What the serving process supplies: the secretary's effects, since it runs the
 /// secretary, plus peers and phones. Nothing here sends mail; only a route holding

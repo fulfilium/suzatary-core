@@ -869,7 +869,7 @@ fn only_the_request_crossed(
     before: &suzatary_core::secretary::store::Stored,
     after: &suzatary_core::secretary::store::Stored,
 ) {
-    use suzatary_core::capability::Turn;
+    use suzatary_core::secretary::model::Turn;
     use suzatary_core::secretary::taint::{self, Taint};
     let request = before
         .turns

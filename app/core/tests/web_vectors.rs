@@ -18,10 +18,7 @@ use prodrome_core::fpl::{self, mk_decay, mk_flat};
 use prodrome_core::policy::Untrusted;
 
 use suzatary_core::capability::Entropy;
-use suzatary_core::capability::{
-    AnswerError, Answers, Clock, Datetime, Html, Model, ModelError, Nothing, Render, RenderError,
-    Server, Turn,
-};
+use suzatary_core::capability::{Clock, Datetime, Html, Nothing, Render, RenderError, Server};
 use suzatary_core::cast::{self, CAST};
 use suzatary_core::chain_set::Read;
 use suzatary_core::chains::{ChainName, ChainPolicy};
@@ -33,10 +30,12 @@ use suzatary_core::record::{Envelope, EventStore, SubTodo, mk_authored, mk_sourc
 use suzatary_core::reference::{ProposalRef, Reference};
 use suzatary_core::routes;
 use suzatary_core::secretary::about;
+use suzatary_core::secretary::answers::{AnswerError, Answers};
 use suzatary_core::secretary::conversations;
 use suzatary_core::secretary::inbox::{self, ProposalId};
 use suzatary_core::secretary::memories::Memories;
 use suzatary_core::secretary::memory::{Fact, Kind};
+use suzatary_core::secretary::model::{Model, ModelError, Turn};
 use suzatary_core::secretary::proposal::{Draft, Proposal, Reasons};
 use suzatary_core::secretary::readings;
 use suzatary_core::secretary::responded::{Done, Performed, Tried};
@@ -517,9 +516,9 @@ impl Model for Bundle {
 
     fn turn(
         &self,
-        _conversation: &suzatary_core::capability::Conversation,
+        _conversation: &suzatary_core::secretary::model::Conversation,
         _tools: &serde_json::Value,
-    ) -> Result<suzatary_core::capability::Reply, ModelError> {
+    ) -> Result<suzatary_core::secretary::model::Reply, ModelError> {
         Err(ModelError::Unreachable(
             "the vectors fixture scripts every turn; nothing asks the model".to_owned(),
         ))

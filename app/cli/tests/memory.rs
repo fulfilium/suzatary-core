@@ -184,7 +184,7 @@ fn only_the_call(fakes: &Fakes, id: &str, words: &str) {
         matches!(
             holding_words.as_slice(),
             [suzatary_core::secretary::store::Entry::Said {
-                turn: suzatary_core::capability::Turn::Model { calls, .. },
+                turn: suzatary_core::secretary::model::Turn::Model { calls, .. },
                 ..
             }] if calls.iter().any(|call| call.verb.as_str() == "remember")
         ),
@@ -219,7 +219,7 @@ fn erased_call(fakes: &Fakes, id: &str, words: &str, verb: &str) {
         read.iter().any(|entry| matches!(
             entry,
             suzatary_core::secretary::store::Entry::Said {
-                turn: suzatary_core::capability::Turn::Erased {
+                turn: suzatary_core::secretary::model::Turn::Erased {
                     shape: suzatary_core::secretary::turn_shape::TurnShape::Model { calls },
                     ..
                 },
@@ -492,7 +492,7 @@ fn a_round_the_box_opened_remembers_nothing() {
         .turns
         .iter()
         .find_map(|said| match &said.turn {
-            suzatary_core::capability::Turn::Tool {
+            suzatary_core::secretary::model::Turn::Tool {
                 verb,
                 answer,
                 outcome,

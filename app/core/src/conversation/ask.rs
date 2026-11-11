@@ -2,13 +2,13 @@
 
 use serde_json::Value;
 
-use crate::capability::{
-    Conversation, Delta, Model, ModelError, Reply, SessionId, SessionModel, Turn,
-};
 use crate::conversation::round::Sink;
 use crate::conversation_id::ConversationId;
 use crate::secretary::compaction::Reading;
 use crate::secretary::digest_view::VIEW_BYTES;
+use crate::secretary::model::{
+    Conversation, Delta, Model, ModelError, Reply, SessionId, SessionModel, Turn,
+};
 use crate::secretary::store::{Kept, Scope, Stored};
 use crate::secretary::told::{Asking, context_of};
 use crate::secretary::topics::stores::TopicStores;

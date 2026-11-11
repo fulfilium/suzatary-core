@@ -3,7 +3,8 @@
 
 use std::path::{Path, PathBuf};
 
-use suzatary_core::capability::{ModelSessions, SessionId};
+use suzatary_core::secretary::model::SessionId;
+use suzatary_core::secretary::model_sessions::ModelSessions;
 
 /// A longer project directory name is cut to this and followed by a hash of the whole path.
 const PROJECT_NAME: usize = 200;

@@ -713,7 +713,8 @@ fn web_turn(
     request: &suzatary_core::web::WebRequest,
     answered: Result<suzatary_core::capability::WebAnswer, suzatary_core::capability::WebFailure>,
 ) -> Performed {
-    use suzatary_core::capability::{Clock as _, Turn};
+    use suzatary_core::capability::Clock as _;
+    use suzatary_core::secretary::model::Turn;
     use suzatary_core::secretary::outcome::Outcome;
     use suzatary_core::secretary::store::Entry;
 
@@ -860,7 +861,7 @@ fn append_act_turn(
     at: suzatary_core::capability::Datetime,
     text: String,
 ) {
-    use suzatary_core::capability::Turn;
+    use suzatary_core::secretary::model::Turn;
     use suzatary_core::secretary::store::Entry;
 
     if let Err(failed) = suzatary_core::secretary::transcript::push(
@@ -930,7 +931,7 @@ fn completion<E: std::fmt::Display>(
     finished: Result<Result<(), E>, ()>,
     at: suzatary_core::capability::Datetime,
 ) -> (Performed, suzatary_core::secretary::store::Entry) {
-    use suzatary_core::capability::Turn;
+    use suzatary_core::secretary::model::Turn;
     use suzatary_core::secretary::store::Entry;
 
     match finished {
@@ -1442,7 +1443,7 @@ pub fn backfill_plan(
     model: &mut dyn FnMut(
         &suzatary_core::for_model::ForModel,
         suzatary_core::for_model::ForModel,
-    ) -> Result<String, suzatary_core::capability::ModelError>,
+    ) -> Result<String, suzatary_core::secretary::model::ModelError>,
     out: &mut impl std::io::Write,
 ) -> anyhow::Result<usize> {
     use anyhow::Context as _;
@@ -2190,7 +2191,9 @@ fn review(
         .iter()
         .rev()
         .find_map(|said| match &said.turn {
-            suzatary_core::capability::Turn::Model { text, .. } if !text.trim().is_empty() => {
+            suzatary_core::secretary::model::Turn::Model { text, .. }
+                if !text.trim().is_empty() =>
+            {
                 Some(text.trim())
             }
             _ => None,
@@ -2462,24 +2465,24 @@ fn transcript(
 ) {
     for said in &stored.turns {
         match &said.turn {
-            suzatary_core::capability::Turn::Person {
+            suzatary_core::secretary::model::Turn::Person {
                 text, references, ..
             } => {
                 println!("\nOWNER: {text}{}", pointing(references));
             }
-            suzatary_core::capability::Turn::Act { text, .. } => println!("\n* {text}"),
-            suzatary_core::capability::Turn::Model { text, .. } => {
+            suzatary_core::secretary::model::Turn::Act { text, .. } => println!("\n* {text}"),
+            suzatary_core::secretary::model::Turn::Model { text, .. } => {
                 if !text.is_empty() {
                     println!("\nSECRETARY: {text}");
                 }
             }
-            suzatary_core::capability::Turn::Tool { verb, outcome, .. } => {
+            suzatary_core::secretary::model::Turn::Tool { verb, outcome, .. } => {
                 println!(
                     "  [{}{verb}]",
                     if outcome.refused() { "refused " } else { "" }
                 );
             }
-            suzatary_core::capability::Turn::Erased { words, .. } => {
+            suzatary_core::secretary::model::Turn::Erased { words, .. } => {
                 println!("\n{}", suzatary_core::secretary::turn_shape::prose(words));
             }
         }
@@ -2537,9 +2540,9 @@ fn pointed(references: &[suzatary_core::reference::Reference]) -> String {
 
 #[cfg(test)]
 mod sign_in_completion {
-    use suzatary_core::capability::{ToolCall, Turn};
     use suzatary_core::conversation_id::DEFAULT;
     use suzatary_core::secretary::inbox::ProposalId;
+    use suzatary_core::secretary::model::{ToolCall, Turn};
     use suzatary_core::secretary::store::{Entry, Stored};
     use suzatary_core::secretary::{taint, transcript};
     use suzatary_core::store::InMemory;

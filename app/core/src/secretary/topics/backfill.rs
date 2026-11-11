@@ -9,8 +9,8 @@ use std::fmt::Write as _;
 
 use serde::Deserialize;
 
-use crate::capability::{ModelError, Turn};
 use crate::for_model::ForModel;
+use crate::secretary::model::{ModelError, Turn};
 use crate::secretary::store::Stored;
 use crate::secretary::taint::{self, Taint};
 use crate::secretary::targets::{MAX_TOPICS, rounds};

@@ -154,7 +154,7 @@ fn a_stop_before_any_round_takes_the_question_closes_it() {
         &suzatary_core::secretary::store::Entry::Said {
             at: suzatary_core::capability::Datetime::new(2026, 9, 2, 12, 0, 0, 0)
                 .expect("an instant"),
-            turn: suzatary_core::capability::Turn::Person {
+            turn: suzatary_core::secretary::model::Turn::Person {
                 text: "read every thread".to_owned(),
                 references: Vec::new(),
                 attachments: Vec::new(),

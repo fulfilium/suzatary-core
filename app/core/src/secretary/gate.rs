@@ -1,9 +1,19 @@
 //! What an effect that binds may do in a round: the one decision every such verb takes.
 
+use prodrome_core::event::Hash;
+
+use crate::believed::Preview;
+use crate::capability::Secretary;
+use crate::chains::ChainPolicy;
+use crate::record::TodoEvent;
+use crate::refusal::{Refusal, shown as quoted};
+use crate::secretary::changes::{Building, Changeset, Unapplied, events_of};
 use crate::secretary::memory::Origin;
 use crate::secretary::store::Stored;
-use crate::secretary::surface::Binding;
 use crate::secretary::taint;
+use crate::secretary::verb_name::Binding;
+use crate::writer::Writer;
+use crate::zone::{Moment, Zone};
 
 /// What an [`Asked`] effect does in a round, as a function of the transcript alone.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -47,11 +57,85 @@ impl Gate {
     }
 }
 
+/// Applies a changeset under the write lock, building and verifying every act before any append.
+///
+/// Not a transaction: an append that fails leaves the earlier ones, and the refusal says how many.
+///
+/// # Errors
+/// [`Unapplied::Refused`] before the first append, [`Unapplied::Appending`] after it.
+pub fn apply(
+    caps: &Secretary<'_>,
+    policy: &ChainPolicy,
+    categories: &[&str],
+    zone: Zone,
+    changeset: &Changeset,
+    by: Writer,
+) -> Result<Vec<Hash>, Unapplied> {
+    if changeset.chain() != policy.name.as_str() {
+        return Err(Unapplied::Refused(Refusal::internal(format!(
+            "this changeset is against {}, and this is {}",
+            quoted(changeset.chain()),
+            policy.name.as_str()
+        ))));
+    }
+    let _held = caps
+        .chain
+        .locked()
+        .map_err(|failed| Unapplied::Refused(Refusal::internal(failed.to_string())))?;
+    let at = caps.clock.now();
+    let chain = caps
+        .chain
+        .objects()
+        .map_err(|failed| Refusal::internal(failed.to_string()))
+        .and_then(|objects| {
+            Preview::of(objects).map_err(|failed| Refusal::internal(failed.to_string()))
+        })
+        .map_err(Unapplied::Refused)?;
+    let built = events_of(
+        changeset,
+        &chain,
+        &Building {
+            now: Moment { at, zone },
+            by,
+            categories,
+            untrusted: &policy.untrusted,
+            typeset: caps.render,
+        },
+    )
+    .map_err(Unapplied::Refused)?;
+
+    // Rendered and read back before anything lands.
+    let mut preview = chain;
+    for event in &built {
+        preview
+            .ahead(event.clone())
+            .map_err(|failed| Unapplied::Refused(Refusal::internal(failed.to_string())))?;
+        if let TodoEvent::Authored(record) = event {
+            crate::todos::render_current(preview.nodes(), at, &policy.untrusted, record)
+                .map_err(Unapplied::Refused)?;
+        }
+    }
+
+    let mut names = Vec::with_capacity(built.len());
+    for (index, event) in built.into_iter().enumerate() {
+        let name = caps.chain.append(event).map_err(|failed| {
+            Unapplied::Appending(Refusal::internal(format!(
+                "event {} of this changeset could not be appended ({failed}) — {} event(s) \
+                 before it are on the chain",
+                index + 1,
+                index
+            )))
+        })?;
+        names.push(name);
+    }
+    Ok(names)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::capability::{ToolCall, Turn};
     use crate::conversation_id::ConversationId;
+    use crate::secretary::model::{ToolCall, Turn};
     use crate::secretary::store::{Entry, Stored};
     use proptest::prelude::*;
 

@@ -15,7 +15,6 @@ use prodrome_core::literal::Datetime;
 use prodrome_core::policy::Everything;
 use prodrome_core::store::EventStore;
 
-use suzatary_core::capability::{SessionId, ToolCall, Turn};
 use suzatary_core::cast::CAST;
 use suzatary_core::conversation_id::ConversationId;
 use suzatary_core::secretary::conversations::Counting;
@@ -24,6 +23,7 @@ use suzatary_core::secretary::inbox_event::{InboxEvent, Said};
 use suzatary_core::secretary::line_event::{LineEvent, LineVocabulary};
 use suzatary_core::secretary::line_shape;
 use suzatary_core::secretary::locked_text::KeyName;
+use suzatary_core::secretary::model::{SessionId, ToolCall, Turn};
 use suzatary_core::secretary::proposal::{Draft, Proposal, Reasons};
 use suzatary_core::secretary::queue;
 use suzatary_core::secretary::responded::{Done, Responded, Tried};

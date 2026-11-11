@@ -21,10 +21,8 @@ use prodrome_core::fpl::{self, mk_decay, mk_flat};
 use prodrome_core::policy::Untrusted;
 use suzatary_cli::serve::{self, Chained, State};
 use suzatary_core::capability::{
-    AnswerError, Answers, Clock, Conversation, Datetime, Delivered, Halt, Html, Login, Manual,
-    Manuals, Model, ModelError, Notify, NotifyError, Push, Render, RenderError, Reply, Repository,
-    RepositoryError, Session, SessionId, SessionModel, Sessioned, Sessions, Turn, Whois,
-    WhoisError,
+    Clock, Datetime, Delivered, Html, Login, Manual, Manuals, Notify, NotifyError, Push, Render,
+    RenderError, Repository, RepositoryError, Whois, WhoisError,
 };
 pub use suzatary_core::cast::{self, CAST};
 use suzatary_core::deployment::Deployment;
@@ -33,12 +31,18 @@ use suzatary_core::file_read::FileRead;
 use suzatary_core::mail::corpus::{Corpus, CorpusError};
 use suzatary_core::mail::junk;
 use suzatary_core::mail::junk_folder::{Junk, JunkFailure};
-use suzatary_core::mail::mailbox::{MailError, Mailbox, Query};
+use suzatary_core::mail::mailbox::{Mailbox, Query};
 use suzatary_core::mail::state::Decision;
 use suzatary_core::mail::sync_report::SyncReport;
 use suzatary_core::mail::verbs::{Marked, Message, Show, Summary};
 use suzatary_core::mail::{AttachmentMeta, MailMessage, MailRow};
+use suzatary_core::mail_error::MailError;
 use suzatary_core::record::{EventStore, SubTodo, mk_authored, mk_source, mk_subtodo};
+use suzatary_core::secretary::answers::{AnswerError, Answers};
+use suzatary_core::secretary::model::{
+    Conversation, Halt, Model, ModelError, Reply, Session, SessionId, SessionModel, Sessioned,
+    Sessions, Turn,
+};
 use suzatary_io::briefings::BriefingFiles;
 use suzatary_io::conversations::ConversationStores as Conversations;
 use suzatary_io::devices::Devices;
@@ -1203,8 +1207,8 @@ impl Model for FakeModel {
 /// `open` and `resume` pop the same scripted queue `turn` reads.
 /// Always `Some`: the harness's model always holds a session.
 impl Sessions for FakeModel {
-    fn pick(&self) -> suzatary_core::capability::Pick<'_> {
-        suzatary_core::capability::Pick::Held(self)
+    fn pick(&self) -> suzatary_core::secretary::model::Pick<'_> {
+        suzatary_core::secretary::model::Pick::Held(self)
     }
 }
 
@@ -1246,7 +1250,7 @@ impl SessionModel for FakeModel {
         &self,
         _system: &str,
         session: &Session,
-        delta: &suzatary_core::capability::Delta,
+        delta: &suzatary_core::secretary::model::Delta,
         tools: &serde_json::Value,
         on_delta: &dyn Fn(&str),
         halt: &Halt,

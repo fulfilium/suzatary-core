@@ -14,7 +14,7 @@ use regex::Regex;
 use serde_json::Value;
 
 pub use crate::held_file::HeldFile;
-use crate::mail::mailbox::MailError;
+use crate::mail_error::MailError;
 use crate::redact::{Kind, identity_numbers};
 
 /// The text form's prefix.

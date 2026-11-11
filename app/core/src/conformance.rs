@@ -6,7 +6,6 @@
 //! of what it is given and never of a generator it hides.
 
 pub mod drive;
-pub mod model;
 pub mod puller;
 pub mod transport;
 
@@ -44,7 +43,11 @@ impl<L: fmt::Display> fmt::Display for Broken<L> {
 impl<L: fmt::Debug + fmt::Display> std::error::Error for Broken<L> {}
 
 /// `holds` or the law it breaks, as `detail` says.
-fn hold<L>(law: L, holds: bool, detail: impl FnOnce() -> String) -> Result<(), Broken<L>> {
+pub(crate) fn hold<L>(
+    law: L,
+    holds: bool,
+    detail: impl FnOnce() -> String,
+) -> Result<(), Broken<L>> {
     if holds {
         Ok(())
     } else {

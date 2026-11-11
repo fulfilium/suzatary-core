@@ -6,8 +6,8 @@ mod common;
 
 use common::Fakes;
 use serde_json::{Value, json};
-use suzatary_core::capability::{ToolCall, Turn};
 use suzatary_core::conversation_id::{ConversationId, DEFAULT};
+use suzatary_core::secretary::model::{ToolCall, Turn};
 use suzatary_core::secretary::store::Entry;
 use suzatary_core::secretary::topics::topic::Topic;
 use suzatary_core::topic_target::Target;

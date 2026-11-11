@@ -9,8 +9,22 @@ use super::Verb;
 /// variant per verb holding its parsed arguments.
 ///
 /// Every function over a surface is a `match` the compiler checks is whole, so a verb joins the
-/// sum with its class, its schema, its parser and its body, or does not compile.
+/// sum with its class, its schema, its parser and its body, or does not compile. `classed by`
+/// makes each verb's class the variant of its own name in an enum of its surface's.
 macro_rules! verbs {
+    (
+        $(#[$verb_doc:meta])* pub enum $Verb:ident;
+        $(#[$call_doc:meta])* pub enum $Call:ident;
+        on $Surface:ty, classed by $Class:ident;
+        $($Name:ident),+ $(,)?
+    ) => {
+        verbs! {
+            $(#[$verb_doc])* pub enum $Verb;
+            $(#[$call_doc])* pub enum $Call;
+            on $Surface;
+            $($Name: $Class::$Name),+
+        }
+    };
     (
         $(#[$verb_doc:meta])* pub enum $Verb:ident;
         $(#[$call_doc:meta])* pub enum $Call:ident;

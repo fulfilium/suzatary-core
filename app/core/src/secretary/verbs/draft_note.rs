@@ -2,8 +2,8 @@ use schemars::JsonSchema;
 use serde::Deserialize;
 use serde_json::{Value, json};
 
-use crate::capability::Turn;
 use crate::refusal::Refusal;
+use crate::secretary::model::Turn;
 use crate::secretary::store::Entry;
 use crate::secretary::transcript;
 use crate::secretary::{Call, SecretarySurface};

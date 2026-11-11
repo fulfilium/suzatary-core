@@ -8,7 +8,7 @@ use std::collections::BTreeSet;
 use prodrome_core::event::Actor;
 use prodrome_core::literal::Datetime;
 
-use crate::capability::{Entropy as _, Turn};
+use crate::capability::Entropy as _;
 use crate::conversation_id::ConversationId;
 use crate::model_name::ModelName;
 use crate::secretary::compact_ask::Beside;
@@ -21,6 +21,7 @@ use crate::secretary::line_event::LineEvent;
 use crate::secretary::memories::ReadMemories;
 use crate::secretary::memory::Fact;
 use crate::secretary::memory_event::MemoryEvent;
+use crate::secretary::model::Turn;
 use crate::secretary::recollection::Recollection;
 use crate::secretary::salted_text::{Text, TextName};
 use crate::secretary::store::{Entry, Kind};

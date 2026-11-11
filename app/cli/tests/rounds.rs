@@ -7,10 +7,10 @@
 mod common;
 
 use common::{FakeModel, Fakes};
-use suzatary_core::capability::{Halt, ModelError, Turn};
 use suzatary_core::conversation::round::{Ending, Sink, Why};
 use suzatary_core::conversation_id::ConversationId;
 use suzatary_core::secretary::Bound;
+use suzatary_core::secretary::model::{Halt, ModelError, Turn};
 use suzatary_core::secretary::store::Kind;
 
 fn id() -> ConversationId {
@@ -130,7 +130,7 @@ fn a_round_over_a_session() {
             &suzatary_core::secretary::store::Entry::Said {
                 at: suzatary_core::capability::Datetime::new(2026, 9, 2, 12, 0, 0, 0)
                     .expect("an instant"),
-                turn: suzatary_core::capability::Turn::Person {
+                turn: suzatary_core::secretary::model::Turn::Person {
                     text: said.to_owned(),
                     references: Vec::new(),
                     attachments: Vec::new(),
@@ -141,7 +141,7 @@ fn a_round_over_a_session() {
         .expect("the person turn appends");
         suzatary_core::secretary::answer(
             &caps.secretary(),
-            || suzatary_core::capability::Pick::Held(&caps.model),
+            || suzatary_core::secretary::model::Pick::Held(&caps.model),
             &deployment,
             &suzatary_core::settings::Settables::default(),
             &chains,
@@ -232,7 +232,7 @@ fn said_first(caps: &Fakes) {
         &suzatary_core::secretary::store::Entry::Said {
             at: suzatary_core::capability::Datetime::new(2026, 9, 2, 12, 0, 0, 0)
                 .expect("an instant"),
-            turn: suzatary_core::capability::Turn::Person {
+            turn: suzatary_core::secretary::model::Turn::Person {
                 text: "go".to_owned(),
                 references: Vec::new(),
                 attachments: Vec::new(),
@@ -266,7 +266,7 @@ fn a_round_never_runs_a_verb_its_surface_does_not_list() {
         .filter_map(|entry| match entry {
             suzatary_core::secretary::store::Entry::Said {
                 turn:
-                    suzatary_core::capability::Turn::Tool {
+                    suzatary_core::secretary::model::Turn::Tool {
                         verb,
                         answer,
                         outcome: suzatary_core::secretary::outcome::Outcome::Refused,
@@ -312,7 +312,7 @@ fn a_round_stops_at_its_bound() {
         assert!(matches!(
             round.appended.last(),
             Some(suzatary_core::secretary::store::Entry::Said {
-                turn: suzatary_core::capability::Turn::Model { text, calls },
+                turn: suzatary_core::secretary::model::Turn::Model { text, calls },
                 ..
             }) if calls.is_empty() && text.contains(&format!("{bound} times"))
         ));
@@ -354,7 +354,7 @@ fn a_round_appends_the_models_turns_and_the_verbs_answers_in_order() {
             other => panic!("only turns are appended after the scope: {other:?}"),
         })
         .collect();
-    let tool = |answer: &str| suzatary_core::capability::Turn::Tool {
+    let tool = |answer: &str| suzatary_core::secretary::model::Turn::Tool {
         verb: "weather".into(),
         answer: answer.to_owned(),
         outcome: suzatary_core::secretary::outcome::Outcome::Answered,
@@ -362,12 +362,12 @@ fn a_round_appends_the_models_turns_and_the_verbs_answers_in_order() {
     };
     assert_eq!(turns.len(), 4);
     assert!(
-        matches!(&turns[0], suzatary_core::capability::Turn::Model { text, calls } if text == "One." && calls.len() == 2)
+        matches!(&turns[0], suzatary_core::secretary::model::Turn::Model { text, calls } if text == "One." && calls.len() == 2)
     );
     assert_eq!(turns[1], tool("sunny"));
     assert_eq!(turns[2], tool("sunny"));
     assert!(
-        matches!(&turns[3], suzatary_core::capability::Turn::Model { text, calls } if text == "Two." && calls.is_empty())
+        matches!(&turns[3], suzatary_core::secretary::model::Turn::Model { text, calls } if text == "Two." && calls.is_empty())
     );
     let stored =
         suzatary_core::secretary::conversations::read(caps.conversations.conversations(), &id())
@@ -400,7 +400,7 @@ fn a_refusal_is_an_answer_not_an_error() {
     let second = &caps.model.asked()[1];
     assert_eq!(
         second.turns.last(),
-        Some(&suzatary_core::capability::Turn::Tool {
+        Some(&suzatary_core::secretary::model::Turn::Tool {
             verb: "todo_show".into(),
             answer: "no such todo".to_owned(),
             outcome: suzatary_core::secretary::outcome::Outcome::Refused,

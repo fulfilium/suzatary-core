@@ -9,7 +9,7 @@
 use std::path::PathBuf;
 
 use suzatary_core::mail::hash_prefix::{HashPrefix, Resolved};
-use suzatary_core::mail::mailbox::MailError;
+use suzatary_core::mail_error::MailError;
 use suzatary_core::store::{Doc as _, Gets as _};
 
 use crate::docs::{DocCodec, Docs, shard};

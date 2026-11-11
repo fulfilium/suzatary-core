@@ -55,7 +55,12 @@ fn an_operators_question_is_the_owners_words_stamped_as_the_operators() {
     let said = stored
         .turns
         .iter()
-        .find(|said| matches!(said.turn, suzatary_core::capability::Turn::Person { .. }))
+        .find(|said| {
+            matches!(
+                said.turn,
+                suzatary_core::secretary::model::Turn::Person { .. }
+            )
+        })
         .expect("the question's line");
     assert_eq!(
         said.by,

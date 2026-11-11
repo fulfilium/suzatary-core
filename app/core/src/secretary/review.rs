@@ -8,13 +8,15 @@ use super::Bound;
 use super::daily::{Run, begin, daily_round};
 use super::found::{Found, Unreadable};
 use super::store::{Decision, Entry, Outcome, Review, Stored};
-use super::surface::{Effect, SecretaryVerb, Subset};
+use super::surface::{SecretaryVerb, Subset};
+use super::verb_name::Effect;
 use super::verbs::{answered, listed, standing};
-use crate::capability::{Secretary, Turn};
+use crate::capability::Secretary;
 use crate::conversation_id::{ConversationId, Daily};
 use crate::deployment::Deployment;
 use crate::refusal::{Refusal, shown};
 use crate::secretary::conversations;
+use crate::secretary::model::Turn;
 use crate::secretary::transcript;
 
 /// What one review did.
@@ -55,7 +57,9 @@ const UNSPOKEN: &str = "The secretary left this standing and did not say why.";
 /// words, which came out of mail anyone can send, so it holds no verb that writes to a chain,
 /// files, remembers or sends: whatever a card says, the round can withdraw it and nothing more.
 pub(crate) const SURFACE: Subset = Subset {
-    allows: |verb| verb.class().effect == Effect::Reads || verb == SecretaryVerb::TriageWithdraw,
+    allows: |verb| {
+        verb.class().powers().effect == Effect::Reads || verb == SecretaryVerb::TriageWithdraw
+    },
     refuses: |called, listed| {
         Refusal::not_found(format!(
             "the review may not call {} — its verbs are {listed}",
@@ -139,11 +143,11 @@ pub fn review(
 
     // A review that could not run is written down, so an unsettled Inbox is distinguishable from a
     // settled one.
-    let halt = crate::capability::Halt::new();
+    let halt = crate::secretary::model::Halt::new();
     let quiet = crate::conversation::round::Sink::quiet(&halt);
     let answered = match super::answer(
         caps,
-        || crate::capability::Pick::Turn(Box::new(caps.model)),
+        || crate::secretary::model::Pick::Turn(Box::new(caps.model)),
         deployment,
         settables,
         chains,

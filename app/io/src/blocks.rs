@@ -2,9 +2,9 @@
 
 use serde_json::{Value, json};
 use suzatary_core::attachment::{Attachment, AttachmentId};
-use suzatary_core::capability::{ModelError, Turn};
 use suzatary_core::enclosed::{Enclosed, Enclosure};
 use suzatary_core::for_model::ForModel;
+use suzatary_core::secretary::model::{ModelError, Turn};
 
 use crate::attachments::AttachmentStore;
 use crate::blobs::Blobs;

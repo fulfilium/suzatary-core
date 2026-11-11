@@ -18,7 +18,7 @@ use crate::settings::{Settable, Settables};
 /// What the box knows of its model.
 #[derive(Clone, Copy)]
 pub struct Answering<'a> {
-    /// The model's name, as [`crate::capability::Model::name`] spells it: the key its calls are
+    /// The model's name, as [`crate::secretary::model::Model::name`] spells it: the key its calls are
     /// recorded under.
     pub model: &'a str,
     /// The model's observed calls.

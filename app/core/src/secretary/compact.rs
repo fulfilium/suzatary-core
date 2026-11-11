@@ -6,9 +6,9 @@
 //! interpreter sends [`crate::secretary::compact_ask::PROMPT`] as the whole system prompt and
 //! [`Ask::text`] as it stands, with none of the secretary's framing.
 
-use crate::capability::ModelError;
 use crate::model_name::ModelName;
 use crate::secretary::compact_ask::Ask;
+use crate::secretary::model::ModelError;
 
 /// A model asked to stand one line for a span.
 pub trait Compact: Sync {

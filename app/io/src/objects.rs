@@ -562,8 +562,8 @@ mod tests {
     /// words, a key per slot of them beside it, and the lines read back in the order written.
     #[test]
     fn a_conversation_is_written_as_changes_through_the_door() {
-        use suzatary_core::capability::Turn;
         use suzatary_core::conversation_id::ConversationId;
+        use suzatary_core::secretary::model::Turn;
         use suzatary_core::secretary::store::Entry;
         use suzatary_core::secretary::transcript;
 
@@ -842,8 +842,8 @@ mod tests {
 
     /// A conversation of 48 lines on disk under `dir`, enough to settle a node of the digest.
     fn spoken(dir: &std::path::Path) -> crate::conversations::ConversationStores {
-        use suzatary_core::capability::Turn;
         use suzatary_core::conversation_id::ConversationId;
+        use suzatary_core::secretary::model::Turn;
         use suzatary_core::secretary::store::Entry;
         use suzatary_core::secretary::transcript;
 

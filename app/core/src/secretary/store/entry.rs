@@ -1,8 +1,9 @@
 //! One line of a conversation, and the instant every line carries.
 
 use super::{Decision, Kind, Namer, Scope, Title};
-use crate::capability::{Datetime, SessionId, Turn};
+use crate::capability::Datetime;
 use crate::reference::Reference;
+use crate::secretary::model::{SessionId, Turn};
 use crate::secretary::own_round::OwnRound;
 use crate::secretary::stamp::Stamp;
 use crate::secretary::words::Words;
@@ -21,7 +22,7 @@ pub enum Entry {
         at: Datetime,
         /// What it is about, for the list.
         title: Words<String>,
-        /// The model's own name for itself ([`crate::capability::Model::name`]).
+        /// The model's own name for itself ([`crate::secretary::model::Model::name`]).
         model: String,
         /// What it is for.
         kind: Kind,
@@ -131,7 +132,7 @@ pub enum Entry {
     },
     /// A model session stands behind this conversation from here, written when one is first
     /// opened and whenever cold recovery mints a fresh one after
-    /// [`crate::capability::ModelError::Lost`]. [`Stored::of`](super::Stored::of) keeps the last: a register with one
+    /// [`crate::secretary::model::ModelError::Lost`]. [`Stored::of`](super::Stored::of) keeps the last: a register with one
     /// writer.
     Session {
         /// When this line was written.

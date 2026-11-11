@@ -1,26 +1,28 @@
 use prodrome_core::event::Hash;
 
 use super::{
-    Agent, AllowRule, AnswerError, Answers, BriefingError, Briefings, Clock, Conversation,
-    Datetime, Delivered, Drive, DriveFailure, Html, MailGrants, Manual, Manuals, Model, ModelError,
-    Notify, NotifyError, Peer, Push, Render, RenderError, Reply, RepoFailure, Repositories,
-    Repository, RepositoryError, Secrets, Sessions, Weather, WeatherError, Web, WebAnswer,
-    WebFailure, WebRequest, Whois, WhoisError,
+    Agent, AllowRule, BriefingError, Briefings, Clock, Datetime, Delivered, Drive, DriveFailure,
+    Html, MailGrants, Manual, Manuals, Notify, NotifyError, Peer, Push, Render, RenderError,
+    RepoFailure, Repositories, Repository, RepositoryError, Secrets, Weather, WeatherError, Web,
+    WebAnswer, WebFailure, WebRequest, Whois, WhoisError,
 };
 use super::{Secretary, Server};
 use crate::escape::Escaped;
 use crate::mail::corpus::{Corpus, CorpusError};
 use crate::mail::junk_folder::{Junk, JunkFailure};
 use crate::mail::mail_sync::{MailSync, SyncFailure, Synced};
-use crate::mail::mailbox::{MailError, Mailbox, Query};
+use crate::mail::mailbox::{Mailbox, Query};
 use crate::mail::state::Decision;
 use crate::mail::sync_report::SyncReport;
 use crate::mail::verbs::{Marked, Show, Summary};
 use crate::mail::{AttachmentMeta, MailMessage, MailRow};
+use crate::mail_error::MailError;
 use crate::record::{Envelope, TodoEvent};
 use crate::refusal::Refusal;
 use crate::repo_ids::{CommitId, RepoName, RepoPath, Rev};
 use crate::repos::{Patch, RepoRow, Visibility};
+use crate::secretary::answers::{AnswerError, Answers};
+use crate::secretary::model::{Conversation, Model, ModelError, Reply, Sessions};
 use crate::store::{Prodrome, Reads, StoreError, WriteLock};
 
 /// Every effect, inert: reads find nothing, writes are refused, no peer has a login.
@@ -323,8 +325,8 @@ impl Model for Nothing {
 }
 
 impl Sessions for Nothing {
-    fn pick(&self) -> crate::capability::Pick<'_> {
-        crate::capability::Pick::Turn(Box::new(self))
+    fn pick(&self) -> crate::secretary::model::Pick<'_> {
+        crate::secretary::model::Pick::Turn(Box::new(self))
     }
 }
 
@@ -413,8 +415,8 @@ impl crate::capability::RenderCache for Nothing {
 }
 
 /// No session is kept, so none is forgotten.
-impl crate::capability::ModelSessions for Nothing {
-    fn forget(&self, _: &crate::capability::SessionId, _: &str) -> Result<(), String> {
+impl crate::secretary::model_sessions::ModelSessions for Nothing {
+    fn forget(&self, _: &crate::secretary::model::SessionId, _: &str) -> Result<(), String> {
         Ok(())
     }
 }

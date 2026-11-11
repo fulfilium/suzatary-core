@@ -275,7 +275,7 @@ pub struct Seen<'a> {
     pub settables: &'a crate::settings::Settables,
     /// Where each stands.
     pub secrets: &'a dyn crate::capability::Secrets,
-    /// The model's name, as [`crate::capability::Model::name`] spells it.
+    /// The model's name, as [`crate::secretary::model::Model::name`] spells it.
     pub model: &'a str,
     /// The model's observed calls.
     pub answered: &'a crate::health::Healths<String>,

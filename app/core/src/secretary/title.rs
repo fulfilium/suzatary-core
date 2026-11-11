@@ -6,9 +6,10 @@
 use crate::secretary::conversations;
 use prodrome_core::event::Actor;
 
-use crate::capability::{Clock, Conversation, Model, Turn};
+use crate::capability::Clock;
 use crate::conversation_id::ConversationId;
 use crate::refusal::Refusal;
+use crate::secretary::model::{Conversation, Model, Turn};
 use crate::secretary::store::{Entry, Kind, Namer, Stored, Title};
 use crate::secretary::transcript;
 
@@ -246,8 +247,8 @@ mod tests {
             &self,
             _: &Conversation,
             _: &serde_json::Value,
-        ) -> Result<crate::capability::Reply, crate::capability::ModelError> {
-            Ok(crate::capability::Reply::parse(self.0))
+        ) -> Result<crate::secretary::model::Reply, crate::secretary::model::ModelError> {
+            Ok(crate::secretary::model::Reply::parse(self.0))
         }
     }
 

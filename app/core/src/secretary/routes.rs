@@ -4,7 +4,7 @@
 //! mint and carries an index, never a body, so what is sent is what was stored and shown.
 
 use crate::believed::Preview;
-use crate::capability::{Clock, Secret, Secrets, Server, Turn};
+use crate::capability::{Clock, Secret, Secrets, Server};
 use crate::conversation_id::ConversationId;
 use crate::deployment::Deployment;
 use crate::health::plugin::{Origin, PluginName};
@@ -21,6 +21,7 @@ use crate::secretary::changes::{self, Changeset};
 use crate::secretary::conversations;
 use crate::secretary::decide;
 use crate::secretary::inbox::{self, ProposalId, Response};
+use crate::secretary::model::Turn;
 use crate::secretary::opening::Opening;
 use crate::secretary::proposal::{Draft, Proposal};
 use crate::secretary::read_holders::ReadHolders;
@@ -2125,7 +2126,7 @@ fn apply(cards: &Cards<'_>, changeset: &Changeset) -> Performed {
         .keys()
         .map(String::as_str)
         .collect();
-    match changes::apply(
+    match crate::secretary::gate::apply(
         &bound.caps,
         bound.policy,
         &known,
@@ -2435,7 +2436,7 @@ fn said_on(origin: &crate::secretary::memory::Origin) -> wire::SaidOn {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::capability::Answers;
+    use crate::secretary::answers::Answers;
     use crate::secretary::proposal::Reasons;
     use crate::secretary::readings::{Place, proposal, turn};
     use crate::secretary::responded::Responded;
@@ -2567,7 +2568,7 @@ mod tests {
         fn block(
             &self,
             _block: &crate::answer::Renderable,
-        ) -> Result<crate::capability::Html, crate::capability::AnswerError> {
+        ) -> Result<crate::capability::Html, crate::secretary::answers::AnswerError> {
             panic!("a turn that is not the model's was rendered");
         }
     }
@@ -2580,7 +2581,7 @@ mod tests {
             &NeverAsked,
             &Said {
                 at: crate::capability::Datetime::new(2026, 9, 9, 9, 1, 0, 0).expect("an instant"),
-                turn: crate::capability::Turn::Person {
+                turn: crate::secretary::model::Turn::Person {
                     text: "what changed".to_owned(),
                     references: Vec::new(),
                     attachments: Vec::new(),
@@ -2654,7 +2655,7 @@ mod tests {
         use crate::secretary::memory::{FactId, Memory};
         use crate::secretary::outcome::Outcome;
         let memory = receipts_memory();
-        let row = |turn_said: crate::capability::Turn, memory: Option<&Memory>| match turn(
+        let row = |turn_said: crate::secretary::model::Turn, memory: Option<&Memory>| match turn(
             &NeverAsked,
             &Said {
                 at: crate::capability::Datetime::new(2026, 10, 2, 9, 0, 0, 0).expect("an instant"),
@@ -2672,7 +2673,7 @@ mod tests {
         // The answer names another fact than the shape, so a reading of the answer would show.
         let drawn = |outcome: Outcome, memory: Option<&Memory>| {
             row(
-                crate::capability::Turn::Tool {
+                crate::secretary::model::Turn::Tool {
                     verb: "remember".into(),
                     answer: r#"{"remembered": 5, "kind": "owner"}"#.to_owned(),
                     outcome,
@@ -2732,7 +2733,10 @@ mod tests {
                 .into(),
             ],
         );
-        assert!(matches!(erased, crate::capability::Turn::Erased { .. }));
+        assert!(matches!(
+            erased,
+            crate::secretary::model::Turn::Erased { .. }
+        ));
         assert_eq!(
             row(erased, Some(&memory)),
             standing,
@@ -2745,7 +2749,7 @@ mod tests {
         fn block(
             &self,
             block: &crate::answer::Renderable,
-        ) -> Result<crate::capability::Html, crate::capability::AnswerError> {
+        ) -> Result<crate::capability::Html, crate::secretary::answers::AnswerError> {
             Ok(crate::capability::Html::from_render(format!(
                 "<p>{}</p>",
                 block.as_str().trim()
@@ -2758,8 +2762,10 @@ mod tests {
         fn block(
             &self,
             _block: &crate::answer::Renderable,
-        ) -> Result<crate::capability::Html, crate::capability::AnswerError> {
-            Err(crate::capability::AnswerError("typst refused".to_owned()))
+        ) -> Result<crate::capability::Html, crate::secretary::answers::AnswerError> {
+            Err(crate::secretary::answers::AnswerError(
+                "typst refused".to_owned(),
+            ))
         }
     }
 
@@ -2769,7 +2775,7 @@ mod tests {
     fn a_model_turns_blocks_each_ask_the_renderer() {
         let model_turn = Said {
             at: crate::capability::Datetime::new(2026, 9, 9, 9, 2, 0, 0).expect("an instant"),
-            turn: crate::capability::Turn::Model {
+            turn: crate::secretary::model::Turn::Model {
                 text: "= Hello\n\n#html.elem(\"b\")[x]".to_owned(),
                 calls: Vec::new(),
             },
@@ -2799,7 +2805,7 @@ mod tests {
     fn only_a_model_turn_is_ever_rendered() {
         let person = Said {
             at: crate::capability::Datetime::new(2026, 9, 9, 9, 1, 0, 0).expect("an instant"),
-            turn: crate::capability::Turn::Person {
+            turn: crate::secretary::model::Turn::Person {
                 text: "what changed".to_owned(),
                 references: Vec::new(),
                 attachments: Vec::new(),
@@ -2812,7 +2818,7 @@ mod tests {
         ));
         let act = Said {
             at: crate::capability::Datetime::new(2026, 9, 9, 9, 3, 0, 0).expect("an instant"),
-            turn: crate::capability::Turn::Act {
+            turn: crate::secretary::model::Turn::Act {
                 text: "dismissed proposal 0".to_owned(),
                 references: Vec::new(),
             },

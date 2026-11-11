@@ -8,9 +8,9 @@
 use chrono::NaiveDate;
 
 use super::store::{Said, Stored};
-use super::surface::Effect;
-use crate::capability::Turn;
+use super::verb_name::Effect;
 use crate::conversation_id::ConversationId;
+use crate::secretary::model::Turn;
 
 /// The question the morning brief asks: a person turn, not a system instruction, since the
 /// secretary answers questions somebody asked.
@@ -89,7 +89,7 @@ fn reads(turn: &Turn) -> bool {
     match super::turn_shape::shape(turn) {
         super::turn_shape::TurnShape::Model { calls } => calls.iter().any(|verb| {
             verb.verb()
-                .is_none_or(|verb| verb.class().effect == Effect::Reads)
+                .is_none_or(|verb| verb.powers().effect == Effect::Reads)
         }),
         super::turn_shape::TurnShape::Person { .. }
         | super::turn_shape::TurnShape::Tool { .. }

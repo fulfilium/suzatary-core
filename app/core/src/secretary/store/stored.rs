@@ -7,7 +7,8 @@ use super::{
 use crate::conversation_id::ConversationId;
 use crate::secretary::proposal::Proposal;
 
-use crate::capability::{Datetime, Turn};
+use crate::capability::Datetime;
+use crate::secretary::model::Turn;
 use crate::secretary::turn_shape::TurnShape;
 use crate::secretary::words::Words;
 
@@ -33,7 +34,7 @@ pub struct Stored {
     pub reviews: Vec<Review>,
     /// Every time a review was asked for here and could not run, in order; usually empty.
     pub failures: Vec<ReviewFailure>,
-    /// The session a [`SessionModel`](crate::capability::SessionModel) caller should `resume`: the
+    /// The session a [`SessionModel`](crate::secretary::model::SessionModel) caller should `resume`: the
     /// last [`Entry::Kept`](super::Entry::Kept) or [`Entry::Session`](super::Entry::Session) line, or `None` when none was ever opened or a
     /// stop, a rewind or an [`Entry::Unheard`](super::Entry::Unheard) line since ended it.
     pub session: Option<Kept>,
@@ -316,8 +317,8 @@ impl Stored {
     /// # Errors
     /// [`Refusal::conflict`](crate::refusal::Refusal::conflict) naming which rule it broke.
     ///
-    /// [`Effect`]: crate::secretary::Effect
-    /// [`Effect::Reads`]: crate::secretary::Effect::Reads
+    /// [`Effect`]: crate::secretary::verb_name::Effect
+    /// [`Effect::Reads`]: crate::secretary::verb_name::Effect::Reads
     pub fn rewind(&self, how: Rewind) -> Result<usize, crate::refusal::Refusal> {
         let conflict = crate::refusal::Refusal::conflict;
         let live = self.live();
@@ -361,7 +362,7 @@ impl Stored {
                 TurnShape::Tool { verb, outcome, .. } => {
                     !outcome.refused()
                         && verb.verb().is_some_and(|verb| {
-                            verb.class().effect != crate::secretary::Effect::Reads
+                            verb.powers().effect != crate::secretary::verb_name::Effect::Reads
                         })
                 }
                 TurnShape::Act { .. } => !self.stops.contains(&index),

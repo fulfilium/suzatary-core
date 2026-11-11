@@ -11,15 +11,15 @@
 
 use std::collections::BTreeSet;
 
-use crate::capability::Turn;
-use crate::secretary::SecretaryVerb;
 use crate::secretary::line_shape::LineShape;
 use crate::secretary::locked_text::KeyName;
 use crate::secretary::memory::{FactId, Origin};
+use crate::secretary::model::Turn;
 use crate::secretary::outcome::Outcome;
 use crate::secretary::store::Entry;
 use crate::secretary::transcript::Transcript;
 use crate::secretary::turn_shape::TurnShape;
+use crate::secretary::verb_name::VerbName;
 
 /// The keys a forgetting erases, and those it offers.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
@@ -58,7 +58,7 @@ impl Caused {
                 calls
                     .get(call)
                     .and_then(crate::secretary::tool_name::ToolName::verb),
-                Some(SecretaryVerb::Remember | SecretaryVerb::Consolidate)
+                Some(VerbName::Remember | VerbName::Consolidate)
             ) {
                 caused
                     .erased
@@ -114,7 +114,7 @@ fn receipt(entry: &Entry, fact: FactId, origin: &Origin) -> bool {
     match origin {
         Origin::Turn { .. } => *outcome == Outcome::Remembered { fact },
         Origin::Tapped { proposal, .. } => {
-            verb.verb() == Some(SecretaryVerb::Remember)
+            verb.verb() == Some(VerbName::Remember)
                 && *outcome == Outcome::Answered
                 && serde_json::from_str::<serde_json::Value>(answer)
                     .ok()

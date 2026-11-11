@@ -5,7 +5,7 @@ use std::path::PathBuf;
 
 use sha2::{Digest as _, Sha256};
 use suzatary_core::held_value::{Kinds, MAX_OPENED, Values};
-use suzatary_core::mail::mailbox::MailError;
+use suzatary_core::mail_error::MailError;
 use suzatary_core::store::{Doc as _, Gets as _};
 
 use crate::docs::{DocCodec, Docs};

@@ -14,13 +14,13 @@ use prodrome_core::literal::Datetime;
 use prodrome_core::store::{MemoryStore, Replica as _};
 
 use prodrome_core::store::frontier::{Frontiers, KEPT, Since, Token};
-use suzatary_core::capability::Turn;
 use suzatary_core::conversation_id::ConversationId;
 use suzatary_core::routes::{self, Books, Cut};
 use suzatary_core::secretary::conversations::{Conversations, InMemory};
 use suzatary_core::secretary::line_event::LineEvent;
 use suzatary_core::secretary::line_words::LineWords;
 use suzatary_core::secretary::locked_text::TextKey;
+use suzatary_core::secretary::model::Turn;
 use suzatary_core::secretary::store::{Entry, Kind};
 use suzatary_core::secretary::words::Words;
 use suzatary_core::store::{Doc as _, Prodrome, Reads, StoreError, WriteLock};

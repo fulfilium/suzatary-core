@@ -3,10 +3,10 @@ use serde::Deserialize;
 use serde_json::{Map, Value};
 
 use crate::attachment::AttachmentId;
-use crate::capability::Turn;
 use crate::held_value::HeldFile;
 use crate::refusal::Refusal;
 use crate::secretary::file_search;
+use crate::secretary::model::Turn;
 use crate::secretary::upload_standing::UploadStanding;
 use crate::secretary::verb_answer::VerbAnswer;
 use crate::secretary::verbs::kept;

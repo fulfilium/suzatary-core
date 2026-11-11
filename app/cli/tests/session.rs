@@ -4,9 +4,9 @@
 mod common;
 
 use common::{FakeModel, Fakes};
-use suzatary_core::capability::{Halt, Pick, SessionId, Turn};
 use suzatary_core::conversation::round::Sink;
 use suzatary_core::conversation_id::ConversationId;
+use suzatary_core::secretary::model::{Halt, Pick, SessionId, Turn};
 use suzatary_core::secretary::store::Entry;
 use suzatary_core::secretary::{Bound, answer, queue};
 
@@ -822,19 +822,20 @@ fn nothing_waiting_asks_a_stateless_model_nothing() {
 /// A model that answers with its own name.
 struct Named(String);
 
-impl suzatary_core::capability::Model for Named {
+impl suzatary_core::secretary::model::Model for Named {
     fn name(&self) -> String {
         self.0.clone()
     }
 
     fn turn(
         &self,
-        _: &suzatary_core::capability::Conversation,
+        _: &suzatary_core::secretary::model::Conversation,
         _: &serde_json::Value,
-    ) -> Result<suzatary_core::capability::Reply, suzatary_core::capability::ModelError> {
-        Ok(suzatary_core::capability::Reply {
+    ) -> Result<suzatary_core::secretary::model::Reply, suzatary_core::secretary::model::ModelError>
+    {
+        Ok(suzatary_core::secretary::model::Reply {
             say: format!("answered by {}", self.0),
-            ..suzatary_core::capability::Reply::default()
+            ..suzatary_core::secretary::model::Reply::default()
         })
     }
 }
@@ -1008,7 +1009,7 @@ fn a_full_window_that_read_a_mail(caps: &Fakes) {
         caps,
         Turn::Model {
             text: String::new(),
-            calls: vec![suzatary_core::capability::ToolCall {
+            calls: vec![suzatary_core::secretary::model::ToolCall {
                 verb: "show".into(),
                 args: std::collections::BTreeMap::new(),
             }],
@@ -1280,35 +1281,36 @@ fn words(turns: &[Turn]) -> Vec<String> {
 }
 
 impl Simulated {
-    fn reply(&self) -> suzatary_core::capability::Reply {
+    fn reply(&self) -> suzatary_core::secretary::model::Reply {
         let n = self.said.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
         let say = format!("held {n}");
         self.holds.lock().expect("unpoisoned").push(say.clone());
-        suzatary_core::capability::Reply {
+        suzatary_core::secretary::model::Reply {
             say,
             calls: if self.calling.load(std::sync::atomic::Ordering::SeqCst) {
-                vec![suzatary_core::capability::ToolCall {
+                vec![suzatary_core::secretary::model::ToolCall {
                     verb: "context".into(),
                     args: std::collections::BTreeMap::new(),
                 }]
             } else {
                 Vec::new()
             },
-            ..suzatary_core::capability::Reply::default()
+            ..suzatary_core::secretary::model::Reply::default()
         }
     }
 }
 
-impl suzatary_core::capability::Model for Simulated {
+impl suzatary_core::secretary::model::Model for Simulated {
     fn name(&self) -> String {
         "claude-cli/simulated".to_owned()
     }
 
     fn turn(
         &self,
-        _: &suzatary_core::capability::Conversation,
+        _: &suzatary_core::secretary::model::Conversation,
         _: &serde_json::Value,
-    ) -> Result<suzatary_core::capability::Reply, suzatary_core::capability::ModelError> {
+    ) -> Result<suzatary_core::secretary::model::Reply, suzatary_core::secretary::model::ModelError>
+    {
         let n = self.said.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
         let calls = self
             .stateless_calls
@@ -1318,42 +1320,45 @@ impl suzatary_core::capability::Model for Simulated {
                 |left| left.checked_sub(1),
             )
             .is_ok();
-        Ok(suzatary_core::capability::Reply {
+        Ok(suzatary_core::secretary::model::Reply {
             say: format!("stateless {n}"),
             calls: if calls {
-                vec![suzatary_core::capability::ToolCall {
+                vec![suzatary_core::secretary::model::ToolCall {
                     verb: "context".into(),
                     args: std::collections::BTreeMap::new(),
                 }]
             } else {
                 Vec::new()
             },
-            ..suzatary_core::capability::Reply::default()
+            ..suzatary_core::secretary::model::Reply::default()
         })
     }
 }
 
-impl suzatary_core::capability::SessionModel for Simulated {
+impl suzatary_core::secretary::model::SessionModel for Simulated {
     fn open(
         &self,
         id: &SessionId,
-        conversation: &suzatary_core::capability::Conversation,
+        conversation: &suzatary_core::secretary::model::Conversation,
         _: &serde_json::Value,
         _: &Halt,
-    ) -> Result<suzatary_core::capability::Sessioned, suzatary_core::capability::ModelError> {
+    ) -> Result<
+        suzatary_core::secretary::model::Sessioned,
+        suzatary_core::secretary::model::ModelError,
+    > {
         // A session lost this round will not reopen.
         if self.lose.swap(false, std::sync::atomic::Ordering::SeqCst)
             || self.refuses.load(std::sync::atomic::Ordering::SeqCst)
         {
-            return Err(suzatary_core::capability::ModelError::Failed(
+            return Err(suzatary_core::secretary::model::ModelError::Failed(
                 "the session will not reopen".to_owned(),
             ));
         }
         self.opens.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
         *self.holds.lock().expect("unpoisoned") = words(&conversation.turns);
-        Ok(suzatary_core::capability::Sessioned {
+        Ok(suzatary_core::secretary::model::Sessioned {
             reply: self.reply(),
-            session: suzatary_core::capability::Session {
+            session: suzatary_core::secretary::model::Session {
                 id: id.clone(),
                 model: "claude-cli/simulated".to_owned(),
                 cwd: String::new(),
@@ -1367,14 +1372,17 @@ impl suzatary_core::capability::SessionModel for Simulated {
     fn resume(
         &self,
         _: &str,
-        session: &suzatary_core::capability::Session,
-        delta: &suzatary_core::capability::Delta,
+        session: &suzatary_core::secretary::model::Session,
+        delta: &suzatary_core::secretary::model::Delta,
         _: &serde_json::Value,
         _: &dyn Fn(&str),
         _: &Halt,
-    ) -> Result<suzatary_core::capability::Sessioned, suzatary_core::capability::ModelError> {
+    ) -> Result<
+        suzatary_core::secretary::model::Sessioned,
+        suzatary_core::secretary::model::ModelError,
+    > {
         if self.lose.load(std::sync::atomic::Ordering::SeqCst) {
-            return Err(suzatary_core::capability::ModelError::Lost(
+            return Err(suzatary_core::secretary::model::ModelError::Lost(
                 "the session is gone".to_owned(),
             ));
         }
@@ -1385,7 +1393,7 @@ impl suzatary_core::capability::SessionModel for Simulated {
             .expect("unpoisoned")
             .get_or_insert_with(|| holds.clone());
         drop(holds);
-        Ok(suzatary_core::capability::Sessioned {
+        Ok(suzatary_core::secretary::model::Sessioned {
             reply: self.reply(),
             session: session.clone(),
         })

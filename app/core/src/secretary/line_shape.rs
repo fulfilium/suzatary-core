@@ -7,7 +7,6 @@
 
 use std::collections::BTreeSet;
 
-use crate::capability::SessionId;
 use crate::coding::{Branch, Session, SessionUrl};
 use crate::conversation_id::{ConversationId, DEFAULT};
 use crate::repo_ids::CommitId;
@@ -15,6 +14,7 @@ use crate::secretary::erasure::Erasure;
 use crate::secretary::inbox::ProposalId;
 use crate::secretary::line_words::LineWords;
 use crate::secretary::locked_text::KeyName;
+use crate::secretary::model::SessionId;
 use crate::secretary::stamp::Stamp;
 use crate::secretary::store::{Decision, Entry, Kind, Namer, Scope};
 use crate::secretary::turn_shape::{self, TurnShape};

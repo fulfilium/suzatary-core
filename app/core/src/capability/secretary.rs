@@ -1,6 +1,6 @@
 use super::{
-    Agent, Briefings, Calendar, Clock, Drive, Manuals, Model, Render, Repositories, Repository,
-    Secrets, Weather, Web,
+    Agent, Briefings, Calendar, Clock, Drive, Manuals, Render, Repositories, Repository, Secrets,
+    Weather, Web,
 };
 use crate::mail::corpus::Corpus;
 use crate::mail::junk_folder::Junk;
@@ -8,6 +8,7 @@ use crate::mail::mail_sync::MailSync;
 use crate::mail::mailbox::Mailbox;
 use crate::mail::older_mail::OlderMail;
 use crate::record::TodoEvent;
+use crate::secretary::model::Model;
 use crate::store::Prodrome;
 
 /// What the secretary may use: the agent's effects over the chain itself, plus a model,

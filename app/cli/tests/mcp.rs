@@ -537,7 +537,7 @@ fn the_agents_reads_of_the_memory_write_no_file() {
         },
         suzatary_core::secretary::store::Entry::Said {
             at,
-            turn: suzatary_core::capability::Turn::Person {
+            turn: suzatary_core::secretary::model::Turn::Person {
                 text: "Renew the permit before it lapses".to_owned(),
                 references: Vec::new(),
                 attachments: Vec::new(),

@@ -4,12 +4,12 @@
 use serde_json::{Map, Value};
 
 use crate::attachment::AttachmentId;
-use crate::capability::Turn;
 use crate::enclosed::{Enclosed, Enclosure};
 use crate::file_read::FileRead;
 use crate::held_value::HeldFile;
 use crate::refusal::Refusal;
 use crate::secretary::memory::FactId;
+use crate::secretary::model::Turn;
 use crate::secretary::outcome::Outcome;
 use crate::secretary::tool_name::ToolName;
 

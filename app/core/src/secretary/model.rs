@@ -3,6 +3,8 @@
 //! A [`Reply`] carries what to say and the calls it wants as values, so the authority stays
 //! on this side; the model is the least trusted author in the application.
 
+pub mod laws;
+
 use std::collections::BTreeMap;
 
 use serde::{Deserialize, Serialize};
@@ -18,10 +20,10 @@ pub enum Turn {
     Person {
         /// His words.
         text: String,
-        /// What he pointed at while typing them; `default` so older transcripts still read.
+        /// What he pointed at while typing them.
         #[serde(default)]
         references: Vec<Reference>,
-        /// The photos he attached; absent on transcripts written before photos existed.
+        /// The photos he attached.
         #[serde(default, skip_serializing_if = "Vec::is_empty")]
         attachments: Vec<crate::attachment::Attachment>,
     },
@@ -41,8 +43,7 @@ pub enum Turn {
         /// How the call ended: answered, refused (still a turn the model must see), or a fact
         /// remembered.
         outcome: crate::secretary::outcome::Outcome,
-        /// Files the answer hands the model as themselves, named by their digest; absent on
-        /// transcripts written before a verb could.
+        /// Files the answer hands the model as themselves, named by their digest.
         #[serde(default, skip_serializing_if = "Vec::is_empty")]
         files: Vec<crate::enclosed::Enclosed>,
     },
@@ -236,9 +237,7 @@ impl Halt {
 }
 
 /// The halt of the round asking a model on this thread, for the e2e fixture's scripted model,
-/// which is handed no halt: a round it keeps waiting ends once its own round's halt is pulled,
-/// whether before the model was asked or while it waits, so a scene's Stop decides when the
-/// round answers and nothing races it.
+/// which is handed none: a scene's Stop decides when the round answers.
 #[cfg(feature = "fixture")]
 pub mod pulled {
     use std::cell::RefCell;
@@ -475,6 +474,33 @@ impl<M: Model + ?Sized> Model for &M {
     ) -> Result<Reply, ModelError> {
         (**self).turn(conversation, tools)
     }
+}
+
+/// The model one round asks, picked once for that round and owned by it: nothing of one
+/// round's pick reaches another round or another conversation.
+pub enum Pick<'a> {
+    /// The model that holds sessions.
+    Held(&'a dyn SessionModel),
+    /// A model with no session, picked for this round alone.
+    Turn(Box<dyn Model + 'a>),
+}
+
+impl Pick<'_> {
+    /// The model picked, asked statelessly.
+    #[must_use]
+    pub fn model(&self) -> &dyn Model {
+        match self {
+            Pick::Held(model) => *model,
+            Pick::Turn(model) => model.as_ref(),
+        }
+    }
+}
+
+/// Which model a round asks, answered as a value rather than a `SessionModel` that always
+/// fails beside a bool.
+pub trait Sessions: Sync {
+    /// The model this round asks, read now.
+    fn pick(&self) -> Pick<'_>;
 }
 
 #[cfg(test)]

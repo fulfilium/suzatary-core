@@ -16,7 +16,6 @@ use prodrome_core::event::{Actor, Envelope, Hash};
 use prodrome_core::literal::Datetime;
 use prodrome_core::registers::Node;
 
-use crate::capability::{SessionId, Turn};
 use crate::conversation_id::ConversationId;
 use crate::secretary::conversations::Conversations;
 use crate::secretary::erasure::Erasure;
@@ -26,6 +25,7 @@ use crate::secretary::line_event::LineEvent;
 use crate::secretary::line_shape::LineShape;
 use crate::secretary::line_words::LineWords;
 use crate::secretary::locked_text::{KeyName, TextKey};
+use crate::secretary::model::{SessionId, Turn};
 use crate::secretary::slots::Slots;
 use crate::secretary::store::{Entry, NotAConversation, Said, Stored};
 use crate::secretary::words::{Gone, Words};
@@ -1123,7 +1123,7 @@ pub use plain_reading::{ReadFailed, of_objects, opened};
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::capability::Turn;
+    use crate::secretary::model::Turn;
     use crate::store::Reads as _;
 
     fn id(text: &str) -> ConversationId {
@@ -1172,7 +1172,7 @@ mod tests {
                     at: at(1),
                     turn: Turn::Model {
                         text: String::new(),
-                        calls: vec![crate::capability::ToolCall {
+                        calls: vec![crate::secretary::model::ToolCall {
                             verb: "weather".into(),
                             args: std::collections::BTreeMap::new(),
                         }],

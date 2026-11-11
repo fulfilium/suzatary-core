@@ -49,8 +49,8 @@ impl Rule for Conversational {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::capability::Turn;
     use crate::rule::{Engine, Named};
+    use crate::secretary::model::Turn;
     use crate::secretary::store::{Entry, Kind, Namer, Title};
     use crate::secretary::transcript;
 

@@ -6,7 +6,7 @@ use std::path::PathBuf;
 
 use serde::Deserialize;
 use serde_json::Value;
-use suzatary_core::mail::mailbox::MailError;
+use suzatary_core::mail_error::MailError;
 
 /// One message as notmuch shows it: every field the readers use, typed, and a message without
 /// an `id` or a file does not parse, so no reader meets an empty one.

@@ -1,10 +1,11 @@
 //! The rounds and notes of one conversation, as targets a topic is put on.
 
 use crate::conversation_id::ConversationId;
-use crate::secretary::SecretaryVerb;
 use crate::secretary::outcome::Outcome;
 use crate::secretary::store::{Said, Stored};
+use crate::secretary::tool_name::ToolName;
 use crate::secretary::turn_shape::{TurnShape, shape};
+use crate::secretary::verb_name::VerbName;
 use crate::topic_target::Target;
 
 /// The most topics one round or note holds.
@@ -69,7 +70,7 @@ impl Round<'_> {
 pub fn notes_in(conversation: &ConversationId, turns: &[(usize, &Said)]) -> Vec<Target> {
     let drafted = |said: &Said| {
         matches!(shape(&said.turn), TurnShape::Tool { verb, outcome: Outcome::Answered, .. }
-            if verb == SecretaryVerb::DraftNote.into())
+            if verb == ToolName::Verb(VerbName::DraftNote))
     };
     let mut notes = Vec::new();
     let mut at = 0;

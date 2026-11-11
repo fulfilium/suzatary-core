@@ -19,7 +19,7 @@ use prodrome_core::literal::Datetime;
 use prodrome_core::policy::Untrusted;
 use serde_json::{Map, Value, json};
 use suzatary_core::agent::TriageVerb;
-use suzatary_core::capability::{Agent, Entropy, Nothing, Turn};
+use suzatary_core::capability::{Agent, Entropy, Nothing};
 use suzatary_core::chains::{ChainName, ChainPolicy, Chains};
 use suzatary_core::conversation_id::ConversationId;
 use suzatary_core::deployment::Deployment;
@@ -36,11 +36,13 @@ use suzatary_core::secretary::line_event::LineEvent;
 use suzatary_core::secretary::memories::{Memories, ReadMemories};
 use suzatary_core::secretary::memory::{Fact, Kind, Origin};
 use suzatary_core::secretary::memory_event::MemoryEvent;
+use suzatary_core::secretary::model::Turn;
 use suzatary_core::secretary::outcome::Outcome;
 use suzatary_core::secretary::recollection::Recollection;
 use suzatary_core::secretary::salted_text::{Text, TextName};
 use suzatary_core::secretary::store::Entry;
-use suzatary_core::secretary::surface::{Binding, Effect, SecretaryVerb};
+use suzatary_core::secretary::surface::SecretaryVerb;
+use suzatary_core::secretary::verb_name::{Binding, Effect};
 use suzatary_core::store::{Doc as _, InMemory, InMemoryDoc, Only, Prodrome, Reads as _};
 
 /// Each salt the next number.
@@ -409,7 +411,7 @@ fn the_triage_surface_reads_the_memory_and_names_no_verb_that_writes_it() {
     );
     let remembers: Vec<&str> = SecretaryVerb::ALL
         .iter()
-        .filter(|verb| verb.class().effect == Effect::Binds(Binding::Remembers))
+        .filter(|verb| verb.class().powers().effect == Effect::Binds(Binding::Remembers))
         .map(|verb| verb.name())
         .collect();
     assert!(

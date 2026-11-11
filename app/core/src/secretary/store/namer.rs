@@ -8,7 +8,7 @@ use serde::{Deserialize, Serialize};
 pub enum Namer {
     /// The title job, after the first answer, and which model it ran on.
     Job {
-        /// [`crate::capability::Model::name`] of the job's model.
+        /// [`crate::secretary::model::Model::name`] of the job's model.
         model: String,
     },
     /// A rename, by the actor the gate resolved.

@@ -2,12 +2,13 @@ use schemars::JsonSchema;
 use serde::Deserialize;
 use serde_json::{Value, json};
 
-use crate::capability::{Secretary, Turn};
+use crate::capability::Secretary;
 use crate::held_value::HeldFile;
 use crate::refusal::Refusal;
 use crate::secretary;
 use crate::secretary::attached::{self, Attached};
 use crate::secretary::attachment_source::AttachmentSource;
+use crate::secretary::model::Turn;
 use crate::secretary::opening;
 use crate::secretary::proposal::{Draft, Proposal};
 use crate::secretary::read_holders::ReadHolders;

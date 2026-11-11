@@ -279,7 +279,7 @@ fn a_review_round_holds_no_write_verb() {
         .turns
         .iter()
         .filter_map(|said| match &said.turn {
-            suzatary_core::capability::Turn::Tool {
+            suzatary_core::secretary::model::Turn::Tool {
                 verb,
                 outcome: suzatary_core::secretary::outcome::Outcome::Refused,
                 ..
@@ -429,7 +429,7 @@ fn an_unreadable_conversation_is_named_and_paged_once() {
     let named = round
         .turns
         .iter()
-        .filter(|said| matches!(&said.turn, suzatary_core::capability::Turn::Act { text, .. } if text.contains("2026-01-02-1")))
+        .filter(|said| matches!(&said.turn, suzatary_core::secretary::model::Turn::Act { text, .. } if text.contains("2026-01-02-1")))
         .count();
     assert_eq!(named, 1, "named once in today's review");
 }

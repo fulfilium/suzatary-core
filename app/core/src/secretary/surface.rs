@@ -6,9 +6,9 @@
 use serde_json::Value;
 
 use super::Call;
-use super::taint::Taint;
 use super::tool_name::ToolName;
 use super::verb_answer::VerbAnswer;
+use super::verb_name::{Binding, VerbName};
 use super::verbs::{
     AddTopics, Attachments, Briefing, BriefingDelta, Calendar, Consolidate, Context, Decisions,
     DraftNote, DriveList, DriveRead, Forget, GitDiffSummary, History, JunkDigest, JunkShow,
@@ -22,7 +22,7 @@ use crate::agent::{Holds, Says};
 use crate::capability::Agent;
 use crate::chains::ChainPolicy;
 use crate::refusal::{Refusal, shown};
-use crate::secretary::changes::{self, Act, Changeset, Unapplied};
+use crate::secretary::changes::{Act, Changeset, Unapplied};
 use crate::secretary::compaction::Reading;
 use crate::secretary::gate::Gate;
 use crate::secretary::proposal::Proposal;
@@ -37,7 +37,7 @@ pub enum SecretarySurface {}
 impl Surface for SecretarySurface {
     type Call<'a> = Call<'a>;
     type Answer = VerbAnswer;
-    type Class = Powers;
+    type Class = VerbName;
 }
 
 impl Holds for SecretarySurface {
@@ -170,7 +170,7 @@ fn applied(call: &Call<'_>, changeset: &Changeset) -> Result<Value, Refusal> {
         .keys()
         .map(String::as_str)
         .collect();
-    match changes::apply(
+    match crate::secretary::gate::apply(
         call.caps,
         call.chain,
         &categories,
@@ -191,110 +191,65 @@ fn applied(call: &Call<'_>, changeset: &Changeset) -> Result<Value, Refusal> {
     }
 }
 
-/// What a verb may do to the world, and whether its answer can carry somebody else's words.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct Powers {
-    /// What it does.
-    pub effect: Effect,
-    /// What its answer can carry.
-    pub taint: Taint,
-}
-
-/// What a verb does to the world, so a round scoped to fewer powers is a set of effects.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Effect {
-    /// Reads, or runs something that writes neither a chain nor a proposal.
-    Reads,
-    /// Stores something the owner taps, binding nothing until he does.
-    Proposes,
-    /// Binds at once in a round holding the owner's words alone, and files a card elsewhere.
-    Binds(Binding),
-    /// Withdraws one of the triage agent's cards; performing one is the owner's tap alone.
-    Settles,
-    /// Starts the timer's own mail sync early: nothing the timer does not reach, and nothing a
-    /// rewind could take back.
-    Syncs,
-    /// Searches a mail server for mail older than the routine sync's window and keeps what
-    /// matched on the box, read-only on the server and nothing a rewind could take back.
-    Pulls,
-    /// Sets a watch on mail the owner expects, whose only act is a push to the owner's phone.
-    Watches,
-}
-
-/// An effect that binds at once, so a round's taint decides whether it runs.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Binding {
-    /// Appends to a chain as the trusted actor.
-    Writes,
-    /// Writes the secretary's own memory.
-    Remembers,
-}
-
-const fn powers(effect: Effect, taint: Taint) -> Powers {
-    Powers { effect, taint }
-}
-
-use Binding::{Remembers, Writes};
-use Effect::{Binds, Proposes, Pulls, Reads, Settles, Syncs, Watches};
-use Taint::{Clean, Tainted};
-
 verbs! {
-    /// Every verb the secretary may call, and its powers. A verb is [`Clean`] only where this
-    /// says so.
+    /// Every verb the secretary may call, each by its [`VerbName`], which says its powers.
     pub enum SecretaryVerb;
     /// One call of a [`SecretaryVerb`], its arguments parsed.
     pub enum SecretaryCall;
-    on SecretarySurface;
-    Context: powers(Reads, Clean),
-    Remember: powers(Binds(Remembers), Clean),
-    Forget: powers(Binds(Remembers), Clean),
-    Consolidate: powers(Binds(Remembers), Clean),
-    Recall: powers(Reads, Tainted),
-    // Its answer carries the node's own taint, which `taint::turn` reads; a refusal stays here.
-    Zoom: powers(Reads, Tainted),
-    ListOpenTodos: powers(Reads, Tainted),
-    TodoShow: powers(Reads, Tainted),
-    History: powers(Reads, Tainted),
-    Search: powers(Reads, Tainted),
-    Show: powers(Reads, Tainted),
-    Attachments: powers(Reads, Tainted),
-    UploadRead: powers(Reads, Tainted),
-    SyncMail: powers(Syncs, Tainted),
-    SearchOlder: powers(Pulls, Tainted),
-    WatchMail: powers(Watches, Tainted),
-    BriefingDelta: powers(Reads, Tainted),
-    Briefing: powers(Reads, Tainted),
-    GitDiffSummary: powers(Reads, Tainted),
-    TodoAdd: powers(Binds(Writes), Tainted),
-    TodoUpdate: powers(Binds(Writes), Tainted),
-    Record: powers(Binds(Writes), Tainted),
-    ProposeEmail: powers(Proposes, Tainted),
-    ProposeForward: powers(Proposes, Tainted),
-    ProposeAct: powers(Proposes, Tainted),
-    ProposeChanges: powers(Proposes, Tainted),
-    WithdrawProposal: powers(Proposes, Tainted),
-    Weather: powers(Reads, Clean),
-    Calendar: powers(Reads, Tainted),
-    Decisions: powers(Reads, Tainted),
-    Web: powers(Proposes, Tainted),
-    DriveList: powers(Reads, Tainted),
-    DriveRead: powers(Proposes, Tainted),
-    JunkDigest: powers(Reads, Tainted),
-    JunkShow: powers(Reads, Tainted),
-    ReposList: powers(Reads, Tainted),
-    RepoTree: powers(Reads, Tainted),
-    RepoRead: powers(Reads, Tainted),
-    RepoGrep: powers(Reads, Tainted),
-    ProposePatch: powers(Proposes, Tainted),
-    ProposeCodingSession: powers(Proposes, Tainted),
-    ProposeDecision: powers(Proposes, Tainted),
-    DraftNote: powers(Proposes, Tainted),
-    TriageCards: powers(Reads, Tainted),
-    TriageWithdraw: powers(Settles, Tainted),
-    // Write the box-local topic store, no chain and no proposal; a topic they may create was
-    // written in a round with no words but the owner's, so their answers carry none but his.
-    AddTopics: powers(Reads, Clean),
-    ReviseTopics: powers(Reads, Clean),
+    on SecretarySurface, classed by VerbName;
+    Context,
+    Remember,
+    Forget,
+    Consolidate,
+    Recall,
+    Zoom,
+    ListOpenTodos,
+    TodoShow,
+    History,
+    Search,
+    Show,
+    Attachments,
+    UploadRead,
+    SyncMail,
+    SearchOlder,
+    WatchMail,
+    BriefingDelta,
+    Briefing,
+    GitDiffSummary,
+    TodoAdd,
+    TodoUpdate,
+    Record,
+    ProposeEmail,
+    ProposeForward,
+    ProposeAct,
+    ProposeChanges,
+    WithdrawProposal,
+    Weather,
+    Calendar,
+    Decisions,
+    Web,
+    DriveList,
+    DriveRead,
+    JunkDigest,
+    JunkShow,
+    ReposList,
+    RepoTree,
+    RepoRead,
+    RepoGrep,
+    ProposePatch,
+    ProposeCodingSession,
+    ProposeDecision,
+    DraftNote,
+    TriageCards,
+    TriageWithdraw,
+    AddTopics,
+    ReviseTopics,
+}
+
+impl From<SecretaryVerb> for ToolName {
+    fn from(verb: SecretaryVerb) -> Self {
+        Self::Verb(verb.class())
+    }
 }
 
 /// Some of the verbs: the ones a round's model is shown and may call, and the refusal a call of
@@ -339,6 +294,7 @@ impl Subset {
     pub fn find(&self, called: &ToolName) -> Result<SecretaryVerb, Refusal> {
         called
             .verb()
+            .and_then(|name| SecretaryVerb::named(name.name()))
             .filter(|verb| (self.allows)(*verb))
             .ok_or_else(|| {
                 (self.refuses)(
@@ -381,6 +337,17 @@ mod tests {
                 verb == "propose_email" || !verb.contains("send"),
                 "sending is structurally human-only: {verb}",
             );
+        }
+    }
+
+    /// Each verb maps to the `VerbName` of its own name, and every `VerbName` is some verb's, so
+    /// the two lists are one.
+    #[test]
+    fn the_verbs_and_their_names_are_one_list() {
+        let mapped: Vec<VerbName> = SecretaryVerb::ALL.iter().map(|verb| verb.class()).collect();
+        assert_eq!(mapped, VerbName::ALL);
+        for &verb in SecretaryVerb::ALL {
+            assert_eq!(verb.class().name(), verb.name());
         }
     }
 

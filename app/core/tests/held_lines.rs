@@ -14,7 +14,7 @@ use prodrome_core::memo::Counts;
 
 use std::sync::atomic::{AtomicU64, Ordering};
 
-use suzatary_core::capability::{Entropy, Turn};
+use suzatary_core::capability::Entropy;
 use suzatary_core::conversation_id::ConversationId;
 use suzatary_core::rendering::ANSWER;
 use suzatary_core::secretary::conversations::{Conversations, InMemory};
@@ -27,6 +27,7 @@ use suzatary_core::secretary::line_form::{Husked, LineReplica};
 use suzatary_core::secretary::line_shape::LineShape;
 use suzatary_core::secretary::locked_text::KeyName;
 use suzatary_core::secretary::locked_text::opens;
+use suzatary_core::secretary::model::Turn;
 use suzatary_core::secretary::outlines::{Outlines, Parsed};
 use suzatary_core::secretary::readings::Dress;
 use suzatary_core::secretary::rescrub;

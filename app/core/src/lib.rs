@@ -43,6 +43,7 @@ pub mod held_file;
 pub mod held_value;
 pub mod leak;
 pub mod mail;
+pub mod mail_error;
 pub mod message_part;
 pub mod model_name;
 pub mod narrowing;

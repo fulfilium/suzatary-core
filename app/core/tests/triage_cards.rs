@@ -174,8 +174,8 @@ fn the_agents_writes_are_cards_and_reach_no_chain() {
 /// The owner's round in conversation `default`, in which the model has read a message that asks
 /// for a write.
 fn a_round_that_read_mail(lines: &suzatary_core::secretary::conversations::InMemory) {
-    use suzatary_core::capability::{ToolCall, Turn};
     use suzatary_core::conversation_id::DEFAULT;
+    use suzatary_core::secretary::model::{ToolCall, Turn};
     use suzatary_core::secretary::store::Entry;
     use suzatary_core::secretary::transcript;
 
@@ -237,7 +237,8 @@ fn a_round_that_read_mail(lines: &suzatary_core::secretary::conversations::InMem
 #[test]
 fn a_mail_read_in_the_round_makes_every_secretary_write_a_card() {
     use suzatary_core::conversation_id::DEFAULT;
-    use suzatary_core::secretary::{Binding, Effect, SecretaryVerb};
+    use suzatary_core::secretary::SecretaryVerb;
+    use suzatary_core::secretary::verb_name::{Binding, Effect};
 
     let chain = the_owners_chain();
     let before = chain.objects().expect("reads");
@@ -274,7 +275,7 @@ fn a_mail_read_in_the_round_makes_every_secretary_write_a_card() {
     let writes: Vec<SecretaryVerb> = SecretaryVerb::ALL
         .iter()
         .copied()
-        .filter(|verb| verb.class().effect == Effect::Binds(Binding::Writes))
+        .filter(|verb| verb.class().powers().effect == Effect::Binds(Binding::Writes))
         .collect();
     for verb in &writes {
         let mut attack = match verb.name() {

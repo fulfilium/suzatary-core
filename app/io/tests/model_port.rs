@@ -5,8 +5,8 @@
 use std::path::PathBuf;
 use std::sync::{Mutex, PoisonError};
 
-use suzatary_core::capability::{Conversation, ToolCall, Turn};
-use suzatary_core::conformance::model::{Case, Rig, check};
+use suzatary_core::secretary::model::laws::{Case, Rig, check};
+use suzatary_core::secretary::model::{Conversation, ToolCall, Turn};
 use suzatary_io::model::{ClaudeCli, Fence};
 
 /// Each model gets its own script and the file it writes what it heard to; the rig keeps the

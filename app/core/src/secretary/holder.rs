@@ -71,11 +71,11 @@ impl Holder {
 mod tests {
     use prodrome_core::literal::Datetime;
 
-    use crate::capability::{SessionId, Turn};
     use crate::conversation_id::ConversationId;
     use crate::secretary::conversations::InMemory;
     use crate::secretary::erasure::Erasure;
     use crate::secretary::line_event::LineEvent;
+    use crate::secretary::model::{SessionId, Turn};
     use crate::secretary::scrubbed_under::ScrubbedUnder;
     use crate::secretary::store::{Entry, Kind};
     use crate::secretary::transcript;

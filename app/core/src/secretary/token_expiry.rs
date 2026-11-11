@@ -82,7 +82,7 @@ pub fn acts(
 /// Write [`acts`] to the chain as the secretary.
 ///
 /// # Errors
-/// As [`acts`], and [`changes::apply`]'s refusals.
+/// As [`acts`], and `gate::apply`'s refusals.
 pub fn write(
     caps: &crate::capability::Secretary<'_>,
     policy: &ChainPolicy,
@@ -109,7 +109,7 @@ pub fn write(
         return Ok(Vec::new());
     };
     let known: Vec<&str> = deployment.categories.keys().map(String::as_str).collect();
-    changes::apply(
+    crate::secretary::gate::apply(
         caps,
         policy,
         &known,

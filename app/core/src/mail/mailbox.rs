@@ -2,6 +2,7 @@
 //! conversation.
 
 use super::Datetime;
+use crate::mail_error::MailError;
 
 /// A notmuch query; an empty one is a mistake, not a search for everything.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -34,25 +35,6 @@ impl Query {
     pub fn as_str(&self) -> &str {
         &self.0
     }
-}
-
-/// The corpus refused a read.
-#[derive(Debug, thiserror::Error)]
-pub enum MailError {
-    /// The text handed in is not a query.
-    #[error("not a query: {0}")]
-    Query(String),
-    /// The index could not be read.
-    #[error("the mail index could not be read: {0}")]
-    Unreachable(String),
-    /// The corpus holds no such message or conversation, which is not an empty result.
-    #[error("the local corpus holds no {kind} {name:?}")]
-    Absent {
-        /// What was looked for: "message" or "conversation".
-        kind: &'static str,
-        /// The identifier that found nothing.
-        name: String,
-    },
 }
 
 /// Reading the corpus, and only reading it; sending is a separate trait nothing the agent holds.

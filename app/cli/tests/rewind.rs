@@ -108,7 +108,7 @@ fn a_regenerate_and_an_edit_ask_again_over_the_live_path() {
     assert!(
         !told.turns.iter().any(|turn| matches!(
             turn,
-            suzatary_core::capability::Turn::Model { text, .. } if text == "one"
+            suzatary_core::secretary::model::Turn::Model { text, .. } if text == "one"
         )),
         "the set-aside answer is never delivered"
     );

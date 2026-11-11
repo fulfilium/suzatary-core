@@ -11,7 +11,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use prodrome_core::event::{Actor, Hash, canonical_envelope};
 use prodrome_core::literal::Datetime;
 use proptest::prelude::*;
-use suzatary_core::capability::{Entropy, Turn};
+use suzatary_core::capability::Entropy;
 use suzatary_core::conversation_id::ConversationId;
 use suzatary_core::model_name::ModelName;
 use suzatary_core::secretary::digest::Digest;
@@ -22,6 +22,7 @@ use suzatary_core::secretary::inbox_event::InboxEvent;
 use suzatary_core::secretary::memories::Memories;
 use suzatary_core::secretary::memory::Fact;
 use suzatary_core::secretary::memory_event::MemoryEvent;
+use suzatary_core::secretary::model::Turn;
 use suzatary_core::secretary::salted_text::{Text, TextName};
 use suzatary_core::secretary::store::Entry;
 use suzatary_core::store::Reads as _;
@@ -891,9 +892,9 @@ impl Recording {
     }
 }
 
-use suzatary_core::capability::Compact as _;
+use suzatary_core::secretary::compact::Compact as _;
 
-impl suzatary_core::capability::Compact for Recording {
+impl suzatary_core::secretary::compact::Compact for Recording {
     fn model(&self) -> &ModelName {
         self.joining.model()
     }
@@ -901,10 +902,10 @@ impl suzatary_core::capability::Compact for Recording {
     fn compact(
         &self,
         ask: &suzatary_core::secretary::compact_ask::Ask,
-    ) -> Result<String, suzatary_core::capability::ModelError> {
+    ) -> Result<String, suzatary_core::secretary::model::ModelError> {
         self.asked.lock().expect("not poisoned").push(ask.clone());
         if self.fails {
-            return Err(suzatary_core::capability::ModelError::Failed(
+            return Err(suzatary_core::secretary::model::ModelError::Failed(
                 "no result".to_owned(),
             ));
         }
@@ -924,8 +925,10 @@ const ROOMY: suzatary_core::secretary::compact_budget::Budget =
 
 /// The ladder of `rungs`, in order.
 fn ladder<'c>(
-    rungs: &[&'c dyn suzatary_core::capability::Compact],
-) -> suzatary_core::secretary::compaction::Compaction<&'c dyn suzatary_core::capability::Compact> {
+    rungs: &[&'c dyn suzatary_core::secretary::compact::Compact],
+) -> suzatary_core::secretary::compaction::Compaction<
+    &'c dyn suzatary_core::secretary::compact::Compact,
+> {
     suzatary_core::secretary::compaction::Compaction {
         ladder: suzatary_core::nonempty::NonEmpty::of(rungs.to_vec()).expect("a rung"),
     }
@@ -940,7 +943,7 @@ impl Box {
     /// Run the compaction rule through an engine until nothing is owed; every firing's outcome.
     fn compact_all(
         &self,
-        compactor: &dyn suzatary_core::capability::Compact,
+        compactor: &dyn suzatary_core::secretary::compact::Compact,
     ) -> Vec<suzatary_core::secretary::compaction::Compacted> {
         use suzatary_core::rule::Engine;
         use suzatary_core::secretary::compaction::{Reading, TheDigest, perform};
@@ -993,7 +996,9 @@ fn conversation(kinds: &[u8], sessions: bool) -> Vec<Entry> {
                     kept = Some(from);
                     lines.push(Entry::Kept {
                         at: at(k),
-                        session: suzatary_core::capability::SessionId::minted(&format!("a/{k}")),
+                        session: suzatary_core::secretary::model::SessionId::minted(&format!(
+                            "a/{k}"
+                        )),
                         model: "m".to_owned(),
                         cwd: String::new(),
                         surface: None,
@@ -1150,9 +1155,12 @@ fn an_unfit_node_stays_pending_and_says_why() {
 }
 
 /// `inner` under another model's name.
-struct Renamed<'c>(&'c dyn suzatary_core::capability::Compact, ModelName);
+struct Renamed<'c>(
+    &'c dyn suzatary_core::secretary::compact::Compact,
+    ModelName,
+);
 
-impl suzatary_core::capability::Compact for Renamed<'_> {
+impl suzatary_core::secretary::compact::Compact for Renamed<'_> {
     fn model(&self) -> &ModelName {
         &self.1
     }
@@ -1160,7 +1168,7 @@ impl suzatary_core::capability::Compact for Renamed<'_> {
     fn compact(
         &self,
         ask: &suzatary_core::secretary::compact_ask::Ask,
-    ) -> Result<String, suzatary_core::capability::ModelError> {
+    ) -> Result<String, suzatary_core::secretary::model::ModelError> {
         self.0.compact(ask)
     }
 }
@@ -1346,7 +1354,7 @@ impl Box {
     fn compact_with_workers(
         &self,
         paced: &suzatary_core::secretary::compaction::Paced<'_>,
-        compactor: &dyn suzatary_core::capability::Compact,
+        compactor: &dyn suzatary_core::secretary::compact::Compact,
         workers: usize,
         round: usize,
     ) {
@@ -1933,7 +1941,7 @@ proptest! {
                 };
                 let call = |verb: &str| Turn::Model {
                     text: String::new(),
-                    calls: vec![suzatary_core::capability::ToolCall {
+                    calls: vec![suzatary_core::secretary::model::ToolCall {
                         verb: verb.into(),
                         args: std::collections::BTreeMap::new(),
                     }],
