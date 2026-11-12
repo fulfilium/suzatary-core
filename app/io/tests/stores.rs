@@ -1318,3 +1318,173 @@ fn inner(
     }
     kept
 }
+
+/// What a deploy of a change of the scrub's rules does to a store written and summarised under the
+/// rules before it, with no migration run. Run by name in release, `write` under the build before
+/// and `read` under each build, on one directory:
+/// `SUZATARY_RULES_STORE=<dir> SUZATARY_RULES_PHASE=write|read cargo test --release -p suzatary-io
+/// --test all -- --ignored a_rules_change_over_a_stored_digest --nocapture`.
+/// `write` lays 20 conversations of 500 lines and one of 12 lines that each hold a code a claiming
+/// word follows, and summarises every node; `read` prints the census, how many slots read stale,
+/// how many of the 12 lines still show their code, and what the lines and the digest cost to read.
+#[test]
+#[ignore = "a measurement, run by name"]
+#[expect(clippy::too_many_lines, reason = "one measurement, read top to bottom")]
+fn a_rules_change_over_a_stored_digest() {
+    use suzatary_core::secretary::compact_ask::Beside;
+    use suzatary_core::secretary::digest_event::{Attempt, DigestEvent, summarized};
+    use suzatary_core::secretary::digest_line::Line;
+    use suzatary_core::secretary::opened::Opened;
+    use suzatary_core::secretary::salted_text::Text;
+    use suzatary_core::secretary::scrubbed_under::ScrubbedUnder;
+    let root = PathBuf::from(std::env::var("SUZATARY_RULES_STORE").expect("a directory"));
+    let phase = std::env::var("SUZATARY_RULES_PHASE").expect("write or read");
+    let (lines, keys) = lines_at(&root);
+    let owners = std::collections::BTreeSet::new();
+    let history = Objects::<DigestEvent>::digests(root.join("digests"), owners.clone());
+    let texts = suzatary_io::texts::Texts::open(root.join("digest-texts"));
+    let entropy = suzatary_io::texts::SystemEntropy;
+    let stores = |opened: &'static Opened| suzatary_core::secretary::conversations::Conversations {
+        lines: &lines,
+        keys: &keys,
+        entropy: &entropy,
+        renders: &suzatary_base::capability::Nothing,
+        sessions: &suzatary_base::capability::Nothing,
+        opened,
+    };
+    let digests = |opened: &'static Opened| Digests {
+        history: &history,
+        texts: &texts,
+        lines: stores(opened),
+        owners: &owners,
+        compacting: &suzatary_core::secretary::compacting::Compacting::Off,
+    };
+    let model = suzatary_core::model_name::ModelName::parse("claude-cli/haiku").expect("a model");
+    let rule = suzatary_core::secretary::compaction::Compaction {
+        ladder: suzatary_core::nonempty::NonEmpty::new(model.clone(), Vec::new()),
+    };
+    let codes = ConversationId::new("2026-10-09-codes").expect("a slug");
+    let code = |k: usize| format!("7391{k:02}");
+    if phase == "write" {
+        conversations_at_scale(&lines, &keys, 20, 500);
+        let opened: &'static Opened = Box::leak(Box::default());
+        let opening = Entry::Opened {
+            at: at(9, 59),
+            title: suzatary_core::secretary::words::Words::kept("Codes".to_owned()),
+            model: "claude-cli/haiku".to_owned(),
+            kind: suzatary_core::secretary::store::Kind::Topic,
+        };
+        transcript::start(stores(opened), &codes, &opening).expect("opened");
+        for k in 0..12 {
+            let entry = Entry::Said {
+                at: at(10, u32::try_from(k).expect("few")),
+                turn: Turn::Person {
+                    text: format!("Your verification code is {}. fee", code(k)),
+                    references: Vec::new(),
+                    attachments: Vec::new(),
+                },
+                by: None,
+            };
+            transcript::push(stores(opened), &codes, &entry).expect("said");
+        }
+        let compactor = suzatary_core::secretary::digests::compactor();
+        let mut count = 0u32;
+        loop {
+            let reading = digests(opened).reads().read().expect("reads");
+            let pending = reading.pending();
+            if pending.is_empty() {
+                break;
+            }
+            let mut nodes = pending.iter();
+            history
+                .append_each(&mut || {
+                    let Some(node) = nodes.next() else {
+                        return Ok(None);
+                    };
+                    count += 1;
+                    let label = *reading.node(node).expect("in the tree").measure();
+                    let text = Text::new(
+                        Line::new(&format!("summary {count} of what was said")).expect("a line"),
+                        [7; suzatary_base::capability::SALT_BYTES],
+                    );
+                    suzatary_core::store::Doc::set(&texts, &text.name(), &text)?;
+                    let attempt = Attempt {
+                        over: reading.over(node).expect("over"),
+                        model: model.clone(),
+                        taint: label.taint,
+                        beside: Beside::of(&label),
+                    };
+                    Ok(Some(
+                        summarized(node.clone(), at(23, 0), compactor.clone(), &text, attempt)
+                            .expect("an event"),
+                    ))
+                })
+                .expect("summarised");
+        }
+        println!("summarised {count} nodes");
+    }
+    let objects = lines.objects().expect("reads");
+    let (mut current, mut stale) = (0usize, 0usize);
+    for (_, object) in &objects {
+        if let Some(line) = object.event() {
+            for under in line.scrubbed_under() {
+                if *under == ScrubbedUnder::current(()) {
+                    current += 1;
+                } else {
+                    stale += 1;
+                }
+            }
+        }
+    }
+    println!(
+        "{} lines; slots under the current rules: {current}, stale: {stale}",
+        objects.len()
+    );
+    let time = |what: &str, f: &mut dyn FnMut()| {
+        let started = std::time::Instant::now();
+        f();
+        println!("{what}: {:?}", started.elapsed());
+    };
+    let warm: &'static Opened = Box::leak(Box::default());
+    let scrubs = suzatary_core::redact::scrubs();
+    time("the lines' fold, cold", &mut || {
+        stores(warm)
+            .reads()
+            .fold(suzatary_core::secretary::held_lines::HeldLines::gathered)
+            .expect("reads");
+    });
+    time("the lines' fold, warm", &mut || {
+        stores(warm)
+            .reads()
+            .fold(suzatary_core::secretary::held_lines::HeldLines::gathered)
+            .expect("reads");
+    });
+    let first = ConversationId::new("2026-10-09-1").expect("a slug");
+    time("one conversation of 500 lines, cold", &mut || {
+        transcript::read(stores(warm), &first).expect("reads");
+    });
+    time("one conversation of 500 lines, warm", &mut || {
+        transcript::read(stores(warm), &first).expect("reads");
+    });
+    time("the digest, cold", &mut || {
+        digests(warm).reads().read().expect("reads");
+    });
+    time("the digest, warm", &mut || {
+        digests(warm).reads().read().expect("reads");
+    });
+    println!(
+        "values scrubbed while reading: {}",
+        suzatary_core::redact::scrubs() - scrubs
+    );
+    let read = format!(
+        "{:?}",
+        transcript::read(stores(warm), &codes).expect("reads")
+    );
+    let shown = (0..12).filter(|&k| read.contains(&code(k))).count();
+    println!("of 12 lines holding a code a claiming word follows, {shown} show their code");
+    let reading = digests(warm).reads().read().expect("reads");
+    print!(
+        "{}",
+        suzatary_core::secretary::digest_census::Census::of(&reading, &rule)
+    );
+}

@@ -349,6 +349,25 @@ impl LineEvent {
         })
     }
 
+    /// Whether slot `slot` opens as `slots` reads it by its key's name ([`Slots::opens`]): its
+    /// words are not read where `slots` can say so by its key alone, so a slot under older rules
+    /// is not scrubbed to answer.
+    pub(crate) fn slot_opens(&self, slot: usize, slots: &impl Slots) -> bool {
+        let Some(sealed) = self.words.get(slot) else {
+            return false;
+        };
+        let binding = self.slot(slot, &sealed.under);
+        let unlocks = |key: &TextKey| match &sealed.seal {
+            Seal::Locked(locked) => locked.open(&binding, key).is_some(),
+            Seal::Dropped(_) => false,
+        };
+        slots.opens(
+            sealed.seal.key(),
+            &|| self.slot_words(slot, slots),
+            &unlocks,
+        )
+    }
+
     /// The line as read: each slot read by `slots` by its key's name, opened with this line's
     /// binding for that slot.
     #[must_use]
@@ -1109,6 +1128,55 @@ mod tests {
             &Counting::default(),
         )
         .expect("a line")
+    }
+
+    /// Whether a slot opens is the same question asked either way: `slot_opens`, which reads no
+    /// words where the key store can say, answers as `slot_words` is not missing, for a slot
+    /// under the current rules and one under older rules, with its key, with another slot's key,
+    /// and with none.
+    #[test]
+    fn a_slot_opens_exactly_where_its_words_are_not_missing() {
+        let entry = Entry::Said {
+            at: at(),
+            turn: Turn::Model {
+                text: "Your verification code is 482913. fee".to_owned(),
+                calls: Vec::new(),
+            },
+            by: None,
+        };
+        let older = ScrubbedUnder::Version(
+            Rules::new("67d7f8df2fd4d019fd90b6d59f17f44b046e102ea2d8ad4da122d6e7517c4f4a")
+                .expect("a rules name"),
+        );
+        let actor = Actor::new("assistant").expect("an actor");
+        let stale = LineEvent::written_under(&older, id(), actor, 3, &entry, &Counting::default())
+            .expect("a line");
+        let (other, others) = written(&entry);
+        for (line, keys) in [written(&entry), stale] {
+            let wrong: Vec<TextKey> = others
+                .iter()
+                .map(|key| TextKey::parse(&keys[0].name(), key.bytes()).expect("a key"))
+                .collect();
+            let own: Vec<TextKey> = keys
+                .iter()
+                .map(|key| TextKey::parse(&key.name(), key.bytes()).expect("a key"))
+                .collect();
+            for held in [own, wrong, Vec::new()] {
+                let slots = opened_by(&held);
+                let words = line.slot_words(0, &slots);
+                let missing = matches!(
+                    words,
+                    Words::Gone {
+                        gone: Gone::Missing
+                    }
+                );
+                assert_eq!(line.slot_opens(0, &slots), !missing, "{} keys", held.len());
+            }
+        }
+        assert!(
+            !other.slot_opens(9, &opened_by(&others)),
+            "a slot the line does not hold"
+        );
     }
 
     fn opened_by(keys: &[TextKey]) -> impl Fn(&KeyName) -> Words<TextKey> + '_ {

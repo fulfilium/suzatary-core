@@ -3001,7 +3001,7 @@ fn a_stored_slot_is_under_the_rules_this_build_names() {
     }
     assert_eq!(
         Rules::current(()).as_str(),
-        "67d7f8df2fd4d019fd90b6d59f17f44b046e102ea2d8ad4da122d6e7517c4f4a"
+        "f7eb6c9fe2ada434c6e1e51ec8bb69a3e10d03e227d8b731458c318793162d8a"
     );
 }
 

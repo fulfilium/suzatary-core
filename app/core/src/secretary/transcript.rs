@@ -420,7 +420,7 @@ pub fn supersedes<'l>(
             continue;
         }
         for reseal in resealed_from(&key) {
-            if !missing(&reseal.slot_words(0, slots)) {
+            if reseal.slot_opens(0, slots) {
                 return true;
             }
             walking.extend(reseal.keys().cloned());

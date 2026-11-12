@@ -21,9 +21,8 @@
 //!   characters on its line, or within [`NEAR`] of such a label or of verification, verify,
 //!   passcode, OTP, 2FA or MFA; four or five digits right after `code` or `code:`; six to eight
 //!   digits within [`NEAR`] of code, codes or PIN, unless the word before makes it a postal, zip,
-//!   promo, error or dialling code. A label claims only the first number beside it, a closer
-//!   order, invoice, reference, flight, room, fee or total label claims the number instead, and a
-//!   year or a `yyyymmdd` date is not a code;
+//!   promo, error or dialling code. A label claims only the first number beside it, a claiming
+//!   word closer before it takes it from code, codes or PIN, and a year or date is not a code;
 //! - a bank account number: six to seventeen digits, in a row or in groups, within [`NEAR`]
 //!   characters of account, acct, a/c, checking or savings, unless an order, invoice, tracking,
 //!   booking, telephone or help label is closer, and not grouped as a phone number or a date;
@@ -37,7 +36,7 @@
 //!   `A-No`, `A#`, alien number or alien registration number.
 //!
 //! An account number, a passport number and an A-number are held only when no order, invoice,
-//! tracking, booking, telephone or help label is closer. A labelled code, account, routing,
+//! tracking, booking, telephone or help word before it is closer. A labelled code, account, routing,
 //! passport or A-number stands alone: no `+` or currency beside it, no
 //! digit beside it across a hyphen, dot, comma or slash, and no run of three digits or more
 //! across one space. When matches overlap, a code wins, then a kind whose checksum held, then the
@@ -55,9 +54,8 @@
 //! withheld on what [`redact`] finds. A conversation line is stored and pushed, so it loses them;
 //! the mail it quotes keeps the working link.
 //!
-//! Over-redaction is the safe failure: a number that looks like one of these
-//! and is not costs the owner a look at the file; one that slips through costs
-//! the number. A `zipcode=` parameter loses its value for the same reason.
+//! Over-redaction is the safe failure: a false match costs the owner a look at the file, a miss
+//! costs the number; so a `zipcode=` parameter loses its value too.
 
 use std::borrow::Cow;
 use std::cell::LazyCell;
@@ -215,7 +213,7 @@ impl Versioned for Scrub {
     /// The revision of the code the patterns' matches pass through (the checksums, the dates,
     /// the standing-alone test and the overlap rule). Raise it when that code changes what is
     /// redacted, since no pattern's text shows such a change.
-    const REVISION: u32 = 2;
+    const REVISION: u32 = 3;
 
     fn parts((): ()) -> Vec<String> {
         let patterns: [&Regex; 24] = [
@@ -688,24 +686,82 @@ fn codes(
             let code = |labels: &[Label], reach: usize, before: bool| {
                 claims(text, labels, (start, end), reach, before)
             };
-            let gap = [
-                code(named, STRONG_NEAR, true),
-                code(named, NEAR, false),
-                code(strong, NEAR, false),
-                code(&right_before, 2, true),
-                (digits.len() >= 6)
-                    .then(|| code(weak, NEAR, false))
-                    .flatten(),
-            ]
-            .into_iter()
-            .flatten()
-            .min()?;
-            let other = closest(text, not_codes, start, end, Reach::Line)
-                .map_or(usize::MAX, |(_, other)| other);
-            (gap < other && alone(text, start, end) && !dated(&digits))
-                .then(|| candidate(start, end, Kind::Code, Strength::Code))
+            let label = CodeLabel::of(
+                [
+                    code(named, STRONG_NEAR, true),
+                    code(named, NEAR, false),
+                    code(strong, NEAR, false),
+                ],
+                [
+                    code(&right_before, 2, true),
+                    (digits.len() >= 6)
+                        .then(|| code(weak, NEAR, false))
+                        .flatten(),
+                ],
+            )?;
+            (label.holds(claimed(text, not_codes, start))
+                && alone(text, start, end)
+                && !dated(&digits))
+            .then(|| candidate(start, end, Kind::Code, Strength::Code))
         })
         .collect()
+}
+
+/// How a code's labels reach it, the strongest first.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum CodeLabel {
+    /// A label that names a code with its noun ("verification code"), or verification, verify,
+    /// passcode, OTP, 2FA or MFA: nothing claims the number from it.
+    Strong,
+    /// `code`, `codes` or `PIN`, this many characters away: a claiming word that labels the number
+    /// and stands closer claims it instead.
+    Weak(usize),
+}
+
+impl CodeLabel {
+    /// The label that reaches a number, from the gaps of the strong labels and of the weak ones
+    /// that reach it; none when none does.
+    fn of<const S: usize, const W: usize>(
+        strong: [Option<usize>; S],
+        weak: [Option<usize>; W],
+    ) -> Option<Self> {
+        match (
+            strong.into_iter().flatten().min(),
+            weak.into_iter().flatten().min(),
+        ) {
+            (Some(_), _) => Some(Self::Strong),
+            (None, Some(gap)) => Some(Self::Weak(gap)),
+            (None, None) => None,
+        }
+    }
+
+    /// Whether the number is held as a code, given how far the closest claiming word that labels
+    /// it is ([`claimed`]). A tie is held: over-redaction is the safe failure.
+    fn holds(self, claim: Option<usize>) -> bool {
+        match (self, claim) {
+            (Self::Strong, _) | (Self::Weak(_), None) => true,
+            (Self::Weak(gap), Some(claim)) => gap <= claim,
+        }
+    }
+}
+
+/// How far the closest of `others`, which claim a number for something other than a held number
+/// (an order, a fee, a booking), labels the number starting at `start`: it stands before the
+/// number, within [`NEAR`] characters on its clause, with no digit between. A word after the
+/// number, or across a sentence's end (`.`, `!`, `?`, `;`) or a line break, labels nothing, so
+/// what follows a number never decides whether it is held.
+fn claimed(text: &str, others: &[Label], start: usize) -> Option<usize> {
+    others
+        .iter()
+        .filter_map(|&(_, label_end, _)| {
+            let gap = text.get(label_end..start)?;
+            let count = gap.chars().count();
+            let clause = !gap
+                .chars()
+                .any(|c| c.is_ascii_digit() || matches!(c, '\n' | '.' | '!' | '?' | ';'));
+            (label_end <= start && count <= NEAR && clause).then_some(count)
+        })
+        .min()
 }
 
 /// Every held number this module recognises in `text`, in order and never overlapping: two
@@ -994,8 +1050,8 @@ fn candidate(start: usize, end: usize, kind: Kind, strength: Strength) -> Candid
 }
 
 /// A match of a kind that its label alone makes held (an account, a passport, an A-number): it
-/// passes `check` and stands alone, and the closest of `labels` is closer than any of `others`,
-/// which claim a number for something else.
+/// passes `check` and stands alone, and the closest of `labels` is no farther than any of
+/// `others` that labels it ([`claimed`]).
 fn labelled(
     text: &str,
     found: &regex::Match<'_>,
@@ -1007,9 +1063,9 @@ fn labelled(
     if !check(found.as_str()) || !alone(text, start, end) {
         return None;
     }
-    let other = closest(text, others, start, end, Reach::Line).map_or(usize::MAX, |(_, gap)| gap);
+    let claim = claimed(text, others, start);
     closest(text, labels, start, end, Reach::Line)
-        .filter(|&(_, gap)| gap < other)
+        .filter(|&(_, gap)| claim.is_none_or(|claim| gap <= claim))
         .map(|(kind, gap)| candidate(start, end, kind, Strength::Labelled(gap)))
 }
 
@@ -1630,15 +1686,79 @@ mod tests {
             "Promo code 123456 and error code 654321",
             "Your code is valid until 20261023",
             "Please verify your shipping address. Your order 87654321",
-            "Thanks for your verification. Your flight 4417",
             "A one-time fee of 1250",
             "OTP sent. Your order total is 15000",
-            "Security code updated. Room 1204",
             "482913, sent 0412",
             "[verification code · withheld] valid for 1500 seconds",
             "Account help: 6175550123",
         ] {
             assert_eq!(shown(text), text, "{text}");
+        }
+    }
+
+    /// The cost of denying by default: a number a strong code label reaches is held even where a
+    /// claiming word labels it as something else, so these, kept before, are redacted now.
+    #[test]
+    fn a_strong_label_holds_a_number_a_claiming_word_also_labels() {
+        for (text, held) in [
+            (
+                "Thanks for your verification. Your flight 4417",
+                "Thanks for your verification. Your flight [redacted]",
+            ),
+            (
+                "Security code updated. Room 1204",
+                "Security code updated. Room [redacted]",
+            ),
+            (
+                "Your verification fee 48213",
+                "Your verification fee [redacted]",
+            ),
+            (
+                "fee 482913 is your verification code",
+                "fee [redacted] is your verification code",
+            ),
+        ] {
+            assert_eq!(shown(text), held, "{text}");
+        }
+    }
+
+    /// A claiming word labels a number only from before it, on its clause, and only where no strong
+    /// label reaches the number; then it keeps the number from a bare `code` or `PIN` farther off.
+    #[test]
+    fn a_claiming_word_labels_a_number_only_from_before_it_on_its_clause() {
+        for (text, shown_as) in [
+            // The case the line law found: a word after the number decided nothing before.
+            (
+                "Your verification code is 482913. fee",
+                "Your verification code is [redacted]. fee",
+            ),
+            (
+                "Your verification code is 482913. total",
+                "Your verification code is [redacted]. total",
+            ),
+            (
+                "Your PIN is 482913. Order status below",
+                "Your PIN is [redacted]. Order status below",
+            ),
+            ("Your code: order 482913", "Your code: order 482913"),
+            (
+                "Your code is ready. Order 482913",
+                "Your code is ready. Order 482913",
+            ),
+            (
+                "Order 482913 and your PIN 552910",
+                "Order 482913 and your PIN [redacted]",
+            ),
+            (
+                "Account number 12345678. Call us",
+                "Account number [redacted]. Call us",
+            ),
+            (
+                "Your order 12345678, account",
+                "Your order 12345678, account",
+            ),
+        ] {
+            assert_eq!(shown(text), shown_as, "{text}");
         }
     }
 
@@ -1808,22 +1928,23 @@ mod tests {
                 let code = |labels: &[Label], reach: usize, before: bool| {
                     claims(text, labels, (start, end), reach, before)
                 };
-                let gap = [
-                    code(named, STRONG_NEAR, true),
-                    code(named, NEAR, false),
-                    code(strong, NEAR, false),
-                    code(&right_before, 2, true),
-                    (digits.len() >= 6)
-                        .then(|| code(weak, NEAR, false))
-                        .flatten(),
-                ]
-                .into_iter()
-                .flatten()
-                .min()?;
-                let other = closest(text, not_codes, start, end, Reach::Line)
-                    .map_or(usize::MAX, |(_, other)| other);
-                (gap < other && alone(text, start, end) && !dated(&digits))
-                    .then(|| candidate(start, end, Kind::Code, Strength::Code))
+                let label = CodeLabel::of(
+                    [
+                        code(named, STRONG_NEAR, true),
+                        code(named, NEAR, false),
+                        code(strong, NEAR, false),
+                    ],
+                    [
+                        code(&right_before, 2, true),
+                        (digits.len() >= 6)
+                            .then(|| code(weak, NEAR, false))
+                            .flatten(),
+                    ],
+                )?;
+                (label.holds(claimed(text, not_codes, start))
+                    && alone(text, start, end)
+                    && !dated(&digits))
+                .then(|| candidate(start, end, Kind::Code, Strength::Code))
             })
             .collect()
     }
@@ -2191,6 +2312,92 @@ mod tests {
         }
     }
 
+    /// A code after a label, the sentence it ends: some text, a code label, six digits and a full
+    /// stop.
+    fn coded() -> impl Strategy<Value = String> {
+        let label = prop::sample::select(
+            &[
+                "Your verification code is ",
+                "OTP: ",
+                "Bestätigungscode ",
+                "código de verificação ",
+                "Your one-time password is ",
+                "Your PIN is ",
+                "code: ",
+                "Enter code ",
+            ][..],
+        );
+        (mixed(), label, "[1-9][0-9]{5}")
+            .prop_map(|(before, label, code)| format!("{before} {label}{code}."))
+    }
+
+    /// Words that may follow a code, the claiming words among them, with sentence ends.
+    fn words_after() -> impl Strategy<Value = String> {
+        proptest::collection::vec(
+            prop::sample::select(
+                &[
+                    "fee", "total", "order", "Room", "flight", "invoice", "ref", "booking",
+                    "ticket", "amount", "price", "and", "the", "your", ".", "!", ";", ",", ":",
+                    "café", "確認",
+                ][..],
+            ),
+            0..12,
+        )
+        .prop_map(|words| words.join(" "))
+    }
+
+    /// Whether every held range of `text` lies inside a held range of `longer`, which starts with it.
+    fn still_held(text: &str, longer: &str) -> bool {
+        let after = identity_numbers(longer);
+        identity_numbers(text).iter().all(|was| {
+            after
+                .iter()
+                .any(|now| now.start <= was.start && was.end <= now.end)
+        })
+    }
+
+    proptest::proptest! {
+        #![proptest_config(proptest::prelude::ProptestConfig::with_cases(1024))]
+        /// Law: a suffix never un-redacts. What follows a sentence's end decides nothing about the
+        /// numbers before it: every number held in `t` is held in `t` followed by any text.
+        #[test]
+        fn a_suffix_never_unredacts(t in coded(), s in mixed(), words in words_after()) {
+            let codes = identity_numbers(&t).iter().filter(|found| found.kind == Kind::Code).count();
+            proptest::prop_assert!(codes > 0, "{t:?} holds no code");
+            for suffix in [format!(" {s}"), format!(" {words}"), format!("\n{s}")] {
+                let longer = format!("{t}{suffix}");
+                proptest::prop_assert!(still_held(&t, &longer), "{t:?} + {suffix:?}");
+            }
+        }
+
+        /// Law: a strong label wins. A code a strong label names is held whatever words follow
+        /// it, the words that claim a number for something else among them.
+        #[test]
+        fn a_strong_label_wins(
+            label in prop::sample::select(&[
+                "Your verification code is ",
+                "Your security code: ",
+                "OTP ",
+                "2FA code ",
+                "Verify with ",
+                "Bestätigungscode ",
+                "código de verificação ",
+                "Your one-time password is ",
+            ][..]),
+            code in "[1-9][0-9]{5}",
+            words in words_after(),
+        ) {
+            let text = format!("{label}{code} {words}");
+            let start = label.len();
+            proptest::prop_assert!(
+                identity_numbers(&text)
+                    .iter()
+                    .any(|found| found.kind == Kind::Code && found.start <= start && start + 6 <= found.end),
+                "{text:?}"
+            );
+        }
+    }
+
     /// An IBAN-shaped match holding a letter outside ASCII is no IBAN, and is never split inside
     /// that letter (the scrub once panicked on this text, the property's shrunk case).
     #[test]
@@ -2213,6 +2420,7 @@ mod tests {
             "Passport No. X12345678, A-Number A123456789, passport photo IMG_20261023",
             "SSN:\n１２３\u{2013}45\u{2013}67\u{200b}89, EIN                         12.3456789",
             "SSN \u{661}\u{662}\u{663} \u{2013} 45 \u{2013} 6\u{fe0f}789; Savings      2024      1500",
+            "Your verification code is 482913. fee; Security code updated. Room 1204",
         ];
         let scrubbed = corpus.map(|text| unlink(redact(text).as_str()));
         if let Err(moved) = Scrub::pinned((), scrubbed, PINNED_RULES, PINNED_CORPUS) {
@@ -2220,8 +2428,8 @@ mod tests {
         }
     }
 
-    const PINNED_RULES: &str = "67d7f8df2fd4d019fd90b6d59f17f44b046e102ea2d8ad4da122d6e7517c4f4a";
-    const PINNED_CORPUS: &str = "9d34245a178fa4c00e21460a15ed512df6c37b32df26310f724325556d1c5125";
+    const PINNED_RULES: &str = "f7eb6c9fe2ada434c6e1e51ec8bb69a3e10d03e227d8b731458c318793162d8a";
+    const PINNED_CORPUS: &str = "3629a1babd07b33dc5b66bb4f6a2c0c01af196d4f828db1a9d8ce17b7679f7f6";
 
     #[test]
     fn rules_print_and_read_back() {

@@ -2158,6 +2158,19 @@ fn a_carried_line_is_leafed_by_the_line_it_carries() {
     assert_eq!(read.line(&old), name);
 }
 
+/// The rules every fixture line here is sealed under: one name, fixed, so a change of the scrub's
+/// rules moves no fixture line's name, and with it no tree, no question and no pin of the asking.
+/// Such a line reads stale and its words are scrubbed again as they open; the fixtures hold
+/// nothing the scrub takes.
+fn fixture_rules() -> suzatary_core::secretary::scrubbed_under::ScrubbedUnder {
+    suzatary_core::secretary::scrubbed_under::ScrubbedUnder::Version(
+        suzatary_core::redact::Rules::new(
+            "67d7f8df2fd4d019fd90b6d59f17f44b046e102ea2d8ad4da122d6e7517c4f4a",
+        )
+        .expect("a rules name"),
+    )
+}
+
 /// `entry` as line `held` of `conversation`, written as `ada` with its words locked.
 fn write_line(
     lines: &suzatary_core::secretary::conversations::InMemory,
@@ -2166,7 +2179,8 @@ fn write_line(
     entry: &Entry,
 ) {
     use suzatary_core::store::Doc as _;
-    let (line, keys) = suzatary_core::secretary::line_event::LineEvent::write(
+    let (line, keys) = suzatary_core::secretary::line_event::LineEvent::written_under(
+        &fixture_rules(),
         conversation,
         ada(),
         held,

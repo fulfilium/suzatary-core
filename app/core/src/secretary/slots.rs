@@ -18,6 +18,24 @@ pub trait Slots {
         sealed: &[u8],
         open: &dyn Fn(&TextKey) -> Option<Words<LineWords>>,
     ) -> Words<LineWords>;
+
+    /// Whether the slot opens.
+    fn opens(
+        &self,
+        name: &KeyName,
+        read: &dyn Fn() -> Words<LineWords>,
+        unlocks: &dyn Fn(&TextKey) -> bool,
+    ) -> bool {
+        // Not missing as `read` reads the words, through the door: a reader that keeps the words
+        // it reads asks this way, so nothing it keeps went around the scrub.
+        let _ = (name, unlocks);
+        !matches!(
+            read(),
+            Words::Gone {
+                gone: Gone::Missing
+            }
+        )
+    }
 }
 
 /// A key store read as itself: each slot opened by the key its name answers; a key that does not
@@ -33,6 +51,20 @@ impl<F: Fn(&KeyName) -> Words<TextKey>> Slots for F {
         match self(name) {
             Words::Kept { kept } => open(&kept).unwrap_or_else(|| Gone::Missing.into()),
             Words::Gone { gone } => gone.into(),
+        }
+    }
+
+    fn opens(
+        &self,
+        name: &KeyName,
+        _: &dyn Fn() -> Words<LineWords>,
+        unlocks: &dyn Fn(&TextKey) -> bool,
+    ) -> bool {
+        // A key store answers by its key alone, reading no words, so a slot under older rules is
+        // not scrubbed to answer.
+        match self(name) {
+            Words::Kept { kept } => unlocks(&kept),
+            Words::Gone { gone } => !matches!(gone, Gone::Missing),
         }
     }
 }
