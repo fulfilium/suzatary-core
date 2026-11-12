@@ -22,7 +22,6 @@ use suzatary_core::mail::dedup_key::DedupKey;
 use suzatary_core::mail::known::Known;
 use suzatary_core::mail::local_state::Kept;
 use suzatary_core::mail::state::Decision;
-use suzatary_core::record::{EventStore, TodoEvent, mk_authored};
 use suzatary_core::secretary::digests::Digests;
 use suzatary_core::secretary::inbox;
 use suzatary_core::secretary::line_event::LineEvent;
@@ -39,6 +38,7 @@ use suzatary_io::blobs::Blobs;
 use suzatary_io::objects::Objects;
 use suzatary_io::pdftotext::Pdftotext;
 use suzatary_io::plugin_store::PluginStore;
+use suzatary_record::record::{EventStore, TodoEvent, mk_authored};
 
 const PNG: &[u8] = &[0x89, b'P', b'N', b'G', 0x0D, 0x0A, 0x1A, 0x0A, 1, 2, 3];
 const SCAN: &[u8] = &[0x89, b'P', b'N', b'G', 0x0D, 0x0A, 0x1A, 0x0A, 4, 5, 6];
@@ -215,7 +215,7 @@ impl suzatary_core::vault::Vault for Vault {
 fn chain(root: &Path) {
     let todo = &CAST.todos.urgent;
     let store = Objects::chain(EventStore::new(root.join("events"), policy()));
-    rooted(&store, suzatary_core::record::GENESIS);
+    rooted(&store, suzatary_record::record::GENESIS);
     store
         .append(mk_created(todo.id, at(8, 0), CAST.owner.actor, todo.created, "").expect("valid"))
         .expect("appends");
@@ -227,12 +227,12 @@ fn chain(root: &Path) {
                 CAST.owner.actor,
                 "todo",
                 at(8, 1),
-                suzatary_core::record::MarkupSource::from_chain(todo.body),
+                suzatary_record::record::MarkupSource::from_chain(todo.body),
                 mk_flat(0.55).expect("a term"),
                 vec!["it is due".to_owned()],
                 todo.category,
                 "",
-                suzatary_core::record::MarkupSource::from_chain(todo.detail),
+                suzatary_record::record::MarkupSource::from_chain(todo.detail),
                 None,
                 Vec::new(),
                 Vec::new(),
@@ -591,7 +591,7 @@ fn decisions(root: &Path) {
     let said = |title: &str| {
         Statement::new(
             title,
-            suzatary_core::record::MarkupSource::escaped("The *body*."),
+            suzatary_record::record::MarkupSource::escaped("The *body*."),
             "Because.",
         )
         .expect("a statement")

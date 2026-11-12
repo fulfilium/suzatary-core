@@ -37,7 +37,7 @@ use wasm_bindgen::JsError;
 pub use chains::{Chains, Linker};
 
 /// The todo schema at this application's record.
-type Event = suzatary_core::record::TodoEvent;
+type Event = suzatary_record::record::TodoEvent;
 
 prodrome_wasm_exports::schema!(Todos = Event, priced);
 object_rows::objects_store!(Proposals = suzatary_core::secretary::inbox_event::InboxEvent);

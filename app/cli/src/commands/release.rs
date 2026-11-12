@@ -12,12 +12,12 @@ use prodrome_core::literal::Datetime;
 use prodrome_core::term::Term;
 use suzatary_base::capability::Clock;
 use suzatary_base::escape::markup_text;
-use suzatary_core::record::Node;
 use suzatary_core::release::{
     Completed, Completes, Cut, Fragment, Plan, Reading, Released, Version, binding,
 };
 use suzatary_core::store::Prodrome;
 use suzatary_io::clock::SystemClock;
+use suzatary_record::record::Node;
 
 use super::store_of;
 use crate::instance::{ChainDir, Instance};
@@ -194,7 +194,7 @@ struct Chain<'a> {
 }
 
 impl Chain<'_> {
-    fn binding(&self) -> impl Iterator<Item = &suzatary_core::record::TodoEvent> {
+    fn binding(&self) -> impl Iterator<Item = &suzatary_record::record::TodoEvent> {
         binding(self.nodes, &self.dir.policy.untrusted)
     }
 

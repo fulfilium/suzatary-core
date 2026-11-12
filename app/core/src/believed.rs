@@ -14,7 +14,7 @@ use prodrome_core::policy::Untrusted;
 use prodrome_core::registers;
 use prodrome_core::term::Term;
 
-use crate::record::{Authored, Envelope, Node, TodoEvent};
+use suzatary_record::record::{Authored, Envelope, Node, TodoEvent};
 
 /// Every todo's candidates at one instant, under one policy.
 ///

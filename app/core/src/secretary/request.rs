@@ -5,9 +5,9 @@
 
 use chrono::NaiveDate;
 
-use crate::record::SubTodo;
 use crate::secretary::changes::{Act, Provenance};
-use crate::todo::{Patch, TodoFields, TodoPatch};
+use suzatary_record::record::SubTodo;
+use suzatary_record::todo::{Patch, TodoFields, TodoPatch};
 
 /// An act with its pricing left out.
 #[derive(Debug, PartialEq, Eq)]

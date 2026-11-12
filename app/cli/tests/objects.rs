@@ -10,8 +10,8 @@ use common::Fakes;
 use prodrome_core::event::{
     Hash, canonical_envelope, mk_completed, mk_created, mk_reopened, mk_sealed, seal_hash,
 };
-use suzatary_core::record::Envelope;
 use suzatary_core::store::Reads as _;
+use suzatary_record::record::Envelope;
 
 fn ada() -> suzatary_base::capability::Login {
     common::login("ada@example.com")
@@ -33,7 +33,7 @@ fn writer(tag: &str) -> (String, Arc<Fakes>) {
     (base, caps)
 }
 
-fn events(caps: &Fakes) -> Vec<suzatary_core::record::TodoEvent> {
+fn events(caps: &Fakes) -> Vec<suzatary_record::record::TodoEvent> {
     caps.chain
         .objects()
         .expect("reads")
@@ -48,7 +48,7 @@ fn at(minute: u32) -> prodrome_core::literal::Datetime {
 }
 
 /// What a phone does: seal an event onto a head it holds.
-fn sealed(prev: Option<&Hash>, event: suzatary_core::record::TodoEvent) -> Envelope {
+fn sealed(prev: Option<&Hash>, event: suzatary_record::record::TodoEvent) -> Envelope {
     mk_sealed(prev.cloned(), event)
 }
 
@@ -258,7 +258,7 @@ fn a_change_a_phone_appended_lands_through_adoption() {
         .iter()
         .map(|(name, envelope)| (name.clone(), canonical_envelope(envelope)))
         .collect();
-    let tab: MemoryStore<suzatary_core::record::TodoEvent> = MemoryStore::default();
+    let tab: MemoryStore<suzatary_record::record::TodoEvent> = MemoryStore::default();
     tab.receive(
         caps.chain.tips().expect("tips").into_iter().collect(),
         &|name| prints.get(name).map(|print| print.clone().into_bytes()),
@@ -634,8 +634,8 @@ fn author_hands_back_an_event_and_writes_nothing() {
     assert_eq!(events(&caps).len(), before);
     assert_eq!(caps.chain.tips().expect("derives"), heads);
 
-    let event: suzatary_core::record::TodoEvent = prodrome_core::event::parse_event(
-        &suzatary_core::record::TodoVocabulary::default(),
+    let event: suzatary_record::record::TodoEvent = prodrome_core::event::parse_event(
+        &suzatary_record::record::TodoVocabulary::default(),
         &print,
     )
     .expect("the core printed it");

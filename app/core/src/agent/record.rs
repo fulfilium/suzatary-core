@@ -1,11 +1,11 @@
 use crate::mail::corpus::Corpus;
 use crate::mail::mailbox::Mailbox;
-use crate::record::TodoEvent;
 use crate::render::Render;
 use crate::repository::Repository;
 use crate::secretary::recollection::Recollection;
 use crate::store::Reads;
 use suzatary_base::capability::{Clock, Manuals};
+use suzatary_record::record::TodoEvent;
 
 /// What the triage agent may use: it reads attacker-controlled mail, so nothing here
 /// sends, notifies, names a peer or performs a card, and its `chain` is only read.
@@ -34,7 +34,7 @@ use suzatary_base::capability::{Clock, Manuals};
 /// Its chain is read and never written: neither `append` nor `accept` is reachable from it.
 ///
 /// ```compile_fail,E0599
-/// fn write(agent: suzatary_core::agent::Agent<'_>, event: suzatary_core::record::TodoEvent) {
+/// fn write(agent: suzatary_core::agent::Agent<'_>, event: suzatary_record::record::TodoEvent) {
 ///     let _ = agent.chain.append(event);
 /// }
 /// ```

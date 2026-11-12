@@ -10,11 +10,11 @@ use crate::health::{Instant, Reading};
 use crate::secretary::changes::{self, Act, Changeset};
 use crate::secretary::proposal::{Proposal, Reasons};
 use crate::secretary::{Bound, WRITES_AS};
-use crate::todo::{Price, TodoFields};
 use suzatary_base::conversation_id::ConversationId;
 use suzatary_base::escape::escape_markup;
 use suzatary_base::reference::Reference;
 use suzatary_base::refusal::Refusal;
+use suzatary_record::todo::{Price, TodoFields};
 
 /// What the proposed todo is priced: an account that does not sync hides its mail from triage,
 /// a real consequence within weeks.

@@ -12,9 +12,6 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::sync::LazyLock;
 
-use crate::record::{
-    Authored, MarkupSource, Record, Source, SubTodo, TodoEvent, is_absent, mk_authored, mk_source,
-};
 use chrono::{Duration, NaiveDate};
 use prodrome_core::event::{Hash, mk_cancelled, mk_completed, mk_reopened, mk_spec_revised};
 use prodrome_core::fpl::{self};
@@ -22,14 +19,17 @@ use prodrome_core::payload::Payload as _;
 use prodrome_core::policy::{Policy, Untrusted};
 use prodrome_core::term::{Term, TermF};
 use regex::Regex;
+use suzatary_record::record::{
+    Authored, MarkupSource, Record, Source, SubTodo, TodoEvent, is_absent, mk_authored, mk_source,
+};
 
-use crate::todo::price::ratio;
-use crate::todo::{Patch, TodoFields, TodoPatch};
 use suzatary_base::capability::{Datetime, Typeset};
 use suzatary_base::escape::escape_string;
 use suzatary_base::reference::Reference;
 use suzatary_base::refusal::{Refusal, shown};
 use suzatary_base::zone::Moment;
+use suzatary_record::todo::price::ratio;
+use suzatary_record::todo::{Patch, TodoFields, TodoPatch};
 
 /// A todo id, as authoring spells one: narrower than the chain's `[a-z0-9_-]+`, because ids
 /// are referenced by hand forever.
@@ -81,11 +81,11 @@ pub fn fresh_id(base: &str, known: &std::collections::BTreeSet<String>) -> Resul
     )))
 }
 
-use crate::decoration::KINDS;
-use crate::decoration::takes_category;
+use suzatary_record::decoration::KINDS;
+use suzatary_record::decoration::takes_category;
 
 /// The recurrence in force in `term` at `now`, in words ("every 60 days after a pass, from
-/// 100% to 30%"). The inverse of [`Price::term`](crate::todo::Price::term)'s cyclic arms; `None` where nothing recurs or
+/// 100% to 30%"). The inverse of [`Price::term`](suzatary_record::todo::Price::term)'s cyclic arms; `None` where nothing recurs or
 /// the body is not a ramp `Cycle::ramp` wrote.
 #[must_use]
 pub fn recurrence_words(term: &Term, now: fpl::Instant) -> Option<String> {
@@ -1198,7 +1198,7 @@ mod tests {
     use suzatary_base::capability::Parses;
 
     use super::*;
-    use crate::todo::{Deadline, Price};
+    use suzatary_record::todo::{Deadline, Price};
 
     fn at(day: u32) -> Datetime {
         Datetime::new(2026, 9, day, 12, 30, 0, 0).expect("a real instant")

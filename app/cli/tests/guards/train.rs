@@ -2524,7 +2524,7 @@ fn train_publish_never_skips_on_a_check_that_could_not_run() {
 /// done; and the instance naming it, as `SUZATARY_INSTANCE` names the box's.
 fn a_release_deployment(data: &Path) -> PathBuf {
     use prodrome_core::fpl;
-    use suzatary_core::record::{EventStore, GENESIS, MarkupSource, mk_authored};
+    use suzatary_record::record::{EventStore, GENESIS, MarkupSource, mk_authored};
     let at = prodrome_core::literal::Datetime::new(2026, 9, 1, 9, 0, 0, 0).expect("an instant");
     let store = EventStore::new(
         data.join("events-suzatary"),
@@ -3197,18 +3197,18 @@ fn train_build_keeps_completes_through_a_join_and_skips_only_an_unknown_todo() {
 /// Whether the fixture's project chain holds `todo` completed as `assistant` with `note`.
 /// Whether anyone recorded `todo` done on the project chain under `data`.
 fn completed(data: &Path, todo: &str) -> bool {
-    suzatary_core::record::EventStore::new(
+    suzatary_record::record::EventStore::new(
         data.join("events-suzatary"),
         prodrome_core::policy::Untrusted::none(),
     )
     .events()
     .expect("the chain reads")
     .iter()
-    .any(|e| matches!(e, suzatary_core::record::TodoEvent::Completed(done) if done.todo.as_str() == todo))
+    .any(|e| matches!(e, suzatary_record::record::TodoEvent::Completed(done) if done.todo.as_str() == todo))
 }
 
 fn recorded(data: &Path, todo: &str, note: &str) -> bool {
-    suzatary_core::record::EventStore::new(
+    suzatary_record::record::EventStore::new(
         data.join("events-suzatary"),
         prodrome_core::policy::Untrusted::none(),
     )
@@ -3216,7 +3216,7 @@ fn recorded(data: &Path, todo: &str, note: &str) -> bool {
     .expect("the chain reads")
     .iter()
     .any(|e| {
-        matches!(e, suzatary_core::record::TodoEvent::Completed(done)
+        matches!(e, suzatary_record::record::TodoEvent::Completed(done)
             if done.todo.as_str() == todo && done.actor.as_str() == "assistant" && done.note == note)
     })
 }
@@ -3322,7 +3322,7 @@ fn app_bin_builds_a_named_commit_from_its_public_tree() {
 impl Train {
     /// The todos the nightly gate filed on the fixture's project chain, by id.
     fn nightly_todos(data: &Path) -> BTreeSet<String> {
-        suzatary_core::record::EventStore::new(
+        suzatary_record::record::EventStore::new(
             data.join("events-suzatary"),
             prodrome_core::policy::Untrusted::none(),
         )
@@ -3330,7 +3330,7 @@ impl Train {
         .expect("the chain reads")
         .iter()
         .filter_map(|e| match e {
-            suzatary_core::record::TodoEvent::Authored(made)
+            suzatary_record::record::TodoEvent::Authored(made)
                 if made.todo.as_str().starts_with("nightly")
                     && made.actor.as_str() == "assistant" =>
             {

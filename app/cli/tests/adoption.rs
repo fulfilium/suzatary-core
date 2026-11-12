@@ -6,8 +6,8 @@ use std::path::Path;
 
 use prodrome_core::event::Envelope;
 use prodrome_core::sign::{PublicKey, Secret};
-use suzatary_core::record::{EventStore, TodoEvent};
 use suzatary_core::signatures::{AGENT_KEY, BOX_KEY};
+use suzatary_record::record::{EventStore, TodoEvent};
 
 use super::todos::{a_chain, a_signing_instance, objects, scratch, signing};
 
@@ -84,7 +84,7 @@ fn adopting_again_refuses_an_unsigned_write_since_the_epoch_until_it_is_repaired
             root.join("events"),
             prodrome_core::policy::Untrusted::none(),
         ),
-        suzatary_core::record::GENESIS,
+        suzatary_record::record::GENESIS,
         done("parkingpermit", "ada"),
     )
     .expect("an unsigned write");

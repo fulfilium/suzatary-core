@@ -34,6 +34,7 @@ pub struct TodoFields {
 }
 
 /// The kind a todo is when its writer names none.
-pub(crate) fn plain_kind() -> String {
+#[must_use]
+pub fn plain_kind() -> String {
     "todo".to_owned()
 }

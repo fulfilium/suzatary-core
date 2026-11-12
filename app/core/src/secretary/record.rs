@@ -6,7 +6,6 @@ use crate::mail::junk_folder::Junk;
 use crate::mail::mail_sync::MailSync;
 use crate::mail::mailbox::Mailbox;
 use crate::mail::older_mail::OlderMail;
-use crate::record::TodoEvent;
 use crate::render::Render;
 use crate::repositories::Repositories;
 use crate::repository::Repository;
@@ -17,6 +16,7 @@ use crate::store::Prodrome;
 use crate::weather::Weather;
 use crate::web::Web;
 use suzatary_base::capability::{Clock, Manuals};
+use suzatary_record::record::TodoEvent;
 
 /// What the secretary may use: the agent's effects over the chain itself, plus a model,
 /// its conversations and memory, and the owner's world read-only. Nothing here sends: its

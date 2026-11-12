@@ -9,7 +9,6 @@ use prodrome_core::declared::Declared;
 use prodrome_core::schema::Schema;
 
 use crate::decisions::DecisionEvent;
-use crate::record::TodoEvent;
 use crate::secretary::digest_event::DigestEvent;
 use crate::secretary::inbox_event::InboxEvent;
 use crate::secretary::line_event::LineEvent;
@@ -17,6 +16,7 @@ use crate::secretary::memory_event::MemoryEvent;
 use crate::secretary::topics::reading::AliasEvent;
 use crate::secretary::topics::reading::MembershipEvent;
 use crate::store::Hold;
+use suzatary_record::record::TodoEvent;
 
 pub use database::Database;
 
@@ -108,7 +108,7 @@ macro_rules! stores {
 
 stores! {
     /// A todo chain.
-    Chain = "chain", Pushed, Chain: TodoEvent, Hold::Reentrant, crate::record::GENESIS;
+    Chain = "chain", Pushed, Chain: TodoEvent, Hold::Reentrant, suzatary_record::record::GENESIS;
     /// The proposals a person taps.
     Inbox = "inbox", Pushed, Objects: InboxEvent, Hold::File("submit.lock");
     /// The secretary's conversations, every word locked.

@@ -3,8 +3,8 @@
 use prodrome_core::event::Actor;
 
 use super::{Asking, Request, Trusted, body_digest, request_name, trust};
-use crate::record::TodoEvent;
 use crate::store::Prodrome as _;
+use suzatary_record::record::TodoEvent;
 
 /// A real [`Trusted`] for a scene: the cast's root adopting a chain in memory, the owner's phone
 /// trusted on it, and a request the phone signed, through the one constructor.

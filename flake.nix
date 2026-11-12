@@ -177,6 +177,7 @@
             ./app/cli
             ./app/core
             ./app/base
+            ./app/record
             ./app/api
             ./app/io
             ./app/plugin
@@ -266,9 +267,11 @@
           ./app/wasm/Cargo.toml
           ./app/core/Cargo.toml
           ./app/base/Cargo.toml
+          ./app/record/Cargo.toml
           ./app/api/Cargo.toml
           ./app/core/src
           ./app/base/src
+          ./app/record/src
           ./app/api/src
           ./app/core/releases.toml
           ./app/core/examples
@@ -398,9 +401,11 @@
                 ./app/wasm/Cargo.toml
                 ./app/core/Cargo.toml
                 ./app/base/Cargo.toml
+                ./app/record/Cargo.toml
                 ./app/api/Cargo.toml
                 ./app/core/src
                 ./app/base/src
+                ./app/record/src
                 ./app/api/src
                 # The release plan, which the core compiles in.
                 ./app/core/releases.toml
@@ -493,6 +498,7 @@
               ./app/io/Cargo.toml
               ./app/core/Cargo.toml
               ./app/base/Cargo.toml
+              ./app/record/Cargo.toml
               ./app/api/Cargo.toml
               ./app/plugin/Cargo.toml
               ./app/plugin-ics/Cargo.toml
@@ -542,6 +548,7 @@
               ./app/io/Cargo.toml
               ./app/core/Cargo.toml
               ./app/base/Cargo.toml
+              ./app/record/Cargo.toml
               ./app/api/Cargo.toml
               ./app/plugin/Cargo.toml
               ./app/plugin-fence/Cargo.toml

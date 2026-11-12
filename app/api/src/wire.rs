@@ -268,7 +268,7 @@ pub struct NewTodo {
     /// An empty rationale gets the app's sentence.
     #[serde(flatten)]
     #[ts(flatten)]
-    pub fields: suzatary_core::todo::TodoFields,
+    pub fields: suzatary_record::todo::TodoFields,
     /// Refused if the chain ever mentioned it; otherwise one from the body.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
@@ -287,7 +287,7 @@ pub struct UpdateTodo {
     /// What is left out is kept.
     #[serde(flatten)]
     #[ts(flatten)]
-    pub patch: suzatary_core::todo::TodoPatch,
+    pub patch: suzatary_record::todo::TodoPatch,
     /// `""` for none.
     #[serde(default)]
     #[ts(as = "Option<String>", optional)]
@@ -1029,7 +1029,7 @@ mod tests {
                 name: "ekaTodo".to_owned()
             }
         );
-        for name in suzatary_core::decoration::KINDS {
+        for name in suzatary_record::decoration::KINDS {
             assert_eq!(Block::of(name).name(), *name);
         }
         assert_eq!(

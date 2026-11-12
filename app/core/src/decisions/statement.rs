@@ -1,4 +1,4 @@
-use crate::record::MarkupSource;
+use suzatary_record::record::MarkupSource;
 
 use super::NotADecision;
 

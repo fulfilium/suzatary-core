@@ -9,7 +9,6 @@ use crate::devices::Device;
 use crate::health::plugin::PluginName;
 use crate::mail::local_state::LocalState;
 use crate::mail::state::TriageState;
-use crate::record::TodoEvent;
 use crate::secretary::digest_event::DigestEvent;
 use crate::secretary::digest_line::Line;
 use crate::secretary::inbox_event::InboxEvent;
@@ -23,6 +22,7 @@ use crate::secretary::topics::reading::MembershipEvent;
 use crate::store::{Doc, Gets, Log, Prodrome};
 use crate::upload::Upload;
 use suzatary_base::chains::ChainName;
+use suzatary_record::record::TodoEvent;
 
 /// The whole store, as one value: every chain, and the box's own stores.
 #[derive(Clone)]

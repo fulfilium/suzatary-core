@@ -3,7 +3,6 @@
 use prodrome_core::event::Hash;
 
 use crate::believed::Preview;
-use crate::record::TodoEvent;
 use crate::secretary::Secretary;
 use crate::secretary::changes::{Building, Changeset, Unapplied, events_of};
 use crate::secretary::memory::Origin;
@@ -14,6 +13,7 @@ use suzatary_base::chains::ChainPolicy;
 use suzatary_base::refusal::{Refusal, shown as quoted};
 use suzatary_base::writer::Writer;
 use suzatary_base::zone::{Moment, Zone};
+use suzatary_record::record::TodoEvent;
 
 /// What an [`Asked`] effect does in a round, as a function of the transcript alone.
 #[derive(Debug, Clone, PartialEq, Eq)]

@@ -40,13 +40,13 @@ pub mod verify;
 pub mod weather;
 
 use anyhow::Context;
-use suzatary_core::record::EventStore;
 use suzatary_io::objects::Objects;
+use suzatary_record::record::EventStore;
 
 use crate::instance::{ChainDir, Instance};
 
 /// The store one chain writes to, with that same chain's trust policy.
-pub(crate) fn store_of(chain: &ChainDir) -> Objects<suzatary_core::record::TodoEvent> {
+pub(crate) fn store_of(chain: &ChainDir) -> Objects<suzatary_record::record::TodoEvent> {
     Objects::chain(EventStore::new(
         chain.events.clone(),
         chain.policy.untrusted.clone(),
@@ -65,7 +65,7 @@ pub fn chains_read(instance: &Instance) -> suzatary_core::chain_set::Read {
     suzatary_core::chain_set::Read::of_stores(stores.iter().map(|(policy, store)| {
         (
             *policy,
-            store as &dyn suzatary_core::store::Prodrome<suzatary_core::record::TodoEvent>,
+            store as &dyn suzatary_core::store::Prodrome<suzatary_record::record::TodoEvent>,
         )
     }))
 }

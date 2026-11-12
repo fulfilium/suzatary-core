@@ -10,12 +10,12 @@ use prodrome_core::literal::Datetime;
 use prodrome_core::policy::Untrusted;
 
 use prodrome_core::term::Term;
-use suzatary_core::record::Entry;
+use suzatary_record::record::Entry;
 
 use suzatary_base::tree::{By, Classifier, Members, Monoid, Place, Segment, Tree};
 use suzatary_core::believed::Believed;
-use suzatary_core::record::{Envelope, TodoEvent, mk_authored};
 use suzatary_core::view::{self, Row};
+use suzatary_record::record::{Envelope, TodoEvent, mk_authored};
 
 fn at(day: u32) -> Datetime {
     Datetime::new(2026, 9, day, 12, 0, 0, 0).expect("a real instant")
@@ -42,12 +42,12 @@ fn todo(id: &str, category: &str, spec: Term) -> TodoEvent {
         "ada",
         "todo",
         at(1),
-        suzatary_core::record::MarkupSource::escaped(&format!("Do {id}")),
+        suzatary_record::record::MarkupSource::escaped(&format!("Do {id}")),
         spec,
         vec!["why".to_owned()],
         category,
         "",
-        suzatary_core::record::MarkupSource::empty(),
+        suzatary_record::record::MarkupSource::empty(),
         None,
         vec![],
         vec![],

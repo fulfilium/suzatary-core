@@ -80,8 +80,8 @@ pub fn reading(held: Held<'_>, at: Datetime) -> Reading {
         .map_err(|failed| NotAMember::Unread(held.name.clone(), failed.to_string()))
 }
 
-use crate::record::{Entry, TodoEvent};
 use suzatary_base::chains::ChainName;
+use suzatary_record::record::{Entry, TodoEvent};
 
 /// The todo chains read as one set at one instant: each chain held as it was read, and each
 /// member's reading, a price or why it has none.

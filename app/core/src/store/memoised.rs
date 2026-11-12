@@ -62,9 +62,9 @@ mod tests {
     use prodrome_core::memo::{Cache, Lru};
 
     use super::memoised;
-    use crate::record::TodoEvent;
     use crate::store::Reads as _;
     use crate::store::{InMemory, Prodrome, StoreError};
+    use suzatary_record::record::TodoEvent;
 
     fn created(todo: &str) -> TodoEvent {
         mk_created(

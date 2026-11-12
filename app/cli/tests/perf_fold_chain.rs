@@ -24,10 +24,10 @@ use sha2::{Digest, Sha256};
 use suzatary_api::routes;
 use suzatary_api::server::Server;
 use suzatary_base::capability::Datetime;
-use suzatary_core::record::EventStore;
 use suzatary_core::secretary::Secretary;
 use suzatary_core::store::Reads as _;
 use suzatary_io::render::Typst;
+use suzatary_record::record::EventStore;
 
 /// The repository root.
 fn repo_root() -> PathBuf {
@@ -137,7 +137,7 @@ fn fold_breakdown() {
         roster: std::collections::BTreeSet::new(),
         root: suzatary_core::cast::keys::root(),
     };
-    let chain: &dyn suzatary_core::store::Prodrome<suzatary_core::record::TodoEvent> =
+    let chain: &dyn suzatary_core::store::Prodrome<suzatary_record::record::TodoEvent> =
         &bench.fakes.chain;
     let at = far_future();
 

@@ -7,8 +7,8 @@
 use std::path::PathBuf;
 
 use prodrome_core::policy::Untrusted;
-use suzatary_core::record::{EventStore, TodoEvent};
 use suzatary_core::store::Only;
+use suzatary_record::record::{EventStore, TodoEvent};
 
 use crate::objects::Objects;
 

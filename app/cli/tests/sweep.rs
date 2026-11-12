@@ -13,13 +13,13 @@ use prodrome_core::event::mk_completed;
 use prodrome_core::policy::Untrusted;
 use suzatary_base::capability::Datetime;
 use suzatary_core::authoring::{NewTodo, build_todo};
-use suzatary_core::record::{EventStore, TodoEvent, mk_source};
 use suzatary_core::secretary::Bound;
 use suzatary_core::secretary::changes::Act;
 use suzatary_core::secretary::daily::Run;
 use suzatary_core::secretary::proposal::Proposal;
 use suzatary_core::secretary::sweep::{Swept, dry_run};
 use suzatary_core::store::Reads as _;
+use suzatary_record::record::{EventStore, TodoEvent, mk_source};
 
 /// The sweep run to its end; a scripted model is under no limit, so it always starts.
 fn sweep(
@@ -63,12 +63,12 @@ fn a_sourced_todo(events: &EventStore, id: &str, thread: &str, sender: &str) {
     let event = build_todo(
         &NewTodo {
             todo: id.to_owned(),
-            fields: suzatary_core::todo::TodoFields {
+            fields: suzatary_record::todo::TodoFields {
                 body: "Check in for the airline flight".to_owned(),
                 rationale: "A real consequence within weeks.".to_owned(),
                 kind: "todo".to_owned(),
                 category: "home".to_owned(),
-                price: suzatary_core::todo::Price::Flat { percent: 45 },
+                price: suzatary_record::todo::Price::Flat { percent: 45 },
                 detail: String::new(),
                 waiting_on: String::new(),
             },
@@ -84,7 +84,7 @@ fn a_sourced_todo(events: &EventStore, id: &str, thread: &str, sender: &str) {
         &suzatary_io::typeset::InProcess,
     )
     .expect("a valid todo");
-    suzatary_core::store::append_to(events, suzatary_core::record::GENESIS, event)
+    suzatary_core::store::append_to(events, suzatary_record::record::GENESIS, event)
         .expect("appends");
 }
 
@@ -93,12 +93,12 @@ fn a_plain_todo(events: &EventStore, id: &str, body: &str) {
     let event = build_todo(
         &NewTodo {
             todo: id.to_owned(),
-            fields: suzatary_core::todo::TodoFields {
+            fields: suzatary_record::todo::TodoFields {
                 body: body.to_owned(),
                 rationale: "An errand with a recoverable cost.".to_owned(),
                 kind: "todo".to_owned(),
                 category: "home".to_owned(),
-                price: suzatary_core::todo::Price::Flat { percent: 75 },
+                price: suzatary_record::todo::Price::Flat { percent: 75 },
                 detail: String::new(),
                 waiting_on: String::new(),
             },
@@ -114,7 +114,7 @@ fn a_plain_todo(events: &EventStore, id: &str, body: &str) {
         &suzatary_io::typeset::InProcess,
     )
     .expect("a valid todo");
-    suzatary_core::store::append_to(events, suzatary_core::record::GENESIS, event)
+    suzatary_core::store::append_to(events, suzatary_record::record::GENESIS, event)
         .expect("appends");
 }
 
@@ -203,7 +203,7 @@ fn an_open_todo_with_later_mail_gets_one_completed_proposal() {
     assert!(
         !chain_events.iter().any(|(_, envelope)| matches!(
             envelope.event(),
-            Some(suzatary_core::record::TodoEvent::Completed(_))
+            Some(suzatary_record::record::TodoEvent::Completed(_))
         )),
         "the sweep proposes; it never appends"
     );
@@ -293,7 +293,7 @@ fn completing_an_already_resolved_todo_is_refused_and_proposes_nothing() {
     a_plain_todo(&events, "alreadydone", "Renew the parking permit");
     suzatary_core::store::append_to(
         &events,
-        suzatary_core::record::GENESIS,
+        suzatary_record::record::GENESIS,
         mk_completed("alreadydone", common::now(), "ada", "done already").expect("valid"),
     )
     .expect("appends");
@@ -399,7 +399,7 @@ fn a_todo_add_call_is_refused_by_the_verb_set() {
     let authored_ids: std::collections::BTreeSet<String> = chain_events
         .iter()
         .filter_map(|(_, envelope)| match envelope.event() {
-            Some(suzatary_core::record::TodoEvent::Authored(record)) => {
+            Some(suzatary_record::record::TodoEvent::Authored(record)) => {
                 Some(record.todo.as_str().to_owned())
             }
             _ => None,
@@ -467,7 +467,7 @@ fn completing_an_open_todo_with_no_candidates_is_refused_and_proposes_nothing() 
     assert!(
         !chain_events.iter().any(|(_, envelope)| matches!(
             envelope.event(),
-            Some(suzatary_core::record::TodoEvent::Completed(_))
+            Some(suzatary_record::record::TodoEvent::Completed(_))
         )),
         "the sweep proposes; it never appends"
     );

@@ -14,9 +14,9 @@ use prodrome_core::event::{Actor, Hash, mk_completed, mk_created};
 use prodrome_core::fpl::{self, mk_decay, mk_flat};
 use suzatary_base::capability::Clock;
 use suzatary_core::cast::{self, CAST};
-use suzatary_core::record::{EventStore, mk_authored, mk_source, mk_subtodo};
 use suzatary_core::store::{append_to, linearised};
 use suzatary_io::clock::SystemClock;
+use suzatary_record::record::{EventStore, mk_authored, mk_source, mk_subtodo};
 
 use suzatary_base::capability::Login;
 use suzatary_base::chains::ChainName;
@@ -854,7 +854,7 @@ fn build_project_chain(root: &Path) -> anyhow::Result<()> {
     let store = EventStore::new(root.join("events-suzatary"), untrusted);
     append_to(
         &store,
-        suzatary_core::record::GENESIS,
+        suzatary_record::record::GENESIS,
         mk_created(
             "seedmarker",
             fpl::datetime_of(now - Duration::days(30))?,
@@ -865,7 +865,7 @@ fn build_project_chain(root: &Path) -> anyhow::Result<()> {
     )?;
     append_to(
         &store,
-        suzatary_core::record::GENESIS,
+        suzatary_record::record::GENESIS,
         mk_completed(
             "seedmarker",
             fpl::datetime_of(now - Duration::days(29))?,
@@ -898,19 +898,19 @@ fn build_chain(root: &Path) -> anyhow::Result<Option<Hash>> {
     let authored = |todo: &cast::Todo, spec, detail: &str| -> anyhow::Result<()> {
         append_to(
             &store,
-            suzatary_core::record::GENESIS,
+            suzatary_record::record::GENESIS,
             mk_authored(
                 todo.id,
                 made_at,
                 owner,
                 "todo",
                 made_at,
-                suzatary_core::record::MarkupSource::from_chain(todo.body),
+                suzatary_record::record::MarkupSource::from_chain(todo.body),
                 spec,
                 todo.rationale.iter().map(|&line| line.to_owned()).collect(),
                 todo.category,
                 "",
-                suzatary_core::record::MarkupSource::from_chain(detail),
+                suzatary_record::record::MarkupSource::from_chain(detail),
                 None,
                 todo.subtodos
                     .iter()
@@ -926,7 +926,7 @@ fn build_chain(root: &Path) -> anyhow::Result<Option<Hash>> {
     for todo in todos.all() {
         append_to(
             &store,
-            suzatary_core::record::GENESIS,
+            suzatary_record::record::GENESIS,
             mk_created(todo.id, born_at, owner, todo.created, "")?,
         )?;
         match todo.id {
@@ -957,7 +957,7 @@ fn build_chain(root: &Path) -> anyhow::Result<Option<Hash>> {
                 authored(todo, mk_flat(0.4)?, todo.detail)?;
                 append_to(
                     &store,
-                    suzatary_core::record::GENESIS,
+                    suzatary_record::record::GENESIS,
                     mk_completed(
                         todo.id,
                         fpl::datetime_of(made + Duration::days(1))?,
@@ -971,7 +971,7 @@ fn build_chain(root: &Path) -> anyhow::Result<Option<Hash>> {
             _ => {
                 append_to(
                     &store,
-                    suzatary_core::record::GENESIS,
+                    suzatary_record::record::GENESIS,
                     agents_todo(made_at, made)?,
                 )?;
             }
@@ -982,7 +982,7 @@ fn build_chain(root: &Path) -> anyhow::Result<Option<Hash>> {
     let unpriced = &CAST.unpriced;
     append_to(
         &store,
-        suzatary_core::record::GENESIS,
+        suzatary_record::record::GENESIS,
         mk_created(unpriced.id, born_at, owner, unpriced.created, "")?,
     )?;
     authored(unpriced, fpl::mk_absent(), unpriced.detail)?;
@@ -994,7 +994,7 @@ fn build_chain(root: &Path) -> anyhow::Result<Option<Hash>> {
 fn agents_todo(
     made_at: prodrome_core::literal::Datetime,
     made: fpl::Instant,
-) -> anyhow::Result<suzatary_core::record::TodoEvent> {
+) -> anyhow::Result<suzatary_record::record::TodoEvent> {
     let todo = &CAST.todos.agents;
     let mail = &CAST.mail[0];
     Ok(mk_authored(
@@ -1003,12 +1003,12 @@ fn agents_todo(
         "triage",
         "todo",
         made_at,
-        suzatary_core::record::MarkupSource::from_chain(todo.body),
+        suzatary_record::record::MarkupSource::from_chain(todo.body),
         mk_flat(0.66)?,
         Vec::new(),
         todo.category,
         "",
-        suzatary_core::record::MarkupSource::empty(),
+        suzatary_record::record::MarkupSource::empty(),
         Some(mk_source(
             mail.from.email,
             mail.subject,
@@ -1487,7 +1487,7 @@ fn bulk_todos(read: &crate::instance::Instance, count: usize) -> anyhow::Result<
                 owner,
                 "todo",
                 born,
-                suzatary_core::record::MarkupSource::from_chain(format!(
+                suzatary_record::record::MarkupSource::from_chain(format!(
                     "Le dossier n° {n}, à rendre"
                 )),
                 mk_decay(
@@ -1500,7 +1500,7 @@ fn bulk_todos(read: &crate::instance::Instance, count: usize) -> anyhow::Result<
                 Vec::new(),
                 "home",
                 "",
-                suzatary_core::record::MarkupSource::from_chain(""),
+                suzatary_record::record::MarkupSource::from_chain(""),
                 None,
                 Vec::new(),
                 Vec::new(),

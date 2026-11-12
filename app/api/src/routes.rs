@@ -11,7 +11,7 @@ use prodrome_core::fpl;
 use prodrome_core::observe::Observation;
 use prodrome_core::policy::Untrusted;
 use suzatary_core::believed::{Believed, records};
-use suzatary_core::record::{Node, TodoEvent};
+use suzatary_record::record::{Node, TodoEvent};
 
 use suzatary_core::chain_set::ChainSet;
 
@@ -127,9 +127,9 @@ fn rows<'s>(
     set: &'s ChainSet<'_>,
     name: &ChainName,
 ) -> Answered<(
-    std::collections::BTreeMap<prodrome_core::event::Hash, &'s suzatary_core::record::Envelope>,
-    &'s [suzatary_core::record::Node],
-    Vec<suzatary_core::record::Entry>,
+    std::collections::BTreeMap<prodrome_core::event::Hash, &'s suzatary_record::record::Envelope>,
+    &'s [suzatary_record::record::Node],
+    Vec<suzatary_record::record::Entry>,
 )> {
     let held = set.held(name).map_err(not_a_member)?;
     let rows = set.entries(name).map_err(not_a_member)?;
@@ -1283,7 +1283,7 @@ pub fn receive_objects(
         .iter()
         .filter_map(|(_, literal)| {
             prodrome_core::event::parse_envelope(
-                &suzatary_core::record::TodoVocabulary::default(),
+                &suzatary_record::record::TodoVocabulary::default(),
                 literal,
             )
             .ok()
@@ -1784,7 +1784,7 @@ pub(crate) const MAX_WAITING_ON_CHARS: usize = 500;
 pub(crate) const MAX_SUBTODOS: usize = 200;
 
 /// A change's prose within the caps a new todo's has.
-fn capped_patch(patch: &suzatary_core::todo::TodoPatch) -> Result<(), Refusal> {
+fn capped_patch(patch: &suzatary_record::todo::TodoPatch) -> Result<(), Refusal> {
     for (name, text, cap) in [
         ("body", &patch.body, MAX_BODY_CHARS),
         ("detail", &patch.detail, MAX_DETAIL_CHARS),

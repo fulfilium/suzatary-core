@@ -43,7 +43,7 @@ confirm. Everything below derives from this.
   `tokens.typ` names each colour role and `scripts/gen-tokens.mjs` prints the
   rest. Keep no second definition of a colour, mark or template; HTML pages
   carry classes, not colours (→ `designsystem`).
-- **The record is the app's**: `app/core/src/record.rs` holds `Record`, its
+- **The record is the app's**: `app/record/src/record.rs` holds `Record`, its
   vocabulary, the `mk_*` constructors and the two source languages
   (`MarkupSource`, `StringSource`) (→ `recordisapp`). A `MarkupSource` has
   three doors: `checked` (a writer's markup, compiled in the CLOSED WORLD and

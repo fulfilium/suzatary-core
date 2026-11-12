@@ -36,7 +36,6 @@ use suzatary_core::mail::verbs::{Marked, Message, Show, Summary};
 use suzatary_core::mail::{AttachmentMeta, MailMessage, MailRow};
 use suzatary_core::mail_error::MailError;
 use suzatary_core::notify::{Delivered, Notify, NotifyError, Push};
-use suzatary_core::record::{EventStore, SubTodo, mk_authored, mk_source, mk_subtodo};
 use suzatary_core::render::{Html, Render};
 use suzatary_core::repository::{Repository, RepositoryError};
 use suzatary_core::secretary::answers::{AnswerError, Answers};
@@ -47,6 +46,7 @@ use suzatary_core::secretary::model::{
 use suzatary_io::briefings::BriefingFiles;
 use suzatary_io::conversations::ConversationStores as Conversations;
 use suzatary_io::devices::Devices;
+use suzatary_record::record::{EventStore, SubTodo, mk_authored, mk_source, mk_subtodo};
 
 /// The one IPv4 identity every real connection from this process presents as.
 #[must_use]
@@ -123,8 +123,8 @@ pub fn deployment(
 
 /// `store` begun with a nonce of zeros, so what a test writes is named the same every run.
 pub fn begun(store: &EventStore) {
-    let genesis = suzatary_core::record::Envelope::Genesis(
-        prodrome_core::genesis::mk_genesis(suzatary_core::record::GENESIS, &"0".repeat(32))
+    let genesis = suzatary_record::record::Envelope::Genesis(
+        prodrome_core::genesis::mk_genesis(suzatary_record::record::GENESIS, &"0".repeat(32))
             .expect("a genesis"),
     );
     let name = prodrome_core::event::seal_hash(&genesis);
@@ -143,8 +143,8 @@ pub fn begun(store: &EventStore) {
 /// appends byte for byte what a store holding them appends.
 #[must_use]
 pub fn tab(
-    store: &dyn suzatary_core::store::Prodrome<suzatary_core::record::TodoEvent>,
-) -> prodrome_core::store::MemoryStore<suzatary_core::record::TodoEvent> {
+    store: &dyn suzatary_core::store::Prodrome<suzatary_record::record::TodoEvent>,
+) -> prodrome_core::store::MemoryStore<suzatary_record::record::TodoEvent> {
     use prodrome_core::store::Replica as _;
     let prints: std::collections::BTreeMap<prodrome_core::event::Hash, String> = store
         .objects()
@@ -167,21 +167,24 @@ pub fn tab(
 
 /// What a tab does: `event` appended to `tab` as the `Change` its append answers.
 pub fn acted(
-    tab: &prodrome_core::store::MemoryStore<suzatary_core::record::TodoEvent>,
-    event: suzatary_core::record::TodoEvent,
-) -> suzatary_core::record::Envelope {
+    tab: &prodrome_core::store::MemoryStore<suzatary_record::record::TodoEvent>,
+    event: suzatary_record::record::TodoEvent,
+) -> suzatary_record::record::Envelope {
     use prodrome_core::store::Replica as _;
     let name = tab.append(event).expect("the tab appends");
     let print = String::from_utf8(tab.print(&name).expect("held")).expect("utf8");
-    prodrome_core::event::parse_envelope(&suzatary_core::record::TodoVocabulary::default(), &print)
-        .expect("the tab printed it")
+    prodrome_core::event::parse_envelope(
+        &suzatary_record::record::TodoVocabulary::default(),
+        &print,
+    )
+    .expect("the tab printed it")
 }
 
 /// One act a fresh tab of `store` writes.
 pub fn written(
-    store: &dyn suzatary_core::store::Prodrome<suzatary_core::record::TodoEvent>,
-    event: suzatary_core::record::TodoEvent,
-) -> suzatary_core::record::Envelope {
+    store: &dyn suzatary_core::store::Prodrome<suzatary_record::record::TodoEvent>,
+    event: suzatary_record::record::TodoEvent,
+) -> suzatary_record::record::Envelope {
     acted(&tab(store), event)
 }
 
@@ -294,7 +297,7 @@ pub fn six_todo_chain(root: &Path) -> EventStore {
     begun(&events);
 
     let append = |event| {
-        suzatary_core::store::append_to(&events, suzatary_core::record::GENESIS, event)
+        suzatary_core::store::append_to(&events, suzatary_record::record::GENESIS, event)
             .expect("appends");
     };
     let authored = |todo: &cast::Todo, at, actor, spec, source| {
@@ -309,12 +312,12 @@ pub fn six_todo_chain(root: &Path) -> EventStore {
             actor,
             "todo",
             made,
-            suzatary_core::record::MarkupSource::from_chain(todo.body),
+            suzatary_record::record::MarkupSource::from_chain(todo.body),
             spec,
             todo.rationale.iter().map(|&line| line.to_owned()).collect(),
             todo.category,
             "",
-            suzatary_core::record::MarkupSource::from_chain(todo.detail),
+            suzatary_record::record::MarkupSource::from_chain(todo.detail),
             source,
             subtodos,
             Vec::new(),
@@ -2195,7 +2198,7 @@ pub struct Fakes {
     /// The scratch root every store here lives under.
     pub root: PathBuf,
     /// The chain store.
-    pub chain: suzatary_io::objects::Objects<suzatary_core::record::TodoEvent>,
+    pub chain: suzatary_io::objects::Objects<suzatary_record::record::TodoEvent>,
     /// Who each peer is.
     pub whois: FakeWhois,
     /// The recorded pushes.
@@ -2294,7 +2297,7 @@ impl Fakes {
     #[must_use]
     pub fn over(
         root: PathBuf,
-        chain: suzatary_io::objects::Objects<suzatary_core::record::TodoEvent>,
+        chain: suzatary_io::objects::Objects<suzatary_record::record::TodoEvent>,
     ) -> Self {
         // Every deployment signs: a scene's chain has adopted the cast's root, as a box's first
         // writer does (its keys registered, its history an epoch), and the owner's phone is
@@ -3487,11 +3490,11 @@ pub fn act(url: &str, body: &serde_json::Value) -> ureq::http::Response<ureq::Bo
 /// `object`'s print, then the print of the owner's [`phone`]'s signature of it: what a tab
 /// posts for one write.
 #[must_use]
-pub fn signed_prints(object: &suzatary_core::record::Envelope) -> Vec<String> {
+pub fn signed_prints(object: &suzatary_record::record::Envelope) -> Vec<String> {
     let name = prodrome_core::event::seal_hash(object);
     vec![
         prodrome_core::event::canonical_envelope(object),
-        prodrome_core::event::canonical_envelope(&suzatary_core::record::Envelope::Signed(
+        prodrome_core::event::canonical_envelope(&suzatary_record::record::Envelope::Signed(
             phone().sign(&name),
         )),
     ]
@@ -4221,7 +4224,7 @@ pub fn chains_read(base: &str) -> suzatary_core::chain_set::Read {
                     suzatary_base::chains::ChainName::new(name).expect("a slug"),
                     untrusted,
                     prodrome_core::dag::Dag::from_prints(
-                        &suzatary_core::record::TodoVocabulary::default(),
+                        &suzatary_record::record::TodoVocabulary::default(),
                         prints,
                     )
                     .objects()

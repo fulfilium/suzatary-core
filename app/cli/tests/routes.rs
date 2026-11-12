@@ -289,13 +289,13 @@ fn a_read_answers_304_to_its_own_tag_and_a_new_tag_once_the_chain_moves() {
             .is_empty()
     );
 
-    let events = suzatary_core::record::EventStore::new(
+    let events = suzatary_record::record::EventStore::new(
         root.join("events"),
         prodrome_core::policy::Untrusted::of([actor("triage")]),
     );
     suzatary_core::store::append_to(
         &events,
-        suzatary_core::record::GENESIS,
+        suzatary_record::record::GENESIS,
         prodrome_core::event::mk_created("a-new-todo", common::now(), "ada", "A new todo", "")
             .expect("valid"),
     )

@@ -8,9 +8,9 @@ use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use suzatary_api::wire::{Authoring, BriefingsPayload, NewTodo};
 use suzatary_base::tree::Tree;
-use suzatary_core::todo::{Price, TodoFields};
 use suzatary_core::wire::cards::Overview;
 use suzatary_core::wire::todo::{Entry, Fulfillment};
+use suzatary_record::todo::{Price, TodoFields};
 use ts_rs::TS;
 use viewtree::Attr::{
     AriaControls, AriaCurrent, AriaExpanded, AriaLabel, AriaPressed, Class, Data, Disabled,

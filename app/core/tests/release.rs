@@ -11,10 +11,10 @@ use prodrome_core::policy::Untrusted;
 use prodrome_core::term::Term;
 use proptest::prelude::*;
 use std::collections::BTreeMap;
-use suzatary_core::record::TodoEvent;
 use suzatary_core::release::{
     Completed, Completes, Counted, Fragment, Lot, Plan, Reading, Release, Released, Version,
 };
+use suzatary_record::record::TodoEvent;
 
 const OWNER: &str = "owner";
 const AGENT: &str = "triage";

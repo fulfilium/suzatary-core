@@ -339,8 +339,9 @@ impl Instance {
             .collect();
         if let Some(keys) = signers.held() {
             let stores: Vec<_> = self.chains.iter().map(crate::commands::store_of).collect();
-            let stores: Vec<&dyn suzatary_core::store::Prodrome<suzatary_core::record::TodoEvent>> =
-                stores.iter().map(|store| store as _).collect();
+            let stores: Vec<
+                &dyn suzatary_core::store::Prodrome<suzatary_record::record::TodoEvent>,
+            > = stores.iter().map(|store| store as _).collect();
             if let Err(why) = suzatary_core::signatures::complete_revocations(&stores, keys.root())
             {
                 failed.push(format!("completing a revocation across chains: {why}"));
@@ -399,7 +400,7 @@ impl Instance {
         signers: &suzatary_core::signatures::Signers,
         actor: &prodrome_core::event::Actor,
     ) -> suzatary_core::store::Signing<
-        suzatary_io::objects::Objects<suzatary_core::record::TodoEvent>,
+        suzatary_io::objects::Objects<suzatary_record::record::TodoEvent>,
     > {
         suzatary_core::store::Signing::new(
             crate::commands::store_of(chain),

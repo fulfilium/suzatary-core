@@ -12,7 +12,6 @@ use crate::mail::verbs::{Marked, Show, Summary};
 use crate::mail::{AttachmentMeta, MailMessage, MailRow};
 use crate::mail_error::MailError;
 use crate::notify::{Delivered, Notify, NotifyError, Push};
-use crate::record::{Envelope, TodoEvent};
 use crate::render::{Html, Render};
 use crate::repos::{Patch, RepoRow, Visibility};
 use crate::repositories::{RepoFailure, Repositories};
@@ -31,6 +30,7 @@ use suzatary_base::drive_path::DriveFailure;
 use suzatary_base::escape::Escaped;
 use suzatary_base::refusal::Refusal;
 use suzatary_base::repo_ids::{CommitId, RepoName, RepoPath, Rev};
+use suzatary_record::record::{Envelope, TodoEvent};
 
 impl Agent<'static> {
     /// The agent's record, every field inert.

@@ -2,9 +2,9 @@ use prodrome_core::event::Actor;
 use prodrome_core::sign::{PublicKey, Registrar, Signature, Signed};
 
 use super::{Requested, Trust, Unproven, WINDOW_SECONDS, body_digest, is_nonce, request_name};
-use crate::record::TodoEvent;
 use crate::store::{Prodrome, StoreError};
 use suzatary_base::refusal::Refusal;
+use suzatary_record::record::TodoEvent;
 
 /// A DEVICE'S REQUEST AT THE DOOR, as its headers carry it: the parts its name is the hash of,
 /// the body read whole, and the key and signature it names, absent where it was not signed.

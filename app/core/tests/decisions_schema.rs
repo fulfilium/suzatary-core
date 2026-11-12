@@ -22,8 +22,8 @@ use proptest::prelude::*;
 use suzatary_core::decisions::{
     self, DecisionEvent, DecisionId, DecisionVocabulary, Ledger, Life, Statement,
 };
-use suzatary_core::record::MarkupSource;
 use suzatary_core::store::linearised;
+use suzatary_record::record::MarkupSource;
 
 type Disk = EventStore<DecisionEvent, Everything>;
 

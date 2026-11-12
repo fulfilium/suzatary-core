@@ -11,7 +11,7 @@ use std::process::{Child, ChildStdin, ChildStdout, Command, Stdio};
 use prodrome_core::event::{Actor, mk_created};
 use prodrome_core::fpl;
 use prodrome_core::literal::Datetime;
-use suzatary_core::record::{EventStore, mk_authored};
+use suzatary_record::record::{EventStore, mk_authored};
 
 /// A scratch root unique to this process and thread.
 fn scratch(name: &str) -> PathBuf {
@@ -35,25 +35,25 @@ fn a_chain(root: &Path) -> EventStore {
     let store = EventStore::new(root.join("events"), untrusted);
     suzatary_core::store::append_to(
         &store,
-        suzatary_core::record::GENESIS,
+        suzatary_record::record::GENESIS,
         mk_created("filething", at(1), "ada", "permit renewal", "").expect("valid"),
     )
     .expect("appends");
     suzatary_core::store::append_to(
         &store,
-        suzatary_core::record::GENESIS,
+        suzatary_record::record::GENESIS,
         mk_authored(
             "filething",
             at(2),
             "ada",
             "todo",
             at(2),
-            suzatary_core::record::MarkupSource::from_chain(r"File the \*permit\* renewal"),
+            suzatary_record::record::MarkupSource::from_chain(r"File the \*permit\* renewal"),
             fpl::mk_flat(0.35).expect("a term"),
             vec!["Missing it is not recoverable.".to_owned()],
             "work",
             "",
-            suzatary_core::record::MarkupSource::empty(),
+            suzatary_record::record::MarkupSource::empty(),
             None,
             Vec::new(),
             Vec::new(),

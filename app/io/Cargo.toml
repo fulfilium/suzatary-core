@@ -13,6 +13,7 @@ path = "src/lib.rs"
 
 [dependencies]
 suzatary-base.workspace = true
+suzatary-record.workspace = true
 suzatary-core.workspace = true
 prodrome_core.workspace = true
 chrono.workspace = true

@@ -11,9 +11,9 @@ use regex::Regex;
 
 use crate::mail::corpus::{Corpus, CorpusError};
 use crate::mail::mailbox::Query;
-use crate::record::{MarkupSource, Source};
 use suzatary_base::capability::Datetime;
 use suzatary_base::reference::MailHash;
+use suzatary_record::record::{MarkupSource, Source};
 
 /// A message's canonical hash, the same type a `mail:<hash>` reference validates.
 pub(crate) type MessageHash = MailHash;
@@ -299,7 +299,7 @@ mod tests {
     }
 
     fn source(sender: &str, subject: &str, thread_id: &str) -> Source {
-        crate::record::mk_source(sender, subject, dt(2026, 9, 1), "", thread_id, "")
+        suzatary_record::record::mk_source(sender, subject, dt(2026, 9, 1), "", thread_id, "")
     }
 
     fn open(id: &str, created: Datetime, src: Option<Source>, body: &str) -> OpenTodo {

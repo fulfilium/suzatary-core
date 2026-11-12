@@ -30,9 +30,9 @@ pub use surface::{TriageCall, TriageVerb, tools};
 pub use reads::{CONTEXT_CAP, CONTEXT_HEADROOM, context, manual};
 
 use crate::deployment::Deployment;
-use crate::record::TodoEvent;
 use crate::store::Reads;
 use suzatary_base::refusal::{Refusal, shown};
+use suzatary_record::record::TodoEvent;
 
 /// Who this surface is: a constant, never an argument. Its writes are cards, which the owner's
 /// tap performs.

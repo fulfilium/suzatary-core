@@ -72,7 +72,7 @@ fn fresh_instance(name: &str) -> Instance {
 /// answers the id of.
 fn proposed(instance: &Instance) -> ConversationId {
     let first = instance.chains.first();
-    let chain = suzatary_io::objects::Objects::chain(suzatary_core::record::EventStore::new(
+    let chain = suzatary_io::objects::Objects::chain(suzatary_record::record::EventStore::new(
         first.events.clone(),
         first.policy.untrusted.clone(),
     ));

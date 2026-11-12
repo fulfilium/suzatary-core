@@ -3,9 +3,9 @@
 use prodrome_core::fpl;
 
 use crate::priced::day_of;
-use crate::record::Source;
 use crate::verb::Caught;
 use suzatary_base::refusal::Refusal;
+use suzatary_record::record::Source;
 
 /// The `source_*` arguments of a call.
 #[derive(Debug, Default)]
@@ -40,7 +40,7 @@ impl Sourced {
         let day = day_of(date, "source_date")?;
         let at = fpl::datetime_of(chrono::NaiveDateTime::from(day))
             .map_err(|e| Refusal::bad_request(e.to_string()))?;
-        Ok(Some(crate::record::mk_source(
+        Ok(Some(suzatary_record::record::mk_source(
             suzatary_base::escape::escape_string(sender).as_str(),
             suzatary_base::escape::escape_string(subject).as_str(),
             at,

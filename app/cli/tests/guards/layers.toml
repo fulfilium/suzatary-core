@@ -1,10 +1,10 @@
 [layers]
 # The cuts of `app/core/src`, bottom first: a module may name its own cut's and lower cuts'
 # modules, never a higher one's. A file is in the cut of the longest module path below that
-# holds it. A cut that is its own crate (`app/base`, `app/api`) is held by the compiler instead.
-# The guard layers.rs beside this file reads it; the core split's plan
+# holds it. A cut that is its own crate (`app/base`, `app/record`, `app/api`) is held by the
+# compiler. The guard layers.rs beside this file reads it; the core split's plan
 # (docs/CORESPLIT-PLAN-2026-11-06.md) says why each module is where it is.
-order = ["record", "store", "signatures", "todo", "held", "memory", "mail", "health", "triage", "services", "google", "connect", "inbox", "conversations", "lines", "topics", "digest", "cards", "secretary", "api"]
+order = ["store", "signatures", "todo", "held", "memory", "mail", "health", "triage", "services", "google", "connect", "inbox", "conversations", "lines", "topics", "digest", "cards", "secretary", "api"]
 # The edges that still point up, each named in the core split's plan; the list only shrinks. Each
 # entry is an inline table, so no two names stand in the `"a", "b"` shape the leak guard's
 # generic-api-key rule reads as a key and its value.
@@ -41,7 +41,6 @@ rendering = [
 ]
 
 [layers.modules]
-record = ["decoration", "record", "todo", "wire/record"]
 store = ["replica", "snapshot", "store", "wire/store"]
 signatures = ["cast", "believed", "chain_set", "devices", "epoch", "signatures", "sync",
   "wire/signatures"]

@@ -7,8 +7,8 @@ use std::path::{Path, PathBuf};
 
 use prodrome_core::fpl;
 use prodrome_core::literal::Datetime;
-use suzatary_core::record::{EventStore, mk_authored};
 use suzatary_core::store::Reads as _;
+use suzatary_record::record::{EventStore, mk_authored};
 
 /// A scratch root unique to this process and thread.
 pub(crate) fn scratch(name: &str) -> PathBuf {
@@ -35,19 +35,19 @@ pub(crate) fn a_chain(root: &Path) {
     );
     suzatary_core::store::append_to(
         &store,
-        suzatary_core::record::GENESIS,
+        suzatary_record::record::GENESIS,
         mk_authored(
             "parkingpermit",
             at(1),
             "ada",
             "todo",
             at(1),
-            suzatary_core::record::MarkupSource::escaped("Renew the parking permit"),
+            suzatary_record::record::MarkupSource::escaped("Renew the parking permit"),
             fpl::mk_flat(0.75).expect("a term"),
             vec!["an errand with a recoverable cost".to_owned()],
             "home",
             "",
-            suzatary_core::record::MarkupSource::empty(),
+            suzatary_record::record::MarkupSource::empty(),
             None,
             Vec::new(),
             Vec::new(),
@@ -58,21 +58,21 @@ pub(crate) fn a_chain(root: &Path) {
     .expect("appends");
     suzatary_core::store::append_to(
         &store,
-        suzatary_core::record::GENESIS,
+        suzatary_record::record::GENESIS,
         mk_authored(
             "settletriagebatchdb12e3b7onlife",
             at(1),
             "assistant",
             "decision",
             at(1),
-            suzatary_core::record::MarkupSource::escaped(
+            suzatary_record::record::MarkupSource::escaped(
                 "Settle the triage batch db12e3b7 on life",
             ),
             fpl::mk_flat(0.55).expect("a term"),
             vec!["The secretary held it for Ada.".to_owned()],
             "",
             "",
-            suzatary_core::record::MarkupSource::escaped("batch:life/db12e3b7\n\nheld, standing"),
+            suzatary_record::record::MarkupSource::escaped("batch:life/db12e3b7\n\nheld, standing"),
             None,
             Vec::new(),
             Vec::new(),
@@ -206,7 +206,7 @@ pub(crate) fn signing(
 
 pub(crate) fn objects(
     root: &Path,
-) -> Vec<prodrome_core::event::Envelope<suzatary_core::record::TodoEvent>> {
+) -> Vec<prodrome_core::event::Envelope<suzatary_record::record::TodoEvent>> {
     suzatary_io::objects::Objects::chain(EventStore::new(
         root.join("events"),
         prodrome_core::policy::Untrusted::none(),
@@ -274,7 +274,7 @@ fn each_write_is_signed_by_the_key_its_actor_owns() {
                 Envelope::Change(change)
                     if matches!(
                         object.event(),
-                        Some(event @ suzatary_core::record::TodoEvent::Completed(_))
+                        Some(event @ suzatary_record::record::TodoEvent::Completed(_))
                             if event.todo().as_str() == todo
                     ) =>
                 {

@@ -12,7 +12,6 @@ use suzatary_base::zone::Zone;
 use suzatary_core::agent::Agent;
 use suzatary_core::decisions::{DecisionEvent, Decisions};
 use suzatary_core::mail::account::Roster;
-use suzatary_core::record::TodoEvent;
 use suzatary_core::render_cache::RenderCache;
 use suzatary_core::secretary::Secretary;
 use suzatary_core::secretary::compacting::Compacting;
@@ -31,6 +30,7 @@ use suzatary_io::conversations::ConversationStores;
 use suzatary_io::objects::Objects;
 use suzatary_io::texts::Texts;
 use suzatary_io::unrendered::Unrendered;
+use suzatary_record::record::TodoEvent;
 
 use crate::commands::serve::interpreters::{Declared, DriveAccess, Forecast, Junk, WebAccess};
 use crate::instance::{ChainDir, Instance};

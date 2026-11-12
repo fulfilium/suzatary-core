@@ -14,6 +14,7 @@ path = "src/lib.rs"
 [dependencies]
 prodrome_core.workspace = true
 suzatary-base.workspace = true
+suzatary-record.workspace = true
 suzatary-core.workspace = true
 thiserror.workspace = true
 tracing.workspace = true

@@ -139,8 +139,8 @@ mod tests {
     use prodrome_core::sign::Secret;
 
     use super::*;
-    use crate::record::TodoEvent;
     use crate::store::InMemory;
+    use suzatary_record::record::TodoEvent;
 
     fn done(todo: &str) -> TodoEvent {
         let at = Datetime::new(2026, 10, 5, 9, 0, 0, 0).expect("an instant");

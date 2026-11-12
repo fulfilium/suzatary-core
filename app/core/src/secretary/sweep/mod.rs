@@ -258,7 +258,7 @@ pub fn dry_run(
 fn gather(chain: &Bound<'_>, zone: suzatary_base::zone::Zone) -> Result<Bounded, Refusal> {
     let now = chain.caps.clock.now();
     let nodes = chain.caps.chain.nodes()?;
-    let records = crate::decoration::records_of(&nodes);
+    let records = suzatary_record::decoration::records_of(&nodes);
     let events = crate::view::events_of(&nodes);
     let mut open = Vec::new();
     for entry in prodrome_core::view::entries(&nodes, now, &chain.policy.untrusted)
@@ -307,7 +307,7 @@ fn gather(chain: &Bound<'_>, zone: suzatary_base::zone::Zone) -> Result<Bounded,
 /// reopen when that is later. Only a trusted actor's reopen counts: an untrusted one binds
 /// nothing, so it cannot hide the mail that closes a todo.
 fn since(
-    events: &[crate::record::TodoEvent],
+    events: &[suzatary_record::record::TodoEvent],
     todo: &prodrome_core::event::TodoId,
     created: suzatary_base::capability::Datetime,
     untrusted: &prodrome_core::policy::Untrusted,
@@ -315,11 +315,11 @@ fn since(
     events
         .iter()
         .filter(|event| {
-            matches!(event, crate::record::TodoEvent::Reopened(_))
+            matches!(event, suzatary_record::record::TodoEvent::Reopened(_))
                 && event.todo() == todo
                 && !untrusted.actors().contains(event.actor())
         })
-        .map(crate::record::TodoEvent::at)
+        .map(suzatary_record::record::TodoEvent::at)
         .fold(created, std::cmp::max)
 }
 

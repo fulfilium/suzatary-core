@@ -363,7 +363,7 @@ fn repair(chain: &crate::instance::ChainDir, keys: &BoxKeys) -> anyhow::Result<(
 fn list(instance: &Instance) -> anyhow::Result<()> {
     let registrar = instance.chains.first().policy.registrar();
     for chain in &instance.chains {
-        let dag: prodrome_core::dag::Dag<suzatary_core::record::TodoEvent> = store_of(chain)
+        let dag: prodrome_core::dag::Dag<suzatary_record::record::TodoEvent> = store_of(chain)
             .objects()
             .with_context(|| format!("reading {}", chain.policy.name))?
             .into_iter()

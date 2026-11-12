@@ -3,7 +3,7 @@
 //! attacker-controlled mail; escaping is a claim, this is a measurement, and a
 //! field that altered the structure makes the two differ.
 //!
-//! It does not go through [`crate::render::Render`]: `Render::html` takes an
+//! It does not go through `suzatary_core::render::Render`: `Render::html` takes an
 //! [`suzatary_base::escape::Escaped`], which only confirmed content yields, and the
 //! agent's writes are provisional. The leading `//` run is verified too, so an
 //! update cannot silently drop a note about the whole block.

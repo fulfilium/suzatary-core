@@ -6,7 +6,6 @@
 //! todo; content is folded from every actor, and `authored_by` says whose text it is.
 
 use crate::believed::{Believed, one_outcome, records};
-use crate::record::{Authored, Node};
 use prodrome_core::event::TodoId;
 use prodrome_core::fpl::Outcome;
 use prodrome_core::fpl::{self};
@@ -14,10 +13,13 @@ use prodrome_core::literal::Datetime;
 use prodrome_core::payload::Payload as _;
 use prodrome_core::policy::Untrusted;
 use prodrome_core::term::Term;
+use suzatary_record::record::{Authored, Node};
 
-use crate::decoration::{DecorationError, block, kind_category, render_verified, shown_of};
 use suzatary_base::escape::markup_text;
 use suzatary_base::refusal::Refusal;
+use suzatary_record::decoration::{
+    DecorationError, block, kind_category, render_verified, shown_of,
+};
 
 // One record as a block.
 
@@ -140,8 +142,8 @@ pub fn open_todos(
 
 #[cfg(test)]
 mod tests {
-    use crate::record::{TodoEvent, mk_authored, mk_source};
     use prodrome_core::event::Actor;
+    use suzatary_record::record::{TodoEvent, mk_authored, mk_source};
 
     use super::*;
 
@@ -160,12 +162,12 @@ mod tests {
             actor,
             "todo",
             midnight(7),
-            crate::record::MarkupSource::from_chain(r"File the \*permit\* renewal"),
+            suzatary_record::record::MarkupSource::from_chain(r"File the \*permit\* renewal"),
             fpl::mk_flat(0.35).expect("a term"),
             vec!["Missing it is not recoverable.".to_owned()],
             "work",
             "",
-            crate::record::MarkupSource::empty(),
+            suzatary_record::record::MarkupSource::empty(),
             None,
             Vec::new(),
             Vec::new(),

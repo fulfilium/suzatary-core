@@ -1,7 +1,7 @@
 //! The fields a todo's forms are made of; what is typed is read at the form's edge, once.
 
 use chrono::{Duration, NaiveDate};
-use suzatary_core::todo::{Cycle, Deadline, Price};
+use suzatary_record::todo::{Cycle, Deadline, Price};
 use viewtree::Attr::{
     AriaLabel, AriaPressed, Class, Hidden, Max, Min, Placeholder, Role, Step, Type, Value,
 };

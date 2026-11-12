@@ -18,10 +18,10 @@ use prodrome_core::event::Hash;
 use prodrome_core::sign::PublicKey;
 use suzatary_api::gate::{actor_of, writer_of};
 use suzatary_base::refusal::Refusal;
-use suzatary_core::record::TodoEvent;
 use suzatary_core::signatures::Admitted;
 use suzatary_core::signatures::{Answer, Asking, Proven, Request, Requested, refused};
 use suzatary_core::store::Prodrome;
+use suzatary_record::record::TodoEvent;
 
 use super::State;
 use super::guard::{Asks, Proof};

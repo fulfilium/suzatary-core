@@ -29,13 +29,13 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use crate::record::{Envelope, TodoEvent};
 use crate::signatures::{Trust, Unproven};
 use prodrome_core::dag::Dag;
 use prodrome_core::event::{
     Actor, Hash, TodoId, canonical_envelope, parents_of, parse_envelope, seal_hash,
 };
 use prodrome_core::sign::{PublicKey, Registrar};
+use suzatary_record::record::{Envelope, TodoEvent};
 
 /// What the server holds: its objects by name, as `Prodrome::objects` answers them.
 #[derive(Debug, Clone, Default)]
@@ -539,7 +539,7 @@ fn rests_on<E>(envelope: &prodrome_core::event::Envelope<E>) -> Vec<Hash> {
 
 /// One literal parsed, reprinted and named by the hash of the print, never the client's name.
 fn named(literal: &str) -> Result<(Hash, String, Envelope), Reason> {
-    named_at(&crate::record::TodoVocabulary::default(), literal)
+    named_at(&suzatary_record::record::TodoVocabulary::default(), literal)
 }
 
 /// [`named`], at the schema `E`.
@@ -560,12 +560,12 @@ fn named_at<E: prodrome_core::schema::Schema>(
 
 #[cfg(test)]
 mod tests {
-    use crate::record::TodoEvent;
     use prodrome_core::event::{
         Hash, mk_cancelled, mk_completed, mk_created, mk_reopened, mk_sealed, mk_woven,
     };
     use prodrome_core::literal::Datetime;
     use prodrome_core::store::{MemoryStore, Replica};
+    use suzatary_record::record::TodoEvent;
 
     use super::*;
 
@@ -610,15 +610,16 @@ mod tests {
     /// Apply an outcome the way the binary does: take in exactly what it names.
     fn apply(held: &mut Objects, taken: &[(Hash, String)]) {
         for (name, literal) in taken {
-            let envelope = parse_envelope(&crate::record::TodoVocabulary::default(), literal)
-                .expect("we printed it");
+            let envelope =
+                parse_envelope(&suzatary_record::record::TodoVocabulary::default(), literal)
+                    .expect("we printed it");
             assert_eq!(&seal_hash(&envelope), name);
             held.insert(name.clone(), envelope);
         }
     }
 
     /// The rows over everything the set holds.
-    fn folded(set: &Objects) -> Vec<crate::record::Entry> {
+    fn folded(set: &Objects) -> Vec<suzatary_record::record::Entry> {
         let nodes = prodrome_core::dag::Dag::from_iter(objects_of(set))
             .nodes()
             .expect("a closed set reads");
@@ -753,18 +754,18 @@ mod tests {
     fn a_sealed_completed_on_a_decision_is_refused_while_an_ordinary_todos_is_accepted() {
         let decision = sealed(
             None,
-            crate::record::mk_authored(
+            suzatary_record::record::mk_authored(
                 "settlethis",
                 at(1),
                 "assistant",
                 "decision",
                 at(1),
-                crate::record::MarkupSource::escaped("Send the reply"),
+                suzatary_record::record::MarkupSource::escaped("Send the reply"),
                 prodrome_core::fpl::mk_absent(),
                 vec!["because he asked".to_owned()],
                 "",
                 "",
-                crate::record::MarkupSource::escaped(
+                suzatary_record::record::MarkupSource::escaped(
                     "proposal:default/0\n\nthe body a person reads",
                 ),
                 None,
@@ -1027,7 +1028,8 @@ mod tests {
 
     fn name_of(print: &str) -> Hash {
         let object: Envelope =
-            parse_envelope(&crate::record::TodoVocabulary::default(), print).expect("a print");
+            parse_envelope(&suzatary_record::record::TodoVocabulary::default(), print)
+                .expect("a print");
         seal_hash(&object)
     }
 

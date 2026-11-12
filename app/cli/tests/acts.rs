@@ -50,12 +50,12 @@ fn authored_update(base: &str, update: &serde_json::Value) -> (String, String) {
         .expect("an event print")
         .to_owned();
     match prodrome_core::event::parse_event(
-        &suzatary_core::record::TodoVocabulary::default(),
+        &suzatary_record::record::TodoVocabulary::default(),
         &print,
     )
     .expect("the core printed it")
     {
-        suzatary_core::record::TodoEvent::Authored(record) => {
+        suzatary_record::record::TodoEvent::Authored(record) => {
             let note = record.payload.note.clone();
             (print, note)
         }
@@ -65,9 +65,11 @@ fn authored_update(base: &str, update: &serde_json::Value) -> (String, String) {
 
 /// Hand `print` to the box as a tab does: sealed and signed.
 fn post_authored(base: &str, fakes: &Fakes, print: &str) {
-    let event =
-        prodrome_core::event::parse_event(&suzatary_core::record::TodoVocabulary::default(), print)
-            .expect("the core printed it");
+    let event = prodrome_core::event::parse_event(
+        &suzatary_record::record::TodoVocabulary::default(),
+        print,
+    )
+    .expect("the core printed it");
     let object = common::written(&fakes.chain, event);
     let posted = common::act(
         &format!("{base}/api/objects"),
@@ -150,7 +152,7 @@ fn a_sealed_completed_event_with_a_note_wakes_the_secretary_on_adoption() {
         [r#"{"say": "Noted — good to know it moved."}"#],
     );
 
-    let event = prodrome_core::event::mk_completed::<suzatary_core::record::Record>(
+    let event = prodrome_core::event::mk_completed::<suzatary_record::record::Record>(
         "file-permit",
         common::now(),
         "ada",
@@ -193,7 +195,7 @@ fn a_sealed_completed_event_with_a_note_wakes_the_secretary_on_adoption() {
 fn a_sealed_completed_event_with_no_note_appends_nothing() {
     let (base, fakes) = writing("acts-sealed-blank", Vec::new());
 
-    let event = prodrome_core::event::mk_completed::<suzatary_core::record::Record>(
+    let event = prodrome_core::event::mk_completed::<suzatary_record::record::Record>(
         "file-permit",
         common::now(),
         "ada",

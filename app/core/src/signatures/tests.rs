@@ -8,9 +8,9 @@ use prodrome_core::sign::{PublicKey, Registrar, Secret, Signed};
 use proptest::prelude::*;
 
 use super::*;
-use crate::record::TodoEvent;
 use crate::store::Reads as _;
 use crate::store::{InMemory, Prodrome, Signing, sign};
+use suzatary_record::record::TodoEvent;
 
 fn key(byte: char) -> Secret {
     Secret::new(&byte.to_string().repeat(64)).expect("a seed")

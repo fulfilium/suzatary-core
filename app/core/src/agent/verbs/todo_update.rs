@@ -8,9 +8,9 @@ use super::Written;
 use crate::agent::Holds;
 use crate::priced::Priced;
 use crate::secretary::changes::Act;
-use crate::todo::TodoPatch;
 use crate::verb::{Chained, Verb};
 use suzatary_base::refusal::Refusal;
+use suzatary_record::todo::TodoPatch;
 
 /// Change fields on a todo, as the surface writes.
 pub struct TodoUpdate<S>(PhantomData<S>);

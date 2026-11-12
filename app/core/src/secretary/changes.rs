@@ -12,13 +12,13 @@ use serde_json::{Map, Value};
 use crate::authoring::{self, NewTodo};
 use crate::believed::{Believed, Preview};
 use crate::priced::{PRICE_SPELLINGS, Priced};
-use crate::record::{Node, Source, TodoEvent};
-use crate::todo::{Patch, Price, TodoFields, TodoPatch};
 use prodrome_core::literal::codec::{Constructor, Fields, Literal, arm, no_arm, record};
 use suzatary_base::capability::{Datetime, Typeset};
 use suzatary_base::refusal::{Refusal, shown as quoted};
 use suzatary_base::writer::Writer;
 use suzatary_base::zone::Moment;
+use suzatary_record::record::{Node, Source, TodoEvent};
+use suzatary_record::todo::{Patch, Price, TodoFields, TodoPatch};
 
 /// One chain act, each arm backed by an existing builder.
 ///
@@ -109,7 +109,7 @@ struct Named {
 struct Adding {
     body: String,
     rationale: String,
-    #[serde(default = "crate::todo::fields::plain_kind")]
+    #[serde(default = "suzatary_record::todo::fields::plain_kind")]
     kind: String,
     #[serde(default)]
     category: String,
@@ -388,7 +388,11 @@ pub struct Building<'a> {
 }
 
 /// The record an edit is against, or the refusal that says there is none.
-fn existing(nodes: &[Node], at: Datetime, todo: &str) -> Result<crate::record::Authored, Refusal> {
+fn existing(
+    nodes: &[Node],
+    at: Datetime,
+    todo: &str,
+) -> Result<suzatary_record::record::Authored, Refusal> {
     crate::todos::current(nodes, at, todo)
         .ok_or_else(|| Refusal::not_found(format!("no todo with id {} on the chain", quoted(todo))))
 }
@@ -866,7 +870,7 @@ mod tests {
             .get("acts"),
         )
         .expect("one act");
-        let cycle = crate::todo::Cycle {
+        let cycle = suzatary_record::todo::Cycle {
             days: 60,
             from_percent: 100,
             to_percent: 30,

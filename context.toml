@@ -47,7 +47,7 @@ typst = 2.887
 other = 2.208
 
 [[tokens.sample]]
-path = "app/core/src/record.rs"
+path = "app/record/src/record.rs"
 characters = 27046
 tokens = 10235
 [[tokens.sample]]
@@ -150,24 +150,31 @@ depends = ["prodrome-core"]
 scripts = []
 
 [[unit]]
+name = "record"
+path = "app/record"
+shape = "crate"
+depends = ["base", "prodrome-core"]
+scripts = []
+
+[[unit]]
 name = "core"
 path = "app/core"
 shape = "crate"
-depends = ["base", "prodrome-core", "prodrome-wasm-exports"]
+depends = ["base", "prodrome-core", "prodrome-wasm-exports", "record"]
 scripts = []
 
 [[unit]]
 name = "api"
 path = "app/api"
 shape = "crate"
-depends = ["base", "core", "prodrome-core"]
+depends = ["base", "core", "prodrome-core", "record"]
 scripts = ["scripts/wire.sh"]
 
 [[unit]]
 name = "io"
 path = "app/io"
 shape = "crate"
-depends = ["base", "core", "prodrome-core", "prodrome-typst-wasm"]
+depends = ["base", "core", "prodrome-core", "prodrome-typst-wasm", "record"]
 scripts = []
 
 [[unit]]
@@ -181,14 +188,14 @@ scripts = ["scripts/plugin-sync.sh"]
 name = "cli"
 path = "app/cli"
 shape = "crate"
-depends = ["api", "base", "core", "io", "plugin", "prodrome-core"]
+depends = ["api", "base", "core", "io", "plugin", "prodrome-core", "record"]
 scripts = ["scripts/app-bin.sh", "scripts/app-build.sh", "scripts/merge-gate.sh"]
 
 [[unit]]
 name = "wasm"
 path = "app/wasm"
 shape = "crate"
-depends = ["api", "base", "core", "prodrome-core", "prodrome-wasm-exports"]
+depends = ["api", "base", "core", "prodrome-core", "prodrome-wasm-exports", "record"]
 scripts = ["scripts/web-inputs.sh"]
 
 [[unit]]
@@ -202,7 +209,7 @@ scripts = []
 name = "pages"
 path = "app/pages"
 shape = "crate"
-depends = ["api", "base", "core", "prodrome-core", "viewtree"]
+depends = ["api", "base", "core", "prodrome-core", "record", "viewtree"]
 scripts = ["scripts/wire.sh", "scripts/web-inputs.sh"]
 
 [[unit]]

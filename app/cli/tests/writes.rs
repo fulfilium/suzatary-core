@@ -608,7 +608,7 @@ fn stored_markup_is_minted_only_where_it_is_read() {
         vec![
             "cli/tests/support/fixture.rs",
             "core/src/decisions/event.rs",
-            "core/src/record.rs",
+            "record/src/record.rs",
         ]
     );
 }

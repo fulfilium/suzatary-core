@@ -6,10 +6,10 @@ use prodrome_core::event::Hash;
 use crate::deployment::Deployment;
 use crate::secretary::changes::{self, Act, Changeset, Provenance};
 use crate::settings::{Help, Settable};
-use crate::todo::{Deadline, Price, TodoFields};
 use suzatary_base::capability::Datetime;
 use suzatary_base::chains::ChainPolicy;
 use suzatary_base::refusal::Refusal;
+use suzatary_record::todo::{Deadline, Price, TodoFields};
 
 /// The todo id for `name` expiring on `day`.
 #[must_use]
@@ -26,7 +26,7 @@ fn prefix(name: &Settable) -> String {
 /// # Errors
 /// The open list does not fold.
 pub fn acts(
-    nodes: &[crate::record::Node],
+    nodes: &[suzatary_record::record::Node],
     at: Datetime,
     untrusted: &prodrome_core::policy::Untrusted,
     expiring: &[(Settable, crate::health::Instant)],

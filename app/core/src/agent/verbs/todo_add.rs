@@ -10,9 +10,9 @@ use crate::agent::Holds;
 use crate::agent::sourced::Sourced;
 use crate::priced::{PRICE_SPELLINGS, Priced, day_of};
 use crate::secretary::changes::{Act, Provenance};
-use crate::todo::TodoFields;
 use crate::verb::{Caught, Chained, Verb};
 use suzatary_base::refusal::Refusal;
+use suzatary_record::todo::TodoFields;
 
 /// Author a new todo, as the surface writes.
 pub struct TodoAdd<S>(PhantomData<S>);
@@ -22,7 +22,7 @@ pub struct TodoAddArgs {
     todo_id: String,
     body: String,
     rationale: String,
-    #[serde(default = "crate::todo::fields::plain_kind")]
+    #[serde(default = "suzatary_record::todo::fields::plain_kind")]
     kind: String,
     category: Option<String>,
     #[serde(flatten)]

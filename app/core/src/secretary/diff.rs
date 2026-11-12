@@ -13,8 +13,8 @@ use prodrome_core::fpl;
 use prodrome_core::payload::Payload as _;
 
 use crate::believed::records;
-use crate::record::{Authored, Node, TodoEvent};
 use crate::wire::inbox as wire;
+use suzatary_record::record::{Authored, Node, TodoEvent};
 
 /// Every row of one changeset, with the "before" column advancing through it.
 ///

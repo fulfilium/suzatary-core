@@ -5,9 +5,9 @@ use prodrome_core::literal::{Datetime, ProdromeError, Value};
 
 use super::registers::{DecisionRegister, DecisionRegisters};
 use super::{DecisionId, NotADecision, Statement};
-use crate::record::MarkupSource;
 use prodrome_core::literal::codec::{Constructor, Fields, Literal};
 use prodrome_core::schema::headed::{Body, Constructors, Event};
+use suzatary_record::record::MarkupSource;
 
 /// One event about one decision: which, when its writer recorded it (data, never an order), who,
 /// and what was said of it.

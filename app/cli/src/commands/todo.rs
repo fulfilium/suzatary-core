@@ -13,8 +13,9 @@ use suzatary_base::capability::Clock;
 use suzatary_core::believed::Preview;
 use suzatary_core::signatures::Signers;
 use suzatary_core::store::{Prodrome, Signing};
-use suzatary_core::{authoring, todo, view};
+use suzatary_core::{authoring, view};
 use suzatary_io::clock::SystemClock;
+use suzatary_record::todo;
 
 use super::store_of;
 use crate::instance::{ChainDir, Instance};
@@ -414,7 +415,7 @@ fn writer(
     chain: &ChainDir,
     signers: &Signers,
     actor: &str,
-) -> anyhow::Result<Signing<suzatary_io::objects::Objects<suzatary_core::record::TodoEvent>>> {
+) -> anyhow::Result<Signing<suzatary_io::objects::Objects<suzatary_record::record::TodoEvent>>> {
     on_the_roster(chain, actor)?;
     let actor = Actor::new(actor).map_err(|e| anyhow::anyhow!("{e}"))?;
     Ok(Instance::writer_of(chain, signers, &actor))
@@ -462,7 +463,7 @@ fn add(
         .collect();
     let todo = authoring::NewTodo {
         todo: new.id.clone(),
-        fields: suzatary_core::todo::TodoFields {
+        fields: suzatary_record::todo::TodoFields {
             body: new.body.clone(),
             rationale: new.rationale.clone(),
             kind: new.kind.clone(),
@@ -567,10 +568,10 @@ fn update(
 /// Render against the chain as it would be, then append: a block that does not render is not
 /// written.
 fn appended(
-    store: &impl Prodrome<suzatary_core::record::TodoEvent>,
+    store: &impl Prodrome<suzatary_record::record::TodoEvent>,
     untrusted: &Untrusted,
     preview: &mut Preview,
-    written: Vec<suzatary_core::record::TodoEvent>,
+    written: Vec<suzatary_record::record::TodoEvent>,
     now: suzatary_base::capability::Datetime,
 ) -> anyhow::Result<()> {
     for event in &written {
@@ -578,7 +579,7 @@ fn appended(
     }
     let mut blocks = Vec::with_capacity(written.len());
     for event in &written {
-        let suzatary_core::record::TodoEvent::Authored(record) = event else {
+        let suzatary_record::record::TodoEvent::Authored(record) = event else {
             bail!("authoring answers an Authored");
         };
         let block = suzatary_core::todos::render_current(preview.nodes(), now, untrusted, record)
@@ -658,12 +659,13 @@ fn list(chain: &ChainDir) -> anyhow::Result<()> {
 }
 
 /// A lifecycle event's `(todo, at, actor, note)` constructor.
-type Build = fn(
-    &str,
-    prodrome_core::literal::Datetime,
-    &str,
-    &str,
-) -> Result<suzatary_core::record::TodoEvent, prodrome_core::literal::ProdromeError>;
+type Build =
+    fn(
+        &str,
+        prodrome_core::literal::Datetime,
+        &str,
+        &str,
+    ) -> Result<suzatary_record::record::TodoEvent, prodrome_core::literal::ProdromeError>;
 
 /// `suzatary todo done|cancel|reopen|tend <id>`: a trusted lifecycle event, binding at once.
 /// An id no event mentions is refused as a typo.

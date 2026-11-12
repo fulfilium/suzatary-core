@@ -1,10 +1,10 @@
 //! The verbs that only look; the ones that append are [`super::writes`].
 
 use crate::believed::Believed;
-use crate::record::TodoEvent;
 use prodrome_core::fpl;
 use prodrome_core::payload::Payload as _;
 use serde_json::{Value, json};
+use suzatary_record::record::TodoEvent;
 
 use super::events_of;
 use crate::agent::Agent;
@@ -146,7 +146,7 @@ fn manual_within(manuals: &dyn Manuals, deployment: &Deployment, cap: usize) -> 
     let categories = listed(&vocabulary, CATEGORIES_BUDGET);
     let mut kinds = serde_json::Map::new();
     kinds.insert("todo".into(), json!("general; REQUIRES category"));
-    for kind in crate::decoration::CATEGORY_KINDS {
+    for kind in suzatary_record::decoration::CATEGORY_KINDS {
         kinds.insert(
             (*kind).into(),
             json!(

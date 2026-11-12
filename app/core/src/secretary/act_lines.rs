@@ -108,12 +108,14 @@ pub fn note_act(
 /// content updates it, and a creation or an undo or redo is not noted.
 #[must_use]
 pub fn heard_from_objects(
-    events: &[crate::record::TodoEvent],
+    events: &[suzatary_record::record::TodoEvent],
     actor: &prodrome_core::event::Actor,
     chain: &suzatary_base::chains::ChainName,
-    before: &dyn Fn(&crate::record::Authored) -> Option<crate::record::Authored>,
+    before: &dyn Fn(
+        &suzatary_record::record::Authored,
+    ) -> Option<suzatary_record::record::Authored>,
 ) -> Vec<ActLine> {
-    use crate::record::TodoEvent;
+    use suzatary_record::record::TodoEvent;
     let line = |todo: &prodrome_core::event::TodoId,
                 at,
                 by: &prodrome_core::event::Actor,
@@ -147,7 +149,7 @@ pub fn heard_from_objects(
             }
             TodoEvent::Authored(r) => {
                 let shown = before(r)?;
-                let same = crate::record::Record {
+                let same = suzatary_record::record::Record {
                     note: shown.payload.note.clone(),
                     ..r.payload.clone()
                 } == shown.payload;
@@ -482,16 +484,21 @@ mod tests {
         let actor = prodrome_core::event::Actor::new("ada").expect("an actor");
         let chain = suzatary_base::chains::ChainName::new("life").expect("a slug");
         for event in [
-            prodrome_core::event::mk_cancelled::<crate::record::Record>("x", now(), "ada", "")
-                .expect("a cancelled event"),
-            prodrome_core::event::mk_reopened::<crate::record::Record>(
+            prodrome_core::event::mk_cancelled::<suzatary_record::record::Record>(
+                "x",
+                now(),
+                "ada",
+                "",
+            )
+            .expect("a cancelled event"),
+            prodrome_core::event::mk_reopened::<suzatary_record::record::Record>(
                 "x",
                 now(),
                 "triage",
                 "wrong call",
             )
             .expect("a reopened event"),
-            prodrome_core::event::mk_created::<crate::record::Record>(
+            prodrome_core::event::mk_created::<suzatary_record::record::Record>(
                 "x",
                 now(),
                 "ada",
@@ -514,24 +521,26 @@ mod tests {
     fn an_adopted_record_is_noted_by_what_it_replaces() {
         let actor = prodrome_core::event::Actor::new("ada").expect("an actor");
         let chain = suzatary_base::chains::ChainName::new("life").expect("a slug");
-        let body = |text: &str| crate::record::MarkupSource::from_chain(text);
-        let Ok(crate::record::TodoEvent::Authored(shown)) = crate::record::mk_authored(
-            "x",
-            now(),
-            "triage",
-            "todo",
-            now(),
-            body("File it"),
-            prodrome_core::fpl::mk_flat(0.5).expect("a term"),
-            vec!["why".to_owned()],
-            "",
-            "",
-            crate::record::MarkupSource::empty(),
-            None,
-            Vec::new(),
-            Vec::new(),
-            "",
-        ) else {
+        let body = |text: &str| suzatary_record::record::MarkupSource::from_chain(text);
+        let Ok(suzatary_record::record::TodoEvent::Authored(shown)) =
+            suzatary_record::record::mk_authored(
+                "x",
+                now(),
+                "triage",
+                "todo",
+                now(),
+                body("File it"),
+                prodrome_core::fpl::mk_flat(0.5).expect("a term"),
+                vec!["why".to_owned()],
+                "",
+                "",
+                suzatary_record::record::MarkupSource::empty(),
+                None,
+                Vec::new(),
+                Vec::new(),
+                "",
+            )
+        else {
             unreachable!("mk_authored answers an Authored")
         };
         let posted = |text: &str, note: &str| {
@@ -539,10 +548,10 @@ mod tests {
             record.actor = actor.clone();
             record.payload.body = body(text);
             record.payload.note = note.to_owned();
-            crate::record::TodoEvent::Authored(Box::new(record))
+            suzatary_record::record::TodoEvent::Authored(Box::new(record))
         };
         let verbs = |event, known: bool| {
-            let before = |_: &crate::record::Authored| known.then(|| (*shown).clone());
+            let before = |_: &suzatary_record::record::Authored| known.then(|| (*shown).clone());
             heard_from_objects(&[event], &actor, &chain, &before)
                 .into_iter()
                 .map(|line| line.verb)

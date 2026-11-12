@@ -26,13 +26,13 @@ use suzatary_core::mail::mailbox::{Mailbox, Query};
 use suzatary_core::mail::sync_report::{AccountSync, SyncReport};
 use suzatary_core::mail::{AttachmentFile, AttachmentMeta, MailMessage, MailRow};
 use suzatary_core::mail_error::MailError;
-use suzatary_core::record::{Envelope, EventStore, TodoEvent};
 use suzatary_core::repos::{Patch, RepoRow, Visibility};
 use suzatary_core::repositories::{RepoFailure, Repositories};
 use suzatary_core::secretary::line_event::LineEvent;
 use suzatary_core::secretary::store::Entry;
 use suzatary_core::secretary::{Bound, Secretary};
 use suzatary_core::store::{Prodrome, Reads, StoreError, WriteLock, append_to, linearised};
+use suzatary_record::record::{Envelope, EventStore, TodoEvent};
 
 fn chain() -> ChainPolicy {
     let actor = |name: &str| Actor::new(name).expect("a roster name");
@@ -82,12 +82,12 @@ impl Fixed {
         let alpha = suzatary_core::authoring::build_todo(
             &suzatary_core::authoring::NewTodo {
                 todo: "alpha".to_owned(),
-                fields: suzatary_core::todo::TodoFields {
+                fields: suzatary_record::todo::TodoFields {
                     body: "Book the flight".to_owned(),
                     rationale: "A trip this month.".to_owned(),
                     kind: "todo".to_owned(),
                     category: "home".to_owned(),
-                    price: suzatary_core::todo::Price::Flat { percent: 45 },
+                    price: suzatary_record::todo::Price::Flat { percent: 45 },
                     detail: String::new(),
                     waiting_on: String::new(),
                 },
@@ -104,7 +104,7 @@ impl Fixed {
             &suzatary_base::capability::Parses,
         )
         .expect("a todo");
-        append_to(&events, suzatary_core::record::GENESIS, alpha).expect("appends");
+        append_to(&events, suzatary_record::record::GENESIS, alpha).expect("appends");
         Self { root, events }
     }
 }

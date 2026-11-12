@@ -6,12 +6,12 @@ use prodrome_core::sign::PublicKey;
 use suzatary_api::gate::{actor_of, writer_of};
 use suzatary_base::capability::Login;
 use suzatary_base::refusal::Refusal;
-use suzatary_core::record::TodoEvent;
 use suzatary_core::signatures::Admitted;
 use suzatary_core::signatures::Tap;
 use suzatary_core::signatures::{ActHeaders, check_csrf};
 use suzatary_core::signatures::{Asking, Possessed, Proven, Trusted, Unproven};
 use suzatary_core::store::Prodrome;
+use suzatary_record::record::TodoEvent;
 
 use super::State;
 

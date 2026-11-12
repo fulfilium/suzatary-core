@@ -31,6 +31,7 @@ required-features = ["fixture"]
 
 [dependencies]
 suzatary-base.workspace = true
+suzatary-record.workspace = true
 suzatary-core.workspace = true
 suzatary-api.workspace = true
 suzatary-io.workspace = true
@@ -66,47 +67,25 @@ hex.workspace = true
 rustix = { version = "1", features = ["process"] }
 async-stream = "0.3"
 
-# THE FIXTURE IS NOT IN THE SHIPPED BINARY; `suzatary-dev` is the one binary
-# built with it (`.#suzatary-fixture`, `scripts/app-build.sh --fixture`).
-# `--whois-fixture` makes every peer one login, which is what puts the write
-# surface inside a browser test's reach — a headless Chromium on this box
-# arrives from 127.0.0.1 whatever address it dialled, which no daemon names,
-# so without it every request would be refused and the whole app untested. It is a FEATURE rather than a flag
-# because CLAUDE.md's Containment section is explicit that a flag in the shipped
-# program is a write path reachable by anything that can set an environment
-# variable here. `nix build .#suzatary` does not enable it, so the deployed
-# program does not contain the code: removal is checkable, a blocklist is not.
+# THE FIXTURE IS NOT IN THE SHIPPED BINARY; `suzatary-dev` is the one binary built with it.
+# `--whois-fixture` makes every peer one login, which puts the write surface in a browser test's
+# reach. A feature, not a flag: a flag in the shipped program would be a write path anything
+# that sets an environment variable could reach, and removal is checkable.
 [features]
 default = []
 fixture = ["suzatary-core/fixture"]
 
-# THE TWO TEST TARGETS THAT ARE NOT ABOUT THIS CRATE. `tests/guards.rs` live-fires
-# the repository's own containment layers — `scripts/tool-guard.sh`,
-# `scripts/edit-guard.sh`, `scripts/hooks/commit-msg`, `scripts/check-commits.sh`
-# — by running them, with `git`, against throwaway repositories. So it needs
-# three things a build sandbox does not have: those scripts (`appSrc` in
-# flake.nix is `app/` and deliberately not the repository), a
-# `git` binary, and `/usr/bin/env` for their shebangs.
-#
-# `test = false` keeps it out of the target set `cargo test` picks up, so
-# `nix build .#suzatary` and `nix flake check` build the package's own laws and
-# not this. It still runs by NAME — `cargo test -p suzatary --test guards` —
-# which is what the merge gate and CI do. The tests did not become optional;
-# they moved to the callers that can actually run them.
+# THE TWO TEST TARGETS THAT ARE NOT ABOUT THIS CRATE. `tests/guards.rs` live-fires the
+# repository's containment scripts with `git` against throwaway repositories, which a build
+# sandbox (`appSrc` is `app/`) cannot hold. `test = false` keeps it out of `cargo test` and
+# `nix flake check`; the merge gate and CI run it by name.
 [[test]]
 name = "guards"
 path = "tests/guards.rs"
 test = false
 
-# AND THE LIVE CHAIN'S PINS, BY THE SAME RULE.
-# `tests/live.rs` is SPEC §9 against the deployment's own `events/`. Those
-# tests were the database's until the Prodrome became its own public repository: a crate a
-# stranger can build must not read the owner's chain, so the crate kept the seeded
-# evidence and the deployment kept its own.
-#
-# `test = false` for exactly the reason above it: the sandbox is handed the
-# source trees and not the repository, so there is no `events/` in there. The
-# merge gate's live half names it, which is what keeps it on every train.
+# AND THE LIVE CHAIN'S PINS, BY THE SAME RULE: `tests/live.rs` is SPEC §9 against the
+# deployment's own `events/`, which the sandbox does not hold; the gate's live half names it.
 [[test]]
 name = "live"
 path = "tests/live.rs"

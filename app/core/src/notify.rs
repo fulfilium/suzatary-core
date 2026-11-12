@@ -10,8 +10,8 @@ pub use effect::{Delivered, Notify, NotifyError, Printed, Push};
 use std::collections::BTreeSet;
 use std::num::NonZeroUsize;
 
-use crate::record::TodoEvent;
 use suzatary_base::capability::Datetime;
+use suzatary_record::record::TodoEvent;
 
 /// What to say about new chain objects, or `None` when nothing is worth a push.
 ///
@@ -81,7 +81,7 @@ pub fn needs_you(
     Some(Push::Waiting { count, open })
 }
 
-fn is_decision(record: &crate::record::Authored) -> bool {
+fn is_decision(record: &suzatary_record::record::Authored) -> bool {
     record.payload.is_decision()
 }
 
@@ -94,12 +94,12 @@ pub const QUIET_SECONDS: u64 = 120;
 
 #[cfg(test)]
 mod tests {
-    use crate::record::mk_authored;
     use crate::secretary::inbox::ProposalId;
     use crate::secretary::inbox_event::{InboxEvent, Said};
     use prodrome_core::event::{mk_completed, mk_created, mk_reopened};
     use prodrome_core::fpl;
     use proptest::prelude::*;
+    use suzatary_record::record::mk_authored;
 
     use super::*;
 
@@ -142,12 +142,12 @@ mod tests {
             actor,
             kind,
             at(1),
-            crate::record::MarkupSource::escaped(body),
+            suzatary_record::record::MarkupSource::escaped(body),
             fpl::mk_flat(0.5).expect("a spec"),
             vec!["because".to_owned()],
             "home",
             "",
-            crate::record::MarkupSource::empty(),
+            suzatary_record::record::MarkupSource::empty(),
             None,
             vec![],
             vec![],

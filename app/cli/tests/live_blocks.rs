@@ -5,10 +5,10 @@
 //! printed where this checkout has no chain.
 
 use suzatary_base::capability::Clock;
-use suzatary_core::record::EventStore;
 use suzatary_core::store::Reads as _;
 use suzatary_io::clock::SystemClock;
 use suzatary_io::objects::Objects;
+use suzatary_record::record::EventStore;
 
 #[test]
 fn every_live_record_renders_verified() {

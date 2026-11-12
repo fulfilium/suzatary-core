@@ -5,7 +5,7 @@ mod common;
 
 use common::Fakes;
 use prodrome_core::event::{mk_completed, mk_created, seal_hash};
-use suzatary_core::record::mk_authored;
+use suzatary_record::record::mk_authored;
 
 fn base() -> String {
     let fakes = Fakes::new("reads");
@@ -32,8 +32,8 @@ fn every_literal_rehashes_to_its_own_name() {
     assert!(!links.is_empty());
     for link in links {
         let literal = link["literal"].as_str().expect("a literal");
-        let envelope: suzatary_core::record::Envelope = prodrome_core::event::parse_envelope(
-            &suzatary_core::record::TodoVocabulary::default(),
+        let envelope: suzatary_record::record::Envelope = prodrome_core::event::parse_envelope(
+            &suzatary_record::record::TodoVocabulary::default(),
             literal,
         )
         .expect("the literal parses back");
@@ -132,7 +132,7 @@ fn a_limited_fold_is_the_lowest_fulfillments_ascending_and_open() {
 #[test]
 fn an_untrusted_completion_is_claimed_but_not_bound() {
     let root = common::scratch("reads-untrusted-completion");
-    let events = suzatary_core::record::EventStore::new(
+    let events = suzatary_record::record::EventStore::new(
         root.join("events"),
         prodrome_core::policy::Untrusted::of([common::actor("triage")]),
     );
@@ -140,25 +140,25 @@ fn an_untrusted_completion_is_claimed_but_not_bound() {
     let made = common::shift(common::now(), -5);
     suzatary_core::store::append_to(
         &events,
-        suzatary_core::record::GENESIS,
+        suzatary_record::record::GENESIS,
         mk_created("call-harrow", born, "ada", "", "").expect("valid"),
     )
     .expect("appends");
     suzatary_core::store::append_to(
         &events,
-        suzatary_core::record::GENESIS,
+        suzatary_record::record::GENESIS,
         mk_authored(
             "call-harrow",
             made,
             "ada",
             "todo",
             made,
-            suzatary_core::record::MarkupSource::escaped("Email Harrow"),
+            suzatary_record::record::MarkupSource::escaped("Email Harrow"),
             prodrome_core::fpl::mk_flat(0.5).expect("valid"),
             Vec::new(),
             "",
             "",
-            suzatary_core::record::MarkupSource::empty(),
+            suzatary_record::record::MarkupSource::empty(),
             None,
             Vec::new(),
             Vec::new(),
@@ -169,7 +169,7 @@ fn an_untrusted_completion_is_claimed_but_not_bound() {
     .expect("appends");
     suzatary_core::store::append_to(
         &events,
-        suzatary_core::record::GENESIS,
+        suzatary_record::record::GENESIS,
         mk_completed("call-harrow", common::shift(made, 1), "triage", "").expect("valid"),
     )
     .expect("appends");
@@ -202,7 +202,7 @@ fn an_untrusted_completion_is_claimed_but_not_bound() {
 )]
 fn the_stream_is_chronological_and_every_authored_carries_its_diff() {
     let root = common::scratch("reads-diffs");
-    let events = suzatary_core::record::EventStore::new(
+    let events = suzatary_record::record::EventStore::new(
         root.join("events"),
         prodrome_core::policy::Untrusted::of([common::actor("triage")]),
     );
@@ -211,25 +211,25 @@ fn the_stream_is_chronological_and_every_authored_carries_its_diff() {
     let second = common::shift(common::now(), -4);
     suzatary_core::store::append_to(
         &events,
-        suzatary_core::record::GENESIS,
+        suzatary_record::record::GENESIS,
         mk_created("file-permit", born, "ada", "", "").expect("valid"),
     )
     .expect("appends");
     suzatary_core::store::append_to(
         &events,
-        suzatary_core::record::GENESIS,
+        suzatary_record::record::GENESIS,
         mk_authored(
             "file-permit",
             first,
             "ada",
             "todo",
             first,
-            suzatary_core::record::MarkupSource::escaped("File the deed"),
+            suzatary_record::record::MarkupSource::escaped("File the deed"),
             prodrome_core::fpl::mk_flat(0.5).expect("valid"),
             Vec::new(),
             "",
             "",
-            suzatary_core::record::MarkupSource::empty(),
+            suzatary_record::record::MarkupSource::empty(),
             None,
             Vec::new(),
             Vec::new(),
@@ -240,19 +240,19 @@ fn the_stream_is_chronological_and_every_authored_carries_its_diff() {
     .expect("appends");
     suzatary_core::store::append_to(
         &events,
-        suzatary_core::record::GENESIS,
+        suzatary_record::record::GENESIS,
         mk_authored(
             "file-permit",
             second,
             "ada",
             "todo",
             first,
-            suzatary_core::record::MarkupSource::escaped("File the permit renewal"),
+            suzatary_record::record::MarkupSource::escaped("File the permit renewal"),
             prodrome_core::fpl::mk_flat(0.5).expect("valid"),
             Vec::new(),
             "work",
             "",
-            suzatary_core::record::MarkupSource::empty(),
+            suzatary_record::record::MarkupSource::empty(),
             None,
             Vec::new(),
             Vec::new(),

@@ -12,7 +12,7 @@ use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
 use super::{Counted, Plan};
-use crate::record;
+use suzatary_record::record;
 
 /// What became of a todo by an instant, joined over its events: completed once is completed,
 /// whatever came after (a reopening does not unship a release), and cancelled below completed.

@@ -1,6 +1,6 @@
 [package]
 name = "suzatary-core"
-description = "Suzatary's meaning, pure: capabilities, the markup escape, the wire (see ../../docs/ARCHITECTURE.md)"
+description = "Suzatary's meaning, pure (see ../../docs/ARCHITECTURE.md)"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -14,6 +14,7 @@ path = "src/lib.rs"
 [dependencies]
 prodrome_core.workspace = true
 suzatary-base.workspace = true
+suzatary-record.workspace = true
 thiserror.workspace = true
 tracing.workspace = true
 serde.workspace = true
@@ -22,9 +23,7 @@ serde_json.workspace = true
 toml.workspace = true
 schemars.workspace = true
 ts-rs.workspace = true
-# `view.references`' one alternation over every long id (a pattern per id per
-# record was 58,000 searches and 1.3 s on the todo route), and the id, date and
-# query classes the routes refuse at the door.
+# `view.references`' one alternation over every long id, and the classes the routes refuse.
 regex.workspace = true
 regex-syntax.workspace = true
 # THE LEAK GUARD READS TEXT AS WORDS (`leak`): folded to its letters without accents or
@@ -35,23 +34,14 @@ unicode-general-category = "1"
 # Go's `h1:…`) and a sealed slot's box for whether their bytes are text (random bytes hide no
 # word), and a line's literal in `secretary::line_event` carries bytes as base64.
 base64.workspace = true
-# The `at` a `Clock` hands back is a `prodrome::literal::Datetime`, but the
-# arithmetic around a window — `to - from`, a day's midnight, the deadline's
-# lead-up — is chrono's on `prodrome::fpl::Instant`. The same chrono
-# prodrome-core takes, so the two layers agree on one library.
+# A window's arithmetic, on `prodrome::fpl::Instant`: the chrono prodrome-core takes.
 chrono.workspace = true
 # The owner's day is read in a NAMED zone, so daylight saving is the zone's rule.
 chrono-tz.workspace = true
-# TYPST'S OWN PARSER (§7). A write's block is read back before it is written —
-# the containment check — with the parser typst compiles with, not with a
-# second reading of typst's grammar.
+# Typst's own parser reads a write's block back before it is written.
 typst-syntax.workspace = true
-# THE MAILDIR FILE NAME IS A CONTENT DIGEST (§8.6, `mail::imap::maildir_name`),
-# which is what makes a refetch rewrite one file instead of duplicating it —
-# and it is the one thing notmuch's index depends on staying the same, so it is
-# stated and tested HERE rather than inside an interpreter. The same crates
-# prodrome-core hashes objects with and `suzatary_io::mailbox::dedup` spells the
-# canonical hash with.
+# A maildir file's name is a content digest (`mail::imap::maildir_name`), so a refetch rewrites
+# one file; the hashes prodrome-core uses.
 sha2.workspace = true
 hmac.workspace = true
 hex.workspace = true
@@ -59,10 +49,7 @@ hex.workspace = true
 chacha20poly1305.workspace = true
 zeroize.workspace = true
 postcard.workspace = true
-# THE OUTGOING MESSAGE IS BUILT HERE, PURE (§8.6, `mail::send::build_mime`):
-# `ms_smtp_send.build_mime` took its Message-Id and Date as arguments precisely
-# so it could be unit-tested with no network, and that property is worth a
-# crate boundary. Zero transitive dependencies.
+# The outgoing message is built here, pure (`mail::send::build_mime`), so it is tested offline.
 mail-builder.workspace = true
 
 # How the inbox's schema crosses into the browser's module (`secretary::inbox_json`): the
@@ -71,7 +58,7 @@ prodrome-wasm-exports = { workspace = true, optional = true }
 
 [features]
 # Inert effects a test fills a record from; never in the shipped build.
-nothing = ["suzatary-base/nothing"]
+nothing = ["suzatary-base/nothing", "suzatary-record/nothing"]
 # The e2e fixture's scripted person (`secretary::Speaker::scripted`); `suzatary`'s `fixture` alone.
 fixture = []
 # The browser module's view of this crate's schemas; `app/wasm` alone enables it.
@@ -79,8 +66,7 @@ wasm = ["dep:prodrome-wasm-exports"]
 
 [dev-dependencies]
 suzatary-core = { path = ".", features = ["nothing"] }
-# The laws are properties over arbitrary strings, not lists of examples
-# (ARCHITECTURE §6), which is the same reason prodrome-core takes it.
+# The laws are properties over arbitrary strings.
 proptest.workspace = true
 # A plugin's manifest is read as the instance file spells it.
 toml.workspace = true

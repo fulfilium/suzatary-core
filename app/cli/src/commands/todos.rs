@@ -9,8 +9,8 @@ use clap::Subcommand;
 use suzatary_base::capability::Clock;
 use suzatary_base::escape::{markup_text, string_text};
 use suzatary_core::believed::one_outcome;
-use suzatary_core::record::Entry;
 use suzatary_io::clock::SystemClock;
+use suzatary_record::record::Entry;
 
 use crate::instance::{ChainDir, Instance};
 
@@ -59,7 +59,7 @@ fn open_todos(instance: &Instance, chain: &ChainDir, json: bool) -> anyhow::Resu
     let entries = set
         .entries(&chain.policy.name)
         .context("folding the chain")?;
-    let records = suzatary_core::decoration::records_of(nodes);
+    let records = suzatary_record::decoration::records_of(nodes);
 
     // The Inbox's held-batch decisions fold like todos and are dropped, as the web app does.
     let mut open: Vec<&Entry> = entries
@@ -92,7 +92,7 @@ fn open_todos(instance: &Instance, chain: &ChainDir, json: bool) -> anyhow::Resu
                     "kind": record.map(|r| r.payload.kind.as_str()),
                     "category": record.map_or("other", |r| {
                         r.payload.category.as_ref().map_or_else(
-                            || suzatary_core::decoration::kind_category(r.payload.kind.as_str()),
+                            || suzatary_record::decoration::kind_category(r.payload.kind.as_str()),
                             prodrome_core::event::Name::as_str,
                         )
                     }),

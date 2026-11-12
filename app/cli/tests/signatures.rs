@@ -14,10 +14,10 @@ use prodrome_core::dag::Dag;
 use prodrome_core::event::{Envelope, Hash, canonical_envelope, mk_completed, seal_hash};
 use prodrome_core::sign::Checks;
 use prodrome_core::sign::{Registrar, Secret};
-use suzatary_core::record::TodoEvent;
 use suzatary_core::signatures::{BoxKeys, Enrolment, KEPT_CHECKS, Trust};
 use suzatary_core::store::Prodrome as _;
 use suzatary_core::store::Reads as _;
+use suzatary_record::record::TodoEvent;
 
 fn ada() -> suzatary_base::capability::Login {
     common::login("ada@example.com")

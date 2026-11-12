@@ -227,6 +227,50 @@ An edit in `routes.rs` now rechecks `api` (about 2 s) and the CLI, not core. Cor
 fell from 17.3 to 15.1 s. The rest goes bottom-up from `record`, and `secretary` comes off the
 top once 29a has removed the edges into it.
 
+**What PR 12 left to revisit.**
+- **Items made `pub` so that `api` can call them.** Any crate that depends on core can now call
+  them too. When the cut that owns each one becomes a crate, see whether it can be `pub(crate)`
+  there again, or whether `api` should reach it through a narrower door:
+
+  | items | owning cut |
+  |---|---|
+  | `secretary::verbs::propose`, `secretary::bound_of`, `secretary::gate` | secretary |
+  | `undo::withdrawn`, `done_elsewhere::{Seen, sweep}` | cards |
+  | `readings::{drawn, proposal, turn, Place, blocks_of}` | topics |
+
+- **The row-10 guard's hole changed the reading of two files.** In `settings.rs`, 292 lines of
+  production code went unread and hid `settings -> notify`. In `secretary/held_lines.rs`, 8 lines
+  of a test-only helper went unread and hid no edge. The sixteen allowed edges were counted with
+  the hole; the guard now reads up to the `#[cfg(test)]` module.
+- **The browser's modules link `api`.** The 71 wire types move down only after the bottom cuts they
+  would move into exist.
+
+**What a crate cut costs the pages' module.** `views_bg.wasm`, brotli, on aarch64-linux:
+
+| release | the cut | bytes |
+|---|---|---|
+| 2.1.119 | base | 618,462 |
+| 2.1.120 | api | 619,307 (+845, no code changed) |
+
+The line is now 620,000 (613,000 on x86_64). Earlier cuts cost several hundred bytes each.
+- **What grows is not measured yet.** This container has no wasm32 target and no `twiggy`. The
+  module is built with fat LTO, one codegen unit, opt-level "s", symbols stripped and
+  `panic = abort`. The candidates to tell apart:
+  - panic and format strings that carry a module path or a file path (`#[track_caller]`
+    locations, `expect` messages)
+  - generic code instantiated once per crate before LTO and not merged after it, such as the
+    serde impls of a type named from two crates
+  - inlining that changes when a function crosses a crate boundary (a callee without `#[inline]`
+    is inlined only by LTO, under a different cost model)
+  - brotli's window over a reordered data section
+- **The measure:** `twiggy diff` of `views_bg.wasm` between consecutive train builds, by function
+  and by data segment, run on a machine with the wasm32 target before each bottom cut. A diff that
+  is mostly data points at paths; one that is mostly code points at instantiation or inlining.
+
+**PR 13 (record).** `decoration`, `record`, `todo` and `wire/record` move to `app/record`; USE
+11.0k. The one item the cuts above call while it is `pub(crate)`, `todo::fields::plain_kind`,
+becomes `pub` first.
+
 After PR 31, rerun the table. Stage 4 is the remedies of the over-budget section, ordered by
 what that measurement shows. Stage 5 moves the stable crates to their own repositories, pinned
 by rev like the Prodrome (→ `prodromedependency`), which takes them out of every train's

@@ -66,12 +66,12 @@ fn three_cards(caps: &Fakes) -> [ProposalRef; 3] {
 fn an_add(id: &str) -> Act {
     Act::Add {
         todo: id.to_owned(),
-        fields: suzatary_core::todo::TodoFields {
+        fields: suzatary_record::todo::TodoFields {
             body: "Renew the parking permit".to_owned(),
             rationale: "an errand with a recoverable cost".to_owned(),
             kind: "todo".to_owned(),
             category: "home".to_owned(),
-            price: suzatary_core::todo::Price::Flat { percent: 75 },
+            price: suzatary_record::todo::Price::Flat { percent: 75 },
             detail: String::new(),
             waiting_on: String::new(),
         },

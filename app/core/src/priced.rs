@@ -3,9 +3,9 @@
 use schemars::JsonSchema;
 use serde::Deserialize;
 
-use crate::todo::{Cycle, Deadline, Price};
 use crate::verb::Caught;
 use suzatary_base::refusal::{Refusal, shown};
+use suzatary_record::todo::{Cycle, Deadline, Price};
 
 /// The price arguments of a call, each read only once the others make it matter, so a fault in
 /// one the call does not use is never raised.

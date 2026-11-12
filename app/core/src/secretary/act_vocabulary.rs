@@ -2,8 +2,8 @@
 //! proposal down to its leaves' records, each declared beside the type it prints.
 
 use crate::secretary::{acts, attached, attachment_source, changes, proposal};
-use crate::todo::price;
 use prodrome_core::literal::codec::Constructor;
+use suzatary_record::todo::price;
 
 /// Every constructor of a stored act, with its fields in printed order. None is a term's or an
 /// inbox event's, so one walker reads an `Asked` whole.
@@ -17,7 +17,7 @@ pub const SIGNATURES: &[Constructor] = &[
     changes::CHANGES,
     changes::ADD,
     changes::ADD_FROM,
-    crate::record::SOURCE,
+    suzatary_record::record::SOURCE,
     changes::UPDATE,
     changes::COMPLETE,
     changes::CANCEL,
@@ -28,7 +28,7 @@ pub const SIGNATURES: &[Constructor] = &[
     price::DEADLINE_PRICE,
     price::RECUR_PRICE,
     price::PERIODIC_PRICE,
-    crate::record::SUBTODO,
+    suzatary_record::record::SUBTODO,
     acts::AUTH,
     acts::AUTH_SEND,
     acts::SECRET,

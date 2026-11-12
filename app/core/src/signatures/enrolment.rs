@@ -4,8 +4,8 @@ use prodrome_core::sign::{KeyAdded, PublicKey, Registrar, Secret, Signature, Sig
 use serde::{Deserialize, Serialize};
 
 use super::{KeyStanding, Trust, Unproven};
-use crate::record::TodoEvent;
 use crate::store::{Prodrome, StoreError};
+use suzatary_record::record::TodoEvent;
 
 /// A device asking to be trusted: whose it is and its public key, as its Inbox card holds them.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

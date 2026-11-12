@@ -8,7 +8,7 @@ use std::path::{Path, PathBuf};
 
 use prodrome_core::fpl;
 use prodrome_core::literal::Datetime;
-use suzatary_core::record::{EventStore, GENESIS, MarkupSource, TodoEvent, mk_authored};
+use suzatary_record::record::{EventStore, GENESIS, MarkupSource, TodoEvent, mk_authored};
 
 fn at(day: u32) -> Datetime {
     Datetime::new(2026, 9, day, 9, 0, 0, 0).expect("a real instant")

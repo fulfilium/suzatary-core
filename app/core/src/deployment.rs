@@ -50,7 +50,7 @@ impl Deployment {
     /// The category vocabulary in its order, by stable id.
     #[must_use]
     pub fn category_order(&self) -> Vec<String> {
-        crate::decoration::categories_in_order(&self.categories)
+        suzatary_record::decoration::categories_in_order(&self.categories)
             .into_iter()
             .map(str::to_owned)
             .collect()

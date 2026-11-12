@@ -14,12 +14,12 @@ use prodrome_core::event::{Envelope, Hash, TodoEvent};
 use prodrome_core::policy::Untrusted;
 use prodrome_core::schema::Schema;
 use prodrome_core::store::{EventStore, Replica};
-use suzatary_core::record::Record;
 use suzatary_core::secretary::digest_event::DigestEvent;
 use suzatary_core::store::{
     Hold, Prodrome, Reads, Reentrant, StoreError, WriteLock, append_to, begun,
 };
 use suzatary_core::stores::{Kind, Store};
+use suzatary_record::record::Record;
 
 use crate::durable;
 
@@ -56,7 +56,7 @@ impl<E: Store> std::fmt::Debug for Objects<E> {
 
 impl Objects<TodoEvent<Record>> {
     /// A chain, or the agent's replica of one, held by this process's threads: a `Genesis`
-    /// labelled [`suzatary_core::record::GENESIS`], then one `Change` per event.
+    /// labelled [`suzatary_record::record::GENESIS`], then one `Change` per event.
     #[must_use]
     pub fn chain(events: EventStore<TodoEvent<Record>, Untrusted>) -> Self {
         Self::new(events)

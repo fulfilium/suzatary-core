@@ -113,8 +113,8 @@ fn confirm(base: &str, caps: &Fakes, todo: &str) {
         .as_str()
         .expect("an event print")
         .to_owned();
-    let event: suzatary_core::record::TodoEvent = prodrome_core::event::parse_event(
-        &suzatary_core::record::TodoVocabulary::default(),
+    let event: suzatary_record::record::TodoEvent = prodrome_core::event::parse_event(
+        &suzatary_record::record::TodoVocabulary::default(),
         &print,
     )
     .expect("the core printed it");
@@ -158,8 +158,8 @@ fn a_todo_added_now_comes_back_rendered() {
         common::body_json(&mut authored)
     );
     let answer = common::body_json(&mut authored);
-    let event: suzatary_core::record::TodoEvent = prodrome_core::event::parse_event(
-        &suzatary_core::record::TodoVocabulary::default(),
+    let event: suzatary_record::record::TodoEvent = prodrome_core::event::parse_event(
+        &suzatary_record::record::TodoVocabulary::default(),
         answer["event"].as_str().expect("a print"),
     )
     .expect("the core printed it");

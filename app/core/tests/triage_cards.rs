@@ -10,7 +10,6 @@ use suzatary_core::agent::Agent;
 use suzatary_core::deployment::Deployment;
 use suzatary_core::mail::corpus::{Corpus, CorpusError};
 use suzatary_core::mail::mailbox::Query;
-use suzatary_core::record::TodoEvent;
 use suzatary_core::secretary::Secretary;
 use suzatary_core::secretary::changes::Act;
 use suzatary_core::secretary::filed::TriageCards;
@@ -19,6 +18,7 @@ use suzatary_core::secretary::proposal::Proposal;
 use suzatary_core::secretary::proposer::Proposer;
 use suzatary_core::store::Reads as _;
 use suzatary_core::store::{InMemory, Prodrome};
+use suzatary_record::record::TodoEvent;
 
 fn deployment() -> Deployment {
     let actor = |name: &str| Actor::new(name).expect("a roster name");
@@ -51,12 +51,12 @@ fn the_owners_chain() -> InMemory<TodoEvent> {
             suzatary_core::authoring::build_todo(
                 &suzatary_core::authoring::NewTodo {
                     todo: "alpha".to_owned(),
-                    fields: suzatary_core::todo::TodoFields {
+                    fields: suzatary_record::todo::TodoFields {
                         body: "Renew the permit".to_owned(),
                         rationale: "an errand".to_owned(),
                         kind: "todo".to_owned(),
                         category: "home".to_owned(),
-                        price: suzatary_core::todo::Price::Flat { percent: 75 },
+                        price: suzatary_record::todo::Price::Flat { percent: 75 },
                         detail: String::new(),
                         waiting_on: String::new(),
                     },

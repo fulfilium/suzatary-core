@@ -400,7 +400,7 @@ fn provider_of(answer: &str) -> anyhow::Result<Provider> {
 /// Each chain begun with its `Genesis`, the prodrome every writer writes into.
 fn begin_chains(data: &Path) -> anyhow::Result<()> {
     for (_, events) in onboarding::CHAINS {
-        let chain = suzatary_core::record::EventStore::new(
+        let chain = suzatary_record::record::EventStore::new(
             data.join(events),
             prodrome_core::policy::Untrusted::none(),
         );
@@ -411,7 +411,7 @@ fn begin_chains(data: &Path) -> anyhow::Result<()> {
             .is_empty()
         {
             chain
-                .init(suzatary_core::record::GENESIS)
+                .init(suzatary_record::record::GENESIS)
                 .with_context(|| format!("beginning {events}"))?;
         }
     }
@@ -556,7 +556,7 @@ mod tests {
         assert_eq!(read.root(), &suzatary_core::cast::keys::root());
         assert_eq!(read.deployment.chains.names(), vec!["life", "suzatary"]);
         for chain in &read.chains {
-            let begun = suzatary_core::record::EventStore::new(
+            let begun = suzatary_record::record::EventStore::new(
                 &chain.events,
                 prodrome_core::policy::Untrusted::none(),
             );

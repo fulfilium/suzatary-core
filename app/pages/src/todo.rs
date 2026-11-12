@@ -7,12 +7,12 @@ use serde::{Deserialize, Serialize};
 use suzatary_api::wire::{Authoring, TodoPayload, UpdateTodo};
 use suzatary_base::escape::{Escaped, unescape_markup};
 use suzatary_base::reference::TodoRef;
-use suzatary_core::todo::{Cycle, Patch, TodoPatch};
-use suzatary_core::wire::record::SubTodo;
 use suzatary_core::wire::todo::{
     Authored, AuthoredSource, Entry, FieldChange, Holds, Link, Neighbour, Reverses,
 };
 use suzatary_core::wire::topics::{ConversationPayload, InboxState};
+use suzatary_record::todo::{Cycle, Patch, TodoPatch};
+use suzatary_record::wire::record::SubTodo;
 use ts_rs::TS;
 use viewtree::Attr::{
     AriaLabel, Checked, Class, Data, Disabled, For, Href, Id, Open, Role, Title, Type,
@@ -431,10 +431,10 @@ impl Model {
         else {
             return Vec::new();
         };
-        let subtodos: Vec<suzatary_core::record::SubTodo> = subs
+        let subtodos: Vec<suzatary_record::record::SubTodo> = subs
             .into_iter()
             .enumerate()
-            .map(|(i, s)| suzatary_core::record::SubTodo {
+            .map(|(i, s)| suzatary_record::record::SubTodo {
                 done: if i == line { !s.done } else { s.done },
                 body: s.body,
             })

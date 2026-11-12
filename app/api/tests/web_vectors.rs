@@ -30,8 +30,6 @@ use suzatary_base::reference::{ProposalRef, Reference};
 use suzatary_core::cast::{self, CAST};
 use suzatary_core::chain_set::Read;
 use suzatary_core::deployment::Deployment;
-use suzatary_core::record::TodoEvent;
-use suzatary_core::record::{Envelope, EventStore, SubTodo, mk_authored, mk_source, mk_subtodo};
 use suzatary_core::render::{Html, Render};
 use suzatary_core::secretary::Secretary;
 use suzatary_core::secretary::about;
@@ -52,6 +50,8 @@ use suzatary_core::store::{
     InMemory, InMemoryDoc, Prodrome, Reads, StoreError, WriteLock, append_to, linearised,
 };
 use suzatary_core::wire::topics as wire;
+use suzatary_record::record::TodoEvent;
+use suzatary_record::record::{Envelope, EventStore, SubTodo, mk_authored, mk_source, mk_subtodo};
 
 fn vector(file: &str) -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
@@ -125,8 +125,8 @@ fn six_todo_chain(root: &Path) -> EventStore {
     let untrusted: Untrusted = Untrusted::of([actor("triage")]);
     let events = EventStore::new(root.join("events"), untrusted);
     // Begun with a nonce of zeros, so the vectors' names are a function of this file.
-    let genesis: suzatary_core::record::Envelope = prodrome_core::event::Envelope::Genesis(
-        prodrome_core::genesis::mk_genesis(suzatary_core::record::GENESIS, &"0".repeat(32))
+    let genesis: suzatary_record::record::Envelope = prodrome_core::event::Envelope::Genesis(
+        prodrome_core::genesis::mk_genesis(suzatary_record::record::GENESIS, &"0".repeat(32))
             .expect("a genesis"),
     );
     let name = prodrome_core::event::seal_hash(&genesis);
@@ -146,7 +146,7 @@ fn six_todo_chain(root: &Path) -> EventStore {
     let todos = &CAST.todos;
 
     let append = |event| {
-        append_to(&events, suzatary_core::record::GENESIS, event).expect("appends");
+        append_to(&events, suzatary_record::record::GENESIS, event).expect("appends");
     };
     let authored = |todo: &cast::Todo, at, actor, spec, source| {
         let subtodos: Vec<SubTodo> = todo
@@ -160,12 +160,12 @@ fn six_todo_chain(root: &Path) -> EventStore {
             actor,
             "todo",
             made,
-            suzatary_core::record::MarkupSource::from_chain(todo.body),
+            suzatary_record::record::MarkupSource::from_chain(todo.body),
             spec,
             todo.rationale.iter().map(|&line| line.to_owned()).collect(),
             todo.category,
             "",
-            suzatary_core::record::MarkupSource::from_chain(todo.detail),
+            suzatary_record::record::MarkupSource::from_chain(todo.detail),
             source,
             subtodos,
             Vec::new(),
@@ -464,8 +464,8 @@ impl Reads<TodoEvent> for Bundle {
 }
 
 impl Prodrome<TodoEvent> for Bundle {
-    fn append(&self, event: suzatary_core::record::TodoEvent) -> Result<Hash, StoreError> {
-        append_to(&self.events, suzatary_core::record::GENESIS, event)
+    fn append(&self, event: suzatary_record::record::TodoEvent) -> Result<Hash, StoreError> {
+        append_to(&self.events, suzatary_record::record::GENESIS, event)
             .map_err(|e| StoreError::not_appended("chain", e.to_string()))
     }
 

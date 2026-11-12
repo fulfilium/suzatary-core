@@ -5,7 +5,6 @@
 use std::cmp::Ordering;
 use std::collections::{BTreeMap, BTreeSet};
 
-use crate::record::{Authored, Entry, Envelope, Node, TodoEvent};
 use prodrome_core::event::{Hash, parents_of, seal_hash};
 use prodrome_core::fpl::{self, Env, LinkError};
 use prodrome_core::literal::{Value, print_literal};
@@ -13,6 +12,7 @@ use prodrome_core::payload::Payload as _;
 use prodrome_core::policy::Untrusted;
 use prodrome_core::term::{Term, TermF};
 use regex::Regex;
+use suzatary_record::record::{Authored, Entry, Envelope, Node, TodoEvent};
 
 use crate::believed::one_outcome;
 use crate::render::Render;
@@ -303,7 +303,7 @@ pub fn authored<R: Render + ?Sized>(
             .payload
             .subtodos
             .iter()
-            .map(|sub| crate::wire::record::SubTodo {
+            .map(|sub| suzatary_record::wire::record::SubTodo {
                 body: sub.body.as_str().to_owned(),
                 done: sub.done,
             })
@@ -630,7 +630,10 @@ pub fn members(entries: &[Entry], by_hash: &BTreeMap<Hash, &Envelope>) -> Member
             let member = Member {
                 title: suzatary_base::escape::markup_text(record.payload.body.as_str()),
                 category: record.payload.category.as_ref().map_or_else(
-                    || crate::decoration::kind_category(record.payload.kind.as_str()).to_owned(),
+                    || {
+                        suzatary_record::decoration::kind_category(record.payload.kind.as_str())
+                            .to_owned()
+                    },
                     |name| name.as_str().to_owned(),
                 ),
                 worth: entry.price.value.clone(),
@@ -766,7 +769,7 @@ pub fn quoted(source: &str) -> Quoted {
 
 #[cfg(test)]
 mod tests {
-    use crate::record::{MarkupSource, mk_authored, mk_source};
+    use suzatary_record::record::{MarkupSource, mk_authored, mk_source};
 
     #[test]
     fn a_data_field_renders_as_escaped_markup_and_a_markup_field_as_written() {

@@ -125,7 +125,7 @@ fn send(caps: &'static Server<'static>, push: suzatary_core::notify::Push) {
 /// The chain's events, in the order the notifier counts them.
 fn events(
     caps: &'static Server<'static>,
-) -> Result<Vec<suzatary_core::record::TodoEvent>, suzatary_core::store::StoreError> {
+) -> Result<Vec<suzatary_record::record::TodoEvent>, suzatary_core::store::StoreError> {
     Ok(view::events_of(&caps.secretary.chain.nodes()?))
 }
 

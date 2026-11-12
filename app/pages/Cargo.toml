@@ -15,6 +15,7 @@ crate-type = ["cdylib", "rlib"]
 
 [dependencies]
 suzatary-base.workspace = true
+suzatary-record.workspace = true
 suzatary-core.workspace = true
 suzatary-api.workspace = true
 prodrome_core.workspace = true

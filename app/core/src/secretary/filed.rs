@@ -504,7 +504,7 @@ mod tests {
     /// `percent`, with a rationale that differs on every pass.
     fn priced(shape: u8, todo: &str, percent: u32, pass: usize) -> crate::secretary::changes::Act {
         use crate::secretary::changes::Act as ChainAct;
-        use crate::todo::{Patch, Price, TodoFields, TodoPatch};
+        use suzatary_record::todo::{Patch, Price, TodoFields, TodoPatch};
         let price = Price::Flat { percent };
         let rationale = format!("read on pass {pass}");
         match shape {
